@@ -54,3 +54,18 @@ align-content: (stretch is the default)
     space-around: Lines display with equal spacing around them.
     stretch: Lines are stretched to fit the container.    
 */
+
+/* "👉" */
+
+li {
+  list-style-type: "👉";
+}
+
+ul {
+  margin-left: 1.5rem;
+}
+
+ul li::marker {
+  font-size: 150%;
+  color: goldenrod;
+}
