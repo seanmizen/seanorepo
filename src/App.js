@@ -1,28 +1,17 @@
 import React from "react";
-import Nav from "./core/Nav";
-import Home from "./features/Home";
 import ExampleFeature from "./features/ExampleFeature";
+import ItemList from "./features/ItemList";
 import styles from "./App.module.css";
-import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
+
+//todo https://adrianroselli.com/2018/02/github-contributions-chart.html
 
 function App() {
   return (
-    <Router>
-      <Nav className={styles["nav"]} />
-      <div>
-        <Switch>
-          <Route path="/ExampleFeature">
-            <ExampleFeature />
-          </Route>
-          <Route path="/Home">
-            <Home />
-          </Route>
-          <Route path="/">
-            <Home />
-          </Route>
-        </Switch>
-      </div>
-    </Router>
+    <div>
+      <h1>seanmizen.com</h1>
+      <p>developer | automator | person | he/him</p>
+      <ItemList />
+    </div>
   );
 }
 

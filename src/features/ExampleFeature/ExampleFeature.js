@@ -3,11 +3,7 @@ import styles from "./ExampleFeature.module.css";
 
 function ExampleFeature() {
   return (
-    <div className={styles["challenge"]}>
-      <div>
-        <p>Hello!</p>
-      </div>
-    </div>
+    <div className={styles["example"]}>Hello - I'm an example feature.</div>
   );
 }
 
