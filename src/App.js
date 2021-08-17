@@ -2,14 +2,14 @@ import React from "react";
 import Nav from "./core/Nav";
 import Home from "./features/Home";
 import ExampleFeature from "./features/ExampleFeature";
+import styles from "./App.module.css";
 import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
-//import './App.css';
 
 function App() {
   return (
     <Router>
-      <Nav />
-      <div className="container">
+      <Nav className={styles["nav"]} />
+      <div>
         <Switch>
           <Route path="/ExampleFeature">
             <ExampleFeature />
