@@ -1,0 +1,113 @@
+/*
+https://flexboxfroggy.com/
+
+Flexbox options:
+justify-content: (horizontal pos)
+    flex-start: Items align to the left side of the container.
+    flex-end: Items align to the right side of the container.
+    center: Items align at the center of the container.
+    space-between: Items display with equal spacing between them.
+    space-around: Items display with equal spacing around them.
+    space-evenly: ??
+
+
+align-items: (vertical pos)
+    flex-start: Items align to the top of the container.
+    flex-end: Items align to the bottom of the container.
+    center: Items align at the vertical center of the container.
+    baseline: Items display at the baseline of the container.
+    stretch: Items are stretched to fit the container.
+
+flex-direction: (order of items)
+    row: Items are placed the same as the text direction.
+    row-reverse: Items are placed opposite to the text direction.
+        Notice that when you set the direction to a reversed row or column, start and end are also reversed.
+    column: Items are placed top to bottom.
+    column-reverse: Items are placed bottom to top.
+        Notice that when the flex direction is a column, justify-content changes to the vertical and align-items to the horizontal.    
+    
+order: shift elements up and down in the order of elements
+    takes an integer. 0 is the original DOM location, -1, 1, 4, etc will move it up or down that number.
+    although -1 looks interesting. ??? need to investigate further
+
+
+align-self: same as align-items but applies to one element (I think?)
+    flex-start: Item aligns to the top of the container.
+    flex-end: Item aligns to the bottom of the container.
+    center: Item aligns at the vertical center of the container.
+    baseline: Item displays at the baseline of the container.
+    stretch: Item is stretched to fit the container.
+
+flex-wrap: Squeeze items onto a single line or no?
+    nowrap: Every item is fit to a single line.
+    wrap: Items wrap around to additional lines.
+    wrap-reverse: Items wrap around to additional lines in reverse.
+
+flex-flow: combines flex-direction and flex-wrap
+    you can do something like flex-flow: column wrap
+
+align-content: (stretch is the default)
+    flex-start: Lines are packed at the top of the container.
+    flex-end: Lines are packed at the bottom of the container.
+    center: Lines are packed at the vertical center of the container.
+    space-between: Lines display with equal spacing between them.
+    space-around: Lines display with equal spacing around them.
+    stretch: Lines are stretched to fit the container.    
+*/
+
+.challenge {
+  padding: 1rem;
+}
+
+.arena {
+  /*height: 80%;*/
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-direction: column;
+  /*flex-wrap: nowrap;*/
+}
+
+.arena-item-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.arena-item {
+  height: 20rem;
+  text-align: center;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  /*width: 100%;*/
+}
+
+.arena-prompt-box {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex: 1; /* fill all horizontal space you can find */
+  /*width: 50%;*/
+}
+
+.arena-answer-box {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex: 1; /* fill all horizontal space you can find */
+  /*width: 50%;*/
+}
+
+.item-light {
+  background: #acabdf;
+  color: black;
+}
+
+.item-dark {
+  background: #6874b9;
+  color: white;
+}
