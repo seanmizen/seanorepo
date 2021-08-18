@@ -1,20 +1,21 @@
 import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/react-collapsible
-import ColorPicker from "../ColorPicker";
-import ExampleFeature from "../ExampleFeature";
-import Bitcoin from "../Bitcoin";
 import styles from "./ItemList.module.css";
+import ColorPicker from "../ColorPicker";
+import Projects from "../Projects";
+import Bitcoin from "../Bitcoin";
+import Github from "../Github";
 
 function ItemList() {
   return (
     <ul>
       <li>
         <Collapsible trigger="projects">
-          <ExampleFeature />
+          <Projects />
         </Collapsible>
       </li>
       <li>
         <Collapsible trigger="github">
-          <ExampleFeature />
+          <Github />
         </Collapsible>
       </li>
       <li>
