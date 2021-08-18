@@ -1,5 +1,4 @@
-import styles from "./ColorPicker.module.css";
-//import { ChromePicker } from "react-color"; -- redacted: this. Semi-useful library but let's stick with the default <input> instead.
+import styles from "../ThisPage.module.css";
 
 function ColorPicker() {
   const setBackgroundColor = (newColor) => {
