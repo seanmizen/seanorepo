@@ -21,6 +21,7 @@ span:hover {
   text-decoration: underline;
   text-decoration-color: red;
   text-shadow: 0.5px 0.5px 0.5px #555;
+  cursor: default;
 }
 
 a:hover {

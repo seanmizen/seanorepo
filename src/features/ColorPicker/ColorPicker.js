@@ -18,7 +18,7 @@ function ColorPicker() {
   return (
     <div className={styles["flexRow"]}>
       <div className={styles["flexColumn"]}>
-        <div>Background</div>
+        <div>background</div>
         <div className={styles["flexRow"]}>
           <input
             onChange={(e) => setBackgroundColor(e.target.value)}
@@ -31,7 +31,7 @@ function ColorPicker() {
         </div>
       </div>
       <div className={styles["flexColumn"]}>
-        <div>Text</div>
+        <div>text</div>
         <div className={styles["flexRow"]}>
           <input
             onChange={(e) => setTextColor(e.target.value)}
