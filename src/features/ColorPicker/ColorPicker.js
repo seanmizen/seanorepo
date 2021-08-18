@@ -3,36 +3,45 @@ import styles from "./ColorPicker.module.css";
 
 function ColorPicker() {
   const setBackgroundColor = (newColor) => {
-    document.body.style.backgroundColor = newColor.target.value;
+    document.body.style.backgroundColor = newColor;
   };
   const setTextColor = (newColor) => {
-    document.body.style.color = newColor.target.value;
+    document.body.style.color = newColor;
+  };
+  const resetTextColor = () => {
+    setTextColor("#000000");
+  };
+  const resetBackgroundColor = () => {
+    setBackgroundColor("#EEEEEE");
   };
 
   return (
     <div className={styles["flexRow"]}>
       <div className={styles["flexColumn"]}>
         <div>Background</div>
-        <input
-          onChange={(e) => setBackgroundColor(e)}
-          type="color"
-          id="background-color"
-          name="head"
-          value="#EEEEEE"
-        />
+        <div className={styles["flexRow"]}>
+          <input
+            onChange={(e) => setBackgroundColor(e.target.value)}
+            type="color"
+            id="background-color"
+            name="head"
+            value="#EEEEEE"
+          />
+          <button onClick={resetBackgroundColor}>Reset</button>
+        </div>
       </div>
       <div className={styles["flexColumn"]}>
         <div>Text</div>
-        <input
-          onChange={(e) => {
-            document.body.style.color = e.target.value;
-            document.getElementById("background-color").value = e.target.value;
-          }}
-          type="color"
-          id="text-color"
-          name="head"
-          value="#000000"
-        />
+        <div className={styles["flexRow"]}>
+          <input
+            onChange={(e) => setTextColor(e.target.value)}
+            type="color"
+            id="text-color"
+            name="head"
+            value="#000000"
+          />
+          <button onClick={resetTextColor}>Reset</button>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import styles from "./Projects.module.css";
+import "./Projects.module.css";
 
 function Projects() {
   return (
