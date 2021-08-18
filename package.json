@@ -1,5 +1,6 @@
 {
   "name": "seanmizen.com",
+  "homepage": "http://seanmizen.com",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
