@@ -1,5 +1,4 @@
 import React from "react";
-import ExampleFeature from "./features/ExampleFeature";
 import ItemList from "./features/ItemList";
 import Spacer from "./features/Spacer";
 import styles from "./App.module.css";
@@ -14,8 +13,12 @@ function App() {
       <p>developer | automator | person | he/him</p>
       <Spacer />
       <ItemList />
+      <div> </div>
     </div>
   );
 }
 
 export default App;
+
+//document.getElementById('test').style.color = 'orange';
+//document.body.style.color = e.target.value
