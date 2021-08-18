@@ -1,15 +1,31 @@
-import { useState } from "react";
+import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/react-collapsible
+import ColorPicker from "../ColorPicker";
 import ExampleFeature from "../ExampleFeature";
+import Bitcoin from "../Bitcoin";
 import styles from "./ItemList.module.css";
 
 function ItemList() {
   return (
     <ul>
       <li>
-        <ExampleFeature />
+        <Collapsible trigger="projects">
+          <ExampleFeature />
+        </Collapsible>
       </li>
       <li>
-        <ExampleFeature />
+        <Collapsible trigger="github">
+          <ExampleFeature />
+        </Collapsible>
+      </li>
+      <li>
+        <Collapsible trigger="donate">
+          <Bitcoin />
+        </Collapsible>
+      </li>
+      <li>
+        <Collapsible trigger="colors">
+          <ColorPicker />
+        </Collapsible>
       </li>
     </ul>
   );

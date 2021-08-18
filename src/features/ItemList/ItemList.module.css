@@ -58,14 +58,20 @@ align-content: (stretch is the default)
 /* "👉" */
 
 li {
-  list-style-type: "👉";
+  list-style-type: ">";
 }
 
 ul {
-  margin-left: 1.5rem;
+  /* margin-left: 1rem */
 }
 
 ul li::marker {
-  font-size: 150%;
-  color: goldenrod;
+  font-size: 100%;
+  /* color: rgba(70, 35, 150, 0.555); */
+}
+
+span:hover {
+  text-decoration: underline;
+  text-decoration-color: red;
+  text-shadow: 0.5px 0.5px 0.5px #555;
 }
