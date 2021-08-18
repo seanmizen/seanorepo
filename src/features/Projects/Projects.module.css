@@ -54,38 +54,3 @@ align-content: (stretch is the default)
     space-around: Lines display with equal spacing around them.
     stretch: Lines are stretched to fit the container.    
 */
-
-/* "👉" */
-
-li {
-  list-style-type: ">";
-}
-
-ul {
-  /* margin-left: 1rem */
-}
-
-ul li::marker {
-  font-size: 100%;
-  /* color: rgba(70, 35, 150, 0.555); */
-}
-
-div.a {
-  transform: rotate(90deg);
-}
-
-span:hover {
-  text-decoration: underline;
-  text-decoration-color: red;
-  text-shadow: 0.5px 0.5px 0.5px #555;
-}
-
-a:hover {
-  text-decoration: underline;
-  text-decoration-color: red;
-  text-shadow: 0.5px 0.5px 0.5px #555;
-}
-
-/*
-transform: rotate(20deg)
-*/
