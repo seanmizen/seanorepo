@@ -1,7 +1,7 @@
 import React from "react";
 import ItemList from "./features/ItemList";
 import Spacer from "./features/Spacer";
-import styles from "./App.module.css";
+import "./App.module.css";
 
 //todo https://adrianroselli.com/2018/02/github-contributions-chart.html
 

@@ -1,5 +1,5 @@
 import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/react-collapsible
-import styles from "./ItemList.module.css";
+import "./ItemList.module.css";
 import ColorPicker from "../ColorPicker";
 import Projects from "../Projects";
 import Bitcoin from "../Bitcoin";
@@ -8,25 +8,25 @@ import Github from "../Github";
 function ItemList() {
   return (
     <ul>
-      <li>
+      <li className="unselected" selected={false}>
         <Collapsible trigger="projects">
           <Projects />
         </Collapsible>
       </li>
-      <li>
+      <li className="unselected" selected={false}>
         <Collapsible trigger="github">
           <Github />
         </Collapsible>
       </li>
-      <li>
+      <li className="unselected" selected={false}>
         <Collapsible trigger="donate">
           <Bitcoin />
         </Collapsible>
       </li>
-      <li>
+      <li className="unselected" selected={false}>
         <Collapsible trigger="this page">
           <ul>
-            <li>
+            <li className="unselected" selected={false}>
               <Collapsible trigger="colors">
                 <ColorPicker />
               </Collapsible>

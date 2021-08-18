@@ -1,5 +1,4 @@
-//import { useState } from "react";
-import styles from "./Github.module.css";
+import "./Github.module.css";
 
 function Github() {
   return (
