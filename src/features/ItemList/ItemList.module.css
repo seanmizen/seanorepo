@@ -70,6 +70,10 @@ ul li::marker {
   /* color: rgba(70, 35, 150, 0.555); */
 }
 
+div.a {
+  transform: rotate(90deg);
+}
+
 span:hover {
   text-decoration: underline;
   text-decoration-color: red;

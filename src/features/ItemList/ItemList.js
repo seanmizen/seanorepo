@@ -23,8 +23,14 @@ function ItemList() {
         </Collapsible>
       </li>
       <li>
-        <Collapsible trigger="colors">
-          <ColorPicker />
+        <Collapsible trigger="this page">
+          <ul>
+            <li>
+              <Collapsible trigger="colors">
+                <ColorPicker />
+              </Collapsible>
+            </li>
+          </ul>
         </Collapsible>
       </li>
     </ul>
