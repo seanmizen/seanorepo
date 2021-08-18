@@ -1,4 +1,5 @@
 import styles from "./ColorPicker.module.css";
+//import { ChromePicker } from "react-color";
 
 function ColorPicker() {
   //  return <div className={styles["example"]}>I'm a color picker.</div>; flexContainer
@@ -22,7 +23,7 @@ function ColorPicker() {
         <input
           onChange={(e) => {
             document.body.style.color = e.target.value;
-            document.getElementById("text-color").value = e.target.value;
+            document.getElementById("background-color").value = e.target.value;
           }}
           type="color"
           id="text-color"
