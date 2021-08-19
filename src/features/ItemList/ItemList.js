@@ -2,7 +2,7 @@ import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/rea
 import "./ItemList.module.css";
 import ThisPage from "../ThisPage/ThisPage";
 import Projects from "../Projects";
-import Bitcoin from "../Bitcoin";
+import Donate from "../Donate";
 import Github from "../Github";
 
 function ItemList() {
@@ -20,7 +20,7 @@ function ItemList() {
       </li>
       <li className="unselected" selected={false}>
         <Collapsible trigger="donate">
-          <Bitcoin />
+          <Donate />
         </Collapsible>
       </li>
       <li className="unselected" selected={false}>
