@@ -19,6 +19,3 @@ function App() {
 }
 
 export default App;
-
-//document.getElementById('test').style.color = 'orange';
-//document.body.style.color = e.target.value
