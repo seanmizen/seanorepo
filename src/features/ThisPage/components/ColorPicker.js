@@ -1,17 +1,27 @@
+import { useState } from "react";
 import styles from "../ThisPage.module.css";
 
 function ColorPicker() {
-  const setBackgroundColor = (newColor) => {
+  const defaultBackgroundColor = "#EEEEEE";
+  const defaultTextColor = "#000000";
+  const [backgroundColor, setBackgroundColor] = useState(
+    defaultBackgroundColor
+  );
+  const [textColor, setTextColor] = useState(defaultTextColor);
+
+  const setBodyBackgroundColor = (newColor) => {
+    setBackgroundColor(newColor);
     document.body.style.backgroundColor = newColor;
   };
-  const setTextColor = (newColor) => {
+  const setBodyTextColor = (newColor) => {
+    setTextColor(newColor);
     document.body.style.color = newColor;
   };
-  const resetTextColor = () => {
-    setTextColor("#000000");
-  };
   const resetBackgroundColor = () => {
-    setBackgroundColor("#EEEEEE");
+    setBodyBackgroundColor(defaultBackgroundColor);
+  };
+  const resetTextColor = () => {
+    setBodyTextColor(defaultTextColor);
   };
 
   return (
@@ -20,11 +30,11 @@ function ColorPicker() {
         <div>background</div>
         <div className={styles["flexRow"]}>
           <input
-            onChange={(e) => setBackgroundColor(e.target.value)}
+            onChange={(e) => setBodyBackgroundColor(e.target.value)}
             type="color"
             id="background-color"
             name="head"
-            value="#EEEEEE"
+            value={backgroundColor}
           />
           <button onClick={resetBackgroundColor}>Reset</button>
         </div>
@@ -33,11 +43,11 @@ function ColorPicker() {
         <div>text</div>
         <div className={styles["flexRow"]}>
           <input
-            onChange={(e) => setTextColor(e.target.value)}
+            onChange={(e) => setBodyTextColor(e.target.value)}
             type="color"
             id="text-color"
             name="head"
-            value="#000000"
+            value={textColor}
           />
           <button onClick={resetTextColor}>Reset</button>
         </div>
