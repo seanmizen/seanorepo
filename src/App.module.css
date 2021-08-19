@@ -17,3 +17,54 @@ h1 {
   padding-top: 0.2rem;
   padding-bottom: 0.5rem;
 }
+
+.invisible {
+  animation: slideInFromTop 1s;
+  -moz-animation: slideInFromTop 1s; /* Firefox */
+  -webkit-animation: slideInFromTop 1s; /* Safari and Chrome */
+  -o-animation: slideInFromTop 1s; /* Opera */
+}
+.visible {
+  animation: slideInFromTop 1s;
+  -moz-animation: slideInFromTop 1s; /* Firefox */
+  -webkit-animation: slideInFromTop 1s; /* Safari and Chrome */
+  -o-animation: slideInFromTop 1s; /* Opera */
+}
+
+h1.visible {
+  animation: slideInFromTop 1s;
+  -moz-animation: slideInFromTop 1s; /* Firefox */
+  -webkit-animation: slideInFromTop 1s; /* Safari and Chrome */
+  -o-animation: slideInFromTop 1s; /* Opera */
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromTop {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideOutY {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}

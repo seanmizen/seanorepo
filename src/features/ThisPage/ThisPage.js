@@ -1,4 +1,4 @@
-import styles from "./ThisPage.module.css";
+import "./ThisPage.module.css";
 import Collapsible from "react-collapsible";
 import ColorPicker from "./components/ColorPicker.js";
 import Glow from "./components/Glow";
