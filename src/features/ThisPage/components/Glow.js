@@ -1,4 +1,4 @@
-import styles from "../../../styles/Glow.css";
+import "../../../styles/Glow.css";
 
 function Glow({ text }) {
   return (
