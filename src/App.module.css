@@ -18,33 +18,41 @@ h1 {
   padding-bottom: 0.5rem;
 }
 
-.invisible {
-  animation: slideInFromTop 1s;
-  -moz-animation: slideInFromTop 1s; /* Firefox */
-  -webkit-animation: slideInFromTop 1s; /* Safari and Chrome */
-  -o-animation: slideInFromTop 1s; /* Opera */
-}
-.visible {
-  animation: slideInFromTop 1s;
-  -moz-animation: slideInFromTop 1s; /* Firefox */
-  -webkit-animation: slideInFromTop 1s; /* Safari and Chrome */
-  -o-animation: slideInFromTop 1s; /* Opera */
+li {
+  list-style-type: ">";
 }
 
-h1.visible {
+ul {
+  /* margin-left: 1rem */
+}
+
+ul li::marker {
+  font-size: 100%;
+  /* color: rgba(70, 35, 150, 0.555); */
+}
+
+div.a {
+  transform: rotate(90deg);
+}
+
+span:hover {
+  text-decoration: underline;
+  text-decoration-color: red;
+  text-shadow: 0.5px 0.5px 0.5px #555;
+  cursor: default;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-decoration-color: red;
+  text-shadow: 0.5px 0.5px 0.5px #555;
+}
+
+h1 {
   animation: slideInFromTop 1s;
   -moz-animation: slideInFromTop 1s; /* Firefox */
   -webkit-animation: slideInFromTop 1s; /* Safari and Chrome */
   -o-animation: slideInFromTop 1s; /* Opera */
-}
-
-@keyframes fadein {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 @keyframes slideInFromTop {
@@ -55,16 +63,5 @@ h1.visible {
   100% {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes slideOutY {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-10px);
   }
 }

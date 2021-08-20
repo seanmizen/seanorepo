@@ -1,5 +1,5 @@
-function Spacer() {
-  return <div>-</div>;
+function Spacer({ text }) {
+  return <div>{text}</div>;
 }
 
 export default Spacer;
