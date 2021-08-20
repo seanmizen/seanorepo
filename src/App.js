@@ -1,4 +1,3 @@
-import React, { useEffect } from "react";
 import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/react-collapsible
 import ThisPage from "./features/ThisPage/ThisPage";
 import Projects from "./features/Projects";
