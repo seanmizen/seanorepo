@@ -10,13 +10,6 @@ import "./App.module.css";
 //todo https://adrianroselli.com/2018/02/github-contributions-chart.html
 
 function App() {
-  useEffect(() => {
-    var elements = document.body.children;
-    for (var i = 0; i < elements.length; i++) {
-      elements[i].className = elements[i].className + " visible";
-      console.log(elements[i]);
-    }
-  }, []);
   return (
     <div>
       <h1>seanmizen.com</h1>
