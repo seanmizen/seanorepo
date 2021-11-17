@@ -12,32 +12,33 @@ function App() {
   return (
     <div>
       <h1>seanmizen.com</h1>
-      <Spacer text="-" />
+      <Spacer text={"\xa0"} />
+
       <p>developer | automator | person | he/him</p>
-      <Spacer text="-" />
+      <Spacer text={"\xa0"} />
       <ul>
         <li>
-          <Collapsible trigger="projects">
+          <Collapsible trigger="projects" tabIndex="1">
             <Projects />
           </Collapsible>
         </li>
         <li>
-          <Collapsible trigger="github">
+          <Collapsible trigger="github" tabIndex="2">
             <Github />
           </Collapsible>
         </li>
         <li>
-          <Collapsible trigger="donate">
+          <Collapsible trigger="donate" tabIndex="3">
             <Donate />
           </Collapsible>
         </li>
         <li>
-          <Collapsible trigger="this page">
+          <Collapsible trigger="this page" tabIndex="4">
             <ThisPage />
           </Collapsible>
         </li>
       </ul>
-      <Spacer text="" />
+      <Spacer text={"\xa0"} />
     </div>
   );
 }
