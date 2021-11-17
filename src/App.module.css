@@ -36,16 +36,16 @@ div.a {
 }
 
 span:hover {
-  text-decoration: underline;
-  text-decoration-color: red;
-  text-shadow: 0.5px 0.5px 0.5px #555;
+  /* text-decoration: underline; */
+  /* text-decoration-color: red; */
+  text-shadow: 0.2px 0.2px 0.2px #555;
   cursor: default;
 }
 
 a:hover {
-  text-decoration: underline;
-  text-decoration-color: red;
-  text-shadow: 0.5px 0.5px 0.5px #555;
+  /* text-decoration: underline; */
+  /* text-decoration-color: red; */
+  text-shadow: 0.2px 0.2px 0.2px #555;
 }
 
 h1 {
@@ -64,4 +64,8 @@ h1 {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+a {
+  padding: 0px;
 }
