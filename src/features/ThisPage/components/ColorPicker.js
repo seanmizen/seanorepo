@@ -36,7 +36,7 @@ function ColorPicker() {
             name="head"
             value={backgroundColor}
           />
-          <button onClick={resetBackgroundColor}>Reset</button>
+          <button onClick={resetBackgroundColor}>reset</button>
         </div>
       </div>
       <div className={styles["flexColumn"]}>
@@ -49,7 +49,7 @@ function ColorPicker() {
             name="head"
             value={textColor}
           />
-          <button onClick={resetTextColor}>Reset</button>
+          <button onClick={resetTextColor}>reset</button>
         </div>
       </div>
     </div>
