@@ -7,7 +7,7 @@ import Spacer from "./features/Spacer";
 import "./App.module.css";
 
 // todo https://adrianroselli.com/2018/02/github-contributions-chart.html
-// Comment for the sake of github workflows
+// Comment for the sake of github workflows.
 
 function App() {
   return (
