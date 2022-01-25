@@ -1,9 +1,0 @@
-.flexColumn {
-  display: flex;
-  flex-flow: column;
-}
-
-.flexRow {
-  display: flex;
-  flex-flow: row;
-}
