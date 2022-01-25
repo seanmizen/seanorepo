@@ -4,9 +4,10 @@ function Projects() {
   return (
     <div>
       <div>
-        <a href="/flash-app">flash app</a> - a flashcarding app built in React
+        <a href="/apps/flash-app">flash app</a> - a flashcarding app built in
+        React
       </div>
-      <div>last updated 2021-11-17</div>
+      <div>last updated 2022-01-25</div>
     </div>
   );
 }
