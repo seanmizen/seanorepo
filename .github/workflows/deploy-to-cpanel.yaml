@@ -17,6 +17,17 @@ jobs:
           npm ci
           npm run build
 
+      #- name: Clean ReactJS precache-manifest and logs
+      #  uses: StephanThierry/ftp-delete-action@v1
+      #  with:
+      #    host: ${{ secrets.FTP_SERVER }}
+      #    user: ${{ secrets.FTP_USERNAME }}
+      #    password: ${{ secrets.FTP_PASSWORD }}
+      #    remoteFiles: "precache-manifest.*.js;logs/*.log"
+      #    remoteDirectories: "/App_Data/TEMP"
+      #    workingDir: "/public_html"
+      #    ignoreSSL: "1"
+
       - name: Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
@@ -27,4 +38,4 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          dry-run: true
+          dry-run: false
