@@ -20,8 +20,9 @@ jobs:
       - name: Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
-          #branch: build
-          #folder: build
+          # branch: build
+          # folder: build
+          # test
           local-dir: ./build/
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
