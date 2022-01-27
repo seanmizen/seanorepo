@@ -6,7 +6,7 @@ on:
       - main
 jobs:
   ftp-deploy-action:
-    name: Github-and-FTP-Deploy-Action
+    name: FTP-Deploy-Action
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,4 +24,4 @@ jobs:
           user: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           localDir: "build"
-          options: "--delete"
+          options: ""
