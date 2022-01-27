@@ -5,8 +5,8 @@ on:
     branches:
       - main
 jobs:
-  github-deploy-action:
-    name: Github-Deploy-Action
+  github-and-ftp-deploy-action:
+    name: Github-and-FTP-Deploy-Action
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,28 +17,23 @@ jobs:
           npm ci
           npm run build
 
-      - name: Deploy
+      - name: Github Deploy
         uses: JamesIves/github-pages-deploy-action@v4.2.2
         with:
           branch: build # The branch the action should deploy to.
           folder: build # The folder the action should deploy.
 
-  ftp-deploy-action:
-    name: FTP-Deploy-Action
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
+      - name: Checkout build
         uses: actions/checkout@v2
         with:
           ref: build #reference to build branch
       
-      - name: FTP-Deploy-Action
+      - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./build/
 
 
 
