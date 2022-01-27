@@ -39,12 +39,19 @@ jobs:
       #    username: ${{ secrets.FTP_USERNAME }}
       #    password: ${{ secrets.FTP_PASSWORD }}
       #    dry-run: false 
+      
+      #- name: FTP-Deploy-Action
+      #  uses: SamKirkland/FTP-Deploy-Action@4.2.0
+      #  with:
+      #    server: ${{ secrets.FTP_SERVER }}
+      #    username: ${{ secrets.FTP_USERNAME }}
+      #    password: ${{ secrets.FTP_PASSWORD }}
+      #    local-dir: ./build/
       - name: FTP-Deploy-Action
-        uses: SamKirkland/FTP-Deploy-Action@4.2.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./build/
+        run: |
+          apt-get update
+          apt-get -qq install git-ftp
+          git ftp push --syncroot ./build --user ${{ secrets.FTP_USERNAME }} --passwd ${{ secrets.FTP_PASSWORD }} ${{ secrets.FTP_SERVER }}
+
 
 
