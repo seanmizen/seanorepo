@@ -69,3 +69,10 @@ h1 {
 a {
   padding: 0px;
 }
+
+/* fix snap / jitter on collapsibles */
+div[class^="Collapsible__contentOuter"] {
+  margin: 0;
+  padding-bottom: 0px;
+  padding-top: 0px;
+}
