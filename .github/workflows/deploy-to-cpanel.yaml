@@ -6,7 +6,7 @@ on:
       - main
 jobs:
   ftp-deploy-action:
-    name: FTP-Deploy-Action
+    name: FTP Deploy Action
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,7 +17,7 @@ jobs:
           npm ci
           npm run build
 
-      - name: Upload ftp
+      - name: Upload FTP
         uses: sebastianpopp/ftp-action@releases/v2
         with:
           host: ${{ secrets.FTP_SERVER }}
