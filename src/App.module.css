@@ -73,9 +73,7 @@ div[class^="Collapsible__contentOuter"] {
   padding-top: 0px;
 }
 
-span[class^="is-closed"] + div {
-  visibility: hidden;
-}
+/* fix tabbing when collapsible is closed */
 span[class*="is-closed"] + div {
   visibility: hidden;
 }
