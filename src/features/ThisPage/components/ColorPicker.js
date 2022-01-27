@@ -30,6 +30,9 @@ function ColorPicker() {
         <div>background</div>
         <div className={styles["flexRow"]}>
           <input
+            tabIndex={0}
+            role="menu"
+            aria-label="Background colour picker"
             onChange={(e) => setBodyBackgroundColor(e.target.value)}
             type="color"
             id="background-color"
@@ -43,6 +46,9 @@ function ColorPicker() {
         <div>text</div>
         <div className={styles["flexRow"]}>
           <input
+            tabIndex={0}
+            role="menu"
+            aria-label="Page text colour picker"
             onChange={(e) => setBodyTextColor(e.target.value)}
             type="color"
             id="text-color"

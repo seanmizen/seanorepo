@@ -8,12 +8,12 @@ function ThisPage() {
   return (
     <ul>
       <li className="unselected" selected={false}>
-        <Collapsible transitionTime="100" trigger="colors">
+        <Collapsible tabIndex={0} transitionTime="100" trigger="colors">
           <ColorPicker />
         </Collapsible>
       </li>
       <li className="unselected" selected={false}>
-        <Collapsible transitionTime="100" trigger="todo">
+        <Collapsible tabIndex={0} transitionTime="100" trigger="todo">
           <Todo />
         </Collapsible>
       </li>

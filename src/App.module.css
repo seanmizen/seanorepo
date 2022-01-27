@@ -22,10 +22,6 @@ li {
   list-style-type: ">";
 }
 
-ul {
-  /* margin-left: 1rem */
-}
-
 ul li::marker {
   font-size: 100%;
   /* color: rgba(70, 35, 150, 0.555); */
@@ -75,4 +71,11 @@ div[class^="Collapsible__contentOuter"] {
   margin: 0;
   padding-bottom: 0px;
   padding-top: 0px;
+}
+
+span[class^="is-closed"] + div {
+  visibility: hidden;
+}
+span[class*="is-closed"] + div {
+  visibility: hidden;
 }
