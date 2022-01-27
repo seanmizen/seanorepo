@@ -1,4 +1,3 @@
-# https://ridbay.medium.com/how-to-deploy-private-github-repositories-to-cpanel-ef5493df8d9f
 name: Build and Deploy to CPanel
 on:
   push:
