@@ -19,22 +19,22 @@ function App() {
       <Spacer text={"\xa0"} />
       <ul>
         <li>
-          <Collapsible trigger="projects" tabIndex="1">
+          <Collapsible transitionTime="100" trigger="projects" tabIndex="1">
             <Projects />
           </Collapsible>
         </li>
         <li>
-          <Collapsible trigger="github" tabIndex="2">
+          <Collapsible transitionTime="100" trigger="github" tabIndex="2">
             <Github />
           </Collapsible>
         </li>
         <li>
-          <Collapsible trigger="donate" tabIndex="3">
+          <Collapsible transitionTime="100" trigger="donate" tabIndex="3">
             <Donate />
           </Collapsible>
         </li>
         <li>
-          <Collapsible trigger="this page" tabIndex="4">
+          <Collapsible transitionTime="100" trigger="this page" tabIndex="4">
             <ThisPage />
           </Collapsible>
         </li>
