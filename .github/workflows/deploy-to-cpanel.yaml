@@ -38,7 +38,7 @@ jobs:
       #    server: ${{ secrets.FTP_SERVER }}
       #    username: ${{ secrets.FTP_USERNAME }}
       #    password: ${{ secrets.FTP_PASSWORD }}
-      #    dry-run: false
+      #    dry-run: false 
       - name: FTP-Deploy-Action
         uses: SamKirkland/FTP-Deploy-Action@3.1.1
         with:
@@ -46,4 +46,5 @@ jobs:
           ftp-server: ${{ secrets.FTP_SERVER }}
           ftp-username: ${{ secrets.FTP_USERNAME }}
           ftp-password: ${{ secrets.FTP_PASSWORD }}
+          dry-run: true
 
