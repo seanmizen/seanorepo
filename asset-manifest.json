@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.css": "/static/css/main.ad148e1a.css",
-    "main.js": "/static/js/main.09e029f7.js",
-    "index.html": "/index.html",
-    "main.ad148e1a.css.map": "/static/css/main.ad148e1a.css.map",
-    "main.09e029f7.js.map": "/static/js/main.09e029f7.js.map"
+    "main.css": "https://seanmizen.github.io/seanmizen.com-react/static/css/main.ad148e1a.css",
+    "main.js": "https://seanmizen.github.io/seanmizen.com-react/static/js/main.09e029f7.js",
+    "index.html": "https://seanmizen.github.io/seanmizen.com-react/index.html",
+    "main.ad148e1a.css.map": "https://seanmizen.github.io/seanmizen.com-react/static/css/main.ad148e1a.css.map",
+    "main.09e029f7.js.map": "https://seanmizen.github.io/seanmizen.com-react/static/js/main.09e029f7.js.map"
   },
   "entrypoints": [
     "static/css/main.ad148e1a.css",
