@@ -19,7 +19,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build-seanmizen": "REACT_APP_BASENAME=/ PUBLIC_URL=http://seanmizen.com/ react-scripts build",
+    "build-pages": "REACT_APP_BASENAME=/seanmizen.com-react/ PUBLIC_URL=https://seanmizen.github.io/seanmizen.com-react/ react-scripts build"
   },
   "eslintConfig": {
     "extends": [
