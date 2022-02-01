@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+  workflow_run:
+  
 jobs:
   ftp-deploy-action:
     name: FTP Deploy Action
