@@ -33,6 +33,11 @@ function Home() {
           </Collapsible>
         </li>
         <li>
+          <Collapsible transitionTime="100" trigger="donate" tabIndex={0}>
+            <Donate />
+          </Collapsible>
+        </li>
+        <li>
           <Collapsible transitionTime="100" trigger="this page" tabIndex={0}>
             <ThisPage />
           </Collapsible>
