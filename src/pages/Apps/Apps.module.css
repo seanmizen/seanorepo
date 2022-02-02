@@ -10,3 +10,7 @@ h2 {
   -webkit-animation: none;
   -o-animation: none;
 }
+
+.padded-left {
+  padding-left: 1rem;
+}

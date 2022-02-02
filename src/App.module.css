@@ -25,11 +25,6 @@ li {
 li::marker {
   font-size: 100%;
 }
-
-div.a {
-  transform: rotate(90deg);
-}
-
 span:hover {
   /* text-decoration: underline; */
   /* text-decoration-color: red; */
