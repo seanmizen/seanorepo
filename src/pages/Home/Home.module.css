@@ -1,0 +1,39 @@
+.sublink {
+  transition-timing-function: ease-in;
+  transition: 100ms;
+  position: absolute;
+  left: 70px;
+  top: 0px;
+  opacity: 0;
+}
+
+.sublink::before {
+  content: "-- ";
+}
+
+span[class*="is-open"] + div div .sublink {
+  /* transform :*/
+  transform: translateX(10px);
+  left: 100px;
+  top: 0px;
+
+  /* fade-in: */
+  opacity: 1;
+  animation-name: fadeInOpacity;
+  animation-iteration-count: 1;
+  animation-timing-function: ease-in;
+  animation-delay: 20ms;
+  animation-duration: 80ms;
+}
+
+div[class*="Collapsible"] {
+  position: relative;
+}
+div[class*="Collapsible__contentOuter"] {
+  position: static;
+}
+div[class*="Collapsible__contentInner"] {
+  position: inherit;
+  padding-top: 0.5rem;
+  padding-bottom: 0.2rem;
+}

@@ -4,17 +4,21 @@ import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/rea
 import ThisPage from "../../features/ThisPage/ThisPage";
 import Donate from "../../features/Donate";
 import Github from "../../features/Github";
-import Spacer from "../../features/Spacer";
+import Spacer from "../../components/Spacer";
+import { Link } from "react-router-dom";
 
 function Home() {
   return (
     <div className={styles[""]}>
-      <h1>seanmizen.com</h1>
+      <h1 alt="shaunmizen.com">seanmizen.com</h1>
       <p>developer | automator | person | he/him</p>
-      <Spacer text={"\xa0"} />
+      <Spacer />
       <ul>
         <li>
           <Collapsible transitionTime="100" trigger="projects" tabIndex={0}>
+            <div className={styles["sublink"]}>
+              <Link to="/apps">visit</Link>
+            </div>
             <Projects />
           </Collapsible>
         </li>
@@ -34,7 +38,7 @@ function Home() {
           </Collapsible>
         </li>
       </ul>
-      <Spacer text={"\xa0"} />
+      <Spacer />
     </div>
   );
 }
