@@ -1,5 +1,6 @@
 import Home from "./pages/Home";
 import Apps from "./pages/Apps";
+import LastUpdated from "./components/LastUpdated/LastUpdated";
 import React from "react";
 import "./App.module.css"; //default css
 import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
@@ -20,6 +21,7 @@ function App() {
           <Home />
         </Route>
       </Switch>
+      <LastUpdated />
     </Router>
   );
 }
