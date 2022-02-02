@@ -1,8 +1,8 @@
 import Home from "./pages/Home";
 import Apps from "./pages/Apps";
 import React from "react";
-import "./App.module.css";
-import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
+import "./App.module.css"; //default css
+import { BrowserRouter as Router, Switch, Route, Link } from "react-router-dom";
 // todo https://adrianroselli.com/2018/02/github-contributions-chart.html
 // Comment for the sake of github workflows.
 
