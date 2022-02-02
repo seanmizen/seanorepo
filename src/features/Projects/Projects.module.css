@@ -6,3 +6,7 @@
 .ul-link li {
   list-style-type: "-";
 }
+
+.ul-padded-left {
+  padding-left: 1rem;
+}
