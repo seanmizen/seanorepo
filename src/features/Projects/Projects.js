@@ -29,9 +29,11 @@ const projectList = [
   },
 ];
 
+// TODO make a verbose version with iframes or previews of the projects.
+// TODO alternate sides in verbose mode - each project is on the opposite side of the page
 function Projects({ verbose = false }) {
   return (
-    <ul className={styles["ul-link"]}>
+    <ul className={styles["ul-link"] + " " + styles["ul-padded-left"]}>
       {projectList.map((project, index) => {
         return (
           <li key={index}>
