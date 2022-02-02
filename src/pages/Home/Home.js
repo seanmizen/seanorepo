@@ -13,7 +13,7 @@ function Home() {
       <h1 alt="shaunmizen.com">seanmizen.com</h1>
       <p>developer | automator | person | he/him</p>
       <Spacer />
-      <ul>
+      <ul className={styles["home-list"]}>
         <li>
           <Collapsible transitionTime="100" trigger="projects" tabIndex={0}>
             <div className={styles["sublink"]}>
