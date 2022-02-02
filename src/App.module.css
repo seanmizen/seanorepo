@@ -22,9 +22,8 @@ li {
   list-style-type: ">";
 }
 
-ul li::marker {
+li::marker {
   font-size: 100%;
-  /* color: rgba(70, 35, 150, 0.555); */
 }
 
 div.a {

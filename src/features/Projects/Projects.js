@@ -1,4 +1,4 @@
-import "./Projects.module.css";
+import styles from "./Projects.module.css";
 //https://stackoverflow.com/questions/56279807/is-it-possible-to-automatically-have-the-last-updated-date-on-my-website-changed
 
 console.log(process.env.PUBLIC_URL);
@@ -31,7 +31,7 @@ const projectList = [
 
 function Projects({ verbose = false }) {
   return (
-    <ul>
+    <ul className={styles["ul-link"]}>
       {projectList.map((project, index) => {
         return (
           <li key={index}>
