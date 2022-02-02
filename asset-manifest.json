@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "https://seanmizen.github.io/seanmizen.com-react/static/css/main.b206b8e5.css",
-    "main.js": "https://seanmizen.github.io/seanmizen.com-react/static/js/main.f4687a56.js",
+    "main.css": "https://seanmizen.github.io/seanmizen.com-react/static/css/main.dc4ff25d.css",
+    "main.js": "https://seanmizen.github.io/seanmizen.com-react/static/js/main.c558bc32.js",
     "index.html": "https://seanmizen.github.io/seanmizen.com-react/index.html",
-    "main.b206b8e5.css.map": "https://seanmizen.github.io/seanmizen.com-react/static/css/main.b206b8e5.css.map",
-    "main.f4687a56.js.map": "https://seanmizen.github.io/seanmizen.com-react/static/js/main.f4687a56.js.map"
+    "main.dc4ff25d.css.map": "https://seanmizen.github.io/seanmizen.com-react/static/css/main.dc4ff25d.css.map",
+    "main.c558bc32.js.map": "https://seanmizen.github.io/seanmizen.com-react/static/js/main.c558bc32.js.map"
   },
   "entrypoints": [
-    "static/css/main.b206b8e5.css",
-    "static/js/main.f4687a56.js"
+    "static/css/main.dc4ff25d.css",
+    "static/js/main.c558bc32.js"
   ]
 }
