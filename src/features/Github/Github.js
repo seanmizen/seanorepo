@@ -15,11 +15,16 @@ function Github() {
         github.com/seanmizen
       </a>
       <div>
-        <Code>i am testing out</Code>
-        {/* <br />
+        <Code>
+          i am testing out
+          <br />
           how to display code nicely
-          <br /> */}
-        {/* <CommandLine>echo yes &gt; myfile.txt</CommandLine> */}
+          <br />
+        </Code>
+        <br />
+        <div className={styles[""] + " " + styles["command-line"]}>
+          echo yes &gt; myfile.txt
+        </div>
       </div>
     </div>
   );
