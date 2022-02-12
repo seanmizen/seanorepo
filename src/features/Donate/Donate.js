@@ -5,16 +5,15 @@ const styles = { ...moduleStyles, ...globalStyles };
 function Donate() {
   return (
     <div>
-      <div>
-        <a
-          tabIndex={0}
-          role="listitem"
-          aria-label="Monzo payment URL"
-          href="https://monzo.me/seanmizen"
-        >
-          monzo.me/seanmizen
-        </a>
-      </div>
+      <a
+        tabIndex={0}
+        role="listitem"
+        aria-label="Monzo payment URL"
+        href="https://monzo.me/seanmizen"
+      >
+        monzo.me/seanmizen
+      </a>
+      <br />
       <div
         className={styles["mono"]}
         tabIndex={0}
@@ -24,6 +23,7 @@ function Donate() {
       >
         bc1qr8vjxmrxqkzd9hu3z22vuhwe8kj55q8nvenkry
       </div>
+      <br />
       <div
         className={styles["mono"]}
         tabIndex={0}

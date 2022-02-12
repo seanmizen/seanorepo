@@ -1,5 +1,6 @@
 import moduleStyles from "./Github.module.css";
 import globalStyles from "../../App.module.css";
+import Code from "../../components/Code";
 const styles = { ...moduleStyles, ...globalStyles };
 
 function Github() {
@@ -14,13 +15,11 @@ function Github() {
         github.com/seanmizen
       </a>
       <div>
-        <p className={styles["code"]}>
-          i am testing out
-          <br />
+        <Code>i am testing out</Code>
+        {/* <br />
           how to display code nicely
-          <br />
-          <p className={styles["command-line"]}>echo yes &gt; myfile.txt</p>
-        </p>
+          <br /> */}
+        {/* <CommandLine>echo yes &gt; myfile.txt</CommandLine> */}
       </div>
     </div>
   );
