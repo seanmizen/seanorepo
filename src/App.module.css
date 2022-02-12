@@ -56,6 +56,18 @@ body {
   content: "$ ";
 }
 
+/* TODO remove all of the below - will need to figure out Multiple Exports first. */
+/* Code.js is broken */
+.command-line {
+  background-color: #ddd;
+  padding: 0.3rem 1rem;
+  margin: 0.5rem 0;
+  display: inline-block;
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 h1 {
   padding-top: 0.2rem;
   padding-bottom: 0.5rem;
