@@ -1,15 +1,18 @@
-import styles from "./Home.module.css";
+import moduleStyles from "./Home.module.css";
+import globalStyles from "../../App.module.css";
 import Projects from "../../features/Projects";
 import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/react-collapsible
 import ThisPage from "../../features/ThisPage/ThisPage";
 import Donate from "../../features/Donate";
 import Github from "../../features/Github";
 import Spacer from "../../components/Spacer";
+import LastUpdated from "../../components/LastUpdated/LastUpdated";
 import { Link } from "react-router-dom";
+const styles = { ...moduleStyles, ...globalStyles };
 
 function Home() {
   return (
-    <div className={styles[""]}>
+    <div className={styles["container"]}>
       <h1 alt="shaunmizen.com">seanmizen.com</h1>
       <p>developer | automator | person | he/him</p>
       <Spacer />
@@ -39,6 +42,7 @@ function Home() {
         </li>
       </ul>
       <Spacer />
+      <LastUpdated />
     </div>
   );
 }
