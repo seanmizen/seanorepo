@@ -33,6 +33,7 @@ body {
 .mono {
   font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
+  display: inline-block;
 }
 
 .code {
@@ -40,7 +41,8 @@ body {
   just like you'd find displayed on a  github readme.md */
   /* background-color: var(--subsection-background); */
   background-color: #ddd;
-  padding: 0.3rem 1.5rem;
+  padding: 0.3rem 1rem;
+  margin: 0.5rem 0;
   display: inline-block;
   font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
@@ -49,14 +51,9 @@ body {
 
 .command-line::before {
   /* and if we want to display command line stuff */
+  /* assume component inherits from .code and .command-line. */
+  /* All we have to do is the ::before */
   content: "$ ";
-}
-
-.command-line {
-  display: inline-block;
-  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
-  font-size: 0.85rem;
-  white-space: nowrap;
 }
 
 h1 {
