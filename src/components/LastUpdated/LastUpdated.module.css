@@ -1,5 +1,6 @@
 .last-updated {
-  position: absolute;
+  position: fixed;
   bottom: 1rem;
   right: 2rem;
+  font-size: 0.85rem;
 }

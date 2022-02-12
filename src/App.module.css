@@ -61,6 +61,20 @@ h1 {
   }
 }
 
+.container {
+  max-width: 100%;
+  width: 36rem;
+  margin: auto;
+  padding: 0 1rem;
+  position: relative;
+  height: 100%;
+}
+@media only screen and (min-width: 880px) {
+  .container {
+    width: 72rem;
+  }
+}
+
 a {
   padding: 0px;
 }
