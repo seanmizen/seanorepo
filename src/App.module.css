@@ -30,6 +30,11 @@ body {
   font-family: "Karla", "Courier New", Courier, monospace;
 }
 
+li div {
+  /* prevent information falling off the screen */
+  overflow: scroll;
+}
+
 .mono {
   font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
