@@ -1,5 +1,22 @@
+:root {
+  color-scheme: light dark;
+}
+
+body.light {
+  --color: #111;
+  --background: #eee;
+  --subsection-background: #ddd;
+}
+body.dark {
+  --color: #cecece;
+  --background: #333;
+  --subsection-background: #444;
+}
 body {
-  background-color: #eee;
+  /* color: var(--color);
+  background: var(--background); */
+  color: #111;
+  background: #eee;
 }
 
 .nav {
@@ -16,6 +33,30 @@ body {
 .mono {
   font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
+}
+
+.code {
+  /* separated sections for code snippets
+  just like you'd find displayed on a  github readme.md */
+  /* background-color: var(--subsection-background); */
+  background-color: #ddd;
+  padding: 0.3rem 1.5rem;
+  display: inline-block;
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.command-line::before {
+  /* and if we want to display command line stuff */
+  content: "$ ";
+}
+
+.command-line {
+  display: inline-block;
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 h1 {
