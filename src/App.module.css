@@ -10,7 +10,12 @@ body {
 * {
   padding: 0.2rem;
   margin: 0;
-  font-family: "Consolas", "Courier New", Courier, monospace;
+  font-family: "Karla", "Courier New", Courier, monospace;
+}
+
+.mono {
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
+  font-size: 0.85rem;
 }
 
 h1 {

@@ -1,4 +1,6 @@
-import "./Donate.module.css";
+import moduleStyles from "./Donate.module.css";
+import globalStyles from "../../App.module.css";
+const styles = { ...moduleStyles, ...globalStyles };
 
 function Donate() {
   return (
@@ -14,6 +16,7 @@ function Donate() {
         </a>
       </div>
       <div
+        className={styles["mono"]}
         tabIndex={0}
         role="listitem"
         aria-label="Bitcoin address"
@@ -22,6 +25,7 @@ function Donate() {
         bc1qr8vjxmrxqkzd9hu3z22vuhwe8kj55q8nvenkry
       </div>
       <div
+        className={styles["mono"]}
         tabIndex={0}
         role="listitem"
         aria-label="Ethereum address"
