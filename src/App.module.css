@@ -133,6 +133,19 @@ h1 {
 a {
   padding: 0px;
 }
+a:link {
+  color: black;
+}
+
+a:visited {
+  color: #663366;
+}
+
+a:active {
+  color: white;
+  text-decoration-color: white;
+  text-shadow: 0.5px 0.5px 0.5px white;
+}
 
 /* fix snap / jitter on collapsibles */
 div[class^="Collapsible__contentOuter"] {
