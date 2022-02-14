@@ -1,7 +1,6 @@
 import styles from "./Projects.module.css";
 //https://stackoverflow.com/questions/56279807/is-it-possible-to-automatically-have-the-last-updated-date-on-my-website-changed
 
-console.log(process.env.PUBLIC_URL);
 const flashappURL =
   process.env.PUBLIC_URL === ""
     ? "http://seanmizen.com/apps/flash-app/"
