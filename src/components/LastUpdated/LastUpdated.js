@@ -74,7 +74,7 @@ const comfyTime = (dateTime) => {
     return "just before " + nextHourStr + " " + descriptor;
   }
 
-  return 'at some time - but this stupid "timeToComfortableString" function is broken, lol';
+  return 'at some time - but this stupid "comfyTimeString" function is broken, lol';
 };
 
 const LastUpdated = () => {
