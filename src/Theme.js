@@ -43,7 +43,6 @@ export const ThemeProvider = ({ children }) => {
   React.useEffect(() => {
     localStorage.setItem(localStorageKey, mode);
     saveMode(mode);
-    console.log("new mode: " + mode);
   }, [mode]);
 
   const [theme, setTheme] = React.useState(() => {
@@ -85,7 +84,6 @@ export const ThemeProvider = ({ children }) => {
     document.body.classList.remove("dark");
     document.body.classList.add(theme);
     // change <meta name="color-scheme"> for native inputs
-    console.log("new theme: " + theme);
     document.getElementById("colorScheme").content = theme;
   }, [theme]);
 
