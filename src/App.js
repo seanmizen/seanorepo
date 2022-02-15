@@ -1,8 +1,7 @@
 import "./index.css";
-import Home from "./pages/Home";
-import Apps from "./pages/Apps";
-import React from "react";
+import { Home, Apps } from "./pages";
 import { ThemeProvider } from "./Theme";
+import React from "react";
 import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
 
 function App() {
