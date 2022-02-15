@@ -1,0 +1,37 @@
+.theme-toggle-outer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 8rem;
+  width: 10rem;
+  font-size: 0.85rem;
+  display: flex;
+}
+.theme-toggle-inner {
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: 1.6rem 2rem;
+}
+
+.theme-toggle-inner button {
+  opacity: 0;
+}
+
+.theme-toggle-outer:hover button {
+  transition: opacity 0.2s;
+  -webkit-transition: opacity 0.2s;
+  opacity: 0.5;
+}
+
+.theme-toggle-inner:hover button {
+  transition: opacity 0.2s;
+  -webkit-transition: opacity 0.2s;
+  opacity: 1 !important;
+}
+
+.theme-toggle-outer button:focus {
+  transition: opacity 0.5s;
+  -webkit-transition: opacity 0.5s;
+  opacity: 1 !important;
+}

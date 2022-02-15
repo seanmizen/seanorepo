@@ -1,21 +1,17 @@
-import moduleStyles from "./Code.module.css";
-import globalStyles from "../../App.module.css";
-const styles = { ...moduleStyles, ...globalStyles };
+import "./Code.module.css";
 
-function Code({ children }) {
-  return <p className={styles["code"]}>{children}</p>;
+function Code({ content, commandLine }) {
+  return (
+    <pre>
+      <code>
+        {!commandLine
+          ? content
+          : content
+              .split("\n")
+              .map((item, i) => <span key={i}>{item + "\n"}</span>)}
+      </code>
+    </pre>
+  );
 }
 
-//JSON.stringify?
-
-// function CommandLine({ children }) {
-//   return (
-//     <p className={styles["code"] + " " + styles["command-line"]}>{children}</p>
-//   );
-// }
-
-//TODO get all of this messy stuff working
-
-// const exports = { Code, CommandLine };
-// export default exports;
 export default Code;

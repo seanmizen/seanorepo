@@ -1,0 +1,28 @@
+code {
+  /* separated sections for code snippets
+    just like you'd find displayed on a  github readme.md */
+  /* background-color: var(--subsection-background); */
+  background-color: RGBA(128, 128, 128, 0.2);
+  padding: 0.3rem 1rem;
+  margin: 0.5rem 0;
+  display: inline-block;
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
+  font-size: 0.85rem;
+  white-space: pre-line;
+}
+
+/* use code > span for command line stuff! */
+code > span {
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
+  font-size: 0.85rem;
+  white-space: pre-line;
+}
+
+code > span::before {
+  content: "$ ";
+}
+
+.dark code {
+  background-color: #222;
+  color: #eee;
+}

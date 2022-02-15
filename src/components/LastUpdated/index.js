@@ -1,1 +1,1 @@
-export { default } from "./HomeLink";
+export { default } from "./LastUpdated";
