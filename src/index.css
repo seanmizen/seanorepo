@@ -2,26 +2,25 @@
   color-scheme: light dark;
 }
 
-body.light {
+body {
+  color: var(--color);
+  background: var(--background);
+}
+.light {
   --color: #111;
   --background: #eee;
   --subsection-background: #ddd;
+  --highlight: #4a9;
+  --link: #000;
+  --link-visted: #636;
 }
-body.dark {
+.dark {
   --color: #cecece;
   --background: #333;
   --subsection-background: #444;
-}
-body {
-  /* color: var(--color);
-  background: var(--background); */
-  color: #111;
-  background: #eee;
-}
-
-.nav {
-  display: none !important;
-  background: #000 !important;
+  --highlight: #969;
+  --link: #cecece;
+  --link-visted: #636;
 }
 
 * {
@@ -38,39 +37,9 @@ li div {
 .mono {
   font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
+  padding: 0.1rem 0px;
+  margin: 0;
   display: inline-block;
-}
-
-.code {
-  /* separated sections for code snippets
-  just like you'd find displayed on a  github readme.md */
-  /* background-color: var(--subsection-background); */
-  background-color: #ddd;
-  padding: 0.3rem 1rem;
-  margin: 0.5rem 0;
-  display: inline-block;
-  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.command-line::before {
-  /* and if we want to display command line stuff */
-  /* assume component inherits from .code and .command-line. */
-  /* All we have to do is the ::before */
-  content: "$ ";
-}
-
-/* TODO remove all of the below - will need to figure out Multiple Exports first. */
-/* Code.js is broken */
-.command-line {
-  background-color: #ddd;
-  padding: 0.3rem 1rem;
-  margin: 0.5rem 0;
-  display: inline-block;
-  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
-  font-size: 0.85rem;
-  white-space: nowrap;
 }
 
 h1 {
@@ -85,7 +54,8 @@ li {
 li::marker {
   font-size: 100%;
 }
-span:hover {
+
+.Collapsible > span:hover {
   /* text-decoration: underline; */
   /* text-decoration-color: red; */
   text-shadow: 0.2px 0.2px 0.2px #555;
@@ -134,17 +104,17 @@ a {
   padding: 0px;
 }
 a:link {
-  color: black;
+  color: var(--link);
 }
 
 a:visited {
-  color: #663366;
+  color: var(--link-visited);
 }
 
 a:active {
-  color: white;
-  text-decoration-color: white;
-  text-shadow: 0.5px 0.5px 0.5px white;
+  color: var(--highlight);
+  text-decoration-color: var(--highlight);
+  text-shadow: 0.5px 0.5px 0.5px var(--highlight);
 }
 
 /* fix snap / jitter on collapsibles */

@@ -1,7 +1,4 @@
-import moduleStyles from "./Github.module.css";
-import globalStyles from "../../App.module.css";
 import Code from "../../components/Code";
-const styles = { ...moduleStyles, ...globalStyles };
 
 function Github() {
   return (
@@ -15,16 +12,8 @@ function Github() {
         github.com/seanmizen
       </a>
       <div>
-        <Code>
-          i am testing out
-          <br />
-          how to display code nicely
-          <br />
-        </Code>
-        <br />
-        <div className={styles[""] + " " + styles["command-line"]}>
-          echo yes &gt; myfile.txt
-        </div>
+        <Code content={"// i am testing out\n// how to display code nicely"} />
+        <Code commandLine content={"echo yes > brick.txt\nbut also this"} />
       </div>
     </div>
   );

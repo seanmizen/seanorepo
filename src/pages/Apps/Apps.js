@@ -1,13 +1,10 @@
-import moduleStyles from "./Apps.module.css";
-import globalStyles from "../../App.module.css";
-import Projects from "../../features/Projects";
-import HomeLink from "../../components/HomeLink";
-import Spacer from "../../components/Spacer";
-const styles = { ...moduleStyles, ...globalStyles };
+import styles from "./Apps.module.css";
+import { Projects } from "../../features";
+import { HomeLink, Spacer } from "../../components";
 
 function Apps() {
   return (
-    <div className={styles["container"]}>
+    <div className={"container"}>
       <h1 className={styles["no-animation"]}>seanmizen.com</h1>
       <h2 className={styles[""]}>current projects:</h2>
       <div className={styles["padded-left"]}>

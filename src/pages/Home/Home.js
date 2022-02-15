@@ -1,18 +1,15 @@
-import moduleStyles from "./Home.module.css";
-import globalStyles from "../../App.module.css";
-import Projects from "../../features/Projects";
-import Collapsible from "react-collapsible"; //https://www.npmjs.com/package/react-collapsible
-import ThisPage from "../../features/ThisPage/ThisPage";
-import Donate from "../../features/Donate";
-import Github from "../../features/Github";
-import Spacer from "../../components/Spacer";
-import LastUpdated from "../../components/LastUpdated/LastUpdated";
+import styles from "./Home.module.css";
+import Collapsible from "react-collapsible";
+import { Projects, ThisPage, Donate, Github } from "../../features";
+import { Spacer, LastUpdated, ThemeToggle } from "../../components";
 import { Link } from "react-router-dom";
-const styles = { ...moduleStyles, ...globalStyles };
+import { ThemeContext } from "../../Theme";
+import React from "react";
 
 function Home() {
+  const { mode, toggleMode } = React.useContext(ThemeContext);
   return (
-    <div className={styles["container"]}>
+    <div className={"container"}>
       <h1 alt="shaunmizen.com">seanmizen.com</h1>
       <p>developer | automator | person | he/him</p>
       <Spacer />
@@ -43,6 +40,7 @@ function Home() {
       </ul>
       <Spacer />
       <LastUpdated />
+      <ThemeToggle mode={mode} toggleMode={toggleMode} />
     </div>
   );
 }
