@@ -13,7 +13,7 @@ function Github() {
       </a>
       <div>
         <Code content={"// i am testing out\n// how to display code nicely"} />
-        <Code commandLine content={"echo yes > brick.txt\nbut also this"} />
+        <Code commandLine content={'screen -dm bash -c "yes > brick.txt"'} />
       </div>
     </div>
   );
