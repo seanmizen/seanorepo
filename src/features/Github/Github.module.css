@@ -1,0 +1,52 @@
+.p3-test {
+  display: flex;
+  flex-wrap: wrap;
+  /* display-p3 allows for more vivid colors. */
+  /* https://p3colorpicker.cool/ */
+  --salmon-pink: #fb79b3;
+  --p3-salmon-pink: var(--salmon-pink);
+  /* --p3-salmon-pink: #000; */
+
+  --pinkest-pink: #ff0073;
+  --p3-pinkest-pink: var(--pinkest-pink);
+  /* --p3-pinkest-pink: #000; */
+
+  --greenest-green: #0f0;
+  --p3-greenest-green: var(--greenest-green);
+  /* --p3-greenest-green: #000; */
+
+  --reddest-red: #f00;
+  --p3-reddest-red: var(--reddest-red);
+  /* --p3-reddest-red: #000; */
+}
+
+.p3-test span {
+  width: 50px;
+  height: 31px;
+  margin: 1px;
+}
+
+.salmon-pink {
+  background-color: var(--salmon-pink);
+}
+.p3-salmon-pink {
+  background-color: var(--p3-salmon-pink);
+}
+.pinkest-pink {
+  background-color: var(--pinkest-pink);
+}
+.p3-pinkest-pink {
+  background-color: var(--p3-pinkest-pink);
+}
+.greenest-green {
+  background-color: var(--greenest-green);
+}
+.p3-greenest-green {
+  background-color: var(--p3-greenest-green);
+}
+.reddest-red {
+  background-color: var(--reddest-red);
+}
+.p3-reddest-red {
+  background-color: var(--p3-reddest-red);
+}
