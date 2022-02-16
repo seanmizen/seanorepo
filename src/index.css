@@ -21,6 +21,9 @@ body {
   --highlight: #969;
   --link: #cecece;
   --link-visted: #636;
+  /* TODO: get display-p3 working even though it's only supported on safari */
+  /* vibrant colors, yo */
+  --highlight: color(display-p3 9 6 9);
 }
 
 * {

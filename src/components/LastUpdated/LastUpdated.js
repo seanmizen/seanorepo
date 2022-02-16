@@ -86,7 +86,6 @@ const LastUpdated = ({ apiRepoUrl }) => {
     sendRequestForDate();
   }, []);
 
-  // TODO - elegant way to pull github repo name?
   const sendRequestForDate = () => {
     const xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function () {
