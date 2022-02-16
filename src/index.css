@@ -31,7 +31,7 @@ body {
 
 li div {
   /* prevent information falling off the screen */
-  overflow: scroll;
+  overflow: overlay;
 }
 
 .mono {
