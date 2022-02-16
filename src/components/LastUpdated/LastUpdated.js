@@ -77,8 +77,10 @@ const comfyTime = (dateTime) => {
   return 'at some time - but this stupid "comfyTimeString" function is broken, lol';
 };
 
-const LastUpdated = () => {
-  const [lastUpdated, setLastUpdated] = useState("");
+const LastUpdated = ({ apiRepoUrl }) => {
+  const [lastUpdated, setLastUpdated] = useState(
+    "at um, well, i'm not sure yet"
+  );
 
   useEffect(() => {
     sendRequestForDate();
@@ -98,30 +100,13 @@ const LastUpdated = () => {
         );
       }
     };
-    xhttp.open(
-      "GET",
-      "https://api.github.com/repos/seanmizen/seanmizen.com-react",
-      true
-    );
+    xhttp.open("GET", apiRepoUrl, true);
     xhttp.send();
   };
 
   return (
     <div className={styles["last-updated"]}>last updated {lastUpdated}</div>
   );
-  /* 
-  section to test comfyTime:
-  <br></br>
-  <div>
-    return(timeToComfortableString(randomDate()));
-    {[...Array(100)].map((x, i) => (
-      <div>
-        {randomDate().toISOString().slice(0, 10) +
-          " " +
-          comfyTime(randomDate())}
-      </div>
-    ))}
-  </div> */
 };
 
 export default LastUpdated;

@@ -10,7 +10,9 @@ function Home() {
   const { mode, toggleMode } = React.useContext(ThemeContext);
   return (
     <div className={"container"}>
-      <h1 alt="shaunmizen.com">seanmizen.com</h1>
+      <h1 className="test" alt="shaunmizen.com">
+        seanmizen.com
+      </h1>
       <p>developer | automator | person | he/him</p>
       <Spacer />
       <ul className={styles["home-list"]}>
@@ -39,7 +41,11 @@ function Home() {
         </li>
       </ul>
       <Spacer />
-      <LastUpdated />
+      <LastUpdated
+        apiRepoUrl={
+          "https://api.github.com/repos/seanmizen/seanmizen.com-react"
+        }
+      />
       <ThemeToggle mode={mode} toggleMode={toggleMode} />
     </div>
   );
