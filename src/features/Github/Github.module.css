@@ -5,19 +5,23 @@
   /* https://p3colorpicker.cool/ */
   --salmon-pink: #fb79b3;
   --p3-salmon-pink: var(--salmon-pink);
-  /* --p3-salmon-pink: #000; */
 
   --pinkest-pink: #ff0073;
   --p3-pinkest-pink: var(--pinkest-pink);
-  /* --p3-pinkest-pink: #000; */
 
   --greenest-green: #0f0;
   --p3-greenest-green: var(--greenest-green);
-  /* --p3-greenest-green: #000; */
 
   --reddest-red: #f00;
   --p3-reddest-red: var(--reddest-red);
-  /* --p3-reddest-red: #000; */
+}
+@supports (color: color(display-p3 1 1 1)) {
+  .p3-test {
+    --p3-salmon-pink: color(display-p3 1 0.515 0.801);
+    --p3-pinkest-pink: color(display-p3 1 0 0.52);
+    --p3-greenest-green: color(display-p3 0 1 0);
+    --p3-reddest-red: color(display-p3 1 0 0);
+  }
 }
 
 .p3-test span {

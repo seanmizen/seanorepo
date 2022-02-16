@@ -19,7 +19,7 @@ function Github() {
       <div>
         below, you'll see me try out some vibrant colours using{" "}
         <em>display-p3</em> (safari only - feb 2022). <br />
-        On your device these might all look the same!
+        on your device these might all look the same!
       </div>
       <div className={styles["p3-test"]}>
         <span className={styles["salmon-pink"]} />
