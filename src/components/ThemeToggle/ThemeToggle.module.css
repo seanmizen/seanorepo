@@ -35,3 +35,10 @@
   -webkit-transition: opacity 0.5s;
   opacity: 1 !important;
 }
+
+/* enforce auto color theme for mobile users */
+@media only screen and (max-width: 440px) {
+  .theme-toggle-outer {
+    display: none;
+  }
+}
