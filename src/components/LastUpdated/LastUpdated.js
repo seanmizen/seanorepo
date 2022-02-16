@@ -84,7 +84,7 @@ const LastUpdated = ({ apiRepoUrl }) => {
 
   useEffect(() => {
     sendRequestForDate();
-  }, []);
+  });
 
   const sendRequestForDate = () => {
     const xhttp = new XMLHttpRequest();
