@@ -26,7 +26,21 @@ span[class*="is-open"] + div div .sublink {
   animation-duration: 80ms;
 }
 
+.home-list > li{
+  position: relative
+}
+
+.clickable-marker{
+  width: 2.15rem;
+  left:-2rem;
+  position: absolute;
+  /* Z-index greater than Collapsible allows for the overlapping marker to work better */
+  /* with no dead unclickable space between the marker and the actual content */
+  z-index: 1; 
+}
+
 div[class*="Collapsible"] {
+  z-index: 0;
   position: relative;
 }
 div[class*="Collapsible__contentOuter"] {
