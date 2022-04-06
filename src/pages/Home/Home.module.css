@@ -26,8 +26,34 @@ span[class*="is-open"] + div div .sublink {
   animation-duration: 80ms;
 }
 
-.home-list > li{
-  position: relative
+/* li::marker{
+  transform: rotate(90deg);
+} */
+
+.home-list li {
+  position: relative;
+  list-style-type: none;
+}
+
+li:before {
+  left: 0.1rem;
+  top: 0.4rem;
+  content:">";
+  margin-left:-20px;
+  position: absolute;
+  transition:150ms;
+  opacity: 0;
+}
+/* Better to do this manually for now */
+/* allows for nested focus events */
+.li-hover:before,
+.li-focused::before{
+  opacity: 1;
+  transform: translate(0.5rem);
+}
+
+.li-hover:before{
+  transition:150ms;
 }
 
 .clickable-marker{
