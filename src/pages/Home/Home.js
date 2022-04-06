@@ -1,6 +1,7 @@
 import styles from "./Home.module.css";
 import { Projects, ThisPage, Donate, Github } from "../../features";
 import { Spacer, LastUpdated, ThemeToggle } from "../../components";
+import { HomeLi } from "./components";
 import { Link } from "react-router-dom";
 import { ThemeContext } from "../../Theme";
 import Collapsible from "react-collapsible";
@@ -9,10 +10,21 @@ import React from "react";
 function Home() {
   const { mode, toggleMode } = React.useContext(ThemeContext);
 
-  const clickableMarker = (e) => {
-    // Allows clicking the <li> marker to activate the collapsible
-    e.target.nextSibling.children[0].click();
+  const toggleCollapsible = (e) => {
+    // Allows activating the collapsible by clicking the marker
+    // Guaranteed className === "Collapsible"
+    const collapsibleRef = Array.from(e.currentTarget.children).filter(
+      (item) => item.className === "Collapsible"
+    )[0].children[0];
+    collapsibleRef.click();
   };
+
+  const subsections = [
+    { component: <Projects />, trigger: "projects", subLink: "/apps" },
+    { component: <Github />, trigger: "github" },
+    { component: <Donate />, trigger: "donate" },
+    { component: <ThisPage />, trigger: "this page" },
+  ];
 
   return (
     <div className={"container"}>
@@ -22,41 +34,24 @@ function Home() {
       <p>developer | automator | person | he/him</p>
       <Spacer />
       <ul className={styles["home-list"]}>
-        <li>
-          <div onClick={clickableMarker} className={styles["clickable-marker"]}>
-            {"\xa0"}
-          </div>
-          <Collapsible transitionTime="100" trigger="projects" tabIndex={0}>
-            <div className={styles["sublink"]}>
-              <Link to="/apps">visit</Link>
-            </div>
-            <Projects />
-          </Collapsible>
-        </li>
-        <li>
-          <div onClick={clickableMarker} className={styles["clickable-marker"]}>
-            {"\xa0"}
-          </div>
-          <Collapsible transitionTime="100" trigger="github" tabIndex={0}>
-            <Github />
-          </Collapsible>
-        </li>
-        <li>
-          <div onClick={clickableMarker} className={styles["clickable-marker"]}>
-            {"\xa0"}
-          </div>
-          <Collapsible transitionTime="100" trigger="donate" tabIndex={0}>
-            <Donate />
-          </Collapsible>
-        </li>
-        <li>
-          <div onClick={clickableMarker} className={styles["clickable-marker"]}>
-            {"\xa0"}
-          </div>
-          <Collapsible transitionTime="100" trigger="this page" tabIndex={0}>
-            <ThisPage />
-          </Collapsible>
-        </li>
+        {subsections.map((subsection, index) => {
+          return (
+            <HomeLi key={index} onClick={toggleCollapsible}>
+              <Collapsible
+                transitionTime="100"
+                trigger={subsection.trigger}
+                tabIndex={0}
+              >
+                {subsection.subLink !== undefined && (
+                  <div className={styles["sublink"]}>
+                    <Link to={subsection.subLink}>visit</Link>
+                  </div>
+                )}
+                {subsection.component}
+              </Collapsible>
+            </HomeLi>
+          );
+        })}
       </ul>
       <Spacer />
       <LastUpdated
