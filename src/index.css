@@ -61,7 +61,6 @@ li::marker {
 .Collapsible > span:hover {
   /* text-decoration: underline; */
   /* text-decoration-color: red; */
-  text-shadow: 0.2px 0.2px 0.2px #555;
   cursor: default;
 }
 
