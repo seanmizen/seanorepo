@@ -2,6 +2,11 @@
   color-scheme: light dark;
 }
 
+* {
+  transition: background-color 100ms linear;
+  transition: color 100ms linear;
+}
+
 body {
   color: var(--color);
   background: var(--background);
