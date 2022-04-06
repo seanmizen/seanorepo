@@ -21,11 +21,10 @@ const HomeLi = ({ children, trigger, subLink }) => {
   const toggleCollapsible = (e) => {
     // Allows activating the collapsible by clicking the marker
     // Guaranteed className === "Collapsible"
-    // CURRENTLY DISABLED, GOOD GRIEF
-    // const collapsibleRef = Array.from(e.currentTarget.children).filter(
-    //   (item) => item.className === "Collapsible"
-    // )[0].children[0];
-    // collapsibleRef.click();
+    const collapsibleRef = Array.from(
+      e.currentTarget.parentNode.children
+    ).filter((item) => item.className === "Collapsible")[0].children[0];
+    collapsibleRef.click();
   };
 
   return (
@@ -34,9 +33,10 @@ const HomeLi = ({ children, trigger, subLink }) => {
       onBlur={onBlur}
       onMouseOver={onMouseOver}
       onMouseOut={onMouseOut}
-      onClick={toggleCollapsible}
     >
-      <div className={styles["clickable-marker"]}>{"\xa0"}</div>
+      <div onClick={toggleCollapsible} className={styles["clickable-marker"]}>
+        {"\xa0"}
+      </div>
       <Collapsible transitionTime="100" trigger={trigger} tabIndex={0}>
         {subLink !== undefined && (
           <div className={styles["sublink"]}>
