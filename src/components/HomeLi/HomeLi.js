@@ -1,4 +1,4 @@
-import styles from "../Home.module.css";
+import styles from "./HomeLi.module.css";
 import Collapsible from "react-collapsible";
 import { Link } from "react-router-dom";
 

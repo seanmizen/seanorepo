@@ -1,7 +1,5 @@
-import styles from "./Home.module.css";
 import { Projects, ThisPage, Donate, Github } from "../../features";
-import { Spacer, LastUpdated, ThemeToggle } from "../../components";
-import { HomeLi } from "./components";
+import { Spacer, LastUpdated, ThemeToggle, HomeLi } from "../../components";
 import { ThemeContext } from "../../Theme";
 import React from "react";
 
@@ -17,12 +15,10 @@ function Home() {
 
   return (
     <div className={"container"}>
-      <h1 className="test" alt="shaunmizen.com">
-        seanmizen.com
-      </h1>
+      <h1 alt="shaunmizen.com">seanmizen.com</h1>
       <p>developer | automator | person | he/him</p>
       <Spacer />
-      <ul className={styles["home-list"]}>
+      <ul>
         {subsections.map((subsection, index) => {
           return (
             <HomeLi
