@@ -21,14 +21,11 @@ const HomeLi = ({ children, trigger, subLink }) => {
   const toggleCollapsible = (e) => {
     // Allows activating the collapsible by clicking the marker
     // Guaranteed className === "Collapsible"
-    try {
-      const collapsibleRef = Array.from(e.currentTarget.children).filter(
-        (item) => item.className === "Collapsible"
-      )[0].children[0];
-      collapsibleRef.click();
-    } catch {
-      //do nothing
-    }
+    // CURRENTLY DISABLED, GOOD GRIEF
+    // const collapsibleRef = Array.from(e.currentTarget.children).filter(
+    //   (item) => item.className === "Collapsible"
+    // )[0].children[0];
+    // collapsibleRef.click();
   };
 
   return (
