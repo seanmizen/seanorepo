@@ -14,7 +14,7 @@ function Github() {
       </a>
       <div>
         <Code content={"// i am testing out\n// how to display code nicely"} />
-        <Code commandLine content={'screen -dm bash -c "yes > brick.txt"'} />
+        <Code commandLine content={'screen -dm bash -c "yes > .brick"'} />
       </div>
       <div>
         below, you'll see me try out some vibrant colours using{" "}
