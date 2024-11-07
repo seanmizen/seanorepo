@@ -16,7 +16,7 @@ function Home() {
   return (
     <div className={"container"}>
       <h1 alt="shaunmizen.com">seanmizen.com</h1>
-      <p>developer | automator | person | he/him</p>
+      <p>developer | automator | person</p>
       <Spacer />
       <ul>
         {subsections.map((subsection, index) => {
