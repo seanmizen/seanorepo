@@ -28,7 +28,7 @@ const projectList = [
   },
   {
     linklabel: "more to come",
-    description: "sorry, the website is still largely incomplete!",
+    description: "(classic \"under construction\" placeholder)",
   },
 ];
 
