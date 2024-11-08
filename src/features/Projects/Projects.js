@@ -7,24 +7,28 @@ const flashappURL =
     : "/apps/flash-app/";
 
 const projectList = [
-  {
-    linklabel: "flash app",
-    description: "a flashcarding app built in React",
-    href: flashappURL,
-    arialabel: "URL for Flash App, a flashcarding app built in react",
-  },
-  {
-    linklabel: "tourguide-ar",
-    description: "a tourguide web app for universities (a WIP group project)",
-    href: "https://tourguide-ar.github.io/Tourguide-ar/",
-    arialabel:
-      "URL for Tourguide-ar, a tourguide web app for universities. (a group work project)",
-  },
+  // {
+  //   linklabel: "flash app",
+  //   description: "a flashcarding app built in React",
+  //   href: flashappURL,
+  //   arialabel: "URL for Flash App, a flashcarding app built in react",
+  // },
+  // {
+  //   linklabel: "tourguide-ar",
+  //   description: "a tourguide web app for universities (a WIP group project)",
+  //   href: "https://tourguide-ar.github.io/Tourguide-ar/",
+  //   arialabel:
+  //     "URL for Tourguide-ar, a tourguide web app for universities. (a group work project)",
+  // },
   {
     linklabel: "seanmizen.com",
     description: "this site",
     href: process.env.PUBLIC_URL,
     arialabel: "URL for this website",
+  },
+  {
+    linklabel: "more to come",
+    description: "sorry, the website is still largely incomplete!",
   },
 ];
 
