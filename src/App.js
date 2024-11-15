@@ -24,7 +24,7 @@ import Snowfall from "react-snowfall";
 function App() {
   return (
     <ThemeProvider>
-      <Snowfall snowflakeCount={200} />
+      <Snowfall snowflakeCount={200} color={'#FF70B5'} />
       <Router basename={process.env.REACT_APP_BASENAME}>
         <Switch>
           <Route path="/apps">
