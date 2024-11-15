@@ -1,4 +1,4 @@
-import { Projects, ThisPage, Donate, Github } from "../../features";
+import { Projects, ThisPage, Donate, Github, Xmas } from "../../features";
 import { Spacer, LastUpdated, ThemeToggle, HomeLi } from "../../components";
 import { ThemeContext } from "../../Theme";
 import React from "react";
@@ -11,6 +11,7 @@ function Home() {
     { component: <Github />, trigger: "github" },
     { component: <Donate />, trigger: "donate" },
     { component: <ThisPage />, trigger: "this page" },
+    { component: <Xmas />, trigger: "Xmas 🎄" },
   ];
 
   return (
