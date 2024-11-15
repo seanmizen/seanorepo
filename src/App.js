@@ -3,6 +3,7 @@ import { Home, Apps } from "./pages";
 import { ThemeProvider } from "./Theme";
 import React from "react";
 import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
+import Snowfall from "react-snowfall";
 
 // I'm on a really good streak of github contributions, so I'm going to keep it going
 // by adding this comment. I'm not sure what else to say, so I'll just say that I'm
@@ -23,6 +24,7 @@ import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
 function App() {
   return (
     <ThemeProvider>
+      <Snowfall snowflakeCount={200} />
       <Router basename={process.env.REACT_APP_BASENAME}>
         <Switch>
           <Route path="/apps">
