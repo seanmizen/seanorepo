@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
+
 import styles from './LastUpdated.module.css';
+
 import toWords from 'number-to-words/src/toWords';
-import { useState, useEffect } from 'react';
 
 const comfyTime = dateTime => {
   const hour = dateTime.getUTCHours();
@@ -24,7 +26,7 @@ const comfyTime = dateTime => {
       descriptor = 'in the morning';
       break;
     case 12:
-      //special case: midday
+      // special case: midday
       return 'at midday';
     case 13:
     case 14:
@@ -41,7 +43,7 @@ const comfyTime = dateTime => {
       descriptor = 'at night';
       break;
     default:
-      //special case: midnight
+      // special case: midnight
       return 'around midnight';
   }
 
@@ -63,43 +65,53 @@ const comfyTime = dateTime => {
   }
 
   if (mins <= 15) {
-    return 'at around ' + hourStr + ' ' + descriptor;
-  } else if (mins <= 25) {
-    return 'just after ' + hourStr + ' ' + descriptor;
-  } else if (mins <= 35) {
-    return 'at half ' + hourStr + '(ish)';
-  } else if (mins <= 50) {
-    return 'at maybe ' + nextHourStr + ' ' + descriptor;
-  } else if (mins >= 50) {
-    return 'just before ' + nextHourStr + ' ' + descriptor;
+    return `at around ${hourStr} ${descriptor}`;
+  }
+  if (mins <= 25) {
+    return `just after ${hourStr} ${descriptor}`;
+  }
+  if (mins <= 35) {
+    return `at half ${hourStr}(ish)`;
+  }
+  if (mins <= 50) {
+    return `at maybe ${nextHourStr} ${descriptor}`;
+  }
+  if (mins >= 50) {
+    return `just before ${nextHourStr} ${descriptor}`;
   }
 
   return 'at some time - but this stupid "comfyTimeString" function is broken, lol';
 };
 
-const LastUpdated = ({ apiRepoUrl }) => {
+function LastUpdated({ apiRepoUrl }) {
   const [lastUpdated, setLastUpdated] = useState("at um, well, i'm not sure yet");
+
+  const sendRequestForDate = async () => {
+    try {
+      const response = await fetch(apiRepoUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const repo = await response.json();
+      const updatedDate = new Date(repo.pushed_at);
+      const comfortableTime = comfyTime(updatedDate);
+
+      setLastUpdated(`${updatedDate.toISOString().slice(0, 10)} ${comfortableTime}`);
+    } catch (error) {
+      console.error('Failed to fetch repository data:', error);
+    }
+  };
 
   useEffect(() => {
     sendRequestForDate();
-  });
+  }, []);
 
-  const sendRequestForDate = () => {
-    const xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function () {
-      if (this.readyState === 4 && this.status === 200) {
-        const repo = JSON.parse(this.responseText);
-        const updatedDate = new Date(repo.pushed_at);
-        let comfortableTime = comfyTime(updatedDate);
-
-        setLastUpdated(updatedDate.toISOString().slice(0, 10) + ' ' + comfortableTime);
-      }
-    };
-    xhttp.open('GET', apiRepoUrl, true);
-    xhttp.send();
-  };
-
-  return <div className={styles['last-updated']}>last updated {lastUpdated}</div>;
-};
+  return (
+    <div className={styles['last-updated']}>
+      last updated
+      {lastUpdated}
+    </div>
+  );
+}
 
 export default LastUpdated;

@@ -1,19 +1,21 @@
 import Code from '../../components/Code';
+
 import styles from './Github.module.css';
 
 function Github() {
   return (
     <div>
-      <a tabIndex={0} role="listitem" aria-label="Github URL" href="https://github.com/seanmizen">
+      <a tabIndex={0} aria-label="Github URL" href="https://github.com/seanmizen">
         github.com/seanmizen
       </a>
       <div>
         <Code content={'// i am testing out\n// how to display code nicely'} />
-        <Code commandLine content={'screen -dm bash -c "yes > .brick"'} />
+        <Code commandLine content='screen -dm bash -c "yes > .brick"' />
       </div>
       <div>
-        below, you'll see me try out some vibrant colours using <em>display-p3</em> (safari only -
-        feb 2022). <br />
+        below, you&apos;ll see me try out some vibrant colours using <em>display-p3</em> (safari
+        only - feb 2022).
+        <br />
         on your device these might all look the same!
       </div>
       <div className={styles['p3-test']}>
