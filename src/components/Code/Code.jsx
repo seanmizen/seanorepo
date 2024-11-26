@@ -1,4 +1,4 @@
-import "./Code.module.css";
+import './Code.module.css';
 
 function Code({ content, commandLine }) {
   return (
@@ -6,9 +6,7 @@ function Code({ content, commandLine }) {
       <code>
         {!commandLine
           ? content
-          : content
-              .split("\n")
-              .map((item, i) => <span key={i}>{item + "\n"}</span>)}
+          : content.split('\n').map((item, i) => <span key={i}>{`${item}\n`}</span>)}
       </code>
     </pre>
   );

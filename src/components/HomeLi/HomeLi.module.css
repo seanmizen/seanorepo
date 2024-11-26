@@ -1,80 +1,79 @@
 .sublink {
-    transition-timing-function: ease-in;
-    transition: 100ms;
-    position: absolute;
-    left: 70px;
-    top: 0px;
-    opacity: 0;
-  }
-  
-  .sublink::before {
-    content: "-- ";
-  }
-  
-  span[class*="is-open"] + div div .sublink {
-    /* transform :*/
-    transform: translateX(10px);
-    left: 100px;
-    top: 0px;
-  
-    /* fade-in: */
-    opacity: 1;
-    animation-name: fadeInOpacity;
-    animation-iteration-count: 1;
-    animation-timing-function: ease-in;
-    animation-delay: 20ms;
-    animation-duration: 80ms;
-  }
-  
-  /* li::marker{
+  transition-timing-function: ease-in;
+  transition: 100ms;
+  position: absolute;
+  left: 70px;
+  top: 0px;
+  opacity: 0;
+}
+
+.sublink::before {
+  content: '-- ';
+}
+
+span[class*='is-open'] + div div .sublink {
+  /* transform :*/
+  transform: translateX(10px);
+  left: 100px;
+  top: 0px;
+
+  /* fade-in: */
+  opacity: 1;
+  animation-name: fadeInOpacity;
+  animation-iteration-count: 1;
+  animation-timing-function: ease-in;
+  animation-delay: 20ms;
+  animation-duration: 80ms;
+}
+
+/* li::marker{
     transform: rotate(90deg);
   } */
-  
- li {
-    position: relative;
-    list-style-type: none;
-  }
-  
-  li:before {
-    left: 0.1rem;
-    top: 0.4rem;
-    content:">";
-    margin-left:-20px;
-    position: absolute;
-    transition:150ms;
-    opacity: 0;
-  }
-  /* Better to do this manually for now */
-  /* allows for nested focus events */
-  .li-hover:before,
-  .li-focused::before{
-    opacity: 1;
-    transform: translate(0.5rem);
-  }
-  
-  .li-hover:before{
-    transition:150ms;
-  }
-  
-  .clickable-marker{
-    width: 2.15rem;
-    left:-2rem;
-    position: absolute;
-    /* Z-index greater than Collapsible allows for the overlapping marker to work better */
-    /* with no dead unclickable space between the marker and the actual content */
-    z-index: 1; 
-  }
-  
-  div[class*="Collapsible"] {
-    z-index: 0;
-    position: relative;
-  }
-  div[class*="Collapsible__contentOuter"] {
-    position: static;
-  }
-  div[class*="Collapsible__contentInner"] {
-    position: inherit;
-    padding-top: 0.5rem;
-    padding-bottom: 0.2rem;
-  }
-  
+
+li {
+  position: relative;
+  list-style-type: none;
+}
+
+li:before {
+  left: 0.1rem;
+  top: 0.4rem;
+  content: '>';
+  margin-left: -20px;
+  position: absolute;
+  transition: 150ms;
+  opacity: 0;
+}
+/* Better to do this manually for now */
+/* allows for nested focus events */
+.li-hover:before,
+.li-focused::before {
+  opacity: 1;
+  transform: translate(0.5rem);
+}
+
+.li-hover:before {
+  transition: 150ms;
+}
+
+.clickable-marker {
+  width: 2.15rem;
+  left: -2rem;
+  position: absolute;
+  /* Z-index greater than Collapsible allows for the overlapping marker to work better */
+  /* with no dead unclickable space between the marker and the actual content */
+  z-index: 1;
+}
+
+div[class*='Collapsible'] {
+  z-index: 0;
+  position: relative;
+}
+div[class*='Collapsible__contentOuter'] {
+  position: static;
+}
+div[class*='Collapsible__contentInner'] {
+  position: inherit;
+  padding-top: 0.5rem;
+  padding-bottom: 0.2rem;
+}
