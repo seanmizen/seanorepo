@@ -1,13 +1,25 @@
+// "overrides": [
+//   {
+//     "files": ["*.js", "*.jsx", "*.ts", "*.tsx"],
+//     "rules": {
+//       "allow-parens": "off"
+//     }
+//   }
+// ],
 {
   "extends": ["react-app", "plugin:prettier/recommended", "airbnb", "airbnb/hooks"],
-  "plugins": ["prettier", "simple-import-sort"],
+  "plugins": ["simple-import-sort", "prettier"],
   "ignorePatterns": ["*.css"],
   "rules": {
+    "arrow-parens": "off",
+    "react-hooks/exhaustive-deps": "off",
     "react/default-props-match-prop-types": "off", // Needs review
     "react/jsx-props-no-spreading": ["error", { "custom": "ignore" }],
     "react/jsx-uses-react": "off",
     "react/jsx-wrap-multilines": "off",
+    "react/jsx-one-expression-per-line": "off",
     "react/prop-types": "off",
+    "react/no-array-index-key": "off",
     "react/react-in-jsx-scope": "off",
     "import/order": "off",
     "prettier/prettier": "error",

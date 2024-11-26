@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import styles from '../ThisPage.module.css';
 
 function ColorPicker() {
@@ -23,10 +24,10 @@ function ColorPicker() {
   };
 
   return (
-    <div className={styles['flexRow']}>
-      <div className={styles['flexColumn']}>
+    <div className={styles.flexRow}>
+      <div className={styles.flexColumn}>
         <div>background</div>
-        <div className={styles['flexRow']}>
+        <div className={styles.flexRow}>
           <input
             tabIndex={0}
             role="menu"
@@ -37,12 +38,14 @@ function ColorPicker() {
             name="head"
             value={backgroundColor}
           />
-          <button onClick={resetBackgroundColor}>reset</button>
+          <button type="button" onClick={resetBackgroundColor}>
+            reset
+          </button>
         </div>
       </div>
-      <div className={styles['flexColumn']}>
+      <div className={styles.flexColumn}>
         <div>text</div>
-        <div className={styles['flexRow']}>
+        <div className={styles.flexRow}>
           <input
             tabIndex={0}
             role="menu"
@@ -53,7 +56,9 @@ function ColorPicker() {
             name="head"
             value={textColor}
           />
-          <button onClick={resetTextColor}>reset</button>
+          <button type="button" onClick={resetTextColor}>
+            reset
+          </button>
         </div>
       </div>
     </div>

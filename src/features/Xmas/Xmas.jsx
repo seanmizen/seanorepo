@@ -1,5 +1,5 @@
 import styles from './Xmas.module.css';
-//https://stackoverflow.com/questions/56279807/is-it-possible-to-automatically-have-the-last-updated-date-on-my-website-changed
+// https://stackoverflow.com/questions/56279807/is-it-possible-to-automatically-have-the-last-updated-date-on-my-website-changed
 
 const presentList = [
   {
@@ -14,32 +14,25 @@ const presentList = [
   },
 ];
 
-function Xmas({ verbose = false }) {
+function Xmas() {
   return (
     <>
       <div>Sean:</div>
-      <ul className={styles['ul-link'] + ' ' + styles['ul-padded-left']}>
-        {presentList.map((present, index) => {
-          return (
-            <li key={index}>
-              {present.description}
-              {present.href && (
-                <>
-                  {' '}
-                  -{' '}
-                  <a
-                    tabIndex={0}
-                    role="listitem"
-                    aria-label={present.arialabel}
-                    href={present.href}
-                  >
-                    {present.linklabel}
-                  </a>
-                </>
-              )}
-            </li>
-          );
-        })}
+      <ul className={`${styles['ul-link']} ${styles['ul-padded-left']}`}>
+        {presentList.map((present, index) => (
+          <li key={index}>
+            {present.description}
+            {present.href && (
+              <>
+                {' '}
+                -
+                <a tabIndex={0} aria-label={present.arialabel} href={present.href}>
+                  {present.linklabel}
+                </a>
+              </>
+            )}
+          </li>
+        ))}
       </ul>
     </>
   );
