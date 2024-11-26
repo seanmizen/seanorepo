@@ -1,10 +1,8 @@
-import styles from "./Projects.module.css";
+import styles from './Projects.module.css';
 //https://stackoverflow.com/questions/56279807/is-it-possible-to-automatically-have-the-last-updated-date-on-my-website-changed
 
 const flashappURL =
-  process.env.PUBLIC_URL === ""
-    ? "http://seanmizen.com/apps/flash-app/"
-    : "/apps/flash-app/";
+  process.env.PUBLIC_URL === '' ? 'http://seanmizen.com/apps/flash-app/' : '/apps/flash-app/';
 
 const projectList = [
   // {
@@ -21,14 +19,14 @@ const projectList = [
   //     "URL for Tourguide-ar, a tourguide web app for universities. (a group work project)",
   // },
   {
-    linklabel: "seanmizen.com",
-    description: "this site",
+    linklabel: 'seanmizen.com',
+    description: 'this site',
     href: process.env.PUBLIC_URL,
-    arialabel: "URL for this website",
+    arialabel: 'URL for this website',
   },
   {
-    linklabel: "more to come",
-    description: "(classic \"under construction\" placeholder)",
+    linklabel: 'more to come',
+    description: '(classic "under construction" placeholder)',
   },
 ];
 
@@ -36,18 +34,13 @@ const projectList = [
 // TODO alternate sides in verbose mode - each project is on the opposite side of the page
 function Projects({ verbose = false }) {
   return (
-    <ul className={styles["ul-link"] + " " + styles["ul-padded-left"]}>
+    <ul className={styles['ul-link'] + ' ' + styles['ul-padded-left']}>
       {projectList.map((project, index) => {
         return (
           <li key={index}>
-            <a
-              tabIndex={0}
-              role="listitem"
-              aria-label={project.arialabel}
-              href={project.href}
-            >
+            <a tabIndex={0} role="listitem" aria-label={project.arialabel} href={project.href}>
               {project.linklabel}
-            </a>{" "}
+            </a>{' '}
             - {project.description}
           </li>
         );

@@ -1,9 +1,11 @@
-import "./index.css";
-import { Home, Apps } from "./pages";
-import { ThemeProvider } from "./Theme";
-import React from "react";
-import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
-import Snowfall from "react-snowfall";
+import './index.css';
+
+import React from 'react';
+import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import Snowfall from 'react-snowfall';
+
+import { Apps, Home } from './pages';
+import { ThemeProvider } from './Theme';
 
 // I'm on a really good streak of github contributions, so I'm going to keep it going
 // by adding this comment. I'm not sure what else to say, so I'll just say that I'm
@@ -22,16 +24,20 @@ import Snowfall from "react-snowfall";
 // conscious? GPT wrote this lol.
 
 function App() {
+  const [isSnowing, setIsSnowing] = React.useState(false);
   return (
     <ThemeProvider>
-      <Snowfall snowflakeCount={200} color={'#FF70B5'} />
+      <Snowfall
+        snowflakeCount={200}
+        style={isSnowing ? { display: 'block' } : { display: 'none' }}
+      />
       <Router basename={process.env.REACT_APP_BASENAME}>
         <Switch>
           <Route path="/apps">
             <Apps />
           </Route>
           <Route path="/">
-            <Home />
+            <Home setIsSnowing={setIsSnowing} />
           </Route>
           <Route path="/*">
             <Home />

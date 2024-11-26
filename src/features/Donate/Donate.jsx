@@ -11,7 +11,7 @@ function Donate() {
       </a>
       <br />
       <span
-        className={"mono"}
+        className={'mono'}
         tabIndex={0}
         role="listitem"
         aria-label="Bitcoin address"
@@ -21,7 +21,7 @@ function Donate() {
       </span>
       <br />
       <span
-        className={"mono"}
+        className={'mono'}
         tabIndex={0}
         role="listitem"
         aria-label="Ethereum address"
