@@ -106,12 +106,7 @@ function LastUpdated({ apiRepoUrl }) {
     sendRequestForDate();
   }, []);
 
-  return (
-    <div className={styles['last-updated']}>
-      last updated
-      {lastUpdated}
-    </div>
-  );
+  return <div className={styles['last-updated']}>last updated {lastUpdated}</div>;
 }
 
 export default LastUpdated;
