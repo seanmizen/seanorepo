@@ -1,11 +1,3 @@
-// "overrides": [
-//   {
-//     "files": ["*.js", "*.jsx", "*.ts", "*.tsx"],
-//     "rules": {
-//       "allow-parens": "off"
-//     }
-//   }
-// ],
 {
   "extends": ["react-app", "plugin:prettier/recommended", "airbnb", "airbnb/hooks"],
   "plugins": ["simple-import-sort", "prettier"],
