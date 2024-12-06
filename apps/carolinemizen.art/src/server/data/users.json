@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "dateCreated": 1706227418690,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "password",
+    "role": "user"
+  },
+  {
+    "id": 2,
+    "dateCreated": 1706227477639,
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "password": "password",
+    "role": "user"
+  }
+]

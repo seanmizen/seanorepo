@@ -1,0 +1,29 @@
+{
+  "name": "carolinemizen.art",
+  "version": "0.2.0",
+  "private": true,
+  "workspaces": [
+    "src/frontend"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "concurrently \"yarn start-frontend\" \"yarn start-server\"",
+    "start-frontend": "cd src/frontend && bun dev",
+    "start-server": "cd src/server && bun dev",
+    "start-old": "tsc --watch",
+    "format": "prettier --write \"src/**/*.ts*\"",
+    "format-check": "prettier --check \"src/**/*.ts*\""
+  },
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "bun-types": "latest",
+    "concurrently": "^9.1.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "prettier": "^3.2.4"
+  }
+}

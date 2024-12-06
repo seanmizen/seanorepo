@@ -1,0 +1,126 @@
+:root {
+  color-scheme: light dark;
+
+  /* Backgrounds */
+  --background-color: #242424;  /* Dark grey for main background */
+  --nav-background-color: #1b1b1b;  /* Slightly darker grey for navigation */
+  /* secondary, tertiary, quaternary colors get lighter */
+  --background-color-secondary: #2a2a2a;  /* Slightly lighter grey for secondary background */
+  --background-color-tertiary: #333333;  /* Slightly lighter grey for tertiary background */
+  --background-color-quaternary: #3d3d3d;  /* Slightly lighter grey for quaternary background */
+
+  /* Text */
+  --text-color: #E1E1E1;  /* Light grey for general text */
+  --text-color-secondary: #C0C0C0;  /* Slightly dimmer for secondary text */
+  --link-color: #646cff;  /* Bright blue for links */
+  --link-hover-color: #535bf2;  /* Slightly darker blue for link hover */
+
+  /* Buttons and other elements */
+  /* --button-background-color: #333333;  Medium grey for buttons */
+  --button-background-color: var(----background-color-tertiary);  /* no chatGPT, darkgrey for buttons */
+  --button-text-color: #FFFFFF;  /* White for button text */
+
+  /* lilac */
+  --border-color: #e8e8ff;
+  --border-color-secondary: #d9d9ff;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+      /* Backgrounds */
+      --background-color: #ffffff;  /* White for main background */
+      --nav-background-color: #f5f5f5;  /* Off-white for navigation */
+      --background-color-secondary: #f0f0f0;  /* Slightly darker off-white for secondary background */
+      --background-color-tertiary: #e5e5e5;  /* Slightly darker off-white for tertiary background */
+      --background-color-quaternary: #d9d9d9;  /* Slightly darker off-white for quaternary background */
+
+      /* Text */
+      --text-color: #213547;  /* Dark blue for general text */
+      --text-color-secondary: #53585f;  /* Soft grey for secondary text */
+      --link-color: #747bff;  /* Soft blue for links */
+      --link-hover-color: #5a5fe8;  /* Slightly darker blue for link hover */
+
+      /* Buttons and other elements */
+      --button-background-color: #f9f9f9;  /* Very light grey for buttons */
+      --button-text-color: #213547;  /* Dark blue for button text, same as text color */
+
+      /* lilac */
+      --border-color: #e8e8ff;
+      --border-color-secondary: #d9d9ff;
+  };
+}
+
+
+:root {
+  /* Now actually set the colors */
+  color: var(--text-color);
+  background-color: var(--background-color);
+
+  /* Fonts */
+  --font-family-hero: 'Merriweather', system-ui, serif;
+  --font-family: 'Lato', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--font-family);
+  line-height: 1.5;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* TODO: reinstate max-width but do cool stuff at the edges */
+  /* max-width: 1280px; */
+  margin: 0 auto;
+  text-align: justify;
+}
+
+a {
+  font-weight: 500;
+  color: var(--link-color);
+  text-decoration: inherit;
+}
+a:hover {
+  color: var(--link-hover-color)
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-family: var(--font-family-hero);
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+h2 {
+  font-family: var(--font-family-hero);
+  font-size: 2.4em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--button-background-color);
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  /* border-color: #646cff; */
+  border-color: var(--link-color);
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
