@@ -1,0 +1,18 @@
+{
+  "name": "seanorepo",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "monorepo for all sites, projects, etc",
+  "main": "index.js",
+  "repository": "https://github.com/seanmizen/seanorepo",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "yarn workspace seanmizen.com start",
+    "build": "yarn workspace seanmizen.com build"
+  },
+  "devDependencies": {}
+}

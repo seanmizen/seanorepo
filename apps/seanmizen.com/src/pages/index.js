@@ -1,4 +1,4 @@
-import Apps from './Apps';
-import Home from './Home';
+import { Apps } from './Apps';
+import { Home } from './Home';
 
 export { Apps, Home };

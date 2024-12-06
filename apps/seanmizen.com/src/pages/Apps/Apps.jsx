@@ -3,7 +3,7 @@ import { Projects } from '../../features';
 
 import styles from './Apps.module.css';
 
-function Apps() {
+const Apps = () => {
   return (
     <div className="container">
       <h1 className={styles['no-animation']}>seanmizen.com</h1>
@@ -16,6 +16,6 @@ function Apps() {
       <HomeLink />
     </div>
   );
-}
+};
 
-export default Apps;
+export { Apps };
