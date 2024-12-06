@@ -1,55 +1,56 @@
-import { FC, useEffect, useState } from 'react';
-import { Arrow, Body, HeroLinksRow, HeroLinksWrapper, LandingPage } from './home.styled';
-import { Nav, PreviewCard } from '../../components';
-import { ROUTES } from '../../constants';
+import { FC, useEffect, useState } from "react";
+import { Arrow, Body, HeroLinksRow, HeroLinksWrapper } from "./home.styled";
+import { FullScreenComponent, Nav, PreviewCard } from "../../components";
+import { ROUTES } from "../../constants";
 
 interface HomeProps {}
 
 const Home: FC<HomeProps> = () => {
   const [showArrow, setShowArrow] = useState(false);
-  // const [shouldShowArrow, setShouldShowArrow] = useState(true);
+  const [, setShouldShowArrow] = useState(true);
   const [timer, setTimer] = useState<number>();
-  /**
-   * don't show arrow if the user has scrolled themselves
-   */
+
   const handleScroll = () => {
-    // setShouldShowArrow(false);
-    console.log('rah');
-    window.removeEventListener('scroll', handleScroll);
-    clearTimeout();
+    setShouldShowArrow(false);
+    clearTimeout(timer);
+    window.removeEventListener("scroll", handleScroll);
   };
 
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    setTimer(
-      window.setTimeout(() => {
-        console.log('showing arrow');
-        setShowArrow(true);
-      }, 4000),
-    );
+    const timerId = window.setTimeout(() => {
+      setShouldShowArrow((prev) => {
+        if (prev) setShowArrow(true);
+        return prev;
+      });
+    }, 4000);
+
+    setTimer(timerId);
+
+    window.addEventListener("scroll", handleScroll);
+
     return () => {
-      window.removeEventListener('scroll', handleScroll);
-      clearTimeout(timer);
+      window.removeEventListener("scroll", handleScroll);
+      clearTimeout(timerId);
     };
   }, []);
 
   return (
     <>
-      <LandingPage>
+      <FullScreenComponent>
         <h1>Art by Caroline</h1>
         <Arrow
           type="button"
           onClick={() => {
             window.scrollTo({
               top: window.innerHeight - 10,
-              behavior: 'smooth',
+              behavior: "smooth",
             });
           }}
           isVisible={showArrow}
         >
           ↓ more below ↓
         </Arrow>
-      </LandingPage>
+      </FullScreenComponent>
       <HeroLinksWrapper>
         <h2>Hero Links</h2>
         <HeroLinksRow>

@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import { FC } from "react";
 import {
   Wrapper,
   Title,
@@ -6,9 +6,9 @@ import {
   IconRow,
   IconWrapper,
   ImageContainer,
-} from './preview-card.styled';
-import { LazyLoadImage, LazyLoadImageProps } from '..';
-import { LinkProps } from 'react-router-dom';
+} from "./preview-card.styled";
+import { LazyLoadImage, LazyLoadImageProps } from "..";
+import { LinkProps } from "react-router-dom";
 
 interface PreviewCardProps extends LinkProps {
   title?: string;
@@ -19,15 +19,15 @@ interface PreviewCardProps extends LinkProps {
 
 // TODO: replace with SVGs
 const iconsExample = [
-  'https://picsum.photos/30/30',
-  'https://picsum.photos/31/31',
-  'https://picsum.photos/32/32',
-  'https://picsum.photos/32/32',
+  "https://picsum.photos/30/30",
+  "https://picsum.photos/31/31",
+  "https://picsum.photos/32/32",
+  "https://picsum.photos/32/32",
 ];
 
 const imagePropsExample: LazyLoadImageProps = {
-  src: 'https://picsum.photos/300/300',
-  alt: 'Gallery preview image',
+  src: "https://picsum.photos/300/300",
+  alt: "Gallery preview image",
 };
 
 const PreviewCard: FC<PreviewCardProps> = ({
@@ -48,8 +48,8 @@ const PreviewCard: FC<PreviewCardProps> = ({
       )}
       {icons && icons.length && (
         <IconRow>
-          {icons.map(icon => (
-            <IconWrapper>
+          {icons.map((icon, index) => (
+            <IconWrapper key={index}>
               <img src={icon} width={50} />
             </IconWrapper>
           ))}
