@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "workspaces": [
-    "src/frontend"
+    "src/*"
   ],
   "scripts": {
     "build": "tsc",
