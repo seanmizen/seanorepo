@@ -1,18 +1,18 @@
-import React from 'react';
+import React from "react";
 
-import { HomeLi, LastUpdated, Spacer, ThemeToggle } from '../../components';
-import { Donate, Github, Projects, ThisPage, Xmas } from '../../features';
-import { ThemeContext } from '../../providers/Theme';
+import { HomeLi, LastUpdated, Spacer, ThemeToggle } from "../../components";
+import { Donate, Github, Projects, ThisPage, Xmas } from "../../features";
+import { ThemeContext } from "../../providers/Theme";
 
 const Home = ({ setIsSnowing }) => {
   const { mode, toggleMode } = React.useContext(ThemeContext);
 
   const subsections = [
-    { component: <Projects />, trigger: 'projects', subLink: '/apps' },
-    { component: <Github />, trigger: 'github' },
-    { component: <Donate />, trigger: 'donate' },
-    { component: <ThisPage />, trigger: 'this page' },
-    { component: <Xmas />, trigger: 'Xmas 🎄' },
+    { component: <Projects />, trigger: "projects", subLink: "/apps" },
+    { component: <Github />, trigger: "github" },
+    { component: <Donate />, trigger: "donate" },
+    { component: <ThisPage />, trigger: "this page" },
+    { component: <Xmas />, trigger: "Xmas 🎄" },
   ];
 
   return (
@@ -33,7 +33,7 @@ const Home = ({ setIsSnowing }) => {
         ))}
       </ul>
       <Spacer />
-      <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanmizen.com-react" />
+      <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
       <ThemeToggle mode={mode} toggleMode={toggleMode} />
     </div>
   );
