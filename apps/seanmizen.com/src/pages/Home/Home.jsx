@@ -2,9 +2,9 @@ import React from 'react';
 
 import { HomeLi, LastUpdated, Spacer, ThemeToggle } from '../../components';
 import { Donate, Github, Projects, ThisPage, Xmas } from '../../features';
-import { ThemeContext } from '../../Theme';
+import { ThemeContext } from '../../providers/Theme';
 
-function Home({ setIsSnowing }) {
+const Home = ({ setIsSnowing }) => {
   const { mode, toggleMode } = React.useContext(ThemeContext);
 
   const subsections = [
@@ -37,6 +37,6 @@ function Home({ setIsSnowing }) {
       <ThemeToggle mode={mode} toggleMode={toggleMode} />
     </div>
   );
-}
+};
 
-export default Home;
+export { Home };

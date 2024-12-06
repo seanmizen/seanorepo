@@ -18,7 +18,7 @@ const projectList = [
   {
     linklabel: 'seanmizen.com',
     description: 'this site',
-    href: process.env.PUBLIC_URL,
+    // href: process.env.PUBLIC_URL,
     arialabel: 'URL for this website',
   },
   {
