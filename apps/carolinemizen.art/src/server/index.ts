@@ -1,32 +1,46 @@
-import express, { NextFunction, Request, Response } from 'express'; // express from 'express';
-import bodyParser from 'body-parser';
-import routes from './src/routes';
-import middleware from './src/middleware';
-// import { pool } from './db/connection';
-import { SlonikError } from 'slonik';
-import createSlonikPool from './db/connection';
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import formbody from "@fastify/formbody";
+import cookie from "@fastify/cookie";
+import jwt from "@fastify/jwt";
+import { Server, IncomingMessage, ServerResponse } from "http";
+import { routes } from "./src/controllers";
 
-/**
- * Wrap express app in a main function to allow async/await for Slonik
- * (see https://dev.to/gajus/integrating-slonik-with-expressjs-33kn)
- */
-const main = async () => {
-  const app = express();
-  const port = process.env.PORT || 5174;
+// const fastify = Fastify({ logger: { level: 'error' } });
+const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
+  logger: { level: "error" },
+});
 
-  // Body parser middleware to parse JSON requests
-  app.use(bodyParser.json());
+fastify.register(cors);
+fastify.register(formbody);
+fastify.register(cookie, {
+  secret: "super", // for cookies signature
+  hook: "onRequest", // set to false to disable cookie autoparsing or set autoparsing on any of the following hooks: 'onRequest', 'preParsing', 'preHandler', 'preValidation'. default: 'onRequest'
+  parseOptions: {}, // options for parsing cookies
+});
+fastify.register(jwt, { secret: "super" });
 
-  app.use('/', routes);
+fastify.register(routes);
 
-  app.use(middleware); // currently errors only - is this middleware?
+const reset = "\x1b[0m";
+const cyan = "\x1b[36m";
+const dim = "\x1b[2m%s";
+const bright = "\x1b[1m";
 
-  // Connect to the database
-  // const pool = await createSlonikPool();
-
-  app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
-  });
+const start = async () => {
+  const port = 5000;
+  try {
+    await fastify.listen({
+      port,
+    });
+    console.debug(
+      "Bun serving at",
+      [cyan, "http://localhost:", bright, port, reset].join("")
+    );
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
 };
 
-main();
+start();
