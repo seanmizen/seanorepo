@@ -256,3 +256,6 @@ $RECYCLE.BIN/
 # .pnp.*
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,yarn,go,node
+
+# old C-R-A build folder
+build
