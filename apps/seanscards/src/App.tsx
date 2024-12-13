@@ -41,6 +41,12 @@ const placeholderMessages = [
   Hope little bump comes out soon!
   Much love, Me!`,
 ];
+const fakeAddresses = [
+  `Dr Watson, 221B Baker Street, London, NW1 6XE`,
+  `Mr and Mrs M+C, 12 The Lane, London, NW1 6XE`,
+  `HM The King, Buckingham Palace, London, SW1A 1AA`,
+  `Mr and Mrs Kringle, The North Pole, H0H 0H0`,
+];
 
 const windowIsMobile = () => window.innerWidth < 800;
 
@@ -133,6 +139,9 @@ const App = () => {
   const [randomPlaceholderIndex, setRandomPlaceholderIndex] = useState(
     getRandomIndex(placeholderMessages.length)
   );
+  const [randomAddressIndex, setRandomAddressIndex] = useState(
+    getRandomIndex(fakeAddresses.length)
+  );
 
   const fetchClientSecret = useCallback(() => {
     // Create a Checkout Session
@@ -144,6 +153,13 @@ const App = () => {
   }, []);
 
   const embeddedStripeOptions = { fetchClientSecret };
+
+  // curl to get localhost:8080 root from the frontend
+  const getFromServer = async () => {
+    const res = await fetch("http://localhost:4242/");
+    const data = await res.text();
+    return data;
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -200,18 +216,18 @@ const App = () => {
             noValidate
           >
             <TextField
-              label="Your card's message"
+              label="Full card message"
               variant="outlined"
               multiline
               className="message"
+              minRows={isMobile ? 5 : 10}
+              sx={{ width: "400px" }}
               onFocus={() =>
                 setRandomPlaceholderIndex(
                   getRandomIndex(placeholderMessages.length)
                 )
               }
               placeholder={placeholderMessages[randomPlaceholderIndex]}
-              minRows={isMobile ? 5 : 10}
-              sx={{ width: "400px" }}
               {...formikPropsForField("message")}
             />
 
@@ -224,15 +240,17 @@ const App = () => {
             <TextField
               label="Recipient's postal address"
               variant="outlined"
-              placeholder="Dr Watson, 221B Baker Street, London, NW1 6XE"
               multiline
               minRows={isMobile ? 3 : 5}
               sx={{ width: "400px" }}
+              onFocus={() =>
+                setRandomAddressIndex(getRandomIndex(fakeAddresses.length))
+              }
+              placeholder={fakeAddresses[randomAddressIndex]}
               {...formikPropsForField("address")}
             />
           </Box>
           <Box
-            display={"none"}
             component={"p"}
             sx={{
               maxWidth: "600px",
@@ -257,6 +275,15 @@ const App = () => {
             ,{` `}
             and leave me 24 hours to process your order. Thanks!
           </Box>
+          <EmbeddedCheckoutProvider
+            stripe={stripePromise}
+            options={embeddedStripeOptions}
+          >
+            <EmbeddedCheckout />
+          </EmbeddedCheckoutProvider>
+          <Button type="button" onClick={() => getFromServer()}>
+            Rah
+          </Button>
           <Button type="submit" variant="contained">
             Submit
           </Button>
@@ -281,12 +308,6 @@ const App = () => {
               setThemeKey(getOppositeThemeKey(themeKey, prefersDark.matches))
             }
           >{`Switch to ${getOppositeThemeKey(themeKey, prefersDark.matches)} mode`}</Button>
-          <EmbeddedCheckoutProvider
-            stripe={stripePromise}
-            options={embeddedStripeOptions}
-          >
-            <EmbeddedCheckout />
-          </EmbeddedCheckoutProvider>
         </Box>
       </Box>
     </ThemeProvider>
