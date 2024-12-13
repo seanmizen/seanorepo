@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "start": "rsbuild dev --open",
+    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn start-fe\" \"yarn start-be\"",
+    "start-fe": "rsbuild dev --open",
+    "start-be": "bun backend/index.js",
     "build": "rsbuild build",
     "preview": "rsbuild preview"
   },
@@ -20,6 +22,7 @@
     "formik": "^2.4.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sqlite3": "^5.1.7",
     "stripe": "^17.4.0",
     "yup": "^1.5.0"
   },
