@@ -13,7 +13,8 @@
   "scripts": {
     "start": "yarn workspace seanmizen.com start",
     "build": "yarn workspace seanmizen.com build",
-    "caroline": "yarn workspace carolinemizen.art start"
+    "caroline": "yarn workspace carolinemizen.art start",
+    "cards": "yarn workspace seanscards start"
   },
   "devDependencies": {}
 }
