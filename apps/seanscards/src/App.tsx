@@ -3,10 +3,8 @@ import {
   TextField,
   CssBaseline,
   ThemeProvider,
-  Button,
   Backdrop,
   CircularProgress,
-  Skeleton,
   Card,
   CardActionArea,
   CardContent,
@@ -14,12 +12,14 @@ import {
   Radio,
 } from "@mui/material";
 import { darkTheme, lightTheme } from "./theme";
-import { SetStateAction, useEffect, useState } from "react";
+import { SetStateAction, useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { object, string } from "yup";
 import { Appearance, loadStripe } from "@stripe/stripe-js";
-import { CheckoutForm } from "./CheckoutForm";
-import { Elements } from "@stripe/react-stripe-js";
+import {
+  EmbeddedCheckout,
+  EmbeddedCheckoutProvider,
+} from "@stripe/react-stripe-js";
 
 // https://docs.stripe.com/checkout/embedded/quickstart
 
@@ -96,9 +96,7 @@ const getOppositeThemeKey = (
 const App = () => {
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)"); // give this a refresh every render, why not
   const [themeKey, setThemeKey] = useState<string | null>(null);
-  const [theme, setTheme] = useState(
-    prefersDark.matches ? darkTheme : lightTheme
-  );
+  const [, setTheme] = useState(prefersDark.matches ? darkTheme : lightTheme);
   // first useEffect listens to the system theme preference
   useEffect(() => {
     prefersDark.addEventListener("change", (e) => {
@@ -171,43 +169,54 @@ const App = () => {
     getRandomIndex(fakeAddresses.length)
   );
 
-  // useEffect(() => {
-  //   const urlParams = new URLSearchParams(window.location.search);
-  //   const sessionId = urlParams.get("session_id");
-  //   if (sessionId) {
-  //     fetch(`http://localhost:4242/session-status?session_id=${sessionId}`)
-  //       .then((res) => res.json())
-  //       .then((data) => {
-  //         console.log("payment response:", data);
-  //       })
-  //       .catch((error) => {
-  //         console.error("Error fetching session status:", error);
-  //         alert("Something happened on the backend. Sorry!");
-  //       });
-  //     window.history.replaceState({}, document.title, "/");
-  //   }
-  // }, []);
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get("session_id");
+    if (sessionId) {
+      fetch(`http://localhost:4242/session-status?session_id=${sessionId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("payment response:", data);
+        })
+        .catch((error) => {
+          console.error("Error fetching session status:", error);
+          alert("Something happened on the backend. Sorry!");
+        });
+      window.history.replaceState({}, document.title, "/");
+    }
+  }, []);
+
+  const fetchClientSecret = useCallback(() => {
+    // Create a Checkout Session
+    return fetch("/create-checkout-session", {
+      method: "POST",
+    })
+      .then((res) => res.json())
+      .then((data) => data.clientSecret);
+  }, []);
+
+  const options = { fetchClientSecret };
 
   // https://docs.stripe.com/payments/quickstart
 
-  const [clientSecret, setClientSecret] = useState("");
-  const [dpmCheckerLink, setDpmCheckerLink] = useState("");
+  // const [clientSecret, setClientSecret] = useState("");
+  // const [dpmCheckerLink, setDpmCheckerLink] = useState("");
 
-  useEffect(() => {
-    // Create PaymentIntent as soon as the page loads
-    fetch("http://localhost:4242/create-payment-intent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: [{ id: "xl-tshirt", amount: 1000 }] }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        console.log("gorren", data);
-        setClientSecret(data.clientSecret);
-        // [DEV] For demo purposes only
-        setDpmCheckerLink(data.dpmCheckerLink);
-      });
-  }, []);
+  // useEffect(() => {
+  //   // Create PaymentIntent as soon as the page loads
+  //   fetch("http://localhost:4242/create-payment-intent", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ items: [{ id: "xl-tshirt", amount: 1000 }] }),
+  //   })
+  //     .then((res) => res.json())
+  //     .then((data) => {
+  //       console.log("gorren", data);
+  //       setClientSecret(data.clientSecret);
+  //       // [DEV] For demo purposes only
+  //       setDpmCheckerLink(data.dpmCheckerLink);
+  //     });
+  // }, []);
 
   const [selected, setSelected] = useState<CardDesign>("Robin and Ivy");
   const handleSelect = (val: SetStateAction<CardDesign>) => setSelected(val);
@@ -382,8 +391,13 @@ const App = () => {
               Payment is declined
               4000 0000 0000 9995
               */}
+            <EmbeddedCheckoutProvider stripe={stripePromise} options={options}>
+              <EmbeddedCheckout />
+            </EmbeddedCheckoutProvider>
           </div>
-          {clientSecret ? (
+
+          {/* NON-EMBEDDED BELOW: */}
+          {/* {clientSecret ? (
             <Box minHeight={"600px"}>
               <Elements
                 options={{ clientSecret, appearance, loader }}
@@ -397,7 +411,7 @@ const App = () => {
             </Box>
           ) : (
             <Skeleton variant="rectangular" width="100%" height="600px" />
-          )}
+          )} */}
           <Backdrop
             sx={(theme) => ({ color: "#fff", zIndex: theme.zIndex.drawer + 1 })}
             open={isLoading}
