@@ -51,13 +51,11 @@ const fakeAddresses = [
 const windowIsMobile = () => window.innerWidth < 800;
 
 type FormShape = {
-  email: string;
   message: string;
   address: string;
 };
 
 const formSchema = object().shape({
-  email: string().email("Invalid email").required("Required"),
   message: string().max(500, "Too long!").required("Required"),
   address: string().required("Required"),
 });
@@ -115,7 +113,6 @@ const App = () => {
 
   const formik = useFormik<FormShape>({
     initialValues: {
-      email: "",
       message: "",
       address: "",
     },
@@ -144,8 +141,7 @@ const App = () => {
   );
 
   const fetchClientSecret = useCallback(() => {
-    // Create a Checkout Session
-    return fetch("/create-checkout-session", {
+    return fetch("http://localhost:4242/create-checkout-session", {
       method: "POST",
     })
       .then((res) => res.json())
@@ -160,6 +156,23 @@ const App = () => {
     const data = await res.text();
     return data;
   };
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get("session_id");
+    if (sessionId) {
+      fetch(`http://localhost:4242/session-status?session_id=${sessionId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("payment response:", data);
+        })
+        .catch((error) => {
+          console.error("Error fetching session status:", error);
+          alert("Something happened on the backend. Sorry!");
+        });
+      window.history.replaceState({}, document.title, "/");
+    }
+  }, []);
 
   return (
     <ThemeProvider theme={theme}>
@@ -230,13 +243,6 @@ const App = () => {
               placeholder={placeholderMessages[randomPlaceholderIndex]}
               {...formikPropsForField("message")}
             />
-
-            <TextField
-              label="Your email"
-              variant="outlined"
-              sx={{ width: "400px" }}
-              {...formikPropsForField("email")}
-            />
             <TextField
               label="Recipient's postal address"
               variant="outlined"
@@ -251,6 +257,7 @@ const App = () => {
             />
           </Box>
           <Box
+            display={"none"}
             component={"p"}
             sx={{
               maxWidth: "600px",
@@ -275,13 +282,23 @@ const App = () => {
             ,{` `}
             and leave me 24 hours to process your order. Thanks!
           </Box>
-          <EmbeddedCheckoutProvider
-            stripe={stripePromise}
-            options={embeddedStripeOptions}
-          >
-            <EmbeddedCheckout />
-          </EmbeddedCheckoutProvider>
-          <Button type="button" onClick={() => getFromServer()}>
+          <div id="checkout">
+            {/* Payment succeeds
+4242 4242 4242 4242
+
+Payment requires authentication
+4000 0025 0000 3155
+
+Payment is declined
+4000 0000 0000 9995 */}
+            <EmbeddedCheckoutProvider
+              stripe={stripePromise}
+              options={embeddedStripeOptions}
+            >
+              <EmbeddedCheckout />
+            </EmbeddedCheckoutProvider>
+          </div>
+          <Button type="button" onClick={() => getFromServer().then(alert)}>
             Rah
           </Button>
           <Button type="submit" variant="contained">
