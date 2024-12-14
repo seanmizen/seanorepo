@@ -15,6 +15,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Popper,
 } from "@mui/material";
 import { ExpandMore } from "@mui/icons-material";
 import { darkTheme, lightTheme } from "./theme";
@@ -226,6 +227,10 @@ const App = () => {
   //   }
   // }, [formik.dirty, formik.isValid]);
 
+  const [cardSelectRef, setCardSelectRef] = useState<HTMLDivElement | null>(
+    null
+  );
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -281,7 +286,7 @@ const App = () => {
             onSubmit={formik.handleSubmit}
             // noValidate
           >
-            <Box display="flex" gap={2}>
+            <Box id={"rah"} display="flex" gap={2}>
               <Card
                 sx={{
                   maxWidth: 200,
@@ -289,14 +294,17 @@ const App = () => {
                     selected === "Robin and Ivy" ? "2px solid blue" : "none",
                 }}
               >
-                <CardActionArea onClick={() => handleSelect("one")}>
+                <CardActionArea onClick={() => handleSelect("Robin and Ivy")}>
                   <CardMedia
                     component="img"
                     height="140"
                     image="https://i.postimg.cc/gXFCHh5M/Robin-Ivy.jpg"
                   />
                   <CardContent>
-                    <Radio checked={selected === "Robin and Ivy"} />
+                    <Radio
+                      tabIndex={-1}
+                      checked={selected === "Robin and Ivy"}
+                    />
                     Robin and Ivy
                   </CardContent>
                 </CardActionArea>
@@ -309,7 +317,7 @@ const App = () => {
                     selected === "Stuffed Toys" ? "2px solid blue" : "none",
                 }}
               >
-                <CardActionArea onClick={() => handleSelect("two")}>
+                <CardActionArea onClick={() => handleSelect("Stuffed Toys")}>
                   <CardMedia
                     component="img"
                     height="140"
@@ -317,24 +325,34 @@ const App = () => {
                     image="https://i.postimg.cc/2bQPc6NC/Stuffed-Toys.jpg"
                   />
                   <CardContent>
-                    <Radio checked={selected === "Stuffed Toys"} />
+                    <Radio
+                      tabIndex={-1}
+                      checked={selected === "Stuffed Toys"}
+                    />
                     Stuffed Toys
                   </CardContent>
                 </CardActionArea>
               </Card>
             </Box>
-            <Box
-              // component={"p"}
-              sx={{
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              Designs by Mum
-              <a href="https://www.instagram.com/caroline.mizen/">
-                @caroline.mizen
-              </a>
-            </Box>
-
+            {/* {!!document.getElementById("rah") && (
+              <Popper
+                anchorEl={document.getElementById("rah")}
+                open={true}
+                placement="top-end"
+              >
+                <Box
+                  component={"p"}
+                  sx={{
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  Designs by Mum
+                  <a href="https://www.instagram.com/caroline.mizen/">
+                    @caroline.mizen
+                  </a>
+                </Box>
+              </Popper>
+            )} */}
             <TextField
               label="Full card message"
               variant="outlined"
