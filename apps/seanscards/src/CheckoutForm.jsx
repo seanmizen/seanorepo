@@ -52,7 +52,6 @@ export const CheckoutForm = ({ dpmCheckerLink, isFormReady }) => {
   };
 
   const [isPopoverOpen, setPopoverOpen] = useState(false);
-  // const open = Boolean(anchorEl);
   const [anchorEl, setAnchorEl] = useState(null);
   const handleHover = (event) => {
     if (!isFormReady) {
