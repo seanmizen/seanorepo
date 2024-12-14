@@ -51,11 +51,13 @@ const windowIsMobile = () => window.innerWidth < 800;
 type FormShape = {
   message: string;
   address: string;
+  email: string;
 };
 
 const formSchema = object().shape({
   message: string().max(500, "Too long!").required("Required"),
   address: string().required("Required"),
+  email: string().email("Invalid email").required("Required"),
 });
 
 const getOppositeThemeKey = (
@@ -118,6 +120,7 @@ const App = () => {
     initialValues: {
       message: "",
       address: "",
+      email: "",
     },
     validationSchema: formSchema,
     onSubmit: (values) => {
@@ -142,23 +145,6 @@ const App = () => {
   const [randomAddressIndex, setRandomAddressIndex] = useState(
     getRandomIndex(fakeAddresses.length)
   );
-
-  // const fetchClientSecret = useCallback(() => {
-  //   return fetch("http://localhost:4242/create-checkout-session", {
-  //     method: "POST",
-  //   })
-  //     .then((res) => res.json())
-  //     .then((data) => data.clientSecret);
-  // }, []);
-
-  // const embeddedStripeOptions = { fetchClientSecret };
-
-  // curl to get localhost:8080 root from the frontend
-  const getFromServer = async () => {
-    const res = await fetch("http://localhost:4242/");
-    const data = await res.text();
-    return data;
-  };
 
   // useEffect(() => {
   //   const urlParams = new URLSearchParams(window.location.search);
@@ -197,9 +183,6 @@ const App = () => {
         setDpmCheckerLink(data.dpmCheckerLink);
       });
   }, []);
-
-  console.log("clientSecret", clientSecret);
-  console.log("dpmCheckerLink", dpmCheckerLink);
 
   return (
     <ThemeProvider theme={theme}>
@@ -282,6 +265,13 @@ const App = () => {
               placeholder={fakeAddresses[randomAddressIndex]}
               {...formikPropsForField("address")}
             />
+            <TextField
+              label="Your email address"
+              variant="outlined"
+              sx={{ width: "400px" }}
+              {...formikPropsForField("email")}
+            />
+            <Button type="submit" variant="contained" />
           </Box>
           <Box
             display={"none"}
@@ -311,33 +301,23 @@ const App = () => {
           </Box>
           <div id="checkout">
             {/* Payment succeeds
-4242 4242 4242 4242
+              4242 4242 4242 4242
 
-Payment requires authentication
-4000 0025 0000 3155
+              Payment requires authentication
+              4000 0025 0000 3155
 
-Payment is declined
-4000 0000 0000 9995 */}
-            {/* <EmbeddedCheckoutProvider
-              stripe={stripePromise}
-              options={embeddedStripeOptions}
-            >
-              <EmbeddedCheckout />
-            </EmbeddedCheckoutProvider> */}
+              Payment is declined
+              4000 0000 0000 9995 
+              */}
           </div>
-          <Button type="button" onClick={() => getFromServer().then(alert)}>
-            Rah
-          </Button>
-          <Button type="submit" variant="contained">
-            Submit
-          </Button>
-          <Button
-            type="button"
-            variant="contained"
-            onClick={() => setIsLoading(!isLoading)}
-          >
-            Loading!
-          </Button>
+          {clientSecret && (
+            <Elements
+              options={{ clientSecret, appearance, loader }}
+              stripe={stripePromise}
+            >
+              <CheckoutForm dpmCheckerLink={dpmCheckerLink} />
+            </Elements>
+          )}
           <Backdrop
             sx={(theme) => ({ color: "#fff", zIndex: theme.zIndex.drawer + 1 })}
             open={isLoading}
@@ -353,14 +333,6 @@ Payment is declined
             }
           >{`Switch to ${getOppositeThemeKey(themeKey, prefersDark.matches)} mode`}</Button>
         </Box>
-        {clientSecret && (
-          <Elements
-            options={{ clientSecret, appearance, loader }}
-            stripe={stripePromise}
-          >
-            <CheckoutForm dpmCheckerLink={dpmCheckerLink} />
-          </Elements>
-        )}
       </Box>
       {/* "Elements" might go elsewhere */}
     </ThemeProvider>
