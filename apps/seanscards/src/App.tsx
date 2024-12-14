@@ -12,12 +12,7 @@ import {
   CardContent,
   CardMedia,
   Radio,
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Popper,
 } from "@mui/material";
-import { ExpandMore } from "@mui/icons-material";
 import { darkTheme, lightTheme } from "./theme";
 import { SetStateAction, useEffect, useState } from "react";
 import { useFormik } from "formik";
@@ -126,7 +121,8 @@ const App = () => {
   }, [themeKey, prefersDark.matches]);
   const [isMobile, setIsMobile] = useState(windowIsMobile());
   const appearance: Appearance = {
-    theme: theme.palette.mode === "dark" ? "night" : "stripe",
+    // theme: theme.palette.mode === "dark" ? "night" : "stripe",
+    theme: "stripe",
   };
   const loader = "auto";
 
@@ -216,25 +212,9 @@ const App = () => {
   const [selected, setSelected] = useState<CardDesign>("Robin and Ivy");
   const handleSelect = (val: SetStateAction<CardDesign>) => setSelected(val);
 
-  // Open accordion
-  // A: once form is complete
-  // B: if opened by clicking
-  // const [showCheckout, setShowCheckout] = useState(false);
-  // useEffect(() => {
-  //   if (formik.dirty && formik.touched) {
-  //     console.log("huzzah!");
-  //     setShowCheckout(true);
-  //   }
-  // }, [formik.dirty, formik.isValid]);
-
-  const [cardSelectRef, setCardSelectRef] = useState<HTMLDivElement | null>(
-    null
-  );
-
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={lightTheme}>
       <CssBaseline />
-      {/* whole page and styles box: */}
       <Box
         sx={{
           display: "flex",
@@ -270,7 +250,6 @@ const App = () => {
             Handwritten cards by Sean - posted straight to your family.
             {`\n`}Or whoever!
           </Box>
-          {/* two card designs, side by side. "" */}
           <Box
             sx={{
               width: "100%",
@@ -284,7 +263,7 @@ const App = () => {
             }}
             component={"form"}
             onSubmit={formik.handleSubmit}
-            // noValidate
+            noValidate
           >
             <Box id={"rah"} display="flex" gap={2}>
               <Card
@@ -321,7 +300,6 @@ const App = () => {
                   <CardMedia
                     component="img"
                     height="140"
-                    // image="../assets/Stuffed Toys.jpg"
                     image="https://i.postimg.cc/2bQPc6NC/Stuffed-Toys.jpg"
                   />
                   <CardContent>
@@ -334,25 +312,6 @@ const App = () => {
                 </CardActionArea>
               </Card>
             </Box>
-            {/* {!!document.getElementById("rah") && (
-              <Popper
-                anchorEl={document.getElementById("rah")}
-                open={true}
-                placement="top-end"
-              >
-                <Box
-                  component={"p"}
-                  sx={{
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  Designs by Mum
-                  <a href="https://www.instagram.com/caroline.mizen/">
-                    @caroline.mizen
-                  </a>
-                </Box>
-              </Popper>
-            )} */}
             <TextField
               label="Full card message"
               variant="outlined"
@@ -386,7 +345,6 @@ const App = () => {
               sx={{ width: "400px" }}
               {...formikPropsForField("email")}
             />
-            {/* <Button type="submit" variant="contained" /> */}
           </Box>
           <Box
             display={"none"}
@@ -425,18 +383,6 @@ const App = () => {
               4000 0000 0000 9995
               */}
           </div>
-          {/* <Accordion
-            expanded={showCheckout}
-            onChange={() => setShowCheckout(!showCheckout)}
-          >
-            <AccordionSummary
-              expandIcon={<ExpandMore />}
-              aria-controls="panel1-content"
-              id="panel1-header"
-            >
-              Payment
-            </AccordionSummary>
-            <AccordionDetails> */}
           {clientSecret ? (
             <Box minHeight={"600px"}>
               <Elements
@@ -452,8 +398,6 @@ const App = () => {
           ) : (
             <Skeleton variant="rectangular" width="100%" height="600px" />
           )}
-          {/* </AccordionDetails>
-          </Accordion> */}
           <Backdrop
             sx={(theme) => ({ color: "#fff", zIndex: theme.zIndex.drawer + 1 })}
             open={isLoading}
@@ -461,14 +405,14 @@ const App = () => {
           >
             <CircularProgress color="inherit" />
           </Backdrop>
-          <Button
+          {/* <Button
             type="button"
             variant="contained"
             sx={{ marginTop: "20px", marginBottom: "20px" }}
             onClick={() =>
               setThemeKey(getOppositeThemeKey(themeKey, prefersDark.matches))
             }
-          >{`Switch to ${getOppositeThemeKey(themeKey, prefersDark.matches)} mode`}</Button>
+          >{`Switch to ${getOppositeThemeKey(themeKey, prefersDark.matches)} mode`}</Button> */}
         </Box>
       </Box>
       {/* "Elements" might go elsewhere */}

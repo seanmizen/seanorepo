@@ -7,7 +7,10 @@
     "start-fe": "rsbuild dev --open",
     "start-be": "bun  --hot --no-clear-screen backend/index.ts",
     "build": "rsbuild build",
-    "preview": "rsbuild preview"
+    "preview": "rsbuild preview",
+    "prod": "yarn install && yarn build && concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn prod-fe\" \"yarn prod-be\"",
+    "prod-be": "bun backend/index.ts",
+    "prod-fe": "serve dist"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
