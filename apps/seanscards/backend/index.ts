@@ -28,7 +28,7 @@ fastify.get("/", async (request, reply) => {
   return { hello: "world" };
 });
 
-const YOUR_DOMAIN = "http://localhost:3000";
+const YOUR_DOMAIN = "http://localhost:3000"; // uhh
 fastify.post("/create-checkout-session", async (request, reply) => {
   console.debug("create-checkout-session", request.headers);
   const session = await stripe.checkout.sessions.create({
@@ -62,25 +62,25 @@ interface PaymentIntentRequestBody {
   items: { amount: number }[];
 }
 
-fastify.post("/create-payment-intent", async (request, reply) => {
-  const { items } = request.body as PaymentIntentRequestBody;
+// fastify.post("/create-payment-intent", async (request, reply) => {
+//   const { items } = request.body as PaymentIntentRequestBody;
 
-  // Create a PaymentIntent with the order amount and currency
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: calculateOrderAmount(items),
-    currency: "gbp",
-    // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
-    automatic_payment_methods: {
-      enabled: true,
-    },
-  });
+//   // Create a PaymentIntent with the order amount and currency
+//   const paymentIntent = await stripe.paymentIntents.create({
+//     amount: calculateOrderAmount(items),
+//     currency: "gbp",
+//     // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+//     automatic_payment_methods: {
+//       enabled: true,
+//     },
+//   });
 
-  reply.send({
-    clientSecret: paymentIntent.client_secret,
-    // [DEV]: For demo purposes only, you should avoid exposing the PaymentIntent ID in the client-side code.
-    dpmCheckerLink: `https://dashboard.stripe.com/settings/payment_methods/review?transaction_id=${paymentIntent.id}`,
-  });
-});
+//   reply.send({
+//     clientSecret: paymentIntent.client_secret,
+//     // [DEV]: For demo purposes only, you should avoid exposing the PaymentIntent ID in the client-side code.
+//     dpmCheckerLink: `https://dashboard.stripe.com/settings/payment_methods/review?transaction_id=${paymentIntent.id}`,
+//   });
+// });
 
 fastify.get("/session-status", async (request, reply) => {
   const session = await stripe.checkout.sessions.retrieve(
