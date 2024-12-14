@@ -5,8 +5,9 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import "./app.css";
+import { Card, Popper, Typography } from "@mui/material";
 
-export const CheckoutForm = ({ dpmCheckerLink }) => {
+export const CheckoutForm = ({ dpmCheckerLink, isFormReady }) => {
   const stripe = useStripe();
   const elements = useElements();
 
@@ -50,11 +51,45 @@ export const CheckoutForm = ({ dpmCheckerLink }) => {
     layout: "accordion",
   };
 
+  const [isPopoverOpen, setPopoverOpen] = useState(false);
+  // const open = Boolean(anchorEl);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const handleHover = (event) => {
+    if (!isFormReady) {
+      setPopoverOpen(true);
+      setAnchorEl(event.currentTarget);
+    }
+  };
+
+  const handleMouseOut = () => {
+    setPopoverOpen(false);
+    setAnchorEl(null);
+  };
+
   return (
     <>
       <form id="payment-form" onSubmit={handleSubmit}>
         <PaymentElement id="payment-element" options={paymentElementOptions} />
-        <button disabled={isLoading || !stripe || !elements} id="submit">
+        <Popper
+          open={isPopoverOpen}
+          anchorEl={anchorEl}
+          anchorOrigin={{
+            vertical: "bottom",
+            horizontal: "left",
+          }}
+        >
+          <Card>
+            <Typography sx={{ p: 2 }}>
+              Please double check you have completed the greetings card details!
+            </Typography>
+          </Card>
+        </Popper>
+        <button
+          onMouseOver={handleHover}
+          onMouseOut={handleMouseOut}
+          disabled={isLoading || !stripe || !elements || !isFormReady}
+          id="submit"
+        >
           <span id="button-text">
             {isLoading ? (
               <div className="spinner" id="spinner"></div>
@@ -66,21 +101,6 @@ export const CheckoutForm = ({ dpmCheckerLink }) => {
         {/* Show any error or success messages */}
         {message && <div id="payment-message">{message}</div>}
       </form>
-      {/* [DEV]: Display dynamic payment methods annotation and integration checker */}
-      <div id="dpm-annotation">
-        <p>
-          Payment methods are dynamically displayed based on customer location,
-          order amount, and currency.&nbsp;
-          <a
-            href={dpmCheckerLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            id="dpm-integration-checker"
-          >
-            Preview payment methods by transaction
-          </a>
-        </p>
-      </div>
     </>
   );
 };

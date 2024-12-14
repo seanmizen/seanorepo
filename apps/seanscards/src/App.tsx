@@ -6,9 +6,19 @@ import {
   Button,
   Backdrop,
   CircularProgress,
+  Skeleton,
+  Card,
+  CardActionArea,
+  CardContent,
+  CardMedia,
+  Radio,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
 } from "@mui/material";
+import { ExpandMore } from "@mui/icons-material";
 import { darkTheme, lightTheme } from "./theme";
-import { useEffect, useState } from "react";
+import { SetStateAction, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { object, string } from "yup";
 import { Appearance, loadStripe } from "@stripe/stripe-js";
@@ -54,10 +64,22 @@ type FormShape = {
   email: string;
 };
 
+type CardDesign = "Robin and Ivy" | "Stuffed Toys";
+
 const formSchema = object().shape({
-  message: string().max(500, "Too long!").required("Required"),
-  address: string().required("Required"),
-  email: string().email("Invalid email").required("Required"),
+  message: string()
+    .max(1120, `Too long! Keep it under 1120 characters pls xxx`)
+    .min(1, "Too short!")
+    .required("Need to enter a message for your card!"),
+  address: string()
+    .min(1, "Too short!")
+    .required("Please enter a postal address!"),
+  email: string()
+    .email("Invalid email")
+    .min(5, "Too short!")
+    .required(
+      "We need your email to send a confirmation! (I don't do tracking or junk mail)"
+    ),
 });
 
 const getOppositeThemeKey = (
@@ -122,6 +144,8 @@ const App = () => {
       address: "",
       email: "",
     },
+    isInitialValid: false,
+    validateOnBlur: true,
     validationSchema: formSchema,
     onSubmit: (values) => {
       alert(JSON.stringify(values, null, 2));
@@ -134,6 +158,10 @@ const App = () => {
     value: formik.values[fieldName],
     onChange: formik.handleChange,
     error: formik.touched[fieldName] && !!formik.errors[fieldName],
+    helperText:
+      formik.touched[fieldName] && !!formik.errors[fieldName]
+        ? formik.errors[fieldName]
+        : undefined,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -184,6 +212,20 @@ const App = () => {
       });
   }, []);
 
+  const [selected, setSelected] = useState<CardDesign>("Robin and Ivy");
+  const handleSelect = (val: SetStateAction<CardDesign>) => setSelected(val);
+
+  // Open accordion
+  // A: once form is complete
+  // B: if opened by clicking
+  // const [showCheckout, setShowCheckout] = useState(false);
+  // useEffect(() => {
+  //   if (formik.dirty && formik.touched) {
+  //     console.log("huzzah!");
+  //     setShowCheckout(true);
+  //   }
+  // }, [formik.dirty, formik.isValid]);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -233,11 +275,66 @@ const App = () => {
               gap: 2,
               alignItems: "center",
               padding: "20px",
+              marginBlock: "20px",
             }}
             component={"form"}
             onSubmit={formik.handleSubmit}
-            noValidate
+            // noValidate
           >
+            <Box display="flex" gap={2}>
+              <Card
+                sx={{
+                  maxWidth: 200,
+                  border:
+                    selected === "Robin and Ivy" ? "2px solid blue" : "none",
+                }}
+              >
+                <CardActionArea onClick={() => handleSelect("one")}>
+                  <CardMedia
+                    component="img"
+                    height="140"
+                    image="https://i.postimg.cc/gXFCHh5M/Robin-Ivy.jpg"
+                  />
+                  <CardContent>
+                    <Radio checked={selected === "Robin and Ivy"} />
+                    Robin and Ivy
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+
+              <Card
+                sx={{
+                  maxWidth: 200,
+                  border:
+                    selected === "Stuffed Toys" ? "2px solid blue" : "none",
+                }}
+              >
+                <CardActionArea onClick={() => handleSelect("two")}>
+                  <CardMedia
+                    component="img"
+                    height="140"
+                    // image="../assets/Stuffed Toys.jpg"
+                    image="https://i.postimg.cc/2bQPc6NC/Stuffed-Toys.jpg"
+                  />
+                  <CardContent>
+                    <Radio checked={selected === "Stuffed Toys"} />
+                    Stuffed Toys
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Box>
+            <Box
+              // component={"p"}
+              sx={{
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              Designs by Mum
+              <a href="https://www.instagram.com/caroline.mizen/">
+                @caroline.mizen
+              </a>
+            </Box>
+
             <TextField
               label="Full card message"
               variant="outlined"
@@ -271,7 +368,7 @@ const App = () => {
               sx={{ width: "400px" }}
               {...formikPropsForField("email")}
             />
-            <Button type="submit" variant="contained" />
+            {/* <Button type="submit" variant="contained" /> */}
           </Box>
           <Box
             display={"none"}
@@ -307,17 +404,38 @@ const App = () => {
               4000 0025 0000 3155
 
               Payment is declined
-              4000 0000 0000 9995 
+              4000 0000 0000 9995
               */}
           </div>
-          {clientSecret && (
-            <Elements
-              options={{ clientSecret, appearance, loader }}
-              stripe={stripePromise}
+          {/* <Accordion
+            expanded={showCheckout}
+            onChange={() => setShowCheckout(!showCheckout)}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMore />}
+              aria-controls="panel1-content"
+              id="panel1-header"
             >
-              <CheckoutForm dpmCheckerLink={dpmCheckerLink} />
-            </Elements>
+              Payment
+            </AccordionSummary>
+            <AccordionDetails> */}
+          {clientSecret ? (
+            <Box minHeight={"600px"}>
+              <Elements
+                options={{ clientSecret, appearance, loader }}
+                stripe={stripePromise}
+              >
+                <CheckoutForm
+                  dpmCheckerLink={dpmCheckerLink}
+                  isFormReady={formik.touched && formik.isValid}
+                />
+              </Elements>
+            </Box>
+          ) : (
+            <Skeleton variant="rectangular" width="100%" height="600px" />
           )}
+          {/* </AccordionDetails>
+          </Accordion> */}
           <Backdrop
             sx={(theme) => ({ color: "#fff", zIndex: theme.zIndex.drawer + 1 })}
             open={isLoading}
@@ -328,6 +446,7 @@ const App = () => {
           <Button
             type="button"
             variant="contained"
+            sx={{ marginTop: "20px", marginBottom: "20px" }}
             onClick={() =>
               setThemeKey(getOppositeThemeKey(themeKey, prefersDark.matches))
             }
