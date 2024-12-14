@@ -8,14 +8,12 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { darkTheme, lightTheme } from "./theme";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { object, string } from "yup";
-import { loadStripe } from "@stripe/stripe-js";
-import {
-  EmbeddedCheckoutProvider,
-  EmbeddedCheckout,
-} from "@stripe/react-stripe-js";
+import { Appearance, loadStripe } from "@stripe/stripe-js";
+import { CheckoutForm } from "./CheckoutForm";
+import { Elements } from "@stripe/react-stripe-js";
 
 // https://docs.stripe.com/checkout/embedded/quickstart
 
@@ -102,6 +100,11 @@ const App = () => {
     else setTheme(prefersDark.matches ? darkTheme : lightTheme);
   }, [themeKey, prefersDark.matches]);
   const [isMobile, setIsMobile] = useState(windowIsMobile());
+  const appearance: Appearance = {
+    theme: theme.palette.mode === "dark" ? "night" : "stripe",
+  };
+  const loader = "auto";
+
   useEffect(() => {
     window.addEventListener("resize", () => {
       setIsMobile(windowIsMobile());
@@ -140,15 +143,15 @@ const App = () => {
     getRandomIndex(fakeAddresses.length)
   );
 
-  const fetchClientSecret = useCallback(() => {
-    return fetch("http://localhost:4242/create-checkout-session", {
-      method: "POST",
-    })
-      .then((res) => res.json())
-      .then((data) => data.clientSecret);
-  }, []);
+  // const fetchClientSecret = useCallback(() => {
+  //   return fetch("http://localhost:4242/create-checkout-session", {
+  //     method: "POST",
+  //   })
+  //     .then((res) => res.json())
+  //     .then((data) => data.clientSecret);
+  // }, []);
 
-  const embeddedStripeOptions = { fetchClientSecret };
+  // const embeddedStripeOptions = { fetchClientSecret };
 
   // curl to get localhost:8080 root from the frontend
   const getFromServer = async () => {
@@ -157,22 +160,46 @@ const App = () => {
     return data;
   };
 
+  // useEffect(() => {
+  //   const urlParams = new URLSearchParams(window.location.search);
+  //   const sessionId = urlParams.get("session_id");
+  //   if (sessionId) {
+  //     fetch(`http://localhost:4242/session-status?session_id=${sessionId}`)
+  //       .then((res) => res.json())
+  //       .then((data) => {
+  //         console.log("payment response:", data);
+  //       })
+  //       .catch((error) => {
+  //         console.error("Error fetching session status:", error);
+  //         alert("Something happened on the backend. Sorry!");
+  //       });
+  //     window.history.replaceState({}, document.title, "/");
+  //   }
+  // }, []);
+
+  // https://docs.stripe.com/payments/quickstart
+
+  const [clientSecret, setClientSecret] = useState("");
+  const [dpmCheckerLink, setDpmCheckerLink] = useState("");
+
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get("session_id");
-    if (sessionId) {
-      fetch(`http://localhost:4242/session-status?session_id=${sessionId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          console.log("payment response:", data);
-        })
-        .catch((error) => {
-          console.error("Error fetching session status:", error);
-          alert("Something happened on the backend. Sorry!");
-        });
-      window.history.replaceState({}, document.title, "/");
-    }
+    // Create PaymentIntent as soon as the page loads
+    fetch("http://localhost:4242/create-payment-intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ id: "xl-tshirt", amount: 1000 }] }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("gorren", data);
+        setClientSecret(data.clientSecret);
+        // [DEV] For demo purposes only
+        setDpmCheckerLink(data.dpmCheckerLink);
+      });
   }, []);
+
+  console.log("clientSecret", clientSecret);
+  console.log("dpmCheckerLink", dpmCheckerLink);
 
   return (
     <ThemeProvider theme={theme}>
@@ -291,12 +318,12 @@ Payment requires authentication
 
 Payment is declined
 4000 0000 0000 9995 */}
-            <EmbeddedCheckoutProvider
+            {/* <EmbeddedCheckoutProvider
               stripe={stripePromise}
               options={embeddedStripeOptions}
             >
               <EmbeddedCheckout />
-            </EmbeddedCheckoutProvider>
+            </EmbeddedCheckoutProvider> */}
           </div>
           <Button type="button" onClick={() => getFromServer().then(alert)}>
             Rah
@@ -326,7 +353,16 @@ Payment is declined
             }
           >{`Switch to ${getOppositeThemeKey(themeKey, prefersDark.matches)} mode`}</Button>
         </Box>
+        {clientSecret && (
+          <Elements
+            options={{ clientSecret, appearance, loader }}
+            stripe={stripePromise}
+          >
+            <CheckoutForm dpmCheckerLink={dpmCheckerLink} />
+          </Elements>
+        )}
       </Box>
+      {/* "Elements" might go elsewhere */}
     </ThemeProvider>
   );
 };
