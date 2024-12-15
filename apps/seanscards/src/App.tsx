@@ -248,6 +248,7 @@ const App = () => {
       },
       body: JSON.stringify({
         sessionToken,
+        stripeSessionId: latestSessionId,
         ...formik.values,
       }),
     })
@@ -256,6 +257,11 @@ const App = () => {
         console.error("Error submitting form:", error);
       });
   };
+
+  // hack: update API when formik values change
+  useEffect(() => {
+    formik.dirty || (formik.values.email && updateSessionFields());
+  }, [formik.values.selectedCardDesign]);
 
   const formikPropsForField = (fieldName: keyof FormShape) => ({
     id: fieldName,
@@ -318,7 +324,7 @@ const App = () => {
           setModalMessage({
             title: "Card sent!",
             body: "Thanks for your order. Merry Christmas! 🎄🎄🎄",
-            accordion: `Session ${stripeSessionId}\n${JSON.stringify(data, null, 2)}`,
+            accordion: `Session:\n${stripeSessionId}\n${JSON.stringify(data, null, 2)}`,
             // { "status": "complete", "customer_email": "sean@seanmizen.com" }
           });
           setModalOpen(true);
@@ -428,9 +434,9 @@ const App = () => {
                 }}
               >
                 <CardActionArea
-                  onClick={() =>
-                    formik.setFieldValue("selectedCardDesign", "Robin and Ivy")
-                  }
+                  onClick={() => {
+                    formik.setFieldValue("selectedCardDesign", "Robin and Ivy");
+                  }}
                 >
                   <CardMedia
                     component="img"
@@ -459,9 +465,9 @@ const App = () => {
                 }}
               >
                 <CardActionArea
-                  onClick={() =>
-                    formik.setFieldValue("selectedCardDesign", "Stuffed Toys")
-                  }
+                  onClick={() => {
+                    formik.setFieldValue("selectedCardDesign", "Stuffed Toys");
+                  }}
                 >
                   <CardMedia
                     component="img"
@@ -640,11 +646,13 @@ const App = () => {
               sx={{
                 padding: "20px",
                 minWidth: "400px",
+                maxWidth: "600px",
               }}
             >
               <Box
                 component={"p"}
                 sx={{
+                  // allow words to be cut off
                   whiteSpace: "pre-wrap",
                 }}
               >
@@ -660,7 +668,14 @@ const App = () => {
               </Box>
               <Accordion>
                 <AccordionSummary>behind the scenes info...</AccordionSummary>
-                <AccordionDetails>{modalMessage.accordion}</AccordionDetails>
+                <AccordionDetails
+                  sx={{
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {modalMessage.accordion}
+                </AccordionDetails>
               </Accordion>
             </Card>
           </Modal>

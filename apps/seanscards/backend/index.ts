@@ -34,7 +34,7 @@ fastify.get("/api", async (request, reply) => {
 fastify.post("/api/create-checkout-session", async (request, reply) => {
   const session = await stripe.checkout.sessions.create({
     ui_mode: "embedded",
-    // submit_type: "pay",
+    submit_type: "pay",
     line_items: [
       {
         price: config.productCode,
@@ -56,6 +56,30 @@ fastify.get("/api/session-status", async (request, reply) => {
   }
 
   const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+  // update DB with stripe status and stripe email
+  // stripeStatus TEXT,
+  // stripeCustomerEmail TEXT,
+
+  try {
+    const stmt = db.prepare(`
+      UPDATE sessions
+      SET stripeStatus = ?,
+          stripeCustomerEmail = ?
+      WHERE stripeSessionId = ?
+    `);
+
+    const result = stmt.run(
+      session.status,
+      session.customer_details?.email || "",
+      sessionId
+    );
+  } catch (error) {
+    console.error("Database error:", error);
+    console.error("session:", session, "sessionId:", sessionId);
+    reply.status(500).send({ error: "Database error" });
+  }
+
   reply.send({
     status: session.status,
     customer_email: session.customer_details?.email,
@@ -76,61 +100,61 @@ type FormShape = {
 };
 
 fastify.post("/api/update-session-fields", async (request, reply) => {
-  const { sessionToken, ...fields } = request.body as FormShape & {
+  const {
+    sessionToken,
+    stripeSessionId = "",
+    ...fields
+  } = request.body as FormShape & {
+    // sessionToken is ours
     sessionToken: string;
+    // stripeSessionId is stripe's
+    stripeSessionId?: string;
   };
   if (!sessionToken) {
     reply.status(400).send({ error: "Missing sessionToken" });
     return;
   }
 
+  // Sanitize inputs
   const safeMessage = fields.message.slice(0, 1120);
   const safeAddress = fields.address.slice(0, 1120);
   const safeEmail = fields.email.slice(0, 255);
   const safeDesign = fields.selectedCardDesign.slice(0, 255);
+  const safeStripeSessionId = stripeSessionId?.slice(0, 255);
+  const safeSessionToken = sessionToken.slice(0, 255);
 
-  console.log("bodybody\n:", request.body);
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO sessions (
+        sessionToken,
+        message,
+        address,
+        email,
+        selectedCardDesign,
+        stripeSessionId
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(sessionToken) DO UPDATE SET
+        message = excluded.message,
+        address = excluded.address,
+        email = excluded.email,
+        selectedCardDesign = excluded.selectedCardDesign,
+        stripeSessionId = excluded.stripeSessionId
+    `);
 
-  // If you also want to store or update stripeStatus and stripeCustomerEmail, include them here
-  // This example sets stripeStatus to 'open' for a newly created row:
-  db.prepare(
-    `
-    INSERT INTO sessions (
-      sessionToken,
-      message,
-      address,
-      email,
-      selectedCardDesign,
-      stripeStatus,
-      stripeCustomerEmail
-    ) VALUES (
-      @sessionToken,
-      @message,
-      @address,
-      @email,
-      @selectedCardDesign,
-      @stripeStatus,
-      @stripeCustomerEmail
-    )
-    ON CONFLICT(sessionToken) DO UPDATE SET
-      message = excluded.message,
-      address = excluded.address,
-      email = excluded.email,
-      selectedCardDesign = excluded.selectedCardDesign,
-      stripeStatus = excluded.stripeStatus,
-      stripeCustomerEmail = excluded.stripeCustomerEmail
-  `
-  ).run({
-    sessionToken,
-    message: safeMessage,
-    address: safeAddress,
-    email: safeEmail,
-    selectedCardDesign: safeDesign,
-    stripeStatus: "open",
-    stripeCustomerEmail: safeEmail,
-  });
+    const result = stmt.run(
+      safeSessionToken,
+      safeMessage,
+      safeAddress,
+      safeEmail,
+      safeDesign,
+      safeStripeSessionId
+    );
 
-  reply.send({ status: "ok" });
+    reply.send({ status: "ok" });
+  } catch (error) {
+    console.error("Database error:", error);
+    reply.status(500).send({ error: "Database error" });
+  }
 });
 
 const reset = "\x1b[0m";

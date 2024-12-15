@@ -20,27 +20,26 @@ db.exec(`
     address TEXT,
     email TEXT,
     selectedCardDesign TEXT,
+    stripeSessionId TEXT,
     stripeStatus TEXT,
     stripeCustomerEmail TEXT,
     createdAt TEXT NOT NULL DEFAULT (datetime('now')),
     updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
-  
+
   CREATE TRIGGER IF NOT EXISTS update_timestamp
   AFTER UPDATE ON sessions
   FOR EACH ROW
   BEGIN
     UPDATE sessions
     SET updatedAt = datetime('now')
-    WHERE rowid = NEW.rowid;
+    WHERE id = NEW.id;
   END;
 `);
 
 const rows = db.query("SELECT * FROM sessions").all();
 console.log("db connection established with row count:", rows.length);
-// console.log("latest row:", rows[rows.length - 1]);
-console.log("all rows:", JSON.stringify(rows, null, 2));
-
-// drop table if exists:
+console.log("latest row:", rows[rows.length - 1]);
+// console.log("all rows:", JSON.stringify(rows, null, 2));
 
 export { db };
