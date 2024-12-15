@@ -110,13 +110,6 @@ const formSchema = object()
 //   return prefersDarkMatches ? "light" : "dark";
 // };
 
-function isInstagramBrowser() {
-  const ua = navigator.userAgent || navigator.vendor || window.opera;
-  return ua.indexOf("Instagram") > -1;
-}
-
-const isInstagram = isInstagramBrowser();
-
 const fetchSessionToken: () => Promise<string> = async () => {
   return fetch(`${config.serverApiPath}/session-token`)
     .then((res) => res.text())
@@ -418,31 +411,6 @@ const App = () => {
             Handwritten cards by Sean - posted straight to your family.
             {`\n`}Or whoever!
           </Box>
-          {isInstagram && (
-            <Card
-              sx={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                zIndex: 2,
-                backgroundColor: "#eee",
-                padding: "10px",
-                whiteSpace: "pre-wrap",
-                height: "100vh",
-                width: "100vw",
-                display: "flex",
-                flexDirection: "row",
-                justifyContent: "flex-start",
-              }}
-            >
-              <Box>
-                You gotta go here and click "open in external browser" to get
-                out of the instagram app!{`\n\n\n`}I'm a trustworthy soul, but
-                Instagram doesn't allow payment links in-app :)
-              </Box>
-              <ArrowOutward />
-            </Card>
-          )}
           <Box
             sx={{
               width: "100%",
@@ -606,18 +574,6 @@ const App = () => {
             ,{` `}
             and leave me 24 hours to process your order. Thanks!
           </Box>
-          {isInstagram && (
-            <Box
-              component={"p"}
-              sx={{
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              <a target="#" href={config.appDomain}>
-                Open in browser to use the site!
-              </a>
-            </Box>
-          )}
         </Box>
         <Box
           sx={{
