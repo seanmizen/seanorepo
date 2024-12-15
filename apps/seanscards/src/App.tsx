@@ -27,6 +27,7 @@ import {
   EmbeddedCheckout,
   EmbeddedCheckoutProvider,
 } from "@stripe/react-stripe-js";
+import type {} from "../globals.d.ts";
 
 // until specified otherwise...
 const env = process.env.NODE_ENV || "development";
@@ -108,6 +109,13 @@ const formSchema = object()
 //   // otherwise, use the system preference
 //   return prefersDarkMatches ? "light" : "dark";
 // };
+
+function isInstagramBrowser() {
+  const ua = navigator.userAgent || navigator.vendor || window.opera;
+  return ua.indexOf("Instagram") > -1;
+}
+
+const isInstagram = isInstagramBrowser();
 
 const fetchSessionToken: () => Promise<string> = async () => {
   return fetch(`${config.serverApiPath}/session-token`)
@@ -573,6 +581,18 @@ const App = () => {
             ,{` `}
             and leave me 24 hours to process your order. Thanks!
           </Box>
+          {isInstagram && (
+            <Box
+              component={"p"}
+              sx={{
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              <a target="#" href={config.appDomain}>
+                Open in browser to use the site!
+              </a>
+            </Box>
+          )}
         </Box>
         <Box
           sx={{
