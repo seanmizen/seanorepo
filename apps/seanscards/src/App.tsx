@@ -479,6 +479,19 @@ const App = () => {
                 </CardActionArea>
               </Card>
             </Box>
+            <Box
+              sx={{
+                fontSize: "0.8rem",
+                color: "rgba(0, 0, 0, 0.6)",
+                textAlign: "center",
+              }}
+            >
+              (painted by the lovely{" "}
+              <a target="#" href="https://www.instagram.com/caroline.mizen/">
+                @caroline.mizen
+              </a>
+              )
+            </Box>
             <TextField
               label="Full card message"
               variant="outlined"
