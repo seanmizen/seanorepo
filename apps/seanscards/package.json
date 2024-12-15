@@ -8,9 +8,9 @@
     "start-be": "bun  --hot --no-clear-screen backend/index.ts",
     "build": "rsbuild build",
     "preview": "rsbuild preview",
-    "prod": "yarn install && yarn build && concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn prod-fe\" \"yarn prod-be\"",
-    "prod-be": "bun backend/index.ts",
-    "prod-fe": "serve -s dist -p 4000",
+    "prod": "NODE_ENV=production yarn install && NODE_ENV=production yarn build && concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn prod-fe\" \"yarn prod-be\"",
+    "prod-be": "NODE_ENV=production bun backend/index.ts",
+    "prod-fe": "NODE_ENV=production serve -s dist -p 4000",
     "prod-fe-macos": "serve --port 4000 dist"
   },
   "dependencies": {

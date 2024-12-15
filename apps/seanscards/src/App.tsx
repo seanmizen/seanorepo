@@ -31,6 +31,13 @@ import {
 // until specified otherwise...
 const config: ConfigType = configs[process.env.NODE_ENV || "development"];
 
+console.info(
+  "running on ",
+  process.env.NODE_ENV || "development",
+  "appDomain",
+  config.appDomain
+);
+
 // https://docs.stripe.com/checkout/embedded/quickstart
 
 const stripePromise = loadStripe(
