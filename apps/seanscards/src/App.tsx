@@ -13,20 +13,24 @@ import {
   Button,
 } from "@mui/material";
 import { darkTheme, lightTheme } from "./theme";
-import { SetStateAction, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { object, string } from "yup";
-import { Appearance, loadStripe } from "@stripe/stripe-js";
-import {
-  EmbeddedCheckout,
-  EmbeddedCheckoutProvider,
-} from "@stripe/react-stripe-js";
+// import { Appearance, loadStripe } from "@stripe/stripe-js";
+// import {
+//   EmbeddedCheckout,
+//   EmbeddedCheckoutProvider,
+// } from "@stripe/react-stripe-js";
+import { configs, ConfigType } from "../configs";
+
+// until specified otherwise...
+const config: ConfigType = configs[process.env.NODE_ENV || "development"];
 
 // https://docs.stripe.com/checkout/embedded/quickstart
 
-const stripePromise = loadStripe(
-  "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x"
-);
+// const stripePromise = loadStripe(
+//   "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x"
+// );
 
 const placeholderMessages = [
   `Dear John,
@@ -55,13 +59,14 @@ const fakeAddresses = [
 
 const windowIsMobile = () => window.innerWidth < 800;
 
+type CardDesign = "Robin and Ivy" | "Stuffed Toys";
+
 type FormShape = {
+  selectedCardDesign: CardDesign;
   message: string;
   address: string;
   email: string;
 };
-
-type CardDesign = "Robin and Ivy" | "Stuffed Toys";
 
 const formSchema = object().shape({
   message: string()
@@ -79,15 +84,21 @@ const formSchema = object().shape({
     ),
 });
 
-const getOppositeThemeKey = (
-  themeKey: string | null,
-  prefersDarkMatches: boolean
-) => {
-  // if we have a non-null themeKey, use that
-  if (themeKey === "dark") return "light";
-  if (themeKey === "light") return "dark";
-  // otherwise, use the system preference
-  return prefersDarkMatches ? "light" : "dark";
+// const getOppositeThemeKey = (
+//   themeKey: string | null,
+//   prefersDarkMatches: boolean
+// ) => {
+//   // if we have a non-null themeKey, use that
+//   if (themeKey === "dark") return "light";
+//   if (themeKey === "light") return "dark";
+//   // otherwise, use the system preference
+//   return prefersDarkMatches ? "light" : "dark";
+// };
+
+const fetchSessionToken: () => Promise<string> = async () => {
+  return fetch(`${config.serverApiPath}/session-token`)
+    .then((res) => res.text())
+    .then((data) => data);
 };
 
 /**
@@ -95,6 +106,16 @@ const getOppositeThemeKey = (
  * but we did it. a single-page application. with a single page.
  */
 const App = () => {
+  // Sean's Jank Solution to order processing:
+  // session token: get one from BE on page load.
+  // on form completion, send the form data and the session token to the BE.
+  // so when we receive the Stripe session ID, we can match it to the session token.
+  // match that to a payment, and then we can send the card.
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  useEffect(() => {
+    fetchSessionToken().then((token) => setSessionToken(token));
+  }, []);
+
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)"); // give this a refresh every render, why not
   const [themeKey, setThemeKey] = useState<string | null>(null);
   const [, setTheme] = useState(prefersDark.matches ? darkTheme : lightTheme);
@@ -119,10 +140,10 @@ const App = () => {
     else setTheme(prefersDark.matches ? darkTheme : lightTheme);
   }, [themeKey, prefersDark.matches]);
   const [isMobile, setIsMobile] = useState(windowIsMobile());
-  const appearance: Appearance = {
-    // theme: theme.palette.mode === "dark" ? "night" : "stripe",
-    theme: "stripe",
-  };
+  // const appearance: Appearance = {
+  //   // theme: theme.palette.mode === "dark" ? "night" : "stripe",
+  //   theme: "stripe",
+  // };
   const loader = "auto";
 
   useEffect(() => {
@@ -136,6 +157,7 @@ const App = () => {
 
   const formik = useFormik<FormShape>({
     initialValues: {
+      selectedCardDesign: "Robin and Ivy",
       message: "",
       address: "",
       email: "",
@@ -148,11 +170,36 @@ const App = () => {
     },
   });
 
+  const updateSessionFields = () => {
+    // "submit" formik values to the backend with session token
+    fetch(`${config.serverApiPath}/update-session-fields`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sessionToken,
+        ...formik.values,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("form response:", data);
+      })
+      .catch((error) => {
+        console.error("Error submitting form:", error);
+      });
+  };
+
   const formikPropsForField = (fieldName: keyof FormShape) => ({
     id: fieldName,
     name: fieldName,
     value: formik.values[fieldName],
     onChange: formik.handleChange,
+    onBlur: (e: any) => {
+      formik.dirty && formik.handleBlur(e);
+      updateSessionFields();
+    },
     error: formik.touched[fieldName] && !!formik.errors[fieldName],
     helperText:
       formik.touched[fieldName] && !!formik.errors[fieldName]
@@ -174,7 +221,7 @@ const App = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get("session_id");
     if (sessionId) {
-      fetch(`http://localhost:4242/session-status?session_id=${sessionId}`)
+      fetch(`${config.serverApiPath}/session-status?session_id=${sessionId}`)
         .then((res) => res.json())
         .then((data) => {
           console.log("payment response:", data);
@@ -189,7 +236,7 @@ const App = () => {
 
   const fetchClientSecret = useCallback(() => {
     // Create a Checkout Session
-    return fetch("/create-checkout-session", {
+    return fetch(`${config.serverApiPath}/create-checkout-session`, {
       method: "POST",
     })
       .then((res) => res.json())
@@ -205,7 +252,7 @@ const App = () => {
 
   // useEffect(() => {
   //   // Create PaymentIntent as soon as the page loads
-  //   fetch("http://localhost:4242/create-payment-intent", {
+  //   fetch(`${config.serverApiPath}/create-payment-intent`, {
   //     method: "POST",
   //     headers: { "Content-Type": "application/json" },
   //     body: JSON.stringify({ items: [{ id: "xl-tshirt", amount: 1000 }] }),
@@ -221,15 +268,16 @@ const App = () => {
 
   // GET from http://localhost:4242 and alert the JSON.stringify(response, null, 2)
   const testServer = () => {
-    fetch("http://localhost:4242")
+    fetch(config.serverApiPath)
       .then((res) => res.json())
       .then((data) => {
         alert(JSON.stringify(data, null, 2));
       });
   };
 
-  const [selected, setSelected] = useState<CardDesign>("Robin and Ivy");
-  const handleSelect = (val: SetStateAction<CardDesign>) => setSelected(val);
+  const formikReady = formik.touched && formik.isValid;
+  const weCanProceedToCheckout = sessionToken && formikReady;
+  // const weCanProceedToCheckout = clientSecret && sessionToken && formikReady;
 
   return (
     <ThemeProvider theme={lightTheme}>
@@ -282,17 +330,23 @@ const App = () => {
             }}
             component={"form"}
             onSubmit={formik.handleSubmit}
-            noValidate
+            // noValidate
           >
             <Box id={"rah"} display="flex" gap={2}>
               <Card
                 sx={{
                   maxWidth: 200,
                   border:
-                    selected === "Robin and Ivy" ? "2px solid blue" : "none",
+                    formik.values.selectedCardDesign === "Robin and Ivy"
+                      ? "2px solid blue"
+                      : "none",
                 }}
               >
-                <CardActionArea onClick={() => handleSelect("Robin and Ivy")}>
+                <CardActionArea
+                  onClick={() =>
+                    formik.setFieldValue("selectedCardDesign", "Robin and Ivy")
+                  }
+                >
                   <CardMedia
                     component="img"
                     height="140"
@@ -301,7 +355,9 @@ const App = () => {
                   <CardContent>
                     <Radio
                       tabIndex={-1}
-                      checked={selected === "Robin and Ivy"}
+                      checked={
+                        formik.values.selectedCardDesign === "Robin and Ivy"
+                      }
                     />
                     Robin and Ivy
                   </CardContent>
@@ -312,10 +368,16 @@ const App = () => {
                 sx={{
                   maxWidth: 200,
                   border:
-                    selected === "Stuffed Toys" ? "2px solid blue" : "none",
+                    formik.values.selectedCardDesign === "Stuffed Toys"
+                      ? "2px solid blue"
+                      : "none",
                 }}
               >
-                <CardActionArea onClick={() => handleSelect("Stuffed Toys")}>
+                <CardActionArea
+                  onClick={() =>
+                    formik.setFieldValue("selectedCardDesign", "Stuffed Toys")
+                  }
+                >
                   <CardMedia
                     component="img"
                     height="140"
@@ -324,7 +386,9 @@ const App = () => {
                   <CardContent>
                     <Radio
                       tabIndex={-1}
-                      checked={selected === "Stuffed Toys"}
+                      checked={
+                        formik.values.selectedCardDesign === "Stuffed Toys"
+                      }
                     />
                     Stuffed Toys
                   </CardContent>
@@ -401,13 +465,26 @@ const App = () => {
               Payment is declined
               4000 0000 0000 9995
               */}
-            <EmbeddedCheckoutProvider stripe={stripePromise} options={options}>
-              <EmbeddedCheckout />
-            </EmbeddedCheckoutProvider>
+            <div
+              style={{
+                pointerEvents: "none",
+                width: "100%",
+                height: "100%",
+              }}
+            >
+              {/* this will be a "opacity" block until the form is complete */}
+              <div />
+              {/* <EmbeddedCheckoutProvider
+                stripe={stripePromise}
+                options={options}
+              >
+                <EmbeddedCheckout />
+              </EmbeddedCheckoutProvider> */}
+            </div>
           </div>
 
           {/* NON-EMBEDDED BELOW: */}
-          {/* {clientSecret ? (
+          {/* {weCanProceedToCheckout ? (
             <Box minHeight={"600px"}>
               <Elements
                 options={{ clientSecret, appearance, loader }}
