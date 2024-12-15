@@ -10,7 +10,7 @@
     "preview": "rsbuild preview",
     "prod": "yarn install && yarn build && concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn prod-fe\" \"yarn prod-be\"",
     "prod-be": "bun backend/index.ts",
-    "prod-fe": "serve -port 4000 dist"
+    "prod-fe": "serve -s dist -p 4000"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
