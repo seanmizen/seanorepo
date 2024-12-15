@@ -17,6 +17,7 @@ import {
   AccordionDetails,
   AccordionSummary,
 } from "@mui/material";
+import { ArrowOutward } from "@mui/icons-material";
 import { darkTheme, lightTheme } from "./theme";
 import { FC, useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
@@ -34,7 +35,6 @@ const env = process.env.NODE_ENV || "development";
 const config: ConfigType = configs[env];
 
 // https://docs.stripe.com/checkout/embedded/quickstart
-
 const stripePromise = loadStripe(config.stripePublicKey);
 
 const placeholderMessages = [
@@ -418,6 +418,31 @@ const App = () => {
             Handwritten cards by Sean - posted straight to your family.
             {`\n`}Or whoever!
           </Box>
+          {isInstagram && (
+            <Card
+              sx={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                zIndex: 2,
+                backgroundColor: "#eee",
+                padding: "10px",
+                whiteSpace: "pre-wrap",
+                height: "100vh",
+                width: "100vw",
+                display: "flex",
+                flexDirection: "row",
+                justifyContent: "flex-start",
+              }}
+            >
+              <Box>
+                You gotta go here and click "open in external browser" to get
+                out of the instagram app!{`\n\n\n`}I'm a trustworthy soul, but
+                Instagram doesn't allow payment links in-app :)
+              </Box>
+              <ArrowOutward />
+            </Card>
+          )}
           <Box
             sx={{
               width: "100%",
@@ -636,7 +661,7 @@ const App = () => {
                   position: "absolute",
                   top: 0,
                   left: 0,
-                  zIndex: 10,
+                  zIndex: 1,
                   width: "100%",
                   height: "100%",
                   display: isMobile ? "none" : "flex",
