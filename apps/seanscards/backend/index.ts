@@ -5,10 +5,10 @@ import cookie from "@fastify/cookie";
 import jwt from "@fastify/jwt";
 import { Server, IncomingMessage, ServerResponse } from "http";
 import Stripe from "stripe";
-import { configs } from "../configs";
+import { configs, ConfigType } from "../configs";
 import { randomUUID } from "crypto";
 
-const config = configs[process.env.NODE_ENV || "development"];
+const config: ConfigType = configs[process.env.NODE_ENV || "development"];
 const appDomain = config.appBasename; // "http://localhost:4000" or "https://seanscards.com"
 
 const stripe = new Stripe(
@@ -28,20 +28,13 @@ fastify.register(cookie, {
 });
 fastify.register(jwt, { secret: "super" });
 
-// fastify.register(routes);
-fastify.get("/api", async (request, reply) => {
-  console.debug("we hello-worlding", request.headers);
-  return { hello: "world" };
-});
-
 fastify.post("/api/create-checkout-session", async (request, reply) => {
   console.debug("create-checkout-session", request.headers);
   const session = await stripe.checkout.sessions.create({
     ui_mode: "embedded",
     line_items: [
       {
-        // "prod_ROSpFjN63ZsvCY",
-        price: "price_1QVfu2BsGhYF8YEWBId3mVNi",
+        price: config.productCode,
         quantity: 1,
       },
     ],
@@ -52,40 +45,6 @@ fastify.post("/api/create-checkout-session", async (request, reply) => {
 
   reply.send({ clientSecret: session.client_secret });
 });
-
-// const calculateOrderAmount = (items) => {
-//   // Calculate the order total on the server to prevent
-//   // people from directly manipulating the amount on the client
-//   let total = 0;
-//   items.forEach((item) => {
-//     total += item.amount;
-//   });
-//   return total;
-// };
-
-// interface PaymentIntentRequestBody {
-//   items: { amount: number }[];
-// }
-
-// fastify.post("/api/create-payment-intent", async (request, reply) => {
-//   const { items } = request.body as PaymentIntentRequestBody;
-
-//   // Create a PaymentIntent with the order amount and currency
-//   const paymentIntent = await stripe.paymentIntents.create({
-//     amount: calculateOrderAmount(items),
-//     currency: "gbp",
-//     // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
-//     automatic_payment_methods: {
-//       enabled: true,
-//     },
-//   });
-
-//   reply.send({
-//     clientSecret: paymentIntent.client_secret,
-//     // [DEV]: For demo purposes only, you should avoid exposing the PaymentIntent ID in the client-side code.
-//     dpmCheckerLink: `https://dashboard.stripe.com/settings/payment_methods/review?transaction_id=${paymentIntent.id}`,
-//   });
-// });
 
 fastify.get("/api/session-status", async (request, reply) => {
   const session = await stripe.checkout.sessions.retrieve(
@@ -103,40 +62,21 @@ fastify.get("/api/session-token", async (request, reply) => {
   reply.send(randomUUID());
 });
 
-// method: "POST",
-// headers: {
-//   "Content-Type": "application/json",
-// },
-// body: JSON.stringify({
-//   sessionToken,
-//   ...formik.values,
-// }),
-// })
-// .then((res) => res.json())
-// .then((data) => {
-//   console.log("form response:", data);
-// })
-// .catch((error) => {
-//   console.error("Error submitting form:", error);
-// });
-
-// update-session-fields
 type FormShape = {
   message: string;
   address: string;
   email: string;
-  // plus sessionToken! (string)
+  selectedCardDesign: string;
 };
 
 fastify.post("/api/update-session-fields", async (request, reply) => {
   const { sessionToken, ...fields } = request.body as FormShape & {
     sessionToken: string;
   };
-
-  // BE does not care nor store sessions. this is an FE responsibility
-  console.log("sessionToken", sessionToken);
-  console.log("fields", fields);
-
+  // TODO sql update session id sessionToken with last updated fields
+  // concatenate message to 1120 chars
+  // concatenate address to 1120 chars
+  // concatenate email to 255 chars
   reply.send({ status: "ok" });
 });
 
@@ -146,14 +86,13 @@ const dim = "\x1b[2m%s";
 const bright = "\x1b[1m";
 
 const start = async () => {
-  const port = 4242;
   try {
     await fastify.listen({
-      port,
+      port: config.serverPort,
     });
     console.debug(
       "Bun serving at",
-      [cyan, "http://localhost:", bright, port, reset].join("")
+      [cyan, "http://localhost:", bright, config.serverPort, reset].join("")
     );
   } catch (err) {
     console.error(err);
