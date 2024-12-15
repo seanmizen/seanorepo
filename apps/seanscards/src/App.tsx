@@ -323,7 +323,7 @@ const App = () => {
         .then((data) => {
           setModalMessage({
             title: "Card sent!",
-            body: "Thanks for your order. Merry Christmas! 🎄🎄🎄",
+            body: "Thanks for your order. Merry Christmas! 🎄🎄🎄\nYou can go right in and make a new order, if you'd like. Thanks again.",
             accordion: `Session:\n${stripeSessionId}\n${JSON.stringify(data, null, 2)}`,
             // { "status": "complete", "customer_email": "sean@seanmizen.com" }
           });
