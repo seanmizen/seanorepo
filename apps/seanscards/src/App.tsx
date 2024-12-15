@@ -59,6 +59,7 @@ const fakeAddresses = [
 ];
 
 const windowIsMobile = () => window.innerWidth < 800;
+const windowIsBigEnoughForSideBySide = () => window.innerWidth > 1250;
 
 type CardDesign = "Robin and Ivy" | "Stuffed Toys";
 
@@ -192,6 +193,9 @@ const App = () => {
     else setTheme(prefersDark.matches ? darkTheme : lightTheme);
   }, [themeKey, prefersDark.matches]);
   const [isMobile, setIsMobile] = useState(windowIsMobile());
+  const [isBigEnoughForSideBySide, setIsBigEnoughForSideBySide] = useState(
+    windowIsBigEnoughForSideBySide()
+  );
   // const appearance: Appearance = {
   //   // theme: theme.palette.mode === "dark" ? "night" : "stripe",
   //   theme: "stripe",
@@ -201,6 +205,7 @@ const App = () => {
   useEffect(() => {
     window.addEventListener("resize", () => {
       setIsMobile(windowIsMobile());
+      setIsBigEnoughForSideBySide(windowIsBigEnoughForSideBySide());
     });
     return () => {
       window.removeEventListener("resize", () => {});
@@ -216,6 +221,7 @@ const App = () => {
     },
     isInitialValid: false,
     validateOnBlur: true,
+    validateOnChange: false,
     validationSchema: formSchema,
     onSubmit: (values) => {
       alert(JSON.stringify(values, null, 2));
@@ -318,18 +324,8 @@ const App = () => {
   //     });
   // }, []);
 
-  // GET from http://localhost:4242 and alert the JSON.stringify(response, null, 2)
-  const testServer = () => {
-    fetch(config.serverApiPath)
-      .then((res) => res.json())
-      .then((data) => {
-        alert(JSON.stringify(data, null, 2));
-      });
-  };
-
   const formikReady = formik.touched && formik.isValid;
   const weCanProceedToCheckout = sessionToken && formikReady;
-  // const weCanProceedToCheckout = clientSecret && sessionToken && formikReady;
 
   return (
     <ThemeProvider theme={lightTheme}>
@@ -341,9 +337,10 @@ const App = () => {
           minHeight: "100vh",
           lineHeight: 1.1,
           textAlign: "center",
-          flexDirection: "column",
+          flexDirection: isBigEnoughForSideBySide ? "row" : "column",
+          gap: isBigEnoughForSideBySide ? 20 : 0,
           justifyContent: "center",
-          alignItems: "center",
+          alignItems: isBigEnoughForSideBySide ? "flex-start" : "center",
           h1: {
             fontSize: "3.6rem",
             fontWeight: 700,
@@ -351,7 +348,7 @@ const App = () => {
           p: {
             fontSize: "1.2rem",
             fontWeight: 400,
-            opacity: 0.5,
+            color: "rgba(0, 0, 0, 0.7)",
           },
         }}
       >
@@ -508,6 +505,13 @@ const App = () => {
             ,{` `}
             and leave me 24 hours to process your order. Thanks!
           </Box>
+        </Box>
+        <Box
+          sx={{
+            maxWidth: "600px",
+            paddingTop: "20px",
+          }}
+        >
           <Box id="checkout" position="relative" width="100%" height="100%">
             {/* Payment succeeds
               4242 4242 4242 4242
