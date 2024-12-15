@@ -34,11 +34,7 @@ const config: ConfigType = configs[env];
 
 // https://docs.stripe.com/checkout/embedded/quickstart
 
-const stripePromise = loadStripe(
-  env === "production"
-    ? "pk_live_..."
-    : "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x"
-);
+const stripePromise = loadStripe(config.stripePublicKey);
 
 const placeholderMessages = [
   `Dear John,
