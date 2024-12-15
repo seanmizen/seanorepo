@@ -120,7 +120,7 @@ const fetchSessionToken: () => Promise<string> = async () => {
 const ServerChecker: FC = () => {
   const [initialRender, setInitialRender] = useState(true);
   const [isServerDown, setIsServerDown] = useState(false);
-  const [displayAlert, setDisplayAlert] = useState(true);
+  const [displayAlert, setDisplayAlert] = useState(false);
 
   const checkServerStatus = () => {
     fetch(config.serverApiPath)
@@ -404,6 +404,7 @@ const App = () => {
             component={"p"}
             sx={{
               whiteSpace: "pre-wrap",
+              margin: "20px",
             }}
           >
             Handwritten cards by Sean - posted straight to your family.
@@ -506,7 +507,10 @@ const App = () => {
               multiline
               className="message"
               minRows={isMobile ? 5 : 10}
-              sx={{ width: "400px" }}
+              sx={{
+                width: "100%",
+                maxWidth: "400px",
+              }}
               onFocus={() =>
                 setRandomPlaceholderIndex(
                   getRandomIndex(placeholderMessages.length)
@@ -523,7 +527,10 @@ const App = () => {
               variant="outlined"
               multiline
               minRows={isMobile ? 3 : 5}
-              sx={{ width: "400px" }}
+              sx={{
+                width: "100%",
+                maxWidth: "400px",
+              }}
               onFocus={() =>
                 setRandomAddressIndex(getRandomIndex(fakeAddresses.length))
               }
@@ -533,7 +540,10 @@ const App = () => {
             <TextField
               label="Your email address"
               variant="outlined"
-              sx={{ width: "400px" }}
+              sx={{
+                width: "100%",
+                maxWidth: "400px",
+              }}
               {...formikPropsForField("email")}
             />
           </Box>
@@ -605,7 +615,7 @@ const App = () => {
                   zIndex: 10,
                   width: "100%",
                   height: "100%",
-                  display: "flex",
+                  display: isMobile ? "none" : "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   pointerEvents: "none",
@@ -649,7 +659,7 @@ const App = () => {
             <Card
               sx={{
                 padding: "20px",
-                minWidth: "400px",
+                minWidth: "300px",
                 maxWidth: "600px",
               }}
             >
