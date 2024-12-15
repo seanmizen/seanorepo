@@ -84,13 +84,11 @@ fastify.post("/api/update-session-fields", async (request, reply) => {
     return;
   }
 
-  // Truncate to safe lengths
   const safeMessage = fields.message.slice(0, 1120);
   const safeAddress = fields.address.slice(0, 1120);
   const safeEmail = fields.email.slice(0, 255);
   const safeDesign = fields.selectedCardDesign.slice(0, 255);
 
-  // Insert or update session record
   db.prepare(
     `
     INSERT INTO sessions (sessionToken, message, address, email, selectedCardDesign)
