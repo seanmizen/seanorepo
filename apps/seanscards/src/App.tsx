@@ -10,27 +10,28 @@ import {
   CardContent,
   CardMedia,
   Radio,
-  Button,
+  Alert,
+  Fade,
 } from "@mui/material";
 import { darkTheme, lightTheme } from "./theme";
-import { useCallback, useEffect, useState } from "react";
+import { FC, useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { object, string } from "yup";
-// import { Appearance, loadStripe } from "@stripe/stripe-js";
-// import {
-//   EmbeddedCheckout,
-//   EmbeddedCheckoutProvider,
-// } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import { configs, ConfigType } from "../configs";
+import {
+  EmbeddedCheckout,
+  EmbeddedCheckoutProvider,
+} from "@stripe/react-stripe-js";
 
 // until specified otherwise...
 const config: ConfigType = configs[process.env.NODE_ENV || "development"];
 
 // https://docs.stripe.com/checkout/embedded/quickstart
 
-// const stripePromise = loadStripe(
-//   "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x"
-// );
+const stripePromise = loadStripe(
+  "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x"
+);
 
 const placeholderMessages = [
   `Dear John,
@@ -99,6 +100,57 @@ const fetchSessionToken: () => Promise<string> = async () => {
   return fetch(`${config.serverApiPath}/session-token`)
     .then((res) => res.text())
     .then((data) => data);
+};
+
+// component which checks `config.serverApiPath` for a response
+// if it gets no response, it displays a message saying "The server is down"
+const ServerChecker: FC = () => {
+  const [initialRender, setInitialRender] = useState(true);
+  const [isServerDown, setIsServerDown] = useState(false);
+  const [displayAlert, setDisplayAlert] = useState(true);
+
+  const checkServerStatus = () => {
+    fetch(config.serverApiPath)
+      .then((res) => res.json())
+      .then(() => setIsServerDown(false))
+      .catch(() => setIsServerDown(true))
+      .finally(() => setInitialRender(false));
+  };
+
+  useEffect(() => {
+    checkServerStatus();
+  }, []);
+
+  const severity = initialRender ? "info" : isServerDown ? "error" : "success";
+  const message = initialRender
+    ? "Checking server status..."
+    : isServerDown
+      ? "The server is down"
+      : `The server is up!`;
+
+  useEffect(() => {
+    if (!initialRender && !isServerDown) {
+      const timeout = setTimeout(() => setDisplayAlert(false), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [initialRender, isServerDown]);
+
+  return (
+    <Fade in={displayAlert} appear={false} timeout={500} unmountOnExit>
+      <Alert
+        severity={severity}
+        sx={{
+          position: "absolute",
+          top: 20,
+          right: 20,
+          cursor: "pointer",
+        }}
+        onClick={checkServerStatus}
+      >
+        {message}
+      </Alert>
+    </Fade>
+  );
 };
 
 /**
@@ -281,6 +333,7 @@ const App = () => {
 
   return (
     <ThemeProvider theme={lightTheme}>
+      <ServerChecker />
       <CssBaseline />
       <Box
         sx={{
@@ -455,7 +508,7 @@ const App = () => {
             ,{` `}
             and leave me 24 hours to process your order. Thanks!
           </Box>
-          <div id="checkout">
+          <Box id="checkout" position="relative" width="100%" height="100%">
             {/* Payment succeeds
               4242 4242 4242 4242
 
@@ -465,23 +518,44 @@ const App = () => {
               Payment is declined
               4000 0000 0000 9995
               */}
-            <div
-              style={{
-                pointerEvents: "none",
+            <Box
+              sx={{
+                pointerEvents: weCanProceedToCheckout ? "unset" : "none",
                 width: "100%",
                 height: "100%",
+                marginBlock: "20px",
               }}
             >
-              {/* this will be a "opacity" block until the form is complete */}
-              <div />
-              {/* <EmbeddedCheckoutProvider
+              <EmbeddedCheckoutProvider
                 stripe={stripePromise}
                 options={options}
               >
                 <EmbeddedCheckout />
-              </EmbeddedCheckoutProvider> */}
-            </div>
-          </div>
+              </EmbeddedCheckoutProvider>
+            </Box>
+            {/* Overlay if we cannot proceed */}
+            {!weCanProceedToCheckout && (
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  zIndex: 10,
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  pointerEvents: "none",
+                  backgroundColor: "rgba(255, 255, 255, 0.6)",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                Please complete the greetings card details first!
+                {`\n`}I can't send a card without all the details!
+              </Box>
+            )}
+          </Box>
 
           {/* NON-EMBEDDED BELOW: */}
           {/* {weCanProceedToCheckout ? (
@@ -506,7 +580,7 @@ const App = () => {
           >
             <CircularProgress color="inherit" />
           </Backdrop>
-          <Button onClick={testServer}>tt</Button>
+          {/* <Button onClick={testServer}>tt</Button> */}
           {/* <Button
             type="button"
             variant="contained"
