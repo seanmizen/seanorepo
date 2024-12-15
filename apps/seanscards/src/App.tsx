@@ -17,7 +17,6 @@ import {
   AccordionDetails,
   AccordionSummary,
 } from "@mui/material";
-import { ArrowOutward } from "@mui/icons-material";
 import { darkTheme, lightTheme } from "./theme";
 import { FC, useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
