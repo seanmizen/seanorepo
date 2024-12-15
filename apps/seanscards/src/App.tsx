@@ -10,6 +10,7 @@ import {
   CardContent,
   CardMedia,
   Radio,
+  Button,
 } from "@mui/material";
 import { darkTheme, lightTheme } from "./theme";
 import { SetStateAction, useCallback, useEffect, useState } from "react";
@@ -218,6 +219,15 @@ const App = () => {
   //     });
   // }, []);
 
+  // GET from http://localhost:4242 and alert the JSON.stringify(response, null, 2)
+  const testServer = () => {
+    fetch("http://localhost:4242")
+      .then((res) => res.json())
+      .then((data) => {
+        alert(JSON.stringify(data, null, 2));
+      });
+  };
+
   const [selected, setSelected] = useState<CardDesign>("Robin and Ivy");
   const handleSelect = (val: SetStateAction<CardDesign>) => setSelected(val);
 
@@ -419,6 +429,7 @@ const App = () => {
           >
             <CircularProgress color="inherit" />
           </Backdrop>
+          <Button onClick={testServer}>tt</Button>
           {/* <Button
             type="button"
             variant="contained"
