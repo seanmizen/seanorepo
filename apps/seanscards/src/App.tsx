@@ -29,19 +29,15 @@ import {
 } from "@stripe/react-stripe-js";
 
 // until specified otherwise...
-const config: ConfigType = configs[process.env.NODE_ENV || "development"];
-
-console.info(
-  "running on ",
-  process.env.NODE_ENV || "development",
-  "appDomain",
-  config.appDomain
-);
+const env = process.env.NODE_ENV || "development";
+const config: ConfigType = configs[env];
 
 // https://docs.stripe.com/checkout/embedded/quickstart
 
 const stripePromise = loadStripe(
-  "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x"
+  env === "production"
+    ? "pk_live_..."
+    : "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x"
 );
 
 const placeholderMessages = [
