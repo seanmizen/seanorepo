@@ -7,7 +7,6 @@
     "allowJs": true,
     "skipLibCheck": true,
     "useDefineForClassFields": true,
-
     /* modules */
     "module": "ESNext",
     "isolatedModules": true,
@@ -17,8 +16,8 @@
 
     /* type checking */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "include": ["src", "configs.ts"]
 }

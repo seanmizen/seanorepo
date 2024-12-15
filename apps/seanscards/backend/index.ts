@@ -3,13 +3,16 @@ import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import cookie from "@fastify/cookie";
 import jwt from "@fastify/jwt";
-import { Server, IncomingMessage, ServerResponse } from "http";
-import Stripe from "stripe";
-import { configs, ConfigType } from "../configs";
 import { randomUUID } from "crypto";
+import { IncomingMessage, Server, ServerResponse } from "http";
+import Stripe from "stripe";
+import { db } from "./db";
+import { configs, ConfigType } from "../configs";
 
-const config: ConfigType = configs[process.env.NODE_ENV || "development"];
-const appDomain = config.appBasename; // "http://localhost:4000" or "https://seanscards.com"
+// until stated otherwise...
+const env = process.env.NODE_ENV || "development";
+const config: ConfigType = configs[env];
+const { appDomain } = config;
 
 const stripe = new Stripe(
   "sk_test_51QVX2JBsGhYF8YEWi3iM9PCLwFMG2AMbKx1eq6L4mPMp6TB62S9tve5NypbQmeiTTJ9epEAJhaO01lTLOZI4Huxy0009gNLP2Z"
@@ -21,17 +24,17 @@ const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
 
 fastify.register(cors);
 fastify.register(formbody);
-fastify.register(cookie, {
-  secret: "super", // for cookies signature
-  hook: "onRequest", // set to false to disable cookie autoparsing or set autoparsing on any of the following hooks: 'onRequest', 'preParsing', 'preHandler', 'preValidation'. default: 'onRequest'
-  parseOptions: {}, // options for parsing cookies
-});
+fastify.register(cookie, { secret: "super", hook: "onRequest" });
 fastify.register(jwt, { secret: "super" });
 
+fastify.get("/api", async (request, reply) => {
+  return { hello: "world" };
+});
+
 fastify.post("/api/create-checkout-session", async (request, reply) => {
-  console.debug("create-checkout-session", request.headers);
   const session = await stripe.checkout.sessions.create({
     ui_mode: "embedded",
+    // submit_type: "pay",
     line_items: [
       {
         price: config.productCode,
@@ -42,15 +45,17 @@ fastify.post("/api/create-checkout-session", async (request, reply) => {
     return_url: `${appDomain}/return?session_id={CHECKOUT_SESSION_ID}`,
     automatic_tax: { enabled: true },
   });
-
-  reply.send({ clientSecret: session.client_secret });
+  reply.send({ clientSecret: session.client_secret, sessionId: session.id });
 });
 
 fastify.get("/api/session-status", async (request, reply) => {
-  const session = await stripe.checkout.sessions.retrieve(
-    (request.query as unknown as any).session_id
-  );
+  const sessionId = (request.query as { session_id?: string }).session_id;
+  if (!sessionId) {
+    reply.status(400).send({ error: "Missing session_id" });
+    return;
+  }
 
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
   reply.send({
     status: session.status,
     customer_email: session.customer_details?.email,
@@ -59,7 +64,8 @@ fastify.get("/api/session-status", async (request, reply) => {
 
 fastify.get("/api/session-token", async (request, reply) => {
   // BE does not care nor store sessions. this is an FE responsibility
-  reply.send(randomUUID());
+  const token = randomUUID();
+  reply.send(token);
 });
 
 type FormShape = {
@@ -73,10 +79,36 @@ fastify.post("/api/update-session-fields", async (request, reply) => {
   const { sessionToken, ...fields } = request.body as FormShape & {
     sessionToken: string;
   };
-  // TODO sql update session id sessionToken with last updated fields
-  // concatenate message to 1120 chars
-  // concatenate address to 1120 chars
-  // concatenate email to 255 chars
+  if (!sessionToken) {
+    reply.status(400).send({ error: "Missing sessionToken" });
+    return;
+  }
+
+  // Truncate to safe lengths
+  const safeMessage = fields.message.slice(0, 1120);
+  const safeAddress = fields.address.slice(0, 1120);
+  const safeEmail = fields.email.slice(0, 255);
+  const safeDesign = fields.selectedCardDesign.slice(0, 255);
+
+  // Insert or update session record
+  db.prepare(
+    `
+    INSERT INTO sessions (sessionToken, message, address, email, selectedCardDesign)
+    VALUES (@sessionToken, @message, @address, @email, @selectedCardDesign)
+    ON CONFLICT(sessionToken) DO UPDATE SET
+      message = excluded.message,
+      address = excluded.address,
+      email = excluded.email,
+      selectedCardDesign = excluded.selectedCardDesign
+  `
+  ).run({
+    sessionToken,
+    message: safeMessage,
+    address: safeAddress,
+    email: safeEmail,
+    selectedCardDesign: safeDesign,
+  });
+
   reply.send({ status: "ok" });
 });
 

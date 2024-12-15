@@ -12,6 +12,10 @@ import {
   Radio,
   Alert,
   Fade,
+  Modal,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
 } from "@mui/material";
 import { darkTheme, lightTheme } from "./theme";
 import { FC, useCallback, useEffect, useState } from "react";
@@ -275,6 +279,13 @@ const App = () => {
     getRandomIndex(fakeAddresses.length)
   );
 
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMessage, setModalMessage] = useState({
+    title: "Why am I open? Merry Christmas! 🎄🎄🎄",
+    body: "I am a modal. Hello.",
+    accordion: `accordion\nnew line\ninfo`,
+  });
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get("session_id");
@@ -282,23 +293,41 @@ const App = () => {
       fetch(`${config.serverApiPath}/session-status?session_id=${sessionId}`)
         .then((res) => res.json())
         .then((data) => {
-          console.log("payment response:", data);
+          setModalMessage({
+            title: "Card sent!",
+            body: "Thanks for your order. Merry Christmas! 🎄🎄🎄",
+            accordion: `Session ${sessionId}\n${JSON.stringify(data, null, 2)}`,
+          });
+          setModalOpen(true);
         })
         .catch((error) => {
           console.error("Error fetching session status:", error);
-          alert("Something happened on the backend. Sorry!");
+          setModalMessage({
+            title: "Error! Sorry!",
+            body: "Something went wrong. Please check your email for a confirmation.",
+            accordion: `Session ${sessionId}\n${JSON.stringify(error, null, 2)}`,
+          });
+          setModalOpen(true);
         });
       window.history.replaceState({}, document.title, "/");
     }
   }, []);
 
+  const [latestSessionId, setLatestSessionId] = useState<string | null>(null);
   const fetchClientSecret = useCallback(() => {
     // Create a Checkout Session
     return fetch(`${config.serverApiPath}/create-checkout-session`, {
       method: "POST",
     })
       .then((res) => res.json())
-      .then((data) => data.clientSecret);
+      .then((data) => {
+        // here's our custom stuff, we can do whatever here (and add any extra stuff if we want)
+        console.log("checkout session created", data);
+        setLatestSessionId(data.id);
+        // and here's Stripe's expected return
+        // options.fetchClientSecret is expected to resolve to string
+        return data.clientSecret;
+      });
   }, []);
 
   const options = { fetchClientSecret };
@@ -577,6 +606,45 @@ const App = () => {
           ) : (
             <Skeleton variant="rectangular" width="100%" height="600px" />
           )} */}
+          <Modal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            aria-labelledby="modal-modal-title"
+            aria-describedby="modal-modal-description"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Card
+              sx={{
+                padding: "20px",
+                minWidth: "400px",
+              }}
+            >
+              <Box
+                component={"p"}
+                sx={{
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {modalMessage.title}
+              </Box>
+              <Box
+                component={"p"}
+                sx={{
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {modalMessage.body}
+              </Box>
+              <Accordion>
+                <AccordionSummary>behind the scenes info...</AccordionSummary>
+                <AccordionDetails>{modalMessage.accordion}</AccordionDetails>
+              </Accordion>
+            </Card>
+          </Modal>
           <Backdrop
             sx={(theme) => ({ color: "#fff", zIndex: theme.zIndex.drawer + 1 })}
             open={isLoading}
