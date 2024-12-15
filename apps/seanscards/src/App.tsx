@@ -290,34 +290,6 @@ const App = () => {
     accordion: `accordion\nnew line\ninfo`,
   });
 
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get("session_id");
-    if (sessionId) {
-      fetch(`${config.serverApiPath}/session-status?session_id=${sessionId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setModalMessage({
-            title: "Card sent!",
-            body: "Thanks for your order. Merry Christmas! 🎄🎄🎄",
-            accordion: `Session ${sessionId}\n${JSON.stringify(data, null, 2)}`,
-            // { "status": "complete", "customer_email": "sean@seanmizen.com" }
-          });
-          setModalOpen(true);
-        })
-        .catch((error) => {
-          console.error("Error fetching session status:", error);
-          setModalMessage({
-            title: "Error! Sorry!",
-            body: "Something went wrong. Please check your email for a confirmation.",
-            accordion: `Session ${sessionId}\n${JSON.stringify(error, null, 2)}`,
-          });
-          setModalOpen(true);
-        });
-      window.history.replaceState({}, document.title, "/");
-    }
-  }, []);
-
   const [latestSessionId, setLatestSessionId] = useState<string | null>(null);
   const fetchClientSecret = useCallback(() => {
     // Create a Checkout Session
@@ -332,6 +304,36 @@ const App = () => {
         // options.fetchClientSecret is expected to resolve to string
         return data.clientSecret;
       });
+  }, []);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const stripeSessionId = urlParams.get("session_id");
+    if (stripeSessionId) {
+      fetch(
+        `${config.serverApiPath}/session-status?session_id=${stripeSessionId}`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          setModalMessage({
+            title: "Card sent!",
+            body: "Thanks for your order. Merry Christmas! 🎄🎄🎄",
+            accordion: `Session ${stripeSessionId}\n${JSON.stringify(data, null, 2)}`,
+            // { "status": "complete", "customer_email": "sean@seanmizen.com" }
+          });
+          setModalOpen(true);
+        })
+        .catch((error) => {
+          console.error("Error fetching session status:", error);
+          setModalMessage({
+            title: "Error! Sorry!",
+            body: "Something went wrong. Please check your email for a confirmation.",
+            accordion: `Session ${stripeSessionId}\n${JSON.stringify(error, null, 2)}`,
+          });
+          setModalOpen(true);
+        });
+      window.history.replaceState({}, document.title, "/");
+    }
   }, []);
 
   const options = { fetchClientSecret };
@@ -360,7 +362,6 @@ const App = () => {
     formik.touched && formik.isValid && Object.keys(formik.touched).length > 1;
   const weCanProceedToCheckout = sessionToken && formikReady;
 
-  console.log("formikReady", formikReady);
   return (
     <ThemeProvider theme={lightTheme}>
       <ServerChecker />

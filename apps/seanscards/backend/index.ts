@@ -89,15 +89,36 @@ fastify.post("/api/update-session-fields", async (request, reply) => {
   const safeEmail = fields.email.slice(0, 255);
   const safeDesign = fields.selectedCardDesign.slice(0, 255);
 
+  console.log("bodybody\n:", request.body);
+
+  // If you also want to store or update stripeStatus and stripeCustomerEmail, include them here
+  // This example sets stripeStatus to 'open' for a newly created row:
   db.prepare(
     `
-    INSERT INTO sessions (sessionToken, message, address, email, selectedCardDesign)
-    VALUES (@sessionToken, @message, @address, @email, @selectedCardDesign)
+    INSERT INTO sessions (
+      sessionToken,
+      message,
+      address,
+      email,
+      selectedCardDesign,
+      stripeStatus,
+      stripeCustomerEmail
+    ) VALUES (
+      @sessionToken,
+      @message,
+      @address,
+      @email,
+      @selectedCardDesign,
+      @stripeStatus,
+      @stripeCustomerEmail
+    )
     ON CONFLICT(sessionToken) DO UPDATE SET
       message = excluded.message,
       address = excluded.address,
       email = excluded.email,
-      selectedCardDesign = excluded.selectedCardDesign
+      selectedCardDesign = excluded.selectedCardDesign,
+      stripeStatus = excluded.stripeStatus,
+      stripeCustomerEmail = excluded.stripeCustomerEmail
   `
   ).run({
     sessionToken,
@@ -105,6 +126,8 @@ fastify.post("/api/update-session-fields", async (request, reply) => {
     address: safeAddress,
     email: safeEmail,
     selectedCardDesign: safeDesign,
+    stripeStatus: "open",
+    stripeCustomerEmail: safeEmail,
   });
 
   reply.send({ status: "ok" });
