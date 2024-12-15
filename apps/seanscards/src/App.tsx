@@ -592,7 +592,11 @@ const App = () => {
               */}
             <Box
               sx={{
-                pointerEvents: weCanProceedToCheckout ? "unset" : "none",
+                pointerEvents: weCanProceedToCheckout
+                  ? "unset"
+                  : isMobile
+                    ? "unset"
+                    : "none",
                 width: "100%",
                 height: "100%",
                 marginBlock: "20px",
