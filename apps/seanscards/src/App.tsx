@@ -74,21 +74,28 @@ type FormShape = {
   email: string;
 };
 
-const formSchema = object().shape({
-  message: string()
-    .max(1120, `Too long! Keep it under 1120 characters pls xxx`)
-    .min(1, "Too short!")
-    .required("Need to enter a message for your card!"),
-  address: string()
-    .min(1, "Too short!")
-    .required("Please enter a postal address!"),
-  email: string()
-    .email("Invalid email")
-    .min(5, "Too short!")
-    .required(
-      "We need your email to send a confirmation! (I don't do tracking or junk mail)"
+const formSchema = object()
+  .required()
+  .shape({
+    message: string()
+      .max(1120, `Too long! Keep it under 1120 characters pls xxx`)
+      .min(1, "Too short!")
+      .required("Need to enter a message for your card!"),
+    address: string()
+      .min(1, "Too short!")
+      .required("Please enter a postal address!"),
+    email: string()
+      .email("Invalid email")
+      .min(5, "Too short!")
+      .required(
+        "We need your email to send a confirmation! (I don't do tracking or junk mail)"
+      ),
+    selectedCardDesign: string().oneOf(
+      ["Robin and Ivy", "Stuffed Toys"],
+      "Please select a card design!"
     ),
-});
+  });
+// .required();
 
 // const getOppositeThemeKey = (
 //   themeKey: string | null,
@@ -225,7 +232,7 @@ const App = () => {
     },
     isInitialValid: false,
     validateOnBlur: true,
-    validateOnChange: false,
+    // validateOnChange: false,
     validationSchema: formSchema,
     onSubmit: (values) => {
       alert(JSON.stringify(values, null, 2));
@@ -245,9 +252,6 @@ const App = () => {
       }),
     })
       .then((res) => res.json())
-      .then((data) => {
-        console.log("form response:", data);
-      })
       .catch((error) => {
         console.error("Error submitting form:", error);
       });
@@ -322,13 +326,14 @@ const App = () => {
       .then((res) => res.json())
       .then((data) => {
         // here's our custom stuff, we can do whatever here (and add any extra stuff if we want)
-        console.log("checkout session created", data);
         setLatestSessionId(data.id);
         // and here's Stripe's expected return
         // options.fetchClientSecret is expected to resolve to string
         return data.clientSecret;
       });
   }, []);
+
+  console.log("latestSessionId", latestSessionId);
 
   const options = { fetchClientSecret };
 
