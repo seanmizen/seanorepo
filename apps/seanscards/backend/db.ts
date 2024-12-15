@@ -9,19 +9,38 @@ const config: ConfigType = configs[env];
 const dbPath = path.join(import.meta.dir, config.dbName);
 const db = new Database(dbPath);
 
+// db.exec(`DROP TABLE IF EXISTS sessions`);
+
 // Create table if not exists
 db.exec(`
-CREATE TABLE IF NOT EXISTS sessions (
-  sessionToken TEXT PRIMARY KEY,
-  message TEXT,
-  address TEXT,
-  email TEXT,
-  selectedCardDesign TEXT
-);
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sessionToken TEXT UNIQUE,
+    message TEXT,
+    address TEXT,
+    email TEXT,
+    selectedCardDesign TEXT,
+    stripeStatus TEXT,
+    stripeCustomerEmail TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  
+  CREATE TRIGGER IF NOT EXISTS update_timestamp
+  AFTER UPDATE ON sessions
+  FOR EACH ROW
+  BEGIN
+    UPDATE sessions
+    SET updatedAt = datetime('now')
+    WHERE rowid = NEW.rowid;
+  END;
 `);
 
 const rows = db.query("SELECT * FROM sessions").all();
 console.log("db connection established with row count:", rows.length);
-console.log("latest row:", rows[rows.length - 1]);
+// console.log("latest row:", rows[rows.length - 1]);
+console.log("all rows:", JSON.stringify(rows, null, 2));
+
+// drop table if exists:
 
 export { db };
