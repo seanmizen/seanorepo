@@ -15,9 +15,8 @@ const config: ConfigType = configs[env];
 const { appDomain } = config;
 
 const stripe = new Stripe(
-  env === "production"
-    ? "NO"
-    : "sk_test_51QVX2JBsGhYF8YEWi3iM9PCLwFMG2AMbKx1eq6L4mPMp6TB62S9tve5NypbQmeiTTJ9epEAJhaO01lTLOZI4Huxy0009gNLP2Z"
+  process.env.STRIPE_SECRET_KEY ||
+    "sk_test_51QVX2JBsGhYF8YEWi3iM9PCLwFMG2AMbKx1eq6L4mPMp6TB62S9tve5NypbQmeiTTJ9epEAJhaO01lTLOZI4Huxy0009gNLP2Z"
 );
 
 const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
