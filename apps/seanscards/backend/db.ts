@@ -20,10 +20,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 `);
 
-const rowCount = db
-  .query<Record<string, number>, any>("SELECT COUNT(*) as count FROM sessions")
-  .all()[0].count;
-
-console.log("db connection established with row count:", rowCount);
+const rows = db.query("SELECT * FROM sessions").all();
+console.log("db connection established with row count:", rows.length);
+console.log("latest row:", rows[rows.length - 1]);
 
 export { db };

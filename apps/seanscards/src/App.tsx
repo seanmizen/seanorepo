@@ -301,6 +301,7 @@ const App = () => {
             title: "Card sent!",
             body: "Thanks for your order. Merry Christmas! 🎄🎄🎄",
             accordion: `Session ${sessionId}\n${JSON.stringify(data, null, 2)}`,
+            // { "status": "complete", "customer_email": "sean@seanmizen.com" }
           });
           setModalOpen(true);
         })
@@ -326,14 +327,12 @@ const App = () => {
       .then((res) => res.json())
       .then((data) => {
         // here's our custom stuff, we can do whatever here (and add any extra stuff if we want)
-        setLatestSessionId(data.id);
+        setLatestSessionId(data.sessionId);
         // and here's Stripe's expected return
         // options.fetchClientSecret is expected to resolve to string
         return data.clientSecret;
       });
   }, []);
-
-  console.log("latestSessionId", latestSessionId);
 
   const options = { fetchClientSecret };
 
@@ -357,10 +356,11 @@ const App = () => {
   //       setDpmCheckerLink(data.dpmCheckerLink);
   //     });
   // }, []);
-
-  const formikReady = formik.touched && formik.isValid;
+  const formikReady =
+    formik.touched && formik.isValid && Object.keys(formik.touched).length > 1;
   const weCanProceedToCheckout = sessionToken && formikReady;
 
+  console.log("formikReady", formikReady);
   return (
     <ThemeProvider theme={lightTheme}>
       <ServerChecker />
