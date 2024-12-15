@@ -48,7 +48,9 @@ const placeholderMessages = [
   I love you lots. From Sean ❤️`,
   `Mummy,
   Don't forget to feed the cat,
-  love from Beth! xxx`,
+  love from Beth! xxx
+
+  (Request drawings at your own peril.)`,
   `Mr and Mrs M+C,
   Have a great Christmas.
   Hope little bump comes out soon!
@@ -510,7 +512,10 @@ const App = () => {
                   getRandomIndex(placeholderMessages.length)
                 )
               }
-              placeholder={placeholderMessages[randomPlaceholderIndex]}
+              placeholder={
+                placeholderMessages[randomPlaceholderIndex] +
+                "\n\n[Special requests in square brackets please!]"
+              }
               {...formikPropsForField("message")}
             />
             <TextField
