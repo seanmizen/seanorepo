@@ -2,9 +2,6 @@ import {
   Box,
   TextField,
   CssBaseline,
-  ThemeProvider,
-  Backdrop,
-  CircularProgress,
   Card,
   CardActionArea,
   CardContent,
@@ -17,7 +14,6 @@ import {
   AccordionDetails,
   AccordionSummary,
 } from "@mui/material";
-import { darkTheme, lightTheme } from "./theme";
 import { FC, useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { object, string } from "yup";
@@ -27,7 +23,6 @@ import {
   EmbeddedCheckout,
   EmbeddedCheckoutProvider,
 } from "@stripe/react-stripe-js";
-import type {} from "../globals.d.ts";
 
 // until specified otherwise...
 const env = process.env.NODE_ENV || "development";
@@ -96,18 +91,6 @@ const formSchema = object()
       "Please select a card design!"
     ),
   });
-// .required();
-
-// const getOppositeThemeKey = (
-//   themeKey: string | null,
-//   prefersDarkMatches: boolean
-// ) => {
-//   // if we have a non-null themeKey, use that
-//   if (themeKey === "dark") return "light";
-//   if (themeKey === "light") return "dark";
-//   // otherwise, use the system preference
-//   return prefersDarkMatches ? "light" : "dark";
-// };
 
 const fetchSessionToken: () => Promise<string> = async () => {
   return fetch(`${config.serverApiPath}/session-token`)
@@ -115,8 +98,11 @@ const fetchSessionToken: () => Promise<string> = async () => {
     .then((data) => data);
 };
 
-// component which checks `config.serverApiPath` for a response
-// if it gets no response, it displays a message saying "The server is down"
+/**
+ * Component which checks `config.serverApiPath` for a response.
+ *
+ * if it gets no response, it displays a message saying "The server is down"
+ */
 const ServerChecker: FC = () => {
   const [initialRender, setInitialRender] = useState(true);
   const [isServerDown, setIsServerDown] = useState(false);
@@ -181,38 +167,10 @@ const App = () => {
     fetchSessionToken().then((token) => setSessionToken(token));
   }, []);
 
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)"); // give this a refresh every render, why not
-  const [themeKey, setThemeKey] = useState<string | null>(null);
-  const [, setTheme] = useState(prefersDark.matches ? darkTheme : lightTheme);
-  // first useEffect listens to the system theme preference
-  useEffect(() => {
-    prefersDark.addEventListener("change", (e) => {
-      setThemeKey(null);
-      if (e.matches) {
-        setTheme(darkTheme);
-      } else {
-        setTheme(lightTheme);
-      }
-    });
-    return () => {
-      prefersDark.removeEventListener("change", () => {});
-    };
-  }, []);
-  // second useEffect listens to the themeKey state (user-initiated theme change)
-  useEffect(() => {
-    if (themeKey === "dark") setTheme(darkTheme);
-    else if (themeKey === "light") setTheme(lightTheme);
-    else setTheme(prefersDark.matches ? darkTheme : lightTheme);
-  }, [themeKey, prefersDark.matches]);
   const [isMobile, setIsMobile] = useState(windowIsMobile());
   const [isBigEnoughForSideBySide, setIsBigEnoughForSideBySide] = useState(
     windowIsBigEnoughForSideBySide()
   );
-  // const appearance: Appearance = {
-  //   // theme: theme.palette.mode === "dark" ? "night" : "stripe",
-  //   theme: "stripe",
-  // };
-  const loader = "auto";
 
   useEffect(() => {
     window.addEventListener("resize", () => {
@@ -233,7 +191,6 @@ const App = () => {
     },
     isInitialValid: false,
     validateOnBlur: true,
-    // validateOnChange: false,
     validationSchema: formSchema,
     onSubmit: (values) => {
       alert(JSON.stringify(values, null, 2));
@@ -241,7 +198,6 @@ const App = () => {
   });
 
   const updateSessionFields = () => {
-    // "submit" formik values to the backend with session token
     fetch(`${config.serverApiPath}/update-session-fields`, {
       method: "POST",
       headers: {
@@ -280,8 +236,6 @@ const App = () => {
         : undefined,
   });
 
-  const [isLoading, setIsLoading] = useState(false);
-
   const getRandomIndex = (max: number) => ~~(max * Math.random());
   const [randomPlaceholderIndex, setRandomPlaceholderIndex] = useState(
     getRandomIndex(placeholderMessages.length)
@@ -299,7 +253,6 @@ const App = () => {
 
   const [latestSessionId, setLatestSessionId] = useState<string | null>(null);
   const fetchClientSecret = useCallback(() => {
-    // Create a Checkout Session
     return fetch(`${config.serverApiPath}/create-checkout-session`, {
       method: "POST",
     })
@@ -326,7 +279,6 @@ const App = () => {
             title: "Card sent!",
             body: "Thanks for your order. Merry Christmas! 🎄🎄🎄\nYou can go right in and make a new order, if you'd like. Thanks again.",
             accordion: `Session:\n${stripeSessionId}\n${JSON.stringify(data, null, 2)}`,
-            // { "status": "complete", "customer_email": "sean@seanmizen.com" }
           });
           setModalOpen(true);
         })
@@ -345,32 +297,12 @@ const App = () => {
 
   const options = { fetchClientSecret };
 
-  // https://docs.stripe.com/payments/quickstart
-
-  // const [clientSecret, setClientSecret] = useState("");
-  // const [dpmCheckerLink, setDpmCheckerLink] = useState("");
-
-  // useEffect(() => {
-  //   // Create PaymentIntent as soon as the page loads
-  //   fetch(`${config.serverApiPath}/create-payment-intent`, {
-  //     method: "POST",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify({ items: [{ id: "xl-tshirt", amount: 1000 }] }),
-  //   })
-  //     .then((res) => res.json())
-  //     .then((data) => {
-  //       console.log("gorren", data);
-  //       setClientSecret(data.clientSecret);
-  //       // [DEV] For demo purposes only
-  //       setDpmCheckerLink(data.dpmCheckerLink);
-  //     });
-  // }, []);
   const formikReady =
     formik.touched && formik.isValid && Object.keys(formik.touched).length > 1;
   const weCanProceedToCheckout = sessionToken && formikReady;
 
   return (
-    <ThemeProvider theme={lightTheme}>
+    <>
       <ServerChecker />
       <CssBaseline />
       <Box
@@ -633,22 +565,6 @@ const App = () => {
             )}
           </Box>
 
-          {/* NON-EMBEDDED BELOW: */}
-          {/* {weCanProceedToCheckout ? (
-            <Box minHeight={"600px"}>
-              <Elements
-                options={{ clientSecret, appearance, loader }}
-                stripe={stripePromise}
-              >
-                <CheckoutForm
-                  dpmCheckerLink={dpmCheckerLink}
-                  isFormReady={formik.touched && formik.isValid}
-                />
-              </Elements>
-            </Box>
-          ) : (
-            <Skeleton variant="rectangular" width="100%" height="600px" />
-          )} */}
           <Modal
             open={modalOpen}
             onClose={() => setModalOpen(false)}
@@ -670,7 +586,6 @@ const App = () => {
               <Box
                 component={"p"}
                 sx={{
-                  // allow words to be cut off
                   whiteSpace: "pre-wrap",
                 }}
               >
@@ -697,26 +612,9 @@ const App = () => {
               </Accordion>
             </Card>
           </Modal>
-          <Backdrop
-            sx={(theme) => ({ color: "#fff", zIndex: theme.zIndex.drawer + 1 })}
-            open={isLoading}
-            onClick={() => setIsLoading(false)}
-          >
-            <CircularProgress color="inherit" />
-          </Backdrop>
-          {/* <Button onClick={testServer}>tt</Button> */}
-          {/* <Button
-            type="button"
-            variant="contained"
-            sx={{ marginTop: "20px", marginBottom: "20px" }}
-            onClick={() =>
-              setThemeKey(getOppositeThemeKey(themeKey, prefersDark.matches))
-            }
-          >{`Switch to ${getOppositeThemeKey(themeKey, prefersDark.matches)} mode`}</Button> */}
         </Box>
       </Box>
-      {/* "Elements" might go elsewhere */}
-    </ThemeProvider>
+    </>
   );
 };
 
