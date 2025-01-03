@@ -18,10 +18,8 @@
   "type": "module",
   "devDependencies": {
     "bun-types": "latest",
+    "typescript": "^5.7.2",
     "concurrently": "^9.1.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
   },
   "dependencies": {
     "prettier": "^3.2.4"
