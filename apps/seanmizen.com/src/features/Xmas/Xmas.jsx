@@ -1,5 +1,4 @@
 import styles from "./Xmas.module.css";
-// https://stackoverflow.com/questions/56279807/is-it-possible-to-automatically-have-the-last-updated-date-on-my-website-changed
 
 const presentLists = {
   Mum: [

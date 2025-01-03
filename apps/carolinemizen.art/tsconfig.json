@@ -17,13 +17,13 @@
     "allowJs": true,
     "types": [
       "bun-types", // add Bun global
-      "web", // https://stackoverflow.com/a/77103144
+      "web" // https://stackoverflow.com/a/77103144
     ],
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["../shared/*"],
-    },
+      "@shared/*": ["../shared/*"]
+    }
   },
-  "include": ["./**/*"],
+  "include": ["./**/*"]
 }
