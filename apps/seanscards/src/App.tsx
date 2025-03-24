@@ -365,8 +365,8 @@ const App = () => {
               margin: "20px",
             }}
           >
-            Handwritten cards by Sean - posted straight to your family.
-            {`\n`}Or whoever!
+            Handwritten cards by Sean - posted in time for this Mother's Day,
+            30th March.{`\n`}Postal cutoff Friday 4pm!
           </Box>
           <Box
             sx={{
@@ -410,7 +410,7 @@ const App = () => {
                   <CardMedia
                     component="img"
                     height="140"
-                    image="https://uc55af56df8ae0c9bc4239410e43.previews.dropboxusercontent.com/p/thumb/ACnmjkjwB1SxBfAWeZyiGpe-TDOgAdniVz09Edrw_4eKEEISIaoG-n6ivEQsZxxzyO1dqTGR0yDwZ-YjyiO9gOop6SmMqmwVCdI-x_vVllCJw_UdDMyyszayvWJb3GdvakL2QFgBG2gM37OH0h8kVF27mZ__FzoFZXPFDc2l3YEkFHPax6fk-pRiehDtceRgVgcEJN-7y8WrjlTzeFYUMEr1HmVaYkPXB0hGoo01g40XVWDYdFkgSDZg-ahQvR2mKtXYH4lB8wNRm9w3nef8Rm9KrLHwOYkA2r9LXHmvHrdJVIUdjs7V9Qw0X7CbAvKW6RCkCqVSvWjJTnu1Y5COn4ha63Z_Rv090D4DO4vzRmwH-rIC7UfayIKJ6_dIyhrFmcoZycHGJdpWwALqG7-ID2nV/p.jpeg"
+                    image="https://i.postimg.cc/F1XpHbbt/Dancing-A6.jpg"
                   />
                   <CardContent>
                     <Radio
@@ -439,7 +439,7 @@ const App = () => {
                   <CardMedia
                     component="img"
                     height="140"
-                    image="https://previews.dropbox.com/p/thumb/AClpxxGEo10Yiu7C6KBT59dlo7-ImiPjLzXp31PNs2-JethG9gY8mjg5GwcwwgDTRMzAALHnvRHi308PZeJnU-doN9BDC-L9bhqfW-u2BSwZBmOh4ccz4GFPiqpAQh8w5sPeq4YoFwlJDYa23jeCpod40RSrSNLFONv-3RZhJhD9Bl30NIukmHhp13mg0d2MWcySkF1FsOP2PkzUsxTCiy0CDjuFGCtDAQTSUw-IqhdUjcjujo_3fq9Q1MeQUWGTWlcR22jDFz41eHRHtyEN8vOjfs-q6qUmy5wUBz6WRUBeFO-Edom0wdH-WnGQm4aHJPjafc9DvHLl5Ye7-ahCwVmO/p.jpeg"
+                    image="https://i.postimg.cc/D82cq2YB/Sunrise-01.jpg"
                   />
                   <CardContent>
                     <Radio
@@ -482,7 +482,7 @@ const App = () => {
                   <CardMedia
                     component="img"
                     height="140"
-                    image="https://previews.dropbox.com/p/thumb/ACkx8YnBVbH6qzWBpPTFSK78QJKhYhLBW_OsYAq5JDlQyIxVSgukZJhhZETDrOOjd1LrLBrVvij_ySUkNZtp_dbtllzXEv1Nv0l3A-7yY1prfxiDo2pQZ91Eojm3VMYMr3lBPqmMNOkHTtNd92LkcLBlJwSoSMsOwKP4ZIhCBSUyXnbr_WxVm8f39U0D_pwK9hA_N0Z1bPDxX8En6LQo3gG0m8M_DT0KVBiaoKcPOUDv5Dx8f82Avh9dVjBhksgjM3S2MFXz84hE6oKmk7tv6UwXJQ6oWwHNB7NrWO9V474ilhZsOLwXdkQgEqXSPexhu4hfcuxY1JuPvNwrflHe5i8H/p.jpeg"
+                    image="https://i.postimg.cc/Hj02cJ3r/Abstract-Music.jpg"
                   />
                   <CardContent>
                     <Radio
@@ -516,7 +516,7 @@ const App = () => {
                   <CardMedia
                     component="img"
                     height="140"
-                    image="https://previews.dropbox.com/p/thumb/ACkCOGOlw10zwEhLadyiqa_RIsxeAvrYfzgOJkp1DaFEoVaE2wm_MqWUXiL3nbpR3biu7u_2qyXyWTIsPVciSi7LqBlxsDdsUPAl1W6m2o5tNKNl8mLDD53PZD41QkxLiBp-V40ilDG3nTeVMmAoh5whbpBvS7nGpa54_ce8UJelxmbrqQk6OFBIJv12mq2GqFeg5cXYXhLAzAWmjukgmJXfIRn49Z1ZTGKmgtbPjgyuBZAJo5rUfUIJIBWvts34ZNAKTn0iugBERLwj4yK3NqONK5di-5IgQvyXP9BjMTukECW8bLg64HVp2BGg-ieuBMY/p.jpeg"
+                    image="https://i.postimg.cc/vc3thpJM/Sail-into-Venice.jpg"
                   />
                   <CardContent>
                     <Radio
@@ -588,32 +588,6 @@ const App = () => {
               }}
               {...formikPropsForField("email")}
             />
-          </Box>
-          <Box
-            display={"none"}
-            component={"p"}
-            sx={{
-              maxWidth: "600px",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            Double check your email address and the recipient's postal address.
-            {`\n`}
-            There's no sign-up here - once you've paid, it's on the way!
-            {`\n`}
-            {`\n`}No mailing list, no cookies, no tracking. Just a card,
-            handwritten with care, sent wherever you like in the UK.
-            {`\n`}
-            {`\n`}
-            If you want it to arrive before Christmas,{" "}
-            <a
-              target="#"
-              href="https://www.royalmail.com/christmas/last-posting-dates"
-            >
-              Check the Royal Mail guide
-            </a>
-            ,{` `}
-            and leave me 24 hours to process your order. Thanks!
           </Box>
         </Box>
         <Box
