@@ -31,7 +31,15 @@ const config: ConfigType = configs[env];
 // https://docs.stripe.com/checkout/embedded/quickstart
 const stripePromise = loadStripe(config.stripePublicKey);
 
+// we at Mother's day now bishes
 const placeholderMessages = [
+  `Mum, love you lots. Thinking of you this Mother's day!`,
+  `Dear Mumma, I hope you're doing well. Love you lots!`,
+  `To the best mum in the world, happy Mother's day!`,
+  `Mum, you're the best. Hope you have a great day! Love, Arugela`,
+];
+
+const _christmasPlaceholderMessages = [
   `Dear John,
   It's been a while,
   Merry Chrimbo.
@@ -51,17 +59,28 @@ const placeholderMessages = [
   Hope little bump comes out soon!
   Much love, Me!`,
 ];
-const fakeAddresses = [
+const _christmasFakeAddresses = [
   `Dr Watson, 221B Baker Street, London, NW1 6XE`,
   `Mr and Mrs M+C, 12 The Lane, London, NW1 6XE`,
   `HM The King, Buckingham Palace, London, SW1A 1AA`,
   `Mr and Mrs Kringle, The North Pole, H0H 0H0`,
 ];
+const fakeAddresses = [
+  `Dr Watson, 221B Baker Street, London, NW1 6XE`,
+  `Mrs C, 12 The Lane, London, NW1 6XE`,
+  `HM The Queen, Buckingham Palace, London, SW1A 1AA`,
+  `Mrs Kringle, The North Pole, H0H 0H0`,
+];
 
 const windowIsMobile = () => window.innerWidth < 800;
 const windowIsBigEnoughForSideBySide = () => window.innerWidth > 1250;
 
-type CardDesign = "Robin and Ivy" | "Stuffed Toys";
+// type CardDesign = "Robin and Ivy" | "Stuffed Toys";
+type CardDesign =
+  | "Dancing"
+  | "Sunrise 01"
+  | "Abstract Music"
+  | "Sail into Venice";
 
 type FormShape = {
   selectedCardDesign: CardDesign;
@@ -69,6 +88,13 @@ type FormShape = {
   address: string;
   email: string;
 };
+
+const cardDesigns: CardDesign[] = [
+  "Dancing",
+  "Sunrise 01",
+  "Abstract Music",
+  "Sail into Venice",
+];
 
 const formSchema = object()
   .required()
@@ -87,7 +113,7 @@ const formSchema = object()
         "We need your email to send a confirmation! (I don't do tracking or junk mail)"
       ),
     selectedCardDesign: string().oneOf(
-      ["Robin and Ivy", "Stuffed Toys"],
+      cardDesigns,
       "Please select a card design!"
     ),
   });
@@ -184,7 +210,7 @@ const App = () => {
 
   const formik = useFormik<FormShape>({
     initialValues: {
-      selectedCardDesign: "Robin and Ivy",
+      selectedCardDesign: "Dancing",
       message: "",
       address: "",
       email: "",
@@ -246,7 +272,7 @@ const App = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState({
-    title: "Why am I open? Merry Christmas! 🎄🎄🎄",
+    title: "Why am I open?",
     body: "I am a modal. Hello.",
     accordion: `accordion\nnew line\ninfo`,
   });
@@ -277,7 +303,7 @@ const App = () => {
         .then((data) => {
           setModalMessage({
             title: "Card sent!",
-            body: "Thanks for your order. Merry Christmas! 🎄🎄🎄\nYou can go right in and make a new order, if you'd like. Thanks again.",
+            body: "Thanks for your order!\nYou can go right in and make a new order, if you'd like. But you only have one mother, I assume. Thanks again.",
             accordion: `Session:\n${stripeSessionId}\n${JSON.stringify(data, null, 2)}`,
           });
           setModalOpen(true);
@@ -350,6 +376,7 @@ const App = () => {
               flexDirection: "column",
               gap: 2,
               alignItems: "center",
+              // alignItems: "space-between",
               padding: "20px",
               marginBlock: "20px",
             }}
@@ -357,34 +384,40 @@ const App = () => {
             onSubmit={formik.handleSubmit}
             // noValidate
           >
-            <Box id={"rah"} display="flex" gap={2}>
+            <Box
+              id={"rah"}
+              gap={2}
+              sx={{
+                display: "flex",
+                alignContent: "space-between",
+                justifyContent: "space-between",
+              }}
+            >
               <Card
                 sx={{
                   maxWidth: 200,
                   border:
-                    formik.values.selectedCardDesign === "Robin and Ivy"
+                    formik.values.selectedCardDesign === "Dancing"
                       ? "2px solid blue"
                       : "none",
                 }}
               >
                 <CardActionArea
                   onClick={() => {
-                    formik.setFieldValue("selectedCardDesign", "Robin and Ivy");
+                    formik.setFieldValue("selectedCardDesign", "Dancing");
                   }}
                 >
                   <CardMedia
                     component="img"
                     height="140"
-                    image="https://i.postimg.cc/gXFCHh5M/Robin-Ivy.jpg"
+                    image="https://uc55af56df8ae0c9bc4239410e43.previews.dropboxusercontent.com/p/thumb/ACnmjkjwB1SxBfAWeZyiGpe-TDOgAdniVz09Edrw_4eKEEISIaoG-n6ivEQsZxxzyO1dqTGR0yDwZ-YjyiO9gOop6SmMqmwVCdI-x_vVllCJw_UdDMyyszayvWJb3GdvakL2QFgBG2gM37OH0h8kVF27mZ__FzoFZXPFDc2l3YEkFHPax6fk-pRiehDtceRgVgcEJN-7y8WrjlTzeFYUMEr1HmVaYkPXB0hGoo01g40XVWDYdFkgSDZg-ahQvR2mKtXYH4lB8wNRm9w3nef8Rm9KrLHwOYkA2r9LXHmvHrdJVIUdjs7V9Qw0X7CbAvKW6RCkCqVSvWjJTnu1Y5COn4ha63Z_Rv090D4DO4vzRmwH-rIC7UfayIKJ6_dIyhrFmcoZycHGJdpWwALqG7-ID2nV/p.jpeg"
                   />
                   <CardContent>
                     <Radio
                       tabIndex={-1}
-                      checked={
-                        formik.values.selectedCardDesign === "Robin and Ivy"
-                      }
+                      checked={formik.values.selectedCardDesign === "Dancing"}
                     />
-                    Robin and Ivy
+                    Dancing
                   </CardContent>
                 </CardActionArea>
               </Card>
@@ -393,29 +426,106 @@ const App = () => {
                 sx={{
                   maxWidth: 200,
                   border:
-                    formik.values.selectedCardDesign === "Stuffed Toys"
+                    formik.values.selectedCardDesign === "Sunrise 01"
                       ? "2px solid blue"
                       : "none",
                 }}
               >
                 <CardActionArea
                   onClick={() => {
-                    formik.setFieldValue("selectedCardDesign", "Stuffed Toys");
+                    formik.setFieldValue("selectedCardDesign", "Sunrise 01");
                   }}
                 >
                   <CardMedia
                     component="img"
                     height="140"
-                    image="https://i.postimg.cc/2bQPc6NC/Stuffed-Toys.jpg"
+                    image="https://previews.dropbox.com/p/thumb/AClpxxGEo10Yiu7C6KBT59dlo7-ImiPjLzXp31PNs2-JethG9gY8mjg5GwcwwgDTRMzAALHnvRHi308PZeJnU-doN9BDC-L9bhqfW-u2BSwZBmOh4ccz4GFPiqpAQh8w5sPeq4YoFwlJDYa23jeCpod40RSrSNLFONv-3RZhJhD9Bl30NIukmHhp13mg0d2MWcySkF1FsOP2PkzUsxTCiy0CDjuFGCtDAQTSUw-IqhdUjcjujo_3fq9Q1MeQUWGTWlcR22jDFz41eHRHtyEN8vOjfs-q6qUmy5wUBz6WRUBeFO-Edom0wdH-WnGQm4aHJPjafc9DvHLl5Ye7-ahCwVmO/p.jpeg"
                   />
                   <CardContent>
                     <Radio
                       tabIndex={-1}
                       checked={
-                        formik.values.selectedCardDesign === "Stuffed Toys"
+                        formik.values.selectedCardDesign === "Sunrise 01"
                       }
                     />
-                    Stuffed Toys
+                    Sunrise 01
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Box>
+            <Box
+              id={"rah"}
+              gap={2}
+              sx={{
+                display: "flex",
+                alignContent: "space-between",
+                justifyContent: "space-between",
+              }}
+            >
+              <Card
+                sx={{
+                  maxWidth: 200,
+                  border:
+                    formik.values.selectedCardDesign === "Abstract Music"
+                      ? "2px solid blue"
+                      : "none",
+                }}
+              >
+                <CardActionArea
+                  onClick={() => {
+                    formik.setFieldValue(
+                      "selectedCardDesign",
+                      "Abstract Music"
+                    );
+                  }}
+                >
+                  <CardMedia
+                    component="img"
+                    height="140"
+                    image="https://previews.dropbox.com/p/thumb/ACkx8YnBVbH6qzWBpPTFSK78QJKhYhLBW_OsYAq5JDlQyIxVSgukZJhhZETDrOOjd1LrLBrVvij_ySUkNZtp_dbtllzXEv1Nv0l3A-7yY1prfxiDo2pQZ91Eojm3VMYMr3lBPqmMNOkHTtNd92LkcLBlJwSoSMsOwKP4ZIhCBSUyXnbr_WxVm8f39U0D_pwK9hA_N0Z1bPDxX8En6LQo3gG0m8M_DT0KVBiaoKcPOUDv5Dx8f82Avh9dVjBhksgjM3S2MFXz84hE6oKmk7tv6UwXJQ6oWwHNB7NrWO9V474ilhZsOLwXdkQgEqXSPexhu4hfcuxY1JuPvNwrflHe5i8H/p.jpeg"
+                  />
+                  <CardContent>
+                    <Radio
+                      tabIndex={-1}
+                      checked={
+                        formik.values.selectedCardDesign === "Abstract Music"
+                      }
+                    />
+                    Abstract Music
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+
+              <Card
+                sx={{
+                  maxWidth: 200,
+                  border:
+                    formik.values.selectedCardDesign === "Sail into Venice"
+                      ? "2px solid blue"
+                      : "none",
+                }}
+              >
+                <CardActionArea
+                  onClick={() => {
+                    formik.setFieldValue(
+                      "selectedCardDesign",
+                      "Sail into Venice"
+                    );
+                  }}
+                >
+                  <CardMedia
+                    component="img"
+                    height="140"
+                    image="https://previews.dropbox.com/p/thumb/ACkCOGOlw10zwEhLadyiqa_RIsxeAvrYfzgOJkp1DaFEoVaE2wm_MqWUXiL3nbpR3biu7u_2qyXyWTIsPVciSi7LqBlxsDdsUPAl1W6m2o5tNKNl8mLDD53PZD41QkxLiBp-V40ilDG3nTeVMmAoh5whbpBvS7nGpa54_ce8UJelxmbrqQk6OFBIJv12mq2GqFeg5cXYXhLAzAWmjukgmJXfIRn49Z1ZTGKmgtbPjgyuBZAJo5rUfUIJIBWvts34ZNAKTn0iugBERLwj4yK3NqONK5di-5IgQvyXP9BjMTukECW8bLg64HVp2BGg-ieuBMY/p.jpeg"
+                  />
+                  <CardContent>
+                    <Radio
+                      tabIndex={-1}
+                      checked={
+                        formik.values.selectedCardDesign === "Sail into Venice"
+                      }
+                    />
+                    Sail into Venice
                   </CardContent>
                 </CardActionArea>
               </Card>
@@ -599,17 +709,19 @@ const App = () => {
               >
                 {modalMessage.body}
               </Box>
-              <Accordion>
-                <AccordionSummary>behind the scenes info...</AccordionSummary>
-                <AccordionDetails
-                  sx={{
-                    whiteSpace: "pre-wrap",
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {modalMessage.accordion}
-                </AccordionDetails>
-              </Accordion>
+              {false && (
+                <Accordion>
+                  <AccordionSummary>behind the scenes info...</AccordionSummary>
+                  <AccordionDetails
+                    sx={{
+                      whiteSpace: "pre-wrap",
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {modalMessage.accordion}
+                  </AccordionDetails>
+                </Accordion>
+              )}
             </Card>
           </Modal>
         </Box>

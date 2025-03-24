@@ -1,5 +1,5 @@
 const devConfig = {
-  appDomain: "http://localhost:3000",
+  appDomain: "http://localhost:4243",
   // keep this flat for now
   serverApiPath: "http://localhost:4242/api",
   serverPort: 4242,
