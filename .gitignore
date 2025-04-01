@@ -259,3 +259,5 @@ $RECYCLE.BIN/
 
 # old C-R-A build folder
 build
+
+.yarn
