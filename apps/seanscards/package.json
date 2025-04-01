@@ -48,6 +48,7 @@
     "@rsbuild/plugin-react": "^1.0.7",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "concurrently": "^9.1.2",
     "typescript": "^5.7.2"
   }
 }
