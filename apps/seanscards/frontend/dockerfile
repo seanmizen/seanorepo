@@ -1,0 +1,16 @@
+FROM node:20 as build
+# debian, not alpine: rspack's bindings will now work
+
+WORKDIR /app
+COPY . .
+RUN corepack enable && corepack prepare yarn@4.8.1 --activate
+RUN yarn install
+
+# RUN corepack enable
+# RUN apk add --no-cache python3 make g++ corepack
+# RUN ln -s /root_yarn /app/.yarn
+
+# COPY package.json yarn.lock ./
+# RUN yarn install
+
+# Don't copy source — you'll mount it

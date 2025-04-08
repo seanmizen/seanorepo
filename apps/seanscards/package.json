@@ -2,53 +2,17 @@
   "name": "seanscards",
   "private": true,
   "version": "0.1.0",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "scripts": {
-    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn start-fe\" \"yarn start-be\"",
-    "start-fe": "rsbuild dev --open --port 4243",
-    "start-be": "bun  --hot --no-clear-screen backend/index.ts",
-    "build": "rsbuild build",
-    "preview": "rsbuild preview",
-    "prod": "yarn install && yarn build && concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn prod-fe\" \"yarn prod-be\"",
-    "prod-be": "NODE_ENV=production bun --env-file=.env backend/index.ts",
-    "prod-fe": "NODE_ENV=production serve -s dist -p 4000",
-    "prod-fe-macos": "serve --port 4000 dist"
+    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace seanscards-fe start\" \"yarn workspace seanscards-be start\"",
+    "start:docker": "docker compose up --build",
+    "build": "TODO. todo?"
   },
-  "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.0",
-    "@fastify/cookie": "^11.0.1",
-    "@fastify/cors": "^10.0.1",
-    "@fastify/formbody": "^8.0.1",
-    "@fastify/jwt": "^9.0.1",
-    "@mui/icons-material": "^6.2.0",
-    "@mui/material": "^6.2.0",
-    "@stripe/react-stripe-js": "^3.1.1",
-    "@stripe/stripe-js": "^5.3.0",
-    "@types/bun": "^1.1.14",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
-    "@types/humps": "^2.0.6",
-    "@types/stripe": "^8.0.417",
-    "@types/yup": "^0.32.0",
-    "bun": "^1.1.38",
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "fastify": "^5.1.0",
-    "formik": "^2.4.6",
-    "humps": "^2.0.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
-    "stripe": "^17.4.0",
-    "yup": "^1.5.0"
-  },
+  "packageManager": "yarn@4.8.1+sha512.bc946f2a022d7a1a38adfc15b36a66a3807a67629789496c3714dd1703d2e6c6b1c69ff9ec3b43141ac7a1dd853b7685638eb0074300386a59c18df351ef8ff6",
   "devDependencies": {
-    "@rsbuild/core": "^1.1.8",
-    "@rsbuild/plugin-react": "^1.0.7",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "concurrently": "^9.1.2",
-    "typescript": "^5.7.2"
+    "concurrently": "^9.1.2"
   }
 }
