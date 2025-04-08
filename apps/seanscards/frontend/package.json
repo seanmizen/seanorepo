@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "start": "rsbuild dev --open --port 4243",
-    "start:docker": "rsbuild dev --port 4243",
+    "start:noopen": "rsbuild dev --port 4243",
     "build": "rsbuild build",
     "prod": "TODO"
   },

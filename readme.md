@@ -11,3 +11,12 @@ corepack enable
 corepack prepare
 yarn
 ```
+
+## Ways of working
+Barely any. this is mine, so I will commit wantonly and whenever I like.
+PRs and proper codebase sanitation can be done in other projects.
+Do as I say, not as I do...
+
+### Workspace and docker sanitation
+- Name your volumes
+
