@@ -9,9 +9,6 @@ const dbBase = process.env.DB_PATH || import.meta.dir;
 const dbPath = path.join(dbBase, config.dbName);
 const db = new Database(dbPath);
 
-// db.exec(`DROP TABLE IF EXISTS sessions`);
-
-// Create table if not exists
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,6 +37,5 @@ db.exec(`
 const rows = db.query("SELECT * FROM sessions").all();
 console.log("db connection established with row count:", rows.length);
 console.log("latest row:", rows[rows.length - 1]);
-// console.log("all rows:", JSON.stringify(rows, null, 2));
 
 export { db };
