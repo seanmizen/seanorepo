@@ -18,7 +18,7 @@ import { FC, useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { object, string } from "yup";
 import { loadStripe } from "@stripe/stripe-js";
-import { configs, ConfigType } from "../configs";
+import { configs, ConfigType } from "../../configs";
 import {
   EmbeddedCheckout,
   EmbeddedCheckoutProvider,
@@ -365,8 +365,8 @@ const App = () => {
               margin: "20px",
             }}
           >
-            Handwritten cards by Sean - posted in time for this Mother's Day,
-            30th March.{`\n`}Postal cutoff Friday 4pm!
+            Handwritten by Sean - posted in time for this Mother's Day, 30th
+            March.{`\n`}Postal cutoff Friday 4pm!
           </Box>
           <Box
             sx={{

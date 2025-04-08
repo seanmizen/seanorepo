@@ -1,0 +1,14 @@
+FROM oven/bun:latest as build
+WORKDIR /app
+
+# context is set to seanscards' root folder in docker-compose. adjust accordingly
+COPY backend/package.json ./
+COPY configs.ts ../
+COPY backend/. .
+
+RUN bun install
+
+WORKDIR /app
+EXPOSE 4244
+
+CMD ["bun", "--hot", "--no-clear-screen", "/app/index.ts"]

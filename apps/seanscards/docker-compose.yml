@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  seanscards-fe:
+    build:
+      context: ../..      # root of seanorepo
+      dockerfile: apps/seanscards/frontend/dockerfile
+    ports:
+      - "4243:4243"
+    volumes:
+      - ../..:/app        # just mount whole monorepo
+      - /app/node_modules
+    command: yarn workspace seanscards-fe start:docker
+    networks:
+      default:
+        aliases:
+          - seanscards.localhost
+
+  seanscards-be:
+    build:
+      context: .
+      dockerfile: backend/dockerfile
+    ports:
+      - "4244:4244"
+    networks:
+      default:
+        aliases:
+          - seanscards.localhost/api
