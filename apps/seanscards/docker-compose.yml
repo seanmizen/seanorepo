@@ -7,30 +7,29 @@ services:
     # in case you DID want to scale it.
     container_name: frontend
     build:
-      context: ../..      # root of seanorepo
+      context: ../..
       dockerfile: apps/seanscards/frontend/dockerfile
+      target: ${BUILD_TARGET:-dev}  # dev by default, prod when overridden
     ports:
       - "4243:4243"
     volumes:
-      - ../..:/app        # just mount whole monorepo as a volume
+      - ../..:/app
       - fe_node_modules:/app/node_modules
-    command: yarn workspace seanscards-fe start:noopen
-    networks:
-      default:
-        aliases:
-          - seanscards.localhost
+    command: yarn workspace seanscards-fe ${FRONTEND_CMD:-start:noopen}
 
   backend:
     container_name: backend
     build:
-      context: .
-      dockerfile: backend/dockerfile
+      context: ../..
+      dockerfile: apps/seanscards/backend/dockerfile
+      target: ${BUILD_TARGET:-dev}
     ports:
       - "4244:4244"
     volumes:
       - sqlite_data:/app/db
     environment:
       - DB_PATH=/app/db
+    command: ${BACKEND_CMD:-bun --hot --no-clear-screen /app/src/index.ts}
     networks:
       default:
         aliases:
