@@ -1,7 +1,25 @@
-FROM node:20 as build
-# debian, not alpine: rspack's bindings will now work
-
+FROM node:20 as deps
 WORKDIR /app
-COPY . .
-RUN corepack enable && corepack prepare yarn@4.8.1 --activate
-RUN yarn install
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+COPY apps/seanscards/package.json ./apps/seanscards/package.json
+COPY apps/seanscards/frontend ./apps/seanscards/frontend
+COPY apps/seanscards/tsconfig.json ./apps/seanscards/tsconfig.json
+COPY apps/seanscards/configs.ts ./apps/configs.ts
+
+# Copy actual frontend workspace
+# COPY apps/seanscards/frontend ./apps/seanscards/frontend
+
+RUN corepack enable && yarn install
+
+# Dev stage
+FROM deps as dev
+CMD ["yarn", "workspace", "seanscards-fe", "start:noopen"]
+
+# Prod stage
+FROM deps as prod
+RUN yarn workspace seanscards-fe run build
+RUN yarn global add serve
+WORKDIR /app/apps/seanscards/frontend/dist
+CMD ["serve", "-s", ".", "-l", "4243"]

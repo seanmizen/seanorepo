@@ -5,8 +5,7 @@
   "scripts": {
     "start": "rsbuild dev --open --port 4243",
     "start:noopen": "rsbuild dev --port 4243",
-    "build": "rsbuild build",
-    "prod": "TODO"
+    "build": "rsbuild build"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
