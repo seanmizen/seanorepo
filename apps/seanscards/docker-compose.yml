@@ -1,20 +1,27 @@
 version: "3.9"
 
 services:
-  frontend:
     # We don't strictly need container_name, it just makes the docker env cleaner.
     # We know we don't need to scale this. docker by default adds an index,
     # in case you DID want to scale it.
+  frontend:
     container_name: frontend
     build:
       context: ../..
       dockerfile: apps/seanscards/frontend/dockerfile
-      target: ${BUILD_TARGET:-dev}  # dev by default, prod when overridden
+      target: ${BUILD_TARGET:-dev}
     ports:
       - "4243:4243"
+
+  frontend-dev:
+    extends:
+      service: frontend
     volumes:
-      - ../..:/app
+      - type: bind
+        source: ../..
+        target: /app
       - fe_node_modules:/app/node_modules
+    profiles: ["dev"]
 
   backend:
     container_name: backend
