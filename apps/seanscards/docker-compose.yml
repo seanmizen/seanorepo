@@ -15,7 +15,6 @@ services:
     volumes:
       - ../..:/app
       - fe_node_modules:/app/node_modules
-    command: yarn workspace seanscards-fe ${FRONTEND_CMD:-start:noopen}
 
   backend:
     container_name: backend
