@@ -1,28 +1,41 @@
 version: "3.9"
 
 services:
-  seanscards-fe:
+  frontend:
+    # We don't strictly need container_name, it just makes the docker env cleaner.
+    # We know we don't need to scale this. docker by default adds an index,
+    # in case you DID want to scale it.
+    container_name: frontend
     build:
       context: ../..      # root of seanorepo
       dockerfile: apps/seanscards/frontend/dockerfile
     ports:
       - "4243:4243"
     volumes:
-      - ../..:/app        # just mount whole monorepo
-      - /app/node_modules
-    command: yarn workspace seanscards-fe start:docker
+      - ../..:/app        # just mount whole monorepo as a volume
+      - fe_node_modules:/app/node_modules
+    command: yarn workspace seanscards-fe start:noopen
     networks:
       default:
         aliases:
           - seanscards.localhost
 
-  seanscards-be:
+  backend:
+    container_name: backend
     build:
       context: .
       dockerfile: backend/dockerfile
     ports:
       - "4244:4244"
+    volumes:
+      - sqlite_data:/app/db
+    environment:
+      - DB_PATH=/app/db
     networks:
       default:
         aliases:
           - seanscards.localhost/api
+
+volumes:
+  sqlite_data:
+  fe_node_modules:
