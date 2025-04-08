@@ -183,6 +183,8 @@ const ServerChecker: FC = () => {
  * but we did it. a single-page application. with a single page.
  */
 const App = () => {
+  console.log("env", env);
+  console.log(config);
   // Sean's Jank Solution to order processing:
   // session token: get one from BE on page load.
   // on form completion, send the form data and the session token to the BE.

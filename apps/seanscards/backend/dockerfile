@@ -1,14 +1,15 @@
-FROM oven/bun:latest as build
+FROM oven/bun:latest as deps
 WORKDIR /app
+COPY apps/seanscards/backend/package.json  apps/seanscards/tsconfig.json ./
+COPY apps/seanscards/backend ./src
+COPY apps/seanscards/configs.ts ./configs.ts
+RUN bun install --production
 
-# context is set to seanscards' root folder in docker-compose. adjust accordingly
-COPY backend/package.json ./
-COPY configs.ts ../
-COPY backend/. .
+# Dev stage
+FROM deps as dev
+CMD ["bun", "--hot", "--no-clear-screen", "/app/src/index.ts"]
 
-RUN bun install
-
-WORKDIR /app
-EXPOSE 4244
-
-CMD ["bun", "--hot", "--no-clear-screen", "/app/index.ts"]
+# Prod stage
+FROM deps as prod
+RUN bun build ./src/index.ts --target=bun --outfile ./dist/index.js
+CMD ["bun", "./dist/index.js"]

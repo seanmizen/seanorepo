@@ -1,23 +1,11 @@
 {
+  "extends": "../tsconfig.json",
   "compilerOptions": {
     "lib": ["DOM", "ES2020"],
     "jsx": "react-jsx",
-    "target": "ES2020",
-    "noEmit": true,
     "allowJs": true,
-    "skipLibCheck": true,
-    "useDefineForClassFields": true,
-    /* modules */
-    "module": "ESNext",
     "isolatedModules": true,
-    "resolveJsonModule": true,
-    "moduleResolution": "Bundler",
-    "allowImportingTsExtensions": true,
-
-    /* type checking */
-    "strict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "useDefineForClassFields": true
   },
-  "include": ["src", "configs.ts"]
+  "include": ["src"]
 }
