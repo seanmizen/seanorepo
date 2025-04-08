@@ -5,8 +5,8 @@ import { configs, ConfigType } from "../configs";
 const env = process.env.NODE_ENV || "development";
 const config: ConfigType = configs[env];
 
-// dbName might be "./mydb_dev.sqlite" or "./mydb_prod.sqlite"
-const dbPath = path.join(import.meta.dir, config.dbName);
+const dbBase = process.env.DB_PATH || import.meta.dir;
+const dbPath = path.join(dbBase, config.dbName);
 const db = new Database(dbPath);
 
 // db.exec(`DROP TABLE IF EXISTS sessions`);
