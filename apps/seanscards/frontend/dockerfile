@@ -13,9 +13,11 @@ RUN corepack enable && yarn install
 FROM deps as dev
 CMD ["yarn", "workspace", "seanscards-fe", "start:noopen"]
 
-FROM deps as prod-build
-RUN yarn workspace seanscards-fe run build
-FROM prod-build as prod
-COPY ./apps/seanscards/frontend/dist /app
+FROM deps AS prod-build
+RUN yarn workspace seanscards-fe build
+
+FROM node:20-alpine AS prod
 WORKDIR /app
-CMD ["yarn", "dlx", "serve", "-s", ".", "-l", "4243"]
+COPY --from=prod-build /app/apps/seanscards/frontend/dist .
+RUN npm install -g serve
+CMD ["serve", "-s", ".", "-l", "4243"]
