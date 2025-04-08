@@ -11,3 +11,5 @@ corepack enable
 corepack prepare
 yarn
 ```
+
+horrible DX to start, but yarn 4 workspaces are sublime for monorepo-d work.
