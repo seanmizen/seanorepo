@@ -139,7 +139,10 @@ const ServerChecker: FC = () => {
       .then((res) => res.json())
       .then(() => setIsServerDown(false))
       .catch(() => setIsServerDown(true))
-      .finally(() => setInitialRender(false));
+      .finally(() => {
+        setInitialRender(false);
+        setDisplayAlert(true);
+      });
   };
 
   useEffect(() => {
@@ -167,7 +170,7 @@ const ServerChecker: FC = () => {
         sx={{
           position: "absolute",
           top: 20,
-          right: 20,
+          left: 20,
           cursor: "pointer",
         }}
         onClick={checkServerStatus}

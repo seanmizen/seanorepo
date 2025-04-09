@@ -28,9 +28,17 @@ fastify.register(formbody);
 fastify.register(cookie, { secret: "super", hook: "onRequest" });
 fastify.register(jwt, { secret: "super" });
 
+fastify.get("/", async (request, reply) => {
+  return { hello: "world?" };
+});
+
 fastify.get("/api", async (request, reply) => {
   return { hello: "world" };
 });
+
+// fastify.addHook("onResponse", async (req, res) => {
+//   console.log(`[RES] ${req.method} ${req.url} → ${res.statusCode}`);
+// });
 
 fastify.post("/api/create-checkout-session", async (request, reply) => {
   const session = await stripe.checkout.sessions.create({
@@ -165,13 +173,24 @@ const bright = "\x1b[1m";
 
 const start = async () => {
   try {
-    await fastify.listen({
-      port: config.serverPort,
+    // without manually listening for interrupts, this hangs in docker.
+    process.on("SIGINT", async () => {
+      await fastify.close();
+      process.exit(0);
     });
-    console.debug(
-      "Bun serving at",
-      [cyan, "http://localhost:", bright, config.serverPort, reset].join("")
-    );
+
+    process.on("SIGTERM", async () => {
+      await fastify.close();
+      process.exit(0);
+    });
+
+    const listenText = `Bun serving at ${[cyan, "http://localhost:", bright, config.serverPort, reset].join("")}`;
+    await fastify.listen({
+      host: "0.0.0.0", // explicitly bind to all interfaces
+      port: config.serverPort,
+      listenTextResolver: () => listenText,
+    });
+    console.debug(listenText);
   } catch (err) {
     console.error(err);
     process.exit(1);

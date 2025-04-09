@@ -1,8 +1,8 @@
 const devConfig = {
   appDomain: "http://localhost:4243",
   // keep this flat for now
-  serverApiPath: "http://localhost:4242/api",
-  serverPort: 4242,
+  serverApiPath: "http://localhost:4244/api",
+  serverPort: 4244,
   productCode: "price_1QVfu2BsGhYF8YEWBId3mVNi",
   stripePublicKey:
     "pk_test_51QVX2JBsGhYF8YEWrWYtL7QL0oA5XoOD1YFZEFxlSVAaX6ob6iUWHju4Nrkj4fzrtjcdF7ntlhPZGIMq944HLGb9006Raprd5x",
@@ -17,7 +17,7 @@ export const configs: Record<string, ConfigType> = {
   production: {
     appDomain: "https://seanscards.com",
     serverApiPath: "https://seanscards.com/api",
-    serverPort: 4242,
+    serverPort: 4244,
     // productCode: "prod_RPAFiu8SybeUa0",
     productCode: "price_1QWLvOBsGhYF8YEWNiZh0UDk",
     stripePublicKey:
