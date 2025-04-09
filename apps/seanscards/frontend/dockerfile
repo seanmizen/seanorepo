@@ -19,5 +19,6 @@ RUN yarn workspace seanscards-fe build
 FROM node:23-slim AS prod
 WORKDIR /app
 COPY --from=prod-build /app/apps/seanscards/frontend/dist .
-RUN npm install -g serve
+RUN corepack enable && yarn global add serve
+EXPOSE 4243
 CMD ["serve", "-s", ".", "-l", "4243"]
