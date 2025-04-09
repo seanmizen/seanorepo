@@ -1,4 +1,4 @@
-FROM oven/bun:latest as deps
+FROM oven/bun:latest AS deps
 WORKDIR /app
 COPY apps/seanscards/backend/package.json  apps/seanscards/tsconfig.json ./
 COPY apps/seanscards/backend ./src
@@ -6,10 +6,10 @@ COPY apps/seanscards/configs.ts ./configs.ts
 RUN bun install --production
 
 # Dev stage
-FROM deps as dev
+FROM deps AS dev
 CMD ["bun", "--hot", "--no-clear-screen", "/app/src/index.ts"]
 
 # Prod stage
-FROM deps as prod
+FROM deps AS prod
 RUN bun build ./src/index.ts --target=bun --outfile ./dist/index.js
 CMD ["bun", "./dist/index.js"]
