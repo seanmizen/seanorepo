@@ -7,6 +7,17 @@ x-frontend-base: &frontend-base
   ports:
       - "4243:4243"
 
+x-backend-base: &backend-base
+  container_name: backend
+  build:
+    context: ../..
+    dockerfile: apps/seanscards/backend/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "4244:4244"
+  environment:
+    - DB_PATH=/app/db
+
 services:
   frontend:
     <<: *frontend-base
@@ -22,22 +33,20 @@ services:
     profiles: ["dev"]
 
   backend:
-    container_name: backend
-    build:
-      context: ../..
-      dockerfile: apps/seanscards/backend/dockerfile
-      target: ${BUILD_TARGET:-dev}
-    ports:
-      - "4244:4244"
+    <<: *backend-base
+    profiles: ["prod"]
     volumes:
       - sqlite_data:/app/db
-    environment:
-      - DB_PATH=/app/db
-    command: ${BACKEND_CMD:-bun --hot --no-clear-screen /app/src/index.ts}
-    networks:
-      default:
-        aliases:
-          - seanscards.localhost/api
+
+  backend-dev:
+    <<: *backend-base
+    command: []
+    profiles: ["dev"]
+    volumes:
+      - type: bind
+        source: ../../apps/seanscards/backend
+        target: /app/src
+      - sqlite_data:/app/db
 
 volumes:
   sqlite_data:
