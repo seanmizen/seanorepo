@@ -1,0 +1,25 @@
+x-frontend-base: &frontend-base
+  container_name: frontend
+  build:
+    context: ../..
+    dockerfile: apps/seanmizen.com/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+      - "4243:4243"
+
+services:
+  frontend:
+    <<: *frontend-base
+    profiles: ["prod"]
+
+  frontend-dev:
+    <<: *frontend-base
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+      - fe_node_modules:/app/node_modules
+    profiles: ["dev"]
+
+volumes:
+  fe_node_modules:
