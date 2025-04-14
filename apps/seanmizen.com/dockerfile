@@ -1,0 +1,21 @@
+FROM node:23-slim AS deps
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+COPY apps/seanmizen.com/package.json ./apps/seanmizen.com/package.json
+
+RUN corepack enable && yarn install
+
+FROM deps AS dev
+CMD ["yarn", "workspace", "seanmizen.com", "start:noopen"]
+
+FROM deps AS prod-build
+RUN yarn workspace seanmizen.com build
+
+FROM node:23-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/dist .
+RUN corepack enable && yarn global add serve
+EXPOSE 4243
+CMD ["serve", "-s", ".", "-l", "4243"]
