@@ -263,3 +263,12 @@ build
 .yarn
 
 *.sqlite
+
+# don't store ISOs! download when you need them.
+*.iso
+*.img
+
+linux
+*.gz
+
+working
