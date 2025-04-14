@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "start": "rsbuild dev --open",
+    "start:noopen": "rsbuild dev --port 4243",
+    "start:docker": "docker compose --profile dev up --build",
+    "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build",
     "build": "rsbuild build",
     "preview": "rsbuild preview"
   },
