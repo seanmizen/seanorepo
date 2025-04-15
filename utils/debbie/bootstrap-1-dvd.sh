@@ -1,55 +1,48 @@
 #!/bin/bash
 set -e
 
-ISO=debian-12.10.0-amd64-netinst.iso
-PRESEED=preseed-1.cfg
+ISO=debian-12.10.0-amd64-DVD-1.iso  # ✅ Full DVD ISO
+PRESEED=preseed-1-dvd.cfg
 WORKDIR=working
 IMGDIR=$WORKDIR/images
 ISODIR=$WORKDIR/iso
-OUTPUT_ISO=debbie.iso
+OUTPUT_ISO=debbie-dvd.iso
 USB_DRIVE=$1  # e.g., disk4
 
-# clean up any bad perms from previous runs
-# sudo mkdir -p "$WORKDIR"
-# sudo chown -R "$USER" "$WORKDIR"
 rm -rf "$ISODIR"
-
 mkdir -p "$IMGDIR" "$ISODIR"
 
-# Download ISO if missing
+# Download full DVD ISO
 if [ ! -f "$IMGDIR/$ISO" ]; then
   echo "ISO not found. Downloading..."
-  curl -Lo "$IMGDIR/$ISO" "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/$ISO"
+  curl -Lo "$IMGDIR/$ISO" "https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/$ISO"
 fi
 
-# Extract ISO contents
 echo "Extracting ISO..."
-# 7z x "$IMGDIR/$ISO" -o"$ISODIR" >/dev/null
 xorriso -osirrox on -indev "$IMGDIR/$ISO" -extract / "$ISODIR"
 chmod -R u+rw "$ISODIR"
 
 # Inject preseed into initrd
 echo "Injecting preseed into initrd..."
-INITRD="$ISODIR/install.amd/initrd.gz"
+INITRD="$ISODIR/install.amd/initrd.gz"  # ✅ Same path on DVD ISO
+
 gunzip "$INITRD"
 cpio_dir=$WORKDIR/initrd
 mkdir -p "$cpio_dir"
 cd "$cpio_dir"
-# cpio -id --no-absolute-filenames --no-preserve-owner 2>/dev/null
 cpio -id < ../iso/install.amd/initrd
 cp "../../$PRESEED" ./preseed.cfg
 find . | cpio -o -H newc | gzip > "../iso/install.amd/initrd.gz"
 cd - >/dev/null
 
-# Rebuild ISO
 echo "Rebuilding ISO..."
 xorriso -as mkisofs -o "$OUTPUT_ISO" \
   -c isolinux/boot.cat \
   -b isolinux/isolinux.bin \
   -no-emul-boot -boot-load-size 4 -boot-info-table \
+  -J -R -V "Debian Custom" \
   "$ISODIR"
 
-# Confirm USB drive
 if [ -z "$USB_DRIVE" ]; then
   echo "No USB drive specified. Usage: $0 <diskN>"
   exit 1
