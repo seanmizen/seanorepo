@@ -3,7 +3,8 @@ WORKDIR /app
 
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
-COPY apps/seanmizen.com/package.json ./apps/seanmizen.com/package.json
+COPY apps/seanmizen.com ./apps/seanmizen.com
+# COPY apps/seanmizen.com/package.json ./apps/seanmizen.com/package.json
 
 RUN corepack enable && yarn install
 
@@ -15,7 +16,7 @@ RUN yarn workspace seanmizen.com build
 
 FROM node:23-slim AS prod
 WORKDIR /app
-COPY --from=prod-build /app/apps/dist .
+COPY --from=prod-build /app/apps/seanmizen.com/dist .
 RUN corepack enable && yarn global add serve
 EXPOSE 4000
 CMD ["serve", "-s", ".", "-l", "4000"]
