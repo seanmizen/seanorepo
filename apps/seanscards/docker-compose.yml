@@ -1,20 +1,20 @@
 x-frontend-base: &frontend-base
-  container_name: frontend
+  container_name: frontend-sc
   build:
     context: ../..
     dockerfile: apps/seanscards/frontend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-      - "4243:4243"
+      - "4010:4010"
 
 x-backend-base: &backend-base
-  container_name: backend
+  container_name: backend-sc
   build:
     context: ../..
     dockerfile: apps/seanscards/backend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4244:4244"
+    - "4011:4011"
   environment:
     - DB_PATH=/app/db
 

@@ -1,11 +1,11 @@
 x-frontend-base: &frontend-base
-  container_name: frontend
+  container_name: frontend-sm
   build:
     context: ../..
     dockerfile: apps/seanmizen.com/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-      - "4243:4243"
+      - "4000:4000"
 
 services:
   frontend:
