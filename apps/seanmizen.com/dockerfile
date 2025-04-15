@@ -17,5 +17,5 @@ FROM node:23-slim AS prod
 WORKDIR /app
 COPY --from=prod-build /app/apps/dist .
 RUN corepack enable && yarn global add serve
-EXPOSE 4243
-CMD ["serve", "-s", ".", "-l", "4243"]
+EXPOSE 4000
+CMD ["serve", "-s", ".", "-l", "4000"]
