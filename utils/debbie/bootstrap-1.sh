@@ -39,7 +39,6 @@ HTTP_PID=$!
 trap "kill $HTTP_PID" EXIT
 
 qemu-system-x86_64 \
-  -D log.txt \
   -m $RAM \
   -smp cpus=$CPUS \
   -hda "$DISK" \
