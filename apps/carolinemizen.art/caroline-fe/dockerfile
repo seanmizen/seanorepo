@@ -1,0 +1,23 @@
+FROM node:23-slim AS deps
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+COPY apps/carolinemizen.art/package.json ./apps/carolinemizen.art/package.json
+COPY apps/carolinemizen.art/caroline-fe ./apps/carolinemizen.art/caroline-fe
+COPY apps/carolinemizen.art/tsconfig.json ./apps/carolinemizen.art/tsconfig.json
+
+RUN corepack enable && yarn install
+
+FROM deps AS dev
+CMD ["yarn", "workspace", "caroline-fe", "start:noopen"]
+
+FROM deps AS prod-build
+RUN yarn workspace caroline-fe build
+
+FROM node:23-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/carolinemizen.art/caroline-fe/dist .
+RUN corepack enable && yarn global add serve
+EXPOSE 4020
+CMD ["serve", "-s", ".", "-l", "4020"]

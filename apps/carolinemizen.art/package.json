@@ -3,16 +3,14 @@
   "version": "0.2.0",
   "private": true,
   "workspaces": [
-    "src/*"
+    "caroline-fe",
+    "caroline-be"
   ],
   "scripts": {
-    "build": "tsc",
-    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace frontend start\" \"yarn workspace server start\"",
-    "start-frontend": "cd src/frontend && bun dev",
-    "start-server": "cd src/server && bun dev",
-    "start-old": "tsc --watch",
-    "format": "prettier --write \"src/**/*.ts*\"",
-    "format-check": "prettier --check \"src/**/*.ts*\""
+    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace caroline-fe start\" \"yarn workspace caroline-be start\"",
+    "start:docker": "docker compose --profile dev up --build",
+    "prod:docker": "BUILD_TARGET=prod BACKEND_CMD=\"bun ./dist/index.js\" docker compose --profile prod up --build",
+    "down": "docker compose --profile dev --profile prod down"
   },
   "module": "index.ts",
   "type": "module",
@@ -20,8 +18,5 @@
     "bun-types": "^1.2.8",
     "concurrently": "^9.1.2",
     "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "prettier": "^3.5.3"
   }
 }
