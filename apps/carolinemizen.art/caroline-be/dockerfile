@@ -1,0 +1,18 @@
+FROM oven/bun:latest AS deps
+WORKDIR /app
+COPY apps/carolinemizen.art/caroline-be/package.json .
+RUN bun install --production
+
+FROM deps AS dev
+CMD ["bun", "--hot", "--no-clear-screen", "/app/src/src/index.ts"]
+
+FROM deps AS prod-build
+COPY apps/carolinemizen.art/caroline-be ./src
+RUN bun build ./src/src/index.ts --target=bun --outfile ./dist/index.js
+
+FROM oven/bun:latest AS prod
+WORKDIR /app
+COPY --from=prod-build /app/dist ./dist
+COPY --from=deps /app/node_modules ./node_modules
+COPY apps/carolinemizen.art/caroline-be/package.json .
+CMD ["bun", "./dist/index.js"]

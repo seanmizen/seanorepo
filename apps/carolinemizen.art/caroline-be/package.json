@@ -1,0 +1,45 @@
+{
+  "name": "caroline-be",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start:bun": "bun --hot --no-clear-screen src/index.ts",
+    "prod:bun": "NODE_ENV=production bun --env-file=.env src/index.ts",
+    "start": "rslib build node ./dist",
+    "prod": "NODE_ENV=production bun --env-file=.env src/index.ts",
+    "format": "biome format --write"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.0.1",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/jwt": "^9.1.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.17",
+    "@types/humps": "^2.0.6",
+    "better-sqlite3": "^11.9.1",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "fastify": "^5.2.2",
+    "humps": "^2.0.1",
+    "stripe": "^18.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@rslib/core": "^0.6.5",
+    "@types/node": "^22.8.1",
+    "typescript": "^5.8.3"
+  },
+  "private": true
+}
