@@ -3,7 +3,7 @@ set -e
 
 # PXE server setup script compatible with macOS and Debian Linux
 
-IFACE="en8"  # set your wired interface (e.g., enp3s0 on Linux, en8 on macOS)
+IFACE="enx9cebe84aa579"  # set your wired interface (e.g., enx... on Linux, en8 on macOS)
 STATIC_IP="192.168.88.1"
 ISO_URL="https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.10.0-amd64-netinst.iso"
 ISO_PATH="iso/debian-12.10.0-amd64-netinst.iso"
@@ -13,11 +13,10 @@ mkdir -p iso ipxe bin config
 # Platform-specific IP setup
 if [[ "$OSTYPE" == "darwin"* ]]; then
   echo "Detected macOS. Setting static IP on $IFACE"
-  sudo ifconfig "$IFACE" inet "$STATIC_IP" netmask 255.255.255.0 up
+  sudo ifconfig "$IFACE" inet "$STATIC_IP" netmask 255.255.255.0 alias
 else
-  echo "Detected Linux. Setting static IP on $IFACE"
-  sudo ip addr flush dev "$IFACE"
-  sudo ip addr add "$STATIC_IP/24" dev "$IFACE"
+  echo "Detected Linux. Adding static IP on $IFACE (without flushing existing IPs)"
+  sudo ip addr add "$STATIC_IP/24" dev "$IFACE" || true
   sudo ip link set "$IFACE" up
 fi
 
