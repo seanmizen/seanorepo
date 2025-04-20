@@ -16,7 +16,11 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   sudo ifconfig "$IFACE" inet "$STATIC_IP" netmask 255.255.255.0 alias
 else
   echo "Detected Linux. Adding static IP on $IFACE (without flushing existing IPs)"
-  sudo ip addr add "$STATIC_IP/24" dev "$IFACE" || true
+  if ! ip addr show "$IFACE" | grep -q "$STATIC_IP"; then
+    sudo ip addr add "$STATIC_IP/24" dev "$IFACE"
+  else
+    echo "Static IP $STATIC_IP already assigned to $IFACE"
+  fi
   sudo ip link set "$IFACE" up
 fi
 
@@ -33,6 +37,10 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   xorriso -osirrox on -indev "$ISO_PATH" -extract /install.amd/initrd.gz ipxe/initrd.gz
 else
   TMPMNT=$(mktemp -d)
+  if mount | grep -q "$ISO_PATH"; then
+    echo "ISO already mounted, unmounting first"
+    sudo umount "$ISO_PATH" || true
+  fi
   sudo mount -o loop "$ISO_PATH" "$TMPMNT"
   cp "$TMPMNT"/install.amd/vmlinuz ipxe/
   cp "$TMPMNT"/install.amd/initrd.gz ipxe/
