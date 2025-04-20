@@ -65,13 +65,15 @@ fi
 
 # Write dnsmasq.conf
 cat > config/dnsmasq.conf <<EOF
-interface=$IFACE
+interface=en8
+bind-dynamic
 port=0
-bind-interfaces
-dhcp-range=192.168.88.100,192.168.88.150,12h
-dhcp-boot=undionly.kpxe
+dhcp-range=192.168.88.100,192.168.88.150,255.255.255.0,12h
+dhcp-option=3,192.168.88.1
+dhcp-option=6,192.168.88.1
 enable-tftp
-tftp-root=$(pwd)/bin
+tftp-root=/Users/seanmizen/projects/seanorepo/utils/debbie/pxe/bin
+dhcp-boot=undionly.kpxe
 log-dhcp
 EOF
 
@@ -80,10 +82,11 @@ echo "Written config/dnsmasq.conf"
 # Write boot.ipxe
 cat > ipxe/boot.ipxe <<EOF
 #!ipxe
-kernel http://$STATIC_IP:8000/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:8000/ipxe/preseed.cfg
+kernel http://$STATIC_IP:8000/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:8000/ipxe/preseed-1.cfg
 initrd http://$STATIC_IP:8000/ipxe/initrd.gz
 boot
 EOF
 
 echo "Written ipxe/boot.ipxe"
 echo "Run ./scripts/serve.sh to launch PXE services"
+
