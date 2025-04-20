@@ -8,6 +8,15 @@ STATIC_IP="192.168.88.1"
 ISO_URL="https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.10.0-amd64-netinst.iso"
 ISO_PATH="iso/debian-12.10.0-amd64-netinst.iso"
 
+if [[ "$1" == "--info" ]]; then
+  echo "PXE Boot Notes:"
+  echo "- ✅ Direct Ethernet (host ↔ client): Works reliably. PXE server sees DHCP."
+  echo "- ❌ Through router (host + client on LAN): Most routers intercept DHCP. PXE server won't see requests."
+  echo "- Workaround: Disable router DHCP temporarily, or use proxyDHCP (advanced)."
+  echo "- Recommendation: Use direct connection for installs."
+  exit 0
+fi
+
 mkdir -p iso ipxe bin config
 
 # Platform-specific IP setup
@@ -55,7 +64,6 @@ if [ ! -f bin/undionly.kpxe ]; then
 fi
 
 # Write dnsmasq.conf
-touch config/dnsmasq.conf
 cat > config/dnsmasq.conf <<EOF
 interface=$IFACE
 port=0
