@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-IFACE="en8"
+IFACE="enx9cebe84aa579"
 CONFIG="config/dnsmasq.conf"
 
 echo "Killing any existing dnsmasq..."
