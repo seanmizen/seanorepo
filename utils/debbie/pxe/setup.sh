@@ -3,7 +3,7 @@ set -e
 
 # PXE server setup script compatible with macOS and Debian Linux
 
-IFACE="enx9cebe84aa579"  # set your wired interface (e.g., enx... on Linux, en8 on macOS)
+IFACE="en8"  # set your wired interface (e.g., enx... on Linux, en8 on macOS)
 STATIC_IP="192.168.88.1"
 ISO_URL="https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.10.0-amd64-netinst.iso"
 ISO_PATH="iso/debian-12.10.0-amd64-netinst.iso"
@@ -55,6 +55,7 @@ if [ ! -f bin/undionly.kpxe ]; then
 fi
 
 # Write dnsmasq.conf
+touch config/dnsmasq.conf
 cat > config/dnsmasq.conf <<EOF
 interface=$IFACE
 port=0
