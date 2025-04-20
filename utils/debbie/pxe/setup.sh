@@ -42,8 +42,8 @@ else
     sudo umount "$ISO_PATH" || true
   fi
   sudo mount -o loop "$ISO_PATH" "$TMPMNT"
-  cp "$TMPMNT"/install.amd/vmlinuz ipxe/
-  cp "$TMPMNT"/install.amd/initrd.gz ipxe/
+  sudo cp "$TMPMNT"/install.amd/vmlinuz ipxe/
+  sudo cp "$TMPMNT"/install.amd/initrd.gz ipxe/
   sudo umount "$TMPMNT"
   rmdir "$TMPMNT"
 fi
