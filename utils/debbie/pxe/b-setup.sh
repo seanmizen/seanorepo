@@ -1,42 +1,43 @@
 #!/bin/bash
 set -e
 
-IFACE="en8"
+# PXE netboot script with offline Debian DVD repo
+# Connect client to Mac via Ethernet. Run this script. Then PXE boot the client.
+
+IFACE="en8" # your Ethernet interface
 STATIC_IP="192.168.88.1"
+HTTP_PORT=8000
 NETBOOT_URL="https://deb.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/netboot.tar.gz"
+DVD_ISO_PATH="./debian-12.10.0-amd64-DVD-1.iso"
+DVD_MOUNT_DIR="./pxe/mount"
 
-mkdir -p pxe/ipxe ipxe config
-cd pxe
+echo "[*] Creating directory structure..."
+rm -rf pxe
+mkdir -p pxe/ipxe config
 
-echo "Setting static IP..."
+echo "[*] Setting static IP on $IFACE..."
 sudo ifconfig "$IFACE" inet "$STATIC_IP" netmask 255.255.255.0 alias
 
-echo "Downloading netboot kernel/initrd..."
-curl -LO "$NETBOOT_URL"
+echo "[*] Downloading Debian netboot files..."
+curl -L "$NETBOOT_URL" -o netboot.tar.gz
 tar -xzf netboot.tar.gz
-rm netboot.tar.gz
+mv debian-installer/amd64/linux pxe/ipxe/vmlinuz
+mv debian-installer/amd64/initrd.gz pxe/ipxe/initrd.gz
+rm -rf debian-installer netboot.tar.gz
 
-mv debian-installer/amd64/linux ipxe/vmlinuz
-mv debian-installer/amd64/initrd.gz ipxe/initrd.gz
-rm -rf debian-installer
+echo "[*] Downloading iPXE bootstrap..."
+curl -Lo pxe/undionly.kpxe https://boot.ipxe.org/undionly.kpxe
 
-echo "Downloading undionly.kpxe (iPXE bootloader)..."
-curl -Lo undionly.kpxe https://boot.ipxe.org/undionly.kpxe
-
-echo "Creating boot.ipxe..."
-touch boot.ipxe
-cat > boot.ipxe <<EOF
+echo "[*] Creating boot.ipxe..."
+cat > pxe/boot.ipxe <<EOF
 #!ipxe
-kernel http://$STATIC_IP:8000/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:8000/ipxe/preseed.cfg
-initrd http://$STATIC_IP:8000/ipxe/initrd.gz
+kernel http://$STATIC_IP:$HTTP_PORT/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:$HTTP_PORT/ipxe/preseed.cfg
+initrd http://$STATIC_IP:$HTTP_PORT/ipxe/initrd.gz
 boot
 EOF
 
-# deb.debian.org -> 151.101.38.132
-
-echo "Creating minimal working preseed.cfg..."
-touch ipxe/preseed.cfg
-cat > ipxe/preseed.cfg <<EOF
+echo "[*] Creating preseed.cfg..."
+cat > pxe/ipxe/preseed.cfg <<EOF
 d-i debian-installer/locale string en_GB.UTF-8
 d-i debian-installer/language string en
 d-i debian-installer/country string GB
@@ -50,8 +51,8 @@ d-i netcfg/wireless_essid string mojodojo
 d-i netcfg/wireless_passphrase string casahouse
 
 d-i mirror/country string manual
-d-i mirror/http/hostname string 151.101.2.132
-d-i mirror/http/directory string /debian
+d-i mirror/http/hostname string $STATIC_IP
+d-i mirror/http/directory string /mount
 d-i mirror/http/proxy string
 
 d-i passwd/root-login boolean false
@@ -78,21 +79,32 @@ d-i grub-installer/with_other_os boolean false
 d-i finish-install/reboot_in_progress note
 EOF
 
-echo "Writing dnsmasq.conf..."
-cat > ../config/dnsmasq.conf <<EOF
+echo "[*] Writing dnsmasq config..."
+cat > config/dnsmasq.conf <<EOF
 interface=$IFACE
 bind-interfaces
 dhcp-range=192.168.88.100,192.168.88.150,12h
 enable-tftp
-tftp-root=$(pwd)
+tftp-root=$(pwd)/pxe
 dhcp-match=set:ipxe,175
 dhcp-boot=tag:ipxe,boot.ipxe
 dhcp-boot=undionly.kpxe
 EOF
 
-echo "Restarting dnsmasq..."
+echo "[*] Restarting dnsmasq..."
 sudo pkill dnsmasq || true
-sudo dnsmasq --conf-file="$(pwd)/../config/dnsmasq.conf"
+sudo dnsmasq --conf-file="$(pwd)/config/dnsmasq.conf"
 
-echo "Starting HTTP server..."
-python3 -m http.server 8000
+echo "[*] Extracting ISO contents to ./pxe/mount..."
+if [[ -f "$DVD_ISO_PATH" ]]; then
+  mkdir -p "$DVD_MOUNT_DIR"
+  rm -rf "$DVD_MOUNT_DIR"/*
+  7z x "$DVD_ISO_PATH" -o"$DVD_MOUNT_DIR" > /dev/null
+else
+  echo "ERROR: ISO not found at $DVD_ISO_PATH"
+  exit 1
+fi
+
+echo "[*] Launching HTTP server from pxe/"
+cd pxe
+python3 -m http.server "$HTTP_PORT"
