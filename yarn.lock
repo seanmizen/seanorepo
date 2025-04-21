@@ -1954,6 +1954,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"egstack@workspace:apps/egstack":
+  version: 0.0.0-use.local
+  resolution: "egstack@workspace:apps/egstack"
+  languageName: unknown
+  linkType: soft
+
 "emoji-regex@npm:^8.0.0":
   version: 8.0.0
   resolution: "emoji-regex@npm:8.0.0"

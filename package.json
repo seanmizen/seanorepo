@@ -14,7 +14,6 @@
     "sean": "yarn workspace seanmizen.com start",
     "caroline": "yarn workspace carolinemizen.art start",
     "cards": "yarn workspace seanscards start",
-    "cards:docker": "yarn workspace seanscards start:docker",
     "gosniff": "yarn workspace gosniff start",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
     "prod:docker": "yarn workspaces foreach -Apt run prod:docker",
