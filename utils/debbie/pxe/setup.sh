@@ -11,11 +11,7 @@ set -e
 IFACE="en8"  # set your wired interface (e.g., enx... on Linux, en8 on macOS)
 STATIC_IP="192.168.88.1"
 ISO_URL="https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.10.0-amd64-netinst.iso"
-# ISO_URL="https://deb.debian.org/debian/dists/bookworm/main/installer-amd64/current/images/netboot/mini.iso"
-# ISO_URL="https://deb.debian.org/debian/dists/bookworm/main/installer-amd64/current/images/netboot/netboot.tar.gz"
 ISO_PATH="iso/debian-12.10.0-amd64-netinst.iso"
-# ISO_PATH="iso/mini.iso"
-# ISO_PATH="iso/netboot.tar.gz"
 
 mkdir -p iso ipxe config
 
@@ -99,6 +95,7 @@ d-i netcfg/get_hostname string debbie2
 d-i netcfg/get_domain string local
 
 ### Installation stuff. important
+d-i anna/choose_modules string network-console
 d-i cdrom-detect/try-usb boolean false
 d-i cdrom-detect/try-floppy boolean false
 d-i cdrom-detect/try-harddisk boolean false
@@ -166,9 +163,17 @@ d-i finish-install/keep-consoles boolean true
 EOF
 
 # boot.ipxe
+# kernel http://$STATIC_IP:8000/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:8000/ipxe/preseed-wifi.cfg
 cat > boot.ipxe <<EOF
 #!ipxe
-kernel http://$STATIC_IP:8000/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:8000/ipxe/preseed-wifi.cfg
+kernel http://192.168.88.1:8000/ipxe/vmlinuz auto=true priority=critical \
+  preseed/url=http://192.168.88.1:8000/ipxe/preseed-wifi.cfg \
+  netcfg/get_ipaddress=dhcp \
+  cdrom-detect/load_media=false \
+  cdrom-detect/try-usb=false \
+  cdrom-detect/try-harddisk=false \
+  cdrom-detect/try-floppy=false \
+  mirror/protocol=http
 initrd http://$STATIC_IP:8000/ipxe/initrd.gz
 boot
 EOF
