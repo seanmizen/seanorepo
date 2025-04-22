@@ -9,7 +9,7 @@
   "scripts": {
     "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace caroline-fe start\" \"yarn workspace caroline-be start\"",
     "start:docker": "docker compose --profile dev up --build",
-    "prod:docker": "BUILD_TARGET=prod BACKEND_CMD=\"bun ./dist/index.js\" docker compose --profile prod up --build",
+    "prod:docker": "BUILD_TARGET=prod BACKEND_CMD=\"bun ./dist/index.js\" docker compose --profile prod up --build --detach",
     "down": "docker compose --profile dev --profile prod down"
   },
   "module": "index.ts",
