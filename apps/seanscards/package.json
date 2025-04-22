@@ -9,7 +9,7 @@
   "scripts": {
     "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace seanscards-fe start\" \"yarn workspace seanscards-be start\"",
     "start:docker": "docker compose --profile dev up --build",
-    "prod:docker": "BUILD_TARGET=prod BACKEND_CMD=\"bun ./dist/index.js\" docker compose --profile prod up --build",
+    "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
     "down": "docker compose --profile dev --profile prod down"
   },
   "packageManager": "yarn@4.8.1+sha512.bc946f2a022d7a1a38adfc15b36a66a3807a67629789496c3714dd1703d2e6c6b1c69ff9ec3b43141ac7a1dd853b7685638eb0074300386a59c18df351ef8ff6",
