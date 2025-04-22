@@ -2,6 +2,10 @@
 set -e
 
 # PXE netboot script with offline Debian DVD repo
+# turn off DHCP on your router. otherwise dnsmasq we run here is overridden.
+# make sure
+# 1. that your client has direct access to the internet
+# 2. that your ipxe server (the host running this script) is connected to your client
 # Connect client to Mac via Ethernet. Run this script. Then PXE boot the client.
 
 IFACE="en8"
@@ -13,8 +17,8 @@ DVD_ISO_PATH="./debian-12.10.0-amd64-DVD-1.iso"
 DVD_MOUNT_DIR="./pxe/mount"
 
 echo "[*] Cleaning root artifacts..."
-rm -rf pxe
-rm -f ldlinux.c32 libutil.c32 pxelinux.0 version.cfg boot.cat isolinux.bin pxelinux.cfg
+sudo rm -rf pxe
+sudo rm -f ldlinux.c32 libutil.c32 pxelinux.0 version.cfg boot.cat isolinux.bin pxelinux.cfg
 echo "[*] Creating directory structure..."
 mkdir -p pxe/ipxe config
 
@@ -35,10 +39,13 @@ curl -Lo pxe/undionly.kpxe https://boot.ipxe.org/undionly.kpxe
 echo "[*] Creating boot.ipxe..."
 cat > pxe/boot.ipxe <<EOF
 #!ipxe
-kernel http://$STATIC_IP:$HTTP_PORT/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:$HTTP_PORT/ipxe/preseed.cfg
 initrd http://$STATIC_IP:$HTTP_PORT/ipxe/initrd.gz
+kernel http://$STATIC_IP:$HTTP_PORT/ipxe/vmlinuz auto=true priority=critical preseed/url=http://$STATIC_IP:$HTTP_PORT/ipxe/preseed.cfg
 boot
 EOF
+
+# d-i mirror/http/hostname string deb.debian.org
+# d-i mirror/http/directory string /debian
 
 echo "[*] Creating preseed.cfg..."
 cat > pxe/ipxe/preseed.cfg <<EOF
@@ -94,6 +101,8 @@ dhcp-match=set:ipxe,175
 dhcp-boot=tag:ipxe,boot.ipxe
 dhcp-boot=undionly.kpxe
 EOF
+# pxe-service=x86PC, "PXE Boot", undionly.kpxe
+# pxe-service=x86PC, "PXE Boot", undionly.kpxe
 
 echo "[*] Restarting dnsmasq..."
 sudo pkill dnsmasq || true
@@ -120,4 +129,4 @@ fi
 
 echo "[*] Launching HTTP server from pxe/"
 cd pxe
-python3 -m http.server "$HTTP_PORT" 
+python3 -m http.server "$HTTP_PORT"
