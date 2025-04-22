@@ -4,15 +4,18 @@ set -e
 # PXE netboot script with offline Debian DVD repo
 # Connect client to Mac via Ethernet. Run this script. Then PXE boot the client.
 
-IFACE="en8" # your Ethernet interface
+IFACE="en8"
 STATIC_IP="192.168.88.1"
-HTTP_PORT=8000
+# by default, PXE setup on your client uses port 80. try to stick to it.
+HTTP_PORT=80
 NETBOOT_URL="https://deb.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/netboot.tar.gz"
 DVD_ISO_PATH="./debian-12.10.0-amd64-DVD-1.iso"
 DVD_MOUNT_DIR="./pxe/mount"
 
-echo "[*] Creating directory structure..."
+echo "[*] Cleaning root artifacts..."
 rm -rf pxe
+rm -f ldlinux.c32 libutil.c32 pxelinux.0 version.cfg boot.cat isolinux.bin pxelinux.cfg
+echo "[*] Creating directory structure..."
 mkdir -p pxe/ipxe config
 
 echo "[*] Setting static IP on $IFACE..."
@@ -20,10 +23,11 @@ sudo ifconfig "$IFACE" inet "$STATIC_IP" netmask 255.255.255.0 alias
 
 echo "[*] Downloading Debian netboot files..."
 curl -L "$NETBOOT_URL" -o netboot.tar.gz
-tar -xzf netboot.tar.gz
-mv debian-installer/amd64/linux pxe/ipxe/vmlinuz
-mv debian-installer/amd64/initrd.gz pxe/ipxe/initrd.gz
-rm -rf debian-installer netboot.tar.gz
+mkdir -p pxe/tmp-netboot
+tar -xzf netboot.tar.gz -C pxe/tmp-netboot
+mv pxe/tmp-netboot/debian-installer/amd64/linux pxe/ipxe/vmlinuz
+mv pxe/tmp-netboot/debian-installer/amd64/initrd.gz pxe/ipxe/initrd.gz
+rm -rf pxe/tmp-netboot netboot.tar.gz
 
 echo "[*] Downloading iPXE bootstrap..."
 curl -Lo pxe/undionly.kpxe https://boot.ipxe.org/undionly.kpxe
@@ -51,7 +55,7 @@ d-i netcfg/wireless_essid string mojodojo
 d-i netcfg/wireless_passphrase string casahouse
 
 d-i mirror/country string manual
-d-i mirror/http/hostname string $STATIC_IP
+d-i mirror/http/hostname string $STATIC_IP:$HTTP_PORT
 d-i mirror/http/directory string /mount
 d-i mirror/http/proxy string
 
@@ -94,17 +98,26 @@ EOF
 echo "[*] Restarting dnsmasq..."
 sudo pkill dnsmasq || true
 sudo dnsmasq --conf-file="$(pwd)/config/dnsmasq.conf"
+# if port 67 in use, MacOS' DHCP server needs to be shutoff. this one liner does the job:
+# sudo launchctl unload -w /System/Library/LaunchDaemons/bootps.plist 2>/dev/null || \
+# sudo launchctl bootout system /System/Library/LaunchDaemons/bootps.plist
 
-echo "[*] Extracting ISO contents to ./pxe/mount..."
+echo "[*] Extracting ISO contents to ./pxe/mount using xorriso..."
 if [[ -f "$DVD_ISO_PATH" ]]; then
   mkdir -p "$DVD_MOUNT_DIR"
   rm -rf "$DVD_MOUNT_DIR"/*
-  7z x "$DVD_ISO_PATH" -o"$DVD_MOUNT_DIR" > /dev/null
+  xorriso -osirrox on -indev "$DVD_ISO_PATH" -extract / "$DVD_MOUNT_DIR"
 else
   echo "ERROR: ISO not found at $DVD_ISO_PATH"
   exit 1
 fi
 
+# Move debian-installer directory into expected place
+if [[ -d "$DVD_MOUNT_DIR/pool/main/debian-installer" ]]; then
+  mkdir -p "$DVD_MOUNT_DIR/pool/main/d"
+  mv "$DVD_MOUNT_DIR/pool/main/debian-installer" "$DVD_MOUNT_DIR/pool/main/d/"
+fi
+
 echo "[*] Launching HTTP server from pxe/"
 cd pxe
-python3 -m http.server "$HTTP_PORT"
+python3 -m http.server "$HTTP_PORT" 
