@@ -266,6 +266,7 @@ build
 
 # don't store ISOs! download when you need them.
 *.iso
+*.efi
 *.img
 
 linux
