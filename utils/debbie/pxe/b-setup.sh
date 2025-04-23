@@ -13,8 +13,27 @@ STATIC_IP="192.168.88.1"
 # by default, PXE setup on your client uses port 80. try to stick to it.
 HTTP_PORT=80
 NETBOOT_URL="https://deb.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/netboot.tar.gz"
-DVD_ISO_PATH="./debian-12.10.0-amd64-DVD-1.iso"
-DVD_MOUNT_DIR="./pxe/mount"
+
+echo "[*] Enabling IP forwarding. This allows netboot."
+
+sudo sysctl -w net.inet.ip.forwarding=1
+
+# NAT disabled.
+# # Write a working PF anchor rule (assumes static 192.168.88.0/24 PXE subnet)
+# PXE_SUBNET="192.168.88.0/24"
+# sudo mkdir -p /etc/pf.anchors
+# sudo bash -c "echo 'nat on $INET_IF from $PXE_SUBNET to any -> ($INET_IF)' > /etc/pf.anchors/pxe-nat"
+
+# # Write the top-level ruleset to include the anchor
+# cat > nat-rules.conf <<EOF
+# nat-anchor "pxe-nat"
+# load anchor "pxe-nat" from "/etc/pf.anchors/pxe-nat"
+# pass out all keep state
+# EOF
+
+# # Load it and enable PF
+# sudo pfctl -f nat-rules.conf
+# sudo pfctl -e
 
 echo "[*] Cleaning root artifacts..."
 sudo rm -rf pxe
@@ -46,6 +65,7 @@ EOF
 
 # d-i mirror/http/hostname string deb.debian.org
 # d-i mirror/http/directory string /debian
+# d-i partman-auto/disk string /dev/sda
 
 echo "[*] Creating preseed.cfg..."
 cat > pxe/ipxe/preseed.cfg <<EOF
@@ -54,16 +74,14 @@ d-i debian-installer/language string en
 d-i debian-installer/country string GB
 d-i keyboard-configuration/xkb-keymap select gb
 
-d-i netcfg/choose_interface select wlan0
+d-i netcfg/choose_interface select auto
 d-i netcfg/disable_dhcp boolean false
 d-i netcfg/get_hostname string debbie2
 d-i netcfg/get_domain string local
-d-i netcfg/wireless_essid string mojodojo
-d-i netcfg/wireless_passphrase string casahouse
 
 d-i mirror/country string manual
-d-i mirror/http/hostname string $STATIC_IP:$HTTP_PORT
-d-i mirror/http/directory string /mount
+d-i mirror/http/hostname string deb.debian.org
+d-i mirror/http/directory string /debian
 d-i mirror/http/proxy string
 
 d-i passwd/root-login boolean false
@@ -107,26 +125,14 @@ EOF
 echo "[*] Restarting dnsmasq..."
 sudo pkill dnsmasq || true
 sudo dnsmasq --conf-file="$(pwd)/config/dnsmasq.conf"
-# if port 67 in use, MacOS' DHCP server needs to be shutoff. this one liner does the job:
-# sudo launchctl unload -w /System/Library/LaunchDaemons/bootps.plist 2>/dev/null || \
-# sudo launchctl bootout system /System/Library/LaunchDaemons/bootps.plist
-
-echo "[*] Extracting ISO contents to ./pxe/mount using xorriso..."
-if [[ -f "$DVD_ISO_PATH" ]]; then
-  mkdir -p "$DVD_MOUNT_DIR"
-  rm -rf "$DVD_MOUNT_DIR"/*
-  xorriso -osirrox on -indev "$DVD_ISO_PATH" -extract / "$DVD_MOUNT_DIR"
-else
-  echo "ERROR: ISO not found at $DVD_ISO_PATH"
-  exit 1
-fi
-
-# Move debian-installer directory into expected place
-if [[ -d "$DVD_MOUNT_DIR/pool/main/debian-installer" ]]; then
-  mkdir -p "$DVD_MOUNT_DIR/pool/main/d"
-  mv "$DVD_MOUNT_DIR/pool/main/debian-installer" "$DVD_MOUNT_DIR/pool/main/d/"
-fi
 
 echo "[*] Launching HTTP server from pxe/"
 cd pxe
 python3 -m http.server "$HTTP_PORT"
+
+# for some reason this is working now.
+# set forwarding on:
+# sudo sysctl -w net.inet.ip.forwarding=1
+# get forwarding setting:
+# sysctl net.inet.ip.forwarding
+# I think I accidentally turned this on and it's allowing netboot to work via my ethernet + wifi
