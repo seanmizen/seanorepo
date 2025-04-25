@@ -1,10 +1,11 @@
 {
   "name": "seanmizen.com",
+  "type": "module",
   "version": "0.2.0",
   "private": true,
   "scripts": {
     "start": "rsbuild dev --open",
-    "start:noopen": "rsbuild dev --port 4000",
+    "start:noopen": "yarn exec rsbuild dev --port 4000",
     "start:docker": "docker compose --profile dev up --build",
     "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
     "build": "rsbuild build",

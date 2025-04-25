@@ -8,9 +8,6 @@ export default defineConfig({
     template: "./public/index.html",
   },
   output: {
-    externals: {
-      // 'mapbox-gl': 'mapboxgl',
-    },
-    assetPrefix: "/rsbuild-plugin-glsl/",
+    assetPrefix: "/",
   },
 });
