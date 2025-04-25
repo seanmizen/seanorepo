@@ -22,9 +22,12 @@ const ShaderSean = () => {
 
   const { width, height } = { width: 500, height: 500 };
 
+  const ripple = useRef({
+    time: null,
+    origin: new THREE.Vector2(width / 2, height / 2),
+  });
+
   useEffect(() => {
-    console.log("theme changed");
-    rendererRef.current?.setClearColor(0x000000, 0); // canvas stays transparent
     if (materialRef.current) {
       materialRef.current.uniforms.u_color.value.set(
         theme === "light" ? 0x000000 : 0x99bbff
@@ -96,6 +99,8 @@ const ShaderSean = () => {
       u_color: {
         value: new THREE.Color(theme === "light" ? 0x000000 : 0x99bbff),
       },
+      u_rippleOrigin: { value: ripple.current.origin.clone() },
+      u_rippleTime: { value: -1 },
     };
 
     const material = new THREE.ShaderMaterial({
@@ -116,10 +121,42 @@ const ShaderSean = () => {
     };
     addEventListener("resize", onResize);
 
+    const startRipple = (e) => {
+      ripple.current.time = performance.now();
+
+      const canvas = renderer.domElement;
+      const bounds = canvas.getBoundingClientRect();
+
+      // Allow clicks outside canvas
+      const clampedX = Math.max(
+        0,
+        Math.min(e.clientX - bounds.left, bounds.width)
+      );
+      const clampedY = Math.max(
+        0,
+        Math.min(e.clientY - bounds.top, bounds.height)
+      );
+
+      const x = (clampedX / bounds.width) * canvas.width;
+      const y = (clampedY / bounds.height) * canvas.height;
+
+      ripple.current.origin.set(x, canvas.height - y);
+    };
+
+    window.addEventListener("click", startRipple);
+
     let frames = 0;
     const animate = () => {
       requestAnimationFrame(animate);
       gpuSim.compute();
+
+      const now = performance.now();
+
+      if (ripple.current.time != null)
+        uniforms.u_rippleTime.value = (now - ripple.current.time) / 1000;
+      else uniforms.u_rippleTime.value = -1;
+
+      uniforms.u_rippleOrigin.value.copy(ripple.current.origin);
 
       const active = Math.ceil(10 * frames++);
       posVar.material.uniforms.u_nActiveParticles.value = active;
@@ -136,6 +173,7 @@ const ShaderSean = () => {
     return () => {
       removeEventListener("resize", onResize);
       mountRef.current?.removeChild(renderer.domElement) || null;
+      window.removeEventListener("click", startRipple);
       renderer.dispose();
     };
   }, []);
