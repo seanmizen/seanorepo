@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY apps/seanmizen.com ./apps/seanmizen.com
+COPY package.json yarn.lock .yarnrc.yml ./
 # COPY apps/seanmizen.com/package.json ./apps/seanmizen.com/package.json
 
 RUN corepack enable && yarn install
