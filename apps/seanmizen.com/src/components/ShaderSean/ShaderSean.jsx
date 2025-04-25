@@ -178,12 +178,7 @@ const ShaderSean = () => {
     };
   }, []);
 
-  return (
-    <div
-      ref={mountRef}
-      className="fixed inset-0 w-full h-full overflow-hidden"
-    />
-  );
+  return <div ref={mountRef} />;
 };
 
 const seed = (pos, vel) => {
