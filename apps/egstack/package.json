@@ -3,9 +3,9 @@
   "private": true,
   "scripts": {
     "ensure": "bash ./ensure-egstack.sh",
-    "start": "yarn ensure && yarn --cwd ../../other-repos/egstack start",
-    "start:docker": "yarn ensure && yarn --cwd ../../other-repos/egstack start:docker",
-    "prod:docker": "yarn ensure && yarn --cwd ../../other-repos/egstack prod:docker",
-    "down": "yarn ensure && yarn --cwd ../../other-repos/egstack down"
+    "DISABLEDstart": "yarn ensure && yarn --cwd ../../other-repos/egstack start",
+    "DISABLEDstart:docker": "yarn ensure && yarn --cwd ../../other-repos/egstack start:docker",
+    "DISABLEDprod:docker": "yarn ensure && yarn --cwd ../../other-repos/egstack prod:docker",
+    "DISABLEDdown": "yarn ensure && yarn --cwd ../../other-repos/egstack down"
   }
 }
