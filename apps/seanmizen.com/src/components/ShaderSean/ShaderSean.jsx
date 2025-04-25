@@ -30,7 +30,7 @@ const ShaderSean = () => {
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.u_color.value.set(
-        theme === "light" ? 0x000000 : 0x99bbff
+        theme === "light" ? 0x000000 : 0xdddddd
       );
     }
   }, [theme]);
@@ -97,7 +97,7 @@ const ShaderSean = () => {
       u_textureOffset: velVar.material.uniforms.u_textureOffset,
       u_texture: { value: new THREE.TextureLoader().load(particleTex) },
       u_color: {
-        value: new THREE.Color(theme === "light" ? 0x000000 : 0x99bbff),
+        value: new THREE.Color(theme === "light" ? 0x000000 : 0xdddddd),
       },
       u_rippleOrigin: { value: ripple.current.origin.clone() },
       u_rippleTime: { value: -1 },
