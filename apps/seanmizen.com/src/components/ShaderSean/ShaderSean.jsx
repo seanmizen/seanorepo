@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useContext } from "react";
 import * as THREE from "three";
 import { OrbitControls, GPUComputationRenderer } from "three-stdlib";
 import Stats from "stats.js";
+import { ThemeContext } from "../../providers/Theme";
 
 import bgImage from "./IMG_4011_crop2.jpeg";
 import particleTex from "./particle2.png";
@@ -14,15 +15,29 @@ import velSim from "./frag-stippling-vel.glsl";
 
 const ShaderSean = () => {
   const mountRef = useRef(null);
+  const rendererRef = useRef(null);
+  const materialRef = useRef(null);
+
+  const { theme } = useContext(ThemeContext);
 
   const { width, height } = { width: 500, height: 500 };
 
   useEffect(() => {
+    console.log("theme changed");
+    rendererRef.current?.setClearColor(0x000000, 0); // canvas stays transparent
+    if (materialRef.current) {
+      materialRef.current.uniforms.u_invert.value =
+        theme === "light" ? 0.0 : 1.0;
+    }
+  }, [theme]);
+
+  useEffect(() => {
     mountRef.current?.replaceChildren();
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    rendererRef.current = renderer;
     renderer.setPixelRatio(devicePixelRatio);
     renderer.setSize(width, height);
-    renderer.setClearColor(new THREE.Color(0.95, 0.95, 0.95));
+    renderer.setClearColor(0x000000, 0);
     mountRef.current.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -48,12 +63,12 @@ const ShaderSean = () => {
     gpuSim.setVariableDependencies(posVar, [posVar, velVar]);
     gpuSim.setVariableDependencies(velVar, [posVar, velVar]);
 
-    const shared = { u_dt: { value: 0.2 }, u_nActiveParticles: { value: 1 } };
+    const shared = { u_dt: { value: 0.78 }, u_nActiveParticles: { value: 10 } };
     Object.assign(posVar.material.uniforms, shared);
     Object.assign(velVar.material.uniforms, {
       ...shared,
       u_bgTexture: { value: new THREE.TextureLoader().load(bgImage) },
-      u_textureOffset: { value: new THREE.Vector2(15, 15) },
+      u_textureOffset: { value: new THREE.Vector2(12, 12) },
     });
 
     if (gpuSim.init()) throw new Error("GPUComputation init failed");
@@ -71,12 +86,15 @@ const ShaderSean = () => {
     const uniforms = {
       u_width: { value: simSize },
       u_height: { value: simSize },
-      u_particleSize: { value: 80 * Math.min(devicePixelRatio, 2) },
+      u_particleSize: { value: 40 * Math.min(devicePixelRatio, 2) },
       u_nActiveParticles: { value: 1 },
       u_positionTexture: { value: null },
       u_bgTexture: velVar.material.uniforms.u_bgTexture,
       u_textureOffset: velVar.material.uniforms.u_textureOffset,
       u_texture: { value: new THREE.TextureLoader().load(particleTex) },
+      u_invert: {
+        value: theme === "light" ? 0.0 : 1.0,
+      },
     };
 
     const material = new THREE.ShaderMaterial({
@@ -86,6 +104,7 @@ const ShaderSean = () => {
       transparent: true,
       depthTest: false,
     });
+    materialRef.current = material;
 
     scene.add(new THREE.Points(geometry, material));
 
