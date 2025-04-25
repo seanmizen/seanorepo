@@ -3,6 +3,7 @@ import React from "react";
 import { HomeLi, LastUpdated, Spacer, ThemeToggle } from "../../components";
 import { Donate, Github, Projects, ThisPage, Xmas } from "../../features";
 import { ThemeContext } from "../../providers/Theme";
+import { ShaderSean } from "../../components/ShaderSean";
 
 const Home = ({ setIsSnowing }) => {
   const { mode, toggleMode } = React.useContext(ThemeContext);
@@ -19,20 +20,27 @@ const Home = ({ setIsSnowing }) => {
       <h1 alt="shaunmizen.com">seanmizen.com</h1>
       <p>developer | automator | person</p>
       <Spacer />
-      <ul>
-        {subsections.map((subsection, index) => (
-          <HomeLi
-            key={index}
-            trigger={subsection.trigger}
-            subLink={subsection.subLink}
-            setIsSnowing={setIsSnowing}
-          >
-            {subsection.component}
-          </HomeLi>
-        ))}
-      </ul>
-      <Spacer />
-      <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
+      <div className="horizontal">
+        <div className="home-left">
+          <ul>
+            {subsections.map((subsection, index) => (
+              <HomeLi
+                key={index}
+                trigger={subsection.trigger}
+                subLink={subsection.subLink}
+                setIsSnowing={setIsSnowing}
+              >
+                {subsection.component}
+              </HomeLi>
+            ))}
+          </ul>
+          <Spacer />
+          <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
+        </div>
+        <div className="home-right">
+          <ShaderSean />
+        </div>
+      </div>
       <ThemeToggle mode={mode} toggleMode={toggleMode} />
     </div>
   );
