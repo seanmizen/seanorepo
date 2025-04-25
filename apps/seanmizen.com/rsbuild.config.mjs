@@ -1,9 +1,16 @@
-import { defineConfig } from '@rsbuild/core';
-import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from "@rsbuild/core";
+import { pluginReact } from "@rsbuild/plugin-react";
+import { pluginGlsl } from "rsbuild-plugin-glsl";
 
 export default defineConfig({
-  plugins: [pluginReact()],
+  plugins: [pluginReact(), pluginGlsl()],
   html: {
-    template: './public/index.html',
+    template: "./public/index.html",
+  },
+  output: {
+    externals: {
+      // 'mapbox-gl': 'mapboxgl',
+    },
+    assetPrefix: "/rsbuild-plugin-glsl/",
   },
 });

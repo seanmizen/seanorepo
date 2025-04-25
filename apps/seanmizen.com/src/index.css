@@ -136,3 +136,16 @@ div[class^='Collapsible__contentOuter'] {
 span[class*='is-closed'] + div {
   visibility: hidden;
 }
+
+.horizontal {
+  display: flex;
+  flex-direction: row;
+}
+
+.home-left {
+  flex: 1;
+}
+
+.home-right {
+  flex: 2;
+}
