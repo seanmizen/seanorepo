@@ -20,26 +20,22 @@ const Home = ({ setIsSnowing }) => {
       <h1 alt="shaunmizen.com">seanmizen.com</h1>
       <p>developer | automator | person</p>
       <Spacer />
-      <div className="horizontal">
-        <div className="home-left">
-          <ul>
-            {subsections.map((subsection, index) => (
-              <HomeLi
-                key={index}
-                trigger={subsection.trigger}
-                subLink={subsection.subLink}
-                setIsSnowing={setIsSnowing}
-              >
-                {subsection.component}
-              </HomeLi>
-            ))}
-          </ul>
-          <Spacer />
-          <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
-        </div>
-        <div className="home-right">
-          <ShaderSean />
-        </div>
+      <ul>
+        {subsections.map((subsection, index) => (
+          <HomeLi
+            key={index}
+            trigger={subsection.trigger}
+            subLink={subsection.subLink}
+            setIsSnowing={setIsSnowing}
+          >
+            {subsection.component}
+          </HomeLi>
+        ))}
+      </ul>
+      <Spacer />
+      <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
+      <div className="shader-container">
+        <ShaderSean />
       </div>
       <ThemeToggle mode={mode} toggleMode={toggleMode} />
     </div>

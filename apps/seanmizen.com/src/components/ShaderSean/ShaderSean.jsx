@@ -26,8 +26,9 @@ const ShaderSean = () => {
     console.log("theme changed");
     rendererRef.current?.setClearColor(0x000000, 0); // canvas stays transparent
     if (materialRef.current) {
-      materialRef.current.uniforms.u_invert.value =
-        theme === "light" ? 0.0 : 1.0;
+      materialRef.current.uniforms.u_color.value.set(
+        theme === "light" ? 0x000000 : 0x99bbff
+      );
     }
   }, [theme]);
 
@@ -92,8 +93,8 @@ const ShaderSean = () => {
       u_bgTexture: velVar.material.uniforms.u_bgTexture,
       u_textureOffset: velVar.material.uniforms.u_textureOffset,
       u_texture: { value: new THREE.TextureLoader().load(particleTex) },
-      u_invert: {
-        value: theme === "light" ? 0.0 : 1.0,
+      u_color: {
+        value: new THREE.Color(theme === "light" ? 0x000000 : 0x99bbff),
       },
     };
 
