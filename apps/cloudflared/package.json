@@ -1,0 +1,6 @@
+{
+  "name": "cloudflared",
+  "scripts": {
+    "DISABLEDdown": "docker compose --profile dev --profile prod down"
+  }
+}
