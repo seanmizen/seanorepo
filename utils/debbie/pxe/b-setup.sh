@@ -156,8 +156,9 @@ echo "Configuring UFW" | tee -a "$LOG"
 sudo ufw --force reset
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp 443/tcp
+sudo ufw allow ssh
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 sudo ufw --force enable
 sudo ufw status verbose >> "$LOG"
 
@@ -202,6 +203,11 @@ sudo nmcli connection up static-ethernet || true
 sudo nmcli connection up static-wifi     || true
 
 ##############################################################################
+# nosleep
+##############################################################################
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+
+##############################################################################
 # Node 20 + Yarn
 ##############################################################################
 echo "Installing Node 20 & Yarn" | tee -a "$LOG"
@@ -230,24 +236,6 @@ sudo usermod -aG docker "$ORIG_USER"
 ##############################################################################
 echo "Installing Go" | tee -a "$LOG"
 sudo apt-get install -y golang
-
-##############################################################################
-# Zsh + Oh-My-Zsh
-##############################################################################
-echo "Installing Zsh & Oh-My-Zsh" | tee -a "$LOG"
-sudo apt-get install -y zsh
-sudo chsh -s "$(command -v zsh)" "$ORIG_USER"
-export RUNZSH=no CHSH=no
-sudo -u "$ORIG_USER" sh -c \
-  "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" || true
-sudo -u "$ORIG_USER" sed -i \
-  's/plugins=(git)/plugins=(git docker node yarn zsh-autosuggestions zsh-syntax-highlighting)/' \
-  "$USER_HOME/.zshrc"
-sudo -u "$ORIG_USER" git clone https://github.com/zsh-users/zsh-autosuggestions \
-  "${ZSH_CUSTOM:-$USER_HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" || true
-sudo -u "$ORIG_USER" git clone https://github.com/zsh-users/zsh-syntax-highlighting \
-  "${ZSH_CUSTOM:-$USER_HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" || true
-echo "Zsh setup complete" >> "$LOG"
 
 ##############################################################################
 # Clone repo & dependencies
@@ -301,8 +289,9 @@ After=network.target
 [Service]
 Type=simple
 User=srv
-ExecStartPre=/usr/bin/test -f /home/srv/seanorepo/apps/cloudflared/config.yml
-ExecStart=/usr/bin/cloudflared tunnel --config /home/srv/seanorepo/apps/cloudflared/config.yml run
+WorkingDirectory=/home/srv/projects/seanorepo/apps/cloudflared
+ExecStartPre=/usr/bin/test -f /home/srv/projects/seanorepo/apps/cloudflared/config.yml
+ExecStart=/usr/local/bin/cloudflared tunnel --config /home/srv/projects/seanorepo/apps/cloudflared/config.yml run
 Restart=on-failure
 
 [Install]
@@ -316,6 +305,40 @@ echo "Reloading systemd & enabling services" | tee -a "$LOG"
 sudo systemctl daemon-reload
 sudo systemctl enable deployment-custom.service cloudflared-custom.service
 sudo systemctl start deployment-custom.service cloudflared-custom.service
+
+##############################################################################
+# Zsh + Oh-My-Zsh
+##############################################################################
+echo "Installing Zsh & Oh-My-Zsh" | tee -a "$LOG"
+sudo apt-get install -y zsh
+sudo chsh -s "$(command -v zsh)" "$ORIG_USER"
+export RUNZSH=no CHSH=no
+sudo -u "$ORIG_USER" sh -c \
+  "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" || true
+sudo -u "$ORIG_USER" sed -i \
+  's/plugins=(git)/plugins=(git docker node yarn zsh-autosuggestions zsh-syntax-highlighting)/' \
+  "$USER_HOME/.zshrc"
+sudo -u "$ORIG_USER" git clone https://github.com/zsh-users/zsh-autosuggestions \
+  "${ZSH_CUSTOM:-$USER_HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" || true
+sudo -u "$ORIG_USER" git clone https://github.com/zsh-users/zsh-syntax-highlighting \
+  "${ZSH_CUSTOM:-$USER_HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" || true
+echo "Zsh setup complete" >> "$LOG"
+
+echo "Setting up Corepack and Yarn (user-local)" | tee -a "$LOG"
+
+# Ensure ~/.local/bin is prioritized in PATH
+if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$USER_HOME/.zshrc"; then
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$USER_HOME/.zshrc"
+fi
+if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$USER_HOME/.profile"; then
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$USER_HOME/.profile"
+fi
+
+# Enable Corepack user-locally
+sudo -u "$ORIG_USER" corepack enable --install-directory "$USER_HOME/.local/bin"
+
+# Prepare and activate exact Yarn version
+sudo -u "$ORIG_USER" corepack prepare yarn@4.8.1 --activate
 
 echo "All done at $(date)" | tee -a "$LOG"
 echo "Rebooting…" | tee -a "$LOG"

@@ -91,6 +91,11 @@ sudo nmcli connection up static-ethernet || true
 sudo nmcli connection up static-wifi     || true
 
 ##############################################################################
+# nosleep
+##############################################################################
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+
+##############################################################################
 # Node 20 + Yarn
 ##############################################################################
 echo "Installing Node 20 & Yarn" | tee -a "$LOG"
@@ -172,8 +177,9 @@ After=network.target
 [Service]
 Type=simple
 User=srv
+WorkingDirectory=/home/srv/projects/seanorepo/apps/cloudflared
 ExecStartPre=/usr/bin/test -f /home/srv/projects/seanorepo/apps/cloudflared/config.yml
-ExecStart=/usr/bin/cloudflared tunnel --config /home/srv/projects/seanorepo/apps/cloudflared/config.yml run
+ExecStart=/usr/local/bin/cloudflared tunnel --config /home/srv/projects/seanorepo/apps/cloudflared/config.yml run
 Restart=on-failure
 
 [Install]
