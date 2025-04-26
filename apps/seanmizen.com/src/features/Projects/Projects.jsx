@@ -29,7 +29,7 @@ const projectList = [
   },
   {
     linklabel: "shist",
-    description: "Super rad Shell History Tool",
+    description: "Sean's History Tool",
     href: "https://github.com/seanmizen/shist",
     arialabel: "Github URL for shist",
   },
