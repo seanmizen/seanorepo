@@ -1768,6 +1768,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cloudflared@workspace:apps/cloudflared":
+  version: 0.0.0-use.local
+  resolution: "cloudflared@workspace:apps/cloudflared"
+  languageName: unknown
+  linkType: soft
+
 "clsx@npm:^2.1.1":
   version: 2.1.1
   resolution: "clsx@npm:2.1.1"
