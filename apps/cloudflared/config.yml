@@ -1,0 +1,60 @@
+tunnel: 0f63e5e3-ee1c-425a-9916-cd037524731d
+credentials-file: ./credentials/0f63e5e3-ee1c-425a-9916-cd037524731d.json
+
+ingress:
+  - hostname: seanmizen.com
+    service: http://localhost:4000
+  - hostname: "*.seanmizen.com"
+    service: http://localhost:4000
+
+  - hostname: seanscards.com
+    path: /api/*
+    service: http://localhost:4011
+  - hostname: seanscards.com
+    service: http://localhost:4010
+  - hostname: "*.seanscards.com"
+    path: /api/*
+    service: http://localhost:4011
+  - hostname: "*.seanscards.com"
+    service: http://localhost:4010
+
+  - hostname: carolinemizen.art
+    path: /api/*
+    service: http://localhost:4021
+  - hostname: carolinemizen.art
+    service: http://localhost:4020
+  - hostname: "*.carolinemizen.art"
+    path: /api/*
+    service: http://localhost:4021
+  - hostname: "*.carolinemizen.art"
+    service: http://localhost:4020
+
+  - hostname: friendsgay.com
+    path: /api/*
+    service: http://localhost:4031
+  - hostname: friendsgay.com
+    service: http://localhost:4030
+  - hostname: "*.friendsgay.com"
+    path: /api/*
+    service: http://localhost:4031
+  - hostname: "*.friendsgay.com"
+    service: http://localhost:4030
+
+  - hostname: friendsgay.app
+    path: /api/*
+    service: http://localhost:4031
+  - hostname: friendsgay.app
+    service: http://localhost:4030
+  - hostname: "*.friendsgay.app"
+    path: /api/*
+    service: http://localhost:4031
+  - hostname: "*.friendsgay.app"
+    service: http://localhost:4030
+
+  - hostname: stealthly.seanmizen.com
+    path: /api/*
+    service: http://localhost:4091
+  - hostname: stealthly.seanmizen.com
+    service: http://localhost:4090
+
+  - service: http_status:404

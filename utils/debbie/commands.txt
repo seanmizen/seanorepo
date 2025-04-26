@@ -1,0 +1,34 @@
+## misc
+
+sqlite3 -header -csv staging.sqlite "select * from sessions;" > selectstar.csv
+
+nano .cloudflared/config.yml
+
+## daemon / service stuff 
+sudo systemctl daemon-reload
+sudo systemctl restart seanscards.service
+sudo nano /etc/systemd/system/seanscards.service
+
+systemctl list-units --type=service --state=active | grep custom
+systemctl list-units --type=service --state=active
+
+## new service
+
+sudo cp /etc/systemd/system/friendsgay-custom.service /etc/systemd/system/my-new-custom.service
+sudo nano /etc/systemd/system/my-new-custom.service
+# set log and serve location!
+
+## SSH tunnel
+cloudflared tunnel create warp-ssh-tunnel
+nano ~/.cloudflared/ssh-config.yml
+
+tunnel: <NEW_TUNNEL_UUID>
+credentials-file: /home/srv/.cloudflared/<NEW_TUNNEL_UUID>.json
+warp-routing: true
+
+ingress:
+  - hostname: ssh.seanmizen.com
+    service: ssh://localhost:22
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404
