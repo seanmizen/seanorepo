@@ -172,8 +172,8 @@ After=network.target
 [Service]
 Type=simple
 User=srv
-ExecStartPre=/usr/bin/test -f /home/srv/seanorepo/apps/cloudflared/config.yml
-ExecStart=/usr/bin/cloudflared tunnel --config /home/srv/seanorepo/apps/cloudflared/config.yml run
+ExecStartPre=/usr/bin/test -f /home/srv/projects/seanorepo/apps/cloudflared/config.yml
+ExecStart=/usr/bin/cloudflared tunnel --config /home/srv/projects/seanorepo/apps/cloudflared/config.yml run
 Restart=on-failure
 
 [Install]
