@@ -1,0 +1,7 @@
+{
+  "name": "sternboats-be",
+  "scripts": {
+    "start": "echo hello"
+  },
+  "packageManager": "yarn@4.8.1"
+}
