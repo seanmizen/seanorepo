@@ -47,6 +47,8 @@ const Home: FC<HomeProps> = () => {
             height: "100vh",
             overflow: "hidden",
             zIndex: 0,
+            pointerEvents: "none",
+            userSelect: "none",
           }}
         >
           <iframe
@@ -64,6 +66,7 @@ const Home: FC<HomeProps> = () => {
               minHeight: "56.25vw",
               border: "none",
               pointerEvents: "none",
+              userSelect: "none",
             }}
             title="WICKED FELINA Charter Yacht - 2004 Bodrum Shipyard"
           />
@@ -95,7 +98,9 @@ const Home: FC<HomeProps> = () => {
             textAlign: "center",
           }}
         >
-          <h1>Stern</h1>
+          <h1>
+            <i>Global</i> Sails
+          </h1>
           <p>Boats | Service | Charter</p>
         </div>
 
@@ -114,6 +119,7 @@ const Home: FC<HomeProps> = () => {
         </Arrow>
       </FullScreenComponent>
       <HeroLinksWrapper>
+        <h2>Website under construction - 2025-05-30</h2>
         <h2>Hero Links</h2>
         <HeroLinksRow>
           <div>hero card</div>

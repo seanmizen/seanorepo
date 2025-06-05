@@ -1,9 +1,5 @@
 import styled from "styled-components";
 
-// @media (prefers-color-scheme: light) {
-//       --link-color: #c6c9ff;  /* Soft blue for links */
-//       --link-hover-color: #9497e8;  /* Slightly darker blue for link hover */
-
 export const StyledNav = styled("nav")({
   position: "absolute",
   top: 0,
@@ -18,6 +14,9 @@ export const StyledNav = styled("nav")({
   "& a": {
     color: "#c6c9ff",
   },
+  "& a:hover": {
+    color: "white",
+  },
 
   pointerEvents: "auto",
 
@@ -26,7 +25,7 @@ export const StyledNav = styled("nav")({
     justifyContent: "space-between",
     alignItems: "center",
     gap: "2rem",
-    maxWidth: "1000px",
+    maxWidth: "1100px",
     width: "100%",
     padding: "0 2rem",
   },
