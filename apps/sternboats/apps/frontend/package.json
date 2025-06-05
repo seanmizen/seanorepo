@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "rsbuild build",
-    "start": "rsbuild dev --open"
+    "start": "rsbuild dev --open",
+    "start:noopen": "rsbuild dev --port 5010"
   },
   "dependencies": {
     "react": "^19.1.0",
