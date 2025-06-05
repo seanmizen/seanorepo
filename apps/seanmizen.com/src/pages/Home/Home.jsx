@@ -4,6 +4,7 @@ import { HomeLi, LastUpdated, Spacer, ThemeToggle } from "../../components";
 import { Donate, Github, Projects, ThisPage, Xmas } from "../../features";
 import { ThemeContext } from "../../providers/Theme";
 import { ShaderSean } from "../../components/ShaderSean";
+import { Glasto } from "../../features/Glasto";
 
 const Home = ({ setIsSnowing }) => {
   const { mode, toggleMode } = React.useContext(ThemeContext);
@@ -12,6 +13,7 @@ const Home = ({ setIsSnowing }) => {
     { component: <Projects />, trigger: "projects", subLink: "/apps" },
     { component: <Github />, trigger: "github" },
     { component: <Donate />, trigger: "donate" },
+    { component: <Glasto />, trigger: "glasto?" },
     { component: <ThisPage />, trigger: "this page" },
   ];
 
