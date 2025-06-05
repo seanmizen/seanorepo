@@ -7,7 +7,7 @@ const TopNav: FC = ({ ...props }) => (
   <StyledNav {...props}>
     <div className="container">
       <div className="left">
-        <span style={{ fontWeight: "bold" }}>LOGO</span>
+        <span style={{ fontWeight: "bold" }}>GLOBAL SAILS</span>
         <Link to={ROUTES.home.path}>Home</Link>
         <Link to={ROUTES.swatch.path}>Swatch</Link>
       </div>
