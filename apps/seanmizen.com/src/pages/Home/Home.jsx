@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 import { HomeLi, LastUpdated, Spacer, ThemeToggle } from "../../components";
 import { Donate, Github, Projects, ThisPage, Xmas } from "../../features";
@@ -13,7 +13,7 @@ const Home = ({ setIsSnowing }) => {
     { component: <Projects />, trigger: "projects", subLink: "/apps" },
     { component: <Github />, trigger: "github" },
     { component: <Donate />, trigger: "donate" },
-    { component: <Glasto />, trigger: "glasto?" },
+    { component: <Glasto />, trigger: "glasto" },
     { component: <ThisPage />, trigger: "this page" },
   ];
 

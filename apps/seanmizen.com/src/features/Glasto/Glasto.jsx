@@ -1,128 +1,160 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { MapNetwork } from "./Map";
 
 const locations = [
-  { name: "Pyramid Stage" },
-  { name: "Other Stage" },
-  { name: "John Peel Stage" },
-  { name: "The Park" },
-  { name: "West Holts" },
-  { name: "Arcadia" },
-  { name: "Green Fields" },
+  "Pyramid Stage",
+  "Other Stage",
+  "The Park",
+  "West Holts",
+  "Arcadia",
+  "Green Fields",
+  "Acoustic Stage",
+  "Silver Hayes",
+  "Shangri-La",
+  "Woodsies",
+  "William's Green",
+  "Left Field",
+  "Avalon",
+  "The Glade",
 ];
 
 const walkingTimes = {
   "Pyramid Stage-Other Stage": 10,
-  "Pyramid Stage-John Peel Stage": 12,
-  "Other Stage-West Holts": 8,
-  "The Park-Arcadia": 15,
-  "West Holts-Green Fields": 14,
-  // Add more as needed
+  "Pyramid Stage-West Holts": 8,
+  "Pyramid Stage-The Park": 15,
+  "West Holts-Arcadia": 7,
+  "Arcadia-Green Fields": 10,
+  "Shangri-La-The Park": 20,
+  "Acoustic Stage-Avalon": 5,
+  "Silver Hayes-Woodsies": 6,
+  "William's Green-Left Field": 4,
+  "Avalon-The Glade": 3,
+  // Add additional accurate times as needed
 };
 
-const getRandomLocation = (exclude = "") => {
-  let locs = locations.filter((l) => l.name !== exclude);
-  return locs[Math.floor(Math.random() * locs.length)].name;
-};
-
-const getRandomPair = () => {
-  let a = locations[Math.floor(Math.random() * locations.length)].name;
-  let b = getRandomLocation(a);
+const randomPair = () => {
+  const a = locations[Math.floor(Math.random() * locations.length)];
+  let b;
+  do {
+    b = locations[Math.floor(Math.random() * locations.length)];
+  } while (a === b);
   return [a, b];
 };
 
-const questionTypes = [
-  "stage", // e.g. "Where is the Pyramid Stage?"
-  "route", // e.g. "Fastest route between X and Y"
-  "walkTime", // e.g. "Walking time between A and B"
-];
+const getQuestion = () => {
+  const types = ["location", "route", "walkTime"];
+  const type = types[Math.floor(Math.random() * types.length)];
 
-const getRandomQuestion = () => {
-  const type = questionTypes[Math.floor(Math.random() * questionTypes.length)];
-  if (type === "stage") {
-    const stage = getRandomLocation();
+  if (type === "location") {
+    const stage = locations[Math.floor(Math.random() * locations.length)];
     return {
-      type,
       prompt: `Where is the ${stage}?`,
-      answer: `At the ${stage} area`, // Replace with real area/descriptions if needed
+      answer: `Located at the ${stage} area.`,
     };
   }
+
   if (type === "route") {
-    const [a, b] = getRandomPair();
+    const [from, to] = randomPair();
     return {
-      type,
-      prompt: `Fastest route between ${a} and ${b}?`,
-      answer: `Follow main festival paths from ${a} to ${b}`, // Replace with real route logic
+      prompt: `Fastest route from ${from} to ${to}?`,
+      answer: `Use main paths from ${from} toward ${to}.`,
     };
   }
-  if (type === "walkTime") {
-    const [a, b] = getRandomPair();
-    const key = `${a}-${b}`;
-    const revKey = `${b}-${a}`;
-    const time = walkingTimes[key] || walkingTimes[revKey] || "unknown";
-    return {
-      type,
-      prompt: `Walking time between ${a} and ${b}?`,
-      answer: typeof time === "number" ? `${time} min` : time,
-    };
-  }
+
+  const [a, b] = randomPair();
+  const key = `${a}-${b}`;
+  const revKey = `${b}-${a}`;
+  const time = walkingTimes[key] || walkingTimes[revKey] || "Unknown";
+
+  return {
+    prompt: `Walking time between ${a} and ${b}?`,
+    answer: typeof time === "number" ? `${time} minutes` : time,
+  };
 };
 
 const Glasto = () => {
-  const [q, setQ] = useState(getRandomQuestion());
+  const [current, setCurrent] = useState(getQuestion());
   const [showAnswer, setShowAnswer] = useState(false);
 
-  const next = () => {
-    setQ(getRandomQuestion());
-    setShowAnswer(false);
+  const nextCard = () => {
+    setCurrent(getQuestion());
+    // setShowAnswer(false);
   };
 
   return (
     <div
       style={{
-        maxWidth: 440,
-        margin: "2em auto",
-        padding: 20,
-        borderRadius: 12,
-        boxShadow: "0 4px 18px #ccc",
-        fontFamily: "sans-serif",
+        // maxWidth: 480,
+        margin: "2rem auto",
+        padding: "1.5rem",
+        borderRadius: "12px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
         background: "#fff",
+        fontFamily: "sans-serif",
       }}
     >
-      <h2 style={{ marginBottom: 20 }}>Glastonbury Flashcards</h2>
-      <div style={{ fontSize: 20, minHeight: 60, marginBottom: 20 }}>
-        {q.prompt}
+      <h2 style={{ marginBottom: "1rem", fontSize: "1.5rem" }}>
+        Glastonbury Flashcards
+      </h2>
+
+      <div style={{ fontSize: "1.2rem", marginBottom: "1rem" }}>
+        {current.prompt}
       </div>
+
       <button
-        onClick={() => setShowAnswer(true)}
+        onClick={() => setShowAnswer(!showAnswer)}
         style={{
-          padding: "8px 18px",
-          borderRadius: 8,
+          padding: "8px 16px",
+          borderRadius: "8px",
           border: "none",
           background: "#333",
           color: "#fff",
-          marginRight: 12,
+          cursor: "pointer",
+          marginRight: "10px",
         }}
-        disabled={showAnswer}
       >
-        Show Answer
+        Toggle Answer
       </button>
+
       <button
-        onClick={next}
+        onClick={nextCard}
         style={{
-          padding: "8px 18px",
-          borderRadius: 8,
+          padding: "8px 16px",
+          borderRadius: "8px",
           border: "none",
-          background: "#eee",
+          background: "#ddd",
           color: "#333",
+          cursor: "pointer",
         }}
       >
         Next
       </button>
+
       {showAnswer && (
-        <div style={{ marginTop: 28, fontSize: 18, color: "#31773b" }}>
-          {q.answer}
+        <div
+          style={{ marginTop: "1rem", color: "#31773b", fontSize: "1.2rem" }}
+        >
+          {current.answer}
+          <MapNetwork />
         </div>
       )}
+
+      {/* <div style={{ marginTop: "1.5rem" }}>
+        <img
+          src="https://camptriangle.co.uk/__data/assets/image/0016/4615/Glastonbury-Access_map_2025_V5-with-CT.png"
+          alt="Glastonbury Festival Map"
+          style={{
+            maxWidth: "100%",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          }}
+        />
+        <div
+          style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#555" }}
+        >
+          Map integration coming soon!
+        </div>
+      </div> */}
     </div>
   );
 };
