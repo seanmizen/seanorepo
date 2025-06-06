@@ -1,4 +1,5 @@
 import { Glasto } from "./features/Glasto";
+import { MapNetwork } from "./features/Glasto/Map";
 import "./index.css";
 
 import { Apps, Home } from "./pages";
@@ -27,7 +28,7 @@ const App = () => {
       <Router basename={"/"}>
         <Routes>
           <Route path="/apps" element={<Apps />} />
-          <Route path="/glasto" element={<Glasto />} />
+          <Route path="/glasto" element={<MapNetwork />} />
           <Route path="/*" element={<Home setIsSnowing={() => {}} />} />
         </Routes>
       </Router>
