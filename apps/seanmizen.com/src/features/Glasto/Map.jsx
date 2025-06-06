@@ -37,6 +37,16 @@ const Popover = ({ x, y, children }) => (
   </foreignObject>
 );
 
+const generateUniqueId = (existing) => {
+  let id;
+  do {
+    id = "node" + Math.random().toString(36).slice(2, 10);
+  } while (existing[id]);
+  return id;
+};
+
+const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
 const MapNetwork = () => {
   const loadData = () => {
     const stored = localStorage.getItem("glastoMapData");
@@ -52,8 +62,8 @@ const MapNetwork = () => {
   const [hover, setHover] = useState(null);
   const [activeNode, setActiveNode] = useState(null);
   const [selectedEdgeIndex, setSelectedEdgeIndex] = useState(null);
+  const [zen, setZen] = useState(false);
   const svgRef = useRef(null);
-  const nodeIdRef = useRef(1000);
   const dragNode = useRef(null);
 
   useEffect(() => {
@@ -77,16 +87,16 @@ const MapNetwork = () => {
     const rect = svgRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const id = `node${nodeIdRef.current++}`;
+    const id = generateUniqueId(nodes);
 
     setNodes((prev) => ({ ...prev, [id]: { x, y } }));
-
     if (activeNode) {
       setEdges((prev) => [...prev, { from: activeNode, to: id }]);
     }
 
     setActiveNode(id);
     setSelectedEdgeIndex(null);
+    setZen(true);
   };
 
   const deleteNode = (id) => {
@@ -103,6 +113,7 @@ const MapNetwork = () => {
       setEdges((prev) => [...prev, { from: activeNode, to: id }]);
     }
 
+    setZen(false);
     setActiveNode((prev) => (prev === id ? null : id));
     setSelectedEdgeIndex(null);
   };
@@ -119,8 +130,9 @@ const MapNetwork = () => {
   const handleMouseMove = (e) => {
     if (!editMode || !dragNode.current) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = clamp(e.clientX - rect.left, 0, rect.width);
+    const y = clamp(e.clientY - rect.top, 0, rect.height);
+
     setNodes((prev) => ({
       ...prev,
       [dragNode.current]: { ...prev[dragNode.current], x, y },
@@ -142,20 +154,17 @@ const MapNetwork = () => {
     }));
   };
 
-  // delete selected node
   useEffect(() => {
     const handleKeyDown = (e) => {
-      const isBackspace = e.key === "Backspace";
-      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
-
-      if (!editMode || !isBackspace || !isCmdOrCtrl) return;
+      if (!editMode || !(e.metaKey || e.ctrlKey) || e.key !== "Backspace")
+        return;
 
       e.preventDefault();
 
       if (activeNode) {
         deleteNode(activeNode);
       } else if (selectedEdgeIndex !== null) {
-        setEdges((prev) => prev.filter((_, idx) => idx !== selectedEdgeIndex));
+        setEdges((prev) => prev.filter((_, i) => i !== selectedEdgeIndex));
         setSelectedEdgeIndex(null);
       }
     };
@@ -165,15 +174,19 @@ const MapNetwork = () => {
   }, [editMode, activeNode, selectedEdgeIndex]);
 
   return (
-    <div style={{ position: "relative", width: 600, margin: "auto" }}>
-      <button
-        onClick={() => setEditMode((prev) => !prev)}
-        style={{ marginRight: 8 }}
-      >
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        maxWidth: 800,
+        margin: "auto",
+      }}
+    >
+      <button onClick={() => setEditMode((p) => !p)} style={{ marginRight: 8 }}>
         {editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
       </button>
       <button
-        onClick={() => setShowPopovers((prev) => !prev)}
+        onClick={() => setShowPopovers((p) => !p)}
         style={{ marginRight: 8 }}
       >
         {showPopovers ? "Hide Popovers" : "Show Popovers"}
@@ -190,13 +203,23 @@ const MapNetwork = () => {
         <img
           src="https://camptriangle.co.uk/__data/assets/image/0016/4615/Glastonbury-Access_map_2025_V5-with-CT.png"
           alt="Glastonbury Map"
-          style={{ width: "100%", pointerEvents: "none" }}
+          style={{
+            width: "100%",
+            display: "block",
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
         />
         <svg
           ref={svgRef}
-          style={{ position: "absolute", top: 0, left: 0 }}
-          width="100%"
-          height={600}
+          viewBox="0 0 600 600"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+          }}
           onClick={handleSvgClick}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -209,13 +232,13 @@ const MapNetwork = () => {
             const time = dist * TIME_COEFF;
             const midX = (a.x + b.x) / 2;
             const midY = (a.y + b.y) / 2;
-
             const isActive = selectedEdgeIndex === idx;
 
             const shouldShow =
-              showPopovers ||
-              (hover?.type === "edge" && hover.idx === idx) ||
-              (editMode && isActive);
+              !zen &&
+              (showPopovers ||
+                (hover?.type === "edge" && hover.idx === idx) ||
+                (editMode && isActive));
 
             return (
               <g
@@ -225,8 +248,10 @@ const MapNetwork = () => {
                   e.stopPropagation();
                   setSelectedEdgeIndex(idx);
                   setActiveNode(null);
+                  setZen(false);
                 }}
                 onMouseEnter={() =>
+                  !zen &&
                   setHover({
                     type: "edge",
                     x: midX,
@@ -237,7 +262,7 @@ const MapNetwork = () => {
                     time,
                   })
                 }
-                onMouseLeave={() => setHover(null)}
+                onMouseLeave={() => !zen && setHover(null)}
                 style={{ cursor: editMode ? "pointer" : "default" }}
               >
                 <line
@@ -275,6 +300,7 @@ const MapNetwork = () => {
               <g
                 key={id}
                 onMouseEnter={() =>
+                  !zen &&
                   setHover({
                     type: "node",
                     x: node.x,
@@ -283,7 +309,7 @@ const MapNetwork = () => {
                     name: node.name,
                   })
                 }
-                onMouseLeave={() => setHover(null)}
+                onMouseLeave={() => !zen && setHover(null)}
               >
                 <circle
                   cx={node.x}
@@ -298,37 +324,38 @@ const MapNetwork = () => {
                   onMouseDown={() => handleMouseDown(id)}
                   onClick={(e) => handleNodeClick(e, id)}
                 />
-                {(showPopovers ||
-                  (hover?.type === "node" && hover.id === id) ||
-                  (editMode && activeNode === id)) && (
-                  <Popover x={node.x} y={node.y}>
-                    <div>
-                      {editMode && activeNode === id ? (
-                        <input
-                          type="text"
-                          value={node.name || ""}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => updateNodeName(id, e.target.value)}
-                          placeholder="Node name"
-                          style={{ width: "100%", marginTop: 4 }}
-                        />
-                      ) : (
-                        <div>{node.name || id}</div>
-                      )}
-                      {editMode && activeNode === id && (
-                        <button
-                          style={{ fontSize: 10, marginTop: 4 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteNode(id);
-                          }}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </Popover>
-                )}
+                {!zen &&
+                  (showPopovers ||
+                    (hover?.type === "node" && hover.id === id) ||
+                    (editMode && activeNode === id)) && (
+                    <Popover x={node.x} y={node.y}>
+                      <div>
+                        {editMode && activeNode === id ? (
+                          <input
+                            type="text"
+                            value={node.name || ""}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => updateNodeName(id, e.target.value)}
+                            placeholder="Node name"
+                            style={{ width: "100%", marginTop: 4 }}
+                          />
+                        ) : (
+                          <div>{node.name || id}</div>
+                        )}
+                        {editMode && activeNode === id && (
+                          <button
+                            style={{ fontSize: 10, marginTop: 4 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNode(id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </Popover>
+                  )}
               </g>
             ) : null
           )}
