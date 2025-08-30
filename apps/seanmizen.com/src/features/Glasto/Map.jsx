@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const TIME_COEFF = 1.5 / 100;
 
@@ -20,7 +20,7 @@ const distanceBetween = (a, b) =>
   Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 
 const Popover = ({ x, y, children }) => (
-  <foreignObject x={x + 10} y={y - 36} width={220} height={240}>
+  <foreignObject x={x + 10} y={y - 36} width={220} height={100}>
     <div
       style={{
         userSelect: "none",
@@ -42,12 +42,12 @@ const MapNetwork = () => {
   const svgRef = useRef(null);
   const dragNode = useRef(null);
   const dragOffset = useRef({});
+  const selectionStart = useRef(null);
 
   const [nodes, setNodes] = useState(() => {
     const stored = localStorage.getItem("glastoMapData");
     return stored ? JSON.parse(stored).nodes : initialNodes;
   });
-
   const [edges, setEdges] = useState(() => {
     const stored = localStorage.getItem("glastoMapData");
     return stored ? JSON.parse(stored).edges : initialEdges;
@@ -60,9 +60,7 @@ const MapNetwork = () => {
   const [selectedEdgeIndex, setSelectedEdgeIndex] = useState(null);
   const [zen, setZen] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState(new Set());
-
   const [selectionBox, setSelectionBox] = useState(null);
-  const selectionStart = useRef(null);
 
   useEffect(() => {
     localStorage.setItem("glastoMapData", JSON.stringify({ nodes, edges }));
@@ -76,7 +74,9 @@ const MapNetwork = () => {
     return id;
   };
 
+  // Main SVG click handler: shift+click node or empty space
   const handleSvgClick = (e) => {
+    console.log("svgclick!", activeNode);
     if (!editMode || !e.shiftKey) {
       setActiveNode(null);
       setSelectedEdgeIndex(null);
@@ -84,14 +84,14 @@ const MapNetwork = () => {
       return;
     }
 
+    // Only create a new node if not clicking on an existing node.
+    // Node clicks will stop propagation, so this only fires for the SVG bg.
     const rect = svgRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
     const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-
     const id = generateNodeId();
 
     setNodes((prev) => ({ ...prev, [id]: { x, y } }));
-
     if (activeNode) {
       setEdges((prev) => [...prev, { from: activeNode, to: id }]);
     }
@@ -102,46 +102,45 @@ const MapNetwork = () => {
     setZen(true);
   };
 
+  // Node click: just select (no shift), or create edge if shift+click with active node
   const handleNodeClick = (e, id) => {
     e.stopPropagation();
     if (!editMode) return;
 
     if (e.shiftKey && activeNode && activeNode !== id) {
+      console.log("setting edge");
       setEdges((prev) => [...prev, { from: activeNode, to: id }]);
+      return;
     }
 
-    setZen(false);
+    // If not shift, set activeNode
     setActiveNode(id);
     setSelectedEdgeIndex(null);
     setSelectedNodes(new Set([id]));
-  };
-
-  const deleteNode = (id) => {
-    setNodes(({ [id]: _, ...rest }) => rest);
-    setEdges((prev) => prev.filter((e) => e.from !== id && e.to !== id));
-    setActiveNode(null);
+    setZen(false);
   };
 
   const handleMouseDown = (e, id = null) => {
     if (!editMode) return;
+    console.log("handleMouseDown", id);
+
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     if (id) {
       const isSelected = selectedNodes.has(id);
       const dragSet = isSelected ? selectedNodes : new Set([id]);
-      dragNode.current = dragSet;
+      dragNode.current = new Set(dragSet);
       dragOffset.current = {};
-      const rect = svgRef.current.getBoundingClientRect();
       for (const nodeId of dragSet) {
         const node = nodes[nodeId];
         dragOffset.current[nodeId] = {
-          dx: e.clientX - rect.left - node.x,
-          dy: e.clientY - rect.top - node.y,
+          dx: x - node.x,
+          dy: y - node.y,
         };
       }
     } else {
-      const rect = svgRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
       selectionStart.current = { x, y };
       setSelectionBox({ x1: x, y1: y, x2: x, y2: y });
     }
@@ -157,7 +156,11 @@ const MapNetwork = () => {
         const updated = { ...prev };
         for (const id of dragNode.current) {
           const { dx, dy } = dragOffset.current[id];
-          updated[id] = { ...updated[id], x: x - dx, y: y - dy };
+          updated[id] = {
+            ...updated[id],
+            x: Math.max(0, Math.min(rect.width, x - dx)),
+            y: Math.max(0, Math.min(rect.height, y - dy)),
+          };
         }
         return updated;
       });
@@ -345,8 +348,10 @@ const MapNetwork = () => {
 
           {Object.entries(nodes).map(([id, node]) => {
             const active = activeNode === id || selectedNodes.has(id);
+            // Hide popovers if multiselect is active
             const showPopover =
               !zen &&
+              selectedNodes.size <= 1 &&
               (showPopovers ||
                 active ||
                 (hover?.type === "node" && hover.id === id));
