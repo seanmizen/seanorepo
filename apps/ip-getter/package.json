@@ -1,0 +1,8 @@
+{
+  "name": "ip-getter",
+  "packageManager": "yarn@4.8.1",
+  "dependencies": {
+    "@types/nodemailer": "^7.0.2",
+    "nodemailer": "^7.0.6"
+  }
+}

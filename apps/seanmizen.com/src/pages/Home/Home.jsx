@@ -1,12 +1,18 @@
-import React, { useEffect } from "react";
+import React from "react";
 
 import { HomeLi, LastUpdated, Spacer, ThemeToggle } from "../../components";
 import { Donate, Github, Projects, ThisPage, Xmas } from "../../features";
 import { ThemeContext } from "../../providers/Theme";
 import { ShaderSean } from "../../components/ShaderSean";
+import { useKeySequence } from "../../hooks";
 
 const Home = ({ setIsSnowing }) => {
   const { mode, toggleMode } = React.useContext(ThemeContext);
+
+  useKeySequence({
+    ssh: () => alert("SSH sequence detected!"),
+    poop: () => alert("oops, poop!"),
+  });
 
   const subsections = [
     { component: <Projects />, trigger: "projects", subLink: "/apps" },
