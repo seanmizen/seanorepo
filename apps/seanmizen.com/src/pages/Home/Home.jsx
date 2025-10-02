@@ -1,16 +1,23 @@
-import React from "react";
+import { useState, useContext } from "react";
 
-import { HomeLi, LastUpdated, Spacer, ThemeToggle } from "../../components";
+import {
+  HomeLi,
+  LastUpdated,
+  Spacer,
+  ThemeToggle,
+  SSHModal,
+} from "../../components";
 import { Donate, Github, Projects, ThisPage, Xmas } from "../../features";
 import { ThemeContext } from "../../providers/Theme";
 import { ShaderSean } from "../../components/ShaderSean";
 import { useKeySequence } from "../../hooks";
 
 const Home = ({ setIsSnowing }) => {
-  const { mode, toggleMode } = React.useContext(ThemeContext);
+  const { mode, toggleMode } = useContext(ThemeContext);
+  const [isSSHModalOpen, setIsSSHModalOpen] = useState(false);
 
   useKeySequence({
-    ssh: () => alert("SSH sequence detected!"),
+    ssh: () => setIsSSHModalOpen(true),
     poop: () => alert("oops, poop!"),
   });
 
@@ -44,6 +51,10 @@ const Home = ({ setIsSnowing }) => {
         <ShaderSean />
       </div>
       <ThemeToggle mode={mode} toggleMode={toggleMode} />
+      <SSHModal
+        isOpen={isSSHModalOpen}
+        onClose={() => setIsSSHModalOpen(false)}
+      />
     </div>
   );
 };

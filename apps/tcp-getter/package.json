@@ -1,0 +1,14 @@
+{
+  "name": "tcp-getter",
+  "packageManager": "yarn@4.8.1",
+  "scripts": {
+    "start": "bun --hot --no-clear-screen index.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.1.0",
+    "@types/nodemailer": "^7.0.2",
+    "fastify": "^5.6.1",
+    "nodemailer": "^7.0.6"
+  }
+}

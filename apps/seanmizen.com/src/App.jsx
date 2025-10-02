@@ -5,6 +5,9 @@ import "./index.css";
 import { Apps, Home } from "./pages";
 import { ThemeProvider } from "./providers/Theme";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
 // I'm on a really good streak of github contributions, so I'm going to keep it going
 // by adding this comment. I'm not sure what else to say, so I'll just say that I'm
 // really excited to be working on this project. I'm learning a lot about React and
@@ -23,16 +26,18 @@ import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 
 const App = () => {
   return (
-    <ThemeProvider>
-      {/* <Router basename={process.env.REACT_APP_BASENAME}> */}
-      <Router basename={"/"}>
-        <Routes>
-          <Route path="/apps" element={<Apps />} />
-          <Route path="/glasto" element={<MapNetwork />} />
-          <Route path="/*" element={<Home setIsSnowing={() => {}} />} />
-        </Routes>
-      </Router>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        {/* <Router basename={process.env.REACT_APP_BASENAME}> */}
+        <Router basename={"/"}>
+          <Routes>
+            <Route path="/apps" element={<Apps />} />
+            <Route path="/glasto" element={<MapNetwork />} />
+            <Route path="/*" element={<Home setIsSnowing={() => {}} />} />
+          </Routes>
+        </Router>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 };
 
