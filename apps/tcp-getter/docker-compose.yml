@@ -8,6 +8,8 @@ x-tcp-getter-base: &tcp-getter-base
     target: ${BUILD_TARGET:-dev}
   ports:
     - "4120:4120"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
 
 services:
   tcp-getter:
