@@ -3,6 +3,9 @@ credentials-file: ./credentials/0f63e5e3-ee1c-425a-9916-cd037524731d.json
 
 ingress:
   - hostname: seanmizen.com
+    path: /tcp/*
+    service: http://localhost:4120
+  - hostname: seanmizen.com
     service: http://localhost:4000
   - hostname: "*.seanmizen.com"
     service: http://localhost:4000
