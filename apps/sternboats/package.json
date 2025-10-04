@@ -6,7 +6,7 @@
   "scripts": {
     "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace sternboats-fe start\" \"yarn workspace sternboats-be start\"",
     "start:dockerDISABLED": "docker compose --profile dev up --build",
-    "prod:docker": "yarn workspace sternboats-fe build && BUILD_TARGET=prod docker compose --profile prod up --build --detach",
+    "prod:dockerDISABLED": "yarn workspace sternboats-fe build && BUILD_TARGET=prod docker compose --profile prod up --build --detach",
     "down": "docker compose --profile dev --profile prod down"
   },
   "packageManager": "yarn@4.8.1",
