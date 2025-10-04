@@ -2564,24 +2564,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tanstack/query-core@npm:5.90.2":
-  version: 5.90.2
-  resolution: "@tanstack/query-core@npm:5.90.2"
-  checksum: 10c0/695a7450b0bb9f6dd21bebeacfc962dfc886631a3b3a13c33a842ef719b4c3dd30c15febe8c1ade6902a85e0f387c51a97570f430cc8f5c7032ff737d6410597
-  languageName: node
-  linkType: hard
-
-"@tanstack/react-query@npm:^5.90.2":
-  version: 5.90.2
-  resolution: "@tanstack/react-query@npm:5.90.2"
-  dependencies:
-    "@tanstack/query-core": "npm:5.90.2"
-  peerDependencies:
-    react: ^18 || ^19
-  checksum: 10c0/22e76626a59890409858521b0e42b49219126a4ea5ed79eaa48a267959175dfdd28b30b9b03a415dccf703d95c18100a9d8917679818f6d2adc26d6c5f96a4d6
-  languageName: node
-  linkType: hard
-
 "@tybys/wasm-util@npm:^0.10.1":
   version: 0.10.1
   resolution: "@tybys/wasm-util@npm:0.10.1"
@@ -3913,18 +3895,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ip-getter@workspace:apps/ip-getter":
-  version: 0.0.0-use.local
-  resolution: "ip-getter@workspace:apps/ip-getter"
-  dependencies:
-    "@fastify/cookie": "npm:^11.0.2"
-    "@fastify/cors": "npm:^11.1.0"
-    "@types/nodemailer": "npm:^7.0.2"
-    fastify: "npm:^5.6.1"
-    nodemailer: "npm:^7.0.6"
-  languageName: unknown
-  linkType: soft
-
 "ipaddr.js@npm:^2.1.0":
   version: 2.2.0
   resolution: "ipaddr.js@npm:2.2.0"
@@ -4923,7 +4893,6 @@ __metadata:
   dependencies:
     "@rsbuild/core": "npm:^1.5.13"
     "@rsbuild/plugin-react": "npm:^1.4.1"
-    "@tanstack/react-query": "npm:^5.90.2"
     number-to-words: "npm:^1.2.4"
     react: "npm:^19.1.0"
     react-collapsible: "npm:^2.10.0"
@@ -5425,6 +5394,18 @@ __metadata:
   checksum: 10c0/d4679609bb2a9b48eeaf84632b6d844128d2412b95b6de07d53d8ee8baf4ca0857c9331dfa510390a0727b550fd543d4d1a10995ad86cdf078423fbb8d99831d
   languageName: node
   linkType: hard
+
+"tcp-getter@workspace:apps/tcp-getter":
+  version: 0.0.0-use.local
+  resolution: "tcp-getter@workspace:apps/tcp-getter"
+  dependencies:
+    "@fastify/cookie": "npm:^11.0.2"
+    "@fastify/cors": "npm:^11.1.0"
+    "@types/nodemailer": "npm:^7.0.2"
+    fastify: "npm:^5.6.1"
+    nodemailer: "npm:^7.0.6"
+  languageName: unknown
+  linkType: soft
 
 "thread-stream@npm:^3.0.0":
   version: 3.1.0

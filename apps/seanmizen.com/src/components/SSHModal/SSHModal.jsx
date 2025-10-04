@@ -1,13 +1,25 @@
-import React, { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
 import styles from "./SSHModal.module.css";
+
+const SITE_BASE_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:4120"
+    : "https://seanmizen.com/tcp";
 
 const SSHModal = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [isError, setIsError] = useState(false);
 
-  const sendSSHMutation = useMutation({
-    mutationFn: async (email) => {
-      const response = await fetch("http://localhost:3001/send-ssh", {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setIsSuccess(false);
+    setIsError(false);
+
+    try {
+      const response = await fetch(`${SITE_BASE_URL}/send-ssh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -15,13 +27,13 @@ const SSHModal = ({ isOpen, onClose }) => {
       if (!response.ok) {
         throw new Error("Failed to send SSH details");
       }
-      return response.json();
-    },
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    sendSSHMutation.mutate(email);
+      await response.json();
+      setIsSuccess(true);
+    } catch (error) {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBackdropClick = (e) => {
@@ -57,21 +69,21 @@ const SSHModal = ({ isOpen, onClose }) => {
             />
             <button
               type="submit"
-              disabled={sendSSHMutation.isPending}
+              disabled={isLoading}
               className={styles.button}
             >
-              {sendSSHMutation.isPending ? "Sending..." : "Send SSH Details"}
+              {isLoading ? "Sending..." : "Send SSH Details"}
             </button>
           </form>
 
-          {sendSSHMutation.isSuccess && (
+          {isSuccess && (
             <p className={styles.success}>
               ✓ Request submitted! If your email is whitelisted, you'll receive
               connection details shortly.
             </p>
           )}
 
-          {sendSSHMutation.isError && (
+          {isError && (
             <p className={styles.error}>
               Failed to send SSH details. Please try again.
             </p>

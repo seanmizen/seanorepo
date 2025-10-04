@@ -11,6 +11,7 @@ const NGROK_API_URL =
   process.env.NGROK_API_URL || "http://127.0.0.1:4040/api/tunnels";
 const EMAIL_WHITELIST =
   process.env.EMAIL_WHITELIST?.split(",").map((e) => e.trim()) || [];
+const MOCK_TCP_TUNNEL = process.env.MOCK_TCP_TUNNEL === "true";
 
 interface NgrokTunnel {
   proto: string;
@@ -22,6 +23,7 @@ interface NgrokResponse {
 }
 
 const getTcpTunnelUrl = async (): Promise<{ host: string; port: string }> => {
+  if (MOCK_TCP_TUNNEL) return { host: "6.tcp.eu.ngrok.io", port: "19931" };
   try {
     const response = await fetch(NGROK_API_URL);
     const data = (await response.json()) as NgrokResponse;
