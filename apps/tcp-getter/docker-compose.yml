@@ -7,7 +7,7 @@ x-tcp-getter-base: &tcp-getter-base
     dockerfile: apps/tcp-getter/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4120:3001"
+    - "4120:4120"
 
 services:
   tcp-getter:
