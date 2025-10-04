@@ -122,6 +122,17 @@ async function start() {
     }
   });
 
+  // without manually listening for interrupts, this hangs in docker.
+  process.on("SIGINT", async () => {
+    await fastify.close();
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", async () => {
+    await fastify.close();
+    process.exit(0);
+  });
+
   await fastify.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`tcp-getter running on port ${PORT}`);
 }
