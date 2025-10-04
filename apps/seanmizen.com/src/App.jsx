@@ -1,10 +1,10 @@
-import { Glasto } from "./features/Glasto";
 import { MapNetwork } from "./features/Glasto/Map";
 import "./index.css";
 
 import { Apps, Home } from "./pages";
 import { ThemeProvider } from "./providers/Theme";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+
 // I'm on a really good streak of github contributions, so I'm going to keep it going
 // by adding this comment. I'm not sure what else to say, so I'll just say that I'm
 // really excited to be working on this project. I'm learning a lot about React and
