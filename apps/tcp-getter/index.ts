@@ -118,6 +118,7 @@ async function start() {
       console.error("Error sending SSH email:", error);
       return res.status(500).send({
         error: "Failed to send SSH details",
+        message: (error as Error)?.message,
       });
     }
   });
