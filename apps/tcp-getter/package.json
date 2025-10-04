@@ -3,9 +3,11 @@
   "packageManager": "yarn@4.8.1",
   "scripts": {
     "start": "bun --hot --no-clear-screen index.ts",
-    "start:docker": "docker compose --profile dev up --build",
-    "prod:docker": "docker compose --profile prod up --build --detach",
-    "down": "docker compose --profile dev --profile prod down"
+    "DISABLEDstart:docker": "docker compose --profile dev up --build",
+    "DISABLEDprod:docker": "docker compose --profile prod up --build --detach",
+    "down": "docker compose --profile dev --profile prod down",
+    "build": "bun build index.ts --outdir dist --target bun",
+    "prod": "NODE_ENV=production bun dist/index.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
