@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import styles from "./SSHModal.module.css";
 
 const SITE_BASE_URL =
@@ -11,6 +11,13 @@ const SSHModal = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isError, setIsError] = useState(false);
+  const focusRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && focusRef.current) {
+      focusRef.current.focus();
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,7 +54,7 @@ const SSHModal = ({ isOpen, onClose }) => {
   return (
     <div className={styles.backdrop} onClick={handleBackdropClick}>
       <div className={styles.modal}>
-        <button className={styles.closeButton} onClick={onClose}>
+        <button ref={focusRef} className={styles.closeButton} onClick={onClose}>
           x
         </button>
 
