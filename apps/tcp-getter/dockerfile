@@ -3,9 +3,8 @@ WORKDIR /app
 COPY apps/tcp-getter/package.json .
 RUN bun install --production
 
-
 FROM deps AS dev
-CMD ["bun", "--hot", "--no-clear-screen", "/app/index.ts"]
+CMD ["bun", "--hot", "--no-clear-screen", "/app/apps/tcp-getter/index.ts"]
 
 FROM deps AS prod-build
 COPY apps/tcp-getter ./src
@@ -16,4 +15,4 @@ WORKDIR /app
 COPY --from=prod-build /app/dist ./dist
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/tcp-getter/package.json .
-CMD ["bun", "./dist/index.ts"]
+CMD ["bun", "./dist/index.js"]

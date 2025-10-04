@@ -65,8 +65,12 @@ async function start() {
   });
 
   await fastify.register(fastifyCors, {
-    origin: SITE_BASE_URL,
+    origin: SITE_BASE_URL || true,
     credentials: true,
+  });
+
+  fastify.get("/ping", async (req, res) => {
+    res.send({ ok: true, timestamp: Date.now() });
   });
 
   fastify.post("/send-ssh", async (req, res) => {
@@ -116,8 +120,8 @@ async function start() {
     }
   });
 
-  await fastify.listen({ port: PORT });
-  console.log("tcp-getter running on port 3001");
+  await fastify.listen({ port: PORT, host: "0.0.0.0" });
+  console.log(`tcp-getter running on port ${PORT}`);
 }
 
 start();
