@@ -1,7 +1,7 @@
 x-tcp-getter-base: &tcp-getter-base
   container_name: tcp-getter-sm
   build:
-    context: ../..\
+    context: ../..
     dockerfile: apps/tcp-getter/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
@@ -10,6 +10,10 @@ x-tcp-getter-base: &tcp-getter-base
 services:
   tcp-getter:
     <<: *tcp-getter-base
+    build:
+      context: ../..
+      dockerfile: apps/tcp-getter/dockerfile
+      target: prod
     profiles: ["prod"]
 
   tcp-getter-dev:
