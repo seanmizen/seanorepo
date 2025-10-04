@@ -4,11 +4,11 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "start": "rsbuild dev --open",
-    "start:noopen": "yarn exec rsbuild dev --port 4000",
+    "start": "yarn dlx @rsbuild/core dev --open",
+    "start:noopen": "yarn dlx @rsbuild/core dev --port 4000",
     "start:docker": "docker compose --profile dev up --build",
     "prod:docker": "yarn build && BUILD_TARGET=prod docker compose --profile prod up --build --detach",
-    "build": "rsbuild build",
+    "build": "yarn dlx @rsbuild/core build",
     "down": "docker compose --profile dev --profile prod down"
   },
   "dependencies": {
