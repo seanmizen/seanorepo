@@ -1,0 +1,19 @@
+FROM oven/bun:latest AS deps
+WORKDIR /app
+COPY apps/tcp-getter/package.json .
+RUN bun install --production
+
+
+FROM deps AS dev
+CMD ["bun", "--hot", "--no-clear-screen", "/app/index.ts"]
+
+FROM deps AS prod-build
+COPY apps/tcp-getter ./src
+RUN bun build ./src/index.ts --target=bun --outfile ./dist/index.js
+
+FROM oven/bun:latest AS prod
+WORKDIR /app
+COPY --from=prod-build /app/dist ./dist
+COPY --from=deps /app/node_modules ./node_modules
+COPY apps/tcp-getter/package.json .
+CMD ["bun", "./dist/index.ts"]
