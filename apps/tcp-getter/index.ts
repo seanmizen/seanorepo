@@ -71,11 +71,11 @@ async function start() {
     credentials: true,
   });
 
-  fastify.get("/ping", async (req, res) => {
+  fastify.get("/tcp/ping", async (req, res) => {
     res.send({ ok: true, timestamp: Date.now() });
   });
 
-  fastify.post("/send-ssh", async (req, res) => {
+  fastify.post("/tcp/send-ssh", async (req, res) => {
     const { email } = req.body as { email?: string };
 
     if (!email) {
