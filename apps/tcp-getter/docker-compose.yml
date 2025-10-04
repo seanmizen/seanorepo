@@ -1,4 +1,6 @@
 x-tcp-getter-base: &tcp-getter-base
+  env_file:
+    - .env
   container_name: tcp-getter-sm
   build:
     context: ../..
