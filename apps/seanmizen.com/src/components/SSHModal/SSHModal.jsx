@@ -19,6 +19,22 @@ const SSHModal = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    const handleEscKey = (e) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      window.addEventListener("keydown", handleEscKey);
+    }
+
+    return () => {
+      window.removeEventListener("keydown", handleEscKey);
+    };
+  }, [isOpen, onClose]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
