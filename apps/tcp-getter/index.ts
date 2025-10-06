@@ -4,7 +4,7 @@ import fastifyCors from "@fastify/cors";
 
 const SITE_BASE_URL = process.env.SITE_BASE_URL;
 const SSH_USERNAME = process.env.SSH_USERNAME;
-const PORT = Number(process.env.PORT) || 3001;
+const PORT = Number(process.env.PORT);
 const MAIL_USERNAME = process.env.MAIL_USERNAME;
 const MAIL_PASSWORD = process.env.MAIL_PASSWORD;
 const NGROK_API_URL =
@@ -12,6 +12,27 @@ const NGROK_API_URL =
 const EMAIL_WHITELIST =
   process.env.EMAIL_WHITELIST?.split(",").map((e) => e.trim()) || [];
 const MOCK_TCP_TUNNEL = process.env.MOCK_TCP_TUNNEL === "true";
+
+function validateEnvVars() {
+  const required = {
+    SITE_BASE_URL,
+    SSH_USERNAME,
+    PORT,
+    MAIL_USERNAME,
+    MAIL_PASSWORD,
+    EMAIL_WHITELIST: EMAIL_WHITELIST.length > 0,
+  };
+
+  const missing = Object.entries(required)
+    .filter(([_, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(", ")}`
+    );
+  }
+}
 
 interface NgrokTunnel {
   proto: string;
@@ -112,6 +133,8 @@ async function sendStartupEmail() {
 }
 
 async function start() {
+  validateEnvVars();
+
   const fastify = Fastify({
     logger: { level: "error" },
   });
