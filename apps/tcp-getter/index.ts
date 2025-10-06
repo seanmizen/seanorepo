@@ -61,6 +61,56 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+async function sendSSHEmail(
+  email: string,
+  options: { isStartup?: boolean } = {}
+) {
+  const { host, port } = await getTcpTunnelUrl();
+  const sshCommand = `ssh ${SSH_USERNAME}@${host} -p ${port}`;
+  const timestamp = new Date().toLocaleString();
+
+  const subject = options.isStartup
+    ? "tcp-getter Started - SSH Connection Details"
+    : "SSH Connection Details";
+
+  const textPrefix = options.isStartup
+    ? "tcp-getter has started successfully.\n\n"
+    : "";
+  const htmlPrefix = options.isStartup
+    ? "<p><strong>tcp-getter has started successfully.</strong></p>\n  "
+    : "";
+
+  const timeLabel = options.isStartup ? "Startup time" : "Message sent at";
+
+  await transporter.sendMail({
+    to: email,
+    from: MAIL_USERNAME,
+    subject,
+    text: `${textPrefix}Your SSH connection command:\n\n${sshCommand}\n\nHost: ${host}\nPort: ${port}`,
+    html: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<body>
+  ${htmlPrefix}<p>Your SSH connection command:</p>
+  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace;">${sshCommand}</pre>
+  <p><strong>Host:</strong> ${host}<br><strong>Port:</strong> ${port}</p>
+  <p>${timeLabel}: ${timestamp}</p>
+</body>
+</html>`,
+  });
+}
+
+async function sendStartupEmail() {
+  try {
+    await sendSSHEmail(EMAIL_WHITELIST[0], { isStartup: true });
+    console.log(`Startup email sent to ${EMAIL_WHITELIST[0]}`);
+  } catch (error) {
+    console.error("Failed to send startup email:", error);
+  }
+}
+
 async function start() {
   const fastify = Fastify({
     logger: { level: "error" },
@@ -90,28 +140,7 @@ async function start() {
     }
 
     try {
-      const { host, port } = await getTcpTunnelUrl();
-      const sshCommand = `ssh ${SSH_USERNAME}@${host} -p ${port}`;
-
-      await transporter.sendMail({
-        to: email,
-        from: MAIL_USERNAME,
-        subject: "SSH Connection Details",
-        text: `Your SSH connection command:\n\n${sshCommand}\n\nHost: ${host}\nPort: ${port}`,
-        html: `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-</head>
-<body>
-  <p>Your SSH connection command:</p>
-  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace;">${sshCommand}</pre>
-  <p><strong>Host:</strong> ${host}<br><strong>Port:</strong> ${port}</p>
-  <p>Message sent at ${new Date().toLocaleString()}</p>
-</body>
-</html>`,
-      });
-
+      await sendSSHEmail(email);
       console.log(`SSH details sent to whitelisted email: ${email}`);
       res.send({ ok: true });
     } catch (error) {
@@ -136,6 +165,9 @@ async function start() {
 
   await fastify.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`tcp-getter running on port ${PORT}`);
+
+  // Send startup email with connection details
+  await sendStartupEmail();
 }
 
 start();
