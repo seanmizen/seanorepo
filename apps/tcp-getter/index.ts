@@ -87,7 +87,7 @@ async function sendSSHEmail(
   options: { isStartup?: boolean } = {}
 ) {
   const { host, port } = await getTcpTunnelUrl();
-  const sshCommand = `ssh ${SSH_USERNAME}@${host} -p ${port}`;
+  const sshCommand = `ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ${SSH_USERNAME}@${host} -p ${port}`;
   const timestamp = new Date().toLocaleString();
 
   const subject = options.isStartup
