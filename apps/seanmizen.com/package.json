@@ -8,7 +8,7 @@
     "start:noopen": "yarn rsbuild dev --port 4000",
     "start:docker": "docker compose --profile dev up --build",
     "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
-    "build": "yarn rsbuild build",
+    "build": "yarn && yarn rsbuild build",
     "down": "docker compose --profile dev --profile prod down"
   },
   "dependencies": {
