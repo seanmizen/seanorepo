@@ -1,6 +1,7 @@
 #!/bin/bash
 # 
-# Bootstrap script to create a bootable Debian installer USB drive
+# Bootstrap script to create a bootable Debian installer USB drive.
+# This script formats the specified USB drive as FAT32 for compatibility (your old laptop might need it).
 #
 # Usage: ./bootstrap-1.sh [diskN]
 #
@@ -55,19 +56,47 @@ cp "../../$PRESEED" ./preseed.cfg
 find . | cpio -o -H newc | gzip > "../iso/install.amd/initrd.gz"
 cd - >/dev/null
 
-# Rebuild ISO
-echo "Rebuilding ISO..."
-xorriso -as mkisofs -o "$OUTPUT_ISO" \
-  -c isolinux/boot.cat \
-  -b isolinux/isolinux.bin \
-  -no-emul-boot -boot-load-size 4 -boot-info-table \
-  "$ISODIR"
-
-# Confirm USB drive
+# Prepare USB drive with FAT32
 echo "Using USB drive: /dev/$USB_DRIVE"
+echo "WARNING: This will erase all data on /dev/$USB_DRIVE"
+read -p "Press Enter to continue or Ctrl+C to cancel..."
 
+echo "Partitioning and formatting USB drive as FAT32..."
 diskutil unmountDisk "/dev/$USB_DRIVE"
-sudo dd if="$OUTPUT_ISO" of="/dev/r$USB_DRIVE" bs=1m status=progress
+sudo diskutil partitionDisk "/dev/$USB_DRIVE" 1 MBR FAT32 DEBIAN 100%
+
+# Find the partition identifier (should be ${USB_DRIVE}s1)
+PARTITION="${USB_DRIVE}s1"
+
+# Mount the partition
+echo "Mounting partition..."
+MOUNT_POINT="/Volumes/DEBIAN"
+if [ ! -d "$MOUNT_POINT" ]; then
+  # If auto-mount didn't work, mount manually
+  sudo mkdir -p "$MOUNT_POINT"
+  sudo mount -t msdos "/dev/$PARTITION" "$MOUNT_POINT" 2>/dev/null || true
+fi
+
+# Wait a moment for the mount to complete
+sleep 2
+
+# Copy ISO contents to FAT32 partition
+echo "Copying installer files to USB drive..."
+sudo rsync -av --progress "$ISODIR/" "$MOUNT_POINT/"
+
+# Make bootable - ensure boot flag is set
+echo "Setting boot flag..."
+sudo fdisk -e "/dev/$USB_DRIVE" > /dev/null 2>&1 <<EOF
+f 1
+write
+quit
+EOF
+
+# Sync and unmount
+echo "Finalizing USB drive..."
+sync
+diskutil unmount "/dev/$PARTITION"
 diskutil eject "/dev/$USB_DRIVE"
 
-echo "USB installer written to /dev/$USB_DRIVE"
+echo "Bootable USB installer created on /dev/$USB_DRIVE (FAT32)"
+echo "The USB drive can now be removed. Use it to boot and install Debian."
