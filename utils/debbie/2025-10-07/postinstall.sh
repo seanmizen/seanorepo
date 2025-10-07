@@ -5,9 +5,27 @@ export DEBIAN_FRONTEND=noninteractive
 
 ORIG_USER="${SUDO_USER:-$USER}"                         # actual login user
 USER_HOME="$(getent passwd "$ORIG_USER" | cut -d: -f6)"
-LOG="$USER_HOME/hello.txt"
+LOG="$USER_HOME/postinstall.txt"
 
-echo "postinstall.sh run at $(date)" > "$LOG"
+# Detect which server this is (debbie or trixie)
+# Can be overridden with: sudo SERVER=trixie ./postinstall.sh
+if [ -z "${SERVER:-}" ]; then
+    # Try to detect based on MAC address
+    ETH_MAC=$(ip link show | grep -A1 "state UP" | grep "link/ether" | awk '{print $2}' | head -n1 | tr '[:lower:]' '[:upper:]')
+    WIFI_MAC=$(ip link show | grep -A1 "wlan" | grep "link/ether" | awk '{print $2}' | head -n1 | tr '[:lower:]' '[:upper:]')
+    
+    if [ "$ETH_MAC" = "9C:EB:E8:4A:A5:79" ] || [ "$WIFI_MAC" = "48:45:20:40:E4:E9" ]; then
+        SERVER="debbie"
+    else
+        # Default to trixie for new servers
+        SERVER="trixie"
+    fi
+fi
+
+echo "========================================" | tee "$LOG"
+echo "Configuring server: $SERVER" | tee -a "$LOG"
+echo "postinstall.sh run at $(date)" | tee -a "$LOG"
+echo "========================================" | tee -a "$LOG"
 
 ##############################################################################
 # Base packages
@@ -46,48 +64,105 @@ sudo ufw default allow outgoing
 sudo ufw allow ssh
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
+sudo ufw allow 5353/udp  # mDNS
 sudo ufw --force enable
 sudo ufw status verbose >> "$LOG"
 
 ##############################################################################
-# Network Manager with static IPs (MAC-based)
+# Set hostname & install Avahi for mDNS
+##############################################################################
+echo "Setting hostname to $SERVER" | tee -a "$LOG"
+sudo hostnamectl set-hostname "$SERVER"
+echo "$SERVER" | sudo tee /etc/hostname > /dev/null
+
+# Update /etc/hosts
+sudo sed -i '/^127\.0\.1\.1/d' /etc/hosts
+echo "127.0.1.1       $SERVER" | sudo tee -a /etc/hosts > /dev/null
+
+echo "Installing Avahi for mDNS support" | tee -a "$LOG"
+sudo apt-get install -y avahi-daemon avahi-utils libnss-mdns
+sudo systemctl enable avahi-daemon
+sudo systemctl start avahi-daemon
+
+echo "Hostname '$SERVER' is now accessible as '$SERVER.local' on the network" | tee -a "$LOG"
+
+##############################################################################
+# Network Manager with static IPs
 ##############################################################################
 echo "Installing & enabling NetworkManager" | tee -a "$LOG"
 sudo apt-get install -y network-manager
 sudo systemctl enable --now NetworkManager
 
-echo "Creating static NM profiles" | tee -a "$LOG"
+echo "Creating static NM profiles for $SERVER" | tee -a "$LOG"
 
-# Ethernet — MAC 9C:EB:E8:4A:A5:79 → 192.168.1.4
-if ! nmcli -g NAME connection | grep -q '^static-ethernet$'; then
-  sudo nmcli connection add type ethernet con-name static-ethernet \
-    connection.interface-name "*" \
-    802-3-ethernet.mac-address 9C:EB:E8:4A:A5:79 \
-    ipv4.method manual \
-    ipv4.addresses 192.168.1.4/24 \
-    ipv4.gateway 192.168.1.1 \
-    ipv4.dns "1.1.1.1 8.8.8.8" \
-    autoconnect yes
+if [ "$SERVER" = "debbie" ]; then
+    # Debbie configuration (MAC-based)
+    # Ethernet — MAC 9C:EB:E8:4A:A5:79 → 192.168.1.6
+    if ! nmcli -g NAME connection | grep -q '^static-ethernet$'; then
+        sudo nmcli connection add type ethernet con-name static-ethernet \
+            connection.interface-name "*" \
+            802-3-ethernet.mac-address 9C:EB:E8:4A:A5:79 \
+            ipv4.method manual \
+            ipv4.addresses 192.168.1.6/24 \
+            ipv4.gateway 192.168.1.1 \
+            ipv4.dns "1.1.1.1 8.8.8.8" \
+            autoconnect yes
+    fi
+
+    # Wi-Fi — MAC 48:45:20:40:E4:E9, SSID mojodojo → 192.168.1.7
+    if ! nmcli -g NAME connection | grep -q '^static-wifi$'; then
+        sudo nmcli connection add type wifi con-name static-wifi \
+            connection.interface-name "*" \
+            802-11-wireless.ssid "mojodojo" \
+            802-11-wireless.mac-address 48:45:20:40:E4:E9 \
+            wifi-sec.key-mgmt wpa-psk wifi-sec.psk "casahouse" \
+            ipv4.method manual \
+            ipv4.addresses 192.168.1.7/24 \
+            ipv4.gateway 192.168.1.1 \
+            ipv4.dns "1.1.1.1 8.8.8.8" \
+            autoconnect yes
+    fi
+
+    sudo nmcli connection modify static-ethernet ipv4.route-metric 100
+    sudo nmcli connection modify static-wifi     ipv4.route-metric 200
+    sudo nmcli connection up static-ethernet || true
+    sudo nmcli connection up static-wifi     || true
+
+elif [ "$SERVER" = "trixie" ]; then
+    # Trixie configuration (auto-detect interface, static IP 192.168.1.10)
+    PRIMARY_IFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
+    if [ -z "$PRIMARY_IFACE" ]; then
+        echo "WARNING: Could not detect primary network interface" | tee -a "$LOG"
+        echo "You'll need to configure static IP manually" | tee -a "$LOG"
+    else
+        echo "Detected primary interface: $PRIMARY_IFACE" | tee -a "$LOG"
+        
+        # Get current connection name
+        CURRENT_CONN=$(nmcli -t -f NAME,DEVICE connection show --active | grep "$PRIMARY_IFACE" | cut -d: -f1)
+        
+        if [ -n "$CURRENT_CONN" ]; then
+            echo "Modifying connection: $CURRENT_CONN" | tee -a "$LOG"
+            sudo nmcli connection modify "$CURRENT_CONN" \
+                ipv4.method manual \
+                ipv4.addresses 192.168.1.10/24 \
+                ipv4.gateway 192.168.1.1 \
+                ipv4.dns "1.1.1.1 8.8.8.8"
+            sudo nmcli connection up "$CURRENT_CONN"
+        else
+            echo "Creating new static connection" | tee -a "$LOG"
+            sudo nmcli connection add type ethernet con-name static-trixie \
+                ifname "$PRIMARY_IFACE" \
+                ipv4.method manual \
+                ipv4.addresses 192.168.1.10/24 \
+                ipv4.gateway 192.168.1.1 \
+                ipv4.dns "1.1.1.1 8.8.8.8" \
+                autoconnect yes
+            sudo nmcli connection up static-trixie
+        fi
+        
+        echo "Static IP 192.168.1.10 configured on $PRIMARY_IFACE" | tee -a "$LOG"
+    fi
 fi
-
-# Wi-Fi — MAC 48:45:20:40:E4:E9, SSID mojodojo → 192.168.1.5
-if ! nmcli -g NAME connection | grep -q '^static-wifi$'; then
-  sudo nmcli connection add type wifi con-name static-wifi \
-    connection.interface-name "*" \
-    802-11-wireless.ssid "mojodojo" \
-    802-11-wireless.mac-address 48:45:20:40:E4:E9 \
-    wifi-sec.key-mgmt wpa-psk wifi-sec.psk "casahouse" \
-    ipv4.method manual \
-    ipv4.addresses 192.168.1.5/24 \
-    ipv4.gateway 192.168.1.1 \
-    ipv4.dns "1.1.1.1 8.8.8.8" \
-    autoconnect yes
-fi
-
-sudo nmcli connection modify static-ethernet ipv4.route-metric 100
-sudo nmcli connection modify static-wifi     ipv4.route-metric 200
-sudo nmcli connection up static-ethernet || true
-sudo nmcli connection up static-wifi     || true
 
 ##############################################################################
 # nosleep
@@ -133,15 +208,13 @@ if [ ! -d "$USER_HOME/projects/seanorepo/.git" ]; then
   sudo -u "$ORIG_USER" git clone https://github.com/seanmizen/seanorepo "$USER_HOME/projects/seanorepo"
 fi
 
-echo "Setting up Corepack + deps" | tee -a "$LOG"
+echo "Setting up Corepack" | tee -a "$LOG"
 sudo -u "$ORIG_USER" mkdir -p "$USER_HOME/.local/bin"
 if ! grep -q '\.local/bin' "$USER_HOME/.profile"; then
   echo 'export PATH="$HOME/.local/bin:$PATH"' | sudo tee -a "$USER_HOME/.profile" > /dev/null
 fi
 sudo -u "$ORIG_USER" bash -c \
   'corepack enable --install-directory "$HOME/.local/bin" || true'
-sudo -u "$ORIG_USER" bash -c \
-  'cd "$HOME/projects/seanorepo" && yarn'
 
 ##############################################################################
 # deployment-custom.service (one-shot deploy)
@@ -186,12 +259,14 @@ WantedBy=multi-user.target
 EOL
 
 ##############################################################################
-# Enable & start services
+# Create services (but do not enable or start)
 ##############################################################################
-echo "Reloading systemd & enabling services" | tee -a "$LOG"
+echo "Reloading systemd" | tee -a "$LOG"
 sudo systemctl daemon-reload
-sudo systemctl enable deployment-custom.service cloudflared-custom.service
-sudo systemctl start deployment-custom.service cloudflared-custom.service
+echo "Services created but not enabled or started" | tee -a "$LOG"
+echo "To enable and start services later, run:" | tee -a "$LOG"
+echo "  sudo systemctl enable --now deployment-custom.service" | tee -a "$LOG"
+echo "  sudo systemctl enable --now cloudflared-custom.service" | tee -a "$LOG"
 
 ##############################################################################
 # Zsh + Oh-My-Zsh
@@ -255,6 +330,36 @@ sudo -u "$ORIG_USER" corepack enable --install-directory "$USER_HOME/.local/bin"
 # Prepare and activate exact Yarn version
 sudo -u "$ORIG_USER" corepack prepare yarn@4.8.1 --activate
 
-echo "All done at $(date)" | tee -a "$LOG"
-echo "Rebooting…" | tee -a "$LOG"
+##############################################################################
+# Summary
+##############################################################################
+echo "" | tee -a "$LOG"
+echo "========================================" | tee -a "$LOG"
+echo "Setup complete at $(date)" | tee -a "$LOG"
+echo "========================================" | tee -a "$LOG"
+echo "" | tee -a "$LOG"
+
+if [ "$SERVER" = "debbie" ]; then
+    echo "Server: debbie" | tee -a "$LOG"
+    echo "mDNS name: debbie.local" | tee -a "$LOG"
+    echo "Ethernet IP: 192.168.1.6" | tee -a "$LOG"
+    echo "WiFi IP: 192.168.1.7" | tee -a "$LOG"
+    echo "" | tee -a "$LOG"
+    echo "Access via:" | tee -a "$LOG"
+    echo "  ssh srv@debbie.local" | tee -a "$LOG"
+    echo "  ssh srv@192.168.1.4" | tee -a "$LOG"
+elif [ "$SERVER" = "trixie" ]; then
+    echo "Server: trixie" | tee -a "$LOG"
+    echo "mDNS name: trixie.local" | tee -a "$LOG"
+    echo "Static IP: 192.168.1.10" | tee -a "$LOG"
+    echo "" | tee -a "$LOG"
+    echo "Access via:" | tee -a "$LOG"
+    echo "  ssh srv@trixie.local" | tee -a "$LOG"
+    echo "  ssh srv@192.168.1.10" | tee -a "$LOG"
+fi
+
+echo "" | tee -a "$LOG"
+echo "Rebooting in 5 seconds…" | tee -a "$LOG"
+
+sleep 5
 sudo reboot
