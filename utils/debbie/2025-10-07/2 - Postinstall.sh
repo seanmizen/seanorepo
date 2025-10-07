@@ -211,6 +211,34 @@ sudo -u "$ORIG_USER" git clone https://github.com/zsh-users/zsh-syntax-highlight
   "${ZSH_CUSTOM:-$USER_HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" || true
 echo "Zsh setup complete" >> "$LOG"
 
+##############################################################################
+# Custom .zshrc configuration
+##############################################################################
+echo "Applying custom .zshrc configuration" | tee -a "$LOG"
+
+# Append custom prompt configuration to .zshrc
+cat >> "$USER_HOME/.zshrc" <<'ZSHRC_EOF'
+
+# Custom prompt configuration (depth-based path display)
+setopt promptsubst
+autoload -U colors && colors
+
+precmd() {
+  if [[ $PWD == "/" ]]; then
+    prompt_path="/"
+  else
+    depth=$(( $(echo "$PWD" | awk -F/ '{print NF-1}') - 1 ))
+    dirname=$([[ $PWD == $HOME ]] && echo "~" || basename "$PWD")
+    [[ $depth == 0 ]] && prompt_path="/$dirname" || prompt_path="/[$depth]/$dirname"
+  fi
+}
+
+arrow='%(?:%F{green}➜%f:%F{red}➜%f)'
+PROMPT='%B${arrow}%b %B%F{blue}%m%f%b %B%F{cyan}${prompt_path}%f%b $(git_prompt_info)'
+ZSHRC_EOF
+
+chown "$ORIG_USER:$ORIG_USER" "$USER_HOME/.zshrc"
+
 echo "Setting up Corepack and Yarn (user-local)" | tee -a "$LOG"
 
 # Ensure ~/.local/bin is prioritized in PATH
