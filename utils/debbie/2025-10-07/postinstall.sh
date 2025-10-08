@@ -10,9 +10,9 @@ LOG="$USER_HOME/postinstall.txt"
 # Detect which server this is (debbie or trixie)
 # Can be overridden with: sudo SERVER=trixie ./postinstall.sh
 if [ -z "${SERVER:-}" ]; then
-    # Try to detect based on MAC address
-    ETH_MAC=$(ip link show | grep -A1 "state UP" | grep "link/ether" | awk '{print $2}' | head -n1 | tr '[:lower:]' '[:upper:]')
-    WIFI_MAC=$(ip link show | grep -A1 "wlan" | grep "link/ether" | awk '{print $2}' | head -n1 | tr '[:lower:]' '[:upper:]')
+    # Try to detect based on MAC address (|| true prevents script exit if grep fails)
+    ETH_MAC=$(ip link show | grep -A1 "state UP" | grep "link/ether" | awk '{print $2}' | head -n1 | tr '[:lower:]' '[:upper:]' || true)
+    WIFI_MAC=$(ip link show | grep -A1 "wlan" | grep "link/ether" | awk '{print $2}' | head -n1 | tr '[:lower:]' '[:upper:]' || true)
     
     if [ "$ETH_MAC" = "9C:EB:E8:4A:A5:79" ] || [ "$WIFI_MAC" = "48:45:20:40:E4:E9" ]; then
         SERVER="debbie"
@@ -130,7 +130,7 @@ if [ "$SERVER" = "debbie" ]; then
 
 elif [ "$SERVER" = "trixie" ]; then
     # Trixie configuration (auto-detect interface, static IP 192.168.1.10)
-    PRIMARY_IFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
+    PRIMARY_IFACE=$(ip route | grep default | awk '{print $5}' | head -n1 || true)
     if [ -z "$PRIMARY_IFACE" ]; then
         echo "WARNING: Could not detect primary network interface" | tee -a "$LOG"
         echo "You'll need to configure static IP manually" | tee -a "$LOG"
@@ -138,7 +138,7 @@ elif [ "$SERVER" = "trixie" ]; then
         echo "Detected primary interface: $PRIMARY_IFACE" | tee -a "$LOG"
         
         # Get current connection name
-        CURRENT_CONN=$(nmcli -t -f NAME,DEVICE connection show --active | grep "$PRIMARY_IFACE" | cut -d: -f1)
+        CURRENT_CONN=$(nmcli -t -f NAME,DEVICE connection show --active | grep "$PRIMARY_IFACE" | cut -d: -f1 || true)
         
         if [ -n "$CURRENT_CONN" ]; then
             echo "Modifying connection: $CURRENT_CONN" | tee -a "$LOG"
@@ -157,7 +157,7 @@ elif [ "$SERVER" = "trixie" ]; then
                 ipv4.gateway 192.168.1.1 \
                 ipv4.dns "1.1.1.1 8.8.8.8" \
                 autoconnect yes
-            sudo nmcli connection up static-trixie
+            sudo nmcli connection up static-trixie || true
         fi
         
         echo "Static IP 192.168.1.10 configured on $PRIMARY_IFACE" | tee -a "$LOG"
@@ -347,7 +347,7 @@ if [ "$SERVER" = "debbie" ]; then
     echo "" | tee -a "$LOG"
     echo "Access via:" | tee -a "$LOG"
     echo "  ssh srv@debbie.local" | tee -a "$LOG"
-    echo "  ssh srv@192.168.1.4" | tee -a "$LOG"
+    echo "  ssh srv@192.168.1.6" | tee -a "$LOG"
 elif [ "$SERVER" = "trixie" ]; then
     echo "Server: trixie" | tee -a "$LOG"
     echo "mDNS name: trixie.local" | tee -a "$LOG"
