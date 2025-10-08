@@ -1,0 +1,16 @@
+[Unit]
+Description=Cloudflare Tunnel (manual, custom config)
+After=network.target
+
+[Service]
+Type=simple
+User=srv
+EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/setup/.env
+WorkingDirectory=/home/srv/projects/seanorepo/apps/cloudflared
+ExecStartPre=/usr/bin/test -f /home/srv/projects/seanorepo/apps/cloudflared/config.yml
+ExecStart=/usr/local/bin/cloudflared tunnel --config /home/srv/projects/seanorepo/apps/cloudflared/config.yml run
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
