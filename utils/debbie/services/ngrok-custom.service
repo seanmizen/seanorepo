@@ -1,0 +1,14 @@
+[Unit]
+Description=Ngrok TCP tunnel for port 22
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ngrok tcp 22
+Restart=always
+User=srv
+WorkingDirectory=/srv
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target

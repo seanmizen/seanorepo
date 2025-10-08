@@ -1,0 +1,15 @@
+[Unit]
+Description=One-shot deploy of latest production code
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=srv
+EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/setup/.env
+Environment=PATH=/home/srv/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/srv/projects/seanorepo
+ExecStart=/bin/bash -c 'git fetch --all && git reset --hard origin/main && yarn prod:docker'
+
+[Install]
+WantedBy=multi-user.target
