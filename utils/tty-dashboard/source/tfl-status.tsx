@@ -93,9 +93,11 @@ export const TFLStatus: FC<Props> = ({
 	useEffect(() => {
 		if (loading) return;
 
+		const countdownIntervalMs =
+			Number(process.env['COUNTDOWN_INTERVAL_MS']) || 10000;
 		const countdownInterval = setInterval(() => {
 			setCountdown(prev => (prev > 0 ? prev - 1 : 0));
-		}, 1000);
+		}, countdownIntervalMs);
 
 		return () => {
 			clearInterval(countdownInterval);
