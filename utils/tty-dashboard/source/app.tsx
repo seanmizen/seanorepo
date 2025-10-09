@@ -4,6 +4,7 @@ import {TFLStatus} from './tfl-status.js';
 import {StationDepartureBoard} from './station-departure-board.js';
 import {Tetris} from './tetris.js';
 import {YouTubeAsciiPlayer} from './youtube-ascii-player.js';
+import {SpoonsFinder} from './spoons-finder.js';
 
 type Props = {
 	name: string | undefined;
@@ -68,7 +69,7 @@ const App: FC<Props> = () => {
 						{SECRET_MODES.includes('youtube') && <YouTubeAsciiPlayer />}
 					</Box>
 				</Box>
-				<Box width="50%" flexGrow={1}>
+				<Box width="50%" flexGrow={1} flexDirection="column">
 					<StationDepartureBoard
 						stationName="Putney"
 						columns={{operator: false}}
@@ -78,6 +79,23 @@ const App: FC<Props> = () => {
 						isTTY={IS_TTY}
 						refreshInterval={REFRESH_INTERVAL}
 						countdownInterval={SCREEN_REFRESH_INTERVAL}
+					/>
+					<SpoonsFinder
+						width="100%"
+						height="50%"
+						location={process.env['SPOONS_LOCATION'] || 'putney'}
+						lat={
+							process.env['SPOONS_LAT']
+								? Number(process.env['SPOONS_LAT'])
+								: undefined
+						}
+						lng={
+							process.env['SPOONS_LNG']
+								? Number(process.env['SPOONS_LNG'])
+								: undefined
+						}
+						useTestData={true} // TODO
+						isTTY={IS_TTY}
 					/>
 				</Box>
 			</Box>
