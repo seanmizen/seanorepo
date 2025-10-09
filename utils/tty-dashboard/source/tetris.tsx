@@ -372,7 +372,11 @@ function renderBraille(board: Cell[][], currentPiece: Piece | null): string[] {
 	return lines;
 }
 
-export const Tetris: FC = () => {
+interface TetrisProps {
+	millisecondsPerFrame?: number;
+}
+
+export const Tetris: FC<TetrisProps> = ({millisecondsPerFrame = 500}) => {
 	const [board, setBoard] = useState<Cell[][]>(
 		Array(BOARD_HEIGHT)
 			.fill(null)
@@ -469,7 +473,7 @@ export const Tetris: FC = () => {
 					setCurrentPiece(nextPiece);
 				}
 			}
-		}, 200); // Game speed
+		}, millisecondsPerFrame);
 
 		return () => clearInterval(interval);
 	}, [board, currentPiece, gameOver]);

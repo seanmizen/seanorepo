@@ -3,6 +3,7 @@ import {Text, useInput, useApp, Box, useStdout} from 'ink';
 import {TFLStatus} from './tfl-status.js';
 import {StationDepartureBoard} from './station-departure-board.js';
 import {Tetris} from './tetris.js';
+import {YouTubeAsciiPlayer} from './youtube-ascii-player.js';
 
 type Props = {
 	name: string | undefined;
@@ -53,7 +54,7 @@ const App: FC<Props> = () => {
 				</Box>
 			</Box>
 			<Box flexDirection="row" flexGrow={1}>
-				<Box flexDirection="column" width="50%">
+				<Box flexDirection="column" width="50%" flexGrow={1}>
 					<TFLStatus
 						width="100%"
 						useTestData={USE_TEST_DATA}
@@ -62,19 +63,24 @@ const App: FC<Props> = () => {
 						refreshInterval={REFRESH_INTERVAL}
 						countdownInterval={SCREEN_REFRESH_INTERVAL}
 					/>
+					<Box flexDirection="row" alignItems="flex-end" flexGrow={1}>
+						{SECRET_MODES.includes('tetris') && <Tetris />}
+						{SECRET_MODES.includes('youtube') && <YouTubeAsciiPlayer />}
+					</Box>
 				</Box>
-				<StationDepartureBoard
-					stationName="Putney"
-					columns={{operator: false}}
-					width="50%"
-					useTestData={USE_TEST_DATA}
-					maxDepartures={MAX_RAIL_DEPARTURES}
-					isTTY={IS_TTY}
-					refreshInterval={REFRESH_INTERVAL}
-					countdownInterval={SCREEN_REFRESH_INTERVAL}
-				/>
+				<Box width="50%" flexGrow={1}>
+					<StationDepartureBoard
+						stationName="Putney"
+						columns={{operator: false}}
+						width="100%"
+						useTestData={USE_TEST_DATA}
+						maxDepartures={MAX_RAIL_DEPARTURES}
+						isTTY={IS_TTY}
+						refreshInterval={REFRESH_INTERVAL}
+						countdownInterval={SCREEN_REFRESH_INTERVAL}
+					/>
+				</Box>
 			</Box>
-			{SECRET_MODES.includes('tetris') && <Tetris />}
 			{SHOW_DEBUG_INFO && (
 				<Box justifyContent="space-between" width="100%">
 					<Text dimColor>Press 'q' or ESC to quit</Text>
