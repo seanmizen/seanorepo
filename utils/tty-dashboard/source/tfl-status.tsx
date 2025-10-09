@@ -46,6 +46,7 @@ type Props = {
 	refreshInterval?: number; // in seconds
 	useTestData?: boolean;
 	showDescription?: boolean;
+	isTTY?: boolean;
 };
 
 export const TFLStatus: FC<Props> = ({
@@ -54,6 +55,7 @@ export const TFLStatus: FC<Props> = ({
 	refreshInterval = 120,
 	useTestData = false,
 	showDescription = true,
+	isTTY = false,
 }) => {
 	const [tubeData, setTubeData] = useState<TubeLineStatus[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -115,7 +117,7 @@ export const TFLStatus: FC<Props> = ({
 		>
 			<Box marginBottom={1} justifyContent="space-between">
 				<Text bold color="cyan">
-					🚇 TFL Tube Status
+					{isTTY ? '' : '🚇 '}TFL Tube Status
 				</Text>
 				{lastUpdated && (
 					<Box flexDirection="column" marginLeft={2}>

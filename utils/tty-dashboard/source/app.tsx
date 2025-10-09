@@ -11,6 +11,9 @@ const SHOW_SCREEN_DIMENSIONS = process.env['SHOW_SCREEN_DIMENSIONS'] === 'true';
 const USE_TEST_DATA = process.env['USE_TEST_DATA'] === 'true';
 const SHOW_TFL_DESCRIPTION = process.env['SHOW_TFL_DESCRIPTION'] === 'true';
 const MAX_RAIL_DEPARTURES = Number(process.env['MAX_RAIL_DEPARTURES']) || 4;
+// const IS_TTY =
+// 	process.env['TERM'] === 'linux' || process.env['TERM']?.startsWith('vt');
+const IS_TTY = true;
 
 const App: FC<Props> = () => {
 	const {exit} = useApp();
@@ -36,6 +39,7 @@ const App: FC<Props> = () => {
 					width="50%"
 					useTestData={USE_TEST_DATA}
 					showDescription={SHOW_TFL_DESCRIPTION}
+					isTTY={IS_TTY}
 				/>
 				<StationDepartureBoard
 					stationName="Putney"
@@ -43,6 +47,7 @@ const App: FC<Props> = () => {
 					width="50%"
 					useTestData={USE_TEST_DATA}
 					maxDepartures={MAX_RAIL_DEPARTURES}
+					isTTY={IS_TTY}
 				/>
 			</Box>
 			<Box justifyContent="space-between" width="100%">

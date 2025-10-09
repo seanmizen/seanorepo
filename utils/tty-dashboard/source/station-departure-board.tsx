@@ -14,6 +14,15 @@ export type ColumnConfig = {
 	operator?: boolean;
 };
 
+const DEFAULT_COLUMNS: ColumnConfig = {
+	time: true,
+	destination: true,
+	status: true,
+	platform: true,
+	duration: true,
+	operator: true,
+};
+
 type Props = {
 	stationName: string;
 	useTestData?: boolean;
@@ -22,15 +31,7 @@ type Props = {
 	columns?: ColumnConfig; // which columns to display
 	width?: string | number;
 	height?: string | number;
-};
-
-const DEFAULT_COLUMNS: ColumnConfig = {
-	time: true,
-	destination: true,
-	status: true,
-	platform: true,
-	duration: true,
-	operator: true,
+	isTTY?: boolean;
 };
 
 export const StationDepartureBoard: FC<Props> = ({
@@ -41,6 +42,7 @@ export const StationDepartureBoard: FC<Props> = ({
 	width,
 	height,
 	useTestData = false,
+	isTTY = false,
 }) => {
 	// Merge provided columns with defaults
 	const displayColumns = {...DEFAULT_COLUMNS, ...columns};
@@ -97,7 +99,8 @@ export const StationDepartureBoard: FC<Props> = ({
 			{/* Header */}
 			<Box marginBottom={1} justifyContent="space-between">
 				<Text bold color="magenta">
-					🚉 {stationName} Departures
+					{isTTY ? '' : '🚉 '}
+					{stationName} Departures
 				</Text>
 				{lastUpdated && (
 					<Text dimColor color="gray">
