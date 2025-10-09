@@ -235,7 +235,7 @@ export const StationDepartureBoard: FC<Props> = ({
 			)}
 
 			{/* Delayed trains section */}
-			{!loading && departures.some(d => d.delayReason) && (
+			{departures.some(d => d.delayReason) && (
 				<Box flexDirection="column" marginTop={1}>
 					<Text bold color="yellow">
 						⚠️ Delay Information:
