@@ -1,33 +1,34 @@
 #!/bin/bash
-# Deploy debbie-dash-custom.service cleanly from remote SSH
+set -e
 
-SERVICE_NAME="debbie-dash-custom"
+SERVICE_NAME="tty-dashboard-custom"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-APP_DIR="$HOME/debbie-dash"
-AUTOLOGIN_DIR="/etc/systemd/system/getty@tty1.service.d"
+APP_DIR="$(pwd)"  # current working directory
+USER_NAME="$USER"
 
-echo "Setting up ${SERVICE_NAME}.service..."
+echo "🚀 Deploying $SERVICE_NAME from $APP_DIR ..."
 
-# Paths for node + nodemon
-NODE_PATH=$(command -v node)
-NODEMON_PATH=$(command -v nodemon)
-
-if [ -z "$NODE_PATH" ] || [ -z "$NODEMON_PATH" ]; then
-    echo "Error: node or nodemon not found in PATH."
-    exit 1
+# Ensure the build output exists
+if [ ! -d "$APP_DIR/dist" ]; then
+  echo "❌ No dist/ directory found. Run 'yarn build' first."
+  exit 1
 fi
 
-# --- Create service file (as root) ---
+# Find node and yarn paths
+NODE_PATH=$(command -v node)
+NODEMON_PATH=$(command -v nodemon || true)
+
+# Create systemd service
 sudo bash -c "cat > '$SERVICE_FILE'" <<EOF
 [Unit]
-Description=Debbie Dash Custom Service
-After=network.target systemd-user-sessions.service getty@tty1.service
+Description=TTY Dashboard (local monorepo service)
+After=network.target
 
 [Service]
 Type=simple
-User=$USER
+User=$USER_NAME
 WorkingDirectory=$APP_DIR
-ExecStart=$NODEMON_PATH --watch $APP_DIR/dist --exec $NODE_PATH $APP_DIR/dist/cli.js
+ExecStart=$NODE_PATH $APP_DIR/dist/cli.js
 Restart=always
 RestartSec=3
 StandardOutput=journal
@@ -39,29 +40,13 @@ EOF
 
 echo "✓ Service file written to $SERVICE_FILE"
 
-# --- Configure tty1 autologin (optional, harmless if exists) ---
-sudo mkdir -p "$AUTOLOGIN_DIR"
-sudo tee "$AUTOLOGIN_DIR/autologin.conf" >/dev/null <<EOF
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin $USER --noclear %I \$TERM
-Type=idle
-EOF
-
-echo "✓ Auto-login config written to $AUTOLOGIN_DIR/autologin.conf"
-
-# --- Reload systemd and enable service ---
+# Reload systemd and enable service
 sudo systemctl daemon-reexec
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
 
 echo ""
-echo "Service status (short):"
 sudo systemctl status "$SERVICE_NAME" --no-pager -l | grep -E 'Loaded:|Active:|Main PID:' || true
-
 echo ""
-echo "✓ ${SERVICE_NAME}.service deployed successfully!"
-echo "  - Auto-starts on boot"
-echo "  - Logs: sudo journalctl -u ${SERVICE_NAME} -f"
-echo "  - Console login (tty1) remains available"
+echo "✅ $SERVICE_NAME deployed successfully!"

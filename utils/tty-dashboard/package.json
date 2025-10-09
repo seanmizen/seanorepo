@@ -9,7 +9,8 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"deploy": "yarn build && ssh sean@trixie 'mkdir -p ~/debbie-dash' && scp -r dist package.json sean@trixie:~/debbie-dash/ && ssh sean@trixie 'cd ~/debbie-dash && npm install --production' && sed 's/^sudo /echo debbie | sudo -S /' ./deploy-service.sh | ssh sean@trixie 'bash -s'",
+		"deploy": "yarn build && bash ./deploy-service.sh",
+		"undeploy": "bash ./undeploy-service.sh",
 		"start": "bash ./dev-session.sh",
 		"test": "prettier --check . && xo && ava"
 	},
