@@ -121,7 +121,7 @@ export const StationDepartureBoard: FC<Props> = ({
 			)}
 
 			{/* Departure list */}
-			{!loading && departures.length > 0 && (
+			{departures.length > 0 && (
 				<Box flexDirection="column">
 					{/* Column headers */}
 					<Box marginBottom={1}>
@@ -242,15 +242,19 @@ export const StationDepartureBoard: FC<Props> = ({
 						.filter(d => d.delayReason)
 						.slice(0, 3)
 						.map((departure, index) => (
-							<Box key={index} marginTop={0}>
-								<Text color="yellow">
-									{departure.scheduledTime} to {departure.destination}:{' '}
-								</Text>
-								<Text dimColor>
-									{departure.delayReason && departure.delayReason.length > 60
-										? `${departure.delayReason.substring(0, 60)}...`
-										: departure.delayReason}
-								</Text>
+							<Box key={index} marginTop={0} flexDirection="column">
+								<Box>
+									<Text color="yellow">
+										{departure.scheduledTime} to {departure.destination}:{' '}
+									</Text>
+								</Box>
+								<Box marginLeft={2}>
+									<Text dimColor>
+										{departure.delayReason && departure.delayReason.length > 60
+											? `${departure.delayReason.substring(0, 60)}...`
+											: departure.delayReason}
+									</Text>
+								</Box>
 							</Box>
 						))}
 				</Box>
