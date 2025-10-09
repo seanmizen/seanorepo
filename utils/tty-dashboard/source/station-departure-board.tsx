@@ -33,6 +33,7 @@ type Props = {
 	width?: string | number;
 	height?: string | number;
 	isTTY?: boolean;
+	minHeight?: string | number;
 };
 
 export const StationDepartureBoard: FC<Props> = ({
@@ -45,6 +46,7 @@ export const StationDepartureBoard: FC<Props> = ({
 	useTestData = false,
 	isTTY = false,
 	countdownInterval = 10, // in seconds
+	minHeight = '50%',
 }) => {
 	// Merge provided columns with defaults
 	const displayColumns = {...DEFAULT_COLUMNS, ...columns};
@@ -94,6 +96,7 @@ export const StationDepartureBoard: FC<Props> = ({
 			paddingY={0}
 			width={width}
 			height={height}
+			minHeight={minHeight}
 		>
 			{/* Header */}
 			<Box marginBottom={1} justifyContent="space-between">
