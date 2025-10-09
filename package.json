@@ -8,7 +8,8 @@
   "license": "MIT",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "utils/*"
   ],
   "scripts": {
     "sean": "yarn workspace seanmizen.com start",
