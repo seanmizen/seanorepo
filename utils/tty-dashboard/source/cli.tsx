@@ -7,14 +7,7 @@ import {App} from './app.js';
 const cli = meow(
 	`
 	Usage
-	  $ debbie-dash
-
-	Options
-		--name  Your name
-
-	Examples
-	  $ debbie-dash --name=Jane
-	  Hello, Jane
+	  $ tty-dashboard
 `,
 	{
 		importMeta: import.meta,
