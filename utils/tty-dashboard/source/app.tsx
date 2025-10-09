@@ -13,8 +13,9 @@ const SHOW_TFL_DESCRIPTION = process.env['SHOW_TFL_DESCRIPTION'] === 'true';
 const MAX_RAIL_DEPARTURES = Number(process.env['MAX_RAIL_DEPARTURES']) || 4;
 const IS_TTY =
 	process.env['TERM'] === 'linux' || process.env['TERM']?.startsWith('vt');
-
-const SCREEN_REFRESH_INTERVAL = 10; // in seconds
+const REFRESH_INTERVAL = Number(process.env['REFRESH_INTERVAL']) || 120; // in seconds
+const SCREEN_REFRESH_INTERVAL =
+	Number(process.env['SCREEN_REFRESH_INTERVAL']) || 10; // in seconds
 
 const App: FC<Props> = () => {
 	const {exit} = useApp();
@@ -54,6 +55,7 @@ const App: FC<Props> = () => {
 					useTestData={USE_TEST_DATA}
 					showDescription={SHOW_TFL_DESCRIPTION}
 					isTTY={IS_TTY}
+					refreshInterval={REFRESH_INTERVAL}
 					countdownInterval={SCREEN_REFRESH_INTERVAL}
 				/>
 				<StationDepartureBoard
@@ -63,6 +65,7 @@ const App: FC<Props> = () => {
 					useTestData={USE_TEST_DATA}
 					maxDepartures={MAX_RAIL_DEPARTURES}
 					isTTY={IS_TTY}
+					refreshInterval={REFRESH_INTERVAL}
 					countdownInterval={SCREEN_REFRESH_INTERVAL}
 				/>
 			</Box>
