@@ -2,9 +2,6 @@ import React, {useState, useEffect, FC} from 'react';
 import {Text, Box} from 'ink';
 import {getTFLStatuses, TubeLineStatus} from './tfl-scraper.js';
 
-const SHOW_DESCRIPTION = false;
-const USE_TEST_DATA = true;
-
 const lineColors: Record<string, string> = {
 	Bakerloo: '#B36305',
 	Central: '#E32017',
@@ -47,12 +44,16 @@ type Props = {
 	width?: string | number;
 	height?: string | number;
 	refreshInterval?: number; // in seconds
+	useTestData?: boolean;
+	showDescription?: boolean;
 };
 
 export const TFLStatus: FC<Props> = ({
 	width,
 	height,
 	refreshInterval = 120,
+	useTestData = false,
+	showDescription = true,
 }) => {
 	const [tubeData, setTubeData] = useState<TubeLineStatus[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -65,7 +66,7 @@ export const TFLStatus: FC<Props> = ({
 		try {
 			setLoading(true);
 			setError(null);
-			const statuses = await getTFLStatuses(USE_TEST_DATA);
+			const statuses = await getTFLStatuses(useTestData);
 			setTubeData(statuses);
 			setLastUpdated(new Date());
 			setCountdown(refreshInterval);
@@ -151,7 +152,7 @@ export const TFLStatus: FC<Props> = ({
 									))}
 								</Box>
 							)}
-							{line.description && SHOW_DESCRIPTION && (
+							{line.description && showDescription && (
 								<Box marginLeft={2}>
 									<Text dimColor>{line.description}</Text>
 								</Box>
