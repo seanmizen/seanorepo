@@ -2,6 +2,7 @@ import React, {FC, useEffect} from 'react';
 import {Text, useInput, useApp, Box, useStdout} from 'ink';
 import {TFLStatus} from './tfl-status.js';
 import {StationDepartureBoard} from './station-departure-board.js';
+import {Tetris} from './tetris.js';
 
 type Props = {
 	name: string | undefined;
@@ -16,6 +17,8 @@ const IS_TTY =
 const REFRESH_INTERVAL = Number(process.env['REFRESH_INTERVAL']) || 120; // in seconds
 const SCREEN_REFRESH_INTERVAL =
 	Number(process.env['SCREEN_REFRESH_INTERVAL']) || 10; // in seconds
+const SECRET_MODES =
+	process.env['SECRET_MODES']?.split(',').map(s => s.trim()) || [];
 
 const App: FC<Props> = () => {
 	const {exit} = useApp();
@@ -50,14 +53,16 @@ const App: FC<Props> = () => {
 				</Box>
 			</Box>
 			<Box flexDirection="row" flexGrow={1}>
-				<TFLStatus
-					width="50%"
-					useTestData={USE_TEST_DATA}
-					showDescription={SHOW_TFL_DESCRIPTION}
-					isTTY={IS_TTY}
-					refreshInterval={REFRESH_INTERVAL}
-					countdownInterval={SCREEN_REFRESH_INTERVAL}
-				/>
+				<Box flexDirection="column" width="50%">
+					<TFLStatus
+						width="100%"
+						useTestData={USE_TEST_DATA}
+						showDescription={SHOW_TFL_DESCRIPTION}
+						isTTY={IS_TTY}
+						refreshInterval={REFRESH_INTERVAL}
+						countdownInterval={SCREEN_REFRESH_INTERVAL}
+					/>
+				</Box>
 				<StationDepartureBoard
 					stationName="Putney"
 					columns={{operator: false}}
@@ -69,6 +74,7 @@ const App: FC<Props> = () => {
 					countdownInterval={SCREEN_REFRESH_INTERVAL}
 				/>
 			</Box>
+			{SECRET_MODES.includes('tetris') && <Tetris />}
 			{SHOW_DEBUG_INFO && (
 				<Box justifyContent="space-between" width="100%">
 					<Text dimColor>Press 'q' or ESC to quit</Text>
