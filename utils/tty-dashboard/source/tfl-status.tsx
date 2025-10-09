@@ -43,7 +43,8 @@ const getStatusColor = (status: string): string => {
 type Props = {
 	width?: string | number;
 	height?: string | number;
-	refreshInterval?: number; // in seconds
+	refreshInterval?: number; // poll interval, in seconds
+	countdownInterval?: number; // screen refresh interval, in seconds
 	useTestData?: boolean;
 	showDescription?: boolean;
 	isTTY?: boolean;
@@ -56,6 +57,7 @@ export const TFLStatus: FC<Props> = ({
 	useTestData = false,
 	showDescription = true,
 	isTTY = false,
+	countdownInterval = 10, // in seconds
 }) => {
 	const [tubeData, setTubeData] = useState<TubeLineStatus[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -91,18 +93,15 @@ export const TFLStatus: FC<Props> = ({
 		};
 	}, []);
 
-	// Countdown timer
 	useEffect(() => {
 		if (loading) return;
 
-		const countdownIntervalMs =
-			Number(process.env['COUNTDOWN_INTERVAL_MS']) || 10000;
-		const countdownInterval = setInterval(() => {
-			setCountdown(prev => (prev > 0 ? prev - 1 : 0));
-		}, countdownIntervalMs);
+		const countdownIntervalRef = setInterval(() => {
+			setCountdown(prev => (prev > 0 ? prev - countdownInterval : 0));
+		}, countdownInterval * 1000);
 
 		return () => {
-			clearInterval(countdownInterval);
+			clearInterval(countdownIntervalRef);
 		};
 	}, [loading]);
 

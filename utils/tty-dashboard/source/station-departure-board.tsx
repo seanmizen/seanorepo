@@ -26,7 +26,8 @@ const DEFAULT_COLUMNS: ColumnConfig = {
 type Props = {
 	stationName: string;
 	useTestData?: boolean;
-	refreshInterval?: number; // in seconds
+	refreshInterval?: number; // poll interval, in seconds
+	countdownInterval?: number; // screen refresh interval, in seconds
 	maxDepartures?: number; // maximum number of departures to display
 	columns?: ColumnConfig; // which columns to display
 	width?: string | number;
@@ -43,6 +44,7 @@ export const StationDepartureBoard: FC<Props> = ({
 	height,
 	useTestData = false,
 	isTTY = false,
+	countdownInterval = 10, // in seconds
 }) => {
 	// Merge provided columns with defaults
 	const displayColumns = {...DEFAULT_COLUMNS, ...columns};
@@ -72,18 +74,15 @@ export const StationDepartureBoard: FC<Props> = ({
 		return () => clearInterval(interval);
 	}, [stationName, refreshInterval]);
 
-	// Countdown timer
 	useEffect(() => {
 		if (loading) return;
 
-		const countdownIntervalMs =
-			Number(process.env['COUNTDOWN_INTERVAL_MS']) || 10000;
-		const countdownInterval = setInterval(() => {
-			setCountdown(prev => (prev > 0 ? prev - 1 : 0));
-		}, countdownIntervalMs);
+		const countdownIntervalRef = setInterval(() => {
+			setCountdown(prev => (prev > 0 ? prev - countdownInterval : 0));
+		}, countdownInterval * 1000);
 
 		return () => {
-			clearInterval(countdownInterval);
+			clearInterval(countdownIntervalRef);
 		};
 	}, [loading]);
 
