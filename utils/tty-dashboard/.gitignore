@@ -1,3 +1,5 @@
 node_modules
 dist
 .yarn
+*player-script.js
+videos
