@@ -53,7 +53,8 @@ case $OS in
             libxtst6 \
             lsb-release \
             wget \
-            xdg-utils
+            xdg-utils \
+            ffmpeg
         ;;
     
     fedora|rhel|centos)
@@ -80,7 +81,8 @@ case $OS in
             xorg-x11-fonts-Type1 \
             xorg-x11-utils \
             mozilla-nss \
-            nspr
+            nspr \
+            ffmpeg
         ;;
     
     arch)
@@ -107,7 +109,8 @@ case $OS in
             mesa \
             nspr \
             nss \
-            pango
+            pango \
+            ffmpeg
         ;;
     
     *)
@@ -118,6 +121,7 @@ case $OS in
         echo "  - libatk-bridge2.0-0"
         echo "  - libgtk-3-0"
         echo "  - libgbm1"
+        echo "  - ffmpeg"
         echo "  - And other Chromium dependencies"
         exit 1
         ;;

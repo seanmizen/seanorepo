@@ -48,6 +48,7 @@ type Props = {
 	useTestData?: boolean;
 	showDescription?: boolean;
 	isTTY?: boolean;
+	minHeight?: string | number;
 };
 
 export const TFLStatus: FC<Props> = ({
@@ -58,6 +59,7 @@ export const TFLStatus: FC<Props> = ({
 	showDescription = true,
 	isTTY = false,
 	countdownInterval = 10, // in seconds
+	minHeight = '50%',
 }) => {
 	const [tubeData, setTubeData] = useState<TubeLineStatus[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -113,6 +115,7 @@ export const TFLStatus: FC<Props> = ({
 			paddingY={0}
 			width={width}
 			height={height}
+			minHeight={minHeight}
 		>
 			<Box marginBottom={1} justifyContent="space-between">
 				<Text bold color="cyan">
