@@ -111,14 +111,14 @@ export const TFLStatus: FC<Props> = ({
 			width={width}
 			height={height}
 		>
-			<Box marginBottom={1}>
+			<Box marginBottom={1} justifyContent="space-between">
 				<Text bold color="cyan">
 					🚇 TFL Tube Status
 				</Text>
 				{lastUpdated && (
 					<Box flexDirection="column" marginLeft={2}>
 						<Text dimColor>
-							Last updated: {lastUpdated.toLocaleTimeString()} - {countdown}s
+							Updated: {lastUpdated.toLocaleTimeString()} - {countdown}s
 						</Text>
 					</Box>
 				)}
