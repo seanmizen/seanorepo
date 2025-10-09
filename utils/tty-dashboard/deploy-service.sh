@@ -32,8 +32,18 @@ EnvironmentFile=$APP_DIR/.env
 ExecStart=$NODE_PATH $APP_DIR/dist/cli.js
 Restart=always
 RestartSec=3
-StandardOutput=journal
-StandardError=journal
+
+# --- Make it visible on screen ---
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+# --- Replace getty so login prompt doesn't conflict ---
+After=systemd-user-sessions.service getty@tty1.service
+Conflicts=getty@tty1.service
 
 [Install]
 WantedBy=multi-user.target
