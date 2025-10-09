@@ -5,8 +5,6 @@ import {
 	getNationalRailDepartures,
 } from './national-rail-scraper.js';
 
-const USE_TEST_DATA = true;
-
 export type ColumnConfig = {
 	time?: boolean;
 	destination?: boolean;
@@ -42,6 +40,7 @@ export const StationDepartureBoard: FC<Props> = ({
 	columns = DEFAULT_COLUMNS,
 	width,
 	height,
+	useTestData = false,
 }) => {
 	// Merge provided columns with defaults
 	const displayColumns = {...DEFAULT_COLUMNS, ...columns};
@@ -55,7 +54,7 @@ export const StationDepartureBoard: FC<Props> = ({
 		try {
 			setLoading(true);
 			setError(null);
-			const data = await getNationalRailDepartures(stationName, USE_TEST_DATA);
+			const data = await getNationalRailDepartures(stationName, useTestData);
 			setDepartures(data);
 			setLastUpdate(new Date());
 		} catch (err) {

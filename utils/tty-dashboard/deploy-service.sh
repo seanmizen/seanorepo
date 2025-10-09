@@ -28,6 +28,7 @@ After=network.target
 Type=simple
 User=$USER_NAME
 WorkingDirectory=$APP_DIR
+EnvironmentFile=$APP_DIR/.env
 ExecStart=$NODE_PATH $APP_DIR/dist/cli.js
 Restart=always
 RestartSec=3

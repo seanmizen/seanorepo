@@ -7,7 +7,9 @@ type Props = {
 	name: string | undefined;
 };
 
-const SHOW_SCREEN_DIMENSIONS = true;
+const SHOW_SCREEN_DIMENSIONS = process.env['SHOW_SCREEN_DIMENSIONS'] === 'true';
+const USE_TEST_DATA = process.env['USE_TEST_DATA'] === 'true';
+const SHOW_TFL_DESCRIPTION = process.env['SHOW_TFL_DESCRIPTION'] === 'true';
 
 const App: FC<Props> = () => {
 	const {exit} = useApp();
@@ -29,11 +31,16 @@ const App: FC<Props> = () => {
 			minHeight={stdout?.rows}
 		>
 			<Box flexDirection="row" flexGrow={1}>
-				<TFLStatus width="50%" />
+				<TFLStatus
+					width="50%"
+					useTestData={USE_TEST_DATA}
+					showDescription={SHOW_TFL_DESCRIPTION}
+				/>
 				<StationDepartureBoard
 					stationName="Putney"
 					columns={{operator: false}}
 					width="50%"
+					useTestData={USE_TEST_DATA}
 				/>
 			</Box>
 			<Box justifyContent="space-between" width="100%">
