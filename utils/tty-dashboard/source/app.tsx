@@ -80,23 +80,25 @@ const App: FC<Props> = () => {
 						refreshInterval={REFRESH_INTERVAL}
 						countdownInterval={SCREEN_REFRESH_INTERVAL}
 					/>
-					<SpoonsFinder
-						width="100%"
-						height="50%"
-						location={process.env['SPOONS_LOCATION'] || 'putney'}
-						lat={
-							process.env['SPOONS_LAT']
-								? Number(process.env['SPOONS_LAT'])
-								: undefined
-						}
-						lng={
-							process.env['SPOONS_LNG']
-								? Number(process.env['SPOONS_LNG'])
-								: undefined
-						}
-						useTestData={true} // TODO
-						isTTY={IS_TTY}
-					/>
+					{SECRET_MODES.includes('spoons') && (
+						<SpoonsFinder
+							width="100%"
+							height="50%"
+							location={process.env['SPOONS_LOCATION'] || 'putney'}
+							lat={
+								process.env['SPOONS_LAT']
+									? Number(process.env['SPOONS_LAT'])
+									: undefined
+							}
+							lng={
+								process.env['SPOONS_LNG']
+									? Number(process.env['SPOONS_LNG'])
+									: undefined
+							}
+							useTestData={true} // TODO
+							isTTY={IS_TTY}
+						/>
+					)}
 				</Box>
 			</Box>
 			{SHOW_DEBUG_INFO && (
