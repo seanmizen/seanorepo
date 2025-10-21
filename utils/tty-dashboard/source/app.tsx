@@ -63,6 +63,7 @@ const App: FC<Props> = () => {
 						isTTY={IS_TTY}
 						refreshInterval={REFRESH_INTERVAL}
 						countdownInterval={SCREEN_REFRESH_INTERVAL}
+						spooky={SECRET_MODES.includes('spooky')}
 					/>
 					<Box flexDirection="row" alignItems="flex-end" flexGrow={1}>
 						{SECRET_MODES.includes('tetris') && <Tetris />}
@@ -79,6 +80,7 @@ const App: FC<Props> = () => {
 						isTTY={IS_TTY}
 						refreshInterval={REFRESH_INTERVAL}
 						countdownInterval={SCREEN_REFRESH_INTERVAL}
+						spooky={SECRET_MODES.includes('spooky')}
 					/>
 					{SECRET_MODES.includes('spoons') && (
 						<SpoonsFinder
