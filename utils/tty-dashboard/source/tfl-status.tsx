@@ -181,7 +181,7 @@ export const TFLStatus: FC<Props> = ({
 			) : (
 				<>
 					{tubeData.map((line, index) => (
-						<Box key={index} flexDirection="column" marginBottom={1}>
+						<Box key={index} flexDirection="column">
 							<Box>
 								<Text color={getLineColor(line.lineName, isTTY)}>
 									{getLineIndicator(line.lineName, isTTY)}{' '}
@@ -208,7 +208,7 @@ export const TFLStatus: FC<Props> = ({
 						</Box>
 					))}
 					{tubeData.length > 0 && (
-						<Box marginTop={1} paddingTop={1}>
+						<Box marginTop={1}>
 							<Text color="green">Good service on all other lines</Text>
 						</Box>
 					)}
