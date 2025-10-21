@@ -84,6 +84,29 @@ type Props = {
 	showDescription?: boolean;
 	isTTY?: boolean;
 	minHeight?: string | number;
+	spooky?: boolean;
+};
+
+const spookifyLineName = (lineName: string): string => {
+	const spookMap: Record<string, string> = {
+		Bakerloo: 'Bakerboo',
+		Central: 'Scent-ral',
+		Circle: 'Carcass',
+		District: 'Die-strict',
+		Elizabeth: 'Elizadeath',
+		'Hammersmith & City': 'Hammerscythe & Creepy',
+		Jubilee: 'Boo-bilee',
+		Metropolitan: 'Necropolitan',
+		Northern: "Mournin'",
+		Piccadilly: 'Prickle-deadly',
+		Victoria: 'Vic-terror-ia',
+		'Waterloo & City': 'Wail-erloo & City',
+		DLR: 'DLR (Dead Light Rail)',
+		'London Overground': 'London Over-graveyard',
+		'London Trams': 'London Terrors',
+		'Emirates Cable Car': 'Emirates Cackle Scare',
+	};
+	return spookMap[lineName] || lineName;
 };
 
 export const TFLStatus: FC<Props> = ({
@@ -95,6 +118,7 @@ export const TFLStatus: FC<Props> = ({
 	isTTY = false,
 	countdownInterval = 10, // in seconds
 	minHeight = '50%',
+	spooky = false,
 }) => {
 	const [tubeData, setTubeData] = useState<TubeLineStatus[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -186,7 +210,9 @@ export const TFLStatus: FC<Props> = ({
 								<Text color={getLineColor(line.lineName, isTTY)}>
 									{getLineIndicator(line.lineName, isTTY)}{' '}
 								</Text>
-								<Text bold>{line.lineName}: </Text>
+								<Text bold>
+									{spooky ? spookifyLineName(line.lineName) : line.lineName}:{' '}
+								</Text>
 								<Text color={getStatusColor(line.statusSeverity)}>
 									{line.statusSeverity}
 								</Text>
@@ -209,7 +235,18 @@ export const TFLStatus: FC<Props> = ({
 					))}
 					{tubeData.length > 0 && (
 						<Box marginTop={1}>
-							<Text color="green">Good service on all other lines</Text>
+							<Text color="green">
+								{spooky
+									? 'Spooky service on all other lines'
+									: 'Good service on all other lines'}
+							</Text>
+						</Box>
+					)}
+					{spooky && (
+						<Box marginTop={1}>
+							<Text color="red" bold>
+								{isTTY ? '' : '⚠️ '}ALL LINES CALLING AT HOUNSLOW WEST ONLY
+							</Text>
 						</Box>
 					)}
 					{tubeData.length === 0 && (
