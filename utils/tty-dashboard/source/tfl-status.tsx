@@ -41,11 +41,23 @@ const lineColorsTTY: Record<string, string> = {
 	'Emirates Cable Car': 'red',
 };
 
+// Special indicators for lines that need different symbols in TTY
+const lineIndicatorsTTY: Record<string, string> = {
+	Northern: '▢▢', // Empty box character - visible white outline on black
+};
+
 const getLineColor = (lineName: string, isTTY: boolean): string => {
 	if (isTTY) {
 		return lineColorsTTY[lineName] || 'white';
 	}
 	return lineColors[lineName] || '#FFFFFF';
+};
+
+const getLineIndicator = (lineName: string, isTTY: boolean): string => {
+	if (isTTY && lineIndicatorsTTY[lineName]) {
+		return lineIndicatorsTTY[lineName];
+	}
+	return '▬▬';
 };
 
 const getStatusColor = (status: string): string => {
@@ -166,7 +178,9 @@ export const TFLStatus: FC<Props> = ({
 					{tubeData.map((line, index) => (
 						<Box key={index} flexDirection="column" marginBottom={1}>
 							<Box>
-								<Text color={getLineColor(line.lineName, isTTY)}>▬▬ </Text>
+								<Text color={getLineColor(line.lineName, isTTY)}>
+									{getLineIndicator(line.lineName, isTTY)}{' '}
+								</Text>
 								<Text bold>{line.lineName}: </Text>
 								<Text color={getStatusColor(line.statusSeverity)}>
 									{line.statusSeverity}
