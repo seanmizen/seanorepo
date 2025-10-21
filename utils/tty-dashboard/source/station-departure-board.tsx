@@ -134,7 +134,7 @@ export const StationDepartureBoard: FC<Props> = ({
 			{departures.length > 0 && (
 				<Box flexDirection="column">
 					{/* Column headers */}
-					<Box marginBottom={1}>
+					<Box>
 						{displayColumns.time && (
 							<Box width={7}>
 								<Text bold dimColor>
