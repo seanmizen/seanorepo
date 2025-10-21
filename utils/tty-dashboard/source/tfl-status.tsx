@@ -21,7 +21,30 @@ const lineColors: Record<string, string> = {
 	'Emirates Cable Car': '#E21836',
 };
 
-const getLineColor = (lineName: string): string => {
+// TTY-compatible ANSI color names
+const lineColorsTTY: Record<string, string> = {
+	Bakerloo: 'yellow',
+	Central: 'red',
+	Circle: 'yellow',
+	District: 'green',
+	Elizabeth: 'magenta',
+	'Hammersmith & City': 'magentaBright',
+	Jubilee: 'gray',
+	Metropolitan: 'magenta',
+	Northern: 'white',
+	Piccadilly: 'blue',
+	Victoria: 'cyan',
+	'Waterloo & City': 'cyan',
+	DLR: 'cyan',
+	'London Overground': 'yellow',
+	'London Trams': 'green',
+	'Emirates Cable Car': 'red',
+};
+
+const getLineColor = (lineName: string, isTTY: boolean): string => {
+	if (isTTY) {
+		return lineColorsTTY[lineName] || 'white';
+	}
 	return lineColors[lineName] || '#FFFFFF';
 };
 
@@ -143,7 +166,7 @@ export const TFLStatus: FC<Props> = ({
 					{tubeData.map((line, index) => (
 						<Box key={index} flexDirection="column" marginBottom={1}>
 							<Box>
-								<Text color={getLineColor(line.lineName)}>▬▬ </Text>
+								<Text color={getLineColor(line.lineName, isTTY)}>▬▬ </Text>
 								<Text bold>{line.lineName}: </Text>
 								<Text color={getStatusColor(line.statusSeverity)}>
 									{line.statusSeverity}
