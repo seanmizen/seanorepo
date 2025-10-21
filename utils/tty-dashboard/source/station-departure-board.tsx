@@ -34,6 +34,29 @@ type Props = {
 	height?: string | number;
 	isTTY?: boolean;
 	minHeight?: string | number;
+	spooky?: boolean;
+};
+
+const spookifyDestination = (destination: string): string => {
+	const spookMap: Record<string, string> = {
+		'London Waterloo': 'London Waterghoul',
+		Waterloo: 'Waterghoul',
+		Weybridge: 'Wailbridge',
+		Kingston: 'Killston',
+		'Windsor & Eton Riverside': 'Windscream & Eaten Riverside',
+		'Clapham Junction': 'Clapham Conjure-tion',
+		Putney: 'Putrefied',
+		Richmond: 'Wretchmond',
+		Wimbledon: 'Whimbledon',
+		Reading: 'Bleeding',
+		Guildford: 'Guiltyford',
+		Basingstoke: 'Hauntingstoke',
+		Southampton: 'Screamhampton',
+		Woking: 'Wailing',
+		Surbiton: 'Scarybiton',
+		Epsom: 'Creepsom',
+	};
+	return spookMap[destination] || destination;
 };
 
 export const StationDepartureBoard: FC<Props> = ({
@@ -47,6 +70,7 @@ export const StationDepartureBoard: FC<Props> = ({
 	isTTY = false,
 	countdownInterval = 10, // in seconds
 	minHeight = '50%',
+	spooky = false,
 }) => {
 	// Merge provided columns with defaults
 	const displayColumns = {...DEFAULT_COLUMNS, ...columns};
@@ -195,9 +219,14 @@ export const StationDepartureBoard: FC<Props> = ({
 							{displayColumns.destination && (
 								<Box width={30}>
 									<Text>
-										{departure.destination.length > 27
-											? `${departure.destination.substring(0, 27)}...`
-											: departure.destination}
+										{(() => {
+											const displayName = spooky
+												? spookifyDestination(departure.destination)
+												: departure.destination;
+											return displayName.length > 27
+												? `${displayName.substring(0, 27)}...`
+												: displayName;
+										})()}
 									</Text>
 								</Box>
 							)}
@@ -255,7 +284,11 @@ export const StationDepartureBoard: FC<Props> = ({
 							<Box key={index} marginTop={0} flexDirection="column">
 								<Box>
 									<Text color="yellow">
-										{departure.scheduledTime} to {departure.destination}:{' '}
+										{departure.scheduledTime} to{' '}
+										{spooky
+											? spookifyDestination(departure.destination)
+											: departure.destination}
+										:{' '}
 									</Text>
 								</Box>
 								<Box marginLeft={2}>
