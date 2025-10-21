@@ -59,6 +59,13 @@ const spookifyDestination = (destination: string): string => {
 	return spookMap[destination] || destination;
 };
 
+const spookifyStationName = (stationName: string): string => {
+	const spookMap: Record<string, string> = {
+		Putney: 'Putrid-ney',
+	};
+	return spookMap[stationName] || stationName;
+};
+
 export const StationDepartureBoard: FC<Props> = ({
 	stationName,
 	refreshInterval = 120,
@@ -131,7 +138,7 @@ export const StationDepartureBoard: FC<Props> = ({
 			<Box marginBottom={1} justifyContent="space-between">
 				<Text bold color="magenta">
 					{isTTY ? '' : '🚉 '}
-					{stationName} Departures
+					{spooky ? spookifyStationName(stationName) : stationName} Departures
 				</Text>
 				{lastUpdated && (
 					<Text dimColor color="gray">
@@ -169,14 +176,14 @@ export const StationDepartureBoard: FC<Props> = ({
 						{displayColumns.destination && (
 							<Box width={30}>
 								<Text bold dimColor>
-									Destination
+									{spooky ? 'Place of Death' : 'Destination'}
 								</Text>
 							</Box>
 						)}
 						{displayColumns.status && (
 							<Box width={12}>
 								<Text bold dimColor>
-									Status
+									{spooky ? 'Fate' : 'Status'}
 								</Text>
 							</Box>
 						)}
