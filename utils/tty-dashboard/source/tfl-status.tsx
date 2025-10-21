@@ -128,19 +128,24 @@ export const TFLStatus: FC<Props> = ({
 		return () => {
 			clearInterval(pollInterval);
 		};
-	}, []);
+	}, [refreshInterval]);
 
 	useEffect(() => {
 		if (loading) return;
 
-		const countdownIntervalRef = setInterval(() => {
-			setCountdown(prev => (prev > 0 ? prev - countdownInterval : 0));
+		const timer = setInterval(() => {
+			setCountdown(prev => {
+				const next = prev - countdownInterval;
+				// If we would hit 0 or go negative, reset to full interval
+				if (next <= 0) {
+					return refreshInterval;
+				}
+				return next;
+			});
 		}, countdownInterval * 1000);
 
-		return () => {
-			clearInterval(countdownIntervalRef);
-		};
-	}, [loading]);
+		return () => clearInterval(timer);
+	}, [loading, refreshInterval, countdownInterval]);
 
 	return (
 		<Box
