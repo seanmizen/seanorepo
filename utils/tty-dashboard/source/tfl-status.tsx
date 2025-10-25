@@ -90,21 +90,27 @@ type Props = {
 const spookifyLineName = (lineName: string): string => {
 	const spookMap: Record<string, string> = {
 		Bakerloo: 'Bakerboo',
-		Central: 'Scent-ral',
+		Central: 'SPOOKY Central',
 		Circle: 'Carcass',
 		District: 'Die-strict',
 		Elizabeth: 'Elizadeath',
 		'Hammersmith & City': 'Hammerscythe & Creepy',
 		Jubilee: 'Boo-bilee',
 		Metropolitan: 'Necropolitan',
-		Northern: "Mournin'",
-		Piccadilly: 'Prickle-deadly',
+		Northern: 'Mourning',
+		Piccadilly: 'Picca-deadly',
 		Victoria: 'Vic-terror-ia',
-		'Waterloo & City': 'Wail-erloo & City',
+		'Waterloo & City': 'Waterghoul & Shitty',
 		DLR: 'DLR (Dead Light Rail)',
 		'London Overground': 'London Over-graveyard',
-		'London Trams': 'London Terrors',
 		'Emirates Cable Car': 'Emirates Cackle Scare',
+		Liberty: 'Licherty',
+		Lioness: 'Liono-curse',
+		Mildmay: 'Mouldmay',
+		Suffragette: 'Goblin',
+		Weaver: 'Reaper',
+		Windrush: 'Windreaper',
+		Tram: 'Trance',
 	};
 	return spookMap[lineName] || lineName;
 };
