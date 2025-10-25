@@ -17,15 +17,21 @@ const lineColors: Record<string, string> = {
 	'Waterloo & City': '#95CDBA',
 	DLR: '#00A4A7',
 	'London Overground': '#EE7C0E',
-	'London Trams': '#84B817',
+	Tram: '#84B817',
 	'Emirates Cable Car': '#E21836',
+	Lioness: '#F1B41C',
+	Mildmay: '#437EC1',
+	Windrush: '#EF4D5E',
+	Weaver: '#972861',
+	Suffragette: '#39B97A',
+	Liberty: '#676767',
 };
 
 // TTY-compatible ANSI color names
 const lineColorsTTY: Record<string, string> = {
 	Bakerloo: 'yellow',
 	Central: 'red',
-	Circle: 'yellow',
+	Circle: 'yellowBright',
 	District: 'green',
 	Elizabeth: 'magenta',
 	'Hammersmith & City': 'magentaBright',
@@ -37,8 +43,15 @@ const lineColorsTTY: Record<string, string> = {
 	'Waterloo & City': 'cyan',
 	DLR: 'cyan',
 	'London Overground': 'yellow',
-	'London Trams': 'green',
+	Tram: 'green',
 	'Emirates Cable Car': 'red',
+	// Overground line names
+	Liberty: 'gray',
+	Lioness: 'yellowBright',
+	Mildmay: 'blue',
+	Suffragette: 'green',
+	Weaver: 'magenta',
+	Windrush: 'red',
 };
 
 // Special indicators for lines that need different symbols in TTY
