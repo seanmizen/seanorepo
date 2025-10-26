@@ -26,6 +26,7 @@ const Home = ({ setIsSnowing }) => {
     { component: <Github />, trigger: "github" },
     { component: <Donate />, trigger: "donate" },
     { component: <ThisPage />, trigger: "this page" },
+    { component: <Xmas />, trigger: "xmas lists!" },
   ];
 
   return (
