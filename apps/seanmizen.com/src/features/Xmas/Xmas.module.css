@@ -6,3 +6,8 @@
 .ul-link li {
   list-style-type: '-';
 }
+
+.emoji-header {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
