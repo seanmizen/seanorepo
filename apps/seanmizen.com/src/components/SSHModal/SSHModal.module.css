@@ -12,13 +12,14 @@
 }
 
 .modal {
-  background: white;
+  background: var(--background);
+  color: var(--color);
   padding: 2rem;
   border-radius: 8px;
   max-width: 500px;
   width: 90%;
   position: relative;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .closeButton {
@@ -29,7 +30,8 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--color);
+  opacity: 0.7;
   padding: 0;
   width: 2rem;
   height: 2rem;
@@ -39,7 +41,7 @@
 }
 
 .closeButton:hover {
-  color: #000;
+  opacity: 1;
 }
 
 .content {
@@ -49,11 +51,18 @@
 .input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--subsection-background);
   border-radius: 4px;
   font-size: 1rem;
   margin-bottom: 1rem;
   box-sizing: border-box;
+  background: var(--subsection-background);
+  color: var(--color);
+}
+
+.input::placeholder {
+  color: var(--color);
+  opacity: 0.5;
 }
 
 .button {
@@ -88,7 +97,7 @@
 
 .codeContainer {
   margin: 1rem 0;
-  background: #f5f5f5;
+  background: var(--subsection-background);
   padding: 1rem;
   border-radius: 4px;
 }
