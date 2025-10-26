@@ -46,6 +46,8 @@ const spookifyDestination = (destination: string): string => {
 		'Windsor & Eton Riverside': 'Windscream & Eaten Riverside',
 		'Clapham Junction': 'Clapham Conjure-tion',
 		Ascot: 'Ascot (but scary)',
+		Wokingham: 'WokingBAD',
+		Twickenham: 'Sickenham',
 		Putney: 'Putrefied',
 		Richmond: 'Wretchmond',
 		Wimbledon: 'Whimbledon',
