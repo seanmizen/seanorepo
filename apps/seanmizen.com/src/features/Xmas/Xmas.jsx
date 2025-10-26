@@ -31,7 +31,7 @@ const presentLists = {
 function Xmas() {
   return (
     <>
-      <div>🎅🎄✝️🕯️🫏🐑🏚️</div>
+      <div className={`${styles["emoji-header"]}`}>🎅🎄👶🕯️🫏🐑🏚️</div>
       {Object.keys(presentLists).map((key, index) => (
         <>
           <div>{key}:</div>
