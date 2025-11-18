@@ -5,6 +5,7 @@ import {StationDepartureBoard} from './station-departure-board.js';
 import {Tetris} from './tetris.js';
 import {YouTubeAsciiPlayer} from './youtube-ascii-player.js';
 import {SpoonsFinder} from './spoons-finder.js';
+import {XmasQuotes} from './xmas-quotes.js';
 
 type Props = {
 	name: string | undefined;
@@ -68,6 +69,7 @@ const App: FC<Props> = () => {
 					<Box flexDirection="row" alignItems="flex-end" flexGrow={1}>
 						{SECRET_MODES.includes('tetris') && <Tetris />}
 						{SECRET_MODES.includes('youtube') && <YouTubeAsciiPlayer />}
+						{SECRET_MODES.includes('xmas') && <XmasQuotes isTTY={IS_TTY} />}
 					</Box>
 				</Box>
 				<Box width="50%" flexGrow={1} flexDirection="column">
