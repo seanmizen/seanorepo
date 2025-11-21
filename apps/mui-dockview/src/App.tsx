@@ -10,7 +10,6 @@
 // };
 
 // export default App;
-import { Chip } from "@mui/material";
 import {
   DockviewApi,
   DockviewReact,
@@ -18,12 +17,20 @@ import {
   IDockviewPanelProps,
 } from "dockview";
 import { useState, useEffect } from "react";
+import { BreakpointChip, usePanelBreakpoint } from "./PanelBreakpoint";
 
 const Default = (props: IDockviewPanelProps) => {
+  const { panelRef, panelWidth, currentBreakpoint, chipVisible } =
+    usePanelBreakpoint();
+
   return (
-    <div style={{ height: "100%" }}>
+    <div ref={panelRef} style={{ height: "100%", position: "relative" }}>
+      <BreakpointChip
+        width={panelWidth}
+        breakpoint={currentBreakpoint}
+        visible={chipVisible}
+      />
       <div>{props.api.title}</div>
-      <Chip label="24px" color="primary" />
     </div>
   );
 };
