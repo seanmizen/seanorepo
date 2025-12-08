@@ -1,31 +1,31 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
   Box,
-  TextField,
-  CssBaseline,
   Card,
   CardActionArea,
   CardContent,
   CardMedia,
-  Radio,
-  Alert,
+  CssBaseline,
   Fade,
   Modal,
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-} from "@mui/material";
-import { FC, useCallback, useEffect, useState } from "react";
-import { useFormik } from "formik";
-import { object, string } from "yup";
-import { loadStripe } from "@stripe/stripe-js";
-import { configs, ConfigType } from "../../configs";
+  Radio,
+  TextField,
+} from '@mui/material';
 import {
   EmbeddedCheckout,
   EmbeddedCheckoutProvider,
-} from "@stripe/react-stripe-js";
+} from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { useFormik } from 'formik';
+import { type FC, useCallback, useEffect, useState } from 'react';
+import { object, string } from 'yup';
+import { type ConfigType, configs } from '../../configs';
 
 // until specified otherwise...
-const env = process.env.NODE_ENV || "development";
+const env = process.env.NODE_ENV || 'development';
 const config: ConfigType = configs[env];
 
 // https://docs.stripe.com/checkout/embedded/quickstart
@@ -77,10 +77,10 @@ const windowIsBigEnoughForSideBySide = () => window.innerWidth > 1250;
 
 // type CardDesign = "Robin and Ivy" | "Stuffed Toys";
 type CardDesign =
-  | "Dancing"
-  | "Sunrise 01"
-  | "Abstract Music"
-  | "Sail into Venice";
+  | 'Dancing'
+  | 'Sunrise 01'
+  | 'Abstract Music'
+  | 'Sail into Venice';
 
 type FormShape = {
   selectedCardDesign: CardDesign;
@@ -90,10 +90,10 @@ type FormShape = {
 };
 
 const cardDesigns: CardDesign[] = [
-  "Dancing",
-  "Sunrise 01",
-  "Abstract Music",
-  "Sail into Venice",
+  'Dancing',
+  'Sunrise 01',
+  'Abstract Music',
+  'Sail into Venice',
 ];
 
 const formSchema = object()
@@ -101,20 +101,20 @@ const formSchema = object()
   .shape({
     message: string()
       .max(1120, `Too long! Keep it under 1120 characters pls xxx`)
-      .min(1, "Too short!")
-      .required("Need to enter a message for your card!"),
+      .min(1, 'Too short!')
+      .required('Need to enter a message for your card!'),
     address: string()
-      .min(1, "Too short!")
-      .required("Please enter a postal address!"),
+      .min(1, 'Too short!')
+      .required('Please enter a postal address!'),
     email: string()
-      .email("Invalid email")
-      .min(5, "Too short!")
+      .email('Invalid email')
+      .min(5, 'Too short!')
       .required(
-        "We need your email to send a confirmation! (I don't do tracking or junk mail)"
+        "We need your email to send a confirmation! (I don't do tracking or junk mail)",
       ),
     selectedCardDesign: string().oneOf(
       cardDesigns,
-      "Please select a card design!"
+      'Please select a card design!',
     ),
   });
 
@@ -149,11 +149,11 @@ const ServerChecker: FC = () => {
     checkServerStatus();
   }, []);
 
-  const severity = initialRender ? "info" : isServerDown ? "error" : "success";
+  const severity = initialRender ? 'info' : isServerDown ? 'error' : 'success';
   const message = initialRender
-    ? "Checking server status..."
+    ? 'Checking server status...'
     : isServerDown
-      ? "The server is down"
+      ? 'The server is down'
       : `The server is up!`;
 
   useEffect(() => {
@@ -168,10 +168,10 @@ const ServerChecker: FC = () => {
       <Alert
         severity={severity}
         sx={{
-          position: "absolute",
+          position: 'absolute',
           top: 20,
           left: 20,
-          cursor: "pointer",
+          cursor: 'pointer',
         }}
         onClick={checkServerStatus}
       >
@@ -198,25 +198,25 @@ const App = () => {
 
   const [isMobile, setIsMobile] = useState(windowIsMobile());
   const [isBigEnoughForSideBySide, setIsBigEnoughForSideBySide] = useState(
-    windowIsBigEnoughForSideBySide()
+    windowIsBigEnoughForSideBySide(),
   );
 
   useEffect(() => {
-    window.addEventListener("resize", () => {
+    window.addEventListener('resize', () => {
       setIsMobile(windowIsMobile());
       setIsBigEnoughForSideBySide(windowIsBigEnoughForSideBySide());
     });
     return () => {
-      window.removeEventListener("resize", () => {});
+      window.removeEventListener('resize', () => {});
     };
   }, []);
 
   const formik = useFormik<FormShape>({
     initialValues: {
-      selectedCardDesign: "Dancing",
-      message: "",
-      address: "",
-      email: "",
+      selectedCardDesign: 'Dancing',
+      message: '',
+      address: '',
+      email: '',
     },
     isInitialValid: false,
     validateOnBlur: true,
@@ -228,9 +228,9 @@ const App = () => {
 
   const updateSessionFields = () => {
     fetch(`${config.serverApiPath}/update-session-fields`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         sessionToken,
@@ -240,7 +240,7 @@ const App = () => {
     })
       .then((res) => res.json())
       .catch((error) => {
-        console.error("Error submitting form:", error);
+        console.error('Error submitting form:', error);
       });
   };
 
@@ -254,7 +254,7 @@ const App = () => {
     name: fieldName,
     value: formik.values[fieldName],
     onChange: formik.handleChange,
-    onBlur: (e: any) => {
+    onBlur: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       formik.dirty && formik.handleBlur(e);
       updateSessionFields();
     },
@@ -267,23 +267,23 @@ const App = () => {
 
   const getRandomIndex = (max: number) => ~~(max * Math.random());
   const [randomPlaceholderIndex, setRandomPlaceholderIndex] = useState(
-    getRandomIndex(placeholderMessages.length)
+    getRandomIndex(placeholderMessages.length),
   );
   const [randomAddressIndex, setRandomAddressIndex] = useState(
-    getRandomIndex(fakeAddresses.length)
+    getRandomIndex(fakeAddresses.length),
   );
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState({
-    title: "Why am I open?",
-    body: "I am a modal. Hello.",
+    title: 'Why am I open?',
+    body: 'I am a modal. Hello.',
     accordion: `accordion\nnew line\ninfo`,
   });
 
   const [latestSessionId, setLatestSessionId] = useState<string | null>(null);
   const fetchClientSecret = useCallback(() => {
     return fetch(`${config.serverApiPath}/create-checkout-session`, {
-      method: "POST",
+      method: 'POST',
     })
       .then((res) => res.json())
       .then((data) => {
@@ -297,30 +297,30 @@ const App = () => {
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const stripeSessionId = urlParams.get("session_id");
+    const stripeSessionId = urlParams.get('session_id');
     if (stripeSessionId) {
       fetch(
-        `${config.serverApiPath}/session-status?session_id=${stripeSessionId}`
+        `${config.serverApiPath}/session-status?session_id=${stripeSessionId}`,
       )
         .then((res) => res.json())
         .then((data) => {
           setModalMessage({
-            title: "Card sent!",
+            title: 'Card sent!',
             body: "Thanks for your order!\nYou can go right in and make a new order, if you'd like. But you only have one mother, I assume. Thanks again.",
             accordion: `Session:\n${stripeSessionId}\n${JSON.stringify(data, null, 2)}`,
           });
           setModalOpen(true);
         })
         .catch((error) => {
-          console.error("Error fetching session status:", error);
+          console.error('Error fetching session status:', error);
           setModalMessage({
-            title: "Error! Sorry!",
-            body: "Something went wrong. Please check your email for a confirmation.",
+            title: 'Error! Sorry!',
+            body: 'Something went wrong. Please check your email for a confirmation.',
             accordion: `Session ${stripeSessionId}\n${JSON.stringify(error, null, 2)}`,
           });
           setModalOpen(true);
         });
-      window.history.replaceState({}, document.title, "/");
+      window.history.replaceState({}, document.title, '/');
     }
   }, []);
 
@@ -336,77 +336,77 @@ const App = () => {
       <CssBaseline />
       <Box
         sx={{
-          display: "flex",
-          minHeight: "100vh",
+          display: 'flex',
+          minHeight: '100vh',
           lineHeight: 1.1,
-          textAlign: "center",
-          flexDirection: isBigEnoughForSideBySide ? "row" : "column",
+          textAlign: 'center',
+          flexDirection: isBigEnoughForSideBySide ? 'row' : 'column',
           gap: isBigEnoughForSideBySide ? 20 : 0,
-          justifyContent: "center",
-          alignItems: isBigEnoughForSideBySide ? "flex-start" : "center",
+          justifyContent: 'center',
+          alignItems: isBigEnoughForSideBySide ? 'flex-start' : 'center',
           h1: {
-            fontSize: "3.6rem",
+            fontSize: '3.6rem',
             fontWeight: 700,
           },
           p: {
-            fontSize: "1.2rem",
+            fontSize: '1.2rem',
             fontWeight: 400,
-            color: "rgba(0, 0, 0, 0.7)",
+            color: 'rgba(0, 0, 0, 0.7)',
           },
         }}
       >
         <Box
           sx={{
-            maxWidth: "600px",
-            paddingTop: "20px",
+            maxWidth: '600px',
+            paddingTop: '20px',
           }}
         >
           <Box
-            component={"p"}
+            component={'p'}
             sx={{
-              whiteSpace: "pre-wrap",
-              margin: "20px",
+              whiteSpace: 'pre-wrap',
+              margin: '20px',
             }}
           >
             SEANSCARDS IS OUT OF SEASON - THANKS FOR YOUR INTEREST!
           </Box>
           <Box
             sx={{
-              width: "100%",
-              maxWidth: "600px",
-              display: "flex",
-              flexDirection: "column",
+              width: '100%',
+              maxWidth: '600px',
+              display: 'flex',
+              flexDirection: 'column',
               gap: 2,
-              alignItems: "center",
+              alignItems: 'center',
               // alignItems: "space-between",
-              padding: "20px",
-              marginBlock: "20px",
+              padding: '20px',
+              marginBlock: '20px',
             }}
-            component={"form"}
+            component={'form'}
             onSubmit={formik.handleSubmit}
             // noValidate
           >
             <Box
-              id={"rah"}
+              id={'rah'}
               gap={2}
               sx={{
-                display: "flex",
-                alignContent: "space-between",
-                justifyContent: "space-between",
+                display: 'flex',
+                alignContent: 'space-between',
+                justifyContent: 'space-between',
               }}
             >
               <Card
                 sx={{
                   maxWidth: 200,
                   border:
-                    formik.values.selectedCardDesign === "Dancing"
-                      ? "2px solid blue"
-                      : "none",
+                    formik.values.selectedCardDesign === 'Dancing'
+                      ? '2px solid blue'
+                      : 'none',
                 }}
               >
                 <CardActionArea
                   onClick={() => {
-                    formik.setFieldValue("selectedCardDesign", "Dancing");
+                    formik.setFieldValue('selectedCardDesign', 'Dancing');
                   }}
                 >
                   <CardMedia
@@ -417,7 +417,7 @@ const App = () => {
                   <CardContent>
                     <Radio
                       tabIndex={-1}
-                      checked={formik.values.selectedCardDesign === "Dancing"}
+                      checked={formik.values.selectedCardDesign === 'Dancing'}
                     />
                     Dancing
                   </CardContent>
@@ -428,14 +428,14 @@ const App = () => {
                 sx={{
                   maxWidth: 200,
                   border:
-                    formik.values.selectedCardDesign === "Sunrise 01"
-                      ? "2px solid blue"
-                      : "none",
+                    formik.values.selectedCardDesign === 'Sunrise 01'
+                      ? '2px solid blue'
+                      : 'none',
                 }}
               >
                 <CardActionArea
                   onClick={() => {
-                    formik.setFieldValue("selectedCardDesign", "Sunrise 01");
+                    formik.setFieldValue('selectedCardDesign', 'Sunrise 01');
                   }}
                 >
                   <CardMedia
@@ -447,7 +447,7 @@ const App = () => {
                     <Radio
                       tabIndex={-1}
                       checked={
-                        formik.values.selectedCardDesign === "Sunrise 01"
+                        formik.values.selectedCardDesign === 'Sunrise 01'
                       }
                     />
                     Sunrise 01
@@ -456,28 +456,28 @@ const App = () => {
               </Card>
             </Box>
             <Box
-              id={"rah"}
+              id={'rah'}
               gap={2}
               sx={{
-                display: "flex",
-                alignContent: "space-between",
-                justifyContent: "space-between",
+                display: 'flex',
+                alignContent: 'space-between',
+                justifyContent: 'space-between',
               }}
             >
               <Card
                 sx={{
                   maxWidth: 200,
                   border:
-                    formik.values.selectedCardDesign === "Abstract Music"
-                      ? "2px solid blue"
-                      : "none",
+                    formik.values.selectedCardDesign === 'Abstract Music'
+                      ? '2px solid blue'
+                      : 'none',
                 }}
               >
                 <CardActionArea
                   onClick={() => {
                     formik.setFieldValue(
-                      "selectedCardDesign",
-                      "Abstract Music"
+                      'selectedCardDesign',
+                      'Abstract Music',
                     );
                   }}
                 >
@@ -490,7 +490,7 @@ const App = () => {
                     <Radio
                       tabIndex={-1}
                       checked={
-                        formik.values.selectedCardDesign === "Abstract Music"
+                        formik.values.selectedCardDesign === 'Abstract Music'
                       }
                     />
                     Abstract Music
@@ -502,16 +502,16 @@ const App = () => {
                 sx={{
                   maxWidth: 200,
                   border:
-                    formik.values.selectedCardDesign === "Sail into Venice"
-                      ? "2px solid blue"
-                      : "none",
+                    formik.values.selectedCardDesign === 'Sail into Venice'
+                      ? '2px solid blue'
+                      : 'none',
                 }}
               >
                 <CardActionArea
                   onClick={() => {
                     formik.setFieldValue(
-                      "selectedCardDesign",
-                      "Sail into Venice"
+                      'selectedCardDesign',
+                      'Sail into Venice',
                     );
                   }}
                 >
@@ -524,7 +524,7 @@ const App = () => {
                     <Radio
                       tabIndex={-1}
                       checked={
-                        formik.values.selectedCardDesign === "Sail into Venice"
+                        formik.values.selectedCardDesign === 'Sail into Venice'
                       }
                     />
                     Sail into Venice
@@ -534,12 +534,12 @@ const App = () => {
             </Box>
             <Box
               sx={{
-                fontSize: "0.8rem",
-                color: "rgba(0, 0, 0, 0.6)",
-                textAlign: "center",
+                fontSize: '0.8rem',
+                color: 'rgba(0, 0, 0, 0.6)',
+                textAlign: 'center',
               }}
             >
-              (painted by the lovely{" "}
+              (painted by the lovely{' '}
               <a target="#" href="https://www.instagram.com/caroline.mizen/">
                 @caroline.mizen
               </a>
@@ -552,19 +552,19 @@ const App = () => {
               className="message"
               minRows={isMobile ? 5 : 10}
               sx={{
-                width: "100%",
-                maxWidth: "400px",
+                width: '100%',
+                maxWidth: '400px',
               }}
               onFocus={() =>
                 setRandomPlaceholderIndex(
-                  getRandomIndex(placeholderMessages.length)
+                  getRandomIndex(placeholderMessages.length),
                 )
               }
               placeholder={
                 placeholderMessages[randomPlaceholderIndex] +
-                "\n\n[Special requests in square brackets please!]"
+                '\n\n[Special requests in square brackets please!]'
               }
-              {...formikPropsForField("message")}
+              {...formikPropsForField('message')}
             />
             <TextField
               label="Recipient's postal address"
@@ -572,30 +572,30 @@ const App = () => {
               multiline
               minRows={isMobile ? 3 : 5}
               sx={{
-                width: "100%",
-                maxWidth: "400px",
+                width: '100%',
+                maxWidth: '400px',
               }}
               onFocus={() =>
                 setRandomAddressIndex(getRandomIndex(fakeAddresses.length))
               }
               placeholder={fakeAddresses[randomAddressIndex]}
-              {...formikPropsForField("address")}
+              {...formikPropsForField('address')}
             />
             <TextField
               label="Your email address"
               variant="outlined"
               sx={{
-                width: "100%",
-                maxWidth: "400px",
+                width: '100%',
+                maxWidth: '400px',
               }}
-              {...formikPropsForField("email")}
+              {...formikPropsForField('email')}
             />
           </Box>
         </Box>
         <Box
           sx={{
-            maxWidth: "600px",
-            paddingTop: "20px",
+            maxWidth: '600px',
+            paddingTop: '20px',
           }}
         >
           <Box id="checkout" position="relative" width="100%" height="100%">
@@ -611,13 +611,13 @@ const App = () => {
             <Box
               sx={{
                 pointerEvents: weCanProceedToCheckout
-                  ? "unset"
+                  ? 'unset'
                   : isMobile
-                    ? "unset"
-                    : "none",
-                width: "100%",
-                height: "100%",
-                marginBlock: "20px",
+                    ? 'unset'
+                    : 'none',
+                width: '100%',
+                height: '100%',
+                marginBlock: '20px',
               }}
             >
               <EmbeddedCheckoutProvider
@@ -631,18 +631,18 @@ const App = () => {
             {!weCanProceedToCheckout && (
               <Box
                 sx={{
-                  position: "absolute",
+                  position: 'absolute',
                   top: 0,
                   left: 0,
                   zIndex: 1,
-                  width: "100%",
-                  height: "100%",
-                  display: isMobile ? "none" : "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  pointerEvents: "none",
-                  backgroundColor: "rgba(255, 255, 255, 0.6)",
-                  whiteSpace: "pre-wrap",
+                  width: '100%',
+                  height: '100%',
+                  display: isMobile ? 'none' : 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                  backgroundColor: 'rgba(255, 255, 255, 0.6)',
+                  whiteSpace: 'pre-wrap',
                 }}
               >
                 Please complete the greetings card details first!
@@ -657,30 +657,30 @@ const App = () => {
             aria-labelledby="modal-modal-title"
             aria-describedby="modal-modal-description"
             sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             <Card
               sx={{
-                padding: "20px",
-                minWidth: "300px",
-                maxWidth: "600px",
+                padding: '20px',
+                minWidth: '300px',
+                maxWidth: '600px',
               }}
             >
               <Box
-                component={"p"}
+                component={'p'}
                 sx={{
-                  whiteSpace: "pre-wrap",
+                  whiteSpace: 'pre-wrap',
                 }}
               >
                 {modalMessage.title}
               </Box>
               <Box
-                component={"p"}
+                component={'p'}
                 sx={{
-                  whiteSpace: "pre-wrap",
+                  whiteSpace: 'pre-wrap',
                 }}
               >
                 {modalMessage.body}
@@ -690,8 +690,8 @@ const App = () => {
                   <AccordionSummary>behind the scenes info...</AccordionSummary>
                   <AccordionDetails
                     sx={{
-                      whiteSpace: "pre-wrap",
-                      overflowWrap: "anywhere",
+                      whiteSpace: 'pre-wrap',
+                      overflowWrap: 'anywhere',
                     }}
                   >
                     {modalMessage.accordion}

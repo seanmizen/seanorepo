@@ -11,20 +11,20 @@
 
 // export default App;
 import {
-  DockviewApi,
+  type DockviewApi,
   DockviewReact,
-  DockviewReadyEvent,
-  IDockviewPanelProps,
-} from "dockview";
-import { useState, useEffect } from "react";
-import { BreakpointChip, usePanelBreakpoint } from "./PanelBreakpoint";
+  type DockviewReadyEvent,
+  type IDockviewPanelProps,
+} from 'dockview';
+import { useEffect, useState } from 'react';
+import { BreakpointChip, usePanelBreakpoint } from './PanelBreakpoint';
 
 const Default = (props: IDockviewPanelProps) => {
   const { panelRef, panelWidth, currentBreakpoint, chipVisible } =
     usePanelBreakpoint();
 
   return (
-    <div ref={panelRef} style={{ height: "100%", position: "relative" }}>
+    <div ref={panelRef} style={{ height: '100%', position: 'relative' }}>
       <BreakpointChip
         width={panelWidth}
         breakpoint={currentBreakpoint}
@@ -76,12 +76,12 @@ const Component = (props: { theme?: string }) => {
       }),
 
       api.onWillDrop(() => {
-        console.log("onwilldrop");
+        console.log('onwilldrop');
         //
       }),
 
       api.onDidDrop(() => {
-        console.log("ondiddrop");
+        console.log('ondiddrop');
 
         //
       }),
@@ -98,53 +98,56 @@ const Component = (props: { theme?: string }) => {
     setApi(event.api);
 
     event.api.addPanel({
-      id: "panel_1",
-      component: "default",
+      id: 'panel_1',
+      component: 'default',
     });
 
     event.api.addPanel({
-      id: "panel_2",
-      component: "default",
+      id: 'panel_2',
+      component: 'default',
       position: {
-        direction: "right",
-        referencePanel: "panel_1",
+        direction: 'right',
+        referencePanel: 'panel_1',
       },
     });
 
     event.api.addPanel({
-      id: "panel_3",
-      component: "default",
+      id: 'panel_3',
+      component: 'default',
       position: {
-        direction: "below",
-        referencePanel: "panel_1",
+        direction: 'below',
+        referencePanel: 'panel_1',
       },
     });
     event.api.addPanel({
-      id: "panel_4",
-      component: "default",
+      id: 'panel_4',
+      component: 'default',
     });
     event.api.addPanel({
-      id: "panel_5",
-      component: "default",
+      id: 'panel_5',
+      component: 'default',
     });
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div>
         <button
+          type="button"
           onClick={() => setDisablePanelDrag(!disablePanelDrag)}
-        >{`Panel Drag: ${disablePanelDrag ? "disabled" : "enabled"}`}</button>
+        >{`Panel Drag: ${disablePanelDrag ? 'disabled' : 'enabled'}`}</button>
         <button
+          type="button"
           onClick={() => setDisableGroupDrag(!disableGroupDrag)}
-        >{`Group Drag: ${disableGroupDrag ? "disabled" : "enabled"}`}</button>
-        <button onClick={() => setDisableOverlay(!disableOverlay)}>{`Overlay: ${
-          disableOverlay ? "disabled" : "enabled"
-        }`}</button>
+        >{`Group Drag: ${disableGroupDrag ? 'disabled' : 'enabled'}`}</button>
+        <button
+          type="button"
+          onClick={() => setDisableOverlay(!disableOverlay)}
+        >{`Overlay: ${disableOverlay ? 'disabled' : 'enabled'}`}</button>
       </div>
       <div style={{ flexGrow: 1 }}>
         <DockviewReact
-          className={`${props.theme || "dockview-theme-abyss"}`}
+          className={`${props.theme || 'dockview-theme-abyss'}`}
           onReady={onReady}
           components={components}
         />

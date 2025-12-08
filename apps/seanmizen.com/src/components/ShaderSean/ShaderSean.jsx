@@ -1,17 +1,15 @@
-import { useEffect, useRef, useContext } from "react";
-import * as THREE from "three";
-import { OrbitControls, GPUComputationRenderer } from "three-stdlib";
-import Stats from "stats.js";
-import { ThemeContext } from "../../providers/Theme";
-
-import bgImage from "./IMG_4011_crop2.jpeg";
-import particleTex from "./particle2.png";
-
+import { useContext, useEffect, useRef } from 'react';
+import Stats from 'stats.js';
+import * as THREE from 'three';
+import { GPUComputationRenderer, OrbitControls } from 'three-stdlib';
+import { ThemeContext } from '../../providers/Theme';
+import frag from './frag-stippling.glsl';
+import posSim from './frag-stippling-pos.glsl';
+import velSim from './frag-stippling-vel.glsl';
+import bgImage from './IMG_4011_crop2.jpeg';
+import particleTex from './particle2.png';
 // GLSL sources – no “?raw”
-import vert from "./vert-stippling.glsl";
-import frag from "./frag-stippling.glsl";
-import posSim from "./frag-stippling-pos.glsl";
-import velSim from "./frag-stippling-vel.glsl";
+import vert from './vert-stippling.glsl';
 
 const ShaderSean = () => {
   const mountRef = useRef(null);
@@ -30,7 +28,7 @@ const ShaderSean = () => {
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.u_color.value.set(
-        theme === "light" ? 0x000000 : 0xdddddd
+        theme === 'light' ? 0x000000 : 0xdddddd,
       );
     }
   }, [theme]);
@@ -61,8 +59,8 @@ const ShaderSean = () => {
     const velTex = gpuSim.createTexture();
     seed(posTex.image.data, velTex.image.data);
 
-    const posVar = gpuSim.addVariable("u_positionTexture", posSim, posTex);
-    const velVar = gpuSim.addVariable("u_velocityTexture", velSim, velTex);
+    const posVar = gpuSim.addVariable('u_positionTexture', posSim, posTex);
+    const velVar = gpuSim.addVariable('u_velocityTexture', velSim, velTex);
 
     gpuSim.setVariableDependencies(posVar, [posVar, velVar]);
     gpuSim.setVariableDependencies(velVar, [posVar, velVar]);
@@ -75,16 +73,16 @@ const ShaderSean = () => {
       u_textureOffset: { value: new THREE.Vector2(12, 12) },
     });
 
-    if (gpuSim.init()) throw new Error("GPUComputation init failed");
+    if (gpuSim.init()) throw new Error('GPUComputation init failed');
 
     const n = simSize * simSize;
     const geometry = new THREE.BufferGeometry();
     const indices = new Float32Array(n);
     for (let i = 0; i < n; i++) indices[i] = i;
-    geometry.setAttribute("a_index", new THREE.BufferAttribute(indices, 1));
+    geometry.setAttribute('a_index', new THREE.BufferAttribute(indices, 1));
     geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(new Float32Array(3 * n), 3)
+      'position',
+      new THREE.BufferAttribute(new Float32Array(3 * n), 3),
     );
 
     const uniforms = {
@@ -97,7 +95,7 @@ const ShaderSean = () => {
       u_textureOffset: velVar.material.uniforms.u_textureOffset,
       u_texture: { value: new THREE.TextureLoader().load(particleTex) },
       u_color: {
-        value: new THREE.Color(theme === "light" ? 0x000000 : 0xdddddd),
+        value: new THREE.Color(theme === 'light' ? 0x000000 : 0xdddddd),
       },
       u_rippleOrigin: { value: ripple.current.origin.clone() },
       u_rippleTime: { value: -1 },
@@ -119,7 +117,7 @@ const ShaderSean = () => {
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
     };
-    addEventListener("resize", onResize);
+    addEventListener('resize', onResize);
 
     const startRipple = (e) => {
       ripple.current.time = performance.now();
@@ -130,11 +128,11 @@ const ShaderSean = () => {
       // Allow clicks outside canvas
       const clampedX = Math.max(
         0,
-        Math.min(e.clientX - bounds.left, bounds.width)
+        Math.min(e.clientX - bounds.left, bounds.width),
       );
       const clampedY = Math.max(
         0,
-        Math.min(e.clientY - bounds.top, bounds.height)
+        Math.min(e.clientY - bounds.top, bounds.height),
       );
 
       const x = (clampedX / bounds.width) * canvas.width;
@@ -143,7 +141,7 @@ const ShaderSean = () => {
       ripple.current.origin.set(x, canvas.height - y);
     };
 
-    window.addEventListener("click", startRipple);
+    window.addEventListener('click', startRipple);
 
     let frames = 0;
     const animate = () => {
@@ -171,9 +169,9 @@ const ShaderSean = () => {
     animate();
 
     return () => {
-      removeEventListener("resize", onResize);
+      removeEventListener('resize', onResize);
       mountRef.current?.removeChild(renderer.domElement) || null;
-      window.removeEventListener("click", startRipple);
+      window.removeEventListener('click', startRipple);
       renderer.dispose();
     };
   }, []);

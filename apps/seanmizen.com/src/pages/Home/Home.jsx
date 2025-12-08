@@ -1,16 +1,16 @@
-import { useState, useContext } from "react";
+import { useContext, useState } from 'react';
 
 import {
   HomeLi,
   LastUpdated,
   Spacer,
-  ThemeToggle,
   SSHModal,
-} from "../../components";
-import { Donate, Github, Projects, ThisPage, Xmas } from "../../features";
-import { ThemeContext } from "../../providers/Theme";
-import { ShaderSean } from "../../components/ShaderSean";
-import { useKeySequence } from "../../hooks";
+  ThemeToggle,
+} from '../../components';
+import { ShaderSean } from '../../components/ShaderSean';
+import { Donate, Github, Projects, ThisPage, Xmas } from '../../features';
+import { useKeySequence } from '../../hooks';
+import { ThemeContext } from '../../providers/Theme';
 
 const Home = ({ setIsSnowing }) => {
   const { mode, toggleMode } = useContext(ThemeContext);
@@ -18,15 +18,15 @@ const Home = ({ setIsSnowing }) => {
 
   useKeySequence({
     ssh: () => setIsSSHModalOpen(true),
-    poop: () => alert("oops, poop!"),
+    poop: () => alert('oops, poop!'),
   });
 
   const subsections = [
-    { component: <Projects />, trigger: "projects", subLink: "/apps" },
-    { component: <Github />, trigger: "github" },
-    { component: <Donate />, trigger: "donate" },
-    { component: <ThisPage />, trigger: "this page" },
-    { component: <Xmas />, trigger: "xmas lists!" },
+    { component: <Projects />, trigger: 'projects', subLink: '/apps' },
+    { component: <Github />, trigger: 'github' },
+    { component: <Donate />, trigger: 'donate' },
+    { component: <ThisPage />, trigger: 'this page' },
+    { component: <Xmas />, trigger: 'xmas lists!' },
   ];
 
   return (
@@ -35,9 +35,9 @@ const Home = ({ setIsSnowing }) => {
       <p>developer | automator | person</p>
       <Spacer />
       <ul>
-        {subsections.map((subsection, index) => (
+        {subsections.map((subsection) => (
           <HomeLi
-            key={index}
+            key={subsection.trigger}
             trigger={subsection.trigger}
             subLink={subsection.subLink}
             setIsSnowing={setIsSnowing}

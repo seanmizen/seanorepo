@@ -1,11 +1,13 @@
 // database actions e.g. seed, init, arbitrary query
 // TODO: bun:sqlite3? might be faster.
-import { Database } from "better-sqlite3";
-import { existsSync, unlinkSync } from "node:fs";
-import * as userService from "./users";
 
-const openDbConnection: () => Promise<Database> = async () => {
-  const db = new Database("./database.db");
+import { existsSync, unlinkSync } from 'node:fs';
+import type { Database as DatabaseType } from 'better-sqlite3';
+import Database from 'better-sqlite3';
+import * as userService from './users';
+
+const openDbConnection: () => Promise<DatabaseType> = async () => {
+  const db = new Database('./database.db');
   return db;
 };
 
@@ -14,13 +16,13 @@ const openDbConnection: () => Promise<Database> = async () => {
  *
  * but I couldn't figure that out at 2am
  */
-const runQuery = (connection: Database, query: string) =>
-  new Promise<void>((resolve, reject) => {
-    connection.run(query, (err: any) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
+const runQuery = (connection: DatabaseType, query: string) => {
+  try {
+    connection.prepare(query).run();
+  } catch (err) {
+    throw new Error(`Failed to execute query: ${query}. Error: ${err}`);
+  }
+};
 
 const seedDatabase = async () => {
   // V1: create the entire schema and some seed data in this function.
@@ -38,50 +40,51 @@ const seedDatabase = async () => {
     password_salt TEXT NOT NULL,
     salt_iterations INTEGER NOT NULL,
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`
+  )`,
   );
   connection.close();
-  console.debug("Database seeded");
+  console.debug('Database seeded');
 
   await userService.createUser({
-    email: "alice@bob.com",
-    password: "password",
-    role: "user",
+    email: 'alice@bob.com',
+    password: 'password',
+    role: 'user',
   });
   await userService.createUser({
-    email: "bob@bob.com",
-    password: "password",
+    email: 'bob@bob.com',
+    password: 'password',
   });
   await userService.createUser({
-    email: "daniel@bob.com",
-    password: "password",
+    email: 'daniel@bob.com',
+    password: 'password',
   });
 };
 
 const resetDatabase = async () => {
-  if (existsSync("./database.db")) unlinkSync("./database.db");
+  if (existsSync('./database.db')) unlinkSync('./database.db');
   await seedDatabase();
 };
 
 /**
  * Executes arbitrary SQL
  */
-const executeQuery: (sql: string) => Promise<any[]> = async (sql: string) => {
+const executeQuery: (sql: string) => Promise<unknown[]> = async (
+  sql: string,
+) => {
   const db = await openDbConnection();
 
   return new Promise((resolve, reject) => {
-    db.all<any>(sql, (err, rows) => {
-      if (err) {
-        console.error(err);
-        console.error("The above error occurred when executing the this SQL:");
-        console.error(sql);
-        db.close();
-        reject(err);
-      } else {
-        db.close();
-        resolve(rows);
-      }
-    });
+    try {
+      const rows = db.prepare(sql).all();
+      db.close();
+      resolve(rows);
+    } catch (err) {
+      console.error(err);
+      console.error('The above error occurred when executing this SQL:');
+      console.error(sql);
+      db.close();
+      reject(err);
+    }
   });
 };
 
@@ -93,11 +96,11 @@ const executeQuery: (sql: string) => Promise<any[]> = async (sql: string) => {
 const testDbConnection: () => Promise<boolean> = async () => {
   try {
     const db = await openDbConnection();
-    const result = await db.get("SELECT name FROM sqlite_master LIMIT 1");
+    const result = db.prepare('SELECT name FROM sqlite_master LIMIT 1').get();
     await db.close();
     return result !== undefined;
   } catch (error) {
-    console.error("Database connection test failed:", error);
+    console.error('Database connection test failed:', error);
     return false;
   }
 };
