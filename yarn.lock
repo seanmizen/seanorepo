@@ -888,7 +888,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@biomejs/biome@npm:^2.3.8":
+"@biomejs/biome@npm:2.3.8, @biomejs/biome@npm:^2.3.8":
   version: 2.3.8
   resolution: "@biomejs/biome@npm:2.3.8"
   dependencies:
@@ -10058,6 +10058,8 @@ __metadata:
 "seanorepo@workspace:.":
   version: 0.0.0-use.local
   resolution: "seanorepo@workspace:."
+  dependencies:
+    "@biomejs/biome": "npm:2.3.8"
   languageName: unknown
   linkType: soft
 
