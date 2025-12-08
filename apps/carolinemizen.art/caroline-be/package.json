@@ -22,24 +22,24 @@
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
-    "@fastify/cors": "^11.0.1",
+    "@fastify/cors": "^11.1.0",
     "@fastify/formbody": "^8.0.2",
     "@fastify/jwt": "^9.1.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/cors": "^2.8.17",
+    "@types/cors": "^2.8.19",
     "@types/humps": "^2.0.6",
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^11.10.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
-    "fastify": "^5.2.2",
+    "fastify": "^5.6.2",
     "humps": "^2.0.1",
-    "stripe": "^18.0.0"
+    "stripe": "^18.5.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
-    "@rslib/core": "^0.6.5",
-    "@types/node": "^22.8.1",
-    "typescript": "^5.8.3"
+    "@biomejs/biome": "^2.3.8",
+    "@rslib/core": "^0.18.3",
+    "@types/node": "^22.19.1",
+    "typescript": "^5.9.3"
   },
   "private": true
 }
