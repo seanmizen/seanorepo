@@ -5,14 +5,16 @@ import styles from '../ThisPage.module.css';
 function ColorPicker() {
   const defaultBackgroundColor = '#EEEEEE';
   const defaultTextColor = '#000000';
-  const [backgroundColor, setBackgroundColor] = useState(defaultBackgroundColor);
+  const [backgroundColor, setBackgroundColor] = useState(
+    defaultBackgroundColor,
+  );
   const [textColor, setTextColor] = useState(defaultTextColor);
 
-  const setBodyBackgroundColor = newColor => {
+  const setBodyBackgroundColor = (newColor) => {
     setBackgroundColor(newColor);
     document.body.style.backgroundColor = newColor;
   };
-  const setBodyTextColor = newColor => {
+  const setBodyTextColor = (newColor) => {
     setTextColor(newColor);
     document.body.style.color = newColor;
   };
@@ -29,10 +31,8 @@ function ColorPicker() {
         <div>background</div>
         <div className={styles.flexRow}>
           <input
-            tabIndex={0}
-            role="menu"
             aria-label="Background colour picker"
-            onChange={e => setBodyBackgroundColor(e.target.value)}
+            onChange={(e) => setBodyBackgroundColor(e.target.value)}
             type="color"
             id="background-color"
             name="head"
@@ -47,10 +47,8 @@ function ColorPicker() {
         <div>text</div>
         <div className={styles.flexRow}>
           <input
-            tabIndex={0}
-            role="menu"
             aria-label="Page text colour picker"
-            onChange={e => setBodyTextColor(e.target.value)}
+            onChange={(e) => setBodyTextColor(e.target.value)}
             type="color"
             id="text-color"
             name="head"

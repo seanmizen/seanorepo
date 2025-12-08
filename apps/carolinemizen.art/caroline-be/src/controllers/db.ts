@@ -1,11 +1,12 @@
 // direct DB access controller
-import { dbService, userService } from "../services";
-import {
-  FastifyRequest,
-  FastifyReply,
+
+import type {
   FastifyInstance,
   FastifyPluginOptions,
-} from "fastify";
+  FastifyReply,
+  FastifyRequest,
+} from 'fastify';
+import { dbService, userService } from '../services';
 
 /**
  * I don't have to tell you this is unsafe
@@ -22,7 +23,7 @@ const executeQuery = async (request: FastifyRequest, reply: FastifyReply) => {
 
 const testDbConnection = async (
   _request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   const result = await dbService.testDbConnection();
   reply.send(result);
@@ -43,13 +44,13 @@ const resetDatabase = async () => {
 
 const routes = async (
   fastify: FastifyInstance,
-  _options: FastifyPluginOptions
+  _options: FastifyPluginOptions,
 ) => {
-  fastify.post("/", executeQuery);
-  fastify.get("/test", testDbConnection);
-  fastify.get("/", getUsers);
-  fastify.post("/seed", seedDatabase);
-  fastify.post("/reset", resetDatabase);
+  fastify.post('/', executeQuery);
+  fastify.get('/test', testDbConnection);
+  fastify.get('/', getUsers);
+  fastify.post('/seed', seedDatabase);
+  fastify.post('/reset', resetDatabase);
 };
 
 export { routes };

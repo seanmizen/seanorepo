@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef } from 'react';
 
 /**
  * A hook that listens to keypress sequences and triggers callbacks
@@ -7,11 +7,11 @@ import { useEffect, useRef, useCallback } from "react";
  * @returns {string} - Current key sequence
  */
 export const useKeySequence = (sequences = {}, debounceMs = 2000) => {
-  const sequenceRef = useRef("");
+  const sequenceRef = useRef('');
   const timeoutRef = useRef(null);
 
   const clearSequence = useCallback(() => {
-    sequenceRef.current = "";
+    sequenceRef.current = '';
   }, []);
 
   const resetTimeout = useCallback(() => {
@@ -25,8 +25,8 @@ export const useKeySequence = (sequences = {}, debounceMs = 2000) => {
     const handleKeyPress = (event) => {
       // Ignore keypresses in input fields, textareas, etc.
       if (
-        event.target.tagName === "INPUT" ||
-        event.target.tagName === "TEXTAREA" ||
+        event.target.tagName === 'INPUT' ||
+        event.target.tagName === 'TEXTAREA' ||
         event.target.isContentEditable
       ) {
         return;
@@ -49,10 +49,10 @@ export const useKeySequence = (sequences = {}, debounceMs = 2000) => {
       }
     };
 
-    window.addEventListener("keypress", handleKeyPress);
+    window.addEventListener('keypress', handleKeyPress);
 
     return () => {
-      window.removeEventListener("keypress", handleKeyPress);
+      window.removeEventListener('keypress', handleKeyPress);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }

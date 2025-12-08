@@ -1,2 +1,2 @@
-export { FullScreenComponent } from "./full-screen-component.styled";
-export { Nav } from "./nav";
+export { FullScreenComponent } from './full-screen-component.styled';
+export { Nav } from './nav';

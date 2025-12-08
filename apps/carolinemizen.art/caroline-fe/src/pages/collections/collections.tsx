@@ -1,9 +1,7 @@
-import { FC } from 'react';
+import type { FC } from 'react';
 import { Nav } from '../../components/nav';
 
-interface CollectionsProps {}
-
-const Collections: FC<CollectionsProps> = () => {
+const Collections: FC = () => {
   return (
     <>
       <Nav />
@@ -15,4 +13,3 @@ const Collections: FC<CollectionsProps> = () => {
 };
 
 export { Collections };
-export type { CollectionsProps };

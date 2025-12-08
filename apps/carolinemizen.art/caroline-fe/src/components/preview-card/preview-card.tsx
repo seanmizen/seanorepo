@@ -1,14 +1,14 @@
-import { FC } from 'react';
+import type { FC } from 'react';
+import type { LinkProps } from 'react-router-dom';
+import { LazyLoadImage, type LazyLoadImageProps } from '..';
 import {
-  Wrapper,
-  Title,
   Description,
   IconRow,
   IconWrapper,
   ImageContainer,
+  Title,
+  Wrapper,
 } from './preview-card.styled';
-import { LazyLoadImage, LazyLoadImageProps } from '..';
-import { LinkProps } from 'react-router-dom';
 
 interface PreviewCardProps extends LinkProps {
   title?: string;
@@ -46,11 +46,11 @@ const PreviewCard: FC<PreviewCardProps> = ({
           <LazyLoadImage {...imageProps} />
         </ImageContainer>
       )}
-      {icons && icons.length && (
+      {icons?.length && (
         <IconRow>
-          {icons.map((icon, index) => (
-            <IconWrapper key={index}>
-              <img src={icon} width={50} />
+          {icons.map((icon) => (
+            <IconWrapper key={icon}>
+              <img src={icon} width={50} alt="icon" />
             </IconWrapper>
           ))}
         </IconRow>

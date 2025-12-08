@@ -1,6 +1,6 @@
-import { FC } from "react";
-import { Link } from "react-router-dom";
-import { FullScreenComponent } from "../../../components";
+import type { FC } from 'react';
+import { Link } from 'react-router-dom';
+import { FullScreenComponent } from '../../../components';
 
 const NotFound: FC = () => (
   <FullScreenComponent>

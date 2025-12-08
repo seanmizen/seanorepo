@@ -1,4 +1,4 @@
-window.onload = function () {
+window.onload = () => {
   runSketch();
 };
 
@@ -29,7 +29,7 @@ function runSketch() {
     renderer.setClearColor(new THREE.Color(0.95, 0.95, 0.95));
 
     // Add the renderer to the sketch container
-    var container = document.getElementById("sketch-container");
+    var container = document.getElementById('sketch-container');
     container.appendChild(renderer.domElement);
 
     // Initialize the scene
@@ -40,7 +40,7 @@ function runSketch() {
       75,
       window.innerWidth / window.innerHeight,
       0.1,
-      5000
+      5000,
     );
     camera.position.z = 20;
 
@@ -50,16 +50,16 @@ function runSketch() {
 
     // Initialize the statistics monitor and add it to the sketch container
     stats = new Stats();
-    stats.dom.style.cssText = "";
-    document.getElementById("sketch-stats").appendChild(stats.dom);
+    stats.dom.style.cssText = '';
+    document.getElementById('sketch-stats').appendChild(stats.dom);
 
     // Initialize the simulator
     var isDesktop = Math.min(window.innerWidth, window.innerHeight) > 450;
     var simSizeX = isDesktop ? 64 : 64;
     var simSizeY = isDesktop ? 64 : 64;
     simulator = getSimulator(simSizeX, simSizeY, renderer);
-    positionVariable = getSimulationVariable("u_positionTexture", simulator);
-    velocityVariable = getSimulationVariable("u_velocityTexture", simulator);
+    positionVariable = getSimulationVariable('u_positionTexture', simulator);
+    velocityVariable = getSimulationVariable('u_velocityTexture', simulator);
 
     // Create the particles geometry
     var geometry = new THREE.BufferGeometry();
@@ -68,57 +68,58 @@ function runSketch() {
     var nParticles = simSizeX * simSizeY;
     var indices = new Float32Array(nParticles);
     var positions = new Float32Array(3 * nParticles);
-    geometry.addAttribute("a_index", new THREE.BufferAttribute(indices, 1));
-    geometry.addAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.addAttribute('a_index', new THREE.BufferAttribute(indices, 1));
+    geometry.addAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     // Fill the indices attribute. It's not necessary to fill the positions
     // attribute because it's not used in the shaders (the position texture is
     // used instead)
-    for (var i = 0; i < nParticles; i++) {
+    let i;
+    for (i = 0; i < nParticles; i++) {
       indices[i] = i;
     }
 
     // Define the particle shader uniforms
     uniforms = {
       u_width: {
-        type: "f",
+        type: 'f',
         value: simSizeX,
       },
       u_height: {
-        type: "f",
+        type: 'f',
         value: simSizeY,
       },
       u_particleSize: {
-        type: "f",
+        type: 'f',
         value: 80 * Math.min(window.devicePixelRatio, 2),
       },
       u_nActiveParticles: {
-        type: "f",
+        type: 'f',
         value: 1,
       },
       u_positionTexture: {
-        type: "t",
+        type: 't',
         value: null,
       },
       u_bgTexture: {
-        type: "t",
+        type: 't',
         value: velocityVariable.material.uniforms.u_bgTexture.value,
       },
       u_textureOffset: {
-        type: "v2",
+        type: 'v2',
         value: velocityVariable.material.uniforms.u_textureOffset.value,
       },
       u_texture: {
-        type: "t",
-        value: new THREE.TextureLoader().load("img/particle2.png"),
+        type: 't',
+        value: new THREE.TextureLoader().load('img/particle2.png'),
       },
     };
 
     // Create the particles shader material
     var material = new THREE.ShaderMaterial({
       uniforms: uniforms,
-      vertexShader: document.getElementById("vertexShader").textContent,
-      fragmentShader: document.getElementById("fragmentShader").textContent,
+      vertexShader: document.getElementById('vertexShader').textContent,
+      fragmentShader: document.getElementById('fragmentShader').textContent,
       depthTest: false,
       lights: false,
       transparent: true,
@@ -129,7 +130,7 @@ function runSketch() {
     scene.add(particles);
 
     // Add the event listeners
-    window.addEventListener("resize", onWindowResize, false);
+    window.addEventListener('resize', onWindowResize, false);
 
     // Initialize the frames counter
     frames = 0;
@@ -151,14 +152,14 @@ function runSketch() {
 
     // Add the position and velocity variables to the simulator
     var positionVariable = gpuSimulator.addVariable(
-      "u_positionTexture",
-      document.getElementById("positionShader").textContent,
-      positionTexture
+      'u_positionTexture',
+      document.getElementById('positionShader').textContent,
+      positionTexture,
     );
     var velocityVariable = gpuSimulator.addVariable(
-      "u_velocityTexture",
-      document.getElementById("velocityShader").textContent,
-      velocityTexture
+      'u_velocityTexture',
+      document.getElementById('velocityShader').textContent,
+      velocityTexture,
     );
 
     // Specify the variable dependencies
@@ -174,30 +175,30 @@ function runSketch() {
     // Add the position uniforms
     var positionUniforms = positionVariable.material.uniforms;
     positionUniforms.u_dt = {
-      type: "f",
+      type: 'f',
       value: 0.2,
     };
     positionUniforms.u_nActiveParticles = {
-      type: "f",
+      type: 'f',
       value: 1,
     };
 
     // Add the velocity uniforms
     var velocityUniforms = velocityVariable.material.uniforms;
     velocityUniforms.u_dt = {
-      type: "f",
+      type: 'f',
       value: positionUniforms.u_dt.value,
     };
     velocityUniforms.u_nActiveParticles = {
-      type: "f",
+      type: 'f',
       value: positionUniforms.u_nActiveParticles.value,
     };
     velocityUniforms.u_bgTexture = {
-      type: "t",
-      value: new THREE.TextureLoader().load("./IMG_4011_crop2.jpeg"),
+      type: 't',
+      value: new THREE.TextureLoader().load('./IMG_4011_crop2.jpeg'),
     };
     velocityUniforms.u_textureOffset = {
-      type: "v2",
+      type: 'v2',
       value: new THREE.Vector2(15, 15),
     };
 
@@ -222,13 +223,17 @@ function runSketch() {
     // Fill the position and velocity arrays
     var nParticles = position.length / 4;
 
-    for (var i = 0; i < nParticles; i++) {
+    let i;
+    let distance;
+    let ang;
+    let particleIndex;
+    for (i = 0; i < nParticles; i++) {
       // Get a random point inside a disk
-      var distance = 4 * Math.pow(Math.random(), 1 / 2);
-      var ang = 2 * Math.PI * Math.random();
+      distance = 4 * Math.random() ** (1 / 2);
+      ang = 2 * Math.PI * Math.random();
 
       // Calculate the point x,y,z coordinates
-      var particleIndex = 4 * i;
+      particleIndex = 4 * i;
       position[particleIndex] = distance * Math.cos(ang);
       position[particleIndex + 1] = distance * Math.sin(ang);
       position[particleIndex + 2] = 0;
@@ -246,7 +251,8 @@ function runSketch() {
    * Returns the requested simulation variable
    */
   function getSimulationVariable(variableName, gpuSimulator) {
-    for (var i = 0; i < gpuSimulator.variables.length; i++) {
+    let i;
+    for (i = 0; i < gpuSimulator.variables.length; i++) {
       if (gpuSimulator.variables[i].name === variableName) {
         return gpuSimulator.variables[i];
       }
@@ -269,7 +275,8 @@ function runSketch() {
    */
   function render() {
     // Run several iterations per frame
-    for (var i = 0; i < 1; i++) {
+    let i;
+    for (i = 0; i < 1; i++) {
       simulator.compute();
     }
 
@@ -291,7 +298,7 @@ function runSketch() {
   /*
    * Updates the renderer size and the camera aspect ratio when the window is resized
    */
-  function onWindowResize(event) {
+  function onWindowResize(_event) {
     // Update the renderer
     renderer.setSize(window.innerWidth, window.innerHeight);
 

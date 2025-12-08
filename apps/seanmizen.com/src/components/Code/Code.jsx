@@ -6,7 +6,9 @@ function Code({ content, commandLine }) {
       <code>
         {!commandLine
           ? content
-          : content.split('\n').map((item, i) => <span key={i}>{`${item}\n`}</span>)}
+          : content
+              .split('\n')
+              .map((item) => <span key={item}>{`${item}\n`}</span>)}
       </code>
     </pre>
   );

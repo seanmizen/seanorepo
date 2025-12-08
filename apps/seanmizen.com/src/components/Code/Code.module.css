@@ -6,20 +6,20 @@ code {
   padding: 0.3rem 1rem;
   margin: 0.5rem 0;
   display: inline-block;
-  font-family: 'Red Hat Mono', 'Courier New', Courier, monospace;
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
   white-space: pre-line;
 }
 
 /* use code > span for command line stuff! */
 code > span {
-  font-family: 'Red Hat Mono', 'Courier New', Courier, monospace;
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
   white-space: pre-line;
 }
 
 code > span::before {
-  content: '$ ';
+  content: "$ ";
 }
 
 .dark code {

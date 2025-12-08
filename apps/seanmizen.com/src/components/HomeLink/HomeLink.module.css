@@ -1,5 +1,5 @@
 .home-link::before {
-  content: '<< ';
+  content: "<< ";
   display: inline-block;
   white-space: pre-wrap;
   padding: 0.2rem;

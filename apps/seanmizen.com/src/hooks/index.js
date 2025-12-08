@@ -1,1 +1,1 @@
-export { useKeySequence } from "./useKeySequence";
+export { useKeySequence } from './useKeySequence';

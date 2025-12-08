@@ -1,4 +1,4 @@
-import { Chip } from "@mui/material";
+import { Chip } from '@mui/material';
 
 export interface BreakpointChipProps {
   width: number;
@@ -33,17 +33,17 @@ export const BreakpointChip = ({
   return (
     <div
       style={{
-        position: "absolute",
+        position: 'absolute',
         top: 8,
         right: 8,
         zIndex: 1000,
-        pointerEvents: "none",
+        pointerEvents: 'none',
         opacity: visible ? 0.9 : 0,
-        transition: visible ? "none" : "opacity 1s ease-out",
+        transition: visible ? 'none' : 'opacity 1s ease-out',
       }}
     >
       <Chip
-        sx={{ borderRadius: "4px" }}
+        sx={{ borderRadius: '4px' }}
         label={`${width}px / ${breakpoint}`}
         color="secondary"
         size="small"

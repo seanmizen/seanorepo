@@ -1,9 +1,9 @@
-import { useState, useEffect, createContext } from 'react';
+import { createContext, useEffect, useState } from 'react';
 
 const localStorageKey = 'mode';
 const modes = ['system', 'light', 'dark'];
 
-const saveMode = async mode => {};
+const saveMode = async (_mode) => {};
 
 export const ThemeContext = createContext({
   mode: 'system',
@@ -13,13 +13,15 @@ export const ThemeContext = createContext({
 });
 
 export const ThemeProvider = ({ children }) => {
-  const [mode, setMode] = useState(() => localStorage.getItem(localStorageKey) || 'system');
+  const [mode, setMode] = useState(
+    () => localStorage.getItem(localStorageKey) || 'system',
+  );
   const [theme, setTheme] = useState(() =>
     mode !== 'system'
       ? mode
       : window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light',
+        ? 'dark'
+        : 'light',
   );
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export const ThemeProvider = ({ children }) => {
       return;
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = e => setTheme(e.matches ? 'dark' : 'light');
+    const handler = (e) => setTheme(e.matches ? 'dark' : 'light');
     handler(media);
     media.addEventListener('change', handler);
     return () => media.removeEventListener('change', handler);
@@ -48,7 +50,8 @@ export const ThemeProvider = ({ children }) => {
     if (meta) meta.content = theme;
   }, [theme]);
 
-  const toggleMode = () => setMode(modes[(modes.indexOf(mode) + 1) % modes.length]);
+  const toggleMode = () =>
+    setMode(modes[(modes.indexOf(mode) + 1) % modes.length]);
 
   return (
     <ThemeContext.Provider value={{ theme, mode, setMode, toggleMode }}>

@@ -20,11 +20,11 @@ export type PanelBreakpoint = keyof PanelBreakpointConfig;
 
 export const getCurrentPanelBreakpoint = (
   width: number,
-  breakpoints: PanelBreakpointConfig = defaultBreakpoints
+  breakpoints: PanelBreakpointConfig = defaultBreakpoints,
 ): PanelBreakpoint => {
-  if (width < breakpoints.sm) return "xs";
-  if (width < breakpoints.md) return "sm";
-  if (width < breakpoints.lg) return "md";
-  if (width < breakpoints.xl) return "lg";
-  return "xl";
+  if (width < breakpoints.sm) return 'xs';
+  if (width < breakpoints.md) return 'sm';
+  if (width < breakpoints.lg) return 'md';
+  if (width < breakpoints.xl) return 'lg';
+  return 'xl';
 };

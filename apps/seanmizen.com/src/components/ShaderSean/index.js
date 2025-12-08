@@ -1,1 +1,1 @@
-export { ShaderSean } from "./ShaderSean";
+export { ShaderSean } from './ShaderSean';

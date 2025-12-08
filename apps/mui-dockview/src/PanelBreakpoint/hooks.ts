@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getCurrentPanelBreakpoint,
-  PanelBreakpointConfig,
-} from "./breakpoints";
+  type PanelBreakpointConfig,
+} from './breakpoints';
 
 export interface UsePanelBreakpointOptions {
   breakpoints?: PanelBreakpointConfig;
@@ -74,7 +74,7 @@ export const usePanelBreakpoint = (options: UsePanelBreakpointOptions = {}) => {
 
   const currentBreakpoint = useMemo(
     () => getCurrentPanelBreakpoint(panelWidth, breakpoints),
-    [panelWidth, breakpoints]
+    [panelWidth, breakpoints],
   );
 
   const handleResize = useCallback(
@@ -91,7 +91,7 @@ export const usePanelBreakpoint = (options: UsePanelBreakpointOptions = {}) => {
         }, hideDelay);
       }
     },
-    [hideDelay]
+    [hideDelay],
   );
 
   useEffect(() => {

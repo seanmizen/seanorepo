@@ -1,4 +1,4 @@
-import { Home, Swatch } from "../routes";
+import { Home, Swatch } from '../routes';
 
 type RouteType = {
   path: string;
@@ -10,10 +10,10 @@ type RouteType = {
  * Routes for the application. Contains the path, exact, and Component for each route.
  */
 const ROUTES: Record<string, RouteType> = {
-  home: { exact: true, path: "/", Component: Home },
+  home: { exact: true, path: '/', Component: Home },
   // collection: { path: "/collections/:id" },
   // artwork: { path: "/collections/:id/:artworkId" },
-  swatch: { path: "/swatch", Component: Swatch },
+  swatch: { path: '/swatch', Component: Swatch },
 };
 
 export type { RouteType };

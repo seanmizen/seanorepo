@@ -24,7 +24,7 @@ body {
   --color: #cecece;
   --background: #333;
   --subsection-background: #444;
-  --highlight: #969;
+  /* --highlight: #969; */
   --link: #cecece;
   --link-visted: #636;
   /* TODO: get display-p3 working even though it's only supported on safari */
@@ -35,7 +35,7 @@ body {
 * {
   padding: 0.2rem;
   margin: 0;
-  font-family: 'Karla', 'Courier New', Courier, monospace;
+  font-family: "Karla", "Courier New", Courier, monospace;
 }
 
 li div {
@@ -44,7 +44,7 @@ li div {
 }
 
 .mono {
-  font-family: 'Red Hat Mono', 'Courier New', Courier, monospace;
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
   font-size: 0.85rem;
   padding: 0.1rem 0px;
   margin: 0;
@@ -57,7 +57,7 @@ h1 {
 }
 
 li {
-  list-style-type: '>';
+  list-style-type: ">";
 }
 
 li::marker {
@@ -126,14 +126,14 @@ a:active {
 }
 
 /* fix snap / jitter on collapsibles */
-div[class^='Collapsible__contentOuter'] {
+div[class^="Collapsible__contentOuter"] {
   margin: 0;
   padding-bottom: 0px;
   padding-top: 0px;
 }
 
 /* fix tabbing when collapsible is closed */
-span[class*='is-closed'] + div {
+span[class*="is-closed"] + div {
   visibility: hidden;
 }
 

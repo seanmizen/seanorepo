@@ -1,19 +1,19 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from 'react';
 
 const TIME_COEFF = 1.5 / 100;
 
 const initialNodes = {
-  pyramid: { name: "Pyramid Stage", x: 400, y: 270 },
-  westHolts: { name: "West Holts", x: 450, y: 300 },
-  acoustic: { name: "Acoustic Stage", x: 200, y: 500 },
+  pyramid: { name: 'Pyramid Stage', x: 400, y: 270 },
+  westHolts: { name: 'West Holts', x: 450, y: 300 },
+  acoustic: { name: 'Acoustic Stage', x: 200, y: 500 },
   node1: { x: 300, y: 300 },
 };
 
 const initialEdges = [
-  { from: "pyramid", to: "westHolts", name: "Past West Holts" },
-  { from: "westHolts", to: "acoustic", name: "Through the forest" },
-  { from: "pyramid", to: "node1" },
-  { from: "node1", to: "acoustic" },
+  { from: 'pyramid', to: 'westHolts', name: 'Past West Holts' },
+  { from: 'westHolts', to: 'acoustic', name: 'Through the forest' },
+  { from: 'pyramid', to: 'node1' },
+  { from: 'node1', to: 'acoustic' },
 ];
 
 const distanceBetween = (a, b) =>
@@ -23,14 +23,14 @@ const Popover = ({ x, y, children }) => (
   <foreignObject x={x + 10} y={y - 36} width={220} height={100}>
     <div
       style={{
-        userSelect: "none",
-        background: "rgba(0,0,0,0.85)",
-        color: "#fff",
-        padding: "5px 10px",
-        borderRadius: "5px",
-        fontSize: "13px",
-        pointerEvents: "auto",
-        whiteSpace: "nowrap",
+        userSelect: 'none',
+        background: 'rgba(0,0,0,0.85)',
+        color: '#fff',
+        padding: '5px 10px',
+        borderRadius: '5px',
+        fontSize: '13px',
+        pointerEvents: 'auto',
+        whiteSpace: 'nowrap',
       }}
     >
       {children}
@@ -45,11 +45,11 @@ const MapNetwork = () => {
   const selectionStart = useRef(null);
 
   const [nodes, setNodes] = useState(() => {
-    const stored = localStorage.getItem("glastoMapData");
+    const stored = localStorage.getItem('glastoMapData');
     return stored ? JSON.parse(stored).nodes : initialNodes;
   });
   const [edges, setEdges] = useState(() => {
-    const stored = localStorage.getItem("glastoMapData");
+    const stored = localStorage.getItem('glastoMapData');
     return stored ? JSON.parse(stored).edges : initialEdges;
   });
 
@@ -63,7 +63,7 @@ const MapNetwork = () => {
   const [selectionBox, setSelectionBox] = useState(null);
 
   useEffect(() => {
-    localStorage.setItem("glastoMapData", JSON.stringify({ nodes, edges }));
+    localStorage.setItem('glastoMapData', JSON.stringify({ nodes, edges }));
   }, [nodes, edges]);
 
   const generateNodeId = () => {
@@ -76,7 +76,7 @@ const MapNetwork = () => {
 
   // Main SVG click handler: shift+click node or empty space
   const handleSvgClick = (e) => {
-    console.log("svgclick!", activeNode);
+    console.log('svgclick!', activeNode);
     if (!editMode || !e.shiftKey) {
       setActiveNode(null);
       setSelectedEdgeIndex(null);
@@ -108,7 +108,7 @@ const MapNetwork = () => {
     if (!editMode) return;
 
     if (e.shiftKey && activeNode && activeNode !== id) {
-      console.log("setting edge");
+      console.log('setting edge');
       setEdges((prev) => [...prev, { from: activeNode, to: id }]);
       return;
     }
@@ -122,7 +122,7 @@ const MapNetwork = () => {
 
   const handleMouseDown = (e, id = null) => {
     if (!editMode) return;
-    console.log("handleMouseDown", id);
+    console.log('handleMouseDown', id);
 
     const rect = svgRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -184,9 +184,9 @@ const MapNetwork = () => {
       const selected = new Set(
         Object.entries(nodes)
           .filter(
-            ([, { x, y }]) => x >= minX && x <= maxX && y >= minY && y <= maxY
+            ([, { x, y }]) => x >= minX && x <= maxX && y >= minY && y <= maxY,
           )
-          .map(([id]) => id)
+          .map(([id]) => id),
       );
 
       setSelectedNodes(selected);
@@ -215,7 +215,7 @@ const MapNetwork = () => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key !== "Backspace") return;
+      if (!(e.metaKey || e.ctrlKey) || e.key !== 'Backspace') return;
 
       e.preventDefault();
 
@@ -227,8 +227,8 @@ const MapNetwork = () => {
         });
         setEdges((prev) =>
           prev.filter(
-            (e) => !selectedNodes.has(e.from) && !selectedNodes.has(e.to)
-          )
+            (e) => !selectedNodes.has(e.from) && !selectedNodes.has(e.to),
+          ),
         );
         setSelectedNodes(new Set());
       } else if (selectedEdgeIndex !== null) {
@@ -237,39 +237,44 @@ const MapNetwork = () => {
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodes, selectedEdgeIndex]);
 
   return (
-    <div style={{ position: "relative", width: 600, margin: "auto" }}>
-      <button onClick={() => setEditMode((v) => !v)} style={{ marginRight: 8 }}>
-        {editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
+    <div style={{ position: 'relative', width: 600, margin: 'auto' }}>
+      <button
+        type="button"
+        onClick={() => setEditMode((v) => !v)}
+        style={{ marginRight: 8 }}
+      >
+        {editMode ? 'Exit Edit Mode' : 'Enter Edit Mode'}
       </button>
       <button
+        type="button"
         onClick={() => setShowPopovers((v) => !v)}
         style={{ marginRight: 8 }}
       >
-        {showPopovers ? "Hide Popovers" : "Show Popovers"}
+        {showPopovers ? 'Hide Popovers' : 'Show Popovers'}
       </button>
       <textarea
         readOnly
         value={JSON.stringify({ nodes, edges }, null, 2)}
-        style={{ width: "100%", height: 150, marginTop: 10 }}
+        style={{ width: '100%', height: 150, marginTop: 10 }}
       />
-      <div style={{ position: "relative" }}>
+      <div style={{ position: 'relative' }}>
         <img
           src="https://glastonburyfestivals.co.uk/wp-content/uploads/2025/05/Glastonbury-Access_map_2025_V5.png"
           alt="Map"
           style={{
-            width: "100%",
-            pointerEvents: "none",
+            width: '100%',
+            pointerEvents: 'none',
             opacity: editMode ? 0.4 : 0.9,
           }}
         />
         <svg
           ref={svgRef}
-          style={{ position: "absolute", top: 0, left: 0 }}
+          style={{ position: 'absolute', top: 0, left: 0 }}
           width="100%"
           height="100%"
           onClick={handleSvgClick}
@@ -290,7 +295,7 @@ const MapNetwork = () => {
               !zen &&
               (showPopovers ||
                 active ||
-                (hover?.type === "edge" && hover.idx === idx));
+                (hover?.type === 'edge' && hover.idx === idx));
 
             return (
               <g
@@ -305,7 +310,7 @@ const MapNetwork = () => {
                 }}
                 onMouseEnter={() =>
                   setHover({
-                    type: "edge",
+                    type: 'edge',
                     idx,
                     x: midX,
                     y: midY,
@@ -315,14 +320,14 @@ const MapNetwork = () => {
                   })
                 }
                 onMouseLeave={() => setHover(null)}
-                style={{ cursor: editMode ? "pointer" : "default" }}
+                style={{ cursor: editMode ? 'pointer' : 'default' }}
               >
                 <line
                   x1={a.x}
                   y1={a.y}
                   x2={b.x}
                   y2={b.y}
-                  stroke={active ? "#f39c12" : "#3498db"}
+                  stroke={active ? '#f39c12' : '#3498db'}
                   strokeWidth={3}
                 />
                 {show && (
@@ -334,9 +339,9 @@ const MapNetwork = () => {
                       {editMode && active && (
                         <input
                           type="text"
-                          value={name || ""}
+                          value={name || ''}
                           onChange={(e) => updateEdgeName(idx, e.target.value)}
-                          style={{ width: "100%", marginTop: 4 }}
+                          style={{ width: '100%', marginTop: 4 }}
                         />
                       )}
                     </div>
@@ -354,13 +359,13 @@ const MapNetwork = () => {
               selectedNodes.size <= 1 &&
               (showPopovers ||
                 active ||
-                (hover?.type === "node" && hover.id === id));
+                (hover?.type === 'node' && hover.id === id));
             return (
               <g
                 key={id}
                 onMouseEnter={() =>
                   setHover({
-                    type: "node",
+                    type: 'node',
                     id,
                     x: node.x,
                     y: node.y,
@@ -373,11 +378,11 @@ const MapNetwork = () => {
                   cx={node.x}
                   cy={node.y}
                   r={node.name ? 6 : 4}
-                  visibility={node.name || editMode ? "visible" : "hidden"}
-                  fill={active ? "green" : node.name ? "#e74c3c" : "#bbb"}
+                  visibility={node.name || editMode ? 'visible' : 'hidden'}
+                  fill={active ? 'green' : node.name ? '#e74c3c' : '#bbb'}
                   stroke="#fff"
                   strokeWidth={2}
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: 'pointer' }}
                   onMouseDown={(e) => handleMouseDown(e, id)}
                   onClick={(e) => handleNodeClick(e, id)}
                 />
@@ -387,11 +392,11 @@ const MapNetwork = () => {
                       {editMode && activeNode === id ? (
                         <input
                           type="text"
-                          value={node.name || ""}
+                          value={node.name || ''}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => updateNodeName(id, e.target.value)}
                           placeholder="Node name"
-                          style={{ width: "100%", marginTop: 4 }}
+                          style={{ width: '100%', marginTop: 4 }}
                         />
                       ) : (
                         <div>{node.name || id}</div>

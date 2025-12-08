@@ -1,6 +1,6 @@
 .sublink {
   transition-timing-function: ease-in;
-  transition: 100ms;
+  transition-duration: 100ms;
   position: absolute;
   left: 70px;
   top: 0px;
@@ -8,10 +8,10 @@
 }
 
 .sublink::before {
-  content: '-- ';
+  content: "-- ";
 }
 
-span[class*='is-open'] + div div .sublink {
+span[class*="is-open"] + div div .sublink {
   /* transform :*/
   transform: translateX(10px);
   left: 100px;
@@ -38,7 +38,7 @@ li {
 li:before {
   left: 0.1rem;
   top: 0.4rem;
-  content: '>';
+  content: ">";
   margin-left: -20px;
   position: absolute;
   transition: 150ms;
@@ -57,6 +57,9 @@ li:before {
 }
 
 .clickable-marker {
+  background-color: #00000000;
+  outline: #00000000;
+  border: none;
   width: 2.15rem;
   left: -2rem;
   position: absolute;
@@ -65,14 +68,14 @@ li:before {
   z-index: 1;
 }
 
-div[class*='Collapsible'] {
+div[class*="Collapsible"] {
   z-index: 0;
   position: relative;
 }
-div[class*='Collapsible__contentOuter'] {
+div[class*="Collapsible__contentOuter"] {
   position: static;
 }
-div[class*='Collapsible__contentInner'] {
+div[class*="Collapsible__contentInner"] {
   position: inherit;
   padding-top: 0.5rem;
   padding-bottom: 0.2rem;

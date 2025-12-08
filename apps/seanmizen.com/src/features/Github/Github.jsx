@@ -5,7 +5,7 @@ import styles from './Github.module.css';
 function Github() {
   return (
     <div>
-      <a tabIndex={0} aria-label="Github URL" href="https://github.com/seanmizen">
+      <a aria-label="Github URL" href="https://github.com/seanmizen">
         github.com/seanmizen
       </a>
       <div>
@@ -13,8 +13,8 @@ function Github() {
         <Code commandLine content='screen -dm bash -c "yes > .brick"' />
       </div>
       <div>
-        below, you&apos;ll see me try out some vibrant colours using <em>display-p3</em> (safari
-        only - feb 2022).
+        below, you&apos;ll see me try out some vibrant colours using{' '}
+        <em>display-p3</em> (safari only - feb 2022).
         <br />
         on your device these might all look the same!
       </div>

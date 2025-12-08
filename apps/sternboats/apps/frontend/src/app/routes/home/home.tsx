@@ -1,11 +1,9 @@
-import { FC, useEffect, useState } from "react";
-import { Arrow, Body, HeroLinksRow, HeroLinksWrapper } from "./home.styled";
-import { FullScreenComponent, Nav } from "../../../components";
-import { TopNav } from "../../../components/top-nav";
+import { type FC, useEffect, useState } from 'react';
+import { FullScreenComponent, Nav } from '../../../components';
+import { TopNav } from '../../../components/top-nav';
+import { Arrow, Body, HeroLinksRow, HeroLinksWrapper } from './home.styled';
 
-interface HomeProps {}
-
-const Home: FC<HomeProps> = () => {
+const Home: FC = () => {
   const [showArrow, setShowArrow] = useState(false);
   const [, setShouldShowArrow] = useState(true);
   const [timer, setTimer] = useState<number>();
@@ -13,7 +11,7 @@ const Home: FC<HomeProps> = () => {
   const handleScroll = () => {
     setShouldShowArrow(false);
     clearTimeout(timer);
-    window.removeEventListener("scroll", handleScroll);
+    window.removeEventListener('scroll', handleScroll);
   };
 
   useEffect(() => {
@@ -26,10 +24,10 @@ const Home: FC<HomeProps> = () => {
 
     setTimer(timerId);
 
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener('scroll', handleScroll);
 
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener('scroll', handleScroll);
       clearTimeout(timerId);
     };
   }, []);
@@ -40,15 +38,15 @@ const Home: FC<HomeProps> = () => {
         {/* Background Video Layer */}
         <div
           style={{
-            position: "absolute",
+            position: 'absolute',
             top: 0,
             left: 0,
-            width: "100vw",
-            height: "100vh",
-            overflow: "hidden",
+            width: '100vw',
+            height: '100vh',
+            overflow: 'hidden',
             zIndex: 0,
-            pointerEvents: "none",
-            userSelect: "none",
+            pointerEvents: 'none',
+            userSelect: 'none',
           }}
         >
           <iframe
@@ -56,17 +54,17 @@ const Home: FC<HomeProps> = () => {
             frameBorder="0"
             allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
             style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              width: "177.78vh",
-              height: "100vh",
-              transform: "translate(-50%, -50%)",
-              minWidth: "100vw",
-              minHeight: "56.25vw",
-              border: "none",
-              pointerEvents: "none",
-              userSelect: "none",
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              width: '177.78vh',
+              height: '100vh',
+              transform: 'translate(-50%, -50%)',
+              minWidth: '100vw',
+              minHeight: '56.25vw',
+              border: 'none',
+              pointerEvents: 'none',
+              userSelect: 'none',
             }}
             title="WICKED FELINA Charter Yacht - 2004 Bodrum Shipyard"
           />
@@ -75,14 +73,14 @@ const Home: FC<HomeProps> = () => {
         {/* Overlay */}
         <div
           style={{
-            position: "absolute",
+            position: 'absolute',
             top: 0,
             left: 0,
-            width: "100vw",
-            height: "100vh",
-            backgroundColor: "rgba(0,0,0,0.4)",
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.4)',
             zIndex: 1,
-            pointerEvents: "none",
+            pointerEvents: 'none',
           }}
         />
         {/* TopNav */}
@@ -91,11 +89,11 @@ const Home: FC<HomeProps> = () => {
         <div
           style={{
             zIndex: 2,
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textAlign: "center",
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
           }}
         >
           <h1>
@@ -110,7 +108,7 @@ const Home: FC<HomeProps> = () => {
           onClick={() => {
             window.scrollTo({
               top: window.innerHeight - 10,
-              behavior: "smooth",
+              behavior: 'smooth',
             });
           }}
           isVisible={showArrow}
@@ -146,4 +144,3 @@ const Home: FC<HomeProps> = () => {
 };
 
 export { Home };
-export type { HomeProps };

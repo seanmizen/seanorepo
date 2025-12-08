@@ -1,9 +1,7 @@
-import { FC, useState } from "react";
-import { Nav } from "../../../components";
+import type { FC } from 'react';
+import { Nav } from '../../../components';
 
-interface SwatchProps {}
-
-const Swatch: FC<SwatchProps> = () => {
+const Swatch: FC = () => {
   return (
     <>
       <Nav />
@@ -37,4 +35,3 @@ const Swatch: FC<SwatchProps> = () => {
 };
 
 export { Swatch };
-export type { SwatchProps };

@@ -27,13 +27,13 @@
 .theme-toggle-inner:hover button {
   transition: opacity 0.2s;
   -webkit-transition: opacity 0.2s;
-  opacity: 1 !important;
+  opacity: 1;
 }
 
 .theme-toggle-outer button:focus {
   transition: opacity 0.5s;
   -webkit-transition: opacity 0.5s;
-  opacity: 1 !important;
+  opacity: 1;
 }
 
 /* enforce auto color theme for mobile users */

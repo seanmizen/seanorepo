@@ -1,7 +1,7 @@
-import { FC } from "react";
-import { Link } from "react-router-dom";
-import { ROUTES } from "../../app/constants";
-import { StyledNav } from "./nav.styled";
+import type { FC } from 'react';
+import { Link } from 'react-router-dom';
+import { ROUTES } from '../../app/constants';
+import { StyledNav } from './nav.styled';
 
 const Nav: FC = () => {
   return (
