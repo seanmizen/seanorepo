@@ -1,7 +1,7 @@
-import { User } from "../../../shared/types";
-import { hashPassword } from "../utils/hash-password";
-import { openDbConnection } from "./db";
-import { CreateUserDto } from "../types";
+import type { User } from '../../../shared/types';
+import type { CreateUserDto } from '../types';
+import { hashPassword } from '../utils/hash-password';
+import { openDbConnection } from './db';
 
 const getUser: (id: number) => Promise<User> = async (id: number) => {
   const db = await openDbConnection();
@@ -20,7 +20,7 @@ const getUser: (id: number) => Promise<User> = async (id: number) => {
 };
 
 const getUsers: (limit?: number) => Promise<User[]> = async (
-  limit?: number
+  limit?: number,
 ) => {
   const db = await openDbConnection();
   return new Promise((resolve, reject) => {
@@ -38,11 +38,11 @@ const getUsers: (limit?: number) => Promise<User[]> = async (
 };
 
 const createUser: (user: CreateUserDto) => Promise<User> = async (
-  user: CreateUserDto
+  user: CreateUserDto,
 ) => {
   const { hash, salt, iterations } = hashPassword(user.password);
   const db = await openDbConnection();
-  const role = user.role || "user";
+  const role = user.role || 'user';
   return new Promise((resolve, reject) => {
     db.all<User>(
       `INSERT INTO users (email, password_hash, password_salt, salt_iterations, role) VALUES (?, ?, ?, ?, ?)`,
@@ -56,7 +56,7 @@ const createUser: (user: CreateUserDto) => Promise<User> = async (
           db.close();
           resolve(rows[0]);
         }
-      }
+      },
     );
   });
 };

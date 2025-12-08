@@ -4,7 +4,7 @@
   only enter will work for links
  */
 .ul-link li {
-  list-style-type: '-';
+  list-style-type: "-";
 }
 
 .emoji-header {

@@ -888,7 +888,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@biomejs/biome@npm:2.3.8, @biomejs/biome@npm:^2.3.8":
+"@biomejs/biome@npm:2.3.8":
   version: 2.3.8
   resolution: "@biomejs/biome@npm:2.3.8"
   dependencies:
@@ -4387,7 +4387,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "caroline-be@workspace:apps/carolinemizen.art/caroline-be"
   dependencies:
-    "@biomejs/biome": "npm:^2.3.8"
     "@fastify/cookie": "npm:^11.0.2"
     "@fastify/cors": "npm:^11.1.0"
     "@fastify/formbody": "npm:^8.0.2"
@@ -4411,7 +4410,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "caroline-fe@workspace:apps/carolinemizen.art/caroline-fe"
   dependencies:
-    "@biomejs/biome": "npm:^2.3.8"
     "@rsbuild/core": "npm:^1.6.13"
     "@rsbuild/plugin-react": "npm:^1.4.2"
     "@types/react": "npm:^19.2.7"
@@ -10531,7 +10529,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "sternboats-fe@workspace:apps/sternboats/apps/frontend"
   dependencies:
-    "@biomejs/biome": "npm:^2.3.8"
     "@rsbuild/core": "npm:^1.6.13"
     "@rsbuild/plugin-react": "npm:^1.4.2"
     "@types/react": "npm:^19.2.7"

@@ -1,8 +1,8 @@
-import Database from "bun:sqlite";
-import path from "path";
-import { configs, ConfigType } from "../configs";
+import Database from 'bun:sqlite';
+import path from 'node:path';
+import { type ConfigType, configs } from '../configs';
 
-const env = process.env.NODE_ENV || "development";
+const env = process.env.NODE_ENV || 'development';
 const config: ConfigType = configs[env];
 
 const dbBase = process.env.DB_PATH || import.meta.dir;
@@ -34,8 +34,8 @@ db.exec(`
   END;
 `);
 
-const rows = db.query("SELECT * FROM sessions").all();
-console.log("db connection established with row count:", rows.length);
-console.log("latest row:", rows[rows.length - 1]);
+const rows = db.query('SELECT * FROM sessions').all();
+console.log('db connection established with row count:', rows.length);
+console.log('latest row:', rows[rows.length - 1]);
 
 export { db };

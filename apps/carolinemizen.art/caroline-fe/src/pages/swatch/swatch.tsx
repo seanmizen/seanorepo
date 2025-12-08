@@ -1,10 +1,8 @@
-import { FC, useState } from 'react';
+import { type FC, useState } from 'react';
 import { Nav } from '../../components/nav';
 import { PreviewCard } from '../../components/preview-card/preview-card';
 
-interface SwatchProps {}
-
-const Swatch: FC<SwatchProps> = () => {
+const Swatch: FC = () => {
   const [urlOnLoad] = useState(window.location.toString());
   return (
     <>
@@ -44,4 +42,3 @@ const Swatch: FC<SwatchProps> = () => {
 };
 
 export { Swatch };
-export type { SwatchProps };

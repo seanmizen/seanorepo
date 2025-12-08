@@ -1,7 +1,6 @@
 import { HomeLi } from '../../components';
-
-import Todo from './components/Todo';
 import { ColorPicker } from './components';
+import Todo from './components/Todo';
 
 function ThisPage() {
   return (

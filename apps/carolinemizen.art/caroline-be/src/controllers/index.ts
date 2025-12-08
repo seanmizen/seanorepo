@@ -1,26 +1,26 @@
 // API layer
-import {
+import type {
   FastifyInstance,
-  FastifyRequest,
-  FastifyReply,
   FastifyPluginOptions,
-} from "fastify";
-import { routes as databaseRoutes } from "./db";
-import { routes as userRoutes } from "./users";
+  FastifyReply,
+  FastifyRequest,
+} from 'fastify';
+import { routes as databaseRoutes } from './db';
+import { routes as userRoutes } from './users';
 
 /**
  * encapsulates the routes
  */
 const routes = async (
   fastify: FastifyInstance,
-  _options: FastifyPluginOptions
+  _options: FastifyPluginOptions,
 ) => {
-  fastify.get("/", async (request: FastifyRequest, reply: FastifyReply) => {
-    reply.send({ hello: "world" });
+  fastify.get('/', async (_request: FastifyRequest, reply: FastifyReply) => {
+    reply.send({ hello: 'world' });
   });
 
-  fastify.register(databaseRoutes, { prefix: "/db" });
-  fastify.register(userRoutes, { prefix: "/users" });
+  fastify.register(databaseRoutes, { prefix: '/db' });
+  fastify.register(userRoutes, { prefix: '/users' });
 };
 
 export { routes };

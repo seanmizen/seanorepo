@@ -1,14 +1,14 @@
-import { defineConfig } from "@rsbuild/core";
-import { pluginReact } from "@rsbuild/plugin-react";
+import { defineConfig } from '@rsbuild/core';
+import { pluginReact } from '@rsbuild/plugin-react';
 
 export default defineConfig({
   plugins: [pluginReact()],
   html: {
-    template: "./public/index.html",
+    template: './public/index.html',
   },
   source: {
     entry: {
-      index: "./src/app/index.tsx",
+      index: './src/app/index.tsx',
     },
   },
 });

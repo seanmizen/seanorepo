@@ -1,5 +1,5 @@
-import { User } from "../../shared/types";
+import type { User } from '../../shared/types';
 
-export type CreateUserDto = Omit<User, "id" | "dateCreated" | "role"> & {
+export type CreateUserDto = Omit<User, 'id' | 'dateCreated' | 'role'> & {
   role?: string;
 };

@@ -1,11 +1,9 @@
-import { FC, useEffect, useState } from 'react';
-import { Arrow, Body, HeroLinksRow, HeroLinksWrapper } from './home.styled';
+import { type FC, useEffect, useState } from 'react';
 import { FullScreenComponent, Nav, PreviewCard } from '../../components';
 import { ROUTES } from '../../constants';
+import { Arrow, Body, HeroLinksRow, HeroLinksWrapper } from './home.styled';
 
-interface HomeProps {}
-
-const Home: FC<HomeProps> = () => {
+const Home: FC = () => {
   const [showArrow, setShowArrow] = useState(false);
   const [, setShouldShowArrow] = useState(true);
   const [timer, setTimer] = useState<number>();
@@ -90,4 +88,3 @@ const Home: FC<HomeProps> = () => {
 };
 
 export { Home };
-export type { HomeProps };

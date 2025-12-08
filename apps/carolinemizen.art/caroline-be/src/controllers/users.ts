@@ -1,17 +1,17 @@
-import {
+import type {
   FastifyInstance,
   FastifyPluginOptions,
   FastifyReply,
   FastifyRequest,
-} from "fastify";
-import { userService } from "../services";
-import { CreateUserDto } from "../types";
+} from 'fastify';
+import { userService } from '../services';
+import type { CreateUserDto } from '../types';
 
 const createUser = async (request: FastifyRequest, reply: FastifyReply) => {
   const user = request.body as CreateUserDto; // TODO this but properly
   try {
     await userService.createUser(user);
-    reply.send({ message: "User created" });
+    reply.send({ message: 'User created' });
   } catch (err) {
     reply.status(500).send(err);
   }
@@ -24,7 +24,7 @@ const getUsers = async (_request: FastifyRequest, reply: FastifyReply) => {
 
 const getUser = async (
   request: FastifyRequest<{ Params: { id: number } }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   const id = request?.params?.id || 0;
   const user = await userService.getUser(id);
@@ -33,11 +33,11 @@ const getUser = async (
 
 const routes = async (
   fastify: FastifyInstance,
-  _options: FastifyPluginOptions
+  _options: FastifyPluginOptions,
 ) => {
-  fastify.post("/", createUser);
-  fastify.get("/", getUsers);
-  fastify.get("/:id", getUser);
+  fastify.post('/', createUser);
+  fastify.get('/', getUsers);
+  fastify.get('/:id', getUser);
   // fastify.put("/:id", updateUser);
   // fastify.delete("/:id", deleteUser);
 };

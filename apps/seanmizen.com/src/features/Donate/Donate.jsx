@@ -1,17 +1,29 @@
+import styles from './Donate.module.css';
+
 function Donate() {
   return (
     <div>
-      <a tabIndex={0} aria-label="Monzo payment URL" href="https://monzo.me/seanmizen">
+      <a aria-label="Monzo payment URL" href="https://monzo.me/seanmizen">
         monzo.me/seanmizen
       </a>
       <br />
-      <span className="mono" tabIndex={0} role="listitem" aria-label="Bitcoin address" id="bitcoin">
-        bc1qr8vjxmrxqkzd9hu3z22vuhwe8kj55q8nvenkry
-      </span>
+      <input
+        className={`mono ${styles['copy-input']}`}
+        type="text"
+        readOnly
+        id="bitcoin"
+        aria-label="Bitcoin address"
+        value="bc1qr8vjxmrxqkzd9hu3z22vuhwe8kj55q8nvenkry"
+      />
       <br />
-      <span className="mono" tabIndex={0} aria-label="Ethereum address" id="ethereum">
-        0x45c97B7D7c68efa8006471089066a746Ac117b71
-      </span>
+      <input
+        className={`mono ${styles['copy-input']}`}
+        type="text"
+        readOnly
+        id="ethereum"
+        aria-label="Ethereum address"
+        value="0x45c97B7D7c68efa8006471089066a746Ac117b71"
+      />
     </div>
   );
 }

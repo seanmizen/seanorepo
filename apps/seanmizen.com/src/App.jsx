@@ -1,9 +1,9 @@
-import { MapNetwork } from "./features/Glasto/Map";
-import "./index.css";
+import { MapNetwork } from './features/Glasto/Map';
+import './index.css';
 
-import { Apps, Home } from "./pages";
-import { ThemeProvider } from "./providers/Theme";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { Apps, Home } from './pages';
+import { ThemeProvider } from './providers/Theme';
 
 // I'm on a really good streak of github contributions, so I'm going to keep it going
 // by adding this comment. I'm not sure what else to say, so I'll just say that I'm
@@ -25,7 +25,7 @@ const App = () => {
   return (
     <ThemeProvider>
       {/* <Router basename={process.env.REACT_APP_BASENAME}> */}
-      <Router basename={"/"}>
+      <Router basename={'/'}>
         <Routes>
           <Route path="/apps" element={<Apps />} />
           <Route path="/glasto" element={<MapNetwork />} />

@@ -17,8 +17,7 @@
     "start:bun": "bun --hot --no-clear-screen src/index.ts",
     "prod:bun": "NODE_ENV=production bun --env-file=.env src/index.ts",
     "start": "rslib build node ./dist",
-    "prod": "NODE_ENV=production bun --env-file=.env src/index.ts",
-    "format": "biome format --write"
+    "prod": "NODE_ENV=production bun --env-file=.env src/index.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -36,7 +35,6 @@
     "stripe": "^18.5.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.8",
     "@rslib/core": "^0.18.3",
     "@types/node": "^22.19.1",
     "typescript": "^5.9.3"
