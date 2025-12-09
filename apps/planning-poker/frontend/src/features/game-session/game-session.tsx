@@ -53,7 +53,6 @@ const GameSession: FC = () => {
   const [voteStatus, setVoteStatus] = useState<VoteStatus[]>([]);
   const [myVote, setMyVote] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
-  const [currentTicketId, setCurrentTicketId] = useState<number | null>(null);
 
   const fetchVotes = (ticketId: number, currentAttendeeId: string) => {
     if (!shortId) return;
@@ -89,7 +88,6 @@ const GameSession: FC = () => {
 
       const currentTicket = sessionData.tickets[currentIndex];
       if (currentTicket) {
-        setCurrentTicketId(currentTicket.id);
         fetchVotes(currentTicket.id, attendeeId);
       }
 
@@ -105,9 +103,6 @@ const GameSession: FC = () => {
       .then((res) => res.json())
       .then((data) => {
         setTickets(data.tickets);
-        if (data.tickets.length > 0) {
-          setCurrentTicketId(data.tickets[0].id);
-        }
       })
       .catch(() => showSnackbar('Failed to load session', 'error'));
 
@@ -121,11 +116,11 @@ const GameSession: FC = () => {
       if (message.type === 'attendee:id') {
         setAttendeeId(message.attendeeId);
         localStorage.setItem(`attendee-${shortId}`, message.attendeeId);
-        setCurrentTicketId((currentId) => {
-          if (currentId) {
-            fetchVotes(currentId, message.attendeeId);
+        setTickets((currentTickets) => {
+          if (currentTickets.length > 0) {
+            fetchVotes(currentTickets[0].id, message.attendeeId);
           }
-          return currentId;
+          return currentTickets;
         });
       } else if (message.type === 'attendees:updated') {
         fetch(`${api.baseUrl}/api/session/${shortId}/attendees`)
@@ -142,8 +137,9 @@ const GameSession: FC = () => {
           });
         }
       } else if (message.type === 'votes:updated') {
-        setCurrentTicketId((currentId) => {
-          if (currentId === message.ticketId) {
+        setTickets((currentTickets) => {
+          const currentTicket = currentTickets[currentTicketIndex];
+          if (currentTicket?.id === message.ticketId) {
             setAttendeeId((currentAttendeeId) => {
               if (currentAttendeeId) {
                 fetchVotes(message.ticketId, currentAttendeeId);
@@ -151,11 +147,12 @@ const GameSession: FC = () => {
               return currentAttendeeId;
             });
           }
-          return currentId;
+          return currentTickets;
         });
       } else if (message.type === 'votes:revealed') {
-        setCurrentTicketId((currentId) => {
-          if (currentId === message.ticketId) {
+        setTickets((currentTickets) => {
+          const currentTicket = currentTickets[currentTicketIndex];
+          if (currentTicket?.id === message.ticketId) {
             setRevealed(true);
             setAttendeeId((currentAttendeeId) => {
               if (currentAttendeeId) {
@@ -164,11 +161,12 @@ const GameSession: FC = () => {
               return currentAttendeeId;
             });
           }
-          return currentId;
+          return currentTickets;
         });
       } else if (message.type === 'votes:unrevealed') {
-        setCurrentTicketId((currentId) => {
-          if (currentId === message.ticketId) {
+        setTickets((currentTickets) => {
+          const currentTicket = currentTickets[currentTicketIndex];
+          if (currentTicket?.id === message.ticketId) {
             setRevealed(false);
             setAttendeeId((currentAttendeeId) => {
               if (currentAttendeeId) {
@@ -177,7 +175,7 @@ const GameSession: FC = () => {
               return currentAttendeeId;
             });
           }
-          return currentId;
+          return currentTickets;
         });
       } else if (message.type === 'ticket:added') {
         setTickets((prev) => {
@@ -197,7 +195,6 @@ const GameSession: FC = () => {
         setTickets((currentTickets) => {
           if (currentTickets[message.ticketIndex]) {
             const newTicket = currentTickets[message.ticketIndex];
-            setCurrentTicketId(newTicket.id);
             setAttendeeId((currentAttendeeId) => {
               if (currentAttendeeId) {
                 fetchVotes(newTicket.id, currentAttendeeId);
@@ -320,7 +317,6 @@ const GameSession: FC = () => {
     if (!shortId || !ticket) return;
 
     setCurrentTicketIndex(index);
-    setCurrentTicketId(ticket.id);
     if (attendeeId) {
       fetchVotes(ticket.id, attendeeId);
     }

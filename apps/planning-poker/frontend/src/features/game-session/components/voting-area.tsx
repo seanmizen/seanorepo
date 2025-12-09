@@ -28,7 +28,9 @@ const VotingArea: FC<VotingAreaProps> = ({
 }) => {
   return (
     <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+      <Box
+        sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}
+      >
         <Box>
           <Typography variant="caption" display="block" gutterBottom>
             Your Vote
@@ -103,7 +105,11 @@ const VotingArea: FC<VotingAreaProps> = ({
                       <Typography variant="caption">-</Typography>
                     )}
                   </Card>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.7rem' }}
+                  >
                     {status.attendeeId.slice(-4)}
                   </Typography>
                 </Box>
