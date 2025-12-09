@@ -1,0 +1,8 @@
+{
+  "name": "Planning Poker",
+  "short_name": "Planning Poker",
+  "icons": [],
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
