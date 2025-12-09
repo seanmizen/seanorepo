@@ -1,4 +1,11 @@
-import { Add, CheckCircle, Close, Delete, Done, ExpandMore } from '@mui/icons-material';
+import {
+  Add,
+  CheckCircle,
+  Close,
+  Delete,
+  Done,
+  ExpandMore,
+} from '@mui/icons-material';
 import {
   Accordion,
   AccordionDetails,
@@ -52,74 +59,77 @@ const TicketList: FC<TicketListProps> = ({
       </AccordionSummary>
       <AccordionDetails sx={{ p: 0 }}>
         <List>
-        {tickets.map((ticket, index) => (
-          <ListItem
-            key={ticket.id}
-            disablePadding
-            secondaryAction={
-              <IconButton edge="end" onClick={() => onDeleteTicket(ticket.id)}>
-                <Delete />
-              </IconButton>
-            }
-          >
-            <ListItemButton
-              selected={index === currentIndex}
-              onClick={() => onSelectTicket(index)}
-            >
-              <ListItemText primary={ticket.title} />
-              {ticket.estimate && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {ticket.estimate}
-                  </Typography>
-                  <CheckCircle color="success" fontSize="small" />
-                </Box>
-              )}
-            </ListItemButton>
-          </ListItem>
-        ))}
-        {isAdding ? (
-          <ListItem
-            onBlur={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget)) {
-                if (newTicketTitle.trim()) {
-                  handleAdd();
-                } else {
-                  setIsAdding(false);
-                }
+          {tickets.map((ticket, index) => (
+            <ListItem
+              key={ticket.id}
+              disablePadding
+              secondaryAction={
+                <IconButton
+                  edge="end"
+                  onClick={() => onDeleteTicket(ticket.id)}
+                >
+                  <Delete />
+                </IconButton>
               }
-            }}
-          >
-            <TextField
-              fullWidth
-              size="small"
-              autoFocus
-              value={newTicketTitle}
-              onChange={(e) => setNewTicketTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAdd();
-                if (e.key === 'Escape') setIsAdding(false);
-              }}
-              placeholder="Ticket title"
-            />
-            <IconButton onClick={handleAdd} color="primary">
-              <Done />
-            </IconButton>
-            <IconButton onClick={() => setIsAdding(false)}>
-              <Close />
-            </IconButton>
-          </ListItem>
-        ) : (
-          <ListItem>
-            <Button
-              fullWidth
-              startIcon={<Add />}
-              onClick={() => setIsAdding(true)}
             >
-              Add Ticket
-            </Button>
-          </ListItem>
-        )}
+              <ListItemButton
+                selected={index === currentIndex}
+                onClick={() => onSelectTicket(index)}
+              >
+                <ListItemText primary={ticket.title} />
+                {ticket.estimate && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {ticket.estimate}
+                    </Typography>
+                    <CheckCircle color="success" fontSize="small" />
+                  </Box>
+                )}
+              </ListItemButton>
+            </ListItem>
+          ))}
+          {isAdding ? (
+            <ListItem
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                  if (newTicketTitle.trim()) {
+                    handleAdd();
+                  } else {
+                    setIsAdding(false);
+                  }
+                }
+              }}
+            >
+              <TextField
+                fullWidth
+                size="small"
+                autoFocus
+                value={newTicketTitle}
+                onChange={(e) => setNewTicketTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAdd();
+                  if (e.key === 'Escape') setIsAdding(false);
+                }}
+                placeholder="Ticket title"
+              />
+              <IconButton onClick={handleAdd} color="primary">
+                <Done />
+              </IconButton>
+              <IconButton onClick={() => setIsAdding(false)}>
+                <Close />
+              </IconButton>
+            </ListItem>
+          ) : (
+            <ListItem>
+              <Button
+                fullWidth
+                startIcon={<Add />}
+                onClick={() => setIsAdding(true)}
+              >
+                Add Ticket
+              </Button>
+            </ListItem>
+          )}
         </List>
       </AccordionDetails>
     </Accordion>
