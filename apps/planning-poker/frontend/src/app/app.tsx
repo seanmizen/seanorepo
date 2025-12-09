@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  CircularProgress,
   Container,
   Input,
   Paper,
@@ -17,14 +18,34 @@ const App: FC = () => {
   const navigate = useNavigate();
   // const theme = useTheme();
   const [sessionCode, setSessionCode] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
 
   const handleCreateSession = async () => {
     try {
       const res = await fetch(api.endpoints.gameSession, { method: 'POST' });
       const data = await res.json();
-      navigate(`/session/${data.shortId}`);
+      navigate(`/session?session-code=${data.shortId}`);
     } catch {
       showSnackbar('Failed to create session', 'error');
+    }
+  };
+
+  const handleJoinSession = async () => {
+    const trimmedCode = sessionCode.trim();
+    if (!trimmedCode) return;
+
+    setIsJoining(true);
+    try {
+      const res = await fetch(`${api.baseUrl}/api/session/${trimmedCode}`);
+      if (!res.ok) {
+        showSnackbar('Session not found', 'error');
+        return;
+      }
+      navigate(`/session?session-code=${trimmedCode}`);
+    } catch {
+      showSnackbar('Failed to verify session', 'error');
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -73,10 +94,14 @@ const App: FC = () => {
                 />
                 <Button
                   variant="contained"
-                  onClick={handleCreateSession}
-                  disabled={!sessionCode.trim()}
+                  onClick={handleJoinSession}
+                  disabled={!sessionCode.trim() || isJoining}
                 >
-                  Join Session
+                  {isJoining ? (
+                    <CircularProgress size={24} color="inherit" />
+                  ) : (
+                    'Join Session'
+                  )}
                 </Button>
               </Stack>
             </Paper>
