@@ -2,20 +2,21 @@ import {
   Box,
   Button,
   Container,
+  Input,
   Paper,
+  Stack,
   Typography,
-  useMediaQuery,
-  useTheme,
+  // useTheme,
 } from '@mui/material';
-import type { FC } from 'react';
+import { type FC, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/config';
 import { showSnackbar } from '@/lib';
 
 const App: FC = () => {
   const navigate = useNavigate();
-  const theme = useTheme();
-  const isSmall = useMediaQuery(theme.breakpoints.down('md'));
+  // const theme = useTheme();
+  const [sessionCode, setSessionCode] = useState('');
 
   const handleCreateSession = async () => {
     try {
@@ -42,19 +43,44 @@ const App: FC = () => {
         <Box
           sx={{
             display: 'flex',
-            flexDirection: isSmall ? 'column' : 'row',
+            flexDirection: {
+              xs: 'column',
+              lg: 'row',
+            },
             alignItems: 'center',
-            gap: 2,
+            gap: 6,
           }}
         >
+          <Typography variant="h4" component="h4">
+            Sean's Simple
+          </Typography>
           <Typography variant="h2" component="h1">
             Planning Poker
           </Typography>
-          <Paper elevation={3} sx={{ p: 2 }}>
-            <Button variant="contained" onClick={handleCreateSession}>
-              Start Session
-            </Button>
-          </Paper>
+          <Stack spacing={2}>
+            <Paper elevation={3} sx={{ p: 2, width: 'fit-content' }}>
+              <Button variant="contained" onClick={handleCreateSession}>
+                Start Session
+              </Button>
+            </Paper>
+            <Paper elevation={3} sx={{ p: 2 }}>
+              <Stack spacing={1} direction={'row'}>
+                <Input
+                  placeholder="Enter Session Code"
+                  sx={{ ml: 2 }}
+                  value={sessionCode}
+                  onChange={(e) => setSessionCode(e.currentTarget.value)}
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleCreateSession}
+                  disabled={!sessionCode.trim()}
+                >
+                  Join Session
+                </Button>
+              </Stack>
+            </Paper>
+          </Stack>
         </Box>
       </Box>
     </Container>
