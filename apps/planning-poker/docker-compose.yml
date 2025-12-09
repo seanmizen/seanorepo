@@ -1,0 +1,53 @@
+x-frontend-base: &frontend-base
+  container_name: frontend-sc
+  build:
+    context: ../..
+    dockerfile: apps/planning-poker/frontend/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+      - "4010:4010"
+
+x-backend-base: &backend-base
+  container_name: backend-sc
+  build:
+    context: ../..
+    dockerfile: apps/planning-poker/backend/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "4011:4011"
+  environment:
+    - DB_PATH=/app/db
+
+services:
+  frontend:
+    <<: *frontend-base
+    profiles: ["prod"]
+
+  frontend-dev:
+    <<: *frontend-base
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+      - fe_node_modules:/app/node_modules
+    profiles: ["dev"]
+
+  backend:
+    <<: *backend-base
+    profiles: ["prod"]
+    volumes:
+      - sqlite_data:/app/db
+
+  backend-dev:
+    <<: *backend-base
+    command: []
+    profiles: ["dev"]
+    volumes:
+      - type: bind
+        source: ../../apps/planning-poker/backend
+        target: /app/src
+      - sqlite_data:/app/db
+
+volumes:
+  sqlite_data:
+  fe_node_modules:

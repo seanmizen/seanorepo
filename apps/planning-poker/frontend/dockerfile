@@ -1,0 +1,24 @@
+FROM node:23-slim AS deps
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+COPY apps/planning-poker/package.json ./apps/planning-poker/package.json
+COPY apps/planning-poker/frontend ./apps/planning-poker/frontend
+COPY apps/planning-poker/tsconfig.json ./apps/planning-poker/tsconfig.json
+COPY apps/planning-poker/configs.ts ./apps/planning-poker/configs.ts
+
+RUN corepack enable && yarn install
+
+FROM deps AS dev
+CMD ["yarn", "workspace", "planning-poker-fe", "start:noopen"]
+
+FROM deps AS prod-build
+RUN yarn workspace planning-poker-fe build
+
+FROM node:23-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/planning-poker/frontend/dist .
+RUN corepack enable && yarn global add serve
+EXPOSE 4010
+CMD ["serve", "-s", ".", "-l", "4010"]
