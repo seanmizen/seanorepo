@@ -8,7 +8,7 @@ export const router = createBrowserRouter([
     element: <App />,
   },
   {
-    path: '/session/:shortId',
+    path: '/session',
     element: <GameSession />,
   },
 ]);
