@@ -1,4 +1,9 @@
-import { ExpandMore, Refresh } from '@mui/icons-material';
+import {
+  CopyAllOutlined,
+  ExpandMore,
+  HomeFilled,
+  Refresh,
+} from '@mui/icons-material';
 import {
   Accordion,
   AccordionDetails,
@@ -10,6 +15,7 @@ import {
   Container,
   IconButton,
   Paper,
+  Skeleton,
   Stack,
   Tooltip,
   Typography,
@@ -350,6 +356,14 @@ const GameSession: FC = () => {
       >
         <Typography variant="h4">
           Planning Poker: session <code>{shortId}</code>
+          <IconButton
+            onClick={() => {
+              navigator.clipboard.writeText(shortId || '');
+              showSnackbar('Session code copied to clipboard', 'success');
+            }}
+          >
+            <CopyAllOutlined />
+          </IconButton>
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {attendeeId && (
@@ -362,9 +376,13 @@ const GameSession: FC = () => {
               <Refresh />
             </IconButton>
           </Tooltip>
+          <Tooltip title="Country Roads!">
+            <IconButton href="/">
+              <HomeFilled />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
-
       <Box
         sx={{
           display: 'flex',
@@ -393,6 +411,7 @@ const GameSession: FC = () => {
                       gap: 1,
                       mb: 1,
                       alignItems: 'center',
+                      justifyContent: 'space-between',
                     }}
                   >
                     <Tooltip
@@ -415,8 +434,7 @@ const GameSession: FC = () => {
                         }
                         color="primary"
                       >
-                        {/** biome-ignore lint/complexity/noUselessFragments: no it isn't */}
-                        <>
+                        <Stack direction={'row'} gap={2} alignItems={'center'}>
                           <Avatar />
                           <Typography
                             variant="body2"
@@ -425,7 +443,7 @@ const GameSession: FC = () => {
                             {attendee.id.slice(-4)}
                             {isMe ? ' (you)' : ''}:
                           </Typography>
-                        </>
+                        </Stack>
                       </Badge>
                     </Tooltip>
                     <Typography
@@ -461,17 +479,24 @@ const GameSession: FC = () => {
                 }}
               >
                 <Paper
+                  component={Button}
                   elevation={1}
-                  sx={{ p: 2, opacity: currentTicketIndex > 0 ? 1 : 0.3 }}
+                  disabled={currentTicketIndex === 0}
+                  onClick={() => handleSelectTicket(currentTicketIndex - 1)}
+                  sx={{
+                    textTransform: 'none',
+                  }}
                 >
-                  <Typography variant="caption" color="text.secondary">
-                    Previous
-                  </Typography>
-                  <Typography variant="body2" noWrap>
-                    {currentTicketIndex > 0
-                      ? tickets[currentTicketIndex - 1].title
-                      : '—'}
-                  </Typography>
+                  <Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      Previous
+                    </Typography>
+                    <Typography variant="body2" noWrap>
+                      {currentTicketIndex > 0
+                        ? tickets[currentTicketIndex - 1].title
+                        : '—'}
+                    </Typography>
+                  </Stack>
                 </Paper>
                 <Paper
                   elevation={3}
@@ -481,74 +506,67 @@ const GameSession: FC = () => {
                     color: 'primary.contrastText',
                   }}
                 >
-                  <Typography variant="caption">Current</Typography>
+                  <Typography variant="caption">Current ticket</Typography>
                   <Typography variant="body2" fontWeight="bold" noWrap>
                     {tickets[currentTicketIndex].title}
                   </Typography>
                 </Paper>
                 <Paper
+                  component={Button}
                   elevation={1}
-                  sx={{
-                    p: 2,
-                    opacity: currentTicketIndex < tickets.length - 1 ? 1 : 0.3,
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    Next
-                  </Typography>
-                  <Typography variant="body2" noWrap>
-                    {currentTicketIndex < tickets.length - 1
-                      ? tickets[currentTicketIndex + 1].title
-                      : '—'}
-                  </Typography>
-                </Paper>
-              </Box>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  disabled={currentTicketIndex === 0}
-                  onClick={() => handleSelectTicket(currentTicketIndex - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outlined"
-                  fullWidth
                   disabled={currentTicketIndex === tickets.length - 1}
                   onClick={() => handleSelectTicket(currentTicketIndex + 1)}
+                  sx={{
+                    textTransform: 'none',
+                  }}
                 >
-                  Next
-                </Button>
+                  <Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      Next
+                    </Typography>
+                    <Typography variant="body2" noWrap>
+                      {currentTicketIndex < tickets.length - 1
+                        ? tickets[currentTicketIndex + 1].title
+                        : '—'}
+                    </Typography>
+                  </Stack>
+                </Paper>
               </Box>
             </Box>
           )}
         </Stack>
 
         <Box sx={{ flex: 2 }}>
-          {currentTicket && (
-            <>
-              <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h5" gutterBottom>
-                  {currentTicket.title}
-                </Typography>
-                {currentTicket.estimate && (
-                  <Typography variant="body2" color="success.main">
-                    Estimate: {currentTicket.estimate}
-                  </Typography>
-                )}
-              </Paper>
-              <VotingArea
-                myVote={myVote}
-                voteStatus={voteStatus}
-                revealed={revealed}
-                attendeeId={attendeeId}
-                onRemoveVote={handleRemoveVote}
-                onReveal={handleReveal}
-                onUnreveal={handleUnreveal}
-              />
-            </>
-          )}
+          <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+            <Stack direction={'row'} gap={2}>
+              <Typography variant="h5" gutterBottom>
+                We are refining:
+              </Typography>
+              <Typography
+                variant="h5"
+                gutterBottom
+                sx={{
+                  color: currentTicket ? 'currentColor' : 'grey',
+                }}
+              >
+                {currentTicket?.title || 'Nothing yet. Add a ticket!'}
+              </Typography>
+            </Stack>
+            {currentTicket?.estimate && (
+              <Typography variant="body2" color="success.main">
+                Estimate: {currentTicket.estimate}
+              </Typography>
+            )}
+          </Paper>
+          <VotingArea
+            myVote={myVote}
+            voteStatus={voteStatus}
+            revealed={revealed}
+            attendeeId={attendeeId}
+            onRemoveVote={handleRemoveVote}
+            onReveal={handleReveal}
+            onUnreveal={handleUnreveal}
+          />
           <EstimateCards onEstimate={handleVote} />
         </Box>
       </Box>
