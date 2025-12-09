@@ -107,61 +107,73 @@ fastify.post('/api/session/:shortId/ticket', async (request, reply) => {
 
 fastify.put('/api/session/:shortId/ticket/:id/vote', async (request, reply) => {
   const { shortId, id } = request.params as { shortId: string; id: string };
-  const { vote, attendeeId } = request.body as { vote: string | null; attendeeId: string };
-  
+  const { vote, attendeeId } = request.body as {
+    vote: string | null;
+    attendeeId: string;
+  };
+
   if (!ticketVotes.has(shortId)) {
     ticketVotes.set(shortId, new Map());
   }
   if (!ticketVotes.get(shortId)?.has(Number(id))) {
     ticketVotes.get(shortId)?.set(Number(id), new Map());
   }
-  
+
   if (vote === null) {
     ticketVotes.get(shortId)?.get(Number(id))?.delete(attendeeId);
   } else {
     ticketVotes.get(shortId)?.get(Number(id))?.set(attendeeId, vote);
   }
-  
+
   broadcast(shortId, { type: 'votes:updated', ticketId: Number(id) });
   reply.send({ success: true });
 });
 
-fastify.post('/api/session/:shortId/ticket/:id/reveal', async (request, reply) => {
-  const { shortId, id } = request.params as { shortId: string; id: string };
-  
-  if (!ticketRevealed.has(shortId)) {
-    ticketRevealed.set(shortId, new Map());
-  }
-  ticketRevealed.get(shortId)?.set(Number(id), true);
-  
-  broadcast(shortId, { type: 'votes:revealed', ticketId: Number(id) });
-  reply.send({ success: true });
-});
+fastify.post(
+  '/api/session/:shortId/ticket/:id/reveal',
+  async (request, reply) => {
+    const { shortId, id } = request.params as { shortId: string; id: string };
 
-fastify.post('/api/session/:shortId/ticket/:id/unreveal', async (request, reply) => {
-  const { shortId, id } = request.params as { shortId: string; id: string };
-  
-  if (!ticketRevealed.has(shortId)) {
-    ticketRevealed.set(shortId, new Map());
-  }
-  ticketRevealed.get(shortId)?.set(Number(id), false);
-  
-  broadcast(shortId, { type: 'votes:unrevealed', ticketId: Number(id) });
-  reply.send({ success: true });
-});
+    if (!ticketRevealed.has(shortId)) {
+      ticketRevealed.set(shortId, new Map());
+    }
+    ticketRevealed.get(shortId)?.set(Number(id), true);
 
-fastify.put('/api/session/:shortId/ticket/:id/estimate', async (request, reply) => {
-  const { shortId, id } = request.params as { shortId: string; id: string };
-  const { estimate } = request.body as { estimate: string };
-  
-  db.query('UPDATE tickets SET estimate = ? WHERE id = ?').run(estimate, id);
-  broadcast(shortId, {
-    type: 'ticket:updated',
-    ticketId: Number(id),
-    estimate,
-  });
-  reply.send({ success: true });
-});
+    broadcast(shortId, { type: 'votes:revealed', ticketId: Number(id) });
+    reply.send({ success: true });
+  },
+);
+
+fastify.post(
+  '/api/session/:shortId/ticket/:id/unreveal',
+  async (request, reply) => {
+    const { shortId, id } = request.params as { shortId: string; id: string };
+
+    if (!ticketRevealed.has(shortId)) {
+      ticketRevealed.set(shortId, new Map());
+    }
+    ticketRevealed.get(shortId)?.set(Number(id), false);
+
+    broadcast(shortId, { type: 'votes:unrevealed', ticketId: Number(id) });
+    reply.send({ success: true });
+  },
+);
+
+fastify.put(
+  '/api/session/:shortId/ticket/:id/estimate',
+  async (request, reply) => {
+    const { shortId, id } = request.params as { shortId: string; id: string };
+    const { estimate } = request.body as { estimate: string };
+
+    db.query('UPDATE tickets SET estimate = ? WHERE id = ?').run(estimate, id);
+    broadcast(shortId, {
+      type: 'ticket:updated',
+      ticketId: Number(id),
+      estimate,
+    });
+    reply.send({ success: true });
+  },
+);
 
 fastify.put('/api/session/:shortId/current-ticket', async (request, reply) => {
   const { shortId } = request.params as { shortId: string };
@@ -180,31 +192,46 @@ fastify.delete('/api/session/:shortId/ticket/:id', async (request, reply) => {
 fastify.get('/api/session/:shortId/attendees', async (request, reply) => {
   const { shortId } = request.params as { shortId: string };
   const counts = attendeeConnectionCount.get(shortId);
-  const attendees = counts ? Array.from(counts.entries()).map(([id, count]) => ({ id, connectionCount: count })) : [];
+  const attendees = counts
+    ? Array.from(counts.entries()).map(([id, count]) => ({
+        id,
+        connectionCount: count,
+      }))
+    : [];
   reply.send({ attendees });
 });
 
-fastify.get('/api/session/:shortId/ticket/:id/votes', async (request, reply) => {
-  const { shortId, id } = request.params as { shortId: string; id: string };
-  const { requestingAttendeeId } = request.query as { requestingAttendeeId?: string };
-  const votes = ticketVotes.get(shortId)?.get(Number(id));
-  const revealed = ticketRevealed.get(shortId)?.get(Number(id)) || false;
-  const counts = attendeeConnectionCount.get(shortId);
-  const attendeeList = counts ? Array.from(counts.keys()) : [];
-  const voteStatus = attendeeList.map((attendeeId) => ({
-    attendeeId,
-    hasVoted: votes?.has(attendeeId) || false,
-    vote: revealed || attendeeId === requestingAttendeeId ? votes?.get(attendeeId) || null : null,
-  }));
-  reply.send({ votes: voteStatus, revealed });
-});
+fastify.get(
+  '/api/session/:shortId/ticket/:id/votes',
+  async (request, reply) => {
+    const { shortId, id } = request.params as { shortId: string; id: string };
+    const { requestingAttendeeId } = request.query as {
+      requestingAttendeeId?: string;
+    };
+    const votes = ticketVotes.get(shortId)?.get(Number(id));
+    const revealed = ticketRevealed.get(shortId)?.get(Number(id)) || false;
+    const counts = attendeeConnectionCount.get(shortId);
+    const attendeeList = counts ? Array.from(counts.keys()) : [];
+    const voteStatus = attendeeList.map((attendeeId) => ({
+      attendeeId,
+      hasVoted: votes?.has(attendeeId) || false,
+      vote:
+        revealed || attendeeId === requestingAttendeeId
+          ? votes?.get(attendeeId) || null
+          : null,
+    }));
+    reply.send({ votes: voteStatus, revealed });
+  },
+);
 
 fastify.register(async (fastify) => {
   fastify.get('/ws/:shortId', { websocket: true }, (socket, request) => {
     const { shortId } = request.params as { shortId: string };
-    const { existingAttendeeId } = request.query as { existingAttendeeId?: string };
+    const { existingAttendeeId } = request.query as {
+      existingAttendeeId?: string;
+    };
     const attendeeId = existingAttendeeId || randomUUID();
-    
+
     if (!sessionClients.has(shortId)) {
       sessionClients.set(shortId, new Set());
     }
@@ -214,20 +241,22 @@ fastify.register(async (fastify) => {
     if (!attendeeConnectionCount.has(shortId)) {
       attendeeConnectionCount.set(shortId, new Map());
     }
-    
+
     sessionClients.get(shortId)?.add(socket);
     sessionAttendees.get(shortId)?.set(socket, attendeeId);
-    
-    const counts = attendeeConnectionCount.get(shortId)!;
-    counts.set(attendeeId, (counts.get(attendeeId) || 0) + 1);
-    
+
+    const counts = attendeeConnectionCount.get(shortId);
+    if (counts) {
+      counts.set(attendeeId, (counts.get(attendeeId) || 0) + 1);
+    }
+
     socket.send(JSON.stringify({ type: 'attendee:id', attendeeId }));
     broadcast(shortId, { type: 'attendees:updated' });
-    
+
     socket.on('close', () => {
       sessionClients.get(shortId)?.delete(socket);
       sessionAttendees.get(shortId)?.delete(socket);
-      
+
       const counts = attendeeConnectionCount.get(shortId);
       if (counts) {
         const currentCount = counts.get(attendeeId) || 0;
@@ -245,7 +274,7 @@ fastify.register(async (fastify) => {
           counts.set(attendeeId, currentCount - 1);
         }
       }
-      
+
       broadcast(shortId, { type: 'attendees:updated' });
     });
   });

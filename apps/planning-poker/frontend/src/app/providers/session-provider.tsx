@@ -12,7 +12,12 @@ const SessionProvider: FC = () => {
     const handleHealthCheck = () => {
       const existingSession = localStorage.getItem('user-session-id');
       if (existingSession) {
-        showSnackbar(`Session ID: ${existingSession}`, 'info', 'session-id', true);
+        showSnackbar(
+          `Session ID: ${existingSession}`,
+          'info',
+          'session-id',
+          true,
+        );
         return;
       }
 
