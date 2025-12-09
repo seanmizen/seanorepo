@@ -2,6 +2,7 @@ import {
   CopyAllOutlined,
   ExpandMore,
   HomeFilled,
+  Link as LinkIcon,
   Refresh,
 } from '@mui/icons-material';
 import {
@@ -15,13 +16,12 @@ import {
   Container,
   IconButton,
   Paper,
-  Skeleton,
   Stack,
   Tooltip,
   Typography,
 } from '@mui/material';
 import { type FC, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '@/config';
 import { showSnackbar } from '@/lib';
 import { EstimateCards, TicketList, VotingArea } from './components';
@@ -51,7 +51,8 @@ type Attendee = {
 };
 
 const GameSession: FC = () => {
-  const { shortId } = useParams<{ shortId: string }>();
+  const [searchParams] = useSearchParams();
+  const shortId = searchParams.get('session-code');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [currentTicketIndex, setCurrentTicketIndex] = useState(0);
   const [attendeeId, setAttendeeId] = useState<string>('');
@@ -363,6 +364,14 @@ const GameSession: FC = () => {
             }}
           >
             <CopyAllOutlined />
+          </IconButton>
+          <IconButton
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              showSnackbar('Session URL copied to clipboard', 'success');
+            }}
+          >
+            <LinkIcon />
           </IconButton>
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
