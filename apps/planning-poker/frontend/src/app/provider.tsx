@@ -1,11 +1,12 @@
 import { CssBaseline, createTheme, ThemeProvider } from '@mui/material';
-import type { FC, ReactNode } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { Component, type FC, type ReactNode } from 'react';
 import {
   HealthCheckProvider,
-  NamePromptProvider,
   SessionProvider,
   SnackbarProvider,
 } from '@/app/providers';
+import { queryClient } from '@/lib';
 
 const theme = createTheme();
 
@@ -13,16 +14,40 @@ type AppProviderProps = {
   children: ReactNode;
 };
 
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div>Something went wrong.</div>;
+    }
+    return this.props.children;
+  }
+}
+
 const AppProvider: FC<AppProviderProps> = ({ children }) => {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <SnackbarProvider />
-      <HealthCheckProvider />
-      <SessionProvider />
-      <NamePromptProvider />
-      {children}
-    </ThemeProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <SnackbarProvider />
+          <HealthCheckProvider />
+          <SessionProvider />
+          {children}
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

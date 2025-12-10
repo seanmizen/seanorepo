@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  CircularProgress,
   Container,
   Input,
   Paper,
@@ -37,7 +36,8 @@ const App: FC = () => {
     setIsJoining(true);
     try {
       const res = await fetch(`${api.baseUrl}/api/session/${trimmedCode}`);
-      if (!res.ok) {
+      const data = await res.json();
+      if (!res.ok || data.wasCreated) {
         showSnackbar('Session not found', 'error');
         return;
       }
@@ -59,6 +59,7 @@ const App: FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           gap: 4,
+          position: 'relative',
         }}
       >
         <Box
@@ -69,7 +70,10 @@ const App: FC = () => {
               lg: 'row',
             },
             alignItems: 'center',
-            gap: 6,
+            gap: {
+              xs: 4,
+              lg: 6,
+            },
           }}
         >
           <Typography variant="h4" component="h4">
@@ -85,8 +89,8 @@ const App: FC = () => {
               </Button>
             </Paper>
             <Paper elevation={3} sx={{ p: 2 }}>
-              <Stack spacing={1} direction={'row'}>
-                <form onSubmit={handleJoinSession}>
+              <form onSubmit={handleJoinSession}>
+                <Stack spacing={1} direction={'row'}>
                   <Input
                     placeholder="Enter Session Code"
                     sx={{ ml: 2 }}
@@ -99,14 +103,10 @@ const App: FC = () => {
                     onClick={handleJoinSession}
                     disabled={!sessionCode.trim() || isJoining}
                   >
-                    {isJoining ? (
-                      <CircularProgress size={24} color="inherit" />
-                    ) : (
-                      'Join Session'
-                    )}
+                    Join Session
                   </Button>
-                </form>
-              </Stack>
+                </Stack>
+              </form>
             </Paper>
           </Stack>
         </Box>
