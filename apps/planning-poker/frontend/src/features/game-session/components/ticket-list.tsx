@@ -145,7 +145,14 @@ const TicketList: FC<TicketListProps> = ({
                         }}
                       />
                     ) : (
-                      <Typography variant="body1" noWrap>
+                      <Typography
+                        variant="body1"
+                        noWrap
+                        sx={{
+                          direction: 'rtl',
+                          textAlign: 'left',
+                        }}
+                      >
                         {ticket.title}
                       </Typography>
                     )}

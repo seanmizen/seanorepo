@@ -1,6 +1,13 @@
 import { CssBaseline, createTheme, ThemeProvider } from '@mui/material';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Component, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  Component,
+  type FC,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   HealthCheckProvider,
   SessionProvider,
@@ -10,13 +17,18 @@ import { eventBus, queryClient } from '@/lib';
 
 const getInitialMode = (): 'light' | 'dark' | 'auto' => {
   const stored = localStorage.getItem('theme-mode');
-  if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored;
+  if (stored === 'light' || stored === 'dark' || stored === 'auto')
+    return stored;
   return 'light';
 };
 
-const getEffectiveMode = (mode: 'light' | 'dark' | 'auto'): 'light' | 'dark' => {
+const getEffectiveMode = (
+  mode: 'light' | 'dark' | 'auto',
+): 'light' | 'dark' => {
   if (mode === 'auto') {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
   }
   return mode;
 };
@@ -64,7 +76,8 @@ const AppProvider: FC<AppProviderProps> = ({ children }) => {
   useEffect(() => {
     const handleToggle = () => {
       setMode((prev) => {
-        const next = prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light';
+        const next =
+          prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light';
         localStorage.setItem('theme-mode', next);
         return next;
       });
