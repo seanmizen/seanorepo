@@ -86,23 +86,26 @@ const App: FC = () => {
             </Paper>
             <Paper elevation={3} sx={{ p: 2 }}>
               <Stack spacing={1} direction={'row'}>
-                <Input
-                  placeholder="Enter Session Code"
-                  sx={{ ml: 2 }}
-                  value={sessionCode}
-                  onChange={(e) => setSessionCode(e.currentTarget.value)}
-                />
-                <Button
-                  variant="contained"
-                  onClick={handleJoinSession}
-                  disabled={!sessionCode.trim() || isJoining}
-                >
-                  {isJoining ? (
-                    <CircularProgress size={24} color="inherit" />
-                  ) : (
-                    'Join Session'
-                  )}
-                </Button>
+                <form onSubmit={handleJoinSession}>
+                  <Input
+                    placeholder="Enter Session Code"
+                    sx={{ ml: 2 }}
+                    value={sessionCode}
+                    onChange={(e) => setSessionCode(e.currentTarget.value)}
+                  />
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    onClick={handleJoinSession}
+                    disabled={!sessionCode.trim() || isJoining}
+                  >
+                    {isJoining ? (
+                      <CircularProgress size={24} color="inherit" />
+                    ) : (
+                      'Join Session'
+                    )}
+                  </Button>
+                </form>
               </Stack>
             </Paper>
           </Stack>
