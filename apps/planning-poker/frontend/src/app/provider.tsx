@@ -2,6 +2,7 @@ import { CssBaseline, createTheme, ThemeProvider } from '@mui/material';
 import type { FC, ReactNode } from 'react';
 import {
   HealthCheckProvider,
+  NamePromptProvider,
   SessionProvider,
   SnackbarProvider,
 } from '@/app/providers';
@@ -19,6 +20,7 @@ const AppProvider: FC<AppProviderProps> = ({ children }) => {
       <SnackbarProvider />
       <HealthCheckProvider />
       <SessionProvider />
+      <NamePromptProvider />
       {children}
     </ThemeProvider>
   );

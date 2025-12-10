@@ -48,6 +48,7 @@ type VotesData = {
 type Attendee = {
   id: string;
   connectionCount: number;
+  name: string | null;
 };
 
 const GameSession: FC = () => {
@@ -114,9 +115,19 @@ const GameSession: FC = () => {
       .catch(() => showSnackbar('Failed to load session', 'error'));
 
     const storedAttendeeId = localStorage.getItem(`attendee-${shortId}`);
-    const wsUrl = storedAttendeeId
-      ? `${api.wsUrl}/ws/${shortId}?existingAttendeeId=${encodeURIComponent(storedAttendeeId)}`
-      : `${api.wsUrl}/ws/${shortId}`;
+    const userSessionId = localStorage.getItem('user-session-id');
+
+    let wsUrl = `${api.wsUrl}/ws/${shortId}`;
+    const params = new URLSearchParams();
+    if (storedAttendeeId) {
+      params.append('existingAttendeeId', storedAttendeeId);
+    }
+    if (userSessionId) {
+      params.append('userSessionId', userSessionId);
+    }
+    if (params.toString()) {
+      wsUrl += `?${params.toString()}`;
+    }
     const ws = new WebSocket(wsUrl);
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -449,7 +460,7 @@ const GameSession: FC = () => {
                             variant="body2"
                             fontWeight={isMe ? 'bold' : 'normal'}
                           >
-                            {attendee.id.slice(-4)}
+                            {attendee.name || attendee.id.slice(-4)}
                             {isMe ? ' (you)' : ''}:
                           </Typography>
                         </Stack>
