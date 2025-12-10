@@ -198,13 +198,13 @@ const useGameSession = (shortId: string | null) => {
   });
 
   const selectTicketMutation = useMutation({
-    mutationFn: async (ticketIndex: number) => {
+    mutationFn: async ({ index, attendeeId }: { index: number; attendeeId: string }) => {
       const res = await fetch(
         `${api.baseUrl}/api/session/${shortId}/current-ticket`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ticketIndex }),
+          body: JSON.stringify({ ticketIndex: index, attendeeId }),
         },
       );
       if (!res.ok) throw new Error('Failed to sync ticket selection');
@@ -264,6 +264,11 @@ const useGameSession = (shortId: string | null) => {
         queryClient.invalidateQueries({ queryKey: ['session', shortId] });
         queryClient.invalidateQueries({ queryKey: ['votes', shortId] });
         queryClient.invalidateQueries({ queryKey: ['all-votes', shortId] });
+      } else if (message.type === 'ticket-changed') {
+        showSnackbar(`${message.changedBy} changed ticket to: ${message.ticketTitle}`, 'info');
+        queryClient.invalidateQueries({ queryKey: ['session', shortId] });
+        queryClient.invalidateQueries({ queryKey: ['votes', shortId] });
+        queryClient.invalidateQueries({ queryKey: ['all-votes', shortId] });
       } else if (message.type === 'kicked') {
         alert('You were kicked 👢');
         window.location.href = '/';
@@ -283,7 +288,7 @@ const useGameSession = (shortId: string | null) => {
 
     if (deletingCurrentTicket && newTickets.length > 0) {
       const newIndex = Math.min(currentTicketIndex, newTickets.length - 1);
-      selectTicketMutation.mutate(newIndex);
+      selectTicketMutation.mutate({ index: newIndex, attendeeId });
     }
 
     deleteTicketMutation.mutate(id);
@@ -308,7 +313,7 @@ const useGameSession = (shortId: string | null) => {
   };
 
   const handleSelectTicket = (index: number) => {
-    selectTicketMutation.mutate(index);
+    selectTicketMutation.mutate({ index, attendeeId });
   };
 
   const handleRefresh = () => {
