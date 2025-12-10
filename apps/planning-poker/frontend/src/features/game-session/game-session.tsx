@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import type { FC } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ThemeToggle } from '@/components';
 import { api, env } from '@/config';
 import { showSnackbar } from '@/lib';
 import { EstimateCards, TicketList, VotingArea } from './components';
@@ -125,10 +126,11 @@ const GameSession: FC = () => {
             </Tooltip>
           )}
           <Tooltip title="Country Roads!">
-            <IconButton href="/">
+            <IconButton href="/" color="inherit">
               <HomeFilled />
             </IconButton>
           </Tooltip>
+          <ThemeToggle />
         </Box>
       </Box>
       <Stack

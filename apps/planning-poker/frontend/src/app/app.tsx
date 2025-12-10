@@ -6,10 +6,10 @@ import {
   Paper,
   Stack,
   Typography,
-  // useTheme,
 } from '@mui/material';
 import { type FC, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ThemeToggle } from '@/components';
 import { api } from '@/config';
 import { showSnackbar } from '@/lib';
 
@@ -51,6 +51,9 @@ const App: FC = () => {
 
   return (
     <Container maxWidth="lg">
+      <Box sx={{ position: 'fixed', top: 16, right: 16, zIndex: 1000 }}>
+        <ThemeToggle />
+      </Box>
       <Box
         sx={{
           minHeight: '100vh',
