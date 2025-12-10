@@ -1,7 +1,7 @@
 const devConfig = {
-  appDomain: 'http://localhost:4010',
-  serverApiPath: 'http://localhost:4011/api',
-  serverPort: 4011,
+  appDomain: 'http://localhost:4040',
+  serverApiPath: 'http://localhost:4041/api',
+  serverPort: 4041,
   dbName: 'dev.sqlite',
 };
 
@@ -12,7 +12,7 @@ export const configs: Record<string, ConfigType> = {
   production: {
     appDomain: 'https://planning-poker.com',
     serverApiPath: 'https://planning-poker.com/api',
-    serverPort: 4011,
+    serverPort: 4041,
     dbName: 'production.sqlite',
   },
 };

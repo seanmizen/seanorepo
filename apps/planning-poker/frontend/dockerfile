@@ -20,5 +20,5 @@ FROM node:23-slim AS prod
 WORKDIR /app
 COPY --from=prod-build /app/apps/planning-poker/frontend/dist .
 RUN corepack enable && yarn global add serve
-EXPOSE 4010
-CMD ["serve", "-s", ".", "-l", "4010"]
+EXPOSE 4040
+CMD ["serve", "-s", ".", "-l", "4040"]
