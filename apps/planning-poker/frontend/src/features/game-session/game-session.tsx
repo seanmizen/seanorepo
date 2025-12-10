@@ -434,7 +434,7 @@ const GameSession: FC = () => {
           />
         </Box>
       </Stack>
-      {disclaimerDismissed === false && attendeeId && (
+      {!disclaimerDismissed && attendeeId && (
         <Alert
           severity="info"
           onClose={handleDismissDisclaimer}

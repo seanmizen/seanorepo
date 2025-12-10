@@ -73,7 +73,7 @@ const useGameSession = (shortId: string | null) => {
   const currentTicketIndex = sessionData?.currentTicketIndex || 0;
   const attendees = sessionData?.attendees || [];
   const currentTicket = tickets[currentTicketIndex];
-  const disclaimerDismissed = sessionData?.disclaimerDismissed ?? null;
+  const disclaimerDismissed = localStorage.getItem('disclaimer-dismissed') === 'true' ? true : null;
 
   // Fetch votes for all tickets in a single query
   const ticketIds = tickets.map((t) => t.id).join(',');
@@ -216,11 +216,7 @@ const useGameSession = (shortId: string | null) => {
 
   const dismissDisclaimerMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(
-        `${api.baseUrl}/api/session/${shortId}/attendee/${attendeeId}/disclaimer`,
-        { method: 'PUT' },
-      );
-      if (!res.ok) throw new Error('Failed to dismiss disclaimer');
+      localStorage.setItem('disclaimer-dismissed', 'true');
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['session', shortId] }),
