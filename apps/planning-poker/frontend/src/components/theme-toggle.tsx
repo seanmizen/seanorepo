@@ -9,12 +9,24 @@ const ThemeToggle: FC = () => {
 
   const handleToggle = () => {
     eventBus.emit('theme:toggle');
-    setMode((prev) => (prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light'));
+    setMode((prev) =>
+      prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light',
+    );
   };
 
   const effectiveMode = getEffectiveMode(mode);
-  const Icon = mode === 'auto' ? SettingsBrightness : effectiveMode === 'dark' ? DarkMode : LightMode;
-  const label = mode === 'auto' ? 'Auto theme' : effectiveMode === 'dark' ? 'Dark mode' : 'Light mode';
+  const Icon =
+    mode === 'auto'
+      ? SettingsBrightness
+      : effectiveMode === 'dark'
+        ? DarkMode
+        : LightMode;
+  const label =
+    mode === 'auto'
+      ? 'Auto theme'
+      : effectiveMode === 'dark'
+        ? 'Dark mode'
+        : 'Light mode';
 
   return (
     <Tooltip title={label}>

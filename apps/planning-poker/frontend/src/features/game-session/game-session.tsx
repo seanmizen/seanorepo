@@ -23,6 +23,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import Linkify from 'linkify-react';
 import type { FC } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ThemeToggle } from '@/components';
@@ -272,7 +273,12 @@ const GameSession: FC = () => {
                       <Typography
                         variant="body2"
                         noWrap
-                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          direction: 'rtl',
+                          textAlign: 'left',
+                        }}
                       >
                         {currentTicketIndex > 0
                           ? tickets[currentTicketIndex - 1].title
@@ -295,7 +301,12 @@ const GameSession: FC = () => {
                       variant="body2"
                       fontWeight="bold"
                       noWrap
-                      sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      sx={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        direction: 'rtl',
+                        textAlign: 'left',
+                      }}
                     >
                       {tickets[currentTicketIndex].title}
                     </Typography>
@@ -318,7 +329,12 @@ const GameSession: FC = () => {
                       <Typography
                         variant="body2"
                         noWrap
-                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          direction: 'rtl',
+                          textAlign: 'left',
+                        }}
                       >
                         {currentTicketIndex < tickets.length - 1
                           ? tickets[currentTicketIndex + 1].title
@@ -349,15 +365,27 @@ const GameSession: FC = () => {
                 <Typography
                   variant="h5"
                   gutterBottom
-                  noWrap
                   sx={{
                     color: currentTicket ? 'currentColor' : 'grey',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
                     minWidth: 0,
+                    display: 'flex',
+                    '& > *': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      direction: 'rtl',
+                      textAlign: 'left',
+                    },
                   }}
                 >
-                  {currentTicket?.title || 'Nothing yet. Add a ticket!'}
+                  <Linkify
+                    options={{
+                      target: '_blank',
+                      rel: 'noopener noreferrer',
+                    }}
+                  >
+                    {currentTicket?.title || 'Nothing yet. Add a ticket!'}
+                  </Linkify>
                 </Typography>
               </Stack>
               <Stack
