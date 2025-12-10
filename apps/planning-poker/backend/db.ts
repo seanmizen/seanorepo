@@ -9,10 +9,11 @@ const dbBase = process.env.DB_PATH || __dirname;
 const dbPath = path.join(dbBase, config.dbName);
 const db = new Database(dbPath);
 
-db.exec(`
+db.run(`
   CREATE TABLE IF NOT EXISTS user_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sessionToken TEXT UNIQUE,
+    name TEXT,
     createdAt TEXT NOT NULL DEFAULT (datetime('now')),
     updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
