@@ -1,6 +1,6 @@
 import { CssBaseline, createTheme, ThemeProvider } from '@mui/material';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Component, type FC, type ReactNode, useMemo, useState } from 'react';
+import { Component, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   HealthCheckProvider,
   SessionProvider,
@@ -11,7 +11,7 @@ import { eventBus, queryClient } from '@/lib';
 const getInitialMode = (): 'light' | 'dark' | 'auto' => {
   const stored = localStorage.getItem('theme-mode');
   if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored;
-  return 'auto';
+  return 'light';
 };
 
 const getEffectiveMode = (mode: 'light' | 'dark' | 'auto'): 'light' | 'dark' => {
@@ -61,7 +61,7 @@ const AppProvider: FC<AppProviderProps> = ({ children }) => {
     });
   }, [mode]);
 
-  useMemo(() => {
+  useEffect(() => {
     const handleToggle = () => {
       setMode((prev) => {
         const next = prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light';
