@@ -79,10 +79,10 @@ const App: FC = () => {
             },
           }}
         >
-          <Typography variant="h4" component="h4">
+          <Typography variant="h4" component="h4" mb={2}>
             Sean's Simple
           </Typography>
-          <Typography variant="h2" component="h1">
+          <Typography variant="h2" component="h1" mb={2}>
             Planning Poker
           </Typography>
           <Stack spacing={2}>
