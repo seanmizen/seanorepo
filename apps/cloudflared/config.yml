@@ -21,6 +21,12 @@ ingress:
   - hostname: "*.seanscards.com"
     service: http://localhost:4010
 
+  - hostname: planning-poker.seanmizen.com
+    path: /api/*
+    service: http://localhost:4011
+  - hostname: planning-poker.seanmizen.com
+    service: http://localhost:4010
+
   - hostname: carolinemizen.art
     path: /api/*
     service: http://localhost:4021

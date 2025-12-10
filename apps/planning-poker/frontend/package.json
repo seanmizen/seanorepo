@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "rsbuild dev --open --port 4010",
-    "start:noopen": "rsbuild dev --port 4010",
+    "start": "rsbuild dev --open --port 4040",
+    "start:noopen": "rsbuild dev --port 4040",
     "build": "rsbuild build"
   },
   "dependencies": {
