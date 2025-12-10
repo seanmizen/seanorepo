@@ -46,7 +46,10 @@ const attendeeToWebSocket = new Map<string, Map<string, WebSocket>>();
 
 let ticketIdCounter = 1;
 
-const broadcast = (shortId: string, message?: { type: string; changedBy?: string; ticketTitle?: string }) => {
+const broadcast = (
+  shortId: string,
+  message?: { type: string; changedBy?: string; ticketTitle?: string },
+) => {
   try {
     const clients = sessionClients.get(shortId);
     if (!clients) return;
@@ -294,7 +297,10 @@ fastify.put(
 
 fastify.put('/api/session/:shortId/current-ticket', async (request, reply) => {
   const { shortId } = request.params as { shortId: string };
-  const { ticketIndex, attendeeId } = request.body as { ticketIndex: number; attendeeId?: string };
+  const { ticketIndex, attendeeId } = request.body as {
+    ticketIndex: number;
+    attendeeId?: string;
+  };
 
   const session = sessions.get(shortId);
   if (!session) {
@@ -303,11 +309,13 @@ fastify.put('/api/session/:shortId/current-ticket', async (request, reply) => {
   }
 
   session.currentTicketIndex = ticketIndex;
-  
+
   const names = attendeeNames.get(shortId);
-  const changedBy = attendeeId ? (names?.get(attendeeId) || attendeeId.slice(-4)) : 'Someone';
+  const changedBy = attendeeId
+    ? names?.get(attendeeId) || attendeeId.slice(-4)
+    : 'Someone';
   const ticketTitle = session.tickets[ticketIndex]?.title || 'Unknown';
-  
+
   broadcast(shortId, { type: 'ticket-changed', changedBy, ticketTitle });
   reply.send({ success: true });
 });

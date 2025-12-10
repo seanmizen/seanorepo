@@ -73,7 +73,8 @@ const useGameSession = (shortId: string | null) => {
   const currentTicketIndex = sessionData?.currentTicketIndex || 0;
   const attendees = sessionData?.attendees || [];
   const currentTicket = tickets[currentTicketIndex];
-  const disclaimerDismissed = localStorage.getItem('disclaimer-dismissed') === 'true' ? true : null;
+  const disclaimerDismissed =
+    localStorage.getItem('disclaimer-dismissed') === 'true' ? true : null;
 
   // Fetch votes for all tickets in a single query
   const ticketIds = tickets.map((t) => t.id).join(',');
@@ -101,7 +102,7 @@ const useGameSession = (shortId: string | null) => {
     queryKey: ['votes', shortId, currentTicket?.id, attendeeId],
     queryFn: async (): Promise<VotesData> => {
       const res = await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${currentTicket!.id}/votes?requestingAttendeeId=${encodeURIComponent(attendeeId)}`,
+        `${api.baseUrl}/api/session/${shortId}/ticket/${currentTicket.id}/votes?requestingAttendeeId=${encodeURIComponent(attendeeId)}`,
       );
       if (!res.ok) throw new Error('Failed to load votes');
       return res.json();
@@ -162,7 +163,7 @@ const useGameSession = (shortId: string | null) => {
       attendeeId: string;
     }) => {
       const res = await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${currentTicket!.id}/vote`,
+        `${api.baseUrl}/api/session/${shortId}/ticket/${currentTicket.id}/vote`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -181,7 +182,7 @@ const useGameSession = (shortId: string | null) => {
   const revealMutation = useMutation<void, Error, boolean>({
     mutationFn: async (revealed: boolean) => {
       const res = await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${currentTicket!.id}/reveal`,
+        `${api.baseUrl}/api/session/${shortId}/ticket/${currentTicket.id}/reveal`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -198,7 +199,13 @@ const useGameSession = (shortId: string | null) => {
   });
 
   const selectTicketMutation = useMutation({
-    mutationFn: async ({ index, attendeeId }: { index: number; attendeeId: string }) => {
+    mutationFn: async ({
+      index,
+      attendeeId,
+    }: {
+      index: number;
+      attendeeId: string;
+    }) => {
       const res = await fetch(
         `${api.baseUrl}/api/session/${shortId}/current-ticket`,
         {
@@ -261,7 +268,10 @@ const useGameSession = (shortId: string | null) => {
         queryClient.invalidateQueries({ queryKey: ['votes', shortId] });
         queryClient.invalidateQueries({ queryKey: ['all-votes', shortId] });
       } else if (message.type === 'ticket-changed') {
-        showSnackbar(`${message.changedBy} changed ticket to: ${message.ticketTitle}`, 'info');
+        showSnackbar(
+          `${message.changedBy} changed ticket to: ${message.ticketTitle}`,
+          'info',
+        );
         queryClient.invalidateQueries({ queryKey: ['session', shortId] });
         queryClient.invalidateQueries({ queryKey: ['votes', shortId] });
         queryClient.invalidateQueries({ queryKey: ['all-votes', shortId] });
