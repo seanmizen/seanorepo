@@ -14,6 +14,12 @@ export default defineConfig({
       'import.meta.env.PUBLIC_DEBUG_SHOW_SNACKBAR_TIMER': JSON.stringify(
         process.env.DEBUG_SHOW_SNACKBAR_TIMER || 'false',
       ),
+      'import.meta.env.PUBLIC_DEBUG_SHOW_ATTENDEE_ID': JSON.stringify(
+        process.env.DEBUG_SHOW_ATTENDEE_ID || 'false',
+      ),
+      'import.meta.env.PUBLIC_DEBUG_SHOW_REFRESH_BUTTON': JSON.stringify(
+        process.env.DEBUG_SHOW_REFRESH_BUTTON || 'false',
+      ),
     },
   },
   resolve: {

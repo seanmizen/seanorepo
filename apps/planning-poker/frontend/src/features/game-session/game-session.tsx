@@ -9,352 +9,74 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Avatar,
   Badge,
   Box,
   Button,
   Container,
+  Divider,
+  Fade,
   IconButton,
   Paper,
   Stack,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { type FC, useEffect, useState } from 'react';
+import type { FC } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '@/config';
+import { api, env } from '@/config';
 import { showSnackbar } from '@/lib';
 import { EstimateCards, TicketList, VotingArea } from './components';
+import { useGameSession } from './hooks';
 
-type Ticket = {
-  id: number;
-  title: string;
-  description: string;
-  estimate: string | null;
-  orderIndex: number;
-};
-
-type VoteStatus = {
-  attendeeId: string;
-  hasVoted: boolean;
-  vote: string | null;
-};
-
-type VotesData = {
-  votes: VoteStatus[];
-  revealed: boolean;
-};
-
-type Attendee = {
-  id: string;
-  connectionCount: number;
-  name: string | null;
-};
+const SHOW_ATTENDEES = false;
 
 const GameSession: FC = () => {
   const [searchParams] = useSearchParams();
   const shortId = searchParams.get('session-code');
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [currentTicketIndex, setCurrentTicketIndex] = useState(0);
-  const [attendeeId, setAttendeeId] = useState<string>('');
-  const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [voteStatus, setVoteStatus] = useState<VoteStatus[]>([]);
-  const [myVote, setMyVote] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState(false);
 
-  const fetchVotes = (ticketId: number, currentAttendeeId: string) => {
-    if (!shortId) return;
-    fetch(
-      `${api.baseUrl}/api/session/${shortId}/ticket/${ticketId}/votes?requestingAttendeeId=${encodeURIComponent(currentAttendeeId)}`,
-    )
-      .then((res) => res.json())
-      .then((data: VotesData) => {
-        setVoteStatus(data.votes);
-        setRevealed(data.revealed);
-        const myVoteData = data.votes.find(
-          (v) => v.attendeeId === currentAttendeeId,
-        );
-        setMyVote(myVoteData?.vote || null);
-      })
-      .catch(() => showSnackbar('Failed to load votes', 'error'));
+  const {
+    tickets,
+    currentTicketIndex,
+    currentTicket,
+    attendees,
+    attendeeId,
+    voteStatus,
+    myVote,
+    revealed,
+    disclaimerDismissed,
+    ticketVotesMap,
+    handleAddTicket,
+    handleDeleteTicket,
+    handleVote,
+    handleRemoveVote,
+    handleReveal,
+    handleUnreveal,
+    handleSelectTicket,
+    handleRefresh,
+    handleDismissDisclaimer,
+    handleUpdateTicketTitle,
+  } = useGameSession(shortId);
+
+  const calculateAverage = (votes: { vote: string | null }[]) => {
+    const numericVotes = votes
+      .map((v) => v.vote)
+      .filter((v) => v && v !== '?')
+      .map((v) => Number.parseFloat(v || '0'))
+      .filter((v) => !Number.isNaN(v));
+
+    if (numericVotes.length === 0) return null;
+    const sum = numericVotes.reduce((a, b) => a + b, 0);
+    return (sum / numericVotes.length).toFixed(1);
   };
 
-  const refreshGameState = async () => {
-    if (!shortId || !attendeeId) return;
-    try {
-      const [sessionRes, attendeesRes] = await Promise.all([
-        fetch(`${api.baseUrl}/api/session/${shortId}`),
-        fetch(`${api.baseUrl}/api/session/${shortId}/attendees`),
-      ]);
-      const sessionData = await sessionRes.json();
-      const attendeesData = await attendeesRes.json();
-
-      setTickets(sessionData.tickets);
-      setAttendees(attendeesData.attendees);
-      const currentIndex = sessionData.currentTicketIndex ?? 0;
-      setCurrentTicketIndex(currentIndex);
-
-      const currentTicket = sessionData.tickets[currentIndex];
-      if (currentTicket) {
-        fetchVotes(currentTicket.id, attendeeId);
-      }
-
-      showSnackbar('Refreshed', 'success');
-    } catch {
-      showSnackbar('Failed to refresh', 'error');
-    }
-  };
-
-  useEffect(() => {
-    if (!shortId) return;
-    fetch(`${api.baseUrl}/api/session/${shortId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setTickets(data.tickets);
-      })
-      .catch(() => showSnackbar('Failed to load session', 'error'));
-
-    const storedAttendeeId = localStorage.getItem(`attendee-${shortId}`);
-    const userSessionId = localStorage.getItem('user-session-id');
-
-    let wsUrl = `${api.wsUrl}/ws/${shortId}`;
-    const params = new URLSearchParams();
-    if (storedAttendeeId) {
-      params.append('existingAttendeeId', storedAttendeeId);
-    }
-    if (userSessionId) {
-      params.append('userSessionId', userSessionId);
-    }
-    if (params.toString()) {
-      wsUrl += `?${params.toString()}`;
-    }
-    const ws = new WebSocket(wsUrl);
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'attendee:id') {
-        setAttendeeId(message.attendeeId);
-        localStorage.setItem(`attendee-${shortId}`, message.attendeeId);
-        setTickets((currentTickets) => {
-          if (currentTickets.length > 0) {
-            fetchVotes(currentTickets[0].id, message.attendeeId);
-          }
-          return currentTickets;
-        });
-      } else if (message.type === 'attendees:updated') {
-        fetch(`${api.baseUrl}/api/session/${shortId}/attendees`)
-          .then((res) => res.json())
-          .then((data) => setAttendees(data.attendees))
-          .catch(() => showSnackbar('Failed to load attendees', 'error'));
-        if (tickets.length > 0) {
-          const currentTicket = tickets[currentTicketIndex] || tickets[0];
-          setAttendeeId((currentAttendeeId) => {
-            if (currentAttendeeId) {
-              fetchVotes(currentTicket.id, currentAttendeeId);
-            }
-            return currentAttendeeId;
-          });
-        }
-      } else if (message.type === 'votes:updated') {
-        setTickets((currentTickets) => {
-          const currentTicket = currentTickets[currentTicketIndex];
-          if (currentTicket?.id === message.ticketId) {
-            setAttendeeId((currentAttendeeId) => {
-              if (currentAttendeeId) {
-                fetchVotes(message.ticketId, currentAttendeeId);
-              }
-              return currentAttendeeId;
-            });
-          }
-          return currentTickets;
-        });
-      } else if (message.type === 'votes:revealed') {
-        setTickets((currentTickets) => {
-          const currentTicket = currentTickets[currentTicketIndex];
-          if (currentTicket?.id === message.ticketId) {
-            setRevealed(true);
-            setAttendeeId((currentAttendeeId) => {
-              if (currentAttendeeId) {
-                fetchVotes(message.ticketId, currentAttendeeId);
-              }
-              return currentAttendeeId;
-            });
-          }
-          return currentTickets;
-        });
-      } else if (message.type === 'votes:unrevealed') {
-        setTickets((currentTickets) => {
-          const currentTicket = currentTickets[currentTicketIndex];
-          if (currentTicket?.id === message.ticketId) {
-            setRevealed(false);
-            setAttendeeId((currentAttendeeId) => {
-              if (currentAttendeeId) {
-                fetchVotes(message.ticketId, currentAttendeeId);
-              }
-              return currentAttendeeId;
-            });
-          }
-          return currentTickets;
-        });
-      } else if (message.type === 'ticket:added') {
-        setTickets((prev) => {
-          if (prev.find((t) => t.id === message.ticket.id)) return prev;
-          return [...prev, message.ticket];
-        });
-      } else if (message.type === 'ticket:updated') {
-        setTickets((prev) =>
-          prev.map((t) =>
-            t.id === message.ticketId
-              ? { ...t, estimate: message.estimate }
-              : t,
-          ),
-        );
-      } else if (message.type === 'current-ticket:changed') {
-        setCurrentTicketIndex(message.ticketIndex);
-        setTickets((currentTickets) => {
-          if (currentTickets[message.ticketIndex]) {
-            const newTicket = currentTickets[message.ticketIndex];
-            setAttendeeId((currentAttendeeId) => {
-              if (currentAttendeeId) {
-                fetchVotes(newTicket.id, currentAttendeeId);
-              }
-              return currentAttendeeId;
-            });
-          }
-          return currentTickets;
-        });
-      } else if (message.type === 'ticket:deleted') {
-        setTickets((prev) => prev.filter((t) => t.id !== message.ticketId));
-      }
-    };
-    return () => ws.close();
-  }, [shortId]);
-
-  const handleAddTicket = async (title: string) => {
-    if (!shortId) return;
-    try {
-      await fetch(`${api.baseUrl}/api/session/${shortId}/ticket`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
-      });
-    } catch {
-      showSnackbar('Failed to add ticket', 'error');
-    }
-  };
-
-  const handleDeleteTicket = async (id: number) => {
-    if (!shortId) return;
-    const deletingCurrentTicket = tickets[currentTicketIndex]?.id === id;
-    const newTickets = tickets.filter((t) => t.id !== id);
-
-    if (deletingCurrentTicket && newTickets.length > 0) {
-      const newIndex = Math.min(currentTicketIndex, newTickets.length - 1);
-      await handleSelectTicket(newIndex);
-    } else if (newTickets.length === 0) {
-      setCurrentTicketIndex(0);
-      setVoteStatus([]);
-    }
-
-    try {
-      await fetch(`${api.baseUrl}/api/session/${shortId}/ticket/${id}`, {
-        method: 'DELETE',
-      });
-    } catch {
-      showSnackbar('Failed to delete ticket', 'error');
-    }
-  };
-
-  const handleVote = async (vote: string) => {
-    const ticket = tickets[currentTicketIndex];
-    if (!ticket || !shortId || !attendeeId) return;
-    try {
-      await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${ticket.id}/vote`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vote, attendeeId }),
-        },
-      );
-      setMyVote(vote);
-    } catch {
-      showSnackbar('Failed to save vote', 'error');
-    }
-  };
-
-  const handleRemoveVote = async () => {
-    const ticket = tickets[currentTicketIndex];
-    if (!ticket || !shortId || !attendeeId) return;
-    try {
-      await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${ticket.id}/vote`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vote: null, attendeeId }),
-        },
-      );
-      setMyVote(null);
-    } catch {
-      showSnackbar('Failed to remove vote', 'error');
-    }
-  };
-
-  const handleReveal = async () => {
-    const ticket = tickets[currentTicketIndex];
-    if (!ticket || !shortId) return;
-    try {
-      await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${ticket.id}/reveal`,
-        {
-          method: 'POST',
-        },
-      );
-    } catch {
-      showSnackbar('Failed to reveal votes', 'error');
-    }
-  };
-
-  const handleUnreveal = async () => {
-    const ticket = tickets[currentTicketIndex];
-    if (!ticket || !shortId) return;
-    try {
-      await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${ticket.id}/unreveal`,
-        {
-          method: 'POST',
-        },
-      );
-    } catch {
-      showSnackbar('Failed to hide votes', 'error');
-    }
-  };
-
-  const handleSelectTicket = async (index: number) => {
-    const ticket = tickets[index];
-    if (!shortId || !ticket) return;
-
-    setCurrentTicketIndex(index);
-    if (attendeeId) {
-      fetchVotes(ticket.id, attendeeId);
-    }
-
-    try {
-      const res = await fetch(
-        `${api.baseUrl}/api/session/${shortId}/current-ticket`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ticketIndex: index }),
-        },
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      showSnackbar('Failed to sync ticket selection', 'error');
-    }
-  };
-
-  const currentTicket = tickets[currentTicketIndex];
+  const currentTicketVotes = currentTicket
+    ? ticketVotesMap.get(currentTicket.id)
+    : null;
+  const currentTicketAverage = currentTicketVotes?.revealed
+    ? calculateAverage(currentTicketVotes.votes)
+    : null;
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -368,34 +90,40 @@ const GameSession: FC = () => {
       >
         <Typography variant="h4">
           Planning Poker: session <code>{shortId}</code>
-          <IconButton
-            onClick={() => {
-              navigator.clipboard.writeText(shortId || '');
-              showSnackbar('Session code copied to clipboard', 'success');
-            }}
-          >
-            <CopyAllOutlined />
-          </IconButton>
-          <IconButton
-            onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
-              showSnackbar('Session URL copied to clipboard', 'success');
-            }}
-          >
-            <LinkIcon />
-          </IconButton>
+          <Tooltip title="Copy session code">
+            <IconButton
+              onClick={() => {
+                navigator.clipboard.writeText(shortId || '');
+                showSnackbar('Session code copied to clipboard', 'success');
+              }}
+            >
+              <CopyAllOutlined />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Copy session URL">
+            <IconButton
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                showSnackbar('Session URL copied to clipboard', 'success');
+              }}
+            >
+              <LinkIcon />
+            </IconButton>
+          </Tooltip>
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {attendeeId && (
+          {env.debugShowAttendeeId && attendeeId && (
             <Typography variant="body2" color="text.secondary">
               Your ID: <code>{attendeeId.slice(-8)}</code>
             </Typography>
           )}
-          <Tooltip title="Refresh game state">
-            <IconButton onClick={refreshGameState} size="small" color="primary">
-              <Refresh />
-            </IconButton>
-          </Tooltip>
+          {env.debugShowRefreshButton && (
+            <Tooltip title="Refresh game state">
+              <IconButton onClick={handleRefresh} size="small" color="primary">
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Country Roads!">
             <IconButton href="/">
               <HomeFilled />
@@ -403,193 +131,326 @@ const GameSession: FC = () => {
           </Tooltip>
         </Box>
       </Box>
-      <Box
-        sx={{
-          display: 'flex',
-          gap: { xs: 2, md: 3 },
-          flexDirection: { xs: 'column', md: 'row' },
+      <Stack
+        direction={{
+          xs: 'column-reverse',
+          md: 'row',
         }}
+        gap={{ xs: 6, md: 3 }}
+        divider={<Divider />}
       >
-        <Stack spacing={{ xs: 2, md: 3 }} sx={{ flex: 1 }}>
-          <Accordion defaultExpanded>
-            <AccordionSummary expandIcon={<ExpandMore />}>
-              <Typography variant="h6">
-                Attendees ({attendees.length})
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              {attendees.map((attendee) => {
-                const status = voteStatus.find(
-                  (v) => v.attendeeId === attendee.id,
-                );
-                const isMe = attendee.id === attendeeId;
-                return (
-                  <Box
-                    key={attendee.id}
-                    sx={{
-                      display: 'flex',
-                      gap: 1,
-                      mb: 1,
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Tooltip
-                      title={
-                        attendee.connectionCount > 1
-                          ? `[ATTENDEE NAME] HAS ${attendee.connectionCount} TABS OPEN!`
-                          : ''
-                      }
-                      arrow
-                    >
-                      <Badge
-                        anchorOrigin={{
-                          vertical: 'top',
-                          horizontal: 'left',
-                        }}
-                        badgeContent={
-                          attendee.connectionCount > 1
-                            ? attendee.connectionCount
-                            : 0
-                        }
-                        color="primary"
-                      >
-                        <Stack direction={'row'} gap={2} alignItems={'center'}>
-                          <Avatar />
-                          <Typography
-                            variant="body2"
-                            fontWeight={isMe ? 'bold' : 'normal'}
-                          >
-                            {attendee.name || attendee.id.slice(-4)}
-                            {isMe ? ' (you)' : ''}:
-                          </Typography>
-                        </Stack>
-                      </Badge>
-                    </Tooltip>
-                    <Typography
-                      variant="body2"
-                      color={
-                        status?.hasVoted ? 'success.main' : 'text.secondary'
-                      }
-                    >
-                      {status?.hasVoted ? 'Voted' : 'Not voted'}
-                    </Typography>
-                  </Box>
-                );
-              })}
-            </AccordionDetails>
-          </Accordion>
+        <Stack spacing={{ xs: 1, md: 3 }} sx={{ flex: 1, minWidth: 0 }}>
+          {SHOW_ATTENDEES && (
+            <Accordion defaultExpanded>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6">
+                  Attendees ({attendees.length})
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {attendees.map((attendee, index) => {
+                  const status = voteStatus.find(
+                    (v) => v.attendeeId === attendee.id,
+                  );
+                  const isMe = attendee.id === attendeeId;
+                  const isDisconnected = attendee.connectionCount === 0;
+                  const displayName = attendee.name || attendee.id.slice(-4);
 
+                  const tooltipTitle = isDisconnected
+                    ? 'User disconnected'
+                    : attendee.connectionCount > 1
+                      ? `${attendee.name?.toUpperCase() || attendee.id.slice(-4)} HAS ${attendee.connectionCount} TABS OPEN!`
+                      : '';
+
+                  return (
+                    <Fade
+                      key={attendee.id}
+                      in={!!attendeeId}
+                      timeout={300}
+                      style={{ transitionDelay: `${index * 30}ms` }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          gap: 1,
+                          mb: 1,
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Tooltip title={tooltipTitle} arrow>
+                          <Badge
+                            anchorOrigin={{
+                              vertical: 'top',
+                              horizontal: 'left',
+                            }}
+                            badgeContent={
+                              attendee.connectionCount > 1
+                                ? attendee.connectionCount
+                                : 0
+                            }
+                            color="primary"
+                          >
+                            <Stack
+                              direction={'row'}
+                              gap={2}
+                              alignItems={'center'}
+                            >
+                              <Avatar
+                                sx={{
+                                  bgcolor: isDisconnected
+                                    ? 'error.main'
+                                    : undefined,
+                                }}
+                              />
+                              <Typography
+                                variant="body2"
+                                fontWeight={isMe ? 'bold' : 'normal'}
+                                color={
+                                  isDisconnected ? 'text.disabled' : undefined
+                                }
+                              >
+                                {displayName}
+                                {isMe ? ' (you)' : ''}:
+                              </Typography>
+                            </Stack>
+                          </Badge>
+                        </Tooltip>
+                        <Typography
+                          variant="body2"
+                          color={
+                            status?.hasVoted ? 'success.main' : 'text.secondary'
+                          }
+                        >
+                          {status?.hasVoted ? 'Voted' : 'Not voted'}
+                        </Typography>
+                      </Box>
+                    </Fade>
+                  );
+                })}
+              </AccordionDetails>
+            </Accordion>
+          )}
           <TicketList
             tickets={tickets}
             currentIndex={currentTicketIndex}
+            ticketVotesMap={ticketVotesMap}
             onSelectTicket={handleSelectTicket}
             onAddTicket={handleAddTicket}
             onDeleteTicket={handleDeleteTicket}
+            onUpdateTicketTitle={handleUpdateTicketTitle}
           />
 
           {tickets.length > 0 && (
-            <Box>
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr',
-                  gap: 2,
-                  mb: 2,
-                }}
-              >
-                <Paper
-                  component={Button}
-                  elevation={1}
-                  disabled={currentTicketIndex === 0}
-                  onClick={() => handleSelectTicket(currentTicketIndex - 1)}
+            <Fade in={!!attendeeId} timeout={400}>
+              <Box>
+                <Box
                   sx={{
-                    textTransform: 'none',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: 2,
+                    mb: 2,
                   }}
                 >
-                  <Stack>
-                    <Typography variant="caption" color="text.secondary">
-                      Previous
+                  <Paper
+                    component={Button}
+                    elevation={1}
+                    disabled={currentTicketIndex === 0}
+                    onClick={() => handleSelectTicket(currentTicketIndex - 1)}
+                    sx={{
+                      textTransform: 'none',
+                      minWidth: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Stack sx={{ width: '100%', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Previous
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      >
+                        {currentTicketIndex > 0
+                          ? tickets[currentTicketIndex - 1].title
+                          : '—'}
+                      </Typography>
+                    </Stack>
+                  </Paper>
+                  <Paper
+                    elevation={3}
+                    sx={{
+                      p: 2,
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                      minWidth: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Typography variant="caption">Current ticket</Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight="bold"
+                      noWrap
+                      sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    >
+                      {tickets[currentTicketIndex].title}
                     </Typography>
-                    <Typography variant="body2" noWrap>
-                      {currentTicketIndex > 0
-                        ? tickets[currentTicketIndex - 1].title
-                        : '—'}
-                    </Typography>
-                  </Stack>
-                </Paper>
-                <Paper
-                  elevation={3}
-                  sx={{
-                    p: 2,
-                    bgcolor: 'primary.main',
-                    color: 'primary.contrastText',
-                  }}
-                >
-                  <Typography variant="caption">Current ticket</Typography>
-                  <Typography variant="body2" fontWeight="bold" noWrap>
-                    {tickets[currentTicketIndex].title}
-                  </Typography>
-                </Paper>
-                <Paper
-                  component={Button}
-                  elevation={1}
-                  disabled={currentTicketIndex === tickets.length - 1}
-                  onClick={() => handleSelectTicket(currentTicketIndex + 1)}
-                  sx={{
-                    textTransform: 'none',
-                  }}
-                >
-                  <Stack>
-                    <Typography variant="caption" color="text.secondary">
-                      Next
-                    </Typography>
-                    <Typography variant="body2" noWrap>
-                      {currentTicketIndex < tickets.length - 1
-                        ? tickets[currentTicketIndex + 1].title
-                        : '—'}
-                    </Typography>
-                  </Stack>
-                </Paper>
+                  </Paper>
+                  <Paper
+                    component={Button}
+                    elevation={1}
+                    disabled={currentTicketIndex === tickets.length - 1}
+                    onClick={() => handleSelectTicket(currentTicketIndex + 1)}
+                    sx={{
+                      textTransform: 'none',
+                      minWidth: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Stack sx={{ width: '100%', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Next
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      >
+                        {currentTicketIndex < tickets.length - 1
+                          ? tickets[currentTicketIndex + 1].title
+                          : '—'}
+                      </Typography>
+                    </Stack>
+                  </Paper>
+                </Box>
               </Box>
-            </Box>
+            </Fade>
           )}
         </Stack>
 
-        <Box sx={{ flex: 2 }}>
-          <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-            <Stack direction={'row'} gap={2}>
-              <Typography variant="h5" gutterBottom>
-                We are refining:
-              </Typography>
-              <Typography
-                variant="h5"
-                gutterBottom
-                sx={{
-                  color: currentTicket ? 'currentColor' : 'grey',
-                }}
+        <Box sx={{ flex: 2, minWidth: 0 }}>
+          <Fade in={!!attendeeId} timeout={400}>
+            <Paper
+              elevation={2}
+              sx={{ p: 3, mb: 3, minWidth: 0, overflow: 'hidden' }}
+            >
+              <Stack
+                direction={'row'}
+                gap={2}
+                sx={{ minWidth: 0, overflow: 'hidden' }}
               >
-                {currentTicket?.title || 'Nothing yet. Add a ticket!'}
-              </Typography>
-            </Stack>
-            {currentTicket?.estimate && (
-              <Typography variant="body2" color="success.main">
-                Estimate: {currentTicket.estimate}
-              </Typography>
-            )}
-          </Paper>
+                <Typography variant="h5" gutterBottom sx={{ flexShrink: 0 }}>
+                  We are refining:
+                </Typography>
+                <Typography
+                  variant="h5"
+                  gutterBottom
+                  noWrap
+                  sx={{
+                    color: currentTicket ? 'currentColor' : 'grey',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
+                  }}
+                >
+                  {currentTicket?.title || 'Nothing yet. Add a ticket!'}
+                </Typography>
+              </Stack>
+              <Stack
+                direction={'row'}
+                gap={2}
+                sx={{ minWidth: 0, overflow: 'hidden' }}
+              >
+                <Typography variant="body2" color="info">
+                  {currentTicket
+                    ? currentTicketAverage
+                      ? `Voting average: ${currentTicketAverage}`
+                      : 'Votes pending...'
+                    : '\xa0'}
+                </Typography>
+                {currentTicket?.estimate && (
+                  <Typography variant="body2" color="success">
+                    Final Estimate: {currentTicket.estimate}
+                  </Typography>
+                )}
+              </Stack>
+            </Paper>
+          </Fade>
           <VotingArea
             myVote={myVote}
             voteStatus={voteStatus}
             revealed={revealed}
             attendeeId={attendeeId}
+            attendees={attendees}
+            currentEstimate={currentTicket?.estimate || null}
+            hasCurrentTicket={!!currentTicket}
             onRemoveVote={handleRemoveVote}
             onReveal={handleReveal}
             onUnreveal={handleUnreveal}
+            onUpdateName={(name) => {
+              const sessionCode = shortId;
+              if (!sessionCode || !attendeeId) return;
+              fetch(
+                `${api.baseUrl}/api/session/${sessionCode}/attendee/${attendeeId}/name`,
+                {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name }),
+                },
+              );
+            }}
+            onKickPlayer={(playerId) => {
+              const sessionCode = shortId;
+              if (!sessionCode) return;
+              fetch(
+                `${api.baseUrl}/api/session/${sessionCode}/attendee/${playerId}/kick`,
+                {
+                  method: 'POST',
+                },
+              );
+            }}
+            onSetEstimate={(estimate) => {
+              const sessionCode = shortId;
+              if (!sessionCode || !currentTicket) return;
+              fetch(
+                `${api.baseUrl}/api/session/${sessionCode}/ticket/${currentTicket.id}/estimate`,
+                {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ estimate }),
+                },
+              );
+            }}
           />
-          <EstimateCards onEstimate={handleVote} />
+          <EstimateCards
+            myVote={myVote}
+            onEstimate={handleVote}
+            onRemoveVote={handleRemoveVote}
+            disabled={!currentTicket}
+          />
         </Box>
-      </Box>
+      </Stack>
+      {disclaimerDismissed === false && attendeeId && (
+        <Alert
+          severity="info"
+          onClose={handleDismissDisclaimer}
+          sx={{
+            position: 'absolute',
+            bottom: (theme) => theme.spacing(4),
+          }}
+        >
+          <Typography variant="body2">
+            I don't store nothing, boss. No cookies, no database.
+            <br />
+            Poker sessions are deleted after 24 hours.
+            <br />
+            However, it's a fabulous idea that you trust this site with NO
+            confidential data.
+          </Typography>
+        </Alert>
+      )}
     </Container>
   );
 };

@@ -1,14 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
-import formbody from '@fastify/formbody';
-import jwt from '@fastify/jwt';
 import websocket from '@fastify/websocket';
 import Fastify from 'fastify';
 import type { WebSocket } from 'ws';
 import { type ConfigType, configs } from '../configs';
-import { db } from './db';
 
 const env = process.env.NODE_ENV || 'development';
 const config: ConfigType = configs[env];
@@ -22,24 +18,48 @@ fastify.register(cors, {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 });
-fastify.register(formbody);
-fastify.register(cookie, { secret: 'super', hook: 'onRequest' });
-fastify.register(jwt, { secret: 'super' });
 fastify.register(websocket);
 
-const sessionClients = new Map<string, Set<WebSocket>>();
-const sessionAttendees = new Map<string, Map<WebSocket, string>>();
-const attendeeConnectionCount = new Map<string, Map<string, number>>();
-const attendeeToUserSession = new Map<string, Map<string, string>>();
-const ticketVotes = new Map<string, Map<number, Map<string, string>>>();
-const ticketRevealed = new Map<string, Map<number, boolean>>();
+type Ticket = {
+  id: number;
+  title: string;
+  description: string;
+  estimate: string | null;
+};
 
-const broadcast = (shortId: string, message: unknown) => {
-  const clients = sessionClients.get(shortId);
-  if (!clients) return;
-  const data = JSON.stringify(message);
-  for (const client of clients) {
-    if (client.readyState === 1) client.send(data);
+type GameSession = {
+  id: string;
+  shortId: string;
+  tickets: Ticket[];
+  currentTicketIndex: number;
+  votes: Map<number, Map<string, string>>;
+  revealed: Map<number, boolean>;
+  createdAt: number;
+};
+
+const sessions = new Map<string, GameSession>();
+const sessionClients = new Map<string, Set<WebSocket>>();
+const attendeeConnectionCount = new Map<string, Map<string, number>>();
+const attendeeNames = new Map<string, Map<string, string>>();
+const attendeeDisclaimerDismissed = new Map<string, Set<string>>();
+const attendeeToWebSocket = new Map<string, Map<string, WebSocket>>();
+
+let ticketIdCounter = 1;
+
+const broadcast = (shortId: string) => {
+  try {
+    const clients = sessionClients.get(shortId);
+    if (!clients) return;
+    const data = JSON.stringify({ type: 'refresh' });
+    for (const client of clients) {
+      try {
+        if (client.readyState === 1) client.send(data);
+      } catch (err) {
+        console.error('Failed to send message to client:', err);
+      }
+    }
+  } catch (err) {
+    console.error('Broadcast error:', err);
   }
 };
 
@@ -47,55 +67,115 @@ fastify.get('/', async (_request, _reply) => {
   return { status: 'ok' };
 });
 
-fastify.post('/api/user-session', async (_request, reply) => {
-  const token = randomUUID();
-  const result = db
-    .query('INSERT INTO user_sessions (sessionToken) VALUES (?) RETURNING id')
-    .get(token) as { id: number };
-  reply.send({ id: result.id, token });
-});
-
-fastify.put('/api/user-session/:id', async (request, reply) => {
-  const { id } = request.params as { id: string };
-  const { name } = request.body as { name: string };
-
-  db.query('UPDATE user_sessions SET name = ? WHERE id = ?').run(name, id);
-
-  const updated = db
-    .query('SELECT * FROM user_sessions WHERE id = ?')
-    .get(id) as { id: number; name: string; sessionToken: string } | undefined;
-
-  if (!updated) {
-    reply.code(404).send({ error: 'User session not found' });
-    return;
-  }
-
-  reply.send(updated);
-});
-
 fastify.post('/api/game-session', async (_request, reply) => {
   const id = randomUUID();
   const shortId = id.slice(-4);
-  db.query('INSERT INTO game_sessions (id, shortId) VALUES (?, ?)').run(
+  sessions.set(shortId, {
     id,
     shortId,
-  );
+    tickets: [],
+    currentTicketIndex: 0,
+    votes: new Map(),
+    revealed: new Map(),
+    createdAt: Date.now(),
+  });
   reply.send({ id, shortId });
 });
 
+fastify.put(
+  '/api/session/:shortId/attendee/:attendeeId/name',
+  async (request, reply) => {
+    const { shortId, attendeeId } = request.params as {
+      shortId: string;
+      attendeeId: string;
+    };
+    const { name } = request.body as { name: string };
+
+    if (!attendeeNames.has(shortId)) {
+      attendeeNames.set(shortId, new Map());
+    }
+    attendeeNames.get(shortId)?.set(attendeeId, name);
+
+    broadcast(shortId);
+    reply.send({ success: true });
+  },
+);
+
+fastify.put(
+  '/api/session/:shortId/attendee/:attendeeId/disclaimer',
+  async (request, reply) => {
+    const { shortId, attendeeId } = request.params as {
+      shortId: string;
+      attendeeId: string;
+    };
+
+    if (!attendeeDisclaimerDismissed.has(shortId)) {
+      attendeeDisclaimerDismissed.set(shortId, new Set());
+    }
+    attendeeDisclaimerDismissed.get(shortId)?.add(attendeeId);
+
+    broadcast(shortId);
+    reply.send({ success: true });
+  },
+);
+
+fastify.get(
+  '/api/session/:shortId/attendee/:attendeeId/disclaimer',
+  async (request, reply) => {
+    const { shortId, attendeeId } = request.params as {
+      shortId: string;
+      attendeeId: string;
+    };
+
+    const dismissed =
+      attendeeDisclaimerDismissed.get(shortId)?.has(attendeeId) || false;
+    reply.send({ dismissed });
+  },
+);
+
 fastify.get('/api/session/:shortId', async (request, reply) => {
   const { shortId } = request.params as { shortId: string };
-  const session = db
-    .query('SELECT * FROM game_sessions WHERE shortId = ?')
-    .get(shortId);
+  const { attendeeId } = request.query as { attendeeId?: string };
+
+  let session = sessions.get(shortId);
+  let wasCreated = false;
   if (!session) {
-    reply.code(404).send({ error: 'Session not found' });
-    return;
+    const id = randomUUID();
+    session = {
+      id,
+      shortId,
+      tickets: [],
+      currentTicketIndex: 0,
+      votes: new Map(),
+      revealed: new Map(),
+      createdAt: Date.now(),
+    };
+    sessions.set(shortId, session);
+    wasCreated = true;
   }
-  const tickets = db
-    .query('SELECT * FROM tickets WHERE gameSessionId = ? ORDER BY orderIndex')
-    .all((session as { id: string }).id);
-  reply.send({ session, tickets });
+
+  const counts = attendeeConnectionCount.get(shortId);
+  const names = attendeeNames.get(shortId);
+  const attendees = counts
+    ? Array.from(counts.entries()).map(([id, count]) => ({
+        id,
+        connectionCount: count,
+        name: names?.get(id) || null,
+      }))
+    : [];
+
+  const disclaimerDismissed = attendeeId
+    ? attendeeDisclaimerDismissed.get(shortId)?.has(attendeeId) || false
+    : false;
+
+  reply.send({
+    session: { id: session.id, shortId: session.shortId },
+    tickets: session.tickets,
+    currentTicketIndex: session.currentTicketIndex,
+    attendees,
+    disclaimerDismissed,
+    wasCreated,
+  });
 });
 
 fastify.post('/api/session/:shortId/ticket', async (request, reply) => {
@@ -104,24 +184,23 @@ fastify.post('/api/session/:shortId/ticket', async (request, reply) => {
     title: string;
     description?: string;
   };
-  const session = db
-    .query('SELECT * FROM game_sessions WHERE shortId = ?')
-    .get(shortId) as { id: string } | undefined;
+
+  const session = sessions.get(shortId);
   if (!session) {
     reply.code(404).send({ error: 'Session not found' });
     return;
   }
-  const maxOrder = db
-    .query('SELECT MAX(orderIndex) as max FROM tickets WHERE gameSessionId = ?')
-    .get(session.id) as { max: number | null };
-  const orderIndex = (maxOrder.max ?? -1) + 1;
-  const result = db
-    .query(
-      'INSERT INTO tickets (gameSessionId, title, description, orderIndex) VALUES (?, ?, ?, ?) RETURNING *',
-    )
-    .get(session.id, title, description || '', orderIndex);
-  broadcast(shortId, { type: 'ticket:added', ticket: result });
-  reply.send(result);
+
+  const ticket: Ticket = {
+    id: ticketIdCounter++,
+    title,
+    description: description || '',
+    estimate: null,
+  };
+
+  session.tickets.push(ticket);
+  broadcast(shortId);
+  reply.send(ticket);
 });
 
 fastify.put('/api/session/:shortId/ticket/:id/vote', async (request, reply) => {
@@ -131,49 +210,40 @@ fastify.put('/api/session/:shortId/ticket/:id/vote', async (request, reply) => {
     attendeeId: string;
   };
 
-  if (!ticketVotes.has(shortId)) {
-    ticketVotes.set(shortId, new Map());
+  const session = sessions.get(shortId);
+  if (!session) {
+    reply.code(404).send({ error: 'Session not found' });
+    return;
   }
-  if (!ticketVotes.get(shortId)?.has(Number(id))) {
-    ticketVotes.get(shortId)?.set(Number(id), new Map());
+
+  if (!session.votes.has(Number(id))) {
+    session.votes.set(Number(id), new Map());
   }
 
   if (vote === null) {
-    ticketVotes.get(shortId)?.get(Number(id))?.delete(attendeeId);
+    session.votes.get(Number(id))?.delete(attendeeId);
   } else {
-    ticketVotes.get(shortId)?.get(Number(id))?.set(attendeeId, vote);
+    session.votes.get(Number(id))?.set(attendeeId, vote);
   }
 
-  broadcast(shortId, { type: 'votes:updated', ticketId: Number(id) });
+  broadcast(shortId);
   reply.send({ success: true });
 });
 
-fastify.post(
+fastify.put(
   '/api/session/:shortId/ticket/:id/reveal',
   async (request, reply) => {
     const { shortId, id } = request.params as { shortId: string; id: string };
+    const { revealed } = request.body as { revealed: boolean };
 
-    if (!ticketRevealed.has(shortId)) {
-      ticketRevealed.set(shortId, new Map());
+    const session = sessions.get(shortId);
+    if (!session) {
+      reply.code(404).send({ error: 'Session not found' });
+      return;
     }
-    ticketRevealed.get(shortId)?.set(Number(id), true);
 
-    broadcast(shortId, { type: 'votes:revealed', ticketId: Number(id) });
-    reply.send({ success: true });
-  },
-);
-
-fastify.post(
-  '/api/session/:shortId/ticket/:id/unreveal',
-  async (request, reply) => {
-    const { shortId, id } = request.params as { shortId: string; id: string };
-
-    if (!ticketRevealed.has(shortId)) {
-      ticketRevealed.set(shortId, new Map());
-    }
-    ticketRevealed.get(shortId)?.set(Number(id), false);
-
-    broadcast(shortId, { type: 'votes:unrevealed', ticketId: Number(id) });
+    session.revealed.set(Number(id), revealed);
+    broadcast(shortId);
     reply.send({ success: true });
   },
 );
@@ -182,14 +252,42 @@ fastify.put(
   '/api/session/:shortId/ticket/:id/estimate',
   async (request, reply) => {
     const { shortId, id } = request.params as { shortId: string; id: string };
-    const { estimate } = request.body as { estimate: string };
+    const { estimate } = request.body as { estimate: string | null };
 
-    db.query('UPDATE tickets SET estimate = ? WHERE id = ?').run(estimate, id);
-    broadcast(shortId, {
-      type: 'ticket:updated',
-      ticketId: Number(id),
-      estimate,
-    });
+    const session = sessions.get(shortId);
+    if (!session) {
+      reply.code(404).send({ error: 'Session not found' });
+      return;
+    }
+
+    const ticket = session.tickets.find((t) => t.id === Number(id));
+    if (ticket) {
+      ticket.estimate = estimate || null;
+    }
+
+    broadcast(shortId);
+    reply.send({ success: true });
+  },
+);
+
+fastify.put(
+  '/api/session/:shortId/ticket/:id/title',
+  async (request, reply) => {
+    const { shortId, id } = request.params as { shortId: string; id: string };
+    const { title } = request.body as { title: string };
+
+    const session = sessions.get(shortId);
+    if (!session) {
+      reply.code(404).send({ error: 'Session not found' });
+      return;
+    }
+
+    const ticket = session.tickets.find((t) => t.id === Number(id));
+    if (ticket) {
+      ticket.title = title;
+    }
+
+    broadcast(shortId);
     reply.send({ success: true });
   },
 );
@@ -197,39 +295,30 @@ fastify.put(
 fastify.put('/api/session/:shortId/current-ticket', async (request, reply) => {
   const { shortId } = request.params as { shortId: string };
   const { ticketIndex } = request.body as { ticketIndex: number };
-  broadcast(shortId, { type: 'current-ticket:changed', ticketIndex });
+
+  const session = sessions.get(shortId);
+  if (!session) {
+    reply.code(404).send({ error: 'Session not found' });
+    return;
+  }
+
+  session.currentTicketIndex = ticketIndex;
+  broadcast(shortId);
   reply.send({ success: true });
 });
 
 fastify.delete('/api/session/:shortId/ticket/:id', async (request, reply) => {
   const { shortId, id } = request.params as { shortId: string; id: string };
-  db.query('DELETE FROM tickets WHERE id = ?').run(id);
-  broadcast(shortId, { type: 'ticket:deleted', ticketId: Number(id) });
-  reply.send({ success: true });
-});
 
-fastify.get('/api/session/:shortId/attendees', async (request, reply) => {
-  const { shortId } = request.params as { shortId: string };
-  const counts = attendeeConnectionCount.get(shortId);
-  const userSessionMap = attendeeToUserSession.get(shortId);
-  const attendees = counts
-    ? Array.from(counts.entries()).map(([id, count]) => {
-        const userSessionId = userSessionMap?.get(id);
-        let name: string | null = null;
-        if (userSessionId) {
-          const userSession = db
-            .query('SELECT name FROM user_sessions WHERE id = ?')
-            .get(userSessionId) as { name: string | null } | undefined;
-          name = userSession?.name || null;
-        }
-        return {
-          id,
-          connectionCount: count,
-          name,
-        };
-      })
-    : [];
-  reply.send({ attendees });
+  const session = sessions.get(shortId);
+  if (!session) {
+    reply.code(404).send({ error: 'Session not found' });
+    return;
+  }
+
+  session.tickets = session.tickets.filter((t) => t.id !== Number(id));
+  broadcast(shortId);
+  reply.send({ success: true });
 });
 
 fastify.get(
@@ -239,9 +328,17 @@ fastify.get(
     const { requestingAttendeeId } = request.query as {
       requestingAttendeeId?: string;
     };
-    const votes = ticketVotes.get(shortId)?.get(Number(id));
-    const revealed = ticketRevealed.get(shortId)?.get(Number(id)) || false;
+
+    const session = sessions.get(shortId);
+    if (!session) {
+      reply.code(404).send({ error: 'Session not found' });
+      return;
+    }
+
+    const votes = session.votes.get(Number(id));
+    const revealed = session.revealed.get(Number(id)) || false;
     const counts = attendeeConnectionCount.get(shortId);
+    const names = attendeeNames.get(shortId);
     const attendeeList = counts ? Array.from(counts.keys()) : [];
     const voteStatus = attendeeList.map((attendeeId) => ({
       attendeeId,
@@ -250,83 +347,112 @@ fastify.get(
         revealed || attendeeId === requestingAttendeeId
           ? votes?.get(attendeeId) || null
           : null,
+      name: names?.get(attendeeId) || null,
     }));
     reply.send({ votes: voteStatus, revealed });
+  },
+);
+
+fastify.post(
+  '/api/session/:shortId/attendee/:attendeeId/kick',
+  async (request, reply) => {
+    const { shortId, attendeeId } = request.params as {
+      shortId: string;
+      attendeeId: string;
+    };
+
+    const wsMap = attendeeToWebSocket.get(shortId);
+    const socket = wsMap?.get(attendeeId);
+    if (socket && socket.readyState === 1) {
+      socket.send(JSON.stringify({ type: 'kicked' }));
+      socket.close();
+    }
+
+    // Clean up attendee data immediately
+    attendeeConnectionCount.get(shortId)?.delete(attendeeId);
+    attendeeNames.get(shortId)?.delete(attendeeId);
+    attendeeDisclaimerDismissed.get(shortId)?.delete(attendeeId);
+    attendeeToWebSocket.get(shortId)?.delete(attendeeId);
+
+    broadcast(shortId);
+    reply.send({ success: true });
   },
 );
 
 fastify.register(async (fastify) => {
   fastify.get('/ws/:shortId', { websocket: true }, (socket, request) => {
     const { shortId } = request.params as { shortId: string };
-    const { existingAttendeeId, userSessionId } = request.query as {
+    const { existingAttendeeId } = request.query as {
       existingAttendeeId?: string;
-      userSessionId?: string;
     };
     const attendeeId = existingAttendeeId || randomUUID();
 
     if (!sessionClients.has(shortId)) {
       sessionClients.set(shortId, new Set());
     }
-    if (!sessionAttendees.has(shortId)) {
-      sessionAttendees.set(shortId, new Map());
-    }
     if (!attendeeConnectionCount.has(shortId)) {
       attendeeConnectionCount.set(shortId, new Map());
     }
-    if (!attendeeToUserSession.has(shortId)) {
-      attendeeToUserSession.set(shortId, new Map());
+    if (!attendeeNames.has(shortId)) {
+      attendeeNames.set(shortId, new Map());
+    }
+    if (!attendeeToWebSocket.has(shortId)) {
+      attendeeToWebSocket.set(shortId, new Map());
     }
 
     sessionClients.get(shortId)?.add(socket);
-    sessionAttendees.get(shortId)?.set(socket, attendeeId);
+    attendeeToWebSocket.get(shortId)?.set(attendeeId, socket);
 
     const counts = attendeeConnectionCount.get(shortId);
     if (counts) {
       counts.set(attendeeId, (counts.get(attendeeId) || 0) + 1);
     }
 
-    if (userSessionId) {
-      attendeeToUserSession.get(shortId)?.set(attendeeId, userSessionId);
-    }
-
     socket.send(JSON.stringify({ type: 'attendee:id', attendeeId }));
-    broadcast(shortId, { type: 'attendees:updated' });
+    broadcast(shortId);
 
     socket.on('close', () => {
       sessionClients.get(shortId)?.delete(socket);
-      sessionAttendees.get(shortId)?.delete(socket);
+      attendeeToWebSocket.get(shortId)?.delete(attendeeId);
 
       const counts = attendeeConnectionCount.get(shortId);
       if (counts) {
         const currentCount = counts.get(attendeeId) || 0;
-        if (currentCount <= 1) {
-          counts.delete(attendeeId);
-          const votes = ticketVotes.get(shortId);
-          if (votes) {
-            for (const [ticketId, voteMap] of votes) {
-              if (voteMap.delete(attendeeId)) {
-                broadcast(shortId, { type: 'votes:updated', ticketId });
-              }
-            }
-          }
-        } else {
-          counts.set(attendeeId, currentCount - 1);
-        }
+        counts.set(attendeeId, Math.max(0, currentCount - 1));
       }
 
-      broadcast(shortId, { type: 'attendees:updated' });
+      broadcast(shortId);
     });
   });
 });
 
 const reset = '\x1b[0m';
 const cyan = '\x1b[36m';
-const _dim = '\x1b[2m%s';
 const bright = '\x1b[1m';
+
+// Clean up sessions older than 24 hours
+const cleanupOldSessions = () => {
+  const now = Date.now();
+  const twentyFourHours = 24 * 60 * 60 * 1000;
+
+  for (const [shortId, session] of sessions.entries()) {
+    if (now - session.createdAt > twentyFourHours) {
+      sessions.delete(shortId);
+      sessionClients.delete(shortId);
+      attendeeConnectionCount.delete(shortId);
+      attendeeNames.delete(shortId);
+      attendeeDisclaimerDismissed.delete(shortId);
+      attendeeToWebSocket.delete(shortId);
+      console.log(`Cleaned up session ${shortId} (older than 24 hours)`);
+    }
+  }
+};
+
+// Run cleanup every hour
+setInterval(cleanupOldSessions, 60 * 60 * 1000);
 
 const start = async () => {
   try {
-    // without manually listening for interrupts, this hangs in docker.
     process.on('SIGINT', async () => {
       await fastify.close();
       process.exit(0);
@@ -339,7 +465,7 @@ const start = async () => {
 
     const listenText = `Bun serving at ${[cyan, 'http://localhost:', bright, config.serverPort, reset].join('')}`;
     await fastify.listen({
-      host: '0.0.0.0', // explicitly bind to all interfaces
+      host: '0.0.0.0',
       port: config.serverPort,
       listenTextResolver: () => listenText,
     });
