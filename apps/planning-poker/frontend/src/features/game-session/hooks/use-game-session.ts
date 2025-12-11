@@ -290,6 +290,7 @@ const useGameSession = (shortId: string | null) => {
         showSnackbar(
           `${message.changedBy} changed ticket to: ${message.ticketTitle}`,
           'info',
+          'ticket-changed-notification',
         );
         queryClient.invalidateQueries({ queryKey: ['session', shortId] });
         queryClient.invalidateQueries({ queryKey: ['votes', shortId] });
