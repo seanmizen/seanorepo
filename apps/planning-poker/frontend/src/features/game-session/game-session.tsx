@@ -25,7 +25,7 @@ import {
 } from '@mui/material';
 import Linkify from 'linkify-react';
 import type { FC } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { ThemeToggle } from '@/components';
 import { api, env } from '@/config';
 import { showSnackbar } from '@/lib';
@@ -127,7 +127,7 @@ const GameSession: FC = () => {
             </Tooltip>
           )}
           <Tooltip title="Country Roads!">
-            <IconButton href="/" color="inherit">
+            <IconButton component={RouterLink} to="/" color="inherit">
               <HomeFilled />
             </IconButton>
           </Tooltip>
