@@ -277,7 +277,7 @@ const GameSession: FC = () => {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           direction: 'rtl',
-                          textAlign: 'left',
+                          textAlign: 'center',
                         }}
                       >
                         {currentTicketIndex > 0
@@ -305,7 +305,7 @@ const GameSession: FC = () => {
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         direction: 'rtl',
-                        textAlign: 'left',
+                        textAlign: 'center',
                       }}
                     >
                       {tickets[currentTicketIndex].title}
@@ -333,7 +333,7 @@ const GameSession: FC = () => {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           direction: 'rtl',
-                          textAlign: 'left',
+                          textAlign: 'center',
                         }}
                       >
                         {currentTicketIndex < tickets.length - 1
@@ -374,7 +374,7 @@ const GameSession: FC = () => {
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                       direction: 'rtl',
-                      textAlign: 'left',
+                      textAlign: 'center',
                     },
                   }}
                 >
