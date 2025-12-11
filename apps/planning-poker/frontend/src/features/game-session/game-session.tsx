@@ -102,7 +102,7 @@ const GameSession: FC = () => {
               <CopyAllOutlined />
             </IconButton>
           </Tooltip>
-          {env.showCopyUrlButton && (
+          {env.hideCopyUrlButton || (
             <Tooltip title="Copy session URL">
               <IconButton
                 onClick={() => {
