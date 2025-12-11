@@ -63,11 +63,44 @@ const AppProvider: FC<AppProviderProps> = ({ children }) => {
 
   const theme = useMemo(() => {
     const effectiveMode = getEffectiveMode(mode);
+    const isDark = effectiveMode === 'dark';
+
+    const primaryMain = isDark ? '#fb923c' : '#f97316'; // deep orange
+
     return createTheme({
       palette: {
         mode: effectiveMode,
         background: {
-          default: effectiveMode === 'dark' ? '#111' : '#eee',
+          default: isDark ? '#111' : '#eee',
+        },
+        primary: {
+          main: primaryMain,
+          light: isDark ? '#fdba74' : '#fed7aa', // softer sunrise glow
+          dark: isDark ? '#c2410c' : '#ea580c', // ember / horizon edge
+          contrastText: '#ffffff',
+        },
+        // optional: a secondary with a sunrise magenta if you want
+        secondary: {
+          main: isDark ? '#f973a7' : '#ec4899',
+          contrastText: '#ffffff',
+        },
+      },
+      components: {
+        MuiCssBaseline: {
+          styleOverrides: {
+            '*, *::before, *::after': {
+              transitionProperty:
+                'color, background-color, border-color, box-shadow, fill, stroke',
+              transitionDuration: '100ms',
+              transitionTimingFunction: 'ease',
+            },
+            // if we re-add SVG filter backgrounds (beaut), this will make theme transitions nice.
+            'svg, svg *': {
+              transitionProperty: 'fill, stroke, color',
+              transitionDuration: '300ms',
+              transitionTimingFunction: 'ease',
+            },
+          },
         },
       },
     });
@@ -90,7 +123,7 @@ const AppProvider: FC<AppProviderProps> = ({ children }) => {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider theme={theme}>
-          <CssBaseline />
+          <CssBaseline enableColorScheme={true} />
           <SnackbarProvider />
           <HealthCheckProvider />
           <SessionProvider />
