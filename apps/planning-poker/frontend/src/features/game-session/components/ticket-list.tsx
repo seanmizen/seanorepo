@@ -76,7 +76,7 @@ const TicketList: FC<TicketListProps> = ({
 
   const handleStartEdit = (ticket: Ticket) => {
     setEditingTicketId(ticket.id);
-    setEditingTitle(ticket.title);
+    setEditingTitle(ticket?.title || '');
   };
 
   const handleSubmitEdit = () => {
@@ -153,7 +153,8 @@ const TicketList: FC<TicketListProps> = ({
                           textAlign: 'left',
                         }}
                       >
-                        {ticket.title}
+                        {/* RTL hijinks: replace trailing slashes */}
+                        {ticket?.title?.replace(/\/$/g, '')}
                       </Typography>
                     )}
                     <Box
