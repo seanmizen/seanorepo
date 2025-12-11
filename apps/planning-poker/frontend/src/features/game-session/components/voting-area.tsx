@@ -307,7 +307,10 @@ const VotingArea: FC<VotingAreaProps> = ({
             </Box>
           </Fade>
         </Stack>
-        <Stack spacing={2} sx={{ justifyContent: 'center' }}>
+        <Stack
+          spacing={2}
+          sx={{ justifyContent: 'flex-end', alignItems: 'flex-end' }}
+        >
           <Button
             variant={revealed ? 'outlined' : 'contained'}
             onClick={revealed ? onUnreveal : onReveal}
@@ -316,7 +319,7 @@ const VotingArea: FC<VotingAreaProps> = ({
           >
             {revealed ? 'Hide Votes' : 'Reveal Votes'}
           </Button>
-          <Paper variant="outlined" sx={{ p: 2 }}>
+          <Paper variant="outlined" sx={{ p: 2, width: '100%' }}>
             <Typography
               variant="body2"
               color={hasCurrentTicket ? 'success.main' : 'textDisabled'}
