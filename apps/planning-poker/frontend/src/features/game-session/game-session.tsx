@@ -102,16 +102,18 @@ const GameSession: FC = () => {
               <CopyAllOutlined />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Copy session URL">
-            <IconButton
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                showSnackbar('Session URL copied to clipboard', 'success');
-              }}
-            >
-              <LinkIcon />
-            </IconButton>
-          </Tooltip>
+          {env.showCopyUrlButton && (
+            <Tooltip title="Copy session URL">
+              <IconButton
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  showSnackbar('Session URL copied to clipboard', 'success');
+                }}
+              >
+                <LinkIcon />
+              </IconButton>
+            </Tooltip>
+          )}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {env.debugShowAttendeeId && attendeeId && (
