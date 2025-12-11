@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/config';
 import { showSnackbar } from '@/lib';
 
@@ -247,8 +247,25 @@ const useGameSession = (shortId: string | null) => {
   });
 
   // WebSocket setup
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (!shortId) return;
+
+    // Clear any pending reconnect
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    // Don't create a new connection if one already exists
+    if (
+      wsRef.current?.readyState === WebSocket.OPEN ||
+      wsRef.current?.readyState === WebSocket.CONNECTING
+    ) {
+      return;
+    }
 
     const storedAttendeeId = localStorage.getItem(`attendee-${shortId}`);
 
@@ -258,6 +275,8 @@ const useGameSession = (shortId: string | null) => {
     }
 
     const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       if (message.type === 'attendee:id') {
@@ -280,7 +299,18 @@ const useGameSession = (shortId: string | null) => {
         window.location.href = '/';
       }
     };
-    return () => ws.close();
+
+    return () => {
+      // In StrictMode, React will unmount/remount immediately
+      // Use a small delay before closing to avoid duplicate connections
+      // (and ghost players)
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (wsRef.current === ws) {
+          ws.close();
+          wsRef.current = null;
+        }
+      }, 100);
+    };
   }, [shortId, queryClient]);
 
   // Handler functions

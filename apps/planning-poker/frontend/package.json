@@ -6,6 +6,7 @@
   "scripts": {
     "start": "rsbuild dev --open --port 4040",
     "start:noopen": "rsbuild dev --port 4040",
+    "preview": "rsbuild preview --port 4040",
     "build": "rsbuild build"
   },
   "dependencies": {
