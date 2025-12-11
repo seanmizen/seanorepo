@@ -281,7 +281,7 @@ const GameSession: FC = () => {
                         }}
                       >
                         {currentTicketIndex > 0
-                          ? tickets[currentTicketIndex - 1].title
+                          ? tickets[currentTicketIndex - 1]?.title
                           : '—'}
                       </Typography>
                     </Stack>
@@ -308,7 +308,7 @@ const GameSession: FC = () => {
                         textAlign: 'center',
                       }}
                     >
-                      {tickets[currentTicketIndex].title}
+                      {tickets[currentTicketIndex]?.title}
                     </Typography>
                   </Paper>
                   <Paper
@@ -337,7 +337,7 @@ const GameSession: FC = () => {
                         }}
                       >
                         {currentTicketIndex < tickets.length - 1
-                          ? tickets[currentTicketIndex + 1].title
+                          ? tickets[currentTicketIndex + 1]?.title
                           : '—'}
                       </Typography>
                     </Stack>
@@ -373,8 +373,6 @@ const GameSession: FC = () => {
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
-                      direction: 'rtl',
-                      textAlign: 'center',
                     },
                   }}
                 >
@@ -382,6 +380,11 @@ const GameSession: FC = () => {
                     options={{
                       target: '_blank',
                       rel: 'noopener noreferrer',
+                      render: ({ attributes, content }) => (
+                        <a {...attributes} style={{ direction: 'rtl' }}>
+                          {content.replace(/\/$/g, '')}
+                        </a>
+                      ),
                     }}
                   >
                     {currentTicket?.title || 'Nothing yet. Add a ticket!'}
