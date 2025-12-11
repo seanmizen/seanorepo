@@ -20,6 +20,9 @@ export default defineConfig({
       'import.meta.env.PUBLIC_DEBUG_SHOW_REFRESH_BUTTON': JSON.stringify(
         process.env.DEBUG_SHOW_REFRESH_BUTTON || 'false',
       ),
+      'import.meta.env.PUBLIC_SHOW_COPY_URL_BUTTON': JSON.stringify(
+        process.env.SHOW_COPY_URL_BUTTON || 'false',
+      ),
     },
   },
   resolve: {
