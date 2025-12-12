@@ -20,6 +20,7 @@ const App: FC = () => {
   const [isJoining, setIsJoining] = useState(false);
 
   const handleCreateSession = async () => {
+    console.log('api.endpoints.gameSession', api.endpoints.gameSession);
     try {
       const res = await fetch(api.endpoints.gameSession, { method: 'POST' });
       const data = await res.json();

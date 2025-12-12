@@ -1,0 +1,79 @@
+# utils/fly-io/Dockerfile
+
+########################
+# 1) Frontend builds (Node + Yarn)
+########################
+FROM node:23-slim AS fe-build
+WORKDIR /repo
+
+ENV NODE_ENV=production
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+
+# seanmizen.com app
+COPY apps/seanmizen.com ./apps/seanmizen.com
+
+# planning-poker frontend + shared configs
+COPY apps/planning-poker/package.json ./apps/planning-poker/package.json
+COPY apps/planning-poker/frontend ./apps/planning-poker/frontend
+COPY apps/planning-poker/tsconfig.json ./apps/planning-poker/tsconfig.json
+COPY apps/planning-poker/configs.ts ./apps/planning-poker/configs.ts
+
+RUN corepack enable && yarn install
+
+# build root site (adjust workspace name if needed)
+RUN NODE_ENV=production yarn workspace seanmizen.com build
+
+# build planning-poker frontend
+RUN NODE_ENV=production yarn workspace planning-poker-fe build
+
+########################
+# 2) Backend build (Bun)
+########################
+FROM oven/bun:latest AS be-build
+WORKDIR /app
+
+# make sure bundle uses production config
+ENV NODE_ENV=production
+
+# put package.json where Bun expects it
+COPY apps/planning-poker/backend/package.json ./package.json
+COPY apps/planning-poker/configs.ts ./configs.ts
+
+RUN bun install --production
+
+# now copy backend source and build
+COPY apps/planning-poker/backend ./src
+
+RUN bun build ./src/index.ts \
+  --target=bun \
+  --outfile ./dist/index.js
+
+########################
+# 3) Runtime: nginx + serve (2x FE) + Bun backend
+########################
+FROM oven/bun:latest AS runtime
+WORKDIR /app
+
+# make backend + frontend use production config
+ENV NODE_ENV=production
+
+RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
+
+# backend bundle
+COPY --from=be-build /app/dist ./backend
+
+# frontends...
+COPY --from=fe-build /repo/apps/seanmizen.com/dist ./sites/seanmizen.com
+COPY --from=fe-build /repo/apps/planning-poker/frontend/dist ./sites/planning-poker
+
+RUN bun install -g serve
+
+COPY utils/fly-io/nginx.conf /etc/nginx/conf.d/default.conf
+COPY utils/fly-io/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8080
+
+CMD ["/entrypoint.sh"]

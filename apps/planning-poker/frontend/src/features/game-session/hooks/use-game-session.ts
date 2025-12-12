@@ -102,7 +102,9 @@ const useGameSession = (shortId: string | null) => {
     queryKey: ['votes', shortId, currentTicket?.id, attendeeId],
     queryFn: async (): Promise<VotesData> => {
       const res = await fetch(
-        `${api.baseUrl}/api/session/${shortId}/ticket/${currentTicket.id}/votes?requestingAttendeeId=${encodeURIComponent(attendeeId)}`,
+        `${api.baseUrl}/api/session/${shortId}/ticket/${
+          currentTicket.id
+        }/votes?requestingAttendeeId=${encodeURIComponent(attendeeId)}`,
       );
       if (!res.ok) throw new Error('Failed to load votes');
       return res.json();

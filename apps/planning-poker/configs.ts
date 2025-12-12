@@ -1,18 +1,20 @@
+// apps/planning-poker/configs.ts
+
 const devConfig = {
   appDomain: 'http://localhost:4040',
-  serverApiPath: 'http://localhost:4041/api',
-  serverPort: 4041,
+  backendPort: 4041, // Fastify/Bun dev port
+  apiPath: 'http://localhost:4041/api',
   dbName: 'dev.sqlite',
 };
 
 type ConfigType = typeof devConfig;
 
-export const configs: Record<string, ConfigType> = {
+export const configs: Record<'development' | 'production', ConfigType> = {
   development: devConfig,
   production: {
     appDomain: 'https://planning-poker.com',
-    serverApiPath: 'https://planning-poker.com/api',
-    serverPort: 4041,
+    backendPort: 4102, // <- must match nginx upstream
+    apiPath: 'https://planning-poker.com/api',
     dbName: 'production.sqlite',
   },
 };

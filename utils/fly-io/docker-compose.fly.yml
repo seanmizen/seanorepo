@@ -1,0 +1,10 @@
+services:
+  seanorepo-fly-stack:
+    build:
+      # monorepo root as build context
+      context: ../..
+      # Dockerfile path relative to *context*
+      dockerfile: utils/fly-io/Dockerfile
+    ports:
+      - "8080:8080"
+    container_name: seanorepo-fly-stack

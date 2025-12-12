@@ -164,7 +164,9 @@ const GameSession: FC = () => {
                   const tooltipTitle = isDisconnected
                     ? 'User disconnected'
                     : attendee.connectionCount > 1
-                      ? `${attendee.name?.toUpperCase() || attendee.id.slice(-4)} HAS ${attendee.connectionCount} TABS OPEN!`
+                      ? `${
+                          attendee.name?.toUpperCase() || attendee.id.slice(-4)
+                        } HAS ${attendee.connectionCount} TABS OPEN!`
                       : '';
 
                   return (
@@ -351,11 +353,11 @@ const GameSession: FC = () => {
         </Stack>
 
         <Box sx={{ flex: 2, minWidth: 0 }}>
-          <Fade in={!!attendeeId} timeout={400}>
-            <Paper
-              elevation={2}
-              sx={{ p: 3, mb: 3, minWidth: 0, overflow: 'hidden' }}
-            >
+          <Paper
+            elevation={2}
+            sx={{ p: 3, mb: 3, minWidth: 0, overflow: 'hidden' }}
+          >
+            <Fade in={!!attendeeId} timeout={400}>
               <Stack
                 direction={'row'}
                 gap={2}
@@ -393,6 +395,8 @@ const GameSession: FC = () => {
                   </Linkify>
                 </Typography>
               </Stack>
+            </Fade>
+            <Fade in={!!attendeeId} timeout={400}>
               <Stack
                 direction={'row'}
                 gap={2}
@@ -411,8 +415,8 @@ const GameSession: FC = () => {
                   </Typography>
                 )}
               </Stack>
-            </Paper>
-          </Fade>
+            </Fade>
+          </Paper>
           <VotingArea
             myVote={myVote}
             voteStatus={voteStatus}
@@ -467,7 +471,7 @@ const GameSession: FC = () => {
           />
         </Box>
       </Stack>
-      {!disclaimerDismissed && attendeeId && (
+      {!disclaimerDismissed && attendeeId && env.showDisclaimer && (
         <Alert
           severity="info"
           onClose={handleDismissDisclaimer}

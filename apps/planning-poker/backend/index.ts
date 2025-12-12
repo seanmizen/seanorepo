@@ -6,7 +6,13 @@ import Fastify from 'fastify';
 import type { WebSocket } from 'ws';
 import { type ConfigType, configs } from '../configs';
 
-const env = process.env.NODE_ENV || 'development';
+type Env = keyof typeof configs;
+
+const getEnv = (value: string | undefined): Env => {
+  return value === 'production' ? 'production' : 'development';
+};
+
+const env = getEnv(process.env.NODE_ENV);
 const config: ConfigType = configs[env];
 
 const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
@@ -476,10 +482,16 @@ const start = async () => {
       process.exit(0);
     });
 
-    const listenText = `Bun serving at ${[cyan, 'http://localhost:', bright, config.serverPort, reset].join('')}`;
+    const listenText = `Bun serving at ${[
+      cyan,
+      'http://localhost:',
+      bright,
+      config.backendPort,
+      reset,
+    ].join('')}`;
     await fastify.listen({
       host: '0.0.0.0',
-      port: config.serverPort,
+      port: config.backendPort,
       listenTextResolver: () => listenText,
     });
     console.debug(listenText);
