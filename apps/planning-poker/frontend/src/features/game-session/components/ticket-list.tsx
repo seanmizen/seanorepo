@@ -57,23 +57,25 @@ const TicketList: FC<TicketListProps> = ({
   const [editingTicketId, setEditingTicketId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const listItemRefs = useRef<(HTMLLIElement | null)[]>([]);
-  const shouldScrollToNewTicketRef = useRef(false);
+  const newTicketInputRef = useRef<HTMLInputElement | null>(null);
+  const shouldScrollToAddFieldRef = useRef(false);
 
   useEffect(() => {
-    if (!shouldScrollToNewTicketRef.current) return;
+    if (!shouldScrollToAddFieldRef.current) return;
+    shouldScrollToAddFieldRef.current = false;
 
-    const el = listItemRefs.current[currentIndex];
-    if (!el) return;
-
-    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    shouldScrollToNewTicketRef.current = false;
-  }, [tickets.length, currentIndex]);
+    newTicketInputRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
+    newTicketInputRef.current?.focus();
+  }, [tickets.length]);
 
   const handleAdd = () => {
     const title = newTicketTitle.trim();
     if (!title) return;
 
-    shouldScrollToNewTicketRef.current = true;
+    shouldScrollToAddFieldRef.current = true;
     onAddTicket(title);
     setNewTicketTitle('');
   };
@@ -243,6 +245,7 @@ const TicketList: FC<TicketListProps> = ({
                 fullWidth
                 size="small"
                 autoFocus
+                inputRef={newTicketInputRef}
                 value={newTicketTitle}
                 onChange={(e) => setNewTicketTitle(e.target.value)}
                 onKeyDown={(e) => {
@@ -250,7 +253,7 @@ const TicketList: FC<TicketListProps> = ({
                   if (e.key === 'Escape') setIsAdding(false);
                 }}
                 placeholder="Ticket title"
-              />
+              />{' '}
               <IconButton onClick={handleAdd} color="primary">
                 <Done />
               </IconButton>
