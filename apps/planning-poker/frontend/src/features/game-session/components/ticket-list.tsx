@@ -57,21 +57,25 @@ const TicketList: FC<TicketListProps> = ({
   const [editingTicketId, setEditingTicketId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const listItemRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const shouldScrollToNewTicketRef = useRef(false);
 
   useEffect(() => {
-    if (listItemRefs.current[currentIndex]) {
-      listItemRefs.current[currentIndex]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      });
-    }
-  }, [currentIndex]);
+    if (!shouldScrollToNewTicketRef.current) return;
+
+    const el = listItemRefs.current[currentIndex];
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    shouldScrollToNewTicketRef.current = false;
+  }, [tickets.length, currentIndex]);
 
   const handleAdd = () => {
-    if (newTicketTitle.trim()) {
-      onAddTicket(newTicketTitle);
-      setNewTicketTitle('');
-    }
+    const title = newTicketTitle.trim();
+    if (!title) return;
+
+    shouldScrollToNewTicketRef.current = true;
+    onAddTicket(title);
+    setNewTicketTitle('');
   };
 
   const handleStartEdit = (ticket: Ticket) => {
