@@ -8,6 +8,9 @@ export default defineConfig({
   },
   source: {
     define: {
+      'import.meta.env.MODE': JSON.stringify(
+        process.env.NODE_ENV ?? 'development',
+      ),
       'import.meta.env.PUBLIC_DEBUG_BACKEND': JSON.stringify(
         process.env.DEBUG_BACKEND || 'false',
       ),
