@@ -1,4 +1,4 @@
 init.defaultbranch=main
 user.name=Sean Mizen
 user.email=sean@seanmizen.com
-alias.slog=log --graph --topo-order --date=format-local:'%Y-%m-%d %H:%M' --topo-order --pretty=format:'%C(yellow)%h%C(reset) %C(green)%ad%C(reset) %C(#ee1111)%an%C(reset) %s'
+alias.slog=log --graph --topo-order --date=format-local:'%Y-%m-%d %H:%M' --topo-order --pretty=format:'%C(yellow)%h%C(reset) %C(green)%ad%C(reset) %C(#ee1111)%an%C(reset)%C(cyan)%d%C(reset) %s'
