@@ -1,0 +1,28 @@
+.copy-input {
+  background-color: transparent;
+  border: none;
+  color: inherit;
+  width: 100%;
+}
+
+.input-wrapper {
+  display: inline-grid;
+  vertical-align: top;
+  align-items: center;
+  position: relative;
+}
+
+.input-wrapper::after {
+  content: attr(data-value);
+  visibility: hidden;
+  white-space: pre;
+  grid-area: 1 / 1 / 2 / 2;
+  font: inherit;
+  padding: inherit;
+  border: inherit;
+  padding-right: 20px;
+}
+
+.input-wrapper > input {
+  grid-area: 1 / 1 / 2 / 2;
+}

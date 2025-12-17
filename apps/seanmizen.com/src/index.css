@@ -3,9 +3,7 @@
 }
 
 * {
-  transition:
-    background-color 100ms linear,
-    color 40ms linear;
+  transition: background-color 100ms linear, color 40ms linear;
 }
 
 body {
@@ -38,6 +36,23 @@ body {
   font-family: "Karla", "Courier New", Courier, monospace;
 }
 
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 1px 0 currentColor;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 li div {
   /* prevent information falling off the screen */
   overflow: overlay;
@@ -61,7 +76,8 @@ li {
 }
 
 li::marker {
-  font-size: 100%;
+  font-size: 1rem !important;
+  padding: 0;
 }
 
 .Collapsible > span:hover {
