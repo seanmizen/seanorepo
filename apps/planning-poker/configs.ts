@@ -1,5 +1,3 @@
-// apps/planning-poker/configs.ts
-
 const devConfig = {
   appDomain: 'http://localhost:4040',
   backendPort: 4041, // Fastify/Bun dev port
