@@ -1,0 +1,36 @@
+.accordion {
+  position: relative;
+}
+
+.trigger {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.trigger:hover {
+  cursor: default;
+}
+
+.content {
+  overflow: hidden;
+  transition: max-height 100ms ease-in-out;
+}
+
+.content.closed {
+  max-height: 0;
+}
+
+.content.open {
+  max-height: 5000px;
+}
+
+.inner {
+  padding-top: 0.5rem;
+  padding-bottom: 0.2rem;
+}
