@@ -21,6 +21,11 @@
   overflow: hidden;
   transition: max-height 100ms ease-in-out;
 }
+@media screen and (min-width: 500px) {
+  .content {
+    min-width: 400px;
+  }
+}
 
 .content.closed {
   max-height: 0;
