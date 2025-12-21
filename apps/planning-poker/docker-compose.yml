@@ -1,5 +1,5 @@
 x-frontend-base: &frontend-base
-  container_name: frontend-sc
+  container_name: frontend-pp
   build:
     context: ../..
     dockerfile: apps/planning-poker/frontend/dockerfile
@@ -8,7 +8,7 @@ x-frontend-base: &frontend-base
     - "4040:4040"
 
 x-backend-base: &backend-base
-  container_name: backend-sc
+  container_name: backend-pp
   build:
     context: ../..
     dockerfile: apps/planning-poker/backend/dockerfile
