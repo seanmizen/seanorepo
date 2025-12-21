@@ -3,7 +3,9 @@
 }
 
 * {
-  transition: background-color 100ms linear, color 40ms linear;
+  transition:
+    background-color 100ms linear,
+    color 40ms linear;
 }
 
 body {
@@ -76,14 +78,7 @@ li {
 }
 
 li::marker {
-  font-size: 1rem !important;
   padding: 0;
-}
-
-.Collapsible > span:hover {
-  /* text-decoration: underline; */
-  /* text-decoration-color: red; */
-  cursor: default;
 }
 
 a:hover {
