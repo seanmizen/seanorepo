@@ -329,12 +329,15 @@ trap cleanup EXIT
 
 log "=== Debian Preseed Test Environment ==="
 
-# Validate preseed file exists
+# Validate preseed file exists and get absolute path BEFORE changing directories
 if [ ! -f "$PRESEED_FILE" ]; then
     log "ERROR: Preseed file not found: $PRESEED_FILE"
     exit 1
 fi
-log "Using preseed: $PRESEED_FILE"
+
+# Convert to absolute path while we're still in the original directory
+PRESEED_FILE_ABS="$(cd "$(dirname "$PRESEED_FILE")" && pwd)/$(basename "$PRESEED_FILE")"
+log "Using preseed: $PRESEED_FILE_ABS"
 
 check_dependencies
 detect_platform
@@ -343,7 +346,7 @@ log "Platform: $PLATFORM (acceleration: ${ACCEL:-none})"
 setup_work_dir
 download_netboot
 create_disk
-start_http_server "$(cd "$(dirname "$PRESEED_FILE")" && pwd)/$(basename "$PRESEED_FILE")"
+start_http_server "$PRESEED_FILE_ABS"
 
 log ""
 log "=== Starting Installation ==="
