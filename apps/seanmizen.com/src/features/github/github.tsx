@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { Code } from '../../components';
+import { Code } from '@/components';
 import styles from './github.module.css';
 
 const Github: FC = () => {

@@ -3,7 +3,7 @@ import { useContext, useEffect, useRef } from 'react';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 import { GPUComputationRenderer, OrbitControls } from 'three-stdlib';
-import { ThemeContext } from '../../providers';
+import { ThemeContext } from '@/providers';
 import frag from './frag-stippling.glsl';
 import posSim from './frag-stippling-pos.glsl';
 import velSim from './frag-stippling-vel.glsl';
