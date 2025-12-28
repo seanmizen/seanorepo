@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { HomeLi } from '../../components';
+import { HomeLi } from '@/components';
 import { ColorPicker, Todo } from './components';
 
 const ThisPage: FC = () => {

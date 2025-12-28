@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react';
 import { createContext, useEffect, useState } from 'react';
-import type { Theme, ThemeContextValue, ThemeMode } from '../types';
+import type { Theme, ThemeContextValue, ThemeMode } from '@/types';
 
 const localStorageKey = 'mode';
 const modes: ThemeMode[] = ['system', 'light', 'dark'];

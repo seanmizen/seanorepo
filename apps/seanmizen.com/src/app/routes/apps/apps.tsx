@@ -1,6 +1,6 @@
 import type { FC } from 'react';
-import { HomeLink, Spacer } from '../../components';
-import { Projects } from '../../features';
+import { HomeLink, Spacer } from '@/components';
+import { Projects } from '@/features';
 import styles from './apps.module.css';
 
 const Apps: FC = () => {
