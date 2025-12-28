@@ -1,0 +1,24 @@
+# Boot the installed system (no installer)
+& "C:\Program Files\qemu\qemu-system-x86_64.exe" `
+    -accel whpx `
+    -m 2048 `
+    -smp 2 `
+    -drive "file=preseed-test\debian-test.qcow2,format=qcow2,if=virtio" `
+    -netdev "user,id=net0,hostfwd=tcp::2222-:22" `
+    -device "virtio-net-pci,netdev=net0" `
+    -display gtk
+
+# Without WHPX (slower but more stable)
+& "C:\Program Files\qemu\qemu-system-x86_64.exe" `
+    -m 2048 `
+    -smp 2 `
+    -drive "file=preseed-test\debian-test.qcow2,format=qcow2,if=virtio" `
+    -netdev "user,id=net0,hostfwd=tcp::2222-:22" `
+    -device "virtio-net-pci,netdev=net0" `
+    -display gtk
+
+# Or try HAXM instead of WHPX (often more stable):
+winget install Intel.HAXM
+# Then use -accel hax instead of -accel whpx
+
+
