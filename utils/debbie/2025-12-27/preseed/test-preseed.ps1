@@ -5,8 +5,8 @@
 .DESCRIPTION
     This script automates testing of Debian preseed files by:
     - Downloading Debian netboot files
+    - Embedding the preseed file directly in the initrd (most reliable method)
     - Creating a virtual disk
-    - Starting an HTTP server for the preseed file
     - Launching QEMU with proper acceleration
 
 .PARAMETER Clean
@@ -40,7 +40,7 @@
     Requirements:
     - QEMU for Windows: winget install SoftwareFreedomConservancy.QEMU
     - Windows Hypervisor Platform enabled (optional, for acceleration)
-    - Python 3 (for HTTP server)
+    - Git for Windows (provides gzip) - or install gzip separately
 #>
 
 [CmdletBinding()]
@@ -50,8 +50,7 @@ param(
     [string]$PreseedFile = "preseed.cfg",
     [int]$Ram = 2048,
     [int]$Cpus = 2,
-    [string]$DiskSize = "20G",
-    [int]$HttpPort = 8888
+    [string]$DiskSize = "20G"
 )
 
 $ErrorActionPreference = "Stop"
@@ -104,6 +103,29 @@ function Find-Qemu {
     return $null
 }
 
+function Find-Gzip {
+    # Check common locations for gzip on Windows
+    $searchPaths = @(
+        "C:\Program Files\Git\usr\bin\gzip.exe",
+        "C:\Program Files (x86)\Git\usr\bin\gzip.exe",
+        "$env:LOCALAPPDATA\Programs\Git\usr\bin\gzip.exe"
+    )
+    
+    foreach ($path in $searchPaths) {
+        if (Test-Path $path) {
+            return $path
+        }
+    }
+    
+    # Try PATH
+    $gzip = Get-Command "gzip" -ErrorAction SilentlyContinue
+    if ($gzip) {
+        return $gzip.Source
+    }
+    
+    return $null
+}
+
 function Test-WhpxAvailable {
     param([string]$QemuDir)
     
@@ -111,44 +133,122 @@ function Test-WhpxAvailable {
     return $output -match "whpx"
 }
 
-function Stop-HttpServer {
-    param([int]$Port)
+function Add-PreseedToInitrd {
+    param(
+        [string]$OriginalInitrd,
+        [string]$PreseedFile,
+        [string]$OutputInitrd,
+        [string]$GzipPath
+    )
     
-    $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
-    foreach ($conn in $connections) {
-        if ($conn.OwningProcess -ne 0) {
-            Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
-        }
+    Write-Status "Embedding preseed.cfg into initrd..."
+    
+    $tempDir = Join-Path $env:TEMP "preseed-initrd-$(Get-Random)"
+    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    
+    try {
+        # Copy files to temp
+        Copy-Item -Path $PreseedFile -Destination (Join-Path $tempDir "preseed.cfg")
+        Copy-Item -Path $OriginalInitrd -Destination (Join-Path $tempDir "initrd.gz")
+        
+        Push-Location $tempDir
+        
+        # Decompress initrd
+        & $GzipPath -d "initrd.gz"
+        if ($LASTEXITCODE -ne 0) { throw "gzip decompress failed" }
+        
+        # Create cpio archive with preseed.cfg
+        # Build a minimal cpio newc archive manually (since Windows doesn't have cpio)
+        $preseedBytes = [System.IO.File]::ReadAllBytes((Join-Path $tempDir "preseed.cfg"))
+        $cpioData = New-Object System.Collections.Generic.List[byte]
+        
+        # cpio newc header for preseed.cfg
+        $filename = "preseed.cfg"
+        $filenameBytes = [System.Text.Encoding]::ASCII.GetBytes($filename)
+        $filesize = $preseedBytes.Length
+        
+        # Build header string
+        $header = "070701"  # magic (newc format)
+        $header += "{0:X8}" -f 1           # ino
+        $header += "{0:X8}" -f 0x81A4      # mode (regular file, 0644)
+        $header += "{0:X8}" -f 0           # uid
+        $header += "{0:X8}" -f 0           # gid
+        $header += "{0:X8}" -f 1           # nlink
+        $header += "{0:X8}" -f 0           # mtime
+        $header += "{0:X8}" -f $filesize   # filesize
+        $header += "{0:X8}" -f 0           # devmajor
+        $header += "{0:X8}" -f 0           # devminor
+        $header += "{0:X8}" -f 0           # rdevmajor
+        $header += "{0:X8}" -f 0           # rdevminor
+        $header += "{0:X8}" -f ($filenameBytes.Length + 1)  # namesize (including null)
+        $header += "{0:X8}" -f 0           # check
+        
+        $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
+        $cpioData.AddRange($headerBytes)
+        $cpioData.AddRange($filenameBytes)
+        $cpioData.Add(0)  # null terminator
+        
+        # Pad to 4-byte boundary
+        while (($cpioData.Count % 4) -ne 0) { $cpioData.Add(0) }
+        
+        # File content
+        $cpioData.AddRange($preseedBytes)
+        
+        # Pad to 4-byte boundary  
+        while (($cpioData.Count % 4) -ne 0) { $cpioData.Add(0) }
+        
+        # Trailer entry
+        $trailerName = "TRAILER!!!"
+        $trailerNameBytes = [System.Text.Encoding]::ASCII.GetBytes($trailerName)
+        
+        $trailer = "070701"
+        $trailer += "{0:X8}" -f 0           # ino
+        $trailer += "{0:X8}" -f 0           # mode
+        $trailer += "{0:X8}" -f 0           # uid
+        $trailer += "{0:X8}" -f 0           # gid
+        $trailer += "{0:X8}" -f 1           # nlink
+        $trailer += "{0:X8}" -f 0           # mtime
+        $trailer += "{0:X8}" -f 0           # filesize
+        $trailer += "{0:X8}" -f 0           # devmajor
+        $trailer += "{0:X8}" -f 0           # devminor
+        $trailer += "{0:X8}" -f 0           # rdevmajor
+        $trailer += "{0:X8}" -f 0           # rdevminor
+        $trailer += "{0:X8}" -f ($trailerNameBytes.Length + 1)  # namesize
+        $trailer += "{0:X8}" -f 0           # check
+        
+        $trailerBytes = [System.Text.Encoding]::ASCII.GetBytes($trailer)
+        $cpioData.AddRange($trailerBytes)
+        $cpioData.AddRange($trailerNameBytes)
+        $cpioData.Add(0)
+        
+        # Pad to 4-byte boundary
+        while (($cpioData.Count % 4) -ne 0) { $cpioData.Add(0) }
+        
+        # Append cpio archive to initrd
+        $initrdPath = Join-Path $tempDir "initrd"
+        $initrdBytes = [System.IO.File]::ReadAllBytes($initrdPath)
+        $combinedBytes = $initrdBytes + $cpioData.ToArray()
+        [System.IO.File]::WriteAllBytes($initrdPath, $combinedBytes)
+        
+        # Recompress
+        & $GzipPath -9 "initrd"
+        if ($LASTEXITCODE -ne 0) { throw "gzip compress failed" }
+        
+        Pop-Location
+        
+        # Copy result
+        Copy-Item (Join-Path $tempDir "initrd.gz") $OutputInitrd -Force
+        
+        return $true
     }
-}
-
-function Start-PreseedHttpServer {
-    param([string]$Directory, [int]$Port)
-    
-    Stop-HttpServer -Port $Port
-    Start-Sleep -Milliseconds 500
-    
-    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-    if (-not $pythonCmd) {
-        $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue
+    catch {
+        Pop-Location -ErrorAction SilentlyContinue
+        Write-Status "Failed to embed preseed: $_" "WARN"
+        return $false
     }
-    if (-not $pythonCmd) {
-        throw "Python not found. Install Python 3 or add it to PATH."
+    finally {
+        Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
     }
-    
-    $job = Start-Job -ScriptBlock {
-        param($dir, $port)
-        Set-Location $dir
-        & python -m http.server $port 2>&1
-    } -ArgumentList $Directory, $Port
-    
-    Start-Sleep -Seconds 2
-    
-    if ($job.State -eq "Failed") {
-        throw "Failed to start HTTP server"
-    }
-    
-    return $job
 }
 
 # ============================================================================
@@ -157,7 +257,7 @@ function Start-PreseedHttpServer {
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor White
-Write-Host " Debian Preseed Test (Windows)" -ForegroundColor White
+Write-Host " Debian Preseed Test (Windows)" -ForegroundColor White  
 Write-Host "========================================" -ForegroundColor White
 Write-Host ""
 
@@ -168,11 +268,18 @@ if (-not $QemuDir) {
     Write-Host ""
     Write-Host "Install QEMU for Windows:" -ForegroundColor Yellow
     Write-Host "  winget install SoftwareFreedomConservancy.QEMU" -ForegroundColor Gray
-    Write-Host "  - or -"
-    Write-Host "  Download from https://qemu.weilnetz.de/w64/" -ForegroundColor Gray
     exit 1
 }
 Write-Status "QEMU found: $QemuDir" "OK"
+
+# Find gzip
+$GzipPath = Find-Gzip
+if (-not $GzipPath) {
+    Write-Status "gzip not found - install Git for Windows" "WARN"
+    Write-Host "         winget install Git.Git" -ForegroundColor Gray
+} else {
+    Write-Status "gzip found: $GzipPath" "OK"
+}
 
 # Validate preseed file
 $PreseedPath = Resolve-Path $PreseedFile -ErrorAction SilentlyContinue
@@ -183,10 +290,10 @@ if (-not $PreseedPath) {
 Write-Status "Preseed: $PreseedPath" "OK"
 
 # Check WHPX
-$accelFlag = ""
+$accelFlag = @()
 if (-not $NoAccel) {
     if (Test-WhpxAvailable -QemuDir $QemuDir) {
-        $accelFlag = "-accel whpx"
+        $accelFlag = @("-accel", "whpx")
         Write-Status "WHPX acceleration available" "OK"
     } else {
         Write-Status "WHPX not available - VM will be slower" "WARN"
@@ -214,9 +321,8 @@ if (-not (Test-Path $tftpDir)) {
     Write-Status "Downloading Debian netboot files..."
     $netbootTar = Join-Path $WorkDir "netboot.tar.gz"
     
-    $ProgressPreference = 'SilentlyContinue'  # Speed up Invoke-WebRequest
-    Invoke-WebRequest -Uri $NetbootUrl -OutFile $netbootTar
-    $ProgressPreference = 'Continue'
+    # Use curl.exe explicitly (not PowerShell's curl alias)
+    & curl.exe --location --output $netbootTar $NetbootUrl --progress-bar
     
     Write-Status "Extracting netboot files..."
     $extractDir = Join-Path $WorkDir "tftp"
@@ -234,28 +340,55 @@ if (-not (Test-Path $diskPath)) {
     Write-Status "Creating disk image: $DiskFile ($DiskSize)"
     & "$QemuDir\qemu-img.exe" create -f qcow2 $diskPath $DiskSize
 } else {
-    Write-Status "Using existing disk image" "OK"
+    Write-Status "Using existing disk image (use -Clean for fresh install)" "OK"
 }
-
-# Copy preseed file
-Copy-Item -Path $PreseedPath -Destination (Join-Path $WorkDir "preseed.cfg") -Force
-
-# Start HTTP server
-Write-Host ""
-Write-Status "Starting HTTP server on port $HttpPort..."
-$httpJob = Start-PreseedHttpServer -Directory $WorkDir -Port $HttpPort
-Write-Status "HTTP server started" "OK"
 
 # Build paths
 $kernel = Join-Path $WorkDir "tftp\debian-installer\$DebianArch\linux"
-$initrd = Join-Path $WorkDir "tftp\debian-installer\$DebianArch\initrd.gz"
-$preseedUrl = "http://10.0.2.2:$HttpPort/preseed.cfg"
+$originalInitrd = Join-Path $WorkDir "tftp\debian-installer\$DebianArch\initrd.gz"
+$customInitrd = Join-Path $WorkDir "initrd-preseed.gz"
+
+# Determine preseed delivery method
+$preseedParam = ""
+$initrd = $originalInitrd
+$httpJob = $null
+
+if ($GzipPath) {
+    # Try to embed preseed in initrd (most reliable)
+    $embedded = Add-PreseedToInitrd -OriginalInitrd $originalInitrd -PreseedFile $PreseedPath -OutputInitrd $customInitrd -GzipPath $GzipPath
+    
+    if ($embedded) {
+        $initrd = $customInitrd
+        $preseedParam = "file=/preseed.cfg"
+        Write-Status "Preseed embedded in initrd" "OK"
+    }
+}
+
+if (-not $preseedParam) {
+    # Fall back to HTTP server
+    Write-Status "Using HTTP server for preseed delivery..." "INFO"
+    
+    $httpPort = 8888
+    Copy-Item -Path $PreseedPath -Destination (Join-Path $WorkDir "preseed.cfg") -Force
+    
+    # Start simple Python HTTP server
+    $httpJob = Start-Job -ScriptBlock {
+        param($dir, $port)
+        Set-Location $dir
+        python -m http.server $port
+    } -ArgumentList $WorkDir, $httpPort
+    
+    Start-Sleep -Seconds 2
+    $preseedParam = "preseed/url=http://10.0.2.2:$httpPort/preseed.cfg"
+    Write-Status "HTTP server started on port $httpPort" "OK"
+    Write-Status "If preseed fails, try installing Git for Windows for initrd embedding" "WARN"
+}
 
 # Kernel command line
 $append = @(
     "auto=true",
     "priority=critical",
-    "preseed/url=$preseedUrl",
+    $preseedParam,
     "debian-installer/locale=en_GB.UTF-8",
     "keyboard-configuration/xkb-keymap=gb",
     "netcfg/choose_interface=auto",
@@ -269,7 +402,7 @@ Write-Host " Starting QEMU" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor White
 Write-Host "  RAM: ${Ram}MB, CPUs: $Cpus" -ForegroundColor Gray
 Write-Host "  Disk: $DiskSize" -ForegroundColor Gray
-Write-Host "  Preseed URL: $preseedUrl" -ForegroundColor Gray
+Write-Host "  Preseed: $preseedParam" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Close the QEMU window to stop." -ForegroundColor Yellow
 Write-Host "  After install: ssh -p 2222 admin@localhost" -ForegroundColor Yellow
@@ -277,7 +410,7 @@ Write-Host "========================================" -ForegroundColor White
 Write-Host ""
 
 try {
-    $qemuArgs = @(
+    $qemuArgs = $accelFlag + @(
         "-m", $Ram
         "-smp", $Cpus
         "-drive", "file=$diskPath,format=qcow2,if=virtio"
@@ -289,16 +422,11 @@ try {
         "-display", "gtk"
     )
     
-    if ($accelFlag) {
-        $qemuArgs = @("-accel", "whpx") + $qemuArgs
-    }
-    
     & "$QemuDir\qemu-system-x86_64.exe" @qemuArgs
 }
 finally {
     Write-Host ""
-    Write-Status "Stopping HTTP server..."
-    Stop-HttpServer -Port $HttpPort
+    Write-Status "Cleaning up..."
     if ($httpJob) {
         Stop-Job -Job $httpJob -ErrorAction SilentlyContinue
         Remove-Job -Job $httpJob -ErrorAction SilentlyContinue
