@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import type { ThemeMode } from '../../types';
+import type { ThemeMode } from '@/types';
 import styles from './theme-toggle.module.css';
 
 interface ThemeToggleProps {

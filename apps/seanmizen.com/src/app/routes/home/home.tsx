@@ -7,10 +7,10 @@ import {
   Spacer,
   SSHModal,
   ThemeToggle,
-} from '../../components';
-import { Donate, Github, Projects, ThisPage, Xmas } from '../../features';
-import { useKeySequence } from '../../hooks';
-import { ThemeContext } from '../../providers';
+} from '@/components';
+import { Donate, Github, Projects, ThisPage, Xmas } from '@/features';
+import { useKeySequence } from '@/hooks';
+import { ThemeContext } from '@/providers';
 
 interface HomeProps {
   setIsSnowing?: (isSnowing: boolean) => void;
