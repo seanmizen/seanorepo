@@ -1,39 +1,34 @@
-.theme-toggle-outer {
+.theme-toggle-button {
   position: fixed;
-  top: 0;
-  right: 0;
-  height: 8rem;
-  width: 10rem;
-  font-size: 0.85rem;
-  display: flex;
-}
-.theme-toggle-inner {
-  position: absolute;
-  right: 0;
-  top: 0;
-  padding: 1.6rem 2rem;
+  top: 10;
+  right: 18;
+
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  line-height: 0;
+
+  opacity: 0.7;
+
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.theme-toggle-inner button {
-  opacity: 0;
+.theme-toggle-button:focus {
+  outline: none;
 }
 
-.theme-toggle-outer:hover button {
-  transition: opacity 0.2s;
-  -webkit-transition: opacity 0.2s;
-  opacity: 0.5;
+.theme-toggle-button svg {
+  display: block;
 }
 
-.theme-toggle-inner:hover button {
-  transition: opacity 0.2s;
-  -webkit-transition: opacity 0.2s;
-  opacity: 1;
-}
-
-.theme-toggle-outer button:focus {
-  transition: opacity 0.5s;
-  -webkit-transition: opacity 0.5s;
-  opacity: 1;
+.theme-toggle-button {
+  color: var(--color);
 }
 
 /* enforce auto color theme for mobile users */
