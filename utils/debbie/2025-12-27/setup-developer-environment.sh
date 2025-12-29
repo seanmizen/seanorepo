@@ -338,6 +338,19 @@ log_step "Go installation"
 } || log_fail "Go installation"
 
 #-------------------------------------------------------------------------------
+# Step: Claude Code installation
+#-------------------------------------------------------------------------------
+log_step "Claude Code installation"
+{
+    if ! command_exists claude; then
+        run_as_user "$ORIG_USER" "curl -fsSL https://claude.ai/install.sh | bash"
+        log_success "Claude Code installed"
+    else
+        log_skip "Claude Code already installed"
+    fi
+} || log_fail "Claude Code installation"
+
+#-------------------------------------------------------------------------------
 # Step: Projects directory
 #-------------------------------------------------------------------------------
 log_step "Projects directory"
