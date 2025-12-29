@@ -16,16 +16,14 @@ const iconMap: Record<ThemeMode, ReactNode> = {
 
 const ThemeToggle: FC<ThemeToggleProps> = ({ mode, toggleMode }) => {
   return (
-    <div className={styles['theme-toggle-outer']}>
-      <button
-        type="button"
-        onClick={toggleMode}
-        aria-label={`Current theme: ${mode}. Click to change.`}
-        className={styles['theme-toggle-button']}
-      >
-        {iconMap[mode]}
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={toggleMode}
+      aria-label={`Current theme: ${mode}. Click to change.`}
+      className={styles['theme-toggle-button']}
+    >
+      {iconMap[mode]}
+    </button>
   );
 };
 

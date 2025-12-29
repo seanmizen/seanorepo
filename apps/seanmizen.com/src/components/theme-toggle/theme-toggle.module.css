@@ -1,22 +1,17 @@
 .theme-toggle-button {
-  position: fixed;
-  top: 10;
-  right: 18;
-
   background: transparent;
   border: 0;
   padding: 0;
   margin: 0;
   cursor: pointer;
   line-height: 0;
-
   opacity: 0.7;
-
   width: 40px;
   height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: var(--color);
 }
 
 .theme-toggle-button:focus {
@@ -25,15 +20,4 @@
 
 .theme-toggle-button svg {
   display: block;
-}
-
-.theme-toggle-button {
-  color: var(--color);
-}
-
-/* enforce auto color theme for mobile users */
-@media only screen and (max-width: 440px) {
-  .theme-toggle-outer {
-    display: none;
-  }
 }
