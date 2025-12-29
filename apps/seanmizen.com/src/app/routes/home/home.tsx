@@ -51,11 +51,13 @@ const Home: FC<HomeProps> = ({ setIsSnowing }) => {
         ))}
       </ul>
       <Spacer />
-      <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
       <div className="shader-container">
         <ShaderSean />
       </div>
-      <ThemeToggle mode={mode} toggleMode={toggleMode} />
+      <div className="bottom-right-controls">
+        <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
+        <ThemeToggle mode={mode} toggleMode={toggleMode} />
+      </div>
       <SSHModal
         isOpen={isSSHModalOpen}
         onClose={() => setIsSSHModalOpen(false)}
