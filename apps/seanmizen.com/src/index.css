@@ -168,3 +168,21 @@ span[class*="is-closed"] + div {
     transform: scale(0.5);
   }
 }
+
+.bottom-right-controls {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  z-index: 10;
+}
+
+/* enforce auto color theme for mobile users */
+@media only screen and (max-width: 440px) {
+  .bottom-right-controls {
+    display: none;
+  }
+}
