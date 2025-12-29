@@ -17,10 +17,10 @@
     "cards": "yarn workspace seanscards start",
     "gosniff": "yarn workspace gosniff start",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
-    "prod:docker": "yarn workspaces foreach -Apt run prod:docker",
+    "prod:docker": "yarn workspaces foreach -At run prod:docker",
     "down": "yarn workspaces foreach -Apt run down",
     "lint": "yarn exec biome check --write",
-    "fly:up": "docker compose -f utils/fly-io/docker-compose.fly.yml up --build",
+    "fly:up": "docker compose -f utils/fly-io/docker-compose.fly.yml up --build --detach",
     "fly:down": "docker compose -f utils/fly-io/docker-compose.fly.yml down",
     "fly:deploy": "fly deploy"
   },

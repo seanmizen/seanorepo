@@ -184,10 +184,13 @@ const start = async () => {
       process.exit(0);
     });
 
-    const listenText = `Bun serving at ${[cyan, 'http://localhost:', bright, config.serverPort, reset].join('')}`;
+    const port = process.env.PORT
+      ? Number(process.env.PORT)
+      : config.serverPort;
+    const listenText = `Bun serving at ${[cyan, 'http://localhost:', bright, port, reset].join('')}`;
     await fastify.listen({
       host: '0.0.0.0', // explicitly bind to all interfaces
-      port: config.serverPort,
+      port,
       listenTextResolver: () => listenText,
     });
     console.debug(listenText);
