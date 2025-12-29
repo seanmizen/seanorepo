@@ -61,12 +61,19 @@ Apps: `seanmizen.com`, `planning-poker` (frontend), `carolinemizen.art` (fronten
 
 **Stack**: Bun runtime, Fastify, SQLite, WebSockets, Nodemailer
 
-Apps: `planning-poker` (backend), `tcp-getter`, `carolinemizen.art` (backend), `sternboats` (backend)
+Apps: `planning-poker` (backend), `tcp-getter`, `carolinemizen.art` (backend), `seanscards` (backend)
 
 - Framework: Fastify with hot reload via Bun
 - Real-time: @fastify/websocket for live communication
 - Database: SQLite with named Docker volumes
 - Auth: JWT plugins where needed
+
+**CRITICAL: Bun is RUNTIME ONLY**
+- ⛔ NEVER use `bun install` or `bun build` in Dockerfiles or package management
+- ✅ ALWAYS use Yarn 4 for package management and installation
+- ✅ Bun is used ONLY to run the application (`bun index.ts`, `bun ./dist/index.js`)
+- If you see `bun install` or `bun build` anywhere, remove it and replace with Yarn
+- Bundling is handled by the build tool (Rspack, esbuild, etc.), not Bun
 
 ### Go Services
 
@@ -133,16 +140,55 @@ Run: `yarn lint` (auto-fixes issues)
 ## Development Patterns
 
 ### Port Allocation
-- 4000: seanmizen.com
-- 4040: planning-poker frontend
-- 4041: planning-poker backend
-- 10101: sternboats backend
+
+The repository uses **dual port schemes** for different deployment targets:
+
+**Cloudflared (Home Server) - 4xxx range:**
+- 4000: seanmizen.com (FE)
+- 4010: seanscards (FE)
+- 4011: seanscards (BE)
+- 4020: carolinemizen.art (FE)
+- 4021: carolinemizen.art (BE)
+- 4040: planning-poker (FE)
+- 4041: planning-poker (BE)
+
+**Fly.io (Cloud) - 5xxx range:**
+- 5000: seanmizen.com (FE)
+- 5010: seanscards (FE)
+- 5011: seanscards (BE)
+- 5020: carolinemizen.art (FE)
+- 5021: carolinemizen.art (BE)
+- 5040: planning-poker (FE)
+- 5041: planning-poker (BE)
+- 8080: Fly.io nginx gateway
 
 ### Concurrent Development
 Multiple apps use `concurrently` to run frontend + backend simultaneously with named logging.
 
 ### Deployment Model
-`yarn prod:docker` is the **actual deployment command** used on the deployment server. The server pulls the repo and runs this exact command.
+
+**Dual Deployment Architecture:**
+
+1. **Cloudflared (Home Server)**
+   - Uses 4xxx port range
+   - Each app runs in separate Docker containers
+   - Cloudflared tunnels traffic to localhost ports
+   - Command: `yarn prod:docker`
+
+2. **Fly.io (Cloud)**
+   - Uses 5xxx port range
+   - Single container with nginx gateway (port 8080)
+   - All services bundled together with domain-based routing
+   - Build: `docker build -f utils/fly-io/dockerfile`
+
+**Testing Deployments:**
+See `DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
+- Port scheme documentation
+- Service smoke tests (`./test-deployment.sh`)
+- Instructions for adding new services
+
+**Production Deployment:**
+`yarn prod:docker` is the **actual deployment command** used on the Cloudflared server. The server pulls the repo and runs this exact command.
 
 ## Working Philosophy
 

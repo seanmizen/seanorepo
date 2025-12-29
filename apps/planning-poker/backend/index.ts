@@ -482,16 +482,19 @@ const start = async () => {
       process.exit(0);
     });
 
+    const port = process.env.PORT
+      ? Number(process.env.PORT)
+      : config.backendPort;
     const listenText = `Bun serving at ${[
       cyan,
       'http://localhost:',
       bright,
-      config.backendPort,
+      port,
       reset,
     ].join('')}`;
     await fastify.listen({
       host: '0.0.0.0',
-      port: config.backendPort,
+      port,
       listenTextResolver: () => listenText,
     });
     console.debug(listenText);

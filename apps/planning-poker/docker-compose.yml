@@ -27,7 +27,7 @@ services:
     <<: *frontend-base
     volumes:
       - type: bind
-        source: ../..
+        source: ../../apps/planning-poker/frontend
         target: /app
       - fe_node_modules:/app/node_modules
     profiles: ["dev"]
@@ -44,10 +44,12 @@ services:
     profiles: ["dev"]
     volumes:
       - type: bind
-        source: ../../apps/planning-poker/backend
-        target: /app/src
+        source: ../../apps/planning-poker
+        target: /app
+      - be_node_modules:/app/backend/node_modules
       - sqlite_data:/app/db
 
 volumes:
   sqlite_data:
   fe_node_modules:
+  be_node_modules:

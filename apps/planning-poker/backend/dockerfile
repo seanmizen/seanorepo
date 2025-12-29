@@ -1,17 +1,35 @@
-FROM oven/bun:latest AS deps
+FROM node:23-slim AS deps
 WORKDIR /app
-COPY apps/planning-poker/backend/package.json .
-COPY apps/planning-poker/configs.ts ./configs.ts
-RUN bun install --production
 
-FROM deps AS dev
-CMD ["bun", "--hot", "--no-clear-screen", "/app/src/index.ts"]
+# Copy root package.json and .yarnrc.yml for Yarn 4 configuration
+COPY package.json .yarnrc.yml ./
 
-FROM deps AS prod-build
-COPY apps/planning-poker/backend ./src
-RUN bun build ./src/index.ts --target=bun --outfile ./dist/index.js
+# Copy backend package.json and install dependencies directly
+COPY apps/planning-poker/backend/package.json ./package.json
 
+# Install with yarn (standalone, not as workspace)
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
+
+# dev target - run source directly
+FROM oven/bun:latest AS dev
+WORKDIR /app/backend
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+ENV NODE_ENV=development
+CMD ["bun", "--hot", "--no-clear-screen", "index.ts"]
+
+# prod target - run source directly (no bundling)
 FROM oven/bun:latest AS prod
 WORKDIR /app
-COPY --from=prod-build /app/dist ./dist
-CMD ["bun", "./dist/index.js"]
+
+# Copy application source
+COPY apps/planning-poker/backend ./src
+COPY apps/planning-poker/configs.ts ./configs.ts
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+ENV NODE_ENV=production
+CMD ["bun", "./src/index.ts"]

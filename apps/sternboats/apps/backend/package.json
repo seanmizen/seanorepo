@@ -1,7 +1,0 @@
-{
-  "name": "sternboats-be",
-  "scripts": {
-    "start": "serve -p 10101"
-  },
-  "packageManager": "yarn@4.8.1"
-}
