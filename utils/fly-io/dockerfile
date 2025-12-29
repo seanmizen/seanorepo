@@ -1,4 +1,11 @@
 # utils/fly-io/Dockerfile
+# Builds all services for Fly.io deployment in a single container
+# To add a new service:
+# 1. Add frontend build in fe-build stage (copy app, run yarn workspace build)
+# 2. Add backend build in be-build stage if needed (create separate build stage)
+# 3. Copy built artifacts to runtime stage
+# 4. Update entrypoint.sh to serve the new service
+# 5. Update nginx.conf to route requests to the new service
 
 ########################
 # 1) Frontend builds (Node + Yarn)
@@ -11,61 +18,88 @@ ENV NODE_ENV=production
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 
-# seanmizen.com app
+# Copy all frontend apps
 COPY apps/seanmizen.com ./apps/seanmizen.com
-
-# planning-poker frontend + shared configs
+COPY apps/seanscards/frontend ./apps/seanscards/frontend
+COPY apps/seanscards/package.json ./apps/seanscards/package.json
+COPY apps/seanscards/tsconfig.json ./apps/seanscards/tsconfig.json
+COPY apps/carolinemizen.art/caroline-fe ./apps/carolinemizen.art/caroline-fe
+COPY apps/carolinemizen.art/package.json ./apps/carolinemizen.art/package.json
+COPY apps/carolinemizen.art/tsconfig.json ./apps/carolinemizen.art/tsconfig.json
 COPY apps/planning-poker/package.json ./apps/planning-poker/package.json
 COPY apps/planning-poker/frontend ./apps/planning-poker/frontend
 COPY apps/planning-poker/tsconfig.json ./apps/planning-poker/tsconfig.json
 COPY apps/planning-poker/configs.ts ./apps/planning-poker/configs.ts
 
-RUN corepack enable && yarn install
+# Copy all backend apps (for dependency installation)
+COPY apps/seanscards/backend ./apps/seanscards/backend
+COPY apps/seanscards/configs.ts ./apps/seanscards/configs.ts
+COPY apps/carolinemizen.art/caroline-be ./apps/carolinemizen.art/caroline-be
+COPY apps/planning-poker/backend ./apps/planning-poker/backend
 
-# build root site (adjust workspace name if needed)
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
+
+# Build all frontends
 RUN NODE_ENV=production yarn workspace seanmizen.com build
-
-# build planning-poker frontend
+RUN NODE_ENV=production yarn workspace seanscards-fe build
+RUN NODE_ENV=production yarn workspace caroline-fe build
 RUN NODE_ENV=production yarn workspace planning-poker-fe build
 
 ########################
-# 2) Backend build (Bun)
+# 2) Backend builds (Bun)
 ########################
-FROM oven/bun:latest AS be-build
-WORKDIR /app
 
-# make sure bundle uses production config
+# planning-poker backend
+FROM oven/bun:latest AS be-build-pp
+WORKDIR /app
 ENV NODE_ENV=production
 
-# put package.json where Bun expects it
-COPY apps/planning-poker/backend/package.json ./package.json
-COPY apps/planning-poker/configs.ts ./configs.ts
+COPY --from=fe-build /repo/node_modules ./node_modules
+COPY --from=fe-build /repo/apps/planning-poker/configs.ts ./configs.ts
+COPY --from=fe-build /repo/apps/planning-poker/backend ./backend
 
-RUN bun install --production
+RUN bun build ./backend/index.ts --target=bun --outfile ./dist/index.js
 
-# now copy backend source and build
-COPY apps/planning-poker/backend ./src
+# seanscards backend
+FROM oven/bun:latest AS be-build-sc
+WORKDIR /app
+ENV NODE_ENV=production
 
-RUN bun build ./src/index.ts \
-  --target=bun \
-  --outfile ./dist/index.js
+COPY --from=fe-build /repo/node_modules ./node_modules
+COPY --from=fe-build /repo/apps/seanscards/configs.ts ./configs.ts
+COPY --from=fe-build /repo/apps/seanscards/backend ./backend
+
+RUN bun build ./backend/index.ts --target=bun --outfile ./dist/index.js
+
+# carolinemizen.art backend
+FROM oven/bun:latest AS be-build-cm
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=fe-build /repo/node_modules ./node_modules
+COPY --from=fe-build /repo/apps/carolinemizen.art/caroline-be ./caroline-be
+
+RUN bun build ./caroline-be/src/index.ts --target=bun --outfile ./dist/index.js
 
 ########################
-# 3) Runtime: nginx + serve (2x FE) + Bun backend
+# 3) Runtime: nginx + serve (4x FE) + Bun (3x BE)
 ########################
 FROM oven/bun:latest AS runtime
 WORKDIR /app
 
-# make backend + frontend use production config
 ENV NODE_ENV=production
 
 RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
 
-# backend bundle
-COPY --from=be-build /app/dist ./backend
+# Copy backend bundles
+COPY --from=be-build-pp /app/dist ./backends/planning-poker
+COPY --from=be-build-sc /app/dist ./backends/seanscards
+COPY --from=be-build-cm /app/dist ./backends/carolinemizen
 
-# frontends...
+# Copy frontends
 COPY --from=fe-build /repo/apps/seanmizen.com/dist ./sites/seanmizen.com
+COPY --from=fe-build /repo/apps/seanscards/frontend/dist ./sites/seanscards
+COPY --from=fe-build /repo/apps/carolinemizen.art/caroline-fe/dist ./sites/carolinemizen
 COPY --from=fe-build /repo/apps/planning-poker/frontend/dist ./sites/planning-poker
 
 RUN bun install -g serve
@@ -74,6 +108,7 @@ COPY utils/fly-io/nginx.conf /etc/nginx/conf.d/default.conf
 COPY utils/fly-io/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 8080
+# Expose nginx gateway and all individual service ports
+EXPOSE 8080 5000 5010 5011 5020 5021 5040 5041
 
 CMD ["/entrypoint.sh"]

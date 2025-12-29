@@ -1,18 +1,50 @@
-FROM oven/bun:latest AS deps
+# deps stage - install with yarn (standalone)
+FROM node:23-slim AS deps
 WORKDIR /app
-COPY apps/carolinemizen.art/caroline-be/package.json .
-RUN bun install --production
 
-FROM deps AS dev
-CMD ["bun", "--hot", "--no-clear-screen", "/app/src/src/index.ts"]
+# Install build dependencies for native modules (better-sqlite3)
+RUN apt-get update && apt-get install -y \
+  python3 \
+  make \
+  g++ \
+  pkg-config \
+  libsqlite3-dev \
+  && rm -rf /var/lib/apt/lists/*
 
-FROM deps AS prod-build
-COPY apps/carolinemizen.art/caroline-be ./src
-RUN bun build ./src/src/index.ts --target=bun --outfile ./dist/index.js
+# Copy root package.json and .yarnrc.yml for Yarn 4 configuration
+COPY package.json .yarnrc.yml ./
 
+# Copy backend package.json and install dependencies directly
+COPY apps/carolinemizen.art/caroline-be/package.json ./package.json
+
+# Install with yarn (standalone, not as workspace)
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
+
+# dev target - run source directly
+FROM oven/bun:latest AS dev
+WORKDIR /app
+
+# Install runtime dependencies for native modules
+RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+ENV NODE_ENV=development
+CMD ["bun", "--hot", "--no-clear-screen", "src/index.ts"]
+
+# prod target - run source directly (no bundling)
 FROM oven/bun:latest AS prod
 WORKDIR /app
-COPY --from=prod-build /app/dist ./dist
+
+# Install runtime dependencies for native modules
+RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
+
+# Copy application source first
+COPY apps/carolinemizen.art/caroline-be ./
+
+# Copy node_modules from deps stage (after source, so it doesn't get overwritten)
 COPY --from=deps /app/node_modules ./node_modules
-COPY apps/carolinemizen.art/caroline-be/package.json .
-CMD ["bun", "./dist/index.js"]
+
+ENV NODE_ENV=production
+CMD ["bun", "./src/index.ts"]

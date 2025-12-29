@@ -1,4 +1,4 @@
-import { pbkdf2Sync, randomBytes } from 'crypto';
+import { pbkdf2Sync, randomBytes } from 'node:crypto';
 
 export const hashPassword = (password: string) => {
   const salt = randomBytes(16).toString('hex');

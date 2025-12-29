@@ -7,7 +7,10 @@ import Database from 'better-sqlite3';
 import * as userService from './users';
 
 const openDbConnection: () => Promise<DatabaseType> = async () => {
-  const db = new Database('./database.db');
+  const dbPath = process.env.DB_PATH
+    ? `${process.env.DB_PATH}/database.db`
+    : './database.db';
+  const db = new Database(dbPath);
   return db;
 };
 
@@ -61,7 +64,10 @@ const seedDatabase = async () => {
 };
 
 const resetDatabase = async () => {
-  if (existsSync('./database.db')) unlinkSync('./database.db');
+  const dbPath = process.env.DB_PATH
+    ? `${process.env.DB_PATH}/database.db`
+    : './database.db';
+  if (existsSync(dbPath)) unlinkSync(dbPath);
   await seedDatabase();
 };
 

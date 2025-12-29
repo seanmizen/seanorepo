@@ -4,19 +4,33 @@ x-frontend-base: &frontend-base
     context: ../..
     dockerfile: apps/carolinemizen.art/caroline-fe/dockerfile
     target: ${BUILD_TARGET:-dev}
+    x-bake:
+      no-cache: false
+      provenance: false
   ports:
       - "4020:4020"
+  labels:
+    - "com.docker.compose.service.primary=true"
+    - "description=Caroline Mizen Art - Frontend (http://localhost:4020)"
 
-# x-backend-base: &backend-base
-#   container_name: backend-cm
-#   build:
-#     context: ../..
-#     dockerfile: apps/carolinemizen.art/caroline-be/dockerfile
-#     target: ${BUILD_TARGET:-dev}
-#   ports:
-#     - "4021:4021"
-#   environment:
-#     - DB_PATH=/app/db
+x-backend-base: &backend-base
+  container_name: backend-cm
+  build:
+    context: ../..
+    dockerfile: apps/carolinemizen.art/caroline-be/dockerfile
+    target: ${BUILD_TARGET:-dev}
+    x-bake:
+      no-cache: false
+      provenance: false
+  ports:
+    - "4021:4021"
+  labels:
+    - "description=Caroline Mizen Art - Backend API"
+  environment:
+    - DB_PATH=/app/db
+    - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+    - COOKIE_SECRET=${COOKIE_SECRET:-dev-cookie-secret-change-in-production}
+    - CORS_ORIGIN=http://localhost:4020
 
 services:
   frontend:
@@ -27,27 +41,28 @@ services:
     <<: *frontend-base
     volumes:
       - type: bind
-        source: ../..
+        source: ../../apps/carolinemizen.art/caroline-fe
         target: /app
       - fe_node_modules:/app/node_modules
     profiles: ["dev"]
 
-  # backend:
-  #   <<: *backend-base
-  #   profiles: ["prod"]
-  #   volumes:
-  #     - sqlite_data:/app/db
+  backend:
+    <<: *backend-base
+    profiles: ["prod"]
+    volumes:
+      - sqlite_data:/app/db
 
-  # backend-dev:
-  #   <<: *backend-base
-  #   command: []
-  #   profiles: ["dev"]
-  #   volumes:
-  #     - type: bind
-  #       source: ../../apps/carolinemizen.art/caroline-be
-  #       target: /app/src
-  #     - sqlite_data:/app/db
+  backend-dev:
+    <<: *backend-base
+    profiles: ["dev"]
+    volumes:
+      - type: bind
+        source: ../../apps/carolinemizen.art/caroline-be
+        target: /app
+      - be_node_modules:/app/node_modules
+      - sqlite_data:/app/db
 
 volumes:
-  # sqlite_data:
+  sqlite_data:
   fe_node_modules:
+  be_node_modules:

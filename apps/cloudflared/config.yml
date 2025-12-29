@@ -1,15 +1,22 @@
 tunnel: 0f63e5e3-ee1c-425a-9916-cd037524731d
 credentials-file: ./credentials/0f63e5e3-ee1c-425a-9916-cd037524731d.json
 
+# Cloudflared Ingress Rules (Port Range: 4xxx)
+# To add a new service:
+# 1. Choose an available port in the 4xxx range (e.g., 4050 for frontend, 4051 for backend)
+# 2. Add hostname rules following the pattern below
+# 3. API requests (/api/* or /ws/*) should route to backend port
+# 4. All other requests route to frontend port
+# 5. Include wildcard subdomain rules if needed
+
 ingress:
-  - hostname: seanmizen.com
-    path: /tcp/*
-    service: http://localhost:4120
+  # seanmizen.com - Port 4000 (Frontend only)
   - hostname: seanmizen.com
     service: http://localhost:4000
   - hostname: "*.seanmizen.com"
     service: http://localhost:4000
 
+  # seanscards.com - Ports 4010 (FE) / 4011 (BE)
   - hostname: seanscards.com
     path: /api/*
     service: http://localhost:4011
@@ -21,12 +28,7 @@ ingress:
   - hostname: "*.seanscards.com"
     service: http://localhost:4010
 
-  - hostname: pp.seanmizen.com
-    path: /api/*
-    service: http://localhost:4011
-  - hostname: pp.seanmizen.com
-    service: http://localhost:4010
-
+  # carolinemizen.art - Ports 4020 (FE) / 4021 (BE)
   - hostname: carolinemizen.art
     path: /api/*
     service: http://localhost:4021
@@ -38,35 +40,15 @@ ingress:
   - hostname: "*.carolinemizen.art"
     service: http://localhost:4020
 
-  - hostname: friendsgay.com
+  # planning-poker (pp.seanmizen.com) - Ports 4040 (FE) / 4041 (BE)
+  - hostname: pp.seanmizen.com
     path: /api/*
-    service: http://localhost:4031
-  - hostname: friendsgay.com
-    service: http://localhost:4030
-  - hostname: "*.friendsgay.com"
-    path: /api/*
-    service: http://localhost:4031
-  - hostname: "*.friendsgay.com"
-    service: http://localhost:4030
+    service: http://localhost:4041
+  - hostname: pp.seanmizen.com
+    path: /ws/*
+    service: http://localhost:4041
+  - hostname: pp.seanmizen.com
+    service: http://localhost:4040
 
-  - hostname: friendsgay.app
-    path: /api/*
-    service: http://localhost:4031
-  - hostname: friendsgay.app
-    service: http://localhost:4030
-  - hostname: "*.friendsgay.app"
-    path: /api/*
-    service: http://localhost:4031
-  - hostname: "*.friendsgay.app"
-    service: http://localhost:4030
-
-  - hostname: stealthly.seanmizen.com
-    path: /api/*
-    service: http://localhost:4091
-  - hostname: stealthly.seanmizen.com
-    service: http://localhost:4090
-
-  - hostname: sternboats.seanmizen.com
-    service: http://localhost:5000
-
+  # Catch-all for unmatched routes
   - service: http_status:404

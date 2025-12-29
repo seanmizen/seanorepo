@@ -1,23 +1,38 @@
 FROM node:23-slim AS deps
 WORKDIR /app
 
-COPY package.json yarn.lock .yarnrc.yml ./
-COPY .yarn ./.yarn
-COPY apps/carolinemizen.art/package.json ./apps/carolinemizen.art/package.json
-COPY apps/carolinemizen.art/caroline-fe ./apps/carolinemizen.art/caroline-fe
-COPY apps/carolinemizen.art/tsconfig.json ./apps/carolinemizen.art/tsconfig.json
+# Copy root package.json and .yarnrc.yml for Yarn 4 configuration
+COPY package.json .yarnrc.yml ./
 
-RUN corepack enable && yarn install
+# Copy frontend package.json and install dependencies directly (standalone)
+COPY apps/carolinemizen.art/caroline-fe/package.json ./package.json
 
-FROM deps AS dev
-CMD ["yarn", "workspace", "caroline-fe", "start:noopen"]
+# Install with yarn (standalone, not as workspace)
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
 
-FROM deps AS prod-build
-RUN yarn workspace caroline-fe build
+FROM node:23-slim AS dev
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+# Copy node_modules from deps
+COPY --from=deps /app/node_modules ./node_modules
+# Copy tsconfig for TypeScript resolution
+COPY apps/carolinemizen.art/tsconfig.json ../tsconfig.json
+# Note: source will be mounted via docker-compose volume
+CMD ["yarn", "rsbuild", "dev", "--port", "4020"]
+
+FROM node:23-slim AS prod-build
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+# Copy dependencies and source
+COPY --from=deps /app/node_modules ./node_modules
+COPY apps/carolinemizen.art/caroline-fe ./
+COPY apps/carolinemizen.art/tsconfig.json ./tsconfig.json
+ENV NODE_ENV=production
+RUN yarn rsbuild build
 
 FROM node:23-slim AS prod
 WORKDIR /app
-COPY --from=prod-build /app/apps/carolinemizen.art/caroline-fe/dist .
-RUN corepack enable && yarn global add serve
+COPY --from=prod-build /app/dist .
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
 EXPOSE 4020
 CMD ["serve", "-s", ".", "-l", "4020"]
