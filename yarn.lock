@@ -3136,15 +3136,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/cors@npm:^2.8.19":
-  version: 2.8.19
-  resolution: "@types/cors@npm:2.8.19"
-  dependencies:
-    "@types/node": "npm:*"
-  checksum: 10c0/b5dd407040db7d8aa1bd36e79e5f3f32292f6b075abc287529e9f48df1a25fda3e3799ba30b4656667ffb931d3b75690c1d6ca71e39f7337ea6dfda8581916d0
-  languageName: node
-  linkType: hard
-
 "@types/draco3d@npm:^1.4.0":
   version: 1.4.10
   resolution: "@types/draco3d@npm:1.4.10"
@@ -4572,12 +4563,9 @@ __metadata:
     "@fastify/jwt": "npm:^9.1.0"
     "@rslib/core": "npm:^0.18.3"
     "@types/better-sqlite3": "npm:^7.6.13"
-    "@types/cors": "npm:^2.8.19"
     "@types/humps": "npm:^2.0.6"
     "@types/node": "npm:^22.19.1"
     better-sqlite3: "npm:^11.10.0"
-    cors: "npm:^2.8.5"
-    crypto: "npm:^1.0.1"
     fastify: "npm:^5.6.2"
     humps: "npm:^2.0.1"
     stripe: "npm:^18.5.0"
@@ -4892,16 +4880,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cors@npm:^2.8.5":
-  version: 2.8.5
-  resolution: "cors@npm:2.8.5"
-  dependencies:
-    object-assign: "npm:^4"
-    vary: "npm:^1"
-  checksum: 10c0/373702b7999409922da80de4a61938aabba6929aea5b6fd9096fefb9e8342f626c0ebd7507b0e8b0b311380744cc985f27edebc0a26e0ddb784b54e1085de761
-  languageName: node
-  linkType: hard
-
 "cosmiconfig@npm:^7.0.0, cosmiconfig@npm:^7.1.0":
   version: 7.1.0
   resolution: "cosmiconfig@npm:7.1.0"
@@ -4947,13 +4925,6 @@ __metadata:
     shebang-command: "npm:^2.0.0"
     which: "npm:^2.0.1"
   checksum: 10c0/053ea8b2135caff68a9e81470e845613e374e7309a47731e81639de3eaeb90c3d01af0e0b44d2ab9d50b43467223b88567dfeb3262db942dc063b9976718ffc1
-  languageName: node
-  linkType: hard
-
-"crypto@npm:^1.0.1":
-  version: 1.0.1
-  resolution: "crypto@npm:1.0.1"
-  checksum: 10c0/fcf7dbd68ac5415b7fde7d7208fe203038e92e83e8a8fcf6e86ab4771ce3dd026d6967a990ba56b9d1c771378210814d5c90d907d3739fbd1723d552ad6c8ab8
   languageName: node
   linkType: hard
 
@@ -8860,7 +8831,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"object-assign@npm:^4, object-assign@npm:^4.1.1":
+"object-assign@npm:^4.1.1":
   version: 4.1.1
   resolution: "object-assign@npm:4.1.1"
   checksum: 10c0/1f4df9945120325d041ccf7b86f31e8bcc14e73d29171e37a7903050e96b81323784ec59f93f102ec635bcf6fa8034ba3ea0a8c7e69fa202b87ae3b6cec5a414
@@ -10789,34 +10760,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"sternboats-be@workspace:apps/sternboats/apps/backend":
-  version: 0.0.0-use.local
-  resolution: "sternboats-be@workspace:apps/sternboats/apps/backend"
-  languageName: unknown
-  linkType: soft
-
-"sternboats-fe@workspace:apps/sternboats/apps/frontend":
-  version: 0.0.0-use.local
-  resolution: "sternboats-fe@workspace:apps/sternboats/apps/frontend"
-  dependencies:
-    "@rsbuild/core": "npm:^1.6.13"
-    "@rsbuild/plugin-react": "npm:^1.4.2"
-    "@types/react": "npm:^19.2.7"
-    "@types/react-dom": "npm:^19.2.3"
-    react: "npm:^19.2.1"
-    react-dom: "npm:^19.2.1"
-    typescript: "npm:^5.9.3"
-  languageName: unknown
-  linkType: soft
-
-"sternboats@workspace:apps/sternboats":
-  version: 0.0.0-use.local
-  resolution: "sternboats@workspace:apps/sternboats"
-  dependencies:
-    concurrently: "npm:^9.2.1"
-  languageName: unknown
-  linkType: soft
-
 "stop-iteration-iterator@npm:^1.1.0":
   version: 1.1.0
   resolution: "stop-iteration-iterator@npm:1.1.0"
@@ -11829,13 +11772,6 @@ __metadata:
     spdx-correct: "npm:^3.0.0"
     spdx-expression-parse: "npm:^3.0.0"
   checksum: 10c0/7b91e455a8de9a0beaa9fe961e536b677da7f48c9a493edf4d4d4a87fd80a7a10267d438723364e432c2fcd00b5650b5378275cded362383ef570276e6312f4f
-  languageName: node
-  linkType: hard
-
-"vary@npm:^1":
-  version: 1.1.2
-  resolution: "vary@npm:1.1.2"
-  checksum: 10c0/f15d588d79f3675135ba783c91a4083dcd290a2a5be9fcb6514220a1634e23df116847b1cc51f66bfb0644cf9353b2abb7815ae499bab06e46dd33c1a6bf1f4f
   languageName: node
   linkType: hard
 

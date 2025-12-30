@@ -1,38 +1,38 @@
-FROM node:23-slim AS deps
-WORKDIR /app
-
-# Copy root package.json and .yarnrc.yml for Yarn 4 configuration
-COPY package.json .yarnrc.yml ./
-
-# Copy frontend package.json and install dependencies directly (standalone)
-COPY apps/carolinemizen.art/caroline-fe/package.json ./package.json
-
-# Install with yarn (standalone, not as workspace)
-RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
-
 FROM node:23-slim AS dev
 WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.8.1
-# Copy node_modules from deps
-COPY --from=deps /app/node_modules ./node_modules
-# Copy tsconfig for TypeScript resolution
-COPY apps/carolinemizen.art/tsconfig.json ../tsconfig.json
 # Note: source will be mounted via docker-compose volume
 CMD ["yarn", "rsbuild", "dev", "--port", "4020"]
 
 FROM node:23-slim AS prod-build
 WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.8.1
-# Copy dependencies and source
-COPY --from=deps /app/node_modules ./node_modules
-COPY apps/carolinemizen.art/caroline-fe ./
-COPY apps/carolinemizen.art/tsconfig.json ./tsconfig.json
+
+# Copy workspace root files
+COPY package.json yarn.lock .yarnrc.yml ./
+
+# Copy parent workspace package.json (carolinemizen.art defines nested workspaces)
+COPY apps/carolinemizen.art/package.json ./apps/carolinemizen.art/
+
+# Copy app package.json into workspace structure
+COPY apps/carolinemizen.art/caroline-fe/package.json ./apps/carolinemizen.art/caroline-fe/
+
+# Install workspace with lockfile (including devDependencies for build)
+RUN yarn workspaces focus caroline-fe
+
+# Copy app source and shared files
+COPY apps/carolinemizen.art/caroline-fe/src ./apps/carolinemizen.art/caroline-fe/src
+COPY apps/carolinemizen.art/caroline-fe/public ./apps/carolinemizen.art/caroline-fe/public
+COPY apps/carolinemizen.art/caroline-fe/rsbuild.config.ts ./apps/carolinemizen.art/caroline-fe/
+COPY apps/carolinemizen.art/tsconfig.json ./apps/carolinemizen.art/
+
+# Build using workspace command from root
 ENV NODE_ENV=production
-RUN yarn rsbuild build
+RUN yarn workspace caroline-fe build
 
 FROM node:23-slim AS prod
 WORKDIR /app
-COPY --from=prod-build /app/dist .
+COPY --from=prod-build /app/apps/carolinemizen.art/caroline-fe/dist .
 RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
 EXPOSE 4020
 CMD ["serve", "-s", ".", "-l", "4020"]

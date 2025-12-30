@@ -1,40 +1,39 @@
-FROM node:23-slim AS deps
-WORKDIR /app
-
-# Copy root package.json and .yarnrc.yml for Yarn 4 configuration
-COPY package.json .yarnrc.yml ./
-
-# Copy frontend package.json and install dependencies directly (standalone)
-COPY apps/planning-poker/frontend/package.json ./package.json
-
-# Install with yarn (standalone, not as workspace)
-RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
-
 FROM node:23-slim AS dev
 WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.8.1
-# Copy node_modules from deps
-COPY --from=deps /app/node_modules ./node_modules
-# Copy tsconfig and configs for imports
-COPY apps/planning-poker/tsconfig.json ../tsconfig.json
-COPY apps/planning-poker/configs.ts ../configs.ts
 # Note: source will be mounted via docker-compose volume
 CMD ["yarn", "rsbuild", "dev", "--port", "4040"]
 
 FROM node:23-slim AS prod-build
 WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.8.1
-# Copy dependencies and source
-COPY --from=deps /app/node_modules ./node_modules
-COPY apps/planning-poker/frontend ./
-COPY apps/planning-poker/tsconfig.json ../tsconfig.json
-COPY apps/planning-poker/configs.ts ../configs.ts
+
+# Copy workspace root files
+COPY package.json yarn.lock .yarnrc.yml ./
+
+# Copy parent workspace package.json (planning-poker defines nested workspaces)
+COPY apps/planning-poker/package.json ./apps/planning-poker/
+
+# Copy app package.json into workspace structure
+COPY apps/planning-poker/frontend/package.json ./apps/planning-poker/frontend/
+
+# Install workspace with lockfile (including devDependencies for build)
+RUN yarn workspaces focus planning-poker-fe
+
+# Copy app source and shared files
+COPY apps/planning-poker/frontend/src ./apps/planning-poker/frontend/src
+COPY apps/planning-poker/frontend/public ./apps/planning-poker/frontend/public
+COPY apps/planning-poker/frontend/rsbuild.config.ts ./apps/planning-poker/frontend/
+COPY apps/planning-poker/tsconfig.json ./apps/planning-poker/
+COPY apps/planning-poker/configs.ts ./apps/planning-poker/
+
+# Build using workspace command from root
 ENV NODE_ENV=production
-RUN yarn rsbuild build
+RUN yarn workspace planning-poker-fe build
 
 FROM node:23-slim AS prod
 WORKDIR /app
-COPY --from=prod-build /app/dist .
+COPY --from=prod-build /app/apps/planning-poker/frontend/dist .
 RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
 EXPOSE 4040
 CMD ["serve", "-s", ".", "-l", "4040"]
