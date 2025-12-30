@@ -33,9 +33,13 @@ const wsUrl =
         window.location.host
       }`;
 
+// Debug flag for showing WebSocket updates in snackbar
+const debugWsUpdates = import.meta.env.VITE_DEBUG_WS_UPDATES === 'true';
+
 export const api = {
   baseUrl,
   wsUrl,
+  debugWsUpdates,
   endpoints: {
     health: mode === 'development' || isLocalhost ? `${baseUrl}` : '/api',
     userSession:

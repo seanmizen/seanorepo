@@ -41,6 +41,8 @@ type TicketListProps = {
   onAddTicket: (title: string) => void;
   onDeleteTicket: (id: number) => void;
   onUpdateTicketTitle: (id: number, title: string) => void;
+  isAdding: boolean;
+  setIsAdding: (isAdding: boolean) => void;
 };
 
 const TicketList: FC<TicketListProps> = ({
@@ -51,31 +53,50 @@ const TicketList: FC<TicketListProps> = ({
   onAddTicket,
   onDeleteTicket,
   onUpdateTicketTitle,
+  isAdding,
+  setIsAdding,
 }) => {
   const [newTicketTitle, setNewTicketTitle] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
   const [editingTicketId, setEditingTicketId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const listItemRefs = useRef<(HTMLLIElement | null)[]>([]);
   const newTicketInputRef = useRef<HTMLInputElement | null>(null);
-  const shouldScrollToAddFieldRef = useRef(false);
+  const shouldScrollToNewTicketRef = useRef(false);
 
+  // Scroll to newly added ticket (only for local user)
   useEffect(() => {
-    if (!shouldScrollToAddFieldRef.current) return;
-    shouldScrollToAddFieldRef.current = false;
+    if (!shouldScrollToNewTicketRef.current) return;
+    shouldScrollToNewTicketRef.current = false;
 
-    newTicketInputRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-    });
-    newTicketInputRef.current?.focus();
-  }, [tickets.length]);
+    const lastTicketIndex = tickets.length - 1;
+    if (lastTicketIndex >= 0) {
+      listItemRefs.current[lastTicketIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+
+    if (isAdding) {
+      newTicketInputRef.current?.focus();
+    }
+  }, [tickets.length, isAdding]);
+
+  // Scroll and focus when entering add mode
+  useEffect(() => {
+    if (isAdding) {
+      newTicketInputRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+      newTicketInputRef.current?.focus();
+    }
+  }, [isAdding]);
 
   const handleAdd = () => {
     const title = newTicketTitle.trim();
     if (!title) return;
 
-    shouldScrollToAddFieldRef.current = true;
+    shouldScrollToNewTicketRef.current = true;
     onAddTicket(title);
     setNewTicketTitle('');
   };
@@ -98,9 +119,17 @@ const TicketList: FC<TicketListProps> = ({
       <AccordionSummary expandIcon={<ExpandMore />}>
         <Typography variant="h6">Tickets ({tickets.length})</Typography>
       </AccordionSummary>
-      <AccordionDetails sx={{ p: 0, maxHeight: 360, overflow: 'auto' }}>
-        <List>
-          {tickets.map((ticket, index) => {
+      <AccordionDetails
+        sx={{
+          p: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: 360,
+        }}
+      >
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
+          <List>
+            {tickets.map((ticket, index) => {
             const votesData = ticketVotesMap.get(ticket.id);
             const voteCount =
               votesData?.votes.filter((v) => v.hasVoted).length || 0;
@@ -229,6 +258,9 @@ const TicketList: FC<TicketListProps> = ({
               </ListItem>
             );
           })}
+          </List>
+        </Box>
+        <Box sx={{ borderTop: 1, borderColor: 'divider' }}>
           {isAdding ? (
             <ListItem
               onBlur={(e) => {
@@ -272,7 +304,7 @@ const TicketList: FC<TicketListProps> = ({
               </Button>
             </ListItem>
           )}
-        </List>
+        </Box>
       </AccordionDetails>
     </Accordion>
   );
