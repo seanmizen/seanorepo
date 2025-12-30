@@ -1,7 +1,7 @@
 const devConfig = {
-  appDomain: 'http://localhost:4040',
-  backendPort: 4041, // Fastify/Bun dev port
-  apiPath: 'http://localhost:4041/api',
+  appDomain: 'http://localhost:4030',
+  backendPort: 4031, // Fastify/Bun dev port
+  apiPath: 'http://localhost:4031/api',
   dbName: 'dev.sqlite',
 };
 
@@ -11,7 +11,7 @@ export const configs: Record<'development' | 'production', ConfigType> = {
   development: devConfig,
   production: {
     appDomain: 'https://pp.seanmizen.com',
-    backendPort: 4041, // <- must match docker-compose
+    backendPort: 4031, // <- must match docker-compose
     apiPath: 'https://pp.seanmizen.com/api',
     dbName: 'production.sqlite',
   },

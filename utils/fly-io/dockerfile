@@ -109,6 +109,6 @@ COPY utils/fly-io/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Expose nginx gateway and all individual service ports
-EXPOSE 8080 5000 5010 5011 5020 5021 5040 5041
+EXPOSE 8080 5000 5010 5011 5020 5021 5030 5031
 
 CMD ["/entrypoint.sh"]
