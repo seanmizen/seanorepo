@@ -12,6 +12,6 @@ services:
       - "6011:5011"   # seanscards BE
       - "6020:5020"   # carolinemizen FE
       - "6021:5021"   # carolinemizen BE
-      - "6040:5040"   # planning-poker FE
-      - "6041:5041"   # planning-poker BE
+      - "6030:5030"   # planning-poker FE
+      - "6031:5031"   # planning-poker BE
     container_name: seanorepo-fly-stack

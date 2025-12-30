@@ -5,7 +5,7 @@ x-frontend-base: &frontend-base
     dockerfile: apps/planning-poker/frontend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4040:4040"
+    - "4030:4030"
 
 x-backend-base: &backend-base
   container_name: backend-pp
@@ -14,7 +14,7 @@ x-backend-base: &backend-base
     dockerfile: apps/planning-poker/backend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4041:4041"
+    - "4031:4031"
   environment:
     - DB_PATH=/app/db
 
