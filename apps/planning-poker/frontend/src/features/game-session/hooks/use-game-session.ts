@@ -34,12 +34,14 @@ type SessionData = {
   currentTicketIndex: number;
   disclaimerDismissed: boolean;
   wasCreated?: boolean;
+  version?: number;
 };
 
 const useGameSession = (shortId: string | null) => {
   const queryClient = useQueryClient();
   const [attendeeId, setAttendeeId] = useState<string>('');
   const [sessionCreated, setSessionCreated] = useState(false);
+  const [lastSeenVersion, setLastSeenVersion] = useState(0);
 
   // Queries
   const { data: sessionData } = useQuery({
@@ -281,22 +283,50 @@ const useGameSession = (shortId: string | null) => {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+
       if (message.type === 'attendee:id') {
         setAttendeeId(message.attendeeId);
         localStorage.setItem(`attendee-${shortId}`, message.attendeeId);
-      } else if (message.type === 'refresh') {
+      } else if (message.type === 'refresh' || message.type === 'ticket-changed') {
+        const incomingVersion = message.version || 0;
+
+        // Detect missed updates
+        if (incomingVersion > lastSeenVersion + 1) {
+          const missedCount = incomingVersion - lastSeenVersion - 1;
+          console.warn(
+            `[Sync] Missed ${missedCount} update(s)`,
+            `(${lastSeenVersion} → ${incomingVersion})`,
+          );
+          if (api.debugWsUpdates) {
+            showSnackbar(
+              `⚠️ Missed ${missedCount} update(s) (v${lastSeenVersion} → v${incomingVersion})`,
+              'warning',
+            );
+          }
+        }
+
+        setLastSeenVersion(incomingVersion);
+
+        // Debug: Show all WS updates if enabled
+        if (api.debugWsUpdates) {
+          showSnackbar(
+            `🔄 WS ${message.type} (v${incomingVersion})`,
+            'info',
+          );
+        }
+
+        // Invalidate queries to refresh data
         queryClient.invalidateQueries({ queryKey: ['session', shortId] });
         queryClient.invalidateQueries({ queryKey: ['votes', shortId] });
         queryClient.invalidateQueries({ queryKey: ['all-votes', shortId] });
-      } else if (message.type === 'ticket-changed') {
-        showSnackbar(
-          `${message.changedBy} changed ticket to: ${message.ticketTitle}`,
-          'info',
-          'ticket-changed-notification',
-        );
-        queryClient.invalidateQueries({ queryKey: ['session', shortId] });
-        queryClient.invalidateQueries({ queryKey: ['votes', shortId] });
-        queryClient.invalidateQueries({ queryKey: ['all-votes', shortId] });
+
+        if (message.type === 'ticket-changed') {
+          showSnackbar(
+            `${message.changedBy} changed ticket to: ${message.ticketTitle}`,
+            'info',
+            'ticket-changed-notification',
+          );
+        }
       } else if (message.type === 'kicked') {
         alert('You were kicked 👢');
         window.location.href = '/';
@@ -315,6 +345,13 @@ const useGameSession = (shortId: string | null) => {
       }, 100);
     };
   }, [shortId, queryClient]);
+
+  // Sync version from session data
+  useEffect(() => {
+    if (sessionData?.version) {
+      setLastSeenVersion(sessionData.version);
+    }
+  }, [sessionData?.version]);
 
   // Handler functions
   const handleAddTicket = (title: string) => {

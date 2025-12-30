@@ -23,8 +23,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import Linkify from 'linkify-react';
-import type { FC } from 'react';
+import { type FC, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { ThemeToggle } from '@/components';
 import { api, env } from '@/config';
@@ -37,6 +36,7 @@ const SHOW_ATTENDEES = false;
 const GameSession: FC = () => {
   const [searchParams] = useSearchParams();
   const shortId = searchParams.get('session-code');
+  const [isAddingTicket, setIsAddingTicket] = useState(false);
 
   const {
     tickets,
@@ -81,36 +81,39 @@ const GameSession: FC = () => {
     : null;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
+      {/* Desktop: Compact header */}
       <Box
         sx={{
-          display: 'flex',
+          display: { xs: 'none', md: 'flex' },
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: 2,
+          mb: 1,
         }}
       >
-        <Typography variant="h4">
+        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           Planning Poker: session <code>{shortId}</code>
           <Tooltip title="Copy session code">
             <IconButton
+              size="small"
               onClick={() => {
                 navigator.clipboard.writeText(shortId || '');
                 showSnackbar('Session code copied to clipboard', 'success');
               }}
             >
-              <CopyAllOutlined />
+              <CopyAllOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
           {env.hideCopyUrlButton || (
             <Tooltip title="Copy session URL">
               <IconButton
+                size="small"
                 onClick={() => {
                   navigator.clipboard.writeText(window.location.href);
                   showSnackbar('Session URL copied to clipboard', 'success');
                 }}
               >
-                <LinkIcon />
+                <LinkIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
@@ -136,6 +139,61 @@ const GameSession: FC = () => {
           <ThemeToggle />
         </Box>
       </Box>
+
+      {/* Mobile: Compact header */}
+      <Box
+        sx={{
+          display: { xs: 'flex', md: 'none' },
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 0.5,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="body2" fontWeight={600}>
+            Poker: session {shortId}
+          </Typography>
+          <Tooltip title="Copy code">
+            <IconButton
+              size="small"
+              onClick={() => {
+                navigator.clipboard.writeText(shortId || '');
+                showSnackbar('Code copied', 'success');
+              }}
+            >
+              <CopyAllOutlined />
+            </IconButton>
+          </Tooltip>
+          {env.hideCopyUrlButton || (
+            <Tooltip title="Copy URL">
+              <IconButton
+                size="small"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  showSnackbar('URL copied', 'success');
+                }}
+              >
+                <LinkIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {env.debugShowRefreshButton && (
+            <Tooltip title="Refresh">
+              <IconButton onClick={handleRefresh} size="small">
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title="Home">
+            <IconButton component={RouterLink} to="/" size="small">
+              <HomeFilled />
+            </IconButton>
+          </Tooltip>
+          <ThemeToggle />
+        </Box>
+      </Box>
       <Stack
         direction={{
           xs: 'column-reverse',
@@ -143,8 +201,9 @@ const GameSession: FC = () => {
         }}
         gap={{ xs: 6, md: 3 }}
         divider={<Divider />}
+        sx={{ alignItems: 'stretch' }}
       >
-        <Stack spacing={{ xs: 1, md: 3 }} sx={{ flex: 1, minWidth: 0 }}>
+        <Stack spacing={{ xs: 1, md: 3 }} sx={{ flex: 1, minWidth: 0, height: '100%' }} id="ticket-list">
           {SHOW_ATTENDEES && (
             <Accordion defaultExpanded>
               <AccordionSummary expandIcon={<ExpandMore />}>
@@ -246,6 +305,8 @@ const GameSession: FC = () => {
             onAddTicket={handleAddTicket}
             onDeleteTicket={handleDeleteTicket}
             onUpdateTicketTitle={handleUpdateTicketTitle}
+            isAdding={isAddingTicket}
+            setIsAdding={setIsAddingTicket}
           />
 
           {tickets.length > 0 && (
@@ -352,71 +413,7 @@ const GameSession: FC = () => {
           )}
         </Stack>
 
-        <Box sx={{ flex: 2, minWidth: 0 }}>
-          <Paper
-            elevation={2}
-            sx={{ p: 3, mb: 3, minWidth: 0, overflow: 'hidden' }}
-          >
-            <Fade in={!!attendeeId} timeout={400}>
-              <Stack
-                direction={'row'}
-                gap={2}
-                sx={{ minWidth: 0, overflow: 'hidden' }}
-              >
-                <Typography variant="h5" gutterBottom sx={{ flexShrink: 0 }}>
-                  We are refining:
-                </Typography>
-                <Typography
-                  variant="h5"
-                  gutterBottom
-                  sx={{
-                    color: currentTicket ? 'currentColor' : 'grey',
-                    minWidth: 0,
-                    display: 'flex',
-                    '& > *': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    },
-                  }}
-                >
-                  <Linkify
-                    options={{
-                      target: '_blank',
-                      rel: 'noopener noreferrer',
-                      render: ({ attributes, content }) => (
-                        <a {...attributes} style={{ direction: 'rtl' }}>
-                          {content.replace(/\/$/g, '')}
-                        </a>
-                      ),
-                    }}
-                  >
-                    {currentTicket?.title || 'Nothing yet. Add a ticket!'}
-                  </Linkify>
-                </Typography>
-              </Stack>
-            </Fade>
-            <Fade in={!!attendeeId} timeout={400}>
-              <Stack
-                direction={'row'}
-                gap={2}
-                sx={{ minWidth: 0, overflow: 'hidden' }}
-              >
-                <Typography variant="body2" color="info">
-                  {currentTicket
-                    ? currentTicketAverage
-                      ? `Voting average: ${currentTicketAverage}`
-                      : 'Votes pending...'
-                    : '\xa0'}
-                </Typography>
-                {currentTicket?.estimate && (
-                  <Typography variant="body2" color="success">
-                    Final Estimate: {currentTicket.estimate}
-                  </Typography>
-                )}
-              </Stack>
-            </Fade>
-          </Paper>
+        <Box sx={{ flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <VotingArea
             myVote={myVote}
             voteStatus={voteStatus}
@@ -425,6 +422,8 @@ const GameSession: FC = () => {
             attendees={attendees}
             currentEstimate={currentTicket?.estimate || null}
             hasCurrentTicket={!!currentTicket}
+            currentTicketTitle={currentTicket?.title}
+            currentTicketAverage={currentTicketAverage}
             onRemoveVote={handleRemoveVote}
             onReveal={handleReveal}
             onUnreveal={handleUnreveal}
@@ -462,6 +461,7 @@ const GameSession: FC = () => {
                 },
               );
             }}
+            onStartAddingTicket={() => setIsAddingTicket(true)}
           />
           <EstimateCards
             myVote={myVote}

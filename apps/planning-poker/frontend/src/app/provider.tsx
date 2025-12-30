@@ -19,7 +19,7 @@ const getInitialMode = (): 'light' | 'dark' | 'auto' => {
   const stored = localStorage.getItem('theme-mode');
   if (stored === 'light' || stored === 'dark' || stored === 'auto')
     return stored;
-  return 'light';
+  return 'auto';
 };
 
 const getEffectiveMode = (

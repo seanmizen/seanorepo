@@ -49,6 +49,7 @@ const attendeeConnectionCount = new Map<string, Map<string, number>>();
 const attendeeNames = new Map<string, Map<string, string>>();
 const attendeeDisclaimerDismissed = new Map<string, Set<string>>();
 const attendeeToWebSocket = new Map<string, Map<string, WebSocket>>();
+const stateVersions = new Map<string, number>();
 
 let ticketIdCounter = 1;
 
@@ -57,9 +58,18 @@ const broadcast = (
   message?: { type: string; changedBy?: string; ticketTitle?: string },
 ) => {
   try {
+    // Increment version for this session
+    const currentVersion = (stateVersions.get(shortId) || 0) + 1;
+    stateVersions.set(shortId, currentVersion);
+
     const clients = sessionClients.get(shortId);
     if (!clients) return;
-    const data = JSON.stringify(message || { type: 'refresh' });
+
+    const data = JSON.stringify({
+      ...(message || { type: 'refresh' }),
+      version: currentVersion,
+    });
+
     for (const client of clients) {
       try {
         if (client.readyState === 1) client.send(data);
@@ -184,6 +194,7 @@ fastify.get('/api/session/:shortId', async (request, reply) => {
     attendees,
     disclaimerDismissed,
     wasCreated,
+    version: stateVersions.get(shortId) || 0,
   });
 });
 
@@ -462,6 +473,7 @@ const cleanupOldSessions = () => {
       attendeeNames.delete(shortId);
       attendeeDisclaimerDismissed.delete(shortId);
       attendeeToWebSocket.delete(shortId);
+      stateVersions.delete(shortId);
       console.log(`Cleaned up session ${shortId} (older than 24 hours)`);
     }
   }
