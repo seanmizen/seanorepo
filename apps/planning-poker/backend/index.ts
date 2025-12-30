@@ -55,7 +55,7 @@ let ticketIdCounter = 1;
 
 const broadcast = (
   shortId: string,
-  message?: { type: string; changedBy?: string; ticketTitle?: string },
+  message?: { type: string; [key: string]: unknown },
 ) => {
   try {
     // Increment version for this session
@@ -115,7 +115,7 @@ fastify.put(
     }
     attendeeNames.get(shortId)?.set(attendeeId, name);
 
-    broadcast(shortId);
+    broadcast(shortId, { type: 'name-changed', attendeeId, name });
     reply.send({ success: true });
   },
 );
@@ -133,7 +133,7 @@ fastify.put(
     }
     attendeeDisclaimerDismissed.get(shortId)?.add(attendeeId);
 
-    broadcast(shortId);
+    broadcast(shortId, { type: 'disclaimer-dismissed', attendeeId });
     reply.send({ success: true });
   },
 );
@@ -219,7 +219,11 @@ fastify.post('/api/session/:shortId/ticket', async (request, reply) => {
   };
 
   session.tickets.push(ticket);
-  broadcast(shortId);
+  broadcast(shortId, {
+    type: 'ticket-added',
+    ticketTitle: title,
+    ticketId: ticket.id,
+  });
   reply.send(ticket);
 });
 
@@ -246,7 +250,15 @@ fastify.put('/api/session/:shortId/ticket/:id/vote', async (request, reply) => {
     session.votes.get(Number(id))?.set(attendeeId, vote);
   }
 
-  broadcast(shortId);
+  const attendeeName =
+    attendeeNames.get(shortId)?.get(attendeeId) || attendeeId;
+  broadcast(shortId, {
+    type: 'vote-changed',
+    attendeeId,
+    attendeeName,
+    ticketId: Number(id),
+    vote: vote || 'cleared',
+  });
   reply.send({ success: true });
 });
 
@@ -263,7 +275,11 @@ fastify.put(
     }
 
     session.revealed.set(Number(id), revealed);
-    broadcast(shortId);
+    broadcast(shortId, {
+      type: 'votes-revealed',
+      ticketId: Number(id),
+      revealed,
+    });
     reply.send({ success: true });
   },
 );
@@ -285,7 +301,12 @@ fastify.put(
       ticket.estimate = estimate || null;
     }
 
-    broadcast(shortId);
+    broadcast(shortId, {
+      type: 'estimate-set',
+      ticketId: Number(id),
+      ticketTitle: ticket?.title || 'Unknown',
+      estimate: estimate || 'cleared',
+    });
     reply.send({ success: true });
   },
 );
@@ -303,11 +324,17 @@ fastify.put(
     }
 
     const ticket = session.tickets.find((t) => t.id === Number(id));
+    const oldTitle = ticket?.title;
     if (ticket) {
       ticket.title = title;
     }
 
-    broadcast(shortId);
+    broadcast(shortId, {
+      type: 'ticket-title-changed',
+      ticketId: Number(id),
+      oldTitle: oldTitle || 'Unknown',
+      newTitle: title,
+    });
     reply.send({ success: true });
   },
 );
@@ -346,8 +373,13 @@ fastify.delete('/api/session/:shortId/ticket/:id', async (request, reply) => {
     return;
   }
 
+  const deletedTicket = session.tickets.find((t) => t.id === Number(id));
   session.tickets = session.tickets.filter((t) => t.id !== Number(id));
-  broadcast(shortId);
+  broadcast(shortId, {
+    type: 'ticket-deleted',
+    ticketId: Number(id),
+    ticketTitle: deletedTicket?.title || 'Unknown',
+  });
   reply.send({ success: true });
 });
 
@@ -399,12 +431,14 @@ fastify.post(
     }
 
     // Clean up attendee data immediately
+    const attendeeName =
+      attendeeNames.get(shortId)?.get(attendeeId) || attendeeId.slice(-4);
     attendeeConnectionCount.get(shortId)?.delete(attendeeId);
     attendeeNames.get(shortId)?.delete(attendeeId);
     attendeeDisclaimerDismissed.get(shortId)?.delete(attendeeId);
     attendeeToWebSocket.get(shortId)?.delete(attendeeId);
 
-    broadcast(shortId);
+    broadcast(shortId, { type: 'attendee-kicked', attendeeId, attendeeName });
     reply.send({ success: true });
   },
 );
@@ -439,7 +473,12 @@ fastify.register(async (fastify) => {
     }
 
     socket.send(JSON.stringify({ type: 'attendee:id', attendeeId }));
-    broadcast(shortId);
+    const isReconnect = (counts?.get(attendeeId) || 0) > 1;
+    broadcast(shortId, {
+      type: isReconnect ? 'attendee-reconnected' : 'attendee-connected',
+      attendeeId,
+      connectionCount: counts?.get(attendeeId) || 1,
+    });
 
     socket.on('close', () => {
       sessionClients.get(shortId)?.delete(socket);
@@ -451,7 +490,12 @@ fastify.register(async (fastify) => {
         counts.set(attendeeId, Math.max(0, currentCount - 1));
       }
 
-      broadcast(shortId);
+      const remainingConnections = counts?.get(attendeeId) || 0;
+      broadcast(shortId, {
+        type: 'attendee-disconnected',
+        attendeeId,
+        remainingConnections,
+      });
     });
   });
 });

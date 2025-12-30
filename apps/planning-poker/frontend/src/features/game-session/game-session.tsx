@@ -91,7 +91,10 @@ const GameSession: FC = () => {
           mb: 1,
         }}
       >
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Typography
+          variant="h6"
+          sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+        >
           Planning Poker: session <code>{shortId}</code>
           <Tooltip title="Copy session code">
             <IconButton
@@ -203,7 +206,11 @@ const GameSession: FC = () => {
         divider={<Divider />}
         sx={{ alignItems: 'stretch' }}
       >
-        <Stack spacing={{ xs: 1, md: 3 }} sx={{ flex: 1, minWidth: 0, height: '100%' }} id="ticket-list">
+        <Stack
+          spacing={{ xs: 1, md: 3 }}
+          sx={{ flex: 1, minWidth: 0, height: '100%' }}
+          id="ticket-list"
+        >
           {SHOW_ATTENDEES && (
             <Accordion defaultExpanded>
               <AccordionSummary expandIcon={<ExpandMore />}>
@@ -413,7 +420,14 @@ const GameSession: FC = () => {
           )}
         </Stack>
 
-        <Box sx={{ flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Box
+          sx={{
+            flex: 2,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           <VotingArea
             myVote={myVote}
             voteStatus={voteStatus}

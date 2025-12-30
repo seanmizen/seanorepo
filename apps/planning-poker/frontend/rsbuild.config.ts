@@ -23,6 +23,9 @@ export default defineConfig({
       'import.meta.env.PUBLIC_DEBUG_SHOW_REFRESH_BUTTON': JSON.stringify(
         process.env.DEBUG_SHOW_REFRESH_BUTTON || 'false',
       ),
+      'import.meta.env.PUBLIC_DEBUG_WS_UPDATES': JSON.stringify(
+        process.env.DEBUG_WS_UPDATES || 'false',
+      ),
       'import.meta.env.PUBLIC_HIDE_COPY_URL_BUTTON': JSON.stringify(
         process.env.HIDE_COPY_URL_BUTTON || 'false',
       ),

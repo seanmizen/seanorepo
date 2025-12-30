@@ -8,6 +8,7 @@ export const env = {
   debugShowAttendeeId: import.meta.env.PUBLIC_DEBUG_SHOW_ATTENDEE_ID === 'true',
   debugShowRefreshButton:
     import.meta.env.PUBLIC_DEBUG_SHOW_REFRESH_BUTTON === 'true',
+  debugWsUpdates: import.meta.env.PUBLIC_DEBUG_WS_UPDATES === 'true',
   showDisclaimer: import.meta.env.PUBLIC_SHOW_DISCLAIMER === 'true',
   hideCopyUrlButton: import.meta.env.PUBLIC_HIDE_COPY_URL_BUTTON === 'true',
 };
