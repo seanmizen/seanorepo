@@ -1,7 +1,9 @@
-import { Box, Card, CardActionArea, Typography } from '@mui/material';
+import { Box, Card, CardActionArea, Stack, Typography } from '@mui/material';
 import type { FC } from 'react';
 
-const estimates = ['0', '1', '2', '3', '5', '8', '13', '21', '?'];
+// Row-based layout: common values prominent, rare values smaller
+const commonEstimates = ['1', '2', '3', '5', '8'];
+const rareEstimates = ['0', '13', '21', '?'];
 
 type EstimateCardsProps = {
   myVote: string | null;
@@ -16,40 +18,65 @@ const EstimateCards: FC<EstimateCardsProps> = ({
   onRemoveVote,
   disabled = false,
 }) => {
-  return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
-        gap: 2,
-      }}
-    >
-      {estimates.map((value) => {
-        const isSelected = myVote === value;
-        return (
-          <Card
-            key={value}
-            elevation={3}
+  const renderCard = (value: string, isCommon: boolean) => {
+    const isSelected = myVote === value;
+    const height = isCommon ? 100 : 70;
+    const typographyVariant = isCommon ? 'h3' : 'h5';
+
+    return (
+      <Card
+        key={value}
+        elevation={3}
+        sx={{
+          height,
+          flex: 1,
+          bgcolor: isSelected ? 'primary.main' : undefined,
+          color: isSelected ? 'primary.contrastText' : undefined,
+          opacity: disabled ? 0.5 : 1,
+          transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+          '&:hover': {
+            transform: disabled ? 'scale(1)' : 'scale(1.05)',
+            boxShadow: disabled ? undefined : 6,
+          },
+        }}
+      >
+        <CardActionArea
+          onClick={() => (isSelected ? onRemoveVote() : onEstimate(value))}
+          disabled={disabled}
+          aria-label={isSelected ? `Remove vote ${value}` : `Vote ${value}`}
+          sx={{
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Typography
+            variant={typographyVariant}
+            align="center"
             sx={{
-              bgcolor: isSelected ? 'primary.main' : undefined,
-              color: isSelected ? 'primary.contrastText' : undefined,
-              opacity: disabled ? 0.5 : 1,
+              fontWeight: isSelected ? 700 : undefined,
             }}
           >
-            <CardActionArea
-              onClick={() => (isSelected ? onRemoveVote() : onEstimate(value))}
-              disabled={disabled}
-              aria-label={isSelected ? `Remove vote ${value}` : `Vote ${value}`}
-              sx={{ p: 3 }}
-            >
-              <Typography variant="h4" align="center">
-                {value}
-              </Typography>
-            </CardActionArea>
-          </Card>
-        );
-      })}
-    </Box>
+            {value}
+          </Typography>
+        </CardActionArea>
+      </Card>
+    );
+  };
+
+  return (
+    <Stack spacing={2} sx={{ py: 1 }}>
+      {/* Top row: Common values (larger) */}
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        {commonEstimates.map((value) => renderCard(value, true))}
+      </Box>
+
+      {/* Bottom row: Rare values (smaller) */}
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        {rareEstimates.map((value) => renderCard(value, false))}
+      </Box>
+    </Stack>
   );
 };
 

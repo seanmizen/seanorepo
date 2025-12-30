@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Divider,
   Fade,
   IconButton,
   Paper,
@@ -12,7 +13,9 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import Linkify from 'linkify-react';
 import { type FC, useState } from 'react';
+import { NameModal } from './name-modal';
 
 type VoteStatus = {
   attendeeId: string;
@@ -35,12 +38,15 @@ type VotingAreaProps = {
   attendees: Attendee[];
   currentEstimate: string | null;
   hasCurrentTicket: boolean;
+  currentTicketTitle?: string;
+  currentTicketAverage?: string | null;
   onRemoveVote: () => void;
   onReveal: () => void;
   onUnreveal: () => void;
   onUpdateName: (name: string) => void;
   onKickPlayer: (playerId: string, playerName: string) => void;
   onSetEstimate: (estimate: string | null) => void;
+  onStartAddingTicket: () => void;
 };
 
 const VotingArea: FC<VotingAreaProps> = ({
@@ -51,20 +57,36 @@ const VotingArea: FC<VotingAreaProps> = ({
   attendees,
   currentEstimate,
   hasCurrentTicket,
+  currentTicketTitle,
+  currentTicketAverage,
   onRemoveVote,
   onReveal,
   onUnreveal,
   onUpdateName,
   onKickPlayer,
   onSetEstimate,
+  onStartAddingTicket,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
+  const [hasSkippedNameModal, setHasSkippedNameModal] = useState(false);
+  const lastUsedName = localStorage.getItem('last-used-name') || '';
 
   const fibonacciNumbers = ['0', '1', '2', '3', '5', '8', '13', '21', '?'];
   const myStatus = voteStatus.find((s) => s.attendeeId === attendeeId);
   const myName = myStatus?.name || '';
   const myDisplayName = myName || attendeeId.slice(-4);
+
+  const shouldShowNameModal =
+    !!attendeeId && !myName && !isEditingName && !hasSkippedNameModal;
+
+  const handleNameModalSubmit = (name: string) => {
+    onUpdateName(name);
+  };
+
+  const handleNameModalSkip = () => {
+    setHasSkippedNameModal(true);
+  };
 
   const handleStartEditName = () => {
     setNameInput(myName);
@@ -84,14 +106,110 @@ const VotingArea: FC<VotingAreaProps> = ({
   const totalPlayers = otherPlayers.length;
 
   return (
-    <Paper elevation={2} sx={{ p: 3, mb: 3, overflow: 'visible' }}>
+    <Paper
+      elevation={2}
+      sx={{
+        p: 2.5,
+        mb: 3,
+        overflow: 'visible',
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Ticket Info Header */}
+      <Fade in={!!attendeeId} timeout={400}>
+        <Box sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            gap={2}
+            sx={{ minWidth: 0, overflow: 'hidden', mb: 0.5 }}
+          >
+            <Typography variant="h6" sx={{ flexShrink: 0, fontWeight: 600 }}>
+              We are refining:
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                color: 'currentColor',
+                minWidth: 0,
+                display: 'flex',
+                '& > *': {
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                },
+              }}
+            >
+              {currentTicketTitle ? (
+                <Linkify
+                  options={{
+                    target: '_blank',
+                    rel: 'noopener noreferrer',
+                    render: ({ attributes, content }) => (
+                      <a {...attributes} style={{ direction: 'rtl' }}>
+                        {content.replace(/\/$/g, '')}
+                      </a>
+                    ),
+                  }}
+                >
+                  {currentTicketTitle}
+                </Linkify>
+              ) : (
+                <Stack direction={'row'} gap={1}>
+                  Nothing yet.
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      onStartAddingTicket();
+                      const ticketListElement =
+                        document.getElementById('ticket-list');
+                      if (ticketListElement) {
+                        ticketListElement.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'start',
+                        });
+                      }
+                    }}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Add a ticket!
+                  </Button>
+                </Stack>
+              )}
+            </Typography>
+          </Stack>
+          <Stack direction="row" gap={2} sx={{ minWidth: 0 }}>
+            <Typography variant="body2" color="info.main">
+              {hasCurrentTicket
+                ? currentTicketAverage
+                  ? `Voting average: ${currentTicketAverage}`
+                  : 'Votes pending...'
+                : '\xa0'}
+            </Typography>
+            {currentEstimate && (
+              <Typography variant="body2" color="success.main">
+                Final Estimate: {currentEstimate}
+              </Typography>
+            )}
+          </Stack>
+          <Divider sx={{ mt: 1.5 }} />
+        </Box>
+      </Fade>
+
       <Box sx={{ display: 'flex', gap: 3, overflow: 'visible' }}>
         <Stack spacing={3} sx={{ flex: 1, overflow: 'visible' }}>
           <Box sx={{ overflow: 'visible' }}>
             <Typography
-              variant="caption"
+              variant="body2"
               color="text.secondary"
-              sx={{ mb: 1, display: 'block', textAlign: 'center' }}
+              sx={{
+                mb: 2,
+                display: 'block',
+                textAlign: 'center',
+                fontWeight: 600,
+              }}
             >
               Other Players ({totalPlayers})
             </Typography>
@@ -117,7 +235,10 @@ const VotingArea: FC<VotingAreaProps> = ({
                 const tooltipTitle = isDisconnected
                   ? 'User disconnected'
                   : connectionCount > 1
-                    ? `${status.name?.toUpperCase() || status.attendeeId.slice(-4)} HAS ${connectionCount} TABS OPEN!`
+                    ? `${
+                        status.name?.toUpperCase() ||
+                        status.attendeeId.slice(-4)
+                      } HAS ${connectionCount} TABS OPEN!`
                     : '';
 
                 return (
@@ -164,8 +285,8 @@ const VotingArea: FC<VotingAreaProps> = ({
                         <Card
                           elevation={3}
                           sx={{
-                            width: 50,
-                            height: 70,
+                            width: 55,
+                            height: 75,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -178,9 +299,9 @@ const VotingArea: FC<VotingAreaProps> = ({
                           }}
                         >
                           {revealed && status.vote ? (
-                            <Typography variant="h5">{status.vote}</Typography>
+                            <Typography variant="h4">{status.vote}</Typography>
                           ) : status.hasVoted ? (
-                            <Typography variant="h6">?</Typography>
+                            <Typography variant="h5">?</Typography>
                           ) : (
                             <Typography variant="caption">-</Typography>
                           )}
@@ -229,16 +350,21 @@ const VotingArea: FC<VotingAreaProps> = ({
             </Box>
           </Box>
           <Fade in={!!attendeeId} timeout={300}>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" display="block" gutterBottom>
+            <Box sx={{ textAlign: 'center', py: 1 }}>
+              <Typography
+                variant="subtitle2"
+                display="block"
+                gutterBottom
+                sx={{ fontWeight: 600 }}
+              >
                 Your Vote
               </Typography>
               {myVote ? (
                 <Card
                   elevation={3}
                   sx={{
-                    width: 80,
-                    height: 110,
+                    width: 70,
+                    height: 100,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -255,8 +381,8 @@ const VotingArea: FC<VotingAreaProps> = ({
                 <Card
                   elevation={1}
                   sx={{
-                    width: 80,
-                    height: 110,
+                    width: 70,
+                    height: 100,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -293,8 +419,9 @@ const VotingArea: FC<VotingAreaProps> = ({
                 ) : (
                   <>
                     <Typography
-                      variant="body1"
+                      variant="h6"
                       color={myName ? 'text.primary' : 'text.secondary'}
+                      sx={{ fontWeight: 500 }}
                     >
                       {myDisplayName}
                     </Typography>
@@ -349,6 +476,12 @@ const VotingArea: FC<VotingAreaProps> = ({
           </Paper>
         </Stack>
       </Box>
+      <NameModal
+        open={shouldShowNameModal}
+        onSubmit={handleNameModalSubmit}
+        onSkip={handleNameModalSkip}
+        lastUsedName={lastUsedName}
+      />
     </Paper>
   );
 };
