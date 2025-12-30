@@ -130,134 +130,137 @@ const TicketList: FC<TicketListProps> = ({
         <Box sx={{ flex: 1, overflow: 'auto' }}>
           <List>
             {tickets.map((ticket, index) => {
-            const votesData = ticketVotesMap.get(ticket.id);
-            const voteCount =
-              votesData?.votes.filter((v) => v.hasVoted).length || 0;
-            const isEditing = editingTicketId === ticket.id;
+              const votesData = ticketVotesMap.get(ticket.id);
+              const voteCount =
+                votesData?.votes.filter((v) => v.hasVoted).length || 0;
+              const isEditing = editingTicketId === ticket.id;
 
-            return (
-              <ListItem
-                key={ticket.id}
-                disablePadding
-                ref={(el) => {
-                  listItemRefs.current[index] = el;
-                }}
-              >
-                <ListItemButton
-                  selected={index === currentIndex}
-                  onClick={() => !isEditing && onSelectTicket(index)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    py: 1.5,
+              return (
+                <ListItem
+                  key={ticket.id}
+                  disablePadding
+                  ref={(el) => {
+                    listItemRefs.current[index] = el;
                   }}
                 >
-                  <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                    {isEditing ? (
-                      <TextField
-                        variant="standard"
-                        value={editingTitle}
-                        onChange={(e) => setEditingTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSubmitEdit();
-                          if (e.key === 'Escape') {
+                  <ListItemButton
+                    selected={index === currentIndex}
+                    onClick={() => !isEditing && onSelectTicket(index)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      py: 1.5,
+                    }}
+                  >
+                    <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                      {isEditing ? (
+                        <TextField
+                          variant="standard"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSubmitEdit();
+                            if (e.key === 'Escape') {
+                              setEditingTicketId(null);
+                              setEditingTitle('');
+                            }
+                          }}
+                          onBlur={() => {
                             setEditingTicketId(null);
                             setEditingTitle('');
-                          }
-                        }}
-                        onBlur={() => {
-                          setEditingTicketId(null);
-                          setEditingTitle('');
-                        }}
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                        fullWidth
-                        sx={{
-                          '& .MuiInputBase-input': {
-                            fontSize: '1rem',
-                          },
-                        }}
-                      />
-                    ) : (
-                      <Typography
-                        variant="body1"
-                        noWrap
-                        sx={{
-                          direction: 'rtl',
-                          textAlign: 'left',
-                        }}
-                      >
-                        {/* RTL hijinks: replace trailing slashes */}
-                        {ticket?.title?.replace(/\/$/g, '')}
-                      </Typography>
-                    )}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        gap: 2,
-                        mt: 0.5,
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <Typography variant="caption" color="text.secondary">
-                        {voteCount} votes cast
-                      </Typography>
-                      {ticket.estimate && (
-                        <Box
+                          }}
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                          fullWidth
                           sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
+                            '& .MuiInputBase-input': {
+                              fontSize: '1rem',
+                            },
+                          }}
+                        />
+                      ) : (
+                        <Typography
+                          variant="body1"
+                          noWrap
+                          sx={{
+                            direction: 'rtl',
+                            textAlign: 'left',
                           }}
                         >
-                          <Typography variant="caption" color="success.main">
-                            Final estimate:
-                            {ticket.estimate}
-                          </Typography>
-                          <CheckCircle color="success" sx={{ fontSize: 14 }} />
-                        </Box>
+                          {/* RTL hijinks: replace trailing slashes */}
+                          {ticket?.title?.replace(/\/$/g, '')}
+                        </Typography>
                       )}
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    {isEditing ? (
-                      <IconButton
-                        size="small"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleSubmitEdit();
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          gap: 2,
+                          mt: 0.5,
+                          flexWrap: 'wrap',
                         }}
-                        color="primary"
                       >
-                        <Done />
-                      </IconButton>
-                    ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          {voteCount} votes cast
+                        </Typography>
+                        {ticket.estimate && (
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                            }}
+                          >
+                            <Typography variant="caption" color="success.main">
+                              Final estimate:
+                              {ticket.estimate}
+                            </Typography>
+                            <CheckCircle
+                              color="success"
+                              sx={{ fontSize: 14 }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      {isEditing ? (
+                        <IconButton
+                          size="small"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSubmitEdit();
+                          }}
+                          color="primary"
+                        >
+                          <Done />
+                        </IconButton>
+                      ) : (
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEdit(ticket);
+                          }}
+                        >
+                          <Edit />
+                        </IconButton>
+                      )}
                       <IconButton
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleStartEdit(ticket);
+                          onDeleteTicket(ticket.id);
                         }}
                       >
-                        <Edit />
+                        <Delete />
                       </IconButton>
-                    )}
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteTicket(ticket.id);
-                      }}
-                    >
-                      <Delete />
-                    </IconButton>
-                  </Box>
-                </ListItemButton>
-              </ListItem>
-            );
-          })}
+                    </Box>
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
           </List>
         </Box>
         <Box sx={{ borderTop: 1, borderColor: 'divider' }}>

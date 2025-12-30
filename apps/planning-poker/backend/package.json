@@ -5,7 +5,8 @@
   "version": "0.1.0",
   "scripts": {
     "start": "bun --hot --no-clear-screen index.ts",
-    "prod": "NODE_ENV=production bun --env-file=.env index.ts"
+    "prod": "NODE_ENV=production bun --env-file=.env index.ts",
+    "test-ws": "bun test-websocket.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
