@@ -88,8 +88,8 @@ test_cloudflared() {
 
   # Test planning-poker (FE + BE)
   echo -e "\n${YELLOW}pp.seanmizen.com (planning-poker)${NC}"
-  test_endpoint "http://localhost:4040" "Frontend" || ((failed++))
-  test_endpoint "http://localhost:4041" "Backend API" || ((failed++))
+  test_endpoint "http://localhost:4030" "Frontend" || ((failed++))
+  test_endpoint "http://localhost:4031" "Backend API" || ((failed++))
 
   echo ""
   if [ $failed -eq 0 ]; then
@@ -122,8 +122,8 @@ test_flyio() {
 
   # Test planning-poker (FE + BE)
   echo -e "\n${YELLOW}pp.seanmizen.com (planning-poker)${NC}"
-  test_endpoint "http://localhost:6040" "Frontend" || ((failed++))
-  test_endpoint "http://localhost:6041" "Backend API" || ((failed++))
+  test_endpoint "http://localhost:6030" "Frontend" || ((failed++))
+  test_endpoint "http://localhost:6031" "Backend API" || ((failed++))
 
   echo ""
   if [ $failed -eq 0 ]; then

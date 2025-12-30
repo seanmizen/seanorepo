@@ -16,8 +16,8 @@ The repository uses separate port ranges to avoid conflicts:
 | seanscards (BE) | 4011 | 5011 |
 | carolinemizen.art (FE) | 4020 | 5020 |
 | carolinemizen.art (BE) | 4021 | 5021 |
-| planning-poker (FE) | 4040 | 5040 |
-| planning-poker (BE) | 4041 | 5041 |
+| planning-poker (FE) | 4030 | 5030 |
+| planning-poker (BE) | 4031 | 5031 |
 | Fly.io nginx gateway | - | 8080 |
 
 ## Testing Cloudflared Setup
@@ -51,8 +51,8 @@ Visit these URLs in your browser:
 - http://localhost:4011/api - seanscards API
 - http://localhost:4020 - carolinemizen.art
 - http://localhost:4021 - carolinemizen.art API (hello world)
-- http://localhost:4040 - planning-poker
-- http://localhost:4041 - planning-poker API
+- http://localhost:4030 - planning-poker
+- http://localhost:4031 - planning-poker API
 
 ### Stop Services
 
@@ -79,7 +79,7 @@ Add:
 127.0.0.1 seanmizen.com seanscards.com carolinemizen.art pp.seanmizen.com
 ```
 
-**Why?** This lets you test with real domain names (e.g., `http://pp.seanmizen.com:8080`) which triggers same-origin mode, so nginx correctly routes `/api` requests to backends. Direct port access (e.g., `localhost:6040`) won't work properly for apps with backends because the frontend uses the wrong API port.
+**Why?** This lets you test with real domain names (e.g., `http://pp.seanmizen.com:8080`) which triggers same-origin mode, so nginx correctly routes `/api` requests to backends. Direct port access (e.g., `localhost:6030`) won't work properly for apps with backends because the frontend uses the wrong API port.
 
 **Safe to leave forever?** Yes! These entries are harmless and only affect local development.
 
@@ -103,7 +103,7 @@ From repository root:
 
 ```bash
 docker build -f utils/fly-io/dockerfile -t seanmizen-flyio .
-docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5021:5021 -p 5040:5040 -p 5041:5041 seanmizen-flyio
+docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5021:5021 -p 5030:5030 -p 5031:5031 seanmizen-flyio
 ```
 
 ### Run Tests
@@ -124,7 +124,7 @@ docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5
 - http://localhost:6000 - seanmizen.com ✅
 - http://localhost:6010 - seanscards.com ❌ (backend API calls fail)
 - http://localhost:6020 - carolinemizen.art ❌ (backend API calls fail)
-- http://localhost:6040 - planning-poker ❌ (backend API calls fail)
+- http://localhost:6030 - planning-poker ❌ (backend API calls fail)
 
 **Alternative: curl with Host headers** (without /etc/hosts):
 ```bash

@@ -2,7 +2,7 @@ FROM node:23-slim AS dev
 WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.8.1
 # Note: source will be mounted via docker-compose volume
-CMD ["yarn", "rsbuild", "dev", "--port", "4040"]
+CMD ["yarn", "rsbuild", "dev", "--port", "4030"]
 
 FROM node:23-slim AS prod-build
 WORKDIR /app
@@ -35,5 +35,5 @@ FROM node:23-slim AS prod
 WORKDIR /app
 COPY --from=prod-build /app/apps/planning-poker/frontend/dist .
 RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
-EXPOSE 4040
-CMD ["serve", "-s", ".", "-l", "4040"]
+EXPOSE 4030
+CMD ["serve", "-s", ".", "-l", "4030"]

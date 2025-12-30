@@ -40,15 +40,15 @@ ingress:
   - hostname: "*.carolinemizen.art"
     service: http://localhost:4020
 
-  # planning-poker (pp.seanmizen.com) - Ports 4040 (FE) / 4041 (BE)
+  # planning-poker (pp.seanmizen.com) - Ports 4030 (FE) / 4031 (BE)
   - hostname: pp.seanmizen.com
     path: /api/*
-    service: http://localhost:4041
+    service: http://localhost:4031
   - hostname: pp.seanmizen.com
     path: /ws/*
-    service: http://localhost:4041
+    service: http://localhost:4031
   - hostname: pp.seanmizen.com
-    service: http://localhost:4040
+    service: http://localhost:4030
 
   # Catch-all for unmatched routes
   - service: http_status:404
