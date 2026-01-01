@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/macos,windows,linux,yarn,go,node
-# Edit at https://www.toptal.com/developers/gitignore?templates=macos,windows,linux,yarn,go,node
+# Created by https://www.toptal.com/developers/gitignore/api/go,node,yarn,linux,macos,windows,zig
+# Edit at https://www.toptal.com/developers/gitignore?templates=go,node,yarn,linux,macos,windows,zig
 
 ### Go ###
 # If you prefer the allow list template instead of the deny list, see community template:
@@ -255,7 +255,23 @@ $RECYCLE.BIN/
 # and uncomment the following lines
 # .pnp.*
 
-# End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,yarn,go,node
+### zig ###
+# Zig programming language
+
+zig-cache/
+zig-out/
+build/
+build-*/
+docgen_tmp/
+
+# End of https://www.toptal.com/developers/gitignore/api/go,node,yarn,linux,macos,windows,zig
+
+# zig 0.15?
+.zig-cache/
+.zig-out/
+.build/
+.build-*/
+.docgen_tmp/
 
 # old C-R-A build folder
 build
