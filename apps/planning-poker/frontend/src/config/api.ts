@@ -1,4 +1,5 @@
 import { configs } from '../../../configs';
+import { env } from './env';
 
 type Mode = 'development' | 'production';
 
@@ -33,13 +34,10 @@ const wsUrl =
         window.location.host
       }`;
 
-// Debug flag for showing WebSocket updates in snackbar
-const debugWsUpdates = import.meta.env.VITE_DEBUG_WS_UPDATES === 'true';
-
 export const api = {
   baseUrl,
   wsUrl,
-  debugWsUpdates,
+  debugWsUpdates: env.debugWsUpdates,
   endpoints: {
     health: mode === 'development' || isLocalhost ? `${baseUrl}` : '/api',
     userSession:

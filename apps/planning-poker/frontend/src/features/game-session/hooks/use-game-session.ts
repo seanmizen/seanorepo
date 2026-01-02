@@ -287,19 +287,23 @@ const useGameSession = (shortId: string | null) => {
       if (message.type === 'attendee:id') {
         setAttendeeId(message.attendeeId);
         localStorage.setItem(`attendee-${shortId}`, message.attendeeId);
-      } else if (message.type === 'refresh' || message.type === 'ticket-changed') {
+      } else if (message.type === 'kicked') {
+        alert('You were kicked 👢');
+        window.location.href = '/';
+      } else if (message.version !== undefined) {
+        // Handle all versioned update messages
         const incomingVersion = message.version || 0;
 
-        // Detect missed updates
-        if (incomingVersion > lastSeenVersion + 1) {
+        // Detect missed updates (only if we've seen at least one message before)
+        if (lastSeenVersion > 0 && incomingVersion > lastSeenVersion + 1) {
           const missedCount = incomingVersion - lastSeenVersion - 1;
           console.warn(
             `[Sync] Missed ${missedCount} update(s)`,
-            `(${lastSeenVersion} → ${incomingVersion})`,
+            `(#${lastSeenVersion} → #${incomingVersion})`,
           );
           if (api.debugWsUpdates) {
             showSnackbar(
-              `⚠️ Missed ${missedCount} update(s) (v${lastSeenVersion} → v${incomingVersion})`,
+              `⚠️ Missed ${missedCount} update(s) (#${lastSeenVersion} → #${incomingVersion})`,
               'warning',
             );
           }
@@ -310,8 +314,9 @@ const useGameSession = (shortId: string | null) => {
         // Debug: Show all WS updates if enabled
         if (api.debugWsUpdates) {
           showSnackbar(
-            `🔄 WS ${message.type} (v${incomingVersion})`,
+            `🔄 WS Update (#${incomingVersion})\n${JSON.stringify(message, null, 2)}`,
             'info',
+            'ws-debug-update',
           );
         }
 
@@ -327,9 +332,6 @@ const useGameSession = (shortId: string | null) => {
             'ticket-changed-notification',
           );
         }
-      } else if (message.type === 'kicked') {
-        alert('You were kicked 👢');
-        window.location.href = '/';
       }
     };
 
