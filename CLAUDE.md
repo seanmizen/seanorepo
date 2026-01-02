@@ -19,6 +19,7 @@ yarn
 ## Build Commands
 
 ### Root-level shortcuts
+
 - `yarn sean` - Start seanmizen.com dev server
 - `yarn caroline` - Start carolinemizen.art dev server
 - `yarn cards` - Start seanscards dev server
@@ -26,12 +27,14 @@ yarn
 - `yarn lint` - Run Biome linter/formatter with auto-fix
 
 ### Docker orchestration
+
 - `yarn start:docker` - Start all workspaces in dev mode (hot reload)
 - `yarn prod:docker` - **Production deployment command** - starts all workspaces in production mode
 - `yarn down` - Stop all Docker containers
 - `yarn fly:deploy` - Deploy to Fly.io
 
 ### Per-workspace commands
+
 Navigate to any `apps/*` or `utils/*` directory:
 
 - `yarn start` - Start dev server (equivalent to `yarn dev`)
@@ -69,6 +72,7 @@ Apps: `planning-poker` (backend), `tcp-getter`, `carolinemizen.art` (backend), `
 - Auth: JWT plugins where needed
 
 **CRITICAL: Bun is RUNTIME ONLY**
+
 - ⛔ NEVER use `bun install` or `bun build` in Dockerfiles or package management
 - ✅ ALWAYS use Yarn 4 for package management and installation
 - ✅ Bun is used ONLY to run the application (`bun index.ts`, `bun ./dist/index.js`)
@@ -97,10 +101,12 @@ App: `gosniff` - Network packet sniffer
 - Build target controlled via `BUILD_TARGET` env var
 
 **Profiles**:
+
 - `dev` profile: Hot reload enabled, source mounted
 - `prod` profile: Production build, detached mode
 
 **Example docker-compose pattern**:
+
 ```yaml
 x-frontend-base: &frontend-base
   build:
@@ -127,6 +133,7 @@ services:
 **Linter/Formatter**: Biome v2.3.8
 
 Configuration (`biome.json`):
+
 - Single quotes for JS/TS
 - Space indentation
 - Import organization enabled
@@ -137,6 +144,12 @@ Configuration (`biome.json`):
 
 Run: `yarn lint` (auto-fixes issues)
 
+**IMPORTANT FOR CLAUDE**:
+
+- Always run `yarn lint` from the monorepo root before completing tasks or handing off code
+- Always run `tsc --noEmit` in backend TypeScript projects to check for type errors
+- Fix all TypeScript errors before marking tasks as complete
+
 ## Development Patterns
 
 ### Port Allocation
@@ -144,6 +157,7 @@ Run: `yarn lint` (auto-fixes issues)
 The repository uses **dual port schemes** for different deployment targets:
 
 **Cloudflared (Home Server) - 4xxx range:**
+
 - 4000: seanmizen.com (FE)
 - 4010: seanscards (FE)
 - 4011: seanscards (BE)
@@ -153,6 +167,7 @@ The repository uses **dual port schemes** for different deployment targets:
 - 4031: planning-poker (BE)
 
 **Fly.io (Cloud) - 5xxx range:**
+
 - 5000: seanmizen.com (FE)
 - 5010: seanscards (FE)
 - 5011: seanscards (BE)
@@ -163,6 +178,7 @@ The repository uses **dual port schemes** for different deployment targets:
 - 8080: Fly.io nginx gateway
 
 ### Concurrent Development
+
 Multiple apps use `concurrently` to run frontend + backend simultaneously with named logging.
 
 ### Deployment Model
@@ -170,6 +186,7 @@ Multiple apps use `concurrently` to run frontend + backend simultaneously with n
 **Dual Deployment Architecture:**
 
 1. **Cloudflared (Home Server)**
+
    - Uses 4xxx port range
    - Each app runs in separate Docker containers
    - Cloudflared tunnels traffic to localhost ports
@@ -183,6 +200,7 @@ Multiple apps use `concurrently` to run frontend + backend simultaneously with n
 
 **Testing Deployments:**
 See `DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
+
 - Port scheme documentation
 - Service smoke tests (`./test-deployment.sh`)
 - Instructions for adding new services
@@ -193,6 +211,7 @@ See `DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
 ## Working Philosophy
 
 From readme.md:
+
 > "this is mine, so I will commit wantonly and whenever I like. PRs and proper codebase sanitation can be done in other projects."
 
 This is a personal monorepo - conventional best practices may be relaxed. Docker is used even for non-containerized apps just for orchestration convenience ("Not a JS/Node project? it is now").

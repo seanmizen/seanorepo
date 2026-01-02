@@ -8,7 +8,7 @@ x-frontend-base: &frontend-base
       no-cache: false
       provenance: false
   ports:
-      - "4020:4020"
+    - "4020:4020"
   labels:
     - "com.docker.compose.service.primary=true"
     - "description=Caroline Mizen Art - Frontend (http://localhost:4020)"
@@ -31,6 +31,9 @@ x-backend-base: &backend-base
     - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
     - COOKIE_SECRET=${COOKIE_SECRET:-dev-cookie-secret-change-in-production}
     - CORS_ORIGIN=http://localhost:4020
+    - UPLOADS_PATH=/app/uploads
+    - UPLOADS_URL=http://localhost:4021/uploads
+    - FRONTEND_URL=http://localhost:4020
 
 services:
   frontend:
@@ -51,6 +54,7 @@ services:
     profiles: ["prod"]
     volumes:
       - sqlite_data:/app/db
+      - uploads_data:/app/uploads
 
   backend-dev:
     <<: *backend-base
@@ -61,8 +65,10 @@ services:
         target: /app
       - be_node_modules:/app/node_modules
       - sqlite_data:/app/db
+      - uploads_data:/app/uploads
 
 volumes:
   sqlite_data:
+  uploads_data:
   fe_node_modules:
   be_node_modules:
