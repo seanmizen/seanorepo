@@ -22,6 +22,10 @@ ingress:
     service: http://localhost:4030
 
   # seanmizen.com - Port 4000 (Frontend only)
+  # tcp-getter at tcp/
+  - hostname: seanmizen.com
+    path: /tcp/*
+    service: http://localhost:4120
   - hostname: seanmizen.com
     service: http://localhost:4000
   - hostname: "*.seanmizen.com"
