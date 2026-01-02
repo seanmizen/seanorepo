@@ -1,0 +1,22 @@
+[Unit]
+Description=TCP Getter Custom Service
+After=network.target
+
+[Service]
+Type=simple
+User=srv
+WorkingDirectory=/home/srv/projects/seanorepo/apps/tcp-getter
+
+# Environment setup
+Environment=PATH=/home/srv/.local/bin:/home/srv/.bun/bin:/usr/local/bin:/usr/bin
+Environment=NODE_ENV=production
+
+# Run pre-built app directly (no rebuild on restart)
+# To rebuild: cd /home/srv/projects/seanorepo && yarn && cd apps/tcp-getter && yarn build
+ExecStart=/home/srv/.bun/bin/bun dist/index.js
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
