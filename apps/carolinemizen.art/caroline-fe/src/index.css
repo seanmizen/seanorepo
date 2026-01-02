@@ -1,127 +1,391 @@
 :root {
   color-scheme: light dark;
 
-  /* Backgrounds */
-  --background-color: #242424; /* Dark grey for main background */
-  --nav-background-color: #1b1b1b; /* Slightly darker grey for navigation */
-  /* secondary, tertiary, quaternary colors get lighter */
-  --background-color-secondary: #2a2a2a; /* Slightly lighter grey for secondary background */
-  --background-color-tertiary: #333333; /* Slightly lighter grey for tertiary background */
-  --background-color-quaternary: #3d3d3d; /* Slightly lighter grey for quaternary background */
+  /* Typography (bigger + more readable) */
+  --font-family-hero: "Merriweather", system-ui, serif;
+  --font-family:
+    "Lato", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+
+  font-family: var(--font-family);
+  font-size: 18px;
+  line-height: 1.65;
+  font-weight: 400;
+
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Surfaces (dark default) */
+  --background-color: #141416;
+  --nav-background-color: #0f0f12;
+  --background-color-secondary: #1b1b20;
+  --background-color-tertiary: #23232a;
+  --background-color-quaternary: #2d2d36;
 
   /* Text */
-  --text-color: #e1e1e1; /* Light grey for general text */
-  --text-color-secondary: #c0c0c0; /* Slightly dimmer for secondary text */
-  --link-color: #646cff; /* Bright blue for links */
-  --link-hover-color: #535bf2; /* Slightly darker blue for link hover */
+  --text-color: #f1f2f4;
+  --text-color-secondary: #c9cbd1;
 
-  /* Buttons and other elements */
-  /* --button-background-color: #333333;  Medium grey for buttons */
-  --button-background-color: var(
-    ----background-color-tertiary
-  ); /* no chatGPT, darkgrey for buttons */
-  --button-text-color: #ffffff; /* White for button text */
+  /* Accent scheme (purple / blue / green) */
+  --accent-purple: #8b6cff;
+  --accent-blue: #3b82f6;
+  --accent-green: #22c55e;
 
-  /* lilac */
-  --border-color: #e8e8ff;
-  --border-color-secondary: #d9d9ff;
+  /* Links derive from accents */
+  --link-color: var(--accent-blue);
+  --link-hover-color: var(--accent-purple);
+
+  /* Borders (subtle lilac, consistent) */
+  --border-color: rgba(139, 108, 255, 0.22);
+  --border-color-secondary: rgba(139, 108, 255, 0.14);
+
+  /* Buttons */
+  --button-background-color: var(--background-color-tertiary);
+  --button-text-color: var(--text-color);
+
+  /* Glass tokens (use inside styled-components) */
+  --glass-bg: rgba(255, 255, 255, 0.18);
+  --glass-blur: blur(8px);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+
+  /* Interaction tokens */
+  --focus-flash: #22d3ee;
+  --focus-wipe: #8b6cff;
+  --hover-tint: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+
+  color: var(--text-color);
+  background-color: var(--background-color);
+}
+
+/* display-p3 upgrade (falls back cleanly if unsupported) */
+@supports (color: color(display-p3 1 1 1)) {
+  :root {
+    --accent-purple: color(display-p3 0.56 0.4 1);
+    --accent-blue: color(display-p3 0.2 0.52 1);
+    --accent-green: color(display-p3 0.18 0.82 0.46);
+
+    --border-color: color(display-p3 0.56 0.4 1 / 0.22);
+    --border-color-secondary: color(display-p3 0.56 0.4 1 / 0.14);
+
+    --glass-bg: color(display-p3 1 1 1 / 0.16);
+    --focus-flash: color(display-p3 0.15 0.85 0.75);
+    --focus-wipe: color(display-p3 0.56 0.4 1);
+  }
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    /* Backgrounds */
-    --background-color: #ffffff; /* White for main background */
-    --nav-background-color: #f5f5f5; /* Off-white for navigation */
-    --background-color-secondary: #f0f0f0; /* Slightly darker off-white for secondary background */
-    --background-color-tertiary: #e5e5e5; /* Slightly darker off-white for tertiary background */
-    --background-color-quaternary: #d9d9d9; /* Slightly darker off-white for quaternary background */
+    --background-color: #ffffff;
+    --nav-background-color: #f6f6fb;
+    --background-color-secondary: #f1f2f7;
+    --background-color-tertiary: #e9eaf2;
+    --background-color-quaternary: #dde0ea;
 
-    /* Text */
-    --text-color: #213547; /* Dark blue for general text */
-    --text-color-secondary: #53585f; /* Soft grey for secondary text */
-    --link-color: #747bff; /* Soft blue for links */
-    --link-hover-color: #5a5fe8; /* Slightly darker blue for link hover */
+    --text-color: #17202a;
+    --text-color-secondary: #3e4650;
 
-    /* Buttons and other elements */
-    --button-background-color: #f9f9f9; /* Very light grey for buttons */
-    --button-text-color: #213547; /* Dark blue for button text, same as text color */
+    /* Slightly deeper accents in light mode */
+    --accent-purple: #6d4dff;
+    --accent-blue: #1f6feb;
+    --accent-green: #16a34a;
 
-    /* lilac */
-    --border-color: #e8e8ff;
-    --border-color-secondary: #d9d9ff;
+    --border-color: rgba(109, 77, 255, 0.2);
+    --border-color-secondary: rgba(109, 77, 255, 0.12);
+
+    --button-background-color: #f8f8ff;
+    --button-text-color: var(--text-color);
+
+    --glass-bg: rgba(255, 255, 255, 0.65);
+    --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+
+    --hover-tint: color-mix(in srgb, var(--accent-blue) 8%, transparent);
   }
-}
 
-:root {
-  /* Now actually set the colors */
-  color: var(--text-color);
-  background-color: var(--background-color);
+  @supports (color: color(display-p3 1 1 1)) {
+    :root {
+      --accent-purple: color(display-p3 0.38 0.26 0.95);
+      --accent-blue: color(display-p3 0.1 0.42 0.95);
+      --accent-green: color(display-p3 0.1 0.62 0.26);
 
-  /* Fonts */
-  --font-family-hero: "Merriweather", system-ui, serif;
-  --font-family: "Lato", system-ui, Avenir, Helvetica, Arial, sans-serif;
-  font-family: var(--font-family);
-  line-height: 1.5;
-  font-weight: 400;
+      --border-color: color(display-p3 0.38 0.26 0.95 / 0.18);
+      --border-color-secondary: color(display-p3 0.38 0.26 0.95 / 0.12);
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  /* TODO: reinstate max-width but do cool stuff at the edges */
-  /* max-width: 1280px; */
-  margin: 0 auto;
-  text-align: justify;
-}
-
-a {
-  font-weight: 500;
-  color: var(--link-color);
-  text-decoration: inherit;
-}
-a:hover {
-  color: var(--link-hover-color);
+      --glass-bg: color(display-p3 1 1 1 / 0.68);
+      --focus-flash: color(display-p3 0.1 0.75 0.65);
+      --focus-wipe: color(display-p3 0.38 0.26 0.95);
+    }
+  }
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  text-align: left;
 }
 
 h1 {
   font-family: var(--font-family-hero);
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: 3.25rem;
+  line-height: 1.08;
+  margin: 0.2em 0;
 }
 
 h2 {
   font-family: var(--font-family-hero);
-  font-size: 2.4em;
-  line-height: 1.1;
+  font-size: 2.25rem;
+  line-height: 1.12;
+  margin: 0.2em 0;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
+p,
+li {
+  font-size: 1.06rem;
+}
+
+/* Links: striking but not annoying */
+a {
+  font-weight: 600;
+  color: var(--link-color);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in srgb, var(--link-color) 50%, transparent);
+
+  transition:
+    color 120ms ease,
+    text-decoration-color 120ms ease;
+}
+
+/*
+ * INTERACTION SYSTEM - THE NEW LAW
+ *
+ * HOVER = ELEVATION (box-shadow)
+ * FOCUS = FLASH (cyan + purple wipe)
+ *
+ * Rules:
+ * 1. ALL interactive elements get box-shadow elevation on hover
+ * 2. Elevation creates depth: 0 2px 8px rgba(0,0,0,0.15)
+ * 3. Active state removes elevation (press down)
+ * 4. Focus flash style depends on context:
+ *    - Regular buttons/links: Underline (bottom placement)
+ *    - Compact buttons (admin tables): Border glow (contained)
+ * 5. Consistency above all - no special snowflakes
+ */
+
+button,
+.button-styled {
+  border-radius: 10px;
+  border: 2px solid transparent;
+  padding: 0.7em 1.2em;
+  font-size: 1.02rem;
+  font-weight: 600;
   font-family: inherit;
   background-color: var(--button-background-color);
+  color: var(--button-text-color);
   cursor: pointer;
-  transition: border-color 0.25s;
+  text-decoration: none;
+  display: inline-block;
+
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease,
+    background-color 120ms ease;
 }
-button:hover {
-  /* border-color: #646cff; */
-  border-color: var(--link-color);
+
+button:hover,
+.button-styled:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+
+button:active,
+.button-styled:active {
+  box-shadow: none;
+  transform: translateY(0);
 }
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Regular links keep simple hover (styled components override this) */
+
+/* Global focus - quick vibrant flash */
+:where(a, button, [role="button"], input, select, textarea, summary):focus {
+  outline: none;
+}
+
+/*
+ * FOCUS SYSTEM - THE LAW
+ *
+ * Rules:
+ * 1. ALL focus indicators are pseudo-elements (never box-shadow, never outline)
+ * 2. Cyan appears instantly (::before)
+ * 3. Purple wipes across (::after)
+ * 4. No interference with elevation, borders, or existing shadows
+ * 5. Position: relative required on parent
+ */
+
+@keyframes focus-wipe {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  35% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  65% {
+    transform: scaleX(1);
+    transform-origin: right;
+  }
+  100% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
+
+/* Universal focus reset */
+:where(a, button, [role="button"], input, select, textarea, summary):focus {
+  outline: none;
+}
+
+/* BUTTONS - underline with pseudo-elements only */
+button:focus-visible {
+  position: relative;
+}
+
+button:focus-visible::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--focus-flash);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+button:focus-visible::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--focus-wipe);
+  border-radius: 2px;
+  pointer-events: none;
+  transform: scaleX(0);
+  animation: focus-wipe 180ms ease-in-out forwards;
+  z-index: 2;
+}
+
+/* LINKS - text-decoration for base, ::before for wipe */
+a:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--focus-flash);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  position: relative;
+}
+
+a:focus-visible::before {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--focus-wipe);
+  border-radius: 1px;
+  pointer-events: none;
+  transform: scaleX(0);
+  animation: focus-wipe 180ms ease-in-out forwards;
+  z-index: 10;
+}
+
+/* INPUTS - border-bottom for base, ::after for wipe */
+:where(input, select, textarea):focus-visible {
+  position: relative;
+  border-bottom-color: var(--focus-flash);
+  border-bottom-width: 2px;
+}
+
+:where(input, select, textarea):focus-visible::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--focus-wipe);
+  pointer-events: none;
+  transform: scaleX(0);
+  animation: focus-wipe 180ms ease-in-out forwards;
+  z-index: 1;
+}
+
+/* ROLE=BUTTON elements */
+:where([role="button"]):focus-visible {
+  position: relative;
+}
+
+:where([role="button"]):focus-visible::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--focus-flash);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+:where([role="button"]):focus-visible::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--focus-wipe);
+  border-radius: 2px;
+  pointer-events: none;
+  transform: scaleX(0);
+  animation: focus-wipe 180ms ease-in-out forwards;
+  z-index: 2;
+}
+
+/* Inputs (if you have them elsewhere) */
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text-color);
+  background: var(--background-color-secondary);
+  border: 1px solid var(--border-color-secondary);
+  border-radius: 10px;
+  padding: 0.65em 0.8em;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--border-color);
+}
+
+/* Selection */
+::selection {
+  background: color-mix(in srgb, var(--accent-purple) 35%, transparent);
 }
