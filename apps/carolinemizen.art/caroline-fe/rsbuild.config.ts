@@ -1,6 +1,6 @@
+import path from 'node:path';
 import { defineConfig } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
-import path from 'node:path';
 
 export default defineConfig({
   plugins: [pluginReact()],
