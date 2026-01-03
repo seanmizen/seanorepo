@@ -175,16 +175,6 @@ const API_URL = import.meta.env.API_URL;
 const getImageUrl = (storagePath: string) =>
   `${API_URL}/uploads/${storagePath}`;
 
-// interface Artwork {
-//   id: number;
-//   title: string;
-//   description: string | null;
-//   price_cents: number;
-//   currency: string;
-//   status: string;
-//   primary_image_id: number | null;
-// }
-
 interface Image {
   id: number;
   filename: string;
@@ -274,7 +264,7 @@ const Artwork: FC = () => {
         <Breadcrumbs>
           <BreadcrumbLink to="/collections">Collections</BreadcrumbLink>
           <BreadcrumbSeparator>/</BreadcrumbSeparator>
-          <BreadcrumbLink to={`/collections/${id}`}>Gallery</BreadcrumbLink>
+          <BreadcrumbLink to={`/collections/${id}`}>Collection</BreadcrumbLink>
           <BreadcrumbSeparator>/</BreadcrumbSeparator>
           <span>{artwork.title}</span>
         </Breadcrumbs>

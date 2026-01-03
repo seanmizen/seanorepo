@@ -1,7 +1,7 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { Nav } from '../../components/nav';
+import { type Gallery, GalleryGrid } from '@/components/gallery-grid';
+import { Nav } from '@/components/nav';
 
 const Container = styled.div`
   max-width: 1400px;
@@ -26,57 +26,8 @@ const Subtitle = styled.p`
   margin: 0;
 `;
 
-const GalleryGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 2rem;
+const StyledGalleryGrid = styled(GalleryGrid)`
   margin-top: 3rem;
-`;
-
-const GalleryCard = styled(Link)`
-  text-decoration: none;
-  color: inherit;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
-
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-  }
-`;
-
-const CoverImage = styled.img`
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  background: #f5f5f5;
-`;
-
-const CoverVideo = styled.video`
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  background: #f5f5f5;
-`;
-
-const GalleryInfo = styled.div`
-  padding: 1.5rem;
-`;
-
-const GalleryName = styled.h2`
-  font-size: 1.5rem;
-  color: #333;
-  margin: 0 0 0.5rem;
-`;
-
-const GalleryDescription = styled.p`
-  color: #666;
-  margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.5;
 `;
 
 const LoadingMessage = styled.div`
@@ -102,18 +53,6 @@ const EmptyMessage = styled.div`
   font-size: 1.125rem;
 `;
 
-const API_URL = import.meta.env.API_URL;
-
-interface Gallery {
-  id: number;
-  name: string;
-  slug: string;
-  description: string | null;
-  cover_image_path: string | null;
-  cover_image_mime_type: string | null;
-  is_featured: boolean;
-}
-
 const Collections: FC = () => {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +60,7 @@ const Collections: FC = () => {
 
   const fetchGalleries = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/galleries`);
+      const response = await fetch(`${import.meta.env.API_URL}/galleries`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch galleries');
@@ -158,38 +97,7 @@ const Collections: FC = () => {
         )}
 
         {!loading && !error && galleries.length > 0 && (
-          <GalleryGrid>
-            {galleries.map((gallery) => (
-              <GalleryCard key={gallery.id} to={`/collections/${gallery.slug}`}>
-                {gallery.cover_image_path ? (
-                  gallery.cover_image_mime_type?.startsWith('video/') ? (
-                    <CoverVideo
-                      src={`${API_URL}/uploads/${gallery.cover_image_path}`}
-                      loop
-                      autoPlay
-                      muted
-                      playsInline
-                    />
-                  ) : (
-                    <CoverImage
-                      src={`${API_URL}/uploads/${gallery.cover_image_path}`}
-                      alt={gallery.name}
-                    />
-                  )
-                ) : (
-                  <CoverImage as="div" />
-                )}
-                <GalleryInfo>
-                  <GalleryName>{gallery.name}</GalleryName>
-                  {gallery.description && (
-                    <GalleryDescription>
-                      {gallery.description}
-                    </GalleryDescription>
-                  )}
-                </GalleryInfo>
-              </GalleryCard>
-            ))}
-          </GalleryGrid>
+          <StyledGalleryGrid galleries={galleries} />
         )}
       </Container>
     </>

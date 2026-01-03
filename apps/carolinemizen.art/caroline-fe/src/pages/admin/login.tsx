@@ -1,7 +1,7 @@
 import { type FC, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { useAuth } from '../../contexts/auth-context';
+import { useAuth } from '@/contexts/auth-context';
 
 const OuterContainer = styled.div`
   display: flex;
@@ -76,9 +76,7 @@ const Button = styled.button`
   font-weight: 600;
   cursor: pointer;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease;
+  transition: box-shadow 120ms ease, transform 120ms ease;
 
   &:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);

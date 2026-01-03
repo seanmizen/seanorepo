@@ -297,6 +297,39 @@ const testDbConnection: () => Promise<boolean> = async () => {
 };
 
 /**
+ * Check if the database needs to be seeded
+ *
+ * @returns true if the database needs seeding (doesn't exist or has no tables), false otherwise
+ */
+const needsSeeding: () => Promise<boolean> = async () => {
+  const dbPath = process.env.DB_PATH
+    ? `${process.env.DB_PATH}/database.db`
+    : './database.db';
+
+  // Check if database file exists
+  if (!existsSync(dbPath)) {
+    return true;
+  }
+
+  // Check if database has the expected tables
+  try {
+    const db = await openDbConnection();
+    const tables = db
+      .query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='users'",
+      )
+      .all();
+    db.close();
+
+    // If users table doesn't exist, database needs seeding
+    return tables.length === 0;
+  } catch (error) {
+    console.error('Error checking database state:', error);
+    return true; // If we can't check, assume it needs seeding
+  }
+};
+
+/**
  * Scan the uploads/images folder and add any files not in the database
  */
 const ingestOrphanedImages = async () => {
@@ -389,5 +422,6 @@ export {
   openDbConnection,
   executeQuery,
   testDbConnection,
+  needsSeeding,
   ingestOrphanedImages,
 };

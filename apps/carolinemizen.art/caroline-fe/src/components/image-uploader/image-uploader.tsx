@@ -1,6 +1,6 @@
 import { type FC, useCallback, useState } from 'react';
 import styled from 'styled-components';
-import { useAppConfig } from '../../hooks/use-app-config';
+import { useAppConfig } from '@/hooks/use-app-config';
 
 const Container = styled.div`
   width: 100%;
@@ -334,7 +334,9 @@ export const ImageUploader: FC<ImageUploaderProps> = ({
             >
               {uploading
                 ? 'Uploading...'
-                : `Upload ${images.length} image${images.length > 1 ? 's' : ''}`}
+                : `Upload ${images.length} image${
+                    images.length > 1 ? 's' : ''
+                  }`}
             </button>
           )}
         </>

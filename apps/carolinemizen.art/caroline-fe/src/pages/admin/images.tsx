@@ -1,6 +1,6 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { ImageUploader } from '../../components/image-uploader';
+import { ImageUploader } from '@/components/image-uploader';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -93,9 +93,7 @@ const DeleteButton = styled.button`
   font-weight: 600;
   position: relative;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease,
+  transition: box-shadow 120ms ease, transform 120ms ease,
     border-color 120ms ease;
 
   &:hover {
@@ -116,7 +114,8 @@ const DeleteButton = styled.button`
 
   &:focus-visible {
     border-color: var(--focus-flash);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-flash) 40%, transparent);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--focus-flash) 40%, transparent);
   }
 
   &:disabled {

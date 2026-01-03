@@ -1,7 +1,7 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { useAppConfig } from '../../hooks/use-app-config';
+import { useAppConfig } from '@/hooks/use-app-config';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -109,9 +109,7 @@ const DangerButton = styled.button`
   font-weight: 600;
   cursor: pointer;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease;
+  transition: box-shadow 120ms ease, transform 120ms ease;
 
   &:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);

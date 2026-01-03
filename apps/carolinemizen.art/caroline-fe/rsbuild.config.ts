@@ -1,9 +1,8 @@
 import { defineConfig } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
-import { pluginGlsl } from 'rsbuild-plugin-glsl';
 
 export default defineConfig({
-  plugins: [pluginReact(), pluginGlsl()],
+  plugins: [pluginReact()],
   html: {
     template: './public/index.html',
   },

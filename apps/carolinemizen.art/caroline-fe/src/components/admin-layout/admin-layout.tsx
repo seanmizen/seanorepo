@@ -1,7 +1,7 @@
 import type { FC, ReactNode } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import styled from 'styled-components';
-import { useAuth } from '../../contexts/auth-context';
+import { useAuth } from '@/contexts/auth-context';
 import { DebugMenu } from '../debug-menu';
 
 const LayoutContainer = styled.div`

@@ -1,22 +1,31 @@
 import { randomBytes } from 'node:crypto';
 import { openDbConnection } from './db';
 
-// Admin email whitelist - users with these emails get admin role
-// MUST be set in .env file
-if (!process.env.ADMIN_EMAILS) {
-  throw new Error(
-    'ADMIN_EMAILS environment variable is required. Set it in .env file (comma-separated list)',
+/**
+ * Get admin emails from environment variable
+ * Evaluated at runtime to support testing
+ */
+function getAdminEmails(): Set<string> {
+  const TEST_MODE = process.env.TEST_MODE === 'true';
+
+  if (!process.env.ADMIN_EMAILS && !TEST_MODE) {
+    throw new Error(
+      'ADMIN_EMAILS environment variable is required. Set it in .env file (comma-separated list)',
+    );
+  }
+
+  const emails = new Set(
+    (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map((e) => e.trim())
+      .filter(Boolean),
   );
-}
 
-const ADMIN_EMAILS = new Set(
-  process.env.ADMIN_EMAILS.split(',')
-    .map((e) => e.trim())
-    .filter(Boolean),
-);
+  if (emails.size === 0 && !TEST_MODE) {
+    throw new Error('ADMIN_EMAILS cannot be empty');
+  }
 
-if (ADMIN_EMAILS.size === 0) {
-  throw new Error('ADMIN_EMAILS cannot be empty');
+  return emails;
 }
 
 interface MagicToken {
@@ -57,7 +66,8 @@ export async function createMagicToken(
       | User
       | undefined;
 
-    const expectedRole = ADMIN_EMAILS.has(email.toLowerCase())
+    const adminEmails = getAdminEmails();
+    const expectedRole = adminEmails.has(email.toLowerCase())
       ? 'admin'
       : 'guest';
 
