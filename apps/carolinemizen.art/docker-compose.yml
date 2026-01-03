@@ -4,9 +4,14 @@ x-frontend-base: &frontend-base
     context: ../..
     dockerfile: apps/carolinemizen.art/caroline-fe/dockerfile
     target: ${BUILD_TARGET:-dev}
+    args:
+      API_URL: ${API_URL:-http://localhost:4021/api}
+      DEBUG_MODE: ${DEBUG_MODE:-false}
     x-bake:
       no-cache: false
       provenance: false
+  env_file:
+    - ./caroline-be/.env
   ports:
     - "4020:4020"
   labels:
@@ -22,18 +27,15 @@ x-backend-base: &backend-base
     x-bake:
       no-cache: false
       provenance: false
+  env_file:
+    - ./caroline-be/.env
   ports:
     - "4021:4021"
   labels:
     - "description=Caroline Mizen Art - Backend API"
   environment:
     - DB_PATH=/app/db
-    - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
-    - COOKIE_SECRET=${COOKIE_SECRET:-dev-cookie-secret-change-in-production}
-    - CORS_ORIGIN=http://localhost:4020
     - UPLOADS_PATH=/app/uploads
-    - UPLOADS_URL=http://localhost:4021/uploads
-    - FRONTEND_URL=http://localhost:4020
 
 services:
   frontend:
