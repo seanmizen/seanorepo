@@ -24,6 +24,7 @@ RUN yarn workspaces focus caroline-fe
 COPY apps/carolinemizen.art/caroline-fe/src ./apps/carolinemizen.art/caroline-fe/src
 COPY apps/carolinemizen.art/caroline-fe/public ./apps/carolinemizen.art/caroline-fe/public
 COPY apps/carolinemizen.art/caroline-fe/rsbuild.config.ts ./apps/carolinemizen.art/caroline-fe/
+COPY apps/carolinemizen.art/caroline-fe/tsconfig.json ./apps/carolinemizen.art/caroline-fe/
 COPY apps/carolinemizen.art/tsconfig.json ./apps/carolinemizen.art/
 
 # Build using workspace command from root
