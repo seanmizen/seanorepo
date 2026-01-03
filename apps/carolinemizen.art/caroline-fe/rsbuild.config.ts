@@ -15,9 +15,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
     define: {
-      'import.meta.env.API_URL': JSON.stringify(
-        process.env.API_URL || 'http://localhost:4021',
-      ),
+      'import.meta.env.API_URL': JSON.stringify(process.env.API_URL || '/api'),
       'import.meta.env.DEBUG_MODE': JSON.stringify(
         process.env.DEBUG_MODE || 'false',
       ),
