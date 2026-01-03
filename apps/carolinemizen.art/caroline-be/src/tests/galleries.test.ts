@@ -96,25 +96,27 @@ describe('Gallery Ordering', () => {
         .get('gallery-b') as { id: number; display_order: number } | undefined;
 
       expect(galleryB).toBeDefined();
-      expect(galleryB?.display_order).toBe(1);
+      if (!galleryB) throw new Error('galleryB should be defined');
+      expect(galleryB.display_order).toBe(1);
 
       // Simulate move-up: Gallery B (order 1) moves up to 0, Gallery A (order 0) moves down to 1
       const galleryA = db
         .query('SELECT * FROM galleries WHERE display_order = ?')
-        .get(galleryB!.display_order - 1) as
+        .get(galleryB.display_order - 1) as
         | { id: number; display_order: number }
         | undefined;
 
       expect(galleryA).toBeDefined();
+      if (!galleryA) throw new Error('galleryA should be defined');
 
       // Swap
       db.run('UPDATE galleries SET display_order = ? WHERE id = ?', [
-        galleryA!.display_order,
-        galleryB!.id,
+        galleryA.display_order,
+        galleryB.id,
       ]);
       db.run('UPDATE galleries SET display_order = ? WHERE id = ?', [
-        galleryB!.display_order,
-        galleryA!.id,
+        galleryB.display_order,
+        galleryA.id,
       ]);
 
       const updatedA = db
@@ -156,25 +158,27 @@ describe('Gallery Ordering', () => {
         .get('gallery-b') as { id: number; display_order: number } | undefined;
 
       expect(galleryB).toBeDefined();
-      expect(galleryB?.display_order).toBe(1);
+      if (!galleryB) throw new Error('galleryB should be defined');
+      expect(galleryB.display_order).toBe(1);
 
       // Simulate move-down: Gallery B (order 1) moves down to 2, Gallery C (order 2) moves up to 1
       const galleryC = db
         .query('SELECT * FROM galleries WHERE display_order = ?')
-        .get(galleryB!.display_order + 1) as
+        .get(galleryB.display_order + 1) as
         | { id: number; display_order: number }
         | undefined;
 
       expect(galleryC).toBeDefined();
+      if (!galleryC) throw new Error('galleryC should be defined');
 
       // Swap
       db.run('UPDATE galleries SET display_order = ? WHERE id = ?', [
-        galleryC!.display_order,
-        galleryB!.id,
+        galleryC.display_order,
+        galleryB.id,
       ]);
       db.run('UPDATE galleries SET display_order = ? WHERE id = ?', [
-        galleryB!.display_order,
-        galleryC!.id,
+        galleryB.display_order,
+        galleryC.id,
       ]);
 
       const updatedB = db
@@ -207,12 +211,13 @@ describe('Gallery Ordering', () => {
         | undefined;
 
       expect(gallery).toBeDefined();
-      expect(gallery?.display_order).toBe(0);
+      if (!gallery) throw new Error('gallery should be defined');
+      expect(gallery.display_order).toBe(0);
 
       // Try to find gallery above (should not exist)
       const aboveGallery = db
         .query('SELECT * FROM galleries WHERE display_order = ?')
-        .get(gallery!.display_order - 1);
+        .get(gallery.display_order - 1);
 
       expect(aboveGallery).toBeNull();
     } finally {
@@ -239,12 +244,13 @@ describe('Gallery Ordering', () => {
         .get('gallery-b') as { id: number; display_order: number } | undefined;
 
       expect(gallery).toBeDefined();
-      expect(gallery?.display_order).toBe(1);
+      if (!gallery) throw new Error('gallery should be defined');
+      expect(gallery.display_order).toBe(1);
 
       // Try to find gallery below (should not exist)
       const belowGallery = db
         .query('SELECT * FROM galleries WHERE display_order = ?')
-        .get(gallery!.display_order + 1);
+        .get(gallery.display_order + 1);
 
       expect(belowGallery).toBeNull();
     } finally {

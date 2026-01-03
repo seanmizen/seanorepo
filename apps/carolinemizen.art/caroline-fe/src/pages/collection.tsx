@@ -230,7 +230,7 @@ const Collection: FC = () => {
             <BreadcrumbSeparator>/</BreadcrumbSeparator>
             <span>{gallery.name}</span>
           </Breadcrumbs>
-          <Title>{gallery.name}</Title>
+          <Title>Collection: {gallery.name}</Title>
           {gallery.description && (
             <Description>{gallery.description}</Description>
           )}

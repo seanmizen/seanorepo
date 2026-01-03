@@ -6,12 +6,113 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Link } from 'react-router-dom';
 import styled, { css } from 'styled-components';
-import { FullScreenComponent, Nav } from '../../components';
-import type { Artwork } from '../../types';
+import { FullScreenComponent, Nav } from '@/components';
+import { GalleryGrid } from '@/components/gallery-grid';
+import { useArtworkCache } from '@/contexts/artwork-cache-context';
+import type { Artwork } from '@/types';
 
 const API_URL = import.meta.env.API_URL;
+
+const groupHalo = css`
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -18px -28px;
+    z-index: -1;
+    pointer-events: none;
+
+    background: radial-gradient(
+      ellipse 140% 130% at 50% 50%,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.9) 45%,
+      transparent 75%
+    );
+
+    filter: blur(22px);
+  }
+`;
+
+const readableText = css`
+  position: relative;
+  z-index: 0;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -28px -120px; /* wider left/right */
+    z-index: -1;
+    pointer-events: none;
+
+    background: radial-gradient(
+      ellipse 160% 120% at 50% 55%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.28) 38%,
+      rgba(255, 255, 255, 0.12) 60%,
+      transparent 78%
+    );
+
+    filter: blur(28px);
+  }
+`;
+
+const TextPanel = styled.div`
+  /* outline: 2px solid red; */
+  ${groupHalo}
+`;
+
+export const insetScrim = css`
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+
+  background: color-mix(in srgb, white 50%, transparent);
+  backdrop-filter: blur(10px) saturate(0.9);
+  -webkit-backdrop-filter: blur(10px) saturate(0.9);
+
+  border: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+  box-shadow: var(--glass-shadow);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      120% 120% at 50% 20%,
+      color-mix(in srgb, white 55%, transparent) 0%,
+      transparent 60%
+    );
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+`;
+
+export const frostedDesat = css`
+  background: color-mix(in srgb, white 62%, transparent);
+  backdrop-filter: blur(12px) saturate(0.85) contrast(1.05);
+  -webkit-backdrop-filter: blur(12px) saturate(0.85) contrast(1.05);
+
+  border: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+  box-shadow: var(--glass-shadow);
+  border-radius: 18px;
+`;
+
+export const milkGlass = css`
+  background: color-mix(in srgb, white 72%, transparent);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+
+  border: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+  box-shadow: var(--glass-shadow);
+  border-radius: 18px;
+`;
 
 const glassmorphismStyle = css`
   background: rgba(255, 255, 255, 0.2);
@@ -31,6 +132,7 @@ const Arrow = styled.button<{ $isVisible: boolean }>`
   cursor: pointer;
   font-weight: 600;
   letter-spacing: 0.02em;
+  overflow: hidden;
 
   transition: transform 220ms ease, opacity 220ms ease, background 120ms ease;
   transform: ${(p) => (p.$isVisible ? 'translateY(0)' : 'translateY(80px)')};
@@ -61,6 +163,7 @@ const HeaderTextContainer = styled.div`
   width: 100%;
   display: flex;
   justify-content: center;
+  overflow: hidden;
 `;
 
 const HeroWrapper = styled.div`
@@ -131,12 +234,36 @@ const CarouselTrack = styled.div<{ $duration: number; $ready: boolean }>`
   }
 `;
 
-const CarouselImage = styled.img`
+const CarouselMedia = css`
   height: 100%;
   width: min(40vw, 900px);
   object-fit: cover;
   flex: 0 0 auto;
   filter: grayscale(0.2) contrast(1.05);
+`;
+
+const CarouselImage = styled.img`
+  ${CarouselMedia}
+`;
+
+const CarouselVideo = styled.video`
+  ${CarouselMedia}
+`;
+
+const CarouselGradient = styled.div<{ $variant: 'purple' | 'blue' | 'green' }>`
+  height: 100%;
+  width: min(40vw, 900px);
+  flex: 0 0 auto;
+  background: ${(p) => {
+    const gradients = {
+      purple:
+        'linear-gradient(135deg, var(--accent-purple) 0%, color-mix(in srgb, var(--accent-purple) 60%, var(--accent-blue)) 100%)',
+      blue: 'linear-gradient(135deg, var(--accent-blue) 0%, color-mix(in srgb, var(--accent-blue) 60%, var(--accent-green)) 100%)',
+      green:
+        'linear-gradient(135deg, var(--accent-green) 0%, color-mix(in srgb, var(--accent-green) 60%, var(--accent-purple)) 100%)',
+    };
+    return gradients[p.$variant];
+  }};
 `;
 
 const HeroContent = styled.div`
@@ -164,104 +291,6 @@ const GalleriesInner = styled.div`
   max-width: 1200px;
 `;
 
-const GalleryGrid = styled.div`
-  display: grid;
-  gap: 1.25rem;
-
-  grid-template-columns: repeat(12, 1fr);
-
-  @media (max-width: 1100px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  @media (max-width: 720px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const GalleryCard = styled(Link)`
-  text-decoration: none;
-  color: inherit;
-  border-radius: 16px;
-  overflow: hidden;
-
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-
-  transform: translate3d(0, 0, 0);
-  transition: transform 50ms ease, box-shadow 50ms ease, filter 50ms ease;
-
-  &:hover {
-    transform: translate3d(0, -2px, 0);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
-  }
-
-  &:active {
-    transform: translate3d(0, 0px, 0);
-  }
-`;
-
-const FeaturedCard = styled(GalleryCard)`
-  grid-column: span 6;
-
-  @media (max-width: 1100px) {
-    grid-column: auto;
-  }
-`;
-
-const StandardCard = styled(GalleryCard)`
-  grid-column: span 3;
-
-  @media (max-width: 1100px) {
-    grid-column: auto;
-  }
-`;
-
-const CardMedia = css`
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  background: #f5f5f5;
-  display: block;
-`;
-
-const CoverImage = styled.img`
-  ${CardMedia}
-`;
-
-const CoverVideo = styled.video`
-  ${CardMedia}
-`;
-
-const GalleryInfo = styled.div`
-  padding: 1.1rem 1.2rem 1.25rem;
-`;
-
-const GalleryName = styled.h2`
-  font-size: 1.25rem;
-  color: #222;
-  margin: 0 0 0.4rem;
-  line-height: 1.2;
-`;
-
-const GalleryDescription = styled.p`
-  color: #555;
-  margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.5;
-`;
-
-interface Gallery {
-  id: number;
-  name: string;
-  slug: string;
-  description: string | null;
-  cover_image_path: string | null;
-  cover_image_mime_type: string | null;
-}
-
 const pickForCarousel = (items: Artwork[], count: number) => {
   const arr = items.slice();
   for (let i = arr.length - 1; i > 0; i--) {
@@ -271,52 +300,68 @@ const pickForCarousel = (items: Artwork[], count: number) => {
   return arr.slice(0, Math.min(count, arr.length));
 };
 
+const placeholderGalleries = [
+  {
+    id: -1,
+    name: 'There are no collections yet.',
+    slug: '',
+    description: 'But they will be here, once we add them.',
+    gradient: 'purple' as const,
+  },
+  {
+    id: -2,
+    name: 'Stay Tuned.',
+    slug: '',
+    description: 'More will be on the way.',
+    gradient: 'blue' as const,
+  },
+  {
+    id: -3,
+    name: 'Check Back Soon!',
+    slug: '',
+    description: '',
+    gradient: 'green' as const,
+  },
+];
+
+const placeholderCarouselItems = [
+  { id: -1, gradient: 'purple' as const },
+  { id: -2, gradient: 'blue' as const },
+  { id: -3, gradient: 'green' as const },
+  { id: -4, gradient: 'purple' as const },
+  { id: -5, gradient: 'blue' as const },
+  { id: -6, gradient: 'green' as const },
+];
+
 const Home: FC = () => {
   const [showArrow, setShowArrow] = useState(false);
-  const [galleries, setGalleries] = useState<Gallery[]>([]);
-  const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const { artworks, galleries } = useArtworkCache();
+
+  const displayGalleries =
+    galleries.length > 0 ? galleries : placeholderGalleries;
 
   const trackRef = useRef<HTMLDivElement>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
   const [ready, setReady] = useState(false);
   const [duration, setDuration] = useState(90);
 
-  const fetchGalleries = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/galleries`);
-      if (!response.ok) return;
-      const data = await response.json();
-      setGalleries(data.galleries.slice(0, 3));
-    } catch (err) {
-      console.error('Failed to load galleries:', err);
-    }
-  }, []);
-
-  const fetchArtworks = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/artworks`);
-      if (!response.ok) return;
-
-      const data = await response.json();
-      const nonDraftArtworks = data.artworks.filter(
-        (artwork: Artwork) =>
-          artwork.status !== 'draft' && artwork.primary_image_path,
-      );
-      setArtworks(nonDraftArtworks);
-    } catch (err) {
-      console.error('Failed to load artworks:', err);
-    }
-  }, []);
-
   const baseArtworks = useMemo(() => {
     if (artworks.length === 0) return [];
+    if (artworks.length === 1) {
+      // Pad single artwork with gradients
+      return [artworks[0], ...placeholderCarouselItems.slice(0, 5)];
+    }
     return pickForCarousel(artworks, 12);
-  }, [artworks]);
+  }, [artworks, placeholderCarouselItems]);
 
   const carouselArtworks = useMemo(() => {
+    if (artworks.length === 0) {
+      // Show only gradients when no artworks
+      return [...placeholderCarouselItems, ...placeholderCarouselItems];
+    }
     if (baseArtworks.length === 0) return [];
     return [...baseArtworks, ...baseArtworks];
-  }, [baseArtworks]);
+  }, [baseArtworks, artworks.length, placeholderCarouselItems]);
 
   const readyTarget = useMemo(
     () => Math.min(3, baseArtworks.length),
@@ -324,22 +369,24 @@ const Home: FC = () => {
   );
 
   useEffect(() => {
-    fetchGalleries();
-    fetchArtworks();
-
     const arrowTimer = window.setTimeout(() => setShowArrow(true), 2500);
     return () => window.clearTimeout(arrowTimer);
-  }, [fetchGalleries, fetchArtworks]);
+  }, []);
 
   useEffect(() => {
     if (readyTarget > 0 && resolvedCount >= readyTarget) setReady(true);
   }, [resolvedCount, readyTarget]);
 
   useEffect(() => {
+    // If we have no artworks (only gradients) or very few, start immediately
+    if (artworks.length === 0) {
+      setReady(true);
+      return;
+    }
     if (baseArtworks.length === 0) return;
     const id = window.setTimeout(() => setReady(true), 1500);
     return () => window.clearTimeout(id);
-  }, [baseArtworks.length]);
+  }, [baseArtworks.length, artworks.length]);
 
   useEffect(() => {
     if (!ready || !trackRef.current) return;
@@ -372,18 +419,46 @@ const Home: FC = () => {
         <BackgroundCarousel>
           {carouselArtworks.length > 0 && (
             <CarouselTrack ref={trackRef} $duration={duration} $ready={ready}>
-              {carouselArtworks.map((artwork, index) => {
+              {carouselArtworks.map((item, index) => {
                 const eager = index < 2;
                 const isFirstHalf = index < baseArtworks.length;
+                const isGradient = 'gradient' in item;
 
                 const onResolved = () => {
                   if (isFirstHalf) setResolvedCount((c) => c + 1);
                 };
 
+                if (isGradient) {
+                  return (
+                    <CarouselGradient
+                      key={`gradient-${item.id}-${index}`}
+                      $variant={item.gradient}
+                    />
+                  );
+                }
+
+                const isVideo =
+                  item.primary_image_mime_type?.startsWith('video/');
+
+                if (isVideo) {
+                  return (
+                    <CarouselVideo
+                      key={`${item.id}-${index}`}
+                      src={`${API_URL}/uploads/${item.primary_image_path}`}
+                      loop
+                      autoPlay
+                      muted
+                      playsInline
+                      onLoadedData={onResolved}
+                      onError={onResolved}
+                    />
+                  );
+                }
+
                 return (
                   <CarouselImage
-                    key={`${artwork.id}-${index}`}
-                    src={`${API_URL}/uploads/${artwork.primary_image_path}`}
+                    key={`${item.id}-${index}`}
+                    src={`${API_URL}/uploads/${item.primary_image_path}`}
                     alt=""
                     aria-hidden="true"
                     loading={eager ? 'eager' : 'lazy'}
@@ -399,56 +474,20 @@ const Home: FC = () => {
 
         <FullScreenComponent as={HeroContent}>
           <HeaderTextContainer>
-            <h1>Art by Caroline</h1>
+            <TextPanel>
+              <h1>Art by Caroline</h1>
+            </TextPanel>
           </HeaderTextContainer>
 
           <Arrow type="button" onClick={scrollDown} $isVisible={showArrow}>
-            ↓ more below ↓
+            <TextPanel>↓ more below ↓</TextPanel>
           </Arrow>
         </FullScreenComponent>
       </HeroWrapper>
 
       <GalleriesSection>
         <GalleriesInner>
-          <GalleryGrid>
-            {galleries.map((gallery, idx) => {
-              const Card = idx === 0 ? FeaturedCard : StandardCard;
-
-              return (
-                <Card key={gallery.id} to={`/collections/${gallery.slug}`}>
-                  {gallery.cover_image_path ? (
-                    gallery.cover_image_mime_type?.startsWith('video/') ? (
-                      <CoverVideo
-                        src={`${API_URL}/uploads/${gallery.cover_image_path}`}
-                        loop
-                        autoPlay
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      <CoverImage
-                        src={`${API_URL}/uploads/${gallery.cover_image_path}`}
-                        alt={gallery.name}
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    )
-                  ) : (
-                    <CoverImage as="div" />
-                  )}
-
-                  <GalleryInfo>
-                    <GalleryName>{gallery.name}</GalleryName>
-                    {gallery.description && (
-                      <GalleryDescription>
-                        {gallery.description}
-                      </GalleryDescription>
-                    )}
-                  </GalleryInfo>
-                </Card>
-              );
-            })}
-          </GalleryGrid>
+          <GalleryGrid galleries={displayGalleries} featured />
         </GalleriesInner>
       </GalleriesSection>
 

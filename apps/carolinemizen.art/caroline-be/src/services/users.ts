@@ -1,4 +1,4 @@
-import type { User } from '../../../shared/types';
+import type { User } from '@shared/types';
 import type { CreateUserDto } from '../types';
 import { hashPassword } from '../utils/hash-password';
 import { openDbConnection } from './db';

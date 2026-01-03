@@ -1,4 +1,4 @@
-import { Artwork, Collection, Collections, Home, Swatch } from '../pages';
+import { Artwork, Collection, Collections, Home } from '../pages';
 import { AdminDashboard, AdminLogin, AdminVerify } from '../pages/admin';
 
 type RouteType = {
@@ -15,7 +15,6 @@ const ROUTES: Record<string, RouteType> = {
   collections: { path: '/collections', Component: Collections },
   collection: { path: '/collections/:id', Component: Collection },
   artwork: { path: '/collections/:id/:artworkId', Component: Artwork },
-  swatch: { path: '/swatch', Component: Swatch },
 
   // Admin routes
   adminLogin: { path: '/admin/login', Component: AdminLogin },

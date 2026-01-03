@@ -59,7 +59,9 @@ const routes = async (
         async (_request: FastifyRequest, reply: FastifyReply) => {
           try {
             const { seedDatabase } = await import('../services/db');
-            const { copyFile } = await import('node:fs/promises');
+            const { copyFile, readdir, unlink, stat } = await import(
+              'node:fs/promises'
+            );
             const path = await import('node:path');
 
             // Get database path
@@ -79,6 +81,32 @@ const routes = async (
             await copyFile(dbPath, backupPath);
             console.log(`✓ Database backed up to: ${backupPath}`);
 
+            // Delete all images from storage
+            const uploadsPath = process.env.UPLOADS_PATH || './uploads';
+            const imagesPath = path.join(uploadsPath, 'images');
+
+            let deletedCount = 0;
+            try {
+              // Check if images folder exists
+              await stat(imagesPath);
+
+              const files = await readdir(imagesPath);
+              for (const file of files) {
+                const filePath = path.join(imagesPath, file);
+                const fileStats = await stat(filePath);
+
+                // Only delete files, not directories
+                if (fileStats.isFile()) {
+                  await unlink(filePath);
+                  deletedCount++;
+                }
+              }
+              console.log(`✓ Deleted ${deletedCount} image(s) from storage`);
+            } catch {
+              // If images folder doesn't exist, that's fine
+              console.log('✓ No images folder to clean');
+            }
+
             // Reset database
             await seedDatabase();
             console.log('✓ Database reset to defaults');
@@ -86,7 +114,8 @@ const routes = async (
             return reply.send({
               success: true,
               backup_path: backupPath,
-              message: 'Database reset successful',
+              images_deleted: deletedCount,
+              message: 'Database and images reset successful',
             });
           } catch (error) {
             console.error('Error resetting database:', error);

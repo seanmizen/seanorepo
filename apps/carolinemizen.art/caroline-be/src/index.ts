@@ -8,7 +8,11 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { routes } from './controllers';
-import { ingestOrphanedImages } from './services/db';
+import {
+  ingestOrphanedImages,
+  needsSeeding,
+  seedDatabase,
+} from './services/db';
 
 // Validate required environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -91,6 +95,15 @@ const start = async () => {
     await fastify.close();
     process.exit(0);
   });
+
+  // Check if database needs seeding on startup
+  if (await needsSeeding()) {
+    console.log('🌱 Database not found or empty, seeding...');
+    await seedDatabase();
+    console.log('✓ Database seeded successfully');
+  } else {
+    console.log('✓ Database already exists');
+  }
 
   // Ingest orphaned images from filesystem on startup
   console.log('🔍 Scanning for orphaned images...');
