@@ -1,5 +1,6 @@
 import { defineConfig } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
+import path from 'node:path';
 
 export default defineConfig({
   plugins: [pluginReact()],
@@ -10,6 +11,9 @@ export default defineConfig({
     assetPrefix: './',
   },
   source: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
     define: {
       'import.meta.env.API_URL': JSON.stringify(
         process.env.API_URL || 'http://localhost:4021',
