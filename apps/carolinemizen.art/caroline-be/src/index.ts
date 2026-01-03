@@ -72,13 +72,13 @@ const UPLOADS_PATH =
   (process.env.NODE_ENV === 'production' ? '/app/uploads' : './uploads');
 fastify.register(fastifyStatic, {
   root: path.resolve(UPLOADS_PATH),
-  prefix: '/uploads/',
+  prefix: '/api/uploads/',
   decorateReply: false,
 });
 
 console.log(`📁 Serving uploads from: ${path.resolve(UPLOADS_PATH)}`);
 
-fastify.register(routes);
+fastify.register(routes, { prefix: '/api' });
 
 const reset = '\x1b[0m';
 const cyan = '\x1b[36m';
