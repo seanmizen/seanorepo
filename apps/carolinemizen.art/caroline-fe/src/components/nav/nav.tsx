@@ -1,136 +1,260 @@
 import type { FC } from 'react';
 import { Link } from 'react-router-dom';
-import styled from 'styled-components';
-import { ROUTES } from '../../constants';
-import { useAuth } from '../../contexts/auth-context';
-import { useBackendHealth } from '../../hooks/use-backend-health';
-import {
-  NavBrand,
-  NavContainer,
-  NavLinks,
-  NavRight,
-  StyledNav,
-} from './nav.styled';
+import styled, { css } from 'styled-components';
+import { ROUTES } from '@/constants';
+import { useAuth } from '@/contexts/auth-context';
+import { useBackendHealth } from '@/hooks/use-backend-health';
 
-const BrandName = styled(Link)`
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-color);
-  text-decoration: none;
-  letter-spacing: -0.02em;
-  padding: 0.25rem 0.5rem;
-  border-radius: 8px;
+type NavDock = 'top' | 'bottom';
 
-  transition: box-shadow 120ms ease, transform 120ms ease;
+const groupHalo = css`
+  position: relative;
+  isolation: isolate;
 
-  &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    transform: translateY(-1px);
-  }
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -18px -28px;
+    z-index: -1;
+    pointer-events: none;
 
-  &:active {
-    box-shadow: none;
-    transform: translateY(0);
+    background: radial-gradient(
+      ellipse 140% 130% at 50% 50%,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.9) 45%,
+      transparent 75%
+    );
+
+    filter: blur(22px);
   }
 `;
 
-const NavLink = styled(Link)`
-  color: var(--text-color-secondary);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.9375rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  display: inline-block;
+export const StyledNav = styled.nav<{ $dock?: NavDock }>`
+  position: sticky;
+  top: ${(p) => (p.$dock === 'bottom' ? 'auto' : '0')};
+  bottom: ${(p) => (p.$dock === 'bottom' ? '0' : 'auto')};
+  z-index: 1000;
 
-  transition: box-shadow 120ms ease, transform 120ms ease, color 120ms ease;
+  /* background: var(--nav-background-color); */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  border-top: 1px solid var(--border-color-secondary);
+  border-bottom: 1px solid var(--border-color-secondary);
+`;
+
+export const NavContainer = styled.div`
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0.75rem clamp(12px, 4vw, 22px);
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+`;
+
+const Spacer = styled.div`
+  flex: 1 1 auto;
+
+  @media (max-width: 720px) {
+    display: none;
+  }
+`;
+
+const NavBrand = styled.div`
+  ${groupHalo}
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 0 1 auto;
+
+  @media (max-width: 720px) {
+    width: 100%;
+    justify-content: space-between;
+    display: none;
+  }
+`;
+
+const NavLinks = styled.div`
+  ${groupHalo}
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 0 1 auto;
+
+  @media (max-width: 720px) {
+    width: 100%;
+    justify-content: space-between;
+  }
+`;
+
+const NavRight = styled.div`
+  ${groupHalo}
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 0 1 auto;
+
+  @media (max-width: 720px) {
+    width: 100%;
+    justify-content: space-between;
+  }
+`;
+
+const BrandText = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const BrandName = styled(Link)`
+  font-size: 1.2rem;
+  font-weight: 650;
+  color: var(--text-color);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+
+  padding: 0.35rem 0.55rem;
+  border-radius: 10px;
+
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+
+  transition: background 120ms ease, color 120ms ease;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    transform: translateY(-1px);
+    background: var(--hover-tint);
+    color: var(--text-color);
+  }
+
+  @media (max-width: 720px) {
+    font-size: 1.1rem;
+  }
+
+  @media (hover: none) {
+    &:hover {
+      background: transparent;
+    }
+  }
+`;
+
+const NavItemLink = styled(Link)`
+  color: var(--text-color-secondary);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  box-sizing: border-box;
+
+  transition: background 120ms ease, color 120ms ease;
+
+  &:hover {
+    background: var(--hover-tint);
     color: var(--text-color);
   }
 
   &:active {
-    box-shadow: none;
-    transform: translateY(0);
-  }
-`;
-
-const AdminButton = styled(Link)`
-  padding: 0.5rem 1rem;
-  background: var(--button-background-color);
-  color: var(--button-text-color);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.875rem;
-  border-radius: 10px;
-  border: 2px solid transparent;
-  display: inline-block;
-  cursor: pointer;
-
-  transition: box-shadow 120ms ease, transform 120ms ease;
-
-  &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--hover-tint) 70%, transparent);
   }
 
-  &:active {
-    box-shadow: none;
-    transform: translateY(0);
+  @media (max-width: 720px) {
+    flex: 1 1 0;
+  }
+
+  @media (hover: none) {
+    &:hover {
+      background: transparent;
+      color: var(--text-color-secondary);
+    }
   }
 `;
 
 const LogoutButton = styled.button`
-  padding: 0.5rem 1rem;
+  padding: 0.65rem 0.85rem;
   background: transparent;
   color: #dc3545;
   border: 2px solid #dc3545;
-  border-radius: 10px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.875rem;
+  border-radius: 12px;
 
-  transition: box-shadow 120ms ease, transform 120ms ease, background 120ms ease,
-    color 120ms ease;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.9rem;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  box-sizing: border-box;
+
+  transition: background 120ms ease, color 120ms ease;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    transform: translateY(-1px);
     background: #dc3545;
     color: white;
   }
 
   &:active {
-    box-shadow: none;
-    transform: translateY(0);
+    opacity: 0.95;
+  }
+
+  @media (max-width: 720px) {
+    flex: 1 1 0;
+  }
+
+  @media (hover: none) {
+    &:hover {
+      background: transparent;
+      color: #dc3545;
+    }
   }
 `;
 
 const HealthIndicator = styled.span<{ $healthy: boolean }>`
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  background: ${(props) => (props.$healthy ? '#d1fae5' : '#fee2e2')};
-  color: ${(props) => (props.$healthy ? '#065f46' : '#991b1b')};
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  gap: 0.45rem;
+
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+
+  background: ${(p) => (p.$healthy ? '#d1fae5' : '#fee2e2')};
+  color: ${(p) => (p.$healthy ? '#065f46' : '#991b1b')};
+
+  font-size: 0.72rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 
   &::before {
     content: "";
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: ${(props) => (props.$healthy ? '#10b981' : '#ef4444')};
+    background: ${(p) => (p.$healthy ? '#10b981' : '#ef4444')};
   }
 `;
 
-const Nav: FC = () => {
+type NavProps = {
+  dock?: NavDock;
+};
+
+const Nav: FC<NavProps> = ({ dock = 'top' }) => {
   const { user, logout } = useAuth();
   const isBackendHealthy = useBackendHealth();
 
@@ -139,25 +263,32 @@ const Nav: FC = () => {
   };
 
   return (
-    <StyledNav>
+    <StyledNav $dock={dock}>
       <NavContainer>
         <NavBrand>
-          <BrandName to={ROUTES.home.path}>carolinemizen.art</BrandName>
+          <BrandName to={ROUTES.home.path}>
+            <BrandText>carolinemizen.art</BrandText>
+          </BrandName>
           {!isBackendHealthy && (
             <HealthIndicator $healthy={false}>API Down</HealthIndicator>
           )}
         </NavBrand>
 
+        <Spacer />
+
         <NavLinks>
-          <NavLink to={ROUTES.home.path}>Home</NavLink>
-          <NavLink to={ROUTES.collections.path}>Collections</NavLink>
+          <NavItemLink to={ROUTES.home.path}>Home</NavItemLink>
+          <NavItemLink to={ROUTES.collections.path}>Collections</NavItemLink>
         </NavLinks>
 
         {user && (
-          <NavRight>
-            <NavLink to="/admin">Admin</NavLink>
-            <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
-          </NavRight>
+          <>
+            <Spacer />
+            <NavRight>
+              <NavItemLink to="/admin">Admin</NavItemLink>
+              <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
+            </NavRight>
+          </>
         )}
       </NavContainer>
     </StyledNav>

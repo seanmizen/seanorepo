@@ -24,7 +24,14 @@ yarn
 - `yarn caroline` - Start carolinemizen.art dev server
 - `yarn cards` - Start seanscards dev server
 - `yarn gosniff` - Start gosniff Go service
-- `yarn lint` - Run Biome linter/formatter with auto-fix
+
+**Code quality:**
+- `yarn format` - Auto-format code (spacing, quotes, etc.)
+- `yarn format:check` - Check formatting without fixing
+- `yarn lint` - Check for code issues (unused vars, bugs, etc.)
+- `yarn lint:fix` - Auto-fix linting issues
+- `yarn check` - Run both lint and format checks (for CI)
+- `yarn fix` - Auto-fix both lint and format issues
 
 ### Docker orchestration
 
@@ -142,11 +149,14 @@ Configuration (`biome.json`):
 - Notable rules disabled: `useExhaustiveDependencies`, `useLiteralKeys`
 - Files excluded: Anything with "Glasto" in the name
 
-Run: `yarn lint` (auto-fixes issues)
+**Usage:**
+- Check only: `yarn lint` (linting) or `yarn format:check` (formatting) or `yarn check` (both)
+- Auto-fix: `yarn lint:fix` (linting) or `yarn format` (formatting) or `yarn fix` (both)
 
 **IMPORTANT FOR CLAUDE**:
 
-- Always run `yarn lint` from the monorepo root before completing tasks or handing off code
+- Always run `yarn fix` from the monorepo root before completing tasks (auto-fixes formatting + linting)
+- For CI-style checks without auto-fix, use `yarn check`
 - Always run `tsc --noEmit` in backend TypeScript projects to check for type errors
 - Fix all TypeScript errors before marking tasks as complete
 
