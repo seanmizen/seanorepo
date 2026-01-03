@@ -4,8 +4,6 @@ import styled from 'styled-components';
 const API_URL = import.meta.env.API_URL;
 const DEBUG_MODE = import.meta.env.DEBUG_MODE === 'true';
 
-console.log('Debug Menu - DEBUG_MODE:', DEBUG_MODE);
-
 const DebugButton = styled.button`
   position: fixed;
   bottom: 20px;
