@@ -78,6 +78,15 @@ fastify.register(fastifyStatic, {
 
 console.log(`📁 Serving uploads from: ${path.resolve(UPLOADS_PATH)}`);
 
+// Root health check (outside /api prefix for production monitoring)
+fastify.get('/', async (_request, reply) => {
+  return reply.send({
+    status: 'ok',
+    service: 'carolinemizen.art-backend',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 fastify.register(routes, { prefix: '/api' });
 
 const reset = '\x1b[0m';
