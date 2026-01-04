@@ -28,7 +28,7 @@ COPY apps/carolinemizen.art/caroline-fe/tsconfig.json ./apps/carolinemizen.art/c
 COPY apps/carolinemizen.art/tsconfig.json ./apps/carolinemizen.art/
 
 # Build args for environment variables
-ARG API_URL=http://localhost:4021/api
+ARG API_URL=/api
 ARG DEBUG_MODE=false
 
 # Build using workspace command from root

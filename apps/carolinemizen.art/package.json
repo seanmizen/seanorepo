@@ -12,7 +12,7 @@
     "test:unit": "yarn workspace caroline-be test",
     "test:types": "yarn workspace caroline-be tsc --noEmit",
     "test:smoke": "./scripts/smoke-test.sh",
-    "start:docker": "docker compose --profile dev up --build",
+    "start:docker": "API_URL=http://localhost:4021/api docker compose --profile dev up --build",
     "prod:docker": "BUILD_TARGET=prod BACKEND_CMD=\"bun ./dist/index.js\" docker compose --profile prod up --build --detach",
     "down": "docker compose --profile dev --profile prod down"
   },
