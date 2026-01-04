@@ -5,7 +5,7 @@ x-frontend-base: &frontend-base
     dockerfile: apps/carolinemizen.art/caroline-fe/dockerfile
     target: ${BUILD_TARGET:-dev}
     args:
-      API_URL: ${API_URL:-http://localhost:4021/api}
+      API_URL: ${API_URL:-/api}
       DEBUG_MODE: ${DEBUG_MODE:-false}
     x-bake:
       no-cache: false
