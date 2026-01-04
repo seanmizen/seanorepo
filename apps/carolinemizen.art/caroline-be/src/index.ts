@@ -33,6 +33,8 @@ if (
 const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
   logger: { level: 'error' },
   // logger: { level: process.env.NODE_ENV === 'production' ? 'error' : 'info' },
+  connectionTimeout: 600000, // 10 minutes for uploads/downloads
+  requestTimeout: 600000, // 10 minutes for processing/streaming
 });
 
 fastify.register(cors, {
