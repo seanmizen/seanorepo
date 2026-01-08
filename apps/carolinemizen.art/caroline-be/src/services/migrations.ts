@@ -33,7 +33,9 @@ function getMigrationFiles(): Migration[] {
 /**
  * Get the current schema version from the database
  */
-function getCurrentVersion(db: Awaited<ReturnType<typeof openDbConnection>>): number {
+function getCurrentVersion(
+  db: Awaited<ReturnType<typeof openDbConnection>>,
+): number {
   try {
     const result = db
       .query('SELECT MAX(version) as version FROM schema_migrations')
