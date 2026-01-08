@@ -102,7 +102,7 @@ const Price = styled.div`
   font-size: 2rem;
   color: #3498db;
   font-weight: 600;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 `;
 
 const Status = styled.div<{ $status: string }>`
@@ -139,18 +139,53 @@ const SectionTitle = styled.h2`
   margin: 0 0 1rem;
 `;
 
-const ContactButton = styled.a`
+const ContactButton = styled.button`
   display: inline-block;
   padding: 1rem 2rem;
   background: #3498db;
   color: white;
   text-decoration: none;
+  border: none;
   border-radius: 8px;
   font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
   transition: background 0.2s;
 
   &:hover {
     background: #2980b9;
+  }
+`;
+
+const ContactCard = styled.div`
+  margin-top: 1rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  color: #333;
+  line-height: 1.6;
+  animation: slideIn 0.2s ease-out;
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const EmailLink = styled.a`
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
   }
 `;
 
@@ -198,6 +233,7 @@ const Artwork: FC = () => {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showContactCard, setShowContactCard] = useState(false);
 
   const fetchArtwork = useCallback(async () => {
     if (!artworkId) return;
@@ -320,9 +356,17 @@ const Artwork: FC = () => {
           <InfoSection>
             <Title>{artwork.title}</Title>
 
-            <Price>{formatPrice(artwork.price_cents, artwork.currency)}</Price>
+            {artwork.status !== 'sold' && (
+              <Price>
+                {formatPrice(artwork.price_cents, artwork.currency)}
+              </Price>
+            )}
 
-            <Status $status={artwork.status}>{artwork.status}</Status>
+            <Status $status={artwork.status}>
+              {artwork.status === 'sold'
+                ? 'sold - but commissions are available'
+                : artwork.status}
+            </Status>
 
             {artwork.description && (
               <Section>
@@ -331,14 +375,38 @@ const Artwork: FC = () => {
               </Section>
             )}
 
-            {artwork.status === 'available' && (
-              <Section>
-                <SectionTitle>Interested in purchasing?</SectionTitle>
-                <ContactButton href="mailto:caroline@carolinemizen.art">
-                  Contact Artist
-                </ContactButton>
-              </Section>
-            )}
+            <Section>
+              <SectionTitle>
+                {artwork.status === 'sold'
+                  ? 'Interested in a commission?'
+                  : 'Interested in purchasing?'}
+              </SectionTitle>
+              <ContactButton
+                onClick={() => setShowContactCard(!showContactCard)}
+              >
+                Contact Artist
+              </ContactButton>
+              {showContactCard && (
+                <ContactCard>
+                  {artwork.status === 'sold' ? (
+                    <>
+                      Email me at{' '}
+                      <EmailLink href="mailto:caroline.mizen@gmail.com">
+                        caroline.mizen@gmail.com
+                      </EmailLink>{' '}
+                      for commission enquiries
+                    </>
+                  ) : (
+                    <>
+                      Email me at{' '}
+                      <EmailLink href="mailto:caroline.mizen@gmail.com">
+                        caroline.mizen@gmail.com
+                      </EmailLink>
+                    </>
+                  )}
+                </ContactCard>
+              )}
+            </Section>
           </InfoSection>
         </ContentGrid>
       </Container>

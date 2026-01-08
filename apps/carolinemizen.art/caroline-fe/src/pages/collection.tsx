@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { Nav } from '../components/nav';
 
 const Container = styled.div`
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
 `;
@@ -186,7 +186,11 @@ const Collection: FC = () => {
 
       const data = await response.json();
       setGallery(data.gallery);
-      setArtworks(data.artworks);
+      // NOTE: Filtering draft artworks on frontend for now.
+      // TODO: Could/should be filtered on backend to reduce payload size.
+      setArtworks(
+        data.artworks.filter((artwork: Artwork) => artwork.status !== 'draft'),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load gallery');
     } finally {
@@ -265,11 +269,15 @@ const Collection: FC = () => {
                 )}
                 <ArtworkInfo>
                   <ArtworkTitle>{artwork.title}</ArtworkTitle>
-                  <ArtworkPrice>
-                    {formatPrice(artwork.price_cents, artwork.currency)}
-                  </ArtworkPrice>
+                  {artwork.status !== 'sold' && (
+                    <ArtworkPrice>
+                      {formatPrice(artwork.price_cents, artwork.currency)}
+                    </ArtworkPrice>
+                  )}
                   <ArtworkStatus status={artwork.status}>
-                    {artwork.status}
+                    {artwork.status === 'sold'
+                      ? 'sold - but commissions are available'
+                      : artwork.status}
                   </ArtworkStatus>
                 </ArtworkInfo>
               </ArtworkCard>
