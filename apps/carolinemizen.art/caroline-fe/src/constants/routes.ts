@@ -27,8 +27,8 @@ const ROUTES: Record<string, RouteType> = {
   adminDashboard: { path: '/admin/dashboard', Component: AdminDashboard },
   Artworks: { path: '/admin/artworks' },
   adminArtworkEdit: { path: '/admin/artworks/:id' },
-  adminGalleries: { path: '/admin/galleries' },
-  adminGalleryEdit: { path: '/admin/galleries/:id' },
+  adminGalleries: { path: '/admin/collections' },
+  adminGalleryEdit: { path: '/admin/collections/:id' },
   adminImages: { path: '/admin/images' },
   adminContent: { path: '/admin/content', Component: AdminContent },
 };

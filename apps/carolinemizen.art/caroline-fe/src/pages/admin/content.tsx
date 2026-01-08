@@ -1,5 +1,6 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
+import { Pagination } from '@/components';
 
 const Container = styled.div`
   max-width: 1400px;
@@ -168,20 +169,26 @@ interface Image {
 export const AdminContent: FC = () => {
   const [images, setImages] = useState<Image[]>([]);
   const [selectedImageIds, setSelectedImageIds] = useState<number[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const fetchImages = useCallback(async () => {
+  const fetchImages = useCallback(async (pageNum: number) => {
     try {
-      const response = await fetch(`${API_URL}/admin/images`, {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `${API_URL}/admin/images?page=${pageNum}&limit=10`,
+        {
+          credentials: 'include',
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
         setImages(data.images);
+        setTotalPages(data.pagination.totalPages);
       }
     } catch (err) {
       console.error('Failed to load images:', err);
@@ -207,9 +214,16 @@ export const AdminContent: FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchImages();
+    fetchImages(page);
+  }, [fetchImages, page]);
+
+  useEffect(() => {
     fetchCarousel();
-  }, [fetchImages, fetchCarousel]);
+  }, [fetchCarousel]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
 
   const handleImageToggle = (imageId: number) => {
     setSelectedImageIds((prev) => {
@@ -313,6 +327,12 @@ export const AdminContent: FC = () => {
                 );
               })}
             </ImageGrid>
+
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
 
             <ButtonRow style={{ marginTop: '2rem' }}>
               <Button onClick={handleSave} disabled={saving}>

@@ -232,7 +232,7 @@ const seedDatabase = async () => {
   const defaultContent = [
     { key: 'hero_title', value: 'Caroline Mizen' },
     { key: 'hero_subtitle', value: 'Original Artwork & Paintings' },
-    { key: 'hero_cta', value: 'View Galleries' },
+    { key: 'hero_cta', value: 'View Collections' },
     { key: 'about_title', value: 'About' },
     { key: 'about_text', value: 'Artist biography coming soon.' },
   ];
