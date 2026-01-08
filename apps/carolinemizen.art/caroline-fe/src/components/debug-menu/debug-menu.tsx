@@ -204,7 +204,7 @@ export const DebugMenu: FC = () => {
 
           <InputGroup>
             <Label>
-              Galleries:
+              Collections:
               <Input
                 type="number"
                 min="1"

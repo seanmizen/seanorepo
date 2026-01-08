@@ -145,9 +145,9 @@ export const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
 
           <NavSection>
             <NavSectionTitle>Content</NavSectionTitle>
-            <NavItem to="/admin/artworks">Artworks</NavItem>
-            <NavItem to="/admin/galleries">Galleries</NavItem>
             <NavItem to="/admin/images">Images</NavItem>
+            <NavItem to="/admin/artworks">Artworks</NavItem>
+            <NavItem to="/admin/collections">Collections</NavItem>
           </NavSection>
 
           <NavSection>

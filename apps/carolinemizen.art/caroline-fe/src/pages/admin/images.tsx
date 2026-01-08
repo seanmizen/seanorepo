@@ -1,5 +1,6 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
+import { Pagination } from '@/components';
 import { ImageUploader } from '@/components/image-uploader';
 
 const Container = styled.div`
@@ -159,15 +160,20 @@ interface Image {
 
 export const AdminImages: FC = () => {
   const [images, setImages] = useState<Image[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
 
-  const fetchImages = useCallback(async () => {
+  const fetchImages = useCallback(async (pageNum: number) => {
     try {
-      const response = await fetch(`${API_URL}/admin/images`, {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `${API_URL}/admin/images?page=${pageNum}&limit=10`,
+        {
+          credentials: 'include',
+        },
+      );
 
       if (!response.ok) {
         throw new Error('Failed to fetch media');
@@ -175,6 +181,7 @@ export const AdminImages: FC = () => {
 
       const data = await response.json();
       setImages(data.images);
+      setTotalPages(data.pagination.totalPages);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load media');
     } finally {
@@ -183,8 +190,12 @@ export const AdminImages: FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchImages();
-  }, [fetchImages]);
+    fetchImages(page);
+  }, [fetchImages, page]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
 
   const handleUpload = useCallback(
     async (files: File[]) => {
@@ -203,7 +214,8 @@ export const AdminImages: FC = () => {
         throw new Error('Failed to upload media');
       }
 
-      await fetchImages();
+      setPage(1);
+      await fetchImages(1);
     },
     [fetchImages],
   );
@@ -225,7 +237,8 @@ export const AdminImages: FC = () => {
           throw new Error('Failed to delete media');
         }
 
-        await fetchImages();
+        setPage(1);
+        await fetchImages(1);
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Failed to delete media');
       } finally {
@@ -265,46 +278,53 @@ export const AdminImages: FC = () => {
         ) : images.length === 0 ? (
           <LoadingMessage>No media uploaded yet</LoadingMessage>
         ) : (
-          <ImageGrid>
-            {images.map((image) => (
-              <ImageCard key={image.id}>
-                {image.mime_type.startsWith('video/') ? (
-                  <VideoPreview
-                    src={getImageUrl(image.storage_path)}
-                    controls
-                    loop
-                    muted
-                    playsInline
-                  />
-                ) : (
-                  <ImagePreview
-                    src={getImageUrl(image.storage_path)}
-                    alt={image.original_name}
-                  />
-                )}
-                <ImageInfo>
-                  <ImageName title={image.original_name}>
-                    {image.original_name}
-                  </ImageName>
-                  <ImageMeta>
-                    {image.width && image.height && (
-                      <div>
-                        {image.width} × {image.height}
-                      </div>
-                    )}
-                    <div>{formatFileSize(image.file_size)}</div>
-                  </ImageMeta>
-                  <DeleteButton
-                    type="button"
-                    onClick={() => handleDelete(image.id)}
-                    disabled={deleting === image.id}
-                  >
-                    {deleting === image.id ? 'Deleting...' : 'Delete'}
-                  </DeleteButton>
-                </ImageInfo>
-              </ImageCard>
-            ))}
-          </ImageGrid>
+          <>
+            <ImageGrid>
+              {images.map((image) => (
+                <ImageCard key={image.id}>
+                  {image.mime_type.startsWith('video/') ? (
+                    <VideoPreview
+                      src={getImageUrl(image.storage_path)}
+                      controls
+                      loop
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    <ImagePreview
+                      src={getImageUrl(image.storage_path)}
+                      alt={image.original_name}
+                    />
+                  )}
+                  <ImageInfo>
+                    <ImageName title={image.original_name}>
+                      {image.original_name}
+                    </ImageName>
+                    <ImageMeta>
+                      {image.width && image.height && (
+                        <div>
+                          {image.width} × {image.height}
+                        </div>
+                      )}
+                      <div>{formatFileSize(image.file_size)}</div>
+                    </ImageMeta>
+                    <DeleteButton
+                      type="button"
+                      onClick={() => handleDelete(image.id)}
+                      disabled={deleting === image.id}
+                    >
+                      {deleting === image.id ? 'Deleting...' : 'Delete'}
+                    </DeleteButton>
+                  </ImageInfo>
+                </ImageCard>
+              ))}
+            </ImageGrid>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          </>
         )}
       </Section>
     </Container>

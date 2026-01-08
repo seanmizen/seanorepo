@@ -31,9 +31,7 @@ const CreateButton = styled(Link)`
   cursor: pointer;
   position: relative;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease,
+  transition: box-shadow 120ms ease, transform 120ms ease,
     border-color 120ms ease;
 
   &:hover {
@@ -54,7 +52,8 @@ const CreateButton = styled(Link)`
 
   &:focus-visible {
     border-color: var(--focus-flash);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-flash) 40%, transparent);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--focus-flash) 40%, transparent);
   }
 `;
 
@@ -123,9 +122,7 @@ const EditButton = styled(Link)`
   cursor: pointer;
   position: relative;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease,
+  transition: box-shadow 120ms ease, transform 120ms ease,
     border-color 120ms ease;
 
   &:hover {
@@ -146,7 +143,8 @@ const EditButton = styled(Link)`
 
   &:focus-visible {
     border-color: var(--focus-flash);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-flash) 40%, transparent);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--focus-flash) 40%, transparent);
   }
 `;
 
@@ -161,9 +159,7 @@ const DeleteButton = styled.button`
   cursor: pointer;
   position: relative;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease,
+  transition: box-shadow 120ms ease, transform 120ms ease,
     border-color 120ms ease;
 
   &:hover {
@@ -184,7 +180,8 @@ const DeleteButton = styled.button`
 
   &:focus-visible {
     border-color: var(--focus-flash);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-flash) 40%, transparent);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--focus-flash) 40%, transparent);
   }
 
   &:disabled {
@@ -400,9 +397,9 @@ export const AdminGalleries: FC = () => {
     return (
       <Container>
         <Header>
-          <Title>Galleries</Title>
+          <Title>Collections</Title>
         </Header>
-        <LoadingMessage>Loading galleries...</LoadingMessage>
+        <LoadingMessage>Loading collections...</LoadingMessage>
       </Container>
     );
   }
@@ -411,7 +408,9 @@ export const AdminGalleries: FC = () => {
     <Container>
       <Header>
         <Title>Galleries</Title>
-        <CreateButton to="/admin/galleries/new">Create Gallery</CreateButton>
+        <CreateButton to="/admin/collections/new">
+          Create Collection
+        </CreateButton>
       </Header>
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -420,7 +419,9 @@ export const AdminGalleries: FC = () => {
         <EmptyState>
           <h2>No galleries yet</h2>
           <p>Create your first gallery to organize your artworks</p>
-          <CreateButton to="/admin/galleries/new">Create Gallery</CreateButton>
+          <CreateButton to="/admin/collections/new">
+            Create Gallery
+          </CreateButton>
         </EmptyState>
       ) : (
         <Table>
@@ -519,7 +520,7 @@ export const AdminGalleries: FC = () => {
                 </Td>
                 <Td>
                   <ActionButtons>
-                    <EditButton to={`/admin/galleries/${gallery.id}`}>
+                    <EditButton to={`/admin/collections/${gallery.id}`}>
                       Edit
                     </EditButton>
                     <DeleteButton

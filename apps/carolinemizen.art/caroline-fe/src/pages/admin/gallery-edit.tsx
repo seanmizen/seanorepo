@@ -1,6 +1,7 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import styled from 'styled-components';
+import { Pagination } from '@/components';
 import type { Artwork } from '@/types';
 
 const Container = styled.div`
@@ -135,9 +136,7 @@ const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
     props.variant === 'secondary' ? '#95a5a6' : '#3498db'};
   color: white;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease;
+  transition: box-shadow 120ms ease, transform 120ms ease;
 
   &:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -290,6 +289,8 @@ export const AdminGalleryEdit: FC = () => {
   });
 
   const [images, setImages] = useState<Image[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -318,15 +319,19 @@ export const AdminGalleryEdit: FC = () => {
     fetchArtworks();
   }, [fetchArtworks]);
 
-  const fetchImages = useCallback(async () => {
+  const fetchImages = useCallback(async (pageNum: number) => {
     try {
-      const response = await fetch(`${API_URL}/admin/images`, {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `${API_URL}/admin/images?page=${pageNum}&limit=10`,
+        {
+          credentials: 'include',
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
         setImages(data.images);
+        setTotalPages(data.pagination.totalPages);
       }
     } catch (err) {
       console.error('Failed to load images:', err);
@@ -342,7 +347,7 @@ export const AdminGalleryEdit: FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch gallery');
+        throw new Error('Failed to fetch collection');
       }
 
       const data = await response.json();
@@ -356,16 +361,25 @@ export const AdminGalleryEdit: FC = () => {
         artwork_ids: galleryArtworkIds,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load gallery');
+      setError(
+        err instanceof Error ? err.message : 'Failed to load collection',
+      );
     } finally {
       setLoading(false);
     }
   }, [id, isNew]);
 
   useEffect(() => {
-    fetchImages();
+    fetchImages(page);
+  }, [fetchImages, page]);
+
+  useEffect(() => {
     fetchGallery();
-  }, [fetchImages, fetchGallery]);
+  }, [fetchGallery]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,7 +396,7 @@ export const AdminGalleryEdit: FC = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to create gallery');
+          throw new Error('Failed to create collection');
         }
       } else {
         const { artwork_ids, ...galleryData } = formData;
@@ -398,7 +412,7 @@ export const AdminGalleryEdit: FC = () => {
         );
 
         if (!galleryResponse.ok) {
-          throw new Error('Failed to update gallery');
+          throw new Error('Failed to update collection');
         }
 
         const artworksResponse = await fetch(
@@ -412,13 +426,15 @@ export const AdminGalleryEdit: FC = () => {
         );
 
         if (!artworksResponse.ok) {
-          throw new Error('Failed to update gallery artworks');
+          throw new Error('Failed to update collection artworks');
         }
       }
 
-      navigate('/admin/galleries');
+      navigate('/admin/collections');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save gallery');
+      setError(
+        err instanceof Error ? err.message : 'Failed to save collection',
+      );
     } finally {
       setSaving(false);
     }
@@ -467,11 +483,11 @@ export const AdminGalleryEdit: FC = () => {
   return (
     <Container>
       <Header>
-        <Title>{isNew ? 'Create Gallery' : 'Edit Gallery'}</Title>
+        <Title>{isNew ? 'Create Collection' : 'Edit Collection'}</Title>
         <Subtitle>
           {isNew
-            ? 'Create a new gallery to organize your artworks'
-            : 'Update gallery details'}
+            ? 'Create a new collection to organize your artworks'
+            : 'Update collection details'}
         </Subtitle>
       </Header>
 
@@ -524,50 +540,57 @@ export const AdminGalleryEdit: FC = () => {
           <p
             style={{ margin: '0 0 1rem', fontSize: '0.875rem', color: '#666' }}
           >
-            Click an image to set it as the gallery cover
+            Click an image to set it as the collection cover
           </p>
           {images.length === 0 ? (
             <p style={{ color: '#999' }}>
               No images available. Upload images in the Images section first.
             </p>
           ) : (
-            <ImageGrid>
-              {images.map((image) => {
-                const isSelected = formData.cover_image_id === image.id;
+            <>
+              <ImageGrid>
+                {images.map((image) => {
+                  const isSelected = formData.cover_image_id === image.id;
 
-                return (
-                  <ImageCard
-                    key={image.id}
-                    selected={isSelected}
-                    onClick={() => handleImageSelect(image.id)}
-                  >
-                    {image.mime_type.startsWith('video/') ? (
-                      <VideoPreview
-                        src={getImageUrl(image.storage_path)}
-                        loop
-                        autoPlay
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      <ImagePreview
-                        src={getImageUrl(image.storage_path)}
-                        alt={image.original_name}
-                      />
-                    )}
-                    {isSelected && <SelectedBadge>Cover</SelectedBadge>}
-                  </ImageCard>
-                );
-              })}
-            </ImageGrid>
+                  return (
+                    <ImageCard
+                      key={image.id}
+                      selected={isSelected}
+                      onClick={() => handleImageSelect(image.id)}
+                    >
+                      {image.mime_type.startsWith('video/') ? (
+                        <VideoPreview
+                          src={getImageUrl(image.storage_path)}
+                          loop
+                          autoPlay
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <ImagePreview
+                          src={getImageUrl(image.storage_path)}
+                          alt={image.original_name}
+                        />
+                      )}
+                      {isSelected && <SelectedBadge>Cover</SelectedBadge>}
+                    </ImageCard>
+                  );
+                })}
+              </ImageGrid>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </>
           )}
         </FormSection>
 
         <FormSection>
-          <Label>Add Artworks to Gallery</Label>
+          <Label>Add Artworks to Collection</Label>
           <HelpText>
-            Select artworks to include in this gallery. Selected artworks will
-            appear in the public gallery view.
+            Select artworks to include in this collection. Selected artworks
+            will appear in the public collection view.
           </HelpText>
           {artworks.length === 0 ? (
             <p style={{ color: '#999', marginTop: '1rem' }}>
@@ -674,12 +697,16 @@ export const AdminGalleryEdit: FC = () => {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => navigate('/admin/galleries')}
+            onClick={() => navigate('/admin/collections')}
           >
             Cancel
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? 'Saving...' : isNew ? 'Create Gallery' : 'Save Changes'}
+            {saving
+              ? 'Saving...'
+              : isNew
+                ? 'Create Collection'
+                : 'Save Changes'}
           </Button>
         </ButtonRow>
       </Form>

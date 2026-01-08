@@ -1,6 +1,7 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import styled from 'styled-components';
+import { Pagination } from '@/components';
 
 const Container = styled.div`
   max-width: 900px;
@@ -148,9 +149,7 @@ const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
     props.variant === 'secondary' ? '#95a5a6' : '#3498db'};
   color: white;
 
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease;
+  transition: box-shadow 120ms ease, transform 120ms ease;
 
   &:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -237,19 +236,25 @@ export const AdminArtworkEdit: FC = () => {
 
   const [priceDisplay, setPriceDisplay] = useState('0.00');
   const [images, setImages] = useState<Image[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchImages = useCallback(async () => {
+  const fetchImages = useCallback(async (pageNum: number) => {
     try {
-      const response = await fetch(`${API_URL}/admin/images`, {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `${API_URL}/admin/images?page=${pageNum}&limit=10`,
+        {
+          credentials: 'include',
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
         setImages(data.images);
+        setTotalPages(data.pagination.totalPages);
       }
     } catch (err) {
       console.error('Failed to load images:', err);
@@ -287,9 +292,16 @@ export const AdminArtworkEdit: FC = () => {
   }, [id, isNew]);
 
   useEffect(() => {
-    fetchImages();
+    fetchImages(page);
+  }, [fetchImages, page]);
+
+  useEffect(() => {
     fetchArtwork();
-  }, [fetchImages, fetchArtwork]);
+  }, [fetchArtwork]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -451,41 +463,48 @@ export const AdminArtworkEdit: FC = () => {
               No images available. Upload images in the Images section first.
             </p>
           ) : (
-            <ImageGrid>
-              {images.map((image) => {
-                const isSelected = formData.image_ids.includes(image.id);
-                const isPrimary = formData.primary_image_id === image.id;
+            <>
+              <ImageGrid>
+                {images.map((image) => {
+                  const isSelected = formData.image_ids.includes(image.id);
+                  const isPrimary = formData.primary_image_id === image.id;
 
-                return (
-                  <ImageCard
-                    key={image.id}
-                    selected={isSelected}
-                    onClick={() => handleImageToggle(image.id)}
-                  >
-                    {image.mime_type.startsWith('video/') ? (
-                      <VideoPreview
-                        src={getImageUrl(image.storage_path)}
-                        loop
-                        autoPlay
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      <ImagePreview
-                        src={getImageUrl(image.storage_path)}
-                        alt={image.original_name}
-                      />
-                    )}
-                    {isPrimary && <SelectedBadge>Primary</SelectedBadge>}
-                    {isSelected && !isPrimary && (
-                      <SelectedBadge>
-                        {formData.image_ids.indexOf(image.id) + 1}
-                      </SelectedBadge>
-                    )}
-                  </ImageCard>
-                );
-              })}
-            </ImageGrid>
+                  return (
+                    <ImageCard
+                      key={image.id}
+                      selected={isSelected}
+                      onClick={() => handleImageToggle(image.id)}
+                    >
+                      {image.mime_type.startsWith('video/') ? (
+                        <VideoPreview
+                          src={getImageUrl(image.storage_path)}
+                          loop
+                          autoPlay
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <ImagePreview
+                          src={getImageUrl(image.storage_path)}
+                          alt={image.original_name}
+                        />
+                      )}
+                      {isPrimary && <SelectedBadge>Primary</SelectedBadge>}
+                      {isSelected && !isPrimary && (
+                        <SelectedBadge>
+                          {formData.image_ids.indexOf(image.id) + 1}
+                        </SelectedBadge>
+                      )}
+                    </ImageCard>
+                  );
+                })}
+              </ImageGrid>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </>
           )}
         </FormSection>
 
