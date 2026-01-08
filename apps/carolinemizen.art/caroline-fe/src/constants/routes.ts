@@ -1,5 +1,10 @@
 import { Artwork, Collection, Collections, Home } from '../pages';
-import { AdminDashboard, AdminLogin, AdminVerify } from '../pages/admin';
+import {
+  AdminContent,
+  AdminDashboard,
+  AdminLogin,
+  AdminVerify,
+} from '../pages/admin';
 
 type RouteType = {
   path: string;
@@ -25,7 +30,7 @@ const ROUTES: Record<string, RouteType> = {
   adminGalleries: { path: '/admin/galleries' },
   adminGalleryEdit: { path: '/admin/galleries/:id' },
   adminImages: { path: '/admin/images' },
-  adminContent: { path: '/admin/content' },
+  adminContent: { path: '/admin/content', Component: AdminContent },
 };
 
 export type { RouteType };

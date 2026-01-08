@@ -13,6 +13,7 @@ import {
   needsSeeding,
   seedDatabase,
 } from './services/db';
+import { runMigrations } from './services/migrations';
 
 // Validate required environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -115,6 +116,9 @@ const start = async () => {
   } else {
     console.log('✓ Database already exists');
   }
+
+  // Run database migrations
+  await runMigrations();
 
   // Ingest orphaned images from filesystem on startup
   console.log('🔍 Scanning for orphaned images...');

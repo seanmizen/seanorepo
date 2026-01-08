@@ -78,7 +78,7 @@ const AppRoutes: FC = () => {
               <Route path={ROUTES.adminImages.path} Component={AdminImages} />
               <Route
                 path={ROUTES.adminContent.path}
-                element={<div>Content</div>}
+                Component={ROUTES.adminContent.Component}
               />
             </Route>
 

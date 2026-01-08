@@ -339,6 +339,7 @@ const placeholderCarouselItems = [
 const Home: FC = () => {
   const [showArrow, setShowArrow] = useState(false);
   const { artworks, galleries } = useArtworkCache();
+  const [carouselImages, setCarouselImages] = useState<Artwork[]>([]);
 
   const displayGalleries =
     galleries.length > 0 ? galleries : placeholderGalleries;
@@ -348,23 +349,55 @@ const Home: FC = () => {
   const [ready, setReady] = useState(false);
   const [duration, setDuration] = useState(90);
 
+  // Fetch carousel images on mount
+  useEffect(() => {
+    const fetchCarousel = async () => {
+      try {
+        const response = await fetch(`${API_URL}/carousel`);
+        if (response.ok) {
+          const data = await response.json();
+          // Transform carousel images to artwork-like objects for compatibility
+          const carouselArtworks = data.images.map((img: any) => ({
+            id: img.id,
+            title: img.original_name,
+            primary_image_path: img.storage_path,
+            primary_image_mime_type: img.mime_type,
+          }));
+          setCarouselImages(carouselArtworks);
+        }
+      } catch (error) {
+        console.error('Failed to fetch carousel:', error);
+      }
+    };
+    fetchCarousel();
+  }, []);
+
   const baseArtworks = useMemo(() => {
-    if (artworks.length === 0) return [];
-    if (artworks.length === 1) {
+    // Use carousel images if available, otherwise fall back to artworks
+    const sourceArtworks =
+      carouselImages.length > 0 ? carouselImages : artworks;
+
+    if (sourceArtworks.length === 0) return [];
+    if (sourceArtworks.length === 1) {
       // Pad single artwork with gradients
-      return [artworks[0], ...placeholderCarouselItems.slice(0, 5)];
+      return [sourceArtworks[0], ...placeholderCarouselItems.slice(0, 5)];
     }
-    return pickForCarousel(artworks, 12);
-  }, [artworks, placeholderCarouselItems]);
+    return pickForCarousel(sourceArtworks, 12);
+  }, [carouselImages, artworks, placeholderCarouselItems]);
 
   const carouselArtworks = useMemo(() => {
-    if (artworks.length === 0) {
-      // Show only gradients when no artworks
+    if (carouselImages.length === 0 && artworks.length === 0) {
+      // Show only gradients when no carousel images or artworks
       return [...placeholderCarouselItems, ...placeholderCarouselItems];
     }
     if (baseArtworks.length === 0) return [];
     return [...baseArtworks, ...baseArtworks];
-  }, [baseArtworks, artworks.length, placeholderCarouselItems]);
+  }, [
+    baseArtworks,
+    carouselImages.length,
+    artworks.length,
+    placeholderCarouselItems,
+  ]);
 
   const readyTarget = useMemo(
     () => Math.min(3, baseArtworks.length),
