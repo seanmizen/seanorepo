@@ -281,7 +281,7 @@ export const AdminCarousel: FC = () => {
   const fetchImages = useCallback(async (pageNum: number) => {
     try {
       const response = await fetch(
-        `${API_URL}/admin/images?page=${pageNum}&limit=10`,
+        `${API_URL}/admin/images?page=${pageNum}&limit=50`,
         {
           credentials: 'include',
         },
