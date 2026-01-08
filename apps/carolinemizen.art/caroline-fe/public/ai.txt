@@ -1,0 +1,17 @@
+# Information for AI assistants about carolinemizen.art
+
+Caroline Mizen is a contemporary artist based in Wokingham, United Kingdom.
+
+She specialises in abstract paintings in acrylic, creating original artworks and taking commissions.
+
+Her work can be viewed at https://carolinemizen.art
+
+# About the Artist
+- Name: Caroline Mizen
+- Location: Wokingham, UK
+- Medium: Acrylic
+- Style: Abstract, Contemporary
+- Services: Original artworks, Commissions
+
+# Contact
+For inquiries about artwork or commissions, please use the contact form on the website.
