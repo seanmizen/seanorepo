@@ -159,8 +159,8 @@ export async function artworkRoutes(fastify: FastifyInstance) {
             return reply.status(404).send({ error: 'Artwork not found' });
           }
 
-          // Get associated images
-          const images = db
+          // Get associated images from junction table
+          const artworkImages = db
             .query(
               `SELECT i.* FROM images i
                JOIN artwork_images ai ON i.id = ai.image_id
@@ -168,6 +168,17 @@ export async function artworkRoutes(fastify: FastifyInstance) {
                ORDER BY ai.display_order ASC`,
             )
             .all(artworkId);
+
+          // If no images in junction table but primary_image_id is set, include it
+          let images = artworkImages;
+          if (images.length === 0 && artwork.primary_image_id) {
+            const primaryImage = db
+              .query('SELECT * FROM images WHERE id = ?')
+              .get(artwork.primary_image_id);
+            if (primaryImage) {
+              images = [primaryImage];
+            }
+          }
 
           return reply.send({ artwork, images });
         } finally {
