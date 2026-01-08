@@ -26,8 +26,6 @@ const ROUTES: Record<string, RouteType> = {
   adminGalleryEdit: { path: '/admin/galleries/:id' },
   adminImages: { path: '/admin/images' },
   adminContent: { path: '/admin/content' },
-  adminOrders: { path: '/admin/orders' },
-  adminOrderDetail: { path: '/admin/orders/:id' },
 };
 
 export type { RouteType };

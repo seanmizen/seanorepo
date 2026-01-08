@@ -17,7 +17,6 @@ interface AppConfig {
       galleries: { title: string; description: string };
       images: { title: string; description: string };
       content: { title: string; description: string };
-      orders: { title: string; description: string };
     };
   };
   uploads: {
