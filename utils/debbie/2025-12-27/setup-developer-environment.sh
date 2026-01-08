@@ -253,6 +253,26 @@ log_step "Local bin directory setup"
 } || log_fail "Local bin directory setup"
 
 #-------------------------------------------------------------------------------
+# Step: Add auto-load completions to zsh
+#-------------------------------------------------------------------------------
+log_step "Add auto-load completions to zsh"
+{
+    COMPLETION_SCRIPT='[[ -f ./completions.zsh ]] && source ./completions.zsh'
+    
+    # Add to .profile if not present
+    if [ -f "$USER_HOME/.profile" ] && ! grep -qF "$COMPLETION_SCRIPT" "$USER_HOME/.profile"; then
+        echo "$COMPLETION_SCRIPT" >> "$USER_HOME/.profile"
+    fi
+    
+    # Add to .zshrc if not present
+    if [ -f "$USER_HOME/.zshrc" ] && ! grep -qF "$PATH_EXPORT" "$USER_HOME/.zshrc"; then
+        echo "$COMPLETION_SCRIPT" >> "$USER_HOME/.zshrc"
+    fi
+    
+    log_success "Local bin directory configured"
+} || log_fail "Local bin directory setup"
+
+#-------------------------------------------------------------------------------
 # Step: Node.js installation
 #-------------------------------------------------------------------------------
 log_step "Node.js $NODE_VERSION installation"
