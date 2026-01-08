@@ -54,7 +54,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           });
 
           // Create session in database
-          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // One hour JWT.
           await sessionService.createSession(user.id, jwtToken, expiresAt);
 
           // Set cookie
@@ -124,7 +124,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
 
         // Create session in database
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // One hour JWT.
         await sessionService.createSession(user.id, jwtToken, expiresAt);
 
         // Set cookie

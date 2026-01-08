@@ -7,12 +7,19 @@ import {
   useState,
 } from 'react';
 import styled, { css } from 'styled-components';
-import { FullScreenComponent, Nav } from '@/components';
-import { GalleryGrid } from '@/components/gallery-grid';
+import { FullScreenComponent, GalleryPreview, Nav } from '@/components';
+import type { Gallery } from '@/components/gallery-grid';
 import { useArtworkCache } from '@/contexts/artwork-cache-context';
 import type { Artwork } from '@/types';
 
 const API_URL = import.meta.env.API_URL;
+
+interface CarouselImageResponse {
+  id: number;
+  original_name: string;
+  storage_path: string;
+  mime_type: string;
+}
 
 const groupHalo = css`
   position: relative;
@@ -33,29 +40,6 @@ const groupHalo = css`
     );
 
     filter: blur(22px);
-  }
-`;
-
-const readableText = css`
-  position: relative;
-  z-index: 0;
-
-  &::before {
-    content: "";
-    position: absolute;
-    inset: -28px -120px; /* wider left/right */
-    z-index: -1;
-    pointer-events: none;
-
-    background: radial-gradient(
-      ellipse 160% 120% at 50% 55%,
-      rgba(255, 255, 255, 0.55) 0%,
-      rgba(255, 255, 255, 0.28) 38%,
-      rgba(255, 255, 255, 0.12) 60%,
-      transparent 78%
-    );
-
-    filter: blur(28px);
   }
 `;
 
@@ -276,24 +260,6 @@ const HeroContent = styled.div`
   height: 100%;
 `;
 
-const GalleriesSection = styled.section`
-  min-height: 80vh;
-  border-top: 1px solid var(--border-color-secondary);
-  border-bottom: 1px solid var(--border-color-secondary);
-  padding: 4rem 2rem;
-
-  display: grid;
-  place-items: center;
-`;
-
-const GalleriesInner = styled.div`
-  /* min-height: 100%; */
-  width: 100%;
-  max-width: 1200px;
-  display: flex;
-  align-items: stretch;
-`;
-
 const pickForCarousel = (items: Artwork[], count: number) => {
   const arr = items.slice();
   for (let i = arr.length - 1; i > 0; i--) {
@@ -338,18 +304,19 @@ const placeholderCarouselItems = [
 
 const Home: FC = () => {
   const [showArrow, setShowArrow] = useState(false);
-  const { artworks, galleries } = useArtworkCache();
+  const { artworks } = useArtworkCache();
   const [carouselImages, setCarouselImages] = useState<Artwork[]>([]);
+  const [featuredGalleries, setFeaturedGalleries] = useState<Gallery[]>([]);
 
   const displayGalleries =
-    galleries.length > 0 ? galleries : placeholderGalleries;
+    featuredGalleries.length > 0 ? featuredGalleries : placeholderGalleries;
 
   const trackRef = useRef<HTMLDivElement>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
   const [ready, setReady] = useState(false);
   const [duration, setDuration] = useState(90);
 
-  // Fetch carousel images on mount
+  // Fetch carousel images and featured galleries on mount
   useEffect(() => {
     const fetchCarousel = async () => {
       try {
@@ -357,11 +324,20 @@ const Home: FC = () => {
         if (response.ok) {
           const data = await response.json();
           // Transform carousel images to artwork-like objects for compatibility
-          const carouselArtworks = data.images.map((img: any) => ({
+          const carouselArtworks: Artwork[] = (
+            data.images as CarouselImageResponse[]
+          ).map((img) => ({
             id: img.id,
             title: img.original_name,
+            description: null,
+            price_cents: 0,
+            currency: 'USD',
+            status: 'available' as const,
+            primary_image_id: null,
             primary_image_path: img.storage_path,
             primary_image_mime_type: img.mime_type,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           }));
           setCarouselImages(carouselArtworks);
         }
@@ -369,7 +345,21 @@ const Home: FC = () => {
         console.error('Failed to fetch carousel:', error);
       }
     };
+
+    const fetchFeaturedGalleries = async () => {
+      try {
+        const response = await fetch(`${API_URL}/galleries?featured=true`);
+        if (response.ok) {
+          const data = await response.json();
+          setFeaturedGalleries(data.galleries);
+        }
+      } catch (error) {
+        console.error('Failed to fetch featured galleries:', error);
+      }
+    };
+
     fetchCarousel();
+    fetchFeaturedGalleries();
   }, []);
 
   const baseArtworks = useMemo(() => {
@@ -521,11 +511,7 @@ const Home: FC = () => {
         </FullScreenComponent>
       </HeroWrapper>
 
-      <GalleriesSection>
-        <GalleriesInner>
-          <GalleryGrid galleries={displayGalleries} featured />
-        </GalleriesInner>
-      </GalleriesSection>
+      <GalleryPreview galleries={displayGalleries} featured />
 
       <Nav />
     </>

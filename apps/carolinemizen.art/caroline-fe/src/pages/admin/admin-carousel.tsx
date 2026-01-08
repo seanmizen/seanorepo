@@ -1,4 +1,4 @@
-import { type FC, useCallback, useEffect, useState } from 'react';
+import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Pagination } from '@/components';
 
@@ -13,12 +13,6 @@ const Header = styled.div`
 const Title = styled.h1`
   margin: 0 0 0.5rem;
   color: #333;
-`;
-
-const Subtitle = styled.p`
-  margin: 0;
-  color: #666;
-  font-size: 1rem;
 `;
 
 const Section = styled.section`
@@ -76,17 +70,38 @@ const VideoPreview = styled.video`
   object-fit: cover;
 `;
 
-const SelectedBadge = styled.div`
+const SelectionBadge = styled.div`
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
+  width: 2rem;
+  height: 2rem;
   background: #3498db;
   color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+`;
+
+const GhostBadge = styled.div`
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  background: #95a5a6;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 `;
 
 const ButtonRow = styled.div`
@@ -95,39 +110,125 @@ const ButtonRow = styled.div`
   justify-content: flex-start;
 `;
 
-const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
+const SaveButton = styled.button`
   padding: 0.75rem 2rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
+  background: #2ecc71;
+  color: white;
   border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
 
-  ${(props) =>
-    props.variant === 'secondary'
-      ? `
-    background: white;
-    color: #3498db;
-    border-color: #3498db;
+  transition: box-shadow 120ms ease, transform 120ms ease,
+    border-color 120ms ease;
 
-    &:hover {
-      background: #f8f9fa;
-    }
-  `
-      : `
-    background: #3498db;
-    color: white;
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
 
-    &:hover {
-      background: #2980b9;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    }
-  `}
+  &:active {
+    box-shadow: none;
+    transform: translateY(0);
+  }
+
+  &:focus-visible::before,
+  &:focus-visible::after {
+    display: none;
+  }
+
+  &:focus-visible {
+    border-color: var(--focus-flash);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--focus-flash) 40%, transparent);
+  }
 
   &:disabled {
-    opacity: 0.5;
+    background: #95a5a6;
     cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+`;
+
+const ClearButton = styled.button`
+  padding: 0.75rem 2rem;
+  background: #95a5a6;
+  color: white;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+
+  transition: box-shadow 120ms ease, transform 120ms ease,
+    border-color 120ms ease;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    box-shadow: none;
+    transform: translateY(0);
+  }
+
+  &:focus-visible::before,
+  &:focus-visible::after {
+    display: none;
+  }
+
+  &:focus-visible {
+    border-color: var(--focus-flash);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--focus-flash) 40%, transparent);
+  }
+`;
+
+const ResetButton = styled.button`
+  padding: 0.75rem 2rem;
+  background: #3498db;
+  color: white;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+
+  transition: box-shadow 120ms ease, transform 120ms ease,
+    border-color 120ms ease;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    box-shadow: none;
+    transform: translateY(0);
+  }
+
+  &:focus-visible::before,
+  &:focus-visible::after {
+    display: none;
+  }
+
+  &:focus-visible {
+    border-color: var(--focus-flash);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--focus-flash) 40%, transparent);
+  }
+
+  &:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
   }
 `;
 
@@ -166,9 +267,10 @@ interface Image {
   storage_path: string;
 }
 
-export const AdminContent: FC = () => {
+export const AdminCarousel: FC = () => {
   const [images, setImages] = useState<Image[]>([]);
   const [selectedImageIds, setSelectedImageIds] = useState<number[]>([]);
+  const [savedImageIds, setSavedImageIds] = useState<number[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -204,7 +306,9 @@ export const AdminContent: FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setSelectedImageIds(data.images.map((img: Image) => img.id));
+        // Load current carousel from DB (saved state only, don't select)
+        const imageIds = data.images.map((img: Image) => img.id);
+        setSavedImageIds(imageIds);
       }
     } catch (err) {
       console.error('Failed to load carousel:', err);
@@ -221,9 +325,18 @@ export const AdminContent: FC = () => {
     fetchCarousel();
   }, [fetchCarousel]);
 
+  const hasChanges = useMemo(() => {
+    if (selectedImageIds.length !== savedImageIds.length) return true;
+    return !selectedImageIds.every((id, index) => id === savedImageIds[index]);
+  }, [selectedImageIds, savedImageIds]);
+
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
   };
+
+  const handleResetToSaved = useCallback(() => {
+    setSelectedImageIds(savedImageIds);
+  }, [savedImageIds]);
 
   const handleImageToggle = (imageId: number) => {
     setSelectedImageIds((prev) => {
@@ -255,6 +368,8 @@ export const AdminContent: FC = () => {
         throw new Error('Failed to save carousel');
       }
 
+      setSavedImageIds(selectedImageIds);
+      setSelectedImageIds([]);
       setSuccess('Carousel updated successfully!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -271,10 +386,7 @@ export const AdminContent: FC = () => {
   return (
     <Container>
       <Header>
-        <Title>Site Content</Title>
-        <Subtitle>
-          Manage your homepage carousel and other site content
-        </Subtitle>
+        <Title>The Carousel</Title>
       </Header>
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -283,8 +395,9 @@ export const AdminContent: FC = () => {
       <Section>
         <SectionTitle>Homepage Carousel</SectionTitle>
         <HelpText>
-          Select images to display in the homepage carousel. Click images to add
-          or remove them. Images will appear in the order you click them. If no
+          Select images to display in the homepage carousel. Click images in the
+          order you want them to appear. Grey badges show the current homepage
+          carousel (saved), blue badges show your working selection. If no
           images are selected, the carousel will fall back to showing artwork
           images.
         </HelpText>
@@ -298,7 +411,9 @@ export const AdminContent: FC = () => {
             <ImageGrid>
               {images.map((image) => {
                 const isSelected = selectedImageIds.includes(image.id);
-                const orderIndex = selectedImageIds.indexOf(image.id);
+                const selectionIndex = selectedImageIds.indexOf(image.id);
+                const isSaved = savedImageIds.includes(image.id);
+                const savedIndex = savedImageIds.indexOf(image.id);
 
                 return (
                   <ImageCard
@@ -320,8 +435,9 @@ export const AdminContent: FC = () => {
                         alt={image.original_name}
                       />
                     )}
+                    {isSaved && <GhostBadge>{savedIndex + 1}</GhostBadge>}
                     {isSelected && (
-                      <SelectedBadge>{orderIndex + 1}</SelectedBadge>
+                      <SelectionBadge>{selectionIndex + 1}</SelectionBadge>
                     )}
                   </ImageCard>
                 );
@@ -335,18 +451,29 @@ export const AdminContent: FC = () => {
             />
 
             <ButtonRow style={{ marginTop: '2rem' }}>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Carousel'}
-              </Button>
-              {selectedImageIds.length > 0 && (
-                <Button
-                  variant="secondary"
-                  onClick={() => setSelectedImageIds([])}
-                  disabled={saving}
-                >
-                  Clear All
-                </Button>
-              )}
+              <SaveButton
+                type="button"
+                onClick={handleSave}
+                disabled={
+                  saving || selectedImageIds.length === 0 || !hasChanges
+                }
+              >
+                {saving ? 'Saving...' : 'Apply current selection'}
+              </SaveButton>
+              <ClearButton
+                type="button"
+                onClick={() => setSelectedImageIds([])}
+                disabled={selectedImageIds.length === 0}
+              >
+                Clear Selection
+              </ClearButton>
+              <ResetButton
+                type="button"
+                onClick={handleResetToSaved}
+                disabled={!hasChanges}
+              >
+                Reset to current homepage carousel
+              </ResetButton>
             </ButtonRow>
           </>
         )}

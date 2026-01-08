@@ -2,13 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { requireAdmin } from '../middleware/auth';
 import { openDbConnection } from '../services/db';
 
-interface CarouselImage {
-  id: number;
-  image_id: number;
-  display_order: number;
-  created_at: string;
-}
-
 interface Image {
   id: number;
   filename: string;
