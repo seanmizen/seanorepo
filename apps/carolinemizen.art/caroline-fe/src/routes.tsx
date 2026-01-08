@@ -75,6 +75,10 @@ const AppRoutes: FC = () => {
                 path={ROUTES.adminGalleryEdit.path}
                 Component={AdminGalleryEdit}
               />
+              <Route
+                path={ROUTES.adminFeaturedGalleries.path}
+                Component={ROUTES.adminFeaturedGalleries.Component}
+              />
               <Route path={ROUTES.adminImages.path} Component={AdminImages} />
               <Route
                 path={ROUTES.adminContent.path}

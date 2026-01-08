@@ -151,8 +151,11 @@ export const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
           </NavSection>
 
           <NavSection>
-            <NavSectionTitle>Site</NavSectionTitle>
-            <NavItem to="/admin/content">Site Content</NavItem>
+            <NavSectionTitle>Homepage</NavSectionTitle>
+            <NavItem to="/admin/featured-collections">
+              Homepage Collections
+            </NavItem>
+            <NavItem to="/admin/carousel">Homepage Carousel</NavItem>
           </NavSection>
         </Nav>
       </Sidebar>

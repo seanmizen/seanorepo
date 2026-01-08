@@ -511,6 +511,66 @@ export async function galleryRoutes(fastify: FastifyInstance) {
   );
 
   /**
+   * PUT /admin/galleries/featured
+   * Admin: Set featured galleries (homepage display)
+   */
+  fastify.put<{ Body: { gallery_ids: number[] } }>(
+    '/featured',
+    { onRequest: [requireAdmin] },
+    async (
+      request: FastifyRequest<{ Body: { gallery_ids: number[] } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const { gallery_ids } = request.body;
+
+        // Validate max 7 galleries
+        if (gallery_ids.length > 7) {
+          return reply
+            .status(400)
+            .send({ error: 'Maximum 7 galleries allowed for homepage' });
+        }
+
+        const db = await openDbConnection();
+        try {
+          // Clear all featured flags
+          db.run('UPDATE galleries SET is_featured = 0');
+
+          // Set featured galleries with display_order
+          for (let i = 0; i < gallery_ids.length; i++) {
+            db.run(
+              'UPDATE galleries SET is_featured = 1, display_order = ? WHERE id = ?',
+              [i, gallery_ids[i]],
+            );
+          }
+
+          // Fetch updated featured galleries
+          const galleries = db
+            .query(
+              `SELECT g.*,
+                      i.storage_path as cover_image_path,
+                      i.mime_type as cover_image_mime_type
+               FROM galleries g
+               LEFT JOIN images i ON g.cover_image_id = i.id
+               WHERE g.is_featured = 1
+               ORDER BY g.display_order ASC`,
+            )
+            .all();
+
+          return reply.send({ galleries });
+        } finally {
+          db.close();
+        }
+      } catch (error) {
+        console.error('Error updating featured galleries:', error);
+        return reply
+          .status(500)
+          .send({ error: 'Failed to update featured galleries' });
+      }
+    },
+  );
+
+  /**
    * DELETE /admin/galleries/:id
    * Admin: Delete gallery
    */

@@ -255,6 +255,13 @@ export const AdminDashboard: FC = () => {
           <CardCount>{loadingCounts ? '...' : counts.galleries}</CardCount>
         </Card>
 
+        <Card to="/admin/featured-collections">
+          <CardTitle>Homepage Collections</CardTitle>
+          <CardDescription>
+            Choose which collections appear on the homepage
+          </CardDescription>
+        </Card>
+
         <Card to="/admin/images">
           <CardTitle>{dashboard.cards.images.title}</CardTitle>
           <CardDescription>
@@ -263,7 +270,7 @@ export const AdminDashboard: FC = () => {
           <CardCount>{loadingCounts ? '...' : counts.images}</CardCount>
         </Card>
 
-        <Card to="/admin/content">
+        <Card to="/admin/carousel">
           <CardTitle>{dashboard.cards.content.title}</CardTitle>
           <CardDescription>
             {dashboard.cards.content.description}

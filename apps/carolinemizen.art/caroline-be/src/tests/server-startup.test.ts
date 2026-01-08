@@ -39,7 +39,7 @@ describe('Server Startup Integration Test', () => {
   });
 
   test('should respond to health check', async () => {
-    const response = await fetch(`${serverUrl}/health`);
+    const response = await fetch(`${serverUrl}/api/health`);
     expect(response.ok).toBe(true);
 
     const data = (await response.json()) as { status: string };
@@ -53,7 +53,7 @@ describe('Server Startup Integration Test', () => {
   });
 
   test('public artworks endpoint should be accessible', async () => {
-    const response = await fetch(`${serverUrl}/artworks`);
+    const response = await fetch(`${serverUrl}/api/artworks`);
     expect(response.ok).toBe(true);
 
     const data = (await response.json()) as { artworks: unknown[] };
@@ -62,7 +62,7 @@ describe('Server Startup Integration Test', () => {
   });
 
   test('admin artworks endpoint should require auth', async () => {
-    const response = await fetch(`${serverUrl}/admin/artworks`);
+    const response = await fetch(`${serverUrl}/api/admin/artworks`);
     // Should return 401 Unauthorized without credentials
     expect(response.status).toBe(401);
   });

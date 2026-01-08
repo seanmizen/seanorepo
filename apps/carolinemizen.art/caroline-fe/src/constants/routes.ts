@@ -1,7 +1,8 @@
 import { Artwork, Collection, Collections, Home } from '../pages';
 import {
-  AdminContent,
+  AdminCarousel,
   AdminDashboard,
+  AdminFeaturedGalleries,
   AdminLogin,
   AdminVerify,
 } from '../pages/admin';
@@ -29,8 +30,12 @@ const ROUTES: Record<string, RouteType> = {
   adminArtworkEdit: { path: '/admin/artworks/:id' },
   adminGalleries: { path: '/admin/collections' },
   adminGalleryEdit: { path: '/admin/collections/:id' },
+  adminFeaturedGalleries: {
+    path: '/admin/featured-collections',
+    Component: AdminFeaturedGalleries,
+  },
   adminImages: { path: '/admin/images' },
-  adminContent: { path: '/admin/content', Component: AdminContent },
+  adminContent: { path: '/admin/carousel', Component: AdminCarousel },
 };
 
 export type { RouteType };
