@@ -24,7 +24,7 @@ function getMigrationFiles(): Migration[] {
       const sql = readFileSync(join(MIGRATIONS_DIR, filename), 'utf-8');
       return { version, filename, sql };
     });
-  } catch (error) {
+  } catch (_error) {
     // Migrations directory doesn't exist yet
     return [];
   }

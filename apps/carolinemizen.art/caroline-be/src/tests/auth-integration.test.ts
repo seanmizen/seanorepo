@@ -29,7 +29,7 @@ describe('Auth Integration Tests', () => {
 
     // Simulate JWT creation
     const mockJwt = `mock-jwt-token-${Date.now()}`;
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     // Create session
     const session = await sessionService.createSession(
@@ -49,7 +49,7 @@ describe('Auth Integration Tests', () => {
     // Create user and session
     const { userId } = await authService.createMagicToken(email);
     const mockJwt = 'valid-jwt-token';
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     await sessionService.createSession(userId, mockJwt, expiresAt);
 
     // Validate session
@@ -64,7 +64,7 @@ describe('Auth Integration Tests', () => {
     // Create user and session
     const { userId } = await authService.createMagicToken(email);
     const mockJwt = 'revoked-jwt-token';
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     await sessionService.createSession(userId, mockJwt, expiresAt);
 
     // Revoke session
@@ -108,7 +108,7 @@ describe('Auth Integration Tests', () => {
     const jwt1 = 'device-1-token';
     const jwt2 = 'device-2-token';
     const jwt3 = 'device-3-token';
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     await sessionService.createSession(userId, jwt1, expiresAt);
     await sessionService.createSession(userId, jwt2, expiresAt);
@@ -128,7 +128,7 @@ describe('Auth Integration Tests', () => {
     const email = 'once@example.com';
     const { userId } = await authService.createMagicToken(email);
     const mockJwt = 'once-token';
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     await sessionService.createSession(userId, mockJwt, expiresAt);
 
@@ -148,7 +148,7 @@ describe('Auth Integration Tests', () => {
     // Create two sessions
     const expiredJwt = 'cleanup-expired-token';
     const validJwt = 'cleanup-valid-token';
-    const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const futureDate = new Date(Date.now() + 60 * 60 * 1000);
 
     await sessionService.createSession(userId, expiredJwt, futureDate);
     await sessionService.createSession(userId, validJwt, futureDate);
@@ -195,7 +195,7 @@ describe('Auth Integration Tests', () => {
 
     // Step 3: Create JWT and session (what backend does on verify)
     const mockJwt = `full-flow-jwt-${Date.now()}`;
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     const session = await sessionService.createSession(
       user.id,
       mockJwt,

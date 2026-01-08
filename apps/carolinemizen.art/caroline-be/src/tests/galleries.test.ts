@@ -790,3 +790,225 @@ describe('Gallery-Artwork Associations', () => {
     }
   });
 });
+
+describe('Featured Galleries', () => {
+  beforeEach(async () => {
+    await seedDatabase();
+  });
+
+  test('setting featured galleries updates is_featured flag', async () => {
+    const db = await openDbConnection();
+    try {
+      // Create 5 galleries
+      const galleryIds: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        db.run(
+          `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+           VALUES (?, ?, ?, ?, ?)`,
+          [`Gallery ${i}`, `gallery-${i}`, `Test gallery ${i}`, 0, i],
+        );
+        const id = Number(
+          (db.query('SELECT last_insert_rowid() as id').get() as { id: number })
+            .id,
+        );
+        galleryIds.push(id);
+      }
+
+      // Set galleries 0, 2, 4 as featured
+      const featuredIds = [galleryIds[0], galleryIds[2], galleryIds[4]];
+
+      // Simulate PUT /admin/galleries/featured
+      db.run('UPDATE galleries SET is_featured = 0');
+      for (let i = 0; i < featuredIds.length; i++) {
+        db.run(
+          'UPDATE galleries SET is_featured = 1, display_order = ? WHERE id = ?',
+          [i, featuredIds[i]],
+        );
+      }
+
+      // Verify featured galleries
+      const featured = db
+        .query(
+          'SELECT * FROM galleries WHERE is_featured = 1 ORDER BY display_order ASC',
+        )
+        .all() as Array<{ id: number; slug: string; display_order: number }>;
+
+      expect(featured).toHaveLength(3);
+      expect(featured[0].id).toBe(galleryIds[0]);
+      expect(featured[0].slug).toBe('gallery-0');
+      expect(featured[0].display_order).toBe(0);
+      expect(featured[1].id).toBe(galleryIds[2]);
+      expect(featured[1].display_order).toBe(1);
+      expect(featured[2].id).toBe(galleryIds[4]);
+      expect(featured[2].display_order).toBe(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  test('can set up to 7 featured galleries', async () => {
+    const db = await openDbConnection();
+    try {
+      // Create 10 galleries
+      const galleryIds: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        db.run(
+          `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+           VALUES (?, ?, ?, ?, ?)`,
+          [`Gallery ${i}`, `gallery-${i}`, `Test`, 0, i],
+        );
+        const id = Number(
+          (db.query('SELECT last_insert_rowid() as id').get() as { id: number })
+            .id,
+        );
+        galleryIds.push(id);
+      }
+
+      // Set 7 galleries as featured
+      const featuredIds = galleryIds.slice(0, 7);
+
+      db.run('UPDATE galleries SET is_featured = 0');
+      for (let i = 0; i < featuredIds.length; i++) {
+        db.run(
+          'UPDATE galleries SET is_featured = 1, display_order = ? WHERE id = ?',
+          [i, featuredIds[i]],
+        );
+      }
+
+      // Verify 7 featured galleries
+      const featured = db
+        .query('SELECT * FROM galleries WHERE is_featured = 1')
+        .all();
+
+      expect(featured).toHaveLength(7);
+    } finally {
+      db.close();
+    }
+  });
+
+  test('clearing featured galleries sets all is_featured to false', async () => {
+    const db = await openDbConnection();
+    try {
+      // Create galleries with some featured
+      db.run(
+        `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        ['Featured 1', 'featured-1', 'Test', 1, 0],
+      );
+      db.run(
+        `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        ['Featured 2', 'featured-2', 'Test', 1, 1],
+      );
+      db.run(
+        `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        ['Not Featured', 'not-featured', 'Test', 0, 2],
+      );
+
+      // Verify initial state
+      let featured = db
+        .query('SELECT * FROM galleries WHERE is_featured = 1')
+        .all();
+      expect(featured).toHaveLength(2);
+
+      // Clear all featured
+      db.run('UPDATE galleries SET is_featured = 0');
+
+      // Verify all cleared
+      featured = db
+        .query('SELECT * FROM galleries WHERE is_featured = 1')
+        .all();
+      expect(featured).toHaveLength(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  test('featured galleries are ordered by display_order', async () => {
+    const db = await openDbConnection();
+    try {
+      // Create galleries
+      db.run(
+        `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        ['Second', 'second', 'Test', 1, 1],
+      );
+      db.run(
+        `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        ['Third', 'third', 'Test', 1, 2],
+      );
+      db.run(
+        `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        ['First', 'first', 'Test', 1, 0],
+      );
+      db.run(
+        `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        ['Not Featured', 'not-featured', 'Test', 0, 3],
+      );
+
+      // Get featured galleries in order
+      const featured = db
+        .query(
+          'SELECT * FROM galleries WHERE is_featured = 1 ORDER BY display_order ASC',
+        )
+        .all() as Array<{ slug: string }>;
+
+      expect(featured).toHaveLength(3);
+      expect(featured[0].slug).toBe('first');
+      expect(featured[1].slug).toBe('second');
+      expect(featured[2].slug).toBe('third');
+    } finally {
+      db.close();
+    }
+  });
+
+  test('updating featured galleries preserves non-featured gallery order', async () => {
+    const db = await openDbConnection();
+    try {
+      // Create galleries
+      const galleryIds: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        db.run(
+          `INSERT INTO galleries (name, slug, description, is_featured, display_order)
+           VALUES (?, ?, ?, ?, ?)`,
+          [`Gallery ${i}`, `gallery-${i}`, `Test`, 0, i],
+        );
+        const id = Number(
+          (db.query('SELECT last_insert_rowid() as id').get() as { id: number })
+            .id,
+        );
+        galleryIds.push(id);
+      }
+
+      // Set 2 as featured
+      db.run('UPDATE galleries SET is_featured = 0');
+      db.run(
+        'UPDATE galleries SET is_featured = 1, display_order = ? WHERE id = ?',
+        [0, galleryIds[1]],
+      );
+      db.run(
+        'UPDATE galleries SET is_featured = 1, display_order = ? WHERE id = ?',
+        [1, galleryIds[3]],
+      );
+
+      // Verify non-featured galleries still have their original display_order
+      const nonFeatured = db
+        .query('SELECT * FROM galleries WHERE is_featured = 0 ORDER BY id ASC')
+        .all() as Array<{ id: number; display_order: number }>;
+
+      expect(nonFeatured).toHaveLength(3);
+      expect(nonFeatured[0].id).toBe(galleryIds[0]);
+      expect(nonFeatured[0].display_order).toBe(0);
+      expect(nonFeatured[1].id).toBe(galleryIds[2]);
+      expect(nonFeatured[1].display_order).toBe(2);
+      expect(nonFeatured[2].id).toBe(galleryIds[4]);
+      expect(nonFeatured[2].display_order).toBe(4);
+    } finally {
+      db.close();
+    }
+  });
+});

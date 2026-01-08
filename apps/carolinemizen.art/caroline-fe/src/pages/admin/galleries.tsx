@@ -1,6 +1,7 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
+import type { Gallery } from '@/types';
 
 const Container = styled.div`
   max-width: 1400px;
@@ -259,20 +260,6 @@ const IconButton = styled.button`
 const API_URL = import.meta.env.API_URL;
 const PUBLIC_URL = import.meta.env.PUBLIC_URL || 'http://localhost:4020';
 
-interface Gallery {
-  id: number;
-  name: string;
-  slug: string;
-  description: string | null;
-  cover_image_id: number | null;
-  cover_image_path: string | null;
-  cover_image_mime_type: string | null;
-  is_featured: boolean;
-  display_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export const AdminGalleries: FC = () => {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -407,7 +394,7 @@ export const AdminGalleries: FC = () => {
   return (
     <Container>
       <Header>
-        <Title>Galleries</Title>
+        <Title>Collections</Title>
         <CreateButton to="/admin/collections/new">
           Create Collection
         </CreateButton>
@@ -417,7 +404,7 @@ export const AdminGalleries: FC = () => {
 
       {galleries.length === 0 ? (
         <EmptyState>
-          <h2>No galleries yet</h2>
+          <h2>No collections yet</h2>
           <p>Create your first gallery to organize your artworks</p>
           <CreateButton to="/admin/collections/new">
             Create Gallery
