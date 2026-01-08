@@ -1,5 +1,6 @@
 export { AdminArtworkEdit } from './artwork-edit';
 export { Artworks } from './artworks/artworks';
+export { AdminContent } from './content';
 export { AdminDashboard } from './dashboard';
 export { AdminGalleries } from './galleries';
 export { AdminGalleryEdit } from './gallery-edit';

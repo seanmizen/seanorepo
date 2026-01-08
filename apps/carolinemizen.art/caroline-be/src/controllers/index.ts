@@ -7,6 +7,7 @@ import type {
 } from 'fastify';
 import { artworkRoutes } from './artworks';
 import { authRoutes } from './auth';
+import { carouselRoutes } from './carousel';
 import { configRoutes } from './config';
 import { contentRoutes } from './content';
 import { routes as databaseRoutes } from './db';
@@ -40,6 +41,7 @@ const routes = async (
   fastify.register(contentRoutes, { prefix: '/content' });
   fastify.register(artworkRoutes, { prefix: '/artworks' });
   fastify.register(galleryRoutes, { prefix: '/galleries' });
+  fastify.register(carouselRoutes, { prefix: '/carousel' });
 
   // Admin routes - protected by requireAdmin middleware
   fastify.register(
@@ -51,6 +53,7 @@ const routes = async (
       adminScope.register(artworkRoutes, { prefix: '/artworks' });
       adminScope.register(galleryRoutes, { prefix: '/galleries' });
       adminScope.register(contentRoutes, { prefix: '/content' });
+      adminScope.register(carouselRoutes, { prefix: '/carousel' });
       adminScope.register(debugRoutes, { prefix: '/debug' });
 
       // Nuke endpoint - backup and reseed database
