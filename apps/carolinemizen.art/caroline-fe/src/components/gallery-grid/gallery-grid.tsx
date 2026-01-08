@@ -29,8 +29,8 @@ interface GalleryGridProps {
 }
 
 const Grid = styled.div<{ $featured: boolean }>`
-  /* tighter content column = more dead space on wide screens */
   width: 100%;
+  min-height: 100%;
   max-width: ${(p) => (p.$featured ? '1040px' : '980px')};
   margin: 0 auto;
   padding: 0 clamp(18px, 5vw, 72px);
@@ -77,6 +77,7 @@ const Card = styled(Link)<{ $featured: boolean; $isPlaceholder: boolean }>`
 
   max-height: var(--card-max-h);
   height: 100%;
+  /* height: 200px; */
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
 
@@ -159,10 +160,16 @@ const GradientPlaceholder = styled.div<{
   }};
 `;
 
+const Subheader = styled.div`
+  opacity: 0.7;
+  font-size: 0.8rem;
+  font-style: italic;
+`;
+
 const Info = styled.div`
   padding: 1.05rem 1.2rem 1.2rem;
   display: grid;
-  gap: 0.45rem;
+  gap: 0.3rem;
 `;
 
 const Name = styled.h2`
@@ -235,8 +242,8 @@ export const GalleryGrid: FC<GalleryGridProps> = ({
             ) : (
               <GradientPlaceholder $variant="purple" />
             )}
-
             <Info>
+              <Subheader>collection:</Subheader>
               <Name>{gallery.name}</Name>
               {gallery.description && (
                 <Description>{gallery.description}</Description>
