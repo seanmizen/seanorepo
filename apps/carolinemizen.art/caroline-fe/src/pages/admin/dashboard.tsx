@@ -269,13 +269,6 @@ export const AdminDashboard: FC = () => {
             {dashboard.cards.content.description}
           </CardDescription>
         </Card>
-
-        <Card to="/admin/orders">
-          <CardTitle>{dashboard.cards.orders.title}</CardTitle>
-          <CardDescription>
-            {dashboard.cards.orders.description}
-          </CardDescription>
-        </Card>
       </Grid>
 
       <DangerZone>

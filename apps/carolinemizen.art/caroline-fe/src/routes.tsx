@@ -80,14 +80,6 @@ const AppRoutes: FC = () => {
                 path={ROUTES.adminContent.path}
                 element={<div>Content</div>}
               />
-              <Route
-                path={ROUTES.adminOrders.path}
-                element={<div>Orders</div>}
-              />
-              <Route
-                path={ROUTES.adminOrderDetail.path}
-                element={<div>Order Detail</div>}
-              />
             </Route>
 
             <Route path="*" element={<NotFound />} />

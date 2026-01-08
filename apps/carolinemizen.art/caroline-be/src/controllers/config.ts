@@ -47,12 +47,6 @@ export async function configRoutes(fastify: FastifyInstance) {
                 process.env.DASHBOARD_CARD_CONTENT ||
                 'Edit site-wide content including hero text, about page, and other page content.',
             },
-            orders: {
-              title: 'Orders',
-              description:
-                process.env.DASHBOARD_CARD_ORDERS ||
-                'View and manage orders, update shipping status, and track sales.',
-            },
           },
         },
         uploads: {
