@@ -1,5 +1,33 @@
+/* * {
+  outline: 1px solid black;
+} */
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --background-color: #ffffff;
+  --nav-background-color: #f6f6fb;
+  --background-color-secondary: #f1f2f7;
+  --background-color-tertiary: #e9eaf2;
+  --background-color-quaternary: #dde0ea;
+
+  --text-color: #17202a;
+  --text-color-secondary: #3e4650;
+
+  /* Slightly deeper accents in light mode */
+  --accent-purple: #6d4dff;
+  --accent-blue: #1f6feb;
+  --accent-green: #16a34a;
+
+  --border-color: rgba(109, 77, 255, 0.2);
+  --border-color-secondary: rgba(109, 77, 255, 0.12);
+
+  --button-background-color: #f8f8ff;
+  --button-text-color: var(--text-color);
+
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+
+  --hover-tint: color-mix(in srgb, var(--accent-blue) 8%, transparent);
 
   /* Typography (bigger + more readable) */
   --font-family-hero: "Merriweather", system-ui, serif;
@@ -16,51 +44,36 @@
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  /* Surfaces (dark default) */
-  --background-color: #141416;
-  --nav-background-color: #0f0f12;
-  --background-color-secondary: #1b1b20;
-  --background-color-tertiary: #23232a;
-  --background-color-quaternary: #2d2d36;
-
-  /* Text */
-  --text-color: #f1f2f4;
-  --text-color-secondary: #c9cbd1;
-
-  /* Accent scheme (purple / blue / green) */
-  --accent-purple: #8b6cff;
-  --accent-blue: #3b82f6;
-  --accent-green: #22c55e;
-
   /* Links derive from accents */
   --link-color: var(--accent-blue);
   --link-hover-color: var(--accent-purple);
-
-  /* Borders (subtle lilac, consistent) */
-  --border-color: rgba(139, 108, 255, 0.22);
-  --border-color-secondary: rgba(139, 108, 255, 0.14);
-
-  /* Buttons */
-  --button-background-color: var(--background-color-tertiary);
-  --button-text-color: var(--text-color);
-
-  /* Glass tokens (use inside styled-components) */
-  --glass-bg: rgba(255, 255, 255, 0.18);
   --glass-blur: blur(8px);
-  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-
   /* Interaction tokens */
   --focus-flash: #22d3ee;
   --focus-wipe: #8b6cff;
-  --hover-tint: color-mix(in srgb, var(--accent-blue) 10%, transparent);
 
   color: var(--text-color);
   background-color: var(--background-color);
+  /* --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.12); */
+}
+
+@supports (color: color(display-p3 1 1 1)) {
+  :root {
+    --accent-purple: color(display-p3 0.38 0.26 0.95);
+    --accent-blue: color(display-p3 0.1 0.42 0.95);
+    --accent-green: color(display-p3 0.1 0.62 0.26);
+
+    --border-color: color(display-p3 0.38 0.26 0.95 / 0.18);
+    --border-color-secondary: color(display-p3 0.38 0.26 0.95 / 0.12);
+
+    --glass-bg: color(display-p3 1 1 1 / 0.68);
+    --focus-flash: color(display-p3 0.1 0.75 0.65);
+    --focus-wipe: color(display-p3 0.38 0.26 0.95);
+  }
 }
 
 /* display-p3 upgrade (falls back cleanly if unsupported) */
-@supports (color: color(display-p3 1 1 1)) {
+/* @supports (color: color(display-p3 1 1 1)) {
   :root {
     --accent-purple: color(display-p3 0.56 0.4 1);
     --accent-blue: color(display-p3 0.2 0.52 1);
@@ -73,51 +86,8 @@
     --focus-flash: color(display-p3 0.15 0.85 0.75);
     --focus-wipe: color(display-p3 0.56 0.4 1);
   }
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --background-color: #ffffff;
-    --nav-background-color: #f6f6fb;
-    --background-color-secondary: #f1f2f7;
-    --background-color-tertiary: #e9eaf2;
-    --background-color-quaternary: #dde0ea;
-
-    --text-color: #17202a;
-    --text-color-secondary: #3e4650;
-
-    /* Slightly deeper accents in light mode */
-    --accent-purple: #6d4dff;
-    --accent-blue: #1f6feb;
-    --accent-green: #16a34a;
-
-    --border-color: rgba(109, 77, 255, 0.2);
-    --border-color-secondary: rgba(109, 77, 255, 0.12);
-
-    --button-background-color: #f8f8ff;
-    --button-text-color: var(--text-color);
-
-    --glass-bg: rgba(255, 255, 255, 0.65);
-    --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-
-    --hover-tint: color-mix(in srgb, var(--accent-blue) 8%, transparent);
-  }
-
-  @supports (color: color(display-p3 1 1 1)) {
-    :root {
-      --accent-purple: color(display-p3 0.38 0.26 0.95);
-      --accent-blue: color(display-p3 0.1 0.42 0.95);
-      --accent-green: color(display-p3 0.1 0.62 0.26);
-
-      --border-color: color(display-p3 0.38 0.26 0.95 / 0.18);
-      --border-color-secondary: color(display-p3 0.38 0.26 0.95 / 0.12);
-
-      --glass-bg: color(display-p3 1 1 1 / 0.68);
-      --focus-flash: color(display-p3 0.1 0.75 0.65);
-      --focus-wipe: color(display-p3 0.38 0.26 0.95);
-    }
-  }
-}
+} */
+/* } */
 
 body {
   margin: 0;

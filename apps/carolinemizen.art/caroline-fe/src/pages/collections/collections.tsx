@@ -26,10 +26,6 @@ const Subtitle = styled.p`
   margin: 0;
 `;
 
-const StyledGalleryGrid = styled(GalleryGrid)`
-  margin-top: 3rem;
-`;
-
 const LoadingMessage = styled.div`
   text-align: center;
   padding: 4rem 2rem;
@@ -97,7 +93,7 @@ const Collections: FC = () => {
         )}
 
         {!loading && !error && galleries.length > 0 && (
-          <StyledGalleryGrid galleries={galleries} />
+          <GalleryGrid galleries={galleries} />
         )}
       </Container>
     </>

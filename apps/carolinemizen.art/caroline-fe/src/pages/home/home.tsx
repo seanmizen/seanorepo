@@ -287,8 +287,11 @@ const GalleriesSection = styled.section`
 `;
 
 const GalleriesInner = styled.div`
+  /* min-height: 100%; */
   width: 100%;
   max-width: 1200px;
+  display: flex;
+  align-items: stretch;
 `;
 
 const pickForCarousel = (items: Artwork[], count: number) => {
