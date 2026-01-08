@@ -269,8 +269,8 @@ log_step "Add auto-load completions to zsh"
         echo "$COMPLETION_SCRIPT" >> "$USER_HOME/.zshrc"
     fi
     
-    log_success "Local bin directory configured"
-} || log_fail "Local bin directory setup"
+    log_success "Add auto-load completions to zsh"
+} || log_fail "Add auto-load completions to zsh"
 
 #-------------------------------------------------------------------------------
 # Step: Node.js installation
