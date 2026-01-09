@@ -1,16 +1,17 @@
 # carolinemizen.art
 
-A complete art exhibition and e-commerce platform for Caroline Mizen to showcase and sell her artwork.
+A complete art portfolio and exhibition platform for Caroline Mizen to showcase her artwork.
 
 ## Overview
 
-This application combines a Content Management System (CMS) and e-commerce functionality specifically designed for artists. Caroline can:
+This application is a Content Management System (CMS) specifically designed for artists. Caroline can:
 
 - Upload and manage artwork images
 - Create and organize galleries/collections
-- Sell physical artwork with Stripe payment processing
+- Feature galleries on the homepage
+- Manage a homepage carousel for highlighting artwork
 - Edit site content (hero section, about page, navigation)
-- Manage orders and shipping
+- Organize artworks with drag-and-drop reordering
 
 ## Architecture
 
@@ -26,9 +27,11 @@ Images (flat storage)
 
 **Images**: Individual image files stored on the filesystem with metadata (dimensions, mime type, alt text)
 
-**Artworks**: Sellable pieces with title, description, price, and status (draft/available/sold). Each artwork can have multiple images for different angles/details.
+**Artworks**: Individual pieces with title, description, and metadata. Each artwork can have multiple images for different angles/details.
 
-**Galleries**: Curated collections of artworks with custom ordering. Featured galleries appear on the homepage.
+**Galleries**: Curated collections of artworks with custom ordering, cover images, and SEO-friendly slugs. Up to 7 galleries can be featured on the homepage.
+
+**Carousel**: Homepage image carousel for highlighting featured artwork or collections.
 
 ### Tech Stack
 
@@ -38,7 +41,7 @@ Images (flat storage)
 - RSBuild (Rspack) for fast compilation
 - styled-components for CSS-in-JS
 - TanStack Query for data fetching
-- Stripe embedded checkout
+- Drag-and-drop reordering
 
 **Backend** (`caroline-be`):
 
@@ -46,8 +49,8 @@ Images (flat storage)
 - Fastify 5 web framework
 - SQLite with better-sqlite3
 - JWT authentication
-- Nodemailer for email notifications
-- Stripe API for payments
+- Nodemailer for email notifications (magic link auth)
+- RESTful API with `/api` prefix
 
 **Infrastructure**:
 
@@ -61,8 +64,7 @@ Images (flat storage)
 
 - Yarn 4 (via corepack)
 - Docker & Docker Compose
-- Stripe account (for payments)
-- Email account for SMTP (Gmail recommended)
+- Email account for SMTP (Gmail recommended, for magic link authentication)
 
 ### Installation
 
@@ -85,10 +87,6 @@ COOKIE_SECRET=your-random-cookie-secret-here
 
 # Database
 DB_PATH=/app/db
-
-# Stripe (get from https://dashboard.stripe.com/test/apikeys)
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
 
 # Email (for magic link authentication)
 SMTP_HOST=smtp.gmail.com
@@ -159,10 +157,10 @@ yarn prod:docker    # Production build
 - Width/height metadata
 - Alt text for accessibility
 
-**artworks** - Individual pieces for sale
+**artworks** - Individual art pieces
 
-- Title, description, price (in pence/cents)
-- Status: draft, available, sold
+- Title, description, metadata
+- Primary image reference
 - Multiple images per artwork
 
 **artwork_images** - Junction table
@@ -172,9 +170,10 @@ yarn prod:docker    # Production build
 
 **galleries** - Collections of artworks
 
-- URL-friendly slug
-- Featured flag for homepage
-- Custom display order
+- URL-friendly slugs for SEO
+- Cover image for preview cards
+- Featured flag (max 7 on homepage)
+- Custom display order with move up/down
 
 **gallery_artworks** - Junction table
 
@@ -186,43 +185,43 @@ yarn prod:docker    # Production build
 - Key-value storage (hero_title, about_text, etc.)
 - Content types: text, html, image_id
 
-**orders** - Purchase records
+**carousel_images** - Homepage carousel
 
-- Stripe session/payment intent IDs
-- Customer email and shipping address
-- Order status workflow: pending → paid → shipped → delivered
+- Links to image entries
+- Custom display order for rotation
 
 ## API Endpoints
+
+All API routes are prefixed with `/api`.
 
 ### Public Endpoints
 
 **Galleries**
 
 ```
-GET  /galleries           - List all galleries
-GET  /galleries/:slug     - Get gallery with artworks
+GET  /api/galleries              - List all galleries
+GET  /api/galleries?featured=true - List featured galleries only
+GET  /api/galleries/:slug        - Get gallery with artworks
 ```
 
 **Artworks**
 
 ```
-GET  /artworks            - List available artworks
-GET  /artworks/:id        - Get artwork with images
+GET  /api/artworks            - List available artworks
+GET  /api/artworks/:id        - Get artwork with images
 ```
 
 **Site Content**
 
 ```
-GET  /content             - Get all site content
-GET  /content/:key        - Get specific content value
+GET  /api/content             - Get all site content
+GET  /api/content/:key        - Get specific content value
 ```
 
-**Checkout**
+**Carousel**
 
 ```
-POST /checkout/create-session  - Create Stripe checkout
-GET  /checkout/session-status  - Check payment status
-POST /checkout/webhook         - Stripe webhook handler
+GET  /api/carousel            - Get carousel images in display order
 ```
 
 ### Admin Endpoints (Authentication Required)
@@ -230,61 +229,61 @@ POST /checkout/webhook         - Stripe webhook handler
 **Authentication**
 
 ```
-POST /auth/magic-link     - Send magic link email
-GET  /auth/verify         - Verify token, set JWT cookie
-POST /auth/logout         - Clear session
-GET  /auth/me             - Get current user
+POST /api/auth/magic-link     - Send magic link email
+GET  /api/auth/verify         - Verify token, set JWT cookie
+POST /api/auth/logout         - Clear session
+GET  /api/auth/me             - Get current user
 ```
 
 **Images**
 
 ```
-POST   /admin/images/upload    - Upload image (multipart/form-data)
-GET    /admin/images           - List images (paginated)
-DELETE /admin/images/:id       - Delete image
+POST   /api/admin/images/upload    - Upload image (multipart/form-data)
+GET    /api/admin/images           - List images (paginated)
+DELETE /api/admin/images/:id       - Delete image
 ```
 
 **Artworks**
 
 ```
-POST   /admin/artworks         - Create artwork
-PUT    /admin/artworks/:id     - Update artwork
-DELETE /admin/artworks/:id     - Delete artwork
+POST   /api/admin/artworks         - Create artwork
+PUT    /api/admin/artworks/:id     - Update artwork
+DELETE /api/admin/artworks/:id     - Delete artwork
 ```
 
 **Galleries**
 
 ```
-POST   /admin/galleries                - Create gallery
-PUT    /admin/galleries/:id            - Update gallery
-PUT    /admin/galleries/:id/artworks   - Set artworks (ordered)
-DELETE /admin/galleries/:id            - Delete gallery
+POST   /api/admin/galleries                - Create gallery
+PUT    /api/admin/galleries/:id            - Update gallery
+PUT    /api/admin/galleries/:id/artworks   - Set artworks (ordered)
+POST   /api/admin/galleries/:id/move-up    - Move gallery up in order
+POST   /api/admin/galleries/:id/move-down  - Move gallery down in order
+PUT    /api/admin/galleries/featured       - Set featured galleries (max 7)
+DELETE /api/admin/galleries/:id            - Delete gallery
+GET    /api/admin/galleries/count          - Get total gallery count
 ```
 
-**Orders**
+**Carousel**
 
 ```
-GET /admin/orders              - List orders (paginated)
-GET /admin/orders/:id          - Get order details
-PUT /admin/orders/:id/status   - Update order status
+PUT /api/admin/carousel    - Replace all carousel images (ordered)
 ```
 
 **Content**
 
 ```
-PUT /admin/content/:key        - Update content value
+PUT /api/admin/content/:key        - Update content value
 ```
 
 ## Frontend Routes
 
 ### Public Pages
 
-- `/` - Homepage with hero and featured galleries
-- `/galleries` - Browse all galleries
-- `/galleries/:slug` - View gallery with artworks
+- `/` - Homepage with hero, carousel, and featured galleries
+- `/collections` - Browse all galleries
+- `/collection/:slug` - View gallery with artworks
 - `/artwork/:id` - Artwork detail with image carousel
-- `/checkout/:artworkId` - Stripe embedded checkout
-- `/checkout/return` - Order confirmation
 
 ### Admin Pages
 
@@ -292,12 +291,14 @@ PUT /admin/content/:key        - Update content value
 - `/admin/verify` - Token verification
 - `/admin` - Dashboard overview
 - `/admin/artworks` - Artwork management
-- `/admin/artworks/:id` - Create/edit artwork
+- `/admin/artworks/new` - Create new artwork
+- `/admin/artworks/:id` - Edit artwork
+- `/admin/images` - Image library with pagination
 - `/admin/galleries` - Gallery management
-- `/admin/galleries/:id` - Create/edit gallery
-- `/admin/orders` - Order list
-- `/admin/orders/:id` - Order details
-- `/admin/content` - Edit site content
+- `/admin/galleries/new` - Create new gallery
+- `/admin/galleries/:id` - Edit gallery
+- `/admin/carousel` - Manage homepage carousel
+- `/admin/featured-galleries` - Manage featured galleries (max 7)
 
 ## Authentication Flow
 
@@ -315,27 +316,6 @@ carolinemizen.art uses **passwordless authentication** via magic links:
 - Tokens can only be used once
 - JWT cookies are httpOnly and secure
 - Admin routes protected with auth middleware
-
-## Payment Processing
-
-Uses **Stripe Embedded Checkout** for secure payment processing:
-
-1. Customer clicks "Purchase" on artwork detail page
-2. Frontend creates checkout session via `/checkout/create-session`
-3. Stripe embedded checkout loads with:
-   - Artwork details and price
-   - Shipping address collection
-   - Secure card payment
-4. On successful payment, Stripe webhook fires
-5. Backend creates order record, marks artwork as sold
-6. Customer receives confirmation email
-
-**Stripe Webhook Events**:
-
-- `checkout.session.completed` - Create order
-- `payment_intent.succeeded` - Mark order as paid
-
-**Test Mode**: Use Stripe test card `4242 4242 4242 4242` for development.
 
 ## Storage Strategy
 
@@ -375,8 +355,8 @@ yarn test:e2e --ui
 - Artwork upload and management
 - Gallery creation and reordering
 - Public gallery browsing
-- Stripe checkout flow (test mode)
-- Order status updates
+- Carousel management
+- Featured galleries
 
 ## Deployment
 
@@ -394,20 +374,14 @@ This starts:
 - SQLite database with named volume persistence
 - Uploads stored in named volume
 
-### Stripe Webhook Setup
+### SEO Features
 
-In production, configure Stripe webhook endpoint:
+The site includes:
 
-```
-https://yourdomain.com/checkout/webhook
-```
-
-Events to listen for:
-
-- `checkout.session.completed`
-- `payment_intent.succeeded`
-
-Copy webhook signing secret to `STRIPE_WEBHOOK_SECRET` env variable.
+- `sitemap.xml` - Auto-generated site structure for search engines
+- `robots.txt` - Search engine crawling directives
+- `ai.txt` - AI crawler guidelines
+- Meta tags and Open Graph support for social sharing
 
 ## Design Principles
 
@@ -427,22 +401,24 @@ Copy webhook signing secret to `STRIPE_WEBHOOK_SECRET` env variable.
 2. Navigate to "Artworks" in admin sidebar
 3. Click "New Artwork"
 4. Upload images (drag-drop or click)
-5. Fill in title, description, price
-6. Set status to "Available"
-7. Optionally add to galleries
+5. Fill in title, description, metadata
+6. Optionally add to galleries
 
-### Managing Orders
+### Managing the Homepage
 
-1. Navigate to "Orders" in admin sidebar
-2. View pending orders
-3. Update status as artwork is shipped
-4. Customer receives email notifications
+**Carousel**: Navigate to "Carousel" in admin sidebar to:
+- Select images for the homepage carousel
+- Reorder carousel images with drag-and-drop
+- Preview the carousel
 
-### Editing Homepage
+**Featured Galleries**: Navigate to "Featured Galleries" to:
+- Select up to 7 galleries to feature on homepage
+- Reorder featured galleries with drag-and-drop
+- Preview gallery cards with cover images
 
-1. Navigate to "Site Content" in admin sidebar
-2. Edit hero title, subtitle, call-to-action
-3. Set featured galleries (shown on homepage)
+**Hero Section**: Navigate to "Site Content" to:
+- Edit hero title, subtitle, call-to-action
+- Update about page content
 
 ## Coding standards
 

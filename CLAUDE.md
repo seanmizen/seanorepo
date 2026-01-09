@@ -77,6 +77,26 @@ Apps: `planning-poker` (backend), `tcp-getter`, `carolinemizen.art` (backend), `
 - Real-time: @fastify/websocket for live communication
 - Database: SQLite with named Docker volumes
 - Auth: JWT plugins where needed
+- All API routes use `/api` prefix
+
+### carolinemizen.art (Art Portfolio Platform)
+
+A full-stack art portfolio CMS for showcasing artwork. **Note: This is NOT an e-commerce platform** - all Stripe/payment/order functionality has been removed.
+
+**Key Features:**
+- **Homepage Carousel**: Managed image carousel for highlighting featured artwork
+- **Featured Galleries**: Up to 7 galleries can be featured on homepage with cover images and drag-drop reordering
+- **Gallery Management**: Create collections with SEO-friendly slugs, cover images, and custom artwork ordering
+- **Image Library**: Upload and manage images with pagination
+- **Magic Link Auth**: Passwordless authentication for admin access
+- **Content Management**: Editable hero section and site content
+
+**Tech Details:**
+- Frontend (React + RSBuild) on port 4020
+- Backend (Bun + Fastify) on port 4021 with `/api` prefix
+- SQLite database with migrations
+- Local file storage with abstracted provider interface (ready for S3/R2)
+- SEO: sitemap.xml, robots.txt, ai.txt, meta tags
 
 **CRITICAL: Bun is RUNTIME ONLY**
 
