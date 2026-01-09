@@ -8,19 +8,6 @@ import type {
 } from 'fastify';
 import { dbService, userService } from '../services';
 
-/**
- * I don't have to tell you this is unsafe
- */
-const executeQuery = async (request: FastifyRequest, reply: FastifyReply) => {
-  const sql = request.body as string;
-  try {
-    const rows = await dbService.executeQuery(sql);
-    reply.send(rows);
-  } catch (err) {
-    reply.status(500).send(err);
-  }
-};
-
 const testDbConnection = async (
   _request: FastifyRequest,
   reply: FastifyReply,
@@ -46,7 +33,6 @@ const routes = async (
   fastify: FastifyInstance,
   _options: FastifyPluginOptions,
 ) => {
-  fastify.post('/', executeQuery);
   fastify.get('/test', testDbConnection);
   fastify.get('/', getUsers);
   fastify.post('/seed', seedDatabase);
