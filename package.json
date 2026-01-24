@@ -19,12 +19,9 @@
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
     "prod:docker": "yarn workspaces foreach -At run prod:docker",
     "down": "yarn workspaces foreach -Apt run down",
-    "format": "biome format --write .",
-    "format:check": "biome format .",
-    "lint": "biome lint .",
-    "lint:fix": "biome lint --write .",
     "check": "biome check .",
     "fix": "biome check --write .",
+    "format": "biome format --write .",
     "fly:up": "docker compose -f utils/fly-io/docker-compose.fly.yml up --build --detach",
     "fly:down": "docker compose -f utils/fly-io/docker-compose.fly.yml down",
     "fly:deploy": "fly deploy"
