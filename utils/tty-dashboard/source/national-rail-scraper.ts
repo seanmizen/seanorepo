@@ -22,6 +22,35 @@ export interface ScraperConfig {
   headless?: boolean;
 }
 
+// Internal interface for the National Rail JSON API structure
+interface NationalRailService {
+  departureInfo?: {
+    scheduled: string | null;
+    estimated: string | null;
+  };
+  status?: {
+    status: string;
+    delay?: string;
+  };
+  destination?: Array<{
+    locationName: string;
+    crs: string;
+  }>;
+  platform?: string;
+  operator?: {
+    name: string;
+  };
+  journeyDetails?: {
+    stops: number;
+    departureInfo?: {
+      scheduled: string | null;
+    };
+    arrivalInfo?: {
+      scheduled: string | null;
+    };
+  };
+}
+
 // Browser lifecycle functions
 export async function launchBrowser(headless = true): Promise<Browser> {
   return await puppeteer.launch({
@@ -73,96 +102,110 @@ async function extractTrainDepartures(page: Page): Promise<TrainDeparture[]> {
   // Wait a bit more for the page to fully render
   await delay(2000);
 
-  // Extract train departures from the results list
-  const departures = await page.$$eval('ul.sc-f6950b8f-0 > li', (nodes) => {
-    return nodes.map((node) => {
-      // Scheduled time
-      const scheduledTime =
-        node.querySelector('.sc-68d26c6b-1.hobgaI')?.textContent?.trim() ?? '';
+  // Extract JSON data from Next.js data
+  const departures = await page.evaluate(() => {
+    // Try to find __NEXT_DATA__ script tag (Next.js standard)
+    const nextDataScript = document.getElementById('__NEXT_DATA__');
 
-      // Expected time/status
-      const statusElement = node.querySelector(
-        '.sc-68d26c6b-2.hRMAvd, .sc-68d26c6b-2.fSGVGZ',
-      );
-      const statusText = statusElement?.textContent?.trim() ?? '';
-      const isDelayed = statusElement?.classList.contains('hRMAvd') ?? false;
+    if (nextDataScript?.textContent) {
+      try {
+        const nextData = JSON.parse(nextDataScript.textContent);
+        const liveTrainsState = nextData?.props?.pageProps?.liveTrainsState;
 
-      // Extract expected time if delayed
-      let expectedTime = scheduledTime;
-      let status = statusText;
-      if (statusText.startsWith('Expected ')) {
-        expectedTime = statusText.replace('Expected ', '');
-        status = 'Delayed';
-      } else if (statusText === 'On time') {
-        status = 'On time';
-      }
+        // Data is in React Query hydration format
+        const queryData = liveTrainsState?.queries?.[0]?.state?.data;
+        const services = queryData?.pages?.[0]?.services || [];
 
-      // Destination
-      const destinationElement = node.querySelector('h3.sc-e490da6-0');
-      const destinationFull =
-        destinationElement
-          ?.querySelector('.sc-e490da6-4')
-          ?.textContent?.trim() ?? '';
+        if (services.length > 0) {
+          return services.map((service: NationalRailService) => {
+            // Parse times from ISO format
+            const parseTime = (
+              isoString: string | null | undefined,
+            ): string => {
+              if (!isoString) return '';
+              const date = new Date(isoString);
+              return date.toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              });
+            };
 
-      // Extract destination name and code
-      const destinationMatch = destinationFull.match(/^(.+?)\(([A-Z]{3})\)$/);
-      const destination = destinationMatch
-        ? (destinationMatch[1]?.trim() ?? destinationFull)
-        : destinationFull;
-      const destinationCode = destinationMatch?.[2] ?? '';
+            // Calculate duration
+            const calculateDuration = (
+              departure: string | null | undefined,
+              arrival: string | null | undefined,
+            ): string => {
+              if (!departure || !arrival) return '';
+              const depTime = new Date(departure);
+              const arrTime = new Date(arrival);
+              const diffMs = arrTime.getTime() - depTime.getTime();
+              const diffMins = Math.floor(diffMs / 60000);
+              const hours = Math.floor(diffMins / 60);
+              const mins = diffMins % 60;
+              if (hours > 0) {
+                return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+              }
+              return `${mins}m`;
+            };
 
-      // Calling at
-      const callingAtElement = node.querySelector('h4.sc-68d26c6b-7');
-      const callingAt =
-        callingAtElement?.textContent?.trim().replace('Calling at ', '') ?? '';
+            const scheduledTime = parseTime(service.departureInfo?.scheduled);
+            const estimatedTime = parseTime(service.departureInfo?.estimated);
+            const statusValue = service.status?.status || 'Unknown';
+            const isDelayed = statusValue !== 'OnTime';
 
-      // Platform
-      const platform =
-        node.querySelector('.sc-68d26c6b-5.MAkdk')?.textContent?.trim() ?? '';
+            // Format status for display
+            let status = statusValue;
+            if (statusValue === 'OnTime') {
+              status = 'On time';
+            } else if (isDelayed && estimatedTime !== scheduledTime) {
+              status = 'Delayed';
+            }
 
-      // Duration, stops, operator
-      const metaElements = Array.from(
-        node.querySelectorAll('.sc-dccf2f8a-1.hAgctT'),
-      );
+            const destination = service.destination?.[0]?.locationName || '';
+            const destinationCode = service.destination?.[0]?.crs || '';
+            const platform = service.platform || '';
+            const operator = service.operator?.name || '';
 
-      let duration = '';
-      let stops = '';
-      let operator = '';
+            // Format stops
+            const stopCount = service.journeyDetails?.stops;
+            const stops =
+              stopCount !== undefined
+                ? `${stopCount} stop${stopCount !== 1 ? 's' : ''}`
+                : '';
 
-      metaElements.forEach((el, index) => {
-        const text = el.textContent?.trim() ?? '';
-        if (index === 0) {
-          // First element is duration
-          duration = text;
-        } else if (text.includes('stop')) {
-          // Element containing "stop" or "stops"
-          stops = text;
-        } else {
-          // Remaining text is operator
-          operator = text;
+            // Calculate duration from journey details
+            const duration = calculateDuration(
+              service.journeyDetails?.departureInfo?.scheduled,
+              service.journeyDetails?.arrivalInfo?.scheduled,
+            );
+
+            // Delay reason
+            const delayReason = service.status?.delay || undefined;
+
+            return {
+              scheduledTime,
+              expectedTime: estimatedTime,
+              status,
+              destination,
+              destinationCode,
+              callingAt: '', // No longer available in new site structure
+              platform,
+              duration,
+              stops,
+              operator,
+              delayReason,
+              isDelayed,
+            };
+          });
         }
-      });
+      } catch (error) {
+        console.error('Failed to parse __NEXT_DATA__:', error);
+      }
+    }
 
-      // Delay reason
-      const delayReason =
-        node.querySelector('.sc-68d26c6b-17.lnzdlv')?.textContent?.trim() ??
-        undefined;
-
-      return {
-        scheduledTime,
-        expectedTime,
-        status,
-        destination,
-        destinationCode,
-        callingAt,
-        platform,
-        duration,
-        stops,
-        operator,
-        delayReason,
-        isDelayed,
-      };
-    });
+    // Fallback: data not found
+    return [];
   });
 
   return departures;
@@ -175,8 +218,8 @@ export async function getTrainDepartures(
 ): Promise<TrainDeparture[]> {
   const config: ScraperConfig = {
     url: `https://www.nationalrail.co.uk/live-trains/departures/${stationName}`,
-    waitForSelector: 'ul.sc-f6950b8f-0',
-    timeout: 30000,
+    waitForSelector: 'script', // Wait for page scripts to load
+    timeout: 100000,
   };
 
   return await scrape(browser, config, extractTrainDepartures);
