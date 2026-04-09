@@ -298,3 +298,9 @@ Amazon Q
 .vscode
 
 *.db
+
+# Claude Code — local settings, worktrees, memory cache
+.claude
+
+# zig alternate cache dirs
+.zig-cache2/
