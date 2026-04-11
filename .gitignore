@@ -300,7 +300,9 @@ Amazon Q
 *.db
 
 # Claude Code — local settings, worktrees, memory cache
-.claude
+# Ignore everything inside .claude except committed skills
+.claude/*
+!.claude/skills/
 
 # zig alternate cache dirs
 .zig-cache2/
