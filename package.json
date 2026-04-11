@@ -16,6 +16,7 @@
     "caroline": "yarn workspace carolinemizen.art start",
     "cards": "yarn workspace seanscards start",
     "gosniff": "yarn workspace gosniff start",
+    "converter": "yarn workspace converter start",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
     "prod:docker": "yarn workspaces foreach -At run prod:docker",
     "down": "yarn workspaces foreach -Apt run down",

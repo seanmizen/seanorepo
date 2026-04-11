@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+
+# ---- build ----
+FROM golang:1.22-alpine AS builder
+WORKDIR /src
+RUN apk add --no-cache git
+
+COPY apps/converter/backend/go.mod apps/converter/backend/go.sum ./
+RUN go mod download
+
+COPY apps/converter/backend/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /converter-be .
+
+# ---- production runtime ----
+FROM alpine:3.20 AS prod
+RUN apk add --no-cache ffmpeg ca-certificates tzdata
+COPY --from=builder /converter-be /usr/local/bin/converter-be
+EXPOSE 4041
+ENTRYPOINT ["/usr/local/bin/converter-be"]
+
+# ---- dev (source mounted via docker-compose volume) ----
+FROM golang:1.22-alpine AS dev
+RUN apk add --no-cache ffmpeg
+WORKDIR /app/apps/converter/backend
+ENV CGO_ENABLED=0
+# go mod download on startup so the mounted source gets deps resolved
+CMD sh -c "go mod download && go run ."
