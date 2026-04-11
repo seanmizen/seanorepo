@@ -1,0 +1,23 @@
+{
+  "name": "converter-fe",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "rsbuild dev --open --port 4040",
+    "start:noopen": "rsbuild dev --port 4040",
+    "preview": "rsbuild preview --port 4040",
+    "build": "rsbuild build"
+  },
+  "dependencies": {
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^1.6.13",
+    "@rsbuild/plugin-react": "^1.4.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

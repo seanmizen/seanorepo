@@ -1,0 +1,30 @@
+FROM node:23-slim AS dev
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+# Source is mounted via docker-compose volume
+CMD ["yarn", "rsbuild", "dev", "--port", "4040"]
+
+FROM node:23-slim AS prod-build
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY apps/converter/package.json ./apps/converter/
+COPY apps/converter/frontend/package.json ./apps/converter/frontend/
+
+RUN yarn workspaces focus converter-fe
+
+COPY apps/converter/frontend/src ./apps/converter/frontend/src
+COPY apps/converter/frontend/public ./apps/converter/frontend/public
+COPY apps/converter/frontend/rsbuild.config.ts ./apps/converter/frontend/
+COPY apps/converter/frontend/tsconfig.json ./apps/converter/frontend/
+
+ENV NODE_ENV=production
+RUN yarn workspace converter-fe build
+
+FROM node:23-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/converter/frontend/dist .
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
+EXPOSE 4040
+CMD ["serve", "-s", ".", "-l", "4040"]
