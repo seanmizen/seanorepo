@@ -15,12 +15,13 @@ Follow-up work after the initial scaffold. Ordered roughly by priority within ea
 
 ## Frontend (React + RSBuild)
 
-- [ ] Add `react-router` and route skeletons per the CLAUDE.md Directive 1 URL pattern: `/`, `/convert-mp4-to-gif`, `/convert-wav-to-mp3`, etc. Each route pre-selects the conversion pair and embeds the same tool component
-- [ ] Generate 5 initial `/convert-*` landing pages as actual routes (not query params) — start with the pairs listed in `docs/seo.md` week-1 priorities
-- [ ] Inject `WebApplication` + `HowTo` JSON-LD per page in the RSBuild HTML template
-- [ ] Create `public/llms.txt` and serve it at `/llms.txt` — content template is in `docs/seo.md`
-- [ ] Sitemap.xml generation from the route list at build time
-- [ ] `favicon.svg` — waiting on branding lock-in 🔒
+- [x] Add `react-router` and route skeletons per the CLAUDE.md Directive 1 URL pattern: `/`, `/convert-mp4-to-gif`, `/convert-wav-to-mp3`, etc. Each route pre-selects the conversion pair and embeds the same tool component
+- [x] Generate 5 initial `/convert-*` landing pages as actual routes (not query params) — start with the pairs listed in `docs/seo.md` week-1 priorities (source of truth: `src/data/pairs.ts`)
+- [x] Inject `WebApplication` (homepage) + `HowTo` + `BreadcrumbList` (pair pages) JSON-LD via `usePageMeta` hook
+- [x] Create `public/llms.txt` and serve it at `/llms.txt` — content template is in `docs/seo.md`
+- [ ] Serve a real 301 from `/convert` → `/` at the edge (nginx / Cloudflare). The React `<Navigate>` is a client-side fallback only — search engines won't see the redirect
+- [ ] Sitemap.xml generation from the route list at build time — drive from `src/data/pairs.ts`
+- [ ] `favicon.svg` — optional, raster favicons already copied from seanmizen.com
 - [ ] Keyboard shortcut: `Cmd/Ctrl+U` focuses the drop zone's hidden file input
 - [ ] Handle the "drag entered then left" state so the drop zone doesn't get stuck in hover style
 - [ ] Error state currently shows `String(e)` — render a friendly message map instead
@@ -34,13 +35,13 @@ Follow-up work after the initial scaffold. Ordered roughly by priority within ea
 - [ ] Disk quota on `TEMP_DIR` partition — without this a single runaway upload could fill root
 - [ ] Monitoring: ffmpeg failure rate alert (>5% over 10 min triggers a ping)
 
-## Branding & Domain 🔒
+## Branding & Domain
 
-- [ ] Pick the name — top rec in `docs/branding.md` is **Transmute**, but this is Sean's call
-- [ ] Register the domain. Check availability of `.dev` first (likely free), `.io` second
-- [ ] Wordmark / logo draft — sans-serif, two-arrow transform icon per branding doc
-- [ ] Favicon (SVG, dark + light variant)
-- [ ] Update all placeholder domains in docs once locked in — currently `yourdomain.com` / `transmute.dev` as examples
+Name and domain **locked**: Sean's Converter, `seansconverter.com`. See [`docs/branding.md`](docs/branding.md).
+
+- [ ] Register `seansconverter.com` (if not already done)
+- [ ] OG image / social card — 1200×630 PNG with the "s" mark
+- [ ] Optional: vector SVG version of the "s" mark (current favicons are PNG/ICO)
 
 ## Monetisation (ship later, not week 1)
 
@@ -58,11 +59,9 @@ Follow-up work after the initial scaffold. Ordered roughly by priority within ea
 - [ ] Answer 5 Reddit / SuperUser / StackOverflow questions about format conversion, mention the tool once at the end
 - [ ] Submit to alternativeto.net, theresanaiforthat.com, producthunt.com
 
-## Open questions for Sean
+## Resolved decisions (historical)
 
-These block multiple TODOs above — answering them unlocks work:
-
-1. 🔒 **Home server arch**: arm64 or x86_64? Affects Dockerfile platform, binary builds, CPU-count tuning for `WORKERS`
-2. 🔒 **Brand name**: Transmute or something else? Everything downstream (domain, logo, JSON-LD `name` field, social cards) waits on this
-3. 🔒 **Canonical home route**: I defaulted to `/` being canonical with `/convert` → `/` redirect. If the brand name is itself a noun, we might want `/convert` as canonical instead — let me know if you want to flip it
-4. 🔒 **Free tier shape**: 5/day by IP, or 10/day by cookie+IP? IP is harder to circumvent but rougher on shared networks (offices, libraries)
+1. ~~🔒 Home server arch~~ → **x86_64**, portable to arm64 (no hardcoded arch). Default Docker buildx target `linux/amd64`. See `docs/architecture.md`.
+2. ~~🔒 Brand name~~ → **Sean's Converter** at `seansconverter.com`. See `docs/branding.md`.
+3. ~~🔒 Canonical home route~~ → `/` is canonical. `/convert` 301-redirects to `/`. Per `CLAUDE.md` Directive 1.
+4. 🔒 **Free tier shape** — still open: 5/day by IP, or 10/day by cookie+IP? Not blocking until monetisation ships.

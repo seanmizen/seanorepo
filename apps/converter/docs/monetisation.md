@@ -134,8 +134,8 @@ body: { pack: "pack_100" }
 stripe.checkout.sessions.create({
   mode: "payment",
   line_items: [{ price: PRICE_ID_FOR_PACK_100, quantity: 1 }],
-  success_url: "https://transmute.dev/success?session_id={CHECKOUT_SESSION_ID}",
-  cancel_url: "https://transmute.dev",
+  success_url: "https://seansconverter.com/success?session_id={CHECKOUT_SESSION_ID}",
+  cancel_url: "https://seansconverter.com",
   metadata: { userId: req.cookieUserId, pack: "pack_100" },
 })
 

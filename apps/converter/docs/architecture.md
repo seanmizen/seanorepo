@@ -65,7 +65,7 @@ A Go backend (streaming ffmpeg jobs via worker pool) + React frontend, served vi
 cloudflared tunnel run converter-tunnel
 ```
 
-Add a CNAME in Cloudflare DNS: `converter.yourdomain.com → <tunnel-id>.cfargotunnel.com`
+Add a CNAME in Cloudflare DNS: `seansconverter.com → <tunnel-id>.cfargotunnel.com`
 
 Then create `~/.cloudflared/config.yml`:
 ```yaml
@@ -73,9 +73,9 @@ tunnel: <tunnel-id>
 credentials-file: /root/.cloudflared/<tunnel-id>.json
 
 ingress:
-  - hostname: converter.yourdomain.com
+  - hostname: seansconverter.com
     service: http://localhost:4040
-  - hostname: api.converter.yourdomain.com
+  - hostname: api.seansconverter.com   # optional — split only if we outgrow path-based routing
     service: http://localhost:4041
   - service: http_status:404
 ```
@@ -93,7 +93,7 @@ server {
 
 ```bash
 # Caddy is simplest — auto HTTPS with Let's Encrypt
-caddy reverse-proxy --from converter.yourdomain.com --to localhost:4041
+caddy reverse-proxy --from seansconverter.com --to localhost:4041
 ```
 
 ### Rate Limiting per IP
@@ -125,19 +125,22 @@ Set `TEMP_DIR` to a dedicated partition with a disk quota (e.g. 20 GB) to preven
 
 ## Binary Targets
 
-The Go binary is statically compiled (`CGO_ENABLED=0`). Cross-compile for arm64:
+**Primary target: `linux/amd64` (x86_64 server-class CPU).** The home server is x86_64, and that's what we build and ship by default. The default `WORKERS` tuning (4) assumes a server-class CPU with 4+ physical cores.
+
+**Secondary target: `linux/arm64` is supported but not default.** The Go code is arch-agnostic (`CGO_ENABLED=0`, pure Go stdlib), the runtime image (`alpine:3.20`) has arm64 ffmpeg packages, and nothing in this codebase hardcodes x86_64 assumptions. If we ever move to a Pi or Apple Silicon host, the only change is the buildx platform flag — no code changes.
 
 ```bash
-# From your Mac, targeting a Raspberry Pi / Apple Silicon server
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o converter-be-arm64 .
+# Default — ship the x86_64 image
+docker buildx build --platform linux/amd64 -t seansconverter-be .
 
-# Or let Docker buildx cross-compile:
-docker buildx build --platform linux/arm64 -t converter-be:arm64 .
+# Cross-build for arm64 when needed
+docker buildx build --platform linux/arm64 -t seansconverter-be:arm64 .
+
+# Or native-build on the target host
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o converter-be .
 ```
 
-The runtime Docker image (`alpine:3.20`) installs ffmpeg via `apk`, which has arm64 packages. No CGO means no native compilation issues.
-
-**Assumption**: Home server is arm64 (Apple Silicon Mac mini or Pi 4+). If x86_64, change `--platform linux/amd64`.
+**Never hardcode an architecture** in Dockerfiles, Go code, or CI config. If you find yourself writing `amd64` in a non-command context (e.g. an env var, a file name), flag it — it should be a build-time platform argument, not a baked-in string.
 
 ## Systemd Unit (non-Docker)
 

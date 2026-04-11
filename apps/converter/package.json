@@ -2,7 +2,9 @@
   "name": "converter",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["frontend"],
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
     "start": "concurrently --names FE,BE --prefix-colors cyan,green \"yarn workspace converter-fe start:noopen\" \"cd backend && go run .\"",
     "start:docker": "docker compose --profile dev up --build",
