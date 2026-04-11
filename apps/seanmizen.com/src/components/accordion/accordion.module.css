@@ -15,6 +15,12 @@
 
 .trigger:hover {
   cursor: default;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.trigger:active {
+  opacity: 0.7;
 }
 
 .content {

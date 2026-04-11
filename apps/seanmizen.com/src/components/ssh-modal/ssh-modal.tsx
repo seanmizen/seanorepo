@@ -1,4 +1,4 @@
-import type { ChangeEvent, FC, FormEvent } from 'react';
+import type { ChangeEvent, FC, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import styles from './ssh-modal.module.css';
 
@@ -17,28 +17,47 @@ const SSHModal: FC<SSHModalProps> = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isError, setIsError] = useState(false);
-  const focusRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isOpen && focusRef.current) {
-      focusRef.current.focus();
+    if (isOpen && closeButtonRef.current) {
+      closeButtonRef.current.focus();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    const handleEscKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (!isOpen) return;
+
+      if (e.key === 'Escape') {
         onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, input, [tabindex]:not([tabindex="-1"])',
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
 
-    if (isOpen) {
-      window.addEventListener('keydown', handleEscKey);
-    }
-
-    return () => {
-      window.removeEventListener('keydown', handleEscKey);
-    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -63,6 +82,12 @@ const SSHModal: FC<SSHModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleBackdropKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      onClose();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -71,23 +96,25 @@ const SSHModal: FC<SSHModalProps> = ({ isOpen, onClose }) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="ssh-modal-title"
+      ref={modalRef}
     >
       <button
         type="button"
         className={styles.backdropButton}
         onClick={onClose}
+        onKeyDown={handleBackdropKeyDown}
         aria-label="Close modal"
         tabIndex={-1}
       />
       <div className={styles.modal}>
         <button
           type="button"
-          ref={focusRef}
+          ref={closeButtonRef}
           className={styles.closeButton}
           onClick={onClose}
-          aria-label="Close"
+          aria-label="Close SSH modal"
         >
-          x
+          ✕
         </button>
 
         <h2 id="ssh-modal-title">SSH Access</h2>

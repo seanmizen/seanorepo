@@ -8,14 +8,19 @@
   opacity: 0.7;
   width: 40px;
   height: 40px;
+  border-radius: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--color);
 }
 
-.theme-toggle-button:focus {
-  outline: none;
+.theme-toggle-button:hover {
+  opacity: 1;
+}
+
+.theme-toggle-button:active {
+  opacity: 0.5;
 }
 
 .theme-toggle-button svg {
