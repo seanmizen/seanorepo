@@ -30,9 +30,6 @@ const Home: FC = () => {
 
   return (
     <main className="container">
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
       <h1 id="main-content">seanmizen.com</h1>
       <p>developer | automator | person</p>
       <Spacer />
