@@ -1,0 +1,10 @@
+# All ephemeral converter artifacts — nothing here should ever be committed.
+data/
+test/in/
+test/out/
+test/tmp/
+*.log
+ffmpeg-converter
+ffmpeg-converter.exe
+test/.ffmpeg-converter
+test/server.log
