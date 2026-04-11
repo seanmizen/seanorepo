@@ -12,7 +12,7 @@ const App: FC = () => {
         <Routes>
           <Route path="/apps" element={<Apps />} />
           <Route path="/glasto" element={<MapNetwork />} />
-          <Route path="/*" element={<Home setIsSnowing={() => {}} />} />
+          <Route path="/*" element={<Home />} />
         </Routes>
       </Router>
     </ThemeProvider>

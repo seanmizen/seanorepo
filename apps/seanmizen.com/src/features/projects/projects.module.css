@@ -1,8 +1,12 @@
-/* 
+/*
   Make list of links appear differently to collapsibles.
   spacebar will work for collapsibles
   only enter will work for links
  */
 .ul-link li {
   list-style-type: "-";
+}
+
+.ul-padded-left {
+  padding-left: 1rem;
 }

@@ -8,15 +8,11 @@ import {
   SSHModal,
   ThemeToggle,
 } from '@/components';
-import { Donate, Github, Projects, ThisPage, Xmas } from '@/features';
+import { Donate, Github, Projects, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 import { ThemeContext } from '@/providers';
 
-interface HomeProps {
-  setIsSnowing?: (isSnowing: boolean) => void;
-}
-
-const Home: FC<HomeProps> = ({ setIsSnowing }) => {
+const Home: FC = () => {
   const { mode, toggleMode } = useContext(ThemeContext);
   const [isSSHModalOpen, setIsSSHModalOpen] = useState(false);
 
@@ -30,12 +26,14 @@ const Home: FC<HomeProps> = ({ setIsSnowing }) => {
     { component: <Github />, trigger: 'github' },
     { component: <Donate />, trigger: 'donate' },
     { component: <ThisPage />, trigger: 'this page' },
-    { component: <Xmas />, trigger: 'xmas lists!' },
   ];
 
   return (
     <main className="container">
-      <h1>seanmizen.com</h1>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      <h1 id="main-content">seanmizen.com</h1>
       <p>developer | automator | person</p>
       <Spacer />
       <ul>
@@ -44,7 +42,6 @@ const Home: FC<HomeProps> = ({ setIsSnowing }) => {
             key={subsection.trigger}
             trigger={subsection.trigger}
             subLink={subsection.subLink}
-            setIsSnowing={setIsSnowing}
           >
             {subsection.component}
           </HomeLi>

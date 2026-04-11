@@ -18,6 +18,7 @@ const projectList: Project[] = [
   {
     linklabel: 'seanmizen.com',
     description: 'This site',
+    href: 'https://seanmizen.com',
     arialabel: 'URL for this website',
   },
   {
@@ -28,7 +29,7 @@ const projectList: Project[] = [
   },
   {
     linklabel: 'carolinemizen.art',
-    description: 'Art portfolio (under construction)',
+    description: 'Art portfolio',
     href: 'https://carolinemizen.art',
     arialabel: 'URL for carolinemizen.art',
   },
