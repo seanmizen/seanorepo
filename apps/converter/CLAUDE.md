@@ -20,6 +20,8 @@ This file is **agent-authoritative**: any Claude session working in `apps/conver
 
 **Conclusion**: Every user-facing route is named as if it were a Google search query. Every machine-facing route follows REST. The URL is the first thing a person reads — and often the only thing they read before clicking.
 
+**Final call: flat form wins.** `/convert-mp4-to-gif`, not `/convert/mp4-to-gif`. The whole Google query lives in a single slug, no nesting. This is locked.
+
 ### The rule
 
 **Every user-facing route MUST begin with an action verb that matches a real search query.**
