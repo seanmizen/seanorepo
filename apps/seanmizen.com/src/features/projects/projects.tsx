@@ -5,15 +5,13 @@ interface Project {
   linklabel: string;
   description: string;
   href?: string;
-  arialabel: string;
+  arialabel?: string;
 }
 
 const projectList: Project[] = [
   {
-    linklabel: 'SeansCards.com',
-    description: 'Handwritten cards for sale - by me, for you',
-    href: 'https://seanscards.com',
-    arialabel: 'URL for SeansCards.com',
+    linklabel: 'SeansCards.com (2024–2025)',
+    description: 'RIP, it covered its costs',
   },
   {
     linklabel: 'seanmizen.com',
@@ -46,15 +44,20 @@ const Projects: FC = () => {
     <ul className={`${styles['ul-link']} ${styles['ul-padded-left']}`}>
       {projectList.map((project) => (
         <li key={project.linklabel}>
-          <a
-            aria-label={project.arialabel}
-            href={project.href}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {project.linklabel}
-          </a>
-          - {project.description}
+          {project.href ? (
+            <a
+              aria-label={project.arialabel}
+              href={project.href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {project.linklabel}
+            </a>
+          ) : (
+            <span>{project.linklabel}</span>
+          )}
+          {' - '}
+          {project.description}
         </li>
       ))}
     </ul>

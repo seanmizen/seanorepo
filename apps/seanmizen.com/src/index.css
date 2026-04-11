@@ -44,22 +44,6 @@ body {
   box-shadow: none;
 }
 
-/* skip link - hidden until focused */
-.skip-link {
-  position: absolute;
-  top: -100%;
-  left: 0;
-  padding: 0.5rem 1rem;
-  background: var(--background);
-  color: var(--color);
-  z-index: 9999;
-  text-decoration: underline;
-}
-
-.skip-link:focus {
-  top: 0;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
