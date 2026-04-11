@@ -11,7 +11,7 @@ export const devConfig = {
 };
 
 export const prodConfig = {
-  feDomain: 'https://converter.yourdomain.com',
+  feDomain: 'https://seansconverter.com',
   fePort: 4040,
   bePort: 4041,
   apiBase: '/api', // proxied by nginx in prod

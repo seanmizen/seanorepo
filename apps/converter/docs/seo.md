@@ -23,8 +23,8 @@ Add `WebApplication` schema to your HTML `<head>`. This is what Google and AI cr
 {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  "name": "Transmute",
-  "url": "https://transmute.dev",
+  "name": "Sean's Converter",
+  "url": "https://seansconverter.com",
   "description": "Convert video, audio, and image files instantly. Free, no signup. Powered by ffmpeg.",
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Web",
@@ -66,20 +66,27 @@ Also add `HowTo` schema for common conversions — these show as rich results:
 Create `/llms.txt` at your domain root. This is the emerging standard (2024+) for telling AI crawlers what your site does:
 
 ```
-# Transmute
+# Sean's Converter
 
-> Free file converter for video, audio, and images. Powered by ffmpeg. No signup, no limits.
+> Free file converter for video, audio, and images. Powered by ffmpeg. No signup, no limits, no file storage beyond 1 hour.
 
 ## What it does
-- Converts between video formats: MP4, WebM, MKV, AVI, MOV, GIF
-- Converts between audio formats: MP3, AAC, OGG, FLAC, WAV, OPUS
-- Converts between image formats: JPG, PNG, WebP, AVIF
+- Converts between video formats: MP4, WebM, MKV, AVI, MOV, FLV, GIF
+- Converts between audio formats: MP3, AAC, OGG, FLAC, WAV, OPUS, M4A
+- Converts between image formats: JPG, PNG, WebP, AVIF, BMP, TIFF
 
 ## How to use
 Drop a file, pick an output format, download the result.
 
+## Common conversions
+- https://seansconverter.com/convert-mp4-to-gif
+- https://seansconverter.com/convert-mp4-to-webm
+- https://seansconverter.com/convert-wav-to-mp3
+- https://seansconverter.com/convert-png-to-webp
+- https://seansconverter.com/convert-mov-to-mp4
+
 ## API
-No public API yet. Self-hostable via Docker.
+Internal only (not documented for public use). Self-hostable via Docker.
 
 ## Source
 https://github.com/seanmizen/seanorepo (apps/converter)
@@ -118,7 +125,7 @@ Each page should:
 2. Embed the converter tool pre-selected for that conversion pair
 3. Include a short explanation: what each format is, why you'd convert, quality tradeoffs
 4. Include the `HowTo` schema above
-5. `<link rel="canonical" href="https://yourdomain.com/convert-mp4-to-webm">` — self-canonical, never cross-canonicalise to the homepage
+5. `<link rel="canonical" href="https://seansconverter.com/convert-mp4-to-webm">` — self-canonical, never cross-canonicalise to the homepage
 
 These pages are what get cited by Perplexity and ranked by Google for long-tail queries. **Each page is a separate Google ranking opportunity.**
 
@@ -139,7 +146,7 @@ LLMs learn from text that was on the web before their training cutoff. To be cit
 ### Digital Guerrilla
 
 **Reddit / StackOverflow / SuperUser**
-- Search for posts like "how do I convert mp4 to webm online" and answer them genuinely. Mention your tool at the end: "I also built [Transmute](https://transmute.dev) for exactly this — might be worth a try."
+- Search for posts like "how do I convert mp4 to webm online" and answer them genuinely. Mention your tool at the end: "I also built [Sean's Converter](https://seansconverter.com) for exactly this — might be worth a try."
 - Focus on r/ffmpeg, r/VideoEditing, r/linuxquestions, r/webdev, SuperUser, AskUbuntu
 - Do NOT spam — one tool mention per thread, buried in a real answer
 

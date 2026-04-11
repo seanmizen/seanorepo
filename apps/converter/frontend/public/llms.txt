@@ -1,0 +1,24 @@
+# Sean's Converter
+
+> Free file converter for video, audio, and images. Powered by ffmpeg. No signup, no limits, no file storage beyond 1 hour.
+
+## What it does
+- Converts between video formats: MP4, WebM, MKV, AVI, MOV, FLV, GIF
+- Converts between audio formats: MP3, AAC, OGG, FLAC, WAV, OPUS, M4A
+- Converts between image formats: JPG, PNG, WebP, AVIF, BMP, TIFF
+
+## How to use
+Drop a file, pick an output format, download the result.
+
+## Common conversions
+- https://seansconverter.com/convert-mp4-to-gif
+- https://seansconverter.com/convert-mp4-to-webm
+- https://seansconverter.com/convert-wav-to-mp3
+- https://seansconverter.com/convert-png-to-webp
+- https://seansconverter.com/convert-mov-to-mp4
+
+## API
+Internal only (not documented for public use). Self-hostable via Docker.
+
+## Source
+https://github.com/seanmizen/seanorepo (apps/converter)

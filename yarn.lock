@@ -4919,7 +4919,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"concurrently@npm:^9.2.1":
+"concurrently@npm:^9.1.2, concurrently@npm:^9.2.1":
   version: 9.2.1
   resolution: "concurrently@npm:9.2.1"
   dependencies:
@@ -4972,6 +4972,29 @@ __metadata:
   checksum: 10c0/d90aa0e3b6a27f9d5265a8d32def3c5c855b3e823a9db1f26d772f8146d6b91020a2fdfd905ce8048a73fad3aaf836fef8188c67602c374405e2ae8396c4ac46
   languageName: node
   linkType: hard
+
+"converter-fe@workspace:apps/converter/frontend":
+  version: 0.0.0-use.local
+  resolution: "converter-fe@workspace:apps/converter/frontend"
+  dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
+    "@rsbuild/plugin-react": "npm:^1.4.2"
+    "@types/react": "npm:^19.2.7"
+    "@types/react-dom": "npm:^19.2.3"
+    react: "npm:^19.2.1"
+    react-dom: "npm:^19.2.1"
+    react-router-dom: "npm:^7.10.1"
+    typescript: "npm:^5.9.3"
+  languageName: unknown
+  linkType: soft
+
+"converter@workspace:apps/converter":
+  version: 0.0.0-use.local
+  resolution: "converter@workspace:apps/converter"
+  dependencies:
+    concurrently: "npm:^9.1.2"
+  languageName: unknown
+  linkType: soft
 
 "cookie@npm:^1.0.0, cookie@npm:^1.0.1":
   version: 1.0.2

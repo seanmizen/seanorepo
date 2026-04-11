@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"syscall"
@@ -18,6 +19,15 @@ import (
 )
 
 func main() {
+	// Fail fast if ffmpeg/ffprobe aren't on PATH — otherwise the server happily
+	// accepts uploads until the first job fails. systemd/docker will restart-loop
+	// on a non-zero exit, which surfaces the misconfiguration immediately.
+	for _, bin := range []string{"ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			log.Fatalf("required binary %q not found on PATH: %v", bin, err)
+		}
+	}
+
 	port := getenv("PORT", "4041")
 	numWorkers := getenvInt("WORKERS", 4)
 	tempDir := getenv("TEMP_DIR", os.TempDir())
