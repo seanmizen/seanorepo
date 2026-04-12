@@ -186,11 +186,7 @@ const Collection: FC = () => {
 
       const data = await response.json();
       setGallery(data.gallery);
-      // NOTE: Filtering draft artworks on frontend for now.
-      // TODO: Could/should be filtered on backend to reduce payload size.
-      setArtworks(
-        data.artworks.filter((artwork: Artwork) => artwork.status !== 'draft'),
-      );
+      setArtworks(data.artworks);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load gallery');
     } finally {

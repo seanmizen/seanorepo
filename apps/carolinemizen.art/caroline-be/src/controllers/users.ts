@@ -7,10 +7,25 @@ import type {
 import { userService } from '../services';
 import type { CreateUserDto } from '../types';
 
-const createUser = async (request: FastifyRequest, reply: FastifyReply) => {
-  const user = request.body as CreateUserDto; // TODO this but properly
+const createUserSchema = {
+  body: {
+    type: 'object',
+    required: ['email', 'password'],
+    properties: {
+      email: { type: 'string', format: 'email' },
+      password: { type: 'string', minLength: 1 },
+      role: { type: 'string' },
+    },
+    additionalProperties: false,
+  },
+};
+
+const createUser = async (
+  request: FastifyRequest<{ Body: CreateUserDto }>,
+  reply: FastifyReply,
+) => {
   try {
-    await userService.createUser(user);
+    await userService.createUser(request.body);
     reply.send({ message: 'User created' });
   } catch (err) {
     reply.status(500).send(err);
@@ -35,7 +50,7 @@ const routes = async (
   fastify: FastifyInstance,
   _options: FastifyPluginOptions,
 ) => {
-  fastify.post('/', createUser);
+  fastify.post('/', { schema: createUserSchema }, createUser);
   fastify.get('/', getUsers);
   fastify.get('/:id', getUser);
   // fastify.put("/:id", updateUser);

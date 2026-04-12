@@ -132,7 +132,7 @@ export async function galleryRoutes(fastify: FastifyInstance) {
             return reply.status(404).send({ error: 'Gallery not found' });
           }
 
-          // Get artworks in gallery with image data
+          // Get artworks in gallery with image data, excluding drafts
           const artworks = db
             .query(
               `SELECT a.*,
@@ -141,7 +141,7 @@ export async function galleryRoutes(fastify: FastifyInstance) {
                FROM artworks a
                JOIN gallery_artworks ga ON a.id = ga.artwork_id
                LEFT JOIN images i ON a.primary_image_id = i.id
-               WHERE ga.gallery_id = ?
+               WHERE ga.gallery_id = ? AND a.status != 'draft'
                ORDER BY ga.display_order ASC`,
             )
             .all(gallery.id);
