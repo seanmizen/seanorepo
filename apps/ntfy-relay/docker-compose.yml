@@ -1,0 +1,38 @@
+x-ntfy-relay-base: &ntfy-relay-base
+  container_name: ntfy-relay-sm
+  build:
+    context: ../..
+    dockerfile: apps/ntfy-relay/dockerfile
+  environment:
+    - NTFY_URL=http://ntfy:80/${NTFY_TOPIC:-sean}
+    - NOTIFY_SECRET=${NOTIFY_SECRET:-}
+    - ADDR=:8080
+  ports:
+    - "4051:8080"
+  depends_on:
+    - ntfy
+  restart: unless-stopped
+
+services:
+  # The ntfy push-notification server
+  ntfy:
+    image: binwiederhier/ntfy
+    container_name: ntfy-sm
+    command: serve --cache-file /var/cache/ntfy/cache.db --upstream-base-url https://ntfy.sh
+    ports:
+      - "4050:80"
+    volumes:
+      - ntfy_cache:/var/cache/ntfy
+    restart: unless-stopped
+
+  # The Go relay that translates POST /notify → ntfy HTTP API
+  ntfy-relay:
+    <<: *ntfy-relay-base
+    profiles: ["prod"]
+
+  ntfy-relay-dev:
+    <<: *ntfy-relay-base
+    profiles: ["dev"]
+
+volumes:
+  ntfy_cache:
