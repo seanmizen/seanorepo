@@ -411,7 +411,13 @@ export const catalogCategories: CatalogCategory[] = [
     id: 'audio-conversion',
     title: 'Audio Conversion',
     description: 'Convert or extract audio to MP3, Opus, AAC, FLAC, or WAV.',
-    ops: ['audio_mp3', 'audio_opus', 'audio_aac', 'audio_flac', 'extract_audio'],
+    ops: [
+      'audio_mp3',
+      'audio_opus',
+      'audio_aac',
+      'audio_flac',
+      'extract_audio',
+    ],
   },
   {
     id: 'audio-editing',
