@@ -1,8 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
-import Home from '@/pages/Home';
-import ConvertPair from '@/pages/ConvertPair';
 import { PAIRS } from '@/data/pairs';
+import ConvertPair from '@/pages/ConvertPair';
+import Home from '@/pages/Home';
 
 // URL convention is **locked** by apps/converter/CLAUDE.md Directive 1.
 // Landing pages are verb-first flat slugs (`/convert-mp4-to-gif`). `/convert`
