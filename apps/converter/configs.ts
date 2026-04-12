@@ -4,23 +4,23 @@
 const isDev = process.env.NODE_ENV !== 'production';
 
 export const devConfig = {
-  feDomain: 'http://localhost:4040',
-  fePort: 4040,
-  bePort: 4041,
-  apiBase: 'http://localhost:4041/api',
+  feDomain: 'http://localhost:4050',
+  fePort: 4050,
+  bePort: 4051,
+  apiBase: 'http://localhost:4051/api',
 };
 
 export const prodConfig = {
   feDomain: 'https://seansconverter.com',
-  fePort: 4040,
-  bePort: 4041,
+  fePort: 4050,
+  bePort: 4051,
   apiBase: '/api', // proxied by nginx in prod
 };
 
 export const flyConfig = {
   feDomain: 'https://converter.fly.dev',
-  fePort: 5040,
-  bePort: 5041,
+  fePort: 5050,
+  bePort: 5051,
   apiBase: '/api',
 };
 

@@ -15,7 +15,7 @@ export default defineConfig({
         process.env.NODE_ENV ?? 'development',
       ),
       'import.meta.env.VITE_API_BASE': JSON.stringify(
-        process.env.API_BASE ?? 'http://localhost:4041',
+        process.env.API_BASE ?? 'http://localhost:4051',
       ),
     },
   },
@@ -25,9 +25,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 4040,
+    port: 4050,
     proxy: {
-      '/api': 'http://localhost:4041',
+      '/api': 'http://localhost:4051',
     },
   },
 });
