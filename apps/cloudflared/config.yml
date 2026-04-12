@@ -2,6 +2,7 @@ tunnel: 0f63e5e3-ee1c-425a-9916-cd037524731d
 credentials-file: ./credentials/0f63e5e3-ee1c-425a-9916-cd037524731d.json
 
 # Cloudflared Ingress Rules (Port Range: 4xxx)
+# !! PORT 4040 IS BANNED — ngrok's web inspector binds it by default. Never assign any service to 4040.
 # To add a new service:
 # 1. Choose an available port in the 4xxx range (e.g., 4050 for frontend, 4051 for backend)
 # 2. Add hostname rules following the pattern below
