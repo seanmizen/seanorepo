@@ -16,12 +16,18 @@ export async function getFormats(): Promise<Record<string, string[]>> {
   return res.json();
 }
 
-export async function createJob(file: File, outputFormat: string): Promise<{ id: string }> {
+export async function createJob(
+  file: File,
+  outputFormat: string,
+): Promise<{ id: string }> {
   const form = new FormData();
   form.append('file', file);
   form.append('outputFormat', outputFormat);
 
-  const res = await fetch(`${API_BASE}/api/jobs`, { method: 'POST', body: form });
+  const res = await fetch(`${API_BASE}/api/jobs`, {
+    method: 'POST',
+    body: form,
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Upload failed (${res.status})`);
@@ -29,7 +35,10 @@ export async function createJob(file: File, outputFormat: string): Promise<{ id:
   return res.json();
 }
 
-export function subscribeToJob(id: string, onEvent: (job: JobStatus) => void): () => void {
+export function subscribeToJob(
+  id: string,
+  onEvent: (job: JobStatus) => void,
+): () => void {
   const es = new EventSource(`${API_BASE}/api/jobs/${id}/events`);
   es.onmessage = (e) => {
     try {

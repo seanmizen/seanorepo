@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Converter } from '@/components/Converter';
+import { PAIRS } from '@/data/pairs';
 import { BRAND } from '@/lib/brand';
 import { usePageMeta } from '@/lib/usePageMeta';
-import { PAIRS } from '@/data/pairs';
 
 export default function Home() {
   usePageMeta({
@@ -13,8 +13,16 @@ export default function Home() {
 
   return (
     <>
-      <section style={{ textAlign: 'center', marginBottom: '2rem', maxWidth: '560px' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.03em' }}>
+      <section
+        style={{ textAlign: 'center', marginBottom: '2rem', maxWidth: '560px' }}
+      >
+        <h1
+          style={{
+            fontSize: '2rem',
+            fontWeight: 700,
+            letterSpacing: '-0.03em',
+          }}
+        >
           Convert anything, instantly
         </h1>
         <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>

@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { Converter } from '@/components/Converter';
+import { type ConversionPair, pairCanonical } from '@/data/pairs';
 import { BRAND } from '@/lib/brand';
 import { usePageMeta } from '@/lib/usePageMeta';
-import { pairCanonical, type ConversionPair } from '@/data/pairs';
 
 interface ConvertPairPageProps {
   pair: ConversionPair;
@@ -77,8 +77,17 @@ export default function ConvertPair({ pair }: ConvertPairPageProps) {
 
   return (
     <>
-      <section style={{ textAlign: 'center', marginBottom: '2rem', maxWidth: '640px' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+      <section
+        style={{ textAlign: 'center', marginBottom: '2rem', maxWidth: '640px' }}
+      >
+        <h1
+          style={{
+            fontSize: '1.75rem',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.2,
+          }}
+        >
           {heading}
         </h1>
         <p
@@ -105,7 +114,14 @@ export default function ConvertPair({ pair }: ConvertPairPageProps) {
           lineHeight: 1.6,
         }}
       >
-        <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.5rem' }}>
+        <h2
+          style={{
+            fontSize: '1rem',
+            fontWeight: 600,
+            color: 'var(--text)',
+            marginBottom: '0.5rem',
+          }}
+        >
           How it works
         </h2>
         <ol style={{ paddingLeft: '1.25rem', margin: 0 }}>
@@ -113,7 +129,10 @@ export default function ConvertPair({ pair }: ConvertPairPageProps) {
           <li>
             Click <strong>Convert to .{pair.to}</strong>.
           </li>
-          <li>Download the {pair.toLabel} result. Files are deleted from the server within 1 hour.</li>
+          <li>
+            Download the {pair.toLabel} result. Files are deleted from the
+            server within 1 hour.
+          </li>
         </ol>
       </section>
     </>

@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  createJob,
+  downloadUrl,
+  getFormats,
+  type JobStatus,
+  subscribeToJob,
+} from '@/api/client';
 import { DropZone } from '@/components/DropZone';
 import { FormatPicker } from '@/components/FormatPicker';
-import { createJob, downloadUrl, getFormats, subscribeToJob, type JobStatus } from '@/api/client';
 
 type Stage =
   | { name: 'idle' }
@@ -17,7 +23,10 @@ interface ConverterProps {
   presetOutputFormat?: string;
 }
 
-export function Converter({ presetInputExt, presetOutputFormat }: ConverterProps) {
+export function Converter({
+  presetInputExt,
+  presetOutputFormat,
+}: ConverterProps) {
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
   const [formatsMap, setFormatsMap] = useState<Record<string, string[]>>({});
   const [selectedFmt, setSelectedFmt] = useState(presetOutputFormat ?? '');
@@ -42,7 +51,10 @@ export function Converter({ presetInputExt, presetOutputFormat }: ConverterProps
 
     const formats = formatsMap[ext] ?? [];
     if (formats.length === 0) {
-      setStage({ name: 'error', message: `Unsupported format: .${ext || '???'}` });
+      setStage({
+        name: 'error',
+        message: `Unsupported format: .${ext || '???'}`,
+      });
       return;
     }
 
@@ -88,10 +100,17 @@ export function Converter({ presetInputExt, presetOutputFormat }: ConverterProps
       if (updatedJob.status === 'done') {
         unsubRef.current?.();
         const base = stage.file.name.replace(/\.[^.]+$/, '');
-        setStage({ name: 'done', jobId, downloadName: `${base}.${selectedFmt}` });
+        setStage({
+          name: 'done',
+          jobId,
+          downloadName: `${base}.${selectedFmt}`,
+        });
       } else if (updatedJob.status === 'error') {
         unsubRef.current?.();
-        setStage({ name: 'error', message: updatedJob.error ?? 'Conversion failed' });
+        setStage({
+          name: 'error',
+          message: updatedJob.error ?? 'Conversion failed',
+        });
       } else {
         setStage((prev) =>
           prev.name === 'converting' ? { ...prev, job: updatedJob } : prev,
@@ -136,7 +155,13 @@ export function Converter({ presetInputExt, presetOutputFormat }: ConverterProps
                   alignItems: 'center',
                 }}
               >
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {stage.file.name}
                 </span>
                 <span style={{ flexShrink: 0, marginLeft: '1rem' }}>
@@ -197,16 +222,26 @@ export function Converter({ presetInputExt, presetOutputFormat }: ConverterProps
             <div
               style={{
                 height: '100%',
-                width: stage.job.progress > 0 ? `${stage.job.progress}%` : '100%',
+                width:
+                  stage.job.progress > 0 ? `${stage.job.progress}%` : '100%',
                 background: 'var(--accent)',
                 borderRadius: '3px',
                 transition: 'width 0.3s',
-                animation: stage.job.progress === 0 ? 'pulse 1.5s ease-in-out infinite' : undefined,
+                animation:
+                  stage.job.progress === 0
+                    ? 'pulse 1.5s ease-in-out infinite'
+                    : undefined,
               }}
             />
           </div>
           {stage.job.progress > 0 && (
-            <p style={{ marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+            <p
+              style={{
+                marginTop: '0.5rem',
+                color: 'var(--text-muted)',
+                fontSize: '0.875rem',
+              }}
+            >
               {stage.job.progress}%
             </p>
           )}
@@ -277,7 +312,13 @@ export function Converter({ presetInputExt, presetOutputFormat }: ConverterProps
           }}
         >
           <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>⚠️</div>
-          <p style={{ color: 'var(--error)', fontWeight: 600, marginBottom: '1rem' }}>
+          <p
+            style={{
+              color: 'var(--error)',
+              fontWeight: 600,
+              marginBottom: '1rem',
+            }}
+          >
             {stage.message}
           </p>
           <button

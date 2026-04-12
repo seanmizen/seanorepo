@@ -21,7 +21,9 @@ function upsertMetaByName(name: string, content: string) {
 }
 
 function upsertMetaByProperty(property: string, content: string) {
-  let el = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`);
+  let el = document.querySelector<HTMLMetaElement>(
+    `meta[property="${property}"]`,
+  );
   if (!el) {
     el = document.createElement('meta');
     el.setAttribute('property', property);
@@ -44,7 +46,12 @@ function upsertCanonical(href: string) {
 // minimum viable SSR-less SEO — crawlers that execute JS (Googlebot,
 // ClaudeBot, PerplexityBot) will see the updated tags. Once traffic
 // justifies it we can upgrade to rsbuild SSR or static prerender.
-export function usePageMeta({ title, description, canonical, jsonLd }: PageMeta) {
+export function usePageMeta({
+  title,
+  description,
+  canonical,
+  jsonLd,
+}: PageMeta) {
   useEffect(() => {
     const prevTitle = document.title;
     document.title = title;

@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent, type ChangeEvent } from 'react';
+import { type ChangeEvent, type DragEvent, useRef, useState } from 'react';
 
 interface Props {
   onFile: (file: File) => void;
@@ -41,18 +41,32 @@ export function DropZone({ onFile, disabled }: Props) {
         opacity: disabled ? 0.5 : 1,
         userSelect: 'none',
       }}
-      onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragging(true); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!disabled) setDragging(true);
+      }}
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
       onClick={() => !disabled && inputRef.current?.click()}
-      onKeyDown={(e) => { if (!disabled && (e.key === 'Enter' || e.key === ' ')) inputRef.current?.click(); }}
+      onKeyDown={(e) => {
+        if (!disabled && (e.key === 'Enter' || e.key === ' '))
+          inputRef.current?.click();
+      }}
     >
       <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📁</div>
-      <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Drop a file here</p>
+      <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
+        Drop a file here
+      </p>
       <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
         or <span style={{ color: 'var(--accent)' }}>browse</span> to choose
       </p>
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.75rem' }}>
+      <p
+        style={{
+          color: 'var(--text-muted)',
+          fontSize: '0.8rem',
+          marginTop: '0.75rem',
+        }}
+      >
         Video · Audio · Image — up to 500 MB
       </p>
       <input
