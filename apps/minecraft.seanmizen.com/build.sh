@@ -39,8 +39,8 @@ mkdir -p "${PUBLIC_DIR}"
 
 # --- 1. Zig WASM build ------------------------------------------------------
 if command -v zig >/dev/null 2>&1; then
-  echo "==> zig build web -Dexample=${EXAMPLE}"
-  if ( cd "${SWINDOWZIG}" && zig build web -Dexample="${EXAMPLE}" ); then
+  echo "==> zig build web -Dexample=${EXAMPLE} -Doptimize=ReleaseFast"
+  if ( cd "${SWINDOWZIG}" && zig build web -Dexample="${EXAMPLE}" -Doptimize=ReleaseFast ); then
     if [ -f "${SWINDOWZIG}/zig-out/bin/app.wasm" ]; then
       cp "${SWINDOWZIG}/zig-out/bin/app.wasm" "${PUBLIC_DIR}/app.wasm"
       echo "    ✅ app.wasm → ${PUBLIC_DIR}/app.wasm"

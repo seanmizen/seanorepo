@@ -168,6 +168,9 @@ async function main(): Promise<void> {
     swindowzig_init?: () => void;
     swindowzig_frame?: (timestamp: number) => void;
     swindowzig_event_resize?: (w: number, h: number, dpi: number) => void;
+    swindowzig_event_mouse_move?: (x: number, y: number, dx: number, dy: number) => void;
+    swindowzig_event_mouse_button?: (button: number, down: boolean) => void;
+    swindowzig_event_key?: (keycode: number, down: boolean) => void;
     swindowzig_config_disable_context_menu?: number;
     swindowzig_config_hide_cursor?: number;
   };
@@ -211,9 +214,17 @@ async function main(): Promise<void> {
       swindowzig_init: init,
       swindowzig_frame: frame,
       swindowzig_event_resize: notifyResize ?? (() => {}),
+      swindowzig_event_mouse_move: exports.swindowzig_event_mouse_move,
+      swindowzig_event_mouse_button: exports.swindowzig_event_mouse_button,
+      swindowzig_event_key: exports.swindowzig_event_key,
     } as never,
     { disableContextMenu },
   );
+
+  // Pointer lock for FPS mouselook — request on click, release on Escape.
+  canvas.addEventListener('click', () => {
+    canvas.requestPointerLock();
+  });
 
   // Hand off: hide the overlay and start the frame loop.
   hideOverlay(ov);
