@@ -78,8 +78,8 @@ COPY apps/minecraft.seanmizen.com/public /app
 COPY --from=js-build /build/boot.js /app/boot.js
 COPY --from=zig-build /build/swindowzig/zig-out/bin/app.wasm /app/app.wasm
 
-EXPOSE 4040
-CMD ["serve", "-s", ".", "-l", "4040"]
+EXPOSE 4042
+CMD ["serve", "-s", ".", "-l", "4042"]
 
 # =============================================================================
 # Dev target — kept minimal so `docker compose --profile dev up` has something

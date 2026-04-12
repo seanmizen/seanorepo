@@ -5,7 +5,7 @@ x-frontend-base: &frontend-base
     dockerfile: apps/minecraft.seanmizen.com/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4040:4040"
+    - "4042:4042"
 
 services:
   frontend:
