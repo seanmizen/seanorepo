@@ -1,4 +1,4 @@
-// Marketing copy for the ffmpeg-converter site.
+// Marketing copy for Sean's Converter site.
 // Pulled straight from STRATEGY.md. Voice: direct, a bit wry, technical when it
 // counts. Sean's existing site style: minimal, no-nonsense, mono for facts.
 
@@ -43,7 +43,7 @@ export interface Competitor {
 
 export const competitors: Competitor[] = [
   {
-    name: 'ffmpeg-converter (us)',
+    name: "Sean's Converter (us)",
     freeFileCap: 'Generous',
     freeCount: 'Generous',
     login: 'Never',

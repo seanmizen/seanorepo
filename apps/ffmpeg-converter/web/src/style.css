@@ -18,31 +18,31 @@
 .light {
   --color: #111;
   --color-dim: #555;
-  --background: #eee;
+  --background: #f4f4f5;
   --panel: #fff;
-  --panel-2: #ddd;
-  --border: #bbb;
+  --panel-2: #e4e4e7;
+  --border: #d4d4d8;
   --border-strong: #333;
-  --accent: #4a9;
-  --accent-2: #087;
-  --danger: #c33;
-  --link: #045;
+  --accent: #7c3aed;
+  --accent-2: #6d28d9;
+  --danger: #dc2626;
+  --link: #1e1b4b;
   --shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .dark {
-  --color: #cecece;
-  --color-dim: #888;
-  --background: #1a1a1a;
-  --panel: #242424;
-  --panel-2: #2e2e2e;
-  --border: #3a3a3a;
-  --border-strong: #888;
-  --accent: #4a9;
-  --accent-2: #6cb;
-  --danger: #e66;
-  --link: #cecece;
-  --shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --color: #d4d4d8;
+  --color-dim: #71717a;
+  --background: rgb(15, 15, 17);
+  --panel: #1c1c20;
+  --panel-2: #27272a;
+  --border: #3f3f46;
+  --border-strong: #71717a;
+  --accent: #7c3aed;
+  --accent-2: #a78bfa;
+  --danger: #ef4444;
+  --link: #d4d4d8;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
 body {
@@ -54,9 +54,26 @@ body {
 }
 
 .container {
-  max-width: 920px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 1.2rem 1rem 3rem;
+}
+
+/* Ad space: generous side margins on wide screens */
+@media (min-width: 1200px) {
+  .container {
+    max-width: 900px;
+  }
+  body {
+    padding-left: 160px;
+    padding-right: 160px;
+  }
+}
+@media (min-width: 1600px) {
+  body {
+    padding-left: 300px;
+    padding-right: 300px;
+  }
 }
 
 .top {
@@ -72,6 +89,26 @@ body {
   font-family: var(--mono);
   font-weight: 500;
   letter-spacing: -0.01em;
+}
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.top-nav a {
+  color: var(--color-dim);
+  text-decoration: none;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition:
+    color 100ms,
+    background 100ms;
+}
+.top-nav a:hover {
+  color: var(--accent-2);
+  background: rgba(124, 58, 237, 0.08);
 }
 .top-right {
   display: flex;
@@ -165,6 +202,9 @@ body {
   }
   .hero h2 {
     font-size: 1.4rem;
+  }
+  .top-nav {
+    display: none;
   }
 }
 
@@ -350,6 +390,9 @@ body {
   color: #fff;
   border-color: var(--accent);
 }
+.chip:hover {
+  background: rgba(124, 58, 237, 0.1);
+}
 
 .advanced {
   border: 1px solid var(--border);
@@ -449,7 +492,7 @@ body {
   cursor: pointer;
 }
 .primary:hover {
-  background: var(--accent-2);
+  background: #6d28d9;
 }
 .primary:disabled {
   opacity: 0.5;

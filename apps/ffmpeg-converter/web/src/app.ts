@@ -154,7 +154,7 @@ function renderStatic(): void {
   for (const c of competitors) {
     const tr = el(
       'tr',
-      c.name.startsWith('ffmpeg-converter') ? { class: 'us' } : {},
+      c.name.startsWith("Sean's Converter") ? { class: 'us' } : {},
       [
         el('td', {}, [c.name]),
         el('td', {}, [c.freeFileCap]),
