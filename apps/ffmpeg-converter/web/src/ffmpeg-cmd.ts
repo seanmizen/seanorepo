@@ -532,6 +532,218 @@ export function buildFfmpegCmd(
         'pcm_s16le',
         sh(output),
       ].join(' ');
+    case 'concat': {
+      // Two-input preview; backend accepts N inputs via repeated -F 'file=@…'.
+      const input2 = `${input.replace(/\.[^.]+$/, '')}2${input.match(/\.[^.]+$/)?.[0] ?? ''}`;
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-i',
+        sh(input2),
+        '-filter_complex',
+        sh('[0:v:0][0:a:0][1:v:0][1:a:0]concat=n=2:v=1:a=1[v][a]'),
+        '-map',
+        '[v]',
+        '-map',
+        '[a]',
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '30',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '64k',
+        sh(output),
+      ].join(' ');
+    }
+    case 'watermark': {
+      const wm = 'watermark.png';
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-i',
+        wm,
+        '-filter_complex',
+        sh('[0:v][1:v]overlay=W-w-5:5'),
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '30',
+        '-c:a',
+        'copy',
+        sh(output),
+      ].join(' ');
+    }
+    case 'loop': {
+      const count = get('count', '3');
+      let extra = '2';
+      if (count === '2') extra = '1';
+      else if (count === '4') extra = '3';
+      return [
+        ...prefix,
+        '-stream_loop',
+        extra,
+        '-i',
+        sh(input),
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '30',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '64k',
+        sh(output),
+      ].join(' ');
+    }
+    case 'subtitles_burn': {
+      const sub = `${input.replace(/\.[^.]+$/, '')}.srt`;
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-vf',
+        sh(`subtitles=${sub}`),
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '30',
+        '-c:a',
+        'copy',
+        sh(output),
+      ].join(' ');
+    }
+    case 'subtitles_soft':
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-i',
+        sh(`${input.replace(/\.[^.]+$/, '')}.srt`),
+        '-c',
+        'copy',
+        '-c:s',
+        'srt',
+        sh(output),
+      ].join(' ');
+    case 'pad_aspect':
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-vf',
+        sh(
+          "scale='if(gt(a,16/9),128,-2)':'if(gt(a,16/9),-2,72)',pad=128:72:(ow-iw)/2:(oh-ih)/2:color=black",
+        ),
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '30',
+        '-c:a',
+        'copy',
+        sh(output),
+      ].join(' ');
+    case 'timelapse':
+      // Backend writes a concat list file; this shows the equivalent ffmpeg call.
+      return [
+        ...prefix,
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        'inputs.list.txt',
+        '-vf',
+        sh('fps=10,format=yuv420p,scale=128:-2'),
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '30',
+        sh(output),
+      ].join(' ');
+    case 'audio_fade':
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-af',
+        sh('afade=t=in:st=0:d=0.2,afade=t=out:st=0.8:d=0.2'),
+        '-c:a',
+        'pcm_s16le',
+        sh(output),
+      ].join(' ');
+    case 'audio_concat': {
+      const input2ac = `${input.replace(/\.[^.]+$/, '')}2${input.match(/\.[^.]+$/)?.[0] ?? ''}`;
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-i',
+        sh(input2ac),
+        '-filter_complex',
+        sh('[0:0][1:0]concat=n=2:v=0:a=1[a]'),
+        '-map',
+        '[a]',
+        sh(output),
+      ].join(' ');
+    }
+    case 'pitch_shift':
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-af',
+        sh('asetrate=44100*1.25,aresample=44100,atempo=0.8'),
+        '-c:a',
+        'pcm_s16le',
+        sh(output),
+      ].join(' ');
+    case 'gif_from_images':
+      // Backend writes a concat list file; this shows the equivalent ffmpeg call.
+      return [
+        ...prefix,
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        'inputs.list.txt',
+        '-vf',
+        sh('fps=10,scale=96:-1:flags=lanczos'),
+        sh(output),
+      ].join(' ');
+    case 'meme_overlay': {
+      const top = get('top', 'WHEN YOU FIND');
+      const bot = get('bottom', 'AN UNUSED FFMPEG FLAG');
+      const vf = `drawtext=text='${top}':x=(w-text_w)/2:y=4:fontsize=10:fontcolor=white:borderw=1:bordercolor=black:font=Arial,drawtext=text='${bot}':x=(w-text_w)/2:y=h-th-4:fontsize=10:fontcolor=white:borderw=1:bordercolor=black:font=Arial`;
+      return [
+        ...prefix,
+        '-i',
+        sh(input),
+        '-vf',
+        sh(vf),
+        '-frames:v',
+        '1',
+        '-q:v',
+        '5',
+        sh(output),
+      ].join(' ');
+    }
     default:
       return `# TODO: ${opName} — command preview not yet mirrored in the frontend`;
   }

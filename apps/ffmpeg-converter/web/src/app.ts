@@ -839,8 +839,7 @@ function openAccountModal(): void {
 const THEME_KEY = 'ffmpeg-converter:theme';
 function applyInitialTheme(): void {
   const saved = localStorage.getItem(THEME_KEY);
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const theme = saved ?? (prefersDark ? 'dark' : 'dark'); // default dark
+  const theme = saved ?? 'dark'; // default dark
   document.body.classList.remove('light', 'dark');
   document.body.classList.add(theme);
 }
