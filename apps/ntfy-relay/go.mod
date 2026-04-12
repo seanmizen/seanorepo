@@ -1,4 +1,4 @@
-module github.com/seanmizen/whatsapp-notify
+module github.com/seanmizen/ntfy-relay
 
 go 1.23
 
