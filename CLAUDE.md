@@ -195,6 +195,9 @@ The repository uses **dual port schemes** for different deployment targets:
 - 4021: carolinemizen.art (BE)
 - 4030: planning-poker (FE)
 - 4031: planning-poker (BE)
+- 4040: minecraft.seanmizen.com (FE)
+- 4050: seansconverter.com / converter (FE)
+- 4051: seansconverter.com / converter (BE)
 
 **Fly.io (Cloud) - 5xxx range:**
 
@@ -205,6 +208,8 @@ The repository uses **dual port schemes** for different deployment targets:
 - 5021: carolinemizen.art (BE)
 - 5030: planning-poker (FE)
 - 5031: planning-poker (BE)
+- 5050: seansconverter.com / converter (FE)
+- 5051: seansconverter.com / converter (BE)
 - 8080: Fly.io nginx gateway
 
 ### Concurrent Development

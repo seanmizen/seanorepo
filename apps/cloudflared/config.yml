@@ -60,5 +60,17 @@ ingress:
   - hostname: "*.carolinemizen.art"
     service: http://localhost:4020
 
+  # seansconverter.com - Ports 4050 (FE) / 4051 (BE)
+  - hostname: seansconverter.com
+    path: /api/*
+    service: http://localhost:4051
+  - hostname: seansconverter.com
+    service: http://localhost:4050
+  - hostname: "*.seansconverter.com"
+    path: /api/*
+    service: http://localhost:4051
+  - hostname: "*.seansconverter.com"
+    service: http://localhost:4050
+
   # Catch-all for unmatched routes
   - service: http_status:404
