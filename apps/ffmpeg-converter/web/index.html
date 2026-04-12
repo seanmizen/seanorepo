@@ -23,7 +23,7 @@
         <h1>Sean's Converter</h1>
         <nav class="top-nav">
           <a href="/#presets">Popular conversions</a>
-          <a href="/#catalog">Full catalog</a>
+          <a href="/catalog">Full catalog</a>
           <a href="/plans">Plans &amp; tokens</a>
           <a href="/compare">How it compares</a>
           <a href="/faq">FAQ</a>
@@ -61,9 +61,14 @@
         <div id="presetGrid" class="preset-grid"></div>
       </section>
 
-      <section id="catalog" class="catalog">
+      <section id="catalog" class="catalog page-hidden">
         <h3 class="section-title">Full catalog</h3>
+        <p class="catalog-intro">Every conversion we support, organised by category. Click any conversion to go straight to it.</p>
         <div id="catalogGrid" class="catalog-grid"></div>
+      </section>
+
+      <section id="conversionPage" class="conversion-page page-hidden">
+        <div id="conversionPageContent"></div>
       </section>
 
       <section id="panel" class="panel" hidden>
@@ -86,22 +91,6 @@
             <summary>Advanced options</summary>
             <div id="advancedBody" class="advanced-body"></div>
           </details>
-
-          <div class="cmd-block">
-            <div class="cmd-label">
-              <span>ffmpeg command</span>
-              <button id="copyCmd" class="ghost small">copy</button>
-            </div>
-            <pre id="cmdLine" class="cmd-line"></pre>
-          </div>
-
-          <div class="cmd-block">
-            <div class="cmd-label">
-              <span>as curl (our backend)</span>
-              <button id="copyCurl" class="ghost small">copy</button>
-            </div>
-            <pre id="curlLine" class="cmd-line"></pre>
-          </div>
 
           <div class="actions">
             <button id="runBtn" class="primary">Convert</button>

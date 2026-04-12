@@ -13,12 +13,8 @@ export const bullets: { title: string; body: string }[] = [
     body: 'Drag a file onto the page. We suggest the best format. You click once. No wizard, no multi-step form.',
   },
   {
-    title: 'All of ffmpeg, none of the complexity.',
-    body: '50 operations across video, audio, and images — trims, crops, resizes, bitrate targeting, loudness normalisation, contact sheets. Advanced panel for codec, CRF, fps, and filters when you need them.',
-  },
-  {
-    title: 'See the command.',
-    body: 'Every option maps to a live ffmpeg command you can copy and run in your own terminal. Nothing hidden.',
+    title: '50+ conversions, zero complexity.',
+    body: '50 operations across video, audio, and images — trims, crops, resizes, bitrate targeting, loudness normalisation, contact sheets. Advanced panel when you need it.',
   },
   {
     title: 'Shareable presets.',
@@ -48,7 +44,7 @@ export const competitors: Competitor[] = [
     freeCount: 'Generous',
     login: 'Never',
     paid: 'Free',
-    gotcha: 'Command + presets visible',
+    gotcha: 'No tricks, presets shareable',
   },
   {
     name: 'CloudConvert',
@@ -103,31 +99,23 @@ export const competitors: Competitor[] = [
 export const faq: { q: string; a: string }[] = [
   {
     q: 'Do you store my files?',
-    a: 'Server-side jobs are written to a local disk on the converter machine and deleted one hour after conversion. There is no off-site backup, no S3, no analytics pipeline. In the planned browser-WASM lane, your file never leaves the tab.',
+    a: 'Files are written to a local disk on the converter machine and deleted one hour after conversion. There is no off-site backup, no S3, no analytics pipeline.',
   },
   {
     q: 'Why is there no login?',
-    a: 'Because a converter is a tool, not a product. Logins mean accounts, accounts mean passwords, passwords mean leaks, leaks mean a bad afternoon. Your preferences live in your own browser localStorage — export them as JSON if you want to move machines.',
-  },
-  {
-    q: "What can this do that ffmpeg can't?",
-    a: 'Nothing — we shell out to ffmpeg. The point of the site is the UI: a drop zone, a sensible default for every conversion, a preset library, and a shareable URL. Your terminal will always win on flexibility. We win on "I\'m on someone else\'s laptop."',
+    a: 'Because a converter is a tool, not a product. Logins mean accounts, accounts mean passwords, passwords mean leaks, leaks mean a bad afternoon. Your preferences live in your own browser localStorage.',
   },
   {
     q: "What's the file size limit?",
-    a: 'Soft cap at 500 MB on the server lane right now — the Go backend loads files into memory before handing them to ffmpeg, so a huge file can OOM the box. Larger than that and we suggest the CLI.',
+    a: 'Soft cap at 500 MB right now. Larger files may time out or fail depending on the conversion type.',
   },
   {
     q: 'Is this open source?',
-    a: 'Yes. The Go backend and this web UI live in the monorepo at apps/ffmpeg-converter/. PRs welcome, but fair warning: this is a personal site, not a company.',
+    a: 'Yes. The backend and this web UI live in a public monorepo. PRs welcome, but fair warning: this is a personal site, not a company.',
   },
   {
-    q: 'What if I want my own ffmpeg flags?',
-    a: "Copy the live command from the panel, paste it into your terminal, edit to taste. The site is an honest front door — it's not trying to trap you.",
-  },
-  {
-    q: 'Why do you show the ffmpeg command?',
-    a: "Because you should be able to see what the computer is about to do. Every other converter hides this; we think that's a missed opportunity and a trust-building move.",
+    q: 'What formats do you support?',
+    a: 'Over 50 operations across video, audio, and images. Check the full catalog for the complete list — everything from MOV to MP4, PNG to WebP, video to GIF, and much more.',
   },
 ];
 
