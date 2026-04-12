@@ -12,9 +12,9 @@
 //   - Re-uses the real webgpu + events + audio bridges from swindowzig
 //     without copying them (bun bundles them in at build time)
 
-import { audioImports } from '@swindowzig/wasm/audio';
-import { attachEventListeners } from '@swindowzig/wasm/events';
-import { initWebGPU } from '@swindowzig/wasm/webgpu';
+import { audioImports } from '#/utils/swindowzig/backends/wasm/audio';
+import { attachEventListeners } from '#/utils/swindowzig/backends/wasm/events';
+import { initWebGPU } from '#/utils/swindowzig/backends/wasm/webgpu';
 
 interface OverlayElements {
   overlay: HTMLElement;
