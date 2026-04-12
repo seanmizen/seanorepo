@@ -1,0 +1,10 @@
+# Generated wasm artefact — built by build.sh or the Dockerfile.
+# 3+ MB binary, do not commit.
+public/app.wasm
+
+# Generated JS bundle — built from src/boot.ts by bun. Regenerate with
+# `./build.sh`. The Dockerfile rebuilds it inside the js-build stage.
+public/boot.js
+
+# node_modules if any future tooling ends up pulling them in.
+node_modules/
