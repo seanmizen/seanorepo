@@ -560,12 +560,25 @@ func RegisterOps() map[string]*Operation {
 			return ffmpegRun(ctx, "-i", oc.Inputs[0], oc.Output)
 		},
 	})
+	// Detect once whether ffmpeg was compiled with libwebp. If not, fall back
+	// to the standalone cwebp tool (brew install webp / apt-get install webp).
+	ffmpegEncoders, _ := exec.Command("ffmpeg", "-hide_banner", "-encoders").Output()
+	hasLibwebp := strings.Contains(string(ffmpegEncoders), "libwebp")
+
 	add(&Operation{
 		Name: "image_to_webp", Category: "image",
 		Description: "Convert image to WebP",
 		DefaultExt:  ".webp",
 		Run: func(ctx context.Context, oc OpContext) error {
-			return ffmpegRun(ctx, "-i", oc.Inputs[0], "-q:v", "60", oc.Output)
+			if hasLibwebp {
+				return ffmpegRun(ctx, "-i", oc.Inputs[0], "-c:v", "libwebp", "-quality", "75", oc.Output)
+			}
+			// cwebp fallback for ffmpeg builds without libwebp (e.g. homebrew default).
+			cmd := exec.CommandContext(ctx, "cwebp", "-q", "75", "-quiet", oc.Inputs[0], "-o", oc.Output)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("cwebp: %w\n%s", err, out)
+			}
+			return nil
 		},
 	})
 	add(&Operation{

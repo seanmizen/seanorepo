@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Store holds uploaded inputs and produced outputs on disk.
@@ -66,5 +67,8 @@ func randomID() string {
 func sanitize(name string) string {
 	// Drop any path components. FFmpeg doesn't care about the original name
 	// but we don't want "../etc/passwd" shenanigans.
-	return filepath.Base(name)
+	base := filepath.Base(name)
+	// Replace spaces with underscores — some ffmpeg builds fail to open
+	// paths containing spaces even when passed as proper exec args.
+	return strings.ReplaceAll(base, " ", "_")
 }
