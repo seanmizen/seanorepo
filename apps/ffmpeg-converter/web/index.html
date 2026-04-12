@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" id="colorScheme" />
+    <title>ffmpeg-converter — convert anything to anything</title>
+    <meta
+      name="description"
+      content="A fast, honest, no-login file converter. Powered by ffmpeg. Your file doesn't travel any further than it has to."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600&family=Red+Hat+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="dark">
+    <div class="container">
+      <header class="top">
+        <h1>ffmpeg-converter</h1>
+        <div class="top-right">
+          <a class="ghost" href="#faq">FAQ</a>
+          <button id="themeBtn" class="ghost" aria-label="Toggle theme" title="Toggle theme">
+            <span class="theme-icon">◐</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <h2 id="headline">Convert anything to anything.</h2>
+        <p id="subheadline" class="sub"></p>
+      </section>
+
+      <section
+        id="dropzone"
+        class="dropzone"
+        tabindex="0"
+        role="button"
+        aria-label="Drop a file here or click to browse"
+      >
+        <div class="drop-inner">
+          <div class="drop-icon">⬇</div>
+          <div class="drop-title">Drop a file here</div>
+          <div class="drop-sub">or <span class="underline">click to browse</span> — any format ffmpeg understands</div>
+          <input id="fileInput" type="file" multiple hidden />
+        </div>
+      </section>
+
+      <section id="presets" class="presets">
+        <h3 class="section-title">Or pick a headline conversion:</h3>
+        <div id="presetGrid" class="preset-grid"></div>
+        <details class="more-ops">
+          <summary>All 50 operations →</summary>
+          <div id="allOps" class="all-ops"></div>
+        </details>
+      </section>
+
+      <section id="panel" class="panel" hidden>
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">Chosen</span>
+            <h3 id="panelTitle" class="panel-title">—</h3>
+            <p id="panelDesc" class="panel-desc"></p>
+          </div>
+          <button id="closePanel" class="ghost" aria-label="Close panel">×</button>
+        </div>
+
+        <div class="panel-body">
+          <div class="preset-row">
+            <label>Preset:</label>
+            <div id="presetChips" class="chips"></div>
+          </div>
+
+          <details id="advanced" class="advanced">
+            <summary>Advanced options</summary>
+            <div id="advancedBody" class="advanced-body"></div>
+          </details>
+
+          <div class="cmd-block">
+            <div class="cmd-label">
+              <span>ffmpeg command</span>
+              <button id="copyCmd" class="ghost small">copy</button>
+            </div>
+            <pre id="cmdLine" class="cmd-line"></pre>
+          </div>
+
+          <div class="cmd-block">
+            <div class="cmd-label">
+              <span>as curl (our backend)</span>
+              <button id="copyCurl" class="ghost small">copy</button>
+            </div>
+            <pre id="curlLine" class="cmd-line"></pre>
+          </div>
+
+          <div class="actions">
+            <button id="runBtn" class="primary">Convert</button>
+            <button id="saveBtn" class="ghost">Save preset…</button>
+            <button id="shareBtn" class="ghost">Copy link</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="queue" class="queue" hidden>
+        <h3 class="section-title">Jobs</h3>
+        <ul id="queueList" class="queue-list"></ul>
+      </section>
+
+      <section id="savedPresets" class="saved-presets" hidden>
+        <h3 class="section-title">Your saved presets</h3>
+        <ul id="savedList"></ul>
+      </section>
+
+      <section id="compare" class="compare">
+        <h3 class="section-title">How it compares</h3>
+        <div id="compareTable"></div>
+      </section>
+
+      <section id="faq" class="faq">
+        <h3 class="section-title">FAQ</h3>
+        <div id="faqBody"></div>
+      </section>
+
+      <footer class="foot">
+        <div id="lane" class="lane">Server lane — files auto-delete one hour after conversion.</div>
+        <div class="foot-right">
+          <a href="https://ffmpeg.org" target="_blank" rel="noreferrer">ffmpeg</a>
+          <span class="sep">·</span>
+          <a id="healthLink" href="/api/health" target="_blank" rel="noreferrer">/health</a>
+          <span class="sep">·</span>
+          <span>no tracking, no ads, no login</span>
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/app.ts"></script>
+  </body>
+</html>
