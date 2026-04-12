@@ -1,0 +1,87 @@
+# syntax=docker/dockerfile:1.6
+#
+# minecraft.seanmizen.com — browser voxel, served over Cloudflared tunnel.
+#
+# Three stages:
+#   1. zig-build  — download Zig 0.15.2, build swindowzig's `web` step to WASM
+#   2. js-build   — use Bun to bundle the swindowzig WASM bootstrap TS into one JS file
+#   3. prod       — copy the static output into a minimal Node image and run `serve`
+#
+# The dev target is a no-op: for dev you'd run `yarn build` locally and open the dist
+# folder with your usual static server. Docker dev mode just keeps an interactive shell
+# alive so `docker compose --profile dev up` doesn't flap.
+
+# =============================================================================
+# Stage 1: Zig WASM build
+# =============================================================================
+FROM debian:bookworm-slim AS zig-build
+WORKDIR /build
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin Zig 0.15.2 — matches utils/swindowzig/CLAUDE.md and the host dev environment.
+ARG ZIG_VERSION=0.15.2
+RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" \
+    | tar -xJ \
+    && mv "zig-linux-x86_64-${ZIG_VERSION}" /opt/zig \
+    && ln -s /opt/zig/zig /usr/local/bin/zig \
+    && zig version
+
+# Copy only the swindowzig workspace — the build context is the monorepo root.
+COPY utils/swindowzig /build/swindowzig
+WORKDIR /build/swindowzig
+
+# Build the voxel example for WASM. examples/voxel/main.zig has the
+# `swindowzig_init` / `swindowzig_frame` entry exports at the bottom and
+# gates all posix-dependent code (CLI args, TAS file IO, frame dumps,
+# std.process.exit) behind `if (comptime !is_wasm)`.
+RUN zig build web -Dexample=voxel && ls -la zig-out/bin/
+
+# =============================================================================
+# Stage 2: JS bundle (Bun)
+# =============================================================================
+# Bundles apps/minecraft.seanmizen.com/src/boot.ts — which imports the
+# swindowzig WebGPU/event/audio bridges — into a single self-contained boot.js.
+FROM oven/bun:1.1-slim AS js-build
+WORKDIR /build
+
+COPY utils/swindowzig/backends/wasm /build/utils/swindowzig/backends/wasm
+COPY apps/minecraft.seanmizen.com/src /build/apps/minecraft.seanmizen.com/src
+
+RUN bun build /build/apps/minecraft.seanmizen.com/src/boot.ts \
+    --outfile /build/boot.js \
+    --target browser \
+    --minify
+
+# =============================================================================
+# Stage 3: Production runtime — static file server
+# =============================================================================
+FROM node:23-slim AS prod
+WORKDIR /app
+
+# `serve` is a tiny static server with correct MIME types for .wasm — the same
+# tool seanmizen.com uses in its prod stage.
+RUN corepack enable \
+    && corepack prepare yarn@4.8.1 --activate \
+    && yarn global add serve
+
+# Copy the static assets (index.html etc.) and overlay freshly-built artefacts.
+COPY apps/minecraft.seanmizen.com/public /app
+COPY --from=js-build /build/boot.js /app/boot.js
+COPY --from=zig-build /build/swindowzig/zig-out/bin/app.wasm /app/app.wasm
+
+EXPOSE 4040
+CMD ["serve", "-s", ".", "-l", "4040"]
+
+# =============================================================================
+# Dev target — kept minimal so `docker compose --profile dev up` has something
+# to point at. The real dev loop for this app is `bun utils/swindowzig/backends/
+# wasm/dev-server.ts` run directly on the host.
+# =============================================================================
+FROM node:23-slim AS dev
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+# Source is mounted in via docker-compose's bind mount.
+CMD ["sh", "-c", "echo 'minecraft.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]
