@@ -20,15 +20,15 @@ import (
 
 // BillingConfig holds Stripe keys and price IDs loaded from environment variables.
 type BillingConfig struct {
-	SecretKey       string
-	PublishableKey  string
-	WebhookSecret   string
-	PriceIDPro      string
-	PriceIDEnt      string
-	PriceIDTok50    string
-	PriceIDTok250   string
-	PriceIDTok1000  string
-	AppURL          string
+	SecretKey      string
+	PublishableKey string
+	WebhookSecret  string
+	PriceIDPro     string
+	PriceIDEnt     string
+	PriceIDTok50   string
+	PriceIDTok250  string
+	PriceIDTok1000 string
+	AppURL         string
 }
 
 // IsEnabled reports whether billing is configured (i.e. a secret key is set).

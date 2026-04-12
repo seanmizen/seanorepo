@@ -618,6 +618,60 @@ func TestConvert_RealFfmpeg_Transcode(t *testing.T) {
 	}
 }
 
+func TestConvert_RealFfmpeg_SpacedFilename_WebP(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	// Skip if no WebP encoder is available at all.
+	encoders, _ := exec.Command("ffmpeg", "-hide_banner", "-encoders").Output()
+	if !strings.Contains(string(encoders), "libwebp") {
+		if _, err := exec.LookPath("cwebp"); err != nil {
+			t.Skip("no WebP encoder available (no libwebp in ffmpeg, no cwebp on PATH)")
+		}
+	}
+
+	ts := newCoreServer(t)
+
+	// Generate a tiny test PNG via lavfi — no external fixtures needed.
+	tmpDir := t.TempDir()
+	inputPath := tmpDir + "/input.png"
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "color=c=red:s=8x8:r=1",
+		"-frames:v", "1", inputPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("could not generate test PNG: %v\n%s", err, out)
+	}
+	inputData, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("read PNG: %v", err)
+	}
+
+	// Submit under a filename with spaces, exactly like a macOS screenshot.
+	code, body := doConvert(t, ts, "image_to_webp",
+		map[string][]byte{"Screenshot 2026-04-12 at 15.34.32.png": inputData},
+		nil, "")
+	if code != http.StatusOK {
+		t.Fatalf("want 200 for spaced filename, got %d; body: %s", code, body)
+	}
+
+	var resp map[string]any
+	_ = json.Unmarshal(body, &resp)
+	if resp["status"] != "done" {
+		t.Errorf("want status=done, got %v", resp["status"])
+	}
+
+	dlResp, err := http.Get(ts.URL + resp["output"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dlResp.Body.Close()
+	data, _ := io.ReadAll(dlResp.Body)
+	if len(data) < 10 {
+		t.Errorf("WebP output suspiciously small (%d bytes)", len(data))
+	}
+}
+
 // ── /billing/me (billing disabled) ───────────────────────────────────────────
 
 func TestBillingMe_BillingDisabled(t *testing.T) {
