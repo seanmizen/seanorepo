@@ -335,6 +335,114 @@ export const allOpsByCategory: Record<OpCategory, string[]> = {
   special: ['youtube_preview', 'meme_overlay', 'silence_trim'],
 };
 
+// ─────────────── catalog ───────────────
+// Organises all 51 ops into human-friendly categories for the full catalog.
+
+export interface CatalogCategory {
+  id: string;
+  title: string;
+  description: string;
+  ops: string[];
+}
+
+export const catalogCategories: CatalogCategory[] = [
+  {
+    id: 'image-formats',
+    title: 'Image Formats',
+    description: 'Convert between image types — JPG, PNG, WebP, AVIF.',
+    ops: ['image_to_jpg', 'image_to_png', 'image_to_webp', 'image_to_avif'],
+  },
+  {
+    id: 'image-effects',
+    title: 'Image Effects',
+    description: 'Resize, blur, sharpen, or desaturate images.',
+    ops: ['image_resize', 'blur', 'sharpen', 'grayscale'],
+  },
+  {
+    id: 'video-to-images',
+    title: 'Video to Images',
+    description: 'Extract frames, thumbnails, or animated GIFs from video.',
+    ops: ['thumbnail', 'contact_sheet', 'gif_from_video'],
+  },
+  {
+    id: 'images-to-video',
+    title: 'Images to Video',
+    description: 'Combine an image sequence into a timelapse video.',
+    ops: ['timelapse'],
+  },
+  {
+    id: 'images-to-gif',
+    title: 'Images to GIF',
+    description: 'Stitch images into an animated GIF.',
+    ops: ['gif_from_images'],
+  },
+  {
+    id: 'video-conversion',
+    title: 'Video Conversion',
+    description: 'Re-container or transcode between video formats.',
+    ops: ['transcode', 'transcode_webm', 'transcode_mkv', 'h264_to_h265'],
+  },
+  {
+    id: 'video-editing',
+    title: 'Video Editing',
+    description: 'Trim, crop, resize, rotate, loop, and more.',
+    ops: [
+      'trim',
+      'resize',
+      'crop',
+      'rotate',
+      'flip',
+      'speed',
+      'reverse',
+      'loop',
+      'concat',
+      'change_framerate',
+      'change_bitrate',
+      'pad_aspect',
+    ],
+  },
+  {
+    id: 'video-overlays',
+    title: 'Video Overlays',
+    description: 'Burn subtitles, watermarks, or meme text onto video.',
+    ops: ['watermark', 'subtitles_burn', 'subtitles_soft', 'meme_overlay'],
+  },
+  {
+    id: 'audio-conversion',
+    title: 'Audio Conversion',
+    description: 'Convert or extract audio to MP3, Opus, AAC, FLAC, or WAV.',
+    ops: ['audio_mp3', 'audio_opus', 'audio_aac', 'audio_flac', 'extract_audio'],
+  },
+  {
+    id: 'audio-editing',
+    title: 'Audio Editing',
+    description: 'Trim, fade, concat, normalise, pitch-shift, and more.',
+    ops: [
+      'normalize_audio',
+      'audio_trim',
+      'audio_fade',
+      'audio_concat',
+      'stereo_to_mono',
+      'audio_bitrate',
+      'time_stretch',
+      'pitch_shift',
+      'silence_trim',
+    ],
+  },
+  {
+    id: 'audio-visualisation',
+    title: 'Audio Visualisation',
+    description: 'Render audio as a spectrogram or waveform image.',
+    ops: ['spectrogram', 'waveform_png'],
+  },
+  {
+    id: 'special',
+    title: 'Special',
+    description: 'YouTube-style previews and other one-off tools.',
+    ops: ['youtube_preview'],
+  },
+];
+
 // Auto-suggest which presets to highlight based on the dropped file's extension.
 export function suggestPresetsForFile(filename: string): string[] {
   const ext = filename.toLowerCase().split('.').pop() ?? '';
