@@ -309,27 +309,25 @@ function resetDropZone(): void {
 // ─────────────── preset selection ───────────────
 
 function selectPreset(opName: string): void {
+  // On /convert-* pages the slug already encodes the op — don't append ?op=…
+  const onConversionRoute = window.location.pathname.startsWith('/convert-');
+
   const preset = findPreset(opName);
   if (!preset) {
-    // Op outside the flagship list — build a minimal synthetic preset so the
-    // panel still opens.
     state.currentOp = opName;
     state.currentArgs = {};
     state.activeChipId = null;
     renderPanelForSynthetic(opName);
-    writeUrlState({ op: opName, args: {} });
+    if (!onConversionRoute) writeUrlState({ op: opName, args: {} });
     return;
   }
 
   state.currentOp = opName;
-  // Reset args to the first preset chip's defaults if any, otherwise empty.
   const chip = preset.presets[0];
   state.currentArgs = chip ? { ...chip.args } : {};
   state.activeChipId = chip?.id ?? null;
 
-  // Update drop zone copy to reflect the chosen conversion (unless a file is already loaded)
   if (state.files.length === 0) {
-    // Try to find a matching conversion route for dynamic drop zone text
     const route = conversionRoutes.find((r) => r.op === opName);
     if (route) {
       updateDropZoneForConversion(route);
@@ -337,7 +335,9 @@ function selectPreset(opName: string): void {
   }
 
   renderPanel(preset);
-  writeUrlState({ op: opName, args: state.currentArgs });
+  if (!onConversionRoute) {
+    writeUrlState({ op: opName, args: state.currentArgs });
+  }
   highlightActiveButton(opName);
 }
 
