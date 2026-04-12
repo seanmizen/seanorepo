@@ -40,6 +40,288 @@ export interface AdvField {
   default?: string;
 }
 
+// The 5 most universally useful conversions shown on the homepage.
+// Everything else lives in the full catalog at /catalog.
+export const popularOpNames = [
+  'gif_from_video', // MP4 → GIF
+  'transcode', // MOV → MP4
+  'transcode_webm', // MP4 → WebM
+  'image_to_webp', // PNG/JPG → WebP
+  'audio_mp3', // Video → MP3
+];
+
+// ─────────────── SEO conversion routes ───────────────
+// Each entry maps a URL slug like /convert-mov-to-mp4 to a preset + metadata.
+// Used by the SPA router to render dedicated landing pages for each conversion.
+
+export interface ConversionRoute {
+  /** URL slug, e.g. "convert-mov-to-mp4" (no leading slash) */
+  slug: string;
+  /** Page title for SEO */
+  title: string;
+  /** Meta description for SEO */
+  description: string;
+  /** The backend op name */
+  op: string;
+  /** Input file extension (e.g. ".mov") — used for drop zone accept + copy */
+  inputExt: string;
+  /** Human label for the input format */
+  inputLabel: string;
+  /** Human label for the output format */
+  outputLabel: string;
+}
+
+export const conversionRoutes: ConversionRoute[] = [
+  // Video format conversions
+  {
+    slug: 'convert-mov-to-mp4',
+    title: 'Convert MOV to MP4 online — free, instant, no signup',
+    description:
+      'Convert MOV video files to MP4 format instantly in your browser. No signup, no watermarks, no file size tricks.',
+    op: 'transcode',
+    inputExt: '.mov',
+    inputLabel: 'MOV',
+    outputLabel: 'MP4',
+  },
+  {
+    slug: 'convert-mp4-to-webm',
+    title: 'Convert MP4 to WebM online — free, instant, no signup',
+    description:
+      'Convert MP4 videos to WebM (VP9 + Opus) for smaller web-ready files. Free, no signup required.',
+    op: 'transcode_webm',
+    inputExt: '.mp4',
+    inputLabel: 'MP4',
+    outputLabel: 'WebM',
+  },
+  {
+    slug: 'convert-mp4-to-mkv',
+    title: 'Convert MP4 to MKV online — free, instant, no signup',
+    description:
+      'Convert MP4 videos to MKV container format. Free, no login, instant results.',
+    op: 'transcode_mkv',
+    inputExt: '.mp4',
+    inputLabel: 'MP4',
+    outputLabel: 'MKV',
+  },
+  {
+    slug: 'convert-webm-to-mp4',
+    title: 'Convert WebM to MP4 online — free, instant, no signup',
+    description:
+      'Convert WebM videos to universally compatible MP4 format. No signup, no watermarks.',
+    op: 'transcode',
+    inputExt: '.webm',
+    inputLabel: 'WebM',
+    outputLabel: 'MP4',
+  },
+  {
+    slug: 'convert-mkv-to-mp4',
+    title: 'Convert MKV to MP4 online — free, instant, no signup',
+    description:
+      'Convert MKV videos to MP4 for universal playback. Free, instant, no signup.',
+    op: 'transcode',
+    inputExt: '.mkv',
+    inputLabel: 'MKV',
+    outputLabel: 'MP4',
+  },
+  {
+    slug: 'convert-avi-to-mp4',
+    title: 'Convert AVI to MP4 online — free, instant, no signup',
+    description:
+      'Convert AVI video files to modern MP4 format. Free, no login needed.',
+    op: 'transcode',
+    inputExt: '.avi',
+    inputLabel: 'AVI',
+    outputLabel: 'MP4',
+  },
+  {
+    slug: 'convert-mp4-to-gif',
+    title: 'Convert MP4 to GIF online — free, instant, no signup',
+    description:
+      'Turn any MP4 video into an animated GIF with optimised colours. Free, no signup.',
+    op: 'gif_from_video',
+    inputExt: '.mp4',
+    inputLabel: 'MP4',
+    outputLabel: 'GIF',
+  },
+  {
+    slug: 'convert-mov-to-gif',
+    title: 'Convert MOV to GIF online — free, instant, no signup',
+    description:
+      'Turn iPhone MOV videos into animated GIFs. Free, no signup, instant conversion.',
+    op: 'gif_from_video',
+    inputExt: '.mov',
+    inputLabel: 'MOV',
+    outputLabel: 'GIF',
+  },
+  {
+    slug: 'convert-h264-to-h265',
+    title: 'Convert H.264 to H.265 (HEVC) online — free, instant',
+    description:
+      'Re-encode H.264 video to H.265/HEVC for smaller file sizes. Free, no signup.',
+    op: 'h264_to_h265',
+    inputExt: '.mp4',
+    inputLabel: 'H.264',
+    outputLabel: 'H.265',
+  },
+
+  // Audio conversions
+  {
+    slug: 'convert-mp4-to-mp3',
+    title: 'Convert MP4 to MP3 online — free, instant, no signup',
+    description:
+      'Extract audio from MP4 video as MP3. Choose your bitrate. Free, no signup.',
+    op: 'audio_mp3',
+    inputExt: '.mp4',
+    inputLabel: 'MP4',
+    outputLabel: 'MP3',
+  },
+  {
+    slug: 'convert-mov-to-mp3',
+    title: 'Convert MOV to MP3 online — free, instant, no signup',
+    description:
+      'Extract audio from MOV video as MP3. Free, instant, no signup.',
+    op: 'audio_mp3',
+    inputExt: '.mov',
+    inputLabel: 'MOV',
+    outputLabel: 'MP3',
+  },
+  {
+    slug: 'convert-wav-to-mp3',
+    title: 'Convert WAV to MP3 online — free, instant, no signup',
+    description:
+      'Convert WAV audio to MP3. Choose your bitrate. Free, no signup required.',
+    op: 'audio_mp3',
+    inputExt: '.wav',
+    inputLabel: 'WAV',
+    outputLabel: 'MP3',
+  },
+  {
+    slug: 'convert-flac-to-mp3',
+    title: 'Convert FLAC to MP3 online — free, instant, no signup',
+    description:
+      'Convert lossless FLAC audio to MP3. Free, no signup, instant results.',
+    op: 'audio_mp3',
+    inputExt: '.flac',
+    inputLabel: 'FLAC',
+    outputLabel: 'MP3',
+  },
+  {
+    slug: 'convert-mp3-to-opus',
+    title: 'Convert MP3 to Opus online — free, instant, no signup',
+    description:
+      'Convert MP3 audio to Opus for smaller files with better quality. Free, no signup.',
+    op: 'audio_opus',
+    inputExt: '.mp3',
+    inputLabel: 'MP3',
+    outputLabel: 'Opus',
+  },
+  {
+    slug: 'convert-mp3-to-aac',
+    title: 'Convert MP3 to AAC online — free, instant, no signup',
+    description: 'Convert MP3 audio to AAC. Free, no signup, instant results.',
+    op: 'audio_aac',
+    inputExt: '.mp3',
+    inputLabel: 'MP3',
+    outputLabel: 'AAC',
+  },
+  {
+    slug: 'convert-wav-to-flac',
+    title: 'Convert WAV to FLAC online — free, instant, no signup',
+    description:
+      'Convert WAV audio to lossless FLAC. Smaller files, same quality. Free, no signup.',
+    op: 'audio_flac',
+    inputExt: '.wav',
+    inputLabel: 'WAV',
+    outputLabel: 'FLAC',
+  },
+
+  // Image conversions
+  {
+    slug: 'convert-png-to-webp',
+    title: 'Convert PNG to WebP online — free, instant, no signup',
+    description:
+      'Convert PNG images to WebP for smaller web-ready files. Free, instant, no signup.',
+    op: 'image_to_webp',
+    inputExt: '.png',
+    inputLabel: 'PNG',
+    outputLabel: 'WebP',
+  },
+  {
+    slug: 'convert-jpg-to-webp',
+    title: 'Convert JPG to WebP online — free, instant, no signup',
+    description:
+      'Convert JPG/JPEG images to WebP format. Smaller files, same quality. Free, no signup.',
+    op: 'image_to_webp',
+    inputExt: '.jpg',
+    inputLabel: 'JPG',
+    outputLabel: 'WebP',
+  },
+  {
+    slug: 'convert-heic-to-jpg',
+    title: 'Convert HEIC to JPG online — free, instant, no signup',
+    description:
+      'Convert iPhone HEIC photos to universally compatible JPG. Free, no signup.',
+    op: 'image_to_jpg',
+    inputExt: '.heic',
+    inputLabel: 'HEIC',
+    outputLabel: 'JPG',
+  },
+  {
+    slug: 'convert-png-to-jpg',
+    title: 'Convert PNG to JPG online — free, instant, no signup',
+    description: 'Convert PNG images to JPG. Free, instant, no signup.',
+    op: 'image_to_jpg',
+    inputExt: '.png',
+    inputLabel: 'PNG',
+    outputLabel: 'JPG',
+  },
+  {
+    slug: 'convert-webp-to-jpg',
+    title: 'Convert WebP to JPG online — free, instant, no signup',
+    description:
+      'Convert WebP images to widely compatible JPG format. Free, no signup.',
+    op: 'image_to_jpg',
+    inputExt: '.webp',
+    inputLabel: 'WebP',
+    outputLabel: 'JPG',
+  },
+  {
+    slug: 'convert-webp-to-png',
+    title: 'Convert WebP to PNG online — free, instant, no signup',
+    description:
+      'Convert WebP images to PNG for lossless quality. Free, no signup.',
+    op: 'image_to_png',
+    inputExt: '.webp',
+    inputLabel: 'WebP',
+    outputLabel: 'PNG',
+  },
+  {
+    slug: 'convert-png-to-avif',
+    title: 'Convert PNG to AVIF online — free, instant, no signup',
+    description:
+      'Convert PNG images to next-gen AVIF format. Smaller files, better quality. Free, no signup.',
+    op: 'image_to_avif',
+    inputExt: '.png',
+    inputLabel: 'PNG',
+    outputLabel: 'AVIF',
+  },
+  {
+    slug: 'convert-jpg-to-avif',
+    title: 'Convert JPG to AVIF online — free, instant, no signup',
+    description:
+      'Convert JPG images to AVIF for next-gen compression. Free, no signup.',
+    op: 'image_to_avif',
+    inputExt: '.jpg',
+    inputLabel: 'JPG',
+    outputLabel: 'AVIF',
+  },
+];
+
+/** Find a conversion route by slug (e.g. "convert-mov-to-mp4"). */
+export function findConversionRoute(slug: string): ConversionRoute | undefined {
+  return conversionRoutes.find((r) => r.slug === slug);
+}
+
 // Flagship 12, ordered by how they'd appear on the landing page.
 // See STRATEGY.md "Flagship 8–12 headline conversions" for rationale.
 export const flagshipPresets: Preset[] = [
