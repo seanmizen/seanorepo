@@ -316,7 +316,9 @@ export const conversionRoutes: ConversionRoute[] = [
     outputLabel: 'AVIF',
   },
 
-  // Generic routes — accept any input of that media type
+  // ─── Generic routes — accept any input of that media type ───
+
+  // Images
   {
     slug: 'convert-image-to-jpg',
     title: 'Convert any image to JPG online — free, instant, no signup',
@@ -328,6 +330,37 @@ export const conversionRoutes: ConversionRoute[] = [
     outputLabel: 'JPG',
   },
   {
+    slug: 'convert-image-to-png',
+    title: 'Convert any image to PNG online — free, instant, no signup',
+    description: 'Convert any image to lossless PNG. Free, no signup.',
+    op: 'image_to_png',
+    inputExt: '.jpg,.jpeg,.webp,.heic,.heif,.bmp,.tiff,.avif',
+    inputLabel: 'Image',
+    outputLabel: 'PNG',
+  },
+  {
+    slug: 'convert-image-to-webp',
+    title: 'Convert any image to WebP online — free, instant, no signup',
+    description:
+      'Convert any image to WebP for smaller web-ready files. Free, no signup.',
+    op: 'image_to_webp',
+    inputExt: '.png,.jpg,.jpeg,.heic,.heif,.bmp,.tiff,.avif',
+    inputLabel: 'Image',
+    outputLabel: 'WebP',
+  },
+  {
+    slug: 'convert-image-to-avif',
+    title: 'Convert any image to AVIF online — free, instant, no signup',
+    description:
+      'Convert any image to next-gen AVIF format. Smaller files, better quality. Free, no signup.',
+    op: 'image_to_avif',
+    inputExt: '.png,.jpg,.jpeg,.webp,.heic,.heif,.bmp,.tiff',
+    inputLabel: 'Image',
+    outputLabel: 'AVIF',
+  },
+
+  // Videos
+  {
     slug: 'convert-video-to-mp4',
     title: 'Convert any video to MP4 online — free, instant, no signup',
     description:
@@ -338,6 +371,27 @@ export const conversionRoutes: ConversionRoute[] = [
     outputLabel: 'MP4',
   },
   {
+    slug: 'convert-video-to-webm',
+    title: 'Convert any video to WebM online — free, instant, no signup',
+    description:
+      'Convert any video to WebM (VP9 + Opus) for smaller web-ready files. Free, no signup.',
+    op: 'transcode_webm',
+    inputExt: '.mp4,.mov,.mkv,.avi,.wmv,.m4v,.mpg,.mpeg,.flv',
+    inputLabel: 'Video',
+    outputLabel: 'WebM',
+  },
+  {
+    slug: 'convert-video-to-mkv',
+    title: 'Convert any video to MKV online — free, instant, no signup',
+    description: 'Convert any video to MKV container format. Free, no signup.',
+    op: 'transcode_mkv',
+    inputExt: '.mp4,.mov,.webm,.avi,.wmv,.m4v,.mpg,.mpeg,.flv',
+    inputLabel: 'Video',
+    outputLabel: 'MKV',
+  },
+
+  // Audio
+  {
     slug: 'convert-audio-to-mp3',
     title: 'Convert any audio to MP3 online — free, instant, no signup',
     description:
@@ -346,6 +400,35 @@ export const conversionRoutes: ConversionRoute[] = [
     inputExt: '.wav,.flac,.aac,.m4a,.ogg,.opus,.wma,.mp3,.mp4,.mov,.mkv,.webm',
     inputLabel: 'Audio',
     outputLabel: 'MP3',
+  },
+  {
+    slug: 'convert-audio-to-opus',
+    title: 'Convert any audio to Opus online — free, instant, no signup',
+    description:
+      'Convert any audio to Opus for smaller files with better quality. Free, no signup.',
+    op: 'audio_opus',
+    inputExt: '.mp3,.wav,.flac,.aac,.m4a,.ogg,.wma',
+    inputLabel: 'Audio',
+    outputLabel: 'Opus',
+  },
+  {
+    slug: 'convert-audio-to-aac',
+    title: 'Convert any audio to AAC online — free, instant, no signup',
+    description: 'Convert any audio to AAC. Free, no signup, instant results.',
+    op: 'audio_aac',
+    inputExt: '.mp3,.wav,.flac,.ogg,.opus,.wma,.m4a',
+    inputLabel: 'Audio',
+    outputLabel: 'AAC',
+  },
+  {
+    slug: 'convert-audio-to-flac',
+    title: 'Convert any audio to FLAC online — free, instant, no signup',
+    description:
+      'Convert any audio to lossless FLAC. Same quality, smaller than WAV. Free, no signup.',
+    op: 'audio_flac',
+    inputExt: '.wav,.mp3,.aac,.m4a,.ogg,.opus,.wma',
+    inputLabel: 'Audio',
+    outputLabel: 'FLAC',
   },
 ];
 

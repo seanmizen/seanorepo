@@ -173,11 +173,17 @@ function renderCatalog(): void {
   for (const cat of catalogCategories) {
     const accordion = el('div', { class: 'catalog-accordion' });
 
-    // Count visible items: conversion routes for this category + unrouted ops
-    const catRoutes = conversionRoutes.filter((r) => cat.ops.includes(r.op));
-    const catRoutedOps = new Set(catRoutes.map((r) => r.op));
-    const unroutedCount = cat.ops.filter((op) => !catRoutedOps.has(op)).length;
-    const visibleCount = catRoutes.length + unroutedCount;
+    // Split routes into generic (multi-input) and specific (single-input)
+    const genericRoutes: ConversionRoute[] = [];
+    for (const route of conversionRoutes) {
+      if (!cat.ops.includes(route.op)) continue;
+      if (route.inputExt.includes(',')) genericRoutes.push(route);
+    }
+
+    // If generics exist, show ONLY those — specifics are redundant in the catalog.
+    // Otherwise fall back to ops with preset labels.
+    const hasGenerics = genericRoutes.length > 0;
+    const visibleCount = hasGenerics ? genericRoutes.length : cat.ops.length;
 
     const trigger = el('button', { class: 'catalog-accordion-trigger' }, [
       el('div', { class: 'catalog-accordion-meta' }, [
@@ -195,50 +201,27 @@ function renderCatalog(): void {
     const body = el('div', { class: 'catalog-accordion-body' });
     const opList = el('div', { class: 'catalog-ops' });
 
-    // Collect all conversion routes that belong to this category's ops
-    const genericRoutes: ConversionRoute[] = [];
-    const specificRoutes: ConversionRoute[] = [];
-    for (const route of conversionRoutes) {
-      if (!cat.ops.includes(route.op)) continue;
-      if (route.inputExt.includes(',')) {
-        genericRoutes.push(route);
-      } else {
-        specificRoutes.push(route);
+    if (hasGenerics) {
+      for (const route of genericRoutes) {
+        const a = el('a', { href: `/${route.slug}`, class: 'generic-route' }, [
+          `${route.inputLabel} → ${route.outputLabel}`,
+        ]);
+        opList.appendChild(a);
       }
-    }
-
-    // Generic "any → X" routes first, visually distinct
-    for (const route of genericRoutes) {
-      const a = el('a', { href: `/${route.slug}`, class: 'generic-route' }, [
-        `Any ${route.inputLabel.toLowerCase()} → ${route.outputLabel}`,
-      ]);
-      opList.appendChild(a);
-    }
-
-    // Specific conversion routes with human labels
-    for (const route of specificRoutes) {
-      const a = el('a', { href: `/${route.slug}` }, [
-        `${route.inputLabel} → ${route.outputLabel}`,
-      ]);
-      opList.appendChild(a);
-    }
-
-    // Ops with no SEO route — use flagship preset label or cleaned-up name
-    const routedOps = new Set(
-      [...genericRoutes, ...specificRoutes].map((r) => r.op),
-    );
-    for (const op of cat.ops) {
-      if (routedOps.has(op)) continue;
-      const preset = findPreset(op);
-      const label = preset ? preset.label : op.replace(/_/g, ' ');
-      const b = el('a', { href: '#', 'data-op': op }, [label]);
-      b.addEventListener('click', (e) => {
-        e.preventDefault();
-        window.history.pushState(null, '', '/');
-        applyRoute();
-        selectPreset(op);
-      });
-      opList.appendChild(b);
+    } else {
+      // Non-conversion category — show ops with human labels
+      for (const op of cat.ops) {
+        const preset = findPreset(op);
+        const label = preset ? preset.label : op.replace(/_/g, ' ');
+        const b = el('a', { href: '#', 'data-op': op }, [label]);
+        b.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.history.pushState(null, '', '/');
+          applyRoute();
+          selectPreset(op);
+        });
+        opList.appendChild(b);
+      }
     }
     body.appendChild(opList);
     accordion.appendChild(trigger);
