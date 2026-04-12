@@ -102,7 +102,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 function renderStatic(): void {
   $('headline').textContent = headline;
   $('subheadline').textContent = subheadline;
-  $('lane').textContent = `Server lane — ${footerLine}`;
+  $('lane').textContent = footerLine;
 
   // Preset grid — only the 5 most popular on the homepage
   const grid = $('presetGrid');
@@ -933,23 +933,6 @@ function openAccountModal(): void {
   renderAccount(account);
 }
 
-// ─────────────── theme ───────────────
-
-const THEME_KEY = 'ffmpeg-converter:theme';
-function applyInitialTheme(): void {
-  const saved = localStorage.getItem(THEME_KEY);
-  const theme = saved ?? 'dark'; // default dark
-  document.body.classList.remove('light', 'dark');
-  document.body.classList.add(theme);
-}
-function toggleTheme(): void {
-  const isDark = document.body.classList.contains('dark');
-  const next = isDark ? 'light' : 'dark';
-  document.body.classList.remove('light', 'dark');
-  document.body.classList.add(next);
-  localStorage.setItem(THEME_KEY, next);
-}
-
 // ─────────────── bindings ───────────────
 
 function bindControls(): void {
@@ -977,8 +960,6 @@ function bindControls(): void {
     savePreset(name, state.currentOp, state.currentArgs);
     renderSaved();
   });
-  $('themeBtn').addEventListener('click', toggleTheme);
-
   $('accountBtn').addEventListener('click', async () => {
     openAccountModal();
     // Refresh account data in background.
@@ -1121,7 +1102,6 @@ function bindRouter(): void {
 // ─────────────── boot ───────────────
 
 function boot(): void {
-  applyInitialTheme();
   renderStatic();
   renderPricing();
   bindDropZone();
@@ -1151,16 +1131,16 @@ function boot(): void {
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (data) {
-        console.log(`[ffmpeg-converter] backend alive, ops=${data.ops}`);
+        console.log(`[converter] backend alive, ops=${data.ops}`);
       } else {
         console.warn(
-          '[ffmpeg-converter] backend health check failed — running with mocked endpoint',
+          '[converter] backend health check failed — running with mocked endpoint',
         );
       }
     })
     .catch(() => {
       console.warn(
-        '[ffmpeg-converter] backend unreachable — /api/convert will fail. See web/README.md',
+        '[converter] backend unreachable — /api/convert will fail. See web/README.md',
       );
     });
 }

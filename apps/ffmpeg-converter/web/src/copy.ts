@@ -2,10 +2,10 @@
 // Pulled straight from STRATEGY.md. Voice: direct, a bit wry, technical when it
 // counts. Sean's existing site style: minimal, no-nonsense, mono for facts.
 
-export const headline = 'Convert anything to anything.';
+export const headline = 'Convert anything, instantly';
 
 export const subheadline =
-  'Free, instant, no signup. Your file never leaves further than it has to.';
+  'Video \u00b7 Audio \u00b7 Images \u2014 fast, free, private';
 
 export const bullets: { title: string; body: string }[] = [
   {
