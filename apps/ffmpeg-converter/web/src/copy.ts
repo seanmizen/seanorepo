@@ -5,7 +5,7 @@
 export const headline = 'Convert anything to anything.';
 
 export const subheadline =
-  'Free, instant, no signup. Powered by ffmpeg — your file never leaves further than it has to.';
+  'Free, instant, no signup. Your file never leaves further than it has to.';
 
 export const bullets: { title: string; body: string }[] = [
   {
