@@ -12,9 +12,9 @@
 //   - Re-uses the real webgpu + events + audio bridges from swindowzig
 //     without copying them (bun bundles them in at build time)
 
-import { audioImports } from '../../../utils/swindowzig/backends/wasm/audio';
-import { attachEventListeners } from '../../../utils/swindowzig/backends/wasm/events';
-import { initWebGPU } from '../../../utils/swindowzig/backends/wasm/webgpu';
+import { audioImports } from '@swindowzig/wasm/audio';
+import { attachEventListeners } from '@swindowzig/wasm/events';
+import { initWebGPU } from '@swindowzig/wasm/webgpu';
 
 interface OverlayElements {
   overlay: HTMLElement;
@@ -168,7 +168,12 @@ async function main(): Promise<void> {
     swindowzig_init?: () => void;
     swindowzig_frame?: (timestamp: number) => void;
     swindowzig_event_resize?: (w: number, h: number, dpi: number) => void;
-    swindowzig_event_mouse_move?: (x: number, y: number, dx: number, dy: number) => void;
+    swindowzig_event_mouse_move?: (
+      x: number,
+      y: number,
+      dx: number,
+      dy: number,
+    ) => void;
     swindowzig_event_mouse_button?: (button: number, down: boolean) => void;
     swindowzig_event_key?: (keycode: number, down: boolean) => void;
     swindowzig_config_disable_context_menu?: number;

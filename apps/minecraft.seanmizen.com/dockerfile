@@ -22,10 +22,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Pin Zig 0.15.2 — matches utils/swindowzig/CLAUDE.md and the host dev environment.
+# Note: Zig 0.15+ changed the tarball naming convention from zig-linux-ARCH to zig-ARCH-linux.
 ARG ZIG_VERSION=0.15.2
-RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" \
+ARG TARGETARCH
+RUN set -e; \
+    case "${TARGETARCH:-$(uname -m)}" in \
+      arm64|aarch64) ZIG_ARCH=aarch64 ;; \
+      *) ZIG_ARCH=x86_64 ;; \
+    esac; \
+    curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-${ZIG_ARCH}-linux-${ZIG_VERSION}.tar.xz" \
     | tar -xJ \
-    && mv "zig-linux-x86_64-${ZIG_VERSION}" /opt/zig \
+    && mv "zig-${ZIG_ARCH}-linux-${ZIG_VERSION}" /opt/zig \
     && ln -s /opt/zig/zig /usr/local/bin/zig \
     && zig version
 
@@ -37,7 +44,7 @@ WORKDIR /build/swindowzig
 # `swindowzig_init` / `swindowzig_frame` entry exports at the bottom and
 # gates all posix-dependent code (CLI args, TAS file IO, frame dumps,
 # std.process.exit) behind `if (comptime !is_wasm)`.
-RUN zig build web -Dexample=voxel && ls -la zig-out/bin/
+RUN zig build web -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 
 # =============================================================================
 # Stage 2: JS bundle (Bun)
@@ -49,6 +56,7 @@ WORKDIR /build
 
 COPY utils/swindowzig/backends/wasm /build/utils/swindowzig/backends/wasm
 COPY apps/minecraft.seanmizen.com/src /build/apps/minecraft.seanmizen.com/src
+COPY apps/minecraft.seanmizen.com/tsconfig.json /build/apps/minecraft.seanmizen.com/tsconfig.json
 
 RUN bun build /build/apps/minecraft.seanmizen.com/src/boot.ts \
     --outfile /build/boot.js \
@@ -63,9 +71,7 @@ WORKDIR /app
 
 # `serve` is a tiny static server with correct MIME types for .wasm — the same
 # tool seanmizen.com uses in its prod stage.
-RUN corepack enable \
-    && corepack prepare yarn@4.8.1 --activate \
-    && yarn global add serve
+RUN npm install -g serve
 
 # Copy the static assets (index.html etc.) and overlay freshly-built artefacts.
 COPY apps/minecraft.seanmizen.com/public /app
