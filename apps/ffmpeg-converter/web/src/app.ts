@@ -121,9 +121,7 @@ function renderStatic(): void {
     card.appendChild(
       el('div', { class: 'catalog-card-head' }, [
         el('h4', { class: 'catalog-card-title' }, [cat.title]),
-        el('span', { class: 'catalog-card-count' }, [
-          `${cat.ops.length}`,
-        ]),
+        el('span', { class: 'catalog-card-count' }, [`${cat.ops.length}`]),
       ]),
     );
     card.appendChild(
