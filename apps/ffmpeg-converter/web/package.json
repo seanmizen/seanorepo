@@ -1,0 +1,14 @@
+{
+  "name": "ffmpeg-converter-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run dev.ts",
+    "start": "bun run dev.ts"
+  },
+  "devDependencies": {
+    "bun-types": "^1.2.0",
+    "typescript": "^5.9.3"
+  }
+}
