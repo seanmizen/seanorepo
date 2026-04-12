@@ -119,7 +119,7 @@ func buildBody(req rs.NotifyRequest) string {
 		b.WriteString("\n")
 	}
 	b.WriteString(req.Message)
-	if req.Priority == rs.PriorityHigh {
+	if req.Priority >= 4 {
 		b.WriteString("\n[!] HIGH PRIORITY")
 	}
 	return b.String()
