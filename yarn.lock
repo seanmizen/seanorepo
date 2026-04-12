@@ -8660,6 +8660,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"minecraft.seanmizen.com@workspace:apps/minecraft.seanmizen.com":
+  version: 0.0.0-use.local
+  resolution: "minecraft.seanmizen.com@workspace:apps/minecraft.seanmizen.com"
+  languageName: unknown
+  linkType: soft
+
 "miniget@npm:^4.2.2, miniget@npm:^4.2.3":
   version: 4.2.3
   resolution: "miniget@npm:4.2.3"
