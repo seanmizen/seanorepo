@@ -8,6 +8,17 @@
 //   5. On job done → enqueue download link + keep row for re-download.
 
 import {
+  type BillingAccount,
+  type BillingError,
+  clearSessionToken,
+  fetchAccount,
+  getSessionToken,
+  identify,
+  redirectToPortal,
+  redirectToSubscriptionCheckout,
+  redirectToTokenCheckout,
+} from './billing';
+import {
   bullets,
   competitors,
   faq,
@@ -53,6 +64,8 @@ const state = {
   jobs: [] as Job[],
 };
 
+let billingAccount: BillingAccount | null = null;
+
 // Backend is served through the dev proxy at /api.
 const API = '/api';
 
@@ -86,7 +99,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 function renderStatic(): void {
   $('headline').textContent = headline;
   $('subheadline').textContent = subheadline;
-  $('lane').textContent = 'Server lane — ' + footerLine;
+  $('lane').textContent = `Server lane — ${footerLine}`;
 
   // Preset grid
   const grid = $('presetGrid');
@@ -105,7 +118,7 @@ function renderStatic(): void {
   all.innerHTML = '';
   for (const [cat, ops] of Object.entries(allOpsByCategory)) {
     const header = el('div', { class: 'cat' }, [
-      cat.toUpperCase() + ' — ' + ops.length,
+      `${cat.toUpperCase()} — ${ops.length}`,
     ]);
     all.appendChild(header);
     for (const op of ops) {
@@ -222,7 +235,7 @@ function renderPanel(preset: Preset): void {
     const btn = el(
       'button',
       {
-        class: 'chip' + (p.id === state.activeChipId ? ' active' : ''),
+        class: `chip${p.id === state.activeChipId ? ' active' : ''}`,
         'data-chip': p.id,
       },
       [p.label],
@@ -243,11 +256,11 @@ function renderPanel(preset: Preset): void {
   }
   for (const field of preset.advanced) {
     const wrap = el('div', { class: 'adv-field' });
-    wrap.appendChild(el('label', { for: 'adv-' + field.key }, [field.label]));
+    wrap.appendChild(el('label', { for: `adv-${field.key}` }, [field.label]));
     let input: HTMLInputElement | HTMLSelectElement;
     if (field.kind === 'select' && field.options) {
       input = el('select', {
-        id: 'adv-' + field.key,
+        id: `adv-${field.key}`,
         name: field.key,
       }) as HTMLSelectElement;
       for (const o of field.options) {
@@ -259,7 +272,7 @@ function renderPanel(preset: Preset): void {
       }
     } else {
       input = el('input', {
-        id: 'adv-' + field.key,
+        id: `adv-${field.key}`,
         name: field.key,
         type: field.kind === 'number' ? 'number' : 'text',
         value: state.currentArgs[field.key] ?? field.default ?? '',
@@ -397,7 +410,22 @@ async function runConversion(): Promise<void> {
   try {
     job.status = 'running';
     renderQueue();
-    const res = await fetch(API + '/convert', { method: 'POST', body: form });
+    const headers: Record<string, string> = {};
+    const sessionToken = getSessionToken();
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+    const res = await fetch(`${API}/convert`, {
+      method: 'POST',
+      body: form,
+      headers,
+    });
+    if (res.status === 402) {
+      const data = (await res.json()) as BillingError;
+      job.status = 'error';
+      job.error = data.message || data.error;
+      renderQueue();
+      showBillingBlock(data);
+      return;
+    }
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(errText || res.statusText);
@@ -431,7 +459,7 @@ function renderQueue(): void {
     const li = el('li');
     li.appendChild(el('span', { class: 'q-name' }, [job.filename]));
     li.appendChild(
-      el('span', { class: 'q-status ' + job.status }, [job.status]),
+      el('span', { class: `q-status ${job.status}` }, [job.status]),
     );
     const actions = el('span', { class: 'q-actions' });
     if (job.status === 'done' && job.outputUrl) {
@@ -463,7 +491,7 @@ function renderSaved(): void {
   for (const p of list) {
     const li = el('li');
     const a = el('button', { class: 'ghost small', 'data-id': p.id }, [
-      p.name + ' → ' + p.op,
+      `${p.name} → ${p.op}`,
     ]);
     a.addEventListener('click', () => {
       state.currentArgs = { ...p.args };
@@ -481,6 +509,329 @@ function renderSaved(): void {
     li.appendChild(x);
     ul.appendChild(li);
   }
+}
+
+// ─────────────── billing UI ───────────────
+
+function renderPricing(): void {
+  const grid = $('pricingCards');
+  grid.innerHTML = '';
+
+  const plans = [
+    {
+      name: 'Free',
+      price: '$0',
+      tier: 'free',
+      desc: 'Image ops + basic audio forever free. 10 ops/day. 50 MB limit.',
+      featured: false,
+      cta: null as null | 'pro' | 'enterprise',
+    },
+    {
+      name: 'Pro',
+      price: '$9/mo',
+      tier: 'pro',
+      desc: 'All 50 ops. 2 GB files. Unlimited daily. 100 tokens/month included.',
+      featured: true,
+      cta: 'pro' as const,
+    },
+    {
+      name: 'Enterprise',
+      price: '$29/mo',
+      tier: 'enterprise',
+      desc: 'Everything in Pro. 10 GB files. 500 tokens/month included.',
+      featured: false,
+      cta: 'enterprise' as const,
+    },
+  ];
+
+  for (const plan of plans) {
+    const card = el('div', {
+      class: `pricing-card${plan.featured ? ' featured' : ''}`,
+    });
+    card.appendChild(
+      el('div', { class: `tier-badge tier-badge--${plan.tier}` }, [plan.name]),
+    );
+    card.appendChild(el('div', { class: 'pricing-price' }, [plan.price]));
+    card.appendChild(el('p', { class: 'pricing-desc' }, [plan.desc]));
+    if (plan.cta) {
+      const btn = el('button', { class: 'primary pricing-cta' }, [
+        `Upgrade to ${plan.name}`,
+      ]);
+      const planName = plan.cta;
+      btn.addEventListener('click', async () => {
+        try {
+          await redirectToSubscriptionCheckout(planName);
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes('authentication') || msg.includes('401')) {
+            openAccountModal();
+          } else {
+            alert(`Checkout error: ${msg}`);
+          }
+        }
+      });
+      card.appendChild(btn);
+    }
+    grid.appendChild(card);
+  }
+
+  const tokenGrid = $('tokenCards');
+  tokenGrid.innerHTML = '';
+
+  const packs: Array<{
+    tokens: '50' | '250' | '1000';
+    price: string;
+    popular: boolean;
+  }> = [
+    { tokens: '50', price: '$5', popular: false },
+    { tokens: '250', price: '$20', popular: true },
+    { tokens: '1000', price: '$60', popular: false },
+  ];
+
+  for (const pack of packs) {
+    const card = el('div', {
+      class: `token-card${pack.popular ? ' featured' : ''}`,
+    });
+    if (pack.popular) {
+      card.appendChild(el('div', { class: 'token-popular' }, ['Most popular']));
+    }
+    card.appendChild(
+      el('div', { class: 'token-count' }, [`${pack.tokens} tokens`]),
+    );
+    card.appendChild(el('div', { class: 'token-price' }, [pack.price]));
+    const btn = el('button', { class: 'ghost token-buy' }, ['Buy']);
+    const packVal = pack.tokens;
+    btn.addEventListener('click', async () => {
+      try {
+        await redirectToTokenCheckout(packVal);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('authentication') || msg.includes('401')) {
+          openAccountModal();
+        } else {
+          alert(`Checkout error: ${msg}`);
+        }
+      }
+    });
+    card.appendChild(btn);
+    tokenGrid.appendChild(card);
+  }
+}
+
+function renderAccount(account: BillingAccount): void {
+  const body = $('accountBody');
+  body.innerHTML = '';
+
+  if (!account.logged_in) {
+    // Not signed in — show identify form.
+    const form = el('div', { class: 'billing-email-form' });
+    const input = el('input', {
+      type: 'email',
+      placeholder: 'you@example.com',
+      id: 'billingEmail',
+    }) as HTMLInputElement;
+    const btn = el('button', { class: 'primary' }, ['Sign in / Sign up']);
+    btn.addEventListener('click', async () => {
+      const email = input.value.trim();
+      if (!email) return;
+      btn.textContent = 'Sending…';
+      try {
+        await identify(email);
+        billingAccount = await fetchAccount();
+        renderAccount(billingAccount);
+      } catch (e: unknown) {
+        btn.textContent = 'Sign in / Sign up';
+        alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    });
+    form.appendChild(input);
+    form.appendChild(btn);
+    body.appendChild(form);
+    body.appendChild(
+      el('p', { class: 'account-hint' }, [
+        'No password needed — just your email.',
+      ]),
+    );
+    return;
+  }
+
+  // Signed in.
+  const tierBadge = el(
+    'div',
+    { class: `tier-badge tier-badge--${account.tier}` },
+    [account.tier.charAt(0).toUpperCase() + account.tier.slice(1)],
+  );
+  body.appendChild(tierBadge);
+
+  body.appendChild(
+    el('div', { class: 'account-row' }, [
+      el('span', { class: 'account-label' }, ['Email']),
+      el('span', {}, [account.email ?? '']),
+    ]),
+  );
+
+  body.appendChild(
+    el('div', { class: 'account-row' }, [
+      el('span', { class: 'account-label' }, ['Tokens']),
+      el('span', {}, [String(account.token_balance)]),
+    ]),
+  );
+
+  const dailyMax =
+    account.daily_ops_max === -1 ? 'unlimited' : String(account.daily_ops_max);
+  body.appendChild(
+    el('div', { class: 'account-row' }, [
+      el('span', { class: 'account-label' }, ['Ops today']),
+      el('span', {}, [`${account.daily_ops_used} / ${dailyMax}`]),
+    ]),
+  );
+
+  if (account.tier === 'free') {
+    // Show token packs + upgrade CTA.
+    body.appendChild(el('hr', { class: 'account-divider' }));
+    body.appendChild(
+      el('p', { class: 'account-hint' }, ['Buy tokens to unlock more ops:']),
+    );
+    const packRow = el('div', { class: 'account-pack-row' });
+    const packs: Array<{ tokens: '50' | '250' | '1000'; price: string }> = [
+      { tokens: '50', price: '$5' },
+      { tokens: '250', price: '$20' },
+      { tokens: '1000', price: '$60' },
+    ];
+    for (const pack of packs) {
+      const btn = el('button', { class: 'ghost' }, [
+        `${pack.tokens} — ${pack.price}`,
+      ]);
+      const packVal = pack.tokens;
+      btn.addEventListener('click', async () => {
+        try {
+          await redirectToTokenCheckout(packVal);
+        } catch (e: unknown) {
+          alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      });
+      packRow.appendChild(btn);
+    }
+    body.appendChild(packRow);
+
+    body.appendChild(el('hr', { class: 'account-divider' }));
+    const upgradeBtn = el('button', { class: 'primary' }, [
+      'Upgrade to Pro — $9/mo',
+    ]);
+    upgradeBtn.addEventListener('click', async () => {
+      try {
+        await redirectToSubscriptionCheckout('pro');
+      } catch (e: unknown) {
+        alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    });
+    body.appendChild(upgradeBtn);
+  } else {
+    // Pro/enterprise — show manage subscription.
+    body.appendChild(el('hr', { class: 'account-divider' }));
+    const manageBtn = el('button', { class: 'ghost' }, ['Manage subscription']);
+    manageBtn.addEventListener('click', async () => {
+      try {
+        await redirectToPortal();
+      } catch (e: unknown) {
+        alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    });
+    body.appendChild(manageBtn);
+  }
+
+  body.appendChild(el('hr', { class: 'account-divider' }));
+  const signOut = el('button', { class: 'ghost small' }, ['Sign out']);
+  signOut.addEventListener('click', () => {
+    clearSessionToken();
+    billingAccount = null;
+    renderAccount({
+      logged_in: false,
+      tier: 'free',
+      token_balance: 0,
+      daily_ops_used: 0,
+      daily_ops_max: -1,
+    });
+  });
+  body.appendChild(signOut);
+}
+
+function showBillingBlock(err: BillingError): void {
+  openAccountModal();
+  const body = $('accountBody');
+
+  const notice = el('div', { class: 'billing-notice' });
+  notice.appendChild(el('p', { class: 'billing-notice-msg' }, [err.message]));
+
+  if (err.kind === 'auth_required') {
+    notice.appendChild(
+      el('p', { class: 'account-hint' }, ['Sign in below to proceed.']),
+    );
+    body.prepend(notice);
+    // Render sign-in form below the notice.
+    if (!billingAccount?.logged_in) {
+      renderAccount({
+        logged_in: false,
+        tier: 'free',
+        token_balance: 0,
+        daily_ops_used: 0,
+        daily_ops_max: -1,
+      });
+      body.prepend(notice);
+    }
+  } else if (err.kind === 'daily_limit') {
+    notice.appendChild(
+      el('p', { class: 'account-hint' }, [
+        'Upgrade to Pro for unlimited daily ops.',
+      ]),
+    );
+    const upgradeBtn = el('button', { class: 'primary' }, ['Upgrade to Pro']);
+    upgradeBtn.addEventListener('click', async () => {
+      try {
+        await redirectToSubscriptionCheckout('pro');
+      } catch (e: unknown) {
+        alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    });
+    notice.appendChild(upgradeBtn);
+    body.innerHTML = '';
+    body.appendChild(notice);
+  } else if (err.kind === 'insufficient_tokens') {
+    notice.appendChild(
+      el('p', { class: 'account-hint' }, [
+        'You need ' +
+          (err.required_tokens ?? '?') +
+          ' tokens but have ' +
+          (err.balance ?? 0) +
+          '.',
+      ]),
+    );
+    const buyBtn = el('button', { class: 'primary' }, ['Buy tokens']);
+    buyBtn.addEventListener('click', async () => {
+      try {
+        await redirectToTokenCheckout('50');
+      } catch (e: unknown) {
+        alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    });
+    notice.appendChild(buyBtn);
+    body.innerHTML = '';
+    body.appendChild(notice);
+    if (billingAccount) renderAccount(billingAccount);
+  }
+}
+
+function openAccountModal(): void {
+  const modal = $('accountModal');
+  modal.hidden = false;
+  const account = billingAccount ?? {
+    logged_in: false,
+    tier: 'free' as const,
+    token_balance: 0,
+    daily_ops_used: 0,
+    daily_ops_max: -1,
+  };
+  renderAccount(account);
 }
 
 // ─────────────── theme ───────────────
@@ -537,6 +888,28 @@ function bindControls(): void {
     renderSaved();
   });
   $('themeBtn').addEventListener('click', toggleTheme);
+
+  $('accountBtn').addEventListener('click', async () => {
+    openAccountModal();
+    // Refresh account data in background.
+    try {
+      billingAccount = await fetchAccount();
+      renderAccount(billingAccount);
+    } catch {
+      // Silently ignore.
+    }
+  });
+
+  $('closeAccount').addEventListener('click', () => {
+    $('accountModal').hidden = true;
+  });
+
+  // Close modal when clicking the backdrop.
+  $('accountModal')
+    .querySelector('.modal-backdrop')
+    ?.addEventListener('click', () => {
+      $('accountModal').hidden = true;
+    });
 }
 
 function flash(btn: HTMLElement): void {
@@ -552,9 +925,19 @@ function flash(btn: HTMLElement): void {
 function boot(): void {
   applyInitialTheme();
   renderStatic();
+  renderPricing();
   bindDropZone();
   bindControls();
   renderSaved();
+
+  // Silently fetch billing account and cache it.
+  fetchAccount()
+    .then((account) => {
+      billingAccount = account;
+    })
+    .catch(() => {
+      // Ignore — billing may be disabled.
+    });
 
   // Hydrate from URL state (bookmarked preset).
   const urlState = readUrlState();
@@ -564,11 +947,11 @@ function boot(): void {
   }
 
   // Health ping — silently mark the backend as alive.
-  fetch(API + '/health')
+  fetch(`${API}/health`)
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (data) {
-        console.log('[ffmpeg-converter] backend alive, ops=' + data.ops);
+        console.log(`[ffmpeg-converter] backend alive, ops=${data.ops}`);
       } else {
         console.warn(
           '[ffmpeg-converter] backend health check failed — running with mocked endpoint',
