@@ -26,13 +26,16 @@ import {
   headline,
   subheadline,
 } from './copy';
-import { buildCurlCmd, buildFfmpegCmd, suggestOutputName } from './ffmpeg-cmd';
 import {
+  type ConversionRoute,
   catalogCategories,
+  conversionRoutes,
+  findConversionRoute,
   findPreset,
   flagshipPresets,
   type Preset,
   type PresetChip,
+  popularOpNames,
   suggestPresetsForFile,
 } from './ops';
 import {
@@ -101,10 +104,13 @@ function renderStatic(): void {
   $('subheadline').textContent = subheadline;
   $('lane').textContent = `Server lane — ${footerLine}`;
 
-  // Preset grid
+  // Preset grid — only the 5 most popular on the homepage
   const grid = $('presetGrid');
   grid.innerHTML = '';
-  for (const preset of flagshipPresets) {
+  const popularPresets = flagshipPresets.filter((p) =>
+    popularOpNames.includes(p.op),
+  );
+  for (const preset of popularPresets) {
     const btn = el('button', { class: 'preset-btn', 'data-op': preset.op }, [
       el('span', { class: 'label' }, [preset.label]),
       el('span', { class: 'tag' }, [preset.tag]),
@@ -113,29 +119,8 @@ function renderStatic(): void {
     grid.appendChild(btn);
   }
 
-  // Full catalog — organised by intuitive categories
-  const catalogGrid = $('catalogGrid');
-  catalogGrid.innerHTML = '';
-  for (const cat of catalogCategories) {
-    const card = el('div', { class: 'catalog-card' });
-    card.appendChild(
-      el('div', { class: 'catalog-card-head' }, [
-        el('h4', { class: 'catalog-card-title' }, [cat.title]),
-        el('span', { class: 'catalog-card-count' }, [`${cat.ops.length}`]),
-      ]),
-    );
-    card.appendChild(
-      el('p', { class: 'catalog-card-desc' }, [cat.description]),
-    );
-    const opList = el('div', { class: 'catalog-ops' });
-    for (const op of cat.ops) {
-      const b = el('button', { 'data-op': op }, [op]);
-      b.addEventListener('click', () => selectPreset(op));
-      opList.appendChild(b);
-    }
-    card.appendChild(opList);
-    catalogGrid.appendChild(card);
-  }
+  // Full catalog — accordion layout, rendered on /catalog page
+  renderCatalog();
 
   // Comparison table
   const compareTable = $('compareTable');
@@ -187,6 +172,120 @@ function renderStatic(): void {
   void bullets;
 }
 
+// ─────────────── catalog (accordion) ───────────────
+
+/** Build a slug for an op name, e.g. "transcode" → links to conversion route or falls back. */
+function opToSlug(op: string): string | null {
+  const route = conversionRoutes.find((r) => r.op === op);
+  return route ? `/${route.slug}` : null;
+}
+
+function renderCatalog(): void {
+  const catalogGrid = $('catalogGrid');
+  catalogGrid.innerHTML = '';
+  for (const cat of catalogCategories) {
+    const accordion = el('div', { class: 'catalog-accordion' });
+
+    const trigger = el('button', { class: 'catalog-accordion-trigger' }, [
+      el('div', { class: 'catalog-accordion-meta' }, [
+        document.createTextNode(cat.title),
+        el('span', { class: 'catalog-accordion-desc' }, [cat.description]),
+      ]),
+      el('span', { class: 'catalog-card-count' }, [`${cat.ops.length}`]),
+      el('span', { class: 'arrow' }, ['\u25B8']),
+    ]);
+
+    trigger.addEventListener('click', () => {
+      accordion.classList.toggle('open');
+    });
+
+    const body = el('div', { class: 'catalog-accordion-body' });
+    const opList = el('div', { class: 'catalog-ops' });
+    for (const op of cat.ops) {
+      const slug = opToSlug(op);
+      if (slug) {
+        const a = el('a', { href: slug }, [op.replace(/_/g, ' ')]);
+        opList.appendChild(a);
+      } else {
+        // No dedicated SEO route — use a button to select the preset directly
+        const b = el('a', { href: '#', 'data-op': op }, [
+          op.replace(/_/g, ' '),
+        ]);
+        b.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.history.pushState(null, '', '/');
+          applyRoute();
+          selectPreset(op);
+        });
+        opList.appendChild(b);
+      }
+    }
+    body.appendChild(opList);
+    accordion.appendChild(trigger);
+    accordion.appendChild(body);
+    catalogGrid.appendChild(accordion);
+  }
+}
+
+// ─────────────── conversion SEO page ───────────────
+
+function renderConversionPage(route: ConversionRoute): void {
+  const container = $('conversionPageContent');
+  container.innerHTML = '';
+
+  // Set page title + meta for SEO
+  document.title = route.title;
+  const metaDesc = document.querySelector('meta[name="description"]');
+  if (metaDesc) metaDesc.setAttribute('content', route.description);
+
+  const backLink = el('a', { href: '/catalog', class: 'back-link' }, [
+    '\u2190 Full catalog',
+  ]);
+  container.appendChild(backLink);
+
+  const header = el('div', { class: 'conversion-page-header' });
+  header.appendChild(
+    el('h2', {}, [`Convert ${route.inputLabel} to ${route.outputLabel}`]),
+  );
+  header.appendChild(el('p', {}, [route.description]));
+  container.appendChild(header);
+
+  // Pre-configure the drop zone for this specific conversion
+  updateDropZoneForConversion(route);
+
+  // Auto-select the preset
+  selectPreset(route.op);
+}
+
+/** Update drop zone copy and accept attribute to match a specific conversion. */
+function updateDropZoneForConversion(route: ConversionRoute): void {
+  // Don't change drop zone if a file is already selected
+  if (state.files.length > 0) return;
+
+  const dz = $('dropzone');
+  const title = dz.querySelector('.drop-title') as HTMLElement;
+  const sub = dz.querySelector('.drop-sub') as HTMLElement;
+  const input = $<HTMLInputElement>('fileInput');
+
+  title.textContent = `Drop your ${route.inputExt.replace('.', '').toUpperCase()} file here`;
+  sub.innerHTML = `<span class="underline">One click to convert to ${route.outputLabel}.</span>`;
+  input.setAttribute('accept', route.inputExt);
+}
+
+/** Reset drop zone to default state. */
+function resetDropZone(): void {
+  if (state.files.length > 0) return;
+  const dz = $('dropzone');
+  const title = dz.querySelector('.drop-title') as HTMLElement;
+  const sub = dz.querySelector('.drop-sub') as HTMLElement;
+  const input = $<HTMLInputElement>('fileInput');
+
+  title.textContent = 'Drop your file here';
+  sub.innerHTML =
+    'We\'ll suggest the best format. <span class="underline">One click to convert.</span>';
+  input.removeAttribute('accept');
+}
+
 // ─────────────── preset selection ───────────────
 
 function selectPreset(opName: string): void {
@@ -208,6 +307,15 @@ function selectPreset(opName: string): void {
   state.currentArgs = chip ? { ...chip.args } : {};
   state.activeChipId = chip?.id ?? null;
 
+  // Update drop zone copy to reflect the chosen conversion (unless a file is already loaded)
+  if (state.files.length === 0) {
+    // Try to find a matching conversion route for dynamic drop zone text
+    const route = conversionRoutes.find((r) => r.op === opName);
+    if (route) {
+      updateDropZoneForConversion(route);
+    }
+  }
+
   renderPanel(preset);
   writeUrlState({ op: opName, args: state.currentArgs });
   highlightActiveButton(opName);
@@ -223,12 +331,10 @@ function renderPanelForSynthetic(opName: string): void {
   const panel = $('panel');
   panel.hidden = false;
   $('panelTitle').textContent = opName;
-  $('panelDesc').textContent =
-    'From the full 50-op registry. Configure below or edit the command directly.';
+  $('panelDesc').textContent = 'From the full catalog. Configure below.';
   $('presetChips').innerHTML = '';
   $('advancedBody').innerHTML =
-    '<div class="adv-field"><label>No additional options for this operation. Edit the ffmpeg command below if needed.</label></div>';
-  updateCmdPreview();
+    '<div class="adv-field"><label>No additional options for this operation.</label></div>';
 }
 
 function renderPanel(preset: Preset): void {
@@ -294,14 +400,14 @@ function renderPanel(preset: Preset): void {
       for (const c of document.querySelectorAll('.chip')) {
         c.classList.remove('active');
       }
-      updateCmdPreview();
+      // (cmd preview removed — convenience-first UI)
       writeUrlState({ op: preset.op, args: state.currentArgs });
     });
     wrap.appendChild(input);
     adv.appendChild(wrap);
   }
 
-  updateCmdPreview();
+  // (cmd preview removed — convenience-first UI)
 }
 
 function applyChip(preset: Preset, chip: PresetChip): void {
@@ -311,23 +417,9 @@ function applyChip(preset: Preset, chip: PresetChip): void {
   writeUrlState({ op: preset.op, args: state.currentArgs });
 }
 
-function updateCmdPreview(): void {
-  if (!state.currentOp) return;
-  const inputName = state.files[0]?.name ?? 'input.ext';
-  const preset = findPreset(state.currentOp);
-  const outputName = preset
-    ? suggestOutputName(inputName, preset, state.currentArgs.ext)
-    : 'output';
-  const cmd = buildFfmpegCmd(
-    state.currentOp,
-    state.currentArgs,
-    inputName,
-    outputName,
-  );
-  const curl = buildCurlCmd(state.currentOp, state.currentArgs, inputName);
-  $('cmdLine').textContent = cmd;
-  $('curlLine').textContent = curl;
-}
+// Command preview removed — convenience-first users don't need to see
+// the underlying commands. The ffmpeg-cmd module is still available for
+// power-user features if needed in the future.
 
 // ─────────────── file drop / pick ───────────────
 
@@ -385,8 +477,6 @@ function handleFiles(files: File[]): void {
     const op = b.dataset.op ?? '';
     b.style.opacity = recommended.includes(op) ? '1' : '0.35';
   });
-  // Re-preview cmd if a preset is already chosen.
-  if (state.currentOp) updateCmdPreview();
 }
 
 // ─────────────── run ───────────────
@@ -872,14 +962,6 @@ function bindControls(): void {
     highlightActiveButton('');
   });
 
-  $('copyCmd').addEventListener('click', async () => {
-    await navigator.clipboard.writeText($('cmdLine').textContent ?? '');
-    flash($('copyCmd'));
-  });
-  $('copyCurl').addEventListener('click', async () => {
-    await navigator.clipboard.writeText($('curlLine').textContent ?? '');
-    flash($('copyCurl'));
-  });
   $('shareBtn').addEventListener('click', async () => {
     const url = stateToShareableUrl({
       op: state.currentOp ?? undefined,
@@ -930,47 +1012,74 @@ function flash(btn: HTMLElement): void {
 
 // ─────────────── SPA router ───────────────
 
-type Route = '/' | '/plans' | '/compare' | '/faq';
+type Route = '/' | '/plans' | '/compare' | '/faq' | '/catalog' | '/convert';
 
 function getRoute(): Route {
   const path = window.location.pathname;
   if (path === '/plans' || path === '/pricing') return '/plans';
   if (path === '/compare') return '/compare';
   if (path === '/faq') return '/faq';
+  if (path === '/catalog') return '/catalog';
+  if (path.startsWith('/convert-')) return '/convert';
   return '/';
 }
 
-/** Map of section IDs to the route they belong to. */
-const sectionRoutes: Record<string, Route> = {
-  hero: '/',
-  dropzone: '/',
-  presets: '/',
-  catalog: '/',
-  panel: '/',
-  queue: '/',
-  savedPresets: '/',
-  pricing: '/plans',
-  compare: '/compare',
-  faq: '/faq',
+/** Map of section IDs to the routes they're visible on. */
+const sectionRoutes: Record<string, Route[]> = {
+  hero: ['/'],
+  dropzone: ['/', '/convert'],
+  presets: ['/'],
+  catalog: ['/catalog'],
+  conversionPage: ['/convert'],
+  panel: ['/', '/convert'],
+  queue: ['/', '/convert'],
+  savedPresets: ['/'],
+  pricing: ['/plans'],
+  compare: ['/compare'],
+  faq: ['/faq'],
 };
 
 function applyRoute(): void {
   const route = getRoute();
-  for (const [id, sectionRoute] of Object.entries(sectionRoutes)) {
+  for (const [id, routes] of Object.entries(sectionRoutes)) {
     const section = document.getElementById(id);
     if (!section) continue;
-    if (sectionRoute === route) {
+    if (routes.includes(route)) {
       section.classList.remove('page-hidden');
     } else {
       section.classList.add('page-hidden');
     }
   }
 
+  // Handle SEO conversion pages
+  if (route === '/convert') {
+    const slug = window.location.pathname.slice(1); // e.g. "convert-mov-to-mp4"
+    const convRoute = findConversionRoute(slug);
+    if (convRoute) {
+      renderConversionPage(convRoute);
+    }
+  } else {
+    // Reset page title and drop zone when navigating away from a conversion page
+    document.title = "Sean's Converter \u2014 convert anything to anything";
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute(
+        'content',
+        "Sean's Converter \u2014 a fast, honest, no-login file converter. Your file doesn't travel any further than it has to.",
+      );
+    }
+    if (route === '/') {
+      resetDropZone();
+    }
+  }
+
   // Update active nav link.
   document.querySelectorAll<HTMLAnchorElement>('.top-nav a').forEach((a) => {
     const href = a.getAttribute('href') ?? '';
-    // Path-based routes match exactly; anchor links are active on homepage.
-    const isActive = href === route || (route === '/' && href.startsWith('#'));
+    const isActive =
+      href === route ||
+      (route === '/' && href.startsWith('/#')) ||
+      (route === '/catalog' && href === '/catalog');
     a.classList.toggle('active', isActive);
   });
 }

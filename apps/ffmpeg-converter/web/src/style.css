@@ -249,44 +249,68 @@ body {
   background: var(--panel-2);
 }
 
-/* ── catalog ──────────────────────────────────────────────────────────── */
+/* ── catalog (accordion page) ─────────────────────────────────────────── */
 
 .catalog {
   margin-bottom: 1.2rem;
 }
+.catalog-intro {
+  font-size: 0.9rem;
+  color: var(--color-dim);
+  margin-bottom: 1rem;
+}
 .catalog-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
-}
-@media (max-width: 880px) {
-  .catalog-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 480px) {
-  .catalog-grid {
-    grid-template-columns: 1fr;
-  }
-}
-.catalog-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.7rem 0.8rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0;
 }
-.catalog-card-head {
+.catalog-accordion {
+  border-bottom: 1px solid var(--border);
+}
+.catalog-accordion:first-child {
+  border-top: 1px solid var(--border);
+}
+.catalog-accordion-trigger {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 0.4rem;
-}
-.catalog-card-title {
-  font-size: 0.9rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color);
+  font-size: 0.95rem;
   font-weight: 600;
+  text-align: left;
+  gap: 0.5rem;
+}
+.catalog-accordion-trigger:hover {
+  background: var(--panel);
+}
+.catalog-accordion-trigger .arrow {
+  font-size: 0.7rem;
+  color: var(--color-dim);
+  transition: transform 150ms;
+  flex-shrink: 0;
+}
+.catalog-accordion.open .arrow {
+  transform: rotate(90deg);
+}
+.catalog-accordion-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+.catalog-accordion-desc {
+  font-size: 0.78rem;
+  color: var(--color-dim);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .catalog-card-count {
   font-family: var(--mono);
@@ -297,29 +321,64 @@ body {
   border-radius: 4px;
   flex-shrink: 0;
 }
-.catalog-card-desc {
-  font-size: 0.78rem;
-  color: var(--color-dim);
-  line-height: 1.3;
+.catalog-accordion-body {
+  display: none;
+  padding: 0 0.5rem 0.75rem;
+}
+.catalog-accordion.open .catalog-accordion-body {
+  display: block;
 }
 .catalog-ops {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-top: 0.2rem;
+  gap: 0.35rem;
 }
-.catalog-ops button {
+.catalog-ops a {
   font-family: var(--mono);
-  font-size: 0.7rem;
-  background: var(--panel-2);
+  font-size: 0.75rem;
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--color);
-  padding: 0.25rem 0.45rem;
+  padding: 0.3rem 0.55rem;
   cursor: pointer;
+  text-decoration: none;
+  transition:
+    border-color 100ms,
+    background 100ms;
 }
-.catalog-ops button:hover {
+.catalog-ops a:hover {
   border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+/* ── conversion SEO page ─────────────────────────────────────────────── */
+
+.conversion-page {
+  margin-bottom: 1.2rem;
+}
+.conversion-page-header {
+  margin-bottom: 1rem;
+}
+.conversion-page-header h2 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.15;
+  margin-bottom: 0.3rem;
+}
+.conversion-page-header p {
+  color: var(--color-dim);
+  font-size: 0.92rem;
+}
+.conversion-page .back-link {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--color-dim);
+  text-decoration: none;
+  margin-bottom: 0.6rem;
+}
+.conversion-page .back-link:hover {
+  color: var(--accent-2);
 }
 
 .panel {
