@@ -38,14 +38,7 @@ import {
   popularOpNames,
   suggestPresetsForFile,
 } from './ops';
-import {
-  deletePreset,
-  loadSavedPresets,
-  readUrlState,
-  savePreset,
-  stateToShareableUrl,
-  writeUrlState,
-} from './url-state';
+import { readUrlState, stateToShareableUrl, writeUrlState } from './url-state';
 
 // ─────────────── state ───────────────
 
@@ -201,6 +194,18 @@ function renderCatalog(): void {
 
     const body = el('div', { class: 'catalog-accordion-body' });
     const opList = el('div', { class: 'catalog-ops' });
+
+    // Find generic routes for this category and show them first
+    const genericRoutes = conversionRoutes.filter(
+      (r) => r.inputExt.includes(',') && cat.ops.includes(r.op),
+    );
+    for (const route of genericRoutes) {
+      const a = el('a', { href: `/${route.slug}`, class: 'generic-route' }, [
+        `Convert any ${route.inputLabel.toLowerCase()} to ${route.outputLabel}`,
+      ]);
+      opList.appendChild(a);
+    }
+
     for (const op of cat.ops) {
       const slug = opToSlug(op);
       if (slug) {
@@ -579,37 +584,6 @@ function renderQueue(): void {
   }
 }
 
-// ─────────────── saved presets ───────────────
-
-function renderSaved(): void {
-  const list = loadSavedPresets();
-  const section = $('savedPresets');
-  const ul = $('savedList');
-  section.hidden = list.length === 0;
-  ul.innerHTML = '';
-  for (const p of list) {
-    const li = el('li');
-    const a = el('button', { class: 'ghost small', 'data-id': p.id }, [
-      `${p.name} → ${p.op}`,
-    ]);
-    a.addEventListener('click', () => {
-      state.currentArgs = { ...p.args };
-      selectPreset(p.op);
-      writeUrlState({ op: p.op, args: p.args });
-    });
-    const x = el('button', { class: 'x', 'aria-label': 'Delete preset' }, [
-      '×',
-    ]);
-    x.addEventListener('click', () => {
-      deletePreset(p.id);
-      renderSaved();
-    });
-    li.appendChild(a);
-    li.appendChild(x);
-    ul.appendChild(li);
-  }
-}
-
 // ─────────────── billing UI ───────────────
 
 function renderPricing(): void {
@@ -953,13 +927,6 @@ function bindControls(): void {
     await navigator.clipboard.writeText(url);
     flash($('shareBtn'));
   });
-  $('saveBtn').addEventListener('click', () => {
-    if (!state.currentOp) return;
-    const name = prompt('Name this preset:', state.currentOp);
-    if (!name) return;
-    savePreset(name, state.currentOp, state.currentArgs);
-    renderSaved();
-  });
   $('accountBtn').addEventListener('click', async () => {
     openAccountModal();
     // Refresh account data in background.
@@ -1014,7 +981,6 @@ const sectionRoutes: Record<string, Route[]> = {
   conversionPage: ['/convert'],
   panel: ['/', '/convert'],
   queue: ['/', '/convert'],
-  savedPresets: ['/'],
   pricing: ['/plans'],
   compare: ['/compare'],
   faq: ['/faq'],
@@ -1107,7 +1073,6 @@ function boot(): void {
   bindDropZone();
   bindControls();
   bindRouter();
-  renderSaved();
   applyRoute();
 
   // Silently fetch billing account and cache it.

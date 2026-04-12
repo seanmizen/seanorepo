@@ -22,7 +22,7 @@ export const bullets: { title: string; body: string }[] = [
   },
   {
     title: 'No login. No account. Ever.',
-    body: 'Your presets live in localStorage on your device. We have nothing to forget because we never knew you.',
+    body: "You don't need an account to convert files. We have nothing to forget because we never knew you.",
   },
 ];
 
@@ -102,16 +102,12 @@ export const faq: { q: string; a: string }[] = [
     a: 'Files are written to a local disk on the converter machine and deleted one hour after conversion. There is no off-site backup, no S3, no analytics pipeline.',
   },
   {
-    q: 'Why is there no login?',
-    a: 'Because a converter is a tool, not a product. Logins mean accounts, accounts mean passwords, passwords mean leaks, leaks mean a bad afternoon. Your preferences live in your own browser localStorage.',
+    q: 'Do I need an account?',
+    a: "You don't need an account to convert files. Just drop a file, pick a format, and go. Your preferences live in your own browser.",
   },
   {
     q: "What's the file size limit?",
     a: 'Soft cap at 500 MB right now. Larger files may time out or fail depending on the conversion type.',
-  },
-  {
-    q: 'Is this open source?',
-    a: 'Yes. The backend and this web UI live in a public monorepo. PRs welcome, but fair warning: this is a personal site, not a company.',
   },
   {
     q: 'What formats do you support?',
