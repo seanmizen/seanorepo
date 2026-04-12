@@ -5,28 +5,28 @@
 export const headline = 'Convert anything to anything.';
 
 export const subheadline =
-  'Powered by ffmpeg. No login, no ads, no email gate. Your file does not travel any further than it has to.';
+  'Free, instant, no signup. Powered by ffmpeg — your file never leaves further than it has to.';
 
 export const bullets: { title: string; body: string }[] = [
   {
-    title: 'Drop it and go.',
-    body: 'Drag a file anywhere on the page. We guess the most useful target format, and you click once to convert. No wizard, no 4-step form.',
+    title: 'Drop, convert, done.',
+    body: 'Drag a file onto the page. We suggest the best format. You click once. No wizard, no multi-step form.',
   },
   {
-    title: 'The full ffmpeg, not a cripplesware subset.',
-    body: '50 operations across video, audio and images — including trims, crops, resizes, bitrate targeting, loudness normalisation, and contact sheets. Advanced panel exposes codec, CRF, fps, filters.',
+    title: 'All of ffmpeg, none of the complexity.',
+    body: '50 operations across video, audio, and images — trims, crops, resizes, bitrate targeting, loudness normalisation, contact sheets. Advanced panel for codec, CRF, fps, and filters when you need them.',
   },
   {
     title: 'See the command.',
-    body: 'Every option you pick is mirrored into a live ffmpeg command line you can copy and paste into your own shell. No black box.',
+    body: 'Every option maps to a live ffmpeg command you can copy and run in your own terminal. Nothing hidden.',
   },
   {
     title: 'Shareable presets.',
-    body: 'The URL is the state. Bookmark /?op=transcode_webm&crf=28 and you have a one-click personal tool. Send the link to a friend and they get the same preset pre-loaded.',
+    body: 'The URL is the state. Bookmark it and you have a one-click tool. Send it to a colleague and they get the same preset, ready to go.',
   },
   {
-    title: 'No login. Ever.',
-    body: 'Your saved presets live in localStorage on your own device. We have nothing to forget because we never knew you.',
+    title: 'No login. No account. Ever.',
+    body: 'Your presets live in localStorage on your device. We have nothing to forget because we never knew you.',
   },
 ];
 
@@ -131,4 +131,4 @@ export const faq: { q: string; a: string }[] = [
   },
 ];
 
-export const footerLine = 'Files auto-delete one hour after conversion.';
+export const footerLine = 'Files auto-delete after one hour.';
