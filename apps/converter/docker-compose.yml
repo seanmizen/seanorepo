@@ -5,7 +5,7 @@ x-frontend-base: &frontend-base
     dockerfile: apps/converter/frontend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4040:4040"
+    - "4050:4050"
 
 x-backend-base: &backend-base
   container_name: converter-be
@@ -14,9 +14,9 @@ x-backend-base: &backend-base
     dockerfile: apps/converter/backend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4041:4041"
+    - "4051:4051"
   environment:
-    - PORT=4041
+    - PORT=4051
     - WORKERS=4
     - MAX_UPLOAD_MB=500
     - FILE_TTL=1h
