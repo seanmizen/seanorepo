@@ -215,10 +215,10 @@ function renderPanelForSynthetic(opName: string): void {
   panel.hidden = false;
   $('panelTitle').textContent = opName;
   $('panelDesc').textContent =
-    'Operation from the full 50-op registry. Advanced users only.';
+    'From the full 50-op registry. Configure below or edit the command directly.';
   $('presetChips').innerHTML = '';
   $('advancedBody').innerHTML =
-    '<div class="adv-field"><label>No UI fields mapped for this op — edit the URL directly or the ffmpeg command below.</label></div>';
+    '<div class="adv-field"><label>No additional options for this operation. Edit the ffmpeg command below if needed.</label></div>';
   updateCmdPreview();
 }
 
@@ -250,7 +250,7 @@ function renderPanel(preset: Preset): void {
   if (preset.advanced.length === 0) {
     adv.appendChild(
       el('div', { class: 'adv-field' }, [
-        el('label', {}, ['No advanced options for this op. It Just Works™.']),
+        el('label', {}, ['No additional options — this one just works.']),
       ]),
     );
   }
@@ -368,7 +368,7 @@ function handleFiles(files: File[]): void {
   const sub = dz.querySelector('.drop-sub') as HTMLElement;
   title.textContent =
     files.length === 1 ? first.name : `${files.length} files ready`;
-  sub.innerHTML = `<span class="underline">pick a conversion below</span> or <span class="underline">drop different file</span>`;
+  sub.innerHTML = `<span class="underline">Pick a conversion below</span> or <span class="underline">drop a different file</span>`;
 
   // Auto-suggest: highlight recommended preset buttons for this file type.
   const recommended = suggestPresetsForFile(first.name);
@@ -385,7 +385,7 @@ function handleFiles(files: File[]): void {
 async function runConversion(): Promise<void> {
   if (!state.currentOp) return;
   if (state.files.length === 0) {
-    alert('Drop a file first.');
+    alert('Add a file first — drop one onto the page or click to browse.');
     return;
   }
 
@@ -522,7 +522,7 @@ function renderPricing(): void {
       name: 'Free',
       price: '$0',
       tier: 'free',
-      desc: 'Image ops + basic audio forever free. 10 ops/day. 50 MB limit.',
+      desc: 'Image and basic audio conversions, free forever. 10 ops per day, 50 MB limit.',
       featured: false,
       cta: null as null | 'pro' | 'enterprise',
     },
@@ -530,7 +530,7 @@ function renderPricing(): void {
       name: 'Pro',
       price: '$9/mo',
       tier: 'pro',
-      desc: 'All 50 ops. 2 GB files. Unlimited daily. 100 tokens/month included.',
+      desc: 'All 50 operations. Files up to 2 GB. Unlimited daily use. 100 tokens per month.',
       featured: true,
       cta: 'pro' as const,
     },
@@ -538,7 +538,7 @@ function renderPricing(): void {
       name: 'Enterprise',
       price: '$29/mo',
       tier: 'enterprise',
-      desc: 'Everything in Pro. 10 GB files. 500 tokens/month included.',
+      desc: 'Everything in Pro. Files up to 10 GB. 500 tokens per month.',
       featured: false,
       cta: 'enterprise' as const,
     },
