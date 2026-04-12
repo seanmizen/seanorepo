@@ -32,6 +32,20 @@ console.log(`  port:     ${PORT}`);
 
 const transpiler = new Bun.Transpiler({ loader: 'ts' });
 
+async function resolveFile(
+  abs: string,
+): Promise<{ file: ReturnType<typeof Bun.file>; path: string } | null> {
+  const file = Bun.file(abs);
+  if (await file.exists()) return { file, path: abs };
+
+  // Extensionless module import → try .ts fallback (e.g. ./billing → ./billing.ts).
+  if (!/\.\w+$/.test(abs)) {
+    const tsFile = Bun.file(abs + '.ts');
+    if (await tsFile.exists()) return { file: tsFile, path: abs + '.ts' };
+  }
+  return null;
+}
+
 async function serveStatic(pathname: string): Promise<Response> {
   // Default document.
   const rel = pathname === '/' ? '/index.html' : pathname;
@@ -39,14 +53,23 @@ async function serveStatic(pathname: string): Promise<Response> {
   if (rel.includes('..')) return new Response('nope', { status: 400 });
 
   const abs = ROOT.replace(/\/$/, '') + rel;
-  const file = Bun.file(abs);
-  if (!(await file.exists())) {
+  const resolved = await resolveFile(abs);
+
+  if (!resolved) {
+    // SPA fallback: serve index.html for unmatched routes so the client
+    // router can handle /plans, /compare, /faq, etc.
+    const indexFile = Bun.file(ROOT.replace(/\/$/, '') + '/index.html');
+    if (await indexFile.exists()) {
+      return new Response(indexFile, {
+        headers: { 'cache-control': 'no-store' },
+      });
+    }
     return new Response('not found: ' + rel, { status: 404 });
   }
 
   // Transpile .ts on the fly so browsers get plain JS.
-  if (rel.endsWith('.ts')) {
-    const src = await file.text();
+  if (resolved.path.endsWith('.ts')) {
+    const src = await resolved.file.text();
     const out = transpiler.transformSync(src);
     return new Response(out, {
       headers: {
@@ -57,7 +80,9 @@ async function serveStatic(pathname: string): Promise<Response> {
   }
 
   // Bun.file sets a reasonable content-type for most extensions.
-  return new Response(file, { headers: { 'cache-control': 'no-store' } });
+  return new Response(resolved.file, {
+    headers: { 'cache-control': 'no-store' },
+  });
 }
 
 // In-memory mock: minimal responses that keep the frontend alive when the

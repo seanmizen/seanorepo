@@ -928,6 +928,87 @@ function flash(btn: HTMLElement): void {
   }, 900);
 }
 
+// ─────────────── SPA router ───────────────
+
+type Route = '/' | '/plans' | '/compare' | '/faq';
+
+function getRoute(): Route {
+  const path = window.location.pathname;
+  if (path === '/plans' || path === '/pricing') return '/plans';
+  if (path === '/compare') return '/compare';
+  if (path === '/faq') return '/faq';
+  return '/';
+}
+
+/** Map of section IDs to the route they belong to. */
+const sectionRoutes: Record<string, Route> = {
+  hero: '/',
+  dropzone: '/',
+  presets: '/',
+  catalog: '/',
+  panel: '/',
+  queue: '/',
+  savedPresets: '/',
+  pricing: '/plans',
+  compare: '/compare',
+  faq: '/faq',
+};
+
+function applyRoute(): void {
+  const route = getRoute();
+  for (const [id, sectionRoute] of Object.entries(sectionRoutes)) {
+    const section = document.getElementById(id);
+    if (!section) continue;
+    if (sectionRoute === route) {
+      section.classList.remove('page-hidden');
+    } else {
+      section.classList.add('page-hidden');
+    }
+  }
+
+  // Update active nav link.
+  document.querySelectorAll<HTMLAnchorElement>('.top-nav a').forEach((a) => {
+    const href = a.getAttribute('href') ?? '';
+    // Path-based routes match exactly; anchor links are active on homepage.
+    const isActive = href === route || (route === '/' && href.startsWith('#'));
+    a.classList.toggle('active', isActive);
+  });
+}
+
+/** Intercept local link clicks for SPA navigation. */
+function bindRouter(): void {
+  document.addEventListener('click', (e) => {
+    const anchor = (e.target as HTMLElement).closest('a');
+    if (!anchor) return;
+    const href = anchor.getAttribute('href');
+    if (!href) return;
+
+    // Handle /#anchor links — navigate to homepage then scroll.
+    if (href.startsWith('/#')) {
+      e.preventDefault();
+      const hash = href.slice(1); // e.g. "#presets"
+      window.history.pushState(null, '', '/');
+      applyRoute();
+      const target = document.querySelector(hash);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    // Only intercept local path routes, not anchors or external links.
+    if (
+      href.startsWith('/') &&
+      !href.startsWith('/api') &&
+      !href.startsWith('/licenses')
+    ) {
+      e.preventDefault();
+      window.history.pushState(null, '', href);
+      applyRoute();
+      window.scrollTo(0, 0);
+    }
+  });
+  window.addEventListener('popstate', () => applyRoute());
+}
+
 // ─────────────── boot ───────────────
 
 function boot(): void {
@@ -936,7 +1017,9 @@ function boot(): void {
   renderPricing();
   bindDropZone();
   bindControls();
+  bindRouter();
   renderSaved();
+  applyRoute();
 
   // Silently fetch billing account and cache it.
   fetchAccount()
