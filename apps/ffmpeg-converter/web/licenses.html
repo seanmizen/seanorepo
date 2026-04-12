@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" id="colorScheme" />
+    <title>Open Source Licenses — ffmpeg-converter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600&family=Red+Hat+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+    <style>
+      .licenses-page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+      }
+      .licenses-page h1 {
+        font-size: 1.4rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+      .licenses-page .back {
+        display: inline-block;
+        margin-bottom: 2rem;
+        font-size: 0.85rem;
+        color: var(--fg-2, #888);
+        text-decoration: none;
+      }
+      .licenses-page .back:hover {
+        color: var(--fg, inherit);
+      }
+      .license-entry {
+        margin-bottom: 3rem;
+        border-top: 1px solid var(--border, #333);
+        padding-top: 1.5rem;
+      }
+      .license-entry h2 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+      }
+      .license-entry .meta {
+        font-size: 0.8rem;
+        color: var(--fg-2, #888);
+        margin-bottom: 1rem;
+        font-family: 'Red Hat Mono', monospace;
+      }
+      .license-entry .meta a {
+        color: inherit;
+      }
+      .license-text {
+        font-family: 'Red Hat Mono', monospace;
+        font-size: 0.75rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        background: var(--surface-2, #111);
+        border: 1px solid var(--border, #333);
+        border-radius: 4px;
+        padding: 1rem 1.25rem;
+        overflow-x: auto;
+        color: var(--fg-2, #aaa);
+      }
+    </style>
+  </head>
+  <body class="dark">
+    <div class="licenses-page">
+      <a class="back" href="/">← ffmpeg-converter</a>
+      <h1>Open Source Licenses</h1>
+      <p style="font-size:0.875rem;color:var(--fg-2,#888);margin-bottom:2.5rem;">
+        ffmpeg-converter is built on open-source software. License notices for each component are reproduced below.
+      </p>
+
+      <!-- ffmpeg -->
+      <div class="license-entry">
+        <h2>ffmpeg</h2>
+        <div class="meta">
+          GNU Lesser General Public License v2.1 or later (LGPLv2.1+) ·
+          <a href="https://ffmpeg.org/legal.html" target="_blank" rel="noreferrer">ffmpeg.org/legal.html</a>
+        </div>
+        <div class="license-text">FFmpeg is free software; you can redistribute it and/or modify it under the terms of
+the GNU Lesser General Public License as published by the Free Software Foundation;
+either version 2.1 of the License, or (at your option) any later version.
+
+FFmpeg is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License along with
+FFmpeg; if not, write to the Free Software Foundation, Inc., 51 Franklin Street,
+Fifth Floor, Boston, MA 02110-1301 USA.
+
+--- Note ---
+Some optional components of FFmpeg (certain codecs and filters) are licensed under
+the GNU General Public License v2 or later (GPLv2+). The binary deployed on this
+server was compiled without those components. Full license texts:
+  LGPL v2.1: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt
+  GPL  v2:   https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt</div>
+      </div>
+
+      <!-- TypeScript -->
+      <div class="license-entry">
+        <h2>TypeScript</h2>
+        <div class="meta">
+          Apache License 2.0 ·
+          <a href="https://github.com/microsoft/TypeScript" target="_blank" rel="noreferrer">github.com/microsoft/TypeScript</a>
+        </div>
+        <div class="license-text">Copyright (c) Microsoft Corporation. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.</div>
+      </div>
+
+      <!-- Karla (Google Fonts) -->
+      <div class="license-entry">
+        <h2>Karla typeface</h2>
+        <div class="meta">
+          SIL Open Font License 1.1 ·
+          <a href="https://fonts.google.com/specimen/Karla" target="_blank" rel="noreferrer">fonts.google.com/specimen/Karla</a>
+        </div>
+        <div class="license-text">Copyright (c) 2012, Jonny Pinhorn (jonny@underscoretype.com),
+with Reserved Font Name "Karla".
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://openfontlicense.org
+
+The OFL allows the licensed fonts to be used, studied, modified and redistributed
+freely as long as they are not sold by themselves. The fonts, including any
+derivative works, can be bundled, embedded, redistributed and/or sold with any
+software provided that any reserved names are not used by derivative works.</div>
+      </div>
+
+      <!-- Red Hat Mono (Google Fonts) -->
+      <div class="license-entry">
+        <h2>Red Hat Mono typeface</h2>
+        <div class="meta">
+          SIL Open Font License 1.1 ·
+          <a href="https://fonts.google.com/specimen/Red+Hat+Mono" target="_blank" rel="noreferrer">fonts.google.com/specimen/Red+Hat+Mono</a>
+        </div>
+        <div class="license-text">Copyright (c) 2020 The Red Hat Mono Project Authors
+(https://github.com/RedHatOfficial/RedHatFont)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://openfontlicense.org</div>
+      </div>
+
+    </div>
+    <script>
+      // Honour persisted theme preference from the main app.
+      try {
+        const stored = localStorage.getItem('theme');
+        if (stored === 'light') {
+          document.body.classList.replace('dark', 'light');
+          document.getElementById('colorScheme').setAttribute('content', 'light dark');
+        }
+      } catch (_) {}
+    </script>
+  </body>
+</html>
