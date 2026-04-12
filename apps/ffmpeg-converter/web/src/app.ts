@@ -167,24 +167,24 @@ function renderStatic(): void {
 
 // ─────────────── catalog (accordion) ───────────────
 
-/** Build a slug for an op name, e.g. "transcode" → links to conversion route or falls back. */
-function opToSlug(op: string): string | null {
-  const route = conversionRoutes.find((r) => r.op === op);
-  return route ? `/${route.slug}` : null;
-}
-
 function renderCatalog(): void {
   const catalogGrid = $('catalogGrid');
   catalogGrid.innerHTML = '';
   for (const cat of catalogCategories) {
     const accordion = el('div', { class: 'catalog-accordion' });
 
+    // Count visible items: conversion routes for this category + unrouted ops
+    const catRoutes = conversionRoutes.filter((r) => cat.ops.includes(r.op));
+    const catRoutedOps = new Set(catRoutes.map((r) => r.op));
+    const unroutedCount = cat.ops.filter((op) => !catRoutedOps.has(op)).length;
+    const visibleCount = catRoutes.length + unroutedCount;
+
     const trigger = el('button', { class: 'catalog-accordion-trigger' }, [
       el('div', { class: 'catalog-accordion-meta' }, [
         document.createTextNode(cat.title),
         el('span', { class: 'catalog-accordion-desc' }, [cat.description]),
       ]),
-      el('span', { class: 'catalog-card-count' }, [`${cat.ops.length}`]),
+      el('span', { class: 'catalog-card-count' }, [`${visibleCount}`]),
       el('span', { class: 'arrow' }, ['\u25B8']),
     ]);
 
@@ -195,35 +195,50 @@ function renderCatalog(): void {
     const body = el('div', { class: 'catalog-accordion-body' });
     const opList = el('div', { class: 'catalog-ops' });
 
-    // Find generic routes for this category and show them first
-    const genericRoutes = conversionRoutes.filter(
-      (r) => r.inputExt.includes(',') && cat.ops.includes(r.op),
-    );
+    // Collect all conversion routes that belong to this category's ops
+    const genericRoutes: ConversionRoute[] = [];
+    const specificRoutes: ConversionRoute[] = [];
+    for (const route of conversionRoutes) {
+      if (!cat.ops.includes(route.op)) continue;
+      if (route.inputExt.includes(',')) {
+        genericRoutes.push(route);
+      } else {
+        specificRoutes.push(route);
+      }
+    }
+
+    // Generic "any → X" routes first, visually distinct
     for (const route of genericRoutes) {
       const a = el('a', { href: `/${route.slug}`, class: 'generic-route' }, [
-        `Convert any ${route.inputLabel.toLowerCase()} to ${route.outputLabel}`,
+        `Any ${route.inputLabel.toLowerCase()} → ${route.outputLabel}`,
       ]);
       opList.appendChild(a);
     }
 
+    // Specific conversion routes with human labels
+    for (const route of specificRoutes) {
+      const a = el('a', { href: `/${route.slug}` }, [
+        `${route.inputLabel} → ${route.outputLabel}`,
+      ]);
+      opList.appendChild(a);
+    }
+
+    // Ops with no SEO route — use flagship preset label or cleaned-up name
+    const routedOps = new Set(
+      [...genericRoutes, ...specificRoutes].map((r) => r.op),
+    );
     for (const op of cat.ops) {
-      const slug = opToSlug(op);
-      if (slug) {
-        const a = el('a', { href: slug }, [op.replace(/_/g, ' ')]);
-        opList.appendChild(a);
-      } else {
-        // No dedicated SEO route — use a button to select the preset directly
-        const b = el('a', { href: '#', 'data-op': op }, [
-          op.replace(/_/g, ' '),
-        ]);
-        b.addEventListener('click', (e) => {
-          e.preventDefault();
-          window.history.pushState(null, '', '/');
-          applyRoute();
-          selectPreset(op);
-        });
-        opList.appendChild(b);
-      }
+      if (routedOps.has(op)) continue;
+      const preset = findPreset(op);
+      const label = preset ? preset.label : op.replace(/_/g, ' ');
+      const b = el('a', { href: '#', 'data-op': op }, [label]);
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.history.pushState(null, '', '/');
+        applyRoute();
+        selectPreset(op);
+      });
+      opList.appendChild(b);
     }
     body.appendChild(opList);
     accordion.appendChild(trigger);
