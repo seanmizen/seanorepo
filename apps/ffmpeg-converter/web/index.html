@@ -14,7 +14,7 @@
   <body>
     <div class="container">
       <header class="top">
-        <h1>Sean's Converter</h1>
+        <h1><a href="/" style="color: inherit; text-decoration: none;">Sean's Converter</a></h1>
         <nav class="top-nav">
           <a href="/#presets">Popular conversions</a>
           <a href="/catalog">Full catalog</a>
@@ -85,7 +85,6 @@
 
           <div class="actions">
             <button id="runBtn" class="primary">Convert</button>
-            <button id="saveBtn" class="ghost">Save preset…</button>
             <button id="shareBtn" class="ghost">Copy link</button>
           </div>
         </div>
@@ -94,11 +93,6 @@
       <section id="queue" class="queue" hidden>
         <h3 class="section-title">Jobs</h3>
         <ul id="queueList" class="queue-list"></ul>
-      </section>
-
-      <section id="savedPresets" class="saved-presets" hidden>
-        <h3 class="section-title">Your saved presets</h3>
-        <ul id="savedList"></ul>
       </section>
 
       <section id="pricing" class="pricing">

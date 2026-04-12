@@ -315,6 +315,38 @@ export const conversionRoutes: ConversionRoute[] = [
     inputLabel: 'JPG',
     outputLabel: 'AVIF',
   },
+
+  // Generic routes — accept any input of that media type
+  {
+    slug: 'convert-image-to-jpg',
+    title: 'Convert any image to JPG online — free, instant, no signup',
+    description:
+      'Convert any image (PNG, WebP, HEIC, AVIF) to universally compatible JPG. Free, no signup.',
+    op: 'image_to_jpg',
+    inputExt: '.png,.jpg,.jpeg,.webp,.heic,.heif,.bmp,.tiff,.avif',
+    inputLabel: 'Image',
+    outputLabel: 'JPG',
+  },
+  {
+    slug: 'convert-video-to-mp4',
+    title: 'Convert any video to MP4 online — free, instant, no signup',
+    description:
+      'Convert any video (MOV, WebM, MKV, AVI) to MP4 for universal playback. Free, no signup.',
+    op: 'transcode',
+    inputExt: '.mov,.webm,.mkv,.avi,.wmv,.m4v,.mpg,.mpeg,.flv,.mp4',
+    inputLabel: 'Video',
+    outputLabel: 'MP4',
+  },
+  {
+    slug: 'convert-audio-to-mp3',
+    title: 'Convert any audio to MP3 online — free, instant, no signup',
+    description:
+      'Convert any audio or video file to MP3. Choose your bitrate. Free, no signup.',
+    op: 'audio_mp3',
+    inputExt: '.wav,.flac,.aac,.m4a,.ogg,.opus,.wma,.mp3,.mp4,.mov,.mkv,.webm',
+    inputLabel: 'Audio',
+    outputLabel: 'MP3',
+  },
 ];
 
 /** Find a conversion route by slug (e.g. "convert-mov-to-mp4"). */
@@ -630,43 +662,43 @@ export interface CatalogCategory {
 export const catalogCategories: CatalogCategory[] = [
   {
     id: 'image-formats',
-    title: 'Image Formats',
+    title: 'Convert Images',
     description: 'Convert between image types — JPG, PNG, WebP, AVIF.',
     ops: ['image_to_jpg', 'image_to_png', 'image_to_webp', 'image_to_avif'],
   },
   {
     id: 'image-effects',
-    title: 'Image Effects',
+    title: 'Edit Images',
     description: 'Resize, blur, sharpen, or desaturate images.',
     ops: ['image_resize', 'blur', 'sharpen', 'grayscale'],
   },
   {
     id: 'video-to-images',
-    title: 'Video to Images',
+    title: 'Extract Frames',
     description: 'Extract frames, thumbnails, or animated GIFs from video.',
     ops: ['thumbnail', 'contact_sheet', 'gif_from_video'],
   },
   {
     id: 'images-to-video',
-    title: 'Images to Video',
+    title: 'Make a Video',
     description: 'Combine an image sequence into a timelapse video.',
     ops: ['timelapse'],
   },
   {
     id: 'images-to-gif',
-    title: 'Images to GIF',
+    title: 'Create GIFs',
     description: 'Stitch images into an animated GIF.',
     ops: ['gif_from_images'],
   },
   {
     id: 'video-conversion',
-    title: 'Video Conversion',
+    title: 'Convert Videos',
     description: 'Re-container or transcode between video formats.',
     ops: ['transcode', 'transcode_webm', 'transcode_mkv', 'h264_to_h265'],
   },
   {
     id: 'video-editing',
-    title: 'Video Editing',
+    title: 'Edit Videos',
     description: 'Trim, crop, resize, rotate, loop, and more.',
     ops: [
       'trim',
@@ -685,13 +717,13 @@ export const catalogCategories: CatalogCategory[] = [
   },
   {
     id: 'video-overlays',
-    title: 'Video Overlays',
+    title: 'Add Overlays',
     description: 'Burn subtitles, watermarks, or meme text onto video.',
     ops: ['watermark', 'subtitles_burn', 'subtitles_soft', 'meme_overlay'],
   },
   {
     id: 'audio-conversion',
-    title: 'Audio Conversion',
+    title: 'Convert Audio',
     description: 'Convert or extract audio to MP3, Opus, AAC, FLAC, or WAV.',
     ops: [
       'audio_mp3',
@@ -703,7 +735,7 @@ export const catalogCategories: CatalogCategory[] = [
   },
   {
     id: 'audio-editing',
-    title: 'Audio Editing',
+    title: 'Edit Audio',
     description: 'Trim, fade, concat, normalise, pitch-shift, and more.',
     ops: [
       'normalize_audio',
@@ -719,13 +751,13 @@ export const catalogCategories: CatalogCategory[] = [
   },
   {
     id: 'audio-visualisation',
-    title: 'Audio Visualisation',
+    title: 'Visualise Audio',
     description: 'Render audio as a spectrogram or waveform image.',
     ops: ['spectrogram', 'waveform_png'],
   },
   {
     id: 'special',
-    title: 'Special',
+    title: 'Tools',
     description: 'YouTube-style previews and other one-off tools.',
     ops: ['youtube_preview'],
   },

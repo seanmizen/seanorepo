@@ -89,15 +89,17 @@ a {
 .top-nav {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+  gap: 0.3rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 .top-nav a {
   color: var(--text-muted);
   text-decoration: none;
-  font-size: 0.8rem;
-  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.35rem;
   border-radius: 6px;
+  white-space: nowrap;
   transition:
     color 0.12s,
     background 0.12s;
@@ -336,6 +338,12 @@ a {
 .catalog-ops a:hover {
   border-color: var(--accent);
   background: var(--surface-hover);
+}
+.catalog-ops a.generic-route {
+  font-family: var(--font);
+  font-weight: 600;
+  border-color: var(--accent-dim);
+  color: var(--accent);
 }
 
 /* ── conversion SEO page ───────────────────────────────────────────────── */
@@ -633,37 +641,6 @@ a {
   display: flex;
   gap: 0.3rem;
   flex-shrink: 0;
-}
-
-/* ── saved presets ─────────────────────────────────────────────────────── */
-
-.saved-presets ul {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-.saved-presets li {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.25rem 0.55rem 0.25rem 0.75rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-}
-.saved-presets button.x {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0;
-  line-height: 1;
-}
-.saved-presets button.x:hover {
-  color: var(--error);
 }
 
 /* ── comparison table ──────────────────────────────────────────────────── */
