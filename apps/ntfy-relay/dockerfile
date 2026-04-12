@@ -1,0 +1,17 @@
+FROM golang:1.23-alpine AS build
+WORKDIR /build
+
+# Copy shared types first (relay-shared is referenced via replace directive)
+COPY apps/relay-shared/ ./apps/relay-shared/
+COPY apps/ntfy-relay/go.mod apps/ntfy-relay/go.sum* ./apps/ntfy-relay/
+
+WORKDIR /build/apps/ntfy-relay
+RUN go mod download
+
+COPY apps/ntfy-relay/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /ntfy-relay .
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+COPY --from=build /ntfy-relay /ntfy-relay
+ENTRYPOINT ["/ntfy-relay"]
