@@ -1,0 +1,11 @@
+{
+  "name": "ffmpeg-converter",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "start": "concurrently --prefix \"{time} {name} †\" -k --kill-signal SIGKILL -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"bun run web/dev.ts\" \"go run .\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
