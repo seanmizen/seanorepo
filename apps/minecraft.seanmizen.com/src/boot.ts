@@ -215,16 +215,15 @@ async function main(): Promise<void> {
     { disableContextMenu },
   );
 
-  // Push initial size to Zig before init so `ctx.window()` returns correct dims.
-  if (notifyResize) {
-    notifyResize(canvas.width, canvas.height, window.devicePixelRatio || 1);
-    window.addEventListener('resize', () => {
-      notifyResize(canvas.width, canvas.height, window.devicePixelRatio || 1);
-    });
-  }
-
   // Hand off: hide the overlay and start the frame loop.
   hideOverlay(ov);
+
+  // init() MUST run before the first resize notification — it creates the
+  // WasmBackend inside Zig which is what owns `global_window_info`. A
+  // notifyResize before init() is silently dropped because the global
+  // pointer is still null, which would leave the MSAA target stuck at the
+  // Zig-side default of 1280×720 while the swap-chain surface is the real
+  // DPR-scaled canvas size. Order: init, resize, frame loop.
   try {
     init();
   } catch (err) {
@@ -237,6 +236,16 @@ async function main(): Promise<void> {
       String(err instanceof Error ? err.message : err),
     );
     return;
+  }
+
+  // Now push the real canvas size to Zig. The first voxelRender calls
+  // setupGPUResources lazily, which reads window_info — so this has to land
+  // before the first rAF tick.
+  if (notifyResize) {
+    notifyResize(canvas.width, canvas.height, window.devicePixelRatio || 1);
+    window.addEventListener('resize', () => {
+      notifyResize(canvas.width, canvas.height, window.devicePixelRatio || 1);
+    });
   }
 
   // Bind frame into a local so the narrowing from the typeof check above
