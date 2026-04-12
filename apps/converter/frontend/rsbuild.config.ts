@@ -7,6 +7,9 @@ export default defineConfig({
     template: './public/index.html',
   },
   source: {
+    entry: {
+      index: './src/main.tsx',
+    },
     define: {
       'import.meta.env.MODE': JSON.stringify(
         process.env.NODE_ENV ?? 'development',

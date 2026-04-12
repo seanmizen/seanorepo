@@ -1,5 +1,19 @@
 # Dev Environment Notes
 
+## Prerequisites
+
+### ffmpeg
+
+The backend calls `ffmpeg` and `ffprobe` at startup and fails fast if either is missing.
+
+```bash
+brew install ffmpeg
+```
+
+Both binaries must be on `PATH`. The Go server will print a clear error and exit if they're not found.
+
+---
+
 ## Node version resolution — the Homebrew trap
 
 ### What's going on
