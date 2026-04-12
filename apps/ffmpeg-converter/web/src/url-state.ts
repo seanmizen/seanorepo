@@ -40,4 +40,3 @@ export function stateToShareableUrl(state: UrlState): string {
   const qs = params.toString();
   return qs ? `${origin}?${qs}` : origin;
 }
-
