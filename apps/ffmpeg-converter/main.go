@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	stripe "github.com/stripe/stripe-go/v76"
 )
 
 func main() {
@@ -36,12 +38,57 @@ func main() {
 	ops := RegisterOps()
 	log.Printf("registered %d operations", len(ops))
 
+	// Billing setup (non-fatal).
+	billingCfg := loadBillingConfig()
+	var bh *BillingHandler
+	if billingCfg.IsEnabled() {
+		stripe.Key = billingCfg.SecretKey
+		dbPath := filepath.Join(dataDir, "billing.db")
+		billingDB, dbErr := NewBillingDB(dbPath)
+		if dbErr != nil {
+			log.Printf("WARN: billing DB init failed (%v) — billing disabled", dbErr)
+		} else {
+			bh = &BillingHandler{DB: billingDB, Cfg: billingCfg}
+			log.Printf("billing enabled (Stripe configured, DB at %s)", dbPath)
+		}
+	} else {
+		log.Printf("billing disabled (STRIPE_SECRET_KEY not set)")
+	}
+
 	mux := http.NewServeMux()
-	h := &Handler{Store: store, Jobs: jobs, Ops: ops}
+	h := &Handler{Store: store, Jobs: jobs, Ops: ops, Billing: bh}
 	mux.HandleFunc("/health", h.Health)
 	mux.HandleFunc("/ops", h.ListOps)
 	mux.HandleFunc("/convert", h.Convert)
 	mux.HandleFunc("/jobs/", h.JobOrOutput) // /jobs/{id} or /jobs/{id}/output
+
+	// Billing routes (always registered; handlers gracefully handle disabled state).
+	if bh != nil {
+		mux.HandleFunc("/billing/me", bh.Me)
+		mux.HandleFunc("/billing/identify", bh.Identify)
+		mux.HandleFunc("/billing/checkout/subscription", bh.CreateSubscriptionCheckout)
+		mux.HandleFunc("/billing/checkout/tokens", bh.CreateTokenCheckout)
+		mux.HandleFunc("/billing/portal", bh.CustomerPortal)
+		mux.HandleFunc("/billing/webhook", bh.Webhook)
+	} else {
+		// Billing disabled: /billing/me returns minimal anonymous info.
+		mux.HandleFunc("/billing/me", func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, http.StatusOK, BillingInfo{
+				LoggedIn:    false,
+				Tier:        "free",
+				DailyOpsMax: -1,
+			})
+		})
+	}
+
+	// Config endpoint — exposes publishable key for the frontend.
+	pubKey := ""
+	if billingCfg != nil {
+		pubKey = billingCfg.PublishableKey
+	}
+	mux.HandleFunc("/billing/config", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"publishable_key": pubKey})
+	})
 
 	srv := &http.Server{
 		Addr:         ":" + port,
