@@ -3,21 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" id="colorScheme" />
-    <title>Sean's Converter — convert anything to anything</title>
+    <title>Sean's Converter — Convert anything, instantly</title>
     <meta
       name="description"
-      content="Sean's Converter — a fast, honest, no-login file converter. Your file doesn't travel any further than it has to."
+      content="Free file converter for video, audio, and images. No signup, no limits, no file storage beyond 1 hour."
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600&family=Red+Hat+Mono:wght@400;500&display=swap"
-    />
+    <meta name="theme-color" content="#0f0f11" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
-  <body class="dark">
+  <body>
     <div class="container">
       <header class="top">
         <h1>Sean's Converter</h1>
@@ -30,14 +24,11 @@
         </nav>
         <div class="top-right">
           <button id="accountBtn" class="ghost" aria-label="Account">Account</button>
-          <button id="themeBtn" class="ghost" aria-label="Toggle theme" title="Toggle theme">
-            <span class="theme-icon">◐</span>
-          </button>
         </div>
       </header>
 
       <section id="hero" class="hero">
-        <h2 id="headline">Convert anything to anything.</h2>
+        <h2 id="headline">Convert anything, instantly</h2>
         <p id="subheadline" class="sub"></p>
       </section>
 
@@ -46,12 +37,12 @@
         class="dropzone"
         tabindex="0"
         role="button"
-        aria-label="Drop your file here — we'll suggest the best format"
+        aria-label="Drop a file here or click to browse"
       >
         <div class="drop-inner">
-          <div class="drop-icon">⬇</div>
-          <div class="drop-title">Drop your file here</div>
-          <div class="drop-sub">We'll suggest the best format. <span class="underline">One click to convert.</span></div>
+          <div class="drop-icon">&#128193;</div>
+          <div class="drop-title">Drop a file here</div>
+          <div class="drop-sub">or <span class="underline">click to browse</span> — video, audio, images</div>
           <input id="fileInput" type="file" multiple hidden />
         </div>
       </section>
@@ -127,13 +118,11 @@
       </section>
 
       <footer class="foot">
-        <div id="lane" class="lane">Server lane — files auto-delete one hour after conversion.</div>
+        <div id="lane" class="lane">Files auto-delete after one hour.</div>
         <div class="foot-right">
           <a href="/licenses.html">Licenses</a>
-          <span class="sep">·</span>
-          <a id="healthLink" href="/api/health" target="_blank" rel="noreferrer">/health</a>
-          <span class="sep">·</span>
-          <span>no tracking, no login</span>
+          <span class="sep">&middot;</span>
+          <span>Video &middot; Audio &middot; Images &mdash; fast, free, private</span>
         </div>
       </footer>
     </div>
