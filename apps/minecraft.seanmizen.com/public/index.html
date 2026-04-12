@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0a0a0f" />
+    <title>minecraft.seanmizen.com</title>
+    <meta name="description" content="A browser voxel engine. WebGPU-only. By Sean Mizen." />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        background: #000;
+        color: #eaeaea;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: #000;
+        /* Hide cursor inside the game; pointer lock makes this moot while
+           active, but this keeps the borders clean. */
+        cursor: crosshair;
+      }
+      #canvas.no-cursor {
+        cursor: none;
+      }
+      /* Fallback/status overlay — only visible when the engine isn't running. */
+      #overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      #overlay.hidden {
+        display: none;
+      }
+      #overlay .card {
+        pointer-events: auto;
+        max-width: 32rem;
+        padding: 2rem 2.25rem;
+        background: rgba(10, 10, 15, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(12px);
+      }
+      #overlay h1 {
+        margin: 0 0 0.75rem;
+        font-size: 1.35rem;
+        letter-spacing: 0.01em;
+      }
+      #overlay p {
+        margin: 0 0 0.75rem;
+        line-height: 1.5;
+        font-size: 0.95rem;
+        color: #c7c7cd;
+      }
+      #overlay p.small {
+        font-size: 0.8rem;
+        color: #8a8a94;
+      }
+      #overlay code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85em;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+      }
+      #overlay a {
+        color: #8ecae6;
+      }
+      #overlay .status {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        border-radius: 999px;
+      }
+      #overlay .status.err {
+        background: rgba(239, 68, 68, 0.18);
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+      }
+      #overlay .status.warn {
+        background: rgba(250, 204, 21, 0.18);
+        color: #fde68a;
+        border: 1px solid rgba(250, 204, 21, 0.4);
+      }
+      #overlay .status.ok {
+        background: rgba(34, 197, 94, 0.18);
+        color: #86efac;
+        border: 1px solid rgba(34, 197, 94, 0.4);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+      <div class="card" id="card">
+        <div class="status ok" id="status">loading</div>
+        <h1 id="title">minecraft.seanmizen.com</h1>
+        <p id="message">Booting the voxel engine…</p>
+        <p class="small" id="hint">
+          A hobby voxel engine by
+          <a href="https://seanmizen.com">Sean Mizen</a>.
+        </p>
+      </div>
+    </div>
+    <!--
+      boot.js is produced by `./build.sh` (bun-bundled from src/boot.ts) and
+      is .gitignored. On a fresh checkout with no build yet, the script load
+      fails and the inline fallback below surfaces a friendly "run build"
+      message in the overlay.
+    -->
+    <script type="module" src="./boot.js" onerror="
+      var s = document.getElementById('status');
+      var t = document.getElementById('title');
+      var m = document.getElementById('message');
+      var h = document.getElementById('hint');
+      if (s) { s.className = 'status warn'; s.textContent = 'build pending'; }
+      if (t) t.textContent = 'minecraft.seanmizen.com';
+      if (m) m.textContent = 'boot.js has not been built yet. The docker image, static hosting and Cloudflare tunnel are all wired up — only the JS/wasm artefacts are missing.';
+      if (h) h.innerHTML = 'Run <code>./apps/minecraft.seanmizen.com/build.sh</code> (or <code>yarn workspace minecraft.seanmizen.com build</code>) to produce them.';
+    "></script>
+  </body>
+</html>
