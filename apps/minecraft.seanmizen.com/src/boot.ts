@@ -129,6 +129,13 @@ async function main(): Promise<void> {
   const imports = {
     env: {
       jsGetTime: (): number => performance.now(),
+      jsSetPointerLock: (lock: number): void => {
+        if (lock) {
+          canvas.requestPointerLock();
+        } else if (document.pointerLockElement === canvas) {
+          document.exitPointerLock();
+        }
+      },
       jsLog: (ptr: number, len: number): void => {
         const mem = window.wasmMemory;
         if (!mem) {
