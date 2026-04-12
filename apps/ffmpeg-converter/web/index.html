@@ -44,25 +44,26 @@
       >
         <div class="drop-inner">
           <div class="drop-icon">⬇</div>
-          <div class="drop-title">Drop your file here to get started</div>
-          <div class="drop-sub">or <span class="underline">click to browse</span> — we'll suggest the best conversion</div>
+          <div class="drop-title">Drop a file here</div>
+          <div class="drop-sub">or <span class="underline">click to browse</span> — any format ffmpeg understands</div>
           <input id="fileInput" type="file" multiple hidden />
         </div>
       </section>
 
       <section id="presets" class="presets">
-        <h3 class="section-title">Or pick a conversion:</h3>
+        <h3 class="section-title">Popular conversions</h3>
         <div id="presetGrid" class="preset-grid"></div>
-        <details class="more-ops">
-          <summary>All 50 operations</summary>
-          <div id="allOps" class="all-ops"></div>
-        </details>
+      </section>
+
+      <section id="catalog" class="catalog">
+        <h3 class="section-title">Full catalog</h3>
+        <div id="catalogGrid" class="catalog-grid"></div>
       </section>
 
       <section id="panel" class="panel" hidden>
         <div class="panel-head">
           <div>
-            <span class="panel-kicker">Selected</span>
+            <span class="panel-kicker">Chosen</span>
             <h3 id="panelTitle" class="panel-title">—</h3>
             <p id="panelDesc" class="panel-desc"></p>
           </div>
@@ -131,7 +132,7 @@
       </section>
 
       <footer class="foot">
-        <div id="lane" class="lane">Server lane — files auto-delete after one hour.</div>
+        <div id="lane" class="lane">Server lane — files auto-delete one hour after conversion.</div>
         <div class="foot-right">
           <a href="https://ffmpeg.org" target="_blank" rel="noreferrer">ffmpeg</a>
           <span class="sep">·</span>

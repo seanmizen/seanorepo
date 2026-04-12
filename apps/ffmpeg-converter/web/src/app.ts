@@ -28,7 +28,7 @@ import {
 } from './copy';
 import { buildCurlCmd, buildFfmpegCmd, suggestOutputName } from './ffmpeg-cmd';
 import {
-  allOpsByCategory,
+  catalogCategories,
   findPreset,
   flagshipPresets,
   type Preset,
@@ -113,19 +113,30 @@ function renderStatic(): void {
     grid.appendChild(btn);
   }
 
-  // All ops disclosure
-  const all = $('allOps');
-  all.innerHTML = '';
-  for (const [cat, ops] of Object.entries(allOpsByCategory)) {
-    const header = el('div', { class: 'cat' }, [
-      `${cat.toUpperCase()} — ${ops.length}`,
-    ]);
-    all.appendChild(header);
-    for (const op of ops) {
+  // Full catalog — organised by intuitive categories
+  const catalogGrid = $('catalogGrid');
+  catalogGrid.innerHTML = '';
+  for (const cat of catalogCategories) {
+    const card = el('div', { class: 'catalog-card' });
+    card.appendChild(
+      el('div', { class: 'catalog-card-head' }, [
+        el('h4', { class: 'catalog-card-title' }, [cat.title]),
+        el('span', { class: 'catalog-card-count' }, [
+          `${cat.ops.length}`,
+        ]),
+      ]),
+    );
+    card.appendChild(
+      el('p', { class: 'catalog-card-desc' }, [cat.description]),
+    );
+    const opList = el('div', { class: 'catalog-ops' });
+    for (const op of cat.ops) {
       const b = el('button', { 'data-op': op }, [op]);
       b.addEventListener('click', () => selectPreset(op));
-      all.appendChild(b);
+      opList.appendChild(b);
     }
+    card.appendChild(opList);
+    catalogGrid.appendChild(card);
   }
 
   // Comparison table
