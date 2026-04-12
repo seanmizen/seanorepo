@@ -23,6 +23,7 @@
         <h1>ffmpeg-converter</h1>
         <div class="top-right">
           <a class="ghost" href="#faq">FAQ</a>
+          <button id="accountBtn" class="ghost" aria-label="Account">Account</button>
           <button id="themeBtn" class="ghost" aria-label="Toggle theme" title="Toggle theme">
             <span class="theme-icon">◐</span>
           </button>
@@ -113,6 +114,12 @@
         <ul id="savedList"></ul>
       </section>
 
+      <section id="pricing" class="pricing">
+        <h3 class="section-title">Plans &amp; tokens</h3>
+        <div id="pricingCards" class="pricing-grid"></div>
+        <div id="tokenCards" class="token-grid"></div>
+      </section>
+
       <section id="compare" class="compare">
         <h3 class="section-title">How it compares</h3>
         <div id="compareTable"></div>
@@ -133,6 +140,17 @@
           <span>no tracking, no ads, no login</span>
         </div>
       </footer>
+    </div>
+
+    <div id="accountModal" class="modal" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-box">
+        <div class="modal-head">
+          <span class="panel-kicker">Account &amp; Billing</span>
+          <button id="closeAccount" class="ghost" aria-label="Close">×</button>
+        </div>
+        <div id="accountBody" class="modal-body"></div>
+      </div>
     </div>
 
     <script type="module" src="/src/app.ts"></script>
