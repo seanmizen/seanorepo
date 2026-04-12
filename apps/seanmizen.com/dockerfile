@@ -30,6 +30,6 @@ RUN yarn workspace seanmizen.com build
 FROM node:23-slim AS prod
 WORKDIR /app
 COPY --from=prod-build /app/apps/seanmizen.com/dist .
-RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
+RUN npm install -g serve
 EXPOSE 4000
 CMD ["serve", "-s", ".", "-l", "4000"]

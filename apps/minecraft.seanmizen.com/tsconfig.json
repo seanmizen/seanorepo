@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@swindowzig/wasm/*": ["../../utils/swindowzig/backends/wasm/*"]
+    }
+  }
+}
