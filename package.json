@@ -16,7 +16,7 @@
     "caroline": "yarn workspace carolinemizen.art start",
     "cards": "yarn workspace seanscards start",
     "gosniff": "yarn workspace gosniff start",
-    "converter": "yarn workspace converter start",
+    "converter": "yarn workspace ffmpeg-converter start",
     "voxel": "yarn workspace swindowzig native:voxel",
     "voxel:web": "yarn workspace swindowzig dev",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
