@@ -203,57 +203,77 @@ body {
   background: var(--panel-2);
 }
 
-.more-ops {
-  margin-top: 0.8rem;
-  font-size: 0.85rem;
+/* ── catalog ──────────────────────────────────────────────────────────── */
+
+.catalog {
+  margin-bottom: 1.2rem;
 }
-.more-ops summary {
-  cursor: pointer;
-  color: var(--color-dim);
-  padding: 0.3rem 0;
-  list-style: none;
-}
-.more-ops summary::-webkit-details-marker {
-  display: none;
-}
-.more-ops summary:hover {
-  color: var(--color);
-}
-.all-ops {
+.catalog-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.3rem;
-  padding-top: 0.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
 }
-@media (max-width: 640px) {
-  .all-ops {
+@media (max-width: 880px) {
+  .catalog-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-.all-ops button {
-  font-family: var(--mono);
-  font-size: 0.75rem;
+@media (max-width: 480px) {
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.catalog-card {
   background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.catalog-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.catalog-card-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.catalog-card-count {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--color-dim);
+  background: var(--panel-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.catalog-card-desc {
+  font-size: 0.78rem;
+  color: var(--color-dim);
+  line-height: 1.3;
+}
+.catalog-ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+}
+.catalog-ops button {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--color);
-  padding: 0.35rem 0.5rem;
+  padding: 0.25rem 0.45rem;
   cursor: pointer;
-  text-align: left;
 }
-.all-ops button:hover {
+.catalog-ops button:hover {
   border-color: var(--accent);
-}
-.all-ops .cat {
-  grid-column: 1 / -1;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  color: var(--color-dim);
-  padding-top: 0.4rem;
-  padding-bottom: 0.1rem;
-  border: none;
-  background: transparent;
 }
 
 .panel {
