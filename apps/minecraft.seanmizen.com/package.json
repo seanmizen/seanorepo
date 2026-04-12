@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "build": "bash ./build.sh",
-    "start": "bash ./build.sh && npx --yes serve -s public -l 4040",
+    "start": "bash ./build.sh && npx --yes serve -s public -l 4042",
     "start:docker": "docker compose --profile dev up --build",
     "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
     "down": "docker compose --profile dev --profile prod down"
