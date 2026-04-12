@@ -628,3 +628,212 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ── modal ─────────────────────────────────────────────────────────────── */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal[hidden] {
+  display: none;
+}
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+.modal-box {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.2rem;
+  max-width: 440px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 0.6rem;
+}
+.modal-body {
+  padding-top: 0.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+/* ── pricing section ───────────────────────────────────────────────────── */
+
+.pricing {
+  margin: 1.5rem 0;
+}
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 640px) {
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.pricing-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pricing-card.featured {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.pricing-price {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.pricing-desc {
+  font-size: 0.82rem;
+  color: var(--color-dim);
+  flex: 1;
+}
+.pricing-cta {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+.token-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.token-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 120px;
+}
+.token-card.featured {
+  border-color: var(--accent);
+}
+.token-popular {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+.token-count {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.token-price {
+  font-size: 0.82rem;
+  color: var(--color-dim);
+}
+.token-buy {
+  margin-top: 0.3rem;
+}
+
+/* ── tier badge ────────────────────────────────────────────────────────── */
+
+.tier-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.tier-badge--free {
+  background: var(--panel-2);
+  color: var(--color-dim);
+}
+.tier-badge--pro {
+  background: var(--accent);
+  color: #fff;
+}
+.tier-badge--enterprise {
+  background: #b8860b;
+  color: #fff;
+}
+
+/* ── account modal body ────────────────────────────────────────────────── */
+
+.account-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+}
+.account-label {
+  color: var(--color-dim);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.account-hint {
+  font-size: 0.8rem;
+  color: var(--color-dim);
+}
+.account-divider {
+  border: none;
+  border-top: 1px dashed var(--border);
+  margin: 0.2rem 0;
+}
+.account-pack-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.billing-email-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.billing-email-form input {
+  flex: 1;
+  min-width: 180px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--color);
+}
+.billing-notice {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.billing-notice-msg {
+  font-size: 0.88rem;
+  font-weight: 600;
+}

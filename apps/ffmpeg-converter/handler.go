@@ -11,9 +11,10 @@ import (
 )
 
 type Handler struct {
-	Store *Store
-	Jobs  *JobTracker
-	Ops   map[string]*Operation
+	Store   *Store
+	Jobs    *JobTracker
+	Ops     map[string]*Operation
+	Billing *BillingHandler
 }
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +63,14 @@ func (h *Handler) Convert(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "unknown op: "+opName)
 		return
+	}
+
+	// Billing gate — check before creating the job.
+	if h.Billing != nil {
+		if berr := h.Billing.CheckConvert(r, opName); berr != nil {
+			writeJSON(w, http.StatusPaymentRequired, berr)
+			return
+		}
 	}
 
 	job := h.Jobs.Create(opName)
