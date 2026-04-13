@@ -320,6 +320,23 @@ Always squash-merge PRs. No merge commits, no fast-forward. Squash message: `[SE
 
 One ticket = one branch = one PR. If you discover out-of-scope work, create a new issue — do not do it in the current branch.
 
+### Issue Templates
+
+All issues must be created using the YAML-based GitHub Issue Forms in `.github/ISSUE_TEMPLATE/`:
+
+| Template | File | Use for |
+|---|---|---|
+| Feature | `feature.yml` | New features and enhancements |
+| Bug | `bug.yml` | Unexpected behaviour or regressions |
+| Chore | `chore.yml` | Maintenance, refactoring, dependency updates |
+
+Every template pre-populates the `backlog` label and requires **Acceptance Criteria** and **Priority**. Agents creating issues programmatically must include these same fields (even if not using the web form):
+
+- **Context** (feature/chore) or **Steps to Reproduce + Expected/Actual** (bug)
+- **Acceptance Criteria** — checklist of done conditions
+- **Files Likely Touched** — expected files to create or modify
+- **Priority** — `P0` through `P3`
+
 ### WIP Limits
 
 Cap concurrent `in-progress` issues at 3–5 to prevent merge conflicts between parallel agents.
