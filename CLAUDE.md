@@ -282,6 +282,37 @@ SEAN-{number}/{short-description}
 
 **Important:** Agents must NEVER use `--no-verify` to bypass git hooks.
 
+### Ticket Lifecycle
+
+Every issue moves through these states:
+
+```
+Idea -> Backlog -> Ready -> In Progress -> In Review -> Merged -> Done
+```
+
+| State       | Definition                                                                 |
+| ----------- | -------------------------------------------------------------------------- |
+| Idea        | Rough concept, not yet groomed or accepted                                 |
+| Backlog     | Accepted issue, not yet prioritised for a sprint                           |
+| Ready       | Groomed, estimated, and available for an agent or developer to pick up     |
+| In Progress | Actively being worked on in a branch                                       |
+| In Review   | PR is open and awaiting review                                             |
+| Merged      | PR has been squash-merged into main                                        |
+| Done        | Verified in production or otherwise closed                                 |
+
+**Agent responsibilities:**
+
+- When starting work on a ticket, add the `in-progress` label to the issue.
+- When opening a PR, add the `in-review` label and remove `in-progress`.
+- Issues auto-close on PR merge (use `Closes #N` in the PR body).
+
+### Squash-Merge Policy
+
+- **Always squash-merge** PRs into main. Never create merge commits and never fast-forward multi-commit branches.
+- Squash commit message format: `[SEAN-{number}] {type}: {description} (#{pr_number})`
+  - Example: `[SEAN-42] feat: add dark mode toggle (#87)`
+- **Reason:** AI agents produce many small, iterative commits during development. The git log on main should show one clean commit per ticket, not dozens of work-in-progress snapshots.
+
 ## Agile Process
 
 **Tracking:** GitHub Issues + GitHub Projects (kanban). See `docs/archive/seanorepo-agile-blueprint.md` for full methodology.
