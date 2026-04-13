@@ -244,6 +244,44 @@ See `docs/DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
 **Production Deployment:**
 `yarn prod:docker` is the **actual deployment command** used on the Cloudflared server. The server pulls the repo and runs this exact command.
 
+### Branch Naming Convention
+
+```
+SEAN-{number}/{short-description}
+```
+
+- Lowercase, hyphenated, max 5 words
+- Every branch must have a ticket ref
+
+**Valid examples:**
+
+- `SEAN-42/fix-hover-flicker`
+- `SEAN-7/add-avif-support`
+- `SEAN-1/setup-commitlint-husky`
+
+**Invalid examples:**
+
+- `main` (not a feature branch)
+- `fix-hover-flicker` (no ticket ref)
+- `SEAN-42` (no description)
+- `SEAN-42/Fix-Hover` (uppercase)
+- `feature/new-thing` (wrong prefix)
+
+### Commit Message Convention
+
+```
+[SEAN-{number}] {type}: {description}
+```
+
+**Valid types:** `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`
+
+**Examples:**
+
+- `[SEAN-42] fix: resolve hover flicker on subsection cards`
+- `[SEAN-7] feat: add webp-to-avif conversion support`
+
+**Important:** Agents must NEVER use `--no-verify` to bypass git hooks.
+
 ## Agile Process
 
 **Tracking:** GitHub Issues + GitHub Projects (kanban). See `docs/archive/seanorepo-agile-blueprint.md` for full methodology.
