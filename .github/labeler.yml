@@ -1,0 +1,47 @@
+# Maps path globs to labels for actions/labeler
+# Labels must already exist in the repo before they can be applied
+
+seanmizen.com:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/seanmizen.com/**'
+
+carolinemizen.art:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/carolinemizen.art/**'
+
+seanscards:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/seanscards/**'
+
+planning-poker:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/planning-poker/**'
+
+converter:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/converter/**'
+
+gosniff:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/gosniff/**'
+
+minecraft:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/minecraft.seanmizen.com/**'
+
+tty-dashboard:
+  - changed-files:
+      - any-glob-to-any-file: 'utils/tty-dashboard/**'
+
+fly-io:
+  - changed-files:
+      - any-glob-to-any-file: 'utils/fly-io/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: 'docs/**'
+      - any-glob-to-any-file: '*.md'
