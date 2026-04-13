@@ -286,6 +286,8 @@ SEAN-{number}/{short-description}
 
 **Tracking:** GitHub Issues + GitHub Projects (kanban). See `docs/archive/seanorepo-agile-blueprint.md` for full methodology.
 
+**Agent SOP:** See [`AGENTS.md`](./AGENTS.md) for the authoritative agent workflow — ticket lifecycle, gh CLI commands, branch/commit conventions, out-of-scope handling, and merge conflict resolution.
+
 **Org:** Sean (CEO) → Dispatch (COO / orchestrator) → Workers (Claude Code agents on individual issues).
 
 ### Ticket Lifecycle
