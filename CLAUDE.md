@@ -235,7 +235,7 @@ Multiple apps use `concurrently` to run frontend + backend simultaneously with n
    - Build: `docker build -f utils/fly-io/dockerfile`
 
 **Testing Deployments:**
-See `DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
+See `docs/DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
 
 - Port scheme documentation
 - Service smoke tests (`./test-deployment.sh`)
@@ -243,6 +243,48 @@ See `DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
 
 **Production Deployment:**
 `yarn prod:docker` is the **actual deployment command** used on the Cloudflared server. The server pulls the repo and runs this exact command.
+
+## Agile Process
+
+**Tracking:** GitHub Issues + GitHub Projects (kanban). See `docs/archive/seanorepo-agile-blueprint.md` for full methodology.
+
+**Org:** Sean (CEO) → Dispatch (COO / orchestrator) → Workers (Claude Code agents on individual issues).
+
+### Ticket Lifecycle
+
+```
+Idea → Backlog → Ready → In Progress → In Review → Merged → Done
+```
+
+Agents update issue labels at each transition: `backlog` → `ready` → `in-progress` → `in-review`. Issues auto-close on PR merge.
+
+### Branch Naming
+
+```
+SEAN-{number}/{short-description}
+```
+
+Lowercase, hyphenated, max 5 words. Every branch must have a ticket ref. Examples: `SEAN-42/fix-hover-flicker`, `SEAN-7/add-avif-support`.
+
+### Commit Messages
+
+```
+[SEAN-{number}] {type}: {description}
+```
+
+Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`. Never use `--no-verify`.
+
+### Squash-Merge Policy
+
+Always squash-merge PRs. No merge commits, no fast-forward. Squash message: `[SEAN-{number}] {type}: {description} (#{pr_number})`.
+
+### Scope Discipline
+
+One ticket = one branch = one PR. If you discover out-of-scope work, create a new issue — do not do it in the current branch.
+
+### WIP Limits
+
+Cap concurrent `in-progress` issues at 3–5 to prevent merge conflicts between parallel agents.
 
 ## Working Philosophy
 
