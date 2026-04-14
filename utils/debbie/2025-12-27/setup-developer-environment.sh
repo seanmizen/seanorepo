@@ -479,13 +479,58 @@ log_step "Docker installation"
 #-------------------------------------------------------------------------------
 log_step "Go installation"
 {
-    if ! command_exists go; then
-        apt-get install -y golang
-        log_success "Go installed"
+    GO_INSTALL_DIR="/usr/local/go"
+    GO_LATEST=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
+
+    CURRENT_GO=""
+    if [ -x "$GO_INSTALL_DIR/bin/go" ]; then
+        CURRENT_GO=$("$GO_INSTALL_DIR/bin/go" version 2>/dev/null | awk '{print $3}')
+    fi
+
+    if [ "$CURRENT_GO" != "$GO_LATEST" ]; then
+        ARCH=$(uname -m)
+        case "$ARCH" in
+            x86_64)  GO_ARCH="amd64" ;;
+            aarch64) GO_ARCH="arm64" ;;
+            *)        GO_ARCH="$ARCH" ;;
+        esac
+        curl -fsSL "https://go.dev/dl/${GO_LATEST}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz
+        rm -rf "$GO_INSTALL_DIR"
+        tar -C /usr/local -xzf /tmp/go.tar.gz
+        rm /tmp/go.tar.gz
+        log_success "Go $GO_LATEST installed"
     else
-        log_skip "Go already installed"
+        log_skip "Go $GO_LATEST already installed"
+    fi
+
+    # Add Go to PATH in .zshrc
+    GO_PATH_EXPORT='export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"'
+    if [ -f "$USER_HOME/.zshrc" ] && ! grep -qF "/usr/local/go/bin" "$USER_HOME/.zshrc"; then
+        echo "$GO_PATH_EXPORT" >> "$USER_HOME/.zshrc"
+        log "  - Go PATH added to .zshrc"
     fi
 } || log_fail "Go installation"
+
+#-------------------------------------------------------------------------------
+# Step: Shist installation
+#-------------------------------------------------------------------------------
+log_step "Shist installation"
+{
+    if ! run_as_user "$ORIG_USER" "export PATH=\"\$PATH:/usr/local/go/bin:\$HOME/go/bin\" && command -v shist" &>/dev/null; then
+        run_as_user "$ORIG_USER" \
+            "export PATH=\"\$PATH:/usr/local/go/bin\" && go install github.com/seanmizen/shist@latest"
+        log_success "shist installed"
+    else
+        log_skip "shist already installed"
+    fi
+
+    # Add SHIST_DEFAULT_MIN_INDEX to .zshrc
+    SHIST_CONFIG='export SHIST_DEFAULT_MIN_INDEX=4000'
+    if [ -f "$USER_HOME/.zshrc" ] && ! grep -qF "SHIST_DEFAULT_MIN_INDEX" "$USER_HOME/.zshrc"; then
+        echo "$SHIST_CONFIG" >> "$USER_HOME/.zshrc"
+        log "  - SHIST_DEFAULT_MIN_INDEX set in .zshrc"
+    fi
+} || log_fail "Shist installation"
 
 #-------------------------------------------------------------------------------
 # Step: Claude Code installation
