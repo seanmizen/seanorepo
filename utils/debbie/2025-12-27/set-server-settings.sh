@@ -215,7 +215,13 @@ get_orig_user() {
 
 get_user_home() {
     local user="$1"
-    getent passwd "$user" | cut -d: -f6
+    if command -v getent >/dev/null 2>&1; then
+        getent passwd "$user" | cut -d: -f6
+    elif [ "$(uname)" = "Darwin" ]; then
+        dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}'
+    else
+        grep "^${user}:" /etc/passwd | cut -d: -f6
+    fi
 }
 
 run_as_user() {

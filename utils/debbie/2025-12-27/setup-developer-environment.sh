@@ -65,9 +65,26 @@ get_orig_user() {
     fi
 }
 
+get_passwd_field() {
+    # Cross-platform replacement for: getent passwd "$user" | cut -d: -f<field>
+    # field 6 = home directory, field 7 = shell
+    local user="$1"
+    local field="$2"
+    if command -v getent >/dev/null 2>&1; then
+        getent passwd "$user" | cut -d: -f"$field"
+    elif [ "$(uname)" = "Darwin" ]; then
+        case "$field" in
+            6) dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}' ;;
+            7) dscl . -read "/Users/$user" UserShell 2>/dev/null | awk '{print $2}' ;;
+        esac
+    else
+        grep "^${user}:" /etc/passwd | cut -d: -f"$field"
+    fi
+}
+
 get_user_home() {
     local user="$1"
-    getent passwd "$user" | cut -d: -f6
+    get_passwd_field "$user" 6
 }
 
 run_as_user() {
@@ -139,7 +156,7 @@ log_step "Zsh installation"
 #-------------------------------------------------------------------------------
 log_step "Set Zsh as default shell"
 {
-    CURRENT_SHELL=$(getent passwd "$ORIG_USER" | cut -d: -f7)
+    CURRENT_SHELL=$(get_passwd_field "$ORIG_USER" 7)
     ZSH_PATH=$(command -v zsh)
     if [ "$CURRENT_SHELL" != "$ZSH_PATH" ]; then
         chsh -s "$ZSH_PATH" "$ORIG_USER"
