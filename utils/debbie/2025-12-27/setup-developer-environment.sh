@@ -95,7 +95,9 @@ run_as_user() {
     local user="$1"
     shift
     if [ "$(id -u)" -eq 0 ]; then
-        sudo -u "$user" bash -c "$*"
+        local user_home
+        user_home="$(get_user_home "$user")"
+        sudo -H -u "$user" env HOME="$user_home" bash -c "$*"
     else
         bash -c "$*"
     fi
@@ -611,20 +613,29 @@ log_step "Shist installation"
         log_fail "Shist installation"
     else
         GOPATH_BIN="$USER_HOME/go/bin"
+        SHIST_SRC="$USER_HOME/projects/shist"
         if [ ! -x "$GOPATH_BIN/shist" ]; then
-            run_as_user "$ORIG_USER" \
-                "export PATH=\"\$PATH:$(dirname "$GO_BIN")\" && go install github.com/seanmizen/shist@latest"
-            log_success "shist installed"
+            mkdir -p "$USER_HOME/projects"
+            chown "$ORIG_USER" "$USER_HOME/projects" 2>/dev/null || true
+            if [ ! -d "$SHIST_SRC/.git" ]; then
+                run_as_user "$ORIG_USER" \
+                    "git clone https://github.com/seanmizen/shist.git '$SHIST_SRC'" || true
+            else
+                run_as_user "$ORIG_USER" "cd '$SHIST_SRC' && git pull --ff-only" || true
+            fi
+            mkdir -p "$GOPATH_BIN"
+            chown "$ORIG_USER" "$USER_HOME/go" "$GOPATH_BIN" 2>/dev/null || true
+            if run_as_user "$ORIG_USER" \
+                "export PATH=\"\$PATH:$(dirname "$GO_BIN")\" && cd '$SHIST_SRC' && go build -o '$GOPATH_BIN/shist' ./src/main" \
+                && [ -x "$GOPATH_BIN/shist" ]; then
+                log_success "shist built and installed to $GOPATH_BIN/shist"
+            else
+                log_fail "shist installation"
+            fi
         else
             log_skip "shist already installed"
         fi
 
-        # Add SHIST_DEFAULT_MIN_INDEX to .zshrc
-        SHIST_CONFIG='export SHIST_DEFAULT_MIN_INDEX=4000'
-        if [ -f "$USER_HOME/.zshrc" ] && ! grep -qF "SHIST_DEFAULT_MIN_INDEX" "$USER_HOME/.zshrc"; then
-            echo "$SHIST_CONFIG" >> "$USER_HOME/.zshrc"
-            log "  - SHIST_DEFAULT_MIN_INDEX set in .zshrc"
-        fi
     fi
 } || log_fail "Shist installation"
 
