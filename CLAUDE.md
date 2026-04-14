@@ -288,6 +288,14 @@ SEAN-{number}/{short-description}
 
 **Agent SOP:** See [`AGENTS.md`](./AGENTS.md) for the authoritative agent workflow — ticket lifecycle, gh CLI commands, branch/commit conventions, out-of-scope handling, and merge conflict resolution.
 
+### Workflow References
+
+Concise per-phase checklists for agents. Not enforced by tooling — just SOPs.
+
+- [`.claude/workflows/new-ticket.md`](./.claude/workflows/new-ticket.md) — steps for creating a well-formed issue
+- [`.claude/workflows/start-work.md`](./.claude/workflows/start-work.md) — checklist for starting a ticket
+- [`.claude/workflows/submit-pr.md`](./.claude/workflows/submit-pr.md) — checklist for opening a PR
+
 **Org:** Sean (CEO) → Dispatch (COO / orchestrator) → Workers (Claude Code agents on individual issues).
 
 ### Ticket Lifecycle
