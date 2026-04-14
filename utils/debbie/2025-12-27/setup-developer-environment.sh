@@ -202,27 +202,6 @@ log_step "Zsh installation"
 } || log_fail "Zsh installation"
 
 #-------------------------------------------------------------------------------
-# Step: Set Zsh as default shell
-#-------------------------------------------------------------------------------
-log_step "Set Zsh as default shell"
-{
-    CURRENT_SHELL=$(get_passwd_field "$ORIG_USER" 7)
-    ZSH_PATH=$(command -v zsh)
-    if [ "$CURRENT_SHELL" != "$ZSH_PATH" ]; then
-        if [ "$OS" = "Darwin" ]; then
-            # macOS: ensure zsh is in /etc/shells before chsh
-            if ! grep -qF "$ZSH_PATH" /etc/shells; then
-                echo "$ZSH_PATH" | sudo tee -a /etc/shells >/dev/null
-            fi
-        fi
-        chsh -s "$ZSH_PATH" "$ORIG_USER"
-        log_success "Zsh set as default shell"
-    else
-        log_skip "Zsh already default shell"
-    fi
-} || log_fail "Set Zsh as default shell"
-
-#-------------------------------------------------------------------------------
 # Step: Oh-My-Zsh installation
 #-------------------------------------------------------------------------------
 log_step "Oh-My-Zsh installation"
@@ -545,6 +524,35 @@ log_step "Docker installation"
 } || log_fail "Docker installation"
 
 #-------------------------------------------------------------------------------
+# Step: iTerm2 installation and prefs (macOS only)
+#-------------------------------------------------------------------------------
+if [ "$OS" = "Darwin" ]; then
+    log_step "iTerm2 installation and prefs"
+    {
+        # Install iTerm2 via brew cask if missing
+        if [ ! -d "/Applications/iTerm.app" ] && [ ! -d "$USER_HOME/Applications/iTerm.app" ]; then
+            run_as_user "$ORIG_USER" "brew install --cask iterm2"
+            log_success "iTerm2 installed"
+        else
+            log_skip "iTerm2 already installed"
+        fi
+
+        # Apply bundled prefs
+        ITERM_PLIST_SRC="$SCRIPT_DIR/mac/com.googlecode.iterm2.plist"
+        if [ -f "$ITERM_PLIST_SRC" ]; then
+            if pgrep -qx iTerm2 2>/dev/null; then
+                log "  - iTerm2 is running; skipping prefs import (quit iTerm2 and re-run to apply)"
+            else
+                run_as_user "$ORIG_USER" "defaults import com.googlecode.iterm2 '$ITERM_PLIST_SRC'"
+                log_success "iTerm2 prefs imported"
+            fi
+        else
+            log "  - prefs file not found at $ITERM_PLIST_SRC, skipping"
+        fi
+    } || log_fail "iTerm2 installation and prefs"
+fi
+
+#-------------------------------------------------------------------------------
 # Step: Go installation
 #-------------------------------------------------------------------------------
 log_step "Go installation"
@@ -690,6 +698,29 @@ log_step "Install seanorepo"
         log_skip "gitconfig already exists"
     fi
 } || log_fail "Install seanorepo"
+
+#-------------------------------------------------------------------------------
+# Step: Set Zsh as default shell
+# NOTE: kept last because `chsh` may prompt for the user's password, which
+# would otherwise interrupt unattended execution of the steps above.
+#-------------------------------------------------------------------------------
+log_step "Set Zsh as default shell"
+{
+    CURRENT_SHELL=$(get_passwd_field "$ORIG_USER" 7)
+    ZSH_PATH=$(command -v zsh)
+    if [ "$CURRENT_SHELL" != "$ZSH_PATH" ]; then
+        if [ "$OS" = "Darwin" ]; then
+            # macOS: ensure zsh is in /etc/shells before chsh
+            if ! grep -qF "$ZSH_PATH" /etc/shells; then
+                echo "$ZSH_PATH" | sudo tee -a /etc/shells >/dev/null
+            fi
+        fi
+        chsh -s "$ZSH_PATH" "$ORIG_USER"
+        log_success "Zsh set as default shell"
+    else
+        log_skip "Zsh already default shell"
+    fi
+} || log_fail "Set Zsh as default shell"
 
 #-------------------------------------------------------------------------------
 # Summary
