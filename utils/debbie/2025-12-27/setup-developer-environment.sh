@@ -282,12 +282,125 @@ log_step "Add auto-load completions to zsh"
     fi
     
     # Add to .zshrc if not present
-    if [ -f "$USER_HOME/.zshrc" ] && ! grep -qF "$PATH_EXPORT" "$USER_HOME/.zshrc"; then
+    if [ -f "$USER_HOME/.zshrc" ] && ! grep -qF "$COMPLETION_SCRIPT" "$USER_HOME/.zshrc"; then
         echo "$COMPLETION_SCRIPT" >> "$USER_HOME/.zshrc"
     fi
-    
+
     log_success "Add auto-load completions to zsh"
 } || log_fail "Add auto-load completions to zsh"
+
+#-------------------------------------------------------------------------------
+# Step: Custom Zsh aliases and functions
+#-------------------------------------------------------------------------------
+log_step "Custom Zsh aliases and functions"
+{
+    ALIASES_MARKER="# Custom aliases and functions"
+    if [ -f "$USER_HOME/.zshrc" ] && ! grep -q "$ALIASES_MARKER" "$USER_HOME/.zshrc"; then
+        cat >> "$USER_HOME/.zshrc" <<'ZSHRC_EOF'
+
+# Custom aliases and functions
+alias cls=clear
+
+hist() {
+  local lines=100
+  local file="$HOME/.zsh_history"
+  local green='\033[0;32m'
+  local yellow='\033[1;33m'
+  local reset='\033[0m'
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        cat <<EOF
+Usage: hist [N] [--file <path>]
+
+Options:
+  N            Show last N entries (use -1 to show all)
+  -f, --file   Use specified file instead of ~/.zsh_history
+  -h, --help   Show this help message
+
+Examples:
+  hist            # show last 100 entries
+  hist 50         # show last 50 entries
+  hist -1         # show entire history
+  hist -f ~/.bash_history
+EOF
+        return 0
+        ;;
+      -f|--file)
+        shift
+        file="$1"
+        ;;
+      -*)
+        if [[ "$1" =~ ^-[0-9]+$ ]]; then
+          lines="$1"
+        else
+          echo "Unknown option: $1" >&2
+          return 1
+        fi
+        ;;
+      *)
+        lines="$1"
+        ;;
+    esac
+    shift
+  done
+
+  if [ "$lines" -eq 0 ]; then
+    echo "No output (0 lines requested)."
+    return 0
+  fi
+
+  local total_lines input
+  total_lines=$(wc -l < "$file")
+
+  if [ "$lines" -lt 0 ]; then
+    input=$(tac "$file")
+  else
+    input=$(tac "$file" | head -n "$lines")
+  fi
+
+  echo "$input" | awk -v total="$total_lines" '
+    BEGIN { line = 0 }
+    {
+      rawline[++line] = $0
+    }
+    END {
+      for (i = line; i >= 1; i--) {
+        l = rawline[i]
+        idx = total - (i - 1)
+        if (l ~ /^: [0-9]+:0;/) {
+          split(l, a, ";")
+          raw = substr(a[1], 3)
+          split(raw, tsParts, ":")
+          timestamp = tsParts[1]
+          cmd = a[2]
+          printf "%s|%d|%s\n", timestamp, idx, cmd
+        } else {
+          printf "0|%d|%s\n", idx, l
+        }
+      }
+    }
+  ' | while IFS='|' read -r ts line cmd; do
+    if [ "$ts" -ne 0 ] 2>/dev/null; then
+      if date -d "@$ts" >/dev/null 2>&1; then
+        dt=$(date -d "@$ts" +"%Y-%m-%d %H:%M")   # Linux
+      else
+        dt=$(date -r "$ts" +"%Y-%m-%d %H:%M")     # macOS/BSD
+      fi
+      printf "${green}%s${reset} | ${yellow}%d${reset}\t| %s\n" "$dt" "$line" "$cmd"
+    else
+      printf "\t | ${yellow}%d${reset}\t| %s\n" "$line" "$cmd"
+    fi
+  done
+}
+ZSHRC_EOF
+        chown "$ORIG_USER:$ORIG_USER" "$USER_HOME/.zshrc"
+        log_success "Custom aliases and functions added"
+    else
+        log_skip "Custom aliases and functions already configured"
+    fi
+} || log_fail "Custom Zsh aliases and functions"
 
 #-------------------------------------------------------------------------------
 # Step: Node.js installation
