@@ -10,10 +10,6 @@ interface Project {
 
 const projectList: Project[] = [
   {
-    linklabel: 'SeansCards.com (2024–2025)',
-    description: 'RIP, it covered its costs',
-  },
-  {
     linklabel: 'seanmizen.com',
     description: 'This site',
     href: 'https://seanmizen.com',
@@ -24,18 +20,6 @@ const projectList: Project[] = [
     description: 'Planning Poker - Agile estimation tool for teams',
     href: 'https://pp.seanmizen.com',
     arialabel: 'URL for Planning Poker',
-  },
-  {
-    linklabel: 'carolinemizen.art',
-    description: 'Art portfolio',
-    href: 'https://carolinemizen.art',
-    arialabel: 'URL for carolinemizen.art',
-  },
-  {
-    linklabel: 'shist',
-    description: "Sean's History Tool",
-    href: 'https://github.com/seanmizen/shist',
-    arialabel: 'Github URL for shist',
   },
 ];
 
