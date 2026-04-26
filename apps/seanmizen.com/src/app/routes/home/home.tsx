@@ -2,13 +2,12 @@ import type { FC } from 'react';
 import { useContext, useState } from 'react';
 import {
   HomeLi,
-  LastUpdated,
   ShaderSean,
   Spacer,
   SSHModal,
   ThemeToggle,
 } from '@/components';
-import { Donate, Github, Projects, ThisPage } from '@/features';
+import { Donate, Projects, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 import { ThemeContext } from '@/providers';
 
@@ -23,7 +22,6 @@ const Home: FC = () => {
 
   const subsections = [
     { component: <Projects />, trigger: 'projects', subLink: '/apps' },
-    { component: <Github />, trigger: 'github' },
     { component: <Donate />, trigger: 'donate' },
     { component: <ThisPage />, trigger: 'this page' },
   ];
@@ -49,7 +47,6 @@ const Home: FC = () => {
         <ShaderSean />
       </div>
       <div className="bottom-right-controls">
-        <LastUpdated apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo" />
         <ThemeToggle mode={mode} toggleMode={toggleMode} />
       </div>
       <SSHModal
