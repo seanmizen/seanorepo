@@ -1103,7 +1103,7 @@ function boot(): void {
     })
     .catch(() => {
       console.warn(
-        '[converter] backend unreachable — /api/convert will fail. See web/README.md',
+        '[converter] backend unreachable — /api/convert will fail. See web-spa/README.md',
       );
     });
 }

@@ -18,11 +18,11 @@ intentionally missing — Sean will set that up after review.
 ## How to run it
 
 ```bash
-# From apps/ffmpeg-converter/web:
+# From apps/ffmpeg-converter/web-spa:
 bun run dev.ts
 
 # …or from anywhere in the monorepo:
-bun run apps/ffmpeg-converter/web/dev.ts
+bun run apps/ffmpeg-converter/web-spa/dev.ts
 ```
 
 Then open <http://localhost:4040>.
@@ -52,7 +52,7 @@ to exercise the UI).
 ## File tree
 
 ```
-apps/ffmpeg-converter/web/
+apps/ffmpeg-converter/web-spa/
 ├── README.md          ← you are here
 ├── package.json       ← single script: `bun run dev.ts`
 ├── tsconfig.json      ← strict, for editor/type-check only (Bun transpiles at runtime)
