@@ -1,0 +1,45 @@
+# Docker Compose for the ffmpeg-converter Next.js frontend.
+#
+# The Go backend is not yet containerised (future ticket). For now, run it
+# on the host (`go run .` from this directory) and the frontend container
+# will reach it via host.docker.internal:9876. If the backend is offline,
+# the proxy falls back to an in-memory mock so the FE still renders.
+#
+# Profiles:
+#   dev   — bind-mounts the monorepo, hot-reload on file change
+#   prod  — production build, detached
+
+x-frontend-base: &frontend-base
+  container_name: frontend-converter
+  build:
+    context: ../..
+    dockerfile: apps/ffmpeg-converter/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "4050:4050"
+  environment:
+    # When the backend runs on the host, reach it via host.docker.internal
+    # (works on Docker Desktop for macOS/Windows; on Linux, add the
+    # host-gateway extra_host below).
+    BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:9876}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  frontend:
+    <<: *frontend-base
+    profiles: ["prod"]
+
+  frontend-dev:
+    <<: *frontend-base
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+      - fe_node_modules:/app/node_modules
+      - fe_next_cache:/app/apps/ffmpeg-converter/web/.next
+    profiles: ["dev"]
+
+volumes:
+  fe_node_modules:
+  fe_next_cache:
