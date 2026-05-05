@@ -7,6 +7,21 @@ couple of specials.
 
 **Not deployed.** Code + local test suite only.
 
+## Directory layout
+
+This workspace contains three components:
+
+| Path                 | What it is                                       | Status                                   |
+| -------------------- | ------------------------------------------------ | ---------------------------------------- |
+| `./` (root)          | Go HTTP service — the conversion engine          | Active. The 50-op backend documented below. |
+| `./web-spa/`         | Vanilla-TS single-page app (drop zone + preset UI) | **Legacy reference.** Patterns port into the Next.js app; do not extend. |
+| `./web/`             | Next.js 15 (App Router) frontend                 | **Phase 1 — coming next.** Will be the production frontend. Not present yet. |
+
+See [`phased-spec.md`](./phased-spec.md) for the full delivery plan: Phase 0 is the
+`web/` → `web-spa/` rename and this documentation update; Phase 1 stands up the new
+Next.js app at `web/`. The Go backend at the root of this directory powers both
+frontends via `/api/*` proxy.
+
 ## Requirements
 
 - Go 1.22+

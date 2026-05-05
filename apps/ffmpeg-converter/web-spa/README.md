@@ -1,4 +1,14 @@
-# ffmpeg-converter web
+# ffmpeg-converter web-spa (legacy reference)
+
+> **Status:** Legacy reference SPA. **Not the production frontend.**
+>
+> The Next.js app in `../web/` (Phase 1 of the phased build plan) supersedes this directory.
+> See [`../phased-spec.md`](../phased-spec.md) for the full plan and the role this SPA plays
+> as reference material during the migration.
+>
+> Read this README to understand the original drop-zone UI, URL-state preset model, and
+> Go-backend contract — those patterns port into the Next.js app component-by-component.
+> Do not extend this SPA with new features; new work belongs in `../web/`.
 
 Frontend for the ffmpeg-converter site. A single-page drop-zone + preset UI that posts
 multipart uploads to the Go backend next door in `apps/ffmpeg-converter/`.
@@ -176,6 +186,8 @@ Things explicitly left out of the first cut:
 
 ## See also
 
+- [`../phased-spec.md`](../phased-spec.md) — phased build plan; explains why this SPA is
+  reference material and where the Next.js replacement lives.
 - `../docs/COMPETITORS.md` — field research on the online-converter landscape.
 - `../docs/STRATEGY.md` — answers to "where does simplicity win" and "where does
   fractal options give an edge".
