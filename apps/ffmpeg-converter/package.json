@@ -2,8 +2,16 @@
   "name": "ffmpeg-converter",
   "private": true,
   "version": "0.0.1",
+  "workspaces": [
+    "web",
+    "web-spa"
+  ],
   "scripts": {
-    "start": "concurrently --prefix \"{time} {name} †\" -k --kill-signal SIGKILL -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"bun run web-spa/dev.ts\" \"go run .\""
+    "start": "concurrently --prefix \"{time} {name} †\" -k --kill-signal SIGKILL -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace ffmpeg-converter-next dev\" \"go run .\"",
+    "start:spa": "concurrently --prefix \"{time} {name} †\" -k --kill-signal SIGKILL -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace ffmpeg-converter-web start\" \"go run .\"",
+    "start:docker": "BUILD_TARGET=dev docker compose --profile dev up --build",
+    "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
+    "down": "docker compose --profile dev --profile prod down"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
