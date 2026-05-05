@@ -3,16 +3,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Brand: dark by default, matches the legacy web-spa palette
+ * (--bg #0f0f11, --surface #1a1a1f, --accent #6c6ef7). */
 :root {
-  --background: 255 255 255;
-  --foreground: 17 24 39;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 10 10 10;
-    --foreground: 237 237 237;
-  }
+  --background: 15 15 17;
+  --foreground: 232 232 240;
 }
 
 html,
