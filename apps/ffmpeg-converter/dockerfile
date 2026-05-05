@@ -1,0 +1,54 @@
+# Multi-stage Dockerfile for the ffmpeg-converter Next.js frontend.
+# Build context is the monorepo root (see docker-compose.yml).
+#
+# Targets:
+#   dev   — hot-reload Next.js dev server. Source mounted via compose volume.
+#   prod  — standalone production build. Self-contained image.
+
+FROM node:23-slim AS dev
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+# Note: source will be mounted via docker-compose volume in dev profile
+EXPOSE 4050
+CMD ["yarn", "workspace", "ffmpeg-converter-next", "dev"]
+
+
+FROM node:23-slim AS prod-build
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+
+# Copy workspace root files
+COPY package.json yarn.lock .yarnrc.yml ./
+
+# Copy app package.json into workspace structure
+COPY apps/ffmpeg-converter/web/package.json ./apps/ffmpeg-converter/web/
+
+# Install workspace with lockfile (including devDependencies for build)
+RUN yarn workspaces focus ffmpeg-converter-next
+
+# Copy app source
+COPY apps/ffmpeg-converter/web/src ./apps/ffmpeg-converter/web/src
+COPY apps/ffmpeg-converter/web/next.config.ts ./apps/ffmpeg-converter/web/
+COPY apps/ffmpeg-converter/web/tsconfig.json ./apps/ffmpeg-converter/web/
+COPY apps/ffmpeg-converter/web/tailwind.config.ts ./apps/ffmpeg-converter/web/
+COPY apps/ffmpeg-converter/web/postcss.config.mjs ./apps/ffmpeg-converter/web/
+COPY apps/ffmpeg-converter/web/next-env.d.ts ./apps/ffmpeg-converter/web/
+
+# Build using workspace command from root
+ENV NODE_ENV=production
+RUN yarn workspace ffmpeg-converter-next build
+
+
+FROM node:23-slim AS prod
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=4050
+ENV HOSTNAME=0.0.0.0
+
+# Copy the standalone server output. Next.js' `output: 'standalone'` produces
+# a self-contained server.js with a minimal node_modules tree.
+COPY --from=prod-build /app/apps/ffmpeg-converter/web/.next/standalone ./
+COPY --from=prod-build /app/apps/ffmpeg-converter/web/.next/static ./apps/ffmpeg-converter/web/.next/static
+
+EXPOSE 4050
+CMD ["node", "apps/ffmpeg-converter/web/server.js"]
