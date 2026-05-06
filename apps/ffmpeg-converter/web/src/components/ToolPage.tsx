@@ -1,5 +1,3 @@
-'use client';
-
 // pSEO tool page composition. Spec §7.2 render order is fixed:
 //
 //   [H1: "MOV to MP4"]
@@ -16,30 +14,29 @@
 //   [Tiny "How it works" block]
 //   [Footer is in layout.tsx]
 //
+// SERVER component — only the interactive convert step (<ConverterPanel />)
+// needs JS. Keeps the route-specific bundle minimal for Lighthouse.
+//
 // This component is the proof-of-concept for the entire pSEO strategy. Phase 2
 // generates ≥200 pages by calling <ToolPage row={...} /> for every entry in
 // the operations matrix — so the API surface here MUST be just the row.
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
 import { MATRIX_BY_SLUG } from '@/ops/matrix';
 import type { OperationRow } from '@/ops/types';
-import { type ConversionJob, DropZone } from './DropZone';
+import { ConverterPanel } from './ConverterPanel';
 import { FAQ } from './FAQ';
-import { ResultBlock } from './ResultBlock';
 
 export interface ToolPageProps {
   row: OperationRow;
 }
 
 export function ToolPage({ row }: ToolPageProps) {
-  const [job, setJob] = useState<ConversionJob | null>(null);
-
-  const accept = useMemo(() => buildAcceptString(row), [row]);
-  const acceptLabel = useMemo(() => buildAcceptLabel(row), [row]);
-  const reverse = useMemo(() => findReverse(row), [row]);
-  const siblings = useMemo(() => resolveSiblings(row), [row]);
-  const extraArgs = useMemo(() => buildExtraArgs(row), [row]);
+  const accept = buildAcceptString(row);
+  const acceptLabel = buildAcceptLabel(row);
+  const reverse = findReverse(row);
+  const siblings = resolveSiblings(row);
+  const extraArgs = buildExtraArgs(row);
 
   return (
     <div className="mx-auto max-w-3xl px-6 pt-12 pb-20 md:pt-16">
@@ -53,27 +50,19 @@ export function ToolPage({ row }: ToolPageProps) {
         </p>
       </header>
 
-      {/* Drop zone OR result block (one or the other) */}
+      {/* Convert panel — client-only state lives behind this boundary */}
       <section className="mb-10" aria-label="Convert your file">
-        {!job ? (
-          <DropZone
-            goOp={row.goOp}
-            outputExt={extOf(row.outputFormat)}
-            accept={accept}
-            acceptLabel={acceptLabel}
-            extraArgs={extraArgs}
-            onJobComplete={setJob}
-          />
-        ) : (
-          <ResultBlock
-            job={job}
-            ffmpegCommand={row.ffmpegCommand}
-            reverseSlug={reverse?.slug}
-            reverseLabel={reverse?.label}
-            reverseOperation={reverse?.operation}
-            onReset={() => setJob(null)}
-          />
-        )}
+        <ConverterPanel
+          goOp={row.goOp}
+          outputExt={extOf(row.outputFormat)}
+          accept={accept}
+          acceptLabel={acceptLabel}
+          extraArgs={extraArgs}
+          ffmpegCommand={row.ffmpegCommand}
+          reverseSlug={reverse?.slug}
+          reverseLabel={reverse?.label}
+          reverseOperation={reverse?.operation}
+        />
       </section>
 
       {/* Three sibling links — internal-link block per spec §7.2 */}
