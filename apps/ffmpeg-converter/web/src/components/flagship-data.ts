@@ -1,40 +1,49 @@
-// Hardcoded flagship presets for the homepage pill row.
+// Homepage flagship pill row — derived from the operations matrix.
 //
-// Source: apps/ffmpeg-converter/docs/STRATEGY.md §"Flagship 8–12 headline
-// conversions". Twelve presets, two rows of six on desktop.
+// Source: `MATRIX`/`FLAGSHIP_PRESETS` in `@/ops/matrix`. SEAN-50 replaced the
+// hardcoded list with a matrix-derived one so we can never ship a pill that
+// points at a non-existent route. Flagship rows whose operation route hasn't
+// been implemented yet are filtered out — they'll appear automatically when
+// the matching `app/[op]/[slug]/page.tsx` route lands.
 //
-// This file is intentionally hardcoded — Phase 1 does not depend on the typed
-// operations matrix (SEAN-38). When the matrix lands, a follow-up ticket will
-// derive these pills from the matrix instead of duplicating the data here.
+// Twelve presets max (per `apps/ffmpeg-converter/docs/STRATEGY.md` "Flagship
+// 8-12 headline conversions"). Some flagships will not render in Phase 1 —
+// they reappear when their operation route ships.
 
-export type FlagshipPreset = {
+import {
+  MATRIX_BY_SLUG,
+  FLAGSHIP_PRESETS as MATRIX_FLAGSHIPS,
+} from '@/ops/matrix';
+import { pathForSlug, routeExistsForSlug } from './route-registry';
+
+export interface FlagshipPreset {
   /** Short label used on the pill button. */
   label: string;
-  /** Tool-page slug (relative to /, no leading slash). */
+  /** Tool-page path (with leading slash), guaranteed to resolve. */
   href: string;
   /** Op identifier from the Go backend's ops registry. */
   op: string;
-};
+  /** Matrix slug — used as a stable React key. */
+  slug: string;
+}
 
-export const FLAGSHIP_PRESETS: FlagshipPreset[] = [
-  { label: 'MP4 → WebM', href: '/convert/mp4-to-webm', op: 'transcode_webm' },
-  { label: 'MOV → MP4', href: '/convert/mov-to-mp4', op: 'transcode' },
-  { label: 'MP4 → GIF', href: '/gif/mp4-to-gif', op: 'gif_from_video' },
-  { label: 'Video → MP3', href: '/extract-audio/mp4-to-mp3', op: 'audio_mp3' },
-  {
-    label: 'Shrink for Discord',
-    href: '/compress/mp4-under-10mb',
-    op: 'change_bitrate',
+/**
+ * Flagship pills filtered to rows whose route is implemented today. As more
+ * operation routes ship (Phase 2), more pills will surface automatically.
+ */
+export const FLAGSHIP_PRESETS: FlagshipPreset[] = MATRIX_FLAGSHIPS.flatMap(
+  (row) => {
+    if (!MATRIX_BY_SLUG[row.slug]) return [];
+    if (!routeExistsForSlug(row.slug)) return [];
+    const href = pathForSlug(row.slug);
+    if (!href) return [];
+    return [
+      {
+        label: row.flagship?.label ?? row.h1,
+        href,
+        op: row.goOp,
+        slug: row.slug,
+      },
+    ];
   },
-  { label: 'Grab a thumbnail', href: '/thumbnail/mp4', op: 'thumbnail' },
-  { label: 'Trim a clip', href: '/trim/mp4', op: 'trim' },
-  { label: 'Resize', href: '/resize/mp4', op: 'resize' },
-  { label: 'Image → WebP', href: '/convert/jpg-to-webp', op: 'image_to_webp' },
-  { label: 'HEIC/PNG → JPG', href: '/convert/heic-to-jpg', op: 'image_to_jpg' },
-  {
-    label: 'Normalise audio',
-    href: '/audio/normalize-mp3',
-    op: 'normalize_audio',
-  },
-  { label: 'Contact sheet', href: '/contact-sheet/mp4', op: 'contact_sheet' },
-];
+);

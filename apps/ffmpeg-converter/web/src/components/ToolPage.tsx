@@ -26,6 +26,7 @@ import { MATRIX_BY_SLUG } from '@/ops/matrix';
 import type { OperationRow } from '@/ops/types';
 import { ConverterPanel } from './ConverterPanel';
 import { FAQ } from './FAQ';
+import { pathForSlug, routeExistsForSlug } from './route-registry';
 
 export interface ToolPageProps {
   row: OperationRow;
@@ -75,7 +76,7 @@ export function ToolPage({ row }: ToolPageProps) {
             {siblings.map((s) => (
               <li key={s.slug}>
                 <Link
-                  href={`/${s.operation}/${s.slug}`}
+                  href={s.href}
                   className={[
                     'flex h-full items-center justify-center rounded-xl',
                     'border border-gray-800 bg-gray-900/40 px-4 py-3',
@@ -202,33 +203,35 @@ function buildExtraArgs(row: OperationRow): Record<string, string> | undefined {
 interface SiblingLink {
   slug: string;
   label: string;
-  operation: string;
+  href: string;
 }
 
 /**
- * Resolve `row.related` slugs against the matrix. Falls back to a plain label
- * derived from the slug when a sibling row isn't in the matrix yet (Phase 2
- * will add the long-tail rows).
+ * Resolve `row.related` slugs against the matrix.
+ *
+ * SEAN-50: every sibling must be (a) present in `MATRIX_BY_SLUG` and (b) have
+ * an implemented operation route. Slugs that fail either gate are dropped
+ * rather than rendered as 404 links. The visible "Related" section hides
+ * itself when the filter empties the list.
  */
 function resolveSiblings(row: OperationRow): SiblingLink[] {
-  return (row.related ?? []).map((slug) => {
+  const out: SiblingLink[] = [];
+  for (const slug of row.related ?? []) {
     const sib = MATRIX_BY_SLUG[slug];
-    if (sib) {
-      return { slug, label: sib.h1, operation: sib.operation };
-    }
-    // Sibling row doesn't exist yet — synthesise a label from the slug.
-    return {
-      slug,
-      label: humanise(slug),
-      operation: inferOperationFromSlug(slug),
-    };
-  });
+    if (!sib) continue;
+    if (!routeExistsForSlug(slug)) continue;
+    const href = pathForSlug(slug);
+    if (!href) continue;
+    out.push({ slug, label: sib.h1, href });
+  }
+  return out;
 }
 
 /**
  * Find the inverse-direction row (e.g. `mov-to-mp4` → `mp4-to-mov`). Only
- * applies to two-format `convert` rows. Returns null when there's no clean
- * reverse (e.g. `extract-audio`, multi-input `video-to-mp4`).
+ * applies to two-format `convert` rows whose reverse slug is in the matrix
+ * AND whose route is implemented. Returns null otherwise — the converter
+ * panel hides the reverse-link CTA when this is null.
  */
 function findReverse(
   row: OperationRow,
@@ -240,44 +243,10 @@ function findReverse(
   const reverseSlug = `${outputExt}-to-${inputExt}`;
   const sib = MATRIX_BY_SLUG[reverseSlug];
   if (!sib) return null;
+  if (!routeExistsForSlug(reverseSlug)) return null;
   return {
     slug: sib.slug,
     label: sib.h1,
     operation: sib.operation,
   };
-}
-
-/** Convert a slug like `mp4-to-webm` to a plain label `MP4 → WebM`. */
-function humanise(slug: string): string {
-  return slug
-    .replace('-to-', ' → ')
-    .replace(/-/g, ' ')
-    .replace(/\b([a-z])/g, (m) => m.toUpperCase())
-    .replace(
-      /Mp4|Mov|Webm|Mkv|Mpeg|Mp3|Wav|Aac|Flac|Webp|Heic|Avif|Jpg|Png|Gif/gi,
-      (m) => m.toUpperCase(),
-    );
-}
-
-/**
- * Infer the operation prefix (URL segment) from a slug. Used when a sibling
- * row isn't in the matrix yet — we still need to render a working link.
- */
-function inferOperationFromSlug(slug: string): string {
-  if (slug.startsWith('compress-')) return 'compress';
-  if (slug.startsWith('trim-')) return 'trim';
-  if (slug.startsWith('resize-')) return 'resize';
-  if (slug.startsWith('thumbnail-')) return 'thumbnail';
-  if (slug.startsWith('contact-sheet-')) return 'contact-sheet';
-  if (slug.startsWith('image-')) return 'convert';
-  if (
-    slug.endsWith('-to-mp3') ||
-    slug.endsWith('-to-wav') ||
-    slug.endsWith('-to-aac') ||
-    slug.endsWith('-to-flac')
-  ) {
-    return slug.startsWith('video-') ? 'extract-audio' : 'convert';
-  }
-  if (slug.endsWith('-to-gif')) return 'gif';
-  return 'convert';
 }
