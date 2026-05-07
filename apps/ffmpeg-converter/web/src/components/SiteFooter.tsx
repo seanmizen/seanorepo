@@ -1,5 +1,6 @@
-// Site footer. Per spec §7.1: link to /llms.txt (file ships in Phase 5 — the
-// link is a placeholder for now, signalling AEO confidence).
+// Site footer. Every link here MUST resolve — /pricing, /docs, /llms.txt all
+// have placeholder routes until Phase 4/5 ship the real pages (see SEAN-51).
+// Do not add a nav link here without first creating its route.
 
 import Link from 'next/link';
 
@@ -14,8 +15,6 @@ export function SiteFooter() {
               <Link
                 href="/llms.txt"
                 className="hover:text-gray-300"
-                // /llms.txt is a Phase 5 deliverable — the route doesn't exist
-                // yet. We still render the link so the IA is set in stone.
                 prefetch={false}
               >
                 /llms.txt
