@@ -1,11 +1,17 @@
 // 12-flagship pill row from STRATEGY.md. Two rows of six on desktop, wraps
 // on smaller breakpoints. Each pill is an anchor to the canonical tool page
 // — pure server component, no client JS.
+//
+// SEAN-50: pills are derived from the matrix and gated on route presence, so
+// the rendered list shrinks/grows automatically as new routes ship. If the
+// list is empty (shouldn't happen in practice — Phase 1 ships at least the
+// flagship convert pages) we render nothing rather than a dangling header.
 
 import Link from 'next/link';
 import { FLAGSHIP_PRESETS } from './flagship-data';
 
 export function FlagshipPills() {
+  if (FLAGSHIP_PRESETS.length === 0) return null;
   return (
     <nav aria-label="Popular conversions" className="w-full">
       <h2 className="mb-4 text-center text-sm font-medium uppercase tracking-wider text-gray-400">
@@ -13,7 +19,7 @@ export function FlagshipPills() {
       </h2>
       <ul className="flex flex-wrap justify-center gap-2">
         {FLAGSHIP_PRESETS.map((preset) => (
-          <li key={preset.op}>
+          <li key={preset.slug}>
             <Link
               href={preset.href}
               className={[
