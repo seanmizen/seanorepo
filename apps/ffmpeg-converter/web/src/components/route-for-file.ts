@@ -4,43 +4,63 @@
 // should send the user to. Spec §7.1: "dropping a .mov on the homepage routes
 // to /convert/mov-to-mp4".
 //
-// The mapping is intentionally minimal in Phase 1 — Phase 2 will expand it
-// from the typed operations matrix (SEAN-38). Anything we don't recognise
-// goes to the generic /convert page (which doesn't exist yet — Phase 2 ships
-// it). For now, an unknown extension falls back to a search-style URL the
-// user can route from manually.
+// SEAN-50: every candidate target must resolve to an existing route. We gate
+// the lookup on `MATRIX_BY_SLUG` and `IMPLEMENTED_OPERATION_ROUTES` rather
+// than maintaining a hand-rolled extension map that drifts out of sync with
+// the matrix. Anything not covered by the matrix returns `null`, and the
+// caller surfaces a "we don't recognise this format yet" message.
 
-const EXT_DEFAULT_TARGET: Record<string, string> = {
-  // Video → MP4 by default. MOV is the headline case (iPhone footage).
-  mov: '/convert/mov-to-mp4',
-  webm: '/convert/webm-to-mp4',
-  mkv: '/convert/mkv-to-mp4',
-  avi: '/convert/avi-to-mp4',
-  flv: '/convert/flv-to-mp4',
-  wmv: '/convert/wmv-to-mp4',
-  m4v: '/convert/m4v-to-mp4',
-  mpeg: '/convert/mpeg-to-mp4',
-  mpg: '/convert/mpg-to-mp4',
-  // MP4 → most-asked sibling: WebM (browser-native).
-  mp4: '/convert/mp4-to-webm',
+import { MATRIX, MATRIX_BY_SLUG } from '@/ops/matrix';
+import type { Format } from '@/ops/types';
+import { pathForSlug, routeExistsForSlug } from './route-registry';
 
-  // Image → WebP is the modern web default.
-  jpg: '/convert/jpg-to-webp',
-  jpeg: '/convert/jpg-to-webp',
-  png: '/convert/png-to-webp',
-  heic: '/convert/heic-to-jpg',
-  heif: '/convert/heic-to-jpg',
-  bmp: '/convert/bmp-to-jpg',
-  tiff: '/convert/tiff-to-jpg',
-  tif: '/convert/tiff-to-jpg',
+/**
+ * Default target output for each input extension. The matrix decides whether
+ * a `${ext}-to-${target}` slug actually exists — these are just preference
+ * hints (e.g. iPhone HEIC photos default to JPG, not WebP, because that's
+ * what most users actually want).
+ */
+const PREFERRED_TARGET_BY_EXT: Record<string, Format> = {
+  // Video: MP4 is the universal default.
+  mov: 'mp4',
+  webm: 'mp4',
+  mkv: 'mp4',
+  avi: 'mp4',
+  flv: 'mp4',
+  wmv: 'mp4',
+  m4v: 'mp4',
+  mpeg: 'mp4',
+  mpg: 'mp4',
+  // MP4 → WebM (browser-native, smaller).
+  mp4: 'webm',
 
-  // Audio → MP3 by default (universal).
-  wav: '/convert/wav-to-mp3',
-  flac: '/convert/flac-to-mp3',
-  aac: '/convert/aac-to-mp3',
-  ogg: '/convert/ogg-to-mp3',
-  m4a: '/convert/m4a-to-mp3',
-  opus: '/convert/opus-to-mp3',
+  // Image: WebP for the modern web; HEIC defaults to JPG (compatibility).
+  jpg: 'webp',
+  jpeg: 'webp',
+  png: 'webp',
+  heic: 'jpg',
+  heif: 'jpg',
+  bmp: 'jpg',
+  tiff: 'jpg',
+  tif: 'jpg',
+
+  // Audio: MP3 is universal.
+  wav: 'mp3',
+  flac: 'mp3',
+  aac: 'mp3',
+  ogg: 'mp3',
+  m4a: 'mp3',
+  opus: 'mp3',
+};
+
+// Some input extensions normalise to a different `Format` enum value (the
+// matrix uses canonical names). Phase 1 only needs `jpeg → jpg`, `mpg → mpeg`,
+// `tif → tiff`, `heif → heic`. Anything else is a one-to-one mapping.
+const EXT_TO_FORMAT: Record<string, string> = {
+  jpeg: 'jpg',
+  mpg: 'mpeg',
+  tif: 'tiff',
+  heif: 'heic',
 };
 
 /**
@@ -55,12 +75,38 @@ export function extOf(filename: string): string {
 
 /**
  * Pick the tool-page path to route to for a given file. Returns `null` when
- * the extension isn't in our table — the caller should surface a friendly
- * "we don't recognise this format" message rather than dumping the user on a
- * 404.
+ *   - the file has no extension
+ *   - the extension isn't in our preference table
+ *   - the matrix has no `${ext}-to-${target}` row
+ *   - the matrix row exists but its operation route isn't implemented yet
+ *
+ * The caller should surface a friendly "we don't recognise this format yet"
+ * message rather than dumping the user on a 404.
  */
 export function routeForFile(file: File | { name: string }): string | null {
   const ext = extOf(file.name);
   if (!ext) return null;
-  return EXT_DEFAULT_TARGET[ext] ?? null;
+
+  const inputFormat = EXT_TO_FORMAT[ext] ?? ext;
+  const target = PREFERRED_TARGET_BY_EXT[ext];
+  if (!target) return null;
+
+  // Try the direct `${input}-to-${target}` slug first.
+  const directSlug = `${inputFormat}-to-${target}`;
+  if (routeExistsForSlug(directSlug)) {
+    return pathForSlug(directSlug);
+  }
+
+  // Fall back to multi-input rows like `video-to-mp4` (covers mkv/avi/flv/wmv
+  // /m4v/mpeg → mp4 from a single matrix row).
+  for (const row of MATRIX) {
+    if (row.operation !== 'convert') continue;
+    if (row.outputFormat !== target) continue;
+    if (!row.inputFormats.includes(inputFormat as Format)) continue;
+    if (!MATRIX_BY_SLUG[row.slug]) continue;
+    if (!routeExistsForSlug(row.slug)) continue;
+    return pathForSlug(row.slug);
+  }
+
+  return null;
 }

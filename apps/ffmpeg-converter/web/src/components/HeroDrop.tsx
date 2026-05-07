@@ -19,12 +19,15 @@ export function HeroDrop() {
   const [error, setError] = useState<string | null>(null);
 
   const handleFile = (file: File) => {
+    // SEAN-50: routeForFile only returns paths that resolve to a real route
+    // (matrix slug + implemented operation). Anything else falls through to
+    // the friendly error rather than routing the user to a 404.
     const target = routeForFile(file);
     if (!target) {
       const ext = extOf(file.name);
       setError(
         ext
-          ? `We don't recognise .${ext} yet. Try MOV, MP4, WebM, MP3, JPG, or HEIC.`
+          ? `We don't recognise .${ext} yet. Try MOV, MP4, WebM, MKV, AVI, FLV, WMV, M4V, or MPEG.`
           : "That file doesn't have an extension we can route on.",
       );
       return;
