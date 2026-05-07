@@ -25,6 +25,9 @@ export default function RootLayout({
             >
               Sean&apos;s Converter
             </Link>
+            {/* /pricing and /docs are placeholder routes until Phase 4 ships
+                the real pages — see SEAN-51. Do not add a nav link here
+                without first creating its route. */}
             <nav aria-label="Primary">
               <ul className="flex items-center gap-5 text-sm text-gray-400">
                 <li>
