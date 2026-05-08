@@ -71,6 +71,16 @@ export function buildExtraArgs(
   if (p.resolution !== undefined) args.resolution = p.resolution;
   if (p.fps !== undefined) args.fps = String(p.fps);
   if (p.audioBitrate !== undefined) args.audio_bitrate = p.audioBitrate;
+  // SEAN-92: gif preset chips + customise panel forward width/dither/max_colors
+  // and a start/duration trim. The Go op (`gif_from_video`) reads these from
+  // the multipart form; absent fields fall through to backend defaults.
+  if (p.width !== undefined) args.width = String(p.width);
+  if (p.dither !== undefined) args.dither = p.dither;
+  if (p.maxColors !== undefined) args.max_colors = String(p.maxColors);
+  if (p.trimStartSec !== undefined) args.start = String(p.trimStartSec);
+  if (p.trimDurationSec !== undefined) {
+    args.duration = String(p.trimDurationSec);
+  }
   return Object.keys(args).length > 0 ? args : undefined;
 }
 
