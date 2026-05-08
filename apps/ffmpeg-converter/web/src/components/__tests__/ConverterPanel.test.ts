@@ -19,7 +19,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 
 import { MATRIX_BY_SLUG } from '../../ops/matrix';
-import { adaptiveRowForFile } from '../route-for-file';
+import { adaptiveRowForFile, outputsForExt } from '../route-for-file';
 
 describe('SEAN-105 ConverterPanel adaptive-panel — adaptiveRowForFile', () => {
   it('keeps the current row when the dropped file matches the slug input', () => {
@@ -108,5 +108,76 @@ describe('SEAN-105 ConverterPanel adaptive-panel — adaptiveRowForFile', () => 
     const match = adaptiveRowForFile({ name: 'iPhone.MOV' }, 'gif', 'gif');
     assert.ok(match, 'uppercase extension should resolve like lowercase');
     assert.equal(match.row.slug, 'mov-to-gif');
+  });
+});
+
+describe('SEAN-106 OutputFormatChips on slug pages', () => {
+  it('drop .webm on /convert/mov-to-mp4 → webm-output options, .mp4 active', () => {
+    // The load-bearing AC scenario: user lands on /convert/mov-to-mp4 (a
+    // mov→mp4 convert row), drops a .webm. The panel re-detects the input
+    // ext as `webm`; the chip row's options come from outputsForExt('webm');
+    // active chip = the panel's current effective output, which after
+    // adaptiveRowForFile resolves should land on mp4 (webm's preferred
+    // target per PREFERRED_TARGET_BY_EXT, since there's no webm-to-mov).
+    const match = adaptiveRowForFile({ name: 'clip.webm' }, 'convert', 'mp4');
+    assert.ok(match, 'webm on a convert page should resolve');
+    // webm has no webm-to-mp4 same-output preservation step (the source
+    // page was mov-to-mp4, mp4 is mov's preferred target). For webm the
+    // matrix exposes a webm-to-mp4 row directly, so the same-output match
+    // should land on it.
+    assert.equal(
+      match.row.outputFormat,
+      'mp4',
+      'webm on /convert/mov-to-mp4 should preserve mp4 as output',
+    );
+
+    // Chip-row options for webm input must include mp4 (active) plus other
+    // outputs the user can pick.
+    const options = outputsForExt('webm');
+    const formats = new Set(options.map((o) => o.format));
+    assert.ok(formats.has('mp4'), 'webm chip row must offer mp4');
+    assert.ok(
+      options.length >= 2,
+      'webm chip row must show at least 2 chips so the row is visible',
+    );
+    // The active chip is the resolved output — must exist in the options.
+    assert.ok(
+      formats.has(match.row.outputFormat),
+      'effective output format must appear as a chip option',
+    );
+  });
+
+  it('chip row hides itself when outputsForExt(ext).length < 2', () => {
+    // Per AC: "When `outputsForExt(ext).length < 2` chip row hides itself."
+    // We model this with the empty-extension case (no input → no options).
+    const empty = outputsForExt('');
+    assert.equal(empty.length, 0, 'empty ext returns no options');
+    const unknown = outputsForExt('xyz-not-real');
+    assert.equal(unknown.length, 0, 'unknown ext returns no options');
+  });
+
+  it('falls back to PREFERRED_TARGET_BY_EXT when URL output is unreachable', () => {
+    // AC: "When detected input doesn't support URL's hinted output (e.g.
+    // `.mov` on `/convert/mp4-to-webm` with no `mov-to-webm` row), chip
+    // row's active state falls back to `PREFERRED_TARGET_BY_EXT[ext]`."
+    //
+    // The matrix today *does* have `mov-to-webm` — so we synthesise the
+    // condition with png on a video-output page where no png-to-mp4 row
+    // exists. PNG's preferred target is webp; that's what the chip row
+    // active state should be.
+    const match = adaptiveRowForFile({ name: 'photo.png' }, 'convert', 'mp4');
+    assert.ok(match, 'png on a convert page must fall back to a routable row');
+    assert.equal(
+      match.row.outputFormat,
+      'webp',
+      "png's preferred target is webp; active chip falls back to it",
+    );
+    // The chip row options for png must include the resolved output.
+    const options = outputsForExt('png');
+    const formats = new Set(options.map((o) => o.format));
+    assert.ok(
+      formats.has('webp'),
+      'png chip row must include the fallback output',
+    );
   });
 });
