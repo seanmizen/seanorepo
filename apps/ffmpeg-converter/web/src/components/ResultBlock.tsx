@@ -10,8 +10,13 @@
 // state and decides when to render this.
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { type DragEvent, useState } from 'react';
 import type { ConversionJob } from './DropZone';
+import {
+  buildDownloadName,
+  buildDownloadUrlPayload,
+  mimeForExt,
+} from './drag-out-download';
 
 export interface ResultBlockProps {
   job: ConversionJob;
@@ -54,6 +59,38 @@ export function ResultBlock({
     }
   };
 
+  // SEAN-96: drag the result out of the page directly into Finder, the
+  // desktop, or an email/Slack compose window. Powered by Chromium's
+  // `DownloadURL` data-transfer slot — Firefox sometimes ignores it, in
+  // which case the user just sees an empty drag and falls back to the
+  // Download button (which is always present).
+  const handleDragStart = (event: DragEvent<HTMLAnchorElement>) => {
+    if (!job.downloadUrl || typeof window === 'undefined') return;
+    const payload = buildDownloadUrlPayload({
+      downloadUrl: job.downloadUrl,
+      filename: downloadName,
+      outputExt: job.outputExt,
+      origin: window.location.origin,
+    });
+    try {
+      event.dataTransfer.setData('DownloadURL', payload);
+      // Belt-and-braces: also set the URL/text slots so drop targets that
+      // don't grok DownloadURL (most non-Chromium apps) at least get a
+      // working hyperlink to the file.
+      const absolute = payload.split(':').slice(2).join(':');
+      event.dataTransfer.setData(
+        'text/uri-list',
+        `${mimeForExt(job.outputExt)}\n${absolute}`,
+      );
+      event.dataTransfer.setData('text/plain', absolute);
+      event.dataTransfer.effectAllowed = 'copy';
+    } catch {
+      // Some browsers throw on unknown data-transfer types. The native
+      // anchor drag still works (drops a URL onto most targets) — that's
+      // the graceful fallback the AC calls out.
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-6">
       <h2 className="text-xl font-semibold text-gray-100">Done.</h2>
@@ -62,9 +99,14 @@ export function ResultBlock({
         <a
           href={job.downloadUrl}
           download={downloadName}
+          draggable
+          onDragStart={handleDragStart}
+          title="Click to download, or drag to Finder / Mail / Slack"
+          aria-label={`Download ${downloadName} (or drag to save anywhere)`}
           className={[
             'inline-flex items-center rounded-lg px-5 py-2.5',
             'bg-indigo-500 text-sm font-semibold text-white',
+            'cursor-grab active:cursor-grabbing',
             'transition-colors hover:bg-indigo-400',
           ].join(' ')}
         >
@@ -122,14 +164,4 @@ export function ResultBlock({
       )}
     </div>
   );
-}
-
-/**
- * Replace the input file's extension with the output extension. Falls back to
- * `output.<ext>` if the input has no extension at all.
- */
-function buildDownloadName(input: string, outputExt: string): string {
-  const dot = input.lastIndexOf('.');
-  const base = dot > 0 ? input.slice(0, dot) : input || 'output';
-  return `${base}.${outputExt}`;
 }
