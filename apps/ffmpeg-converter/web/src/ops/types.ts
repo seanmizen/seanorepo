@@ -72,7 +72,13 @@ export type VideoFormat =
   | 'flv'
   | 'wmv'
   | 'm4v'
-  | 'mpeg';
+  | 'mpeg'
+  | '3gp'
+  | 'ts'
+  | 'mts'
+  | 'm2ts'
+  | 'ogv'
+  | 'vob';
 
 export type AudioFormat =
   | 'mp3'
@@ -116,6 +122,12 @@ export const KIND_OF: Record<Format, MediaKind> = {
   wmv: 'video',
   m4v: 'video',
   mpeg: 'video',
+  '3gp': 'video',
+  ts: 'video',
+  mts: 'video',
+  m2ts: 'video',
+  ogv: 'video',
+  vob: 'video',
   // audio
   mp3: 'audio',
   wav: 'audio',
