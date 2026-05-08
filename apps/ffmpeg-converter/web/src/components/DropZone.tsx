@@ -15,20 +15,16 @@ import {
   type DragEvent,
   type ReactNode,
   useCallback,
+  useEffect,
   useRef,
   useState,
 } from 'react';
+import { type ConversionJob, submitConversion } from './submit-conversion';
 
-export interface ConversionJob {
-  /** Backend job id, e.g. UUID. */
-  jobId: string;
-  /** Same-origin download URL (`/api/jobs/<id>/output`). */
-  downloadUrl: string;
-  /** Original input filename, used to name the downloaded result. */
-  inputFilename: string;
-  /** Output extension (without leading dot), e.g. `mp4`, `webp`, `mp3`. */
-  outputExt: string;
-}
+// Re-export the job/args types from the JSX-free module so existing imports
+// (`from './DropZone'`) keep working.
+export type { ConversionJob, SubmitConversionArgs } from './submit-conversion';
+export { submitConversion } from './submit-conversion';
 
 export interface DropZoneProps {
   /**
@@ -58,6 +54,14 @@ export interface DropZoneProps {
   header?: ReactNode;
   /** Called when the upload + conversion succeeds. */
   onJobComplete: (job: ConversionJob) => void;
+  /**
+   * SEAN-75: pre-loaded file. When provided, the drop zone immediately fires
+   * the upload on mount instead of waiting for a fresh user drop. Used by the
+   * homepage flow where the user already provided a file in the hero zone —
+   * the file is forwarded to a freshly-mounted `<DropZone />` so they don't
+   * have to drop it a second time.
+   */
+  initialFile?: File;
 }
 
 type Status = 'idle' | 'uploading' | 'converting';
@@ -70,6 +74,7 @@ export function DropZone({
   extraArgs,
   header,
   onJobComplete,
+  initialFile,
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -83,38 +88,15 @@ export function DropZone({
       setStatus('uploading');
       setPendingName(file.name);
 
-      const form = new FormData();
-      form.append('op', goOp);
-      form.append('file', file);
-      form.append('ext', outputExt);
-      if (extraArgs) {
-        for (const [k, v] of Object.entries(extraArgs)) {
-          if (v !== '') form.append(k, v);
-        }
-      }
-
       try {
         setStatus('converting');
-        const res = await fetch('/api/convert', {
-          method: 'POST',
-          body: form,
-        });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || `${res.status} ${res.statusText}`);
-        }
-        const data = (await res.json()) as {
-          job_id?: string;
-          output?: string;
-        };
-        const jobId = data.job_id ?? '';
-        const downloadPath = data.output ?? `/jobs/${jobId}/output`;
-        onJobComplete({
-          jobId,
-          downloadUrl: `/api${downloadPath}`,
-          inputFilename: file.name,
+        const job = await submitConversion({
+          file,
+          goOp,
           outputExt,
+          extraArgs,
         });
+        onJobComplete(job);
         setStatus('idle');
         setPendingName(null);
       } catch (e) {
@@ -130,6 +112,20 @@ export function DropZone({
   const handleFile = (file: File) => {
     void runConversion(file);
   };
+
+  // SEAN-75: when the homepage hands us a pre-dropped file, fire the upload
+  // immediately on mount so the user doesn't have to interact a second time.
+  // Each `initialFile` is auto-submitted exactly once — subsequent renders
+  // (parent re-render, status changes) don't re-fire because we key on the
+  // File object reference.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runConversion
+  // captures props that mutate per-render; we want to fire only when the
+  // initialFile reference changes, not when callbacks rebuild.
+  useEffect(() => {
+    if (initialFile) {
+      void runConversion(initialFile);
+    }
+  }, [initialFile]);
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
