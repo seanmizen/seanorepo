@@ -17,7 +17,7 @@
 // documented in `AUDIO_FALLBACK_NOTE` below.
 
 import { MATRIX, MATRIX_BY_SLUG } from '@/ops/matrix';
-import type { Format } from '@/ops/types';
+import type { Format, OperationRow } from '@/ops/types';
 import { KIND_OF } from '@/ops/types';
 import { pathForSlug, routeExistsForSlug } from './route-registry';
 
@@ -135,18 +135,48 @@ export function extOf(filename: string): string {
  * message rather than dumping the user on a 404 — see `friendlyDropError`.
  */
 export function routeForFile(file: File | { name: string }): string | null {
+  const match = matrixRowForFile(file);
+  if (!match) return null;
+  return pathForSlug(match.row.slug);
+}
+
+/**
+ * Resolved matrix row for a dropped file. Used by SEAN-75's homepage in-place
+ * conversion: instead of routing to a slug page (which loses the File object),
+ * the homepage drop zone runs the conversion right there with the row's
+ * backend op + output format already wired in.
+ */
+export interface MatrixRowMatch {
+  row: OperationRow;
+  /** Resolved input `Format` enum value (after `EXT_TO_FORMAT` normalisation). */
+  inputFormat: Format;
+}
+
+/**
+ * Look up the matrix row that corresponds to a given dropped file. Returns
+ * `null` under the same conditions as `routeForFile` (no extension, no
+ * preferred target, no matching row, or the row's operation route isn't
+ * implemented yet).
+ *
+ * Mirrors `routeForFile`'s preference order: direct `${input}-to-${target}`
+ * slug first, then a multi-input fallback row (e.g. `video-to-mp4`).
+ */
+export function matrixRowForFile(
+  file: File | { name: string },
+): MatrixRowMatch | null {
   const ext = extOf(file.name);
   if (!ext) return null;
 
-  const inputFormat = EXT_TO_FORMAT[ext] ?? ext;
+  const inputFormat = (EXT_TO_FORMAT[ext] ?? ext) as Format;
   const target = PREFERRED_TARGET_BY_EXT[ext];
   if (!target) return null;
 
   // Try the direct `${input}-to-${target}` slug first — covers the bulk of
   // single-input convert/extract-audio rows.
   const directSlug = `${inputFormat}-to-${target}`;
-  if (routeExistsForSlug(directSlug)) {
-    return pathForSlug(directSlug);
+  const directRow = MATRIX_BY_SLUG[directSlug];
+  if (directRow && routeExistsForSlug(directSlug)) {
+    return { row: directRow, inputFormat };
   }
 
   // Fall back to multi-input rows. `convert` rows like `video-to-mp4` cover
@@ -156,10 +186,10 @@ export function routeForFile(file: File | { name: string }): string | null {
   for (const row of MATRIX) {
     if (!ROUTABLE_OPERATIONS.has(row.operation)) continue;
     if (row.outputFormat !== target) continue;
-    if (!row.inputFormats.includes(inputFormat as Format)) continue;
+    if (!row.inputFormats.includes(inputFormat)) continue;
     if (!MATRIX_BY_SLUG[row.slug]) continue;
     if (!routeExistsForSlug(row.slug)) continue;
-    return pathForSlug(row.slug);
+    return { row, inputFormat };
   }
 
   return null;

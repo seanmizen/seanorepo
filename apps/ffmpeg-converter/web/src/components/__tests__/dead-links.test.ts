@@ -29,6 +29,8 @@ import {
 // SEAN-56 — hub-page routes added in this ticket. Listed here so the
 // dead-link walk recognises them as real, and so the footer's "Browse:"
 // nav row (which links into them) doesn't trip the homepage assertion.
+// SEAN-80 added the remaining three (thumbnail, contact-sheet, normalize-audio)
+// so every operation segment resolves as a hub page rather than 404ing.
 const HUB_ROUTES = [
   '/convert',
   '/compress',
@@ -36,6 +38,9 @@ const HUB_ROUTES = [
   '/trim',
   '/resize',
   '/gif',
+  '/thumbnail',
+  '/contact-sheet',
+  '/normalize-audio',
 ];
 
 // ─────────────────────────────────────────────────────── HELPERS ─────────────
@@ -53,9 +58,10 @@ function buildKnownRoutes(): Set<string> {
   // Static routes (top-level pages).
   known.add('/');
 
-  // Footer/header links handled by SEAN-51 — listed here so the homepage walk
-  // doesn't false-flag them. They are static stubs (or external in the case of
-  // the GitHub link), not 404s.
+  // /pricing and /docs are still real (placeholder) routes — kept so that
+  // bookmarked/external links don't 404 — but as of SEAN-82 they are no longer
+  // linked from the header or footer (the dead-end nav links were pure funnel
+  // friction). Listed here because the file-system route still exists.
   known.add('/pricing');
   known.add('/docs');
   known.add('/llms.txt');
@@ -87,12 +93,12 @@ function buildKnownRoutes(): Set<string> {
 function homepageLinks(): string[] {
   const links: string[] = [];
 
-  // Header (layout.tsx).
-  links.push('/pricing', '/docs');
+  // Header (layout.tsx) — no nav links anymore (SEAN-82); only the logotype,
+  // pushed below.
 
-  // Footer (SiteFooter.tsx) — but only the internal ones; the GitHub link is
-  // external.
-  links.push('/llms.txt', '/pricing', '/docs');
+  // Footer (SiteFooter.tsx) — only /llms.txt remains as an internal link
+  // (Pricing/Docs removed in SEAN-82); the GitHub link is external.
+  links.push('/llms.txt');
 
   // SEAN-56 — hub-page nav row in the footer.
   for (const hub of HUB_ROUTES) links.push(hub);

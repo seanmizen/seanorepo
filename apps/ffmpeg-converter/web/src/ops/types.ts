@@ -192,6 +192,7 @@ export type GoOpName =
   // audio
   | 'audio_mp3'
   | 'audio_opus'
+  | 'audio_ogg'
   | 'audio_aac'
   | 'audio_flac'
   | 'extract_audio'
@@ -212,6 +213,7 @@ export type GoOpName =
   | 'image_to_webp'
   | 'image_to_avif'
   | 'gif_from_video'
+  | 'gif_to_webp_anim'
   | 'gif_from_images'
   | 'blur'
   | 'sharpen'

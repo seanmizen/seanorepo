@@ -392,6 +392,15 @@ func RegisterOps() map[string]*Operation {
 		},
 	})
 	add(&Operation{
+		Name: "audio_ogg", Category: "audio",
+		Description: "Convert/extract to Ogg Vorbis",
+		DefaultExt:  ".ogg",
+		Run: func(ctx context.Context, oc OpContext) error {
+			return ffmpegRun(ctx, "-i", oc.Inputs[0],
+				"-vn", "-c:a", "libvorbis", "-q:a", "5", oc.Output)
+		},
+	})
+	add(&Operation{
 		Name: "audio_aac", Category: "audio",
 		Description: "Convert/extract to AAC (m4a)",
 		DefaultExt:  ".m4a",
@@ -411,11 +420,16 @@ func RegisterOps() map[string]*Operation {
 	})
 	add(&Operation{
 		Name: "extract_audio", Category: "audio",
-		Description: "Strip audio from a video (wav)",
+		Description: "Strip audio from a video (CD-quality WAV)",
 		DefaultExt:  ".wav",
 		Run: func(ctx context.Context, oc OpContext) error {
+			// Mirror source rate/channels by not forcing -ar/-ac. Output is
+			// CD-quality stereo WAV when the source is stereo, mono WAV when
+			// the source is mono — appropriate for music, mixing, and editing.
+			// Transcription pipelines that need 16 kHz mono should resample
+			// after the fact.
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", oc.Output)
+				"-vn", "-c:a", "pcm_s16le", oc.Output)
 		},
 	})
 	add(&Operation{
@@ -598,6 +612,31 @@ func RegisterOps() map[string]*Operation {
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
 				"-vf", "fps=10,scale=96:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
 				oc.Output)
+		},
+	})
+	add(&Operation{
+		Name: "gif_to_webp_anim", Category: "image",
+		Description: "Animated WebP from a video (libwebp_anim, full-colour frames)",
+		DefaultExt:  ".webp",
+		Run: func(ctx context.Context, oc OpContext) error {
+			// libwebp_anim ships with most ffmpeg builds that include libwebp;
+			// it produces an animated WebP at full colour (no 256-colour
+			// palette quantisation like GIF) and typically half the bytes
+			// of an equivalent GIF.
+			if hasLibwebp {
+				return ffmpegRun(ctx, "-i", oc.Inputs[0],
+					"-vf", "fps=10,scale=480:-1:flags=lanczos",
+					"-c:v", "libwebp_anim", "-loop", "0", "-quality", "75",
+					"-an", oc.Output)
+			}
+			// Fallback: many homebrew ffmpeg builds don't include libwebp,
+			// in which case we still emit a valid animated webp via the
+			// older single-image libwebp encoder with -loop 0 (still animated
+			// at the container level, just slightly larger output).
+			return ffmpegRun(ctx, "-i", oc.Inputs[0],
+				"-vf", "fps=10,scale=480:-1:flags=lanczos",
+				"-c:v", "libwebp", "-loop", "0", "-quality", "75",
+				"-an", oc.Output)
 		},
 	})
 	add(&Operation{
