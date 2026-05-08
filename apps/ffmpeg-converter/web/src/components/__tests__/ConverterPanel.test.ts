@@ -25,6 +25,8 @@ import {
   matrixRowForFile,
   outputsForExt,
 } from '../route-for-file';
+import { pathForSlug } from '../route-registry';
+import { parseUrlState, URL_PARAM_WHITELIST } from '../url-state';
 
 describe('SEAN-105 ConverterPanel adaptive-panel — adaptiveRowForFile', () => {
   it('keeps the current row when the dropped file matches the slug input', () => {
@@ -260,5 +262,184 @@ describe('SEAN-108 ConverterPanel friendly-fallback — no matrix coverage', () 
     // second message string must trip an explicit grep for this test.
     assert.equal(typeof homepageMsg, 'string');
     assert.ok(homepageMsg.length > 0);
+  });
+});
+
+/**
+ * SEAN-107 — cross-category drop adapts the panel without losing the file.
+ *
+ * Same testability constraint as SEAN-105: ConverterPanel renders JSX, so we
+ * test the load-bearing decision via the pure helpers it composes. The
+ * panel's behaviour for `.png` dropped on `/convert/mp4-to-gif`:
+ *
+ *   1. `adaptiveRowForFile(file, currentRow.operation, currentRow.outputFormat)`
+ *      finds no same-output row for png on a gif page → falls through to
+ *      `matrixRowForFile(file)` → resolves to the image-convert/png-to-webp
+ *      row.
+ *   2. The panel sets `detectedRow = match.row` → `effectiveOperation` flips
+ *      to the new row's operation (`'image-convert'`).
+ *   3. URL update via `pathForSlug(match.row.slug)` →
+ *      `/convert/png-to-webp` (image-convert is aliased onto /convert).
+ *   4. URL-state useEffect re-parses with the new operation; any params from
+ *      the previous slug not in the new whitelist are silently dropped.
+ *
+ * Step (3) and (4) are pure-function assertions — no JSX render needed.
+ */
+describe('SEAN-107 ConverterPanel cross-category drop — operation switch', () => {
+  it('PNG dropped on /convert/mp4-to-gif resolves to a different operation', () => {
+    // The headline AC scenario. The slug page is `gif`/`gif`; the dropped
+    // file is `.png`. The resolved row must come from a different operation
+    // (image-convert, not gif) — that's what makes it a cross-category swap.
+    const match = adaptiveRowForFile({ name: 'photo.png' }, 'gif', 'gif');
+    assert.ok(match, 'png on a gif page must resolve via cross-category');
+    assert.notEqual(
+      match.row.operation,
+      'gif',
+      'cross-category swap MUST flip the operation away from gif',
+    );
+    assert.equal(
+      match.row.operation,
+      'image-convert',
+      'png belongs on image-convert, not gif/convert',
+    );
+    assert.equal(
+      match.row.outputFormat,
+      'webp',
+      'png prefers webp per PREFERRED_TARGET_BY_EXT',
+    );
+    // Today the matrix has a multi-input `image-to-webp` row (covering
+    // jpg/png/heic/avif → webp), not a direct `png-to-webp` slug. The AC's
+    // example URL `/convert/png-to-webp` is illustrative — the real slug
+    // the panel lands on is whichever multi-input row covers png. If a
+    // future commit splits this into a per-input row the slug here will
+    // change; the test pins the OPERATION, not the exact slug.
+    assert.ok(
+      MATRIX_BY_SLUG[match.row.slug],
+      `cross-category swap landed on slug ${match.row.slug} which must exist in the matrix`,
+    );
+  });
+
+  it('cross-category resolved row has a real route via pathForSlug', () => {
+    // The panel calls `pathForSlug(match.row.slug)` to update the URL via
+    // history.replaceState. That call must return a non-null path so the
+    // URL bar reflects the now-correct slug. The exact path depends on
+    // which row the matrix exposes for png → webp today (image-to-webp)
+    // — but it MUST live under /convert/ because image-convert aliases
+    // there per route-registry.
+    const match = adaptiveRowForFile({ name: 'photo.png' }, 'gif', 'gif');
+    assert.ok(match);
+    const newPath = pathForSlug(match.row.slug);
+    assert.ok(newPath, 'cross-category swap must produce a non-null URL path');
+    assert.ok(
+      newPath.startsWith('/convert/'),
+      `image-convert aliases to /convert/, got: ${newPath}`,
+    );
+    // And critically, it's not the slug we landed on — replaceState only
+    // fires when the new path differs from the current location. The
+    // mp4-to-gif slug lives at /gif/mp4-to-gif (operation `gif`), not
+    // /convert/mp4-to-gif — but either way the new path differs.
+    assert.notEqual(newPath, pathForSlug('mp4-to-gif'));
+  });
+
+  it('flipping from gif to image-convert drops gif-only URL params', () => {
+    // The AC: "URL-state params from previous whitelist not in new whitelist
+    // are silently dropped." Concretely, a shared link
+    // `/convert/mp4-to-gif?fps=24&max_colors=128` followed by a png drop
+    // should re-parse the URL through the image-convert whitelist, which
+    // dumps `fps` and `max_colors` (gif-only) on the floor.
+    const params = new URLSearchParams('?fps=24&max_colors=128&width=320');
+    const beforeSwap = parseUrlState(params, 'gif');
+    assert.equal(beforeSwap.fps, '24', 'fps survives on gif whitelist');
+    assert.equal(
+      beforeSwap.max_colors,
+      '128',
+      'max_colors survives on gif whitelist',
+    );
+
+    const afterSwap = parseUrlState(params, 'image-convert');
+    assert.equal(
+      afterSwap.fps,
+      undefined,
+      'fps is NOT in image-convert whitelist → dropped',
+    );
+    assert.equal(
+      afterSwap.max_colors,
+      undefined,
+      'max_colors is NOT in image-convert whitelist → dropped',
+    );
+    // image-convert keeps `width` (it's in both whitelists), so a shared
+    // link with width=320 still applies after a png drop. Verifies the
+    // "silently dropped" behaviour is per-param, not all-or-nothing.
+    assert.equal(
+      afterSwap.width,
+      '320',
+      'width IS in image-convert whitelist → preserved',
+    );
+  });
+
+  it('image-convert whitelist excludes the convert/gif advanced knobs', () => {
+    // Structural pin: the AC for SEAN-107 depends on the whitelists not
+    // overlapping for the advanced knobs (fps, max_colors, dither, crf,
+    // bitrate, codec). If a future commit accidentally adds `fps` to the
+    // image-convert whitelist this test will fail loudly so we know the
+    // "silently dropped" behaviour for that param has changed.
+    const imageWhitelist = URL_PARAM_WHITELIST['image-convert'];
+    assert.ok(
+      !imageWhitelist.includes('fps'),
+      'fps must stay gif/extract-frames-only',
+    );
+    assert.ok(
+      !imageWhitelist.includes('max_colors'),
+      'max_colors must stay gif-only',
+    );
+    assert.ok(!imageWhitelist.includes('crf'), 'crf must stay convert-only');
+    assert.ok(
+      !imageWhitelist.includes('codec'),
+      'codec must stay convert-only',
+    );
+  });
+
+  it('cross-category swap landing on image-convert hides Advanced disclosure', () => {
+    // The Advanced disclosure renders only when the *effective* operation is
+    // `convert`. After a png drop on a gif page the effective operation is
+    // `image-convert` → the Advanced panel must not render. We assert the
+    // structural property the panel uses to make that decision: the
+    // resolved row's operation is NOT 'convert'.
+    const match = adaptiveRowForFile({ name: 'photo.png' }, 'gif', 'gif');
+    assert.ok(match);
+    assert.notEqual(
+      match.row.operation,
+      'convert',
+      'png cross-category swap must not land on a convert row → Advanced hidden',
+    );
+  });
+
+  it('mp4 dropped on a gif page is NOT cross-category (same operation kept)', () => {
+    // Negative anchor: the cross-category branch must only trigger when the
+    // operation actually differs. Dropping the slug's declared input on its
+    // own page is the dominant case and must not flip operations.
+    const match = adaptiveRowForFile({ name: 'video.mp4' }, 'gif', 'gif');
+    assert.ok(match);
+    assert.equal(
+      match.row.operation,
+      'gif',
+      'same-input drop must keep the gif operation',
+    );
+    assert.equal(match.row.slug, 'mp4-to-gif');
+  });
+
+  it('mov dropped on /convert/mp4-to-gif is same-category (gif kept)', () => {
+    // The case-2 anchor from STRATEGY (case 3 = cross-category, case 2 =
+    // same-category). A mov on a gif page swaps the row but stays on `gif`
+    // — the operation does NOT flip. Verifies the cross-category logic
+    // doesn't over-trigger on legitimate same-category swaps.
+    const match = adaptiveRowForFile({ name: 'iphone.mov' }, 'gif', 'gif');
+    assert.ok(match);
+    assert.equal(
+      match.row.operation,
+      'gif',
+      'mov-to-gif row preserves the gif operation',
+    );
+    assert.equal(match.row.slug, 'mov-to-gif');
   });
 });

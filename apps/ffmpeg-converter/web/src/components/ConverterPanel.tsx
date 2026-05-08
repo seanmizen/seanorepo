@@ -196,26 +196,26 @@ export function ConverterPanel({
   // browser back/forward buttons resync the panel; updates triggered by the
   // panel itself go through `applyUrlState` (replaceState) which doesn't
   // fire popstate, so there's no feedback loop.
+  //
+  // SEAN-107: re-parse on `effectiveOperation` change too — when a cross-
+  // category drop swaps the panel from `convert` to `image-convert`, the
+  // whitelist switches and any params from the previous slug that aren't
+  // in the new whitelist are silently dropped. See decision record SEAN-103
+  // case 3 + the URL-state bullet ("URL params from previous whitelist not
+  // in new whitelist are silently dropped").
   const [urlState, setUrlState] = useState<UrlState>({});
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !operation) return;
-    const sync = () => {
-      const params = new URLSearchParams(window.location.search);
-      setUrlState(parseUrlState(params, operation));
-    };
-    sync();
-    window.addEventListener('popstate', sync);
-    return () => {
-      window.removeEventListener('popstate', sync);
-    };
-  }, [operation]);
 
   // SEAN-105: when the dropped file's detected row differs from the slug
   // default, all the row-derived knobs (goOp, outputExt, extraArgs, ffmpeg
   // command, accept label) re-derive from the detected row instead of the
   // props. The slug default IS the detected row on first paint, so before any
   // drop the effective values match the props 1:1.
+  //
+  // SEAN-107: `effectiveOperation` joins the family. A cross-category drop
+  // (`.png` on `/convert/mp4-to-gif` ⇒ swap to an `image-convert` row) flips
+  // the operation to the detected row's. The URL-state whitelist, the
+  // saved-presets bar, and the Advanced disclosure all read from this
+  // value rather than the slug's hard-coded `operation` prop.
   const detectedSwapped =
     detectedRow !== null && detectedRow.slug !== slugDefault?.row.slug;
   const effectiveGoOp = detectedSwapped ? detectedRow.goOp : goOp;
@@ -231,6 +231,21 @@ export function ConverterPanel({
   const effectiveAcceptLabel = detectedSwapped
     ? buildAcceptLabel(detectedRow)
     : acceptLabel;
+  const effectiveOperation: Operation | undefined =
+    detectedRow?.operation ?? operation;
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !effectiveOperation) return;
+    const sync = () => {
+      const params = new URLSearchParams(window.location.search);
+      setUrlState(parseUrlState(params, effectiveOperation));
+    };
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('popstate', sync);
+    };
+  }, [effectiveOperation]);
 
   // Merge URL state into the (possibly-swapped) row's preset-derived extraArgs
   // (URL wins) and substitute the same values into the displayed ffmpeg
@@ -302,10 +317,30 @@ export function ConverterPanel({
           );
         }
       }
+      // SEAN-107: when a cross-category drop flips the operation, re-parse
+      // the URL through the new whitelist so the in-flight POST doesn't ship
+      // params from the old slug's schema (e.g. `fps=24` hanging off
+      // `/convert/mp4-to-gif?fps=24` is meaningless on the new
+      // `image-convert` row). Same effect the post-swap useEffect would
+      // produce, just executed synchronously here so the immediate
+      // submission uses the cleaned-up args. Same-operation swaps short-
+      // circuit to the existing `urlState` because the whitelist hasn't
+      // changed.
+      const swappedUrlState =
+        match.row.operation !== currentRow.operation &&
+        typeof window !== 'undefined'
+          ? parseUrlState(
+              new URLSearchParams(window.location.search),
+              match.row.operation,
+            )
+          : urlState;
       return {
         goOp: match.row.goOp,
         outputExt: formatToExt(match.row.outputFormat),
-        extraArgs: mergeUrlIntoExtraArgs(buildExtraArgs(match.row), urlState),
+        extraArgs: mergeUrlIntoExtraArgs(
+          buildExtraArgs(match.row),
+          swappedUrlState,
+        ),
       };
     },
     [slugDefault, detectedRow, urlState],
@@ -352,8 +387,16 @@ export function ConverterPanel({
   // BUT: replaceState doesn't fire popstate, so we expose a state-setter so
   // AdvancedPanel can also push the change directly into urlState here. We
   // wrap that into a child-callback to keep the URL ↔ React loop tight.
+  //
+  // SEAN-107: appearance gates on `effectiveOperation`, not the slug's prop.
+  // A `.png` dropped on `/convert/mp4-to-gif` flips the panel to
+  // `image-convert` — the Advanced disclosure must hide. A `.mov` dropped on
+  // `/gif/png-to-jpg` (hypothetical) would flip the panel to `convert` —
+  // the disclosure must appear if `showAdvancedPanel` is on. The slug-page
+  // shell decides whether the disclosure is *eligible* (`showAdvancedPanel`),
+  // the detected operation decides whether it's currently *applicable*.
   const advanced =
-    showAdvancedPanel && operation === 'convert' ? (
+    showAdvancedPanel && effectiveOperation === 'convert' ? (
       <AdvancedPanel
         operation="convert"
         // SEAN-105: use the effective command so the displayed terminal line
@@ -370,17 +413,21 @@ export function ConverterPanel({
 
   // Re-sync urlState after Advanced panel writes — replaceState doesn't fire
   // popstate, so we listen on a custom event the panel emits when it writes.
+  // SEAN-107: same `effectiveOperation` swap as the parse-on-mount effect —
+  // a cross-category drop re-binds the listener to the new operation's
+  // whitelist so an Advanced-panel write under the new operation is parsed
+  // through the right schema.
   useEffect(() => {
-    if (typeof window === 'undefined' || !operation) return;
+    if (typeof window === 'undefined' || !effectiveOperation) return;
     const onChange = () => {
       const params = new URLSearchParams(window.location.search);
-      setUrlState(parseUrlState(params, operation));
+      setUrlState(parseUrlState(params, effectiveOperation));
     };
     window.addEventListener('ffmpeg-converter:url-state', onChange);
     return () => {
       window.removeEventListener('ffmpeg-converter:url-state', onChange);
     };
-  }, [operation]);
+  }, [effectiveOperation]);
 
   // SEAN-106: chip row mounts above the DropZone on slug pages only. The
   // homepage flow already wraps `<ConverterPanel />` with its own chip row
@@ -451,13 +498,19 @@ export function ConverterPanel({
     }
     return (
       <>
-        {operation && (
+        {effectiveOperation && (
+          // SEAN-107: presets are per-operation. After a cross-category drop
+          // the bar reads the *current* operation, which has flipped — so a
+          // user's saved gif presets don't pollute the chip row when they
+          // drop a png on a gif page (and vice versa). Falls out of the
+          // operation-switch model with no extra wiring; see decision record
+          // SEAN-103 § "saved presets" bullet.
           <SavedPresetsBar
-            operation={operation}
+            operation={effectiveOperation}
             currentArgs={urlState}
             onApply={(preset) => {
               if (typeof window === 'undefined') return;
-              applyUrlState(preset.args, operation);
+              applyUrlState(preset.args, effectiveOperation);
               setUrlState(preset.args);
             }}
           />
