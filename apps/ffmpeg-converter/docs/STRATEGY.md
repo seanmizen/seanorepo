@@ -197,6 +197,165 @@ The footer changes to reflect the actual lane the *current* job is on:
 TODO with the hooks in place. The strategy doc commits to the hybrid; the code can
 land it in two phases without rewriting the UI.
 
+## Adaptive panel — input-type detection over URL-as-constraint
+
+The pSEO landing-page model gives us a per-conversion URL (`/convert/mov-to-mp4`,
+`/gif/mp4-to-gif`, `/convert/heic-to-jpg`) — and Google ranks each one for the
+exact phrase. That's load-bearing for traffic and we keep it. **What we drop is
+the assumption that the URL is allowed to *gate* the panel.** Today every slug
+page sets `<input accept=".mov,.MOV">` (or whatever the row's `inputFormats`
+declare) and the browser silently rejects everything else; drop a `.mov` on
+`/convert/mp4-to-gif` and nothing happens. From the user's point of view the
+page is broken. From Google's point of view the page is fine.
+
+The fix: **the URL is a hint, not a gate**. The drop zone accepts any file. The
+panel detects the input type from the dropped file (extension + magic bytes)
+and adapts its op + chip row in place. The URL is silently updated via
+`history.replaceState` so refresh / share-link / back-button still work, but
+the upload state and the File object never reset. No `router.push`, no remount,
+no second drop.
+
+This belongs in the strategy doc rather than as a one-off bug-fix because it
+is the load-bearing model for everything that follows: the gif preset chips
+(#92), URL-state (#93), saved presets (#94), and the Advanced panel (#95) all
+assume the panel knows what input it's working with. Today they assume the URL
+told them. From this point on they assume the panel detected it.
+
+### What happens when
+
+The four cases the panel must handle, in order from "do nothing" to "rare":
+
+1. **Detected input matches the URL slug.** The dominant case — user landed on
+   `/convert/mov-to-mp4` and dropped a `.mov`. Nothing changes. The chip row
+   shows the slug's hinted output as the active chip. URL stays as-is.
+
+2. **Detected input is in the same category, different format.** User landed on
+   `/convert/mp4-to-gif` and dropped a `.mov`. Both are video; both can become
+   gif. The panel silently flips its input op from `mp4` to `mov` (looking up
+   the row that handles `mov → gif` — `MATRIX_BY_SLUG['mov-to-gif']`, falling
+   back to a multi-input row like `video-to-gif` if no direct slug exists).
+   The chip row continues to offer gif as the active chip plus mp4 / webm /
+   mkv as alternative outputs. URL is rewritten to `/convert/mov-to-gif` via
+   `history.replaceState` — silent, no scroll jump, the page metadata (h1,
+   title, FAQ) does NOT re-render because Next.js doesn't re-render server
+   components on `replaceState`. We accept the metadata drift: the user only
+   ever sees the panel from this point on, and the chip row is the source of
+   truth for what's running. SEO content stays whatever the original slug
+   shipped — fine, because the SEO arrival was for the *intent*, and the
+   intent (video → gif) hasn't changed.
+
+3. **Detected input crosses category.** User landed on `/convert/mp4-to-gif`
+   (video page) and dropped a `.png`. PNG can't become a video gif. The chip
+   row reorganises to show valid PNG conversions: jpg / webp / avif. The panel
+   picks the most popular valid output for that input as the new active chip
+   (per the existing `PREFERRED_TARGET_BY_EXT` table in `route-for-file.ts`,
+   which already ranks targets by demand — png defaults to webp). The page's
+   surrounding shell (h1, value prop, FAQ, "How it works") stays whatever the
+   original slug shipped — we don't try to mutate the page metadata in
+   response to a drop. The user is in the panel; the panel is now correct.
+   The h1 saying "MP4 to GIF" while the panel converts a PNG to WebP is a
+   small contradiction we accept in exchange for the no-reset guarantee.
+   `history.replaceState` rewrites the URL to the now-correct slug
+   (`/convert/png-to-webp`) so refresh / share-link land them in the right
+   place next time.
+
+4. **No valid conversions for this input.** Very rare with our matrix — a
+   `.zip`, a `.exe`, a `.docx`. The panel surfaces a friendly message
+   ("We don't support `.zip` files yet — try video, audio, or images.")
+   plus a "Clear and try another file" button. The original SEO slug page
+   shell stays put. We never throw the user out of the panel.
+
+### How the chip row composes
+
+The chip row is the surface for this whole feature. The principle is simple:
+
+> The chip row's options are always sourced from `validOutputsFor(detectedInputType)`,
+> not hardcoded per-slug.
+
+`outputsForExt(ext)` already exists (added in #79) — it scans the matrix for
+every `convert` / `image-convert` row that accepts the given input and returns
+the union of output formats with a default flag. The slug-page `<ToolPage />`
+currently bypasses this and renders a pure `<ConverterPanel />` because the
+slug locked the input. After this change, slug-page panels also mount a chip
+row (the same component the homepage uses today via `<HeroDrop />`'s
+`<RunningPanel />`), populated from the *detected* input. On first paint —
+before the user drops a file — the chip row uses the slug's input as a
+synthetic detection so the page doesn't render a different layout pre- and
+post-drop.
+
+When the detected input doesn't support the URL's hinted output (case 3
+above), the panel falls back to the most popular valid output for that input
+(per `PREFERRED_TARGET_BY_EXT`). This is the same logic the homepage uses
+today; we just lift it onto the slug pages.
+
+### How this threads through existing features
+
+- **#79 format-picker chip row** — already supports the "swap output mid-flight"
+  flow on the homepage. The slug-page version is the same component, sourced
+  from the detected input rather than the original slug. The two converge.
+- **#92 gif preset chips** — the gif page is a special case: the chip row
+  is gif-specific (Smooth / Compact / Tiny). When a non-video file lands on
+  a gif page, `<GifPresetPanel />` cedes to the generic chip row + a
+  `<ConverterPanel />` mount for the new operation. The gif chips only render
+  when the detected input is video (or animated-image). Fall-through, not
+  overlay.
+- **#93 URL-state** — the `parseUrlState` whitelist is per-operation. When
+  the panel switches operation in response to a cross-category drop, the
+  whitelist switches too. Any URL params from the previous slug that aren't
+  in the new whitelist are silently dropped. This is fine — a `?fps=24`
+  param hanging off `/convert/mp4-to-gif` is meaningless for `/convert/png-to-webp`,
+  and silently dropping it is preferable to forwarding nonsense to the
+  backend.
+- **#94 saved presets** — already keyed per-operation. A user's saved gif
+  presets don't pollute the chip row when they drop a png on a gif page;
+  the saved-presets bar reads the *current* operation, which has already
+  flipped to `image-convert`. No code change needed in the preset module
+  for this to work — it falls out of the operation-switch model.
+- **#95 Advanced panel** — only renders for `operation === 'convert'`. The
+  same pattern: when the panel switches op, the Advanced disclosure either
+  appears (cross-category drop landed on a `convert` row) or disappears
+  (drop landed on `image-convert` / `gif` / etc). The `showAdvancedPanel`
+  prop becomes a function of the *detected* operation, not the slug's.
+
+### URL-update mechanics
+
+`history.replaceState` only — never `router.push`, never `router.replace`.
+The reasons:
+
+- `router.push` triggers a full Next.js client-side route transition,
+  which remounts the page including the panel — losing the File object.
+- `router.replace` does the same, just without adding a history entry.
+- `history.replaceState` rewrites the URL bar without telling Next.js
+  anything, so React state (including the in-panel `<DropZone />`'s
+  File reference) survives intact.
+
+Trade-off: the page metadata (h1, title, JSON-LD) doesn't re-render after
+the URL update. We accept this because the alternative (full route
+transition) violates constraint #3 (no upload reset). The chip row is the
+in-page source of truth for what's running; the surrounding shell is the
+SEO landing-page artifact, and once the user has interacted, the shell's
+job is done.
+
+The URL update fires once per detected-input change — not on every chip
+click within the same input. Picking a different output chip (mp4 → webm)
+on a `mov` upload updates the slug from `mov-to-mp4` to `mov-to-webm`;
+dropping a fresh `.png` afterwards updates again to `png-to-webp`. Refresh
+at any point lands on the correct slug.
+
+### What this is not
+
+- It is not a SPA-wide router rewrite. The URL update is `history.replaceState`,
+  scoped to the current page's path segment. Other links in the app still
+  navigate via `<Link />` and Next.js routing.
+- It is not a content-mutation feature. The h1, value prop, FAQ, and
+  "How it works" text do not adapt to the dropped file. They stay whatever
+  the original slug shipped. The *panel* adapts; the *page* does not.
+- It is not magic-byte detection (yet). Phase 1 detects from the file
+  extension only — the same data the homepage `routeForFile` already uses.
+  Magic-byte sniffing is a phase-2 hardening hook for files with wrong
+  extensions; it's not load-bearing for this feature and lives in its own
+  ticket if/when it ships.
+
 ## Anti-goals
 
 Things we deliberately do NOT build:
@@ -466,3 +625,121 @@ exceeds 40 %. At that threshold the strategy doc says "promote the panel to
 layer 2" — i.e. show it expanded by default for everyone, not just users who
 opened it once. Below 5 % the simple flow is winning and we should consider
 collapsing the codec/preset distinction further.
+
+### SEAN-103 — dropped accept= attribute, panel detects input type and adapts in place
+
+**Status:** locked, 2026-05-08.
+
+**Question:** the slug pages (`/convert/mp4-to-gif`, `/convert/mov-to-gif`,
+`/convert/heic-to-jpg`, …) each set `<input accept>` to the row's declared
+`inputFormats`. Drop a `.mov` on `/convert/mp4-to-gif` and the browser
+silently rejects the file — the page looks broken, even though the matrix
+has a perfectly good `mov-to-gif` row two slugs over. Should the file
+picker keep enforcing the slug's input declaration (status quo, SEO-clean
+but UX-broken on cross-arrival), drop the picker constraint and reroute
+the user via `router.push` to the correct slug (loses the File object —
+the SEAN-75 bug we fixed last week, just on the slug pages instead of the
+homepage), or drop the picker constraint AND adapt in place without
+navigation?
+
+**Decision:** adapt in place. The drop zone (and `<input accept>`) accepts
+any file. On drop, the panel runs `detectInputType(file)` (extension-based,
+mirrors `extOf` + `EXT_TO_FORMAT` from `route-for-file.ts`) and either:
+
+1. **Match** — uses the slug's row as-is (the dominant case).
+2. **Same-category mismatch** (`mov` dropped on a `mp4-to-X` page where X
+   has a `mov-to-X` row) — silently swaps to that row, keeps the same
+   output format, fires the conversion. Chip row reflects the swap.
+3. **Cross-category mismatch** (`png` dropped on a video page where PNG
+   has matrix coverage) — switches the panel's operation entirely
+   (`convert` → `image-convert`), uses `PREFERRED_TARGET_BY_EXT` for the
+   default output, fires the conversion. Page shell (h1 / FAQ / "How it
+   works") stays. Chip row reorganises to PNG's valid outputs.
+4. **No matrix coverage** — friendly message + "Clear and try another
+   file" button. Panel state preserved until user clears.
+
+URL is updated via `history.replaceState` only — never `router.push`.
+This is the *only* way to preserve React state including the File object
+in the panel; Next.js client-side route transitions remount the page.
+
+**Why:** the URL slug is a load-bearing SEO artefact (Google ranks
+`mov-to-mp4` separately from `mp4-to-mov` and we keep that). But within
+the panel, the URL is a *hint about the user's intent* — not a
+*constraint on the file they're allowed to drop*. The slug-arrival
+audience (Google → landing page → drop) overlaps almost completely with
+people who think "I want a gif from this video", and the specific source
+extension is a detail the panel can figure out. Forcing the user to find
+the *exact* slug for their input format inverts the demand: people search
+"mp4 to gif" because that's the *most-known* video-to-gif phrase, not
+because they always have an `.mp4`. Lifting that lock is pure UX win, and
+the SEO pages still rank for the canonical phrase.
+
+**Why not router.push to the correct slug:** that's the SEAN-75 bug
+pattern — the File object lives in component state, the route transition
+remounts the page, the file is gone. We solved this on the homepage by
+running the conversion in place; the slug pages get the same treatment.
+
+**Why not magic-byte sniffing:** extension is enough for v1. Magic-byte
+detection is a phase-2 hardening for users who saved a `.png` as
+`.jpg` (real but rare); it composes cleanly on top of this decision and
+ships in its own ticket if/when needed.
+
+**SEO arrivals are unaffected.** The slug pages still render whatever
+h1 / FAQ / metadata they always rendered. Google still indexes them. The
+only thing that changes is what happens *after* the user drops a file
+that doesn't match the slug — instead of the picker silently rejecting
+the file, the panel adapts and runs the conversion the user actually
+wanted.
+
+**Trade-offs accepted:**
+
+- **Page-shell drift after a cross-category drop.** Drop a `.png` on a
+  `/convert/mp4-to-gif` page and the h1 still says "MP4 to GIF" while the
+  panel converts PNG to WebP. We accept this. The chip row is the in-page
+  source of truth for what's running; the page shell is the SEO artefact,
+  and once the user has interacted, the shell's job is done. The
+  `replaceState` URL update means refresh / share-link land on the
+  correct slug next time.
+- **URL-state whitelist switching.** When the panel changes operation
+  mid-flow, any URL params from the previous slug's whitelist that aren't
+  in the new whitelist are silently dropped. This is correct (a `?fps=24`
+  hanging off a video URL is meaningless for an image conversion) but
+  could surprise a user who shared a URL with custom args expecting them
+  to round-trip across an op switch. Acceptable — the shared URL still
+  rehydrates correctly when the recipient drops the *matching* file
+  type.
+- **One File, one panel.** Dropping a fresh file replaces the previous
+  one — but no automatic clear, no automatic reset. The user explicitly
+  re-drops or clicks "Try another file" to start over.
+
+**Files:**
+
+- `apps/ffmpeg-converter/web/src/components/DropZone.tsx` — drop the
+  `accept` prop forwarding into `<input>`. Add `detectInputType(file)`
+  helper (or import from `route-for-file.ts`).
+- `apps/ffmpeg-converter/web/src/components/HeroDrop.tsx` — already
+  doesn't set `accept`; double-check there's no remaining type guard
+  on drop.
+- `apps/ffmpeg-converter/web/src/components/ConverterPanel.tsx` — accept
+  detected-input state, swap row + extraArgs + ffmpegCommand when input
+  changes, fire `history.replaceState` to update the URL.
+- `apps/ffmpeg-converter/web/src/components/ToolPage.tsx` — pass slug
+  defaults but no longer treat them as authoritative; mount the chip row
+  alongside the panel for non-gif operations too.
+- `apps/ffmpeg-converter/web/src/components/route-for-file.ts` — already
+  exports the lookup helpers (`matrixRowForFile`, `outputsForExt`); the
+  panel re-uses them rather than duplicating logic.
+- `apps/ffmpeg-converter/web/src/components/url-state.ts` — no API change
+  needed; the existing per-operation whitelist machinery handles the
+  switch.
+- `apps/ffmpeg-converter/web/src/components/__tests__/` — new tests for
+  drop-mismatch behaviour on slug pages.
+
+**Re-revisit if:** the page-shell drift turns into a real complaint
+(user reports landing on `/convert/mp4-to-gif`, dropping a png, getting
+a webp result, then being confused by the FAQ). At that point we either
+(a) suppress the page-shell content after a category-switch detection
+and replace it with a generic "Converting your image…" heading, or
+(b) re-trigger a soft Next.js navigation that preserves the File via a
+sessionStorage handoff. Both are bigger changes; we don't ship them
+preemptively.
