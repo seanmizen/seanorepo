@@ -49,6 +49,63 @@ func arg(oc OpContext, key, def string) string {
 	return def
 }
 
+// SEAN-95 — shared transcode runner for the libx264/libx265 family.
+// Reads the Advanced-panel args (`crf`, `bitrate`, `preset`, `fps`,
+// `audio_bitrate`, `codec`) from oc.Args. When `bitrate` is set it overrides
+// CRF (constant-rate-factor and explicit -b:v together is a confusing
+// constrained-quality mode that we don't expose). When `codec` is set it
+// overrides the per-op default (e.g. `transcode` uses libx264 unless the
+// power-user toggle picks libx265).
+func runTranscode(ctx context.Context, oc OpContext, defaultVCodec, defaultACodec, defaultABitrate string) error {
+	vcodec := arg(oc, "codec", defaultVCodec)
+	preset := arg(oc, "preset", "ultrafast")
+	args := []string{"-i", oc.Inputs[0], "-c:v", vcodec, "-preset", preset}
+
+	if br := arg(oc, "bitrate", ""); br != "" {
+		// Bitrate-targeted encode — drop CRF entirely.
+		args = append(args, "-b:v", br)
+	} else {
+		args = append(args, "-crf", arg(oc, "crf", "30"))
+	}
+
+	if fps := arg(oc, "fps", ""); fps != "" {
+		args = append(args, "-r", fps)
+	}
+
+	args = append(args,
+		"-c:a", defaultACodec,
+		"-b:a", arg(oc, "audio_bitrate", defaultABitrate),
+		oc.Output,
+	)
+	return ffmpegRun(ctx, args...)
+}
+
+// SEAN-95 — VP9/Opus-flavoured transcode runner. VP9 doesn't have libx264-style
+// presets; we still accept and ignore the `preset` arg so URL-state round-trips
+// work. CRF is constant-quality mode when paired with `-b:v 0`; explicit
+// bitrate is rate-targeted.
+func runTranscodeVPx(ctx context.Context, oc OpContext, defaultVCodec, defaultACodec, defaultABitrate, defaultBitrate string) error {
+	vcodec := arg(oc, "codec", defaultVCodec)
+	args := []string{"-i", oc.Inputs[0], "-c:v", vcodec, "-deadline", "realtime"}
+
+	if crf := arg(oc, "crf", ""); crf != "" {
+		args = append(args, "-crf", crf, "-b:v", "0")
+	} else {
+		args = append(args, "-b:v", arg(oc, "bitrate", defaultBitrate))
+	}
+
+	if fps := arg(oc, "fps", ""); fps != "" {
+		args = append(args, "-r", fps)
+	}
+
+	args = append(args,
+		"-c:a", defaultACodec,
+		"-b:a", arg(oc, "audio_bitrate", defaultABitrate),
+		oc.Output,
+	)
+	return ffmpegRun(ctx, args...)
+}
+
 // RegisterOps returns the full operation map. The names are deliberately
 // stable — test scripts and any future client both reference these strings.
 func RegisterOps() map[string]*Operation {
@@ -65,32 +122,31 @@ func RegisterOps() map[string]*Operation {
 
 	add(&Operation{
 		Name: "transcode", Category: "video",
-		Description: "Re-container a video; ext=mp4|webm|mkv",
+		Description: "Re-container a video; ext=mp4|webm|mkv. Args: crf, bitrate, preset, fps, audio_bitrate, codec.",
 		DefaultExt:  ".mp4",
 		Run: func(ctx context.Context, oc OpContext) error {
-			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
-				"-c:a", "aac", "-b:a", "64k", oc.Output)
+			return runTranscode(ctx, oc, "libx264", "aac", "64k")
 		},
 	})
 	add(&Operation{
 		Name: "transcode_webm", Category: "video",
-		Description: "Transcode to WebM (VP9 + Opus)",
+		Description: "Transcode to WebM (VP9 + Opus). Args: crf, bitrate, preset, fps, audio_bitrate, codec.",
 		DefaultExt:  ".webm",
 		Run: func(ctx context.Context, oc OpContext) error {
-			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-c:v", "libvpx-vp9", "-b:v", "200k", "-deadline", "realtime",
-				"-c:a", "libopus", "-b:a", "48k", oc.Output)
+			// VP9 has no encoder presets in the libx264 sense, but ffmpeg
+			// accepts -deadline (realtime / good / best) instead. We still
+			// honour the SEAN-95 advanced-panel `bitrate` arg (defaulting
+			// to 200k if unset) and `crf` arg (which VP9 supports as
+			// constant quality when paired with -b:v 0).
+			return runTranscodeVPx(ctx, oc, "libvpx-vp9", "libopus", "48k", "200k")
 		},
 	})
 	add(&Operation{
 		Name: "transcode_mkv", Category: "video",
-		Description: "Remux/transcode to Matroska",
+		Description: "Remux/transcode to Matroska. Args: crf, bitrate, preset, fps, audio_bitrate, codec.",
 		DefaultExt:  ".mkv",
 		Run: func(ctx context.Context, oc OpContext) error {
-			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
-				"-c:a", "aac", "-b:a", "64k", oc.Output)
+			return runTranscode(ctx, oc, "libx264", "aac", "64k")
 		},
 	})
 	add(&Operation{
