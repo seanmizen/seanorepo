@@ -29,15 +29,22 @@ export { submitConversion } from './submit-conversion';
 export interface DropZoneProps {
   /**
    * Backend op name as registered in the Go service (`ops.go::RegisterOps`).
-   * Comes from the matrix row's `goOp` field.
+   * Comes from the matrix row's `goOp` field. Used as the default when
+   * `resolveArgsForFile` is unset or returns a partial result.
    */
   goOp: string;
   /** Output format extension (no leading dot) — used to name the download. */
   outputExt: string;
   /**
-   * Comma-separated list of accepted MIME types or extensions for the
-   * `<input accept>` attribute (e.g. `.mov,.MOV,video/quicktime`).
-   * Optional — accepting everything still works, the backend will reject.
+   * Comma-separated list of accepted MIME types or extensions. Historically
+   * forwarded into the underlying `<input type="file">` `accept` attribute.
+   *
+   * SEAN-105: NO LONGER FORWARDED. Slug pages used to lock the picker to the
+   * row's input formats — drop a `.mov` on `/convert/mp4-to-gif` and the
+   * browser silently rejected it. The panel now detects the input type from
+   * the dropped file and adapts in place (see `ConverterPanel.slugDefault`),
+   * so we accept any file at the picker. The prop is kept for source-compat
+   * with existing call sites and may be removed in a follow-up.
    */
   accept?: string;
   /**
@@ -62,6 +69,23 @@ export interface DropZoneProps {
    * have to drop it a second time.
    */
   initialFile?: File;
+  /**
+   * SEAN-105: optional per-file argument resolver. Called synchronously
+   * before each `submitConversion`, with the file the user just dropped.
+   * Returning a partial set replaces the corresponding prop defaults for
+   * that single conversion (e.g. swapping `goOp` from `gif_from_video`
+   * driven by `mp4` to the same op driven by `mov` after detecting the
+   * actual input type).
+   *
+   * Keeping the resolver synchronous side-steps React's stale-state problem
+   * — the parent can't update `goOp` props in time for the imminent submit,
+   * but it CAN inspect the file and return the right args directly.
+   */
+  resolveArgsForFile?: (file: File) => {
+    goOp?: string;
+    outputExt?: string;
+    extraArgs?: Record<string, string>;
+  } | null;
 }
 
 type Status = 'idle' | 'uploading' | 'converting';
@@ -69,12 +93,13 @@ type Status = 'idle' | 'uploading' | 'converting';
 export function DropZone({
   goOp,
   outputExt,
-  accept,
+  accept: _acceptIgnored,
   acceptLabel,
   extraArgs,
   header,
   onJobComplete,
   initialFile,
+  resolveArgsForFile,
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -98,11 +123,16 @@ export function DropZone({
 
       try {
         setStatus('converting');
+        // SEAN-105: synchronous per-file override hook. Lets ConverterPanel
+        // detect the dropped file's type and supply matching args before the
+        // submit fires (the React state update in the parent runs after this
+        // callback chain returns, so we can't rely on prop changes here).
+        const overrides = resolveArgsForFile?.(file) ?? null;
         const job = await submitConversion({
           file,
-          goOp,
-          outputExt,
-          extraArgs,
+          goOp: overrides?.goOp ?? goOp,
+          outputExt: overrides?.outputExt ?? outputExt,
+          extraArgs: overrides?.extraArgs ?? extraArgs,
           signal: controller.signal,
         });
         onJobComplete(job);
@@ -126,7 +156,7 @@ export function DropZone({
         }
       }
     },
-    [goOp, outputExt, extraArgs, onJobComplete],
+    [goOp, outputExt, extraArgs, onJobComplete, resolveArgsForFile],
   );
 
   const handleFile = (file: File) => {
@@ -231,11 +261,14 @@ export function DropZone({
             </div>
           </>
         )}
+        {/* SEAN-105: no `accept` attribute. The picker accepts every file;
+            the panel detects the input type and adapts its op + args in
+            place via `resolveArgsForFile`. Also no extension-based guard
+            in `handleDrop` — every dropped file flows through. */}
         <input
           ref={inputRef}
           type="file"
           hidden
-          accept={accept}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleFile(file);

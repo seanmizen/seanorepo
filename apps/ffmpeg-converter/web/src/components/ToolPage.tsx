@@ -140,6 +140,17 @@ export function ToolPage({ row, page }: ToolPageProps) {
                   }
                 : undefined
             }
+            // SEAN-105 — slug-page seed for the adaptive panel. When the user
+            // drops a file whose detected input type maps to a different row
+            // (e.g. .mov on /convert/mp4-to-gif), the panel swaps the row and
+            // updates the URL via `history.replaceState` — no remount, no
+            // upload reset. The slug remains the URL-encoded "intent hint" the
+            // user landed on; first paint uses this row's metadata.
+            slugDefault={{
+              row,
+              inputFormat:
+                page?.inputFormat ?? row.inputFormats[0] ?? row.outputFormat,
+            }}
           />
         )}
       </section>
