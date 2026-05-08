@@ -299,3 +299,102 @@ export function matrixInputExtensions(): string[] {
   }
   return [...exts].sort();
 }
+
+/**
+ * SEAN-79 — one available output format the picker can render. The picker on
+ * the homepage drop zone shows one chip per `OutputOption` returned here, so
+ * the user who drops a `.mov` and wants `.webm` instead of the preferred
+ * `.mp4` default can re-pick before the conversion fires.
+ */
+export interface OutputOption {
+  /** Resolved matrix row that runs the conversion if the user picks this format. */
+  row: OperationRow;
+  /** Output format enum (e.g. `mp4`, `webm`, `webp`). */
+  format: Format;
+  /** UI label (uppercase ext, e.g. `MP4`, `WEBM`, `JPG`). */
+  label: string;
+  /** True for the row `routeForFile`'s preferred-target table picks by default. */
+  isDefault: boolean;
+}
+
+/**
+ * SEAN-79 — every pure-format output the matrix supports for a given input
+ * extension. Used by the homepage format picker so the user can re-pick the
+ * output before clicking Convert.
+ *
+ * Scope is intentionally narrow: only `convert` and `image-convert` rows are
+ * returned (the picker's intent is "swap output format", not "switch
+ * operation"). Extract-audio, gif, compress, trim etc. live on dedicated slug
+ * pages and the homepage doesn't surface them via the picker — those are
+ * different intents, not different output formats of the same intent.
+ *
+ * Pure function of input ext + matrix — no API call, no side effects, safe to
+ * compute at module load. Empty array means the picker should be hidden.
+ */
+export function outputsForExt(ext: string): OutputOption[] {
+  if (!ext) return [];
+  const inputFormat = (EXT_TO_FORMAT[ext] ?? ext) as Format;
+  const preferredTarget = PREFERRED_TARGET_BY_EXT[ext];
+
+  // Map of outputFormat → chosen row. We dedupe by output format because two
+  // rows can target the same output (e.g. a flagship `mov-to-mp4` row plus
+  // the multi-input `video-to-mp4` fallback both produce mp4 from mov). The
+  // direct `${input}-to-${target}` slug wins over multi-input rows so the
+  // user lands on the page Google ranks for the pair.
+  const byOutput = new Map<Format, OperationRow>();
+
+  for (const row of MATRIX) {
+    if (row.operation !== 'convert' && row.operation !== 'image-convert') {
+      continue;
+    }
+    if (!row.inputFormats.includes(inputFormat)) continue;
+    if (!MATRIX_BY_SLUG[row.slug]) continue;
+    if (!routeExistsForSlug(row.slug)) continue;
+
+    const directSlug = `${inputFormat}-to-${formatExtName(row.outputFormat)}`;
+    const existing = byOutput.get(row.outputFormat);
+    if (!existing) {
+      byOutput.set(row.outputFormat, row);
+      continue;
+    }
+    // Prefer the direct `${input}-to-${output}` slug over a multi-input row.
+    if (row.slug === directSlug && existing.slug !== directSlug) {
+      byOutput.set(row.outputFormat, row);
+    }
+  }
+
+  const options: OutputOption[] = [];
+  for (const [format, row] of byOutput) {
+    options.push({
+      row,
+      format,
+      label: formatExtName(format).toUpperCase(),
+      isDefault: format === preferredTarget,
+    });
+  }
+
+  // Stable order: default first, then alphabetical by label.
+  options.sort((a, b) => {
+    if (a.isDefault && !b.isDefault) return -1;
+    if (!a.isDefault && b.isDefault) return 1;
+    return a.label.localeCompare(b.label);
+  });
+
+  return options;
+}
+
+/**
+ * Map a `Format` enum value to the file-extension form used in slugs and URLs.
+ * Mirrors `formatToExt` in `./converter-row-args.ts`; duplicated here to keep
+ * this module JSX-free and importable from tests without a tsx loader.
+ */
+function formatExtName(format: Format): string {
+  switch (format) {
+    case 'gif-static':
+      return 'gif';
+    case 'webp-anim':
+      return 'webp';
+    default:
+      return format;
+  }
+}
