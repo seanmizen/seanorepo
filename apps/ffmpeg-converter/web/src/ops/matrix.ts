@@ -900,12 +900,210 @@ const CURATED_MATRIX: OperationRow[] = [
       },
     ],
   },
+
+  // ─── SEAN-76: high-intent gif siblings to the mp4-to-gif flagship ────────
+  // These three slugs were declared in `mp4-to-gif`'s `related` block but
+  // didn't exist as matrix rows, so the flagship's Related section silently
+  // collapsed (resolveSiblings filters dead links per SEAN-50). They also
+  // cover high-intent SEO queries that were being absorbed by the 14-input
+  // `video-to-gif` bulk row.
+
+  // MOV → GIF — iPhone screen recording / Final Cut export → Slack/Discord.
   {
+    slug: 'mov-to-gif',
+    operation: 'gif',
+    inputFormats: ['mov'],
+    outputFormat: 'gif',
+    goOp: 'gif_from_video',
+    title: 'Convert MOV to GIF — free, no watermark',
+    h1: 'MOV to GIF',
+    valueProp: 'iPhone clip → animated GIF. Palette-optimised. No watermark.',
+    ffmpegCommand:
+      "ffmpeg -i input.mov -vf 'fps=10,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse' output.gif",
+    intentVolume: 'mid',
+    faqs: [
+      {
+        q: 'My MOV is a screen recording from iOS — will the conversion handle HEVC?',
+        a: 'Yes. iPhone screen recordings since iOS 11 wrap HEVC inside the QuickTime MOV container. We decode the HEVC video stream first, then run palettegen + paletteuse to land a clean 256-colour GIF.',
+      },
+      {
+        q: 'How big will the GIF be vs the MOV?',
+        a: 'Typically 5-10x bigger. GIF has no inter-frame compression, so every frame stores a full bitmap rather than a delta. Drop FPS to 8 or width to 320 px in the advanced panel for a smaller output.',
+      },
+      {
+        q: 'Will the audio survive?',
+        a: 'No — GIF format has no audio track. The audio in the MOV is discarded silently. Use animated WebP (also no audio) plus a separate audio track, or a video container, if sound matters.',
+      },
+      {
+        q: 'Why does the GIF look posterised on flat backgrounds?',
+        a: 'GIF is hard-capped at 256 colours per palette. Our palettegen filter picks the optimal 256 for your specific clip, but flat colours like skies and skin tones still band slightly. Switch to animated WebP for full-colour output.',
+      },
+      {
+        q: 'What ffmpeg command do you run?',
+        a: 'Shown on the result page with a copy button — paste into your terminal if you prefer to keep the file local.',
+      },
+    ],
+    related: ['mp4-to-gif', 'webm-to-gif', 'mp4-to-webp-anim'],
+    preset: { fps: 10 },
+    // SEAN-76 — hand-tuned copy. Required because the default `gif` op copy
+    // collides with `video-to-gif` resolved with input=mov (would have
+    // produced an identical body signature and tripped the duplicate-content
+    // check in word-count.test.ts).
+    whenToUse: `Reach for MOV to GIF when an iPhone clip or a Final Cut export needs to play inline somewhere a video tag won't fit — a Slack thread, a Discord chat, a Twitter timeline, a GitHub README, a Stack Overflow answer. The MOV container almost always wraps HEVC since iOS 11 made it the default, which a GIF encoder can't read directly; we decode HEVC to raw frames first, then run palettegen + paletteuse to land a clean animated GIF on the other side. The audio track is dropped silently — GIF has no sound. For long iPhone clips or any source that needs full colour fidelity, animated WebP holds up better; reach for MOV to GIF specifically when the destination is one of the older platforms that still expect literal .gif files.`,
+    extendedHowItWorks: `The pipeline runs in three logical stages. Stage one demuxes the MOV container and decodes the HEVC (or H.264) video stream to raw frames in memory. Stage two passes those frames through ffmpeg's palettegen filter, which scans every frame to pick the optimal 256 colours for that specific clip — sampling the entire runtime so the chosen palette covers the full colour range, not just the opening shot. Stage three encodes each frame using paletteuse with Floyd-Steinberg dithering, scaling to 480 px wide via the lanczos resampler so flat regions like skies and skin tones don't band visibly. The audio track is discarded with -an. Output is a standard GIF89a animation that plays inline on every platform that accepts the format.`,
+    commonPitfalls: [
+      {
+        q: 'My MOV came out of an iPhone — does the HEVC codec change anything for the GIF?',
+        a: 'iPhone MOVs use HEVC (H.265) by default since iOS 11. We decode HEVC fine, but if the source is a screen recording at 60 FPS, the default 10 FPS GIF output will skip frames. Bump FPS in the advanced panel to keep more motion detail.',
+      },
+      {
+        q: 'My GIF is enormous compared to the source MOV.',
+        a: 'Expected. iPhone HEVC inside MOV is highly compressed — often 50-100x smaller than an equivalent uncompressed bitmap stream. GIF stores every frame as a full bitmap with no inter-frame compression, so the size jump is unavoidable. Trim the clip first or switch to animated WebP if size matters.',
+      },
+      {
+        q: 'The GIF stutters where the MOV played smoothly.',
+        a: 'GIF browsers cap playback at the framerate they were encoded at, and 10 FPS is our default to keep file size manageable. If the source MOV was 60 FPS and the motion matters, bump GIF FPS to 24 in the advanced panel — file size roughly doubles but the playback stays smoother.',
+      },
+      {
+        q: 'Will Slack / Discord / Twitter autoplay this inline?',
+        a: 'Yes. GIF is the universal inline-animation format on chat and social platforms. Discord and Slack autoplay every GIF in chat; Twitter transcodes uploaded GIFs to MP4 internally but still displays them as inline animations.',
+      },
+    ],
+  },
+
+  // WebM → GIF — modern browser export / OBS → chat platforms.
+  {
+    slug: 'webm-to-gif',
+    operation: 'gif',
+    inputFormats: ['webm'],
+    outputFormat: 'gif',
+    goOp: 'gif_from_video',
+    title: 'Convert WebM to GIF — free, no watermark',
+    h1: 'WebM to GIF',
+    valueProp: 'WebM clip → animated GIF. Palette-optimised. No watermark.',
+    ffmpegCommand:
+      "ffmpeg -i input.webm -vf 'fps=10,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse' output.gif",
+    intentVolume: 'mid',
+    faqs: [
+      {
+        q: 'My WebM came from a browser export — is it VP9 or VP8?',
+        a: 'Modern browsers (Chrome, Firefox, Safari since 14) encode WebM as VP9 + Opus by default; older recordings may be VP8 + Vorbis. We decode both transparently and the output GIF is identical either way.',
+      },
+      {
+        q: 'How big will the GIF be vs the WebM?',
+        a: 'Typically 8-15x bigger. WebM with VP9 is one of the most efficient web video codecs — close to half the bytes of an equivalent MP4. GIF has no inter-frame compression, so every frame is a full bitmap. The relative jump is bigger than for MP4 sources.',
+      },
+      {
+        q: 'Will the audio survive in the GIF?',
+        a: 'No — GIF format has no audio track. The Opus or Vorbis audio in the WebM is dropped silently. Use animated WebP (which also has no audio) or a video container for sound.',
+      },
+      {
+        q: 'Why does my GIF lose the smooth gradients my WebM had?',
+        a: 'GIF is capped at 256 colours per palette per frame. VP9 inside WebM holds gradients natively at the full codec colour space; GIF must quantise. Our palettegen picks the optimal 256 for your clip, but for full-colour output use animated WebP instead.',
+      },
+      {
+        q: 'What ffmpeg command do you run?',
+        a: 'Shown on the result page with a copy button — paste into your terminal if you prefer to keep the file local.',
+      },
+    ],
+    related: ['mp4-to-gif', 'mov-to-gif', 'mp4-to-webp-anim'],
+    preset: { fps: 10 },
+    // SEAN-76 — hand-tuned copy required for the same reason as mov-to-gif:
+    // avoids body-signature collision with `video-to-gif` resolved input=webm.
+    whenToUse: `Reach for WebM to GIF when a browser export or an OBS recording landed you on the modern open codec but the destination only accepts the legacy format — Slack messages, Discord channels, Reddit comments, GitHub issue replies, Stack Overflow answers, internal documentation. WebM is the open VP9/Opus container every modern browser ships natively, which makes it the default for Chrome screen recorders and browser capture tools; GIF is what every chat and forum still expects in return. The audio track in the WebM is dropped — GIF has no sound — so reach for animated WebP or a video container instead when the audio matters.`,
+    extendedHowItWorks: `WebM-to-GIF runs the same palette-quantisation pipeline as every gif-from-video operation, but the input decoding stage is more demanding because VP9 holds more visual detail than the codec GIF can represent. Stage one decodes the VP9 (or VP8) bitstream to raw frames at the source resolution. Stage two runs palettegen across the full clip to choose the optimal 256-colour palette — sampling every frame so the choice represents the entire animation, not just the opening shot. Stage three encodes each frame with paletteuse plus Floyd-Steinberg dithering and scales to 480 px wide via the lanczos resampler. The Opus or Vorbis audio is discarded with -an. Output is a standard GIF89a animation; expect noticeable colour banding on flat regions where the VP9 source held smooth gradients.`,
+    commonPitfalls: [
+      {
+        q: 'WebM looks blocky compared to my MP4 source — why?',
+        a: 'VP9 takes longer to compress well than H.264. If the WebM was generated quickly (a browser screen recording, an OBS realtime output), expect chunky blocks on flat backgrounds even before GIF conversion. The blocks survive — and become more obvious — once GIF quantises down to 256 colours.',
+      },
+      {
+        q: 'My GIF is way bigger than the source WebM.',
+        a: 'Expected, and the gap is wider than for MP4 sources. WebM with VP9 is one of the most efficient web video codecs — often half the bytes of an equivalent MP4. GIF has no inter-frame compression at all, so the relative size jump is roughly double what you would see going from MP4 to GIF.',
+      },
+      {
+        q: 'My WebM has a transparent background — does the GIF preserve it?',
+        a: 'Partially. GIF supports a single fully-transparent palette index but no alpha channel, so semi-transparent pixels in the WebM (common when the source is a layered animation) flatten to either fully transparent or fully opaque. Use animated WebP if you need true alpha.',
+      },
+      {
+        q: 'Will the GIF play in browsers that don’t support WebM?',
+        a: 'Yes — GIF predates every browser GIF support is older than WebM by two decades. The GIF output plays in IE6, Safari on iOS, every Android version, and every legacy app or CMS that survives. That’s the whole reason this conversion exists.',
+      },
+    ],
+  },
+
+  // MP4 → animated WebP — modern alternative to GIF, half the size.
+  {
+    slug: 'mp4-to-webp-anim',
+    operation: 'gif',
+    inputFormats: ['mp4'],
+    outputFormat: 'webp-anim',
+    goOp: 'gif_to_webp_anim',
+    title: 'Convert MP4 to animated WebP — half the size of GIF',
+    h1: 'MP4 to animated WebP',
+    valueProp:
+      'Full-colour animated WebP. Roughly half the bytes of an equivalent GIF.',
+    ffmpegCommand:
+      'ffmpeg -i input.mp4 -vf "fps=10,scale=480:-1:flags=lanczos" -c:v libwebp_anim -loop 0 -quality 75 -an output.webp',
+    intentVolume: 'mid',
+    faqs: [
+      {
+        q: 'Why animated WebP instead of GIF?',
+        a: 'WebP is full-colour (no 256-palette cap), supports alpha, and typically lands at half the file size of an equivalent GIF for the same visible quality. Modern browsers and chat platforms (Discord, Slack, Telegram, modern WhatsApp) display animated WebP inline.',
+      },
+      {
+        q: 'Will animated WebP play everywhere a GIF plays?',
+        a: 'Almost. Chrome, Firefox, Safari (since 14), and Edge support animated WebP natively. Older browsers, some legacy email clients, and a small number of CMS uploaders still expect literal GIF — use the mp4-to-gif tool for those destinations.',
+      },
+      {
+        q: 'Will the audio survive?',
+        a: 'No — animated WebP, like GIF, has no audio track. The audio in the MP4 is discarded silently. For sound use a video container.',
+      },
+      {
+        q: 'How does file size compare to my source MP4?',
+        a: 'Animated WebP is typically 2-4x bigger than a well-encoded MP4 of the same clip — much closer than GIF, which is usually 5-10x. The gap shrinks further on flat-coloured or low-motion clips.',
+      },
+      {
+        q: 'What ffmpeg command do you run?',
+        a: 'Shown on the result page with a copy button — paste into your terminal if you prefer to keep the file local.',
+      },
+    ],
+    related: ['mp4-to-gif', 'mov-to-gif', 'webm-to-gif'],
+    preset: { fps: 10 },
+    // SEAN-76 — hand-tuned copy required because the default `gif` op copy
+    // hard-codes "animated GIF" semantics (palettegen, 256 colours, etc.) that
+    // don't apply to webp-anim. This row needs its own narrative about the
+    // GIF-vs-WebP tradeoff.
+    whenToUse: `Reach for MP4 to animated WebP when the destination is modern enough to render WebP — Discord, Slack, Telegram, modern WhatsApp, Chrome and Firefox web embeds, GitHub README files (since 2022), most Notion blocks, and every modern email client except a stubborn corner of Outlook. Animated WebP holds full colour rather than quantising to 256 like GIF, supports alpha cleanly, and typically lands at half the bytes for the same visible quality — which makes it the right choice when bandwidth or upload caps matter and the destination accepts the format. Audio is dropped (WebP has no sound track), so reach for a video container instead when the soundtrack matters. For older or stricter destinations that still expect literal .gif files, use the mp4-to-gif tool.`,
+    extendedHowItWorks: `Animated WebP encoding skips the palette-quantisation step entirely — that is the load-bearing difference from GIF. Stage one decodes the MP4 to raw frames using the H.264 (or HEVC, for newer devices) decoder. Stage two scales each frame to 480 px wide via the lanczos resampler and resamples to 10 FPS, which keeps file size manageable while preserving readable motion. Stage three encodes the frame sequence with libwebp_anim at quality 75, which produces a full-colour animated WebP file with no per-frame palette and no banding on gradients or skin tones — both of which GIF cannot represent. The audio track is discarded with -an. Output is a single .webp file containing the entire animation, recognised inline by every modern browser and chat platform.`,
+    commonPitfalls: [
+      {
+        q: 'My destination shows a broken-image icon instead of the animation.',
+        a: 'The destination doesn’t support animated WebP. Older email clients, legacy CMS uploaders, and a handful of social platforms (LinkedIn historically) still expect literal GIF. Use the mp4-to-gif tool for those — animated WebP is the modern alternative, not a universal replacement.',
+      },
+      {
+        q: 'My WebP is bigger than I expected.',
+        a: 'Animated WebP is much smaller than GIF for the same clip but still 2-4x the source MP4. WebP has no inter-frame compression as efficient as H.264. Drop FPS to 8 or width to 320 px in the advanced panel if the file size matters more than full-fidelity playback.',
+      },
+      {
+        q: 'Does Twitter / X display animated WebP inline?',
+        a: 'No — Twitter strips animated WebP and shows it as a static image. Use mp4-to-gif for X/Twitter, or upload the source MP4 directly (Twitter transcodes video natively and displays it inline as if it were a GIF).',
+      },
+      {
+        q: 'Why no audio?',
+        a: 'WebP, like GIF, was designed as an image format. Neither carries an audio track. If the soundtrack matters, render to a video container (MP4 or WebM) instead — both display inline on every modern chat platform.',
+      },
+    ],
+  },
+
+  {
+    // SEAN-76: mov & webm pulled out of this bulk row; they now have their
+    // own curated `mov-to-gif` / `webm-to-gif` rows above so the high-intent
+    // queries "convert mov to gif" and "convert webm to gif" land on a
+    // dedicated SEO page instead of being absorbed by the 14-input bulk row.
     slug: 'video-to-gif',
     operation: 'gif',
     inputFormats: [
-      'mov',
-      'webm',
       'mkv',
       'avi',
       'flv',

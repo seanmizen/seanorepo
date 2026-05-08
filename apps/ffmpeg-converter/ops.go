@@ -601,6 +601,31 @@ func RegisterOps() map[string]*Operation {
 		},
 	})
 	add(&Operation{
+		Name: "gif_to_webp_anim", Category: "image",
+		Description: "Animated WebP from a video (libwebp_anim, full-colour frames)",
+		DefaultExt:  ".webp",
+		Run: func(ctx context.Context, oc OpContext) error {
+			// libwebp_anim ships with most ffmpeg builds that include libwebp;
+			// it produces an animated WebP at full colour (no 256-colour
+			// palette quantisation like GIF) and typically half the bytes
+			// of an equivalent GIF.
+			if hasLibwebp {
+				return ffmpegRun(ctx, "-i", oc.Inputs[0],
+					"-vf", "fps=10,scale=480:-1:flags=lanczos",
+					"-c:v", "libwebp_anim", "-loop", "0", "-quality", "75",
+					"-an", oc.Output)
+			}
+			// Fallback: many homebrew ffmpeg builds don't include libwebp,
+			// in which case we still emit a valid animated webp via the
+			// older single-image libwebp encoder with -loop 0 (still animated
+			// at the container level, just slightly larger output).
+			return ffmpegRun(ctx, "-i", oc.Inputs[0],
+				"-vf", "fps=10,scale=480:-1:flags=lanczos",
+				"-c:v", "libwebp", "-loop", "0", "-quality", "75",
+				"-an", oc.Output)
+		},
+	})
+	add(&Operation{
 		Name: "gif_from_images", Category: "image",
 		Description: "Animated GIF from an image sequence (upload multiple files)",
 		DefaultExt:  ".gif",

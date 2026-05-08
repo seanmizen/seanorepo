@@ -212,6 +212,7 @@ export type GoOpName =
   | 'image_to_webp'
   | 'image_to_avif'
   | 'gif_from_video'
+  | 'gif_to_webp_anim'
   | 'gif_from_images'
   | 'blur'
   | 'sharpen'
