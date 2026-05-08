@@ -304,6 +304,7 @@ function RunningPanel({
         reverseSlug={reverse?.slug}
         reverseLabel={reverse?.label}
         reverseOperation={reverse?.operation}
+        operation={row.operation}
         initialFile={file}
         // SEAN-75: "Try another file" tears the panel back down to the
         // empty hero zone. Same hook the chip-row Cancel uses.
