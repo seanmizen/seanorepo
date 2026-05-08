@@ -11,8 +11,9 @@
     "test:dead-links": "ts-node -P tsconfig.test.json src/components/__tests__/dead-links.test.ts",
     "test:matrix": "ts-node -P tsconfig.test.json src/ops/matrix.test.ts",
     "test:sitemap": "ts-node -P tsconfig.test.json src/ops/sitemap.test.ts",
+    "test:redirects": "ts-node -P tsconfig.test.json src/ops/redirects.test.ts",
     "test:word-count": "ts-node -P tsconfig.test.json src/ops/word-count.test.ts",
-    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:word-count"
+    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count"
   },
   "dependencies": {
     "next": "15.1.6",
