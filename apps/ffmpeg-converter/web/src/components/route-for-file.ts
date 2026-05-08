@@ -398,3 +398,65 @@ function formatExtName(format: Format): string {
       return format;
   }
 }
+
+/**
+ * SEAN-105 — adaptive panel: pick the matrix row that best matches a dropped
+ * file given the current page's operation + output format.
+ *
+ * Resolution order:
+ *   1. Same-operation row whose `inputFormats` includes the dropped input AND
+ *      whose `outputFormat` matches `currentOutputFormat`. Prefer the direct
+ *      `${input}-to-${output}` slug, then any multi-input fallback.
+ *   2. Otherwise fall back to `matrixRowForFile(file)` (which honours
+ *      `PREFERRED_TARGET_BY_EXT` per the existing routing table). The output
+ *      format necessarily changes here — the panel re-derives `goOp` /
+ *      `outputExt` / `extraArgs` from whatever row this lands on.
+ *   3. Returns `null` when the file's extension isn't routable at all (no
+ *      matching matrix row anywhere). Caller should keep the existing row
+ *      unchanged — friendly fallback messaging is a separate ticket.
+ *
+ * `currentOperation` is consulted as a soft hint: a `/convert/*` page should
+ * prefer a `convert` row, a `/gif/*` page a `gif` row, etc. Without it, the
+ * helper would happily swap a `/convert/mov-to-mp4` panel into a `/gif/mp4-to-gif`
+ * panel just because the input matched, which surprises the user.
+ */
+export function adaptiveRowForFile(
+  file: File | { name: string },
+  currentOperation: OperationRow['operation'],
+  currentOutputFormat: Format,
+): MatrixRowMatch | null {
+  const ext = extOf(file.name);
+  if (!ext) return null;
+
+  const inputFormat = (EXT_TO_FORMAT[ext] ?? ext) as Format;
+
+  // Step 1 — find a same-operation row that lands on the same output format.
+  // The direct `${input}-to-${output}` slug wins (Google ranks it; user landed
+  // on the equivalent slug); multi-input rows like `video-to-mp4` are the
+  // fallback within this step.
+  const directSlug = `${inputFormat}-to-${formatExtName(currentOutputFormat)}`;
+  const directRow = MATRIX_BY_SLUG[directSlug];
+  if (
+    directRow &&
+    directRow.operation === currentOperation &&
+    directRow.outputFormat === currentOutputFormat &&
+    directRow.inputFormats.includes(inputFormat) &&
+    routeExistsForSlug(directSlug)
+  ) {
+    return { row: directRow, inputFormat };
+  }
+
+  for (const row of MATRIX) {
+    if (row.operation !== currentOperation) continue;
+    if (row.outputFormat !== currentOutputFormat) continue;
+    if (!row.inputFormats.includes(inputFormat)) continue;
+    if (!MATRIX_BY_SLUG[row.slug]) continue;
+    if (!routeExistsForSlug(row.slug)) continue;
+    return { row, inputFormat };
+  }
+
+  // Step 2 — no row preserves the current output format for this input.
+  // Fall back to the preferred-target row (`PREFERRED_TARGET_BY_EXT`).
+  // Output format changes; the panel re-derives everything from the new row.
+  return matrixRowForFile(file);
+}
