@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Operation } from '@/ops/types';
+import { AdvancedPanel } from './AdvancedPanel';
 import { type ConversionJob, DropZone } from './DropZone';
 import {
   deletePreset as deletePresetFromStorage,
@@ -72,6 +73,26 @@ export interface ConverterPanelProps {
    */
   operation?: Operation;
   /**
+   * SEAN-95 — when true (video `convert` rows only) the panel renders the
+   * Layer-3 Advanced disclosure below the dropzone. Per-row defaults flow
+   * via `advancedDefaults`.
+   */
+  showAdvancedPanel?: boolean;
+  /**
+   * SEAN-95 — defaults for the Advanced panel's controls. Sourced from the
+   * matrix row's `preset` (CRF + preset name) plus parsed-out hints from
+   * the displayed ffmpeg command (so the slider position matches what the
+   * copy-paste command shows on first paint).
+   */
+  advancedDefaults?: {
+    crf?: number;
+    preset?: string;
+    bitrate?: string;
+    fps?: string;
+    audio_bitrate?: string;
+    codec?: string;
+  };
+  /**
    * SEAN-75: pre-loaded file forwarded from the homepage drop zone. When set,
    * `<DropZone />` auto-fires the upload on mount so the user reaches the
    * converting/result UI without dropping a second time.
@@ -97,6 +118,8 @@ export function ConverterPanel({
   reverseLabel,
   reverseOperation,
   operation,
+  showAdvancedPanel,
+  advancedDefaults,
   initialFile,
   onReset,
 }: ConverterPanelProps) {
@@ -135,6 +158,41 @@ export function ConverterPanel({
     [ffmpegCommand, urlState],
   );
 
+  // SEAN-95 — Advanced disclosure. Mounted below the converter panel for
+  // video `convert` rows only. The panel itself is a pure URL-state writer:
+  // no callback up to the parent, the URL is the single source of truth and
+  // ConverterPanel re-reads on the resulting popstate / its own mount.
+  // BUT: replaceState doesn't fire popstate, so we expose a state-setter so
+  // AdvancedPanel can also push the change directly into urlState here. We
+  // wrap that into a child-callback to keep the URL ↔ React loop tight.
+  const advanced =
+    showAdvancedPanel && operation === 'convert' ? (
+      <AdvancedPanel
+        operation="convert"
+        ffmpegCommand={ffmpegCommand}
+        defaultCrf={advancedDefaults?.crf}
+        defaultPreset={advancedDefaults?.preset}
+        defaultBitrate={advancedDefaults?.bitrate}
+        defaultFps={advancedDefaults?.fps}
+        defaultAudioBitrate={advancedDefaults?.audio_bitrate}
+        defaultCodec={advancedDefaults?.codec}
+      />
+    ) : null;
+
+  // Re-sync urlState after Advanced panel writes — replaceState doesn't fire
+  // popstate, so we listen on a custom event the panel emits when it writes.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !operation) return;
+    const onChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      setUrlState(parseUrlState(params, operation));
+    };
+    window.addEventListener('ffmpeg-converter:url-state', onChange);
+    return () => {
+      window.removeEventListener('ffmpeg-converter:url-state', onChange);
+    };
+  }, [operation]);
+
   if (!job) {
     return (
       <>
@@ -158,21 +216,25 @@ export function ConverterPanel({
           onJobComplete={setJob}
           initialFile={initialFile}
         />
+        {advanced}
       </>
     );
   }
   return (
-    <ResultBlock
-      job={job}
-      ffmpegCommand={displayedCommand}
-      reverseSlug={reverseSlug}
-      reverseLabel={reverseLabel}
-      reverseOperation={reverseOperation}
-      onReset={() => {
-        setJob(null);
-        onReset?.();
-      }}
-    />
+    <>
+      <ResultBlock
+        job={job}
+        ffmpegCommand={displayedCommand}
+        reverseSlug={reverseSlug}
+        reverseLabel={reverseLabel}
+        reverseOperation={reverseOperation}
+        onReset={() => {
+          setJob(null);
+          onReset?.();
+        }}
+      />
+      {advanced}
+    </>
   );
 }
 
