@@ -1,9 +1,11 @@
 // FAQ block. Renders the per-row `faqs` array as native <details>/<summary>
-// pairs (no JS) plus a JSON-LD `FAQPage` schema block for SEO.
+// pairs (no JS).
 //
-// Pure server component. Phase 2 will add full schema.org coverage
-// (SoftwareApplication, HowTo, BreadcrumbList) — Phase 1 ships FAQPage only,
-// since it is the highest-leverage SERP feature (rich-result eligibility).
+// Pure server component. The FAQPage JSON-LD schema is emitted centrally
+// from <ToolPage /> via `@/lib/schemas` (SEAN-55) — alongside the other
+// three schema.org blocks (SoftwareApplication, HowTo, BreadcrumbList).
+// Keeping all four schemas in one place means future schema changes only
+// touch `lib/schemas.ts`, not this presentation component.
 
 import type { FAQ as FAQItem } from '@/ops/types';
 
@@ -15,21 +17,6 @@ export interface FAQProps {
 
 export function FAQ({ faqs, heading = 'Frequently asked' }: FAQProps) {
   if (!faqs || faqs.length === 0) return null;
-
-  // FAQPage schema — generated inline so the SERP eligibility ships with the
-  // page on first paint, not after hydration.
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: faqs.map((f) => ({
-      '@type': 'Question',
-      name: f.q,
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: f.a,
-      },
-    })),
-  };
 
   return (
     <section aria-label="Frequently asked questions">
@@ -53,11 +40,6 @@ export function FAQ({ faqs, heading = 'Frequently asked' }: FAQProps) {
           </details>
         ))}
       </div>
-      <script
-        type="application/ld+json"
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD schema is required to be a script tag with serialized JSON
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-      />
     </section>
   );
 }
