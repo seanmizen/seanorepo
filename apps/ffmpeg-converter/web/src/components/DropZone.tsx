@@ -82,11 +82,19 @@ export function DropZone({
   const [error, setError] = useState<string | null>(null);
   const [pendingName, setPendingName] = useState<string | null>(null);
 
+  // SEAN-81: track the in-flight AbortController so the effect cleanup can
+  // cancel the upload when the parent unmounts/remounts the panel (e.g. when
+  // the homepage user picks a different output format mid-conversion).
+  const abortRef = useRef<AbortController | null>(null);
+
   const runConversion = useCallback(
     async (file: File) => {
       setError(null);
       setStatus('uploading');
       setPendingName(file.name);
+
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       try {
         setStatus('converting');
@@ -95,15 +103,27 @@ export function DropZone({
           goOp,
           outputExt,
           extraArgs,
+          signal: controller.signal,
         });
         onJobComplete(job);
         setStatus('idle');
         setPendingName(null);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(msg);
+        // Aborted requests are expected when the parent remounts the panel
+        // (e.g. format change mid-conversion). Don't surface as an error.
+        const isAbort =
+          (e instanceof DOMException && e.name === 'AbortError') ||
+          (e instanceof Error && e.name === 'AbortError');
+        if (!isAbort) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setError(msg);
+        }
         setStatus('idle');
         setPendingName(null);
+      } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
       }
     },
     [goOp, outputExt, extraArgs, onJobComplete],
@@ -117,14 +137,22 @@ export function DropZone({
   // immediately on mount so the user doesn't have to interact a second time.
   // Each `initialFile` is auto-submitted exactly once — subsequent renders
   // (parent re-render, status changes) don't re-fire because we key on the
-  // File object reference.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runConversion
-  // captures props that mutate per-render; we want to fire only when the
-  // initialFile reference changes, not when callbacks rebuild.
+  // File object reference. (biome's useExhaustiveDependencies is off in the
+  // repo config, so we don't need a suppression comment for the missing
+  // `runConversion` dep — that's intentional, fire only on file change.)
+  //
+  // SEAN-81: on cleanup (component unmount, e.g. the parent remounted with a
+  // different `goOp`/`outputExt` because the user changed the output format),
+  // abort the in-flight request. Without this, the user changes their mind to
+  // .webm and we still finish the .mp4 upload they cancelled — wasted server
+  // compute and bandwidth.
   useEffect(() => {
     if (initialFile) {
       void runConversion(initialFile);
     }
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [initialFile]);
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {

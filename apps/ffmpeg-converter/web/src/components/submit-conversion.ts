@@ -25,12 +25,19 @@ export interface SubmitConversionArgs {
   extraArgs?: Record<string, string>;
   /** Injectable for tests. Defaults to global `fetch`. */
   fetchImpl?: typeof fetch;
+  /**
+   * SEAN-81: optional abort signal. The homepage in-place flow uses this to
+   * cancel the in-flight upload when the user picks a different output format
+   * mid-conversion (or clicks Cancel). The backend handles connection close
+   * cleanly — partial uploads are dropped on abort.
+   */
+  signal?: AbortSignal;
 }
 
 export async function submitConversion(
   args: SubmitConversionArgs,
 ): Promise<ConversionJob> {
-  const { file, goOp, outputExt, extraArgs, fetchImpl } = args;
+  const { file, goOp, outputExt, extraArgs, fetchImpl, signal } = args;
   const f = fetchImpl ?? fetch;
 
   const form = new FormData();
@@ -43,7 +50,11 @@ export async function submitConversion(
     }
   }
 
-  const res = await f('/api/convert', { method: 'POST', body: form });
+  const res = await f('/api/convert', {
+    method: 'POST',
+    body: form,
+    signal,
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `${res.status} ${res.statusText}`);
