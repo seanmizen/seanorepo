@@ -5,9 +5,10 @@
  * or more static pages under `/convert/...`, `/compress/...`, `/extract-audio/...`,
  * `/gif/...`, etc.
  *
- * Schema mirrors §6 of the original vision spec (`spec-2026-05-05.md`, preserved
- * in git history at commit 058ab8c) — extended with the metadata that Phase 2
- * page generation needs (intent volume, FAQ blocks, related-page slugs, presets).
+ * Schema mirrors §6 of the original vision spec (folded into `phased-spec.md`;
+ * the dated source doc lives only in git history at commit 058ab8c) — extended
+ * with the metadata that Phase 2 page generation needs (intent volume, FAQ
+ * blocks, related-page slugs, presets).
  *
  * The Go backend's op identifiers (`transcode`, `transcode_webm`, `gif_from_video`,
  * etc.) live in `apps/ffmpeg-converter/ops.go`. The `goOp` field on each row binds
