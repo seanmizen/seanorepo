@@ -86,6 +86,11 @@ export function buildExtraArgs(
   if (p.trimDurationSec !== undefined) {
     args.duration = String(p.trimDurationSec);
   }
+  // SEAN-95 — Advanced disclosure preset hints. `videoBitrate` becomes the
+  // backend `bitrate` arg; `videoCodec` becomes the backend `codec` arg.
+  // Both stay snake_case-ish on the wire to match the Go op's `arg()` keys.
+  if (p.videoBitrate !== undefined) args.bitrate = p.videoBitrate;
+  if (p.videoCodec !== undefined) args.codec = p.videoCodec;
   return Object.keys(args).length > 0 ? args : undefined;
 }
 

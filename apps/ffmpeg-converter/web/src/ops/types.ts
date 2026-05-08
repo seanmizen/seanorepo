@@ -285,6 +285,20 @@ export interface OperationPreset {
    * Absent = use full remaining input.
    */
   trimDurationSec?: number;
+  /**
+   * SEAN-95 — explicit video bitrate (`500k`, `2M`, etc.). When set on the
+   * row this becomes the default value in the Advanced panel's bitrate field;
+   * the user can override per-conversion via URL state. Bitrate overrides
+   * CRF on the backend when both are present.
+   */
+  videoBitrate?: string;
+  /**
+   * SEAN-95 — explicit video codec name (`libx264`, `libx265`, `libvpx-vp9`,
+   * etc.). Hidden behind the "Show everything" power-user toggle; the
+   * format-appropriate codec is chosen automatically by the backend op when
+   * this is unset.
+   */
+  videoCodec?: string;
 }
 
 /**
