@@ -334,6 +334,31 @@ export interface OperationRow {
     /** Short button label as it appears on the homepage pill. */
     label: string;
   };
+
+  /**
+   * SEAN-60: Optional ~60-100 word "When to use this" paragraph rendered
+   * directly under the converter panel. Hand-tuned for flagship/head rows;
+   * tail rows fall back to a per-operation default in `./copy.ts` that is
+   * varied by row metadata (formats, codecs, op type) so no two pages get
+   * identical body copy — Google's duplicate-content filter is unforgiving
+   * for thin templated pages.
+   */
+  whenToUse?: string;
+
+  /**
+   * SEAN-60: Optional list of common pitfalls — same Q&A shape as `faqs`
+   * but rendered in a separate "Watch out for" section. Hand-tuned content
+   * for flagship rows; tail rows fall back to per-op defaults.
+   */
+  commonPitfalls?: FAQ[];
+
+  /**
+   * SEAN-60: Optional ~80-150 word extension to the "How it works" block
+   * with format/codec-specific detail (e.g. palette quantisation for GIF
+   * pages, codec-copy semantics for compatible video pairs). Falls back
+   * to a per-operation default if absent.
+   */
+  extendedHowItWorks?: string;
 }
 
 /**
