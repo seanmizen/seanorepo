@@ -227,3 +227,70 @@ If this ships and Sean wants to prove it's working:
 
 None of these need a tracking pixel — they can live in localStorage + one anonymous
 counter endpoint on the Go backend.
+
+## Decision records
+
+### SEAN-81 — homepage drop fires conversion immediately
+
+**Status:** locked, 2026-05-08.
+
+**Question:** when a file is dropped on the homepage (post-#75 in-place flow,
+post-#79 format picker), should the conversion fire automatically using the
+inferred default output format, or should the picker stage gate the upload
+until the user clicks Convert?
+
+**Decision:** auto-fire. The homepage drop zone runs the conversion immediately
+on drop using `routeForFile`'s preferred-target table (mov→mp4, mp4→webm,
+png→webp, heic→jpg, audio→wav). The picker becomes a non-blocking affordance
+shown alongside the converting/result UI: a "Converting to .X — change format?"
+chip row + Cancel button. Picking a different chip aborts the in-flight request
+and re-fires with the new row (panel remounts on `row.slug` key change, the
+in-flight `fetch` is cancelled by `AbortController` cleanup).
+
+**Why:** the homepage is the impatient-arrival path. Someone who lands on `/`
+and drops a `.mov` overwhelmingly wants the canonical default (`.mp4`). Forcing
+a third tap (drop → click chip → click Convert) for everyone, just so the
+minority who want `.webm` instead of `.mp4` can re-pick, inverts the
+probability. The two-step happy path ("drop, download") is what the strategy
+TL;DR (line 12 above) commits to: "starts converting before the user has read
+the page". The picker remains for the minority — visible and one-tap — but
+doesn't gate the majority case.
+
+**SEO arrivals are unaffected.** Slug pages (`/convert/mov-to-mp4`,
+`/compress/compress-mp4`, etc.) keep their existing input-locked drop zone
+with no picker — the slug owns intent. This decision is homepage-only.
+
+**Cancel semantics.** The "Cancel" button on the converting banner aborts the
+in-flight upload via `AbortController` and returns the user to the empty hero
+drop zone (same state as a fresh page load). The "Change format" chips abort
+the in-flight upload AND re-fire with the picked row's `goOp` and output ext —
+no re-drop required, the same File object is reused.
+
+**Trade-offs accepted:**
+
+- The user who wanted `.webm` from a `.mov` will see the conversion start as
+  `.mp4` first, then re-pick. Wasted server-side compute is bounded by the
+  abort window — typically sub-second on the click. The Go backend handles
+  cancellation cleanly (`fetch` abort closes the multipart stream; `jobs.go`
+  cleans up partial uploads on connection close).
+- Edge case: very fast conversions (small files, thumbnails) might complete
+  before the user reads the "change format" affordance. Acceptable — they
+  still got a working download in the default format, "Try another file" on
+  the result block lets them re-do it.
+
+**Files:**
+
+- `apps/ffmpeg-converter/web/src/components/HeroDrop.tsx` — drops the picking
+  stage; adds the converting-state banner with chips + cancel.
+- `apps/ffmpeg-converter/web/src/components/DropZone.tsx` — passes
+  `AbortSignal` through to `submitConversion`; aborts on unmount.
+- `apps/ffmpeg-converter/web/src/components/submit-conversion.ts` — accepts
+  optional `signal: AbortSignal`.
+- `apps/ffmpeg-converter/web/src/components/__tests__/HeroDrop.test.ts` —
+  asserts drop fires exactly one request with no intermediate click.
+
+**Re-revisit if:** time-to-first-download metrics show >5 % of homepage drops
+get cancelled in the first second (suggests users were going somewhere else
+and the auto-fire is wasting their bandwidth + ours). At that point, flip to
+a 1-click confirm gate (single button per format, no separate Convert button)
+and re-measure.

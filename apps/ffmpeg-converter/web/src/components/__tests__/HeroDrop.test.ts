@@ -290,3 +290,91 @@ describe('SEAN-79 outputsForExt — homepage format picker options', () => {
     );
   });
 });
+
+describe('SEAN-81 homepage drop — auto-fires immediately', () => {
+  it('submitConversion forwards an AbortSignal to fetch', async () => {
+    // Implementation note: the homepage in-place flow needs cancellation.
+    // When the user picks a different output format mid-conversion, the
+    // panel remounts and DropZone's effect cleanup aborts the in-flight
+    // request via AbortController. submitConversion has to forward the
+    // signal verbatim or the abort never reaches `fetch`.
+    let observedSignal: AbortSignal | null | undefined;
+    const fetchImpl = async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      observedSignal = init?.signal as AbortSignal | null | undefined;
+      return new Response(
+        JSON.stringify({ job_id: 'x', output: '/jobs/x/output' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    };
+    const controller = new AbortController();
+    await submitConversion({
+      file: fakeFile('a.mov'),
+      goOp: 'transcode',
+      outputExt: 'mp4',
+      fetchImpl: fetchImpl as typeof fetch,
+      signal: controller.signal,
+    });
+    assert.equal(
+      observedSignal,
+      controller.signal,
+      'fetch must receive the same AbortSignal we passed to submitConversion',
+    );
+  });
+
+  it('rejects with an AbortError when the signal is aborted mid-flight', async () => {
+    // The "change format mid-conversion" flow relies on `fetch` honouring
+    // the signal: when DropZone's cleanup calls `controller.abort()`, the
+    // pending fetch must reject so submitConversion's catch block can
+    // swallow the AbortError without surfacing it as a real conversion
+    // failure to the user.
+    const controller = new AbortController();
+    const fetchImpl = async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      // Simulate a slow upload — wait until the signal fires, then reject.
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_, reject) => {
+        signal?.addEventListener('abort', () => {
+          const err = new DOMException('Aborted', 'AbortError');
+          reject(err);
+        });
+      });
+    };
+    const promise = submitConversion({
+      file: fakeFile('a.mov'),
+      goOp: 'transcode',
+      outputExt: 'mp4',
+      fetchImpl: fetchImpl as typeof fetch,
+      signal: controller.signal,
+    });
+    controller.abort();
+    await assert.rejects(promise, (err: Error) => err.name === 'AbortError');
+  });
+
+  it('drop default for every flagship input lines up with strategy targets', () => {
+    // STRATEGY.md SEAN-81 decision record commits to: mov→mp4, mp4→webm,
+    // png→webp, heic→jpg, audio→wav. The auto-fire flow must agree —
+    // otherwise the doc and the code have drifted.
+    const expected: Array<[string, string]> = [
+      ['mov', 'mp4'],
+      ['mp4', 'webm'],
+      ['png', 'webp'],
+      ['heic', 'jpg'],
+      ['wav', 'wav'], // matrix has no audio→audio convert; falls to normalize.
+      ['mp3', 'wav'],
+    ];
+    for (const [ext, target] of expected) {
+      const match = matrixRowForFile({ name: `a.${ext}` });
+      assert.ok(match, `no match for .${ext} — STRATEGY.md says there is one`);
+      assert.equal(
+        match.row.outputFormat,
+        target,
+        `auto-fire default for .${ext} (${match.row.outputFormat}) does not match STRATEGY.md (${target})`,
+      );
+    }
+  });
+});
