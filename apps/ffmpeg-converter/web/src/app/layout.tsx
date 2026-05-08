@@ -25,23 +25,10 @@ export default function RootLayout({
             >
               Sean&apos;s Converter
             </Link>
-            {/* /pricing and /docs are placeholder routes until Phase 4 ships
-                the real pages — see SEAN-51. Do not add a nav link here
-                without first creating its route. */}
-            <nav aria-label="Primary">
-              <ul className="flex items-center gap-5 text-sm text-gray-400">
-                <li>
-                  <Link href="/pricing" className="hover:text-gray-100">
-                    Pricing
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/docs" className="hover:text-gray-100">
-                    Docs
-                  </Link>
-                </li>
-              </ul>
-            </nav>
+            {/* SEAN-82 — Pricing/Docs nav links removed until Phase 4 ships the
+                real pages. The conversion funnel is the homepage drop-zone;
+                routing users to placeholder pages is pure friction. Re-add a
+                primary nav once /pricing and /docs have content worth visiting. */}
           </div>
         </header>
 
