@@ -861,6 +861,159 @@ func TestConvert_RealFfmpeg_AudioOgg_VorbisCodec(t *testing.T) {
 	}
 }
 
+// TestConvert_RealFfmpeg_GifFromVideo_DefaultWidth verifies that gif_from_video
+// produces a 480 px-wide GIF by default — matching the ffmpeg command advertised
+// in the matrix (web/src/ops/matrix.ts). Regression test for the bug where the
+// backend was hard-coded to scale=96:-1 while the copy-button told users 480.
+func TestConvert_RealFfmpeg_GifFromVideo_DefaultWidth(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	ffprobePath, ffprobeErr := exec.LookPath("ffprobe")
+	if ffprobeErr != nil {
+		t.Skip("ffprobe not on PATH – needed to verify gif width")
+	}
+
+	ts := newCoreServer(t)
+
+	// Generate a 1-second 1920x1080 synthetic video as input. This is wide
+	// enough that scale=480:-1 will downscale (proving the scale filter ran)
+	// but won't accidentally land on 96.
+	tmpDir := t.TempDir()
+	inputPath := tmpDir + "/input.mp4"
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "color=c=blue:s=1920x1080:r=10:d=1",
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "40",
+		"-pix_fmt", "yuv420p", inputPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("could not generate test video: %v\n%s", err, out)
+	}
+	inputData, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("read input: %v", err)
+	}
+
+	code, body := doConvert(t, ts, "gif_from_video",
+		map[string][]byte{"input.mp4": inputData}, nil, "")
+	if code != http.StatusOK {
+		t.Fatalf("want 200, got %d; body: %s", code, body)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(body, &resp)
+	if resp["status"] != "done" {
+		t.Errorf("want status=done, got %v", resp["status"])
+	}
+
+	dlResp, err := http.Get(ts.URL + resp["output"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dlResp.Body.Close()
+	gifBytes, _ := io.ReadAll(dlResp.Body)
+	if len(gifBytes) < 6 {
+		t.Fatalf("output too small to be a GIF (%d bytes)", len(gifBytes))
+	}
+	// GIF header is "GIF87a" or "GIF89a".
+	if !bytes.HasPrefix(gifBytes, []byte("GIF8")) {
+		t.Fatalf("output is not a GIF: header=%q", gifBytes[:6])
+	}
+	gifPath := tmpDir + "/output.gif"
+	if err := os.WriteFile(gifPath, gifBytes, 0o644); err != nil {
+		t.Fatalf("write gif: %v", err)
+	}
+
+	probe := exec.Command(ffprobePath,
+		"-v", "error", "-select_streams", "v:0",
+		"-show_entries", "stream=width",
+		"-of", "json", gifPath)
+	probeOut, err := probe.Output()
+	if err != nil {
+		t.Fatalf("ffprobe failed: %v", err)
+	}
+	var probed struct {
+		Streams []struct {
+			Width int `json:"width"`
+		} `json:"streams"`
+	}
+	if err := json.Unmarshal(probeOut, &probed); err != nil {
+		t.Fatalf("parse ffprobe output: %v", err)
+	}
+	if len(probed.Streams) == 0 {
+		t.Fatalf("ffprobe found no video stream in gif")
+	}
+	if probed.Streams[0].Width != 480 {
+		t.Errorf("want gif width=480 (matrix advertises scale=480:-1), got %d", probed.Streams[0].Width)
+	}
+}
+
+// TestConvert_RealFfmpeg_GifFromVideo_WidthOverride verifies that the width
+// arg overrides the 480 default. Locks in the read-from-extraArgs-if-present
+// behaviour the AC asks for.
+func TestConvert_RealFfmpeg_GifFromVideo_WidthOverride(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	ffprobePath, ffprobeErr := exec.LookPath("ffprobe")
+	if ffprobeErr != nil {
+		t.Skip("ffprobe not on PATH – needed to verify gif width")
+	}
+
+	ts := newCoreServer(t)
+	tmpDir := t.TempDir()
+	inputPath := tmpDir + "/input.mp4"
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "color=c=blue:s=1920x1080:r=10:d=1",
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "40",
+		"-pix_fmt", "yuv420p", inputPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("could not generate test video: %v\n%s", err, out)
+	}
+	inputData, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("read input: %v", err)
+	}
+
+	code, body := doConvert(t, ts, "gif_from_video",
+		map[string][]byte{"input.mp4": inputData},
+		map[string]string{"width": "240"}, "")
+	if code != http.StatusOK {
+		t.Fatalf("want 200, got %d; body: %s", code, body)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(body, &resp)
+
+	dlResp, err := http.Get(ts.URL + resp["output"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dlResp.Body.Close()
+	gifBytes, _ := io.ReadAll(dlResp.Body)
+	gifPath := tmpDir + "/output.gif"
+	if err := os.WriteFile(gifPath, gifBytes, 0o644); err != nil {
+		t.Fatalf("write gif: %v", err)
+	}
+
+	probe := exec.Command(ffprobePath,
+		"-v", "error", "-select_streams", "v:0",
+		"-show_entries", "stream=width",
+		"-of", "json", gifPath)
+	probeOut, err := probe.Output()
+	if err != nil {
+		t.Fatalf("ffprobe failed: %v", err)
+	}
+	var probed struct {
+		Streams []struct {
+			Width int `json:"width"`
+		} `json:"streams"`
+	}
+	_ = json.Unmarshal(probeOut, &probed)
+	if len(probed.Streams) == 0 || probed.Streams[0].Width != 240 {
+		t.Errorf("want gif width=240 (override), got %+v", probed.Streams)
+	}
+}
+
 // ── /billing/me (billing disabled) ───────────────────────────────────────────
 
 func TestBillingMe_BillingDisabled(t *testing.T) {
