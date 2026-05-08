@@ -1,29 +1,51 @@
 'use client';
 
-// Above-the-fold drop zone. Detects file type on drop / select and routes to
-// the canonical tool page (e.g. .mov → /convert/mov-to-mp4). Acts as the
-// homepage's primary CTA.
+// Above-the-fold homepage drop zone.
 //
-// Routing-only in Phase 1 — actual conversion happens on the destination tool
-// page (Phase 2). We don't try to start the upload here because the tool page
-// owns the conversion UI and result block.
+// SEAN-75: dropping a file used to immediately `router.push()` to the slug
+// page — but the `File` object lived in this component's memory and never
+// made it to the destination, so the user had to drop it a second time. The
+// cancellation rate at that step was the central UX failure of the funnel.
+//
+// New behaviour (Option A — KISS): the homepage runs the conversion in
+// place. We pick the matrix row using the same preference table as the old
+// `routeForFile`, mount the same `<ConverterPanel />` the slug pages use, and
+// hand it the dropped File via `initialFile` so it auto-fires the upload on
+// mount. No navigation, no lost File, one drop.
+//
+// SEO is unaffected: someone landing on `/convert/mov-to-mp4` directly from
+// Google still gets the slug page with its input-locked drop zone — those
+// pages are unchanged.
 
-import { useRouter } from 'next/navigation';
 import { type DragEvent, useRef, useState } from 'react';
-import { extOf, routeForFile } from './route-for-file';
+import { ConverterPanel } from './ConverterPanel';
+import {
+  buildAcceptLabel,
+  buildAcceptString,
+  buildExtraArgs,
+  findReverse,
+  formatToExt,
+} from './converter-row-args';
+import { extOf, type MatrixRowMatch, matrixRowForFile } from './route-for-file';
+
+interface ActiveJob {
+  file: File;
+  match: MatrixRowMatch;
+}
 
 export function HeroDrop() {
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [active, setActive] = useState<ActiveJob | null>(null);
 
   const handleFile = (file: File) => {
-    // SEAN-50: routeForFile only returns paths that resolve to a real route
-    // (matrix slug + implemented operation). Anything else falls through to
-    // the friendly error rather than routing the user to a 404.
-    const target = routeForFile(file);
-    if (!target) {
+    // SEAN-50 / SEAN-75: matrixRowForFile only resolves to rows whose
+    // operation route is actually implemented (matrix slug + registry gate).
+    // Anything else surfaces the friendly error — we don't drop the user
+    // into a converter panel for an op we can't run.
+    const match = matrixRowForFile(file);
+    if (!match) {
       const ext = extOf(file.name);
       setError(
         ext
@@ -33,7 +55,7 @@ export function HeroDrop() {
       return;
     }
     setError(null);
-    router.push(target);
+    setActive({ file, match });
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -51,6 +73,32 @@ export function HeroDrop() {
   const handleDragLeave = () => setDragOver(false);
 
   const handleClick = () => inputRef.current?.click();
+
+  // Conversion in flight (or done) — render the same ConverterPanel the slug
+  // pages use, with the file pre-loaded so the upload auto-fires on mount.
+  if (active) {
+    const { row } = active.match;
+    const reverse = findReverse(row);
+    return (
+      <ConverterPanel
+        goOp={row.goOp}
+        outputExt={formatToExt(row.outputFormat)}
+        accept={buildAcceptString(row)}
+        acceptLabel={buildAcceptLabel(row)}
+        extraArgs={buildExtraArgs(row)}
+        ffmpegCommand={row.ffmpegCommand}
+        reverseSlug={reverse?.slug}
+        reverseLabel={reverse?.label}
+        reverseOperation={reverse?.operation}
+        initialFile={active.file}
+        // SEAN-75: "Try another file" on the homepage tears the converter
+        // back down to the original hero drop zone, so the user lands on a
+        // clean, recognisable homepage state instead of an empty slug-shaped
+        // panel.
+        onReset={() => setActive(null)}
+      />
+    );
+  }
 
   return (
     <div className="w-full">
