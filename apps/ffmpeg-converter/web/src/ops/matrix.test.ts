@@ -215,15 +215,22 @@ describe('SEAN-57 matrix coverage — Phase 2 pSEO floor', () => {
     }
   });
 
-  it('gif covers ≥15 video → gif pages', () => {
+  it('gif covers ≥15 video → animated-image pages', () => {
     const gifPages = pagesByOperation('gif');
     assert.ok(
       gifPages.length >= 15,
       `expected ≥15 gif pages, got ${gifPages.length}`,
     );
-    // Every page output must be the animated `gif` format.
+    // Every page output must be an animated-image format. The `gif` operation
+    // covers both literal GIF output and animated WebP output (per SEAN-76 —
+    // webp-anim is the modern half-the-bytes alternative to GIF and uses the
+    // same video → animated-image pipeline).
+    const ANIMATED_IMAGE_OUTPUTS = new Set(['gif', 'webp-anim', 'apng']);
     for (const page of gifPages) {
-      assert.equal(page.outputFormat, 'gif');
+      assert.ok(
+        ANIMATED_IMAGE_OUTPUTS.has(page.outputFormat),
+        `gif op page ${page.slug} has non-animated-image output: ${page.outputFormat}`,
+      );
     }
   });
 });
