@@ -23,8 +23,9 @@
 
 import Link from 'next/link';
 import { buildToolPageSchemas } from '@/lib/schemas';
+import { resolvePageCopy } from '@/ops/copy';
 import { MATRIX_BY_SLUG } from '@/ops/matrix';
-import type { OperationRow } from '@/ops/types';
+import type { OperationRow, ResolvedPage } from '@/ops/types';
 import { ConverterPanel } from './ConverterPanel';
 import { FAQ } from './FAQ';
 import { JsonLd } from './JsonLd';
@@ -32,14 +33,30 @@ import { pathForSlug, routeExistsForSlug } from './route-registry';
 
 export interface ToolPageProps {
   row: OperationRow;
+  /**
+   * SEAN-60 — optional resolved (input, output) pair used to vary the body
+   * copy. When present the per-input fallback copy uses the actual input
+   * format from the URL; absent, copy falls back to the row's first input.
+   * Pages routed via `/convert/[slug]` etc. don't pass this today (the
+   * route is keyed on slug, not input format), so the copy resolves against
+   * the row's flagship input — which is fine for the head-term flagship
+   * pages and acceptable for the bulk multi-input rows whose body still
+   * varies by output format.
+   */
+  page?: ResolvedPage;
 }
 
-export function ToolPage({ row }: ToolPageProps) {
+export function ToolPage({ row, page }: ToolPageProps) {
   const accept = buildAcceptString(row);
   const acceptLabel = buildAcceptLabel(row);
   const reverse = findReverse(row);
   const siblings = resolveSiblings(row);
   const extraArgs = buildExtraArgs(row);
+
+  // SEAN-60 — resolved body copy. Row-level overrides win; otherwise the
+  // per-operation defaults compose paragraphs from row metadata so no two
+  // pages share the same body verbatim (Google's duplicate-content filter).
+  const copy = resolvePageCopy(row, page);
 
   // SEAN-55 — emit four schema.org JSON-LD blocks per tool page
   // (SoftwareApplication, HowTo, FAQPage, BreadcrumbList). Server-rendered
@@ -76,6 +93,18 @@ export function ToolPage({ row }: ToolPageProps) {
         />
       </section>
 
+      {/* SEAN-60 — "When to use this" paragraph. Renders directly under the
+          converter so users who scroll past the drop zone hit the load-bearing
+          context immediately. Content varies per (op, from, to) tuple. */}
+      <section className="mb-10" aria-label="When to use this">
+        <h2 className="mb-3 font-semibold text-gray-100 text-xl">
+          When to use this
+        </h2>
+        <p className="text-gray-400 text-sm leading-relaxed">
+          {copy.whenToUse}
+        </p>
+      </section>
+
       {/* Three sibling links — internal-link block per spec §7.2 */}
       {siblings.length > 0 && (
         <section className="mb-12" aria-label="Related conversions">
@@ -107,15 +136,36 @@ export function ToolPage({ row }: ToolPageProps) {
         <FAQ faqs={row.faqs} />
       </section>
 
-      {/* Tiny "How it works" block */}
-      <HowItWorks row={row} />
+      {/* SEAN-60 — "Watch out for" / common pitfalls block. Same shape as
+          the FAQ section but separated visually so the load-bearing
+          gotchas don't get buried under standard FAQ entries. */}
+      {copy.commonPitfalls.length > 0 && (
+        <section className="mb-12">
+          <FAQ faqs={copy.commonPitfalls} heading="Watch out for" />
+        </section>
+      )}
+
+      {/* "How it works" block — extended with op/format-specific detail */}
+      <HowItWorks row={row} extendedHowItWorks={copy.extendedHowItWorks} />
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────── HOW IT WORKS ────────
 
-function HowItWorks({ row }: { row: OperationRow }) {
+function HowItWorks({
+  row,
+  extendedHowItWorks,
+}: {
+  row: OperationRow;
+  /**
+   * SEAN-60 — per-row deep dive (~80-150 words). Renders between the
+   * generic "drop a file / one-hour delete" paragraphs and the backend-op
+   * tag so users get the format-specific detail without breaking the
+   * canonical "how it works" frame.
+   */
+  extendedHowItWorks: string;
+}) {
   // Per spec §7.2 the "how it works" block is intentionally tiny — wasm vs
   // server lane explanation + file deletion policy. Phase 6 will swap in the
   // wasm copy on rows that run client-side; until then everything is server.
@@ -131,6 +181,7 @@ function HowItWorks({ row }: { row: OperationRow }) {
           on our server, hand you back the result, and delete both files one
           hour later.
         </p>
+        <p>{extendedHowItWorks}</p>
         <p>
           The exact command we run is shown above with a copy button — paste it
           into your own terminal if you prefer to keep the file on your machine.

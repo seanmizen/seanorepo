@@ -455,6 +455,29 @@ const CURATED_MATRIX: OperationRow[] = [
     faqs: convertFaqs('mov', 'mp4'),
     related: ['mp4-to-mov', 'mov-to-webm', 'compress-mp4'],
     flagship: { rank: 2, label: 'MOV → MP4' },
+    // SEAN-60: hand-tuned copy for flagship rank-2 page. Talks specifically
+    // about iPhone HEVC-in-MOV vs widely-supported H.264-in-MP4 — the load-
+    // bearing reason this conversion exists at all.
+    whenToUse: `Reach for MOV to MP4 when you've got an iPhone or Final Cut export and the destination wants something more universal. Since iOS 11 every iPhone records into HEIC stills and HEVC-inside-MOV video by default, which Apple devices and modern Macs play fine — but Discord previews, Google Slides embeds, Outlook attachment thumbnails, older Windows builds, and a long tail of CMS uploaders still expect H.264 inside MP4. Converting unwraps the QuickTime container, re-encodes the HEVC stream to H.264 (or stream-copies it where the source already used H.264), and writes a fresh MP4 with the moov atom up front so playback starts instantly.`,
+    extendedHowItWorks: `The encoder reads the QuickTime container, demuxes the video and audio streams, and re-encodes the video to H.264 with libx264 if the source uses HEVC (iPhone default). When the source MOV already wraps H.264 — common for Final Cut renders — we stream-copy the video to skip the re-encode and finish in a few seconds. Audio is re-encoded to AAC at 64 kbps regardless, since MOV happily holds AAC but the bitrate is sometimes higher than MP4 needs. The result is a fast-start MP4 with the moov atom at the front of the file, so progressive download and HTML5 video playback start instantly without waiting for the full file. Subtitles and chapter markers ride through where present.`,
+    commonPitfalls: [
+      {
+        q: 'My MOV is from an iPhone — will it work?',
+        a: 'Yes. iPhone MOVs use HEVC (H.265) by default since iOS 11, which we re-encode to H.264 so the result plays everywhere Discord, Outlook, and old Windows builds expect MP4 to play.',
+      },
+      {
+        q: 'Will the audio sync drift?',
+        a: 'No. We preserve the source timestamps, so audio sync rides through identically. Drift only shows up on broken sources where the MOV header already disagreed with the actual stream.',
+      },
+      {
+        q: 'Is the MP4 fast-start (moov atom up front)?',
+        a: 'Yes. We move the moov atom to the start of the file so HTML5 video and progressive download start playback instantly without waiting for the full file.',
+      },
+      {
+        q: 'Will the file be smaller?',
+        a: 'Slightly. HEVC is more efficient than H.264 at the same quality, so a re-encoded MP4 is typically 10-40% larger than the source MOV. Use compress afterwards if size matters more than universal compatibility.',
+      },
+    ],
   },
 
   // Reverse direction (matches the "reverse-link" convention in spec §7.2).
@@ -853,6 +876,29 @@ const CURATED_MATRIX: OperationRow[] = [
     related: ['mov-to-gif', 'webm-to-gif', 'mp4-to-webp-anim'],
     flagship: { rank: 3, label: 'MP4 → GIF' },
     preset: { fps: 10 },
+    // SEAN-60: hand-tuned copy for flagship rank-3 GIF page. Talks
+    // specifically about GIF's 256-colour palette quantisation — the load-
+    // bearing technical detail this format demands.
+    whenToUse: `Reach for MP4 to GIF when you need an inline animation that plays without a video player — Slack messages, Discord chats, Twitter timelines, GitHub README files, Stack Overflow answers, Reddit comments, internal wikis. GIF carries no audio and tops out at 256 colours per palette, so it suits short low-detail loops more than full-fidelity clips. Expect the GIF to weigh five to ten times the source MP4 since GIF has no inter-frame compression — every frame stores a full bitmap rather than a delta from the previous frame. We default to 10 FPS at 480 px wide, which keeps file size manageable while preserving readable motion. For longer animations or higher fidelity, animated WebP or a hosted MP4 wins on size and looks cleaner on flat backgrounds.`,
+    extendedHowItWorks: `GIF encoding is a two-pass palette operation. Pass one runs ffmpeg's palettegen filter over the entire MP4 to pick the optimal 256 colours for that specific clip — sampling every frame so the chosen palette covers the full colour range, not just the first few seconds. Pass two encodes each frame using paletteuse with Floyd-Steinberg dithering, which scatters quantisation error across neighbouring pixels so flat regions like skies and skin tones don't band visibly. The lanczos scaler resizes each frame to 480 px wide before palette mapping. Increase FPS for smoother motion (24 FPS produces near-video smoothness but doubles the file size) or width for more detail (720 px roughly doubles size again). Both parameters trade size for fidelity linearly.`,
+    commonPitfalls: [
+      {
+        q: 'My GIF looks pixelated or banded — why?',
+        a: 'GIF is hard-capped at 256 colours per palette. Our palettegen picks the optimal 256 for your clip, but gradients, skin tones, and flat backgrounds still band slightly. For full-colour animation, use animated WebP — most modern destinations accept it.',
+      },
+      {
+        q: 'My GIF is enormous — way bigger than the MP4.',
+        a: 'Expected. GIF stores every frame as a full bitmap (no inter-frame compression), so a 5-second clip can balloon 5-10x. Drop FPS to 8 or width to 320 px in the advanced panel, or switch to animated WebP if the destination accepts it.',
+      },
+      {
+        q: 'Will Discord / Slack / Twitter play this inline?',
+        a: 'Yes — GIF is the universal inline-animation format. Discord and Slack both autoplay GIFs in chat; Twitter converts uploaded GIFs to MP4 internally but still displays them inline.',
+      },
+      {
+        q: 'Can I add audio to the GIF?',
+        a: 'No — GIF format has no audio track. If you need sound with your loop, render to animated WebP (which also has no audio) plus a separate audio track, or use a video container.',
+      },
+    ],
   },
   {
     slug: 'video-to-gif',
