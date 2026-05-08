@@ -109,7 +109,10 @@ function homepageLinks(): string[] {
   // PREFERRED_TARGET_BY_EXT table. We can't import that table directly (it's
   // module-private), so we exercise routeForFile() with a representative file
   // per extension.
+  // SEAN-78: extended to cover the audio/image families and the rare video
+  // formats (3gp/ts/mts/m2ts/ogv/vob/avif/webp) the matrix supports.
   const candidateExts = [
+    // video
     'mov',
     'webm',
     'mkv',
@@ -120,6 +123,13 @@ function homepageLinks(): string[] {
     'mpeg',
     'mpg',
     'mp4',
+    '3gp',
+    'ts',
+    'mts',
+    'm2ts',
+    'ogv',
+    'vob',
+    // image
     'jpg',
     'jpeg',
     'png',
@@ -128,12 +138,16 @@ function homepageLinks(): string[] {
     'bmp',
     'tiff',
     'tif',
+    'avif',
+    'webp',
+    // audio
     'wav',
     'flac',
     'aac',
     'ogg',
     'm4a',
     'opus',
+    'mp3',
   ];
   for (const ext of candidateExts) {
     const target = routeForFile({ name: `dummy.${ext}` });
@@ -214,7 +228,9 @@ describe('SEAN-50 dead-links — every internal link resolves', () => {
   it('routeForFile only returns paths that resolve', () => {
     // Walk every plausible extension. routeForFile returns null for unknown
     // ones — that's fine. Anything it returns must be a real route.
+    // SEAN-78: extended to cover audio/image and rare video formats.
     const exts = [
+      // video
       'mov',
       'webm',
       'mkv',
@@ -225,6 +241,13 @@ describe('SEAN-50 dead-links — every internal link resolves', () => {
       'mpeg',
       'mpg',
       'mp4',
+      '3gp',
+      'ts',
+      'mts',
+      'm2ts',
+      'ogv',
+      'vob',
+      // image
       'jpg',
       'jpeg',
       'png',
@@ -233,12 +256,17 @@ describe('SEAN-50 dead-links — every internal link resolves', () => {
       'bmp',
       'tiff',
       'tif',
+      'avif',
+      'webp',
+      // audio
       'wav',
       'flac',
       'aac',
       'ogg',
       'm4a',
       'opus',
+      'mp3',
+      // genuinely unknown
       'unknown-ext',
     ];
     for (const ext of exts) {

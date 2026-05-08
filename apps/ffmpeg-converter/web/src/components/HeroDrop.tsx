@@ -10,7 +10,7 @@
 
 import { useRouter } from 'next/navigation';
 import { type DragEvent, useRef, useState } from 'react';
-import { extOf, routeForFile } from './route-for-file';
+import { friendlyDropError, routeForFile } from './route-for-file';
 
 export function HeroDrop() {
   const router = useRouter();
@@ -22,14 +22,12 @@ export function HeroDrop() {
     // SEAN-50: routeForFile only returns paths that resolve to a real route
     // (matrix slug + implemented operation). Anything else falls through to
     // the friendly error rather than routing the user to a 404.
+    // SEAN-78: the error now lists the matrix-supported families ("video,
+    // audio, images") rather than naming only video extensions, so users
+    // dropping a .png/.mp3/.flac get a recommendation instead of a flat "no".
     const target = routeForFile(file);
     if (!target) {
-      const ext = extOf(file.name);
-      setError(
-        ext
-          ? `We don't recognise .${ext} yet. Try MOV, MP4, WebM, MKV, AVI, FLV, WMV, M4V, or MPEG.`
-          : "That file doesn't have an extension we can route on.",
-      );
+      setError(friendlyDropError(file.name));
       return;
     }
     setError(null);
