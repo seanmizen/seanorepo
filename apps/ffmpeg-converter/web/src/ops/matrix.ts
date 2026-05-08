@@ -341,7 +341,7 @@ function extractAudioRow(audioOut: Format, goOp: GoOpName): OperationRow {
     audioOut === 'mp3'
       ? '-c:a libmp3lame -b:a 192k'
       : audioOut === 'wav'
-        ? '-acodec pcm_s16le'
+        ? '-c:a pcm_s16le'
         : audioOut === 'aac'
           ? '-c:a aac -b:a 192k'
           : audioOut === 'flac'
@@ -756,7 +756,7 @@ const CURATED_MATRIX: OperationRow[] = [
     title: 'Extract WAV from video — free, no watermark',
     h1: 'Video to WAV',
     valueProp: 'Lossless audio out. No watermark.',
-    ffmpegCommand: 'ffmpeg -i input.{ext} -vn -acodec pcm_s16le output.wav',
+    ffmpegCommand: 'ffmpeg -i input.{ext} -vn -c:a pcm_s16le output.wav',
     intentVolume: 'mid',
     faqs: [
       {
@@ -1273,7 +1273,7 @@ function generateCompressRows(): OperationRow[] {
 function generateExtractAudioRows(): OperationRow[] {
   const rows: OperationRow[] = [];
   const audioOpMap: Partial<Record<Format, GoOpName>> = {
-    ogg: 'extract_audio',
+    ogg: 'audio_ogg',
     opus: 'audio_opus',
   };
   for (const audioOut of AUDIO_OUTPUTS_EXTRACT) {
