@@ -26,8 +26,13 @@
 // `./preset-storage.ts` so this file stays focused on the rendering logic.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Operation } from '@/ops/types';
+import type { Format, Operation, OperationRow } from '@/ops/types';
 import { AdvancedPanel } from './AdvancedPanel';
+import {
+  buildAcceptLabel,
+  buildExtraArgs,
+  formatToExt,
+} from './converter-row-args';
 import { type ConversionJob, DropZone } from './DropZone';
 import {
   deletePreset as deletePresetFromStorage,
@@ -39,6 +44,8 @@ import {
   savePreset as savePresetToStorage,
 } from './preset-storage';
 import { ResultBlock } from './ResultBlock';
+import { adaptiveRowForFile } from './route-for-file';
+import { pathForSlug } from './route-registry';
 import {
   applyUrlState,
   applyUrlToFfmpegCommand,
@@ -105,6 +112,22 @@ export interface ConverterPanelProps {
    * panel sitting on the homepage.
    */
   onReset?: () => void;
+  /**
+   * SEAN-105: slug-page seed for the adaptive panel. When set the panel runs
+   * `adaptiveRowForFile` on every drop and swaps `detectedRow` if the
+   * resolved row differs. The drop zone's hard-coded `goOp` / `outputExt` /
+   * `extraArgs` props become the *initial* defaults, but `detectedRow`
+   * overrides them after the first drop. The URL slug is updated via
+   * `history.replaceState` (no `router.push` — preserves the in-flight File
+   * object and the panel state).
+   *
+   * Hub pages and the homepage embed don't pass this — they keep the existing
+   * locked-row behaviour. Only `<ToolPage />` (slug pages) wires it.
+   */
+  slugDefault?: {
+    row: OperationRow;
+    inputFormat: Format;
+  };
 }
 
 export function ConverterPanel({
@@ -122,8 +145,19 @@ export function ConverterPanel({
   advancedDefaults,
   initialFile,
   onReset,
+  slugDefault,
 }: ConverterPanelProps) {
   const [job, setJob] = useState<ConversionJob | null>(null);
+
+  // SEAN-105: detected-row state for the adaptive panel. Initialised from the
+  // slug default; replaced when the user drops a file whose detected input
+  // type maps to a different matrix row (e.g. dropping a `.mov` on the
+  // `mp4-to-gif` page swaps to the `mov-to-gif` row). When unset (no
+  // `slugDefault` passed by the parent) the panel falls back to the existing
+  // hard-coded prop behaviour.
+  const [detectedRow, setDetectedRow] = useState<OperationRow | null>(
+    slugDefault?.row ?? null,
+  );
 
   // SEAN-93 — initial URL-state snapshot, read on mount. SSR-safe (returns
   // empty when `window` is undefined). Subscribes to `popstate` so the
@@ -145,17 +179,82 @@ export function ConverterPanel({
     };
   }, [operation]);
 
-  // Merge URL state into the row's preset-derived extraArgs (URL wins) and
-  // substitute the same values into the displayed ffmpeg command so a copy-
-  // paste of the command matches what the backend will run. Both are memoised
-  // so DropZone's effect deps stay stable when nothing changed.
+  // SEAN-105: when the dropped file's detected row differs from the slug
+  // default, all the row-derived knobs (goOp, outputExt, extraArgs, ffmpeg
+  // command, accept label) re-derive from the detected row instead of the
+  // props. The slug default IS the detected row on first paint, so before any
+  // drop the effective values match the props 1:1.
+  const detectedSwapped =
+    detectedRow !== null && detectedRow.slug !== slugDefault?.row.slug;
+  const effectiveGoOp = detectedSwapped ? detectedRow.goOp : goOp;
+  const effectiveOutputExt = detectedSwapped
+    ? formatToExt(detectedRow.outputFormat)
+    : outputExt;
+  const effectiveExtraArgs = detectedSwapped
+    ? buildExtraArgs(detectedRow)
+    : extraArgs;
+  const effectiveFfmpegCommand = detectedSwapped
+    ? detectedRow.ffmpegCommand
+    : ffmpegCommand;
+  const effectiveAcceptLabel = detectedSwapped
+    ? buildAcceptLabel(detectedRow)
+    : acceptLabel;
+
+  // Merge URL state into the (possibly-swapped) row's preset-derived extraArgs
+  // (URL wins) and substitute the same values into the displayed ffmpeg
+  // command so a copy-paste of the command matches what the backend will run.
   const mergedExtraArgs = useMemo(
-    () => mergeUrlIntoExtraArgs(extraArgs, urlState),
-    [extraArgs, urlState],
+    () => mergeUrlIntoExtraArgs(effectiveExtraArgs, urlState),
+    [effectiveExtraArgs, urlState],
   );
   const displayedCommand = useMemo(
-    () => applyUrlToFfmpegCommand(ffmpegCommand, urlState),
-    [ffmpegCommand, urlState],
+    () => applyUrlToFfmpegCommand(effectiveFfmpegCommand, urlState),
+    [effectiveFfmpegCommand, urlState],
+  );
+
+  // SEAN-105: per-file argument resolver passed into DropZone. Runs
+  // `adaptiveRowForFile` synchronously on every drop. If the resolved row
+  // differs from `detectedRow`, the panel swaps and `history.replaceState`
+  // updates the URL slug — but the in-flight conversion uses the resolved
+  // row's args directly (returned from this callback) so React's async state
+  // update doesn't race the imminent submit.
+  const resolveArgsForFile = useCallback(
+    (file: File) => {
+      if (!slugDefault) return null;
+      const currentRow = detectedRow ?? slugDefault.row;
+      const match = adaptiveRowForFile(
+        file,
+        currentRow.operation,
+        currentRow.outputFormat,
+      );
+      if (!match) return null;
+      if (match.row.slug === currentRow.slug) return null;
+
+      // Swap detected row + URL slug. The state update is async (React
+      // batches it for after the current event loop tick) so we ALSO return
+      // the resolved args so DropZone's `submitConversion` doesn't fire with
+      // the stale `goOp` / `outputExt` props.
+      setDetectedRow(match.row);
+      if (typeof window !== 'undefined') {
+        const newPath = pathForSlug(match.row.slug);
+        if (newPath && newPath !== window.location.pathname) {
+          // `history.replaceState` per AC — never `router.push`. Preserves
+          // the in-flight File object and avoids a Next.js re-mount of the
+          // page tree (which would tear down this component).
+          window.history.replaceState(
+            null,
+            '',
+            newPath + window.location.search,
+          );
+        }
+      }
+      return {
+        goOp: match.row.goOp,
+        outputExt: formatToExt(match.row.outputFormat),
+        extraArgs: mergeUrlIntoExtraArgs(buildExtraArgs(match.row), urlState),
+      };
+    },
+    [slugDefault, detectedRow, urlState],
   );
 
   // SEAN-95 — Advanced disclosure. Mounted below the converter panel for
@@ -169,7 +268,9 @@ export function ConverterPanel({
     showAdvancedPanel && operation === 'convert' ? (
       <AdvancedPanel
         operation="convert"
-        ffmpegCommand={ffmpegCommand}
+        // SEAN-105: use the effective command so the displayed terminal line
+        // reflects the swapped-in row after an adaptive drop.
+        ffmpegCommand={effectiveFfmpegCommand}
         defaultCrf={advancedDefaults?.crf}
         defaultPreset={advancedDefaults?.preset}
         defaultBitrate={advancedDefaults?.bitrate}
@@ -208,13 +309,14 @@ export function ConverterPanel({
           />
         )}
         <DropZone
-          goOp={goOp}
-          outputExt={outputExt}
+          goOp={effectiveGoOp}
+          outputExt={effectiveOutputExt}
           accept={accept}
-          acceptLabel={acceptLabel}
+          acceptLabel={effectiveAcceptLabel}
           extraArgs={mergedExtraArgs}
           onJobComplete={setJob}
           initialFile={initialFile}
+          resolveArgsForFile={slugDefault ? resolveArgsForFile : undefined}
         />
         {advanced}
       </>
