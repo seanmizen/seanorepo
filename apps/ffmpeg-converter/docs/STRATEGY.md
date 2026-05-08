@@ -294,3 +294,91 @@ get cancelled in the first second (suggests users were going somewhere else
 and the auto-fire is wasting their bandwidth + ours). At that point, flip to
 a 1-click confirm gate (single button per format, no separate Convert button)
 and re-measure.
+
+### SEAN-92 — gif preset chips + customise disclosure
+
+**Status:** locked, 2026-05-08.
+
+**Question:** GIF is the operation with the richest size/quality knob set —
+fps, width, dither, palette size, trim — and the one users tinker with most
+(Discord 8 MB ceilings, Bluesky 50 MB, Slack quirks). Until #92 every
+`/gif/[slug]` page hard-coded `fps=10, width=480, default dither, 256
+colours` with no user controls. Should the gif tool pages expose all of
+those knobs at once (CloudConvert-style 30-field dialog), none of them
+(status quo), or stage the disclosure?
+
+**Decision:** progressive disclosure with a three-chip preset row (Smooth /
+Compact / Tiny) shown immediately below the converter panel, plus an
+optional "Customize" `<details>` panel revealing fps chips
+(10/15/20/24/30), width chips (240/320/480/640), and start + duration trim
+sliders. The default chip is Smooth (480p, matching the post-#91 width
+default). Picking any chip — preset OR fps/width override — re-keys the
+inner `<ConverterPanel />`, which unmounts the old `<DropZone />` and fires
+its `AbortController` cleanup, cancelling the in-flight upload before
+mounting a fresh panel with the new args. Same SEAN-79/-81 abort pattern
+the homepage chip row uses.
+
+**Why this shape rather than the layer-cake from §"Progressive disclosure":**
+
+- The full 4-layer cake (drop → format → preset → advanced → command)
+  belongs to the homepage flow where the user hasn't picked an op yet.
+  Slug pages already locked the op and the output format via the URL —
+  the only remaining axes are the gif-specific knobs.
+- Three named presets cover the dominant Discord/Slack/Bluesky use cases
+  without forcing the user to read about palette quantisation. The
+  customise panel is for the second-use power user — it stays collapsed
+  by default.
+- `<details>` is a real HTML element, so it works without JS state and
+  composes cleanly with the rest of the server-rendered page. We could
+  promote it to a remembered preference in localStorage later (the
+  STRATEGY.md repeat-customer hooks list) without restructuring.
+
+**The live ffmpeg command preview** is the dev-funnel hook from STRATEGY
+§1 in concrete form: `renderGifFfmpegCommand(inputExt, effectivePreset)`
+re-runs on every state change and the new command is forwarded to
+`<ConverterPanel />`'s existing `ffmpegCommand` prop, which surfaces it on
+the result block with a copy button. Dev users can paste the exact command
+we just ran into their own terminal — same args, same filter graph.
+
+**Backend extension:** `gif_from_video` in `ops.go` reads `width`, `fps`,
+`dither`, `max_colors`, `start`, `duration` from the multipart form. All
+default to the legacy values (480, 10, sierra2_4a, 256, no trim) so callers
+that don't pass an override see the same output as before. Trim is wired as
+input-side `-ss` / `-t` (not as a filter), so the palettegen pass samples
+only the trimmed window — otherwise the GIF gets quantised against frames
+the user can't see.
+
+**Out of scope for v1:**
+
+- **Dither method UI** — sticks to default `sierra2_4a` for Smooth/Compact,
+  `none` for Tiny. The Tiny chip's hard-edge look is the point of the
+  preset (smaller files, no dithering noise on flat backgrounds).
+- **Max-colours UI** — sticks to 256. Dropping below 256 helps file size
+  on cartoonish content but tanks photo-derived clips. Add later if
+  Discord-size feedback shows demand.
+- **Reverse / boomerang** — separate op, separate pSEO page.
+- **Speed** — same; `change_speed` already has its own slug template.
+
+**Files:**
+
+- `apps/ffmpeg-converter/web/src/components/GifPresetPanel.tsx` — new
+  client wrapper around `<ConverterPanel />`, owns the chip + customise
+  state and re-renders the live ffmpeg command.
+- `apps/ffmpeg-converter/web/src/components/ToolPage.tsx` — branches on
+  `row.operation === 'gif'` to mount `<GifPresetPanel />` instead of the
+  plain `<ConverterPanel />`.
+- `apps/ffmpeg-converter/web/src/components/converter-row-args.ts` —
+  `buildExtraArgs` forwards the new `width`/`dither`/`maxColors`/
+  `trimStartSec`/`trimDurationSec` fields when present on the row preset.
+- `apps/ffmpeg-converter/web/src/ops/types.ts` — `OperationPreset`
+  extended with the new fields.
+- `apps/ffmpeg-converter/ops.go` — `gif_from_video` reads the six fields
+  from `extraArgs` with backward-compatible defaults.
+- `apps/ffmpeg-converter/e2e_test.go` — per-preset width + fps assertions
+  via ffprobe.
+
+**Re-revisit if:** advanced-panel open rate (the `<details>` element in
+GifPresetPanel) sits above 40 % across gif pages — at that point the panel
+has earned promotion to default-open + remembered-in-localStorage. Or if
+preset-chip metrics show one chip dominating: collapse to that as the
+single default and demote the others to the customise panel.
