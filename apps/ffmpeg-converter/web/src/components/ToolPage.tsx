@@ -92,6 +92,13 @@ export function ToolPage({ row, page }: ToolPageProps) {
           arg change so chip clicks abort the in-flight upload and re-fire. */}
       <section className="mb-10" aria-label="Convert your file">
         {row.operation === 'gif' ? (
+          // SEAN-92: gif rows render the preset chip wrapper. The wrapper
+          // owns its own state and does NOT pass `operation` through to the
+          // inner ConverterPanel — meaning ConverterPanel's URL-state
+          // machinery (SEAN-93) and saved-presets bar (SEAN-94) stay
+          // dormant on gif pages. The chip row + customise disclosure is
+          // the gif-specific surface for those settings, so we don't want
+          // both UIs fighting for the same args.
           <GifPresetPanel
             inputExt={formatToExt(row.inputFormats[0] ?? row.outputFormat)}
             goOp={row.goOp}
@@ -113,6 +120,7 @@ export function ToolPage({ row, page }: ToolPageProps) {
             reverseSlug={reverse?.slug}
             reverseLabel={reverse?.label}
             reverseOperation={reverse?.operation}
+            operation={row.operation}
           />
         )}
       </section>
