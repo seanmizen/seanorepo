@@ -22,10 +22,12 @@
 // the operations matrix — so the API surface here MUST be just the row.
 
 import Link from 'next/link';
+import { buildToolPageSchemas } from '@/lib/schemas';
 import { MATRIX_BY_SLUG } from '@/ops/matrix';
 import type { OperationRow } from '@/ops/types';
 import { ConverterPanel } from './ConverterPanel';
 import { FAQ } from './FAQ';
+import { JsonLd } from './JsonLd';
 import { pathForSlug, routeExistsForSlug } from './route-registry';
 
 export interface ToolPageProps {
@@ -39,8 +41,16 @@ export function ToolPage({ row }: ToolPageProps) {
   const siblings = resolveSiblings(row);
   const extraArgs = buildExtraArgs(row);
 
+  // SEAN-55 — emit four schema.org JSON-LD blocks per tool page
+  // (SoftwareApplication, HowTo, FAQPage, BreadcrumbList). Server-rendered
+  // into the HTML so the structured data ships on first paint — never
+  // injected client-side. See `@/lib/schemas` for the per-schema builders.
+  const schemas = buildToolPageSchemas(row);
+
   return (
     <div className="mx-auto max-w-3xl px-6 pt-12 pb-20 md:pt-16">
+      <JsonLd schemas={schemas} />
+
       {/* Header — H1 + value prop */}
       <header className="mb-8">
         <h1 className="text-balance text-4xl font-bold tracking-tight text-gray-100 md:text-5xl">
