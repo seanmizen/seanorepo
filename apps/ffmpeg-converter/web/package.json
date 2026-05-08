@@ -16,7 +16,8 @@
     "test:hero-drop": "ts-node -P tsconfig.test.json src/components/__tests__/HeroDrop.test.ts",
     "test:route-for-file": "ts-node -P tsconfig.test.json src/components/__tests__/route-for-file.test.ts",
     "test:result-block": "ts-node -P tsconfig.test.json src/components/__tests__/ResultBlock.test.ts",
-    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count && yarn test:hero-drop && yarn test:route-for-file && yarn test:result-block"
+    "test:url-state": "ts-node -P tsconfig.test.json src/components/__tests__/url-state.test.ts",
+    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count && yarn test:hero-drop && yarn test:route-for-file && yarn test:result-block && yarn test:url-state"
   },
   "dependencies": {
     "next": "15.1.6",
