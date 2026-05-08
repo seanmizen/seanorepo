@@ -9,8 +9,9 @@
     "serve": "next start --port 4050",
     "lint": "next lint",
     "test:dead-links": "ts-node -P tsconfig.test.json src/components/__tests__/dead-links.test.ts",
+    "test:matrix": "ts-node -P tsconfig.test.json src/ops/matrix.test.ts",
     "test:sitemap": "ts-node -P tsconfig.test.json src/ops/sitemap.test.ts",
-    "test": "yarn test:dead-links && yarn test:sitemap"
+    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap"
   },
   "dependencies": {
     "next": "15.1.6",
