@@ -80,12 +80,29 @@ export interface DropZoneProps {
    * Keeping the resolver synchronous side-steps React's stale-state problem
    * — the parent can't update `goOp` props in time for the imminent submit,
    * but it CAN inspect the file and return the right args directly.
+   *
+   * SEAN-108: returning `{ reject: true }` blocks the imminent submit and
+   * fires `onFileRejected` instead. Used by the slug-page panel to surface
+   * `friendlyDropError` when the dropped file has no matrix coverage at all
+   * (`.zip`, `.exe`, `.docx`, `.tif`) — without this the conversion would
+   * fire with the slug's default `goOp` and the backend would reject it
+   * with an opaque "unsupported input" error.
    */
-  resolveArgsForFile?: (file: File) => {
-    goOp?: string;
-    outputExt?: string;
-    extraArgs?: Record<string, string>;
-  } | null;
+  resolveArgsForFile?: (file: File) =>
+    | {
+        goOp?: string;
+        outputExt?: string;
+        extraArgs?: Record<string, string>;
+        reject?: false;
+      }
+    | { reject: true }
+    | null;
+  /**
+   * SEAN-108: called when `resolveArgsForFile` returns `{ reject: true }`.
+   * The drop zone surrenders control of rendering to the parent — typically
+   * the parent replaces the dropzone with a friendly message + Clear button.
+   */
+  onFileRejected?: (file: File) => void;
 }
 
 type Status = 'idle' | 'uploading' | 'converting';
@@ -100,6 +117,7 @@ export function DropZone({
   onJobComplete,
   initialFile,
   resolveArgsForFile,
+  onFileRejected,
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -114,6 +132,15 @@ export function DropZone({
 
   const runConversion = useCallback(
     async (file: File) => {
+      // SEAN-108: rejection branch runs BEFORE we flip into the busy state
+      // so the parent's friendly-fallback UI swaps in immediately, with no
+      // spinner flash. The resolver decides; we just plumb the signal.
+      const overrides = resolveArgsForFile?.(file) ?? null;
+      if (overrides && 'reject' in overrides && overrides.reject === true) {
+        onFileRejected?.(file);
+        return;
+      }
+
       setError(null);
       setStatus('uploading');
       setPendingName(file.name);
@@ -127,7 +154,6 @@ export function DropZone({
         // detect the dropped file's type and supply matching args before the
         // submit fires (the React state update in the parent runs after this
         // callback chain returns, so we can't rely on prop changes here).
-        const overrides = resolveArgsForFile?.(file) ?? null;
         const job = await submitConversion({
           file,
           goOp: overrides?.goOp ?? goOp,
@@ -156,7 +182,14 @@ export function DropZone({
         }
       }
     },
-    [goOp, outputExt, extraArgs, onJobComplete, resolveArgsForFile],
+    [
+      goOp,
+      outputExt,
+      extraArgs,
+      onJobComplete,
+      resolveArgsForFile,
+      onFileRejected,
+    ],
   );
 
   const handleFile = (file: File) => {
