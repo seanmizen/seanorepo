@@ -609,9 +609,11 @@ func RegisterOps() map[string]*Operation {
 		Description: "Animated GIF from a video (palettegen for quality)",
 		DefaultExt:  ".gif",
 		Run: func(ctx context.Context, oc OpContext) error {
-			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-vf", "fps=10,scale=96:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
-				oc.Output)
+			width := arg(oc, "width", "480")
+			vf := fmt.Sprintf(
+				"fps=10,scale=%s:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
+				width)
+			return ffmpegRun(ctx, "-i", oc.Inputs[0], "-vf", vf, oc.Output)
 		},
 	})
 	add(&Operation{
@@ -655,8 +657,10 @@ func RegisterOps() map[string]*Operation {
 				return err
 			}
 			defer removeFile(list)
+			width := arg(oc, "width", "480")
+			vf := fmt.Sprintf("fps=10,scale=%s:-1:flags=lanczos", width)
 			return ffmpegRun(ctx, "-f", "concat", "-safe", "0", "-i", list,
-				"-vf", "fps=10,scale=96:-1:flags=lanczos", oc.Output)
+				"-vf", vf, oc.Output)
 		},
 	})
 	add(&Operation{
