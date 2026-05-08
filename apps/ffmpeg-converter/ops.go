@@ -609,11 +609,33 @@ func RegisterOps() map[string]*Operation {
 		Description: "Animated GIF from a video (palettegen for quality)",
 		DefaultExt:  ".gif",
 		Run: func(ctx context.Context, oc OpContext) error {
+			// SEAN-92: every knob now flows through extraArgs. Defaults match
+			// the legacy 480-wide / fps=10 / sierra2_4a / 256-colour behaviour
+			// so callers that don't pass a preset get the same output as before.
 			width := arg(oc, "width", "480")
+			fps := arg(oc, "fps", "10")
+			dither := arg(oc, "dither", "sierra2_4a")
+			maxColors := arg(oc, "max_colors", "256")
+			start := arg(oc, "start", "")
+			duration := arg(oc, "duration", "")
+
 			vf := fmt.Sprintf(
-				"fps=10,scale=%s:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
-				width)
-			return ffmpegRun(ctx, "-i", oc.Inputs[0], "-vf", vf, oc.Output)
+				"fps=%s,scale=%s:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=%s[p];[b][p]paletteuse=dither=%s",
+				fps, width, maxColors, dither)
+
+			// Trim is implemented as input-side -ss / -t, not as a filter, so
+			// the palette is built from the trimmed window only — otherwise
+			// palettegen samples frames you can't see.
+			args := []string{}
+			if start != "" {
+				args = append(args, "-ss", start)
+			}
+			args = append(args, "-i", oc.Inputs[0])
+			if duration != "" {
+				args = append(args, "-t", duration)
+			}
+			args = append(args, "-vf", vf, oc.Output)
+			return ffmpegRun(ctx, args...)
 		},
 	})
 	add(&Operation{

@@ -35,6 +35,7 @@ import {
   resolveSiblings,
 } from './converter-row-args';
 import { FAQ } from './FAQ';
+import { GifPresetPanel } from './GifPresetPanel';
 import { JsonLd } from './JsonLd';
 
 export interface ToolPageProps {
@@ -84,20 +85,44 @@ export function ToolPage({ row, page }: ToolPageProps) {
         </p>
       </header>
 
-      {/* Convert panel — client-only state lives behind this boundary */}
+      {/* Convert panel — client-only state lives behind this boundary.
+          SEAN-92: gif rows render the preset-chip wrapper instead of the
+          plain ConverterPanel — the wrapper renders the chip row + customise
+          disclosure below the panel and re-keys ConverterPanel on every
+          arg change so chip clicks abort the in-flight upload and re-fire. */}
       <section className="mb-10" aria-label="Convert your file">
-        <ConverterPanel
-          goOp={row.goOp}
-          outputExt={formatToExt(row.outputFormat)}
-          accept={accept}
-          acceptLabel={acceptLabel}
-          extraArgs={extraArgs}
-          ffmpegCommand={row.ffmpegCommand}
-          reverseSlug={reverse?.slug}
-          reverseLabel={reverse?.label}
-          reverseOperation={reverse?.operation}
-          operation={row.operation}
-        />
+        {row.operation === 'gif' ? (
+          // SEAN-92: gif rows render the preset chip wrapper. The wrapper
+          // owns its own state and does NOT pass `operation` through to the
+          // inner ConverterPanel — meaning ConverterPanel's URL-state
+          // machinery (SEAN-93) and saved-presets bar (SEAN-94) stay
+          // dormant on gif pages. The chip row + customise disclosure is
+          // the gif-specific surface for those settings, so we don't want
+          // both UIs fighting for the same args.
+          <GifPresetPanel
+            inputExt={formatToExt(row.inputFormats[0] ?? row.outputFormat)}
+            goOp={row.goOp}
+            outputExt={formatToExt(row.outputFormat)}
+            accept={accept}
+            acceptLabel={acceptLabel}
+            reverseSlug={reverse?.slug}
+            reverseLabel={reverse?.label}
+            reverseOperation={reverse?.operation}
+          />
+        ) : (
+          <ConverterPanel
+            goOp={row.goOp}
+            outputExt={formatToExt(row.outputFormat)}
+            accept={accept}
+            acceptLabel={acceptLabel}
+            extraArgs={extraArgs}
+            ffmpegCommand={row.ffmpegCommand}
+            reverseSlug={reverse?.slug}
+            reverseLabel={reverse?.label}
+            reverseOperation={reverse?.operation}
+            operation={row.operation}
+          />
+        )}
       </section>
 
       {/* SEAN-60 — "When to use this" paragraph. Renders directly under the

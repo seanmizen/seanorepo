@@ -1014,6 +1014,211 @@ func TestConvert_RealFfmpeg_GifFromVideo_WidthOverride(t *testing.T) {
 	}
 }
 
+// SEAN-92: each preset chip on `/gif/[slug]` (Smooth/Compact/Tiny) must
+// produce a GIF at its advertised width AND frame rate. The chip values come
+// straight from the AC; the test drives the (width, fps) tuple straight to
+// the backend `extraArgs` to lock the contract — if the chip values change
+// in the frontend, the test moves with them.
+func TestConvert_RealFfmpeg_GifFromVideo_Presets(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	ffprobePath, ffprobeErr := exec.LookPath("ffprobe")
+	if ffprobeErr != nil {
+		t.Skip("ffprobe not on PATH – needed to verify gif width + fps")
+	}
+
+	ts := newCoreServer(t)
+	tmpDir := t.TempDir()
+
+	// 2-second source so palettegen has at least 20 frames at 10 fps to
+	// sample — short enough that even Smooth (20 fps × 2 s = 40 frames at
+	// 480 px) finishes in well under the test timeout.
+	inputPath := tmpDir + "/input.mp4"
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "color=c=blue:s=1920x1080:r=30:d=2",
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "40",
+		"-pix_fmt", "yuv420p", inputPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("could not generate test video: %v\n%s", err, out)
+	}
+	inputData, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("read input: %v", err)
+	}
+
+	cases := []struct {
+		name      string
+		args      map[string]string
+		wantWidth int
+		wantFps   string // ffprobe returns frame rate as "20/1" etc.
+	}{
+		{
+			name:      "smooth",
+			args:      map[string]string{"width": "480", "fps": "20"},
+			wantWidth: 480,
+			wantFps:   "20/1",
+		},
+		{
+			name:      "compact",
+			args:      map[string]string{"width": "320", "fps": "15"},
+			wantWidth: 320,
+			wantFps:   "15/1",
+		},
+		{
+			name:      "tiny",
+			args:      map[string]string{"width": "240", "fps": "10", "dither": "none"},
+			wantWidth: 240,
+			wantFps:   "10/1",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			code, body := doConvert(t, ts, "gif_from_video",
+				map[string][]byte{"input.mp4": inputData}, tc.args, "")
+			if code != http.StatusOK {
+				t.Fatalf("want 200, got %d; body: %s", code, body)
+			}
+			var resp map[string]any
+			_ = json.Unmarshal(body, &resp)
+
+			dlResp, err := http.Get(ts.URL + resp["output"].(string))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer dlResp.Body.Close()
+			gifBytes, _ := io.ReadAll(dlResp.Body)
+			gifPath := tmpDir + "/" + tc.name + ".gif"
+			if err := os.WriteFile(gifPath, gifBytes, 0o644); err != nil {
+				t.Fatalf("write gif: %v", err)
+			}
+
+			probe := exec.Command(ffprobePath,
+				"-v", "error", "-select_streams", "v:0",
+				"-show_entries", "stream=width,r_frame_rate",
+				"-of", "json", gifPath)
+			probeOut, err := probe.Output()
+			if err != nil {
+				t.Fatalf("ffprobe failed: %v", err)
+			}
+			var probed struct {
+				Streams []struct {
+					Width     int    `json:"width"`
+					FrameRate string `json:"r_frame_rate"`
+				} `json:"streams"`
+			}
+			if err := json.Unmarshal(probeOut, &probed); err != nil {
+				t.Fatalf("parse ffprobe: %v", err)
+			}
+			if len(probed.Streams) == 0 {
+				t.Fatalf("ffprobe found no video stream in %s gif", tc.name)
+			}
+			s := probed.Streams[0]
+			if s.Width != tc.wantWidth {
+				t.Errorf("%s preset: want width=%d, got %d", tc.name, tc.wantWidth, s.Width)
+			}
+			if s.FrameRate != tc.wantFps {
+				t.Errorf("%s preset: want r_frame_rate=%s, got %q", tc.name, tc.wantFps, s.FrameRate)
+			}
+		})
+	}
+}
+
+// SEAN-92: trim args (`start`, `duration`) must clip the output GIF to the
+// requested window. Locks in input-side -ss/-t semantics — if the backend
+// regresses to using filter-side trim, palettegen samples frames the user
+// can't see and the test still catches the duration regression here.
+func TestConvert_RealFfmpeg_GifFromVideo_Trim(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	ffprobePath, ffprobeErr := exec.LookPath("ffprobe")
+	if ffprobeErr != nil {
+		t.Skip("ffprobe not on PATH – needed to verify gif duration")
+	}
+
+	ts := newCoreServer(t)
+	tmpDir := t.TempDir()
+
+	// 4-second source so a 1-second trim leaves an obvious window.
+	inputPath := tmpDir + "/input.mp4"
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "color=c=red:s=320x180:r=10:d=4",
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "40",
+		"-pix_fmt", "yuv420p", inputPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("could not generate test video: %v\n%s", err, out)
+	}
+	inputData, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("read input: %v", err)
+	}
+
+	code, body := doConvert(t, ts, "gif_from_video",
+		map[string][]byte{"input.mp4": inputData},
+		map[string]string{"width": "240", "fps": "10", "start": "1", "duration": "1"}, "")
+	if code != http.StatusOK {
+		t.Fatalf("want 200, got %d; body: %s", code, body)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(body, &resp)
+
+	dlResp, err := http.Get(ts.URL + resp["output"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dlResp.Body.Close()
+	gifBytes, _ := io.ReadAll(dlResp.Body)
+	gifPath := tmpDir + "/trimmed.gif"
+	if err := os.WriteFile(gifPath, gifBytes, 0o644); err != nil {
+		t.Fatalf("write gif: %v", err)
+	}
+
+	probe := exec.Command(ffprobePath,
+		"-v", "error", "-select_streams", "v:0",
+		"-show_entries", "stream=duration,nb_read_frames",
+		"-count_frames",
+		"-of", "json", gifPath)
+	probeOut, err := probe.Output()
+	if err != nil {
+		t.Fatalf("ffprobe failed: %v", err)
+	}
+	var probed struct {
+		Streams []struct {
+			Duration     string `json:"duration"`
+			NbReadFrames string `json:"nb_read_frames"`
+		} `json:"streams"`
+	}
+	if err := json.Unmarshal(probeOut, &probed); err != nil {
+		t.Fatalf("parse ffprobe: %v", err)
+	}
+	if len(probed.Streams) == 0 {
+		t.Fatalf("ffprobe found no video stream in trimmed gif")
+	}
+	// At fps=10 for 1 s we expect ~10 frames. Allow a small tolerance for
+	// keyframe alignment on the -ss side.
+	frames := probed.Streams[0].NbReadFrames
+	if frames == "" {
+		t.Fatalf("ffprobe returned empty nb_read_frames: %s", probeOut)
+	}
+	// Parse manually to avoid pulling in another dep. Frame count should
+	// land in [8, 12] for a 1-second 10 fps trim.
+	var frameCount int
+	for _, c := range frames {
+		if c < '0' || c > '9' {
+			t.Fatalf("non-numeric nb_read_frames: %q", frames)
+		}
+		frameCount = frameCount*10 + int(c-'0')
+	}
+	if frameCount < 8 || frameCount > 12 {
+		t.Errorf("trim regression: want ~10 frames for 1s @ 10fps, got %d (full input would be 40)", frameCount)
+	}
+}
+
 // ── /billing/me (billing disabled) ───────────────────────────────────────────
 
 func TestBillingMe_BillingDisabled(t *testing.T) {
