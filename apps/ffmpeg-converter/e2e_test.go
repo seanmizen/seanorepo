@@ -672,6 +672,195 @@ func TestConvert_RealFfmpeg_SpacedFilename_WebP(t *testing.T) {
 	}
 }
 
+// TestConvert_RealFfmpeg_ExtractAudio_WavCodec verifies that the extract_audio
+// op produces a real WAV file (RIFF header) with stereo source preserved as
+// stereo and CD-quality sample rate (44.1 kHz). Regression test for the bug
+// where extract_audio hard-coded -ar 16000 -ac 1, downgrading music sources
+// to transcription quality.
+func TestConvert_RealFfmpeg_ExtractAudio_WavCodec(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	ffprobePath, ffprobeErr := exec.LookPath("ffprobe")
+	if ffprobeErr != nil {
+		t.Skip("ffprobe not on PATH – needed to verify codec/rate/channels")
+	}
+
+	ts := newCoreServer(t)
+
+	// Generate a 1-second stereo 44.1 kHz video as input. extract_audio must
+	// preserve those characteristics on the way out.
+	tmpDir := t.TempDir()
+	inputPath := tmpDir + "/input.mp4"
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "color=c=blue:s=64x36:r=10:d=1",
+		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=1",
+		"-ac", "2",
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "40",
+		"-c:a", "aac", "-b:a", "96k",
+		"-shortest", inputPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("could not generate test video: %v\n%s", err, out)
+	}
+	inputData, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("read input: %v", err)
+	}
+
+	code, body := doConvert(t, ts, "extract_audio",
+		map[string][]byte{"input.mp4": inputData}, nil, "")
+	if code != http.StatusOK {
+		t.Fatalf("want 200, got %d; body: %s", code, body)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(body, &resp)
+	if resp["status"] != "done" {
+		t.Errorf("want status=done, got %v", resp["status"])
+	}
+
+	// Pull the WAV bytes back and write to disk so ffprobe can inspect.
+	dlResp, err := http.Get(ts.URL + resp["output"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dlResp.Body.Close()
+	wavBytes, _ := io.ReadAll(dlResp.Body)
+	if len(wavBytes) < 44 {
+		t.Fatalf("output too small to be a WAV (%d bytes)", len(wavBytes))
+	}
+	// RIFF/WAVE header sanity check: bytes [0:4]="RIFF", [8:12]="WAVE".
+	if !bytes.Equal(wavBytes[0:4], []byte("RIFF")) || !bytes.Equal(wavBytes[8:12], []byte("WAVE")) {
+		t.Fatalf("output is not a RIFF/WAVE file: header=%q", wavBytes[0:12])
+	}
+	wavPath := tmpDir + "/output.wav"
+	if err := os.WriteFile(wavPath, wavBytes, 0o644); err != nil {
+		t.Fatalf("write wav: %v", err)
+	}
+
+	// ffprobe → JSON, check codec_name=pcm_s16le, sample_rate=44100, channels=2.
+	probe := exec.Command(ffprobePath,
+		"-v", "error", "-select_streams", "a:0",
+		"-show_entries", "stream=codec_name,sample_rate,channels",
+		"-of", "json", wavPath)
+	probeOut, err := probe.Output()
+	if err != nil {
+		t.Fatalf("ffprobe failed: %v", err)
+	}
+	var probed struct {
+		Streams []struct {
+			CodecName  string `json:"codec_name"`
+			SampleRate string `json:"sample_rate"`
+			Channels   int    `json:"channels"`
+		} `json:"streams"`
+	}
+	if err := json.Unmarshal(probeOut, &probed); err != nil {
+		t.Fatalf("parse ffprobe output: %v", err)
+	}
+	if len(probed.Streams) == 0 {
+		t.Fatalf("ffprobe found no audio stream in output")
+	}
+	s := probed.Streams[0]
+	if s.CodecName != "pcm_s16le" {
+		t.Errorf("want codec_name=pcm_s16le, got %q", s.CodecName)
+	}
+	if s.SampleRate != "44100" {
+		t.Errorf("want sample_rate=44100 (mirroring source), got %q", s.SampleRate)
+	}
+	if s.Channels != 2 {
+		t.Errorf("want channels=2 (stereo, mirroring source), got %d", s.Channels)
+	}
+}
+
+// TestConvert_RealFfmpeg_AudioOgg_VorbisCodec verifies that the audio_ogg op
+// produces a real Vorbis-in-Ogg file. Regression test for the bug where the
+// matrix routed video-to-ogg at extract_audio (which produced WAV bytes inside
+// a .ogg-named file).
+func TestConvert_RealFfmpeg_AudioOgg_VorbisCodec(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	ffprobePath, ffprobeErr := exec.LookPath("ffprobe")
+	if ffprobeErr != nil {
+		t.Skip("ffprobe not on PATH – needed to verify codec")
+	}
+	encoders, _ := exec.Command("ffmpeg", "-hide_banner", "-encoders").Output()
+	if !strings.Contains(string(encoders), "libvorbis") {
+		t.Skip("libvorbis encoder not built into ffmpeg")
+	}
+
+	ts := newCoreServer(t)
+
+	tmpDir := t.TempDir()
+	inputPath := tmpDir + "/input.mp4"
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "color=c=blue:s=64x36:r=10:d=1",
+		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=1",
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "40",
+		"-c:a", "aac", "-b:a", "96k",
+		"-shortest", inputPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("could not generate test video: %v\n%s", err, out)
+	}
+	inputData, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("read input: %v", err)
+	}
+
+	code, body := doConvert(t, ts, "audio_ogg",
+		map[string][]byte{"input.mp4": inputData}, nil, "")
+	if code != http.StatusOK {
+		t.Fatalf("want 200, got %d; body: %s", code, body)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(body, &resp)
+	if resp["status"] != "done" {
+		t.Errorf("want status=done, got %v", resp["status"])
+	}
+
+	dlResp, err := http.Get(ts.URL + resp["output"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dlResp.Body.Close()
+	oggBytes, _ := io.ReadAll(dlResp.Body)
+	if len(oggBytes) < 4 {
+		t.Fatalf("output too small (%d bytes)", len(oggBytes))
+	}
+	// Ogg files start with "OggS" capture pattern (RFC 3533, §6).
+	if !bytes.Equal(oggBytes[0:4], []byte("OggS")) {
+		t.Fatalf("output is not an Ogg container: header=%q (regression: backend probably emitted WAV)", oggBytes[0:min(12, len(oggBytes))])
+	}
+	oggPath := tmpDir + "/output.ogg"
+	if err := os.WriteFile(oggPath, oggBytes, 0o644); err != nil {
+		t.Fatalf("write ogg: %v", err)
+	}
+
+	probe := exec.Command(ffprobePath,
+		"-v", "error", "-select_streams", "a:0",
+		"-show_entries", "stream=codec_name",
+		"-of", "json", oggPath)
+	probeOut, err := probe.Output()
+	if err != nil {
+		t.Fatalf("ffprobe failed: %v", err)
+	}
+	var probed struct {
+		Streams []struct {
+			CodecName string `json:"codec_name"`
+		} `json:"streams"`
+	}
+	if err := json.Unmarshal(probeOut, &probed); err != nil {
+		t.Fatalf("parse ffprobe output: %v", err)
+	}
+	if len(probed.Streams) == 0 {
+		t.Fatalf("ffprobe found no audio stream in output")
+	}
+	if probed.Streams[0].CodecName != "vorbis" {
+		t.Errorf("want codec_name=vorbis, got %q", probed.Streams[0].CodecName)
+	}
+}
+
 // ── /billing/me (billing disabled) ───────────────────────────────────────────
 
 func TestBillingMe_BillingDisabled(t *testing.T) {
