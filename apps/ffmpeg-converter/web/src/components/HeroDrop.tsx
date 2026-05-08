@@ -26,7 +26,11 @@ import {
   findReverse,
   formatToExt,
 } from './converter-row-args';
-import { extOf, type MatrixRowMatch, matrixRowForFile } from './route-for-file';
+import {
+  friendlyDropError,
+  type MatrixRowMatch,
+  matrixRowForFile,
+} from './route-for-file';
 
 interface ActiveJob {
   file: File;
@@ -44,14 +48,12 @@ export function HeroDrop() {
     // operation route is actually implemented (matrix slug + registry gate).
     // Anything else surfaces the friendly error — we don't drop the user
     // into a converter panel for an op we can't run.
+    // SEAN-78: the error now lists the matrix-supported families ("video,
+    // audio, images") rather than naming only video extensions, so users
+    // dropping a .png/.mp3/.flac get a recommendation instead of a flat "no".
     const match = matrixRowForFile(file);
     if (!match) {
-      const ext = extOf(file.name);
-      setError(
-        ext
-          ? `We don't recognise .${ext} yet. Try MOV, MP4, WebM, MKV, AVI, FLV, WMV, M4V, or MPEG.`
-          : "That file doesn't have an extension we can route on.",
-      );
+      setError(friendlyDropError(file.name));
       return;
     }
     setError(null);
