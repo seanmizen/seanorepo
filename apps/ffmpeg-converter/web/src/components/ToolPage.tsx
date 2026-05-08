@@ -96,6 +96,7 @@ export function ToolPage({ row, page }: ToolPageProps) {
           reverseSlug={reverse?.slug}
           reverseLabel={reverse?.label}
           reverseOperation={reverse?.operation}
+          operation={row.operation}
         />
       </section>
 
