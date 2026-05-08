@@ -121,6 +121,25 @@ export function ToolPage({ row, page }: ToolPageProps) {
             reverseLabel={reverse?.label}
             reverseOperation={reverse?.operation}
             operation={row.operation}
+            // SEAN-95 — Advanced disclosure for video convert pages. Image-
+            // convert and other operations get their own (eventually) panel
+            // shape; this one targets the libx264/libx265/VP9 knobs.
+            showAdvancedPanel={row.operation === 'convert'}
+            advancedDefaults={
+              row.operation === 'convert'
+                ? {
+                    crf: row.preset?.crf,
+                    preset: row.preset?.preset,
+                    bitrate: row.preset?.videoBitrate,
+                    fps:
+                      row.preset?.fps !== undefined
+                        ? String(row.preset.fps)
+                        : undefined,
+                    audio_bitrate: row.preset?.audioBitrate,
+                    codec: row.preset?.videoCodec,
+                  }
+                : undefined
+            }
           />
         )}
       </section>

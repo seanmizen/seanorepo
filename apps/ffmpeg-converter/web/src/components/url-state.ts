@@ -45,7 +45,18 @@ import type { Operation } from '@/ops/types';
  * not raw form fields.
  */
 export const URL_PARAM_WHITELIST: Record<Operation, readonly string[]> = {
-  convert: ['crf', 'preset', 'audio_bitrate', 'resolution', 'fps'],
+  // SEAN-95 — convert adds `bitrate` and `codec` for the advanced disclosure
+  // panel. `bitrate` overrides CRF when set; `codec` is hidden by default and
+  // only revealed via the "Show everything" power-user toggle.
+  convert: [
+    'crf',
+    'bitrate',
+    'preset',
+    'audio_bitrate',
+    'resolution',
+    'fps',
+    'codec',
+  ],
   compress: ['crf', 'preset', 'target_size_mb', 'audio_bitrate', 'resolution'],
   'extract-audio': ['audio_bitrate'],
   'extract-frames': ['fps', 'width'],
@@ -183,16 +194,21 @@ export function mergeUrlIntoExtraArgs(
  * displayed command reflects what will actually run.
  *
  * The matrix authors ffmpeg commands with literal preset values baked in
- * (e.g. `fps=10,scale=480:-1` for the GIF flagship row). When the user
- * overrides via URL params we patch those literals so the copy-paste command
- * stays accurate. Scope is intentionally narrow:
- *   - `fps=N` → replaces `fps=<digits>` everywhere in the command
- *   - `width=N` → replaces `scale=<digits>:-1` and `scale=<digits>:<anything>`
+ * (e.g. `fps=10,scale=480:-1` for the GIF flagship row, or `-crf 30
+ * -preset ultrafast` for the convert flagship). When the user overrides via
+ * URL params we patch those literals so the copy-paste command stays
+ * accurate. Scope:
+ *   - `fps=N`        → replaces `fps=<digits>` (filter-graph form, gif/preview)
+ *   - `width=N`      → replaces `scale=<digits>:-1` / `scale=<digits>:<digits>`
+ *   - `crf=N`        → replaces `-crf <digits>`
+ *   - `preset=X`     → replaces `-preset <word>`
+ *   - `bitrate=X`    → replaces `-b:v <value>` (and inserts when CRF is
+ *     replaced by bitrate-targeted encoding — see SEAN-95)
+ *   - `audio_bitrate=X` → replaces `-b:a <value>`
  *
- * Anything else (CRF, bitrate, etc.) is forwarded to the backend via
- * extraArgs but the ffmpeg command keeps its original literal — Phase 2 of
- * URL-state will extend this list once a wider set of advanced controls
- * actually exists in the UI.
+ * Anything else (codec selector, etc.) is forwarded to the backend via
+ * extraArgs but the displayed command keeps its original literal until the
+ * matrix command needs it.
  */
 export function applyUrlToFfmpegCommand(
   template: string,
@@ -206,6 +222,37 @@ export function applyUrlToFfmpegCommand(
     // Match `scale=<digits>:-1` and `scale=<digits>:<digits>` (the two shapes
     // the matrix uses today) without touching the height side.
     out = out.replace(/scale=\d+:(-?\d+)/g, `scale=${state.width}:$1`);
+  }
+  if (state.crf) {
+    out = out.replace(/-crf\s+\d+/g, `-crf ${state.crf}`);
+  }
+  if (state.preset) {
+    // Replace any `-preset <word>` (the libx264/libx265 preset). Won't touch
+    // `-preset:v` or other variants — none of the matrix commands use them.
+    out = out.replace(
+      /-preset\s+(ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow)/g,
+      `-preset ${state.preset}`,
+    );
+  }
+  if (state.bitrate) {
+    // When the user supplies an explicit bitrate the encoder switches off
+    // CRF (`-crf` + `-b:v` together is a constrained-quality mode that's
+    // surprising to users). Strip the CRF flag so the command reflects the
+    // actual bitrate-targeted encode.
+    if (/-b:v\s+\S+/.test(out)) {
+      out = out.replace(/-b:v\s+\S+/g, `-b:v ${state.bitrate}`);
+    } else {
+      // Insert `-b:v X` after `-c:v <codec>` (or `-c:v <codec> -preset Y`).
+      // Drop the `-crf N` literal since bitrate takes over.
+      out = out.replace(/-crf\s+\d+\s*/g, '');
+      out = out.replace(
+        /(-c:v\s+\S+(?:\s+-preset\s+\S+)?)/,
+        `$1 -b:v ${state.bitrate}`,
+      );
+    }
+  }
+  if (state.audio_bitrate) {
+    out = out.replace(/-b:a\s+\S+/g, `-b:a ${state.audio_bitrate}`);
   }
   return out;
 }

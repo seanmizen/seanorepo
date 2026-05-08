@@ -382,3 +382,87 @@ GifPresetPanel) sits above 40 % across gif pages — at that point the panel
 has earned promotion to default-open + remembered-in-localStorage. Or if
 preset-chip metrics show one chip dominating: collapse to that as the
 single default and demote the others to the customise panel.
+
+### SEAN-95 — Advanced disclosure control set
+
+**Status:** locked, 2026-05-08.
+
+**Question:** which knobs ship in the Layer-3 Advanced disclosure on
+`/convert/[slug]` video pages, and which stay behind the "Show everything"
+power-user toggle?
+
+**Decision:** the disclosure renders six controls in this order:
+
+1. **CRF slider** (0–51, default 23) — the canonical libx264/libx265/VP9
+   quality knob. Disabled when bitrate is set; the label flips to "Quality
+   (CRF) — overridden by bitrate" so the user understands why the slider
+   greyed out.
+2. **Video bitrate** text input (e.g. `2M`, `500k`) — overrides CRF when set.
+   Wins over CRF on the backend; the displayed ffmpeg command drops the
+   `-crf` flag and inserts `-b:v X` so copy-paste reflects the actual encode.
+3. **Encoder preset** dropdown (`ultrafast` … `veryslow`).
+4. **FPS** text input — leave blank for source rate.
+5. **Audio bitrate** text input.
+6. **Show everything** checkbox (Layer-3+ toggle, persisted in localStorage)
+   — when on, reveals a 7th control:
+7. **Video codec** dropdown (`libx264` / `libx265` / `libvpx-vp9` /
+   `libaom-av1` / `mpeg4`, default = format-appropriate auto). Hidden by
+   default because the format → codec mapping is correct 95 % of the time
+   and exposing a wrong-codec footgun (e.g. `libvpx-vp9` into an `.mp4`
+   container) on the casual flow burns the user.
+
+**Persistence:** disclosure expanded-state is stored in `localStorage` under
+`ffmpegConverter:advancedPanelExpanded`. Power users get the panel pre-
+expanded on subsequent visits. The "Show everything" toggle uses
+`ffmpegConverter:advancedPanelShowAll`. URL state per #93 carries the actual
+control values — share-links round-trip cleanly. Default values stay out of
+the URL so the URL stays minimal until the user customises something.
+
+**Why these six (not eight, not three):** the strategy doc's Layer-3 sketch
+calls out video codec, CRF, bitrate, fps, audio bitrate, sample rate,
+channels, plus the filters block. Sample rate and channels are out — they're
+audio-mastering decisions the wrong audience for a "convert MOV to MP4"
+visit. The filters block (resize/crop/trim/rotate/flip/speed/normalize) is
+out — those each have their own slug pages already (`/resize`, `/trim`,
+etc.), and stuffing them into a per-format Advanced panel duplicates the
+decision tree. Codec gets the power-user toggle because the format-appropriate
+default is correct for the load-bearing slug (mov-to-mp4 should not let a
+user pick libvpx-vp9 in one tap).
+
+**Out of scope (per ticket Notes):** pix_fmt, profile/level, two-pass
+encoding, lookahead, GOP. These are deeper-than-Layer-3 flags and belong
+either behind "Show everything" if/when we add them or in a future Layer-4
+"raw ffmpeg flags" textarea.
+
+**Backend coupling:** the `transcode`, `transcode_webm`, `transcode_mkv` ops
+in `ops.go` route through shared `runTranscode` / `runTranscodeVPx` helpers
+that read `crf`, `bitrate`, `preset`, `fps`, `audio_bitrate`, `codec` from
+`OpContext.Args`. Bitrate beats CRF when both are present (the panel
+disables the slider in that case so it's not surprising). Unknown codec
+strings fall through to ffmpeg's own validation — the panel only exposes
+the five we know work.
+
+**Files:**
+
+- `apps/ffmpeg-converter/web/src/components/AdvancedPanel.tsx` — the
+  disclosure component.
+- `apps/ffmpeg-converter/web/src/components/ConverterPanel.tsx` — wires the
+  panel below the dropzone for `operation === 'convert'` rows.
+- `apps/ffmpeg-converter/web/src/components/ToolPage.tsx` — passes
+  `showAdvancedPanel` + `advancedDefaults` from the matrix row.
+- `apps/ffmpeg-converter/web/src/components/url-state.ts` — adds `bitrate`
+  and `codec` to the `convert` whitelist; extends `applyUrlToFfmpegCommand`
+  to substitute CRF / preset / bitrate / audio_bitrate into the displayed
+  command.
+- `apps/ffmpeg-converter/web/src/components/converter-row-args.ts` —
+  forwards `videoBitrate` / `videoCodec` preset hints.
+- `apps/ffmpeg-converter/web/src/ops/types.ts` — `OperationPreset` extension
+  for `videoBitrate` and `videoCodec`.
+- `apps/ffmpeg-converter/ops.go` — `runTranscode` / `runTranscodeVPx`
+  helpers; `transcode` / `transcode_webm` / `transcode_mkv` use them.
+
+**Re-revisit if:** the Advanced-panel open rate (per the metrics list above)
+exceeds 40 %. At that threshold the strategy doc says "promote the panel to
+layer 2" — i.e. show it expanded by default for everyone, not just users who
+opened it once. Below 5 % the simple flow is winning and we should consider
+collapsing the codec/preset distinction further.

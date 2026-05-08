@@ -18,7 +18,8 @@
     "test:result-block": "ts-node -P tsconfig.test.json src/components/__tests__/ResultBlock.test.ts",
     "test:url-state": "ts-node -P tsconfig.test.json src/components/__tests__/url-state.test.ts",
     "test:preset-storage": "ts-node -P tsconfig.test.json src/components/__tests__/preset-storage.test.ts",
-    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count && yarn test:hero-drop && yarn test:route-for-file && yarn test:result-block && yarn test:url-state && yarn test:preset-storage"
+    "test:advanced-panel": "ts-node -P tsconfig.test.json src/components/__tests__/AdvancedPanel.test.ts",
+    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count && yarn test:hero-drop && yarn test:route-for-file && yarn test:result-block && yarn test:url-state && yarn test:preset-storage && yarn test:advanced-panel"
   },
   "dependencies": {
     "next": "15.1.6",
