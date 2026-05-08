@@ -2,7 +2,8 @@
  * Operations matrix — single source of truth for pSEO page generation.
  *
  * Schema is defined in `./types.ts` and mirrors §6 of the original vision spec
- * (preserved in git at commit 058ab8c, file `apps/ffmpeg-converter/spec-2026-05-05.md`).
+ * (folded into `phased-spec.md`; dated source doc lives only in git history at
+ * commit 058ab8c).
  *
  * Phase 1 (this ticket): curated subset covering at minimum the four ops named
  * in `phased-spec.md` Phase 1 — `convert`, `compress`, `extract-audio`, `gif` —
