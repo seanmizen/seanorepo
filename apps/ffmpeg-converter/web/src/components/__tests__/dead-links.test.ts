@@ -26,6 +26,18 @@ import {
   routeExistsForSlug,
 } from '../route-registry';
 
+// SEAN-56 — hub-page routes added in this ticket. Listed here so the
+// dead-link walk recognises them as real, and so the footer's "Browse:"
+// nav row (which links into them) doesn't trip the homepage assertion.
+const HUB_ROUTES = [
+  '/convert',
+  '/compress',
+  '/extract-audio',
+  '/trim',
+  '/resize',
+  '/gif',
+];
+
 // ─────────────────────────────────────────────────────── HELPERS ─────────────
 
 /**
@@ -48,9 +60,16 @@ function buildKnownRoutes(): Set<string> {
   known.add('/docs');
   known.add('/llms.txt');
 
+  // SEAN-56 hub pages.
+  for (const hub of HUB_ROUTES) known.add(hub);
+
   // Dynamic operation routes — every matrix slug whose operation is in the
-  // implemented set.
+  // implemented set, plus image-convert rows aliased under /convert/.
   for (const row of MATRIX) {
+    if (row.operation === 'image-convert') {
+      known.add(`/convert/${row.slug}`);
+      continue;
+    }
     if (!IMPLEMENTED_OPERATION_ROUTES.has(row.operation)) continue;
     known.add(`/${row.operation}/${row.slug}`);
   }
@@ -74,6 +93,9 @@ function homepageLinks(): string[] {
   // Footer (SiteFooter.tsx) — but only the internal ones; the GitHub link is
   // external.
   links.push('/llms.txt', '/pricing', '/docs');
+
+  // SEAN-56 — hub-page nav row in the footer.
+  for (const hub of HUB_ROUTES) links.push(hub);
 
   // Logotype links back to /.
   links.push('/');
