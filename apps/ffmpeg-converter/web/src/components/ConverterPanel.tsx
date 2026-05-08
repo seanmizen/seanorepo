@@ -34,6 +34,7 @@ import {
   formatToExt,
 } from './converter-row-args';
 import { type ConversionJob, DropZone } from './DropZone';
+import { OutputFormatChips } from './OutputFormatChips';
 import {
   deletePreset as deletePresetFromStorage,
   exportPresetsAsJson,
@@ -44,7 +45,7 @@ import {
   savePreset as savePresetToStorage,
 } from './preset-storage';
 import { ResultBlock } from './ResultBlock';
-import { adaptiveRowForFile } from './route-for-file';
+import { adaptiveRowForFile, extOf, outputsForExt } from './route-for-file';
 import { pathForSlug } from './route-registry';
 import {
   applyUrlState,
@@ -159,6 +160,22 @@ export function ConverterPanel({
     slugDefault?.row ?? null,
   );
 
+  // SEAN-106: detected input extension for the chip row. First-paint value is
+  // the slug's input format (per AC: "First-paint detected ext = slug's input
+  // format"). After a drop, the file's actual extension. Drives the chip-row
+  // option lookup via `outputsForExt(detectedInputExt)`.
+  const [detectedInputExt, setDetectedInputExt] = useState<string>(
+    slugDefault ? formatToExt(slugDefault.inputFormat) : '',
+  );
+
+  // SEAN-106: track the most-recently-dropped file so chip-pick remounts of
+  // the inner `<DropZone />` can re-fire the upload via `initialFile` instead
+  // of forcing the user to re-drop. Seeded from the parent's `initialFile`
+  // (homepage flow); updated on every fresh drop in the panel itself.
+  const [trackedFile, setTrackedFile] = useState<File | null>(
+    initialFile ?? null,
+  );
+
   // SEAN-93 — initial URL-state snapshot, read on mount. SSR-safe (returns
   // empty when `window` is undefined). Subscribes to `popstate` so the
   // browser back/forward buttons resync the panel; updates triggered by the
@@ -221,6 +238,13 @@ export function ConverterPanel({
   const resolveArgsForFile = useCallback(
     (file: File) => {
       if (!slugDefault) return null;
+      // SEAN-106: every drop refreshes the tracked file (chip clicks remount
+      // DropZone with this as `initialFile`) and the detected input ext (chip
+      // row sources its options from `outputsForExt(detectedInputExt)`).
+      setTrackedFile(file);
+      const droppedExt = extOf(file.name);
+      if (droppedExt) setDetectedInputExt(droppedExt);
+
       const currentRow = detectedRow ?? slugDefault.row;
       const match = adaptiveRowForFile(
         file,
@@ -255,6 +279,40 @@ export function ConverterPanel({
       };
     },
     [slugDefault, detectedRow, urlState],
+  );
+
+  // SEAN-106: chip-pick handler. Looks up the row matching the detected input
+  // + picked output via `outputsForExt`, swaps `detectedRow`, updates the URL
+  // via `history.replaceState`, and re-keys the inner `<DropZone />` so the
+  // in-flight upload (if any) is aborted via the AbortController cleanup and
+  // re-fired with the new row's args via `initialFile={trackedFile}`.
+  const handleChipPick = useCallback(
+    (nextFormat: Format) => {
+      if (!slugDefault) return;
+      const currentRow = detectedRow ?? slugDefault.row;
+      if (nextFormat === currentRow.outputFormat) return;
+      const options = outputsForExt(detectedInputExt);
+      const next = options.find((o) => o.format === nextFormat);
+      if (!next) return;
+      setDetectedRow(next.row);
+      // SEAN-106: clear any completed job so a chip pick from the result
+      // block reverts to the DropZone — which then auto-fires via
+      // `initialFile={trackedFile}` on the freshly-keyed mount. Mirrors the
+      // homepage flow where re-picking on the result block re-fires the
+      // conversion with the new row's args.
+      setJob(null);
+      if (typeof window !== 'undefined') {
+        const newPath = pathForSlug(next.row.slug);
+        if (newPath && newPath !== window.location.pathname) {
+          window.history.replaceState(
+            null,
+            '',
+            newPath + window.location.search,
+          );
+        }
+      }
+    },
+    [slugDefault, detectedRow, detectedInputExt],
   );
 
   // SEAN-95 — Advanced disclosure. Mounted below the converter panel for
@@ -294,6 +352,35 @@ export function ConverterPanel({
     };
   }, [operation]);
 
+  // SEAN-106: chip row mounts above the DropZone on slug pages only. The
+  // homepage flow already wraps `<ConverterPanel />` with its own chip row
+  // inside `<HeroDrop />`'s `<RunningPanel />`, so we'd double-render
+  // otherwise. Active chip = the panel's current effective output format
+  // (which falls back to `PREFERRED_TARGET_BY_EXT[ext]` when the URL's hinted
+  // output isn't reachable from the detected input — see SEAN-105 / SEAN-103
+  // decision records).
+  const slugChipRow = slugDefault ? (
+    <OutputFormatChips
+      detectedInputExt={detectedInputExt}
+      activeFormat={effectiveOutputExt}
+      onPick={handleChipPick}
+    />
+  ) : null;
+
+  // SEAN-106: re-key the inner `<DropZone />` on the effective row's slug.
+  // Picking a different output chip swaps `detectedRow`, which changes the
+  // key, which unmounts the old DropZone (firing AbortController cleanup ⇒
+  // in-flight upload aborts) and mounts a fresh one with `initialFile=
+  // trackedFile`, auto-re-firing the upload with the new row's args.
+  const dropZoneKey = slugDefault
+    ? (detectedRow ?? slugDefault.row).slug
+    : undefined;
+  // For slug pages, the parent `<HeroDrop />` doesn't supply `initialFile` —
+  // but after the first drop, the panel itself tracks the file so chip-pick
+  // remounts can re-fire. Homepage flow keeps using its own `initialFile`
+  // (passed as a prop and seeded into `trackedFile` on mount).
+  const effectiveInitialFile = trackedFile ?? initialFile;
+
   if (!job) {
     return (
       <>
@@ -308,14 +395,16 @@ export function ConverterPanel({
             }}
           />
         )}
+        {slugChipRow}
         <DropZone
+          key={dropZoneKey}
           goOp={effectiveGoOp}
           outputExt={effectiveOutputExt}
           accept={accept}
           acceptLabel={effectiveAcceptLabel}
           extraArgs={mergedExtraArgs}
           onJobComplete={setJob}
-          initialFile={initialFile}
+          initialFile={effectiveInitialFile}
           resolveArgsForFile={slugDefault ? resolveArgsForFile : undefined}
         />
         {advanced}
@@ -324,6 +413,7 @@ export function ConverterPanel({
   }
   return (
     <>
+      {slugChipRow}
       <ResultBlock
         job={job}
         ffmpegCommand={displayedCommand}

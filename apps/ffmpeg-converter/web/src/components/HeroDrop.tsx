@@ -37,6 +37,7 @@ import {
   findReverse,
   formatToExt,
 } from './converter-row-args';
+import { OutputFormatChips } from './OutputFormatChips';
 import {
   extOf,
   friendlyDropError,
@@ -223,72 +224,19 @@ function RunningPanel({
     });
   };
 
-  // Only render the chip row when there's at least one alternative format
-  // (i.e. options.length >= 2). Single-output inputs would just see one chip
-  // showing what's already running — adds noise, removes nothing.
-  const showChips = options.length >= 2;
-
   return (
     <div className="w-full">
-      {showChips && (
-        <div
-          className={[
-            'mb-4 flex flex-col items-center gap-3',
-            'rounded-2xl border border-gray-800 bg-gray-900/40',
-            'px-4 py-3 sm:flex-row sm:justify-between',
-          ].join(' ')}
-        >
-          <div className="flex items-center gap-2 text-sm text-gray-300">
-            <span aria-hidden>{'\u{1F4C4}'}</span>
-            <span className="max-w-[16rem] truncate font-medium">
-              {file.name}
-            </span>
-            <span className="text-gray-500">→</span>
-            <span className="font-medium text-gray-100">.{outputExt}</span>
-          </div>
-          <ul
-            aria-label="Change output format"
-            className="flex flex-wrap items-center justify-center gap-2"
-          >
-            <li className="text-xs text-gray-500">change format:</li>
-            {options.map((option) => {
-              const active = option.format === row.outputFormat;
-              return (
-                <li key={option.format}>
-                  <button
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => handlePick(option.format)}
-                    className={[
-                      'inline-flex items-center rounded-full',
-                      'border px-3 py-1 text-xs font-medium transition-colors',
-                      active
-                        ? 'border-indigo-400 bg-indigo-500/20 text-white'
-                        : 'border-gray-700 bg-gray-900/60 text-gray-200 hover:border-indigo-500 hover:bg-indigo-500/10',
-                    ].join(' ')}
-                  >
-                    {option.label}
-                  </button>
-                </li>
-              );
-            })}
-            <li>
-              <button
-                type="button"
-                onClick={onCancel}
-                className={[
-                  'inline-flex items-center rounded-full',
-                  'border border-gray-700 bg-transparent px-3 py-1',
-                  'text-xs text-gray-400',
-                  'transition-colors hover:border-gray-600 hover:text-gray-300',
-                ].join(' ')}
-              >
-                Cancel
-              </button>
-            </li>
-          </ul>
-        </div>
-      )}
+      {/* SEAN-106: chip row extracted into <OutputFormatChips />. Hides itself
+          when outputsForExt(ext).length < 2. The homepage flow passes the
+          dropped file's name + a Cancel button (returns to empty hero); slug
+          pages call the same component without those props. */}
+      <OutputFormatChips
+        detectedInputExt={ext}
+        activeFormat={row.outputFormat}
+        onPick={handlePick}
+        fileName={file.name}
+        onCancel={onCancel}
+      />
       <ConverterPanel
         // SEAN-81: keying on the row slug forces a fresh mount when the user
         // re-picks the output format. The unmount aborts the in-flight
