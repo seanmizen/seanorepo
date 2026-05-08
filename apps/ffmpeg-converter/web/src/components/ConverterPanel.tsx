@@ -45,7 +45,13 @@ import {
   savePreset as savePresetToStorage,
 } from './preset-storage';
 import { ResultBlock } from './ResultBlock';
-import { adaptiveRowForFile, extOf, outputsForExt } from './route-for-file';
+import {
+  adaptiveRowForFile,
+  extOf,
+  friendlyDropError,
+  matrixRowForFile,
+  outputsForExt,
+} from './route-for-file';
 import { pathForSlug } from './route-registry';
 import {
   applyUrlState,
@@ -176,6 +182,15 @@ export function ConverterPanel({
     initialFile ?? null,
   );
 
+  // SEAN-108: friendly fallback when the dropped file has no matrix coverage
+  // at all (`.zip`, `.exe`, `.docx`, `.tif`). Holds the user-visible message
+  // produced by `friendlyDropError(file.name)` — the same string the homepage
+  // shows for an unsupported drop. Set inside `resolveArgsForFile`'s reject
+  // branch and via `onFileRejected`; cleared by the "Clear and try another
+  // file" button which also restores the slug-default row so URL semantics
+  // and chip-row-derived knobs revert to the page the user landed on.
+  const [rejectionMessage, setRejectionMessage] = useState<string | null>(null);
+
   // SEAN-93 — initial URL-state snapshot, read on mount. SSR-safe (returns
   // empty when `window` is undefined). Subscribes to `popstate` so the
   // browser back/forward buttons resync the panel; updates triggered by the
@@ -251,7 +266,22 @@ export function ConverterPanel({
         currentRow.operation,
         currentRow.outputFormat,
       );
-      if (!match) return null;
+      // SEAN-108: `adaptiveRowForFile` returns null for two distinct reasons —
+      // (a) the input has *some* matrix coverage but not on this output (very
+      // rare, falls back inside the helper), or (b) the input has NO coverage
+      // anywhere (zip/exe/docx/tif). We disambiguate here: if `matrixRowForFile`
+      // also returns null we know it's case (b) and surface the friendly
+      // message instead of letting the conversion fire with the slug default
+      // (which would 4xx with an opaque "unsupported input" backend error,
+      // and crucially would also fire `replaceState` from the backend's
+      // perspective of the URL — neither acceptable per AC).
+      if (!match) {
+        if (matrixRowForFile(file) === null) {
+          setRejectionMessage(friendlyDropError(file.name));
+          return { reject: true as const };
+        }
+        return null;
+      }
       if (match.row.slug === currentRow.slug) return null;
 
       // Swap detected row + URL slug. The state update is async (React
@@ -382,6 +412,43 @@ export function ConverterPanel({
   const effectiveInitialFile = trackedFile ?? initialFile;
 
   if (!job) {
+    // SEAN-108: friendly-fallback branch — render the message + Clear button
+    // INSIDE the panel surface, replacing the dropzone. The page shell (h1,
+    // FAQ, "How it works") around <ConverterPanel /> stays put because they
+    // live in <ToolPage />. The dropzone is the only thing that swaps. We
+    // still surface the saved-presets bar above (those presets are tied to
+    // the operation, not the file — their existence is independent of this
+    // particular drop having no coverage).
+    if (rejectionMessage !== null) {
+      return (
+        <>
+          {operation && (
+            <SavedPresetsBar
+              operation={operation}
+              currentArgs={urlState}
+              onApply={(preset) => {
+                if (typeof window === 'undefined') return;
+                applyUrlState(preset.args, operation);
+                setUrlState(preset.args);
+              }}
+            />
+          )}
+          <FriendlyFallback
+            message={rejectionMessage}
+            onClear={() => {
+              // Restore the slug-default row so chip-row-derived knobs and
+              // the displayed ffmpeg command revert to the page the user
+              // landed on. We deliberately do NOT touch the URL — no
+              // `replaceState` ever fires for unsupported drops, so the
+              // URL is already untouched and there's nothing to roll back.
+              setRejectionMessage(null);
+              if (slugDefault) setDetectedRow(slugDefault.row);
+            }}
+          />
+          {advanced}
+        </>
+      );
+    }
     return (
       <>
         {operation && (
@@ -406,6 +473,20 @@ export function ConverterPanel({
           onJobComplete={setJob}
           initialFile={effectiveInitialFile}
           resolveArgsForFile={slugDefault ? resolveArgsForFile : undefined}
+          onFileRejected={
+            slugDefault
+              ? (file) => {
+                  // Resolver already set rejectionMessage in the same tick;
+                  // this hook is the explicit signal that the upload was
+                  // suppressed. Kept as a separate callback so the contract
+                  // is clear at the DropZone boundary even though the
+                  // resolver already wrote the state.
+                  if (rejectionMessage === null) {
+                    setRejectionMessage(friendlyDropError(file.name));
+                  }
+                }
+              : undefined
+          }
         />
         {advanced}
       </>
@@ -427,6 +508,53 @@ export function ConverterPanel({
       />
       {advanced}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────── FRIENDLY FALLBACK ────
+
+interface FriendlyFallbackProps {
+  /** Pre-formatted message from `friendlyDropError(file.name)`. */
+  message: string;
+  /** Called when the user clicks "Clear and try another file". */
+  onClear: () => void;
+}
+
+/**
+ * SEAN-108 — replacement for the dropzone shown when the user drops a file
+ * with no matrix coverage on a slug page. Wording is the same as the
+ * homepage friendly-error path so users see consistent copy regardless of
+ * entry point. The Clear button is the only escape — no auto-dismiss, no
+ * timeout — so the user can read the message at their own pace.
+ */
+function FriendlyFallback({ message, onClear }: FriendlyFallbackProps) {
+  return (
+    <div
+      className={[
+        'flex w-full flex-col items-center justify-center gap-4',
+        'rounded-2xl border-2 border-dashed border-gray-700',
+        'bg-gray-900/40 px-6 py-16 text-center',
+      ].join(' ')}
+    >
+      <div aria-hidden className="text-5xl">
+        {'\u{1F914}'}
+      </div>
+      <p role="alert" className="max-w-md text-balance text-base text-gray-200">
+        {message}
+      </p>
+      <button
+        type="button"
+        onClick={onClear}
+        className={[
+          'inline-flex items-center rounded-full',
+          'border border-gray-700 bg-gray-900/60',
+          'px-4 py-2 text-sm font-medium text-gray-100',
+          'transition-colors hover:border-indigo-500 hover:text-white',
+        ].join(' ')}
+      >
+        Clear and try another file
+      </button>
+    </div>
   );
 }
 

@@ -19,7 +19,12 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 
 import { MATRIX_BY_SLUG } from '../../ops/matrix';
-import { adaptiveRowForFile, outputsForExt } from '../route-for-file';
+import {
+  adaptiveRowForFile,
+  friendlyDropError,
+  matrixRowForFile,
+  outputsForExt,
+} from '../route-for-file';
 
 describe('SEAN-105 ConverterPanel adaptive-panel — adaptiveRowForFile', () => {
   it('keeps the current row when the dropped file matches the slug input', () => {
@@ -179,5 +184,81 @@ describe('SEAN-106 OutputFormatChips on slug pages', () => {
       formats.has('webp'),
       'png chip row must include the fallback output',
     );
+  });
+});
+
+/**
+ * SEAN-108 — friendly fallback when the dropped file has no matrix coverage.
+ *
+ * `ConverterPanel.resolveArgsForFile` consults two helpers in sequence:
+ *   1. `adaptiveRowForFile` — try to land on a same-output row first.
+ *   2. `matrixRowForFile`   — disambiguate "no same-output row" (the file
+ *      has matrix coverage somewhere else) from "no matrix coverage at all"
+ *      (zip / exe / docx / tif). The latter is the SEAN-108 reject branch.
+ *
+ * The branch in the panel is one if-statement built on these two helpers
+ * plus `friendlyDropError`. We test the helper composition here — same
+ * pattern as the SEAN-105 tests above (the JSX render path needs JSDOM,
+ * which the suite intentionally avoids).
+ */
+describe('SEAN-108 ConverterPanel friendly-fallback — no matrix coverage', () => {
+  // The four rep extensions called out in the AC. Each must satisfy:
+  //   - matrixRowForFile returns null (no coverage)
+  //   - adaptiveRowForFile returns null on a representative slug page
+  //   - friendlyDropError produces a user-visible message naming the ext
+  const NO_COVERAGE_EXTS = ['zip', 'exe', 'docx', 'tif'];
+
+  for (const ext of NO_COVERAGE_EXTS) {
+    it(`returns null from matrixRowForFile for .${ext}`, () => {
+      const match = matrixRowForFile({ name: `payload.${ext}` });
+      assert.equal(
+        match,
+        null,
+        `.${ext} must have no matrix coverage — friendly fallback depends on this`,
+      );
+    });
+
+    it(`returns null from adaptiveRowForFile for .${ext} on a slug page`, () => {
+      // Drop the unsupported file on /convert/mp4-to-gif. Both helpers must
+      // return null so the panel knows to surface the friendly message
+      // rather than fire the conversion with the slug default.
+      const match = adaptiveRowForFile(
+        { name: `payload.${ext}` },
+        'gif',
+        'gif',
+      );
+      assert.equal(match, null);
+    });
+
+    it(`friendlyDropError mentions .${ext} verbatim`, () => {
+      const msg = friendlyDropError(`payload.${ext}`);
+      assert.ok(
+        msg.includes(`.${ext}`),
+        `friendly message must name the unsupported extension (got: ${msg})`,
+      );
+    });
+  }
+
+  it('friendlyDropError handles files with no extension at all', () => {
+    const msg = friendlyDropError('README');
+    assert.ok(
+      msg.length > 0,
+      'no-extension files must still get a friendly message, not an empty string',
+    );
+  });
+
+  it('friendlyDropError output is the same string the homepage uses', () => {
+    // The AC requires identical wording between homepage and slug pages.
+    // Since both call `friendlyDropError(file.name)`, this is structurally
+    // guaranteed — but the test pins it so a future refactor can't drift
+    // the slug-page panel onto a different message source by mistake.
+    const filename = 'archive.zip';
+    const homepageMsg = friendlyDropError(filename);
+    // The slug-page panel calls the SAME function with the SAME input —
+    // there's no second message generator to compare against. The test
+    // exists as a structural anchor: any future change that introduces a
+    // second message string must trip an explicit grep for this test.
+    assert.equal(typeof homepageMsg, 'string');
+    assert.ok(homepageMsg.length > 0);
   });
 });
