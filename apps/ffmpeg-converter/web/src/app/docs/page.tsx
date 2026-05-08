@@ -1,7 +1,7 @@
 // Phase 4/5 placeholder. The real /docs surface — /docs/api (Phase 4) and
-// /docs/mcp (Phase 5) — ships with the API tier and MCP server. This stub
-// exists so the header & footer Docs link doesn't 404 in the meantime.
-// Do NOT remove the route without also removing the nav links — see SEAN-51.
+// /docs/mcp (Phase 5) — ships with the API tier and MCP server. The header
+// & footer Docs nav links were removed in SEAN-82 — this stub now only covers
+// direct/bookmarked URLs so they don't 404 until Phase 4/5 ships.
 
 import type { Metadata } from 'next';
 import Link from 'next/link';

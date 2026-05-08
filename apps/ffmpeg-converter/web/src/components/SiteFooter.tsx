@@ -1,6 +1,8 @@
-// Site footer. Every link here MUST resolve — /pricing, /docs, /llms.txt all
-// have placeholder routes until Phase 4/5 ship the real pages (see SEAN-51).
-// Do not add a nav link here without first creating its route.
+// Site footer. Every link here MUST resolve. /llms.txt is a real route; the
+// hub-page links target real generated routes (SEAN-56). The /pricing and
+// /docs placeholder links were removed in SEAN-82 — they pointed at empty
+// stubs and were pure funnel friction. Re-add them once Phase 4 ships real
+// content.
 //
 // SEAN-56 added the "Browse" row of hub-page links. Each one targets a hub
 // page (`/convert`, `/compress`, etc.) that lists every variant of that
@@ -53,16 +55,6 @@ export function SiteFooter() {
                   prefetch={false}
                 >
                   /llms.txt
-                </Link>
-              </li>
-              <li>
-                <Link href="/pricing" className="hover:text-gray-300">
-                  Pricing
-                </Link>
-              </li>
-              <li>
-                <Link href="/docs" className="hover:text-gray-300">
-                  Docs
                 </Link>
               </li>
               <li>
