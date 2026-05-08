@@ -24,12 +24,18 @@
 import Link from 'next/link';
 import { buildToolPageSchemas } from '@/lib/schemas';
 import { resolvePageCopy } from '@/ops/copy';
-import { MATRIX_BY_SLUG } from '@/ops/matrix';
 import type { OperationRow, ResolvedPage } from '@/ops/types';
 import { ConverterPanel } from './ConverterPanel';
+import {
+  buildAcceptLabel,
+  buildAcceptString,
+  buildExtraArgs,
+  findReverse,
+  formatToExt,
+  resolveSiblings,
+} from './converter-row-args';
 import { FAQ } from './FAQ';
 import { JsonLd } from './JsonLd';
-import { pathForSlug, routeExistsForSlug } from './route-registry';
 
 export interface ToolPageProps {
   row: OperationRow;
@@ -82,7 +88,7 @@ export function ToolPage({ row, page }: ToolPageProps) {
       <section className="mb-10" aria-label="Convert your file">
         <ConverterPanel
           goOp={row.goOp}
-          outputExt={extOf(row.outputFormat)}
+          outputExt={formatToExt(row.outputFormat)}
           accept={accept}
           acceptLabel={acceptLabel}
           extraArgs={extraArgs}
@@ -198,116 +204,5 @@ function HowItWorks({
   );
 }
 
-// ─────────────────────────────────────────────────────── HELPERS ─────────────
-
-/**
- * Map a Format enum to the file extension used in URLs and filenames. Most
- * formats are their own extension; the special-cases below cover the ones
- * with longer names.
- */
-function extOf(format: string): string {
-  switch (format) {
-    case 'gif-static':
-      return 'gif';
-    case 'webp-anim':
-      return 'webp';
-    default:
-      return format;
-  }
-}
-
-/**
- * Build the `<input accept>` attribute from the row's accepted input formats.
- * Each format maps to its `.ext` form; we don't bother with MIME types since
- * the backend validates anyway.
- */
-function buildAcceptString(row: OperationRow): string {
-  return row.inputFormats.map((f) => `.${extOf(f)}`).join(',');
-}
-
-/**
- * Human-readable accept label for the drop zone copy. Single format → just
- * the name (`MOV`); 2-3 formats → all listed; many formats → "video file" etc.
- */
-function buildAcceptLabel(row: OperationRow): string {
-  if (row.inputFormats.length === 0) return 'file';
-  if (row.inputFormats.length === 1) {
-    return extOf(row.inputFormats[0] ?? '').toUpperCase();
-  }
-  if (row.inputFormats.length <= 3) {
-    return row.inputFormats.map((f) => extOf(f).toUpperCase()).join(', ');
-  }
-  // Many inputs — group by media kind for the copy.
-  return 'video file';
-}
-
-/**
- * Build the `extraArgs` map forwarded to the Go op. Pulls preset hints from
- * the row (CRF, target size, FPS, etc.) — the backend reads them from the
- * multipart form values.
- */
-function buildExtraArgs(row: OperationRow): Record<string, string> | undefined {
-  const args: Record<string, string> = {};
-  const p = row.preset;
-  if (!p) return undefined;
-  if (p.crf !== undefined) args.crf = String(p.crf);
-  if (p.preset !== undefined) args.preset = p.preset;
-  if (p.targetSizeMb !== undefined) {
-    args.target_size_mb = String(p.targetSizeMb);
-  }
-  if (p.resolution !== undefined) args.resolution = p.resolution;
-  if (p.fps !== undefined) args.fps = String(p.fps);
-  if (p.audioBitrate !== undefined) args.audio_bitrate = p.audioBitrate;
-  return Object.keys(args).length > 0 ? args : undefined;
-}
-
-interface SiblingLink {
-  slug: string;
-  label: string;
-  href: string;
-}
-
-/**
- * Resolve `row.related` slugs against the matrix.
- *
- * SEAN-50: every sibling must be (a) present in `MATRIX_BY_SLUG` and (b) have
- * an implemented operation route. Slugs that fail either gate are dropped
- * rather than rendered as 404 links. The visible "Related" section hides
- * itself when the filter empties the list.
- */
-function resolveSiblings(row: OperationRow): SiblingLink[] {
-  const out: SiblingLink[] = [];
-  for (const slug of row.related ?? []) {
-    const sib = MATRIX_BY_SLUG[slug];
-    if (!sib) continue;
-    if (!routeExistsForSlug(slug)) continue;
-    const href = pathForSlug(slug);
-    if (!href) continue;
-    out.push({ slug, label: sib.h1, href });
-  }
-  return out;
-}
-
-/**
- * Find the inverse-direction row (e.g. `mov-to-mp4` → `mp4-to-mov`). Only
- * applies to two-format `convert` rows whose reverse slug is in the matrix
- * AND whose route is implemented. Returns null otherwise — the converter
- * panel hides the reverse-link CTA when this is null.
- */
-function findReverse(
-  row: OperationRow,
-): { slug: string; label: string; operation: string } | null {
-  if (row.operation !== 'convert') return null;
-  if (row.inputFormats.length !== 1) return null;
-  const inputExt = extOf(row.inputFormats[0] ?? '');
-  const outputExt = extOf(row.outputFormat);
-  const reverseSlug = `${outputExt}-to-${inputExt}`;
-  const sib = MATRIX_BY_SLUG[reverseSlug];
-  if (!sib) return null;
-  if (!routeExistsForSlug(reverseSlug)) return null;
-  return {
-    slug: sib.slug,
-    label: sib.h1,
-    operation: sib.operation,
-  };
-}
+// Row → ConverterPanel-args mapping helpers live in `./converter-row-args.ts`
+// so the homepage `<HeroDrop />` flow (SEAN-75) reuses the same logic.

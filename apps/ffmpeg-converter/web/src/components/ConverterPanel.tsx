@@ -32,6 +32,19 @@ export interface ConverterPanelProps {
   reverseLabel?: string;
   /** Operation prefix for the reverse URL. */
   reverseOperation?: string;
+  /**
+   * SEAN-75: pre-loaded file forwarded from the homepage drop zone. When set,
+   * `<DropZone />` auto-fires the upload on mount so the user reaches the
+   * converting/result UI without dropping a second time.
+   */
+  initialFile?: File;
+  /**
+   * SEAN-75: called when the user clicks "Try another file" in the result
+   * block. Lets the homepage flow tear down the embedded converter and
+   * restore the original hero drop zone, instead of leaving a slug-page-shaped
+   * panel sitting on the homepage.
+   */
+  onReset?: () => void;
 }
 
 export function ConverterPanel({
@@ -44,6 +57,8 @@ export function ConverterPanel({
   reverseSlug,
   reverseLabel,
   reverseOperation,
+  initialFile,
+  onReset,
 }: ConverterPanelProps) {
   const [job, setJob] = useState<ConversionJob | null>(null);
 
@@ -56,6 +71,7 @@ export function ConverterPanel({
         acceptLabel={acceptLabel}
         extraArgs={extraArgs}
         onJobComplete={setJob}
+        initialFile={initialFile}
       />
     );
   }
@@ -66,7 +82,10 @@ export function ConverterPanel({
       reverseSlug={reverseSlug}
       reverseLabel={reverseLabel}
       reverseOperation={reverseOperation}
-      onReset={() => setJob(null)}
+      onReset={() => {
+        setJob(null);
+        onReset?.();
+      }}
     />
   );
 }
