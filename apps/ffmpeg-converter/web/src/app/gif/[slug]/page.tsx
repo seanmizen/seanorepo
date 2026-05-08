@@ -4,6 +4,12 @@
 // All rendering goes through the shared <ToolPage row={...} /> component —
 // no per-operation customisation lives here.
 //
+// SEAN-92: <ToolPage /> branches on `row.operation === 'gif'` and mounts
+// <GifPresetPanel /> instead of the plain <ConverterPanel />, which renders
+// the preset chip row + customise disclosure below the panel. Keeps this
+// route file purely declarative (slug → row → ToolPage) — the gif-specific
+// UI lives in the shared component, not the route.
+//
 // See `/convert/[slug]/page.tsx` for the full Phase 2 routing rationale.
 
 import type { Metadata } from 'next';

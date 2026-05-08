@@ -250,6 +250,41 @@ export interface OperationPreset {
   fps?: number;
   /** Audio bitrate (`64k`, `128k`, `192k`). */
   audioBitrate?: string;
+  /**
+   * SEAN-92: target output width in pixels. Used by gif/preview ops where
+   * the `scale` filter trades file size for fidelity. The matching filter
+   * keeps height auto-derived to preserve aspect (`scale=W:-1`).
+   */
+  width?: number;
+  /**
+   * SEAN-92: dither algorithm passed to ffmpeg's `paletteuse=dither=...`.
+   * Used by gif ops. Common values: `sierra2_4a` (default, balanced),
+   * `floyd_steinberg`, `bayer`, `none`.
+   */
+  dither?:
+    | 'sierra2_4a'
+    | 'floyd_steinberg'
+    | 'bayer'
+    | 'none'
+    | 'heckbert'
+    | 'sierra2'
+    | 'sierra3';
+  /**
+   * SEAN-92: max palette size for ffmpeg's `palettegen=max_colors=...`.
+   * GIF caps at 256; smaller values shrink the file at the cost of
+   * banding on gradients.
+   */
+  maxColors?: number;
+  /**
+   * SEAN-92: trim start offset in seconds. Forwarded as `start` to gif ops
+   * so users can clip a tighter window than the full input.
+   */
+  trimStartSec?: number;
+  /**
+   * SEAN-92: trim duration in seconds. Forwarded as `duration` to gif ops.
+   * Absent = use full remaining input.
+   */
+  trimDurationSec?: number;
 }
 
 /**
