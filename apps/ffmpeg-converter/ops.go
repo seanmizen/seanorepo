@@ -392,6 +392,15 @@ func RegisterOps() map[string]*Operation {
 		},
 	})
 	add(&Operation{
+		Name: "audio_ogg", Category: "audio",
+		Description: "Convert/extract to Ogg Vorbis",
+		DefaultExt:  ".ogg",
+		Run: func(ctx context.Context, oc OpContext) error {
+			return ffmpegRun(ctx, "-i", oc.Inputs[0],
+				"-vn", "-c:a", "libvorbis", "-q:a", "5", oc.Output)
+		},
+	})
+	add(&Operation{
 		Name: "audio_aac", Category: "audio",
 		Description: "Convert/extract to AAC (m4a)",
 		DefaultExt:  ".m4a",
@@ -411,11 +420,16 @@ func RegisterOps() map[string]*Operation {
 	})
 	add(&Operation{
 		Name: "extract_audio", Category: "audio",
-		Description: "Strip audio from a video (wav)",
+		Description: "Strip audio from a video (CD-quality WAV)",
 		DefaultExt:  ".wav",
 		Run: func(ctx context.Context, oc OpContext) error {
+			// Mirror source rate/channels by not forcing -ar/-ac. Output is
+			// CD-quality stereo WAV when the source is stereo, mono WAV when
+			// the source is mono — appropriate for music, mixing, and editing.
+			// Transcription pipelines that need 16 kHz mono should resample
+			// after the fact.
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", oc.Output)
+				"-vn", "-c:a", "pcm_s16le", oc.Output)
 		},
 	})
 	add(&Operation{
