@@ -1,10 +1,10 @@
 # Sean's Converter — Phased Build Plan
 
-> Working delivery doc. Turns the vision in [`spec-2026-05-05.md`](./spec-2026-05-05.md) into ticket-sized phases, accounting for what already exists in this directory. Hand this to a ticket-writing agent.
+> Working delivery doc. Turns the original vision (preserved in git at commit `058ab8c` as `spec-2026-05-05.md`, since superseded by this file) into ticket-sized phases, accounting for what already exists in this directory. Hand this to a ticket-writing agent.
 
 ## Reference reading (in priority order)
 
-- [`spec-2026-05-05.md`](./spec-2026-05-05.md) — vision, non-negotiables, voice, URL architecture, schema list, anti-goals. Source of truth for the *why*.
+- Original vision spec — preserved only in git history at commit `058ab8c` (file `apps/ffmpeg-converter/spec-2026-05-05.md`). Captured the *why*: non-negotiables, voice, URL architecture, schema list, anti-goals. Its content has been folded into this doc; the dated file no longer exists in the working tree.
 - [`docs/STRATEGY.md`](./docs/STRATEGY.md) — simplicity vs fractal-options tradeoff, the 12 flagship presets, repeat-customer hooks, wasm-vs-server tiering rules.
 - [`docs/COMPETITORS.md`](./docs/COMPETITORS.md) — competitor numbers; source for the comparison table.
 - [`README.md`](./README.md) — current Go service shape and op registry.
@@ -21,7 +21,7 @@ Why this is the right architecture and stays the right architecture:
 - **Operations simplicity is a moat.** Cloudconvert et al. burn engineering time on infra that doesn't differentiate. We don't. Every hour not spent on Redis cluster topology is an hour spent shipping recipes and pSEO pages.
 - **Backups are `cp seans-converter.db ./backup/`.** That's the whole disaster-recovery plan.
 
-**Where this doc disagrees with [`spec-2026-05-05.md`](./spec-2026-05-05.md) on hosting/persistence/scale, this doc wins.** The dated spec preserves the vision (three doors, no watermark, MCP, AEO). Stack choices in §4 of that doc — Postgres, Redis, S3, Vercel, Fly worker fleet — are superseded by the architecture above.
+**Where this doc disagrees with the original vision spec (commit `058ab8c`) on hosting/persistence/scale, this doc wins.** That spec preserved the vision (three doors, no watermark, MCP, AEO). Its §4 stack choices — Postgres, Redis, S3, Vercel, Fly worker fleet — are superseded by the architecture above.
 
 We revisit this only when measured load on the home server forces it. Not before. Not "just in case".
 
@@ -234,7 +234,7 @@ Don't let scope drift back in via tickets. If you find yourself writing one of t
 
 ## Plan of action
 
-1. **Now (this commit):** `new-spec.md` renamed to `spec-2026-05-05.md`. This file is the working delivery doc. The dated spec is the immutable vision; this file is the moving plan.
+1. **Now (this commit):** the dated vision spec has been folded into this doc and removed from the working tree (preserved at commit `058ab8c` for archaeology). This file is the working delivery doc and the moving plan.
 2. **Next session:** spawn a ticket-writing agent. Scope: Phase 0 + Phase 1 only. Each deliverable above maps to roughly one ticket — split if obviously bigger (e.g. "Postgres schema" might be schema + migration tooling). Do not write tickets past Phase 1 yet — let the plan absorb learnings before committing more.
 3. **Per-phase rules:**
    - One phase = one GitHub Project milestone.
