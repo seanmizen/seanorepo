@@ -11,6 +11,11 @@
 import { MATRIX_BY_SLUG } from '@/ops/matrix';
 import type { OperationRow } from '@/ops/types';
 import { pathForSlug, routeExistsForSlug } from './route-registry';
+import {
+  applyUrlToFfmpegCommand,
+  mergeUrlIntoExtraArgs,
+  type UrlState,
+} from './url-state';
 
 /**
  * Map a Format enum to the file extension used in URLs and filenames. Most
@@ -106,6 +111,31 @@ export interface SiblingLink {
   slug: string;
   label: string;
   href: string;
+}
+
+/**
+ * SEAN-93 — merge a row's preset-derived extraArgs with any URL-state
+ * overrides. URL beats preset beats hard-coded fallback (the fallback lives
+ * inside the matrix's ffmpegCommand string). Returns `undefined` when both
+ * inputs are empty so the panel can spread it into props unchanged.
+ */
+export function buildExtraArgsWithUrlState(
+  row: OperationRow,
+  urlState: UrlState,
+): Record<string, string> | undefined {
+  return mergeUrlIntoExtraArgs(buildExtraArgs(row), urlState);
+}
+
+/**
+ * SEAN-93 — substitute URL-state values into a row's ffmpegCommand so the
+ * displayed command reflects what will actually run. Thin wrapper kept here
+ * so call sites import from a single module.
+ */
+export function buildFfmpegCommand(
+  row: OperationRow,
+  urlState: UrlState,
+): string {
+  return applyUrlToFfmpegCommand(row.ffmpegCommand, urlState);
 }
 
 /**
