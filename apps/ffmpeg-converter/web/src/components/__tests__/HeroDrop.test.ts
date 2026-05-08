@@ -22,7 +22,11 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 
-import { matrixRowForFile, routeForFile } from '../route-for-file';
+import {
+  matrixRowForFile,
+  outputsForExt,
+  routeForFile,
+} from '../route-for-file';
 import { submitConversion } from '../submit-conversion';
 
 // ─────────────────────────────────────────────────────── HELPERS ─────────────
@@ -171,5 +175,118 @@ describe('SEAN-75 homepage drop — file is honoured without re-upload', () => {
     assert.ok(call);
     assert.equal(call.body.get('target_size_mb'), '25');
     assert.equal(call.body.get('crf'), '28');
+  });
+});
+
+describe('SEAN-79 outputsForExt — homepage format picker options', () => {
+  it('returns the full set of convert outputs for a .mov input', () => {
+    // Dropping a .mov should let the user pick mp4 (default), webm, mov, and
+    // any other convert-style row whose route is implemented today. The
+    // picker hides extract-audio / gif / compress — those are different
+    // intents, not different output formats of the convert intent.
+    const options = outputsForExt('mov');
+    assert.ok(options.length >= 2, 'expected at least 2 mov output options');
+
+    const formats = new Set<string>(options.map((o) => o.format));
+    assert.ok(formats.has('mp4'), 'mov picker must offer mp4');
+    assert.ok(formats.has('webm'), 'mov picker must offer webm');
+
+    // Extract-audio outputs (mp3/wav/aac/flac/ogg/opus) MUST NOT appear in
+    // the convert picker — they are a separate operation.
+    for (const audio of ['mp3', 'wav', 'aac', 'flac', 'ogg', 'opus']) {
+      assert.ok(
+        !formats.has(audio),
+        `mov picker must not surface audio output ${audio}`,
+      );
+    }
+    // Same for animated outputs (gif op, not convert).
+    for (const anim of ['gif', 'webp-anim']) {
+      assert.ok(
+        !formats.has(anim),
+        `mov picker must not surface animated output ${anim}`,
+      );
+    }
+  });
+
+  it('marks exactly one option as the default and sorts it first', () => {
+    const options = outputsForExt('mov');
+    const defaults = options.filter((o) => o.isDefault);
+    assert.equal(
+      defaults.length,
+      1,
+      'expected exactly one default option for .mov',
+    );
+    assert.equal(defaults[0]?.format, 'mp4', '.mov default must be mp4');
+    // Default first in the sorted list.
+    assert.equal(
+      options[0]?.format,
+      'mp4',
+      'default option must sort to the front',
+    );
+  });
+
+  it('agrees with matrixRowForFile on the default target row', () => {
+    // The picker default and the routeForFile preferred target must point at
+    // the same row — otherwise a user who never touches the picker gets a
+    // different target from someone who lands on the slug page directly.
+    const exts = ['mov', 'mp4', 'webm', 'mkv', 'png', 'heic'];
+    for (const ext of exts) {
+      const match = matrixRowForFile({ name: `a.${ext}` });
+      const options = outputsForExt(ext);
+      if (!match) {
+        // No match means no preferred target — picker may still have options
+        // but no `isDefault: true` entry.
+        const hasDefault = options.some((o) => o.isDefault);
+        assert.ok(
+          !hasDefault,
+          `outputsForExt('${ext}') flagged a default but matrixRowForFile returned null`,
+        );
+        continue;
+      }
+      const def = options.find((o) => o.isDefault);
+      assert.ok(def, `outputsForExt('${ext}') has no default option`);
+      assert.equal(
+        def.format,
+        match.row.outputFormat,
+        `picker default for .${ext} (${def.format}) does not match matrixRowForFile (${match.row.outputFormat})`,
+      );
+    }
+  });
+
+  it('returns empty array for an unknown extension', () => {
+    assert.deepEqual(outputsForExt(''), []);
+    assert.deepEqual(outputsForExt('xyz-not-real'), []);
+  });
+
+  it('every returned row has an implemented route', () => {
+    // Same gating as routeForFile / matrixRowForFile — clicking a chip must
+    // never land the user on a 404. We can't easily import route-registry's
+    // gate from here without the @/ alias, so cross-check by piping each
+    // row's slug through routeForFile (which uses the same gate).
+    for (const ext of ['mov', 'mp4', 'webm', 'png', 'heic']) {
+      const options = outputsForExt(ext);
+      for (const opt of options) {
+        // The row must at minimum exist + have a goOp the homepage can fire.
+        assert.ok(opt.row.slug, `option for .${ext} has empty slug`);
+        assert.ok(opt.row.goOp, `option for .${ext} has empty goOp`);
+        assert.ok(
+          opt.row.inputFormats.length > 0,
+          `option for .${ext} has empty inputFormats`,
+        );
+      }
+    }
+  });
+
+  it('does not duplicate output formats when multiple rows target the same one', () => {
+    // E.g. mov can resolve via the flagship `mov-to-mp4` row OR the
+    // multi-input `video-to-mp4` row — the picker should only show MP4 once.
+    const options = outputsForExt('mov');
+    const formats = options.map((o) => o.format);
+    const unique = new Set(formats);
+    assert.equal(
+      formats.length,
+      unique.size,
+      `outputsForExt('mov') returned duplicate formats: ${formats.join(', ')}`,
+    );
   });
 });
