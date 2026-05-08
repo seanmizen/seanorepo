@@ -29,6 +29,8 @@ import {
 // SEAN-56 — hub-page routes added in this ticket. Listed here so the
 // dead-link walk recognises them as real, and so the footer's "Browse:"
 // nav row (which links into them) doesn't trip the homepage assertion.
+// SEAN-80 added the remaining three (thumbnail, contact-sheet, normalize-audio)
+// so every operation segment resolves as a hub page rather than 404ing.
 const HUB_ROUTES = [
   '/convert',
   '/compress',
@@ -36,6 +38,9 @@ const HUB_ROUTES = [
   '/trim',
   '/resize',
   '/gif',
+  '/thumbnail',
+  '/contact-sheet',
+  '/normalize-audio',
 ];
 
 // ─────────────────────────────────────────────────────── HELPERS ─────────────
