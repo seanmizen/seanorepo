@@ -3,6 +3,8 @@
 # and AI/LLM crawlers (positive AEO signal).
 # /api/ is REST plumbing, not for indexing.
 
+Sitemap: https://seansconverter.com/sitemap.xml
+
 User-agent: *
 Allow: /
 Disallow: /api/
