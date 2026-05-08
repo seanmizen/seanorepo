@@ -192,6 +192,7 @@ export type GoOpName =
   // audio
   | 'audio_mp3'
   | 'audio_opus'
+  | 'audio_ogg'
   | 'audio_aac'
   | 'audio_flac'
   | 'extract_audio'
