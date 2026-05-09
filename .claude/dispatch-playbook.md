@@ -17,6 +17,18 @@ is needed for three things:
 2. **Intake** -- turning Sean's raw ideas into well-formed tickets.
 3. **Exception handling** -- unsticking workers, enforcing WIP limits, running retros.
 
+### The "where on earth is GIF?" lesson (issue #122)
+
+Between #75 and #108, the converter shipped 19 feature tickets in two days. Every PR
+self-merged because every acceptance criterion was met. Then Sean opened the running site
+and asked "where on earth is GIF?" -- a class of mental-model drift that no individual
+ticket could have caught, because each ticket was internally consistent. **Every PR
+self-merging is not the same as every PR being right; eyes on the running product is the
+gate.** The AI UX Verification harness (#113 / #114 / #115) exists for exactly this reason
+-- treat its `ux:check` step as the real done-condition for any feature whose effect is
+visible to a user, and prefer pausing a feature stream over compounding drift when that
+gate is degraded or absent.
+
 ---
 
 ## 1. Creating Tickets from Raw Ideas
