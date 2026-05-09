@@ -18,3 +18,8 @@ dist/
 
 # OS
 .DS_Store
+
+# Playwright artifacts — regenerated each run, never check in.
+test-results/
+playwright-report/
+.playwright/
