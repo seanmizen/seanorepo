@@ -1,0 +1,60 @@
+{
+  "flow": "baseline-aggregate",
+  "runDir": "tests/ux/runs/baseline",
+  "capturedAt": "2026-05-09T00:00:00Z",
+  "total": 38,
+  "max": 50,
+  "dimensions": [
+    {
+      "key": "firstPaintClarity",
+      "score": 4,
+      "rationale": "Hero headline names the product, drop zone above the fold; CTA could be louder."
+    },
+    {
+      "key": "ctaSalience",
+      "score": 3,
+      "rationale": "Drop zone identifiable but competes with chip examples; no high-contrast button reinforces it."
+    },
+    {
+      "key": "decisionsToConversion",
+      "score": 5,
+      "rationale": "Drop file, conversion auto-fires via matrix routing. Zero required decisions."
+    },
+    {
+      "key": "filePickerPermissiveness",
+      "score": 5,
+      "rationale": "SEAN-105 dropped accept= from the picker; OS shows every file."
+    },
+    {
+      "key": "flowLogic",
+      "score": 4,
+      "rationale": "Linear drop->progress->result; cross-category drop swaps panel without losing file (SEAN-107)."
+    },
+    {
+      "key": "errorLegibility",
+      "score": 4,
+      "rationale": "SEAN-108 added a friendly fallback with a Clear-and-try-again recovery button."
+    },
+    {
+      "key": "timeToSuccess",
+      "score": 3,
+      "rationale": "Tiny fixtures convert in 2-5s locally; no persistent progress signal during the wait."
+    },
+    {
+      "key": "waitStateHonesty",
+      "score": 3,
+      "rationale": "'Converting...' text appears but no percent or step counter."
+    },
+    {
+      "key": "resultBlockSufficiency",
+      "score": 4,
+      "rationale": "Download link with filename; missing file size and a prominent convert-another affordance."
+    },
+    {
+      "key": "restrictionsLog",
+      "score": 3,
+      "rationale": "One restriction surfaced (unsupported ext on homepage) with a suggestion. Slug-page cross-category drop still has a brief confusion moment before the panel swaps."
+    }
+  ],
+  "notes": "Baseline produced manually for SEAN-110 (#114) before the capture harness was wired into the agent workflow (SEAN-111 / #115). Future automated runs will overwrite or be diffed against this file."
+}
