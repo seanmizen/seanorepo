@@ -29,6 +29,8 @@
 // pages don't render the chip row (slug owns intent).
 
 import { type DragEvent, useMemo, useRef, useState } from 'react';
+import type { Format, OperationRow } from '@/ops/types';
+import { CapabilitiesPicker } from './CapabilitiesPicker';
 import { ConverterPanel } from './ConverterPanel';
 import {
   buildAcceptLabel,
@@ -37,13 +39,12 @@ import {
   findReverse,
   formatToExt,
 } from './converter-row-args';
-import { OutputFormatChips } from './OutputFormatChips';
 import {
+  capabilitiesForExt,
   extOf,
   friendlyDropError,
   type MatrixRowMatch,
   matrixRowForFile,
-  outputsForExt,
 } from './route-for-file';
 
 /**
@@ -208,30 +209,46 @@ function RunningPanel({
   onCancel,
 }: RunningPanelProps) {
   const ext = extOf(file.name);
-  const options = useMemo(() => outputsForExt(ext), [ext]);
+  const capabilities = useMemo(() => capabilitiesForExt(ext), [ext]);
 
   const { row } = match;
   const reverse = findReverse(row);
   const outputExt = formatToExt(row.outputFormat);
 
-  const handlePick = (nextFormat: string) => {
-    if (nextFormat === row.outputFormat) return;
-    const next = options.find((o) => o.format === nextFormat);
-    if (!next) return;
+  // SEAN-121: capability-pick handler. Looks up the (operation, format) pair
+  // in `capabilitiesForExt(ext)` and remounts the panel with the new row —
+  // mirrors the slug-page handler in <ConverterPanel />. Replaces the
+  // SEAN-106 format-only handler that only let users swap the output of the
+  // existing operation.
+  const handlePick = (next: {
+    operation: OperationRow['operation'];
+    format: Format;
+  }) => {
+    if (next.operation === row.operation && next.format === row.outputFormat) {
+      return;
+    }
+    const cap = capabilities.find((c) => c.operation === next.operation);
+    const opt = cap?.outputs.find((o) => o.format === next.format);
+    if (!opt) return;
     onChangeFormat({
-      row: next.row,
+      row: opt.row,
       inputFormat: match.inputFormat,
     });
   };
 
   return (
     <div className="w-full">
-      {/* SEAN-106: chip row extracted into <OutputFormatChips />. Hides itself
-          when outputsForExt(ext).length < 2. The homepage flow passes the
-          dropped file's name + a Cancel button (returns to empty hero); slug
-          pages call the same component without those props. */}
-      <OutputFormatChips
+      {/* SEAN-121: operation-first capabilities picker. Replaces the SEAN-106
+          <OutputFormatChips /> entry surface. Surfaces every shipped operation
+          that accepts the dropped file's media kind — convert, compress,
+          extract-audio, gif, trim, resize, thumbnail, contact-sheet — instead
+          of hiding the value-add operations behind the convert-only filter
+          the old chip row used. The homepage flow passes the dropped file's
+          name + a Cancel button (returns to empty hero); slug pages call the
+          same component without those props. */}
+      <CapabilitiesPicker
         detectedInputExt={ext}
+        activeOperation={row.operation}
         activeFormat={row.outputFormat}
         onPick={handlePick}
         fileName={file.name}
