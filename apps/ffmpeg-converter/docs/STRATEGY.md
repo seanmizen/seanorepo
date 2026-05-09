@@ -743,3 +743,148 @@ and replace it with a generic "Converting your image…" heading, or
 (b) re-trigger a soft Next.js navigation that preserves the File via a
 sessionStorage handoff. Both are bigger changes; we don't ship them
 preemptively.
+
+### SEAN-121 — picker is operation-first; every shipped capability is visible
+
+**Status:** locked, 2026-05-09. Overturns parts of SEAN-79 / SEAN-103 /
+SEAN-106 (see "what changed" below).
+
+**Question:** SEAN-79 introduced an output-format picker on the homepage
+drop zone. SEAN-106 extracted it into `<OutputFormatChips />` and reused
+it on every slug page. Both filtered the picker's data source —
+`outputsForExt(ext)` — to `convert` and `image-convert` rows only:
+
+> "The picker hides extract-audio / gif / compress — those are different
+> intents, not different output formats of the convert intent."
+
+That choice read sensibly per-ticket but compounded into a picker that
+hid roughly 60 % of the converter's shipped capability from the user
+mid-task. Drop a `.mov` and the chip row offered MP4/3GP/AVI/FLV/M2TS/
+M4V/MKV/MPEG/MTS/OGV/TS/VOB/WEBM/WMV — but no GIF, no audio extract, no
+compress, no trim, no thumbnail, no contact-sheet, even though every one
+of those is a shipped operation with matrix rows that accept video
+input. Sean's reaction on first encounter: *"where on earth is GIF?"*
+
+The bug surface was one filter line; the framing it implied was bigger.
+"Different intents vs different output formats of the same intent" was
+the locked principle. It was wrong. Users don't think in operations —
+they think in *what they want done with this file*. The picker had to
+either model that mental model or stay broken.
+
+**Decision:** picker is operation-first. The picker entry surface (the
+new `<CapabilitiesPicker />`) renders one chip per *shipped operation
+that accepts the dropped file's media kind*. Picking an op with a
+single output runs that op directly. Picking an op with multiple
+outputs reveals a small format sub-picker. Format chips remain — they
+just live underneath the operation chip, not above it.
+
+**What changed in code:**
+
+- `outputsForExt()`'s `operation === 'convert' || operation === 'image-convert'`
+  filter is gone. Same function still exists as a back-compat shim —
+  but its scope is documented as "the convert family's output formats"
+  (the same-operation format-swap path inside `<HeroDrop />`'s
+  `<RunningPanel />` uses it). Net new helpers:
+  - `capabilitiesForExt(ext)` — every operation + every format, grouped.
+    The new picker's data source.
+  - `outputsForOperation(ext, op)` — the format sub-picker's data source.
+- `<CapabilitiesPicker />` replaces `<OutputFormatChips />` as the entry
+  surface in both `<HeroDrop />` and `<ConverterPanel />`. The widget
+  is composite chips: a primary button (runs the op with the default /
+  active format) and a chevron toggle (reveals the format sub-picker).
+  Single-output ops render as a one-click chip with no chevron.
+  `<OutputFormatChips />` itself is removed — every call site moved to
+  the new picker.
+- `handleCapabilityPick` replaces `handleChipPick` in both components.
+  The handler signature gained an `operation` field so a chip click can
+  swap the operation in addition to the format. URL update via
+  `history.replaceState` honours the path the new (op, format) pair
+  resolves to via `pathForSlug`.
+
+**What stayed the same:**
+
+- Page shell (h1, FAQ, How-it-works) does NOT mutate when the user
+  picks a different op via the picker. Same trade-off accepted in
+  SEAN-107: the chip row is the in-page source of truth for what's
+  running; the page shell is the SEO artefact and once the user
+  has interacted, its job is done. Refresh / share-link land on the
+  correct slug next time via `replaceState`.
+- URL is a hint, not a gate (SEAN-103). The picker doesn't gate by
+  slug. URL updates only when the user picks something that maps to
+  a real route.
+- No regression on SEAN-105 / SEAN-106 / SEAN-107: detection-on-drop,
+  in-place adaptation, no remount, no upload reset, no `router.push`.
+  The picker rework lives on top of the adaptive panel; it doesn't
+  replace it.
+- The advanced disclosure (SEAN-95), the saved presets bar (SEAN-94),
+  the GIF preset chips (SEAN-92), and the friendly fallback (SEAN-108)
+  all compose underneath the new picker unchanged.
+
+**Verification anchor:** GIF specifically must be one click from any
+video drop on any tool page. The `gif` matrix rows always output `gif`
+(single output), so the gif capability has exactly one output and the
+chip runs the op directly without a sub-picker reveal. The
+`CapabilitiesPicker.test.ts` suite pins this contract for every video
+format the matrix accepts as gif input.
+
+**Why not a different mental model (e.g. dropdown menu, modal):** the
+chip-row pattern is already established for format swapping (SEAN-79,
+SEAN-106). Composite chips (verb + dropdown trigger) keep the same
+visual language, so the picker reads as "more of the same" rather than
+a UI rewrite. The format sub-picker reveal is a small dropdown anchored
+to the parent chip, not a modal — it doesn't steal focus or block the
+rest of the panel.
+
+**Why not auto-switch the operation based on input ext:** the picker's
+job is to surface choice, not infer it. Auto-switching from `convert`
+to `gif` because the user dropped a `.mov` would be a confident guess
+about intent the user hasn't expressed yet — exactly the framing the
+old picker got wrong, just inverted. The default operation on drop
+remains the slug's declared op (SEO arrival respects the URL); the
+picker exists so the user can pivot without re-dropping.
+
+**Trade-offs accepted:**
+
+- **The picker is wider on video inputs than on image / audio inputs.**
+  A video drop surfaces 7-8 ops; an image drop surfaces 1-2; an audio
+  drop surfaces 1. This is honest reflection of matrix coverage and
+  not a UX problem — fewer chips for narrower inputs is correct. Once
+  audio-to-audio convert rows ship the audio picker grows naturally.
+- **The format sub-picker uses an inline dropdown, not a flat
+  expansion.** Flat expansion would consume vertical space proportional
+  to the number of ops with multiple outputs (`convert` alone has
+  10+ format outputs for `mov`). The dropdown bounds the picker
+  height to one row of chips on every input ext.
+- **Single-output ops use a verb label (`Compress`, `Trim`, `Make GIF`)
+  rather than `Compress (MP4)` / `Trim (MP4)`.** The output format is
+  obvious for ops that round-trip the input format; surfacing it on
+  the chip would be visual noise. Multi-output ops show the active
+  format in the chip label so the user always knows which run is one
+  click away.
+
+**Files:**
+
+- `apps/ffmpeg-converter/web/src/components/route-for-file.ts` — drops
+  the operation filter from `outputsForExt`; adds `capabilitiesForExt`
+  and `outputsForOperation`.
+- `apps/ffmpeg-converter/web/src/components/CapabilitiesPicker.tsx` —
+  new component. Replaces `<OutputFormatChips />` as the picker entry
+  surface.
+- `apps/ffmpeg-converter/web/src/components/OutputFormatChips.tsx` —
+  removed; every call site moved to `<CapabilitiesPicker />`.
+- `apps/ffmpeg-converter/web/src/components/ConverterPanel.tsx` —
+  swaps `slugChipRow` for `slugCapabilitiesPicker`; renames
+  `handleChipPick` to `handleCapabilityPick` with the new signature.
+- `apps/ffmpeg-converter/web/src/components/HeroDrop.tsx` — same
+  swap inside `<RunningPanel />`; the file's `OutputFormatChips`
+  import is replaced with `CapabilitiesPicker`.
+- `apps/ffmpeg-converter/web/src/components/__tests__/CapabilitiesPicker.test.ts` —
+  new test suite pinning the operation-first contract (gif appears for
+  every video drop, png surfaces image-convert, audio surfaces
+  normalize-audio, every returned row has a real route).
+
+**Re-revisit if:** the picker grows past ~10 chips on common inputs,
+or the format sub-picker dropdown's hover-toggle becomes a friction
+point on touch. Both are measurable in the UX harness. At ~10 chips
+we'd start grouping by media-kind ("Video", "Image", "Audio") with
+collapsing sections; today the linear chip row is fine.

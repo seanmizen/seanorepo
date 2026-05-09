@@ -318,68 +318,74 @@ export interface OutputOption {
 }
 
 /**
- * SEAN-79 — every pure-format output the matrix supports for a given input
- * extension. Used by the homepage format picker so the user can re-pick the
- * output before clicking Convert.
+ * SEAN-79 / SEAN-121 — output options for the (ext, operation) pair.
  *
- * Scope is intentionally narrow: only `convert` and `image-convert` rows are
- * returned (the picker's intent is "swap output format", not "switch
- * operation"). Extract-audio, gif, compress, trim etc. live on dedicated slug
- * pages and the homepage doesn't surface them via the picker — those are
- * different intents, not different output formats of the same intent.
+ * The original SEAN-79 `outputsForExt(ext)` filtered to `convert` /
+ * `image-convert` rows only. SEAN-121 lifted that filter — the picker is now
+ * operation-first via `capabilitiesForExt(ext)`. This helper is the
+ * sub-picker data source: given a chosen operation and an input ext, return
+ * the output formats that operation can produce for that input (what the
+ * format chips render under "Convert" or "Extract audio").
  *
- * Pure function of input ext + matrix — no API call, no side effects, safe to
- * compute at module load. Empty array means the picker should be hidden.
+ * Returns an empty array when the operation has no matrix coverage for the
+ * input — callers should hide the sub-picker in that case.
+ *
+ * Pure function of input ext + matrix — no API call, no side effects, safe
+ * to compute at module load.
+ */
+export function outputsForOperation(
+  ext: string,
+  operation: OperationRow['operation'],
+): OutputOption[] {
+  const cap = capabilitiesForExt(ext).find((c) => c.operation === operation);
+  if (!cap) return [];
+  return cap.outputs.map((o) => ({
+    row: o.row,
+    format: o.format,
+    label: o.label,
+    isDefault: o.isDefault,
+  }));
+}
+
+/**
+ * SEAN-79 — backwards-compatible alias: every output format any `convert` /
+ * `image-convert` row in the matrix can produce for the given input.
+ *
+ * SEAN-121 superseded the picker's use of this helper (the new picker is
+ * operation-first via `capabilitiesForExt`). Kept for the same-operation
+ * format-swap path inside `<ConverterPanel />` and `<HeroDrop />` — when a
+ * user has already picked an operation (or landed on a slug that pins one),
+ * the format sub-picker shows that operation's outputs only. For that
+ * narrow use case, callers should prefer `outputsForOperation(ext, op)` —
+ * `outputsForExt` resolves the same data through the convert-family
+ * defaults so existing tests / call sites don't drift.
  */
 export function outputsForExt(ext: string): OutputOption[] {
   if (!ext) return [];
-  const inputFormat = (EXT_TO_FORMAT[ext] ?? ext) as Format;
-  const preferredTarget = PREFERRED_TARGET_BY_EXT[ext];
+  const caps = capabilitiesForExt(ext);
 
-  // Map of outputFormat → chosen row. We dedupe by output format because two
-  // rows can target the same output (e.g. a flagship `mov-to-mp4` row plus
-  // the multi-input `video-to-mp4` fallback both produce mp4 from mov). The
-  // direct `${input}-to-${target}` slug wins over multi-input rows so the
-  // user lands on the page Google ranks for the pair.
-  const byOutput = new Map<Format, OperationRow>();
-
-  for (const row of MATRIX) {
-    if (row.operation !== 'convert' && row.operation !== 'image-convert') {
-      continue;
-    }
-    if (!row.inputFormats.includes(inputFormat)) continue;
-    if (!MATRIX_BY_SLUG[row.slug]) continue;
-    if (!routeExistsForSlug(row.slug)) continue;
-
-    const directSlug = `${inputFormat}-to-${formatExtName(row.outputFormat)}`;
-    const existing = byOutput.get(row.outputFormat);
-    if (!existing) {
-      byOutput.set(row.outputFormat, row);
-      continue;
-    }
-    // Prefer the direct `${input}-to-${output}` slug over a multi-input row.
-    if (row.slug === directSlug && existing.slug !== directSlug) {
-      byOutput.set(row.outputFormat, row);
+  // Combine convert + image-convert. `outputsForExt` historically described
+  // "format outputs of the convert intent" — keeping the same scope means
+  // the existing same-op format-swap path inside <HeroDrop />'s RunningPanel
+  // and <ConverterPanel />'s handleChipPick keep working unchanged.
+  const merged = new Map<Format, OutputOption>();
+  for (const op of ['convert', 'image-convert'] as const) {
+    const cap = caps.find((c) => c.operation === op);
+    if (!cap) continue;
+    for (const o of cap.outputs) {
+      // First write wins — convert outputs take precedence over image-convert
+      // when both target the same format, mirroring the pre-SEAN-121 ordering
+      // (the iteration order over MATRIX put convert rows first).
+      if (!merged.has(o.format)) merged.set(o.format, o);
     }
   }
 
-  const options: OutputOption[] = [];
-  for (const [format, row] of byOutput) {
-    options.push({
-      row,
-      format,
-      label: formatExtName(format).toUpperCase(),
-      isDefault: format === preferredTarget,
-    });
-  }
-
-  // Stable order: default first, then alphabetical by label.
+  const options = [...merged.values()];
   options.sort((a, b) => {
     if (a.isDefault && !b.isDefault) return -1;
     if (!a.isDefault && b.isDefault) return 1;
     return a.label.localeCompare(b.label);
   });
-
   return options;
 }
 
@@ -397,6 +403,160 @@ function formatExtName(format: Format): string {
     default:
       return format;
   }
+}
+
+// ─────────────────────────────────────────────── CAPABILITIES (SEAN-121) ─────
+
+/**
+ * SEAN-121 — one operation that can run on the detected input, plus every
+ * output format that operation can produce for that input.
+ *
+ * Operations whose matrix coverage for the detected input has a single output
+ * (`compress` always lands on the same format, `gif` always lands on `gif`,
+ * `trim` round-trips back to the input format, etc.) get a one-element
+ * `outputs` array — the picker renders these as a single "Compress" / "Make
+ * GIF" / "Trim" chip and runs them on click without revealing a sub-picker.
+ *
+ * Operations with multiple outputs (`convert` lands on mp4/webm/mkv/etc;
+ * `extract-audio` lands on mp3/wav/aac/flac/ogg/opus; `image-convert` lands
+ * on jpg/webp/png/avif) get a multi-element `outputs` array — the picker
+ * reveals a sub-picker after the user clicks the operation chip.
+ */
+export interface CapabilityOption {
+  /** Resolved matrix row that runs if the user picks this output. */
+  row: OperationRow;
+  /** Output format enum (e.g. `mp4`, `gif`, `webp`). */
+  format: Format;
+  /** UI label (uppercase ext, e.g. `MP4`, `GIF`). */
+  label: string;
+  /** True when this output matches `PREFERRED_TARGET_BY_EXT[ext]`. */
+  isDefault: boolean;
+}
+
+export interface OperationCapability {
+  /** Operation enum value — keys the chip into the right copy + icon. */
+  operation: OperationRow['operation'];
+  /**
+   * Every output format the matrix can produce for this (operation, input)
+   * pair on a routable row. Single-element arrays render as a one-click chip;
+   * multi-element arrays reveal a sub-picker on chip click.
+   *
+   * Sorted: default (per `PREFERRED_TARGET_BY_EXT`) first, then alphabetical.
+   */
+  outputs: CapabilityOption[];
+  /**
+   * The "default" option for this operation — `outputs[0]`, exposed
+   * separately for picker components that want to fire a one-click run for
+   * single-output ops without indexing into the array.
+   */
+  defaultOption: CapabilityOption;
+}
+
+/**
+ * Display order for the capability chips. Mirrors the user's mental model:
+ * convert first (the most-asked), then the value-add operations (compress,
+ * extract-audio, gif, trim, resize, thumbnail, contact-sheet,
+ * normalize-audio), then `image-convert` for image inputs (which doesn't
+ * collide with `convert` because images don't have video-convert rows).
+ *
+ * Operations not in this list fall through to the end of the picker in
+ * alphabetical order — this keeps the picker robust to new operations being
+ * added to the matrix without an explicit ordering update.
+ */
+const CAPABILITY_DISPLAY_ORDER: ReadonlyArray<OperationRow['operation']> = [
+  'convert',
+  'image-convert',
+  'compress',
+  'extract-audio',
+  'gif',
+  'trim',
+  'resize',
+  'thumbnail',
+  'contact-sheet',
+  'normalize-audio',
+];
+
+/**
+ * SEAN-121 — every shipped operation that accepts the dropped file's media
+ * kind, grouped with its output formats. Replaces the old `outputsForExt`
+ * filter that only surfaced `convert` / `image-convert` rows — that filter
+ * hid GIF, audio extract, compress, trim, thumbnail, and contact-sheet from
+ * any video drop, even though the matrix has rows for all of them.
+ *
+ * This is the picker's data source. Operation-first hierarchy: the picker
+ * renders one chip per `OperationCapability`; chips for ops with multiple
+ * outputs reveal a sub-picker after click.
+ *
+ * Pure function of input ext + matrix — no API call, no side effects, safe
+ * to compute at module load. Empty array means the picker should be hidden.
+ */
+export function capabilitiesForExt(ext: string): OperationCapability[] {
+  if (!ext) return [];
+  const inputFormat = (EXT_TO_FORMAT[ext] ?? ext) as Format;
+  const preferredTarget = PREFERRED_TARGET_BY_EXT[ext];
+
+  // Group by operation → (output format → row). Dedupe by output format the
+  // same way `outputsForExt` did: a flagship `mov-to-gif` row plus the
+  // multi-input `video-to-gif` fallback both target gif from mov; the
+  // direct `${input}-to-${target}` slug wins so the user lands on the page
+  // Google ranks for the pair.
+  const byOp = new Map<OperationRow['operation'], Map<Format, OperationRow>>();
+
+  for (const row of MATRIX) {
+    if (!row.inputFormats.includes(inputFormat)) continue;
+    if (!MATRIX_BY_SLUG[row.slug]) continue;
+    if (!routeExistsForSlug(row.slug)) continue;
+
+    const directSlug = `${inputFormat}-to-${formatExtName(row.outputFormat)}`;
+    let opMap = byOp.get(row.operation);
+    if (!opMap) {
+      opMap = new Map();
+      byOp.set(row.operation, opMap);
+    }
+    const existing = opMap.get(row.outputFormat);
+    if (!existing) {
+      opMap.set(row.outputFormat, row);
+      continue;
+    }
+    if (row.slug === directSlug && existing.slug !== directSlug) {
+      opMap.set(row.outputFormat, row);
+    }
+  }
+
+  const capabilities: OperationCapability[] = [];
+  for (const [operation, opMap] of byOp) {
+    const options: CapabilityOption[] = [];
+    for (const [format, row] of opMap) {
+      options.push({
+        row,
+        format,
+        label: formatExtName(format).toUpperCase(),
+        isDefault: format === preferredTarget,
+      });
+    }
+    options.sort((a, b) => {
+      if (a.isDefault && !b.isDefault) return -1;
+      if (!a.isDefault && b.isDefault) return 1;
+      return a.label.localeCompare(b.label);
+    });
+    const defaultOption = options[0];
+    if (!defaultOption) continue;
+    capabilities.push({ operation, outputs: options, defaultOption });
+  }
+
+  // Stable order per `CAPABILITY_DISPLAY_ORDER`; unknown ops sort to the end
+  // alphabetically so a new operation added to the matrix without updating
+  // the order list still renders, just at the bottom.
+  capabilities.sort((a, b) => {
+    const ai = CAPABILITY_DISPLAY_ORDER.indexOf(a.operation);
+    const bi = CAPABILITY_DISPLAY_ORDER.indexOf(b.operation);
+    if (ai === -1 && bi === -1) return a.operation.localeCompare(b.operation);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  return capabilities;
 }
 
 /**
