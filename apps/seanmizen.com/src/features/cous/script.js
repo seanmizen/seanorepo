@@ -1,0 +1,4630 @@
+// Copyright 2022 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+function assert(value, message) {
+  if (value) {
+    return;
+  }
+  throw new Error('Assertion failed' + (message ? `: ${message}` : ''));
+}
+// Copyright 2022 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+class LoadTimeData {
+  data_ = null;
+  set data(value) {
+    assert(!this.data_, 'Re-setting data.');
+    this.data_ = value;
+  }
+  valueExists(id) {
+    assert(this.data_, 'No data. Did you remember to include strings.js?');
+    return id in this.data_;
+  }
+  getValue(id) {
+    assert(this.data_, 'No data. Did you remember to include strings.js?');
+    const value = this.data_[id];
+    assert(typeof value !== 'undefined', 'Could not find value for ' + id);
+    return value;
+  }
+  getString(id) {
+    const value = this.getValue(id);
+    assert(typeof value === 'string', `[${value}] (${id}) is not a string`);
+    return value;
+  }
+  getStringF(id, ...args) {
+    const value = this.getString(id);
+    if (!value) {
+      return '';
+    }
+    return this.substituteString(value, ...args);
+  }
+  substituteString(label, ...args) {
+    return label.replace(/\$(.|$|\n)/g, (m) => {
+      assert(m.match(/\$[$1-9]/), 'Unescaped $ found in localized string.');
+      if (m === '$$') {
+        return '$';
+      }
+      const substitute = args[Number(m[1]) - 1];
+      if (substitute === undefined || substitute === null) {
+        return '';
+      }
+      return substitute.toString();
+    });
+  }
+  getSubstitutedStringPieces(label, ...args) {
+    const pieces = (label.match(/(\$[1-9])|(([^$]|\$([^1-9]|$))+)/g) || []).map(
+      (p) => {
+        if (!p.match(/^\$[1-9]$/)) {
+          assert(
+            (p.match(/\$/g) || []).length % 2 === 0,
+            'Unescaped $ found in localized string.',
+          );
+          return { value: p.replace(/\$\$/g, '$'), arg: null };
+        }
+        const substitute = args[Number(p[1]) - 1];
+        if (substitute === undefined || substitute === null) {
+          return { value: '', arg: p };
+        }
+        return { value: substitute.toString(), arg: p };
+      },
+    );
+    return pieces;
+  }
+  getBoolean(id) {
+    const value = this.getValue(id);
+    assert(typeof value === 'boolean', `[${value}] (${id}) is not a boolean`);
+    return value;
+  }
+  getInteger(id) {
+    const value = this.getValue(id);
+    assert(typeof value === 'number', `[${value}] (${id}) is not a number`);
+    assert(value === Math.floor(value), "Number isn't integer: " + value);
+    return value;
+  }
+  overrideValues(replacements) {
+    assert(
+      typeof replacements === 'object',
+      'Replacements must be a dictionary object.',
+    );
+    assert(this.data_, 'Data must exist before being overridden');
+    for (const key in replacements) {
+      this.data_[key] = replacements[key];
+    }
+  }
+  resetForTesting(newData = null) {
+    this.data_ = newData;
+  }
+  isInitialized() {
+    return this.data_ !== null;
+  }
+}
+const loadTimeData = new LoadTimeData();
+// Copyright 2022 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+function getRequiredElement(id) {
+  const el = document.querySelector(`#${id}`);
+  assert(el);
+  assert(el instanceof HTMLElement);
+  return el;
+}
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */ const t$3 = globalThis,
+  e$3 =
+    t$3.ShadowRoot &&
+    (void 0 === t$3.ShadyCSS || t$3.ShadyCSS.nativeShadow) &&
+    'adoptedStyleSheets' in Document.prototype &&
+    'replace' in CSSStyleSheet.prototype,
+  s$3 = Symbol(),
+  o$4 = new WeakMap();
+const n$3 = class n {
+  constructor(t, e, o) {
+    if (((this._$cssResult$ = !0), o !== s$3))
+      throw Error(
+        'CSSResult is not constructable. Use `unsafeCSS` or `css` instead.',
+      );
+    (this.cssText = t), (this.t = e);
+  }
+  get styleSheet() {
+    let t = this.o;
+    const s = this.t;
+    if (e$3 && void 0 === t) {
+      const e = void 0 !== s && 1 === s.length;
+      e && (t = o$4.get(s)),
+        void 0 === t &&
+          ((this.o = t = new CSSStyleSheet()).replaceSync(this.cssText),
+          e && o$4.set(s, t));
+    }
+    return t;
+  }
+  toString() {
+    return this.cssText;
+  }
+};
+const r$3 = (t) => new n$3('string' == typeof t ? t : t + '', void 0, s$3),
+  S$1 = (s, o) => {
+    if (e$3)
+      s.adoptedStyleSheets = o.map((t) =>
+        t instanceof CSSStyleSheet ? t : t.styleSheet,
+      );
+    else
+      for (const e of o) {
+        const o = document.createElement('style'),
+          n = t$3.litNonce;
+        void 0 !== n && o.setAttribute('nonce', n),
+          (o.textContent = e.cssText),
+          s.appendChild(o);
+      }
+  },
+  c$3 = e$3
+    ? (t) => t
+    : (t) =>
+        t instanceof CSSStyleSheet
+          ? ((t) => {
+              let e = '';
+              for (const s of t.cssRules) e += s.cssText;
+              return r$3(e);
+            })(t)
+          : t;
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+const {
+    is: i$3,
+    defineProperty: e$2,
+    getOwnPropertyDescriptor: h$2,
+    getOwnPropertyNames: r$2,
+    getOwnPropertySymbols: o$3,
+    getPrototypeOf: n$2,
+  } = Object,
+  a$1 = globalThis,
+  c$2 = a$1.trustedTypes,
+  l$1 = c$2 ? c$2.emptyScript : '',
+  p$1 = a$1.reactiveElementPolyfillSupport,
+  d$1 = (t, s) => t,
+  u$1 = {
+    toAttribute(t, s) {
+      switch (s) {
+        case Boolean:
+          t = t ? l$1 : null;
+          break;
+        case Object:
+        case Array:
+          t = null == t ? t : JSON.stringify(t);
+      }
+      return t;
+    },
+    fromAttribute(t, s) {
+      let i = t;
+      switch (s) {
+        case Boolean:
+          i = null !== t;
+          break;
+        case Number:
+          i = null === t ? null : Number(t);
+          break;
+        case Object:
+        case Array:
+          try {
+            i = JSON.parse(t);
+          } catch (t) {
+            i = null;
+          }
+      }
+      return i;
+    },
+  },
+  f$3 = (t, s) => !i$3(t, s),
+  b = {
+    attribute: !0,
+    type: String,
+    converter: u$1,
+    reflect: !1,
+    useDefault: !1,
+    hasChanged: f$3,
+  };
+(Symbol.metadata ??= Symbol('metadata')),
+  (a$1.litPropertyMetadata ??= new WeakMap());
+const y$1 = class y extends HTMLElement {
+  static addInitializer(t) {
+    y._$Ei(), (y.l ??= []).push(t);
+  }
+  static get observedAttributes() {
+    return y.finalize(), y._$Eh && [...y._$Eh.keys()];
+  }
+  static createProperty(t, s = b) {
+    if (
+      (s.state && (s.attribute = !1),
+      y._$Ei(),
+      Object.hasOwn(y.prototype, t) && ((s = Object.create(s)).wrapped = !0),
+      y.elementProperties.set(t, s),
+      !s.noAccessor)
+    ) {
+      const i = Symbol(),
+        h = y.getPropertyDescriptor(t, i, s);
+      void 0 !== h && e$2(y.prototype, t, h);
+    }
+  }
+  static getPropertyDescriptor(t, s, i) {
+    const { get: e, set: r } = h$2(y.prototype, t) ?? {
+      get() {
+        return this[s];
+      },
+      set(t) {
+        this[s] = t;
+      },
+    };
+    return {
+      get: e,
+      set(s) {
+        const h = e?.call(this);
+        r?.call(this, s), this.requestUpdate(t, h, i);
+      },
+      configurable: !0,
+      enumerable: !0,
+    };
+  }
+  static getPropertyOptions(t) {
+    return y.elementProperties.get(t) ?? b;
+  }
+  static _$Ei() {
+    if (Object.hasOwn(y, d$1('elementProperties'))) return;
+    const t = n$2(y);
+    t.finalize(),
+      void 0 !== t.l && (y.l = [...t.l]),
+      (y.elementProperties = new Map(t.elementProperties));
+  }
+  static finalize() {
+    if (Object.hasOwn(y, d$1('finalized'))) return;
+    if (((y.finalized = !0), y._$Ei(), Object.hasOwn(y, d$1('properties')))) {
+      const t = y.properties,
+        s = [...r$2(t), ...o$3(t)];
+      for (const i of s) y.createProperty(i, t[i]);
+    }
+    const t = y[Symbol.metadata];
+    if (null !== t) {
+      const s = litPropertyMetadata.get(t);
+      if (void 0 !== s) for (const [t, i] of s) y.elementProperties.set(t, i);
+    }
+    y._$Eh = new Map();
+    for (const [t, s] of y.elementProperties) {
+      const i = y._$Eu(t, s);
+      void 0 !== i && y._$Eh.set(i, t);
+    }
+    y.elementStyles = y.finalizeStyles(y.styles);
+  }
+  static finalizeStyles(s) {
+    const i = [];
+    if (Array.isArray(s)) {
+      const e = new Set(s.flat(1 / 0).reverse());
+      for (const s of e) i.unshift(c$3(s));
+    } else void 0 !== s && i.push(c$3(s));
+    return i;
+  }
+  static _$Eu(t, s) {
+    const i = s.attribute;
+    return !1 === i
+      ? void 0
+      : 'string' == typeof i
+        ? i
+        : 'string' == typeof t
+          ? t.toLowerCase()
+          : void 0;
+  }
+  constructor() {
+    super(),
+      (this._$Ep = void 0),
+      (this.isUpdatePending = !1),
+      (this.hasUpdated = !1),
+      (this._$Em = null),
+      this._$Ev();
+  }
+  _$Ev() {
+    (this._$ES = new Promise((t) => (this.enableUpdating = t))),
+      (this._$AL = new Map()),
+      this._$E_(),
+      this.requestUpdate(),
+      this.constructor.l?.forEach((t) => t(this));
+  }
+  addController(t) {
+    (this._$EO ??= new Set()).add(t),
+      void 0 !== this.renderRoot && this.isConnected && t.hostConnected?.();
+  }
+  removeController(t) {
+    this._$EO?.delete(t);
+  }
+  _$E_() {
+    const t = new Map(),
+      s = this.constructor.elementProperties;
+    for (const i of s.keys())
+      Object.hasOwn(this, i) && (t.set(i, this[i]), delete this[i]);
+    t.size > 0 && (this._$Ep = t);
+  }
+  createRenderRoot() {
+    const t =
+      this.shadowRoot ?? this.attachShadow(this.constructor.shadowRootOptions);
+    return S$1(t, this.constructor.elementStyles), t;
+  }
+  connectedCallback() {
+    (this.renderRoot ??= this.createRenderRoot()),
+      this.enableUpdating(!0),
+      this._$EO?.forEach((t) => t.hostConnected?.());
+  }
+  enableUpdating(t) {}
+  disconnectedCallback() {
+    this._$EO?.forEach((t) => t.hostDisconnected?.());
+  }
+  attributeChangedCallback(t, s, i) {
+    this._$AK(t, i);
+  }
+  _$ET(t, s) {
+    const i = this.constructor.elementProperties.get(t),
+      e = this.constructor._$Eu(t, i);
+    if (void 0 !== e && !0 === i.reflect) {
+      const h = (
+        void 0 !== i.converter?.toAttribute ? i.converter : u$1
+      ).toAttribute(s, i.type);
+      (this._$Em = t),
+        null == h ? this.removeAttribute(e) : this.setAttribute(e, h),
+        (this._$Em = null);
+    }
+  }
+  _$AK(t, s) {
+    const i = this.constructor,
+      e = i._$Eh.get(t);
+    if (void 0 !== e && this._$Em !== e) {
+      const t = i.getPropertyOptions(e),
+        h =
+          'function' == typeof t.converter
+            ? { fromAttribute: t.converter }
+            : void 0 !== t.converter?.fromAttribute
+              ? t.converter
+              : u$1;
+      (this._$Em = e),
+        (this[e] = h.fromAttribute(s, t.type) ?? this._$Ej?.get(e) ?? null),
+        (this._$Em = null);
+    }
+  }
+  requestUpdate(t, s, i) {
+    if (void 0 !== t) {
+      const e = this.constructor,
+        h = this[t];
+      if (
+        ((i ??= e.getPropertyOptions(t)),
+        !(
+          (i.hasChanged ?? f$3)(h, s) ||
+          (i.useDefault &&
+            i.reflect &&
+            h === this._$Ej?.get(t) &&
+            !this.hasAttribute(e._$Eu(t, i)))
+        ))
+      )
+        return;
+      this.C(t, s, i);
+    }
+    !1 === this.isUpdatePending && (this._$ES = this._$EP());
+  }
+  C(t, s, { useDefault: i, reflect: e, wrapped: h }, r) {
+    (i &&
+      !(this._$Ej ??= new Map()).has(t) &&
+      (this._$Ej.set(t, r ?? s ?? this[t]), !0 !== h || void 0 !== r)) ||
+      (this._$AL.has(t) ||
+        (this.hasUpdated || i || (s = void 0), this._$AL.set(t, s)),
+      !0 === e && this._$Em !== t && (this._$Eq ??= new Set()).add(t));
+  }
+  async _$EP() {
+    this.isUpdatePending = !0;
+    try {
+      await this._$ES;
+    } catch (t) {
+      Promise.reject(t);
+    }
+    const t = this.scheduleUpdate();
+    return null != t && (await t), !this.isUpdatePending;
+  }
+  scheduleUpdate() {
+    return this.performUpdate();
+  }
+  performUpdate() {
+    if (!this.isUpdatePending) return;
+    if (!this.hasUpdated) {
+      if (((this.renderRoot ??= this.createRenderRoot()), this._$Ep)) {
+        for (const [t, s] of this._$Ep) this[t] = s;
+        this._$Ep = void 0;
+      }
+      const t = this.constructor.elementProperties;
+      if (t.size > 0)
+        for (const [s, i] of t) {
+          const { wrapped: t } = i,
+            e = this[s];
+          !0 !== t ||
+            this._$AL.has(s) ||
+            void 0 === e ||
+            this.C(s, void 0, i, e);
+        }
+    }
+    let t = !1;
+    const s = this._$AL;
+    try {
+      (t = this.shouldUpdate(s)),
+        t
+          ? (this.willUpdate(s),
+            this._$EO?.forEach((t) => t.hostUpdate?.()),
+            this.update(s))
+          : this._$EM();
+    } catch (s) {
+      throw ((t = !1), this._$EM(), s);
+    }
+    t && this._$AE(s);
+  }
+  willUpdate(t) {}
+  _$AE(t) {
+    this._$EO?.forEach((t) => t.hostUpdated?.()),
+      this.hasUpdated || ((this.hasUpdated = !0), this.firstUpdated(t)),
+      this.updated(t);
+  }
+  _$EM() {
+    (this._$AL = new Map()), (this.isUpdatePending = !1);
+  }
+  get updateComplete() {
+    return this.getUpdateComplete();
+  }
+  getUpdateComplete() {
+    return this._$ES;
+  }
+  shouldUpdate(t) {
+    return !0;
+  }
+  update(t) {
+    (this._$Eq &&= this._$Eq.forEach((t) => this._$ET(t, this[t]))),
+      this._$EM();
+  }
+  updated(t) {}
+  firstUpdated(t) {}
+};
+(y$1.elementStyles = []),
+  (y$1.shadowRootOptions = { mode: 'open' }),
+  (y$1[d$1('elementProperties')] = new Map()),
+  (y$1[d$1('finalized')] = new Map()),
+  p$1?.({ ReactiveElement: y$1 }),
+  (a$1.reactiveElementVersions ??= []).push('2.1.0');
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */ const t$2 = globalThis,
+  i$2 = t$2.trustedTypes,
+  s$2 = i$2
+    ? i$2.createPolicy('lit-html-desktop', { createHTML: (t) => t })
+    : void 0,
+  e$1 = '$lit$',
+  h$1 = `lit$${Math.random().toFixed(9).slice(2)}$`,
+  o$2 = '?' + h$1,
+  n$1 = `<${o$2}>`,
+  r$1 = document,
+  l = () => r$1.createComment(''),
+  c$1 = (t) => null === t || ('object' != typeof t && 'function' != typeof t),
+  a = Array.isArray,
+  u = (t) => a(t) || 'function' == typeof t?.[Symbol.iterator],
+  d = '[ \t\n\f\r]',
+  f$2 = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,
+  v = /-->/g,
+  _ = />/g,
+  m = RegExp(
+    `>|${d}(?:([^\\s"'>=/]+)(${d}*=${d}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`,
+    'g',
+  ),
+  p = /'/g,
+  g = /"/g,
+  $ = /^(?:script|style|textarea|title)$/i,
+  y =
+    (t) =>
+    (i, ...s) => ({ _$litType$: t, strings: i, values: s }),
+  x = y(1),
+  T = Symbol.for('lit-noChange'),
+  E = Symbol.for('lit-nothing'),
+  A = new WeakMap(),
+  C = r$1.createTreeWalker(r$1, 129);
+function P(t, i) {
+  if (!a(t) || !Object.hasOwn(t, 'raw'))
+    throw Error('invalid template strings array');
+  return void 0 !== s$2 ? s$2.createHTML(i) : i;
+}
+const V = (t, i) => {
+  const s = t.length - 1,
+    o = [];
+  let r,
+    l = 2 === i ? '<svg>' : 3 === i ? '<math>' : '',
+    c = f$2;
+  for (let i = 0; i < s; i++) {
+    const s = t[i];
+    let a,
+      u,
+      d = -1,
+      y = 0;
+    for (; y < s.length && ((c.lastIndex = y), (u = c.exec(s)), null !== u); )
+      (y = c.lastIndex),
+        c === f$2
+          ? '!--' === u[1]
+            ? (c = v)
+            : void 0 !== u[1]
+              ? (c = _)
+              : void 0 !== u[2]
+                ? ($.test(u[2]) && (r = RegExp('</' + u[2], 'g')), (c = m))
+                : void 0 !== u[3] && (c = m)
+          : c === m
+            ? '>' === u[0]
+              ? ((c = r ?? f$2), (d = -1))
+              : void 0 === u[1]
+                ? (d = -2)
+                : ((d = c.lastIndex - u[2].length),
+                  (a = u[1]),
+                  (c = void 0 === u[3] ? m : '"' === u[3] ? g : p))
+            : c === g || c === p
+              ? (c = m)
+              : c === v || c === _
+                ? (c = f$2)
+                : ((c = m), (r = void 0));
+    const x = c === m && t[i + 1].startsWith('/>') ? ' ' : '';
+    l +=
+      c === f$2
+        ? s + n$1
+        : d >= 0
+          ? (o.push(a), s.slice(0, d) + e$1 + s.slice(d) + h$1 + x)
+          : s + h$1 + (-2 === d ? i : x);
+  }
+  return [
+    P(t, l + (t[s] || '<?>') + (2 === i ? '</svg>' : 3 === i ? '</math>' : '')),
+    o,
+  ];
+};
+class N {
+  constructor({ strings: t, _$litType$: s }, n) {
+    let r;
+    this.parts = [];
+    let c = 0,
+      a = 0;
+    const u = t.length - 1,
+      d = this.parts,
+      [f, v] = V(t, s);
+    if (
+      ((this.el = N.createElement(f, n)),
+      (C.currentNode = this.el.content),
+      2 === s || 3 === s)
+    ) {
+      const t = this.el.content.firstChild;
+      t.replaceWith(...t.childNodes);
+    }
+    for (; null !== (r = C.nextNode()) && d.length < u; ) {
+      if (1 === r.nodeType) {
+        if (r.hasAttributes())
+          for (const t of r.getAttributeNames())
+            if (t.endsWith(e$1)) {
+              const i = v[a++],
+                s = r.getAttribute(t).split(h$1),
+                e = /([.?@])?(.*)/.exec(i);
+              d.push({
+                type: 1,
+                index: c,
+                name: e[2],
+                strings: s,
+                ctor:
+                  '.' === e[1] ? H : '?' === e[1] ? I : '@' === e[1] ? L : k,
+              }),
+                r.removeAttribute(t);
+            } else
+              t.startsWith(h$1) &&
+                (d.push({ type: 6, index: c }), r.removeAttribute(t));
+        if ($.test(r.tagName)) {
+          const t = r.textContent.split(h$1),
+            s = t.length - 1;
+          if (s > 0) {
+            r.textContent = i$2 ? i$2.emptyScript : '';
+            for (let i = 0; i < s; i++)
+              r.append(t[i], l()),
+                C.nextNode(),
+                d.push({ type: 2, index: ++c });
+            r.append(t[s], l());
+          }
+        }
+      } else if (8 === r.nodeType)
+        if (r.data === o$2) d.push({ type: 2, index: c });
+        else {
+          let t = -1;
+          for (; -1 !== (t = r.data.indexOf(h$1, t + 1)); )
+            d.push({ type: 7, index: c }), (t += h$1.length - 1);
+        }
+      c++;
+    }
+  }
+  static createElement(t, i) {
+    const s = r$1.createElement('template');
+    return (s.innerHTML = t), s;
+  }
+}
+function S(t, i, s = t, e) {
+  if (i === T) return i;
+  let h = void 0 !== e ? s._$Co?.[e] : s._$Cl;
+  const o = c$1(i) ? void 0 : i._$litDirective$;
+  return (
+    h?.constructor !== o &&
+      (h?._$AO?.(!1),
+      void 0 === o ? (h = void 0) : ((h = new o(t)), h._$AT(t, s, e)),
+      void 0 !== e ? ((s._$Co ??= [])[e] = h) : (s._$Cl = h)),
+    void 0 !== h && (i = S(t, h._$AS(t, i.values), h, e)),
+    i
+  );
+}
+class M {
+  constructor(t, i) {
+    (this._$AV = []), (this._$AN = void 0), (this._$AD = t), (this._$AM = i);
+  }
+  get parentNode() {
+    return this._$AM.parentNode;
+  }
+  get _$AU() {
+    return this._$AM._$AU;
+  }
+  u(t) {
+    const {
+        el: { content: i },
+        parts: s,
+      } = this._$AD,
+      e = (t?.creationScope ?? r$1).importNode(i, !0);
+    C.currentNode = e;
+    let h = C.nextNode(),
+      o = 0,
+      n = 0,
+      l = s[0];
+    for (; void 0 !== l; ) {
+      if (o === l.index) {
+        let i;
+        2 === l.type
+          ? (i = new R(h, h.nextSibling, this, t))
+          : 1 === l.type
+            ? (i = new l.ctor(h, l.name, l.strings, this, t))
+            : 6 === l.type && (i = new z(h, this, t)),
+          this._$AV.push(i),
+          (l = s[++n]);
+      }
+      o !== l?.index && ((h = C.nextNode()), o++);
+    }
+    return (C.currentNode = r$1), e;
+  }
+  p(t) {
+    let i = 0;
+    for (const s of this._$AV)
+      void 0 !== s &&
+        (void 0 !== s.strings
+          ? (s._$AI(t, s, i), (i += s.strings.length - 2))
+          : s._$AI(t[i])),
+        i++;
+  }
+}
+class R {
+  get _$AU() {
+    return this._$AM?._$AU ?? this._$Cv;
+  }
+  constructor(t, i, s, e) {
+    (this.type = 2),
+      (this._$AH = E),
+      (this._$AN = void 0),
+      (this._$AA = t),
+      (this._$AB = i),
+      (this._$AM = s),
+      (this.options = e),
+      (this._$Cv = e?.isConnected ?? !0);
+  }
+  get parentNode() {
+    let t = this._$AA.parentNode;
+    const i = this._$AM;
+    return void 0 !== i && 11 === t?.nodeType && (t = i.parentNode), t;
+  }
+  get startNode() {
+    return this._$AA;
+  }
+  get endNode() {
+    return this._$AB;
+  }
+  _$AI(t, i = this) {
+    (t = S(this, t, i)),
+      c$1(t)
+        ? t === E || null == t || '' === t
+          ? (this._$AH !== E && this._$AR(), (this._$AH = E))
+          : t !== this._$AH && t !== T && this._(t)
+        : void 0 !== t._$litType$
+          ? this.$(t)
+          : void 0 !== t.nodeType
+            ? this.T(t)
+            : u(t)
+              ? this.k(t)
+              : this._(t);
+  }
+  O(t) {
+    return this._$AA.parentNode.insertBefore(t, this._$AB);
+  }
+  T(t) {
+    this._$AH !== t && (this._$AR(), (this._$AH = this.O(t)));
+  }
+  _(t) {
+    this._$AH !== E && c$1(this._$AH)
+      ? (this._$AA.nextSibling.data = t)
+      : this.T(r$1.createTextNode(t)),
+      (this._$AH = t);
+  }
+  $(t) {
+    const { values: i, _$litType$: s } = t,
+      e =
+        'number' == typeof s
+          ? this._$AC(t)
+          : (void 0 === s.el &&
+              (s.el = N.createElement(P(s.h, s.h[0]), this.options)),
+            s);
+    if (this._$AH?._$AD === e) this._$AH.p(i);
+    else {
+      const t = new M(e, this),
+        s = t.u(this.options);
+      t.p(i), this.T(s), (this._$AH = t);
+    }
+  }
+  _$AC(t) {
+    let i = A.get(t.strings);
+    return void 0 === i && A.set(t.strings, (i = new N(t))), i;
+  }
+  k(t) {
+    a(this._$AH) || ((this._$AH = []), this._$AR());
+    const i = this._$AH;
+    let s,
+      e = 0;
+    for (const h of t)
+      e === i.length
+        ? i.push((s = new R(this.O(l()), this.O(l()), this, this.options)))
+        : (s = i[e]),
+        s._$AI(h),
+        e++;
+    e < i.length && (this._$AR(s && s._$AB.nextSibling, e), (i.length = e));
+  }
+  _$AR(t = this._$AA.nextSibling, i) {
+    for (this._$AP?.(!1, !0, i); t && t !== this._$AB; ) {
+      const i = t.nextSibling;
+      t.remove(), (t = i);
+    }
+  }
+  setConnected(t) {
+    void 0 === this._$AM && ((this._$Cv = t), this._$AP?.(t));
+  }
+}
+class k {
+  get tagName() {
+    return this.element.tagName;
+  }
+  get _$AU() {
+    return this._$AM._$AU;
+  }
+  constructor(t, i, s, e, h) {
+    (this.type = 1),
+      (this._$AH = E),
+      (this._$AN = void 0),
+      (this.element = t),
+      (this.name = i),
+      (this._$AM = e),
+      (this.options = h),
+      s.length > 2 || '' !== s[0] || '' !== s[1]
+        ? ((this._$AH = Array(s.length - 1).fill(new String())),
+          (this.strings = s))
+        : (this._$AH = E);
+  }
+  _$AI(t, i = this, s, e) {
+    const h = this.strings;
+    let o = !1;
+    if (void 0 === h)
+      (t = S(this, t, i, 0)),
+        (o = !c$1(t) || (t !== this._$AH && t !== T)),
+        o && (this._$AH = t);
+    else {
+      const e = t;
+      let n, r;
+      for (t = h[0], n = 0; n < h.length - 1; n++)
+        (r = S(this, e[s + n], i, n)),
+          r === T && (r = this._$AH[n]),
+          (o ||= !c$1(r) || r !== this._$AH[n]),
+          r === E ? (t = E) : t !== E && (t += (r ?? '') + h[n + 1]),
+          (this._$AH[n] = r);
+    }
+    o && !e && this.j(t);
+  }
+  j(t) {
+    t === E
+      ? this.element.removeAttribute(this.name)
+      : this.element.setAttribute(this.name, t ?? '');
+  }
+}
+class H extends k {
+  constructor() {
+    super(...arguments), (this.type = 3);
+  }
+  j(t) {
+    this.element[this.name] = t === E ? void 0 : t;
+  }
+}
+class I extends k {
+  constructor() {
+    super(...arguments), (this.type = 4);
+  }
+  j(t) {
+    this.element.toggleAttribute(this.name, !!t && t !== E);
+  }
+}
+class L extends k {
+  constructor(t, i, s, e, h) {
+    super(t, i, s, e, h), (this.type = 5);
+  }
+  _$AI(t, i = this) {
+    if ((t = S(this, t, i, 0) ?? E) === T) return;
+    const s = this._$AH,
+      e =
+        (t === E && s !== E) ||
+        t.capture !== s.capture ||
+        t.once !== s.once ||
+        t.passive !== s.passive,
+      h = t !== E && (s === E || e);
+    e && this.element.removeEventListener(this.name, this, s),
+      h && this.element.addEventListener(this.name, this, t),
+      (this._$AH = t);
+  }
+  handleEvent(t) {
+    'function' == typeof this._$AH
+      ? this._$AH.call(this.options?.host ?? this.element, t)
+      : this._$AH.handleEvent(t);
+  }
+}
+class z {
+  constructor(t, i, s) {
+    (this.element = t),
+      (this.type = 6),
+      (this._$AN = void 0),
+      (this._$AM = i),
+      (this.options = s);
+  }
+  get _$AU() {
+    return this._$AM._$AU;
+  }
+  _$AI(t) {
+    S(this, t);
+  }
+}
+const j = t$2.litHtmlPolyfillSupport;
+j?.(N, R), (t$2.litHtmlVersions ??= []).push('3.3.0');
+const B = (t, i, s) => {
+  const e = s?.renderBefore ?? i;
+  let h = e._$litPart$;
+  if (void 0 === h) {
+    const t = s?.renderBefore ?? null;
+    e._$litPart$ = h = new R(i.insertBefore(l(), t), t, void 0, s ?? {});
+  }
+  return h._$AI(t), h;
+  /**
+   * @license
+   * Copyright 2017 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+};
+const s$1 = globalThis;
+const i$1 = class i extends y$1 {
+  constructor() {
+    super(...arguments),
+      (this.renderOptions = { host: this }),
+      (this._$Do = void 0);
+  }
+  createRenderRoot() {
+    const t = super.createRenderRoot();
+    return (this.renderOptions.renderBefore ??= t.firstChild), t;
+  }
+  update(t) {
+    const r = this.render();
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected),
+      super.update(t),
+      (this._$Do = B(r, this.renderRoot, this.renderOptions));
+  }
+  connectedCallback() {
+    super.connectedCallback(), this._$Do?.setConnected(!0);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback(), this._$Do?.setConnected(!1);
+  }
+  render() {
+    return T;
+  }
+};
+(i$1._$litElement$ = !0),
+  (i$1['finalized'] = !0),
+  s$1.litElementHydrateSupport?.({ LitElement: i$1 });
+const o$1 = s$1.litElementPolyfillSupport;
+o$1?.({ LitElement: i$1 });
+(s$1.litElementVersions ??= []).push('4.2.0');
+// Copyright 2023 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+const HIDDEN_CLASS = 'hidden';
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+const IS_IOS = /CriOS/.test(window.navigator.userAgent);
+const IS_HIDPI = window.devicePixelRatio > 1;
+const IS_MOBILE = /Android/.test(window.navigator.userAgent) || IS_IOS;
+const IS_RTL = document.documentElement.dir === 'rtl';
+const FPS = 60;
+const DEFAULT_DIMENSIONS = { width: 600, height: 150 };
+// Copyright 2025 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+function getRandomNum(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+function getTimeStamp() {
+  return IS_IOS ? new Date().getTime() : performance.now();
+}
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+var Dimensions;
+((Dimensions) => {
+  Dimensions[(Dimensions['WIDTH'] = 10)] = 'WIDTH';
+  Dimensions[(Dimensions['HEIGHT'] = 13)] = 'HEIGHT';
+  Dimensions[(Dimensions['DEST_WIDTH'] = 11)] = 'DEST_WIDTH';
+})(Dimensions || (Dimensions = {}));
+var Config$2;
+((Config) => {
+  Config[(Config['MAX_DISTANCE_UNITS'] = 5)] = 'MAX_DISTANCE_UNITS';
+  Config[(Config['ACHIEVEMENT_DISTANCE'] = 100)] = 'ACHIEVEMENT_DISTANCE';
+  Config[(Config['COEFFICIENT'] = 0.025)] = 'COEFFICIENT';
+  Config[(Config['FLASH_DURATION'] = 250)] = 'FLASH_DURATION';
+  Config[(Config['FLASH_ITERATIONS'] = 3)] = 'FLASH_ITERATIONS';
+  Config[(Config['HIGH_SCORE_HIT_AREA_PADDING'] = 4)] =
+    'HIGH_SCORE_HIT_AREA_PADDING';
+})(Config$2 || (Config$2 = {}));
+class DistanceMeter {
+  achievement = false;
+  canvas;
+  canvasCtx;
+  image;
+  spritePos;
+  x = 0;
+  y = 5;
+  maxScore = 0;
+  highScore = '0';
+  digits = [];
+  defaultString = '';
+  flashTimer = 0;
+  flashIterations = 0;
+  flashingRafId = null;
+  highScoreBounds = null;
+  highScoreFlashing = false;
+  maxScoreUnits = Config$2.MAX_DISTANCE_UNITS;
+  canvasWidth;
+  frameTimeStamp;
+  constructor(canvas, spritePos, canvasWidth, imageSpriteProvider) {
+    this.canvas = canvas;
+    const canvasContext = canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.image = imageSpriteProvider.getRunnerImageSprite();
+    this.spritePos = spritePos;
+    this.canvasWidth = canvasWidth;
+    this.init(canvasWidth);
+  }
+  init(width) {
+    let maxDistanceStr = '';
+    this.calcXpos(width);
+    this.maxScore = this.maxScoreUnits;
+    for (let i = 0; i < this.maxScoreUnits; i++) {
+      this.draw(i, 0);
+      this.defaultString += '0';
+      maxDistanceStr += '9';
+    }
+    this.maxScore = parseInt(maxDistanceStr, 10);
+  }
+  calcXpos(canvasWidth) {
+    this.x = canvasWidth - Dimensions.DEST_WIDTH * (this.maxScoreUnits + 1);
+  }
+  draw(digitPos, value, highScore) {
+    let sourceWidth = Dimensions.WIDTH;
+    let sourceHeight = Dimensions.HEIGHT;
+    let sourceX = Dimensions.WIDTH * value;
+    let sourceY = 0;
+    const targetX = digitPos * Dimensions.DEST_WIDTH;
+    const targetY = this.y;
+    const targetWidth = Dimensions.WIDTH;
+    const targetHeight = Dimensions.HEIGHT;
+    if (IS_HIDPI) {
+      sourceWidth *= 2;
+      sourceHeight *= 2;
+      sourceX *= 2;
+    }
+    sourceX += this.spritePos.x;
+    sourceY += this.spritePos.y;
+    this.canvasCtx.save();
+    if (IS_RTL) {
+      const translateX = highScore
+        ? this.canvasWidth - Dimensions.WIDTH * (this.maxScoreUnits + 3)
+        : this.canvasWidth - Dimensions.WIDTH;
+      this.canvasCtx.translate(translateX, this.y);
+      this.canvasCtx.scale(-1, 1);
+    } else {
+      const highScoreX = this.x - this.maxScoreUnits * 2 * Dimensions.WIDTH;
+      this.canvasCtx.translate(highScore ? highScoreX : this.x, this.y);
+    }
+    this.canvasCtx.drawImage(
+      this.image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      targetX,
+      targetY,
+      targetWidth,
+      targetHeight,
+    );
+    this.canvasCtx.restore();
+  }
+  getActualDistance(distance) {
+    return distance ? Math.round(distance * Config$2.COEFFICIENT) : 0;
+  }
+  update(deltaTime, distance) {
+    let paint = true;
+    let playSound = false;
+    if (!this.achievement) {
+      distance = this.getActualDistance(distance);
+      if (
+        distance > this.maxScore &&
+        this.maxScoreUnits === Config$2.MAX_DISTANCE_UNITS
+      ) {
+        this.maxScoreUnits++;
+        this.maxScore = parseInt(this.maxScore + '9', 10);
+      }
+      if (distance > 0) {
+        if (distance % Config$2.ACHIEVEMENT_DISTANCE === 0) {
+          this.achievement = true;
+          this.flashTimer = 0;
+          playSound = true;
+        }
+        const distanceStr = (this.defaultString + distance).substr(
+          -this.maxScoreUnits,
+        );
+        this.digits = distanceStr.split('');
+      } else {
+        this.digits = this.defaultString.split('');
+      }
+    } else {
+      if (this.flashIterations <= Config$2.FLASH_ITERATIONS) {
+        this.flashTimer += deltaTime;
+        if (this.flashTimer < Config$2.FLASH_DURATION) {
+          paint = false;
+        } else if (this.flashTimer > Config$2.FLASH_DURATION * 2) {
+          this.flashTimer = 0;
+          this.flashIterations++;
+        }
+      } else {
+        this.achievement = false;
+        this.flashIterations = 0;
+        this.flashTimer = 0;
+      }
+    }
+    if (paint) {
+      for (let i = this.digits.length - 1; i >= 0; i--) {
+        this.draw(i, parseInt(this.digits[i], 10));
+      }
+    }
+    this.drawHighScore();
+    return playSound;
+  }
+  drawHighScore() {
+    if (this.highScore.length > 0) {
+      this.canvasCtx.save();
+      this.canvasCtx.globalAlpha = 0.8;
+      for (let i = this.highScore.length - 1; i >= 0; i--) {
+        const characterToDraw = this.highScore[i];
+        let characterSpritePosition = parseInt(characterToDraw, 10);
+        if (isNaN(characterSpritePosition)) {
+          switch (characterToDraw) {
+            case 'H':
+              characterSpritePosition = 10;
+              break;
+            case 'I':
+              characterSpritePosition = 11;
+              break;
+            default:
+              continue;
+          }
+        }
+        this.draw(i, characterSpritePosition, true);
+      }
+      this.canvasCtx.restore();
+    }
+  }
+  setHighScore(distance) {
+    distance = this.getActualDistance(distance);
+    const highScoreStr = (this.defaultString + distance).substr(
+      -this.maxScoreUnits,
+    );
+    this.highScore = 'HI ' + highScoreStr;
+  }
+  hasClickedOnHighScore(e) {
+    let x = 0;
+    let y = 0;
+    if (e instanceof TouchEvent) {
+      const canvasBounds = this.canvas.getBoundingClientRect();
+      x = e.touches[0].clientX - canvasBounds.left;
+      y = e.touches[0].clientY - canvasBounds.top;
+    } else if (e instanceof MouseEvent) {
+      x = e.offsetX;
+      y = e.offsetY;
+    }
+    this.highScoreBounds = this.getHighScoreBounds();
+    return (
+      x >= this.highScoreBounds.x &&
+      x <= this.highScoreBounds.x + this.highScoreBounds.width &&
+      y >= this.highScoreBounds.y &&
+      y <= this.highScoreBounds.y + this.highScoreBounds.height
+    );
+  }
+  getHighScoreBounds() {
+    return {
+      x:
+        this.x -
+        this.maxScoreUnits * 2 * Dimensions.WIDTH -
+        Config$2.HIGH_SCORE_HIT_AREA_PADDING,
+      y: this.y,
+      width:
+        Dimensions.WIDTH * (this.highScore.length + 1) +
+        Config$2.HIGH_SCORE_HIT_AREA_PADDING,
+      height: Dimensions.HEIGHT + Config$2.HIGH_SCORE_HIT_AREA_PADDING * 2,
+    };
+  }
+  flashHighScore() {
+    const now = getTimeStamp();
+    const deltaTime = now - (this.frameTimeStamp || now);
+    let paint = true;
+    this.frameTimeStamp = now;
+    if (this.flashIterations > Config$2.FLASH_ITERATIONS * 2) {
+      this.cancelHighScoreFlashing();
+      return;
+    }
+    this.flashTimer += deltaTime;
+    if (this.flashTimer < Config$2.FLASH_DURATION) {
+      paint = false;
+    } else if (this.flashTimer > Config$2.FLASH_DURATION * 2) {
+      this.flashTimer = 0;
+      this.flashIterations++;
+    }
+    if (paint) {
+      this.drawHighScore();
+    } else {
+      this.clearHighScoreBounds();
+    }
+    this.flashingRafId = requestAnimationFrame(this.flashHighScore.bind(this));
+  }
+  clearHighScoreBounds() {
+    assert(this.highScoreBounds);
+    this.canvasCtx.save();
+    this.canvasCtx.fillStyle = '#fff';
+    this.canvasCtx.rect(
+      this.highScoreBounds.x,
+      this.highScoreBounds.y,
+      this.highScoreBounds.width,
+      this.highScoreBounds.height,
+    );
+    this.canvasCtx.fill();
+    this.canvasCtx.restore();
+  }
+  startHighScoreFlashing() {
+    this.highScoreFlashing = true;
+    this.flashHighScore();
+  }
+  isHighScoreFlashing() {
+    return this.highScoreFlashing;
+  }
+  cancelHighScoreFlashing() {
+    if (this.flashingRafId) {
+      cancelAnimationFrame(this.flashingRafId);
+    }
+    this.flashIterations = 0;
+    this.flashTimer = 0;
+    this.highScoreFlashing = false;
+    this.clearHighScoreBounds();
+    this.drawHighScore();
+  }
+  resetHighScore() {
+    this.setHighScore(0);
+    this.cancelHighScoreFlashing();
+  }
+  reset() {
+    this.update(0, 0);
+    this.achievement = false;
+  }
+}
+// Copyright 2021 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+const GAME_TYPE = [];
+class CollisionBox {
+  x;
+  y;
+  width;
+  height;
+  constructor(x, y, width, height) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+  }
+}
+const spriteDefinitionByType = {
+  original: {
+    ldpi: {
+      backgroundEl: { x: 86, y: 2 },
+      cactusLarge: { x: 332, y: 2 },
+      cactusSmall: { x: 228, y: 2 },
+      obstacle2: { x: 332, y: 2 },
+      obstacle: { x: 228, y: 2 },
+      cloud: { x: 86, y: 2 },
+      horizon: { x: 2, y: 54 },
+      moon: { x: 484, y: 2 },
+      pterodactyl: { x: 134, y: 2 },
+      restart: { x: 2, y: 68 },
+      textSprite: { x: 655, y: 2 },
+      tRex: { x: 848, y: 2 },
+      star: { x: 645, y: 2 },
+      collectable: { x: 0, y: 0 },
+      altGameEnd: { x: 32, y: 0 },
+    },
+    hdpi: {
+      backgroundEl: { x: 166, y: 2 },
+      cactusLarge: { x: 652, y: 2 },
+      cactusSmall: { x: 446, y: 2 },
+      obstacle2: { x: 652, y: 2 },
+      obstacle: { x: 446, y: 2 },
+      cloud: { x: 166, y: 2 },
+      horizon: { x: 2, y: 104 },
+      moon: { x: 954, y: 2 },
+      pterodactyl: { x: 260, y: 2 },
+      restart: { x: 2, y: 130 },
+      textSprite: { x: 1294, y: 2 },
+      tRex: { x: 1678, y: 2 },
+      star: { x: 1276, y: 2 },
+      collectable: { x: 0, y: 0 },
+      altGameEnd: { x: 64, y: 0 },
+    },
+    maxGapCoefficient: 1.5,
+    maxObstacleLength: 3,
+    hasClouds: true,
+    bottomPad: 10,
+    obstacles: [
+      {
+        type: 'cactusSmall',
+        width: 17,
+        height: 35,
+        yPos: 105,
+        multipleSpeed: 4,
+        minGap: 120,
+        minSpeed: 0,
+        collisionBoxes: [
+          { x: 0, y: 7, width: 5, height: 27 },
+          { x: 4, y: 0, width: 6, height: 34 },
+          { x: 10, y: 4, width: 7, height: 14 },
+        ],
+      },
+      {
+        type: 'cactusLarge',
+        width: 25,
+        height: 50,
+        yPos: 90,
+        multipleSpeed: 7,
+        minGap: 120,
+        minSpeed: 0,
+        collisionBoxes: [
+          { x: 0, y: 12, width: 7, height: 38 },
+          { x: 8, y: 0, width: 7, height: 49 },
+          { x: 13, y: 10, width: 10, height: 38 },
+        ],
+      },
+      {
+        type: 'pterodactyl',
+        width: 46,
+        height: 40,
+        yPos: [100, 75, 50],
+        yPosMobile: [100, 50],
+        multipleSpeed: 999,
+        minSpeed: 8.5,
+        minGap: 150,
+        collisionBoxes: [
+          { x: 15, y: 15, width: 16, height: 5 },
+          { x: 18, y: 21, width: 24, height: 6 },
+          { x: 2, y: 14, width: 4, height: 3 },
+          { x: 6, y: 10, width: 4, height: 7 },
+          { x: 10, y: 8, width: 6, height: 9 },
+        ],
+        numFrames: 2,
+        frameRate: 1e3 / 6,
+        speedOffset: 0.8,
+      },
+      {
+        type: 'collectable',
+        width: 31,
+        height: 24,
+        yPos: 104,
+        multipleSpeed: 1e3,
+        minGap: 9999,
+        minSpeed: 0,
+        collisionBoxes: [{ x: 0, y: 0, width: 32, height: 25 }],
+      },
+    ],
+    backgroundEl: {
+      CLOUD: { height: 14, offset: 4, width: 46, xPos: 1, fixed: false },
+    },
+    backgroundElConfig: {
+      maxBgEls: 1,
+      maxGap: 400,
+      minGap: 100,
+      pos: 0,
+      speed: 0.5,
+      yPos: 125,
+    },
+    lines: [{ sourceX: 2, sourceY: 52, width: 600, height: 12, yPos: 127 }],
+    altGameOverTextConfig: {
+      textX: 32,
+      textY: 0,
+      textWidth: 246,
+      textHeight: 17,
+      flashDuration: 1500,
+      flashing: false,
+    },
+  },
+};
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+const RESTART_ANIM_DURATION = 875;
+const LOGO_PAUSE_DURATION = 875;
+const FLASH_ITERATIONS = 5;
+const animConfig = {
+  frames: [0, 36, 72, 108, 144, 180, 216, 252],
+  msPerFrame: RESTART_ANIM_DURATION / 8,
+};
+const defaultPanelDimensions = {
+  textX: 0,
+  textY: 13,
+  textWidth: 191,
+  textHeight: 11,
+  restartWidth: 36,
+  restartHeight: 32,
+};
+class GameOverPanel {
+  canvasCtx;
+  canvasDimensions;
+  textImgPos;
+  restartImgPos;
+  imageSpriteProvider;
+  altGameEndImgPos;
+  altGameModeActive;
+  frameTimeStamp = 0;
+  animTimer = 0;
+  currentFrame = 0;
+  gameOverRafId = null;
+  flashTimer = 0;
+  flashCounter = 0;
+  originalText = true;
+  constructor(
+    canvas,
+    textImgPos,
+    restartImgPos,
+    dimensions,
+    imageSpriteProvider,
+    altGameEndImgPos,
+    altGameActive,
+  ) {
+    const canvasContext = canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.canvasDimensions = dimensions;
+    this.textImgPos = textImgPos;
+    this.restartImgPos = restartImgPos;
+    this.imageSpriteProvider = imageSpriteProvider;
+    this.altGameEndImgPos = altGameEndImgPos ?? null;
+    this.altGameModeActive = altGameActive ?? false;
+  }
+  updateDimensions(width, height) {
+    this.canvasDimensions.width = width;
+    if (height) {
+      this.canvasDimensions.height = height;
+    }
+    this.currentFrame = animConfig.frames.length - 1;
+  }
+  drawGameOverText(dimensions, useAltText) {
+    const centerX = this.canvasDimensions.width / 2;
+    let textSourceX = dimensions.textX;
+    let textSourceY = dimensions.textY;
+    let textSourceWidth = dimensions.textWidth;
+    let textSourceHeight = dimensions.textHeight;
+    const textTargetX = Math.round(centerX - dimensions.textWidth / 2);
+    const textTargetY = Math.round((this.canvasDimensions.height - 25) / 3);
+    const textTargetWidth = dimensions.textWidth;
+    const textTargetHeight = dimensions.textHeight;
+    if (IS_HIDPI) {
+      textSourceY *= 2;
+      textSourceX *= 2;
+      textSourceWidth *= 2;
+      textSourceHeight *= 2;
+    }
+    if (!useAltText) {
+      textSourceX += this.textImgPos.x;
+      textSourceY += this.textImgPos.y;
+    }
+    const spriteSource = useAltText
+      ? this.imageSpriteProvider.getAltCommonImageSprite()
+      : this.imageSpriteProvider.getOrigImageSprite();
+    assert(spriteSource);
+    this.canvasCtx.save();
+    if (IS_RTL) {
+      this.canvasCtx.translate(this.canvasDimensions.width, 0);
+      this.canvasCtx.scale(-1, 1);
+    }
+    this.canvasCtx.drawImage(
+      spriteSource,
+      textSourceX,
+      textSourceY,
+      textSourceWidth,
+      textSourceHeight,
+      textTargetX,
+      textTargetY,
+      textTargetWidth,
+      textTargetHeight,
+    );
+    this.canvasCtx.restore();
+  }
+  drawAltGameElements(tRex) {
+    const spriteDefinition = this.imageSpriteProvider.getSpriteDefinition();
+    if (this.altGameModeActive && spriteDefinition) {
+      assert(this.altGameEndImgPos);
+      const altGameEndConfig = spriteDefinition.altGameEndConfig;
+      assert(altGameEndConfig);
+      let altGameEndSourceWidth = altGameEndConfig.width;
+      let altGameEndSourceHeight = altGameEndConfig.height;
+      const altGameEndTargetX = tRex.xPos + altGameEndConfig.xOffset;
+      const altGameEndTargetY = tRex.yPos + altGameEndConfig.yOffset;
+      if (IS_HIDPI) {
+        altGameEndSourceWidth *= 2;
+        altGameEndSourceHeight *= 2;
+      }
+      const altCommonImageSprite =
+        this.imageSpriteProvider.getAltCommonImageSprite();
+      assert(altCommonImageSprite);
+      this.canvasCtx.drawImage(
+        altCommonImageSprite,
+        this.altGameEndImgPos.x,
+        this.altGameEndImgPos.y,
+        altGameEndSourceWidth,
+        altGameEndSourceHeight,
+        altGameEndTargetX,
+        altGameEndTargetY,
+        altGameEndConfig.width,
+        altGameEndConfig.height,
+      );
+    }
+  }
+  drawRestartButton() {
+    const dimensions = defaultPanelDimensions;
+    let framePosX = animConfig.frames[this.currentFrame];
+    let restartSourceWidth = dimensions.restartWidth;
+    let restartSourceHeight = dimensions.restartHeight;
+    const restartTargetX =
+      this.canvasDimensions.width / 2 - dimensions.restartHeight / 2;
+    const restartTargetY = this.canvasDimensions.height / 2;
+    if (IS_HIDPI) {
+      restartSourceWidth *= 2;
+      restartSourceHeight *= 2;
+      framePosX *= 2;
+    }
+    this.canvasCtx.save();
+    if (IS_RTL) {
+      this.canvasCtx.translate(this.canvasDimensions.width, 0);
+      this.canvasCtx.scale(-1, 1);
+    }
+    const origImageSprite = this.imageSpriteProvider.getOrigImageSprite();
+    this.canvasCtx.drawImage(
+      origImageSprite,
+      this.restartImgPos.x + framePosX,
+      this.restartImgPos.y,
+      restartSourceWidth,
+      restartSourceHeight,
+      restartTargetX,
+      restartTargetY,
+      dimensions.restartWidth,
+      dimensions.restartHeight,
+    );
+    this.canvasCtx.restore();
+  }
+  draw(altGameModeActive, tRex) {
+    if (altGameModeActive) {
+      this.altGameModeActive = altGameModeActive;
+    }
+    this.drawGameOverText(defaultPanelDimensions, false);
+    this.drawRestartButton();
+    if (tRex) {
+      this.drawAltGameElements(tRex);
+    }
+    this.update();
+  }
+  update() {
+    const now = getTimeStamp();
+    const deltaTime = now - (this.frameTimeStamp || now);
+    this.frameTimeStamp = now;
+    this.animTimer += deltaTime;
+    this.flashTimer += deltaTime;
+    if (this.currentFrame === 0 && this.animTimer > LOGO_PAUSE_DURATION) {
+      this.animTimer = 0;
+      this.currentFrame++;
+      this.drawRestartButton();
+    } else if (
+      this.currentFrame > 0 &&
+      this.currentFrame < animConfig.frames.length
+    ) {
+      if (this.animTimer >= animConfig.msPerFrame) {
+        this.currentFrame++;
+        this.drawRestartButton();
+      }
+    } else if (
+      !this.altGameModeActive &&
+      this.currentFrame === animConfig.frames.length
+    ) {
+      this.reset();
+      return;
+    }
+    if (
+      this.altGameModeActive &&
+      spriteDefinitionByType.original.altGameOverTextConfig
+    ) {
+      const altTextConfig =
+        spriteDefinitionByType.original.altGameOverTextConfig;
+      if (altTextConfig.flashing) {
+        if (
+          this.flashCounter < FLASH_ITERATIONS &&
+          this.flashTimer > altTextConfig.flashDuration
+        ) {
+          this.flashTimer = 0;
+          this.originalText = !this.originalText;
+          this.clearGameOverTextBounds();
+          if (this.originalText) {
+            this.drawGameOverText(defaultPanelDimensions, false);
+            this.flashCounter++;
+          } else {
+            this.drawGameOverText(altTextConfig, true);
+          }
+        } else if (this.flashCounter >= FLASH_ITERATIONS) {
+          this.reset();
+          return;
+        }
+      } else {
+        this.clearGameOverTextBounds(altTextConfig);
+        this.drawGameOverText(altTextConfig, true);
+      }
+    }
+    this.gameOverRafId = requestAnimationFrame(this.update.bind(this));
+  }
+  clearGameOverTextBounds(dimensions = defaultPanelDimensions) {
+    this.canvasCtx.save();
+    this.canvasCtx.clearRect(
+      Math.round(this.canvasDimensions.width / 2 - dimensions.textWidth / 2),
+      Math.round((this.canvasDimensions.height - 25) / 3),
+      dimensions.textWidth,
+      dimensions.textHeight + 4,
+    );
+    this.canvasCtx.restore();
+  }
+  reset() {
+    if (this.gameOverRafId) {
+      cancelAnimationFrame(this.gameOverRafId);
+      this.gameOverRafId = null;
+    }
+    this.animTimer = 0;
+    this.frameTimeStamp = 0;
+    this.currentFrame = 0;
+    this.flashTimer = 0;
+    this.flashCounter = 0;
+    this.originalText = true;
+  }
+}
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+class GeneratedSoundFx {
+  constructor() {
+    this.context = new AudioContext();
+    if (IS_IOS) {
+      this.context.onstatechange = () => {
+        if (this.context.state !== 'running') {
+          this.context.resume();
+        }
+      };
+      this.context.resume();
+    }
+    this.panner = this.context.createStereoPanner
+      ? this.context.createStereoPanner()
+      : null;
+  }
+  context;
+  panner = null;
+  bgSoundIntervalId = null;
+  stopAll() {
+    this.cancelFootSteps();
+  }
+  playNote(frequency, startTime, duration, vol = 0.01, pan = 0) {
+    const osc1 = this.context.createOscillator();
+    const osc2 = this.context.createOscillator();
+    const volume = this.context.createGain();
+    osc1.type = 'triangle';
+    osc2.type = 'triangle';
+    volume.gain.value = 0.1;
+    if (this.panner) {
+      this.panner.pan.value = pan;
+      osc1.connect(volume).connect(this.panner);
+      osc2.connect(volume).connect(this.panner);
+      this.panner.connect(this.context.destination);
+    } else {
+      osc1.connect(volume);
+      osc2.connect(volume);
+      volume.connect(this.context.destination);
+    }
+    osc1.frequency.value = frequency + 1;
+    osc2.frequency.value = frequency - 2;
+    volume.gain.setValueAtTime(vol, startTime + duration - 0.05);
+    volume.gain.linearRampToValueAtTime(1e-5, startTime + duration);
+    osc1.start(startTime);
+    osc2.start(startTime);
+    osc1.stop(startTime + duration);
+    osc2.stop(startTime + duration);
+  }
+  background() {
+    const now = this.context.currentTime;
+    this.playNote(493.883, now, 0.116);
+    this.playNote(659.255, now + 0.116, 0.232);
+    this.loopFootSteps();
+  }
+  loopFootSteps() {
+    if (!this.bgSoundIntervalId) {
+      this.bgSoundIntervalId = setInterval(() => {
+        this.playNote(73.42, this.context.currentTime, 0.05, 0.16);
+        this.playNote(69.3, this.context.currentTime + 0.116, 0.116, 0.16);
+      }, 280);
+    }
+  }
+  cancelFootSteps() {
+    if (this.bgSoundIntervalId) {
+      clearInterval(this.bgSoundIntervalId);
+      this.bgSoundIntervalId = null;
+      this.playNote(103.83, this.context.currentTime, 0.232, 0.02);
+      this.playNote(116.54, this.context.currentTime + 0.116, 0.232, 0.02);
+    }
+  }
+  collect() {
+    this.cancelFootSteps();
+    const now = this.context.currentTime;
+    this.playNote(830.61, now, 0.116);
+    this.playNote(1318.51, now + 0.116, 0.232);
+  }
+  jump() {
+    const now = this.context.currentTime;
+    this.playNote(659.25, now, 0.116, 0.3, -0.6);
+    this.playNote(880, now + 0.116, 0.232, 0.3, -0.6);
+  }
+}
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+let globalConfig = {
+  maxBgEls: 0,
+  maxGap: 0,
+  minGap: 0,
+  msPerFrame: 0,
+  pos: 0,
+  speed: 0,
+  yPos: 0,
+};
+function getGlobalConfig() {
+  return globalConfig;
+}
+function setGlobalConfig(config) {
+  globalConfig = config;
+}
+class BackgroundEl {
+  gap;
+  xPos;
+  remove = false;
+  canvas;
+  canvasCtx;
+  spritePos;
+  yPos = 0;
+  type;
+  animTimer = 0;
+  spriteConfig;
+  switchFrames = false;
+  imageSpriteProvider;
+  constructor(canvas, spritePos, containerWidth, type, imageSpriteProvider) {
+    this.canvas = canvas;
+    const canvasContext = this.canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.spritePos = spritePos;
+    this.imageSpriteProvider = imageSpriteProvider;
+    this.xPos = containerWidth;
+    this.type = type;
+    this.gap = getRandomNum(getGlobalConfig().minGap, getGlobalConfig().maxGap);
+    const spriteConfig =
+      imageSpriteProvider.getSpriteDefinition().backgroundEl[this.type];
+    assert(spriteConfig);
+    this.spriteConfig = spriteConfig;
+    this.init();
+  }
+  init() {
+    if (this.spriteConfig.fixed) {
+      assert(this.spriteConfig.fixedXPos);
+      this.xPos = this.spriteConfig.fixedXPos;
+    }
+    this.yPos =
+      getGlobalConfig().yPos -
+      this.spriteConfig.height +
+      this.spriteConfig.offset;
+    this.draw();
+  }
+  draw() {
+    this.canvasCtx.save();
+    let sourceWidth = this.spriteConfig.width;
+    let sourceHeight = this.spriteConfig.height;
+    let sourceX = this.spriteConfig.xPos;
+    const outputWidth = sourceWidth;
+    const outputHeight = sourceHeight;
+    const imageSprite = this.imageSpriteProvider.getRunnerImageSprite();
+    assert(imageSprite);
+    if (IS_HIDPI) {
+      sourceWidth *= 2;
+      sourceHeight *= 2;
+      sourceX *= 2;
+    }
+    this.canvasCtx.drawImage(
+      imageSprite,
+      sourceX,
+      this.spritePos.y,
+      sourceWidth,
+      sourceHeight,
+      this.xPos,
+      this.yPos,
+      outputWidth,
+      outputHeight,
+    );
+    this.canvasCtx.restore();
+  }
+  update(speed) {
+    if (!this.remove) {
+      if (this.spriteConfig.fixed) {
+        const globalConfig = getGlobalConfig();
+        assert(globalConfig.msPerFrame);
+        this.animTimer += speed;
+        if (this.animTimer > globalConfig.msPerFrame) {
+          this.animTimer = 0;
+          this.switchFrames = !this.switchFrames;
+        }
+        if (this.spriteConfig.fixedYPos1 && this.spriteConfig.fixedYPos2) {
+          this.yPos = this.switchFrames
+            ? this.spriteConfig.fixedYPos1
+            : this.spriteConfig.fixedYPos2;
+        }
+      } else {
+        this.xPos -= getGlobalConfig().speed;
+      }
+      this.draw();
+      if (!this.isVisible()) {
+        this.remove = true;
+      }
+    }
+  }
+  isVisible() {
+    return this.xPos + this.spriteConfig.width > 0;
+  }
+}
+// Copyright 2025 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+class Cloud {
+  gap;
+  xPos;
+  remove = false;
+  yPos = 0;
+  canvasCtx;
+  spritePos;
+  imageSpriteProvider;
+  constructor(canvas, spritePos, containerWidth, imageSpriteProvider) {
+    const canvasContext = canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.xPos = containerWidth;
+    this.spritePos = spritePos;
+    this.imageSpriteProvider = imageSpriteProvider;
+    this.gap = getRandomNum(Config$1.MIN_CLOUD_GAP, Config$1.MAX_CLOUD_GAP);
+    this.init();
+  }
+  init() {
+    this.yPos = getRandomNum(Config$1.MAX_SKY_LEVEL, Config$1.MIN_SKY_LEVEL);
+    this.draw();
+  }
+  draw() {
+    const runnerImageSprite = this.imageSpriteProvider.getRunnerImageSprite();
+    this.canvasCtx.save();
+    let sourceWidth = Config$1.WIDTH;
+    let sourceHeight = Config$1.HEIGHT;
+    const outputWidth = sourceWidth;
+    const outputHeight = sourceHeight;
+    if (IS_HIDPI) {
+      sourceWidth = sourceWidth * 2;
+      sourceHeight = sourceHeight * 2;
+    }
+    this.canvasCtx.drawImage(
+      runnerImageSprite,
+      this.spritePos.x,
+      this.spritePos.y,
+      sourceWidth,
+      sourceHeight,
+      this.xPos,
+      this.yPos,
+      outputWidth,
+      outputHeight,
+    );
+    this.canvasCtx.restore();
+  }
+  update(speed) {
+    if (!this.remove) {
+      this.xPos -= Math.ceil(speed);
+      this.draw();
+      if (!this.isVisible()) {
+        this.remove = true;
+      }
+    }
+  }
+  isVisible() {
+    return this.xPos + Config$1.WIDTH > 0;
+  }
+}
+var Config$1;
+((Config) => {
+  Config[(Config['HEIGHT'] = 14)] = 'HEIGHT';
+  Config[(Config['MAX_CLOUD_GAP'] = 400)] = 'MAX_CLOUD_GAP';
+  Config[(Config['MAX_SKY_LEVEL'] = 30)] = 'MAX_SKY_LEVEL';
+  Config[(Config['MIN_CLOUD_GAP'] = 100)] = 'MIN_CLOUD_GAP';
+  Config[(Config['MIN_SKY_LEVEL'] = 71)] = 'MIN_SKY_LEVEL';
+  Config[(Config['WIDTH'] = 46)] = 'WIDTH';
+})(Config$1 || (Config$1 = {}));
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+class HorizonLine {
+  canvasCtx;
+  xPos;
+  yPos = 0;
+  bumpThreshold = 0.5;
+  sourceXPos;
+  spritePos;
+  sourceDimensions;
+  dimensions;
+  imageSpriteProvider;
+  constructor(canvas, lineConfig, imageSpriteProvider) {
+    let sourceX = lineConfig.sourceX;
+    let sourceY = lineConfig.sourceY;
+    if (IS_HIDPI) {
+      sourceX *= 2;
+      sourceY *= 2;
+    }
+    this.spritePos = { x: sourceX, y: sourceY };
+    const canvasContext = canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.dimensions = { width: lineConfig.width, height: lineConfig.height };
+    this.imageSpriteProvider = imageSpriteProvider;
+    this.sourceXPos = [
+      this.spritePos.x,
+      this.spritePos.x + this.dimensions.width,
+    ];
+    this.xPos = [0, this.dimensions.width];
+    this.yPos = lineConfig.yPos;
+    this.sourceDimensions = {
+      height: lineConfig.height,
+      width: lineConfig.width,
+    };
+    if (IS_HIDPI) {
+      this.sourceDimensions.width = lineConfig.width * 2;
+      this.sourceDimensions.height = lineConfig.height * 2;
+    }
+    this.draw();
+  }
+  getRandomType() {
+    return Math.random() > this.bumpThreshold ? this.dimensions.width : 0;
+  }
+  draw() {
+    const runnerImageSprite = this.imageSpriteProvider.getRunnerImageSprite();
+    assert(runnerImageSprite);
+    this.canvasCtx.drawImage(
+      runnerImageSprite,
+      this.sourceXPos[0],
+      this.spritePos.y,
+      this.sourceDimensions.width,
+      this.sourceDimensions.height,
+      this.xPos[0],
+      this.yPos,
+      this.dimensions.width,
+      this.dimensions.height,
+    );
+    this.canvasCtx.drawImage(
+      runnerImageSprite,
+      this.sourceXPos[1],
+      this.spritePos.y,
+      this.sourceDimensions.width,
+      this.sourceDimensions.height,
+      this.xPos[1],
+      this.yPos,
+      this.dimensions.width,
+      this.dimensions.height,
+    );
+  }
+  updatexPos(pos, increment) {
+    const line1 = pos;
+    const line2 = pos === 0 ? 1 : 0;
+    this.xPos[line1] -= increment;
+    this.xPos[line2] = this.xPos[line1] + this.dimensions.width;
+    if (this.xPos[line1] <= -this.dimensions.width) {
+      this.xPos[line1] += this.dimensions.width * 2;
+      this.xPos[line2] = this.xPos[line1] - this.dimensions.width;
+      this.sourceXPos[line1] = this.getRandomType() + this.spritePos.x;
+    }
+  }
+  update(deltaTime, speed) {
+    const increment = Math.floor(speed * (FPS / 1e3) * deltaTime);
+    this.updatexPos(this.xPos[0] <= 0 ? 0 : 1, increment);
+    this.draw();
+  }
+  reset() {
+    this.xPos[0] = 0;
+    this.xPos[1] = this.dimensions.width;
+  }
+}
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+const PHASES = [140, 120, 100, 60, 40, 20, 0];
+var Config;
+((Config) => {
+  Config[(Config['FADE_SPEED'] = 0.035)] = 'FADE_SPEED';
+  Config[(Config['HEIGHT'] = 40)] = 'HEIGHT';
+  Config[(Config['MOON_SPEED'] = 0.25)] = 'MOON_SPEED';
+  Config[(Config['NUM_STARS'] = 2)] = 'NUM_STARS';
+  Config[(Config['STAR_SIZE'] = 9)] = 'STAR_SIZE';
+  Config[(Config['STAR_SPEED'] = 0.3)] = 'STAR_SPEED';
+  Config[(Config['STAR_MAX_Y'] = 70)] = 'STAR_MAX_Y';
+  Config[(Config['WIDTH'] = 20)] = 'WIDTH';
+})(Config || (Config = {}));
+class NightMode {
+  spritePos;
+  canvasCtx;
+  xPos = 0;
+  yPos = 30;
+  currentPhase = 0;
+  opacity = 0;
+  containerWidth;
+  stars = new Array(Config.NUM_STARS);
+  drawStars = false;
+  imageSpriteProvider;
+  constructor(canvas, spritePos, containerWidth, imageSpriteProvider) {
+    this.spritePos = spritePos;
+    this.imageSpriteProvider = imageSpriteProvider;
+    const canvasContext = canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.containerWidth = containerWidth;
+    this.placeStars();
+  }
+  update(activated) {
+    if (activated && this.opacity === 0) {
+      this.currentPhase++;
+      if (this.currentPhase >= PHASES.length) {
+        this.currentPhase = 0;
+      }
+    }
+    if (activated && (this.opacity < 1 || this.opacity === 0)) {
+      this.opacity += Config.FADE_SPEED;
+    } else if (this.opacity > 0) {
+      this.opacity -= Config.FADE_SPEED;
+    }
+    if (this.opacity > 0) {
+      this.xPos = this.updateXpos(this.xPos, Config.MOON_SPEED);
+      if (this.drawStars) {
+        for (let i = 0; i < Config.NUM_STARS; i++) {
+          const star = this.stars[i];
+          assert(star);
+          star.x = this.updateXpos(star.x, Config.STAR_SPEED);
+        }
+      }
+      this.draw();
+    } else {
+      this.opacity = 0;
+      this.placeStars();
+    }
+    this.drawStars = true;
+  }
+  updateXpos(currentPos, speed) {
+    if (currentPos < -Config.WIDTH) {
+      currentPos = this.containerWidth;
+    } else {
+      currentPos -= speed;
+    }
+    return currentPos;
+  }
+  draw() {
+    let moonSourceWidth =
+      this.currentPhase === 3 ? Config.WIDTH * 2 : Config.WIDTH;
+    let moonSourceHeight = Config.HEIGHT;
+    const currentPhaseSpritePosition = PHASES[this.currentPhase];
+    assert(currentPhaseSpritePosition !== undefined);
+    let moonSourceX = this.spritePos.x + currentPhaseSpritePosition;
+    const moonOutputWidth = moonSourceWidth;
+    let starSize = Config.STAR_SIZE;
+    let starSourceX = spriteDefinitionByType.original.ldpi.star.x;
+    const runnerOrigImageSprite = this.imageSpriteProvider.getOrigImageSprite();
+    assert(runnerOrigImageSprite);
+    if (IS_HIDPI) {
+      moonSourceWidth *= 2;
+      moonSourceHeight *= 2;
+      moonSourceX = this.spritePos.x + currentPhaseSpritePosition * 2;
+      starSize *= 2;
+      starSourceX = spriteDefinitionByType.original.hdpi.star.x;
+    }
+    this.canvasCtx.save();
+    this.canvasCtx.globalAlpha = this.opacity;
+    if (this.drawStars) {
+      for (const star of this.stars) {
+        this.canvasCtx.drawImage(
+          runnerOrigImageSprite,
+          starSourceX,
+          star.sourceY,
+          starSize,
+          starSize,
+          Math.round(star.x),
+          star.y,
+          Config.STAR_SIZE,
+          Config.STAR_SIZE,
+        );
+      }
+    }
+    this.canvasCtx.drawImage(
+      runnerOrigImageSprite,
+      moonSourceX,
+      this.spritePos.y,
+      moonSourceWidth,
+      moonSourceHeight,
+      Math.round(this.xPos),
+      this.yPos,
+      moonOutputWidth,
+      Config.HEIGHT,
+    );
+    this.canvasCtx.globalAlpha = 1;
+    this.canvasCtx.restore();
+  }
+  placeStars() {
+    const segmentSize = Math.round(this.containerWidth / Config.NUM_STARS);
+    for (let i = 0; i < Config.NUM_STARS; i++) {
+      const starPosition = {
+        x: getRandomNum(segmentSize * i, segmentSize * (i + 1)),
+        y: getRandomNum(0, Config.STAR_MAX_Y),
+        sourceY: 0,
+      };
+      if (IS_HIDPI) {
+        starPosition.sourceY =
+          spriteDefinitionByType.original.hdpi.star.y +
+          Config.STAR_SIZE * 2 * i;
+      } else {
+        starPosition.sourceY =
+          spriteDefinitionByType.original.ldpi.star.y + Config.STAR_SIZE * i;
+      }
+      this.stars[i] = starPosition;
+    }
+  }
+  reset() {
+    this.currentPhase = 0;
+    this.opacity = 0;
+    this.update(false);
+  }
+}
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+let maxGapCoefficient = 1.5;
+let maxObstacleLength = 3;
+function setMaxGapCoefficient(coefficient) {
+  maxGapCoefficient = coefficient;
+}
+function setMaxObstacleLength(length) {
+  maxObstacleLength = length;
+}
+class Obstacle {
+  collisionBoxes = [];
+  followingObstacleCreated = false;
+  gap = 0;
+  jumpAlerted = false;
+  remove = false;
+  size;
+  width = 0;
+  xPos;
+  yPos = 0;
+  typeConfig;
+  canvasCtx;
+  spritePos;
+  gapCoefficient;
+  speedOffset = 0;
+  altGameModeActive;
+  imageSprite;
+  currentFrame = 0;
+  timer = 0;
+  resourceProvider;
+  constructor(
+    canvasCtx,
+    type,
+    spriteImgPos,
+    dimensions,
+    gapCoefficient,
+    speed,
+    xOffset = 0,
+    resourceProvider,
+    isAltGameMode = false,
+  ) {
+    this.canvasCtx = canvasCtx;
+    this.spritePos = spriteImgPos;
+    this.typeConfig = type;
+    this.resourceProvider = resourceProvider;
+    this.gapCoefficient = this.resourceProvider.hasSlowdown
+      ? gapCoefficient * 2
+      : gapCoefficient;
+    this.size = getRandomNum(1, maxObstacleLength);
+    this.xPos = dimensions.width + xOffset;
+    this.altGameModeActive = isAltGameMode;
+    const imageSprite =
+      this.typeConfig.type === 'collectable'
+        ? this.resourceProvider.getAltCommonImageSprite()
+        : this.altGameModeActive
+          ? this.resourceProvider.getRunnerAltGameImageSprite()
+          : this.resourceProvider.getRunnerImageSprite();
+    assert(imageSprite);
+    this.imageSprite = imageSprite;
+    this.init(speed);
+  }
+  init(speed) {
+    this.cloneCollisionBoxes();
+    if (this.size > 1 && this.typeConfig.multipleSpeed > speed) {
+      this.size = 1;
+    }
+    this.width = this.typeConfig.width * this.size;
+    if (Array.isArray(this.typeConfig.yPos)) {
+      assert(Array.isArray(this.typeConfig.yPosMobile));
+      const yPosConfig = IS_MOBILE
+        ? this.typeConfig.yPosMobile
+        : this.typeConfig.yPos;
+      const randomYPos = yPosConfig[getRandomNum(0, yPosConfig.length - 1)];
+      assert(randomYPos);
+      this.yPos = randomYPos;
+    } else {
+      this.yPos = this.typeConfig.yPos;
+    }
+    this.draw();
+    if (this.size > 1) {
+      assert(this.collisionBoxes.length >= 3);
+      this.collisionBoxes[1].width =
+        this.width -
+        this.collisionBoxes[0].width -
+        this.collisionBoxes[2].width;
+      this.collisionBoxes[2].x = this.width - this.collisionBoxes[2].width;
+    }
+    if (this.typeConfig.speedOffset) {
+      this.speedOffset =
+        Math.random() > 0.5
+          ? this.typeConfig.speedOffset
+          : -this.typeConfig.speedOffset;
+    }
+    this.gap = this.getGap(this.gapCoefficient, speed);
+    if (this.resourceProvider.hasAudioCues) {
+      this.gap *= 2;
+    }
+  }
+  draw() {
+    let sourceWidth = this.typeConfig.width;
+    let sourceHeight = this.typeConfig.height;
+    if (IS_HIDPI) {
+      sourceWidth = sourceWidth * 2;
+      sourceHeight = sourceHeight * 2;
+    }
+    let sourceX =
+      sourceWidth * this.size * (0.5 * (this.size - 1)) + this.spritePos.x;
+    if (this.currentFrame > 0) {
+      sourceX += sourceWidth * this.currentFrame;
+    }
+    this.canvasCtx.drawImage(
+      this.imageSprite,
+      sourceX,
+      this.spritePos.y,
+      sourceWidth * this.size,
+      sourceHeight,
+      this.xPos,
+      this.yPos,
+      this.typeConfig.width * this.size,
+      this.typeConfig.height,
+    );
+  }
+  update(deltaTime, speed) {
+    if (!this.remove) {
+      if (this.typeConfig.speedOffset) {
+        speed += this.speedOffset;
+      }
+      this.xPos -= Math.floor(((speed * FPS) / 1e3) * deltaTime);
+      if (this.typeConfig.numFrames) {
+        assert(this.typeConfig.frameRate);
+        this.timer += deltaTime;
+        if (this.timer >= this.typeConfig.frameRate) {
+          this.currentFrame =
+            this.currentFrame === this.typeConfig.numFrames - 1
+              ? 0
+              : this.currentFrame + 1;
+          this.timer = 0;
+        }
+      }
+      this.draw();
+      if (!this.isVisible()) {
+        this.remove = true;
+      }
+    }
+  }
+  getGap(gapCoefficient, speed) {
+    const minGap = Math.round(
+      this.width * speed + this.typeConfig.minGap * gapCoefficient,
+    );
+    const maxGap = Math.round(minGap * maxGapCoefficient);
+    return getRandomNum(minGap, maxGap);
+  }
+  isVisible() {
+    return this.xPos + this.width > 0;
+  }
+  cloneCollisionBoxes() {
+    const collisionBoxes = this.typeConfig.collisionBoxes;
+    for (let i = collisionBoxes.length - 1; i >= 0; i--) {
+      this.collisionBoxes[i] = new CollisionBox(
+        collisionBoxes[i].x,
+        collisionBoxes[i].y,
+        collisionBoxes[i].width,
+        collisionBoxes[i].height,
+      );
+    }
+  }
+}
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+class Horizon {
+  obstacles = [];
+  canvas;
+  canvasCtx;
+  config = horizonConfig;
+  dimensions;
+  gapCoefficient;
+  resourceProvider;
+  obstacleHistory = [];
+  cloudFrequency;
+  spritePos;
+  nightMode;
+  altGameModeActive = false;
+  obstacleTypes = [];
+  clouds = [];
+  cloudSpeed;
+  backgroundEls = [];
+  lastEl = null;
+  horizonLines = [];
+  constructor(canvas, spritePos, dimensions, gapCoefficient, resourceProvider) {
+    this.canvas = canvas;
+    const canvasContext = canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.dimensions = dimensions;
+    this.gapCoefficient = gapCoefficient;
+    this.resourceProvider = resourceProvider;
+    this.cloudFrequency = this.config.CLOUD_FREQUENCY;
+    this.spritePos = spritePos;
+    this.cloudSpeed = this.config.BG_CLOUD_SPEED;
+    this.obstacleTypes = spriteDefinitionByType.original.obstacles;
+    this.addCloud();
+    const runnerSpriteDefinition = this.resourceProvider.getSpriteDefinition();
+    assert(runnerSpriteDefinition);
+    for (let i = 0; i < runnerSpriteDefinition.lines.length; i++) {
+      this.horizonLines.push(
+        new HorizonLine(
+          this.canvas,
+          runnerSpriteDefinition.lines[i],
+          this.resourceProvider,
+        ),
+      );
+    }
+    this.nightMode = new NightMode(
+      this.canvas,
+      this.spritePos.moon,
+      this.dimensions.height,
+      this.resourceProvider,
+    );
+  }
+  adjustObstacleSpeed() {
+    for (let i = 0; i < this.obstacleTypes.length; i++) {
+      if (this.resourceProvider.hasSlowdown) {
+        this.obstacleTypes[i].multipleSpeed =
+          this.obstacleTypes[i].multipleSpeed / 2;
+        this.obstacleTypes[i].minGap *= 1.5;
+        this.obstacleTypes[i].minSpeed = this.obstacleTypes[i].minSpeed / 2;
+        const obstacleYpos = this.obstacleTypes[i].yPos;
+        if (Array.isArray(obstacleYpos) && obstacleYpos.length > 1) {
+          this.obstacleTypes[i].yPos = obstacleYpos[0];
+        }
+      }
+    }
+  }
+  enableAltGameMode(spritePos) {
+    const runnerSpriteDefinition = this.resourceProvider.getSpriteDefinition();
+    assert(runnerSpriteDefinition);
+    this.clouds = [];
+    this.backgroundEls = [];
+    this.altGameModeActive = true;
+    this.spritePos = spritePos;
+    this.obstacleTypes = runnerSpriteDefinition.obstacles;
+    this.adjustObstacleSpeed();
+    setMaxGapCoefficient(runnerSpriteDefinition.maxGapCoefficient);
+    setMaxObstacleLength(runnerSpriteDefinition.maxObstacleLength);
+    setGlobalConfig(runnerSpriteDefinition.backgroundElConfig);
+    this.horizonLines = [];
+    for (let i = 0; i < runnerSpriteDefinition.lines.length; i++) {
+      this.horizonLines.push(
+        new HorizonLine(
+          this.canvas,
+          runnerSpriteDefinition.lines[i],
+          this.resourceProvider,
+        ),
+      );
+    }
+    this.reset();
+  }
+  update(deltaTime, currentSpeed, updateObstacles, showNightMode) {
+    const runnerSpriteDefinition = this.resourceProvider.getSpriteDefinition();
+    assert(runnerSpriteDefinition);
+    if (this.altGameModeActive) {
+      this.updateBackgroundEls(deltaTime);
+    }
+    for (const line of this.horizonLines) {
+      line.update(deltaTime, currentSpeed);
+    }
+    if (!this.altGameModeActive || runnerSpriteDefinition.hasClouds) {
+      this.nightMode.update(showNightMode);
+      this.updateClouds(deltaTime, currentSpeed);
+    }
+    if (updateObstacles) {
+      this.updateObstacles(deltaTime, currentSpeed);
+    }
+  }
+  updateBackgroundEl(elSpeed, bgElArray, maxBgEl, bgElAddFunction, frequency) {
+    const numElements = bgElArray.length;
+    if (!numElements) {
+      bgElAddFunction();
+      return;
+    }
+    for (let i = numElements - 1; i >= 0; i--) {
+      bgElArray[i].update(elSpeed);
+    }
+    const lastEl = bgElArray.at(-1);
+    if (
+      numElements < maxBgEl &&
+      this.dimensions.width - lastEl.xPos > lastEl.gap &&
+      frequency > Math.random()
+    ) {
+      bgElAddFunction();
+    }
+  }
+  updateClouds(deltaTime, speed) {
+    const elSpeed = (this.cloudSpeed / 1e3) * deltaTime * speed;
+    this.updateBackgroundEl(
+      elSpeed,
+      this.clouds,
+      this.config.MAX_CLOUDS,
+      this.addCloud.bind(this),
+      this.cloudFrequency,
+    );
+    this.clouds = this.clouds.filter((obj) => !obj.remove);
+  }
+  updateBackgroundEls(deltaTime) {
+    this.updateBackgroundEl(
+      deltaTime,
+      this.backgroundEls,
+      getGlobalConfig().maxBgEls,
+      this.addBackgroundEl.bind(this),
+      this.cloudFrequency,
+    );
+    this.backgroundEls = this.backgroundEls.filter((obj) => !obj.remove);
+  }
+  updateObstacles(deltaTime, currentSpeed) {
+    const updatedObstacles = this.obstacles.slice(0);
+    for (const obstacle of this.obstacles) {
+      obstacle.update(deltaTime, currentSpeed);
+      if (obstacle.remove) {
+        updatedObstacles.shift();
+      }
+    }
+    this.obstacles = updatedObstacles;
+    if (this.obstacles.length > 0) {
+      const lastObstacle = this.obstacles.at(-1);
+      if (
+        lastObstacle &&
+        !lastObstacle.followingObstacleCreated &&
+        lastObstacle.isVisible() &&
+        lastObstacle.xPos + lastObstacle.width + lastObstacle.gap <
+          this.dimensions.width
+      ) {
+        this.addNewObstacle(currentSpeed);
+        lastObstacle.followingObstacleCreated = true;
+      }
+    } else {
+      this.addNewObstacle(currentSpeed);
+    }
+  }
+  removeFirstObstacle() {
+    this.obstacles.shift();
+  }
+  addNewObstacle(currentSpeed) {
+    const obstacleCount =
+      this.obstacleTypes[this.obstacleTypes.length - 1].type !==
+        'collectable' ||
+      (this.resourceProvider.isAltGameModeEnabled() &&
+        !this.altGameModeActive) ||
+      this.altGameModeActive
+        ? this.obstacleTypes.length - 1
+        : this.obstacleTypes.length - 2;
+    const obstacleTypeIndex =
+      obstacleCount > 0 ? getRandomNum(0, obstacleCount) : 0;
+    const obstacleType = this.obstacleTypes[obstacleTypeIndex];
+    if (
+      (obstacleCount > 0 && this.duplicateObstacleCheck(obstacleType.type)) ||
+      currentSpeed < obstacleType.minSpeed
+    ) {
+      this.addNewObstacle(currentSpeed);
+    } else {
+      const obstacleSpritePos = this.spritePos[obstacleType.type];
+      this.obstacles.push(
+        new Obstacle(
+          this.canvasCtx,
+          obstacleType,
+          obstacleSpritePos,
+          this.dimensions,
+          this.gapCoefficient,
+          currentSpeed,
+          obstacleType.width,
+          this.resourceProvider,
+          this.altGameModeActive,
+        ),
+      );
+      this.obstacleHistory.unshift(obstacleType.type);
+      if (this.obstacleHistory.length > 1) {
+        const maxObstacleDuplicationValue =
+          this.resourceProvider.getConfig().maxObstacleDuplication;
+        assert(maxObstacleDuplicationValue);
+        this.obstacleHistory.splice(maxObstacleDuplicationValue);
+      }
+    }
+  }
+  duplicateObstacleCheck(nextObstacleType) {
+    let duplicateCount = 0;
+    for (const obstacle of this.obstacleHistory) {
+      duplicateCount = obstacle === nextObstacleType ? duplicateCount + 1 : 0;
+    }
+    const maxObstacleDuplicationValue =
+      this.resourceProvider.getConfig().maxObstacleDuplication;
+    assert(maxObstacleDuplicationValue);
+    return duplicateCount >= maxObstacleDuplicationValue;
+  }
+  reset() {
+    this.obstacles = [];
+    for (let l = 0; l < this.horizonLines.length; l++) {
+      this.horizonLines[l].reset();
+    }
+    this.nightMode.reset();
+  }
+  resize(width, height) {
+    this.canvas.width = width;
+    this.canvas.height = height;
+  }
+  addCloud() {
+    this.clouds.push(
+      new Cloud(
+        this.canvas,
+        this.spritePos.cloud,
+        this.dimensions.width,
+        this.resourceProvider,
+      ),
+    );
+  }
+  addBackgroundEl() {
+    const runnerSpriteDefinition = this.resourceProvider.getSpriteDefinition();
+    assert(runnerSpriteDefinition);
+    const backgroundElTypes = Object.keys(runnerSpriteDefinition.backgroundEl);
+    if (backgroundElTypes.length > 0) {
+      let index = getRandomNum(0, backgroundElTypes.length - 1);
+      let type = backgroundElTypes[index];
+      while (type === this.lastEl && backgroundElTypes.length > 1) {
+        index = getRandomNum(0, backgroundElTypes.length - 1);
+        type = backgroundElTypes[index];
+      }
+      this.lastEl = type;
+      this.backgroundEls.push(
+        new BackgroundEl(
+          this.canvas,
+          this.spritePos.backgroundEl,
+          this.dimensions.width,
+          type,
+          this.resourceProvider,
+        ),
+      );
+    }
+  }
+}
+const horizonConfig = {
+  BG_CLOUD_SPEED: 0.2,
+  BUMPY_THRESHOLD: 0.3,
+  CLOUD_FREQUENCY: 0.5,
+  HORIZON_HEIGHT: 16,
+  MAX_CLOUDS: 6,
+};
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+const defaultTrexConfig = {
+  dropVelocity: -5,
+  flashOff: 175,
+  flashOn: 100,
+  height: 47,
+  heightDuck: 25,
+  introDuration: 1500,
+  speedDropCoefficient: 3,
+  spriteWidth: 262,
+  startXPos: 50,
+  width: 44,
+  widthDuck: 59,
+  invertJump: false,
+};
+const slowJumpConfig = {
+  gravity: 0.25,
+  maxJumpHeight: 50,
+  minJumpHeight: 45,
+  initialJumpVelocity: -20,
+};
+const normalJumpConfig = {
+  gravity: 0.6,
+  maxJumpHeight: 30,
+  minJumpHeight: 30,
+  initialJumpVelocity: -10,
+};
+const collisionBoxes = {
+  ducking: [new CollisionBox(1, 18, 55, 25)],
+  running: [
+    new CollisionBox(22, 0, 17, 16),
+    new CollisionBox(1, 18, 30, 9),
+    new CollisionBox(10, 35, 14, 8),
+    new CollisionBox(1, 24, 29, 5),
+    new CollisionBox(5, 30, 21, 4),
+    new CollisionBox(9, 34, 15, 4),
+  ],
+};
+var Status;
+((Status) => {
+  Status[(Status['CRASHED'] = 0)] = 'CRASHED';
+  Status[(Status['DUCKING'] = 1)] = 'DUCKING';
+  Status[(Status['JUMPING'] = 2)] = 'JUMPING';
+  Status[(Status['RUNNING'] = 3)] = 'RUNNING';
+  Status[(Status['WAITING'] = 4)] = 'WAITING';
+})(Status || (Status = {}));
+const BLINK_TIMING = 7e3;
+const animFrames = {
+  [Status.WAITING]: { frames: [44, 0], msPerFrame: 1e3 / 3 },
+  [Status.RUNNING]: { frames: [88, 132], msPerFrame: 1e3 / 12 },
+  [Status.CRASHED]: { frames: [220], msPerFrame: 1e3 / 60 },
+  [Status.JUMPING]: { frames: [0], msPerFrame: 1e3 / 60 },
+  [Status.DUCKING]: { frames: [264, 323], msPerFrame: 1e3 / 8 },
+};
+class Trex {
+  config;
+  playingIntro = false;
+  xPos = 0;
+  yPos = 0;
+  jumpCount = 0;
+  ducking = false;
+  blinkCount = 0;
+  jumping = false;
+  speedDrop = false;
+  canvasCtx;
+  spritePos;
+  xInitialPos = 0;
+  groundYPos = 0;
+  currentFrame = 0;
+  currentAnimFrames = [];
+  blinkDelay = 0;
+  animStartTime = 0;
+  timer = 0;
+  msPerFrame = 1e3 / FPS;
+  status = Status.WAITING;
+  jumpVelocity = 0;
+  reachedMinHeight = false;
+  altGameModeEnabled = false;
+  flashing = false;
+  minJumpHeight;
+  resourceProvider;
+  constructor(canvas, spritePos, resourceProvider) {
+    const canvasContext = canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.spritePos = spritePos;
+    this.resourceProvider = resourceProvider;
+    this.config = Object.assign(defaultTrexConfig, normalJumpConfig);
+    const runnerDefaultDimensions = DEFAULT_DIMENSIONS;
+    const runnerBottomPadding = this.resourceProvider.getConfig().bottomPad;
+    assert(runnerDefaultDimensions);
+    assert(runnerBottomPadding);
+    this.groundYPos =
+      runnerDefaultDimensions.height - this.config.height - runnerBottomPadding;
+    this.yPos = this.groundYPos;
+    this.minJumpHeight = this.groundYPos - this.config.minJumpHeight;
+    this.draw(0, 0);
+    this.update(0, Status.WAITING);
+  }
+  enableSlowConfig() {
+    const jumpConfig = this.resourceProvider.hasSlowdown
+      ? slowJumpConfig
+      : normalJumpConfig;
+    this.config = Object.assign(defaultTrexConfig, jumpConfig);
+    this.adjustAltGameConfigForSlowSpeed();
+  }
+  enableAltGameMode(spritePos) {
+    this.altGameModeEnabled = true;
+    this.spritePos = spritePos;
+    const spriteDefinition = this.resourceProvider.getSpriteDefinition();
+    assert(spriteDefinition);
+    const tRexSpriteDefinition = spriteDefinition.tRex;
+    assert(tRexSpriteDefinition.running1);
+    const runnerDefaultDimensions = DEFAULT_DIMENSIONS;
+    animFrames[Status.RUNNING].frames = [
+      tRexSpriteDefinition.running1.x,
+      tRexSpriteDefinition.running2.x,
+    ];
+    animFrames[Status.CRASHED].frames = [tRexSpriteDefinition.crashed.x];
+    if (typeof tRexSpriteDefinition.jumping.x === 'object') {
+      animFrames[Status.JUMPING].frames = tRexSpriteDefinition.jumping.x;
+    } else {
+      animFrames[Status.JUMPING].frames = [tRexSpriteDefinition.jumping.x];
+    }
+    animFrames[Status.DUCKING].frames = [
+      tRexSpriteDefinition.ducking1.x,
+      tRexSpriteDefinition.ducking2.x,
+    ];
+    this.config.gravity = tRexSpriteDefinition.gravity || this.config.gravity;
+    (this.config.height = tRexSpriteDefinition.running1.h),
+      (this.config.initialJumpVelocity =
+        tRexSpriteDefinition.initialJumpVelocity);
+    this.config.maxJumpHeight = tRexSpriteDefinition.maxJumpHeight;
+    this.config.minJumpHeight = tRexSpriteDefinition.minJumpHeight;
+    this.config.width = tRexSpriteDefinition.running1.w;
+    this.config.widthCrashed = tRexSpriteDefinition.crashed.w;
+    this.config.widthJump = tRexSpriteDefinition.jumping.w;
+    this.config.invertJump = tRexSpriteDefinition.invertJump;
+    this.adjustAltGameConfigForSlowSpeed(tRexSpriteDefinition.gravity);
+    this.groundYPos =
+      runnerDefaultDimensions.height -
+      this.config.height -
+      spriteDefinition.bottomPad;
+    this.yPos = this.groundYPos;
+    this.reset();
+  }
+  adjustAltGameConfigForSlowSpeed(gravityValue) {
+    if (this.resourceProvider.hasSlowdown) {
+      if (gravityValue) {
+        this.config.gravity = gravityValue / 1.5;
+      }
+      this.config.minJumpHeight *= 1.5;
+      this.config.maxJumpHeight *= 1.5;
+      this.config.initialJumpVelocity *= 1.5;
+    }
+  }
+  setFlashing(status) {
+    this.flashing = status;
+  }
+  setJumpVelocity(setting) {
+    this.config.initialJumpVelocity = -setting;
+    this.config.dropVelocity = -setting / 2;
+  }
+  update(deltaTime, status) {
+    this.timer += deltaTime;
+    if (status !== undefined) {
+      this.status = status;
+      this.currentFrame = 0;
+      this.msPerFrame = animFrames[status].msPerFrame;
+      this.currentAnimFrames = animFrames[status].frames;
+      if (status === Status.WAITING) {
+        this.animStartTime = getTimeStamp();
+        this.setBlinkDelay();
+      }
+    }
+    if (this.playingIntro && this.xPos < this.config.startXPos) {
+      this.xPos += Math.round(
+        (this.config.startXPos / this.config.introDuration) * deltaTime,
+      );
+      this.xInitialPos = this.xPos;
+    }
+    if (this.status === Status.WAITING) {
+      this.blink(getTimeStamp());
+    } else {
+      this.draw(this.currentAnimFrames[this.currentFrame], 0);
+    }
+    if (!this.flashing && this.timer >= this.msPerFrame) {
+      this.currentFrame =
+        this.currentFrame === this.currentAnimFrames.length - 1
+          ? 0
+          : this.currentFrame + 1;
+      this.timer = 0;
+    }
+    if (this.speedDrop && this.yPos === this.groundYPos) {
+      this.speedDrop = false;
+      this.setDuck(true);
+    }
+  }
+  draw(x, y) {
+    let sourceX = x;
+    let sourceY = y;
+    let sourceWidth =
+      this.ducking && this.status !== Status.CRASHED
+        ? this.config.widthDuck
+        : this.config.width;
+    let sourceHeight = this.config.height;
+    const outputHeight = sourceHeight;
+    if (this.altGameModeEnabled) {
+      assert(this.config.widthCrashed);
+    }
+    const outputWidth =
+      this.altGameModeEnabled && this.status === Status.CRASHED
+        ? this.config.widthCrashed
+        : this.config.width;
+    const runnerImageSprite = this.resourceProvider.getRunnerImageSprite();
+    assert(runnerImageSprite);
+    if (this.altGameModeEnabled) {
+      if (this.jumping && this.status !== Status.CRASHED) {
+        assert(this.config.widthJump);
+        sourceWidth = this.config.widthJump;
+      } else if (this.status === Status.CRASHED) {
+        assert(this.config.widthCrashed);
+        sourceWidth = this.config.widthCrashed;
+      }
+    }
+    if (IS_HIDPI) {
+      sourceX *= 2;
+      sourceY *= 2;
+      sourceWidth *= 2;
+      sourceHeight *= 2;
+    }
+    sourceX += this.spritePos.x;
+    sourceY += this.spritePos.y;
+    if (this.flashing) {
+      if (this.timer < this.config.flashOn) {
+        this.canvasCtx.globalAlpha = 0.5;
+      } else if (this.timer > this.config.flashOff) {
+        this.timer = 0;
+      }
+    }
+    if (this.ducking && this.status !== Status.CRASHED) {
+      this.canvasCtx.drawImage(
+        runnerImageSprite,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        this.xPos,
+        this.yPos,
+        this.config.widthDuck,
+        outputHeight,
+      );
+    } else if (
+      this.altGameModeEnabled &&
+      this.jumping &&
+      this.status !== Status.CRASHED
+    ) {
+      assert(this.config.widthJump);
+      const spriteDefinition = this.resourceProvider.getSpriteDefinition();
+      assert(spriteDefinition);
+      assert(spriteDefinition.tRex);
+      const jumpOffset =
+        spriteDefinition.tRex.jumping.xOffset * (IS_HIDPI ? 2 : 1);
+      this.canvasCtx.drawImage(
+        runnerImageSprite,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        this.xPos - jumpOffset,
+        this.yPos,
+        this.config.widthJump,
+        outputHeight,
+      );
+    } else {
+      if (this.ducking && this.status === Status.CRASHED) {
+        this.xPos++;
+      }
+      this.canvasCtx.drawImage(
+        runnerImageSprite,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        this.xPos,
+        this.yPos,
+        outputWidth,
+        outputHeight,
+      );
+    }
+    this.canvasCtx.globalAlpha = 1;
+  }
+  setBlinkDelay() {
+    this.blinkDelay = Math.ceil(Math.random() * BLINK_TIMING);
+  }
+  blink(time) {
+    const deltaTime = time - this.animStartTime;
+    if (deltaTime >= this.blinkDelay) {
+      this.draw(this.currentAnimFrames[this.currentFrame], 0);
+      if (this.currentFrame === 1) {
+        this.setBlinkDelay();
+        this.animStartTime = time;
+        this.blinkCount++;
+      }
+    }
+  }
+  startJump(speed) {
+    if (!this.jumping) {
+      this.update(0, Status.JUMPING);
+      this.jumpVelocity = this.config.initialJumpVelocity - speed / 10;
+      this.jumping = true;
+      this.reachedMinHeight = false;
+      this.speedDrop = false;
+      if (this.config.invertJump) {
+        this.minJumpHeight = this.groundYPos + this.config.minJumpHeight;
+      }
+    }
+  }
+  endJump() {
+    if (this.reachedMinHeight && this.jumpVelocity < this.config.dropVelocity) {
+      this.jumpVelocity = this.config.dropVelocity;
+    }
+  }
+  updateJump(deltaTime) {
+    const msPerFrame = animFrames[this.status].msPerFrame;
+    const framesElapsed = deltaTime / msPerFrame;
+    if (this.speedDrop) {
+      this.yPos += Math.round(
+        this.jumpVelocity * this.config.speedDropCoefficient * framesElapsed,
+      );
+    } else if (this.config.invertJump) {
+      this.yPos -= Math.round(this.jumpVelocity * framesElapsed);
+    } else {
+      this.yPos += Math.round(this.jumpVelocity * framesElapsed);
+    }
+    this.jumpVelocity += this.config.gravity * framesElapsed;
+    if (
+      (this.config.invertJump && this.yPos > this.minJumpHeight) ||
+      (!this.config.invertJump && this.yPos < this.minJumpHeight) ||
+      this.speedDrop
+    ) {
+      this.reachedMinHeight = true;
+    }
+    if (
+      (this.config.invertJump && this.yPos > -this.config.maxJumpHeight) ||
+      (!this.config.invertJump && this.yPos < this.config.maxJumpHeight) ||
+      this.speedDrop
+    ) {
+      this.endJump();
+    }
+    if (
+      (this.config.invertJump && this.yPos < this.groundYPos) ||
+      (!this.config.invertJump && this.yPos > this.groundYPos)
+    ) {
+      this.reset();
+      this.jumpCount++;
+      if (this.resourceProvider.hasAudioCues) {
+        const generatedSoundFx = this.resourceProvider.getGeneratedSoundFx();
+        assert(generatedSoundFx);
+        generatedSoundFx.loopFootSteps();
+      }
+    }
+  }
+  setSpeedDrop() {
+    this.speedDrop = true;
+    this.jumpVelocity = 1;
+  }
+  setDuck(isDucking) {
+    if (isDucking && this.status !== Status.DUCKING) {
+      this.update(0, Status.DUCKING);
+      this.ducking = true;
+    } else if (this.status === Status.DUCKING) {
+      this.update(0, Status.RUNNING);
+      this.ducking = false;
+    }
+  }
+  reset() {
+    this.xPos = this.xInitialPos;
+    this.yPos = this.groundYPos;
+    this.jumpVelocity = 0;
+    this.jumping = false;
+    this.ducking = false;
+    this.update(0, Status.RUNNING);
+    this.speedDrop = false;
+    this.jumpCount = 0;
+  }
+  getCollisionBoxes() {
+    return this.ducking ? collisionBoxes.ducking : collisionBoxes.running;
+  }
+}
+// Copyright 2014 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+var A11yStrings;
+((A11yStrings) => {
+  A11yStrings['ARIA_LABEL'] = 'dinoGameA11yAriaLabel';
+  A11yStrings['DESCRIPTION'] = 'dinoGameA11yDescription';
+  A11yStrings['GAME_OVER'] = 'dinoGameA11yGameOver';
+  A11yStrings['HIGH_SCORE'] = 'dinoGameA11yHighScore';
+  A11yStrings['JUMP'] = 'dinoGameA11yJump';
+  A11yStrings['STARTED'] = 'dinoGameA11yStartGame';
+  A11yStrings['SPEED_LABEL'] = 'dinoGameA11ySpeedToggle';
+})(A11yStrings || (A11yStrings = {}));
+const defaultBaseConfig = {
+  audiocueProximityThreshold: 190,
+  audiocueProximityThresholdMobileA11y: 250,
+  bgCloudSpeed: 0.2,
+  bottomPad: 10,
+  canvasInViewOffset: -10,
+  clearTime: 3e3,
+  cloudFrequency: 0.5,
+  fadeDuration: 1,
+  flashDuration: 1e3,
+  gameoverClearTime: 1200,
+  initialJumpVelocity: 12,
+  invertFadeDuration: 12e3,
+  maxBlinkCount: 3,
+  maxClouds: 6,
+  maxObstacleLength: 3,
+  maxObstacleDuplication: 2,
+  resourceTemplateId: 'audio-resources',
+  speed: 6,
+  speedDropCoefficient: 3,
+  arcadeModeInitialTopPosition: 35,
+  arcadeModeTopPositionPercent: 0.1,
+};
+const normalModeConfig = {
+  acceleration: 0.001,
+  audiocueProximityThreshold: 190,
+  audiocueProximityThresholdMobileA11y: 250,
+  gapCoefficient: 0.6,
+  invertDistance: 700,
+  maxSpeed: 13,
+  mobileSpeedCoefficient: 1.2,
+  speed: 6,
+};
+const slowModeConfig = {
+  acceleration: 5e-4,
+  audiocueProximityThreshold: 170,
+  audiocueProximityThresholdMobileA11y: 220,
+  gapCoefficient: 0.3,
+  invertDistance: 350,
+  maxSpeed: 9,
+  mobileSpeedCoefficient: 1.5,
+  speed: 4.2,
+};
+var RunnerClasses;
+((RunnerClasses) => {
+  RunnerClasses['ARCADE_MODE'] = 'arcade-mode';
+  RunnerClasses['CANVAS'] = 'runner-canvas';
+  RunnerClasses['CONTAINER'] = 'runner-container';
+  RunnerClasses['CRASHED'] = 'crashed';
+  RunnerClasses['ICON'] = 'icon-offline';
+  RunnerClasses['ICON_DISABLED'] = 'icon-disabled';
+  RunnerClasses['INVERTED'] = 'inverted';
+  RunnerClasses['SNACKBAR'] = 'snackbar';
+  RunnerClasses['SNACKBAR_SHOW'] = 'snackbar-show';
+  RunnerClasses['TOUCH_CONTROLLER'] = 'controller';
+})(RunnerClasses || (RunnerClasses = {}));
+var RunnerSounds;
+((RunnerSounds) => {
+  RunnerSounds['BUTTON_PRESS'] = 'offline-sound-press';
+  RunnerSounds['HIT'] = 'offline-sound-hit';
+  RunnerSounds['SCORE'] = 'offline-sound-reached';
+})(RunnerSounds || (RunnerSounds = {}));
+const runnerKeycodes = { jump: [38, 32], duck: [40], restart: [13] };
+var RunnerEvents;
+((RunnerEvents) => {
+  RunnerEvents['ANIM_END'] = 'webkitAnimationEnd';
+  RunnerEvents['CLICK'] = 'click';
+  RunnerEvents['KEYDOWN'] = 'keydown';
+  RunnerEvents['KEYUP'] = 'keyup';
+  RunnerEvents['POINTERDOWN'] = 'pointerdown';
+  RunnerEvents['POINTERUP'] = 'pointerup';
+  RunnerEvents['RESIZE'] = 'resize';
+  RunnerEvents['TOUCHEND'] = 'touchend';
+  RunnerEvents['TOUCHSTART'] = 'touchstart';
+  RunnerEvents['VISIBILITY'] = 'visibilitychange';
+  RunnerEvents['BLUR'] = 'blur';
+  RunnerEvents['FOCUS'] = 'focus';
+  RunnerEvents['LOAD'] = 'load';
+  RunnerEvents['GAMEPADCONNECTED'] = 'gamepadconnected';
+})(RunnerEvents || (RunnerEvents = {}));
+let runnerInstance = null;
+const ARCADE_MODE_URL = 'chrome://dino/';
+const RESOURCE_POSTFIX = 'offline-resources-';
+class Runner {
+  outerContainerEl;
+  containerEl = null;
+  touchController = null;
+  canvas = null;
+  canvasCtx = null;
+  a11yStatusEl = null;
+  slowSpeedCheckboxLabel = null;
+  slowSpeedCheckbox = null;
+  slowSpeedToggleEl = null;
+  origImageSprite = null;
+  altCommonImageSprite = null;
+  altGameImageSprite = null;
+  imageSprite = null;
+  config;
+  dimensions = DEFAULT_DIMENSIONS;
+  gameType = null;
+  spriteDefinition = spriteDefinitionByType.original;
+  spriteDef = null;
+  altGameModeActive = false;
+  altGameModeFlashTimer = null;
+  altGameAssetsFailedToLoad = false;
+  fadeInTimer = 0;
+  tRex = null;
+  distanceMeter = null;
+  gameOverPanel = null;
+  horizon = null;
+  msPerFrame = 1e3 / FPS;
+  time = 0;
+  distanceRan = 0;
+  runningTime = 0;
+  currentSpeed;
+  resizeTimerId;
+  raqId = 0;
+  playCount = 0;
+  isDisabled = loadTimeData.valueExists('disabledEasterEgg');
+  activated = false;
+  playing = false;
+  playingIntro = false;
+  crashed = false;
+  paused = false;
+  inverted = false;
+  isDarkMode = false;
+  updatePending = false;
+  hasSlowdownInternal = false;
+  hasAudioCuesInternal = false;
+  highestScore = 0;
+  syncHighestScore = false;
+  invertTimer = 0;
+  invertTrigger = false;
+  soundFx = {};
+  audioContext = null;
+  generatedSoundFx = null;
+  pollingGamepads = false;
+  gamepadIndex;
+  previousGamepad = null;
+  static initializeInstance(outerContainerId, config) {
+    assert(runnerInstance === null);
+    runnerInstance = new Runner(outerContainerId, config);
+    if (!runnerInstance.isDisabled) {
+      runnerInstance.loadImages();
+    }
+    return runnerInstance;
+  }
+  static getInstance() {
+    assert(runnerInstance);
+    return runnerInstance;
+  }
+  constructor(outerContainerId, configParam) {
+    const outerContainerElement = document.querySelector(outerContainerId);
+    assert(outerContainerElement);
+    this.outerContainerEl = outerContainerElement;
+    this.config =
+      configParam || Object.assign({}, defaultBaseConfig, normalModeConfig);
+    this.currentSpeed = this.config.speed;
+    if (this.isDisabled) {
+      this.setupDisabledRunner();
+      return;
+    }
+    if (this.isAltGameModeEnabled()) {
+      this.initAltGameType();
+    }
+    window.initializeEasterEggHighScore = this.initializeHighScore.bind(this);
+  }
+  get hasSlowdown() {
+    return this.hasSlowdownInternal;
+  }
+  get hasAudioCues() {
+    return this.hasAudioCuesInternal;
+  }
+  isAltGameModeEnabled() {
+    if (this.altGameAssetsFailedToLoad) {
+      return false;
+    }
+    return loadTimeData.valueExists('enableAltGameMode');
+  }
+  getGeneratedSoundFx() {
+    assert(this.generatedSoundFx);
+    return this.generatedSoundFx;
+  }
+  getSpriteDefinition() {
+    return this.spriteDefinition;
+  }
+  getOrigImageSprite() {
+    assert(this.origImageSprite);
+    return this.origImageSprite;
+  }
+  getRunnerImageSprite() {
+    assert(this.imageSprite);
+    return this.imageSprite;
+  }
+  getRunnerAltGameImageSprite() {
+    return this.altGameImageSprite;
+  }
+  getAltCommonImageSprite() {
+    return this.altCommonImageSprite;
+  }
+  getConfig() {
+    return this.config;
+  }
+  initAltGameType() {
+    assert(loadTimeData.valueExists('altGameType'));
+    if (GAME_TYPE.length > 0) {
+      const parsedValue = Number.parseInt(
+        loadTimeData.getValue('altGameType'),
+        10,
+      );
+      const type = GAME_TYPE[parsedValue - 1];
+      this.gameType = type || null;
+    }
+  }
+  setupDisabledRunner() {
+    this.containerEl = document.createElement('div');
+    this.containerEl.className = RunnerClasses.SNACKBAR;
+    this.containerEl.textContent = loadTimeData.getValue('disabledEasterEgg');
+    this.outerContainerEl.appendChild(this.containerEl);
+    document.addEventListener(RunnerEvents.KEYDOWN, (e) => {
+      if (runnerKeycodes.jump.includes(e.keyCode)) {
+        assert(this.containerEl);
+        this.containerEl.classList.add(RunnerClasses.SNACKBAR_SHOW);
+        const iconElement = document.querySelector('.icon');
+        assert(iconElement);
+        iconElement.classList.add(RunnerClasses.ICON_DISABLED);
+      }
+    });
+  }
+  updateConfigSetting(setting, value) {
+    this.config[setting] = value;
+  }
+  updateTrexConfigSetting(setting, value) {
+    assert(this.tRex);
+    switch (setting) {
+      case 'gravity':
+      case 'minJumpHeight':
+      case 'speedDropCoefficient':
+        this.tRex.config[setting] = value;
+        break;
+      case 'initialJumpVelocity':
+        this.tRex.setJumpVelocity(value);
+        break;
+      case 'speed':
+        this.setSpeed(value);
+        break;
+    }
+  }
+  createImageElement(resourceName) {
+    const imgSrc = loadTimeData.valueExists(resourceName)
+      ? loadTimeData.getString(resourceName)
+      : null;
+    if (imgSrc) {
+      const el = document.createElement('img');
+      el.id = resourceName;
+      el.src = imgSrc;
+      const resourcesElement = document.getElementById('offline-resources');
+      assert(resourcesElement);
+      resourcesElement.appendChild(el);
+      return el;
+    }
+    return null;
+  }
+  loadImages() {
+    let scale = '1x';
+    this.spriteDef = this.getSpriteDefinition().ldpi;
+    if (IS_HIDPI) {
+      scale = '2x';
+      this.spriteDef = this.getSpriteDefinition().hdpi;
+    }
+    const imageSpriteElement = document.querySelector(
+      `#${RESOURCE_POSTFIX + scale}`,
+    );
+    assert(imageSpriteElement);
+    this.imageSprite = imageSpriteElement;
+    if (this.gameType) {
+      this.altGameImageSprite = this.createImageElement(
+        'altGameSpecificImage' + scale,
+      );
+      this.altCommonImageSprite = this.createImageElement(
+        'altGameCommonImage' + scale,
+      );
+    }
+    this.origImageSprite = this.getRunnerImageSprite();
+    if (
+      !this.getRunnerAltGameImageSprite() === null ||
+      this.getAltCommonImageSprite() === null
+    ) {
+      this.altGameAssetsFailedToLoad = true;
+      this.altGameModeActive = false;
+    }
+    if (this.getRunnerImageSprite().complete) {
+      this.init();
+    } else {
+      this.getRunnerImageSprite().addEventListener(
+        RunnerEvents.LOAD,
+        this.init.bind(this),
+      );
+    }
+  }
+  loadSounds() {
+    if (IS_IOS) {
+      return;
+    }
+    this.audioContext = new AudioContext();
+    const resourceTemplateElement = document.querySelector(
+      `#${this.config.resourceTemplateId}`,
+    );
+    assert(resourceTemplateElement);
+    const resourceTemplate = resourceTemplateElement.content;
+    for (const sound in RunnerSounds) {
+      const audioElement = resourceTemplate.querySelector(
+        `#${RunnerSounds[sound]}`,
+      );
+      assert(audioElement);
+      let soundSrc = audioElement.src;
+      soundSrc = soundSrc.substr(soundSrc.indexOf(',') + 1);
+      const buffer = decodeBase64ToArrayBuffer(soundSrc);
+      this.audioContext.decodeAudioData(buffer, (audioBuffer) => {
+        this.soundFx = { ...this.soundFx, [sound]: audioBuffer };
+      });
+    }
+  }
+  setSpeed(newSpeed) {
+    const speed = newSpeed || this.currentSpeed;
+    if (this.dimensions.width < DEFAULT_DIMENSIONS.width) {
+      const mobileSpeed = this.hasSlowdown
+        ? speed
+        : ((speed * this.dimensions.width) / DEFAULT_DIMENSIONS.width) *
+          this.config.mobileSpeedCoefficient;
+      this.currentSpeed = mobileSpeed > speed ? speed : mobileSpeed;
+    } else if (newSpeed) {
+      this.currentSpeed = newSpeed;
+    }
+  }
+  init() {
+    assert(this.spriteDef);
+    const iconElement = document.querySelector('.' + RunnerClasses.ICON);
+    assert(iconElement);
+    iconElement.style.visibility = 'hidden';
+    if (this.isArcadeMode()) {
+      document.title =
+        document.title + ' - ' + getA11yString(A11yStrings.ARIA_LABEL);
+    }
+    this.adjustDimensions();
+    this.setSpeed();
+    const ariaLabel = getA11yString(A11yStrings.ARIA_LABEL);
+    this.containerEl = document.createElement('div');
+    this.containerEl.setAttribute('role', IS_MOBILE ? 'button' : 'application');
+    this.containerEl.setAttribute('tabindex', '0');
+    this.containerEl.setAttribute(
+      'title',
+      getA11yString(A11yStrings.DESCRIPTION),
+    );
+    this.containerEl.setAttribute('aria-label', ariaLabel);
+    this.containerEl.className = RunnerClasses.CONTAINER;
+    this.canvas = createCanvas(
+      this.containerEl,
+      this.dimensions.width,
+      this.dimensions.height,
+    );
+    this.a11yStatusEl = document.createElement('span');
+    this.a11yStatusEl.className = 'offline-runner-live-region';
+    this.a11yStatusEl.setAttribute('aria-live', 'assertive');
+    this.a11yStatusEl.textContent = '';
+    this.slowSpeedCheckboxLabel = document.createElement('label');
+    this.slowSpeedCheckboxLabel.className = 'slow-speed-option hidden';
+    this.slowSpeedCheckboxLabel.textContent = getA11yString(
+      A11yStrings.SPEED_LABEL,
+    );
+    this.slowSpeedCheckbox = document.createElement('input');
+    this.slowSpeedCheckbox.setAttribute('type', 'checkbox');
+    this.slowSpeedCheckbox.setAttribute(
+      'title',
+      getA11yString(A11yStrings.SPEED_LABEL),
+    );
+    this.slowSpeedCheckbox.setAttribute('tabindex', '0');
+    this.slowSpeedCheckbox.setAttribute('checked', 'checked');
+    this.slowSpeedToggleEl = document.createElement('span');
+    this.slowSpeedToggleEl.className = 'slow-speed-toggle';
+    this.slowSpeedCheckboxLabel.appendChild(this.slowSpeedCheckbox);
+    this.slowSpeedCheckboxLabel.appendChild(this.slowSpeedToggleEl);
+    if (IS_IOS) {
+      this.outerContainerEl.appendChild(this.a11yStatusEl);
+    } else {
+      this.containerEl.appendChild(this.a11yStatusEl);
+    }
+    const canvasContext = this.canvas.getContext('2d');
+    assert(canvasContext);
+    this.canvasCtx = canvasContext;
+    this.canvasCtx.fillStyle = '#f7f7f7';
+    this.canvasCtx.fill();
+    updateCanvasScaling(this.canvas);
+    this.horizon = new Horizon(
+      this.canvas,
+      this.spriteDef,
+      this.dimensions,
+      this.config.gapCoefficient,
+      this,
+    );
+    this.distanceMeter = new DistanceMeter(
+      this.canvas,
+      this.spriteDef.textSprite,
+      this.dimensions.width,
+      this,
+    );
+    this.tRex = new Trex(this.canvas, this.spriteDef.tRex, this);
+    this.outerContainerEl.appendChild(this.containerEl);
+    this.outerContainerEl.appendChild(this.slowSpeedCheckboxLabel);
+    this.startListening();
+    this.update();
+    window.addEventListener(
+      RunnerEvents.RESIZE,
+      this.debounceResize.bind(this),
+    );
+    const darkModeMediaQuery = window.matchMedia(
+      '(prefers-color-scheme: dark)',
+    );
+    this.isDarkMode = darkModeMediaQuery && darkModeMediaQuery.matches;
+    darkModeMediaQuery.addListener((e) => {
+      this.isDarkMode = e.matches;
+    });
+  }
+  createTouchController() {
+    this.touchController = document.createElement('div');
+    this.touchController.className = RunnerClasses.TOUCH_CONTROLLER;
+    this.touchController.addEventListener(RunnerEvents.TOUCHSTART, this);
+    this.touchController.addEventListener(RunnerEvents.TOUCHEND, this);
+    this.outerContainerEl.appendChild(this.touchController);
+  }
+  debounceResize() {
+    if (this.resizeTimerId === undefined) {
+      this.resizeTimerId = setInterval(this.adjustDimensions.bind(this), 250);
+    }
+  }
+  adjustDimensions() {
+    clearInterval(this.resizeTimerId);
+    this.resizeTimerId = undefined;
+    const boxStyles = window.getComputedStyle(this.outerContainerEl);
+    const padding = Number(
+      boxStyles.paddingLeft.substr(0, boxStyles.paddingLeft.length - 2),
+    );
+    this.dimensions.width = this.outerContainerEl.offsetWidth - padding * 2;
+    if (this.isArcadeMode()) {
+      this.dimensions.width = Math.min(
+        DEFAULT_DIMENSIONS.width,
+        this.dimensions.width,
+      );
+      if (this.activated) {
+        this.setArcadeModeContainerScale();
+      }
+    }
+    if (this.canvas) {
+      assert(this.distanceMeter);
+      assert(this.horizon);
+      assert(this.tRex);
+      assert(this.containerEl);
+      this.canvas.width = this.dimensions.width;
+      this.canvas.height = this.dimensions.height;
+      updateCanvasScaling(this.canvas);
+      this.distanceMeter.calcXpos(this.dimensions.width);
+      this.clearCanvas();
+      this.horizon.update(0, 0, true, false);
+      this.tRex.update(0);
+      if (this.playing || this.crashed || this.paused) {
+        this.containerEl.style.width = this.dimensions.width + 'px';
+        this.containerEl.style.height = this.dimensions.height + 'px';
+        this.distanceMeter.update(0, Math.ceil(this.distanceRan));
+        this.stop();
+      } else {
+        this.tRex.draw(0, 0);
+      }
+      if (this.crashed && this.gameOverPanel) {
+        this.gameOverPanel.updateDimensions(this.dimensions.width);
+        this.gameOverPanel.draw(this.altGameModeActive, this.tRex);
+      }
+    }
+  }
+  playIntro() {
+    if (!this.activated && !this.crashed) {
+      assert(this.tRex);
+      assert(this.containerEl);
+      this.playingIntro = true;
+      this.tRex.playingIntro = true;
+      const keyframes =
+        '@-webkit-keyframes intro { ' +
+        'from { width:' +
+        this.tRex.config.width +
+        'px }' +
+        'to { width: ' +
+        this.dimensions.width +
+        'px }' +
+        '}';
+      const styleSheet = document.styleSheets[0];
+      assert(styleSheet);
+      styleSheet.insertRule(keyframes, 0);
+      this.containerEl.addEventListener(
+        RunnerEvents.ANIM_END,
+        this.startGame.bind(this),
+      );
+      this.containerEl.style.webkitAnimation = 'intro .4s ease-out 1 both';
+      this.containerEl.style.width = this.dimensions.width + 'px';
+      this.setPlayStatus(true);
+      this.activated = true;
+    } else if (this.crashed) {
+      this.restart();
+    }
+  }
+  startGame() {
+    assert(this.containerEl);
+    assert(this.tRex);
+    if (this.isArcadeMode()) {
+      this.setArcadeMode();
+    }
+    this.toggleSpeed();
+    this.runningTime = 0;
+    this.playingIntro = false;
+    this.tRex.playingIntro = false;
+    this.containerEl.style.webkitAnimation = '';
+    this.playCount++;
+    if (this.hasAudioCuesInternal) {
+      this.getGeneratedSoundFx().background();
+      this.containerEl.setAttribute('title', getA11yString(A11yStrings.JUMP));
+    }
+    document.addEventListener(
+      RunnerEvents.VISIBILITY,
+      this.onVisibilityChange.bind(this),
+    );
+    window.addEventListener(
+      RunnerEvents.BLUR,
+      this.onVisibilityChange.bind(this),
+    );
+    window.addEventListener(
+      RunnerEvents.FOCUS,
+      this.onVisibilityChange.bind(this),
+    );
+  }
+  clearCanvas() {
+    assert(this.canvasCtx);
+    this.canvasCtx.clearRect(
+      0,
+      0,
+      this.dimensions.width,
+      this.dimensions.height,
+    );
+  }
+  isCanvasInView() {
+    assert(this.containerEl);
+    return (
+      this.containerEl.getBoundingClientRect().top >
+      this.config.canvasInViewOffset
+    );
+  }
+  enableAltGameMode() {
+    this.imageSprite = this.getRunnerAltGameImageSprite();
+    assert(this.gameType);
+    assert(this.tRex);
+    assert(this.horizon);
+    this.spriteDefinition = spriteDefinitionByType[this.gameType];
+    if (IS_HIDPI) {
+      this.spriteDef = this.getSpriteDefinition().hdpi;
+    } else {
+      this.spriteDef = this.getSpriteDefinition().ldpi;
+    }
+    this.altGameModeActive = true;
+    this.tRex.enableAltGameMode(this.spriteDef.tRex);
+    this.horizon.enableAltGameMode(this.spriteDef);
+    if (this.hasAudioCuesInternal) {
+      this.getGeneratedSoundFx()?.background();
+    }
+  }
+  update() {
+    assert(this.tRex);
+    this.updatePending = false;
+    const now = getTimeStamp();
+    let deltaTime = now - (this.time || now);
+    if (this.altGameModeFlashTimer !== null) {
+      if (this.altGameModeFlashTimer <= 0) {
+        this.altGameModeFlashTimer = null;
+        this.tRex.setFlashing(false);
+        this.enableAltGameMode();
+      } else if (this.altGameModeFlashTimer > 0) {
+        this.altGameModeFlashTimer -= deltaTime;
+        this.tRex.update(deltaTime);
+        deltaTime = 0;
+      }
+    }
+    this.time = now;
+    if (this.playing) {
+      assert(this.distanceMeter);
+      assert(this.horizon);
+      assert(this.canvasCtx);
+      this.clearCanvas();
+      if (
+        this.altGameModeActive &&
+        this.fadeInTimer <= this.config.fadeDuration
+      ) {
+        this.fadeInTimer += deltaTime / 1e3;
+        this.canvasCtx.globalAlpha = this.fadeInTimer;
+      } else {
+        this.canvasCtx.globalAlpha = 1;
+      }
+      if (this.tRex.jumping) {
+        this.tRex.updateJump(deltaTime);
+      }
+      this.runningTime += deltaTime;
+      const hasObstacles = this.runningTime > this.config.clearTime;
+      if (this.tRex.jumpCount === 1 && !this.playingIntro) {
+        this.playIntro();
+      }
+      if (this.playingIntro) {
+        this.horizon.update(0, this.currentSpeed, hasObstacles, false);
+      } else if (!this.crashed) {
+        const showNightMode = this.isDarkMode !== this.inverted;
+        deltaTime = !this.activated ? 0 : deltaTime;
+        this.horizon.update(
+          deltaTime,
+          this.currentSpeed,
+          hasObstacles,
+          showNightMode,
+        );
+      }
+      const firstObstacle = this.horizon.obstacles[0];
+      let collision =
+        hasObstacles &&
+        firstObstacle &&
+        this.checkForCollision(firstObstacle, this.tRex);
+      if (this.hasAudioCuesInternal && hasObstacles) {
+        assert(firstObstacle);
+        const jumpObstacle = firstObstacle.typeConfig.type !== 'collectable';
+        if (!firstObstacle.jumpAlerted) {
+          const threshold = this.config.audiocueProximityThreshold;
+          const adjProximityThreshold =
+            threshold +
+            threshold * Math.log10(this.currentSpeed / this.config.speed);
+          if (firstObstacle.xPos < adjProximityThreshold) {
+            if (jumpObstacle) {
+              this.getGeneratedSoundFx().jump();
+            }
+            firstObstacle.jumpAlerted = true;
+          }
+        }
+      }
+      if (
+        this.isAltGameModeEnabled() &&
+        collision &&
+        firstObstacle &&
+        firstObstacle.typeConfig.type === 'collectable'
+      ) {
+        this.horizon.removeFirstObstacle();
+        this.tRex.setFlashing(true);
+        collision = false;
+        this.altGameModeFlashTimer = this.config.flashDuration;
+        this.runningTime = 0;
+        if (this.hasAudioCuesInternal) {
+          this.getGeneratedSoundFx().collect();
+        }
+      }
+      if (!collision) {
+        this.distanceRan += (this.currentSpeed * deltaTime) / this.msPerFrame;
+        if (this.currentSpeed < this.config.maxSpeed) {
+          this.currentSpeed += this.config.acceleration;
+        }
+      } else {
+        this.gameOver();
+      }
+      const playAchievementSound = this.distanceMeter.update(
+        deltaTime,
+        Math.ceil(this.distanceRan),
+      );
+      if (!this.hasAudioCuesInternal && playAchievementSound) {
+        this.playSound(this.soundFx.SCORE);
+      }
+      if (!this.isAltGameModeEnabled()) {
+        if (this.invertTimer > this.config.invertFadeDuration) {
+          this.invertTimer = 0;
+          this.invertTrigger = false;
+          this.invert(false);
+        } else if (this.invertTimer) {
+          this.invertTimer += deltaTime;
+        } else {
+          const actualDistance = this.distanceMeter.getActualDistance(
+            Math.ceil(this.distanceRan),
+          );
+          if (actualDistance > 0) {
+            this.invertTrigger = !(actualDistance % this.config.invertDistance);
+            if (this.invertTrigger && this.invertTimer === 0) {
+              this.invertTimer += deltaTime;
+              this.invert(false);
+            }
+          }
+        }
+      }
+    }
+    if (
+      this.playing ||
+      (!this.activated && this.tRex.blinkCount < this.config.maxBlinkCount)
+    ) {
+      this.tRex.update(deltaTime);
+      this.scheduleNextUpdate();
+    }
+  }
+  handleEvent(e) {
+    switch (e.type) {
+      case RunnerEvents.KEYDOWN:
+      case RunnerEvents.TOUCHSTART:
+      case RunnerEvents.POINTERDOWN:
+        this.onKeyDown(e);
+        break;
+      case RunnerEvents.KEYUP:
+      case RunnerEvents.TOUCHEND:
+      case RunnerEvents.POINTERUP:
+        this.onKeyUp(e);
+        break;
+      case RunnerEvents.GAMEPADCONNECTED:
+        this.onGamepadConnected();
+        break;
+    }
+  }
+  handleCanvasKeyPress(e) {
+    if (!this.activated && !this.hasAudioCuesInternal) {
+      this.toggleSpeed();
+      this.hasAudioCuesInternal = true;
+      this.generatedSoundFx = new GeneratedSoundFx();
+      this.config.clearTime *= 1.2;
+    } else if (
+      e instanceof KeyboardEvent &&
+      runnerKeycodes.jump.includes(e.keyCode)
+    ) {
+      this.onKeyDown(e);
+    }
+  }
+  preventScrolling(e) {
+    if (e.keyCode === 32) {
+      e.preventDefault();
+    }
+  }
+  toggleSpeed() {
+    if (this.hasAudioCuesInternal) {
+      assert(this.slowSpeedCheckbox);
+      const speedChange = this.hasSlowdown !== this.slowSpeedCheckbox.checked;
+      if (speedChange) {
+        assert(this.horizon);
+        assert(this.tRex);
+        this.hasSlowdownInternal = this.slowSpeedCheckbox.checked;
+        const updatedConfig = this.hasSlowdown
+          ? slowModeConfig
+          : normalModeConfig;
+        this.config = Object.assign(defaultBaseConfig, updatedConfig);
+        this.currentSpeed = updatedConfig.speed;
+        this.tRex.enableSlowConfig();
+        this.horizon.adjustObstacleSpeed();
+      }
+      if (this.playing) {
+        this.disableSpeedToggle(true);
+      }
+    }
+  }
+  showSpeedToggle(e) {
+    const isFocusEvent = e && e.type === 'focus';
+    if (this.hasAudioCuesInternal || isFocusEvent) {
+      assert(this.slowSpeedCheckboxLabel);
+      this.slowSpeedCheckboxLabel.classList.toggle(
+        HIDDEN_CLASS,
+        isFocusEvent ? false : !this.crashed,
+      );
+    }
+  }
+  disableSpeedToggle(disable) {
+    assert(this.slowSpeedCheckbox);
+    if (disable) {
+      this.slowSpeedCheckbox.setAttribute('disabled', 'disabled');
+    } else {
+      this.slowSpeedCheckbox.removeAttribute('disabled');
+    }
+  }
+  startListening() {
+    assert(this.containerEl);
+    assert(this.canvas);
+    this.containerEl.addEventListener(
+      RunnerEvents.KEYDOWN,
+      this.handleCanvasKeyPress.bind(this),
+    );
+    if (!IS_MOBILE) {
+      this.containerEl.addEventListener(
+        RunnerEvents.FOCUS,
+        this.showSpeedToggle.bind(this),
+      );
+    }
+    this.canvas.addEventListener(
+      RunnerEvents.KEYDOWN,
+      this.preventScrolling.bind(this),
+    );
+    this.canvas.addEventListener(
+      RunnerEvents.KEYUP,
+      this.preventScrolling.bind(this),
+    );
+    document.addEventListener(RunnerEvents.KEYDOWN, this);
+    document.addEventListener(RunnerEvents.KEYUP, this);
+    this.containerEl.addEventListener(RunnerEvents.TOUCHSTART, this);
+    document.addEventListener(RunnerEvents.POINTERDOWN, this);
+    document.addEventListener(RunnerEvents.POINTERUP, this);
+    if (this.isArcadeMode()) {
+      window.addEventListener(RunnerEvents.GAMEPADCONNECTED, this);
+    }
+  }
+  onKeyDown(e) {
+    if (IS_MOBILE && this.playing) {
+      e.preventDefault();
+    }
+    if (this.isCanvasInView()) {
+      if (
+        e instanceof KeyboardEvent &&
+        runnerKeycodes.jump.includes(e.keyCode) &&
+        e.target === this.slowSpeedCheckbox
+      ) {
+        return;
+      }
+      if (!this.crashed && !this.paused) {
+        const isMobileMouseInput =
+          IS_MOBILE &&
+          e instanceof PointerEvent &&
+          e.type === RunnerEvents.POINTERDOWN &&
+          e.pointerType === 'mouse' &&
+          (e.target === this.containerEl ||
+            (IS_IOS &&
+              (e.target === this.touchController || e.target === this.canvas)));
+        assert(this.tRex);
+        if (
+          (e instanceof KeyboardEvent &&
+            runnerKeycodes.jump.includes(e.keyCode)) ||
+          e.type === RunnerEvents.TOUCHSTART ||
+          isMobileMouseInput
+        ) {
+          e.preventDefault();
+          if (!this.playing) {
+            if (!this.touchController && e.type === RunnerEvents.TOUCHSTART) {
+              this.createTouchController();
+            }
+            if (isMobileMouseInput) {
+              this.handleCanvasKeyPress(e);
+            }
+            this.loadSounds();
+            this.setPlayStatus(true);
+            this.update();
+            if (window.errorPageController) {
+              window.errorPageController.trackEasterEgg();
+            }
+          }
+          if (!this.tRex.jumping && !this.tRex.ducking) {
+            if (this.hasAudioCuesInternal) {
+              this.getGeneratedSoundFx().cancelFootSteps();
+            } else {
+              this.playSound(this.soundFx.BUTTON_PRESS);
+            }
+            this.tRex.startJump(this.currentSpeed);
+          }
+        } else if (
+          this.playing &&
+          e instanceof KeyboardEvent &&
+          runnerKeycodes.duck.includes(e.keyCode)
+        ) {
+          e.preventDefault();
+          if (this.tRex.jumping) {
+            this.tRex.setSpeedDrop();
+          } else if (!this.tRex.jumping && !this.tRex.ducking) {
+            this.tRex.setDuck(true);
+          }
+        }
+      }
+    }
+  }
+  onKeyUp(e) {
+    assert(this.tRex);
+    const keyCode = 'keyCode' in e ? e.keyCode : 0;
+    const isjumpKey =
+      runnerKeycodes.jump.includes(keyCode) ||
+      e.type === RunnerEvents.TOUCHEND ||
+      e.type === RunnerEvents.POINTERUP;
+    if (this.isRunning() && isjumpKey) {
+      this.tRex.endJump();
+    } else if (runnerKeycodes.duck.includes(keyCode)) {
+      this.tRex.speedDrop = false;
+      this.tRex.setDuck(false);
+    } else if (this.crashed) {
+      const deltaTime = getTimeStamp() - this.time;
+      if (
+        this.isCanvasInView() &&
+        (runnerKeycodes.restart.includes(keyCode) ||
+          this.isLeftClickOnCanvas(e) ||
+          (deltaTime >= this.config.gameoverClearTime &&
+            runnerKeycodes.jump.includes(keyCode)))
+      ) {
+        this.handleGameOverClicks(e);
+      }
+    } else if (this.paused && isjumpKey) {
+      this.tRex.reset();
+      this.play();
+    }
+  }
+  onGamepadConnected() {
+    if (!this.pollingGamepads) {
+      this.pollGamepadState();
+    }
+  }
+  pollGamepadState() {
+    const gamepads = navigator.getGamepads();
+    this.pollActiveGamepad(gamepads);
+    this.pollingGamepads = true;
+    requestAnimationFrame(this.pollGamepadState.bind(this));
+  }
+  pollForActiveGamepad(gamepads) {
+    for (const [i, gamepad] of gamepads.entries()) {
+      if (gamepad && gamepad.buttons.length > 0 && gamepad.buttons[0].pressed) {
+        this.gamepadIndex = i;
+        this.pollActiveGamepad(gamepads);
+        return;
+      }
+    }
+  }
+  pollActiveGamepad(gamepads) {
+    if (this.gamepadIndex === undefined) {
+      this.pollForActiveGamepad(gamepads);
+      return;
+    }
+    const gamepad = gamepads[this.gamepadIndex];
+    if (!gamepad) {
+      this.gamepadIndex = undefined;
+      this.pollForActiveGamepad(gamepads);
+      return;
+    }
+    this.pollGamepadButton(gamepad, 0, 38);
+    if (gamepad.buttons.length >= 2) {
+      this.pollGamepadButton(gamepad, 1, 40);
+    }
+    if (gamepad.buttons.length >= 10) {
+      this.pollGamepadButton(gamepad, 9, 13);
+    }
+    this.previousGamepad = gamepad;
+  }
+  pollGamepadButton(gamepad, buttonIndex, keyCode) {
+    const state = gamepad.buttons[buttonIndex]?.pressed || false;
+    let previousState = false;
+    if (this.previousGamepad) {
+      previousState =
+        this.previousGamepad.buttons[buttonIndex]?.pressed || false;
+    }
+    if (state !== previousState) {
+      const e = new KeyboardEvent(
+        state ? RunnerEvents.KEYDOWN : RunnerEvents.KEYUP,
+        { keyCode: keyCode },
+      );
+      document.dispatchEvent(e);
+    }
+  }
+  handleGameOverClicks(e) {
+    if (e.target !== this.slowSpeedCheckbox) {
+      assert(this.distanceMeter);
+      e.preventDefault();
+      if (this.distanceMeter.hasClickedOnHighScore(e) && this.highestScore) {
+        if (this.distanceMeter.isHighScoreFlashing()) {
+          this.saveHighScore(0, true);
+          this.distanceMeter.resetHighScore();
+        } else {
+          this.distanceMeter.startHighScoreFlashing();
+        }
+      } else {
+        this.distanceMeter.cancelHighScoreFlashing();
+        this.restart();
+      }
+    }
+  }
+  isLeftClickOnCanvas(e) {
+    if (!(e instanceof MouseEvent)) {
+      return false;
+    }
+    return (
+      e.button != null &&
+      e.button < 2 &&
+      e.type === RunnerEvents.POINTERUP &&
+      (e.target === this.canvas ||
+        (IS_MOBILE &&
+          this.hasAudioCuesInternal &&
+          e.target === this.containerEl))
+    );
+  }
+  scheduleNextUpdate() {
+    if (!this.updatePending) {
+      this.updatePending = true;
+      this.raqId = requestAnimationFrame(this.update.bind(this));
+    }
+  }
+  isRunning() {
+    return !!this.raqId;
+  }
+  initializeHighScore(highScore) {
+    assert(this.distanceMeter);
+    this.syncHighestScore = true;
+    highScore = Math.ceil(highScore);
+    if (highScore < this.highestScore) {
+      if (window.errorPageController) {
+        window.errorPageController.updateEasterEggHighScore(this.highestScore);
+      }
+      return;
+    }
+    this.highestScore = highScore;
+    this.distanceMeter.setHighScore(this.highestScore);
+  }
+  saveHighScore(distanceRan, resetScore) {
+    assert(this.distanceMeter);
+    this.highestScore = Math.ceil(distanceRan);
+    this.distanceMeter.setHighScore(this.highestScore);
+    if (this.syncHighestScore && window.errorPageController) {
+      if (resetScore) {
+        window.errorPageController.resetEasterEggHighScore();
+      } else {
+        window.errorPageController.updateEasterEggHighScore(this.highestScore);
+      }
+    }
+  }
+  gameOver() {
+    assert(this.distanceMeter);
+    assert(this.tRex);
+    assert(this.containerEl);
+    this.playSound(this.soundFx.HIT);
+    vibrate(200);
+    this.stop();
+    this.crashed = true;
+    this.distanceMeter.achievement = false;
+    this.tRex.update(100, Status.CRASHED);
+    if (!this.gameOverPanel) {
+      const origSpriteDef = IS_HIDPI
+        ? spriteDefinitionByType.original.hdpi
+        : spriteDefinitionByType.original.ldpi;
+      if (this.canvas) {
+        if (this.isAltGameModeEnabled()) {
+          this.gameOverPanel = new GameOverPanel(
+            this.canvas,
+            origSpriteDef.textSprite,
+            origSpriteDef.restart,
+            this.dimensions,
+            this,
+            origSpriteDef.altGameEnd,
+            this.altGameModeActive,
+          );
+        } else {
+          this.gameOverPanel = new GameOverPanel(
+            this.canvas,
+            origSpriteDef.textSprite,
+            origSpriteDef.restart,
+            this.dimensions,
+            this,
+          );
+        }
+      }
+    }
+    assert(this.gameOverPanel);
+    this.gameOverPanel.draw(this.altGameModeActive, this.tRex);
+    if (this.distanceRan > this.highestScore) {
+      this.saveHighScore(this.distanceRan);
+    }
+    this.time = getTimeStamp();
+    if (this.hasAudioCuesInternal) {
+      this.getGeneratedSoundFx().stopAll();
+      assert(this.containerEl);
+      this.announcePhrase(
+        getA11yString(A11yStrings.GAME_OVER).replace(
+          '$1',
+          this.distanceMeter.getActualDistance(this.distanceRan).toString(),
+        ) +
+          ' ' +
+          getA11yString(A11yStrings.HIGH_SCORE).replace(
+            '$1',
+            this.distanceMeter.getActualDistance(this.highestScore).toString(),
+          ),
+      );
+      this.containerEl.setAttribute(
+        'title',
+        getA11yString(A11yStrings.ARIA_LABEL),
+      );
+    }
+    this.showSpeedToggle();
+    this.disableSpeedToggle(false);
+  }
+  stop() {
+    this.setPlayStatus(false);
+    this.paused = true;
+    cancelAnimationFrame(this.raqId);
+    this.raqId = 0;
+    if (this.hasAudioCuesInternal) {
+      this.getGeneratedSoundFx().stopAll();
+    }
+  }
+  play() {
+    if (!this.crashed) {
+      assert(this.tRex);
+      this.setPlayStatus(true);
+      this.paused = false;
+      this.tRex.update(0, Status.RUNNING);
+      this.time = getTimeStamp();
+      this.update();
+      if (this.hasAudioCuesInternal) {
+        this.getGeneratedSoundFx().background();
+      }
+    }
+  }
+  restart() {
+    if (!this.raqId) {
+      assert(this.containerEl);
+      assert(this.gameOverPanel);
+      assert(this.tRex);
+      assert(this.horizon);
+      assert(this.distanceMeter);
+      this.playCount++;
+      this.runningTime = 0;
+      this.setPlayStatus(true);
+      this.toggleSpeed();
+      this.paused = false;
+      this.crashed = false;
+      this.distanceRan = 0;
+      this.setSpeed(this.config.speed);
+      this.time = getTimeStamp();
+      this.containerEl.classList.remove(RunnerClasses.CRASHED);
+      this.clearCanvas();
+      this.distanceMeter.reset();
+      this.horizon.reset();
+      this.tRex.reset();
+      this.playSound(this.soundFx.BUTTON_PRESS);
+      this.invert(true);
+      this.update();
+      this.gameOverPanel.reset();
+      if (this.hasAudioCuesInternal) {
+        this.getGeneratedSoundFx().background();
+      }
+      this.containerEl.setAttribute('title', getA11yString(A11yStrings.JUMP));
+      this.announcePhrase(getA11yString(A11yStrings.STARTED));
+    }
+  }
+  setPlayStatus(isPlaying) {
+    if (this.touchController) {
+      this.touchController.classList.toggle(HIDDEN_CLASS, !isPlaying);
+    }
+    this.playing = isPlaying;
+  }
+  isArcadeMode() {
+    return IS_RTL
+      ? document.title.indexOf(ARCADE_MODE_URL) === 1
+      : document.title === ARCADE_MODE_URL;
+  }
+  setArcadeMode() {
+    document.body.classList.add(RunnerClasses.ARCADE_MODE);
+    this.setArcadeModeContainerScale();
+  }
+  setArcadeModeContainerScale() {
+    assert(this.containerEl);
+    const windowHeight = window.innerHeight;
+    const scaleHeight = windowHeight / this.dimensions.height;
+    const scaleWidth = window.innerWidth / this.dimensions.width;
+    const scale = Math.max(1, Math.min(scaleHeight, scaleWidth));
+    const scaledCanvasHeight = this.dimensions.height * scale;
+    const translateY =
+      Math.ceil(
+        Math.max(
+          0,
+          (windowHeight -
+            scaledCanvasHeight -
+            this.config.arcadeModeInitialTopPosition) *
+            this.config.arcadeModeTopPositionPercent,
+        ),
+      ) * window.devicePixelRatio;
+    const cssScale = IS_RTL ? -scale + ',' + scale : scale;
+    this.containerEl.style.transform =
+      'scale(' + cssScale + ') translateY(' + translateY + 'px)';
+  }
+  onVisibilityChange(e) {
+    if (
+      document.hidden ||
+      e.type === 'blur' ||
+      document.visibilityState !== 'visible'
+    ) {
+      this.stop();
+    } else if (!this.crashed) {
+      assert(this.tRex);
+      this.tRex.reset();
+      this.play();
+    }
+  }
+  playSound(soundBuffer) {
+    if (soundBuffer) {
+      assert(this.audioContext);
+      const sourceNode = this.audioContext.createBufferSource();
+      sourceNode.buffer = soundBuffer;
+      sourceNode.connect(this.audioContext.destination);
+      sourceNode.start(0);
+    }
+  }
+  invert(reset) {
+    const htmlEl = document.firstElementChild;
+    assert(htmlEl);
+    if (reset) {
+      htmlEl.classList.toggle(RunnerClasses.INVERTED, false);
+      this.invertTimer = 0;
+      this.inverted = false;
+    } else {
+      this.inverted = htmlEl.classList.toggle(
+        RunnerClasses.INVERTED,
+        this.invertTrigger,
+      );
+    }
+  }
+  announcePhrase(phrase) {
+    if (this.a11yStatusEl) {
+      this.a11yStatusEl.textContent = '';
+      this.a11yStatusEl.textContent = phrase;
+    }
+  }
+  checkForCollision(obstacle, tRex, canvasCtx) {
+    const tRexBox = new CollisionBox(
+      tRex.xPos + 1,
+      tRex.yPos + 1,
+      tRex.config.width - 2,
+      tRex.config.height - 2,
+    );
+    const obstacleBox = new CollisionBox(
+      obstacle.xPos + 1,
+      obstacle.yPos + 1,
+      obstacle.typeConfig.width * obstacle.size - 2,
+      obstacle.typeConfig.height - 2,
+    );
+    if (canvasCtx) {
+      drawCollisionBoxes(canvasCtx, tRexBox, obstacleBox);
+    }
+    if (boxCompare(tRexBox, obstacleBox)) {
+      const collisionBoxes = obstacle.collisionBoxes;
+      let tRexCollisionBoxes = [];
+      if (this.isAltGameModeEnabled()) {
+        const runnerSpriteDefinition = this.getSpriteDefinition();
+        assert(runnerSpriteDefinition);
+        assert(runnerSpriteDefinition.tRex);
+        tRexCollisionBoxes = runnerSpriteDefinition.tRex.collisionBoxes;
+      } else {
+        tRexCollisionBoxes = tRex.getCollisionBoxes();
+      }
+      for (const tRexCollisionBox of tRexCollisionBoxes) {
+        for (const obstacleCollixionBox of collisionBoxes) {
+          const adjTrexBox = createAdjustedCollisionBox(
+            tRexCollisionBox,
+            tRexBox,
+          );
+          const adjObstacleBox = createAdjustedCollisionBox(
+            obstacleCollixionBox,
+            obstacleBox,
+          );
+          const crashed = boxCompare(adjTrexBox, adjObstacleBox);
+          if (canvasCtx) {
+            drawCollisionBoxes(canvasCtx, adjTrexBox, adjObstacleBox);
+          }
+          if (crashed) {
+            return [adjTrexBox, adjObstacleBox];
+          }
+        }
+      }
+    }
+    return null;
+  }
+}
+function updateCanvasScaling(canvas, width, height) {
+  const context = canvas.getContext('2d');
+  assert(context);
+  const devicePixelRatio = Math.floor(window.devicePixelRatio) || 1;
+  const backingStoreRatio =
+    'webkitBackingStorePixelRatio' in context
+      ? Math.floor(context.webkitBackingStorePixelRatio)
+      : 1;
+  const ratio = devicePixelRatio / backingStoreRatio;
+  if (devicePixelRatio !== backingStoreRatio) {
+    const oldWidth = canvas.width;
+    const oldHeight = canvas.height;
+    canvas.width = oldWidth * ratio;
+    canvas.height = oldHeight * ratio;
+    canvas.style.width = oldWidth + 'px';
+    canvas.style.height = oldHeight + 'px';
+    context.scale(ratio, ratio);
+    return true;
+  } else if (devicePixelRatio === 1) {
+    canvas.style.width = canvas.width + 'px';
+    canvas.style.height = canvas.height + 'px';
+  }
+  return false;
+}
+function getA11yString(stringName) {
+  return loadTimeData.valueExists(stringName)
+    ? loadTimeData.getString(stringName)
+    : '';
+}
+function vibrate(duration) {
+  if (IS_MOBILE && window.navigator.vibrate) {
+    window.navigator.vibrate(duration);
+  }
+}
+function createCanvas(container, width, height, classname) {
+  const canvas = document.createElement('canvas');
+  canvas.className = RunnerClasses.CANVAS;
+  canvas.width = width;
+  canvas.height = height;
+  container.appendChild(canvas);
+  return canvas;
+}
+function decodeBase64ToArrayBuffer(base64String) {
+  const len = (base64String.length / 4) * 3;
+  const str = atob(base64String);
+  const arrayBuffer = new ArrayBuffer(len);
+  const bytes = new Uint8Array(arrayBuffer);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = str.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+function createAdjustedCollisionBox(box, adjustment) {
+  return new CollisionBox(
+    box.x + adjustment.x,
+    box.y + adjustment.y,
+    box.width,
+    box.height,
+  );
+}
+function drawCollisionBoxes(canvasCtx, tRexBox, obstacleBox) {
+  canvasCtx.save();
+  canvasCtx.strokeStyle = '#f00';
+  canvasCtx.strokeRect(tRexBox.x, tRexBox.y, tRexBox.width, tRexBox.height);
+  canvasCtx.strokeStyle = '#0f0';
+  canvasCtx.strokeRect(
+    obstacleBox.x,
+    obstacleBox.y,
+    obstacleBox.width,
+    obstacleBox.height,
+  );
+  canvasCtx.restore();
+}
+function boxCompare(tRexBox, obstacleBox) {
+  const tRexBoxX = tRexBox.x;
+  const tRexBoxY = tRexBox.y;
+  const obstacleBoxX = obstacleBox.x;
+  const obstacleBoxY = obstacleBox.y;
+  if (
+    tRexBoxX < obstacleBoxX + obstacleBox.width &&
+    tRexBoxX + tRexBox.width > obstacleBoxX &&
+    tRexBoxY < obstacleBoxY + obstacleBox.height &&
+    tRexBox.height + tRexBoxY > obstacleBoxY
+  ) {
+    return true;
+  }
+  return false;
+}
+// Copyright 2013 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+let showingDetails = false;
+let lastData = null;
+let dinoGameInitialized = false;
+function toggleHelpBox() {
+  showingDetails = !showingDetails;
+  assert(lastData);
+  B(getHtml(lastData, showingDetails), getRequiredElement('content'));
+}
+function diagnoseErrors() {
+  if (window.errorPageController) {
+    window.errorPageController.diagnoseErrorsButtonClick();
+  }
+}
+function portalSignin() {
+  if (window.errorPageController) {
+    window.errorPageController.portalSigninButtonClick();
+  }
+}
+let isSubFrame = false;
+if (window.top.location !== window.location) {
+  document.documentElement.setAttribute('subframe', '');
+  isSubFrame = true;
+}
+function updateForDnsProbe(newData) {
+  updateInitialInstruction(newData);
+  onTemplateDataReceived(newData);
+}
+function getMainFrameErrorCssClass(showingDetails) {
+  return showingDetails ? 'showing-details' : '';
+}
+function getMainFrameErrorIconCssClass(data) {
+  return isSubFrame ? '' : data.iconClass;
+}
+function getSubFrameErrorIconCssClass(data) {
+  return isSubFrame ? data.iconClass : '';
+}
+function shouldShowSuggestionsSummaryList(data) {
+  return (
+    !!data.suggestionsSummaryList && data.suggestionsSummaryList.length > 0
+  );
+}
+function getSuggestionsSummaryItemCssClass(data) {
+  assert(data.suggestionsSummaryList);
+  return data.suggestionsSummaryList.length === 1 ? 'single-suggestion' : '';
+}
+function reloadButtonClick(e) {
+  const url = e.target.dataset['url'];
+  if (window.errorPageController) {
+    window.errorPageController.reloadButtonClick();
+  } else {
+    assert(url);
+    window.location.href = url;
+  }
+}
+function downloadButtonClick() {
+  if (window.errorPageController) {
+    window.errorPageController.downloadButtonClick();
+    const downloadButton = getRequiredElement('download-button');
+    downloadButton.disabled = true;
+    downloadButton.textContent = downloadButton.disabledText;
+  }
+}
+function detailsButtonClick() {
+  if (window.errorPageController) {
+    window.errorPageController.detailsButtonClick();
+  }
+  toggleHelpBox();
+}
+function setAutoFetchState(scheduled, canSchedule) {
+  getRequiredElement('cancel-save-page-button').classList.toggle(
+    HIDDEN_CLASS,
+    !scheduled,
+  );
+  getRequiredElement('save-page-for-later-button').classList.toggle(
+    HIDDEN_CLASS,
+    !canSchedule,
+  );
+}
+function savePageLaterClick() {
+  assert(window.errorPageController);
+  window.errorPageController.savePageForLater();
+}
+function cancelSavePageClick() {
+  assert(window.errorPageController);
+  window.errorPageController.cancelSavePage();
+  setAutoFetchState(false, true);
+}
+function shouldShowControlButtons(data) {
+  const downloadButtonVisible =
+    !!data.downloadButton && !!data.downloadButton.msg;
+  const reloadButtonVisible = !!data.reloadButton && !!data.reloadButton.msg;
+  return reloadButtonVisible || downloadButtonVisible;
+}
+function shouldShowDetailsButton(data) {
+  return !!data.suggestionsDetails && data.suggestionsDetails.length > 0;
+}
+function getDetailsButtonCssClass(data) {
+  return shouldShowControlButtons(data) ? '' : 'singular';
+}
+function getDetailsButtonText(data, showingDetails) {
+  assert(data.details);
+  assert(data.hideDetails);
+  return showingDetails ? data.hideDetails : data.details;
+}
+function getButtonsCssClass() {
+  let primaryControlOnLeft = true;
+  primaryControlOnLeft = false;
+  return primaryControlOnLeft ? 'suggested-left' : 'suggested-right';
+}
+function updateInitialInstruction(data) {
+  if (!data.isOfflineError) {
+    return;
+  }
+  if (navigator.maxTouchPoints === 0) {
+    data.heading.msg = data.dinoGameInstructionsKeyboard;
+    data.dinoGameA11yAriaLabel = data.dinoGameA11yAriaLabelKeyboard;
+  } else if (window.matchMedia('(hover: hover)').matches) {
+    data.heading.msg = data.dinoGameInstructionsHybrid;
+    data.dinoGameA11yAriaLabel = data.dinoGameA11yAriaLabelHybrid;
+  } else {
+    data.heading.msg = data.dinoGameInstructionsTouch;
+    data.dinoGameA11yAriaLabel = data.dinoGameA11yAriaLabelTouch;
+  }
+}
+function onDocumentLoad() {
+  const data = window.loadTimeDataRaw;
+  updateInitialInstruction(data);
+  onTemplateDataReceived(data);
+}
+function onTemplateDataReceived(newData) {
+  lastData = newData;
+  B(getHtml(lastData, showingDetails), getRequiredElement('content'));
+  if (!isSubFrame && newData.iconClass === 'icon-offline') {
+    document.documentElement.classList.add('offline');
+    if (!dinoGameInitialized) {
+      loadTimeData.data = newData;
+      Runner.initializeInstance('.interstitial-wrapper');
+      dinoGameInitialized = true;
+    }
+  }
+}
+function getHtml(data, showingDetails) {
+  return x`
+    <div id="main-frame-error" class="interstitial-wrapper ${getMainFrameErrorCssClass(
+      showingDetails,
+    )}">
+      <div id="main-content">
+        <div class="icon ${getMainFrameErrorIconCssClass(data)}"></div>
+        <div id="main-message">
+          <h1>
+            <span .innerHTML="${data.heading.msg}"></span>
+          </h1>
+          ${
+            data.summary
+              ? x`
+            <p .innerHTML="${data.summary.msg}"></p>
+          `
+              : ''
+          }
+
+          ${
+            shouldShowSuggestionsSummaryList(data)
+              ? x`
+            <div id="suggestions-list">
+              <p>${data.suggestionsSummaryListHeader}</p>
+              <ul class="${getSuggestionsSummaryItemCssClass(data)}">
+                ${data.suggestionsSummaryList.map(
+                  (item) => x`
+                  <li .innerHTML="${item.summary}"></li>
+                `,
+                )}
+              </ul>
+            </div>
+          `
+              : ''
+          }
+
+          <div class="error-code">${data.errorCode}</div>
+
+          ${
+            data.savePageLater
+              ? x`
+            <div id="save-page-for-later-button">
+              <a class="link-button" @click="${savePageLaterClick}">
+                ${data.savePageLater.savePageMsg}
+              </a>
+            </div>
+            <div id="cancel-save-page-button" class="hidden"
+                @click="${cancelSavePageClick}"
+                .innerHTML="${data.savePageLater.cancelMsg}">
+            </div>
+          `
+              : ''
+          }
+        </div>
+      </div>
+      <div id="buttons" class="nav-wrapper ${getButtonsCssClass()}">
+        <div id="control-buttons" ?hidden="${!shouldShowControlButtons(data)}">
+          ${
+            data.reloadButton
+              ? x`
+            <button id="reload-button"
+                class="blue-button text-button"
+                @click="${reloadButtonClick}"
+                data-url="${data.reloadButton.reloadUrl}">
+              ${data.reloadButton.msg}
+            </button>
+          `
+              : ''
+          }
+          ${
+            data.downloadButton
+              ? x`
+            <button id="download-button"
+                class="blue-button text-button"
+                @click="${downloadButtonClick}"
+                .disabledText="${data.downloadButton.disabledMsg}">
+              ${data.downloadButton.msg}
+            </button>
+          `
+              : ''
+          }
+        </div>
+        ${
+          shouldShowDetailsButton(data)
+            ? x`
+          <button id="details-button" class="secondary-button text-button
+              small-link ${getDetailsButtonCssClass(data)}"
+              @click="${detailsButtonClick}">
+            ${getDetailsButtonText(data, showingDetails)}
+          </button>
+        `
+            : ''
+        }
+      </div>
+      ${
+        data.suggestionsDetails
+          ? x`
+        <div id="details">
+          ${data.suggestionsDetails.map(
+            (item) => x`
+            <div class="suggestions">
+              <div class="suggestion-header" .innerHTML="${item.header}"></div>
+              <div class="suggestion-body" .innerHTML="${item.body}"></div>
+            </div>
+          `,
+          )}
+        </div>
+      `
+          : ''
+      }
+    </div>
+    ${
+      data.summary
+        ? x`
+      <div id="sub-frame-error">
+        <!-- Show details when hovering over the icon, in case the details are
+             hidden because they're too large. -->
+        <div class="icon ${getSubFrameErrorIconCssClass(data)}"></div>
+        <div id="sub-frame-error-details" .innerHTML="${data.summary.msg}">
+        </div>
+      </div>
+    `
+        : ''
+    }
+  `;
+}
+Object.assign(window, {
+  diagnoseErrors: diagnoseErrors,
+  portalSignin: portalSignin,
+  toggleHelpBox: toggleHelpBox,
+  updateForDnsProbe: updateForDnsProbe,
+  updateInitialInstruction: updateInitialInstruction,
+});
+document.addEventListener('DOMContentLoaded', onDocumentLoad);
