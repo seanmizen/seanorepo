@@ -29,6 +29,13 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install ffmpeg
+        # The test:fixtures step synthesises tiny media files via lavfi,
+        # so ffmpeg must be on PATH. Pre-installed on ubuntu-latest in
+        # most cases, but make it explicit so the workflow does not rely
+        # on the runner image's bundled toolchain.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Enable Corepack (Yarn 4)
         run: corepack enable
 
