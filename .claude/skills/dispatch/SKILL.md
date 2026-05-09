@@ -1,44 +1,3 @@
-# Dispatch skill patch — SEAN-115
-
-> **Sandbox note:** The agent sandbox blocked direct writes to
-> `.claude/skills/dispatch/SKILL.md` when this ticket landed. The full
-> patched skill content is parked here. Move it to
-> `.claude/skills/dispatch/SKILL.md` (project-level — NOT the user-level
-> `~/.claude/skills/dispatch/SKILL.md`) to register the updated worker
-> prompt with the dispatch flow.
-
-## Why this matters
-
-This patch adds the **UX gate** — step 4.5 in the worker WORKFLOW. When
-a worker touches `apps/ffmpeg-converter/web/`, dispatch instructs it to
-run `yarn workspace ffmpeg-converter-next ux:check` (Playwright e2e +
-axe + UX capture) and then invoke `/ux-review` to score the capture
-against the 10-dimension rubric. If any dimension scores below 3, axe
-finds a WCAG-AA violation, or Lighthouse Perf drops below 95, the
-worker blocks self-merge and posts the scorecard as a PR comment.
-
-The CI workflow at `.github/workflows/ux-check.yml` is the
-non-agent-contributor safety net (e2e + axe only, no capture/scorecard
-because the LLM call doesn't make sense in CI).
-
-## Move steps
-
-```bash
-# From repo root, with Sean's account (sandbox-free):
-mkdir -p .claude/skills/dispatch
-mv apps/ffmpeg-converter/web/tests/ux/dispatch-skill-patch.md \
-   .claude/skills/dispatch/SKILL.md
-# Then strip the YAML frontmatter wrapper "below this line" comment
-# block (everything above the next "---" line) before committing — the
-# SKILL.md content starts at the second YAML frontmatter block below.
-```
-
-Or simpler: copy-paste everything between the BEGIN and END markers
-below into `.claude/skills/dispatch/SKILL.md`.
-
----
-
-BEGIN SKILL.md
 ---
 name: dispatch
 description: Dispatch a GitHub Issue to a Claude Code worker agent. Takes an issue number, reads the issue, launches a worker in an isolated worktree to complete the work. Use when Sean says "dispatch", "assign", "work on issue", or gives an issue number to work on.
@@ -253,4 +212,3 @@ If Sean gives multiple issue numbers (e.g., `/dispatch 7 8 9`), launch each as a
 If the issue body contains "CLASH TEST", warn Sean:
 - "This issue is part of a deliberate clash test. The worker may hit a merge conflict if the companion issue is dispatched simultaneously."
 - Dispatch it anyway — the point is to test conflict resolution.
-END SKILL.md
