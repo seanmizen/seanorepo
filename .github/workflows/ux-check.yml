@@ -1,0 +1,53 @@
+name: UX Check (seansconverter)
+
+# Runs the deterministic slice of the UX harness (Playwright e2e + axe)
+# on PRs that touch the ffmpeg-converter web app. The full capture +
+# /ux-review LLM pass is not run here — it lives in the worker agent
+# workflow (see .claude/skills/dispatch/SKILL.md, step 4.5) where the
+# LLM call cost is already part of the agent's lifecycle. CI is the
+# safety net for non-agent contributions.
+
+on:
+  pull_request:
+    paths:
+      - 'apps/ffmpeg-converter/web/**'
+
+permissions:
+  contents: read
+
+jobs:
+  ux-check:
+    name: Playwright e2e + axe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Install Playwright browsers
+        working-directory: apps/ffmpeg-converter/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build fixtures
+        run: yarn workspace ffmpeg-converter-next test:fixtures
+
+      - name: Run Playwright e2e
+        # The conversion-flow specs self-skip when the Go backend is not
+        # reachable on :9876 (see tests/helpers/backend.ts). CI does not
+        # spin up the Go binary; pure-frontend specs (file-handling,
+        # homepage-routing, error-states, lighthouse-budget) still run.
+        run: yarn workspace ffmpeg-converter-next test:e2e
+
+      - name: Run axe a11y suite
+        run: yarn workspace ffmpeg-converter-next test:axe
