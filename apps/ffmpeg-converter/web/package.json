@@ -20,12 +20,13 @@
     "test:preset-storage": "ts-node -P tsconfig.test.json src/components/__tests__/preset-storage.test.ts",
     "test:advanced-panel": "ts-node -P tsconfig.test.json src/components/__tests__/AdvancedPanel.test.ts",
     "test:converter-panel": "ts-node -P tsconfig.test.json src/components/__tests__/ConverterPanel.test.ts",
+    "test:capabilities-picker": "ts-node -P tsconfig.test.json src/components/__tests__/CapabilitiesPicker.test.ts",
     "test:fixtures": "bash tests/fixtures/make-fixtures.sh",
     "test:e2e": "playwright test --config=playwright.config.ts --grep-invert=@axe",
     "test:axe": "playwright test --config=playwright.config.ts --grep=@axe",
     "test:capture": "ts-node -P tsconfig.test.json tests/ux/run.ts",
     "ux:check": "yarn test:e2e && yarn test:axe && yarn test:capture",
-    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count && yarn test:hero-drop && yarn test:route-for-file && yarn test:result-block && yarn test:url-state && yarn test:preset-storage && yarn test:advanced-panel && yarn test:converter-panel"
+    "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count && yarn test:hero-drop && yarn test:route-for-file && yarn test:result-block && yarn test:url-state && yarn test:preset-storage && yarn test:advanced-panel && yarn test:converter-panel && yarn test:capabilities-picker"
   },
   "dependencies": {
     "next": "15.1.6",

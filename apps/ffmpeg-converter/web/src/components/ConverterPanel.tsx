@@ -28,13 +28,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Format, Operation, OperationRow } from '@/ops/types';
 import { AdvancedPanel } from './AdvancedPanel';
+import { CapabilitiesPicker } from './CapabilitiesPicker';
 import {
   buildAcceptLabel,
   buildExtraArgs,
   formatToExt,
 } from './converter-row-args';
 import { type ConversionJob, DropZone } from './DropZone';
-import { OutputFormatChips } from './OutputFormatChips';
 import {
   deletePreset as deletePresetFromStorage,
   exportPresetsAsJson,
@@ -47,10 +47,10 @@ import {
 import { ResultBlock } from './ResultBlock';
 import {
   adaptiveRowForFile,
+  capabilitiesForExt,
   extOf,
   friendlyDropError,
   matrixRowForFile,
-  outputsForExt,
 } from './route-for-file';
 import { pathForSlug } from './route-registry';
 import {
@@ -166,10 +166,10 @@ export function ConverterPanel({
     slugDefault?.row ?? null,
   );
 
-  // SEAN-106: detected input extension for the chip row. First-paint value is
-  // the slug's input format (per AC: "First-paint detected ext = slug's input
-  // format"). After a drop, the file's actual extension. Drives the chip-row
-  // option lookup via `outputsForExt(detectedInputExt)`.
+  // SEAN-106 / SEAN-121: detected input extension for the picker. First-paint
+  // value is the slug's input format (per AC: "First-paint detected ext =
+  // slug's input format"). After a drop, the file's actual extension. Drives
+  // the capability lookup via `capabilitiesForExt(detectedInputExt)`.
   const [detectedInputExt, setDetectedInputExt] = useState<string>(
     slugDefault ? formatToExt(slugDefault.inputFormat) : '',
   );
@@ -268,9 +268,10 @@ export function ConverterPanel({
   const resolveArgsForFile = useCallback(
     (file: File) => {
       if (!slugDefault) return null;
-      // SEAN-106: every drop refreshes the tracked file (chip clicks remount
-      // DropZone with this as `initialFile`) and the detected input ext (chip
-      // row sources its options from `outputsForExt(detectedInputExt)`).
+      // SEAN-106 / SEAN-121: every drop refreshes the tracked file (chip
+      // clicks remount DropZone with this as `initialFile`) and the detected
+      // input ext (the picker sources its capabilities from
+      // `capabilitiesForExt(detectedInputExt)`).
       setTrackedFile(file);
       const droppedExt = extOf(file.name);
       if (droppedExt) setDetectedInputExt(droppedExt);
@@ -346,28 +347,40 @@ export function ConverterPanel({
     [slugDefault, detectedRow, urlState],
   );
 
-  // SEAN-106: chip-pick handler. Looks up the row matching the detected input
-  // + picked output via `outputsForExt`, swaps `detectedRow`, updates the URL
-  // via `history.replaceState`, and re-keys the inner `<DropZone />` so the
-  // in-flight upload (if any) is aborted via the AbortController cleanup and
-  // re-fired with the new row's args via `initialFile={trackedFile}`.
-  const handleChipPick = useCallback(
-    (nextFormat: Format) => {
+  // SEAN-121: capability-pick handler. Replaces the SEAN-106 format-only
+  // handler. Looks up the row matching the detected input + picked operation
+  // + picked output via `capabilitiesForExt`, swaps `detectedRow`, updates
+  // the URL via `history.replaceState`, and re-keys the inner `<DropZone />`
+  // so the in-flight upload (if any) is aborted via the AbortController
+  // cleanup and re-fired with the new row's args via
+  // `initialFile={trackedFile}`.
+  //
+  // Honours #103's "URL is a hint, not a gate": replaceState only fires when
+  // the picked op + format maps to a real route different from the current
+  // location. Page shell (h1, FAQ, How-it-works) does NOT mutate — same
+  // trade-off accepted in #107.
+  const handleCapabilityPick = useCallback(
+    (next: { operation: OperationRow['operation']; format: Format }) => {
       if (!slugDefault) return;
       const currentRow = detectedRow ?? slugDefault.row;
-      if (nextFormat === currentRow.outputFormat) return;
-      const options = outputsForExt(detectedInputExt);
-      const next = options.find((o) => o.format === nextFormat);
-      if (!next) return;
-      setDetectedRow(next.row);
-      // SEAN-106: clear any completed job so a chip pick from the result
-      // block reverts to the DropZone — which then auto-fires via
-      // `initialFile={trackedFile}` on the freshly-keyed mount. Mirrors the
-      // homepage flow where re-picking on the result block re-fires the
-      // conversion with the new row's args.
+      if (
+        next.operation === currentRow.operation &&
+        next.format === currentRow.outputFormat
+      ) {
+        return;
+      }
+      const caps = capabilitiesForExt(detectedInputExt);
+      const cap = caps.find((c) => c.operation === next.operation);
+      const opt = cap?.outputs.find((o) => o.format === next.format);
+      if (!opt) return;
+      setDetectedRow(opt.row);
+      // Clear any completed job so a chip pick from the result block reverts
+      // to the DropZone — which then auto-fires via `initialFile={trackedFile}`
+      // on the freshly-keyed mount. Mirrors the homepage flow where re-picking
+      // on the result block re-fires the conversion with the new row's args.
       setJob(null);
       if (typeof window !== 'undefined') {
-        const newPath = pathForSlug(next.row.slug);
+        const newPath = pathForSlug(opt.row.slug);
         if (newPath && newPath !== window.location.pathname) {
           window.history.replaceState(
             null,
@@ -429,18 +442,18 @@ export function ConverterPanel({
     };
   }, [effectiveOperation]);
 
-  // SEAN-106: chip row mounts above the DropZone on slug pages only. The
-  // homepage flow already wraps `<ConverterPanel />` with its own chip row
-  // inside `<HeroDrop />`'s `<RunningPanel />`, so we'd double-render
-  // otherwise. Active chip = the panel's current effective output format
-  // (which falls back to `PREFERRED_TARGET_BY_EXT[ext]` when the URL's hinted
-  // output isn't reachable from the detected input — see SEAN-105 / SEAN-103
-  // decision records).
-  const slugChipRow = slugDefault ? (
-    <OutputFormatChips
+  // SEAN-121: capabilities picker mounts above the DropZone on slug pages
+  // only. The homepage flow already wraps `<ConverterPanel />` with its own
+  // picker inside `<HeroDrop />`'s `<RunningPanel />`, so we'd double-render
+  // otherwise. Active op + format = the panel's current effective state.
+  // Picking a different op/format swaps the row and updates the URL via
+  // `history.replaceState` (per #103 — URL is a hint, not a gate).
+  const slugCapabilitiesPicker = slugDefault ? (
+    <CapabilitiesPicker
       detectedInputExt={detectedInputExt}
+      activeOperation={effectiveOperation}
       activeFormat={effectiveOutputExt}
-      onPick={handleChipPick}
+      onPick={handleCapabilityPick}
     />
   ) : null;
 
@@ -515,7 +528,7 @@ export function ConverterPanel({
             }}
           />
         )}
-        {slugChipRow}
+        {slugCapabilitiesPicker}
         <DropZone
           key={dropZoneKey}
           goOp={effectiveGoOp}
@@ -547,7 +560,7 @@ export function ConverterPanel({
   }
   return (
     <>
-      {slugChipRow}
+      {slugCapabilitiesPicker}
       <ResultBlock
         job={job}
         ffmpegCommand={displayedCommand}

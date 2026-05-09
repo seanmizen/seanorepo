@@ -117,8 +117,9 @@ test.describe('file handling — adaptive panel + extension detection', () => {
       });
 
       if (c.expectAcceptance) {
-        // Accepted path: the chip row mounts (HeroDrop → RunningPanel →
-        // OutputFormatChips). We assert the API was hit with the right op.
+        // Accepted path: the picker mounts (HeroDrop → RunningPanel →
+        // CapabilitiesPicker, post-SEAN-121). We assert the API was hit
+        // with the right op.
         await expect
           .poll(() => convertCalls.length, { timeout: 10_000 })
           .toBeGreaterThan(0);

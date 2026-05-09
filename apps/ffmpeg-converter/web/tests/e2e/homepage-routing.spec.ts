@@ -56,10 +56,10 @@ test.describe('homepage routing', () => {
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(fixturePath('tiny.mov'));
 
-    // Wait for the chip row + converter panel to mount (SEAN-81). The
-    // OutputFormatChips renders "Converting to .mp4 — change format?" once
-    // the file is being uploaded.
-    await expect(page.getByText(/change format/i)).toBeVisible({
+    // Wait for the picker + converter panel to mount (SEAN-81 / SEAN-121).
+    // The new CapabilitiesPicker renders "What do you want to do?" above
+    // the operation chips once the file is being uploaded.
+    await expect(page.getByText(/what do you want to do/i)).toBeVisible({
       timeout: 10_000,
     });
 
