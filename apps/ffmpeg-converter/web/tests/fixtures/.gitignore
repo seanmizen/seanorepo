@@ -1,0 +1,17 @@
+# All fixture media is regenerated on demand by make-fixtures.sh. Don't
+# commit binary blobs — keeps the diff small and ensures the suite stays
+# deterministic across machines (see SEAN-113).
+*.mov
+*.mp4
+*.webm
+*.gif
+*.png
+*.jpg
+*.jpeg
+*.heic
+*.avif
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg

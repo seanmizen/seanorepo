@@ -20,6 +20,9 @@
     "test:preset-storage": "ts-node -P tsconfig.test.json src/components/__tests__/preset-storage.test.ts",
     "test:advanced-panel": "ts-node -P tsconfig.test.json src/components/__tests__/AdvancedPanel.test.ts",
     "test:converter-panel": "ts-node -P tsconfig.test.json src/components/__tests__/ConverterPanel.test.ts",
+    "test:fixtures": "bash tests/fixtures/make-fixtures.sh",
+    "test:e2e": "playwright test --config=playwright.config.ts --grep-invert=@axe",
+    "test:axe": "playwright test --config=playwright.config.ts --grep=@axe",
     "test": "yarn test:dead-links && yarn test:matrix && yarn test:sitemap && yarn test:redirects && yarn test:word-count && yarn test:hero-drop && yarn test:route-for-file && yarn test:result-block && yarn test:url-state && yarn test:preset-storage && yarn test:advanced-panel && yarn test:converter-panel"
   },
   "dependencies": {
@@ -28,10 +31,15 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.49.1",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
+    "lighthouse": "^12.2.1",
+    "playwright-core": "^1.49.1",
+    "playwright-lighthouse": "^4.0.0",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "ts-node": "^10.9.2",
