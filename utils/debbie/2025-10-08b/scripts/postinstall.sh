@@ -142,8 +142,46 @@ if [ "$SERVER_NAME" = "debbie" ]; then
             autoconnect yes
     fi
 
-    sudo nmcli connection modify static-ethernet ipv4.route-metric 100
-    sudo nmcli connection modify static-wifi     ipv4.route-metric 200
+    # Both NICs sit on the same /24. With Linux defaults any interface will
+    # answer ARP for any local address, so remote hosts see both IPs behind a
+    # single MAC and replies can arrive on the interface that did not send the
+    # request. Restrict ARP to the interface that actually owns the address.
+    echo "Applying ARP flux mitigation" | tee -a "$LOG"
+    sudo tee /etc/sysctl.d/10-debbie-arp.conf > /dev/null <<'SYSCTL'
+# debbie has two NICs on one subnet - answer ARP only for local addresses
+net.ipv4.conf.all.arp_ignore = 1
+net.ipv4.conf.all.arp_announce = 2
+SYSCTL
+    sudo sysctl -q --system || true
+
+    sudo nmcli connection up static-ethernet || true
+    sudo nmcli connection up static-wifi     || true
+
+    # 'ipv4.method manual' assigns the static address whether or not the link
+    # has real upstream connectivity, so an unplugged or dead-port USB NIC would
+    # still claim the preferred default route and blackhole every outbound
+    # packet. Prefer ethernet only when it has carrier AND reaches the gateway.
+    GW="${GATEWAY:-192.168.1.1}"
+    ETH_LOOKUP="$(echo "${ETH_MAC:-9C:EB:E8:4A:A5:79}" | tr '[:upper:]' '[:lower:]')"
+    ETH_IFACE="$(ip -o link | awk -v mac="$ETH_LOOKUP" '$0 ~ mac {gsub(/:$/, "", $2); print $2; exit}' || true)"
+
+    ethernet_reaches_gateway() {
+        [ -n "$ETH_IFACE" ] || return 1
+        [ "$(cat "/sys/class/net/$ETH_IFACE/carrier" 2>/dev/null || echo 0)" = "1" ] || return 1
+        ping -c 2 -W 2 -I "$ETH_IFACE" "$GW" > /dev/null 2>&1
+    }
+
+    if ethernet_reaches_gateway; then
+        echo "Ethernet ($ETH_IFACE) reaches $GW - preferring ethernet" | tee -a "$LOG"
+        sudo nmcli connection modify static-ethernet ipv4.route-metric 100
+        sudo nmcli connection modify static-wifi     ipv4.route-metric 200
+    else
+        echo "WARNING: ethernet (${ETH_IFACE:-not found}) has no carrier or cannot reach $GW" | tee -a "$LOG"
+        echo "         demoting ethernet, preferring wifi for the default route" | tee -a "$LOG"
+        sudo nmcli connection modify static-ethernet ipv4.route-metric 300
+        sudo nmcli connection modify static-wifi     ipv4.route-metric 200
+    fi
+
     sudo nmcli connection up static-ethernet || true
     sudo nmcli connection up static-wifi     || true
 
