@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodically verify debbie's default route still reaches the gateway
+Documentation=https://github.com/seanmizen/seanorepo/issues/133
+
+[Timer]
+# Boot check runs once NetworkManager has had a chance to bring links up.
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=net-failover-custom.service
+
+[Install]
+WantedBy=timers.target

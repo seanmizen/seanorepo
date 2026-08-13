@@ -1,0 +1,16 @@
+[Unit]
+Description=Keep the default route on an interface that can reach the gateway
+Documentation=https://github.com/seanmizen/seanorepo/issues/133
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/setup/.env
+ExecStart=/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/net-failover.sh
+# A failed probe means "no healthy interface right now", which the timer will
+# retry. It should not mark the unit failed and stop the timer.
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=multi-user.target
