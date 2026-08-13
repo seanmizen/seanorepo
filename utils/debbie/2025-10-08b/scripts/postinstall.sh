@@ -130,11 +130,16 @@ if [ "$SERVER_NAME" = "debbie" ]; then
     fi
 
     if ! nmcli -g NAME connection | grep -q '^static-wifi$'; then
+        # This repo is public. WiFi credentials come from .env only - never
+        # commit them, and never provide a fallback default here.
+        : "${WIFI_SSID:?WIFI_SSID must be set in $ENV_FILE - see .env.example}"
+        : "${WIFI_PSK:?WIFI_PSK must be set in $ENV_FILE - see .env.example}"
+
         sudo nmcli connection add type wifi con-name static-wifi \
             connection.interface-name "*" \
-            802-11-wireless.ssid "${WIFI_SSID:-mojodojo}" \
+            802-11-wireless.ssid "$WIFI_SSID" \
             802-11-wireless.mac-address "${WIFI_MAC:-48:45:20:40:E4:E9}" \
-            wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PSK:-casahouse}" \
+            wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$WIFI_PSK" \
             ipv4.method manual \
             ipv4.addresses "${WIFI_IP:-192.168.1.7}/24" \
             ipv4.gateway "${GATEWAY:-192.168.1.1}" \
