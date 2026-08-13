@@ -7,7 +7,7 @@ Documentation=https://github.com/seanmizen/seanorepo/issues/133
 OnBootSec=45s
 OnUnitActiveSec=60s
 AccuracySec=5s
-Unit=net-failover.service
+Unit=net-failover-custom.service
 
 [Install]
 WantedBy=timers.target

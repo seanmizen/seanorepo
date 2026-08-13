@@ -260,9 +260,9 @@ if [ -d "$SERVICES_DIR" ]; then
     # the whole box off the internet until someone notices in person. Enable it
     # here so a fresh provision is safe by default.
     chmod +x "$SCRIPT_DIR/net-failover.sh" 2>/dev/null || true
-    if [ -f "$SERVICES_DIR/net-failover.timer" ]; then
-        echo "Enabling net-failover.timer" | tee -a "$LOG"
-        sudo systemctl enable --now net-failover.timer
+    if [ -f "$SERVICES_DIR/net-failover-custom.timer" ]; then
+        echo "Enabling net-failover-custom.timer" | tee -a "$LOG"
+        sudo systemctl enable --now net-failover-custom.timer
     fi
 else
     echo "Warning: Services directory not found at $SERVICES_DIR" | tee -a "$LOG"
