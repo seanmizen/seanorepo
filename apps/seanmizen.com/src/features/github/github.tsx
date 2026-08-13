@@ -10,7 +10,14 @@ const Github: FC = () => {
       </a>
       <div>
         <Code content={'// i am testing out\n// how to display code nicely'} />
-        <Code commandLine content='screen -dm bash -c "yes > .brick"' />
+        <Code
+          commandLine
+          content={
+            '# the ten files this repo edits the most\n' +
+            'git log --format=format: --name-only --no-merges \\\n' +
+            '  | grep . | sort | uniq -c | sort -rn | head -10'
+          }
+        />
       </div>
       <div>
         below, you&apos;ll see me try out some vibrant colours using{' '}
