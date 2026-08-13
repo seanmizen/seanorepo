@@ -157,7 +157,7 @@ Local Docker containers
 
 ### Debbie Server
 - **Ethernet**: 192.168.1.6 (MAC: 9C:EB:E8:4A:A5:79)
-- **WiFi**: 192.168.1.7 (MAC: 48:45:20:40:E4:E9, SSID: mojodojo)
+- **WiFi**: 192.168.1.7 (MAC: 48:45:20:40:E4:E9, SSID: set via `WIFI_SSID` in `.env`)
 - **mDNS**: debbie.local
 - **Gateway**: 192.168.1.1
 - **DNS**: 1.1.1.1, 8.8.8.8
