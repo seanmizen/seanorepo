@@ -20,8 +20,17 @@ RUN corepack enable && corepack prepare yarn@4.8.1
 # Copy workspace root files
 COPY package.json yarn.lock .yarnrc.yml ./
 
-# Copy app package.json into workspace structure
+# Copy app package.json into workspace structure.
+#
+# ffmpeg-converter-next lives at apps/ffmpeg-converter/web, which the root
+# 'apps/*' glob does not reach. It is registered as a NESTED workspace by
+# apps/ffmpeg-converter/package.json ("workspaces": ["web", "web-spa"]), so
+# that intermediate manifest must be present or the workspace cannot be
+# resolved inside the image. web-spa is copied too, to keep the resolved
+# workspace set identical to the one the lockfile was generated against.
+COPY apps/ffmpeg-converter/package.json ./apps/ffmpeg-converter/
 COPY apps/ffmpeg-converter/web/package.json ./apps/ffmpeg-converter/web/
+COPY apps/ffmpeg-converter/web-spa/package.json ./apps/ffmpeg-converter/web-spa/
 
 # Install workspace with lockfile (including devDependencies for build)
 RUN yarn workspaces focus ffmpeg-converter-next
