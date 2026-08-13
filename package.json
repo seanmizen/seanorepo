@@ -20,7 +20,7 @@
     "voxel": "yarn workspace swindowzig native:voxel",
     "voxel:web": "yarn workspace swindowzig dev:voxel",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
-    "prod:docker": "yarn workspaces foreach -At run prod:docker",
+    "prod:docker": "yarn workspaces foreach -At --exclude ffmpeg-converter run prod:docker",
     "down": "yarn workspaces foreach -Apt run down",
     "check": "biome check .",
     "fix": "biome check --write .",
