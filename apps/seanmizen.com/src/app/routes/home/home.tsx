@@ -7,7 +7,7 @@ import {
   SSHModal,
   ThemeToggle,
 } from '@/components';
-import { Donate, Projects, ThisPage } from '@/features';
+import { Donate, Github, Projects, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 import { ThemeContext } from '@/providers';
 
@@ -22,6 +22,7 @@ const Home: FC = () => {
 
   const subsections = [
     { component: <Projects />, trigger: 'projects', subLink: '/apps' },
+    { component: <Github />, trigger: 'github' },
     { component: <Donate />, trigger: 'donate' },
     { component: <ThisPage />, trigger: 'this page' },
   ];
