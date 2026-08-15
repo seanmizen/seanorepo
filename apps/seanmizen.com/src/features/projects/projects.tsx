@@ -36,8 +36,8 @@ const projectList: Project[] = [
   },
   {
     name: 'SeansCards.com',
-    blurb: 'it covered its costs',
-    retired: '2024–2025',
+    blurb: 'RIP - it covered its costs',
+    retired: '2024-2025',
   },
 ];
 
@@ -46,10 +46,8 @@ const Projects: FC = () => (
     {projectList.map(({ name, blurb, href, retired }) => (
       <Entity key={name}>
         {href ? <ExternalLink href={href}>{name}</ExternalLink> : name}
-        <span className={styles.blurb}> — {blurb}</span>
-        {retired && (
-          <span className={styles.retired}> (retired, {retired})</span>
-        )}
+        <span className={styles.blurb}> - {blurb}</span>
+        {retired && <span className={styles.retired}> ({retired})</span>}
       </Entity>
     ))}
   </EntityList>
