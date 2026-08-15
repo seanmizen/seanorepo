@@ -1,49 +1,9 @@
+/* The chevron and list-item layout come from Entity — see entity-list. */
+
 .sublink {
   margin-left: 1rem;
 }
 
 .sublink::before {
   content: "→ ";
-}
-
-.li {
-  position: relative;
-  list-style-type: none;
-  width: fit-content;
-  padding-left: 1.2rem;
-}
-
-.li:before {
-  left: 0.1rem;
-  top: 0.4rem;
-  content: ">";
-  position: absolute;
-  transition: 150ms;
-  opacity: 0;
-  padding: 0;
-  font-size: 1rem;
-  pointer-events: none;
-}
-
-.li:hover:before,
-.li:focus-within:before {
-  opacity: 1;
-  transform: translate(0.5rem);
-}
-
-.li:hover:before {
-  transition: 150ms;
-}
-
-div[class*="Collapsible"] {
-  z-index: 0;
-  position: relative;
-}
-div[class*="Collapsible__contentOuter"] {
-  position: static;
-}
-div[class*="Collapsible__contentInner"] {
-  position: inherit;
-  padding-top: 0.5rem;
-  padding-bottom: 0.2rem;
 }

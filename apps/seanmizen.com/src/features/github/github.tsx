@@ -1,13 +1,17 @@
 import type { FC } from 'react';
-import { Code } from '@/components';
+import { Code, Entity, EntityList } from '@/components';
 import styles from './github.module.css';
 
 const Github: FC = () => {
   return (
     <div>
-      <a aria-label="Github URL" href="https://github.com/seanmizen">
-        github.com/seanmizen
-      </a>
+      <EntityList>
+        <Entity>
+          <a aria-label="Github URL" href="https://github.com/seanmizen">
+            github.com/seanmizen
+          </a>
+        </Entity>
+      </EntityList>
       <div>
         <Code content={'// i am testing out\n// how to display code nicely'} />
         <Code

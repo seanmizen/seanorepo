@@ -1,5 +1,6 @@
 import type { ChangeEvent, FC } from 'react';
 import { useState } from 'react';
+import { Entity, EntityList } from '@/components';
 import styles from '../this-page.module.css';
 
 const ColorPicker: FC = () => {
@@ -25,8 +26,8 @@ const ColorPicker: FC = () => {
   const resetTextColor = () => setBodyTextColor(defaultTextColor);
 
   return (
-    <div className={styles.flexRow}>
-      <div className={styles.flexColumn}>
+    <EntityList row>
+      <Entity className={styles.flexColumn}>
         <label htmlFor="background-color">background</label>
         <div className={styles.flexRow}>
           <input
@@ -41,8 +42,8 @@ const ColorPicker: FC = () => {
             reset
           </button>
         </div>
-      </div>
-      <div className={styles.flexColumn}>
+      </Entity>
+      <Entity className={styles.flexColumn}>
         <label htmlFor="text-color">text</label>
         <div className={styles.flexRow}>
           <input
@@ -57,8 +58,8 @@ const ColorPicker: FC = () => {
             reset
           </button>
         </div>
-      </div>
-    </div>
+      </Entity>
+    </EntityList>
   );
 };
 

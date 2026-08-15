@@ -1,5 +1,6 @@
 export { Accordion } from './accordion';
 export { Code } from './code';
+export { Entity, EntityList } from './entity-list';
 export { HomeLi } from './home-li';
 export { HomeLink } from './home-link';
 export { LastUpdated } from './last-updated';

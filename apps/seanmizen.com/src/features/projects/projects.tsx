@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import styles from './projects.module.css';
+import { Entity, EntityList } from '@/components';
 
 interface Project {
   linklabel: string;
@@ -41,9 +41,9 @@ const projectList: Project[] = [
 
 const Projects: FC = () => {
   return (
-    <ul className={`${styles['ul-link']} ${styles['ul-padded-left']}`}>
+    <EntityList>
       {projectList.map((project) => (
-        <li key={project.linklabel}>
+        <Entity key={project.linklabel}>
           {project.href ? (
             <a
               aria-label={project.arialabel}
@@ -58,9 +58,9 @@ const Projects: FC = () => {
           )}
           {' - '}
           {project.description}
-        </li>
+        </Entity>
       ))}
-    </ul>
+    </EntityList>
   );
 };
 

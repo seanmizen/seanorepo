@@ -8,7 +8,8 @@
   opacity: 0.7;
   width: 40px;
   height: 40px;
-  border-radius: 4px;
+  /* No border-radius: the focus ring follows it, and a rounded ring here would
+     be the only one on the site that is not square. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -25,4 +26,25 @@
 
 .theme-toggle-button svg {
   display: block;
+  /* The global `* { padding: 0.2rem }` reaches the icon too and pads its box
+     out to 30.4px, which the ring below would then trace. */
+  padding: 0;
+}
+
+/*
+  The button is a deliberately generous 40px pointer target around a 24px
+  icon, so an outline on its own border box drew a 44px square — far looser
+  than the text-hugging rings everywhere else, and it read as discordant.
+  Anchoring the ring to the icon tightens it to 32px without shrinking the
+  target (WCAG 2.5.8 Target Size wants at least 24px; this keeps 40px).
+
+  Kept below `.theme-toggle-button svg` so specificity ascends down the file.
+*/
+.theme-toggle-button:focus-visible {
+  outline: none;
+}
+
+.theme-toggle-button:focus-visible svg {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
