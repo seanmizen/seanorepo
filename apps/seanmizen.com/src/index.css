@@ -111,6 +111,15 @@ h1 {
 }
 
 .container {
+  /*
+    The site is otherwise on the default content-box, where `max-width: 100%`
+    caps only the *content* box and the 1rem gutters are then added outside
+    that cap — so the container was 2rem wider than the space it was told to
+    fit into, and the page scrolled horizontally at every width below 1200px.
+    border-box folds the gutters into the cap. `width` now means the outer
+    width, which is what both figures below were always meant to describe.
+  */
+  box-sizing: border-box;
   max-width: 100%;
   width: 36rem;
   margin: auto;
