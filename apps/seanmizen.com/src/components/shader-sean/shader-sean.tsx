@@ -11,6 +11,11 @@ import bgImage from './IMG_4011_crop2.jpeg';
 import particleTex from './particle2.png';
 import vert from './vert-stippling.glsl';
 
+/* Anything a click can be aimed at. Mirrors the tabbable set the chevron
+   system uses in entity-list.module.css. */
+const INTERACTIVE =
+  'a[href], button, input, select, textarea, summary, label, [tabindex]:not([tabindex="-1"])';
+
 const seed = (pos: Float32Array, vel: Float32Array) => {
   const n = pos.length / 4;
   for (let i = 0; i < n; i++) {
@@ -146,6 +151,23 @@ const ShaderSean: FC = () => {
     addEventListener('resize', onResize);
 
     const startRipple = (e: MouseEvent) => {
+      // The backdrop sits behind everything with pointer-events: none, so the
+      // ripple has to be driven from a window listener — which means it hears
+      // every click on the page, including ones aimed at a control. A click
+      // that lands on something interactive was meant for that thing, not for
+      // the background behind it.
+      //
+      // composedPath() is captured when the event is dispatched, so it still
+      // holds the real ancestor chain even if React has since re-rendered the
+      // target away. Walking up from e.target instead would miss the theme
+      // toggle: its onClick swaps the icon <svg>, and closest() on a detached
+      // node finds no <button>. This listener is also registered in the
+      // capture phase so it runs before that re-render can happen.
+      const clicked = e
+        .composedPath()
+        .some((node) => node instanceof Element && node.matches(INTERACTIVE));
+      if (clicked) return;
+
       ripple.current.time = performance.now();
 
       const canvas = renderer.domElement;
@@ -166,7 +188,7 @@ const ShaderSean: FC = () => {
       ripple.current.origin.set(x, canvas.height - y);
     };
 
-    window.addEventListener('click', startRipple);
+    window.addEventListener('click', startRipple, true);
 
     let frames = 0;
     const animate = () => {
@@ -201,7 +223,7 @@ const ShaderSean: FC = () => {
       ) {
         mountRef.current.removeChild(renderer.domElement);
       }
-      window.removeEventListener('click', startRipple);
+      window.removeEventListener('click', startRipple, true);
       renderer.dispose();
     };
   }, [width, height]);
