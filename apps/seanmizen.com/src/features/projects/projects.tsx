@@ -1,67 +1,58 @@
 import type { FC } from 'react';
-import { Entity, EntityList } from '@/components';
+import { Entity, EntityList, ExternalLink } from '@/components';
+import styles from './projects.module.css';
 
 interface Project {
-  linklabel: string;
-  description: string;
+  /** Doubles as the link text, so it has to stand on its own. */
+  name: string;
+  /** One line, lowercase, no repetition of the name. */
+  blurb: string;
+  /** Absent for anything not currently reachable. */
   href?: string;
-  arialabel?: string;
+  /** Only set once something has stopped running. */
+  retired?: string;
 }
 
 const projectList: Project[] = [
   {
-    linklabel: 'SeansCards.com (2024–2025)',
-    description: 'RIP, it covered its costs',
-  },
-  {
-    linklabel: 'seanmizen.com',
-    description: 'This site',
+    name: 'seanmizen.com',
+    blurb: 'this site',
     href: 'https://seanmizen.com',
-    arialabel: 'URL for this website',
   },
   {
-    linklabel: 'Planning Poker',
-    description: 'Planning Poker - Agile estimation tool for teams',
+    name: 'Planning Poker',
+    blurb: 'agile estimation for teams',
     href: 'https://pp.seanmizen.com',
-    arialabel: 'URL for Planning Poker',
   },
   {
-    linklabel: 'carolinemizen.art',
-    description: 'Art portfolio',
+    name: 'carolinemizen.art',
+    blurb: 'art portfolio',
     href: 'https://carolinemizen.art',
-    arialabel: 'URL for carolinemizen.art',
   },
   {
-    linklabel: 'shist',
-    description: "Sean's History Tool",
+    name: 'shist',
+    blurb: "sean's history tool",
     href: 'https://github.com/seanmizen/shist',
-    arialabel: 'Github URL for shist',
+  },
+  {
+    name: 'SeansCards.com',
+    blurb: 'it covered its costs',
+    retired: '2024–2025',
   },
 ];
 
-const Projects: FC = () => {
-  return (
-    <EntityList>
-      {projectList.map((project) => (
-        <Entity key={project.linklabel}>
-          {project.href ? (
-            <a
-              aria-label={project.arialabel}
-              href={project.href}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {project.linklabel}
-            </a>
-          ) : (
-            <span>{project.linklabel}</span>
-          )}
-          {' - '}
-          {project.description}
-        </Entity>
-      ))}
-    </EntityList>
-  );
-};
+const Projects: FC = () => (
+  <EntityList>
+    {projectList.map(({ name, blurb, href, retired }) => (
+      <Entity key={name}>
+        {href ? <ExternalLink href={href}>{name}</ExternalLink> : name}
+        <span className={styles.blurb}> — {blurb}</span>
+        {retired && (
+          <span className={styles.retired}> (retired, {retired})</span>
+        )}
+      </Entity>
+    ))}
+  </EntityList>
+);
 
 export { Projects };

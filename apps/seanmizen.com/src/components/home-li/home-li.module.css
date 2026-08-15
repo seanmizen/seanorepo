@@ -1,9 +1,0 @@
-/* The chevron and list-item layout come from Entity — see entity-list. */
-
-.sublink {
-  margin-left: 1rem;
-}
-
-.sublink::before {
-  content: "→ ";
-}

@@ -1,0 +1,15 @@
+/*
+  The name carries the emphasis; everything after it is supporting detail and
+  is dimmed to match the weight of a static chevron, so a scan down the column
+  hits the names first.
+*/
+.blurb {
+  padding: 0;
+  opacity: 0.75;
+}
+
+.retired {
+  padding: 0;
+  opacity: 0.55;
+  font-size: 0.9em;
+}
