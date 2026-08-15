@@ -29,9 +29,6 @@ const ExternalLink: FC<ExternalLinkProps> = ({ href, children }) => (
     rel="noopener noreferrer"
   >
     {children}
-    <span className={styles.marker} aria-hidden="true">
-      »
-    </span>
     <span className="sr-only"> (opens in a new tab)</span>
   </a>
 );
