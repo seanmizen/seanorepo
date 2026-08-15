@@ -4,8 +4,11 @@
   Every list item on the site is an "entity", and every entity gets a ">".
   How that chevron behaves says whether you can interact with the entity:
 
-    tabbable  -> invisible at rest, springs in and slides right on hover/focus
+    tabbable  -> dimmed at rest, brightens and slides right on hover/focus
     static    -> permanently dimmed, never moves
+
+  Every chevron sits in the same place at the same weight until you touch it,
+  so a list reads as one column of markers rather than two.
 
   Which of the two applies is decided by :has() below, so it can never drift
   out of sync with the markup: put a link in an entity and it becomes
@@ -77,12 +80,13 @@
   pointer-events: none;
   transition: 150ms;
 
-  /* static: hold at --chevron-static-opacity. tabbable: 0 until --active. */
+  /* Everything rests at --chevron-static-opacity; only a tabbable entity that
+     is hovered or focused takes the remaining distance up to full. */
   opacity: calc(
-    (1 - var(--tabbable)) *
     var(--chevron-static-opacity) +
     var(--tabbable) *
-    var(--active)
+    var(--active) *
+    (1 - var(--chevron-static-opacity))
   );
   transform: translateX(
     calc(var(--tabbable) * var(--active) * var(--chevron-shift))
