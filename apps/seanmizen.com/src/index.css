@@ -19,6 +19,8 @@ body {
   --highlight: #4a9;
   --link: #000;
   --link-visted: #636;
+  /* Sits between --background and --link so the halo reads against both. */
+  --link-hover-glow: #555;
 }
 .dark {
   --color: #cecece;
@@ -27,6 +29,10 @@ body {
   /* --highlight: #969; */
   --link: #cecece;
   --link-visted: #636;
+  /* #555 was hardcoded for both themes, but it lands 1.6:1 from this
+     background — the halo had nothing to render against and hover was
+     invisible in dark mode. #aaa mirrors light's relationship instead. */
+  --link-hover-glow: #aaa;
   /* TODO: get display-p3 working even though it's only supported on safari */
   /* vibrant colors, yo */
   --highlight: color(display-p3 9 6 9);
@@ -87,9 +93,11 @@ h1 {
 */
 
 a:hover {
-  /* text-decoration: underline; */
-  /* text-decoration-color: red; */
-  text-shadow: 0.2px 0.2px 0.2px #555;
+  text-shadow: 0.2px 0.2px 0.2px var(--link-hover-glow);
+  /* A cue that survives any palette: links already carry an underline at rest,
+     so thickening it emphasises without depending on colour at all (WCAG 1.4.1
+     prefers a non-colour cue). */
+  text-decoration-thickness: 2px;
 }
 
 h1 {
