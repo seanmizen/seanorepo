@@ -1,17 +1,25 @@
 /*
-  The arrow is a different axis of meaning from the chevrons in entity-list:
-  a chevron says where a link goes, this says the link leaves the site. Keeping
-  them visually distinct is deliberate — reusing ">" here would overload it.
+  "»" marks a link that leaves the site.
+
+  Worth knowing, since it is not obvious from the character alone: this is the
+  same shape as the ">" the entity system uses, at a different meaning. A
+  chevron in the gutter says "this row points somewhere"; a guillemet after
+  link text says "this one points off-site". They are kept apart by position
+  and weight rather than by form — the chevron sits in its own column to the
+  left of everything, this sits tight against the end of a word — so if the
+  two ever start reading as the same mark, position is the thing to push on
+  first.
+
+  It sits on the baseline rather than raised: a guillemet is a typographic
+  mark with its own vertical placement already built in, and superscripting it
+  makes it look like a footnote reference.
 */
 .marker {
   padding: 0;
   margin-left: 0.15rem;
-  font-size: 0.75em;
-  /* Sits on the cap line rather than the baseline, where it would look like it
-     had fallen off the end of the word. */
-  vertical-align: super;
-  line-height: 0;
-  opacity: 0.6;
+  font-size: 0.9em;
+  vertical-align: baseline;
+  opacity: 0.5;
 }
 
 .link:hover .marker,
