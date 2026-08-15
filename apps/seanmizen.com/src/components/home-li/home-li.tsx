@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Accordion } from '../accordion';
+import { Entity } from '../entity-list';
 import styles from './home-li.module.css';
 
 interface HomeLiProps {
@@ -11,7 +12,7 @@ interface HomeLiProps {
 
 const HomeLi: FC<HomeLiProps> = ({ children, trigger, subLink }) => {
   return (
-    <li className={styles.li}>
+    <Entity>
       <Accordion trigger={trigger}>
         {subLink && (
           <div className={styles.sublink}>
@@ -20,7 +21,7 @@ const HomeLi: FC<HomeLiProps> = ({ children, trigger, subLink }) => {
         )}
         {children}
       </Accordion>
-    </li>
+    </Entity>
   );
 };
 
