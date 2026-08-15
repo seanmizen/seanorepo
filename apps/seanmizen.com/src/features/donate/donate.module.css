@@ -10,6 +10,17 @@
   vertical-align: top;
   align-items: center;
   position: relative;
+  /* An address is ~41 monospace characters and will not wrap, so cap it at the
+     column and let the input scroll its own text. Capping is what keeps it on
+     screen — deliberately not `overflow`, which would clip the focus ring. */
+  max-width: 100%;
+}
+
+/* Grid items default to min-width: auto, which refuses to shrink below the
+   address's own width and would defeat the cap above. */
+.input-wrapper::after,
+.input-wrapper > input {
+  min-width: 0;
 }
 
 .input-wrapper::after {

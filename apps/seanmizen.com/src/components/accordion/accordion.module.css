@@ -13,7 +13,13 @@
   width: 100%;
 }
 
-.trigger:hover {
+/*
+  Focus shows everything hover shows, plus the global focus ring. A keyboard
+  user has no cursor to tell them where they are, so the focused affordance
+  must never be weaker than the hovered one.
+*/
+.trigger:hover,
+.trigger:focus-visible {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
