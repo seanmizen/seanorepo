@@ -4,8 +4,14 @@
   Every list item on the site is an "entity", and every entity gets a ">".
   How that chevron behaves says whether you can interact with the entity:
 
-    tabbable  -> dimmed at rest, brightens and slides right on hover/focus
+    tabbable  -> dimmed at rest, brightens and slides on hover/focus
     static    -> permanently dimmed, never moves
+
+  This is the only marker system on the site. Anything that points somewhere
+  is an entity and wears a chevron; the only thing that varies is which way it
+  points (see .back). Navigation used to be three unrelated idioms — ">" here,
+  "→ " on the home page's sublinks, "<< " on the back link — which is why a
+  page could not be read as one consistent set of affordances.
 
   Every chevron sits in the same place at the same weight until you touch it,
   so a list reads as one column of markers rather than two.
@@ -41,6 +47,9 @@
   --active: 0;
 
   --chevron-static-opacity: 0.35;
+  /* Which way the entity points. The glyph and the direction of travel are
+     one decision, so .back below flips both together. */
+  --chevron-glyph: ">";
   /* Far enough to read as movement, short enough to stay out of the focus
      ring that starts 15.2px in. See the note at the top of this file. */
   --chevron-shift: 0.2rem;
@@ -77,8 +86,20 @@
   --active: 1;
 }
 
+/*
+  An entity that takes you back the way you came. Same marker system, pointed
+  the other way — and because the shift is negative it retreats to the left on
+  interaction rather than advancing, which is the whole idea rendered as
+  motion. Declared after .item so it wins on source order; both are a single
+  class, so specificity alone would not settle it.
+*/
+.back {
+  --chevron-glyph: "<";
+  --chevron-shift: -0.2rem;
+}
+
 .item::before {
-  content: ">";
+  content: var(--chevron-glyph);
   position: absolute;
   left: 0.1rem;
   top: var(--chevron-top);

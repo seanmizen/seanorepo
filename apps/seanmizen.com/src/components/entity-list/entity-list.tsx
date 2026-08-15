@@ -21,6 +21,8 @@ const EntityList: FC<EntityListProps> = ({ children, row, className }) => (
 
 interface EntityProps {
   children: ReactNode;
+  /** Points the chevron backwards, for links that retrace a step. */
+  back?: boolean;
   className?: string;
 }
 
@@ -28,8 +30,12 @@ interface EntityProps {
  * One entity, marked with a chevron. Whether the chevron is the static or the
  * interactive kind is worked out from the children — see entity-list.module.css.
  */
-const Entity: FC<EntityProps> = ({ children, className }) => (
-  <li className={[styles.item, className].filter(Boolean).join(' ')}>
+const Entity: FC<EntityProps> = ({ children, back, className }) => (
+  <li
+    className={[styles.item, back && styles.back, className]
+      .filter(Boolean)
+      .join(' ')}
+  >
     {children}
   </li>
 );

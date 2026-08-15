@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { Entity, EntityList } from '@/components';
+import { Entity, EntityList, ExternalLink } from '@/components';
 import styles from './donate.module.css';
 
 const BITCOIN_ADDRESS = 'bc1qr8vjxmrxqkzd9hu3z22vuhwe8kj55q8nvenkry';
@@ -9,9 +9,12 @@ const Donate: FC = () => {
   return (
     <EntityList>
       <Entity>
-        <a aria-label="Monzo payment URL" href="https://monzo.me/seanmizen">
+        {/* Was aria-label="Monzo payment URL" over link text reading
+            "monzo.me/seanmizen" — the third instance of the same WCAG 2.5.3
+            mismatch, after the projects list and the github feature. */}
+        <ExternalLink href="https://monzo.me/seanmizen">
           monzo.me/seanmizen
-        </a>
+        </ExternalLink>
       </Entity>
       <Entity>
         <label htmlFor="bitcoin" className="sr-only">
