@@ -1,0 +1,97 @@
+/*
+  The chevron system.
+
+  Every list item on the site is an "entity", and every entity gets a ">".
+  How that chevron behaves says whether you can interact with the entity:
+
+    tabbable  -> invisible at rest, springs in and slides right on hover/focus
+    static    -> permanently dimmed, never moves
+
+  Which of the two applies is decided by :has() below, so it can never drift
+  out of sync with the markup: put a link in an entity and it becomes
+  interactive on its own.
+*/
+
+.list {
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-flow: row;
+}
+
+.item {
+  position: relative;
+  list-style-type: none;
+  width: fit-content;
+  padding: var(--chevron-top) 0.2rem;
+  padding-left: 1.2rem;
+
+  /* Both are booleans, multiplied together in .item::before. */
+  --tabbable: 0;
+  --active: 0;
+
+  --chevron-static-opacity: 0.35;
+  --chevron-shift: 0.5rem;
+  /* Shared by the item's padding and the chevron's offset, so the chevron
+     always lands on the entity's first line. */
+  --chevron-top: 0.2rem;
+}
+
+/*
+  The global `* { padding: 0.2rem }` would otherwise indent an entity's content
+  by an amount that depends on what happens to be inside it — a bare <a> and a
+  wrapped <div> would sit at different offsets, and the chevron could only line
+  up with one of them. Entity content starts where the entity starts.
+*/
+.item > * {
+  padding: 0;
+}
+
+/* Anything a keyboard can land on makes the whole entity interactive. */
+.item:has(
+    a[href],
+    button:not(:disabled),
+    input:not(:disabled),
+    select:not(:disabled),
+    textarea:not(:disabled),
+    summary,
+    [tabindex]:not([tabindex="-1"])
+  ) {
+  --tabbable: 1;
+}
+
+.item:hover,
+.item:focus-within {
+  --active: 1;
+}
+
+.item::before {
+  content: ">";
+  position: absolute;
+  left: 0.1rem;
+  top: var(--chevron-top);
+  padding: 0;
+  font-size: 1rem;
+  pointer-events: none;
+  transition: 150ms;
+
+  /* static: hold at --chevron-static-opacity. tabbable: 0 until --active. */
+  opacity: calc(
+    (1 - var(--tabbable)) *
+    var(--chevron-static-opacity) +
+    var(--tabbable) *
+    var(--active)
+  );
+  transform: translateX(
+    calc(var(--tabbable) * var(--active) * var(--chevron-shift))
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item::before {
+    transition: none;
+    transform: none;
+  }
+}

@@ -74,13 +74,10 @@ h1 {
   padding-bottom: 0.5rem;
 }
 
-li {
-  list-style-type: ">";
-}
-
-li::marker {
-  padding: 0;
-}
+/*
+  Markers are not set globally: every list on the site goes through
+  EntityList/Entity, which owns the chevron and what it means.
+*/
 
 a:hover {
   /* text-decoration: underline; */
