@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { useContext, useState } from 'react';
 import {
+  EntityList,
   HomeLi,
   ShaderSean,
   Spacer,
@@ -32,7 +33,7 @@ const Home: FC = () => {
       <h1 id="main-content">seanmizen.com</h1>
       <p>developer | automator | person</p>
       <Spacer />
-      <ul>
+      <EntityList>
         {subsections.map((subsection) => (
           <HomeLi
             key={subsection.trigger}
@@ -42,7 +43,7 @@ const Home: FC = () => {
             {subsection.component}
           </HomeLi>
         ))}
-      </ul>
+      </EntityList>
       <Spacer />
       <div className="shader-container">
         <ShaderSean />

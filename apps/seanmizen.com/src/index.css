@@ -19,6 +19,8 @@ body {
   --highlight: #4a9;
   --link: #000;
   --link-visted: #636;
+  /* Sits between --background and --link so the halo reads against both. */
+  --link-hover-glow: #555;
 }
 .dark {
   --color: #cecece;
@@ -27,6 +29,10 @@ body {
   /* --highlight: #969; */
   --link: #cecece;
   --link-visted: #636;
+  /* #555 was hardcoded for both themes, but it lands 1.6:1 from this
+     background — the halo had nothing to render against and hover was
+     invisible in dark mode. #aaa mirrors light's relationship instead. */
+  --link-hover-glow: #aaa;
   /* TODO: get display-p3 working even though it's only supported on safari */
   /* vibrant colors, yo */
   --highlight: color(display-p3 9 6 9);
@@ -56,10 +62,17 @@ body {
   border-width: 0;
 }
 
-li div {
-  /* prevent information falling off the screen */
-  overflow: overlay;
-}
+/*
+  There used to be a `li div { overflow: overlay }` here to stop long content
+  running off the screen. `overlay` is deprecated and now computes to `auto`,
+  which turned every div in a list into a scroll container — and an outline is
+  painted outside the border box, so `outline-offset: 2px` put every focus ring
+  just past the clip edge. It silently ate 13 of the 21 focus rings on this
+  page (WCAG 2.4.7), while the page still overflowed horizontally regardless.
+
+  Anything that can genuinely get too wide is capped where it lives instead
+  (see .input-wrapper in donate), which contains it without clipping anything.
+*/
 
 .mono {
   font-family: "Red Hat Mono", "Courier New", Courier, monospace;
@@ -74,18 +87,17 @@ h1 {
   padding-bottom: 0.5rem;
 }
 
-li {
-  list-style-type: ">";
-}
-
-li::marker {
-  padding: 0;
-}
+/*
+  Markers are not set globally: every list on the site goes through
+  EntityList/Entity, which owns the chevron and what it means.
+*/
 
 a:hover {
-  /* text-decoration: underline; */
-  /* text-decoration-color: red; */
-  text-shadow: 0.2px 0.2px 0.2px #555;
+  text-shadow: 0.2px 0.2px 0.2px var(--link-hover-glow);
+  /* A cue that survives any palette: links already carry an underline at rest,
+     so thickening it emphasises without depending on colour at all (WCAG 1.4.1
+     prefers a non-colour cue). */
+  text-decoration-thickness: 2px;
 }
 
 h1 {
@@ -107,6 +119,15 @@ h1 {
 }
 
 .container {
+  /*
+    The site is otherwise on the default content-box, where `max-width: 100%`
+    caps only the *content* box and the 1rem gutters are then added outside
+    that cap — so the container was 2rem wider than the space it was told to
+    fit into, and the page scrolled horizontally at every width below 1200px.
+    border-box folds the gutters into the cap. `width` now means the outer
+    width, which is what both figures below were always meant to describe.
+  */
+  box-sizing: border-box;
   max-width: 100%;
   width: 36rem;
   margin: auto;
