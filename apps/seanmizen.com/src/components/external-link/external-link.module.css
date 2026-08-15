@@ -1,0 +1,20 @@
+/*
+  The arrow is a different axis of meaning from the chevrons in entity-list:
+  a chevron says where a link goes, this says the link leaves the site. Keeping
+  them visually distinct is deliberate — reusing ">" here would overload it.
+*/
+.marker {
+  padding: 0;
+  margin-left: 0.15rem;
+  font-size: 0.75em;
+  /* Sits on the cap line rather than the baseline, where it would look like it
+     had fallen off the end of the word. */
+  vertical-align: super;
+  line-height: 0;
+  opacity: 0.6;
+}
+
+.link:hover .marker,
+.link:focus-visible .marker {
+  opacity: 1;
+}

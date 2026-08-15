@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { Code, Entity, EntityList } from '@/components';
+import { Code, Entity, EntityList, ExternalLink } from '@/components';
 import styles from './github.module.css';
 
 const Github: FC = () => {
@@ -7,9 +7,12 @@ const Github: FC = () => {
     <div>
       <EntityList>
         <Entity>
-          <a aria-label="Github URL" href="https://github.com/seanmizen">
+          {/* Was aria-label="Github URL" over link text "github.com/seanmizen"
+              — the same WCAG 2.5.3 mismatch as the projects list, and it was
+              also missing rel on an off-site link. */}
+          <ExternalLink href="https://github.com/seanmizen">
             github.com/seanmizen
-          </a>
+          </ExternalLink>
         </Entity>
       </EntityList>
       <div>
