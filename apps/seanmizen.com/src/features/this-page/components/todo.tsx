@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { Entity, EntityList } from '@/components';
+import { Entity, EntityList, ExternalLink } from '@/components';
 
 /*
   Most of these are just text, so they render with the static chevron: dimmed,
@@ -15,8 +15,10 @@ const Todo: FC = () => {
       <Entity>github contribution chart 🟨</Entity>
       <Entity>AI slop app</Entity>
       <Entity>
-        <a href="https://huggingface.co/meta-llama">Llama</a>-on-phone for your
-        auntie
+        <ExternalLink href="https://huggingface.co/meta-llama">
+          Llama
+        </ExternalLink>
+        -on-phone for your auntie
       </Entity>
       <Entity>make the ui better (?)</Entity>
     </EntityList>

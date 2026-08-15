@@ -1,16 +1,20 @@
-h2 {
+/*
+  This file used to declare a bare `h2 { ... }`. CSS Modules only hash class
+  selectors — element selectors are emitted as-is — so that rule was styling
+  every h2 on the site from a file named after one route. Scoped to a class
+  now, which is what it always meant.
+*/
+.heading {
   padding-top: 0.2rem;
   padding-bottom: 0.5rem;
-  padding-left: 0.5rem;
+  /* Lines up with the chevron column of the list it introduces. */
+  padding-left: 1.2rem;
+  font-size: 1.1rem;
+  font-weight: normal;
+  opacity: 0.75;
 }
 
-.no-animation {
+/* The h1 slide-in belongs to arriving at the site, not to every page of it. */
+.static {
   animation: none;
-  -moz-animation: none;
-  -webkit-animation: none;
-  -o-animation: none;
-}
-
-.padded-left {
-  padding-left: 1rem;
 }

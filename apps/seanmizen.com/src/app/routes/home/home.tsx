@@ -22,7 +22,12 @@ const Home: FC = () => {
   });
 
   const subsections = [
-    { component: <Projects />, trigger: 'projects', subLink: '/apps' },
+    {
+      component: <Projects />,
+      trigger: 'projects',
+      subLink: '/apps',
+      subLinkLabel: 'see all projects',
+    },
     { component: <Github />, trigger: 'github' },
     { component: <Donate />, trigger: 'donate' },
     { component: <ThisPage />, trigger: 'this page' },
@@ -30,7 +35,7 @@ const Home: FC = () => {
 
   return (
     <main className="container">
-      <h1 id="main-content">seanmizen.com</h1>
+      <h1>seanmizen.com</h1>
       <p>developer | automator | person</p>
       <Spacer />
       <EntityList>
@@ -39,6 +44,7 @@ const Home: FC = () => {
             key={subsection.trigger}
             trigger={subsection.trigger}
             subLink={subsection.subLink}
+            subLinkLabel={subsection.subLinkLabel}
           >
             {subsection.component}
           </HomeLi>
