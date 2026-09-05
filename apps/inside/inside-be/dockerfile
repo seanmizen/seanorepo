@@ -1,0 +1,35 @@
+# Build context is always the monorepo root (see docker-compose.yml).
+
+# deps — install the backend's dependencies standalone rather than as a
+# workspace. No native build toolchain is needed: SQLite comes from bun:sqlite,
+# which is built into the runtime.
+FROM node:23-slim AS deps
+WORKDIR /app
+COPY package.json .yarnrc.yml ./
+# Overwrite the root package.json with the backend's so this resolves
+# standalone instead of pulling in the whole monorepo.
+COPY apps/inside/inside-be/package.json ./package.json
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
+
+# dev — node_modules sits at /app so the named volume in docker-compose is
+# seeded from this image; source arrives via the bind mount. Module resolution
+# walks up from the working directory to find it.
+FROM oven/bun:latest AS dev
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+WORKDIR /app/apps/inside/inside-be
+ENV NODE_ENV=development
+EXPOSE 4061
+CMD ["bun", "--hot", "--no-clear-screen", "src/index.ts"]
+
+# prod — Bun runs the TypeScript directly; there is no bundling step by design.
+FROM oven/bun:latest AS prod
+WORKDIR /app
+# The whole `inside` workspace, so `@shared/*` (../shared) resolves.
+COPY apps/inside ./apps/inside
+# After the source, so it isn't clobbered by the copy above.
+COPY --from=deps /app/node_modules ./node_modules
+WORKDIR /app/apps/inside/inside-be
+ENV NODE_ENV=production
+EXPOSE 4061
+CMD ["bun", "./src/index.ts"]
