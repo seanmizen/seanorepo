@@ -9472,6 +9472,7 @@ __metadata:
     "@emotion/styled": "npm:^11.14.1"
     "@mui/icons-material": "npm:^7.3.6"
     "@mui/material": "npm:^7.3.6"
+    "@playwright/test": "npm:^1.49.1"
     "@rsbuild/core": "npm:^1.6.13"
     "@rsbuild/plugin-react": "npm:^1.4.2"
     "@tanstack/react-query": "npm:^5.90.12"
