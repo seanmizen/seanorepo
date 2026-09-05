@@ -1,0 +1,78 @@
+name: Check (inside)
+
+# Gate for apps/inside: types, lint, backend unit tests, and Playwright E2E.
+# Per apps/inside/CLAUDE.md, a feature ticket ships with tests — this is what
+# makes that rule real rather than aspirational.
+#
+# Lint is scoped to apps/inside on purpose: a repo-wide `yarn check` currently
+# reports ~138 pre-existing findings elsewhere, which would make this job
+# permanently red and therefore ignored.
+
+on:
+  pull_request:
+    paths:
+      - 'apps/inside/**'
+      - '.github/workflows/inside-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: types + lint + unit + e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Install dependencies
+        # Yarn 4 is the package manager. Bun is the runtime only — never
+        # `bun install` here.
+        run: yarn install --immutable
+
+      - name: Type-check (frontend and backend)
+        run: yarn workspace inside test:types
+
+      - name: Lint
+        run: npx biome check apps/inside
+
+      - name: Backend unit tests
+        run: yarn workspace inside test:unit
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        run: yarn workspace inside test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/inside/inside-fe/playwright-report/
+          retention-days: 7
+
+      - name: Assert tests left no artefacts in the repo
+        # A leaked database.db or uploads/ means a suite is not using
+        # createTestEnv() correctly.
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Test run modified tracked files or left artefacts:"
+            git status --porcelain
+            exit 1
+          fi
