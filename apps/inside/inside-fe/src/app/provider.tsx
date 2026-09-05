@@ -1,0 +1,119 @@
+import { CssBaseline, ThemeProvider } from '@mui/material';
+import { QueryClientProvider } from '@tanstack/react-query';
+import {
+  Component,
+  type FC,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { queryClient } from '@/lib';
+import {
+  buildTheme,
+  type EffectiveMode,
+  getEffectiveMode,
+  getInitialMode,
+  THEME_STORAGE_KEY,
+  type ThemeMode,
+} from './theme';
+import { ThemeModeContext } from './theme-context';
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div>Something went wrong.</div>;
+    }
+    return this.props.children;
+  }
+}
+
+const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
+  const [mode, setModeState] = useState<ThemeMode>(getInitialMode);
+  const [effectiveMode, setEffectiveMode] = useState<EffectiveMode>(() =>
+    getEffectiveMode(getInitialMode()),
+  );
+
+  const setMode = useCallback((next: ThemeMode) => {
+    setModeState(next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // Storage blocked; the choice just won't survive a reload.
+    }
+  }, []);
+
+  const toggleMode = useCallback(() => {
+    setModeState((prev) => {
+      const next: ThemeMode =
+        prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light';
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // As above.
+      }
+      return next;
+    });
+  }, []);
+
+  // Keep the resolved mode in step with both the user's choice and, while on
+  // 'auto', live OS theme changes.
+  useEffect(() => {
+    setEffectiveMode(getEffectiveMode(mode));
+    if (mode !== 'auto') return;
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      setEffectiveMode(event.matches ? 'dark' : 'light');
+    };
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, [mode]);
+
+  // Mirror onto <body> so the pre-paint script in index.html and any plain CSS
+  // agree with MUI about which theme is showing.
+  useEffect(() => {
+    document.body.classList.remove('light', 'dark');
+    document.body.classList.add(effectiveMode);
+    document
+      .getElementById('colorScheme')
+      ?.setAttribute('content', effectiveMode);
+  }, [effectiveMode]);
+
+  const theme = useMemo(() => buildTheme(effectiveMode), [effectiveMode]);
+
+  // One source of truth for the mode — the toggle reads this rather than
+  // keeping its own copy, so multiple toggles can never disagree.
+  const themeModeValue = useMemo(
+    () => ({ mode, effectiveMode, setMode, toggleMode }),
+    [mode, effectiveMode, setMode, toggleMode],
+  );
+
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeModeContext.Provider value={themeModeValue}>
+          <ThemeProvider theme={theme}>
+            <CssBaseline enableColorScheme={true} />
+            {children}
+          </ThemeProvider>
+        </ThemeModeContext.Provider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+};
+
+export { AppProvider };

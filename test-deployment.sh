@@ -91,6 +91,10 @@ test_cloudflared() {
   test_endpoint "http://localhost:4030" "Frontend" || ((failed++))
   test_endpoint "http://localhost:4031" "Backend API" || ((failed++))
 
+  echo -e "\n${YELLOW}inside.seanmizen.com${NC}"
+  test_endpoint "http://localhost:4060" "Frontend" || ((failed++))
+  test_endpoint "http://localhost:4061/api/health" "Backend API" || ((failed++))
+
   echo ""
   if [ $failed -eq 0 ]; then
     print_success "All Cloudflared services passed!"
