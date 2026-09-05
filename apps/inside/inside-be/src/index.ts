@@ -12,6 +12,7 @@ import { runMigrations } from './services/migrations';
 
 const DEV_SECRET = 'dev-secret-change-in-production';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_TEST = process.env.NODE_ENV === 'test';
 
 /**
  * Read a secret, refusing to start in production with the dev placeholder.
@@ -36,7 +37,8 @@ const UPLOAD_MAX_FILE_SIZE_MB = Number(
 const UPLOAD_MAX_FILES = Number(process.env.UPLOAD_MAX_FILES ?? 30);
 
 const fastify = Fastify({
-  logger: { level: IS_PRODUCTION ? 'warn' : 'info' },
+  // Silent under test so a failing assertion is readable.
+  logger: IS_TEST ? false : { level: IS_PRODUCTION ? 'warn' : 'info' },
   // Portfolio uploads are large; the defaults cut them off mid-transfer.
   connectionTimeout: 600000,
   requestTimeout: 600000,

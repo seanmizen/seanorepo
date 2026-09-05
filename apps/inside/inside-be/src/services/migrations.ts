@@ -3,6 +3,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type DatabaseType, openDbConnection } from './db';
 
+// Migrations run inside the test suite too; the progress chatter would bury
+// assertion output there.
+const log = (...args: unknown[]): void => {
+  if (process.env.NODE_ENV !== 'test') console.log(...args);
+};
+
 const MIGRATIONS_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -77,18 +83,14 @@ export async function runMigrations(): Promise<void> {
     const pending = getMigrationFiles().filter((m) => !applied.has(m.version));
 
     if (pending.length === 0) {
-      console.log(
-        `[Migrations] No pending migrations (${applied.size} applied)`,
-      );
+      log(`[Migrations] No pending migrations (${applied.size} applied)`);
       return;
     }
 
-    console.log(`[Migrations] Found ${pending.length} pending migration(s)`);
+    log(`[Migrations] Found ${pending.length} pending migration(s)`);
 
     for (const migration of pending) {
-      console.log(
-        `[Migrations] Applying ${migration.version}: ${migration.filename}`,
-      );
+      log(`[Migrations] Applying ${migration.version}: ${migration.filename}`);
 
       const apply = db.transaction(() => {
         db.exec(migration.sql);
@@ -100,7 +102,7 @@ export async function runMigrations(): Promise<void> {
 
       try {
         apply();
-        console.log(
+        log(
           `[Migrations] ✓ Applied ${migration.version}: ${migration.filename}`,
         );
       } catch (error) {
@@ -112,7 +114,7 @@ export async function runMigrations(): Promise<void> {
       }
     }
 
-    console.log('[Migrations] All migrations applied successfully');
+    log('[Migrations] All migrations applied successfully');
   } finally {
     db.close();
   }
