@@ -1,0 +1,26 @@
+import type { FastifyInstance } from 'fastify';
+import { requireAdmin } from '../middleware/auth';
+import { configRoutes } from './config';
+import { healthRoutes } from './health';
+
+/** Everything under /api. */
+export async function routes(fastify: FastifyInstance): Promise<void> {
+  fastify.register(healthRoutes);
+  fastify.register(configRoutes);
+
+  // Public feature routes (designers, projects, enquiries) register here.
+
+  // Admin routes live in their own encapsulated scope with the guard attached
+  // as an onRequest hook, so every child route is protected by construction —
+  // you cannot add an unprotected admin route by forgetting a decorator.
+  fastify.register(
+    async (adminScope) => {
+      adminScope.addHook('onRequest', requireAdmin);
+
+      adminScope.get('/whoami', async (request) => {
+        return { user: (request as { authUser?: unknown }).authUser };
+      });
+    },
+    { prefix: '/admin' },
+  );
+}

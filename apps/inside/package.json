@@ -1,0 +1,23 @@
+{
+  "name": "inside",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "inside-fe",
+    "inside-be"
+  ],
+  "scripts": {
+    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace inside-fe start\" \"yarn workspace inside-be start\"",
+    "test": "yarn test:types",
+    "test:types": "yarn workspace inside-fe tsc --noEmit && yarn workspace inside-be tsc --noEmit",
+    "start:docker": "API_URL=http://localhost:4061/api docker compose --profile dev up --build",
+    "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
+    "down": "docker compose --profile dev --profile prod down"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.4",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
+  }
+}
