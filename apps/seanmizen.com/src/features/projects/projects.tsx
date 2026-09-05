@@ -30,6 +30,11 @@ const projectList: Project[] = [
     href: 'https://carolinemizen.art',
   },
   {
+    name: 'inside',
+    blurb: 'a marketplace for interior designers',
+    href: 'https://inside.seanmizen.com',
+  },
+  {
     name: 'shist',
     blurb: "sean's history tool",
     href: 'https://github.com/seanmizen/shist',

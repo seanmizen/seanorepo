@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta id="colorScheme" name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="inside — a marketplace for architects and interior designers."
+    />
+    <title>inside</title>
+  </head>
+  <body>
+    <script>
+      // Blocking on purpose: resolves the theme before first paint so dark-mode
+      // users never see a white flash. Must read the same key the app writes
+      // (see THEME_STORAGE_KEY in src/app/theme.ts).
+      (() => {
+        var mode = 'auto';
+        try {
+          mode = localStorage.getItem('theme-mode') || 'auto';
+        } catch {
+          // Storage blocked; fall through to following the OS.
+        }
+        var theme =
+          mode === 'auto'
+            ? matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+            : mode;
+        document.body.classList.add(theme);
+        document
+          .getElementById('colorScheme')
+          .setAttribute('content', theme);
+      })();
+    </script>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

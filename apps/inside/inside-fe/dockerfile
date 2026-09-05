@@ -1,0 +1,52 @@
+# Build context is always the monorepo root (see docker-compose.yml).
+
+# dev — deps are installed into the image so the named node_modules volume in
+# docker-compose is seeded from it; source arrives via the bind mount.
+FROM node:23-slim AS dev
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY apps/inside/package.json ./apps/inside/
+COPY apps/inside/inside-fe/package.json ./apps/inside/inside-fe/
+COPY apps/inside/inside-be/package.json ./apps/inside/inside-be/
+RUN yarn workspaces focus inside-fe
+
+WORKDIR /app/apps/inside/inside-fe
+EXPOSE 4060
+CMD ["yarn", "rsbuild", "dev", "--port", "4060", "--host", "0.0.0.0"]
+
+FROM node:23-slim AS prod-build
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.8.1
+
+COPY package.json yarn.lock .yarnrc.yml ./
+# `inside` declares nested workspaces, so its package.json is needed for the
+# install to resolve.
+COPY apps/inside/package.json ./apps/inside/
+COPY apps/inside/inside-fe/package.json ./apps/inside/inside-fe/
+COPY apps/inside/inside-be/package.json ./apps/inside/inside-be/
+RUN yarn workspaces focus inside-fe
+
+COPY apps/inside/inside-fe/src ./apps/inside/inside-fe/src
+COPY apps/inside/inside-fe/public ./apps/inside/inside-fe/public
+COPY apps/inside/inside-fe/rsbuild.config.ts ./apps/inside/inside-fe/
+COPY apps/inside/inside-fe/tsconfig.json ./apps/inside/inside-fe/
+COPY apps/inside/tsconfig.json ./apps/inside/
+COPY apps/inside/shared ./apps/inside/shared
+
+# Baked into the bundle via rsbuild `source.define`. Defaults to '/api' so a
+# production build works behind cloudflared without further configuration.
+ARG API_URL=/api
+
+ENV NODE_ENV=production
+ENV API_URL=${API_URL}
+RUN yarn workspace inside-fe build
+
+FROM node:23-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/inside/inside-fe/dist .
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
+EXPOSE 4060
+# -s: SPA fallback, so client-side routes resolve on a hard refresh.
+CMD ["serve", "-s", ".", "-l", "4060"]

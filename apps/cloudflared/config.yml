@@ -28,6 +28,14 @@ ingress:
   - hostname: minecraft.seanmizen.com
     service: http://localhost:4042
 
+  # inside.seanmizen.com - Ports 4060 (FE) / 4061 (BE)
+  # MUST come before *.seanmizen.com wildcard below — first match wins.
+  - hostname: inside.seanmizen.com
+    path: /api/*
+    service: http://localhost:4061
+  - hostname: inside.seanmizen.com
+    service: http://localhost:4060
+
   # seanmizen.com - Port 4000 (Frontend only)
   # tcp-getter at tcp/
   - hostname: seanmizen.com

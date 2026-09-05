@@ -1,0 +1,13 @@
+/*
+ * Almost everything is themed through MUI. This file only covers what has to
+ * be right before React mounts — the pre-paint background set by the blocking
+ * script in index.html, so a dark-mode user never sees a white flash.
+ */
+
+body.light {
+  background-color: #faf9f7;
+}
+
+body.dark {
+  background-color: #121110;
+}

@@ -1,0 +1,17 @@
+# Secrets — never commit. Use .env.example as the template.
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+
+# SQLite databases live on a docker volume, never in git
+*.db
+*.sqlite
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Uploaded assets live on a docker volume, never in git
+uploads/
