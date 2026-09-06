@@ -44,7 +44,7 @@ interface PitchRow {
   budget_band: Pitch['budgetBand'];
   availability: Pitch['availability'];
   status: Pitch['status'];
-  read_at: string | null;
+  submitted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -108,7 +108,7 @@ const toPitch = (r: PitchRow): Pitch => ({
   budgetBand: r.budget_band,
   availability: r.availability,
   status: r.status,
-  readAt: r.read_at,
+  submittedAt: r.submitted_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -125,8 +125,15 @@ const toReceivedPitch = (r: PitchWithDesignerRow): ReceivedPitch => ({
   },
 });
 
-/** The pitch count, as a correlated subquery so one round trip serves a list. */
-const PITCH_COUNT = '(SELECT COUNT(*) FROM pitches WHERE brief_id = b.id)';
+/**
+ * The bid count, as a correlated subquery so one round trip serves a list.
+ *
+ * Drafts are excluded: a bid nobody has sent is not a bid, and counting them
+ * would tell a buyer they have interest they cannot see, and tell a designer
+ * the board is busier than it is.
+ */
+const PITCH_COUNT =
+  "(SELECT COUNT(*) FROM pitches WHERE brief_id = b.id AND status = 'submitted')";
 
 /** `%` and `_` are wildcards; a location typed with one must match literally. */
 const escapeLike = (value: string): string =>
@@ -194,7 +201,7 @@ export async function listOpenBriefs(
  * Public detail for one brief.
  *
  * A `draft` is nobody's business but its author's, so it reads as missing.
- * Closed and awarded briefs stay readable: designers who pitched must still be
+ * Closed briefs stay readable: designers who bid must still be
  * able to see what they answered.
  */
 export async function findPublicBrief(id: number): Promise<PublicBrief | null> {
@@ -501,4 +508,63 @@ export function isDuplicatePitchError(error: unknown): boolean {
     code === 'SQLITE_CONSTRAINT_UNIQUE' ||
     /UNIQUE constraint failed:\s*pitches/i.test(message)
   );
+}
+
+/** One bid by id, regardless of owner. Callers check ownership. */
+export async function findPitchById(id: number): Promise<Pitch | null> {
+  const db = await openDbConnection();
+  try {
+    const row = db
+      .query('SELECT * FROM pitches WHERE id = ?')
+      .get(id) as PitchRow | null;
+    return row ? toPitch(row) : null;
+  } finally {
+    db.close();
+  }
+}
+
+/** Edit a draft bid in place. */
+export async function updatePitch(
+  id: number,
+  fields: PitchFields,
+): Promise<Pitch> {
+  const db = await openDbConnection();
+  try {
+    db.run(
+      `UPDATE pitches
+          SET message = ?, budget_band = ?, availability = ?,
+              updated_at = datetime('now')
+        WHERE id = ?`,
+      [fields.message, fields.budgetBand, fields.availability, id],
+    );
+    return toPitch(
+      db.query('SELECT * FROM pitches WHERE id = ?').get(id) as PitchRow,
+    );
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Send a draft bid.
+ *
+ * The status guard is in the WHERE clause as well as the caller, so two
+ * concurrent submits cannot both stamp a submitted_at.
+ */
+export async function submitPitch(id: number): Promise<Pitch> {
+  const db = await openDbConnection();
+  try {
+    db.run(
+      `UPDATE pitches
+          SET status = 'submitted', submitted_at = datetime('now'),
+              updated_at = datetime('now')
+        WHERE id = ? AND status = 'draft'`,
+      [id],
+    );
+    return toPitch(
+      db.query('SELECT * FROM pitches WHERE id = ?').get(id) as PitchRow,
+    );
+  } finally {
+    db.close();
+  }
 }

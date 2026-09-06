@@ -240,8 +240,17 @@ const CHECK_CASES: Array<{
   {
     table: 'pitches',
     column: 'status',
-    bad: 'archived',
-    good: 'shortlisted',
+    // 'shortlisted' was one of six speculative states SEAN-185 removed; it is
+    // now as invalid as anything else nobody built a behaviour for.
+    bad: 'shortlisted',
+    good: 'submitted',
+  },
+  {
+    table: 'briefs',
+    column: 'status',
+    // 'awarded' went the same way: nothing could ever produce it.
+    bad: 'awarded',
+    good: 'open',
   },
 ];
 
@@ -267,9 +276,10 @@ describe('CHECK constraints actually bite', () => {
     });
   }
 
-  test('covers every CHECK constraint in the migration', () => {
-    // 16 CHECKs shipped in 001; a new one must arrive with a case here.
-    expect(CHECK_CASES.length).toBe(16);
+  test('covers every CHECK constraint in the migrations', () => {
+    // 16 CHECKs shipped in 001, plus briefs.status re-declared by 003 and
+    // covered here explicitly. A new or changed one must arrive with a case.
+    expect(CHECK_CASES.length).toBe(17);
   });
 });
 
