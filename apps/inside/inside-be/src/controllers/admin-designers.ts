@@ -57,7 +57,10 @@ export async function adminDesignerRoutes(
     const id = Number((request.params as { id: string }).id);
     const found = await findProfileForReview(id);
     if (!found) return reply.status(404).send({ error: 'Not found' });
-    return { profile: found.profile, projects: found.projects };
+    return {
+      profile: found.profile,
+      portfolio_projects: found.portfolio_projects,
+    };
   });
 
   for (const decision of ['approve', 'reject'] as ReviewDecision[]) {

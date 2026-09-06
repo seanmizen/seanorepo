@@ -1,4 +1,8 @@
-import type { DesignerProfile, Project, ProjectImage } from '@shared/types';
+import type {
+  DesignerProfile,
+  PortfolioProject,
+  PortfolioProjectImage,
+} from '@shared/types';
 import { openDbConnection } from './db';
 import { reindexDesigner, reindexDesignerForProject } from './search';
 
@@ -24,7 +28,7 @@ export interface ProfileRow {
   updated_at: string;
 }
 
-export interface ProjectRow {
+export interface PortfolioProjectRow {
   id: number;
   designer_profile_id: number;
   slug: string;
@@ -32,11 +36,11 @@ export interface ProjectRow {
   summary: string | null;
   description: string | null;
   location: string | null;
-  project_type: Project['projectType'];
-  budget_band: Project['budgetBand'];
+  work_type: PortfolioProject['workType'];
+  budget_band: PortfolioProject['budgetBand'];
   completed_year: number | null;
   cover_image_id: number | null;
-  status: Project['status'];
+  status: PortfolioProject['status'];
   display_order: number;
   created_at: string;
   updated_at: string;
@@ -44,7 +48,7 @@ export interface ProjectRow {
 
 interface ProjectImageRow {
   id: number;
-  project_id: number;
+  portfolio_project_id: number;
   image_id: number;
   caption: string | null;
   display_order: number;
@@ -76,7 +80,7 @@ export const toProfile = (r: ProfileRow): DesignerProfile => ({
   updatedAt: r.updated_at,
 });
 
-export const toProject = (r: ProjectRow): Project => ({
+export const toProject = (r: PortfolioProjectRow): PortfolioProject => ({
   id: r.id,
   designerProfileId: r.designer_profile_id,
   slug: r.slug,
@@ -84,7 +88,7 @@ export const toProject = (r: ProjectRow): Project => ({
   summary: r.summary,
   description: r.description,
   location: r.location,
-  projectType: r.project_type,
+  workType: r.work_type,
   budgetBand: r.budget_band,
   completedYear: r.completed_year,
   coverImageId: r.cover_image_id,
@@ -94,9 +98,9 @@ export const toProject = (r: ProjectRow): Project => ({
   updatedAt: r.updated_at,
 });
 
-const toProjectImage = (r: ProjectImageRow): ProjectImage => ({
+const toProjectImage = (r: ProjectImageRow): PortfolioProjectImage => ({
   id: r.id,
-  projectId: r.project_id,
+  portfolioProjectId: r.portfolio_project_id,
   imageId: r.image_id,
   caption: r.caption,
   displayOrder: r.display_order,
@@ -237,26 +241,30 @@ export async function submitProfileForReview(
 export async function listProjects(
   profileId: number,
   { publishedOnly = false }: { publishedOnly?: boolean } = {},
-): Promise<Project[]> {
+): Promise<PortfolioProject[]> {
   const db = await openDbConnection();
   try {
     const sql = publishedOnly
-      ? `SELECT * FROM projects WHERE designer_profile_id = ? AND status = 'published'
+      ? `SELECT * FROM portfolio_projects WHERE designer_profile_id = ? AND status = 'published'
          ORDER BY display_order ASC, id ASC`
-      : `SELECT * FROM projects WHERE designer_profile_id = ?
+      : `SELECT * FROM portfolio_projects WHERE designer_profile_id = ?
          ORDER BY display_order ASC, id ASC`;
-    return (db.query(sql).all(profileId) as ProjectRow[]).map(toProject);
+    return (db.query(sql).all(profileId) as PortfolioProjectRow[]).map(
+      toProject,
+    );
   } finally {
     db.close();
   }
 }
 
-export async function findProject(id: number): Promise<Project | null> {
+export async function findProject(
+  id: number,
+): Promise<PortfolioProject | null> {
   const db = await openDbConnection();
   try {
     const row = db
-      .query('SELECT * FROM projects WHERE id = ?')
-      .get(id) as ProjectRow | null;
+      .query('SELECT * FROM portfolio_projects WHERE id = ?')
+      .get(id) as PortfolioProjectRow | null;
     return row ? toProject(row) : null;
   } finally {
     db.close();
@@ -267,16 +275,16 @@ export async function insertProject(
   profileId: number,
   slug: string,
   fields: Record<string, unknown>,
-): Promise<Project> {
+): Promise<PortfolioProject> {
   const db = await openDbConnection();
-  let row: ProjectRow;
+  let row: PortfolioProjectRow;
   try {
     db.run(
-      `INSERT INTO projects
+      `INSERT INTO portfolio_projects
         (designer_profile_id, slug, title, summary, description, location,
-         project_type, budget_band, completed_year, status, display_order)
+         work_type, budget_band, completed_year, status, display_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         COALESCE((SELECT MAX(display_order) + 1 FROM projects WHERE designer_profile_id = ?), 0))`,
+         COALESCE((SELECT MAX(display_order) + 1 FROM portfolio_projects WHERE designer_profile_id = ?), 0))`,
       [
         profileId,
         slug,
@@ -284,7 +292,7 @@ export async function insertProject(
         fields.summary as string | null,
         fields.description as string | null,
         fields.location as string | null,
-        fields.projectType as string | null,
+        fields.workType as string | null,
         fields.budgetBand as string | null,
         fields.completedYear as number | null,
         (fields.status as string) ?? 'draft',
@@ -292,8 +300,8 @@ export async function insertProject(
       ],
     );
     row = db
-      .query('SELECT * FROM projects WHERE slug = ?')
-      .get(slug) as ProjectRow;
+      .query('SELECT * FROM portfolio_projects WHERE slug = ?')
+      .get(slug) as PortfolioProjectRow;
   } finally {
     db.close();
   }
@@ -305,14 +313,14 @@ export async function insertProject(
 export async function updateProject(
   id: number,
   fields: Record<string, unknown>,
-): Promise<Project> {
+): Promise<PortfolioProject> {
   const db = await openDbConnection();
-  let row: ProjectRow;
+  let row: PortfolioProjectRow;
   try {
     db.run(
-      `UPDATE projects SET
+      `UPDATE portfolio_projects SET
          title = ?, summary = ?, description = ?, location = ?,
-         project_type = ?, budget_band = ?, completed_year = ?, status = ?,
+         work_type = ?, budget_band = ?, completed_year = ?, status = ?,
          display_order = ?, updated_at = datetime('now')
        WHERE id = ?`,
       [
@@ -320,7 +328,7 @@ export async function updateProject(
         fields.summary as string | null,
         fields.description as string | null,
         fields.location as string | null,
-        fields.projectType as string | null,
+        fields.workType as string | null,
         fields.budgetBand as string | null,
         fields.completedYear as number | null,
         fields.status as string,
@@ -328,7 +336,9 @@ export async function updateProject(
         id,
       ],
     );
-    row = db.query('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow;
+    row = db
+      .query('SELECT * FROM portfolio_projects WHERE id = ?')
+      .get(id) as PortfolioProjectRow;
   } finally {
     db.close();
   }
@@ -345,9 +355,11 @@ export async function deleteProject(id: number): Promise<void> {
     // The owner has to be read before the row goes, or there is nothing left
     // to reindex and the title lingers in search forever.
     owner = db
-      .query('SELECT designer_profile_id AS id FROM projects WHERE id = ?')
+      .query(
+        'SELECT designer_profile_id AS id FROM portfolio_projects WHERE id = ?',
+      )
       .get(id) as { id: number } | null;
-    db.run('DELETE FROM projects WHERE id = ?', [id]);
+    db.run('DELETE FROM portfolio_projects WHERE id = ?', [id]);
   } finally {
     db.close();
   }
@@ -355,17 +367,17 @@ export async function deleteProject(id: number): Promise<void> {
 }
 
 export async function listProjectImages(
-  projectId: number,
-): Promise<ProjectImage[]> {
+  portfolioProjectId: number,
+): Promise<PortfolioProjectImage[]> {
   const db = await openDbConnection();
   try {
     return (
       db
         .query(
-          `SELECT * FROM project_images WHERE project_id = ?
+          `SELECT * FROM portfolio_project_images WHERE portfolio_project_id = ?
            ORDER BY display_order ASC, id ASC`,
         )
-        .all(projectId) as ProjectImageRow[]
+        .all(portfolioProjectId) as ProjectImageRow[]
     ).map(toProjectImage);
   } finally {
     db.close();
@@ -380,19 +392,22 @@ export async function listProjectImages(
  * would leave the portfolio in an order the designer never chose.
  */
 export async function setProjectImages(
-  projectId: number,
+  portfolioProjectId: number,
   images: Array<{ imageId: number; caption: string | null }>,
-): Promise<ProjectImage[]> {
+): Promise<PortfolioProjectImage[]> {
   const db = await openDbConnection();
   try {
     db.run('PRAGMA foreign_keys = ON');
     const apply = db.transaction(() => {
-      db.run('DELETE FROM project_images WHERE project_id = ?', [projectId]);
+      db.run(
+        'DELETE FROM portfolio_project_images WHERE portfolio_project_id = ?',
+        [portfolioProjectId],
+      );
       images.forEach((image, index) => {
         db.run(
-          `INSERT INTO project_images (project_id, image_id, caption, display_order)
+          `INSERT INTO portfolio_project_images (portfolio_project_id, image_id, caption, display_order)
            VALUES (?, ?, ?, ?)`,
-          [projectId, image.imageId, image.caption, index],
+          [portfolioProjectId, image.imageId, image.caption, index],
         );
       });
     });
@@ -401,10 +416,10 @@ export async function setProjectImages(
     return (
       db
         .query(
-          `SELECT * FROM project_images WHERE project_id = ?
+          `SELECT * FROM portfolio_project_images WHERE portfolio_project_id = ?
            ORDER BY display_order ASC, id ASC`,
         )
-        .all(projectId) as ProjectImageRow[]
+        .all(portfolioProjectId) as ProjectImageRow[]
     ).map(toProjectImage);
   } finally {
     db.close();

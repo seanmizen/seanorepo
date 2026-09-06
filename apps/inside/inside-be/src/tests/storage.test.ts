@@ -46,9 +46,9 @@ describe('StorageProvider contract', () => {
 
   test('creates nested folders on demand', async () => {
     const { path } = await storage.upload(Buffer.from('n'), 'storage-e.txt', {
-      folder: 'projects/covers',
+      folder: 'portfolio_projects/covers',
     });
-    expect(path).toBe('projects/covers/storage-e.txt');
+    expect(path).toBe('portfolio_projects/covers/storage-e.txt');
     expect(await storage.exists(path)).toBe(true);
   });
 });

@@ -1,11 +1,11 @@
 import type {
+  Bid,
   Brief,
   BriefStatus,
   OwnedBrief,
-  Pitch,
   PublicBrief,
-  ReceivedPitch,
-  SentPitch,
+  ReceivedBid,
+  SentBid,
 } from '@shared/types';
 import { openDbConnection } from './db';
 import { sqliteNow } from './validation';
@@ -13,7 +13,7 @@ import { sqliteNow } from './validation';
 /**
  * Post-a-project data access.
  *
- * `briefs` are homeowners' posted jobs and `pitches` are designers' responses
+ * `briefs` are homeowners' posted jobs and `bids` are designers' responses
  * to them — neither is a portfolio `project`, which lives in `designers.ts`.
  */
 
@@ -23,7 +23,7 @@ interface BriefRow {
   buyer_id: number | null;
   title: string;
   description: string;
-  project_type: Brief['projectType'];
+  work_type: Brief['workType'];
   budget_band: Brief['budgetBand'];
   location: string | null;
   timeline: Brief['timeline'];
@@ -34,27 +34,27 @@ interface BriefRow {
   updated_at: string;
 }
 
-type CountedBriefRow = BriefRow & { pitch_count: number };
+type CountedBriefRow = BriefRow & { bid_count: number };
 
-interface PitchRow {
+interface BidRow {
   id: number;
   brief_id: number;
   designer_profile_id: number;
   message: string;
-  budget_band: Pitch['budgetBand'];
-  availability: Pitch['availability'];
-  status: Pitch['status'];
+  budget_band: Bid['budgetBand'];
+  availability: Bid['availability'];
+  status: Bid['status'];
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-type PitchWithDesignerRow = PitchRow & {
+type BidWithDesignerRow = BidRow & {
   designer_slug: string;
   designer_studio_name: string;
   designer_headline: string | null;
   designer_location: string | null;
-  designer_budget_band: Pitch['budgetBand'];
+  designer_budget_band: Bid['budgetBand'];
 };
 
 const toBrief = (r: BriefRow): Brief => ({
@@ -62,7 +62,7 @@ const toBrief = (r: BriefRow): Brief => ({
   buyerId: r.buyer_id,
   title: r.title,
   description: r.description,
-  projectType: r.project_type,
+  workType: r.work_type,
   budgetBand: r.budget_band,
   location: r.location,
   timeline: r.timeline,
@@ -75,7 +75,7 @@ const toBrief = (r: BriefRow): Brief => ({
 
 const toOwnedBrief = (r: CountedBriefRow): OwnedBrief => ({
   ...toBrief(r),
-  pitchCount: r.pitch_count,
+  bidCount: r.bid_count,
 });
 
 /**
@@ -88,7 +88,7 @@ const toPublicBrief = (r: CountedBriefRow): PublicBrief => ({
   id: r.id,
   title: r.title,
   description: r.description,
-  projectType: r.project_type,
+  workType: r.work_type,
   budgetBand: r.budget_band,
   location: r.location,
   timeline: r.timeline,
@@ -97,10 +97,10 @@ const toPublicBrief = (r: CountedBriefRow): PublicBrief => ({
   publishedAt: r.published_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
-  pitchCount: r.pitch_count,
+  bidCount: r.bid_count,
 });
 
-const toPitch = (r: PitchRow): Pitch => ({
+const toBid = (r: BidRow): Bid => ({
   id: r.id,
   briefId: r.brief_id,
   designerProfileId: r.designer_profile_id,
@@ -113,8 +113,8 @@ const toPitch = (r: PitchRow): Pitch => ({
   updatedAt: r.updated_at,
 });
 
-const toReceivedPitch = (r: PitchWithDesignerRow): ReceivedPitch => ({
-  ...toPitch(r),
+const toReceivedBid = (r: BidWithDesignerRow): ReceivedBid => ({
+  ...toBid(r),
   designer: {
     id: r.designer_profile_id,
     slug: r.designer_slug,
@@ -132,15 +132,15 @@ const toReceivedPitch = (r: PitchWithDesignerRow): ReceivedPitch => ({
  * would tell a buyer they have interest they cannot see, and tell a designer
  * the board is busier than it is.
  */
-const PITCH_COUNT =
-  "(SELECT COUNT(*) FROM pitches WHERE brief_id = b.id AND status = 'submitted')";
+const BID_COUNT =
+  "(SELECT COUNT(*) FROM bids WHERE brief_id = b.id AND status = 'submitted')";
 
 /** `%` and `_` are wildcards; a location typed with one must match literally. */
 const escapeLike = (value: string): string =>
   value.replace(/[\\%_]/g, (char) => `\\${char}`);
 
 export interface BriefFilters {
-  projectType?: string | null;
+  workType?: string | null;
   budgetBand?: string | null;
   location?: string | null;
   limit: number;
@@ -160,9 +160,9 @@ export async function listOpenBriefs(
   const clauses = ["b.status = 'open'"];
   const params: Array<string | number> = [];
 
-  if (filters.projectType) {
-    clauses.push('b.project_type = ?');
-    params.push(filters.projectType);
+  if (filters.workType) {
+    clauses.push('b.work_type = ?');
+    params.push(filters.workType);
   }
   if (filters.budgetBand) {
     clauses.push('b.budget_band = ?');
@@ -184,7 +184,7 @@ export async function listOpenBriefs(
 
     const rows = db
       .query(
-        `SELECT b.*, ${PITCH_COUNT} AS pitch_count FROM briefs b
+        `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b
          WHERE ${where}
          ORDER BY b.created_at DESC, b.id DESC
          LIMIT ? OFFSET ?`,
@@ -209,7 +209,7 @@ export async function findPublicBrief(id: number): Promise<PublicBrief | null> {
   try {
     const row = db
       .query(
-        `SELECT b.*, ${PITCH_COUNT} AS pitch_count FROM briefs b
+        `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b
          WHERE b.id = ? AND b.status != 'draft'`,
       )
       .get(id) as CountedBriefRow | null;
@@ -237,7 +237,7 @@ export async function findOwnedBrief(id: number): Promise<OwnedBrief | null> {
   try {
     const row = db
       .query(
-        `SELECT b.*, ${PITCH_COUNT} AS pitch_count FROM briefs b WHERE b.id = ?`,
+        `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b WHERE b.id = ?`,
       )
       .get(id) as CountedBriefRow | null;
     return row ? toOwnedBrief(row) : null;
@@ -255,7 +255,7 @@ export async function listBriefsByBuyer(
     return (
       db
         .query(
-          `SELECT b.*, ${PITCH_COUNT} AS pitch_count FROM briefs b
+          `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b
            WHERE b.buyer_id = ?
            ORDER BY b.created_at DESC, b.id DESC`,
         )
@@ -269,7 +269,7 @@ export async function listBriefsByBuyer(
 export interface BriefFields {
   title: string;
   description: string;
-  projectType: string | null;
+  workType: string | null;
   budgetBand: string | null;
   location: string | null;
   timeline: string | null;
@@ -286,14 +286,14 @@ export async function insertBrief(
   try {
     db.run(
       `INSERT INTO briefs
-        (buyer_id, title, description, project_type, budget_band, location,
+        (buyer_id, title, description, work_type, budget_band, location,
          timeline, status, closes_at, published_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         buyerId,
         fields.title,
         fields.description,
-        fields.projectType,
+        fields.workType,
         fields.budgetBand,
         fields.location,
         fields.timeline,
@@ -307,7 +307,7 @@ export async function insertBrief(
     ).id;
     const row = db
       .query(
-        `SELECT b.*, ${PITCH_COUNT} AS pitch_count FROM briefs b WHERE b.id = ?`,
+        `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b WHERE b.id = ?`,
       )
       .get(id) as CountedBriefRow;
     return toOwnedBrief(row);
@@ -318,7 +318,7 @@ export async function insertBrief(
 
 /**
  * Content edits only. Status moves through `setBriefStatus` so that publishing
- * and closing — the transitions that decide whether pitches are accepted —
+ * and closing — the transitions that decide whether bids are accepted —
  * cannot happen as a side effect of a typo fix.
  */
 export async function updateBrief(
@@ -329,13 +329,13 @@ export async function updateBrief(
   try {
     db.run(
       `UPDATE briefs SET
-         title = ?, description = ?, project_type = ?, budget_band = ?,
+         title = ?, description = ?, work_type = ?, budget_band = ?,
          location = ?, timeline = ?, closes_at = ?, updated_at = datetime('now')
        WHERE id = ?`,
       [
         fields.title,
         fields.description,
-        fields.projectType,
+        fields.workType,
         fields.budgetBand,
         fields.location,
         fields.timeline,
@@ -378,60 +378,60 @@ export async function deleteBrief(id: number): Promise<void> {
   }
 }
 
-const PITCH_WITH_DESIGNER = `SELECT p.*,
+const BID_WITH_DESIGNER = `SELECT p.*,
     d.slug AS designer_slug,
     d.studio_name AS designer_studio_name,
     d.headline AS designer_headline,
     d.location AS designer_location,
     d.budget_band AS designer_budget_band
-  FROM pitches p
+  FROM bids p
   JOIN designer_profiles d ON d.id = p.designer_profile_id`;
 
 /**
- * Every pitch on one brief.
+ * Every bid on one brief.
  *
  * Served only to that brief's owner — the caller proves ownership before
  * calling, because this returns identifying detail about every designer who
  * responded.
  */
-export async function listPitchesForBrief(
+export async function listBidsForBrief(
   briefId: number,
-): Promise<ReceivedPitch[]> {
+): Promise<ReceivedBid[]> {
   const db = await openDbConnection();
   try {
     return (
       db
         .query(
-          `${PITCH_WITH_DESIGNER}
+          `${BID_WITH_DESIGNER}
            WHERE p.brief_id = ?
            ORDER BY p.created_at DESC, p.id DESC`,
         )
-        .all(briefId) as PitchWithDesignerRow[]
-    ).map(toReceivedPitch);
+        .all(briefId) as BidWithDesignerRow[]
+    ).map(toReceivedBid);
   } finally {
     db.close();
   }
 }
 
-/** A designer's own pitches, each with the brief it answers. */
-export async function listPitchesByDesigner(
+/** A designer's own bids, each with the brief it answers. */
+export async function listBidsByDesigner(
   designerProfileId: number,
-): Promise<SentPitch[]> {
+): Promise<SentBid[]> {
   const db = await openDbConnection();
   try {
-    const pitches = db
+    const bids = db
       .query(
-        `SELECT * FROM pitches WHERE designer_profile_id = ?
+        `SELECT * FROM bids WHERE designer_profile_id = ?
          ORDER BY created_at DESC, id DESC`,
       )
-      .all(designerProfileId) as PitchRow[];
+      .all(designerProfileId) as BidRow[];
 
     const briefQuery = db.query(
-      `SELECT b.*, ${PITCH_COUNT} AS pitch_count FROM briefs b WHERE b.id = ?`,
+      `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b WHERE b.id = ?`,
     );
 
-    return pitches.map((row) => ({
-      ...toPitch(row),
+    return bids.map((row) => ({
+      ...toBid(row),
       // The FK is NOT NULL and cascades, so the brief always exists here.
       brief: toPublicBrief(briefQuery.get(row.brief_id) as CountedBriefRow),
     }));
@@ -440,38 +440,38 @@ export async function listPitchesByDesigner(
   }
 }
 
-export async function findPitch(
+export async function findBid(
   briefId: number,
   designerProfileId: number,
-): Promise<Pitch | null> {
+): Promise<Bid | null> {
   const db = await openDbConnection();
   try {
     const row = db
       .query(
-        'SELECT * FROM pitches WHERE brief_id = ? AND designer_profile_id = ?',
+        'SELECT * FROM bids WHERE brief_id = ? AND designer_profile_id = ?',
       )
-      .get(briefId, designerProfileId) as PitchRow | null;
-    return row ? toPitch(row) : null;
+      .get(briefId, designerProfileId) as BidRow | null;
+    return row ? toBid(row) : null;
   } finally {
     db.close();
   }
 }
 
-export interface PitchFields {
+export interface BidFields {
   message: string;
   budgetBand: string | null;
   availability: string | null;
 }
 
-export async function insertPitch(
+export async function insertBid(
   briefId: number,
   designerProfileId: number,
-  fields: PitchFields,
-): Promise<Pitch> {
+  fields: BidFields,
+): Promise<Bid> {
   const db = await openDbConnection();
   try {
     db.run(
-      `INSERT INTO pitches
+      `INSERT INTO bids
         (brief_id, designer_profile_id, message, budget_band, availability)
        VALUES (?, ?, ?, ?, ?)`,
       [
@@ -484,10 +484,10 @@ export async function insertPitch(
     );
     const row = db
       .query(
-        'SELECT * FROM pitches WHERE brief_id = ? AND designer_profile_id = ?',
+        'SELECT * FROM bids WHERE brief_id = ? AND designer_profile_id = ?',
       )
-      .get(briefId, designerProfileId) as PitchRow;
-    return toPitch(row);
+      .get(briefId, designerProfileId) as BidRow;
+    return toBid(row);
   } finally {
     db.close();
   }
@@ -497,49 +497,44 @@ export async function insertPitch(
  * True when the database refused a write because of the
  * `UNIQUE (brief_id, designer_profile_id)` constraint.
  *
- * The pre-check for an existing pitch handles the ordinary case; this catches
+ * The pre-check for an existing bid handles the ordinary case; this catches
  * the race between two concurrent submissions, which would otherwise surface
  * as a 500 with raw SQLite text in it.
  */
-export function isDuplicatePitchError(error: unknown): boolean {
+export function isDuplicateBidError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const code = (error as { code?: string } | null)?.code ?? '';
   return (
     code === 'SQLITE_CONSTRAINT_UNIQUE' ||
-    /UNIQUE constraint failed:\s*pitches/i.test(message)
+    /UNIQUE constraint failed:\s*bids/i.test(message)
   );
 }
 
 /** One bid by id, regardless of owner. Callers check ownership. */
-export async function findPitchById(id: number): Promise<Pitch | null> {
+export async function findBidById(id: number): Promise<Bid | null> {
   const db = await openDbConnection();
   try {
     const row = db
-      .query('SELECT * FROM pitches WHERE id = ?')
-      .get(id) as PitchRow | null;
-    return row ? toPitch(row) : null;
+      .query('SELECT * FROM bids WHERE id = ?')
+      .get(id) as BidRow | null;
+    return row ? toBid(row) : null;
   } finally {
     db.close();
   }
 }
 
 /** Edit a draft bid in place. */
-export async function updatePitch(
-  id: number,
-  fields: PitchFields,
-): Promise<Pitch> {
+export async function updateBid(id: number, fields: BidFields): Promise<Bid> {
   const db = await openDbConnection();
   try {
     db.run(
-      `UPDATE pitches
+      `UPDATE bids
           SET message = ?, budget_band = ?, availability = ?,
               updated_at = datetime('now')
         WHERE id = ?`,
       [fields.message, fields.budgetBand, fields.availability, id],
     );
-    return toPitch(
-      db.query('SELECT * FROM pitches WHERE id = ?').get(id) as PitchRow,
-    );
+    return toBid(db.query('SELECT * FROM bids WHERE id = ?').get(id) as BidRow);
   } finally {
     db.close();
   }
@@ -551,19 +546,17 @@ export async function updatePitch(
  * The status guard is in the WHERE clause as well as the caller, so two
  * concurrent submits cannot both stamp a submitted_at.
  */
-export async function submitPitch(id: number): Promise<Pitch> {
+export async function submitBid(id: number): Promise<Bid> {
   const db = await openDbConnection();
   try {
     db.run(
-      `UPDATE pitches
+      `UPDATE bids
           SET status = 'submitted', submitted_at = datetime('now'),
               updated_at = datetime('now')
         WHERE id = ? AND status = 'draft'`,
       [id],
     );
-    return toPitch(
-      db.query('SELECT * FROM pitches WHERE id = ?').get(id) as PitchRow,
-    );
+    return toBid(db.query('SELECT * FROM bids WHERE id = ?').get(id) as BidRow);
   } finally {
     db.close();
   }

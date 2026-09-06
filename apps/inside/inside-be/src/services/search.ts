@@ -5,13 +5,13 @@ import { openDbConnection } from './db';
  *
  * The index lives in `designer_search` (migration 002). One document per
  * profile, keyed by `rowid = designer_profiles.id`, holding the studio name,
- * headline, bio, location and the titles of the designer's published projects.
+ * headline, bio, location and the titles of the designer's published portfolio_projects.
  *
  * INDEX MAINTENANCE — rebuild on write, not triggers.
  *
- * A designer's document folds in the titles of their published projects, so a
+ * A designer's document folds in the titles of their published portfolio_projects, so a
  * trigger would have to re-aggregate across two tables on every insert, update
- * and delete of `projects`, in SQL, duplicated three times, and again for the
+ * and delete of `portfolio_projects`, in SQL, duplicated three times, and again for the
  * profile's own columns. Writes here all pass through `services/designers.ts`,
  * so one `reindexDesigner()` call per write path is a single readable
  * implementation instead of six trigger bodies that can drift apart. It is
@@ -75,7 +75,7 @@ export function buildMatchExpression(raw: string): string | null {
  * bm25 weights, in the column order of `designer_search`.
  *
  * A hit on the studio name is what the buyer typed if they know who they are
- * looking for, so it outranks everything. Project titles and headline come
+ * looking for, so it outranks everything. PortfolioProject titles and headline come
  * next — both are curated, deliberate text. The bio is long and rambling, so a
  * hit there is weak evidence and is weighted down accordingly.
  *
@@ -101,7 +101,7 @@ const REINDEX_SELECT = `
     COALESCE(p.location, ''),
     COALESCE(
       (SELECT group_concat(pr.title, ' ')
-       FROM projects pr
+       FROM portfolio_projects pr
        WHERE pr.designer_profile_id = p.id AND pr.status = 'published'),
       ''
     )
@@ -133,7 +133,7 @@ export async function reindexDesigner(profileId: number): Promise<void> {
 }
 
 /**
- * Rebuild the document of whichever designer owns `projectId`.
+ * Rebuild the document of whichever designer owns `portfolioProjectId`.
  *
  * Resolving the owner here keeps every project write path down to one call and
  * means no caller has to remember that a project edit changes a *designer's*
@@ -141,14 +141,16 @@ export async function reindexDesigner(profileId: number): Promise<void> {
  * a no-op — callers that delete must capture the owner first.
  */
 export async function reindexDesignerForProject(
-  projectId: number,
+  portfolioProjectId: number,
 ): Promise<void> {
   const db = await openDbConnection();
   let ownerId: number | null;
   try {
     const row = db
-      .query('SELECT designer_profile_id AS id FROM projects WHERE id = ?')
-      .get(projectId) as { id: number } | null;
+      .query(
+        'SELECT designer_profile_id AS id FROM portfolio_projects WHERE id = ?',
+      )
+      .get(portfolioProjectId) as { id: number } | null;
     ownerId = row?.id ?? null;
   } finally {
     db.close();

@@ -2,13 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../middleware/auth';
 import { adminDesignerRoutes } from './admin-designers';
 import { authRoutes } from './auth';
+import { bidRoutes } from './bids';
 import { briefRoutes } from './briefs';
 import { configRoutes } from './config';
 import { designerRoutes } from './designers';
 import { discoveryRoutes } from './discovery';
 import { healthRoutes } from './health';
 import { imageRoutes } from './images';
-import { pitchRoutes } from './pitches';
 
 /** Everything under /api. */
 export async function routes(fastify: FastifyInstance): Promise<void> {
@@ -22,9 +22,9 @@ export async function routes(fastify: FastifyInstance): Promise<void> {
   fastify.register(discoveryRoutes);
   fastify.register(imageRoutes);
 
-  // Post-a-project: the buyer posts briefs, the designer pitches on them.
+  // Post-a-project: the buyer posts briefs, the designer bids on them.
   fastify.register(briefRoutes);
-  fastify.register(pitchRoutes);
+  fastify.register(bidRoutes);
 
   // Admin routes live in their own encapsulated scope with the guard attached
   // as an onRequest hook, so every child route is protected by construction —
