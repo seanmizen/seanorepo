@@ -55,6 +55,7 @@ touching `apps/inside`.
 | `yarn workspace inside test:types` | `tsc --noEmit` on **both** FE and BE |
 | `yarn workspace inside test:unit` | backend `bun test` |
 | `yarn workspace inside test:e2e` | Playwright against a real FE + BE |
+| `yarn workspace inside test:axe` | axe WCAG 2.1 AA scan of every route, light and dark |
 | `yarn workspace inside test:all` | everything |
 
 ### What to test where
@@ -99,6 +100,17 @@ touching `apps/inside`.
   generated and will churn.
 - Assert no console errors on any page you add. `smoke.spec.ts` shows the
   pattern.
+- **Every new route goes into `a11y.spec.ts` and `keyboard.spec.ts`.** The axe
+  scan runs each route in *both* themes — dark-mode contrast is what usually
+  breaks — and must report zero WCAG 2.1 AA violations. `test:e2e` excludes the
+  `@axe` tag and `test:axe` selects it, so the two never run twice.
+- Keyboard cover is separate because axe cannot see it: whether a control is
+  reachable by Tab and whether focus is *visible* are runtime properties. The
+  focus ring is a theme concern — `app/theme.ts` defines it once for everything
+  focusable. Do not restyle focus per component.
+- Share fixtures via `tests/e2e/helpers.ts` (`signIn`, `uniqueEmail`,
+  `waitForApp`). `signIn` must not return until the URL has left *both*
+  `/login` and `/verify`, or the sign-in silently doesn't stick.
 
 ### Bar for new work
 
