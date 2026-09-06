@@ -6,7 +6,7 @@ project managers browse and get in touch. Positioning is high-brow and luxury.
 
 ## Ports
 
-| | Cloudflared | Fly.io (reserved) |
+| | Cloudflared | Fly.io |
 |---|---|---|
 | Frontend | 4060 | 5060 |
 | Backend | 4061 | 5061 |
@@ -48,3 +48,39 @@ runs.
 Local disk today; the S3 swap is a new provider plus `STORAGE_TYPE=s3`, with
 nothing above it changing. Image resizing lives in `services/images.ts`, above
 the provider, so the provider stays a pure blob store.
+
+## Deployment
+
+Two targets, and they are not peers.
+
+**Cloudflared (home server, 4060/4061) is the real deployment.** The SQLite
+file and the uploads directory are named Docker volumes there, so they survive
+rebuilds. This is where the data lives.
+
+**Fly.io (5060/5061) is a stateless mirror.** No Fly volume is attached, so the
+database and every uploaded asset are lost on each deploy or machine restart —
+`auto_stop_machines` is on, so that is often. The app boots, migrates an empty
+schema and serves; it just does not remember anything.
+
+That is a deliberate choice, not an oversight:
+
+- The Fly image is one container shared by every site in the monorepo
+  (`utils/fly-io/dockerfile`). A volume attaches to a single machine in a
+  single region, so adding one for `inside` would pin the whole stack.
+- `carolinemizen.art`, the other app here with a CMS and large uploads, is
+  already deployed the same way.
+- Nothing on Fly is the source of truth. If `inside` ever needs durable cloud
+  storage, the answer is the S3 swap the `StorageProvider` interface is already
+  shaped for, plus a hosted database — not a Fly volume.
+
+Fly needs two secrets, or the backend refuses to boot (by design — see
+`requireSecret` in `inside-be/src/index.ts`):
+
+```bash
+fly secrets set JWT_SECRET=... COOKIE_SECRET=...
+```
+
+The Fly build runs the backend's TypeScript directly rather than bundling it,
+matching `inside-be/dockerfile`. Bundling breaks two things: `runMigrations`
+resolves its `.sql` files relative to its own module path, and `sharp` ships a
+native binary that cannot be inlined.
