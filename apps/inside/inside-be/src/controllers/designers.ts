@@ -3,6 +3,7 @@ import { getAuthUser, requireRole } from '../middleware/auth';
 import * as designers from '../services/designers';
 import { uniqueSlug } from '../services/slugs';
 import {
+  AVAILABILITIES,
   BUDGET_BANDS,
   optionalEnum,
   optionalString,
@@ -24,6 +25,8 @@ const readProfileFields = (body: unknown) => {
     websiteUrl: optionalUrl(b.websiteUrl, 'Website'),
     instagramUrl: optionalUrl(b.instagramUrl, 'Instagram'),
     budgetBand: optionalEnum(b.budgetBand, 'Budget band', BUDGET_BANDS),
+    // Drives the "who can start soon" discovery filter.
+    availability: optionalEnum(b.availability, 'Availability', AVAILABILITIES),
   };
 };
 
