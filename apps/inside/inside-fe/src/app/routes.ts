@@ -31,6 +31,12 @@ export interface RouteDefinition {
   /** The route is behind `ProtectedRoute` and needs a session to resolve. */
   requiresAuth?: boolean;
   /**
+   * The session must also hold this role, or `ProtectedRoute` bounces to home.
+   * The breadcrumb guard reads this to sign in as the right kind of user;
+   * without it an admin route would look like a dead path to a buyer.
+   */
+  requiresRole?: 'designer' | 'admin';
+  /**
    * Representative values for the `:params` in `path`, so the guard can
    * genuinely visit this route and every descendant's version of it.
    */
@@ -46,6 +52,30 @@ export const ROUTES = [
   // deliberately invalid one so it lands on the same state the other specs use.
   { path: '/verify', label: 'sign-in link', search: '?token=nonsense' },
   { path: '/account', label: 'account', requiresAuth: true },
+  // Admin. `/admin` and `/admin/designers` both exist as real pages because
+  // `/admin/designers/:id` implies them, and a breadcrumb link that 404s is a
+  // bug — see the standing rule above.
+  {
+    path: '/admin',
+    label: 'admin',
+    requiresAuth: true,
+    requiresRole: 'admin',
+  },
+  {
+    path: '/admin/designers',
+    label: 'designers',
+    requiresAuth: true,
+    requiresRole: 'admin',
+  },
+  {
+    path: '/admin/designers/:id',
+    label: 'review',
+    requiresAuth: true,
+    requiresRole: 'admin',
+    // The page renders "no longer available" inline for an unknown id rather
+    // than the 404 route, so the guard can visit it without a fixture profile.
+    params: { id: '1' },
+  },
 ] as const satisfies readonly RouteDefinition[];
 
 /** Every path the router serves. A route with no element is a type error. */

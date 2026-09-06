@@ -3,7 +3,7 @@ import { openDbConnection } from './db';
 import { reindexDesigner, reindexDesignerForProject } from './search';
 
 /** Raw column shapes, mapped to the camelCase shared types below. */
-interface ProfileRow {
+export interface ProfileRow {
   id: number;
   user_id: number;
   slug: string;
@@ -24,7 +24,7 @@ interface ProfileRow {
   updated_at: string;
 }
 
-interface ProjectRow {
+export interface ProjectRow {
   id: number;
   designer_profile_id: number;
   slug: string;
@@ -51,7 +51,11 @@ interface ProjectImageRow {
   created_at: string;
 }
 
-const toProfile = (r: ProfileRow): DesignerProfile => ({
+/**
+ * Row -> DesignerProfile. Exported so admin and discovery map identically:
+ * a private copy silently loses any column added later.
+ */
+export const toProfile = (r: ProfileRow): DesignerProfile => ({
   id: r.id,
   userId: r.user_id,
   slug: r.slug,
@@ -72,7 +76,7 @@ const toProfile = (r: ProfileRow): DesignerProfile => ({
   updatedAt: r.updated_at,
 });
 
-const toProject = (r: ProjectRow): Project => ({
+export const toProject = (r: ProjectRow): Project => ({
   id: r.id,
   designerProfileId: r.designer_profile_id,
   slug: r.slug,

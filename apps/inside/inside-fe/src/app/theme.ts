@@ -66,6 +66,22 @@ export const buildTheme = (effectiveMode: EffectiveMode): Theme => {
         contrastText: isDark ? '#121110' : '#ffffff',
       },
       divider: isDark ? 'rgba(236, 232, 226, 0.12)' : 'rgba(26, 26, 24, 0.12)',
+      // MUI's defaults are tuned for a pure-white ground and miss 4.5:1 on
+      // this warm off-white — its warning orange lands at 2.95:1. Overriding
+      // them here fixes every `color="warning"` consumer at once, rather than
+      // each component inventing its own compliant colour.
+      warning: {
+        main: isDark ? '#f0b357' : '#9a5b06',
+        contrastText: isDark ? '#121110' : '#ffffff',
+      },
+      success: {
+        main: isDark ? '#86d691' : '#2e7d32',
+        contrastText: isDark ? '#121110' : '#ffffff',
+      },
+      error: {
+        main: isDark ? '#f4948b' : '#c62828',
+        contrastText: isDark ? '#121110' : '#ffffff',
+      },
     },
     typography: {
       // Headings in a serif to read as editorial rather than dashboard.
