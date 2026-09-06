@@ -39,8 +39,10 @@ test.describe('backend degraded', () => {
   }) => {
     await page.route('**/api/health', (route) => route.abort());
     await page.goto('/');
-    await expect(page.getByText('backend unreachable')).toBeVisible({
-      timeout: 15_000,
-    });
+    // Surfaced by the global status chip rather than inline on the page.
+    await expect(page.getByTestId('status-chip-backend')).toHaveText(
+      /backend down/i,
+      { timeout: 15_000 },
+    );
   });
 });

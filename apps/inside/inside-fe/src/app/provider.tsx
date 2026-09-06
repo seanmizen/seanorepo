@@ -9,6 +9,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { StatusChips } from '@/components';
 import { AuthProvider } from '@/contexts/auth-context';
 import { queryClient } from '@/lib';
 import {
@@ -109,6 +110,8 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
         <ThemeModeContext.Provider value={themeModeValue}>
           <ThemeProvider theme={theme}>
             <CssBaseline enableColorScheme={true} />
+            {/* App-wide, so every route shows the same status. */}
+            <StatusChips />
             <AuthProvider>{children}</AuthProvider>
           </ThemeProvider>
         </ThemeModeContext.Provider>

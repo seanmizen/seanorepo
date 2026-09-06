@@ -1,5 +1,5 @@
-import { Box, Button, Chip, Container, Stack, Typography } from '@mui/material';
-import type { AppConfig, HealthResponse } from '@shared/types';
+import { Box, Button, Container, Stack, Typography } from '@mui/material';
+import type { AppConfig } from '@shared/types';
 import { useQuery } from '@tanstack/react-query';
 import type { FC } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,11 +15,6 @@ const fetchJson = async <T,>(url: string): Promise<T> => {
 
 const App: FC = () => {
   const { user, loading } = useAuth();
-
-  const health = useQuery({
-    queryKey: ['health'],
-    queryFn: () => fetchJson<HealthResponse>(api.endpoints.health),
-  });
 
   const config = useQuery({
     queryKey: ['config'],
@@ -71,25 +66,6 @@ const App: FC = () => {
           A marketplace for architects and interior designers. Under
           construction.
         </Typography>
-
-        <Chip
-          size="small"
-          variant="outlined"
-          color={
-            health.isPending
-              ? 'default'
-              : health.isError
-                ? 'error'
-                : 'secondary'
-          }
-          label={
-            health.isPending
-              ? 'checking backend…'
-              : health.isError
-                ? 'backend unreachable'
-                : `backend ok · up ${health.data.uptime}s`
-          }
-        />
       </Stack>
     </Container>
   );
