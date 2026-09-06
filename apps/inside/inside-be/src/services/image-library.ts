@@ -173,6 +173,49 @@ export async function listImages(
   }
 }
 
+/**
+ * Look up images by id, with their variants, as one batch.
+ *
+ * Discovery needs the same srcset-ready payload this module already returns,
+ * for images it reaches by foreign key rather than by owner — a designer's
+ * cover shot is rendered to anonymous visitors who own nothing. Sharing
+ * `toStoredImage` rather than reshaping rows at the call site is what keeps
+ * there being exactly one image payload on this API.
+ *
+ * Two statements rather than a join, so a row with no variants yet still comes
+ * back (with an empty `variants`) instead of vanishing. Missing ids are simply
+ * absent from the map; callers treat that as "no image".
+ */
+export async function findStoredImages(
+  ids: number[],
+): Promise<Map<number, StoredImage>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+
+  const db = await openDbConnection();
+  try {
+    const placeholders = unique.map(() => '?').join(',');
+    const rows = db
+      .query(`SELECT * FROM images WHERE id IN (${placeholders})`)
+      .all(...unique) as ImageRow[];
+    const variants = db
+      .query(`SELECT * FROM image_variants WHERE image_id IN (${placeholders})`)
+      .all(...unique) as VariantRow[];
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        toStoredImage(
+          row,
+          variants.filter((v) => v.image_id === row.id),
+        ),
+      ]),
+    );
+  } finally {
+    db.close();
+  }
+}
+
 export async function findOwnedImage(
   id: number,
   ownerId: number,

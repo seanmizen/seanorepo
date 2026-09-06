@@ -1,5 +1,6 @@
 import type { DesignerProfile, Project, ProjectImage } from '@shared/types';
 import { openDbConnection } from './db';
+import { reindexDesigner, reindexDesignerForProject } from './search';
 
 /** Raw column shapes, mapped to the camelCase shared types below. */
 interface ProfileRow {
@@ -13,6 +14,7 @@ interface ProfileRow {
   website_url: string | null;
   instagram_url: string | null;
   budget_band: DesignerProfile['budgetBand'];
+  availability: DesignerProfile['availability'];
   cover_image_id: number | null;
   status: DesignerProfile['status'];
   reviewed_at: string | null;
@@ -60,6 +62,7 @@ const toProfile = (r: ProfileRow): DesignerProfile => ({
   websiteUrl: r.website_url,
   instagramUrl: r.instagram_url,
   budgetBand: r.budget_band,
+  availability: r.availability,
   coverImageId: r.cover_image_id,
   status: r.status,
   reviewedAt: r.reviewed_at,
@@ -137,11 +140,12 @@ export async function insertProfile(
   fields: Record<string, unknown>,
 ): Promise<DesignerProfile> {
   const db = await openDbConnection();
+  let row: ProfileRow;
   try {
     db.run(
       `INSERT INTO designer_profiles
-        (user_id, slug, studio_name, headline, bio, location, website_url, instagram_url, budget_band)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, slug, studio_name, headline, bio, location, website_url, instagram_url, budget_band, availability)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
         slug,
@@ -152,15 +156,21 @@ export async function insertProfile(
         fields.websiteUrl as string | null,
         fields.instagramUrl as string | null,
         fields.budgetBand as string | null,
+        fields.availability as string | null,
       ],
     );
-    const row = db
+    row = db
       .query('SELECT * FROM designer_profiles WHERE user_id = ?')
       .get(userId) as ProfileRow;
-    return toProfile(row);
   } finally {
     db.close();
   }
+  // Reindexed on its own connection, after this one is closed — two live
+  // handles writing the same file is how you earn an intermittent SQLITE_BUSY.
+  // The profile is searchable from the moment it exists; the approval gate is
+  // applied at query time, not by withholding the index row.
+  await reindexDesigner(row.id);
+  return toProfile(row);
 }
 
 export async function updateProfile(
@@ -168,11 +178,12 @@ export async function updateProfile(
   fields: Record<string, unknown>,
 ): Promise<DesignerProfile> {
   const db = await openDbConnection();
+  let row: ProfileRow;
   try {
     db.run(
       `UPDATE designer_profiles SET
          studio_name = ?, headline = ?, bio = ?, location = ?,
-         website_url = ?, instagram_url = ?, budget_band = ?,
+         website_url = ?, instagram_url = ?, budget_band = ?, availability = ?,
          updated_at = datetime('now')
        WHERE id = ?`,
       [
@@ -183,16 +194,19 @@ export async function updateProfile(
         fields.websiteUrl as string | null,
         fields.instagramUrl as string | null,
         fields.budgetBand as string | null,
+        fields.availability as string | null,
         id,
       ],
     );
-    const row = db
+    row = db
       .query('SELECT * FROM designer_profiles WHERE id = ?')
       .get(id) as ProfileRow;
-    return toProfile(row);
   } finally {
     db.close();
   }
+  // Studio name, headline, bio and location are all indexed text.
+  await reindexDesigner(id);
+  return toProfile(row);
 }
 
 /** draft | rejected -> pending. Approved profiles are already live. */
@@ -251,6 +265,7 @@ export async function insertProject(
   fields: Record<string, unknown>,
 ): Promise<Project> {
   const db = await openDbConnection();
+  let row: ProjectRow;
   try {
     db.run(
       `INSERT INTO projects
@@ -272,13 +287,15 @@ export async function insertProject(
         profileId,
       ],
     );
-    const row = db
+    row = db
       .query('SELECT * FROM projects WHERE slug = ?')
       .get(slug) as ProjectRow;
-    return toProject(row);
   } finally {
     db.close();
   }
+  // A published title becomes part of its designer's search document.
+  await reindexDesigner(profileId);
+  return toProject(row);
 }
 
 export async function updateProject(
@@ -286,6 +303,7 @@ export async function updateProject(
   fields: Record<string, unknown>,
 ): Promise<Project> {
   const db = await openDbConnection();
+  let row: ProjectRow;
   try {
     db.run(
       `UPDATE projects SET
@@ -306,22 +324,30 @@ export async function updateProject(
         id,
       ],
     );
-    const row = db
-      .query('SELECT * FROM projects WHERE id = ?')
-      .get(id) as ProjectRow;
-    return toProject(row);
+    row = db.query('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow;
   } finally {
     db.close();
   }
+  // Retitling, or publishing/unpublishing, both change what the designer is
+  // findable by.
+  await reindexDesignerForProject(id);
+  return toProject(row);
 }
 
 export async function deleteProject(id: number): Promise<void> {
   const db = await openDbConnection();
+  let owner: { id: number } | null;
   try {
+    // The owner has to be read before the row goes, or there is nothing left
+    // to reindex and the title lingers in search forever.
+    owner = db
+      .query('SELECT designer_profile_id AS id FROM projects WHERE id = ?')
+      .get(id) as { id: number } | null;
     db.run('DELETE FROM projects WHERE id = ?', [id]);
   } finally {
     db.close();
   }
+  if (owner) await reindexDesigner(owner.id);
 }
 
 export async function listProjectImages(

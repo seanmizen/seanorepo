@@ -1,6 +1,7 @@
 import type {
   Availability,
   BudgetBand,
+  DesignerSort,
   ProjectType,
   Timeline,
 } from '@shared/types';
@@ -107,6 +108,46 @@ export function optionalEnum<T extends string>(
     throw new ValidationError(`${field} must be one of: ${allowed.join(', ')}`);
   }
   return value as T;
+}
+
+export const DESIGNER_SORTS: DesignerSort[] = [
+  'relevance',
+  'newest',
+  'oldest',
+  'name',
+];
+
+/**
+ * A whole number from a query string, inside `[min, max]`.
+ *
+ * Absent means "use the default"; present but not a plain non-negative integer
+ * — `?page=abc`, `?limit=-1`, `?limit=1e3` — is rejected rather than coerced.
+ * `Number('12abc')` is NaN and `Number('')` is 0, so a permissive parse turns a
+ * typo into a silently different page, which is exactly the class of bug that
+ * makes a paginated list look like it is losing rows.
+ *
+ * A value outside the range is a 400 rather than being clamped, so a client
+ * asking for 500 results learns the ceiling instead of quietly getting a short
+ * page and paginating wrongly on it.
+ */
+export function boundedInt(
+  value: unknown,
+  field: string,
+  { min, max, fallback }: { min: number; max: number; fallback: number },
+): number {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    throw new ValidationError(`${field} must be a whole number`);
+  }
+  const raw = String(value);
+  if (!/^\d+$/.test(raw)) {
+    throw new ValidationError(`${field} must be a whole number`);
+  }
+  const parsed = Number(raw);
+  if (parsed < min || parsed > max) {
+    throw new ValidationError(`${field} must be between ${min} and ${max}`);
+  }
+  return parsed;
 }
 
 export function optionalYear(value: unknown, field: string): number | null {
