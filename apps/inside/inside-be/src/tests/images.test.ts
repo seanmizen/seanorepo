@@ -1,9 +1,8 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import sharp from 'sharp';
-import { createTestEnv } from './setup';
+import { getTestEnv } from './setup';
 
-const env = createTestEnv('inside-images');
-afterAll(() => env.cleanup());
+getTestEnv();
 
 const { processAndStoreImage, VARIANT_WIDTHS } = await import(
   '../services/images'

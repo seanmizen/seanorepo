@@ -1,0 +1,135 @@
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  Link as MuiLink,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material';
+import { type FC, type FormEvent, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  type SignupRole,
+  safeReturnTo,
+  useAuth,
+} from '@/contexts/auth-context';
+
+const Login: FC = () => {
+  const [params] = useSearchParams();
+  const returnTo = safeReturnTo(params.get('returnTo'));
+  const { requestMagicLink } = useAuth();
+
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<SignupRole>('buyer');
+  const [sent, setSent] = useState(false);
+  const [devLink, setDevLink] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await requestMagicLink(email, role, returnTo);
+      setDevLink(result.devLink);
+      setSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <Container maxWidth="sm">
+        <Stack
+          spacing={2}
+          sx={{ minHeight: '100vh', justifyContent: 'center' }}
+        >
+          <Typography variant="h4" component="h1">
+            Check your email
+          </Typography>
+          <Typography color="text.secondary">
+            We've sent a sign-in link to {email}. It expires in 15 minutes and
+            can only be used once.
+          </Typography>
+          {devLink && (
+            // Only ever present when DANGEROUS_BYPASS_EMAIL_MAGIC_LINK is on.
+            <Alert severity="warning">
+              Email bypass is enabled.{' '}
+              <MuiLink href={devLink} data-testid="dev-magic-link">
+                Sign in
+              </MuiLink>
+            </Alert>
+          )}
+        </Stack>
+      </Container>
+    );
+  }
+
+  return (
+    <Container maxWidth="sm">
+      <Stack
+        spacing={3}
+        component="form"
+        onSubmit={handleSubmit}
+        sx={{ minHeight: '100vh', justifyContent: 'center' }}
+      >
+        <Typography variant="h3" component="h1">
+          Sign in
+        </Typography>
+        <Typography color="text.secondary">
+          No password. We'll email you a link.
+        </Typography>
+
+        <Box>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            id="role-label"
+            gutterBottom
+          >
+            I'm joining as
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            value={role}
+            onChange={(_, next) => next && setRole(next as SignupRole)}
+            aria-labelledby="role-label"
+          >
+            <ToggleButton value="buyer">Looking for a designer</ToggleButton>
+            <ToggleButton value="designer">I'm a designer</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+
+        <TextField
+          label="Email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+        />
+
+        {error && <Alert severity="error">{error}</Alert>}
+
+        <Button
+          type="submit"
+          variant="contained"
+          size="large"
+          disabled={busy || !email}
+        >
+          {busy ? 'Sending…' : 'Email me a link'}
+        </Button>
+      </Stack>
+    </Container>
+  );
+};
+
+export { Login };

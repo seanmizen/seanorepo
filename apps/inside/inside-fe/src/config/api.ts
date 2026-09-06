@@ -12,5 +12,9 @@ export const api = {
   endpoints: {
     health: `${baseUrl}/health`,
     config: `${baseUrl}/config`,
+    magicLink: `${baseUrl}/auth/magic-link`,
+    verify: `${baseUrl}/auth/verify`,
+    me: `${baseUrl}/auth/me`,
+    logout: `${baseUrl}/auth/logout`,
   },
 };
