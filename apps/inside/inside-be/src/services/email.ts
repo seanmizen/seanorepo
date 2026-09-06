@@ -55,3 +55,42 @@ export async function sendMagicLinkEmail(
 <p>This link expires in 15 minutes and can only be used once. If you didn't request it, ignore this email.</p>`,
   });
 }
+
+export interface ReviewDecisionEmail {
+  decision: 'approve' | 'reject';
+  studioName: string;
+  slug: string;
+  note: string | null;
+}
+
+/**
+ * Tell a designer the outcome of their review.
+ *
+ * Everything interpolated is escaped: a studio name and a review note are both
+ * free text, and a note is written by an admin about a profile whose content
+ * the designer controls.
+ */
+export async function sendReviewDecisionEmail(
+  email: string,
+  { decision, studioName, slug, note }: ReviewDecisionEmail,
+): Promise<void> {
+  const siteName = process.env.SITE_NAME ?? 'inside';
+  const frontend = process.env.FRONTEND_URL ?? 'http://localhost:4060';
+  const approved = decision === 'approve';
+
+  const subject = approved
+    ? `${studioName} is now listed on ${siteName}`
+    : `About your ${siteName} profile`;
+
+  const body = approved
+    ? `Your profile is approved and now visible at ${frontend}/designers/${slug}.`
+    : `Your profile has not been approved yet.\n\n${note ?? ''}\n\nYou can edit it and submit again at ${frontend}/me/profile.`;
+
+  await getTransporter().sendMail({
+    from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+    to: email,
+    subject,
+    text: body,
+    html: `<p>${escapeHtml(body).replace(/\n/g, '<br />')}</p>`,
+  });
+}

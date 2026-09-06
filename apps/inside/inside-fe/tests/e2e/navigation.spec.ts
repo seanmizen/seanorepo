@@ -60,10 +60,30 @@ const needsSession = (route: RouteDefinition) =>
     (ancestor) => matchRoute(ancestor, ROUTE_TABLE)?.requiresAuth === true,
   );
 
-const establishSession = async (page: Page) => {
+/**
+ * The role needed to reach this route, or anything on the way to it.
+ *
+ * Without this an admin route looks like a dead path: the guard would sign in
+ * as a buyer, ProtectedRoute would bounce it home, and the failure would read
+ * as "missing page" rather than "wrong session".
+ */
+const roleFor = (route: RouteDefinition): 'buyer' | 'designer' | 'admin' =>
+  route.requiresRole ??
+  ancestorsOf(route.path)
+    .map((ancestor) => matchRoute(ancestor, ROUTE_TABLE)?.requiresRole)
+    .find((role): role is 'designer' | 'admin' => role !== undefined) ??
+  'buyer';
+
+const establishSession = async (
+  page: Page,
+  role: 'buyer' | 'designer' | 'admin' = 'buyer',
+) => {
   await page.goto('/login');
   await waitForApp(page);
-  await signIn(page, uniqueEmail('nav'));
+  // ADMIN_EMAILS in playwright.config.ts is what makes this address an admin;
+  // the role is granted by the whitelist, never by the signup payload.
+  const email = role === 'admin' ? 'admin@inside.test' : uniqueEmail('nav');
+  await signIn(page, email, role === 'designer' ? 'designer' : 'buyer');
 };
 
 /**
@@ -127,7 +147,7 @@ test.describe('no dead intermediate paths', () => {
     test(`every ancestor of ${route.path} resolves to a real page`, async ({
       page,
     }) => {
-      if (needsSession(route)) await establishSession(page);
+      if (needsSession(route)) await establishSession(page, roleFor(route));
 
       for (const ancestor of ancestorsOf(route.path)) {
         const path = concrete(ancestor, route);
@@ -144,7 +164,7 @@ test.describe('no dead intermediate paths', () => {
 test.describe('breadcrumb', () => {
   for (const route of ROUTE_TABLE) {
     test(`mirrors the URL on ${route.path}`, async ({ page }) => {
-      if (needsSession(route)) await establishSession(page);
+      if (needsSession(route)) await establishSession(page, roleFor(route));
 
       const path = concrete(route.path, route);
       await expectRealPage(page, path, route.path);
@@ -212,7 +232,7 @@ test.describe('breadcrumb', () => {
     test(`the crumbs on ${route.path} navigate to real pages`, async ({
       page,
     }) => {
-      if (needsSession(route)) await establishSession(page);
+      if (needsSession(route)) await establishSession(page, roleFor(route));
       const path = concrete(route.path, route);
 
       for (const crumb of intermediates) {
