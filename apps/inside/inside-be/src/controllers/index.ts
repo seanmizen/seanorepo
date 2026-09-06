@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../middleware/auth';
+import { authRoutes } from './auth';
 import { configRoutes } from './config';
 import { healthRoutes } from './health';
 
@@ -7,6 +8,7 @@ import { healthRoutes } from './health';
 export async function routes(fastify: FastifyInstance): Promise<void> {
   fastify.register(healthRoutes);
   fastify.register(configRoutes);
+  fastify.register(authRoutes, { prefix: '/auth' });
 
   // Public feature routes (designers, projects, enquiries) register here.
 
