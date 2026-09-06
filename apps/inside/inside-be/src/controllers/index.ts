@@ -4,6 +4,7 @@ import { authRoutes } from './auth';
 import { briefRoutes } from './briefs';
 import { configRoutes } from './config';
 import { designerRoutes } from './designers';
+import { discoveryRoutes } from './discovery';
 import { healthRoutes } from './health';
 import { imageRoutes } from './images';
 import { pitchRoutes } from './pitches';
@@ -16,6 +17,8 @@ export async function routes(fastify: FastifyInstance): Promise<void> {
 
   // Public reads and the signed-in designer's own /me scope.
   fastify.register(designerRoutes);
+  // Browse, filter and search. Public and anonymous by design.
+  fastify.register(discoveryRoutes);
   fastify.register(imageRoutes);
 
   // Post-a-project: the buyer posts briefs, the designer pitches on them.
