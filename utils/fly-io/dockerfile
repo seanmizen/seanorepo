@@ -30,12 +30,19 @@ COPY apps/planning-poker/package.json ./apps/planning-poker/package.json
 COPY apps/planning-poker/frontend ./apps/planning-poker/frontend
 COPY apps/planning-poker/tsconfig.json ./apps/planning-poker/tsconfig.json
 COPY apps/planning-poker/configs.ts ./apps/planning-poker/configs.ts
+COPY apps/inside/package.json ./apps/inside/package.json
+COPY apps/inside/tsconfig.json ./apps/inside/tsconfig.json
+COPY apps/inside/shared ./apps/inside/shared
+COPY apps/inside/inside-fe ./apps/inside/inside-fe
 
 # Copy all backend apps (for dependency installation)
 COPY apps/seanscards/backend ./apps/seanscards/backend
 COPY apps/seanscards/configs.ts ./apps/seanscards/configs.ts
 COPY apps/carolinemizen.art/caroline-be ./apps/carolinemizen.art/caroline-be
 COPY apps/planning-poker/backend ./apps/planning-poker/backend
+# `inside` declares nested workspaces, so inside-be's manifest is needed for
+# the root install to resolve even though its build happens in its own stage.
+COPY apps/inside/inside-be ./apps/inside/inside-be
 
 RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
 
@@ -44,6 +51,7 @@ RUN NODE_ENV=production yarn workspace seanmizen.com build
 RUN NODE_ENV=production yarn workspace seanscards-fe build
 RUN NODE_ENV=production yarn workspace caroline-fe build
 RUN NODE_ENV=production yarn workspace planning-poker-fe build
+RUN NODE_ENV=production yarn workspace inside-fe build
 
 ########################
 # 2) Backend builds (Bun)
@@ -81,8 +89,36 @@ COPY --from=fe-build /repo/apps/carolinemizen.art/caroline-be ./caroline-be
 
 RUN bun build ./caroline-be/src/index.ts --target=bun --outfile ./dist/index.js
 
+# inside backend
+#
+# Deliberately NOT bundled, unlike the stages above. Two things break under
+# `bun build`:
+#   - `services/migrations.ts` resolves its .sql files relative to its own
+#     module path, so a bundle finds zero migrations and silently boots
+#     against an empty schema.
+#   - `sharp` ships a native binary that cannot be inlined; the bundled copy
+#     throws on first use.
+# So Bun runs the TypeScript directly, exactly as apps/inside/inside-be's own
+# production image does. Dependencies are installed standalone (Yarn, never
+# `bun install`) rather than dragging the whole monorepo's node_modules in.
+FROM node:23-slim AS be-build-inside
+WORKDIR /app
+
+COPY package.json .yarnrc.yml ./
+# Overwrite the root manifest with the backend's so this resolves standalone.
+COPY apps/inside/inside-be/package.json ./package.json
+RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
+
+# Assemble the runnable tree. node_modules sits at its root so resolution from
+# inside-be/src walks up to it, and apps/inside/tsconfig.json comes along so
+# the `@shared/*` path mapping still resolves.
+COPY apps/inside/tsconfig.json ./dist/tsconfig.json
+COPY apps/inside/shared ./dist/shared
+COPY apps/inside/inside-be ./dist/inside-be
+RUN mv ./node_modules ./dist/node_modules
+
 ########################
-# 3) Runtime: nginx + serve (4x FE) + Bun (3x BE)
+# 3) Runtime: nginx + serve (5x FE) + Bun (4x BE)
 ########################
 FROM oven/bun:latest AS runtime
 WORKDIR /app
@@ -95,12 +131,14 @@ RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
 COPY --from=be-build-pp /app/dist ./backends/planning-poker
 COPY --from=be-build-sc /app/dist ./backends/seanscards
 COPY --from=be-build-cm /app/dist ./backends/carolinemizen
+COPY --from=be-build-inside /app/dist ./backends/inside
 
 # Copy frontends
 COPY --from=fe-build /repo/apps/seanmizen.com/dist ./sites/seanmizen.com
 COPY --from=fe-build /repo/apps/seanscards/frontend/dist ./sites/seanscards
 COPY --from=fe-build /repo/apps/carolinemizen.art/caroline-fe/dist ./sites/carolinemizen
 COPY --from=fe-build /repo/apps/planning-poker/frontend/dist ./sites/planning-poker
+COPY --from=fe-build /repo/apps/inside/inside-fe/dist ./sites/inside
 
 RUN bun install -g serve
 
@@ -109,6 +147,6 @@ COPY utils/fly-io/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Expose nginx gateway and all individual service ports
-EXPOSE 8080 5000 5010 5011 5020 5021 5030 5031
+EXPOSE 8080 5000 5010 5011 5020 5021 5030 5031 5060 5061
 
 CMD ["/entrypoint.sh"]

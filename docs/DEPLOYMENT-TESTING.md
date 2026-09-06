@@ -18,6 +18,8 @@ The repository uses separate port ranges to avoid conflicts:
 | carolinemizen.art (BE) | 4021        | 5021   |
 | planning-poker (FE)    | 4030        | 5030   |
 | planning-poker (BE)    | 4031        | 5031   |
+| inside (FE)            | 4060        | 5060   |
+| inside (BE)            | 4061        | 5061   |
 | Fly.io nginx gateway   | -           | 8080   |
 
 ## Testing Cloudflared Setup
@@ -65,7 +67,7 @@ cd apps/[app-name] && yarn down
 
 ## Testing Fly.io Setup
 
-The Fly.io deployment uses a **single unified dockerfile** (`utils/fly-io/dockerfile`) that builds all services (4 frontends + 3 backends) into one container with nginx routing.
+The Fly.io deployment uses a **single unified dockerfile** (`utils/fly-io/dockerfile`) that builds all services (5 frontends + 4 backends) into one container with nginx routing.
 
 ### Setup: /etc/hosts (One-time, Recommended)
 
@@ -78,7 +80,7 @@ sudo nano /etc/hosts
 Add:
 
 ```
-127.0.0.1 seanmizen.com seanscards.com carolinemizen.art pp.seanmizen.com
+127.0.0.1 seanmizen.com seanscards.com carolinemizen.art pp.seanmizen.com inside.seanmizen.com
 ```
 
 **Why?** This lets you test with real domain names (e.g., `http://pp.seanmizen.com:8080`) which triggers same-origin mode, so nginx correctly routes `/api` requests to backends. Direct port access (e.g., `localhost:6030`) won't work properly for apps with backends because the frontend uses the wrong API port.
@@ -106,7 +108,7 @@ From repository root:
 
 ```bash
 docker build -f utils/fly-io/dockerfile -t seanmizen-flyio .
-docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5021:5021 -p 5030:5030 -p 5031:5031 seanmizen-flyio
+docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5021:5021 -p 5030:5030 -p 5031:5031 -p 5060:5060 -p 5061:5061 seanmizen-flyio
 ```
 
 ### Run Tests
@@ -123,6 +125,7 @@ docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5
 - http://seanscards.com:8080
 - http://carolinemizen.art:8080
 - http://pp.seanmizen.com:8080
+- http://inside.seanmizen.com:8080
 
 **Direct service access** (6xxx ports, frontend-only apps work, apps with backends won't):
 
@@ -130,6 +133,7 @@ docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5
 - http://localhost:6010 - seanscards.com ❌ (backend API calls fail)
 - http://localhost:6020 - carolinemizen.art ❌ (backend API calls fail)
 - http://localhost:6030 - planning-poker ❌ (backend API calls fail)
+- http://localhost:6060 - inside ❌ (backend API calls fail)
 
 **Alternative: curl with Host headers** (without /etc/hosts):
 
@@ -138,6 +142,7 @@ curl -H "Host: seanmizen.com" http://localhost:8080
 curl -H "Host: seanscards.com" http://localhost:8080
 curl -H "Host: carolinemizen.art" http://localhost:8080
 curl -H "Host: pp.seanmizen.com" http://localhost:8080
+curl -H "Host: inside.seanmizen.com" http://localhost:8080
 ```
 
 ### Stop Container
@@ -251,7 +256,15 @@ serve -s /app/sites/new-service -l 5050 &
 PORT=5051 bun /app/backends/new-service/index.js &
 ```
 
-### 4. Update Test Script
+### 4. Decide on Persistence
+
+Nothing in the Fly image has a volume attached, so SQLite files and uploaded
+assets are lost on every deploy and machine restart. Either attach a Fly volume
+or state in the app's README that Fly is a stateless mirror and the home server
+holds the real data. Do not leave it implicit — see `apps/inside/README.md` for
+the shape of that note.
+
+### 5. Update Test Script
 
 Edit `test-deployment.sh` to include the new service in both test functions.
 
@@ -276,6 +289,10 @@ await fastify.listen({ host: "0.0.0.0", port });
 - ✅ All dependencies installed via Yarn in the fe-build stage
 - ✅ Backend build stages copy node_modules from fe-build
 - ⚠️ Bun is used ONLY for building bundles and runtime (never for `bun install`)
+- ⚠️ `inside` is the exception: its backend is not bundled at all. `runMigrations`
+  resolves its `.sql` files relative to its own module path and `sharp` ships a
+  native binary, so a bundle breaks both. Its stage installs dependencies with
+  Yarn standalone and Bun runs the TypeScript directly.
 
 **Directory Structure Preservation:**
 
@@ -284,7 +301,7 @@ await fastify.listen({ host: "0.0.0.0", port });
 
 **Container Architecture:**
 
-- Single container runs: nginx + 4 frontends (serve) + 3 backends (Bun)
+- Single container runs: nginx + 5 frontends (serve) + 4 backends (Bun)
 - Nginx listens on 8080, routes by domain to individual service ports (5xxx)
 
 ## Deployment Checklist
