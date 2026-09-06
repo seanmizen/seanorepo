@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { getAuthUser, requireRole } from '../middleware/auth';
 import * as designers from '../services/designers';
 import { uniqueSlug } from '../services/slugs';
@@ -12,22 +12,7 @@ import {
   requiredString,
   ValidationError,
 } from '../services/validation';
-
-/** Turns a ValidationError into a 400; anything else keeps bubbling. */
-async function withValidation<T>(
-  reply: FastifyReply,
-  run: () => Promise<T>,
-): Promise<T | undefined> {
-  try {
-    return await run();
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      await reply.status(400).send({ error: error.message });
-      return undefined;
-    }
-    throw error;
-  }
-}
+import { withValidation } from './helpers';
 
 const readProfileFields = (body: unknown) => {
   const b = (body ?? {}) as Record<string, unknown>;

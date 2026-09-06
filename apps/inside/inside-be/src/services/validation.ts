@@ -1,4 +1,9 @@
-import type { BudgetBand, ProjectType } from '@shared/types';
+import type {
+  Availability,
+  BudgetBand,
+  ProjectType,
+  Timeline,
+} from '@shared/types';
 
 /** Thrown for bad input; controllers turn it into a 400 with the message. */
 export class ValidationError extends Error {}
@@ -23,6 +28,22 @@ export const PROJECT_TYPES: ProjectType[] = [
   'commercial',
   'styling',
   'other',
+];
+
+export const TIMELINES: Timeline[] = [
+  'asap',
+  'within_3_months',
+  'within_6_months',
+  'within_12_months',
+  'exploring',
+];
+
+/** A designer's availability. Narrower than a buyer's timeline: no 'exploring'. */
+export const AVAILABILITIES: Availability[] = [
+  'asap',
+  'within_3_months',
+  'within_6_months',
+  'within_12_months',
 ];
 
 export function requiredString(
@@ -99,3 +120,25 @@ export function optionalYear(value: unknown, field: string): number | null {
   }
   return year;
 }
+
+/**
+ * An optional instant, normalised to SQLite's UTC `YYYY-MM-DD HH:MM:SS`.
+ *
+ * Storing the client's raw string would leave a column that cannot be compared
+ * with `CURRENT_TIMESTAMP`, so a deadline would silently never expire.
+ */
+export function optionalDateTime(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    throw new ValidationError(`${field} must be a date`);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new ValidationError(`${field} must be a valid date`);
+  }
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/** `now` in the same shape as `optionalDateTime`, so the two compare directly. */
+export const sqliteNow = (): string =>
+  new Date().toISOString().slice(0, 19).replace('T', ' ');
