@@ -1,3 +1,4 @@
+import { adminDesignerFilters } from '@shared/filters';
 import type { DesignerProfileStatus } from '@shared/types';
 import type { FastifyInstance } from 'fastify';
 import { getAuthUser } from '../middleware/auth';
@@ -8,6 +9,7 @@ import {
   type ReviewDecision,
 } from '../services/admin-designers';
 import { sendReviewDecisionEmail } from '../services/email';
+import { parseQuery } from '../services/query';
 import { optionalString, ValidationError } from '../services/validation';
 
 const STATUSES: DesignerProfileStatus[] = [
@@ -26,31 +28,24 @@ export async function adminDesignerRoutes(
   fastify: FastifyInstance,
 ): Promise<void> {
   fastify.get('/designers', async (request, reply) => {
-    const query = request.query as {
-      status?: string;
-      limit?: string;
-      page?: string;
-    };
+    // Same shared contract as every other list. This endpoint used to clamp
+    // with Math.min/Math.max, so `?limit=abc` silently became 25 and the
+    // caller had no way to know their request had been ignored.
+    const filters = await parseQuery(
+      adminDesignerFilters,
+      reply,
+      request.query,
+    );
+    if (!filters) return reply;
 
-    if (
-      query.status &&
-      !STATUSES.includes(query.status as DesignerProfileStatus)
-    ) {
-      return reply
-        .status(400)
-        .send({ error: `status must be one of: ${STATUSES.join(', ')}` });
-    }
-
-    const limit = Math.min(Math.max(Number(query.limit) || 25, 1), 100);
-    const page = Math.max(Number(query.page) || 1, 1);
-
+    const offset = (filters.page - 1) * filters.limit;
     const { designers, total } = await listReviewQueue({
-      status: query.status as DesignerProfileStatus | undefined,
-      limit,
-      offset: (page - 1) * limit,
+      statuses: filters.statuses ?? null,
+      limit: filters.limit,
+      offset,
     });
 
-    return { designers, total, page, limit };
+    return { designers, total, page: filters.page, limit: filters.limit };
   });
 
   fastify.get('/designers/:id', async (request, reply) => {
