@@ -14,14 +14,20 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { adminDesignerFilters } from '@shared/filters';
 import type { DesignerProfileStatus } from '@shared/types';
-import { type FC, useState } from 'react';
+import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import { useReviewQueue } from '@/features/admin/use-admin-designers';
+import { useFilters } from '@/features/filters/use-filters';
 
 type Filter = DesignerProfileStatus | 'all';
 
 const FILTERS: Filter[] = ['pending', 'approved', 'rejected', 'draft', 'all'];
+
+/** `all` is the absence of a status filter, not a status. */
+const toStatuses = (filter: Filter): DesignerProfileStatus[] =>
+  filter === 'all' ? [] : [filter];
 
 const STATUS_COLOUR: Record<
   DesignerProfileStatus,
@@ -34,9 +40,12 @@ const STATUS_COLOUR: Record<
 };
 
 const AdminDesigners: FC = () => {
+  // Filter state lives in the URL, so a reviewer can bookmark or share
+  // "everything still pending" and the back button behaves.
+  const { values, setFilters } = useFilters(adminDesignerFilters);
   // Pending first: it is the only list with work waiting in it.
-  const [filter, setFilter] = useState<Filter>('pending');
-  const queue = useReviewQueue(filter);
+  const filter: Filter = (values.statuses?.[0] as Filter) ?? 'pending';
+  const queue = useReviewQueue(toStatuses(filter));
 
   return (
     <Container maxWidth="lg" sx={{ py: 6 }}>
@@ -49,7 +58,9 @@ const AdminDesigners: FC = () => {
           exclusive
           size="small"
           value={filter}
-          onChange={(_, next: Filter | null) => next && setFilter(next)}
+          onChange={(_, next: Filter | null) =>
+            next && setFilters({ statuses: toStatuses(next) })
+          }
           aria-label="Filter by status"
         >
           {FILTERS.map((value) => (

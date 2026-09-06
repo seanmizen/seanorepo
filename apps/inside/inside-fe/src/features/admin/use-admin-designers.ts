@@ -1,3 +1,4 @@
+import { toQueryString } from '@shared/filters';
 import type {
   DesignerProfile,
   DesignerProfileStatus,
@@ -28,14 +29,22 @@ const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
-export const useReviewQueue = (status: DesignerProfileStatus | 'all') =>
+/**
+ * The review queue for a set of statuses.
+ *
+ * The query string is built by the shared serialiser rather than by hand — the
+ * previous version interpolated an un-encoded value and used an `'all'`
+ * sentinel to mean "omit the param", both of which the schema now subsumes.
+ */
+export const useReviewQueue = (statuses: DesignerProfileStatus[]) =>
   useQuery({
-    queryKey: ['admin', 'designers', status],
+    queryKey: ['admin', 'designers', [...statuses].sort().join(',')],
     queryFn: () =>
       request<{ designers: AdminDesignerListItem[]; total: number }>(
-        status === 'all'
-          ? `${api.endpoints.adminDesigners}?limit=100`
-          : `${api.endpoints.adminDesigners}?status=${status}&limit=100`,
+        `${api.endpoints.adminDesigners}${toQueryString(
+          { statuses, limit: 100 },
+          {},
+        )}`,
       ),
   });
 

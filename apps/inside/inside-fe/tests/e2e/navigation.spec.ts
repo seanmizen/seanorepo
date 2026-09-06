@@ -38,7 +38,7 @@ const ROUTE_TABLE: readonly RouteDefinition[] = ROUTES;
  * Fixture values for a pattern's `:params`.
  *
  * An ancestor's own declaration wins, so `/designers` and
- * `/designers/:slug/portfolio_projects/:id` agree on which designer is being visited;
+ * `/designers/:slug/portfolio/:id` agree on which designer is being visited;
  * the descendant's values fill anything the ancestor did not name.
  */
 const paramsFor = (pattern: string, descendant: RouteDefinition) => ({
@@ -131,15 +131,15 @@ test.describe('route table', () => {
     const table: RouteDefinition[] = [
       { path: '/', label: 'home' },
       { path: '/designers/:slug', label: 'designer' },
-      { path: '/me/portfolio_projects/:id', label: 'project' },
+      { path: '/me/portfolio/:id', label: 'project' },
     ];
 
     expect(findMissingAncestors(table)).toEqual([
       { route: '/designers/:slug', missing: '/designers' },
-      { route: '/me/portfolio_projects/:id', missing: '/me' },
+      { route: '/me/portfolio/:id', missing: '/me' },
       {
-        route: '/me/portfolio_projects/:id',
-        missing: '/me/portfolio_projects',
+        route: '/me/portfolio/:id',
+        missing: '/me/portfolio',
       },
     ]);
   });

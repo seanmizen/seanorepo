@@ -143,7 +143,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         return { profile: await designers.submitProfileForReview(existing.id) };
       });
 
-      me.get('/portfolio_projects', async (request, reply) => {
+      me.get('/portfolio', async (request, reply) => {
         const profile = await profileOf(request);
         if (!profile) {
           return reply.status(404).send({ error: 'No profile yet' });
@@ -151,7 +151,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         return { portfolio_projects: await designers.listProjects(profile.id) };
       });
 
-      me.post('/portfolio_projects', async (request, reply) =>
+      me.post('/portfolio', async (request, reply) =>
         withValidation(reply, async () => {
           const profile = await profileOf(request);
           if (!profile) {
@@ -182,7 +182,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
           : null;
       };
 
-      me.get('/portfolio_projects/:id', async (request, reply) => {
+      me.get('/portfolio/:id', async (request, reply) => {
         const id = Number((request.params as { id: string }).id);
         const project = await ownedProject(request, id);
         if (!project) return reply.status(404).send({ error: 'Not found' });
@@ -192,7 +192,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         };
       });
 
-      me.put('/portfolio_projects/:id', async (request, reply) =>
+      me.put('/portfolio/:id', async (request, reply) =>
         withValidation(reply, async () => {
           const id = Number((request.params as { id: string }).id);
           const project = await ownedProject(request, id);
@@ -216,7 +216,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         }),
       );
 
-      me.delete('/portfolio_projects/:id', async (request, reply) => {
+      me.delete('/portfolio/:id', async (request, reply) => {
         const id = Number((request.params as { id: string }).id);
         const project = await ownedProject(request, id);
         if (!project) return reply.status(404).send({ error: 'Not found' });
@@ -225,7 +225,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
       });
 
       /** Replaces the image list; array order becomes display order. */
-      me.put('/portfolio_projects/:id/images', async (request, reply) =>
+      me.put('/portfolio/:id/images', async (request, reply) =>
         withValidation(reply, async () => {
           const id = Number((request.params as { id: string }).id);
           const project = await ownedProject(request, id);

@@ -9,7 +9,7 @@ import type {
 import { getApp, uniqueEmail } from './setup';
 
 /**
- * Discovery: GET /api/designers and GET /api/designers/:slug/portfolio_projects.
+ * Discovery: GET /api/designers and GET /api/designers/:slug/portfolio.
  *
  * Suites share one process, one server and one database, so nothing here
  * assumes an empty table. Every fixture carries a token unique to this run —
@@ -99,7 +99,7 @@ async function makeDesigner(fixture: Fixture = {}) {
   for (const project of fixture.portfolio_projects ?? []) {
     const res = await app.inject({
       method: 'POST',
-      url: '/api/me/portfolio_projects',
+      url: '/api/me/portfolio',
       cookies: { token: cookie },
       payload: {
         title: project.title,
@@ -222,7 +222,7 @@ describe('listing', () => {
 
     const portfolio_projects = await app.inject({
       method: 'GET',
-      url: '/api/me/portfolio_projects',
+      url: '/api/me/portfolio',
       cookies: { token: cookie },
     });
     const portfolioProjectId = portfolio_projects.json<{
@@ -230,7 +230,7 @@ describe('listing', () => {
     }>().portfolio_projects[0].id;
     await app.inject({
       method: 'PUT',
-      url: `/api/me/portfolio_projects/${portfolioProjectId}/images`,
+      url: `/api/me/portfolio/${portfolioProjectId}/images`,
       cookies: { token: cookie },
       payload: { images: [{ imageId }] },
     });
@@ -279,7 +279,7 @@ describe('filters', () => {
       ],
     });
 
-    const band = await list(`?location=${location}&budgetBand=50k_100k`);
+    const band = await list(`?location=${location}&budgetBands=50k_100k`);
     expect(slugsOf(band.designers).sort()).toEqual(
       [target.profile.slug, otherAvailability.profile.slug].sort(),
     );
@@ -289,14 +289,14 @@ describe('filters', () => {
       [target.profile.slug, otherBand.profile.slug].sort(),
     );
 
-    const type = await list(`?location=${location}&workType=kitchen`);
+    const type = await list(`?location=${location}&workTypes=kitchen`);
     expect(slugsOf(type.designers).sort()).toEqual(
       [target.profile.slug, otherBand.profile.slug].sort(),
     );
 
     // All four together narrow to exactly one.
     const combined = await list(
-      `?location=${location}&budgetBand=50k_100k&availability=asap&workType=kitchen`,
+      `?location=${location}&budgetBands=50k_100k&availability=asap&workTypes=kitchen`,
     );
     expect(slugsOf(combined.designers)).toEqual([target.profile.slug]);
     expect(combined.total).toBe(1);
@@ -321,16 +321,55 @@ describe('filters', () => {
         },
       ],
     });
-    const body = await list(`?location=${where}&workType=extension`);
+    const body = await list(`?location=${where}&workTypes=extension`);
     expect(slugsOf(body.designers)).not.toContain(drafted.profile.slug);
     expect(body.total).toBe(0);
   });
 
+  test('several values in one facet are ORed together', async () => {
+    // The point of the shared csv param: "kitchens or bathrooms", not a
+    // second request per value.
+    const where = unique('Multi');
+    await approved({
+      location: where,
+      portfolio_projects: [
+        { title: unique('Multi Kitchen'), workType: 'kitchen' },
+      ],
+    });
+    await approved({
+      location: where,
+      portfolio_projects: [
+        { title: unique('Multi Bath'), workType: 'bathroom' },
+      ],
+    });
+    await approved({
+      location: where,
+      portfolio_projects: [
+        { title: unique('Multi Loft'), workType: 'extension' },
+      ],
+    });
+
+    const both = await list(`?location=${where}&workTypes=kitchen,bathroom`);
+    expect(both.total).toBe(2);
+
+    // Repeated keys must give the identical answer to the comma list.
+    const repeated = await list(
+      `?location=${where}&workTypes=kitchen&workTypes=bathroom`,
+    );
+    expect(repeated.total).toBe(both.total);
+  });
+
+  test('an unknown campaign parameter does not break the page', async () => {
+    // ?utm_source must never 400 a marketed link.
+    const res = await list('?utm_source=instagram&fbclid=abc123');
+    expect(res.total).toBeGreaterThanOrEqual(0);
+  });
+
   test('malformed filter values are rejected, never ignored', async () => {
     for (const query of [
-      '?budgetBand=infinite',
+      '?budgetBands=infinite',
       '?availability=whenever',
-      '?workType=spaceship',
+      '?workTypes=spaceship',
       '?sort=cheapest',
       '?limit=abc',
       '?limit=0',
@@ -575,7 +614,7 @@ describe('search', () => {
 
     const created = await app.inject({
       method: 'POST',
-      url: '/api/me/portfolio_projects',
+      url: '/api/me/portfolio',
       cookies: { token: cookie },
       payload: { title: `${token} Mews`, status: 'published' },
     });
@@ -588,7 +627,7 @@ describe('search', () => {
     // Unpublishing takes the title back out of the designer's document.
     await app.inject({
       method: 'PUT',
-      url: `/api/me/portfolio_projects/${portfolioProjectId}`,
+      url: `/api/me/portfolio/${portfolioProjectId}`,
       cookies: { token: cookie },
       payload: { title: `${token} Mews`, status: 'draft' },
     });
@@ -597,7 +636,7 @@ describe('search', () => {
     // Republishing brings it back, and deleting removes it for good.
     await app.inject({
       method: 'PUT',
-      url: `/api/me/portfolio_projects/${portfolioProjectId}`,
+      url: `/api/me/portfolio/${portfolioProjectId}`,
       cookies: { token: cookie },
       payload: { title: `${token} Mews`, status: 'published' },
     });
@@ -607,7 +646,7 @@ describe('search', () => {
 
     await app.inject({
       method: 'DELETE',
-      url: `/api/me/portfolio_projects/${portfolioProjectId}`,
+      url: `/api/me/portfolio/${portfolioProjectId}`,
       cookies: { token: cookie },
     });
     expect((await list(`?q=${token}`)).designers).toEqual([]);
@@ -645,16 +684,16 @@ describe('the approval gate', () => {
   const probes = [
     '',
     `?location=${location}`,
-    '?budgetBand=100k_250k',
+    '?budgetBands=100k_250k',
     '?availability=within_3_months',
-    '?workType=kitchen',
-    `?location=${location}&budgetBand=100k_250k&availability=within_3_months&workType=kitchen`,
+    '?workTypes=kitchen',
+    `?location=${location}&budgetBands=100k_250k&availability=within_3_months&workTypes=kitchen`,
     `?q=${token}`,
     `?q=${token}%20kitchen`,
     `?q=${token.slice(0, 6)}`,
     `?q=${token}&sort=relevance`,
     `?q=${token}&location=${location}`,
-    `?q=${token}&workType=kitchen&budgetBand=100k_250k`,
+    `?q=${token}&workTypes=kitchen&budgetBands=100k_250k`,
     `?location=${location}&sort=newest`,
     `?location=${location}&sort=oldest`,
     `?location=${location}&sort=name`,
@@ -722,24 +761,15 @@ describe('the approval gate', () => {
     for (const status of ['draft', 'pending', 'rejected'] as const) {
       await setStatus(made.profile.id, status);
       // 404 rather than 403 — a 403 would confirm the profile exists.
-      await expectStatus(
-        `/api/designers/${made.profile.slug}/portfolio_projects`,
-        404,
-      );
+      await expectStatus(`/api/designers/${made.profile.slug}/portfolio`, 404);
     }
 
     await setStatus(made.profile.id, 'approved');
-    await expectStatus(
-      `/api/designers/${made.profile.slug}/portfolio_projects`,
-      200,
-    );
+    await expectStatus(`/api/designers/${made.profile.slug}/portfolio`, 200);
   });
 
   test('a slug that was never taken 404s the same way', async () => {
-    await expectStatus(
-      `/api/designers/${SUITE}-no-such-studio/portfolio_projects`,
-      404,
-    );
+    await expectStatus(`/api/designers/${SUITE}-no-such-studio/portfolio`, 404);
   });
 });
 
@@ -861,7 +891,7 @@ describe('public portfolio', () => {
 
     const mine = await app.inject({
       method: 'GET',
-      url: '/api/me/portfolio_projects',
+      url: '/api/me/portfolio',
       cookies: { token: cookie },
     });
     const published = mine
@@ -871,13 +901,13 @@ describe('public portfolio', () => {
       ) as PortfolioProject;
     await app.inject({
       method: 'PUT',
-      url: `/api/me/portfolio_projects/${published.id}/images`,
+      url: `/api/me/portfolio/${published.id}/images`,
       cookies: { token: cookie },
       payload: { images: [{ imageId, caption: 'The hallway' }] },
     });
 
     const res = await expectStatus(
-      `/api/designers/${profile.slug}/portfolio_projects`,
+      `/api/designers/${profile.slug}/portfolio`,
       200,
     );
     const body = res.json<DesignerPortfolioResponse>();
@@ -900,7 +930,7 @@ describe('public portfolio', () => {
       portfolio_projects: [{ title: unique('Only Draft'), status: 'draft' }],
     });
     const res = await expectStatus(
-      `/api/designers/${profile.slug}/portfolio_projects`,
+      `/api/designers/${profile.slug}/portfolio`,
       200,
     );
     const body = res.json<DesignerPortfolioResponse>();
@@ -918,7 +948,7 @@ describe('public portfolio', () => {
     const seen: string[] = [];
     for (let page = 1; page <= 3; page++) {
       const res = await expectStatus(
-        `/api/designers/${profile.slug}/portfolio_projects?limit=2&page=${page}`,
+        `/api/designers/${profile.slug}/portfolio?limit=2&page=${page}`,
         200,
       );
       seen.push(
@@ -935,7 +965,7 @@ describe('public portfolio', () => {
     const { profile } = await approved({});
     for (const query of ['?limit=abc', '?limit=0', '?limit=999', '?page=0']) {
       await expectStatus(
-        `/api/designers/${profile.slug}/portfolio_projects${query}`,
+        `/api/designers/${profile.slug}/portfolio${query}`,
         400,
       );
     }
@@ -954,9 +984,9 @@ describe('query plans', () => {
   ) => {
     const { sql, params } = listApprovedDesignersSql({
       q: null,
-      workType: null,
+      workTypes: null,
       location: null,
-      budgetBand: null,
+      budgetBands: null,
       availability: null,
       sort: 'newest',
       limit: 24,
@@ -992,9 +1022,13 @@ describe('query plans', () => {
     }
     for (const overrides of [
       { location: 'London' },
-      { budgetBand: '50k_100k' as const },
-      { availability: 'asap' as const },
-      { workType: 'kitchen' as const },
+      { budgetBands: ['50k_100k'] as const },
+      { availability: ['asap'] as const },
+      { workTypes: ['kitchen'] as const },
+      // Several values in one facet must still use the index, not fall back
+      // to a scan — an IN list is where that most easily goes wrong.
+      { workTypes: ['kitchen', 'bathroom'] as const },
+      { budgetBands: ['25k_50k', '50k_100k'] as const },
     ]) {
       const plan = await planFor(overrides);
       expect(plan).not.toContain('SCAN designer_profiles');
