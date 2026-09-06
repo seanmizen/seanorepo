@@ -8,7 +8,11 @@ import {
   type SignupRole,
   verifyMagicToken,
 } from '../services/auth';
-import { sendMagicLinkEmail } from '../services/email';
+import {
+  currentDevModeInputs,
+  shouldExposeDevLink,
+} from '../services/dev-mode';
+import { isEmailConfigured, sendMagicLinkEmail } from '../services/email';
 import {
   createSession,
   revokeSession,
@@ -16,9 +20,6 @@ import {
 } from '../services/session';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:4060';
-const BYPASS_EMAIL =
-  process.env.DANGEROUS_BYPASS_EMAIL_MAGIC_LINK === 'true' &&
-  process.env.NODE_ENV !== 'production';
 
 /**
  * Where to send the user after verifying.
@@ -73,9 +74,11 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     const { token } = await createMagicToken(body.email, role);
     const link = `${FRONTEND_URL}/verify?token=${token}&returnTo=${encodeURIComponent(returnTo)}`;
 
-    if (BYPASS_EMAIL) {
+    // Evaluated per request rather than cached at module load, so a test or a
+    // restart cannot leave a stale permissive decision in memory.
+    if (shouldExposeDevLink(currentDevModeInputs(isEmailConfigured()))) {
       fastify.log.warn(
-        '⚠️  DANGEROUS_BYPASS_EMAIL_MAGIC_LINK is on — returning the link in the response instead of emailing it.',
+        '⚠️  Returning the sign-in link in the response instead of emailing it. This is a full authentication bypass and is only possible outside production.',
       );
       return reply.send({ sent: true, devLink: link });
     }
