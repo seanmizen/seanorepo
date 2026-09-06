@@ -1,12 +1,11 @@
 import { Database } from 'bun:sqlite';
-import { afterAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createTestEnv } from './setup';
+import { getTestEnv } from './setup';
 
-const env = createTestEnv('inside-migrations');
-afterAll(() => env.cleanup());
+const env = getTestEnv();
 
-// Imported after createTestEnv so DB_PATH is already set.
+// Imported after getTestEnv so DB_PATH is already set.
 const { runMigrations } = await import('../services/migrations');
 
 const open = () => new Database(join(env.dbPath, 'database.db'));

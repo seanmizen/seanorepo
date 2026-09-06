@@ -9,6 +9,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { AuthProvider } from '@/contexts/auth-context';
 import { queryClient } from '@/lib';
 import {
   buildTheme,
@@ -108,7 +109,7 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
         <ThemeModeContext.Provider value={themeModeValue}>
           <ThemeProvider theme={theme}>
             <CssBaseline enableColorScheme={true} />
-            {children}
+            <AuthProvider>{children}</AuthProvider>
           </ThemeProvider>
         </ThemeModeContext.Provider>
       </QueryClientProvider>
