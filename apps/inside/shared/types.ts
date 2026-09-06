@@ -66,7 +66,7 @@ export type BudgetBand =
   | '100k_250k'
   | '250k_plus';
 
-/** The kind of work, used on portfolio portfolio_projects, enquiries and briefs alike. */
+/** The kind of work, used on portfolio projects, enquiries and briefs alike. */
 export type WorkType =
   | 'full_home'
   | 'single_room'
@@ -347,7 +347,7 @@ export interface PublicProject extends PortfolioProject {
 
 export interface DesignerPortfolioResponse {
   designer: { slug: string; studioName: string };
-  portfolio_projects: PublicProject[];
+  portfolioProjects: PublicProject[];
   total: number;
   page: number;
   limit: number;

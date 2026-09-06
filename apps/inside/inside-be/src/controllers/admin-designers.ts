@@ -54,7 +54,7 @@ export async function adminDesignerRoutes(
     if (!found) return reply.status(404).send({ error: 'Not found' });
     return {
       profile: found.profile,
-      portfolio_projects: found.portfolio_projects,
+      portfolioProjects: found.portfolioProjects,
     };
   });
 

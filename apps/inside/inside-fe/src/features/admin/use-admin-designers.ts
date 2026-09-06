@@ -54,7 +54,7 @@ export const useDesignerUnderReview = (id: number) =>
     queryFn: () =>
       request<{
         profile: DesignerProfile;
-        portfolio_projects: PortfolioProject[];
+        portfolioProjects: PortfolioProject[];
       }>(`${api.endpoints.adminDesigners}/${id}`),
     retry: false,
   });

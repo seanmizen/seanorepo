@@ -105,7 +105,7 @@ export async function listReviewQueue(
  */
 export async function findProfileForReview(id: number): Promise<{
   profile: DesignerProfile;
-  portfolio_projects: PortfolioProject[];
+  portfolioProjects: PortfolioProject[];
   email: string;
 } | null> {
   const db = await openDbConnection();
@@ -120,7 +120,7 @@ export async function findProfileForReview(id: number): Promise<{
       .get(id) as (Record<string, unknown> & { user_email: string }) | null;
     if (!row) return null;
 
-    const portfolio_projects = db
+    const portfolioProjects = db
       .query(
         `SELECT * FROM portfolio_projects WHERE designer_profile_id = ?
           ORDER BY display_order ASC, id ASC`,
@@ -130,8 +130,8 @@ export async function findProfileForReview(id: number): Promise<{
     return {
       email: row.user_email,
       profile: toProfile(row as unknown as ProfileRow),
-      portfolio_projects: (
-        portfolio_projects as unknown as PortfolioProjectRow[]
+      portfolioProjects: (
+        portfolioProjects as unknown as PortfolioProjectRow[]
       ).map(toProject),
     };
   } finally {
