@@ -99,7 +99,7 @@ describe('the review queue', () => {
     const { profile } = await pendingDesigner('Queue Studio');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/admin/designers?status=pending&limit=100',
+      url: '/api/admin/designers?statuses=pending&limit=100',
       cookies: { token: await adminCookie() },
     });
 
@@ -116,7 +116,7 @@ describe('the review queue', () => {
   test('rejects an unknown status rather than ignoring it', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/api/admin/designers?status=banished',
+      url: '/api/admin/designers?statuses=banished',
       cookies: { token: await adminCookie() },
     });
     expect(res.statusCode).toBe(400);
@@ -143,7 +143,7 @@ describe('the review queue', () => {
     const { cookie, profile } = await pendingDesigner('Draft Work Studio');
     await app.inject({
       method: 'POST',
-      url: '/api/me/portfolio_projects',
+      url: '/api/me/portfolio',
       cookies: { token: cookie },
       payload: { title: 'Unpublished Piece', status: 'draft' },
     });

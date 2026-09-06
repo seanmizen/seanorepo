@@ -34,10 +34,10 @@ import { BM25_EXPRESSION, buildMatchExpression } from './search';
 
 export interface DesignerListFilters {
   q: string | null;
-  workType: WorkType | null;
+  workTypes: readonly WorkType[] | null;
   location: string | null;
-  budgetBand: BudgetBand | null;
-  availability: Availability | null;
+  budgetBands: readonly BudgetBand[] | null;
+  availability: readonly Availability[] | null;
   sort: DesignerSort;
   limit: number;
   offset: number;
@@ -103,23 +103,28 @@ function buildQuery(filters: DesignerListFilters): BuiltQuery | null {
     where.push('p.location = ? COLLATE NOCASE');
     params.push(filters.location);
   }
-  if (filters.budgetBand !== null) {
-    where.push('p.budget_band = ?');
-    params.push(filters.budgetBand);
+  // Multi-value filters are OR within a facet and AND across facets, which is
+  // what a filter panel implies: "kitchens or bathrooms, in London".
+  const placeholders = (values: readonly unknown[]) =>
+    values.map(() => '?').join(', ');
+
+  if (filters.budgetBands?.length) {
+    where.push(`p.budget_band IN (${placeholders(filters.budgetBands)})`);
+    params.push(...filters.budgetBands);
   }
-  if (filters.availability !== null) {
-    where.push('p.availability = ?');
-    params.push(filters.availability);
+  if (filters.availability?.length) {
+    where.push(`p.availability IN (${placeholders(filters.availability)})`);
+    params.push(...filters.availability);
   }
-  if (filters.workType !== null) {
-    // "Has published work of this kind." EXISTS rather than a join, so a
-    // designer with three published kitchens is still one row.
+  if (filters.workTypes?.length) {
+    // "Has published work of any of these kinds." EXISTS rather than a join,
+    // so a designer with three published kitchens is still one row.
     where.push(`EXISTS (
       SELECT 1 FROM portfolio_projects pr
       WHERE pr.designer_profile_id = p.id
         AND pr.status = 'published'
-        AND pr.work_type = ?)`);
-    params.push(filters.workType);
+        AND pr.work_type IN (${placeholders(filters.workTypes)}))`);
+    params.push(...filters.workTypes);
   }
 
   return { from, where: where.join(' AND '), params };

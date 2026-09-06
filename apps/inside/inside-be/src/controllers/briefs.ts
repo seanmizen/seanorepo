@@ -1,7 +1,9 @@
+import { briefFilters } from '@shared/filters';
 import type { BriefStatus } from '@shared/types';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getAuthUser, requireRole } from '../middleware/auth';
 import * as briefs from '../services/briefs';
+import { parseQuery } from '../services/query';
 import {
   BUDGET_BANDS,
   optionalDateTime,
@@ -30,37 +32,6 @@ const readBriefFields = (body: unknown): briefs.BriefFields => {
   };
 };
 
-/** A whole number in range, or a 400 — a bad filter is never silently ignored. */
-const readBounded = (
-  value: unknown,
-  field: string,
-  fallback: number,
-  { min, max }: { min: number; max: number },
-): number => {
-  if (value === undefined || value === '') return fallback;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
-    throw new ValidationError(
-      `${field} must be a whole number between ${min} and ${max}`,
-    );
-  }
-  return parsed;
-};
-
-const readListQuery = (query: unknown): briefs.BriefFilters => {
-  const q = (query ?? {}) as Record<string, unknown>;
-  return {
-    workType: optionalEnum(q.workType, 'PortfolioProject type', WORK_TYPES),
-    budgetBand: optionalEnum(q.budgetBand, 'Budget band', BUDGET_BANDS),
-    location: optionalString(q.location, 'Location', 120),
-    limit: readBounded(q.limit, 'Limit', DEFAULT_LIMIT, {
-      min: 1,
-      max: MAX_LIMIT,
-    }),
-    offset: readBounded(q.offset, 'Offset', 0, { min: 0, max: 1_000_000 }),
-  };
-};
-
 const briefId = (request: FastifyRequest): number =>
   Number((request.params as { id: string }).id);
 
@@ -70,18 +41,30 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
    * found — and `PublicBrief` carries no `buyerId`, so no listing ever hands a
    * stranger a route back to the person who posted it.
    */
-  fastify.get('/briefs', async (request, reply) =>
-    withValidation(reply, async () => {
-      const filters = readListQuery(request.query);
-      const { briefs: found, total } = await briefs.listOpenBriefs(filters);
-      return {
-        briefs: found,
-        total,
-        limit: filters.limit,
-        offset: filters.offset,
-      };
-    }),
-  );
+  fastify.get('/briefs', async (request, reply) => {
+    const filters = await parseQuery(briefFilters, reply, request.query);
+    if (!filters) return reply;
+
+    // Page-based, like every other list. This endpoint used to take `offset`
+    // while discovery took `page`, which meant the public API answered the
+    // same question two different ways.
+    const offset = (filters.page - 1) * filters.limit;
+    const { briefs: found, total } = await briefs.listOpenBriefs({
+      workTypes: filters.workTypes ?? null,
+      budgetBands: filters.budgetBands ?? null,
+      location: filters.location ?? null,
+      limit: filters.limit,
+      offset,
+    });
+
+    return {
+      briefs: found,
+      total,
+      page: filters.page,
+      limit: filters.limit,
+      hasMore: offset + found.length < total,
+    };
+  });
 
   /**
    * Public detail. A draft reads as missing; closed briefs stay

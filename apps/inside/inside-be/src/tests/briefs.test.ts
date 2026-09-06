@@ -244,19 +244,19 @@ describe('the public board', () => {
         .sort();
 
     expect(await ids('')).toEqual([kitchen.id, bathroom.id].sort());
-    expect(await ids('&workType=kitchen')).toEqual([kitchen.id]);
-    expect(await ids('&budgetBand=50k_100k')).toEqual([bathroom.id]);
-    expect(await ids('&workType=kitchen&budgetBand=50k_100k')).toEqual([]);
+    expect(await ids('&workTypes=kitchen')).toEqual([kitchen.id]);
+    expect(await ids('&budgetBands=50k_100k')).toEqual([bathroom.id]);
+    expect(await ids('&workTypes=kitchen&budgetBands=50k_100k')).toEqual([]);
   });
 
   test('a malformed filter is rejected rather than ignored', async () => {
     for (const query of [
-      'workType=spaceship',
-      'budgetBand=infinite',
+      'workTypes=spaceship',
+      'budgetBands=infinite',
       'limit=0',
       'limit=1000',
       'limit=abc',
-      'offset=-1',
+      'page=0',
     ]) {
       const res = await app.inject({
         method: 'GET',
@@ -282,15 +282,16 @@ describe('the public board', () => {
       );
     }
 
-    const page = async (offset: number) =>
+    // Page-based now, matching every other list endpoint.
+    const page = async (n: number) =>
       (
         await app.inject({
           method: 'GET',
-          url: `/api/briefs?location=${encodeURIComponent(location)}&limit=2&offset=${offset}`,
+          url: `/api/briefs?location=${encodeURIComponent(location)}&limit=2&page=${n}`,
         })
       ).json<{ briefs: PublicBrief[]; total: number }>();
 
-    const first = await page(0);
+    const first = await page(1);
     const second = await page(2);
     expect(first.total).toBe(3);
     // Newest first, with id breaking the one-second timestamp tie.
