@@ -33,6 +33,57 @@ export interface ProcessedImage {
   variants: GeneratedVariant[];
 }
 
+/** Formats we accept, decided by decoding the bytes rather than trusting labels. */
+const ACCEPTED_FORMATS = new Set(['jpeg', 'png', 'webp']);
+
+const FORMAT_MIME: Record<string, string> = {
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
+
+export class UnsupportedImageError extends Error {}
+
+/**
+ * Identify an upload by decoding it.
+ *
+ * The declared mime type and the filename extension are both attacker-supplied
+ * and prove nothing — a .exe renamed to .jpg carries `image/jpeg` quite
+ * happily. sharp either decodes the bytes or it does not, which is the only
+ * answer worth having. A corrupt or non-image file fails here with a clean
+ * error rather than an unhandled throw deeper in the pipeline.
+ */
+export async function identifyImage(file: Buffer): Promise<{
+  format: string;
+  mimeType: string;
+  width: number;
+  height: number;
+}> {
+  let metadata: sharp.Metadata;
+  try {
+    metadata = await sharp(file).metadata();
+  } catch {
+    throw new UnsupportedImageError('That file could not be read as an image');
+  }
+
+  const format = metadata.format ?? '';
+  if (!ACCEPTED_FORMATS.has(format)) {
+    throw new UnsupportedImageError(
+      `Unsupported image type. Accepted formats: ${[...ACCEPTED_FORMATS].join(', ')}`,
+    );
+  }
+  if (!metadata.width || !metadata.height) {
+    throw new UnsupportedImageError('That image has no readable dimensions');
+  }
+
+  return {
+    format,
+    mimeType: FORMAT_MIME[format],
+    width: metadata.width,
+    height: metadata.height,
+  };
+}
+
 /**
  * Store an uploaded image and its derivatives.
  *
