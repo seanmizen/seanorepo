@@ -140,8 +140,8 @@ const escapeLike = (value: string): string =>
   value.replace(/[\\%_]/g, (char) => `\\${char}`);
 
 export interface BriefFilters {
-  workType?: string | null;
-  budgetBand?: string | null;
+  workTypes?: readonly string[] | null;
+  budgetBands?: readonly string[] | null;
   location?: string | null;
   limit: number;
   offset: number;
@@ -160,13 +160,17 @@ export async function listOpenBriefs(
   const clauses = ["b.status = 'open'"];
   const params: Array<string | number> = [];
 
-  if (filters.workType) {
-    clauses.push('b.work_type = ?');
-    params.push(filters.workType);
+  // OR within a facet, AND across facets — what a filter panel implies.
+  const placeholders = (values: readonly unknown[]) =>
+    values.map(() => '?').join(', ');
+
+  if (filters.workTypes?.length) {
+    clauses.push(`b.work_type IN (${placeholders(filters.workTypes)})`);
+    params.push(...filters.workTypes);
   }
-  if (filters.budgetBand) {
-    clauses.push('b.budget_band = ?');
-    params.push(filters.budgetBand);
+  if (filters.budgetBands?.length) {
+    clauses.push(`b.budget_band IN (${placeholders(filters.budgetBands)})`);
+    params.push(...filters.budgetBands);
   }
   if (filters.location) {
     clauses.push("b.location LIKE ? ESCAPE '\\'");

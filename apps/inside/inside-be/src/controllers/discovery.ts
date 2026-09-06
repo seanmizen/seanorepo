@@ -1,9 +1,10 @@
-import type { DesignerSort } from '@shared/types';
+import { designerFilters } from '@shared/filters';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   listApprovedDesigners,
   listPublicPortfolio,
 } from '../services/discovery';
+import { parseQuery } from '../services/query';
 import { MAX_SEARCH_LENGTH } from '../services/search';
 import {
   AVAILABILITIES,
@@ -58,77 +59,53 @@ export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
    * filter would be worse than rejecting it: the caller gets a full, unfiltered
    * list back and has no way to tell it was not narrowed.
    */
-  fastify.get('/designers', async (request, reply) =>
-    withValidation(reply, async () => {
-      const query = (request.query ?? {}) as Record<string, unknown>;
+  fastify.get('/designers', async (request, reply) => {
+    // One shared schema does the parsing, the validation and the defaults, so
+    // this endpoint cannot drift from the others or from the client.
+    const filters = await parseQuery(designerFilters, reply, request.query);
+    if (!filters) return reply;
 
-      const q = optionalString(query.q, 'Search', MAX_SEARCH_LENGTH);
-      const sort = optionalEnum<DesignerSort>(
-        query.sort,
-        'Sort',
-        DESIGNER_SORTS,
-      );
-      // Relevance without a query has nothing to rank. Falling back silently
-      // would return a differently-ordered list than the caller asked for and
-      // never say so.
-      if (sort === 'relevance' && q === null) {
-        throw new ValidationError(
-          'Sorting by relevance needs a search query — pass q',
-        );
-      }
+    // Relevance without a query has nothing to rank. Falling back silently
+    // would return a differently-ordered list than the caller asked for and
+    // never say so.
+    if (filters.sort === 'relevance' && filters.q === undefined) {
+      return reply
+        .status(400)
+        .send({ error: 'sort: relevance needs a search query — pass q' });
+    }
 
-      const limit = boundedInt(query.limit, 'Limit', {
-        min: 1,
-        max: MAX_LIMIT,
-        fallback: DEFAULT_LIMIT,
-      });
-      const page = boundedInt(query.page, 'Page', {
-        min: 1,
-        max: MAX_PAGE,
-        fallback: 1,
-      });
-      const offset = (page - 1) * limit;
+    const offset = (filters.page - 1) * filters.limit;
+    const { designers, total } = await listApprovedDesigners({
+      q: filters.q ?? null,
+      workTypes: filters.workTypes ?? null,
+      location: filters.location ?? null,
+      budgetBands: filters.budgetBands ?? null,
+      availability: filters.availability ?? null,
+      // Search defaults to relevance; browsing defaults to newest.
+      sort: filters.sort ?? (filters.q === undefined ? 'newest' : 'relevance'),
+      limit: filters.limit,
+      offset,
+    });
 
-      const { designers, total } = await listApprovedDesigners({
-        q,
-        workType: optionalEnum(
-          query.workType,
-          'PortfolioProject type',
-          WORK_TYPES,
-        ),
-        location: optionalString(query.location, 'Location', 120),
-        budgetBand: optionalEnum(query.budgetBand, 'Budget band', BUDGET_BANDS),
-        availability: optionalEnum(
-          query.availability,
-          'Availability',
-          AVAILABILITIES,
-        ),
-        // Search defaults to relevance; browsing defaults to newest.
-        sort: sort ?? (q === null ? 'newest' : 'relevance'),
-        limit,
-        offset,
-      });
-
-      // A page past the end, or a filter nothing matches, is an empty page —
-      // 200 with zero results. It is a valid answer to a valid question, and
-      // a 404 would make an empty filter combination look like a broken URL.
-      return {
-        designers,
-        total,
-        page,
-        limit,
-        hasMore: offset + designers.length < total,
-      };
-    }),
-  );
+    // A page past the end, or a filter nothing matches, is an empty page —
+    // 200 with zero results. It is a valid answer to a valid question, and a
+    // 404 would make an empty filter combination look like a broken URL.
+    return {
+      designers,
+      total,
+      page: filters.page,
+      limit: filters.limit,
+      hasMore: offset + designers.length < total,
+    };
+  });
 
   /**
-   * GET /api/designers/:slug/portfolio_projects — one designer's public portfolio.
+   * GET /api/designers/:slug/portfolio — one designer's public portfolio.
    *
    * Published pieces of an approved designer, and nothing else. An unapproved
    * or unknown slug gets the same 404, so the approval queue cannot be probed.
    */
-  fastify.get('/designers/:slug/portfolio_projects', async (request, reply) =>
+  fastify.get('/designers/:slug/portfolio', async (request, reply) =>
     withValidation(reply, async () => {
       const { slug } = request.params as { slug: string };
       const query = (request.query ?? {}) as Record<string, unknown>;

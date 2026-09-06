@@ -1,5 +1,6 @@
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { NuqsAdapter } from 'nuqs/adapters/react-router/v7';
 import {
   Component,
   type FC,
@@ -106,16 +107,22 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ThemeModeContext.Provider value={themeModeValue}>
-          <ThemeProvider theme={theme}>
-            <CssBaseline enableColorScheme={true} />
-            {/* App-wide, so every route shows the same status. */}
-            <StatusChips />
-            <AuthProvider>{children}</AuthProvider>
-          </ThemeProvider>
-        </ThemeModeContext.Provider>
-      </QueryClientProvider>
+      {/*
+        nuqs reads and writes the URL through the router, so its adapter has to
+        sit inside the same tree. Everything below can use useFilters.
+      */}
+      <NuqsAdapter>
+        <QueryClientProvider client={queryClient}>
+          <ThemeModeContext.Provider value={themeModeValue}>
+            <ThemeProvider theme={theme}>
+              <CssBaseline enableColorScheme={true} />
+              {/* App-wide, so every route shows the same status. */}
+              <StatusChips />
+              <AuthProvider>{children}</AuthProvider>
+            </ThemeProvider>
+          </ThemeModeContext.Provider>
+        </QueryClientProvider>
+      </NuqsAdapter>
     </ErrorBoundary>
   );
 };

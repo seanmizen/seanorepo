@@ -15,7 +15,7 @@ import {
 export type ReviewDecision = 'approve' | 'reject';
 
 export interface ReviewQueueFilters {
-  status?: DesignerProfileStatus;
+  statuses?: readonly DesignerProfileStatus[] | null;
   limit: number;
   offset: number;
 }
@@ -55,8 +55,10 @@ export async function listReviewQueue(
 ): Promise<{ designers: AdminDesignerListItem[]; total: number }> {
   const db = await openDbConnection();
   try {
-    const where = filters.status ? 'WHERE dp.status = ?' : '';
-    const args = filters.status ? [filters.status] : [];
+    const where = filters.statuses?.length
+      ? `WHERE dp.status IN (${filters.statuses.map(() => '?').join(', ')})`
+      : '';
+    const args = filters.statuses?.length ? [...filters.statuses] : [];
 
     const total = (
       db
