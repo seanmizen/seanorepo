@@ -138,7 +138,7 @@ describe('the review queue', () => {
     expect(body.limit).toBe(2);
   });
 
-  test('the detail view shows unpublished portfolio_projects too', async () => {
+  test('the detail view shows unpublished portfolio projects too', async () => {
     // The reviewer must be able to judge draft work; that is the whole job.
     const { cookie, profile } = await pendingDesigner('Draft Work Studio');
     await app.inject({
@@ -154,8 +154,8 @@ describe('the review queue', () => {
       cookies: { token: await adminCookie() },
     });
     const titles = res
-      .json<{ portfolio_projects: PortfolioProject[] }>()
-      .portfolio_projects.map((p) => p.title);
+      .json<{ portfolioProjects: PortfolioProject[] }>()
+      .portfolioProjects.map((p) => p.title);
     expect(titles).toContain('Unpublished Piece');
   });
 
