@@ -139,7 +139,9 @@ test.describe('keyboard navigation', () => {
 
   test('verify — failure state', async ({ page }) => {
     await page.goto('/verify?token=nonsense');
-    await expect(page.getByText(/sign-in failed/i)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /sign-in failed/i }),
+    ).toBeVisible();
     await expectKeyboardNavigable(page, '/verify?token=nonsense');
   });
 
@@ -150,6 +152,39 @@ test.describe('keyboard navigation', () => {
     await page.goto('/account');
     await expect(page.getByTestId('account-email')).toBeVisible();
     await expectKeyboardNavigable(page, '/account');
+  });
+
+  test('not found', async ({ page }) => {
+    await page.goto('/no-such-page');
+    await waitForApp(page);
+    await expect(page.getByTestId('not-found')).toBeVisible();
+    await expectKeyboardNavigable(page, '/no-such-page');
+  });
+});
+
+test.describe('breadcrumb', () => {
+  test('a crumb is reachable by Tab and followed with Enter', async ({
+    page,
+  }) => {
+    // The trail is the only way back on a page with no other navigation, so
+    // "reachable and operable without a mouse" is not optional for it.
+    await page.goto('/login');
+    await waitForApp(page);
+
+    const home = page
+      .getByTestId('breadcrumbs')
+      .getByRole('link', { name: 'home', exact: true });
+
+    // Walk rather than assuming a position: what precedes the trail depends on
+    // the page.
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      if (await home.evaluate((el) => el === document.activeElement)) break;
+    }
+    await expect(home, 'the breadcrumb was not reachable by Tab').toBeFocused();
+
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/localhost:4160\/$/);
   });
 });
 
@@ -217,15 +252,18 @@ test.describe('keyboard-only sign in', () => {
 
     // Tab to the role choice and pick "I'm a designer" with the keyboard, so
     // the ToggleButtonGroup is proven operable rather than merely focusable.
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
-    await expect(
-      page.getByRole('button', { name: /i'm a designer/i }),
-    ).toBeFocused();
+    //
+    // Walked rather than counted: the breadcrumb's crumbs come first in the
+    // tab order and the trail's length depends on the route, so a fixed number
+    // of presses would have to be re-derived every time a page moves.
+    const designer = page.getByRole('button', { name: /i'm a designer/i });
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      if (await designer.evaluate((el) => el === document.activeElement)) break;
+    }
+    await expect(designer).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(
-      page.getByRole('button', { name: /i'm a designer/i }),
-    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(designer).toHaveAttribute('aria-pressed', 'true');
 
     await page.keyboard.press('Tab');
     await expect(page.getByRole('textbox', { name: /email/i })).toBeFocused();

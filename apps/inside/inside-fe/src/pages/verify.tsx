@@ -10,6 +10,7 @@ import {
 import { type FC, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
+import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 
 /**
  * Consumes the magic-link token, then returns the user to whatever they were
@@ -20,6 +21,11 @@ const Verify: FC = () => {
   const navigate = useNavigate();
   const { verify } = useAuth();
   const [error, setError] = useState<string | null>(null);
+
+  // The route table can only call this crumb "sign-in link". Once the attempt
+  // has resolved, the page knows something better than the URL does, so it
+  // names its own crumb. Null while in flight, which falls back to the label.
+  useBreadcrumbTitle(error ? 'sign-in failed' : null);
 
   // Tokens are single-use. StrictMode double-invokes effects in development,
   // so without this guard the second run consumes an already-used token and

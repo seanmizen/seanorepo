@@ -86,7 +86,9 @@ for (const scheme of ['light', 'dark'] as const) {
 
     test('verify — failure state', async ({ page }) => {
       await page.goto('/verify?token=nonsense');
-      await expect(page.getByText(/sign-in failed/i)).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: /sign-in failed/i }),
+      ).toBeVisible();
       await expectNoViolations(page, `/verify?token=nonsense (${scheme})`);
     });
 
@@ -97,6 +99,15 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.goto('/account');
       await expect(page.getByTestId('account-email')).toBeVisible();
       await expectNoViolations(page, `/account (${scheme})`);
+    });
+
+    test('not found', async ({ page }) => {
+      // Two segments deep on purpose: it is the only page today that renders a
+      // three-crumb trail, including an inert crumb for an undeclared parent.
+      await page.goto('/designers/alice-morgan');
+      await waitForApp(page);
+      await expect(page.getByTestId('not-found')).toBeVisible();
+      await expectNoViolations(page, `/designers/alice-morgan (${scheme})`);
     });
   });
 }
