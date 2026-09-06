@@ -25,7 +25,7 @@ export function slugify(input: string): string {
  * Slugs are public URLs, so they are only ever generated, never guessed.
  */
 export async function uniqueSlug(
-  table: 'designer_profiles' | 'projects',
+  table: 'designer_profiles' | 'portfolio_projects',
   desired: string,
   excludeId?: number,
 ): Promise<string> {

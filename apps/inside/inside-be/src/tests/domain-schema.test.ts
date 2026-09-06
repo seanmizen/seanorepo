@@ -72,7 +72,7 @@ const makeProfile = (db: Database, extra: Row = {}): number =>
   });
 
 const makeProject = (db: Database, extra: Row = {}): number =>
-  insert(db, 'projects', {
+  insert(db, 'portfolio_projects', {
     designer_profile_id: makeProfile(db),
     slug: uniqueSlug('project'),
     title: 'A Completed Portfolio Piece',
@@ -95,7 +95,7 @@ const baseRow = (db: Database, table: string): Row => {
         slug: uniqueSlug('studio'),
         studio_name: 'Test Studio',
       };
-    case 'projects':
+    case 'portfolio_projects':
       return {
         designer_profile_id: makeProfile(db),
         slug: uniqueSlug('project'),
@@ -113,7 +113,7 @@ const baseRow = (db: Database, table: string): Row => {
         title: 'Kitchen rework',
         description: 'A homeowner posted job, not a portfolio piece.',
       };
-    case 'pitches':
+    case 'bids':
       return {
         brief_id: makeBrief(db),
         designer_profile_id: makeProfile(db),
@@ -126,12 +126,12 @@ const baseRow = (db: Database, table: string): Row => {
 
 const DOMAIN_TABLES = [
   'designer_profiles',
-  'projects',
-  'project_images',
+  'portfolio_projects',
+  'portfolio_project_images',
   'saved_designers',
   'enquiries',
   'briefs',
-  'pitches',
+  'bids',
 ];
 
 describe('001_domain_tables — tables exist', () => {
@@ -162,8 +162,8 @@ describe('001_domain_tables — tables exist', () => {
 
 /**
  * Every CHECK constraint in 001. Several bad values are deliberately valid on
- * a *different* table ('pending' on projects, 'new' on briefs, 'open' on
- * enquiries, 'exploring' on pitches.availability) so a copy-pasted enum list
+ * a *different* table ('pending' on portfolio_projects, 'new' on briefs, 'open' on
+ * enquiries, 'exploring' on bids.availability) so a copy-pasted enum list
  * would be caught.
  */
 const CHECK_CASES: Array<{
@@ -185,21 +185,26 @@ const CHECK_CASES: Array<{
     good: 'approved',
   },
   {
-    table: 'projects',
-    column: 'project_type',
+    table: 'portfolio_projects',
+    column: 'work_type',
     bad: 'treehouse',
     good: 'kitchen',
   },
   {
-    table: 'projects',
+    table: 'portfolio_projects',
     column: 'budget_band',
     bad: '250k+',
     good: '250k_plus',
   },
-  { table: 'projects', column: 'status', bad: 'pending', good: 'published' },
+  {
+    table: 'portfolio_projects',
+    column: 'status',
+    bad: 'pending',
+    good: 'published',
+  },
   {
     table: 'enquiries',
-    column: 'project_type',
+    column: 'work_type',
     bad: 'shed',
     good: 'extension',
   },
@@ -213,7 +218,7 @@ const CHECK_CASES: Array<{
   { table: 'enquiries', column: 'status', bad: 'open', good: 'archived' },
   {
     table: 'briefs',
-    column: 'project_type',
+    column: 'work_type',
     bad: 'houseboat',
     good: 'new_build',
   },
@@ -226,19 +231,19 @@ const CHECK_CASES: Array<{
   { table: 'briefs', column: 'timeline', bad: 'immediately', good: 'asap' },
   { table: 'briefs', column: 'status', bad: 'new', good: 'open' },
   {
-    table: 'pitches',
+    table: 'bids',
     column: 'budget_band',
     bad: '10k-25k',
     good: '10k_25k',
   },
   {
-    table: 'pitches',
+    table: 'bids',
     column: 'availability',
     bad: 'exploring',
     good: 'within_12_months',
   },
   {
-    table: 'pitches',
+    table: 'bids',
     column: 'status',
     // 'shortlisted' was one of six speculative states SEAN-185 removed; it is
     // now as invalid as anything else nobody built a behaviour for.
@@ -339,7 +344,7 @@ describe('unique keys', () => {
     db.close();
   });
 
-  test('projects.slug is unique site-wide, across different designers', () => {
+  test('portfolio_projects.slug is unique site-wide, across different designers', () => {
     const db = open();
     const slug = uniqueSlug('project');
     makeProject(db, { slug });
@@ -383,39 +388,39 @@ describe('unique keys', () => {
     db.close();
   });
 
-  test('project_images rejects the same image twice on one project', () => {
+  test('portfolio_project_images rejects the same image twice on one project', () => {
     const db = open();
-    const projectId = makeProject(db);
+    const portfolioProjectId = makeProject(db);
     const imageId = makeImage(db);
-    insert(db, 'project_images', {
-      project_id: projectId,
+    insert(db, 'portfolio_project_images', {
+      portfolio_project_id: portfolioProjectId,
       image_id: imageId,
     });
 
     expect(() =>
-      insert(db, 'project_images', {
-        project_id: projectId,
+      insert(db, 'portfolio_project_images', {
+        portfolio_project_id: portfolioProjectId,
         image_id: imageId,
       }),
     ).toThrow();
     db.close();
   });
 
-  test('pitches rejects a second pitch from one designer on one brief', () => {
+  test('bids rejects a second bid from one designer on one brief', () => {
     const db = open();
     const briefId = makeBrief(db);
     const profileId = makeProfile(db);
-    insert(db, 'pitches', {
+    insert(db, 'bids', {
       brief_id: briefId,
       designer_profile_id: profileId,
-      message: 'First pitch',
+      message: 'First bid',
     });
 
     expect(() =>
-      insert(db, 'pitches', {
+      insert(db, 'bids', {
         brief_id: briefId,
         designer_profile_id: profileId,
-        message: 'Second pitch',
+        message: 'Second bid',
       }),
     ).toThrow();
     db.close();
@@ -450,10 +455,10 @@ describe('orphan foreign keys are rejected', () => {
     db.close();
   });
 
-  test('projects.designer_profile_id', () => {
+  test('portfolio_projects.designer_profile_id', () => {
     const db = open();
     expect(() =>
-      insert(db, 'projects', {
+      insert(db, 'portfolio_projects', {
         designer_profile_id: MISSING_ID,
         slug: uniqueSlug('project'),
         title: 'Orphan',
@@ -462,22 +467,22 @@ describe('orphan foreign keys are rejected', () => {
     db.close();
   });
 
-  test('project_images.project_id', () => {
+  test('portfolio_project_images.portfolio_project_id', () => {
     const db = open();
     expect(() =>
-      insert(db, 'project_images', {
-        project_id: MISSING_ID,
+      insert(db, 'portfolio_project_images', {
+        portfolio_project_id: MISSING_ID,
         image_id: makeImage(db),
       }),
     ).toThrow();
     db.close();
   });
 
-  test('project_images.image_id', () => {
+  test('portfolio_project_images.image_id', () => {
     const db = open();
     expect(() =>
-      insert(db, 'project_images', {
-        project_id: makeProject(db),
+      insert(db, 'portfolio_project_images', {
+        portfolio_project_id: makeProject(db),
         image_id: MISSING_ID,
       }),
     ).toThrow();
@@ -539,25 +544,25 @@ describe('orphan foreign keys are rejected', () => {
     db.close();
   });
 
-  test('pitches.brief_id', () => {
+  test('bids.brief_id', () => {
     const db = open();
     expect(() =>
-      insert(db, 'pitches', {
+      insert(db, 'bids', {
         brief_id: MISSING_ID,
         designer_profile_id: makeProfile(db),
-        message: 'Orphan pitch',
+        message: 'Orphan bid',
       }),
     ).toThrow();
     db.close();
   });
 
-  test('pitches.designer_profile_id', () => {
+  test('bids.designer_profile_id', () => {
     const db = open();
     expect(() =>
-      insert(db, 'pitches', {
+      insert(db, 'bids', {
         brief_id: makeBrief(db),
         designer_profile_id: MISSING_ID,
-        message: 'Orphan pitch',
+        message: 'Orphan bid',
       }),
     ).toThrow();
     db.close();
@@ -565,7 +570,7 @@ describe('orphan foreign keys are rejected', () => {
 });
 
 describe('delete behaviour is deliberately asymmetric', () => {
-  test('deleting a designer user cascades to profile, projects and images', () => {
+  test('deleting a designer user cascades to profile, portfolio_projects and images', () => {
     const db = open();
     const userId = makeUser(db, 'designer');
     const profileId = insert(db, 'designer_profiles', {
@@ -573,13 +578,13 @@ describe('delete behaviour is deliberately asymmetric', () => {
       slug: uniqueSlug('studio'),
       studio_name: 'Doomed Studio',
     });
-    const projectId = insert(db, 'projects', {
+    const portfolioProjectId = insert(db, 'portfolio_projects', {
       designer_profile_id: profileId,
       slug: uniqueSlug('project'),
-      title: 'Doomed Project',
+      title: 'Doomed PortfolioProject',
     });
-    const linkId = insert(db, 'project_images', {
-      project_id: projectId,
+    const linkId = insert(db, 'portfolio_project_images', {
+      portfolio_project_id: portfolioProjectId,
       image_id: makeImage(db),
     });
 
@@ -589,8 +594,8 @@ describe('delete behaviour is deliberately asymmetric', () => {
       db.query(`SELECT id FROM ${table} WHERE id = ?`).get(id);
 
     expect(gone('designer_profiles', profileId)).toBeNull();
-    expect(gone('projects', projectId)).toBeNull();
-    expect(gone('project_images', linkId)).toBeNull();
+    expect(gone('portfolio_projects', portfolioProjectId)).toBeNull();
+    expect(gone('portfolio_project_images', linkId)).toBeNull();
     db.close();
   });
 
@@ -625,14 +630,14 @@ describe('delete behaviour is deliberately asymmetric', () => {
     expect(row?.contact_name).toBe('Departed Homeowner');
   });
 
-  test('deleting a buyer keeps an open brief and its live pitches', () => {
+  test('deleting a buyer keeps an open brief and its live bids', () => {
     const db = open();
     const buyerId = makeUser(db, 'buyer');
     const briefId = makeBrief(db, { buyer_id: buyerId, status: 'open' });
-    const pitchId = insert(db, 'pitches', {
+    const bidId = insert(db, 'bids', {
       brief_id: briefId,
       designer_profile_id: makeProfile(db),
-      message: 'My pitch must outlive their account.',
+      message: 'My bid must outlive their account.',
     });
 
     db.prepare('DELETE FROM users WHERE id = ?').run(buyerId as never);
@@ -640,21 +645,21 @@ describe('delete behaviour is deliberately asymmetric', () => {
     const brief = db
       .query('SELECT buyer_id, status FROM briefs WHERE id = ?')
       .get(briefId) as { buyer_id: number | null; status: string } | null;
-    const pitch = db
-      .query('SELECT id FROM pitches WHERE id = ?')
-      .get(pitchId) as { id: number } | null;
+    const bid = db.query('SELECT id FROM bids WHERE id = ?').get(bidId) as {
+      id: number;
+    } | null;
     db.close();
 
     expect(brief).not.toBeNull();
     expect(brief?.buyer_id).toBeNull();
     expect(brief?.status).toBe('open');
-    expect(pitch?.id).toBe(pitchId);
+    expect(bid?.id).toBe(bidId);
   });
 
-  test('deleting a brief cascades to its pitches', () => {
+  test('deleting a brief cascades to its bids', () => {
     const db = open();
     const briefId = makeBrief(db, { status: 'open' });
-    const pitchId = insert(db, 'pitches', {
+    const bidId = insert(db, 'bids', {
       brief_id: briefId,
       designer_profile_id: makeProfile(db),
       message: 'Goes with the brief.',
@@ -662,22 +667,22 @@ describe('delete behaviour is deliberately asymmetric', () => {
 
     db.prepare('DELETE FROM briefs WHERE id = ?').run(briefId as never);
 
-    const pitch = db.query('SELECT id FROM pitches WHERE id = ?').get(pitchId);
+    const bid = db.query('SELECT id FROM bids WHERE id = ?').get(bidId);
     db.close();
 
-    expect(pitch).toBeNull();
+    expect(bid).toBeNull();
   });
 
   test('deleting a cover image nulls the reference rather than the project', () => {
     const db = open();
     const imageId = makeImage(db);
-    const projectId = makeProject(db, { cover_image_id: imageId });
+    const portfolioProjectId = makeProject(db, { cover_image_id: imageId });
 
     db.prepare('DELETE FROM images WHERE id = ?').run(imageId as never);
 
     const row = db
-      .query('SELECT cover_image_id FROM projects WHERE id = ?')
-      .get(projectId) as { cover_image_id: number | null } | null;
+      .query('SELECT cover_image_id FROM portfolio_projects WHERE id = ?')
+      .get(portfolioProjectId) as { cover_image_id: number | null } | null;
     db.close();
 
     expect(row).not.toBeNull();
@@ -685,29 +690,29 @@ describe('delete behaviour is deliberately asymmetric', () => {
   });
 });
 
-describe('project_images display order', () => {
+describe('portfolio_project_images display order', () => {
   test('round-trips the curated sequence, not insertion order', () => {
     const db = open();
-    const projectId = makeProject(db);
+    const portfolioProjectId = makeProject(db);
 
     // Inserted deliberately out of order — display_order is authoritative.
     const third = makeImage(db);
     const first = makeImage(db);
     const second = makeImage(db);
-    insert(db, 'project_images', {
-      project_id: projectId,
+    insert(db, 'portfolio_project_images', {
+      portfolio_project_id: portfolioProjectId,
       image_id: third,
       display_order: 2,
       caption: 'third',
     });
-    insert(db, 'project_images', {
-      project_id: projectId,
+    insert(db, 'portfolio_project_images', {
+      portfolio_project_id: portfolioProjectId,
       image_id: first,
       display_order: 0,
       caption: 'first',
     });
-    insert(db, 'project_images', {
-      project_id: projectId,
+    insert(db, 'portfolio_project_images', {
+      portfolio_project_id: portfolioProjectId,
       image_id: second,
       display_order: 1,
       caption: 'second',
@@ -715,9 +720,9 @@ describe('project_images display order', () => {
 
     const ordered = db
       .query(
-        'SELECT image_id, display_order, caption FROM project_images WHERE project_id = ? ORDER BY display_order',
+        'SELECT image_id, display_order, caption FROM portfolio_project_images WHERE portfolio_project_id = ? ORDER BY display_order',
       )
-      .all(projectId) as Array<{
+      .all(portfolioProjectId) as Array<{
       image_id: number;
       display_order: number;
       caption: string;
@@ -731,14 +736,14 @@ describe('project_images display order', () => {
 
   test('defaults display_order to 0', () => {
     const db = open();
-    const projectId = makeProject(db);
-    const linkId = insert(db, 'project_images', {
-      project_id: projectId,
+    const portfolioProjectId = makeProject(db);
+    const linkId = insert(db, 'portfolio_project_images', {
+      portfolio_project_id: portfolioProjectId,
       image_id: makeImage(db),
     });
 
     const row = db
-      .query('SELECT display_order FROM project_images WHERE id = ?')
+      .query('SELECT display_order FROM portfolio_project_images WHERE id = ?')
       .get(linkId) as { display_order: number };
     db.close();
 
@@ -747,20 +752,20 @@ describe('project_images display order', () => {
 
   test('reordering persists', () => {
     const db = open();
-    const projectId = makeProject(db);
-    const linkId = insert(db, 'project_images', {
-      project_id: projectId,
+    const portfolioProjectId = makeProject(db);
+    const linkId = insert(db, 'portfolio_project_images', {
+      portfolio_project_id: portfolioProjectId,
       image_id: makeImage(db),
       display_order: 5,
     });
 
     // Scoped to the row this test created — never a bulk update.
-    db.prepare('UPDATE project_images SET display_order = ? WHERE id = ?').run(
-      ...([9, linkId] as never[]),
-    );
+    db.prepare(
+      'UPDATE portfolio_project_images SET display_order = ? WHERE id = ?',
+    ).run(...([9, linkId] as never[]));
 
     const row = db
-      .query('SELECT display_order FROM project_images WHERE id = ?')
+      .query('SELECT display_order FROM portfolio_project_images WHERE id = ?')
       .get(linkId) as { display_order: number };
     db.close();
 

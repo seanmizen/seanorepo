@@ -7,10 +7,10 @@ import {
   optionalDateTime,
   optionalEnum,
   optionalString,
-  PROJECT_TYPES,
   requiredString,
   TIMELINES,
   ValidationError,
+  WORK_TYPES,
 } from '../services/validation';
 import { withValidation } from './helpers';
 
@@ -22,7 +22,7 @@ const readBriefFields = (body: unknown): briefs.BriefFields => {
   return {
     title: requiredString(b.title, 'Title', 160),
     description: requiredString(b.description, 'Description', 6000),
-    projectType: optionalEnum(b.projectType, 'Project type', PROJECT_TYPES),
+    workType: optionalEnum(b.workType, 'PortfolioProject type', WORK_TYPES),
     budgetBand: optionalEnum(b.budgetBand, 'Budget band', BUDGET_BANDS),
     location: optionalString(b.location, 'Location', 120),
     timeline: optionalEnum(b.timeline, 'Timeline', TIMELINES),
@@ -50,7 +50,7 @@ const readBounded = (
 const readListQuery = (query: unknown): briefs.BriefFilters => {
   const q = (query ?? {}) as Record<string, unknown>;
   return {
-    projectType: optionalEnum(q.projectType, 'Project type', PROJECT_TYPES),
+    workType: optionalEnum(q.workType, 'PortfolioProject type', WORK_TYPES),
     budgetBand: optionalEnum(q.budgetBand, 'Budget band', BUDGET_BANDS),
     location: optionalString(q.location, 'Location', 120),
     limit: readBounded(q.limit, 'Limit', DEFAULT_LIMIT, {
@@ -85,7 +85,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
 
   /**
    * Public detail. A draft reads as missing; closed briefs stay
-   * readable so a designer can still see what they pitched for.
+   * readable so a designer can still see what they bid for.
    */
   fastify.get('/briefs/:id', async (request, reply) => {
     const brief = await briefs.findPublicBrief(briefId(request));
@@ -179,7 +179,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       });
 
       /**
-       * Stop taking pitches. The pitches already received stay exactly where
+       * Stop taking bids. The bids already received stay exactly where
        * they are — closing a brief withdraws the listing, not the responses.
        */
       me.post('/briefs/:id/close', async (request, reply) => {
@@ -188,7 +188,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
         if (brief.status === 'closed') {
           return reply
             .status(409)
-            .send({ error: 'This brief is already closed to pitches' });
+            .send({ error: 'This brief is already closed to bids' });
         }
         return { brief: await briefs.setBriefStatus(brief.id, 'closed') };
       });
@@ -196,14 +196,14 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       /**
        * The responses to one brief, for the person who posted it.
        *
-       * This is the only route that returns somebody else's pitch, and it is
-       * reachable only by the brief's owner. A designer sees their own pitches
-       * through `GET /api/me/pitches` and nobody else's, ever.
+       * This is the only route that returns somebody else's bid, and it is
+       * reachable only by the brief's owner. A designer sees their own bids
+       * through `GET /api/me/bids` and nobody else's, ever.
        */
-      me.get('/briefs/:id/pitches', async (request, reply) => {
+      me.get('/briefs/:id/bids', async (request, reply) => {
         const brief = await owned(request);
         if (!brief) return reply.status(404).send({ error: 'Not found' });
-        return { pitches: await briefs.listPitchesForBrief(brief.id) };
+        return { bids: await briefs.listBidsForBrief(brief.id) };
       });
     },
     { prefix: '/me' },

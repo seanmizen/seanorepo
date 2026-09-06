@@ -1,7 +1,7 @@
 import type {
   DesignerProfile,
   DesignerProfileStatus,
-  Project,
+  PortfolioProject,
 } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/config';
@@ -43,9 +43,10 @@ export const useDesignerUnderReview = (id: number) =>
   useQuery({
     queryKey: ['admin', 'designer', id],
     queryFn: () =>
-      request<{ profile: DesignerProfile; projects: Project[] }>(
-        `${api.endpoints.adminDesigners}/${id}`,
-      ),
+      request<{
+        profile: DesignerProfile;
+        portfolio_projects: PortfolioProject[];
+      }>(`${api.endpoints.adminDesigners}/${id}`),
     retry: false,
   });
 

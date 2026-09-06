@@ -24,13 +24,31 @@ Do not relitigate these without asking Sean.
 
 ### Vocabulary
 
-"Project" is overloaded here. Keep these straight:
+**One vocabulary, everywhere** — database, API, routes, code and UI copy. Split
+vocabularies are where bugs and onboarding confusion breed, so a new concept
+gets its name decided once and used identically in all five places.
 
 | Term | Means |
 |---|---|
-| `projects` | a designer's completed work, shown in their portfolio |
-| `briefs` | a homeowner's posted job, which designers pitch on |
-| `pitches` | a designer's response to a brief |
+| `portfolio_projects` | a designer's completed work, shown in their portfolio |
+| `briefs` | a homeowner's posted job, which designers bid on |
+| `bids` | a designer's response to a brief |
+| `work_type` | the kind of work: kitchen, extension, new build … |
+| `designers` / `buyers` | the two sides of the marketplace |
+
+Two words are deliberately absent. **"Project" alone is banned** — it meant
+both a designer's portfolio piece and a client's job, which is exactly the
+ambiguity that cost us a rename; say `portfolio_project` or `brief`. And
+**"pitch" is banned** — a designer places a `bid`.
+
+Public URL shape:
+
+| Purpose | URL |
+|---|---|
+| Designer profile | `/designers/:slug` |
+| Portfolio piece | `/designers/:slug/portfolio/:slug` |
+| Client brief | `/briefs/:slug` |
+| A bid (private) | `/bids` |
 
 ## Layout
 

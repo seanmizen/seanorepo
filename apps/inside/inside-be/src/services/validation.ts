@@ -2,8 +2,8 @@ import type {
   Availability,
   BudgetBand,
   DesignerSort,
-  ProjectType,
   Timeline,
+  WorkType,
 } from '@shared/types';
 
 /** Thrown for bad input; controllers turn it into a 400 with the message. */
@@ -18,7 +18,7 @@ export const BUDGET_BANDS: BudgetBand[] = [
   '250k_plus',
 ];
 
-export const PROJECT_TYPES: ProjectType[] = [
+export const WORK_TYPES: WorkType[] = [
   'full_home',
   'single_room',
   'kitchen',

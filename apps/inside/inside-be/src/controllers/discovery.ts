@@ -12,8 +12,8 @@ import {
   DESIGNER_SORTS,
   optionalEnum,
   optionalString,
-  PROJECT_TYPES,
   ValidationError,
+  WORK_TYPES,
 } from '../services/validation';
 
 /**
@@ -91,10 +91,10 @@ export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
 
       const { designers, total } = await listApprovedDesigners({
         q,
-        projectType: optionalEnum(
-          query.projectType,
-          'Project type',
-          PROJECT_TYPES,
+        workType: optionalEnum(
+          query.workType,
+          'PortfolioProject type',
+          WORK_TYPES,
         ),
         location: optionalString(query.location, 'Location', 120),
         budgetBand: optionalEnum(query.budgetBand, 'Budget band', BUDGET_BANDS),
@@ -123,12 +123,12 @@ export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
   );
 
   /**
-   * GET /api/designers/:slug/projects — one designer's public portfolio.
+   * GET /api/designers/:slug/portfolio_projects — one designer's public portfolio.
    *
    * Published pieces of an approved designer, and nothing else. An unapproved
    * or unknown slug gets the same 404, so the approval queue cannot be probed.
    */
-  fastify.get('/designers/:slug/projects', async (request, reply) =>
+  fastify.get('/designers/:slug/portfolio_projects', async (request, reply) =>
     withValidation(reply, async () => {
       const { slug } = request.params as { slug: string };
       const query = (request.query ?? {}) as Record<string, unknown>;
@@ -155,11 +155,11 @@ export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
           slug: result.profile.slug,
           studioName: result.profile.studioName,
         },
-        projects: result.projects,
+        portfolio_projects: result.portfolio_projects,
         total: result.total,
         page,
         limit,
-        hasMore: offset + result.projects.length < result.total,
+        hasMore: offset + result.portfolio_projects.length < result.total,
       };
     }),
   );
