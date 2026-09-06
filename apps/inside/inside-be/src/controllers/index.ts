@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../middleware/auth';
 import { authRoutes } from './auth';
 import { configRoutes } from './config';
+import { designerRoutes } from './designers';
 import { healthRoutes } from './health';
 
 /** Everything under /api. */
@@ -10,7 +11,8 @@ export async function routes(fastify: FastifyInstance): Promise<void> {
   fastify.register(configRoutes);
   fastify.register(authRoutes, { prefix: '/auth' });
 
-  // Public feature routes (designers, projects, enquiries) register here.
+  // Public reads and the signed-in designer's own /me scope.
+  fastify.register(designerRoutes);
 
   // Admin routes live in their own encapsulated scope with the guard attached
   // as an onRequest hook, so every child route is protected by construction —
