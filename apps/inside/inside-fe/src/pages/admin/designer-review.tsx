@@ -18,7 +18,7 @@ import {
 } from '@/features/admin/use-admin-designers';
 
 /**
- * One profile, as the reviewer sees it: every project including unpublished
+ * One profile, as the reviewer sees it: every portfolio piece including unpublished
  * drafts, because judging unfinished work is the point of reviewing.
  */
 const AdminDesignerReview: FC = () => {
@@ -60,7 +60,7 @@ const AdminDesignerReview: FC = () => {
     );
   }
 
-  const { profile, projects } = review.data;
+  const { profile, portfolio_projects } = review.data;
   const decided =
     profile.status === 'approved' || profile.status === 'rejected';
 
@@ -94,13 +94,15 @@ const AdminDesignerReview: FC = () => {
         <Divider />
 
         <Typography variant="h6" component="h2">
-          Portfolio ({projects.length})
+          Portfolio ({portfolio_projects.length})
         </Typography>
-        {projects.length === 0 ? (
-          <Typography color="text.secondary">No projects yet.</Typography>
+        {portfolio_projects.length === 0 ? (
+          <Typography color="text.secondary">
+            No portfolio_projects yet.
+          </Typography>
         ) : (
           <Stack spacing={1}>
-            {projects.map((project) => (
+            {portfolio_projects.map((project) => (
               <Box key={project.id}>
                 <Typography>
                   {project.title}{' '}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { DesignerProfile, Project } from '@shared/types';
+import type { DesignerProfile, PortfolioProject } from '@shared/types';
 import { getApp, uniqueEmail } from './setup';
 
 const app = await getApp();
@@ -138,12 +138,12 @@ describe('the review queue', () => {
     expect(body.limit).toBe(2);
   });
 
-  test('the detail view shows unpublished projects too', async () => {
+  test('the detail view shows unpublished portfolio_projects too', async () => {
     // The reviewer must be able to judge draft work; that is the whole job.
     const { cookie, profile } = await pendingDesigner('Draft Work Studio');
     await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: cookie },
       payload: { title: 'Unpublished Piece', status: 'draft' },
     });
@@ -154,8 +154,8 @@ describe('the review queue', () => {
       cookies: { token: await adminCookie() },
     });
     const titles = res
-      .json<{ projects: Project[] }>()
-      .projects.map((p) => p.title);
+      .json<{ portfolio_projects: PortfolioProject[] }>()
+      .portfolio_projects.map((p) => p.title);
     expect(titles).toContain('Unpublished Piece');
   });
 
