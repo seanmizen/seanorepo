@@ -237,6 +237,35 @@ Magic link only; there are no passwords. See `services/auth.ts`,
   sign-out, because on `/verify` it races the sign-in and would otherwise
   overwrite a fresh session with `null`. Preserve that guard.
 
+## Never assert what you have not verified
+
+**Loading, loaded and failed are three distinct states, and every surface must
+make clear which one it is in.**
+
+This is not a style preference. The backend status chip once rendered green
+with the tooltip "API reachable" while its request was still in flight — the
+app telling the user something it did not know. A fallback that looks identical
+to real data is a lie with a happy path.
+
+Rules:
+
+- **Derive every presentation from ONE value.** When label, colour and tooltip
+  each branch on the query separately, they will eventually disagree. Compute a
+  single status (`'checking' | 'ok' | 'down'`) and map it to a presentation, so
+  a contradictory combination is unrepresentable rather than merely unlikely.
+- **A pending state must never look like a successful one.** Not green, not a
+  reassuring word, not a plausible placeholder. Neutral or explicitly unknown.
+- **Do not invent content for data you have not received.** `data?.x ?? 'some
+  default'` renders a guess that is indistinguishable from the truth. Use a
+  skeleton while pending, and render nothing rather than a fabrication on
+  failure. The exception is genuinely static branding that never came from the
+  server — the site's own name is not "data".
+- **Handle the failure branch explicitly.** `isError` collapsing into the
+  success path is the same bug wearing a different hat.
+- **Test the in-flight state.** Most netcode bugs live there and never appear
+  in a test that only covers success and failure. Playwright can hold a
+  response open (`route.fulfill` after a delay) — use it.
+
 ## Theming
 
 MUI, three-state light / dark / auto, persisted to `localStorage['theme-mode']`.
