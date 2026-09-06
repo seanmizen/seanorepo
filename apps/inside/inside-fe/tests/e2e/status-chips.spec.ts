@@ -143,3 +143,64 @@ test.describe('dev sign-in link', () => {
     await expect(page.getByTestId('dev-magic-link-notice')).toHaveCount(0);
   });
 });
+
+test.describe('in-flight state', () => {
+  /**
+   * The bug this guards: the chip was green with the tooltip "API reachable"
+   * while the health request was still outstanding — asserting a fact the app
+   * had not yet established. Success-and-failure tests never catch this,
+   * because the window only exists while the request is open.
+   */
+  test('never claims the backend is reachable before a response lands', async ({
+    page,
+  }) => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await page.route('**/api/health', async (route) => {
+      await held;
+      await route.continue();
+    });
+
+    await page.goto('/');
+
+    const chip = page.getByTestId('status-chip-backend');
+    await expect(chip).toBeVisible();
+    // Assert the state, not the copy, so rewording cannot silently break this.
+    await expect(chip).toHaveAttribute('data-status', 'checking');
+    await expect(chip).toHaveText(/backend…/);
+    // The tooltip must not assert reachability while the request is open.
+    await expect(chip).toHaveAttribute('aria-label', /^Checking/);
+
+    release?.();
+    await expect(chip).toHaveAttribute('data-status', 'ok', {
+      timeout: 15_000,
+    });
+    await expect(chip).toHaveText(/backend ok/);
+  });
+
+  test('the tagline is not invented while config is loading', async ({
+    page,
+  }) => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await page.route('**/api/config', async (route) => {
+      await held;
+      await route.continue();
+    });
+
+    await page.goto('/');
+    // A skeleton, not a plausible hardcoded sentence standing in for real data.
+    await expect(page.getByTestId('tagline-loading')).toBeVisible();
+
+    release?.();
+    await expect(
+      page.getByText('Find the designer for your space'),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+});

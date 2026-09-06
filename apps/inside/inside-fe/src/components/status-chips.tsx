@@ -25,6 +25,8 @@ interface ChipColour {
 const PURPLE: ChipColour = { light: '#7b3fbf', dark: '#cbaaf2' };
 const GREEN: ChipColour = { light: '#2e7d32', dark: '#86d691' };
 const RED: ChipColour = { light: '#c62828', dark: '#f4948b' };
+/** Deliberately not green: "we don't know yet" must not look like "it's fine". */
+const NEUTRAL: ChipColour = { light: '#5f5a54', dark: '#a39d94' };
 
 /**
  * Every chip is the same shape, so the stack reads as one system as more are
@@ -35,7 +37,10 @@ const StatusChip: FC<{
   title: string;
   colour: ChipColour;
   testId: string;
-}> = ({ label, title, colour: pair, testId }) => {
+  /** The state this chip is reporting, exposed so tests assert the state
+   *  machine rather than the wording. */
+  status?: string;
+}> = ({ label, title, colour: pair, testId, status }) => {
   const theme = useTheme();
   const colour = theme.palette.mode === 'dark' ? pair.dark : pair.light;
 
@@ -46,6 +51,10 @@ const StatusChip: FC<{
         variant="outlined"
         label={label}
         data-testid={testId}
+        data-status={status}
+        // The tooltip text is the chip's accessible name too, so a screen
+        // reader gets the full status rather than only the short label.
+        aria-label={title}
         sx={{
           // Explicit rather than a palette slot: these are meta-UI about the
           // deployment, deliberately outside the site's own brand colours.
@@ -97,23 +106,44 @@ const StatusChips: FC = () => {
     );
   }
 
+  /**
+   * One value, three presentations.
+   *
+   * Label, colour and tooltip previously branched separately, so an in-flight
+   * request rendered a green chip whose tooltip said "API reachable" — the app
+   * asserting something it had not yet verified. Deriving all three from a
+   * single status makes that class of disagreement unrepresentable.
+   */
+  const backend: 'checking' | 'ok' | 'down' = health.isPending
+    ? 'checking'
+    : health.isError
+      ? 'down'
+      : 'ok';
+
+  const BACKEND_PRESENTATION = {
+    checking: {
+      label: 'backend…',
+      colour: NEUTRAL,
+      title: 'Checking whether the API is reachable',
+    },
+    down: {
+      label: 'backend down',
+      colour: RED,
+      title: 'The API is not reachable',
+    },
+    ok: {
+      label: 'backend ok',
+      colour: GREEN,
+      title: `API reachable${health.data ? ` · up ${health.data.uptime}s` : ''}`,
+    },
+  } as const;
+
   chips.push(
     <StatusChip
       key="backend"
       testId="status-chip-backend"
-      label={
-        health.isPending
-          ? 'backend…'
-          : health.isError
-            ? 'backend down'
-            : 'backend ok'
-      }
-      title={
-        health.isError
-          ? 'The API is not reachable'
-          : `API reachable${health.data ? ` · up ${health.data.uptime}s` : ''}`
-      }
-      colour={health.isError ? RED : GREEN}
+      status={backend}
+      {...BACKEND_PRESENTATION[backend]}
     />,
   );
 
