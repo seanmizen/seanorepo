@@ -101,6 +101,15 @@ for (const scheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, `/account (${scheme})`);
     });
 
+    test('home — signed in', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-home'));
+      await page.goto('/');
+      await expect(page.getByRole('link', { name: 'Account' })).toBeVisible();
+      await expectNoViolations(page, `/ signed in (${scheme})`);
+    });
+
     test('admin — review queue', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);
