@@ -356,3 +356,29 @@ export async function listPublicPortfolio(
     }),
   };
 }
+
+/**
+ * One published piece from an approved designer's portfolio.
+ *
+ * Reuses the list path rather than writing a second query: portfolios are
+ * small (a studio has a handful of pieces, not thousands), and one code path
+ * means the detail page can never disagree with the grid about what is
+ * published or what images a piece has.
+ */
+export async function findPublicPortfolioProject(
+  designerSlug: string,
+  projectSlug: string,
+): Promise<{ profile: DesignerProfile; project: PublicProject } | null> {
+  const portfolio = await listPublicPortfolio(designerSlug, {
+    limit: 200,
+    offset: 0,
+  });
+  if (!portfolio) return null;
+
+  const project = portfolio.portfolioProjects.find(
+    (candidate) => candidate.slug === projectSlug,
+  );
+  // An unpublished piece is indistinguishable from one that never existed —
+  // the same rule the profile itself follows.
+  return project ? { profile: portfolio.profile, project } : null;
+}

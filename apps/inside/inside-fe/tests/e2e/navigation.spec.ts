@@ -263,23 +263,41 @@ test.describe('an undeclared URL', () => {
   test('renders the 404 page and never offers a dead link', async ({
     page,
   }) => {
-    // Nobody declared /designers yet, so the middle crumb is inert text. The
-    // moment a ticket adds /designers/:slug, the route-table guard above
-    // forces /designers to exist and this crumb becomes a link.
-    await page.goto('/designers/alice-morgan');
+    // Nobody declares /journal, so the middle crumb is inert text rather than
+    // an invitation into a 404. (This test used to use /designers/alice, which
+    // stopped being undeclared the moment SEAN-160 added those routes — and
+    // the route-table guard then forced /designers to exist, exactly as the
+    // rule intends.)
+    await page.goto('/journal/spring-2026');
     await waitForApp(page);
 
     await expect(page.getByTestId('not-found')).toBeVisible();
     await expect(page.getByTestId('breadcrumb-crumb')).toHaveText([
       'home',
-      'designers',
-      'alice morgan',
+      'journal',
+      'spring 2026',
     ]);
 
     const nav = page.getByTestId('breadcrumbs');
     await expect(nav.getByRole('link')).toHaveCount(1);
     await expect(
       nav.getByRole('link', { name: 'home', exact: true }),
+    ).toBeVisible();
+  });
+
+  test('a declared route with no such record is a real page, not the 404', async ({
+    page,
+  }) => {
+    // /designers/:slug IS declared, so an unknown studio is a page saying so —
+    // with a working trail back — rather than the catch-all. The distinction
+    // matters: the crumbs must stay navigable.
+    await page.goto('/designers/no-such-studio');
+    await waitForApp(page);
+
+    await expect(page.getByTestId('not-found')).toHaveCount(0);
+    await expect(page.getByTestId('designer-missing')).toBeVisible();
+    await expect(
+      page.getByTestId('breadcrumbs').getByRole('link', { name: 'designers' }),
     ).toBeVisible();
   });
 });

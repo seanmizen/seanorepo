@@ -1,6 +1,7 @@
 import { designerFilters } from '@shared/filters';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  findPublicPortfolioProject,
   listApprovedDesigners,
   listPublicPortfolio,
 } from '../services/discovery';
@@ -105,6 +106,24 @@ export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
    * Published pieces of an approved designer, and nothing else. An unapproved
    * or unknown slug gets the same 404, so the approval queue cannot be probed.
    */
+  /**
+   * GET /api/designers/:slug/portfolio/:projectSlug — one piece.
+   *
+   * Both slugs must resolve to something published and approved, or it 404s.
+   */
+  fastify.get(
+    '/designers/:slug/portfolio/:projectSlug',
+    async (request, reply) => {
+      const { slug, projectSlug } = request.params as {
+        slug: string;
+        projectSlug: string;
+      };
+      const found = await findPublicPortfolioProject(slug, projectSlug);
+      if (!found) return reply.status(404).send({ error: 'Not found' });
+      return found;
+    },
+  );
+
   fastify.get('/designers/:slug/portfolio', async (request, reply) =>
     withValidation(reply, async () => {
       const { slug } = request.params as { slug: string };
