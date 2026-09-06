@@ -1,6 +1,7 @@
 name: Check (inside)
 
-# Gate for apps/inside: types, lint, backend unit tests, and Playwright E2E.
+# Gate for apps/inside: types, lint, backend unit tests, Playwright E2E and an
+# axe accessibility scan.
 # Per apps/inside/CLAUDE.md, a feature ticket ships with tests — this is what
 # makes that rule real rather than aspirational.
 #
@@ -19,7 +20,7 @@ permissions:
 
 jobs:
   check:
-    name: types + lint + unit + e2e
+    name: types + lint + unit + e2e + a11y
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -58,6 +59,13 @@ jobs:
 
       - name: E2E
         run: yarn workspace inside test:e2e
+
+      - name: Accessibility (axe)
+        # Scans every route in both light and dark. Separate from the E2E step
+        # so a contrast regression is named as such in the job log rather than
+        # buried among the behavioural specs; `test:e2e` excludes the @axe tag,
+        # so nothing runs twice.
+        run: yarn workspace inside test:axe
 
       - name: Upload Playwright report on failure
         if: failure()

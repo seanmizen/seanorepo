@@ -9468,6 +9468,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "inside-fe@workspace:apps/inside/inside-fe"
   dependencies:
+    "@axe-core/playwright": "npm:^4.10.2"
     "@emotion/react": "npm:^11.14.0"
     "@emotion/styled": "npm:^11.14.1"
     "@mui/icons-material": "npm:^7.3.6"

@@ -16,7 +16,8 @@
     "down": "docker compose --profile dev --profile prod down",
     "test:unit": "yarn workspace inside-be test",
     "test:e2e": "yarn workspace inside-fe test:e2e",
-    "test:all": "yarn test && yarn test:e2e"
+    "test:axe": "yarn workspace inside-fe test:axe",
+    "test:all": "yarn test && yarn test:e2e && yarn test:axe"
   },
   "devDependencies": {
     "bun-types": "^1.3.4",

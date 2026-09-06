@@ -1,36 +1,5 @@
-import { expect, type Page, test } from '@playwright/test';
-
-/** Unique per test so parallel runs never share an account. */
-const uniqueEmail = (prefix: string) =>
-  `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}@inside.test`;
-
-/**
- * Complete a sign-in using the dev bypass, which returns the magic link in the
- * response rather than emailing it.
- */
-async function signIn(
-  page: Page,
-  email: string,
-  role: 'buyer' | 'designer' = 'buyer',
-) {
-  await page.getByRole('textbox', { name: /email/i }).fill(email);
-  if (role === 'designer') {
-    await page.getByRole('button', { name: /i'm a designer/i }).click();
-  }
-  await page.getByRole('button', { name: /email me a link/i }).click();
-  await page.getByTestId('dev-magic-link').click();
-
-  // /verify consumes the token and sets the cookie via fetch, THEN redirects.
-  // Returning early lets the caller's next navigation cancel that request in
-  // flight, so the sign-in silently doesn't stick.
-  //
-  // Both interstitials are excluded: at the moment this is called the page is
-  // still on /login, so waiting only for "not /verify" would match instantly.
-  await page.waitForURL(
-    (url) =>
-      !url.pathname.startsWith('/verify') && !url.pathname.startsWith('/login'),
-  );
-}
+import { expect, test } from '@playwright/test';
+import { signIn, uniqueEmail } from './helpers';
 
 test.describe('sign in', () => {
   test('a new buyer can sign in end to end', async ({ page }) => {
