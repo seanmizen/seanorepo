@@ -246,3 +246,45 @@ export interface Pitch {
   createdAt: string;
   updatedAt: string;
 }
+
+/* ------------------------------------------------------------------ *
+ * Post-a-project API shapes
+ * ------------------------------------------------------------------ */
+
+/**
+ * A brief as the public board sees it.
+ *
+ * `buyerId` is deliberately absent: the board is readable anonymously, and who
+ * posted a job is contact detail. It must never leak from a listing.
+ */
+export type PublicBrief = Omit<Brief, 'buyerId'> & {
+  /** How many designers have responded. A count identifies nobody. */
+  pitchCount: number;
+};
+
+/** A brief in its own author's dashboard, where `buyerId` is their own id. */
+export type OwnedBrief = Brief & { pitchCount: number };
+
+/** The designer behind a pitch, as shown to the brief's owner. */
+export interface PitchDesigner {
+  id: number;
+  slug: string;
+  studioName: string;
+  headline: string | null;
+  location: string | null;
+  budgetBand: BudgetBand | null;
+}
+
+/** A pitch as the brief's owner sees it. Only ever served to that owner. */
+export type ReceivedPitch = Pitch & { designer: PitchDesigner };
+
+/** A pitch as its author sees it, alongside the brief it answers. */
+export type SentPitch = Pitch & { brief: PublicBrief };
+
+/** GET /api/briefs — the public board, paginated. */
+export interface BriefListResponse {
+  briefs: PublicBrief[];
+  total: number;
+  limit: number;
+  offset: number;
+}
