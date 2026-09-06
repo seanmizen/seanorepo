@@ -132,11 +132,11 @@ export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
           slug: result.profile.slug,
           studioName: result.profile.studioName,
         },
-        portfolio_projects: result.portfolio_projects,
+        portfolioProjects: result.portfolioProjects,
         total: result.total,
         page,
         limit,
-        hasMore: offset + result.portfolio_projects.length < result.total,
+        hasMore: offset + result.portfolioProjects.length < result.total,
       };
     }),
   );

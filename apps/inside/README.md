@@ -27,6 +27,29 @@ yarn workspace inside down
 
 Type-check both sides with `yarn workspace inside test:types`.
 
+## Demo data
+
+A fresh database is empty, which makes discovery and the portfolio pages
+impossible to review. Fill it:
+
+```bash
+yarn workspace inside seed
+```
+
+Six designer profiles covering every approval status (draft, pending, approved,
+rejected), portfolio projects with real generated images, two buyers, three
+briefs and a bid. Images go through the actual `services/images.ts` pipeline, so
+variants and `srcset` are exercised rather than faked with rows pointing at
+files that do not exist.
+
+It is **idempotent** — run it as often as you like — and it **refuses to run
+when `NODE_ENV=production`**, because it writes fabricated accounts and doing
+that to real data would be destructive.
+
+Every seeded address ends in `@inside.test`, a reserved TLD that can never
+receive mail. Sign in as any of them: with no SMTP configured the sign-in link
+appears directly on `/login`.
+
 ## Layout
 
 - `inside-fe` — React 19 + RSBuild + MUI (light/dark/auto) + TanStack Query

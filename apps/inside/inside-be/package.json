@@ -7,7 +7,8 @@
   "scripts": {
     "start": "bun --hot --no-clear-screen src/index.ts",
     "prod": "NODE_ENV=production bun --env-file=.env src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "seed": "bun src/seed.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

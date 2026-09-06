@@ -57,10 +57,10 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
     if (!profile) {
       return reply.status(404).send({ error: 'Designer not found' });
     }
-    const portfolio_projects = await designers.listProjects(profile.id, {
+    const portfolioProjects = await designers.listProjects(profile.id, {
       publishedOnly: true,
     });
-    return { profile, portfolio_projects };
+    return { profile, portfolioProjects };
   });
 
   /**
@@ -148,7 +148,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         if (!profile) {
           return reply.status(404).send({ error: 'No profile yet' });
         }
-        return { portfolio_projects: await designers.listProjects(profile.id) };
+        return { portfolioProjects: await designers.listProjects(profile.id) };
       });
 
       me.post('/portfolio', async (request, reply) =>

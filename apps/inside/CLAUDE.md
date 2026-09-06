@@ -75,6 +75,7 @@ touching `apps/inside`.
 | `yarn workspace inside test:e2e` | Playwright against a real FE + BE |
 | `yarn workspace inside test:axe` | axe WCAG 2.1 AA scan of every route, light and dark |
 | `yarn workspace inside test:all` | everything |
+| `yarn workspace inside seed` | fill an empty database with demo data |
 
 ### What to test where
 
