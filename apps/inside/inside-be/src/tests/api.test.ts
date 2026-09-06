@@ -1,23 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { createTestEnv } from './setup';
+import { describe, expect, test } from 'bun:test';
+import { getApp } from './setup';
 
-const env = createTestEnv('inside-api');
-
-// Imported after createTestEnv so the server reads the test env at module
-// scope. `app` is exported without listening, so inject() drives it in-process
-// — no port, no race, no cleanup.
-const { app } = await import('../index');
-const { runMigrations } = await import('../services/migrations');
-
-beforeAll(async () => {
-  await runMigrations();
-  await app.ready();
-});
-
-afterAll(async () => {
-  await app.close();
-  env.cleanup();
-});
+// Shared, migrated, ready instance. `app` is exported without listening, so
+// inject() drives it in-process — no port, no race. Never closed by a suite:
+// the module is a singleton, so closing it here would break other suites.
+const app = await getApp();
 
 describe('liveness', () => {
   test('GET / responds outside the /api prefix', async () => {

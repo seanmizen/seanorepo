@@ -41,6 +41,11 @@ export default defineConfig({
         JWT_SECRET: 'e2e-jwt-secret',
         COOKIE_SECRET: 'e2e-cookie-secret',
         CORS_ORIGIN: `http://localhost:${FE_PORT}`,
+        FRONTEND_URL: `http://localhost:${FE_PORT}`,
+        // Lets the auth specs complete a real sign-in without SMTP: the
+        // magic link comes back in the response instead of an email.
+        DANGEROUS_BYPASS_EMAIL_MAGIC_LINK: 'true',
+        ADMIN_EMAILS: 'admin@inside.test',
       },
     },
     {
