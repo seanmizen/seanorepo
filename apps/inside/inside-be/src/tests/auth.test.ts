@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getApp } from './setup';
+import { getApp, uniqueEmail } from './setup';
 
 // Shared instance — see setup.ts. ADMIN_EMAILS is set there to boss@inside.test.
 const app = await getApp();
@@ -29,6 +29,45 @@ async function login(email: string, role?: string): Promise<string> {
   });
   return res.cookies.find((c) => c.name === 'token')?.value as string;
 }
+
+describe('the dev sign-in link', () => {
+  test('is returned in the test environment, where email is unconfigured', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/magic-link',
+      payload: { email: uniqueEmail('devlink') },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ devLink?: string }>().devLink).toBeString();
+  });
+
+  test('is a working credential, not a decorative string', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/magic-link',
+      payload: { email: uniqueEmail('devlink-works') },
+    });
+    const link = res.json<{ devLink: string }>().devLink;
+    const token = new URL(link).searchParams.get('token') as string;
+
+    const verified = await app.inject({
+      method: 'GET',
+      url: `/api/auth/verify?token=${token}`,
+    });
+    expect(verified.statusCode).toBe(200);
+  });
+
+  test('the endpoint does not 502 when SMTP is unconfigured', async () => {
+    // The regression: .env.example ships a host with blank credentials, so the
+    // send failed and a developer could not sign in at all.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/magic-link',
+      payload: { email: uniqueEmail('no-smtp') },
+    });
+    expect(res.statusCode).not.toBe(502);
+  });
+});
 
 describe('POST /api/auth/magic-link', () => {
   test('issues a link for a new address', async () => {

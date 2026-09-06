@@ -33,6 +33,8 @@ export interface HealthResponse {
 
 /** GET /api/config — server-driven copy and limits the frontend reads at boot. */
 export interface AppConfig {
+  /** True when the server is not running in production. Drives the dev chip. */
+  devMode: boolean;
   siteName: string;
   tagline: string;
   uploadMaxFileSizeMb: number;
