@@ -2,6 +2,19 @@ import nodemailer, { type Transporter } from 'nodemailer';
 
 let transporter: Transporter | null = null;
 
+/**
+ * Whether SMTP is configured well enough to attempt a send.
+ *
+ * A host alone is not enough — the default .env.example ships a host with
+ * blank credentials, which fails at send time with a 502 and leaves a
+ * developer unable to sign in at all.
+ */
+export function isEmailConfigured(): boolean {
+  return Boolean(
+    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS,
+  );
+}
+
 function getTransporter(): Transporter {
   if (!transporter) {
     transporter = nodemailer.createTransport({

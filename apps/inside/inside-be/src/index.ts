@@ -8,6 +8,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { routes } from './controllers';
+import { assertBypassNotProduction } from './services/dev-mode';
 import { runMigrations } from './services/migrations';
 
 const DEV_SECRET = 'dev-secret-change-in-production';
@@ -28,6 +29,13 @@ const requireSecret = (name: 'JWT_SECRET' | 'COOKIE_SECRET'): string => {
   }
   return value || DEV_SECRET;
 };
+
+// A production box with the email bypass on has no authentication at all.
+// Crash rather than run, exactly as with missing secrets.
+assertBypassNotProduction({
+  nodeEnv: process.env.NODE_ENV,
+  bypassFlag: process.env.DANGEROUS_BYPASS_EMAIL_MAGIC_LINK === 'true',
+});
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4061;
 const UPLOADS_PATH = process.env.UPLOADS_PATH || './uploads';

@@ -1,5 +1,6 @@
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Container,
@@ -60,12 +61,20 @@ const Login: FC = () => {
             can only be used once.
           </Typography>
           {devLink && (
-            // Only ever present when DANGEROUS_BYPASS_EMAIL_MAGIC_LINK is on.
-            <Alert severity="warning">
-              Email bypass is enabled.{' '}
-              <MuiLink href={devLink} data-testid="dev-magic-link">
-                Sign in
-              </MuiLink>
+            // Present only when the SERVER chose to send a link, which it
+            // cannot do in production. The page never builds one itself, so
+            // this block is unreachable against a production backend
+            // regardless of how the frontend was built.
+            <Alert severity="warning" data-testid="dev-magic-link-notice">
+              <AlertTitle>Development sign-in</AlertTitle>
+              No email was sent because this backend is not configured to send
+              any. Use the link below — it is a real, single-use sign-in
+              credential and only ever appears outside production.
+              <Box sx={{ mt: 1 }}>
+                <MuiLink href={devLink} data-testid="dev-magic-link">
+                  Sign in as {email}
+                </MuiLink>
+              </Box>
             </Alert>
           )}
         </Stack>

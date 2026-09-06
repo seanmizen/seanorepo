@@ -39,15 +39,22 @@ describe('GET /api/config', () => {
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
+      devMode: boolean;
       siteName: string;
       tagline: string;
       uploadMaxFileSizeMb: number;
       uploadMaxFiles: number;
     }>();
+    expect(typeof body.devMode).toBe('boolean');
     expect(typeof body.siteName).toBe('string');
     expect(typeof body.tagline).toBe('string');
     expect(typeof body.uploadMaxFileSizeMb).toBe('number');
     expect(typeof body.uploadMaxFiles).toBe('number');
+  });
+
+  test('reports dev mode outside production', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/config' });
+    expect(res.json<{ devMode: boolean }>().devMode).toBe(true);
   });
 });
 
