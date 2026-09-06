@@ -8,7 +8,7 @@
     "inside-be"
   ],
   "scripts": {
-    "start": "concurrently --prefix \"{time} {name} \u2020\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace inside-fe start\" \"yarn workspace inside-be start\"",
+    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace inside-fe start\" \"yarn workspace inside-be start\"",
     "test": "yarn test:types && yarn test:unit",
     "test:types": "yarn workspace inside-fe tsc --noEmit && yarn workspace inside-be tsc --noEmit",
     "start:docker": "API_URL=http://localhost:4061/api docker compose --profile dev up --build",
