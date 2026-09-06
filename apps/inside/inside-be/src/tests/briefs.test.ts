@@ -477,7 +477,15 @@ describe('managing your own briefs', () => {
 });
 
 describe('pitching', () => {
-  test('an approved designer can pitch, and the count shows on the board', async () => {
+  /** Send a draft bid. */
+  const submit = (cookie: string, pitchId: number) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/me/pitches/${pitchId}/submit`,
+      cookies: { token: cookie },
+    });
+
+  test('a bid starts as a draft and only counts once sent', async () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Keen Studio');
 
@@ -490,7 +498,23 @@ describe('pitching', () => {
     const created = res.json<{ pitch: Pitch }>().pitch;
     expect(created.briefId).toBe(brief.id);
     expect(created.designerProfileId).toBe(designer.profile.id);
-    expect(created.status).toBe('sent');
+    expect(created.status).toBe('draft');
+    expect(created.submittedAt).toBeNull();
+
+    // A bid nobody has sent is not a bid: it must not tell the buyer they have
+    // interest they cannot see.
+    const beforeSubmit = await app.inject({
+      method: 'GET',
+      url: `/api/briefs/${brief.id}`,
+    });
+    expect(beforeSubmit.json<{ brief: PublicBrief }>().brief.pitchCount).toBe(
+      0,
+    );
+
+    const sent = await submit(designer.cookie, created.id);
+    expect(sent.statusCode).toBe(200);
+    expect(sent.json<{ pitch: Pitch }>().pitch.status).toBe('submitted');
+    expect(sent.json<{ pitch: Pitch }>().pitch.submittedAt).toBeString();
 
     const detail = await app.inject({
       method: 'GET',
@@ -499,11 +523,106 @@ describe('pitching', () => {
     expect(detail.json<{ brief: PublicBrief }>().brief.pitchCount).toBe(1);
   });
 
-  test('the same designer cannot pitch the same brief twice', async () => {
+  test('starting again returns the draft already in progress', async () => {
+    // "Start creating a bid" and "continue the bid you had in draft" are the
+    // same button, so they are the same call.
+    const { brief } = await openBrief();
+    const designer = await asDesigner('Continue Studio');
+
+    const first = await pitch(designer.cookie, brief.id);
+    const again = await pitch(designer.cookie, brief.id);
+
+    expect(again.statusCode).toBe(200);
+    expect(again.json<{ pitch: Pitch }>().pitch.id).toBe(
+      first.json<{ pitch: Pitch }>().pitch.id,
+    );
+  });
+
+  test('a draft can be edited, a sent bid cannot', async () => {
+    const { brief } = await openBrief();
+    const designer = await asDesigner('Editing Studio');
+    const created = (await pitch(designer.cookie, brief.id)).json<{
+      pitch: Pitch;
+    }>().pitch;
+
+    const edited = await app.inject({
+      method: 'PUT',
+      url: `/api/me/pitches/${created.id}`,
+      cookies: { token: designer.cookie },
+      payload: { message: 'A much better pitch than before' },
+    });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json<{ pitch: Pitch }>().pitch.message).toBe(
+      'A much better pitch than before',
+    );
+
+    await submit(designer.cookie, created.id);
+
+    const tooLate = await app.inject({
+      method: 'PUT',
+      url: `/api/me/pitches/${created.id}`,
+      cookies: { token: designer.cookie },
+      payload: { message: 'Sneaking a change in after sending' },
+    });
+    expect(tooLate.statusCode).toBe(409);
+  });
+
+  test('a bid cannot be sent twice', async () => {
+    const { brief } = await openBrief();
+    const designer = await asDesigner('Double Send Studio');
+    const created = (await pitch(designer.cookie, brief.id)).json<{
+      pitch: Pitch;
+    }>().pitch;
+
+    expect((await submit(designer.cookie, created.id)).statusCode).toBe(200);
+    expect((await submit(designer.cookie, created.id)).statusCode).toBe(409);
+  });
+
+  test("a designer cannot touch another designer's bid", async () => {
+    const { brief } = await openBrief();
+    const owner = await asDesigner('Owner Bid Studio');
+    const intruder = await asDesigner('Intruder Bid Studio');
+    const created = (await pitch(owner.cookie, brief.id)).json<{
+      pitch: Pitch;
+    }>().pitch;
+
+    for (const call of [
+      app.inject({
+        method: 'PUT',
+        url: `/api/me/pitches/${created.id}`,
+        cookies: { token: intruder.cookie },
+        payload: { message: 'Not mine to edit at all' },
+      }),
+      submit(intruder.cookie, created.id),
+    ]) {
+      // 404 rather than 403, so ids cannot be probed.
+      expect((await call).statusCode).toBe(404);
+    }
+  });
+
+  test('a draft cannot be sent once the brief has closed', async () => {
+    const buyer = await asBuyer();
+    const brief = await buyer.postBrief({ status: 'open' });
+    const designer = await asDesigner('Slow Studio');
+    const created = (await pitch(designer.cookie, brief.id)).json<{
+      pitch: Pitch;
+    }>().pitch;
+
+    // The brief can close while a draft sits unsent.
+    const db = await openDbConnection();
+    db.run("UPDATE briefs SET status = 'closed' WHERE id = ?", [brief.id]);
+    db.close();
+
+    expect((await submit(designer.cookie, created.id)).statusCode).toBe(409);
+  });
+
+  test('the same designer cannot bid the same brief twice once sent', async () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Twice Studio');
 
-    expect((await pitch(designer.cookie, brief.id)).statusCode).toBe(201);
+    const created = await pitch(designer.cookie, brief.id);
+    expect(created.statusCode).toBe(201);
+    await submit(designer.cookie, created.json<{ pitch: Pitch }>().pitch.id);
 
     const again = await pitch(designer.cookie, brief.id, {
       message: 'Actually, we would love it even more',
@@ -525,13 +644,24 @@ describe('pitching', () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Racing Studio');
 
-    // Both requests pass the "already pitched?" check before either inserts,
+    // Both requests pass the "already started?" check before either inserts,
     // so the loser is caught by the UNIQUE constraint rather than the lookup.
+    // Either way exactly one row exists and neither caller sees a 500.
     const [a, b] = await Promise.all([
       pitch(designer.cookie, brief.id),
       pitch(designer.cookie, brief.id),
     ]);
-    expect([a.statusCode, b.statusCode].sort()).toEqual([201, 409]);
+    for (const res of [a, b]) {
+      expect([200, 201, 409]).toContain(res.statusCode);
+      expect(res.statusCode).not.toBe(500);
+    }
+
+    const db = await openDbConnection();
+    const count = db
+      .query('SELECT COUNT(*) AS n FROM pitches WHERE brief_id = ?')
+      .get(brief.id) as { n: number };
+    db.close();
+    expect(count.n).toBe(1);
   });
 
   test('a designer whose profile is not approved cannot pitch', async () => {
@@ -583,7 +713,7 @@ describe('pitching', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  test('a closed, awarded or draft brief takes no new pitches', async () => {
+  test('a closed or draft brief takes no new bids', async () => {
     const buyer = await asBuyer();
     const designer = await asDesigner('Too Late Studio');
 
@@ -591,7 +721,7 @@ describe('pitching', () => {
     // A draft is not on the board, so it must read as missing.
     expect((await pitch(designer.cookie, draft.id)).statusCode).toBe(404);
 
-    for (const status of ['closed', 'awarded'] as const) {
+    for (const status of ['closed'] as const) {
       const brief = await buyer.postBrief({ status: 'open' });
       const db = await openDbConnection();
       db.run('UPDATE briefs SET status = ? WHERE id = ?', [status, brief.id]);
@@ -657,11 +787,19 @@ describe('who can see a pitch', () => {
     const created = await pitch(designer.cookie, brief.id, {
       message: 'A very private pitch',
     });
+    const draft = created.json<{ pitch: Pitch }>().pitch;
+    // A brief "with a bid" means a bid the designer actually sent — a draft is
+    // invisible to the buyer by design.
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/me/pitches/${draft.id}/submit`,
+      cookies: { token: designer.cookie },
+    });
     return {
       buyer,
       brief,
       designer,
-      pitch: created.json<{ pitch: Pitch }>().pitch,
+      pitch: sent.json<{ pitch: Pitch }>().pitch,
     };
   }
 

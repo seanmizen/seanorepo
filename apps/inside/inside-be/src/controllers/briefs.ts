@@ -84,7 +84,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
   );
 
   /**
-   * Public detail. A draft reads as missing; closed and awarded briefs stay
+   * Public detail. A draft reads as missing; closed briefs stay
    * readable so a designer can still see what they pitched for.
    */
   fastify.get('/briefs/:id', async (request, reply) => {
@@ -175,11 +175,6 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
             .status(409)
             .send({ error: 'This brief is already open' });
         }
-        if (brief.status === 'awarded') {
-          return reply
-            .status(409)
-            .send({ error: 'An awarded brief cannot be reopened' });
-        }
         return { brief: await briefs.setBriefStatus(brief.id, 'open') };
       });
 
@@ -190,7 +185,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       me.post('/briefs/:id/close', async (request, reply) => {
         const brief = await owned(request);
         if (!brief) return reply.status(404).send({ error: 'Not found' });
-        if (brief.status === 'closed' || brief.status === 'awarded') {
+        if (brief.status === 'closed') {
           return reply
             .status(409)
             .send({ error: 'This brief is already closed to pitches' });
