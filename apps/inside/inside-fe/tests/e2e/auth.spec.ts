@@ -70,7 +70,9 @@ test.describe('protected routes', () => {
 test.describe('bad links', () => {
   test('an invalid token shows a real error', async ({ page }) => {
     await page.goto('/verify?token=nonsense');
-    await expect(page.getByText(/sign-in failed/i)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /sign-in failed/i }),
+    ).toBeVisible();
     await expect(
       page.getByRole('link', { name: /request a new link/i }),
     ).toBeVisible();
@@ -95,7 +97,9 @@ test.describe('bad links', () => {
     await page.goto(
       new URL(link as string).pathname + new URL(link as string).search,
     );
-    await expect(page.getByText(/sign-in failed/i)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /sign-in failed/i }),
+    ).toBeVisible();
   });
 
   test('a returnTo pointing off-site is ignored', async ({ page }) => {
