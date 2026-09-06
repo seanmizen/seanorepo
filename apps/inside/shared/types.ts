@@ -118,6 +118,8 @@ export interface DesignerProfile {
   websiteUrl: string | null;
   instagramUrl: string | null;
   budgetBand: BudgetBand | null;
+  /** When the designer can start. A discovery filter, not a promise. */
+  availability: Availability | null;
   coverImageId: number | null;
   status: DesignerProfileStatus;
   reviewedAt: string | null;
@@ -287,4 +289,65 @@ export interface BriefListResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * Discovery — the public, anonymous-facing read side
+ * ------------------------------------------------------------------ */
+
+/**
+ * How a designer list is ordered.
+ *
+ * `relevance` is only meaningful alongside a search query and is rejected
+ * without one — silently falling back would make the ordering unexplainable.
+ */
+export type DesignerSort = 'relevance' | 'newest' | 'oldest' | 'name';
+
+/**
+ * A designer as they appear in a list. Deliberately narrower than
+ * `DesignerProfile`: no bio, and none of the review fields, which are the
+ * approval pipeline's business and not a visitor's.
+ */
+export interface DesignerListItem {
+  id: number;
+  slug: string;
+  studioName: string;
+  headline: string | null;
+  location: string | null;
+  budgetBand: BudgetBand | null;
+  availability: Availability | null;
+  /** Published portfolio pieces only. */
+  projectCount: number;
+  /** Ready for a `srcset` — the same shape the image library returns. */
+  coverImage: StoredImage | null;
+  createdAt: string;
+}
+
+export interface DesignerListResponse {
+  designers: DesignerListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+/** A portfolio image with its captions and every variant. */
+export interface PublicProjectImage {
+  caption: string | null;
+  image: StoredImage;
+}
+
+/** A published portfolio piece with its imagery resolved for rendering. */
+export interface PublicProject extends Project {
+  coverImage: StoredImage | null;
+  images: PublicProjectImage[];
+}
+
+export interface DesignerPortfolioResponse {
+  designer: { slug: string; studioName: string };
+  projects: PublicProject[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
