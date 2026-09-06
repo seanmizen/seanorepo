@@ -293,7 +293,7 @@ export async function listPublicPortfolio(
   { limit, offset }: { limit: number; offset: number },
 ): Promise<{
   profile: DesignerProfile;
-  portfolio_projects: PublicProject[];
+  portfolioProjects: PublicProject[];
   total: number;
 } | null> {
   const profile = await findApprovedProfileBySlug(slug);
@@ -305,7 +305,7 @@ export async function listPublicPortfolio(
   const page = published.slice(offset, offset + limit);
 
   if (page.length === 0) {
-    return { profile, portfolio_projects: [], total: published.length };
+    return { profile, portfolioProjects: [], total: published.length };
   }
 
   const db = await openDbConnection();
@@ -335,7 +335,7 @@ export async function listPublicPortfolio(
   return {
     profile,
     total: published.length,
-    portfolio_projects: page.map((project) => {
+    portfolioProjects: page.map((project) => {
       const own = imageRows
         .filter((r) => r.portfolio_project_id === project.id)
         .flatMap((r) => {

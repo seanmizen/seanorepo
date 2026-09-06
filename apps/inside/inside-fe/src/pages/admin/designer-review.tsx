@@ -60,7 +60,7 @@ const AdminDesignerReview: FC = () => {
     );
   }
 
-  const { profile, portfolio_projects } = review.data;
+  const { profile, portfolioProjects } = review.data;
   const decided =
     profile.status === 'approved' || profile.status === 'rejected';
 
@@ -94,15 +94,15 @@ const AdminDesignerReview: FC = () => {
         <Divider />
 
         <Typography variant="h6" component="h2">
-          Portfolio ({portfolio_projects.length})
+          Portfolio ({portfolioProjects.length})
         </Typography>
-        {portfolio_projects.length === 0 ? (
+        {portfolioProjects.length === 0 ? (
           <Typography color="text.secondary">
-            No portfolio_projects yet.
+            No portfolio projects yet.
           </Typography>
         ) : (
           <Stack spacing={1}>
-            {portfolio_projects.map((project) => (
+            {portfolioProjects.map((project) => (
               <Box key={project.id}>
                 <Typography>
                   {project.title}{' '}

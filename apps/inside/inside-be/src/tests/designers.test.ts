@@ -158,7 +158,7 @@ describe('public visibility', () => {
     );
   });
 
-  test('only published portfolio_projects appear publicly', async () => {
+  test('only published portfolio projects appear publicly', async () => {
     const { cookie, profile } = await asDesigner('Curated Works');
     await approve(profile.id);
     await app.inject({
@@ -179,8 +179,8 @@ describe('public visibility', () => {
       url: `/api/designers/${profile.slug}`,
     });
     const titles = res
-      .json<{ portfolio_projects: PortfolioProject[] }>()
-      .portfolio_projects.map((p) => p.title);
+      .json<{ portfolioProjects: PortfolioProject[] }>()
+      .portfolioProjects.map((p) => p.title);
     expect(titles).toContain('Public Piece');
     expect(titles).not.toContain('Secret Piece');
   });
@@ -332,7 +332,7 @@ describe('project ownership', () => {
       cookies: { token: b.cookie },
     });
     expect(
-      res.json<{ portfolio_projects: PortfolioProject[] }>().portfolio_projects,
+      res.json<{ portfolioProjects: PortfolioProject[] }>().portfolioProjects,
     ).toEqual([]);
   });
 });

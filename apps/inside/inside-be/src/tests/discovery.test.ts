@@ -59,7 +59,7 @@ interface Fixture {
   budgetBand?: string;
   availability?: string;
   status?: DesignerProfile['status'];
-  portfolio_projects?: Array<{
+  portfolioProjects?: Array<{
     title: string;
     workType?: string;
     status?: 'draft' | 'published';
@@ -96,7 +96,7 @@ async function makeDesigner(fixture: Fixture = {}) {
   expect(created.statusCode).toBe(201);
   const profile = created.json<{ profile: DesignerProfile }>().profile;
 
-  for (const project of fixture.portfolio_projects ?? []) {
+  for (const project of fixture.portfolioProjects ?? []) {
     const res = await app.inject({
       method: 'POST',
       url: '/api/me/portfolio',
@@ -192,7 +192,7 @@ describe('listing', () => {
     const location = `${SUITE}-imagery`;
     const { cookie, profile } = await makeDesigner({
       location,
-      portfolio_projects: [{ title: unique('Shot PortfolioProject') }],
+      portfolioProjects: [{ title: unique('Shot PortfolioProject') }],
     });
     await setStatus(profile.id, 'approved');
 
@@ -220,14 +220,14 @@ describe('listing', () => {
     }
     db.close();
 
-    const portfolio_projects = await app.inject({
+    const portfolioProjects = await app.inject({
       method: 'GET',
       url: '/api/me/portfolio',
       cookies: { token: cookie },
     });
-    const portfolioProjectId = portfolio_projects.json<{
-      portfolio_projects: PortfolioProject[];
-    }>().portfolio_projects[0].id;
+    const portfolioProjectId = portfolioProjects.json<{
+      portfolioProjects: PortfolioProject[];
+    }>().portfolioProjects[0].id;
     await app.inject({
       method: 'PUT',
       url: `/api/me/portfolio/${portfolioProjectId}/images`,
@@ -258,7 +258,7 @@ describe('filters', () => {
       location,
       budgetBand: '50k_100k',
       availability: 'asap',
-      portfolio_projects: [
+      portfolioProjects: [
         { title: unique('Filter Kitchen'), workType: 'kitchen' },
       ],
     });
@@ -266,7 +266,7 @@ describe('filters', () => {
       location,
       budgetBand: 'under_10k',
       availability: 'asap',
-      portfolio_projects: [
+      portfolioProjects: [
         { title: unique('Filter Kitchen'), workType: 'kitchen' },
       ],
     });
@@ -274,7 +274,7 @@ describe('filters', () => {
       location,
       budgetBand: '50k_100k',
       availability: 'within_12_months',
-      portfolio_projects: [
+      portfolioProjects: [
         { title: unique('Filter Bath'), workType: 'bathroom' },
       ],
     });
@@ -313,7 +313,7 @@ describe('filters', () => {
     const where = `${SUITE}-drafts`;
     const drafted = await approved({
       location: where,
-      portfolio_projects: [
+      portfolioProjects: [
         {
           title: unique('Unpublished Loft'),
           workType: 'extension',
@@ -332,19 +332,19 @@ describe('filters', () => {
     const where = unique('Multi');
     await approved({
       location: where,
-      portfolio_projects: [
+      portfolioProjects: [
         { title: unique('Multi Kitchen'), workType: 'kitchen' },
       ],
     });
     await approved({
       location: where,
-      portfolio_projects: [
+      portfolioProjects: [
         { title: unique('Multi Bath'), workType: 'bathroom' },
       ],
     });
     await approved({
       location: where,
-      portfolio_projects: [
+      portfolioProjects: [
         { title: unique('Multi Loft'), workType: 'extension' },
       ],
     });
@@ -466,7 +466,7 @@ describe('search', () => {
       bio: `We have practised ${token} work for years.`,
     });
     const byProject = await approved({
-      portfolio_projects: [{ title: `${token} Townhouse` }],
+      portfolioProjects: [{ title: `${token} Townhouse` }],
     });
 
     const body = await list(`?q=${token}`);
@@ -675,7 +675,7 @@ describe('the approval gate', () => {
     location,
     budgetBand: '100k_250k',
     availability: 'within_3_months',
-    portfolio_projects: [
+    portfolioProjects: [
       { title: `${token} Kitchen PortfolioProject`, workType: 'kitchen' },
     ],
   });
@@ -755,7 +755,7 @@ describe('the approval gate', () => {
 
   test('an unapproved portfolio 404s at every status, and 200s once approved', async () => {
     const made = await makeDesigner({
-      portfolio_projects: [{ title: unique('Gated Piece') }],
+      portfolioProjects: [{ title: unique('Gated Piece') }],
     });
 
     for (const status of ['draft', 'pending', 'rejected'] as const) {
@@ -867,7 +867,7 @@ describe('pagination stability', () => {
 describe('public portfolio', () => {
   test('returns published work only, with image variants', async () => {
     const { cookie, profile } = await approved({
-      portfolio_projects: [
+      portfolioProjects: [
         { title: unique('Published Piece') },
         { title: unique('Hidden Piece'), status: 'draft' },
       ],
@@ -895,8 +895,8 @@ describe('public portfolio', () => {
       cookies: { token: cookie },
     });
     const published = mine
-      .json<{ portfolio_projects: PortfolioProject[] }>()
-      .portfolio_projects.find(
+      .json<{ portfolioProjects: PortfolioProject[] }>()
+      .portfolioProjects.find(
         (p) => p.status === 'published',
       ) as PortfolioProject;
     await app.inject({
@@ -913,28 +913,28 @@ describe('public portfolio', () => {
     const body = res.json<DesignerPortfolioResponse>();
 
     expect(body.designer.slug).toBe(profile.slug);
-    expect(body.portfolio_projects.map((p) => p.title)).toEqual([
+    expect(body.portfolioProjects.map((p) => p.title)).toEqual([
       published.title,
     ]);
     expect(body.total).toBe(1);
-    expect(body.portfolio_projects[0].images[0].caption).toBe('The hallway');
-    expect(body.portfolio_projects[0].images[0].image.variants.grid.width).toBe(
+    expect(body.portfolioProjects[0].images[0].caption).toBe('The hallway');
+    expect(body.portfolioProjects[0].images[0].image.variants.grid.width).toBe(
       800,
     );
     // No explicit cover was chosen, so the first curated image stands in.
-    expect(body.portfolio_projects[0].coverImage?.id).toBe(imageId);
+    expect(body.portfolioProjects[0].coverImage?.id).toBe(imageId);
   });
 
   test('a designer with no published work is an empty page, not a 404', async () => {
     const { profile } = await approved({
-      portfolio_projects: [{ title: unique('Only Draft'), status: 'draft' }],
+      portfolioProjects: [{ title: unique('Only Draft'), status: 'draft' }],
     });
     const res = await expectStatus(
       `/api/designers/${profile.slug}/portfolio`,
       200,
     );
     const body = res.json<DesignerPortfolioResponse>();
-    expect(body.portfolio_projects).toEqual([]);
+    expect(body.portfolioProjects).toEqual([]);
     expect(body.total).toBe(0);
     expect(body.hasMore).toBe(false);
   });
@@ -942,7 +942,7 @@ describe('public portfolio', () => {
   test('pages in curated order without duplicating or skipping', async () => {
     const titles = [1, 2, 3, 4, 5].map((n) => `${unique('Piece')} ${n}`);
     const { profile } = await approved({
-      portfolio_projects: titles.map((title) => ({ title })),
+      portfolioProjects: titles.map((title) => ({ title })),
     });
 
     const seen: string[] = [];
@@ -954,7 +954,7 @@ describe('public portfolio', () => {
       seen.push(
         ...res
           .json<DesignerPortfolioResponse>()
-          .portfolio_projects.map((p) => p.title),
+          .portfolioProjects.map((p) => p.title),
       );
     }
     // Curatorial order is display_order ASC, id ASC — creation order here.
