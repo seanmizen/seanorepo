@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { mkdirSync } from 'node:fs';
 
 type DatabaseType = InstanceType<typeof Database>;
 
@@ -10,11 +11,14 @@ type DatabaseType = InstanceType<typeof Database>;
  * pool to manage and no cross-request state to leak.
  */
 const openDbConnection = async (): Promise<DatabaseType> => {
-  const dbPath = process.env.DB_PATH
-    ? `${process.env.DB_PATH}/database.db`
-    : './database.db';
+  const directory = process.env.DB_PATH ?? '.';
+  // A missing directory is a legitimate first-run state — a fresh volume, a
+  // temp dir for a test, a new machine. SQLite will not create it and fails
+  // with SQLITE_CANTOPEN, which reads like a permissions problem rather than
+  // the plain "no such folder" it is.
+  mkdirSync(directory, { recursive: true });
 
-  const db = new Database(dbPath);
+  const db = new Database(`${directory}/database.db`);
   // SQLite leaves foreign keys off by default; every connection must opt in.
   db.run('PRAGMA foreign_keys = ON');
   return db;

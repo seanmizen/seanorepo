@@ -39,9 +39,12 @@ test.describe('admin approval', () => {
     const studioName = `Approve E2E ${Date.now()}`;
     const profile = await submitProfile(page, studioName);
 
-    // Not yet visible to the public.
+    // Not yet visible to the public. Since SEAN-160 declared /designers/:slug,
+    // an unapproved studio is a real page saying it is not listed rather than
+    // the catch-all 404 — indistinguishable from one that never existed, which
+    // is what keeps the approval queue unprobeable.
     await page.goto(`/designers/${profile.slug}`);
-    await expect(page.getByTestId('not-found')).toBeVisible();
+    await expect(page.getByTestId('designer-missing')).toBeVisible();
 
     await signInAs(page, ADMIN_EMAIL);
     await page.goto(`/admin/designers/${profile.id}`);
