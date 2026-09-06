@@ -213,8 +213,8 @@ The repository uses **dual port schemes** for different deployment targets:
 - 5031: planning-poker (BE)
 - 5050: seansconverter.com / converter (FE)
 - 5051: seansconverter.com / converter (BE)
-- 5060: inside.seanmizen.com (FE) — RESERVED, not yet deployed to Fly
-- 5061: inside.seanmizen.com (BE) — RESERVED, not yet deployed to Fly
+- 5060: inside.seanmizen.com (FE)
+- 5061: inside.seanmizen.com (BE)
 - 8080: Fly.io nginx gateway
 
 ### Concurrent Development

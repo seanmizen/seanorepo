@@ -129,6 +129,11 @@ test_flyio() {
   test_endpoint "http://localhost:6030" "Frontend" || ((failed++))
   test_endpoint "http://localhost:6031" "Backend API" || ((failed++))
 
+  # Test inside (FE + BE)
+  echo -e "\n${YELLOW}inside.seanmizen.com${NC}"
+  test_endpoint "http://localhost:6060" "Frontend" || ((failed++))
+  test_endpoint "http://localhost:6061/api/health" "Backend API" || ((failed++))
+
   echo ""
   if [ $failed -eq 0 ]; then
     print_success "All Fly.io services passed!"
@@ -173,6 +178,33 @@ test_flyio_nginx() {
     print_success "pp.seanmizen.com routing → $status"
   else
     print_error "pp.seanmizen.com routing → $status"
+    ((failed++))
+  fi
+
+  local status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: inside.seanmizen.com" "http://localhost:8080" 2>/dev/null || echo "000")
+  if [ "$status" = "200" ]; then
+    print_success "inside.seanmizen.com routing → $status"
+  else
+    print_error "inside.seanmizen.com routing → $status"
+    ((failed++))
+  fi
+
+  # nginx has no default_server, so an unmatched Host silently falls through to
+  # the first block (seanmizen.com). Assert on the response body, not just the
+  # status, or a misnamed server_name passes.
+  local body=$(curl -s -H "Host: inside.seanmizen.com" "http://localhost:8080" 2>/dev/null || echo "")
+  if echo "$body" | grep -qiE "marketplace for architects|<title>inside"; then
+    print_success "inside.seanmizen.com serves the inside frontend"
+  else
+    print_error "inside.seanmizen.com did not serve the inside frontend (fell through?)"
+    ((failed++))
+  fi
+
+  local status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: inside.seanmizen.com" "http://localhost:8080/api/health" 2>/dev/null || echo "000")
+  if [ "$status" = "200" ]; then
+    print_success "inside.seanmizen.com/api/health → $status"
+  else
+    print_error "inside.seanmizen.com/api/health → $status"
     ((failed++))
   fi
 

@@ -14,4 +14,15 @@ services:
       - "6021:5021"   # carolinemizen BE
       - "6030:5030"   # planning-poker FE
       - "6031:5031"   # planning-poker BE
+      - "6060:5060"   # inside FE
+      - "6061:5061"   # inside BE
+    environment:
+      # inside-be refuses to boot with NODE_ENV=production unless these are set
+      # to a non-default value. On Fly they come from `fly secrets set`; the
+      # fallbacks here exist only so the local `yarn fly:up` stack boots.
+      JWT_SECRET: ${JWT_SECRET:-local-fly-stack-jwt-secret}
+      COOKIE_SECRET: ${COOKIE_SECRET:-local-fly-stack-cookie-secret}
+      INSIDE_UPLOADS_URL: ${INSIDE_UPLOADS_URL:-http://localhost:6061/api/uploads}
+      INSIDE_FRONTEND_URL: ${INSIDE_FRONTEND_URL:-http://localhost:6060}
+      INSIDE_CORS_ORIGIN: ${INSIDE_CORS_ORIGIN:-http://localhost:6060}
     container_name: seanorepo-fly-stack
