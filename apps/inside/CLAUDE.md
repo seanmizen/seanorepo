@@ -121,6 +121,65 @@ touching `apps/inside`.
 - New user-facing flow → an E2E spec walking it as a user would.
 - New shared module (storage, images, email) → contract tests written against
   the interface, not the implementation, so a future provider passes unchanged.
+- New route → an entry in `inside-fe/src/app/routes.ts`, plus its parent route
+  if the URL is nested. See the routing rule below.
+
+## Routing and navigation
+
+Routes are declared as **data** in `inside-fe/src/app/routes.ts`. The router,
+the breadcrumb and the guard that polices both are all built from that one
+table — never from a second list kept alongside it.
+
+### NO DEAD INTERMEDIATE PATHS — a standing constraint, not a one-off
+
+**Every ancestor of every route must itself be a real, visitable page.**
+
+If `/designers/:slug` exists, `/designers` must exist and render something
+worth landing on. The breadcrumb renders every intermediate segment as a link,
+so a parent that 404s is a broken link the app itself is offering. This is a
+rule about route *design*: no ticket may introduce a nested URL without also
+providing its parent. `/me` and `/admin` arrive with their own feature tickets
+and must comply the moment they do — `/me/projects/:id` requires both `/me`
+and `/me/projects`.
+
+`findMissingAncestors` in `routes.ts` enforces it, and
+`tests/e2e/navigation.spec.ts` fails CI on a non-empty result and again on any
+ancestor that does not actually resolve in a browser. The guard reads the route
+table, so a nested route added without its parent fails **without anyone
+touching the test**. Do not work around a failure by hiding the crumb — add the
+parent page.
+
+### Adding a route
+
+1. Add it to `ROUTES` with a lower-case `label` (the crumb reads
+   `home › subsection › page`, one sentence).
+2. Give it an element in `ELEMENTS` in `router.tsx`. It is typed by
+   `RoutePath`, so a route with no element — or an element with no route — is a
+   compile error.
+3. Parameterised? Give it `params` with a representative fixture value, or the
+   guard cannot visit it. Needs a session? Set `requiresAuth`. Needs a query
+   string to render? Set `search`.
+4. Add its parent if the URL is nested. Non-negotiable, see above.
+5. Add it to `a11y.spec.ts` and `keyboard.spec.ts` like any other route.
+
+### Crumb labels
+
+The route table's `label` is the fallback. A page that knows a better name at
+runtime — a designer's studio name, a project's title — calls
+`useBreadcrumbTitle(name)` and owns its own crumb; passing `null` while the
+name is still loading falls back to the label, and then to the humanised URL
+segment. A crumb is never blank.
+
+A crumb only becomes a **link** when a route actually serves that path. On a
+URL nobody declared, the intermediate crumbs are inert text rather than an
+invitation into a 404.
+
+### Layout
+
+`RootLayout` renders the breadcrumb for every route, so pages never opt in. The
+fixed furniture has assigned corners and they must stay clear of each other at
+375px: status chips top-left, theme toggle top-right, breadcrumb below the
+chips on the left. `navigation.spec.ts` asserts they do not collide.
 
 ## Conventions
 
