@@ -1,12 +1,12 @@
 import type {
   DesignerProfile,
   DesignerProfileStatus,
-  Project,
+  PortfolioProject,
 } from '@shared/types';
 import { openDbConnection } from './db';
 import {
+  type PortfolioProjectRow,
   type ProfileRow,
-  type ProjectRow,
   toProfile,
   toProject,
 } from './designers';
@@ -68,7 +68,7 @@ export async function listReviewQueue(
       .query(
         `SELECT dp.id, dp.slug, dp.studio_name, dp.location, dp.status,
                 dp.updated_at, dp.reviewed_at,
-                (SELECT COUNT(*) FROM projects p
+                (SELECT COUNT(*) FROM portfolio_projects p
                   WHERE p.designer_profile_id = dp.id) AS project_count
            FROM designer_profiles dp
            ${where}
@@ -103,7 +103,7 @@ export async function listReviewQueue(
  */
 export async function findProfileForReview(id: number): Promise<{
   profile: DesignerProfile;
-  projects: Project[];
+  portfolio_projects: PortfolioProject[];
   email: string;
 } | null> {
   const db = await openDbConnection();
@@ -118,9 +118,9 @@ export async function findProfileForReview(id: number): Promise<{
       .get(id) as (Record<string, unknown> & { user_email: string }) | null;
     if (!row) return null;
 
-    const projects = db
+    const portfolio_projects = db
       .query(
-        `SELECT * FROM projects WHERE designer_profile_id = ?
+        `SELECT * FROM portfolio_projects WHERE designer_profile_id = ?
           ORDER BY display_order ASC, id ASC`,
       )
       .all(id) as Array<Record<string, unknown>>;
@@ -128,7 +128,9 @@ export async function findProfileForReview(id: number): Promise<{
     return {
       email: row.user_email,
       profile: toProfile(row as unknown as ProfileRow),
-      projects: (projects as unknown as ProjectRow[]).map(toProject),
+      portfolio_projects: (
+        portfolio_projects as unknown as PortfolioProjectRow[]
+      ).map(toProject),
     };
   } finally {
     db.close();

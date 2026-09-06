@@ -75,7 +75,7 @@ const AdminDesigners: FC = () => {
                 <TableRow>
                   <TableCell>Studio</TableCell>
                   <TableCell>Location</TableCell>
-                  <TableCell>Projects</TableCell>
+                  <TableCell>Portfolio</TableCell>
                   <TableCell>Status</TableCell>
                 </TableRow>
               </TableHead>

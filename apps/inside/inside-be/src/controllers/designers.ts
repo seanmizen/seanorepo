@@ -9,9 +9,9 @@ import {
   optionalString,
   optionalUrl,
   optionalYear,
-  PROJECT_TYPES,
   requiredString,
   ValidationError,
+  WORK_TYPES,
 } from '../services/validation';
 import { withValidation } from './helpers';
 
@@ -38,7 +38,7 @@ const readProjectFields = (body: unknown) => {
     summary: optionalString(b.summary, 'Summary', 300),
     description: optionalString(b.description, 'Description', 6000),
     location: optionalString(b.location, 'Location', 120),
-    projectType: optionalEnum(b.projectType, 'Project type', PROJECT_TYPES),
+    workType: optionalEnum(b.workType, 'PortfolioProject type', WORK_TYPES),
     budgetBand: optionalEnum(b.budgetBand, 'Budget band', BUDGET_BANDS),
     completedYear: optionalYear(b.completedYear, 'Completed year'),
     status: status ?? 'draft',
@@ -57,10 +57,10 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
     if (!profile) {
       return reply.status(404).send({ error: 'Designer not found' });
     }
-    const projects = await designers.listProjects(profile.id, {
+    const portfolio_projects = await designers.listProjects(profile.id, {
       publishedOnly: true,
     });
-    return { profile, projects };
+    return { profile, portfolio_projects };
   });
 
   /**
@@ -143,22 +143,22 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         return { profile: await designers.submitProfileForReview(existing.id) };
       });
 
-      me.get('/projects', async (request, reply) => {
+      me.get('/portfolio_projects', async (request, reply) => {
         const profile = await profileOf(request);
         if (!profile) {
           return reply.status(404).send({ error: 'No profile yet' });
         }
-        return { projects: await designers.listProjects(profile.id) };
+        return { portfolio_projects: await designers.listProjects(profile.id) };
       });
 
-      me.post('/projects', async (request, reply) =>
+      me.post('/portfolio_projects', async (request, reply) =>
         withValidation(reply, async () => {
           const profile = await profileOf(request);
           if (!profile) {
             return reply.status(404).send({ error: 'No profile yet' });
           }
           const fields = readProjectFields(request.body);
-          const slug = await uniqueSlug('projects', fields.title);
+          const slug = await uniqueSlug('portfolio_projects', fields.title);
           const project = await designers.insertProject(
             profile.id,
             slug,
@@ -182,7 +182,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
           : null;
       };
 
-      me.get('/projects/:id', async (request, reply) => {
+      me.get('/portfolio_projects/:id', async (request, reply) => {
         const id = Number((request.params as { id: string }).id);
         const project = await ownedProject(request, id);
         if (!project) return reply.status(404).send({ error: 'Not found' });
@@ -192,7 +192,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         };
       });
 
-      me.put('/projects/:id', async (request, reply) =>
+      me.put('/portfolio_projects/:id', async (request, reply) =>
         withValidation(reply, async () => {
           const id = Number((request.params as { id: string }).id);
           const project = await ownedProject(request, id);
@@ -216,7 +216,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         }),
       );
 
-      me.delete('/projects/:id', async (request, reply) => {
+      me.delete('/portfolio_projects/:id', async (request, reply) => {
         const id = Number((request.params as { id: string }).id);
         const project = await ownedProject(request, id);
         if (!project) return reply.status(404).send({ error: 'Not found' });
@@ -225,7 +225,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
       });
 
       /** Replaces the image list; array order becomes display order. */
-      me.put('/projects/:id/images', async (request, reply) =>
+      me.put('/portfolio_projects/:id/images', async (request, reply) =>
         withValidation(reply, async () => {
           const id = Number((request.params as { id: string }).id);
           const project = await ownedProject(request, id);

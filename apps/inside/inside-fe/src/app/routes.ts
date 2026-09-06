@@ -99,7 +99,7 @@ const fromSegments = (segments: readonly string[]): string =>
 /**
  * Every proper ancestor of a path, root first, excluding the path itself.
  *
- * `/designers/:slug/projects` -> `['/', '/designers', '/designers/:slug']`
+ * `/designers/:slug/portfolio_projects` -> `['/', '/designers', '/designers/:slug']`
  * `/account` -> `['/']`
  * `/` -> `[]`
  */

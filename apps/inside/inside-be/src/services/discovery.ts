@@ -4,9 +4,9 @@ import type {
   DesignerListItem,
   DesignerProfile,
   DesignerSort,
-  ProjectType,
   PublicProject,
   StoredImage,
+  WorkType,
 } from '@shared/types';
 import { openDbConnection } from './db';
 import { findApprovedProfileBySlug, listProjects } from './designers';
@@ -34,7 +34,7 @@ import { BM25_EXPRESSION, buildMatchExpression } from './search';
 
 export interface DesignerListFilters {
   q: string | null;
-  projectType: ProjectType | null;
+  workType: WorkType | null;
   location: string | null;
   budgetBand: BudgetBand | null;
   availability: Availability | null;
@@ -111,15 +111,15 @@ function buildQuery(filters: DesignerListFilters): BuiltQuery | null {
     where.push('p.availability = ?');
     params.push(filters.availability);
   }
-  if (filters.projectType !== null) {
+  if (filters.workType !== null) {
     // "Has published work of this kind." EXISTS rather than a join, so a
     // designer with three published kitchens is still one row.
     where.push(`EXISTS (
-      SELECT 1 FROM projects pr
+      SELECT 1 FROM portfolio_projects pr
       WHERE pr.designer_profile_id = p.id
         AND pr.status = 'published'
-        AND pr.project_type = ?)`);
-    params.push(filters.projectType);
+        AND pr.work_type = ?)`);
+    params.push(filters.workType);
   }
 
   return { from, where: where.join(' AND '), params };
@@ -168,10 +168,10 @@ async function resolveCoverImageIds(
       .query(
         `SELECT pr.designer_profile_id AS pid,
                 pr.cover_image_id AS project_cover_id,
-                (SELECT pi.image_id FROM project_images pi
-                 WHERE pi.project_id = pr.id
+                (SELECT pi.image_id FROM portfolio_project_images pi
+                 WHERE pi.portfolio_project_id = pr.id
                  ORDER BY pi.display_order ASC, pi.id ASC LIMIT 1) AS first_image_id
-         FROM projects pr
+         FROM portfolio_projects pr
          WHERE pr.status = 'published'
            AND pr.designer_profile_id IN (${placeholders})
          ORDER BY pr.designer_profile_id ASC, pr.display_order ASC, pr.id ASC`,
@@ -204,7 +204,7 @@ async function countPublishedProjects(
     const placeholders = profileIds.map(() => '?').join(',');
     const rows = db
       .query(
-        `SELECT designer_profile_id AS pid, COUNT(*) AS c FROM projects
+        `SELECT designer_profile_id AS pid, COUNT(*) AS c FROM portfolio_projects
          WHERE status = 'published' AND designer_profile_id IN (${placeholders})
          GROUP BY designer_profile_id`,
       )
@@ -288,7 +288,7 @@ export async function listPublicPortfolio(
   { limit, offset }: { limit: number; offset: number },
 ): Promise<{
   profile: DesignerProfile;
-  projects: PublicProject[];
+  portfolio_projects: PublicProject[];
   total: number;
 } | null> {
   const profile = await findApprovedProfileBySlug(slug);
@@ -300,12 +300,12 @@ export async function listPublicPortfolio(
   const page = published.slice(offset, offset + limit);
 
   if (page.length === 0) {
-    return { profile, projects: [], total: published.length };
+    return { profile, portfolio_projects: [], total: published.length };
   }
 
   const db = await openDbConnection();
   let imageRows: Array<{
-    project_id: number;
+    portfolio_project_id: number;
     image_id: number;
     caption: string | null;
   }>;
@@ -313,9 +313,9 @@ export async function listPublicPortfolio(
     const placeholders = page.map(() => '?').join(',');
     imageRows = db
       .query(
-        `SELECT project_id, image_id, caption FROM project_images
-         WHERE project_id IN (${placeholders})
-         ORDER BY project_id ASC, display_order ASC, id ASC`,
+        `SELECT portfolio_project_id, image_id, caption FROM portfolio_project_images
+         WHERE portfolio_project_id IN (${placeholders})
+         ORDER BY portfolio_project_id ASC, display_order ASC, id ASC`,
       )
       .all(...page.map((p) => p.id)) as typeof imageRows;
   } finally {
@@ -330,9 +330,9 @@ export async function listPublicPortfolio(
   return {
     profile,
     total: published.length,
-    projects: page.map((project) => {
+    portfolio_projects: page.map((project) => {
       const own = imageRows
-        .filter((r) => r.project_id === project.id)
+        .filter((r) => r.portfolio_project_id === project.id)
         .flatMap((r) => {
           const image = images.get(r.image_id);
           return image ? [{ caption: r.caption, image }] : [];

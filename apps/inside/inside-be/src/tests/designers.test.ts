@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import type { DesignerProfile, Project, ProjectImage } from '@shared/types';
+import type {
+  DesignerProfile,
+  PortfolioProject,
+  PortfolioProjectImage,
+} from '@shared/types';
 import { getApp, uniqueEmail } from './setup';
 
 const app = await getApp();
@@ -154,18 +158,18 @@ describe('public visibility', () => {
     );
   });
 
-  test('only published projects appear publicly', async () => {
+  test('only published portfolio_projects appear publicly', async () => {
     const { cookie, profile } = await asDesigner('Curated Works');
     await approve(profile.id);
     await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: cookie },
       payload: { title: 'Public Piece', status: 'published' },
     });
     await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: cookie },
       payload: { title: 'Secret Piece', status: 'draft' },
     });
@@ -175,8 +179,8 @@ describe('public visibility', () => {
       url: `/api/designers/${profile.slug}`,
     });
     const titles = res
-      .json<{ projects: Project[] }>()
-      .projects.map((p) => p.title);
+      .json<{ portfolio_projects: PortfolioProject[] }>()
+      .portfolio_projects.map((p) => p.title);
     expect(titles).toContain('Public Piece');
     expect(titles).not.toContain('Secret Piece');
   });
@@ -258,15 +262,16 @@ describe('project ownership', () => {
 
     const created = await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: a.cookie },
-      payload: { title: 'A Private Project' },
+      payload: { title: 'A Private PortfolioProject' },
     });
-    const projectId = created.json<{ project: Project }>().project.id;
+    const portfolioProjectId = created.json<{ project: PortfolioProject }>()
+      .project.id;
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/me/projects/${projectId}`,
+      url: `/api/me/portfolio_projects/${portfolioProjectId}`,
       cookies: { token: b.cookie },
     });
     // 404 rather than 403, so ids cannot be probed for existence.
@@ -279,15 +284,15 @@ describe('project ownership', () => {
 
     const created = await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: a.cookie },
       payload: { title: 'Hands Off' },
     });
-    const id = created.json<{ project: Project }>().project.id;
+    const id = created.json<{ project: PortfolioProject }>().project.id;
 
     const edit = await app.inject({
       method: 'PUT',
-      url: `/api/me/projects/${id}`,
+      url: `/api/me/portfolio_projects/${id}`,
       cookies: { token: b.cookie },
       payload: { title: 'Stolen' },
     });
@@ -295,7 +300,7 @@ describe('project ownership', () => {
 
     const remove = await app.inject({
       method: 'DELETE',
-      url: `/api/me/projects/${id}`,
+      url: `/api/me/portfolio_projects/${id}`,
       cookies: { token: b.cookie },
     });
     expect(remove.statusCode).toBe(404);
@@ -303,10 +308,12 @@ describe('project ownership', () => {
     // And the original is untouched.
     const check = await app.inject({
       method: 'GET',
-      url: `/api/me/projects/${id}`,
+      url: `/api/me/portfolio_projects/${id}`,
       cookies: { token: a.cookie },
     });
-    expect(check.json<{ project: Project }>().project.title).toBe('Hands Off');
+    expect(check.json<{ project: PortfolioProject }>().project.title).toBe(
+      'Hands Off',
+    );
   });
 
   test("a project list only ever contains the caller's own work", async () => {
@@ -314,17 +321,19 @@ describe('project ownership', () => {
     const b = await asDesigner('Mine Only B');
     await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: a.cookie },
       payload: { title: 'Belongs To A' },
     });
 
     const res = await app.inject({
       method: 'GET',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: b.cookie },
     });
-    expect(res.json<{ projects: Project[] }>().projects).toEqual([]);
+    expect(
+      res.json<{ portfolio_projects: PortfolioProject[] }>().portfolio_projects,
+    ).toEqual([]);
   });
 });
 
@@ -347,11 +356,12 @@ describe('project images', () => {
     const { cookie } = await asDesigner('Ordered Studio');
     const created = await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: cookie },
-      payload: { title: 'Ordered Project' },
+      payload: { title: 'Ordered PortfolioProject' },
     });
-    const projectId = created.json<{ project: Project }>().project.id;
+    const portfolioProjectId = created.json<{ project: PortfolioProject }>()
+      .project.id;
 
     const first = await makeImage();
     const second = await makeImage();
@@ -359,7 +369,7 @@ describe('project images', () => {
 
     const res = await app.inject({
       method: 'PUT',
-      url: `/api/me/projects/${projectId}/images`,
+      url: `/api/me/portfolio_projects/${portfolioProjectId}/images`,
       cookies: { token: cookie },
       payload: {
         images: [{ imageId: third }, { imageId: first }, { imageId: second }],
@@ -367,7 +377,9 @@ describe('project images', () => {
     });
 
     expect(
-      res.json<{ images: ProjectImage[] }>().images.map((i) => i.imageId),
+      res
+        .json<{ images: PortfolioProjectImage[] }>()
+        .images.map((i) => i.imageId),
     ).toEqual([third, first, second]);
   });
 
@@ -375,18 +387,19 @@ describe('project images', () => {
     const { cookie } = await asDesigner('Reorder Studio');
     const created = await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: cookie },
-      payload: { title: 'Reorder Project' },
+      payload: { title: 'Reorder PortfolioProject' },
     });
-    const projectId = created.json<{ project: Project }>().project.id;
+    const portfolioProjectId = created.json<{ project: PortfolioProject }>()
+      .project.id;
     const a = await makeImage();
     const b = await makeImage();
 
     const put = (images: unknown) =>
       app.inject({
         method: 'PUT',
-        url: `/api/me/projects/${projectId}/images`,
+        url: `/api/me/portfolio_projects/${portfolioProjectId}/images`,
         cookies: { token: cookie },
         payload: { images },
       });
@@ -395,7 +408,9 @@ describe('project images', () => {
     const res = await put([{ imageId: b }]);
 
     expect(
-      res.json<{ images: ProjectImage[] }>().images.map((i) => i.imageId),
+      res
+        .json<{ images: PortfolioProjectImage[] }>()
+        .images.map((i) => i.imageId),
     ).toEqual([b]);
   });
 
@@ -403,16 +418,17 @@ describe('project images', () => {
     const { cookie } = await asDesigner('Dupe Studio');
     const created = await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: cookie },
-      payload: { title: 'Dupe Project' },
+      payload: { title: 'Dupe PortfolioProject' },
     });
-    const projectId = created.json<{ project: Project }>().project.id;
+    const portfolioProjectId = created.json<{ project: PortfolioProject }>()
+      .project.id;
     const image = await makeImage();
 
     const res = await app.inject({
       method: 'PUT',
-      url: `/api/me/projects/${projectId}/images`,
+      url: `/api/me/portfolio_projects/${portfolioProjectId}/images`,
       cookies: { token: cookie },
       payload: { images: [{ imageId: image }, { imageId: image }] },
     });
@@ -423,15 +439,16 @@ describe('project images', () => {
     const { cookie } = await asDesigner('Ghost Image Studio');
     const created = await app.inject({
       method: 'POST',
-      url: '/api/me/projects',
+      url: '/api/me/portfolio_projects',
       cookies: { token: cookie },
-      payload: { title: 'Ghost Project' },
+      payload: { title: 'Ghost PortfolioProject' },
     });
-    const projectId = created.json<{ project: Project }>().project.id;
+    const portfolioProjectId = created.json<{ project: PortfolioProject }>()
+      .project.id;
 
     const res = await app.inject({
       method: 'PUT',
-      url: `/api/me/projects/${projectId}/images`,
+      url: `/api/me/portfolio_projects/${portfolioProjectId}/images`,
       cookies: { token: cookie },
       payload: { images: [{ imageId: 999999 }] },
     });

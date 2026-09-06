@@ -23,7 +23,7 @@ const BreadcrumbTitleContext = createContext<BreadcrumbTitleValue>({
  * Lets the page currently rendering name its own crumb.
  *
  * The route table can only know static labels. A designer profile knows the
- * studio name, a project knows its title, and `/verify` knows whether the link
+ * studio name, a portfolio piece knows its title, and `/verify` knows whether the link
  * worked — all things the URL alone cannot say. This carries that name up to
  * the breadcrumb without the breadcrumb having to know about any page.
  */

@@ -4,9 +4,9 @@
  * SQL is snake_case; these are the camelCase shapes the API speaks.
  *
  * NAMING WARNING — "project" is overloaded in this domain:
- * - `Project` a designer's completed work, shown in their portfolio
- * - `Brief`   a homeowner's posted job, which designers pitch on
- * - `Pitch`   a designer's response to a brief
+ * - `PortfolioProject` a designer's completed work, shown in their portfolio
+ * - `Brief`   a homeowner's posted job, which designers bid on
+ * - `Bid`   a designer's response to a brief
  */
 
 /**
@@ -66,8 +66,8 @@ export type BudgetBand =
   | '100k_250k'
   | '250k_plus';
 
-/** The kind of work, used on portfolio projects, enquiries and briefs alike. */
-export type ProjectType =
+/** The kind of work, used on portfolio portfolio_projects, enquiries and briefs alike. */
+export type WorkType =
   | 'full_home'
   | 'single_room'
   | 'kitchen'
@@ -129,10 +129,10 @@ export interface DesignerProfile {
   updatedAt: string;
 }
 
-export type ProjectStatus = 'draft' | 'published';
+export type PortfolioProjectStatus = 'draft' | 'published';
 
 /** A portfolio piece: a designer's completed work. Not a `Brief`. */
-export interface Project {
+export interface PortfolioProject {
   id: number;
   designerProfileId: number;
   /** Unique site-wide, so a project has a stable canonical URL. */
@@ -141,11 +141,11 @@ export interface Project {
   summary: string | null;
   description: string | null;
   location: string | null;
-  projectType: ProjectType | null;
+  workType: WorkType | null;
   budgetBand: BudgetBand | null;
   completedYear: number | null;
   coverImageId: number | null;
-  status: ProjectStatus;
+  status: PortfolioProjectStatus;
   /** Curatorial order within the portfolio; lower sorts first. */
   displayOrder: number;
   createdAt: string;
@@ -153,9 +153,9 @@ export interface Project {
 }
 
 /** An image on a portfolio project, in an explicit curatorial sequence. */
-export interface ProjectImage {
+export interface PortfolioProjectImage {
   id: number;
-  projectId: number;
+  portfolioProjectId: number;
   imageId: number;
   caption: string | null;
   displayOrder: number;
@@ -195,7 +195,7 @@ export interface Enquiry {
   contactName: string;
   contactEmail: string;
   contactPhone: string | null;
-  projectType: ProjectType | null;
+  workType: WorkType | null;
   budgetBand: BudgetBand | null;
   location: string | null;
   timeline: Timeline | null;
@@ -210,13 +210,13 @@ export interface Enquiry {
 /** `draft` is never listed; `open` takes bids; `closed` does not. */
 export type BriefStatus = 'draft' | 'open' | 'closed';
 
-/** Post-a-project: a homeowner's public listing. Not a portfolio `Project`. */
+/** Post-a-project: a homeowner's public listing. Not a portfolio `PortfolioProject`. */
 export interface Brief {
   id: number;
   buyerId: number | null;
   title: string;
   description: string;
-  projectType: ProjectType | null;
+  workType: WorkType | null;
   budgetBand: BudgetBand | null;
   location: string | null;
   timeline: Timeline | null;
@@ -234,17 +234,17 @@ export interface Brief {
  * declined/withdrawn) had no code driving any of them, and lacked the one
  * state the product actually needs — a draft you can come back to.
  */
-export type PitchStatus = 'draft' | 'submitted' | 'withdrawn';
+export type BidStatus = 'draft' | 'submitted' | 'withdrawn';
 
 /** A designer's response to a `Brief`. One per designer per brief. */
-export interface Pitch {
+export interface Bid {
   id: number;
   briefId: number;
   designerProfileId: number;
   message: string;
   budgetBand: BudgetBand | null;
   availability: Availability | null;
-  status: PitchStatus;
+  status: BidStatus;
   /** Set when the bid is sent. Null while it is still a draft. */
   submittedAt: string | null;
   createdAt: string;
@@ -263,14 +263,14 @@ export interface Pitch {
  */
 export type PublicBrief = Omit<Brief, 'buyerId'> & {
   /** How many designers have responded. A count identifies nobody. */
-  pitchCount: number;
+  bidCount: number;
 };
 
 /** A brief in its own author's dashboard, where `buyerId` is their own id. */
-export type OwnedBrief = Brief & { pitchCount: number };
+export type OwnedBrief = Brief & { bidCount: number };
 
-/** The designer behind a pitch, as shown to the brief's owner. */
-export interface PitchDesigner {
+/** The designer behind a bid, as shown to the brief's owner. */
+export interface BidDesigner {
   id: number;
   slug: string;
   studioName: string;
@@ -279,11 +279,11 @@ export interface PitchDesigner {
   budgetBand: BudgetBand | null;
 }
 
-/** A pitch as the brief's owner sees it. Only ever served to that owner. */
-export type ReceivedPitch = Pitch & { designer: PitchDesigner };
+/** A bid as the brief's owner sees it. Only ever served to that owner. */
+export type ReceivedBid = Bid & { designer: BidDesigner };
 
-/** A pitch as its author sees it, alongside the brief it answers. */
-export type SentPitch = Pitch & { brief: PublicBrief };
+/** A bid as its author sees it, alongside the brief it answers. */
+export type SentBid = Bid & { brief: PublicBrief };
 
 /** GET /api/briefs — the public board, paginated. */
 export interface BriefListResponse {
@@ -340,14 +340,14 @@ export interface PublicProjectImage {
 }
 
 /** A published portfolio piece with its imagery resolved for rendering. */
-export interface PublicProject extends Project {
+export interface PublicProject extends PortfolioProject {
   coverImage: StoredImage | null;
   images: PublicProjectImage[];
 }
 
 export interface DesignerPortfolioResponse {
   designer: { slug: string; studioName: string };
-  projects: PublicProject[];
+  portfolio_projects: PublicProject[];
   total: number;
   page: number;
   limit: number;

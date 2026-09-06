@@ -1,16 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import type {
+  Bid,
   DesignerProfile,
   OwnedBrief,
-  Pitch,
   PublicBrief,
-  ReceivedPitch,
-  SentPitch,
+  ReceivedBid,
+  SentBid,
 } from '@shared/types';
 import { getApp, uniqueEmail } from './setup';
 
 /**
- * Post-a-project: a buyer posts a brief, designers pitch on it.
+ * Post-a-project: a buyer posts a brief, designers bid on it.
  *
  * The suite shares one database with every other suite, so nothing here
  * assumes an empty table — every assertion is scoped to rows this file made,
@@ -93,10 +93,10 @@ const openBrief = async (payload: Record<string, unknown> = {}) => {
   return { buyer, brief };
 };
 
-const pitch = (cookie: string, id: number, payload: unknown = {}) =>
+const bid = (cookie: string, id: number, payload: unknown = {}) =>
   app.inject({
     method: 'POST',
-    url: `/api/briefs/${id}/pitches`,
+    url: `/api/briefs/${id}/bids`,
     cookies: { token: cookie },
     payload: {
       message: 'We would love to take this on',
@@ -174,7 +174,7 @@ describe('posting a brief', () => {
   test('unknown enum values are rejected', async () => {
     const { cookie } = await login('buyer');
     for (const payload of [
-      { projectType: 'spaceship' },
+      { workType: 'spaceship' },
       { budgetBand: 'infinite' },
       { timeline: 'eventually' },
       { closesAt: 'next tuesday-ish' },
@@ -222,13 +222,13 @@ describe('the public board', () => {
     const kitchen = await buyer.postBrief({
       status: 'open',
       location,
-      projectType: 'kitchen',
+      workType: 'kitchen',
       budgetBand: '10k_25k',
     });
     const bathroom = await buyer.postBrief({
       status: 'open',
       location,
-      projectType: 'bathroom',
+      workType: 'bathroom',
       budgetBand: '50k_100k',
     });
 
@@ -244,14 +244,14 @@ describe('the public board', () => {
         .sort();
 
     expect(await ids('')).toEqual([kitchen.id, bathroom.id].sort());
-    expect(await ids('&projectType=kitchen')).toEqual([kitchen.id]);
+    expect(await ids('&workType=kitchen')).toEqual([kitchen.id]);
     expect(await ids('&budgetBand=50k_100k')).toEqual([bathroom.id]);
-    expect(await ids('&projectType=kitchen&budgetBand=50k_100k')).toEqual([]);
+    expect(await ids('&workType=kitchen&budgetBand=50k_100k')).toEqual([]);
   });
 
   test('a malformed filter is rejected rather than ignored', async () => {
     for (const query of [
-      'projectType=spaceship',
+      'workType=spaceship',
       'budgetBand=infinite',
       'limit=0',
       'limit=1000',
@@ -449,10 +449,10 @@ describe('managing your own briefs', () => {
     expect(reopened.publishedAt).toBe(brief.publishedAt);
   });
 
-  test('deleting a brief removes it and its pitches', async () => {
+  test('deleting a brief removes it and its bids', async () => {
     const { buyer, brief } = await openBrief();
-    const designer = await asDesigner('Doomed Pitch Studio');
-    await pitch(designer.cookie, brief.id);
+    const designer = await asDesigner('Doomed Bid Studio');
+    await bid(designer.cookie, brief.id);
 
     const res = await app.inject({
       method: 'DELETE',
@@ -469,19 +469,19 @@ describe('managing your own briefs', () => {
 
     const db = await openDbConnection();
     const left = db
-      .query('SELECT COUNT(*) AS n FROM pitches WHERE brief_id = ?')
+      .query('SELECT COUNT(*) AS n FROM bids WHERE brief_id = ?')
       .get(brief.id) as { n: number };
     db.close();
     expect(left.n).toBe(0);
   });
 });
 
-describe('pitching', () => {
+describe('bidding', () => {
   /** Send a draft bid. */
-  const submit = (cookie: string, pitchId: number) =>
+  const submit = (cookie: string, bidId: number) =>
     app.inject({
       method: 'POST',
-      url: `/api/me/pitches/${pitchId}/submit`,
+      url: `/api/me/bids/${bidId}/submit`,
       cookies: { token: cookie },
     });
 
@@ -489,13 +489,13 @@ describe('pitching', () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Keen Studio');
 
-    const res = await pitch(designer.cookie, brief.id, {
+    const res = await bid(designer.cookie, brief.id, {
       budgetBand: '25k_50k',
       availability: 'within_3_months',
     });
     expect(res.statusCode).toBe(201);
 
-    const created = res.json<{ pitch: Pitch }>().pitch;
+    const created = res.json<{ bid: Bid }>().bid;
     expect(created.briefId).toBe(brief.id);
     expect(created.designerProfileId).toBe(designer.profile.id);
     expect(created.status).toBe('draft');
@@ -507,20 +507,18 @@ describe('pitching', () => {
       method: 'GET',
       url: `/api/briefs/${brief.id}`,
     });
-    expect(beforeSubmit.json<{ brief: PublicBrief }>().brief.pitchCount).toBe(
-      0,
-    );
+    expect(beforeSubmit.json<{ brief: PublicBrief }>().brief.bidCount).toBe(0);
 
     const sent = await submit(designer.cookie, created.id);
     expect(sent.statusCode).toBe(200);
-    expect(sent.json<{ pitch: Pitch }>().pitch.status).toBe('submitted');
-    expect(sent.json<{ pitch: Pitch }>().pitch.submittedAt).toBeString();
+    expect(sent.json<{ bid: Bid }>().bid.status).toBe('submitted');
+    expect(sent.json<{ bid: Bid }>().bid.submittedAt).toBeString();
 
     const detail = await app.inject({
       method: 'GET',
       url: `/api/briefs/${brief.id}`,
     });
-    expect(detail.json<{ brief: PublicBrief }>().brief.pitchCount).toBe(1);
+    expect(detail.json<{ brief: PublicBrief }>().brief.bidCount).toBe(1);
   });
 
   test('starting again returns the draft already in progress', async () => {
@@ -529,38 +527,38 @@ describe('pitching', () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Continue Studio');
 
-    const first = await pitch(designer.cookie, brief.id);
-    const again = await pitch(designer.cookie, brief.id);
+    const first = await bid(designer.cookie, brief.id);
+    const again = await bid(designer.cookie, brief.id);
 
     expect(again.statusCode).toBe(200);
-    expect(again.json<{ pitch: Pitch }>().pitch.id).toBe(
-      first.json<{ pitch: Pitch }>().pitch.id,
+    expect(again.json<{ bid: Bid }>().bid.id).toBe(
+      first.json<{ bid: Bid }>().bid.id,
     );
   });
 
   test('a draft can be edited, a sent bid cannot', async () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Editing Studio');
-    const created = (await pitch(designer.cookie, brief.id)).json<{
-      pitch: Pitch;
-    }>().pitch;
+    const created = (await bid(designer.cookie, brief.id)).json<{
+      bid: Bid;
+    }>().bid;
 
     const edited = await app.inject({
       method: 'PUT',
-      url: `/api/me/pitches/${created.id}`,
+      url: `/api/me/bids/${created.id}`,
       cookies: { token: designer.cookie },
-      payload: { message: 'A much better pitch than before' },
+      payload: { message: 'A much better bid than before' },
     });
     expect(edited.statusCode).toBe(200);
-    expect(edited.json<{ pitch: Pitch }>().pitch.message).toBe(
-      'A much better pitch than before',
+    expect(edited.json<{ bid: Bid }>().bid.message).toBe(
+      'A much better bid than before',
     );
 
     await submit(designer.cookie, created.id);
 
     const tooLate = await app.inject({
       method: 'PUT',
-      url: `/api/me/pitches/${created.id}`,
+      url: `/api/me/bids/${created.id}`,
       cookies: { token: designer.cookie },
       payload: { message: 'Sneaking a change in after sending' },
     });
@@ -570,9 +568,9 @@ describe('pitching', () => {
   test('a bid cannot be sent twice', async () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Double Send Studio');
-    const created = (await pitch(designer.cookie, brief.id)).json<{
-      pitch: Pitch;
-    }>().pitch;
+    const created = (await bid(designer.cookie, brief.id)).json<{
+      bid: Bid;
+    }>().bid;
 
     expect((await submit(designer.cookie, created.id)).statusCode).toBe(200);
     expect((await submit(designer.cookie, created.id)).statusCode).toBe(409);
@@ -582,14 +580,14 @@ describe('pitching', () => {
     const { brief } = await openBrief();
     const owner = await asDesigner('Owner Bid Studio');
     const intruder = await asDesigner('Intruder Bid Studio');
-    const created = (await pitch(owner.cookie, brief.id)).json<{
-      pitch: Pitch;
-    }>().pitch;
+    const created = (await bid(owner.cookie, brief.id)).json<{
+      bid: Bid;
+    }>().bid;
 
     for (const call of [
       app.inject({
         method: 'PUT',
-        url: `/api/me/pitches/${created.id}`,
+        url: `/api/me/bids/${created.id}`,
         cookies: { token: intruder.cookie },
         payload: { message: 'Not mine to edit at all' },
       }),
@@ -604,9 +602,9 @@ describe('pitching', () => {
     const buyer = await asBuyer();
     const brief = await buyer.postBrief({ status: 'open' });
     const designer = await asDesigner('Slow Studio');
-    const created = (await pitch(designer.cookie, brief.id)).json<{
-      pitch: Pitch;
-    }>().pitch;
+    const created = (await bid(designer.cookie, brief.id)).json<{
+      bid: Bid;
+    }>().bid;
 
     // The brief can close while a draft sits unsent.
     const db = await openDbConnection();
@@ -620,11 +618,11 @@ describe('pitching', () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Twice Studio');
 
-    const created = await pitch(designer.cookie, brief.id);
+    const created = await bid(designer.cookie, brief.id);
     expect(created.statusCode).toBe(201);
-    await submit(designer.cookie, created.json<{ pitch: Pitch }>().pitch.id);
+    await submit(designer.cookie, created.json<{ bid: Bid }>().bid.id);
 
-    const again = await pitch(designer.cookie, brief.id, {
+    const again = await bid(designer.cookie, brief.id, {
       message: 'Actually, we would love it even more',
     });
     // The schema's UNIQUE constraint, surfaced as a conflict rather than a 500.
@@ -634,13 +632,13 @@ describe('pitching', () => {
 
     const db = await openDbConnection();
     const count = db
-      .query('SELECT COUNT(*) AS n FROM pitches WHERE brief_id = ?')
+      .query('SELECT COUNT(*) AS n FROM bids WHERE brief_id = ?')
       .get(brief.id) as { n: number };
     db.close();
     expect(count.n).toBe(1);
   });
 
-  test('a race between two identical pitches still resolves to one 409', async () => {
+  test('a race between two identical bids still resolves to one 409', async () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Racing Studio');
 
@@ -648,8 +646,8 @@ describe('pitching', () => {
     // so the loser is caught by the UNIQUE constraint rather than the lookup.
     // Either way exactly one row exists and neither caller sees a 500.
     const [a, b] = await Promise.all([
-      pitch(designer.cookie, brief.id),
-      pitch(designer.cookie, brief.id),
+      bid(designer.cookie, brief.id),
+      bid(designer.cookie, brief.id),
     ]);
     for (const res of [a, b]) {
       expect([200, 201, 409]).toContain(res.statusCode);
@@ -658,13 +656,13 @@ describe('pitching', () => {
 
     const db = await openDbConnection();
     const count = db
-      .query('SELECT COUNT(*) AS n FROM pitches WHERE brief_id = ?')
+      .query('SELECT COUNT(*) AS n FROM bids WHERE brief_id = ?')
       .get(brief.id) as { n: number };
     db.close();
     expect(count.n).toBe(1);
   });
 
-  test('a designer whose profile is not approved cannot pitch', async () => {
+  test('a designer whose profile is not approved cannot bid', async () => {
     const { brief } = await openBrief();
 
     for (const status of ['draft', 'pending', 'rejected'] as const) {
@@ -678,36 +676,36 @@ describe('pitching', () => {
       ]);
       db.close();
 
-      const res = await pitch(designer.cookie, brief.id);
+      const res = await bid(designer.cookie, brief.id);
       // The approval gate is the entire point of the review queue.
       expect(res.statusCode).toBe(403);
     }
 
     const db = await openDbConnection();
     const count = db
-      .query('SELECT COUNT(*) AS n FROM pitches WHERE brief_id = ?')
+      .query('SELECT COUNT(*) AS n FROM bids WHERE brief_id = ?')
       .get(brief.id) as { n: number };
     db.close();
     expect(count.n).toBe(0);
   });
 
-  test('a designer with no profile at all cannot pitch', async () => {
+  test('a designer with no profile at all cannot bid', async () => {
     const { brief } = await openBrief();
     const { cookie } = await login('designer');
-    expect((await pitch(cookie, brief.id)).statusCode).toBe(403);
+    expect((await bid(cookie, brief.id)).statusCode).toBe(403);
   });
 
-  test('a buyer cannot pitch', async () => {
+  test('a buyer cannot bid', async () => {
     const { brief } = await openBrief();
     const buyer = await asBuyer();
-    expect((await pitch(buyer.cookie, brief.id)).statusCode).toBe(403);
+    expect((await bid(buyer.cookie, brief.id)).statusCode).toBe(403);
   });
 
-  test('an anonymous caller cannot pitch', async () => {
+  test('an anonymous caller cannot bid', async () => {
     const { brief } = await openBrief();
     const res = await app.inject({
       method: 'POST',
-      url: `/api/briefs/${brief.id}/pitches`,
+      url: `/api/briefs/${brief.id}/bids`,
       payload: { message: 'Hello' },
     });
     expect(res.statusCode).toBe(401);
@@ -719,7 +717,7 @@ describe('pitching', () => {
 
     const draft = await buyer.postBrief({ title: 'Unpublished' });
     // A draft is not on the board, so it must read as missing.
-    expect((await pitch(designer.cookie, draft.id)).statusCode).toBe(404);
+    expect((await bid(designer.cookie, draft.id)).statusCode).toBe(404);
 
     for (const status of ['closed'] as const) {
       const brief = await buyer.postBrief({ status: 'open' });
@@ -727,37 +725,37 @@ describe('pitching', () => {
       db.run('UPDATE briefs SET status = ? WHERE id = ?', [status, brief.id]);
       db.close();
 
-      const res = await pitch(designer.cookie, brief.id);
+      const res = await bid(designer.cookie, brief.id);
       expect(res.statusCode).toBe(409);
     }
   });
 
-  test('a brief past its closing date takes no new pitches', async () => {
+  test('a brief past its closing date takes no new bids', async () => {
     const buyer = await asBuyer();
     const brief = await buyer.postBrief({
       status: 'open',
       closesAt: new Date(Date.now() - 60_000).toISOString(),
     });
     const designer = await asDesigner('Deadline Studio');
-    expect((await pitch(designer.cookie, brief.id)).statusCode).toBe(409);
+    expect((await bid(designer.cookie, brief.id)).statusCode).toBe(409);
   });
 
-  test('a future closing date still takes pitches', async () => {
+  test('a future closing date still takes bids', async () => {
     const buyer = await asBuyer();
     const brief = await buyer.postBrief({
       status: 'open',
       closesAt: new Date(Date.now() + 3_600_000).toISOString(),
     });
     const designer = await asDesigner('In Time Studio');
-    expect((await pitch(designer.cookie, brief.id)).statusCode).toBe(201);
+    expect((await bid(designer.cookie, brief.id)).statusCode).toBe(201);
   });
 
   test('a brief that does not exist 404s', async () => {
     const designer = await asDesigner('Ghost Brief Studio');
-    expect((await pitch(designer.cookie, 99999999)).statusCode).toBe(404);
+    expect((await bid(designer.cookie, 99999999)).statusCode).toBe(404);
   });
 
-  test('a pitch needs a message, and its enums are checked', async () => {
+  test('a bid needs a message, and its enums are checked', async () => {
     const { brief } = await openBrief();
     const designer = await asDesigner('Sloppy Studio');
 
@@ -770,7 +768,7 @@ describe('pitching', () => {
     ]) {
       const res = await app.inject({
         method: 'POST',
-        url: `/api/briefs/${brief.id}/pitches`,
+        url: `/api/briefs/${brief.id}/bids`,
         cookies: { token: designer.cookie },
         payload,
       });
@@ -779,75 +777,75 @@ describe('pitching', () => {
   });
 });
 
-describe('who can see a pitch', () => {
-  /** A brief with one pitch on it, plus the cast of characters around it. */
-  async function briefWithPitch() {
+describe('who can see a bid', () => {
+  /** A brief with one bid on it, plus the cast of characters around it. */
+  async function briefWithBid() {
     const { buyer, brief } = await openBrief();
     const designer = await asDesigner('Visible Studio');
-    const created = await pitch(designer.cookie, brief.id, {
-      message: 'A very private pitch',
+    const created = await bid(designer.cookie, brief.id, {
+      message: 'A very private bid',
     });
-    const draft = created.json<{ pitch: Pitch }>().pitch;
+    const draft = created.json<{ bid: Bid }>().bid;
     // A brief "with a bid" means a bid the designer actually sent — a draft is
     // invisible to the buyer by design.
     const sent = await app.inject({
       method: 'POST',
-      url: `/api/me/pitches/${draft.id}/submit`,
+      url: `/api/me/bids/${draft.id}/submit`,
       cookies: { token: designer.cookie },
     });
     return {
       buyer,
       brief,
       designer,
-      pitch: sent.json<{ pitch: Pitch }>().pitch,
+      bid: sent.json<{ bid: Bid }>().bid,
     };
   }
 
-  test('the brief owner sees the pitches received, with the designer', async () => {
-    const { buyer, brief, designer } = await briefWithPitch();
+  test('the brief owner sees the bids received, with the designer', async () => {
+    const { buyer, brief, designer } = await briefWithBid();
     const res = await app.inject({
       method: 'GET',
-      url: `/api/me/briefs/${brief.id}/pitches`,
+      url: `/api/me/briefs/${brief.id}/bids`,
       cookies: { token: buyer.cookie },
     });
-    const received = res.json<{ pitches: ReceivedPitch[] }>().pitches;
+    const received = res.json<{ bids: ReceivedBid[] }>().bids;
     expect(received).toHaveLength(1);
-    expect(received[0].message).toBe('A very private pitch');
+    expect(received[0].message).toBe('A very private bid');
     expect(received[0].designer.slug).toBe(designer.profile.slug);
   });
 
-  test('the pitching designer sees their own pitch and the brief', async () => {
-    const { brief, designer } = await briefWithPitch();
+  test('the bidding designer sees their own bid and the brief', async () => {
+    const { brief, designer } = await briefWithBid();
     const res = await app.inject({
       method: 'GET',
-      url: '/api/me/pitches',
+      url: '/api/me/bids',
       cookies: { token: designer.cookie },
     });
-    const sent = res.json<{ pitches: SentPitch[] }>().pitches;
+    const sent = res.json<{ bids: SentBid[] }>().bids;
     expect(sent.map((p) => p.briefId)).toEqual([brief.id]);
     // Even here, the brief carries no route back to the buyer.
     expect(sent[0].brief).not.toHaveProperty('buyerId');
   });
 
-  test('another buyer cannot see the pitches on a brief', async () => {
-    const { brief } = await briefWithPitch();
+  test('another buyer cannot see the bids on a brief', async () => {
+    const { brief } = await briefWithBid();
     const stranger = await asBuyer();
     const res = await app.inject({
       method: 'GET',
-      url: `/api/me/briefs/${brief.id}/pitches`,
+      url: `/api/me/briefs/${brief.id}/bids`,
       cookies: { token: stranger.cookie },
     });
     expect(res.statusCode).toBe(404);
   });
 
-  test('another designer sees neither the pitch nor the route to it', async () => {
-    const { brief } = await briefWithPitch();
+  test('another designer sees neither the bid nor the route to it', async () => {
+    const { brief } = await briefWithBid();
     const rival = await asDesigner('Nosy Studio');
 
     // The buyer's inbox is a buyer-only route, so a designer is refused outright.
     const inbox = await app.inject({
       method: 'GET',
-      url: `/api/me/briefs/${brief.id}/pitches`,
+      url: `/api/me/briefs/${brief.id}/bids`,
       cookies: { token: rival.cookie },
     });
     expect(inbox.statusCode).toBe(403);
@@ -855,22 +853,22 @@ describe('who can see a pitch', () => {
     // And their own list contains only their own work: none.
     const mine = await app.inject({
       method: 'GET',
-      url: '/api/me/pitches',
+      url: '/api/me/bids',
       cookies: { token: rival.cookie },
     });
-    expect(mine.json<{ pitches: SentPitch[] }>().pitches).toEqual([]);
+    expect(mine.json<{ bids: SentBid[] }>().bids).toEqual([]);
   });
 
-  test('an anonymous caller sees no pitch content anywhere public', async () => {
-    const { brief } = await briefWithPitch();
+  test('an anonymous caller sees no bid content anywhere public', async () => {
+    const { brief } = await briefWithBid();
 
     const inbox = await app.inject({
       method: 'GET',
-      url: `/api/me/briefs/${brief.id}/pitches`,
+      url: `/api/me/briefs/${brief.id}/bids`,
     });
     expect(inbox.statusCode).toBe(401);
 
-    const mine = await app.inject({ method: 'GET', url: '/api/me/pitches' });
+    const mine = await app.inject({ method: 'GET', url: '/api/me/bids' });
     expect(mine.statusCode).toBe(401);
 
     // The public detail exposes the count and nothing else.
@@ -878,15 +876,15 @@ describe('who can see a pitch', () => {
       method: 'GET',
       url: `/api/briefs/${brief.id}`,
     });
-    expect(detail.body).not.toContain('A very private pitch');
-    expect(detail.json<{ brief: PublicBrief }>().brief.pitchCount).toBe(1);
+    expect(detail.body).not.toContain('A very private bid');
+    expect(detail.json<{ brief: PublicBrief }>().brief.bidCount).toBe(1);
   });
 
-  test('a designer with no profile has no pitch list', async () => {
+  test('a designer with no profile has no bid list', async () => {
     const { cookie } = await login('designer');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/me/pitches',
+      url: '/api/me/bids',
       cookies: { token: cookie },
     });
     expect(res.statusCode).toBe(404);
@@ -894,32 +892,32 @@ describe('who can see a pitch', () => {
 });
 
 describe('a deleted buyer account', () => {
-  test('leaves the brief and its pitches intact with a null buyer', async () => {
+  test('leaves the brief and its bids intact with a null buyer', async () => {
     const location = uniqueLocation('Orphaned');
     const { buyer, brief } = await openBrief({
       location,
       title: 'Outlives Its Author',
     });
     const designer = await asDesigner('Loyal Studio');
-    const created = await pitch(designer.cookie, brief.id);
+    const created = await bid(designer.cookie, brief.id);
     expect(created.statusCode).toBe(201);
 
     // Deleting the account. `buyer_id` is SET NULL rather than CASCADE, so an
-    // open brief with live pitches must not vanish from under the designers
+    // open brief with live bids must not vanish from under the designers
     // who responded to it.
     const db = await openDbConnection();
     db.run('DELETE FROM users WHERE email = ?', [buyer.email]);
     const row = db
       .query('SELECT buyer_id FROM briefs WHERE id = ?')
       .get(brief.id) as { buyer_id: number | null } | null;
-    const pitches = db
-      .query('SELECT COUNT(*) AS n FROM pitches WHERE brief_id = ?')
+    const bids = db
+      .query('SELECT COUNT(*) AS n FROM bids WHERE brief_id = ?')
       .get(brief.id) as { n: number };
     db.close();
 
     expect(row).not.toBeNull();
     expect(row?.buyer_id).toBeNull();
-    expect(pitches.n).toBe(1);
+    expect(bids.n).toBe(1);
 
     // Still on the board, and still readable.
     const board = await app.inject({
@@ -930,13 +928,13 @@ describe('a deleted buyer account', () => {
       board.json<{ briefs: PublicBrief[] }>().briefs.map((b) => b.id),
     ).toEqual([brief.id]);
 
-    // And the designer still has their pitch, with the brief attached.
+    // And the designer still has their bid, with the brief attached.
     const mine = await app.inject({
       method: 'GET',
-      url: '/api/me/pitches',
+      url: '/api/me/bids',
       cookies: { token: designer.cookie },
     });
-    const sent = mine.json<{ pitches: SentPitch[] }>().pitches;
+    const sent = mine.json<{ bids: SentBid[] }>().bids;
     expect(sent).toHaveLength(1);
     expect(sent[0].brief.title).toBe('Outlives Its Author');
   });
