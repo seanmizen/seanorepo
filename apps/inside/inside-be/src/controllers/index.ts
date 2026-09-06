@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../middleware/auth';
+import { adminDesignerRoutes } from './admin-designers';
 import { authRoutes } from './auth';
 import { briefRoutes } from './briefs';
 import { configRoutes } from './config';
@@ -35,6 +36,9 @@ export async function routes(fastify: FastifyInstance): Promise<void> {
       adminScope.get('/whoami', async (request) => {
         return { user: (request as { authUser?: unknown }).authUser };
       });
+
+      // The designer review queue that operates the approval gate.
+      adminScope.register(adminDesignerRoutes);
     },
     { prefix: '/admin' },
   );

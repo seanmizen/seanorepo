@@ -16,5 +16,6 @@ export const api = {
     verify: `${baseUrl}/auth/verify`,
     me: `${baseUrl}/auth/me`,
     logout: `${baseUrl}/auth/logout`,
+    adminDesigners: `${baseUrl}/admin/designers`,
   },
 };

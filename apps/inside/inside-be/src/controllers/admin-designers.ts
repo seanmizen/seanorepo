@@ -1,0 +1,122 @@
+import type { DesignerProfileStatus } from '@shared/types';
+import type { FastifyInstance } from 'fastify';
+import { getAuthUser } from '../middleware/auth';
+import {
+  decideProfile,
+  findProfileForReview,
+  listReviewQueue,
+  type ReviewDecision,
+} from '../services/admin-designers';
+import { sendReviewDecisionEmail } from '../services/email';
+import { optionalString, ValidationError } from '../services/validation';
+
+const STATUSES: DesignerProfileStatus[] = [
+  'draft',
+  'pending',
+  'approved',
+  'rejected',
+];
+
+/**
+ * Registered INSIDE the admin scope in controllers/index.ts, which attaches
+ * `requireAdmin` as an onRequest hook — so every route here is protected by
+ * construction rather than by remembering a decorator.
+ */
+export async function adminDesignerRoutes(
+  fastify: FastifyInstance,
+): Promise<void> {
+  fastify.get('/designers', async (request, reply) => {
+    const query = request.query as {
+      status?: string;
+      limit?: string;
+      page?: string;
+    };
+
+    if (
+      query.status &&
+      !STATUSES.includes(query.status as DesignerProfileStatus)
+    ) {
+      return reply
+        .status(400)
+        .send({ error: `status must be one of: ${STATUSES.join(', ')}` });
+    }
+
+    const limit = Math.min(Math.max(Number(query.limit) || 25, 1), 100);
+    const page = Math.max(Number(query.page) || 1, 1);
+
+    const { designers, total } = await listReviewQueue({
+      status: query.status as DesignerProfileStatus | undefined,
+      limit,
+      offset: (page - 1) * limit,
+    });
+
+    return { designers, total, page, limit };
+  });
+
+  fastify.get('/designers/:id', async (request, reply) => {
+    const id = Number((request.params as { id: string }).id);
+    const found = await findProfileForReview(id);
+    if (!found) return reply.status(404).send({ error: 'Not found' });
+    return { profile: found.profile, projects: found.projects };
+  });
+
+  for (const decision of ['approve', 'reject'] as ReviewDecision[]) {
+    fastify.post(`/designers/:id/${decision}`, async (request, reply) => {
+      const id = Number((request.params as { id: string }).id);
+      const admin = getAuthUser(request);
+
+      const found = await findProfileForReview(id);
+      if (!found) return reply.status(404).send({ error: 'Not found' });
+
+      let note: string | null;
+      try {
+        note = optionalString(
+          (request.body as { note?: unknown } | undefined)?.note,
+          'Review note',
+          1000,
+        );
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+
+      // A rejection the designer cannot act on is not a decision, it is a
+      // dead end — so the reason is required when rejecting.
+      if (decision === 'reject' && !note) {
+        return reply
+          .status(400)
+          .send({ error: 'A reason is required when rejecting a profile' });
+      }
+
+      const profile = await decideProfile(
+        id,
+        decision,
+        admin?.id as number,
+        note,
+      );
+      if (!profile) return reply.status(404).send({ error: 'Not found' });
+
+      // The decision is already committed. Email is a notification, not part
+      // of the transaction: if SMTP is down the reviewer's decision must still
+      // stand, so a send failure is logged and swallowed rather than 500ing
+      // and inviting them to click approve a second time.
+      try {
+        await sendReviewDecisionEmail(found.email, {
+          decision,
+          studioName: profile.studioName,
+          slug: profile.slug,
+          note,
+        });
+      } catch (error) {
+        fastify.log.error(
+          { error, profileId: id },
+          'Review decision saved but the notification email failed to send',
+        );
+      }
+
+      return { profile };
+    });
+  }
+}
