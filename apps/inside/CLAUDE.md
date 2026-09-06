@@ -237,6 +237,39 @@ Magic link only; there are no passwords. See `services/auth.ts`,
   sign-out, because on `/verify` it races the sign-in and would otherwise
   overwrite a fresh session with `null`. Preserve that guard.
 
+## Build the state you need, not the state you imagine
+
+`inside` is pre-launch. Every speculative branch is a thing that must be
+reasoned about, tested around and migrated later, in service of a workflow
+nobody has committed to — and it makes a pivot more expensive exactly when
+pivoting should still be cheap.
+
+What this looked like in practice: `pitches.status` shipped with six values —
+`sent`, `read`, `shortlisted`, `accepted`, `declined`, `withdrawn` — and **no
+code set or read a single one of them**. There was only a create route; no
+transition existed. Meanwhile `draft`, the one state the product actually
+wanted, was not among them. `briefs.status` had `awarded`, which nothing could
+produce, guarded by three branches defending against an impossible condition.
+
+Rules:
+
+- **A state earns its place when something can put a record into it and
+  something else behaves differently because of it.** Until then it is a
+  comment pretending to be a constraint.
+- **Do not add a status column "for later".** Later has different requirements
+  than the ones you are imagining, and by then the value is in the schema, the
+  types, the validators and half the tests.
+- **Prefer a boolean or a nullable timestamp to an enum** when there are two
+  real states. `submitted_at IS NULL` says everything a `draft`/`submitted`
+  pair does, with nothing left to invent.
+- **Resist workflow coupling.** A bid knows about its brief. It does not need
+  to know about shortlisting, awarding, or a buyer's decision process that has
+  not been designed.
+- **Idempotent beats stateful.** "Start a bid" and "continue my draft" are the
+  same intent, so they are the same endpoint returning the same row — the UI
+  does not have to know which state it is in, and there is no third state to
+  get stuck in.
+
 ## Never assert what you have not verified
 
 **Loading, loaded and failed are three distinct states, and every surface must

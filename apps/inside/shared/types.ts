@@ -207,8 +207,8 @@ export interface Enquiry {
   updatedAt: string;
 }
 
-/** `draft` is never listed; `open` takes pitches; `closed`/`awarded` do not. */
-export type BriefStatus = 'draft' | 'open' | 'closed' | 'awarded';
+/** `draft` is never listed; `open` takes bids; `closed` does not. */
+export type BriefStatus = 'draft' | 'open' | 'closed';
 
 /** Post-a-project: a homeowner's public listing. Not a portfolio `Project`. */
 export interface Brief {
@@ -227,13 +227,14 @@ export interface Brief {
   updatedAt: string;
 }
 
-export type PitchStatus =
-  | 'sent'
-  | 'read'
-  | 'shortlisted'
-  | 'accepted'
-  | 'declined'
-  | 'withdrawn';
+/**
+ * A bid is being written, has been sent, or was taken back.
+ *
+ * Deliberately small: the previous six states (sent/read/shortlisted/accepted/
+ * declined/withdrawn) had no code driving any of them, and lacked the one
+ * state the product actually needs — a draft you can come back to.
+ */
+export type PitchStatus = 'draft' | 'submitted' | 'withdrawn';
 
 /** A designer's response to a `Brief`. One per designer per brief. */
 export interface Pitch {
@@ -244,7 +245,8 @@ export interface Pitch {
   budgetBand: BudgetBand | null;
   availability: Availability | null;
   status: PitchStatus;
-  readAt: string | null;
+  /** Set when the bid is sent. Null while it is still a draft. */
+  submittedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
