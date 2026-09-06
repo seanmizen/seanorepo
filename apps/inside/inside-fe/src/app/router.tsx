@@ -2,6 +2,9 @@ import type { ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import { ProtectedRoute } from '@/components';
 import { Account } from '@/pages/account';
+import { AdminHome } from '@/pages/admin';
+import { AdminDesignerReview } from '@/pages/admin/designer-review';
+import { AdminDesigners } from '@/pages/admin/designers';
 import { Login } from '@/pages/login';
 import { NotFound } from '@/pages/not-found';
 import { Verify } from '@/pages/verify';
@@ -23,6 +26,21 @@ const ELEMENTS: Record<RoutePath, ReactNode> = {
   '/account': (
     <ProtectedRoute>
       <Account />
+    </ProtectedRoute>
+  ),
+  '/admin': (
+    <ProtectedRoute roles={['admin']}>
+      <AdminHome />
+    </ProtectedRoute>
+  ),
+  '/admin/designers': (
+    <ProtectedRoute roles={['admin']}>
+      <AdminDesigners />
+    </ProtectedRoute>
+  ),
+  '/admin/designers/:id': (
+    <ProtectedRoute roles={['admin']}>
+      <AdminDesignerReview />
     </ProtectedRoute>
   ),
 };

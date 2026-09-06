@@ -101,6 +101,25 @@ for (const scheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, `/account (${scheme})`);
     });
 
+    test('admin — review queue', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      // ADMIN_EMAILS in playwright.config.ts is what grants the role.
+      await signIn(page, 'admin@inside.test');
+      await page.goto('/admin/designers');
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expectNoViolations(page, `/admin/designers (${scheme})`);
+    });
+
+    test('admin — review detail', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, 'admin@inside.test');
+      await page.goto('/admin/designers/1');
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expectNoViolations(page, `/admin/designers/:id (${scheme})`);
+    });
+
     test('not found', async ({ page }) => {
       // Two segments deep on purpose: it is the only page today that renders a
       // three-crumb trail, including an inert crumb for an undeclared parent.
