@@ -27,7 +27,10 @@ export default defineConfig({
 
   webServer: [
     {
-      command: `bun src/index.ts`,
+      // Seeded before the server starts, so discovery, profile and portfolio
+      // pages have real content and the navigation guard's slug fixtures
+      // resolve. Seeding is idempotent, so a reused server is unaffected.
+      command: 'bun src/seed.ts && bun src/index.ts',
       cwd: '../inside-be',
       url: `http://localhost:${BE_PORT}/api/health`,
       reuseExistingServer: !process.env.CI,

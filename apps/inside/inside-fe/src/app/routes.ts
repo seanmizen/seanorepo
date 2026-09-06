@@ -52,6 +52,24 @@ export const ROUTES = [
   // deliberately invalid one so it lands on the same state the other specs use.
   { path: '/verify', label: 'sign-in link', search: '?token=nonsense' },
   { path: '/account', label: 'account', requiresAuth: true },
+  // Public discovery. Every level is a real page, so the trail on a portfolio
+  // piece — home > designers > studio > portfolio > project — is all links.
+  { path: '/designers', label: 'designers' },
+  {
+    path: '/designers/:slug',
+    label: 'studio',
+    params: { slug: 'studio-mercer' },
+  },
+  {
+    path: '/designers/:slug/portfolio',
+    label: 'portfolio',
+    params: { slug: 'studio-mercer' },
+  },
+  {
+    path: '/designers/:slug/portfolio/:projectSlug',
+    label: 'project',
+    params: { slug: 'studio-mercer', projectSlug: 'clapham-townhouse' },
+  },
   // Admin. `/admin` and `/admin/designers` both exist as real pages because
   // `/admin/designers/:id` implies them, and a breadcrumb link that 404s is a
   // bug — see the standing rule above.

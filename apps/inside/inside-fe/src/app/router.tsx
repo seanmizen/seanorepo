@@ -5,6 +5,10 @@ import { Account } from '@/pages/account';
 import { AdminHome } from '@/pages/admin';
 import { AdminDesignerReview } from '@/pages/admin/designer-review';
 import { AdminDesigners } from '@/pages/admin/designers';
+import { Designers } from '@/pages/designers';
+import { DesignerPortfolio } from '@/pages/designers/portfolio';
+import { DesignerProfilePage } from '@/pages/designers/profile';
+import { PortfolioProjectPage } from '@/pages/designers/project';
 import { Login } from '@/pages/login';
 import { NotFound } from '@/pages/not-found';
 import { Verify } from '@/pages/verify';
@@ -28,6 +32,10 @@ const ELEMENTS: Record<RoutePath, ReactNode> = {
       <Account />
     </ProtectedRoute>
   ),
+  '/designers': <Designers />,
+  '/designers/:slug': <DesignerProfilePage />,
+  '/designers/:slug/portfolio': <DesignerPortfolio />,
+  '/designers/:slug/portfolio/:projectSlug': <PortfolioProjectPage />,
   '/admin': (
     <ProtectedRoute roles={['admin']}>
       <AdminHome />

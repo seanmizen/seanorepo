@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getAuthUser, requireRole } from '../middleware/auth';
 import * as designers from '../services/designers';
+import { listPublicPortfolio } from '../services/discovery';
 import { uniqueSlug } from '../services/slugs';
 import {
   AVAILABILITIES,
@@ -53,14 +54,18 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.get('/designers/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
-    const profile = await designers.findApprovedProfileBySlug(slug);
-    if (!profile) {
+    // Goes through the portfolio path so the pieces arrive WITH their images:
+    // a public profile is a gallery, and a grid of titles with no photography
+    // is not one. One call also means the page cannot render a profile and its
+    // work in two different states.
+    const found = await listPublicPortfolio(slug, { limit: 60, offset: 0 });
+    if (!found) {
       return reply.status(404).send({ error: 'Designer not found' });
     }
-    const portfolioProjects = await designers.listProjects(profile.id, {
-      publishedOnly: true,
-    });
-    return { profile, portfolioProjects };
+    return {
+      profile: found.profile,
+      portfolioProjects: found.portfolioProjects,
+    };
   });
 
   /**

@@ -110,6 +110,27 @@ for (const scheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, `/ signed in (${scheme})`);
     });
 
+    test('designers — list', async ({ page }) => {
+      await page.goto('/designers');
+      await expect(page.getByTestId('designers-grid')).toBeVisible();
+      await expectNoViolations(page, `/designers (${scheme})`);
+    });
+
+    test('designers — profile', async ({ page }) => {
+      await page.goto('/designers/studio-mercer');
+      await expect(page.getByTestId('portfolio-grid')).toBeVisible();
+      await expectNoViolations(page, `/designers/:slug (${scheme})`);
+    });
+
+    test('designers — portfolio piece', async ({ page }) => {
+      await page.goto('/designers/studio-mercer/portfolio/clapham-townhouse');
+      await expect(page.getByTestId('project-images')).toBeVisible();
+      await expectNoViolations(
+        page,
+        `/designers/:slug/portfolio/:projectSlug (${scheme})`,
+      );
+    });
+
     test('admin — review queue', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);
@@ -130,12 +151,13 @@ for (const scheme of ['light', 'dark'] as const) {
     });
 
     test('not found', async ({ page }) => {
-      // Two segments deep on purpose: it is the only page today that renders a
-      // three-crumb trail, including an inert crumb for an undeclared parent.
-      await page.goto('/designers/alice-morgan');
+      // Two segments deep on purpose: it renders a three-crumb trail including
+      // an inert crumb for an undeclared parent, which is the only place that
+      // styling appears. /designers/* stopped being undeclared in SEAN-160.
+      await page.goto('/journal/spring-2026');
       await waitForApp(page);
       await expect(page.getByTestId('not-found')).toBeVisible();
-      await expectNoViolations(page, `/designers/alice-morgan (${scheme})`);
+      await expectNoViolations(page, `/journal/spring-2026 (${scheme})`);
     });
   });
 }
