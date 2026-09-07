@@ -25,6 +25,8 @@
     "down": "yarn workspaces foreach -Apt run down",
     "check": "biome check .",
     "fix": "biome check --write .",
+    "requirements:check": "node requirements/check.mjs",
+    "requirements:build": "node requirements/check.mjs --write",
     "format": "biome format --write .",
     "fly:up": "docker compose -f utils/fly-io/docker-compose.fly.yml up --build --detach",
     "fly:down": "docker compose -f utils/fly-io/docker-compose.fly.yml down",
