@@ -97,6 +97,21 @@ const Login: FC = () => {
           No password. We'll email you a link.
         </Typography>
 
+        {/*
+          REQ-AUTH-008. Why they are here, when they did not come here on
+          purpose. A visitor bounced to a login page with no explanation
+          reasonably concludes the site dropped them — and the honest answer,
+          that their session expired or was signed out elsewhere, is the one
+          that tells them what to do next.
+        */}
+        {params.get('reason') === 'expired' && (
+          <Alert severity="info" data-testid="session-expired">
+            You were signed out. That happens when a session expires, or when it
+            is ended from another browser. Signing in again picks up where you
+            left off.
+          </Alert>
+        )}
+
         <Box>
           <Typography
             variant="body2"
