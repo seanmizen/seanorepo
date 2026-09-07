@@ -34,7 +34,7 @@ test.describe('browsing designers', () => {
   }) => {
     await page.goto('/designers/ash-ember');
     await waitForApp(page);
-    await expect(page.getByTestId('designer-missing')).toBeVisible();
+    await expect(page.getByTestId('designer-failure')).toBeVisible();
   });
 
   test('filtering narrows the list and shows in the URL', async ({ page }) => {
@@ -127,7 +127,7 @@ test.describe('a portfolio piece', () => {
   test('an unpublished piece is not reachable', async ({ page }) => {
     await page.goto(`/designers/${APPROVED_SLUG}/portfolio/notting-hill-study`);
     await waitForApp(page);
-    await expect(page.getByTestId('project-missing')).toBeVisible();
+    await expect(page.getByTestId('project-failure')).toBeVisible();
   });
 
   test('the full portfolio page lists every published piece', async ({

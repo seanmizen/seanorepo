@@ -202,7 +202,9 @@ test.describe('keyboard navigation', () => {
     await page.goto('/me/portfolio');
     // A designer who has not started a profile gets the invitation to, which
     // is the state a brand-new account actually lands on.
-    await expect(page.getByTestId('portfolio-empty')).toBeVisible();
+    // A designer with no profile yet — which is now its own id, distinct
+    // from a genuinely empty portfolio (REQ-QUALITY-001).
+    await expect(page.getByTestId('portfolio-needs-profile')).toBeVisible();
     await expectKeyboardNavigable(page, '/me/portfolio');
   });
 });

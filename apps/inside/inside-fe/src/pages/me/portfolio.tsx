@@ -76,7 +76,10 @@ const MyPortfolio: FC = () => {
           </Typography>
           {noProfileYet ? (
             <>
-              <Typography color="text.secondary" data-testid="portfolio-empty">
+              <Typography
+                color="text.secondary"
+                data-testid="portfolio-needs-profile"
+              >
                 Set up your profile first — your work hangs off it.
               </Typography>
               <Button component={Link} to="/me/profile" variant="contained">
@@ -84,7 +87,7 @@ const MyPortfolio: FC = () => {
               </Button>
             </>
           ) : (
-            <Alert severity="error" data-testid="portfolio-error">
+            <Alert severity="error" data-testid="portfolio-load-failure">
               Your portfolio could not be loaded.
             </Alert>
           )}
@@ -119,7 +122,7 @@ const MyPortfolio: FC = () => {
         </Stack>
 
         {error && (
-          <Alert severity="error" data-testid="portfolio-error">
+          <Alert severity="error" data-testid="portfolio-action-failure">
             {error}
           </Alert>
         )}

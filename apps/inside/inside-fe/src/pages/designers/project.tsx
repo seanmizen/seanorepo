@@ -68,7 +68,7 @@ const PortfolioProjectPage: FC = () => {
           <Typography variant="h3" component="h1">
             {failure.title}
           </Typography>
-          <Alert severity={failure.severity} data-testid="project-missing">
+          <Alert severity={failure.severity} data-testid="project-failure">
             {failure.body}
           </Alert>
           <Button
