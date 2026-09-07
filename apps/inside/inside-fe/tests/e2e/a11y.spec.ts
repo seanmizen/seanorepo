@@ -53,9 +53,26 @@ for (const scheme of ['light', 'dark'] as const) {
   test.describe(`@axe WCAG 2.1 AA — ${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
 
-    // Proves the scans below really ran in the theme this block claims. Without
-    // it a regression in the pre-paint script would silently scan light twice.
+    /*
+     * The theme is CHOSEN, not inherited from the OS.
+     *
+     * Since #224 the app defaults to light whatever the operating system says
+     * (REQ-THEME-003), so `colorScheme` alone no longer produces a dark render
+     * — it only decides what `auto` would resolve to. Storing the mode before
+     * first paint is what a visitor who picked a theme actually has, and is
+     * the only way to scan dark deterministically.
+     */
     test.beforeEach(async ({ page }) => {
+      await page.addInitScript((mode) => {
+        try {
+          localStorage.setItem('theme-mode', mode);
+        } catch {
+          // Blocked storage would fall back to light and fail the check below,
+          // which is the correct outcome rather than a silent light-twice scan.
+        }
+      }, scheme);
+
+      // Proves the scans below really ran in the theme this block claims.
       await page.goto('/');
       await waitForApp(page);
       await expect(page.locator('body')).toHaveClass(

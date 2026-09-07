@@ -13,16 +13,22 @@
   <body>
     <script>
       // REQ-THEME-002. Blocking on purpose: resolves the theme before first
-      // paint so dark-mode users never see a white flash. Must read the same
-      // key the app writes — 'theme-mode' below is a hand-kept copy of
-      // THEME_STORAGE_KEY in src/app/theme.ts, because this runs before any
-      // bundle loads and cannot import it.
+      // paint so nobody sees the wrong one flash. Must agree with
+      // src/app/theme.ts on BOTH the key and the fallback — 'theme-mode' and
+      // 'light' below are hand-kept copies of THEME_STORAGE_KEY and
+      // DEFAULT_THEME_MODE, because this runs before any bundle loads and
+      // cannot import them.
+      //
+      // REQ-THEME-003: the fallback is 'light', not 'auto'. Get that wrong
+      // here and the flash comes back for exactly one group — visitors whose
+      // OS is dark and who have never chosen — which is the sort of bug that
+      // survives a casual look.
       (() => {
-        var mode = 'auto';
+        var mode = 'light';
         try {
-          mode = localStorage.getItem('theme-mode') || 'auto';
+          mode = localStorage.getItem('theme-mode') || 'light';
         } catch {
-          // Storage blocked; fall through to following the OS.
+          // Storage blocked; fall through to the default.
         }
         var theme =
           mode === 'auto'
