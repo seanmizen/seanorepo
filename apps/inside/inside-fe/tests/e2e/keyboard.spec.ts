@@ -168,6 +168,15 @@ test.describe('keyboard navigation', () => {
     await expectKeyboardNavigable(page, '/no-such-page');
   });
 
+  test('account — with the preference controls', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('kbd-account-prefs'));
+    await page.goto('/account');
+    await expect(page.getByTestId('account-preferences')).toBeVisible();
+    await expectKeyboardNavigable(page, '/account');
+  });
+
   test('my studio', async ({ page }) => {
     await page.goto('/login');
     await waitForApp(page);
