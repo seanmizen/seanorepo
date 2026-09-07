@@ -81,6 +81,28 @@ const messageFor = (status: number): string =>
     ? 'Something went wrong at our end.'
     : `That request was refused (${status}).`;
 
+/**
+ * Told whenever any request comes back 401. REQ-AUTH-008.
+ *
+ * A session can end mid-flow — expired, or revoked from another browser — and
+ * before this nothing in the app noticed. The 401 surfaced as whatever generic
+ * error the page happened to own, while the header still showed the visitor
+ * signed in and `ProtectedRoute` still admitted them. They were left pressing
+ * Save against a red box.
+ *
+ * Registered by AuthProvider rather than imported by it, so `lib/` keeps
+ * knowing nothing about auth — this module's job is transport.
+ */
+type UnauthorizedHandler = (url: string) => void;
+
+let onUnauthorized: UnauthorizedHandler | null = null;
+
+export const setUnauthorizedHandler = (
+  handler: UnauthorizedHandler | null,
+): void => {
+  onUnauthorized = handler;
+};
+
 export interface RequestOptions extends RequestInit {
   /** Override the deadline. Uploads use their own path; see `uploadImage`. */
   timeoutMs?: number;
@@ -132,6 +154,17 @@ export async function request<T>(
     } catch {
       // A non-JSON error body is not itself worth surfacing.
     }
+    /*
+     * The session check is exempt, deliberately. `/auth/me` answers 401 for a
+     * cookie that is present but revoked (REQ-AUTH-005), and that IS how the
+     * app learns the session ended — but it is answered by AuthProvider's own
+     * boot logic. Routing it through the global handler as well would have the
+     * provider reacting to its own request.
+     */
+    if (response.status === 401 && !url.includes('/auth/me')) {
+      onUnauthorized?.(url);
+    }
+
     throw new ApiError(message, response.status, 'http', requestId);
   }
 

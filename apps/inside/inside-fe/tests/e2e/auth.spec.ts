@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { signIn, uniqueEmail } from './helpers';
+import { expect, type Page, request, test } from '@playwright/test';
+import { signIn, uniqueEmail, waitForApp } from './helpers';
 
 test.describe('sign in', () => {
   test('a new buyer can sign in end to end', async ({ page }) => {
@@ -117,5 +117,89 @@ test.describe('bad links', () => {
 
     // Must land on our own site, never the attacker's.
     await expect(page).toHaveURL(/localhost:4160\//);
+  });
+});
+
+test.describe('a session that ends underneath you', () => {
+  /**
+   * Revoke the session SERVER-side while leaving the browser's cookie in
+   * place — which is what "signed out from another browser" actually is, and
+   * the only case REQ-AUTH-005 answers 401 for.
+   *
+   * Logging out from the page itself would not do: the response clears the
+   * cookie, so the next `/me` is an ordinary anonymous 200 and the expiry is
+   * indistinguishable from a normal sign-out. The call has to come from a
+   * different cookie jar carrying the same token.
+   */
+  async function revokeElsewhere(page: Page) {
+    const cookies = await page.context().cookies();
+    const token = cookies.find((c) => c.name === 'token');
+    expect(token, 'no session cookie to revoke').toBeTruthy();
+
+    const elsewhere = await request.newContext({
+      extraHTTPHeaders: { cookie: `token=${token?.value}` },
+    });
+    const res = await elsewhere.post('http://localhost:4161/api/auth/logout');
+    expect(res.ok()).toBe(true);
+    await elsewhere.dispose();
+  }
+
+  test('says why, rather than bouncing to login in silence', async ({
+    page,
+  }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('expiry'));
+
+    await page.goto('/account');
+    await expect(page.getByTestId('account-email')).toBeVisible();
+
+    await revokeElsewhere(page);
+
+    // A hard reload: the cookie is still there, so /me answers 401 rather
+    // than an anonymous 200, and the boot check has to tell them apart.
+    await page.reload();
+
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId('session-expired')).toBeVisible();
+  });
+
+  test('the next authenticated request ends the session, without a reload', async ({
+    page,
+  }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('expiry-live'), 'designer');
+
+    await page.goto('/me');
+    await expect(page.getByTestId('start-profile')).toBeVisible();
+
+    await revokeElsewhere(page);
+
+    /*
+     * A client-side navigation to a page that ACTUALLY ASKS the server — no
+     * reload, so nothing is re-read at boot.
+     *
+     * The qualifier matters and is the honest limit of REQ-AUTH-008: a session
+     * is discovered to have ended on the next authenticated request, not the
+     * instant it is revoked. Nothing polls, and nothing should — the
+     * alternative is a heartbeat asking "am I still here?" forever. A page
+     * that makes no authenticated request keeps its stale session until one
+     * does, which is why this test navigates somewhere that fetches.
+     */
+    await page.getByRole('link', { name: /start your profile/i }).click();
+
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId('session-expired')).toBeVisible();
+  });
+
+  test('an ordinary anonymous visitor is not told a session ended', async ({
+    page,
+  }) => {
+    // The distinction REQ-AUTH-005 exists for: /me answers 200 with a null
+    // user when signed out, which is not an expiry and must not read as one.
+    await page.goto('/account');
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId('session-expired')).toHaveCount(0);
   });
 });

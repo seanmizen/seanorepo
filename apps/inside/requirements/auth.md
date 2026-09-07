@@ -144,3 +144,45 @@ to everywhere else.
   convenience and the server's is the control.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "a returnTo pointing off-site is ignored"
 - **Relations:** none
+
+## REQ-AUTH-008 — A session that ends says so
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #215
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** Where a request is refused for want of a valid session, the
+  app shall sign the visitor out and tell them why they are being asked to sign
+  in again.
+- **Rationale:** Nothing in the app read a 401. A session ending mid-flow —
+  expired, or signed out from another browser — surfaced as whatever generic
+  error the page happened to own, while the header still showed the visitor
+  signed in and `ProtectedRoute` still admitted them. They were left pressing
+  Save against a red box that would never go away.
+
+  Being returned to a login page with no explanation reads as the site having
+  dropped them on purpose. The honest answer — the session expired, or was
+  ended elsewhere — is also the one that says what to do next.
+
+  This depends on REQ-AUTH-005 being true: `/api/auth/me` answers 200 with a
+  null user when signed out and 401 only for a cookie that is present but
+  revoked. Without that distinction, an ordinary anonymous visitor would be
+  told their session ended, which is the same class of lie in the opposite
+  direction.
+
+  **The honest limit:** a session is discovered to have ended on the next
+  authenticated request, not the instant it is revoked. Nothing polls, and
+  nothing should — the alternative is a heartbeat asking "am I still here?"
+  forever, spending requests to learn something the next real request will say
+  for free. A page that makes no authenticated call keeps its stale session
+  until one does.
+
+  A transport failure is deliberately NOT treated as a sign-out. It says
+  nothing about the session, so claiming one ended would assert something
+  unverified (REQ-STATE-003); the offline banner covers that case honestly.
+- **Verification:**
+  - Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "says why, rather than bouncing to login in silence"
+  - Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "the next authenticated request ends the session, without a reload"
+  - Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "an ordinary anonymous visitor is not told a session ended"
+- **Relations:** depends-on REQ-AUTH-005
