@@ -14,7 +14,7 @@ export const ProtectedRoute: FC<ProtectedRouteProps> = ({
   children,
   roles,
 }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionEnded } = useAuth();
   const location = useLocation();
 
   // Must wait: redirecting before /me resolves would bounce signed-in users
@@ -28,11 +28,14 @@ export const ProtectedRoute: FC<ProtectedRouteProps> = ({
   }
 
   if (!user) {
-    // Carry where they were so signing in resumes it.
+    // Carry where they were so signing in resumes it, and WHY they are here.
+    // Being returned to a login page with no explanation reads as the site
+    // losing your session on purpose (REQ-AUTH-008).
     const returnTo = `${location.pathname}${location.search}`;
+    const reason = sessionEnded ? '&reason=expired' : '';
     return (
       <Navigate
-        to={`/login?returnTo=${encodeURIComponent(returnTo)}`}
+        to={`/login?returnTo=${encodeURIComponent(returnTo)}${reason}`}
         replace
       />
     );

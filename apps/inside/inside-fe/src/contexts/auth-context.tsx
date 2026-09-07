@@ -11,7 +11,7 @@ import {
   useState,
 } from 'react';
 import { api } from '@/config';
-import { get, send } from '@/lib/http';
+import { ApiError, get, send, setUnauthorizedHandler } from '@/lib/http';
 
 export type SignupRole = 'buyer' | 'designer';
 
@@ -19,6 +19,14 @@ interface AuthContextValue {
   user: User | null;
   /** True until the initial /me check resolves — routes must wait for this. */
   loading: boolean;
+  /**
+   * The session ended rather than never existing. REQ-AUTH-008.
+   *
+   * Distinct from `user === null`, which is the ordinary anonymous case. This
+   * says a cookie was present and the server refused it, so the visitor should
+   * be told why they are back at the login page instead of silently bounced.
+   */
+  sessionEnded: boolean;
   requestMagicLink: (
     email: string,
     role: SignupRole,
@@ -31,6 +39,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
+  sessionEnded: false,
   requestMagicLink: async () => ({}),
   verify: async () => ({ returnTo: '/' }),
   logout: async () => {},
@@ -65,6 +74,21 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
    * bounce them back to login — so it defers to an explicit action.
    */
   const settledByAction = useRef(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
+
+  /*
+   * Any 401 from anywhere ends the session here, once. Before this each caller
+   * met the 401 alone and showed its own generic error, while the header and
+   * ProtectedRoute carried on as though nothing had happened.
+   */
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setUser(null);
+      setSessionEnded(true);
+      settledByAction.current = true;
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   // Cookie is httpOnly, so the only way to know who we are is to ask.
   useEffect(() => {
@@ -75,19 +99,24 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
           api.endpoints.me,
         );
         if (!cancelled && !settledByAction.current) setUser(resolved ?? null);
-      } catch {
+      } catch (error) {
+        if (cancelled || settledByAction.current) return;
+
         /*
-         * Every failure becomes "signed out", which is the behaviour this
-         * replaced and is deliberately unchanged here.
+         * REQ-AUTH-008. The three cases are finally distinguished.
          *
-         * It is also wrong, and #215 fixes it: `/me` answers 200 with a null
-         * user when signed out and 401 only for a cookie that is present but
-         * revoked (REQ-AUTH-005), so flattening them loses the one case worth
-         * knowing about — and a transport failure currently reads as a
-         * sign-out too. Splitting them is a behaviour change with its own
-         * tests, so it is not smuggled in here.
+         * `/me` answers 200 with a null user when signed out and 401 only for
+         * a cookie that is present but revoked (REQ-AUTH-005) — so a 401 here
+         * means a real session ended, and the visitor is owed an explanation.
+         *
+         * A transport failure is NOT a sign-out. It says nothing about the
+         * session, so claiming one ended would be asserting something we have
+         * not verified. The offline banner covers that case honestly.
          */
-        if (!cancelled && !settledByAction.current) setUser(null);
+        setUser(null);
+        if (error instanceof ApiError && error.status === 401) {
+          setSessionEnded(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -112,6 +141,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const url = `${api.endpoints.verify}?token=${encodeURIComponent(token)}&returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`;
     const data = await get<{ user: User; returnTo?: string }>(url);
     settledByAction.current = true;
+    setSessionEnded(false);
     setUser(data.user);
     return { returnTo: safeReturnTo(data.returnTo) };
   }, []);
@@ -132,8 +162,8 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, requestMagicLink, verify, logout }),
-    [user, loading, requestMagicLink, verify, logout],
+    () => ({ user, loading, sessionEnded, requestMagicLink, verify, logout }),
+    [user, loading, sessionEnded, requestMagicLink, verify, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
