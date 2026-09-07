@@ -36,7 +36,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
 
 ## REQ-CHIPS-002 — Chips anchor top-left and stack downwards
 
-- **Status:** active
+- **Status:** superseded
 - **Source:** sean
 - **Origin:** #174
 - **Type:** constraint
@@ -48,8 +48,10 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   itself at 375px: chips top-left, theme toggle top-right, breadcrumb trail
   below the chips. Stacking downwards rather than sideways is what lets chips
   be added without renegotiating the horizontal budget shared with the header.
-- **Verification:** Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "the backend chip sits below the dev chip, top-left"
-- **Relations:** refines REQ-CHIPS-001
+- **Verification:** Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "the chips stack in one column, anchored to a corner"
+- **Relations:**
+  - refines REQ-CHIPS-001
+  - superseded-by REQ-CHIPS-009
 
 ## REQ-CHIPS-003 — The backdrop is translucent, the content is not
 
@@ -83,6 +85,13 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   resolution recorded here is the opposite and is deliberate: the header
   reserves left padding and moves aside for the chips, not the other way round.
   Supported widths are 375, 768 and 1280.
+
+  **Amended in #222 — the resolution changed, the requirement did not.** The
+  header no longer indents at all, because in production there are no chips to
+  clear (REQ-CHIPS-008) and the indent left the brand misaligned with the
+  breadcrumb trail for a reason invisible to anyone looking at it. The chips
+  avoid the header by living at the bottom-left instead (REQ-CHIPS-009). This
+  statement holds either way, which is why it is still this requirement.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "never cover the header brand or nav"
 - **Relations:** depends-on REQ-CHIPS-001
 
@@ -107,7 +116,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
 
 ## REQ-CHIPS-007 — Chips appear on every route, until the visitor says otherwise
 
-- **Status:** active
+- **Status:** superseded
 - **Source:** sean
 - **Origin:** #219
 - **Type:** functional
@@ -136,11 +145,13 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "shows the dev chip and backend chip on /"
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "can be dismissed, and stays dismissed across a reload"
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "can be brought back from the account page"
-- **Relations:** supersedes REQ-CHIPS-005
+- **Relations:**
+  - supersedes REQ-CHIPS-005
+  - superseded-by REQ-CHIPS-008
 
 ## REQ-CHIPS-006 — The dev chip is shown only when the server says so
 
-- **Status:** active
+- **Status:** withdrawn
 - **Source:** sean
 - **Origin:** #174
 - **Type:** constraint
@@ -152,5 +163,67 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   bundle. A bundle-derived flag says what the frontend was compiled to believe,
   which is not the same claim and would show a production visitor a dev badge —
   or, worse, hide it from someone who really is on a dev backend.
-- **Verification:** Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "the dev chip is driven by the server, not the bundle"
+
+  **Withdrawn in #222, subsumed rather than reversed.** REQ-CHIPS-008 made the
+  whole card conditional on the same server signal, so by the time this chip
+  renders, the answer is already yes — the gate had no remaining observable
+  effect, and a test for it could not fail. Two gates on one input is not
+  defence in depth. The principle it stood for is unchanged and now lives in
+  REQ-CHIPS-008: the server, never the bundle, decides what environment this
+  is.
+- **Verification:** Inspection — no longer separately observable; see the note below. Its intent is carried by REQ-CHIPS-008, whose tests exercise the same signal.
 - **Relations:** refines REQ-CHIPS-007
+
+## REQ-CHIPS-008 — The card exists only outside production
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #222
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** Where the server reports a production backend, the status chip
+  stack shall not be rendered.
+- **Rationale:** Supersedes REQ-CHIPS-007, which guaranteed the card on every
+  route and was therefore wrong in the one place it mattered. The card is
+  deployment chrome — which backend am I on, is it up — and a member of the
+  public browsing a marketplace has no business seeing it. It was visible in
+  production and noticed there, which is how this was found.
+
+  Availability comes from the SERVER, never a build-time flag: the same
+  reasoning as REQ-CHIPS-006, for a stronger reason, since this decides what
+  the public sees. While the config request is in flight the card stays hidden,
+  because a pending state must not be drawn as the permissive one
+  (REQ-STATE-002).
+
+  A production visitor cannot dismiss it, restore it, or find a control for it
+  — the preference row on the account page appears only where the card can. A
+  switch that silently does nothing is worse than no switch.
+- **Verification:**
+  - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "is absent entirely when the server reports production"
+  - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "offers no preference control where the card cannot appear"
+- **Relations:** supersedes REQ-CHIPS-007
+
+## REQ-CHIPS-009 — The card sits in the bottom-left
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #222
+- **Type:** constraint
+- **Priority:** P2
+- **Statement:** The status chip stack shall be anchored to the bottom-left of
+  the viewport.
+- **Rationale:** Supersedes REQ-CHIPS-002. The top-left anchor forced the site
+  header to indent 104-124px to clear it, which left the brand offset from the
+  breadcrumb trail beneath it — visibly wrong, and for a reason that does not
+  exist in production where there are no chips at all.
+
+  Removing the indent while keeping the chips at the top would have put them on
+  the brand, which is the exact trade made in #197 and reverted in #198. Moving
+  the card instead satisfies REQ-CHIPS-004 with nothing yielding to it: the
+  bottom-left corner is outside the reading path and has nothing to collide
+  with. The theme toggle keeps the top-right, the trail keeps its tray, and the
+  brand now starts flush with it.
+- **Relations:** supersedes REQ-CHIPS-002
+- **Verification:**
+  - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "the chips stack in one column, anchored to a corner"
+  - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "never cover the header brand or nav"

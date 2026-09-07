@@ -121,10 +121,10 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
             <ThemeProvider theme={theme}>
               <CssBaseline enableColorScheme={true} />
               {/*
-                REQ-CHIPS-007: rendered here, above the router, so the chips
+                REQ-CHIPS-008: rendered here, above the router, so the chips
                 are on every route by existing rather than by each page opting
-                in — for as long as the visitor wants them. REQ-CHIPS-001 is
-                what keeps them out of the page's flow.
+                in — where they appear at all, and for as long as the visitor
+                wants them. REQ-CHIPS-001 keeps them out of the page's flow.
               */}
               <ChromeProvider>
                 <StatusChips />

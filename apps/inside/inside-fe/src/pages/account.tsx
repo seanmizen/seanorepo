@@ -63,7 +63,8 @@ const Section: FC<{
  */
 const Account: FC = () => {
   const { user, logout } = useAuth();
-  const { statusCardVisible, setStatusCardVisible } = useChrome();
+  const { statusCardVisible, statusCardAvailable, setStatusCardVisible } =
+    useChrome();
   const navigate = useNavigate();
 
   const isDesigner = user?.role === 'designer';
@@ -127,26 +128,35 @@ const Account: FC = () => {
           </Typography>
         </Section>
 
-        <Section
-          title="Preferences"
-          description="How the site behaves for you, on this browser."
-          testId="account-preferences"
-        >
-          <FormControlLabel
-            control={
-              <Switch
-                checked={statusCardVisible}
-                onChange={(event) => setStatusCardVisible(event.target.checked)}
-                data-testid="status-card-toggle"
-              />
-            }
-            label="Show the deployment status card"
-          />
-          <Typography variant="body2" color="text.secondary">
-            The floating card in the top-left corner showing which backend you
-            are talking to. Remembered on this browser only.
-          </Typography>
-        </Section>
+        {/*
+          Only where the card can actually appear. Offering a switch for
+          something that cannot happen — the production case — would be a
+          control that silently does nothing, which is worse than its absence.
+        */}
+        {statusCardAvailable && (
+          <Section
+            title="Preferences"
+            description="How the site behaves for you, on this browser."
+            testId="account-preferences"
+          >
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={statusCardVisible}
+                  onChange={(event) =>
+                    setStatusCardVisible(event.target.checked)
+                  }
+                  data-testid="status-card-toggle"
+                />
+              }
+              label="Show the deployment status card"
+            />
+            <Typography variant="body2" color="text.secondary">
+              The floating card showing which backend you are talking to. Shown
+              only outside production, and remembered on this browser only.
+            </Typography>
+          </Section>
+        )}
 
         <Section
           title="Session"

@@ -83,11 +83,10 @@ const StatusChip: FC<{
  * `apps/inside/requirements/chips.md`:
  *
  * - REQ-CHIPS-001 — fixed-position chrome, never in normal flow
- * - REQ-CHIPS-002 — anchored top-left, stacking downwards as chips are added
+ * - REQ-CHIPS-009 — anchored bottom-left, stacking as chips are added
  * - REQ-CHIPS-003 — translucent backdrop, fully opaque content
- * - REQ-CHIPS-007 — present on every route until the visitor hides it,
- *                   rendered once in app/provider
- * - REQ-CHIPS-006 — the dev chip appears only when the server says so
+ * - REQ-CHIPS-008 — present only where the server reports a non-production
+ *                   backend, and only until the visitor hides it
  *
  * Do not move these into the header to resolve a layout collision; adjust the
  * header's offset instead, which is REQ-CHIPS-004. That trade was made once,
@@ -95,12 +94,6 @@ const StatusChip: FC<{
  */
 const StatusChips: FC = () => {
   const { statusCardVisible, setStatusCardVisible } = useChrome();
-  const config = useQuery({
-    queryKey: ['config'],
-    queryFn: () => fetchJson<AppConfig>(api.endpoints.config),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => fetchJson<HealthResponse>(api.endpoints.health),
@@ -109,20 +102,21 @@ const StatusChips: FC = () => {
 
   const chips: ReactNode[] = [];
 
-  // REQ-CHIPS-006. Purple, and only ever shown when the SERVER says it is not
-  // production — a build-time flag would say what the bundle was compiled to
-  // believe, which is a different claim.
-  if (config.data?.devMode) {
-    chips.push(
-      <StatusChip
-        key="dev"
-        testId="status-chip-dev"
-        label="dev"
-        title="Running against a non-production backend"
-        colour={PURPLE}
-      />,
-    );
-  }
+  /*
+   * Purple, unconditional — because reaching this component at all already
+   * means the server reported a non-production backend (REQ-CHIPS-008). The
+   * chip used to carry its own duplicate check of the same signal, which
+   * chips.md records the withdrawal of. Two gates on one input is not defence.
+   */
+  chips.push(
+    <StatusChip
+      key="dev"
+      testId="status-chip-dev"
+      label="dev"
+      title="Running against a non-production backend"
+      colour={PURPLE}
+    />,
+  );
 
   /**
    * One value, three presentations. REQ-STATE-004, and the mechanism that
@@ -169,9 +163,9 @@ const StatusChips: FC = () => {
     />,
   );
 
-  // REQ-CHIPS-007. Nothing rendered at all when dismissed — the requirement is
-  // about the card, so a hidden-but-present element would not satisfy it and
-  // would still take up the corner for a screen reader.
+  // REQ-CHIPS-008. Nothing rendered at all when hidden — whether because this
+  // is production or because the visitor dismissed it. A hidden-but-present
+  // element would still occupy the corner for a screen reader.
   if (!statusCardVisible) return null;
 
   return (
@@ -184,8 +178,13 @@ const StatusChips: FC = () => {
         position: 'fixed',
         // Room for the dismiss control, which overlays the top-right corner.
         pr: 2.25,
-        // REQ-CHIPS-002 — top-left, and the column below stacks downwards.
-        top: 14,
+        /*
+         * REQ-CHIPS-009 — BOTTOM-left. It was top-left until #222, where the
+         * header stopped reserving space on its left: with no indent, chips at
+         * the top would sit on the brand, which is the regression #197 caused
+         * and #198 reverted. The corner nobody reads is the one to use.
+         */
+        bottom: 14,
         left: 14,
         zIndex: (theme) => theme.zIndex.appBar + 1,
         p: 0.75,
