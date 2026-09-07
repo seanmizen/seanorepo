@@ -26,7 +26,20 @@ const Account: FC = () => {
             // first makes ProtectedRoute bounce to /login, which is a jarring
             // place to land after deliberately signing out.
             navigate('/', { replace: true });
-            await logout();
+            try {
+              await logout();
+            } catch {
+              /*
+               * `logout` now throws when the server did not actually revoke
+               * the session, rather than clearing local state and claiming
+               * success (REQ-AUTH-006). Caught here so a failure is not an
+               * unhandled rejection.
+               *
+               * The visible result is already honest: the user stays signed
+               * in, because they are. What is missing is telling them so —
+               * that needs a surface for session state, which is #215.
+               */
+            }
           }}
         >
           Sign out
