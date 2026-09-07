@@ -52,6 +52,10 @@ function getMigrationFiles(): Migration[] {
  *
  * Tracked by presence rather than a `MAX(version)` high-water mark, so a
  * migration merged out of order still runs, and version 000 is legal.
+ *
+ * This tracking is also why REQ-DATA-001 forbids editing an applied migration:
+ * presence means an edited file is never re-run, so the change reaches only
+ * fresh databases and every existing one silently keeps the old schema.
  */
 function getAppliedVersions(db: DatabaseType): Set<number> {
   const rows = db
@@ -61,7 +65,10 @@ function getAppliedVersions(db: DatabaseType): Set<number> {
 }
 
 /**
- * Apply every migration not yet recorded.
+ * Apply every migration not yet recorded. REQ-DATA-002: a second run against an
+ * already-migrated database applies nothing, which matters because this runs on
+ * every boot — deploy, crash restart, server reboot. A runner that is not
+ * idempotent turns an ordinary restart into a schema change.
  *
  * Each migration's DDL and its `schema_migrations` row are committed in one
  * transaction, so a failure part-way through a file can't leave applied DDL

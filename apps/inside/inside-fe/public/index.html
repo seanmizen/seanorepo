@@ -12,9 +12,11 @@
   </head>
   <body>
     <script>
-      // Blocking on purpose: resolves the theme before first paint so dark-mode
-      // users never see a white flash. Must read the same key the app writes
-      // (see THEME_STORAGE_KEY in src/app/theme.ts).
+      // REQ-THEME-002. Blocking on purpose: resolves the theme before first
+      // paint so dark-mode users never see a white flash. Must read the same
+      // key the app writes — 'theme-mode' below is a hand-kept copy of
+      // THEME_STORAGE_KEY in src/app/theme.ts, because this runs before any
+      // bundle loads and cannot import it.
       (() => {
         var mode = 'auto';
         try {

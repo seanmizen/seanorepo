@@ -8,7 +8,7 @@
  * automatically, and a hand-maintained list would silently miss exactly the
  * route someone forgot.
  *
- * ## The standing rule: no dead intermediate paths
+ * ## The standing rule: no dead intermediate paths — REQ-NAV-001
  *
  * Every ancestor of every path here must itself be a declared, visitable
  * route. `/designers/:slug` may not exist without `/designers`, because the
@@ -157,11 +157,12 @@ export interface MissingAncestor {
 }
 
 /**
- * The guard, as a pure function so it can be asserted on directly.
+ * The guard for REQ-NAV-001, as a pure function so it can be asserted on
+ * directly.
  *
  * A non-empty result means some route's breadcrumb would render a link to a
  * path nothing serves. Fix it by adding the parent route, not by hiding the
- * crumb.
+ * crumb — hiding the crumb satisfies the test and abandons the requirement.
  */
 export const findMissingAncestors = (
   routes: readonly RouteDefinition[] = ROUTES,
@@ -251,6 +252,8 @@ export const crumbsFor = (
       const route = matchRoute(path, routes);
 
       /*
+       * REQ-NAV-003, the middle rung of the fallback order.
+       *
        * A route's label is a placeholder, and only a good one for a STATIC
        * path. Where the matched segment is a parameter, the concrete segment
        * is strictly more informative: `northlight-architects` says which

@@ -24,10 +24,12 @@ const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:4060';
 /**
  * Where to send the user after verifying.
  *
- * Only same-site relative paths are allowed. Without this an attacker can send
- * `?returnTo=https://evil.example` and turn our verified-login redirect into a
- * credible phishing hop. `//evil.example` is a protocol-relative URL, so the
- * leading-slash check alone is not enough.
+ * REQ-AUTH-007. Only same-site relative paths are allowed. Without this an
+ * attacker can send `?returnTo=https://evil.example` and turn our
+ * verified-login redirect into a credible phishing hop. `//evil.example` is a
+ * protocol-relative URL, so the leading-slash check alone is not enough — that
+ * is the case each of these four returns exists to catch, not defensive
+ * padding.
  */
 export function safeReturnTo(value: unknown): string {
   if (typeof value !== 'string' || value.length === 0) return '/';
@@ -127,8 +129,12 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   /**
-   * Who am I? Answers 200 with `user: null` when signed out, because every
-   * anonymous visitor calls this on page load and that is not an error.
+   * Who am I? REQ-AUTH-005: answers 200 with `user: null` when signed out,
+   * because every anonymous visitor calls this on page load (REQ-PRODUCT-001)
+   * and that is not an error. Answering 401 would make the normal case a
+   * failure, and error handling written for a state that happens constantly
+   * gets loosened until it stops catching the real thing.
+   *
    * A cookie that is present but invalid or revoked still 401s.
    */
   fastify.get('/me', { onRequest: optionalAuth }, async (request) => ({

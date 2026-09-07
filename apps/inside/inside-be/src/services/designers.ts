@@ -122,9 +122,14 @@ export async function findProfileByUserId(
 }
 
 /**
- * Public lookup. Approved only — an unapproved profile must be
- * indistinguishable from one that does not exist, or the approval gate leaks
- * who has signed up.
+ * Public lookup. REQ-DISCOVERY-001: approved only, and this is the requirement
+ * rather than REQ-PRODUCT-002's list-level one. Omitting a profile from the
+ * listing is a presentation choice; refusing to serve it by slug is the actual
+ * control — slugs derive from studio names and are guessable, and a designer
+ * awaiting review has every reason to share their own URL.
+ *
+ * An unapproved profile must be indistinguishable from one that does not
+ * exist, or the gate leaks who has signed up.
  */
 export async function findApprovedProfileBySlug(
   slug: string,
@@ -238,6 +243,12 @@ export async function submitProfileForReview(
   }
 }
 
+/**
+ * REQ-DISCOVERY-002. `publishedOnly` defaults to false because the designer's
+ * own editor needs their drafts; every PUBLIC caller must pass true. A separate
+ * gate from the approval one — an approved designer may still have unfinished
+ * work, and publishing it early is a cost borne by them, not by us.
+ */
 export async function listProjects(
   profileId: number,
   { publishedOnly = false }: { publishedOnly?: boolean } = {},
