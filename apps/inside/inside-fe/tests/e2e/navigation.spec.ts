@@ -373,6 +373,85 @@ test.describe('layout', () => {
   }
 });
 
+test.describe('the breadcrumb tray', () => {
+  test('is a band of its own, distinct from the page behind it', async ({
+    page,
+  }) => {
+    await page.goto('/designers');
+    await waitForApp(page);
+
+    const tray = page.getByTestId('breadcrumb-tray');
+    await expect(tray).toBeVisible();
+
+    // The trail reads as navigation rather than as page content because the
+    // tray is a different surface from the page ground — asserted as "not the
+    // same colour" rather than as a specific colour, so a palette change does
+    // not break it.
+    const [trayBg, bodyBg] = await Promise.all([
+      tray.evaluate((el) => getComputedStyle(el).backgroundColor),
+      page.evaluate(() => getComputedStyle(document.body).backgroundColor),
+    ]);
+    expect(trayBg).not.toBe(bodyBg);
+    expect(trayBg).not.toBe('rgba(0, 0, 0, 0)');
+  });
+
+  test('never lets the chips sit on a crumb', async ({ page }) => {
+    // The chips overlay everything by design (REQ-CHIPS-001), so the question
+    // is not whether they overlap the tray's band — they may — but whether
+    // they cover a crumb. They did, briefly: adding a dismiss control made the
+    // card taller and it landed on "home", which is unclickable under it.
+    for (const width of [375, 768, 1280]) {
+      await page.setViewportSize({ width, height: 720 });
+      await page.goto('/designers');
+      await waitForApp(page);
+
+      const chips = await page.getByTestId('status-chips').boundingBox();
+      const crumb = await page
+        .getByTestId('breadcrumb-crumb')
+        .first()
+        .boundingBox();
+
+      expect(chips, `chips missing at ${width}px`).not.toBeNull();
+      expect(crumb, `crumb missing at ${width}px`).not.toBeNull();
+
+      const c = chips as {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      const b = crumb as {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      const overlaps =
+        c.x < b.x + b.width &&
+        c.x + c.width > b.x &&
+        c.y < b.y + b.height &&
+        c.y + c.height > b.y;
+
+      expect(overlaps, `chips cover the first crumb at ${width}px`).toBe(false);
+    }
+  });
+
+  test('sits below the header rather than under it', async ({ page }) => {
+    await page.goto('/designers');
+    await waitForApp(page);
+
+    const header = await page.getByRole('banner').boundingBox();
+    const tray = await page.getByTestId('breadcrumb-tray').boundingBox();
+
+    expect(tray).not.toBeNull();
+    expect((tray as { y: number }).y).toBeGreaterThanOrEqual(
+      (header as { y: number; height: number }).y +
+        (header as { height: number }).height -
+        1,
+    );
+  });
+});
+
 test.describe('crumbs carry real names, not placeholders', () => {
   /**
    * The bug: /designers/:slug has the route label 'studio', so every studio's

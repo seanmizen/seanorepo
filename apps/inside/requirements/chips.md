@@ -88,7 +88,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
 
 ## REQ-CHIPS-005 — Chips appear on every route
 
-- **Status:** active
+- **Status:** superseded
 - **Source:** sean
 - **Origin:** #174
 - **Type:** functional
@@ -103,7 +103,40 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "shows the dev chip and backend chip on /"
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "shows them on a signed-in route too"
-- **Relations:** none
+- **Relations:** superseded-by REQ-CHIPS-007
+
+## REQ-CHIPS-007 — Chips appear on every route, until the visitor says otherwise
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #219
+- **Type:** functional
+- **Priority:** P3
+- **Statement:** While the visitor has not hidden it, the status chip stack
+  shall be rendered on every route, whether or not they are signed in.
+- **Rationale:** Supersedes REQ-CHIPS-005, which was not wrong so much as
+  incomplete: it assumed the card was unconditionally wanted. It is deployment
+  chrome — useful to whoever runs the site, noise to everyone else — so it
+  became a choice. The every-route guarantee is kept intact, because that was
+  never the part in question: the card answers "which backend am I on, and is
+  it up?", which is not a per-page question.
+
+  The default is ON, deliberately. A default of OFF would mean the one person
+  who needs the card has to go and find it first, which inverts who the setting
+  is for. The whole card, never individual chips: which chips exist is a
+  property of the deployment rather than a preference, and six switches would
+  be a settings page pretending to be a feature.
+
+  Stored per browser rather than per account, because it is a display
+  preference — it has no business on the server, and it should differ between
+  the laptop you develop on and the phone you demo from. The known cost: a
+  signed-out visitor who dismisses the card has no in-app way back, since the
+  restore control lives on the account page. Accepted rather than overlooked.
+- **Verification:**
+  - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "shows the dev chip and backend chip on /"
+  - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "can be dismissed, and stays dismissed across a reload"
+  - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "can be brought back from the account page"
+- **Relations:** supersedes REQ-CHIPS-005
 
 ## REQ-CHIPS-006 — The dev chip is shown only when the server says so
 
@@ -120,4 +153,4 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   which is not the same claim and would show a production visitor a dev badge —
   or, worse, hide it from someone who really is on a dev backend.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "the dev chip is driven by the server, not the bundle"
-- **Relations:** refines REQ-CHIPS-005
+- **Relations:** refines REQ-CHIPS-007

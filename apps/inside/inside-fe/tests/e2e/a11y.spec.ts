@@ -133,6 +133,15 @@ for (const scheme of ['light', 'dark'] as const) {
       );
     });
 
+    test('account — scaffolded sections', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-account-full'));
+      await page.goto('/account');
+      await expect(page.getByTestId('account-preferences')).toBeVisible();
+      await expectNoViolations(page, `/account sections (${scheme})`);
+    });
+
     test('my studio — empty', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);

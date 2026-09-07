@@ -1,4 +1,5 @@
 import {
+  Box,
   Breadcrumbs as MuiBreadcrumbs,
   Link as MuiLink,
   Typography,
@@ -32,63 +33,88 @@ const Breadcrumbs: FC = () => {
   );
 
   return (
-    <MuiBreadcrumbs
-      aria-label="Breadcrumb"
-      separator="›"
-      data-testid="breadcrumbs"
+    /*
+     * A tray of its own, rather than the trail floating in the page ground.
+     *
+     * `background.paper` against the header's `background.default` reads as a
+     * lighter band in light mode and a subtle lift in dark, from one token
+     * pair — no per-theme colours in the component, which is the rule in
+     * apps/inside/CLAUDE.md.
+     *
+     * Still in normal flow: it sits under the header and above the content,
+     * which is what keeps it clear of the floating chips (REQ-CHIPS-001) and
+     * the theme toggle at 375px.
+     */
+    <Box
+      component="nav"
+      data-testid="breadcrumb-tray"
       sx={{
-        // In normal flow beneath the header, so it can never overlap the page
-        // or the header — it used to float, which needed a backdrop and a
-        // z-index to stay legible.
-        maxWidth: 'lg',
-        mx: 'auto',
-        width: '100%',
-        px: { xs: 3, md: 5 },
-        pt: 2.5,
-        color: 'text.secondary',
-        fontSize: 13,
-        '& .MuiBreadcrumbs-separator': { mx: 0.75 },
+        backgroundColor: 'background.paper',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
       }}
     >
-      {crumbs.map((crumb) =>
-        // REQ-NAV-002. A crumb is a link only when a route really serves it.
-        // For a declared route that is always — REQ-NAV-001 guarantees it, via
-        // `findMissingAncestors` — so the inert case can only ever be a URL
-        // nobody declared, where linking would be an invitation into a 404.
-        crumb.isCurrent || !crumb.exists ? (
-          <Typography
-            key={crumb.path}
-            component="span"
-            aria-current={crumb.isCurrent ? 'page' : undefined}
-            data-testid="breadcrumb-crumb"
-            sx={{
-              fontSize: 'inherit',
-              color: crumb.isCurrent ? 'text.primary' : 'inherit',
-            }}
-          >
-            {crumb.label}
-          </Typography>
-        ) : (
-          <MuiLink
-            key={crumb.path}
-            component={RouterLink}
-            to={crumb.path}
-            color="inherit"
-            data-testid="breadcrumb-crumb"
-            sx={{
-              fontSize: 'inherit',
-              // Always underlined, not just on hover: the crumbs sit in a row
-              // of separator glyphs, so colour alone would be the only thing
-              // marking a link (WCAG 1.4.1 Use of Colour).
-              textDecoration: 'underline',
-              textUnderlineOffset: 3,
-            }}
-          >
-            {crumb.label}
-          </MuiLink>
-        ),
-      )}
-    </MuiBreadcrumbs>
+      <MuiBreadcrumbs
+        aria-label="Breadcrumb"
+        separator="›"
+        data-testid="breadcrumbs"
+        sx={{
+          maxWidth: 'lg',
+          mx: 'auto',
+          width: '100%',
+          px: { xs: 3, md: 5 },
+          /*
+           * Enough that the crumbs clear the floating chips, which overhang
+           * the header's bottom edge by a few pixels and would otherwise sit
+           * on the first crumb at 375px. The chips overlay everything by
+           * design (REQ-CHIPS-001), so it is the trail that yields.
+           */
+          py: 2,
+          color: 'text.secondary',
+          fontSize: 13,
+          '& .MuiBreadcrumbs-separator': { mx: 0.75 },
+        }}
+      >
+        {crumbs.map((crumb) =>
+          // REQ-NAV-002. A crumb is a link only when a route really serves it.
+          // For a declared route that is always — REQ-NAV-001 guarantees it, via
+          // `findMissingAncestors` — so the inert case can only ever be a URL
+          // nobody declared, where linking would be an invitation into a 404.
+          crumb.isCurrent || !crumb.exists ? (
+            <Typography
+              key={crumb.path}
+              component="span"
+              aria-current={crumb.isCurrent ? 'page' : undefined}
+              data-testid="breadcrumb-crumb"
+              sx={{
+                fontSize: 'inherit',
+                color: crumb.isCurrent ? 'text.primary' : 'inherit',
+              }}
+            >
+              {crumb.label}
+            </Typography>
+          ) : (
+            <MuiLink
+              key={crumb.path}
+              component={RouterLink}
+              to={crumb.path}
+              color="inherit"
+              data-testid="breadcrumb-crumb"
+              sx={{
+                fontSize: 'inherit',
+                // Always underlined, not just on hover: the crumbs sit in a row
+                // of separator glyphs, so colour alone would be the only thing
+                // marking a link (WCAG 1.4.1 Use of Colour).
+                textDecoration: 'underline',
+                textUnderlineOffset: 3,
+              }}
+            >
+              {crumb.label}
+            </MuiLink>
+          ),
+        )}
+      </MuiBreadcrumbs>
+    </Box>
   );
 };
 
