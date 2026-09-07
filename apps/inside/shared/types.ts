@@ -174,57 +174,52 @@ export interface SavedDesigner {
  * Connections
  * ------------------------------------------------------------------ */
 
-export type EnquiryStatus =
-  | 'new'
-  | 'read'
-  | 'replied'
-  | 'archived'
-  | 'declined';
+/**
+ * Who may EVER see a brief. Orthogonal to whether it is currently published.
+ *
+ * `link` means unlisted, NOT secret. Brief slugs are derived from titles and
+ * are user-editable, so they are guessable by design — a buyer who chooses
+ * anything other than `private` is consenting to a reachable URL, not a hidden
+ * one. UI copy must say "unlisted", never "only people with the link".
+ * `private` is the only value that enforces anything.
+ */
+export type BriefVisibility = 'public' | 'link' | 'private';
 
 /**
- * Buyer -> designer, direct. The root of an in-app thread: replies hang off
- * `id` later, so the opening message lives on the enquiry itself.
+ * Post-a-project: a homeowner's job. Not a portfolio `PortfolioProject`.
  *
- * `buyerId` is nullable — the designer keeps the enquiry even if the sender
- * deletes their account, which is why contact details are snapshotted here.
+ * There is no `status`. It duplicated `publishedAt` — `draft` was exactly
+ * `publishedAt === null` — and a terminal `closed` could not express
+ * publish/unpublish at will. Two timestamps carry it instead:
+ *
+ * - `publishedAt === null` — unpublished; hidden from everyone but the owner,
+ *   whatever `visibility` says and whoever is invited.
+ * - `closesAt` in the past — still visible, no longer accepting bids.
  */
-export interface Enquiry {
-  id: number;
-  buyerId: number | null;
-  designerProfileId: number;
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string | null;
-  workType: WorkType | null;
-  budgetBand: BudgetBand | null;
-  location: string | null;
-  timeline: Timeline | null;
-  message: string;
-  status: EnquiryStatus;
-  readAt: string | null;
-  lastMessageAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** `draft` is never listed; `open` takes bids; `closed` does not. */
-export type BriefStatus = 'draft' | 'open' | 'closed';
-
-/** Post-a-project: a homeowner's public listing. Not a portfolio `PortfolioProject`. */
 export interface Brief {
   id: number;
   buyerId: number | null;
+  /** Public URL segment. History-backed, so a rename keeps old links alive. */
+  slug: string;
   title: string;
   description: string;
   workType: WorkType | null;
   budgetBand: BudgetBand | null;
   location: string | null;
   timeline: Timeline | null;
-  status: BriefStatus;
+  visibility: BriefVisibility;
   closesAt: string | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Someone a buyer has let into a private brief. A user, not a designer. */
+export interface BriefInvitee {
+  id: number;
+  briefId: number;
+  userId: number;
+  invitedAt: string;
 }
 
 /**

@@ -14,6 +14,12 @@
 | [`REQ-AUTH-005`](auth.md#req-auth-005--nobody-is-an-answer-not-an-error) | "Nobody" is an answer, not an error | active | functional | P1 | sean |
 | [`REQ-AUTH-006`](auth.md#req-auth-006--signing-out-revokes-the-session-on-the-server) | Signing out revokes the session on the server | active | constraint | P0 | sean |
 | [`REQ-AUTH-007`](auth.md#req-auth-007--a-return-path-must-be-relative) | A return path must be relative | active | constraint | P1 | sean |
+| [`REQ-BRIEF-001`](brief.md#req-brief-001--visibility-and-publication-are-separate-questions) | Visibility and publication are separate questions | active | constraint | P0 | sean |
+| [`REQ-BRIEF-006`](brief.md#req-brief-006--the-access-rule-lives-in-exactly-one-place) | The access rule lives in exactly one place | active | constraint | P1 | sean |
+| [`REQ-BRIEF-002`](brief.md#req-brief-002--only-public-briefs-are-ever-listed) | Only public briefs are ever listed | active | constraint | P0 | sean |
+| [`REQ-BRIEF-003`](brief.md#req-brief-003--unpublishing-hides-a-brief-without-forgetting-who-was-invited) | Unpublishing hides a brief without forgetting who was invited | active | constraint | P1 | sean |
+| [`REQ-BRIEF-004`](brief.md#req-brief-004--a-brief-is-private-until-its-author-says-otherwise) | A brief is private until its author says otherwise | active | constraint | P0 | sean |
+| [`REQ-BRIEF-005`](brief.md#req-brief-005--link-is-unlisted-and-is-never-described-as-private) | `link` is unlisted, and is never described as private | active | quality | P1 | sean |
 | [`REQ-CHIPS-001`](chips.md#req-chips-001--chips-are-fixed-position-chrome) | Chips are fixed-position chrome | active | constraint | P2 | sean |
 | [`REQ-CHIPS-002`](chips.md#req-chips-002--chips-anchor-top-left-and-stack-downwards) | Chips anchor top-left and stack downwards | active | constraint | P3 | sean |
 | [`REQ-CHIPS-003`](chips.md#req-chips-003--the-backdrop-is-translucent-the-content-is-not) | The backdrop is translucent, the content is not | active | quality | P2 | sean |
@@ -64,6 +70,12 @@ graph TD
   REQ_AUTH_005["REQ-AUTH-005<br/>"Nobody" is an answer, not an error"]
   REQ_AUTH_006["REQ-AUTH-006<br/>Signing out revokes the session on the server"]
   REQ_AUTH_007["REQ-AUTH-007<br/>A return path must be relative"]
+  REQ_BRIEF_001["REQ-BRIEF-001<br/>Visibility and publication are separate questions"]
+  REQ_BRIEF_002["REQ-BRIEF-002<br/>Only public briefs are ever listed"]
+  REQ_BRIEF_003["REQ-BRIEF-003<br/>Unpublishing hides a brief without forgetting who was invited"]
+  REQ_BRIEF_004["REQ-BRIEF-004<br/>A brief is private until its author says otherwise"]
+  REQ_BRIEF_005["REQ-BRIEF-005<br/>`link` is unlisted, and is never described as private"]
+  REQ_BRIEF_006["REQ-BRIEF-006<br/>The access rule lives in exactly one place"]
   REQ_CHIPS_001["REQ-CHIPS-001<br/>Chips are fixed-position chrome"]
   REQ_CHIPS_002["REQ-CHIPS-002<br/>Chips anchor top-left and stack downwards"]
   REQ_CHIPS_003["REQ-CHIPS-003<br/>The backdrop is translucent, the content is not"]
@@ -100,6 +112,11 @@ graph TD
   REQ_STATE_004["REQ-STATE-004<br/>One value drives every part of a presentation"]
   REQ_THEME_001["REQ-THEME-001<br/>Auto follows the OS until the visitor chooses"]
   REQ_THEME_002["REQ-THEME-002<br/>The first paint is already the right theme"]
+  REQ_BRIEF_006 -->|refines| REQ_BRIEF_001
+  REQ_BRIEF_002 -->|depends-on| REQ_BRIEF_001
+  REQ_BRIEF_003 -->|refines| REQ_BRIEF_001
+  REQ_BRIEF_004 -->|refines| REQ_BRIEF_001
+  REQ_BRIEF_005 -->|refines| REQ_BRIEF_001
   REQ_CHIPS_002 -->|refines| REQ_CHIPS_001
   REQ_CHIPS_003 -->|refines| REQ_CHIPS_001
   REQ_CHIPS_004 -->|depends-on| REQ_CHIPS_001
@@ -123,6 +140,7 @@ graph TD
 
 - `REQ-A11Y-002` — required-by REQ-ONBOARD-005
 - `REQ-AUTH-005` — required-by REQ-PRODUCT-001
+- `REQ-BRIEF-001` — refined-by REQ-BRIEF-006, required-by REQ-BRIEF-002, refined-by REQ-BRIEF-003, refined-by REQ-BRIEF-004, refined-by REQ-BRIEF-005
 - `REQ-CHIPS-001` — refined-by REQ-CHIPS-002, refined-by REQ-CHIPS-003, required-by REQ-CHIPS-004
 - `REQ-CHIPS-005` — refined-by REQ-CHIPS-006
 - `REQ-DATA-003` — required-by REQ-PRODUCT-002

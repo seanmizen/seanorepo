@@ -104,13 +104,6 @@ const baseRow = (db: Database, table: string): Row => {
         slug: uniqueSlug('project'),
         title: 'A Completed Portfolio Piece',
       };
-    case 'enquiries':
-      return {
-        designer_profile_id: makeProfile(db),
-        contact_name: 'Homeowner',
-        contact_email: uniqueEmail('buyer'),
-        message: 'Could you quote for a kitchen?',
-      };
     case 'briefs':
       return {
         title: 'Kitchen rework',
@@ -133,8 +126,8 @@ const DOMAIN_TABLES = [
   'portfolio_projects',
   'portfolio_project_images',
   'saved_designers',
-  'enquiries',
   'briefs',
+  'brief_invitees',
   'bids',
 ];
 
@@ -165,10 +158,10 @@ describe('001_domain_tables — tables exist', () => {
 });
 
 /**
- * Every CHECK constraint in 001. Several bad values are deliberately valid on
- * a *different* table ('pending' on portfolio_projects, 'new' on briefs, 'open' on
- * enquiries, 'exploring' on bids.availability) so a copy-pasted enum list
- * would be caught.
+ * Every CHECK constraint in the migrations. Several bad values are
+ * deliberately valid on a *different* table ('pending' on portfolio_projects,
+ * 'draft' on bids, 'exploring' on bids.availability) so a copy-pasted enum
+ * list would be caught.
  */
 const CHECK_CASES: Array<{
   table: string;
@@ -207,20 +200,6 @@ const CHECK_CASES: Array<{
     good: 'published',
   },
   {
-    table: 'enquiries',
-    column: 'work_type',
-    bad: 'shed',
-    good: 'extension',
-  },
-  {
-    table: 'enquiries',
-    column: 'budget_band',
-    bad: 'free',
-    good: 'under_10k',
-  },
-  { table: 'enquiries', column: 'timeline', bad: 'someday', good: 'exploring' },
-  { table: 'enquiries', column: 'status', bad: 'open', good: 'archived' },
-  {
     table: 'briefs',
     column: 'work_type',
     bad: 'houseboat',
@@ -233,7 +212,10 @@ const CHECK_CASES: Array<{
     good: '100k_250k',
   },
   { table: 'briefs', column: 'timeline', bad: 'immediately', good: 'asap' },
-  { table: 'briefs', column: 'status', bad: 'new', good: 'open' },
+  // `status` was retired in 006; visibility is the enum that replaced the part
+  // of it worth keeping. 'draft' is a good probe: it was a legal status and is
+  // deliberately NOT a visibility, because unpublished is a timestamp now.
+  { table: 'briefs', column: 'visibility', bad: 'draft', good: 'link' },
   {
     table: 'bids',
     column: 'budget_band',
@@ -253,13 +235,6 @@ const CHECK_CASES: Array<{
     // now as invalid as anything else nobody built a behaviour for.
     bad: 'shortlisted',
     good: 'submitted',
-  },
-  {
-    table: 'briefs',
-    column: 'status',
-    // 'awarded' went the same way: nothing could ever produce it.
-    bad: 'awarded',
-    good: 'open',
   },
 ];
 
@@ -286,9 +261,11 @@ describe('CHECK constraints actually bite', () => {
   }
 
   test('covers every CHECK constraint in the migrations', () => {
-    // 16 CHECKs shipped in 001, plus briefs.status re-declared by 003 and
-    // covered here explicitly. A new or changed one must arrive with a case.
-    expect(CHECK_CASES.length).toBe(17);
+    // 12 after 006. The four enquiries CHECKs went with the table, and both
+    // briefs.status cases went with the column — replaced by the single
+    // briefs.visibility case. A new or changed constraint must still arrive
+    // with a case of its own.
+    expect(CHECK_CASES.length).toBe(12);
   });
 });
 
@@ -431,6 +408,7 @@ describe('unique keys', () => {
   });
 });
 
+const SOME_TIME = '2026-01-01 12:00:00';
 const MISSING_ID = 999_999_999;
 
 describe('orphan foreign keys are rejected', () => {
@@ -515,28 +493,23 @@ describe('orphan foreign keys are rejected', () => {
     db.close();
   });
 
-  test('enquiries.designer_profile_id', () => {
+  test('brief_invitees.brief_id', () => {
     const db = open();
     expect(() =>
-      insert(db, 'enquiries', {
-        designer_profile_id: MISSING_ID,
-        contact_name: 'Homeowner',
-        contact_email: uniqueEmail('buyer'),
-        message: 'Hello?',
+      insert(db, 'brief_invitees', {
+        brief_id: MISSING_ID,
+        user_id: makeUser(db, 'buyer'),
       }),
     ).toThrow();
     db.close();
   });
 
-  test('enquiries.buyer_id', () => {
+  test('brief_invitees.user_id', () => {
     const db = open();
     expect(() =>
-      insert(db, 'enquiries', {
-        buyer_id: MISSING_ID,
-        designer_profile_id: makeProfile(db),
-        contact_name: 'Homeowner',
-        contact_email: uniqueEmail('buyer'),
-        message: 'Hello?',
+      insert(db, 'brief_invitees', {
+        brief_id: makeBrief(db),
+        user_id: MISSING_ID,
       }),
     ).toThrow();
     db.close();
@@ -603,41 +576,34 @@ describe('delete behaviour is deliberately asymmetric', () => {
     db.close();
   });
 
-  test('deleting a buyer keeps the enquiry in the designer inbox, buyer_id NULL', () => {
+  test('an invitee list survives an unpublish', () => {
     const db = open();
-    const buyerId = makeUser(db, 'buyer');
-    const enquiryId = insert(db, 'enquiries', {
-      buyer_id: buyerId,
-      designer_profile_id: makeProfile(db),
-      contact_name: 'Departed Homeowner',
-      contact_email: uniqueEmail('buyer'),
-      message: 'Still in the inbox after I leave.',
-    });
+    const briefId = makeBrief(db, { published_at: SOME_TIME });
+    const userId = makeUser(db, 'designer');
+    insert(db, 'brief_invitees', { brief_id: briefId, user_id: userId });
 
-    db.prepare('DELETE FROM users WHERE id = ?').run(buyerId as never);
+    // Unpublishing is only a cleared timestamp. If it also dropped invitees,
+    // republishing would silently require re-inviting everyone — which is the
+    // behaviour REQ-BRIEF-003 exists to rule out.
+    db.prepare('UPDATE briefs SET published_at = NULL WHERE id = ?').run(
+      briefId as never,
+    );
 
-    const row = db
-      .query(
-        'SELECT buyer_id, contact_name, message FROM enquiries WHERE id = ?',
-      )
-      .get(enquiryId) as {
-      buyer_id: number | null;
-      contact_name: string;
-      message: string;
-    } | null;
+    const still = db
+      .query('SELECT user_id FROM brief_invitees WHERE brief_id = ?')
+      .get(briefId) as { user_id: number } | null;
     db.close();
 
-    expect(row).not.toBeNull();
-    expect(row?.buyer_id).toBeNull();
-    // The snapshotted contact details are the reason the record still means
-    // something once the account is gone.
-    expect(row?.contact_name).toBe('Departed Homeowner');
+    expect(still?.user_id).toBe(userId);
   });
 
   test('deleting a buyer keeps an open brief and its live bids', () => {
     const db = open();
     const buyerId = makeUser(db, 'buyer');
-    const briefId = makeBrief(db, { buyer_id: buyerId, status: 'open' });
+    const briefId = makeBrief(db, {
+      buyer_id: buyerId,
+      published_at: SOME_TIME,
+    });
     const bidId = insert(db, 'bids', {
       brief_id: briefId,
       designer_profile_id: makeProfile(db),
@@ -647,8 +613,11 @@ describe('delete behaviour is deliberately asymmetric', () => {
     db.prepare('DELETE FROM users WHERE id = ?').run(buyerId as never);
 
     const brief = db
-      .query('SELECT buyer_id, status FROM briefs WHERE id = ?')
-      .get(briefId) as { buyer_id: number | null; status: string } | null;
+      .query('SELECT buyer_id, published_at FROM briefs WHERE id = ?')
+      .get(briefId) as {
+      buyer_id: number | null;
+      published_at: string | null;
+    } | null;
     const bid = db.query('SELECT id FROM bids WHERE id = ?').get(bidId) as {
       id: number;
     } | null;
@@ -656,13 +625,13 @@ describe('delete behaviour is deliberately asymmetric', () => {
 
     expect(brief).not.toBeNull();
     expect(brief?.buyer_id).toBeNull();
-    expect(brief?.status).toBe('open');
+    expect(brief?.published_at).not.toBeNull();
     expect(bid?.id).toBe(bidId);
   });
 
   test('deleting a brief cascades to its bids', () => {
     const db = open();
-    const briefId = makeBrief(db, { status: 'open' });
+    const briefId = makeBrief(db, { published_at: SOME_TIME });
     const bidId = insert(db, 'bids', {
       brief_id: briefId,
       designer_profile_id: makeProfile(db),

@@ -56,7 +56,7 @@ async function approve(profileId: number) {
 
 /** A signed-in designer with a profile, approved unless told otherwise. */
 async function asDesigner(studioName: string, { approved = true } = {}) {
-  const { cookie } = await login('designer');
+  const { cookie, email } = await login('designer');
   const res = await app.inject({
     method: 'POST',
     url: '/api/me/profile',
@@ -65,7 +65,8 @@ async function asDesigner(studioName: string, { approved = true } = {}) {
   });
   const profile = res.json<{ profile: DesignerProfile }>().profile;
   if (approved) await approve(profile.id);
-  return { cookie, profile };
+  // The email is what a buyer invites by — invitees are users, not designers.
+  return { cookie, email, profile };
 }
 
 /** A signed-in buyer, plus a helper to post briefs as them. */
@@ -89,7 +90,11 @@ async function asBuyer() {
 
 const openBrief = async (payload: Record<string, unknown> = {}) => {
   const buyer = await asBuyer();
-  const brief = await buyer.postBrief({ status: 'open', ...payload });
+  const brief = await buyer.postBrief({
+    visibility: 'public',
+    publish: true,
+    ...payload,
+  });
   return { buyer, brief };
 };
 
@@ -108,7 +113,9 @@ describe('posting a brief', () => {
   test('a buyer posts a draft, and it is not on the public board', async () => {
     const buyer = await asBuyer();
     const brief = await buyer.postBrief({ title: 'Quiet Draft' });
-    expect(brief.status).toBe('draft');
+    // Private and unpublished by omission — the safe answer, not the common
+    // one. This is what 'draft' used to mean, now said as two facts.
+    expect(brief.visibility).toBe('private');
     expect(brief.publishedAt).toBeNull();
 
     const res = await app.inject({ method: 'GET', url: '/api/briefs' });
@@ -121,7 +128,7 @@ describe('posting a brief', () => {
   test('a brief posted open is on the board and stamped published', async () => {
     const location = uniqueLocation('Published');
     const { brief } = await openBrief({ title: 'Loud Brief', location });
-    expect(brief.status).toBe('open');
+    expect(brief.visibility).toBe('public');
     expect(brief.publishedAt).not.toBeNull();
 
     const res = await app.inject({
@@ -178,7 +185,7 @@ describe('posting a brief', () => {
       { budgetBand: 'infinite' },
       { timeline: 'eventually' },
       { closesAt: 'next tuesday-ish' },
-      { status: 'awarded' },
+      { visibility: 'sideways' },
     ]) {
       const res = await app.inject({
         method: 'POST',
@@ -202,7 +209,7 @@ describe('the public board', () => {
     });
     const detail = await app.inject({
       method: 'GET',
-      url: `/api/briefs/${brief.id}`,
+      url: `/api/briefs/${brief.slug}`,
     });
 
     for (const body of [list.body, detail.body]) {
@@ -220,13 +227,15 @@ describe('the public board', () => {
     const location = uniqueLocation('Filter');
     const buyer = await asBuyer();
     const kitchen = await buyer.postBrief({
-      status: 'open',
+      visibility: 'public',
+      publish: true,
       location,
       workType: 'kitchen',
       budgetBand: '10k_25k',
     });
     const bathroom = await buyer.postBrief({
-      status: 'open',
+      visibility: 'public',
+      publish: true,
       location,
       workType: 'bathroom',
       budgetBand: '50k_100k',
@@ -274,7 +283,8 @@ describe('the public board', () => {
       posted.push(
         (
           await buyer.postBrief({
-            status: 'open',
+            visibility: 'public',
+            publish: true,
             location,
             title: `Page ${n}`,
           })
@@ -315,17 +325,21 @@ describe('the public board', () => {
   test('a draft brief 404s on public detail, an open one does not', async () => {
     const buyer = await asBuyer();
     const draft = await buyer.postBrief({ title: 'Still Drafting' });
-    const live = await buyer.postBrief({ status: 'open', title: 'Live One' });
+    const live = await buyer.postBrief({
+      visibility: 'public',
+      publish: true,
+      title: 'Live One',
+    });
 
     const hidden = await app.inject({
       method: 'GET',
-      url: `/api/briefs/${draft.id}`,
+      url: `/api/briefs/${draft.slug}`,
     });
     expect(hidden.statusCode).toBe(404);
 
     const shown = await app.inject({
       method: 'GET',
-      url: `/api/briefs/${live.id}`,
+      url: `/api/briefs/${live.slug}`,
     });
     expect(shown.statusCode).toBe(200);
     expect(shown.json<{ brief: PublicBrief }>().brief.title).toBe('Live One');
@@ -388,10 +402,12 @@ describe('managing your own briefs', () => {
     });
     const updated = res.json<{ brief: OwnedBrief }>().brief;
     expect(updated.title).toBe('Renamed');
-    expect(updated.status).toBe('open');
+    // A content edit must not change who can see it or whether it is live.
+    expect(updated.visibility).toBe('public');
+    expect(updated.publishedAt).not.toBeNull();
   });
 
-  test('publishing a draft opens it, and publishing twice is refused', async () => {
+  test('publishing is idempotent — a retry is a no-op, not an error', async () => {
     const buyer = await asBuyer();
     const brief = await buyer.postBrief({ title: 'To Publish' });
 
@@ -403,51 +419,41 @@ describe('managing your own briefs', () => {
       });
 
     const first = await publish();
-    expect(first.json<{ brief: OwnedBrief }>().brief.status).toBe('open');
     expect(
       first.json<{ brief: OwnedBrief }>().brief.publishedAt,
     ).not.toBeNull();
-    expect((await publish()).statusCode).toBe(409);
+
+    // Publishing an already-published brief is the same intent and the same
+    // outcome. A 409 here would make an ordinary retry look like a failure.
+    const second = await publish();
+    expect(second.statusCode).toBe(200);
+    expect(
+      second.json<{ brief: OwnedBrief }>().brief.publishedAt,
+    ).not.toBeNull();
   });
 
-  test('closing a brief takes it off the board, and closing twice is refused', async () => {
+  test('closing a brief takes it off the board but leaves it published', async () => {
     const location = uniqueLocation('Closing');
     const { buyer, brief } = await openBrief({ location });
 
-    const close = () =>
-      app.inject({
-        method: 'POST',
-        url: `/api/me/briefs/${brief.id}/close`,
-        cookies: { token: buyer.cookie },
-      });
+    const closed = await app.inject({
+      method: 'POST',
+      url: `/api/me/briefs/${brief.id}/close`,
+      cookies: { token: buyer.cookie },
+    });
 
-    expect((await close()).json<{ brief: OwnedBrief }>().brief.status).toBe(
-      'closed',
-    );
-    expect((await close()).statusCode).toBe(409);
+    // Closing stops the invitation to bid. It is NOT an unpublish: the brief
+    // stays readable to anyone holding its link, and the bids already received
+    // stay exactly where they are.
+    const body = closed.json<{ brief: OwnedBrief }>().brief;
+    expect(body.closesAt).not.toBeNull();
+    expect(body.publishedAt).not.toBeNull();
 
     const board = await app.inject({
       method: 'GET',
       url: `/api/briefs?location=${encodeURIComponent(location)}`,
     });
     expect(board.json<{ briefs: PublicBrief[] }>().briefs).toEqual([]);
-  });
-
-  test('a closed brief can be reopened, keeping its original published stamp', async () => {
-    const { buyer, brief } = await openBrief();
-    await app.inject({
-      method: 'POST',
-      url: `/api/me/briefs/${brief.id}/close`,
-      cookies: { token: buyer.cookie },
-    });
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/me/briefs/${brief.id}/publish`,
-      cookies: { token: buyer.cookie },
-    });
-    const reopened = res.json<{ brief: OwnedBrief }>().brief;
-    expect(reopened.status).toBe('open');
-    expect(reopened.publishedAt).toBe(brief.publishedAt);
   });
 
   test('deleting a brief removes it and its bids', async () => {
@@ -464,7 +470,7 @@ describe('managing your own briefs', () => {
 
     const gone = await app.inject({
       method: 'GET',
-      url: `/api/briefs/${brief.id}`,
+      url: `/api/briefs/${brief.slug}`,
     });
     expect(gone.statusCode).toBe(404);
 
@@ -506,7 +512,7 @@ describe('bidding', () => {
     // interest they cannot see.
     const beforeSubmit = await app.inject({
       method: 'GET',
-      url: `/api/briefs/${brief.id}`,
+      url: `/api/briefs/${brief.slug}`,
     });
     expect(beforeSubmit.json<{ brief: PublicBrief }>().brief.bidCount).toBe(0);
 
@@ -517,7 +523,7 @@ describe('bidding', () => {
 
     const detail = await app.inject({
       method: 'GET',
-      url: `/api/briefs/${brief.id}`,
+      url: `/api/briefs/${brief.slug}`,
     });
     expect(detail.json<{ brief: PublicBrief }>().brief.bidCount).toBe(1);
   });
@@ -601,15 +607,22 @@ describe('bidding', () => {
 
   test('a draft cannot be sent once the brief has closed', async () => {
     const buyer = await asBuyer();
-    const brief = await buyer.postBrief({ status: 'open' });
+    const brief = await buyer.postBrief({
+      visibility: 'public',
+      publish: true,
+    });
     const designer = await asDesigner('Slow Studio');
     const created = (await bid(designer.cookie, brief.id)).json<{
       bid: Bid;
     }>().bid;
 
-    // The brief can close while a draft sits unsent.
+    // The brief can close while a draft sits unsent. Closing is a past
+    // closes_at now, not a status.
     const db = await openDbConnection();
-    db.run("UPDATE briefs SET status = 'closed' WHERE id = ?", [brief.id]);
+    db.run(
+      "UPDATE briefs SET closes_at = datetime('now', '-1 minute') WHERE id = ?",
+      [brief.id],
+    );
     db.close();
 
     expect((await submit(designer.cookie, created.id)).statusCode).toBe(409);
@@ -712,29 +725,35 @@ describe('bidding', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  test('a closed or draft brief takes no new bids', async () => {
+  test('an unpublished brief reads as missing; a closed one refuses the bid', async () => {
     const buyer = await asBuyer();
     const designer = await asDesigner('Too Late Studio');
 
-    const draft = await buyer.postBrief({ title: 'Unpublished' });
-    // A draft is not on the board, so it must read as missing.
-    expect((await bid(designer.cookie, draft.id)).statusCode).toBe(404);
+    // Unpublished is 404, not 409. A 409 would confirm the brief exists, which
+    // is the thing an unpublished brief must not do.
+    const unpublished = await buyer.postBrief({ title: 'Unpublished' });
+    expect((await bid(designer.cookie, unpublished.id)).statusCode).toBe(404);
 
-    for (const status of ['closed'] as const) {
-      const brief = await buyer.postBrief({ status: 'open' });
-      const db = await openDbConnection();
-      db.run('UPDATE briefs SET status = ? WHERE id = ?', [status, brief.id]);
-      db.close();
+    // Closed is 409: the brief is openly readable, it just takes no more bids.
+    const closed = await buyer.postBrief({
+      visibility: 'public',
+      publish: true,
+    });
+    const db = await openDbConnection();
+    db.run(
+      "UPDATE briefs SET closes_at = datetime('now', '-1 minute') WHERE id = ?",
+      [closed.id],
+    );
+    db.close();
 
-      const res = await bid(designer.cookie, brief.id);
-      expect(res.statusCode).toBe(409);
-    }
+    expect((await bid(designer.cookie, closed.id)).statusCode).toBe(409);
   });
 
   test('a brief past its closing date takes no new bids', async () => {
     const buyer = await asBuyer();
     const brief = await buyer.postBrief({
-      status: 'open',
+      visibility: 'public',
+      publish: true,
       closesAt: new Date(Date.now() - 60_000).toISOString(),
     });
     const designer = await asDesigner('Deadline Studio');
@@ -744,7 +763,8 @@ describe('bidding', () => {
   test('a future closing date still takes bids', async () => {
     const buyer = await asBuyer();
     const brief = await buyer.postBrief({
-      status: 'open',
+      visibility: 'public',
+      publish: true,
       closesAt: new Date(Date.now() + 3_600_000).toISOString(),
     });
     const designer = await asDesigner('In Time Studio');
@@ -875,7 +895,7 @@ describe('who can see a bid', () => {
     // The public detail exposes the count and nothing else.
     const detail = await app.inject({
       method: 'GET',
-      url: `/api/briefs/${brief.id}`,
+      url: `/api/briefs/${brief.slug}`,
     });
     expect(detail.body).not.toContain('A very private bid');
     expect(detail.json<{ brief: PublicBrief }>().brief.bidCount).toBe(1);
@@ -954,5 +974,234 @@ describe('a deleted buyer account', () => {
       cookies: { token: other.cookie },
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('who can see a brief', () => {
+  const fetchAs = (slug: string, cookie?: string) =>
+    app.inject({
+      method: 'GET',
+      url: `/api/briefs/${slug}`,
+      ...(cookie ? { cookies: { token: cookie } } : {}),
+    });
+
+  const setVisibility = (cookie: string, id: number, visibility: string) =>
+    app.inject({
+      method: 'PUT',
+      url: `/api/me/briefs/${id}/visibility`,
+      cookies: { token: cookie },
+      payload: { visibility },
+    });
+
+  const invite = (cookie: string, id: number, email: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/me/briefs/${id}/invitees`,
+      cookies: { token: cookie },
+      payload: { email },
+    });
+
+  test('a brief is private and unpublished unless asked otherwise', async () => {
+    const buyer = await asBuyer();
+    const brief = await buyer.postBrief({ title: 'Unasked' });
+
+    expect(brief.visibility).toBe('private');
+    expect(brief.publishedAt).toBeNull();
+    // The safe default matters more than the common one: a brief must never
+    // become public because a field was omitted.
+    expect((await fetchAs(brief.slug)).statusCode).toBe(404);
+  });
+
+  test('the owner always sees their own brief, published or not', async () => {
+    const buyer = await asBuyer();
+    const brief = await buyer.postBrief({ title: 'Mine' });
+
+    const res = await fetchAs(brief.slug, buyer.cookie);
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ isOwner: boolean }>().isOwner).toBe(true);
+  });
+
+  test('a link brief is readable by anyone but never listed', async () => {
+    const location = uniqueLocation('LinkOnly');
+    const buyer = await asBuyer();
+    const brief = await buyer.postBrief({
+      title: 'Reachable But Unlisted',
+      location,
+      visibility: 'link',
+      publish: true,
+    });
+
+    // Anonymous, with the URL: fine. That is what "unlisted" means, and the
+    // buyer consented to it by not choosing private.
+    expect((await fetchAs(brief.slug)).statusCode).toBe(200);
+
+    const board = await app.inject({
+      method: 'GET',
+      url: `/api/briefs?location=${encodeURIComponent(location)}`,
+    });
+    expect(board.json<{ briefs: PublicBrief[] }>().briefs).toEqual([]);
+  });
+
+  test('a private brief is invisible to a signed-in stranger', async () => {
+    const buyer = await asBuyer();
+    const stranger = await asBuyer();
+    const brief = await buyer.postBrief({
+      title: 'Not For You',
+      visibility: 'private',
+      publish: true,
+    });
+
+    // 404, not 403 — indistinguishable from a brief that does not exist, or
+    // the response itself confirms it is there.
+    expect((await fetchAs(brief.slug, stranger.cookie)).statusCode).toBe(404);
+    expect((await fetchAs(brief.slug)).statusCode).toBe(404);
+  });
+
+  test('an invitee sees a private brief; a designer may be invited', async () => {
+    const buyer = await asBuyer();
+    const designer = await asDesigner('Invited Studio');
+    const brief = await buyer.postBrief({
+      title: 'For You Specifically',
+      visibility: 'private',
+      publish: true,
+    });
+
+    expect((await fetchAs(brief.slug, designer.cookie)).statusCode).toBe(404);
+
+    const invited = await invite(buyer.cookie, brief.id, designer.email);
+    expect(invited.statusCode).toBe(201);
+
+    const res = await fetchAs(brief.slug, designer.cookie);
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ isOwner: boolean }>().isOwner).toBe(false);
+  });
+
+  test('unpublishing hides the brief and KEEPS the invitee list', async () => {
+    const buyer = await asBuyer();
+    const guest = await asBuyer();
+    const brief = await buyer.postBrief({
+      title: 'Paused',
+      visibility: 'private',
+      publish: true,
+    });
+    await invite(buyer.cookie, brief.id, guest.email);
+    expect((await fetchAs(brief.slug, guest.cookie)).statusCode).toBe(200);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/me/briefs/${brief.id}/unpublish`,
+      cookies: { token: buyer.cookie },
+    });
+
+    // Hidden from the invitee too — unpublish has to mean something.
+    expect((await fetchAs(brief.slug, guest.cookie)).statusCode).toBe(404);
+    // But still hers on the way back: this is the whole reason invitees live
+    // in their own table rather than as brief state.
+    await app.inject({
+      method: 'POST',
+      url: `/api/me/briefs/${brief.id}/publish`,
+      cookies: { token: buyer.cookie },
+    });
+    expect((await fetchAs(brief.slug, guest.cookie)).statusCode).toBe(200);
+  });
+
+  test('an uninvited guest loses access immediately', async () => {
+    const buyer = await asBuyer();
+    const guest = await asBuyer();
+    const brief = await buyer.postBrief({
+      title: 'Revoked',
+      visibility: 'private',
+      publish: true,
+    });
+    await invite(buyer.cookie, brief.id, guest.email);
+
+    const invitees = await app.inject({
+      method: 'GET',
+      url: `/api/me/briefs/${brief.id}/invitees`,
+      cookies: { token: buyer.cookie },
+    });
+    const userId = invitees.json<{ invitees: Array<{ userId: number }> }>()
+      .invitees[0].userId;
+
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/me/briefs/${brief.id}/invitees/${userId}`,
+      cookies: { token: buyer.cookie },
+    });
+
+    expect((await fetchAs(brief.slug, guest.cookie)).statusCode).toBe(404);
+  });
+
+  test('changing visibility takes a brief off the board without unpublishing it', async () => {
+    const location = uniqueLocation('Retracted');
+    const { buyer, brief } = await openBrief({ location });
+
+    const onBoard = async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/briefs?location=${encodeURIComponent(location)}`,
+      });
+      return res.json<{ briefs: PublicBrief[] }>().briefs.length;
+    };
+    expect(await onBoard()).toBe(1);
+
+    await setVisibility(buyer.cookie, brief.id, 'private');
+
+    expect(await onBoard()).toBe(0);
+    // Still published — visibility and publication are orthogonal, and only
+    // one of them changed.
+    const mine = await app.inject({
+      method: 'GET',
+      url: `/api/me/briefs/${brief.id}`,
+      cookies: { token: buyer.cookie },
+    });
+    expect(mine.json<{ brief: OwnedBrief }>().brief.publishedAt).not.toBeNull();
+  });
+
+  test('inviting the same person twice is one invitation', async () => {
+    const buyer = await asBuyer();
+    const guest = await asBuyer();
+    const brief = await buyer.postBrief({ visibility: 'private' });
+
+    await invite(buyer.cookie, brief.id, guest.email);
+    const second = await invite(buyer.cookie, brief.id, guest.email);
+
+    expect(second.statusCode).toBe(201);
+    expect(second.json<{ invitees: unknown[] }>().invitees).toHaveLength(1);
+  });
+
+  test('inviting someone with no account says so rather than silently dropping it', async () => {
+    const buyer = await asBuyer();
+    const brief = await buyer.postBrief({ visibility: 'private' });
+
+    const res = await invite(buyer.cookie, brief.id, 'nobody@nowhere.test');
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: string }>().error).toMatch(/account/i);
+  });
+
+  test('an old slug still resolves to the brief', async () => {
+    const buyer = await asBuyer();
+    const brief = await buyer.postBrief({
+      title: 'Original Name',
+      visibility: 'link',
+      publish: true,
+    });
+
+    const db = await openDbConnection();
+    db.run("UPDATE briefs SET slug = 'renamed-brief-slug' WHERE id = ?", [
+      brief.id,
+    ]);
+    db.run(
+      "INSERT INTO slugs (entity_type, entity_id, slug) VALUES ('brief', ?, 'renamed-brief-slug')",
+      [brief.id],
+    );
+    db.close();
+
+    // REQ-SLUG-001: the slug it was created with keeps working.
+    const res = await fetchAs(brief.slug);
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ brief: PublicBrief }>().brief.slug).toBe(
+      'renamed-brief-slug',
+    );
   });
 });
