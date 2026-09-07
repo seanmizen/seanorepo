@@ -6,7 +6,7 @@ import { isProduction } from './dev-mode';
 import { addImage } from './image-library';
 import { runMigrations } from './migrations';
 import { BRIEFS, BUYERS, DESIGNERS, type SeedProject } from './seed-data';
-import { uniqueSlug } from './slugs';
+import { chooseSlug, recordSlug } from './slugs';
 
 export class RefusedInProductionError extends Error {}
 
@@ -96,7 +96,7 @@ async function seedProject(
   ownerId: number,
   project: SeedProject,
 ): Promise<void> {
-  const slug = await uniqueSlug('portfolio_projects', project.title);
+  const slug = await chooseSlug('portfolio_project', project.title);
   const created = await insertProject(profileId, slug, {
     title: project.title,
     summary: project.summary,
@@ -107,6 +107,7 @@ async function seedProject(
     completedYear: project.completedYear,
     status: project.published === false ? 'draft' : 'published',
   });
+  await recordSlug('portfolio_project', created.id, slug);
 
   const image = await addImage(
     ownerId,
@@ -173,7 +174,7 @@ export async function seed(): Promise<SeedResult> {
       continue;
     }
 
-    const slug = await uniqueSlug('designer_profiles', designer.studioName);
+    const slug = await chooseSlug('designer_profile', designer.studioName);
     const profile = await insertProfile(userId, slug, {
       studioName: designer.studioName,
       headline: designer.headline,
@@ -184,6 +185,7 @@ export async function seed(): Promise<SeedResult> {
       budgetBand: designer.budgetBand,
       availability: designer.availability,
     });
+    await recordSlug('designer_profile', profile.id, slug);
     result.designers += 1;
 
     for (const project of designer.projects) {

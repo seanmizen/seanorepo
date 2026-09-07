@@ -8,6 +8,7 @@ import type {
   SentBid,
 } from '@shared/types';
 import { openDbConnection } from './db';
+import { chooseSlug, recordSlug } from './slugs';
 import { sqliteNow } from './validation';
 
 /**
@@ -286,13 +287,18 @@ export async function insertBrief(
   fields: BriefFields,
   status: BriefStatus,
 ): Promise<OwnedBrief> {
+  // Chosen before the insert, because the row is created with it (REQ-SLUG-002),
+  // and recorded into history after, once there is an id to bind it to.
+  const slug = await chooseSlug('brief', fields.title);
+
   const db = await openDbConnection();
+  let id: number;
   try {
     db.run(
       `INSERT INTO briefs
         (buyer_id, title, description, work_type, budget_band, location,
-         timeline, status, closes_at, published_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         timeline, status, closes_at, published_at, slug)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         buyerId,
         fields.title,
@@ -304,19 +310,22 @@ export async function insertBrief(
         status,
         fields.closesAt,
         status === 'open' ? sqliteNow() : null,
+        slug,
       ],
     );
-    const id = (
-      db.query('SELECT last_insert_rowid() AS id').get() as { id: number }
-    ).id;
+    id = (db.query('SELECT last_insert_rowid() AS id').get() as { id: number })
+      .id;
     const row = db
       .query(
         `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b WHERE b.id = ?`,
       )
       .get(id) as CountedBriefRow;
-    return toOwnedBrief(row);
-  } finally {
     db.close();
+    await recordSlug('brief', id, slug);
+    return toOwnedBrief(row);
+  } catch (error) {
+    db.close();
+    throw error;
   }
 }
 

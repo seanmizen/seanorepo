@@ -12,6 +12,7 @@ import { openDbConnection } from './db';
 import { findApprovedProfileBySlug, listProjects } from './designers';
 import { findStoredImages } from './image-library';
 import { BM25_EXPRESSION, buildMatchExpression } from './search';
+import { resolveSlug } from './slugs';
 
 /**
  * The public read side of the marketplace: browse, filter, sort, search.
@@ -376,9 +377,15 @@ export async function findPublicPortfolioProject(
   });
   if (!portfolio) return null;
 
-  const project = portfolio.portfolioProjects.find(
-    (candidate) => candidate.slug === projectSlug,
-  );
+  // Resolved through slug history (REQ-SLUG-001) so a renamed piece still
+  // answers on its old slug, then matched by id against the published set —
+  // resolution says which piece, publication says whether it may be seen.
+  const resolved = await resolveSlug('portfolio_project', projectSlug);
+  const project = resolved
+    ? portfolio.portfolioProjects.find(
+        (candidate) => candidate.id === resolved.entityId,
+      )
+    : undefined;
   // An unpublished piece is indistinguishable from one that never existed —
   // the same rule the profile itself follows.
   return project ? { profile: portfolio.profile, project } : null;
