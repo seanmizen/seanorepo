@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 import { openDbConnection } from './db';
 
 /**
- * Sessions exist so a logout can actually revoke a live JWT. A JWT alone is
- * valid until it expires — with no server-side record there is no way to
- * invalidate one.
+ * Sessions exist so a logout can actually revoke a live JWT (REQ-AUTH-006). A
+ * JWT alone is valid until it expires — with no server-side record there is no
+ * way to invalidate one, so clearing the cookie would only remove the browser's
+ * copy and anyone holding the token would still be signed in.
  *
  * Session lifetime MUST match the cookie's maxAge in controllers/auth.ts.
  * carolinemizen.art sets a 1-hour session against a 7-day cookie, so its users
