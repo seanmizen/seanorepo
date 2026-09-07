@@ -5,6 +5,7 @@ import type {
 } from '@shared/types';
 import { openDbConnection } from './db';
 import { reindexDesigner, reindexDesignerForProject } from './search';
+import { claimSlug, resolveSlug } from './slugs';
 
 /** Raw column shapes, mapped to the camelCase shared types below. */
 export interface ProfileRow {
@@ -134,13 +135,19 @@ export async function findProfileByUserId(
 export async function findApprovedProfileBySlug(
   slug: string,
 ): Promise<DesignerProfile | null> {
+  // Resolved through slug history (REQ-SLUG-001), so a studio that renamed
+  // still answers on every slug it has ever held. The row carries its CURRENT
+  // slug, which is what the caller returns and the client rewrites the URL to.
+  const resolved = await resolveSlug('designer_profile', slug);
+  if (!resolved) return null;
+
   const db = await openDbConnection();
   try {
     const row = db
       .query(
-        "SELECT * FROM designer_profiles WHERE slug = ? AND status = 'approved'",
+        "SELECT * FROM designer_profiles WHERE id = ? AND status = 'approved'",
       )
-      .get(slug) as ProfileRow | null;
+      .get(resolved.entityId) as ProfileRow | null;
     return row ? toProfile(row) : null;
   } finally {
     db.close();
@@ -184,6 +191,63 @@ export async function insertProfile(
   // applied at query time, not by withholding the index row.
   await reindexDesigner(row.id);
   return toProfile(row);
+}
+
+/**
+ * Rename an entity's public slug, keeping every old one alive.
+ *
+ * The old slug is not deleted or rewritten: it stays in history pointing at
+ * this entity, so links already shared keep resolving here (REQ-SLUG-001).
+ * That is the whole mechanism — a rename adds, it never removes.
+ *
+ * `desired` comes from the user when they typed a slug, in which case a
+ * collision or a reserved word is refused rather than silently altered.
+ */
+export async function renameProfileSlug(
+  id: number,
+  desired: string,
+  { custom = true }: { custom?: boolean } = {},
+): Promise<DesignerProfile> {
+  const slug = await claimSlug('designer_profile', id, desired, { custom });
+
+  const db = await openDbConnection();
+  let row: ProfileRow;
+  try {
+    db.run(
+      "UPDATE designer_profiles SET slug = ?, updated_at = datetime('now') WHERE id = ?",
+      [slug, id],
+    );
+    row = db
+      .query('SELECT * FROM designer_profiles WHERE id = ?')
+      .get(id) as ProfileRow;
+  } finally {
+    db.close();
+  }
+  return toProfile(row);
+}
+
+/** As `renameProfileSlug`, for a portfolio piece. */
+export async function renameProjectSlug(
+  id: number,
+  desired: string,
+  { custom = true }: { custom?: boolean } = {},
+): Promise<PortfolioProject> {
+  const slug = await claimSlug('portfolio_project', id, desired, { custom });
+
+  const db = await openDbConnection();
+  let row: PortfolioProjectRow;
+  try {
+    db.run(
+      "UPDATE portfolio_projects SET slug = ?, updated_at = datetime('now') WHERE id = ?",
+      [slug, id],
+    );
+    row = db
+      .query('SELECT * FROM portfolio_projects WHERE id = ?')
+      .get(id) as PortfolioProjectRow;
+  } finally {
+    db.close();
+  }
+  return toProject(row);
 }
 
 export async function updateProfile(
