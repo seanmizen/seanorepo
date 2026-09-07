@@ -7,7 +7,7 @@ import {
   Tooltip,
   useTheme,
 } from '@mui/material';
-import type { AppConfig, HealthResponse } from '@shared/types';
+import type { HealthResponse } from '@shared/types';
 import { useQuery } from '@tanstack/react-query';
 import type { FC, ReactNode } from 'react';
 import { api } from '@/config';

@@ -65,6 +65,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `DATA` | `apps/inside/requirements/data.md` | inside — schema, migrations, storage, vocabulary |
 | `DISCOVERY` | `apps/inside/requirements/discovery.md` | inside — public visibility and filtering |
 | `NET` | `apps/inside/requirements/net.md` | inside — API transport and failure handling |
+| `FAIL` | `apps/inside/requirements/fail.md` | inside — failure surfaces |
 | `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
 | `ONBOARD` | `apps/inside/requirements/onboard.md` | inside — designer onboarding |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
