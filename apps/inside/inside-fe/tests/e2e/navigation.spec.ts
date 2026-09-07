@@ -186,7 +186,13 @@ test.describe('breadcrumb', () => {
           await expect(rendered).toHaveAttribute('aria-current', 'page');
           await expect(rendered).not.toBeEmpty();
         } else {
-          await expect(rendered).toHaveText(crumb.label);
+          // Wording is not asserted here for the same reason as the current
+          // crumb: ANY crumb may be renamed at runtime by a page that knows
+          // the real name — a portfolio piece supplies its studio's name for
+          // the studio crumb above it. What is structural, and what this
+          // generic pass exists to check, is that the crumb is present and
+          // points at its own path. The explicit trails below cover wording.
+          await expect(rendered).not.toBeEmpty();
           await expect(rendered).toHaveAttribute('href', crumb.path);
         }
       }
@@ -242,14 +248,18 @@ test.describe('breadcrumb', () => {
         await page.goto(`${path}${searchFor(route.path)}`);
         await waitForApp(page);
 
+        // Located by href, not by name: a crumb's wording may be replaced at
+        // runtime by a page that knows the real name, so the label from the
+        // route table is not reliably what is on screen. The href is the
+        // crumb's identity, and it is what this test is about anyway.
         await page
           .getByTestId('breadcrumbs')
-          .getByRole('link', { name: crumb.label, exact: true })
+          .locator(`a[href="${crumb.path}"]`)
           .click();
 
         await expect
           .poll(() => new URL(page.url()).pathname, {
-            message: `clicking "${crumb.label}" did not go to ${crumb.path}`,
+            message: `clicking the crumb for ${crumb.path} did not go there`,
           })
           .toBe(crumb.path);
         await waitForApp(page);
@@ -361,4 +371,63 @@ test.describe('layout', () => {
       ).toBeLessThanOrEqual(width);
     });
   }
+});
+
+test.describe('crumbs carry real names, not placeholders', () => {
+  /**
+   * The bug: /designers/:slug has the route label 'studio', so every studio's
+   * crumb read "studio" — and a nested page could not correct it, because a
+   * page could only ever name its own crumb.
+   */
+  test('a nested portfolio piece names its whole trail', async ({ page }) => {
+    await page.goto(
+      '/designers/northlight-architects/portfolio/chorlton-rear-extension',
+    );
+    await waitForApp(page);
+
+    await expect(page.getByTestId('breadcrumb-crumb')).toHaveText([
+      'home',
+      'designers',
+      'Northlight Architects',
+      'portfolio',
+      'Chorlton Rear Extension',
+    ]);
+  });
+
+  test('the studio crumb links to the studio', async ({ page }) => {
+    await page.goto(
+      '/designers/northlight-architects/portfolio/chorlton-rear-extension',
+    );
+    await waitForApp(page);
+
+    await page
+      .getByTestId('breadcrumbs')
+      .getByRole('link', { name: 'Northlight Architects' })
+      .click();
+    await expect(page).toHaveURL(/\/designers\/northlight-architects$/);
+  });
+
+  test('degrades to the slug, never to a placeholder', async ({ page }) => {
+    // With no data — an unknown studio — the crumb must still say which one
+    // was asked for rather than the generic route label.
+    await page.goto('/designers/no-such-studio');
+    await waitForApp(page);
+
+    const crumbs = page.getByTestId('breadcrumb-crumb');
+    await expect(crumbs).toHaveText(['home', 'designers', 'no such studio']);
+    await expect(crumbs.filter({ hasText: /^studio$/ })).toHaveCount(0);
+  });
+
+  test('a name does not leak onto the next page', async ({ page }) => {
+    await page.goto('/designers/northlight-architects');
+    await expect(page.getByTestId('studio-name')).toBeVisible();
+
+    await page.goto('/designers/studio-mercer');
+    await expect(page.getByTestId('studio-name')).toHaveText('Studio Mercer');
+    await expect(page.getByTestId('breadcrumb-crumb')).toHaveText([
+      'home',
+      'designers',
+      'Studio Mercer',
+    ]);
+  });
 });
