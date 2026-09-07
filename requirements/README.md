@@ -60,6 +60,7 @@ Prefixes are globally unique. Add a row when you add a file.
 |---|---|---|
 | `A11Y` | `apps/inside/requirements/a11y.md` | inside — accessibility |
 | `AUTH` | `apps/inside/requirements/auth.md` | inside — authentication, sessions, roles |
+| `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |
 | `DATA` | `apps/inside/requirements/data.md` | inside — schema, migrations, storage, vocabulary |
 | `DISCOVERY` | `apps/inside/requirements/discovery.md` | inside — public visibility and filtering |
