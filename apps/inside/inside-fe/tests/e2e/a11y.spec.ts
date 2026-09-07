@@ -106,7 +106,9 @@ for (const scheme of ['light', 'dark'] as const) {
       await waitForApp(page);
       await signIn(page, uniqueEmail('axe-home'));
       await page.goto('/');
-      await expect(page.getByRole('link', { name: 'Account' })).toBeVisible();
+      await expect(
+        page.getByRole('banner').getByRole('link', { name: 'Account' }),
+      ).toBeVisible();
       await expectNoViolations(page, `/ signed in (${scheme})`);
     });
 

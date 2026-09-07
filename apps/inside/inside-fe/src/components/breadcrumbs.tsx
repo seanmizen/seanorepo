@@ -37,16 +37,14 @@ const Breadcrumbs: FC = () => {
       separator="›"
       data-testid="breadcrumbs"
       sx={{
-        position: 'fixed',
-        top: 76,
-        left: 16,
-        zIndex: (theme) => theme.zIndex.appBar,
-        maxWidth: 'calc(100vw - 32px)',
-        // A backdrop, matching the status chips, so the trail stays legible
-        // where it floats over a page's own content on a short viewport.
-        backgroundColor: 'background.default',
-        borderRadius: 1,
-        px: 0.5,
+        // In normal flow beneath the header, so it can never overlap the page
+        // or the header — it used to float, which needed a backdrop and a
+        // z-index to stay legible.
+        maxWidth: 'lg',
+        mx: 'auto',
+        width: '100%',
+        px: { xs: 3, md: 5 },
+        pt: 2.5,
         color: 'text.secondary',
         fontSize: 13,
         '& .MuiBreadcrumbs-separator': { mx: 0.75 },

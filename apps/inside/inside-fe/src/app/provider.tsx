@@ -116,7 +116,7 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
           <ThemeModeContext.Provider value={themeModeValue}>
             <ThemeProvider theme={theme}>
               <CssBaseline enableColorScheme={true} />
-              {/* App-wide, so every route shows the same status. */}
+              {/* Floating chrome on every route — see REQ-CHIPS-001. */}
               <StatusChips />
               <AuthProvider>{children}</AuthProvider>
             </ThemeProvider>

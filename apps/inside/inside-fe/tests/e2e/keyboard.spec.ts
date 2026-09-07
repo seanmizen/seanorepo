@@ -253,11 +253,13 @@ test.describe('keyboard-only sign in', () => {
     // Tab to the role choice and pick "I'm a designer" with the keyboard, so
     // the ToggleButtonGroup is proven operable rather than merely focusable.
     //
-    // Walked rather than counted: the breadcrumb's crumbs come first in the
-    // tab order and the trail's length depends on the route, so a fixed number
-    // of presses would have to be re-derived every time a page moves.
+    // Walked rather than counted: the header and the breadcrumb both come
+    // first in the tab order and both vary — the trail by route, the header by
+    // whether you are signed in and what role you hold. The bound is
+    // deliberately generous so adding a header link does not break this; only
+    // the toggle becoming genuinely unreachable should.
     const designer = page.getByRole('button', { name: /i'm a designer/i });
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 25; i++) {
       await page.keyboard.press('Tab');
       if (await designer.evaluate((el) => el === document.activeElement)) break;
     }
