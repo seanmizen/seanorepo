@@ -19,7 +19,7 @@ test.describe('going offline', () => {
     // The point of the banner: ONE statement about the network. Before it,
     // losing connection produced a separate "not listed" on every page in
     // flight — six honest-looking messages, all wrong, for one cause.
-    await expect(page.getByTestId('designers-error')).toHaveCount(0);
+    await expect(page.getByTestId('designers-failure')).toHaveCount(0);
   });
 
   test('recovers without a manual refresh', async ({ page, context }) => {
@@ -64,16 +64,16 @@ test.describe('a failure offers a control that actually retries', () => {
     });
 
     await page.goto(PROFILE);
-    await expect(page.getByTestId('designer-missing')).toBeVisible();
+    await expect(page.getByTestId('designer-failure')).toBeVisible();
 
     allowThrough = true;
-    await page.getByTestId('designer-missing-retry').click();
+    await page.getByTestId('designer-failure-retry').click();
 
     // The real page, from a real second request.
     await expect(page.getByTestId('studio-name')).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByTestId('designer-missing')).toHaveCount(0);
+    await expect(page.getByTestId('designer-failure')).toHaveCount(0);
   });
 });
 

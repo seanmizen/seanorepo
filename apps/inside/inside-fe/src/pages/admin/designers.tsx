@@ -72,7 +72,9 @@ const AdminDesigners: FC = () => {
 
         {queue.isPending && <CircularProgress />}
         {queue.isError && (
-          <Alert severity="error">Could not load the review queue.</Alert>
+          <Alert severity="error" data-testid="queue-failure">
+            Could not load the review queue.
+          </Alert>
         )}
 
         {queue.data &&

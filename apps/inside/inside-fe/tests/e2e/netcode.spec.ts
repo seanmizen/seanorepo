@@ -18,10 +18,10 @@ test.describe('a request that never answers', () => {
 
     // Must appear on the FIRST deadline, not after retries: a timeout is not
     // retried precisely so the visitor is told at 15s rather than at 45s.
-    await expect(page.getByTestId('designer-missing')).toBeVisible({
+    await expect(page.getByTestId('designer-failure')).toBeVisible({
       timeout: 25_000,
     });
-    await expect(page.getByTestId('designer-missing')).toHaveText(
+    await expect(page.getByTestId('designer-failure')).toHaveText(
       /did not answer in time|too long/i,
     );
   });
@@ -38,7 +38,7 @@ test.describe('a server fault', () => {
     );
 
     await page.goto(PROFILE);
-    const alert = page.getByTestId('designer-missing');
+    const alert = page.getByTestId('designer-failure');
     await expect(alert).toBeVisible();
 
     // The whole point of REQ-NET-007: this used to say "That studio is not
@@ -56,7 +56,7 @@ test.describe('a server fault', () => {
     await page.route('**/api/designers/**', (route) => route.abort('failed'));
 
     await page.goto(PROFILE);
-    await expect(page.getByTestId('designer-missing')).toHaveText(
+    await expect(page.getByTestId('designer-failure')).toHaveText(
       /could not reach|connection/i,
     );
   });
@@ -69,7 +69,7 @@ test.describe('a genuine 404', () => {
     await page.goto('/designers/no-such-studio-at-all');
     await waitForApp(page);
 
-    await expect(page.getByTestId('designer-missing')).toHaveText(
+    await expect(page.getByTestId('designer-failure')).toHaveText(
       /not listed/i,
     );
   });

@@ -96,8 +96,13 @@ const DesignerProfilePage: FC = () => {
             body: 'That studio is not listed. It may have been removed, or the link may be wrong.',
           }}
           onRetry={() => query.refetch()}
-          testId="designer-missing"
+          testId="designer-failure"
         />
+        {/* A way onward as well as a retry — the retry helps when the server
+            faltered, this helps when the studio really has gone. */}
+        <Button component={Link} to="/designers" variant="text" sx={{ mt: 2 }}>
+          Browse designers
+        </Button>
       </Container>
     );
   }

@@ -55,7 +55,7 @@ const DesignerPortfolio: FC = () => {
             body: 'That studio is not listed.',
           }}
           onRetry={() => query.refetch()}
-          testId="portfolio-missing"
+          testId="portfolio-failure"
         />
       </Container>
     );

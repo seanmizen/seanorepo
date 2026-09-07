@@ -1,4 +1,5 @@
 import {
+  Button,
   Chip,
   Container,
   Divider,
@@ -66,8 +67,16 @@ const PortfolioProjectPage: FC = () => {
             body: 'That project is not published.',
           }}
           onRetry={() => query.refetch()}
-          testId="project-missing"
+          testId="project-failure"
         />
+        <Button
+          component={Link}
+          to={`/designers/${slug}`}
+          variant="text"
+          sx={{ alignSelf: 'flex-start' }}
+        >
+          Back to the studio
+        </Button>
       </Container>
     );
   }

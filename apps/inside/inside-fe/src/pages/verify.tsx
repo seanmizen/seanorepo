@@ -61,7 +61,9 @@ const Verify: FC = () => {
           <Typography variant="h4" component="h1">
             Sign-in failed
           </Typography>
-          <Alert severity="error">{error}</Alert>
+          <Alert severity="error" data-testid="verify-failure">
+            {error}
+          </Alert>
           <Button component={Link} to="/login" variant="contained">
             Request a new link
           </Button>
