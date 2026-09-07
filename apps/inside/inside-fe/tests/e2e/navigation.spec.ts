@@ -436,6 +436,26 @@ test.describe('the breadcrumb tray', () => {
     }
   });
 
+  test('starts at the same left edge as the header brand', async ({ page }) => {
+    // #222 removed the header's indent, which existed only to clear chips that
+    // do not exist in production. Brand and trail now line up.
+    await page.goto('/designers');
+    await waitForApp(page);
+
+    const brand = await page
+      .getByRole('banner')
+      .getByRole('link', { name: 'inside' })
+      .boundingBox();
+    const crumb = await page
+      .getByTestId('breadcrumb-crumb')
+      .first()
+      .boundingBox();
+
+    expect(
+      Math.abs((brand as { x: number }).x - (crumb as { x: number }).x),
+    ).toBeLessThan(2);
+  });
+
   test('sits below the header rather than under it', async ({ page }) => {
     await page.goto('/designers');
     await waitForApp(page);
