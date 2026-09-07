@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
-import { ProtectedRoute } from '@/components';
+import { ProtectedRoute, RouteErrorElement } from '@/components';
 import { Account } from '@/pages/account';
 import { AdminHome } from '@/pages/admin';
 import { AdminDesignerReview } from '@/pages/admin/designer-review';
@@ -80,6 +80,11 @@ const ELEMENTS: Record<RoutePath, ReactNode> = {
 export const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    // REQ-FAIL-004. Without this, React Router renders its own error page —
+    // "Unexpected Application Error!" plus a stack trace — for any render
+    // crash inside a route, and it does so before the app's own boundary can
+    // see it.
+    errorElement: <RouteErrorElement />,
     children: [
       ...ROUTES.map((route) => ({
         path: route.path,
