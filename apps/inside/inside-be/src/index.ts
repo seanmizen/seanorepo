@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import cookie from '@fastify/cookie';
@@ -9,6 +10,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { routes } from './controllers';
 import { assertBypassNotProduction } from './services/dev-mode';
+import { errorHandler, notFoundHandler } from './services/http-errors';
 import { runMigrations } from './services/migrations';
 
 const DEV_SECRET = 'dev-secret-change-in-production';
@@ -47,10 +49,56 @@ const UPLOAD_MAX_FILES = Number(process.env.UPLOAD_MAX_FILES ?? 30);
 const fastify = Fastify({
   // Silent under test so a failing assertion is readable.
   logger: IS_TEST ? false : { level: IS_PRODUCTION ? 'warn' : 'info' },
-  // Portfolio uploads are large; the defaults cut them off mid-transfer.
-  connectionTimeout: 600000,
-  requestTimeout: 600000,
+  /*
+   * REQ-NET-004. The app sits behind cloudflared, so without this every
+   * request's `ip` is the tunnel's rather than the visitor's.
+   *
+   * That is not a cosmetic problem: it is what would make the per-IP rate
+   * limits in #165 bucket every visitor on earth into one counter, throttling
+   * everyone collectively while passing a smoke test. A limit keyed on the
+   * wrong address is worse than no limit, because it looks like it works.
+   */
+  trustProxy: true,
+  /*
+   * REQ-NET-002. Long enough for a 50MB portfolio upload on a poor connection,
+   * short enough that a hung request eventually becomes a failure somebody can
+   * see. It was 600s, which is indistinguishable from "never" to a visitor.
+   */
+  connectionTimeout: 120_000,
+  requestTimeout: 120_000,
+  /*
+   * REQ-NET-003. One id per request, echoed to the client and attached to every
+   * log line for it, so an error a user reports can be found in the logs
+   * rather than guessed at.
+   *
+   * An inbound header is honoured because cloudflared is the only thing that
+   * can reach this port, and a caller who forges one only confuses their own
+   * trace. `crypto.randomUUID` rather than a counter: a counter restarts at
+   * zero on every deploy, so ids collide across restarts.
+   */
+  genReqId: (request) =>
+    (request.headers['x-request-id'] as string | undefined) ?? randomUUID(),
 });
+
+/**
+ * Every response carries its request id, whether it succeeded or not.
+ *
+ * On the success path it is what lets a slow request be correlated later; on
+ * the failure path it is the only thing connecting what the user saw to the
+ * line in the log that explains it.
+ */
+fastify.addHook('onSend', async (request, reply, payload) => {
+  reply.header('x-request-id', request.id);
+  return payload;
+});
+
+/*
+ * One error envelope and one not-found shape, for everything.
+ * REQ-NET-005 — the handlers live in services/http-errors.ts so they can be
+ * tested against a route that throws, without adding one to the real app.
+ */
+fastify.setErrorHandler(errorHandler);
+fastify.setNotFoundHandler(notFoundHandler);
 
 fastify.register(cors, {
   origin: process.env.CORS_ORIGIN || 'http://localhost:4060',

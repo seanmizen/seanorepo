@@ -32,6 +32,13 @@
 | [`REQ-NAV-002`](nav.md#req-nav-002--a-crumb-is-a-link-only-where-a-route-serves-it) | A crumb is a link only where a route serves it | active | constraint | P2 | sean |
 | [`REQ-NAV-003`](nav.md#req-nav-003--a-crumb-shows-the-most-specific-name-available) | A crumb shows the most specific name available | active | functional | P2 | sean |
 | [`REQ-NAV-004`](nav.md#req-nav-004--the-trail-is-rendered-once-for-every-route) | The trail is rendered once, for every route | active | constraint | P3 | sean |
+| [`REQ-NET-001`](net.md#req-net-001--one-client-for-every-request) | One client for every request | active | constraint | P1 | sean |
+| [`REQ-NET-002`](net.md#req-net-002--every-request-has-a-deadline) | Every request has a deadline | active | constraint | P1 | sean |
+| [`REQ-NET-003`](net.md#req-net-003--every-request-is-identifiable-afterwards) | Every request is identifiable afterwards | active | functional | P2 | sean |
+| [`REQ-NET-004`](net.md#req-net-004--the-clients-address-is-the-clients-address) | The client's address is the client's address | active | constraint | P1 | sean |
+| [`REQ-NET-005`](net.md#req-net-005--one-error-envelope) | One error envelope | active | constraint | P0 | sean |
+| [`REQ-NET-006`](net.md#req-net-006--retry-what-might-work-never-retry-an-answer) | Retry what might work; never retry an answer | active | constraint | P2 | sean |
+| [`REQ-NET-007`](net.md#req-net-007--a-failure-says-what-actually-failed) | A failure says what actually failed | active | quality | P1 | sean |
 | [`REQ-ONBOARD-001`](onboard.md#req-onboard-001--a-studio-can-be-set-up-without-leaving-the-app) | A studio can be set up without leaving the app | active | functional | P1 | sean |
 | [`REQ-ONBOARD-002`](onboard.md#req-onboard-002--work-in-progress-survives-a-refresh) | Work in progress survives a refresh | active | quality | P1 | sean |
 | [`REQ-ONBOARD-003`](onboard.md#req-onboard-003--a-rejection-says-what-to-do-about-it) | A rejection says what to do about it | active | functional | P1 | sean |
@@ -82,6 +89,13 @@ graph TD
   REQ_NAV_002["REQ-NAV-002<br/>A crumb is a link only where a route serves it"]
   REQ_NAV_003["REQ-NAV-003<br/>A crumb shows the most specific name available"]
   REQ_NAV_004["REQ-NAV-004<br/>The trail is rendered once, for every route"]
+  REQ_NET_001["REQ-NET-001<br/>One client for every request"]
+  REQ_NET_002["REQ-NET-002<br/>Every request has a deadline"]
+  REQ_NET_003["REQ-NET-003<br/>Every request is identifiable afterwards"]
+  REQ_NET_004["REQ-NET-004<br/>The client's address is the client's address"]
+  REQ_NET_005["REQ-NET-005<br/>One error envelope"]
+  REQ_NET_006["REQ-NET-006<br/>Retry what might work; never retry an answer"]
+  REQ_NET_007["REQ-NET-007<br/>A failure says what actually failed"]
   REQ_ONBOARD_001["REQ-ONBOARD-001<br/>A studio can be set up without leaving the app"]
   REQ_ONBOARD_002["REQ-ONBOARD-002<br/>Work in progress survives a refresh"]
   REQ_ONBOARD_003["REQ-ONBOARD-003<br/>A rejection says what to do about it"]
@@ -107,6 +121,9 @@ graph TD
   REQ_DISCOVERY_001 -->|refines| REQ_PRODUCT_002
   REQ_NAV_002 -->|depends-on| REQ_NAV_004
   REQ_NAV_003 -->|depends-on| REQ_NAV_004
+  REQ_NET_006 -->|depends-on| REQ_NET_002
+  REQ_NET_007 -->|refines| REQ_STATE_003
+  REQ_NET_007 -->|depends-on| REQ_NET_001
   REQ_ONBOARD_004 -->|refines| REQ_STATE_001
   REQ_ONBOARD_005 -->|depends-on| REQ_A11Y_002
   REQ_PRODUCT_001 -->|depends-on| REQ_AUTH_005
@@ -127,8 +144,11 @@ graph TD
 - `REQ-CHIPS-005` — refined-by REQ-CHIPS-006
 - `REQ-DATA-003` — required-by REQ-PRODUCT-002
 - `REQ-NAV-004` — required-by REQ-NAV-002, required-by REQ-NAV-003
+- `REQ-NET-001` — required-by REQ-NET-007
+- `REQ-NET-002` — required-by REQ-NET-006
 - `REQ-PRODUCT-001` — refined-by REQ-PRODUCT-003
 - `REQ-PRODUCT-002` — refined-by REQ-DISCOVERY-001
 - `REQ-SLUG-001` — required-by REQ-SLUG-003
 - `REQ-STATE-001` — refined-by REQ-ONBOARD-004, refined-by REQ-STATE-002, refined-by REQ-STATE-003, refined-by REQ-STATE-004
+- `REQ-STATE-003` — refined-by REQ-NET-007
 - `REQ-STATE-004` — required-by REQ-STATE-002
