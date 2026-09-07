@@ -18,5 +18,8 @@ export const api = {
     logout: `${baseUrl}/auth/logout`,
     adminDesigners: `${baseUrl}/admin/designers`,
     designers: `${baseUrl}/designers`,
+    myProfile: `${baseUrl}/me/profile`,
+    myPortfolio: `${baseUrl}/me/portfolio`,
+    myImages: `${baseUrl}/me/images`,
   },
 };
