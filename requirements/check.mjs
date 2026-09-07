@@ -70,6 +70,10 @@ const errors = [];
 const fail = (file, id, message) =>
   errors.push(`${file}${id ? ` [${id}]` : ''}: ${message}`);
 
+const warnings = [];
+const warn = (file, id, message) =>
+  warnings.push(`${file}${id ? ` [${id}]` : ''}: ${message}`);
+
 /** Every directory that holds requirement files. */
 const requirementDirs = () => {
   const dirs = [];
@@ -96,6 +100,89 @@ const requirementFiles = (dir) =>
     .filter((name) => name !== 'README.md' && name !== 'index.md')
     .sort()
     .map((name) => join(dir, name));
+
+/**
+ * Directories that never contain a citation worth checking, plus anything a
+ * build produced.
+ */
+const CITATION_SKIP_DIRS = new Set([
+  '.git',
+  '.next',
+  '.zig-cache',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'playwright-report',
+  'test-results',
+  'uploads',
+  'zig-out',
+]);
+
+/** Extensions worth opening. Keeps the walk off binaries and lockfiles. */
+const CITATION_EXTENSIONS = new Set([
+  '.css',
+  '.go',
+  '.html',
+  '.js',
+  '.jsx',
+  '.md',
+  '.mjs',
+  '.sh',
+  '.sql',
+  '.ts',
+  '.tsx',
+  '.yaml',
+  '.yml',
+  '.zig',
+]);
+
+const CITATION = /REQ-[A-Z][A-Z0-9]*-\d{3}/g;
+
+/**
+ * Every requirement citation in the codebase, with where it is.
+ *
+ * `requirements/` directories are skipped on purpose. They are the declaration
+ * side, and README.md there uses illustrative IDs like REQ-X-001 to show the
+ * format — examples, not references to anything.
+ */
+const collectCitations = () => {
+  const found = [];
+
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        if (CITATION_SKIP_DIRS.has(entry.name)) continue;
+        if (entry.name === 'requirements') continue;
+        walk(full);
+        continue;
+      }
+
+      const dot = entry.name.lastIndexOf('.');
+      if (dot === -1 || !CITATION_EXTENSIONS.has(entry.name.slice(dot))) {
+        continue;
+      }
+
+      const text = readFileSync(full, 'utf8');
+      if (!text.includes('REQ-')) continue;
+
+      for (const [index, line] of text.split('\n').entries()) {
+        for (const match of line.matchAll(CITATION)) {
+          found.push({
+            file: relative(ROOT, full),
+            line: index + 1,
+            id: match[0],
+          });
+        }
+      }
+    }
+  };
+
+  walk(ROOT);
+  return found;
+};
 
 /**
  * Parse one file into requirements.
@@ -538,6 +625,32 @@ for (const req of requirements) {
 
 checkCycles(byId);
 
+/*
+ * Code -> requirement: the other direction of 29148 traceability.
+ *
+ * A citation naming an ID that no longer exists is the same silent rot as a
+ * requirement naming a test that no longer exists, pointed the other way — and
+ * until now only one of the two was checked.
+ *
+ * Citing a superseded or withdrawn requirement warns rather than fails: it is
+ * legitimate while the code still implements the old behaviour and the
+ * migration has not happened yet. What is not acceptable is for it to be
+ * invisible.
+ */
+const citations = collectCitations();
+for (const { file, line, id } of citations) {
+  const cited = byId.get(id);
+  if (!cited) {
+    fail(`${file}:${line}`, id, 'cites a requirement that does not exist');
+    continue;
+  }
+
+  const citedStatus = first(cited.fields.Status ?? []);
+  if (citedStatus === 'superseded' || citedStatus === 'withdrawn') {
+    warn(`${file}:${line}`, id, `cites a ${citedStatus} requirement`);
+  }
+}
+
 // Indexes are only worth generating from a sound set; a graph built from
 // broken input would just be a second, prettier wrong answer.
 if (errors.length === 0) {
@@ -563,6 +676,12 @@ if (errors.length === 0) {
   }
 }
 
+if (warnings.length > 0) {
+  console.warn(`\n${warnings.length} requirement warning(s):\n`);
+  for (const warning of warnings) console.warn(`  ! ${warning}`);
+  console.warn('');
+}
+
 if (errors.length > 0) {
   console.error(`\n${errors.length} requirement problem(s):\n`);
   for (const error of errors) console.error(`  ✗ ${error}`);
@@ -571,5 +690,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `requirements ok — ${byId.size} requirement(s) across ${dirs.length} area director${dirs.length === 1 ? 'y' : 'ies'}`,
+  `requirements ok — ${byId.size} requirement(s) across ${dirs.length} area director${dirs.length === 1 ? 'y' : 'ies'}, ${citations.length} citation(s) in code`,
 );
