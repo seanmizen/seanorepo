@@ -58,7 +58,15 @@ Prefixes are globally unique. Add a row when you add a file.
 
 | Prefix | File | Scope |
 |---|---|---|
+| `A11Y` | `apps/inside/requirements/a11y.md` | inside — accessibility |
+| `AUTH` | `apps/inside/requirements/auth.md` | inside — authentication, sessions, roles |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |
+| `DATA` | `apps/inside/requirements/data.md` | inside — schema, migrations, storage, vocabulary |
+| `DISCOVERY` | `apps/inside/requirements/discovery.md` | inside — public visibility and filtering |
+| `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
+| `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
+| `STATE` | `apps/inside/requirements/state.md` | inside — request-state honesty |
+| `THEME` | `apps/inside/requirements/theme.md` | inside — light, dark and auto |
 
 ---
 
