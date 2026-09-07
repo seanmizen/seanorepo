@@ -66,6 +66,7 @@
 | [`REQ-STATE-004`](state.md#req-state-004--one-value-drives-every-part-of-a-presentation) | One value drives every part of a presentation | active | constraint | P2 | sean |
 | [`REQ-THEME-001`](theme.md#req-theme-001--auto-follows-the-os-until-the-visitor-chooses) | Auto follows the OS until the visitor chooses | active | functional | P3 | sean |
 | [`REQ-THEME-002`](theme.md#req-theme-002--the-first-paint-is-already-the-right-theme) | The first paint is already the right theme | active | quality | P2 | sean |
+| [`REQ-THEME-003`](theme.md#req-theme-003--light-until-the-visitor-says-otherwise) | Light until the visitor says otherwise | active | constraint | P2 | sean |
 
 ## Dependency graph
 
@@ -132,6 +133,7 @@ graph TD
   REQ_STATE_004["REQ-STATE-004<br/>One value drives every part of a presentation"]
   REQ_THEME_001["REQ-THEME-001<br/>Auto follows the OS until the visitor chooses"]
   REQ_THEME_002["REQ-THEME-002<br/>The first paint is already the right theme"]
+  REQ_THEME_003["REQ-THEME-003<br/>Light until the visitor says otherwise"]
   REQ_BRIEF_006 -->|refines| REQ_BRIEF_001
   REQ_BRIEF_002 -->|depends-on| REQ_BRIEF_001
   REQ_BRIEF_003 -->|refines| REQ_BRIEF_001
@@ -163,6 +165,8 @@ graph TD
   REQ_STATE_002 -->|depends-on| REQ_STATE_004
   REQ_STATE_003 -->|refines| REQ_STATE_001
   REQ_STATE_004 -->|refines| REQ_STATE_001
+  REQ_THEME_001 -->|amended-by| REQ_THEME_003
+  REQ_THEME_003 -->|amends| REQ_THEME_001
   style REQ_CHIPS_002 stroke-dasharray: 4 4
   style REQ_CHIPS_005 stroke-dasharray: 4 4
   style REQ_CHIPS_006 stroke-dasharray: 4 4
