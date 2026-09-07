@@ -73,6 +73,37 @@ export const ROUTES = [
     label: 'project',
     params: { slug: 'studio-mercer', projectSlug: 'clapham-townhouse' },
   },
+  // The designer's own workspace. Every level is a real page because
+  // `/me/portfolio/:id` implies both `/me` and `/me/portfolio` — the standing
+  // rule above, which is why there is no bare editor hanging off nothing.
+  {
+    path: '/me',
+    label: 'my studio',
+    requiresAuth: true,
+    requiresRole: 'designer',
+  },
+  {
+    path: '/me/profile',
+    label: 'profile',
+    requiresAuth: true,
+    requiresRole: 'designer',
+  },
+  {
+    path: '/me/portfolio',
+    label: 'portfolio',
+    requiresAuth: true,
+    requiresRole: 'designer',
+  },
+  {
+    path: '/me/portfolio/:id',
+    label: 'piece',
+    requiresAuth: true,
+    requiresRole: 'designer',
+    // Like the admin review page, an unknown id renders "no longer available"
+    // inline rather than the catch-all 404, so the guard can visit it without
+    // a fixture row.
+    params: { id: '1' },
+  },
   // Admin. `/admin` and `/admin/designers` both exist as real pages because
   // `/admin/designers/:id` implies them, and a breadcrumb link that 404s is a
   // bug — see the standing rule above.

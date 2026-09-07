@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getAuthUser, requireRole } from '../middleware/auth';
 import * as designers from '../services/designers';
 import { listPublicPortfolio } from '../services/discovery';
+import { findStoredImages } from '../services/image-library';
 import { chooseSlug, recordSlug, SlugRejected } from '../services/slugs';
 import {
   AVAILABILITIES,
@@ -209,14 +210,28 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
           : null;
       };
 
+      /**
+       * A piece's images WITH their stored variants resolved.
+       *
+       * The join table only holds ids, which is all the public list needed —
+       * but the editor has to render each image to let a designer reorder
+       * them, so it needs the URLs too. Resolved here rather than in a second
+       * client request, so the order and the images can never arrive out of
+       * step with each other.
+       */
+      const imagesWithVariants = async (projectId: number) => {
+        const rows = await designers.listProjectImages(projectId);
+        const stored = await findStoredImages(rows.map((row) => row.imageId));
+        return rows
+          .map((row) => ({ ...row, image: stored.get(row.imageId) }))
+          .filter((row) => row.image !== undefined);
+      };
+
       me.get('/portfolio/:id', async (request, reply) => {
         const id = Number((request.params as { id: string }).id);
         const project = await ownedProject(request, id);
         if (!project) return reply.status(404).send({ error: 'Not found' });
-        return {
-          project,
-          images: await designers.listProjectImages(project.id),
-        };
+        return { project, images: await imagesWithVariants(project.id) };
       });
 
       me.put('/portfolio/:id', async (request, reply) =>
@@ -285,7 +300,8 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
           });
 
           try {
-            return { images: await designers.setProjectImages(id, images) };
+            await designers.setProjectImages(id, images);
+            return { project, images: await imagesWithVariants(id) };
           } catch {
             // The only realistic failure is an image id that does not exist,
             // which the foreign key rejects.

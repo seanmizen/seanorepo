@@ -32,6 +32,11 @@
 | [`REQ-NAV-002`](nav.md#req-nav-002--a-crumb-is-a-link-only-where-a-route-serves-it) | A crumb is a link only where a route serves it | active | constraint | P2 | sean |
 | [`REQ-NAV-003`](nav.md#req-nav-003--a-crumb-shows-the-most-specific-name-available) | A crumb shows the most specific name available | active | functional | P2 | sean |
 | [`REQ-NAV-004`](nav.md#req-nav-004--the-trail-is-rendered-once-for-every-route) | The trail is rendered once, for every route | active | constraint | P3 | sean |
+| [`REQ-ONBOARD-001`](onboard.md#req-onboard-001--a-studio-can-be-set-up-without-leaving-the-app) | A studio can be set up without leaving the app | active | functional | P1 | sean |
+| [`REQ-ONBOARD-002`](onboard.md#req-onboard-002--work-in-progress-survives-a-refresh) | Work in progress survives a refresh | active | quality | P1 | sean |
+| [`REQ-ONBOARD-003`](onboard.md#req-onboard-003--a-rejection-says-what-to-do-about-it) | A rejection says what to do about it | active | functional | P1 | sean |
+| [`REQ-ONBOARD-004`](onboard.md#req-onboard-004--a-refused-upload-says-what-was-wrong-with-the-file) | A refused upload says what was wrong with the file | active | quality | P2 | sean |
+| [`REQ-ONBOARD-005`](onboard.md#req-onboard-005--portfolio-order-is-set-by-the-designer-and-is-what-the-public-sees) | Portfolio order is set by the designer and is what the public sees | active | functional | P2 | sean |
 | [`REQ-PRODUCT-001`](product.md#req-product-001--buyers-browse-without-an-account) | Buyers browse without an account | active | constraint | P0 | sean |
 | [`REQ-PRODUCT-002`](product.md#req-product-002--a-designer-is-unlisted-until-an-admin-approves-them) | A designer is unlisted until an admin approves them | active | constraint | P0 | sean |
 | [`REQ-PRODUCT-003`](product.md#req-product-003--sign-up-is-asked-for-at-the-point-of-value) | Sign-up is asked for at the point of value | active | constraint | P2 | sean |
@@ -77,6 +82,11 @@ graph TD
   REQ_NAV_002["REQ-NAV-002<br/>A crumb is a link only where a route serves it"]
   REQ_NAV_003["REQ-NAV-003<br/>A crumb shows the most specific name available"]
   REQ_NAV_004["REQ-NAV-004<br/>The trail is rendered once, for every route"]
+  REQ_ONBOARD_001["REQ-ONBOARD-001<br/>A studio can be set up without leaving the app"]
+  REQ_ONBOARD_002["REQ-ONBOARD-002<br/>Work in progress survives a refresh"]
+  REQ_ONBOARD_003["REQ-ONBOARD-003<br/>A rejection says what to do about it"]
+  REQ_ONBOARD_004["REQ-ONBOARD-004<br/>A refused upload says what was wrong with the file"]
+  REQ_ONBOARD_005["REQ-ONBOARD-005<br/>Portfolio order is set by the designer and is what the public sees"]
   REQ_PRODUCT_001["REQ-PRODUCT-001<br/>Buyers browse without an account"]
   REQ_PRODUCT_002["REQ-PRODUCT-002<br/>A designer is unlisted until an admin approves them"]
   REQ_PRODUCT_003["REQ-PRODUCT-003<br/>Sign-up is asked for at the point of value"]
@@ -97,6 +107,8 @@ graph TD
   REQ_DISCOVERY_001 -->|refines| REQ_PRODUCT_002
   REQ_NAV_002 -->|depends-on| REQ_NAV_004
   REQ_NAV_003 -->|depends-on| REQ_NAV_004
+  REQ_ONBOARD_004 -->|refines| REQ_STATE_001
+  REQ_ONBOARD_005 -->|depends-on| REQ_A11Y_002
   REQ_PRODUCT_001 -->|depends-on| REQ_AUTH_005
   REQ_PRODUCT_002 -->|depends-on| REQ_DATA_003
   REQ_PRODUCT_003 -->|refines| REQ_PRODUCT_001
@@ -109,6 +121,7 @@ graph TD
 
 ## Derived reverse links
 
+- `REQ-A11Y-002` — required-by REQ-ONBOARD-005
 - `REQ-AUTH-005` — required-by REQ-PRODUCT-001
 - `REQ-CHIPS-001` — refined-by REQ-CHIPS-002, refined-by REQ-CHIPS-003, required-by REQ-CHIPS-004
 - `REQ-CHIPS-005` — refined-by REQ-CHIPS-006
@@ -117,5 +130,5 @@ graph TD
 - `REQ-PRODUCT-001` — refined-by REQ-PRODUCT-003
 - `REQ-PRODUCT-002` — refined-by REQ-DISCOVERY-001
 - `REQ-SLUG-001` — required-by REQ-SLUG-003
-- `REQ-STATE-001` — refined-by REQ-STATE-002, refined-by REQ-STATE-003, refined-by REQ-STATE-004
+- `REQ-STATE-001` — refined-by REQ-ONBOARD-004, refined-by REQ-STATE-002, refined-by REQ-STATE-003, refined-by REQ-STATE-004
 - `REQ-STATE-004` — required-by REQ-STATE-002
