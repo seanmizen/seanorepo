@@ -1,5 +1,18 @@
 import { createTheme, type Theme } from '@mui/material';
 
+/**
+ * Type stacks.
+ *
+ * Deliberately system fonts: a web font is a render-blocking request and a
+ * layout-shift risk on an image-heavy page, and the identity here comes from
+ * the scale, the spacing and the restraint rather than from a licence fee.
+ * Swapping in a licensed face later is a one-line change.
+ */
+const DISPLAY_STACK =
+  '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif';
+const BODY_STACK =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif';
+
 export type ThemeMode = 'light' | 'dark' | 'auto';
 export type EffectiveMode = 'light' | 'dark';
 
@@ -84,14 +97,100 @@ export const buildTheme = (effectiveMode: EffectiveMode): Theme => {
       },
     },
     typography: {
-      // Headings in a serif to read as editorial rather than dashboard.
-      h1: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 400 },
-      h2: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 400 },
-      h3: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 400 },
-      h4: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 400 },
+      fontFamily: BODY_STACK,
+      /*
+       * Headings are a serif, and a real type scale rather than MUI's default.
+       *
+       * The register this is aiming for is an architecture monograph: large
+       * quiet display type, tight leading on the big sizes, and generous
+       * letter-spacing nowhere. A marketplace competing on taste cannot look
+       * like a dashboard.
+       */
+      h1: {
+        fontFamily: DISPLAY_STACK,
+        fontWeight: 400,
+        lineHeight: 1.04,
+        letterSpacing: '-0.022em',
+      },
+      h2: {
+        fontFamily: DISPLAY_STACK,
+        fontWeight: 400,
+        lineHeight: 1.1,
+        letterSpacing: '-0.018em',
+      },
+      h3: {
+        fontFamily: DISPLAY_STACK,
+        fontWeight: 400,
+        lineHeight: 1.15,
+        letterSpacing: '-0.014em',
+      },
+      h4: { fontFamily: DISPLAY_STACK, fontWeight: 400, lineHeight: 1.2 },
+      h5: { fontFamily: DISPLAY_STACK, fontWeight: 400, lineHeight: 1.3 },
+      h6: { fontFamily: BODY_STACK, fontWeight: 600, letterSpacing: '0.005em' },
+      body1: { lineHeight: 1.65 },
+      body2: { lineHeight: 1.6 },
+      button: {
+        // Sentence case, not SHOUTING. Uppercase buttons read as software;
+        // this is meant to read as a publication.
+        textTransform: 'none',
+        fontWeight: 500,
+        letterSpacing: '0.01em',
+      },
+      overline: { letterSpacing: '0.14em', fontWeight: 600 },
     },
-    shape: { borderRadius: 2 },
+    // Square. A rounded corner is the single fastest way to look like a SaaS
+    // app rather than a gallery.
+    shape: { borderRadius: 0 },
     components: {
+      /*
+       * Component-level restraint, set once here so pages stay declarative and
+       * nobody reaches for a one-off sx to undo a default.
+       */
+      MuiButton: {
+        defaultProps: { disableElevation: true },
+        styleOverrides: {
+          root: { paddingInline: 22, paddingBlock: 10 },
+          outlined: { borderColor: 'currentColor' },
+        },
+      },
+      MuiCard: {
+        defaultProps: { elevation: 0 },
+        styleOverrides: {
+          root: {
+            // Hairline borders instead of shadows: a gallery wall, not a deck
+            // of floating cards.
+            borderColor: isDark
+              ? 'rgba(236, 232, 226, 0.14)'
+              : 'rgba(26, 26, 24, 0.14)',
+          },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          outlined: {
+            borderColor: isDark
+              ? 'rgba(236, 232, 226, 0.24)'
+              : 'rgba(26, 26, 24, 0.22)',
+          },
+        },
+      },
+      MuiDivider: {
+        styleOverrides: {
+          root: {
+            borderColor: isDark
+              ? 'rgba(236, 232, 226, 0.12)'
+              : 'rgba(26, 26, 24, 0.12)',
+          },
+        },
+      },
+      MuiContainer: {
+        styleOverrides: {
+          root: {
+            paddingInline: 24,
+            '@media (min-width:900px)': { paddingInline: 40 },
+          },
+        },
+      },
       MuiCssBaseline: {
         styleOverrides: {
           '*, *::before, *::after': {
