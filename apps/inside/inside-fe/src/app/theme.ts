@@ -16,6 +16,13 @@ const BODY_STACK =
 export type ThemeMode = 'light' | 'dark' | 'auto';
 export type EffectiveMode = 'light' | 'dark';
 
+/**
+ * REQ-THEME-002. This literal is duplicated, unavoidably, in the blocking
+ * script in `public/index.html` — that script runs before any bundle loads, so
+ * it cannot import this. Change one and you must change the other: nothing
+ * connects them, the flash returns silently, and every other theme test still
+ * passes.
+ */
 export const THEME_STORAGE_KEY = 'theme-mode';
 
 const isThemeMode = (value: unknown): value is ThemeMode =>
@@ -199,11 +206,15 @@ export const buildTheme = (effectiveMode: EffectiveMode): Theme => {
             transitionDuration: '100ms',
             transitionTimingFunction: 'ease',
           },
-          // WCAG 2.4.7 Focus Visible. MUI's ButtonBase sets `outline: 0` and
-          // leans on a focus ripple that is, on an IconButton, invisible — the
-          // theme toggle had no keyboard focus cue at all. axe cannot catch
-          // this (it is not a static-DOM property), so it is asserted in
-          // tests/e2e/keyboard.spec.ts instead.
+          // REQ-A11Y-002, WCAG 2.4.7 Focus Visible. MUI's ButtonBase sets
+          // `outline: 0` and leans on a focus ripple that is, on an IconButton,
+          // invisible — the theme toggle had no keyboard focus cue at all. axe
+          // cannot catch this (it is not a static-DOM property), so it is
+          // asserted in tests/e2e/keyboard.spec.ts instead.
+          //
+          // Defined once, here, for everything focusable. Do not restyle focus
+          // per component: the component someone forgets is the one that needed
+          // it, and nothing reports the omission.
           //
           // The selector is `body :focus-visible` rather than `:focus-visible`
           // deliberately: it outranks `.MuiButtonBase-root { outline: 0 }` on

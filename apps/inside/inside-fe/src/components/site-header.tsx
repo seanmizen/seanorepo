@@ -59,9 +59,14 @@ const SiteHeader: FC = () => {
           spacing={{ xs: 1, sm: 2 }}
           sx={{
             height: 68,
-            // Clears the floating status chips (REQ-CHIPS-001, #198), which
+            // REQ-CHIPS-004 (#198). Clears the floating status chips, which
             // are fixed at the top-left and overlay everything. The header
-            // moves aside for them, not the other way round.
+            // moves aside for them, not the other way round — the opposite
+            // resolution was tried in #197 and broke REQ-CHIPS-001.
+            //
+            // This padding looks arbitrary and is not: it is the chip stack's
+            // width at each breakpoint. Removing it does not fail a header
+            // test, it fails a chips test.
             pl: { xs: '104px', sm: '124px' },
           }}
         >

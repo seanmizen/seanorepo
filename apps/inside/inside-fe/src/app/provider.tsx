@@ -72,8 +72,11 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
     });
   }, []);
 
-  // Keep the resolved mode in step with both the user's choice and, while on
-  // 'auto', live OS theme changes.
+  // REQ-THEME-001. Keep the resolved mode in step with both the user's choice
+  // and, while on 'auto', live OS theme changes. The subscription is what makes
+  // it "live": reading the OS preference only at mount looks right in every
+  // test that reloads, and wrong for the case that matters — a machine flipping
+  // to dark on schedule while someone is reading.
   useEffect(() => {
     setEffectiveMode(getEffectiveMode(mode));
     if (mode !== 'auto') return;
@@ -116,7 +119,11 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
           <ThemeModeContext.Provider value={themeModeValue}>
             <ThemeProvider theme={theme}>
               <CssBaseline enableColorScheme={true} />
-              {/* Floating chrome on every route — see REQ-CHIPS-001. */}
+              {/*
+                REQ-CHIPS-005: rendered here, above the router, so the chips
+                are on every route by existing rather than by each page opting
+                in. REQ-CHIPS-001 is what keeps them out of the page's flow.
+              */}
               <StatusChips />
               <AuthProvider>{children}</AuthProvider>
             </ThemeProvider>

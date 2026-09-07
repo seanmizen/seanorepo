@@ -75,13 +75,18 @@ const StatusChip: FC<{
 /**
  * Deployment status: floating, top-left, stacked, with room to grow.
  *
- * REQ-CHIPS-001 (#198): these are floating chrome and MUST stay fixed-position
- * — never in normal flow. They sit on a translucent card so they stay legible
- * over whatever is beneath, and the header reserves space on its left so the
- * brand is never obscured. New chips append to this stack.
+ * Implements, and is the reason for the shape of, five requirements — see
+ * `apps/inside/requirements/chips.md`:
+ *
+ * - REQ-CHIPS-001 — fixed-position chrome, never in normal flow
+ * - REQ-CHIPS-002 — anchored top-left, stacking downwards as chips are added
+ * - REQ-CHIPS-003 — translucent backdrop, fully opaque content
+ * - REQ-CHIPS-005 — present on every route (rendered once, in app/provider)
+ * - REQ-CHIPS-006 — the dev chip appears only when the server says so
  *
  * Do not move these into the header to resolve a layout collision; adjust the
- * header's offset instead. That trade was made once, in #197, and reverted.
+ * header's offset instead, which is REQ-CHIPS-004. That trade was made once,
+ * in #197, and reverted in #198.
  */
 const StatusChips: FC = () => {
   const config = useQuery({
@@ -98,7 +103,9 @@ const StatusChips: FC = () => {
 
   const chips: ReactNode[] = [];
 
-  // Purple, and only ever shown when the SERVER says it is not production.
+  // REQ-CHIPS-006. Purple, and only ever shown when the SERVER says it is not
+  // production — a build-time flag would say what the bundle was compiled to
+  // believe, which is a different claim.
   if (config.data?.devMode) {
     chips.push(
       <StatusChip
@@ -112,12 +119,16 @@ const StatusChips: FC = () => {
   }
 
   /**
-   * One value, three presentations.
+   * One value, three presentations. REQ-STATE-004, and the mechanism that
+   * makes REQ-STATE-002 hold rather than merely be intended.
    *
    * Label, colour and tooltip previously branched separately, so an in-flight
    * request rendered a green chip whose tooltip said "API reachable" — the app
    * asserting something it had not yet verified. Deriving all three from a
    * single status makes that class of disagreement unrepresentable.
+   *
+   * `checking` is deliberately neutral rather than optimistic: a pending state
+   * must not look like a successful one.
    */
   const backend: 'checking' | 'ok' | 'down' = health.isPending
     ? 'checking'
@@ -157,7 +168,10 @@ const StatusChips: FC = () => {
       elevation={0}
       data-testid="status-chips"
       sx={{
+        // REQ-CHIPS-001. Not a styling preference: moving this into flow is
+        // the specific regression #198 exists to prevent.
         position: 'fixed',
+        // REQ-CHIPS-002 — top-left, and the column below stacks downwards.
         top: 14,
         left: 14,
         zIndex: (theme) => theme.zIndex.appBar + 1,
@@ -166,10 +180,10 @@ const StatusChips: FC = () => {
         flexDirection: 'column',
         alignItems: 'flex-start',
         gap: 0.5,
-        // 90% on the BACKGROUND, not the element. Fading the whole card fades
-        // the chip text with it, which cost the green chip its contrast (4.25:1
-        // against the composited ground) — the opposite of what a legibility
-        // backdrop is for.
+        // REQ-CHIPS-003: 90% on the BACKGROUND, not the element. Fading the
+        // whole card fades the chip text with it, which cost the green chip its
+        // contrast (4.25:1 against the composited ground) — the opposite of
+        // what a legibility backdrop is for. `opacity` here would be the bug.
         backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.9),
         border: '1px solid',
         borderColor: 'divider',
