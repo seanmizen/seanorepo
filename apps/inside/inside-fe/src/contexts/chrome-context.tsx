@@ -1,3 +1,5 @@
+import type { AppConfig } from '@shared/types';
+import { useQuery } from '@tanstack/react-query';
 import {
   createContext,
   type FC,
@@ -11,11 +13,13 @@ import {
 /**
  * Whether the floating deployment status card is showing.
  *
- * REQ-CHIPS-007. Deployment chrome is useful to whoever runs the site and
- * noise to everyone else, so it is a visitor's choice — but only after they
- * make one. The default is ON, because the card's whole job is to say which
- * backend you are looking at and whether it is up, and a default of OFF would
- * mean the one person who needs that has to go find it first.
+ * REQ-CHIPS-008. Deployment chrome belongs to whoever runs the site, so it
+ * exists only where the SERVER reports a non-production backend — a visitor to
+ * a public marketplace never sees it, whatever they have stored.
+ *
+ * Where it can appear, showing it is the default: the card's whole job is to
+ * say which backend you are on and whether it is up, and a default of OFF
+ * would mean the one person who needs it has to go and find it first.
  *
  * The whole card, never individual chips. Which chips exist is a property of
  * the deployment, not a preference, and offering six switches for something
@@ -28,12 +32,22 @@ import {
 const STORAGE_KEY = 'inside:status-card';
 
 interface ChromeValue {
+  /** Whether the card is showing right now. */
   statusCardVisible: boolean;
+  /**
+   * Whether it COULD show — i.e. this is a non-production backend.
+   *
+   * Separate from `statusCardVisible` so the account page can hide its
+   * preference row entirely rather than offering a switch for something that
+   * cannot happen.
+   */
+  statusCardAvailable: boolean;
   setStatusCardVisible: (visible: boolean) => void;
 }
 
 const ChromeContext = createContext<ChromeValue>({
-  statusCardVisible: true,
+  statusCardVisible: false,
+  statusCardAvailable: false,
   setStatusCardVisible: () => {},
 });
 
@@ -50,7 +64,31 @@ const readPreference = (): boolean => {
 };
 
 export const ChromeProvider: FC<{ children: ReactNode }> = ({ children }) => {
-  const [statusCardVisible, setVisible] = useState(readPreference);
+  const [wanted, setVisible] = useState(readPreference);
+
+  /*
+   * REQ-CHIPS-008. Availability comes from the SERVER, never from a build-time
+   * flag, and for a strong reason: this decides whether a member of the public
+   * sees deployment chrome on a marketplace. A bundle flag says what the
+   * frontend was compiled to believe, which is a different claim from what it
+   * is actually talking to.
+   *
+   * Shares the query key with StatusChips, so this costs no extra request.
+   * While it is in flight `devMode` is undefined and the card stays hidden —
+   * a pending state must not be drawn as the permissive one.
+   */
+  const config = useQuery({
+    queryKey: ['config'],
+    queryFn: async () => {
+      const { get } = await import('@/lib/http');
+      const { api } = await import('@/config');
+      return get<AppConfig>(api.endpoints.config);
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  const statusCardAvailable = config.data?.devMode === true;
+  const statusCardVisible = statusCardAvailable && wanted;
 
   const setStatusCardVisible = useCallback((visible: boolean) => {
     setVisible(visible);
@@ -62,8 +100,8 @@ export const ChromeProvider: FC<{ children: ReactNode }> = ({ children }) => {
   }, []);
 
   const value = useMemo(
-    () => ({ statusCardVisible, setStatusCardVisible }),
-    [statusCardVisible, setStatusCardVisible],
+    () => ({ statusCardVisible, statusCardAvailable, setStatusCardVisible }),
+    [statusCardVisible, statusCardAvailable, setStatusCardVisible],
   );
 
   return (

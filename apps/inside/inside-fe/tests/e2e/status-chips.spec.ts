@@ -27,12 +27,13 @@ test.describe('status chips', () => {
     await expect(page.getByTestId('status-chip-backend')).toBeVisible();
   });
 
-  test('the backend chip sits below the dev chip, top-left', async ({
+  test('the chips stack in one column, anchored to a corner', async ({
     page,
   }) => {
     await page.goto('/');
     const dev = await page.getByTestId('status-chip-dev').boundingBox();
     const backend = await page.getByTestId('status-chip-backend').boundingBox();
+    const viewport = page.viewportSize();
 
     expect(dev).not.toBeNull();
     expect(backend).not.toBeNull();
@@ -43,6 +44,14 @@ test.describe('status chips', () => {
       2,
     );
     expect(dev?.x as number).toBeLessThan(200);
+    // REQ-CHIPS-009: the BOTTOM-left corner since #222, so the header can stop
+    // indenting to clear it.
+    const card = await page.getByTestId('status-chips').boundingBox();
+    const bottomGap =
+      (viewport as { height: number }).height -
+      ((card as { y: number; height: number }).y +
+        (card as { height: number }).height);
+    expect(bottomGap).toBeLessThan(40);
   });
 
   test('reports the backend as down when the API is unreachable', async ({
@@ -56,31 +65,6 @@ test.describe('status chips', () => {
     );
   });
 
-  test('the dev chip is driven by the server, not the bundle', async ({
-    page,
-  }) => {
-    // If the server says this is production, the chip must disappear even
-    // though the frontend build is unchanged — the client is never the
-    // authority on which environment it is talking to.
-    await page.route('**/api/config', (route) =>
-      route.fulfill({
-        json: {
-          devMode: false,
-          siteName: 'inside',
-          tagline: 'Find the designer for your space',
-          uploadMaxFileSizeMb: 50,
-          uploadMaxFiles: 30,
-        },
-      }),
-    );
-    await page.goto('/');
-    await waitForApp(page);
-    await expect(page.getByTestId('status-chip-backend')).toBeVisible();
-    await expect(page.getByTestId('status-chip-dev')).toHaveCount(0);
-  });
-});
-
-test.describe('dev sign-in link', () => {
   test('is offered on /login and actually signs you in', async ({ page }) => {
     const email = uniqueEmail('devlink');
     await page.goto('/login');
@@ -205,7 +189,7 @@ test.describe('in-flight state', () => {
   });
 });
 
-test.describe('the card can be turned off (REQ-CHIPS-007)', () => {
+test.describe('the card can be turned off (REQ-CHIPS-008)', () => {
   test('can be dismissed, and stays dismissed across a reload', async ({
     page,
   }) => {
@@ -244,6 +228,54 @@ test.describe('the card can be turned off (REQ-CHIPS-007)', () => {
     await page.getByTestId('status-card-toggle').click();
 
     await expect(page.getByTestId('status-chips')).toBeVisible();
+  });
+
+  test('is absent entirely when the server reports production', async ({
+    page,
+  }) => {
+    // The card's availability comes from the server, so the server's answer is
+    // what the test changes — not a build flag, which is the whole point of
+    // REQ-CHIPS-008.
+    await page.route('**/api/config', (route) =>
+      route.fulfill({
+        json: {
+          devMode: false,
+          siteName: 'inside',
+          tagline: 'Find the designer for your space',
+          uploadMaxFileSizeMb: 50,
+          uploadMaxFiles: 30,
+        },
+      }),
+    );
+
+    await page.goto('/');
+    await waitForApp(page);
+    await expect(page.getByTestId('status-chips')).toHaveCount(0);
+  });
+
+  test('offers no preference control where the card cannot appear', async ({
+    page,
+  }) => {
+    await page.route('**/api/config', (route) =>
+      route.fulfill({
+        json: {
+          devMode: false,
+          siteName: 'inside',
+          tagline: 'Find the designer for your space',
+          uploadMaxFileSizeMb: 50,
+          uploadMaxFiles: 30,
+        },
+      }),
+    );
+
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('prod-prefs'));
+    await page.goto('/account');
+    await expect(page.getByTestId('account-session')).toBeVisible();
+
+    // A switch that silently does nothing is worse than no switch.
+    await expect(page.getByTestId('account-preferences')).toHaveCount(0);
   });
 
   test('dismissing hides the whole card, not one chip', async ({ page }) => {
@@ -307,12 +339,33 @@ test.describe('the chips float (REQ-CHIPS-001)', () => {
 
       expect(chips, `chips missing at ${width}px`).not.toBeNull();
       expect(brand, `brand missing at ${width}px`).not.toBeNull();
-      // The header moves aside for the chips, not the other way round.
-      expect(
-        (chips as { x: number; width: number }).x +
-          (chips as { width: number }).width,
-        `chips overlap the brand at ${width}px`,
-      ).toBeLessThanOrEqual((brand as { x: number }).x);
+
+      /*
+       * A rectangle check, not a left-edge one. Until #222 the header indented
+       * to clear the chips, so "chips end before the brand starts" was the
+       * whole story. Now both sit at the left and it is the vertical
+       * separation doing the work — an x-only assertion would fail on a
+       * layout that is perfectly correct.
+       */
+      const c = chips as {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      const b = brand as {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      const overlaps =
+        c.x < b.x + b.width &&
+        c.x + c.width > b.x &&
+        c.y < b.y + b.height &&
+        c.y + c.height > b.y;
+
+      expect(overlaps, `chips overlap the brand at ${width}px`).toBe(false);
     }
   });
 });
