@@ -183,11 +183,27 @@ parent page.
 
 ### Crumb labels
 
-The route table's `label` is the fallback. A page that knows a better name at
-runtime — a designer's studio name, a project's title — calls
-`useBreadcrumbTitle(name)` and owns its own crumb; passing `null` while the
-name is still loading falls back to the label, and then to the humanised URL
-segment. A crumb is never blank.
+A crumb shows the best name available, in this order: a real name supplied by
+the page at runtime, then — for a **static** segment only — the route table's
+`label`, then the humanised URL segment. A crumb is never blank.
+
+The label is skipped for a **parameterised** segment because it cannot
+distinguish one instance from another: `/designers/:slug` is labelled "studio",
+which would read the same for every studio. The concrete segment
+(`northlight-architects` → "northlight architects") is strictly more
+informative, so it wins until a real name arrives.
+
+Pages supply real names with `useCrumbTitles({ [path]: name })`, keyed **by
+path** rather than "the current page" — a nested page knows its ancestors'
+names too, and a placeholder in the middle of a trail is as unhelpful as one at
+the end. A portfolio piece names both itself and the studio above it. Entries
+that are `undefined` or blank are ignored, so passing `data?.name` straight
+through degrades gracefully while loading; everything set is cleared on unmount
+so a name never leaks onto the next page. `useBreadcrumbTitle(name)` remains as
+a thin wrapper for the common case of naming only your own crumb.
+
+Because any crumb's wording can be replaced at runtime, tests that need to
+identify a crumb structurally select it by `href`, not by accessible name.
 
 A crumb only becomes a **link** when a route actually serves that path. On a
 URL nobody declared, the intermediate crumbs are inert text rather than an

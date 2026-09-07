@@ -23,9 +23,12 @@ export interface RouteDefinition {
    * Human-readable crumb label for this route's own segment.
    *
    * Lower case, because the trail reads as one sentence: `home › account`.
-   * A page that knows a better name at runtime (a designer's studio name, a
-   * project's title) overrides this with `useBreadcrumbTitle`; this stays the
-   * fallback so a crumb is never blank.
+   *
+   * Only meaningful for a STATIC segment. On a parameterised route the label
+   * is the same for every instance — `/designers/:slug` is "studio" for every
+   * studio — so the concrete segment wins instead and the label goes unused;
+   * see `crumbsFor`. A page that knows the real name supplies it at runtime
+   * with `useCrumbTitles`, for its own crumb or an ancestor's.
    */
   label: string;
   /** The route is behind `ProtectedRoute` and needs a session to resolve. */
@@ -246,9 +249,26 @@ export const crumbsFor = (
     ...segments.map((segment, index) => {
       const path = fromSegments(segments.slice(0, index + 1));
       const route = matchRoute(path, routes);
+
+      /*
+       * A route's label is a placeholder, and only a good one for a STATIC
+       * path. Where the matched segment is a parameter, the concrete segment
+       * is strictly more informative: `northlight-architects` says which
+       * studio, `studio` says nothing. So the label is used only when the
+       * route's own segment is not a parameter.
+       *
+       * A page that knows the real name still overrides this at runtime; this
+       * is what the crumb degrades to before that name arrives, or when
+       * nothing supplies one.
+       */
+      const pattern = route ? toSegments(route.path)[index] : undefined;
+      const isParameterised = pattern?.startsWith(':') ?? false;
+      const label =
+        route && !isParameterised ? route.label : humaniseSegment(segment);
+
       return {
         path,
-        label: route?.label ?? humaniseSegment(segment),
+        label,
         isCurrent: index === segments.length - 1,
         exists: route !== undefined,
       };
