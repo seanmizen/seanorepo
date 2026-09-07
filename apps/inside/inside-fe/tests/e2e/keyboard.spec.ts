@@ -34,9 +34,7 @@ type TabStop = {
  */
 async function walkWithTab(page: Page) {
   const expected = await page.evaluate((selector) => {
-    const visible = Array.from(
-      document.querySelectorAll<HTMLElement>(selector),
-    )
+    const visible = Array.from(document.querySelectorAll<HTMLElement>(selector))
       .filter((el) => el.getClientRects().length > 0)
       // `tabindex="-1"` is excluded by the selector only for the [tabindex]
       // clause; a <textarea> or <button> carrying it still matched. MUI's
