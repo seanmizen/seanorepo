@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getAuthUser, requireRole } from '../middleware/auth';
 import * as designers from '../services/designers';
 import { listPublicPortfolio } from '../services/discovery';
-import { uniqueSlug } from '../services/slugs';
+import { chooseSlug, recordSlug, SlugRejected } from '../services/slugs';
 import {
   AVAILABILITIES,
   BUDGET_BANDS,
@@ -99,12 +99,15 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
               .send({ error: 'You already have a profile' });
           }
           const fields = readProfileFields(request.body);
-          const slug = await uniqueSlug('designer_profiles', fields.studioName);
+          const slug = await chooseSlug('designer_profile', fields.studioName);
           const profile = await designers.insertProfile(
             getAuthUser(request)?.id as number,
             slug,
             fields,
           );
+          // Recorded after the insert, because history is keyed on the row id
+          // and the row does not have one until it exists.
+          await recordSlug('designer_profile', profile.id, slug);
           return reply.status(201).send({ profile });
         }),
       );
@@ -122,10 +125,28 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
           if (!existing) {
             return reply.status(404).send({ error: 'No profile yet' });
           }
-          const profile = await designers.updateProfile(
+          let profile = await designers.updateProfile(
             existing.id,
             readProfileFields(request.body),
           );
+
+          // A user-supplied slug is `custom`, so a collision or a reserved word
+          // is refused rather than quietly altered (REQ-SLUG-004). The old slug
+          // keeps working either way — renaming only ever adds (REQ-SLUG-001).
+          const desired = (request.body as { slug?: unknown }).slug;
+          if (typeof desired === 'string' && desired.trim().length > 0) {
+            try {
+              profile = await designers.renameProfileSlug(existing.id, desired);
+            } catch (error) {
+              if (error instanceof SlugRejected) {
+                return reply
+                  .status(409)
+                  .send({ error: error.message, reason: error.reason });
+              }
+              throw error;
+            }
+          }
+
           return { profile };
         }),
       );
@@ -163,12 +184,13 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
             return reply.status(404).send({ error: 'No profile yet' });
           }
           const fields = readProjectFields(request.body);
-          const slug = await uniqueSlug('portfolio_projects', fields.title);
+          const slug = await chooseSlug('portfolio_project', fields.title);
           const project = await designers.insertProject(
             profile.id,
             slug,
             fields,
           );
+          await recordSlug('portfolio_project', project.id, slug);
           return reply.status(201).send({ project });
         }),
       );

@@ -83,6 +83,9 @@ const makeBrief = (db: Database, extra: Row = {}): number =>
   insert(db, 'briefs', {
     title: 'Kitchen rework',
     description: 'A homeowner posted job, not a portfolio piece.',
+    // Briefs gained a unique slug in 005. Unique per row, because these suites
+    // share one database and stay independent through unique data.
+    slug: uniqueSlug('brief'),
     ...extra,
   });
 
@@ -112,6 +115,7 @@ const baseRow = (db: Database, table: string): Row => {
       return {
         title: 'Kitchen rework',
         description: 'A homeowner posted job, not a portfolio piece.',
+        slug: uniqueSlug('brief'),
       };
     case 'bids':
       return {
