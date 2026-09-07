@@ -21,12 +21,14 @@
 | [`REQ-BRIEF-004`](brief.md#req-brief-004--a-brief-is-private-until-its-author-says-otherwise) | A brief is private until its author says otherwise | active | constraint | P0 | sean |
 | [`REQ-BRIEF-005`](brief.md#req-brief-005--link-is-unlisted-and-is-never-described-as-private) | `link` is unlisted, and is never described as private | active | quality | P1 | sean |
 | [`REQ-CHIPS-001`](chips.md#req-chips-001--chips-are-fixed-position-chrome) | Chips are fixed-position chrome | active | constraint | P2 | sean |
-| [`REQ-CHIPS-002`](chips.md#req-chips-002--chips-anchor-top-left-and-stack-downwards) | Chips anchor top-left and stack downwards | active | constraint | P3 | sean |
+| [`REQ-CHIPS-002`](chips.md#req-chips-002--chips-anchor-top-left-and-stack-downwards) | Chips anchor top-left and stack downwards | superseded | constraint | P3 | sean |
 | [`REQ-CHIPS-003`](chips.md#req-chips-003--the-backdrop-is-translucent-the-content-is-not) | The backdrop is translucent, the content is not | active | quality | P2 | sean |
 | [`REQ-CHIPS-004`](chips.md#req-chips-004--chips-never-cover-the-header-brand-or-navigation) | Chips never cover the header brand or navigation | active | constraint | P1 | sean |
 | [`REQ-CHIPS-005`](chips.md#req-chips-005--chips-appear-on-every-route) | Chips appear on every route | superseded | functional | P3 | sean |
-| [`REQ-CHIPS-007`](chips.md#req-chips-007--chips-appear-on-every-route-until-the-visitor-says-otherwise) | Chips appear on every route, until the visitor says otherwise | active | functional | P3 | sean |
-| [`REQ-CHIPS-006`](chips.md#req-chips-006--the-dev-chip-is-shown-only-when-the-server-says-so) | The dev chip is shown only when the server says so | active | constraint | P1 | sean |
+| [`REQ-CHIPS-007`](chips.md#req-chips-007--chips-appear-on-every-route-until-the-visitor-says-otherwise) | Chips appear on every route, until the visitor says otherwise | superseded | functional | P3 | sean |
+| [`REQ-CHIPS-006`](chips.md#req-chips-006--the-dev-chip-is-shown-only-when-the-server-says-so) | The dev chip is shown only when the server says so | withdrawn | constraint | P1 | sean |
+| [`REQ-CHIPS-008`](chips.md#req-chips-008--the-card-exists-only-outside-production) | The card exists only outside production | active | constraint | P1 | sean |
+| [`REQ-CHIPS-009`](chips.md#req-chips-009--the-card-sits-in-the-bottom-left) | The card sits in the bottom-left | active | constraint | P2 | sean |
 | [`REQ-DATA-001`](data.md#req-data-001--migrations-are-additive) | Migrations are additive | active | constraint | P0 | sean |
 | [`REQ-DATA-002`](data.md#req-data-002--re-running-migrations-changes-nothing) | Re-running migrations changes nothing | active | constraint | P1 | sean |
 | [`REQ-DATA-003`](data.md#req-data-003--constraints-are-enforced-by-the-database) | Constraints are enforced by the database | active | constraint | P0 | sean |
@@ -91,6 +93,8 @@ graph TD
   REQ_CHIPS_005["REQ-CHIPS-005<br/>Chips appear on every route"]
   REQ_CHIPS_006["REQ-CHIPS-006<br/>The dev chip is shown only when the server says so"]
   REQ_CHIPS_007["REQ-CHIPS-007<br/>Chips appear on every route, until the visitor says otherwise"]
+  REQ_CHIPS_008["REQ-CHIPS-008<br/>The card exists only outside production"]
+  REQ_CHIPS_009["REQ-CHIPS-009<br/>The card sits in the bottom-left"]
   REQ_DATA_001["REQ-DATA-001<br/>Migrations are additive"]
   REQ_DATA_002["REQ-DATA-002<br/>Re-running migrations changes nothing"]
   REQ_DATA_003["REQ-DATA-003<br/>Constraints are enforced by the database"]
@@ -134,11 +138,15 @@ graph TD
   REQ_BRIEF_004 -->|refines| REQ_BRIEF_001
   REQ_BRIEF_005 -->|refines| REQ_BRIEF_001
   REQ_CHIPS_002 -->|refines| REQ_CHIPS_001
+  REQ_CHIPS_002 -->|superseded-by| REQ_CHIPS_009
   REQ_CHIPS_003 -->|refines| REQ_CHIPS_001
   REQ_CHIPS_004 -->|depends-on| REQ_CHIPS_001
   REQ_CHIPS_005 -->|superseded-by| REQ_CHIPS_007
   REQ_CHIPS_007 -->|supersedes| REQ_CHIPS_005
+  REQ_CHIPS_007 -->|superseded-by| REQ_CHIPS_008
   REQ_CHIPS_006 -->|refines| REQ_CHIPS_007
+  REQ_CHIPS_008 -->|supersedes| REQ_CHIPS_007
+  REQ_CHIPS_009 -->|supersedes| REQ_CHIPS_002
   REQ_DISCOVERY_001 -->|refines| REQ_PRODUCT_002
   REQ_NAV_002 -->|depends-on| REQ_NAV_004
   REQ_NAV_003 -->|depends-on| REQ_NAV_004
@@ -155,7 +163,10 @@ graph TD
   REQ_STATE_002 -->|depends-on| REQ_STATE_004
   REQ_STATE_003 -->|refines| REQ_STATE_001
   REQ_STATE_004 -->|refines| REQ_STATE_001
+  style REQ_CHIPS_002 stroke-dasharray: 4 4
   style REQ_CHIPS_005 stroke-dasharray: 4 4
+  style REQ_CHIPS_006 stroke-dasharray: 4 4
+  style REQ_CHIPS_007 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links

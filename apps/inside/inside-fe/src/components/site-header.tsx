@@ -59,15 +59,17 @@ const SiteHeader: FC = () => {
           spacing={{ xs: 1, sm: 2 }}
           sx={{
             height: 68,
-            // REQ-CHIPS-004 (#198). Clears the floating status chips, which
-            // are fixed at the top-left and overlay everything. The header
-            // moves aside for them, not the other way round — the opposite
-            // resolution was tried in #197 and broke REQ-CHIPS-001.
-            //
-            // This padding looks arbitrary and is not: it is the chip stack's
-            // width at each breakpoint. Removing it does not fail a header
-            // test, it fails a chips test.
-            pl: { xs: '104px', sm: '124px' },
+            /*
+             * No left indent, deliberately. It used to reserve 104/124px for
+             * the floating chips (REQ-CHIPS-004), which meant the brand sat
+             * offset from the breadcrumb trail below it for a reason that is
+             * invisible in production — where, since #222, there are no chips
+             * at all.
+             *
+             * REQ-CHIPS-004 still holds: the chips now avoid the header by
+             * living at the bottom-left (REQ-CHIPS-009) rather than by the
+             * header moving aside for them.
+             */
           }}
         >
           <Typography
