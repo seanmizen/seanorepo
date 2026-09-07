@@ -5,30 +5,107 @@
 
 | ID | Title | Status | Type | Priority | Source |
 |---|---|---|---|---|---|
+| [`REQ-A11Y-001`](a11y.md#req-a11y-001--every-route-passes-wcag-21-aa-in-both-themes) | Every route passes WCAG 2.1 AA, in both themes | active | quality | P1 | sean |
+| [`REQ-A11Y-002`](a11y.md#req-a11y-002--every-control-is-operable-by-keyboard-with-visible-focus) | Every control is operable by keyboard, with visible focus | active | quality | P1 | sean |
+| [`REQ-AUTH-001`](auth.md#req-auth-001--authentication-is-by-magic-link-alone) | Authentication is by magic link alone | active | constraint | P0 | sean |
+| [`REQ-AUTH-002`](auth.md#req-auth-002--a-magic-link-token-is-single-use) | A magic-link token is single-use | active | constraint | P0 | sean |
+| [`REQ-AUTH-003`](auth.md#req-auth-003--signing-in-never-rewrites-an-existing-role) | Signing in never rewrites an existing role | active | constraint | P1 | sean |
+| [`REQ-AUTH-004`](auth.md#req-auth-004--admin-comes-from-the-environment-never-from-a-request) | Admin comes from the environment, never from a request | active | constraint | P0 | sean |
+| [`REQ-AUTH-005`](auth.md#req-auth-005--nobody-is-an-answer-not-an-error) | "Nobody" is an answer, not an error | active | functional | P1 | sean |
+| [`REQ-AUTH-006`](auth.md#req-auth-006--signing-out-revokes-the-session-on-the-server) | Signing out revokes the session on the server | active | constraint | P0 | sean |
+| [`REQ-AUTH-007`](auth.md#req-auth-007--a-return-path-must-be-relative) | A return path must be relative | active | constraint | P1 | sean |
 | [`REQ-CHIPS-001`](chips.md#req-chips-001--chips-are-fixed-position-chrome) | Chips are fixed-position chrome | active | constraint | P2 | sean |
 | [`REQ-CHIPS-002`](chips.md#req-chips-002--chips-anchor-top-left-and-stack-downwards) | Chips anchor top-left and stack downwards | active | constraint | P3 | sean |
 | [`REQ-CHIPS-003`](chips.md#req-chips-003--the-backdrop-is-translucent-the-content-is-not) | The backdrop is translucent, the content is not | active | quality | P2 | sean |
 | [`REQ-CHIPS-004`](chips.md#req-chips-004--chips-never-cover-the-header-brand-or-navigation) | Chips never cover the header brand or navigation | active | constraint | P1 | sean |
 | [`REQ-CHIPS-005`](chips.md#req-chips-005--chips-appear-on-every-route) | Chips appear on every route | active | functional | P3 | sean |
 | [`REQ-CHIPS-006`](chips.md#req-chips-006--the-dev-chip-is-shown-only-when-the-server-says-so) | The dev chip is shown only when the server says so | active | constraint | P1 | sean |
+| [`REQ-DATA-001`](data.md#req-data-001--migrations-are-additive) | Migrations are additive | active | constraint | P0 | sean |
+| [`REQ-DATA-002`](data.md#req-data-002--re-running-migrations-changes-nothing) | Re-running migrations changes nothing | active | constraint | P1 | sean |
+| [`REQ-DATA-003`](data.md#req-data-003--constraints-are-enforced-by-the-database) | Constraints are enforced by the database | active | constraint | P0 | sean |
+| [`REQ-DATA-004`](data.md#req-data-004--stored-assets-are-reached-only-through-the-provider) | Stored assets are reached only through the provider | active | constraint | P1 | sean |
+| [`REQ-DATA-005`](data.md#req-data-005--one-vocabulary-everywhere) | One vocabulary everywhere | active | constraint | P1 | sean |
+| [`REQ-DISCOVERY-001`](discovery.md#req-discovery-001--an-unapproved-profile-is-unreachable-not-merely-unlisted) | An unapproved profile is unreachable, not merely unlisted | active | constraint | P0 | sean |
+| [`REQ-DISCOVERY-002`](discovery.md#req-discovery-002--unpublished-work-is-not-served) | Unpublished work is not served | active | constraint | P1 | sean |
+| [`REQ-DISCOVERY-003`](discovery.md#req-discovery-003--filter-state-lives-in-the-url) | Filter state lives in the URL | active | constraint | P2 | sean |
+| [`REQ-NAV-001`](nav.md#req-nav-001--no-dead-intermediate-paths) | No dead intermediate paths | active | constraint | P1 | sean |
+| [`REQ-NAV-002`](nav.md#req-nav-002--a-crumb-is-a-link-only-where-a-route-serves-it) | A crumb is a link only where a route serves it | active | constraint | P2 | sean |
+| [`REQ-NAV-003`](nav.md#req-nav-003--a-crumb-shows-the-most-specific-name-available) | A crumb shows the most specific name available | active | functional | P2 | sean |
+| [`REQ-NAV-004`](nav.md#req-nav-004--the-trail-is-rendered-once-for-every-route) | The trail is rendered once, for every route | active | constraint | P3 | sean |
+| [`REQ-PRODUCT-001`](product.md#req-product-001--buyers-browse-without-an-account) | Buyers browse without an account | active | constraint | P0 | sean |
+| [`REQ-PRODUCT-002`](product.md#req-product-002--a-designer-is-unlisted-until-an-admin-approves-them) | A designer is unlisted until an admin approves them | active | constraint | P0 | sean |
+| [`REQ-PRODUCT-003`](product.md#req-product-003--sign-up-is-asked-for-at-the-point-of-value) | Sign-up is asked for at the point of value | active | constraint | P2 | sean |
+| [`REQ-STATE-001`](state.md#req-state-001--three-states-always-distinguishable) | Three states, always distinguishable | active | quality | P1 | sean |
+| [`REQ-STATE-002`](state.md#req-state-002--a-pending-state-never-looks-like-a-successful-one) | A pending state never looks like a successful one | active | quality | P1 | sean |
+| [`REQ-STATE-003`](state.md#req-state-003--content-is-never-invented-for-data-that-has-not-arrived) | Content is never invented for data that has not arrived | active | quality | P1 | sean |
+| [`REQ-STATE-004`](state.md#req-state-004--one-value-drives-every-part-of-a-presentation) | One value drives every part of a presentation | active | constraint | P2 | sean |
+| [`REQ-THEME-001`](theme.md#req-theme-001--auto-follows-the-os-until-the-visitor-chooses) | Auto follows the OS until the visitor chooses | active | functional | P3 | sean |
+| [`REQ-THEME-002`](theme.md#req-theme-002--the-first-paint-is-already-the-right-theme) | The first paint is already the right theme | active | quality | P2 | sean |
 
 ## Dependency graph
 
 ```mermaid
 graph TD
+  REQ_A11Y_001["REQ-A11Y-001<br/>Every route passes WCAG 2.1 AA, in both themes"]
+  REQ_A11Y_002["REQ-A11Y-002<br/>Every control is operable by keyboard, with visible focus"]
+  REQ_AUTH_001["REQ-AUTH-001<br/>Authentication is by magic link alone"]
+  REQ_AUTH_002["REQ-AUTH-002<br/>A magic-link token is single-use"]
+  REQ_AUTH_003["REQ-AUTH-003<br/>Signing in never rewrites an existing role"]
+  REQ_AUTH_004["REQ-AUTH-004<br/>Admin comes from the environment, never from a request"]
+  REQ_AUTH_005["REQ-AUTH-005<br/>"Nobody" is an answer, not an error"]
+  REQ_AUTH_006["REQ-AUTH-006<br/>Signing out revokes the session on the server"]
+  REQ_AUTH_007["REQ-AUTH-007<br/>A return path must be relative"]
   REQ_CHIPS_001["REQ-CHIPS-001<br/>Chips are fixed-position chrome"]
   REQ_CHIPS_002["REQ-CHIPS-002<br/>Chips anchor top-left and stack downwards"]
   REQ_CHIPS_003["REQ-CHIPS-003<br/>The backdrop is translucent, the content is not"]
   REQ_CHIPS_004["REQ-CHIPS-004<br/>Chips never cover the header brand or navigation"]
   REQ_CHIPS_005["REQ-CHIPS-005<br/>Chips appear on every route"]
   REQ_CHIPS_006["REQ-CHIPS-006<br/>The dev chip is shown only when the server says so"]
+  REQ_DATA_001["REQ-DATA-001<br/>Migrations are additive"]
+  REQ_DATA_002["REQ-DATA-002<br/>Re-running migrations changes nothing"]
+  REQ_DATA_003["REQ-DATA-003<br/>Constraints are enforced by the database"]
+  REQ_DATA_004["REQ-DATA-004<br/>Stored assets are reached only through the provider"]
+  REQ_DATA_005["REQ-DATA-005<br/>One vocabulary everywhere"]
+  REQ_DISCOVERY_001["REQ-DISCOVERY-001<br/>An unapproved profile is unreachable, not merely unlisted"]
+  REQ_DISCOVERY_002["REQ-DISCOVERY-002<br/>Unpublished work is not served"]
+  REQ_DISCOVERY_003["REQ-DISCOVERY-003<br/>Filter state lives in the URL"]
+  REQ_NAV_001["REQ-NAV-001<br/>No dead intermediate paths"]
+  REQ_NAV_002["REQ-NAV-002<br/>A crumb is a link only where a route serves it"]
+  REQ_NAV_003["REQ-NAV-003<br/>A crumb shows the most specific name available"]
+  REQ_NAV_004["REQ-NAV-004<br/>The trail is rendered once, for every route"]
+  REQ_PRODUCT_001["REQ-PRODUCT-001<br/>Buyers browse without an account"]
+  REQ_PRODUCT_002["REQ-PRODUCT-002<br/>A designer is unlisted until an admin approves them"]
+  REQ_PRODUCT_003["REQ-PRODUCT-003<br/>Sign-up is asked for at the point of value"]
+  REQ_STATE_001["REQ-STATE-001<br/>Three states, always distinguishable"]
+  REQ_STATE_002["REQ-STATE-002<br/>A pending state never looks like a successful one"]
+  REQ_STATE_003["REQ-STATE-003<br/>Content is never invented for data that has not arrived"]
+  REQ_STATE_004["REQ-STATE-004<br/>One value drives every part of a presentation"]
+  REQ_THEME_001["REQ-THEME-001<br/>Auto follows the OS until the visitor chooses"]
+  REQ_THEME_002["REQ-THEME-002<br/>The first paint is already the right theme"]
   REQ_CHIPS_002 -->|refines| REQ_CHIPS_001
   REQ_CHIPS_003 -->|refines| REQ_CHIPS_001
   REQ_CHIPS_004 -->|depends-on| REQ_CHIPS_001
   REQ_CHIPS_006 -->|refines| REQ_CHIPS_005
+  REQ_DISCOVERY_001 -->|refines| REQ_PRODUCT_002
+  REQ_NAV_002 -->|depends-on| REQ_NAV_004
+  REQ_NAV_003 -->|depends-on| REQ_NAV_004
+  REQ_PRODUCT_001 -->|depends-on| REQ_AUTH_005
+  REQ_PRODUCT_002 -->|depends-on| REQ_DATA_003
+  REQ_PRODUCT_003 -->|refines| REQ_PRODUCT_001
+  REQ_STATE_002 -->|refines| REQ_STATE_001
+  REQ_STATE_002 -->|depends-on| REQ_STATE_004
+  REQ_STATE_003 -->|refines| REQ_STATE_001
+  REQ_STATE_004 -->|refines| REQ_STATE_001
 ```
 
 ## Derived reverse links
 
+- `REQ-AUTH-005` — required-by REQ-PRODUCT-001
 - `REQ-CHIPS-001` — refined-by REQ-CHIPS-002, refined-by REQ-CHIPS-003, required-by REQ-CHIPS-004
 - `REQ-CHIPS-005` — refined-by REQ-CHIPS-006
+- `REQ-DATA-003` — required-by REQ-PRODUCT-002
+- `REQ-NAV-004` — required-by REQ-NAV-002, required-by REQ-NAV-003
+- `REQ-PRODUCT-001` — refined-by REQ-PRODUCT-003
+- `REQ-PRODUCT-002` — refined-by REQ-DISCOVERY-001
+- `REQ-STATE-001` — refined-by REQ-STATE-002, refined-by REQ-STATE-003, refined-by REQ-STATE-004
+- `REQ-STATE-004` — required-by REQ-STATE-002

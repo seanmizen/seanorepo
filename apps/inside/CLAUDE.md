@@ -14,19 +14,28 @@ Positioning is **high-brow, luxury**: image-first, restrained, editorial.
 
 Do not relitigate these without asking Sean.
 
-- Both sides have accounts. Buyers can browse **fully anonymously** and are
-  only asked to sign up at the point of value ("sign up to save this profile").
-- Designers self-signup but stay **unlisted until admin-approved**.
+- Both sides have accounts. Buyers can browse **fully anonymously**
+  (`REQ-PRODUCT-001`) and are only asked to sign up at the point of value
+  ("sign up to save this profile") — `REQ-PRODUCT-003`.
+- Designers self-signup but stay **unlisted until admin-approved**
+  (`REQ-PRODUCT-002`), enforced in the schema (`REQ-DATA-003`) and on direct
+  slug access (`REQ-DISCOVERY-001`).
 - Two connection directions: buyer → designer **enquiries**, and
   **post-a-project** where a buyer posts a brief and designers pitch.
-- Assets go through a storage abstraction: local disk now, S3 later.
+- Assets go through a storage abstraction: local disk now, S3 later
+  (`REQ-DATA-004`).
 - Site data is SQLite, kept right next to the runner. Barebones.
+
+> Requirements live in [`requirements/`](./requirements/) and are validated in
+> CI. This prose explains; the requirement binds. When the two disagree, the
+> requirement is right — see [`requirements/README.md`](../../requirements/README.md).
 
 ### Vocabulary
 
-**One vocabulary, everywhere** — database, API, routes, code and UI copy. Split
-vocabularies are where bugs and onboarding confusion breed, so a new concept
-gets its name decided once and used identically in all five places.
+**One vocabulary, everywhere** (`REQ-DATA-005`) — database, API, routes, code
+and UI copy. Split vocabularies are where bugs and onboarding confusion breed,
+so a new concept gets its name decided once and used identically in all five
+places.
 
 | Term | Means |
 |---|---|
@@ -152,6 +161,7 @@ table — never from a second list kept alongside it.
 ### NO DEAD INTERMEDIATE PATHS — a standing constraint, not a one-off
 
 **Every ancestor of every route must itself be a real, visitable page.**
+`REQ-NAV-001`, with `REQ-NAV-002` covering URLs nobody declared.
 
 If `/designers/:slug` exists, `/designers` must exist and render something
 worth landing on. The breadcrumb renders every intermediate segment as a link,
@@ -181,7 +191,7 @@ parent page.
 4. Add its parent if the URL is nested. Non-negotiable, see above.
 5. Add it to `a11y.spec.ts` and `keyboard.spec.ts` like any other route.
 
-### Crumb labels
+### Crumb labels — `REQ-NAV-003`
 
 A crumb shows the best name available, in this order: a real name supplied by
 the page at runtime, then — for a **static** segment only — the route table's
@@ -240,7 +250,7 @@ chips on the left. `navigation.spec.ts` asserts they do not collide.
   `source.define`. There is deliberately no runtime hostname detection — do not
   add a second strategy.
 
-## Auth
+## Auth — `REQ-AUTH-001` … `REQ-AUTH-007`
 
 Magic link only; there are no passwords. See `services/auth.ts`,
 `services/session.ts`, `middleware/auth.ts`.
@@ -305,7 +315,7 @@ Rules:
   does not have to know which state it is in, and there is no third state to
   get stuck in.
 
-## Never assert what you have not verified
+## Never assert what you have not verified — `REQ-STATE-001` … `REQ-STATE-004`
 
 **Loading, loaded and failed are three distinct states, and every surface must
 make clear which one it is in.**
@@ -334,7 +344,7 @@ Rules:
   in a test that only covers success and failure. Playwright can hold a
   response open (`route.fulfill` after a delay) — use it.
 
-## Theming
+## Theming — `REQ-THEME-001`, `REQ-THEME-002`
 
 MUI, three-state light / dark / auto, persisted to `localStorage['theme-mode']`.
 
