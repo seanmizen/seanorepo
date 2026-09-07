@@ -92,10 +92,15 @@ const App: FC = () => {
           </Typography>
 
           {/*
-            The tagline IS server-driven, so it gets three honest states. It
-            previously fell back to a hardcoded string indistinguishable from
-            loaded content — a placeholder that lies when the real value
-            differs, and lies silently when the request fails.
+            REQ-STATE-001 and REQ-STATE-003. The tagline IS server-driven, so it
+            gets three honest states. It previously fell back to a hardcoded
+            string indistinguishable from loaded content — a placeholder that
+            lies when the real value differs, and lies silently when the request
+            fails. The `: null` on failure is deliberate, not an oversight:
+            rendering nothing beats rendering a guess.
+
+            The word "inside" above is exempt — that is static branding, and the
+            site's own name never came from the server.
           */}
           {config.isPending ? (
             <Skeleton
@@ -172,9 +177,12 @@ const App: FC = () => {
         </Box>
 
         {/*
-          Never shown to a signed-in visitor. Inviting someone to create an
-          account they already have reads as the site not knowing who they are.
-          It waits for `loading` rather than guessing.
+          REQ-PRODUCT-003 — the sign-up invitation, offered alongside something
+          worth an account for rather than as a condition of browsing
+          (REQ-PRODUCT-001). Never shown to a signed-in visitor: inviting
+          someone to create an account they already have reads as the site not
+          knowing who they are. It waits for `loading` rather than guessing,
+          which is REQ-STATE-002 — a pending session is not an absent one.
         */}
         {!loading && !user && (
           <Card

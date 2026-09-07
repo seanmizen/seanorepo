@@ -7,6 +7,11 @@ import type { z } from 'zod';
 /**
  * URL-backed filter state, driven by a schema shared with the server.
  *
+ * REQ-DISCOVERY-003. The URL is the source, not a mirror — there is no second
+ * copy in component state to fall out of step with it. That is what makes a
+ * filtered search shareable, reloadable and survivable, which is the whole
+ * point: a filtered list is the thing a buyer sends to a partner.
+ *
  * The schema in `shared/filters.ts` is the single source: the server validates
  * `request.query` with it and this hook parses the URL with it, so the two can
  * never disagree about what a filter means or which values are legal.

@@ -2,7 +2,14 @@ import { randomBytes } from 'node:crypto';
 import type { User, UserRole } from '@shared/types';
 import { openDbConnection } from './db';
 
-/** Short-lived by design: a magic link is a bearer credential sitting in an inbox. */
+/**
+ * REQ-AUTH-001: the magic link is the only credential this app accepts, so
+ * there is no password path anywhere below — that absence is the requirement,
+ * not an omission.
+ *
+ * Short-lived by design: a magic link is a bearer credential sitting in an
+ * inbox. Expiry bounds the window; REQ-AUTH-002 closes replay inside it.
+ */
 export const MAGIC_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 /** Roles a person may choose at signup. `admin` is never self-assignable. */
@@ -45,9 +52,12 @@ function getAdminEmails(): Set<string> {
  *
  * Two rules, and the second is where carolinemizen.art gets it wrong:
  *
- * 1. `admin` comes only from the ADMIN_EMAILS whitelist. It is never chosen at
- *    signup, so the role column cannot be used for privilege escalation.
- * 2. An EXISTING user's buyer/designer role is never rewritten by logging in.
+ * 1. REQ-AUTH-004 — `admin` comes only from the ADMIN_EMAILS whitelist. It is
+ *    never chosen at signup, so the role column cannot be used for privilege
+ *    escalation. Signup is unauthenticated, so a role taken from the request
+ *    body would be a role an attacker can simply ask for.
+ * 2. REQ-AUTH-003 — an EXISTING user's buyer/designer role is never rewritten
+ *    by logging in.
  *    Caroline recomputes the role on every login, which here would silently
  *    demote a designer to buyer — destroying the link to their profile and
  *    portfolio. The signup role only applies when the account is created.
@@ -150,6 +160,10 @@ export async function createMagicToken(
 export async function verifyMagicToken(token: string): Promise<User | null> {
   const db = await openDbConnection();
   try {
+    // REQ-AUTH-002. `used_at IS NULL` is what makes the link single-use, and it
+    // is not made redundant by the expiry check beside it: a link replayed
+    // inside its window is still a second sign-in nobody asked for, out of an
+    // inbox that forwards, syncs and archives.
     const row = db
       .query(
         `SELECT id, user_id FROM magic_tokens

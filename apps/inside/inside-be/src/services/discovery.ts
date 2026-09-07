@@ -16,7 +16,8 @@ import { BM25_EXPRESSION, buildMatchExpression } from './search';
 /**
  * The public read side of the marketplace: browse, filter, sort, search.
  *
- * THE APPROVAL GATE. Every query in this file is anchored on
+ * THE APPROVAL GATE — REQ-PRODUCT-002, enforced here and in the schema
+ * (REQ-DATA-003). Every query in this file is anchored on
  * `designer_profiles.status = 'approved'`, and that predicate is written into
  * the base WHERE clause before any caller-supplied filter is appended — it is
  * not a filter that a parameter could displace. Search hits arrive from the
