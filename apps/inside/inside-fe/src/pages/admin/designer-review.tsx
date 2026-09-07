@@ -139,7 +139,9 @@ const AdminDesignerReview: FC = () => {
         />
 
         {decide.isError && (
-          <Alert severity="error">{(decide.error as Error).message}</Alert>
+          <Alert severity="error" data-testid="review-action-failure">
+            {(decide.error as Error).message}
+          </Alert>
         )}
 
         <Stack direction="row" spacing={2}>

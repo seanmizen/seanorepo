@@ -165,7 +165,9 @@ for (const scheme of ['light', 'dark'] as const) {
       await waitForApp(page);
       await signIn(page, uniqueEmail('axe-port'), 'designer');
       await page.goto('/me/portfolio');
-      await expect(page.getByTestId('portfolio-empty')).toBeVisible();
+      // A designer with no profile yet — which is now its own id, distinct
+      // from a genuinely empty portfolio (REQ-QUALITY-001).
+      await expect(page.getByTestId('portfolio-needs-profile')).toBeVisible();
       await expectNoViolations(page, `/me/portfolio (${scheme})`);
     });
 
