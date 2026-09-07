@@ -11,7 +11,7 @@ import {
 import type { FC } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ResponsiveImage } from '@/components';
-import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
+import { useCrumbTitles } from '@/contexts/breadcrumb-context';
 import { useDesigner } from '@/features/discovery/use-designers';
 
 const TILE_SIZES = '(max-width: 600px) 100vw, (max-width: 900px) 50vw, 33vw';
@@ -26,7 +26,9 @@ const TILE_SIZES = '(max-width: 600px) 100vw, (max-width: 900px) 50vw, 33vw';
 const DesignerPortfolio: FC = () => {
   const slug = useParams().slug as string;
   const query = useDesigner(slug);
-  useBreadcrumbTitle(query.data ? 'portfolio' : undefined);
+  useCrumbTitles({
+    [`/designers/${slug}`]: query.data?.profile.studioName,
+  });
 
   if (query.isPending) {
     return (

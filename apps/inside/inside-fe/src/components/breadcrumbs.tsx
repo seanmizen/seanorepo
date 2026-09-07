@@ -6,7 +6,7 @@ import {
 import type { FC } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { crumbsFor } from '@/app/routes';
-import { useBreadcrumbTitleValue } from '@/contexts/breadcrumb-context';
+import { useBreadcrumbTitles } from '@/contexts/breadcrumb-context';
 
 /**
  * The trail, mirroring the URL: `home › subsection › page`.
@@ -14,21 +14,21 @@ import { useBreadcrumbTitleValue } from '@/contexts/breadcrumb-context';
  * Rendered once by the root layout so every route — including every route
  * added later — gets it without opting in.
  *
- * Placement: fixed top-left, *below* the status chips, which occupy
- * `top: 16` and stand at most two chips tall (~50px). The theme toggle owns
- * the top-right corner. Sitting under the chips rather than beside them is
+ * Placement: in normal flow beneath the site header. The status chips float
+ * over everything at the top-left (REQ-CHIPS-001) and the header reserves
+ * space for them; the trail sits below both. Being in flow rather than fixed is
  * what keeps all three clear of each other at 375px, where a centred or
  * right-aligned trail would run into one or the other.
  */
 const Breadcrumbs: FC = () => {
   const { pathname } = useLocation();
-  const pageTitle = useBreadcrumbTitleValue();
+  const titles = useBreadcrumbTitles();
 
-  const crumbs = crumbsFor(pathname).map((crumb, index, all) =>
-    // Only the page you are on may rename its own crumb.
-    crumb.isCurrent && pageTitle && index === all.length - 1
-      ? { ...crumb, label: pageTitle }
-      : crumb,
+  // Any crumb may carry a real name, not just the current page: a nested page
+  // knows its ancestors' names too, and a placeholder in the middle of a trail
+  // is as unhelpful as one at the end.
+  const crumbs = crumbsFor(pathname).map((crumb) =>
+    titles[crumb.path] ? { ...crumb, label: titles[crumb.path] } : crumb,
   );
 
   return (
