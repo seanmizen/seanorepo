@@ -11,7 +11,7 @@ import {
 import type { FC } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ResponsiveImage } from '@/components';
-import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
+import { useCrumbTitles } from '@/contexts/breadcrumb-context';
 import {
   humanise,
   usePortfolioProject,
@@ -26,7 +26,13 @@ const PortfolioProjectPage: FC = () => {
     projectSlug: string;
   };
   const query = usePortfolioProject(slug, projectSlug);
-  useBreadcrumbTitle(query.data?.project.title);
+
+  // Names the whole trail this page knows about, not just its own crumb: the
+  // studio's real name belongs on the studio's crumb, and this page has it.
+  useCrumbTitles({
+    [`/designers/${slug}`]: query.data?.profile.studioName,
+    [`/designers/${slug}/portfolio/${projectSlug}`]: query.data?.project.title,
+  });
 
   if (query.isPending) {
     return (
