@@ -36,7 +36,16 @@ async function walkWithTab(page: Page) {
   const expected = await page.evaluate((selector) => {
     const visible = Array.from(
       document.querySelectorAll<HTMLElement>(selector),
-    ).filter((el) => el.getClientRects().length > 0);
+    )
+      .filter((el) => el.getClientRects().length > 0)
+      // `tabindex="-1"` is excluded by the selector only for the [tabindex]
+      // clause; a <textarea> or <button> carrying it still matched. MUI's
+      // multiline TextField renders a second, hidden textarea to measure rows
+      // with, which is how this surfaced.
+      .filter((el) => el.getAttribute('tabindex') !== '-1')
+      // Anything hidden from the accessibility tree is not a control a
+      // keyboard user can reach, so requiring Tab to reach it is wrong.
+      .filter((el) => el.closest('[aria-hidden="true"]') === null);
 
     return visible.map((el, index) => {
       const id = String(index);
@@ -159,6 +168,35 @@ test.describe('keyboard navigation', () => {
     await waitForApp(page);
     await expect(page.getByTestId('not-found')).toBeVisible();
     await expectKeyboardNavigable(page, '/no-such-page');
+  });
+
+  test('my studio', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('kbd-studio'), 'designer');
+    await page.goto('/me');
+    await expect(page.getByTestId('start-profile')).toBeVisible();
+    await expectKeyboardNavigable(page, '/me');
+  });
+
+  test('my studio — profile editor', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('kbd-profile'), 'designer');
+    await page.goto('/me/profile');
+    await expect(page.getByTestId('field-studioName')).toBeVisible();
+    await expectKeyboardNavigable(page, '/me/profile');
+  });
+
+  test('my studio — portfolio', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('kbd-portfolio'), 'designer');
+    await page.goto('/me/portfolio');
+    // A designer who has not started a profile gets the invitation to, which
+    // is the state a brand-new account actually lands on.
+    await expect(page.getByTestId('portfolio-empty')).toBeVisible();
+    await expectKeyboardNavigable(page, '/me/portfolio');
   });
 });
 

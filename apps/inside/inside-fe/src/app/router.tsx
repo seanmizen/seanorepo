@@ -10,6 +10,10 @@ import { DesignerPortfolio } from '@/pages/designers/portfolio';
 import { DesignerProfilePage } from '@/pages/designers/profile';
 import { PortfolioProjectPage } from '@/pages/designers/project';
 import { Login } from '@/pages/login';
+import { MyStudio } from '@/pages/me';
+import { MyPortfolio } from '@/pages/me/portfolio';
+import { MyProfileEditor } from '@/pages/me/profile';
+import { MyProjectEditor } from '@/pages/me/project';
 import { NotFound } from '@/pages/not-found';
 import { Verify } from '@/pages/verify';
 import { App } from './app';
@@ -36,6 +40,26 @@ const ELEMENTS: Record<RoutePath, ReactNode> = {
   '/designers/:slug': <DesignerProfilePage />,
   '/designers/:slug/portfolio': <DesignerPortfolio />,
   '/designers/:slug/portfolio/:projectSlug': <PortfolioProjectPage />,
+  '/me': (
+    <ProtectedRoute roles={['designer']}>
+      <MyStudio />
+    </ProtectedRoute>
+  ),
+  '/me/profile': (
+    <ProtectedRoute roles={['designer']}>
+      <MyProfileEditor />
+    </ProtectedRoute>
+  ),
+  '/me/portfolio': (
+    <ProtectedRoute roles={['designer']}>
+      <MyPortfolio />
+    </ProtectedRoute>
+  ),
+  '/me/portfolio/:id': (
+    <ProtectedRoute roles={['designer']}>
+      <MyProjectEditor />
+    </ProtectedRoute>
+  ),
   '/admin': (
     <ProtectedRoute roles={['admin']}>
       <AdminHome />

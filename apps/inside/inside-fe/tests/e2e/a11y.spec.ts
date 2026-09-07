@@ -133,6 +133,44 @@ for (const scheme of ['light', 'dark'] as const) {
       );
     });
 
+    test('my studio — empty', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-studio'), 'designer');
+      await page.goto('/me');
+      await expect(page.getByTestId('start-profile')).toBeVisible();
+      await expectNoViolations(page, `/me empty (${scheme})`);
+    });
+
+    test('my studio — profile editor', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-editor'), 'designer');
+      await page.goto('/me/profile');
+      await expect(page.getByTestId('field-studioName')).toBeVisible();
+      await expectNoViolations(page, `/me/profile (${scheme})`);
+    });
+
+    test('my studio — portfolio', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-port'), 'designer');
+      await page.goto('/me/portfolio');
+      await expect(page.getByTestId('portfolio-empty')).toBeVisible();
+      await expectNoViolations(page, `/me/portfolio (${scheme})`);
+    });
+
+    test('my studio — piece editor', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-piece'), 'designer');
+      // No such piece for this designer, which is the inline "no longer
+      // available" state rather than the catch-all 404.
+      await page.goto('/me/portfolio/1');
+      await expect(page.getByTestId('piece-missing')).toBeVisible();
+      await expectNoViolations(page, `/me/portfolio/:id (${scheme})`);
+    });
+
     test('admin — review queue', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);
