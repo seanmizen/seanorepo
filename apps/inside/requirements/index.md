@@ -38,6 +38,10 @@
 | [`REQ-DISCOVERY-001`](discovery.md#req-discovery-001--an-unapproved-profile-is-unreachable-not-merely-unlisted) | An unapproved profile is unreachable, not merely unlisted | active | constraint | P0 | sean |
 | [`REQ-DISCOVERY-002`](discovery.md#req-discovery-002--unpublished-work-is-not-served) | Unpublished work is not served | active | constraint | P1 | sean |
 | [`REQ-DISCOVERY-003`](discovery.md#req-discovery-003--filter-state-lives-in-the-url) | Filter state lives in the URL | active | constraint | P2 | sean |
+| [`REQ-FAIL-001`](fail.md#req-fail-001--a-render-crash-is-themed-logged-and-recoverable) | A render crash is themed, logged and recoverable | active | quality | P2 | sean |
+| [`REQ-FAIL-002`](fail.md#req-fail-002--losing-the-network-is-said-once-not-once-per-page) | Losing the network is said once, not once per page | active | quality | P2 | sean |
+| [`REQ-FAIL-003`](fail.md#req-fail-003--a-failure-offers-a-control-that-actually-retries) | A failure offers a control that actually retries | active | functional | P2 | sean |
+| [`REQ-FAIL-004`](fail.md#req-fail-004--a-route-crash-never-shows-a-stack-trace) | A route crash never shows a stack trace | active | constraint | P1 | sean |
 | [`REQ-NAV-001`](nav.md#req-nav-001--no-dead-intermediate-paths) | No dead intermediate paths | active | constraint | P1 | sean |
 | [`REQ-NAV-002`](nav.md#req-nav-002--a-crumb-is-a-link-only-where-a-route-serves-it) | A crumb is a link only where a route serves it | active | constraint | P2 | sean |
 | [`REQ-NAV-003`](nav.md#req-nav-003--a-crumb-shows-the-most-specific-name-available) | A crumb shows the most specific name available | active | functional | P2 | sean |
@@ -47,6 +51,7 @@
 | [`REQ-NET-003`](net.md#req-net-003--every-request-is-identifiable-afterwards) | Every request is identifiable afterwards | active | functional | P2 | sean |
 | [`REQ-NET-004`](net.md#req-net-004--the-clients-address-is-the-clients-address) | The client's address is the client's address | active | constraint | P1 | sean |
 | [`REQ-NET-005`](net.md#req-net-005--one-error-envelope) | One error envelope | active | constraint | P0 | sean |
+| [`REQ-NET-008`](net.md#req-net-008--a-5xx-says-nothing-about-our-internals) | A 5xx says nothing about our internals | active | constraint | P0 | sean |
 | [`REQ-NET-006`](net.md#req-net-006--retry-what-might-work-never-retry-an-answer) | Retry what might work; never retry an answer | active | constraint | P2 | sean |
 | [`REQ-NET-007`](net.md#req-net-007--a-failure-says-what-actually-failed) | A failure says what actually failed | active | quality | P1 | sean |
 | [`REQ-ONBOARD-001`](onboard.md#req-onboard-001--a-studio-can-be-set-up-without-leaving-the-app) | A studio can be set up without leaving the app | active | functional | P1 | sean |
@@ -107,6 +112,10 @@ graph TD
   REQ_DISCOVERY_001["REQ-DISCOVERY-001<br/>An unapproved profile is unreachable, not merely unlisted"]
   REQ_DISCOVERY_002["REQ-DISCOVERY-002<br/>Unpublished work is not served"]
   REQ_DISCOVERY_003["REQ-DISCOVERY-003<br/>Filter state lives in the URL"]
+  REQ_FAIL_001["REQ-FAIL-001<br/>A render crash is themed, logged and recoverable"]
+  REQ_FAIL_002["REQ-FAIL-002<br/>Losing the network is said once, not once per page"]
+  REQ_FAIL_003["REQ-FAIL-003<br/>A failure offers a control that actually retries"]
+  REQ_FAIL_004["REQ-FAIL-004<br/>A route crash never shows a stack trace"]
   REQ_NAV_001["REQ-NAV-001<br/>No dead intermediate paths"]
   REQ_NAV_002["REQ-NAV-002<br/>A crumb is a link only where a route serves it"]
   REQ_NAV_003["REQ-NAV-003<br/>A crumb shows the most specific name available"]
@@ -118,6 +127,7 @@ graph TD
   REQ_NET_005["REQ-NET-005<br/>One error envelope"]
   REQ_NET_006["REQ-NET-006<br/>Retry what might work; never retry an answer"]
   REQ_NET_007["REQ-NET-007<br/>A failure says what actually failed"]
+  REQ_NET_008["REQ-NET-008<br/>A 5xx says nothing about our internals"]
   REQ_ONBOARD_001["REQ-ONBOARD-001<br/>A studio can be set up without leaving the app"]
   REQ_ONBOARD_002["REQ-ONBOARD-002<br/>Work in progress survives a refresh"]
   REQ_ONBOARD_003["REQ-ONBOARD-003<br/>A rejection says what to do about it"]
@@ -155,8 +165,12 @@ graph TD
   REQ_CHIPS_008 -->|supersedes| REQ_CHIPS_007
   REQ_CHIPS_009 -->|supersedes| REQ_CHIPS_002
   REQ_DISCOVERY_001 -->|refines| REQ_PRODUCT_002
+  REQ_FAIL_002 -->|refines| REQ_STATE_001
+  REQ_FAIL_003 -->|depends-on| REQ_NET_006
+  REQ_FAIL_004 -->|refines| REQ_FAIL_001
   REQ_NAV_002 -->|depends-on| REQ_NAV_004
   REQ_NAV_003 -->|depends-on| REQ_NAV_004
+  REQ_NET_008 -->|depends-on| REQ_NET_003
   REQ_NET_006 -->|depends-on| REQ_NET_002
   REQ_NET_007 -->|refines| REQ_STATE_003
   REQ_NET_007 -->|depends-on| REQ_NET_001
@@ -187,13 +201,16 @@ graph TD
 - `REQ-CHIPS-001` — refined-by REQ-CHIPS-002, refined-by REQ-CHIPS-003, required-by REQ-CHIPS-004
 - `REQ-CHIPS-007` — refined-by REQ-CHIPS-006
 - `REQ-DATA-003` — required-by REQ-PRODUCT-002
+- `REQ-FAIL-001` — refined-by REQ-FAIL-004
 - `REQ-NAV-004` — required-by REQ-NAV-002, required-by REQ-NAV-003
 - `REQ-NET-001` — required-by REQ-NET-007
 - `REQ-NET-002` — required-by REQ-NET-006
+- `REQ-NET-003` — required-by REQ-NET-008
+- `REQ-NET-006` — required-by REQ-FAIL-003
 - `REQ-NET-007` — refined-by REQ-QUALITY-001
 - `REQ-PRODUCT-001` — refined-by REQ-PRODUCT-003
 - `REQ-PRODUCT-002` — refined-by REQ-DISCOVERY-001
 - `REQ-SLUG-001` — required-by REQ-SLUG-003
-- `REQ-STATE-001` — refined-by REQ-ONBOARD-004, refined-by REQ-STATE-002, refined-by REQ-STATE-003, refined-by REQ-STATE-004
+- `REQ-STATE-001` — refined-by REQ-FAIL-002, refined-by REQ-ONBOARD-004, refined-by REQ-STATE-002, refined-by REQ-STATE-003, refined-by REQ-STATE-004
 - `REQ-STATE-003` — refined-by REQ-NET-007
 - `REQ-STATE-004` — required-by REQ-STATE-002

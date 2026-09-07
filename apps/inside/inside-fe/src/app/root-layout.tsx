@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Breadcrumbs, SiteHeader } from '@/components';
+import { Breadcrumbs, OfflineBanner, SiteHeader } from '@/components';
 import { BreadcrumbTitleProvider } from '@/contexts/breadcrumb-context';
 
 /**
@@ -15,6 +15,9 @@ import { BreadcrumbTitleProvider } from '@/contexts/breadcrumb-context';
 const RootLayout: FC = () => (
   <BreadcrumbTitleProvider>
     <SiteHeader />
+    {/* Above the trail so it is the first thing after the header — one
+        statement about the network, not one per failed page. */}
+    <OfflineBanner />
     <Breadcrumbs />
     <Outlet />
   </BreadcrumbTitleProvider>

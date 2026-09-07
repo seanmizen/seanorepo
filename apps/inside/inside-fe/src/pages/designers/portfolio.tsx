@@ -1,5 +1,4 @@
 import {
-  Alert,
   Box,
   Container,
   Grid,
@@ -10,10 +9,9 @@ import {
 } from '@mui/material';
 import type { FC } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ResponsiveImage } from '@/components';
+import { FailureNotice, ResponsiveImage } from '@/components';
 import { useCrumbTitles } from '@/contexts/breadcrumb-context';
 import { useDesigner } from '@/features/discovery/use-designers';
-import { describeFailure } from '@/lib/http';
 
 const TILE_SIZES = '(max-width: 600px) 100vw, (max-width: 900px) 50vw, 33vw';
 
@@ -46,22 +44,19 @@ const DesignerPortfolio: FC = () => {
   }
 
   if (query.isError || !query.data) {
-    const failure = describeFailure(query.error, {
-      title: 'Portfolio not found',
-      body: 'That studio is not listed.',
-    });
+    // REQ-NET-007 decides what is true; REQ-FAIL-003 decides how it looks and
+    // gives the visitor a control that actually refetches.
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>
-        <Typography variant="h3" component="h1">
-          {failure.title}
-        </Typography>
-        <Alert
-          severity={failure.severity}
-          sx={{ mt: 3 }}
-          data-testid="portfolio-failure"
-        >
-          {failure.body}
-        </Alert>
+        <FailureNotice
+          error={query.error}
+          notFound={{
+            title: 'Portfolio not found',
+            body: 'That studio is not listed.',
+          }}
+          onRetry={() => query.refetch()}
+          testId="portfolio-failure"
+        />
       </Container>
     );
   }
