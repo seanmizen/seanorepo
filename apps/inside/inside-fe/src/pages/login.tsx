@@ -126,7 +126,11 @@ const Login: FC = () => {
           autoComplete="email"
         />
 
-        {error && <Alert severity="error">{error}</Alert>}
+        {error && (
+          <Alert severity="error" data-testid="login-failure">
+            {error}
+          </Alert>
+        )}
 
         <Button
           type="submit"

@@ -305,7 +305,7 @@ test.describe('an undeclared URL', () => {
     await waitForApp(page);
 
     await expect(page.getByTestId('not-found')).toHaveCount(0);
-    await expect(page.getByTestId('designer-missing')).toBeVisible();
+    await expect(page.getByTestId('designer-failure')).toBeVisible();
     await expect(
       page.getByTestId('breadcrumbs').getByRole('link', { name: 'designers' }),
     ).toBeVisible();

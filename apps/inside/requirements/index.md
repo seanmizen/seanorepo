@@ -56,6 +56,7 @@
 | [`REQ-PRODUCT-001`](product.md#req-product-001--buyers-browse-without-an-account) | Buyers browse without an account | active | constraint | P0 | sean |
 | [`REQ-PRODUCT-002`](product.md#req-product-002--a-designer-is-unlisted-until-an-admin-approves-them) | A designer is unlisted until an admin approves them | active | constraint | P0 | sean |
 | [`REQ-PRODUCT-003`](product.md#req-product-003--sign-up-is-asked-for-at-the-point-of-value) | Sign-up is asked for at the point of value | active | constraint | P2 | sean |
+| [`REQ-QUALITY-001`](quality.md#req-quality-001--one-suffix-one-meaning) | One suffix, one meaning | active | constraint | P3 | sean |
 | [`REQ-SLUG-001`](slug.md#req-slug-001--a-slug-once-issued-is-permanent) | A slug, once issued, is permanent | active | constraint | P1 | sean |
 | [`REQ-SLUG-002`](slug.md#req-slug-002--a-released-slug-is-never-reissued-to-a-different-entity) | A released slug is never reissued to a different entity | active | constraint | P0 | sean |
 | [`REQ-SLUG-003`](slug.md#req-slug-003--an-old-slug-moves-the-visitor-to-the-current-one) | An old slug moves the visitor to the current one | active | functional | P2 | sean |
@@ -122,6 +123,7 @@ graph TD
   REQ_PRODUCT_001["REQ-PRODUCT-001<br/>Buyers browse without an account"]
   REQ_PRODUCT_002["REQ-PRODUCT-002<br/>A designer is unlisted until an admin approves them"]
   REQ_PRODUCT_003["REQ-PRODUCT-003<br/>Sign-up is asked for at the point of value"]
+  REQ_QUALITY_001["REQ-QUALITY-001<br/>One suffix, one meaning"]
   REQ_SLUG_001["REQ-SLUG-001<br/>A slug, once issued, is permanent"]
   REQ_SLUG_002["REQ-SLUG-002<br/>A released slug is never reissued to a different entity"]
   REQ_SLUG_003["REQ-SLUG-003<br/>An old slug moves the visitor to the current one"]
@@ -158,6 +160,7 @@ graph TD
   REQ_PRODUCT_001 -->|depends-on| REQ_AUTH_005
   REQ_PRODUCT_002 -->|depends-on| REQ_DATA_003
   REQ_PRODUCT_003 -->|refines| REQ_PRODUCT_001
+  REQ_QUALITY_001 -->|refines| REQ_NET_007
   REQ_SLUG_003 -->|depends-on| REQ_SLUG_001
   REQ_STATE_002 -->|refines| REQ_STATE_001
   REQ_STATE_002 -->|depends-on| REQ_STATE_004
@@ -180,6 +183,7 @@ graph TD
 - `REQ-NAV-004` — required-by REQ-NAV-002, required-by REQ-NAV-003
 - `REQ-NET-001` — required-by REQ-NET-007
 - `REQ-NET-002` — required-by REQ-NET-006
+- `REQ-NET-007` — refined-by REQ-QUALITY-001
 - `REQ-PRODUCT-001` — refined-by REQ-PRODUCT-003
 - `REQ-PRODUCT-002` — refined-by REQ-DISCOVERY-001
 - `REQ-SLUG-001` — required-by REQ-SLUG-003

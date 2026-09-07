@@ -107,7 +107,7 @@ test.describe('slug history', () => {
   test('a slug nobody has held is still a real 404', async ({ page }) => {
     await page.goto('/designers/never-been-anyones-slug');
     await waitForApp(page);
-    await expect(page.getByTestId('designer-missing')).toBeVisible();
+    await expect(page.getByTestId('designer-failure')).toBeVisible();
   });
 
   test('a reserved slug is refused with a reason the designer can act on', async ({

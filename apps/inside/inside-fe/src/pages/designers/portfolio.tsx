@@ -58,7 +58,7 @@ const DesignerPortfolio: FC = () => {
         <Alert
           severity={failure.severity}
           sx={{ mt: 3 }}
-          data-testid="portfolio-missing"
+          data-testid="portfolio-failure"
         >
           {failure.body}
         </Alert>

@@ -158,7 +158,9 @@ const Designers: FC = () => {
         </Stack>
 
         {query.isError && (
-          <Alert severity="error">The designer list could not be loaded.</Alert>
+          <Alert severity="error" data-testid="designers-failure">
+            The designer list could not be loaded.
+          </Alert>
         )}
 
         {query.isPending ? (
