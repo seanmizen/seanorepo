@@ -14,6 +14,7 @@
 | [`REQ-AUTH-005`](auth.md#req-auth-005--nobody-is-an-answer-not-an-error) | "Nobody" is an answer, not an error | active | functional | P1 | sean |
 | [`REQ-AUTH-006`](auth.md#req-auth-006--signing-out-revokes-the-session-on-the-server) | Signing out revokes the session on the server | active | constraint | P0 | sean |
 | [`REQ-AUTH-007`](auth.md#req-auth-007--a-return-path-must-be-relative) | A return path must be relative | active | constraint | P1 | sean |
+| [`REQ-AUTH-008`](auth.md#req-auth-008--a-session-that-ends-says-so) | A session that ends says so | active | functional | P1 | sean |
 | [`REQ-BRIEF-001`](brief.md#req-brief-001--visibility-and-publication-are-separate-questions) | Visibility and publication are separate questions | active | constraint | P0 | sean |
 | [`REQ-BRIEF-006`](brief.md#req-brief-006--the-access-rule-lives-in-exactly-one-place) | The access rule lives in exactly one place | active | constraint | P1 | sean |
 | [`REQ-BRIEF-002`](brief.md#req-brief-002--only-public-briefs-are-ever-listed) | Only public briefs are ever listed | active | constraint | P0 | sean |
@@ -81,6 +82,7 @@ graph TD
   REQ_AUTH_005["REQ-AUTH-005<br/>"Nobody" is an answer, not an error"]
   REQ_AUTH_006["REQ-AUTH-006<br/>Signing out revokes the session on the server"]
   REQ_AUTH_007["REQ-AUTH-007<br/>A return path must be relative"]
+  REQ_AUTH_008["REQ-AUTH-008<br/>A session that ends says so"]
   REQ_BRIEF_001["REQ-BRIEF-001<br/>Visibility and publication are separate questions"]
   REQ_BRIEF_002["REQ-BRIEF-002<br/>Only public briefs are ever listed"]
   REQ_BRIEF_003["REQ-BRIEF-003<br/>Unpublishing hides a brief without forgetting who was invited"]
@@ -134,6 +136,7 @@ graph TD
   REQ_STATE_004["REQ-STATE-004<br/>One value drives every part of a presentation"]
   REQ_THEME_001["REQ-THEME-001<br/>Auto follows the OS until the visitor chooses"]
   REQ_THEME_002["REQ-THEME-002<br/>The first paint is already the right theme"]
+  REQ_AUTH_008 -->|depends-on| REQ_AUTH_005
   REQ_BRIEF_006 -->|refines| REQ_BRIEF_001
   REQ_BRIEF_002 -->|depends-on| REQ_BRIEF_001
   REQ_BRIEF_003 -->|refines| REQ_BRIEF_001
@@ -175,7 +178,7 @@ graph TD
 ## Derived reverse links
 
 - `REQ-A11Y-002` — required-by REQ-ONBOARD-005
-- `REQ-AUTH-005` — required-by REQ-PRODUCT-001
+- `REQ-AUTH-005` — required-by REQ-AUTH-008, required-by REQ-PRODUCT-001
 - `REQ-BRIEF-001` — refined-by REQ-BRIEF-006, required-by REQ-BRIEF-002, refined-by REQ-BRIEF-003, refined-by REQ-BRIEF-004, refined-by REQ-BRIEF-005
 - `REQ-CHIPS-001` — refined-by REQ-CHIPS-002, refined-by REQ-CHIPS-003, required-by REQ-CHIPS-004
 - `REQ-CHIPS-007` — refined-by REQ-CHIPS-006
