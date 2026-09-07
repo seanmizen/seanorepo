@@ -6,6 +6,7 @@ import type {
 } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/config';
+import { request } from '@/lib/http';
 
 export interface AdminDesignerListItem {
   id: number;
@@ -17,17 +18,6 @@ export interface AdminDesignerListItem {
   reviewedAt: string | null;
   projectCount: number;
 }
-
-const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(url, { credentials: 'include', ...init });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as {
-      error?: string;
-    };
-    throw new Error(body.error ?? `Request failed (${response.status})`);
-  }
-  return response.json() as Promise<T>;
-};
 
 /**
  * The review queue for a set of statuses.

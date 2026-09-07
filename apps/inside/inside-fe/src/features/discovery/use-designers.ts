@@ -6,12 +6,7 @@ import type {
 } from '@shared/types';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/config';
-
-const get = async <T>(url: string): Promise<T> => {
-  const response = await fetch(url, { credentials: 'include' });
-  if (!response.ok) throw new Error(`${response.status} from ${url}`);
-  return response.json() as Promise<T>;
-};
+import { get } from '@/lib/http';
 
 /**
  * The public designer list.
@@ -36,7 +31,6 @@ export const useDesigner = (slug: string) =>
       get<{ profile: DesignerProfile; portfolioProjects: PublicProject[] }>(
         `${api.endpoints.designers}/${encodeURIComponent(slug)}`,
       ),
-    retry: false,
   });
 
 export const usePortfolioProject = (slug: string, projectSlug: string) =>
@@ -46,7 +40,6 @@ export const usePortfolioProject = (slug: string, projectSlug: string) =>
       get<{ profile: DesignerProfile; project: PublicProject }>(
         `${api.endpoints.designers}/${encodeURIComponent(slug)}/portfolio/${encodeURIComponent(projectSlug)}`,
       ),
-    retry: false,
   });
 
 /** Turns `50k_100k` into `£50k–£100k`, and `full_home` into `Full home`. */

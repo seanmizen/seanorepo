@@ -13,6 +13,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ResponsiveImage } from '@/components';
 import { useCrumbTitles } from '@/contexts/breadcrumb-context';
 import { useDesigner } from '@/features/discovery/use-designers';
+import { describeFailure } from '@/lib/http';
 
 const TILE_SIZES = '(max-width: 600px) 100vw, (max-width: 900px) 50vw, 33vw';
 
@@ -45,13 +46,21 @@ const DesignerPortfolio: FC = () => {
   }
 
   if (query.isError || !query.data) {
+    const failure = describeFailure(query.error, {
+      title: 'Portfolio not found',
+      body: 'That studio is not listed.',
+    });
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>
         <Typography variant="h3" component="h1">
-          Portfolio not found
+          {failure.title}
         </Typography>
-        <Alert severity="info" sx={{ mt: 3 }} data-testid="portfolio-missing">
-          That studio is not listed.
+        <Alert
+          severity={failure.severity}
+          sx={{ mt: 3 }}
+          data-testid="portfolio-missing"
+        >
+          {failure.body}
         </Alert>
       </Container>
     );

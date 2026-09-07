@@ -17,6 +17,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ResponsiveImage } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import { humanise, useDesigner } from '@/features/discovery/use-designers';
+import { describeFailure } from '@/lib/http';
 import { useCanonicalPath } from '@/lib/use-canonical-path';
 
 const HERO_SIZES = '(max-width: 900px) 100vw, 900px';
@@ -86,15 +87,21 @@ const DesignerProfilePage: FC = () => {
   }
 
   if (query.isError || !query.data) {
+    // Only a 404 means "not listed" — REQ-NET-007. A 500 or a dropped
+    // connection gets copy that matches what actually happened.
+    const failure = describeFailure(query.error, {
+      title: 'Designer not found',
+      body: 'That studio is not listed. It may have been removed, or the link may be wrong.',
+    });
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>
         <Stack spacing={3}>
           <Typography variant="h3" component="h1">
-            Designer not found
+            {failure.title}
           </Typography>
-          <Alert severity="info" data-testid="designer-missing">
-            That studio is not listed. It may have been removed, or the link may
-            be wrong.
+          <Alert severity={failure.severity} data-testid="designer-missing">
+            {failure.body}
+            {failure.requestId ? ` (reference ${failure.requestId})` : ''}
           </Alert>
           <Button
             component={Link}

@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import { api } from '@/config';
+import { get, send } from '@/lib/http';
 
 export type SignupRole = 'buyer' | 'designer';
 
@@ -70,10 +71,22 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(api.endpoints.me, { credentials: 'include' });
-        const resolved = res.ok ? ((await res.json()).user ?? null) : null;
-        if (!cancelled && !settledByAction.current) setUser(resolved);
+        const { user: resolved } = await get<{ user: User | null }>(
+          api.endpoints.me,
+        );
+        if (!cancelled && !settledByAction.current) setUser(resolved ?? null);
       } catch {
+        /*
+         * Every failure becomes "signed out", which is the behaviour this
+         * replaced and is deliberately unchanged here.
+         *
+         * It is also wrong, and #215 fixes it: `/me` answers 200 with a null
+         * user when signed out and 401 only for a cookie that is present but
+         * revoked (REQ-AUTH-005), so flattening them loses the one case worth
+         * knowing about — and a transport failure currently reads as a
+         * sign-out too. Splitting them is a behaviour change with its own
+         * tests, so it is not smuggled in here.
+         */
         if (!cancelled && !settledByAction.current) setUser(null);
       } finally {
         if (!cancelled) setLoading(false);
@@ -86,43 +99,34 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
   const requestMagicLink = useCallback(
     async (email: string, role: SignupRole, returnTo?: string) => {
-      const res = await fetch(api.endpoints.magicLink, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, role, returnTo: safeReturnTo(returnTo) }),
+      return send<{ devLink?: string }>(api.endpoints.magicLink, 'POST', {
+        email,
+        role,
+        returnTo: safeReturnTo(returnTo),
       });
-      if (!res.ok) {
-        throw new Error(
-          (await res.json().catch(() => ({}))).error ??
-            'Could not send the sign-in link',
-        );
-      }
-      return res.json();
     },
     [],
   );
 
   const verify = useCallback(async (token: string, returnTo?: string) => {
     const url = `${api.endpoints.verify}?token=${encodeURIComponent(token)}&returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`;
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) {
-      throw new Error(
-        (await res.json().catch(() => ({}))).error ??
-          'This sign-in link is invalid or has expired',
-      );
-    }
-    const data = await res.json();
+    const data = await get<{ user: User; returnTo?: string }>(url);
     settledByAction.current = true;
     setUser(data.user);
     return { returnTo: safeReturnTo(data.returnTo) };
   }, []);
 
+  /*
+   * REQ-AUTH-006 is about the SERVER session ending, so a logout that failed
+   * must not clear local state and report success. Doing that told a visitor
+   * they were signed out while their session stayed live — worst for exactly
+   * the person who most needs it, someone on a shared machine.
+   *
+   * The throw is deliberate: the caller shows it rather than the app quietly
+   * pretending.
+   */
   const logout = useCallback(async () => {
-    await fetch(api.endpoints.logout, {
-      method: 'POST',
-      credentials: 'include',
-    });
+    await send(api.endpoints.logout, 'POST');
     settledByAction.current = true;
     setUser(null);
   }, []);

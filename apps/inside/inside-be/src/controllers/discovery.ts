@@ -17,6 +17,7 @@ import {
   ValidationError,
   WORK_TYPES,
 } from '../services/validation';
+import { withValidation } from './helpers';
 
 /**
  * Discovery: the public, anonymous-friendly read side of the marketplace.
@@ -35,21 +36,6 @@ const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 60;
 /** 10k pages deep is a crawler or a mistake, and OFFSET cost grows with it. */
 const MAX_PAGE = 10_000;
-
-async function withValidation<T>(
-  reply: FastifyReply,
-  run: () => Promise<T>,
-): Promise<T | undefined> {
-  try {
-    return await run();
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      await reply.status(400).send({ error: error.message });
-      return undefined;
-    }
-    throw error;
-  }
-}
 
 export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
   /**
