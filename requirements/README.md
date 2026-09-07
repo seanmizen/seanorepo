@@ -194,6 +194,23 @@ CI runs `requirements:check` on every PR. If it fails on a stale index, run
 `yarn requirements:build` and commit the result — an `index.md` is generated
 and must never be hand-edited.
 
+### What the check enforces
+
+Both directions of traceability, because checking only one leaves the same rot
+free to happen the other way round:
+
+| Direction | Rule |
+|---|---|
+| requirement → test | A `Verification` link of method `Test` must name a file that exists. A spec renamed out from under a requirement turns CI red. |
+| code → requirement | Every `REQ-...` cited anywhere outside `requirements/` must be a declared ID. A citation of a **superseded** or **withdrawn** requirement warns instead of failing — legitimate while the code still implements the old behaviour, but never invisible. |
+
+Plus, on the requirements themselves: ID format and prefix/filename agreement,
+unique IDs, required fields, the one-`shall` Singular rule, EARS clause
+structure, relation vocabulary and targets, `depends-on` cycles, and
+supersession recorded on both sides.
+
+Failures name `file:line`, so a broken citation says exactly where it is.
+
 ## Referring to requirements from code
 
 Cite the ID in a comment where a requirement constrains the code, so the next
@@ -202,6 +219,10 @@ reader — human or agent — knows the shape is deliberate:
 ```ts
 // Floating chrome on every route — see REQ-CHIPS-001.
 ```
+
+Citations are checked: an ID that does not exist fails CI, and one naming a
+superseded or withdrawn requirement warns. So cite freely — a stale reference
+reports itself rather than quietly misleading the next reader.
 
 `CLAUDE.md` files keep their prose and gain the ID alongside it. The prose
 explains; the requirement binds.
