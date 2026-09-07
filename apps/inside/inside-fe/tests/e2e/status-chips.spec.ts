@@ -204,3 +204,62 @@ test.describe('in-flight state', () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe('the chips float (REQ-CHIPS-001)', () => {
+  /**
+   * These were briefly moved into the site header's normal flow to resolve a
+   * layout collision, which silently dropped a stated requirement. The
+   * assertions below exist so that trade cannot be made again without a test
+   * going red and someone having to argue for it.
+   */
+  test('are fixed-position, not in normal flow', async ({ page }) => {
+    await page.goto('/');
+    const position = await page
+      .getByTestId('status-chips')
+      .evaluate((el) => getComputedStyle(el).position);
+    expect(position).toBe('fixed');
+  });
+
+  test('stay put when the page scrolls', async ({ page }) => {
+    await page.goto('/designers');
+    const before = await page.getByTestId('status-chips').boundingBox();
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(200);
+    const after = await page.getByTestId('status-chips').boundingBox();
+    expect(after?.y).toBe(before?.y);
+  });
+
+  test('are translucent, so content shows through', async ({ page }) => {
+    await page.goto('/');
+    const style = await page.getByTestId('status-chips').evaluate((el) => ({
+      background: getComputedStyle(el).backgroundColor,
+      opacity: getComputedStyle(el).opacity,
+    }));
+
+    // The BACKGROUND is translucent, not the element: fading the whole card
+    // fades the chip text with it and costs it contrast.
+    expect(style.background).toMatch(/rgba\(.+,\s*0?\.9\d*\)/);
+    expect(Number(style.opacity)).toBe(1);
+  });
+
+  test('never cover the header brand or nav', async ({ page }) => {
+    for (const width of [375, 768, 1280]) {
+      await page.setViewportSize({ width, height: 720 });
+      await page.goto('/');
+      const chips = await page.getByTestId('status-chips').boundingBox();
+      const brand = await page
+        .getByRole('banner')
+        .getByRole('link', { name: 'inside' })
+        .boundingBox();
+
+      expect(chips, `chips missing at ${width}px`).not.toBeNull();
+      expect(brand, `brand missing at ${width}px`).not.toBeNull();
+      // The header moves aside for the chips, not the other way round.
+      expect(
+        (chips as { x: number; width: number }).x +
+          (chips as { width: number }).width,
+        `chips overlap the brand at ${width}px`,
+      ).toBeLessThanOrEqual((brand as { x: number }).x);
+    }
+  });
+});
