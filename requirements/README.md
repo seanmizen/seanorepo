@@ -65,6 +65,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `DISCOVERY` | `apps/inside/requirements/discovery.md` | inside — public visibility and filtering |
 | `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
+| `SLUG` | `apps/inside/requirements/slug.md` | inside — public slugs and their history |
 | `STATE` | `apps/inside/requirements/state.md` | inside — request-state honesty |
 | `THEME` | `apps/inside/requirements/theme.md` | inside — light, dark and auto |
 

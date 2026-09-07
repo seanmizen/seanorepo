@@ -17,6 +17,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ResponsiveImage } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import { humanise, useDesigner } from '@/features/discovery/use-designers';
+import { useCanonicalPath } from '@/lib/use-canonical-path';
 
 const HERO_SIZES = '(max-width: 900px) 100vw, 900px';
 const TILE_SIZES = '(max-width: 600px) 100vw, (max-width: 900px) 50vw, 450px';
@@ -62,6 +63,12 @@ const DesignerProfilePage: FC = () => {
   // The route table can only know the slug; the studio's real name is a
   // runtime fact, so the crumb is corrected once it is known.
   useBreadcrumbTitle(query.data?.profile.studioName);
+
+  // The API answers on any slug this studio has ever held and returns its
+  // current one, so an old link lands here and the URL corrects itself.
+  useCanonicalPath(
+    query.data ? `/designers/${query.data.profile.slug}` : undefined,
+  );
 
   if (query.isPending) {
     return (
