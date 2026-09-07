@@ -1,8 +1,17 @@
-import { alpha, Chip, Paper, Tooltip, useTheme } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import {
+  alpha,
+  Chip,
+  IconButton,
+  Paper,
+  Tooltip,
+  useTheme,
+} from '@mui/material';
 import type { AppConfig, HealthResponse } from '@shared/types';
 import { useQuery } from '@tanstack/react-query';
 import type { FC, ReactNode } from 'react';
 import { api } from '@/config';
+import { useChrome } from '@/contexts/chrome-context';
 import { get as fetchJson } from '@/lib/http';
 
 /**
@@ -76,7 +85,8 @@ const StatusChip: FC<{
  * - REQ-CHIPS-001 — fixed-position chrome, never in normal flow
  * - REQ-CHIPS-002 — anchored top-left, stacking downwards as chips are added
  * - REQ-CHIPS-003 — translucent backdrop, fully opaque content
- * - REQ-CHIPS-005 — present on every route (rendered once, in app/provider)
+ * - REQ-CHIPS-007 — present on every route until the visitor hides it,
+ *                   rendered once in app/provider
  * - REQ-CHIPS-006 — the dev chip appears only when the server says so
  *
  * Do not move these into the header to resolve a layout collision; adjust the
@@ -84,6 +94,7 @@ const StatusChip: FC<{
  * in #197, and reverted in #198.
  */
 const StatusChips: FC = () => {
+  const { statusCardVisible, setStatusCardVisible } = useChrome();
   const config = useQuery({
     queryKey: ['config'],
     queryFn: () => fetchJson<AppConfig>(api.endpoints.config),
@@ -158,6 +169,11 @@ const StatusChips: FC = () => {
     />,
   );
 
+  // REQ-CHIPS-007. Nothing rendered at all when dismissed — the requirement is
+  // about the card, so a hidden-but-present element would not satisfy it and
+  // would still take up the corner for a screen reader.
+  if (!statusCardVisible) return null;
+
   return (
     <Paper
       elevation={0}
@@ -166,6 +182,8 @@ const StatusChips: FC = () => {
         // REQ-CHIPS-001. Not a styling preference: moving this into flow is
         // the specific regression #198 exists to prevent.
         position: 'fixed',
+        // Room for the dismiss control, which overlays the top-right corner.
+        pr: 2.25,
         // REQ-CHIPS-002 — top-left, and the column below stacks downwards.
         top: 14,
         left: 14,
@@ -186,6 +204,30 @@ const StatusChips: FC = () => {
       aria-label="Environment status"
     >
       {chips}
+      {/*
+        Absolutely positioned rather than stacked with the chips, so the card's
+        HEIGHT is unchanged by adding it. In flow it made the card taller,
+        which pushed it down over the breadcrumb tray and covered the first
+        crumb — REQ-CHIPS-004 is about the header, but the same principle
+        applies to anything the card grows into.
+      */}
+      <Tooltip title="Hide this card">
+        <IconButton
+          size="small"
+          aria-label="Hide the deployment status card"
+          data-testid="status-chips-dismiss"
+          onClick={() => setStatusCardVisible(false)}
+          sx={{
+            position: 'absolute',
+            top: 1,
+            right: 1,
+            p: 0.125,
+            color: 'text.secondary',
+          }}
+        >
+          <CloseIcon sx={{ fontSize: 13 }} />
+        </IconButton>
+      </Tooltip>
     </Paper>
   );
 };

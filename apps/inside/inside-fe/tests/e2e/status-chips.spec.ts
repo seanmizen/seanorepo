@@ -205,6 +205,59 @@ test.describe('in-flight state', () => {
   });
 });
 
+test.describe('the card can be turned off (REQ-CHIPS-007)', () => {
+  test('can be dismissed, and stays dismissed across a reload', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('status-chips')).toBeVisible();
+
+    await page.getByTestId('status-chips-dismiss').click();
+    // Gone entirely, not hidden — a present-but-invisible element would still
+    // occupy the corner for a screen reader.
+    await expect(page.getByTestId('status-chips')).toHaveCount(0);
+
+    await page.reload();
+    await waitForApp(page);
+    await expect(page.getByTestId('status-chips')).toHaveCount(0);
+  });
+
+  test('is on by default, so the person who needs it does not go looking', async ({
+    page,
+  }) => {
+    // A fresh browser context has made no choice, and "no choice" is on.
+    await page.goto('/designers');
+    await expect(page.getByTestId('status-chips')).toBeVisible();
+  });
+
+  test('can be brought back from the account page', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('chips-toggle'));
+
+    await page.goto('/');
+    await page.getByTestId('status-chips-dismiss').click();
+    await expect(page.getByTestId('status-chips')).toHaveCount(0);
+
+    await page.goto('/account');
+    await expect(page.getByTestId('account-preferences')).toBeVisible();
+    await page.getByTestId('status-card-toggle').click();
+
+    await expect(page.getByTestId('status-chips')).toBeVisible();
+  });
+
+  test('dismissing hides the whole card, not one chip', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('status-chip-backend')).toBeVisible();
+
+    await page.getByTestId('status-chips-dismiss').click();
+
+    // Which chips exist is a property of the deployment, not a preference.
+    await expect(page.getByTestId('status-chip-backend')).toHaveCount(0);
+    await expect(page.getByTestId('status-chip-dev')).toHaveCount(0);
+  });
+});
+
 test.describe('the chips float (REQ-CHIPS-001)', () => {
   /**
    * These were briefly moved into the site header's normal flow to resolve a

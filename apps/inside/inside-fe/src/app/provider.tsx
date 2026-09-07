@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { StatusChips } from '@/components';
 import { AuthProvider } from '@/contexts/auth-context';
+import { ChromeProvider } from '@/contexts/chrome-context';
 import { queryClient } from '@/lib';
 import {
   buildTheme,
@@ -120,12 +121,15 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
             <ThemeProvider theme={theme}>
               <CssBaseline enableColorScheme={true} />
               {/*
-                REQ-CHIPS-005: rendered here, above the router, so the chips
+                REQ-CHIPS-007: rendered here, above the router, so the chips
                 are on every route by existing rather than by each page opting
-                in. REQ-CHIPS-001 is what keeps them out of the page's flow.
+                in — for as long as the visitor wants them. REQ-CHIPS-001 is
+                what keeps them out of the page's flow.
               */}
-              <StatusChips />
-              <AuthProvider>{children}</AuthProvider>
+              <ChromeProvider>
+                <StatusChips />
+                <AuthProvider>{children}</AuthProvider>
+              </ChromeProvider>
             </ThemeProvider>
           </ThemeModeContext.Provider>
         </QueryClientProvider>
