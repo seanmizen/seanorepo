@@ -2,7 +2,6 @@ import { CssBaseline, ThemeProvider } from '@mui/material';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7';
 import {
-  Component,
   type FC,
   type ReactNode,
   useCallback,
@@ -10,7 +9,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { StatusChips } from '@/components';
+import { ErrorBoundary, StatusChips } from '@/components';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ChromeProvider } from '@/contexts/chrome-context';
 import { queryClient } from '@/lib';
@@ -23,27 +22,6 @@ import {
   type ThemeMode,
 } from './theme';
 import { ThemeModeContext } from './theme-context';
-
-class ErrorBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <div>Something went wrong.</div>;
-    }
-    return this.props.children;
-  }
-}
 
 const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [mode, setModeState] = useState<ThemeMode>(getInitialMode);
@@ -110,31 +88,36 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
   );
 
   return (
-    <ErrorBoundary>
-      {/*
-        nuqs reads and writes the URL through the router, so its adapter has to
-        sit inside the same tree. Everything below can use useFilters.
-      */}
-      <NuqsAdapter>
-        <QueryClientProvider client={queryClient}>
-          <ThemeModeContext.Provider value={themeModeValue}>
-            <ThemeProvider theme={theme}>
-              <CssBaseline enableColorScheme={true} />
-              {/*
+    /*
+      nuqs reads and writes the URL through the router, so its adapter has to
+      sit inside the same tree. Everything below can use useFilters.
+    */
+    <NuqsAdapter>
+      <QueryClientProvider client={queryClient}>
+        <ThemeModeContext.Provider value={themeModeValue}>
+          <ThemeProvider theme={theme}>
+            <CssBaseline enableColorScheme={true} />
+            {/*
                 REQ-CHIPS-008: rendered here, above the router, so the chips
                 are on every route by existing rather than by each page opting
                 in — where they appear at all, and for as long as the visitor
                 wants them. REQ-CHIPS-001 keeps them out of the page's flow.
               */}
-              <ChromeProvider>
-                <StatusChips />
+            <ChromeProvider>
+              <StatusChips />
+              {/*
+                  Inside ThemeProvider, deliberately. Mounted above it, the
+                  fallback rendered unthemed and un-fonted — a white box for a
+                  visitor on a dark theme (REQ-FAIL-001).
+                */}
+              <ErrorBoundary>
                 <AuthProvider>{children}</AuthProvider>
-              </ChromeProvider>
-            </ThemeProvider>
-          </ThemeModeContext.Provider>
-        </QueryClientProvider>
-      </NuqsAdapter>
-    </ErrorBoundary>
+              </ErrorBoundary>
+            </ChromeProvider>
+          </ThemeProvider>
+        </ThemeModeContext.Provider>
+      </QueryClientProvider>
+    </NuqsAdapter>
   );
 };
 

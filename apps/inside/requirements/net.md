@@ -100,17 +100,37 @@ error shapes, so most pages had no way to know what had actually gone wrong.
 - **Statement:** Every error response shall use the same envelope, whatever
   produced it.
 - **Rationale:** There was no error handler at all, so anything unrecognised
-  reached Fastify's default — which answers in a different shape *and* returns
-  `err.message`. The messages in question are SQLite constraint text, `sharp`
-  decode failures and filesystem paths: an attacker's map of the schema and the
-  disk, handed over by any request that provokes an exception. A 4xx keeps its
-  message because those are written by us for the caller to read; a 5xx was
-  written by a library, about our internals, for us.
+  reached Fastify's default, which answers in a shape the app uses nowhere
+  else. An unmatched route did the same. A client then has two error shapes to
+  know about, and learns the second one exists by hitting a typo in production.
+- **Verification:**
+  - Test — `apps/inside/inside-be/src/tests/http-errors.test.ts` › "an unmatched route answers in the app shape, not Fastify’s"
+  - Test — `apps/inside/inside-be/src/tests/http-errors.test.ts` › "a hand-written 404 carries the same envelope"
+- **Relations:** none
+
+## REQ-NET-008 — A 5xx says nothing about our internals
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #214
+- **Type:** constraint
+- **Priority:** P0
+- **Statement:** A 5xx response shall never carry the underlying exception's
+  message.
+- **Rationale:** Split out of REQ-NET-005 in #178, where it should have been in
+  #214 — one requirement was carrying two obligations, which is the Singular
+  characteristic ISO 29148 asks for and this file's own validator enforces.
+
+  The messages in question are SQLite constraint text, `sharp` decode failures
+  and filesystem paths: an attacker's map of the schema and the disk, handed
+  over by any request that provokes an exception. A 4xx keeps its message
+  because those are written by us for the caller to read; a 5xx was written by
+  a library, about our internals, for us. Saying nothing is only acceptable
+  because REQ-NET-003 gives the caller a reference that finds everything.
 - **Verification:**
   - Test — `apps/inside/inside-be/src/tests/http-errors.test.ts` › "never returns its own message to the client"
-  - Test — `apps/inside/inside-be/src/tests/http-errors.test.ts` › "an unmatched route answers in the app shape, not Fastify’s"
   - Test — `apps/inside/inside-be/src/tests/http-errors.test.ts` › "a 4xx keeps its message — those are written for the caller"
-- **Relations:** none
+- **Relations:** depends-on REQ-NET-003
 
 ## REQ-NET-006 — Retry what might work; never retry an answer
 

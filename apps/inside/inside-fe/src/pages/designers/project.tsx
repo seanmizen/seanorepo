@@ -1,6 +1,4 @@
 import {
-  Alert,
-  Button,
   Chip,
   Container,
   Divider,
@@ -10,13 +8,12 @@ import {
 } from '@mui/material';
 import type { FC } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ResponsiveImage } from '@/components';
+import { FailureNotice, ResponsiveImage } from '@/components';
 import { useCrumbTitles } from '@/contexts/breadcrumb-context';
 import {
   humanise,
   usePortfolioProject,
 } from '@/features/discovery/use-designers';
-import { describeFailure } from '@/lib/http';
 import { useCanonicalPath } from '@/lib/use-canonical-path';
 
 /** One column at any width — the images are the point, so they get the room. */
@@ -58,28 +55,19 @@ const PortfolioProjectPage: FC = () => {
   }
 
   if (query.isError || !query.data) {
-    const failure = describeFailure(query.error, {
-      title: 'Project not found',
-      body: 'That project is not published.',
-    });
+    // REQ-NET-007 decides what is true; REQ-FAIL-003 decides how it looks and
+    // gives the visitor a control that actually refetches.
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>
-        <Stack spacing={3}>
-          <Typography variant="h3" component="h1">
-            {failure.title}
-          </Typography>
-          <Alert severity={failure.severity} data-testid="project-missing">
-            {failure.body}
-          </Alert>
-          <Button
-            component={Link}
-            to={`/designers/${slug}`}
-            variant="contained"
-            sx={{ alignSelf: 'flex-start' }}
-          >
-            Back to the studio
-          </Button>
-        </Stack>
+        <FailureNotice
+          error={query.error}
+          notFound={{
+            title: 'Project not found',
+            body: 'That project is not published.',
+          }}
+          onRetry={() => query.refetch()}
+          testId="project-missing"
+        />
       </Container>
     );
   }
