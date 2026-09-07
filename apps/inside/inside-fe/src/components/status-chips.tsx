@@ -3,12 +3,7 @@ import type { AppConfig, HealthResponse } from '@shared/types';
 import { useQuery } from '@tanstack/react-query';
 import type { FC, ReactNode } from 'react';
 import { api } from '@/config';
-
-const fetchJson = async <T,>(url: string): Promise<T> => {
-  const response = await fetch(url, { credentials: 'include' });
-  if (!response.ok) throw new Error(`${response.status} from ${url}`);
-  return response.json() as Promise<T>;
-};
+import { get as fetchJson } from '@/lib/http';
 
 /**
  * Each status colour needs a light and a dark value.

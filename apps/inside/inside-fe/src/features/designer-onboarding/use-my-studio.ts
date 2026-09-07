@@ -6,6 +6,7 @@ import type {
 } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/config';
+import { ApiError, request } from '@/lib/http';
 
 /**
  * The designer's own view of their studio: the draft profile, its portfolio,
@@ -17,42 +18,8 @@ import { api } from '@/config';
  * what the world may see (REQ-DISCOVERY-002) are different questions.
  */
 
-/** A server error carrying the message the API chose, not a generic one. */
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    credentials: 'include',
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
-    ...init,
-  });
-
-  if (!response.ok) {
-    // The server's own wording is shown to the designer wherever it has any:
-    // "That file is 14MB; the limit is 8MB" beats "Request failed", and it is
-    // the only message that says what to do next.
-    let message = `Something went wrong (${response.status}).`;
-    try {
-      const body = (await response.json()) as { error?: string };
-      if (typeof body.error === 'string' && body.error.length > 0) {
-        message = body.error;
-      }
-    } catch {
-      // A non-JSON error body is not itself an error worth surfacing.
-    }
-    throw new ApiError(message, response.status);
-  }
-
-  return response.json() as Promise<T>;
-}
+/** Re-exported so pages keep one import for the studio surface. */
+export { ApiError };
 
 export interface MyProfileResponse {
   profile: DesignerProfile | null;
@@ -205,6 +172,12 @@ export function uploadImage(
     const xhr = new XMLHttpRequest();
     xhr.open('POST', api.endpoints.myImages);
     xhr.withCredentials = true;
+    /*
+     * REQ-NET-002. Longer than the shared deadline because this is the one
+     * request that legitimately takes minutes — a 50MB photograph over mobile
+     * — but not unbounded, which is what it was.
+     */
+    xhr.timeout = 5 * 60 * 1000;
 
     xhr.upload.addEventListener('progress', (event) => {
       onProgress({
@@ -233,10 +206,15 @@ export function uploadImage(
     });
 
     xhr.addEventListener('error', () =>
-      reject(new ApiError('The upload could not reach the server.', 0)),
+      reject(
+        new ApiError('The upload could not reach the server.', 0, 'network'),
+      ),
     );
     xhr.addEventListener('abort', () =>
-      reject(new ApiError('The upload was cancelled.', 0)),
+      reject(new ApiError('The upload was cancelled.', 0, 'network')),
+    );
+    xhr.addEventListener('timeout', () =>
+      reject(new ApiError('That upload took too long.', 0, 'timeout')),
     );
 
     xhr.send(form);
