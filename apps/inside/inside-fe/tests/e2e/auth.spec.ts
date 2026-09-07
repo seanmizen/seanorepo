@@ -8,9 +8,14 @@ test.describe('sign in', () => {
     await signIn(page, email);
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('link', { name: 'Account' })).toBeVisible();
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Account' }),
+    ).toBeVisible();
 
-    await page.getByRole('link', { name: 'Account' }).click();
+    await page
+      .getByRole('banner')
+      .getByRole('link', { name: 'Account' })
+      .click();
     await expect(page.getByTestId('account-email')).toHaveText(email);
     await expect(page.getByText('buyer', { exact: true })).toBeVisible();
   });
@@ -41,7 +46,9 @@ test.describe('sign in', () => {
     await page.getByRole('button', { name: /sign out/i }).click();
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Sign in' }),
+    ).toBeVisible();
 
     // Revoked server-side, so the route guard must bounce us.
     await page.goto('/account');

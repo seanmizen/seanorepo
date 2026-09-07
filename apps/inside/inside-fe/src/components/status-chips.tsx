@@ -1,4 +1,4 @@
-import { Chip, Stack, Tooltip, useTheme } from '@mui/material';
+import { alpha, Chip, Paper, Tooltip, useTheme } from '@mui/material';
 import type { AppConfig, HealthResponse } from '@shared/types';
 import { useQuery } from '@tanstack/react-query';
 import type { FC, ReactNode } from 'react';
@@ -73,10 +73,15 @@ const StatusChip: FC<{
 };
 
 /**
- * Deployment status, fixed top-left on every page.
+ * Deployment status: floating, top-left, stacked, with room to grow.
  *
- * Sits opposite the theme toggle and is deliberately a vertical stack with
- * room to grow — new chips append here rather than finding their own corner.
+ * REQ-CHIPS-001 (#198): these are floating chrome and MUST stay fixed-position
+ * — never in normal flow. They sit on a translucent card so they stay legible
+ * over whatever is beneath, and the header reserves space on its left so the
+ * brand is never obscured. New chips append to this stack.
+ *
+ * Do not move these into the header to resolve a layout collision; adjust the
+ * header's offset instead. That trade was made once, in #197, and reverted.
  */
 const StatusChips: FC = () => {
   const config = useQuery({
@@ -148,14 +153,31 @@ const StatusChips: FC = () => {
   );
 
   return (
-    <Stack
-      spacing={0.75}
-      alignItems="flex-start"
-      sx={{ position: 'fixed', top: 16, left: 16, zIndex: 1200 }}
+    <Paper
+      elevation={0}
+      data-testid="status-chips"
+      sx={{
+        position: 'fixed',
+        top: 14,
+        left: 14,
+        zIndex: (theme) => theme.zIndex.appBar + 1,
+        p: 0.75,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 0.5,
+        // 90% on the BACKGROUND, not the element. Fading the whole card fades
+        // the chip text with it, which cost the green chip its contrast (4.25:1
+        // against the composited ground) — the opposite of what a legibility
+        // backdrop is for.
+        backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.9),
+        border: '1px solid',
+        borderColor: 'divider',
+      }}
       aria-label="Environment status"
     >
       {chips}
-    </Stack>
+    </Paper>
   );
 };
 

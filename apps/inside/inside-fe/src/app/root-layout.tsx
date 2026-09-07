@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Breadcrumbs } from '@/components';
+import { Breadcrumbs, SiteHeader } from '@/components';
 import { BreadcrumbTitleProvider } from '@/contexts/breadcrumb-context';
 
 /**
@@ -10,6 +10,7 @@ import { BreadcrumbTitleProvider } from '@/contexts/breadcrumb-context';
  */
 const RootLayout: FC = () => (
   <BreadcrumbTitleProvider>
+    <SiteHeader />
     <Breadcrumbs />
     <Outlet />
   </BreadcrumbTitleProvider>

@@ -36,7 +36,9 @@ test.describe('homepage sign-up CTA', () => {
     // people who already know what it is.
     await page.goto('/');
     await waitForApp(page);
-    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Sign in' }),
+    ).toBeVisible();
     await expect(page.getByTestId('signup-cta')).toBeVisible();
   });
 
@@ -46,7 +48,9 @@ test.describe('homepage sign-up CTA', () => {
     await signIn(page, uniqueEmail('cta'));
 
     await page.goto('/');
-    await expect(page.getByRole('link', { name: 'Account' })).toBeVisible();
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Account' }),
+    ).toBeVisible();
     // Inviting someone to create an account they have reads as the site not
     // knowing who they are.
     await expect(page.getByTestId('signup-cta')).toHaveCount(0);
