@@ -1,14 +1,15 @@
 import type {
   Bid,
   Brief,
-  BriefStatus,
+  BriefInvitee,
+  BriefVisibility,
   OwnedBrief,
   PublicBrief,
   ReceivedBid,
   SentBid,
 } from '@shared/types';
 import { openDbConnection } from './db';
-import { chooseSlug, recordSlug } from './slugs';
+import { chooseSlug, claimSlug, recordSlug, resolveSlug } from './slugs';
 import { sqliteNow } from './validation';
 
 /**
@@ -22,13 +23,14 @@ import { sqliteNow } from './validation';
 interface BriefRow {
   id: number;
   buyer_id: number | null;
+  slug: string;
   title: string;
   description: string;
   work_type: Brief['workType'];
   budget_band: Brief['budgetBand'];
   location: string | null;
   timeline: Brief['timeline'];
-  status: BriefStatus;
+  visibility: BriefVisibility;
   closes_at: string | null;
   published_at: string | null;
   created_at: string;
@@ -61,13 +63,14 @@ type BidWithDesignerRow = BidRow & {
 const toBrief = (r: BriefRow): Brief => ({
   id: r.id,
   buyerId: r.buyer_id,
+  slug: r.slug,
   title: r.title,
   description: r.description,
   workType: r.work_type,
   budgetBand: r.budget_band,
   location: r.location,
   timeline: r.timeline,
-  status: r.status,
+  visibility: r.visibility,
   closesAt: r.closes_at,
   publishedAt: r.published_at,
   createdAt: r.created_at,
@@ -87,13 +90,14 @@ const toOwnedBrief = (r: CountedBriefRow): OwnedBrief => ({
  */
 const toPublicBrief = (r: CountedBriefRow): PublicBrief => ({
   id: r.id,
+  slug: r.slug,
   title: r.title,
   description: r.description,
   workType: r.work_type,
   budgetBand: r.budget_band,
   location: r.location,
   timeline: r.timeline,
-  status: r.status,
+  visibility: r.visibility,
   closesAt: r.closes_at,
   publishedAt: r.published_at,
   createdAt: r.created_at,
@@ -158,8 +162,20 @@ export interface BriefFilters {
 export async function listOpenBriefs(
   filters: BriefFilters,
 ): Promise<{ briefs: PublicBrief[]; total: number }> {
-  const clauses = ["b.status = 'open'"];
-  const params: Array<string | number> = [];
+  // REQ-BRIEF-002. Two conditions, because they are two different questions:
+  // `public` is who may ever see it, `published_at` is whether they can now.
+  // A `link` or `private` brief must never reach a listing, whatever its
+  // publication state.
+  const clauses = [
+    "b.visibility = 'public'",
+    'b.published_at IS NOT NULL',
+    // Past its close date is off the board. Closing stops the invitation to
+    // bid, so a listing nobody may answer has no business on a board of
+    // things to answer — this is what the old `closed` status did, preserved.
+    '(b.closes_at IS NULL OR b.closes_at > ?)',
+  ];
+  const boardParams: string[] = [sqliteNow()];
+  const params: Array<string | number> = [...boardParams];
 
   // OR within a facet, AND across facets — what a filter panel implies.
   const placeholders = (values: readonly unknown[]) =>
@@ -209,16 +225,60 @@ export async function listOpenBriefs(
  * Closed briefs stay readable: designers who bid must still be
  * able to see what they answered.
  */
-export async function findPublicBrief(id: number): Promise<PublicBrief | null> {
+/**
+ * A brief as a given viewer may see it, addressed by any slug it has held.
+ *
+ * REQ-BRIEF-001 — the whole access model, in one place so no caller can
+ * assemble a different version of it:
+ *
+ *   owner                       -> always, published or not
+ *   published + public          -> anyone
+ *   published + link            -> anyone who reaches the URL
+ *   published + private         -> users on the invitee list
+ *   unpublished, not the owner  -> null, invitee or otherwise
+ *
+ * Returns null for "you may not see this" and for "this does not exist"
+ * alike. That is deliberate: a private brief that 404s differently from a
+ * missing one tells an unauthorised viewer it is there.
+ *
+ * `viewerId` is null for an anonymous visitor, which is a first-class case —
+ * the public board is readable without an account (REQ-PRODUCT-001).
+ */
+export async function findVisibleBrief(
+  slug: string,
+  viewerId: number | null,
+): Promise<{ brief: PublicBrief; isOwner: boolean } | null> {
+  const resolved = await resolveSlug('brief', slug);
+  if (!resolved) return null;
+
   const db = await openDbConnection();
   try {
     const row = db
       .query(
-        `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b
-         WHERE b.id = ? AND b.status != 'draft'`,
+        `SELECT b.*, ${BID_COUNT} AS bid_count FROM briefs b WHERE b.id = ?`,
       )
-      .get(id) as CountedBriefRow | null;
-    return row ? toPublicBrief(row) : null;
+      .get(resolved.entityId) as CountedBriefRow | null;
+    if (!row) return null;
+
+    const isOwner = viewerId !== null && row.buyer_id === viewerId;
+    if (isOwner) return { brief: toPublicBrief(row), isOwner };
+
+    // Unpublished is invisible to everyone else, whatever the visibility says
+    // and whoever is on the invitee list. Unpublishing has to actually hide it,
+    // or the switch means nothing.
+    if (row.published_at === null) return null;
+
+    if (row.visibility === 'private') {
+      if (viewerId === null) return null;
+      const invited = db
+        .query(
+          'SELECT 1 FROM brief_invitees WHERE brief_id = ? AND user_id = ?',
+        )
+        .get(row.id, viewerId);
+      if (!invited) return null;
+    }
+
+    return { brief: toPublicBrief(row), isOwner: false };
   } finally {
     db.close();
   }
@@ -285,7 +345,8 @@ export interface BriefFields {
 export async function insertBrief(
   buyerId: number,
   fields: BriefFields,
-  status: BriefStatus,
+  visibility: BriefVisibility,
+  { publish = false }: { publish?: boolean } = {},
 ): Promise<OwnedBrief> {
   // Chosen before the insert, because the row is created with it (REQ-SLUG-002),
   // and recorded into history after, once there is an id to bind it to.
@@ -297,7 +358,7 @@ export async function insertBrief(
     db.run(
       `INSERT INTO briefs
         (buyer_id, title, description, work_type, budget_band, location,
-         timeline, status, closes_at, published_at, slug)
+         timeline, visibility, closes_at, published_at, slug)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         buyerId,
@@ -307,9 +368,9 @@ export async function insertBrief(
         fields.budgetBand,
         fields.location,
         fields.timeline,
-        status,
+        visibility,
         fields.closesAt,
-        status === 'open' ? sqliteNow() : null,
+        publish ? sqliteNow() : null,
         slug,
       ],
     );
@@ -362,19 +423,144 @@ export async function updateBrief(
   }
 }
 
-export async function setBriefStatus(
+/**
+ * Publish or unpublish. REQ-BRIEF-003.
+ *
+ * Unpublishing clears `published_at` and touches nothing else — in particular
+ * it does NOT clear the invitee list, so republishing restores access to
+ * exactly the same people without re-inviting anyone. That is the whole reason
+ * invitees live in their own table rather than as brief state.
+ *
+ * Publishing re-stamps rather than COALESCEing, because with unpublish in the
+ * model `published_at` is the current publication, not a first-ever milestone.
+ */
+export async function setBriefPublished(
   id: number,
-  status: BriefStatus,
+  published: boolean,
 ): Promise<OwnedBrief> {
   const db = await openDbConnection();
   try {
     db.run(
-      `UPDATE briefs
-       SET status = ?,
-           published_at = COALESCE(published_at, CASE WHEN ? = 'open' THEN datetime('now') END),
-           updated_at = datetime('now')
+      `UPDATE briefs SET published_at = ?, updated_at = datetime('now')
        WHERE id = ?`,
-      [status, status, id],
+      [published ? sqliteNow() : null, id],
+    );
+  } finally {
+    db.close();
+  }
+  return (await findOwnedBrief(id)) as OwnedBrief;
+}
+
+/** Change who may ever see a brief. Orthogonal to whether it is published. */
+export async function setBriefVisibility(
+  id: number,
+  visibility: BriefVisibility,
+): Promise<OwnedBrief> {
+  const db = await openDbConnection();
+  try {
+    db.run(
+      `UPDATE briefs SET visibility = ?, updated_at = datetime('now')
+       WHERE id = ?`,
+      [visibility, id],
+    );
+  } finally {
+    db.close();
+  }
+  return (await findOwnedBrief(id)) as OwnedBrief;
+}
+
+/** Stop accepting bids now, without hiding the brief from anyone. */
+export async function closeBriefToBids(id: number): Promise<OwnedBrief> {
+  const db = await openDbConnection();
+  try {
+    db.run(
+      `UPDATE briefs SET closes_at = ?, updated_at = datetime('now')
+       WHERE id = ?`,
+      [sqliteNow(), id],
+    );
+  } finally {
+    db.close();
+  }
+  return (await findOwnedBrief(id)) as OwnedBrief;
+}
+
+/** A brief accepts bids while it is published and not past its close date. */
+export const acceptsBids = (brief: Brief): boolean =>
+  brief.publishedAt !== null &&
+  (brief.closesAt === null || brief.closesAt > sqliteNow());
+
+/* ------------------------------------------------------------------ *
+ * Invitees — who may see a private brief
+ * ------------------------------------------------------------------ */
+
+export async function listInvitees(briefId: number): Promise<BriefInvitee[]> {
+  const db = await openDbConnection();
+  try {
+    return (
+      db
+        .query(
+          `SELECT * FROM brief_invitees WHERE brief_id = ?
+           ORDER BY invited_at ASC, id ASC`,
+        )
+        .all(briefId) as Array<{
+        id: number;
+        brief_id: number;
+        user_id: number;
+        invited_at: string;
+      }>
+    ).map((r) => ({
+      id: r.id,
+      briefId: r.brief_id,
+      userId: r.user_id,
+      invitedAt: r.invited_at,
+    }));
+  } finally {
+    db.close();
+  }
+}
+
+/** Idempotent: inviting the same person twice is one invitation, not two. */
+export async function inviteToBrief(
+  briefId: number,
+  userId: number,
+): Promise<void> {
+  const db = await openDbConnection();
+  try {
+    db.run(
+      'INSERT OR IGNORE INTO brief_invitees (brief_id, user_id) VALUES (?, ?)',
+      [briefId, userId],
+    );
+  } finally {
+    db.close();
+  }
+}
+
+export async function uninviteFromBrief(
+  briefId: number,
+  userId: number,
+): Promise<void> {
+  const db = await openDbConnection();
+  try {
+    db.run('DELETE FROM brief_invitees WHERE brief_id = ? AND user_id = ?', [
+      briefId,
+      userId,
+    ]);
+  } finally {
+    db.close();
+  }
+}
+
+/** Rename a brief's public slug, keeping every old one alive (REQ-SLUG-001). */
+export async function renameBriefSlug(
+  id: number,
+  desired: string,
+): Promise<OwnedBrief> {
+  const slug = await claimSlug('brief', id, desired, { custom: true });
+  const db = await openDbConnection();
+  try {
+    db.run(
+      "UPDATE briefs SET slug = ?, updated_at = datetime('now') WHERE id = ?",
+      [slug, id],
     );
   } finally {
     db.close();

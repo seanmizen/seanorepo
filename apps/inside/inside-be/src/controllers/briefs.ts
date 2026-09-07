@@ -1,7 +1,8 @@
 import { briefFilters } from '@shared/filters';
-import type { BriefStatus } from '@shared/types';
+import type { BriefVisibility } from '@shared/types';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { getAuthUser, requireRole } from '../middleware/auth';
+import { getAuthUser, optionalAuth, requireRole } from '../middleware/auth';
+import { findUserByEmail } from '../services/auth';
 import * as briefs from '../services/briefs';
 import { parseQuery } from '../services/query';
 import {
@@ -67,14 +68,29 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   /**
-   * Public detail. A draft reads as missing; closed briefs stay
-   * readable so a designer can still see what they bid for.
+   * Public detail, addressed by slug — any slug the brief has ever held.
+   *
+   * Visibility is decided by `findVisibleBrief`, which is the single place the
+   * rules live (REQ-BRIEF-001). `optionalAuth` rather than a guard, because
+   * who is asking changes the answer: an invitee sees a private brief, an
+   * anonymous visitor sees only a published public or link one.
+   *
+   * A brief the viewer may not see is 404, indistinguishable from one that
+   * does not exist — a different response would confirm it is there.
    */
-  fastify.get('/briefs/:id', async (request, reply) => {
-    const brief = await briefs.findPublicBrief(briefId(request));
-    if (!brief) return reply.status(404).send({ error: 'Brief not found' });
-    return { brief };
-  });
+  fastify.get(
+    '/briefs/:slug',
+    { onRequest: optionalAuth },
+    async (request, reply) => {
+      const slug = (request.params as { slug: string }).slug;
+      const found = await briefs.findVisibleBrief(
+        slug,
+        getAuthUser(request)?.id ?? null,
+      );
+      if (!found) return reply.status(404).send({ error: 'Brief not found' });
+      return { brief: found.brief, isOwner: found.isOwner };
+    },
+  );
 
   /**
    * A buyer's own briefs.
@@ -109,15 +125,19 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       me.post('/briefs', async (request, reply) =>
         withValidation(reply, async () => {
           const body = (request.body ?? {}) as Record<string, unknown>;
-          // A brief can be saved as a draft or posted straight to the board.
-          const status = (optionalEnum(body.status, 'Status', [
-            'draft',
-            'open',
-          ]) ?? 'draft') as BriefStatus;
+          // Private unless asked otherwise, so a brief is never public by
+          // omission. Publishing is a separate flag because visibility and
+          // publication are orthogonal (REQ-BRIEF-003).
+          const visibility = (optionalEnum(body.visibility, 'Visibility', [
+            'public',
+            'link',
+            'private',
+          ]) ?? 'private') as BriefVisibility;
           const brief = await briefs.insertBrief(
             getAuthUser(request)?.id as number,
             readBriefFields(body),
-            status,
+            visibility,
+            { publish: body.publish === true },
           );
           return reply.status(201).send({ brief });
         }),
@@ -149,31 +169,101 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
         return reply.status(204).send();
       });
 
-      /** draft | closed -> open. Awarded is final; reopening it is refused. */
+      /**
+       * Publish and unpublish, freely and repeatedly.
+       *
+       * Unpublishing hides the brief from everyone but its owner and KEEPS the
+       * invitee list, so republishing restores access to the same people
+       * without re-inviting anyone (REQ-BRIEF-003). Idempotent on purpose:
+       * publishing an already-published brief is not an error, it is a no-op,
+       * and a 409 here would only make a retry look like a failure.
+       */
       me.post('/briefs/:id/publish', async (request, reply) => {
         const brief = await owned(request);
         if (!brief) return reply.status(404).send({ error: 'Not found' });
-        if (brief.status === 'open') {
-          return reply
-            .status(409)
-            .send({ error: 'This brief is already open' });
-        }
-        return { brief: await briefs.setBriefStatus(brief.id, 'open') };
+        return { brief: await briefs.setBriefPublished(brief.id, true) };
       });
 
+      me.post('/briefs/:id/unpublish', async (request, reply) => {
+        const brief = await owned(request);
+        if (!brief) return reply.status(404).send({ error: 'Not found' });
+        return { brief: await briefs.setBriefPublished(brief.id, false) };
+      });
+
+      /** Who may ever see it. Orthogonal to whether it is published now. */
+      me.put('/briefs/:id/visibility', async (request, reply) =>
+        withValidation(reply, async () => {
+          const brief = await owned(request);
+          if (!brief) return reply.status(404).send({ error: 'Not found' });
+          const body = (request.body ?? {}) as Record<string, unknown>;
+          const visibility = optionalEnum(body.visibility, 'Visibility', [
+            'public',
+            'link',
+            'private',
+          ]);
+          if (!visibility) {
+            throw new ValidationError(
+              'Visibility must be one of public, link, private',
+            );
+          }
+          return {
+            brief: await briefs.setBriefVisibility(
+              brief.id,
+              visibility as BriefVisibility,
+            ),
+          };
+        }),
+      );
+
       /**
-       * Stop taking bids. The bids already received stay exactly where
-       * they are — closing a brief withdraws the listing, not the responses.
+       * Stop taking bids. The brief stays visible and the bids already
+       * received stay exactly where they are — closing withdraws the
+       * invitation to bid, not the responses, and not the listing.
        */
       me.post('/briefs/:id/close', async (request, reply) => {
         const brief = await owned(request);
         if (!brief) return reply.status(404).send({ error: 'Not found' });
-        if (brief.status === 'closed') {
+        return { brief: await briefs.closeBriefToBids(brief.id) };
+      });
+
+      /* Invitees — who may see a private brief. Users, not designers. */
+
+      me.get('/briefs/:id/invitees', async (request, reply) => {
+        const brief = await owned(request);
+        if (!brief) return reply.status(404).send({ error: 'Not found' });
+        return { invitees: await briefs.listInvitees(brief.id) };
+      });
+
+      me.post('/briefs/:id/invitees', async (request, reply) =>
+        withValidation(reply, async () => {
+          const brief = await owned(request);
+          if (!brief) return reply.status(404).send({ error: 'Not found' });
+          const body = (request.body ?? {}) as Record<string, unknown>;
+          const email = requiredString(body.email, 'Email');
+
+          const invitee = await findUserByEmail(email);
+          // Deliberately explicit rather than silently dropping it: a buyer
+          // who thinks they have shared a brief and has not is worse off than
+          // one told the person has no account yet.
+          if (!invitee) {
+            return reply
+              .status(404)
+              .send({ error: 'Nobody with that email has an account yet' });
+          }
+
+          await briefs.inviteToBrief(brief.id, invitee.id);
           return reply
-            .status(409)
-            .send({ error: 'This brief is already closed to bids' });
-        }
-        return { brief: await briefs.setBriefStatus(brief.id, 'closed') };
+            .status(201)
+            .send({ invitees: await briefs.listInvitees(brief.id) });
+        }),
+      );
+
+      me.delete('/briefs/:id/invitees/:userId', async (request, reply) => {
+        const brief = await owned(request);
+        if (!brief) return reply.status(404).send({ error: 'Not found' });
+        const userId = Number((request.params as { userId: string }).userId);
+        await briefs.uninviteFromBrief(brief.id, userId);
+        return { invitees: await briefs.listInvitees(brief.id) };
       });
 
       /**

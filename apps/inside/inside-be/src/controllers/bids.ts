@@ -66,11 +66,12 @@ export async function bidRoutes(fastify: FastifyInstance): Promise<void> {
 
         const id = Number((request.params as { id: string }).id);
         const brief = await briefs.findBrief(id);
-        // A draft brief is not on the board, so it must read as missing.
-        if (!brief || brief.status === 'draft') {
+        // An unpublished brief is not on the board, so it must read as missing
+        // rather than as closed — the latter would confirm it exists.
+        if (!brief || brief.publishedAt === null) {
           return reply.status(404).send({ error: 'Brief not found' });
         }
-        if (brief.status !== 'open') {
+        if (!briefs.acceptsBids(brief)) {
           return reply
             .status(409)
             .send({ error: 'This brief is no longer accepting bids' });
@@ -151,7 +152,7 @@ export async function bidRoutes(fastify: FastifyInstance): Promise<void> {
       // The brief can close while a draft sits unsent, so the same gate that
       // guards starting a bid has to guard sending one.
       const brief = await briefs.findBrief(bid.briefId);
-      if (!brief || brief.status !== 'open') {
+      if (!brief || !briefs.acceptsBids(brief)) {
         return reply
           .status(409)
           .send({ error: 'This brief is no longer accepting bids' });
