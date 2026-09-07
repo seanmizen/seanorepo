@@ -99,7 +99,7 @@ const DesignerProfilePage: FC = () => {
           <Typography variant="h3" component="h1">
             {failure.title}
           </Typography>
-          <Alert severity={failure.severity} data-testid="designer-missing">
+          <Alert severity={failure.severity} data-testid="designer-failure">
             {failure.body}
             {failure.requestId ? ` (reference ${failure.requestId})` : ''}
           </Alert>

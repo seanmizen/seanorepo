@@ -117,6 +117,29 @@ touching `apps/inside`.
   value and an orphan FK and expect a throw. `PRAGMA foreign_keys` is
   per-connection, so set it on your test connection.
 
+### Test id conventions — `REQ-QUALITY-001`
+
+One suffix, one meaning. The convention drifted once and became actively
+misleading: `-missing` came to mean "any failure" and rendered as
+`severity="info"`, so a page told a visitor a studio was unlisted when the
+backend was down. `portfolio-empty` marked both a genuinely empty list and a
+404, so a test asserting it could not tell which it had caught.
+
+| Suffix | Means |
+|---|---|
+| `-loading` | A request is in flight. |
+| `-empty` | A request succeeded and there is genuinely nothing. |
+| `-missing` | This specific record does not exist. Only where the page knows that, not "something failed". |
+| `-failure` | A request failed. Cause unknown to the surface — `describeFailure` decides the wording. |
+
+No id may mark two conditions. If you need to distinguish a load failure from
+an action failure on the same page, they are two ids
+(`portfolio-load-failure`, `portfolio-action-failure`), not one used twice.
+
+Every surface that can fail, be empty, or be pending needs one — including the
+pending state. `apps/inside/CLAUDE.md` already says "test the in-flight state";
+an untestable in-flight state is the same rule broken one step earlier.
+
 **Frontend E2E** — `inside-fe/tests/e2e/*.spec.ts`, Playwright.
 
 - Runs the real app against the real backend on ports 4160/4161, so a running

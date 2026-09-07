@@ -68,6 +68,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
 | `ONBOARD` | `apps/inside/requirements/onboard.md` | inside — designer onboarding |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
+| `QUALITY` | `apps/inside/requirements/quality.md` | inside — testing conventions |
 | `SLUG` | `apps/inside/requirements/slug.md` | inside — public slugs and their history |
 | `STATE` | `apps/inside/requirements/state.md` | inside — request-state honesty |
 | `THEME` | `apps/inside/requirements/theme.md` | inside — light, dark and auto |
