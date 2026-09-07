@@ -17,13 +17,26 @@ export type ThemeMode = 'light' | 'dark' | 'auto';
 export type EffectiveMode = 'light' | 'dark';
 
 /**
- * REQ-THEME-002. This literal is duplicated, unavoidably, in the blocking
+ * REQ-THEME-002. Both of these are duplicated, unavoidably, in the blocking
  * script in `public/index.html` — that script runs before any bundle loads, so
- * it cannot import this. Change one and you must change the other: nothing
- * connects them, the flash returns silently, and every other theme test still
- * passes.
+ * it cannot import them. Change either one and you must change it there too:
+ * nothing connects them, the flash returns silently, and every other theme
+ * test still passes.
  */
 export const THEME_STORAGE_KEY = 'theme-mode';
+
+/**
+ * REQ-THEME-003. Light, not `auto`.
+ *
+ * A first visit should look the way the site was designed — image-first and
+ * editorial, drawn against a light ground. An OS setting is a statement about
+ * someone's operating system, not a request about this site, and treating it
+ * as one meant a visitor could arrive at a palette nobody chose for them.
+ *
+ * `auto` remains available and still follows the OS live (REQ-THEME-001); it
+ * is now something you opt into rather than something you are given.
+ */
+export const DEFAULT_THEME_MODE: ThemeMode = 'light';
 
 const isThemeMode = (value: unknown): value is ThemeMode =>
   value === 'light' || value === 'dark' || value === 'auto';
@@ -31,10 +44,11 @@ const isThemeMode = (value: unknown): value is ThemeMode =>
 export const getInitialMode = (): ThemeMode => {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemeMode(stored) ? stored : 'auto';
+    return isThemeMode(stored) ? stored : DEFAULT_THEME_MODE;
   } catch {
-    // Private mode / blocked storage — fall back to following the OS.
-    return 'auto';
+    // Private mode / blocked storage. The default, not the OS — a visitor who
+    // cannot store a choice should still get the designed one.
+    return DEFAULT_THEME_MODE;
   }
 };
 

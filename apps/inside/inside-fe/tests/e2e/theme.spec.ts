@@ -17,24 +17,39 @@ const ready = (page: Page) =>
   expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
 test.describe('theme', () => {
-  test('follows the OS preference by default', async ({ browser }) => {
+  test('is light by default, whatever the OS says', async ({ browser }) => {
+    // REQ-THEME-003. The dark-OS case is the one that matters: before #224 it
+    // decided the palette for a visitor who had never chosen.
     for (const scheme of ['dark', 'light'] as const) {
       const ctx = await browser.newContext({ colorScheme: scheme });
       const page = await ctx.newPage();
       await page.goto('/');
       await ready(page);
-      await expectTheme(page, scheme);
-      await expect(toggle(page)).toHaveAttribute('aria-label', /system/i);
+      await expectTheme(page, 'light');
+      await expect(toggle(page)).toHaveAttribute('aria-label', /light/i);
       await ctx.close();
     }
   });
 
-  test('cycles auto -> light -> dark -> auto', async ({ page }) => {
+  test('auto is reachable, and then follows the OS', async ({ browser }) => {
+    // REQ-THEME-001 intact: auto still does exactly what it did. It is now
+    // something you opt into rather than something you are given.
+    const ctx = await browser.newContext({ colorScheme: 'dark' });
+    const page = await ctx.newPage();
     await page.goto('/');
     await ready(page);
-    await expect(toggle(page)).toHaveAttribute('aria-label', /system/i);
+    await expectTheme(page, 'light');
 
-    await toggle(page).click();
+    await toggle(page).click(); // -> dark
+    await toggle(page).click(); // -> auto
+    await expect(toggle(page)).toHaveAttribute('aria-label', /system/i);
+    await expectTheme(page, 'dark');
+    await ctx.close();
+  });
+
+  test('cycles light -> dark -> auto -> light', async ({ page }) => {
+    await page.goto('/');
+    await ready(page);
     await expect(toggle(page)).toHaveAttribute('aria-label', /light/i);
     await expectTheme(page, 'light');
 
@@ -44,13 +59,16 @@ test.describe('theme', () => {
 
     await toggle(page).click();
     await expect(toggle(page)).toHaveAttribute('aria-label', /system/i);
+
+    await toggle(page).click();
+    await expect(toggle(page)).toHaveAttribute('aria-label', /light/i);
+    await expectTheme(page, 'light');
   });
 
   test('survives a reload', async ({ page }) => {
     await page.goto('/');
     await ready(page);
-    await toggle(page).click(); // -> light
-    await toggle(page).click(); // -> dark
+    await toggle(page).click(); // light -> dark
     await expectTheme(page, 'dark');
 
     await page.reload();
@@ -62,19 +80,20 @@ test.describe('theme', () => {
   test('an explicit choice is not overridden by the OS', async ({
     browser,
   }) => {
-    // Pin light while the OS says dark — the user's choice must win.
-    const ctx = await browser.newContext({ colorScheme: 'dark' });
+    // Pin dark while the OS says light — the visitor's choice must win, in
+    // the direction that is now the interesting one.
+    const ctx = await browser.newContext({ colorScheme: 'light' });
     const page = await ctx.newPage();
     await page.goto('/');
     await ready(page);
-    await expectTheme(page, 'dark');
-
-    await toggle(page).click(); // auto -> light
     await expectTheme(page, 'light');
+
+    await toggle(page).click(); // light -> dark, explicitly
+    await expectTheme(page, 'dark');
 
     await page.reload();
     await ready(page);
-    await expectTheme(page, 'light');
+    await expectTheme(page, 'dark');
     await ctx.close();
   });
 
@@ -85,6 +104,12 @@ test.describe('theme', () => {
     const page = await ctx.newPage();
     await page.goto('/');
     await ready(page);
+
+    // Auto has to be chosen now (REQ-THEME-003), so get there first — two
+    // clicks, light -> dark -> auto.
+    await toggle(page).click();
+    await toggle(page).click();
+    await expect(toggle(page)).toHaveAttribute('aria-label', /system/i);
     await expectTheme(page, 'light');
 
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -100,11 +125,15 @@ test.describe('theme', () => {
   }) => {
     // The blocking script in index.html sets the body class pre-paint, so the
     // first observable state is already correct.
+    //
+    // A dark OS with nothing stored is the case #224 created and the one that
+    // would regress silently: if index.html and theme.ts disagree on the
+    // fallback, this is the only test that notices.
     const ctx = await browser.newContext({ colorScheme: 'dark' });
     const page = await ctx.newPage();
     await page.goto('/', { waitUntil: 'commit' });
     await page.waitForFunction(() => document.body.className.length > 0);
-    await expectTheme(page, 'dark');
+    await expectTheme(page, 'light');
     await ctx.close();
   });
 });
