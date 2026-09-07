@@ -17,6 +17,7 @@ import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/config';
 import { useAuth } from '@/contexts/auth-context';
+import { get as fetchJson } from '@/lib/http';
 
 /**
  * A plain index of what exists.
@@ -58,12 +59,6 @@ const SECTIONS: ReadonlyArray<{
     adminOnly: true,
   },
 ];
-
-const fetchJson = async <T,>(url: string): Promise<T> => {
-  const response = await fetch(url, { credentials: 'include' });
-  if (!response.ok) throw new Error(`${response.status} from ${url}`);
-  return response.json() as Promise<T>;
-};
 
 const App: FC = () => {
   const { user, loading } = useAuth();

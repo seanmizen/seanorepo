@@ -16,6 +16,7 @@ import {
   humanise,
   usePortfolioProject,
 } from '@/features/discovery/use-designers';
+import { describeFailure } from '@/lib/http';
 import { useCanonicalPath } from '@/lib/use-canonical-path';
 
 /** One column at any width — the images are the point, so they get the room. */
@@ -57,14 +58,18 @@ const PortfolioProjectPage: FC = () => {
   }
 
   if (query.isError || !query.data) {
+    const failure = describeFailure(query.error, {
+      title: 'Project not found',
+      body: 'That project is not published.',
+    });
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>
         <Stack spacing={3}>
           <Typography variant="h3" component="h1">
-            Project not found
+            {failure.title}
           </Typography>
-          <Alert severity="info" data-testid="project-missing">
-            That project is not published.
+          <Alert severity={failure.severity} data-testid="project-missing">
+            {failure.body}
           </Alert>
           <Button
             component={Link}
