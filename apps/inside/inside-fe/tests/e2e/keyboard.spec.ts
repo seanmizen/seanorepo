@@ -246,13 +246,14 @@ test.describe('theme toggle', () => {
     await page.goto('/');
     await waitForApp(page);
 
-    await expect(toggle(page)).toHaveAccessibleName(/system/i);
-    await toggle(page).click();
+    // Light first since #224 (REQ-THEME-003), then dark, then system.
     await expect(toggle(page)).toHaveAccessibleName(/light/i);
     await toggle(page).click();
     await expect(toggle(page)).toHaveAccessibleName(/dark/i);
     await toggle(page).click();
     await expect(toggle(page)).toHaveAccessibleName(/system/i);
+    await toggle(page).click();
+    await expect(toggle(page)).toHaveAccessibleName(/light/i);
   });
 
   test('is reachable and operable with the keyboard alone', async ({
@@ -272,20 +273,20 @@ test.describe('theme toggle', () => {
     }
     expect(focused, 'theme toggle was not reachable by Tab').toBe(true);
 
-    await expect(toggle(page)).toHaveAccessibleName(/system/i);
+    await expect(toggle(page)).toHaveAccessibleName(/light/i);
+    await expect(page.locator('body')).toHaveClass(/\blight\b/);
 
     // Enter and Space must both work — a <div role="button"> would pass one
     // and fail the other.
     await page.keyboard.press('Enter');
-    await expect(toggle(page)).toHaveAccessibleName(/light/i);
-    await expect(page.locator('body')).toHaveClass(/\blight\b/);
-
-    await page.keyboard.press(' ');
     await expect(toggle(page)).toHaveAccessibleName(/dark/i);
     await expect(page.locator('body')).toHaveClass(/\bdark\b/);
 
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     await expect(toggle(page)).toHaveAccessibleName(/system/i);
+
+    await page.keyboard.press('Enter');
+    await expect(toggle(page)).toHaveAccessibleName(/light/i);
   });
 });
 
