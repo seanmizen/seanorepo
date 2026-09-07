@@ -16,6 +16,7 @@ import {
   humanise,
   usePortfolioProject,
 } from '@/features/discovery/use-designers';
+import { useCanonicalPath } from '@/lib/use-canonical-path';
 
 /** One column at any width — the images are the point, so they get the room. */
 const VIEWER_SIZES = '(max-width: 1200px) 100vw, 1100px';
@@ -33,6 +34,14 @@ const PortfolioProjectPage: FC = () => {
     [`/designers/${slug}`]: query.data?.profile.studioName,
     [`/designers/${slug}/portfolio/${projectSlug}`]: query.data?.project.title,
   });
+
+  // Both halves of the path can have been renamed independently, so the
+  // canonical URL is rebuilt from the response rather than patched.
+  useCanonicalPath(
+    query.data
+      ? `/designers/${query.data.profile.slug}/portfolio/${query.data.project.slug}`
+      : undefined,
+  );
 
   if (query.isPending) {
     return (
