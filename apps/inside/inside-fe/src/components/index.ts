@@ -3,7 +3,7 @@ export {
   ErrorBoundary,
   RouteErrorElement,
 } from './error-boundary';
-export { FailureNotice } from './failure-notice';
+export { FailureAlert, FailureNotice } from './failure-notice';
 export { OfflineBanner } from './offline-banner';
 export { ProtectedRoute } from './protected-route';
 export { ResponsiveImage } from './responsive-image';

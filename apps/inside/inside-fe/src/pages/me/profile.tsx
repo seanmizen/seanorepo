@@ -15,11 +15,10 @@ import {
 import type { FC } from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FailureNotice } from '@/components';
+import { FailureAlert, FailureNotice } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import { useDraft } from '@/features/designer-onboarding/use-draft';
 import {
-  ApiError,
   isNoProfileYet,
   useMyProfile,
   useSaveProfile,
@@ -95,7 +94,13 @@ const MyProfileEditor: FC = () => {
 
   const existing = query.data?.profile ?? null;
   const [step, setStep] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * `unknown`, so a caught rejection keeps knowing what it was — a 500, a
+   * timeout, a dead connection — instead of being flattened to a sentence that
+   * names the wrong culprit (REQ-NET-007). It also holds a plain string for
+   * the page's own validation message, which `FailureAlert` shows verbatim.
+   */
+  const [error, setError] = useState<unknown>(null);
 
   const [draft, updateDraft, clearDraft] = useDraft<ProfileDraft>(
     'inside:profile-draft',
@@ -166,11 +171,7 @@ const MyProfileEditor: FC = () => {
       });
       return true;
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'That could not be saved. Try again.',
-      );
+      setError(caught);
       return false;
     }
   };
@@ -191,11 +192,7 @@ const MyProfileEditor: FC = () => {
       clearDraft();
       navigate('/me');
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'That could not be submitted. Try again.',
-      );
+      setError(caught);
     }
   };
 
@@ -214,10 +211,16 @@ const MyProfileEditor: FC = () => {
           ))}
         </Stepper>
 
-        {error && (
-          <Alert severity="error" data-testid="profile-error">
-            {error}
-          </Alert>
+        {error != null && (
+          // The retry is the stepper's own Next / Submit button below.
+          <FailureAlert
+            error={error}
+            fallback={{
+              title: 'Not saved',
+              body: 'That could not be saved.',
+            }}
+            testId="profile-error"
+          />
         )}
 
         {step === 0 && (
