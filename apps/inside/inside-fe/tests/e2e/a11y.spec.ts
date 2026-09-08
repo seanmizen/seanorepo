@@ -218,6 +218,24 @@ for (const scheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, `/me/portfolio/:id (${scheme})`);
     });
 
+    test('my studio — piece editor load failure', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-piece-fail'), 'designer');
+      // Distinct from the missing state above: an alert at a different
+      // severity plus a retry button, so it needs its own contrast scan.
+      await page.route(/\/api\/me\/portfolio\/\d+(\?|$)/, (route) =>
+        route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'nope' }),
+        }),
+      );
+      await page.goto('/me/portfolio/1');
+      await expect(page.getByTestId('piece-load-failure')).toBeVisible();
+      await expectNoViolations(page, `/me/portfolio/:id failure (${scheme})`);
+    });
+
     test('admin — review queue', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);

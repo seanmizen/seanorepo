@@ -33,5 +33,8 @@ and, as REQ-QUALITY-001 shows, the two are not as separate as they sound.
 
   Documented in `apps/inside/CLAUDE.md` so it is applied when a page is written
   rather than swept afterwards.
-- **Verification:** Inspection — the suffix table in `apps/inside/CLAUDE.md`, checked when reviewing any change that adds a state surface. No automated check exists; a lint rule over `data-testid` values is what would make this enforceable rather than conventional.
+- **Verification:**
+  - Inspection — the suffix table in `apps/inside/CLAUDE.md`, checked when reviewing any change that adds a state surface. No general automated check exists; a lint rule over `data-testid` values is what would make this enforceable rather than conventional. #234 tracks that.
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a 404 is the missing piece, in its own right"
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a 500 is a failure, not a deletion"
 - **Relations:** refines REQ-NET-007
