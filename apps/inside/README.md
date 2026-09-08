@@ -80,6 +80,11 @@ Two targets, and they are not peers.
 file and the uploads directory are named Docker volumes there, so they survive
 rebuilds. This is where the data lives.
 
+> **`SITE_NAME` lives on the host, not in the repo.** It is `inside.space`, and
+> the deployed `.env` on debbie needs the same value. `.env.example` carries it
+> for a fresh checkout only. A stale `SITE_NAME` signs every magic-link email
+> with the old name, and nothing in CI can see that.
+
 **Fly.io (5060/5061) is a stateless mirror.** We attach no Fly volume, so the
 database and every uploaded asset are lost on each deploy or machine restart —
 `auto_stop_machines` is on, so that is often. The app boots, migrates an empty

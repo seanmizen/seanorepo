@@ -12,7 +12,7 @@ export async function configRoutes(fastify: FastifyInstance): Promise<void> {
       // Drives the "dev" status chip. Cosmetic: no sign-in link exists to
       // render unless the server itself sent one.
       devMode: isDevMode(process.env.NODE_ENV),
-      siteName: process.env.SITE_NAME ?? 'inside',
+      siteName: process.env.SITE_NAME ?? 'inside.space',
       tagline: process.env.TAGLINE ?? 'Find the designer for your space',
       uploadMaxFileSizeMb: Number(process.env.UPLOAD_MAX_FILE_SIZE_MB ?? 50),
       uploadMaxFiles: Number(process.env.UPLOAD_MAX_FILES ?? 30),

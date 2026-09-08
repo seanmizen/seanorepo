@@ -10,3 +10,4 @@ export { ResponsiveImage } from './responsive-image';
 export { SiteHeader } from './site-header';
 export { StatusChips } from './status-chips';
 export { ThemeToggle } from './theme-toggle';
+export { Wordmark } from './wordmark';

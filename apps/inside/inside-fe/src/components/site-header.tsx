@@ -1,7 +1,8 @@
-import { Box, Button, Container, Stack, Typography } from '@mui/material';
+import { Box, Button, Container, Stack } from '@mui/material';
 import type { FC } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Wordmark } from '@/components/wordmark';
 import { useAuth } from '@/contexts/auth-context';
 
 /**
@@ -72,7 +73,7 @@ const SiteHeader: FC = () => {
              */
           }}
         >
-          <Typography
+          <Wordmark
             component={Link}
             to="/"
             variant="h5"
@@ -82,9 +83,7 @@ const SiteHeader: FC = () => {
               letterSpacing: '-0.02em',
               mr: { xs: 0.5, sm: 2 },
             }}
-          >
-            inside
-          </Typography>
+          />
 
           <Stack direction="row" component="nav" aria-label="Main">
             <NavLink
