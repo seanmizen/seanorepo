@@ -4,7 +4,7 @@
 // e2e command excludes the tag. Mirrors the harness already in use by
 // ffmpeg-converter/web (see .github/workflows/ux-check.yml).
 //
-// Every route is scanned in BOTH themes. The app defaults to `auto`, so
+// The scan covers every route in BOTH themes. The app defaults to `auto`, so
 // Playwright's `colorScheme` context option is enough to pin each one —
 // no clicking through the toggle, which would leave localStorage state
 // behind and make the scans order-dependent. Dark-mode contrast is the
@@ -18,7 +18,7 @@ import { signIn, uniqueEmail, waitForApp } from './helpers';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 /**
- * Scan and assert. Violations are printed before the assertion so a CI
+ * Scan and assert. This prints violations before the assertion so a CI
  * failure names the rule, the impact and the offending selector rather than
  * just showing an empty-array diff.
  */
@@ -258,7 +258,7 @@ for (const scheme of ['light', 'dark'] as const) {
     test('not found', async ({ page }) => {
       // Two segments deep on purpose: it renders a three-crumb trail including
       // an inert crumb for an undeclared parent, which is the only place that
-      // styling appears. /designers/* stopped being undeclared in SEAN-160.
+      // styling appears. SEAN-160 declared /designers/*.
       await page.goto('/journal/spring-2026');
       await waitForApp(page);
       await expect(page.getByTestId('not-found')).toBeVisible();

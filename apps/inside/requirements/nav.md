@@ -1,6 +1,6 @@
 # REQ-NAV — Routing and navigation
 
-Routes are declared as data in `inside-fe/src/app/routes.ts`. The router, the
+`inside-fe/src/app/routes.ts` declares the routes as data. The router, the
 breadcrumb and the guard that polices both are all built from that one table.
 
 Introduced in #176. Crumb naming corrected in #200.

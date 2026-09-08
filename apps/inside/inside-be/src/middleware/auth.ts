@@ -65,7 +65,7 @@ export async function requireAuth(
   return user ? undefined : reply;
 }
 
-/** Attach to an encapsulated scope so child routes are protected structurally. */
+/** Attach to an encapsulated scope so it protects child routes structurally. */
 export function requireRole(...roles: UserRole[]) {
   return async function guard(
     request: FastifyRequest,
@@ -87,7 +87,7 @@ export const requireAdmin = requireRole('admin');
 /**
  * Populate `authUser` when the caller has a valid session, without demanding
  * one. Credentials that are present but bad are still rejected — that is a
- * real error worth surfacing, unlike simply being signed out.
+ * real error worth surfacing, unlike a plain sign-out.
  *
  * Used by the boot-time "who am I" check, which every anonymous visitor makes.
  * Answering 401 there would log a console error on every anonymous page load.

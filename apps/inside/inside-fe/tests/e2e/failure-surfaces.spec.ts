@@ -52,7 +52,7 @@ test.describe('a failure offers a control that actually retries', () => {
      * Fail every attempt until the visitor presses retry, then let it through.
      *
      * It has to be every attempt, not one: a 5xx IS retried (REQ-NET-006), so
-     * a single failure is absorbed by the query layer and never reaches a
+     * the query layer absorbs a single failure, which never reaches a
      * failure state at all — which is the policy working, and is why the first
      * version of this test passed the wrong thing.
      */
@@ -134,7 +134,7 @@ test.describe('a render crash', () => {
  * `/me/profile` and `/me/portfolio` answer 404 for a designer who has not
  * started a profile, so on these pages "you have nothing yet" and "the request
  * failed" arrive identically — `isError`, no data. Every test here exists to
- * hold those two apart, which is why each failure case is paired with the 404
+ * hold those two apart, which is why each test pairs the failure case with the 404
  * case rather than asserted alone.
  */
 test.describe('a failed load in /me is not an empty studio', () => {
@@ -255,9 +255,9 @@ test.describe('a failed load in /me is not an empty studio', () => {
 /*
  * REQ-QUALITY-001, on the page the #217 sweep missed.
  *
- * The two cases are asserted separately and never in the same test, because
+ * These tests assert the two cases separately and never in one test, because
  * conflating them IS the bug: a spec that only checked "some state appears"
- * passed happily while a 500 was being reported as a deleted piece.
+ * passed happily while the page reported a 500 as a deleted piece.
  */
 test.describe('a piece editor tells a failure from a missing piece', () => {
   test('a 404 is the missing piece, in its own right', async ({ page }) => {
@@ -383,7 +383,7 @@ test.describe('the /me failure surfaces are finished', () => {
     await page.goto('/me/profile');
     await expect(page.getByTestId('field-studioName')).toBeVisible();
 
-    // No server was asked, so there is nothing to diagnose — describing this
+    // The page asked no server, so there is nothing to diagnose — describing this
     // would dress the visitor's own omission as a fault of ours.
     await page.getByTestId('profile-next').click();
     await expect(page.getByTestId('profile-error')).toHaveText(

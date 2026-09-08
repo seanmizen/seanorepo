@@ -33,7 +33,7 @@ test.describe('theme', () => {
 
   test('auto is reachable, and then follows the OS', async ({ browser }) => {
     // REQ-THEME-001 intact: auto still does exactly what it did. It is now
-    // something you opt into rather than something you are given.
+    // something you opt into rather than something the OS picks for you.
     const ctx = await browser.newContext({ colorScheme: 'dark' });
     const page = await ctx.newPage();
     await page.goto('/');

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { getApp, uniqueEmail } from './setup';
 
-// Shared instance — see setup.ts. ADMIN_EMAILS is set there to boss@inside.test.
+// Shared instance — see setup.ts, which sets ADMIN_EMAILS to boss@inside.test.
 const app = await getApp();
 const { openDbConnection } = await import('../services/db');
 const { safeReturnTo } = await import('../controllers/auth');

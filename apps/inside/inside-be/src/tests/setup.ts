@@ -9,12 +9,12 @@ import type { FastifyInstance } from 'fastify';
  * `bun test` runs every suite in ONE process, and the modules under test
  * capture their configuration at module scope — `services/storage/index.ts`
  * reads UPLOADS_PATH on import, and `src/index.ts` builds the Fastify instance
- * on import. Those imports are cached, so all suites unavoidably share one
+ * on import. Those imports stay cached, so all suites unavoidably share one
  * server and one storage provider.
  *
  * Giving each suite its own env therefore does not isolate anything. It just
  * means whichever suite loaded first wins, and whichever calls `app.close()`
- * first breaks the others. So the environment is created once per process and
+ * first breaks the others. So this creates the environment once per process and
  * torn down at exit, and suites share it deliberately rather than by accident.
  *
  * Tests must stay independent by using unique data (unique emails, unique

@@ -34,10 +34,10 @@ constraint-tested in #150, storage abstracted in #143 and #154.
 - **Priority:** P1
 - **Statement:** The migration runner shall apply nothing on a second run
   against an already-migrated database.
-- **Rationale:** Migrations run on every boot, and the app is restarted by
-  Docker on deploy, on crash and on a server reboot. A runner that is not
+- **Rationale:** Migrations run on every boot, and Docker restarts the app on
+  deploy, on crash and on a server reboot. A runner that is not
   idempotent turns an ordinary restart into a schema change. Each file's DDL
-  and its tracking row are committed in one transaction, so a crash midway
+  and its tracking row land in one transaction, so a crash midway
   cannot leave a migration half-applied but recorded.
 - **Verification:** Test — `apps/inside/inside-be/src/tests/migrations.test.ts` › "is idempotent — a second run applies nothing"
 - **Relations:** none

@@ -18,11 +18,11 @@ import { resolveSlug } from './slugs';
  * The public read side of the marketplace: browse, filter, sort, search.
  *
  * THE APPROVAL GATE — REQ-PRODUCT-002, enforced here and in the schema
- * (REQ-DATA-003). Every query in this file is anchored on
- * `designer_profiles.status = 'approved'`, and that predicate is written into
- * the base WHERE clause before any caller-supplied filter is appended — it is
- * not a filter that a parameter could displace. Search hits arrive from the
- * FTS index, which holds no status at all, and are gated by the INNER JOIN
+ * (REQ-DATA-003). Every query in this file anchors on
+ * `designer_profiles.status = 'approved'`, and this file writes that predicate
+ * into the base WHERE clause before it appends any caller-supplied filter — it
+ * is not a filter that a parameter could displace. Search hits arrive from the
+ * FTS index, which holds no status at all, and the INNER JOIN gates them
  * back to `designer_profiles` carrying the same predicate. There is no code
  * path here, and no combination of parameters, that can return a row whose
  * status is not 'approved'.
@@ -155,7 +155,7 @@ export function listApprovedDesignersSql(filters: DesignerListFilters): {
  * then the cover of their first published project, then the first image on
  * their first published project that has one.
  *
- * Scoped to the page's ids, so the cost is bounded by page size, not by the
+ * Narrowed to the page's ids, so page size bounds the cost, not the
  * size of the result set.
  */
 async function resolveCoverImageIds(
@@ -190,7 +190,7 @@ async function resolveCoverImageIds(
     }>;
 
     // Rows arrive in curatorial order, so the first usable one per designer
-    // wins and later ones are ignored.
+    // wins and this loop skips later ones.
     for (const row of rows) {
       if (covers.has(row.pid)) continue;
       const id = row.project_cover_id ?? row.first_image_id;

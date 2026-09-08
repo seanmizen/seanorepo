@@ -20,7 +20,7 @@ to everywhere else.
 - **Statement:** The system shall accept no credential for authentication
   other than an emailed single-use link.
 - **Rationale:** No password means no password to store, leak, reset or get
-  wrong. The cost is an email round-trip on every sign-in, which was accepted
+  wrong. The cost is an email round-trip on every sign-in, which we accepted
   deliberately. Adding a password field later is not a small addition — it
   reintroduces every storage and reset concern this avoids — so it is a
   decision to reopen explicitly rather than drift into.
@@ -36,8 +36,8 @@ to everywhere else.
 - **Priority:** P0
 - **Statement:** The system shall reject a magic-link token that has already
   been redeemed.
-- **Rationale:** The link travels through email, which is forwarded, archived,
-  synced to other devices and scanned by intermediaries. A replayable link is
+- **Rationale:** The link travels through email. People forward it and archive
+  it, it syncs to other devices, and intermediaries scan it. A replayable link is
   therefore a durable credential sitting in an inbox rather than a momentary
   one. Expiry alone does not close this: a token replayed inside its window is
   still a second sign-in nobody asked for.
@@ -59,8 +59,8 @@ to everywhere else.
   designer's profile and portfolio. Letting a later sign-in carry a role in its
   payload would mean a designer who signs in from a buyer-flavoured link
   silently becomes a buyer and loses the route to their own work. The signup
-  payload's role is honoured exactly once, for an account that does not yet
-  exist.
+  server honours the payload's role exactly once, for an account that does not
+  yet exist.
 - **Verification:**
   - Test — `apps/inside/inside-be/src/tests/auth.test.ts` › "logging in again never rewrites an existing role"
   - Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "a designer keeps the designer role"
@@ -158,11 +158,11 @@ to everywhere else.
 - **Rationale:** Nothing in the app read a 401. A session ending mid-flow —
   expired, or signed out from another browser — surfaced as whatever generic
   error the page happened to own, while the header still showed the visitor
-  signed in and `ProtectedRoute` still admitted them. They were left pressing
-  Save against a red box that would never go away.
+  signed in and `ProtectedRoute` still admitted them. They kept pressing Save
+  against a red box that would never go away.
 
-  Being returned to a login page with no explanation reads as the site having
-  dropped them on purpose. The honest answer — the session expired, or was
+  A login page with no explanation reads as the site having dropped them on
+  purpose. The honest answer — the session expired, or was
   ended elsewhere — is also the one that says what to do next.
 
   This depends on REQ-AUTH-005 being true: `/api/auth/me` answers 200 with a
@@ -171,8 +171,8 @@ to everywhere else.
   told their session ended, which is the same class of lie in the opposite
   direction.
 
-  **The honest limit:** a session is discovered to have ended on the next
-  authenticated request, not the instant it is revoked. Nothing polls, and
+  **The honest limit:** the app learns that a session ended on the next
+  authenticated request, not the instant somebody revokes it. Nothing polls, and
   nothing should — the alternative is a heartbeat asking "am I still here?"
   forever, spending requests to learn something the next real request will say
   for free. A page that makes no authenticated call keeps its stale session

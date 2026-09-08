@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { getApp, uniqueEmail } from './setup';
 
-// The app is built (and migrated) before anything below imports the services.
+// setup builds and migrates the app before anything below imports the services.
 await getApp();
 
 const {
@@ -222,7 +222,7 @@ describe('resolution misses', () => {
     const asProfile = await resolveSlug('designer_profile', 'shared-word');
     expect(asProfile).not.toBeNull();
     // The brief's own row does not exist, so it resolves to null rather than
-    // leaking the designer — but the INSERT above was accepted, which is the
+    // leaking the designer — but the database accepted the INSERT above, which is the
     // point: the two namespaces do not collide.
     expect(await resolveSlug('brief', 'shared-word')).toBeNull();
   });

@@ -17,7 +17,7 @@ export type ThemeMode = 'light' | 'dark' | 'auto';
 export type EffectiveMode = 'light' | 'dark';
 
 /**
- * REQ-THEME-002. Both of these are duplicated, unavoidably, in the blocking
+ * REQ-THEME-002. Both of these appear a second time, unavoidably, in the blocking
  * script in `public/index.html` — that script runs before any bundle loads, so
  * it cannot import them. Change either one and you must change it there too:
  * nothing connects them, the flash returns silently, and every other theme
@@ -28,13 +28,13 @@ export const THEME_STORAGE_KEY = 'theme-mode';
 /**
  * REQ-THEME-003. Light, not `auto`.
  *
- * A first visit should look the way the site was designed — image-first and
+ * A first visit should look the way we designed the site — image-first and
  * editorial, drawn against a light ground. An OS setting is a statement about
  * someone's operating system, not a request about this site, and treating it
  * as one meant a visitor could arrive at a palette nobody chose for them.
  *
  * `auto` remains available and still follows the OS live (REQ-THEME-001). It
- * is now something you opt into rather than something you are given.
+ * is now something you opt into rather than something the OS picks for you.
  */
 export const DEFAULT_THEME_MODE: ThemeMode = 'light';
 
@@ -100,7 +100,7 @@ export const buildTheme = (effectiveMode: EffectiveMode): Theme => {
         contrastText: isDark ? '#121110' : '#ffffff',
       },
       divider: isDark ? 'rgba(236, 232, 226, 0.12)' : 'rgba(26, 26, 24, 0.12)',
-      // MUI's defaults are tuned for a pure-white ground and miss 4.5:1 on
+      // MUI tunes its defaults for a pure-white ground, and they miss 4.5:1 on
       // this warm off-white — its warning orange lands at 2.95:1. Overriding
       // them here fixes every `color="warning"` consumer at once, rather than
       // each component inventing its own compliant colour.
