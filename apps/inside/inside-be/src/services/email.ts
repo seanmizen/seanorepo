@@ -42,7 +42,7 @@ export async function sendMagicLinkEmail(
   email: string,
   link: string,
 ): Promise<void> {
-  const siteName = process.env.SITE_NAME ?? 'inside';
+  const siteName = process.env.SITE_NAME ?? 'inside.space';
   const safeLink = escapeHtml(link);
 
   await getTransporter().sendMail({
@@ -74,7 +74,7 @@ export async function sendReviewDecisionEmail(
   email: string,
   { decision, studioName, slug, note }: ReviewDecisionEmail,
 ): Promise<void> {
-  const siteName = process.env.SITE_NAME ?? 'inside';
+  const siteName = process.env.SITE_NAME ?? 'inside.space';
   const frontend = process.env.FRONTEND_URL ?? 'http://localhost:4060';
   const approved = decision === 'approve';
 

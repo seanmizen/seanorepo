@@ -444,7 +444,7 @@ test.describe('the breadcrumb tray', () => {
 
     const brand = await page
       .getByRole('banner')
-      .getByRole('link', { name: 'inside' })
+      .getByRole('link', { name: 'inside.space' })
       .boundingBox();
     const crumb = await page
       .getByTestId('breadcrumb-crumb')
