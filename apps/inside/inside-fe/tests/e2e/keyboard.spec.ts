@@ -20,23 +20,23 @@ type TabStop = {
 };
 
 /**
- * Walk the page with Tab and report what was reached and whether each stop
+ * Walk the page with Tab and report what it reached and whether each stop
  * showed a focus ring.
  *
- * Every visible focusable element is tagged with `data-kbd` first so a stop can
- * be matched back to the element it came from — accessible names are not unique
+ * The walk tags every visible focusable element with `data-kbd` first, so a
+ * stop can point back to the element it came from — accessible names are not unique
  * enough (two toggle buttons, several plain links) to key on.
  *
  * A focus ring may be drawn on the focused element or on a wrapper: MUI styles
  * the inner `<input>` of a text field with `outline: 0` and the ring goes on
- * `.MuiOutlinedInput-root` instead (see app/theme.ts). So ancestors are checked
- * too, a few levels up.
+ * `.MuiOutlinedInput-root` instead (see app/theme.ts). So the check walks a
+ * few levels of ancestors too.
  */
 async function walkWithTab(page: Page) {
   const expected = await page.evaluate((selector) => {
     const visible = Array.from(document.querySelectorAll<HTMLElement>(selector))
       .filter((el) => el.getClientRects().length > 0)
-      // `tabindex="-1"` is excluded by the selector only for the [tabindex]
+      // The selector excludes `tabindex="-1"` only for the [tabindex]
       // clause. A <textarea> or <button> carrying it still matched. MUI's
       // multiline TextField renders a second, hidden textarea to measure rows
       // with, which is how this surfaced.

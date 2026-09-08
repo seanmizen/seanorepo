@@ -3,12 +3,12 @@
 Deployment status chips for `inside`: the floating stack at the top-left that
 reports which backend the app is talking to and whether it is reachable.
 
-Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
+Introduced in #174. #198 stated `REQ-CHIPS-001`, after #197 broke it.
 
 > **Scope.** This file covers the chips as *chrome* — where they sit, how they
-> are composed, when they appear. What the chips are allowed to **claim** is
-> governed by the "never assert what you have not verified" principle, which
-> becomes `REQ-QUALITY-*` in the retrospective pass and is verified against
+> fit together, when they appear. What a chip may **claim** follows the
+> "never assert what you have not verified" principle, which becomes
+> `REQ-QUALITY-*` in the retrospective pass, and which tests check against
 > this component.
 
 ---
@@ -22,9 +22,9 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
 - **Priority:** P2
 - **Statement:** The status chip stack shall be rendered as fixed-position
   chrome, outside normal document flow.
-- **Rationale:** In #197 the chips were moved into the site header's normal
-  flow to resolve a layout collision. That silently dropped this requirement,
-  because at the time it was written down nowhere — it existed only as an
+- **Rationale:** #197 moved the chips into the site header's normal flow to
+  resolve a layout collision. That silently dropped this requirement,
+  because at the time nobody had written it down — it existed only as an
   intention. #198 reverted the change and added the assertions below so the
   same trade cannot be made again without a test going red and someone having
   to argue for it. When a future layout collision recurs, the header yields.
@@ -126,7 +126,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
 - **Rationale:** Supersedes REQ-CHIPS-005, which was not wrong so much as
   incomplete: it assumed the card was unconditionally wanted. It is deployment
   chrome — useful to whoever runs the site, noise to everyone else — so it
-  became a choice. The every-route guarantee is kept intact, because that was
+  became a choice. The successor keeps the every-route guarantee, because that was
   never the part in question: the card answers "which backend am I on, and is
   it up?", which is not a per-page question.
 
@@ -160,7 +160,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   chip stack shall show the dev chip.
 - **Rationale:** The chip marks a non-production backend, so it must be driven
   by what the server actually reports rather than by a build-time flag in the
-  bundle. A bundle-derived flag says what the frontend was compiled to believe,
+  bundle. A bundle-derived flag says what the build told the frontend to believe,
   which is not the same claim and would show a production visitor a dev badge —
   or, worse, hide it from someone who really is on a dev backend.
 
@@ -171,7 +171,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   defence in depth. The principle it stood for is unchanged and now lives in
   REQ-CHIPS-008: the server, never the bundle, decides what environment this
   is.
-- **Verification:** Inspection — no longer separately observable. See the note below. Its intent is carried by REQ-CHIPS-008, whose tests exercise the same signal.
+- **Verification:** Inspection — no longer separately observable. See the note below. REQ-CHIPS-008 carries its intent, and its tests exercise the same signal.
 - **Relations:** refines REQ-CHIPS-007
 
 ## REQ-CHIPS-008 — The card exists only outside production
@@ -187,7 +187,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   route and was therefore wrong in the one place it mattered. The card is
   deployment chrome — which backend am I on, is it up — and a member of the
   public browsing a marketplace has no business seeing it. It was visible in
-  production and noticed there, which is how this was found.
+  production and noticed there, which is how we found it.
 
   Availability comes from the SERVER, never a build-time flag: the same
   reasoning as REQ-CHIPS-006, for a stronger reason, since this decides what

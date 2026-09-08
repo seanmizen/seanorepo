@@ -61,7 +61,7 @@ visibility model in #158.
 - **Statement:** The system shall exclude any brief that is not both public and
   published from every listing, search result and count.
 - **Rationale:** `link` and `private` mean unlisted before they mean anything
-  else, and a leak into a listing is not recoverable — the brief has been seen.
+  else, and a leak into a listing is not recoverable — somebody has read it.
   Enforced as two conditions in the base query rather than as a filter a
   parameter could displace, the same shape as the designer approval gate.
   A brief past its close date also drops off, because a board is a list of
@@ -118,10 +118,12 @@ visibility model in #158.
 - **Priority:** P1
 - **Statement:** The interface shall describe `link` visibility as unlisted
   rather than as private, secret or restricted to people holding the link.
-- **Rationale:** Brief slugs are derived from titles and are user-editable, so
+- **Rationale:** The server derives brief slugs from titles and a user can
+  edit them, so
   they are guessable by design (REQ-SLUG-001). That trade is deliberate — a
   buyer who chooses anything other than `private` is consenting to a reachable
-  URL — but the consent is only real if the option is described accurately.
+  URL — but the consent is only real if the copy describes the option
+  accurately.
   "Only people with the link can see this" would be a guarantee the system does
   not provide, which is REQ-STATE-003 one layer up: presenting a guess as a
   fact. `private` is the only value that enforces anything.

@@ -20,19 +20,19 @@ and, as REQ-QUALITY-001 shows, the two are not as separate as they sound.
 - **Rationale:** A testing convention with a user-facing consequence, which is
   why it is a requirement rather than a style note.
 
-  `-missing` drifted into meaning "any failure" and was rendered as
+  `-missing` drifted into meaning "any failure", and pages rendered it as
   `severity="info"`, so six pages told a visitor a studio was "not listed" when
   the real answer was that the backend was down — the defect REQ-NET-007 had to
   fix. The naming did not cause that, but it recorded and normalised it: once
-  every failure is called *missing*, writing "not listed" is the natural next
+  we call every failure *missing*, writing "not listed" is the natural next
   thing to do.
 
   `portfolio-empty` marked both a genuinely empty list and a 404, so a test
   asserting it could not say which it had caught. A test that cannot fail for
   the right reason is not worth much more than no test.
 
-  Documented in `apps/inside/CLAUDE.md` so it is applied when a page is written
-  rather than swept afterwards.
+  Documented in `apps/inside/CLAUDE.md` so somebody applies it while writing a
+  page, rather than sweeping afterwards.
 - **Verification:**
   - Inspection — the suffix table in `apps/inside/CLAUDE.md`, checked when reviewing any change that adds a state surface. No general automated check exists. A lint rule over `data-testid` values is what would make this enforceable rather than conventional. #234 tracks that.
   - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a 404 is the missing piece, in its own right"

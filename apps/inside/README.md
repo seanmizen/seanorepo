@@ -39,8 +39,8 @@ yarn workspace inside seed
 Six designer profiles covering every approval status (draft, pending, approved,
 rejected), portfolio projects with real generated images, two buyers, three
 briefs and a bid. Images go through the actual `services/images.ts` pipeline, so
-variants and `srcset` are exercised rather than faked with rows pointing at
-files that do not exist.
+the tests exercise variants and `srcset` rather than faking them with rows
+pointing at files that do not exist.
 
 It is **idempotent** — run it as often as you like — and it **refuses to run
 when `NODE_ENV=production`**, because it writes fabricated accounts and doing
@@ -80,7 +80,7 @@ Two targets, and they are not peers.
 file and the uploads directory are named Docker volumes there, so they survive
 rebuilds. This is where the data lives.
 
-**Fly.io (5060/5061) is a stateless mirror.** No Fly volume is attached, so the
+**Fly.io (5060/5061) is a stateless mirror.** We attach no Fly volume, so the
 database and every uploaded asset are lost on each deploy or machine restart —
 `auto_stop_machines` is on, so that is often. The app boots, migrates an empty
 schema and serves. It just does not remember anything.

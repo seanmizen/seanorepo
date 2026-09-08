@@ -73,8 +73,8 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
    * Everything a signed-in designer manages about themselves.
    *
    * An encapsulated scope with the role guard as an onRequest hook, so every
-   * route below is protected by construction. Ownership is resolved from the
-   * session — never from a path or body parameter — so one designer cannot
+   * construction protects the route below. The session decides ownership —
+   * never a path or body parameter — so one designer cannot
    * address another's rows at all.
    */
   fastify.register(
@@ -106,7 +106,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
             slug,
             fields,
           );
-          // Recorded after the insert, because history is keyed on the row id
+          // Recorded after the insert, because history keys on the row id
           // and the row does not have one until it exists.
           await recordSlug('designer_profile', profile.id, slug);
           return reply.status(201).send({ profile });
@@ -116,9 +116,10 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
       /**
        * Edits to an approved profile stay live rather than dropping it back to
        * pending. Re-reviewing every typo would build an admin queue nobody can
-       * keep up with, and the approval gate exists to vet who is listed, not to
+       * keep up with, and the approval gate exists to vet who appears, not to
        * proofread. The slug is deliberately NOT regenerated here: once a
-       * profile is public its URL is shared and indexed, so it must be stable.
+       * profile is public, people share its URL and search engines index it,
+       * so it must be stable.
        */
       me.put('/profile', async (request, reply) =>
         withValidation(reply, async () => {
@@ -132,7 +133,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
           );
 
           // A user-supplied slug is `custom`, so a collision or a reserved word
-          // is refused rather than quietly altered (REQ-SLUG-004). The old slug
+          // draws a refusal rather than a quiet change (REQ-SLUG-004). The old slug
           // keeps working either way — renaming only ever adds (REQ-SLUG-001).
           const desired = (request.body as { slug?: unknown }).slug;
           if (typeof desired === 'string' && desired.trim().length > 0) {

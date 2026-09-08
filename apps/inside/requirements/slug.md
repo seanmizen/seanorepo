@@ -18,7 +18,7 @@ Introduced in #192.
 - **Priority:** P1
 - **Statement:** Every slug an entity has ever held shall continue to resolve to
   that entity for as long as the entity exists.
-- **Rationale:** A slug leaves the site the moment it is created — in an email,
+- **Rationale:** A slug leaves the site the moment we create it — in an email,
   a message, a bookmark, an index. Nothing can be recalled, so a rename that
   drops the old name breaks links we cannot see and cannot fix. History means a
   rename is purely additive: one entity may accumulate twenty slugs over a
@@ -42,7 +42,7 @@ Introduced in #192.
   of the same type has ever held.
 - **Rationale:** This is the failure that matters more than a 404. If a studio
   renames away from `north-house` and another studio is then allowed to take
-  it, everyone holding the old link is delivered to the wrong studio — and
+  it, the site sends everyone holding the old link to the wrong studio — and
   nothing looks broken, so nobody reports it. Checking history rather than the
   live column is the difference. An entity reclaiming a slug it previously held
   is always allowed: it is already theirs.
@@ -63,7 +63,7 @@ Introduced in #192.
   app shall replace the address with the current one without adding a browser
   history entry.
 - **Rationale:** Resolving an old slug is not enough on its own — the visitor
-  is left looking at a stale URL, which they then copy and share onward,
+  keeps looking at a stale URL, which they then copy and share onward,
   extending the life of a name that has moved. A true HTTP 301 is unavailable:
   the frontend is a static SPA whose server has no database and cannot know
   the mapping, so the rewrite happens client-side.
@@ -89,7 +89,8 @@ Introduced in #192.
   `admin`, `api` or `login` shadows one. The list is trivial to maintain now
   and impossible to apply retroactively: once somebody holds a reserved slug,
   REQ-SLUG-002 says it can never be taken away from them. A *derived* slug that
-  happens to land on a reserved word is suffixed rather than refused, because a
+  happens to land on a reserved word takes a suffix rather than a refusal,
+  because a
   studio genuinely called "Admin" has done nothing wrong.
 - **Verification:**
   - Test — `apps/inside/inside-be/src/tests/slugs.test.ts` › "a custom reserved slug is refused with a reason worth showing"

@@ -71,7 +71,7 @@ const fastify = Fastify({
    * log line for it, so an error a user reports can be found in the logs
    * rather than guessed at.
    *
-   * An inbound header is honoured because cloudflared is the only thing that
+   * We honour an inbound header because cloudflared is the only thing that
    * can reach this port, and a caller who forges one only confuses their own
    * trace. `crypto.randomUUID` rather than a counter: a counter restarts at
    * zero on every deploy, so ids collide across restarts.

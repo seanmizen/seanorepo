@@ -36,10 +36,10 @@ than about features.
 - **Statement:** Unsaved edits to a profile shall still be present after the
   page is reloaded.
 - **Rationale:** Onboarding is long — a name, a headline worth reading, a bio,
-  a location, several pieces of work — and it is done on a phone, where a
+  a location, several pieces of work — and they do it on a phone, where a
   reload is a phone call, a low battery or a stray gesture. Losing half of it
   is the point at which somebody gives up and does not come back. The server
-  holds what is saved. A local draft holds the keystrokes since, and the draft
+  holds the last save. A local draft holds the keystrokes since, and the draft
   wins on load because it is newer by construction.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/onboarding.spec.ts` › "work in progress survives a refresh mid-edit"
 - **Relations:** none
@@ -74,7 +74,7 @@ than about features.
   they retry the same file and fail again. The server already knows whether the
   problem was the type, the size or the quota, and says so — discarding that
   and substituting a generic message is throwing away the only part of the
-  response that helps. Progress is reported for the same reason: an upload with
+  response that helps. The upload reports progress for the same reason: one with
   no visible progress is indistinguishable from a hung page.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/onboarding.spec.ts` › "a rejected upload says what was wrong with the file"
 - **Relations:** refines REQ-STATE-001

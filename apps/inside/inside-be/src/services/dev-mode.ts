@@ -5,7 +5,7 @@
  * Exposing that link is a COMPLETE AUTHENTICATION BYPASS: anyone who can call
  * the endpoint gets a valid session for any address they name. It is only
  * tolerable because it is impossible in production, so the whole decision
- * lives here as pure functions with no I/O, and is tested against the full
+ * lives here as pure functions with no I/O, and its tests cover the full
  * truth table rather than the one path we happen to run locally.
  *
  * The frontend never synthesises a link — it renders only what the server
@@ -22,10 +22,10 @@ export interface DevModeInputs {
 }
 
 /**
- * Anything that is not explicitly production is treated as production-unsafe
+ * We treat anything that is not explicitly production as production-unsafe
  * only in the permissive direction: we require an explicit non-production
  * marker before relaxing anything. `undefined` counts as development, which
- * matches how the app is run locally (`bun src/index.ts` with no NODE_ENV),
+ * matches how we run the app locally (`bun src/index.ts` with no NODE_ENV),
  * but never reaches a deployed container — every Dockerfile sets NODE_ENV
  * explicitly, and production additionally refuses to boot without real
  * secrets.
@@ -39,7 +39,7 @@ export const isProduction = (nodeEnv: string | undefined): boolean =>
  * Production short-circuits FIRST and unconditionally — no flag, no missing
  * SMTP config, and no combination of the two can reach the permissive branch.
  *
- * Outside production it is allowed when either:
+ * Outside production the app allows it when either:
  *   - the operator explicitly asked for it, or
  *   - email is not configured, so the alternative is a 502 and a developer who
  *     cannot sign in at all.
@@ -56,7 +56,7 @@ export function shouldExposeDevLink({
 /**
  * Whether to advertise dev mode to the client (drives the "dev" chip).
  *
- * Cosmetic only. Even if a client were tricked into believing this, no link
+ * Cosmetic only. Even if somebody tricked a client into believing this, no link
  * exists to render — the link comes from the response body, not from a flag.
  */
 export const isDevMode = (nodeEnv: string | undefined): boolean =>
@@ -70,7 +70,7 @@ export class InsecureConfigurationError extends Error {}
  * Silently ignoring the flag would be safe for this request but leaves a box
  * running that its operator believes has an auth bypass — and the next person
  * to change this file might honour it. Crashing makes the misconfiguration
- * impossible to miss, matching how missing JWT/COOKIE secrets are handled.
+ * impossible to miss, matching how the app handles missing JWT/COOKIE secrets.
  */
 export function assertBypassNotProduction(inputs: {
   nodeEnv: string | undefined;
