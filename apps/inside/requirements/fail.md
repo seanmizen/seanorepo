@@ -69,7 +69,13 @@ Introduced across #178 and #216, on the machinery #214 provided.
 
   It matters more since REQ-NET-006 stopped retrying timeouts automatically:
   failing fast is only the better trade if the visitor can choose to wait.
-- **Verification:** Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "the retry button refetches, and succeeds once the server does"
+- **Verification:**
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "the retry button refetches, and succeeds once the server does"
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a portfolio that failed to load offers a retry that works"
+- **Note:** A failed *mutation* is out of this requirement's scope by design.
+  The control that re-issues it is the Save button the visitor pressed, still
+  on screen — a second retry beside it would be two controls for one action.
+  Those surfaces owe the visitor a diagnosis (REQ-NET-007), not a button.
 - **Relations:** depends-on REQ-NET-006
 
 ## REQ-FAIL-004 — A route crash never shows a stack trace

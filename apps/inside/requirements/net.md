@@ -171,6 +171,8 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   - Test — `apps/inside/inside-fe/tests/e2e/netcode.spec.ts` › "does not claim the studio is unlisted"
   - Test — `apps/inside/inside-fe/tests/e2e/netcode.spec.ts` › "an unreachable server reads as a connection problem"
   - Test — `apps/inside/inside-fe/tests/e2e/netcode.spec.ts` › "still says the studio is not listed"
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "an action that cannot reach the server says so, not \"could not be saved\""
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a validation message the page raised itself is shown as written"
 - **Relations:**
   - refines REQ-STATE-003
   - depends-on REQ-NET-001
