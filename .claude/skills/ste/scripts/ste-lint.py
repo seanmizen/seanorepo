@@ -181,9 +181,15 @@ def changed_files(scopes):
     reports every file somebody else changed, which is not this branch's work.
     """
     base = _git(["merge-base", "HEAD", "origin/main"]) or _git(["merge-base", "HEAD", "main"])
+    if not base:
+        # "Nothing changed" and "I could not work out what changed" are different
+        # answers, and a shallow clone produces the second while looking like the
+        # first. A check that cannot determine its own scope must not pass.
+        print("ste-lint: no merge base with main. Fetch full history "
+              "(actions/checkout fetch-depth: 0).", file=sys.stderr)
+        raise SystemExit(2)
     names = set()
-    if base:
-        names |= set(_git(["diff", "--name-only", base]).splitlines())
+    names |= set(_git(["diff", "--name-only", base]).splitlines())
     names |= set(_git(["diff", "--name-only", "HEAD"]).splitlines())
     names |= set(_git(["ls-files", "--others", "--exclude-standard"]).splitlines())
 
@@ -350,10 +356,11 @@ def main(argv):
         i += 1
 
     if only_changed:
+        scope_note = ", ".join(paths) if paths else "the whole repo"
         paths = changed_files(paths)
         if not paths:
             if not as_json:
-                print("no changed files to lint")
+                print(f"no changed files to lint (compared against {scope_note})")
             else:
                 print(json.dumps({"violations": [], "count": 0, "hard_count": 0,
                                   "baseline": baseline, "words": 0, "per_100_words": 0.0}))
