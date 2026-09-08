@@ -33,6 +33,7 @@ import type { StoredImage } from '@shared/types';
 import type { FC } from 'react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { FailureNotice } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import {
   ApiError,
@@ -190,10 +191,20 @@ const MyProjectEditor: FC = () => {
     );
   }
 
-  // A piece that is not this designer's, or no longer exists, is answered
-  // inline rather than by the catch-all 404 — the same choice the admin review
-  // page makes, and what lets the route guard visit this path.
-  if (query.isError || !query.data) {
+  /*
+   * A piece that is not this designer's, or no longer exists, is answered
+   * inline rather than by the catch-all 404 — the same choice the admin review
+   * page makes, and what lets the route guard visit this path.
+   *
+   * The backend 404s for both "no such piece" and "not yours" on purpose:
+   * telling one designer that another's piece exists is itself a leak. So a
+   * 404 is the only status this page can honestly call missing.
+   */
+  if (
+    query.isError &&
+    query.error instanceof ApiError &&
+    query.error.status === 404
+  ) {
     return (
       <Container maxWidth="md" sx={{ py: 6 }}>
         <Stack spacing={3} alignItems="flex-start">
@@ -204,6 +215,35 @@ const MyProjectEditor: FC = () => {
             That piece is no longer available.
           </Alert>
         </Stack>
+      </Container>
+    );
+  }
+
+  /*
+   * Everything else failed, and must not be dressed as a deletion —
+   * REQ-QUALITY-001.
+   *
+   * `isError || !query.data` used to render the block above, so a 500 or a
+   * dead tunnel told a designer their work was "no longer available", in
+   * `severity="info"`, calmly. That is the precise misuse of `-missing` the
+   * suffix convention was written after, reintroduced in a page the #217 sweep
+   * did not reach.
+   *
+   * `!query.data` on a settled, non-error query is a success with no body —
+   * a fourth thing again, and a failure rather than a missing record.
+   */
+  if (query.isError || !query.data) {
+    return (
+      <Container maxWidth="md" sx={{ py: 6 }}>
+        <FailureNotice
+          error={query.error}
+          notFound={{
+            title: 'Your piece',
+            body: 'That piece is no longer available.',
+          }}
+          onRetry={() => query.refetch()}
+          testId="piece-load-failure"
+        />
       </Container>
     );
   }
