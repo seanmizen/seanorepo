@@ -102,7 +102,7 @@ constraint-tested in #150, storage abstracted in #143 and #154.
   piece and a client's job, and disambiguating it cost a whole rename ticket.
   Two words are therefore banned outright — bare "project" (say
   `portfolio_project` or `brief`) and "pitch" (a designer places a `bid`). The
-  cost of the rule is a slightly longer name; the cost of breaking it is
+  cost of the rule is a slightly longer name. The cost of breaking it is
   another #189.
-- **Verification:** Inspection — the term table in `apps/inside/CLAUDE.md`, checked when reviewing any change that introduces a domain noun. No automated check exists; a linter rule over identifiers and copy would be the way to make this enforceable rather than aspirational.
+- **Verification:** Inspection — the term table in `apps/inside/CLAUDE.md`, checked when reviewing any change that introduces a domain noun. No automated check exists. A linter rule over identifiers and copy would be the way to make this enforceable rather than aspirational.
 - **Relations:** none

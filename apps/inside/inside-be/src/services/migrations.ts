@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type DatabaseType, openDbConnection } from './db';
 
-// Migrations run inside the test suite too; the progress chatter would bury
+// Migrations run inside the test suite too. The progress chatter would bury
 // assertion output there.
 const log = (...args: unknown[]): void => {
   if (process.env.NODE_ENV !== 'test') console.log(...args);

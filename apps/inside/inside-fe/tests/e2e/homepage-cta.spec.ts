@@ -57,7 +57,7 @@ test.describe('homepage sign-up CTA', () => {
   });
 
   test('does not flash before the session is known', async ({ page }) => {
-    // The auth check is in flight on first paint; showing the CTA and then
+    // The auth check is in flight on first paint. Showing the CTA and then
     // yanking it away would be the same "assert before you know" bug.
     let release: (() => void) | undefined;
     const held = new Promise<void>((resolve) => {

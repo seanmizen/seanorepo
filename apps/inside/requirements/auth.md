@@ -1,6 +1,6 @@
 # REQ-AUTH — Authentication, sessions and roles
 
-Magic link only; there are no passwords. Introduced in #149.
+Magic link only. There are no passwords. Introduced in #149.
 
 This is the highest-stakes area in the app, and the one where a silent
 regression is least likely to be noticed by looking at the screen — a session
@@ -140,7 +140,7 @@ to everywhere else.
   looks like a genuine `inside` sign-in but lands on an attacker's page,
   arriving with all the trust of an email the user asked for. A leading-slash
   check is not enough on its own, because `//evil.example` passes it and is
-  protocol-relative. Validated on both sides, since the client-side check is a
+  protocol-relative. Checked on both sides, since the client-side check is a
   convenience and the server's is the control.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "a returnTo pointing off-site is ignored"
 - **Relations:** none
@@ -180,7 +180,7 @@ to everywhere else.
 
   A transport failure is deliberately NOT treated as a sign-out. It says
   nothing about the session, so claiming one ended would assert something
-  unverified (REQ-STATE-003); the offline banner covers that case honestly.
+  unverified (REQ-STATE-003). The offline banner covers that case honestly.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "says why, rather than bouncing to login in silence"
   - Test — `apps/inside/inside-fe/tests/e2e/auth.spec.ts` › "the next authenticated request ends the session, without a reload"

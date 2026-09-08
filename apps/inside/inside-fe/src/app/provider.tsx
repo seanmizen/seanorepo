@@ -34,7 +34,7 @@ const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
-      // Storage blocked; the choice just won't survive a reload.
+      // Storage blocked. The choice just won't survive a reload.
     }
   }, []);
 

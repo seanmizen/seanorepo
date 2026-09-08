@@ -100,7 +100,7 @@ export async function bidRoutes(fastify: FastifyInstance): Promise<void> {
           const bid = await briefs.insertBid(brief.id, profile.id, fields);
           return reply.status(201).send({ bid });
         } catch (error) {
-          // The check above loses a race between two concurrent starts; the
+          // The check above loses a race between two concurrent starts. The
           // UNIQUE constraint catches it. Answer the same 409 rather than
           // letting raw SQLite text out as a 500.
           if (briefs.isDuplicateBidError(error)) {

@@ -233,7 +233,7 @@ export async function seed(): Promise<SeedResult> {
         timeline: 'within_3_months',
         closesAt: null,
       },
-      // Demo briefs that were 'open' become public and published; the rest
+      // Demo briefs that were 'open' become public and published. The rest
       // stay private and unpublished, which is what 'draft' meant.
       brief.status === 'open' ? 'public' : 'private',
       { publish: brief.status === 'open' },

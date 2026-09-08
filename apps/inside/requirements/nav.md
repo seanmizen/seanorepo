@@ -3,7 +3,7 @@
 Routes are declared as data in `inside-fe/src/app/routes.ts`. The router, the
 breadcrumb and the guard that polices both are all built from that one table.
 
-Introduced in #176; crumb naming corrected in #200.
+Introduced in #176. Crumb naming corrected in #200.
 
 ---
 
@@ -23,7 +23,7 @@ Introduced in #176; crumb naming corrected in #200.
   `/designers/:slug` may not exist without `/designers`. The guard is driven
   off the route table rather than a hand-maintained list, so a nested route
   added without its parent fails without anyone touching the test. The
-  forbidden workaround is hiding the crumb; the fix is adding the page.
+  forbidden workaround is hiding the crumb. The fix is adding the page.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/navigation.spec.ts` › "every ancestor of every route is itself a declared route"
   - Test — `apps/inside/inside-fe/tests/e2e/navigation.spec.ts` › "the guard catches a nested route with no parent"
@@ -40,7 +40,7 @@ Introduced in #176; crumb naming corrected in #200.
   text wherever no declared route serves that path.
 - **Rationale:** The counterpart to REQ-NAV-001, covering the paths that rule
   cannot reach. REQ-NAV-001 guarantees the ancestors of *declared* routes
-  resolve; this one covers a URL nobody declared, where the app must not
+  resolve. This one covers a URL nobody declared, where the app must not
   fabricate an invitation into a 404 out of the segments it happens to find.
   Together they mean the app never offers a link it cannot honour.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/navigation.spec.ts` › "renders the 404 page and never offers a dead link"

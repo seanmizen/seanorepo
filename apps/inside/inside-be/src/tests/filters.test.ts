@@ -19,7 +19,7 @@ describe('multi-value params accept both conventions', () => {
   });
 
   test('repeated keys become the same array', () => {
-    // Fastify hands repeated keys through as an array; a hand-written link or
+    // Fastify hands repeated keys through as an array. A hand-written link or
     // another service may use either convention, so both must work.
     const result = parse({ workTypes: ['kitchen', 'bathroom'] });
     expect(result.success && result.data.workTypes).toEqual([

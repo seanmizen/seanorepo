@@ -39,7 +39,7 @@ than about features.
   a location, several pieces of work — and it is done on a phone, where a
   reload is a phone call, a low battery or a stray gesture. Losing half of it
   is the point at which somebody gives up and does not come back. The server
-  holds what is saved; a local draft holds the keystrokes since, and the draft
+  holds what is saved. A local draft holds the keystrokes since, and the draft
   wins on load because it is newer by construction.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/onboarding.spec.ts` › "work in progress survives a refresh mid-edit"
 - **Relations:** none
@@ -55,7 +55,7 @@ than about features.
   reviewer's note alongside the status and allow the designer to resubmit.
 - **Rationale:** A rejection the designer cannot act on is a dead end, and a
   dead end in a two-sided marketplace costs supply. The admin side already
-  refuses to reject without a reason; this is the other half of that decision —
+  refuses to reject without a reason. This is the other half of that decision —
   the reason has to reach the person who can act on it, and resubmitting must
   not require starting again.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/onboarding.spec.ts` › "a rejected designer sees the reason and can resubmit"

@@ -7,8 +7,8 @@ import { ApiError, describeFailure } from '@/lib/http';
  *
  * REQ-FAIL-003. Every page used to hand-roll this, which is how six of them
  * ended up rendering `severity="info"` and the words "not listed" for a dead
- * backend. `describeFailure` (REQ-NET-007) already decides *what* is true;
- * this decides how it looks and gives the visitor something to press.
+ * backend. `describeFailure` (REQ-NET-007) already decides *what* is true.
+ * This decides how it looks and gives the visitor something to press.
  *
  * The retry is a real control. Before this the app contained three "Try
  * again." strings — all of them prose inside an alert, instructing the visitor
@@ -69,7 +69,7 @@ export const FailureNotice: FC<{
  * it. That function answers a 4xx with the caller's `notFound` copy, which is
  * right for a load — a 404 on a profile page means "not listed" — and wrong
  * for an action, where a refused request carries the only wording that says
- * what to do next: "That file is 14MB; the limit is 8MB" beats "that could not
+ * what to do next: "That file is 14MB. The limit is 8MB" beats "that could not
  * be saved" every time. Transport failures and 5xx have no such message, and
  * those are exactly the cases `describeFailure` exists to word properly.
  *

@@ -13,7 +13,7 @@
  * Every ancestor of every path here must itself be a declared, visitable
  * route. `/designers/:slug` may not exist without `/designers`, because the
  * breadcrumb renders `/designers` as a link and a link that 404s is a bug.
- * `findMissingAncestors` is what enforces it; CI fails on a non-empty result.
+ * `findMissingAncestors` is what enforces it. CI fails on a non-empty result.
  */
 
 export interface RouteDefinition {
@@ -26,8 +26,8 @@ export interface RouteDefinition {
    *
    * Only meaningful for a STATIC segment. On a parameterised route the label
    * is the same for every instance — `/designers/:slug` is "studio" for every
-   * studio — so the concrete segment wins instead and the label goes unused;
-   * see `crumbsFor`. A page that knows the real name supplies it at runtime
+   * studio — so the concrete segment wins instead and the label goes unused.
+   * See `crumbsFor`. A page that knows the real name supplies it at runtime
    * with `useCrumbTitles`, for its own crumb or an ancestor's.
    */
   label: string;
@@ -35,8 +35,8 @@ export interface RouteDefinition {
   requiresAuth?: boolean;
   /**
    * The session must also hold this role, or `ProtectedRoute` bounces to home.
-   * The breadcrumb guard reads this to sign in as the right kind of user;
-   * without it an admin route would look like a dead path to a buyer.
+   * The breadcrumb guard reads this to sign in as the right kind of user.
+   * Without it an admin route would look like a dead path to a buyer.
    */
   requiresRole?: 'designer' | 'admin';
   /**
@@ -51,7 +51,7 @@ export interface RouteDefinition {
 export const ROUTES = [
   { path: '/', label: 'home' },
   { path: '/login', label: 'sign in' },
-  // Without a token the page renders "missing its token"; the guard uses a
+  // Without a token the page renders "missing its token". The guard uses a
   // deliberately invalid one so it lands on the same state the other specs use.
   { path: '/verify', label: 'sign-in link', search: '?token=nonsense' },
   { path: '/account', label: 'account', requiresAuth: true },
@@ -144,7 +144,7 @@ export const NOT_FOUND_PATH = '*';
 export const toSegments = (path: string): string[] =>
   path.split('/').filter(Boolean);
 
-/** `['a', 'b']` -> `/a/b`; the empty case is the root. */
+/** `['a', 'b']` -> `/a/b`. The empty case is the root. */
 const fromSegments = (segments: readonly string[]): string =>
   segments.length === 0 ? '/' : `/${segments.join('/')}`;
 
@@ -291,7 +291,7 @@ export const crumbsFor = (
        * studio, `studio` says nothing. So the label is used only when the
        * route's own segment is not a parameter.
        *
-       * A page that knows the real name still overrides this at runtime; this
+       * A page that knows the real name still overrides this at runtime. This
        * is what the crumb degrades to before that name arrives, or when
        * nothing supplies one.
        */

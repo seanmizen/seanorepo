@@ -46,7 +46,7 @@ Introduced across #178 and #216, on the machinery #214 provided.
 
   Driven by TanStack's `onlineManager` rather than a bare `navigator.onLine`
   listener, so the banner and the query layer cannot disagree: the same value
-  decides both what is displayed and whether queries are paused.
+  decides both what is shown and whether queries are paused.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "says so once, at app level, rather than once per failed page"
   - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "recovers without a manual refresh"
@@ -63,7 +63,7 @@ Introduced across #178 and #216, on the machinery #214 provided.
   that re-issues it.
 - **Rationale:** The app contained three "Try again." strings and no retry.
   All three were prose inside an alert, instructing the visitor to re-click
-  something themselves; `refetch` was not called from any component in the
+  something themselves. `refetch` was not called from any component in the
   codebase. Telling somebody to try again while giving them nothing to press is
   worse than saying nothing, because it implies a control exists.
 

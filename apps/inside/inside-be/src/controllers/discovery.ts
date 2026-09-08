@@ -26,12 +26,12 @@ import { withValidation } from './helpers';
  * the pages search engines crawl, so an auth check would be both wrong and
  * invisible until traffic arrived.
  *
- * Only approved designers are ever returned; the gate lives in
+ * Only approved designers are ever returned. The gate lives in
  * `services/discovery.ts`, in the base WHERE clause of every query, rather
  * than being reapplied per route where a future route could forget it.
  */
 
-/** Sensible grid page; the ceiling stops a caller pulling the whole table. */
+/** Sensible grid page. The ceiling stops a caller pulling the whole table. */
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 60;
 /** 10k pages deep is a crawler or a mistake, and OFFSET cost grows with it. */
@@ -68,7 +68,7 @@ export async function discoveryRoutes(fastify: FastifyInstance): Promise<void> {
       location: filters.location ?? null,
       budgetBands: filters.budgetBands ?? null,
       availability: filters.availability ?? null,
-      // Search defaults to relevance; browsing defaults to newest.
+      // Search defaults to relevance. Browsing defaults to newest.
       sort: filters.sort ?? (filters.q === undefined ? 'newest' : 'relevance'),
       limit: filters.limit,
       offset,

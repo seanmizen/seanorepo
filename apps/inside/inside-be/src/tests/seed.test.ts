@@ -113,7 +113,7 @@ describe('seeding', () => {
   });
 
   test('refuses to run in production', async () => {
-    // It writes fabricated accounts and fake portfolio work; doing that to
+    // It writes fabricated accounts and fake portfolio work. Doing that to
     // real data would be destructive, so this fails loudly rather than being
     // merely discouraged.
     const original = process.env.NODE_ENV;

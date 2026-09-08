@@ -64,7 +64,7 @@ export const REQUEST_TIMEOUT_MS = 15_000;
  * - A **4xx is an answer.** Retrying it twice with backoff — which is what the
  *   previous blanket `retry: 2` did — only makes the app slower to admit it.
  * - A **timeout is expensive to retry.** The deadline has already been paid
- *   once; two more attempts means the visitor stares at a skeleton for 45
+ *   once. Two more attempts means the visitor stares at a skeleton for 45
  *   seconds instead of being told at 15. Failing fast and offering a retry
  *   they choose to press beats deciding to wait on their behalf.
  * - A **network error is cheap to retry** — it fails immediately, so a second
@@ -104,7 +104,7 @@ export const setUnauthorizedHandler = (
 };
 
 export interface RequestOptions extends RequestInit {
-  /** Override the deadline. Uploads use their own path; see `uploadImage`. */
+  /** Override the deadline. Uploads use their own path. See `uploadImage`. */
   timeoutMs?: number;
 }
 
@@ -126,7 +126,7 @@ export async function request<T>(
     });
   } catch (caught) {
     // A thrown fetch means no response at all. `AbortSignal.timeout` raises a
-    // TimeoutError; everything else here is DNS, CORS, or the network being
+    // TimeoutError. Everything else here is DNS, CORS, or the network being
     // gone. Neither is an HTTP status, so neither gets one.
     const timedOut =
       caught instanceof DOMException && caught.name === 'TimeoutError';
@@ -142,7 +142,7 @@ export async function request<T>(
   const requestId = response.headers.get('x-request-id') ?? undefined;
 
   if (!response.ok) {
-    // The server's own wording wherever it has any: "That file is 14MB; the
+    // The server's own wording wherever it has any: "That file is 14MB. The
     // limit is 8MB" beats a generic failure, and is the only message that says
     // what to do next.
     let message = messageFor(response.status);
@@ -206,7 +206,7 @@ export interface FailureDescription {
  * Every public read page used to render the same `severity="info"` line —
  * "that studio is not listed" — for a 404, a 500, a dead tunnel and a dropped
  * wifi connection. Three of those four are the app asserting something it has
- * not verified, which is exactly what REQ-STATE-003 forbids; it just happened
+ * not verified, which is exactly what REQ-STATE-003 forbids. It just happened
  * one layer up from where that requirement was being applied.
  *
  * `notFound` is the caller's, because only the caller knows what was missing.

@@ -1,7 +1,7 @@
 # inside
 
 `inside.seanmizen.com` — a marketplace for architects and interior designers.
-Designers sell themselves, their projects and their portfolio; homeowners and
+Designers sell themselves, their projects and their portfolio. Homeowners and
 project managers browse and get in touch. Positioning is high-brow and luxury.
 
 ## Ports
@@ -68,7 +68,7 @@ by presence in `schema_migrations` — so a migration merged out of order still
 runs.
 
 **Assets** go through `StorageProvider` (`inside-be/src/services/storage/`).
-Local disk today; the S3 swap is a new provider plus `STORAGE_TYPE=s3`, with
+Local disk today. The S3 swap is a new provider plus `STORAGE_TYPE=s3`, with
 nothing above it changing. Image resizing lives in `services/images.ts`, above
 the provider, so the provider stays a pure blob store.
 
@@ -83,7 +83,7 @@ rebuilds. This is where the data lives.
 **Fly.io (5060/5061) is a stateless mirror.** No Fly volume is attached, so the
 database and every uploaded asset are lost on each deploy or machine restart —
 `auto_stop_machines` is on, so that is often. The app boots, migrates an empty
-schema and serves; it just does not remember anything.
+schema and serves. It just does not remember anything.
 
 That is a deliberate choice, not an oversight:
 

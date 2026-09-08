@@ -37,7 +37,7 @@ async function walkWithTab(page: Page) {
     const visible = Array.from(document.querySelectorAll<HTMLElement>(selector))
       .filter((el) => el.getClientRects().length > 0)
       // `tabindex="-1"` is excluded by the selector only for the [tabindex]
-      // clause; a <textarea> or <button> carrying it still matched. MUI's
+      // clause. A <textarea> or <button> carrying it still matched. MUI's
       // multiline TextField renders a second, hidden textarea to measure rows
       // with, which is how this surfaced.
       .filter((el) => el.getAttribute('tabindex') !== '-1')
@@ -59,7 +59,7 @@ async function walkWithTab(page: Page) {
 
   const stops: TabStop[] = [];
   // Tabbing past the last control hands focus to the browser chrome, where
-  // activeElement falls back to <body>; the next Tab re-enters at the top. So
+  // activeElement falls back to <body>. The next Tab re-enters at the top. So
   // this loops well past the element count and tolerates the empty stops
   // rather than breaking on the first one.
   for (let i = 0; i < expected.length * 2 + 4; i++) {
@@ -304,7 +304,7 @@ test.describe('keyboard-only sign in', () => {
     // Walked rather than counted: the header and the breadcrumb both come
     // first in the tab order and both vary — the trail by route, the header by
     // whether you are signed in and what role you hold. The bound is
-    // deliberately generous so adding a header link does not break this; only
+    // deliberately generous so adding a header link does not break this. Only
     // the toggle becoming genuinely unreachable should.
     const designer = page.getByRole('button', { name: /i'm a designer/i });
     for (let i = 0; i < 25; i++) {

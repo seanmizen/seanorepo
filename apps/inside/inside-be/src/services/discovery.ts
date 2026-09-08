@@ -45,7 +45,7 @@ export interface DesignerListFilters {
   offset: number;
 }
 
-/** Only the columns a list needs; bio and the review trail stay server-side. */
+/** Only the columns a list needs. Bio and the review trail stay server-side. */
 interface ListRow {
   id: number;
   slug: string;
@@ -101,7 +101,7 @@ function buildQuery(filters: DesignerListFilters): BuiltQuery | null {
     params.push(match);
   }
   if (filters.location !== null) {
-    // NOCASE so "london" finds "London"; migration 002 indexes this collation.
+    // NOCASE so "london" finds "London". Migration 002 indexes this collation.
     where.push('p.location = ? COLLATE NOCASE');
     params.push(filters.location);
   }

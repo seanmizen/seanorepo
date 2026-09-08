@@ -212,7 +212,7 @@ const CHECK_CASES: Array<{
     good: '100k_250k',
   },
   { table: 'briefs', column: 'timeline', bad: 'immediately', good: 'asap' },
-  // `status` was retired in 006; visibility is the enum that replaced the part
+  // `status` was retired in 006. Visibility is the enum that replaced the part
   // of it worth keeping. 'draft' is a good probe: it was a legal status and is
   // deliberately NOT a visibility, because unpublished is a timestamp now.
   { table: 'briefs', column: 'visibility', bad: 'draft', good: 'link' },
@@ -231,7 +231,7 @@ const CHECK_CASES: Array<{
   {
     table: 'bids',
     column: 'status',
-    // 'shortlisted' was one of six speculative states SEAN-185 removed; it is
+    // 'shortlisted' was one of six speculative states SEAN-185 removed. It is
     // now as invalid as anything else nobody built a behaviour for.
     bad: 'shortlisted',
     good: 'submitted',

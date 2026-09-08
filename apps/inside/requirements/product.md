@@ -1,7 +1,7 @@
 # REQ-PRODUCT — Locked product decisions
 
 The decisions that define what `inside` *is*, rather than how it is built.
-These are the stakeholder-level requirements everything else serves; the rest
+These are the stakeholder-level requirements everything else serves. The rest
 of this directory refines or depends on them.
 
 Do not relitigate these without asking Sean. That instruction has lived in
@@ -42,7 +42,7 @@ honours them.
   until an administrator has approved it.
 - **Rationale:** Designers self-signup, so the approval gate is the only thing
   standing between an open signup form and the public directory. Positioning is
-  high-brow and curated; an unreviewed profile appearing publicly damages that
+  high-brow and curated. An unreviewed profile appearing publicly damages that
   directly and is not recoverable by deleting it afterwards. The gate is
   enforced in the schema rather than only in query code — a profile defaults to
   draft — so a new query written later cannot accidentally expose one.
