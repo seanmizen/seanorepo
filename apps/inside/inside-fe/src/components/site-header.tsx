@@ -92,6 +92,9 @@ const SiteHeader: FC = () => {
             >
               Designers
             </NavLink>
+            <NavLink to="/briefs" current={pathname.startsWith('/briefs')}>
+              Projects
+            </NavLink>
           </Stack>
 
           <Box sx={{ flexGrow: 1 }} />

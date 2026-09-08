@@ -73,6 +73,26 @@ export const ROUTES = [
     label: 'project',
     params: { slug: 'studio-mercer', projectSlug: 'clapham-townhouse' },
   },
+  // Post-a-project. The board is public and anonymous (REQ-BRIEF-002). The
+  // buyer's own projects hang off `/account` rather than `/me`, because `/me`
+  // is the designer's workspace and carries a designer role guard. A buyer
+  // following the breadcrumb up from their projects must land somewhere they
+  // can actually be.
+  { path: '/briefs', label: 'projects' },
+  {
+    path: '/briefs/:slug',
+    label: 'project',
+    // An unknown slug renders "no longer listed" inline rather than the
+    // catch-all 404, so the guard can visit it without a fixture row.
+    params: { slug: 'no-such-project' },
+  },
+  { path: '/account/briefs', label: 'projects', requiresAuth: true },
+  {
+    path: '/account/briefs/:id',
+    label: 'project',
+    requiresAuth: true,
+    params: { id: '1' },
+  },
   // The designer's own workspace. Every level is a real page because
   // `/me/portfolio/:id` implies both `/me` and `/me/portfolio` — the standing
   // rule above, which is why there is no bare editor hanging off nothing.
