@@ -46,6 +46,20 @@ RULES = [
      "Compound tense. Use simple past/present unless current relevance is the point (then keep and flag)."),
 ]
 
+# seanorepo modification: advisory, not blocking.
+#
+# We read all 25 hits across apps/inside before changing anything. About 21 were
+# false positives, because the rule matches any inflection and knows no part of
+# speech. It paired "the leading-slash check" (a noun) with "validate" (a verb),
+# the route path "/verify" with "check", the SQL words DELETE and CHECK with our
+# prose, and "the upload path gets a longer deadline" (receives) with "fetch".
+#
+# Upstream already set this precedent: the noun-cluster rule is absent with the
+# comment "needs POS tagging to avoid constant false positives". This rule has
+# the same defect. It still reports, so a real rotation is still visible, but it
+# no longer fails a build and no longer pressures anyone into rewriting correct
+# prose to quiet a heuristic.
+#
 # One word, one meaning: groups of verbs commonly rotated for the same action.
 # Only pairs where the members are genuinely interchangeable — error/fault/failure
 # are distinct concepts and stay out.
@@ -152,7 +166,11 @@ def extract_prose(text, filename):
                 # A URL or a regex inside a string is not a comment.
                 i = _skip_string(line, i)
                 continue
-            if line_tok and line.startswith(line_tok, i):
+            # `\//` closes a regex literal, it does not open a comment.
+            # /localhost:4160\// was read as code plus a comment, and the
+            # linter then reported the statement's own semicolon as prose.
+            if (line_tok and line.startswith(line_tok, i)
+                    and not (i > 0 and line[i - 1] == "\\")):
                 for k in range(i + len(line_tok), n):
                     buf[k] = line[k]
                 i = n
@@ -254,7 +272,7 @@ def lint(text, filename="<stdin>"):
             first_base = present[0][1]
             for (lineno, col, match), base in present[1:]:
                 findings.append({"file": filename, "line": lineno, "col": col,
-                                 "rule": "synonym-rotation", "level": "advisory-free",
+                                 "rule": "synonym-rotation", "level": "advisory",
                                  "match": match,
                                  "message": f"'{base}' and '{first_base}' name the same action. Pick one and use it every time."})
     findings.sort(key=lambda f: (f["line"], f["col"]))
@@ -313,6 +331,10 @@ def selftest():
 
     # a URL in a string is not a comment
     findings, _ = lint('const u = "https://x.example/a;b";\n', filename="x.ts")
+    assert findings == [], findings
+
+    # a regex literal ending \// is not a comment either
+    findings, _ = lint("await expect(p).toHaveURL(/host:4160\\//);\n", filename="x.ts")
     assert findings == [], findings
 
     # block comments, JSDoc stars stripped so the marker is not counted as a word

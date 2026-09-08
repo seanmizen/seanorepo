@@ -5,7 +5,7 @@
  * them too — to build filter controls, and to parse URL state against the same
  * source the server validates with. A copy on each side is a copy that drifts.
  *
- * The union TYPES stay in `types.ts`; these are the runtime lists, and the
+ * The union TYPES stay in `types.ts`. These are the runtime lists, and the
  * `satisfies` below keeps the two from diverging.
  */
 import type {

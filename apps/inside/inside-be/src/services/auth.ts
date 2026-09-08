@@ -8,7 +8,7 @@ import { openDbConnection } from './db';
  * not an omission.
  *
  * Short-lived by design: a magic link is a bearer credential sitting in an
- * inbox. Expiry bounds the window; REQ-AUTH-002 closes replay inside it.
+ * inbox. Expiry bounds the window. REQ-AUTH-002 closes replay inside it.
  */
 export const MAGIC_TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -69,8 +69,8 @@ function resolveRole(
 ): UserRole {
   if (getAdminEmails().has(normaliseEmail(email))) return 'admin';
   if (existing === null) return requested;
-  // An existing admin who is dropped from the whitelist falls back to buyer;
-  // otherwise the stored role stands.
+  // An existing admin who is dropped from the whitelist falls back to buyer.
+  // Otherwise the stored role stands.
   return existing === 'admin' ? 'buyer' : existing;
 }
 

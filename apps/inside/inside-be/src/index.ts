@@ -83,7 +83,7 @@ const fastify = Fastify({
 /**
  * Every response carries its request id, whether it succeeded or not.
  *
- * On the success path it is what lets a slow request be correlated later; on
+ * On the success path it is what lets a slow request be correlated later. On
  * the failure path it is the only thing connecting what the user saw to the
  * line in the log that explains it.
  */

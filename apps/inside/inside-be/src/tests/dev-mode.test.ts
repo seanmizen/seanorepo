@@ -10,7 +10,7 @@ import {
 /**
  * Exposing a sign-in link is a complete authentication bypass, so the decision
  * is tested against the FULL truth table rather than the one path we happen to
- * run locally. Every production row must be false; no combination of flags may
+ * run locally. Every production row must be false. No combination of flags may
  * reach the permissive branch.
  */
 const ENVS = ['production', 'development', 'test', undefined, '', 'Production'];

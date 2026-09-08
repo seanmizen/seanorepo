@@ -19,7 +19,7 @@ export async function parseQuery<T extends z.ZodType>(
   const result = schema.safeParse(query ?? {});
   if (result.success) return result.data;
 
-  // The first issue is the useful one; a wall of them helps nobody, and the
+  // The first issue is the useful one. A wall of them helps nobody, and the
   // path tells the caller which parameter to fix.
   const issue = result.error.issues[0];
   const field = issue.path.join('.') || 'query';

@@ -23,7 +23,7 @@ prose in `apps/inside/CLAUDE.md`.
 - **Rationale:** Following the OS only at load looks correct in every test that
   reloads and wrong for the one case that matters — a machine flipping to dark
   on schedule while someone is reading. An explicit light or dark choice is
-  never overridden by the OS afterwards; that is what makes it explicit.
+  never overridden by the OS afterwards. That is what makes it explicit.
 
   **Amended in #224 — the behaviour is unchanged, its reach is not.** This
   said "auto is the default, so this is what most visitors get". Auto is no

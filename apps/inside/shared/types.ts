@@ -1,7 +1,7 @@
 /**
  * Types shared between inside-fe and inside-be.
  *
- * SQL is snake_case; these are the camelCase shapes the API speaks.
+ * SQL is snake_case. These are the camelCase shapes the API speaks.
  *
  * NAMING WARNING — "project" is overloaded in this domain:
  * - `PortfolioProject` a designer's completed work, shown in their portfolio
@@ -10,10 +10,10 @@
  */
 
 /**
- * Every account is one row in `users`; `role` decides what they can do.
+ * Every account is one row in `users`. `role` decides what they can do.
  * - `buyer`    homeowner / project manager looking for a designer
  * - `designer` architect, interior designer etc. selling their work
- * - `admin`    site owner; approves designer profiles
+ * - `admin`    site owner, approves designer profiles
  */
 export type UserRole = 'buyer' | 'designer' | 'admin';
 
@@ -96,7 +96,7 @@ export type Availability = Exclude<Timeline, 'exploring'>;
 
 /**
  * Approval gate. Designers self-signup but stay unlisted until an admin
- * approves them; a new profile starts as `draft` and is never publicly visible.
+ * approves them. A new profile starts as `draft` and is never publicly visible.
  * Discovery only ever selects `approved`.
  */
 export type DesignerProfileStatus =
@@ -146,7 +146,7 @@ export interface PortfolioProject {
   completedYear: number | null;
   coverImageId: number | null;
   status: PortfolioProjectStatus;
-  /** Curatorial order within the portfolio; lower sorts first. */
+  /** Curatorial order within the portfolio. Lower sorts first. */
   displayOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -192,7 +192,7 @@ export type BriefVisibility = 'public' | 'link' | 'private';
  * `publishedAt === null` — and a terminal `closed` could not express
  * publish/unpublish at will. Two timestamps carry it instead:
  *
- * - `publishedAt === null` — unpublished; hidden from everyone but the owner,
+ * - `publishedAt === null` — unpublished, hidden from everyone but the owner,
  *   whatever `visibility` says and whoever is invited.
  * - `closesAt` in the past — still visible, no longer accepting bids.
  */

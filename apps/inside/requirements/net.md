@@ -3,7 +3,7 @@
 The transport layer, and what happens when it does not work.
 
 Introduced in #214. `REQ-STATE-001..004` already said a surface must never
-assert what it has not verified; this is the machinery that lets it comply.
+assert what it has not verified. This is the machinery that lets it comply.
 Before this, the same fetch wrapper existed four times with three incompatible
 error shapes, so most pages had no way to know what had actually gone wrong.
 
@@ -26,7 +26,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   a client-rendered app, so it has to be given one deliberately or it is
   re-invented per call site.
 - **Verification:** Analysis — `apps/inside/inside-fe/src/lib/http.ts` is the
-  only module in `inside-fe/src` containing `fetch`; the one remaining
+  only module in `inside-fe/src` containing `fetch`. The one remaining
   `XMLHttpRequest` is the upload path, which exists because `fetch` cannot
   report upload progress.
 - **Relations:** none
@@ -81,13 +81,13 @@ error shapes, so most pages had no way to know what had actually gone wrong.
 - **Statement:** The server shall resolve a request's originating address from
   the proxy headers set by the tunnel it sits behind.
 - **Rationale:** Without `trustProxy` every request appears to come from
-  cloudflared. On its own that is merely useless; as the input to the per-IP
+  cloudflared. On its own that is merely useless. As the input to the per-IP
   rate limits in #165 it is dangerous, because every visitor on earth lands in
   one bucket and is throttled collectively. A security control that appears to
   work is worse than an absent one, since nothing prompts anybody to look at
   it. Recorded here rather than in #165 because it is a property of the request
   pipeline, and #165 is a consumer of it.
-- **Verification:** Inspection — `trustProxy: true` in `apps/inside/inside-be/src/index.ts`, against the ingress in `apps/cloudflared/config.yml`. No automated check exists; proving it end-to-end needs a request through the real tunnel, which CI has no access to.
+- **Verification:** Inspection — `trustProxy: true` in `apps/inside/inside-be/src/index.ts`, against the ingress in `apps/cloudflared/config.yml`. No automated check exists. Proving it end-to-end needs a request through the real tunnel, which CI has no access to.
 - **Relations:** none
 
 ## REQ-NET-005 — One error envelope
@@ -124,7 +124,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   The messages in question are SQLite constraint text, `sharp` decode failures
   and filesystem paths: an attacker's map of the schema and the disk, handed
   over by any request that provokes an exception. A 4xx keeps its message
-  because those are written by us for the caller to read; a 5xx was written by
+  because those are written by us for the caller to read. A 5xx was written by
   a library, about our internals, for us. Saying nothing is only acceptable
   because REQ-NET-003 gives the caller a reference that finds everything.
 - **Verification:**
@@ -132,7 +132,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   - Test — `apps/inside/inside-be/src/tests/http-errors.test.ts` › "a 4xx keeps its message — those are written for the caller"
 - **Relations:** depends-on REQ-NET-003
 
-## REQ-NET-006 — Retry what might work; never retry an answer
+## REQ-NET-006 — Retry what might work. Never retry an answer
 
 - **Status:** active
 - **Source:** sean
@@ -145,7 +145,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   policy retried a 404 twice with backoff before admitting it — latency
   dressed as resilience. A timeout has already cost the visitor the full
   deadline once, so retrying twice means 45 seconds of skeleton instead of
-  being told at 15; failing fast and letting them choose to retry is the better
+  being told at 15. Failing fast and letting them choose to retry is the better
   trade. A network error fails instantly, so a second attempt costs nothing and
   genuinely rescues a blip.
 - **Verification:** Analysis — `isRetryable` in `apps/inside/inside-fe/src/lib/http.ts`, consumed by the single `retry` predicate in `lib/query-client.ts`. The 15-second first-failure assertion in `netcode.spec.ts` › "becomes a failure the visitor can see" would take 45 seconds if timeouts were retried.
@@ -163,7 +163,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
 - **Rationale:** Every public read page rendered the same `severity="info"`
   line — "that studio is not listed" — for a 404, a 500, a dead tunnel and a
   dropped connection. Three of those four are the app stating something it has
-  not verified, which is what `REQ-STATE-003` forbids; it was simply happening
+  not verified, which is what `REQ-STATE-003` forbids. It was simply happening
   one layer up from where that requirement was being applied. Telling somebody
   a studio does not exist when the truth is that our server is down also sends
   them away permanently, which is the expensive version of the mistake.

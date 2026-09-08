@@ -33,7 +33,7 @@ export const THEME_STORAGE_KEY = 'theme-mode';
  * someone's operating system, not a request about this site, and treating it
  * as one meant a visitor could arrive at a palette nobody chose for them.
  *
- * `auto` remains available and still follows the OS live (REQ-THEME-001); it
+ * `auto` remains available and still follows the OS live (REQ-THEME-001). It
  * is now something you opt into rather than something you are given.
  */
 export const DEFAULT_THEME_MODE: ThemeMode = 'light';
@@ -65,7 +65,7 @@ export const getEffectiveMode = (mode: ThemeMode): EffectiveMode =>
  * site is the photography, and a loud UI competes with it.
  *
  * The full editorial identity (type scale, custom faces, spacing rhythm) is
- * SEAN-150; this is the neutral base it replaces.
+ * SEAN-150. This is the neutral base it replaces.
  */
 export const buildTheme = (effectiveMode: EffectiveMode): Theme => {
   const isDark = effectiveMode === 'dark';
@@ -151,8 +151,8 @@ export const buildTheme = (effectiveMode: EffectiveMode): Theme => {
       body1: { lineHeight: 1.65 },
       body2: { lineHeight: 1.6 },
       button: {
-        // Sentence case, not SHOUTING. Uppercase buttons read as software;
-        // this is meant to read as a publication.
+        // Sentence case, not SHOUTING. Uppercase buttons read as software.
+        // This is meant to read as a publication.
         textTransform: 'none',
         fontWeight: 500,
         letterSpacing: '0.01em',

@@ -49,7 +49,7 @@ export const useAuth = (): AuthContextValue => useContext(AuthContext);
 
 /**
  * Only same-site relative paths are ever followed after signing in. The
- * backend applies the same rule; this is the second half of the same guard,
+ * backend applies the same rule. This is the second half of the same guard,
  * because the value also reaches `navigate()` on the client.
  */
 export function safeReturnTo(value: string | null | undefined): string {

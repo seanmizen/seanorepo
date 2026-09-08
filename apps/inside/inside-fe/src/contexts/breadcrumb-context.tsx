@@ -70,7 +70,7 @@ export const BreadcrumbTitleProvider: FC<{ children: ReactNode }> = ({
   );
 };
 
-/** Read by the breadcrumb only; pages use the hooks below. */
+/** Read by the breadcrumb only. Pages use the hooks below. */
 export const useBreadcrumbTitles = (): CrumbTitles =>
   useContext(BreadcrumbTitleContext).titles;
 

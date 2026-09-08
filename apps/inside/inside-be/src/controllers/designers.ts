@@ -266,7 +266,7 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
         return reply.status(204).send();
       });
 
-      /** Replaces the image list; array order becomes display order. */
+      /** Replaces the image list. Array order becomes display order. */
       me.put('/portfolio/:id/images', async (request, reply) =>
         withValidation(reply, async () => {
           const id = Number((request.params as { id: string }).id);

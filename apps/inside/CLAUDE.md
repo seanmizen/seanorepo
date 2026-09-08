@@ -1,7 +1,7 @@
 # CLAUDE.md — `inside`
 
-Guidance for agents working in `apps/inside`. This file is scoped to this app;
-the monorepo-wide rules in the root `CLAUDE.md` still apply.
+Guidance for agents working in `apps/inside`. This file is scoped to this app.
+The monorepo-wide rules in the root `CLAUDE.md` still apply.
 
 ## What this app is
 
@@ -27,7 +27,7 @@ Do not relitigate these without asking Sean.
 - Site data is SQLite, kept right next to the runner. Barebones.
 
 > Requirements live in [`requirements/`](./requirements/) and are validated in
-> CI. This prose explains; the requirement binds. When the two disagree, the
+> CI. This prose explains. The requirement binds. When the two disagree, the
 > requirement is right — see [`requirements/README.md`](../../requirements/README.md).
 
 ### Vocabulary
@@ -47,7 +47,7 @@ places.
 
 Two words are deliberately absent. **"Project" alone is banned** — it meant
 both a designer's portfolio piece and a client's job, which is exactly the
-ambiguity that cost us a rename; say `portfolio_project` or `brief`. And
+ambiguity that cost us a rename. Say `portfolio_project` or `brief`. And
 **"pitch" is banned** — a designer places a `bid`.
 
 Public URL shape:
@@ -94,14 +94,14 @@ touching `apps/inside`.
   every file in a single process, and the modules under test capture their
   config at import — `services/storage/index.ts` reads `UPLOADS_PATH` on
   import, `src/index.ts` builds the Fastify instance on import. Those imports
-  are cached, so giving a suite its own environment isolates nothing; it only
+  are cached, so giving a suite its own environment isolates nothing. It only
   decides which suite's settings win.
 - Get the server with `await getApp()` from `./setup` — already migrated and
   ready. Call `getTestEnv()` if you only need paths. Both are memoised.
 - **Never call `app.close()` in a suite.** The instance is shared, so closing
   it breaks every other suite. Teardown happens once at process exit.
 - **Keep suites independent by using unique data, not a clean database.**
-  `uniqueEmail()` is in `./setup`; do the same for filenames and slugs. Never
+  `uniqueEmail()` is in `./setup`. Do the same for filenames and slugs. Never
   write a test that assumes a table is empty, and never bulk-mutate shared
   state — a query like `UPDATE sessions SET expires_at = ...` with no `WHERE`
   will sign out accounts other suites are mid-way through using. Scope every
@@ -137,8 +137,8 @@ an action failure on the same page, they are two ids
 (`portfolio-load-failure`, `portfolio-action-failure`), not one used twice.
 
 Every surface that can fail, be empty, or be pending needs one — including the
-pending state. `apps/inside/CLAUDE.md` already says "test the in-flight state";
-an untestable in-flight state is the same rule broken one step earlier.
+pending state. `apps/inside/CLAUDE.md` already says "test the in-flight state".
+An untestable in-flight state is the same rule broken one step earlier.
 
 **Frontend E2E** — `inside-fe/tests/e2e/*.spec.ts`, Playwright.
 
@@ -231,7 +231,7 @@ path** rather than "the current page" — a nested page knows its ancestors'
 names too, and a placeholder in the middle of a trail is as unhelpful as one at
 the end. A portfolio piece names both itself and the studio above it. Entries
 that are `undefined` or blank are ignored, so passing `data?.name` straight
-through degrades gracefully while loading; everything set is cleared on unmount
+through degrades gracefully while loading. Everything set is cleared on unmount
 so a name never leaks onto the next page. `useBreadcrumbTitle(name)` remains as
 a thin wrapper for the common case of naming only your own crumb.
 
@@ -253,7 +253,7 @@ chips on the left. `navigation.spec.ts` asserts they do not collide.
 
 - **Bun is the runtime only.** Package management is Yarn 4. Never
   `bun install` or `bun build`.
-- **Migrations are additive.** Never edit an applied migration; add
+- **Migrations are additive.** Never edit an applied migration. Add
   `NNN_name.sql`. The runner tracks by presence (not a `MAX(version)`
   high-water mark) and wraps each file's DDL plus its tracking row in one
   transaction.
@@ -275,7 +275,7 @@ chips on the left. `navigation.spec.ts` asserts they do not collide.
 
 ## Auth — `REQ-AUTH-001` … `REQ-AUTH-007`
 
-Magic link only; there are no passwords. See `services/auth.ts`,
+Magic link only. There are no passwords. See `services/auth.ts`,
 `services/session.ts`, `middleware/auth.ts`.
 
 - **Roles are `buyer`, `designer`, `admin`.** `admin` comes *only* from the
@@ -297,7 +297,7 @@ Magic link only; there are no passwords. See `services/auth.ts`,
   `//evil.example`, which a leading-slash check lets through.
 - Guard routes by putting them in an encapsulated scope with `requireRole(...)`
   as an `onRequest` hook. A Fastify v5 async hook must **return** the reply to
-  halt the lifecycle; awaiting `reply.send()` alone lets the handler run and
+  halt the lifecycle. Awaiting `reply.send()` alone lets the handler run and
   send twice.
 - Local dev and E2E use `DANGEROUS_BYPASS_EMAIL_MAGIC_LINK=true`, which returns
   the link in the response instead of emailing it. It is ignored in production.
@@ -314,7 +314,7 @@ pivoting should still be cheap.
 
 What this looked like in practice: `pitches.status` shipped with six values —
 `sent`, `read`, `shortlisted`, `accepted`, `declined`, `withdrawn` — and **no
-code set or read a single one of them**. There was only a create route; no
+code set or read a single one of them**. There was only a create route. No
 transition existed. Meanwhile `draft`, the one state the product actually
 wanted, was not among them. `briefs.status` had `awarded`, which nothing could
 produce, guarded by three branches defending against an impossible condition.
@@ -379,7 +379,7 @@ MUI, three-state light / dark / auto, persisted to `localStorage['theme-mode']`.
   avoid a flash. It must read the same key the app writes.
 - The current palette is a restrained neutral placeholder. The real editorial
   identity is a separate ticket — don't scatter hardcoded colours in
-  components; extend `app/theme.ts`.
+  components. Extend `app/theme.ts`.
 
 ## Ports
 
