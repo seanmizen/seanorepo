@@ -328,7 +328,64 @@ def selftest():
     # markdown is untouched by extraction
     assert extract_prose("a; b", "x.md") == "a; b"
 
+    _selftest_changed()
     print("selftest OK")
+
+
+def _selftest_changed():
+    """changed_files against a throwaway repository.
+
+    Builds real history rather than mocking git: the rule under test is which
+    commits the merge base picks, and a mock would only assert our own belief
+    about that.
+    """
+    import shutil
+    import tempfile
+
+    if not shutil.which("git"):
+        return
+    here = os.getcwd()
+    tmp = tempfile.mkdtemp(prefix="ste-selftest-")
+    try:
+        os.chdir(tmp)
+        _git(["init", "-q", "-b", "main"])
+        _git(["config", "user.email", "t@t"])
+        _git(["config", "user.name", "t"])
+        open("base.md", "w").write("base\n")
+        _git(["add", "-A"])
+        _git(["commit", "-qm", "base"])
+
+        # main moves on after the branch point, CHANGING a file that also exists
+        # on the branch. A file that only exists on main would be filtered out by
+        # the isfile check instead, and the assertion below would pass whether or
+        # not we used the merge base — a test that cannot fail for the right
+        # reason (REQ-QUALITY-001).
+        _git(["checkout", "-qb", "work"])
+        _git(["checkout", "-q", "main"])
+        open("base.md", "w").write("base, edited by somebody else\n")
+        _git(["add", "-A"])
+        _git(["commit", "-qm", "elsewhere"])
+
+        _git(["checkout", "-q", "work"])
+        open("mine.md", "w").write("mine\n")
+        _git(["add", "-A"])
+        _git(["commit", "-qm", "mine"])
+        open("untracked.md", "w").write("untracked\n")
+        os.makedirs("app", exist_ok=True)
+        open("app/scoped.md", "w").write("scoped\n")
+        open("skip.bin", "w").write("binary\n")
+
+        got = set(changed_files([]))
+        assert "mine.md" in got, got
+        assert "untracked.md" in got, got
+        assert "base.md" not in got, got       # merge base, not the branch tip
+        assert "skip.bin" not in got, got       # extension filter
+
+        assert set(changed_files(["app"])) == {"app/scoped.md"}, changed_files(["app"])
+        assert changed_files(["nothing-here"]) == []
+    finally:
+        os.chdir(here)
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def main(argv):
