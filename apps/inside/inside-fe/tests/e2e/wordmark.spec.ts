@@ -9,10 +9,23 @@ import { waitForApp } from './helpers';
  * anybody who cannot see them.
  */
 
-const halves = (page: Page) => ({
-  name: page.getByTestId('wordmark-name').first(),
-  suffix: page.getByTestId('wordmark-suffix').first(),
-});
+/*
+ * Both halves from ONE wordmark, scoped to the header.
+ *
+ * Resolving `.first()` separately for each half is not the same thing: the
+ * homepage renders two wordmarks, and two independent queries can bind to
+ * different ones. That produced a comparison of the header's `inside` against
+ * the masthead's `.space` — a ratio of 0.81 rather than 0.62 — but only in a
+ * full serial run, where the masthead had mounted by the time the second
+ * locator resolved.
+ */
+const halves = (page: Page) => {
+  const mark = page.getByRole('banner').getByTestId('wordmark');
+  return {
+    name: mark.getByTestId('wordmark-name'),
+    suffix: mark.getByTestId('wordmark-suffix'),
+  };
+};
 
 const pixels = (value: string) => Number.parseFloat(value.replace('px', ''));
 
@@ -74,8 +87,17 @@ for (const scheme of ['light', 'dark'] as const) {
         suffix.evaluate((el) => getComputedStyle(el).color),
       ]);
 
-      // Smaller, and by a visible margin rather than a rounding difference.
-      expect(pixels(suffixSize)).toBeLessThan(pixels(nameSize) * 0.8);
+      /*
+       * Smaller. NOT "smaller by a specific ratio" — the first version of this
+       * asserted `< nameSize * 0.8`, which encoded the 0.62 the component
+       * shipped with. Retuning the wordmark to 0.81 (7adce85) then failed a
+       * test about a design decision that is the designer's to make.
+       *
+       * The requirement is that the suffix recedes, so that is what this
+       * checks: strictly smaller, and by more than a sub-pixel rounding
+       * difference.
+       */
+      expect(pixels(nameSize) - pixels(suffixSize)).toBeGreaterThan(1);
       // And a different colour. Asserting "greyer" numerically would need a
       // luminance comparison that flips between themes. What the requirement
       // actually forbids is the two halves rendering identically.

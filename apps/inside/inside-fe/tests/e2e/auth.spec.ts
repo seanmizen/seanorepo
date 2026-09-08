@@ -193,6 +193,36 @@ test.describe('a session that ends underneath you', () => {
     await expect(page.getByTestId('session-expired')).toBeVisible();
   });
 
+  /*
+   * A slow 401 on the boot check, which nothing covered before.
+   *
+   * Honest about what this is: **it passes against the code before #245 too.**
+   * It is coverage of a path that had none, not proof of the fix. I could not
+   * write a test that fails without the fix, because the ordering that loses
+   * the verdict needs a race inside one page load that Playwright cannot stage
+   * from outside. That is recorded on #245 rather than papered over with a
+   * test that would pass either way and look like evidence.
+   */
+  test('a slow 401 on boot still explains itself', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('expiry-late'));
+
+    await page.route('**/api/auth/me', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Session ended' }),
+      });
+    });
+
+    await page.goto('/account');
+
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId('session-expired')).toBeVisible();
+  });
+
   test('an ordinary anonymous visitor is not told a session ended', async ({
     page,
   }) => {
