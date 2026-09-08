@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import type { FC } from 'react';
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { FailureAlert, FailureNotice } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import {

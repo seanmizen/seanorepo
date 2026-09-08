@@ -120,3 +120,42 @@ test.describe('a designer answers a project', () => {
     await expect(page.getByTestId('bid-error')).toContainText(/approved/i);
   });
 });
+
+test.describe('a link shared off-platform', () => {
+  test('an unlisted project opens for whoever holds the URL', async ({
+    page,
+  }) => {
+    await signInAs(page, 'link-owner');
+    const title = `Unlisted ${Date.now()}`;
+
+    await page.goto('/account/briefs');
+    await page.getByTestId('post-a-project').click();
+    await page.getByTestId('field-brief-title').fill(title);
+    await page.getByTestId('field-brief-description').fill('Sent by email.');
+    await page.getByTestId('field-brief-visibility').selectOption('link');
+    await page.getByTestId('submit-brief').click();
+    await expect(page.getByTestId('my-briefs-list')).toContainText(title);
+
+    await page.getByRole('link', { name: 'Manage' }).first().click();
+    await page.getByTestId('publish-brief').click();
+    await expect(page.getByTestId('brief-state')).toHaveText('live');
+
+    const href = await page
+      .getByTestId('brief-public-link')
+      .getAttribute('href');
+    expect(href, 'the buyer is never shown a link to send').toBeTruthy();
+
+    /*
+     * What `link` is for: the buyer sends the URL to a designer they already
+     * know, off-platform. It must open for somebody who was never invited and
+     * is not the owner (REQ-BRIEF-005), while staying off the public board.
+     */
+    await page.context().clearCookies();
+
+    await page.goto('/briefs');
+    await expect(page.getByTestId('briefs-list')).not.toContainText(title);
+
+    await page.goto(href as string);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
+  });
+});

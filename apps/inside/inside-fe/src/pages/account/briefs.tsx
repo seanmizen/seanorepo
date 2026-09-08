@@ -43,7 +43,21 @@ const BUDGET_BANDS = [
   ['250k_plus', '£250k+'],
 ] as const;
 
+/**
+ * The three answers to "who may see this", in the buyer's words.
+ *
+ * `link` is described as unlisted and never as private, because the URL is
+ * guessable in principle and calling it private would be a guarantee the
+ * system does not make (REQ-BRIEF-005).
+ */
+const VISIBILITY = [
+  ['public', 'On the public board'],
+  ['link', 'Unlisted — anyone with the link'],
+  ['private', 'Private — only people you invite'],
+] as const;
+
 const EMPTY: BriefDraft = {
+  visibility: 'public',
   title: '',
   description: '',
   workType: '',
@@ -200,6 +214,20 @@ const AccountBriefs: FC = () => {
                 {...field('location')}
               />
             </Stack>
+
+            <TextField
+              select={true}
+              label="Who can see it"
+              sx={{ maxWidth: 360 }}
+              inputProps={{ 'data-testid': 'field-brief-visibility' }}
+              {...field('visibility')}
+            >
+              {VISIBILITY.map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
 
             {error != null && (
               // The retry is the Post button below it.

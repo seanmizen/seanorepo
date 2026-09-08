@@ -73,6 +73,16 @@ export const useReceivedBids = (id: number | null) =>
   });
 
 export interface BriefDraft {
+  /**
+   * Who may EVER see it, which is not the same question as whether it is
+   * published (REQ-BRIEF-001).
+   *
+   * The server defaults to `private` when this is absent, so a brief is never
+   * public by omission (REQ-BRIEF-004). The form therefore has to ask: a buyer
+   * who posts a project and never sees this control ends up with a brief
+   * nobody can reach, including a designer they sent the link to.
+   */
+  visibility: string;
   title: string;
   description: string;
   workType: string;
@@ -81,14 +91,24 @@ export interface BriefDraft {
   timeline: string;
 }
 
-/** Blank means "not set" to the API, which wants null rather than ''. */
-const forApi = (draft: BriefDraft) =>
-  Object.fromEntries(
-    Object.entries(draft).map(([key, value]) => [
-      key,
-      value.trim().length === 0 ? null : value.trim(),
-    ]),
-  );
+/**
+ * Blank means "not set" to the API, which wants null rather than ''.
+ *
+ * `visibility` is exempt: an empty string there would read as "no preference"
+ * and the server would fall back to `private`, which is the opposite of what a
+ * buyer who chose "anyone with the link" asked for.
+ */
+const forApi = (draft: BriefDraft) => ({
+  ...Object.fromEntries(
+    Object.entries(draft)
+      .filter(([key]) => key !== 'visibility')
+      .map(([key, value]) => [
+        key,
+        value.trim().length === 0 ? null : value.trim(),
+      ]),
+  ),
+  visibility: draft.visibility,
+});
 
 const invalidateBriefs = (client: ReturnType<typeof useQueryClient>) => {
   client.invalidateQueries({ queryKey: ['my-briefs'] });
@@ -150,6 +170,22 @@ export const useBriefAction = (action: 'publish' | 'unpublish' | 'close') => {
  * they have already SENT answers 409, which the UI must show as "you have
  * already responded" rather than as a failure.
  */
+/** Who may ever see it. Orthogonal to whether it is published. */
+export const useSetVisibility = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, visibility }: { id: number; visibility: string }) =>
+      request<{ brief: OwnedBrief }>(`${MY_BRIEFS}/${id}/visibility`, {
+        method: 'PUT',
+        body: JSON.stringify({ visibility }),
+      }),
+    onSuccess: (_data, variables) => {
+      invalidateBriefs(client);
+      client.invalidateQueries({ queryKey: ['my-brief', variables.id] });
+    },
+  });
+};
+
 export const useStartBid = () => {
   const client = useQueryClient();
   return useMutation({
