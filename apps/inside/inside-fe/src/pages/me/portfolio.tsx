@@ -1,6 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
 import {
-  Alert,
   Button,
   Card,
   CardContent,
@@ -13,6 +12,7 @@ import {
 import type { FC } from 'react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { FailureAlert, FailureNotice } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import {
   ApiError,
@@ -32,7 +32,10 @@ const MyPortfolio: FC = () => {
   const navigate = useNavigate();
   const query = useMyPortfolio();
   const create = useSaveProject();
-  const [error, setError] = useState<string | null>(null);
+  // `unknown`, not a pre-flattened string: the caught error still knows
+  // whether it was a 500, a timeout or a dead connection, and flattening it
+  // here is what threw that away (REQ-NET-007).
+  const [error, setError] = useState<unknown>(null);
 
   const addPiece = async () => {
     setError(null);
@@ -43,11 +46,7 @@ const MyPortfolio: FC = () => {
       });
       navigate(`/me/portfolio/${created.project.id}`);
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'That could not be created. Try again.',
-      );
+      setError(caught);
     }
   };
 
@@ -68,29 +67,43 @@ const MyPortfolio: FC = () => {
     const noProfileYet =
       query.error instanceof ApiError && query.error.status === 404;
 
+    /*
+     * A genuine failure, with something to press — REQ-FAIL-003. It returns
+     * on its own rather than nesting inside the heading below, because
+     * `FailureNotice` supplies its own h1 and two of those on one page is
+     * both a WCAG problem and a visibly doubled title.
+     */
+    if (!noProfileYet) {
+      return (
+        <Container maxWidth="md" sx={{ py: 6 }}>
+          <FailureNotice
+            error={query.error}
+            notFound={{
+              title: 'Your work',
+              body: 'Your portfolio could not be loaded.',
+            }}
+            onRetry={() => query.refetch()}
+            testId="portfolio-load-failure"
+          />
+        </Container>
+      );
+    }
+
     return (
       <Container maxWidth="md" sx={{ py: 6 }}>
         <Stack spacing={3} alignItems="flex-start">
           <Typography variant="h1" sx={{ fontSize: { xs: 32, sm: 40 } }}>
             Your work
           </Typography>
-          {noProfileYet ? (
-            <>
-              <Typography
-                color="text.secondary"
-                data-testid="portfolio-needs-profile"
-              >
-                Set up your profile first — your work hangs off it.
-              </Typography>
-              <Button component={Link} to="/me/profile" variant="contained">
-                Start your profile
-              </Button>
-            </>
-          ) : (
-            <Alert severity="error" data-testid="portfolio-load-failure">
-              Your portfolio could not be loaded.
-            </Alert>
-          )}
+          <Typography
+            color="text.secondary"
+            data-testid="portfolio-needs-profile"
+          >
+            Set up your profile first — your work hangs off it.
+          </Typography>
+          <Button component={Link} to="/me/profile" variant="contained">
+            Start your profile
+          </Button>
         </Stack>
       </Container>
     );
@@ -121,10 +134,17 @@ const MyPortfolio: FC = () => {
           </Button>
         </Stack>
 
-        {error && (
-          <Alert severity="error" data-testid="portfolio-action-failure">
-            {error}
-          </Alert>
+        {error != null && (
+          // The retry is the "Add a piece" button directly above, so this
+          // says what happened and does not offer a second control for it.
+          <FailureAlert
+            error={error}
+            fallback={{
+              title: 'Not created',
+              body: 'That piece could not be created.',
+            }}
+            testId="portfolio-action-failure"
+          />
         )}
 
         {pieces.length === 0 ? (
