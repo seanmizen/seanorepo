@@ -48,8 +48,8 @@ prose in `apps/inside/CLAUDE.md`.
 - **Rationale:** A dark-mode visitor flashed a white page is the most
   noticeable defect in the app, and it happens on every navigation until it is
   fixed. Avoiding it needs a blocking script in `public/index.html` that runs
-  before paint — which means the stored theme is read by that script and
-  written by React, two places that must agree on the storage key. Nothing
+  before paint — which means that script reads the stored theme and React
+  writes it, two places that must agree on the storage key. Nothing
   connects them but this requirement: rename the key in one place and the flash
   returns silently, with every other theme test still passing.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/theme.spec.ts` › "does not flash the wrong theme before hydrating"
@@ -73,7 +73,7 @@ prose in `apps/inside/CLAUDE.md`.
   request about this site. Honouring it is right once they ask for it, which is
   what `auto` is now for.
 
-  The cost is carried entirely by REQ-THEME-002: the fallback is duplicated in
+  REQ-THEME-002 carries the whole cost: the fallback appears a second time in
   the pre-paint script in `public/index.html`, which cannot import anything.
   Get the two out of step and the flash returns for exactly one group —
   visitors on a dark OS who have never chosen — which is the sort of bug that

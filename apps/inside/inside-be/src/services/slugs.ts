@@ -78,7 +78,7 @@ interface SlugRow {
 /**
  * Who, if anyone, holds this slug — now or at any point in the past.
  *
- * History is checked rather than just the live column, because a released slug
+ * This checks history rather than just the live column, because a released slug
  * must never be handed to a different entity. Someone still has the old link.
  */
 async function holderOf(
@@ -99,7 +99,7 @@ async function holderOf(
 /**
  * Pick a slug that is free to use, WITHOUT recording it.
  *
- * Separate from recording because a new row has no id until it is inserted, and
+ * Separate from recording because a new row has no id until the insert runs, and
  * the slug has to be chosen first to be inserted with it. Callers create the
  * row and then call `recordSlug`.
  *
@@ -113,7 +113,7 @@ async function holderOf(
  *   `north-house-4` when they typed `north-house` is worse than refusing.
  *
  * Pass `entityId` when renaming an existing entity: a slug it already holds in
- * history is returned as-is, so going back to an old name is never blocked by
+ * this returns history as-is, so going back to an old name never fails on
  * the entity's own past.
  */
 export async function chooseSlug(
@@ -216,7 +216,7 @@ export async function slugHistory(
 
 export interface ResolvedSlug {
   entityId: number;
-  /** The entity's slug NOW, which may differ from the one that was asked for. */
+  /** The entity's slug NOW, which may differ from the one the caller asked for. */
   canonical: string;
   /** True when the caller used an old slug and should be sent to `canonical`. */
   moved: boolean;
@@ -244,7 +244,7 @@ export async function resolveSlug(
       .query(`SELECT slug FROM ${ACTIVE_SLUG_TABLE[entityType]} WHERE id = ?`)
       .get(entityId) as { slug: string } | null;
 
-    // History outliving its entity is not an error: the row was deleted, and
+    // History outliving its entity is not an error: somebody deleted the row, and
     // the slug stays claimed so it can never be reissued to something else.
     if (!row) return null;
 

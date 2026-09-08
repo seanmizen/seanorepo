@@ -19,8 +19,8 @@ what the list happens to render.
 - **Statement:** The system shall refuse to serve an unapproved designer
   profile even when its slug is requested directly.
 - **Rationale:** Omitting a profile from the list is a presentation choice.
-  Refusing to serve it is the actual control. Slugs are derived from studio
-  names and are therefore guessable, and a designer awaiting review has every
+  Refusing to serve it is the actual control. The server derives slugs from
+  studio names, which makes them guessable, and a designer awaiting review has every
   reason to share their own URL — so "not in the list" would leave the profile
   publicly readable to anyone who tried. This is the requirement that makes
   REQ-PRODUCT-002 mean something, rather than describing a default sort order.

@@ -9,7 +9,7 @@
 // built from — rather than a list kept here. That is deliberate: a
 // hand-maintained list of paths would silently miss exactly the route someone
 // forgot to give a parent, which is the only case that matters. Add a nested
-// route to the table and it is covered on the next run, with no edit here.
+// route to the table and the next run covers it, with no edit here.
 
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import {
@@ -24,9 +24,9 @@ import {
 import { signIn, uniqueEmail, waitForApp } from './helpers';
 
 /**
- * The same table the router is built from, widened to the interface.
+ * The same table the router reads, widened to the interface.
  *
- * `ROUTES` is declared `as const` so the router can type-check that every
+ * `ROUTES` uses `as const` so the router can type-check that every
  * declared path has an element. That makes it a tuple of literal object types,
  * where an optional field a given route omits is not even a property. Reading
  * it as `RouteDefinition[]` is what lets this file ask any route about
@@ -38,7 +38,7 @@ const ROUTE_TABLE: readonly RouteDefinition[] = ROUTES;
  * Fixture values for a pattern's `:params`.
  *
  * An ancestor's own declaration wins, so `/designers` and
- * `/designers/:slug/portfolio/:id` agree on which designer is being visited,
+ * `/designers/:slug/portfolio/:id` agree on which designer the visitor sees,
  * the descendant's values fill anything the ancestor did not name.
  */
 const paramsFor = (pattern: string, descendant: RouteDefinition) => ({
@@ -81,7 +81,7 @@ const establishSession = async (
   await page.goto('/login');
   await waitForApp(page);
   // ADMIN_EMAILS in playwright.config.ts is what makes this address an admin.
-  // The role is granted by the whitelist, never by the signup payload.
+  // The whitelist grants the role, never the signup payload.
   const email = role === 'admin' ? 'admin@inside.test' : uniqueEmail('nav');
   await signIn(page, email, role === 'designer' ? 'designer' : 'buyer');
 };
@@ -275,7 +275,7 @@ test.describe('an undeclared URL', () => {
   }) => {
     // Nobody declares /journal, so the middle crumb is inert text rather than
     // an invitation into a 404. (This test used to use /designers/alice, which
-    // stopped being undeclared the moment SEAN-160 added those routes — and
+    // became declared the moment SEAN-160 added those routes — and
     // the route-table guard then forced /designers to exist, exactly as the
     // rule intends.)
     await page.goto('/journal/spring-2026');
@@ -507,8 +507,8 @@ test.describe('crumbs carry real names, not placeholders', () => {
   });
 
   test('degrades to the slug, never to a placeholder', async ({ page }) => {
-    // With no data — an unknown studio — the crumb must still say which one
-    // was asked for rather than the generic route label.
+    // With no data — an unknown studio — the crumb must still name the studio
+    // the visitor asked for rather than the generic route label.
     await page.goto('/designers/no-such-studio');
     await waitForApp(page);
 

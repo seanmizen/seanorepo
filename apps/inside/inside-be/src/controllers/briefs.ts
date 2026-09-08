@@ -70,7 +70,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
   /**
    * Public detail, addressed by slug — any slug the brief has ever held.
    *
-   * Visibility is decided by `findVisibleBrief`, which is the single place the
+   * `findVisibleBrief` decides visibility, and it is the single place the
    * rules live (REQ-BRIEF-001). `optionalAuth` rather than a guard, because
    * who is asking changes the answer: an invitee sees a private brief, an
    * anonymous visitor sees only a published public or link one.
@@ -96,7 +96,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
    * A buyer's own briefs.
    *
    * An encapsulated scope with the role guard as an onRequest hook, so every
-   * route below is protected by construction. Designers are refused here with
+   * construction protects the route below. This scope refuses designers with
    * a 403: posting a job is the buyer's side of the marketplace.
    *
    * Ownership always comes from the session, never from a path or body, so one

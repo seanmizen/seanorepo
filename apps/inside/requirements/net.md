@@ -21,7 +21,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
 - **Rationale:** Four copies of the same wrapper produced three error shapes,
   two of which threw the status as unparsed text inside a debug string. The
   result was that exactly one page in the app could tell a 404 from a dead
-  backend, and the others could not have been fixed individually — they had
+  backend, and nobody could have fixed the others individually — they had
   nothing to branch on. Cross-cutting request behaviour has no natural home in
   a client-rendered app, so it has to be given one deliberately or it is
   re-invented per call site.
@@ -43,7 +43,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
 - **Rationale:** `fetch` has no default timeout, so a hung backend left the
   query in a pending state forever. That is worse than an error: the retry
   never fired because the promise never settled, so there was no failure state
-  to render at all, and the visitor was shown a skeleton indefinitely — the
+  to render at all, and the visitor watched a skeleton indefinitely — the
   app asserting "still loading" about a request that was never coming back.
   The upload path gets a longer deadline because a 50MB photograph over mobile
   legitimately takes minutes, but bounded is the requirement, not the number.
@@ -83,7 +83,8 @@ error shapes, so most pages had no way to know what had actually gone wrong.
 - **Rationale:** Without `trustProxy` every request appears to come from
   cloudflared. On its own that is merely useless. As the input to the per-IP
   rate limits in #165 it is dangerous, because every visitor on earth lands in
-  one bucket and is throttled collectively. A security control that appears to
+  one bucket and the limiter throttles them together. A security control that
+  appears to
   work is worse than an absent one, since nothing prompts anybody to look at
   it. Recorded here rather than in #165 because it is a property of the request
   pipeline, and #165 is a consumer of it.
@@ -124,8 +125,8 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   The messages in question are SQLite constraint text, `sharp` decode failures
   and filesystem paths: an attacker's map of the schema and the disk, handed
   over by any request that provokes an exception. A 4xx keeps its message
-  because those are written by us for the caller to read. A 5xx was written by
-  a library, about our internals, for us. Saying nothing is only acceptable
+  because we write those for the caller to read. A library wrote the 5xx,
+  about our internals, for us. Saying nothing is only acceptable
   because REQ-NET-003 gives the caller a reference that finds everything.
 - **Verification:**
   - Test — `apps/inside/inside-be/src/tests/http-errors.test.ts` › "never returns its own message to the client"
@@ -148,7 +149,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   being told at 15. Failing fast and letting them choose to retry is the better
   trade. A network error fails instantly, so a second attempt costs nothing and
   genuinely rescues a blip.
-- **Verification:** Analysis — `isRetryable` in `apps/inside/inside-fe/src/lib/http.ts`, consumed by the single `retry` predicate in `lib/query-client.ts`. The 15-second first-failure assertion in `netcode.spec.ts` › "becomes a failure the visitor can see" would take 45 seconds if timeouts were retried.
+- **Verification:** Analysis — `isRetryable` in `apps/inside/inside-fe/src/lib/http.ts`, consumed by the single `retry` predicate in `lib/query-client.ts`. The 15-second first-failure assertion in `netcode.spec.ts` › "becomes a failure the visitor can see" would take 45 seconds if the client retried timeouts.
 - **Relations:** depends-on REQ-NET-002
 
 ## REQ-NET-007 — A failure says what actually failed
@@ -164,7 +165,7 @@ error shapes, so most pages had no way to know what had actually gone wrong.
   line — "that studio is not listed" — for a 404, a 500, a dead tunnel and a
   dropped connection. Three of those four are the app stating something it has
   not verified, which is what `REQ-STATE-003` forbids. It was simply happening
-  one layer up from where that requirement was being applied. Telling somebody
+  one layer up from where we were applying that requirement. Telling somebody
   a studio does not exist when the truth is that our server is down also sends
   them away permanently, which is the expensive version of the mistake.
 - **Verification:**

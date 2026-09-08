@@ -39,7 +39,7 @@ const MAX_TERM_LENGTH = 40;
  * User input is never passed to MATCH as-is. FTS5 has its own query syntax —
  * `AND`, `OR`, `NOT`, `NEAR`, `*`, `:`, `^`, parentheses, quotes — so a bare
  * apostrophe or a stray colon is a syntax error, and `NOT` in a search box
- * would silently mean set subtraction. Instead the input is tokenised down to
+ * would silently mean set subtraction. Instead this tokenises the input down to
  * letters, digits and apostrophes, and each term is re-emitted as a quoted
  * phrase with a prefix marker: `"o'brien"*`.
  *
@@ -77,7 +77,7 @@ export function buildMatchExpression(raw: string): string | null {
  * A hit on the studio name is what the buyer typed if they know who they are
  * looking for, so it outranks everything. PortfolioProject titles and headline come
  * next — both are curated, deliberate text. The bio is long and rambling, so a
- * hit there is weak evidence and is weighted down accordingly.
+ * hit there is weak evidence and scores lower accordingly.
  *
  * bm25() returns a NEGATIVE score where a better match is more negative, so
  * every relevance sort is ASC.
@@ -137,7 +137,7 @@ export async function reindexDesigner(profileId: number): Promise<void> {
  *
  * Resolving the owner here keeps every project write path down to one call and
  * means no caller has to remember that a project edit changes a *designer's*
- * document. A project that has already been deleted resolves to nothing and is
+ * document. A project somebody already deleted resolves to nothing and is
  * a no-op — callers that delete must capture the owner first.
  */
 export async function reindexDesignerForProject(

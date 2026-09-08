@@ -1,6 +1,6 @@
 # CLAUDE.md — `inside`
 
-Guidance for agents working in `apps/inside`. This file is scoped to this app.
+Guidance for agents working in `apps/inside`. This file covers this app only.
 The monorepo-wide rules in the root `CLAUDE.md` still apply.
 
 ## What this app is
@@ -26,8 +26,8 @@ Do not relitigate these without asking Sean.
   (`REQ-DATA-004`).
 - Site data is SQLite, kept right next to the runner. Barebones.
 
-> Requirements live in [`requirements/`](./requirements/) and are validated in
-> CI. This prose explains. The requirement binds. When the two disagree, the
+> Requirements live in [`requirements/`](./requirements/), and CI validates
+> them. This prose explains. The requirement binds. When the two disagree, the
 > requirement is right — see [`requirements/README.md`](../../requirements/README.md).
 
 ### Vocabulary
@@ -45,10 +45,10 @@ places.
 | `work_type` | the kind of work: kitchen, extension, new build … |
 | `designers` / `buyers` | the two sides of the marketplace |
 
-Two words are deliberately absent. **"Project" alone is banned** — it meant
+Two words are deliberately absent. **Never write "project" alone** — it meant
 both a designer's portfolio piece and a client's job, which is exactly the
 ambiguity that cost us a rename. Say `portfolio_project` or `brief`. And
-**"pitch" is banned** — a designer places a `bid`.
+**Never write "pitch"** — a designer places a `bid`.
 
 Public URL shape:
 
@@ -94,11 +94,11 @@ touching `apps/inside`.
   every file in a single process, and the modules under test capture their
   config at import — `services/storage/index.ts` reads `UPLOADS_PATH` on
   import, `src/index.ts` builds the Fastify instance on import. Those imports
-  are cached, so giving a suite its own environment isolates nothing. It only
+  stay cached, so giving a suite its own environment isolates nothing. It only
   decides which suite's settings win.
 - Get the server with `await getApp()` from `./setup` — already migrated and
-  ready. Call `getTestEnv()` if you only need paths. Both are memoised.
-- **Never call `app.close()` in a suite.** The instance is shared, so closing
+  ready. Call `getTestEnv()` if you only need paths. Both memoise their result.
+- **Never call `app.close()` in a suite.** Every suite shares one instance, so closing
   it breaks every other suite. Teardown happens once at process exit.
 - **Keep suites independent by using unique data, not a clean database.**
   `uniqueEmail()` is in `./setup`. Do the same for filenames and slugs. Never
@@ -107,7 +107,7 @@ touching `apps/inside`.
   will sign out accounts other suites are mid-way through using. Scope every
   write to the row you created.
 - Anything imported from `src/` must be imported *after* `getTestEnv()` or
-  `getApp()` has run, so the env is set first. Use a top-level
+  `getApp()` has run, so that call sets the env first. Use a top-level
   `await import(...)`.
 - Tests must never create `database.db` or `uploads/` in the repo. CI fails if
   a run leaves artefacts behind, and a leak means your setup is wrong.
@@ -177,8 +177,8 @@ An untestable in-flight state is the same rule broken one step earlier.
 
 ## Routing and navigation
 
-Routes are declared as **data** in `inside-fe/src/app/routes.ts`. The router,
-the breadcrumb and the guard that polices both are all built from that one
+`inside-fe/src/app/routes.ts` declares the routes as **data**. The router,
+the breadcrumb and the guard that polices both all read that one
 table — never from a second list kept alongside it.
 
 ### NO DEAD INTERMEDIATE PATHS — a standing constraint, not a one-off
@@ -205,8 +205,8 @@ parent page.
 
 1. Add it to `ROUTES` with a lower-case `label` (the crumb reads
    `home › subsection › page`, one sentence).
-2. Give it an element in `ELEMENTS` in `router.tsx`. It is typed by
-   `RoutePath`, so a route with no element — or an element with no route — is a
+2. Give it an element in `ELEMENTS` in `router.tsx`. `RoutePath` types it,
+   so a route with no element — or an element with no route — is a
    compile error.
 3. Parameterised? Give it `params` with a representative fixture value, or the
    guard cannot visit it. Needs a session? Set `requiresAuth`. Needs a query
@@ -220,8 +220,9 @@ A crumb shows the best name available, in this order: a real name supplied by
 the page at runtime, then — for a **static** segment only — the route table's
 `label`, then the humanised URL segment. A crumb is never blank.
 
-The label is skipped for a **parameterised** segment because it cannot
-distinguish one instance from another: `/designers/:slug` is labelled "studio",
+The crumb skips the label for a **parameterised** segment, because the label
+cannot tell one instance from another: the table calls `/designers/:slug`
+"studio",
 which would read the same for every studio. The concrete segment
 (`northlight-architects` → "northlight architects") is strictly more
 informative, so it wins until a real name arrives.
@@ -230,8 +231,8 @@ Pages supply real names with `useCrumbTitles({ [path]: name })`, keyed **by
 path** rather than "the current page" — a nested page knows its ancestors'
 names too, and a placeholder in the middle of a trail is as unhelpful as one at
 the end. A portfolio piece names both itself and the studio above it. Entries
-that are `undefined` or blank are ignored, so passing `data?.name` straight
-through degrades gracefully while loading. Everything set is cleared on unmount
+that are `undefined` or blank do nothing, so passing `data?.name` straight
+through degrades gracefully while loading. The hook clears every name on unmount
 so a name never leaks onto the next page. `useBreadcrumbTitle(name)` remains as
 a thin wrapper for the common case of naming only your own crumb.
 
@@ -269,7 +270,7 @@ chips on the left. `navigation.spec.ts` asserts they do not collide.
 - **Secrets fail hard.** `JWT_SECRET` and `COOKIE_SECRET` throw in production
   if unset or left at the dev default. Do not soften this to a warning.
 - **Never commit** `.env`, `dist/`, `*.db`, or `uploads/`.
-- The frontend's API base is baked in at **build time** via rsbuild
+- rsbuild bakes the frontend's API base in at **build time**, through
   `source.define`. There is deliberately no runtime hostname detection — do not
   add a second strategy.
 
@@ -300,7 +301,7 @@ Magic link only. There are no passwords. See `services/auth.ts`,
   halt the lifecycle. Awaiting `reply.send()` alone lets the handler run and
   send twice.
 - Local dev and E2E use `DANGEROUS_BYPASS_EMAIL_MAGIC_LINK=true`, which returns
-  the link in the response instead of emailing it. It is ignored in production.
+  the link in the response instead of emailing it. Production ignores it.
 - The frontend's `AuthProvider` boot check defers to an explicit sign-in or
   sign-out, because on `/verify` it races the sign-in and would otherwise
   overwrite a fresh session with `null`. Preserve that guard.
@@ -331,8 +332,8 @@ Rules:
   real states. `submitted_at IS NULL` says everything a `draft`/`submitted`
   pair does, with nothing left to invent.
 - **Resist workflow coupling.** A bid knows about its brief. It does not need
-  to know about shortlisting, awarding, or a buyer's decision process that has
-  not been designed.
+  to know about shortlisting, awarding, or a buyer's decision process that
+  nobody has designed yet.
 - **Idempotent beats stateful.** "Start a bid" and "continue my draft" are the
   same intent, so they are the same endpoint returning the same row — the UI
   does not have to know which state it is in, and there is no third state to
@@ -373,7 +374,7 @@ MUI, three-state light / dark / auto, persisted to `localStorage['theme-mode']`.
 
 - One source of truth: `ThemeModeContext`. Components read it via
   `useThemeMode()`. Never keep a second copy of the mode in local state.
-- `auto` subscribes to `matchMedia`, so a live OS theme change is followed
+- `auto` subscribes to `matchMedia`, so the app follows a live OS theme change
   without a reload. Keep that.
 - A blocking script in `public/index.html` sets the body class pre-paint to
   avoid a flash. It must read the same key the app writes.

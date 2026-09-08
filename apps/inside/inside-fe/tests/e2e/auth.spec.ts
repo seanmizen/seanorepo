@@ -63,7 +63,7 @@ test.describe('protected routes', () => {
   });
 
   test('signing in resumes where the visitor was headed', async ({ page }) => {
-    // The conversion mechanic: being asked to sign in must not lose the action.
+    // The conversion mechanic: a sign-in prompt must not lose the action.
     await page.goto('/account');
     await expect(page).toHaveURL(/\/login/);
 
@@ -181,8 +181,8 @@ test.describe('a session that ends underneath you', () => {
      * reload, so nothing is re-read at boot.
      *
      * The qualifier matters and is the honest limit of REQ-AUTH-008: a session
-     * is discovered to have ended on the next authenticated request, not the
-     * instant it is revoked. Nothing polls, and nothing should — the
+     * ends, as far as the app knows, on the next authenticated request, not the
+     * instant somebody revokes it. Nothing polls, and nothing should — the
      * alternative is a heartbeat asking "am I still here?" forever. A page
      * that makes no authenticated request keeps its stale session until one
      * does, which is why this test navigates somewhere that fetches.

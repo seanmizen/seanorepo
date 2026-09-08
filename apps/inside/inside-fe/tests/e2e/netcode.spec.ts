@@ -43,7 +43,7 @@ test.describe('a server fault', () => {
 
     // The whole point of REQ-NET-007: this used to say "That studio is not
     // listed" — the app asserting something it had not verified, one layer up
-    // from where REQ-STATE-003 was being applied.
+    // from where we applied REQ-STATE-003.
     await expect(alert).not.toHaveText(/not listed/i);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       /our end/i,

@@ -26,7 +26,7 @@ export async function signIn(
   // Returning early lets the caller's next navigation cancel that request in
   // flight, so the sign-in silently doesn't stick.
   //
-  // Both interstitials are excluded: at the moment this is called the page is
+  // This skips both interstitials: when the caller runs it, the page is
   // still on /login, so waiting only for "not /verify" would match instantly.
   await page.waitForURL(
     (url) =>

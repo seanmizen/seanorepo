@@ -133,7 +133,7 @@ const toReceivedBid = (r: BidWithDesignerRow): ReceivedBid => ({
 /**
  * The bid count, as a correlated subquery so one round trip serves a list.
  *
- * Drafts are excluded: a bid nobody has sent is not a bid, and counting them
+ * The count excludes drafts: a bid nobody has sent is not a bid, and counting them
  * would tell a buyer they have interest they cannot see, and tell a designer
  * the board is busier than it is.
  */
@@ -341,14 +341,15 @@ export interface BriefFields {
   closesAt: string | null;
 }
 
-/** `published_at` is stamped the moment a brief first goes `open`. */
+/** We stamp `published_at` the moment a brief first goes `open`. */
 export async function insertBrief(
   buyerId: number,
   fields: BriefFields,
   visibility: BriefVisibility,
   { publish = false }: { publish?: boolean } = {},
 ): Promise<OwnedBrief> {
-  // Chosen before the insert, because the row is created with it (REQ-SLUG-002),
+  // Chosen before the insert, because the insert creates the row with it
+  // (REQ-SLUG-002),
   // and recorded into history after, once there is an id to bind it to.
   const slug = await chooseSlug('brief', fields.title);
 
@@ -392,7 +393,7 @@ export async function insertBrief(
 
 /**
  * Content edits only. Status moves through `setBriefStatus` so that publishing
- * and closing — the transitions that decide whether bids are accepted —
+ * and closing — the transitions that decide whether the brief takes bids —
  * cannot happen as a side effect of a typo fix.
  */
 export async function updateBrief(

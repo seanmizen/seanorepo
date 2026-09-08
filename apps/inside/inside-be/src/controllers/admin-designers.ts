@@ -21,8 +21,8 @@ const STATUSES: DesignerProfileStatus[] = [
 
 /**
  * Registered INSIDE the admin scope in controllers/index.ts, which attaches
- * `requireAdmin` as an onRequest hook — so every route here is protected by
- * construction rather than by remembering a decorator.
+ * `requireAdmin` as an onRequest hook — so construction protects every route
+ * here, rather than somebody remembering a decorator.
  */
 export async function adminDesignerRoutes(
   fastify: FastifyInstance,
@@ -30,7 +30,7 @@ export async function adminDesignerRoutes(
   fastify.get('/designers', async (request, reply) => {
     // Same shared contract as every other list. This endpoint used to clamp
     // with Math.min/Math.max, so `?limit=abc` silently became 25 and the
-    // caller had no way to know their request had been ignored.
+    // caller had no way to know the server had ignored their request.
     const filters = await parseQuery(
       adminDesignerFilters,
       reply,
@@ -81,7 +81,7 @@ export async function adminDesignerRoutes(
       }
 
       // A rejection the designer cannot act on is not a decision, it is a
-      // dead end — so the reason is required when rejecting.
+      // dead end — so rejecting requires a reason.
       if (decision === 'reject' && !note) {
         return reply
           .status(400)
@@ -98,7 +98,7 @@ export async function adminDesignerRoutes(
 
       // The decision is already committed. Email is a notification, not part
       // of the transaction: if SMTP is down the reviewer's decision must still
-      // stand, so a send failure is logged and swallowed rather than 500ing
+      // stand, so we log and swallow a send failure rather than 500ing
       // and inviting them to click approve a second time.
       try {
         await sendReviewDecisionEmail(found.email, {
