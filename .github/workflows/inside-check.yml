@@ -14,6 +14,7 @@ on:
     paths:
       - 'apps/inside/**'
       - '.github/workflows/inside-check.yml'
+      - '.claude/skills/ste/**'
 
 permissions:
   contents: read
@@ -26,6 +27,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history: the STE step diffs against the merge base with main,
+          # and the default shallow clone has no merge base to find.
+          fetch-depth: 0
+
+      - name: Simplified Technical English
+        # Only files this PR changed, so the back catalogue does not block work
+        # that does not touch it. See .claude/skills/ste/ for the rules.
+        # Hard violations fail. Passive voice and compound tenses are advisory.
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main || true
+          python3 .claude/skills/ste/scripts/ste-lint.py --changed apps/inside
 
       - name: Set up Node
         uses: actions/setup-node@v4
