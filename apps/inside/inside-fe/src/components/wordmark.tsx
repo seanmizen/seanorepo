@@ -23,7 +23,7 @@ import type { ElementType, FC } from 'react';
  * without either carrying a hardcoded pixel size. Colour comes from the
  * palette, so it is correct in both themes without a second definition.
  */
-const SUFFIX_SCALE = 0.62;
+const SUFFIX_SCALE = 0.81;
 
 /**
  * `component` is widened to any element type, which is what lets the header
