@@ -22,7 +22,22 @@ import {
 const Login: FC = () => {
   const [params] = useSearchParams();
   const returnTo = safeReturnTo(params.get('returnTo'));
-  const { requestMagicLink } = useAuth();
+  const { requestMagicLink, sessionEnded } = useAuth();
+
+  /*
+   * Two sources, because one of them can arrive too late. REQ-AUTH-008.
+   *
+   * `ProtectedRoute` reads `sessionEnded` at the moment it redirects and writes
+   * the answer into the URL. That captures the verdict once. A verdict that
+   * lands after the redirect — the boot check settling a beat later, or a 401
+   * from a request still in flight — never reaches this page through the URL,
+   * and the visitor gets the silent bounce the requirement forbids.
+   *
+   * Reading the live value as well removes the ordering dependency: the notice
+   * appears whether the verdict arrived before the redirect or after it. The
+   * redirect is client-side, so the provider is the same one throughout.
+   */
+  const sessionExpired = params.get('reason') === 'expired' || sessionEnded;
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<SignupRole>('buyer');
@@ -104,7 +119,7 @@ const Login: FC = () => {
           that their session expired or was signed out elsewhere, is the one
           that tells them what to do next.
         */}
-        {params.get('reason') === 'expired' && (
+        {sessionExpired && (
           <Alert severity="info" data-testid="session-expired">
             You were signed out. That happens when a session expires, or when it
             is ended from another browser. Signing in again picks up where you

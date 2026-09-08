@@ -100,8 +100,6 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
         );
         if (!cancelled && !settledByAction.current) setUser(resolved ?? null);
       } catch (error) {
-        if (cancelled || settledByAction.current) return;
-
         /*
          * REQ-AUTH-008. The three cases are finally distinguished.
          *
@@ -113,10 +111,20 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
          * session, so claiming one ended would be asserting something we have
          * not verified. The offline banner covers that case honestly.
          */
+        const revoked = error instanceof ApiError && error.status === 401;
+
+        /*
+         * The 401 is recorded BEFORE the cancelled/settled guard, because it is
+         * a fact about the session rather than a proposal about the UI. The
+         * guard exists to stop a stale boot check overwriting a fresh sign-in
+         * (see `settledByAction` above) — it was never meant to discard a
+         * server verdict, and discarding one leaves `loading` false with no
+         * reason recorded, which is a silent bounce to the login page.
+         */
+        if (revoked) setSessionEnded(true);
+
+        if (cancelled || settledByAction.current) return;
         setUser(null);
-        if (error instanceof ApiError && error.status === 401) {
-          setSessionEnded(true);
-        }
       } finally {
         if (!cancelled) setLoading(false);
       }
