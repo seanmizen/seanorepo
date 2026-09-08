@@ -1,7 +1,13 @@
-import { expect, test } from '@playwright/test';
-import { waitForApp } from './helpers';
+import { expect, type Page, test } from '@playwright/test';
+import { signIn, uniqueEmail, waitForApp } from './helpers';
 
 const PROFILE = '/designers/northlight-architects';
+
+const signInAsDesigner = async (page: Page, prefix: string) => {
+  await page.goto('/login');
+  await waitForApp(page);
+  await signIn(page, uniqueEmail(prefix), 'designer');
+};
 
 test.describe('going offline', () => {
   test('says so once, at app level, rather than once per failed page', async ({
@@ -119,5 +125,129 @@ test.describe('a render crash', () => {
     await expect(crash).toHaveAttribute('role', 'alert');
     // And it can be recovered from without a manual browser refresh.
     await expect(page.getByTestId('render-error-retry')).toBeVisible();
+  });
+});
+
+/*
+ * The signed-in half of the app. REQ-STATE-003.
+ *
+ * `/me/profile` and `/me/portfolio` answer 404 for a designer who has not
+ * started a profile, so on these pages "you have nothing yet" and "the request
+ * failed" arrive identically — `isError`, no data. Every test here exists to
+ * hold those two apart, which is why each failure case is paired with the 404
+ * case rather than asserted alone.
+ */
+test.describe('a failed load in /me is not an empty studio', () => {
+  /** Fail /me/profile until the flag flips. Never matches /profile/submit. */
+  const breakProfile = (page: Page, allow: () => boolean) =>
+    page.route(/\/api\/me\/profile(\?|$)/, async (route) => {
+      if (allow()) {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'nope' }),
+      });
+    });
+
+  test('/me says the load failed rather than inviting a setup', async ({
+    page,
+  }) => {
+    await signInAsDesigner(page, 'me-fail');
+
+    let allowThrough = false;
+    await breakProfile(page, () => allowThrough);
+
+    await page.goto('/me');
+    await expect(page.getByTestId('studio-load-failure')).toBeVisible();
+    // The bug this covers: a listed studio being told it has none.
+    await expect(page.getByTestId('start-profile')).toHaveCount(0);
+
+    allowThrough = true;
+    await page.getByTestId('studio-load-failure-retry').click();
+
+    // This designer genuinely has no profile, so a real 404 now arrives — and
+    // THAT is the invitation. Same page, same absence of data, opposite answer.
+    await expect(page.getByTestId('start-profile')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('studio-load-failure')).toHaveCount(0);
+  });
+
+  test('/me/profile says so rather than showing a blank new profile', async ({
+    page,
+  }) => {
+    await signInAsDesigner(page, 'me-profile-fail');
+
+    let allowThrough = false;
+    await breakProfile(page, () => allowThrough);
+
+    await page.goto('/me/profile');
+    await expect(page.getByTestId('profile-load-failure')).toBeVisible();
+    // The empty create form is what made this dangerous: the first save would
+    // POST as though the designer had no profile at all.
+    await expect(page.getByTestId('field-studioName')).toHaveCount(0);
+
+    allowThrough = true;
+    await page.getByTestId('profile-load-failure-retry').click();
+
+    await expect(page.getByTestId('field-studioName')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('profile-load-failure')).toHaveCount(0);
+  });
+
+  test('a portfolio that failed to load is not a portfolio of nothing', async ({
+    page,
+  }) => {
+    await signInAsDesigner(page, 'me-count-fail');
+
+    // A profile that loads, so the page reaches the work card at all. Served
+    // rather than seeded: this test is about the count, not about onboarding.
+    await page.route(/\/api\/me\/profile(\?|$)/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          profile: {
+            id: 1,
+            userId: 1,
+            slug: 'count-fail-studio',
+            studioName: 'Count Fail Studio',
+            headline: null,
+            bio: null,
+            location: null,
+            websiteUrl: null,
+            instagramUrl: null,
+            budgetBand: null,
+            availability: null,
+            coverImageId: null,
+            status: 'approved',
+            reviewedAt: null,
+            reviewedBy: null,
+            reviewNote: null,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        }),
+      }),
+    );
+    await page.route(/\/api\/me\/portfolio(\?|$)/, (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'nope' }),
+      }),
+    );
+
+    await page.goto('/me');
+    await expect(page.getByTestId('piece-count')).toBeVisible();
+    // A count we do not have is not zero, and must not be dressed as advice.
+    await expect(page.getByTestId('piece-count')).not.toHaveText(/no pieces/i);
+    await expect(page.getByTestId('piece-count')).toHaveText(
+      /could not load your work/i,
+    );
   });
 });

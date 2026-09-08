@@ -15,10 +15,12 @@ import {
 import type { FC } from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FailureNotice } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import { useDraft } from '@/features/designer-onboarding/use-draft';
 import {
   ApiError,
+  isNoProfileYet,
   useMyProfile,
   useSaveProfile,
   useSubmitProfile,
@@ -116,6 +118,35 @@ const MyProfileEditor: FC = () => {
       <Container maxWidth="sm" sx={{ py: 6 }}>
         <Skeleton variant="text" width={240} height={48} />
         <Skeleton variant="rectangular" height={300} sx={{ mt: 3 }} />
+      </Container>
+    );
+  }
+
+  /*
+   * A failed load must not present itself as a blank new profile —
+   * REQ-STATE-003.
+   *
+   * `existing` above collapses every failure into null, and null here means
+   * "create". So a 500 rendered the empty onboarding form to a designer who
+   * already had a studio, and the first save would POST as though they had
+   * none. `useDraft` sometimes repopulated the fields from localStorage, which
+   * made it intermittent rather than merely wrong.
+   *
+   * A 404 genuinely is "you have not started one" and still falls through to
+   * the empty form, which is the whole point of the page.
+   */
+  if (query.isError && !isNoProfileYet(query.error)) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 6 }}>
+        <FailureNotice
+          error={query.error}
+          notFound={{
+            title: 'Your profile',
+            body: 'We could not find your profile.',
+          }}
+          onRetry={() => query.refetch()}
+          testId="profile-load-failure"
+        />
       </Container>
     );
   }
