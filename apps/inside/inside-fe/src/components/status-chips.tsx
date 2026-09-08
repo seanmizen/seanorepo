@@ -88,7 +88,7 @@ const StatusChip: FC<{
  * - REQ-CHIPS-008 — present only where the server reports a non-production
  *                   backend, and only until the visitor hides it
  *
- * Do not move these into the header to resolve a layout collision; adjust the
+ * Do not move these into the header to resolve a layout collision. Adjust the
  * header's offset instead, which is REQ-CHIPS-004. That trade was made once,
  * in #197, and reverted in #198.
  */

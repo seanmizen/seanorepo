@@ -1,6 +1,6 @@
 // WCAG 2.1 AA accessibility scan via @axe-core/playwright.
 //
-// Tagged `@axe` so `yarn workspace inside test:axe` runs only this file; the
+// Tagged `@axe` so `yarn workspace inside test:axe` runs only this file. The
 // e2e command excludes the tag. Mirrors the harness already in use by
 // ffmpeg-converter/web (see .github/workflows/ux-check.yml).
 //

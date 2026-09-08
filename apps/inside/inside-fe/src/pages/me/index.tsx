@@ -84,7 +84,7 @@ const MyStudio: FC = () => {
    * dead backend both arrive here as `isError` with no data. Branching on the
    * absence of data told an approved, listed designer that they had no studio
    * and invited them to create one, which is the app asserting something it
-   * had not verified. Only a 404 is an answer; everything else is a failure.
+   * had not verified. Only a 404 is an answer. Everything else is a failure.
    */
   if (profile.isError && !isNoProfileYet(profile.error)) {
     return (

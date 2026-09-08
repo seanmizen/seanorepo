@@ -184,7 +184,7 @@ export async function listImages(
  *
  * Two statements rather than a join, so a row with no variants yet still comes
  * back (with an empty `variants`) instead of vanishing. Missing ids are simply
- * absent from the map; callers treat that as "no image".
+ * absent from the map. Callers treat that as "no image".
  */
 export async function findStoredImages(
   ids: number[],

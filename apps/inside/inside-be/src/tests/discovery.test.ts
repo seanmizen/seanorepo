@@ -562,7 +562,7 @@ describe('search', () => {
     }
 
     // And they are matched as ordinary words. `${token} not` would be set
-    // subtraction in raw FTS5 and return nothing; here 'not' is just a word in
+    // subtraction in raw FTS5 and return nothing. Here 'not' is just a word in
     // the bio, so the designer is still found.
     for (const query of [`${token} and`, `${token} not`]) {
       const body = await list(`?q=${encodeURIComponent(query)}`);

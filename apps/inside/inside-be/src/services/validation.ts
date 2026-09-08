@@ -6,7 +6,7 @@ import type {
   WorkType,
 } from '@shared/types';
 
-/** Thrown for bad input; controllers turn it into a 400 with the message. */
+/** Thrown for bad input. Controllers turn it into a 400 with the message. */
 export class ValidationError extends Error {}
 
 export const BUDGET_BANDS: BudgetBand[] = [
@@ -120,7 +120,7 @@ export const DESIGNER_SORTS: DesignerSort[] = [
 /**
  * A whole number from a query string, inside `[min, max]`.
  *
- * Absent means "use the default"; present but not a plain non-negative integer
+ * Absent means "use the default". Present but not a plain non-negative integer
  * — `?page=abc`, `?limit=-1`, `?limit=1e3` — is rejected rather than coerced.
  * `Number('12abc')` is NaN and `Number('')` is 0, so a permissive parse turns a
  * typo into a silently different page, which is exactly the class of bug that

@@ -7,7 +7,7 @@ const APPROVED_SLUG = 'studio-mercer';
 
 test.describe('browsing designers', () => {
   test('lists approved studios to an anonymous visitor', async ({ page }) => {
-    // Buyers browse without an account; that is the whole funnel.
+    // Buyers browse without an account. That is the whole funnel.
     await page.goto('/designers');
     await waitForApp(page);
 

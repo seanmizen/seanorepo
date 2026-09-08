@@ -11,7 +11,7 @@ import {
   toProject,
 } from './designers';
 
-/** A decision an admin can record. Approve publishes; reject keeps it hidden. */
+/** A decision an admin can record. Approve publishes. Reject keeps it hidden. */
 export type ReviewDecision = 'approve' | 'reject';
 
 export interface ReviewQueueFilters {

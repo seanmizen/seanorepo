@@ -44,7 +44,7 @@ export const csv = <T extends z.ZodType>(item: T) =>
  * A bounded integer from a query string.
  *
  * Rejects rather than clamps. Silently coercing `?limit=9999` to 60 hands back
- * a page the caller did not ask for and cannot tell is wrong; a 400 says so.
+ * a page the caller did not ask for and cannot tell is wrong. A 400 says so.
  * The digits-only check also rejects `"1e3"`, `"-1"` and `" 12"`, which
  * `Number()` would all accept.
  */

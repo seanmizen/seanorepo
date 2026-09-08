@@ -95,7 +95,7 @@ export const ChromeProvider: FC<{ children: ReactNode }> = ({ children }) => {
     try {
       localStorage.setItem(STORAGE_KEY, visible ? 'on' : 'off');
     } catch {
-      // The choice still applies to this session; it just will not persist.
+      // The choice still applies to this session. It just will not persist.
     }
   }, []);
 

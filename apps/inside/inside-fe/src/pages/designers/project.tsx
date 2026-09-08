@@ -56,7 +56,7 @@ const PortfolioProjectPage: FC = () => {
   }
 
   if (query.isError || !query.data) {
-    // REQ-NET-007 decides what is true; REQ-FAIL-003 decides how it looks and
+    // REQ-NET-007 decides what is true. REQ-FAIL-003 decides how it looks and
     // gives the visitor a control that actually refetches.
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>

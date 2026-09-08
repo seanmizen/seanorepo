@@ -27,8 +27,8 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   because at the time it was written down nowhere — it existed only as an
   intention. #198 reverted the change and added the assertions below so the
   same trade cannot be made again without a test going red and someone having
-  to argue for it. When a future layout collision recurs, the header yields;
-  the chips do not move into flow. See REQ-CHIPS-004.
+  to argue for it. When a future layout collision recurs, the header yields.
+  The chips do not move into flow. See REQ-CHIPS-004.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "are fixed-position, not in normal flow"
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "stay put when the page scrolls"
@@ -171,7 +171,7 @@ Introduced in #174. `REQ-CHIPS-001` was stated in #198 after #197 broke it.
   defence in depth. The principle it stood for is unchanged and now lives in
   REQ-CHIPS-008: the server, never the bundle, decides what environment this
   is.
-- **Verification:** Inspection — no longer separately observable; see the note below. Its intent is carried by REQ-CHIPS-008, whose tests exercise the same signal.
+- **Verification:** Inspection — no longer separately observable. See the note below. Its intent is carried by REQ-CHIPS-008, whose tests exercise the same signal.
 - **Relations:** refines REQ-CHIPS-007
 
 ## REQ-CHIPS-008 — The card exists only outside production

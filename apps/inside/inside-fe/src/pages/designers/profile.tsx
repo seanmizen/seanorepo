@@ -38,7 +38,7 @@ const PieceTile: FC<{
         image={project.coverImage}
         sizes={TILE_SIZES}
         alt={project.title}
-        // Only the first tile is likely above the fold; the rest wait.
+        // Only the first tile is likely above the fold. The rest wait.
         priority={first}
       />
     ) : (
@@ -59,7 +59,7 @@ const DesignerProfilePage: FC = () => {
   const slug = useParams().slug as string;
   const query = useDesigner(slug);
 
-  // The route table can only know the slug; the studio's real name is a
+  // The route table can only know the slug. The studio's real name is a
   // runtime fact, so the crumb is corrected once it is known.
   useBreadcrumbTitle(query.data?.profile.studioName);
 
@@ -85,7 +85,7 @@ const DesignerProfilePage: FC = () => {
   }
 
   if (query.isError || !query.data) {
-    // REQ-NET-007 decides what is true; REQ-FAIL-003 decides how it looks and
+    // REQ-NET-007 decides what is true. REQ-FAIL-003 decides how it looks and
     // gives the visitor a control that actually refetches.
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>

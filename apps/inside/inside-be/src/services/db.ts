@@ -19,7 +19,7 @@ const openDbConnection = async (): Promise<DatabaseType> => {
   mkdirSync(directory, { recursive: true });
 
   const db = new Database(`${directory}/database.db`);
-  // SQLite leaves foreign keys off by default; every connection must opt in.
+  // SQLite leaves foreign keys off by default. Every connection must opt in.
   db.run('PRAGMA foreign_keys = ON');
   return db;
 };

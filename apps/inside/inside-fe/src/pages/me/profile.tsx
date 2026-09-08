@@ -82,7 +82,7 @@ const forApi = (draft: ProfileDraft) =>
  * Split into steps because the alternative — one form with everything on it —
  * reads as a wall on a phone, and this is the funnel that decides whether good
  * designers join at all. Each step advance saves to the server, so progress
- * survives more than the session; `useDraft` covers the keystrokes since the
+ * survives more than the session. `useDraft` covers the keystrokes since the
  * last save (REQ-ONBOARD-002).
  */
 const MyProfileEditor: FC = () => {

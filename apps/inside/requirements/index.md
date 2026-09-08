@@ -52,7 +52,7 @@
 | [`REQ-NET-004`](net.md#req-net-004--the-clients-address-is-the-clients-address) | The client's address is the client's address | active | constraint | P1 | sean |
 | [`REQ-NET-005`](net.md#req-net-005--one-error-envelope) | One error envelope | active | constraint | P0 | sean |
 | [`REQ-NET-008`](net.md#req-net-008--a-5xx-says-nothing-about-our-internals) | A 5xx says nothing about our internals | active | constraint | P0 | sean |
-| [`REQ-NET-006`](net.md#req-net-006--retry-what-might-work-never-retry-an-answer) | Retry what might work; never retry an answer | active | constraint | P2 | sean |
+| [`REQ-NET-006`](net.md#req-net-006--retry-what-might-work-never-retry-an-answer) | Retry what might work. Never retry an answer | active | constraint | P2 | sean |
 | [`REQ-NET-007`](net.md#req-net-007--a-failure-says-what-actually-failed) | A failure says what actually failed | active | quality | P1 | sean |
 | [`REQ-ONBOARD-001`](onboard.md#req-onboard-001--a-studio-can-be-set-up-without-leaving-the-app) | A studio can be set up without leaving the app | active | functional | P1 | sean |
 | [`REQ-ONBOARD-002`](onboard.md#req-onboard-002--work-in-progress-survives-a-refresh) | Work in progress survives a refresh | active | quality | P1 | sean |
@@ -125,7 +125,7 @@ graph TD
   REQ_NET_003["REQ-NET-003<br/>Every request is identifiable afterwards"]
   REQ_NET_004["REQ-NET-004<br/>The client's address is the client's address"]
   REQ_NET_005["REQ-NET-005<br/>One error envelope"]
-  REQ_NET_006["REQ-NET-006<br/>Retry what might work; never retry an answer"]
+  REQ_NET_006["REQ-NET-006<br/>Retry what might work. Never retry an answer"]
   REQ_NET_007["REQ-NET-007<br/>A failure says what actually failed"]
   REQ_NET_008["REQ-NET-008<br/>A 5xx says nothing about our internals"]
   REQ_ONBOARD_001["REQ-ONBOARD-001<br/>A studio can be set up without leaving the app"]

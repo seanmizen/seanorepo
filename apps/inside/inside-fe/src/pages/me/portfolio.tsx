@@ -23,7 +23,7 @@ import {
 /**
  * The designer's own portfolio list — drafts included.
  *
- * The public list shows only published work (REQ-DISCOVERY-002); this one is
+ * The public list shows only published work (REQ-DISCOVERY-002). This one is
  * the opposite by design. A designer needs to see what is unfinished, and the
  * status chip is what keeps the two readings apart.
  */
