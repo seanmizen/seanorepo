@@ -13,8 +13,10 @@ import {
 import type { DesignerProfileStatus } from '@shared/types';
 import type { FC } from 'react';
 import { Link } from 'react-router-dom';
+import { FailureNotice } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import {
+  isNoProfileYet,
   useMyPortfolio,
   useMyProfile,
 } from '@/features/designer-onboarding/use-my-studio';
@@ -75,6 +77,31 @@ const MyStudio: FC = () => {
     );
   }
 
+  /*
+   * A failed load is not an empty studio — REQ-STATE-003.
+   *
+   * The endpoint 404s for a designer with no profile, so the first visit and a
+   * dead backend both arrive here as `isError` with no data. Branching on the
+   * absence of data told an approved, listed designer that they had no studio
+   * and invited them to create one, which is the app asserting something it
+   * had not verified. Only a 404 is an answer; everything else is a failure.
+   */
+  if (profile.isError && !isNoProfileYet(profile.error)) {
+    return (
+      <Container maxWidth="md" sx={{ py: 6 }}>
+        <FailureNotice
+          error={profile.error}
+          notFound={{
+            title: 'Your studio',
+            body: 'We could not find your studio.',
+          }}
+          onRetry={() => profile.refetch()}
+          testId="studio-load-failure"
+        />
+      </Container>
+    );
+  }
+
   // A designer who has just signed up has no profile. That is the ordinary
   // first visit, not a failure, so it gets an invitation rather than an error.
   if (!profile.data?.profile) {
@@ -105,6 +132,20 @@ const MyStudio: FC = () => {
   const { profile: mine } = profile.data;
   const review = REVIEW[mine.status];
   const pieces = portfolio.data?.portfolioProjects ?? [];
+
+  /*
+   * The same rule one card down. `?? []` renders "No pieces yet" — an
+   * assertion about their portfolio — from a request that failed, so a studio
+   * with twelve pieces is told it has none and nudged to add some. A count we
+   * do not have is not zero.
+   */
+  const pieceCount = portfolio.isPending
+    ? 'Counting your work…'
+    : portfolio.isError
+      ? 'We could not load your work just now.'
+      : pieces.length === 0
+        ? 'No pieces yet. Studios with work get enquiries; studios without do not.'
+        : `${pieces.length} ${pieces.length === 1 ? 'piece' : 'pieces'}.`;
 
   return (
     <Container maxWidth="md" sx={{ py: 6 }}>
@@ -165,9 +206,7 @@ const MyStudio: FC = () => {
                 Your work
               </Typography>
               <Typography color="text.secondary" data-testid="piece-count">
-                {pieces.length === 0
-                  ? 'No pieces yet. Studios with work get enquiries; studios without do not.'
-                  : `${pieces.length} ${pieces.length === 1 ? 'piece' : 'pieces'}.`}
+                {pieceCount}
               </Typography>
               <Button component={Link} to="/me/portfolio" variant="outlined">
                 Manage portfolio

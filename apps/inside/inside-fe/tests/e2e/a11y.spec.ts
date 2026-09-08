@@ -168,6 +168,25 @@ for (const scheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, `/me empty (${scheme})`);
     });
 
+    test('my studio — load failure', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-studio-fail'), 'designer');
+      // The state a dead backend produces, distinct from the empty studio
+      // above — it has a heading, an alert and a retry button, none of which
+      // the empty state has, so it needs its own scan in both themes.
+      await page.route(/\/api\/me\/profile(\?|$)/, (route) =>
+        route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'nope' }),
+        }),
+      );
+      await page.goto('/me');
+      await expect(page.getByTestId('studio-load-failure')).toBeVisible();
+      await expectNoViolations(page, `/me load failure (${scheme})`);
+    });
+
     test('my studio — profile editor', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);

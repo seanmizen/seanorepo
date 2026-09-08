@@ -62,6 +62,9 @@ data is a lie with a happy path.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "the tagline is not invented while config is loading"
   - Test — `apps/inside/inside-fe/tests/e2e/status-chips.spec.ts` › "the page never invents a link the server did not send"
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "/me says the load failed rather than inviting a setup"
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "/me/profile says so rather than showing a blank new profile"
+  - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a portfolio that failed to load is not a portfolio of nothing"
 - **Relations:** refines REQ-STATE-001
 
 ## REQ-STATE-004 — One value drives every part of a presentation
