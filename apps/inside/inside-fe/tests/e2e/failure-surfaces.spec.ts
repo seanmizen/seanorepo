@@ -304,3 +304,90 @@ test.describe('a piece editor tells a failure from a missing piece', () => {
     await expect(page.getByTestId('piece-load-failure')).toHaveCount(0);
   });
 });
+
+test.describe('the /me failure surfaces are finished', () => {
+  test('a portfolio that failed to load offers a retry that works', async ({
+    page,
+  }) => {
+    await signInAsDesigner(page, 'portfolio-retry');
+
+    /*
+     * A 500, not an offline context: /me/portfolio answers 404 for a designer
+     * with no profile, and that case is deliberately NOT a failure — it is the
+     * "set up your profile first" step. Only a non-404 reaches this surface.
+     */
+    let allowThrough = false;
+    await page.route(/\/api\/me\/portfolio(\?|$)/, async (route) => {
+      if (allowThrough) {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'nope' }),
+      });
+    });
+
+    await page.goto('/me/portfolio');
+    await expect(page.getByTestId('portfolio-load-failure')).toBeVisible();
+
+    allowThrough = true;
+    await page.getByTestId('portfolio-load-failure-retry').click();
+
+    // The real 404 answer, which only a genuine second request can produce.
+    await expect(page.getByTestId('portfolio-needs-profile')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('portfolio-load-failure')).toHaveCount(0);
+  });
+
+  test('an action that cannot reach the server says so, not "could not be saved"', async ({
+    page,
+  }) => {
+    await signInAsDesigner(page, 'action-transport');
+
+    await page.goto('/me/profile');
+    await expect(page.getByTestId('field-studioName')).toBeVisible();
+    await page.getByTestId('field-studioName').fill('Unreachable Studio');
+
+    /*
+     * An aborted request, NOT `context.setOffline(true)`.
+     *
+     * With the browser offline, `onlineManager` PAUSES a mutation rather than
+     * failing it (TanStack's default `networkMode: 'online'`), so nothing ever
+     * rejects and there is no failure to word — the app-level banner is the
+     * statement instead, which is REQ-FAIL-002 working as intended.
+     *
+     * This is the case that does reach the surface: the browser believes it is
+     * online and the request still never lands — a dead tunnel, DNS, CORS. The
+     * cause is transport, and the message must name it rather than blaming the
+     * save (REQ-NET-007).
+     */
+    await page.route(/\/api\/me\/profile(\?|$)/, (route) =>
+      route.abort('failed'),
+    );
+    await page.getByTestId('profile-next').click();
+
+    const failure = page.getByTestId('profile-error');
+    await expect(failure).toBeVisible({ timeout: 20_000 });
+    await expect(failure).toHaveText(/connection|reach the server/i);
+    await expect(failure).not.toHaveText(/could not be saved/i);
+  });
+
+  test('a validation message the page raised itself is shown as written', async ({
+    page,
+  }) => {
+    await signInAsDesigner(page, 'action-validation');
+
+    await page.goto('/me/profile');
+    await expect(page.getByTestId('field-studioName')).toBeVisible();
+
+    // No server was asked, so there is nothing to diagnose — describing this
+    // would dress the visitor's own omission as a fault of ours.
+    await page.getByTestId('profile-next').click();
+    await expect(page.getByTestId('profile-error')).toHaveText(
+      /your studio needs a name/i,
+    );
+  });
+});

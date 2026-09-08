@@ -33,7 +33,7 @@ import type { StoredImage } from '@shared/types';
 import type { FC } from 'react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FailureNotice } from '@/components';
+import { FailureAlert, FailureNotice } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import {
   ApiError,
@@ -148,7 +148,18 @@ const MyProjectEditor: FC = () => {
     status: 'draft',
   });
   const [order, setOrder] = useState<Ordered[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * The caught error, plus what to say when it carries no wording of its own.
+   *
+   * Three different actions share this one surface, and they failed in three
+   * different ways — reordering, uploading and saving are not interchangeable
+   * to the designer reading the message. Keeping the fallback beside the cause
+   * preserves that, while `FailureAlert` decides whether the cause has
+   * something better to say (REQ-NET-007).
+   */
+  const [error, setError] = useState<{ cause: unknown; body: string } | null>(
+    null,
+  );
   const [progress, setProgress] = useState<number | null>(null);
 
   useBreadcrumbTitle(query.data?.project.title);
@@ -260,11 +271,7 @@ const MyProjectEditor: FC = () => {
         })),
       });
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'The new order could not be saved.',
-      );
+      setError({ cause: caught, body: 'The new order could not be saved.' });
     }
   };
 
@@ -290,12 +297,9 @@ const MyProjectEditor: FC = () => {
         { imageId: image.id, caption: null, image },
       ]);
     } catch (caught) {
-      // The server's own wording, which says what was wrong with the file.
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'That image could not be uploaded.',
-      );
+      // FailureAlert keeps the server's own wording for a refused upload,
+      // which is what says what was wrong with the file.
+      setError({ cause: caught, body: 'That image could not be uploaded.' });
     } finally {
       setProgress(null);
     }
@@ -320,11 +324,7 @@ const MyProjectEditor: FC = () => {
         },
       });
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'That could not be saved. Try again.',
-      );
+      setError({ cause: caught, body: 'That could not be saved.' });
     }
   };
 
@@ -336,9 +336,13 @@ const MyProjectEditor: FC = () => {
         </Typography>
 
         {error && (
-          <Alert severity="error" data-testid="project-error">
-            {error}
-          </Alert>
+          // The retry is whichever control failed — Save, the upload input,
+          // or dragging a row back — all of them still on screen.
+          <FailureAlert
+            error={error.cause}
+            fallback={{ title: 'Not saved', body: error.body }}
+            testId="project-error"
+          />
         )}
 
         <Stack spacing={3}>
