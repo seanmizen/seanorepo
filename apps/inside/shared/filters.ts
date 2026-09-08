@@ -121,7 +121,7 @@ export type BidFilters = z.infer<typeof bidFilters>;
 /**
  * Serialise parsed filters back to a query string.
  *
- * Defaults and empties are omitted, so the URL stays short and one set of
+ * The serialiser omits defaults and empties, so the URL stays short and one set of
  * filters always produces one canonical URL — which matters for sharing, for
  * caching, and for not splitting search equity across paginated duplicates.
  */

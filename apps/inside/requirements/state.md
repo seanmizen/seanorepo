@@ -77,7 +77,7 @@ data is a lie with a happy path.
 - **Statement:** Where a surface presents a request's status, its label, colour
   and description shall all derive from a single computed status value.
 - **Rationale:** This is the mechanism that makes REQ-STATE-002 hold rather
-  than merely being intended. When label, colour and tooltip each branch on the
+  than merely an intention. When label, colour and tooltip each branch on the
   query separately, they will eventually disagree — which is exactly how a
   green chip acquired an "API reachable" tooltip during a pending request.
   Computing one status and mapping it to a presentation makes a contradictory

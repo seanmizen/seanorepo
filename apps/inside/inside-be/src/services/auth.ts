@@ -60,7 +60,8 @@ function getAdminEmails(): Set<string> {
  *    by logging in.
  *    Caroline recomputes the role on every login, which here would silently
  *    demote a designer to buyer — destroying the link to their profile and
- *    portfolio. The signup role only applies when the account is created.
+ *    portfolio. The signup role only applies when the server creates the
+ *    account.
  */
 function resolveRole(
   email: string,
@@ -69,7 +70,7 @@ function resolveRole(
 ): UserRole {
   if (getAdminEmails().has(normaliseEmail(email))) return 'admin';
   if (existing === null) return requested;
-  // An existing admin who is dropped from the whitelist falls back to buyer.
+  // An existing admin who leaves the whitelist falls back to buyer.
   // Otherwise the stored role stands.
   return existing === 'admin' ? 'buyer' : existing;
 }
@@ -154,7 +155,7 @@ export async function createMagicToken(
 }
 
 /**
- * Consume a token. Single-use and expiry are enforced in the WHERE clause, so
+ * Consume a token. The WHERE clause enforces single-use and expiry, so
  * a replayed or stale token simply matches nothing.
  */
 export async function verifyMagicToken(token: string): Promise<User | null> {

@@ -13,7 +13,7 @@ import { getApp, uniqueEmail } from './setup';
  * Post-a-project: a buyer posts a brief, designers bid on it.
  *
  * The suite shares one database with every other suite, so nothing here
- * assumes an empty table — every assertion is scoped to rows this file made,
+ * assumes an empty table — every assertion targets rows this file made,
  * and location filters use a unique token per test.
  */
 
@@ -863,7 +863,7 @@ describe('who can see a bid', () => {
     const { brief } = await briefWithBid();
     const rival = await asDesigner('Nosy Studio');
 
-    // The buyer's inbox is a buyer-only route, so a designer is refused outright.
+    // The buyer's inbox is a buyer-only route, so it refuses a designer outright.
     const inbox = await app.inject({
       method: 'GET',
       url: `/api/me/briefs/${brief.id}/bids`,
@@ -1008,7 +1008,7 @@ describe('who can see a brief', () => {
     expect(brief.visibility).toBe('private');
     expect(brief.publishedAt).toBeNull();
     // The safe default matters more than the common one: a brief must never
-    // become public because a field was omitted.
+    // become public because somebody omitted a field.
     expect((await fetchAs(brief.slug)).statusCode).toBe(404);
   });
 
@@ -1197,7 +1197,7 @@ describe('who can see a brief', () => {
     );
     db.close();
 
-    // REQ-SLUG-001: the slug it was created with keeps working.
+    // REQ-SLUG-001: the slug it started with keeps working.
     const res = await fetchAs(brief.slug);
     expect(res.statusCode).toBe(200);
     expect(res.json<{ brief: PublicBrief }>().brief.slug).toBe(

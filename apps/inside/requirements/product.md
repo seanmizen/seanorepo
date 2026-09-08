@@ -1,11 +1,11 @@
 # REQ-PRODUCT — Locked product decisions
 
-The decisions that define what `inside` *is*, rather than how it is built.
+The decisions that define what `inside` *is*, rather than how we build it.
 These are the stakeholder-level requirements everything else serves. The rest
 of this directory refines or depends on them.
 
 Do not relitigate these without asking Sean. That instruction has lived in
-`apps/inside/CLAUDE.md` since the app was scaffolded — what it lacked was a
+`apps/inside/CLAUDE.md` since we scaffolded the app — what it lacked was a
 handle to cite, a record of who decided, and anything proving the app still
 honours them.
 
@@ -63,7 +63,7 @@ honours them.
   alongside something worth having an account for, and never as a condition of
   browsing.
 - **Rationale:** The counterpart to REQ-PRODUCT-001, and the reason that
-  requirement does not simply mean "delay the wall". A buyer is asked to sign
+  requirement does not simply mean "delay the wall". We ask a buyer to sign
   up when they want to save a designer or send an enquiry — at which point the
   account has an obvious purpose — rather than on arrival, when it has none.
 - **Verification:**

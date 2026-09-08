@@ -21,7 +21,7 @@ Introduced across #178 and #216, on the machinery #214 provided.
 - **Statement:** Where a render error is caught, the app shall present a themed
   fallback offering a way to continue.
 - **Rationale:** The boundary rendered a bare `<div>Something went wrong.</div>`
-  and was mounted OUTSIDE `ThemeProvider`, so a visitor on a dark theme got an
+  and sat OUTSIDE `ThemeProvider`, so a visitor on a dark theme got an
   unstyled white box. It never reset, so one transient crash ended the session
   until a manual browser refresh. And it had no `componentDidCatch`, so the
   error and its component stack were lost entirely — the one moment you most
@@ -40,13 +40,13 @@ Introduced across #178 and #216, on the machinery #214 provided.
   single application-level notice.
 - **Rationale:** Without one, going offline produced an error *storm*: every
   request in flight failed separately and each surface said, individually, that
-  the thing being looked for did not exist. Six honest-looking messages, all
-  wrong, for one cause — and the visitor is left believing the site has lost
+  the thing it was looking for did not exist. Six honest-looking messages, all
+  wrong, for one cause — and the visitor ends up believing the site has lost
   their data rather than that their train went into a tunnel.
 
   Driven by TanStack's `onlineManager` rather than a bare `navigator.onLine`
   listener, so the banner and the query layer cannot disagree: the same value
-  decides both what is shown and whether queries are paused.
+  decides both what the app shows and whether it pauses queries.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "says so once, at app level, rather than once per failed page"
   - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "recovers without a manual refresh"
@@ -94,7 +94,7 @@ Introduced across #178 and #216, on the machinery #214 provided.
   whoever tripped it.
 
   That is the frontend twin of the leak REQ-NET-008 closed on the backend, and
-  it was found the same way: by writing a test that deliberately crashed a
+  we found it the same way: by writing a test that deliberately crashed a
   page and looking at what a visitor would actually see.
 - **Verification:** Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "is themed, announced, and recoverable"
 - **Relations:** refines REQ-FAIL-001

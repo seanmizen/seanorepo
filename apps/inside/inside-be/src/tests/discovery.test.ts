@@ -14,9 +14,9 @@ import { getApp, uniqueEmail } from './setup';
  * Suites share one process, one server and one database, so nothing here
  * assumes an empty table. Every fixture carries a token unique to this run —
  * a nonsense location for the filter and pagination tests, a nonsense word in
- * the searchable text for the search tests — and every assertion is made
- * against a list scoped by one of those tokens, or by checking membership
- * rather than length. Every write is scoped to a row this file created.
+ * the searchable text for the search tests — and every assertion runs
+ * against a list narrowed by one of those tokens, or checks membership
+ * rather than length. Every write targets a row this file created.
  */
 
 const app = await getApp();
@@ -24,7 +24,7 @@ const { openDbConnection } = await import('../services/db');
 const { listApprovedDesignersSql } = await import('../services/discovery');
 
 let counter = 0;
-/** Unique per call — slugs and studio names are shared across the database. */
+/** Unique per call — the whole database shares one slug namespace. */
 const unique = (prefix: string): string =>
   `${prefix}-${Date.now().toString(36)}-${counter++}`;
 
@@ -70,10 +70,10 @@ interface Fixture {
  * Build a designer through the public write API, then set the review status
  * directly.
  *
- * Going through the API matters: the FTS document is maintained by the write
- * paths in `services/designers.ts`, so a fixture inserted straight into SQL
+ * Going through the API matters: the write paths in `services/designers.ts`
+ * maintain the FTS document, so a fixture inserted straight into SQL
  * would be invisible to search and would quietly make the search tests test
- * nothing. The status UPDATE is scoped to the one row just created — the admin
+ * nothing. The status UPDATE touches only the row just created — the admin
  * approval API is a separate ticket.
  */
 async function makeDesigner(fixture: Fixture = {}) {
@@ -197,7 +197,7 @@ describe('listing', () => {
     await setStatus(profile.id, 'approved');
 
     // A real images row with its variants. The payload shape is what is under
-    // test, so the rows are made directly rather than by re-uploading a file.
+    // test, so this test makes the rows directly rather than re-uploading a file.
     const db = await openDbConnection();
     const path = `images/${crypto.randomUUID()}.webp`;
     db.run(
@@ -561,7 +561,7 @@ describe('search', () => {
       expect({ query, code: res.statusCode }).toEqual({ query, code: 200 });
     }
 
-    // And they are matched as ordinary words. `${token} not` would be set
+    // And FTS matches them as ordinary words. `${token} not` would be set
     // subtraction in raw FTS5 and return nothing. Here 'not' is just a word in
     // the bio, so the designer is still found.
     for (const query of [`${token} and`, `${token} not`]) {
@@ -655,9 +655,9 @@ describe('search', () => {
 
 /**
  * The approval gate is the product's entire curation promise, so this is
- * deliberately exhaustive: an unapproved designer is built with every
+ * deliberately exhaustive: it builds an unapproved designer with every
  * distinguishing attribute the API can filter, sort or search on, and an
- * identical approved twin is built beside it. Every parameter combination is
+ * identical approved twin beside it. Every parameter combination is
  * then asserted twice — the twin must be found, proving the query really does
  * match this shape, and the unapproved one must not.
  *
@@ -781,7 +781,7 @@ describe('the approval gate', () => {
  * second resolution, so designers signing up in the same second collide
  * routinely, and studios do share names. Without `p.id` closing the ORDER BY
  * the order within a tied group is undefined, and paging can show one row
- * twice while skipping another. Every UPDATE below is scoped to the rows this
+ * twice while skipping another. Every UPDATE below touches only the rows this
  * helper just created.
  */
 async function tiedSet(where: string, size: number, studioName: string) {
@@ -1011,7 +1011,7 @@ describe('query plans', () => {
     const plan = await planFor({});
     expect(plan).toContain('idx_designer_profiles_status_created_at');
     expect(plan).not.toContain('SCAN designer_profiles');
-    // A temp b-tree would mean the tie-breaker is being sorted in memory
+    // A temp b-tree would mean SQLite sorts the tie-breaker in memory
     // rather than read off the index in order.
     expect(plan).not.toContain('USE TEMP B-TREE');
   });
@@ -1047,11 +1047,11 @@ describe('query plans', () => {
 /**
  * Schema cover for 002_designer_discovery.sql.
  *
- * Fresh apply and idempotency are covered generically in `migrations.test.ts`
+ * `migrations.test.ts` covers fresh apply and idempotency generically
  * — the runner tracks by presence, so a second boot must not try to recreate
  * the virtual table. What is specific to this migration is the new CHECK and
- * the delete trigger, and both are asserted to actually bite rather than
- * merely to exist.
+ * the delete trigger, and this file asserts both actually bite rather than
+ * merely exist.
  */
 describe('migration 002', () => {
   test('the search index and its columns exist', async () => {

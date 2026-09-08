@@ -3,7 +3,7 @@
  *
  * SQL is snake_case. These are the camelCase shapes the API speaks.
  *
- * NAMING WARNING — "project" is overloaded in this domain:
+ * NAMING WARNING — this domain overloads the word "project":
  * - `PortfolioProject` a designer's completed work, shown in their portfolio
  * - `Brief`   a homeowner's posted job, which designers bid on
  * - `Bid`   a designer's response to a brief
@@ -177,8 +177,8 @@ export interface SavedDesigner {
 /**
  * Who may EVER see a brief. Orthogonal to whether it is currently published.
  *
- * `link` means unlisted, NOT secret. Brief slugs are derived from titles and
- * are user-editable, so they are guessable by design — a buyer who chooses
+ * `link` means unlisted, NOT secret. The server derives brief slugs from
+ * titles and a user can edit them, so they are guessable by design — a buyer who chooses
  * anything other than `private` is consenting to a reachable URL, not a hidden
  * one. UI copy must say "unlisted", never "only people with the link".
  * `private` is the only value that enforces anything.
@@ -193,7 +193,7 @@ export type BriefVisibility = 'public' | 'link' | 'private';
  * publish/unpublish at will. Two timestamps carry it instead:
  *
  * - `publishedAt === null` — unpublished, hidden from everyone but the owner,
- *   whatever `visibility` says and whoever is invited.
+ *   whatever `visibility` says and whoever holds an invite.
  * - `closesAt` in the past — still visible, no longer accepting bids.
  */
 export interface Brief {
@@ -223,7 +223,7 @@ export interface BriefInvitee {
 }
 
 /**
- * A bid is being written, has been sent, or was taken back.
+ * A designer is writing a bid, has sent it, or took it back.
  *
  * Deliberately small: the previous six states (sent/read/shortlisted/accepted/
  * declined/withdrawn) had no code driving any of them, and lacked the one
@@ -240,7 +240,7 @@ export interface Bid {
   budgetBand: BudgetBand | null;
   availability: Availability | null;
   status: BidStatus;
-  /** Set when the bid is sent. Null while it is still a draft. */
+  /** Set when the designer sends the bid. Null while it is still a draft. */
   submittedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -293,10 +293,10 @@ export interface BriefListResponse {
  * ------------------------------------------------------------------ */
 
 /**
- * How a designer list is ordered.
+ * How the API orders a designer list.
  *
- * `relevance` is only meaningful alongside a search query and is rejected
- * without one — silently falling back would make the ordering unexplainable.
+ * `relevance` is only meaningful alongside a search query, and the API
+ * rejects it without one — silently falling back would make the ordering unexplainable.
  */
 export type DesignerSort = 'relevance' | 'newest' | 'oldest' | 'name';
 
