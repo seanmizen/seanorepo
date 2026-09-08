@@ -251,3 +251,56 @@ test.describe('a failed load in /me is not an empty studio', () => {
     );
   });
 });
+
+/*
+ * REQ-QUALITY-001, on the page the #217 sweep missed.
+ *
+ * The two cases are asserted separately and never in the same test, because
+ * conflating them IS the bug: a spec that only checked "some state appears"
+ * passed happily while a 500 was being reported as a deleted piece.
+ */
+test.describe('a piece editor tells a failure from a missing piece', () => {
+  test('a 404 is the missing piece, in its own right', async ({ page }) => {
+    await signInAsDesigner(page, 'piece-missing');
+
+    // This designer owns no piece 1, and the backend 404s for "no such piece"
+    // and "not yours" alike — so this is genuinely all the page can know.
+    await page.goto('/me/portfolio/1');
+    await expect(page.getByTestId('piece-missing')).toBeVisible();
+    await expect(page.getByTestId('piece-load-failure')).toHaveCount(0);
+  });
+
+  test('a 500 is a failure, not a deletion', async ({ page }) => {
+    await signInAsDesigner(page, 'piece-failure');
+
+    let allowThrough = false;
+    await page.route(/\/api\/me\/portfolio\/\d+(\?|$)/, async (route) => {
+      if (allowThrough) {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'nope' }),
+      });
+    });
+
+    await page.goto('/me/portfolio/1');
+    await expect(page.getByTestId('piece-load-failure')).toBeVisible();
+    // The bug: "That piece is no longer available", severity info, for a
+    // server that was down for a second.
+    await expect(page.getByTestId('piece-missing')).toHaveCount(0);
+
+    allowThrough = true;
+    await page.getByTestId('piece-load-failure-retry').click();
+
+    // The real answer now arrives — a 404, because this designer really does
+    // not own piece 1. Same page, opposite meaning, and only reachable
+    // because the retry actually re-issued the request.
+    await expect(page.getByTestId('piece-missing')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('piece-load-failure')).toHaveCount(0);
+  });
+});
