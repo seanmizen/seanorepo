@@ -140,7 +140,7 @@ const toReceivedBid = (r: BidWithDesignerRow): ReceivedBid => ({
 const BID_COUNT =
   "(SELECT COUNT(*) FROM bids WHERE brief_id = b.id AND status = 'submitted')";
 
-/** `%` and `_` are wildcards; a location typed with one must match literally. */
+/** `%` and `_` are wildcards. A location with one must match it literally. */
 const escapeLike = (value: string): string =>
   value.replace(/[\\%_]/g, (char) => `\\${char}`);
 
@@ -696,7 +696,7 @@ export async function insertBid(
  * True when the database refused a write because of the
  * `UNIQUE (brief_id, designer_profile_id)` constraint.
  *
- * The pre-check for an existing bid handles the ordinary case; this catches
+ * The pre-check for an existing bid handles the ordinary case. This catches
  * the race between two concurrent submissions, which would otherwise surface
  * as a 500 with raw SQLite text in it.
  */

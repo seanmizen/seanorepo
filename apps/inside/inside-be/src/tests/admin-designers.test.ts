@@ -139,7 +139,7 @@ describe('the review queue', () => {
   });
 
   test('the detail view shows unpublished portfolio projects too', async () => {
-    // The reviewer must be able to judge draft work; that is the whole job.
+    // The reviewer must be able to judge draft work. That is the whole job.
     const { cookie, profile } = await pendingDesigner('Draft Work Studio');
     await app.inject({
       method: 'POST',

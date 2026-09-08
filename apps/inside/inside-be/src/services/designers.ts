@@ -125,7 +125,7 @@ export async function findProfileByUserId(
 /**
  * Public lookup. REQ-DISCOVERY-001: approved only, and this is the requirement
  * rather than REQ-PRODUCT-002's list-level one. Omitting a profile from the
- * listing is a presentation choice; refusing to serve it by slug is the actual
+ * listing is a presentation choice. Refusing to serve it by slug is the actual
  * control — slugs derive from studio names and are guessable, and a designer
  * awaiting review has every reason to share their own URL.
  *
@@ -187,7 +187,7 @@ export async function insertProfile(
   }
   // Reindexed on its own connection, after this one is closed — two live
   // handles writing the same file is how you earn an intermittent SQLITE_BUSY.
-  // The profile is searchable from the moment it exists; the approval gate is
+  // The profile is searchable from the moment it exists. The approval gate is
   // applied at query time, not by withholding the index row.
   await reindexDesigner(row.id);
   return toProfile(row);
@@ -201,7 +201,7 @@ export async function insertProfile(
  * That is the whole mechanism — a rename adds, it never removes.
  *
  * `desired` comes from the user when they typed a slug, in which case a
- * collision or a reserved word is refused rather than silently altered.
+ * collision or a reserved word is refused rather than silently changed.
  */
 export async function renameProfileSlug(
   id: number,
@@ -309,7 +309,7 @@ export async function submitProfileForReview(
 
 /**
  * REQ-DISCOVERY-002. `publishedOnly` defaults to false because the designer's
- * own editor needs their drafts; every PUBLIC caller must pass true. A separate
+ * own editor needs their drafts. Every PUBLIC caller must pass true. A separate
  * gate from the approval one — an approved designer may still have unfinished
  * work, and publishing it early is a cost borne by them, not by us.
  */

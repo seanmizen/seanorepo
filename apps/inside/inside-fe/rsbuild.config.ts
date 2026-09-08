@@ -12,7 +12,7 @@ export default defineConfig({
   },
   source: {
     // Single API-base strategy: baked in at build time. Docker passes API_URL
-    // as a build arg; in production behind cloudflared it stays '/api' and the
+    // as a build arg. In production behind cloudflared it stays '/api' and the
     // tunnel routes it to the backend.
     define: {
       'import.meta.env.API_URL': JSON.stringify(process.env.API_URL || '/api'),

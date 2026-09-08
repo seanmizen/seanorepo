@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
  * location, several pieces of work. Losing half of that to a stray refresh or
  * a phone call is the point at which someone gives up and does not come back.
  *
- * The server holds everything already saved; this holds the keystrokes since.
+ * The server holds everything already saved. This holds the keystrokes since.
  * The two are layered rather than merged — the draft wins when present,
  * because by construction it is newer than the last save.
  *

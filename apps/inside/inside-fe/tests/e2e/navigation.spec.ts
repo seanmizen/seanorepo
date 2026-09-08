@@ -27,7 +27,7 @@ import { signIn, uniqueEmail, waitForApp } from './helpers';
  * The same table the router is built from, widened to the interface.
  *
  * `ROUTES` is declared `as const` so the router can type-check that every
- * declared path has an element; that makes it a tuple of literal object types,
+ * declared path has an element. That makes it a tuple of literal object types,
  * where an optional field a given route omits is not even a property. Reading
  * it as `RouteDefinition[]` is what lets this file ask any route about
  * `params`, `search` or `requiresAuth` uniformly.
@@ -38,7 +38,7 @@ const ROUTE_TABLE: readonly RouteDefinition[] = ROUTES;
  * Fixture values for a pattern's `:params`.
  *
  * An ancestor's own declaration wins, so `/designers` and
- * `/designers/:slug/portfolio/:id` agree on which designer is being visited;
+ * `/designers/:slug/portfolio/:id` agree on which designer is being visited,
  * the descendant's values fill anything the ancestor did not name.
  */
 const paramsFor = (pattern: string, descendant: RouteDefinition) => ({
@@ -80,8 +80,8 @@ const establishSession = async (
 ) => {
   await page.goto('/login');
   await waitForApp(page);
-  // ADMIN_EMAILS in playwright.config.ts is what makes this address an admin;
-  // the role is granted by the whitelist, never by the signup payload.
+  // ADMIN_EMAILS in playwright.config.ts is what makes this address an admin.
+  // The role is granted by the whitelist, never by the signup payload.
   const email = role === 'admin' ? 'admin@inside.test' : uniqueEmail('nav');
   await signIn(page, email, role === 'designer' ? 'designer' : 'buyer');
 };

@@ -12,7 +12,7 @@ import type { FastifyInstance } from 'fastify';
  * on import. Those imports are cached, so all suites unavoidably share one
  * server and one storage provider.
  *
- * Giving each suite its own env therefore does not isolate anything; it just
+ * Giving each suite its own env therefore does not isolate anything. It just
  * means whichever suite loaded first wins, and whichever calls `app.close()`
  * first breaks the others. So the environment is created once per process and
  * torn down at exit, and suites share it deliberately rather than by accident.

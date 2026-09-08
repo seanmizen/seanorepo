@@ -23,7 +23,7 @@ export interface ErrorEnvelope {
 export const GENERIC_5XX = 'Something went wrong at our end.';
 
 /**
- * A 4xx keeps its message; a 5xx never does.
+ * A 4xx keeps its message. A 5xx never does.
  *
  * The split is about authorship. Messages below 500 were written by us for the
  * caller to read — "Your studio needs a name", "That brief is no longer

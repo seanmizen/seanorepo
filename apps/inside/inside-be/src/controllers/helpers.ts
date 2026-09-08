@@ -2,7 +2,7 @@ import type { FastifyReply } from 'fastify';
 import { ValidationError } from '../services/validation';
 
 /**
- * Turns a ValidationError into a 400; anything else keeps bubbling.
+ * Turns a ValidationError into a 400. Anything else keeps bubbling.
  *
  * Lives in the controller layer, not in `services/validation.ts`, so the
  * validators stay free of any knowledge of HTTP.

@@ -17,7 +17,7 @@ import { useBreadcrumbTitles } from '@/contexts/breadcrumb-context';
  *
  * Placement: in normal flow beneath the site header. The status chips float
  * over everything at the top-left (REQ-CHIPS-001) and the header reserves
- * space for them (REQ-CHIPS-004); the trail sits below both. Being in flow
+ * space for them (REQ-CHIPS-004). The trail sits below both. Being in flow
  * rather than fixed is what keeps all three clear of each other at 375px,
  * where a centred or right-aligned trail would run into one or the other.
  */

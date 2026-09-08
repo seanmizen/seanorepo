@@ -26,7 +26,7 @@ import { openDbConnection } from './db';
  * `status = 'approved'` there. The join is the approval gate.
  */
 
-/** Long enough for a real query; a longer one is a mistake or an attack. */
+/** Long enough for a real query. A longer one is a mistake or an attack. */
 export const MAX_SEARCH_LENGTH = 200;
 
 /** Beyond this the query is noise, and each term costs an index lookup. */
@@ -46,8 +46,8 @@ const MAX_TERM_LENGTH = 40;
  * That gives three of the four things the search has to do:
  * - apostrophes are safe, because quoting makes them content rather than
  *   syntax (unicode61 splits "o'brien" into two tokens, and the quotes make
- *   that an exact phrase, so it still matches the indexed name);
- * - partial words match, because of the trailing `*`;
+ *   that an exact phrase, so it still matches the indexed name).
+ * - partial words match, because of the trailing `*`,
  * - multi-word queries AND together, which is FTS5's default between terms —
  *   "kitchen london" means both, not either.
  *

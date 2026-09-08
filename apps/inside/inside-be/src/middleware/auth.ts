@@ -42,7 +42,7 @@ async function authenticate(
     return null;
   }
 
-  // The signature proves the token is ours; the session lookup proves it has
+  // The signature proves the token is ours. The session lookup proves it has
   // not been revoked. Without the second check, logout would be cosmetic.
   if (!(await isSessionValid(token))) {
     reply.clearCookie('token', { path: '/' });
@@ -61,7 +61,7 @@ export async function requireAuth(
   reply: FastifyReply,
 ): Promise<FastifyReply | undefined> {
   const user = await authenticate(request, reply);
-  // Returning the reply halts the lifecycle; returning undefined continues it.
+  // Returning the reply halts the lifecycle. Returning undefined continues it.
   return user ? undefined : reply;
 }
 

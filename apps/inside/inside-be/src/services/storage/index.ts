@@ -13,9 +13,9 @@ function createStorageProvider(): StorageProvider {
     case 'local':
       return new LocalStorageProvider(UPLOADS_PATH, UPLOADS_URL);
     // The planned swap. An S3StorageProvider implements the same four methods
-    // against a bucket; nothing above this line changes.
+    // against a bucket. Nothing above this line changes.
     // case 's3':
-    //   return new S3StorageProvider(process.env.S3_BUCKET, ...);
+    //   return new S3StorageProvider(process.env.S3_BUCKET, ...)
     default:
       console.warn(
         `[Storage] Unknown STORAGE_TYPE "${STORAGE_TYPE}", falling back to local`,

@@ -1057,7 +1057,7 @@ describe('who can see a brief', () => {
     expect((await fetchAs(brief.slug)).statusCode).toBe(404);
   });
 
-  test('an invitee sees a private brief; a designer may be invited', async () => {
+  test('an invitee sees a private brief, and a designer may be invited', async () => {
     const buyer = await asBuyer();
     const designer = await asDesigner('Invited Studio');
     const brief = await buyer.postBrief({
