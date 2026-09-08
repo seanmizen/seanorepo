@@ -22,7 +22,7 @@ import { ApiError, request } from '@/lib/http';
 export { ApiError };
 
 export interface MyProfileResponse {
-  profile: DesignerProfile | null;
+  profile: DesignerProfile;
 }
 
 export interface MyProjectResponse {
@@ -31,11 +31,28 @@ export interface MyProjectResponse {
 }
 
 /**
- * The signed-in designer's profile, or null when they have not started one.
+ * "You have not started one yet", told apart from "we could not find out".
  *
- * `null` is a real answer here, not an error — a designer who has just signed
- * up has no profile, and that is the normal first visit rather than a failure
- * (the same shape as REQ-AUTH-005).
+ * `GET /me/profile` and `GET /me/portfolio` both answer **404** for a designer
+ * who has not created a profile — it is not a 200 carrying null, whatever the
+ * response type used to claim. So the first visit and a dead backend arrive at
+ * a page as the same thing: `isError`, with no data.
+ *
+ * Collapsing them is REQ-STATE-003 broken in the most expensive place in the
+ * app — `/me` told an approved, listed designer they had no studio and invited
+ * them to create one, because a request failed. Every `/me` surface that can
+ * see either must branch on this, not on the absence of data.
+ */
+export const isNoProfileYet = (error: unknown): boolean =>
+  error instanceof ApiError && error.status === 404;
+
+/**
+ * The signed-in designer's profile.
+ *
+ * A designer who has just signed up has no profile, and the endpoint says so
+ * with a 404 rather than a null body — so that case surfaces here as an error
+ * and is separated from a genuine failure by `isNoProfileYet`, never by
+ * checking whether `data` happens to be missing.
  */
 export const useMyProfile = () =>
   useQuery({
