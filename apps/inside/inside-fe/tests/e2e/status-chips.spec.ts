@@ -240,7 +240,7 @@ test.describe('the card can be turned off (REQ-CHIPS-008)', () => {
       route.fulfill({
         json: {
           devMode: false,
-          siteName: 'inside',
+          siteName: 'inside.space',
           tagline: 'Find the designer for your space',
           uploadMaxFileSizeMb: 50,
           uploadMaxFiles: 30,
@@ -260,7 +260,7 @@ test.describe('the card can be turned off (REQ-CHIPS-008)', () => {
       route.fulfill({
         json: {
           devMode: false,
-          siteName: 'inside',
+          siteName: 'inside.space',
           tagline: 'Find the designer for your space',
           uploadMaxFileSizeMb: 50,
           uploadMaxFiles: 30,
@@ -334,7 +334,7 @@ test.describe('the chips float (REQ-CHIPS-001)', () => {
       const chips = await page.getByTestId('status-chips').boundingBox();
       const brand = await page
         .getByRole('banner')
-        .getByRole('link', { name: 'inside' })
+        .getByRole('link', { name: 'inside.space' })
         .boundingBox();
 
       expect(chips, `chips missing at ${width}px`).not.toBeNull();

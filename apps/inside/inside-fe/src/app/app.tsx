@@ -15,6 +15,7 @@ import type { AppConfig } from '@shared/types';
 import { useQuery } from '@tanstack/react-query';
 import type { FC } from 'react';
 import { Link } from 'react-router-dom';
+import { Wordmark } from '@/components/wordmark';
 import { api } from '@/config';
 import { useAuth } from '@/contexts/auth-context';
 import { get as fetchJson } from '@/lib/http';
@@ -79,12 +80,10 @@ const App: FC = () => {
             document title before any request is made, so rendering it
             directly asserts nothing unverified.
           */}
-          <Typography
+          <Wordmark
             variant="h1"
             sx={{ fontSize: { xs: 56, sm: 88, md: 120 } }}
-          >
-            inside
-          </Typography>
+          />
 
           {/*
             REQ-STATE-001 and REQ-STATE-003. The tagline IS server-driven, so it
@@ -94,7 +93,7 @@ const App: FC = () => {
             fails. The `: null` on failure is deliberate, not an oversight:
             rendering nothing beats rendering a guess.
 
-            The word "inside" above is exempt — that is static branding, and the
+            The `Wordmark` above is exempt — that is static branding, and the
             site's own name never came from the server.
           */}
           {config.isPending ? (

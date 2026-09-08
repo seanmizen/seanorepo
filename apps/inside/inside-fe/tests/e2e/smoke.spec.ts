@@ -6,7 +6,9 @@ test.describe('homepage', () => {
   }) => {
     await page.goto('/');
 
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('inside');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'inside.space',
+    );
     // Copy is server-driven via /api/config, so this also proves the frontend
     // reached the backend.
     await expect(
