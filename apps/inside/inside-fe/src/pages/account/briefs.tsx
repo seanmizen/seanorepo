@@ -238,7 +238,7 @@ const AccountBriefs: FC = () => {
                   title: 'Not posted',
                   body: 'That project could not be posted.',
                 }}
-                testId="brief-form-error"
+                testId="brief-form-failure"
               />
             )}
 

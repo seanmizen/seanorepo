@@ -49,7 +49,7 @@ test.describe('a buyer posts a project', () => {
     await page.goto('/account/briefs');
     await page.getByTestId('post-a-project').click();
     await page.getByTestId('submit-brief').click();
-    await expect(page.getByTestId('brief-form-error')).toBeVisible();
+    await expect(page.getByTestId('brief-form-failure')).toBeVisible();
   });
 });
 
@@ -116,11 +116,11 @@ test.describe('a designer answers a project', () => {
      */
     await page.getByTestId('field-bid-message').fill('We would love to help.');
     await page.getByTestId('send-bid').click();
-    await expect(page.getByTestId('bid-error')).toBeVisible();
+    await expect(page.getByTestId('bid-action-failure')).toBeVisible();
     // A designer with no profile is refused for that reason. One awaiting
     // review is refused for approval. What matters to this test is that the
     // refusal ARRIVES and names a cause, not which of the two it is.
-    await expect(page.getByTestId('bid-error')).toContainText(
+    await expect(page.getByTestId('bid-action-failure')).toContainText(
       /profile|approved/i,
     );
   });

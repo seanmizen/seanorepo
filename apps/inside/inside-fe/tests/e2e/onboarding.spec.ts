@@ -65,7 +65,7 @@ test.describe('designer onboarding', () => {
     await expect(page.getByTestId('field-studioName')).toBeVisible();
 
     await page.getByTestId('profile-next').click();
-    await expect(page.getByTestId('profile-error')).toBeVisible();
+    await expect(page.getByTestId('profile-action-failure')).toBeVisible();
     // Still on step one — a failed save must not advance the stepper.
     await expect(page.getByTestId('field-studioName')).toBeVisible();
   });
@@ -129,7 +129,7 @@ test.describe('designer onboarding', () => {
       buffer: Buffer.from('this is not a photograph'),
     });
 
-    const error = page.getByTestId('project-error');
+    const error = page.getByTestId('piece-action-failure');
     await expect(error).toBeVisible();
     await expect(error).not.toHaveText(/^Something went wrong/);
   });

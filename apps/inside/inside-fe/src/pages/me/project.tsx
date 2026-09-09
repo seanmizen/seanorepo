@@ -341,7 +341,7 @@ const MyProjectEditor: FC = () => {
           <FailureAlert
             error={error.cause}
             fallback={{ title: 'Not saved', body: error.body }}
-            testId="project-error"
+            testId="piece-action-failure"
           />
         )}
 
