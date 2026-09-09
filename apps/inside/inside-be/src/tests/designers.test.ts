@@ -49,6 +49,10 @@ async function approve(profileId: number) {
   db.close();
 }
 
+/** setup.ts puts boss@inside.test in ADMIN_EMAILS. */
+const ADMIN_EMAIL = 'boss@inside.test';
+const adminLogin = () => login('buyer', ADMIN_EMAIL);
+
 describe('profile creation', () => {
   test('a designer can create a profile, and it starts unlisted', async () => {
     const { profile } = await asDesigner('Atelier Bloom');
@@ -135,7 +139,7 @@ describe('profile validation', () => {
 });
 
 describe('public visibility', () => {
-  test('an unapproved profile is not publicly reachable', async () => {
+  test('an unapproved profile 404s for an anonymous visitor', async () => {
     const { profile } = await asDesigner('Hidden House');
     const res = await app.inject({
       method: 'GET',
@@ -183,6 +187,68 @@ describe('public visibility', () => {
       .portfolioProjects.map((p) => p.title);
     expect(titles).toContain('Public Piece');
     expect(titles).not.toContain('Secret Piece');
+  });
+});
+
+describe('an unapproved profile and its owner — REQ-DISCOVERY-004', () => {
+  test('the same slug serves for the designer who owns it', async () => {
+    const { cookie, profile } = await asDesigner('Owner Sees Draft');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/designers/${profile.slug}`,
+      cookies: { token: cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ profile: DesignerProfile; isOwner: boolean }>();
+    expect(body.profile.studioName).toBe('Owner Sees Draft');
+    expect(body.profile.status).toBe('draft');
+    expect(body.isOwner).toBe(true);
+  });
+
+  test('the same slug 404s for a DIFFERENT signed-in designer', async () => {
+    const { profile } = await asDesigner('Belongs To Someone Else');
+    const { cookie: otherCookie } = await asDesigner('Not The Owner');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/designers/${profile.slug}`,
+      cookies: { token: otherCookie },
+    });
+    // Signed in is not the same as being the owner.
+    expect(res.statusCode).toBe(404);
+  });
+
+  test('an unapproved profile still 404s for a signed-in buyer', async () => {
+    const { profile } = await asDesigner('Not For Buyers Yet');
+    const { cookie: buyerCookie } = await login('buyer');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/designers/${profile.slug}`,
+      cookies: { token: buyerCookie },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  test('an unapproved profile still 404s for an admin browsing as a visitor', async () => {
+    const { profile } = await asDesigner('Not For Admins Either');
+    const { cookie: adminCookie } = await adminLogin();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/designers/${profile.slug}`,
+      cookies: { token: adminCookie },
+    });
+    // Admin is a role, not ownership — this route grants no special access to it.
+    expect(res.statusCode).toBe(404);
+  });
+
+  test('ownership comes from the session, never a request parameter', async () => {
+    const { profile } = await asDesigner('No Backdoor Via Query');
+    // No cookie at all — an anonymous caller cannot claim ownership by
+    // passing an id or slug that happens to match the owner.
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/designers/${profile.slug}?viewerId=${profile.userId}&userId=${profile.userId}&isOwner=true`,
+    });
+    expect(res.statusCode).toBe(404);
   });
 });
 

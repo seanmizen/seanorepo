@@ -39,10 +39,21 @@ test.describe('admin approval', () => {
     const studioName = `Approve E2E ${Date.now()}`;
     const profile = await submitProfile(page, studioName);
 
-    // Not yet visible to the public. Since SEAN-160 declared /designers/:slug,
-    // an unapproved studio is a real page saying it is not listed rather than
-    // the catch-all 404 — indistinguishable from one that never existed, which
-    // is what keeps the approval queue unprobeable.
+    /*
+     * Not yet visible TO THE PUBLIC, which is why the cookies go first.
+     *
+     * `submitProfile` leaves the page signed in as the designer who owns this
+     * profile, and since REQ-DISCOVERY-004 the owner is served their own
+     * unapproved page. Asserting the failure state while still signed in as
+     * them would now be asserting the opposite of the requirement — and would
+     * have passed for years while testing nothing about the public.
+     *
+     * Since SEAN-160 declared /designers/:slug, an unapproved studio is a real
+     * page saying it is not listed rather than the catch-all 404 —
+     * indistinguishable from one that never existed, which is what keeps the
+     * approval queue unprobeable.
+     */
+    await page.context().clearCookies();
     await page.goto(`/designers/${profile.slug}`);
     await expect(page.getByTestId('designer-failure')).toBeVisible();
 
