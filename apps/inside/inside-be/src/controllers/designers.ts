@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getAuthUser, requireRole } from '../middleware/auth';
+import { getAuthUser, optionalAuth, requireRole } from '../middleware/auth';
 import * as designers from '../services/designers';
 import { listPublicPortfolio } from '../services/discovery';
 import { findStoredImages } from '../services/image-library';
@@ -52,22 +52,40 @@ export async function designerRoutes(fastify: FastifyInstance): Promise<void> {
    * Public profile. Approved only, and a non-approved slug 404s rather than
    * 403s — otherwise the response tells a stranger the profile exists and is
    * merely unapproved, which leaks the pipeline.
+   *
+   * REQ-DISCOVERY-004 carves out exactly one exception: the profile's own
+   * owner, whatever its status. `optionalAuth` populates the caller when a
+   * valid session is present without demanding one — this route stays
+   * reachable fully signed-out, the same as every other discovery route.
+   * Ownership comes from `getAuthUser(request)?.id`, the session, never a
+   * path or body parameter — one designer cannot use this to read another's
+   * unapproved profile by knowing their id or slug.
    */
-  fastify.get('/designers/:slug', async (request, reply) => {
-    const { slug } = request.params as { slug: string };
-    // Goes through the portfolio path so the pieces arrive WITH their images:
-    // a public profile is a gallery, and a grid of titles with no photography
-    // is not one. One call also means the page cannot render a profile and its
-    // work in two different states.
-    const found = await listPublicPortfolio(slug, { limit: 60, offset: 0 });
-    if (!found) {
-      return reply.status(404).send({ error: 'Designer not found' });
-    }
-    return {
-      profile: found.profile,
-      portfolioProjects: found.portfolioProjects,
-    };
-  });
+  fastify.get(
+    '/designers/:slug',
+    { onRequest: optionalAuth },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const viewerId = getAuthUser(request)?.id ?? null;
+      // Goes through the portfolio path so the pieces arrive WITH their images:
+      // a public profile is a gallery, and a grid of titles with no
+      // photography is not one. One call also means the page cannot render a
+      // profile and its work in two different states.
+      const found = await listPublicPortfolio(slug, {
+        limit: 60,
+        offset: 0,
+        viewerId,
+      });
+      if (!found) {
+        return reply.status(404).send({ error: 'Designer not found' });
+      }
+      return {
+        profile: found.profile,
+        portfolioProjects: found.portfolioProjects,
+        isOwner: viewerId !== null && found.profile.userId === viewerId,
+      };
+    },
+  );
 
   /**
    * Everything a signed-in designer manages about themselves.

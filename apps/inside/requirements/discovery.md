@@ -11,7 +11,7 @@ what the list happens to render.
 
 ## REQ-DISCOVERY-001 — An unapproved profile is unreachable, not merely unlisted
 
-- **Status:** active
+- **Status:** superseded
 - **Source:** sean
 - **Origin:** #156
 - **Type:** constraint
@@ -27,7 +27,9 @@ what the list happens to render.
 - **Verification:**
   - Test — `apps/inside/inside-fe/tests/e2e/discovery.spec.ts` › "an unapproved studio is unreachable by guessing its slug"
   - Test — `apps/inside/inside-be/src/tests/domain-schema.test.ts` › "a new profile is invisible to a discovery-shaped query"
-- **Relations:** refines REQ-PRODUCT-002
+- **Relations:**
+  - refines REQ-PRODUCT-002
+  - superseded-by REQ-DISCOVERY-004
 
 ## REQ-DISCOVERY-002 — Unpublished work is not served
 
@@ -69,3 +71,34 @@ what the list happens to render.
   - Test — `apps/inside/inside-fe/tests/e2e/discovery.spec.ts` › "a filtered URL reproduces the same view when shared"
   - Test — `apps/inside/inside-fe/tests/e2e/filters.spec.ts` › "a nonsense filter in the URL does not blank the page"
 - **Relations:** none
+
+## REQ-DISCOVERY-004 — An unapproved profile is served to its owner and to nobody else
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #249
+- **Type:** constraint
+- **Priority:** P0
+- **Statement:** The system shall refuse to serve an unapproved designer profile to
+  every requester except the designer that profile belongs to.
+- **Rationale:** REQ-DISCOVERY-001 was right about the control and incomplete about
+  who it binds. Refusing the slug outright is what makes REQ-PRODUCT-002 mean
+  something rather than describing a sort order — but it also refuses the one person
+  who has to reach the page, because a designer builds the profile that earns the
+  approval. That was invisible while the editor lived at a second address. Retiring
+  `/me` removes the second address, so the owner reaches their profile at its own.
+
+  Nothing changes for anyone else. Slugs are derived from studio names and are
+  therefore guessable, so "absent from the list" would still leave an unapproved
+  profile readable to whoever tried the URL. The identity of the requester is the
+  only thing that changes the answer, and it comes from the session — never from a
+  path or body parameter, the same rule REQ-AUTH-004 applies to roles.
+
+  The owner's view is not a preview of a public page. It IS the page, with an edit
+  affordance, which is the whole reason for putting editing at the public URL: one
+  representation, so there is no second one to drift.
+- **Verification:**
+  - Test — `apps/inside/inside-be/src/tests/designers.test.ts` › "an unapproved profile 404s for an anonymous visitor"
+  - Test — `apps/inside/inside-be/src/tests/designers.test.ts` › "the same slug serves for the designer who owns it"
+  - Test — `apps/inside/inside-be/src/tests/designers.test.ts` › "the same slug 404s for a DIFFERENT signed-in designer"
+- **Relations:** supersedes REQ-DISCOVERY-001
