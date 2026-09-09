@@ -219,13 +219,14 @@ const AccountBriefs: FC = () => {
               select={true}
               label="Who can see it"
               sx={{ maxWidth: 360 }}
+              SelectProps={{ native: true }}
               inputProps={{ 'data-testid': 'field-brief-visibility' }}
               {...field('visibility')}
             >
               {VISIBILITY.map(([value, label]) => (
-                <MenuItem key={value} value={value}>
+                <option key={value} value={value}>
                   {label}
-                </MenuItem>
+                </option>
               ))}
             </TextField>
 

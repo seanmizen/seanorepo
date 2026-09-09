@@ -8,6 +8,7 @@ import {
   Divider,
   Skeleton,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import type { FC } from 'react';
@@ -20,7 +21,15 @@ import {
   useBriefAction,
   useMyBrief,
   useReceivedBids,
+  useSetVisibility,
 } from '@/features/briefs/use-briefs';
+
+/** `link` is unlisted and is never described as private (REQ-BRIEF-005). */
+const VISIBILITY = [
+  ['public', 'On the public board'],
+  ['link', 'Unlisted — anyone with the link'],
+  ['private', 'Private — only people you invite'],
+] as const;
 
 /**
  * One of the buyer's own projects: its state, its switches, its responses.
@@ -38,6 +47,7 @@ const AccountBrief: FC = () => {
   const publish = useBriefAction('publish');
   const unpublish = useBriefAction('unpublish');
   const close = useBriefAction('close');
+  const setVisibility = useSetVisibility();
   const [error, setError] = useState<unknown>(null);
 
   useBreadcrumbTitle(query.data?.brief.title);
@@ -92,7 +102,11 @@ const AccountBrief: FC = () => {
 
   const brief = query.data.brief;
   const live = brief.publishedAt !== null;
-  const busy = publish.isPending || unpublish.isPending || close.isPending;
+  const busy =
+    publish.isPending ||
+    unpublish.isPending ||
+    close.isPending ||
+    setVisibility.isPending;
 
   return (
     <Container maxWidth="md" sx={{ py: 6 }}>
@@ -129,6 +143,47 @@ const AccountBrief: FC = () => {
           separate questions (REQ-BRIEF-001). Unpublishing hides a brief and
           keeps its invitees. Closing ends it.
         */}
+        {/*
+          The buyer's own copy of the public URL. Unlisted visibility is only
+          usable if they can send the link somewhere, and a link you are never
+          shown is a link you cannot send.
+        */}
+        <Typography variant="body2" color="text.secondary">
+          Its link:{' '}
+          <Typography
+            component={Link}
+            to={`/briefs/${brief.slug}`}
+            variant="body2"
+            data-testid="brief-public-link"
+            sx={{ color: 'text.primary' }}
+          >
+            /briefs/{brief.slug}
+          </Typography>
+        </Typography>
+
+        <TextField
+          select={true}
+          label="Who can see it"
+          sx={{ maxWidth: 360 }}
+          value={brief.visibility}
+          disabled={busy}
+          onChange={(event) => {
+            if (id === null) return;
+            setError(null);
+            setVisibility
+              .mutateAsync({ id, visibility: event.target.value })
+              .catch(setError);
+          }}
+          SelectProps={{ native: true }}
+          inputProps={{ 'data-testid': 'brief-visibility' }}
+        >
+          {VISIBILITY.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </TextField>
+
         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap={true}>
           {live ? (
             <Button

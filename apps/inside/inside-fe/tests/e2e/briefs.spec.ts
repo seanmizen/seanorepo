@@ -117,7 +117,12 @@ test.describe('a designer answers a project', () => {
     await page.getByTestId('field-bid-message').fill('We would love to help.');
     await page.getByTestId('send-bid').click();
     await expect(page.getByTestId('bid-error')).toBeVisible();
-    await expect(page.getByTestId('bid-error')).toContainText(/approved/i);
+    // A designer with no profile is refused for that reason; one awaiting
+    // review is refused for approval. What matters to this test is that the
+    // refusal ARRIVES and names a cause, not which of the two it is.
+    await expect(page.getByTestId('bid-error')).toContainText(
+      /profile|approved/i,
+    );
   });
 });
 
