@@ -5,8 +5,10 @@ import { getApp, uniqueEmail } from './setup';
 await getApp();
 
 const {
+  checkSlugHistoryInvariant,
   chooseSlug,
   claimSlug,
+  findUnrecordedSlugs,
   isReservedSlug,
   recordSlug,
   resolveSlug,
@@ -225,5 +227,80 @@ describe('resolution misses', () => {
     // leaking the designer — but the database accepted the INSERT above, which is the
     // point: the two namespaces do not collide.
     expect(await resolveSlug('brief', 'shared-word')).toBeNull();
+  });
+});
+
+describe('the slug history invariant — REQ-SLUG-005', () => {
+  // This database is shared with every other suite in the process (see
+  // setup.ts), and several of them create designer_profiles/portfolio_projects
+  // rows directly for schema-constraint tests unrelated to slugs — so, per the
+  // "never assume a table is empty" rule, these tests scope their assertions
+  // to the one row they created rather than asserting the whole database is
+  // clean.
+  test('a live slug that bypassed recordSlug is caught by name', async () => {
+    // Written directly, skipping recordSlug — this is exactly the drift the
+    // check exists to catch: chooseSlug would offer 'drifted-unrecorded-slug'
+    // again, and the second insert would die on designer_profiles' own
+    // UNIQUE(slug) constraint instead of on a useful error.
+    const db = await openDbConnection();
+    let profileId: number;
+    try {
+      db.run('INSERT INTO users (email, role) VALUES (?, ?)', [
+        uniqueEmail('slug-drift'),
+        'designer',
+      ]);
+      const user = db.query('SELECT last_insert_rowid() AS id').get() as {
+        id: number;
+      };
+      db.run(
+        'INSERT INTO designer_profiles (user_id, slug, studio_name) VALUES (?, ?, ?)',
+        [user.id, 'drifted-unrecorded-slug', 'Drift Studio'],
+      );
+      profileId = (
+        db.query('SELECT last_insert_rowid() AS id').get() as { id: number }
+      ).id;
+    } finally {
+      db.close();
+    }
+
+    try {
+      const gaps = await findUnrecordedSlugs();
+      expect(gaps).toContainEqual({
+        entityType: 'designer_profile',
+        entityId: profileId,
+        slug: 'drifted-unrecorded-slug',
+      });
+
+      await expect(checkSlugHistoryInvariant()).rejects.toThrow(
+        /drifted-unrecorded-slug/,
+      );
+      await expect(checkSlugHistoryInvariant()).rejects.toThrow(
+        new RegExp(`designer_profile #${profileId}`),
+      );
+    } finally {
+      // Restore the invariant so a later call to the check in this shared
+      // database does not inherit this deliberate violation.
+      await recordSlug(
+        'designer_profile',
+        profileId,
+        'drifted-unrecorded-slug',
+      );
+    }
+
+    // Invariant restored for this row specifically.
+    const gapsAfter = await findUnrecordedSlugs();
+    expect(gapsAfter).not.toContainEqual({
+      entityType: 'designer_profile',
+      entityId: profileId,
+      slug: 'drifted-unrecorded-slug',
+    });
+  });
+
+  test('a slug recorded through the normal write path is never flagged', async () => {
+    const id = await makeProfile('invariant-control-clean');
+    const gaps = await findUnrecordedSlugs();
+    expect(gaps).not.toContainEqual(
+      expect.objectContaining({ entityType: 'designer_profile', entityId: id }),
+    );
   });
 });
