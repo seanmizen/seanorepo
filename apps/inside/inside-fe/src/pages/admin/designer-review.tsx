@@ -12,10 +12,12 @@ import {
 } from '@mui/material';
 import { type FC, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { FailureNotice } from '@/components';
 import {
   useDesignerUnderReview,
   useReviewDecision,
 } from '@/features/admin/use-admin-designers';
+import { ApiError } from '@/lib/http';
 
 /**
  * One profile, as the reviewer sees it: every portfolio piece including unpublished
@@ -45,17 +47,37 @@ const AdminDesignerReview: FC = () => {
 
   // Rendered inline rather than as the 404 route: this IS a real page, it just
   // has nothing to show for that id. The breadcrumb trail stays intact.
+  //
+  // A 404 is the only status this page can honestly call "no longer
+  // available" — REQ-QUALITY-001. Everything else (a 500, a dead tunnel) is a
+  // failure, not a deletion, and gets `FailureNotice` rather than the same
+  // reassuring `severity="info"` box. This is the #231 shape: `isError` alone
+  // collapsed every cause into `review-missing` here until this fix.
   if (review.isError || !review.data) {
+    const missing =
+      review.error instanceof ApiError && review.error.status === 404;
     return (
       <Container maxWidth="md" sx={{ py: 6 }}>
-        <Stack spacing={3}>
-          <Typography variant="h3" component="h1">
-            Review
-          </Typography>
-          <Alert severity="info" data-testid="review-missing">
-            That profile is no longer available.
-          </Alert>
-        </Stack>
+        {missing ? (
+          <Stack spacing={3}>
+            <Typography variant="h3" component="h1">
+              Review
+            </Typography>
+            <Alert severity="info" data-testid="review-missing">
+              That profile is no longer available.
+            </Alert>
+          </Stack>
+        ) : (
+          <FailureNotice
+            error={review.error}
+            notFound={{
+              title: 'Review',
+              body: 'That profile is no longer available.',
+            }}
+            onRetry={() => review.refetch()}
+            testId="review-load-failure"
+          />
+        )}
       </Container>
     );
   }

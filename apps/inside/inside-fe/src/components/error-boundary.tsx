@@ -75,6 +75,7 @@ export const ErrorFallback: FC<{ onRetry: () => void }> = ({ onRetry }) => (
       <Typography variant="h1" sx={{ fontSize: { xs: 30, sm: 40 } }}>
         Something went wrong
       </Typography>
+      {/* test-id-lint-ignore: a render crash, not a query state (REQ-FAIL-001, not REQ-QUALITY-001) */}
       <Alert severity="error" data-testid="render-error">
         This page could not be displayed. That is our fault, not yours.
       </Alert>

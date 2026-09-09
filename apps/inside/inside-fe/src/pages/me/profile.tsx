@@ -219,7 +219,7 @@ const MyProfileEditor: FC = () => {
               title: 'Not saved',
               body: 'That could not be saved.',
             }}
-            testId="profile-error"
+            testId="profile-action-failure"
           />
         )}
 

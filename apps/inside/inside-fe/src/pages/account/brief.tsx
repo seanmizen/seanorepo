@@ -134,7 +134,7 @@ const AccountBrief: FC = () => {
               title: 'Not changed',
               body: 'That change could not be saved.',
             }}
-            testId="brief-action-error"
+            testId="brief-action-failure"
           />
         )}
 

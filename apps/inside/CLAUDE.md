@@ -140,6 +140,36 @@ Every surface that can fail, be empty, or be pending needs one — including the
 pending state. `apps/inside/CLAUDE.md` already says "test the in-flight state".
 An untestable in-flight state is the same rule broken one step earlier.
 
+**Enforced by `requirements/check-test-ids.mjs`, in CI on every PR touching
+`apps/inside`** (REQ-QUALITY-001). It parses every `data-testid`/`testId`
+under `inside-fe/src` and fails on:
+
+- A `-missing` or `-empty` id rendered from a branch that tests `isError`
+  without also narrowing on a specific status (e.g. `error instanceof
+  ApiError && error.status === 404`). This is the #231 shape. The check
+  catches it mechanically, not whoever happens to review the diff.
+- The same id used at locations that are not mutually exclusive branches of
+  one condition. A link-vs-text ternary for one crumb is fine. The same id on
+  two unrelated surfaces is not.
+- A `testId` handed to `FailureNotice`/`FailureAlert` that does not end
+  `-failure`. Both are failure surfaces by construction.
+- A suffix that reads as one of the four above but isn't — `-error` where
+  `-failure` was meant, `-gone` where `-missing` was meant, and so on.
+
+What it does **not** and cannot check: whether the words inside the alert are
+honest. That stays a matter for review.
+
+**False positive?** Add a comment containing `test-id-lint-ignore` and the
+reason, on the same line as the attribute or the line above it:
+
+```tsx
+{/* test-id-lint-ignore: a render crash, not a query state (REQ-FAIL-001) */}
+<Alert severity="error" data-testid="render-error">
+```
+
+`error-boundary.tsx` uses this for exactly that reason — a render crash is
+REQ-FAIL-001's territory, not this suffix vocabulary's.
+
 **Frontend E2E** — `inside-fe/tests/e2e/*.spec.ts`, Playwright.
 
 - Runs the real app against the real backend on ports 4160/4161, so a running

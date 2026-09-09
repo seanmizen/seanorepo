@@ -200,7 +200,7 @@ const BriefPage: FC = () => {
                   title: 'Not sent',
                   body: 'That bid could not be sent.',
                 }}
-                testId="bid-error"
+                testId="bid-action-failure"
               />
             )}
 

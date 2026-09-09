@@ -15,6 +15,8 @@ on:
       - 'apps/inside/**'
       - '.github/workflows/inside-check.yml'
       - '.claude/skills/ste/**'
+      - 'requirements/check-test-ids.mjs'
+      - 'requirements/check-test-ids.test.mjs'
   # A merge that skipped the gate is still caught, just later. #243 merged with
   # no completed checks — the run finished red on a branch that no longer
   # mattered, and nothing reported it against main.
@@ -24,6 +26,8 @@ on:
       - 'apps/inside/**'
       - '.github/workflows/inside-check.yml'
       - '.claude/skills/ste/**'
+      - 'requirements/check-test-ids.mjs'
+      - 'requirements/check-test-ids.test.mjs'
 
 permissions:
   contents: read
@@ -84,6 +88,16 @@ jobs:
 
       - name: Lint
         run: npx biome check apps/inside
+
+      - name: Test id convention — self-test
+        # Proves the checker itself still catches the #231 shape before
+        # trusting it to gate real code below.
+        run: node --test requirements/check-test-ids.test.mjs
+
+      - name: Test id convention (REQ-QUALITY-001)
+        # Always a full scan of apps/inside/inside-fe/src, on both events — it
+        # has no --changed mode to get wrong, unlike the STE step above. #234.
+        run: node requirements/check-test-ids.mjs
 
       - name: Backend unit tests
         run: yarn workspace inside test:unit
