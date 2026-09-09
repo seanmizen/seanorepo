@@ -96,3 +96,30 @@ Introduced in #192.
   - Test — `apps/inside/inside-be/src/tests/slugs.test.ts` › "a custom reserved slug is refused with a reason worth showing"
   - Test — `apps/inside/inside-be/src/tests/slugs.test.ts` › "a derived slug that lands on a reserved word is suffixed, not refused"
 - **Relations:** none
+
+## REQ-SLUG-005 — Every live slug is recorded in history
+
+- **Status:** active
+- **Source:** agent:SEAN-212
+- **Origin:** #212
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** If any entity's live slug has no matching row in `slugs`,
+  then the system shall refuse to start and name every offending row.
+- **Rationale:** REQ-SLUG-002 decides a slug is free by consulting `slugs`
+  alone, which is correct only if every live slug is also recorded there —
+  an invariant migration `005_slug_history.sql` establishes by backfilling
+  and every write path since maintains via `recordSlug`. Nothing enforced it
+  structurally. A row whose slug was never recorded (a pre-#192 write path, a
+  hand-edited database) makes `chooseSlug` offer that slug again, and the
+  second insert then dies on the entity table's own `UNIQUE` constraint — a
+  500 with no useful message, discovered in #211's E2E run against a database
+  that predated the slug work. Checking at boot, alongside migrations, turns
+  silent drift into a loud failure naming the exact rows, before a request
+  ever reaches it. Not a foreign key: `slugs` is polymorphic over three entity
+  types, which SQLite cannot express as an FK target.
+- **Verification:**
+  - Test — `apps/inside/inside-be/src/tests/slugs.test.ts` › "a live slug that bypassed recordSlug is caught by name"
+  - Test — `apps/inside/inside-be/src/tests/slugs.test.ts` › "a slug recorded through the normal write path is never flagged"
+  - Inspection — `apps/inside/inside-be/src/index.ts`'s `start` calls `checkSlugHistoryInvariant()` immediately after `runMigrations()`, before the server accepts a connection.
+- **Relations:** depends-on REQ-SLUG-002
