@@ -214,6 +214,77 @@ export async function slugHistory(
   }
 }
 
+/** One live slug found with no matching row in `slugs`. */
+export interface SlugHistoryGap {
+  entityType: SlugEntity;
+  entityId: number;
+  slug: string;
+}
+
+/**
+ * Every live slug that has no matching row in `slugs`.
+ *
+ * `chooseSlug` decides whether a candidate is free by consulting `slugs`
+ * alone (REQ-SLUG-002), which is only correct if every live slug is also
+ * recorded there — an invariant migration 005 established by backfilling and
+ * every write path since maintains via `recordSlug`. Nothing enforces it
+ * structurally, so this is the check rather than the assumption. See
+ * REQ-SLUG-005.
+ */
+export async function findUnrecordedSlugs(): Promise<SlugHistoryGap[]> {
+  const db = await openDbConnection();
+  try {
+    const gaps: SlugHistoryGap[] = [];
+
+    for (const entityType of Object.keys(ACTIVE_SLUG_TABLE) as SlugEntity[]) {
+      const table = ACTIVE_SLUG_TABLE[entityType];
+      const rows = db
+        .query(
+          `SELECT t.id AS entity_id, t.slug AS slug
+             FROM ${table} t
+             LEFT JOIN slugs s
+               ON s.entity_type = ? AND s.entity_id = t.id AND s.slug = t.slug
+            WHERE s.id IS NULL`,
+        )
+        .all(entityType) as Array<{ entity_id: number; slug: string }>;
+
+      for (const row of rows) {
+        gaps.push({ entityType, entityId: row.entity_id, slug: row.slug });
+      }
+    }
+
+    return gaps;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Fail loudly, naming every offending row, if any live slug is missing from
+ * `slugs`.
+ *
+ * A row like this hands `chooseSlug` a false negative: it looks free by
+ * history, gets offered again, and the second insert dies on the entity
+ * table's own UNIQUE constraint instead of on a useful error. Called from
+ * `index.ts`'s `start`, right after `runMigrations`, so a drifted database
+ * fails at boot rather than on the next unlucky write. REQ-SLUG-005.
+ */
+export async function checkSlugHistoryInvariant(): Promise<void> {
+  const gaps = await findUnrecordedSlugs();
+  if (gaps.length === 0) return;
+
+  const offenders = gaps
+    .map((gap) => `${gap.entityType} #${gap.entityId} (slug "${gap.slug}")`)
+    .join(', ');
+
+  throw new Error(
+    `Slug history invariant violated (REQ-SLUG-005): ${gaps.length} row(s) ` +
+      `have a live slug never recorded in \`slugs\`, so chooseSlug would hand ` +
+      `it out again: ${offenders}. Backfill \`slugs\` for these rows (see ` +
+      'migrations/005_slug_history.sql) before the server can start.',
+  );
+}
+
 export interface ResolvedSlug {
   entityId: number;
   /** The entity's slug NOW, which may differ from the one the caller asked for. */
