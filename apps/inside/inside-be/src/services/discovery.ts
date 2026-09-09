@@ -9,7 +9,7 @@ import type {
   WorkType,
 } from '@shared/types';
 import { openDbConnection } from './db';
-import { findApprovedProfileBySlug, listProjects } from './designers';
+import { findProfileBySlugForRequester, listProjects } from './designers';
 import { findStoredImages } from './image-library';
 import { BM25_EXPRESSION, buildMatchExpression } from './search';
 import { resolveSlug } from './slugs';
@@ -289,16 +289,26 @@ function coverOf(
  * both into the same 404, so an unapproved slug is indistinguishable from one
  * that was never taken. Anything else would let a stranger enumerate the
  * approval queue by guessing studio names.
+ *
+ * `viewerId` is the one exception (REQ-DISCOVERY-004): the profile's own
+ * owner still resolves it, whatever its status. Defaults to `null` — every
+ * caller except the public profile route wants the strict, approved-only
+ * behaviour, and this keeps it their default rather than something they must
+ * remember to ask for. Must come from the session, never a parameter.
  */
 export async function listPublicPortfolio(
   slug: string,
-  { limit, offset }: { limit: number; offset: number },
+  {
+    limit,
+    offset,
+    viewerId = null,
+  }: { limit: number; offset: number; viewerId?: number | null },
 ): Promise<{
   profile: DesignerProfile;
   portfolioProjects: PublicProject[];
   total: number;
 } | null> {
-  const profile = await findApprovedProfileBySlug(slug);
+  const profile = await findProfileBySlugForRequester(slug, viewerId);
   if (!profile) return null;
 
   // Published only, already ordered display_order ASC, id ASC — the same

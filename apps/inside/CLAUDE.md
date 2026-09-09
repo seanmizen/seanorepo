@@ -19,7 +19,8 @@ Do not relitigate these without asking Sean.
   ("sign up to save this profile") — `REQ-PRODUCT-003`.
 - Designers self-signup but stay **unlisted until admin-approved**
   (`REQ-PRODUCT-002`), enforced in the schema (`REQ-DATA-003`) and on direct
-  slug access (`REQ-DISCOVERY-001`).
+  slug access, with the one exception that the profile's own owner can always
+  reach it (`REQ-DISCOVERY-004`).
 - Two connection directions: buyer → designer **enquiries**, and
   **post-a-project** where a buyer posts a brief and designers pitch.
 - Assets go through a storage abstraction: local disk now, S3 later

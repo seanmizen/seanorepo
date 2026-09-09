@@ -123,17 +123,18 @@ export async function findProfileByUserId(
 }
 
 /**
- * Public lookup. REQ-DISCOVERY-001: approved only, and this is the requirement
- * rather than REQ-PRODUCT-002's list-level one. Omitting a profile from the
- * listing is a presentation choice. Refusing to serve it by slug is the actual
- * control — slugs derive from studio names and are guessable, and a designer
- * awaiting review has every reason to share their own URL.
+ * Public lookup, requester-aware. REQ-DISCOVERY-004: approved for everyone,
+ * and additionally the owner's own profile whatever its status. Ownership is
+ * decided by `viewerId`, which every caller must derive from the session
+ * (`getAuthUser(request)?.id`) — never from a path or body parameter, the
+ * same rule REQ-AUTH-004 applies to roles.
  *
  * An unapproved profile must be indistinguishable from one that does not
- * exist, or the gate leaks who has signed up.
+ * exist to anyone but its owner, or the gate leaks who has signed up.
  */
-export async function findApprovedProfileBySlug(
+export async function findProfileBySlugForRequester(
   slug: string,
+  viewerId: number | null,
 ): Promise<DesignerProfile | null> {
   // Resolved through slug history (REQ-SLUG-001), so a studio that renamed
   // still answers on every slug it has ever held. The row carries its CURRENT
@@ -144,11 +145,13 @@ export async function findApprovedProfileBySlug(
   const db = await openDbConnection();
   try {
     const row = db
-      .query(
-        "SELECT * FROM designer_profiles WHERE id = ? AND status = 'approved'",
-      )
+      .query('SELECT * FROM designer_profiles WHERE id = ?')
       .get(resolved.entityId) as ProfileRow | null;
-    return row ? toProfile(row) : null;
+    if (!row) return null;
+    if (row.status === 'approved') return toProfile(row);
+    return viewerId !== null && row.user_id === viewerId
+      ? toProfile(row)
+      : null;
   } finally {
     db.close();
   }
