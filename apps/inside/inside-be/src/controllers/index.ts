@@ -9,6 +9,7 @@ import { designerRoutes } from './designers';
 import { discoveryRoutes } from './discovery';
 import { healthRoutes } from './health';
 import { imageRoutes } from './images';
+import { savedDesignerRoutes } from './saved-designers';
 
 /** Everything under /api. */
 export async function routes(fastify: FastifyInstance): Promise<void> {
@@ -25,6 +26,9 @@ export async function routes(fastify: FastifyInstance): Promise<void> {
   // Post-a-project: the buyer posts briefs, the designer bids on them.
   fastify.register(briefRoutes);
   fastify.register(bidRoutes);
+
+  // The buyer's shortlist — save a designer for later (#161).
+  fastify.register(savedDesignerRoutes);
 
   // Admin routes live in their own encapsulated scope with the guard attached
   // as an onRequest hook, so every child route is protected by construction —

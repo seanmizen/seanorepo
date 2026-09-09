@@ -21,5 +21,6 @@ export const api = {
     myProfile: `${baseUrl}/me/profile`,
     myPortfolio: `${baseUrl}/me/portfolio`,
     myImages: `${baseUrl}/me/images`,
+    savedDesigners: `${baseUrl}/me/saved-designers`,
   },
 };
