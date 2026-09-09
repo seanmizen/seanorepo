@@ -159,6 +159,39 @@ for (const scheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, `/account sections (${scheme})`);
     });
 
+    test('briefs — board', async ({ page }) => {
+      await page.goto('/briefs');
+      await waitForApp(page);
+      await expectNoViolations(page, `/briefs (${scheme})`);
+    });
+
+    test('briefs — one project', async ({ page }) => {
+      // An unknown slug renders the inline "no longer listed" state, which is
+      // a real rendered page rather than the catch-all 404.
+      await page.goto('/briefs/no-such-project');
+      await expect(page.getByTestId('brief-missing')).toBeVisible();
+      await expectNoViolations(page, `/briefs/:slug (${scheme})`);
+    });
+
+    test('account — projects', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-briefs'));
+      await page.goto('/account/briefs');
+      await expect(page.getByTestId('my-briefs-empty')).toBeVisible();
+      await expectNoViolations(page, `/account/briefs (${scheme})`);
+    });
+
+    test('account — projects, the posting form', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-brief-form'));
+      await page.goto('/account/briefs');
+      await page.getByTestId('post-a-project').click();
+      await expect(page.getByTestId('brief-form')).toBeVisible();
+      await expectNoViolations(page, `/account/briefs form (${scheme})`);
+    });
+
     test('my studio — empty', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);

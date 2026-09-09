@@ -195,6 +195,21 @@ test.describe('keyboard navigation', () => {
     await expectKeyboardNavigable(page, '/me/profile');
   });
 
+  test('briefs — board', async ({ page }) => {
+    await page.goto('/briefs');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectKeyboardNavigable(page, '/briefs');
+  });
+
+  test('account — projects', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('kbd-briefs'));
+    await page.goto('/account/briefs');
+    await expect(page.getByTestId('post-a-project')).toBeVisible();
+    await expectKeyboardNavigable(page, '/account/briefs');
+  });
+
   test('my studio — portfolio', async ({ page }) => {
     await page.goto('/login');
     await waitForApp(page);
