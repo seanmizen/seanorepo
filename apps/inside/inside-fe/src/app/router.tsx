@@ -2,9 +2,20 @@ import type { ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import { ProtectedRoute, RouteErrorElement } from '@/components';
 import { Account } from '@/pages/account';
+/**
+ * What each declared route renders.
+ *
+ * Typed by `RoutePath`, so `ROUTES` stays the single source of truth: add a
+ * route to the table without an element here — or an element here for a path
+ * that is not in the table — and it is a type error, not a runtime blank.
+ */
+import { AccountBrief } from '@/pages/account/brief';
+import { AccountBriefs } from '@/pages/account/briefs';
 import { AdminHome } from '@/pages/admin';
 import { AdminDesignerReview } from '@/pages/admin/designer-review';
 import { AdminDesigners } from '@/pages/admin/designers';
+import { BriefPage } from '@/pages/briefs/brief';
+import { Briefs } from '@/pages/briefs/index';
 import { Designers } from '@/pages/designers';
 import { DesignerPortfolio } from '@/pages/designers/portfolio';
 import { DesignerProfilePage } from '@/pages/designers/profile';
@@ -20,13 +31,6 @@ import { App } from './app';
 import { RootLayout } from './root-layout';
 import { NOT_FOUND_PATH, ROUTES, type RoutePath } from './routes';
 
-/**
- * What each declared route renders.
- *
- * Typed by `RoutePath`, so `ROUTES` stays the single source of truth: add a
- * route to the table without an element here — or an element here for a path
- * that is not in the table — and it is a type error, not a runtime blank.
- */
 const ELEMENTS: Record<RoutePath, ReactNode> = {
   '/': <App />,
   '/login': <Login />,
@@ -34,6 +38,18 @@ const ELEMENTS: Record<RoutePath, ReactNode> = {
   '/account': (
     <ProtectedRoute>
       <Account />
+    </ProtectedRoute>
+  ),
+  '/briefs': <Briefs />,
+  '/briefs/:slug': <BriefPage />,
+  '/account/briefs': (
+    <ProtectedRoute>
+      <AccountBriefs />
+    </ProtectedRoute>
+  ),
+  '/account/briefs/:id': (
+    <ProtectedRoute>
+      <AccountBrief />
     </ProtectedRoute>
   ),
   '/designers': <Designers />,
