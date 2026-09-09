@@ -11,6 +11,7 @@ import { Account } from '@/pages/account';
  */
 import { AccountBrief } from '@/pages/account/brief';
 import { AccountBriefs } from '@/pages/account/briefs';
+import { AccountSaved } from '@/pages/account/saved';
 import { AdminHome } from '@/pages/admin';
 import { AdminDesignerReview } from '@/pages/admin/designer-review';
 import { AdminDesigners } from '@/pages/admin/designers';
@@ -38,6 +39,11 @@ const ELEMENTS: Record<RoutePath, ReactNode> = {
   '/account': (
     <ProtectedRoute>
       <Account />
+    </ProtectedRoute>
+  ),
+  '/account/saved': (
+    <ProtectedRoute>
+      <AccountSaved />
     </ProtectedRoute>
   ),
   '/briefs': <Briefs />,

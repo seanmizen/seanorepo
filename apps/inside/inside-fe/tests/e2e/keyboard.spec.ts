@@ -210,6 +210,15 @@ test.describe('keyboard navigation', () => {
     await expectKeyboardNavigable(page, '/account/briefs');
   });
 
+  test('account — saved designers', async ({ page }) => {
+    await page.goto('/login');
+    await waitForApp(page);
+    await signIn(page, uniqueEmail('kbd-saved'));
+    await page.goto('/account/saved');
+    await expect(page.getByTestId('saved-designers-empty')).toBeVisible();
+    await expectKeyboardNavigable(page, '/account/saved');
+  });
+
   test('my studio — portfolio', async ({ page }) => {
     await page.goto('/login');
     await waitForApp(page);
