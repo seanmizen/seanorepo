@@ -369,7 +369,7 @@ test.describe('the /me failure surfaces are finished', () => {
     );
     await page.getByTestId('profile-next').click();
 
-    const failure = page.getByTestId('profile-error');
+    const failure = page.getByTestId('profile-action-failure');
     await expect(failure).toBeVisible({ timeout: 20_000 });
     await expect(failure).toHaveText(/connection|reach the server/i);
     await expect(failure).not.toHaveText(/could not be saved/i);
@@ -386,7 +386,7 @@ test.describe('the /me failure surfaces are finished', () => {
     // The page asked no server, so there is nothing to diagnose — describing this
     // would dress the visitor's own omission as a fault of ours.
     await page.getByTestId('profile-next').click();
-    await expect(page.getByTestId('profile-error')).toHaveText(
+    await expect(page.getByTestId('profile-action-failure')).toHaveText(
       /your studio needs a name/i,
     );
   });
