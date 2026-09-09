@@ -21,6 +21,7 @@ import { Link } from 'react-router-dom';
 import { ResponsiveImage } from '@/components';
 import { humanise, useDesigners } from '@/features/discovery/use-designers';
 import { useFilters } from '@/features/filters/use-filters';
+import { SaveDesignerButton } from '@/features/saved/save-designer-button';
 
 /**
  * Each card is roughly a third of the container on desktop, half on tablet and
@@ -31,7 +32,14 @@ import { useFilters } from '@/features/filters/use-filters';
 const CARD_SIZES = '(max-width: 600px) 100vw, (max-width: 900px) 50vw, 33vw';
 
 const DesignerCard: FC<{ designer: DesignerListItem }> = ({ designer }) => (
-  <Card variant="outlined" sx={{ height: '100%' }}>
+  <Card variant="outlined" sx={{ height: '100%', position: 'relative' }}>
+    <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
+      <SaveDesignerButton
+        designerProfileId={designer.id}
+        studioName={designer.studioName}
+        sx={{ backgroundColor: 'background.paper', boxShadow: 1 }}
+      />
+    </Box>
     <CardActionArea
       component={Link}
       to={`/designers/${designer.slug}`}

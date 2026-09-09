@@ -16,6 +16,7 @@ import { Link, useParams } from 'react-router-dom';
 import { FailureNotice, ResponsiveImage } from '@/components';
 import { useBreadcrumbTitle } from '@/contexts/breadcrumb-context';
 import { humanise, useDesigner } from '@/features/discovery/use-designers';
+import { SaveDesignerButton } from '@/features/saved/save-designer-button';
 import { useCanonicalPath } from '@/lib/use-canonical-path';
 
 const HERO_SIZES = '(max-width: 900px) 100vw, 900px';
@@ -158,10 +159,14 @@ const DesignerProfilePage: FC = () => {
           </Typography>
         )}
 
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={2} alignItems="center">
           <Button variant="contained" size="large" component={Link} to="/login">
             Get in touch
           </Button>
+          <SaveDesignerButton
+            designerProfileId={profile.id}
+            studioName={profile.studioName}
+          />
           {profile.websiteUrl && (
             <Button
               variant="text"

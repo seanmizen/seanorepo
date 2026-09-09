@@ -157,9 +157,14 @@ export function listApprovedDesignersSql(filters: DesignerListFilters): {
  *
  * Narrowed to the page's ids, so page size bounds the cost, not the
  * size of the result set.
+ *
+ * Exported so `services/saved-designers.ts` can give the shortlist the same
+ * cover-image treatment as the public list rather than a second, poorer
+ * implementation — a saved designer's card should never look worse than the
+ * card it was saved from.
  */
-async function resolveCoverImageIds(
-  profiles: ListRow[],
+export async function resolveCoverImageIds(
+  profiles: Array<Pick<ListRow, 'id' | 'cover_image_id'>>,
 ): Promise<Map<number, number>> {
   const needed = profiles.filter((p) => p.cover_image_id === null);
   const covers = new Map<number, number>();
@@ -202,7 +207,8 @@ async function resolveCoverImageIds(
   }
 }
 
-async function countPublishedProjects(
+/** Also used by `services/saved-designers.ts` — same reasoning as above. */
+export async function countPublishedProjects(
   profileIds: number[],
 ): Promise<Map<number, number>> {
   if (profileIds.length === 0) return new Map();
