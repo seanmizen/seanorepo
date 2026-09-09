@@ -12,6 +12,7 @@ import { routes } from './controllers';
 import { assertBypassNotProduction } from './services/dev-mode';
 import { errorHandler, notFoundHandler } from './services/http-errors';
 import { runMigrations } from './services/migrations';
+import { checkSlugHistoryInvariant } from './services/slugs';
 
 const DEV_SECRET = 'dev-secret-change-in-production';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -150,6 +151,11 @@ const start = async (): Promise<void> => {
 
   try {
     await runMigrations();
+    // A database that has drifted — a row whose slug was never recorded in
+    // `slugs` — must fail loudly here, at boot, rather than handing chooseSlug
+    // a false negative on the next write and 500ing on the entity table's own
+    // UNIQUE constraint. REQ-SLUG-005.
+    await checkSlugHistoryInvariant();
     await fastify.listen({ host: '0.0.0.0', port: PORT });
     console.log(`[inside-be] listening on http://localhost:${PORT}`);
   } catch (error) {

@@ -67,6 +67,7 @@
 | [`REQ-SLUG-002`](slug.md#req-slug-002--a-released-slug-is-never-reissued-to-a-different-entity) | A released slug is never reissued to a different entity | active | constraint | P0 | sean |
 | [`REQ-SLUG-003`](slug.md#req-slug-003--an-old-slug-moves-the-visitor-to-the-current-one) | An old slug moves the visitor to the current one | active | functional | P2 | sean |
 | [`REQ-SLUG-004`](slug.md#req-slug-004--reserved-words-cannot-be-claimed) | Reserved words cannot be claimed | active | constraint | P2 | sean |
+| [`REQ-SLUG-005`](slug.md#req-slug-005--every-live-slug-is-recorded-in-history) | Every live slug is recorded in history | active | constraint | P1 | agent:SEAN-212 |
 | [`REQ-STATE-001`](state.md#req-state-001--three-states-always-distinguishable) | Three states, always distinguishable | active | quality | P1 | sean |
 | [`REQ-STATE-002`](state.md#req-state-002--a-pending-state-never-looks-like-a-successful-one) | A pending state never looks like a successful one | active | quality | P1 | sean |
 | [`REQ-STATE-003`](state.md#req-state-003--content-is-never-invented-for-data-that-has-not-arrived) | Content is never invented for data that has not arrived | active | quality | P1 | sean |
@@ -141,6 +142,7 @@ graph TD
   REQ_SLUG_002["REQ-SLUG-002<br/>A released slug is never reissued to a different entity"]
   REQ_SLUG_003["REQ-SLUG-003<br/>An old slug moves the visitor to the current one"]
   REQ_SLUG_004["REQ-SLUG-004<br/>Reserved words cannot be claimed"]
+  REQ_SLUG_005["REQ-SLUG-005<br/>Every live slug is recorded in history"]
   REQ_STATE_001["REQ-STATE-001<br/>Three states, always distinguishable"]
   REQ_STATE_002["REQ-STATE-002<br/>A pending state never looks like a successful one"]
   REQ_STATE_003["REQ-STATE-003<br/>Content is never invented for data that has not arrived"]
@@ -181,6 +183,7 @@ graph TD
   REQ_PRODUCT_003 -->|refines| REQ_PRODUCT_001
   REQ_QUALITY_001 -->|refines| REQ_NET_007
   REQ_SLUG_003 -->|depends-on| REQ_SLUG_001
+  REQ_SLUG_005 -->|depends-on| REQ_SLUG_002
   REQ_STATE_002 -->|refines| REQ_STATE_001
   REQ_STATE_002 -->|depends-on| REQ_STATE_004
   REQ_STATE_003 -->|refines| REQ_STATE_001
@@ -211,6 +214,7 @@ graph TD
 - `REQ-PRODUCT-001` — refined-by REQ-PRODUCT-003
 - `REQ-PRODUCT-002` — refined-by REQ-DISCOVERY-001
 - `REQ-SLUG-001` — required-by REQ-SLUG-003
+- `REQ-SLUG-002` — required-by REQ-SLUG-005
 - `REQ-STATE-001` — refined-by REQ-FAIL-002, refined-by REQ-ONBOARD-004, refined-by REQ-STATE-002, refined-by REQ-STATE-003, refined-by REQ-STATE-004
 - `REQ-STATE-003` — refined-by REQ-NET-007
 - `REQ-STATE-004` — required-by REQ-STATE-002
