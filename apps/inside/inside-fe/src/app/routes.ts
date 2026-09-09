@@ -55,6 +55,7 @@ export const ROUTES = [
   // deliberately invalid one so it lands on the same state the other specs use.
   { path: '/verify', label: 'sign-in link', search: '?token=nonsense' },
   { path: '/account', label: 'account', requiresAuth: true },
+  { path: '/account/saved', label: 'saved designers', requiresAuth: true },
   // Public discovery. Every level is a real page, so the trail on a portfolio
   // piece — home > designers > studio > portfolio > project — is all links.
   { path: '/designers', label: 'designers' },

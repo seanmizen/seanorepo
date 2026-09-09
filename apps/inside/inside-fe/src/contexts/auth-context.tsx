@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import { api } from '@/config';
+import { takePendingSave } from '@/features/saved/pending-save';
 import { ApiError, get, send, setUnauthorizedHandler } from '@/lib/http';
 
 export type SignupRole = 'buyer' | 'designer';
@@ -151,6 +152,30 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     settledByAction.current = true;
     setSessionEnded(false);
     setUser(data.user);
+
+    /*
+     * REQ-PRODUCT-003. A signed-out visitor who clicked Save was sent here
+     * carrying an intent (`setPendingSave`, in `save-designer-button.tsx`).
+     * Completing it BEFORE returning means the caller's navigate(returnTo)
+     * always lands on a page that is already correct — no manual refresh,
+     * because the query on the returned-to page has not even mounted yet.
+     *
+     * Best-effort and swallowed: a signup that succeeded must not be undone
+     * by a save that failed. The visitor still lands where they were and can
+     * press Save again if this silently did not land.
+     */
+    const pendingDesignerId = takePendingSave();
+    if (pendingDesignerId !== null) {
+      try {
+        await send(
+          `${api.endpoints.savedDesigners}/${pendingDesignerId}`,
+          'POST',
+        );
+      } catch {
+        // See above — deliberately not surfaced.
+      }
+    }
+
     return { returnTo: safeReturnTo(data.returnTo) };
   }, []);
 

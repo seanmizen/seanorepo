@@ -328,6 +328,25 @@ export interface DesignerListResponse {
   hasMore: boolean;
 }
 
+/**
+ * A saved designer as it appears in the buyer's shortlist — the same shape a
+ * browse card uses, plus when it was saved. Not `DesignerListItem &
+ * SavedDesigner`: the shortlist never needs the join row's own `id`, only the
+ * designer it points at and when.
+ */
+export interface SavedDesignerListItem extends DesignerListItem {
+  savedAt: string;
+}
+
+/** GET /api/me/saved-designers */
+export interface SavedDesignerListResponse {
+  savedDesigners: SavedDesignerListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 /** A portfolio image with its captions and every variant. */
 export interface PublicProjectImage {
   caption: string | null;

@@ -51,9 +51,9 @@ const Section: FC<{
  * The signed-in visitor's account.
  *
  * Scaffolded rather than minimal: the sections below are where saved
- * designers (#161), posted briefs (#162) and session management will live, and
- * showing the shape now means adding them is filling a slot rather than
- * redesigning a page.
+ * designers (#161, built), posted briefs (#162) and session management will
+ * live, and showing the shape now means adding them is filling a slot rather
+ * than redesigning a page.
  *
  * REQ-STATE-003 governs how the unbuilt parts are drawn. A section for a
  * feature that does not exist says it does not exist — it never renders an
@@ -123,9 +123,9 @@ const Account: FC = () => {
           description="Studios you want to come back to."
           testId="account-saved"
         >
-          <Typography variant="body2" color="text.secondary">
-            Saving a designer is not built yet.
-          </Typography>
+          <Button component={Link} to="/account/saved" variant="contained">
+            View your saved designers
+          </Button>
         </Section>
 
         {/*

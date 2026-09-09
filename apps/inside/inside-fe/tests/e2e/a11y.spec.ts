@@ -150,6 +150,30 @@ for (const scheme of ['light', 'dark'] as const) {
       );
     });
 
+    test('account — saved designers, empty', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-saved-empty'));
+      await page.goto('/account/saved');
+      await expect(page.getByTestId('saved-designers-empty')).toBeVisible();
+      await expectNoViolations(page, `/account/saved empty (${scheme})`);
+    });
+
+    test('account — saved designers, with one saved', async ({ page }) => {
+      await page.goto('/login');
+      await waitForApp(page);
+      await signIn(page, uniqueEmail('axe-saved-full'));
+      await page.goto('/designers/studio-mercer');
+      await page.getByTestId('save-designer').click();
+      await expect(page.getByTestId('save-designer')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await page.goto('/account/saved');
+      await expect(page.getByTestId('saved-designers-grid')).toBeVisible();
+      await expectNoViolations(page, `/account/saved with items (${scheme})`);
+    });
+
     test('account — scaffolded sections', async ({ page }) => {
       await page.goto('/login');
       await waitForApp(page);
