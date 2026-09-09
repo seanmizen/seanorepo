@@ -35,9 +35,10 @@
 | [`REQ-DATA-003`](data.md#req-data-003--constraints-are-enforced-by-the-database) | Constraints are enforced by the database | active | constraint | P0 | sean |
 | [`REQ-DATA-004`](data.md#req-data-004--stored-assets-are-reached-only-through-the-provider) | Stored assets are reached only through the provider | active | constraint | P1 | sean |
 | [`REQ-DATA-005`](data.md#req-data-005--one-vocabulary-everywhere) | One vocabulary everywhere | active | constraint | P1 | sean |
-| [`REQ-DISCOVERY-001`](discovery.md#req-discovery-001--an-unapproved-profile-is-unreachable-not-merely-unlisted) | An unapproved profile is unreachable, not merely unlisted | active | constraint | P0 | sean |
+| [`REQ-DISCOVERY-001`](discovery.md#req-discovery-001--an-unapproved-profile-is-unreachable-not-merely-unlisted) | An unapproved profile is unreachable, not merely unlisted | superseded | constraint | P0 | sean |
 | [`REQ-DISCOVERY-002`](discovery.md#req-discovery-002--unpublished-work-is-not-served) | Unpublished work is not served | active | constraint | P1 | sean |
 | [`REQ-DISCOVERY-003`](discovery.md#req-discovery-003--filter-state-lives-in-the-url) | Filter state lives in the URL | active | constraint | P2 | sean |
+| [`REQ-DISCOVERY-004`](discovery.md#req-discovery-004--an-unapproved-profile-is-served-to-its-owner-and-to-nobody-else) | An unapproved profile is served to its owner and to nobody else | active | constraint | P0 | sean |
 | [`REQ-FAIL-001`](fail.md#req-fail-001--a-render-crash-is-themed-logged-and-recoverable) | A render crash is themed, logged and recoverable | active | quality | P2 | sean |
 | [`REQ-FAIL-002`](fail.md#req-fail-002--losing-the-network-is-said-once-not-once-per-page) | Losing the network is said once, not once per page | active | quality | P2 | sean |
 | [`REQ-FAIL-003`](fail.md#req-fail-003--a-failure-offers-a-control-that-actually-retries) | A failure offers a control that actually retries | active | functional | P2 | sean |
@@ -112,6 +113,7 @@ graph TD
   REQ_DISCOVERY_001["REQ-DISCOVERY-001<br/>An unapproved profile is unreachable, not merely unlisted"]
   REQ_DISCOVERY_002["REQ-DISCOVERY-002<br/>Unpublished work is not served"]
   REQ_DISCOVERY_003["REQ-DISCOVERY-003<br/>Filter state lives in the URL"]
+  REQ_DISCOVERY_004["REQ-DISCOVERY-004<br/>An unapproved profile is served to its owner and to nobody else"]
   REQ_FAIL_001["REQ-FAIL-001<br/>A render crash is themed, logged and recoverable"]
   REQ_FAIL_002["REQ-FAIL-002<br/>Losing the network is said once, not once per page"]
   REQ_FAIL_003["REQ-FAIL-003<br/>A failure offers a control that actually retries"]
@@ -165,6 +167,8 @@ graph TD
   REQ_CHIPS_008 -->|supersedes| REQ_CHIPS_007
   REQ_CHIPS_009 -->|supersedes| REQ_CHIPS_002
   REQ_DISCOVERY_001 -->|refines| REQ_PRODUCT_002
+  REQ_DISCOVERY_001 -->|superseded-by| REQ_DISCOVERY_004
+  REQ_DISCOVERY_004 -->|supersedes| REQ_DISCOVERY_001
   REQ_FAIL_002 -->|refines| REQ_STATE_001
   REQ_FAIL_003 -->|depends-on| REQ_NET_006
   REQ_FAIL_004 -->|refines| REQ_FAIL_001
@@ -191,6 +195,7 @@ graph TD
   style REQ_CHIPS_005 stroke-dasharray: 4 4
   style REQ_CHIPS_006 stroke-dasharray: 4 4
   style REQ_CHIPS_007 stroke-dasharray: 4 4
+  style REQ_DISCOVERY_001 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links
