@@ -30,6 +30,8 @@ echo "Custom Services:"
 echo "----------------"
 SERVICES=(
     "deployment-custom.service"
+    "deploy-poll-custom.service"
+    "deploy-poll-custom.timer"
     "cloudflared-custom.service"
 )
 
@@ -55,6 +57,22 @@ for service in "${SERVICES[@]}"; do
         echo "  - $service (not installed)"
     fi
 done
+
+echo ""
+
+# Deploy state
+echo "Deploy State:"
+echo "-------------"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/seanorepo"
+if [ -f "$STATE_DIR/last-deployed" ]; then
+    echo "  Last deployed: $(cat "$STATE_DIR/last-deployed")"
+    echo "  At:            $(date -r "$STATE_DIR/last-deployed" 2>/dev/null || echo unknown)"
+else
+    echo "  Last deployed: (never - no marker at $STATE_DIR/last-deployed)"
+fi
+if systemctl list-timers deploy-poll-custom.timer --no-pager 2>/dev/null | grep -q deploy-poll; then
+    echo "  Next poll:     $(systemctl list-timers deploy-poll-custom.timer --no-pager | awk 'NR==2 {print $1, $2, $3}')"
+fi
 
 echo ""
 
