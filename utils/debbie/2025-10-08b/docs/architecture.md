@@ -148,7 +148,7 @@ On debbie, every 2 minutes (deploy-poll-custom.timer):
    ↓
 4. git fetch && git checkout -f -B release origin/release
    ↓
-5. yarn install --immutable   (only if yarn.lock changed)
+5. yarn install --immutable
    ↓
 6. yarn prod:docker
    ↓
@@ -158,8 +158,11 @@ On debbie, every 2 minutes (deploy-poll-custom.timer):
    ↓
 8. docker image prune -f
    ↓
-9. Record the SHA, notify via ntfy
+9. Record the SHA in ~/.local/state/seanorepo/last-deployed
 ```
+
+Progress and failures land in the journal:
+`journalctl -u deploy-poll-custom.service -f`
 
 **Why polling and not a webhook.** debbie is behind home NAT; the only inbound
 path is the Cloudflare tunnel, so a webhook receiver would mean publishing a
@@ -168,9 +171,8 @@ two minutes and is self-healing: if the box is offline or rebooting when a commi
 is promoted, it catches up on the next tick, whereas a webhook delivery is lost.
 
 **Failure handling.** The success marker is a separate file, not `HEAD`, so a
-deploy that fails after the checkout is retried rather than looking done. After 3
-consecutive failures on the same SHA, `deploy.sh` backs off and stops notifying
-until a new commit is promoted.
+deploy that fails after the checkout is retried on the next tick rather than
+looking done. A broken commit keeps being retried until a fix is promoted.
 
 **Why the boot deploy forces.** No app `docker-compose.yml` sets a `restart:`
 policy, so after a reboot the containers are down even though the deployed SHA

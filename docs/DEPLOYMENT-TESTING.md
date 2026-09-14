@@ -330,8 +330,9 @@ ssh srv@debbie.local sudo systemctl start deployment-custom.service
 after the containers are up. Ordinary deploys leave the tunnel untouched, so they cost no
 Cloudflare 1033 downtime.
 
-A failed deploy is retried on the next two ticks, then backs off until a new commit is
-promoted. See `utils/debbie/2025-10-08b/docs/architecture.md` for the full flow.
+A failed deploy is retried on the next tick, so pushing a fix is all that is needed.
+Progress and failures go to the journal. See
+`utils/debbie/2025-10-08b/docs/architecture.md` for the full flow.
 
 ## Deployment Checklist
 

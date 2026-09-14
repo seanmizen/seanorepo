@@ -70,9 +70,6 @@ if [ -f "$STATE_DIR/last-deployed" ]; then
 else
     echo "  Last deployed: (never - no marker at $STATE_DIR/last-deployed)"
 fi
-if [ -f "$STATE_DIR/last-failed" ]; then
-    echo "  ✗ Failing:     $(cat "$STATE_DIR/last-failed") (sha attempts)"
-fi
 if systemctl list-timers deploy-poll-custom.timer --no-pager 2>/dev/null | grep -q deploy-poll; then
     echo "  Next poll:     $(systemctl list-timers deploy-poll-custom.timer --no-pager | awk 'NR==2 {print $1, $2, $3}')"
 fi
