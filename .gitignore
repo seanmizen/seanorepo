@@ -114,7 +114,10 @@ bower_components
 build/Release
 
 # Dependency directories
-node_modules/
+# No trailing slash: 'node_modules/' matches directories only, so a *symlink*
+# named node_modules - how you give a git worktree access to the root install so
+# husky's commitlint hook can run - slips past it and gets committed.
+node_modules
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
