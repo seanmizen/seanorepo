@@ -263,14 +263,22 @@ echo "Setting up seanorepo" | tee -a "$LOG"
 REPO_DIR="${REPO_PATH:-$USER_HOME/projects/seanorepo}"
 sudo -u "$ORIG_USER" mkdir -p "$(dirname "$REPO_DIR")"
 
+# The server deploys the 'release' branch, never 'main' - main moves on every
+# merge, release moves only when someone runs `yarn release`.
+RELEASE_BRANCH="${RELEASE_BRANCH:-release}"
 if [ ! -d "$REPO_DIR/.git" ]; then
   echo "Cloning repository" | tee -a "$LOG"
   sudo -u "$ORIG_USER" git clone "${REPO_URL:-https://github.com/seanmizen/seanorepo}" "$REPO_DIR"
+fi
+
+echo "Checking out $RELEASE_BRANCH" | tee -a "$LOG"
+cd "$REPO_DIR"
+sudo -u "$ORIG_USER" git fetch --all
+if sudo -u "$ORIG_USER" git rev-parse --verify --quiet "origin/$RELEASE_BRANCH" > /dev/null; then
+  sudo -u "$ORIG_USER" git checkout -f -B "$RELEASE_BRANCH" "origin/$RELEASE_BRANCH"
 else
-  echo "Repository exists, pulling latest" | tee -a "$LOG"
-  cd "$REPO_DIR"
-  sudo -u "$ORIG_USER" git fetch --all
-  sudo -u "$ORIG_USER" git reset --hard origin/main
+  echo "WARNING: origin/$RELEASE_BRANCH does not exist yet - staying on the current branch." | tee -a "$LOG"
+  echo "         Run 'yarn release' from a dev machine to create it." | tee -a "$LOG"
 fi
 
 echo "Setting up Corepack" | tee -a "$LOG"
@@ -302,13 +310,40 @@ if [ -d "$SERVICES_DIR" ]; then
     # enabled": if it is not running, a NIC that has link but no upstream takes
     # the whole box off the internet until someone notices in person. Enable it
     # here so a fresh provision is safe by default.
-    chmod +x "$SCRIPT_DIR/net-failover.sh" 2>/dev/null || true
+    chmod +x "$SCRIPT_DIR/net-failover.sh" "$SCRIPT_DIR/deploy.sh" 2>/dev/null || true
     if [ -f "$SERVICES_DIR/net-failover-custom.timer" ]; then
         echo "Enabling net-failover-custom.timer" | tee -a "$LOG"
         sudo systemctl enable --now net-failover-custom.timer
     fi
+
+    # Same reasoning for the deploy poll: a server that does not pick up
+    # promoted commits is the whole problem this timer exists to solve, so it is
+    # on by default rather than waiting to be enabled by hand.
+    if [ -f "$SERVICES_DIR/deploy-poll-custom.timer" ]; then
+        echo "Enabling deploy-poll-custom.timer" | tee -a "$LOG"
+        sudo systemctl enable --now deploy-poll-custom.timer
+    fi
 else
     echo "Warning: Services directory not found at $SERVICES_DIR" | tee -a "$LOG"
+fi
+
+##############################################################################
+# sudoers: let the deploy script restart the cloudflared tunnel
+##############################################################################
+SUDOERS_SRC="$SCRIPT_DIR/../setup/sudoers-seanorepo-deploy"
+if [ -f "$SUDOERS_SRC" ]; then
+    echo "Installing sudoers drop-in for deploy" | tee -a "$LOG"
+    TMP_SUDOERS="$(mktemp)"
+    sed "s/^srv /${ORIG_USER} /" "$SUDOERS_SRC" > "$TMP_SUDOERS"
+    # Never install an unparseable sudoers file - a bad one locks sudo out entirely.
+    if sudo visudo -cf "$TMP_SUDOERS" > /dev/null; then
+        sudo install -m 0440 -o root -g root "$TMP_SUDOERS" /etc/sudoers.d/seanorepo-deploy
+    else
+        echo "ERROR: sudoers drop-in failed validation, not installing" | tee -a "$LOG"
+    fi
+    rm -f "$TMP_SUDOERS"
+else
+    echo "Warning: sudoers drop-in not found at $SUDOERS_SRC" | tee -a "$LOG"
 fi
 
 ##############################################################################
@@ -378,10 +413,16 @@ echo "" | tee -a "$LOG"
 echo "Server: $SERVER_NAME" | tee -a "$LOG"
 echo "mDNS name: $SERVER_NAME.local" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
-echo "To enable services, run:" | tee -a "$LOG"
+echo "Enabled automatically: net-failover-custom.timer, deploy-poll-custom.timer" | tee -a "$LOG"
+echo "" | tee -a "$LOG"
+echo "To enable the remaining services, run:" | tee -a "$LOG"
 echo "  sudo systemctl enable --now deployment-custom.service" | tee -a "$LOG"
 echo "  sudo systemctl enable --now cloudflared-custom.service" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
-echo "Check status with: $REPO_DIR/utils/debbie/status.sh" | tee -a "$LOG"
+echo "Deploys: promote with 'yarn release' on a dev machine; this box polls" | tee -a "$LOG"
+echo "origin/release every 2 minutes. Follow one with:" | tee -a "$LOG"
+echo "  journalctl -u deploy-poll-custom.service -f" | tee -a "$LOG"
+echo "" | tee -a "$LOG"
+echo "Check status with: $REPO_DIR/utils/debbie/2025-10-08b/status.sh" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 echo "Log file: $LOG" | tee -a "$LOG"

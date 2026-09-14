@@ -304,9 +304,38 @@ await fastify.listen({ host: "0.0.0.0", port });
 - Single container runs: nginx + 5 frontends (serve) + 4 backends (Bun)
 - Nginx listens on 8080, routes by domain to individual service ports (5xxx)
 
+## Shipping to the Home Server
+
+debbie deploys the **`release` branch**, not `main`. Merging to `main` changes nothing in
+production. To ship, from a clean `main` on a dev machine:
+
+```bash
+yarn release
+```
+
+That fast-forwards `origin/release` to `main` after showing you the commits about to go
+out. debbie polls `origin/release` every 2 minutes (`deploy-poll-custom.timer`) and
+redeploys when the SHA moves.
+
+```bash
+# Watch a deploy land
+ssh srv@debbie.local journalctl -u deploy-poll-custom.service -f
+
+# Force a redeploy of the current release (e.g. after changing a host .env)
+ssh srv@debbie.local sudo systemctl start deployment-custom.service
+```
+
+`apps/cloudflared/config.yml` is picked up automatically: `deploy.sh` restarts
+`cloudflared-custom.service` when — and only when — that file appears in the deployed diff,
+after the containers are up. Ordinary deploys leave the tunnel untouched, so they cost no
+Cloudflare 1033 downtime.
+
+A failed deploy is retried on the next two ticks, then backs off until a new commit is
+promoted. See `utils/debbie/2025-10-08b/docs/architecture.md` for the full flow.
+
 ## Deployment Checklist
 
-Before deploying to production:
+Before promoting to production:
 
 - [ ] All Cloudflared tests pass (`./test-deployment.sh cloudflared`)
 - [ ] All Fly.io tests pass (`./test-deployment.sh flyio`)
@@ -315,6 +344,8 @@ Before deploying to production:
 - [ ] Nginx config matches all services in Fly.io
 - [ ] Cloudflared config matches all services
 - [ ] No port conflicts between setups
+- [ ] `apps/cloudflared/config.yml` updated if ports or hostnames changed
+- [ ] Promoted with `yarn release`, and the deploy confirmed in the journal
 
 ## Troubleshooting
 

@@ -1,0 +1,15 @@
+[Unit]
+Description=Deploy the release branch if it has moved
+Documentation=https://github.com/seanmizen/seanorepo/issues/256
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=srv
+EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/.env
+Environment=PATH=/home/srv/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/srv/projects/seanorepo
+ExecStart=/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/deploy.sh
+
+# No [Install] section - deploy-poll-custom.timer owns this unit.

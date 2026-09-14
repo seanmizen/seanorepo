@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=srv
-EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/setup/.env
+EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/.env
 WorkingDirectory=/home/srv/projects/seanorepo/apps/cloudflared
 ExecStartPre=/usr/bin/test -f /home/srv/projects/seanorepo/apps/cloudflared/config.yml
 ExecStart=/usr/local/bin/cloudflared tunnel --config /home/srv/projects/seanorepo/apps/cloudflared/config.yml run

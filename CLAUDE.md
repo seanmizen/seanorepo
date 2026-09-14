@@ -246,7 +246,23 @@ See `docs/DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
 - Instructions for adding new services
 
 **Production Deployment:**
-`yarn prod:docker` is the **actual deployment command** used on the Cloudflared server. The server pulls the repo and runs this exact command.
+The home server (debbie) deploys the **`release` branch**, not `main`. Merging to `main`
+changes nothing in production.
+
+To ship, from a clean `main` on a dev machine:
+
+```bash
+yarn release
+```
+
+This fast-forwards `origin/release` to `main`. debbie polls `origin/release` every 2
+minutes (`deploy-poll-custom.timer`) and, when the SHA moves, runs
+`utils/debbie/2025-10-08b/scripts/deploy.sh`: checkout, `yarn prod:docker`, and a
+`cloudflared-custom.service` restart **only** if `apps/cloudflared/config.yml` changed.
+`yarn prod:docker` is still the command that does the actual work.
+
+Follow a deploy with `ssh srv@debbie.local journalctl -u deploy-poll-custom.service -f`.
+See `utils/debbie/2025-10-08b/docs/architecture.md` for the full flow.
 
 ### Branch Naming Convention
 

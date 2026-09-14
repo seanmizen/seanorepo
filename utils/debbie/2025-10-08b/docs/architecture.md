@@ -29,7 +29,9 @@ The Debbie server setup provides a fully automated deployment system for Debian-
 
 ### 4. Service Layer
 - **services/*.service**: Systemd unit files
-  - `deployment-custom.service`: One-shot deployment service
+  - `deployment-custom.service`: Boot-time deploy (forced, ignores the SHA check)
+  - `deploy-poll-custom.service` + `.timer`: Polls `origin/release` every 2 minutes
+    and deploys when it moves
   - `cloudflared-custom.service`: Cloudflare tunnel service
   - All services read configuration from `.env` via `EnvironmentFile`
 
@@ -58,9 +60,17 @@ The Debbie server setup provides a fully automated deployment system for Debian-
 │  ┌────────────────────────────────────────────┐ │
 │  │         Custom Services                    │ │
 │  │                                            │ │
-│  │  deployment-custom.service                 │ │
-│  │    ├─> git fetch & reset                   │ │
-│  │    └─> yarn prod:docker                    │ │
+│  │  deploy-poll-custom.timer (every 2 min)    │ │
+│  │    └─> deploy.sh                           │ │
+│  │         ├─> git ls-remote origin/release   │ │
+│  │         ├─> (exit if SHA unchanged)        │ │
+│  │         ├─> git checkout -f -B release     │ │
+│  │         ├─> yarn prod:docker               │ │
+│  │         └─> restart tunnel if config.yml   │ │
+│  │             changed                        │ │
+│  │                                            │ │
+│  │  deployment-custom.service (at boot)       │ │
+│  │    └─> deploy.sh --force                   │ │
 │  │         └─> Docker Compose Stack           │ │
 │  │              ├─> seanmizen.com             │ │
 │  │              ├─> carolinemizen.art         │ │
@@ -120,23 +130,51 @@ The Debbie server setup provides a fully automated deployment system for Debian-
 
 ### Deployment Flow
 
+The server deploys the `release` branch, never `main`. Merging to `main` changes
+nothing in production; promotion is a deliberate act.
+
 ```
-1. deployment-custom.service (one-shot)
+On a dev machine:
+  yarn release
+   └─> fast-forward push main -> origin/release
+
+On debbie, every 2 minutes (deploy-poll-custom.timer):
+1. deploy.sh
    ↓
-2. git fetch --all
+2. flock - exit if a deploy is already running
    ↓
-3. git reset --hard origin/main
+3. git ls-remote origin refs/heads/release
+   └─> exit if the SHA matches ~/.local/state/seanorepo/last-deployed
    ↓
-4. yarn prod:docker
+4. git fetch && git checkout -f -B release origin/release
    ↓
-5. Docker Compose up -d
-   ├─> Pull images
-   ├─> Build containers
-   └─> Start services
-       ↓
-6. Applications running
-   └─> Accessible via Cloudflare Tunnel
+5. yarn install --immutable   (only if yarn.lock changed)
+   ↓
+6. yarn prod:docker
+   ↓
+7. systemctl restart cloudflared-custom.service
+   └─> only if apps/cloudflared/config.yml was in the diff, and only
+       after the containers are up
+   ↓
+8. docker image prune -f
+   ↓
+9. Record the SHA, notify via ntfy
 ```
+
+**Why polling and not a webhook.** debbie is behind home NAT; the only inbound
+path is the Cloudflare tunnel, so a webhook receiver would mean publishing a
+hostname whose job is to execute deploy commands. A poll is one ref lookup every
+two minutes and is self-healing: if the box is offline or rebooting when a commit
+is promoted, it catches up on the next tick, whereas a webhook delivery is lost.
+
+**Failure handling.** The success marker is a separate file, not `HEAD`, so a
+deploy that fails after the checkout is retried rather than looking done. After 3
+consecutive failures on the same SHA, `deploy.sh` backs off and stops notifying
+until a new commit is promoted.
+
+**Why the boot deploy forces.** No app `docker-compose.yml` sets a `restart:`
+policy, so after a reboot the containers are down even though the deployed SHA
+has not moved. `deployment-custom.service` therefore passes `--force`.
 
 ### Tunnel Flow
 

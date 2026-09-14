@@ -71,14 +71,38 @@ The postinstall script can be run multiple times safely and will:
 
 ### Step 4: Enable Services
 
-After postinstall completes, enable the services:
+`postinstall.sh` enables `net-failover-custom.timer` and `deploy-poll-custom.timer`
+itself. Enable the rest:
 
 ```bash
-# Enable deployment service (one-shot: pulls latest code and runs docker)
+# Boot-time deploy (forced - containers do not survive a reboot on their own)
 sudo systemctl enable --now deployment-custom.service
 
 # Enable Cloudflare tunnel (if configured)
 sudo systemctl enable --now cloudflared-custom.service
+```
+
+### Step 5: Deploying
+
+The server deploys the `release` branch, never `main`. From a dev machine, on
+`main`, with a clean tree:
+
+```bash
+yarn release
+```
+
+That fast-forwards `origin/release` to `main`. debbie polls every 2 minutes and
+redeploys when the SHA moves, restarting the tunnel only when
+`apps/cloudflared/config.yml` changed. Follow a deploy with:
+
+```bash
+journalctl -u deploy-poll-custom.service -f
+```
+
+To force a redeploy of the current release without promoting anything:
+
+```bash
+sudo systemctl start deployment-custom.service
 ```
 
 ## Usage
@@ -99,8 +123,8 @@ This displays:
 ### View Service Logs
 
 ```bash
-# Follow logs for a specific service
-sudo journalctl -u deployment-custom.service -f
+# Follow deploys
+sudo journalctl -u deploy-poll-custom.service -f
 
 # View last 50 lines
 sudo journalctl -u cloudflared-custom.service -n 50
@@ -128,8 +152,10 @@ utils/debbie/
 │   ├── README.md         # This file
 │   └── architecture.md   # System architecture documentation
 ├── services/
-│   ├── deployment-custom.service    # One-shot deployment service
-│   └── cloudflared-custom.service   # Cloudflare tunnel service
+│   ├── deployment-custom.service     # Boot-time deploy (forced)
+│   ├── deploy-poll-custom.service    # Deploy if origin/release moved
+│   ├── deploy-poll-custom.timer      # Runs the above every 2 minutes
+│   └── cloudflared-custom.service    # Cloudflare tunnel service
 ├── setup/
 │   ├── env.example       # Configuration template
 │   ├── build-usb.sh      # Creates bootable USB installer (runs on Mac)
