@@ -3,6 +3,7 @@ import { useContext, useState } from 'react';
 import {
   EntityList,
   HomeLi,
+  LastUpdated,
   ShaderSean,
   Spacer,
   SSHModal,
@@ -55,6 +56,10 @@ const Home: FC = () => {
         <ShaderSean />
       </div>
       <div className="bottom-right-controls">
+        <LastUpdated
+          apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo"
+          branch="release"
+        />
         <ThemeToggle mode={mode} toggleMode={toggleMode} />
       </div>
       <SSHModal

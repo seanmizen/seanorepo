@@ -63,9 +63,10 @@ const comfyTime = (dateTime: Date): string => {
 
 interface LastUpdatedProps {
   apiRepoUrl: string;
+  branch: string;
 }
 
-const LastUpdated: FC<LastUpdatedProps> = ({ apiRepoUrl }) => {
+const LastUpdated: FC<LastUpdatedProps> = ({ apiRepoUrl, branch }) => {
   const [lastUpdated, setLastUpdated] = useState(
     "at um, well, i'm not sure yet",
   );
@@ -73,11 +74,13 @@ const LastUpdated: FC<LastUpdatedProps> = ({ apiRepoUrl }) => {
   useEffect(() => {
     const fetchDate = async () => {
       try {
-        const response = await fetch(apiRepoUrl);
+        const response = await fetch(
+          `${apiRepoUrl}/activity?ref=${branch}&per_page=1`,
+        );
         if (!response.ok)
           throw new Error(`HTTP error! Status: ${response.status}`);
-        const repo = await response.json();
-        const updatedDate = new Date(repo.pushed_at);
+        const [latestPush] = await response.json();
+        const updatedDate = new Date(latestPush.timestamp);
         const comfortableTime = comfyTime(updatedDate);
         setLastUpdated(
           `${updatedDate.toISOString().slice(0, 10)} ${comfortableTime}`,
@@ -87,7 +90,7 @@ const LastUpdated: FC<LastUpdatedProps> = ({ apiRepoUrl }) => {
       }
     };
     fetchDate();
-  }, [apiRepoUrl]);
+  }, [apiRepoUrl, branch]);
 
   return (
     <div className={styles['last-updated']} aria-live="polite">
