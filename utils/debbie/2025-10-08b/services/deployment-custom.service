@@ -1,15 +1,19 @@
 [Unit]
-Description=One-shot deploy of latest production code
-After=network.target docker.service
+Description=Deploy the release branch at boot
+After=network-online.target docker.service
+Wants=network-online.target
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
+# Deliberately NOT RemainAfterExit: a unit left "active (exited)" cannot be
+# re-triggered by systemctl start, which would silently break the poll timer.
 User=srv
-EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/setup/.env
+EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/.env
 Environment=PATH=/home/srv/.local/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=/home/srv/projects/seanorepo
-ExecStart=/bin/bash -c 'git fetch --all && git reset --hard origin/main && yarn prod:docker'
+# --force because no app docker-compose.yml sets a restart policy, so after a
+# reboot the containers are down even though the deployed SHA has not moved.
+ExecStart=/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/deploy.sh --force
 
 [Install]
 WantedBy=multi-user.target

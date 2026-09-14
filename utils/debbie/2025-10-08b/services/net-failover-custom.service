@@ -6,7 +6,7 @@ Wants=NetworkManager.service
 
 [Service]
 Type=oneshot
-EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/setup/.env
+EnvironmentFile=-/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/.env
 ExecStart=/home/srv/projects/seanorepo/utils/debbie/2025-10-08b/scripts/net-failover.sh
 # A failed probe means "no healthy interface right now", which the timer will
 # retry. It should not mark the unit failed and stop the timer.

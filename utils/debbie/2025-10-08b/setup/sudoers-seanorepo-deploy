@@ -1,0 +1,6 @@
+# Installed to /etc/sudoers.d/seanorepo-deploy by postinstall.sh.
+#
+# deploy.sh runs as srv but must restart the cloudflared tunnel when
+# apps/cloudflared/config.yml changes. This grants exactly that one command -
+# no wildcards, no other unit, no other verb.
+srv ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared-custom.service
