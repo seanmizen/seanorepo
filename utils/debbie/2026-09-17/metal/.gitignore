@@ -1,0 +1,4 @@
+# Holds a password hash and a wifi passphrase.
+.env
+# Generated: deploy key, served preseed copies.
+work/

@@ -18,9 +18,11 @@ DEPLOY_USER="${DEPLOY_USER:-srv}"
 
 pass=0
 fail=0
+skip=0
 
 ok()   { printf '  \033[32m/\033[0m %s\n' "$1"; pass=$((pass + 1)); }
 no()   { printf '  \033[31mX\033[0m %s\n' "$1"; fail=$((fail + 1)); }
+sk()   { printf '  \033[33m-\033[0m %s \033[33m(skipped: %s)\033[0m\n' "$1" "$2"; skip=$((skip + 1)); }
 check() { if eval "$2" > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 
 echo "== system =="
@@ -70,6 +72,22 @@ check "lid-close drop-in present" '[ -f /etc/systemd/logind.conf.d/10-debbie-nos
 check "lid close ignored"         '[ "$(loginctl show-seat seat0 -p IdleAction --value 2>/dev/null || busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandleLidSwitch 2>/dev/null | awk "{print \$2}" | tr -d \")" = ignore ] || grep -q "^HandleLidSwitch=ignore" /etc/systemd/logind.conf.d/10-debbie-nosleep.conf'
 check "sleep.target masked"       '[ "$(systemctl is-enabled sleep.target 2>&1)" = masked ]'
 
+# REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
+# passed in a VM: QEMU has no 802.11 device the installer would drive, so a
+# green VM run says nothing at all about this and must not pretend otherwise.
+echo "== network =="
+if [ -n "$(ls -d /sys/class/net/*/wireless 2> /dev/null)" ]; then
+    # netcfg persists wifi as an ifupdown stanza plus wpasupplicant in the
+    # target. Either that, or a NetworkManager profile once REQ-NETWORK-* lands.
+    check "wifi config persisted" \
+        'sudo -n grep -rqs "wpa-ssid\|wpa-psk" /etc/network/interfaces /etc/network/interfaces.d/ \
+         || sudo -n grep -rqs "^ssid=\|wifi.ssid" /etc/NetworkManager/system-connections/'
+    check "a wireless interface has an address" \
+        'for w in /sys/class/net/*/wireless; do i=$(basename "$(dirname "$w")"); ip -4 -o addr show "$i" | grep -q inet && exit 0; done; exit 1'
+else
+    sk "wifi config persisted" "no wireless interface"
+fi
+
 # REQ-SERVER-002 - exactly four ports, nothing else. An extra open port is a
 # failure, not a curiosity, so the count is asserted as well as the members.
 echo "== firewall =="
@@ -83,5 +101,9 @@ check "5353 open"                 'sudo -n ufw status | grep -q "^5353/udp"'
 check "no other ports open"       '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
 
 echo
-echo "passed $pass, failed $fail"
+if [ "$skip" -gt 0 ]; then
+    echo "passed $pass, failed $fail, skipped $skip"
+else
+    echo "passed $pass, failed $fail"
+fi
 [ "$fail" -eq 0 ]
