@@ -30,10 +30,52 @@ log() { echo "[metal] $*"; }
 
 #------------------------------------------------------------------------------
 # Configuration comes from an untracked file, never from the repository.
+#
+# Parsed literally, NOT sourced. `. .env` runs the file as shell, which expands
+# anything in it - and a sha512-crypt hash is full of '$'. Sourcing a correct
+# .env therefore failed on the very first use with "line 12: $6: unbound
+# variable", because the shell read $6 as a positional parameter. Quoting the
+# value works but is a foot-gun in a file whose main value always contains '$'.
+#
+# Values are taken verbatim: no expansion, no command substitution, and an
+# unrecognised key is an error rather than a setting that silently does
+# nothing.
 #------------------------------------------------------------------------------
 [ -f "$ENV_FILE" ] || die "no $ENV_FILE. Copy .env.example to .env and fill it in."
-# shellcheck disable=SC1090
-set -a; . "$ENV_FILE"; set +a
+
+read_env() {
+    local line key val lineno=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        lineno=$((lineno + 1))
+        line="${line%$'\r'}"                       # tolerate CRLF
+        case "$line" in '' | '#'*) continue ;; esac
+        case "$line" in *=*) : ;; *) die "$ENV_FILE line $lineno: not KEY=VALUE: $line" ;; esac
+
+        key="${line%%=*}"; val="${line#*=}"
+        key="${key#"${key%%[![:space:]]*}"}"       # trim
+        key="${key%"${key##*[![:space:]]}"}"
+        key="${key#export }"
+
+        # Strip one layer of surrounding quotes, so a .env written either way
+        # behaves the same.
+        case "$val" in
+            \'*\') val="${val#\'}"; val="${val%\'}" ;;
+            \"*\") val="${val#\"}"; val="${val%\"}" ;;
+        esac
+
+        case "$key" in
+            DEPLOY_USER)      DEPLOY_USER="$val" ;;
+            SERVER_NAME)      SERVER_NAME="$val" ;;
+            PASSWORD_CRYPTED) PASSWORD_CRYPTED="$val" ;;
+            WIFI_SSID)        WIFI_SSID="$val" ;;
+            WIFI_PASS)        WIFI_PASS="$val" ;;
+            WIFI_IFACE)       WIFI_IFACE="$val" ;;
+            SSH_KEY)          SSH_KEY="$val" ;;
+            *) die "$ENV_FILE line $lineno: unknown key '$key'. See .env.example." ;;
+        esac
+    done < "$ENV_FILE"
+}
+read_env
 
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 SERVER_NAME="${SERVER_NAME:-debbie}"
