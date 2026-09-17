@@ -14,6 +14,7 @@
 | [`REQ-SERVER-002`](server.md#req-server-002--only-four-ports-are-reachable) | Only four ports are reachable | active | constraint | P1 | sean |
 | [`REQ-SERVER-003`](server.md#req-server-003--the-deploy-user-can-deploy-without-a-password) | The deploy user can deploy without a password | active | functional | P1 | sean |
 | [`REQ-SERVER-004`](server.md#req-server-004--the-host-is-reachable-by-name-on-the-local-network) | The host is reachable by name on the local network | active | functional | P2 | sean |
+| [`REQ-SERVER-005`](server.md#req-server-005--a-wifi-only-host-keeps-its-network-across-a-reboot) | A wifi-only host keeps its network across a reboot | active | functional | P1 | sean |
 
 ## Dependency graph
 
