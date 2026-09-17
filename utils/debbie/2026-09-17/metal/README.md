@@ -27,7 +27,57 @@ Only `boot/grub/grub.cfg` and `isolinux/txt.cfg` change, rebuilt with
 that killed the December 2025 attempt — that needed a hand-written cpio
 archive. The preseed still comes over HTTP, so changing it needs no rebuild.
 
-## 1. Write the stick
+## Reproduce from zero
+
+```bash
+cd utils/debbie/2026-09-17/metal
+brew install xorriso                   # once
+
+# 1. the stock ISO
+curl -fLO "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.7.0-amd64-netinst.iso"
+curl -fsSL "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS" \
+  | grep netinst | shasum -a 256 -c - | grep -v FAILED
+
+# 2. configure
+cp .env.example .env
+openssl passwd -6                      # -> PASSWORD_CRYPTED
+$EDITOR .env                           # + WIFI_SSID, WIFI_PASS, WIFI_IFACE, SERVER_NAME
+
+# 3. bake the cmdline in
+ISO=debian-13.7.0-amd64-netinst.iso ./build-iso.sh
+
+# 4. write the stick ONCE - the built ISO, not the stock one
+diskutil list                          # find it. dd takes the whole device.
+diskutil unmountDisk force /dev/diskN
+sudo dd if=work/debbie-$(grep ^SERVER_NAME .env | cut -d= -f2).iso of=/dev/rdiskN bs=4m
+
+# 5. serve, then boot the target and walk away
+./serve-preseed.sh
+
+# 6. once it powers itself off, power it on and provision
+./provision.sh
+```
+
+That is the whole thing. Steps 1-3 are needed once per preseed change; step 4
+once per stick.
+
+## 1. Configure and build
+
+```bash
+cp .env.example .env
+openssl passwd -6                      # paste the hash into PASSWORD_CRYPTED
+$EDITOR .env                           # + WIFI_SSID, WIFI_PASS, WIFI_IFACE
+./build-iso.sh                         # ~3 seconds
+```
+
+`build-iso.sh` writes `work/debbie-<name>.iso` and verifies the result rather
+than trusting the build: default entry present, preseed URL and wifi params
+baked in *before* the `---`, El Torito catalogue intact.
+
+**The built ISO contains your wifi passphrase in plaintext.** `work/` and
+`*.iso` are gitignored; treat the stick as a credential.
+
+## 2. Write the stick
 
 Since Debian 12 the **official** netinst image includes non-free firmware, so
 there is no separate firmware ISO to hunt for (the old
@@ -36,46 +86,33 @@ anywhere else: a wifi chipset with no firmware means `netcfg` cannot associate,
 and a preseeded install with no network hangs forever with nothing on screen
 explaining why.
 
-```bash
-ISO=debian-13.7.0-amd64-netinst.iso
-curl -fLO "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/$ISO"
-curl -fsSL "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS" \
-  | grep "$ISO" | shasum -a 256 -c -
-```
+Verify the download before writing, always.
 
-Verify before writing, always. Then find the stick and write it — **`dd` to the
-wrong disk takes the whole disk with it, so read the `diskutil list` output
-rather than assuming the number:**
+**Write the ISO that `build-iso.sh` produced, not the stock one** — that is the
+whole point of step 3, and writing the stick before building it is a wasted
+`dd`.
 
 ```bash
 diskutil list                          # identify the stick, e.g. disk4
-diskutil unmountDisk /dev/disk4
-sudo dd if="$ISO" of=/dev/rdisk4 bs=4m # rdisk4, not disk4 - raw is ~10x faster
+diskutil unmountDisk force /dev/disk4
+sudo dd if=work/debbie-<name>.iso of=/dev/rdisk4 bs=4m
 ```
 
-macOS `dd` has no `status=progress`; press **Ctrl-T** for a progress line. The
-Debian ISO is isohybrid, so a plain `dd` boots under both UEFI and BIOS with no
-partitioning work.
+`force` is not optional in practice: Spotlight's `mds_stores` indexes a
+freshly-written stick and dissents the unmount, and the plain form then fails
+with "Unmount was dissented by PID ... mds_stores", which reads like a hardware
+fault.
 
-## 2. Configure, build the ISO, serve
+`rdisk4`, not `disk4` — the raw device is roughly 10x faster. macOS `dd` has no
+`status=progress`; press **Ctrl-T** for a progress line. The Debian ISO is
+isohybrid, so a plain `dd` boots under both UEFI and BIOS with no partitioning
+work.
+
+## 3. Serve and boot
 
 ```bash
-cp .env.example .env
-openssl passwd -6                      # paste the hash into PASSWORD_CRYPTED
-$EDITOR .env                           # + WIFI_SSID, WIFI_PASS, WIFI_IFACE
-./build-iso.sh                         # bakes the cmdline in; ~3 seconds
 ./serve-preseed.sh
 ```
-
-`build-iso.sh` writes `work/debbie-<name>.iso` and verifies the result rather
-than trusting the build: default entry present, preseed URL and wifi params
-baked in *before* the `---`, El Torito catalogue intact. Write that ISO to the
-stick instead of the stock one (step 1's `dd`, same warnings).
-
-**The built ISO contains your wifi passphrase in plaintext.** `work/` and
-`*.iso` are gitignored; treat the stick as a credential.
-
-Needs `xorriso` (`brew install xorriso`).
 
 The script generates `overrides.cfg` with
 [`../scripts/write-overrides.sh`](../scripts/write-overrides.sh) — the same
@@ -83,74 +120,76 @@ generator the VM harness uses, which is the point: a real install and a proven
 install cannot drift. It then serves the directory, **checks the URL is
 reachable on the LAN address rather than only on loopback** (a macOS firewall
 prompt nobody clicked is otherwise discovered halfway through an install, as a
-hang), and prints the boot line with your values filled in.
+hang), and prints the boot line for the manual fallback.
 
-Both machines must be on the same wifi network.
+Both machines must be on the same wifi network, and the Mac must stay awake
+across the whole install (`caffeinate -i` in another terminal).
 
-## 3. Boot the target
-
-Boot the stick. **Nothing to type** — the automated entry is the default and
-boots after five seconds. The stock menu entries are still there if you want a
-manual install.
+Now boot the stick. **Nothing to type** — the automated entry is the default
+and boots after five seconds. The stock menu entries are still there if you
+want a manual install.
 
 Verified in QEMU under OVMF before ever reaching hardware: the remastered ISO
 auto-boots, skips language and keyboard entirely, fetches the preseed over HTTP
 and reaches partitioning with zero prompts.
 
-### Fallback: typing it by hand
+### Fallback: typing the boot line by hand
 
-If you are booting a stock ISO, highlight **Install**, press `e` (UEFI GRUB) or
-`TAB` (BIOS isolinux), and insert the params **before the `---`**:
+Only needed if you are booting a stock ISO. Highlight **Install**, press `e`
+(UEFI GRUB) or `TAB` (BIOS isolinux), and insert the params **before the
+`---`**. `serve-preseed.sh` prints the exact string.
 
-```
-auto=true priority=critical url=http://<laptop-ip>:8000/preseed.cfg \
-  netcfg/choose_interface=<wlan iface> \
-  netcfg/wireless_show_essids=manual \
-  netcfg/wireless_essid=<SSID> \
-  netcfg/wireless_security_type=wpa \
-  netcfg/wireless_wpa=<passphrase>
-```
-
-Verified against trixie's `netcfg` 1.197 templates, because all three of these
-are easy to get wrong from memory:
+Verified against trixie's `netcfg` 1.197 templates, because all three are easy
+to get wrong from memory:
 
 | Key | Why it is like that |
 |---|---|
 | `wireless_security_type=wpa` | The select's values are `wep/open` and `wpa`. There is no `wpa2` — `wpa` covers WPA2 PSK. |
 | `wireless_show_essids=manual` | A *separate* prompt from `wireless_essid`, offering a scanned list. Unset, the installer stops and asks even though the ESSID is preset. |
-| `choose_interface=<iface>` | `auto` picks the first interface with a **carrier**, and wifi has none until it associates — so on a box with a dead ethernet port `auto` can pick the wrong one. If you don't know the name, omit it and pick from the prompt, or read it from the installer's shell (`Ctrl-Alt-F2`, `ip link`). |
+| `choose_interface=<iface>` | `auto` picks the first interface with a **carrier**, and wifi has none until it associates — so on a box with a dead ethernet port `auto` can pick the wrong one. Read it from the installer's shell (`Ctrl-Alt-F2`, `ip link`) if you don't know it. |
 
 **The wifi values are mandatory, not a convenience.** `priority=critical`
 suppresses the prompt that would otherwise ask for them, so a missing
 passphrase becomes an *empty* one, and netcfg rejects it with "either too long
 (more than 64 characters) or too short (less than 8 characters)" — a message
-that blames the password you never typed. Dropping them to shorten the line is
-the one shortcut that cannot work.
+that blames a password you never typed. Dropping them to shorten the line is
+the one shortcut that cannot work. `build-iso.sh` length-checks `WIFI_PASS`
+up front so this is unreachable on the baked route.
 
 `Ctrl-X` is also load-bearing: it is the only key that boots the edited line.
-`Esc` or `Enter` discards the edit silently, and the result is indistinguishable
-from the parameters not working. If the installer asks for a language, that is
-what happened — `cat /proc/cmdline` on `Ctrl-Alt-F2` confirms it.
-
-The passphrase stays on the boot line and never enters the repository.
+`Esc` or `Enter` discards the edit silently, and the result is
+indistinguishable from the parameters never having worked. If the installer
+asks for a language, that is what happened — `cat /proc/cmdline` on
+`Ctrl-Alt-F2` confirms it.
 
 ## 4. Provision
 
 The preseed ends in **poweroff**, not reboot, so "did the install finish?" is
-answerable without watching a console. Power the box back on:
+answerable without watching a console. Power the box back on, then:
 
 ```bash
-ssh -i work/id_ed25519 srv@debbie.local
-curl -fsSL http://<laptop-ip>:8000/postinstall.sh | sudo bash
-sudo reboot                            # REQ-SERVER-001 applies at next boot
+./provision.sh
 ```
 
-Then run the assertions against the real box, which is the only place some of
-them have ever run:
+That waits for SSH, runs `postinstall.sh`, reboots so the boot-time settings
+apply, waits for the box to return, and runs the same `vm/assert.sh` the VM
+runs — with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from your `.env`. Exit
+codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
+up on SSH.
 
 ```bash
-ssh -i work/id_ed25519 srv@debbie.local 'bash -s' < ../vm/assert.sh
+./provision.sh --assert       # assert only, box already provisioned
+./provision.sh --no-reboot    # postinstall only
+HOST=192.168.1.42 ./provision.sh   # if mDNS has not settled
 ```
+
+Do not hand-run these steps with a hardcoded `debbie.local`: `assert.sh`
+defaults to `EXPECT_HOSTNAME=debbie`, so with any other `SERVER_NAME` the
+hostname check fails on a box that is actually correct. `provision.sh` passes
+the right values, which is most of why it exists.
+
+On metal the wifi assertion **runs** rather than skipping, so this is the first
+place `REQ-SERVER-005` is genuinely tested.
 
 ## Where this is likely to go wrong
 
