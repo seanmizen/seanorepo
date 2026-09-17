@@ -36,7 +36,10 @@ came up on SSH · `124` timed out. Nothing needs watching.
 ### Prerequisites
 
 - **macOS**: `brew install qemu coreutils` — firmware ships with QEMU.
-- **WSL2 Debian**: `sudo apt install qemu-system-x86 qemu-system-arm qemu-utils ovmf qemu-efi-aarch64 curl python3`, plus `nestedVirtualization=true` in `.wslconfig`, `wsl --shutdown`, and `sudo usermod -aG kvm $USER` for `/dev/kvm`.
+- **WSL2 Debian**: `sudo apt install qemu-system-x86 qemu-system-arm qemu-utils ovmf qemu-efi-aarch64 curl python3`, plus `nestedVirtualization=true` in `.wslconfig`, `wsl --shutdown`, and `sudo usermod -aG kvm $USER` for `/dev/kvm`. Windows 11 only — see the Windows 10 note below.
+- **Windows-native (unproven)**: `winget install SoftwareFreedomConservancy.QEMU`, enable the *Windows Hypervisor Platform* feature, reboot, and put `qemu-system-x86_64` on `PATH`. Firmware ships with QEMU under its `share/` directory.
+
+  Accelerator *selection* is correct here, but this is not a supported path. Two things are unresolved: `whpx` is reported broken with `-drive if=pflash`, which this harness requires (see the Windows 10 note below); and a POSIX shell on Windows ships neither `timeout` nor `python3`, both of which the harness needs — `timeout` to bound the install, `python3` to pick a free port and serve the preseed. On Windows, prefer WSL2 and accept TCG.
 
 No Yarn, no `node_modules`. The harness is shell and QEMU only.
 
@@ -47,8 +50,38 @@ The guest architecture follows the host, so the loop stays fast:
 | Host | Guest | Accelerator |
 |---|---|---|
 | macOS arm64 | arm64 | `hvf` |
-| WSL2 / Linux x86_64 | amd64 | `kvm` |
+| Linux x86_64, incl. WSL2 with nested virtualisation | amd64 | `kvm` |
+| Windows, via Git Bash / MSYS2 | amd64 | `whpx` |
 | anything cross-arch | as asked | `tcg`, with a loud warning |
+
+**Windows 10 has no accelerated path for this harness.** Two separate limits
+stack up, and it is worth knowing both before going looking for a setting.
+
+1. **WSL2 on Windows 10 has no nested virtualisation.** Microsoft gates the
+   processor-feature lookup behind a Windows 11 check, so `nestedVirtualization=true`
+   in `.wslconfig` is silently ignored, `/dev/kvm` never appears, and `vmx` is
+   absent from `/proc/cpuinfo` no matter what the CPU supports
+   ([microsoft/WSL#40735](https://github.com/microsoft/WSL/issues/40735)). A run
+   from a WSL2 shell therefore uses TCG.
+2. **`whpx` is not an alternative there.** It is the Windows Hypervisor Platform
+   API, so only a QEMU built for Windows can load `WinHvPlatform.dll`. A Linux
+   build has no `whpx` accelerator compiled in at all, which is why asking for
+   one inside WSL2 fails loudly rather than degrading silently.
+
+A Windows-native QEMU *could* use `whpx`, and the harness selects it where
+`uname -s` reports `MINGW*`/`MSYS*`/`CYGWIN*`. But it collides with this
+harness's firmware requirement:
+[QEMU #513](https://gitlab.com/qemu-project/qemu/-/issues/513) reports `whpx`
+failing on `-drive if=pflash` with *"Failed to emulate MMIO access"*, unfixed
+since 2020, and the documented workaround is `-bios` — exactly what
+`REQ-EMU-004` forbids, because a read-only variable store discards the
+installer's boot entry and the disk then will not boot in the assert phase.
+**Treat the Windows-native path as unproven.**
+
+So on Windows 10, expect TCG. That is not the worst case it sounds like: an
+amd64 guest on an amd64 host gets *multi-threaded* TCG, unlike the x86-on-ARM
+combination. Windows 11 WSL2 supports nested virtualisation and gets `kvm`
+normally.
 
 debbie itself is **x86_64**. Running an arm64 guest on the Mac is a knowing
 trade of fidelity for iteration speed — minutes instead of hours. One preseed
