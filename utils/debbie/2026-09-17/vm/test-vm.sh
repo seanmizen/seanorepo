@@ -58,9 +58,10 @@ resolve_target() {
         Darwin/x86_64) HOST_QARCH=x86_64;  GUEST_ARCH=amd64; NATIVE_ACCEL=hvf ;;
         Linux/aarch64) HOST_QARCH=aarch64; GUEST_ARCH=arm64; NATIVE_ACCEL=kvm ;;
         Linux/x86_64)  HOST_QARCH=x86_64;  GUEST_ARCH=amd64; NATIVE_ACCEL=kvm ;;
-        # Git Bash / MSYS2 / Cygwin - i.e. a QEMU built for Windows. This is the
-        # only place whpx is reachable. Inside WSL2 you are on a Linux build
-        # whose accelerators are kvm and tcg, whatever Windows itself offers.
+        # A POSIX shell on Windows - MSYS2, Cygwin and the like - which is what
+        # makes this a QEMU built for Windows. That is the only place whpx
+        # exists at all: inside WSL2 you are on a Linux build, whose
+        # accelerators are kvm and tcg whatever Windows itself offers.
         MINGW*/x86_64 | MSYS*/x86_64 | CYGWIN*/x86_64)
                        HOST_QARCH=x86_64;  GUEST_ARCH=amd64; NATIVE_ACCEL=whpx ;;
         *) die "unsupported host $os/$arch" ;;
