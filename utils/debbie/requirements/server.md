@@ -138,3 +138,108 @@ Introduced in #259.
     (skipped where the host has no wireless interface, which is every VM run —
     QEMU has no 802.11 device the installer would drive)
 - **Relations:** none
+
+
+## REQ-SERVER-006 — Security updates apply without anyone logging in
+
+- **Status:** proposed
+- **Source:** sean
+- **Origin:** #273
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** The host shall install security updates unattended.
+- **Rationale:** Nobody logs into this box for months at a time. An unpatched
+  internet-facing host that is also never looked at is the worst combination of
+  the two, and "I will run apt upgrade when I next SSH in" has empirically
+  meant sixteen months — see #136, where cloudflared's self-update failed
+  silently for that long with nothing reporting it.
+
+  Reboots are deliberately **not** automatic. This host serves from a shelf,
+  and an unattended reboot that fails to bring wifi back up is an outage nobody
+  is watching for.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "unattended-upgrades enabled"
+- **Relations:** none
+
+## REQ-SERVER-007 — Logs cannot fill the disk
+
+- **Status:** proposed
+- **Source:** sean
+- **Origin:** #273
+- **Type:** constraint
+- **Priority:** P2
+- **Statement:** The host shall bound the on-disk size of its journal.
+- **Rationale:** An uncapped journal on a host nobody inspects eventually fills
+  the disk, and a full disk takes down every site at once with a cause that
+  presents as anything but disk space — containers failing to start, SQLite
+  write errors, a tunnel that will not come up.
+
+  Separate from `REQ-SERVER-006` because they fail independently: a fully
+  patched host can still fill its disk, and a capped journal does nothing about
+  an unpatched OpenSSH.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "journald size capped"
+- **Relations:** none
+
+## REQ-SERVER-008 — SSH accepts keys and nothing else
+
+- **Status:** proposed
+- **Source:** sean
+- **Origin:** #273
+- **Type:** constraint
+- **Priority:** P0
+- **Statement:** The host shall accept SSH authentication by public key only.
+- **Rationale:** Port 22 is open on the LAN by `REQ-SERVER-002`, and the deploy
+  account has passwordless sudo by `REQ-SERVER-003`. Those two together mean a
+  guessed password is complete control of the host, so the password path should
+  not exist rather than merely be hard to use.
+
+  This mostly ratifies the current state, and that is the point: it is
+  currently true by accident. The account has a password hash,
+  `PasswordAuthentication` sits at its default, and nothing asserts either.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "password auth disabled"
+- **Relations:**
+  - depends-on REQ-SERVER-002
+  - depends-on REQ-SERVER-003
+
+## REQ-SERVER-009 — Repeated failed authentication is throttled
+
+- **Status:** proposed
+- **Source:** sean
+- **Origin:** #273
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** When a client fails authentication repeatedly, the host shall
+  refuse further attempts from that address for a period.
+- **Rationale:** Secondary to `REQ-SERVER-008` and deliberately ranked below
+  it: removing the password mechanism matters more than rate-limiting attacks
+  against it. What this adds once keys are the only path is a bound on log
+  volume and on the CPU spent rejecting a scanner, which is why it sits next to
+  `REQ-SERVER-007` rather than replacing anything.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "fail2ban active"
+- **Relations:** refines REQ-SERVER-008
+
+## REQ-SERVER-010 — The interactive shell is the one described in the repository
+
+- **Status:** proposed
+- **Source:** sean
+- **Origin:** #273
+- **Type:** quality
+- **Priority:** P3
+- **Statement:** The host shall give the deploy user the configured interactive
+  shell and prompt.
+- **Rationale:** Most of what is done on this box is done by hand over SSH,
+  usually while something is broken. A shell with history search, completion
+  and a prompt showing the git branch is the difference between diagnosing a
+  bad deploy and mistyping a `git checkout` on the wrong branch.
+
+  At P3 because it is genuinely cosmetic against everything else here, and
+  recorded at all because the previous generation's postinstall re-appended its
+  prompt block on every run while its own documentation claimed idempotency — a
+  claim nobody checked, because nothing asserted it.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy user shell is zsh"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "shell config is idempotent"
+- **Relations:** none
