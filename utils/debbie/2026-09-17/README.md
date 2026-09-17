@@ -167,6 +167,26 @@ In: install, provision, assert — in a VM and on metal. Out: the deploy poller,
 the Cloudflare tunnel and the network failover watchdog — those are rebuilt in
 a later generation under `REQ-DEPLOY-*` and `REQ-NETWORK-*`.
 
+Deferred, not rejected: **systemd targets and slices.** Units go in
+`/usr/local/lib/systemd/system` with a `custom-` prefix (`REQ-SERVER-011`,
+`REQ-SERVER-013`), and that is as far as grouping goes for now. Two further
+mechanisms exist if they ever earn their place:
+
+- A **target** is a named list of units, so `systemctl list-dependencies
+  custom.target` shows the whole stack with live status and
+  `systemctl restart custom.target` operates on it as one thing.
+- A **slice** is a cgroup resource bucket: services given `Slice=custom.slice`
+  can be capped together with `MemoryMax=` and inspected with
+  `systemd-cgls /custom.slice`.
+
+Neither changes how anything runs, and both can be added later without
+rework — a target is a new file plus nothing else, a slice is one line per
+unit. The reason to wait is that most of what this host serves is already
+agglomerated under Docker, so the number of top-level systemd units is
+expected to stay small, and `systemctl list-units 'custom-*'` may well be the
+whole answer. Revisit once there is a clean install and an actual list of
+services to look at.
+
 Also out, and deliberately: **migrating wifi to NetworkManager.** `netcfg`
 persists wifi as an ifupdown stanza, which works and satisfies
 `REQ-SERVER-005`, but production's `net-failover.sh` drives `nmcli` and will
