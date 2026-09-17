@@ -51,7 +51,7 @@ The guest architecture follows the host, so the loop stays fast:
 |---|---|---|
 | macOS arm64 | arm64 | `hvf` |
 | Linux x86_64, incl. WSL2 with nested virtualisation | amd64 | `kvm` |
-| Windows, via Git Bash / MSYS2 | amd64 | `whpx` |
+| Windows-native, via a POSIX shell (MSYS2, Cygwin) | amd64 | `whpx` — unproven, see below |
 | anything cross-arch | as asked | `tcg`, with a loud warning |
 
 **Windows 10 has no accelerated path for this harness.** Two separate limits
