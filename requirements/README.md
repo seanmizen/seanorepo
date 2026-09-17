@@ -63,11 +63,13 @@ Prefixes are globally unique. Add a row when you add a file.
 | `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |
 | `DATA` | `apps/inside/requirements/data.md` | inside — schema, migrations, storage, vocabulary |
+| `DEPLOY` | `utils/debbie/requirements/deploy.md` | debbie — how code reaches the host |
 | `DISCOVERY` | `apps/inside/requirements/discovery.md` | inside — public visibility and filtering |
 | `EMU` | `utils/debbie/requirements/emu.md` | debbie — the VM test harness |
 | `NET` | `apps/inside/requirements/net.md` | inside — API transport and failure handling |
 | `FAIL` | `apps/inside/requirements/fail.md` | inside — failure surfaces |
 | `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
+| `NETWORK` | `utils/debbie/requirements/network.md` | debbie — tunnel ingress and route failover |
 | `ONBOARD` | `apps/inside/requirements/onboard.md` | inside — designer onboarding |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
 | `QUALITY` | `apps/inside/requirements/quality.md` | inside — testing conventions |
