@@ -40,7 +40,7 @@ warn()     { echo "[vm] WARNING: $*" >&2; }
 # GNU coreutils timeout is `gtimeout` under Homebrew, `timeout` on Debian.
 if command -v gtimeout > /dev/null 2>&1; then TIMEOUT=gtimeout
 elif command -v timeout > /dev/null 2>&1; then TIMEOUT=timeout
-else die "no timeout(1) found. macOS: brew install coreutils"; fi
+else die "no timeout(1) found. macOS: brew install coreutils. A POSIX shell on Windows ships neither timeout nor python3, both of which this needs - install MSYS2 coreutils and python, or use WSL2"; fi
 
 #==============================================================================
 # Host -> guest -> accelerator - REQ-EMU-001
@@ -58,6 +58,11 @@ resolve_target() {
         Darwin/x86_64) HOST_QARCH=x86_64;  GUEST_ARCH=amd64; NATIVE_ACCEL=hvf ;;
         Linux/aarch64) HOST_QARCH=aarch64; GUEST_ARCH=arm64; NATIVE_ACCEL=kvm ;;
         Linux/x86_64)  HOST_QARCH=x86_64;  GUEST_ARCH=amd64; NATIVE_ACCEL=kvm ;;
+        # Git Bash / MSYS2 / Cygwin - i.e. a QEMU built for Windows. This is the
+        # only place whpx is reachable. Inside WSL2 you are on a Linux build
+        # whose accelerators are kvm and tcg, whatever Windows itself offers.
+        MINGW*/x86_64 | MSYS*/x86_64 | CYGWIN*/x86_64)
+                       HOST_QARCH=x86_64;  GUEST_ARCH=amd64; NATIVE_ACCEL=whpx ;;
         *) die "unsupported host $os/$arch" ;;
     esac
 
@@ -70,7 +75,7 @@ resolve_target() {
     esac
 
     command -v "$QEMU_BIN" > /dev/null \
-        || die "$QEMU_BIN not found. macOS: brew install qemu. Debian/WSL2: sudo apt install qemu-system-arm qemu-system-x86 qemu-utils"
+        || die "$QEMU_BIN not found. macOS: brew install qemu. Debian/WSL2: sudo apt install qemu-system-arm qemu-system-x86 qemu-utils. Windows-native: winget install SoftwareFreedomConservancy.QEMU - but that path is unproven here, see the README; on Windows prefer WSL2"
 }
 
 # Ask the BINARY what it supports. Asking the host is the bug this guards.
@@ -82,6 +87,11 @@ accel_usable() {
     case "$1" in
         hvf) [ "$(uname -s)" = Darwin ] && [ "$(sysctl -n kern.hv_support 2> /dev/null)" = 1 ] ;;
         kvm) [ -r /dev/kvm ] && [ -w /dev/kvm ] ;;
+        # whpx is the Windows Hypervisor Platform, so it exists only for a QEMU
+        # built for Windows. There is no device node to probe - the -accel help
+        # check is what actually establishes support, and this only rules out
+        # asking for it somewhere it cannot possibly be.
+        whpx) case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) true ;; *) false ;; esac ;;
         tcg) true ;;
         *)   false ;;
     esac
@@ -89,7 +99,8 @@ accel_usable() {
 
 accel_hint() {
     case "$1" in
-        kvm) echo "WSL2 needs nestedVirtualization=true in .wslconfig plus 'wsl --shutdown', then 'sudo usermod -aG kvm \$USER'." ;;
+        kvm) echo "On Windows 11, WSL2 needs nestedVirtualization=true in .wslconfig plus 'wsl --shutdown', then 'sudo usermod -aG kvm \$USER'. On Windows 10 there is no kvm to enable: nested virtualisation is disabled unconditionally (microsoft/WSL#40735), so .wslconfig is ignored and tcg is the practical answer. whpx is not a way out - it needs a Windows-native QEMU, and is reported broken with the pflash firmware this harness requires. See the README." ;;
+        whpx) echo "Enable the 'Windows Hypervisor Platform' Windows feature and reboot. whpx cannot be reached from inside WSL2: that is a Linux QEMU build, which has no whpx accelerator compiled in." ;;
         hvf) echo "Another hypervisor may hold the HV interface - quit VirtualBox or Docker Desktop and retry." ;;
         *)   echo "" ;;
     esac
@@ -135,7 +146,20 @@ resolve_accel() {
         arm64/tcg) MACHINE="virt,gic-version=3";    CPU=cortex-a72;  SMP=4 ;;
         amd64/kvm) MACHINE="q35";                   CPU=host;        SMP=4 ;;
         amd64/hvf) MACHINE="q35";                   CPU=host;        SMP=2 ;;
-        amd64/tcg) MACHINE="q35";                   CPU=max;         SMP=1 ;;
+        # whpx does not support -cpu host passthrough the way kvm and hvf do.
+        #
+        # UNPROVEN. QEMU issue #513 reports whpx failing on -drive if=pflash
+        # with "Failed to emulate MMIO access", unfixed since 2020, and the
+        # documented workaround is -bios - which REQ-EMU-004 forbids, because a
+        # read-only variable store loses the installer's boot entry. So this
+        # profile is correct if that bug is ever fixed, and is reachable only
+        # from a Windows-native QEMU, never from inside WSL2.
+        amd64/whpx) MACHINE="q35";                  CPU=max;         SMP=4 ;;
+        # SMP is not clamped here: an amd64 guest on an amd64 host can use
+        # MTTCG, and the single-thread override below drops it to 1 only for
+        # the x86-on-ARM case that genuinely cannot. This is the path a Windows
+        # 10 WSL2 box takes, where no accelerator exists at all.
+        amd64/tcg) MACHINE="q35";                   CPU=max;         SMP=4 ;;
         *) die "no machine profile for $GUEST_ARCH/$ACCEL" ;;
     esac
 
@@ -188,18 +212,22 @@ resolve_firmware() {
             FW_HINT="macOS: brew install qemu   Debian/WSL2: sudo apt install qemu-efi-aarch64"
             ;;
         amd64)
+            # The last candidate in each list is QEMU for Windows, which keeps
+            # firmware beside itself rather than in a distribution package.
             for c in /usr/share/OVMF/OVMF_CODE_4M.fd \
                      /usr/share/OVMF/OVMF_CODE.fd \
-                     /opt/homebrew/share/qemu/edk2-x86_64-code.fd; do
+                     /opt/homebrew/share/qemu/edk2-x86_64-code.fd \
+                     "/c/Program Files/qemu/share/edk2-x86_64-code.fd"; do
                 [ -f "$c" ] && { FW_CODE="$c"; break; }
             done
             for v in /usr/share/OVMF/OVMF_VARS_4M.fd \
                      /usr/share/OVMF/OVMF_VARS.fd \
-                     /opt/homebrew/share/qemu/edk2-i386-vars.fd; do
+                     /opt/homebrew/share/qemu/edk2-i386-vars.fd \
+                     "/c/Program Files/qemu/share/edk2-i386-vars.fd"; do
                 [ -f "$v" ] && { FW_VARS_TMPL="$v"; break; }
             done
             FW_SIZE=""
-            FW_HINT="Debian/WSL2: sudo apt install ovmf"
+            FW_HINT="Debian/WSL2: sudo apt install ovmf   Windows: ships with QEMU, under its share/ directory"
             ;;
     esac
     [ -n "$FW_CODE" ] || die "no UEFI firmware for $GUEST_ARCH. $FW_HINT"
