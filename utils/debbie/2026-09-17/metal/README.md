@@ -9,11 +9,23 @@ prove](../README.md#what-it-does-not) before trusting a green VM run here.
 
 ## The shape of it
 
-No ISO remaster, no embedded preseed, no build step. The stick is an unmodified
-Debian netinst image; the preseed is fetched over the wifi from your laptop, by
-a URL you type at the boot menu. Editing the preseed between attempts costs
-nothing and never touches the stick — the same property that makes the VM loop
-usable.
+The preseed is fetched over the wifi from your laptop, so editing it between
+attempts costs nothing and never touches the stick — the same property that
+makes the VM loop usable.
+
+The installer's kernel parameters are **baked into the ISO** by
+[`build-iso.sh`](./build-iso.sh), so an install needs no keystrokes at all.
+They used to be typed at the GRUB menu, which failed three times running on
+first contact with real hardware: an edit discarded because `Ctrl-X` was not
+pressed from inside the editor, the wifi presets dropped to shorten the line
+(which cannot work — see below), and the standing risk of landing them after
+the `---` separator. The parameters are known in advance; they belong in a
+file, not in muscle memory.
+
+Only `boot/grub/grub.cfg` and `isolinux/txt.cfg` change, rebuilt with
+`xorriso -boot_image any replay`. This is **not** the initrd-embedded preseed
+that killed the December 2025 attempt — that needed a hand-written cpio
+archive. The preseed still comes over HTTP, so changing it needs no rebuild.
 
 ## 1. Write the stick
 
@@ -45,14 +57,25 @@ macOS `dd` has no `status=progress`; press **Ctrl-T** for a progress line. The
 Debian ISO is isohybrid, so a plain `dd` boots under both UEFI and BIOS with no
 partitioning work.
 
-## 2. Configure and serve
+## 2. Configure, build the ISO, serve
 
 ```bash
 cp .env.example .env
 openssl passwd -6                      # paste the hash into PASSWORD_CRYPTED
-$EDITOR .env                           # + WIFI_SSID, WIFI_PASS
+$EDITOR .env                           # + WIFI_SSID, WIFI_PASS, WIFI_IFACE
+./build-iso.sh                         # bakes the cmdline in; ~3 seconds
 ./serve-preseed.sh
 ```
+
+`build-iso.sh` writes `work/debbie-<name>.iso` and verifies the result rather
+than trusting the build: default entry present, preseed URL and wifi params
+baked in *before* the `---`, El Torito catalogue intact. Write that ISO to the
+stick instead of the stock one (step 1's `dd`, same warnings).
+
+**The built ISO contains your wifi passphrase in plaintext.** `work/` and
+`*.iso` are gitignored; treat the stick as a credential.
+
+Needs `xorriso` (`brew install xorriso`).
 
 The script generates `overrides.cfg` with
 [`../scripts/write-overrides.sh`](../scripts/write-overrides.sh) — the same
@@ -66,8 +89,18 @@ Both machines must be on the same wifi network.
 
 ## 3. Boot the target
 
-At the installer menu, highlight **Install**, press `e` (UEFI GRUB) or `TAB`
-(BIOS isolinux) to edit the kernel line, and append what the script printed:
+Boot the stick. **Nothing to type** — the automated entry is the default and
+boots after five seconds. The stock menu entries are still there if you want a
+manual install.
+
+Verified in QEMU under OVMF before ever reaching hardware: the remastered ISO
+auto-boots, skips language and keyboard entirely, fetches the preseed over HTTP
+and reaches partitioning with zero prompts.
+
+### Fallback: typing it by hand
+
+If you are booting a stock ISO, highlight **Install**, press `e` (UEFI GRUB) or
+`TAB` (BIOS isolinux), and insert the params **before the `---`**:
 
 ```
 auto=true priority=critical url=http://<laptop-ip>:8000/preseed.cfg \
@@ -86,6 +119,18 @@ are easy to get wrong from memory:
 | `wireless_security_type=wpa` | The select's values are `wep/open` and `wpa`. There is no `wpa2` — `wpa` covers WPA2 PSK. |
 | `wireless_show_essids=manual` | A *separate* prompt from `wireless_essid`, offering a scanned list. Unset, the installer stops and asks even though the ESSID is preset. |
 | `choose_interface=<iface>` | `auto` picks the first interface with a **carrier**, and wifi has none until it associates — so on a box with a dead ethernet port `auto` can pick the wrong one. If you don't know the name, omit it and pick from the prompt, or read it from the installer's shell (`Ctrl-Alt-F2`, `ip link`). |
+
+**The wifi values are mandatory, not a convenience.** `priority=critical`
+suppresses the prompt that would otherwise ask for them, so a missing
+passphrase becomes an *empty* one, and netcfg rejects it with "either too long
+(more than 64 characters) or too short (less than 8 characters)" — a message
+that blames the password you never typed. Dropping them to shorten the line is
+the one shortcut that cannot work.
+
+`Ctrl-X` is also load-bearing: it is the only key that boots the edited line.
+`Esc` or `Enter` discards the edit silently, and the result is indistinguishable
+from the parameters not working. If the installer asks for a language, that is
+what happened — `cat /proc/cmdline` on `Ctrl-Alt-F2` confirms it.
 
 The passphrase stays on the boot line and never enters the repository.
 
