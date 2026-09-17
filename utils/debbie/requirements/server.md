@@ -243,3 +243,69 @@ Introduced in #259.
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy user shell is zsh"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "shell config is idempotent"
 - **Relations:** none
+
+## REQ-SERVER-011 — Our systemd units live apart from the distribution's
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #292
+- **Type:** constraint
+- **Priority:** P2
+- **Statement:** The host shall hold every systemd unit this repository
+  introduces in `/usr/local/lib/systemd/system`.
+- **Rationale:** Units put in `/etc/systemd/system` are mixed in with dbus
+  aliases, mask symlinks and `.wants/` directories, and `systemd-analyze
+  unit-paths` shows 156 more in `/usr/lib/systemd/system`. Finding one's own
+  service then depends on a naming trick — the previous generation put `custom`
+  in every filename for exactly this reason.
+
+  `/usr/local/lib/systemd/system` is already in the search path, carries FHS
+  `/usr/local` semantics (software the distribution's package manager does not
+  own), and is empty on a fresh install. Units placed there are, by
+  construction, the only things in that directory, so a plain `ls` answers
+  "what did we install?" with no convention to remember. The `custom` infix is
+  therefore dropped: the directory is the namespace, and a unit is named for
+  what it is.
+
+  `/etc/systemd/system` keeps its proper role — enable symlinks, masks and
+  drop-ins — and nothing here changes that.
+
+  systemd does not recurse into subdirectories of the search path, so a
+  per-project folder is not available; only `<unit>.d/` drop-ins and
+  `<target>.wants/` have meaning. This requirement is the nearest thing that
+  works.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no repo units in /etc/systemd/system"
+  - Inspection — every unit installed by `2026-09-17/` resolves to
+    `/usr/local/lib/systemd/system` under `systemctl cat`
+- **Relations:** none
+
+## REQ-SERVER-012 — A packaged unit is changed by drop-in, never by shadowing
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #292
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** Where a unit shipped by a package needs different settings,
+  the host shall override it with a drop-in rather than a replacement unit file.
+- **Rationale:** `/usr/local/lib/systemd/system` takes precedence over
+  `/usr/lib/systemd/system`, so a file named after a packaged unit silently
+  wins and the package's own version is never read. That is a trap rather than
+  a feature: the override is invisible in the package's directory, survives the
+  package being upgraded, and leaves no clue for whoever is debugging why a
+  documented default does not apply.
+
+  It is not hypothetical. `cloudflared` is to be installed from Cloudflare's
+  apt repository, which ships `cloudflared.service`; a unit of the same name in
+  the higher-precedence directory would quietly displace it.
+
+  A drop-in states only what differs, layers onto whatever the package ships,
+  and appears in `systemctl cat` where somebody will actually find it. The
+  distinction this draws is between introducing a service, which
+  `REQ-SERVER-011` governs, and adjusting somebody else's, which this does.
+- **Verification:**
+  - Inspection — no filename in `/usr/local/lib/systemd/system` matches a unit
+    present in `/usr/lib/systemd/system`
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no shadowed package units"
+- **Relations:** depends-on REQ-SERVER-011
