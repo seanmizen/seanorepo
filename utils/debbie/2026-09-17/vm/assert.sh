@@ -23,7 +23,17 @@ skip=0
 ok()   { printf '  \033[32m/\033[0m %s\n' "$1"; pass=$((pass + 1)); }
 no()   { printf '  \033[31mX\033[0m %s\n' "$1"; fail=$((fail + 1)); }
 sk()   { printf '  \033[33m-\033[0m %s \033[33m(skipped: %s)\033[0m\n' "$1" "$2"; skip=$((skip + 1)); }
-check() { if eval "$2" > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
+# The eval runs in a SUBSHELL, deliberately. `eval` in the current shell lets a
+# check containing `exit` terminate assert.sh itself: the checks after it never
+# run, the summary never prints, and the script exits with whatever that `exit`
+# said - reporting success for assertions that were never made. That happened.
+# A wireless check written with a bare `exit 0` silently skipped the whole
+# firewall section on real hardware and returned 0, and because QEMU has no
+# 802.11 device the guarded branch made it unreachable in every VM run, so no
+# amount of green in the harness could have caught it.
+#
+# Subshelling here fixes the whole class rather than that one call site.
+check() { if ( eval "$2" ) > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 
 echo "== system =="
 if [ -n "$EXPECT_ARCH" ]; then
@@ -82,8 +92,10 @@ if [ -n "$(ls -d /sys/class/net/*/wireless 2> /dev/null)" ]; then
     check "wifi config persisted" \
         'sudo -n grep -rqs "wpa-ssid\|wpa-psk" /etc/network/interfaces /etc/network/interfaces.d/ \
          || sudo -n grep -rqs "^ssid=\|wifi.ssid" /etc/NetworkManager/system-connections/'
+    # No `exit` in here either, subshell or not: a loop that sets a flag says
+    # what it means, and cannot be broken by a later change to how check() runs.
     check "a wireless interface has an address" \
-        'for w in /sys/class/net/*/wireless; do i=$(basename "$(dirname "$w")"); ip -4 -o addr show "$i" | grep -q inet && exit 0; done; exit 1'
+        'found=1; for w in /sys/class/net/*/wireless; do i=$(basename "$(dirname "$w")"); if ip -4 -o addr show "$i" | grep -q inet; then found=0; fi; done; [ "$found" = 0 ]'
 else
     sk "wifi config persisted" "no wireless interface"
 fi
