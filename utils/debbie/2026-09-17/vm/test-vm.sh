@@ -166,7 +166,15 @@ resolve_accel() {
 
     if [ "$ACCEL" = tcg ]; then
         ACCEL_ARG="tcg,thread=$TCG_THREAD"
-        [ "$TCG_THREAD" = single ] && SMP=1
+        # A plain `if`, not `[ ... ] && SMP=1`. As the last statement of this
+        # function, a false test would make the whole function return 1, and
+        # `set -e` would kill the script silently - no error, no output, right
+        # after the accelerator warning. That fired only for same-architecture
+        # TCG, because cross-arch sets thread=single and makes the test true,
+        # so every run on an accelerated host passed straight over it.
+        if [ "$TCG_THREAD" = single ]; then
+            SMP=1
+        fi
     else
         ACCEL_ARG="$ACCEL"
     fi
