@@ -2,3 +2,5 @@
 .env
 # Generated: deploy key, served preseed copies.
 work/
+# Built ISOs contain the wifi passphrase in plaintext.
+*.iso

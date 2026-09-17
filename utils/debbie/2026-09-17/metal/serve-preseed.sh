@@ -25,56 +25,9 @@ WORK="$HERE/work"
 ENV_FILE="${ENV_FILE:-$HERE/.env}"
 PORT="${PORT:-8000}"
 
-die() { echo "ERROR: $*" >&2; exit 1; }
-log() { echo "[metal] $*"; }
+# shellcheck source=lib.sh
+. "$HERE/lib.sh"
 
-#------------------------------------------------------------------------------
-# Configuration comes from an untracked file, never from the repository.
-#
-# Parsed literally, NOT sourced. `. .env` runs the file as shell, which expands
-# anything in it - and a sha512-crypt hash is full of '$'. Sourcing a correct
-# .env therefore failed on the very first use with "line 12: $6: unbound
-# variable", because the shell read $6 as a positional parameter. Quoting the
-# value works but is a foot-gun in a file whose main value always contains '$'.
-#
-# Values are taken verbatim: no expansion, no command substitution, and an
-# unrecognised key is an error rather than a setting that silently does
-# nothing.
-#------------------------------------------------------------------------------
-[ -f "$ENV_FILE" ] || die "no $ENV_FILE. Copy .env.example to .env and fill it in."
-
-read_env() {
-    local line key val lineno=0
-    while IFS= read -r line || [ -n "$line" ]; do
-        lineno=$((lineno + 1))
-        line="${line%$'\r'}"                       # tolerate CRLF
-        case "$line" in '' | '#'*) continue ;; esac
-        case "$line" in *=*) : ;; *) die "$ENV_FILE line $lineno: not KEY=VALUE: $line" ;; esac
-
-        key="${line%%=*}"; val="${line#*=}"
-        key="${key#"${key%%[![:space:]]*}"}"       # trim
-        key="${key%"${key##*[![:space:]]}"}"
-        key="${key#export }"
-
-        # Strip one layer of surrounding quotes, so a .env written either way
-        # behaves the same.
-        case "$val" in
-            \'*\') val="${val#\'}"; val="${val%\'}" ;;
-            \"*\") val="${val#\"}"; val="${val%\"}" ;;
-        esac
-
-        case "$key" in
-            DEPLOY_USER)      DEPLOY_USER="$val" ;;
-            SERVER_NAME)      SERVER_NAME="$val" ;;
-            PASSWORD_CRYPTED) PASSWORD_CRYPTED="$val" ;;
-            WIFI_SSID)        WIFI_SSID="$val" ;;
-            WIFI_PASS)        WIFI_PASS="$val" ;;
-            WIFI_IFACE)       WIFI_IFACE="$val" ;;
-            SSH_KEY)          SSH_KEY="$val" ;;
-            *) die "$ENV_FILE line $lineno: unknown key '$key'. See .env.example." ;;
-        esac
-    done < "$ENV_FILE"
-}
 read_env
 
 DEPLOY_USER="${DEPLOY_USER:-srv}"
@@ -124,22 +77,6 @@ PASSWORD_CRYPTED="$PASSWORD_CRYPTED" \
 # Which address the target should fetch from. The loopback address the harness
 # uses is no good here - the installer is on another machine.
 #------------------------------------------------------------------------------
-lan_ip() {
-    local dev
-    case "$(uname -s)" in
-        Darwin)
-            dev="$(route -n get default 2> /dev/null | awk '/interface:/{print $2}')"
-            [ -n "$dev" ] && ipconfig getifaddr "$dev" 2> /dev/null && return 0
-            ;;
-        *)
-            dev="$(ip route show default 2> /dev/null | awk '/default/{print $5; exit}')"
-            [ -n "$dev" ] && ip -4 -o addr show "$dev" 2> /dev/null \
-                | awk '{split($4,a,"/"); print a[1]; exit}' && return 0
-            ;;
-    esac
-    return 1
-}
-
 IP="${SERVE_IP:-$(lan_ip || true)}"
 [ -n "$IP" ] || die "could not work out this machine's LAN address. Set SERVE_IP=x.x.x.x and re-run."
 
@@ -158,30 +95,30 @@ kill -0 "$HTTP_PID" 2> /dev/null || die "could not serve on :$PORT - is somethin
 curl -fsS --max-time 5 "http://$IP:$PORT/preseed.cfg" > /dev/null \
     || die "serving on :$PORT but http://$IP:$PORT/preseed.cfg is not reachable. Allow incoming connections for python3 (System Settings > Network > Firewall) and re-run."
 
-IFACE_ARG=""
-if [ -n "${WIFI_IFACE:-}" ]; then
-    IFACE_ARG=" netcfg/choose_interface=$WIFI_IFACE"
-fi
+PARAMS="$(installer_params "http://$IP:$PORT/preseed.cfg")"
 
 cat <<EOF
 
   serving $HTTP_ROOT on http://$IP:$PORT  (verified reachable)
 
-  At the installer boot menu, highlight "Install", press TAB (or 'e' under
-  UEFI GRUB) to edit the kernel line, and append:
+  If you built an ISO with build-iso.sh, there is nothing to type: the
+  automated entry is the default and boots after 5 seconds. Just boot it.
 
-    auto=true priority=critical url=http://$IP:$PORT/preseed.cfg$IFACE_ARG \\
-      netcfg/wireless_show_essids=manual \\
-      netcfg/wireless_essid=$WIFI_SSID \\
-      netcfg/wireless_security_type=wpa \\
-      netcfg/wireless_wpa=$WIFI_PASS
+  Otherwise, at the installer GRUB menu highlight "Install", press 'e', put the
+  cursor at the end of the "linux" line, move it back to just before " --- quiet"
+  and insert:
 
-  Notes, each of which has cost somebody an evening:
-    - wireless_security_type=wpa is correct for WPA2. The select's values are
-      'wep/open' and 'wpa'; there is no 'wpa2'.
-    - wireless_show_essids=manual is a SEPARATE prompt from the ESSID. Without
-      it the installer stops and offers a scanned list.
-    - The passphrase is on the boot line and never in the repository.
+    $PARAMS
+
+  Then Ctrl-X - from inside the editor. Esc or Enter discards the edit, which
+  looks identical to the params never having worked.
+
+  Two things that are load-bearing:
+    - The params go BEFORE the '---'. After it they are copied into the
+      installed system's bootloader, persisting the passphrase on its disk.
+    - The wifi values are mandatory, not a convenience. priority=critical
+      suppresses the prompt, so netcfg takes an empty passphrase and fails
+      with "either too long or too short" - which blames the password.
 
   After the install the box powers off (the preseed ends in poweroff, so that
   "did it finish?" is answerable without watching). Power it back on, then:
