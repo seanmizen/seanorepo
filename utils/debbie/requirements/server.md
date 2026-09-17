@@ -103,3 +103,38 @@ Introduced in #259.
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "hostname is debbie"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "avahi-daemon active"
 - **Relations:** none
+
+## REQ-SERVER-005 — A wifi-only host keeps its network across a reboot
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #264
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** Where the host's only network path is wireless, the installed
+  system shall reassociate and obtain an address unattended at boot, without a
+  keyboard or display attached.
+- **Rationale:** debbie serves from a shelf with the lid shut, so a network that
+  needs a human to come back is the same outage as no network at all. On wifi
+  this is not free the way DHCP over ethernet is: the credentials have to be
+  persisted into the installed system, not merely used by the installer.
+
+  `netcfg` does persist them — it writes a `wpa-ssid`/`wpa-psk` stanza into
+  `/etc/network/interfaces` and installs `wpasupplicant` into the target. That
+  is **ifupdown**, not NetworkManager, and this requirement is satisfied by it.
+
+  Recorded here because the obvious next step is a trap. Production debbie's
+  `net-failover.sh` drives wifi through `nmcli`, so it is tempting to add
+  `network-manager` to the package list and be done. Installing it alongside
+  the stanza `netcfg` wrote gives the worst of both: NetworkManager's ifupdown
+  plugin marks an interface listed in `/etc/network/interfaces` as unmanaged,
+  so `nmcli` does not drive the wifi and neither half is in charge. Migrating
+  means removing the stanza and writing an NM connection profile in one step —
+  and if that step is wrong, the result is a headless box with no network and
+  no way in. It is therefore deliberately **not** coupled to installing the
+  machine, and lands with `REQ-NETWORK-*`.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "wifi config persisted"
+    (skipped where the host has no wireless interface, which is every VM run —
+    QEMU has no 802.11 device the installer would drive)
+- **Relations:** none

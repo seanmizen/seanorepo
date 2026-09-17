@@ -23,6 +23,11 @@ harness asks the **QEMU binary** what it supports, never the host.
 
 ## Running it
 
+For a real machine, see [`metal/README.md`](./metal/README.md) — an unmodified
+netinst stick plus the preseed served from your laptop. Both paths generate
+`overrides.cfg` with the same [`scripts/write-overrides.sh`](./scripts/write-overrides.sh),
+so what installs on hardware is what the VM proved.
+
 ```bash
 ./vm/test-vm.sh --full        # install, boot, provision, assert
 ./vm/test-vm.sh --install     # install only
@@ -109,6 +114,12 @@ Read this before trusting a green run on hardware:
 - **The laptop's NIC and wifi drivers.** The VM sees `virtio-net-pci`, which
   needs no firmware. This is the highest-risk gap: a preseed install with no
   working NIC hangs at `netcfg` forever.
+- **Wifi, at all.** QEMU has no 802.11 device the installer would drive, so
+  nothing about association, WPA2 or wifi persistence is exercised here —
+  `REQ-SERVER-005` is skipped, not passed, on every VM run. The first proof is
+  the box itself. This is why the wifi credentials go on the kernel command
+  line rather than into the preseed: the preseed is fetched *over* the network,
+  so the network must already be up to read it.
 - **Real disk topology** — NVMe naming, multiple disks, an existing ESP.
 
 ## Notes on the design
@@ -152,8 +163,18 @@ re-pays the two minutes and the 2G.
 
 ## Scope
 
-In: install, provision, assert. Out: the deploy poller, the Cloudflare tunnel
-and the network failover watchdog — those are rebuilt in a later generation
-under `REQ-DEPLOY-*` and `REQ-NETWORK-*`.
+In: install, provision, assert — in a VM and on metal. Out: the deploy poller,
+the Cloudflare tunnel and the network failover watchdog — those are rebuilt in
+a later generation under `REQ-DEPLOY-*` and `REQ-NETWORK-*`.
+
+Also out, and deliberately: **migrating wifi to NetworkManager.** `netcfg`
+persists wifi as an ifupdown stanza, which works and satisfies
+`REQ-SERVER-005`, but production's `net-failover.sh` drives `nmcli` and will
+not see it. Adding `network-manager` to the package list does not fix that —
+its ifupdown plugin marks an interface listed in `/etc/network/interfaces` as
+unmanaged, so neither half ends up in charge. The migration has to remove the
+stanza and write an NM profile in one step, and getting it wrong leaves a
+headless box with no network. It is not worth coupling that to installing the
+machine, so it lands with `REQ-NETWORK-*`.
 
 `2025-10-08b` remains what production runs. Nothing here changes it.
