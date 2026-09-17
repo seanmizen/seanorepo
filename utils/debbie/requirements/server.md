@@ -263,9 +263,12 @@ Introduced in #259.
   `/usr/local` semantics (software the distribution's package manager does not
   own), and is empty on a fresh install. Units placed there are, by
   construction, the only things in that directory, so a plain `ls` answers
-  "what did we install?" with no convention to remember. The `custom` infix is
-  therefore dropped: the directory is the namespace, and a unit is named for
-  what it is.
+  "what did we install?" with no convention to remember.
+
+  This does not make the naming convention redundant — see
+  `REQ-SERVER-013`. The directory answers the question only while looking at
+  the filesystem, and most of the time one is looking at `systemctl` output
+  instead.
 
   `/etc/systemd/system` keeps its proper role — enable symlinks, masks and
   drop-ins — and nothing here changes that.
@@ -309,3 +312,35 @@ Introduced in #259.
     present in `/usr/lib/systemd/system`
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no shadowed package units"
 - **Relations:** depends-on REQ-SERVER-011
+
+## REQ-SERVER-013 — Our units are identifiable in systemctl output
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #292
+- **Type:** constraint
+- **Priority:** P2
+- **Statement:** The host shall name every unit this repository introduces with
+  a `custom-` prefix.
+- **Rationale:** `REQ-SERVER-011` separates our units on disk, and that is
+  where the separation stops. `systemctl list-units` and `systemctl status`
+  present every unit from all three search paths in one flat list with no
+  indication of which directory any of them came from, so the tidy directory is
+  invisible in precisely the place one usually looks.
+
+  A prefix restores it there: `systemctl list-units 'custom-*'` is the whole
+  stack and nothing else. A suffix — which the previous generation used, as
+  `cloudflared-custom.service` — globs equally well but sorts each unit next to
+  unrelated ones, so a listing never groups them.
+
+  The word is deliberately kept from the previous generation rather than
+  replaced with a project name. It is already the habit, it already appears in
+  the units production runs today, and `custom-` reads correctly for anything
+  locally added regardless of which project adds it.
+
+  Note that this does not apply to a packaged unit adjusted by drop-in, which
+  keeps the package's own name by definition — that is `REQ-SERVER-012`.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "repo units are prefixed custom-"
+- **Relations:**
+  - depends-on REQ-SERVER-011

@@ -118,6 +118,10 @@ echo "== systemd unit layout =="
 # restored from a backup with an old mtime.
 check "no repo units in /etc/systemd/system" \
     '! find /etc/systemd/system -maxdepth 1 -type f \( -name "*.service" -o -name "*.timer" -o -name "*.socket" \) | grep -q .'
+# REQ-SERVER-013. Vacuously true until the first unit is installed, which is
+# fine: it becomes load-bearing exactly when there is something to get wrong.
+check "repo units are prefixed custom-" \
+    'for f in /usr/local/lib/systemd/system/*.service /usr/local/lib/systemd/system/*.timer; do [ -e "$f" ] || continue; case "$(basename "$f")" in custom-*) ;; *) exit 1 ;; esac; done; true'
 # A filename present in both directories means ours silently wins.
 check "no shadowed package units" \
     'for f in /usr/local/lib/systemd/system/*; do [ -e "$f" ] || continue; b=$(basename "$f"); if [ -e "/usr/lib/systemd/system/$b" ]; then exit 1; fi; done; true'
