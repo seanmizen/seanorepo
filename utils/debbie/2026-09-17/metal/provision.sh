@@ -29,10 +29,13 @@
 # the box was up - it had simply moved. $SERVER_NAME.local is the one handle
 # that is stable across a moving lease, and since #285 it works from first boot.
 #
+# The post-reboot wait is satisfied by a NEW BOOT ID, not by a live socket -
+# #295. See wait_for_ssh.
+#
 # Exit codes mirror the VM harness - REQ-EMU-003:
 #   0   every assertion passed
 #   1   an assertion failed
-#   3   the box never became reachable over SSH
+#   3   the box never came back (or came back still on the pre-reboot boot)
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -95,29 +98,111 @@ SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no
 
 sshto() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$HOST" "$@"; }
 
+#------------------------------------------------------------------------------
+# The boot id - #295.
+#
+# /proc/sys/kernel/random/boot_id is a random UUID the kernel generates once per
+# boot. It changes on a boot and on nothing else, which makes it the one thing a
+# script can read to tell "the box came back" apart from "the box has not
+# finished going down yet".
+#
+# It is read over the SAME connection path as everything else, and the check is
+# keyed on the VALUE, never on which candidate answered. That is the part that
+# has to compose with #284: the box may legitimately come back on a different
+# address than the one it left on, and the address is therefore evidence of
+# nothing. Two different addresses reporting the same boot id is the same
+# machine that never rebooted; the same address reporting a new boot id is a
+# box that did.
+#------------------------------------------------------------------------------
+BOOT_ID_PATH=/proc/sys/kernel/random/boot_id
+
+boot_id_of() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$1" "cat $BOOT_ID_PATH" 2> /dev/null; }
+
 # Try every candidate on every round rather than exhausting the deadline on the
 # first one. A name that does not resolve fails in milliseconds and a dead
 # address fails in ConnectTimeout, so the whole list costs a few seconds per
 # round - the difference between "the fallback was tried" and "the fallback was
 # tried five minutes later", which is the same as never on a run someone is
 # watching.
+#
+# With an argument, that argument is the boot id seen BEFORE the reboot, and a
+# candidate only satisfies the wait if it reports a DIFFERENT one. A connection
+# that answers with the same boot id is the pre-reboot system - still up,
+# because a clean shutdown with Docker containers to stop takes longer than any
+# fixed sleep is willing to admit - and polling continues. Before #295 that
+# connection ended the wait, and the PHASE=provisioned assertions then ran
+# against a box that had not rebooted: `lid close ignored` and `sleep.target
+# masked` (REQ-SERVER-001) went red on a box that was fine, which teaches
+# everyone that a re-run is the fix.
 wait_for_ssh() {
-    local deadline=$(( $(date +%s) + SSH_WAIT )) cand
+    local want_new_boot="${1:-}"
+    local deadline=$(( $(date +%s) + SSH_WAIT )) cand id
+    local saw_old_boot=no saw_unreadable=no
     log "waiting for $DEPLOY_USER@$MDNS_NAME${CANDIDATES[1]+, falling back to ${CANDIDATES[1]}}"
+    if [ -n "$want_new_boot" ]; then
+        log "requiring a boot id other than $want_new_boot"
+    fi
+
     while [ "$(date +%s)" -lt "$deadline" ]; do
         for cand in "${CANDIDATES[@]}"; do
-            if ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$cand" true 2> /dev/null; then
-                HOST="$cand"
-                log "up on $HOST"
-                return 0
+            if [ -z "$want_new_boot" ]; then
+                # No reboot to prove: any answer will do, as before #295.
+                if ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$cand" true 2> /dev/null; then
+                    HOST="$cand"
+                    log "up on $HOST"
+                    return 0
+                fi
+                continue
             fi
+
+            id="$(boot_id_of "$cand")" || continue
+            if [ -z "$id" ]; then
+                # Answered, but would not say which boot it is. Cannot be
+                # treated as proof either way, so keep waiting and say so if
+                # the deadline runs out.
+                saw_unreadable=yes
+                continue
+            fi
+            if [ "$id" = "$want_new_boot" ]; then
+                saw_old_boot=yes
+                continue
+            fi
+            HOST="$cand"
+            log "up on $HOST (boot id $id)"
+            return 0
         done
         sleep 5
     done
 
+    echo >&2
+    if [ "$saw_old_boot" = yes ]; then
+        # A different failure with a different fix: the box was reachable the
+        # whole time, so none of the mDNS/lease advice below applies.
+        echo "ERROR: the box answered SSH within ${SSH_WAIT}s, but never rebooted." >&2
+        echo "       It kept reporting boot id $want_new_boot - the same boot this" >&2
+        echo "       run started against." >&2
+        echo >&2
+        echo "The reboot request did not take effect, or the box is taking longer" >&2
+        echo "than ${SSH_WAIT}s to shut down and come back. Either way the" >&2
+        echo "PHASE=provisioned assertions would have been meaningless: the" >&2
+        echo "REQ-SERVER-001 settings only apply on a fresh boot." >&2
+        echo >&2
+        echo "  * check it can reboot at all: ssh -i $KEY $DEPLOY_USER@$HOST sudo systemctl reboot" >&2
+        echo "  * something may be blocking shutdown - a container that will not" >&2
+        echo "    stop, or a hung unmount. Look at: journalctl -b -u docker" >&2
+        echo "  * if it is simply slow, raise SSH_WAIT (currently ${SSH_WAIT}s)." >&2
+        exit 3
+    fi
+    if [ "$saw_unreadable" = yes ]; then
+        echo "ERROR: the box answered SSH within ${SSH_WAIT}s, but $BOOT_ID_PATH" >&2
+        echo "       could not be read, so the reboot could not be proved." >&2
+        echo "       That file is world-readable on every Linux; if this box is" >&2
+        echo "       not, the wait has no signal to work with." >&2
+        exit 3
+    fi
+
     # Name both, and say what to do about each - the address and the name fail
     # for unrelated reasons and the fix differs.
-    echo >&2
     echo "ERROR: nothing answered SSH as $DEPLOY_USER within ${SSH_WAIT}s. Tried:" >&2
     echo "  - $MDNS_NAME (mDNS)" >&2
     if [ -n "$HOST_FALLBACK" ] && [ "$HOST_FALLBACK" != "$MDNS_NAME" ]; then
@@ -142,9 +227,10 @@ wait_for_ssh() {
 # Provision
 #------------------------------------------------------------------------------
 FIRSTBOOT_RC=0
+BOOT_ID_BEFORE=""
 
 if [ "$MODE" != assert ]; then
-    wait_for_ssh
+    wait_for_ssh ""
 
     # REQ-SERVER-004, #285. Assert what the INSTALLER produced, before
     # postinstall.sh has a chance to repair it.
@@ -189,15 +275,34 @@ if [ "$MODE" != assert ]; then
     # REQ-SERVER-001 is asserted after a reboot because that is when the logind
     # drop-in takes effect. postinstall.sh deliberately does not restart logind:
     # doing so would kill this SSH session mid-run.
+    # Read the boot id BEFORE asking for the reboot - #295. Nothing after this
+    # point may treat a live SSH socket as proof the box went down; only a boot
+    # id different from this one is.
+    BOOT_ID_BEFORE="$(sshto "cat $BOOT_ID_PATH" 2> /dev/null || true)"
+    if [ -n "$BOOT_ID_BEFORE" ]; then
+        log "boot id before reboot: $BOOT_ID_BEFORE"
+    else
+        log "WARNING: could not read $BOOT_ID_PATH before the reboot."
+        log "         The wait below cannot prove the box rebooted, so a slow"
+        log "         shutdown may let the PHASE=provisioned assertions run"
+        log "         against the pre-reboot system. See #295."
+    fi
+
     log "rebooting to apply boot-time settings"
     sshto "sudo systemctl reboot" 2> /dev/null || true
+
+    # Not load-bearing any more: the boot id decides whether the box is back.
+    # It only saves a first polling round against a box that is certainly
+    # still up.
     sleep 10
 fi
 
 #------------------------------------------------------------------------------
 # Assert - the same script the VM runs, with this box's own expectations
 #------------------------------------------------------------------------------
-wait_for_ssh
+# BOOT_ID_BEFORE is empty in --assert mode (no reboot was asked for, so there is
+# nothing to prove) and empty if the read above failed.
+wait_for_ssh "$BOOT_ID_BEFORE"
 log "asserting"
 # `|| rc=$?`, not a bare call followed by `rc=$?`: under `set -e` a failing
 # assertion would exit here before the code could be captured, and the script
