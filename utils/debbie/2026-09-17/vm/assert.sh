@@ -81,6 +81,49 @@ logind_handler() {
         awk '{print $2}' | tr -d '"'
 }
 
+# apt's OWN value for one configuration key, printed bare, or EMPTY if nothing
+# under /etc/apt/apt.conf.d sets it.
+#
+# `apt-config shell` is apt's parser reading apt's own configuration tree, which
+# is the same tree unattended-upgrades reads - it asks python-apt for
+# `Unattended-Upgrade::Automatic-Reboot` and gets whatever this prints. So this
+# is the EFFECTIVE configuration, not a file: a key in a file apt never reads -
+# wrong directory, wrong name, or a syntax error earlier in the file that made
+# apt discard the rest - reports empty here while `grep` on that file is
+# perfectly happy. That is #283's and #313's lesson applied to apt, and it is
+# why there is deliberately no fall back to grepping 50unattended-upgrades.
+#
+# Empty for an unset key is the whole point for REQ-SERVER-006. The package
+# default for Automatic-Reboot is already false, so a check that accepted
+# "false or unset" would pass on a box where nobody had ever considered the
+# question - which is precisely the state the requirement forbids.
+apt_config_value() {
+    local value=
+    eval "$(apt-config shell value "$1" 2> /dev/null)"
+    printf '%s' "$value"
+}
+
+# unattended-upgrades' OWN list of the suites it will upgrade from, expanded.
+#
+# `--dry-run --debug` prints "Allowed origins are: ..." with ${distro_codename}
+# already substituted against the running release. That substitution happens
+# nowhere else and is visible nowhere else: apt-config reports the literal
+# "${distro_codename}", so a pattern hardcoded to the wrong codename -
+# `bookworm-security` on a trixie box, which is what half the tutorials online
+# will hand you - reads as perfectly well-formed there while matching nothing
+# at all in reality.
+#
+# `grep -m1` closes the pipe on the first match, so unattended-upgrade dies of
+# SIGPIPE on its next debug line, which is the one immediately after. That is
+# deliberate and load-bearing: a --dry-run allowed to finish DOWNLOADS every
+# candidate .deb, and an assertion that fetches packages is changing the box it
+# claims to be describing. Measured at about a second, with no Get: lines.
+unattended_upgrade_origins() {
+    sudo -n unattended-upgrade --dry-run --debug 2> /dev/null |
+        grep -m1 '^Allowed origins are: ' |
+        sed 's/^Allowed origins are: //'
+}
+
 # Stated up front so a pasted log says which of the two runs it came from. The
 # same check name means different things in each, which is the entire point.
 if [ "$PHASE" = firstboot ]; then
@@ -199,6 +242,94 @@ else
     sk "long power press ignored"  "postinstall.sh writes it"
     sk "suspend key ignored"       "postinstall.sh writes it"
     sk "hibernate key ignored"     "postinstall.sh writes it"
+fi
+
+# REQ-SERVER-006 - the box patches itself, from the security suite only, and
+# never reboots itself to do it.
+#
+# TWO INDEPENDENT HALVES, and a box can have either without the other. The apt
+# configuration says what may be upgraded; the systemd timers say whether
+# anything ever asks. A perfect 50unattended-upgrades on a host with
+# apt-daily-upgrade.timer masked has applied no patch since the day it was
+# installed and says nothing about it, which is the #136 failure mode exactly -
+# a thing that was supposed to keep itself current, quietly not doing so for
+# sixteen months with nothing reporting it. So the timers are asserted against
+# systemd rather than against the presence of a config file.
+#
+# Both timers, not just the upgrade one. apt-daily.timer refreshes the package
+# lists; apt-daily-upgrade.timer invokes unattended-upgrade. The second can only
+# install what the first has told apt about, so a box with stale lists installs
+# the security fixes it heard about last, forever.
+echo
+echo "== unattended upgrades (REQ-SERVER-006) =="
+# Built from the RUNNING release rather than written out, so this file does not
+# have to be edited on the day the box moves to Debian 14 - and so that a box
+# whose pattern was hardcoded to the previous codename goes red here.
+EXPECT_SECURITY_ORIGIN="origin=Debian,codename=$(
+    . /etc/os-release 2> /dev/null
+    printf '%s' "${VERSION_CODENAME:-unknown}"
+)-security,label=Debian-Security"
+# Asserted in BOTH phases, because this one is the INSTALLER's doing rather
+# than postinstall.sh's: the preseed asks for it with apt-setup/services-select,
+# and there is no point configuring a security-only upgrade policy on a box
+# whose apt cannot reach the security suite at all. A red here at firstboot is
+# an install bug, which is exactly what the phase split is for.
+check "the security suite is in apt's sources" \
+    'apt-cache policy | grep -q "l=Debian-Security"'
+if [ "$PHASE" = provisioned ]; then
+    check "unattended-upgrades installed" \
+        'dpkg-query -W -f="\${Status}" unattended-upgrades 2>/dev/null | grep -q "^install ok installed"'
+    # Not installed, deliberately - see the note in postinstall.sh. With it
+    # present, unattended-upgrades skips every run while the machine is on
+    # battery, and debbie is a laptop, so its battery is always discoverable.
+    check "powermgmt-base absent, so a battery cannot pause patching" \
+        '! dpkg-query -W -f="\${Status}" powermgmt-base 2>/dev/null | grep -q "^install ok installed"'
+    check "apt-daily.timer enabled"          '[ "$(systemctl is-enabled apt-daily.timer 2>/dev/null)" = enabled ]'
+    check "apt-daily.timer active"           'systemctl is-active apt-daily.timer'
+    check "apt-daily-upgrade.timer enabled"  '[ "$(systemctl is-enabled apt-daily-upgrade.timer 2>/dev/null)" = enabled ]'
+    check "apt-daily-upgrade.timer active"   'systemctl is-active apt-daily-upgrade.timer'
+    # What turns the timer's daily run into an actual upgrade. 20auto-upgrades
+    # sets it; this reads apt's parsed value, so a file apt never read is red.
+    check "apt's periodic unattended upgrade is on" \
+        '[ "$(apt_config_value APT::Periodic::Unattended-Upgrade)" = 1 ]'
+
+    # AC 1. Printed before the check, like the firewall section's offenders: a
+    # bare red line saying the origins are wrong, without saying what they are,
+    # is a bad afternoon.
+    uu_origins="$(unattended_upgrade_origins)"
+    echo "  allowed origins: ${uu_origins:-<none reported>}"
+    echo "  expected:        $EXPECT_SECURITY_ORIGIN"
+    # EXACT, not "contains -security". Debian's stock configuration enables
+    # three patterns and one of them is the whole stable suite with no security
+    # label at all, so "at least one security origin is present" is satisfied by
+    # the very configuration this requirement exists to replace. An extra origin
+    # is a failure, not a curiosity - the same reason the firewall counts ports.
+    check "only the security suite is upgraded unattended" \
+        "[ \"\$uu_origins\" = '$EXPECT_SECURITY_ORIGIN' ]"
+
+    # THE ONE THAT MATTERS MOST. debbie serves from a shelf on wifi, and an
+    # unattended reboot that fails to bring the network back up is an outage
+    # nobody is watching for - #282 is still open precisely because that wifi
+    # story is unsettled.
+    #
+    # `= false`, not "false or unset". The package default is already false, so
+    # accepting unset would pass on a box where nobody had ever considered the
+    # question, and a security-relevant property has to be true on purpose
+    # rather than by accident.
+    uu_reboot="$(apt_config_value Unattended-Upgrade::Automatic-Reboot)"
+    echo "  Unattended-Upgrade::Automatic-Reboot: ${uu_reboot:-<unset>}"
+    check "automatic reboot explicitly disabled" '[ "$uu_reboot" = false ]'
+else
+    sk "unattended-upgrades installed"       "postinstall.sh installs it"
+    sk "powermgmt-base absent, so a battery cannot pause patching" \
+        "only meaningful once postinstall.sh has installed unattended-upgrades"
+    sk "apt-daily.timer enabled"             "postinstall.sh enables it"
+    sk "apt-daily.timer active"              "postinstall.sh enables it"
+    sk "apt-daily-upgrade.timer enabled"     "postinstall.sh enables it"
+    sk "apt-daily-upgrade.timer active"      "postinstall.sh enables it"
+    sk "apt's periodic unattended upgrade is on" "postinstall.sh writes 20auto-upgrades"
+    sk "only the security suite is upgraded unattended" "postinstall.sh writes the drop-in"
+    sk "automatic reboot explicitly disabled"           "postinstall.sh writes the drop-in"
 fi
 
 # REQ-DEPLOY-004 - the deploy is `yarn prod:docker`, so the engine has to be

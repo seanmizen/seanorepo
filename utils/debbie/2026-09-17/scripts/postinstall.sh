@@ -62,9 +62,18 @@ log() { echo "[postinstall] $*"; }
 # either. ca-certificates is load-bearing twice over: the clone is an
 # anonymous HTTPS fetch from github.com, which fails on a box with no trust
 # store in a way that reads like a network fault.
+#
+# unattended-upgrades is REQ-SERVER-006 and is configured further down.
+# Deliberately WITHOUT powermgmt-base, which is the trap on this particular
+# host: with it installed, unattended-upgrades skips every run while the
+# machine is on battery. debbie is a laptop, so its battery is always there to
+# be discovered, and a brief mains blip would otherwise be indistinguishable
+# from "we stopped patching". Not installing it is what makes the answer to
+# "is it on battery?" permanently "do not know, carry on".
 log "installing packages"
 apt-get update -y
-apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl git gnupg
+apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl git gnupg \
+    unattended-upgrades
 
 #------------------------------------------------------------------------------
 # Hostname and mDNS - REQ-SERVER-004
@@ -167,6 +176,114 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 5353/udp
 ufw --force enable
+
+#------------------------------------------------------------------------------
+# Unattended security upgrades - REQ-SERVER-006
+#
+# Nobody logs into this box for months. #136 is the evidence: cloudflared's
+# self-update failed silently for about sixteen months with nothing reporting
+# it. "I will run apt upgrade when I next SSH in" has empirically meant a year
+# and a half, and an unpatched internet-facing host that is also never looked
+# at is the worst combination of the two.
+#
+# TWO THINGS MUST BOTH BE TRUE for anything to actually happen, and the classic
+# way to get this wrong is to do one of them: the apt configuration must permit
+# the upgrade, AND apt's timers must be enabled to invoke it. A correct
+# 50unattended-upgrades on a box with apt-daily-upgrade.timer masked is a
+# machine that has never applied a patch and reports nothing about it. Both
+# halves are done here and both are asserted in vm/assert.sh.
+#
+# SECURITY SUITE ONLY. Debian's stock 50unattended-upgrades enables three
+# patterns, and only two of them are security:
+#
+#   origin=Debian,codename=${distro_codename},label=Debian            <- NOT security
+#   origin=Debian,codename=${distro_codename},label=Debian-Security
+#   origin=Debian,codename=${distro_codename}-security,label=Debian-Security
+#
+# The first is the whole of the stable suite, so a stock box unattended-installs
+# every point-release update that lands in trixie - measured, not assumed: a
+# --dry-run against the stock config proposed base-files, bash, libc6, perl-base
+# and tzdata from `archive:stable label:Debian`. That is a much larger blast
+# radius than this ticket asks for, on a host with no console attached.
+#
+# So the list is CLEARED and one pattern is set. `#clear` is not decoration and
+# not a comment: apt.conf list syntax APPENDS, so a drop-in that merely names
+# the pattern it wants leaves all three of Debian's in place and adds a fourth
+# duplicate. Verified in a debian:trixie container - without the #clear lines,
+# `Allowed origins are:` printed four entries including the non-security one.
+#
+# A DROP-IN, NOT AN EDIT OF 50unattended-upgrades, for the same reason as the
+# logind drop-in above: the package owns that file and regenerates it, and a
+# drop-in states only what we override. 52 sorts after 50, which is what makes
+# the override win - apt reads /etc/apt/apt.conf.d in sorted order.
+#
+# ${distro_codename} is left as a variable rather than written out as `trixie`.
+# unattended-upgrades expands it against the running release, so this survives
+# the next dist-upgrade; a hardcoded codename would silently stop matching
+# anything on the day the box moved to Debian 14, which is exactly the shape of
+# failure this requirement exists to prevent.
+#
+# REBOOTS ARE NOT AUTOMATIC, and this is the line that matters most in the
+# file. debbie serves from a shelf on wifi, and an unattended reboot that fails
+# to bring the network back up is an outage nobody is watching for - #282, the
+# ifupdown-to-NetworkManager migration, is still open precisely because that
+# wifi story is unsettled. It is set EXPLICITLY to "false" rather than left at
+# the package default, which is also false: a security-relevant property has to
+# be true on purpose rather than by accident, and an explicit value is the only
+# thing an assertion can tell apart from "nobody has thought about this".
+#
+# The consequence is accepted rather than overlooked: a kernel or libc update
+# is downloaded and unpacked but not in force until someone reboots the box by
+# hand. /var/run/reboot-required says so, and `ssh srv@debbie.local sudo
+# systemctl reboot` is the deliberate way to act on it.
+#
+# Both files are rewritten in full on every run rather than appended to, so a
+# repair run leaves a correct file byte-identical and cannot accumulate
+# duplicate keys.
+#------------------------------------------------------------------------------
+log "unattended security upgrades"
+
+# What makes the periodic job run at all. `dpkg-reconfigure` writes this from a
+# debconf answer and is interactive, which is no use here, so the file is
+# written directly - it is generated rather than a dpkg conffile, so nothing
+# prompts about it on the next upgrade.
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+// Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-SERVER-006
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+
+cat > /etc/apt/apt.conf.d/52debbie-unattended-upgrades <<'EOF'
+// Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-SERVER-006
+
+// apt.conf lists APPEND. Without these two lines Debian's stock three
+// patterns - one of which is the whole stable suite, not security - stay in
+// force and this file merely adds a fourth.
+#clear Unattended-Upgrade::Allowed-Origins;
+#clear Unattended-Upgrade::Origins-Pattern;
+
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+};
+
+// REQ-SERVER-006. Explicit, not defaulted: this box is on a shelf on wifi and
+// an unattended reboot that does not come back is an outage nobody is
+// watching for. Reboot it by hand - `sudo systemctl reboot` over SSH.
+Unattended-Upgrade::Automatic-Reboot "false";
+EOF
+
+# The other half. Both timers are enabled on a stock Debian, so on a healthy
+# box this is a no-op; it is here to repair one where they are not, and so that
+# the property is stated by this script rather than inherited silently from a
+# package default. apt-daily.timer refreshes the package lists and
+# apt-daily-upgrade.timer is what invokes unattended-upgrade - the second is
+# useless without the first, since it can only install what apt knows about.
+#
+# Enabled, NOT --now, matching the deploy poller and the tunnel below.
+# Provisioning is followed by a reboot in both harnesses and on metal, and
+# starting apt-daily-upgrade.timer here would let a catch-up run take the dpkg
+# lock while this script is still installing Docker, Node and cloudflared.
+systemctl enable apt-daily.timer apt-daily-upgrade.timer
 
 #------------------------------------------------------------------------------
 # Docker engine - REQ-DEPLOY-004
