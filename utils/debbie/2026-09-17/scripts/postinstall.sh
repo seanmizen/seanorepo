@@ -178,6 +178,59 @@ ufw allow 5353/udp
 ufw --force enable
 
 #------------------------------------------------------------------------------
+# SSH accepts keys only - REQ-SERVER-008
+#
+# Port 22 is open on the LAN by REQ-SERVER-002 and the deploy account has
+# passwordless sudo by REQ-SERVER-003, so a guessed password is not a foothold,
+# it is the whole host. The password path should therefore not exist rather than
+# merely be hard to use.
+#
+# This largely ratifies what the box already does, and that is exactly the
+# problem it fixes: it was true BY ACCIDENT. The account has a password hash,
+# PasswordAuthentication sat at its compiled-in default, and nothing asserted
+# either - so any future change to sshd's packaging, or a stray drop-in, could
+# have quietly reopened it with every test still green.
+#
+# A drop-in, not a sed over /etc/ssh/sshd_config: the main file is package owned,
+# so an upgrade can revert or conflict with an edit made in place. Rewritten in
+# full on every run rather than appended to, so a repair run leaves a correct
+# file byte-identical.
+#
+# The name matters. sshd reads sshd_config.d/*.conf in LEXICAL order and, unlike
+# apt, FIRST setting wins - so a drop-in sorting after one that sets these keys
+# would be silently inert. 10- keeps it ahead of anything a package ships, and
+# assert.sh reads the effective config rather than this file, so a future
+# 05-something that shadows it fails the run instead of hiding behind a grep.
+#
+# The account password is deliberately NOT locked. Console login at the physical
+# keyboard is the documented recovery path if the key is ever lost, and this box
+# has no other out-of-band access in this generation - see #135.
+#------------------------------------------------------------------------------
+log "ssh accepts keys only"
+install -d -m 755 /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/10-debbie-keys-only.conf <<'EOF'
+# Managed by utils/debbie postinstall.sh - REQ-SERVER-008
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+EOF
+chmod 644 /etc/ssh/sshd_config.d/10-debbie-keys-only.conf
+
+# Validate BEFORE reloading. A malformed sshd_config that is merely written
+# costs nothing; one that is written and then reloaded takes sshd down, and this
+# script is running over the SSH it would be killing. On failure the drop-in is
+# removed and the run fails loudly, leaving a box that still accepts passwords -
+# degraded, but reachable, which is the right way round on a host whose only
+# other door is a physical keyboard.
+if sshd -t; then
+    systemctl reload ssh
+else
+    log "  ERROR: sshd -t rejected the drop-in; removing it and stopping"
+    rm -f /etc/ssh/sshd_config.d/10-debbie-keys-only.conf
+    exit 1
+fi
+
+#------------------------------------------------------------------------------
 # Unattended security upgrades - REQ-SERVER-006
 #
 # Nobody logs into this box for months. #136 is the evidence: cloudflared's
