@@ -29,10 +29,12 @@ EXPECT_ARCH="${EXPECT_ARCH:-}"
 EXPECT_HOSTNAME="${EXPECT_HOSTNAME:-debbie}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
-# Must match the default in scripts/postinstall.sh. The checkout itself arrives
-# in #278; until then the yarn-version check skips rather than fails, and prints
-# the path it looked at so a disagreement between the two files is visible.
+# Must match the default in scripts/postinstall.sh, which clones here, and the
+# path 2025-10-08b/scripts/deploy.sh resolves as the deploy user. A check that
+# depends on the checkout and cannot find one SKIPS with the path it looked at
+# printed, so a disagreement between the three is visible rather than silent.
 REPO_DIR="${REPO_DIR:-/home/$DEPLOY_USER/projects/seanorepo}"
+RELEASE_BRANCH="${RELEASE_BRANCH:-release}"
 
 case "$PHASE" in
     firstboot | provisioned) ;;
@@ -208,6 +210,62 @@ else
     sk "docker compose plugin present" "postinstall.sh installs it"
 fi
 
+# REQ-DEPLOY-001 - the host deploys `release` and no other branch.
+#
+# Everything here runs as $DEPLOY_USER over a fresh SSH connection and WITHOUT
+# sudo, on purpose, because that is the account the deploy runs as. A checkout
+# root can read and the deploy user cannot write is the failure being guarded,
+# and `sudo git -C ...` would pass straight through it.
+#
+# The `release` branch is created by `yarn release` from a dev machine, so on a
+# box provisioned before the first release it genuinely does not exist. That is
+# a SKIP, not a failure: postinstall.sh is explicitly forbidden from creating
+# the branch, because doing so would ship whatever `main` was at provision time
+# as though someone had decided to.
+echo
+echo "== repository checkout (REQ-DEPLOY-001) =="
+if [ "$PHASE" = provisioned ]; then
+    check "checkout exists at $REPO_DIR" '[ -d "$REPO_DIR/.git" ]'
+    # AC 1, and the reason it is spelled this way rather than as a stat of the
+    # top directory: `sudo git clone` into a pre-made srv-owned directory
+    # leaves the directory right and everything inside it root-owned, and the
+    # next unattended fetch is the thing that finds out.
+    check "every file under $REPO_DIR is owned by $DEPLOY_USER" \
+        '[ -d "$REPO_DIR" ] && [ -z "$(find "$REPO_DIR" ! -user "$DEPLOY_USER" -print -quit 2>/dev/null)" ]'
+    # Idempotency, asserted rather than assumed: a second provisioning run that
+    # re-cloned or re-added the remote would show up here. One remote, named
+    # origin, pointing at the repository this generation is for.
+    check "origin is the only remote, and is seanorepo" \
+        '[ "$(git -C "$REPO_DIR" remote | wc -l)" -eq 1 ] \
+         && git -C "$REPO_DIR" remote get-url origin | grep -q "seanmizen/seanorepo"'
+    # The claim that provisioning needs no credential, made as something that
+    # can fail. GIT_TERMINAL_PROMPT=0 so a repository that has become private
+    # reports an auth error immediately instead of hanging for a username that
+    # no unattended deploy will ever type.
+    check "$DEPLOY_USER can reach origin with no credential" \
+        'GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" ls-remote --quiet origin HEAD'
+    if [ ! -d "$REPO_DIR/.git" ]; then
+        sk "HEAD is on $RELEASE_BRANCH" "no checkout at $REPO_DIR"
+    elif git -C "$REPO_DIR" rev-parse --verify --quiet \
+        "refs/remotes/origin/$RELEASE_BRANCH" > /dev/null 2>&1; then
+        # symbolic-ref, not `git branch --show-current` or a rev-parse of the
+        # SHA: it is false on a detached HEAD, which is a state a deploy can
+        # leave behind and which compares equal by SHA while not tracking the
+        # branch at all.
+        check "HEAD is on $RELEASE_BRANCH" \
+            '[ "$(git -C "$REPO_DIR" symbolic-ref --short -q HEAD)" = "$RELEASE_BRANCH" ]'
+    else
+        sk "HEAD is on $RELEASE_BRANCH" \
+            "origin/$RELEASE_BRANCH does not exist yet - 'yarn release' creates it"
+    fi
+else
+    sk "checkout exists at $REPO_DIR" "postinstall.sh clones it"
+    sk "every file under $REPO_DIR is owned by $DEPLOY_USER" "postinstall.sh clones it"
+    sk "origin is the only remote, and is seanorepo" "postinstall.sh clones it"
+    sk "$DEPLOY_USER can reach origin with no credential" "postinstall.sh clones it"
+    sk "HEAD is on $RELEASE_BRANCH" "postinstall.sh clones it"
+fi
+
 # REQ-DEPLOY-004 - the other half of `yarn prod:docker`. Docker above proves the
 # box can run the containers; this proves it can get as far as asking.
 #
@@ -239,8 +297,11 @@ if [ "$PHASE" = provisioned ]; then
         check "yarn --version matches the repo's packageManager" \
             'want=$(sed -n "s/.*\"packageManager\"[[:space:]]*:[[:space:]]*\"yarn@\([^\"+]*\).*/\1/p" "$REPO_DIR/package.json" | head -1); [ -n "$want" ] && [ "$(cd "$REPO_DIR" && yarn --version)" = "$want" ]'
     else
+        # Reachable only if the checkout section above already failed, so this
+        # skip is a consequence rather than an independent gap. Since #278 a
+        # provisioned box has the repository, and this check does run.
         sk "yarn --version matches the repo's packageManager" \
-            "no checkout at $REPO_DIR - #278 clones it"
+            "no package.json at $REPO_DIR - see the checkout section above"
     fi
 else
     sk "node 20 installed"            "postinstall.sh installs it"

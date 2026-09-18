@@ -221,9 +221,21 @@ re-pays the two minutes and the 2G.
 
 ## Scope
 
-In: install, provision, assert — in a VM and on metal. Out: the deploy poller,
-the Cloudflare tunnel and the network failover watchdog — those are rebuilt in
-a later generation under `REQ-DEPLOY-*` and `REQ-NETWORK-*`.
+In: install, provision, assert — in a VM and on metal, plus the repository
+checkout itself (`REQ-DEPLOY-001`): `postinstall.sh` clones seanorepo as the
+deploy user and puts it on `release`. Out: the deploy poller, the Cloudflare
+tunnel and the network failover watchdog — those are rebuilt in a later
+generation under `REQ-DEPLOY-*` and `REQ-NETWORK-*`.
+
+The clone is anonymous HTTPS. seanmizen/seanorepo is public, so provisioning
+holds no deploy key and there is nothing on the box to rotate; if the
+repository is ever made private, `postinstall.sh`'s clone is what breaks, and
+`vm/assert.sh` › "srv can reach origin with no credential" is what says so.
+
+`release` exists only once someone has run `yarn release`, so on a newly
+provisioned box it may legitimately be absent. That is reported and skipped,
+never failed, and `postinstall.sh` deliberately does not create it — doing so
+would ship whatever `main` happened to be.
 
 Deferred, not rejected: **systemd targets and slices.** Units go in
 `/usr/local/lib/systemd/system` with a `custom-` prefix (`REQ-SERVER-011`,

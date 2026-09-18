@@ -33,6 +33,20 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` checks out
     `$RELEASE_BRANCH`, which defaults to `release`
+  - Inspection — `utils/debbie/2026-09-17/scripts/postinstall.sh` checks out
+    `$RELEASE_BRANCH` after cloning, and never creates the branch when it is
+    absent
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "checkout exists at
+    /home/srv/projects/seanorepo"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "every file under
+    /home/srv/projects/seanorepo is owned by srv"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "origin is the only remote,
+    and is seanorepo"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "srv can reach origin with
+    no credential"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "HEAD is on release" —
+    skipped, not passed, on a box provisioned before the first `yarn release`,
+    because until then the branch does not exist
 - **Relations:** none
 
 ## REQ-DEPLOY-002 — A deploy needs no access to the host
