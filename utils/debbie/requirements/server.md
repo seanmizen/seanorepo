@@ -45,7 +45,8 @@ Introduced in #259.
 - **Type:** constraint
 - **Priority:** P1
 - **Statement:** The host shall accept inbound connections on exactly ports
-  22/tcp, 80/tcp, 443/tcp and 5353/udp, and refuse every other port.
+  22/tcp, 80/tcp, 443/tcp and 5353/udp, and refuse every other port, including
+  every port published by a container.
 - **Rationale:** Everything public arrives through the Cloudflare tunnel, which
   is an outbound connection. An open application port would therefore be a
   second, unaudited way in that nothing is watching — the app ports in the
@@ -54,9 +55,51 @@ Introduced in #259.
   The count is asserted as well as the membership. Checking only that the four
   are present would let a fifth be added silently, which is the exact shape of
   drift this is meant to catch.
+
+  **"Including every port published by a container" is the part `#300` added,
+  and it is a correction rather than an extension.** This requirement was
+  already meant to cover them; the host did not do it, and nothing noticed
+  because the only thing asserted was `ufw status`. Docker writes its own
+  chains into the `nat` and `filter` tables, and a container published with
+  `-p 4000:4000` gets a DNAT rule that is consulted *before* ufw's — so the port
+  answered from the LAN while `ufw status` said, correctly for ufw and falsely
+  for the host, that nothing but the four was open. The requirement claimed
+  something the box did not do, and the test agreed with the requirement instead
+  of with the box.
+
+  **How it is met.** `scripts/postinstall.sh` writes `/etc/docker/daemon.json`
+  with `{"ip": "127.0.0.1"}`, which is dockerd's `--ip`, "Host IP for port
+  publishing". A published port then binds `127.0.0.1` and no other address, so
+  it is never offered to the LAN and there is no packet to filter. This was
+  preferred over a LAN-deny rule in `DOCKER-USER` because it removes the class
+  rather than filtering it: no rule has to survive a reboot and no chain
+  ordering has to be right. It costs nothing, because every ingress rule in
+  `apps/cloudflared/config.yml` already reaches its origin as
+  `http://localhost:4xxx` and `cloudflared` runs as a host process — loopback is
+  the only address the tunnel has ever used.
+
+  **What this does not guarantee, stated because the assertions are built
+  around it.** `ip` is a *default*. A compose file that names a host address
+  explicitly — `"0.0.0.0:4001:4001"` — walks straight past it, measured on
+  docker 28.5.2 and reachable from another host. No `apps/*/docker-compose.yml`
+  does that today; `#309` is the ticket for making them say so rather than rely
+  on the default. Until then, the checks below are what would catch it, which is
+  why they read listening sockets, the `nat` chain and a deliberately published
+  probe port rather than the daemon's configuration.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ufw active"
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no other ports open"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ufw allows no port beyond
+    the four"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "docker publishes to
+    loopback by default"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "nothing outside the four
+    ports listens on a non-loopback address"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no docker DNAT rule reaches
+    a non-loopback address"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "a deliberately published
+    port binds loopback and nothing else"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "that port refuses a
+    connection to the host's own routable address"
 - **Relations:** none
 
 ## REQ-SERVER-003 — The deploy user can deploy without a password
