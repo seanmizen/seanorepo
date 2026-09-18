@@ -223,9 +223,55 @@ re-pays the two minutes and the 2G.
 
 In: install, provision, assert — in a VM and on metal, plus the repository
 checkout itself (`REQ-DEPLOY-001`): `postinstall.sh` clones seanorepo as the
-deploy user and puts it on `release`. Out: the deploy poller, the Cloudflare
-tunnel and the network failover watchdog — those are rebuilt in a later
-generation under `REQ-DEPLOY-*` and `REQ-NETWORK-*`.
+deploy user and puts it on `release`. Since #279 the deploy poller is in too.
+Out: the Cloudflare tunnel (#280) and the network failover watchdog — those
+arrive under `REQ-NETWORK-*`.
+
+### The deploy poller
+
+`postinstall.sh` installs `custom-deploy-poll.timer`, which runs
+`scripts/deploy.sh` every two minutes. The host pulls, because nothing can
+reach in — `REQ-SERVER-002` forwards no port and `REQ-DEPLOY-002` is the
+consequence. Follow a deploy with:
+
+```bash
+ssh srv@debbie.local journalctl -u custom-deploy-poll.service -f
+# decisions only, without the ~720 "up to date" lines a day
+ssh srv@debbie.local journalctl -u custom-deploy-poll.service -p info
+```
+
+Four things about it are deliberate and easy to undo by accident:
+
+- **The units are written by `postinstall.sh` itself, not copied out of the
+  checkout.** That script is delivered on its own — `scp`'d to `/tmp` by
+  `vm/test-vm.sh`, streamed over stdin by `metal/provision.sh` — so it can read
+  nothing beside it in the repository. The only checkout it could read from is
+  the one it just made, which is on `release`, which by definition holds the
+  last thing *shipped*. On the first box this generation provisions, `release`
+  still points at the previous generation. Sourcing the units from there would
+  install the poller only on a box that already had one.
+- **`deploy.sh` is run from the checkout**, so a deploy updates the deployer. It
+  is too long to inline and two copies would be worse than the problem. The
+  consequence is the chicken-and-egg above, one level down: on a box whose
+  `release` predates #279 the timer fails until the checkout advances.
+  `postinstall.sh` says so, with the remedy, rather than leaving a unit that
+  fails every two minutes with *No such file or directory*.
+- **There is no boot-time deploy unit.** The previous generation needed one
+  because no app compose file sets a restart policy, so after a power cut the
+  containers are down while `release` has not moved. `deploy.sh` records the
+  boot id alongside the deployed SHA, so a reboot is itself a reason to deploy.
+  One line in the marker replaces a whole unit.
+- **There is no `git clean`** — `REQ-DEPLOY-006`, and `vm/assert.sh` asserts
+  both its absence and the comment explaining it. `apps/cloudflared/credentials/`
+  is gitignored and exists only on the host.
+
+The sudoers drop-in grants exactly one command, which is the whole reason the
+deploy does not need general root. Note what it is and is not today:
+`scripts/write-overrides.sh` has the installer write
+`srv ALL=(ALL) NOPASSWD:ALL` to `/etc/sudoers.d/90-srv`, so the account already
+has general passwordless root and this file narrows nothing *yet*. What it does
+is make the deploy need only one command, so that tightening the blanket grant
+under `REQ-SERVER-008` later does not break deploys.
 
 The clone is anonymous HTTPS. seanmizen/seanorepo is public, so provisioning
 holds no deploy key and there is nothing on the box to rotate; if the
