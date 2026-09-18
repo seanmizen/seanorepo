@@ -237,12 +237,13 @@ Introduced in #259.
 
 ## REQ-SERVER-006 — Security updates apply without anyone logging in
 
-- **Status:** proposed
+- **Status:** active
 - **Source:** sean
 - **Origin:** #273
 - **Type:** functional
 - **Priority:** P1
-- **Statement:** The host shall install security updates unattended.
+- **Statement:** The host shall install updates from the security suite
+  unattended and without rebooting itself.
 - **Rationale:** Nobody logs into this box for months at a time. An unpatched
   internet-facing host that is also never looked at is the worst combination of
   the two, and "I will run apt upgrade when I next SSH in" has empirically
@@ -251,9 +252,57 @@ Introduced in #259.
 
   Reboots are deliberately **not** automatic. This host serves from a shelf,
   and an unattended reboot that fails to bring wifi back up is an outage nobody
-  is watching for.
+  is watching for. `#282` — the migration off `ifupdown` — is open precisely
+  because that wifi story is unsettled, which makes an automatic reboot less
+  acceptable now than it will be later, not more.
+
+  `Unattended-Upgrade::Automatic-Reboot` is set **explicitly** to `false`
+  rather than left at the package default, which is also `false`. The default
+  is not good enough: a security-relevant property has to be true on purpose
+  rather than by accident, and an explicit value is the only thing an assertion
+  can tell apart from "nobody has ever considered the question". Same reasoning
+  as `PasswordAuthentication` in `REQ-SERVER-008`. The accepted cost is that a
+  kernel or libc fix is downloaded and unpacked but not in force until somebody
+  reboots by hand; `/var/run/reboot-required` says so.
+
+  **Security suite only, and the stock configuration is not that.** Debian's
+  `50unattended-upgrades` enables three origin patterns, and the first of them
+  — `origin=Debian,codename=${distro_codename},label=Debian` — is the whole of
+  the stable suite rather than anything security-related. A `--dry-run` against
+  the stock file proposed `base-files`, `bash`, `libc6`, `perl-base` and
+  `tzdata` from `archive:stable label:Debian`. `postinstall.sh` therefore writes
+  a drop-in that `#clear`s the list before setting one pattern: apt.conf list
+  syntax **appends**, so a drop-in that merely names the pattern it wants leaves
+  all three of Debian's in force and adds a fourth.
+
+  **Two independent halves.** The apt configuration says what may be upgraded;
+  `apt-daily.timer` and `apt-daily-upgrade.timer` say whether anything ever
+  asks. A correct configuration on a host whose timers are masked has applied no
+  patch since installation and reports nothing about it — the `#136` failure
+  mode exactly. Both halves are asserted, and the timers against systemd rather
+  than against the presence of a file.
+
+  `powermgmt-base` is deliberately **not** installed. With it present,
+  `unattended-upgrades` skips every run while the machine is on battery, and
+  debbie is a laptop, so its battery is always there to be discovered.
+
+  The assertions read the **effective** configuration — `apt-config shell`, which
+  is apt's own parser over apt's own tree, and `unattended-upgrade --dry-run
+  --debug`, which prints the origin list with `${distro_codename}` already
+  expanded against the running release. There is deliberately no fall back to
+  grepping `50unattended-upgrades`: a file the tool never read is the bug, so a
+  check satisfied by that file's contents would pass in the failing state.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "unattended-upgrades enabled"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "unattended-upgrades installed"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "powermgmt-base absent, so a battery cannot pause patching"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the security suite is in apt's sources"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "apt-daily.timer enabled"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "apt-daily.timer active"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "apt-daily-upgrade.timer enabled"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "apt-daily-upgrade.timer active"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "apt's periodic unattended upgrade is on"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "only the security suite is upgraded unattended"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "automatic reboot explicitly disabled"
 - **Relations:** none
 
 ## REQ-SERVER-007 — Logs cannot fill the disk

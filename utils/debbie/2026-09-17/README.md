@@ -185,6 +185,25 @@ Read this before trusting a green run on hardware:
   same daemon setting, tested from a second container on a separate network
   namespace, refused a loopback-bound published port and answered a
   `0.0.0.0`-bound one. See `#300`.
+- **That an unattended upgrade ever actually installs anything.**
+  `REQ-SERVER-006`'s checks prove the box is *configured and scheduled* to patch
+  itself: `unattended-upgrades` is installed, both apt timers are enabled and
+  running, apt's effective configuration allows exactly one origin — the
+  security suite for the running codename — and `Automatic-Reboot` is
+  explicitly `false`. The origin check reads `unattended-upgrade --dry-run
+  --debug`, killed at its first line of output on purpose so the assertion does
+  not download the packages it is describing.
+
+  What no VM run proves is that a security fix published next month is fetched
+  and installed on a timer nobody watched. That takes calendar time and a real
+  advisory, and the only thing that will show it is the box itself — `journalctl
+  -u unattended-upgrades` and `/var/log/unattended-upgrades/` on debbie, some
+  weeks after this shipped.
+
+  The reboot half is asserted rather than exercised for the same reason, and
+  that is the safe direction: the failure being guarded against is the box
+  rebooting on its own and not coming back on wifi, so a green run means it did
+  not, not that it survived one.
 - **That the box can actually deploy, when the deploy-poller checks skip.**
   `deploy.sh` lives in the checkout and the checkout is on `release`, so a box
   provisioned before this generation shipped genuinely cannot have it. Four
@@ -266,6 +285,42 @@ is the last resort rather than the normal way. `HandlePowerKeyLongPress` is
 logind's *software* long press, an unrelated knob, and it is explicitly
 `ignore`: setting it to `poweroff` would hand the hole straight back to anyone
 who held the button a moment too long.
+
+**The box patches itself, from the security suite, and never reboots to do it**
+(`REQ-SERVER-006`, `#286`). Three things about this are easy to get wrong and
+all three are deliberate.
+
+*Debian's stock configuration is not security-only.* `50unattended-upgrades`
+enables three origin patterns and the first,
+`origin=Debian,codename=${distro_codename},label=Debian`, is the whole stable
+suite. A `--dry-run` against it proposed `base-files`, `bash`, `libc6`,
+`perl-base` and `tzdata` from `archive:stable`. So `postinstall.sh` writes
+`/etc/apt/apt.conf.d/52debbie-unattended-upgrades`, which `#clear`s the list
+before setting one pattern — apt.conf list syntax **appends**, so a drop-in that
+only names the pattern it wants leaves all three of Debian's in place and adds
+a fourth duplicate.
+
+*The configuration is half of it.* `apt-daily.timer` and
+`apt-daily-upgrade.timer` are the other half, and a perfect configuration on a
+box whose timers are masked has patched nothing since the day it was installed
+and says so nowhere. That is `#136` again. Both are enabled by `postinstall.sh`
+and both are asserted against systemd rather than against a file.
+
+*Reboots are not automatic, explicitly.* `Unattended-Upgrade::Automatic-Reboot`
+is written as `"false"` although the package default is already `false`, because
+the default cannot be told apart from nobody having considered the question. The
+cost is real and accepted: a kernel or libc fix sits unpacked and inactive until
+somebody reboots by hand.
+
+```bash
+ssh srv@debbie.local cat /var/run/reboot-required   # is one pending?
+ssh srv@debbie.local sudo systemctl reboot          # apply it, deliberately
+ssh srv@debbie.local 'journalctl -u unattended-upgrades --no-pager | tail -40'
+```
+
+`powermgmt-base` is deliberately not installed: with it present,
+`unattended-upgrades` skips every run while the machine is on battery, and
+debbie is a laptop, so its battery is always there to be found.
 
 **The preseed is served over HTTP**, not embedded in the initrd. Embedding is
 what drove the December attempt to hand-write a cpio archive in PowerShell; over
