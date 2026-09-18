@@ -29,6 +29,10 @@ EXPECT_ARCH="${EXPECT_ARCH:-}"
 EXPECT_HOSTNAME="${EXPECT_HOSTNAME:-debbie}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
+# Must match the default in scripts/postinstall.sh. The checkout itself arrives
+# in #278; until then the yarn-version check skips rather than fails, and prints
+# the path it looked at so a disagreement between the two files is visible.
+REPO_DIR="${REPO_DIR:-/home/$DEPLOY_USER/projects/seanorepo}"
 
 case "$PHASE" in
     firstboot | provisioned) ;;
@@ -202,6 +206,47 @@ else
     sk "docker.service active"        "postinstall.sh installs it"
     sk "docker info works as $DEPLOY_USER without sudo" "postinstall.sh installs it"
     sk "docker compose plugin present" "postinstall.sh installs it"
+fi
+
+# REQ-DEPLOY-004 - the other half of `yarn prod:docker`. Docker above proves the
+# box can run the containers; this proves it can get as far as asking.
+#
+# Everything here runs as $DEPLOY_USER over a fresh SSH connection, WITHOUT
+# sudo, on purpose. The failure being guarded is a yarn that only root can
+# reach, or one that is on PATH for an interactive login and not for the
+# non-interactive shell the deploy timer actually uses.
+echo
+echo "== node and yarn (REQ-DEPLOY-004) =="
+if [ "$PHASE" = provisioned ]; then
+    check "node 20 installed"         'node --version | grep -qE "^v20\."'
+    check "corepack installed" \
+        'dpkg-query -W -f="\${Status}" node-corepack 2>/dev/null | grep -q "^install ok installed"'
+    # THE point of #277, stated as something that can fail. `npm install -g
+    # yarn` puts a real Yarn 1 tarball in /usr/local/bin, which precedes
+    # /usr/bin on PATH, so the box would run Yarn 1 against a Yarn 4
+    # repository while `command -v yarn` still answered. Resolving the shim
+    # tells the two apart: corepack's is a symlink into its own dist, an
+    # npm-installed one is not, and because `command -v` takes whichever comes
+    # first on PATH this also catches the shadowing case rather than just the
+    # replacing one.
+    check "yarn is corepack's shim, not a global npm install" \
+        'readlink -f "$(command -v yarn)" | grep -q corepack'
+    # No version is written here either. The expected value is read out of the
+    # repository's own packageManager field at assertion time, so this check
+    # cannot drift from the repo any more than postinstall.sh can - if the repo
+    # bumps Yarn, both sides move together and nothing needs editing.
+    if [ -f "$REPO_DIR/package.json" ]; then
+        check "yarn --version matches the repo's packageManager" \
+            'want=$(sed -n "s/.*\"packageManager\"[[:space:]]*:[[:space:]]*\"yarn@\([^\"+]*\).*/\1/p" "$REPO_DIR/package.json" | head -1); [ -n "$want" ] && [ "$(cd "$REPO_DIR" && yarn --version)" = "$want" ]'
+    else
+        sk "yarn --version matches the repo's packageManager" \
+            "no checkout at $REPO_DIR - #278 clones it"
+    fi
+else
+    sk "node 20 installed"            "postinstall.sh installs it"
+    sk "corepack installed"           "postinstall.sh installs it"
+    sk "yarn is corepack's shim, not a global npm install" "postinstall.sh enables it"
+    sk "yarn --version matches the repo's packageManager"  "postinstall.sh enables it"
 fi
 
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than

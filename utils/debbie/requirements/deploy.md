@@ -100,6 +100,11 @@ Introduced in #273.
     without sudo"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "docker compose plugin
     present"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "node 20 installed"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "yarn is corepack's shim,
+    not a global npm install"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "yarn --version matches the
+    repo's packageManager"
 - **Relations:** depends-on REQ-DEPLOY-002
 
 ## REQ-DEPLOY-005 — The tunnel restarts only when its own configuration changes
