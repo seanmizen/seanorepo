@@ -75,6 +75,23 @@ check() { if ( eval "$2" ) > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 # deliberately, there is no fall back to grepping the drop-in - a file that
 # logind has not read is the bug, so a check satisfied by the file's contents
 # would pass in the failing state.
+# sshd's OWN value for one keyword, lowercased and printed bare.
+#
+# `sshd -T` is sshd parsing its own configuration exactly as it will at the next
+# connection, drop-ins and Match blocks and lexical precedence all resolved. It
+# is therefore the EFFECTIVE configuration, not a file: a keyword set in a
+# drop-in that sorts too late, or under a filename sshd never globs, reports the
+# compiled-in default here while `grep` on that file is perfectly happy.
+#
+# That is #283's and #313's lesson applied to sshd, and it is why there is
+# deliberately no fall back to grepping 10-debbie-keys-only.conf. A drop-in that
+# sshd has not read is precisely the bug REQ-SERVER-008 exists to catch, so a
+# check the file could satisfy would pass in the failing state.
+sshd_effective() {
+    sshd -T 2> /dev/null | awk -v k="$(printf '%s' "$1" | tr 'A-Z' 'a-z')" \
+        'tolower($1) == k { print tolower($2); exit }'
+}
+
 logind_handler() {
     busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
         org.freedesktop.login1.Manager "$1" 2>/dev/null |
@@ -233,6 +250,23 @@ if [ "$PHASE" = provisioned ]; then
     check "long power press ignored"  '[ "$(logind_handler HandlePowerKeyLongPress)" = ignore ]'
     check "suspend key ignored"       '[ "$(logind_handler HandleSuspendKey)" = ignore ]'
     check "hibernate key ignored"     '[ "$(logind_handler HandleHibernateKey)" = ignore ]'
+
+    # REQ-SERVER-008, #288. Asked of sshd, not of the drop-in - a file sshd
+    # never read is the fault being tested for. `no` exactly, never "no or
+    # unset": measured on stock trixie, `sshd -T` reports
+    # PasswordAuthentication=yes and PermitRootLogin=without-password, so an
+    # unset key here IS the failing state for both.
+    #
+    # KbdInteractiveAuthentication already defaults to `no` on trixie, so that
+    # one check is a regression guard rather than a reproduction - it cannot be
+    # shown red by removing the drop-in. The other two can, and were.
+    check "sshd config is valid"           'sshd -t'
+    check "ssh passwords refused"          '[ "$(sshd_effective PasswordAuthentication)" = no ]'
+    check "ssh keyboard-interactive refused" '[ "$(sshd_effective KbdInteractiveAuthentication)" = no ]'
+    check "ssh root login refused"         '[ "$(sshd_effective PermitRootLogin)" = no ]'
+    check "ssh still accepts keys"         '[ "$(sshd_effective PubkeyAuthentication)" = yes ]'
+    check "$DEPLOY_USER has an authorized key" \
+        "sudo test -s /home/$DEPLOY_USER/.ssh/authorized_keys"
 else
     sk "$DEPLOY_USER in docker"   "postinstall.sh creates the group"
     sk "lid-close drop-in present" "postinstall.sh writes it"
@@ -242,6 +276,12 @@ else
     sk "long power press ignored"  "postinstall.sh writes it"
     sk "suspend key ignored"       "postinstall.sh writes it"
     sk "hibernate key ignored"     "postinstall.sh writes it"
+    sk "sshd config is valid"              "postinstall.sh writes the drop-in"
+    sk "ssh passwords refused"             "postinstall.sh writes the drop-in"
+    sk "ssh keyboard-interactive refused"  "postinstall.sh writes the drop-in"
+    sk "ssh root login refused"            "postinstall.sh writes the drop-in"
+    sk "ssh still accepts keys"            "postinstall.sh writes the drop-in"
+    sk "$DEPLOY_USER has an authorized key" "postinstall.sh writes the drop-in"
 fi
 
 # REQ-SERVER-006 - the box patches itself, from the security suite only, and
