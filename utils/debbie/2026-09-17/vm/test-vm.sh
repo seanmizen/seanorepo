@@ -14,7 +14,7 @@
 #   0   every assertion passed
 #   1   an assertion failed
 #   2   the install failed
-#   3   the VM never became reachable over SSH
+#   3   no SSH, or the reboot could not be proved - see wait_for_ssh
 #   124 a stage hit its hard timeout
 set -euo pipefail
 IFS=$'\n\t'
@@ -414,6 +414,108 @@ do_install() {
 #==============================================================================
 # Phase 2 - boot the installed disk and assert
 #==============================================================================
+# The boot id - #295 on metal, #298 here.
+#
+# /proc/sys/kernel/random/boot_id is a random UUID the kernel generates once per
+# boot. It changes on a boot and on nothing else, which makes it the one thing a
+# script can read to tell "the guest came back" apart from "the guest has not
+# finished going down yet".
+BOOT_ID_PATH=/proc/sys/kernel/random/boot_id
+
+# wait_for_ssh [boot-id-to-beat]
+#
+# Called only from do_assert, and it reads that function's ssh_opts, target and
+# QEMU_PID - a bash function sees its caller's locals. The metal sibling
+# (metal/provision.sh wait_for_ssh) reads globals instead; the mechanism below
+# is the same one, minus the candidate list. There is one fixed target here: no
+# mDNS name, no DHCP lease that can move under us, so nothing to loop over.
+#
+# With NO argument, any SSH answer satisfies the wait. That is the first boot,
+# where there is no reboot to prove.
+#
+# With an argument, that argument is the boot id read BEFORE the reboot, and the
+# wait is satisfied only by a DIFFERENT one. A connection that answers with the
+# same boot id is the pre-reboot guest - still up, because it has not finished
+# shutting down - and polling continues. Before this, `sleep 5` and a plain
+# `ssh ... true` ended the wait, and the PHASE=provisioned assertions then ran
+# against a guest that had not rebooted: `lid close ignored` and `sleep.target
+# masked` (REQ-SERVER-001) went red on a guest that was fine. A live SSH socket
+# is not evidence that a reboot happened.
+wait_for_ssh() {
+    local want_new_boot="${1:-}"
+    local waited=0 id
+    local saw_old_boot=no saw_unreadable=no
+
+    if [ -n "$want_new_boot" ]; then
+        log "waiting for a boot id other than $want_new_boot"
+    fi
+
+    while :; do
+        if [ -z "$want_new_boot" ]; then
+            if ssh "${ssh_opts[@]}" "$target" true 2> /dev/null; then
+                log "ssh up after ${waited}s"
+                return 0
+            fi
+        else
+            # One connection, three outcomes: empty means SSH did not answer at
+            # all, the sentinel means it answered but the file would not read
+            # (no proof either way), anything else is a boot id. The `|| echo`
+            # runs in the GUEST, so the two cases stay distinguishable without
+            # paying for a second probe on every round the guest is down.
+            id="$(ssh "${ssh_opts[@]}" "$target" \
+                "cat $BOOT_ID_PATH 2> /dev/null || echo unreadable" 2> /dev/null || true)"
+            if [ -z "$id" ]; then
+                : # not back yet
+            elif [ "$id" = unreadable ]; then
+                saw_unreadable=yes
+            elif [ "$id" = "$want_new_boot" ]; then
+                # Reachable, but it is the boot this run started against.
+                saw_old_boot=yes
+            else
+                log "back up after ${waited}s (boot id $id)"
+                return 0
+            fi
+        fi
+
+        # Without this the harness burns the full timeout on a VM that died
+        # instantly, every single run. Metal has no equivalent because metal has
+        # no guest process to lose: there, a box that never comes back is a box
+        # that is simply not answering.
+        kill -0 "$QEMU_PID" 2> /dev/null || {
+            if [ -n "$want_new_boot" ]; then
+                die_code 3 "VM exited during reboot. See $RUN_DIR/boot.log"
+            fi
+            die_code 3 "VM exited before SSH came up. See $RUN_DIR/boot.log"
+        }
+        [ "$waited" -lt "$SSH_TIMEOUT" ] || break
+        sleep 3
+        waited=$((waited + 3))
+    done
+
+    # Out of time. Which message depends on what was seen, because the three
+    # failures have three different fixes.
+    if [ "$saw_old_boot" = yes ]; then
+        echo >&2
+        echo "ERROR: the guest answered SSH within ${SSH_TIMEOUT}s, but never rebooted." >&2
+        echo "       It kept reporting boot id $want_new_boot - the same boot this" >&2
+        echo "       run started against." >&2
+        echo >&2
+        echo "The reboot request did not take effect, or the guest is taking longer" >&2
+        echo "than ${SSH_TIMEOUT}s to shut down and come back. Either way the" >&2
+        echo "PHASE=provisioned assertions would have been meaningless: the" >&2
+        echo "REQ-SERVER-001 settings only apply on a fresh boot." >&2
+        echo "See $RUN_DIR/boot.log; if it is simply slow, raise SSH_TIMEOUT." >&2
+        exit 3
+    fi
+    if [ "$saw_unreadable" = yes ]; then
+        die_code 3 "the guest answered SSH within ${SSH_TIMEOUT}s, but $BOOT_ID_PATH could not be read, so the reboot could not be proved. See $RUN_DIR/boot.log"
+    fi
+    if [ -n "$want_new_boot" ]; then
+        die_code 3 "no SSH after reboot within ${SSH_TIMEOUT}s. See $RUN_DIR/boot.log"
+    fi
+    die_code 3 "no SSH within ${SSH_TIMEOUT}s. See $RUN_DIR/boot.log"
+}
+
 do_assert() {
     if [ ! -f "$DISK" ]; then
         [ -f "$BASE_IMG" ] || die_code 2 "no installed disk. Run --install first."
@@ -435,16 +537,8 @@ do_assert() {
     local scp_opts=(-P "$SSH_PORT" "${common_opts[@]}")
     local target="$DEPLOY_USER@127.0.0.1"
 
-    local waited=0
-    until ssh "${ssh_opts[@]}" "$target" true 2> /dev/null; do
-        # Without this the harness burns the full timeout on a VM that died
-        # instantly, every single run.
-        kill -0 "$QEMU_PID" 2> /dev/null || die_code 3 "VM exited before SSH came up. See $RUN_DIR/boot.log"
-        [ "$waited" -lt "$SSH_TIMEOUT" ] || die_code 3 "no SSH within ${SSH_TIMEOUT}s. See $RUN_DIR/boot.log"
-        sleep 3
-        waited=$((waited + 3))
-    done
-    log "ssh up after ${waited}s"
+    # No reboot to prove yet: this is the first boot, so any answer will do.
+    wait_for_ssh ""
 
     # REQ-SERVER-004, #285. Assert the INSTALLER's work before anything has
     # been run on the box by hand. This is the run that can tell "the preseed
@@ -472,16 +566,30 @@ do_assert() {
         || die_code 2 "postinstall failed"
 
     # The lid-close drop-in is only read at boot, so assert after a restart.
+    #
+    # Read the boot id BEFORE asking for the reboot - #298. Nothing after this
+    # point may treat a live SSH socket as proof the guest went down; only a
+    # boot id different from this one is.
+    #
+    # Unreadable here is fatal, where metal only warns. The difference is what
+    # the two are for: metal is pointed at a box someone already owns and a
+    # repair run against a half-broken box is legitimate, while this guest was
+    # built by this harness minutes ago, so a boot_id that will not read is
+    # itself a fault - and a green VM run is what gates the metal run.
+    local boot_id_before
+    boot_id_before="$(ssh "${ssh_opts[@]}" "$target" "cat $BOOT_ID_PATH" 2> /dev/null || true)"
+    [ -n "$boot_id_before" ] \
+        || die_code 3 "could not read $BOOT_ID_PATH before the reboot, so the reboot cannot be proved. See $RUN_DIR/boot.log"
+    log "boot id before reboot: $boot_id_before"
+
     log "rebooting to apply boot-time settings"
     ssh "${ssh_opts[@]}" "$target" "sudo -n systemctl reboot" 2> /dev/null || true
+
+    # Not load-bearing any more: the boot id decides whether the guest is back.
+    # It only saves a first polling round against a guest that is certainly
+    # still up.
     sleep 5
-    waited=0
-    until ssh "${ssh_opts[@]}" "$target" true 2> /dev/null; do
-        kill -0 "$QEMU_PID" 2> /dev/null || die_code 3 "VM exited during reboot"
-        [ "$waited" -lt "$SSH_TIMEOUT" ] || die_code 3 "no SSH after reboot"
-        sleep 3
-        waited=$((waited + 3))
-    done
+    wait_for_ssh "$boot_id_before"
 
     log "asserting"
     local rc=0
