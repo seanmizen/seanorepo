@@ -3,9 +3,10 @@
 The path from the public internet to a container on the host, and the
 behaviour that keeps that path alive without anyone watching.
 
-`2025-10-08b/` implements these today; `2026-09-17/` has not rebuilt them. The
-August 2026 outage recorded in `REQ-NETWORK-003` is why the failover half of
-this exists at all.
+`2025-10-08b/` implements these on the box running today. `2026-09-17/` has
+rebuilt the tunnel half (`REQ-NETWORK-001`, `REQ-NETWORK-002`, in #280) and has
+not rebuilt the failover half. The August 2026 outage recorded in
+`REQ-NETWORK-003` is why the failover half exists at all.
 
 Introduced in #273.
 
@@ -30,8 +31,15 @@ Introduced in #273.
   firewall can stay closed — `REQ-SERVER-002` allows four ports and none of
   them is an application port.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no other ports open"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "cloudflared installed"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-cloudflared.service
+    installed in /usr/local/lib/systemd/system"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no other cloudflared unit
+    is enabled" — two daemons dialling out for one tunnel is the failure this
+    catches
+  - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
+    (what production runs today, until a box is rebuilt on `2026-09-17/`)
 - **Relations:** none
 
 ## REQ-NETWORK-002 — Ingress rules live in the repository
@@ -50,13 +58,30 @@ Introduced in #273.
   edited over SSH that exists in one place and is backed up nowhere.
 
   The credentials are the deliberate exception: they are host-specific and
-  gitignored, which is what `REQ-DEPLOY-006` protects.
+  gitignored, which is what `REQ-DEPLOY-006` protects. Provisioning defines
+  where they go and creates the directory; it never writes their content, and
+  re-running it never overwrites a set that is already there.
+
+  Because `config.yml` names its `credentials-file` by a path *relative* to
+  itself, the unit has to run with its working directory set to
+  `apps/cloudflared`. Without that the daemon starts and then cannot find the
+  credentials, which reads as an authentication problem rather than a path one.
 - **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the tunnel reads config.yml
+    from the checkout"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the tunnel runs in the
+    checkout's cloudflared directory"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "credentials directory is
+    mode 700"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the tunnel is NOT enabled
+    while credentials are absent" — a host with no credentials refuses to run
+    the tunnel rather than restarting against it forever
   - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
     points at the checkout's `config.yml`
 - **Relations:**
   - depends-on REQ-NETWORK-001
   - depends-on REQ-DEPLOY-005
+  - depends-on REQ-DEPLOY-006
 
 ## REQ-NETWORK-003 — A link with carrier but no route is treated as dead
 

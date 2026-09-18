@@ -2,8 +2,8 @@
 # postinstall.sh - bring a freshly installed Debian 13 box up to "debbie".
 #
 # Deliberately minimal. This generation proves the VM loop. Since #279 it also
-# installs the deploy poller; the cloudflared tunnel (#280) and the network
-# failover watchdog are still NOT here and arrive under REQ-NETWORK-*.
+# installs the deploy poller and since #280 the cloudflared tunnel; the network
+# failover watchdog is still NOT here and arrives under REQ-NETWORK-003.
 #
 # Every step is idempotent and every append is guarded. The previous
 # generation's postinstall re-appended its zsh prompt block on every run while
@@ -408,11 +408,13 @@ fi
 UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
 DEPLOY_SCRIPT="$GEN_DIR/scripts/deploy.sh"
-# Must match CLOUDFLARED_UNIT in that deploy.sh. #280 creates the unit itself;
-# this is only the name the deploy is permitted to restart, and vm/assert.sh
-# asserts that the two agree. `custom-` prefixed per REQ-SERVER-013, and
-# deliberately not `cloudflared.service`, which would shadow the unit
-# Cloudflare's apt package ships - REQ-SERVER-012.
+# Must match CLOUDFLARED_UNIT in that deploy.sh. The unit itself is written by
+# the tunnel section at the bottom of this script (#280); this is the name the
+# deploy is permitted to restart, and vm/assert.sh asserts that all three - the
+# unit on disk, the name deploy.sh restarts and the name sudo permits - agree.
+# `custom-` prefixed per REQ-SERVER-013, and deliberately not
+# `cloudflared.service`, which would shadow a packaged unit of that name -
+# REQ-SERVER-012.
 CLOUDFLARED_UNIT="${CLOUDFLARED_UNIT:-custom-cloudflared.service}"
 
 log "deploy poller"
@@ -561,6 +563,254 @@ if [ ! -x "$DEPLOY_SCRIPT" ]; then
     log "        'yarn release' from a clean main on a dev machine, then"
     log "        re-run this script - its checkout step above is what pulls"
     log "        the new commit onto the box."
+fi
+
+#------------------------------------------------------------------------------
+# Cloudflare tunnel - REQ-NETWORK-001, REQ-NETWORK-002
+#
+# Everything public arrives this way. REQ-SERVER-002 forwards no inbound port
+# and the firewall above allows four, none of them an app port, so without this
+# the box serves nothing to the internet at all. The tunnel dials OUT to
+# Cloudflare and traffic comes back down that connection.
+#
+# FROM CLOUDFLARE'S APT REPOSITORY, NOT A BINARY DROPPED IN BY HAND - #135.
+# The old arrangement had someone curl the binary into /usr/local/bin, which
+# made it invisible to dpkg, absent from every update path, and dependent on
+# cloudflared's own self-update - which failed silently for about sixteen
+# months (#136). As a package it is upgraded by REQ-SERVER-006's unattended
+# upgrades like anything else, and `dpkg -S` can say where it came from.
+#------------------------------------------------------------------------------
+CLOUDFLARED_KEYRING=/usr/share/keyrings/cloudflare-main.gpg
+CLOUDFLARED_LIST=/etc/apt/sources.list.d/cloudflared.list
+# `any`, NOT $VERSION_CODENAME, and this is a verified fact rather than a
+# preference. Cloudflare's repository has no `trixie` suite - as of writing
+# https://pkg.cloudflare.com/cloudflared/dists/trixie/Release is a 404 - so the
+# codename substitution used for the Docker repository above would leave apt
+# failing on every update, on the box this generation is FOR. The `any` suite
+# exists precisely for this, and it is not a downgrade: its
+# main/binary-<arch>/Packages is byte-identical to bookworm's (same MD5), so
+# `any` and a codename suite serve the same package. cloudflared is a static Go
+# binary with no libc version to disagree about, which is why one build covers
+# every suite.
+CLOUDFLARED_SUITE="${CLOUDFLARED_SUITE:-any}"
+
+CLOUDFLARED_DIR="$REPO_DIR/apps/cloudflared"
+# REQ-NETWORK-002 - ingress comes from the repository, so a routing change is
+# reviewable and revertable rather than being a file edited over SSH.
+CLOUDFLARED_CONFIG="$CLOUDFLARED_DIR/config.yml"
+# REQ-DEPLOY-006 - gitignored, host-specific, and the reason deploy.sh has no
+# `git clean`. Provisioning defines this path and creates the directory. It
+# NEVER writes anything into it: see the note further down.
+CLOUDFLARED_CREDS_DIR="$CLOUDFLARED_DIR/credentials"
+
+log "cloudflare tunnel"
+
+# Already binary, unlike Docker's - `file` reports an OpenPGP Public Key rather
+# than ASCII armour - so there is no `gpg --dearmor` step here and adding one
+# would corrupt it. Downloaded to a temp file first for the same reason as the
+# Docker key: a curl that dies mid-stream must not leave a present, non-empty,
+# unusable keyring that the guard then skips repairing forever.
+if [ ! -s "$CLOUDFLARED_KEYRING" ]; then
+    log "  fetching Cloudflare's apt signing key"
+    cf_key_tmp="$(mktemp)"
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o "$cf_key_tmp"
+    install -m 0644 -o root -g root "$cf_key_tmp" "$CLOUDFLARED_KEYRING"
+    rm -f "$cf_key_tmp"
+fi
+
+# Written whole and compared whole, exactly as the Docker source above is, so a
+# correct file is left byte-identical and a wrong one is replaced rather than
+# appended to. An append here is what leaves apt complaining about a
+# doubly-configured repository on every update - vm/assert.sh counts the lines.
+cf_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$CLOUDFLARED_KEYRING] https://pkg.cloudflare.com/cloudflared $CLOUDFLARED_SUITE main"
+cf_repo_changed=0
+if [ ! -f "$CLOUDFLARED_LIST" ] || [ "$(cat "$CLOUDFLARED_LIST")" != "$cf_deb_line" ]; then
+    log "  writing $CLOUDFLARED_LIST"
+    printf '%s\n' "$cf_deb_line" > "$CLOUDFLARED_LIST"
+    cf_repo_changed=1
+fi
+
+if [ "$cf_repo_changed" = 1 ] \
+    || ! dpkg-query -W -f='${Status}' cloudflared 2> /dev/null | grep -q "^install ok installed"; then
+    apt-get update -y
+fi
+
+apt-get install -y cloudflared
+
+#------------------------------------------------------------------------------
+# Nothing else may drive this tunnel.
+#
+# Two daemons running one tunnel is a real failure mode: Cloudflare accepts
+# both connections, requests are dealt to whichever, and restarting "the
+# tunnel" fixes half of them. Checked here rather than assumed, because two of
+# the three ways it happens are things a person does.
+#
+# What the package does NOT do, verified by unpacking the .deb rather than by
+# reading the docs: cloudflared 2026.9.1 ships /usr/bin/cloudflared, a man page
+# and a changelog, and no systemd unit at all. Its postinst only symlinks
+# /usr/local/bin/cloudflared -> /usr/bin/cloudflared and touches a marker file.
+# So there is no packaged `cloudflared.service` to race us and nothing to mask.
+#
+# A `cloudflared.service` can still appear, which is why this loop exists:
+# `cloudflared service install` writes one into /etc/systemd/system, and that
+# is the documented way to do this, so it is exactly what a future repair
+# session reaches for. `cloudflared-custom.service` is the previous
+# generation's unit and is live on the box this replaces.
+#
+# Disabled, not masked. Masking would make a later `cloudflared service
+# install` fail in a way nobody would connect to this script; disabling is
+# reversible, visible in `systemctl is-enabled`, and re-applied on every
+# provisioning run. vm/assert.sh asserts the property that matters - that no
+# other cloudflared unit is enabled - rather than the mechanism.
+#------------------------------------------------------------------------------
+for stale_unit in cloudflared.service cloudflared-custom.service; do
+    # Spelled as an `if` rather than `[ ... ] && continue`: under `set -e` a
+    # bare failing test at the top of a loop body is a trap that depends on
+    # exactly where it sits in the list, and this script must not die on one.
+    if [ "$stale_unit" = "$CLOUDFLARED_UNIT" ]; then
+        continue
+    fi
+    if systemctl cat -- "$stale_unit" > /dev/null 2>&1; then
+        log "  disabling $stale_unit so it cannot race $CLOUDFLARED_UNIT"
+        systemctl disable --now "$stale_unit" || true
+    fi
+done
+
+#------------------------------------------------------------------------------
+# The credentials directory - REQ-DEPLOY-006.
+#
+# PROVISIONING DEFINES THE PATH AND CREATES THE DIRECTORY. IT NEVER WRITES A
+# CREDENTIAL. There is no credential in this repository, none on the installer
+# medium and none on any command line - the tunnel's credentials file is
+# host-specific, is created once by `cloudflared tunnel create` on a machine
+# with a Cloudflare login, and is copied to the box by hand. See the README.
+#
+# `install -d` touches the directory's own mode and ownership and nothing
+# inside it, so a second run cannot clobber a working tunnel - which is the
+# whole of AC 3. 0700 because the contents are a bearer credential for every
+# hostname this box serves: anything that can read the file can serve traffic
+# as debbie.
+#
+# Guarded on the checkout having apps/cloudflared at all. On a box whose
+# `release` predates that directory, creating it here would scatter untracked
+# directories through the checkout to no purpose - the unit's conditions below
+# would still correctly refuse to start.
+#------------------------------------------------------------------------------
+if [ -d "$CLOUDFLARED_DIR" ]; then
+    install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$CLOUDFLARED_CREDS_DIR"
+else
+    log "  NOTE: $CLOUDFLARED_DIR is not in the checkout yet, so the"
+    log "        credentials directory has not been created."
+fi
+
+#------------------------------------------------------------------------------
+# The unit.
+#
+# WorkingDirectory is load-bearing and is the least obvious line here.
+# config.yml says `credentials-file: ./credentials/<uuid>.json` - a RELATIVE
+# path - and cloudflared resolves it against the process's working directory,
+# not against the config file. Drop this line and the daemon starts, reads the
+# config, and fails looking for the credentials under whatever directory
+# systemd happened to give it. The previous generation's unit set it for the
+# same reason.
+#
+# --no-autoupdate, and this is #136 rather than a style choice. cloudflared's
+# self-update is what silently failed for sixteen months on the old box. Now
+# that this is a package, REQ-SERVER-006's unattended upgrades own the version,
+# and leaving self-update on would have two mechanisms writing the same binary
+# - one of which runs as $DEPLOY_USER and cannot write /usr/bin anyway, so it
+# could only ever fail, quietly, exactly as it did before.
+#
+# /usr/bin/cloudflared, not /usr/local/bin/cloudflared. The latter is the
+# symlink the package's postinst creates; pointing at the real path means the
+# unit does not depend on that symlink surviving.
+#------------------------------------------------------------------------------
+units_changed=0
+
+write_unit "$CLOUDFLARED_UNIT" <<EOF
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-NETWORK-001
+[Unit]
+Description=Cloudflare tunnel - public ingress for every site this host serves
+Documentation=https://github.com/seanmizen/seanorepo/issues/280
+# The tunnel's first act is to dial out to Cloudflare, so it wants a route.
+After=network-online.target
+Wants=network-online.target
+
+# REFUSE, RATHER THAN FAIL IN A LOOP. Both of these are absent on a box that
+# has been provisioned but whose tunnel has never been set up by hand, which is
+# a normal first-boot state rather than an error. A condition that is not met
+# makes systemd log one line and leave the unit inactive - it does NOT count as
+# a failure, does not trigger Restart=, and cannot fill the journal. Starting
+# without credentials would instead be an authentication failure every
+# RestartSec forever, against a journal that is uncapped until #287, hiding the
+# one fact that matters: nobody has put the credentials on this box.
+ConditionPathExists=$CLOUDFLARED_CONFIG
+ConditionDirectoryNotEmpty=$CLOUDFLARED_CREDS_DIR
+
+# The backstop for a failure the conditions cannot see - credentials that are
+# present but rejected, or a config.yml that does not parse. Five attempts in
+# ten minutes, then systemd gives up and leaves the unit in \`failed\`, which is
+# a state \`systemctl status\` reports and a human can find. Without this,
+# Restart=on-failure means "retry every ten seconds until the disk fills".
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+# Not optional - see the note above this unit. config.yml's credentials-file is
+# a relative path and cloudflared resolves it from here.
+WorkingDirectory=$CLOUDFLARED_DIR
+ExecStart=/usr/bin/cloudflared --no-autoupdate --config $CLOUDFLARED_CONFIG tunnel run
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+if [ "$units_changed" = 1 ]; then
+    systemctl daemon-reload
+fi
+
+#------------------------------------------------------------------------------
+# Enable it only if it could actually run.
+#
+# The test mirrors the unit's two Conditions exactly, on purpose: if this
+# script and systemd disagreed about what "ready" means, the box would either
+# carry an enabled unit that never starts or a working tunnel nobody enabled.
+#
+# Enabled, NOT --now, matching the deploy poller above. Provisioning is
+# followed by a reboot in both harnesses and on metal.
+#
+# NOT DISABLED IN THE ELSE BRANCH, deliberately. A box whose credentials have
+# gone missing is already handled by the conditions - the unit stays enabled
+# and is skipped rather than looping - and disabling here would mean a
+# re-provisioning run that misread the state could take a working tunnel down.
+# Refusing to enable is the requirement; tearing down is not.
+#
+# EXIT 0 EITHER WAY. No credentials is the correct state of a freshly built
+# box, exactly like #278's missing origin/release. It is reported, loudly, with
+# the remedy - not treated as a provisioning failure.
+#------------------------------------------------------------------------------
+if [ -f "$CLOUDFLARED_CONFIG" ] \
+    && [ -d "$CLOUDFLARED_CREDS_DIR" ] \
+    && [ -n "$(ls -A "$CLOUDFLARED_CREDS_DIR" 2> /dev/null)" ]; then
+    log "  credentials present - enabling $CLOUDFLARED_UNIT"
+    systemctl enable "$CLOUDFLARED_UNIT"
+else
+    log "  NOT enabling $CLOUDFLARED_UNIT - this box has no tunnel credentials."
+    log "        This is the normal state of a newly provisioned box, not a"
+    log "        failure. The credentials are host-specific, are in no"
+    log "        repository, and are never written by this script."
+    log "        To finish the tunnel, on a machine with a Cloudflare login:"
+    log "          cloudflared tunnel login"
+    log "          cloudflared tunnel create <name>    # writes ~/.cloudflared/<uuid>.json"
+    log "        then copy that file to this box as"
+    log "          $CLOUDFLARED_CREDS_DIR/<uuid>.json"
+    log "        make sure the uuid matches 'tunnel:' in $CLOUDFLARED_CONFIG,"
+    log "        and re-run this script - it enables the unit once the"
+    log "        credentials are there. See utils/debbie/2026-09-17/README.md."
 fi
 
 log "done"

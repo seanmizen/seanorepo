@@ -148,6 +148,14 @@ Read this before trusting a green run on hardware:
   install that fails to impose the intended name — for whatever reason netcfg
   chose something else — goes red. Whether the *fix* works against a router
   that does answer reverse DNS is unproven until the on-metal run.
+- **A tunnel that actually connects.** There are no Cloudflare credentials in
+  any VM and there never will be, so no green run proves that `cloudflared`
+  authenticates, that the ingress rules route, or that a request from the
+  internet reaches a container. What the tunnel checks prove is that the box is
+  *provisioned* to run one: the package is installed and dpkg-owned, the unit
+  exists with the right config path and working directory, nothing else is
+  driving the same tunnel, and the absence of credentials produces a refusal.
+  The first proof of a working tunnel is the box itself.
 - **mDNS on the LAN.** `$SERVER_NAME.local resolves` asks the box's own
   `nss-mdns`, which asks the local `avahi-daemon`, which answers for the name
   it publishes. That proves the daemon is up, publishing the right name, and
@@ -223,9 +231,10 @@ re-pays the two minutes and the 2G.
 
 In: install, provision, assert — in a VM and on metal, plus the repository
 checkout itself (`REQ-DEPLOY-001`): `postinstall.sh` clones seanorepo as the
-deploy user and puts it on `release`. Since #279 the deploy poller is in too.
-Out: the Cloudflare tunnel (#280) and the network failover watchdog — those
-arrive under `REQ-NETWORK-*`.
+deploy user and puts it on `release`. Since #279 the deploy poller is in too,
+and since #280 the Cloudflare tunnel (`REQ-NETWORK-001`, `REQ-NETWORK-002`).
+Out: the network failover watchdog (`REQ-NETWORK-003`) and the wifi migration
+to NetworkManager (`REQ-NETWORK-004`).
 
 ### The deploy poller
 
@@ -282,6 +291,123 @@ repository is ever made private, `postinstall.sh`'s clone is what breaks, and
 provisioned box it may legitimately be absent. That is reported and skipped,
 never failed, and `postinstall.sh` deliberately does not create it — doing so
 would ship whatever `main` happened to be.
+
+### The Cloudflare tunnel
+
+Everything public arrives this way. `REQ-SERVER-002` forwards no inbound port
+and the firewall allows four, none of them an app port, so until the tunnel is
+running the box serves nothing to the internet — that is the design, not a
+gap. `postinstall.sh` installs `custom-cloudflared.service`, which reads its
+ingress rules from `apps/cloudflared/config.yml` in the deployed checkout
+(`REQ-NETWORK-002`), and `deploy.sh` restarts it when that file changes.
+
+**Not the SSH tunnel.** `utils/debbie/README.md` has a *Cloudflare SSH tunnel*
+section with its own `cloudflared tunnel create` recipe and an
+`ssh-config.yml`. That is a different tunnel for a different job. This one is
+the ingress tunnel that serves the sites.
+
+**From apt, not a binary drop** (#135). `postinstall.sh` adds Cloudflare's
+repository and installs the `cloudflared` package, so the binary is
+dpkg-owned and `REQ-SERVER-006`'s unattended upgrades keep it current. The
+unit passes `--no-autoupdate` for the same reason (#136): cloudflared's own
+self-update failed silently for about sixteen months on the old box, and with
+the package in charge of the version a second updater could only ever conflict.
+
+The apt suite is `any`, not the host's codename, and that is deliberate:
+Cloudflare publishes no `trixie` suite — `dists/trixie/Release` is a 404 — so
+the codename substitution used for Docker's repository would break apt on
+every update. `any` serves a byte-identical `Packages` index to the codename
+suites, and `cloudflared` is a static Go binary, so one build covers all of
+them.
+
+#### Creating the tunnel and placing its credentials
+
+The credentials are host-specific, gitignored (`REQ-DEPLOY-006`) and in no
+repository. **Provisioning defines the path and creates the directory; it never
+writes the credentials and never overwrites an existing set**, so re-running
+`postinstall.sh` cannot break a working tunnel.
+
+On a machine with a Cloudflare login:
+
+```bash
+cloudflared tunnel login                 # browser, once per machine
+cloudflared tunnel create debbie         # writes ~/.cloudflared/<uuid>.json
+cloudflared tunnel route dns debbie seanmizen.com   # per hostname served
+```
+
+Then put the credentials on the box and point the config at them:
+
+```bash
+# on debbie, as srv
+install -m 600 <uuid>.json \
+  ~/projects/seanorepo/apps/cloudflared/credentials/<uuid>.json
+```
+
+`apps/cloudflared/config.yml` must name the same tunnel:
+
+```yaml
+tunnel: <uuid>
+credentials-file: ./credentials/<uuid>.json
+```
+
+That `credentials-file` path is **relative**, and cloudflared resolves it
+against the process's working directory rather than against the config file.
+The unit therefore sets `WorkingDirectory` to `apps/cloudflared`; deleting that
+line makes the daemon start and then fail to find its credentials, which reads
+like an auth problem and is not one. `vm/assert.sh` asserts the line is there.
+
+Finally, re-run `postinstall.sh`. It enables the unit once — and only once —
+the credentials are in place.
+
+#### What happens on a box with no credentials
+
+A newly provisioned box has none, and that is a normal state rather than a
+failure: `postinstall.sh` exits 0, prints the recipe above, and **does not
+enable the unit**. Enabling it would be the worse outcome — a tunnel restarting
+every ten seconds against credentials that are not there fills a journal that
+is uncapped until #287 and buries the one fact that matters.
+
+Two mechanisms, because the refusal has to survive a box that loses its
+credentials later as well as one that never had them:
+
+- `postinstall.sh` enables the unit only when `config.yml` and a non-empty
+  credentials directory both exist. It never *disables* an already-enabled
+  unit, so a re-provisioning run cannot take a working tunnel down.
+- The unit carries `ConditionPathExists` and `ConditionDirectoryNotEmpty`. A
+  unit whose conditions are unmet is **skipped** by systemd — one log line,
+  left inactive, never marked failed, so `Restart=` is never reached. For
+  failures the conditions cannot see (credentials present but rejected, a
+  config that will not parse) `StartLimitBurst=5` over ten minutes stops the
+  retries and leaves the unit in `failed`, where `systemctl status` shows it.
+
+Check with:
+
+```bash
+ssh srv@debbie.local systemctl status custom-cloudflared.service
+ssh srv@debbie.local journalctl -u custom-cloudflared.service -b
+```
+
+#### One tunnel, one daemon
+
+Two `cloudflared` processes serving one tunnel is a real failure mode:
+Cloudflare accepts both connections, requests are dealt to whichever, and
+restarting "the tunnel" fixes half of them. The `cloudflared` package itself
+ships **no** systemd unit — verified by unpacking the `.deb`, which contains
+only `/usr/bin/cloudflared`, a man page and a changelog — so there is nothing
+packaged to race and nothing to mask. A `cloudflared.service` can still appear,
+because `cloudflared service install` writes one and that is the documented way
+to set this up; `cloudflared-custom.service` is the previous generation's unit
+and is live on the box this replaces. `postinstall.sh` disables either on
+sight, and `vm/assert.sh` › "no other cloudflared unit is enabled" is what
+keeps it true.
+
+Our unit is `custom-cloudflared.service` and deliberately **not**
+`cloudflared.service`: a file of that name in `/usr/local/lib/systemd/system`
+would shadow any packaged unit of the same name, which `REQ-SERVER-012`
+forbids. The name appears in three places — the unit on disk, `CLOUDFLARED_UNIT`
+in `deploy.sh`, and the sudoers drop-in — and `vm/assert.sh` asserts all three
+agree, because a rename that moves only two of them fails at the exact moment
+it matters, an ingress change, and passes every other day of the year.
 
 Deferred, not rejected: **systemd targets and slices.** Units go in
 `/usr/local/lib/systemd/system` with a `custom-` prefix (`REQ-SERVER-011`,
