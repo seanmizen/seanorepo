@@ -20,7 +20,7 @@
 | [`REQ-NETWORK-002`](network.md#req-network-002--ingress-rules-live-in-the-repository) | Ingress rules live in the repository | active | constraint | P1 | sean |
 | [`REQ-NETWORK-003`](network.md#req-network-003--a-link-with-carrier-but-no-route-is-treated-as-dead) | A link with carrier but no route is treated as dead | active | functional | P0 | sean |
 | [`REQ-NETWORK-004`](network.md#req-network-004--the-failover-watchdog-and-the-wifi-configuration-agree-on-an-owner) | The failover watchdog and the wifi configuration agree on an owner | proposed | constraint | P1 | sean |
-| [`REQ-SERVER-001`](server.md#req-server-001--a-closed-lid-does-not-take-the-server-down) | A closed lid does not take the server down | active | constraint | P0 | sean |
+| [`REQ-SERVER-001`](server.md#req-server-001--no-local-event-takes-the-server-down) | No local event takes the server down | active | constraint | P0 | sean |
 | [`REQ-SERVER-002`](server.md#req-server-002--only-four-ports-are-reachable) | Only four ports are reachable | active | constraint | P1 | sean |
 | [`REQ-SERVER-003`](server.md#req-server-003--the-deploy-user-can-deploy-without-a-password) | The deploy user can deploy without a password | active | functional | P1 | sean |
 | [`REQ-SERVER-004`](server.md#req-server-004--the-host-is-reachable-by-name-on-the-local-network) | The host is reachable by name on the local network | active | functional | P2 | sean |
@@ -53,7 +53,7 @@ graph TD
   REQ_NETWORK_002["REQ-NETWORK-002<br/>Ingress rules live in the repository"]
   REQ_NETWORK_003["REQ-NETWORK-003<br/>A link with carrier but no route is treated as dead"]
   REQ_NETWORK_004["REQ-NETWORK-004<br/>The failover watchdog and the wifi configuration agree on an owner"]
-  REQ_SERVER_001["REQ-SERVER-001<br/>A closed lid does not take the server down"]
+  REQ_SERVER_001["REQ-SERVER-001<br/>No local event takes the server down"]
   REQ_SERVER_002["REQ-SERVER-002<br/>Only four ports are reachable"]
   REQ_SERVER_003["REQ-SERVER-003<br/>The deploy user can deploy without a password"]
   REQ_SERVER_004["REQ-SERVER-004<br/>The host is reachable by name on the local network"]

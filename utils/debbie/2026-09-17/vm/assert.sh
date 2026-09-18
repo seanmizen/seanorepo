@@ -60,6 +60,27 @@ sk()   { printf '  \033[33m-\033[0m %s \033[33m(skipped: %s)\033[0m\n' "$1" "$2"
 # Subshelling here fixes the whole class rather than that one call site.
 check() { if ( eval "$2" ) > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 
+# logind's LIVE view of one of its Handle* properties, printed bare.
+#
+# `busctl get-property ... HandlePowerKey` answers `s "ignore"`, which is the
+# same text #283 quoted off the real box when it still said `poweroff`. This is
+# the running configuration, not the file: a drop-in that was written but never
+# read still reports the compiled-in default here, which is exactly the state
+# that took the box down twice and exactly why REQ-SERVER-001 is asserted only
+# after a reboot.
+#
+# Deliberately NOT `loginctl show-session`. debbie is headless and assert.sh
+# arrives over SSH, so there is no seat and no graphical session to interrogate;
+# the manager object exists whether anyone is logged in or not. Equally
+# deliberately, there is no fall back to grepping the drop-in - a file that
+# logind has not read is the bug, so a check satisfied by the file's contents
+# would pass in the failing state.
+logind_handler() {
+    busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+        org.freedesktop.login1.Manager "$1" 2>/dev/null |
+        awk '{print $2}' | tr -d '"'
+}
+
 # Stated up front so a pasted log says which of the two runs it came from. The
 # same check name means different things in each, which is the entire point.
 if [ "$PHASE" = firstboot ]; then
@@ -157,11 +178,27 @@ if [ "$PHASE" = provisioned ]; then
     check "lid-close drop-in present" '[ -f /etc/systemd/logind.conf.d/10-debbie-nosleep.conf ]'
     check "lid close ignored"         '[ "$(loginctl show-seat seat0 -p IdleAction --value 2>/dev/null || busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandleLidSwitch 2>/dev/null | awk "{print \$2}" | tr -d \")" = ignore ] || grep -q "^HandleLidSwitch=ignore" /etc/systemd/logind.conf.d/10-debbie-nosleep.conf'
     check "sleep.target masked"       '[ "$(systemctl is-enabled sleep.target 2>&1)" = masked ]'
+    # #283. The lid was covered and the power button was not, so systemd's
+    # default of HandlePowerKey=poweroff stood: a brief press cleanly shut the
+    # whole box down, twice in one evening. Asserted against the running
+    # manager, so `poweroff` here fails the run.
+    check "power key ignored"         '[ "$(logind_handler HandlePowerKey)" = ignore ]'
+    # Not `poweroff`. The deliberate shutdown path is `systemctl poweroff` over
+    # SSH; the emergency one is the firmware's own force-off, which holds the
+    # rail down without consulting logind. Setting this to poweroff would only
+    # re-open the hole for anyone who held the button a moment too long.
+    check "long power press ignored"  '[ "$(logind_handler HandlePowerKeyLongPress)" = ignore ]'
+    check "suspend key ignored"       '[ "$(logind_handler HandleSuspendKey)" = ignore ]'
+    check "hibernate key ignored"     '[ "$(logind_handler HandleHibernateKey)" = ignore ]'
 else
     sk "$DEPLOY_USER in docker"   "postinstall.sh creates the group"
     sk "lid-close drop-in present" "postinstall.sh writes it"
     sk "lid close ignored"         "postinstall.sh writes it"
     sk "sleep.target masked"       "postinstall.sh masks it"
+    sk "power key ignored"         "postinstall.sh writes it"
+    sk "long power press ignored"  "postinstall.sh writes it"
+    sk "suspend key ignored"       "postinstall.sh writes it"
+    sk "hibernate key ignored"     "postinstall.sh writes it"
 fi
 
 # REQ-DEPLOY-004 - the deploy is `yarn prod:docker`, so the engine has to be

@@ -108,11 +108,29 @@ systemctl enable --now avahi-daemon
 # debbie is a laptop serving from a shelf with the lid shut. Default logind
 # suspends on lid close, which takes every site down until someone opens it.
 #
+# The power button is the same hole with a different door, and #283 is the bug
+# that proved it: logind's default HandlePowerKey is `poweroff`, so a brief
+# press is a clean shutdown of every hosted site. It happened twice in one
+# evening on the real box, and the second one is why a provision.sh run
+# reported "did not come up on SSH" - the machine had been switched off while
+# the script waited for it. The suspend and hibernate keys are ignored for the
+# same reason: a laptop keyboard has them, and a shelf is not a desk.
+#
+# Nothing deliberate is lost. `systemctl poweroff` over SSH is unaffected, and
+# holding the button still cuts power - the firmware's ~4 second force-off is
+# unconditional and never reaches logind at all. HandlePowerKeyLongPress is
+# logind's own software long press, a different thing entirely, and it is set
+# explicitly to `ignore` so that no press of any duration makes logind act.
+#
 # A drop-in, not a sed over /etc/systemd/logind.conf: the main file is package
 # owned, so an upgrade can revert or conflict with an edit made in place, and a
 # drop-in states only what we override.
+#
+# One drop-in, rewritten in full on every run rather than appended to, so a
+# second run leaves a correct file byte-identical and cannot accumulate
+# duplicate keys.
 #------------------------------------------------------------------------------
-log "disabling sleep on lid close and idle"
+log "ignoring lid, idle, power, suspend and hibernate events"
 install -d /etc/systemd/logind.conf.d
 cat > /etc/systemd/logind.conf.d/10-debbie-nosleep.conf <<'EOF'
 # Managed by utils/debbie postinstall.sh - REQ-SERVER-001
@@ -120,6 +138,10 @@ cat > /etc/systemd/logind.conf.d/10-debbie-nosleep.conf <<'EOF'
 HandleLidSwitch=ignore
 HandleLidSwitchExternalPower=ignore
 HandleLidSwitchDocked=ignore
+HandlePowerKey=ignore
+HandlePowerKeyLongPress=ignore
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
 IdleAction=ignore
 IdleActionSec=0
 EOF
