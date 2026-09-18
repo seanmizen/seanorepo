@@ -73,6 +73,7 @@ graph TD
   REQ_DEPLOY_006 -->|depends-on| REQ_DEPLOY_004
   REQ_NETWORK_002 -->|depends-on| REQ_NETWORK_001
   REQ_NETWORK_002 -->|depends-on| REQ_DEPLOY_005
+  REQ_NETWORK_002 -->|depends-on| REQ_DEPLOY_006
   REQ_NETWORK_003 -->|depends-on| REQ_NETWORK_001
   REQ_NETWORK_004 -->|refines| REQ_SERVER_005
   REQ_NETWORK_004 -->|depends-on| REQ_NETWORK_003
@@ -89,6 +90,7 @@ graph TD
 - `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004
 - `REQ-DEPLOY-004` — required-by REQ-DEPLOY-005, required-by REQ-DEPLOY-006
 - `REQ-DEPLOY-005` — required-by REQ-NETWORK-002
+- `REQ-DEPLOY-006` — required-by REQ-NETWORK-002
 - `REQ-NETWORK-001` — required-by REQ-NETWORK-002, required-by REQ-NETWORK-003
 - `REQ-NETWORK-003` — required-by REQ-NETWORK-004
 - `REQ-SERVER-002` — required-by REQ-SERVER-008
