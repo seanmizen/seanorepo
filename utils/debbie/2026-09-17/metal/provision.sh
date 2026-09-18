@@ -22,6 +22,13 @@
 #   ./provision.sh --assert     assert only, against a box already provisioned
 #   ./provision.sh --no-reboot  postinstall only, no reboot and no assert
 #
+# The box is dialled BY NAME, and the address is only ever a fallback - #284.
+# A DHCP lease does not survive a reboot: the first real box took .182, then
+# .183, then .184, one per boot. A run started with HOST=<ip> kept dialling the
+# address it began with, so the post-reboot wait could not succeed even though
+# the box was up - it had simply moved. $SERVER_NAME.local is the one handle
+# that is stable across a moving lease, and since #285 it works from first boot.
+#
 # Exit codes mirror the VM harness - REQ-EMU-003:
 #   0   every assertion passed
 #   1   an assertion failed
@@ -41,8 +48,34 @@ read_env
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 SERVER_NAME="${SERVER_NAME:-debbie}"
 KEY="${SSH_KEY:-$WORK/id_ed25519}"
-HOST="${HOST:-$SERVER_NAME.local}"
 SSH_WAIT="${SSH_WAIT:-300}"
+
+#------------------------------------------------------------------------------
+# Where to dial - #284. In order of preference, not one pinned address.
+#
+# HOST is no longer "the host"; it is the FALLBACK, for the case where mDNS does
+# not reach this machine. The name goes first because it is the only handle that
+# survives the reboot in the middle of this script: the lease moves, the name
+# does not. Nothing here caches a resolved address, so each wait re-decides from
+# this list and a box that came back on a different address is still found.
+#
+# The fallback matters more than it looks. #285's assertion that
+# `$SERVER_NAME.local resolves` asks the BOX'S OWN resolver, because QEMU's
+# slirp carries no multicast - so "the laptop can hear it" is not something any
+# green run has proved. If mDNS turns out not to cross this particular network,
+# the supplied address is what saves the run, and it is tried within seconds
+# rather than after the full SSH_WAIT: every round tries every candidate.
+#------------------------------------------------------------------------------
+MDNS_NAME="$SERVER_NAME.local"
+HOST_FALLBACK="${HOST:-}"
+
+CANDIDATES=("$MDNS_NAME")
+if [ -n "$HOST_FALLBACK" ] && [ "$HOST_FALLBACK" != "$MDNS_NAME" ]; then
+    CANDIDATES+=("$HOST_FALLBACK")
+fi
+
+# Whichever candidate last answered. wait_for_ssh sets it; sshto reads it.
+HOST="${CANDIDATES[0]}"
 
 MODE=full
 case "${1:-}" in
@@ -62,16 +95,47 @@ SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no
 
 sshto() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$HOST" "$@"; }
 
-die_code() { local c=$1; shift; echo "ERROR: $*" >&2; exit "$c"; }
-
+# Try every candidate on every round rather than exhausting the deadline on the
+# first one. A name that does not resolve fails in milliseconds and a dead
+# address fails in ConnectTimeout, so the whole list costs a few seconds per
+# round - the difference between "the fallback was tried" and "the fallback was
+# tried five minutes later", which is the same as never on a run someone is
+# watching.
 wait_for_ssh() {
-    local deadline=$(( $(date +%s) + SSH_WAIT ))
-    log "waiting for $DEPLOY_USER@$HOST"
+    local deadline=$(( $(date +%s) + SSH_WAIT )) cand
+    log "waiting for $DEPLOY_USER@$MDNS_NAME${CANDIDATES[1]+, falling back to ${CANDIDATES[1]}}"
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        if sshto true 2> /dev/null; then log "up"; return 0; fi
+        for cand in "${CANDIDATES[@]}"; do
+            if ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$cand" true 2> /dev/null; then
+                HOST="$cand"
+                log "up on $HOST"
+                return 0
+            fi
+        done
         sleep 5
     done
-    die_code 3 "$HOST did not come up on SSH within ${SSH_WAIT}s. If the box is on, mDNS may not have settled - set HOST=<ip> and retry."
+
+    # Name both, and say what to do about each - the address and the name fail
+    # for unrelated reasons and the fix differs.
+    echo >&2
+    echo "ERROR: nothing answered SSH as $DEPLOY_USER within ${SSH_WAIT}s. Tried:" >&2
+    echo "  - $MDNS_NAME (mDNS)" >&2
+    if [ -n "$HOST_FALLBACK" ] && [ "$HOST_FALLBACK" != "$MDNS_NAME" ]; then
+        echo "  - $HOST_FALLBACK (HOST, as supplied)" >&2
+    else
+        echo "  - no fallback address: HOST was not set" >&2
+    fi
+    echo >&2
+    echo "If the box is on:" >&2
+    echo "  * find its current address in the router's DHCP lease table - the" >&2
+    echo "    lease moves on every boot, so an address from an earlier run is" >&2
+    echo "    probably stale - and re-run with HOST=<that address>." >&2
+    echo "  * if $MDNS_NAME never resolves from this machine, mDNS is not" >&2
+    echo "    crossing the network (wifi client isolation, or two subnets)." >&2
+    echo "    Check with: ping -c1 $MDNS_NAME" >&2
+    echo "If it is not on, or never finished installing, there is nothing to" >&2
+    echo "reach - see metal/README.md, 'Where this is likely to go wrong'." >&2
+    exit 3
 }
 
 #------------------------------------------------------------------------------
