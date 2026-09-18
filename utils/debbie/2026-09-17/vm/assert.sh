@@ -468,6 +468,153 @@ else
     sk "the unit deploy.sh restarts is the unit sudo permits" "postinstall.sh installs it"
 fi
 
+# REQ-NETWORK-001 / REQ-NETWORK-002 - the tunnel, #280.
+#
+# What a VM run can and cannot prove, stated once here rather than implied by
+# each check: there are no Cloudflare credentials in any VM and there never
+# will be, so nothing below proves a tunnel connects, authenticates or routes a
+# request. What it proves is that the box is provisioned to run one, that the
+# binary is a package rather than a hand-dropped file, that nothing else is
+# driving the same tunnel, and - the one behavioural check here - that the
+# absence of credentials produces a refusal rather than a restart loop.
+echo
+echo "== cloudflare tunnel (REQ-NETWORK-001) =="
+CLOUDFLARED_DIR="$REPO_DIR/apps/cloudflared"
+CLOUDFLARED_CONFIG="$CLOUDFLARED_DIR/config.yml"
+CLOUDFLARED_CREDS_DIR="$CLOUDFLARED_DIR/credentials"
+CLOUDFLARED_UNIT=custom-cloudflared.service
+if [ "$PHASE" = provisioned ]; then
+    check "cloudflared installed" \
+        'dpkg-query -W -f="\${Status}" cloudflared 2>/dev/null | grep -q "^install ok installed"'
+    check "cloudflare apt keyring present" '[ -s /usr/share/keyrings/cloudflare-main.gpg ]'
+    # Same idempotency claim as the docker source above, and the same way to
+    # get it wrong: an append rather than a whole-file compare.
+    check "exactly one cloudflared apt source" \
+        '[ "$(grep -rhsE "^deb .*pkg\.cloudflare\.com" /etc/apt/sources.list /etc/apt/sources.list.d/ | wc -l)" -eq 1 ]'
+
+    # #135, as something that can fail. The old arrangement curled the binary
+    # into /usr/local/bin, where dpkg cannot see it and no update path reaches
+    # it. Asking dpkg who owns the binary is the difference between "a
+    # cloudflared exists" and "cloudflared is a package".
+    check "cloudflared is dpkg-owned, not a manual binary drop" \
+        'dpkg -S /usr/bin/cloudflared 2>/dev/null | grep -q "^cloudflared:"'
+    # The subtle half of #135, and the reason this is not simply "nothing in
+    # /usr/local/bin": the package's own postinst CREATES
+    # /usr/local/bin/cloudflared as a symlink to /usr/bin/cloudflared, so the
+    # path being occupied is normal. A REGULAR FILE there is the #135 shape -
+    # a hand-installed binary shadowing the packaged one, since /usr/local/bin
+    # precedes /usr/bin on PATH. Absent is fine too; a non-symlink is not.
+    check "/usr/local/bin/cloudflared is the package symlink, not a binary" \
+        '[ ! -e /usr/local/bin/cloudflared ] \
+         || { [ -L /usr/local/bin/cloudflared ] \
+              && [ "$(readlink -f /usr/local/bin/cloudflared)" = /usr/bin/cloudflared ]; }'
+
+    check "$CLOUDFLARED_UNIT installed in /usr/local/lib/systemd/system" \
+        "[ -f /usr/local/lib/systemd/system/$CLOUDFLARED_UNIT ]"
+    # REQ-NETWORK-002, and the AC that says "config path points into the
+    # checkout". Read from `systemctl cat`, so it is the EFFECTIVE unit rather
+    # than the file - a drop-in overriding ExecStart would show up here.
+    check "the tunnel reads config.yml from the checkout" \
+        "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -qF -- '--config $CLOUDFLARED_CONFIG'"
+    # Load-bearing and easy to delete as noise. config.yml's credentials-file
+    # is a RELATIVE path, which cloudflared resolves against the working
+    # directory; without this the daemon starts and then cannot find its
+    # credentials.
+    check "the tunnel runs in the checkout's cloudflared directory" \
+        "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -qx 'WorkingDirectory=$CLOUDFLARED_DIR'"
+    # #136. Self-update is what failed silently for sixteen months; the package
+    # is now upgraded by REQ-SERVER-006 instead.
+    check "the tunnel does not self-update" \
+        "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -q -- '--no-autoupdate'"
+
+    # Two daemons for one tunnel. `cloudflared service install` writes a
+    # cloudflared.service and is the documented way to set this up, so it is
+    # what a future repair session would reach for; cloudflared-custom.service
+    # is the previous generation's unit. Either being enabled alongside ours
+    # means requests are dealt between two processes and restarting "the
+    # tunnel" fixes half of them.
+    check "no other cloudflared unit is enabled" \
+        'for u in cloudflared.service cloudflared-custom.service; do
+             if systemctl is-enabled "$u" 2>/dev/null | grep -qx enabled; then exit 1; fi
+         done; true'
+
+    # AC 3 - the path is defined and private. The credentials are a bearer
+    # token for every hostname this box serves, so group or world read is a
+    # finding, not a detail.
+    if [ -d "$CLOUDFLARED_DIR" ]; then
+        check "credentials directory exists" '[ -d "$CLOUDFLARED_CREDS_DIR" ]'
+        check "credentials directory is mode 700" \
+            '[ "$(stat -c %a "$CLOUDFLARED_CREDS_DIR" 2>/dev/null)" = 700 ]'
+        check "credentials directory belongs to $DEPLOY_USER" \
+            '[ "$(stat -c %U "$CLOUDFLARED_CREDS_DIR" 2>/dev/null)" = "$DEPLOY_USER" ]'
+    else
+        sk "credentials directory exists" "no $CLOUDFLARED_DIR in the checkout"
+        sk "credentials directory is mode 700" "no $CLOUDFLARED_DIR in the checkout"
+        sk "credentials directory belongs to $DEPLOY_USER" "no $CLOUDFLARED_DIR in the checkout"
+    fi
+
+    # AC 4, and the branch that matters is the SECOND one - it is the state
+    # every VM run is in, and the state a freshly provisioned box is in.
+    #
+    # Neither branch is a skip. "No credentials" is not a reason to assert
+    # nothing; it is a reason to assert the refusal.
+    if [ -f "$CLOUDFLARED_CONFIG" ] && [ -n "$(ls -A "$CLOUDFLARED_CREDS_DIR" 2> /dev/null)" ]; then
+        check "$CLOUDFLARED_UNIT enabled (credentials are present)" \
+            "systemctl is-enabled $CLOUDFLARED_UNIT"
+    else
+        check "the tunnel is NOT enabled while credentials are absent" \
+            '[ "$(systemctl is-enabled "$CLOUDFLARED_UNIT" 2>&1)" != enabled ]'
+        # The behavioural half, and the whole point of AC 4: a unit that
+        # restarts forever against missing credentials fills a journal that is
+        # uncapped until #287 and buries the real problem.
+        #
+        # Asking it to start is safe precisely because the credentials are
+        # absent - there is no tunnel to disturb. A unit whose conditions are
+        # unmet is SKIPPED: the start job succeeds, the unit stays inactive and
+        # is never marked failed, so Restart= is never reached. A unit that
+        # tried and failed would be `failed` or stuck `activating`, and both
+        # are caught here.
+        check "starting it without credentials refuses rather than looping" \
+            'sudo -n systemctl start "$CLOUDFLARED_UNIT" > /dev/null 2>&1;
+             sleep 2;
+             [ "$(systemctl is-active "$CLOUDFLARED_UNIT" 2>&1)" = inactive ] \
+             && [ "$(systemctl is-failed "$CLOUDFLARED_UNIT" 2>&1)" != failed ]'
+    fi
+
+    # The third corner of the triangle. The sudoers section above proves
+    # deploy.sh and the sudoers drop-in name the same unit; this proves the
+    # unit that actually exists is that same one. Without it all three could
+    # agree on a name that nothing installed.
+    if [ -x "$DEPLOY_SCRIPT" ]; then
+        check "the unit deploy.sh restarts is the unit that is installed" \
+            'want=$(sed -n "s/^CLOUDFLARED_UNIT=\"\([^\"]*\)\".*/\1/p" "$DEPLOY_SCRIPT" | head -1);
+             [ -n "$want" ] && [ -f "/usr/local/lib/systemd/system/$want" ]'
+    else
+        sk "the unit deploy.sh restarts is the unit that is installed" \
+            "no deploy.sh at $DEPLOY_SCRIPT"
+    fi
+else
+    sk "cloudflared installed"                  "postinstall.sh installs it"
+    sk "cloudflare apt keyring present"         "postinstall.sh fetches it"
+    sk "exactly one cloudflared apt source"     "postinstall.sh writes it"
+    sk "cloudflared is dpkg-owned, not a manual binary drop" "postinstall.sh installs it"
+    sk "/usr/local/bin/cloudflared is the package symlink, not a binary" "postinstall.sh installs it"
+    sk "$CLOUDFLARED_UNIT installed in /usr/local/lib/systemd/system" "postinstall.sh writes it"
+    sk "the tunnel reads config.yml from the checkout" "postinstall.sh writes the unit"
+    sk "the tunnel runs in the checkout's cloudflared directory" "postinstall.sh writes the unit"
+    sk "the tunnel does not self-update"        "postinstall.sh writes the unit"
+    sk "no other cloudflared unit is enabled"   "postinstall.sh disables them"
+    sk "credentials directory exists"           "postinstall.sh creates it"
+    sk "credentials directory is mode 700"      "postinstall.sh creates it"
+    sk "credentials directory belongs to $DEPLOY_USER" "postinstall.sh creates it"
+    # Both names, because which of the two runs depends on whether the box has
+    # credentials and a reader of a firstboot log should be able to find either.
+    sk "$CLOUDFLARED_UNIT enabled (credentials are present)" "postinstall.sh decides this"
+    sk "the tunnel is NOT enabled while credentials are absent" "postinstall.sh decides this"
+    sk "starting it without credentials refuses rather than looping" "postinstall.sh writes the unit"
+    sk "the unit deploy.sh restarts is the unit that is installed" "postinstall.sh writes the unit"
+fi
+
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
