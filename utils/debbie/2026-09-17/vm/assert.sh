@@ -317,7 +317,65 @@ fi
 # as the absence of a thing rather than as the presence of a comment.
 echo
 echo "== deploy poller (REQ-DEPLOY-002) =="
-DEPLOY_SCRIPT="$REPO_DIR/utils/debbie/2026-09-17/scripts/deploy.sh"
+DEPLOY_SCRIPT_REL="utils/debbie/2026-09-17/scripts/deploy.sh"
+DEPLOY_SCRIPT="$REPO_DIR/$DEPLOY_SCRIPT_REL"
+
+#------------------------------------------------------------------------------
+# One rule for every check that reads deploy.sh - #311.
+#
+# deploy.sh lives in the checkout, and the checkout is on `release`. A box
+# provisioned before the generation shipped is on a `release` that does not
+# contain this directory at all, so the file CANNOT be there. postinstall.sh
+# says so in as many words and leaves the timer enabled deliberately.
+#
+# Until #311 this section held two rules for that one state: the three checks
+# that READ deploy.sh skipped with the reason printed, while the check for its
+# PRESENCE failed hard. Both cannot be right about the same box, and the failing
+# one made every `--full` run red for a reason having nothing to do with the
+# branch under test - REQ-EMU-003's exit code stopped being a gate.
+#
+# A BARE SKIP IS NOT THE FIX EITHER, and this is the whole point of the ticket.
+# Skipping whenever deploy.sh is missing would make a green run unable to tell
+# "this box legitimately predates the poller" from "the poller should be here
+# and is gone", and the second is a genuine fault - a broken clone, a lost mode
+# bit, a file deleted on the box. That is exactly the shape #300 removed from
+# the firewall section: a check reporting green over a real hole.
+#
+# So the skip is conditional on the CAUSE, and the cause is answerable locally:
+#
+#   the checked-out commit does not track deploy.sh  -> the box cannot have it
+#                                                       -> SKIP, with the reason
+#   it does track it, but the file is absent/not -x  -> something is wrong
+#                                                       -> FAIL, loudly
+#
+# Asked with `git cat-file -e HEAD:<path>` rather than with `ls-tree` of the
+# generation DIRECTORY, and against HEAD rather than against origin/release:
+#
+#   - the exact path, not the directory, because the directory landed before
+#     deploy.sh did (#279 added the script). A `release` in between has the
+#     directory and no script, and on such a box the file still cannot exist.
+#     The directory test would call that a fault; it is not one.
+#   - HEAD, because HEAD is what produced this working tree. origin/release is
+#     a remote-tracking ref that may be stale (never fetched) or ahead of the
+#     checkout, and either way it answers a question about a commit that is not
+#     the one on disk. HEAD also needs no network, which matters: nothing in
+#     assert.sh may depend on reaching a registry to decide whether to assert.
+#------------------------------------------------------------------------------
+deploy_expected=no
+deploy_skip_reason=
+if [ ! -d "$REPO_DIR/.git" ]; then
+    deploy_skip_reason="no checkout at $REPO_DIR - see the checkout section above"
+elif git -C "$REPO_DIR" cat-file -e "HEAD:$DEPLOY_SCRIPT_REL" 2> /dev/null; then
+    deploy_expected=yes
+else
+    deploy_skip_reason="the commit on disk ($(git -C "$REPO_DIR" rev-parse --short HEAD 2> /dev/null || echo unreadable)) does not track $DEPLOY_SCRIPT_REL, so this box cannot have it - '$RELEASE_BRANCH' predates the deploy poller"
+fi
+
+# The single rule. Every check below that reads $DEPLOY_SCRIPT - here, in the
+# sudoers section and in the tunnel section - is gated on this and nothing else,
+# so all of them agree about a box rather than coinciding by accident.
+deploy_script_expected() { [ "$deploy_expected" = yes ]; }
+
 if [ "$PHASE" = provisioned ]; then
     check "custom-deploy-poll.timer enabled"   'systemctl is-enabled custom-deploy-poll.timer'
     # Active, not merely enabled. postinstall.sh deliberately does not start it
@@ -335,23 +393,28 @@ if [ "$PHASE" = provisioned ]; then
     # enabled separately and give the deploy a second, uncoordinated trigger.
     check "custom-deploy-poll.service is timer-owned (static)" \
         '[ "$(systemctl is-enabled custom-deploy-poll.service 2>&1)" = static ]'
-    # Run as $DEPLOY_USER without sudo, like everything else here: the unit
-    # runs as that account, and a deploy script only root can execute is a
-    # timer that fails every two minutes.
-    check "deploy.sh present and executable" '[ -x "$DEPLOY_SCRIPT" ]'
+    # The four checks that read deploy.sh, under the one rule above. They run
+    # together or they skip together: a box that cannot have the file is not a
+    # box that fails one of these and skips three.
+    if deploy_script_expected; then
+        # Run as $DEPLOY_USER without sudo, like everything else here: the unit
+        # runs as that account, and a deploy script only root can execute is a
+        # timer that fails every two minutes. Reached only when the commit on disk
+        # DOES track the file, so a failure here is a real one - the checkout has
+        # lost a file it should have, or lost its mode bit.
+        check "deploy.sh present and executable" '[ -x "$DEPLOY_SCRIPT" ]'
 
-    # REQ-DEPLOY-003, as behaviour rather than as a grep for `flock`.
-    #
-    # A lock is taken and held, then deploy.sh is asked to run against it. It
-    # must exit 0 - being asked while a deploy runs is the timer working, not a
-    # failure - and must say why.
-    #
-    # REPO_DIR is pointed at an empty temporary directory ON PURPOSE. If the
-    # locking ever stopped working, this check would otherwise start a real
-    # deploy in the middle of an assertion run. With nowhere to deploy from,
-    # the unlocked path instead dies at "not a git checkout" and the check goes
-    # red - so the failure mode of the test is a red light, never a build.
-    if [ -x "$DEPLOY_SCRIPT" ]; then
+        # REQ-DEPLOY-003, as behaviour rather than as a grep for `flock`.
+        #
+        # A lock is taken and held, then deploy.sh is asked to run against it. It
+        # must exit 0 - being asked while a deploy runs is the timer working, not a
+        # failure - and must say why.
+        #
+        # REPO_DIR is pointed at an empty temporary directory ON PURPOSE. If the
+        # locking ever stopped working, this check would otherwise start a real
+        # deploy in the middle of an assertion run. With nowhere to deploy from,
+        # the unlocked path instead dies at "not a git checkout" and the check goes
+        # red - so the failure mode of the test is a red light, never a build.
         check "a second deploy exits cleanly while one holds the lock" \
             'lock=$(mktemp -u); empty=$(mktemp -d);
              flock -x "$lock" -c "sleep 20" & held=$!;
@@ -359,28 +422,33 @@ if [ "$PHASE" = provisioned ]; then
              out=$(DEPLOY_LOCK_FILE="$lock" REPO_DIR="$empty" "$DEPLOY_SCRIPT" 2>&1); rc=$?;
              kill "$held" 2>/dev/null; rmdir "$empty";
              [ "$rc" -eq 0 ] && printf "%s" "$out" | grep -q "another deploy holds"'
-    else
-        sk "a second deploy exits cleanly while one holds the lock" \
-            "no deploy.sh at $DEPLOY_SCRIPT"
-    fi
 
-    # REQ-DEPLOY-006, asserted as an absence. This is the one requirement whose
-    # violation looks like a tidy-up: somebody making checkouts deterministic
-    # would reasonably reach for `git clean -fdx`, and that would delete
-    # apps/cloudflared/credentials/, which is gitignored and exists only on
-    # this host. Every site would go down with nothing in the repository to
-    # explain it. The check reads the deployed script, so it catches the change
-    # after it has shipped as well as before.
-    if [ -x "$DEPLOY_SCRIPT" ]; then
+        # REQ-DEPLOY-006, asserted as an absence. This is the one requirement whose
+        # violation looks like a tidy-up: somebody making checkouts deterministic
+        # would reasonably reach for `git clean -fdx`, and that would delete
+        # apps/cloudflared/credentials/, which is gitignored and exists only on
+        # this host. Every site would go down with nothing in the repository to
+        # explain it. The check reads the deployed script, so it catches the change
+        # after it has shipped as well as before.
+        #
+        # The `[ -r ]` is load-bearing, not belt-and-braces. This check is an
+        # inverted grep, and grep on a file that does not exist exits 2 - which `!`
+        # turns into a pass. Under the old guard that was unreachable; under the
+        # one rule it is exactly the case that must go red, so the readability of
+        # the file is asserted as part of the claim rather than assumed by a guard.
         check "no git clean anywhere in the deploy path" \
-            '! grep -qE "^[^#]*\bgit[[:space:]]+clean\b" "$DEPLOY_SCRIPT"'
+            '[ -r "$DEPLOY_SCRIPT" ] \
+             && ! grep -qE "^[^#]*\bgit[[:space:]]+clean\b" "$DEPLOY_SCRIPT"'
         # AC 6 asks for the comment as well as the absence, because an absence
-        # with no explanation is what gets tidied away.
+        # with no explanation is what gets tidied away. No `[ -r ]` needed: this
+        # grep is not inverted, so a missing file fails it already.
         check "deploy.sh says why there is no git clean" \
             'grep -q "REQ-DEPLOY-006" "$DEPLOY_SCRIPT"'
     else
-        sk "no git clean anywhere in the deploy path" "no deploy.sh at $DEPLOY_SCRIPT"
-        sk "deploy.sh says why there is no git clean" "no deploy.sh at $DEPLOY_SCRIPT"
+        sk "deploy.sh present and executable"                      "$deploy_skip_reason"
+        sk "a second deploy exits cleanly while one holds the lock" "$deploy_skip_reason"
+        sk "no git clean anywhere in the deploy path"               "$deploy_skip_reason"
+        sk "deploy.sh says why there is no git clean"               "$deploy_skip_reason"
     fi
 else
     sk "custom-deploy-poll.timer enabled"  "postinstall.sh installs it"
@@ -447,13 +515,17 @@ if [ "$PHASE" = provisioned ]; then
     # and the drop-in names the unit sudo permits; if #280 renames the tunnel
     # and only one of the two moves, the deploy fails at the exact moment it
     # matters - an ingress change - and passes every other day of the year.
-    if [ -x "$DEPLOY_SCRIPT" ]; then
+    #
+    # Gated on the same rule as the deploy-poller section - #311 - not on the
+    # file being there. `sed` on an absent file yields nothing, so `want` is
+    # empty and the check goes red, which is right when the commit on disk says
+    # the file should exist and wrong when it says it cannot.
+    if deploy_script_expected; then
         check "the unit deploy.sh restarts is the unit sudo permits" \
             'want=$(sed -n "s/^CLOUDFLARED_UNIT=\"\([^\"]*\)\".*/\1/p" "$DEPLOY_SCRIPT" | head -1);
              [ -n "$want" ] && sudo -n grep -qF "/usr/bin/systemctl restart $want" "$SUDOERS_DEST"'
     else
-        sk "the unit deploy.sh restarts is the unit sudo permits" \
-            "no deploy.sh at $DEPLOY_SCRIPT"
+        sk "the unit deploy.sh restarts is the unit sudo permits" "$deploy_skip_reason"
     fi
 else
     sk "sudoers drop-in present"        "postinstall.sh installs it"
@@ -585,13 +657,13 @@ if [ "$PHASE" = provisioned ]; then
     # deploy.sh and the sudoers drop-in name the same unit; this proves the
     # unit that actually exists is that same one. Without it all three could
     # agree on a name that nothing installed.
-    if [ -x "$DEPLOY_SCRIPT" ]; then
+    # Same rule as the other two sections - #311.
+    if deploy_script_expected; then
         check "the unit deploy.sh restarts is the unit that is installed" \
             'want=$(sed -n "s/^CLOUDFLARED_UNIT=\"\([^\"]*\)\".*/\1/p" "$DEPLOY_SCRIPT" | head -1);
              [ -n "$want" ] && [ -f "/usr/local/lib/systemd/system/$want" ]'
     else
-        sk "the unit deploy.sh restarts is the unit that is installed" \
-            "no deploy.sh at $DEPLOY_SCRIPT"
+        sk "the unit deploy.sh restarts is the unit that is installed" "$deploy_skip_reason"
     fi
 else
     sk "cloudflared installed"                  "postinstall.sh installs it"

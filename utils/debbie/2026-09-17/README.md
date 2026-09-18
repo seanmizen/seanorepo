@@ -185,6 +185,20 @@ Read this before trusting a green run on hardware:
   same daemon setting, tested from a second container on a separate network
   namespace, refused a loopback-bound published port and answered a
   `0.0.0.0`-bound one. See `#300`.
+- **That the box can actually deploy, when the deploy-poller checks skip.**
+  `deploy.sh` lives in the checkout and the checkout is on `release`, so a box
+  provisioned before this generation shipped genuinely cannot have it. Four
+  checks then skip rather than fail — `#311` — and the reason printed beside
+  each names the commit on disk and the path it does not track.
+
+  **A green run with those skips present does not prove the deploy path.** It
+  proves the timer, the unit ownership, the polling interval and the sudoers
+  boundary are right; it proves nothing about `deploy.sh` itself, because there
+  is no `deploy.sh` to prove anything about. Read the skips, not just the exit
+  code. The first run that proves the deploy path is the one after `yarn
+  release` has put this generation on `release` — in that run the same four
+  checks **run**, and a missing or non-executable `deploy.sh` is then a
+  failure, loudly, because the commit on disk says the file should be there.
 
 ## Notes on the design
 
@@ -325,6 +339,26 @@ Four things about it are deliberate and easy to undo by accident:
   `release` predates #279 the timer fails until the checkout advances.
   `postinstall.sh` says so, with the remedy, rather than leaving a unit that
   fails every two minutes with *No such file or directory*.
+
+  `vm/assert.sh` takes the same view, and takes it **once** for all four checks
+  that read the file — `#311`. The question it asks is not "is `deploy.sh`
+  there" but "does the commit this working tree came from track it", answered
+  with `git cat-file -e HEAD:utils/debbie/2026-09-17/scripts/deploy.sh`:
+
+  | the commit on disk | `deploy.sh` on disk | result |
+  |---|---|---|
+  | does not track it | absent | **skip**, naming the commit and the path |
+  | tracks it | present and executable | **pass** |
+  | tracks it | absent, or not executable | **fail** |
+
+  The middle column cannot contradict the first by accident, which is the
+  point: a flat skip would have made a green run unable to tell a box that
+  legitimately predates the poller from one that has lost a file it should
+  have, and the second is a real fault. The exact path is asked for rather than
+  the generation directory, because the directory landed before `deploy.sh`
+  did — a `release` in between has the directory and no script, and on such a
+  box the file still cannot exist. `HEAD` is asked rather than `origin/release`
+  because `HEAD` is what produced the working tree, and needs no network.
 - **There is no boot-time deploy unit.** The previous generation needed one
   because no app compose file sets a restart policy, so after a power cut the
   containers are down while `release` has not moved. `deploy.sh` records the
