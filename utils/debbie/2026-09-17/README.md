@@ -154,7 +154,9 @@ Read this before trusting a green run on hardware:
   wired into `nsswitch.conf`. It does **not** prove a multicast packet leaves
   the machine or that another host on the LAN can resolve it — QEMU's slirp
   networking does not carry multicast to the host. Only the real box proves
-  reachability.
+  reachability. `metal/provision.sh` dials the name first for `#284` — the DHCP
+  lease moves on every boot and the name does not — and falls back to a supplied
+  `HOST` address precisely because this is the one thing no green run proves.
 
 ## Notes on the design
 

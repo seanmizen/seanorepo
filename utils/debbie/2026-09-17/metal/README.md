@@ -194,8 +194,49 @@ to reach the box to run, which is why `HOST=<ip>` was so often needed below.
 ```bash
 ./provision.sh --assert       # assert only, box already provisioned
 ./provision.sh --no-reboot    # postinstall only
-HOST=192.168.1.42 ./provision.sh   # if mDNS has not settled
+HOST=192.168.1.42 ./provision.sh   # fallback, if .local does not reach the box
 ```
+
+### It dials the name, and `HOST` is only a fallback
+
+`provision.sh` connects by **`$SERVER_NAME.local`** and falls back to `HOST`
+only if the name does not answer. That ordering is the fix for `#284`, and it is
+about the reboot in the middle of the run: **the DHCP lease moves on every
+boot.** The first real box took `.182`, then `.183`, then `.184`, one per power
+cycle. A run started with `HOST=192.168.1.182` used to keep dialling `.182`
+after the reboot and time out against a box that was up the whole time, on a
+different address:
+
+```
+[metal] waiting for srv@192.168.1.182
+ERROR: 192.168.1.182 did not come up on SSH within 300s.
+```
+
+So:
+
+- **Prefer no `HOST` at all.** Since `#285` the name works from first boot, and
+  it is the only handle that survives the reboot.
+- Set `HOST=<ip>` only if `.local` does not reach the box from your laptop — a
+  network with wifi client isolation, or the two machines on different subnets.
+  Check with `ping -c1 $SERVER_NAME.local` before assuming it.
+- Either way the address is **tried within seconds**, not after the 300s
+  timeout: each polling round tries the name and then the address.
+- Nothing is pinned. Both waits — the one before `postinstall.sh` and the one
+  after the reboot — re-choose from the same list, so a box that came back on a
+  new lease is still found by name. The log says which one answered (`up on
+  debbie.local`).
+
+`./provision.sh --assert` works the same way, so asserting an
+already-provisioned box needs no address either.
+
+If neither answers, the error names both and says what to do about each; the
+addresses in this runbook and in your shell history go stale on every boot, so
+read the current one off the router's lease table rather than an earlier run.
+
+A **DHCP reservation** for this host would stop the lease moving, and is worth
+doing. Nothing here may depend on it: it is router-side configuration that no
+script can assert or reproduce, so mDNS stays the mechanism and a reservation
+is only a convenience on top.
 
 Do not hand-run these steps with a hardcoded `debbie.local`: `assert.sh`
 defaults to `EXPECT_HOSTNAME=debbie`, so with any other `SERVER_NAME` the
