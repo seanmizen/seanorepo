@@ -30,9 +30,13 @@ log() { echo "[postinstall] $*"; }
 # apt-get does nothing. They stay named here because this script must also
 # repair a box installed by an earlier preseed, and because ufw is genuinely
 # only wanted after the install (it would otherwise close 22 mid-provision).
+#
+# ca-certificates, curl and gnupg are here for the Docker step below: it
+# fetches an armoured signing key over TLS and dearmors it, which needs all
+# three. A Debian 13 minimal install has neither curl nor gpg.
 log "installing packages"
 apt-get update -y
-apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl
+apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl gnupg
 
 #------------------------------------------------------------------------------
 # Hostname and mDNS - REQ-SERVER-004
@@ -115,17 +119,82 @@ ufw allow 5353/udp
 ufw --force enable
 
 #------------------------------------------------------------------------------
+# Docker engine - REQ-DEPLOY-004
+#
+# The deploy is `yarn prod:docker`, so the box needs the engine and the compose
+# plugin, not merely a group named docker. Until #276 this script created the
+# group and stopped, and vm/assert.sh's "srv in docker" check passed against an
+# empty group - an assertion that read as "Docker works" while proving only
+# that `groupadd` had run.
+#
+# Docker's own apt repository, not Debian's docker.io: compose v2 ships there
+# as a plugin (`docker compose`, not `docker-compose`), which is what
+# yarn prod:docker invokes.
+#
+# Each step below is guarded so a second run is a no-op rather than a second
+# source file, a re-download, or a duplicate deb line that makes apt-get update
+# complain about a doubly-configured repository.
+#------------------------------------------------------------------------------
+DOCKER_KEYRING=/etc/apt/keyrings/docker.gpg
+DOCKER_LIST=/etc/apt/sources.list.d/docker.list
+
+log "docker engine"
+install -d -m 0755 /etc/apt/keyrings
+
+if [ ! -s "$DOCKER_KEYRING" ]; then
+    log "  fetching Docker's apt signing key"
+    # Dearmored via a temp file rather than a pipe: a curl failure mid-stream
+    # would otherwise leave a truncated keyring that is present, non-empty and
+    # unusable - and the guard above would then skip repairing it forever.
+    docker_key_tmp="$(mktemp)"
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o "$docker_key_tmp"
+    gpg --batch --yes --dearmor -o "$DOCKER_KEYRING" "$docker_key_tmp"
+    rm -f "$docker_key_tmp"
+    chmod 0644 "$DOCKER_KEYRING"
+fi
+
+# Written whole and compared whole, so a correct file is left byte-identical
+# and a wrong one is replaced rather than appended to.
+docker_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$DOCKER_KEYRING] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
+docker_repo_changed=0
+if [ ! -f "$DOCKER_LIST" ] || [ "$(cat "$DOCKER_LIST")" != "$docker_deb_line" ]; then
+    log "  writing $DOCKER_LIST"
+    printf '%s\n' "$docker_deb_line" > "$DOCKER_LIST"
+    docker_repo_changed=1
+fi
+
+# Refresh only when there is a reason to. The second condition covers a box
+# whose previous run wrote the source and then failed before installing: the
+# file is already right, so the first condition is false, but the package lists
+# may never have been fetched.
+if [ "$docker_repo_changed" = 1 ] \
+    || ! dpkg-query -W -f='${Status}' docker-ce 2> /dev/null | grep -q "^install ok installed"; then
+    apt-get update -y
+fi
+
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+
+#------------------------------------------------------------------------------
 # Deploy user - REQ-SERVER-003
 #
-# Docker group membership only. Docker itself is a later generation's problem;
-# creating the group here keeps the assertion meaningful without pulling the
-# whole engine into a run that does not use it.
+# The docker-ce package creates the docker group itself, so by here it exists.
+# The getent guard stays for the repair path: a box provisioned by an older
+# revision of this script has the group without the engine, and one where the
+# package install is later changed should not silently lose the membership.
+#
+# Membership grants root-equivalent access through the daemon socket, which is
+# the point - the deploy runs unattended and cannot answer a sudo prompt.
 #------------------------------------------------------------------------------
 log "deploy user $DEPLOY_USER"
 getent group docker > /dev/null || groupadd docker
 id "$DEPLOY_USER" > /dev/null 2>&1 || { echo "user $DEPLOY_USER missing" >&2; exit 1; }
 
-# usermod -aG is already additive, so this is safe to repeat.
+# usermod -aG is already additive, so this is safe to repeat. The new group
+# does NOT appear in sessions that already exist - including the one running
+# this script - so `docker info` without sudo is only true from the next login
+# onwards. vm/assert.sh asserts it over a fresh SSH connection after a reboot,
+# which is why it can make that claim honestly.
 usermod -aG docker,sudo "$DEPLOY_USER"
 
 log "done"

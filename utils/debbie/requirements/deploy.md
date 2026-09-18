@@ -96,6 +96,10 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` runs
     `yarn install --immutable` then `yarn prod:docker`
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "docker info works as srv
+    without sudo"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "docker compose plugin
+    present"
 - **Relations:** depends-on REQ-DEPLOY-002
 
 ## REQ-DEPLOY-005 — The tunnel restarts only when its own configuration changes
