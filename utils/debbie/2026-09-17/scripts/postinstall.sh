@@ -1,9 +1,9 @@
 #!/bin/bash
 # postinstall.sh - bring a freshly installed Debian 13 box up to "debbie".
 #
-# Deliberately minimal. This generation proves the VM loop; the deploy poller,
-# cloudflared tunnel and network failover watchdog are NOT here and arrive in a
-# later generation under REQ-DEPLOY-* and REQ-NETWORK-*.
+# Deliberately minimal. This generation proves the VM loop. Since #279 it also
+# installs the deploy poller; the cloudflared tunnel (#280) and the network
+# failover watchdog are still NOT here and arrive under REQ-NETWORK-*.
 #
 # Every step is idempotent and every append is guarded. The previous
 # generation's postinstall re-appended its zsh prompt block on every run while
@@ -375,6 +375,192 @@ if [ -f "$REPO_DIR/package.json" ]; then
 else
     log "  no package.json at $REPO_DIR - corepack will resolve the version"
     log "  from packageManager on first use inside the checkout"
+fi
+
+#------------------------------------------------------------------------------
+# Deploy poller - REQ-DEPLOY-002, REQ-DEPLOY-003, REQ-DEPLOY-005, REQ-DEPLOY-006
+#
+# The host pulls: every two minutes it compares origin/release against a marker
+# and deploys when the two differ. Nothing reaches in, because nothing can -
+# REQ-SERVER-002 forwards no port.
+#
+# WRITTEN HERE RATHER THAN COPIED FROM THE CHECKOUT, and the reason is not
+# taste. This script is delivered on its own - scp'd to /tmp by vm/test-vm.sh,
+# streamed over stdin by metal/provision.sh - so it can read no file that sits
+# beside it in the repository. The only copy of the repository it could read
+# from is the checkout it made above, which is on `release`, which by
+# definition holds the last thing that was SHIPPED. On the first box this
+# generation provisions, `release` still points at the previous generation and
+# contains none of this. Sourcing the units from there would mean the poller is
+# installed only on a box that already had a working poller.
+#
+# So the units are literals here, in the one file that is guaranteed to be
+# current because a human just ran it. The same is true of the logind drop-in
+# and the Docker apt source above; this follows that pattern rather than
+# inventing a second one.
+#
+# deploy.sh itself cannot be inlined - it is 250 lines and having two copies
+# would be worse than the problem - so ExecStart points into the checkout, and
+# a deploy updates the deployer. The guard below says so out loud when the
+# checkout does not have it yet, with the remedy, rather than leaving a unit
+# that fails every two minutes with "No such file or directory".
+#------------------------------------------------------------------------------
+UNIT_DIR=/usr/local/lib/systemd/system
+GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
+DEPLOY_SCRIPT="$GEN_DIR/scripts/deploy.sh"
+# Must match CLOUDFLARED_UNIT in that deploy.sh. #280 creates the unit itself;
+# this is only the name the deploy is permitted to restart, and vm/assert.sh
+# asserts that the two agree. `custom-` prefixed per REQ-SERVER-013, and
+# deliberately not `cloudflared.service`, which would shadow the unit
+# Cloudflare's apt package ships - REQ-SERVER-012.
+CLOUDFLARED_UNIT="${CLOUDFLARED_UNIT:-custom-cloudflared.service}"
+
+log "deploy poller"
+
+# /usr/local/lib/systemd/system, not /etc/systemd/system - REQ-SERVER-011. It
+# is already on systemd's search path, carries /usr/local semantics, and is
+# empty on a fresh install, so `ls` there answers "what did we install?".
+install -d -m 0755 "$UNIT_DIR"
+
+units_changed=0
+
+# Compare before writing, so a correct unit is left byte-identical and a second
+# provisioning run does not churn systemd. The daemon-reload below is then
+# conditional on something having actually changed, which is what makes
+# re-running this script genuinely free.
+write_unit() {
+    local dest="$UNIT_DIR/$1" tmp
+    tmp="$(mktemp)"
+    cat > "$tmp"
+    if [ ! -f "$dest" ] || ! cmp -s "$tmp" "$dest"; then
+        log "  writing $dest"
+        install -m 0644 -o root -g root "$tmp" "$dest"
+        units_changed=1
+    fi
+    rm -f "$tmp"
+}
+
+write_unit custom-deploy-poll.service <<EOF
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-DEPLOY-002
+[Unit]
+Description=Deploy origin/release to this host if it has moved
+Documentation=https://github.com/seanmizen/seanorepo/issues/279
+# docker.service because the deploy is \`yarn prod:docker\`, and
+# network-online because the first thing it does is talk to github.com.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=$DEPLOY_USER
+WorkingDirectory=$REPO_DIR
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=$DEPLOY_SCRIPT
+
+# Stated rather than inherited. A cold \`yarn install\` plus a rebuild of every
+# workspace is tens of minutes, and the default for a oneshot unit is not worth
+# guessing at when being wrong means SIGKILL half way through a docker build.
+# Being killed is survivable either way: the deploy holds its lock on a file
+# descriptor, so the kernel releases it when the process dies and the next
+# poll picks up cleanly - REQ-DEPLOY-003.
+TimeoutStartSec=30min
+
+# No [Install] section. custom-deploy-poll.timer owns this unit, and enabling
+# it separately would give it a second, uncoordinated trigger.
+EOF
+
+write_unit custom-deploy-poll.timer <<EOF
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-DEPLOY-002
+[Unit]
+Description=Poll origin/release every two minutes and deploy on change
+Documentation=https://github.com/seanmizen/seanorepo/issues/279
+
+[Timer]
+# Late enough after boot that docker and the network are up. The run it
+# triggers is also what brings the containers back after a power cut: no app
+# compose file sets a restart policy, and deploy.sh records the boot id
+# alongside the deployed SHA so a reboot counts as a reason to deploy even
+# though \`release\` has not moved.
+OnBootSec=3min
+OnUnitActiveSec=2min
+# The poll costs one ls-remote. Letting systemd batch it saves wakeups and
+# nobody can tell the difference at a two-minute period.
+AccuracySec=30s
+Unit=custom-deploy-poll.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+if [ "$units_changed" = 1 ]; then
+    systemctl daemon-reload
+fi
+
+#------------------------------------------------------------------------------
+# The sudoers drop-in - REQ-DEPLOY-005
+#
+# deploy.sh runs as $DEPLOY_USER and needs root for exactly one thing:
+# restarting the tunnel when apps/cloudflared/config.yml has changed. This
+# grants that one command. No wildcard, no other unit, no other verb, and no
+# ALL in the command position - which is the whole reason the deploy does not
+# need general root.
+#
+# Note honestly what this is and is not today. scripts/write-overrides.sh has
+# the installer write `$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL` to
+# /etc/sudoers.d/90-$DEPLOY_USER, so on a box as it stands this file narrows
+# nothing - the account already has general passwordless root. What it does is
+# make the DEPLOY need only one command, so that tightening the blanket grant
+# later (REQ-SERVER-008) does not break the deploy. Reading this file as the
+# boundary today would be wrong; writing the deploy as though it were is what
+# makes the boundary available.
+#
+# VALIDATE BEFORE INSTALLING, always. sudo refuses to run at all when any file
+# in /etc/sudoers.d fails to parse, so writing this directly and then checking
+# it can lock every account out of root on a headless box - including the
+# account that would have to fix it. Write to a temp path, run `visudo -c`
+# against that, and only install once it parses. Mode 0440 root:root, which is
+# what sudo requires of a drop-in and will otherwise refuse to read.
+#------------------------------------------------------------------------------
+SUDOERS_DEST=/etc/sudoers.d/seanorepo-deploy
+sudoers_tmp="$(mktemp)"
+
+cat > "$sudoers_tmp" <<EOF
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-DEPLOY-005.
+# Exactly one command. See the deploy poller section of that script for why.
+$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $CLOUDFLARED_UNIT
+EOF
+
+if visudo -cf "$sudoers_tmp" > /dev/null; then
+    if [ ! -f "$SUDOERS_DEST" ] || ! cmp -s "$sudoers_tmp" "$SUDOERS_DEST"; then
+        log "  installing $SUDOERS_DEST"
+        install -m 0440 -o root -g root "$sudoers_tmp" "$SUDOERS_DEST"
+    fi
+else
+    # Loud, and fatal. A deploy that cannot restart the tunnel is a deploy that
+    # silently serves stale ingress after an config.yml change, and there is no
+    # correct way to continue past a sudoers file this script itself generated
+    # and cannot parse.
+    rm -f "$sudoers_tmp"
+    echo "[postinstall] ERROR: generated sudoers drop-in failed visudo -c; not installing" >&2
+    exit 1
+fi
+rm -f "$sudoers_tmp"
+
+# Enabled, NOT started. `--now` here would fire a deploy in the middle of
+# provisioning - a cold `yarn install` and a full docker build, racing the rest
+# of this script and the reboot that follows it. OnBootSec=3min starts it after
+# the next boot, which both harnesses perform before asserting.
+systemctl enable custom-deploy-poll.timer
+
+if [ ! -x "$DEPLOY_SCRIPT" ]; then
+    # Not fatal, and the timer stays enabled on purpose: the moment the
+    # checkout catches up, the poller starts working with no further action.
+    log "  NOTE: $DEPLOY_SCRIPT is not in the checkout yet."
+    log "        This box is on a '$RELEASE_BRANCH' that predates the deploy"
+    log "        poller, so the timer will fail until it advances. Run"
+    log "        'yarn release' from a clean main on a dev machine, then"
+    log "        re-run this script - its checkout step above is what pulls"
+    log "        the new commit onto the box."
 fi
 
 log "done"

@@ -310,6 +310,164 @@ else
     sk "yarn --version matches the repo's packageManager"  "postinstall.sh enables it"
 fi
 
+# REQ-DEPLOY-002 / -003 / -005 / -006 - the deploy poller, #279.
+#
+# The timer and the sudoers drop-in are what a box HAS; the two properties that
+# matter most are things deploy.sh DOES, and both are asserted as behaviour or
+# as the absence of a thing rather than as the presence of a comment.
+echo
+echo "== deploy poller (REQ-DEPLOY-002) =="
+DEPLOY_SCRIPT="$REPO_DIR/utils/debbie/2026-09-17/scripts/deploy.sh"
+if [ "$PHASE" = provisioned ]; then
+    check "custom-deploy-poll.timer enabled"   'systemctl is-enabled custom-deploy-poll.timer'
+    # Active, not merely enabled. postinstall.sh deliberately does not start it
+    # - that would deploy in the middle of provisioning - so this is a claim
+    # about the reboot the harness performs, and it fails if the unit is
+    # malformed in a way `is-enabled` would not notice.
+    check "custom-deploy-poll.timer active"    'systemctl is-active custom-deploy-poll.timer'
+    # Two minutes is the requirement, not an implementation detail: it is the
+    # upper bound on deploy latency that REQ-DEPLOY-002 trades for needing no
+    # inbound port. Read from `systemctl cat`, so it is the EFFECTIVE unit -
+    # drop-ins included - rather than the file in the repository.
+    check "the timer polls every two minutes" \
+        'systemctl cat custom-deploy-poll.timer | grep -qx "OnUnitActiveSec=2min"'
+    # The timer owns the service. A service with its own [Install] could be
+    # enabled separately and give the deploy a second, uncoordinated trigger.
+    check "custom-deploy-poll.service is timer-owned (static)" \
+        '[ "$(systemctl is-enabled custom-deploy-poll.service 2>&1)" = static ]'
+    # Run as $DEPLOY_USER without sudo, like everything else here: the unit
+    # runs as that account, and a deploy script only root can execute is a
+    # timer that fails every two minutes.
+    check "deploy.sh present and executable" '[ -x "$DEPLOY_SCRIPT" ]'
+
+    # REQ-DEPLOY-003, as behaviour rather than as a grep for `flock`.
+    #
+    # A lock is taken and held, then deploy.sh is asked to run against it. It
+    # must exit 0 - being asked while a deploy runs is the timer working, not a
+    # failure - and must say why.
+    #
+    # REPO_DIR is pointed at an empty temporary directory ON PURPOSE. If the
+    # locking ever stopped working, this check would otherwise start a real
+    # deploy in the middle of an assertion run. With nowhere to deploy from,
+    # the unlocked path instead dies at "not a git checkout" and the check goes
+    # red - so the failure mode of the test is a red light, never a build.
+    if [ -x "$DEPLOY_SCRIPT" ]; then
+        check "a second deploy exits cleanly while one holds the lock" \
+            'lock=$(mktemp -u); empty=$(mktemp -d);
+             flock -x "$lock" -c "sleep 20" & held=$!;
+             sleep 2;
+             out=$(DEPLOY_LOCK_FILE="$lock" REPO_DIR="$empty" "$DEPLOY_SCRIPT" 2>&1); rc=$?;
+             kill "$held" 2>/dev/null; rmdir "$empty";
+             [ "$rc" -eq 0 ] && printf "%s" "$out" | grep -q "another deploy holds"'
+    else
+        sk "a second deploy exits cleanly while one holds the lock" \
+            "no deploy.sh at $DEPLOY_SCRIPT"
+    fi
+
+    # REQ-DEPLOY-006, asserted as an absence. This is the one requirement whose
+    # violation looks like a tidy-up: somebody making checkouts deterministic
+    # would reasonably reach for `git clean -fdx`, and that would delete
+    # apps/cloudflared/credentials/, which is gitignored and exists only on
+    # this host. Every site would go down with nothing in the repository to
+    # explain it. The check reads the deployed script, so it catches the change
+    # after it has shipped as well as before.
+    if [ -x "$DEPLOY_SCRIPT" ]; then
+        check "no git clean anywhere in the deploy path" \
+            '! grep -qE "^[^#]*\bgit[[:space:]]+clean\b" "$DEPLOY_SCRIPT"'
+        # AC 6 asks for the comment as well as the absence, because an absence
+        # with no explanation is what gets tidied away.
+        check "deploy.sh says why there is no git clean" \
+            'grep -q "REQ-DEPLOY-006" "$DEPLOY_SCRIPT"'
+    else
+        sk "no git clean anywhere in the deploy path" "no deploy.sh at $DEPLOY_SCRIPT"
+        sk "deploy.sh says why there is no git clean" "no deploy.sh at $DEPLOY_SCRIPT"
+    fi
+else
+    sk "custom-deploy-poll.timer enabled"  "postinstall.sh installs it"
+    sk "custom-deploy-poll.timer active"   "postinstall.sh installs it"
+    sk "the timer polls every two minutes" "postinstall.sh installs it"
+    sk "custom-deploy-poll.service is timer-owned (static)" "postinstall.sh installs it"
+    sk "deploy.sh present and executable"  "postinstall.sh clones the checkout"
+    sk "a second deploy exits cleanly while one holds the lock" "postinstall.sh clones the checkout"
+    sk "no git clean anywhere in the deploy path" "postinstall.sh clones the checkout"
+    sk "deploy.sh says why there is no git clean" "postinstall.sh clones the checkout"
+fi
+
+# REQ-DEPLOY-005 - the security boundary, asserted as a boundary.
+#
+# "A file exists" is not the claim. The claim is that this drop-in authorises
+# ONE command, so the deploy never needs general root, and every check below
+# exists because of a specific way that could stop being true: a second line, a
+# wildcard, ALL in the command position, a comma-separated list, a different
+# runas target, or a mode sudo will not read.
+#
+# Read with `sudo -n`: /etc/sudoers.d is 0750 root:root and the file is 0440,
+# so an unprivileged stat cannot tell "absent" from "unreadable".
+#
+# What this does NOT prove, stated plainly: the box also carries
+# /etc/sudoers.d/90-$DEPLOY_USER from the installer, granting NOPASSWD:ALL
+# (see scripts/write-overrides.sh), so $DEPLOY_USER has general root today
+# regardless of what this file says. `sudo -l` would therefore pass no matter
+# how broad this drop-in became, which is exactly why these checks read the
+# file itself. The narrow grant is what lets REQ-SERVER-008 tighten the blanket
+# one later without breaking the deploy.
+echo
+echo "== deploy sudoers boundary (REQ-DEPLOY-005) =="
+SUDOERS_DEST=/etc/sudoers.d/seanorepo-deploy
+if [ "$PHASE" = provisioned ]; then
+    check "sudoers drop-in present"   "sudo -n test -f '$SUDOERS_DEST'"
+    # 0440 root:root. sudo ignores a drop-in with any other mode, so a wrong
+    # mode is a grant that silently is not there - and the deploy would then
+    # fail to restart the tunnel with no clue as to why.
+    check "sudoers drop-in is mode 440" \
+        "[ \"\$(sudo -n stat -c %a '$SUDOERS_DEST' 2>/dev/null)\" = 440 ]"
+    check "sudoers drop-in is owned by root:root" \
+        "[ \"\$(sudo -n stat -c '%U:%G' '$SUDOERS_DEST' 2>/dev/null)\" = root:root ]"
+    check "sudoers drop-in parses" "sudo -n visudo -cf '$SUDOERS_DEST'"
+    # Exactly one rule. Comments and blank lines do not grant anything; a
+    # second rule does, and would be invisible to a check that only looked at
+    # the first line.
+    check "sudoers drop-in has exactly one rule" \
+        "[ \"\$(sudo -n grep -cvE '^[[:space:]]*(#.*)?\$' '$SUDOERS_DEST')\" -eq 1 ]"
+    # The rule, whole, against a pattern that admits exactly one systemctl
+    # restart of one unit. Anchored at both ends, so nothing can be appended.
+    # No comma (a command list), no wildcard, no ALL in the command position,
+    # no shell metacharacter - every one of those is a way to turn "restart the
+    # tunnel" into "run anything".
+    check "the one rule is a single systemctl restart of a single unit" \
+        "sudo -n grep -qE '^${DEPLOY_USER} ALL=\\(root\\) NOPASSWD: /usr/bin/systemctl restart [A-Za-z0-9@:._-]+\\.service\$' '$SUDOERS_DEST'"
+    # Belt and braces, and each of these has a distinct way of getting in.
+    check "sudoers drop-in grants no wildcard" "! sudo -n grep -q '[*]' '$SUDOERS_DEST'"
+    check "sudoers drop-in grants no command list" \
+        "! sudo -n grep -qE 'NOPASSWD:.*,' '$SUDOERS_DEST'"
+    check "sudoers drop-in does not grant ALL as a command" \
+        "! sudo -n grep -qE 'NOPASSWD:[[:space:]]*ALL' '$SUDOERS_DEST'"
+
+    # The divergence this is really for. deploy.sh names the unit it restarts
+    # and the drop-in names the unit sudo permits; if #280 renames the tunnel
+    # and only one of the two moves, the deploy fails at the exact moment it
+    # matters - an ingress change - and passes every other day of the year.
+    if [ -x "$DEPLOY_SCRIPT" ]; then
+        check "the unit deploy.sh restarts is the unit sudo permits" \
+            'want=$(sed -n "s/^CLOUDFLARED_UNIT=\"\([^\"]*\)\".*/\1/p" "$DEPLOY_SCRIPT" | head -1);
+             [ -n "$want" ] && sudo -n grep -qF "/usr/bin/systemctl restart $want" "$SUDOERS_DEST"'
+    else
+        sk "the unit deploy.sh restarts is the unit sudo permits" \
+            "no deploy.sh at $DEPLOY_SCRIPT"
+    fi
+else
+    sk "sudoers drop-in present"        "postinstall.sh installs it"
+    sk "sudoers drop-in is mode 440"    "postinstall.sh installs it"
+    sk "sudoers drop-in is owned by root:root" "postinstall.sh installs it"
+    sk "sudoers drop-in parses"         "postinstall.sh installs it"
+    sk "sudoers drop-in has exactly one rule" "postinstall.sh installs it"
+    sk "the one rule is a single systemctl restart of a single unit" "postinstall.sh installs it"
+    sk "sudoers drop-in grants no wildcard"     "postinstall.sh installs it"
+    sk "sudoers drop-in grants no command list" "postinstall.sh installs it"
+    sk "sudoers drop-in does not grant ALL as a command" "postinstall.sh installs it"
+    sk "the unit deploy.sh restarts is the unit sudo permits" "postinstall.sh installs it"
+fi
+
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
