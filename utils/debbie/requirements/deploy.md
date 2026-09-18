@@ -71,6 +71,21 @@ Introduced in #273.
   - Inspection — `utils/debbie/2025-10-08b/services/deploy-poll-custom.timer`
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` compares
     `git ls-remote` against a recorded marker
+  - Inspection — `utils/debbie/2026-09-17/scripts/deploy.sh` compares
+    `git ls-remote` against a marker recording the deployed SHA and the boot id
+    it was deployed under, and never dereferences the recorded SHA, so a marker
+    left by a force-pushed or rebuilt `release` cannot wedge the poller
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy-poll.timer
+    enabled"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy-poll.timer
+    active"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the timer polls every two
+    minutes" — the two-minute period is the latency bound this requirement
+    trades for needing no inbound port, so it is asserted rather than assumed
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy-poll.service
+    is timer-owned (static)"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy.sh present and
+    executable"
 - **Relations:** depends-on REQ-DEPLOY-001
 
 ## REQ-DEPLOY-003 — Two deploys cannot run at once
@@ -89,6 +104,13 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` takes
     `$DEPLOY_LOCK_FILE` before doing any work
+  - Inspection — `utils/debbie/2026-09-17/scripts/deploy.sh` takes `flock -n`
+    on a file descriptor before doing any work, so the kernel releases the lock
+    on every exit path including SIGKILL and the unit's `TimeoutStartSec`
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "a second deploy exits
+    cleanly while one holds the lock" — asserted as behaviour, not as a grep
+    for `flock`: a lock is held and `deploy.sh` is then run against it, and it
+    must exit 0 and say why rather than block, queue or proceed
 - **Relations:** depends-on REQ-DEPLOY-002
 
 ## REQ-DEPLOY-004 — A deploy is the same command a human would run
@@ -141,6 +163,32 @@ Introduced in #273.
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` diffs the old and
     new SHA for `$CLOUDFLARED_CONFIG` before restarting
   - Inspection — `utils/debbie/2025-10-08b/setup/sudoers-seanorepo-deploy`
+  - Inspection — `utils/debbie/2026-09-17/scripts/deploy.sh` diffs the two SHAs
+    with a pathspec rather than piping into `grep`, and restarts when it cannot
+    prove the config unchanged — a first recorded deploy, or a previous commit
+    no longer in the object store
+  - Inspection — `utils/debbie/2026-09-17/scripts/postinstall.sh` writes the
+    drop-in to a temporary path, validates it with `visudo -c`, and installs it
+    mode 0440 root:root only once it parses
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the one rule is a single
+    systemctl restart of a single unit" — the grant is matched whole against an
+    anchored pattern, so nothing can be appended to it
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sudoers drop-in has exactly
+    one rule"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sudoers drop-in grants no
+    wildcard"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sudoers drop-in grants no
+    command list"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sudoers drop-in does not
+    grant ALL as a command"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sudoers drop-in is mode 440"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sudoers drop-in is owned by
+    root:root"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sudoers drop-in parses"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the unit deploy.sh restarts
+    is the unit sudo permits" — the drop-in and `deploy.sh` name the unit
+    separately, and a rename that moves only one of them would fail exactly
+    once, on the ingress change it was needed for
 - **Relations:** depends-on REQ-DEPLOY-004
 
 ## REQ-DEPLOY-006 — A deploy leaves untracked credentials alone
@@ -164,4 +212,10 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` carries a comment
     stating that the absence of `git clean` is deliberate
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no git clean anywhere in
+    the deploy path" — asserted as an absence, against the DEPLOYED script, so
+    it catches the tidy-up after it has shipped as well as before
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy.sh says why there is
+    no git clean" — an unexplained absence is what gets tidied away, so the
+    explanation is asserted too
 - **Relations:** depends-on REQ-DEPLOY-004
