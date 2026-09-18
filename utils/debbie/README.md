@@ -15,6 +15,10 @@ Requirements are in [`requirements/`](./requirements/) and are validated by CI o
 every PR — `REQ-EMU-*` constrain the VM harness, `REQ-SERVER-*` describe what a
 provisioned host must be.
 
+[`future-spec.md`](./future-spec.md) is the opposite end: decisions about a
+**fleet** of these machines that have been reasoned about but not built, and are
+validated by nothing. Not a plan of record.
+
 Deploys come from the `release` branch, never `main`. Promote with `yarn release`
 from a clean `main`; debbie polls every two minutes.
 
