@@ -11,7 +11,7 @@ Introduced in #259.
 
 ---
 
-## REQ-SERVER-001 — A closed lid does not take the server down
+## REQ-SERVER-001 — No local event takes the server down
 
 - **Status:** active
 - **Source:** sean
@@ -19,22 +19,54 @@ Introduced in #259.
 - **Type:** constraint
 - **Priority:** P0
 - **Statement:** While the operating system is running, the host shall ignore
-  lid-close and idle events rather than suspending.
+  lid-close, idle, power-button, suspend-key and hibernate-key events rather
+  than suspending or powering off.
 - **Rationale:** debbie is a laptop serving from a shelf with the lid shut.
   Default logind suspends on lid close, which takes every hosted site offline
   until somebody physically opens it — and the machine looks healthy the whole
   time, because it is simply asleep.
 
-  The setting is written as a drop-in under
+  **The power button is the part `#283` added, and it is a correction rather
+  than an extension.** This requirement was always about a physical event on a
+  shelf taking the sites down; it named the lid because the lid was the one
+  anybody had thought of. The drop-in ignored the lid, masked
+  `sleep`/`suspend`/`hibernate` and set `IdleAction=ignore`, then left
+  `HandlePowerKey` at systemd's default of `poweroff` — so a brief press was a
+  graceful shutdown of every hosted site. It happened twice during the first
+  evening of real use, and the second one is why a `provision.sh` run reported
+  "did not come up on SSH": the box had been switched off while the script
+  waited for it, having looked dead because DHCP had moved it to a different
+  address. Same failure as the lid, through a door left open. The suspend and
+  hibernate keys are named for the same reason — a laptop keyboard has them.
+
+  **Nothing deliberate is lost.** `systemctl poweroff` over SSH is the way to
+  shut the box down on purpose and is unaffected. Holding the power button
+  still cuts power: that force-off is done by the firmware after roughly four
+  seconds, unconditionally, and never reaches logind at all.
+  `HandlePowerKeyLongPress` is logind's own *software* long press, a separate
+  thing, and it is set to `ignore` so that no press of any duration makes
+  logind act — setting it to `poweroff` would re-open the hole for anyone
+  holding the button a moment too long.
+
+  The settings are written as one drop-in under
   `/etc/systemd/logind.conf.d/` rather than edited into `logind.conf`, which is
   package-owned and can be reverted or conflicted by an upgrade. `postinstall.sh`
   deliberately does not restart `systemd-logind` afterwards: doing so terminates
   the calling session and would kill the provisioning run over SSH. The drop-in
   is read at next boot, which is why this is asserted only after a reboot.
+
+  The key assertions read the running logind manager over the bus rather than
+  the drop-in file. A file logind has never read is precisely the failing
+  state, so a check satisfied by its contents would pass on a box that was
+  still about to switch itself off.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "lid-close drop-in present"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "lid close ignored"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sleep.target masked"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "power key ignored"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "long power press ignored"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "suspend key ignored"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "hibernate key ignored"
 - **Relations:** none
 
 ## REQ-SERVER-002 — Only four ports are reachable

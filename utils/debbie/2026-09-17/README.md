@@ -242,6 +242,31 @@ only later netcfg script (`55netcfg-copy-config`), which writes interface
 configuration and does not touch either file. That layer cannot lose a race
 with netcfg whatever the boot line does.
 
+**The box ignores its own power button** (`REQ-SERVER-001`, `#283`). The logind
+drop-in covered the lid, masked `sleep`/`suspend`/`hibernate` and set
+`IdleAction=ignore`, and then left `HandlePowerKey` at systemd's default of
+`poweroff`. On a laptop on a shelf that is a graceful shutdown of every hosted
+site for the price of a knock, and it happened twice in the first evening of
+real use — the second time while `provision.sh` was waiting for the box, which
+is why that run reported "did not come up on SSH". `HandlePowerKey`,
+`HandleSuspendKey` and `HandleHibernateKey` are now `ignore` in the same
+drop-in, asserted after the reboot against the running logind manager.
+
+To shut debbie down on purpose:
+
+```bash
+ssh srv@debbie.local sudo systemctl poweroff   # deliberate
+ssh srv@debbie.local sudo systemctl reboot     # deliberate
+```
+
+If it is wedged badly enough that SSH will not answer, **hold the power button**
+for about four seconds. That force-off is done by the firmware, not by the
+operating system, and no logind setting can disable it — it is a hard cut, so it
+is the last resort rather than the normal way. `HandlePowerKeyLongPress` is
+logind's *software* long press, an unrelated knob, and it is explicitly
+`ignore`: setting it to `poweroff` would hand the hole straight back to anyone
+who held the button a moment too long.
+
 **The preseed is served over HTTP**, not embedded in the initrd. Embedding is
 what drove the December attempt to hand-write a cpio archive in PowerShell; over
 HTTP, editing the preseed costs nothing and there is no build step.
