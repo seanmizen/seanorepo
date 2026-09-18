@@ -17,6 +17,12 @@ export DEBIAN_FRONTEND=noninteractive
 
 SERVER_NAME="${SERVER_NAME:-debbie}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
+# Where the checkout will live once #278 clones it. Nothing here creates it -
+# this script only looks, and says so when it is absent. If #278 chooses a
+# different path it must change this default and the matching one in
+# vm/assert.sh, and until it does the corepack assertion SKIPS with the path it
+# looked at printed, so the drift is visible rather than silent.
+REPO_DIR="${REPO_DIR:-/home/$DEPLOY_USER/projects/seanorepo}"
 
 log() { echo "[postinstall] $*"; }
 
@@ -196,5 +202,53 @@ id "$DEPLOY_USER" > /dev/null 2>&1 || { echo "user $DEPLOY_USER missing" >&2; ex
 # onwards. vm/assert.sh asserts it over a fresh SSH connection after a reboot,
 # which is why it can make that claim honestly.
 usermod -aG docker,sudo "$DEPLOY_USER"
+
+#------------------------------------------------------------------------------
+# Node and Yarn - REQ-DEPLOY-004
+#
+# The deploy runs `yarn install --immutable` then `yarn prod:docker`, so the box
+# needs Node and a Yarn 4 that the repository agrees with.
+#
+# DEBIAN'S OWN nodejs, NOT NodeSource. Trixie ships 20.19.2, which is Node 20 -
+# the thing the ticket asks for - so a third-party apt source would buy nothing
+# and cost a second keyring to go stale. The previous generation added
+# NodeSource because bookworm shipped Node 18; that reason expired with trixie.
+#
+# `corepack enable`, NOT `npm install -g yarn`. The previous generation did both
+# and contradicted itself: a globally npm-installed yarn lands in /usr/local/bin
+# and shadows the corepack shim in /usr/bin, so the box ends up running Yarn 1
+# against a Yarn 4 repository. npm is not installed here at all, which is the
+# cheapest way to keep that from coming back.
+#
+# NO VERSION IS NAMED HERE, deliberately, and that is the point of the ticket.
+# `corepack prepare --activate` with no argument reads `packageManager` from the
+# package.json of the directory it runs in, so the repository stays the single
+# source of the Yarn version and the two cannot drift. Pinning it a second time
+# in this script is exactly the contradiction being removed.
+#
+# The checkout arrives in #278 and does not exist yet, so the activation is
+# guarded. That costs nothing: corepack resolves `packageManager` at INVOCATION
+# time, so even with no pre-warm at all the first `yarn` run inside the checkout
+# fetches the declared version by itself. The guarded step only moves that
+# fetch earlier, to a moment when a failure is still attributable.
+#------------------------------------------------------------------------------
+log "node and yarn"
+apt-get install -y nodejs node-corepack
+
+# `yarn` only. A bare `corepack enable` also drops npm and pnpm shims into
+# /usr/bin, and the npm one would collide with Debian's npm package if anything
+# ever pulled it in. We want exactly one of the three.
+corepack enable yarn
+
+if [ -f "$REPO_DIR/package.json" ]; then
+    log "  activating the yarn from $REPO_DIR/package.json"
+    # As the deploy user, with -H: corepack's cache and its record of the
+    # activated version are per-user, under $HOME. Warming root's cache would
+    # do the deploy no good at all.
+    sudo -u "$DEPLOY_USER" -H sh -c 'cd "$1" && corepack prepare --activate' _ "$REPO_DIR"
+else
+    log "  no checkout at $REPO_DIR yet (#278) - corepack will resolve the"
+    log "  version from packageManager on first use inside it"
+fi
 
 log "done"
