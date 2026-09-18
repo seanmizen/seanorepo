@@ -137,9 +137,13 @@ check "$DEPLOY_USER in sudo"      "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -q
 check "passwordless sudo works"   'sudo -n true'
 
 if [ "$PHASE" = provisioned ]; then
-    # The docker group does not exist at install time - postinstall.sh creates
-    # it. Skipped rather than failed at first boot, because its absence there
-    # is correct rather than a regression.
+    # The docker group does not exist at install time - postinstall.sh installs
+    # the engine, whose package creates it. Skipped rather than failed at first
+    # boot, because its absence there is correct rather than a regression.
+    #
+    # This check alone is NOT evidence that Docker works - see the docker
+    # section below, which is what #276 added after this one spent a generation
+    # passing against an empty group.
     check "$DEPLOY_USER in docker" "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx docker"
 
     # REQ-SERVER-001 - asserted after a reboot, which is when the drop-in takes
@@ -152,6 +156,52 @@ else
     sk "lid-close drop-in present" "postinstall.sh writes it"
     sk "lid close ignored"         "postinstall.sh writes it"
     sk "sleep.target masked"       "postinstall.sh masks it"
+fi
+
+# REQ-DEPLOY-004 - the deploy is `yarn prod:docker`, so the engine has to be
+# there and has to be usable by the account the deploy runs as.
+#
+# The membership check above is deliberately not repeated here, because on its
+# own it proves nothing: a group can exist with no daemon behind it, and for a
+# generation that is exactly what it asserted. `docker info` is the check that
+# cannot be satisfied by an empty group - it opens /var/run/docker.sock and
+# asks the daemon its version.
+#
+# Run WITHOUT sudo, on purpose. `sudo docker info` would pass on a box where
+# the deploy user has no access at all, which is the failure this is for.
+# assert.sh arrives over a fresh SSH connection, so the session carries the
+# docker group; a session that predates `usermod -aG` would not, and the right
+# answer to that is to log in again rather than to reach for sudo.
+echo
+echo "== docker (REQ-DEPLOY-004) =="
+if [ "$PHASE" = provisioned ]; then
+    check "docker-ce installed" \
+        'dpkg-query -W -f="\${Status}" docker-ce 2>/dev/null | grep -q "^install ok installed"'
+    check "apt keyring present"       '[ -s /etc/apt/keyrings/docker.gpg ]'
+    # Idempotency, asserted rather than assumed. postinstall.sh runs more than
+    # once on any box that is ever repaired, and the classic way to write this
+    # step is an append, which leaves apt warning about a doubly-configured
+    # repository on every update. One line is the whole claim.
+    check "exactly one docker apt source" \
+        '[ "$(grep -rhsE "^deb .*download\.docker\.com" /etc/apt/sources.list /etc/apt/sources.list.d/ | wc -l)" -eq 1 ]'
+    check "docker.service enabled"    'systemctl is-enabled docker'
+    check "docker.service active"     'systemctl is-active docker'
+    # --format, not a bare `docker info`: it makes the check depend on an
+    # answer from the daemon rather than on an exit code, and a client that
+    # cannot reach the socket prints its error to stderr and yields nothing.
+    check "docker info works as $DEPLOY_USER without sudo" \
+        '[ -n "$(docker info --format "{{.ServerVersion}}" 2>/dev/null)" ]'
+    # `docker compose`, not `docker-compose`. yarn prod:docker calls the v2
+    # plugin, so the v1 python script being present would not help.
+    check "docker compose plugin present" 'docker compose version'
+else
+    sk "docker-ce installed"          "postinstall.sh installs it"
+    sk "apt keyring present"          "postinstall.sh fetches it"
+    sk "exactly one docker apt source" "postinstall.sh writes it"
+    sk "docker.service enabled"       "postinstall.sh installs it"
+    sk "docker.service active"        "postinstall.sh installs it"
+    sk "docker info works as $DEPLOY_USER without sudo" "postinstall.sh installs it"
+    sk "docker compose plugin present" "postinstall.sh installs it"
 fi
 
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
