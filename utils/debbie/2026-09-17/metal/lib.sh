@@ -93,6 +93,31 @@ lan_ip() {
 #                     list. Unset, the install stops even with the ESSID given.
 #   security_type=wpa the select's values are 'wep/open' and 'wpa'. WPA2 PSK is
 #                     'wpa'; there is no 'wpa2'.
+#   netcfg/hostname   REQ-SERVER-004, #285. See below - this one cost a whole
+#                     install, not an evening.
+#
+# The hostname is here, on the boot line, for the same structural reason the
+# wifi credentials are: EVERY netcfg/* ANSWER MUST ARRIVE BEFORE NETCFG RUNS,
+# and netcfg runs before the preseed is fetched, because the preseed is fetched
+# over the network. The Debian guide says it outright - "preseeding the network
+# configuration won't work if you're loading your preconfiguration file from
+# the network" (B.4.3).
+#
+# The first real install proved it. overrides.cfg set both netcfg/hostname and
+# netcfg/get_hostname to the intended name; netcfg had already run, fallen
+# through to a reverse-DNS lookup of the DHCP address 192.168.1.182, and split
+# it at the first dot, so the box installed itself as hostname `192` in domain
+# `168.1.182`. Both keys were correct and both were read too late.
+#
+# netcfg checks netcfg/hostname FIRST and prefers it over the DHCP-supplied
+# name and over reverse DNS - that is what Debian #606636 added in netcfg 1.99,
+# and it is the first branch of the HOSTNAME case in netcfg's dhcp.c. Given
+# here, it is in debconf before netcfg starts, so that branch is taken.
+#
+# Belt and braces, not belt alone: overrides.cfg's late_command also writes
+# /etc/hostname and /etc/hosts in the target. That cannot lose a race with
+# netcfg no matter which key wins, so a box is correctly named even if the
+# reasoning above turns out to be wrong on some particular network.
 #
 # The caller places these BEFORE the '---' separator. After it, they would be
 # copied into the installed system's bootloader config, persisting the wifi
@@ -106,5 +131,8 @@ installer_params() {
     params="$params netcfg/wireless_essid=$WIFI_SSID"
     params="$params netcfg/wireless_security_type=wpa"
     params="$params netcfg/wireless_wpa=$WIFI_PASS"
+    # Must stay in step with vm/test-vm.sh's own append line.
+    params="$params netcfg/hostname=$SERVER_NAME"
+    params="$params netcfg/get_hostname=$SERVER_NAME"
     printf '%s' "$params"
 }

@@ -10,11 +10,30 @@
 # Every check is architecture-neutral. The arm64 run and the amd64 run assert
 # exactly the same things; where a name differs by arch (the EFI loader) the
 # check globs rather than branching.
+#
+# PHASE says WHEN this is running, and it is the whole point of #285.
+#
+#   firstboot    the installed system has booted and nothing has been run on it
+#                by hand. Only what the INSTALLER produced may be asserted.
+#   provisioned  postinstall.sh has run and the box has rebooted. Everything.
+#
+# Without that split, a bug the installer creates and postinstall.sh repairs is
+# invisible: every assertion ran after the repair, so the box was right by the
+# time anything looked, and wrong in between. The hostname was `192` for the
+# whole of that window and no run ever went red. A check that passes in
+# `provisioned` and fails in `firstboot` is precisely "postinstall repaired it",
+# and that is now a distinguishable, reportable state rather than a silence.
 set -uo pipefail
 
 EXPECT_ARCH="${EXPECT_ARCH:-}"
 EXPECT_HOSTNAME="${EXPECT_HOSTNAME:-debbie}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
+PHASE="${PHASE:-provisioned}"
+
+case "$PHASE" in
+    firstboot | provisioned) ;;
+    *) echo "assert.sh: PHASE must be 'firstboot' or 'provisioned', not '$PHASE'" >&2; exit 2 ;;
+esac
 
 pass=0
 fail=0
@@ -35,16 +54,58 @@ sk()   { printf '  \033[33m-\033[0m %s \033[33m(skipped: %s)\033[0m\n' "$1" "$2"
 # Subshelling here fixes the whole class rather than that one call site.
 check() { if ( eval "$2" ) > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 
+# Stated up front so a pasted log says which of the two runs it came from. The
+# same check name means different things in each, which is the entire point.
+if [ "$PHASE" = firstboot ]; then
+    echo "### PHASE=firstboot - asserting what the INSTALLER produced."
+    echo "### postinstall.sh has NOT run. A failure below is an install bug."
+else
+    echo "### PHASE=provisioned - asserting the provisioned box."
+fi
+
+echo
 echo "== system =="
 if [ -n "$EXPECT_ARCH" ]; then
     # Catches a harness mix-up: the wrong netboot images for the chosen guest.
     check "architecture is $EXPECT_ARCH" "[ \"\$(dpkg --print-architecture)\" = '$EXPECT_ARCH' ]"
 fi
 check "Debian 13 (trixie)"        '. /etc/os-release; [ "$VERSION_CODENAME" = trixie ]'
-check "hostname is $EXPECT_HOSTNAME" "[ \"\$(hostname)\" = '$EXPECT_HOSTNAME' ]"
 check "timezone is Europe/London" '[ "$(timedatectl show -p Timezone --value)" = Europe/London ]'
 check "DNS and routing work"      'getent hosts deb.debian.org'
 
+# REQ-SERVER-004 - #285. Asserted in BOTH phases, which is the fix: in
+# `firstboot` nothing but the installer has touched the box, so a pass here
+# means the preseed produced a usable identity, and a failure here followed by
+# a pass in `provisioned` means postinstall.sh papered over it.
+#
+# The hostname is checked three ways because the failure mode split them: the
+# running hostname, the static one in /etc/hostname, and the 127.0.1.1 line.
+# The real box had `192` in all three; a box repaired by hostnamectl alone
+# would have the first two right and the third stale.
+echo
+echo "== identity (REQ-SERVER-004) =="
+check "hostname is $EXPECT_HOSTNAME" \
+    "[ \"\$(hostname)\" = '$EXPECT_HOSTNAME' ]"
+check "static hostname is $EXPECT_HOSTNAME" \
+    "[ \"\$(hostnamectl --static)\" = '$EXPECT_HOSTNAME' ]"
+# Accepts either separator - late_command writes a space, postinstall.sh a tab.
+check "127.0.1.1 maps to $EXPECT_HOSTNAME" \
+    "grep -qE '^127\.0\.1\.1[[:space:]]+$EXPECT_HOSTNAME([[:space:]]|\$)' /etc/hosts"
+check "no leftover 127.0.1.1 line" \
+    '[ "$(grep -c "^127\.0\.1\.1" /etc/hosts)" -eq 1 ]'
+check "avahi-daemon installed"    'dpkg-query -W -f="\${Status}" avahi-daemon 2>/dev/null | grep -q "^install ok installed"'
+check "libnss-mdns installed"     'dpkg-query -W -f="\${Status}" libnss-mdns 2>/dev/null | grep -q "^install ok installed"'
+check "nsswitch resolves .local via mdns" 'grep -qE "^hosts:.*mdns" /etc/nsswitch.conf'
+check "avahi-daemon enabled"      'systemctl is-enabled avahi-daemon'
+check "avahi-daemon active"       'systemctl is-active avahi-daemon'
+# The one check that exercises the whole path rather than its parts. nss-mdns
+# asks the local avahi-daemon, which answers for the name it publishes, so this
+# proves the box would answer to $EXPECT_HOSTNAME.local - see the README for
+# what it does NOT prove, which is that another machine on the LAN can hear it.
+check "$EXPECT_HOSTNAME.local resolves" \
+    "getent hosts '$EXPECT_HOSTNAME.local' || avahi-resolve -n '$EXPECT_HOSTNAME.local'"
+
+echo
 echo "== boot chain =="
 # The reason the harness uses pflash rather than -bios: without a writable
 # variable store the installer's boot entry is discarded and none of this holds.
@@ -60,31 +121,43 @@ check "grub EFI config present"   'sudo -n test -f /boot/efi/EFI/debian/grub.cfg
 check "removable-path loader"     'sudo -n sh -c "ls /boot/efi/EFI/BOOT/BOOT*.EFI"'
 check "fstab mounts by UUID"      'grep -q "^UUID=" /etc/fstab'
 
+echo
 echo "== services =="
 check "systemd reached a steady state" 'systemctl is-system-running --wait | grep -qE "running|degraded"'
 check "ssh enabled"               'systemctl is-enabled ssh'
 check "ssh active"                'systemctl is-active ssh'
 check "headless (no display manager)" '! systemctl list-unit-files | grep -qE "^(gdm3?|sddm|lightdm)\.service"'
 
+echo
 echo "== provisioning =="
-# REQ-SERVER-003
+# REQ-SERVER-003. The user, its sudo membership and the sudoers drop-in all
+# come from the preseed, so they hold in both phases.
 check "user $DEPLOY_USER exists"  "id '$DEPLOY_USER'"
 check "$DEPLOY_USER in sudo"      "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx sudo"
-check "$DEPLOY_USER in docker"    "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx docker"
 check "passwordless sudo works"   'sudo -n true'
 
-# REQ-SERVER-004
-check "avahi-daemon active"       'systemctl is-active avahi-daemon'
+if [ "$PHASE" = provisioned ]; then
+    # The docker group does not exist at install time - postinstall.sh creates
+    # it. Skipped rather than failed at first boot, because its absence there
+    # is correct rather than a regression.
+    check "$DEPLOY_USER in docker" "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx docker"
 
-# REQ-SERVER-001 - asserted after a reboot, which is when the drop-in takes
-# effect. postinstall.sh deliberately does not restart logind.
-check "lid-close drop-in present" '[ -f /etc/systemd/logind.conf.d/10-debbie-nosleep.conf ]'
-check "lid close ignored"         '[ "$(loginctl show-seat seat0 -p IdleAction --value 2>/dev/null || busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandleLidSwitch 2>/dev/null | awk "{print \$2}" | tr -d \")" = ignore ] || grep -q "^HandleLidSwitch=ignore" /etc/systemd/logind.conf.d/10-debbie-nosleep.conf'
-check "sleep.target masked"       '[ "$(systemctl is-enabled sleep.target 2>&1)" = masked ]'
+    # REQ-SERVER-001 - asserted after a reboot, which is when the drop-in takes
+    # effect. postinstall.sh deliberately does not restart logind.
+    check "lid-close drop-in present" '[ -f /etc/systemd/logind.conf.d/10-debbie-nosleep.conf ]'
+    check "lid close ignored"         '[ "$(loginctl show-seat seat0 -p IdleAction --value 2>/dev/null || busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandleLidSwitch 2>/dev/null | awk "{print \$2}" | tr -d \")" = ignore ] || grep -q "^HandleLidSwitch=ignore" /etc/systemd/logind.conf.d/10-debbie-nosleep.conf'
+    check "sleep.target masked"       '[ "$(systemctl is-enabled sleep.target 2>&1)" = masked ]'
+else
+    sk "$DEPLOY_USER in docker"   "postinstall.sh creates the group"
+    sk "lid-close drop-in present" "postinstall.sh writes it"
+    sk "lid close ignored"         "postinstall.sh writes it"
+    sk "sleep.target masked"       "postinstall.sh masks it"
+fi
 
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
+echo
 echo "== network =="
 if [ -n "$(ls -d /sys/class/net/*/wireless 2> /dev/null)" ]; then
     # netcfg persists wifi as an ifupdown stanza plus wpasupplicant in the
@@ -104,6 +177,7 @@ fi
 # not displace. Both are cheap to assert and easy to regress: the obvious place
 # to drop a new unit is /etc/systemd/system, and the obvious name for a unit
 # that configures cloudflared is cloudflared.service.
+echo
 echo "== systemd unit layout =="
 # `-type f` is the whole trick, and it is exact rather than approximate: on a
 # stock Debian 13 host the top level of /etc/systemd/system contains no regular
@@ -128,15 +202,23 @@ check "no shadowed package units" \
 
 # REQ-SERVER-002 - exactly four ports, nothing else. An extra open port is a
 # failure, not a curiosity, so the count is asserted as well as the members.
+#
+# ufw is installed and enabled by postinstall.sh, on purpose: enabling it
+# during the install would close 22 before anything could provision the box.
+echo
 echo "== firewall =="
-check "ufw active"                'sudo -n ufw status | grep -q "Status: active"'
-check "22 open"                   'sudo -n ufw status | grep -q "^22/tcp"'
-check "80 open"                   'sudo -n ufw status | grep -q "^80/tcp"'
-check "443 open"                  'sudo -n ufw status | grep -q "^443/tcp"'
-check "5353 open"                 'sudo -n ufw status | grep -q "^5353/udp"'
-# ufw prints a v4 rule and a matching "(v6)" rule for every allow, so a naive
-# line count sees eight where four were asked for. Count the v4 lines only.
-check "no other ports open"       '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
+if [ "$PHASE" = provisioned ]; then
+    check "ufw active"                'sudo -n ufw status | grep -q "Status: active"'
+    check "22 open"                   'sudo -n ufw status | grep -q "^22/tcp"'
+    check "80 open"                   'sudo -n ufw status | grep -q "^80/tcp"'
+    check "443 open"                  'sudo -n ufw status | grep -q "^443/tcp"'
+    check "5353 open"                 'sudo -n ufw status | grep -q "^5353/udp"'
+    # ufw prints a v4 rule and a matching "(v6)" rule for every allow, so a
+    # naive line count sees eight where four were asked for. Count v4 only.
+    check "no other ports open"       '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
+else
+    sk "ufw active" "postinstall.sh installs and enables it"
+fi
 
 echo
 if [ "$skip" -gt 0 ]; then

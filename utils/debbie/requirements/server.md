@@ -91,17 +91,37 @@ Introduced in #259.
 - **Type:** functional
 - **Priority:** P2
 - **Statement:** The host shall answer to its own hostname over mDNS on the
-  local network.
+  local network from its first boot after installation, with no provisioning
+  step having been run.
 - **Rationale:** Every runbook step reaches the box as `debbie.local`, because
   its LAN address has moved more than once and a written-down IP goes stale
   silently. mDNS keeps the name working across an address change.
+
+  "From its first boot" is the part #285 added, and it is not a refinement —
+  it is the requirement. `postinstall.sh` is itself a runbook step, so it is
+  reached as `debbie.local` like every other one. Installing mDNS *from*
+  `postinstall.sh` made the name start working only after the step that needed
+  it, and the hostname it would have advertised was wrong as well: netcfg
+  preferred a reverse-DNS answer over the preseeded name, split
+  `192.168.1.182` at its first dot, and installed the box as `192`. Both halves
+  are one fault, because avahi advertises the system hostname — fixing either
+  alone leaves the box unreachable by name.
 
   Worth knowing when diagnosing: where a host has two interfaces on one subnet,
   `debbie.local` may resolve to either address, so it is not a safe way to reach
   one specific interface — use the explicit IP for that.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "hostname is debbie"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "static hostname is debbie"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "127.0.1.1 maps to debbie"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "avahi-daemon active"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "debbie.local resolves"
+  - Test — `utils/debbie/2026-09-17/vm/test-vm.sh` › the `PHASE=firstboot` run,
+    which asserts all of the above before `postinstall.sh` executes and so
+    distinguishes "the preseed set it" from "postinstall repaired it"
+  - Inspection — `utils/debbie/2026-09-17/README.md` § "What it does not",
+    which records that a VM cannot reproduce the reverse-DNS hostname fault
+    and cannot prove mDNS reachability from another host
 - **Relations:** none
 
 ## REQ-SERVER-005 — A wifi-only host keeps its network across a reboot
