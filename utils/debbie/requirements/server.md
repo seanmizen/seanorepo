@@ -327,12 +327,14 @@ Introduced in #259.
 
 ## REQ-SERVER-008 — SSH accepts keys and nothing else
 
-- **Status:** proposed
+- **Status:** active
 - **Source:** sean
 - **Origin:** #273
 - **Type:** constraint
 - **Priority:** P0
-- **Statement:** The host shall accept SSH authentication by public key only.
+- **Statement:** The host shall accept SSH authentication by public key only,
+  refusing password authentication, keyboard-interactive authentication and
+  root login, as sshd reports its own effective configuration.
 - **Rationale:** Port 22 is open on the LAN by `REQ-SERVER-002`, and the deploy
   account has passwordless sudo by `REQ-SERVER-003`. Those two together mean a
   guessed password is complete control of the host, so the password path should
@@ -341,8 +343,21 @@ Introduced in #259.
   This mostly ratifies the current state, and that is the point: it is
   currently true by accident. The account has a password hash,
   `PasswordAuthentication` sits at its default, and nothing asserts either.
+
+  Asserted through `sshd -T` rather than by reading the drop-in. sshd globs
+  `sshd_config.d/*.conf` in lexical order and the **first** setting of a keyword
+  wins, so a drop-in that sorts too late — or under a name sshd never globs — is
+  silently inert while a `grep` on it still matches. A file sshd has not read is
+  the fault this requirement exists to catch.
+
+  The account password is deliberately not locked: console login is the recovery
+  path, and this generation provides no out-of-band access (`#135`).
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "password auth disabled"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sshd config is valid"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ssh passwords refused"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ssh keyboard-interactive refused"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ssh root login refused"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ssh still accepts keys"
 - **Relations:**
   - depends-on REQ-SERVER-002
   - depends-on REQ-SERVER-003

@@ -27,7 +27,7 @@
 | [`REQ-SERVER-005`](server.md#req-server-005--a-wifi-only-host-keeps-its-network-across-a-reboot) | A wifi-only host keeps its network across a reboot | active | functional | P1 | sean |
 | [`REQ-SERVER-006`](server.md#req-server-006--security-updates-apply-without-anyone-logging-in) | Security updates apply without anyone logging in | active | functional | P1 | sean |
 | [`REQ-SERVER-007`](server.md#req-server-007--logs-cannot-fill-the-disk) | Logs cannot fill the disk | proposed | constraint | P2 | sean |
-| [`REQ-SERVER-008`](server.md#req-server-008--ssh-accepts-keys-and-nothing-else) | SSH accepts keys and nothing else | proposed | constraint | P0 | sean |
+| [`REQ-SERVER-008`](server.md#req-server-008--ssh-accepts-keys-and-nothing-else) | SSH accepts keys and nothing else | active | constraint | P0 | sean |
 | [`REQ-SERVER-009`](server.md#req-server-009--repeated-failed-authentication-is-throttled) | Repeated failed authentication is throttled | proposed | functional | P2 | sean |
 | [`REQ-SERVER-010`](server.md#req-server-010--the-interactive-shell-is-the-one-described-in-the-repository) | The interactive shell is the one described in the repository | proposed | quality | P3 | sean |
 | [`REQ-SERVER-011`](server.md#req-server-011--our-systemd-units-live-apart-from-the-distributions) | Our systemd units live apart from the distribution's | active | constraint | P2 | sean |
