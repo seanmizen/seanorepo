@@ -666,8 +666,62 @@ check "no shadowed package units" \
 #
 # ufw is installed and enabled by postinstall.sh, on purpose: enabling it
 # during the install would close 22 before anything could provision the box.
+#
+# READING `ufw status` IS NOT ENOUGH, and until #300 that is all this section
+# did. Docker writes its own chains into `nat` and `filter`, and a container
+# published with `-p 4000:4000` gets a DNAT rule consulted BEFORE ufw's - so
+# the port answers from the LAN and `ufw status` never mentions it. The old
+# "no other ports open" check therefore did not merely miss the hole: it
+# reported green over it, because the tool it asked was not the tool that knew.
+#
+# The checks below are ordered from what the box is CONFIGURED to do to what it
+# is OBSERVED doing, and the later ones do not trust the earlier ones. The
+# daemon default is a default, and an explicit `0.0.0.0:` in a compose file
+# walks straight past it - measured, not assumed - so the socket, chain and
+# probe checks all read the running system instead.
 echo
-echo "== firewall =="
+echo "== firewall (REQ-SERVER-002) =="
+
+# Every TCP socket listening on an address that is not loopback, minus the
+# ports REQ-SERVER-002 opens. Printed as "addr:port", one per line; empty is
+# the passing state.
+#
+# TCP only, deliberately. A DHCP client on 0.0.0.0:68, avahi's query socket and
+# an NTP client all bind wildcard UDP for legitimate reasons, and enumerating
+# them would make this red on a correct box - the fastest way to get a security
+# assertion switched off. Every port Docker publishes for this repository is
+# TCP, and the nat-chain check below covers a UDP publish regardless.
+lan_tcp_listeners() {
+    ss -H -ltn 2> /dev/null | awk '
+        {
+            a = $4
+            if (match(a, /:[0-9]+$/) == 0) next
+            port = substr(a, RSTART + 1)
+            addr = substr(a, 1, RSTART - 1)
+            gsub(/^\[|\]$/, "", addr)
+            if (port == "22" || port == "80" || port == "443") next
+            if (addr ~ /^127\./) next
+            if (addr == "::1") next
+            if (addr ~ /^::ffff:127\./) next
+            print addr ":" port
+        }'
+}
+
+# Every DNAT rule in the nat table's DOCKER chain that is NOT restricted to a
+# loopback destination. That is exactly the shape of a port published to the
+# LAN: with the daemon default in place the rule carries `-d 127.0.0.1/32`,
+# and without it the rule has no `-d` at all and matches every address the box
+# holds. The chain not existing is vacuously fine - nothing has published yet.
+#
+# This is the half that survives `"userland-proxy": false`, under which a
+# published port has no listening socket for the check above to see and the
+# DNAT rule is the only evidence there is.
+docker_lan_dnat() {
+    sudo -n iptables -t nat -S DOCKER 2> /dev/null \
+        | grep -- '-j DNAT' \
+        | grep -v -- '-d 127\.'
+}
+
 if [ "$PHASE" = provisioned ]; then
     check "ufw active"                'sudo -n ufw status | grep -q "Status: active"'
     check "22 open"                   'sudo -n ufw status | grep -q "^22/tcp"'
@@ -676,9 +730,182 @@ if [ "$PHASE" = provisioned ]; then
     check "5353 open"                 'sudo -n ufw status | grep -q "^5353/udp"'
     # ufw prints a v4 rule and a matching "(v6)" rule for every allow, so a
     # naive line count sees eight where four were asked for. Count v4 only.
-    check "no other ports open"       '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
+    #
+    # Renamed from "no other ports open", which is a claim this cannot make.
+    # It says what ufw was asked for, and nothing about what Docker does behind
+    # it - that is the next four checks.
+    check "ufw allows no port beyond the four" \
+        '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
+
+    # The configured default. `ip` is dockerd's `--ip`, "Host IP for port
+    # publishing". Parsed with node rather than grepped, which also proves the
+    # file is valid JSON - dockerd refuses to start on one that is not, so a
+    # malformed daemon.json is a box with no Docker rather than a box with a
+    # wrong default. node is on the box by REQ-DEPLOY-004.
+    check "docker publishes to loopback by default" \
+        'node -e "process.exit(JSON.parse(require(\"fs\").readFileSync(\"/etc/docker/daemon.json\",\"utf8\")).ip === \"127.0.0.1\" ? 0 : 1)"'
+    # Guards this section's own ground truth rather than the box's security.
+    # With the userland proxy on - the default - every published port shows as
+    # a listening socket, which is what the next check reads. Turning it off
+    # would not open anything, but it would make that check blind, and a check
+    # that has quietly stopped looking is worse than one that is absent.
+    check "docker's userland proxy is not disabled" \
+        '[ -f /etc/docker/daemon.json ] \
+         && ! grep -qE "\"userland-proxy\"[[:space:]]*:[[:space:]]*false" /etc/docker/daemon.json'
+
+    # The two observed checks. Offenders are printed before the check runs,
+    # because check() sends its output to /dev/null and a red line reading
+    # "something listens on the LAN" with no name attached is a bad afternoon.
+    lan_listeners="$(lan_tcp_listeners)"
+    if [ -n "$lan_listeners" ]; then
+        echo "  non-loopback TCP listeners:"
+        # sed rather than an unquoted printf: ss writes a wildcard address as
+        # `*:2375`, and an unquoted expansion would hand that to the glob.
+        echo "$lan_listeners" | sed 's/^/    /'
+    fi
+    # The `grep :22` is not decoration. An `ss` that is missing, or that fails,
+    # yields nothing, and "nothing" is indistinguishable from "no offenders" -
+    # which is the precise failure this whole ticket is about: a check that
+    # reports green because it asked something that could not answer. sshd
+    # always listens on 22, so an empty result means the tool is broken rather
+    # than the box is clean, and this goes red instead.
+    # Matched on the LOCAL ADDRESS column rather than on the whole line: `ss`
+    # prints the peer column last, so every line ends "0.0.0.0:*" and anchoring
+    # `:22$` against the line never matches. Found by writing it that way first.
+    check "nothing outside the four ports listens on a non-loopback address" \
+        'ss -H -ltn 2>/dev/null | awk "\$4 ~ /:22\$/" | grep -q . \
+         && [ -z "$(lan_tcp_listeners)" ]'
+
+    lan_dnat="$(docker_lan_dnat)"
+    if [ -n "$lan_dnat" ]; then
+        echo "  docker DNAT rules not restricted to loopback:"
+        echo "$lan_dnat" | sed 's/^/    /'
+    fi
+    # Same guard, same reason. `iptables -t nat -S DOCKER` prints nothing when
+    # the chain does not exist AND when the command could not run at all -
+    # no binary, no privilege, or a Docker configured onto a firewall backend
+    # this does not read. Requiring the wider `-t nat -S` to succeed first
+    # separates "there is nothing to find" from "I could not look".
+    check "no docker DNAT rule reaches a non-loopback address" \
+        'sudo -n iptables -t nat -S > /dev/null 2>&1 && [ -z "$(docker_lan_dnat)" ]'
+
+    #--------------------------------------------------------------------------
+    # The live probe - #300 AC 4.
+    #
+    # Everything above reads a box that may simply have nothing published on it,
+    # and on a freshly provisioned VM that is exactly the case: no `release`
+    # branch, no deploy, no containers. Three green checks against an empty
+    # `nat` table prove nothing at all about what happens when a container does
+    # publish a port, which is the only moment that matters.
+    #
+    # So publish one, deliberately, and look. A high port outside 4000-4061 so
+    # it cannot collide with a real service, for the two seconds it takes.
+    #
+    # The two halves are asserted together and neither is sufficient alone. A
+    # refused connection to the box's own LAN address is also what you get from
+    # a probe that never started, so "the socket exists, and it is loopback" is
+    # what makes the refusal mean something.
+    #
+    # NOT AN OFF-HOST TEST, and the README says so in as many words. The
+    # connection below leaves from the box and arrives at the box. What it
+    # proves is the BINDING: a socket bound to 127.0.0.1 does not accept a
+    # connection addressed to 10.0.2.15, whoever sends it. Whether a packet
+    # from another machine is also refused at the wire is the metal run's to
+    # prove - QEMU's slirp networking gives the guest no LAN peer to be refused
+    # from.
+    #--------------------------------------------------------------------------
+    PROBE_PORT="${PROBE_PORT:-49231}"
+    PROBE_IMAGE="${PROBE_IMAGE:-busybox}"
+    PROBE_NAME=assert-port-probe
+
+    probe_ready=0
+    probe_pulled=0
+    if docker image inspect "$PROBE_IMAGE" > /dev/null 2>&1; then
+        probe_ready=1
+    elif docker pull -q "$PROBE_IMAGE" > /dev/null 2>&1; then
+        probe_ready=1
+        probe_pulled=1
+    fi
+
+    if [ "$probe_ready" = 1 ]; then
+        docker rm -f "$PROBE_NAME" > /dev/null 2>&1
+        # No host address on the -p, on purpose: this is the exact shape every
+        # apps/*/docker-compose.yml uses, so what is measured here is what the
+        # deploy will do.
+        #
+        # A REAL LISTENER INSIDE, not `sleep`. Publishing alone binds the host
+        # socket, so `sleep` is enough for the binding check - but it is not
+        # enough for the connection check below, and that difference was found
+        # by running this against a deliberately LAN-published port: with an
+        # empty container the connection is refused by the BACKEND, so the
+        # check passed while the port was wide open. busybox's httpd answers,
+        # which makes a refusal mean the host-side binding and nothing else.
+        docker run -d --name "$PROBE_NAME" -p "$PROBE_PORT:$PROBE_PORT" \
+            "$PROBE_IMAGE" httpd -f -p "$PROBE_PORT" -h /tmp > /dev/null 2>&1
+        sleep 2
+
+        probe_bound="$(ss -H -ltn "sport = :$PROBE_PORT" 2> /dev/null | awk '{print $4}')"
+
+        # The box's own routable address - 10.0.2.15 under slirp, the LAN
+        # address on metal. `scope global` excludes 127.0.0.1, which would
+        # answer and prove nothing.
+        probe_lan_addr="$(ip -4 -o addr show scope global 2> /dev/null \
+            | awk '{print $4}' | cut -d/ -f1 | head -1)"
+        probe_lan=unknown
+        if [ -n "$probe_lan_addr" ]; then
+            if timeout 4 bash -c "exec 3<>/dev/tcp/$probe_lan_addr/$PROBE_PORT" 2> /dev/null; then
+                probe_lan=open
+            else
+                probe_lan=refused
+            fi
+        fi
+
+        docker rm -f "$PROBE_NAME" > /dev/null 2>&1
+        # Only if we brought it. Removing an image the box already had would be
+        # an assertion with a side effect on the thing it is asserting about.
+        if [ "$probe_pulled" = 1 ]; then
+            docker rmi -f "$PROBE_IMAGE" > /dev/null 2>&1
+        fi
+
+        if [ -n "$probe_bound" ]; then
+            echo "  probe on $PROBE_PORT bound: $(printf '%s' "$probe_bound" | tr '\n' ' ')"
+        fi
+        echo "  probe reached at ${probe_lan_addr:-no routable address}: $probe_lan"
+        # Non-empty is half the claim - an empty result is a probe that never
+        # published, not a port that is closed.
+        check "a deliberately published port binds loopback and nothing else" \
+            '[ -n "$probe_bound" ] \
+             && ! printf "%s\n" "$probe_bound" | grep -qvE "^(127\.[0-9.]+|\[::1\]):[0-9]+$"'
+        if [ -n "$probe_lan_addr" ]; then
+            check "that port refuses a connection to the host's own routable address" \
+                '[ "$probe_lan" = refused ]'
+        else
+            sk "that port refuses a connection to the host's own routable address" \
+                "no globally scoped address on this host"
+        fi
+    else
+        # Honest rather than silent. The probe needs one small image and the
+        # box may have no route to a registry; saying so beats a green run that
+        # quietly asserted nothing.
+        sk "a deliberately published port binds loopback and nothing else" \
+            "could not obtain the $PROBE_IMAGE image to publish a port with"
+        sk "that port refuses a connection to the host's own routable address" \
+            "could not obtain the $PROBE_IMAGE image to publish a port with"
+    fi
 else
     sk "ufw active" "postinstall.sh installs and enables it"
+    sk "22 open"    "postinstall.sh installs and enables it"
+    sk "80 open"    "postinstall.sh installs and enables it"
+    sk "443 open"   "postinstall.sh installs and enables it"
+    sk "5353 open"  "postinstall.sh installs and enables it"
+    sk "ufw allows no port beyond the four" "postinstall.sh installs and enables it"
+    sk "docker publishes to loopback by default" "postinstall.sh writes daemon.json"
+    sk "docker's userland proxy is not disabled" "postinstall.sh writes daemon.json"
+    sk "nothing outside the four ports listens on a non-loopback address" \
+        "postinstall.sh installs docker and the firewall"
+    sk "no docker DNAT rule reaches a non-loopback address" "postinstall.sh installs docker"
+    sk "a deliberately published port binds loopback and nothing else" "postinstall.sh installs docker"
+    sk "that port refuses a connection to the host's own routable address" "postinstall.sh installs docker"
 fi
 
 echo
