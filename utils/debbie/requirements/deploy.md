@@ -85,7 +85,15 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy-poll.service
     is timer-owned (static)"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy.sh present and
-    executable"
+    executable" — **conditional, and the condition is the claim.** `deploy.sh`
+    is run from the checkout, and the checkout is on `release`, so a box
+    provisioned before this generation shipped cannot have the file at all.
+    The check therefore asks the commit on disk first — `git cat-file -e
+    HEAD:utils/debbie/2026-09-17/scripts/deploy.sh` — and skips, naming that
+    commit and that path, when the answer is no. It runs, and can fail, exactly
+    when the commit says the file should be there. A green run in which it
+    skipped does not verify this requirement's deploy path; it verifies the
+    timer, the interval, the unit ownership and the sudoers boundary only
 - **Relations:** depends-on REQ-DEPLOY-001
 
 ## REQ-DEPLOY-003 — Two deploys cannot run at once
