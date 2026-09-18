@@ -373,6 +373,17 @@ do_install() {
     append="auto=true priority=critical"
     append="$append preseed/url=http://10.0.2.2:$HTTP_PORT/preseed.cfg"
     append="$append netcfg/choose_interface=auto"
+    # REQ-SERVER-004, #285. netcfg runs BEFORE the preseed is fetched - it has
+    # to, because the preseed is fetched over the network - so a netcfg/* key
+    # in preseed.cfg or overrides.cfg is read too late to influence it. The
+    # boot line is the only place a netcfg answer can arrive in time.
+    #
+    # netcfg reads netcfg/hostname first and prefers it over both the DHCP
+    # hostname and a reverse-DNS lookup (Debian #606636, fixed in netcfg 1.99).
+    # This mirrors metal/lib.sh installer_params(), which does the same for the
+    # real box - the two lists must stay in step.
+    append="$append netcfg/hostname=$SERVER_NAME"
+    append="$append netcfg/get_hostname=$SERVER_NAME"
     append="$append console=$CONSOLE,115200n8"
 
     log "installing ($GUEST_ARCH, accel=$ACCEL_ARG, smp=$SMP) - log: $RUN_DIR/install.log"
@@ -435,6 +446,25 @@ do_assert() {
     done
     log "ssh up after ${waited}s"
 
+    # REQ-SERVER-004, #285. Assert the INSTALLER's work before anything has
+    # been run on the box by hand. This is the run that can tell "the preseed
+    # set it" from "postinstall.sh repaired it": the box has booted once and
+    # postinstall.sh has not touched it, so a green identity section here means
+    # the install produced a usable hostname and a working .local name on its
+    # own. The old harness only ever asserted after provisioning, which is why
+    # a box that came up as `192` looked perfect in every run.
+    #
+    # A failure here is fatal rather than advisory. Carrying on would run
+    # postinstall.sh, repair the box, and report a pass - which is the exact
+    # shape of the bug this exists to prevent.
+    log "asserting first boot (before postinstall)"
+    local firstboot_rc=0
+    ssh "${ssh_opts[@]}" "$target" \
+        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER PHASE=firstboot bash -s" \
+        < "$HERE/assert.sh" || firstboot_rc=$?
+    [ "$firstboot_rc" = 0 ] \
+        || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; postinstall.sh repairs the hostname and mDNS, so it would go green regardless."
+
     log "provisioning"
     scp "${scp_opts[@]}" "$GEN_DIR/scripts/postinstall.sh" "$target:/tmp/postinstall.sh" > /dev/null \
         || die_code 2 "could not copy postinstall.sh into the guest"
@@ -456,7 +486,7 @@ do_assert() {
     log "asserting"
     local rc=0
     ssh "${ssh_opts[@]}" "$target" \
-        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER bash -s" \
+        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER PHASE=provisioned bash -s" \
         < "$HERE/assert.sh" || rc=$?
 
     mkdir -p "$RUN_DIR/artifacts"
