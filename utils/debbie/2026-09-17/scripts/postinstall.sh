@@ -25,23 +25,49 @@ log() { echo "[postinstall] $*"; }
 #------------------------------------------------------------------------------
 # Packages
 #------------------------------------------------------------------------------
+# avahi-daemon, avahi-utils and libnss-mdns are installed by the preseed as of
+# #285, so on a box this generation installed these are already present and
+# apt-get does nothing. They stay named here because this script must also
+# repair a box installed by an earlier preseed, and because ufw is genuinely
+# only wanted after the install (it would otherwise close 22 mid-provision).
 log "installing packages"
 apt-get update -y
 apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl
 
 #------------------------------------------------------------------------------
 # Hostname and mDNS - REQ-SERVER-004
+#
+# REPAIR, NOT RE-DO. Since #285 the preseed's late_command has already set both
+# of these before first boot, and on such a box every branch here is skipped.
+# What survives is the repair path for a box installed by an older preseed, or
+# one whose identity has drifted.
+#
+# The bug this guards: netcfg preferred a reverse-DNS answer over the preseeded
+# hostname, split 192.168.1.182 at its first dot, and installed the box as
+# `192`. postinstall.sh quietly fixed it, which is exactly why nothing noticed
+# for so long - every assertion ran after this script. vm/assert.sh now also
+# runs BEFORE it, so "the preseed set it" and "postinstall repaired it" can no
+# longer be confused.
 #------------------------------------------------------------------------------
 log "hostname -> $SERVER_NAME"
 if [ "$(hostnamectl --static)" != "$SERVER_NAME" ]; then
+    log "  repairing hostname (was '$(hostnamectl --static)')"
     hostnamectl set-hostname "$SERVER_NAME"
     echo "$SERVER_NAME" > /etc/hostname
 fi
 
-# Rewrite rather than append, so re-running cannot accumulate 127.0.1.1 lines.
-sed -i '/^127\.0\.1\.1/d' /etc/hosts
-echo "127.0.1.1	$SERVER_NAME" >> /etc/hosts
+# Guarded so a correct file is left byte-identical. Rewrite rather than append
+# when it IS wrong, so re-running cannot accumulate 127.0.1.1 lines. The
+# pattern accepts either separator: late_command writes a space, this writes a
+# tab, and both are valid in a whitespace-delimited /etc/hosts.
+if ! grep -qE "^127\.0\.1\.1[[:space:]]+${SERVER_NAME}[[:space:]]*\$" /etc/hosts; then
+    log "  repairing the 127.0.1.1 line in /etc/hosts"
+    sed -i '/^127\.0\.1\.1/d' /etc/hosts
+    printf '127.0.1.1\t%s\n' "$SERVER_NAME" >> /etc/hosts
+fi
 
+# Already enabled and running on a box the preseed installed avahi onto; this
+# is idempotent and is what repairs an older one.
 systemctl enable --now avahi-daemon
 
 #------------------------------------------------------------------------------
