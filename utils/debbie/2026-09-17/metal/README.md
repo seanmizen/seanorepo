@@ -171,11 +171,25 @@ answerable without watching a console. Power the box back on, then:
 ./provision.sh
 ```
 
-That waits for SSH, runs `postinstall.sh`, reboots so the boot-time settings
-apply, waits for the box to return, and runs the same `vm/assert.sh` the VM
-runs — with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from your `.env`. Exit
+That waits for SSH, **asserts the box as the installer left it**, runs
+`postinstall.sh`, reboots so the boot-time settings apply, waits for the box to
+return, and asserts again — both times with the same `vm/assert.sh` the VM
+runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from your `.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
 up on SSH.
+
+The **first** of those two runs is the one `#285` added, and it is the only one
+that can catch a fault the installer creates and `postinstall.sh` repairs. The
+first real install came up as hostname `192`; `postinstall.sh` corrected it, so
+every check was green and nobody saw it for a generation. A first-boot failure
+prints a loud banner, lets the repair proceed — being pointed at a broken box
+is a legitimate reason to run this — and still exits non-zero at the end, so a
+repaired box cannot be mistaken for a correctly installed one.
+
+Since `#285` the box also answers to `$SERVER_NAME.local` on **first boot**:
+`avahi-daemon` and `libnss-mdns` are installed by the preseed rather than by
+`postinstall.sh`. Previously mDNS only started working after the step you had
+to reach the box to run, which is why `HOST=<ip>` was so often needed below.
 
 ```bash
 ./provision.sh --assert       # assert only, box already provisioned

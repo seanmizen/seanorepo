@@ -100,6 +100,22 @@ network and mirror configuration, partitioning and ESP creation on GPT under
 UEFI, the UEFI → GRUB → systemd boot chain, user and SSH setup, and every
 `REQ-SERVER-*` property.
 
+### Two assertion phases, and why
+
+`vm/assert.sh` runs **twice**, and the split is the whole of `#285`:
+
+| `PHASE` | When | What a pass means |
+|---|---|---|
+| `firstboot` | the installed system has booted once; nothing run by hand | the **installer** produced a correct box |
+| `provisioned` | after `postinstall.sh` and a reboot | the **box** is correct |
+
+Before this, only the second run existed. `postinstall.sh` repairs the hostname
+and installs mDNS, so a box the installer named `192` was already named
+correctly by the time anything looked at it — the end state was right, the
+install was wrong, and no run could tell the two apart. A check that fails in
+`firstboot` and passes in `provisioned` now reads, in exactly those words, as
+*postinstall repaired it*, and both harnesses exit non-zero on it.
+
 ### What it does not
 
 Read this before trusting a green run on hardware:
@@ -121,6 +137,24 @@ Read this before trusting a green run on hardware:
   line rather than into the preseed: the preseed is fetched *over* the network,
   so the network must already be up to read it.
 - **Real disk topology** — NVMe naming, multiple disks, an existing ESP.
+- **The hostname fault of `#285`, in its original form.** The box installed
+  itself as `192` because netcfg fell through to a reverse-DNS lookup of
+  `192.168.1.182` and split it at the first dot. QEMU's user-mode DHCP supplies
+  no hostname and no reverse-DNS answer, so that branch of netcfg is never
+  taken here and the specific symptom cannot appear.
+
+  What the VM **does** now cover is the class rather than the instance: with
+  `PHASE=firstboot` asserting the hostname before `postinstall.sh` runs, any
+  install that fails to impose the intended name — for whatever reason netcfg
+  chose something else — goes red. Whether the *fix* works against a router
+  that does answer reverse DNS is unproven until the on-metal run.
+- **mDNS on the LAN.** `$SERVER_NAME.local resolves` asks the box's own
+  `nss-mdns`, which asks the local `avahi-daemon`, which answers for the name
+  it publishes. That proves the daemon is up, publishing the right name, and
+  wired into `nsswitch.conf`. It does **not** prove a multicast packet leaves
+  the machine or that another host on the LAN can resolve it — QEMU's slirp
+  networking does not carry multicast to the host. Only the real box proves
+  reachability.
 
 ## Notes on the design
 
@@ -141,6 +175,28 @@ EFI stub: Loaded initrd from LINUX_EFI_INITRD_MEDIA_GUID device path
 Linux version 6.12.107+deb13-arm64
 efi: EFI v2.7 by EDK II
 ```
+
+**A `netcfg/*` answer only counts if it is on the boot line** (`REQ-SERVER-004`,
+`#285`). The preseed is fetched *over the network*, so netcfg has already run
+and already decided everything it decides by the time the file is read. The
+Debian guide states it plainly: *"preseeding the network configuration won't
+work if you're loading your preconfiguration file from the network"* (B.4.3).
+
+That is not a corner case here, it is the norm — it is why the wifi credentials
+were already on the kernel command line, and `netcfg/hostname` now joins them,
+in `metal/lib.sh` `installer_params()` and in `vm/test-vm.sh`'s `append`. The
+keys in `preseed.cfg` and `overrides.cfg` are kept, but nothing depends on
+them: on the first real install both `netcfg/hostname` and
+`netcfg/get_hostname` were set correctly and the box still came up as `192`,
+because netcfg had already resolved `192.168.1.182` by reverse DNS and split it
+at the first dot.
+
+Belt *and* braces: `overrides.cfg`'s `late_command` also writes
+`/etc/hostname` and the `127.0.1.1` line directly into the target. It runs at
+`finish-install.d/07`, after the target's identity files exist and before the
+only later netcfg script (`55netcfg-copy-config`), which writes interface
+configuration and does not touch either file. That layer cannot lose a race
+with netcfg whatever the boot line does.
 
 **The preseed is served over HTTP**, not embedded in the initrd. Embedding is
 what drove the December attempt to hand-write a cpio archive in PowerShell; over
