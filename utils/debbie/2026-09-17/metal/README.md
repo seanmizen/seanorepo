@@ -176,7 +176,7 @@ That waits for SSH, **asserts the box as the installer left it**, runs
 return, and asserts again — both times with the same `vm/assert.sh` the VM
 runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from your `.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
-up on SSH.
+back on SSH.
 
 The **first** of those two runs is the one `#285` added, and it is the only one
 that can catch a fault the installer creates and `postinstall.sh` repairs. The
@@ -196,6 +196,33 @@ to reach the box to run, which is why `HOST=<ip>` was so often needed below.
 ./provision.sh --no-reboot    # postinstall only
 HOST=192.168.1.42 ./provision.sh   # fallback, if .local does not reach the box
 ```
+
+### The reboot has to be proved, not assumed
+
+The wait after the reboot is satisfied by a **new boot id**, not by a live SSH
+socket — `#295`. `provision.sh` reads
+`/proc/sys/kernel/random/boot_id` before asking the box to reboot, and treats
+it as back only once something answers with a *different* one.
+
+It used to send `systemctl reboot`, sleep 10s and poll. A clean shutdown with
+Docker containers to stop takes longer than that, so the first poll could reach
+the **pre-reboot** system, and the `provisioned` assertions then ran against a
+box that had not rebooted. The checks that fail in that case are exactly the
+ones the reboot exists for — `lid close ignored` and `sleep.target masked`
+(REQ-SERVER-001) — so the symptom was a spurious red on a box that was fine,
+and the fix everyone reached for was re-running, which passed.
+
+The check is keyed on the boot id and never on the host, which is what lets it
+sit on top of `#284`: the box may legitimately come back on a different address
+than the one it left on. Two addresses reporting the same boot id is one
+machine that never rebooted; either address reporting a new one is a box that
+did.
+
+A box that never comes back still exits `3` within `SSH_WAIT`, and the message
+says which failure it was — *nothing answered* (look at the lease table and
+mDNS, below) versus *answered, but never rebooted* (something is blocking
+shutdown; try `journalctl -b -u docker`, or raise `SSH_WAIT` if it is merely
+slow).
 
 ### It dials the name, and `HOST` is only a fallback
 
