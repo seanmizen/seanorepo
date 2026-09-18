@@ -17,12 +17,29 @@ export DEBIAN_FRONTEND=noninteractive
 
 SERVER_NAME="${SERVER_NAME:-debbie}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
-# Where the checkout will live once #278 clones it. Nothing here creates it -
-# this script only looks, and says so when it is absent. If #278 chooses a
-# different path it must change this default and the matching one in
-# vm/assert.sh, and until it does the corepack assertion SKIPS with the path it
-# looked at printed, so the drift is visible rather than silent.
+# Where the checkout lives. This default is not free to change: it has to agree
+# with three other places at once, and nothing but agreement makes the deploy
+# work.
+#
+#   - vm/assert.sh reads the same default, and its checkout and yarn-version
+#     assertions look here.
+#   - 2025-10-08b/scripts/deploy.sh - what production runs today - resolves
+#     "${REPO_PATH:-$HOME/projects/seanorepo}" as the deploy user, which for
+#     DEPLOY_USER=srv is this exact path.
+#   - the corepack activation further down reads $REPO_DIR/package.json.
+#
+# deploy.sh's override is spelled REPO_PATH and this one REPO_DIR, which is a
+# wart inherited from the older generation. They are left as they are rather
+# than renamed here: renaming the one in 2025-10-08b would edit what production
+# runs, and this generation does not own that file. The DEFAULTS agree, which
+# is what actually matters, and the next generation's deploy script should
+# adopt REPO_DIR.
 REPO_DIR="${REPO_DIR:-/home/$DEPLOY_USER/projects/seanorepo}"
+REPO_URL="${REPO_URL:-https://github.com/seanmizen/seanorepo.git}"
+# The host deploys `release` and never `main` - REQ-DEPLOY-001. `release` moves
+# only when someone runs `yarn release`, so on a box provisioned before the
+# first release it legitimately does not exist yet.
+RELEASE_BRANCH="${RELEASE_BRANCH:-release}"
 
 log() { echo "[postinstall] $*"; }
 
@@ -40,9 +57,14 @@ log() { echo "[postinstall] $*"; }
 # ca-certificates, curl and gnupg are here for the Docker step below: it
 # fetches an armoured signing key over TLS and dearmors it, which needs all
 # three. A Debian 13 minimal install has neither curl nor gpg.
+#
+# git is for the checkout further down, and a minimal install has no git
+# either. ca-certificates is load-bearing twice over: the clone is an
+# anonymous HTTPS fetch from github.com, which fails on a box with no trust
+# store in a way that reads like a network fault.
 log "installing packages"
 apt-get update -y
-apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl gnupg
+apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl git gnupg
 
 #------------------------------------------------------------------------------
 # Hostname and mDNS - REQ-SERVER-004
@@ -204,6 +226,107 @@ id "$DEPLOY_USER" > /dev/null 2>&1 || { echo "user $DEPLOY_USER missing" >&2; ex
 usermod -aG docker,sudo "$DEPLOY_USER"
 
 #------------------------------------------------------------------------------
+# Repository checkout - REQ-DEPLOY-001
+#
+# Nothing deployed anything before this, because nothing had put the repository
+# on the box. This clones it, and it does so BEFORE the Node and Yarn section
+# on purpose: that section activates the Yarn the repository declares, and can
+# only do so once there is a package.json to read. Put the clone after it and
+# the activation is a no-op on every first run and only ever works on the
+# second - which is the kind of ordering bug that hides for a generation
+# because both runs eventually converge.
+#
+# ANONYMOUS HTTPS, NO CREDENTIAL. seanmizen/seanorepo is a public repository,
+# so an unauthenticated clone works and provisioning holds no secret, no deploy
+# key and nothing to rotate. If the repository is ever made private this step
+# is the thing that breaks, and it breaks loudly at provision time rather than
+# silently at deploy time - which is the right place to find out.
+#
+# AS THE DEPLOY USER, NOT ROOT - REQ-SERVER-003. The deploy runs unattended as
+# $DEPLOY_USER and cannot answer a password prompt, so a checkout root happens
+# to own is a checkout the deploy cannot fetch into. Cloning under sudo -u is
+# the easy half; the ownership repair below is the half that is easy to get
+# subtly wrong, because a single root-owned object inside an otherwise correct
+# tree is enough to break `git fetch` months later.
+#------------------------------------------------------------------------------
+log "repository checkout at $REPO_DIR"
+
+repo_parent="$(dirname "$REPO_DIR")"
+deploy_group="$(id -gn "$DEPLOY_USER")"
+
+# -o/-g so the parent directories are the deploy user's too. `install -d`
+# applies them to every component it creates, and leaves an existing one alone.
+install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0755 "$repo_parent"
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+    log "  cloning $REPO_URL"
+    sudo -u "$DEPLOY_USER" -H git clone "$REPO_URL" "$REPO_DIR"
+    repo_cloned=1
+else
+    log "  already cloned - fetching"
+    repo_cloned=0
+fi
+
+# Always fetch, clone or no clone: this is what makes a second run cheap and
+# correct rather than a re-clone. --prune so a branch deleted upstream does not
+# linger as a remote-tracking ref that a later checkout could resolve against.
+sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" fetch --prune origin
+
+# `|| true` because symbolic-ref exits non-zero on a detached HEAD, which is a
+# state to report rather than to die on, and `set -e` would otherwise take the
+# whole script down over it.
+current_branch="$(sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" symbolic-ref --short -q HEAD || true)"
+
+if sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" \
+    rev-parse --verify --quiet "refs/remotes/origin/$RELEASE_BRANCH" > /dev/null; then
+    if [ "$current_branch" = "$RELEASE_BRANCH" ]; then
+        # Deliberately nothing. Re-running must not move a host that is already
+        # where it belongs: between provisioning runs the deploy poller (#279)
+        # owns advancing this checkout, and resetting it here would undo a
+        # deploy and could roll production backwards on an unrelated repair.
+        log "  already on $RELEASE_BRANCH - leaving the working tree alone"
+    else
+        # -f, matching deploy.sh, and only reached when the box is NOT on the
+        # release branch - a fresh clone (on the default branch) or one that
+        # has drifted. It discards modifications to TRACKED files, which on a
+        # deploy host is exactly right, and leaves untracked files alone
+        # because there is no `git clean` here - REQ-DEPLOY-006, which exists
+        # because apps/cloudflared/credentials/ lives untracked on the host.
+        log "  checking out $RELEASE_BRANCH (was ${current_branch:-a detached HEAD})"
+        sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" \
+            checkout -f -B "$RELEASE_BRANCH" "origin/$RELEASE_BRANCH"
+    fi
+else
+    # NOT AN ERROR, and the exit status stays zero. `release` is created the
+    # first time someone runs `yarn release`, which on a brand new box has not
+    # happened yet, so a box provisioned before the first release is correct
+    # and simply has nothing to deploy. Creating the branch here would be
+    # worse than useless: it would publish whatever `main` happened to be as
+    # though someone had chosen to ship it - the precise thing REQ-DEPLOY-001
+    # exists to prevent.
+    log "  NOTE: origin/$RELEASE_BRANCH does not exist yet."
+    log "        This is the normal state of a box provisioned before the first"
+    log "        release, not a failure. Run 'yarn release' from a clean main on"
+    log "        a dev machine to create it; the checkout stays on"
+    log "        '${current_branch:-a detached HEAD}' until then."
+fi
+
+# Belt and braces, and the reason AC 1 says "not just the top directory". A box
+# where someone once ran `sudo git pull` by hand has root-owned objects inside
+# an srv-owned checkout, and the next unattended fetch fails on a file it
+# cannot write - at 3am, in the journal, with no obvious cause. -print -quit
+# stops at the first offender, so the common case costs one stat, and the
+# chown only runs when there is something to repair.
+if [ -n "$(find "$REPO_DIR" ! -user "$DEPLOY_USER" -print -quit)" ]; then
+    log "  repairing ownership under $REPO_DIR"
+    chown -R "$DEPLOY_USER:$deploy_group" "$REPO_DIR"
+fi
+
+if [ "$repo_cloned" = 1 ]; then
+    log "  cloned at $(sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" rev-parse --short HEAD)"
+fi
+
+#------------------------------------------------------------------------------
 # Node and Yarn - REQ-DEPLOY-004
 #
 # The deploy runs `yarn install --immutable` then `yarn prod:docker`, so the box
@@ -226,10 +349,13 @@ usermod -aG docker,sudo "$DEPLOY_USER"
 # source of the Yarn version and the two cannot drift. Pinning it a second time
 # in this script is exactly the contradiction being removed.
 #
-# The checkout arrives in #278 and does not exist yet, so the activation is
-# guarded. That costs nothing: corepack resolves `packageManager` at INVOCATION
-# time, so even with no pre-warm at all the first `yarn` run inside the checkout
-# fetches the declared version by itself. The guarded step only moves that
+# Since #278 the section above has already cloned the repository, so on any
+# normal run the guard below is satisfied and the activation genuinely happens.
+# The guard stays for the case where it is not - REPO_DIR pointed somewhere
+# else, or a clone that failed and left a directory with no package.json in it.
+# Skipping there costs nothing: corepack resolves `packageManager` at
+# INVOCATION time, so even with no pre-warm at all the first `yarn` run inside
+# the checkout fetches the declared version by itself. The step only moves that
 # fetch earlier, to a moment when a failure is still attributable.
 #------------------------------------------------------------------------------
 log "node and yarn"
@@ -247,8 +373,8 @@ if [ -f "$REPO_DIR/package.json" ]; then
     # do the deploy no good at all.
     sudo -u "$DEPLOY_USER" -H sh -c 'cd "$1" && corepack prepare --activate' _ "$REPO_DIR"
 else
-    log "  no checkout at $REPO_DIR yet (#278) - corepack will resolve the"
-    log "  version from packageManager on first use inside it"
+    log "  no package.json at $REPO_DIR - corepack will resolve the version"
+    log "  from packageManager on first use inside the checkout"
 fi
 
 log "done"
