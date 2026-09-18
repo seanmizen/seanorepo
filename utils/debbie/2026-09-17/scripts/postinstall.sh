@@ -200,8 +200,91 @@ if [ "$docker_repo_changed" = 1 ] \
     apt-get update -y
 fi
 
+#------------------------------------------------------------------------------
+# Published ports bind loopback - REQ-SERVER-002, #300
+#
+# THE HOLE THIS CLOSES. Docker writes its own DOCKER chain into the `nat`
+# table, and a container published with `-p 4000:4000` gets a DNAT rule there
+# that is consulted BEFORE ufw's chain. So every app port in the 4xxx range was
+# reachable from the LAN the moment `yarn prod:docker` ran, on a host whose own
+# `ufw status` - and whose own assertion - said those ports were closed. ufw is
+# not the tool that would ever have shown it, because those rules are not ufw's.
+#
+# THE POSTURE, and it is a deliberate choice between two. The alternative is an
+# explicit LAN-deny rule in DOCKER-USER, which leaves every port published to
+# 0.0.0.0 and filters the packets afterwards. This does the other thing: it
+# changes the DEFAULT ADDRESS Docker binds a published port to, so the port is
+# never offered to the LAN in the first place. That removes the class rather
+# than filtering it, needs no rule to persist across a reboot, and has no
+# ordering to get wrong. It also costs nothing here, because every ingress rule
+# in apps/cloudflared/config.yml already reaches its origin as
+# `http://localhost:4xxx` and cloudflared runs as a host process - so loopback
+# is the only address the tunnel has ever used.
+#
+# `ip` is dockerd's `--ip` flag, documented as "Host IP for port publishing".
+# Verified on docker 28.5.2 rather than taken from the docs: with this file in
+# place `-p 4000:4000` binds 127.0.0.1:4000 and nothing else (the [::]:4000
+# listener that the default produces disappears too), and the nat DOCKER rule
+# becomes `-d 127.0.0.1/32 ... -j DNAT`.
+#
+# WHAT IT DOES NOT DO, stated plainly because vm/assert.sh is built around it:
+# this is a DEFAULT. A compose file that writes `"0.0.0.0:4001:4001"` names the
+# address explicitly and still publishes to the LAN - measured, same daemon,
+# reachable from another host. Nothing here can stop that, which is why the
+# assertion reads listening sockets and the nat chain rather than this file.
+# See #309 for moving the compose files to explicit loopback publishing.
+#
+# WRITTEN WHOLE AND COMPARED WHOLE, and with no comment in it: daemon.json is
+# strict JSON, dockerd refuses to start on a file it cannot parse, and a
+# half-merged file is a box with no Docker on it. This script owns the file.
+#------------------------------------------------------------------------------
+DOCKER_DAEMON_JSON=/etc/docker/daemon.json
+
+log "  docker publishes to loopback only"
+install -d -m 0755 /etc/docker
+
+# Captured BEFORE the write, and the reason is the repair path. On a fresh box
+# docker is not running yet, the `--now` below starts it, and it reads the file
+# we are about to write - so no restart is needed. On a box that is already
+# serving, a CHANGED file only takes effect on a restart, and a restart stops
+# every running container. Doing it only when the file actually changed is what
+# keeps a re-run of this script from bouncing production for nothing.
+# Spelled as an `if`, like the stale-unit loop further down and for the same
+# reason: under `set -e` a bare `cmd && var=1` is a trap that depends on where
+# it sits, and this script must not die because docker is simply not installed
+# yet - which is the state of every first run.
+docker_was_active=0
+if systemctl is-active --quiet docker 2> /dev/null; then
+    docker_was_active=1
+fi
+
+docker_daemon_tmp="$(mktemp)"
+cat > "$docker_daemon_tmp" <<'EOF'
+{
+  "ip": "127.0.0.1"
+}
+EOF
+
+docker_daemon_changed=0
+if [ ! -f "$DOCKER_DAEMON_JSON" ] || ! cmp -s "$docker_daemon_tmp" "$DOCKER_DAEMON_JSON"; then
+    log "    writing $DOCKER_DAEMON_JSON"
+    install -m 0644 -o root -g root "$docker_daemon_tmp" "$DOCKER_DAEMON_JSON"
+    docker_daemon_changed=1
+fi
+rm -f "$docker_daemon_tmp"
+
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable --now docker
+
+# Not a reload. dockerd's SIGHUP live-reload covers a named subset of settings
+# and `ip` is not in it - measured, not assumed: writing the file and sending
+# SIGHUP left a later `-p 4000:4000` still bound to 0.0.0.0, and only a full
+# restart moved it to 127.0.0.1. A reload here would have looked like it worked
+# and left the hole open until the next reboot.
+if [ "$docker_daemon_changed" = 1 ] && [ "$docker_was_active" = 1 ]; then
+    log "    restarting docker so the new default takes effect"
+    systemctl restart docker
+fi
 
 #------------------------------------------------------------------------------
 # Deploy user - REQ-SERVER-003

@@ -165,6 +165,26 @@ Read this before trusting a green run on hardware:
   reachability. `metal/provision.sh` dials the name first for `#284` — the DHCP
   lease moves on every boot and the name does not — and falls back to a supplied
   `HOST` address precisely because this is the one thing no green run proves.
+- **A published port refused from *another machine*.** The firewall section
+  publishes a port deliberately and then proves two things about it: that the
+  socket is bound to `127.0.0.1` and nothing else, and that a connection to the
+  box's own routable address is refused. Both of those leave from the box and
+  arrive at the box. What they establish is the **binding** — a socket bound to
+  loopback does not accept a connection addressed to `10.0.2.15`, whoever sends
+  it — and that is the property `REQ-SERVER-002` actually turns on.
+
+  What no VM run establishes is that a packet from a *different* host on the
+  LAN is refused at the wire. QEMU's slirp networking gives the guest no LAN
+  peer to be refused from; the guest cannot be dialled from the host at all
+  without an explicit forward. The first proof of that half is the metal run:
+  with `yarn prod:docker` up on debbie, `nc -vz debbie.local 4000` from a laptop
+  on the same wifi must be refused, and `curl -sf localhost:4000` on the box
+  itself must answer.
+
+  The off-host half **was** proven off the box, just not in this harness: the
+  same daemon setting, tested from a second container on a separate network
+  namespace, refused a loopback-bound published port and answered a
+  `0.0.0.0`-bound one. See `#300`.
 
 ## Notes on the design
 
@@ -235,6 +255,46 @@ deploy user and puts it on `release`. Since #279 the deploy poller is in too,
 and since #280 the Cloudflare tunnel (`REQ-NETWORK-001`, `REQ-NETWORK-002`).
 Out: the network failover watchdog (`REQ-NETWORK-003`) and the wifi migration
 to NetworkManager (`REQ-NETWORK-004`).
+
+### Published ports never reach the LAN
+
+`REQ-SERVER-002` says four ports and no more. Until #300 that was a claim about
+`ufw` rather than about the host, and the two are not the same thing: Docker
+writes its own chains into `nat` and `filter`, and a container published with
+`-p 4000:4000` gets a DNAT rule consulted *before* ufw's. Every app port in the
+4xxx range was reachable from the LAN the moment `yarn prod:docker` ran, and the
+assertion that would have caught it read `ufw status` — which is not where those
+rules live, so it went green over the hole.
+
+`postinstall.sh` writes `/etc/docker/daemon.json`:
+
+```json
+{
+  "ip": "127.0.0.1"
+}
+```
+
+That is dockerd's `--ip`, *"Host IP for port publishing"*. A published port then
+binds `127.0.0.1` and nothing else. The tunnel is unaffected because every
+ingress rule in `apps/cloudflared/config.yml` already reaches its origin as
+`http://localhost:4xxx` and `cloudflared` runs as a host process.
+
+Chosen over a LAN-deny rule in `DOCKER-USER` on purpose: binding removes the
+class, filtering only catches it. There is no rule to persist across a reboot
+and no chain ordering to get right.
+
+It is a **default**, though, and a compose file that writes
+`"0.0.0.0:4001:4001"` still publishes to the LAN — measured, same daemon,
+reachable from another host. #309 is the ticket for making the compose files say
+what they mean. Until then the assertions are the guard, and they deliberately
+do not trust this file: they read the listening sockets, the `nat` chain, and a
+port they publish themselves on the spot. Changing the daemon setting back does
+not make them pass.
+
+A note for anyone debugging this on the box: the setting takes effect on a
+daemon **restart**, not on `SIGHUP`. dockerd's live reload covers a named subset
+of settings and `ip` is not in it — writing the file and reloading leaves a
+later `-p 4000:4000` still on `0.0.0.0`, which looks exactly like it worked.
 
 ### The deploy poller
 
