@@ -16,7 +16,7 @@ x-frontend-base: &frontend-base
     dockerfile: apps/ffmpeg-converter/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4050:4050"
+    - "${PUBLISH_ADDR:-127.0.0.1}:4050:4050"
   environment:
     # When the backend runs on the host, reach it via host.docker.internal
     # (works on Docker Desktop for macOS/Windows; on Linux, add the

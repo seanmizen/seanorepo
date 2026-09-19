@@ -8,7 +8,7 @@ x-ntfy-relay-base: &ntfy-relay-base
     - NOTIFY_SECRET=${NOTIFY_SECRET:-}
     - ADDR=:8080
   ports:
-    - "4051:8080"
+    - "${PUBLISH_ADDR:-127.0.0.1}:4051:8080"
   depends_on:
     - ntfy
   restart: unless-stopped
@@ -20,7 +20,7 @@ services:
     container_name: ntfy-sm
     command: serve --cache-file /var/cache/ntfy/cache.db --upstream-base-url https://ntfy.sh
     ports:
-      - "4050:80"
+      - "${PUBLISH_ADDR:-127.0.0.1}:4050:80"
     volumes:
       - ntfy_cache:/var/cache/ntfy
     restart: unless-stopped

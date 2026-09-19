@@ -5,7 +5,7 @@ x-frontend-base: &frontend-base
     dockerfile: apps/seanscards/frontend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-      - "4010:4010"
+      - "${PUBLISH_ADDR:-127.0.0.1}:4010:4010"
 
 x-backend-base: &backend-base
   container_name: backend-sc
@@ -14,7 +14,7 @@ x-backend-base: &backend-base
     dockerfile: apps/seanscards/backend/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - "4011:4011"
+    - "${PUBLISH_ADDR:-127.0.0.1}:4011:4011"
   environment:
     - DB_PATH=/app/db
 
