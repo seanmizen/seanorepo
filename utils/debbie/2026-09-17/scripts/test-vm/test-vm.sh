@@ -20,8 +20,8 @@ set -euo pipefail
 IFS=$'\n\t'
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-GEN_DIR="$(dirname "$HERE")"
-WORK="$HERE/work"
+GEN_DIR="$(dirname "$(dirname "$HERE")")"   # scripts/test-vm -> the generation
+WORK="$GEN_DIR/working/vm"
 CACHE="$WORK/cache"
 
 SUITE="${SUITE:-trixie}"
@@ -314,8 +314,7 @@ prepare_run() {
 start_http() {
     HTTP_ROOT="$RUN_DIR/http"
     mkdir -p "$HTTP_ROOT"
-    cp "$GEN_DIR/preseed/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
-    cp "$GEN_DIR/scripts/postinstall.sh" "$HTTP_ROOT/postinstall.sh"
+    cp "$GEN_DIR/payload/install/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
     write_overrides > "$HTTP_ROOT/overrides.cfg"
 
     HTTP_PORT="$(free_port)"
@@ -332,7 +331,7 @@ start_http() {
 #
 # The VM's password hash is a throwaway, and being public is fine: nothing but
 # a disposable guest ever uses it. Real hardware supplies its own from an
-# untracked file - see metal/README.md.
+# untracked file - see scripts/README.md.
 VM_PASSWORD_CRYPTED='$6$debbievmtest$iLHeK/mfyeqbwDyW9O6Khy8qQknk/sM.dPztrhTcIOmWL6l60/5FTzjeJQTgEmn1JGPzCEZm7nwVetbN/ZcR70'
 
 write_overrides() {
@@ -386,7 +385,7 @@ do_install() {
     #
     # netcfg reads netcfg/hostname first and prefers it over both the DHCP
     # hostname and a reverse-DNS lookup (Debian #606636, fixed in netcfg 1.99).
-    # This mirrors metal/lib.sh installer_params(), which does the same for the
+    # This mirrors scripts/lib.sh installer_params(), which does the same for the
     # real box - the two lists must stay in step.
     append="$append netcfg/hostname=$SERVER_NAME"
     append="$append netcfg/get_hostname=$SERVER_NAME"
@@ -432,7 +431,7 @@ BOOT_ID_PATH=/proc/sys/kernel/random/boot_id
 #
 # Called only from do_assert, and it reads that function's ssh_opts, target and
 # QEMU_PID - a bash function sees its caller's locals. The metal sibling
-# (metal/3-provision/provision.sh wait_for_ssh) reads globals instead; the mechanism below
+# (scripts/3-provision/provision.sh wait_for_ssh) reads globals instead; the mechanism below
 # is the same one, minus the candidate list. There is one fixed target here: no
 # mDNS name, no DHCP lease that can move under us, so nothing to loop over.
 #
@@ -561,12 +560,12 @@ do_assert() {
     local firstboot_rc=0
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER PHASE=firstboot bash -s" \
-        < "$HERE/assert.sh" || firstboot_rc=$?
+        < "$GEN_DIR/payload/verify/assert.sh" || firstboot_rc=$?
     [ "$firstboot_rc" = 0 ] \
         || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; postinstall.sh repairs the hostname and mDNS, so it would go green regardless."
 
     log "provisioning"
-    scp "${scp_opts[@]}" "$GEN_DIR/scripts/postinstall.sh" "$target:/tmp/postinstall.sh" > /dev/null \
+    scp "${scp_opts[@]}" "$GEN_DIR/payload/configure/postinstall.sh" "$target:/tmp/postinstall.sh" > /dev/null \
         || die_code 2 "could not copy postinstall.sh into the guest"
     ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/postinstall.sh" \
         || die_code 2 "postinstall failed"
@@ -618,11 +617,11 @@ do_assert() {
     # prove THIS commit rather than whatever \`release\` the guest cloned - #307.
     # Not installed anywhere: assert.sh runs them only against a scratch repo.
     ssh "${ssh_opts[@]}" "$target" "mkdir -p /tmp/under-test" 2> /dev/null || true
-    scp "${scp_opts[@]}" "$GEN_DIR/scripts/deploy.sh" "$GEN_DIR/scripts/release-poll.sh" \
+    scp "${scp_opts[@]}" "$GEN_DIR/services/deploy/deploy.sh" "$GEN_DIR/services/release-poll/release-poll.sh" \
         "$target:/tmp/under-test/" > /dev/null 2>&1 || true
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
-        < "$HERE/assert.sh" || rc=$?
+        < "$GEN_DIR/payload/verify/assert.sh" || rc=$?
 
     mkdir -p "$RUN_DIR/artifacts"
     scp "${scp_opts[@]}" "$target:/etc/fstab" "$RUN_DIR/artifacts/" > /dev/null 2>&1 || true

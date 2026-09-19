@@ -1,5 +1,0 @@
-# Harness working state: netboot cache, disk images, per-run dirs, logs.
-# All of it is reproducible from the scripts, and some of it is gigabytes.
-work/
-*.qcow2
-*.fd

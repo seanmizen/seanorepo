@@ -21,19 +21,19 @@
 # The preseed itself still comes over HTTP from serve-preseed.sh, so editing it
 # costs nothing and never needs a rebuild.
 #
-#   ./build-iso.sh                 build work/debbie-<name>.iso
+#   ./build-iso.sh                 build working/debbie-<name>.iso
 #   ./build-iso.sh --show-cmdline  print the baked cmdline and exit
 #
-# The output contains your wifi passphrase in plaintext. work/ is gitignored.
+# The output contains your wifi passphrase in plaintext. working/ is gitignored.
 set -euo pipefail
 IFS=$'\n\t'
 
 HERE="$(cd "$(dirname "$0")" && pwd)"     # this step's folder: its env files
-METAL="$(dirname "$HERE")"
-GEN_DIR="$(dirname "$METAL")"
-WORK="$METAL/work"                          # shared by all three steps
+SCRIPTS="$(dirname "$HERE")"
+GEN_DIR="$(dirname "$SCRIPTS")"
+WORK="$GEN_DIR/working"                          # shared by all three steps
 # shellcheck source=../lib.sh
-. "$METAL/lib.sh"
+. "$SCRIPTS/lib.sh"
 
 select_env "$HERE" "${1:-}"
 shift
@@ -204,7 +204,7 @@ cat <<EOF
 
     ./serve-preseed.sh
 
-  This ISO contains your wifi passphrase in plaintext. work/ is gitignored;
+  This ISO contains your wifi passphrase in plaintext. working/ is gitignored;
   treat the stick as a credential.
 
 EOF

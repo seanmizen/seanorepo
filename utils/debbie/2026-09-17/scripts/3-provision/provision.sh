@@ -1,7 +1,7 @@
 #!/bin/bash
 # provision.sh - bring a freshly installed box up to debbie, then assert it.
 #
-# The metal counterpart to the second half of vm/test-vm.sh: assert what the
+# The metal counterpart to the second half of scripts/test-vm/test-vm.sh: assert what the
 # installer produced, run postinstall, reboot so the boot-time settings apply,
 # wait for the box to come back, and run the same assertions the VM runs.
 #
@@ -40,11 +40,11 @@ set -euo pipefail
 IFS=$'\n\t'
 
 HERE="$(cd "$(dirname "$0")" && pwd)"     # this step's folder: its env files
-METAL="$(dirname "$HERE")"
-GEN_DIR="$(dirname "$METAL")"
-WORK="$METAL/work"                          # shared by all three steps
+SCRIPTS="$(dirname "$HERE")"
+GEN_DIR="$(dirname "$SCRIPTS")"
+WORK="$GEN_DIR/working"                          # shared by all three steps
 # shellcheck source=../lib.sh
-. "$METAL/lib.sh"
+. "$SCRIPTS/lib.sh"
 
 select_env "$HERE" "${1:-}"
 shift
@@ -223,7 +223,7 @@ wait_for_ssh() {
     echo "    crossing the network (wifi client isolation, or two subnets)." >&2
     echo "    Check with: ping -c1 $MDNS_NAME" >&2
     echo "If it is not on, or never finished installing, there is nothing to" >&2
-    echo "reach - see metal/README.md, 'Where this is likely to go wrong'." >&2
+    echo "reach - see scripts/README.md, 'Where this is likely to go wrong'." >&2
     exit 3
 }
 
@@ -248,7 +248,7 @@ if [ "$MODE" != assert ]; then
     # goes red so it cannot be mistaken for a clean install.
     log "asserting first boot (before postinstall)"
     sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=firstboot bash -s" \
-        < "$GEN_DIR/vm/assert.sh" || FIRSTBOOT_RC=$?
+        < "$GEN_DIR/payload/verify/assert.sh" || FIRSTBOOT_RC=$?
     if [ "$FIRSTBOOT_RC" -ne 0 ]; then
         echo >&2
         echo "  ################################################################" >&2
@@ -258,7 +258,7 @@ if [ "$MODE" != assert ]; then
         echo "  # after it will very likely pass. Do not read that as a fix." >&2
         echo "  # Something in the preseed, the generated overrides.cfg or the" >&2
         echo "  # installer boot line is not taking effect - see REQ-SERVER-004" >&2
-        echo "  # and the notes in preseed/preseed.cfg." >&2
+        echo "  # and the notes in payload/install/preseed.cfg." >&2
         echo "  ################################################################" >&2
         echo >&2
     fi
@@ -271,7 +271,7 @@ if [ "$MODE" != assert ]; then
     # match this file: a role that is not set here is switched OFF there.
     log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
     sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' bash -s" \
-        < "$GEN_DIR/scripts/postinstall.sh"
+        < "$GEN_DIR/payload/configure/postinstall.sh"
 
     if [ "$MODE" = noreboot ]; then
         log "postinstall done; skipping reboot and assertions (--no-reboot)"
@@ -316,7 +316,7 @@ log "asserting"
 # would report nothing at all rather than "an assertion failed".
 rc=0
 sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=provisioned bash -s" \
-    < "$GEN_DIR/vm/assert.sh" || rc=$?
+    < "$GEN_DIR/payload/verify/assert.sh" || rc=$?
 
 # A green provisioned run on top of a red first-boot run is not a pass. It is
 # the #285 shape exactly: correct end state, wrong install, and the difference
