@@ -14,7 +14,7 @@ x-frontend-base: &frontend-base
     args:
       API_URL: ${API_URL:-/api}
   ports:
-    - '4060:4060'
+    - '${PUBLISH_ADDR:-127.0.0.1}:4060:4060'
   labels:
     - 'com.docker.compose.service.primary=true'
     - 'description=inside - Frontend (http://localhost:4060)'
@@ -26,7 +26,7 @@ x-backend-base: &backend-base
     dockerfile: apps/inside/inside-be/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - '4061:4061'
+    - '${PUBLISH_ADDR:-127.0.0.1}:4061:4061'
   labels:
     - 'description=inside - Backend API (http://localhost:4061/api)'
   # Secrets and SMTP config. Optional so `start:docker` works on a fresh clone

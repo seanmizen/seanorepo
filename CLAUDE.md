@@ -184,6 +184,19 @@ Configuration (`biome.json`):
 
 ### Port Allocation
 
+**Every `ports:` entry names its host address** (#309):
+
+```yaml
+ports:
+  - "${PUBLISH_ADDR:-127.0.0.1}:4000:4000"
+```
+
+Production (`yarn prod:docker`) binds loopback only: the Cloudflare tunnel reaches
+`localhost:4xxx`, and nothing else on the LAN should. Each workspace's
+`start:docker` script sets `PUBLISH_ADDR=0.0.0.0`, so a dev server is still
+reachable from another device on the wifi. Never write a bare `"4000:4000"` or
+`"0.0.0.0:4000:4000"`.
+
 The repository uses **dual port schemes** for different deployment targets:
 
 **Cloudflared (Home Server) - 4xxx range:**

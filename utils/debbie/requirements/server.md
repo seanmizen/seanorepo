@@ -115,11 +115,13 @@ Introduced in #259.
   **What this does not guarantee, stated because the assertions are built
   around it.** `ip` is a *default*. A compose file that names a host address
   explicitly — `"0.0.0.0:4001:4001"` — walks straight past it, measured on
-  docker 28.5.2 and reachable from another host. No `apps/*/docker-compose.yml`
-  does that today; `#309` is the ticket for making them say so rather than rely
-  on the default. Until then, the checks below are what would catch it, which is
-  why they read listening sockets, the `nat` chain and a deliberately published
-  probe port rather than the daemon's configuration.
+  docker 28.5.2 and reachable from another host. Since `#309` every
+  `apps/*/docker-compose.yml` port names its address as
+  `"${PUBLISH_ADDR:-127.0.0.1}:PORT:PORT"`: loopback unless a dev script sets
+  `PUBLISH_ADDR=0.0.0.0`, so `yarn prod:docker` binds loopback without relying
+  on the daemon. The daemon default stays as the second layer, and the checks
+  below still read listening sockets, the `nat` chain and a deliberately
+  published probe port rather than either configuration.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ufw active"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ufw allows no port beyond
