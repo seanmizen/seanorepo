@@ -25,9 +25,9 @@ from a clean `main`; debbie polls every two minutes.
 ## Remote SSH
 
 From outside the home network, the only way in is **ngrok**: `ngrok tcp 22`
-runs on the box. The `2025-10-08b` box runs it as `ngrok-custom.service`. The
-`2026-09-17` generation does not provision it yet, so do not build a box that
-must be reachable from off the LAN until #317 lands.
+runs on the box. The `2025-10-08b` box runs it as `ngrok-custom.service`; the
+`2026-09-17` generation provisions it as `custom-ngrok.service` (#317). How to
+set it up and find the address is in [its README](./2026-09-17/README.md#remote-ssh-ngrok).
 
 The Cloudflare SSH tunnel (`ssh.seanmizen.com`) that used to be documented here
 is dead: no ingress config in the repository serves it. It is in `archive/`

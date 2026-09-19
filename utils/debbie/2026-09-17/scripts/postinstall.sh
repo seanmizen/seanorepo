@@ -1111,4 +1111,187 @@ else
     log "        credentials are there. See utils/debbie/2026-09-17/README.md."
 fi
 
+#------------------------------------------------------------------------------
+# ngrok - remote SSH, REQ-NETWORK-005, #317
+#
+# `ngrok tcp 22` is the ONLY way into this box from outside the home network.
+# The Cloudflare SSH tunnel (ssh.seanmizen.com) is dead and is deliberately
+# not rebuilt. Lose this and the box can be reached from the LAN and nowhere
+# else, and the first sign is failing to log in from somewhere else.
+#
+# From ngrok's apt repository, so the binary is dpkg-owned and REQ-SERVER-006
+# keeps it current - #135, the same fix #280 made for cloudflared. The package
+# installs /usr/local/bin/ngrok and nothing else: no unit, no postinst. That
+# path is the package's own choice, verified by unpacking
+# ngrok_3.39.11-0_arm64.deb, so unlike cloudflared's it is not a sign of a
+# manual install - vm/assert.sh asks dpkg who owns it instead.
+#
+# Suite `bookworm`. ngrok publishes per-release suites up to bookworm and no
+# `trixie` (404, 2026-09-19); `buster` and `bookworm` serve the same 3.39.11.
+# The newest suite that exists is the least likely to be retired first.
+#------------------------------------------------------------------------------
+NGROK_KEYRING=/usr/share/keyrings/ngrok.asc
+NGROK_LIST=/etc/apt/sources.list.d/ngrok.list
+NGROK_SUITE="${NGROK_SUITE:-bookworm}"
+NGROK_UNIT=custom-ngrok.service
+deploy_home="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
+# ngrok v3's default config path for the user it runs as. `ngrok config
+# add-authtoken <token>`, run as $DEPLOY_USER, writes exactly this file, so the
+# documented setup step and the unit agree without either naming the other.
+NGROK_CONFIG="$deploy_home/.config/ngrok/ngrok.yml"
+
+log "ngrok ssh tunnel"
+
+# ASCII-armoured, and kept that way: apt reads an armoured key directly when
+# the file ends in .asc, so there is no gpg --dearmor step to get wrong.
+# Downloaded to a temp file first, as the other keys are, so a curl that dies
+# mid-stream cannot leave a present, unusable keyring the guard never repairs.
+if [ ! -s "$NGROK_KEYRING" ]; then
+    log "  fetching ngrok's apt signing key"
+    ngrok_key_tmp="$(mktemp)"
+    curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc -o "$ngrok_key_tmp"
+    install -m 0644 -o root -g root "$ngrok_key_tmp" "$NGROK_KEYRING"
+    rm -f "$ngrok_key_tmp"
+fi
+
+ngrok_deb_line="deb [signed-by=$NGROK_KEYRING] https://ngrok-agent.s3.amazonaws.com $NGROK_SUITE main"
+ngrok_repo_changed=0
+if [ ! -f "$NGROK_LIST" ] || [ "$(cat "$NGROK_LIST")" != "$ngrok_deb_line" ]; then
+    log "  writing $NGROK_LIST"
+    printf '%s\n' "$ngrok_deb_line" > "$NGROK_LIST"
+    ngrok_repo_changed=1
+fi
+
+if [ "$ngrok_repo_changed" = 1 ] \
+    || ! dpkg-query -W -f='${Status}' ngrok 2> /dev/null | grep -q "^install ok installed"; then
+    apt-get update -y
+fi
+
+apt-get install -y ngrok
+
+# One agent. `ngrok service install` writes ngrok.service and is the documented
+# setup, so it is what a repair session reaches for; ngrok-custom.service is
+# the previous generation's unit. Two agents mean two public addresses for one
+# sshd and a free-plan session limit hit by ourselves. Disabled, not masked,
+# for the same reasons as the cloudflared loop above.
+for stale_unit in ngrok.service ngrok-custom.service; do
+    if systemctl cat -- "$stale_unit" > /dev/null 2>&1; then
+        log "  disabling $stale_unit so it cannot race $NGROK_UNIT"
+        systemctl disable --now "$stale_unit" || true
+    fi
+done
+
+# The config directory, private to the deploy user. Provisioning creates the
+# directory and NEVER writes the file: the authtoken is a credential for the
+# ngrok account, specific to whoever set it up, and is in no repository.
+install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$deploy_home/.config"
+install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$(dirname "$NGROK_CONFIG")"
+
+#------------------------------------------------------------------------------
+# The unit.
+#
+# NEVER GIVES UP, which is the opposite of the tunnel's choice and deliberate.
+# The tunnel stops after five failures because a flood of failures would bury
+# the cause. This is the way back in when something is already wrong - a
+# network outage, a failover, ngrok itself down for an hour - and a unit that
+# had given up by the time the network returned would stay down until someone
+# rebooted a box nobody can reach. So StartLimitIntervalSec=0 and a 30s
+# RestartSec: at most ~2900 lines a day into a journal capped at 1G (#287).
+#
+# The condition still refuses a box with no token at all, which is a normal
+# first-boot state and not a failure: skipped, inactive, never looping.
+#
+# --log stdout: the journal is where the public address is recorded (the free
+# plan changes it on every restart), and with a log destination set ngrok does
+# not try to draw its console UI on a terminal it does not have.
+#
+# The web inspector keeps its default of 127.0.0.1:4040. Loopback only, which
+# the "nothing outside the four ports listens on a non-loopback address" check
+# enforces whenever the agent is running.
+#------------------------------------------------------------------------------
+units_changed=0
+
+write_unit "$NGROK_UNIT" <<EOF
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-NETWORK-005
+[Unit]
+Description=ngrok TCP tunnel to sshd - the only remote way in
+Documentation=https://github.com/seanmizen/seanorepo/issues/317
+After=network-online.target ssh.service
+Wants=network-online.target
+ConditionFileNotEmpty=$NGROK_CONFIG
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+ExecStart=/usr/local/bin/ngrok tcp 22 --config $NGROK_CONFIG --log stdout --log-format logfmt
+Restart=always
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+if [ "$units_changed" = 1 ]; then
+    systemctl daemon-reload
+fi
+
+# Enable only when the config carries a token - mirrors the condition, plus
+# the one thing a condition cannot read. Never disabled in the else branch, as
+# with the tunnel: a re-provisioning run must not take remote access down.
+if [ -s "$NGROK_CONFIG" ] && grep -q "authtoken" "$NGROK_CONFIG" 2> /dev/null; then
+    log "  authtoken present - enabling $NGROK_UNIT"
+    systemctl enable "$NGROK_UNIT"
+else
+    log "  NOT enabling $NGROK_UNIT - this box has no ngrok authtoken."
+    log "        Normal for a newly provisioned box, but until it is fixed"
+    log "        this box CANNOT be reached over SSH from off the LAN."
+    log "        On the box, as $DEPLOY_USER:"
+    log "          ngrok config add-authtoken <token>   # dashboard.ngrok.com"
+    log "        then re-run this script. See utils/debbie/2026-09-17/README.md."
+fi
+
+#------------------------------------------------------------------------------
+# sshd's per-source penalties must not apply to loopback - #317.
+#
+# OpenSSH 9.8+ refuses an address for a while after failed or unfinished
+# logins (PerSourcePenalties, on by default). Every ngrok connection reaches
+# sshd from 127.0.0.1, so one scanner hitting the public ngrok address would
+# earn penalties for loopback, and the owner's own login - through the same
+# tunnel, from the same 127.0.0.1 - would be refused before authentication.
+# Holding the right key does not help. Exempting loopback gives the ngrok path
+# the same (lack of) per-address throttling as the previous generation, whose
+# OpenSSH predates the feature. REQ-SERVER-008 is what keeps attackers out.
+#
+# LAN addresses keep their penalties. Only when sshd knows the keyword: an
+# unknown keyword fails `sshd -t`, and an sshd that will not start is the one
+# failure this box cannot be talked out of remotely.
+#------------------------------------------------------------------------------
+NGROK_SSHD_DROPIN=/etc/ssh/sshd_config.d/20-debbie-ngrok-loopback.conf
+# Matched with `case` on captured output, not `sshd -T | grep -q`: under
+# pipefail, grep -q exits at the first match, sshd takes SIGPIPE writing the
+# rest, and the pipeline reports failure - so the answer depended on timing.
+# Two VM runs of the same image disagreed before this.
+case "$(sshd -T 2> /dev/null || true)" in
+    *persourcepenaltyexemptlist*) sshd_has_penalties=yes ;;
+    *) sshd_has_penalties=no ;;
+esac
+if [ "$sshd_has_penalties" = yes ]; then
+    log "  exempting loopback from sshd per-source penalties"
+    cat > "$NGROK_SSHD_DROPIN" <<'EOF'
+# Managed by utils/debbie postinstall.sh - #317. ngrok arrives from loopback.
+PerSourcePenaltyExemptList 127.0.0.1,::1
+EOF
+    chmod 644 "$NGROK_SSHD_DROPIN"
+    if sshd -t; then
+        systemctl reload ssh
+    else
+        log "  ERROR: sshd -t rejected $NGROK_SSHD_DROPIN; removing it and stopping"
+        rm -f "$NGROK_SSHD_DROPIN"
+        exit 1
+    fi
+else
+    log "  sshd has no per-source penalties - nothing to exempt"
+fi
+
 log "done"
