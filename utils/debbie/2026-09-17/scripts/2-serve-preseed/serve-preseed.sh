@@ -1,21 +1,17 @@
 #!/bin/bash
-# serve-preseed.sh - serve the preseed to a real machine, and print the boot
-# line that fetches it.
+# serve-preseed.sh: serves the preseed over HTTP while a target machine
+# installs Debian from the step 1 USB stick.
 #
-# This is the metal counterpart to scripts/test-vm/test-vm.sh. It deliberately does the same
-# thing the harness does - generate overrides.cfg with the shared script, serve
-# the directory over HTTP - so that what installs on hardware is what was
-# proven in the VM.
+# Where: your computer, on the same network as the target machine. Step 2 of 3.
+# When:  start it first. Then boot the target machine from the USB stick. Keep
+#        it running until the install ends and the target powers off.
+# Why:   the installer downloads its answers (the preseed) from this server.
+#        So a preseed edit needs no new USB stick. It builds the files with
+#        the same script as test-vm.sh, so the hardware installs what the VM
+#        tested.
 #
-# It does NOT write to a USB stick. The stick is a plain `dd` of an unmodified
-# Debian netinst ISO; there is no remaster step and nothing to build. The
-# December 2025 attempt died hand-writing a cpio archive to embed a preseed,
-# and over HTTP an edit costs nothing and needs no rewrite of the stick.
-#
-#   ./serve-preseed.sh          serve, print the boot line, wait
-#
-# Ctrl-C to stop. Re-running after editing the preseed is free - the installer
-# re-fetches on the next attempt.
+# Usage:
+#   ./serve-preseed.sh <machine>   serve, print the boot line, wait. Ctrl-C stops.
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -64,16 +60,10 @@ fi
 #------------------------------------------------------------------------------
 HTTP_ROOT="$WORK/http"
 mkdir -p "$HTTP_ROOT"
-cp "$GEN_DIR/payload/install/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
+cp "$GEN_DIR/payload/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
 
-# CONSOLE is deliberately not exported: on a laptop, pointing the kernel
-# console at a serial port that does not exist is a black screen for the whole
-# install. The VM harness sets it; metal must not.
-DEPLOY_USER="$DEPLOY_USER" \
-SERVER_NAME="$SERVER_NAME" \
-SSH_PUBKEY_FILE="$KEY.pub" \
-PASSWORD_CRYPTED="$PASSWORD_CRYPTED" \
-    "$GEN_DIR/scripts/write-overrides.sh" > "$HTTP_ROOT/overrides.cfg"
+# No CONSOLE here: the target machine has no serial port (see write_overrides).
+SSH_PUBKEY_FILE="$KEY.pub" write_overrides > "$HTTP_ROOT/overrides.cfg"
 
 #------------------------------------------------------------------------------
 # Which address the target should fetch from. The loopback address the harness

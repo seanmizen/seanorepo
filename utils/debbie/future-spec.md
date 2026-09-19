@@ -95,7 +95,7 @@ systemd targets are the right mechanism rather than a bespoke supervisor:
 declarative, ordering is free via `Wants=`/`BindsTo=`, and `systemctl enable
 --now` / `disable --now` on a target is the whole of the activation logic. Units
 must be named `custom-*` and live in `/usr/local/lib/systemd/system` — #292, and
-`payload/verify/assert.sh` already enforces both.
+`payload/assert.sh` already enforces both.
 
 **Built (#329), as flag files rather than targets so far:** `webserver` (runs
 the sites) and `tunnel` (the Cloudflare tunnel; requires `webserver`; exactly

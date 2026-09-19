@@ -1,41 +1,34 @@
 #!/bin/bash
-# provision.sh - bring a freshly installed box up to debbie, then assert it.
+# provision.sh: connects to an installed target machine over SSH, configures it
+# with postinstall.sh, and checks the result with assert.sh.
 #
-# The metal counterpart to the second half of scripts/test-vm/test-vm.sh: assert what the
-# installer produced, run postinstall, reboot so the boot-time settings apply,
-# wait for the box to come back, and run the same assertions the VM runs.
+# Where: your computer. It connects to <SERVER_NAME>.local.
+# When:  after the step 2 install, when you power the target machine on again.
+#        Run it again whenever the target's configuration or roles must change.
 #
-# There are TWO assertion runs, and that is deliberate - REQ-SERVER-004, #285.
-# The first (PHASE=firstboot) happens before postinstall.sh touches anything,
-# so it says whether the INSTALL was right. The second (PHASE=provisioned)
-# says whether the box is right. Only the first can catch a fault that
-# postinstall.sh silently repairs, which is how the box ran as `192` for a
-# whole generation with every check green.
+# What happens:
+#   1. assert.sh checks what the installer produced (PHASE=firstboot).
+#   2. It sends postinstall.sh to the target, which runs it as root.
+#   3. The target reboots. A new boot id proves that it did (REQ-SERVER-001).
+#   4. assert.sh checks the configured target (PHASE=provisioned).
 #
-# It exists because doing this by hand meant retyping the hostname, the deploy
-# user and the key path, and the runbook had them wrong for any SERVER_NAME
-# other than the default - the first real install used a different one, so the
-# documented provision step could not connect and the documented assert step
-# failed a check that was passing. Everything here comes from .env.
+# Why:   one command runs the full sequence the same way every time. Step 1
+#        exists because postinstall.sh can repair an install fault and so hide
+#        it (REQ-SERVER-004). A target once ran as `192` for a whole generation.
 #
-#   ./provision.sh              postinstall, reboot, wait, assert
-#   ./provision.sh --assert     assert only, against a box already provisioned
-#   ./provision.sh --no-reboot  postinstall only, no reboot and no assert
+# Usage:
+#   ./provision.sh <machine>               steps 1 to 4
+#   ./provision.sh <machine> --assert      step 4 only, no changes
+#   ./provision.sh <machine> --no-reboot   steps 1 and 2 only
+#   HOST=<ip> ./provision.sh <machine>     use <ip> if <name>.local does not resolve
 #
-# The box is dialled BY NAME, and the address is only ever a fallback - #284.
-# A DHCP lease does not survive a reboot: the first real box took .182, then
-# .183, then .184, one per boot. A run started with HOST=<ip> kept dialling the
-# address it began with, so the post-reboot wait could not succeed even though
-# the box was up - it had simply moved. $SERVER_NAME.local is the one handle
-# that is stable across a moving lease, and since #285 it works from first boot.
+# It connects by name first because the DHCP address changes on each boot
+# (REQ-SERVER-004).
 #
-# The post-reboot wait is satisfied by a NEW BOOT ID, not by a live socket -
-# #295. See wait_for_ssh.
-#
-# Exit codes mirror the VM harness - REQ-EMU-003:
-#   0   every assertion passed
-#   1   an assertion failed
-#   3   the box never came back (or came back still on the pre-reboot boot)
+# Exit codes (the same as test-vm.sh, REQ-EMU-003):
+#   0   every check passed
+#   1   a check failed
+#   3   the target did not come back, or came back without rebooting
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -248,7 +241,7 @@ if [ "$MODE" != assert ]; then
     # goes red so it cannot be mistaken for a clean install.
     log "asserting first boot (before postinstall)"
     sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=firstboot bash -s" \
-        < "$GEN_DIR/payload/verify/assert.sh" || FIRSTBOOT_RC=$?
+        < "$GEN_DIR/payload/assert.sh" || FIRSTBOOT_RC=$?
     if [ "$FIRSTBOOT_RC" -ne 0 ]; then
         echo >&2
         echo "  ################################################################" >&2
@@ -258,7 +251,7 @@ if [ "$MODE" != assert ]; then
         echo "  # after it will very likely pass. Do not read that as a fix." >&2
         echo "  # Something in the preseed, the generated overrides.cfg or the" >&2
         echo "  # installer boot line is not taking effect - see REQ-SERVER-004" >&2
-        echo "  # and the notes in payload/install/preseed.cfg." >&2
+        echo "  # and the notes in payload/preseed.cfg." >&2
         echo "  ################################################################" >&2
         echo >&2
     fi
@@ -271,7 +264,7 @@ if [ "$MODE" != assert ]; then
     # match this file: a role that is not set here is switched OFF there.
     log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
     sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' bash -s" \
-        < "$GEN_DIR/payload/configure/postinstall.sh"
+        < "$GEN_DIR/payload/postinstall.sh"
 
     if [ "$MODE" = noreboot ]; then
         log "postinstall done; skipping reboot and assertions (--no-reboot)"
@@ -316,7 +309,7 @@ log "asserting"
 # would report nothing at all rather than "an assertion failed".
 rc=0
 sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=provisioned bash -s" \
-    < "$GEN_DIR/payload/verify/assert.sh" || rc=$?
+    < "$GEN_DIR/payload/assert.sh" || rc=$?
 
 # A green provisioned run on top of a red first-boot run is not a pass. It is
 # the #285 shape exactly: correct end state, wrong install, and the difference
