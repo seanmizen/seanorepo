@@ -138,7 +138,7 @@ $EDITOR 2-serve-preseed/trixie2.env    # same SERVER_NAME and wifi as step 1
 ```
 
 The script generates `overrides.cfg` with
-[`../scripts/write-overrides.sh`](../scripts/write-overrides.sh) — the same
+`write_overrides` in [`lib.sh`](./lib.sh) — the same
 generator the VM harness uses, which is the point: a real install and a proven
 install cannot drift. It then serves the directory, **checks the URL is
 reachable on the LAN address rather than only on loopback** (a macOS firewall

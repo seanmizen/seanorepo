@@ -43,10 +43,11 @@ EXPECT_ROLES="$( { [ "$ROLE_WEBSERVER" = yes ] && echo webserver; [ "$ROLE_TUNNE
 INSTALL_TIMEOUT="${INSTALL_TIMEOUT:-3600}"
 SSH_TIMEOUT="${SSH_TIMEOUT:-180}"
 
-die()      { echo "ERROR: $*" >&2; exit 1; }
 die_code() { local c=$1; shift; echo "ERROR: $*" >&2; exit "$c"; }
-log()      { echo "[vm] $*"; }
-warn()     { echo "[vm] WARNING: $*" >&2; }
+# log, warn, die, installer_params and write_overrides, shared with the
+# hardware steps so a VM install and a hardware install cannot differ.
+# shellcheck source=../lib.sh
+. "$GEN_DIR/scripts/lib.sh"
 
 # GNU coreutils timeout is `gtimeout` under Homebrew, `timeout` on Debian.
 if command -v gtimeout > /dev/null 2>&1; then TIMEOUT=gtimeout
@@ -320,7 +321,8 @@ start_http() {
     HTTP_ROOT="$RUN_DIR/http"
     mkdir -p "$HTTP_ROOT"
     cp "$GEN_DIR/payload/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
-    write_overrides > "$HTTP_ROOT/overrides.cfg"
+    SSH_PUBKEY_FILE="$KEY.pub" PASSWORD_CRYPTED="$VM_PASSWORD_CRYPTED" \
+        write_overrides > "$HTTP_ROOT/overrides.cfg"
 
     HTTP_PORT="$(free_port)"
     ( cd "$HTTP_ROOT" && python3 -m http.server "$HTTP_PORT" --bind 0.0.0.0 > /dev/null 2>&1 ) &
@@ -338,15 +340,6 @@ start_http() {
 # a disposable guest ever uses it. Real hardware supplies its own from an
 # untracked file - see scripts/README.md.
 VM_PASSWORD_CRYPTED='$6$debbievmtest$iLHeK/mfyeqbwDyW9O6Khy8qQknk/sM.dPztrhTcIOmWL6l60/5FTzjeJQTgEmn1JGPzCEZm7nwVetbN/ZcR70'
-
-write_overrides() {
-    DEPLOY_USER="$DEPLOY_USER" \
-    SERVER_NAME="$SERVER_NAME" \
-    SSH_PUBKEY_FILE="$KEY.pub" \
-    PASSWORD_CRYPTED="$VM_PASSWORD_CRYPTED" \
-    CONSOLE="$CONSOLE" \
-        "$GEN_DIR/scripts/write-overrides.sh"
-}
 
 cleanup() {
     [ -n "${HTTP_PID:-}" ] && kill "$HTTP_PID" 2> /dev/null || true
@@ -379,22 +372,11 @@ do_install() {
 
     start_http
 
+    # The same boot line as the hardware (installer_params), plus the serial
+    # console. netcfg reads the hostname from here: it runs before the preseed
+    # arrives, so a netcfg key in preseed.cfg comes too late (REQ-SERVER-004).
     local append
-    append="auto=true priority=critical"
-    append="$append preseed/url=http://10.0.2.2:$HTTP_PORT/preseed.cfg"
-    append="$append netcfg/choose_interface=auto"
-    # REQ-SERVER-004, #285. netcfg runs BEFORE the preseed is fetched - it has
-    # to, because the preseed is fetched over the network - so a netcfg/* key
-    # in preseed.cfg or overrides.cfg is read too late to influence it. The
-    # boot line is the only place a netcfg answer can arrive in time.
-    #
-    # netcfg reads netcfg/hostname first and prefers it over both the DHCP
-    # hostname and a reverse-DNS lookup (Debian #606636, fixed in netcfg 1.99).
-    # This mirrors scripts/lib.sh installer_params(), which does the same for the
-    # real box - the two lists must stay in step.
-    append="$append netcfg/hostname=$SERVER_NAME"
-    append="$append netcfg/get_hostname=$SERVER_NAME"
-    append="$append console=$CONSOLE,115200n8"
+    append="$(installer_params "http://10.0.2.2:$HTTP_PORT/preseed.cfg") console=$CONSOLE,115200n8"
 
     log "installing ($GUEST_ARCH, accel=$ACCEL_ARG, smp=$SMP) - log: $RUN_DIR/install.log"
     local rc=0

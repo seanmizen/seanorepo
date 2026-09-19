@@ -876,7 +876,7 @@ fi
 #
 # What this does NOT prove, stated plainly: the box also carries
 # /etc/sudoers.d/90-$DEPLOY_USER from the installer, granting NOPASSWD:ALL
-# (see scripts/write-overrides.sh), so $DEPLOY_USER has general root today
+# (see write_overrides in scripts/lib.sh), so $DEPLOY_USER has general root today
 # regardless of what this file says. `sudo -l` would therefore pass no matter
 # how broad this drop-in became, which is exactly why these checks read the
 # file itself. The narrow grant is what lets REQ-SERVER-008 tighten the blanket

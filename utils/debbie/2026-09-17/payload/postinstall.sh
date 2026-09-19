@@ -995,7 +995,7 @@ fi
 # ALL in the command position - which is the whole reason the deploy does not
 # need general root.
 #
-# Note honestly what this is and is not today. scripts/write-overrides.sh has
+# Note honestly what this is and is not today. write_overrides in scripts/lib.sh has
 # the installer write `$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL` to
 # /etc/sudoers.d/90-$DEPLOY_USER, so on a box as it stands this file narrows
 # nothing - the account already has general passwordless root. What it does is

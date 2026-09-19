@@ -11,7 +11,7 @@ explains; the requirements bind. CI validates them on every PR.
 
 | Folder | What | Runs where |
 |---|---|---|
-| `scripts/` | what you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`, each with its `.env.example` and `<machine>.env` files; `lib.sh`, `write-overrides.sh` | your computer |
+| `scripts/` | what you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`, each with its `.env.example` and `<machine>.env` files; `lib.sh`, the functions they share | your computer |
 | `payload/` | sent to a target machine to install, configure and check it: `preseed.cfg`, `postinstall.sh`, `assert.sh`. Idempotent. Runs when you run a script | the installer, then the target machine |
 | `services/` | runs on a target machine for as long as it is up: `release-poll.sh`, `deploy.sh`. systemd starts them from the `release` checkout | the target machine |
 | `working/` | output: ISOs, the SSH key, VM images (gitignored) | — |
@@ -34,7 +34,7 @@ harness asks the **QEMU binary** what it supports, never the host.
 
 For a real machine, see [`scripts/README.md`](./scripts/README.md) — an unmodified
 netinst stick plus the preseed served from your laptop. Both paths generate
-`overrides.cfg` with the same [`scripts/write-overrides.sh`](./scripts/write-overrides.sh),
+`overrides.cfg` with the same `write_overrides` in [`scripts/lib.sh`](./scripts/lib.sh),
 so what installs on hardware is what the VM proved.
 
 ```bash
@@ -505,7 +505,7 @@ Four things about it are deliberate and easy to undo by accident:
 
 The sudoers drop-in grants exactly one command, which is the whole reason the
 deploy does not need general root. Note what it is and is not today:
-`scripts/write-overrides.sh` has the installer write
+`write_overrides` in `scripts/lib.sh` has the installer write
 `srv ALL=(ALL) NOPASSWD:ALL` to `/etc/sudoers.d/90-srv`, so the account already
 has general passwordless root and this file narrows nothing *yet*. What it does
 is make the deploy need only one command, so that tightening the blanket grant

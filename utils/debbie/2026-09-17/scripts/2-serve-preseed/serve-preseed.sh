@@ -62,14 +62,8 @@ HTTP_ROOT="$WORK/http"
 mkdir -p "$HTTP_ROOT"
 cp "$GEN_DIR/payload/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
 
-# CONSOLE is deliberately not exported: on a laptop, pointing the kernel
-# console at a serial port that does not exist is a black screen for the whole
-# install. The VM harness sets it; metal must not.
-DEPLOY_USER="$DEPLOY_USER" \
-SERVER_NAME="$SERVER_NAME" \
-SSH_PUBKEY_FILE="$KEY.pub" \
-PASSWORD_CRYPTED="$PASSWORD_CRYPTED" \
-    "$GEN_DIR/scripts/write-overrides.sh" > "$HTTP_ROOT/overrides.cfg"
+# No CONSOLE here: the target machine has no serial port (see write_overrides).
+SSH_PUBKEY_FILE="$KEY.pub" write_overrides > "$HTTP_ROOT/overrides.cfg"
 
 #------------------------------------------------------------------------------
 # Which address the target should fetch from. The loopback address the harness
