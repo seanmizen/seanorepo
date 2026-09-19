@@ -593,8 +593,14 @@ do_assert() {
 
     log "asserting"
     local rc=0
+    # The deploy scripts of the commit under test, so their behaviour checks
+    # prove THIS commit rather than whatever \`release\` the guest cloned - #307.
+    # Not installed anywhere: assert.sh runs them only against a scratch repo.
+    ssh "${ssh_opts[@]}" "$target" "mkdir -p /tmp/under-test" 2> /dev/null || true
+    scp "${scp_opts[@]}" "$GEN_DIR/scripts/deploy.sh" "$GEN_DIR/scripts/release-poll.sh" \
+        "$target:/tmp/under-test/" > /dev/null 2>&1 || true
     ssh "${ssh_opts[@]}" "$target" \
-        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER PHASE=provisioned bash -s" \
+        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test PHASE=provisioned bash -s" \
         < "$HERE/assert.sh" || rc=$?
 
     mkdir -p "$RUN_DIR/artifacts"
