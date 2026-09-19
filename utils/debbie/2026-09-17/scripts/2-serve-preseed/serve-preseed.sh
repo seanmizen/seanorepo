@@ -1,21 +1,16 @@
 #!/bin/bash
-# serve-preseed.sh - serve the preseed to a real machine, and print the boot
-# line that fetches it.
+# serve-preseed.sh: serves the preseed over HTTP to a box that is installing.
 #
-# This is the metal counterpart to scripts/test-vm/test-vm.sh. It deliberately does the same
-# thing the harness does - generate overrides.cfg with the shared script, serve
-# the directory over HTTP - so that what installs on hardware is what was
-# proven in the VM.
+# Where: your laptop, on the same network as the box. Step 2 of 3.
+# When:  while the box boots from the step 1 USB stick. Keep it running until
+#        the install finishes and the box powers off.
+# Why:   the installer reads its answers from this server. A preseed edit then
+#        needs no new ISO: the installer fetches the file again on its next
+#        attempt. It uses the same overrides generator as the VM harness, so
+#        the hardware installs what the VM tested.
 #
-# It does NOT write to a USB stick. The stick is a plain `dd` of an unmodified
-# Debian netinst ISO; there is no remaster step and nothing to build. The
-# December 2025 attempt died hand-writing a cpio archive to embed a preseed,
-# and over HTTP an edit costs nothing and needs no rewrite of the stick.
-#
-#   ./serve-preseed.sh          serve, print the boot line, wait
-#
-# Ctrl-C to stop. Re-running after editing the preseed is free - the installer
-# re-fetches on the next attempt.
+# Usage:
+#   ./serve-preseed.sh <box>   serve, print the boot line, wait. Ctrl-C stops it.
 set -euo pipefail
 IFS=$'\n\t'
 

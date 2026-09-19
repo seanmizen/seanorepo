@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Keep this host's checkout on origin/release - #307, REQ-DEPLOY-001/002.
+# release-poll.sh: keeps this box's checkout on origin/release.
 #
-# Run every two minutes by custom-release-poll.timer, on EVERY machine. It
-# fetches and checks out `release` and does nothing else: no containers, no
-# units, no yarn. That is what makes it safe everywhere - a standby box is kept
-# at the right SHA, so promoting it is a `docker compose up`, not a fetch plus
-# a cold build.
+# Where: on the box, as the deploy user, on every box whatever its roles.
+# When:  every two minutes, from custom-release-poll.timer.
+# Why:   the box must follow `release` without any inbound connection
+#        (REQ-DEPLOY-001, REQ-DEPLOY-002). It fetches and checks out, and does
+#        nothing else: no containers, no units, no yarn. A standby box is
+#        therefore always at the right commit.
 #
-# Converging running services is deploy.sh's job, in custom-deploy.service,
-# which this unit triggers with OnSuccess= after every run. That is the only
-# thing that starts a deploy: one clock, not two, so a deploy can never start
-# while a checkout is half-written. Whether a machine deploys at all is the
-# serving switch on that unit, not a decision made here.
+# After each successful run, systemd starts custom-deploy.service (OnSuccess=).
+# That is the only trigger for a deploy, so a deploy never starts during a
+# checkout. deploy.sh decides whether there is anything to do.
 #
-# No marker. `git rev-parse HEAD` against the remote's SHA IS the comparison.
+# It keeps no marker. HEAD against the remote commit is the comparison.
 set -euo pipefail
 IFS=$'\n\t'
 

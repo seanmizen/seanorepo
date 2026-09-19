@@ -1,26 +1,25 @@
 #!/bin/bash
-# write-overrides.sh - emit overrides.cfg on stdout.
+# write-overrides.sh: prints overrides.cfg, the per-install part of the preseed.
 #
-# The preseed is architecture- and host-neutral by construction (REQ-EMU-005);
-# everything specific to one run is layered over it through preseed/include.
-# This script is the ONE generator of that layer, called by both the VM harness
-# and the metal path, so a VM run and a real install cannot drift apart.
+# Where: your laptop.
+# When:  test-vm.sh and 2-serve-preseed/serve-preseed.sh run it before each
+#        install.
+# Why:   preseed.cfg holds only settings that suit every box and every
+#        architecture (REQ-EMU-005). This script adds the settings for one
+#        install. The VM and the hardware use the same generator, so the two
+#        installs cannot differ.
 #
-# It used to be a function inside scripts/test-vm/test-vm.sh, which meant the metal path had
-# no way to produce the same file without copying it.
-#
-# Required in the environment:
+# Required environment:
 #   DEPLOY_USER        the account that gets sudo and the SSH key
 #   SERVER_NAME        hostname
 #   SSH_PUBKEY_FILE    path to the public key to authorise
 #   PASSWORD_CRYPTED   sha512-crypt hash for DEPLOY_USER (openssl passwd -6)
 #
 # Optional:
-#   CONSOLE            serial console device, e.g. ttyAMA0. Set by the VM
-#                      harness so the install is watchable and the boot is
-#                      logged. MUST be left unset on real hardware: pointing
-#                      the kernel console at a serial port a laptop does not
-#                      have means a black screen for the whole install.
+#   CONSOLE            serial console device, e.g. ttyAMA0. The VM harness sets
+#                      it so the install is visible and logged. Do not set it
+#                      for hardware: a laptop has no serial port, and the
+#                      screen stays black for the whole install.
 set -euo pipefail
 
 need() {

@@ -1,16 +1,20 @@
 #!/bin/bash
-# postinstall.sh - bring a freshly installed Debian 13 box up to "debbie".
+# postinstall.sh: configures an installed Debian 13 box as a debbie server.
 #
-# Deliberately minimal. This generation proves the VM loop. Since #279 it also
-# installs the deploy poller and since #280 the cloudflared tunnel; the network
-# failover watchdog is still NOT here and arrives under REQ-NETWORK-003.
+# Where: on the box, as root. provision.sh or test-vm.sh sends your laptop's
+#        copy over SSH. The box's checkout also holds a copy. Nothing runs it.
+# When:  once after the install, and again whenever the configuration or the
+#        box's roles must change.
+# Why:   it sets up everything the box needs: firewall, SSH, updates, Docker,
+#        Node, the repository, the release poller, roles, the tunnel, ngrok
+#        and the shell. The failover watchdog is not here yet (#281).
 #
-# Every step is idempotent and every append is guarded. The previous
-# generation's postinstall re-appended its zsh prompt block on every run while
-# its own docs claimed idempotency - a claim nobody checked because nothing
-# asserted it. Here, each step below has a matching assertion in payload/verify/assert.sh.
+# It is idempotent. A second run leaves the box in the same state, and the VM
+# harness runs it twice to prove this. Each step has a check in
+# payload/verify/assert.sh.
 #
-# Usage: sudo ./postinstall.sh
+# Usage: sudo SERVER_NAME=<name> [DEPLOY_USER=srv] [ROLE_WEBSERVER=yes]
+#        [ROLE_TUNNEL=yes] bash postinstall.sh
 set -euo pipefail
 IFS=$'\n\t'
 export DEBIAN_FRONTEND=noninteractive

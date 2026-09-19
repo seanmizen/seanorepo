@@ -1,21 +1,25 @@
 #!/bin/bash
-# test-vm.sh - install Debian 13 into a VM and assert the result.
+# test-vm.sh: installs Debian 13 in a local VM, configures it and checks it.
 #
-# The fast loop: change the preseed or postinstall, run this, get an exit code.
-# No console watching, no keystrokes. See ../README.md for what it does and does
-# not prove.
+# Where: your laptop, with QEMU.
+# When:  after every change to the preseed, postinstall.sh or assert.sh, and
+#        before any hardware install.
+# Why:   it proves a change in minutes, with no hardware and no console to
+#        watch. The result is an exit code. See ../../README.md for what a VM
+#        run cannot prove.
 #
-#   ./test-vm.sh --full          install, boot, assert   (the usual one)
-#   ./test-vm.sh --install       install only
-#   ./test-vm.sh --assert        boot the installed disk and assert
-#   ./test-vm.sh --clean         delete cached images and runs
+# Usage:
+#   ./test-vm.sh --full      install, boot, configure, check (the usual one)
+#   ./test-vm.sh --install   install only
+#   ./test-vm.sh --assert    boot the cached install, configure it, check it
+#   ./test-vm.sh --clean     delete the cached images and runs
 #
-# Exit codes - REQ-EMU-003:
-#   0   every assertion passed
-#   1   an assertion failed
+# Exit codes (REQ-EMU-003):
+#   0   every check passed
+#   1   a check failed
 #   2   the install failed
-#   3   no SSH, or the reboot could not be proved - see wait_for_ssh
-#   124 a stage hit its hard timeout
+#   3   no SSH, or the reboot was not proved (see wait_for_ssh)
+#   124 a stage hit its time limit
 set -euo pipefail
 IFS=$'\n\t'
 

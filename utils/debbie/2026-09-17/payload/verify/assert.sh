@@ -1,28 +1,17 @@
 #!/bin/bash
-# assert.sh - run INSIDE the guest, over SSH, and say whether the box is right.
+# assert.sh: checks a box against the requirements and exits 0 only if all pass.
 #
-# Streamed in by test-vm.sh with `ssh ... 'bash -s' < assert.sh`, so it must be
-# self-contained: no arguments, no files alongside it, nothing from the repo.
+# Where: on the box. provision.sh and test-vm.sh stream it over SSH with
+#        `bash -s`, so it must not read any file beside it.
+# When:  twice per run. PHASE=firstboot runs before postinstall.sh and checks
+#        only what the installer produced. PHASE=provisioned runs after
+#        postinstall.sh and a reboot, and checks everything.
+# Why:   the exit code is the result (REQ-EMU-003). Nobody must read a console.
+#        The two phases show a fault that postinstall.sh repairs: the check
+#        fails in firstboot and passes in provisioned (#285).
 #
-# Exit 0 only if every check passes. This is what makes the harness report by
-# exit code rather than by a human reading a console - REQ-EMU-003.
-#
-# Every check is architecture-neutral. The arm64 run and the amd64 run assert
-# exactly the same things; where a name differs by arch (the EFI loader) the
-# check globs rather than branching.
-#
-# PHASE says WHEN this is running, and it is the whole point of #285.
-#
-#   firstboot    the installed system has booted and nothing has been run on it
-#                by hand. Only what the INSTALLER produced may be asserted.
-#   provisioned  postinstall.sh has run and the box has rebooted. Everything.
-#
-# Without that split, a bug the installer creates and postinstall.sh repairs is
-# invisible: every assertion ran after the repair, so the box was right by the
-# time anything looked, and wrong in between. The hostname was `192` for the
-# whole of that window and no run ever went red. A check that passes in
-# `provisioned` and fails in `firstboot` is precisely "postinstall repaired it",
-# and that is now a distinguishable, reportable state rather than a silence.
+# Every check is the same on arm64 and amd64. Where a name differs by
+# architecture, the check uses a glob.
 set -uo pipefail
 
 EXPECT_ARCH="${EXPECT_ARCH:-}"

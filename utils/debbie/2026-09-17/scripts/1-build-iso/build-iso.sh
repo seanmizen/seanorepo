@@ -1,30 +1,19 @@
 #!/bin/bash
-# build-iso.sh - bake the installer cmdline into a copy of the Debian netinst
-# ISO, so a metal install needs no keystrokes at all.
+# build-iso.sh: makes a copy of the Debian netinst ISO with the installer boot
+# line already in it.
 #
-# WHY THIS EXISTS
+# Where: your laptop. Step 1 of 3.
+# When:  once per box, and again if the boot line changes. A preseed edit does
+#        not need a new ISO, because step 2 serves the preseed over HTTP.
+# Why:   the boot line is about 200 characters. Typing it at the GRUB menu
+#        failed three times on the first hardware install. The values are
+#        known in advance, so a file holds them.
 #
-# The alternative is typing a ~200 character kernel line at the GRUB menu, on a
-# keyboard GRUB reads as US layout whatever the real one is. On its first real
-# outing that failed three times running: edits discarded because Ctrl-X was not
-# pressed from inside the editor; the wifi presets dropped to shorten the line,
-# which cannot work because priority=critical suppresses the very prompt that
-# was supposed to replace them; and the risk of landing the params after the
-# '---' separator, which copies them into the installed system's bootloader.
+# Usage:
+#   ./build-iso.sh <box>                  write working/debbie-<name>.iso
+#   ./build-iso.sh <box> --show-cmdline   print the boot line and stop
 #
-# The parameters are known in advance. They belong in a file.
-#
-# WHAT THIS IS NOT
-#
-# Not the initrd-embedded preseed that killed the December 2025 attempt, which
-# needed a hand-written cpio archive. Only two text files inside the ISO change.
-# The preseed itself still comes over HTTP from serve-preseed.sh, so editing it
-# costs nothing and never needs a rebuild.
-#
-#   ./build-iso.sh                 build working/debbie-<name>.iso
-#   ./build-iso.sh --show-cmdline  print the baked cmdline and exit
-#
-# The output contains your wifi passphrase in plaintext. working/ is gitignored.
+# The ISO contains the wifi passphrase in plaintext. working/ is gitignored.
 set -euo pipefail
 IFS=$'\n\t'
 

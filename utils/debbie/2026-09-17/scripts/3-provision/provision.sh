@@ -1,41 +1,29 @@
 #!/bin/bash
-# provision.sh - bring a freshly installed box up to debbie, then assert it.
+# provision.sh: configures an installed box over SSH and checks the result.
 #
-# The metal counterpart to the second half of scripts/test-vm/test-vm.sh: assert what the
-# installer produced, run postinstall, reboot so the boot-time settings apply,
-# wait for the box to come back, and run the same assertions the VM runs.
+# Where: your laptop. It connects to the box as <SERVER_NAME>.local.
+# When:  after the install, when you power the box on again. Run it again
+#        whenever the box's configuration must change, for example a role.
+# Why:   one command does the full sequence the same way every time:
+#          1. check what the installer produced (PHASE=firstboot)
+#          2. send postinstall.sh to the box and run it as root
+#          3. reboot, and prove the reboot with a new boot id (#295)
+#          4. check the configured box (PHASE=provisioned)
+#        The first check exists because postinstall.sh can repair an install
+#        fault and hide it (#285). The box ran as `192` for one generation.
 #
-# There are TWO assertion runs, and that is deliberate - REQ-SERVER-004, #285.
-# The first (PHASE=firstboot) happens before postinstall.sh touches anything,
-# so it says whether the INSTALL was right. The second (PHASE=provisioned)
-# says whether the box is right. Only the first can catch a fault that
-# postinstall.sh silently repairs, which is how the box ran as `192` for a
-# whole generation with every check green.
+# Usage:
+#   ./provision.sh <box>               steps 1 to 4
+#   ./provision.sh <box> --assert      step 4 only, no changes
+#   ./provision.sh <box> --no-reboot   steps 1 and 2 only
+#   HOST=<ip> ./provision.sh <box>     use <ip> if <name>.local does not resolve
 #
-# It exists because doing this by hand meant retyping the hostname, the deploy
-# user and the key path, and the runbook had them wrong for any SERVER_NAME
-# other than the default - the first real install used a different one, so the
-# documented provision step could not connect and the documented assert step
-# failed a check that was passing. Everything here comes from .env.
+# It dials the name first because the DHCP address changes on each boot (#284).
 #
-#   ./provision.sh              postinstall, reboot, wait, assert
-#   ./provision.sh --assert     assert only, against a box already provisioned
-#   ./provision.sh --no-reboot  postinstall only, no reboot and no assert
-#
-# The box is dialled BY NAME, and the address is only ever a fallback - #284.
-# A DHCP lease does not survive a reboot: the first real box took .182, then
-# .183, then .184, one per boot. A run started with HOST=<ip> kept dialling the
-# address it began with, so the post-reboot wait could not succeed even though
-# the box was up - it had simply moved. $SERVER_NAME.local is the one handle
-# that is stable across a moving lease, and since #285 it works from first boot.
-#
-# The post-reboot wait is satisfied by a NEW BOOT ID, not by a live socket -
-# #295. See wait_for_ssh.
-#
-# Exit codes mirror the VM harness - REQ-EMU-003:
-#   0   every assertion passed
-#   1   an assertion failed
-#   3   the box never came back (or came back still on the pre-reboot boot)
+# Exit codes (the same as the VM harness, REQ-EMU-003):
+#   0   every check passed
+#   1   a check failed
+#   3   the box did not come back, or came back on the old boot
 set -euo pipefail
 IFS=$'\n\t'
 

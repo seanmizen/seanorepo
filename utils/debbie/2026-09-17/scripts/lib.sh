@@ -1,7 +1,9 @@
-# lib.sh - shared by the three numbered steps. Sourced, not executed.
+# lib.sh: shared shell functions for the three numbered steps.
 #
-# Each step has its own env files, one per box, holding only that step's keys
-# (#332). This file finds the right one and parses it.
+# Where: your laptop. The step scripts source this file. Do not run it.
+# When:  at the start of every step script.
+# Why:   each step must select one box's env file and parse it the same way.
+#        This file holds that code once.
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 log() { echo "[metal] $*"; }
