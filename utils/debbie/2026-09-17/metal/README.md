@@ -41,7 +41,7 @@ curl -fsSL "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS
 # 2. configure
 cp .env.example .env
 openssl passwd -6                      # -> PASSWORD_CRYPTED
-$EDITOR .env                           # + WIFI_SSID, WIFI_PASS, WIFI_IFACE, SERVER_NAME
+$EDITOR .env                           # SERVER_NAME, WIFI_*, and ROLE_* if it serves - see the file
 
 # 3. bake the cmdline in
 ISO=debian-13.7.0-amd64-netinst.iso ./build-iso.sh
@@ -56,6 +56,8 @@ sudo dd if=work/debbie-$(grep ^SERVER_NAME .env | cut -d= -f2).iso of=/dev/rdisk
 
 # 6. once it powers itself off, power it on and provision
 ./provision.sh
+
+# 7. after provisioning - see "After provisioning" below
 ```
 
 That is the whole thing. Steps 1-3 are needed once per preseed change; step 4
@@ -272,6 +274,27 @@ the right values, which is most of why it exists.
 
 On metal the wifi assertion **runs** rather than skipping, so this is the first
 place `REQ-SERVER-005` is genuinely tested.
+
+## After provisioning
+
+`provision.sh` ends with the box's roles (`roles on <name>: webserver=… tunnel=…`).
+With no `ROLE_*` in `.env` the box tracks `release` and runs nothing — the
+safe state, and the right one for a box being set up. What is left is by hand,
+because each piece is a credential that is in no repository:
+
+| Step | Which boxes | How |
+|---|---|---|
+| **ngrok token** — SSH from off the LAN | every box | as `srv` on the box: `ngrok config add-authtoken <token>`, then re-run `./provision.sh`. Find the address: [Remote SSH](../README.md#remote-ssh-ngrok) |
+| **Serve the sites** | webservers | set `ROLE_WEBSERVER=yes` in `.env`, re-run `./provision.sh`. Without the tunnel role they are published on the LAN |
+| **Tunnel credentials** — the internet reaches this box | the ONE tunnel box | set `ROLE_TUNNEL=yes` too, copy the credentials JSON into `apps/cloudflared/credentials/` on the box ([recipe](../README.md#creating-the-tunnel-and-placing-its-credentials)), re-run `./provision.sh` |
+
+**Moving the public sites to another box** is a deliberate act, because the
+data moves with it (SQLite on local volumes): take `ROLE_TUNNEL` off the old
+box's `.env` and re-provision it (its tunnel stops), copy the data and the
+credentials across, then set both roles on the new box and provision it. Never
+have the tunnel role on two boxes at once.
+
+Check any box: `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
 ## Where this is likely to go wrong
 
