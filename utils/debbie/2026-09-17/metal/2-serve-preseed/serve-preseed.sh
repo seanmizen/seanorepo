@@ -19,16 +19,17 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-HERE="$(cd "$(dirname "$0")" && pwd)"
-GEN_DIR="$(dirname "$HERE")"
-WORK="$HERE/work"
-ENV_FILE="${ENV_FILE:-$HERE/.env}"
+HERE="$(cd "$(dirname "$0")" && pwd)"     # this step's folder: its env files
+METAL="$(dirname "$HERE")"
+GEN_DIR="$(dirname "$METAL")"
+WORK="$METAL/work"                          # shared by all three steps
+# shellcheck source=../lib.sh
+. "$METAL/lib.sh"
+
+select_env "$HERE" "${1:-}"
+shift
 PORT="${PORT:-8000}"
-
-# shellcheck source=lib.sh
-. "$HERE/lib.sh"
-
-read_env
+read_env SERVER_NAME DEPLOY_USER PASSWORD_CRYPTED WIFI_SSID WIFI_PASS WIFI_IFACE PORT SERVE_IP SSH_KEY
 
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 # No default - #329: a forgotten name used to install a second "debbie".

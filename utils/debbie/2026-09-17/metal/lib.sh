@@ -1,8 +1,7 @@
-# lib.sh - shared by serve-preseed.sh, build-iso.sh and provision.sh. Sourced,
-# not executed.
+# lib.sh - shared by the three numbered steps. Sourced, not executed.
 #
-# Both need the same .env and the same answer to "what address will the target
-# fetch from", and two copies of either would drift.
+# Each step has its own env files, one per box, holding only that step's keys
+# (#332). This file finds the right one and parses it.
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 log() { echo "[metal] $*"; }
@@ -19,9 +18,47 @@ log() { echo "[metal] $*"; }
 # Values are taken verbatim: no expansion, no command substitution, and an
 # unrecognised key is an error rather than a setting that silently does nothing.
 #------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Pick this step's env file for one box - #332. The box is a REQUIRED argument:
+#   <step>.sh trixie2   ->  <step dir>/trixie2.env
+#   <step>.sh .env      ->  <step dir>/.env
+#   <step>.sh ./x.env   ->  that path (anything with a slash)
+# No argument is an error listing the boxes this step has files for, so a
+# forgotten argument can never run against some other box's settings.
+#------------------------------------------------------------------------------
+select_env() {
+    local dir="$1" box="${2:-}" have
+    have="$(cd "$dir" && ls -A 2> /dev/null | { grep -E '\.env$' || true; } | sed 's/\.env$//; s/^$/.env/' | tr '\n' ' ')"
+    [ -n "$box" ] || die "usage: $(basename "$0") <box>   (env files here: ${have:-none - copy env.example to <box>.env})"
+    case "$box" in
+        */*)  ENV_FILE="$box" ;;
+        .env) ENV_FILE="$dir/.env" ;;
+        *)    ENV_FILE="$dir/$box.env" ;;
+    esac
+    [ -f "$ENV_FILE" ] || die "no $ENV_FILE. Copy $dir/env.example to it and fill it in. (env files here: ${have:-none})"
+}
+
+# Which step reads a key, for the error when it turns up in the wrong file.
+key_home() {
+    case "$1" in
+        ISO)                         echo 1-build-iso ;;
+        PASSWORD_CRYPTED)            echo 2-serve-preseed ;;
+        SSH_KEY)                     echo "2-serve-preseed, 3-provision" ;;
+        ROLE_WEBSERVER|ROLE_TUNNEL)  echo 3-provision ;;
+        WIFI_*|PORT|SERVE_IP)        echo "1-build-iso, 2-serve-preseed" ;;
+        SERVER_NAME|DEPLOY_USER)     echo "all three" ;;
+        *)                           echo "no step" ;;
+    esac
+}
+
+# read_env KEY... - parse $ENV_FILE, accepting ONLY the keys named. Every file
+# is atomic: a key another step reads is an error saying which step it is for.
 read_env() {
-    local line key val lineno=0
-    [ -f "$ENV_FILE" ] || die "no $ENV_FILE. Copy .env.example to .env and fill it in."
+    local line key val lineno=0 k allowed=" "
+    # Joined by hand: the callers set IFS=$'\n\t', so "$*" would join with
+    # newlines and no key would ever match.
+    for k in "$@"; do allowed="$allowed$k "; done
+    [ -f "$ENV_FILE" ] || die "no $ENV_FILE."
     while IFS= read -r line || [ -n "$line" ]; do
         lineno=$((lineno + 1))
         line="${line%$'\r'}"                       # tolerate CRLF
@@ -40,21 +77,12 @@ read_env() {
             \"*\") val="${val#\"}"; val="${val%\"}" ;;
         esac
 
-        case "$key" in
-            DEPLOY_USER)      DEPLOY_USER="$val" ;;
-            SERVER_NAME)      SERVER_NAME="$val" ;;
-            PASSWORD_CRYPTED) PASSWORD_CRYPTED="$val" ;;
-            WIFI_SSID)        WIFI_SSID="$val" ;;
-            WIFI_PASS)        WIFI_PASS="$val" ;;
-            WIFI_IFACE)       WIFI_IFACE="$val" ;;
-            SSH_KEY)          SSH_KEY="$val" ;;
-            ISO)              ISO="$val" ;;
-            PORT)             PORT="$val" ;;
-            SERVE_IP)         SERVE_IP="$val" ;;
-            ROLE_WEBSERVER)   ROLE_WEBSERVER="$val" ;;
-            ROLE_TUNNEL)      ROLE_TUNNEL="$val" ;;
-            DEBBIE_SERVES)    die "$ENV_FILE line $lineno: DEBBIE_SERVES was replaced by ROLE_WEBSERVER (#329). Delete the line: unset now means the box runs no sites." ;;
-            *) die "$ENV_FILE line $lineno: unknown key '$key'. See .env.example." ;;
+        if [ "$key" = DEBBIE_SERVES ]; then
+            die "$ENV_FILE line $lineno: DEBBIE_SERVES was replaced by ROLE_WEBSERVER in 3-provision (#329). Delete the line: unset means the box runs no sites."
+        fi
+        case "$allowed" in
+            *" $key "*) printf -v "$key" '%s' "$val" ;;
+            *) die "$ENV_FILE line $lineno: $(basename "$0") does not read $key (read by: $(key_home "$key")). Keys here:$allowed" ;;
         esac
     done < "$ENV_FILE"
 }
