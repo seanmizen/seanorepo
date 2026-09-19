@@ -546,8 +546,8 @@ the credentials are in place.
 A newly provisioned box has none, and that is a normal state rather than a
 failure: `postinstall.sh` exits 0, prints the recipe above, and **does not
 enable the unit**. Enabling it would be the worse outcome — a tunnel restarting
-every ten seconds against credentials that are not there fills a journal that
-is uncapped until #287 and buries the one fact that matters.
+every ten seconds against credentials that are not there floods the
+journal (capped at 1G since #287, but still) and buries the one fact that matters.
 
 Two mechanisms, because the refusal has to survive a box that loses its
 credentials later as well as one that never had them:

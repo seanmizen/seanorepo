@@ -94,6 +94,27 @@ sshd_effective() {
         'tolower($1) == k { print tolower($2); exit }'
 }
 
+# journald's OWN size limit for the persistent journal, as the running daemon
+# reported it, e.g. `1.0G`.
+#
+# journald logs "System Journal (...) is 8.0M, max 1.0G, 990.1M free." each
+# time it opens /var/log/journal, and the `max` there is the limit it computed
+# from its configuration. That is the effective value, not the drop-in: a file
+# journald never read reports the default here (10% of the filesystem), which
+# is #313's lesson applied to journald. The last such line of this boot is the
+# current daemon's.
+#
+# Matched by syslog identifier, not `-u`: journald's reports about its own
+# files are not reliably tagged with its unit. The size is printed as `1.0G` or
+# `1G` depending on the systemd version, so both count.
+journal_usage_line() {
+    sudo -n journalctl -b -t systemd-journald -o cat --no-pager 2> /dev/null |
+        grep -E '^System Journal .* max ' | tail -n 1
+}
+journal_max_use() {
+    journal_usage_line | sed -n 's/.* max \([0-9.]*[KMGT]\).*/\1/p' | sed 's/\.0\([KMGT]\)$/\1/'
+}
+
 logind_handler() {
     busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
         org.freedesktop.login1.Manager "$1" 2>/dev/null |
@@ -262,6 +283,10 @@ if [ "$PHASE" = provisioned ]; then
     check "suspend key ignored"       '[ "$(logind_handler HandleSuspendKey)" = ignore ]'
     check "hibernate key ignored"     '[ "$(logind_handler HandleHibernateKey)" = ignore ]'
 
+    # REQ-SERVER-007, #287. Read from the running journald, not the drop-in.
+    check "journald size capped"      '[ "$(journal_max_use)" = 1G ]'
+    echo "      journald reports: $(journal_usage_line || true)"
+
     # REQ-SERVER-008, #288. Asked of sshd, not of the drop-in - a file sshd
     # never read is the fault being tested for. `no` exactly, never "no or
     # unset": measured on stock trixie, `sshd -T` reports
@@ -289,6 +314,7 @@ else
     sk "long power press ignored"  "postinstall.sh writes it"
     sk "suspend key ignored"       "postinstall.sh writes it"
     sk "hibernate key ignored"     "postinstall.sh writes it"
+    sk "journald size capped"      "postinstall.sh writes the drop-in"
     sk "sshd config is valid"              "postinstall.sh writes the drop-in"
     sk "ssh passwords refused"             "postinstall.sh writes the drop-in"
     sk "ssh keyboard-interactive refused"  "postinstall.sh writes the drop-in"
@@ -858,8 +884,8 @@ if [ "$PHASE" = provisioned ]; then
         check "the tunnel is NOT enabled while credentials are absent" \
             '[ "$(systemctl is-enabled "$CLOUDFLARED_UNIT" 2>&1)" != enabled ]'
         # The behavioural half, and the whole point of AC 4: a unit that
-        # restarts forever against missing credentials fills a journal that is
-        # uncapped until #287 and buries the real problem.
+        # restarts forever against missing credentials floods the journal
+        # (capped since #287, but still) and buries the real problem.
         #
         # Asking it to start is safe precisely because the credentials are
         # absent - there is no tunnel to disturb. A unit whose conditions are

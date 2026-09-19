@@ -26,9 +26,9 @@
 | [`REQ-SERVER-004`](server.md#req-server-004--the-host-is-reachable-by-name-on-the-local-network) | The host is reachable by name on the local network | active | functional | P2 | sean |
 | [`REQ-SERVER-005`](server.md#req-server-005--a-wifi-only-host-keeps-its-network-across-a-reboot) | A wifi-only host keeps its network across a reboot | active | functional | P1 | sean |
 | [`REQ-SERVER-006`](server.md#req-server-006--security-updates-apply-without-anyone-logging-in) | Security updates apply without anyone logging in | active | functional | P1 | sean |
-| [`REQ-SERVER-007`](server.md#req-server-007--logs-cannot-fill-the-disk) | Logs cannot fill the disk | proposed | constraint | P2 | sean |
+| [`REQ-SERVER-007`](server.md#req-server-007--logs-cannot-fill-the-disk) | Logs cannot fill the disk | active | constraint | P2 | sean |
 | [`REQ-SERVER-008`](server.md#req-server-008--ssh-accepts-keys-and-nothing-else) | SSH accepts keys and nothing else | active | constraint | P0 | sean |
-| [`REQ-SERVER-009`](server.md#req-server-009--repeated-failed-authentication-is-throttled) | Repeated failed authentication is throttled | proposed | functional | P2 | sean |
+| [`REQ-SERVER-009`](server.md#req-server-009--repeated-failed-authentication-is-throttled) | Repeated failed authentication is throttled | withdrawn | functional | P2 | sean |
 | [`REQ-SERVER-010`](server.md#req-server-010--the-interactive-shell-is-the-one-described-in-the-repository) | The interactive shell is the one described in the repository | proposed | quality | P3 | sean |
 | [`REQ-SERVER-011`](server.md#req-server-011--our-systemd-units-live-apart-from-the-distributions) | Our systemd units live apart from the distribution's | active | constraint | P2 | sean |
 | [`REQ-SERVER-012`](server.md#req-server-012--a-packaged-unit-is-changed-by-drop-in-never-by-shadowing) | A packaged unit is changed by drop-in, never by shadowing | active | constraint | P1 | sean |
@@ -82,6 +82,7 @@ graph TD
   REQ_SERVER_009 -->|refines| REQ_SERVER_008
   REQ_SERVER_012 -->|depends-on| REQ_SERVER_011
   REQ_SERVER_013 -->|depends-on| REQ_SERVER_011
+  style REQ_SERVER_009 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links

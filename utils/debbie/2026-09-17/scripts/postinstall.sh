@@ -161,6 +161,29 @@ EOF
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
 #------------------------------------------------------------------------------
+# Journal size - REQ-SERVER-007, #287
+#
+# Capped at 1G. The disk is a 128 GB SSD shared with Docker images and the
+# SQLite volumes, and a full disk takes every site down with a cause that looks
+# like anything but disk space. journald's own default is 10% of the
+# filesystem, capped at 4G - bounded, but only by accident, and nothing on
+# this box ever reads that much history.
+#
+# A drop-in, not an edit to the package-owned journald.conf, and rewritten in
+# full so a second run is byte-identical. Restarting journald is safe here,
+# unlike logind: it does not own the calling session, and the restart is what
+# makes the running daemon read the new limit.
+#------------------------------------------------------------------------------
+log "capping the journal at 1G"
+install -d /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/10-debbie-size.conf <<'EOF'
+# Managed by utils/debbie postinstall.sh - REQ-SERVER-007
+[Journal]
+SystemMaxUse=1G
+EOF
+systemctl restart systemd-journald
+
+#------------------------------------------------------------------------------
 # Firewall - REQ-SERVER-002
 #
 # Nothing but SSH, HTTP, HTTPS and mDNS. App ports (4000-4061) are deliberately
@@ -1017,7 +1040,7 @@ Wants=network-online.target
 # makes systemd log one line and leave the unit inactive - it does NOT count as
 # a failure, does not trigger Restart=, and cannot fill the journal. Starting
 # without credentials would instead be an authentication failure every
-# RestartSec forever, against a journal that is uncapped until #287, hiding the
+# RestartSec forever, flooding the journal - capped since #287, but still - and hiding the
 # one fact that matters: nobody has put the credentials on this box.
 ConditionPathExists=$CLOUDFLARED_CONFIG
 ConditionDirectoryNotEmpty=$CLOUDFLARED_CREDS_DIR
