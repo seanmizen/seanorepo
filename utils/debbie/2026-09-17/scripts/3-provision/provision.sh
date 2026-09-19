@@ -238,7 +238,7 @@ if [ "$MODE" != assert ]; then
     # goes red so it cannot be mistaken for a clean install.
     log "asserting first boot (before postinstall)"
     sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=firstboot bash -s" \
-        < "$GEN_DIR/payload/verify/assert.sh" || FIRSTBOOT_RC=$?
+        < "$GEN_DIR/payload/assert.sh" || FIRSTBOOT_RC=$?
     if [ "$FIRSTBOOT_RC" -ne 0 ]; then
         echo >&2
         echo "  ################################################################" >&2
@@ -248,7 +248,7 @@ if [ "$MODE" != assert ]; then
         echo "  # after it will very likely pass. Do not read that as a fix." >&2
         echo "  # Something in the preseed, the generated overrides.cfg or the" >&2
         echo "  # installer boot line is not taking effect - see REQ-SERVER-004" >&2
-        echo "  # and the notes in payload/install/preseed.cfg." >&2
+        echo "  # and the notes in payload/preseed.cfg." >&2
         echo "  ################################################################" >&2
         echo >&2
     fi
@@ -261,7 +261,7 @@ if [ "$MODE" != assert ]; then
     # match this file: a role that is not set here is switched OFF there.
     log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
     sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' bash -s" \
-        < "$GEN_DIR/payload/configure/postinstall.sh"
+        < "$GEN_DIR/payload/postinstall.sh"
 
     if [ "$MODE" = noreboot ]; then
         log "postinstall done; skipping reboot and assertions (--no-reboot)"
@@ -306,7 +306,7 @@ log "asserting"
 # would report nothing at all rather than "an assertion failed".
 rc=0
 sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=provisioned bash -s" \
-    < "$GEN_DIR/payload/verify/assert.sh" || rc=$?
+    < "$GEN_DIR/payload/assert.sh" || rc=$?
 
 # A green provisioned run on top of a red first-boot run is not a pass. It is
 # the #285 shape exactly: correct end state, wrong install, and the difference

@@ -1,7 +1,7 @@
 # REQ-SERVER — What a provisioned debbie must be
 
-The properties `payload/configure/postinstall.sh` establishes on a freshly installed host,
-each one paired with a check in `utils/debbie/2026-09-17/payload/verify/assert.sh`.
+The properties `payload/postinstall.sh` establishes on a freshly installed host,
+each one paired with a check in `utils/debbie/2026-09-17/payload/assert.sh`.
 
 Only what this generation actually provisions is here. The deploy poller, the
 Cloudflare tunnel and the network failover watchdog are not yet requirements —
@@ -60,15 +60,15 @@ Introduced in #259.
   state, so a check satisfied by its contents would pass on a box that was
   still about to switch itself off.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "lid-close drop-in present"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "lid close ignored"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "lid close on power ignored"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "lid close docked ignored"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sleep.target masked"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "power key ignored"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "long power press ignored"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "suspend key ignored"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "hibernate key ignored"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "lid-close drop-in present"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "lid close ignored"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "lid close on power ignored"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "lid close docked ignored"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sleep.target masked"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "power key ignored"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "long power press ignored"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "suspend key ignored"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "hibernate key ignored"
 - **Relations:** none
 
 ## REQ-SERVER-002 — Only four ports are reachable
@@ -103,7 +103,7 @@ Introduced in #259.
   something the box did not do, and the test agreed with the requirement instead
   of with the box.
 
-  **How it is met.** `payload/configure/postinstall.sh` writes `/etc/docker/daemon.json`
+  **How it is met.** `payload/postinstall.sh` writes `/etc/docker/daemon.json`
   with `{"ip": "127.0.0.1"}`, which is dockerd's `--ip`, "Host IP for port
   publishing". A published port then binds `127.0.0.1` and no other address, so
   it is never offered to the LAN and there is no packet to filter. This was
@@ -125,20 +125,20 @@ Introduced in #259.
   below still read listening sockets, the `nat` chain and a deliberately
   published probe port rather than either configuration.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ufw active"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ufw allows no port beyond
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw allows no port beyond
     the four"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "docker publishes to
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "docker publishes to
     loopback by default"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "nothing outside the four
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "nothing outside the four
     ports listens on a non-loopback address"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no docker DNAT rule reaches
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no docker DNAT rule reaches
     a non-loopback address"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "a deliberately published
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "a deliberately published
     port binds loopback and nothing else"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "that port refuses a
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "that port refuses a
     connection to the host's own routable address"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the deploy publishes on
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy publishes on
     loopback with the tunnel and on the LAN without"
 - **Relations:** none
 
@@ -161,9 +161,9 @@ Introduced in #259.
   files end to end produced a box on which none of the units could start. Naming
   the user in a requirement is what stops the two halves drifting apart again.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "user srv exists"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "srv in sudo"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "srv in docker"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "user srv exists"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv in sudo"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv in docker"
 - **Relations:** none
 
 ## REQ-SERVER-004 — The host is reachable by name on the local network
@@ -194,11 +194,11 @@ Introduced in #259.
   `debbie.local` may resolve to either address, so it is not a safe way to reach
   one specific interface — use the explicit IP for that.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "hostname is debbie"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "static hostname is debbie"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "127.0.1.1 maps to debbie"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "avahi-daemon active"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "debbie.local resolves"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "hostname is debbie"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "static hostname is debbie"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "127.0.1.1 maps to debbie"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "avahi-daemon active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "debbie.local resolves"
   - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › the `PHASE=firstboot` run,
     which asserts all of the above before `postinstall.sh` executes and so
     distinguishes "the preseed set it" from "postinstall repaired it"
@@ -237,7 +237,7 @@ Introduced in #259.
   no way in. It is therefore deliberately **not** coupled to installing the
   machine, and lands with `REQ-NETWORK-*`.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "wifi config persisted"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wifi config persisted"
     (skipped where the host has no wireless interface, which is every VM run —
     QEMU has no 802.11 device the installer would drive)
 - **Relations:** none
@@ -301,16 +301,16 @@ Introduced in #259.
   grepping `50unattended-upgrades`: a file the tool never read is the bug, so a
   check satisfied by that file's contents would pass in the failing state.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "unattended-upgrades installed"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "powermgmt-base absent, so a battery cannot pause patching"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the security suite is in apt's sources"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "apt-daily.timer enabled"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "apt-daily.timer active"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "apt-daily-upgrade.timer enabled"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "apt-daily-upgrade.timer active"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "apt's periodic unattended upgrade is on"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "only the security suite is upgraded unattended"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "automatic reboot explicitly disabled"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "unattended-upgrades installed"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "powermgmt-base absent, so a battery cannot pause patching"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the security suite is in apt's sources"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "apt-daily.timer enabled"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "apt-daily.timer active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "apt-daily-upgrade.timer enabled"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "apt-daily-upgrade.timer active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "apt's periodic unattended upgrade is on"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "only the security suite is upgraded unattended"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "automatic reboot explicitly disabled"
 - **Relations:** none
 
 ## REQ-SERVER-007 — Logs cannot fill the disk
@@ -336,7 +336,7 @@ Introduced in #259.
   The assertion reads the limit the running journald reported, not the
   drop-in. A file journald never read is the failing state.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "journald size capped"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "journald size capped"
 - **Relations:** none
 
 ## REQ-SERVER-008 — SSH accepts keys and nothing else
@@ -367,11 +367,11 @@ Introduced in #259.
   The account password is deliberately not locked: console login is the recovery
   path, and this generation provides no out-of-band access (`#135`).
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sshd config is valid"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ssh passwords refused"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ssh keyboard-interactive refused"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ssh root login refused"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ssh still accepts keys"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sshd config is valid"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ssh passwords refused"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ssh keyboard-interactive refused"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ssh root login refused"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ssh still accepts keys"
 - **Relations:**
   - depends-on REQ-SERVER-002
   - depends-on REQ-SERVER-003
@@ -399,7 +399,7 @@ Introduced in #259.
   keeps attackers out is `REQ-SERVER-008`; what bounds their log volume is
   `REQ-SERVER-007`.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "fail2ban active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "fail2ban active"
 - **Relations:** refines REQ-SERVER-008
 
 ## REQ-SERVER-010 — The interactive shell is the one described in the repository
@@ -421,12 +421,12 @@ Introduced in #259.
   prompt block on every run while its own documentation claimed idempotency — a
   claim nobody checked, because nothing asserted it.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "deploy user shell is zsh"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "shell config is idempotent"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "deploy user shell is zsh"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "shell config is idempotent"
     — the VM harness runs `postinstall.sh` twice and hashes `.zshrc` either
     side of the second run; skipped on metal, where there is no second run
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "oh-my-zsh and both plugins present"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "zsh starts cleanly with that config"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "oh-my-zsh and both plugins present"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "zsh starts cleanly with that config"
 - **Relations:** none
 
 ## REQ-SERVER-011 — Our systemd units live apart from the distribution's
@@ -463,7 +463,7 @@ Introduced in #259.
   `<target>.wants/` have meaning. This requirement is the nearest thing that
   works.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no repo units in /etc/systemd/system"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no repo units in /etc/systemd/system"
   - Inspection — every unit installed by `2026-09-17/` resolves to
     `/usr/local/lib/systemd/system` under `systemctl cat`
 - **Relations:** none
@@ -495,7 +495,7 @@ Introduced in #259.
 - **Verification:**
   - Inspection — no filename in `/usr/local/lib/systemd/system` matches a unit
     present in `/usr/lib/systemd/system`
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no shadowed package units"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no shadowed package units"
 - **Relations:** depends-on REQ-SERVER-011
 
 ## REQ-SERVER-013 — Our units are identifiable in systemctl output
@@ -526,7 +526,7 @@ Introduced in #259.
   Note that this does not apply to a packaged unit adjusted by drop-in, which
   keeps the package's own name by definition — that is `REQ-SERVER-012`.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "repo units are prefixed custom-"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "repo units are prefixed custom-"
 - **Relations:**
   - depends-on REQ-SERVER-011
 
@@ -549,10 +549,10 @@ Introduced in #259.
   `SERVER_NAME` has no default in any script. A retired setting is refused by
   name rather than ignored.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "roles on this box are
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "roles on this box are
     exactly '${EXPECT_ROLES:-none}'" — the VM sets no roles, so no role file
     may exist
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "without the webserver role a
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "without the webserver role a
     triggered deploy runs nothing"
   - Demonstration — `provision.sh`, `serve-preseed.sh` and `build-iso.sh` with
     no `SERVER_NAME`, and `provision.sh` with a leftover `DEBBIE_SERVES`, each

@@ -59,7 +59,7 @@ fi
 #------------------------------------------------------------------------------
 HTTP_ROOT="$WORK/http"
 mkdir -p "$HTTP_ROOT"
-cp "$GEN_DIR/payload/install/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
+cp "$GEN_DIR/payload/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
 
 # CONSOLE is deliberately not exported: on a laptop, pointing the kernel
 # console at a serial port that does not exist is a black screen for the whole

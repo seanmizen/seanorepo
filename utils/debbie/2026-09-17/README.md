@@ -12,8 +12,8 @@ explains; the requirements bind. CI validates them on every PR.
 | Folder | What | Runs where |
 |---|---|---|
 | `scripts/` | what you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`, each with its `.env.example` and `<box>.env` files; `lib.sh`, `write-overrides.sh` | your laptop |
-| `payload/` | setup delivered to a box: `install/preseed.cfg`, `configure/postinstall.sh`, `verify/assert.sh`. Idempotent, run on demand | the installer / the box |
-| `services/` | software that runs on the box: `release-poll/`, `deploy/`. Run by systemd from the `release` checkout, forever | the box |
+| `payload/` | setup delivered to a box: `preseed.cfg`, `postinstall.sh`, `assert.sh`. Idempotent, run on demand | the installer / the box |
+| `services/` | software that runs on the box: `release-poll.sh`, `deploy.sh`. Run by systemd from the `release` checkout, forever | the box |
 | `working/` | output: ISOs, the SSH key, VM images (gitignored) | — |
 
 ## Why this exists
@@ -116,7 +116,7 @@ UEFI, the UEFI → GRUB → systemd boot chain, user and SSH setup, and every
 
 ### Two assertion phases, and why
 
-`payload/verify/assert.sh` runs **twice**, and the split is the whole of `#285`:
+`payload/assert.sh` runs **twice**, and the split is the whole of `#285`:
 
 | `PHASE` | When | What a pass means |
 |---|---|---|
@@ -412,11 +412,11 @@ later `-p 4000:4000` still on `0.0.0.0`, which looks exactly like it worked.
 
 Two units, one clock (#307):
 
-- `custom-release-poll.timer` runs `services/release-poll/release-poll.sh` every two
+- `custom-release-poll.timer` runs `services/release-poll.sh` every two
   minutes on **every** machine. It fetches and checks out `release` and does
   nothing else: no containers, no units, no yarn. A standby box is therefore
   always at the right SHA.
-- `custom-deploy.service` runs `services/deploy/deploy.sh`. It has no timer and no
+- `custom-deploy.service` runs `services/deploy.sh`. It has no timer and no
   `[Install]`; the release poller triggers it (`OnSuccess=`) after every
   poll, and `deploy.sh` exits at once unless the checkout or the boot id
   differs from what it last deployed. It runs only on a box with the
@@ -475,10 +475,10 @@ Four things about it are deliberate and easy to undo by accident:
   `postinstall.sh` says so, with the remedy, rather than leaving a unit that
   fails every two minutes with *No such file or directory*.
 
-  `payload/verify/assert.sh` takes the same view, and takes it **once** for all four checks
+  `payload/assert.sh` takes the same view, and takes it **once** for all four checks
   that read the file — `#311`. The question it asks is not "is `deploy.sh`
   there" but "does the commit this working tree came from track it", answered
-  with `git cat-file -e HEAD:utils/debbie/2026-09-17/services/deploy/deploy.sh`:
+  with `git cat-file -e HEAD:utils/debbie/2026-09-17/services/deploy.sh`:
 
   | the commit on disk | `deploy.sh` on disk | result |
   |---|---|---|
@@ -499,7 +499,7 @@ Four things about it are deliberate and easy to undo by accident:
   containers are down while `release` has not moved. `deploy.sh` records the
   boot id alongside the deployed SHA, so a reboot is itself a reason to deploy.
   One line in the marker replaces a whole unit.
-- **There is no `git clean`** — `REQ-DEPLOY-006`, and `payload/verify/assert.sh` asserts
+- **There is no `git clean`** — `REQ-DEPLOY-006`, and `payload/assert.sh` asserts
   both its absence and the comment explaining it. `apps/cloudflared/credentials/`
   is gitignored and exists only on the host.
 
@@ -514,7 +514,7 @@ under `REQ-SERVER-008` later does not break deploys.
 The clone is anonymous HTTPS. seanmizen/seanorepo is public, so provisioning
 holds no deploy key and there is nothing on the box to rotate; if the
 repository is ever made private, `postinstall.sh`'s clone is what breaks, and
-`payload/verify/assert.sh` › "srv can reach origin with no credential" is what says so.
+`payload/assert.sh` › "srv can reach origin with no credential" is what says so.
 
 `release` exists only once someone has run `yarn release`, so on a newly
 provisioned box it may legitimately be absent. That is reported and skipped,
@@ -582,7 +582,7 @@ That `credentials-file` path is **relative**, and cloudflared resolves it
 against the process's working directory rather than against the config file.
 The unit therefore sets `WorkingDirectory` to `apps/cloudflared`; deleting that
 line makes the daemon start and then fail to find its credentials, which reads
-like an auth problem and is not one. `payload/verify/assert.sh` asserts the line is there.
+like an auth problem and is not one. `payload/assert.sh` asserts the line is there.
 
 Finally, re-run `postinstall.sh` with `ROLE_TUNNEL=yes` (#329). It enables the
 unit once — and only once — the box has the tunnel role **and** the
@@ -628,14 +628,14 @@ packaged to race and nothing to mask. A `cloudflared.service` can still appear,
 because `cloudflared service install` writes one and that is the documented way
 to set this up; `cloudflared-custom.service` is the previous generation's unit
 and is live on the box this replaces. `postinstall.sh` disables either on
-sight, and `payload/verify/assert.sh` › "no other cloudflared unit is enabled" is what
+sight, and `payload/assert.sh` › "no other cloudflared unit is enabled" is what
 keeps it true.
 
 Our unit is `custom-cloudflared.service` and deliberately **not**
 `cloudflared.service`: a file of that name in `/usr/local/lib/systemd/system`
 would shadow any packaged unit of the same name, which `REQ-SERVER-012`
 forbids. The name appears in three places — the unit on disk, `CLOUDFLARED_UNIT`
-in `deploy.sh`, and the sudoers drop-in — and `payload/verify/assert.sh` asserts all three
+in `deploy.sh`, and the sudoers drop-in — and `payload/assert.sh` asserts all three
 agree, because a rename that moves only two of them fails at the exact moment
 it matters, an ingress change, and passes every other day of the year.
 

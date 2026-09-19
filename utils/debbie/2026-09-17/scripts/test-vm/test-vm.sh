@@ -318,7 +318,7 @@ prepare_run() {
 start_http() {
     HTTP_ROOT="$RUN_DIR/http"
     mkdir -p "$HTTP_ROOT"
-    cp "$GEN_DIR/payload/install/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
+    cp "$GEN_DIR/payload/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
     write_overrides > "$HTTP_ROOT/overrides.cfg"
 
     HTTP_PORT="$(free_port)"
@@ -564,12 +564,12 @@ do_assert() {
     local firstboot_rc=0
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER PHASE=firstboot bash -s" \
-        < "$GEN_DIR/payload/verify/assert.sh" || firstboot_rc=$?
+        < "$GEN_DIR/payload/assert.sh" || firstboot_rc=$?
     [ "$firstboot_rc" = 0 ] \
         || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; postinstall.sh repairs the hostname and mDNS, so it would go green regardless."
 
     log "provisioning"
-    scp "${scp_opts[@]}" "$GEN_DIR/payload/configure/postinstall.sh" "$target:/tmp/postinstall.sh" > /dev/null \
+    scp "${scp_opts[@]}" "$GEN_DIR/payload/postinstall.sh" "$target:/tmp/postinstall.sh" > /dev/null \
         || die_code 2 "could not copy postinstall.sh into the guest"
     ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/postinstall.sh" \
         || die_code 2 "postinstall failed"
@@ -621,11 +621,11 @@ do_assert() {
     # prove THIS commit rather than whatever \`release\` the guest cloned - #307.
     # Not installed anywhere: assert.sh runs them only against a scratch repo.
     ssh "${ssh_opts[@]}" "$target" "mkdir -p /tmp/under-test" 2> /dev/null || true
-    scp "${scp_opts[@]}" "$GEN_DIR/services/deploy/deploy.sh" "$GEN_DIR/services/release-poll/release-poll.sh" \
+    scp "${scp_opts[@]}" "$GEN_DIR/services/deploy.sh" "$GEN_DIR/services/release-poll.sh" \
         "$target:/tmp/under-test/" > /dev/null 2>&1 || true
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
-        < "$GEN_DIR/payload/verify/assert.sh" || rc=$?
+        < "$GEN_DIR/payload/assert.sh" || rc=$?
 
     mkdir -p "$RUN_DIR/artifacts"
     scp "${scp_opts[@]}" "$target:/etc/fstab" "$RUN_DIR/artifacts/" > /dev/null 2>&1 || true

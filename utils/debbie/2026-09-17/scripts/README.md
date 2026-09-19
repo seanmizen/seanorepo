@@ -198,7 +198,7 @@ $EDITOR 3-provision/trixie2.env        # same SERVER_NAME; ROLE_* only if it ser
 
 That waits for SSH, **asserts the box as the installer left it**, runs
 `postinstall.sh`, reboots so the boot-time settings apply, waits for the box to
-return, and asserts again — both times with the same `payload/verify/assert.sh` the VM
+return, and asserts again — both times with the same `payload/assert.sh` the VM
 runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from `3-provision/<box>.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
 back on SSH.
