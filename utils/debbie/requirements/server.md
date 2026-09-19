@@ -62,6 +62,8 @@ Introduced in #259.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "lid-close drop-in present"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "lid close ignored"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "lid close on power ignored"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "lid close docked ignored"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sleep.target masked"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "power key ignored"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "long power press ignored"

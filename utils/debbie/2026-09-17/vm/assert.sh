@@ -238,7 +238,14 @@ if [ "$PHASE" = provisioned ]; then
     # REQ-SERVER-001 - asserted after a reboot, which is when the drop-in takes
     # effect. postinstall.sh deliberately does not restart logind.
     check "lid-close drop-in present" '[ -f /etc/systemd/logind.conf.d/10-debbie-nosleep.conf ]'
-    check "lid close ignored"         '[ "$(loginctl show-seat seat0 -p IdleAction --value 2>/dev/null || busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandleLidSwitch 2>/dev/null | awk "{print \$2}" | tr -d \")" = ignore ] || grep -q "^HandleLidSwitch=ignore" /etc/systemd/logind.conf.d/10-debbie-nosleep.conf'
+    # #313. Asked of the running manager via logind_handler, like the keys
+    # below, with no fall back to the drop-in's text: a file logind never read
+    # is the fault. postinstall.sh sets all three lid handlers, so all three
+    # are asserted - on external power or docked, logind consults the latter
+    # two instead of HandleLidSwitch.
+    check "lid close ignored"         '[ "$(logind_handler HandleLidSwitch)" = ignore ]'
+    check "lid close on power ignored" '[ "$(logind_handler HandleLidSwitchExternalPower)" = ignore ]'
+    check "lid close docked ignored"  '[ "$(logind_handler HandleLidSwitchDocked)" = ignore ]'
     check "sleep.target masked"       '[ "$(systemctl is-enabled sleep.target 2>&1)" = masked ]'
     # #283. The lid was covered and the power button was not, so systemd's
     # default of HandlePowerKey=poweroff stood: a brief press cleanly shut the
@@ -273,6 +280,8 @@ else
     sk "$DEPLOY_USER in docker"   "postinstall.sh creates the group"
     sk "lid-close drop-in present" "postinstall.sh writes it"
     sk "lid close ignored"         "postinstall.sh writes it"
+    sk "lid close on power ignored" "postinstall.sh writes it"
+    sk "lid close docked ignored"  "postinstall.sh writes it"
     sk "sleep.target masked"       "postinstall.sh masks it"
     sk "power key ignored"         "postinstall.sh writes it"
     sk "long power press ignored"  "postinstall.sh writes it"
