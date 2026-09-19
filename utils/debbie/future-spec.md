@@ -97,8 +97,17 @@ declarative, ordering is free via `Wants=`/`BindsTo=`, and `systemctl enable
 must be named `custom-*` and live in `/usr/local/lib/systemd/system` — #292, and
 `vm/assert.sh` already enforces both.
 
-Roles anticipated so far, deliberately **not** mutually exclusive: `webserver`,
-`provisioner`, `preseeder`. Others will appear.
+**Built (#329), as flag files rather than targets so far:** `webserver` (runs
+the sites) and `tunnel` (the Cloudflare tunnel; requires `webserver`; exactly
+one box). Set as `ROLE_<NAME>=yes` in `metal/.env`, **unset means off**, and
+written to `/etc/seanorepo/roles/<name>` on every provisioning run. A
+`webserver` without `tunnel` publishes on the LAN, for local use. So the
+invariant this document cares about is **exactly one `tunnel`**, not exactly
+one `webserver`: only the tunnel box's data is public.
+
+**Reserved, not built:** `provisioner`, `preseeder`. They take the same
+`ROLE_<NAME>` form when they are. Roles are deliberately **not** mutually
+exclusive.
 
 ### 4. Control-plane state in SQLite on the provisioner; machines poll it
 
@@ -158,12 +167,12 @@ Decided in #307. The poller splits in two:
 - `custom-deploy.service` runs `yarn prod:docker`. The release poller
   triggers it after every poll (`OnSuccess=`), and it has no timer of its own.
   It deploys only when the checkout or the boot id changed, and only on a
-  machine where `/etc/seanorepo/serving` exists.
+  box with the `webserver` role (#329).
 
 A standby box is then already at the right SHA, and promoting it takes seconds
-of `docker compose up`, not a fetch plus a cold build. Until roles exist, that
-flag file is the single documented switch (`DEBBIE_SERVES` at provisioning,
-`touch`/`rm` afterwards). Later it becomes part of the `webserver` role target.
+of `docker compose up`, not a fetch plus a cold build. The switch is
+`ROLE_WEBSERVER` in `metal/.env` (§3); later the role files become
+`custom-role-*.target` units.
 
 Per-app rebuild detection was rejected in the same ticket. On the real box
 `yarn prod:docker` against an unchanged tree measured 12–13s, because the layer

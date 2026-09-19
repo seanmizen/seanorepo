@@ -15,7 +15,60 @@ set -euo pipefail
 IFS=$'\n\t'
 export DEBIAN_FRONTEND=noninteractive
 
-SERVER_NAME="${SERVER_NAME:-debbie}"
+# No default - #329. A forgotten SERVER_NAME used to mean `debbie`, so a new
+# box would claim debbie.local and collide with the live one on mDNS.
+SERVER_NAME="${SERVER_NAME:-}"
+if [ -z "$SERVER_NAME" ]; then
+    echo "[postinstall] ERROR: SERVER_NAME is not set. It has no default: every box must be named on purpose." >&2
+    exit 1
+fi
+
+#------------------------------------------------------------------------------
+# Roles - #329. What this box DOES, as opposed to what it is able to do.
+#
+# Every box gets the same capabilities: Docker, Node, the checkout, the release
+# poller, ngrok, the shell. A role switches one of them on. Each role is a
+# ROLE_<NAME> setting, taken from metal/.env by provision.sh, and a flag file
+# under /etc/seanorepo/roles/ that the role's unit is conditioned on.
+#
+# UNSET MEANS OFF. A forgotten or empty setting never enables anything, and
+# every run makes the flag files match the settings exactly - so re-running
+# this script without ROLE_WEBSERVER=yes on the live webserver REMOVES the
+# role. That is deliberate: the settings are the one source of truth. The run
+# ends with a banner saying which roles the box has.
+#
+#   ROLE_WEBSERVER  runs `yarn prod:docker` (custom-deploy.service). Any number
+#                   of boxes. Without the tunnel role it publishes the apps on
+#                   the LAN; with it, on loopback only (deploy.sh decides).
+#   ROLE_TUNNEL     runs the Cloudflare tunnel (custom-cloudflared.service), so
+#                   the internet reaches this box. Requires ROLE_WEBSERVER - the
+#                   tunnel only forwards to localhost:4xxx. EXACTLY ONE box in
+#                   the fleet: the apps are SQLite on local volumes, and the
+#                   public one must have a single writer.
+#
+# Validated here, before anything is installed, so a typo fails the run
+# instead of leaving a half-provisioned box.
+#------------------------------------------------------------------------------
+ROLES_DIR=/etc/seanorepo/roles
+role_value() {
+    case "$1" in
+        yes) echo yes ;;
+        no | '') echo no ;;
+        *) return 1 ;;
+    esac
+}
+ROLE_WEBSERVER="$(role_value "${ROLE_WEBSERVER:-}")" \
+    || { echo "[postinstall] ERROR: ROLE_WEBSERVER must be yes, no or unset" >&2; exit 1; }
+ROLE_TUNNEL="$(role_value "${ROLE_TUNNEL:-}")" \
+    || { echo "[postinstall] ERROR: ROLE_TUNNEL must be yes, no or unset" >&2; exit 1; }
+if [ "$ROLE_TUNNEL" = yes ] && [ "$ROLE_WEBSERVER" != yes ]; then
+    echo "[postinstall] ERROR: ROLE_TUNNEL=yes needs ROLE_WEBSERVER=yes - the tunnel forwards to this box's own sites." >&2
+    exit 1
+fi
+if [ -n "${DEBBIE_SERVES:-}" ]; then
+    echo "[postinstall] ERROR: DEBBIE_SERVES was replaced by ROLE_WEBSERVER (#329), and unset now means off." >&2
+    exit 1
+fi
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 # Where the checkout lives. This default is not free to change: it has to agree
 # with three other places at once, and nothing but agreement makes the deploy
@@ -776,16 +829,6 @@ UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
 DEPLOY_SCRIPT="$GEN_DIR/scripts/deploy.sh"
 RELEASE_POLL_SCRIPT="$GEN_DIR/scripts/release-poll.sh"
-# THE SERVING SWITCH - #307. Every machine tracks `release`; only one whose
-# flag exists deploys. A file rather than `systemctl enable`, because the
-# deploy unit has no [Install] section - it is started by the release poller,
-# never by boot or by a timer of its own - and a condition on it is what
-# systemd checks each time it is triggered. Defaults to serving, because every
-# machine this has provisioned so far is the one that serves. Provision a
-# standby with DEBBIE_SERVES=no; promote one later with `sudo touch` on the
-# flag, demote with `sudo rm`.
-SERVING_FLAG=/etc/seanorepo/serving
-DEBBIE_SERVES="${DEBBIE_SERVES:-yes}"
 # Must match CLOUDFLARED_UNIT in that deploy.sh. The unit itself is written by
 # the tunnel section at the bottom of this script (#280); this is the name the
 # deploy is permitted to restart, and vm/assert.sh asserts that all three - the
@@ -875,7 +918,7 @@ After=network-online.target docker.service
 Wants=network-online.target
 # The serving switch. Unmet, the trigger is skipped with one log line and the
 # unit is never marked failed.
-ConditionPathExists=$SERVING_FLAG
+ConditionPathExists=$ROLES_DIR/webserver
 
 [Service]
 Type=oneshot
@@ -908,25 +951,24 @@ for old_unit in custom-deploy-poll.timer custom-deploy-poll.service; do
     fi
 done
 
-install -d -m 0755 "$(dirname "$SERVING_FLAG")"
-case "$DEBBIE_SERVES" in
-    yes)
-        if [ ! -e "$SERVING_FLAG" ]; then
-            log "  this machine serves - creating $SERVING_FLAG"
-            printf '%s\n' "# Presence means: this machine deploys. See postinstall.sh (#307)." > "$SERVING_FLAG"
-        fi
-        ;;
-    no)
-        if [ -e "$SERVING_FLAG" ]; then
-            log "  DEBBIE_SERVES=no - removing $SERVING_FLAG; this machine will track release but not deploy"
-            rm -f "$SERVING_FLAG"
-        fi
-        ;;
-    *)
-        echo "[postinstall] ERROR: DEBBIE_SERVES must be yes or no, not '$DEBBIE_SERVES'" >&2
-        exit 1
-        ;;
-esac
+# Make the role files match the settings validated at the top. Written whole,
+# removed when off - never left as they were.
+install -d -m 0755 "$ROLES_DIR"
+for role in webserver tunnel; do
+    case "$role" in
+        webserver) want="$ROLE_WEBSERVER" ;;
+        tunnel)    want="$ROLE_TUNNEL" ;;
+    esac
+    if [ "$want" = yes ]; then
+        [ -e "$ROLES_DIR/$role" ] || log "  role $role: ON"
+        printf '%s\n' "# Presence means this box has the $role role. Set by postinstall.sh from ROLE_* (#329)." > "$ROLES_DIR/$role"
+    elif [ -e "$ROLES_DIR/$role" ]; then
+        log "  role $role: OFF (was on) - removing $ROLES_DIR/$role"
+        rm -f "$ROLES_DIR/$role"
+    fi
+done
+# The #307 switch this replaces. It gated the deploy and defaulted to on.
+rm -f /etc/seanorepo/serving
 
 if [ "$units_changed" = 1 ]; then
     systemctl daemon-reload
@@ -1180,6 +1222,9 @@ Wants=network-online.target
 # one fact that matters: nobody has put the credentials on this box.
 ConditionPathExists=$CLOUDFLARED_CONFIG
 ConditionDirectoryNotEmpty=$CLOUDFLARED_CREDS_DIR
+# The role, #329. Credentials alone are not enough: a box holding a copy of
+# them without the tunnel role must not start pulling public traffic.
+ConditionPathExists=$ROLES_DIR/tunnel
 
 # The backstop for a failure the conditions cannot see - credentials that are
 # present but rejected, or a config.yml that does not parse. Five attempts in
@@ -1227,7 +1272,18 @@ fi
 # box, exactly like #278's missing origin/release. It is reported, loudly, with
 # the remedy - not treated as a provisioning failure.
 #------------------------------------------------------------------------------
-if [ -f "$CLOUDFLARED_CONFIG" ] \
+if [ "$ROLE_TUNNEL" != yes ]; then
+    # Not the tunnel box. If it WAS - enabled or running - it stops now: two
+    # boxes serving one tunnel is exactly what the role exists to prevent, and
+    # the explicit setting outranks the "never tear down" rule below.
+    if systemctl is-enabled --quiet "$CLOUDFLARED_UNIT" 2> /dev/null \
+        || systemctl is-active --quiet "$CLOUDFLARED_UNIT" 2> /dev/null; then
+        log "  ROLE_TUNNEL is not yes - stopping and disabling $CLOUDFLARED_UNIT"
+        systemctl disable --now "$CLOUDFLARED_UNIT" || true
+    else
+        log "  not the tunnel box (ROLE_TUNNEL unset) - $CLOUDFLARED_UNIT stays off"
+    fi
+elif [ -f "$CLOUDFLARED_CONFIG" ] \
     && [ -d "$CLOUDFLARED_CREDS_DIR" ] \
     && [ -n "$(ls -A "$CLOUDFLARED_CREDS_DIR" 2> /dev/null)" ]; then
     log "  credentials present - enabling $CLOUDFLARED_UNIT"
@@ -1430,4 +1486,8 @@ else
     log "  sshd has no per-source penalties - nothing to exempt"
 fi
 
+log "================================================================"
+log "roles on $SERVER_NAME: webserver=$ROLE_WEBSERVER tunnel=$ROLE_TUNNEL"
+[ "$ROLE_WEBSERVER" = yes ] || log "  this box tracks release but runs NO sites (ROLE_WEBSERVER unset)"
+log "================================================================"
 log "done"

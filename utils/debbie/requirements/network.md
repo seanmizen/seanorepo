@@ -66,7 +66,12 @@ Introduced in #273.
   itself, the unit has to run with its working directory set to
   `apps/cloudflared`. Without that the daemon starts and then cannot find the
   credentials, which reads as an authentication problem rather than a path one.
+  Since #329 the tunnel also runs only on the box with the tunnel role
+  (`ROLE_TUNNEL`, exactly one box). Credentials alone are not enough: a copy on
+  a second box must not pull public traffic to it.
 - **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the tunnel runs only on a
+    box with the tunnel role"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the tunnel reads config.yml
     from the checkout"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the tunnel runs in the

@@ -29,6 +29,12 @@ RAM="${RAM:-2048}"
 DISK_SIZE="${DISK_SIZE:-20G}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 SERVER_NAME="${SERVER_NAME:-debbie}"
+# Roles (#329). None by default, like a box whose .env sets none: the VM then
+# proves that a box with no role tracks `release` and runs nothing. Set either
+# in the environment to provision the guest with it.
+ROLE_WEBSERVER="${ROLE_WEBSERVER:-}"
+ROLE_TUNNEL="${ROLE_TUNNEL:-}"
+EXPECT_ROLES="$( { [ "$ROLE_WEBSERVER" = yes ] && echo webserver; [ "$ROLE_TUNNEL" = yes ] && echo tunnel; true; } | tr '\n' ' ' | sed 's/ $//')"
 INSTALL_TIMEOUT="${INSTALL_TIMEOUT:-3600}"
 SSH_TIMEOUT="${SSH_TIMEOUT:-180}"
 
@@ -562,7 +568,7 @@ do_assert() {
     log "provisioning"
     scp "${scp_opts[@]}" "$GEN_DIR/scripts/postinstall.sh" "$target:/tmp/postinstall.sh" > /dev/null \
         || die_code 2 "could not copy postinstall.sh into the guest"
-    ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER bash /tmp/postinstall.sh" \
+    ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/postinstall.sh" \
         || die_code 2 "postinstall failed"
 
     # Run it AGAIN - REQ-SERVER-010, #290. Every re-provisioning step this
@@ -575,7 +581,7 @@ do_assert() {
     log "provisioning again, to prove a re-run changes nothing"
     ssh "${ssh_opts[@]}" "$target" "sudo -n sha256sum ~$DEPLOY_USER/.zshrc | cut -d' ' -f1 | sudo -n tee /var/tmp/debbie-rerun > /dev/null" \
         || die_code 2 "could not hash .zshrc before the second run"
-    ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER bash /tmp/postinstall.sh > /dev/null" \
+    ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/postinstall.sh > /dev/null" \
         || die_code 2 "postinstall failed on its second run - it is not safe to re-run"
     ssh "${ssh_opts[@]}" "$target" "sudo -n sha256sum ~$DEPLOY_USER/.zshrc | cut -d' ' -f1 | sudo -n tee -a /var/tmp/debbie-rerun > /dev/null" \
         || die_code 2 "could not hash .zshrc after the second run"
@@ -615,7 +621,7 @@ do_assert() {
     scp "${scp_opts[@]}" "$GEN_DIR/scripts/deploy.sh" "$GEN_DIR/scripts/release-poll.sh" \
         "$target:/tmp/under-test/" > /dev/null 2>&1 || true
     ssh "${ssh_opts[@]}" "$target" \
-        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test PHASE=provisioned bash -s" \
+        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
         < "$HERE/assert.sh" || rc=$?
 
     mkdir -p "$RUN_DIR/artifacts"

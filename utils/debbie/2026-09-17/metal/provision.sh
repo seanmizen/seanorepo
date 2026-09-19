@@ -49,7 +49,10 @@ ENV_FILE="${ENV_FILE:-$HERE/.env}"
 
 read_env
 DEPLOY_USER="${DEPLOY_USER:-srv}"
-SERVER_NAME="${SERVER_NAME:-debbie}"
+# No default - #329. It used to be `debbie`, which on a forgotten line made the
+# NEW box claim debbie.local and made this script dial the live one.
+SERVER_NAME="${SERVER_NAME:-}"
+[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every box on purpose."
 KEY="${SSH_KEY:-$WORK/id_ed25519}"
 SSH_WAIT="${SSH_WAIT:-300}"
 
@@ -263,7 +266,10 @@ if [ "$MODE" != assert ]; then
     # one less thing that has to still be running, and it provisions the script
     # in this checkout rather than whatever was served earlier.
     log "running postinstall.sh"
-    sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' bash -s" \
+    # Roles from .env (#329). Passed even when empty, so the box's roles always
+    # match this file: a role that is not set here is switched OFF there.
+    log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
+    sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' bash -s" \
         < "$GEN_DIR/scripts/postinstall.sh"
 
     if [ "$MODE" = noreboot ]; then
