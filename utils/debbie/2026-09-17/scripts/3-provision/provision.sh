@@ -259,15 +259,22 @@ if [ "$MODE" != assert ]; then
     # Streamed over stdin rather than fetched by the machine from the HTTP server:
     # one less thing that has to still be running, and it provisions the script
     # in this checkout rather than whatever was served earlier.
-    log "running postinstall.sh"
+    # The toolchain first, then the server configuration. Both are sent the
+    # same way and in this order everywhere, because the server script expects
+    # Docker, Node and the checkout to be there already.
+    log "running setup-developer-environment.sh"
+    sshto "sudo DEV_USER='$DEPLOY_USER' bash -s" \
+        < "$GEN_DIR/payload/setup-developer-environment.sh"
+
+    log "running setup-server-environment.sh"
     # Roles from .env (#329). Passed even when empty, so the machine's roles always
     # match this file: a role that is not set here is switched OFF there.
     log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
     sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' bash -s" \
-        < "$GEN_DIR/payload/postinstall.sh"
+        < "$GEN_DIR/payload/setup-server-environment.sh"
 
     if [ "$MODE" = noreboot ]; then
-        log "postinstall done; skipping reboot and assertions (--no-reboot)"
+        log "setup done; skipping reboot and assertions (--no-reboot)"
         log "REQ-SERVER-001 only takes effect after a reboot"
         exit 0
     fi

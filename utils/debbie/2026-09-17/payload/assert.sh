@@ -5,13 +5,13 @@
 # Where: on the target machine. provision.sh and test-vm.sh send it over SSH
 #        (`bash -s`), so it must not read any file beside it.
 # When:  twice in each run:
-#          1. PHASE=firstboot, before postinstall.sh. It checks only what the
+#          1. PHASE=firstboot, before setup-server-environment.sh. It checks only what the
 #             installer produced.
-#          2. PHASE=provisioned, after postinstall.sh and a reboot. It checks
+#          2. PHASE=provisioned, after setup-server-environment.sh and a reboot. It checks
 #             everything.
 # Why:   the exit code is the result, so nobody must read a console
 #        (REQ-EMU-003). A check that fails in firstboot and passes in
-#        provisioned shows a fault that postinstall.sh repaired
+#        provisioned shows a fault that setup-server-environment.sh repaired
 #        (REQ-SERVER-004).
 #
 # Every check is the same on arm64 and amd64. Where a name differs by
@@ -23,7 +23,7 @@ EXPECT_ARCH="${EXPECT_ARCH:-}"
 EXPECT_HOSTNAME="${EXPECT_HOSTNAME:?EXPECT_HOSTNAME must be set - the name this machine should have}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
-# Must match the default in payload/postinstall.sh, which clones here, and the
+# Must match the default in payload/setup-developer-environment.sh, which clones here, and the
 # path 2025-10-08b/scripts/deploy.sh resolves as the deploy user. A check that
 # depends on the checkout and cannot find one SKIPS with the path it looked at
 # printed, so a disagreement between the three is visible rather than silent.
@@ -162,7 +162,7 @@ unattended_upgrade_origins() {
 # same check name means different things in each, which is the entire point.
 if [ "$PHASE" = firstboot ]; then
     echo "### PHASE=firstboot - asserting what the INSTALLER produced."
-    echo "### postinstall.sh has NOT run. A failure below is an install bug."
+    echo "### setup-server-environment.sh has NOT run. A failure below is an install bug."
 else
     echo "### PHASE=provisioned - asserting the provisioned machine."
 fi
@@ -180,7 +180,7 @@ check "DNS and routing work"      'getent hosts deb.debian.org'
 # REQ-SERVER-004 - #285. Asserted in BOTH phases, which is the fix: in
 # `firstboot` nothing but the installer has touched the machine, so a pass here
 # means the preseed produced a usable identity, and a failure here followed by
-# a pass in `provisioned` means postinstall.sh papered over it.
+# a pass in `provisioned` means setup-server-environment.sh papered over it.
 #
 # The hostname is checked three ways because the failure mode split them: the
 # running hostname, the static one in /etc/hostname, and the 127.0.1.1 line.
@@ -192,7 +192,7 @@ check "hostname is $EXPECT_HOSTNAME" \
     "[ \"\$(hostname)\" = '$EXPECT_HOSTNAME' ]"
 check "static hostname is $EXPECT_HOSTNAME" \
     "[ \"\$(hostnamectl --static)\" = '$EXPECT_HOSTNAME' ]"
-# Accepts either separator - late_command writes a space, postinstall.sh a tab.
+# Accepts either separator - late_command writes a space, setup-server-environment.sh a tab.
 check "127.0.1.1 maps to $EXPECT_HOSTNAME" \
     "grep -qE '^127\.0\.1\.1[[:space:]]+$EXPECT_HOSTNAME([[:space:]]|\$)' /etc/hosts"
 check "no leftover 127.0.1.1 line" \
@@ -241,7 +241,7 @@ check "$DEPLOY_USER in sudo"      "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -q
 check "passwordless sudo works"   'sudo -n true'
 
 if [ "$PHASE" = provisioned ]; then
-    # The docker group does not exist at install time - postinstall.sh installs
+    # The docker group does not exist at install time - setup-developer-environment.sh installs
     # the engine, whose package creates it. Skipped rather than failed at first
     # boot, because its absence there is correct rather than a regression.
     #
@@ -251,11 +251,11 @@ if [ "$PHASE" = provisioned ]; then
     check "$DEPLOY_USER in docker" "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx docker"
 
     # REQ-SERVER-001 - asserted after a reboot, which is when the drop-in takes
-    # effect. postinstall.sh deliberately does not restart logind.
+    # effect. setup-server-environment.sh deliberately does not restart logind.
     check "lid-close drop-in present" '[ -f /etc/systemd/logind.conf.d/10-debbie-nosleep.conf ]'
     # #313. Asked of the running manager via logind_handler, like the keys
     # below, with no fall back to the drop-in's text: a file logind never read
-    # is the fault. postinstall.sh sets all three lid handlers, so all three
+    # is the fault. setup-server-environment.sh sets all three lid handlers, so all three
     # are asserted - on external power or docked, logind consults the latter
     # two instead of HandleLidSwitch. HandleLidSwitchDocked already defaults
     # to `ignore` in systemd, so that one is a regression guard and cannot be
@@ -298,23 +298,23 @@ if [ "$PHASE" = provisioned ]; then
     check "$DEPLOY_USER has an authorized key" \
         "sudo test -s /home/$DEPLOY_USER/.ssh/authorized_keys"
 else
-    sk "$DEPLOY_USER in docker"   "postinstall.sh creates the group"
-    sk "lid-close drop-in present" "postinstall.sh writes it"
-    sk "lid close ignored"         "postinstall.sh writes it"
-    sk "lid close on power ignored" "postinstall.sh writes it"
-    sk "lid close docked ignored"  "postinstall.sh writes it"
-    sk "sleep.target masked"       "postinstall.sh masks it"
-    sk "power key ignored"         "postinstall.sh writes it"
-    sk "long power press ignored"  "postinstall.sh writes it"
-    sk "suspend key ignored"       "postinstall.sh writes it"
-    sk "hibernate key ignored"     "postinstall.sh writes it"
-    sk "journald size capped"      "postinstall.sh writes the drop-in"
-    sk "sshd config is valid"              "postinstall.sh writes the drop-in"
-    sk "ssh passwords refused"             "postinstall.sh writes the drop-in"
-    sk "ssh keyboard-interactive refused"  "postinstall.sh writes the drop-in"
-    sk "ssh root login refused"            "postinstall.sh writes the drop-in"
-    sk "ssh still accepts keys"            "postinstall.sh writes the drop-in"
-    sk "$DEPLOY_USER has an authorized key" "postinstall.sh writes the drop-in"
+    sk "$DEPLOY_USER in docker"   "setup-developer-environment.sh creates the group"
+    sk "lid-close drop-in present" "setup-server-environment.sh writes it"
+    sk "lid close ignored"         "setup-server-environment.sh writes it"
+    sk "lid close on power ignored" "setup-server-environment.sh writes it"
+    sk "lid close docked ignored"  "setup-server-environment.sh writes it"
+    sk "sleep.target masked"       "setup-server-environment.sh masks it"
+    sk "power key ignored"         "setup-server-environment.sh writes it"
+    sk "long power press ignored"  "setup-server-environment.sh writes it"
+    sk "suspend key ignored"       "setup-server-environment.sh writes it"
+    sk "hibernate key ignored"     "setup-server-environment.sh writes it"
+    sk "journald size capped"      "setup-server-environment.sh writes the drop-in"
+    sk "sshd config is valid"              "setup-server-environment.sh writes the drop-in"
+    sk "ssh passwords refused"             "setup-server-environment.sh writes the drop-in"
+    sk "ssh keyboard-interactive refused"  "setup-server-environment.sh writes the drop-in"
+    sk "ssh root login refused"            "setup-server-environment.sh writes the drop-in"
+    sk "ssh still accepts keys"            "setup-server-environment.sh writes the drop-in"
+    sk "$DEPLOY_USER has an authorized key" "setup-server-environment.sh writes the drop-in"
 fi
 
 # REQ-SERVER-006 - the machine patches itself, from the security suite only, and
@@ -343,7 +343,7 @@ EXPECT_SECURITY_ORIGIN="origin=Debian,codename=$(
     printf '%s' "${VERSION_CODENAME:-unknown}"
 )-security,label=Debian-Security"
 # Asserted in BOTH phases, because this one is the INSTALLER's doing rather
-# than postinstall.sh's: the preseed asks for it with apt-setup/services-select,
+# than setup-server-environment.sh's: the preseed asks for it with apt-setup/services-select,
 # and there is no point configuring a security-only upgrade policy on a machine
 # whose apt cannot reach the security suite at all. A red here at firstboot is
 # an install bug, which is exactly what the phase split is for.
@@ -352,7 +352,7 @@ check "the security suite is in apt's sources" \
 if [ "$PHASE" = provisioned ]; then
     check "unattended-upgrades installed" \
         'dpkg-query -W -f="\${Status}" unattended-upgrades 2>/dev/null | grep -q "^install ok installed"'
-    # Not installed, deliberately - see the note in postinstall.sh. With it
+    # Not installed, deliberately - see the note in setup-server-environment.sh. With it
     # present, unattended-upgrades skips every run while the machine is on
     # battery, and debbie is a laptop, so its battery is always discoverable.
     check "powermgmt-base absent, so a battery cannot pause patching" \
@@ -393,16 +393,16 @@ if [ "$PHASE" = provisioned ]; then
     echo "  Unattended-Upgrade::Automatic-Reboot: ${uu_reboot:-<unset>}"
     check "automatic reboot explicitly disabled" '[ "$uu_reboot" = false ]'
 else
-    sk "unattended-upgrades installed"       "postinstall.sh installs it"
+    sk "unattended-upgrades installed"       "setup-server-environment.sh installs it"
     sk "powermgmt-base absent, so a battery cannot pause patching" \
-        "only meaningful once postinstall.sh has installed unattended-upgrades"
-    sk "apt-daily.timer enabled"             "postinstall.sh enables it"
-    sk "apt-daily.timer active"              "postinstall.sh enables it"
-    sk "apt-daily-upgrade.timer enabled"     "postinstall.sh enables it"
-    sk "apt-daily-upgrade.timer active"      "postinstall.sh enables it"
-    sk "apt's periodic unattended upgrade is on" "postinstall.sh writes 20auto-upgrades"
-    sk "only the security suite is upgraded unattended" "postinstall.sh writes the drop-in"
-    sk "automatic reboot explicitly disabled"           "postinstall.sh writes the drop-in"
+        "only meaningful once setup-server-environment.sh has installed unattended-upgrades"
+    sk "apt-daily.timer enabled"             "setup-server-environment.sh enables it"
+    sk "apt-daily.timer active"              "setup-server-environment.sh enables it"
+    sk "apt-daily-upgrade.timer enabled"     "setup-server-environment.sh enables it"
+    sk "apt-daily-upgrade.timer active"      "setup-server-environment.sh enables it"
+    sk "apt's periodic unattended upgrade is on" "setup-server-environment.sh writes 20auto-upgrades"
+    sk "only the security suite is upgraded unattended" "setup-server-environment.sh writes the drop-in"
+    sk "automatic reboot explicitly disabled"           "setup-server-environment.sh writes the drop-in"
 fi
 
 # REQ-DEPLOY-004 - the deploy is `yarn prod:docker`, so the engine has to be
@@ -425,7 +425,7 @@ if [ "$PHASE" = provisioned ]; then
     check "docker-ce installed" \
         'dpkg-query -W -f="\${Status}" docker-ce 2>/dev/null | grep -q "^install ok installed"'
     check "apt keyring present"       '[ -s /etc/apt/keyrings/docker.gpg ]'
-    # Idempotency, asserted rather than assumed. postinstall.sh runs more than
+    # Idempotency, asserted rather than assumed. setup-server-environment.sh runs more than
     # once on any machine that is ever repaired, and the classic way to write this
     # step is an append, which leaves apt warning about a doubly-configured
     # repository on every update. One line is the whole claim.
@@ -442,13 +442,13 @@ if [ "$PHASE" = provisioned ]; then
     # plugin, so the v1 python script being present would not help.
     check "docker compose plugin present" 'docker compose version'
 else
-    sk "docker-ce installed"          "postinstall.sh installs it"
-    sk "apt keyring present"          "postinstall.sh fetches it"
-    sk "exactly one docker apt source" "postinstall.sh writes it"
-    sk "docker.service enabled"       "postinstall.sh installs it"
-    sk "docker.service active"        "postinstall.sh installs it"
-    sk "docker info works as $DEPLOY_USER without sudo" "postinstall.sh installs it"
-    sk "docker compose plugin present" "postinstall.sh installs it"
+    sk "docker-ce installed"          "setup-developer-environment.sh installs it"
+    sk "apt keyring present"          "setup-server-environment.sh fetches it"
+    sk "exactly one docker apt source" "setup-developer-environment.sh writes it"
+    sk "docker.service enabled"       "setup-developer-environment.sh installs it"
+    sk "docker.service active"        "setup-developer-environment.sh installs it"
+    sk "docker info works as $DEPLOY_USER without sudo" "setup-developer-environment.sh installs it"
+    sk "docker compose plugin present" "setup-developer-environment.sh installs it"
 fi
 
 # REQ-DEPLOY-001 - the host deploys `release` and no other branch.
@@ -460,7 +460,7 @@ fi
 #
 # The `release` branch is created by `yarn release` from a dev machine, so on a
 # machine provisioned before the first release it genuinely does not exist. That is
-# a SKIP, not a failure: postinstall.sh is explicitly forbidden from creating
+# a SKIP, not a failure: setup-server-environment.sh is explicitly forbidden from creating
 # the branch, because doing so would ship whatever `main` was at provision time
 # as though someone had decided to.
 echo
@@ -500,11 +500,11 @@ if [ "$PHASE" = provisioned ]; then
             "origin/$RELEASE_BRANCH does not exist yet - 'yarn release' creates it"
     fi
 else
-    sk "checkout exists at $REPO_DIR" "postinstall.sh clones it"
-    sk "every file under $REPO_DIR is owned by $DEPLOY_USER" "postinstall.sh clones it"
-    sk "origin is the only remote, and is seanorepo" "postinstall.sh clones it"
-    sk "$DEPLOY_USER can reach origin with no credential" "postinstall.sh clones it"
-    sk "HEAD is on $RELEASE_BRANCH" "postinstall.sh clones it"
+    sk "checkout exists at $REPO_DIR" "setup-developer-environment.sh clones it"
+    sk "every file under $REPO_DIR is owned by $DEPLOY_USER" "setup-developer-environment.sh clones it"
+    sk "origin is the only remote, and is seanorepo" "setup-developer-environment.sh clones it"
+    sk "$DEPLOY_USER can reach origin with no credential" "setup-developer-environment.sh clones it"
+    sk "HEAD is on $RELEASE_BRANCH" "setup-server-environment.sh checks it out"
 fi
 
 # REQ-DEPLOY-004 - the other half of `yarn prod:docker`. Docker above proves the
@@ -532,7 +532,7 @@ if [ "$PHASE" = provisioned ]; then
         'readlink -f "$(command -v yarn)" | grep -q corepack'
     # No version is written here either. The expected value is read out of the
     # repository's own packageManager field at assertion time, so this check
-    # cannot drift from the repo any more than postinstall.sh can - if the repo
+    # cannot drift from the repo any more than setup-server-environment.sh can - if the repo
     # bumps Yarn, both sides move together and nothing needs editing.
     if [ -f "$REPO_DIR/package.json" ]; then
         check "yarn --version matches the repo's packageManager" \
@@ -544,11 +544,22 @@ if [ "$PHASE" = provisioned ]; then
         sk "yarn --version matches the repo's packageManager" \
             "no package.json at $REPO_DIR - see the checkout section above"
     fi
+    # The tools setup-developer-environment.sh installs for its own sake.
+    # shist is built from source, so its presence also proves Go works.
+    check "go installed"              'go version | grep -qE "go1\.(2[4-9]|[3-9][0-9])"'
+    check "shist built"               "sudo -n test -x ~$DEPLOY_USER/go/bin/shist"
+    check "claude code installed"     "sudo -n test -x ~$DEPLOY_USER/.local/bin/claude"
+    check "git config came from config-anywhere" \
+        "sudo -n test -s ~$DEPLOY_USER/.gitconfig"
 else
-    sk "node 20 installed"            "postinstall.sh installs it"
-    sk "corepack installed"           "postinstall.sh installs it"
-    sk "yarn is corepack's shim, not a global npm install" "postinstall.sh enables it"
-    sk "yarn --version matches the repo's packageManager"  "postinstall.sh enables it"
+    sk "go installed"                 "setup-developer-environment.sh installs it"
+    sk "shist built"                  "setup-developer-environment.sh builds it"
+    sk "claude code installed"        "setup-developer-environment.sh installs it"
+    sk "git config came from config-anywhere" "setup-developer-environment.sh applies it"
+    sk "node 20 installed"            "setup-developer-environment.sh installs it"
+    sk "corepack installed"           "setup-developer-environment.sh installs it"
+    sk "yarn is corepack's shim, not a global npm install" "setup-developer-environment.sh enables it"
+    sk "yarn --version matches the repo's packageManager"  "setup-developer-environment.sh enables it"
 fi
 
 # REQ-DEPLOY-002 / -003 / -005 / -006 - the deploy poller, #279.
@@ -568,7 +579,7 @@ RELEASE_POLL_SCRIPT="$REPO_DIR/$RELEASE_POLL_SCRIPT_REL"
 #
 # deploy.sh lives in the checkout, and the checkout is on `release`. A machine
 # provisioned before the generation shipped is on a `release` that does not
-# contain this directory at all, so the file CANNOT be there. postinstall.sh
+# contain this directory at all, so the file CANNOT be there. setup-server-environment.sh
 # says so in as many words and leaves the timer enabled deliberately.
 #
 # Until #311 this section held two rules for that one state: the three checks
@@ -675,7 +686,7 @@ scratch_release() {
 if [ "$PHASE" = provisioned ]; then
     UD=/usr/local/lib/systemd/system
     check "custom-release-poll.timer enabled"   'systemctl is-enabled custom-release-poll.timer'
-    # Active, not merely enabled. postinstall.sh deliberately does not start it
+    # Active, not merely enabled. setup-server-environment.sh deliberately does not start it
     # - that would deploy in the middle of provisioning - so this is a claim
     # about the reboot the harness performs.
     check "custom-release-poll.timer active"    'systemctl is-active custom-release-poll.timer'
@@ -839,28 +850,28 @@ if [ "$PHASE" = provisioned ]; then
         sk "the deploy publishes on loopback with the tunnel and on the LAN without" "$behaviour_skip_reason"
     fi
 else
-    sk "custom-release-poll.timer enabled"  "postinstall.sh installs it"
-    sk "custom-release-poll.timer active"   "postinstall.sh installs it"
-    sk "the timer polls every two minutes" "postinstall.sh installs it"
-    sk "custom-release-poll.service is timer-owned (static)" "postinstall.sh installs it"
-    sk "custom-deploy.service is not on a timer" "postinstall.sh installs it"
-    sk "the release poller triggers the deploy" "postinstall.sh installs it"
-    sk "the deploy runs only on a machine with the webserver role" "postinstall.sh installs it"
-    sk "the tunnel runs only on a machine with the tunnel role" "postinstall.sh installs it"
-    sk "roles on this machine are exactly '${EXPECT_ROLES:-none}'" "postinstall.sh writes them"
-    sk "the #307 serving flag is gone" "postinstall.sh removes it"
-    sk "without the webserver role a triggered deploy runs nothing" "postinstall.sh installs it"
-    sk "the deploy publishes on loopback with the tunnel and on the LAN without" "postinstall.sh clones the checkout"
-    sk "the pre-#307 poller units are gone" "postinstall.sh removes them"
-    sk "deploy.sh present and executable"  "postinstall.sh clones the checkout"
-    sk "a second deploy exits cleanly while one holds the lock" "postinstall.sh clones the checkout"
-    sk "no git clean anywhere in the deploy path" "postinstall.sh clones the checkout"
-    sk "deploy.sh says why there is no git clean" "postinstall.sh clones the checkout"
-    sk "release-poll.sh present and executable" "postinstall.sh clones the checkout"
-    sk "no git clean in the release poller" "postinstall.sh clones the checkout"
-    sk "the release poller moves the checkout and touches no service" "postinstall.sh clones the checkout"
-    sk "a release poll leaves the checkout alone while a deploy holds the lock" "postinstall.sh clones the checkout"
-    sk "the deploy runs once per checkout and again after a reboot" "postinstall.sh clones the checkout"
+    sk "custom-release-poll.timer enabled"  "setup-server-environment.sh installs it"
+    sk "custom-release-poll.timer active"   "setup-server-environment.sh installs it"
+    sk "the timer polls every two minutes" "setup-server-environment.sh installs it"
+    sk "custom-release-poll.service is timer-owned (static)" "setup-server-environment.sh installs it"
+    sk "custom-deploy.service is not on a timer" "setup-server-environment.sh installs it"
+    sk "the release poller triggers the deploy" "setup-server-environment.sh installs it"
+    sk "the deploy runs only on a machine with the webserver role" "setup-server-environment.sh installs it"
+    sk "the tunnel runs only on a machine with the tunnel role" "setup-server-environment.sh installs it"
+    sk "roles on this machine are exactly '${EXPECT_ROLES:-none}'" "setup-server-environment.sh writes them"
+    sk "the #307 serving flag is gone" "setup-server-environment.sh removes it"
+    sk "without the webserver role a triggered deploy runs nothing" "setup-server-environment.sh installs it"
+    sk "the deploy publishes on loopback with the tunnel and on the LAN without" "setup-server-environment.sh clones the checkout"
+    sk "the pre-#307 poller units are gone" "setup-server-environment.sh removes them"
+    sk "deploy.sh present and executable"  "setup-server-environment.sh clones the checkout"
+    sk "a second deploy exits cleanly while one holds the lock" "setup-developer-environment.sh clones the checkout"
+    sk "no git clean anywhere in the deploy path" "setup-developer-environment.sh clones the checkout"
+    sk "deploy.sh says why there is no git clean" "setup-server-environment.sh clones the checkout"
+    sk "release-poll.sh present and executable" "setup-server-environment.sh clones the checkout"
+    sk "no git clean in the release poller" "setup-server-environment.sh clones the checkout"
+    sk "the release poller moves the checkout and touches no service" "setup-server-environment.sh clones the checkout"
+    sk "a release poll leaves the checkout alone while a deploy holds the lock" "setup-server-environment.sh clones the checkout"
+    sk "the deploy runs once per checkout and again after a reboot" "setup-developer-environment.sh clones the checkout"
 fi
 
 # REQ-DEPLOY-005 - the security boundary, asserted as a boundary.
@@ -930,16 +941,16 @@ if [ "$PHASE" = provisioned ]; then
         sk "the unit deploy.sh restarts is the unit sudo permits" "$deploy_skip_reason"
     fi
 else
-    sk "sudoers drop-in present"        "postinstall.sh installs it"
-    sk "sudoers drop-in is mode 440"    "postinstall.sh installs it"
-    sk "sudoers drop-in is owned by root:root" "postinstall.sh installs it"
-    sk "sudoers drop-in parses"         "postinstall.sh installs it"
-    sk "sudoers drop-in has exactly one rule" "postinstall.sh installs it"
-    sk "the one rule is a single systemctl restart of a single unit" "postinstall.sh installs it"
-    sk "sudoers drop-in grants no wildcard"     "postinstall.sh installs it"
-    sk "sudoers drop-in grants no command list" "postinstall.sh installs it"
-    sk "sudoers drop-in does not grant ALL as a command" "postinstall.sh installs it"
-    sk "the unit deploy.sh restarts is the unit sudo permits" "postinstall.sh installs it"
+    sk "sudoers drop-in present"        "setup-server-environment.sh installs it"
+    sk "sudoers drop-in is mode 440"    "setup-server-environment.sh installs it"
+    sk "sudoers drop-in is owned by root:root" "setup-server-environment.sh installs it"
+    sk "sudoers drop-in parses"         "setup-server-environment.sh installs it"
+    sk "sudoers drop-in has exactly one rule" "setup-server-environment.sh installs it"
+    sk "the one rule is a single systemctl restart of a single unit" "setup-server-environment.sh installs it"
+    sk "sudoers drop-in grants no wildcard"     "setup-server-environment.sh installs it"
+    sk "sudoers drop-in grants no command list" "setup-server-environment.sh installs it"
+    sk "sudoers drop-in does not grant ALL as a command" "setup-server-environment.sh installs it"
+    sk "the unit deploy.sh restarts is the unit sudo permits" "setup-server-environment.sh installs it"
 fi
 
 # REQ-NETWORK-001 / REQ-NETWORK-002 - the tunnel, #280.
@@ -1068,25 +1079,25 @@ if [ "$PHASE" = provisioned ]; then
         sk "the unit deploy.sh restarts is the unit that is installed" "$deploy_skip_reason"
     fi
 else
-    sk "cloudflared installed"                  "postinstall.sh installs it"
-    sk "cloudflare apt keyring present"         "postinstall.sh fetches it"
-    sk "exactly one cloudflared apt source"     "postinstall.sh writes it"
-    sk "cloudflared is dpkg-owned, not a manual binary drop" "postinstall.sh installs it"
-    sk "/usr/local/bin/cloudflared is the package symlink, not a binary" "postinstall.sh installs it"
-    sk "$CLOUDFLARED_UNIT installed in /usr/local/lib/systemd/system" "postinstall.sh writes it"
-    sk "the tunnel reads config.yml from the checkout" "postinstall.sh writes the unit"
-    sk "the tunnel runs in the checkout's cloudflared directory" "postinstall.sh writes the unit"
-    sk "the tunnel does not self-update"        "postinstall.sh writes the unit"
-    sk "no other cloudflared unit is enabled"   "postinstall.sh disables them"
-    sk "credentials directory exists"           "postinstall.sh creates it"
-    sk "credentials directory is mode 700"      "postinstall.sh creates it"
-    sk "credentials directory belongs to $DEPLOY_USER" "postinstall.sh creates it"
+    sk "cloudflared installed"                  "setup-server-environment.sh installs it"
+    sk "cloudflare apt keyring present"         "setup-server-environment.sh fetches it"
+    sk "exactly one cloudflared apt source"     "setup-server-environment.sh writes it"
+    sk "cloudflared is dpkg-owned, not a manual binary drop" "setup-server-environment.sh installs it"
+    sk "/usr/local/bin/cloudflared is the package symlink, not a binary" "setup-server-environment.sh installs it"
+    sk "$CLOUDFLARED_UNIT installed in /usr/local/lib/systemd/system" "setup-server-environment.sh writes it"
+    sk "the tunnel reads config.yml from the checkout" "setup-developer-environment.sh writes the unit"
+    sk "the tunnel runs in the checkout's cloudflared directory" "setup-developer-environment.sh writes the unit"
+    sk "the tunnel does not self-update"        "setup-server-environment.sh writes the unit"
+    sk "no other cloudflared unit is enabled"   "setup-server-environment.sh disables them"
+    sk "credentials directory exists"           "setup-server-environment.sh creates it"
+    sk "credentials directory is mode 700"      "setup-server-environment.sh creates it"
+    sk "credentials directory belongs to $DEPLOY_USER" "setup-server-environment.sh creates it"
     # Both names, because which of the two runs depends on whether the machine has
     # credentials and a reader of a firstboot log should be able to find either.
-    sk "$CLOUDFLARED_UNIT enabled (credentials are present)" "postinstall.sh decides this"
-    sk "the tunnel is NOT enabled while credentials are absent" "postinstall.sh decides this"
-    sk "starting it without credentials refuses rather than looping" "postinstall.sh writes the unit"
-    sk "the unit deploy.sh restarts is the unit that is installed" "postinstall.sh writes the unit"
+    sk "$CLOUDFLARED_UNIT enabled (credentials are present)" "setup-server-environment.sh decides this"
+    sk "the tunnel is NOT enabled while credentials are absent" "setup-server-environment.sh decides this"
+    sk "starting it without credentials refuses rather than looping" "setup-server-environment.sh writes the unit"
+    sk "the unit deploy.sh restarts is the unit that is installed" "setup-server-environment.sh writes the unit"
 fi
 
 # REQ-NETWORK-005 - remote SSH through ngrok, #317.
@@ -1139,7 +1150,7 @@ if [ "$PHASE" = provisioned ]; then
     fi
     # Asked of sshd, not of the drop-in (#313's lesson). Skipped, not passed,
     # where sshd predates per-source penalties: there is nothing to exempt.
-    # `case`, not `| grep -q`, for the pipefail/SIGPIPE reason in postinstall.sh.
+    # `case`, not `| grep -q`, for the pipefail/SIGPIPE reason in setup-server-environment.sh.
     case "$(sudo -n sshd -T 2> /dev/null || true)" in
         *persourcepenaltyexemptlist*) sshd_has_penalties=yes ;;
         *) sshd_has_penalties=no ;;
@@ -1152,18 +1163,18 @@ if [ "$PHASE" = provisioned ]; then
         sk "sshd exempts loopback from per-source penalties" "this sshd has no per-source penalties"
     fi
 else
-    sk "ngrok installed"                            "postinstall.sh installs it"
-    sk "exactly one ngrok apt source"               "postinstall.sh writes it"
-    sk "ngrok is dpkg-owned, not a manual binary drop" "postinstall.sh installs it"
-    sk "$NGROK_UNIT installed in /usr/local/lib/systemd/system" "postinstall.sh writes it"
-    sk "ngrok runs as $DEPLOY_USER"                 "postinstall.sh writes the unit"
-    sk "ngrok never stops retrying"                 "postinstall.sh writes the unit"
-    sk "no other ngrok unit is enabled"             "postinstall.sh disables them"
-    sk "ngrok config directory is private to $DEPLOY_USER" "postinstall.sh creates it"
-    sk "$NGROK_UNIT enabled (authtoken present)"    "postinstall.sh decides this"
-    sk "ngrok is NOT enabled while the authtoken is absent" "postinstall.sh decides this"
-    sk "starting ngrok without an authtoken refuses rather than looping" "postinstall.sh writes the unit"
-    sk "sshd exempts loopback from per-source penalties" "postinstall.sh writes the drop-in"
+    sk "ngrok installed"                            "setup-server-environment.sh installs it"
+    sk "exactly one ngrok apt source"               "setup-server-environment.sh writes it"
+    sk "ngrok is dpkg-owned, not a manual binary drop" "setup-server-environment.sh installs it"
+    sk "$NGROK_UNIT installed in /usr/local/lib/systemd/system" "setup-server-environment.sh writes it"
+    sk "ngrok runs as $DEPLOY_USER"                 "setup-server-environment.sh writes the unit"
+    sk "ngrok never stops retrying"                 "setup-server-environment.sh writes the unit"
+    sk "no other ngrok unit is enabled"             "setup-server-environment.sh disables them"
+    sk "ngrok config directory is private to $DEPLOY_USER" "setup-server-environment.sh creates it"
+    sk "$NGROK_UNIT enabled (authtoken present)"    "setup-server-environment.sh decides this"
+    sk "ngrok is NOT enabled while the authtoken is absent" "setup-server-environment.sh decides this"
+    sk "starting ngrok without an authtoken refuses rather than looping" "setup-server-environment.sh writes the unit"
+    sk "sshd exempts loopback from per-source penalties" "setup-server-environment.sh writes the drop-in"
 fi
 
 # REQ-SERVER-010 - the deploy user's shell, #290.
@@ -1189,10 +1200,10 @@ if [ "$PHASE" = provisioned ]; then
     check "zsh starts cleanly with that config" \
         "sudo -n -u '$DEPLOY_USER' -i zsh -ic exit 2>&1 | grep -qiE 'error|not found|no such' && exit 1; true"
 else
-    sk "deploy user shell is zsh"            "postinstall.sh sets it"
-    sk "oh-my-zsh and both plugins present"  "postinstall.sh installs them"
-    sk "shell config is idempotent"          "postinstall.sh writes it"
-    sk "zsh starts cleanly with that config" "postinstall.sh writes it"
+    sk "deploy user shell is zsh"            "setup-developer-environment.sh sets it"
+    sk "oh-my-zsh and both plugins present"  "setup-developer-environment.sh installs them"
+    sk "shell config is idempotent"          "setup-developer-environment.sh writes it"
+    sk "zsh starts cleanly with that config" "setup-developer-environment.sh writes it"
 fi
 
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
@@ -1244,7 +1255,7 @@ check "no shadowed package units" \
 # REQ-SERVER-002 - exactly four ports, nothing else. An extra open port is a
 # failure, not a curiosity, so the count is asserted as well as the members.
 #
-# ufw is installed and enabled by postinstall.sh, on purpose: enabling it
+# ufw is installed and enabled by setup-server-environment.sh, on purpose: enabling it
 # during the install would close 22 before anything could provision the machine.
 #
 # READING `ufw status` IS NOT ENOUGH, and until #300 that is all this section
@@ -1484,19 +1495,19 @@ if [ "$PHASE" = provisioned ]; then
             "could not obtain the $PROBE_IMAGE image to publish a port with"
     fi
 else
-    sk "ufw active" "postinstall.sh installs and enables it"
-    sk "22 open"    "postinstall.sh installs and enables it"
-    sk "80 open"    "postinstall.sh installs and enables it"
-    sk "443 open"   "postinstall.sh installs and enables it"
-    sk "5353 open"  "postinstall.sh installs and enables it"
-    sk "ufw allows no port beyond the four" "postinstall.sh installs and enables it"
-    sk "docker publishes to loopback by default" "postinstall.sh writes daemon.json"
-    sk "docker's userland proxy is not disabled" "postinstall.sh writes daemon.json"
+    sk "ufw active" "setup-server-environment.sh installs and enables it"
+    sk "22 open"    "setup-server-environment.sh installs and enables it"
+    sk "80 open"    "setup-server-environment.sh installs and enables it"
+    sk "443 open"   "setup-server-environment.sh installs and enables it"
+    sk "5353 open"  "setup-server-environment.sh installs and enables it"
+    sk "ufw allows no port beyond the four" "setup-server-environment.sh installs and enables it"
+    sk "docker publishes to loopback by default" "setup-server-environment.sh writes daemon.json"
+    sk "docker's userland proxy is not disabled" "setup-server-environment.sh writes daemon.json"
     sk "nothing outside the four ports listens on a non-loopback address" \
-        "postinstall.sh installs docker and the firewall"
-    sk "no docker DNAT rule reaches a non-loopback address" "postinstall.sh installs docker"
-    sk "a deliberately published port binds loopback and nothing else" "postinstall.sh installs docker"
-    sk "that port refuses a connection to the host's own routable address" "postinstall.sh installs docker"
+        "setup-developer-environment.sh installs docker and the firewall"
+    sk "no docker DNAT rule reaches a non-loopback address" "setup-server-environment.sh installs docker"
+    sk "a deliberately published port binds loopback and nothing else" "setup-server-environment.sh installs docker"
+    sk "that port refuses a connection to the host's own routable address" "setup-developer-environment.sh installs docker"
 fi
 
 echo
