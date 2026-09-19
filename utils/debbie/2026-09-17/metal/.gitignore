@@ -1,5 +1,6 @@
-# Holds a password hash and a wifi passphrase.
+# Holds a password hash and a wifi passphrase. env.example is the template.
 .env
+*.env
 # Generated: deploy key, served preseed copies.
 work/
 # Built ISOs contain the wifi passphrase in plaintext.

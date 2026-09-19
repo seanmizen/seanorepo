@@ -28,7 +28,7 @@ fi
 #
 # Every box gets the same capabilities: Docker, Node, the checkout, the release
 # poller, ngrok, the shell. A role switches one of them on. Each role is a
-# ROLE_<NAME> setting, taken from metal/.env by provision.sh, and a flag file
+# ROLE_<NAME> setting, taken from metal/3-provision/<box>.env by provision.sh, and a flag file
 # under /etc/seanorepo/roles/ that the role's unit is conditioned on.
 #
 # UNSET MEANS OFF. A forgotten or empty setting never enables anything, and
@@ -806,7 +806,7 @@ fi
 #
 # WRITTEN HERE RATHER THAN COPIED FROM THE CHECKOUT, and the reason is not
 # taste. This script is delivered on its own - scp'd to /tmp by vm/test-vm.sh,
-# streamed over stdin by metal/provision.sh - so it can read no file that sits
+# streamed over stdin by metal/3-provision/provision.sh - so it can read no file that sits
 # beside it in the repository. The only copy of the repository it could read
 # from is the checkout it made above, which is on `release`, which by
 # definition holds the last thing that was SHIPPED. On the first box this
