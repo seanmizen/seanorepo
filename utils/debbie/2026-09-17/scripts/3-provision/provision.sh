@@ -1,6 +1,6 @@
 #!/bin/bash
 # provision.sh: connects to an installed target machine over SSH, configures it
-# with postinstall.sh, and checks the result with assert.sh.
+# with setup-server-environment.sh, and checks the result with assert.sh.
 #
 # Where: your computer. It connects to <SERVER_NAME>.local.
 # When:  after the step 2 install, when you power the target machine on again.
@@ -8,12 +8,12 @@
 #
 # What happens:
 #   1. assert.sh checks what the installer produced (PHASE=firstboot).
-#   2. It sends postinstall.sh to the target, which runs it as root.
+#   2. It sends setup-server-environment.sh to the target, which runs it as root.
 #   3. The target reboots. A new boot id proves that it did (REQ-SERVER-001).
 #   4. assert.sh checks the configured target (PHASE=provisioned).
 #
 # Why:   one command runs the full sequence the same way every time. Step 1
-#        exists because postinstall.sh can repair an install fault and so hide
+#        exists because setup-server-environment.sh can repair an install fault and so hide
 #        it (REQ-SERVER-004). A target once ran as `192` for a whole generation.
 #
 # Usage:
@@ -230,16 +230,16 @@ if [ "$MODE" != assert ]; then
     wait_for_ssh ""
 
     # REQ-SERVER-004, #285. Assert what the INSTALLER produced, before
-    # postinstall.sh has a chance to repair it.
+    # setup-server-environment.sh has a chance to repair it.
     #
-    # This is the only moment the distinction is observable. postinstall.sh
+    # This is the only moment the distinction is observable. setup-server-environment.sh
     # fixes the hostname and installs mDNS, so every assertion that runs after
     # it passes whether the install was right or not - which is how a machine that
     # came up as `192` went unnoticed. The result is recorded and reported at
     # the end rather than aborting here, because a repair run is a legitimate
     # reason to be pointed at a machine that is already wrong; the exit code still
     # goes red so it cannot be mistaken for a clean install.
-    log "asserting first boot (before postinstall)"
+    log "asserting first boot (before configuration)"
     sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=firstboot bash -s" \
         < "$GEN_DIR/payload/assert.sh" || FIRSTBOOT_RC=$?
     if [ "$FIRSTBOOT_RC" -ne 0 ]; then
@@ -247,7 +247,7 @@ if [ "$MODE" != assert ]; then
         echo "  ################################################################" >&2
         echo "  # THE INSTALL IS WRONG, NOT THE PROVISIONING." >&2
         echo "  #" >&2
-        echo "  # postinstall.sh will now repair this machine and the assertions" >&2
+        echo "  # setup-server-environment.sh will now repair this machine and the assertions" >&2
         echo "  # after it will very likely pass. Do not read that as a fix." >&2
         echo "  # Something in the preseed, the generated overrides.cfg or the" >&2
         echo "  # installer boot line is not taking effect - see REQ-SERVER-004" >&2
@@ -280,7 +280,7 @@ if [ "$MODE" != assert ]; then
     fi
 
     # REQ-SERVER-001 is asserted after a reboot because that is when the logind
-    # drop-in takes effect. postinstall.sh deliberately does not restart logind:
+    # drop-in takes effect. setup-server-environment.sh deliberately does not restart logind:
     # doing so would kill this SSH session mid-run.
     # Read the boot id BEFORE asking for the reboot - #295. Nothing after this
     # point may treat a live SSH socket as proof the machine went down; only a boot
@@ -324,7 +324,7 @@ sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=provision
 if [ "$rc" -eq 0 ] && [ "$FIRSTBOOT_RC" -ne 0 ]; then
     echo >&2
     log "FAIL - the machine is correct NOW, but the installer did not make it so."
-    log "       postinstall.sh repaired it. See the first-boot section above."
+    log "       setup-server-environment.sh repaired it. See the first-boot section above."
     rc=1
 fi
 

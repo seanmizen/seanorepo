@@ -22,9 +22,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Resolves to /home/srv/projects/seanorepo, which is where postinstall.sh
+# Resolves to /home/srv/projects/seanorepo, which is where setup-server-environment.sh
 # clones and where payload/assert.sh looks. The override is spelled REPO_DIR to
-# agree with postinstall.sh and payload/assert.sh.
+# agree with setup-server-environment.sh and payload/assert.sh.
 #
 # 2025-10-08b/scripts/deploy.sh - what production runs today - spells the same
 # override REPO_PATH and resolves the same default path. The wart is not
@@ -46,7 +46,7 @@ MARKER="${DEPLOY_MARKER:-$STATE_DIR/last-deployed}"
 # Cloudflare's apt package ships - REQ-SERVER-012.
 #
 # This name appears in exactly two places, here and in the sudoers drop-in
-# postinstall.sh installs, and payload/assert.sh asserts that the two agree. If #280
+# setup-server-environment.sh installs, and payload/assert.sh asserts that the two agree. If #280
 # picks a different name, both move together or the assertion goes red.
 CLOUDFLARED_UNIT="custom-cloudflared.service"
 CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"
@@ -55,7 +55,7 @@ CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"
 # matches the command as written, so a PATH-resolved `systemctl` is a grant
 # that works until the day PATH differs.
 SYSTEMCTL=/usr/bin/systemctl
-# Role flags written by postinstall.sh (#329). Overridable for the tests only.
+# Role flags written by setup-server-environment.sh (#329). Overridable for the tests only.
 ROLES_DIR="${ROLES_DIR:-/etc/seanorepo/roles}"
 
 #------------------------------------------------------------------------------
@@ -126,7 +126,7 @@ fi
 # Should anything be deployed?
 #------------------------------------------------------------------------------
 cd "$REPO_DIR" 2> /dev/null \
-    || { err "no checkout at $REPO_DIR - postinstall.sh clones it"; exit 1; }
+    || { err "no checkout at $REPO_DIR - setup-developer-environment.sh clones it"; exit 1; }
 git rev-parse --git-dir > /dev/null 2>&1 \
     || { err "$REPO_DIR is not a git checkout"; exit 1; }
 

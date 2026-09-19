@@ -1,9 +1,9 @@
 #!/bin/bash
 # test-vm.sh: installs Debian 13 in a VM on your computer, configures it with
-# postinstall.sh, and checks it with assert.sh.
+# setup-server-environment.sh, and checks it with assert.sh.
 #
 # Where: your computer, with QEMU.
-# When:  after every change to preseed.cfg, postinstall.sh or assert.sh, and
+# When:  after every change to preseed.cfg, setup-server-environment.sh or assert.sh, and
 #        before any hardware install.
 # Why:   it tests a change in minutes, with no hardware and no console to
 #        watch. The result is an exit code. ../../README.md lists what a VM
@@ -534,22 +534,22 @@ do_assert() {
 
     # REQ-SERVER-004, #285. Assert the INSTALLER's work before anything has
     # been run on the machine by hand. This is the run that can tell "the preseed
-    # set it" from "postinstall.sh repaired it": the machine has booted once and
-    # postinstall.sh has not touched it, so a green identity section here means
+    # set it" from "setup-server-environment.sh repaired it": the machine has booted once and
+    # setup-server-environment.sh has not touched it, so a green identity section here means
     # the install produced a usable hostname and a working .local name on its
     # own. The old harness only ever asserted after provisioning, which is why
     # a machine that came up as `192` looked perfect in every run.
     #
     # A failure here is fatal rather than advisory. Carrying on would run
-    # postinstall.sh, repair the machine, and report a pass - which is the exact
+    # setup-server-environment.sh, repair the machine, and report a pass - which is the exact
     # shape of the bug this exists to prevent.
-    log "asserting first boot (before postinstall)"
+    log "asserting first boot (before configuration)"
     local firstboot_rc=0
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER PHASE=firstboot bash -s" \
         < "$GEN_DIR/payload/assert.sh" || firstboot_rc=$?
     [ "$firstboot_rc" = 0 ] \
-        || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; postinstall.sh repairs the hostname and mDNS, so it would go green regardless."
+        || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; setup-server-environment.sh repairs the hostname and mDNS, so it would go green regardless."
 
     log "provisioning"
     scp "${scp_opts[@]}" "$GEN_DIR/payload/setup-developer-environment.sh" \
