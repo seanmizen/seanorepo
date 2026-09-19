@@ -33,18 +33,18 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` checks out
     `$RELEASE_BRANCH`, which defaults to `release`
-  - Inspection — `utils/debbie/2026-09-17/payload/configure/postinstall.sh` checks out
+  - Inspection — `utils/debbie/2026-09-17/payload/postinstall.sh` checks out
     `$RELEASE_BRANCH` after cloning, and never creates the branch when it is
     absent
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "checkout exists at
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "checkout exists at
     /home/srv/projects/seanorepo"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "every file under
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "every file under
     /home/srv/projects/seanorepo is owned by srv"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "origin is the only remote,
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "origin is the only remote,
     and is seanorepo"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "srv can reach origin with
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv can reach origin with
     no credential"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "HEAD is on release" —
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "HEAD is on release" —
     skipped, not passed, on a box provisioned before the first `yarn release`,
     because until then the branch does not exist
 - **Relations:** none
@@ -79,41 +79,41 @@ Introduced in #273.
   - Inspection — `utils/debbie/2025-10-08b/services/deploy-poll-custom.timer`
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` compares
     `git ls-remote` against a recorded marker
-  - Inspection — `utils/debbie/2026-09-17/services/release-poll/release-poll.sh` compares
+  - Inspection — `utils/debbie/2026-09-17/services/release-poll.sh` compares
     `git ls-remote` against `HEAD` and checks out on a difference; no marker
-  - Inspection — `utils/debbie/2026-09-17/services/deploy/deploy.sh` compares `HEAD`
+  - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` compares `HEAD`
     against a marker recording the deployed SHA and the boot id it was deployed
     under, and never dereferences the recorded SHA, so a marker left by a
     force-pushed or rebuilt `release` cannot wedge it
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "custom-release-poll.timer
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-release-poll.timer
     enabled"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "custom-release-poll.timer
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-release-poll.timer
     active"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the timer polls every two
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the timer polls every two
     minutes" — the two-minute period is the latency bound this requirement
     trades for needing no inbound port, so it is asserted rather than assumed
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "custom-release-poll.service
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-release-poll.service
     is timer-owned (static)"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "custom-deploy.service is not
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-deploy.service is not
     on a timer"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the release poller triggers
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the release poller triggers
     the deploy"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the deploy runs only on a
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy runs only on a
     box with the webserver role"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "without the webserver role a
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "without the webserver role a
     triggered deploy runs nothing"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the release poller moves the
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the release poller moves the
     checkout and touches no service" — behaviour, against a scratch origin with
     every service command shimmed: a machine that does not serve still tracks
     `release`, and tracking it runs nothing
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the deploy runs once per
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy runs once per
     checkout and again after a reboot"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "deploy.sh present and
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "deploy.sh present and
     executable" — **conditional, and the condition is the claim.** `deploy.sh`
     is run from the checkout, and the checkout is on `release`, so a box
     provisioned before this generation shipped cannot have the file at all.
     The check therefore asks the commit on disk first — `git cat-file -e
-    HEAD:utils/debbie/2026-09-17/services/deploy/deploy.sh` — and skips, naming that
+    HEAD:utils/debbie/2026-09-17/services/deploy.sh` — and skips, naming that
     commit and that path, when the answer is no. It runs, and can fail, exactly
     when the commit says the file should be there. A green run in which it
     skipped does not verify this requirement's deploy path; it verifies the
@@ -140,14 +140,14 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` takes
     `$DEPLOY_LOCK_FILE` before doing any work
-  - Inspection — `utils/debbie/2026-09-17/services/deploy/deploy.sh` takes `flock -n`
+  - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` takes `flock -n`
     on a file descriptor before doing any work, so the kernel releases the lock
     on every exit path including SIGKILL and the unit's `TimeoutStartSec`
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "a second deploy exits
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "a second deploy exits
     cleanly while one holds the lock" — asserted as behaviour, not as a grep
     for `flock`: a lock is held and `deploy.sh` is then run against it, and it
     must exit 0 and say why rather than block, queue or proceed
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "a release poll leaves the
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "a release poll leaves the
     checkout alone while a deploy holds the lock"
 - **Relations:** depends-on REQ-DEPLOY-002
 
@@ -170,14 +170,14 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` runs
     `yarn install --immutable` then `yarn prod:docker`
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "docker info works as srv
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "docker info works as srv
     without sudo"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "docker compose plugin
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "docker compose plugin
     present"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "node 20 installed"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "yarn is corepack's shim,
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "node 20 installed"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn is corepack's shim,
     not a global npm install"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "yarn --version matches the
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn --version matches the
     repo's packageManager"
 - **Relations:** depends-on REQ-DEPLOY-002
 
@@ -201,30 +201,30 @@ Introduced in #273.
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` diffs the old and
     new SHA for `$CLOUDFLARED_CONFIG` before restarting
   - Inspection — `utils/debbie/2025-10-08b/setup/sudoers-seanorepo-deploy`
-  - Inspection — `utils/debbie/2026-09-17/services/deploy/deploy.sh` diffs the last
+  - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` diffs the last
     deployed SHA (the marker, since #307) against `HEAD`
     with a pathspec rather than piping into `grep`, and restarts when it cannot
     prove the config unchanged — a first recorded deploy, or a previous commit
     no longer in the object store
-  - Inspection — `utils/debbie/2026-09-17/payload/configure/postinstall.sh` writes the
+  - Inspection — `utils/debbie/2026-09-17/payload/postinstall.sh` writes the
     drop-in to a temporary path, validates it with `visudo -c`, and installs it
     mode 0440 root:root only once it parses
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the one rule is a single
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the one rule is a single
     systemctl restart of a single unit" — the grant is matched whole against an
     anchored pattern, so nothing can be appended to it
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sudoers drop-in has exactly
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in has exactly
     one rule"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sudoers drop-in grants no
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in grants no
     wildcard"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sudoers drop-in grants no
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in grants no
     command list"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sudoers drop-in does not
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in does not
     grant ALL as a command"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sudoers drop-in is mode 440"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sudoers drop-in is owned by
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in is mode 440"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in is owned by
     root:root"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sudoers drop-in parses"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the unit deploy.sh restarts
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in parses"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the unit deploy.sh restarts
     is the unit sudo permits" — the drop-in and `deploy.sh` name the unit
     separately, and a rename that moves only one of them would fail exactly
     once, on the ingress change it was needed for
@@ -251,12 +251,12 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` carries a comment
     stating that the absence of `git clean` is deliberate
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no git clean anywhere in
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no git clean anywhere in
     the deploy path" — asserted as an absence, against the DEPLOYED script, so
     it catches the tidy-up after it has shipped as well as before
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "deploy.sh says why there is
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "deploy.sh says why there is
     no git clean" — an unexplained absence is what gets tidied away, so the
     explanation is asserted too
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no git clean in the release
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no git clean in the release
     poller" — since #307 the checkout happens there
 - **Relations:** depends-on REQ-DEPLOY-004

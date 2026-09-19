@@ -138,7 +138,7 @@ $EDITOR 2-serve-preseed/trixie2.env    # same SERVER_NAME and wifi as step 1
 ```
 
 The script generates `overrides.cfg` with
-[`../scripts/write-overrides.sh`](../scripts/write-overrides.sh) — the same
+`write_overrides` in [`lib.sh`](./lib.sh) — the same
 generator the VM harness uses, which is the point: a real install and a proven
 install cannot drift. It then serves the directory, **checks the URL is
 reachable on the LAN address rather than only on loopback** (a macOS firewall
@@ -198,7 +198,7 @@ $EDITOR 3-provision/trixie2.env        # same SERVER_NAME; ROLE_* only if it ser
 
 That waits for SSH, **asserts the box as the installer left it**, runs
 `postinstall.sh`, reboots so the boot-time settings apply, waits for the box to
-return, and asserts again — both times with the same `payload/verify/assert.sh` the VM
+return, and asserts again — both times with the same `payload/assert.sh` the VM
 runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from `3-provision/<box>.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
 back on SSH.

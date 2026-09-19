@@ -1,16 +1,28 @@
 #!/bin/bash
-# postinstall.sh - bring a freshly installed Debian 13 box up to "debbie".
+# postinstall.sh: configures a newly installed target machine as a debbie
+# server.
 #
-# Deliberately minimal. This generation proves the VM loop. Since #279 it also
-# installs the deploy poller and since #280 the cloudflared tunnel; the network
-# failover watchdog is still NOT here and arrives under REQ-NETWORK-003.
+# Where: on the target machine, as root. provision.sh or test-vm.sh sends the
+#        copy on your computer over SSH and runs it. The target's checkout also
+#        holds a copy. Nothing runs that copy.
+# When:  after the first boot, and again whenever the configuration or the
+#        target's roles must change.
+# Why:   it sets up everything the target needs, in this order:
+#          1. packages and the hostname
+#          2. power keys and the journal size cap
+#          3. firewall, SSH (keys only) and automatic security updates
+#          4. Docker
+#          5. the deploy user and its shell
+#          6. the repository checkout, then Node and Yarn
+#          7. the release poller, the deploy unit and the roles
+#          8. the Cloudflare tunnel, then ngrok
+#        The failover watchdog is not here yet (REQ-NETWORK-003).
 #
-# Every step is idempotent and every append is guarded. The previous
-# generation's postinstall re-appended its zsh prompt block on every run while
-# its own docs claimed idempotency - a claim nobody checked because nothing
-# asserted it. Here, each step below has a matching assertion in payload/verify/assert.sh.
+# It is idempotent: a second run leaves the target in the same state. test-vm.sh
+# runs it twice to prove this. Each step has a check in assert.sh.
 #
-# Usage: sudo ./postinstall.sh
+# Usage: sudo SERVER_NAME=<name> [DEPLOY_USER=srv] [ROLE_WEBSERVER=yes]
+#        [ROLE_TUNNEL=yes] bash postinstall.sh
 set -euo pipefail
 IFS=$'\n\t'
 export DEBIAN_FRONTEND=noninteractive
@@ -74,7 +86,7 @@ DEPLOY_USER="${DEPLOY_USER:-srv}"
 # with three other places at once, and nothing but agreement makes the deploy
 # work.
 #
-#   - payload/verify/assert.sh reads the same default, and its checkout and yarn-version
+#   - payload/assert.sh reads the same default, and its checkout and yarn-version
 #     assertions look here.
 #   - 2025-10-08b/scripts/deploy.sh - what production runs today - resolves
 #     "${REPO_PATH:-$HOME/projects/seanorepo}" as the deploy user, which for
@@ -139,7 +151,7 @@ apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl
 # The bug this guards: netcfg preferred a reverse-DNS answer over the preseeded
 # hostname, split 192.168.1.182 at its first dot, and installed the box as
 # `192`. postinstall.sh quietly fixed it, which is exactly why nothing noticed
-# for so long - every assertion ran after this script. payload/verify/assert.sh now also
+# for so long - every assertion ran after this script. payload/assert.sh now also
 # runs BEFORE it, so "the preseed set it" and "postinstall repaired it" can no
 # longer be confused.
 #------------------------------------------------------------------------------
@@ -320,7 +332,7 @@ fi
 # the upgrade, AND apt's timers must be enabled to invoke it. A correct
 # 50unattended-upgrades on a box with apt-daily-upgrade.timer masked is a
 # machine that has never applied a patch and reports nothing about it. Both
-# halves are done here and both are asserted in payload/verify/assert.sh.
+# halves are done here and both are asserted in payload/assert.sh.
 #
 # SECURITY SUITE ONLY. Debian's stock 50unattended-upgrades enables three
 # patterns, and only two of them are security:
@@ -377,13 +389,13 @@ log "unattended security upgrades"
 # written directly - it is generated rather than a dpkg conffile, so nothing
 # prompts about it on the next upgrade.
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
-// Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-SERVER-006
+// Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-SERVER-006
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 EOF
 
 cat > /etc/apt/apt.conf.d/52debbie-unattended-upgrades <<'EOF'
-// Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-SERVER-006
+// Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-SERVER-006
 
 // apt.conf lists APPEND. Without these two lines Debian's stock three
 // patterns - one of which is the whole stable suite, not security - stay in
@@ -419,7 +431,7 @@ systemctl enable apt-daily.timer apt-daily-upgrade.timer
 #
 # The deploy is `yarn prod:docker`, so the box needs the engine and the compose
 # plugin, not merely a group named docker. Until #276 this script created the
-# group and stopped, and payload/verify/assert.sh's "srv in docker" check passed against an
+# group and stopped, and payload/assert.sh's "srv in docker" check passed against an
 # empty group - an assertion that read as "Docker works" while proving only
 # that `groupadd` had run.
 #
@@ -495,7 +507,7 @@ fi
 # listener that the default produces disappears too), and the nat DOCKER rule
 # becomes `-d 127.0.0.1/32 ... -j DNAT`.
 #
-# WHAT IT DOES NOT DO, stated plainly because payload/verify/assert.sh is built around it:
+# WHAT IT DOES NOT DO, stated plainly because payload/assert.sh is built around it:
 # this is a DEFAULT. A compose file that writes `"0.0.0.0:4001:4001"` names the
 # address explicitly and still publishes to the LAN - measured, same daemon,
 # reachable from another host. Nothing here can stop that, which is why the
@@ -572,7 +584,7 @@ id "$DEPLOY_USER" > /dev/null 2>&1 || { echo "user $DEPLOY_USER missing" >&2; ex
 # usermod -aG is already additive, so this is safe to repeat. The new group
 # does NOT appear in sessions that already exist - including the one running
 # this script - so `docker info` without sudo is only true from the next login
-# onwards. payload/verify/assert.sh asserts it over a fresh SSH connection after a reboot,
+# onwards. payload/assert.sh asserts it over a fresh SSH connection after a reboot,
 # which is why it can make that claim honestly.
 usermod -aG docker,sudo "$DEPLOY_USER"
 
@@ -612,7 +624,7 @@ clone_once https://github.com/zsh-users/zsh-syntax-highlighting.git "$omz_dir/cu
 
 zshrc_tmp="$(mktemp)"
 cat > "$zshrc_tmp" <<'ZSHRC_EOF'
-# Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-SERVER-010.
+# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-SERVER-010.
 # Rewritten whole on every provisioning run: edits here are lost. Put local
 # additions in ~/.zshrc.local, which is sourced last and never touched.
 export ZSH="$HOME/.oh-my-zsh"
@@ -827,11 +839,11 @@ fi
 #------------------------------------------------------------------------------
 UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
-DEPLOY_SCRIPT="$GEN_DIR/services/deploy/deploy.sh"
-RELEASE_POLL_SCRIPT="$GEN_DIR/services/release-poll/release-poll.sh"
+DEPLOY_SCRIPT="$GEN_DIR/services/deploy.sh"
+RELEASE_POLL_SCRIPT="$GEN_DIR/services/release-poll.sh"
 # Must match CLOUDFLARED_UNIT in that deploy.sh. The unit itself is written by
 # the tunnel section at the bottom of this script (#280); this is the name the
-# deploy is permitted to restart, and payload/verify/assert.sh asserts that all three - the
+# deploy is permitted to restart, and payload/assert.sh asserts that all three - the
 # unit on disk, the name deploy.sh restarts and the name sudo permits - agree.
 # `custom-` prefixed per REQ-SERVER-013, and deliberately not
 # `cloudflared.service`, which would shadow a packaged unit of that name -
@@ -864,7 +876,7 @@ write_unit() {
 }
 
 write_unit custom-release-poll.service <<EOF
-# Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-DEPLOY-002
+# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-002
 [Unit]
 Description=Check out origin/release on this host if it has moved
 Documentation=https://github.com/seanmizen/seanorepo/issues/307
@@ -889,7 +901,7 @@ TimeoutStartSec=5min
 EOF
 
 write_unit custom-release-poll.timer <<EOF
-# Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-DEPLOY-002
+# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-002
 [Unit]
 Description=Poll origin/release every two minutes
 Documentation=https://github.com/seanmizen/seanorepo/issues/307
@@ -909,7 +921,7 @@ WantedBy=timers.target
 EOF
 
 write_unit custom-deploy.service <<EOF
-# Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-DEPLOY-002
+# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-002
 [Unit]
 Description=Start what the checkout holds, on a machine that serves
 Documentation=https://github.com/seanmizen/seanorepo/issues/307
@@ -983,7 +995,7 @@ fi
 # ALL in the command position - which is the whole reason the deploy does not
 # need general root.
 #
-# Note honestly what this is and is not today. scripts/write-overrides.sh has
+# Note honestly what this is and is not today. write_overrides in scripts/lib.sh has
 # the installer write `$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL` to
 # /etc/sudoers.d/90-$DEPLOY_USER, so on a box as it stands this file narrows
 # nothing - the account already has general passwordless root. What it does is
@@ -1003,7 +1015,7 @@ SUDOERS_DEST=/etc/sudoers.d/seanorepo-deploy
 sudoers_tmp="$(mktemp)"
 
 cat > "$sudoers_tmp" <<EOF
-# Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-DEPLOY-005.
+# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-005.
 # Exactly one command. See the deploy poller section of that script for why.
 $DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $CLOUDFLARED_UNIT
 EOF
@@ -1097,7 +1109,7 @@ fi
 # Written whole and compared whole, exactly as the Docker source above is, so a
 # correct file is left byte-identical and a wrong one is replaced rather than
 # appended to. An append here is what leaves apt complaining about a
-# doubly-configured repository on every update - payload/verify/assert.sh counts the lines.
+# doubly-configured repository on every update - payload/assert.sh counts the lines.
 cf_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$CLOUDFLARED_KEYRING] https://pkg.cloudflare.com/cloudflared $CLOUDFLARED_SUITE main"
 cf_repo_changed=0
 if [ ! -f "$CLOUDFLARED_LIST" ] || [ "$(cat "$CLOUDFLARED_LIST")" != "$cf_deb_line" ]; then
@@ -1136,7 +1148,7 @@ apt-get install -y cloudflared
 # Disabled, not masked. Masking would make a later `cloudflared service
 # install` fail in a way nobody would connect to this script; disabling is
 # reversible, visible in `systemctl is-enabled`, and re-applied on every
-# provisioning run. payload/verify/assert.sh asserts the property that matters - that no
+# provisioning run. payload/assert.sh asserts the property that matters - that no
 # other cloudflared unit is enabled - rather than the mechanism.
 #------------------------------------------------------------------------------
 for stale_unit in cloudflared.service cloudflared-custom.service; do
@@ -1204,7 +1216,7 @@ fi
 units_changed=0
 
 write_unit "$CLOUDFLARED_UNIT" <<EOF
-# Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-NETWORK-001
+# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-NETWORK-001
 [Unit]
 Description=Cloudflare tunnel - public ingress for every site this host serves
 Documentation=https://github.com/seanmizen/seanorepo/issues/280
@@ -1316,7 +1328,7 @@ fi
 # installs /usr/local/bin/ngrok and nothing else: no unit, no postinst. That
 # path is the package's own choice, verified by unpacking
 # ngrok_3.39.11-0_arm64.deb, so unlike cloudflared's it is not a sign of a
-# manual install - payload/verify/assert.sh asks dpkg who owns it instead.
+# manual install - payload/assert.sh asks dpkg who owns it instead.
 #
 # Suite `bookworm`. ngrok publishes per-release suites up to bookworm and no
 # `trixie` (404, 2026-09-19); `buster` and `bookworm` serve the same 3.39.11.
@@ -1404,7 +1416,7 @@ install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$(dirname "$NGROK_CONFI
 units_changed=0
 
 write_unit "$NGROK_UNIT" <<EOF
-# Managed by utils/debbie/2026-09-17/payload/configure/postinstall.sh - REQ-NETWORK-005
+# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-NETWORK-005
 [Unit]
 Description=ngrok TCP tunnel to sshd - the only remote way in
 Documentation=https://github.com/seanmizen/seanorepo/issues/317
