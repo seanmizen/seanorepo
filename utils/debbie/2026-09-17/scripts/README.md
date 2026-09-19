@@ -1,6 +1,6 @@
 # Installing debbie on real hardware
 
-The VM harness in [`../vm/`](../vm/) proves the preseed. This is how the same
+The VM harness in [`test-vm/`](./test-vm/) proves the preseed. This is how the same
 preseed reaches a real machine.
 
 **Target assumptions:** UEFI, wifi-only, and a disk you are happy to lose
@@ -10,15 +10,15 @@ prove](../README.md#what-it-does-not) before trusting a green VM run here.
 ## Layout
 
 ```
-1-build-iso/       build-iso.sh      env.example   <box>.env ...
-2-serve-preseed/   serve-preseed.sh  env.example   <box>.env ...
-3-provision/       provision.sh      env.example   <box>.env ...
-lib.sh             shared by all three
-work/              shared output: built ISOs, the SSH key (gitignored)
+scripts/1-build-iso/       build-iso.sh      .env.example   <box>.env ...
+scripts/2-serve-preseed/   serve-preseed.sh  .env.example   <box>.env ...
+scripts/3-provision/       provision.sh      .env.example   <box>.env ...
+scripts/lib.sh             shared by all three
+working/                   shared output: built ISOs, the SSH key (gitignored)
 ```
 
 - One env file per step, per box. `<box>.env` and `.env` are gitignored.
-- Each step reads ONLY the keys in its `env.example`. A key from another step
+- Each step reads ONLY the keys in its `.env.example`. A key from another step
   is an error that names the step it belongs to.
 - The box is a required argument: `./3-provision/provision.sh trixie2` reads
   `3-provision/trixie2.env`. No argument lists the boxes that step has files for.
@@ -48,7 +48,7 @@ archive. The preseed still comes over HTTP, so changing it needs no rebuild.
 ## Reproduce from zero
 
 ```bash
-cd utils/debbie/2026-09-17/metal
+cd utils/debbie/2026-09-17/scripts
 brew install xorriso                   # once
 
 # 1. the stock ISO
@@ -56,9 +56,9 @@ curl -fLO "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.7
 curl -fsSL "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS" \
   | grep netinst | shasum -a 256 -c - | grep -v FAILED
 
-# 2. configure - one env file per step, per box. Each env.example says what.
+# 2. configure - one env file per step, per box. Each .env.example says what.
 BOX=trixie2
-for s in 1-build-iso 2-serve-preseed 3-provision; do cp $s/env.example $s/$BOX.env; done
+for s in 1-build-iso 2-serve-preseed 3-provision; do cp $s/.env.example $s/$BOX.env; done
 openssl passwd -6                      # -> PASSWORD_CRYPTED in 2-serve-preseed
 $EDITOR */$BOX.env                     # SERVER_NAME in all three; ROLE_* in 3 if it serves
 
@@ -68,7 +68,7 @@ ISO=debian-13.7.0-amd64-netinst.iso ./1-build-iso/build-iso.sh $BOX
 # 4. write the stick ONCE - the built ISO, not the stock one
 diskutil list                          # find it. dd takes the whole device.
 diskutil unmountDisk force /dev/diskN
-sudo dd if=work/debbie-$(grep ^SERVER_NAME 1-build-iso/$BOX.env | cut -d= -f2).iso of=/dev/rdiskN bs=4m
+sudo dd if=../working/debbie-$(grep ^SERVER_NAME 1-build-iso/$BOX.env | cut -d= -f2).iso of=/dev/rdiskN bs=4m
 
 # 5. serve, then boot the target and walk away
 ./2-serve-preseed/serve-preseed.sh $BOX
@@ -85,16 +85,16 @@ once per stick.
 ## 1. Configure and build
 
 ```bash
-cp 1-build-iso/env.example 1-build-iso/trixie2.env
+cp 1-build-iso/.env.example 1-build-iso/trixie2.env
 $EDITOR 1-build-iso/trixie2.env        # SERVER_NAME, WIFI_*
 ./1-build-iso/build-iso.sh trixie2     # ~3 seconds
 ```
 
-`build-iso.sh` writes `work/debbie-<name>.iso` and verifies the result rather
+`build-iso.sh` writes `working/debbie-<name>.iso` and verifies the result rather
 than trusting the build: default entry present, preseed URL and wifi params
 baked in *before* the `---`, El Torito catalogue intact.
 
-**The built ISO contains your wifi passphrase in plaintext.** `work/` and
+**The built ISO contains your wifi passphrase in plaintext.** `working/` and
 `*.iso` are gitignored; treat the stick as a credential.
 
 ## 2. Write the stick
@@ -115,7 +115,7 @@ whole point of step 3, and writing the stick before building it is a wasted
 ```bash
 diskutil list                          # identify the stick, e.g. disk4
 diskutil unmountDisk force /dev/disk4
-sudo dd if=work/debbie-<name>.iso of=/dev/rdisk4 bs=4m
+sudo dd if=../working/debbie-<name>.iso of=/dev/rdisk4 bs=4m
 ```
 
 `force` is not optional in practice: Spotlight's `mds_stores` indexes a
@@ -131,7 +131,7 @@ work.
 ## 3. Serve and boot
 
 ```bash
-cp 2-serve-preseed/env.example 2-serve-preseed/trixie2.env
+cp 2-serve-preseed/.env.example 2-serve-preseed/trixie2.env
 openssl passwd -6                      # paste the hash into PASSWORD_CRYPTED
 $EDITOR 2-serve-preseed/trixie2.env    # same SERVER_NAME and wifi as step 1
 ./2-serve-preseed/serve-preseed.sh trixie2
@@ -191,14 +191,14 @@ The preseed ends in **poweroff**, not reboot, so "did the install finish?" is
 answerable without watching a console. Power the box back on, then:
 
 ```bash
-cp 3-provision/env.example 3-provision/trixie2.env
+cp 3-provision/.env.example 3-provision/trixie2.env
 $EDITOR 3-provision/trixie2.env        # same SERVER_NAME; ROLE_* only if it serves
 ./3-provision/provision.sh trixie2
 ```
 
 That waits for SSH, **asserts the box as the installer left it**, runs
 `postinstall.sh`, reboots so the boot-time settings apply, waits for the box to
-return, and asserts again — both times with the same `vm/assert.sh` the VM
+return, and asserts again — both times with the same `payload/verify/assert.sh` the VM
 runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from `3-provision/<box>.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
 back on SSH.

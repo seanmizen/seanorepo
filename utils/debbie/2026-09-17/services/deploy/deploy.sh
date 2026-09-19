@@ -29,8 +29,8 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Resolves to /home/srv/projects/seanorepo, which is where postinstall.sh
-# clones and where vm/assert.sh looks. The override is spelled REPO_DIR to
-# agree with postinstall.sh and vm/assert.sh.
+# clones and where payload/verify/assert.sh looks. The override is spelled REPO_DIR to
+# agree with postinstall.sh and payload/verify/assert.sh.
 #
 # 2025-10-08b/scripts/deploy.sh - what production runs today - spells the same
 # override REPO_PATH and resolves the same default path. The wart is not
@@ -52,7 +52,7 @@ MARKER="${DEPLOY_MARKER:-$STATE_DIR/last-deployed}"
 # Cloudflare's apt package ships - REQ-SERVER-012.
 #
 # This name appears in exactly two places, here and in the sudoers drop-in
-# postinstall.sh installs, and vm/assert.sh asserts that the two agree. If #280
+# postinstall.sh installs, and payload/verify/assert.sh asserts that the two agree. If #280
 # picks a different name, both move together or the assertion goes red.
 CLOUDFLARED_UNIT="custom-cloudflared.service"
 CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"

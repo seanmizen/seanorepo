@@ -30,7 +30,7 @@ EXPECT_ARCH="${EXPECT_ARCH:-}"
 EXPECT_HOSTNAME="${EXPECT_HOSTNAME:?EXPECT_HOSTNAME must be set - the name this box should have}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
-# Must match the default in scripts/postinstall.sh, which clones here, and the
+# Must match the default in payload/configure/postinstall.sh, which clones here, and the
 # path 2025-10-08b/scripts/deploy.sh resolves as the deploy user. A check that
 # depends on the checkout and cannot find one SKIPS with the path it looked at
 # printed, so a disagreement between the three is visible rather than silent.
@@ -565,9 +565,9 @@ fi
 # as the absence of a thing rather than as the presence of a comment.
 echo
 echo "== release poller and deploy (REQ-DEPLOY-002) =="
-DEPLOY_SCRIPT_REL="utils/debbie/2026-09-17/scripts/deploy.sh"
+DEPLOY_SCRIPT_REL="utils/debbie/2026-09-17/services/deploy/deploy.sh"
 DEPLOY_SCRIPT="$REPO_DIR/$DEPLOY_SCRIPT_REL"
-RELEASE_POLL_SCRIPT_REL="utils/debbie/2026-09-17/scripts/release-poll.sh"
+RELEASE_POLL_SCRIPT_REL="utils/debbie/2026-09-17/services/release-poll/release-poll.sh"
 RELEASE_POLL_SCRIPT="$REPO_DIR/$RELEASE_POLL_SCRIPT_REL"
 
 #------------------------------------------------------------------------------
