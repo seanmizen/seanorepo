@@ -30,7 +30,7 @@ read_env SERVER_NAME DEPLOY_USER PASSWORD_CRYPTED WIFI_SSID WIFI_PASS WIFI_IFACE
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 # No default - #329: a forgotten name used to install a second "debbie".
 SERVER_NAME="${SERVER_NAME:-}"
-[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every box on purpose."
+[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every machine on purpose."
 
 [ -n "${PASSWORD_CRYPTED:-}" ] \
     || die "PASSWORD_CRYPTED is not set in $ENV_FILE. Generate one with: openssl passwd -6"
@@ -45,7 +45,7 @@ case "$PASSWORD_CRYPTED" in
 esac
 
 #------------------------------------------------------------------------------
-# SSH key. Reuse the deploy key if it exists, so reinstalling the box does not
+# SSH key. Reuse the deploy key if it exists, so reinstalling the machine does not
 # invalidate anything that already trusts it.
 #------------------------------------------------------------------------------
 mkdir -p "$WORK"
@@ -112,10 +112,10 @@ cat <<EOF
       suppresses the prompt, so netcfg takes an empty passphrase and fails
       with "either too long or too short" - which blames the password.
 
-  After the install the box powers off (the preseed ends in poweroff, so that
+  After the install the machine powers off (the preseed ends in poweroff, so that
   "did it finish?" is answerable without watching). Power it back on, then:
 
-    ./scripts/3-provision/provision.sh <box>
+    ./scripts/3-provision/provision.sh <machine>
 
   Ctrl-C to stop serving.
 

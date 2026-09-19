@@ -44,9 +44,9 @@ shift
 read_env SERVER_NAME DEPLOY_USER SSH_KEY ROLE_WEBSERVER ROLE_TUNNEL
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 # No default - #329. It used to be `debbie`, which on a forgotten line made the
-# NEW box claim debbie.local and made this script dial the live one.
+# NEW machine claim debbie.local and made this script dial the live one.
 SERVER_NAME="${SERVER_NAME:-}"
-[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every box on purpose."
+[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every machine on purpose."
 KEY="${SSH_KEY:-$WORK/id_ed25519}"
 SSH_WAIT="${SSH_WAIT:-300}"
 
@@ -57,10 +57,10 @@ SSH_WAIT="${SSH_WAIT:-300}"
 # not reach this machine. The name goes first because it is the only handle that
 # survives the reboot in the middle of this script: the lease moves, the name
 # does not. Nothing here caches a resolved address, so each wait re-decides from
-# this list and a box that came back on a different address is still found.
+# this list and a machine that came back on a different address is still found.
 #
 # The fallback matters more than it looks. #285's assertion that
-# `$SERVER_NAME.local resolves` asks the BOX'S OWN resolver, because QEMU's
+# `$SERVER_NAME.local resolves` asks the MACHINE'S OWN resolver, because QEMU's
 # slirp carries no multicast - so "the laptop can hear it" is not something any
 # green run has proved. If mDNS turns out not to cross this particular network,
 # the supplied address is what saves the run, and it is tried within seconds
@@ -85,7 +85,7 @@ case "${1:-}" in
     *) die "unknown option '$1' (expected --assert or --no-reboot)" ;;
 esac
 
-[ -f "$KEY" ] || die "no SSH key at $KEY. Was this box installed by this checkout's serve-preseed.sh?"
+[ -f "$KEY" ] || die "no SSH key at $KEY. Was this machine installed by this checkout's serve-preseed.sh?"
 
 # BatchMode so a missing key fails immediately instead of prompting for a
 # password that does not exist - the account is key-only.
@@ -100,16 +100,16 @@ sshto() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$HOST" "$@"; }
 #
 # /proc/sys/kernel/random/boot_id is a random UUID the kernel generates once per
 # boot. It changes on a boot and on nothing else, which makes it the one thing a
-# script can read to tell "the box came back" apart from "the box has not
+# script can read to tell "the machine came back" apart from "the machine has not
 # finished going down yet".
 #
 # It is read over the SAME connection path as everything else, and the check is
 # keyed on the VALUE, never on which candidate answered. That is the part that
-# has to compose with #284: the box may legitimately come back on a different
+# has to compose with #284: the machine may legitimately come back on a different
 # address than the one it left on, and the address is therefore evidence of
 # nothing. Two different addresses reporting the same boot id is the same
 # machine that never rebooted; the same address reporting a new boot id is a
-# box that did.
+# machine that did.
 #------------------------------------------------------------------------------
 BOOT_ID_PATH=/proc/sys/kernel/random/boot_id
 
@@ -128,8 +128,8 @@ boot_id_of() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$1" "cat $BOOT_ID_PATH" 2> /de
 # because a clean shutdown with Docker containers to stop takes longer than any
 # fixed sleep is willing to admit - and polling continues. Before #295 that
 # connection ended the wait, and the PHASE=provisioned assertions then ran
-# against a box that had not rebooted: `lid close ignored` and `sleep.target
-# masked` (REQ-SERVER-001) went red on a box that was fine, which teaches
+# against a machine that had not rebooted: `lid close ignored` and `sleep.target
+# masked` (REQ-SERVER-001) went red on a machine that was fine, which teaches
 # everyone that a re-run is the fix.
 wait_for_ssh() {
     local want_new_boot="${1:-}"
@@ -173,13 +173,13 @@ wait_for_ssh() {
 
     echo >&2
     if [ "$saw_old_boot" = yes ]; then
-        # A different failure with a different fix: the box was reachable the
+        # A different failure with a different fix: the machine was reachable the
         # whole time, so none of the mDNS/lease advice below applies.
-        echo "ERROR: the box answered SSH within ${SSH_WAIT}s, but never rebooted." >&2
+        echo "ERROR: the machine answered SSH within ${SSH_WAIT}s, but never rebooted." >&2
         echo "       It kept reporting boot id $want_new_boot - the same boot this" >&2
         echo "       run started against." >&2
         echo >&2
-        echo "The reboot request did not take effect, or the box is taking longer" >&2
+        echo "The reboot request did not take effect, or the machine is taking longer" >&2
         echo "than ${SSH_WAIT}s to shut down and come back. Either way the" >&2
         echo "PHASE=provisioned assertions would have been meaningless: the" >&2
         echo "REQ-SERVER-001 settings only apply on a fresh boot." >&2
@@ -191,9 +191,9 @@ wait_for_ssh() {
         exit 3
     fi
     if [ "$saw_unreadable" = yes ]; then
-        echo "ERROR: the box answered SSH within ${SSH_WAIT}s, but $BOOT_ID_PATH" >&2
+        echo "ERROR: the machine answered SSH within ${SSH_WAIT}s, but $BOOT_ID_PATH" >&2
         echo "       could not be read, so the reboot could not be proved." >&2
-        echo "       That file is world-readable on every Linux; if this box is" >&2
+        echo "       That file is world-readable on every Linux; if this machine is" >&2
         echo "       not, the wait has no signal to work with." >&2
         exit 3
     fi
@@ -208,7 +208,7 @@ wait_for_ssh() {
         echo "  - no fallback address: HOST was not set" >&2
     fi
     echo >&2
-    echo "If the box is on:" >&2
+    echo "If the machine is on:" >&2
     echo "  * find its current address in the router's DHCP lease table - the" >&2
     echo "    lease moves on every boot, so an address from an earlier run is" >&2
     echo "    probably stale - and re-run with HOST=<that address>." >&2
@@ -234,10 +234,10 @@ if [ "$MODE" != assert ]; then
     #
     # This is the only moment the distinction is observable. postinstall.sh
     # fixes the hostname and installs mDNS, so every assertion that runs after
-    # it passes whether the install was right or not - which is how a box that
+    # it passes whether the install was right or not - which is how a machine that
     # came up as `192` went unnoticed. The result is recorded and reported at
     # the end rather than aborting here, because a repair run is a legitimate
-    # reason to be pointed at a box that is already wrong; the exit code still
+    # reason to be pointed at a machine that is already wrong; the exit code still
     # goes red so it cannot be mistaken for a clean install.
     log "asserting first boot (before postinstall)"
     sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=firstboot bash -s" \
@@ -247,7 +247,7 @@ if [ "$MODE" != assert ]; then
         echo "  ################################################################" >&2
         echo "  # THE INSTALL IS WRONG, NOT THE PROVISIONING." >&2
         echo "  #" >&2
-        echo "  # postinstall.sh will now repair this box and the assertions" >&2
+        echo "  # postinstall.sh will now repair this machine and the assertions" >&2
         echo "  # after it will very likely pass. Do not read that as a fix." >&2
         echo "  # Something in the preseed, the generated overrides.cfg or the" >&2
         echo "  # installer boot line is not taking effect - see REQ-SERVER-004" >&2
@@ -256,11 +256,11 @@ if [ "$MODE" != assert ]; then
         echo >&2
     fi
 
-    # Streamed over stdin rather than fetched by the box from the HTTP server:
+    # Streamed over stdin rather than fetched by the machine from the HTTP server:
     # one less thing that has to still be running, and it provisions the script
     # in this checkout rather than whatever was served earlier.
     log "running postinstall.sh"
-    # Roles from .env (#329). Passed even when empty, so the box's roles always
+    # Roles from .env (#329). Passed even when empty, so the machine's roles always
     # match this file: a role that is not set here is switched OFF there.
     log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
     sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' bash -s" \
@@ -276,14 +276,14 @@ if [ "$MODE" != assert ]; then
     # drop-in takes effect. postinstall.sh deliberately does not restart logind:
     # doing so would kill this SSH session mid-run.
     # Read the boot id BEFORE asking for the reboot - #295. Nothing after this
-    # point may treat a live SSH socket as proof the box went down; only a boot
+    # point may treat a live SSH socket as proof the machine went down; only a boot
     # id different from this one is.
     BOOT_ID_BEFORE="$(sshto "cat $BOOT_ID_PATH" 2> /dev/null || true)"
     if [ -n "$BOOT_ID_BEFORE" ]; then
         log "boot id before reboot: $BOOT_ID_BEFORE"
     else
         log "WARNING: could not read $BOOT_ID_PATH before the reboot."
-        log "         The wait below cannot prove the box rebooted, so a slow"
+        log "         The wait below cannot prove the machine rebooted, so a slow"
         log "         shutdown may let the PHASE=provisioned assertions run"
         log "         against the pre-reboot system. See #295."
     fi
@@ -291,14 +291,14 @@ if [ "$MODE" != assert ]; then
     log "rebooting to apply boot-time settings"
     sshto "sudo systemctl reboot" 2> /dev/null || true
 
-    # Not load-bearing any more: the boot id decides whether the box is back.
-    # It only saves a first polling round against a box that is certainly
+    # Not load-bearing any more: the boot id decides whether the machine is back.
+    # It only saves a first polling round against a machine that is certainly
     # still up.
     sleep 10
 fi
 
 #------------------------------------------------------------------------------
-# Assert - the same script the VM runs, with this box's own expectations
+# Assert - the same script the VM runs, with this machine's own expectations
 #------------------------------------------------------------------------------
 # BOOT_ID_BEFORE is empty in --assert mode (no reboot was asked for, so there is
 # nothing to prove) and empty if the read above failed.
@@ -316,7 +316,7 @@ sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=provision
 # invisible unless something says so out loud.
 if [ "$rc" -eq 0 ] && [ "$FIRSTBOOT_RC" -ne 0 ]; then
     echo >&2
-    log "FAIL - the box is correct NOW, but the installer did not make it so."
+    log "FAIL - the machine is correct NOW, but the installer did not make it so."
     log "       postinstall.sh repaired it. See the first-boot section above."
     rc=1
 fi

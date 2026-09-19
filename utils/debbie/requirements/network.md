@@ -3,7 +3,7 @@
 The path from the public internet to a container on the host, and the
 behaviour that keeps that path alive without anyone watching.
 
-`2025-10-08b/` implements these on the box running today. `2026-09-17/` has
+`2025-10-08b/` implements these on the machine running today. `2026-09-17/` has
 rebuilt the tunnel half (`REQ-NETWORK-001`, `REQ-NETWORK-002`, in #280) and has
 not rebuilt the failover half. The August 2026 outage recorded in
 `REQ-NETWORK-003` is why the failover half exists at all.
@@ -21,7 +21,7 @@ Introduced in #273.
 - **Priority:** P0
 - **Statement:** The host shall serve public traffic through an outbound
   tunnel, without any inbound port being forwarded.
-- **Rationale:** The box is a laptop on a domestic connection with a dynamic
+- **Rationale:** The machine is a laptop on a domestic connection with a dynamic
   address. Port forwarding would expose it directly, tie the sites to an
   address that changes, and put TLS termination on a machine nobody patches on
   a schedule.
@@ -39,7 +39,7 @@ Introduced in #273.
     is enabled" — two daemons dialling out for one tunnel is the failure this
     catches
   - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
-    (what production runs today, until a box is rebuilt on `2026-09-17/`)
+    (what production runs today, until a machine is rebuilt on `2026-09-17/`)
 - **Relations:** none
 
 ## REQ-NETWORK-002 — Ingress rules live in the repository
@@ -66,12 +66,12 @@ Introduced in #273.
   itself, the unit has to run with its working directory set to
   `apps/cloudflared`. Without that the daemon starts and then cannot find the
   credentials, which reads as an authentication problem rather than a path one.
-  Since #329 the tunnel also runs only on the box with the tunnel role
-  (`ROLE_TUNNEL`, exactly one box). Credentials alone are not enough: a copy on
-  a second box must not pull public traffic to it.
+  Since #329 the tunnel also runs only on the machine with the tunnel role
+  (`ROLE_TUNNEL`, exactly one machine). Credentials alone are not enough: a copy on
+  a second machine must not pull public traffic to it.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel runs only on a
-    box with the tunnel role"
+    machine with the tunnel role"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel reads config.yml
     from the checkout"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel runs in the
@@ -141,7 +141,7 @@ Introduced in #273.
   Held at **proposed** because the migration is the risky part, not the
   requirement. It has to delete the stanza and write an NM connection profile
   in a single step, and a mistake leaves a headless machine with no network and
-  no way in. That is worth doing with physical access to the box, which is why
+  no way in. That is worth doing with physical access to the machine, which is why
   it is deliberately not coupled to installing one.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wifi config persisted"
@@ -161,7 +161,7 @@ Introduced in #273.
 - **Priority:** P1
 - **Statement:** The host shall accept an SSH connection that originates outside
   the local network, without any inbound port being opened.
-- **Rationale:** Most repair work on this box is done by hand over SSH, usually
+- **Rationale:** Most repair work on this machine is done by hand over SSH, usually
   while something is already broken, and often from somewhere else. `ngrok tcp
   22` is the only path that does this: the agent dials out, so
   `REQ-NETWORK-001` still holds. The Cloudflare SSH tunnel
@@ -169,7 +169,7 @@ Introduced in #273.
 
   Two properties follow from being the only way in. The agent never stops
   retrying, because a unit that gave up during an outage would stay down on a
-  box nobody can reach. And every ngrok login reaches `sshd` from
+  machine nobody can reach. And every ngrok login reaches `sshd` from
   `127.0.0.1`, so loopback is exempt from sshd's per-source penalties:
   otherwise one scanner hitting the public address would lock the owner out
   before authentication, whatever key they held. `REQ-SERVER-008` is what
@@ -182,7 +182,7 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "starting ngrok without an authtoken refuses rather than looping"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sshd exempts loopback from per-source penalties"
   - Demonstration — an SSH login through ngrok from off the LAN, with key
-    authentication, on the real box
+    authentication, on the real machine
 - **Relations:**
   - depends-on REQ-NETWORK-001
   - depends-on REQ-SERVER-008
