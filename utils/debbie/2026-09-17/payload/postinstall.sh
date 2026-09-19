@@ -28,38 +28,38 @@ IFS=$'\n\t'
 export DEBIAN_FRONTEND=noninteractive
 
 # No default - #329. A forgotten SERVER_NAME used to mean `debbie`, so a new
-# box would claim debbie.local and collide with the live one on mDNS.
+# machine would claim debbie.local and collide with the live one on mDNS.
 SERVER_NAME="${SERVER_NAME:-}"
 if [ -z "$SERVER_NAME" ]; then
-    echo "[postinstall] ERROR: SERVER_NAME is not set. It has no default: every box must be named on purpose." >&2
+    echo "[postinstall] ERROR: SERVER_NAME is not set. It has no default: every machine must be named on purpose." >&2
     exit 1
 fi
 
 #------------------------------------------------------------------------------
-# Roles - #329. What this box DOES, as opposed to what it is able to do.
+# Roles - #329. What this machine DOES, as opposed to what it is able to do.
 #
-# Every box gets the same capabilities: Docker, Node, the checkout, the release
+# Every machine gets the same capabilities: Docker, Node, the checkout, the release
 # poller, ngrok, the shell. A role switches one of them on. Each role is a
-# ROLE_<NAME> setting, taken from scripts/3-provision/<box>.env by provision.sh, and a flag file
+# ROLE_<NAME> setting, taken from scripts/3-provision/<machine>.env by provision.sh, and a flag file
 # under /etc/seanorepo/roles/ that the role's unit is conditioned on.
 #
 # UNSET MEANS OFF. A forgotten or empty setting never enables anything, and
 # every run makes the flag files match the settings exactly - so re-running
 # this script without ROLE_WEBSERVER=yes on the live webserver REMOVES the
 # role. That is deliberate: the settings are the one source of truth. The run
-# ends with a banner saying which roles the box has.
+# ends with a banner saying which roles the machine has.
 #
 #   ROLE_WEBSERVER  runs `yarn prod:docker` (custom-deploy.service). Any number
-#                   of boxes. Without the tunnel role it publishes the apps on
+#                   of machines. Without the tunnel role it publishes the apps on
 #                   the LAN; with it, on loopback only (deploy.sh decides).
 #   ROLE_TUNNEL     runs the Cloudflare tunnel (custom-cloudflared.service), so
-#                   the internet reaches this box. Requires ROLE_WEBSERVER - the
-#                   tunnel only forwards to localhost:4xxx. EXACTLY ONE box in
+#                   the internet reaches this machine. Requires ROLE_WEBSERVER - the
+#                   tunnel only forwards to localhost:4xxx. EXACTLY ONE machine in
 #                   the fleet: the apps are SQLite on local volumes, and the
 #                   public one must have a single writer.
 #
 # Validated here, before anything is installed, so a typo fails the run
-# instead of leaving a half-provisioned box.
+# instead of leaving a half-provisioned machine.
 #------------------------------------------------------------------------------
 ROLES_DIR=/etc/seanorepo/roles
 role_value() {
@@ -74,7 +74,7 @@ ROLE_WEBSERVER="$(role_value "${ROLE_WEBSERVER:-}")" \
 ROLE_TUNNEL="$(role_value "${ROLE_TUNNEL:-}")" \
     || { echo "[postinstall] ERROR: ROLE_TUNNEL must be yes, no or unset" >&2; exit 1; }
 if [ "$ROLE_TUNNEL" = yes ] && [ "$ROLE_WEBSERVER" != yes ]; then
-    echo "[postinstall] ERROR: ROLE_TUNNEL=yes needs ROLE_WEBSERVER=yes - the tunnel forwards to this box's own sites." >&2
+    echo "[postinstall] ERROR: ROLE_TUNNEL=yes needs ROLE_WEBSERVER=yes - the tunnel forwards to this machine's own sites." >&2
     exit 1
 fi
 if [ -n "${DEBBIE_SERVES:-}" ]; then
@@ -102,7 +102,7 @@ DEPLOY_USER="${DEPLOY_USER:-srv}"
 REPO_DIR="${REPO_DIR:-/home/$DEPLOY_USER/projects/seanorepo}"
 REPO_URL="${REPO_URL:-https://github.com/seanmizen/seanorepo.git}"
 # The host deploys `release` and never `main` - REQ-DEPLOY-001. `release` moves
-# only when someone runs `yarn release`, so on a box provisioned before the
+# only when someone runs `yarn release`, so on a machine provisioned before the
 # first release it legitimately does not exist yet.
 RELEASE_BRANCH="${RELEASE_BRANCH:-release}"
 
@@ -114,9 +114,9 @@ log() { echo "[postinstall] $*"; }
 # Packages
 #------------------------------------------------------------------------------
 # avahi-daemon, avahi-utils and libnss-mdns are installed by the preseed as of
-# #285, so on a box this generation installed these are already present and
+# #285, so on a machine this generation installed these are already present and
 # apt-get does nothing. They stay named here because this script must also
-# repair a box installed by an earlier preseed, and because ufw is genuinely
+# repair a machine installed by an earlier preseed, and because ufw is genuinely
 # only wanted after the install (it would otherwise close 22 mid-provision).
 #
 # ca-certificates, curl and gnupg are here for the Docker step below: it
@@ -125,7 +125,7 @@ log() { echo "[postinstall] $*"; }
 #
 # git is for the checkout further down, and a minimal install has no git
 # either. ca-certificates is load-bearing twice over: the clone is an
-# anonymous HTTPS fetch from github.com, which fails on a box with no trust
+# anonymous HTTPS fetch from github.com, which fails on a machine with no trust
 # store in a way that reads like a network fault.
 #
 # unattended-upgrades is REQ-SERVER-006 and is configured further down.
@@ -144,12 +144,12 @@ apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl
 # Hostname and mDNS - REQ-SERVER-004
 #
 # REPAIR, NOT RE-DO. Since #285 the preseed's late_command has already set both
-# of these before first boot, and on such a box every branch here is skipped.
-# What survives is the repair path for a box installed by an older preseed, or
+# of these before first boot, and on such a machine every branch here is skipped.
+# What survives is the repair path for a machine installed by an older preseed, or
 # one whose identity has drifted.
 #
 # The bug this guards: netcfg preferred a reverse-DNS answer over the preseeded
-# hostname, split 192.168.1.182 at its first dot, and installed the box as
+# hostname, split 192.168.1.182 at its first dot, and installed the machine as
 # `192`. postinstall.sh quietly fixed it, which is exactly why nothing noticed
 # for so long - every assertion ran after this script. payload/assert.sh now also
 # runs BEFORE it, so "the preseed set it" and "postinstall repaired it" can no
@@ -172,7 +172,7 @@ if ! grep -qE "^127\.0\.1\.1[[:space:]]+${SERVER_NAME}[[:space:]]*\$" /etc/hosts
     printf '127.0.1.1\t%s\n' "$SERVER_NAME" >> /etc/hosts
 fi
 
-# Already enabled and running on a box the preseed installed avahi onto; this
+# Already enabled and running on a machine the preseed installed avahi onto; this
 # is idempotent and is what repairs an older one.
 systemctl enable --now avahi-daemon
 
@@ -185,7 +185,7 @@ systemctl enable --now avahi-daemon
 # The power button is the same hole with a different door, and #283 is the bug
 # that proved it: logind's default HandlePowerKey is `poweroff`, so a brief
 # press is a clean shutdown of every hosted site. It happened twice in one
-# evening on the real box, and the second one is why a provision.sh run
+# evening on the real machine, and the second one is why a provision.sh run
 # reported "did not come up on SSH" - the machine had been switched off while
 # the script waited for it. The suspend and hibernate keys are ignored for the
 # same reason: a laptop keyboard has them, and a shelf is not a desk.
@@ -232,7 +232,7 @@ systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 # SQLite volumes, and a full disk takes every site down with a cause that looks
 # like anything but disk space. journald's own default is 10% of the
 # filesystem, capped at 4G - bounded, but only by accident, and nothing on
-# this box ever reads that much history.
+# this machine ever reads that much history.
 #
 # A drop-in, not an edit to the package-owned journald.conf, and rewritten in
 # full so a second run is byte-identical. Restarting journald is safe here,
@@ -273,7 +273,7 @@ ufw --force enable
 # it is the whole host. The password path should therefore not exist rather than
 # merely be hard to use.
 #
-# This largely ratifies what the box already does, and that is exactly the
+# This largely ratifies what the machine already does, and that is exactly the
 # problem it fixes: it was true BY ACCIDENT. The account has a password hash,
 # PasswordAuthentication sat at its compiled-in default, and nothing asserted
 # either - so any future change to sshd's packaging, or a stray drop-in, could
@@ -291,7 +291,7 @@ ufw --force enable
 # 05-something that shadows it fails the run instead of hiding behind a grep.
 #
 # The account password is deliberately NOT locked. Console login at the physical
-# keyboard is the documented recovery path if the key is ever lost, and this box
+# keyboard is the documented recovery path if the key is ever lost, and this machine
 # has no other out-of-band access in this generation - see #135.
 #------------------------------------------------------------------------------
 log "ssh accepts keys only"
@@ -307,7 +307,7 @@ chmod 644 /etc/ssh/sshd_config.d/10-debbie-keys-only.conf
 # Validate BEFORE reloading. A malformed sshd_config that is merely written
 # costs nothing; one that is written and then reloaded takes sshd down, and this
 # script is running over the SSH it would be killing. On failure the drop-in is
-# removed and the run fails loudly, leaving a box that still accepts passwords -
+# removed and the run fails loudly, leaving a machine that still accepts passwords -
 # degraded, but reachable, which is the right way round on a host whose only
 # other door is a physical keyboard.
 if sshd -t; then
@@ -321,7 +321,7 @@ fi
 #------------------------------------------------------------------------------
 # Unattended security upgrades - REQ-SERVER-006
 #
-# Nobody logs into this box for months. #136 is the evidence: cloudflared's
+# Nobody logs into this machine for months. #136 is the evidence: cloudflared's
 # self-update failed silently for about sixteen months with nothing reporting
 # it. "I will run apt upgrade when I next SSH in" has empirically meant a year
 # and a half, and an unpatched internet-facing host that is also never looked
@@ -330,7 +330,7 @@ fi
 # TWO THINGS MUST BOTH BE TRUE for anything to actually happen, and the classic
 # way to get this wrong is to do one of them: the apt configuration must permit
 # the upgrade, AND apt's timers must be enabled to invoke it. A correct
-# 50unattended-upgrades on a box with apt-daily-upgrade.timer masked is a
+# 50unattended-upgrades on a machine with apt-daily-upgrade.timer masked is a
 # machine that has never applied a patch and reports nothing about it. Both
 # halves are done here and both are asserted in payload/assert.sh.
 #
@@ -341,7 +341,7 @@ fi
 #   origin=Debian,codename=${distro_codename},label=Debian-Security
 #   origin=Debian,codename=${distro_codename}-security,label=Debian-Security
 #
-# The first is the whole of the stable suite, so a stock box unattended-installs
+# The first is the whole of the stable suite, so a stock machine unattended-installs
 # every point-release update that lands in trixie - measured, not assumed: a
 # --dry-run against the stock config proposed base-files, bash, libc6, perl-base
 # and tzdata from `archive:stable label:Debian`. That is a much larger blast
@@ -361,7 +361,7 @@ fi
 # ${distro_codename} is left as a variable rather than written out as `trixie`.
 # unattended-upgrades expands it against the running release, so this survives
 # the next dist-upgrade; a hardcoded codename would silently stop matching
-# anything on the day the box moved to Debian 14, which is exactly the shape of
+# anything on the day the machine moved to Debian 14, which is exactly the shape of
 # failure this requirement exists to prevent.
 #
 # REBOOTS ARE NOT AUTOMATIC, and this is the line that matters most in the
@@ -374,7 +374,7 @@ fi
 # thing an assertion can tell apart from "nobody has thought about this".
 #
 # The consequence is accepted rather than overlooked: a kernel or libc update
-# is downloaded and unpacked but not in force until someone reboots the box by
+# is downloaded and unpacked but not in force until someone reboots the machine by
 # hand. /var/run/reboot-required says so, and `ssh srv@debbie.local sudo
 # systemctl reboot` is the deliberate way to act on it.
 #
@@ -407,14 +407,14 @@ Unattended-Upgrade::Origins-Pattern {
         "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
 };
 
-// REQ-SERVER-006. Explicit, not defaulted: this box is on a shelf on wifi and
+// REQ-SERVER-006. Explicit, not defaulted: this machine is on a shelf on wifi and
 // an unattended reboot that does not come back is an outage nobody is
 // watching for. Reboot it by hand - `sudo systemctl reboot` over SSH.
 Unattended-Upgrade::Automatic-Reboot "false";
 EOF
 
 # The other half. Both timers are enabled on a stock Debian, so on a healthy
-# box this is a no-op; it is here to repair one where they are not, and so that
+# machine this is a no-op; it is here to repair one where they are not, and so that
 # the property is stated by this script rather than inherited silently from a
 # package default. apt-daily.timer refreshes the package lists and
 # apt-daily-upgrade.timer is what invokes unattended-upgrade - the second is
@@ -429,7 +429,7 @@ systemctl enable apt-daily.timer apt-daily-upgrade.timer
 #------------------------------------------------------------------------------
 # Docker engine - REQ-DEPLOY-004
 #
-# The deploy is `yarn prod:docker`, so the box needs the engine and the compose
+# The deploy is `yarn prod:docker`, so the machine needs the engine and the compose
 # plugin, not merely a group named docker. Until #276 this script created the
 # group and stopped, and payload/assert.sh's "srv in docker" check passed against an
 # empty group - an assertion that read as "Docker works" while proving only
@@ -471,7 +471,7 @@ if [ ! -f "$DOCKER_LIST" ] || [ "$(cat "$DOCKER_LIST")" != "$docker_deb_line" ];
     docker_repo_changed=1
 fi
 
-# Refresh only when there is a reason to. The second condition covers a box
+# Refresh only when there is a reason to. The second condition covers a machine
 # whose previous run wrote the source and then failed before installing: the
 # file is already right, so the first condition is false, but the package lists
 # may never have been fetched.
@@ -516,16 +516,16 @@ fi
 #
 # WRITTEN WHOLE AND COMPARED WHOLE, and with no comment in it: daemon.json is
 # strict JSON, dockerd refuses to start on a file it cannot parse, and a
-# half-merged file is a box with no Docker on it. This script owns the file.
+# half-merged file is a machine with no Docker on it. This script owns the file.
 #------------------------------------------------------------------------------
 DOCKER_DAEMON_JSON=/etc/docker/daemon.json
 
 log "  docker publishes to loopback only"
 install -d -m 0755 /etc/docker
 
-# Captured BEFORE the write, and the reason is the repair path. On a fresh box
+# Captured BEFORE the write, and the reason is the repair path. On a fresh machine
 # docker is not running yet, the `--now` below starts it, and it reads the file
-# we are about to write - so no restart is needed. On a box that is already
+# we are about to write - so no restart is needed. On a machine that is already
 # serving, a CHANGED file only takes effect on a restart, and a restart stops
 # every running container. Doing it only when the file actually changed is what
 # keeps a re-run of this script from bouncing production for nothing.
@@ -570,7 +570,7 @@ fi
 # Deploy user - REQ-SERVER-003
 #
 # The docker-ce package creates the docker group itself, so by here it exists.
-# The getent guard stays for the repair path: a box provisioned by an older
+# The getent guard stays for the repair path: a machine provisioned by an older
 # revision of this script has the group without the engine, and one where the
 # package install is later changed should not silently lose the membership.
 #
@@ -592,7 +592,7 @@ usermod -aG docker,sudo "$DEPLOY_USER"
 # The deploy user's interactive shell - REQ-SERVER-010, #290
 #
 # zsh, oh-my-zsh and the previous generation's plugins and prompt. Most work on
-# this box is done by hand over SSH while something is broken, and a prompt
+# this machine is done by hand over SSH while something is broken, and a prompt
 # that shows the host and the git branch is cheap insurance against running
 # the right command on the wrong branch.
 #
@@ -604,7 +604,7 @@ usermod -aG docker,sudo "$DEPLOY_USER"
 # .zshrc from its template, which would fight this file on every run.
 #
 # Cloned, not pinned. This is a shell prompt; tracking upstream is fine, and
-# nothing here re-pulls, so a provisioned box does not change under anyone.
+# nothing here re-pulls, so a provisioned machine does not change under anyone.
 #------------------------------------------------------------------------------
 log "zsh for $DEPLOY_USER"
 apt-get install -y zsh
@@ -631,7 +631,7 @@ export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="robbyrussell"
 plugins=(git docker node yarn zsh-autosuggestions zsh-syntax-highlighting)
 # No self-update: it prompts on login (a hang for a non-interactive check) and
-# pulls from the network on a box whose changes should come from provisioning.
+# pulls from the network on a machine whose changes should come from provisioning.
 zstyle ':omz:update' mode disabled
 source "$ZSH/oh-my-zsh.sh"
 
@@ -661,7 +661,7 @@ rm -f "$zshrc_tmp"
 # Repository checkout - REQ-DEPLOY-001
 #
 # Nothing deployed anything before this, because nothing had put the repository
-# on the box. This clones it, and it does so BEFORE the Node and Yarn section
+# on the machine. This clones it, and it does so BEFORE the Node and Yarn section
 # on purpose: that section activates the Yarn the repository declares, and can
 # only do so once there is a package.json to read. Put the clone after it and
 # the activation is a no-op on every first run and only ever works on the
@@ -718,7 +718,7 @@ if sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" \
         # deploy and could roll production backwards on an unrelated repair.
         log "  already on $RELEASE_BRANCH - leaving the working tree alone"
     else
-        # -f, matching deploy.sh, and only reached when the box is NOT on the
+        # -f, matching deploy.sh, and only reached when the machine is NOT on the
         # release branch - a fresh clone (on the default branch) or one that
         # has drifted. It discards modifications to TRACKED files, which on a
         # deploy host is exactly right, and leaves untracked files alone
@@ -730,20 +730,20 @@ if sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" \
     fi
 else
     # NOT AN ERROR, and the exit status stays zero. `release` is created the
-    # first time someone runs `yarn release`, which on a brand new box has not
-    # happened yet, so a box provisioned before the first release is correct
+    # first time someone runs `yarn release`, which on a brand new machine has not
+    # happened yet, so a machine provisioned before the first release is correct
     # and simply has nothing to deploy. Creating the branch here would be
     # worse than useless: it would publish whatever `main` happened to be as
     # though someone had chosen to ship it - the precise thing REQ-DEPLOY-001
     # exists to prevent.
     log "  NOTE: origin/$RELEASE_BRANCH does not exist yet."
-    log "        This is the normal state of a box provisioned before the first"
+    log "        This is the normal state of a machine provisioned before the first"
     log "        release, not a failure. Run 'yarn release' from a clean main on"
     log "        a dev machine to create it; the checkout stays on"
     log "        '${current_branch:-a detached HEAD}' until then."
 fi
 
-# Belt and braces, and the reason AC 1 says "not just the top directory". A box
+# Belt and braces, and the reason AC 1 says "not just the top directory". A machine
 # where someone once ran `sudo git pull` by hand has root-owned objects inside
 # an srv-owned checkout, and the next unattended fetch fails on a file it
 # cannot write - at 3am, in the journal, with no obvious cause. -print -quit
@@ -761,7 +761,7 @@ fi
 #------------------------------------------------------------------------------
 # Node and Yarn - REQ-DEPLOY-004
 #
-# The deploy runs `yarn install --immutable` then `yarn prod:docker`, so the box
+# The deploy runs `yarn install --immutable` then `yarn prod:docker`, so the machine
 # needs Node and a Yarn 4 that the repository agrees with.
 #
 # DEBIAN'S OWN nodejs, NOT NodeSource. Trixie ships 20.19.2, which is Node 20 -
@@ -771,7 +771,7 @@ fi
 #
 # `corepack enable`, NOT `npm install -g yarn`. The previous generation did both
 # and contradicted itself: a globally npm-installed yarn lands in /usr/local/bin
-# and shadows the corepack shim in /usr/bin, so the box ends up running Yarn 1
+# and shadows the corepack shim in /usr/bin, so the machine ends up running Yarn 1
 # against a Yarn 4 repository. npm is not installed here at all, which is the
 # cheapest way to keep that from coming back.
 #
@@ -821,10 +821,10 @@ fi
 # streamed over stdin by scripts/3-provision/provision.sh - so it can read no file that sits
 # beside it in the repository. The only copy of the repository it could read
 # from is the checkout it made above, which is on `release`, which by
-# definition holds the last thing that was SHIPPED. On the first box this
+# definition holds the last thing that was SHIPPED. On the first machine this
 # generation provisions, `release` still points at the previous generation and
 # contains none of this. Sourcing the units from there would mean the poller is
-# installed only on a box that already had a working poller.
+# installed only on a machine that already had a working poller.
 #
 # So the units are literals here, in the one file that is guaranteed to be
 # current because a human just ran it. The same is true of the logind drop-in
@@ -973,7 +973,7 @@ for role in webserver tunnel; do
     esac
     if [ "$want" = yes ]; then
         [ -e "$ROLES_DIR/$role" ] || log "  role $role: ON"
-        printf '%s\n' "# Presence means this box has the $role role. Set by postinstall.sh from ROLE_* (#329)." > "$ROLES_DIR/$role"
+        printf '%s\n' "# Presence means this machine has the $role role. Set by postinstall.sh from ROLE_* (#329)." > "$ROLES_DIR/$role"
     elif [ -e "$ROLES_DIR/$role" ]; then
         log "  role $role: OFF (was on) - removing $ROLES_DIR/$role"
         rm -f "$ROLES_DIR/$role"
@@ -997,7 +997,7 @@ fi
 #
 # Note honestly what this is and is not today. write_overrides in scripts/lib.sh has
 # the installer write `$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL` to
-# /etc/sudoers.d/90-$DEPLOY_USER, so on a box as it stands this file narrows
+# /etc/sudoers.d/90-$DEPLOY_USER, so on a machine as it stands this file narrows
 # nothing - the account already has general passwordless root. What it does is
 # make the DEPLOY need only one command, so that tightening the blanket grant
 # later (REQ-SERVER-008) does not break the deploy. Reading this file as the
@@ -1006,7 +1006,7 @@ fi
 #
 # VALIDATE BEFORE INSTALLING, always. sudo refuses to run at all when any file
 # in /etc/sudoers.d fails to parse, so writing this directly and then checking
-# it can lock every account out of root on a headless box - including the
+# it can lock every account out of root on a headless machine - including the
 # account that would have to fix it. Write to a temp path, run `visudo -c`
 # against that, and only install once it parses. Mode 0440 root:root, which is
 # what sudo requires of a drop-in and will otherwise refuse to read.
@@ -1046,11 +1046,11 @@ if [ ! -x "$DEPLOY_SCRIPT" ] || [ ! -x "$RELEASE_POLL_SCRIPT" ]; then
     # Not fatal, and the timer stays enabled on purpose: the moment the
     # checkout catches up, the poller starts working with no further action.
     log "  NOTE: $DEPLOY_SCRIPT or $RELEASE_POLL_SCRIPT is not in the checkout yet."
-    log "        This box is on a '$RELEASE_BRANCH' that predates the deploy"
+    log "        This machine is on a '$RELEASE_BRANCH' that predates the deploy"
     log "        poller, so the timer will fail until it advances. Run"
     log "        'yarn release' from a clean main on a dev machine, then"
     log "        re-run this script - its checkout step above is what pulls"
-    log "        the new commit onto the box."
+    log "        the new commit onto the machine."
 fi
 
 #------------------------------------------------------------------------------
@@ -1058,7 +1058,7 @@ fi
 #
 # Everything public arrives this way. REQ-SERVER-002 forwards no inbound port
 # and the firewall above allows four, none of them an app port, so without this
-# the box serves nothing to the internet at all. The tunnel dials OUT to
+# the machine serves nothing to the internet at all. The tunnel dials OUT to
 # Cloudflare and traffic comes back down that connection.
 #
 # FROM CLOUDFLARE'S APT REPOSITORY, NOT A BINARY DROPPED IN BY HAND - #135.
@@ -1074,7 +1074,7 @@ CLOUDFLARED_LIST=/etc/apt/sources.list.d/cloudflared.list
 # preference. Cloudflare's repository has no `trixie` suite - as of writing
 # https://pkg.cloudflare.com/cloudflared/dists/trixie/Release is a 404 - so the
 # codename substitution used for the Docker repository above would leave apt
-# failing on every update, on the box this generation is FOR. The `any` suite
+# failing on every update, on the machine this generation is FOR. The `any` suite
 # exists precisely for this, and it is not a downgrade: its
 # main/binary-<arch>/Packages is byte-identical to bookworm's (same MD5), so
 # `any` and a codename suite serve the same package. cloudflared is a static Go
@@ -1143,7 +1143,7 @@ apt-get install -y cloudflared
 # `cloudflared service install` writes one into /etc/systemd/system, and that
 # is the documented way to do this, so it is exactly what a future repair
 # session reaches for. `cloudflared-custom.service` is the previous
-# generation's unit and is live on the box this replaces.
+# generation's unit and is live on the machine this replaces.
 #
 # Disabled, not masked. Masking would make a later `cloudflared service
 # install` fail in a way nobody would connect to this script; disabling is
@@ -1171,15 +1171,15 @@ done
 # CREDENTIAL. There is no credential in this repository, none on the installer
 # medium and none on any command line - the tunnel's credentials file is
 # host-specific, is created once by `cloudflared tunnel create` on a machine
-# with a Cloudflare login, and is copied to the box by hand. See the README.
+# with a Cloudflare login, and is copied to the machine by hand. See the README.
 #
 # `install -d` touches the directory's own mode and ownership and nothing
 # inside it, so a second run cannot clobber a working tunnel - which is the
 # whole of AC 3. 0700 because the contents are a bearer credential for every
-# hostname this box serves: anything that can read the file can serve traffic
+# hostname this machine serves: anything that can read the file can serve traffic
 # as debbie.
 #
-# Guarded on the checkout having apps/cloudflared at all. On a box whose
+# Guarded on the checkout having apps/cloudflared at all. On a machine whose
 # `release` predates that directory, creating it here would scatter untracked
 # directories through the checkout to no purpose - the unit's conditions below
 # would still correctly refuse to start.
@@ -1203,7 +1203,7 @@ fi
 # same reason.
 #
 # --no-autoupdate, and this is #136 rather than a style choice. cloudflared's
-# self-update is what silently failed for sixteen months on the old box. Now
+# self-update is what silently failed for sixteen months on the old machine. Now
 # that this is a package, REQ-SERVER-006's unattended upgrades own the version,
 # and leaving self-update on would have two mechanisms writing the same binary
 # - one of which runs as $DEPLOY_USER and cannot write /usr/bin anyway, so it
@@ -1224,17 +1224,17 @@ Documentation=https://github.com/seanmizen/seanorepo/issues/280
 After=network-online.target
 Wants=network-online.target
 
-# REFUSE, RATHER THAN FAIL IN A LOOP. Both of these are absent on a box that
+# REFUSE, RATHER THAN FAIL IN A LOOP. Both of these are absent on a machine that
 # has been provisioned but whose tunnel has never been set up by hand, which is
 # a normal first-boot state rather than an error. A condition that is not met
 # makes systemd log one line and leave the unit inactive - it does NOT count as
 # a failure, does not trigger Restart=, and cannot fill the journal. Starting
 # without credentials would instead be an authentication failure every
 # RestartSec forever, flooding the journal - capped since #287, but still - and hiding the
-# one fact that matters: nobody has put the credentials on this box.
+# one fact that matters: nobody has put the credentials on this machine.
 ConditionPathExists=$CLOUDFLARED_CONFIG
 ConditionDirectoryNotEmpty=$CLOUDFLARED_CREDS_DIR
-# The role, #329. Credentials alone are not enough: a box holding a copy of
+# The role, #329. Credentials alone are not enough: a machine holding a copy of
 # them without the tunnel role must not start pulling public traffic.
 ConditionPathExists=$ROLES_DIR/tunnel
 
@@ -1268,32 +1268,32 @@ fi
 # Enable it only if it could actually run.
 #
 # The test mirrors the unit's two Conditions exactly, on purpose: if this
-# script and systemd disagreed about what "ready" means, the box would either
+# script and systemd disagreed about what "ready" means, the machine would either
 # carry an enabled unit that never starts or a working tunnel nobody enabled.
 #
 # Enabled, NOT --now, matching the deploy poller above. Provisioning is
 # followed by a reboot in both harnesses and on metal.
 #
-# NOT DISABLED IN THE ELSE BRANCH, deliberately. A box whose credentials have
+# NOT DISABLED IN THE ELSE BRANCH, deliberately. A machine whose credentials have
 # gone missing is already handled by the conditions - the unit stays enabled
 # and is skipped rather than looping - and disabling here would mean a
 # re-provisioning run that misread the state could take a working tunnel down.
 # Refusing to enable is the requirement; tearing down is not.
 #
 # EXIT 0 EITHER WAY. No credentials is the correct state of a freshly built
-# box, exactly like #278's missing origin/release. It is reported, loudly, with
+# machine, exactly like #278's missing origin/release. It is reported, loudly, with
 # the remedy - not treated as a provisioning failure.
 #------------------------------------------------------------------------------
 if [ "$ROLE_TUNNEL" != yes ]; then
-    # Not the tunnel box. If it WAS - enabled or running - it stops now: two
-    # boxes serving one tunnel is exactly what the role exists to prevent, and
+    # Not the tunnel machine. If it WAS - enabled or running - it stops now: two
+    # machines serving one tunnel is exactly what the role exists to prevent, and
     # the explicit setting outranks the "never tear down" rule below.
     if systemctl is-enabled --quiet "$CLOUDFLARED_UNIT" 2> /dev/null \
         || systemctl is-active --quiet "$CLOUDFLARED_UNIT" 2> /dev/null; then
         log "  ROLE_TUNNEL is not yes - stopping and disabling $CLOUDFLARED_UNIT"
         systemctl disable --now "$CLOUDFLARED_UNIT" || true
     else
-        log "  not the tunnel box (ROLE_TUNNEL unset) - $CLOUDFLARED_UNIT stays off"
+        log "  not the tunnel machine (ROLE_TUNNEL unset) - $CLOUDFLARED_UNIT stays off"
     fi
 elif [ -f "$CLOUDFLARED_CONFIG" ] \
     && [ -d "$CLOUDFLARED_CREDS_DIR" ] \
@@ -1301,14 +1301,14 @@ elif [ -f "$CLOUDFLARED_CONFIG" ] \
     log "  credentials present - enabling $CLOUDFLARED_UNIT"
     systemctl enable "$CLOUDFLARED_UNIT"
 else
-    log "  NOT enabling $CLOUDFLARED_UNIT - this box has no tunnel credentials."
-    log "        This is the normal state of a newly provisioned box, not a"
+    log "  NOT enabling $CLOUDFLARED_UNIT - this machine has no tunnel credentials."
+    log "        This is the normal state of a newly provisioned machine, not a"
     log "        failure. The credentials are host-specific, are in no"
     log "        repository, and are never written by this script."
     log "        To finish the tunnel, on a machine with a Cloudflare login:"
     log "          cloudflared tunnel login"
     log "          cloudflared tunnel create <name>    # writes ~/.cloudflared/<uuid>.json"
-    log "        then copy that file to this box as"
+    log "        then copy that file to this machine as"
     log "          $CLOUDFLARED_CREDS_DIR/<uuid>.json"
     log "        make sure the uuid matches 'tunnel:' in $CLOUDFLARED_CONFIG,"
     log "        and re-run this script - it enables the unit once the"
@@ -1318,9 +1318,9 @@ fi
 #------------------------------------------------------------------------------
 # ngrok - remote SSH, REQ-NETWORK-005, #317
 #
-# `ngrok tcp 22` is the ONLY way into this box from outside the home network.
+# `ngrok tcp 22` is the ONLY way into this machine from outside the home network.
 # The Cloudflare SSH tunnel (ssh.seanmizen.com) is dead and is deliberately
-# not rebuilt. Lose this and the box can be reached from the LAN and nowhere
+# not rebuilt. Lose this and the machine can be reached from the LAN and nowhere
 # else, and the first sign is failing to log in from somewhere else.
 #
 # From ngrok's apt repository, so the binary is dpkg-owned and REQ-SERVER-006
@@ -1399,10 +1399,10 @@ install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$(dirname "$NGROK_CONFI
 # the cause. This is the way back in when something is already wrong - a
 # network outage, a failover, ngrok itself down for an hour - and a unit that
 # had given up by the time the network returned would stay down until someone
-# rebooted a box nobody can reach. So StartLimitIntervalSec=0 and a 30s
+# rebooted a machine nobody can reach. So StartLimitIntervalSec=0 and a 30s
 # RestartSec: at most ~2900 lines a day into a journal capped at 1G (#287).
 #
-# The condition still refuses a box with no token at all, which is a normal
+# The condition still refuses a machine with no token at all, which is a normal
 # first-boot state and not a failure: skipped, inactive, never looping.
 #
 # --log stdout: the journal is where the public address is recorded (the free
@@ -1447,10 +1447,10 @@ if [ -s "$NGROK_CONFIG" ] && grep -q "authtoken" "$NGROK_CONFIG" 2> /dev/null; t
     log "  authtoken present - enabling $NGROK_UNIT"
     systemctl enable "$NGROK_UNIT"
 else
-    log "  NOT enabling $NGROK_UNIT - this box has no ngrok authtoken."
-    log "        Normal for a newly provisioned box, but until it is fixed"
-    log "        this box CANNOT be reached over SSH from off the LAN."
-    log "        On the box, as $DEPLOY_USER:"
+    log "  NOT enabling $NGROK_UNIT - this machine has no ngrok authtoken."
+    log "        Normal for a newly provisioned machine, but until it is fixed"
+    log "        this machine CANNOT be reached over SSH from off the LAN."
+    log "        On the machine, as $DEPLOY_USER:"
     log "          ngrok config add-authtoken <token>   # dashboard.ngrok.com"
     log "        then re-run this script. See utils/debbie/2026-09-17/README.md."
 fi
@@ -1469,7 +1469,7 @@ fi
 #
 # LAN addresses keep their penalties. Only when sshd knows the keyword: an
 # unknown keyword fails `sshd -t`, and an sshd that will not start is the one
-# failure this box cannot be talked out of remotely.
+# failure this machine cannot be talked out of remotely.
 #------------------------------------------------------------------------------
 NGROK_SSHD_DROPIN=/etc/ssh/sshd_config.d/20-debbie-ngrok-loopback.conf
 # Matched with `case` on captured output, not `sshd -T | grep -q`: under
@@ -1500,6 +1500,6 @@ fi
 
 log "================================================================"
 log "roles on $SERVER_NAME: webserver=$ROLE_WEBSERVER tunnel=$ROLE_TUNNEL"
-[ "$ROLE_WEBSERVER" = yes ] || log "  this box tracks release but runs NO sites (ROLE_WEBSERVER unset)"
+[ "$ROLE_WEBSERVER" = yes ] || log "  this machine tracks release but runs NO sites (ROLE_WEBSERVER unset)"
 log "================================================================"
 log "done"

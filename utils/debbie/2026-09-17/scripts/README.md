@@ -5,23 +5,23 @@ preseed reaches a real machine.
 
 **Target assumptions:** UEFI, wifi-only, and a disk you are happy to lose
 entirely. Read [what the harness does not
-prove](../README.md#what-it-does-not) before trusting a green VM run here.
+prove](../README.md#what-a-vm-run-cannot-test) before trusting a green VM run here.
 
 ## Layout
 
 ```
-scripts/1-build-iso/       build-iso.sh      .env.example   <box>.env ...
-scripts/2-serve-preseed/   serve-preseed.sh  .env.example   <box>.env ...
-scripts/3-provision/       provision.sh      .env.example   <box>.env ...
+scripts/1-build-iso/       build-iso.sh      .env.example   <machine>.env ...
+scripts/2-serve-preseed/   serve-preseed.sh  .env.example   <machine>.env ...
+scripts/3-provision/       provision.sh      .env.example   <machine>.env ...
 scripts/lib.sh             shared by all three
 working/                   shared output: built ISOs, the SSH key (gitignored)
 ```
 
-- One env file per step, per box. `<box>.env` and `.env` are gitignored.
+- One env file per step, per machine. `<machine>.env` and `.env` are gitignored.
 - Each step reads ONLY the keys in its `.env.example`. A key from another step
   is an error that names the step it belongs to.
-- The box is a required argument: `./3-provision/provision.sh trixie2` reads
-  `3-provision/trixie2.env`. No argument lists the boxes that step has files for.
+- The machine is a required argument: `./3-provision/provision.sh trixie2` reads
+  `3-provision/trixie2.env`. No argument lists the machines that step has files for.
 - Shared keys (`SERVER_NAME`, wifi) are repeated per step on purpose. If they
   disagree, the first-boot hostname check in step 3 fails.
 
@@ -56,25 +56,25 @@ curl -fLO "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.7
 curl -fsSL "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS" \
   | grep netinst | shasum -a 256 -c - | grep -v FAILED
 
-# 2. configure - one env file per step, per box. Each .env.example says what.
-BOX=trixie2
-for s in 1-build-iso 2-serve-preseed 3-provision; do cp $s/.env.example $s/$BOX.env; done
+# 2. configure - one env file per step, per machine. Each .env.example says what.
+MACHINE=trixie2
+for s in 1-build-iso 2-serve-preseed 3-provision; do cp $s/.env.example $s/$MACHINE.env; done
 openssl passwd -6                      # -> PASSWORD_CRYPTED in 2-serve-preseed
-$EDITOR */$BOX.env                     # SERVER_NAME in all three; ROLE_* in 3 if it serves
+$EDITOR */$MACHINE.env                     # SERVER_NAME in all three; ROLE_* in 3 if it serves
 
 # 3. bake the cmdline in
-ISO=debian-13.7.0-amd64-netinst.iso ./1-build-iso/build-iso.sh $BOX
+ISO=debian-13.7.0-amd64-netinst.iso ./1-build-iso/build-iso.sh $MACHINE
 
 # 4. write the stick ONCE - the built ISO, not the stock one
 diskutil list                          # find it. dd takes the whole device.
 diskutil unmountDisk force /dev/diskN
-sudo dd if=../working/debbie-$(grep ^SERVER_NAME 1-build-iso/$BOX.env | cut -d= -f2).iso of=/dev/rdiskN bs=4m
+sudo dd if=../working/debbie-$(grep ^SERVER_NAME 1-build-iso/$MACHINE.env | cut -d= -f2).iso of=/dev/rdiskN bs=4m
 
 # 5. serve, then boot the target and walk away
-./2-serve-preseed/serve-preseed.sh $BOX
+./2-serve-preseed/serve-preseed.sh $MACHINE
 
 # 6. once it powers itself off, power it on and provision
-./3-provision/provision.sh $BOX
+./3-provision/provision.sh $MACHINE
 
 # 7. after provisioning - see "After provisioning" below
 ```
@@ -169,7 +169,7 @@ to get wrong from memory:
 |---|---|
 | `wireless_security_type=wpa` | The select's values are `wep/open` and `wpa`. There is no `wpa2` — `wpa` covers WPA2 PSK. |
 | `wireless_show_essids=manual` | A *separate* prompt from `wireless_essid`, offering a scanned list. Unset, the installer stops and asks even though the ESSID is preset. |
-| `choose_interface=<iface>` | `auto` picks the first interface with a **carrier**, and wifi has none until it associates — so on a box with a dead ethernet port `auto` can pick the wrong one. Read it from the installer's shell (`Ctrl-Alt-F2`, `ip link`) if you don't know it. |
+| `choose_interface=<iface>` | `auto` picks the first interface with a **carrier**, and wifi has none until it associates — so on a machine with a dead ethernet port `auto` can pick the wrong one. Read it from the installer's shell (`Ctrl-Alt-F2`, `ip link`) if you don't know it. |
 
 **The wifi values are mandatory, not a convenience.** `priority=critical`
 suppresses the prompt that would otherwise ask for them, so a missing
@@ -188,7 +188,7 @@ asks for a language, that is what happened — `cat /proc/cmdline` on
 ## 4. Provision
 
 The preseed ends in **poweroff**, not reboot, so "did the install finish?" is
-answerable without watching a console. Power the box back on, then:
+answerable without watching a console. Power the machine back on, then:
 
 ```bash
 cp 3-provision/.env.example 3-provision/trixie2.env
@@ -196,10 +196,10 @@ $EDITOR 3-provision/trixie2.env        # same SERVER_NAME; ROLE_* only if it ser
 ./3-provision/provision.sh trixie2
 ```
 
-That waits for SSH, **asserts the box as the installer left it**, runs
-`postinstall.sh`, reboots so the boot-time settings apply, waits for the box to
+That waits for SSH, **asserts the machine as the installer left it**, runs
+`postinstall.sh`, reboots so the boot-time settings apply, waits for the machine to
 return, and asserts again — both times with the same `payload/assert.sh` the VM
-runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from `3-provision/<box>.env`. Exit
+runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from `3-provision/<machine>.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
 back on SSH.
 
@@ -207,43 +207,43 @@ The **first** of those two runs is the one `#285` added, and it is the only one
 that can catch a fault the installer creates and `postinstall.sh` repairs. The
 first real install came up as hostname `192`; `postinstall.sh` corrected it, so
 every check was green and nobody saw it for a generation. A first-boot failure
-prints a loud banner, lets the repair proceed — being pointed at a broken box
+prints a loud banner, lets the repair proceed — being pointed at a broken machine
 is a legitimate reason to run this — and still exits non-zero at the end, so a
-repaired box cannot be mistaken for a correctly installed one.
+repaired machine cannot be mistaken for a correctly installed one.
 
-Since `#285` the box also answers to `$SERVER_NAME.local` on **first boot**:
+Since `#285` the machine also answers to `$SERVER_NAME.local` on **first boot**:
 `avahi-daemon` and `libnss-mdns` are installed by the preseed rather than by
 `postinstall.sh`. Previously mDNS only started working after the step you had
-to reach the box to run, which is why `HOST=<ip>` was so often needed below.
+to reach the machine to run, which is why `HOST=<ip>` was so often needed below.
 
 ```bash
-./3-provision/provision.sh trixie2 --assert       # assert only, box already provisioned
+./3-provision/provision.sh trixie2 --assert       # assert only, machine already provisioned
 ./3-provision/provision.sh trixie2 --no-reboot    # postinstall only
-HOST=192.168.1.42 ./3-provision/provision.sh trixie2   # fallback, if .local does not reach the box
+HOST=192.168.1.42 ./3-provision/provision.sh trixie2   # fallback, if .local does not reach the machine
 ```
 
 ### The reboot has to be proved, not assumed
 
 The wait after the reboot is satisfied by a **new boot id**, not by a live SSH
 socket — `#295`. `provision.sh` reads
-`/proc/sys/kernel/random/boot_id` before asking the box to reboot, and treats
+`/proc/sys/kernel/random/boot_id` before asking the machine to reboot, and treats
 it as back only once something answers with a *different* one.
 
 It used to send `systemctl reboot`, sleep 10s and poll. A clean shutdown with
 Docker containers to stop takes longer than that, so the first poll could reach
 the **pre-reboot** system, and the `provisioned` assertions then ran against a
-box that had not rebooted. The checks that fail in that case are exactly the
+machine that had not rebooted. The checks that fail in that case are exactly the
 ones the reboot exists for — `lid close ignored` and `sleep.target masked`
-(REQ-SERVER-001) — so the symptom was a spurious red on a box that was fine,
+(REQ-SERVER-001) — so the symptom was a spurious red on a machine that was fine,
 and the fix everyone reached for was re-running, which passed.
 
 The check is keyed on the boot id and never on the host, which is what lets it
-sit on top of `#284`: the box may legitimately come back on a different address
+sit on top of `#284`: the machine may legitimately come back on a different address
 than the one it left on. Two addresses reporting the same boot id is one
-machine that never rebooted; either address reporting a new one is a box that
+machine that never rebooted; either address reporting a new one is a machine that
 did.
 
-A box that never comes back still exits `3` within `SSH_WAIT`, and the message
+A machine that never comes back still exits `3` within `SSH_WAIT`, and the message
 says which failure it was — *nothing answered* (look at the lease table and
 mDNS, below) versus *answered, but never rebooted* (something is blocking
 shutdown; try `journalctl -b -u docker`, or raise `SSH_WAIT` if it is merely
@@ -254,9 +254,9 @@ slow).
 `provision.sh` connects by **`$SERVER_NAME.local`** and falls back to `HOST`
 only if the name does not answer. That ordering is the fix for `#284`, and it is
 about the reboot in the middle of the run: **the DHCP lease moves on every
-boot.** The first real box took `.182`, then `.183`, then `.184`, one per power
+boot.** The first real machine took `.182`, then `.183`, then `.184`, one per power
 cycle. A run started with `HOST=192.168.1.182` used to keep dialling `.182`
-after the reboot and time out against a box that was up the whole time, on a
+after the reboot and time out against a machine that was up the whole time, on a
 different address:
 
 ```
@@ -268,18 +268,18 @@ So:
 
 - **Prefer no `HOST` at all.** Since `#285` the name works from first boot, and
   it is the only handle that survives the reboot.
-- Set `HOST=<ip>` only if `.local` does not reach the box from your laptop — a
+- Set `HOST=<ip>` only if `.local` does not reach the machine from your laptop — a
   network with wifi client isolation, or the two machines on different subnets.
   Check with `ping -c1 $SERVER_NAME.local` before assuming it.
 - Either way the address is **tried within seconds**, not after the 300s
   timeout: each polling round tries the name and then the address.
 - Nothing is pinned. Both waits — the one before `postinstall.sh` and the one
-  after the reboot — re-choose from the same list, so a box that came back on a
+  after the reboot — re-choose from the same list, so a machine that came back on a
   new lease is still found by name. The log says which one answered (`up on
   debbie.local`).
 
-`./3-provision/provision.sh <box> --assert` works the same way, so asserting an
-already-provisioned box needs no address either.
+`./3-provision/provision.sh <machine> --assert` works the same way, so asserting an
+already-provisioned machine needs no address either.
 
 If neither answers, the error names both and says what to do about each; the
 addresses in this runbook and in your shell history go stale on every boot, so
@@ -292,7 +292,7 @@ is only a convenience on top.
 
 Do not hand-run these steps with a hardcoded `debbie.local`: `assert.sh`
 defaults to `EXPECT_HOSTNAME=debbie`, so with any other `SERVER_NAME` the
-hostname check fails on a box that is actually correct. `provision.sh` passes
+hostname check fails on a machine that is actually correct. `provision.sh` passes
 the right values, which is most of why it exists.
 
 On metal the wifi assertion **runs** rather than skipping, so this is the first
@@ -300,24 +300,24 @@ place `REQ-SERVER-005` is genuinely tested.
 
 ## After provisioning
 
-`provision.sh` ends with the box's roles (`roles on <name>: webserver=… tunnel=…`).
-With no `ROLE_*` in `3-provision/<box>.env` the box tracks `release` and runs nothing — the
-safe state, and the right one for a box being set up. What is left is by hand,
+`provision.sh` ends with the machine's roles (`roles on <name>: webserver=… tunnel=…`).
+With no `ROLE_*` in `3-provision/<machine>.env` the machine tracks `release` and runs nothing — the
+safe state, and the right one for a machine being set up. What is left is by hand,
 because each piece is a credential that is in no repository:
 
-| Step | Which boxes | How |
+| Step | Which machines | How |
 |---|---|---|
-| **ngrok token** — SSH from off the LAN | every box | as `srv` on the box: `ngrok config add-authtoken <token>`, then re-run `./3-provision/provision.sh <box>`. Find the address: [Remote SSH](../README.md#remote-ssh-ngrok) |
-| **Serve the sites** | webservers | set `ROLE_WEBSERVER=yes` in `3-provision/<box>.env`, re-run `./3-provision/provision.sh <box>`. Without the tunnel role they are published on the LAN |
-| **Tunnel credentials** — the internet reaches this box | the ONE tunnel box | set `ROLE_TUNNEL=yes` too, copy the credentials JSON into `apps/cloudflared/credentials/` on the box ([recipe](../README.md#creating-the-tunnel-and-placing-its-credentials)), re-run `./3-provision/provision.sh <box>` |
+| **ngrok token** — SSH from off the LAN | every machine | as `srv` on the machine: `ngrok config add-authtoken <token>`, then re-run `./3-provision/provision.sh <machine>`. Find the address: [Remote SSH](../README.md#remote-ssh-ngrok) |
+| **Serve the sites** | webservers | set `ROLE_WEBSERVER=yes` in `3-provision/<machine>.env`, re-run `./3-provision/provision.sh <machine>`. Without the tunnel role they are published on the LAN |
+| **Tunnel credentials** — the internet reaches this machine | the ONE tunnel machine | set `ROLE_TUNNEL=yes` too, copy the credentials JSON into `apps/cloudflared/credentials/` on the machine ([recipe](../README.md#set-up-the-cloudflare-tunnel)), re-run `./3-provision/provision.sh <machine>` |
 
-**Moving the public sites to another box** is a deliberate act, because the
+**Moving the public sites to another machine** is a deliberate act, because the
 data moves with it (SQLite on local volumes): take `ROLE_TUNNEL` off the old
-box's `3-provision/<box>.env` and re-provision it (its tunnel stops), copy the data and the
-credentials across, then set both roles on the new box and provision it. Never
-have the tunnel role on two boxes at once.
+machine's `3-provision/<machine>.env` and re-provision it (its tunnel stops), copy the data and the
+credentials across, then set both roles on the new machine and provision it. Never
+have the tunnel role on two machines at once.
 
-Check any box: `ssh srv@<name>.local ls /etc/seanorepo/roles`.
+Check any machine: `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
 ## Where this is likely to go wrong
 
@@ -336,7 +336,7 @@ In rough order of probability, and all of them invisible to the VM loop:
    works, and it is what this generation ships — but production debbie's
    `net-failover.sh` drives wifi through `nmcli` and will not see an
    ifupdown-managed interface. Migrating is deliberately **not** coupled to
-   getting the box installed: doing it wrong leaves a headless machine with no
+   getting the machine installed: doing it wrong leaves a headless machine with no
    network. See REQ-SERVER-005.
 4. **UEFI drops the boot entry.** Why the preseed sets
    `force-efi-extra-removable`, and precisely what a VM cannot reproduce.

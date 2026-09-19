@@ -29,7 +29,7 @@ IFS=$'\n\t'
 # 2025-10-08b/scripts/deploy.sh - what production runs today - spells the same
 # override REPO_PATH and resolves the same default path. The wart is not
 # carried forward: this generation is REPO_DIR throughout, and the two
-# generations never run on the same box.
+# generations never run on the same machine.
 REPO_DIR="${REPO_DIR:-$HOME/projects/seanorepo}"
 
 # State lives under the deploy user's own directory rather than /tmp. A
@@ -196,14 +196,14 @@ log "deploying: $reason"
 # release-poll.sh.
 
 # Where the apps publish - #329, derived from the roles rather than set. A
-# webserver that is also the tunnel box publishes on loopback only: the tunnel
+# webserver that is also the tunnel machine publishes on loopback only: the tunnel
 # reaches localhost:4xxx and nothing on the LAN should (REQ-SERVER-002). A
 # webserver WITHOUT the tunnel publishes on the LAN, because being reached
 # from the LAN is the only reason to run one. Every compose port reads
 # ${PUBLISH_ADDR:-127.0.0.1} (#309).
 if [ -e "$ROLES_DIR/tunnel" ]; then
     export PUBLISH_ADDR=127.0.0.1
-    log "publishing on loopback (tunnel box)"
+    log "publishing on loopback (tunnel machine)"
 else
     export PUBLISH_ADDR=0.0.0.0
     log "publishing on the LAN (webserver without the tunnel role)"
@@ -273,7 +273,7 @@ fi
 
 if [ "$tunnel_restart" = yes ] && [ ! -e "$ROLES_DIR/tunnel" ]; then
     tunnel_restart=no
-    tunnel_why="this box does not have the tunnel role"
+    tunnel_why="this machine does not have the tunnel role"
 fi
 if [ "$tunnel_restart" = no ]; then
     debug "not restarting $CLOUDFLARED_UNIT: $tunnel_why"
