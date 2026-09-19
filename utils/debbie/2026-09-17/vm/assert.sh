@@ -26,7 +26,8 @@
 set -uo pipefail
 
 EXPECT_ARCH="${EXPECT_ARCH:-}"
-EXPECT_HOSTNAME="${EXPECT_HOSTNAME:-debbie}"
+# No default - #329. provision.sh and test-vm.sh always pass it.
+EXPECT_HOSTNAME="${EXPECT_HOSTNAME:?EXPECT_HOSTNAME must be set - the name this box should have}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
 # Must match the default in scripts/postinstall.sh, which clones here, and the
