@@ -103,9 +103,16 @@ sshd_effective() {
 # journald never read reports the default here (10% of the filesystem), which
 # is #313's lesson applied to journald. The last such line of this boot is the
 # current daemon's.
+#
+# Matched by syslog identifier, not `-u`: journald's reports about its own
+# files are not reliably tagged with its unit. The size is printed as `1.0G` or
+# `1G` depending on the systemd version, so both count.
+journal_usage_line() {
+    sudo -n journalctl -b -t systemd-journald -o cat --no-pager 2> /dev/null |
+        grep -E '^System Journal .* max ' | tail -n 1
+}
 journal_max_use() {
-    sudo -n journalctl -b -u systemd-journald -o cat --no-pager 2> /dev/null |
-        sed -n 's/^System Journal .* max \([^,]*\),.*/\1/p' | tail -n 1
+    journal_usage_line | sed -n 's/.* max \([0-9.]*[KMGT]\).*/\1/p' | sed 's/\.0\([KMGT]\)$/\1/'
 }
 
 logind_handler() {
@@ -277,7 +284,8 @@ if [ "$PHASE" = provisioned ]; then
     check "hibernate key ignored"     '[ "$(logind_handler HandleHibernateKey)" = ignore ]'
 
     # REQ-SERVER-007, #287. Read from the running journald, not the drop-in.
-    check "journald size capped"      '[ "$(journal_max_use)" = 1.0G ]'
+    check "journald size capped"      '[ "$(journal_max_use)" = 1G ]'
+    echo "      journald reports: $(journal_usage_line || true)"
 
     # REQ-SERVER-008, #288. Asked of sshd, not of the drop-in - a file sshd
     # never read is the fault being tested for. `no` exactly, never "no or
