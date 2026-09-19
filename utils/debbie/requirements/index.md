@@ -34,6 +34,7 @@
 | [`REQ-SERVER-011`](server.md#req-server-011--our-systemd-units-live-apart-from-the-distributions) | Our systemd units live apart from the distribution's | active | constraint | P2 | sean |
 | [`REQ-SERVER-012`](server.md#req-server-012--a-packaged-unit-is-changed-by-drop-in-never-by-shadowing) | A packaged unit is changed by drop-in, never by shadowing | active | constraint | P1 | sean |
 | [`REQ-SERVER-013`](server.md#req-server-013--our-units-are-identifiable-in-systemctl-output) | Our units are identifiable in systemctl output | active | constraint | P2 | sean |
+| [`REQ-SERVER-014`](server.md#req-server-014--a-forgotten-setting-never-switches-anything-on) | A forgotten setting never switches anything on | active | constraint | P0 | sean |
 
 ## Dependency graph
 
@@ -68,6 +69,7 @@ graph TD
   REQ_SERVER_011["REQ-SERVER-011<br/>Our systemd units live apart from the distribution's"]
   REQ_SERVER_012["REQ-SERVER-012<br/>A packaged unit is changed by drop-in, never by shadowing"]
   REQ_SERVER_013["REQ-SERVER-013<br/>Our units are identifiable in systemctl output"]
+  REQ_SERVER_014["REQ-SERVER-014<br/>A forgotten setting never switches anything on"]
   REQ_DEPLOY_002 -->|depends-on| REQ_DEPLOY_001
   REQ_DEPLOY_003 -->|depends-on| REQ_DEPLOY_002
   REQ_DEPLOY_004 -->|depends-on| REQ_DEPLOY_002
@@ -86,17 +88,20 @@ graph TD
   REQ_SERVER_009 -->|refines| REQ_SERVER_008
   REQ_SERVER_012 -->|depends-on| REQ_SERVER_011
   REQ_SERVER_013 -->|depends-on| REQ_SERVER_011
+  REQ_SERVER_014 -->|refines| REQ_DEPLOY_002
+  REQ_SERVER_014 -->|refines| REQ_NETWORK_002
   style REQ_SERVER_009 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links
 
 - `REQ-DEPLOY-001` — required-by REQ-DEPLOY-002
-- `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004
+- `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004, refined-by REQ-SERVER-014
 - `REQ-DEPLOY-004` — required-by REQ-DEPLOY-005, required-by REQ-DEPLOY-006
 - `REQ-DEPLOY-005` — required-by REQ-NETWORK-002
 - `REQ-DEPLOY-006` — required-by REQ-NETWORK-002
 - `REQ-NETWORK-001` — required-by REQ-NETWORK-002, required-by REQ-NETWORK-003, required-by REQ-NETWORK-005
+- `REQ-NETWORK-002` — refined-by REQ-SERVER-014
 - `REQ-NETWORK-003` — required-by REQ-NETWORK-004
 - `REQ-SERVER-002` — required-by REQ-SERVER-008
 - `REQ-SERVER-003` — required-by REQ-SERVER-008

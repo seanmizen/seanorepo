@@ -80,7 +80,9 @@ Introduced in #259.
 - **Priority:** P1
 - **Statement:** The host shall accept inbound connections on exactly ports
   22/tcp, 80/tcp, 443/tcp and 5353/udp, and refuse every other port, including
-  every port published by a container.
+  every port published by a container. The one exception is a box with the
+  webserver role and without the tunnel role (#329), which publishes its apps
+  on ports 4000-4999 to the LAN by design.
 - **Rationale:** Everything public arrives through the Cloudflare tunnel, which
   is an outbound connection. An open application port would therefore be a
   second, unaudited way in that nothing is watching — the app ports in the
@@ -136,6 +138,8 @@ Introduced in #259.
     port binds loopback and nothing else"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "that port refuses a
     connection to the host's own routable address"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the deploy publishes on
+    loopback with the tunnel and on the LAN without"
 - **Relations:** none
 
 ## REQ-SERVER-003 — The deploy user can deploy without a password
@@ -525,3 +529,34 @@ Introduced in #259.
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "repo units are prefixed custom-"
 - **Relations:**
   - depends-on REQ-SERVER-011
+
+## REQ-SERVER-014 — A forgotten setting never switches anything on
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #329
+- **Type:** constraint
+- **Priority:** P0
+- **Statement:** Where a provisioning setting is unset, the host shall take the
+  choice that runs nothing, or refuse to provision.
+- **Rationale:** `DEBBIE_SERVES` (#307) defaulted to on, so a forgotten line
+  made a box run `yarn prod:docker`, and `SERVER_NAME` defaulted to `debbie`,
+  so a forgotten line installed a second `debbie.local` and pointed
+  `provision.sh` at the live box. Both failures are silent until they matter.
+
+  So roles (`ROLE_WEBSERVER`, `ROLE_TUNNEL`) are off unless set to `yes`, and
+  every provisioning run makes the box's roles match the settings exactly.
+  `SERVER_NAME` has no default in any script. A retired setting is refused by
+  name rather than ignored.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "roles on this box are
+    exactly '${EXPECT_ROLES:-none}'" — the VM sets no roles, so no role file
+    may exist
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "without the webserver role a
+    triggered deploy runs nothing"
+  - Demonstration — `provision.sh`, `serve-preseed.sh` and `build-iso.sh` with
+    no `SERVER_NAME`, and `provision.sh` with a leftover `DEBBIE_SERVES`, each
+    exit with a message before contacting any machine
+- **Relations:**
+  - refines REQ-DEPLOY-002
+  - refines REQ-NETWORK-002

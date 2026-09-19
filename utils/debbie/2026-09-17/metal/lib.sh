@@ -1,4 +1,5 @@
-# lib.sh - shared by serve-preseed.sh and build-iso.sh. Sourced, not executed.
+# lib.sh - shared by serve-preseed.sh, build-iso.sh and provision.sh. Sourced,
+# not executed.
 #
 # Both need the same .env and the same answer to "what address will the target
 # fetch from", and two copies of either would drift.
@@ -50,6 +51,9 @@ read_env() {
             ISO)              ISO="$val" ;;
             PORT)             PORT="$val" ;;
             SERVE_IP)         SERVE_IP="$val" ;;
+            ROLE_WEBSERVER)   ROLE_WEBSERVER="$val" ;;
+            ROLE_TUNNEL)      ROLE_TUNNEL="$val" ;;
+            DEBBIE_SERVES)    die "$ENV_FILE line $lineno: DEBBIE_SERVES was replaced by ROLE_WEBSERVER (#329). Delete the line: unset now means the box runs no sites." ;;
             *) die "$ENV_FILE line $lineno: unknown key '$key'. See .env.example." ;;
         esac
     done < "$ENV_FILE"

@@ -31,7 +31,9 @@ PORT="${PORT:-8000}"
 read_env
 
 DEPLOY_USER="${DEPLOY_USER:-srv}"
-SERVER_NAME="${SERVER_NAME:-debbie}"
+# No default - #329: a forgotten name used to install a second "debbie".
+SERVER_NAME="${SERVER_NAME:-}"
+[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every box on purpose."
 
 [ -n "${PASSWORD_CRYPTED:-}" ] \
     || die "PASSWORD_CRYPTED is not set in $ENV_FILE. Generate one with: openssl passwd -6"
