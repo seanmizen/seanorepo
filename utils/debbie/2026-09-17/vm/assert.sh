@@ -876,8 +876,8 @@ if [ "$PHASE" = provisioned ]; then
         check "the tunnel is NOT enabled while credentials are absent" \
             '[ "$(systemctl is-enabled "$CLOUDFLARED_UNIT" 2>&1)" != enabled ]'
         # The behavioural half, and the whole point of AC 4: a unit that
-        # restarts forever against missing credentials fills a journal that is
-        # uncapped until #287 and buries the real problem.
+        # restarts forever against missing credentials floods the journal
+        # (capped since #287, but still) and buries the real problem.
         #
         # Asking it to start is safe precisely because the credentials are
         # absent - there is no tunnel to disturb. A unit whose conditions are

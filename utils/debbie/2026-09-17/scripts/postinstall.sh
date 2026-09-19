@@ -1040,7 +1040,7 @@ Wants=network-online.target
 # makes systemd log one line and leave the unit inactive - it does NOT count as
 # a failure, does not trigger Restart=, and cannot fill the journal. Starting
 # without credentials would instead be an authentication failure every
-# RestartSec forever, against a journal that is uncapped until #287, hiding the
+# RestartSec forever, flooding the journal - capped since #287, but still - and hiding the
 # one fact that matters: nobody has put the credentials on this box.
 ConditionPathExists=$CLOUDFLARED_CONFIG
 ConditionDirectoryNotEmpty=$CLOUDFLARED_CREDS_DIR
