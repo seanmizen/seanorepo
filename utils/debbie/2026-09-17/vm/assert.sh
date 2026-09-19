@@ -242,7 +242,9 @@ if [ "$PHASE" = provisioned ]; then
     # below, with no fall back to the drop-in's text: a file logind never read
     # is the fault. postinstall.sh sets all three lid handlers, so all three
     # are asserted - on external power or docked, logind consults the latter
-    # two instead of HandleLidSwitch.
+    # two instead of HandleLidSwitch. HandleLidSwitchDocked already defaults
+    # to `ignore` in systemd, so that one is a regression guard and cannot be
+    # shown red by removing its line; the other two default to suspending.
     check "lid close ignored"         '[ "$(logind_handler HandleLidSwitch)" = ignore ]'
     check "lid close on power ignored" '[ "$(logind_handler HandleLidSwitchExternalPower)" = ignore ]'
     check "lid close docked ignored"  '[ "$(logind_handler HandleLidSwitchDocked)" = ignore ]'
