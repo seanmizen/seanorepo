@@ -67,23 +67,44 @@ Introduced in #273.
   compares the remote SHA to what it last deployed. Nothing needs to reach in.
   The cost is up to two minutes of latency on every deploy, which for a
   personal site is not a cost at all.
+
+  Since #307 this is two units with one clock. `custom-release-poll` fetches
+  and checks out `release` on every machine and touches nothing that runs;
+  after every poll it triggers `custom-deploy`, which compares the checkout and
+  the boot id with its marker and deploys only on a machine whose serving flag
+  (`/etc/seanorepo/serving`) exists. The deploy has no timer of its own, so it
+  can never start while a checkout is being written.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/services/deploy-poll-custom.timer`
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` compares
     `git ls-remote` against a recorded marker
-  - Inspection — `utils/debbie/2026-09-17/scripts/deploy.sh` compares
-    `git ls-remote` against a marker recording the deployed SHA and the boot id
-    it was deployed under, and never dereferences the recorded SHA, so a marker
-    left by a force-pushed or rebuilt `release` cannot wedge the poller
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy-poll.timer
+  - Inspection — `utils/debbie/2026-09-17/scripts/release-poll.sh` compares
+    `git ls-remote` against `HEAD` and checks out on a difference; no marker
+  - Inspection — `utils/debbie/2026-09-17/scripts/deploy.sh` compares `HEAD`
+    against a marker recording the deployed SHA and the boot id it was deployed
+    under, and never dereferences the recorded SHA, so a marker left by a
+    force-pushed or rebuilt `release` cannot wedge it
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-release-poll.timer
     enabled"
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy-poll.timer
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-release-poll.timer
     active"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the timer polls every two
     minutes" — the two-minute period is the latency bound this requirement
     trades for needing no inbound port, so it is asserted rather than assumed
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy-poll.service
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-release-poll.service
     is timer-owned (static)"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "custom-deploy.service is not
+    on a timer"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the release poller triggers
+    the deploy"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the deploy runs only where
+    the serving flag exists"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the release poller moves the
+    checkout and touches no service" — behaviour, against a scratch origin with
+    every service command shimmed: a machine that does not serve still tracks
+    `release`, and tracking it runs nothing
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the deploy runs once per
+    checkout and again after a reboot"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy.sh present and
     executable" — **conditional, and the condition is the claim.** `deploy.sh`
     is run from the checkout, and the checkout is on `release`, so a box
@@ -109,6 +130,10 @@ Introduced in #273.
   than that whenever images rebuild. Without a lock, a slow deploy is joined by
   a second one running `git checkout -f` underneath it, and the result is a
   working tree that matches no commit.
+
+  Since #307 the checkout is the release poller's, and it takes the same lock:
+  while a deploy holds it, the poller leaves the checkout alone and tries again
+  on the next tick.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` takes
     `$DEPLOY_LOCK_FILE` before doing any work
@@ -119,6 +144,8 @@ Introduced in #273.
     cleanly while one holds the lock" — asserted as behaviour, not as a grep
     for `flock`: a lock is held and `deploy.sh` is then run against it, and it
     must exit 0 and say why rather than block, queue or proceed
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "a release poll leaves the
+    checkout alone while a deploy holds the lock"
 - **Relations:** depends-on REQ-DEPLOY-002
 
 ## REQ-DEPLOY-004 — A deploy is the same command a human would run
@@ -171,7 +198,8 @@ Introduced in #273.
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` diffs the old and
     new SHA for `$CLOUDFLARED_CONFIG` before restarting
   - Inspection — `utils/debbie/2025-10-08b/setup/sudoers-seanorepo-deploy`
-  - Inspection — `utils/debbie/2026-09-17/scripts/deploy.sh` diffs the two SHAs
+  - Inspection — `utils/debbie/2026-09-17/scripts/deploy.sh` diffs the last
+    deployed SHA (the marker, since #307) against `HEAD`
     with a pathspec rather than piping into `grep`, and restarts when it cannot
     prove the config unchanged — a first recorded deploy, or a previous commit
     no longer in the object store
@@ -226,4 +254,6 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy.sh says why there is
     no git clean" — an unexplained absence is what gets tidied away, so the
     explanation is asserted too
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no git clean in the release
+    poller" — since #307 the checkout happens there
 - **Relations:** depends-on REQ-DEPLOY-004
