@@ -2,7 +2,7 @@
 # serve-preseed.sh - serve the preseed to a real machine, and print the boot
 # line that fetches it.
 #
-# This is the metal counterpart to vm/test-vm.sh. It deliberately does the same
+# This is the metal counterpart to scripts/test-vm/test-vm.sh. It deliberately does the same
 # thing the harness does - generate overrides.cfg with the shared script, serve
 # the directory over HTTP - so that what installs on hardware is what was
 # proven in the VM.
@@ -20,11 +20,11 @@ set -euo pipefail
 IFS=$'\n\t'
 
 HERE="$(cd "$(dirname "$0")" && pwd)"     # this step's folder: its env files
-METAL="$(dirname "$HERE")"
-GEN_DIR="$(dirname "$METAL")"
-WORK="$METAL/work"                          # shared by all three steps
+SCRIPTS="$(dirname "$HERE")"
+GEN_DIR="$(dirname "$SCRIPTS")"
+WORK="$GEN_DIR/working"                          # shared by all three steps
 # shellcheck source=../lib.sh
-. "$METAL/lib.sh"
+. "$SCRIPTS/lib.sh"
 
 select_env "$HERE" "${1:-}"
 shift
@@ -64,8 +64,7 @@ fi
 #------------------------------------------------------------------------------
 HTTP_ROOT="$WORK/http"
 mkdir -p "$HTTP_ROOT"
-cp "$GEN_DIR/preseed/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
-cp "$GEN_DIR/scripts/postinstall.sh" "$HTTP_ROOT/postinstall.sh"
+cp "$GEN_DIR/payload/install/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
 
 # CONSOLE is deliberately not exported: on a laptop, pointing the kernel
 # console at a serial port that does not exist is a black screen for the whole
@@ -126,8 +125,7 @@ cat <<EOF
   After the install the box powers off (the preseed ends in poweroff, so that
   "did it finish?" is answerable without watching). Power it back on, then:
 
-    ssh -i $KEY $DEPLOY_USER@$SERVER_NAME.local
-    curl -fsSL http://$IP:$PORT/postinstall.sh | sudo bash
+    ./scripts/3-provision/provision.sh <box>
 
   Ctrl-C to stop serving.
 

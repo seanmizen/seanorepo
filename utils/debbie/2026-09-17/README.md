@@ -7,6 +7,15 @@ What binds here is [`utils/debbie/requirements/`](../requirements/) — `REQ-EMU
 for the harness, `REQ-SERVER-*` for what a provisioned host must be. This file
 explains; the requirements bind. CI validates them on every PR.
 
+## Layout
+
+| Folder | What | Runs where |
+|---|---|---|
+| `scripts/` | what you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`, each with its `.env.example` and `<box>.env` files; `lib.sh`, `write-overrides.sh` | your laptop |
+| `payload/` | setup delivered to a box: `install/preseed.cfg`, `configure/postinstall.sh`, `verify/assert.sh`. Idempotent, run on demand | the installer / the box |
+| `services/` | software that runs on the box: `release-poll/`, `deploy/`. Run by systemd from the `release` checkout, forever | the box |
+| `working/` | output: ISOs, the SSH key, VM images (gitignored) | — |
+
 ## Why this exists
 
 Every previous generation was written blind and debugged on real hardware.
@@ -23,16 +32,16 @@ harness asks the **QEMU binary** what it supports, never the host.
 
 ## Running it
 
-For a real machine, see [`metal/README.md`](./metal/README.md) — an unmodified
+For a real machine, see [`scripts/README.md`](./scripts/README.md) — an unmodified
 netinst stick plus the preseed served from your laptop. Both paths generate
 `overrides.cfg` with the same [`scripts/write-overrides.sh`](./scripts/write-overrides.sh),
 so what installs on hardware is what the VM proved.
 
 ```bash
-./vm/test-vm.sh --full        # install, boot, provision, assert
-./vm/test-vm.sh --install     # install only
-./vm/test-vm.sh --assert      # boot the cached image and assert
-./vm/test-vm.sh --clean       # delete cached images and run state
+./scripts/test-vm/test-vm.sh --full        # install, boot, provision, assert
+./scripts/test-vm/test-vm.sh --install     # install only
+./scripts/test-vm/test-vm.sh --assert      # boot the cached image and assert
+./scripts/test-vm/test-vm.sh --clean       # delete cached images and run state
 ```
 
 Exit codes: `0` pass · `1` assertion failed · `2` install failed · `3` never
@@ -107,7 +116,7 @@ UEFI, the UEFI → GRUB → systemd boot chain, user and SSH setup, and every
 
 ### Two assertion phases, and why
 
-`vm/assert.sh` runs **twice**, and the split is the whole of `#285`:
+`payload/verify/assert.sh` runs **twice**, and the split is the whole of `#285`:
 
 | `PHASE` | When | What a pass means |
 |---|---|---|
@@ -167,7 +176,7 @@ Read this before trusting a green run on hardware:
   wired into `nsswitch.conf`. It does **not** prove a multicast packet leaves
   the machine or that another host on the LAN can resolve it — QEMU's slirp
   networking does not carry multicast to the host. Only the real box proves
-  reachability. `metal/3-provision/provision.sh` dials the name first for `#284` — the DHCP
+  reachability. `scripts/3-provision/provision.sh` dials the name first for `#284` — the DHCP
   lease moves on every boot and the name does not — and falls back to a supplied
   `HOST` address precisely because this is the one thing no green run proves.
 - **A published port refused from *another machine*.** The firewall section
@@ -252,7 +261,7 @@ work if you're loading your preconfiguration file from the network"* (B.4.3).
 
 That is not a corner case here, it is the norm — it is why the wifi credentials
 were already on the kernel command line, and `netcfg/hostname` now joins them,
-in `metal/lib.sh` `installer_params()` and in `vm/test-vm.sh`'s `append`. The
+in `scripts/lib.sh` `installer_params()` and in `scripts/test-vm/test-vm.sh`'s `append`. The
 keys in `preseed.cfg` and `overrides.cfg` are kept, but nothing depends on
 them: on the first real install both `netcfg/hostname` and
 `netcfg/get_hostname` were set correctly and the box still came up as `192`,
@@ -338,7 +347,7 @@ metal. There is now one mechanism, and it skips removable media so an install
 cannot target the USB stick it booted from.
 
 **The installed image is cached once and overlaid, not copied.** A successful
-install moves its disk to `work/cache/base-<arch>.qcow2`, and the run disk
+install moves its disk to `working/vm/cache/base-<arch>.qcow2`, and the run disk
 becomes a thin qcow2 overlay backed by it. Copying instead cost a real 2G per
 run — APFS does not clone a file written that way — so the pair occupied 4G
 where 2G plus a few hundred kilobytes does. The practical effect is that
@@ -403,11 +412,11 @@ later `-p 4000:4000` still on `0.0.0.0`, which looks exactly like it worked.
 
 Two units, one clock (#307):
 
-- `custom-release-poll.timer` runs `scripts/release-poll.sh` every two
+- `custom-release-poll.timer` runs `services/release-poll/release-poll.sh` every two
   minutes on **every** machine. It fetches and checks out `release` and does
   nothing else: no containers, no units, no yarn. A standby box is therefore
   always at the right SHA.
-- `custom-deploy.service` runs `scripts/deploy.sh`. It has no timer and no
+- `custom-deploy.service` runs `services/deploy/deploy.sh`. It has no timer and no
   `[Install]`; the release poller triggers it (`OnSuccess=`) after every
   poll, and `deploy.sh` exits at once unless the checkout or the boot id
   differs from what it last deployed. It runs only on a box with the
@@ -424,7 +433,7 @@ ssh srv@debbie.local journalctl -u custom-deploy.service -p info
 
 ### Roles (#329)
 
-What a box *does* is set by roles in `metal/3-provision/<box>.env`, passed to `postinstall.sh`
+What a box *does* is set by roles in `scripts/3-provision/<box>.env`, passed to `postinstall.sh`
 by `provision.sh`. **Unset means off**, and every provisioning run makes the
 box match the file. A role is a flag file in `/etc/seanorepo/roles/` that its
 unit is conditioned on; `postinstall.sh` ends by printing the box's roles.
@@ -441,7 +450,7 @@ passed to compose as `PUBLISH_ADDR` (#309); there is no separate setting for
 it. A LAN webserver has its own SQLite data, which diverges from the public
 box's — it is for local use, never a source of truth.
 
-Change a role by editing `metal/3-provision/<box>.env` and re-running `provision.sh <box>`. Taking
+Change a role by editing `scripts/3-provision/<box>.env` and re-running `provision.sh <box>`. Taking
 `ROLE_TUNNEL` off a box stops its tunnel on that run. Check a box with
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
@@ -453,7 +462,7 @@ Four things about it are deliberate and easy to undo by accident:
 
 - **The units are written by `postinstall.sh` itself, not copied out of the
   checkout.** That script is delivered on its own — `scp`'d to `/tmp` by
-  `vm/test-vm.sh`, streamed over stdin by `metal/3-provision/provision.sh` — so it can read
+  `scripts/test-vm/test-vm.sh`, streamed over stdin by `scripts/3-provision/provision.sh` — so it can read
   nothing beside it in the repository. The only checkout it could read from is
   the one it just made, which is on `release`, which by definition holds the
   last thing *shipped*. On the first box this generation provisions, `release`
@@ -466,10 +475,10 @@ Four things about it are deliberate and easy to undo by accident:
   `postinstall.sh` says so, with the remedy, rather than leaving a unit that
   fails every two minutes with *No such file or directory*.
 
-  `vm/assert.sh` takes the same view, and takes it **once** for all four checks
+  `payload/verify/assert.sh` takes the same view, and takes it **once** for all four checks
   that read the file — `#311`. The question it asks is not "is `deploy.sh`
   there" but "does the commit this working tree came from track it", answered
-  with `git cat-file -e HEAD:utils/debbie/2026-09-17/scripts/deploy.sh`:
+  with `git cat-file -e HEAD:utils/debbie/2026-09-17/services/deploy/deploy.sh`:
 
   | the commit on disk | `deploy.sh` on disk | result |
   |---|---|---|
@@ -490,7 +499,7 @@ Four things about it are deliberate and easy to undo by accident:
   containers are down while `release` has not moved. `deploy.sh` records the
   boot id alongside the deployed SHA, so a reboot is itself a reason to deploy.
   One line in the marker replaces a whole unit.
-- **There is no `git clean`** — `REQ-DEPLOY-006`, and `vm/assert.sh` asserts
+- **There is no `git clean`** — `REQ-DEPLOY-006`, and `payload/verify/assert.sh` asserts
   both its absence and the comment explaining it. `apps/cloudflared/credentials/`
   is gitignored and exists only on the host.
 
@@ -505,7 +514,7 @@ under `REQ-SERVER-008` later does not break deploys.
 The clone is anonymous HTTPS. seanmizen/seanorepo is public, so provisioning
 holds no deploy key and there is nothing on the box to rotate; if the
 repository is ever made private, `postinstall.sh`'s clone is what breaks, and
-`vm/assert.sh` › "srv can reach origin with no credential" is what says so.
+`payload/verify/assert.sh` › "srv can reach origin with no credential" is what says so.
 
 `release` exists only once someone has run `yarn release`, so on a newly
 provisioned box it may legitimately be absent. That is reported and skipped,
@@ -573,7 +582,7 @@ That `credentials-file` path is **relative**, and cloudflared resolves it
 against the process's working directory rather than against the config file.
 The unit therefore sets `WorkingDirectory` to `apps/cloudflared`; deleting that
 line makes the daemon start and then fail to find its credentials, which reads
-like an auth problem and is not one. `vm/assert.sh` asserts the line is there.
+like an auth problem and is not one. `payload/verify/assert.sh` asserts the line is there.
 
 Finally, re-run `postinstall.sh` with `ROLE_TUNNEL=yes` (#329). It enables the
 unit once — and only once — the box has the tunnel role **and** the
@@ -619,14 +628,14 @@ packaged to race and nothing to mask. A `cloudflared.service` can still appear,
 because `cloudflared service install` writes one and that is the documented way
 to set this up; `cloudflared-custom.service` is the previous generation's unit
 and is live on the box this replaces. `postinstall.sh` disables either on
-sight, and `vm/assert.sh` › "no other cloudflared unit is enabled" is what
+sight, and `payload/verify/assert.sh` › "no other cloudflared unit is enabled" is what
 keeps it true.
 
 Our unit is `custom-cloudflared.service` and deliberately **not**
 `cloudflared.service`: a file of that name in `/usr/local/lib/systemd/system`
 would shadow any packaged unit of the same name, which `REQ-SERVER-012`
 forbids. The name appears in three places — the unit on disk, `CLOUDFLARED_UNIT`
-in `deploy.sh`, and the sudoers drop-in — and `vm/assert.sh` asserts all three
+in `deploy.sh`, and the sudoers drop-in — and `payload/verify/assert.sh` asserts all three
 agree, because a rename that moves only two of them fails at the exact moment
 it matters, an ingress change, and passes every other day of the year.
 

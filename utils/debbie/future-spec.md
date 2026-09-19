@@ -95,11 +95,11 @@ systemd targets are the right mechanism rather than a bespoke supervisor:
 declarative, ordering is free via `Wants=`/`BindsTo=`, and `systemctl enable
 --now` / `disable --now` on a target is the whole of the activation logic. Units
 must be named `custom-*` and live in `/usr/local/lib/systemd/system` — #292, and
-`vm/assert.sh` already enforces both.
+`payload/verify/assert.sh` already enforces both.
 
 **Built (#329), as flag files rather than targets so far:** `webserver` (runs
 the sites) and `tunnel` (the Cloudflare tunnel; requires `webserver`; exactly
-one box). Set as `ROLE_<NAME>=yes` in `metal/3-provision/<box>.env`, **unset means off**, and
+one box). Set as `ROLE_<NAME>=yes` in `scripts/3-provision/<box>.env`, **unset means off**, and
 written to `/etc/seanorepo/roles/<name>` on every provisioning run. A
 `webserver` without `tunnel` publishes on the LAN, for local use. So the
 invariant this document cares about is **exactly one `tunnel`**, not exactly
@@ -171,7 +171,7 @@ Decided in #307. The poller splits in two:
 
 A standby box is then already at the right SHA, and promoting it takes seconds
 of `docker compose up`, not a fetch plus a cold build. The switch is
-`ROLE_WEBSERVER` in `metal/3-provision/<box>.env` (§3); later the role files become
+`ROLE_WEBSERVER` in `scripts/3-provision/<box>.env` (§3); later the role files become
 `custom-role-*.target` units.
 
 Per-app rebuild detection was rejected in the same ticket. On the real box
