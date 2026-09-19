@@ -6,7 +6,7 @@
 # This script is the ONE generator of that layer, called by both the VM harness
 # and the metal path, so a VM run and a real install cannot drift apart.
 #
-# It used to be a function inside vm/test-vm.sh, which meant the metal path had
+# It used to be a function inside scripts/test-vm/test-vm.sh, which meant the metal path had
 # no way to produce the same file without copying it.
 #
 # Required in the environment:
@@ -50,7 +50,7 @@ d-i passwd/username string $DEPLOY_USER
 # if this preseed is ever driven from a local file instead.
 #
 # What binds is netcfg/hostname= on the KERNEL COMMAND LINE (the caller's job -
-# metal/lib.sh installer_params(), vm/test-vm.sh), and the late_command below.
+# scripts/lib.sh installer_params(), scripts/test-vm/test-vm.sh), and the late_command below.
 d-i netcfg/get_hostname string $SERVER_NAME
 d-i netcfg/hostname string $SERVER_NAME
 

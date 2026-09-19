@@ -1,6 +1,6 @@
 # REQ-EMU — The VM test harness
 
-Constraints on `utils/debbie/2026-09-17/vm/test-vm.sh`, which installs Debian
+Constraints on `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh`, which installs Debian
 into a VM so a provisioning change can be proven before it touches hardware.
 
 Three earlier attempts at this loop exist in the repository and all three were
@@ -39,7 +39,7 @@ Introduced in #259.
   watching, so an explicitly requested accelerator that cannot be honoured is a
   hard failure.
 - **Verification:**
-  - Inspection — `utils/debbie/2026-09-17/vm/test-vm.sh`'s `resolve_accel` probes `-accel help` on the resolved binary and exits non-zero on an unsatisfiable explicit request, never downgrading it silently.
+  - Inspection — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh`'s `resolve_accel` probes `-accel help` on the resolved binary and exits non-zero on an unsatisfiable explicit request, never downgrading it silently.
   - Demonstration — `DEBBIE_ACCEL=hvf DEBBIE_GUEST_ARCH=amd64 ./test-vm.sh` on an arm64 host exits non-zero naming the architecture mismatch.
 - **Relations:** none
 
@@ -60,8 +60,8 @@ Introduced in #259.
   turns "did it finish?" into a process exit code the harness can read. Without
   that, phase one never terminates on its own.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/vm/test-vm.sh` › the `--install` phase, which wraps QEMU in a hard timeout and treats expiry as a failure.
-  - Inspection — `utils/debbie/2026-09-17/preseed/preseed.cfg` sets `debian-installer/exit/poweroff` so the installer halts the machine on success.
+  - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › the `--install` phase, which wraps QEMU in a hard timeout and treats expiry as a failure.
+  - Inspection — `utils/debbie/2026-09-17/payload/install/preseed.cfg` sets `debian-installer/exit/poweroff` so the installer halts the machine on success.
 - **Relations:** none
 
 ## REQ-EMU-003 — The harness reports by exit code
@@ -82,8 +82,8 @@ Introduced in #259.
   broke without anyone opening the log: install failure, boot or SSH timeout,
   and assertion failure are different problems with different fixes.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › the trailing `[ "$fail" -eq 0 ]`, which fails the run if any single check failed.
-  - Inspection — `utils/debbie/2026-09-17/vm/test-vm.sh` documents and uses 0 pass, 1 assertion failure, 2 install failure, 3 boot/SSH timeout, 124 timeout.
+  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › the trailing `[ "$fail" -eq 0 ]`, which fails the run if any single check failed.
+  - Inspection — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` documents and uses 0 pass, 1 assertion failure, 2 install failure, 3 boot/SSH timeout, 124 timeout.
 - **Relations:** none
 
 ## REQ-EMU-004 — The guest boots the way the hardware does
@@ -110,8 +110,8 @@ Introduced in #259.
   unformatted varstore and initialises it on first boot. The similarly named
   `edk2-arm-vars.fd` is 32-bit ARM and already populated, and must not be used.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "booted via UEFI"
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "removable-path loader"
+  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "booted via UEFI"
+  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "removable-path loader"
 - **Relations:** none
 
 ## REQ-EMU-005 — One preseed serves both architectures
@@ -140,6 +140,6 @@ Introduced in #259.
   filters out removable devices so the installer cannot target the USB stick it
   booted from.
 - **Verification:**
-  - Inspection — `utils/debbie/2026-09-17/preseed/preseed.cfg` names no architecture, no `grub-efi-*` package and no disk device; `grub-installer` selects the bootloader from the detected architecture.
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "architecture is $EXPECT_ARCH"
+  - Inspection — `utils/debbie/2026-09-17/payload/install/preseed.cfg` names no architecture, no `grub-efi-*` package and no disk device; `grub-installer` selects the bootloader from the detected architecture.
+  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "architecture is $EXPECT_ARCH"
 - **Relations:** none

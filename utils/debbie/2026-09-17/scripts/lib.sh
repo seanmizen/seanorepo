@@ -29,13 +29,13 @@ log() { echo "[metal] $*"; }
 select_env() {
     local dir="$1" box="${2:-}" have
     have="$(cd "$dir" && ls -A 2> /dev/null | { grep -E '\.env$' || true; } | sed 's/\.env$//; s/^$/.env/' | tr '\n' ' ')"
-    [ -n "$box" ] || die "usage: $(basename "$0") <box>   (env files here: ${have:-none - copy env.example to <box>.env})"
+    [ -n "$box" ] || die "usage: $(basename "$0") <box>   (env files here: ${have:-none - copy .env.example to <box>.env})"
     case "$box" in
         */*)  ENV_FILE="$box" ;;
         .env) ENV_FILE="$dir/.env" ;;
         *)    ENV_FILE="$dir/$box.env" ;;
     esac
-    [ -f "$ENV_FILE" ] || die "no $ENV_FILE. Copy $dir/env.example to it and fill it in. (env files here: ${have:-none})"
+    [ -f "$ENV_FILE" ] || die "no $ENV_FILE. Copy $dir/.env.example to it and fill it in. (env files here: ${have:-none})"
 }
 
 # Which step reads a key, for the error when it turns up in the wrong file.
@@ -163,7 +163,7 @@ installer_params() {
     params="$params netcfg/wireless_essid=$WIFI_SSID"
     params="$params netcfg/wireless_security_type=wpa"
     params="$params netcfg/wireless_wpa=$WIFI_PASS"
-    # Must stay in step with vm/test-vm.sh's own append line.
+    # Must stay in step with scripts/test-vm/test-vm.sh's own append line.
     params="$params netcfg/hostname=$SERVER_NAME"
     params="$params netcfg/get_hostname=$SERVER_NAME"
     printf '%s' "$params"
