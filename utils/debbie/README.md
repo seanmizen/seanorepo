@@ -22,25 +22,13 @@ validated by nothing. Not a plan of record.
 Deploys come from the `release` branch, never `main`. Promote with `yarn release`
 from a clean `main`; debbie polls every two minutes.
 
-## Cloudflare SSH tunnel
+## Remote SSH
 
-Reaching the box over SSH without opening a port. Kept here because it is not
-recorded anywhere else in the repo.
+From outside the home network, the only way in is **ngrok**: `ngrok tcp 22`
+runs on the box. The `2025-10-08b` box runs it as `ngrok-custom.service`. The
+`2026-09-17` generation does not provision it yet, so do not build a box that
+must be reachable from off the LAN until #317 lands.
 
-```bash
-cloudflared tunnel create warp-ssh-tunnel
-nano ~/.cloudflared/ssh-config.yml
-```
-
-```yaml
-tunnel: <NEW_TUNNEL_UUID>
-credentials-file: /home/srv/.cloudflared/<NEW_TUNNEL_UUID>.json
-warp-routing: true
-
-ingress:
-  - hostname: ssh.seanmizen.com
-    service: ssh://localhost:22
-    originRequest:
-      noTLSVerify: true
-  - service: http_status:404
-```
+The Cloudflare SSH tunnel (`ssh.seanmizen.com`) that used to be documented here
+is dead: no ingress config in the repository serves it. It is in `archive/`
+only for history. Do not rebuild it.

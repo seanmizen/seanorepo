@@ -149,7 +149,26 @@ that can be described in one sentence.
 
 A dedicated provisioning keypair, not a personal one.
 
-### 7. The Mac stays the cold-start path
+### 7. Every machine tracks `release`; only a serving machine deploys
+
+Decided in #307. The poller splits in two:
+
+- `custom-release-poll.timer` fetches and checks out `release` on **every**
+  machine. It has no effect on anything running, so it is always safe.
+- `custom-deploy.service` runs `yarn prod:docker`. It is triggered by the
+  release poller when the SHA moves and has no timer of its own. It is enabled
+  only on a machine that serves.
+
+A standby box is then already at the right SHA, and promoting it takes seconds
+of `docker compose up`, not a fetch plus a cold build. Until roles exist, the
+deploy unit's enablement is a single documented switch. Later it becomes part
+of the `webserver` role target.
+
+Per-app rebuild detection was rejected in the same ticket. On the real box
+`yarn prod:docker` against an unchanged tree measured 12–13s, because the layer
+cache already skips unchanged apps.
+
+### 8. The Mac stays the cold-start path
 
 `provision.sh` runs from a workstation today and will keep working. It becomes
 the bootstrap stand-in: what builds machine zero when the fleet is being started
@@ -195,11 +214,6 @@ Genuinely undecided. Listed so they are not mistaken for decisions.
 - **How a role change physically moves the tunnel credentials.** Decided that it
   is a human act; not decided what that act *is*, or what stops the old
   webserver continuing to serve after it stops being one.
-- **Whether every machine runs the deploy poller.** The checkout and the poller
-  are capability, so probably yes. But `deploy.sh` runs `yarn prod:docker`, and
-  only the webserver should. This is the first place roles touch code that
-  already exists, and it needs deciding before the second machine is built, not
-  after.
 - **Backups.** Not discussed at all. A fleet makes the single-writer SQLite box
   more obviously a single point of loss, not less.
 

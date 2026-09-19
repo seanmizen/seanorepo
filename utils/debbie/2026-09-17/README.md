@@ -93,6 +93,11 @@ trade of fidelity for iteration speed — minutes instead of hours. One preseed
 serves both, with anything arch-specific injected by the harness into a
 generated `overrides.cfg` (`REQ-EMU-005`).
 
+**amd64 is proven on hardware, not in the VM** (#291). An amd64 guest on the
+Mac falls back to TCG and takes one to two and a half hours per install, and
+there are real amd64 machines to hand. `DEBBIE_GUEST_ARCH=amd64` still works,
+but no amd64 VM run gates anything, and none should be added to CI.
+
 ### What the arm64 loop proves
 
 Preseed syntax and debconf key validity, that no prompt goes unanswered,
@@ -347,8 +352,12 @@ In: install, provision, assert — in a VM and on metal, plus the repository
 checkout itself (`REQ-DEPLOY-001`): `postinstall.sh` clones seanorepo as the
 deploy user and puts it on `release`. Since #279 the deploy poller is in too,
 and since #280 the Cloudflare tunnel (`REQ-NETWORK-001`, `REQ-NETWORK-002`).
-Out: the network failover watchdog (`REQ-NETWORK-003`) and the wifi migration
-to NetworkManager (`REQ-NETWORK-004`).
+Out: the network failover watchdog (`REQ-NETWORK-003`, #281) and the wifi
+migration to NetworkManager (`REQ-NETWORK-004`, #282).
+
+**Not yet in: ngrok** (#317). It is the only way to SSH into the box from off
+the LAN, and this generation does not install it. A box built from here can be
+reached on the local network and nowhere else.
 
 ### Published ports never reach the LAN
 
@@ -475,10 +484,9 @@ gap. `postinstall.sh` installs `custom-cloudflared.service`, which reads its
 ingress rules from `apps/cloudflared/config.yml` in the deployed checkout
 (`REQ-NETWORK-002`), and `deploy.sh` restarts it when that file changes.
 
-**Not the SSH tunnel.** `utils/debbie/README.md` has a *Cloudflare SSH tunnel*
-section with its own `cloudflared tunnel create` recipe and an
-`ssh-config.yml`. That is a different tunnel for a different job. This one is
-the ingress tunnel that serves the sites.
+**Not for SSH.** This is the ingress tunnel that serves the sites and nothing
+else. Remote SSH goes through ngrok (#317). The old Cloudflare SSH tunnel
+(`ssh.seanmizen.com`) is dead and must not be rebuilt.
 
 **From apt, not a binary drop** (#135). `postinstall.sh` adds Cloudflare's
 repository and installs the `cloudflared` package, so the binary is
