@@ -702,9 +702,27 @@ if [ "$PHASE" = provisioned ]; then
          && ! grep -qsx 'Unit=custom-deploy.service' $UD/*.timer /etc/systemd/system/*.timer"
     check "the release poller triggers the deploy" \
         'systemctl show -p OnSuccess --value custom-release-poll.service | grep -qw custom-deploy.service'
-    check "the deploy runs only where the serving flag exists" \
-        'systemctl cat custom-deploy.service | grep -qx "ConditionPathExists=/etc/seanorepo/serving"'
-    check "this machine serves (DEBBIE_SERVES defaults to yes)" '[ -e /etc/seanorepo/serving ]'
+    # #329: roles. Unset means off, so the files present must be EXACTLY the
+    # roles this box was provisioned with - EXPECT_ROLES, which the VM harness
+    # sets (default: none) and provision.sh derives from .env.
+    check "the deploy runs only on a box with the webserver role" \
+        'systemctl cat custom-deploy.service | grep -qx "ConditionPathExists=/etc/seanorepo/roles/webserver"'
+    check "the tunnel runs only on a box with the tunnel role" \
+        'systemctl cat custom-cloudflared.service | grep -qx "ConditionPathExists=/etc/seanorepo/roles/tunnel"'
+    check "roles on this box are exactly '${EXPECT_ROLES:-none}'" \
+        '[ "$(ls /etc/seanorepo/roles 2>/dev/null | sort | tr "\n" " " | sed "s/ $//")" = "$(printf "%s" "${EXPECT_ROLES:-}" | tr " " "\n" | sort | tr "\n" " " | sed "s/ $//")" ]'
+    check "the #307 serving flag is gone" '[ ! -e /etc/seanorepo/serving ]'
+    if [ ! -e /etc/seanorepo/roles/webserver ]; then
+        # The whole point of #329: with no role, a triggered deploy is
+        # skipped by its condition and runs nothing.
+        check "without the webserver role a triggered deploy runs nothing" \
+            'sudo -n systemctl start custom-deploy.service > /dev/null 2>&1;
+             [ "$(systemctl show -p ConditionResult --value custom-deploy.service)" = no ] \
+             && [ "$(systemctl is-failed custom-deploy.service 2>&1)" != failed ] \
+             && [ -z "$(docker ps -q 2>/dev/null)" ]'
+    else
+        sk "without the webserver role a triggered deploy runs nothing" "this box has the webserver role"
+    fi
     check "the pre-#307 poller units are gone" \
         "[ ! -e $UD/custom-deploy-poll.timer ] && [ ! -e $UD/custom-deploy-poll.service ]"
 
@@ -799,6 +817,18 @@ if [ "$PHASE" = provisioned ]; then
         # REQ-DEPLOY-002/004: the deploy is `yarn prod:docker`, it runs when the
         # checkout differs from what was deployed, and not again until the
         # checkout moves or the host reboots.
+        # #329: the address comes from the roles. The yarn shim records
+        # PUBLISH_ADDR, and ROLES_DIR points at a scratch directory.
+        check "the deploy publishes on loopback with the tunnel and on the LAN without" \
+            't=$(mktemp -d); scratch_release "$t" > /dev/null; git -C "$t/box" pull -q;
+             printf "#!/bin/sh\necho \"yarn \$* PUBLISH_ADDR=\$PUBLISH_ADDR\" >> \"%s/calls\"\n" "$t" > "$t/bin/yarn";
+             mkdir -p "$t/roles"; touch "$t/roles/webserver" "$t/roles/tunnel";
+             run() { PATH="$t/bin:$PATH" REPO_DIR="$t/box" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
+                     DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" --force > /dev/null 2>&1; };
+             run; a=$(grep "^yarn prod:docker" "$t/calls" | tail -1);
+             rm "$t/roles/tunnel"; run; b=$(grep "^yarn prod:docker" "$t/calls" | tail -1);
+             rm -rf "$t";
+             [ "$a" = "yarn prod:docker PUBLISH_ADDR=127.0.0.1" ] && [ "$b" = "yarn prod:docker PUBLISH_ADDR=0.0.0.0" ]'
         check "the deploy runs once per checkout and again after a reboot" \
             't=$(mktemp -d); scratch_release "$t" > /dev/null; git -C "$t/box" pull -q;
              run() { PATH="$t/bin:$PATH" REPO_DIR="$t/box" DEPLOY_LOCK_FILE="$t/lock" \
@@ -813,6 +843,7 @@ if [ "$PHASE" = provisioned ]; then
         sk "the release poller moves the checkout and touches no service" "$behaviour_skip_reason"
         sk "a release poll leaves the checkout alone while a deploy holds the lock" "$behaviour_skip_reason"
         sk "the deploy runs once per checkout and again after a reboot" "$behaviour_skip_reason"
+        sk "the deploy publishes on loopback with the tunnel and on the LAN without" "$behaviour_skip_reason"
     fi
 else
     sk "custom-release-poll.timer enabled"  "postinstall.sh installs it"
@@ -821,8 +852,12 @@ else
     sk "custom-release-poll.service is timer-owned (static)" "postinstall.sh installs it"
     sk "custom-deploy.service is not on a timer" "postinstall.sh installs it"
     sk "the release poller triggers the deploy" "postinstall.sh installs it"
-    sk "the deploy runs only where the serving flag exists" "postinstall.sh installs it"
-    sk "this machine serves (DEBBIE_SERVES defaults to yes)" "postinstall.sh creates the flag"
+    sk "the deploy runs only on a box with the webserver role" "postinstall.sh installs it"
+    sk "the tunnel runs only on a box with the tunnel role" "postinstall.sh installs it"
+    sk "roles on this box are exactly '${EXPECT_ROLES:-none}'" "postinstall.sh writes them"
+    sk "the #307 serving flag is gone" "postinstall.sh removes it"
+    sk "without the webserver role a triggered deploy runs nothing" "postinstall.sh installs it"
+    sk "the deploy publishes on loopback with the tunnel and on the LAN without" "postinstall.sh clones the checkout"
     sk "the pre-#307 poller units are gone" "postinstall.sh removes them"
     sk "deploy.sh present and executable"  "postinstall.sh clones the checkout"
     sk "a second deploy exits cleanly while one holds the lock" "postinstall.sh clones the checkout"
@@ -1243,8 +1278,17 @@ echo "== firewall (REQ-SERVER-002) =="
 # them would make this red on a correct box - the fastest way to get a security
 # assertion switched off. Every port Docker publishes for this repository is
 # TCP, and the nat-chain check below covers a UDP publish regardless.
+# A webserver WITHOUT the tunnel role publishes its apps on the LAN on
+# purpose (#329) - that is the only reason to run one - so on such a box the
+# app range 4000-4999 is expected off-loopback. Everywhere else, including the
+# tunnel box, nothing in it may be.
+if [ -e /etc/seanorepo/roles/webserver ] && [ ! -e /etc/seanorepo/roles/tunnel ]; then
+    LAN_APPS=yes
+else
+    LAN_APPS=no
+fi
 lan_tcp_listeners() {
-    ss -H -ltn 2> /dev/null | awk '
+    ss -H -ltn 2> /dev/null | awk -v lan_apps="$LAN_APPS" '
         {
             a = $4
             if (match(a, /:[0-9]+$/) == 0) next
@@ -1252,6 +1296,7 @@ lan_tcp_listeners() {
             addr = substr(a, 1, RSTART - 1)
             gsub(/^\[|\]$/, "", addr)
             if (port == "22" || port == "80" || port == "443") next
+            if (lan_apps == "yes" && port >= 4000 && port <= 4999) next
             if (addr ~ /^127\./) next
             if (addr == "::1") next
             if (addr ~ /^::ffff:127\./) next
@@ -1271,7 +1316,8 @@ lan_tcp_listeners() {
 docker_lan_dnat() {
     sudo -n iptables -t nat -S DOCKER 2> /dev/null \
         | grep -- '-j DNAT' \
-        | grep -v -- '-d 127\.'
+        | grep -v -- '-d 127\.' \
+        | if [ "$LAN_APPS" = yes ]; then grep -vE -- '--dport 4[0-9]{3}( |$)'; else cat; fi
 }
 
 if [ "$PHASE" = provisioned ]; then
