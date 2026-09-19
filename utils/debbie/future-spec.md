@@ -155,14 +155,15 @@ Decided in #307. The poller splits in two:
 
 - `custom-release-poll.timer` fetches and checks out `release` on **every**
   machine. It has no effect on anything running, so it is always safe.
-- `custom-deploy.service` runs `yarn prod:docker`. It is triggered by the
-  release poller when the SHA moves and has no timer of its own. It is enabled
-  only on a machine that serves.
+- `custom-deploy.service` runs `yarn prod:docker`. The release poller
+  triggers it after every poll (`OnSuccess=`), and it has no timer of its own.
+  It deploys only when the checkout or the boot id changed, and only on a
+  machine where `/etc/seanorepo/serving` exists.
 
 A standby box is then already at the right SHA, and promoting it takes seconds
-of `docker compose up`, not a fetch plus a cold build. Until roles exist, the
-deploy unit's enablement is a single documented switch. Later it becomes part
-of the `webserver` role target.
+of `docker compose up`, not a fetch plus a cold build. Until roles exist, that
+flag file is the single documented switch (`DEBBIE_SERVES` at provisioning,
+`touch`/`rm` afterwards). Later it becomes part of the `webserver` role target.
 
 Per-app rebuild detection was rejected in the same ticket. On the real box
 `yarn prod:docker` against an unchanged tree measured 12–13s, because the layer
