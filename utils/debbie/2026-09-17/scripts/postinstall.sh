@@ -706,6 +706,17 @@ fi
 UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
 DEPLOY_SCRIPT="$GEN_DIR/scripts/deploy.sh"
+RELEASE_POLL_SCRIPT="$GEN_DIR/scripts/release-poll.sh"
+# THE SERVING SWITCH - #307. Every machine tracks `release`; only one whose
+# flag exists deploys. A file rather than `systemctl enable`, because the
+# deploy unit has no [Install] section - it is started by the release poller,
+# never by boot or by a timer of its own - and a condition on it is what
+# systemd checks each time it is triggered. Defaults to serving, because every
+# machine this has provisioned so far is the one that serves. Provision a
+# standby with DEBBIE_SERVES=no; promote one later with `sudo touch` on the
+# flag, demote with `sudo rm`.
+SERVING_FLAG=/etc/seanorepo/serving
+DEBBIE_SERVES="${DEBBIE_SERVES:-yes}"
 # Must match CLOUDFLARED_UNIT in that deploy.sh. The unit itself is written by
 # the tunnel section at the bottom of this script (#280); this is the name the
 # deploy is permitted to restart, and vm/assert.sh asserts that all three - the
@@ -715,7 +726,7 @@ DEPLOY_SCRIPT="$GEN_DIR/scripts/deploy.sh"
 # REQ-SERVER-012.
 CLOUDFLARED_UNIT="${CLOUDFLARED_UNIT:-custom-cloudflared.service}"
 
-log "deploy poller"
+log "release poller and deploy"
 
 # /usr/local/lib/systemd/system, not /etc/systemd/system - REQ-SERVER-011. It
 # is already on systemd's search path, carries /usr/local semantics, and is
@@ -740,15 +751,62 @@ write_unit() {
     rm -f "$tmp"
 }
 
-write_unit custom-deploy-poll.service <<EOF
+write_unit custom-release-poll.service <<EOF
 # Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-DEPLOY-002
 [Unit]
-Description=Deploy origin/release to this host if it has moved
-Documentation=https://github.com/seanmizen/seanorepo/issues/279
-# docker.service because the deploy is \`yarn prod:docker\`, and
-# network-online because the first thing it does is talk to github.com.
+Description=Check out origin/release on this host if it has moved
+Documentation=https://github.com/seanmizen/seanorepo/issues/307
+After=network-online.target
+Wants=network-online.target
+# The one trigger for a deploy - #307. After EVERY successful poll, not only
+# when the SHA moved: deploy.sh compares the checkout and the boot id with its
+# marker and exits in milliseconds when there is nothing to do, and running it
+# every time is what brings the containers back after a power cut. On a
+# machine that does not serve, the deploy unit's condition skips it.
+OnSuccess=custom-deploy.service
+
+[Service]
+Type=oneshot
+User=$DEPLOY_USER
+WorkingDirectory=$REPO_DIR
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=$RELEASE_POLL_SCRIPT
+TimeoutStartSec=5min
+
+# No [Install] section. custom-release-poll.timer owns this unit.
+EOF
+
+write_unit custom-release-poll.timer <<EOF
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-DEPLOY-002
+[Unit]
+Description=Poll origin/release every two minutes
+Documentation=https://github.com/seanmizen/seanorepo/issues/307
+
+[Timer]
+# Late enough after boot that docker and the network are up. The poll it
+# triggers is also what triggers the post-boot deploy.
+OnBootSec=3min
+OnUnitActiveSec=2min
+# The poll costs one ls-remote. Letting systemd batch it saves wakeups and
+# nobody can tell the difference at a two-minute period.
+AccuracySec=30s
+Unit=custom-release-poll.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+write_unit custom-deploy.service <<EOF
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-DEPLOY-002
+[Unit]
+Description=Start what the checkout holds, on a machine that serves
+Documentation=https://github.com/seanmizen/seanorepo/issues/307
+# docker.service because the deploy is \`yarn prod:docker\`.
 After=network-online.target docker.service
 Wants=network-online.target
+# The serving switch. Unmet, the trigger is skipped with one log line and the
+# unit is never marked failed.
+ConditionPathExists=$SERVING_FLAG
 
 [Service]
 Type=oneshot
@@ -765,32 +823,41 @@ ExecStart=$DEPLOY_SCRIPT
 # poll picks up cleanly - REQ-DEPLOY-003.
 TimeoutStartSec=30min
 
-# No [Install] section. custom-deploy-poll.timer owns this unit, and enabling
-# it separately would give it a second, uncoordinated trigger.
+# No [Install] section and no timer, deliberately - #307. The release poller is
+# the only thing that starts it: one clock, so a deploy never races a checkout.
 EOF
 
-write_unit custom-deploy-poll.timer <<EOF
-# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-DEPLOY-002
-[Unit]
-Description=Poll origin/release every two minutes and deploy on change
-Documentation=https://github.com/seanmizen/seanorepo/issues/279
+# The pre-#307 units did both jobs in one. Removed, not just disabled: two
+# pollers would each fetch, and the old one would deploy on a machine the
+# serving switch says must not.
+for old_unit in custom-deploy-poll.timer custom-deploy-poll.service; do
+    if [ -f "$UNIT_DIR/$old_unit" ]; then
+        log "  removing $old_unit (replaced by custom-release-poll + custom-deploy)"
+        systemctl disable --now "$old_unit" 2> /dev/null || true
+        rm -f "$UNIT_DIR/$old_unit"
+        units_changed=1
+    fi
+done
 
-[Timer]
-# Late enough after boot that docker and the network are up. The run it
-# triggers is also what brings the containers back after a power cut: no app
-# compose file sets a restart policy, and deploy.sh records the boot id
-# alongside the deployed SHA so a reboot counts as a reason to deploy even
-# though \`release\` has not moved.
-OnBootSec=3min
-OnUnitActiveSec=2min
-# The poll costs one ls-remote. Letting systemd batch it saves wakeups and
-# nobody can tell the difference at a two-minute period.
-AccuracySec=30s
-Unit=custom-deploy-poll.service
-
-[Install]
-WantedBy=timers.target
-EOF
+install -d -m 0755 "$(dirname "$SERVING_FLAG")"
+case "$DEBBIE_SERVES" in
+    yes)
+        if [ ! -e "$SERVING_FLAG" ]; then
+            log "  this machine serves - creating $SERVING_FLAG"
+            printf '%s\n' "# Presence means: this machine deploys. See postinstall.sh (#307)." > "$SERVING_FLAG"
+        fi
+        ;;
+    no)
+        if [ -e "$SERVING_FLAG" ]; then
+            log "  DEBBIE_SERVES=no - removing $SERVING_FLAG; this machine will track release but not deploy"
+            rm -f "$SERVING_FLAG"
+        fi
+        ;;
+    *)
+        echo "[postinstall] ERROR: DEBBIE_SERVES must be yes or no, not '$DEBBIE_SERVES'" >&2
+        exit 1
+        ;;
+esac
 
 if [ "$units_changed" = 1 ]; then
     systemctl daemon-reload
@@ -850,12 +917,12 @@ rm -f "$sudoers_tmp"
 # provisioning - a cold `yarn install` and a full docker build, racing the rest
 # of this script and the reboot that follows it. OnBootSec=3min starts it after
 # the next boot, which both harnesses perform before asserting.
-systemctl enable custom-deploy-poll.timer
+systemctl enable custom-release-poll.timer
 
-if [ ! -x "$DEPLOY_SCRIPT" ]; then
+if [ ! -x "$DEPLOY_SCRIPT" ] || [ ! -x "$RELEASE_POLL_SCRIPT" ]; then
     # Not fatal, and the timer stays enabled on purpose: the moment the
     # checkout catches up, the poller starts working with no further action.
-    log "  NOTE: $DEPLOY_SCRIPT is not in the checkout yet."
+    log "  NOTE: $DEPLOY_SCRIPT or $RELEASE_POLL_SCRIPT is not in the checkout yet."
     log "        This box is on a '$RELEASE_BRANCH' that predates the deploy"
     log "        poller, so the timer will fail until it advances. Run"
     log "        'yarn release' from a clean main on a dev machine, then"

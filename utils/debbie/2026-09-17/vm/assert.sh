@@ -563,9 +563,11 @@ fi
 # matter most are things deploy.sh DOES, and both are asserted as behaviour or
 # as the absence of a thing rather than as the presence of a comment.
 echo
-echo "== deploy poller (REQ-DEPLOY-002) =="
+echo "== release poller and deploy (REQ-DEPLOY-002) =="
 DEPLOY_SCRIPT_REL="utils/debbie/2026-09-17/scripts/deploy.sh"
 DEPLOY_SCRIPT="$REPO_DIR/$DEPLOY_SCRIPT_REL"
+RELEASE_POLL_SCRIPT_REL="utils/debbie/2026-09-17/scripts/release-poll.sh"
+RELEASE_POLL_SCRIPT="$REPO_DIR/$RELEASE_POLL_SCRIPT_REL"
 
 #------------------------------------------------------------------------------
 # One rule for every check that reads deploy.sh - #311.
@@ -623,23 +625,88 @@ fi
 # so all of them agree about a box rather than coinciding by accident.
 deploy_script_expected() { [ "$deploy_expected" = yes ]; }
 
+# Same rule for release-poll.sh (#307), asked separately: a `release` between
+# #279 and #307 tracks deploy.sh and not the poller.
+release_poll_expected=no
+release_poll_skip_reason=
+if [ ! -d "$REPO_DIR/.git" ]; then
+    release_poll_skip_reason="no checkout at $REPO_DIR - see the checkout section above"
+elif git -C "$REPO_DIR" cat-file -e "HEAD:$RELEASE_POLL_SCRIPT_REL" 2> /dev/null; then
+    release_poll_expected=yes
+else
+    release_poll_skip_reason="the commit on disk ($(git -C "$REPO_DIR" rev-parse --short HEAD 2> /dev/null || echo unreadable)) does not track $RELEASE_POLL_SCRIPT_REL - '$RELEASE_BRANCH' predates #307"
+fi
+
+# The BEHAVIOUR of the two scripts is tested against whichever copy is the one
+# under test. The VM harness copies the commit under test to UNDER_TEST_DIR, so
+# a harness run proves the scripts the PR is about, not whatever `release` was
+# when the box was cloned. On metal there is no such copy and the checkout's own
+# scripts are tested, under the rules above.
+if [ -n "${UNDER_TEST_DIR:-}" ] && [ -x "$UNDER_TEST_DIR/deploy.sh" ] && [ -x "$UNDER_TEST_DIR/release-poll.sh" ]; then
+    DEPLOY_UNDER_TEST="$UNDER_TEST_DIR/deploy.sh"
+    RELEASE_POLL_UNDER_TEST="$UNDER_TEST_DIR/release-poll.sh"
+    behaviour_skip_reason=
+elif deploy_script_expected && [ "$release_poll_expected" = yes ]; then
+    DEPLOY_UNDER_TEST="$DEPLOY_SCRIPT"
+    RELEASE_POLL_UNDER_TEST="$RELEASE_POLL_SCRIPT"
+    behaviour_skip_reason=
+else
+    behaviour_skip_reason="no copy of the scripts under test: ${release_poll_skip_reason:-$deploy_skip_reason}"
+fi
+
+# A throwaway `origin` with a `release` branch two commits long, a box cloned at
+# the first, and shims for every command that could touch a running service.
+# Each shim appends its argv to $1/calls and does nothing else, so a test can
+# assert exactly which service commands a script ran - and a script that
+# misbehaves writes a line to a file instead of rebuilding containers in the
+# middle of an assertion run. Prints the SHA `release` ends on.
+scratch_release() {
+    local t="$1" c
+    mkdir -p "$t/bin"
+    for c in docker yarn systemctl sudo; do
+        printf '#!/bin/sh\necho "%s $*" >> "%s/calls"\n' "$c" "$t" > "$t/bin/$c"
+        chmod +x "$t/bin/$c"
+    done
+    git init -q --bare "$t/origin.git"
+    git init -q "$t/w"
+    git -C "$t/w" -c user.email=a@t -c user.name=a commit -q --allow-empty -m one
+    git -C "$t/w" remote add origin "$t/origin.git"
+    git -C "$t/w" push -q origin HEAD:refs/heads/release
+    git clone -q -b release "$t/origin.git" "$t/box"
+    git -C "$t/w" -c user.email=a@t -c user.name=a commit -q --allow-empty -m two
+    git -C "$t/w" push -q origin HEAD:refs/heads/release
+    git -C "$t/w" rev-parse HEAD
+}
+
 if [ "$PHASE" = provisioned ]; then
-    check "custom-deploy-poll.timer enabled"   'systemctl is-enabled custom-deploy-poll.timer'
+    UD=/usr/local/lib/systemd/system
+    check "custom-release-poll.timer enabled"   'systemctl is-enabled custom-release-poll.timer'
     # Active, not merely enabled. postinstall.sh deliberately does not start it
     # - that would deploy in the middle of provisioning - so this is a claim
-    # about the reboot the harness performs, and it fails if the unit is
-    # malformed in a way `is-enabled` would not notice.
-    check "custom-deploy-poll.timer active"    'systemctl is-active custom-deploy-poll.timer'
-    # Two minutes is the requirement, not an implementation detail: it is the
-    # upper bound on deploy latency that REQ-DEPLOY-002 trades for needing no
-    # inbound port. Read from `systemctl cat`, so it is the EFFECTIVE unit -
-    # drop-ins included - rather than the file in the repository.
+    # about the reboot the harness performs.
+    check "custom-release-poll.timer active"    'systemctl is-active custom-release-poll.timer'
+    # Two minutes is the upper bound on deploy latency that REQ-DEPLOY-002
+    # trades for needing no inbound port. Read from `systemctl cat`, so it is
+    # the EFFECTIVE unit, drop-ins included.
     check "the timer polls every two minutes" \
-        'systemctl cat custom-deploy-poll.timer | grep -qx "OnUnitActiveSec=2min"'
-    # The timer owns the service. A service with its own [Install] could be
-    # enabled separately and give the deploy a second, uncoordinated trigger.
-    check "custom-deploy-poll.service is timer-owned (static)" \
-        '[ "$(systemctl is-enabled custom-deploy-poll.service 2>&1)" = static ]'
+        'systemctl cat custom-release-poll.timer | grep -qx "OnUnitActiveSec=2min"'
+    check "custom-release-poll.service is timer-owned (static)" \
+        '[ "$(systemctl is-enabled custom-release-poll.service 2>&1)" = static ]'
+    # #307: one clock. The deploy has no [Install] and no timer of its own, so
+    # the poller is the only thing that can start it and a deploy can never
+    # race a checkout.
+    check "custom-deploy.service is not on a timer" \
+        "[ \"\$(systemctl is-enabled custom-deploy.service 2>&1)\" = static ] \
+         && [ ! -e $UD/custom-deploy.timer ] \
+         && ! grep -qsx 'Unit=custom-deploy.service' $UD/*.timer /etc/systemd/system/*.timer"
+    check "the release poller triggers the deploy" \
+        'systemctl show -p OnSuccess --value custom-release-poll.service | grep -qw custom-deploy.service'
+    check "the deploy runs only where the serving flag exists" \
+        'systemctl cat custom-deploy.service | grep -qx "ConditionPathExists=/etc/seanorepo/serving"'
+    check "this machine serves (DEBBIE_SERVES defaults to yes)" '[ -e /etc/seanorepo/serving ]'
+    check "the pre-#307 poller units are gone" \
+        "[ ! -e $UD/custom-deploy-poll.timer ] && [ ! -e $UD/custom-deploy-poll.service ]"
+
     # The four checks that read deploy.sh, under the one rule above. They run
     # together or they skip together: a box that cannot have the file is not a
     # box that fails one of these and skips three.
@@ -697,15 +764,74 @@ if [ "$PHASE" = provisioned ]; then
         sk "no git clean anywhere in the deploy path"               "$deploy_skip_reason"
         sk "deploy.sh says why there is no git clean"               "$deploy_skip_reason"
     fi
+
+    if [ "$release_poll_expected" = yes ]; then
+        check "release-poll.sh present and executable" '[ -x "$RELEASE_POLL_SCRIPT" ]'
+        check "no git clean in the release poller" \
+            '[ -r "$RELEASE_POLL_SCRIPT" ] \
+             && ! grep -qE "^[^#]*\bgit[[:space:]]+clean\b" "$RELEASE_POLL_SCRIPT"'
+    else
+        sk "release-poll.sh present and executable" "$release_poll_skip_reason"
+        sk "no git clean in the release poller"     "$release_poll_skip_reason"
+    fi
+
+    # Behaviour, #307 - against a scratch origin and a scratch box, with every
+    # service command replaced by a shim that only records it. Nothing here can
+    # touch this host's real checkout, containers or units.
+    if [ -z "$behaviour_skip_reason" ]; then
+        # The whole point of the split: a machine that does not serve keeps
+        # tracking `release`, and tracking it changes nothing that runs.
+        check "the release poller moves the checkout and touches no service" \
+            't=$(mktemp -d); want=$(scratch_release "$t");
+             PATH="$t/bin:$PATH" REPO_DIR="$t/box" DEPLOY_LOCK_FILE="$t/lock" XDG_STATE_HOME="$t/state" \
+                 "$RELEASE_POLL_UNDER_TEST" > /dev/null 2>&1; rc=$?;
+             got=$(git -C "$t/box" rev-parse HEAD); n=$(cat "$t/calls" 2>/dev/null | wc -l);
+             rm -rf "$t";
+             [ "$rc" = 0 ] && [ "$got" = "$want" ] && [ "$n" -eq 0 ]'
+        check "a release poll leaves the checkout alone while a deploy holds the lock" \
+            't=$(mktemp -d); scratch_release "$t" > /dev/null; before=$(git -C "$t/box" rev-parse HEAD);
+             flock -x "$t/lock" -c "sleep 20" & held=$!; sleep 2;
+             REPO_DIR="$t/box" DEPLOY_LOCK_FILE="$t/lock" XDG_STATE_HOME="$t/state" \
+                 "$RELEASE_POLL_UNDER_TEST" > /dev/null 2>&1; rc=$?;
+             kill "$held" 2>/dev/null; after=$(git -C "$t/box" rev-parse HEAD); rm -rf "$t";
+             [ "$rc" = 0 ] && [ "$before" = "$after" ]'
+        # REQ-DEPLOY-002/004: the deploy is `yarn prod:docker`, it runs when the
+        # checkout differs from what was deployed, and not again until the
+        # checkout moves or the host reboots.
+        check "the deploy runs once per checkout and again after a reboot" \
+            't=$(mktemp -d); scratch_release "$t" > /dev/null; git -C "$t/box" pull -q;
+             run() { PATH="$t/bin:$PATH" REPO_DIR="$t/box" DEPLOY_LOCK_FILE="$t/lock" \
+                     DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" \
+                     "$DEPLOY_UNDER_TEST" > /dev/null 2>&1; };
+             count() { grep -c "^yarn prod:docker" "$t/calls" 2>/dev/null || true; };
+             run; a=$(count); run; b=$(count);
+             sed -i "2s/.*/a-previous-boot/" "$t/marker"; run; c=$(count);
+             rm -rf "$t";
+             [ "$a" = 1 ] && [ "$b" = 1 ] && [ "$c" = 2 ]'
+    else
+        sk "the release poller moves the checkout and touches no service" "$behaviour_skip_reason"
+        sk "a release poll leaves the checkout alone while a deploy holds the lock" "$behaviour_skip_reason"
+        sk "the deploy runs once per checkout and again after a reboot" "$behaviour_skip_reason"
+    fi
 else
-    sk "custom-deploy-poll.timer enabled"  "postinstall.sh installs it"
-    sk "custom-deploy-poll.timer active"   "postinstall.sh installs it"
+    sk "custom-release-poll.timer enabled"  "postinstall.sh installs it"
+    sk "custom-release-poll.timer active"   "postinstall.sh installs it"
     sk "the timer polls every two minutes" "postinstall.sh installs it"
-    sk "custom-deploy-poll.service is timer-owned (static)" "postinstall.sh installs it"
+    sk "custom-release-poll.service is timer-owned (static)" "postinstall.sh installs it"
+    sk "custom-deploy.service is not on a timer" "postinstall.sh installs it"
+    sk "the release poller triggers the deploy" "postinstall.sh installs it"
+    sk "the deploy runs only where the serving flag exists" "postinstall.sh installs it"
+    sk "this machine serves (DEBBIE_SERVES defaults to yes)" "postinstall.sh creates the flag"
+    sk "the pre-#307 poller units are gone" "postinstall.sh removes them"
     sk "deploy.sh present and executable"  "postinstall.sh clones the checkout"
     sk "a second deploy exits cleanly while one holds the lock" "postinstall.sh clones the checkout"
     sk "no git clean anywhere in the deploy path" "postinstall.sh clones the checkout"
     sk "deploy.sh says why there is no git clean" "postinstall.sh clones the checkout"
+    sk "release-poll.sh present and executable" "postinstall.sh clones the checkout"
+    sk "no git clean in the release poller" "postinstall.sh clones the checkout"
+    sk "the release poller moves the checkout and touches no service" "postinstall.sh clones the checkout"
+    sk "a release poll leaves the checkout alone while a deploy holds the lock" "postinstall.sh clones the checkout"
+    sk "the deploy runs once per checkout and again after a reboot" "postinstall.sh clones the checkout"
 fi
 
 # REQ-DEPLOY-005 - the security boundary, asserted as a boundary.
