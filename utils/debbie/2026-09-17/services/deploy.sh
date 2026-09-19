@@ -1,15 +1,15 @@
 #!/bin/bash
-# deploy.sh: starts the sites that the checkout holds, on this box.
+# deploy.sh: starts the sites from this target machine's checkout, after the
+# release poller moves it.
 #
-# Where: on the box, as the deploy user, from the release checkout.
-# When:  custom-release-poll.service triggers it after every poll
-#        (REQ-DEPLOY-002). It runs only on a box with the webserver role
-#        (REQ-SERVER-014). It deploys only
-#        when the checkout or the boot id changed since the last deploy.
-#        Run `deploy.sh --force` over SSH to deploy regardless.
-# Why:   nothing can connect to the box from outside (REQ-SERVER-002), so the
-#        box must pull its own deploys (REQ-DEPLOY-002). The delay is at most
-#        two minutes.
+# Where: on a target machine with the webserver role (REQ-SERVER-014), as the
+#        deploy user, from the checkout.
+# When:  after every release poll (REQ-DEPLOY-002). It deploys only when the
+#        checkout or the boot id changed since the last deploy. To deploy
+#        anyway, run `deploy.sh --force` over SSH.
+# Why:   nothing can connect to a target machine from outside
+#        (REQ-SERVER-002), so each one pulls its own deploys. The delay is at
+#        most two minutes.
 #
 # Output goes to the journal:
 #   journalctl -u custom-deploy.service -u custom-release-poll.service -f

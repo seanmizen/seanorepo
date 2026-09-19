@@ -1,31 +1,34 @@
 #!/bin/bash
-# provision.sh: configures an installed box over SSH and checks the result.
+# provision.sh: connects to an installed target machine over SSH, configures it
+# with postinstall.sh, and checks the result with assert.sh.
 #
-# Where: your laptop. It connects to the box as <SERVER_NAME>.local.
-# When:  after the install, when you power the box on again. Run it again
-#        whenever the box's configuration must change, for example a role.
-# Why:   one command does the full sequence the same way every time:
-#          1. check what the installer produced (PHASE=firstboot)
-#          2. send postinstall.sh to the box and run it as root
-#          3. reboot, and prove the reboot with a new boot id (REQ-SERVER-001)
-#          4. check the configured box (PHASE=provisioned)
-#        The first check exists because postinstall.sh can repair an install
-#        fault and hide it (REQ-SERVER-004). The box ran as `192` for one
-#        generation.
+# Where: your computer. It connects to <SERVER_NAME>.local.
+# When:  after the step 2 install, when you power the target machine on again.
+#        Run it again whenever the target's configuration or roles must change.
+#
+# What happens:
+#   1. assert.sh checks what the installer produced (PHASE=firstboot).
+#   2. It sends postinstall.sh to the target, which runs it as root.
+#   3. The target reboots. A new boot id proves that it did (REQ-SERVER-001).
+#   4. assert.sh checks the configured target (PHASE=provisioned).
+#
+# Why:   one command runs the full sequence the same way every time. Step 1
+#        exists because postinstall.sh can repair an install fault and so hide
+#        it (REQ-SERVER-004). A target once ran as `192` for a whole generation.
 #
 # Usage:
-#   ./provision.sh <box>               steps 1 to 4
-#   ./provision.sh <box> --assert      step 4 only, no changes
-#   ./provision.sh <box> --no-reboot   steps 1 and 2 only
-#   HOST=<ip> ./provision.sh <box>     use <ip> if <name>.local does not resolve
+#   ./provision.sh <machine>               steps 1 to 4
+#   ./provision.sh <machine> --assert      step 4 only, no changes
+#   ./provision.sh <machine> --no-reboot   steps 1 and 2 only
+#   HOST=<ip> ./provision.sh <machine>     use <ip> if <name>.local does not resolve
 #
-# It dials the name first because the DHCP address changes on each boot
+# It connects by name first because the DHCP address changes on each boot
 # (REQ-SERVER-004).
 #
-# Exit codes (the same as the VM harness, REQ-EMU-003):
+# Exit codes (the same as test-vm.sh, REQ-EMU-003):
 #   0   every check passed
 #   1   a check failed
-#   3   the box did not come back, or came back on the old boot
+#   3   the target did not come back, or came back without rebooting
 set -euo pipefail
 IFS=$'\n\t'
 

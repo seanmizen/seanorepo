@@ -1,20 +1,25 @@
 #!/bin/bash
-# build-iso.sh: builds one box's USB installer, a copy of the Debian netinst ISO
-# with the boot line already in it.
+# build-iso.sh: copies the Debian netinst ISO and adds one target machine's
+# boot line to the copy, ready to write to a USB stick.
 #
-# You write the ISO to a USB stick and boot the box from it. The script ends by
-# printing the exact commands to write the stick.
+# The boot line is the settings the installer reads the moment it starts:
+# wifi, hostname, and the address of the preseed server that step 2 runs.
 #
-# Where: your laptop. Step 1 of 3.
-# When:  once per box, and again if the boot line changes. A preseed edit does
-#        not need a new ISO, because step 2 serves the preseed over HTTP.
-# Why:   the boot line is about 200 characters. Typing it at the GRUB menu
-#        failed three times on the first hardware install. The values are
-#        known in advance, so a file holds them.
+# Where: your computer. Step 1 of 3.
+# When:  once per target machine, and again if its boot line changes. A
+#        preseed edit needs no new ISO, because step 2 serves the preseed.
+# Why:   typing the 200-character boot line at the boot menu failed three
+#        times on the first hardware install. We know the values in
+#        advance, so a file holds them.
+#
+# What happens:
+#   1. It writes working/debbie-<name>.iso and checks the result.
+#   2. It prints the commands to write the ISO to a USB stick.
+#   3. You write the stick, start step 2, and boot the target from the stick.
 #
 # Usage:
-#   ./build-iso.sh <box>                  write working/debbie-<name>.iso
-#   ./build-iso.sh <box> --show-cmdline   print the boot line and stop
+#   ./build-iso.sh <machine>                  build the ISO
+#   ./build-iso.sh <machine> --show-cmdline   print the boot line and stop
 #
 # The ISO contains the wifi passphrase in plaintext. working/ is gitignored.
 set -euo pipefail
@@ -194,7 +199,7 @@ cat <<EOF
   Then start the preseed server, plug the stick into the target and boot it.
   No keystrokes: the automated entry is the default and boots after 5 seconds.
 
-    2-serve-preseed/serve-preseed.sh <box>
+    2-serve-preseed/serve-preseed.sh <machine>
 
   This ISO contains your wifi passphrase in plaintext. working/ is gitignored;
   treat the stick as a credential.

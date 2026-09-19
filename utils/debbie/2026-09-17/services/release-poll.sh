@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# release-poll.sh: keeps this box's checkout on origin/release.
+# release-poll.sh: checks whether origin/release moved, and if it did, checks
+# out the new commit on this target machine.
 #
-# Where: on the box, as the deploy user, on every box whatever its roles.
+# Where: on every target machine, whatever its roles, as the deploy user.
 # When:  every two minutes, from custom-release-poll.timer.
-# Why:   the box must follow `release` without any inbound connection
-#        (REQ-DEPLOY-001, REQ-DEPLOY-002). It fetches and checks out, and does
-#        nothing else: no containers, no units, no yarn. A standby box is
-#        therefore always at the right commit.
+# Why:   a target machine must follow `release` with no inbound connection
+#        (REQ-DEPLOY-001, REQ-DEPLOY-002). It changes only the checkout: no
+#        containers, no units, no yarn. So a standby target is always at the
+#        right commit.
 #
 # After each successful run, systemd starts custom-deploy.service (OnSuccess=).
 # That is the only trigger for a deploy, so a deploy never starts during a
-# checkout. deploy.sh decides whether there is anything to do.
-#
-# It keeps no marker. HEAD against the remote commit is the comparison.
+# checkout. deploy.sh then decides whether there is anything to do.
 set -euo pipefail
 IFS=$'\n\t'
 

@@ -1,12 +1,13 @@
 #!/bin/bash
-# test-vm.sh: installs Debian 13 in a local VM, configures it and checks it.
+# test-vm.sh: installs Debian 13 in a VM on your computer, configures it with
+# postinstall.sh, and checks it with assert.sh.
 #
-# Where: your laptop, with QEMU.
-# When:  after every change to the preseed, postinstall.sh or assert.sh, and
+# Where: your computer, with QEMU.
+# When:  after every change to preseed.cfg, postinstall.sh or assert.sh, and
 #        before any hardware install.
-# Why:   it proves a change in minutes, with no hardware and no console to
-#        watch. The result is an exit code. See ../../README.md for what a VM
-#        run cannot prove.
+# Why:   it tests a change in minutes, with no hardware and no console to
+#        watch. The result is an exit code. ../../README.md lists what a VM
+#        run cannot test.
 #
 # Usage:
 #   ./test-vm.sh --full      install, boot, configure, check (the usual one)

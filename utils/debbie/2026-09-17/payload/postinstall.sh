@@ -1,17 +1,25 @@
 #!/bin/bash
-# postinstall.sh: configures an installed Debian 13 box as a debbie server.
+# postinstall.sh: configures a newly installed target machine as a debbie
+# server.
 #
-# Where: on the box, as root. provision.sh or test-vm.sh sends your laptop's
-#        copy over SSH. The box's checkout also holds a copy. Nothing runs it.
-# When:  once after the install, and again whenever the configuration or the
-#        box's roles must change.
-# Why:   it sets up everything the box needs: firewall, SSH, updates, Docker,
-#        Node, the repository, the release poller, roles, the tunnel, ngrok
-#        and the shell. The failover watchdog is not here yet (REQ-NETWORK-003).
+# Where: on the target machine, as root. provision.sh or test-vm.sh sends the
+#        copy on your computer over SSH and runs it. The target's checkout also
+#        holds a copy. Nothing runs that copy.
+# When:  after the first boot, and again whenever the configuration or the
+#        target's roles must change.
+# Why:   it sets up everything the target needs, in this order:
+#          1. packages and the hostname
+#          2. power keys and the journal size cap
+#          3. firewall, SSH (keys only) and automatic security updates
+#          4. Docker
+#          5. the deploy user and its shell
+#          6. the repository checkout, then Node and Yarn
+#          7. the release poller, the deploy unit and the roles
+#          8. the Cloudflare tunnel, then ngrok
+#        The failover watchdog is not here yet (REQ-NETWORK-003).
 #
-# It is idempotent. A second run leaves the box in the same state, and the VM
-# harness runs it twice to prove this. Each step has a check in
-# payload/assert.sh.
+# It is idempotent: a second run leaves the target in the same state. test-vm.sh
+# runs it twice to prove this. Each step has a check in assert.sh.
 #
 # Usage: sudo SERVER_NAME=<name> [DEPLOY_USER=srv] [ROLE_WEBSERVER=yes]
 #        [ROLE_TUNNEL=yes] bash postinstall.sh

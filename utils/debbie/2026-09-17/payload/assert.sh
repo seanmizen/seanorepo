@@ -1,14 +1,18 @@
 #!/bin/bash
-# assert.sh: checks a box against the requirements and exits 0 only if all pass.
+# assert.sh: checks a target machine against the requirements, and exits 0
+# only if every check passes.
 #
-# Where: on the box. provision.sh and test-vm.sh stream it over SSH with
-#        `bash -s`, so it must not read any file beside it.
-# When:  twice per run. PHASE=firstboot runs before postinstall.sh and checks
-#        only what the installer produced. PHASE=provisioned runs after
-#        postinstall.sh and a reboot, and checks everything.
-# Why:   the exit code is the result (REQ-EMU-003). Nobody must read a console.
-#        The two phases show a fault that postinstall.sh repairs: the check
-#        fails in firstboot and passes in provisioned (REQ-SERVER-004).
+# Where: on the target machine. provision.sh and test-vm.sh send it over SSH
+#        (`bash -s`), so it must not read any file beside it.
+# When:  twice in each run:
+#          1. PHASE=firstboot, before postinstall.sh. It checks only what the
+#             installer produced.
+#          2. PHASE=provisioned, after postinstall.sh and a reboot. It checks
+#             everything.
+# Why:   the exit code is the result, so nobody must read a console
+#        (REQ-EMU-003). A check that fails in firstboot and passes in
+#        provisioned shows a fault that postinstall.sh repaired
+#        (REQ-SERVER-004).
 #
 # Every check is the same on arm64 and amd64. Where a name differs by
 # architecture, the check uses a glob.

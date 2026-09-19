@@ -1,16 +1,17 @@
 #!/bin/bash
-# serve-preseed.sh: serves the preseed over HTTP to a box that is installing.
+# serve-preseed.sh: serves the preseed over HTTP while a target machine
+# installs Debian from the step 1 USB stick.
 #
-# Where: your laptop, on the same network as the box. Step 2 of 3.
-# When:  while the box boots from the step 1 USB stick. Keep it running until
-#        the install finishes and the box powers off.
-# Why:   the installer reads its answers from this server. A preseed edit then
-#        needs no new ISO: the installer fetches the file again on its next
-#        attempt. It uses the same overrides generator as the VM harness, so
-#        the hardware installs what the VM tested.
+# Where: your computer, on the same network as the target machine. Step 2 of 3.
+# When:  start it first. Then boot the target machine from the USB stick. Keep
+#        it running until the install ends and the target powers off.
+# Why:   the installer downloads its answers (the preseed) from this server.
+#        So a preseed edit needs no new USB stick. It builds the files with
+#        the same script as test-vm.sh, so the hardware installs what the VM
+#        tested.
 #
 # Usage:
-#   ./serve-preseed.sh <box>   serve, print the boot line, wait. Ctrl-C stops it.
+#   ./serve-preseed.sh <machine>   serve, print the boot line, wait. Ctrl-C stops.
 set -euo pipefail
 IFS=$'\n\t'
 

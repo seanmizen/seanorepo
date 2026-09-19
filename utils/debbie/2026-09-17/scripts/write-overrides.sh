@@ -1,25 +1,29 @@
 #!/bin/bash
-# write-overrides.sh: prints overrides.cfg, the per-install part of the preseed.
+# write-overrides.sh: prints overrides.cfg, the settings that belong to one
+# target machine, for the installer to read after preseed.cfg.
 #
-# Where: your laptop.
-# When:  test-vm.sh and 2-serve-preseed/serve-preseed.sh run it before each
-#        install.
-# Why:   preseed.cfg holds only settings that suit every box and every
-#        architecture (REQ-EMU-005). This script adds the settings for one
-#        install. The VM and the hardware use the same generator, so the two
-#        installs cannot differ.
+# Where: your computer.
+# When:  before each install. serve-preseed.sh (hardware) and test-vm.sh (VM)
+#        run it, then serve its output next to preseed.cfg.
+# Why:   preseed.cfg holds only the settings that every target machine shares.
+#        This script adds the rest: the user, hostname, SSH key and password
+#        hash. Hardware and VM installs use the same script, so they cannot
+#        differ.
 #
-# Required environment:
+# It reads no env file. The script that runs it sets these variables.
+# serve-preseed.sh takes them from 2-serve-preseed/<machine>.env.
+#
+# Required:
 #   DEPLOY_USER        the account that gets sudo and the SSH key
 #   SERVER_NAME        hostname
 #   SSH_PUBKEY_FILE    path to the public key to authorise
 #   PASSWORD_CRYPTED   sha512-crypt hash for DEPLOY_USER (openssl passwd -6)
 #
 # Optional:
-#   CONSOLE            serial console device, e.g. ttyAMA0. The VM harness sets
-#                      it so the install is visible and logged. Do not set it
-#                      for hardware: a laptop has no serial port, and the
-#                      screen stays black for the whole install.
+#   CONSOLE            serial console device, e.g. ttyAMA0. test-vm.sh sets it
+#                      so the install is visible and logged. Do not set it for
+#                      hardware: the target machine has no serial port, and the screen
+#                      stays black for the whole install.
 set -euo pipefail
 
 need() {
