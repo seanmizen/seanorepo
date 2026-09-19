@@ -7,7 +7,7 @@
 #        box's roles must change.
 # Why:   it sets up everything the box needs: firewall, SSH, updates, Docker,
 #        Node, the repository, the release poller, roles, the tunnel, ngrok
-#        and the shell. The failover watchdog is not here yet (#281).
+#        and the shell. The failover watchdog is not here yet (REQ-NETWORK-003).
 #
 # It is idempotent. A second run leaves the box in the same state, and the VM
 # harness runs it twice to prove this. Each step has a check in

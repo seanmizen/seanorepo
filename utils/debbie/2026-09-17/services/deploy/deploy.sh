@@ -2,8 +2,9 @@
 # deploy.sh: starts the sites that the checkout holds, on this box.
 #
 # Where: on the box, as the deploy user, from the release checkout.
-# When:  custom-release-poll.service triggers it after every poll (#307). It
-#        runs only on a box with the webserver role (#329). It deploys only
+# When:  custom-release-poll.service triggers it after every poll
+#        (REQ-DEPLOY-002). It runs only on a box with the webserver role
+#        (REQ-SERVER-014). It deploys only
 #        when the checkout or the boot id changed since the last deploy.
 #        Run `deploy.sh --force` over SSH to deploy regardless.
 # Why:   nothing can connect to the box from outside (REQ-SERVER-002), so the

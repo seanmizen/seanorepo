@@ -7,10 +7,11 @@
 # Why:   one command does the full sequence the same way every time:
 #          1. check what the installer produced (PHASE=firstboot)
 #          2. send postinstall.sh to the box and run it as root
-#          3. reboot, and prove the reboot with a new boot id (#295)
+#          3. reboot, and prove the reboot with a new boot id (REQ-SERVER-001)
 #          4. check the configured box (PHASE=provisioned)
 #        The first check exists because postinstall.sh can repair an install
-#        fault and hide it (#285). The box ran as `192` for one generation.
+#        fault and hide it (REQ-SERVER-004). The box ran as `192` for one
+#        generation.
 #
 # Usage:
 #   ./provision.sh <box>               steps 1 to 4
@@ -18,7 +19,8 @@
 #   ./provision.sh <box> --no-reboot   steps 1 and 2 only
 #   HOST=<ip> ./provision.sh <box>     use <ip> if <name>.local does not resolve
 #
-# It dials the name first because the DHCP address changes on each boot (#284).
+# It dials the name first because the DHCP address changes on each boot
+# (REQ-SERVER-004).
 #
 # Exit codes (the same as the VM harness, REQ-EMU-003):
 #   0   every check passed

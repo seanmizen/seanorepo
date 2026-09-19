@@ -8,7 +8,7 @@
 #        postinstall.sh and a reboot, and checks everything.
 # Why:   the exit code is the result (REQ-EMU-003). Nobody must read a console.
 #        The two phases show a fault that postinstall.sh repairs: the check
-#        fails in firstboot and passes in provisioned (#285).
+#        fails in firstboot and passes in provisioned (REQ-SERVER-004).
 #
 # Every check is the same on arm64 and amd64. Where a name differs by
 # architecture, the check uses a glob.
