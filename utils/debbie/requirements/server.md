@@ -309,7 +309,7 @@ Introduced in #259.
 
 ## REQ-SERVER-007 — Logs cannot fill the disk
 
-- **Status:** proposed
+- **Status:** active
 - **Source:** sean
 - **Origin:** #273
 - **Type:** constraint
@@ -323,6 +323,12 @@ Introduced in #259.
   Separate from `REQ-SERVER-006` because they fail independently: a fully
   patched host can still fill its disk, and a capped journal does nothing about
   an unpatched OpenSSH.
+  The cap is 1G, set by drop-in (#287). The disk is a 128 GB SSD shared with
+  Docker images and the SQLite volumes; journald's default of 10% of the
+  filesystem is bounded, but only by accident.
+
+  The assertion reads the limit the running journald reported, not the
+  drop-in. A file journald never read is the failing state.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "journald size capped"
 - **Relations:** none
@@ -366,7 +372,7 @@ Introduced in #259.
 
 ## REQ-SERVER-009 — Repeated failed authentication is throttled
 
-- **Status:** proposed
+- **Status:** withdrawn
 - **Source:** sean
 - **Origin:** #273
 - **Type:** functional
@@ -378,6 +384,14 @@ Introduced in #259.
   against it. What this adds once keys are the only path is a bound on log
   volume and on the CPU spent rejecting a scanner, which is why it sits next to
   `REQ-SERVER-007` rather than replacing anything.
+
+  **Withdrawn 2026-09-19 (#289).** Throttling by source address has nothing to
+  act on here. The only internet-facing SSH path is ngrok, which reaches `sshd`
+  from `127.0.0.1`, so every remote client shares one address: ignoring
+  loopback throttles no attacker, and not ignoring it lets one scanner lock out
+  the owner. The LAN is exempt so provisioning cannot lock itself out. What
+  keeps attackers out is `REQ-SERVER-008`; what bounds their log volume is
+  `REQ-SERVER-007`.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "fail2ban active"
 - **Relations:** refines REQ-SERVER-008
