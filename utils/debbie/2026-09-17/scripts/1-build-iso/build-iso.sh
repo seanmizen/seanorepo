@@ -1,6 +1,9 @@
 #!/bin/bash
-# build-iso.sh: makes a copy of the Debian netinst ISO with the installer boot
-# line already in it.
+# build-iso.sh: builds one box's USB installer, a copy of the Debian netinst ISO
+# with the boot line already in it.
+#
+# You write the ISO to a USB stick and boot the box from it. The script ends by
+# printing the exact commands to write the stick.
 #
 # Where: your laptop. Step 1 of 3.
 # When:  once per box, and again if the boot line changes. A preseed edit does
@@ -191,7 +194,7 @@ cat <<EOF
   Then start the preseed server, plug the stick into the target and boot it.
   No keystrokes: the automated entry is the default and boots after 5 seconds.
 
-    ./serve-preseed.sh
+    2-serve-preseed/serve-preseed.sh <box>
 
   This ISO contains your wifi passphrase in plaintext. working/ is gitignored;
   treat the stick as a credential.
