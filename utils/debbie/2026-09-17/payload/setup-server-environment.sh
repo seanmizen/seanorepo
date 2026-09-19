@@ -1,28 +1,29 @@
 #!/bin/bash
-# postinstall.sh: configures a newly installed target machine as a debbie
-# server.
+# setup-server-environment.sh: turns a machine that already has the developer
+# toolchain into a debbie server.
 #
-# Where: on the target machine, as root. provision.sh or test-vm.sh sends the
-#        copy on your computer over SSH and runs it. The target's checkout also
-#        holds a copy. Nothing runs that copy.
+# Where: on the target machine, as root. provision.sh and test-vm.sh send it
+#        over SSH and run it after setup-developer-environment.sh.
 # When:  after the first boot, and again whenever the configuration or the
-#        target's roles must change.
-# Why:   it sets up everything the target needs, in this order:
-#          1. packages and the hostname
-#          2. power keys and the journal size cap
-#          3. firewall, SSH (keys only) and automatic security updates
-#          4. Docker
-#          5. the deploy user and its shell
-#          6. the repository checkout, then Node and Yarn
-#          7. the release poller, the deploy unit and the roles
-#          8. the Cloudflare tunnel, then ngrok
+#        machine's roles must change.
+# Why:   a server needs what a laptop must not have, in this order:
+#          1. its own hostname and mDNS name
+#          2. power keys ignored, and a capped journal
+#          3. firewall, SSH keys only, automatic security updates
+#          4. Docker publishing to loopback only
+#          5. the checkout moved to the release branch
+#          6. the release poller, the deploy unit and the roles
+#          7. the Cloudflare tunnel, then ngrok
 #        The failover watchdog is not here yet (REQ-NETWORK-003).
 #
-# It is idempotent: a second run leaves the target in the same state. test-vm.sh
-# runs it twice to prove this. Each step has a check in assert.sh.
+# Docker, Node, Yarn, the shell and the seanorepo clone come from
+# setup-developer-environment.sh, which runs first.
+#
+# It is idempotent: a second run leaves the machine in the same state.
+# test-vm.sh runs it twice to prove this. Each step has a check in assert.sh.
 #
 # Usage: sudo SERVER_NAME=<name> [DEPLOY_USER=srv] [ROLE_WEBSERVER=yes]
-#        [ROLE_TUNNEL=yes] bash postinstall.sh
+#        [ROLE_TUNNEL=yes] bash setup-server-environment.sh
 set -euo pipefail
 IFS=$'\n\t'
 export DEBIAN_FRONTEND=noninteractive
@@ -91,7 +92,7 @@ DEPLOY_USER="${DEPLOY_USER:-srv}"
 #   - 2025-10-08b/scripts/deploy.sh - what production runs today - resolves
 #     "${REPO_PATH:-$HOME/projects/seanorepo}" as the deploy user, which for
 #     DEPLOY_USER=srv is this exact path.
-#   - the corepack activation further down reads $REPO_DIR/package.json.
+#   - setup-developer-environment.sh clones the repository to this path.
 #
 # deploy.sh's override is spelled REPO_PATH and this one REPO_DIR, which is a
 # wart inherited from the older generation. They are left as they are rather
@@ -427,58 +428,9 @@ EOF
 systemctl enable apt-daily.timer apt-daily-upgrade.timer
 
 #------------------------------------------------------------------------------
-# Docker engine - REQ-DEPLOY-004
-#
-# The deploy is `yarn prod:docker`, so the machine needs the engine and the compose
-# plugin, not merely a group named docker. Until #276 this script created the
-# group and stopped, and payload/assert.sh's "srv in docker" check passed against an
-# empty group - an assertion that read as "Docker works" while proving only
-# that `groupadd` had run.
-#
-# Docker's own apt repository, not Debian's docker.io: compose v2 ships there
-# as a plugin (`docker compose`, not `docker-compose`), which is what
-# yarn prod:docker invokes.
-#
-# Each step below is guarded so a second run is a no-op rather than a second
-# source file, a re-download, or a duplicate deb line that makes apt-get update
-# complain about a doubly-configured repository.
-#------------------------------------------------------------------------------
-DOCKER_KEYRING=/etc/apt/keyrings/docker.gpg
-DOCKER_LIST=/etc/apt/sources.list.d/docker.list
-
-log "docker engine"
-install -d -m 0755 /etc/apt/keyrings
-
-if [ ! -s "$DOCKER_KEYRING" ]; then
-    log "  fetching Docker's apt signing key"
-    # Dearmored via a temp file rather than a pipe: a curl failure mid-stream
-    # would otherwise leave a truncated keyring that is present, non-empty and
-    # unusable - and the guard above would then skip repairing it forever.
-    docker_key_tmp="$(mktemp)"
-    curl -fsSL https://download.docker.com/linux/debian/gpg -o "$docker_key_tmp"
-    gpg --batch --yes --dearmor -o "$DOCKER_KEYRING" "$docker_key_tmp"
-    rm -f "$docker_key_tmp"
-    chmod 0644 "$DOCKER_KEYRING"
-fi
-
-# Written whole and compared whole, so a correct file is left byte-identical
-# and a wrong one is replaced rather than appended to.
-docker_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$DOCKER_KEYRING] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
-docker_repo_changed=0
-if [ ! -f "$DOCKER_LIST" ] || [ "$(cat "$DOCKER_LIST")" != "$docker_deb_line" ]; then
-    log "  writing $DOCKER_LIST"
-    printf '%s\n' "$docker_deb_line" > "$DOCKER_LIST"
-    docker_repo_changed=1
-fi
-
-# Refresh only when there is a reason to. The second condition covers a machine
-# whose previous run wrote the source and then failed before installing: the
-# file is already right, so the first condition is false, but the package lists
-# may never have been fetched.
-if [ "$docker_repo_changed" = 1 ] \
-    || ! dpkg-query -W -f='${Status}' docker-ce 2> /dev/null | grep -q "^install ok installed"; then
-    apt-get update -y
-fi
+# Docker is installed by setup-developer-environment.sh, which runs first.
+# What belongs here is the part that is true only of a server: where a
+# published port is allowed to listen.
 
 #------------------------------------------------------------------------------
 # Published ports bind loopback - REQ-SERVER-002, #300
@@ -553,8 +505,6 @@ if [ ! -f "$DOCKER_DAEMON_JSON" ] || ! cmp -s "$docker_daemon_tmp" "$DOCKER_DAEM
 fi
 rm -f "$docker_daemon_tmp"
 
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-systemctl enable --now docker
 
 # Not a reload. dockerd's SIGHUP live-reload covers a named subset of settings
 # and `ip` is not in it - measured, not assumed: writing the file and sending
@@ -589,97 +539,10 @@ id "$DEPLOY_USER" > /dev/null 2>&1 || { echo "user $DEPLOY_USER missing" >&2; ex
 usermod -aG docker,sudo "$DEPLOY_USER"
 
 #------------------------------------------------------------------------------
-# The deploy user's interactive shell - REQ-SERVER-010, #290
+# The repository checkout - REQ-DEPLOY-001
 #
-# zsh, oh-my-zsh and the previous generation's plugins and prompt. Most work on
-# this machine is done by hand over SSH while something is broken, and a prompt
-# that shows the host and the git branch is cheap insurance against running
-# the right command on the wrong branch.
-#
-# IDEMPOTENT BY CONSTRUCTION, and asserted: 2025-10-08b appended its prompt
-# block with `cat >>` on every run while documenting itself as idempotent.
-# Here .zshrc is written whole from the heredoc below on every run, so a second
-# run leaves it byte-identical, and the VM harness runs this script twice to
-# prove it. oh-my-zsh's own installer is deliberately NOT used: it rewrites
-# .zshrc from its template, which would fight this file on every run.
-#
-# Cloned, not pinned. This is a shell prompt; tracking upstream is fine, and
-# nothing here re-pulls, so a provisioned machine does not change under anyone.
-#------------------------------------------------------------------------------
-log "zsh for $DEPLOY_USER"
-apt-get install -y zsh
-zsh_path="$(command -v zsh)"
-if [ "$(getent passwd "$DEPLOY_USER" | cut -d: -f7)" != "$zsh_path" ]; then
-    chsh -s "$zsh_path" "$DEPLOY_USER"
-fi
-
-deploy_home_zsh="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
-omz_dir="$deploy_home_zsh/.oh-my-zsh"
-clone_once() {
-    [ -d "$2/.git" ] || sudo -u "$DEPLOY_USER" git clone -q --depth 1 "$1" "$2"
-}
-clone_once https://github.com/ohmyzsh/ohmyzsh.git "$omz_dir"
-clone_once https://github.com/zsh-users/zsh-autosuggestions.git "$omz_dir/custom/plugins/zsh-autosuggestions"
-clone_once https://github.com/zsh-users/zsh-syntax-highlighting.git "$omz_dir/custom/plugins/zsh-syntax-highlighting"
-
-zshrc_tmp="$(mktemp)"
-cat > "$zshrc_tmp" <<'ZSHRC_EOF'
-# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-SERVER-010.
-# Rewritten whole on every provisioning run: edits here are lost. Put local
-# additions in ~/.zshrc.local, which is sourced last and never touched.
-export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="robbyrussell"
-plugins=(git docker node yarn zsh-autosuggestions zsh-syntax-highlighting)
-# No self-update: it prompts on login (a hang for a non-interactive check) and
-# pulls from the network on a machine whose changes should come from provisioning.
-zstyle ':omz:update' mode disabled
-source "$ZSH/oh-my-zsh.sh"
-
-export PATH="$HOME/.local/bin:$PATH"
-
-# Depth-based path display, carried over from 2025-10-08b.
-setopt promptsubst
-autoload -U colors && colors
-precmd() {
-  if [[ $PWD == "/" ]]; then
-    prompt_path="/"
-  else
-    depth=$(( $(echo "$PWD" | awk -F/ '{print NF-1}') - 1 ))
-    dirname=$([[ $PWD == $HOME ]] && echo "~" || basename "$PWD")
-    [[ $depth == 0 ]] && prompt_path="/$dirname" || prompt_path="/[$depth]/$dirname"
-  fi
-}
-arrow='%(?:%F{green}➜%f:%F{red}➜%f)'
-PROMPT='%B${arrow}%b %B%F{blue}%m%f%b %B%F{cyan}${prompt_path}%f%b $(git_prompt_info)'
-
-[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
-ZSHRC_EOF
-install -m 0644 -o "$DEPLOY_USER" -g "$(id -gn "$DEPLOY_USER")" "$zshrc_tmp" "$deploy_home_zsh/.zshrc"
-rm -f "$zshrc_tmp"
-
-#------------------------------------------------------------------------------
-# Repository checkout - REQ-DEPLOY-001
-#
-# Nothing deployed anything before this, because nothing had put the repository
-# on the machine. This clones it, and it does so BEFORE the Node and Yarn section
-# on purpose: that section activates the Yarn the repository declares, and can
-# only do so once there is a package.json to read. Put the clone after it and
-# the activation is a no-op on every first run and only ever works on the
-# second - which is the kind of ordering bug that hides for a generation
-# because both runs eventually converge.
-#
-# ANONYMOUS HTTPS, NO CREDENTIAL. seanmizen/seanorepo is a public repository,
-# so an unauthenticated clone works and provisioning holds no secret, no deploy
-# key and nothing to rotate. If the repository is ever made private this step
-# is the thing that breaks, and it breaks loudly at provision time rather than
-# silently at deploy time - which is the right place to find out.
-#
-# AS THE DEPLOY USER, NOT ROOT - REQ-SERVER-003. The deploy runs unattended as
-# $DEPLOY_USER and cannot answer a password prompt, so a checkout root happens
-# to own is a checkout the deploy cannot fetch into. Cloning under sudo -u is
-# the easy half; the ownership repair below is the half that is easy to get
-# subtly wrong, because a single root-owned object inside an otherwise correct
-# tree is enough to break `git fetch` months later.
+# setup-developer-environment.sh has already cloned seanorepo for this user.
+# What belongs here is the branch: a server tracks `release`, never `main`.
 #------------------------------------------------------------------------------
 log "repository checkout at $REPO_DIR"
 
@@ -759,83 +622,11 @@ if [ "$repo_cloned" = 1 ]; then
 fi
 
 #------------------------------------------------------------------------------
-# Node and Yarn - REQ-DEPLOY-004
+# The release poller, the deploy unit and the roles - REQ-DEPLOY-002
 #
-# The deploy runs `yarn install --immutable` then `yarn prod:docker`, so the machine
-# needs Node and a Yarn 4 that the repository agrees with.
-#
-# DEBIAN'S OWN nodejs, NOT NodeSource. Trixie ships 20.19.2, which is Node 20 -
-# the thing the ticket asks for - so a third-party apt source would buy nothing
-# and cost a second keyring to go stale. The previous generation added
-# NodeSource because bookworm shipped Node 18; that reason expired with trixie.
-#
-# `corepack enable`, NOT `npm install -g yarn`. The previous generation did both
-# and contradicted itself: a globally npm-installed yarn lands in /usr/local/bin
-# and shadows the corepack shim in /usr/bin, so the machine ends up running Yarn 1
-# against a Yarn 4 repository. npm is not installed here at all, which is the
-# cheapest way to keep that from coming back.
-#
-# NO VERSION IS NAMED HERE, deliberately, and that is the point of the ticket.
-# `corepack prepare --activate` with no argument reads `packageManager` from the
-# package.json of the directory it runs in, so the repository stays the single
-# source of the Yarn version and the two cannot drift. Pinning it a second time
-# in this script is exactly the contradiction being removed.
-#
-# Since #278 the section above has already cloned the repository, so on any
-# normal run the guard below is satisfied and the activation genuinely happens.
-# The guard stays for the case where it is not - REPO_DIR pointed somewhere
-# else, or a clone that failed and left a directory with no package.json in it.
-# Skipping there costs nothing: corepack resolves `packageManager` at
-# INVOCATION time, so even with no pre-warm at all the first `yarn` run inside
-# the checkout fetches the declared version by itself. The step only moves that
-# fetch earlier, to a moment when a failure is still attributable.
-#------------------------------------------------------------------------------
-log "node and yarn"
-apt-get install -y nodejs node-corepack
-
-# `yarn` only. A bare `corepack enable` also drops npm and pnpm shims into
-# /usr/bin, and the npm one would collide with Debian's npm package if anything
-# ever pulled it in. We want exactly one of the three.
-corepack enable yarn
-
-if [ -f "$REPO_DIR/package.json" ]; then
-    log "  activating the yarn from $REPO_DIR/package.json"
-    # As the deploy user, with -H: corepack's cache and its record of the
-    # activated version are per-user, under $HOME. Warming root's cache would
-    # do the deploy no good at all.
-    sudo -u "$DEPLOY_USER" -H sh -c 'cd "$1" && corepack prepare --activate' _ "$REPO_DIR"
-else
-    log "  no package.json at $REPO_DIR - corepack will resolve the version"
-    log "  from packageManager on first use inside the checkout"
-fi
-
-#------------------------------------------------------------------------------
-# Deploy poller - REQ-DEPLOY-002, REQ-DEPLOY-003, REQ-DEPLOY-005, REQ-DEPLOY-006
-#
-# The host pulls: every two minutes it compares origin/release against a marker
-# and deploys when the two differ. Nothing reaches in, because nothing can -
-# REQ-SERVER-002 forwards no port.
-#
-# WRITTEN HERE RATHER THAN COPIED FROM THE CHECKOUT, and the reason is not
-# taste. This script is delivered on its own - scp'd to /tmp by scripts/test-vm/test-vm.sh,
-# streamed over stdin by scripts/3-provision/provision.sh - so it can read no file that sits
-# beside it in the repository. The only copy of the repository it could read
-# from is the checkout it made above, which is on `release`, which by
-# definition holds the last thing that was SHIPPED. On the first machine this
-# generation provisions, `release` still points at the previous generation and
-# contains none of this. Sourcing the units from there would mean the poller is
-# installed only on a machine that already had a working poller.
-#
-# So the units are literals here, in the one file that is guaranteed to be
-# current because a human just ran it. The same is true of the logind drop-in
-# and the Docker apt source above; this follows that pattern rather than
-# inventing a second one.
-#
-# deploy.sh itself cannot be inlined - it is 250 lines and having two copies
-# would be worse than the problem - so ExecStart points into the checkout, and
-# a deploy updates the deployer. The guard below says so out loud when the
-# checkout does not have it yet, with the remedy, rather than leaving a unit
-# that fails every two minutes with "No such file or directory".
+# Node, corepack and Yarn come from setup-developer-environment.sh. The deploy
+# runs `yarn install --immutable` then `yarn prod:docker`, and the Yarn version
+# comes from the repository's own packageManager field.
 #------------------------------------------------------------------------------
 UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
