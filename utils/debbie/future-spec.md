@@ -214,6 +214,14 @@ Before negotiation is safe for a stateful role, this document wants answers to:
 
 ---
 
+### systemd targets and slices
+
+Parked until there is a list of real services to group. A **target** would let
+`systemctl restart custom.target` act on the whole stack. A **slice** would let
+the services share a memory cap (`Slice=custom.slice`, `MemoryMax=`). Both can
+be added later with no rework. Today `systemctl list-units 'custom-*'` is enough,
+because Docker already groups most of what runs.
+
 ## Open questions
 
 Genuinely undecided. Listed so they are not mistaken for decisions.

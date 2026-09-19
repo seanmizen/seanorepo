@@ -1,4 +1,4 @@
-# Per-box settings: a password hash and a wifi passphrase. .env.example is the template.
+# Per-machine settings: a password hash and a wifi passphrase. .env.example is the template.
 .env
 *.env
 # Output: built ISOs (wifi passphrase in plaintext), the SSH key, VM images.

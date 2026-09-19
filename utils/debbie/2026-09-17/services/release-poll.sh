@@ -69,7 +69,7 @@ fi
 
 log "$REMOTE/$RELEASE_BRANCH moved to ${REMOTE_SHA:0:7} (checkout at ${HEAD_SHA:0:7}) - checking out"
 git fetch "$REMOTE" --prune
-# -f discards tracked local edits, which on this box are always accidents.
+# -f discards tracked local edits, which on this machine are always accidents.
 # Untracked files are left alone - REQ-DEPLOY-006: no `git clean`, because
 # apps/cloudflared/credentials/ is gitignored and exists only on this host.
 git checkout -f -B "$RELEASE_BRANCH" "$REMOTE/$RELEASE_BRANCH"
