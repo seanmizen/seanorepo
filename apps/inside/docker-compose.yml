@@ -1,7 +1,7 @@
 # inside — inside.seanmizen.com
 # Cloudflared port range: 4060 (FE) / 4061 (BE).
 #
-# Dev bind-mounts the monorepo root so `@shared/*` resolves from both packages;
+# Dev bind-mounts the monorepo root so `@shared/*` resolves from both packages.
 # node_modules is a named volume seeded from the image, keeping the Linux
 # builds of native deps out of the host's macOS node_modules.
 
@@ -14,7 +14,7 @@ x-frontend-base: &frontend-base
     args:
       API_URL: ${API_URL:-/api}
   ports:
-    - '4060:4060'
+    - '${PUBLISH_ADDR:-127.0.0.1}:4060:4060'
   labels:
     - 'com.docker.compose.service.primary=true'
     - 'description=inside - Frontend (http://localhost:4060)'
@@ -26,11 +26,11 @@ x-backend-base: &backend-base
     dockerfile: apps/inside/inside-be/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-    - '4061:4061'
+    - '${PUBLISH_ADDR:-127.0.0.1}:4061:4061'
   labels:
     - 'description=inside - Backend API (http://localhost:4061/api)'
   # Secrets and SMTP config. Optional so `start:docker` works on a fresh clone
-  # with the dev defaults; production refuses to boot without real values, so
+  # with the dev defaults. Production refuses to boot without real values, so
   # the deploy host must have this file.
   env_file:
     - path: ./inside-be/.env

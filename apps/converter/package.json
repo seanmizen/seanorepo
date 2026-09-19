@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "start": "concurrently --names FE,BE --prefix-colors cyan,green \"yarn workspace converter-fe start:noopen\" \"cd backend && go run .\"",
-    "start:docker": "docker compose --profile dev up --build",
+    "start:docker": "PUBLISH_ADDR=0.0.0.0 docker compose --profile dev up --build",
     "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
     "down": "docker compose down"
   },

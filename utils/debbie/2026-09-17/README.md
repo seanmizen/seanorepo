@@ -386,9 +386,11 @@ and no chain ordering to get right.
 
 It is a **default**, though, and a compose file that writes
 `"0.0.0.0:4001:4001"` still publishes to the LAN — measured, same daemon,
-reachable from another host. #309 is the ticket for making the compose files say
-what they mean. Until then the assertions are the guard, and they deliberately
-do not trust this file: they read the listening sockets, the `nat` chain, and a
+reachable from another host. Since #309 the compose files say what they mean:
+every port is `"${PUBLISH_ADDR:-127.0.0.1}:PORT:PORT"`, and only the dev
+scripts (`yarn start:docker`) set `PUBLISH_ADDR=0.0.0.0`, so a dev server can
+still be reached from a phone on the wifi. The assertions remain the guard, and
+they deliberately do not trust either file: they read the listening sockets, the `nat` chain, and a
 port they publish themselves on the spot. Changing the daemon setting back does
 not make them pass.
 
