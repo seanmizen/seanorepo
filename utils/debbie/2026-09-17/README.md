@@ -355,9 +355,7 @@ and since #280 the Cloudflare tunnel (`REQ-NETWORK-001`, `REQ-NETWORK-002`).
 Out: the network failover watchdog (`REQ-NETWORK-003`, #281) and the wifi
 migration to NetworkManager (`REQ-NETWORK-004`, #282).
 
-**Not yet in: ngrok** (#317). It is the only way to SSH into the box from off
-the LAN, and this generation does not install it. A box built from here can be
-reached on the local network and nowhere else.
+Since #317, ngrok too (`REQ-NETWORK-005`) — see *Remote SSH* below.
 
 ### Published ports never reach the LAN
 
@@ -590,6 +588,53 @@ forbids. The name appears in three places — the unit on disk, `CLOUDFLARED_UNI
 in `deploy.sh`, and the sudoers drop-in — and `vm/assert.sh` asserts all three
 agree, because a rename that moves only two of them fails at the exact moment
 it matters, an ingress change, and passes every other day of the year.
+
+### Remote SSH (ngrok)
+
+`ngrok tcp 22` is the only way into the box from off the LAN
+(`REQ-NETWORK-005`). `postinstall.sh` installs the `ngrok` package from ngrok's
+apt repository (suite `bookworm`; there is no `trixie`) and writes
+`custom-ngrok.service`, which runs as the deploy user.
+
+**Setting it up** needs the account's authtoken, which is in no repository and
+is never written by provisioning. On the box, as `srv`:
+
+```bash
+ngrok config add-authtoken <token>          # from dashboard.ngrok.com
+```
+
+then re-run `postinstall.sh`. It enables the unit once the token is there.
+Moving from the old box, copying `~/.config/ngrok/ngrok.yml` across does the
+same thing.
+
+**Finding the address.** On the free plan it changes whenever the agent
+restarts. Any of these:
+
+```bash
+ssh srv@debbie.local 'journalctl -u custom-ngrok.service -b | grep -o "url=tcp://[^ ]*" | tail -1'
+ssh srv@debbie.local 'curl -s localhost:4040/api/tunnels'   # the inspector, loopback only
+```
+
+or the ngrok dashboard, which is the one that works when you are already
+locked out. Then `ssh -p <port> srv@<host>` with the same key as on the LAN.
+
+Two choices here are the reverse of the tunnel's, on purpose:
+
+- **It never gives up.** No start limit, restarting every 30s. The tunnel
+  stops after five failures so the cause is not buried. This is the way back
+  in when something is already wrong, and a unit that had given up during an
+  outage would stay down on a box nobody can reach.
+- **Loopback is exempt from sshd's per-source penalties.** OpenSSH 9.8+
+  refuses an address for a while after failed logins. Every ngrok login
+  arrives from `127.0.0.1`, so without the exemption one scanner hitting the
+  public address would lock the owner out too, before authentication, whatever
+  key they held. The drop-in is
+  `/etc/ssh/sshd_config.d/20-debbie-ngrok-loopback.conf`. LAN addresses keep
+  their penalties. Keys-only SSH (`REQ-SERVER-008`) is what keeps attackers
+  out, and fail2ban was withdrawn for the same reason (#289).
+
+With no token the unit is refused exactly as the tunnel is: not enabled, and
+skipped by its condition if started.
 
 Deferred, not rejected: **systemd targets and slices.** Units go in
 `/usr/local/lib/systemd/system` with a `custom-` prefix (`REQ-SERVER-011`,
