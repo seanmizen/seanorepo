@@ -1,30 +1,27 @@
 #!/bin/bash
-# build-iso.sh - bake the installer cmdline into a copy of the Debian netinst
-# ISO, so a metal install needs no keystrokes at all.
+# build-iso.sh: copies the Debian netinst ISO and adds one target machine's
+# boot line to the copy, ready to write to a USB stick.
 #
-# WHY THIS EXISTS
+# The boot line is the settings the installer reads the moment it starts:
+# wifi, hostname, and the address of the preseed server that step 2 runs.
 #
-# The alternative is typing a ~200 character kernel line at the GRUB menu, on a
-# keyboard GRUB reads as US layout whatever the real one is. On its first real
-# outing that failed three times running: edits discarded because Ctrl-X was not
-# pressed from inside the editor; the wifi presets dropped to shorten the line,
-# which cannot work because priority=critical suppresses the very prompt that
-# was supposed to replace them; and the risk of landing the params after the
-# '---' separator, which copies them into the installed system's bootloader.
+# Where: your computer. Step 1 of 3.
+# When:  once per target machine, and again if its boot line changes. A
+#        preseed edit needs no new ISO, because step 2 serves the preseed.
+# Why:   typing the 200-character boot line at the boot menu failed three
+#        times on the first hardware install. We know the values in
+#        advance, so a file holds them.
 #
-# The parameters are known in advance. They belong in a file.
+# What happens:
+#   1. It writes working/debbie-<name>.iso and checks the result.
+#   2. It prints the commands to write the ISO to a USB stick.
+#   3. You write the stick, start step 2, and boot the target from the stick.
 #
-# WHAT THIS IS NOT
+# Usage:
+#   ./build-iso.sh <machine>                  build the ISO
+#   ./build-iso.sh <machine> --show-cmdline   print the boot line and stop
 #
-# Not the initrd-embedded preseed that killed the December 2025 attempt, which
-# needed a hand-written cpio archive. Only two text files inside the ISO change.
-# The preseed itself still comes over HTTP from serve-preseed.sh, so editing it
-# costs nothing and never needs a rebuild.
-#
-#   ./build-iso.sh                 build working/debbie-<name>.iso
-#   ./build-iso.sh --show-cmdline  print the baked cmdline and exit
-#
-# The output contains your wifi passphrase in plaintext. working/ is gitignored.
+# The ISO contains the wifi passphrase in plaintext. working/ is gitignored.
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -202,7 +199,7 @@ cat <<EOF
   Then start the preseed server, plug the stick into the target and boot it.
   No keystrokes: the automated entry is the default and boots after 5 seconds.
 
-    ./serve-preseed.sh
+    2-serve-preseed/serve-preseed.sh <machine>
 
   This ISO contains your wifi passphrase in plaintext. working/ is gitignored;
   treat the stick as a credential.

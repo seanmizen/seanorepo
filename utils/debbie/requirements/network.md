@@ -31,11 +31,11 @@ Introduced in #273.
   firewall can stay closed — `REQ-SERVER-002` allows four ports and none of
   them is an application port.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no other ports open"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "cloudflared installed"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "custom-cloudflared.service
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other ports open"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "cloudflared installed"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-cloudflared.service
     installed in /usr/local/lib/systemd/system"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no other cloudflared unit
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other cloudflared unit
     is enabled" — two daemons dialling out for one tunnel is the failure this
     catches
   - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
@@ -70,15 +70,15 @@ Introduced in #273.
   (`ROLE_TUNNEL`, exactly one box). Credentials alone are not enough: a copy on
   a second box must not pull public traffic to it.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the tunnel runs only on a
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel runs only on a
     box with the tunnel role"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the tunnel reads config.yml
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel reads config.yml
     from the checkout"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the tunnel runs in the
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel runs in the
     checkout's cloudflared directory"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "credentials directory is
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "credentials directory is
     mode 700"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "the tunnel is NOT enabled
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel is NOT enabled
     while credentials are absent" — a host with no credentials refuses to run
     the tunnel rather than restarting against it forever
   - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
@@ -144,7 +144,7 @@ Introduced in #273.
   no way in. That is worth doing with physical access to the box, which is why
   it is deliberately not coupled to installing one.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "wifi config persisted"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wifi config persisted"
     (skipped where the host has no wireless interface, which is every VM run)
   - Demonstration — the wifi interface survives a reboot and `nmcli device`
     reports it as managed
@@ -175,12 +175,12 @@ Introduced in #273.
   before authentication, whatever key they held. `REQ-SERVER-008` is what
   keeps attackers out.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ngrok is dpkg-owned, not a manual binary drop"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ngrok runs as $DEPLOY_USER"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "ngrok never stops retrying"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "no other ngrok unit is enabled"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "starting ngrok without an authtoken refuses rather than looping"
-  - Test — `utils/debbie/2026-09-17/payload/verify/assert.sh` › "sshd exempts loopback from per-source penalties"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok is dpkg-owned, not a manual binary drop"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok runs as $DEPLOY_USER"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok never stops retrying"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other ngrok unit is enabled"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "starting ngrok without an authtoken refuses rather than looping"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sshd exempts loopback from per-source penalties"
   - Demonstration — an SSH login through ngrok from off the LAN, with key
     authentication, on the real box
 - **Relations:**

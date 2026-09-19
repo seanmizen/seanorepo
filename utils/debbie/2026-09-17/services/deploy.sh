@@ -1,36 +1,30 @@
 #!/bin/bash
-# deploy.sh - start what the checkout holds on this host.
+# deploy.sh: starts the sites from this target machine's checkout, after the
+# release poller moves it.
 #
-# Invoked two ways:
-#   deploy.sh          from custom-deploy.service, which custom-release-poll
-#                      triggers after every poll (#307). Deploys only when
-#                      there is a reason to - REQ-DEPLOY-002. Runs only on a
-#                      machine that serves: see SERVING_FLAG in postinstall.sh.
-#   deploy.sh --force  by hand over SSH. Deploys regardless of the marker.
-#
-# PULL, NOT PUSH - REQ-DEPLOY-002. The box sits behind a domestic router with
-# no forwarded port (REQ-SERVER-002, REQ-NETWORK-001), so nothing can reach in
-# to trigger a deploy. The host asks instead: release-poll.sh runs one `git
-# ls-remote` every two minutes, and this script compares the checkout against
-# a marker recording what it last deployed. The cost
-# is up to two minutes of latency, which for a personal site is not a cost.
+# Where: on a target machine with the webserver role (REQ-SERVER-014), as the
+#        deploy user, from the checkout.
+# When:  after every release poll (REQ-DEPLOY-002). It deploys only when the
+#        checkout or the boot id changed since the last deploy. To deploy
+#        anyway, run `deploy.sh --force` over SSH.
+# Why:   nothing can connect to a target machine from outside
+#        (REQ-SERVER-002), so each one pulls its own deploys. The delay is at
+#        most two minutes.
 #
 # Output goes to the journal:
 #   journalctl -u custom-deploy.service -u custom-release-poll.service -f
 #   journalctl -u custom-deploy.service -p info     decisions only
 #
-# Lines are prefixed <6>/<7>/<3> when stdout is not a terminal, which systemd
-# reads as a syslog priority (SyslogLevelPrefix= is on by default). That is
-# what makes `-p info` hide the ~720 "up to date" lines a day while leaving
-# every actual decision - and the reason for it - in the log. Run by hand on a
-# terminal the prefixes are dropped, so the output stays readable.
+# Each line starts with <6>, <7> or <3> when stdout is not a terminal. systemd
+# reads that as the syslog priority, so `-p info` hides the "up to date"
+# lines. On a terminal the script omits the prefixes.
 
 set -euo pipefail
 IFS=$'\n\t'
 
 # Resolves to /home/srv/projects/seanorepo, which is where postinstall.sh
-# clones and where payload/verify/assert.sh looks. The override is spelled REPO_DIR to
-# agree with postinstall.sh and payload/verify/assert.sh.
+# clones and where payload/assert.sh looks. The override is spelled REPO_DIR to
+# agree with postinstall.sh and payload/assert.sh.
 #
 # 2025-10-08b/scripts/deploy.sh - what production runs today - spells the same
 # override REPO_PATH and resolves the same default path. The wart is not
@@ -52,7 +46,7 @@ MARKER="${DEPLOY_MARKER:-$STATE_DIR/last-deployed}"
 # Cloudflare's apt package ships - REQ-SERVER-012.
 #
 # This name appears in exactly two places, here and in the sudoers drop-in
-# postinstall.sh installs, and payload/verify/assert.sh asserts that the two agree. If #280
+# postinstall.sh installs, and payload/assert.sh asserts that the two agree. If #280
 # picks a different name, both move together or the assertion goes red.
 CLOUDFLARED_UNIT="custom-cloudflared.service"
 CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"

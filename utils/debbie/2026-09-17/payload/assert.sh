@@ -1,28 +1,21 @@
 #!/bin/bash
-# assert.sh - run INSIDE the guest, over SSH, and say whether the box is right.
+# assert.sh: checks a target machine against the requirements, and exits 0
+# only if every check passes.
 #
-# Streamed in by test-vm.sh with `ssh ... 'bash -s' < assert.sh`, so it must be
-# self-contained: no arguments, no files alongside it, nothing from the repo.
+# Where: on the target machine. provision.sh and test-vm.sh send it over SSH
+#        (`bash -s`), so it must not read any file beside it.
+# When:  twice in each run:
+#          1. PHASE=firstboot, before postinstall.sh. It checks only what the
+#             installer produced.
+#          2. PHASE=provisioned, after postinstall.sh and a reboot. It checks
+#             everything.
+# Why:   the exit code is the result, so nobody must read a console
+#        (REQ-EMU-003). A check that fails in firstboot and passes in
+#        provisioned shows a fault that postinstall.sh repaired
+#        (REQ-SERVER-004).
 #
-# Exit 0 only if every check passes. This is what makes the harness report by
-# exit code rather than by a human reading a console - REQ-EMU-003.
-#
-# Every check is architecture-neutral. The arm64 run and the amd64 run assert
-# exactly the same things; where a name differs by arch (the EFI loader) the
-# check globs rather than branching.
-#
-# PHASE says WHEN this is running, and it is the whole point of #285.
-#
-#   firstboot    the installed system has booted and nothing has been run on it
-#                by hand. Only what the INSTALLER produced may be asserted.
-#   provisioned  postinstall.sh has run and the box has rebooted. Everything.
-#
-# Without that split, a bug the installer creates and postinstall.sh repairs is
-# invisible: every assertion ran after the repair, so the box was right by the
-# time anything looked, and wrong in between. The hostname was `192` for the
-# whole of that window and no run ever went red. A check that passes in
-# `provisioned` and fails in `firstboot` is precisely "postinstall repaired it",
-# and that is now a distinguishable, reportable state rather than a silence.
+# Every check is the same on arm64 and amd64. Where a name differs by
+# architecture, the check uses a glob.
 set -uo pipefail
 
 EXPECT_ARCH="${EXPECT_ARCH:-}"
@@ -30,7 +23,7 @@ EXPECT_ARCH="${EXPECT_ARCH:-}"
 EXPECT_HOSTNAME="${EXPECT_HOSTNAME:?EXPECT_HOSTNAME must be set - the name this box should have}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
-# Must match the default in payload/configure/postinstall.sh, which clones here, and the
+# Must match the default in payload/postinstall.sh, which clones here, and the
 # path 2025-10-08b/scripts/deploy.sh resolves as the deploy user. A check that
 # depends on the checkout and cannot find one SKIPS with the path it looked at
 # printed, so a disagreement between the three is visible rather than silent.
@@ -565,9 +558,9 @@ fi
 # as the absence of a thing rather than as the presence of a comment.
 echo
 echo "== release poller and deploy (REQ-DEPLOY-002) =="
-DEPLOY_SCRIPT_REL="utils/debbie/2026-09-17/services/deploy/deploy.sh"
+DEPLOY_SCRIPT_REL="utils/debbie/2026-09-17/services/deploy.sh"
 DEPLOY_SCRIPT="$REPO_DIR/$DEPLOY_SCRIPT_REL"
-RELEASE_POLL_SCRIPT_REL="utils/debbie/2026-09-17/services/release-poll/release-poll.sh"
+RELEASE_POLL_SCRIPT_REL="utils/debbie/2026-09-17/services/release-poll.sh"
 RELEASE_POLL_SCRIPT="$REPO_DIR/$RELEASE_POLL_SCRIPT_REL"
 
 #------------------------------------------------------------------------------
@@ -883,7 +876,7 @@ fi
 #
 # What this does NOT prove, stated plainly: the box also carries
 # /etc/sudoers.d/90-$DEPLOY_USER from the installer, granting NOPASSWD:ALL
-# (see scripts/write-overrides.sh), so $DEPLOY_USER has general root today
+# (see write_overrides in scripts/lib.sh), so $DEPLOY_USER has general root today
 # regardless of what this file says. `sudo -l` would therefore pass no matter
 # how broad this drop-in became, which is exactly why these checks read the
 # file itself. The narrow grant is what lets REQ-SERVER-008 tighten the blanket
