@@ -61,6 +61,8 @@ CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"
 # matches the command as written, so a PATH-resolved `systemctl` is a grant
 # that works until the day PATH differs.
 SYSTEMCTL=/usr/bin/systemctl
+# Role flags written by postinstall.sh (#329). Overridable for the tests only.
+ROLES_DIR="${ROLES_DIR:-/etc/seanorepo/roles}"
 
 #------------------------------------------------------------------------------
 # Logging
@@ -199,6 +201,20 @@ log "deploying: $reason"
 # under uploads/ goes the same way. Do not add a clean step here or to
 # release-poll.sh.
 
+# Where the apps publish - #329, derived from the roles rather than set. A
+# webserver that is also the tunnel box publishes on loopback only: the tunnel
+# reaches localhost:4xxx and nothing on the LAN should (REQ-SERVER-002). A
+# webserver WITHOUT the tunnel publishes on the LAN, because being reached
+# from the LAN is the only reason to run one. Every compose port reads
+# ${PUBLISH_ADDR:-127.0.0.1} (#309).
+if [ -e "$ROLES_DIR/tunnel" ]; then
+    export PUBLISH_ADDR=127.0.0.1
+    log "publishing on loopback (tunnel box)"
+else
+    export PUBLISH_ADDR=0.0.0.0
+    log "publishing on the LAN (webserver without the tunnel role)"
+fi
+
 yarn install --immutable
 yarn prod:docker
 
@@ -261,6 +277,10 @@ else
     tunnel_why="$CLOUDFLARED_CONFIG is unchanged between ${OLD_SHA:0:7} and ${NEW_SHA:0:7}"
 fi
 
+if [ "$tunnel_restart" = yes ] && [ ! -e "$ROLES_DIR/tunnel" ]; then
+    tunnel_restart=no
+    tunnel_why="this box does not have the tunnel role"
+fi
 if [ "$tunnel_restart" = no ]; then
     debug "not restarting $CLOUDFLARED_UNIT: $tunnel_why"
 elif ! $SYSTEMCTL cat -- "$CLOUDFLARED_UNIT" > /dev/null 2>&1; then

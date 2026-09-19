@@ -71,8 +71,9 @@ Introduced in #273.
   Since #307 this is two units with one clock. `custom-release-poll` fetches
   and checks out `release` on every machine and touches nothing that runs;
   after every poll it triggers `custom-deploy`, which compares the checkout and
-  the boot id with its marker and deploys only on a machine whose serving flag
-  (`/etc/seanorepo/serving`) exists. The deploy has no timer of its own, so it
+  the boot id with its marker and deploys only on a box with the webserver
+  role (`/etc/seanorepo/roles/webserver`, from `ROLE_WEBSERVER`; unset is off,
+  #329). The deploy has no timer of its own, so it
   can never start while a checkout is being written.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/services/deploy-poll-custom.timer`
@@ -97,8 +98,10 @@ Introduced in #273.
     on a timer"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the release poller triggers
     the deploy"
-  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the deploy runs only where
-    the serving flag exists"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the deploy runs only on a
+    box with the webserver role"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "without the webserver role a
+    triggered deploy runs nothing"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "the release poller moves the
     checkout and touches no service" — behaviour, against a scratch origin with
     every service command shimmed: a machine that does not serve still tracks

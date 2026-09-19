@@ -410,8 +410,8 @@ Two units, one clock (#307):
 - `custom-deploy.service` runs `scripts/deploy.sh`. It has no timer and no
   `[Install]`; the release poller triggers it (`OnSuccess=`) after every
   poll, and `deploy.sh` exits at once unless the checkout or the boot id
-  differs from what it last deployed. It runs only where
-  **`/etc/seanorepo/serving`** exists: the serving switch.
+  differs from what it last deployed. It runs only on a box with the
+  **webserver role**.
 
 The host pulls, because nothing can reach in — `REQ-SERVER-002` forwards no
 port and `REQ-DEPLOY-002` is the consequence.
@@ -420,18 +420,30 @@ port and `REQ-DEPLOY-002` is the consequence.
 ssh srv@debbie.local journalctl -u custom-release-poll.service -u custom-deploy.service -f
 # decisions only, without the ~720 "up to date" lines a day
 ssh srv@debbie.local journalctl -u custom-deploy.service -p info
-
-# the serving switch - provision a standby with DEBBIE_SERVES=no, or later:
-ssh srv@debbie.local sudo rm /etc/seanorepo/serving     # stop deploying here
-ssh srv@debbie.local sudo touch /etc/seanorepo/serving  # deploy here
 ```
 
-A file rather than `systemctl enable`, because the deploy unit is started by
-the poller, never by boot, and a condition is what systemd checks each time it
-is triggered. Only one machine may serve: the apps are SQLite on local
-volumes, so two serving machines means two diverging databases (see
-[`future-spec.md`](../future-spec.md)). Nothing enforces that yet except the
-tunnel credentials living on one box.
+### Roles (#329)
+
+What a box *does* is set by roles in `metal/.env`, passed to `postinstall.sh`
+by `provision.sh`. **Unset means off**, and every provisioning run makes the
+box match the file. A role is a flag file in `/etc/seanorepo/roles/` that its
+unit is conditioned on; `postinstall.sh` ends by printing the box's roles.
+
+| Setting | Runs | Publishes the sites on | How many boxes |
+|---|---|---|---|
+| neither | nothing: tracks `release`, reachable over ngrok | — | any |
+| `ROLE_WEBSERVER=yes` | `yarn prod:docker` | the LAN (`0.0.0.0`) | any |
+| `ROLE_WEBSERVER=yes` + `ROLE_TUNNEL=yes` | the sites **and** the Cloudflare tunnel | loopback only | **exactly one** |
+
+`ROLE_TUNNEL` without `ROLE_WEBSERVER` is refused: the tunnel forwards to
+`localhost:4xxx` on its own box. The address is derived in `deploy.sh` and
+passed to compose as `PUBLISH_ADDR` (#309); there is no separate setting for
+it. A LAN webserver has its own SQLite data, which diverges from the public
+box's — it is for local use, never a source of truth.
+
+Change a role by editing `metal/.env` and re-running `provision.sh`. Taking
+`ROLE_TUNNEL` off a box stops its tunnel on that run. Check a box with
+`ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
 Per-app rebuild detection was measured and rejected in #307: `yarn
 prod:docker` against an unchanged tree takes 12–13s on the real box, because
@@ -563,8 +575,10 @@ The unit therefore sets `WorkingDirectory` to `apps/cloudflared`; deleting that
 line makes the daemon start and then fail to find its credentials, which reads
 like an auth problem and is not one. `vm/assert.sh` asserts the line is there.
 
-Finally, re-run `postinstall.sh`. It enables the unit once — and only once —
-the credentials are in place.
+Finally, re-run `postinstall.sh` with `ROLE_TUNNEL=yes` (#329). It enables the
+unit once — and only once — the box has the tunnel role **and** the
+credentials are in place. Without the role the unit is not enabled, and a
+tunnel already running on the box is stopped.
 
 #### What happens on a box with no credentials
 
