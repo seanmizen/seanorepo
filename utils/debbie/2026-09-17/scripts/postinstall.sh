@@ -524,6 +524,75 @@ id "$DEPLOY_USER" > /dev/null 2>&1 || { echo "user $DEPLOY_USER missing" >&2; ex
 usermod -aG docker,sudo "$DEPLOY_USER"
 
 #------------------------------------------------------------------------------
+# The deploy user's interactive shell - REQ-SERVER-010, #290
+#
+# zsh, oh-my-zsh and the previous generation's plugins and prompt. Most work on
+# this box is done by hand over SSH while something is broken, and a prompt
+# that shows the host and the git branch is cheap insurance against running
+# the right command on the wrong branch.
+#
+# IDEMPOTENT BY CONSTRUCTION, and asserted: 2025-10-08b appended its prompt
+# block with `cat >>` on every run while documenting itself as idempotent.
+# Here .zshrc is written whole from the heredoc below on every run, so a second
+# run leaves it byte-identical, and the VM harness runs this script twice to
+# prove it. oh-my-zsh's own installer is deliberately NOT used: it rewrites
+# .zshrc from its template, which would fight this file on every run.
+#
+# Cloned, not pinned. This is a shell prompt; tracking upstream is fine, and
+# nothing here re-pulls, so a provisioned box does not change under anyone.
+#------------------------------------------------------------------------------
+log "zsh for $DEPLOY_USER"
+apt-get install -y zsh
+zsh_path="$(command -v zsh)"
+if [ "$(getent passwd "$DEPLOY_USER" | cut -d: -f7)" != "$zsh_path" ]; then
+    chsh -s "$zsh_path" "$DEPLOY_USER"
+fi
+
+deploy_home_zsh="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
+omz_dir="$deploy_home_zsh/.oh-my-zsh"
+clone_once() {
+    [ -d "$2/.git" ] || sudo -u "$DEPLOY_USER" git clone -q --depth 1 "$1" "$2"
+}
+clone_once https://github.com/ohmyzsh/ohmyzsh.git "$omz_dir"
+clone_once https://github.com/zsh-users/zsh-autosuggestions.git "$omz_dir/custom/plugins/zsh-autosuggestions"
+clone_once https://github.com/zsh-users/zsh-syntax-highlighting.git "$omz_dir/custom/plugins/zsh-syntax-highlighting"
+
+zshrc_tmp="$(mktemp)"
+cat > "$zshrc_tmp" <<'ZSHRC_EOF'
+# Managed by utils/debbie/2026-09-17/scripts/postinstall.sh - REQ-SERVER-010.
+# Rewritten whole on every provisioning run: edits here are lost. Put local
+# additions in ~/.zshrc.local, which is sourced last and never touched.
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(git docker node yarn zsh-autosuggestions zsh-syntax-highlighting)
+# No self-update: it prompts on login (a hang for a non-interactive check) and
+# pulls from the network on a box whose changes should come from provisioning.
+zstyle ':omz:update' mode disabled
+source "$ZSH/oh-my-zsh.sh"
+
+export PATH="$HOME/.local/bin:$PATH"
+
+# Depth-based path display, carried over from 2025-10-08b.
+setopt promptsubst
+autoload -U colors && colors
+precmd() {
+  if [[ $PWD == "/" ]]; then
+    prompt_path="/"
+  else
+    depth=$(( $(echo "$PWD" | awk -F/ '{print NF-1}') - 1 ))
+    dirname=$([[ $PWD == $HOME ]] && echo "~" || basename "$PWD")
+    [[ $depth == 0 ]] && prompt_path="/$dirname" || prompt_path="/[$depth]/$dirname"
+  fi
+}
+arrow='%(?:%F{green}➜%f:%F{red}➜%f)'
+PROMPT='%B${arrow}%b %B%F{blue}%m%f%b %B%F{cyan}${prompt_path}%f%b $(git_prompt_info)'
+
+[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
+ZSHRC_EOF
+install -m 0644 -o "$DEPLOY_USER" -g "$(id -gn "$DEPLOY_USER")" "$zshrc_tmp" "$deploy_home_zsh/.zshrc"
+rm -f "$zshrc_tmp"
+
+#------------------------------------------------------------------------------
 # Repository checkout - REQ-DEPLOY-001
 #
 # Nothing deployed anything before this, because nothing had put the repository
