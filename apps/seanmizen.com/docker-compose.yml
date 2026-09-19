@@ -5,7 +5,7 @@ x-frontend-base: &frontend-base
     dockerfile: apps/seanmizen.com/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
-      - "4000:4000"
+      - "${PUBLISH_ADDR:-127.0.0.1}:4000:4000"
 
 services:
   frontend:

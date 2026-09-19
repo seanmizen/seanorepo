@@ -13,7 +13,7 @@ x-frontend-base: &frontend-base
   env_file:
     - ./caroline-be/.env
   ports:
-    - "4020:4020"
+    - "${PUBLISH_ADDR:-127.0.0.1}:4020:4020"
   labels:
     - "com.docker.compose.service.primary=true"
     - "description=Caroline Mizen Art - Frontend (http://localhost:4020)"
@@ -30,7 +30,7 @@ x-backend-base: &backend-base
   env_file:
     - ./caroline-be/.env
   ports:
-    - "4021:4021"
+    - "${PUBLISH_ADDR:-127.0.0.1}:4021:4021"
   labels:
     - "description=Caroline Mizen Art - Backend API"
   environment:
