@@ -704,7 +704,7 @@ if [ "$PHASE" = provisioned ]; then
         'systemctl show -p OnSuccess --value custom-release-poll.service | grep -qw custom-deploy.service'
     # #329: roles. Unset means off, so the files present must be EXACTLY the
     # roles this box was provisioned with - EXPECT_ROLES, which the VM harness
-    # sets (default: none) and provision.sh derives from .env.
+    # sets (default: none) and provision.sh derives from the box env file.
     check "the deploy runs only on a box with the webserver role" \
         'systemctl cat custom-deploy.service | grep -qx "ConditionPathExists=/etc/seanorepo/roles/webserver"'
     check "the tunnel runs only on a box with the tunnel role" \

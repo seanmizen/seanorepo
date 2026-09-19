@@ -7,6 +7,24 @@ preseed reaches a real machine.
 entirely. Read [what the harness does not
 prove](../README.md#what-it-does-not) before trusting a green VM run here.
 
+## Layout
+
+```
+1-build-iso/       build-iso.sh      env.example   <box>.env ...
+2-serve-preseed/   serve-preseed.sh  env.example   <box>.env ...
+3-provision/       provision.sh      env.example   <box>.env ...
+lib.sh             shared by all three
+work/              shared output: built ISOs, the SSH key (gitignored)
+```
+
+- One env file per step, per box. `<box>.env` and `.env` are gitignored.
+- Each step reads ONLY the keys in its `env.example`. A key from another step
+  is an error that names the step it belongs to.
+- The box is a required argument: `./3-provision/provision.sh trixie2` reads
+  `3-provision/trixie2.env`. No argument lists the boxes that step has files for.
+- Shared keys (`SERVER_NAME`, wifi) are repeated per step on purpose. If they
+  disagree, the first-boot hostname check in step 3 fails.
+
 ## The shape of it
 
 The preseed is fetched over the wifi from your laptop, so editing it between
@@ -14,7 +32,7 @@ attempts costs nothing and never touches the stick — the same property that
 makes the VM loop usable.
 
 The installer's kernel parameters are **baked into the ISO** by
-[`build-iso.sh`](./build-iso.sh), so an install needs no keystrokes at all.
+[`1-build-iso/build-iso.sh`](./1-build-iso/build-iso.sh), so an install needs no keystrokes at all.
 They used to be typed at the GRUB menu, which failed three times running on
 first contact with real hardware: an edit discarded because `Ctrl-X` was not
 pressed from inside the editor, the wifi presets dropped to shorten the line
@@ -38,24 +56,25 @@ curl -fLO "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.7
 curl -fsSL "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS" \
   | grep netinst | shasum -a 256 -c - | grep -v FAILED
 
-# 2. configure
-cp .env.example .env
-openssl passwd -6                      # -> PASSWORD_CRYPTED
-$EDITOR .env                           # SERVER_NAME, WIFI_*, and ROLE_* if it serves - see the file
+# 2. configure - one env file per step, per box. Each env.example says what.
+BOX=trixie2
+for s in 1-build-iso 2-serve-preseed 3-provision; do cp $s/env.example $s/$BOX.env; done
+openssl passwd -6                      # -> PASSWORD_CRYPTED in 2-serve-preseed
+$EDITOR */$BOX.env                     # SERVER_NAME in all three; ROLE_* in 3 if it serves
 
 # 3. bake the cmdline in
-ISO=debian-13.7.0-amd64-netinst.iso ./build-iso.sh
+ISO=debian-13.7.0-amd64-netinst.iso ./1-build-iso/build-iso.sh $BOX
 
 # 4. write the stick ONCE - the built ISO, not the stock one
 diskutil list                          # find it. dd takes the whole device.
 diskutil unmountDisk force /dev/diskN
-sudo dd if=work/debbie-$(grep ^SERVER_NAME .env | cut -d= -f2).iso of=/dev/rdiskN bs=4m
+sudo dd if=work/debbie-$(grep ^SERVER_NAME 1-build-iso/$BOX.env | cut -d= -f2).iso of=/dev/rdiskN bs=4m
 
 # 5. serve, then boot the target and walk away
-./serve-preseed.sh
+./2-serve-preseed/serve-preseed.sh $BOX
 
 # 6. once it powers itself off, power it on and provision
-./provision.sh
+./3-provision/provision.sh $BOX
 
 # 7. after provisioning - see "After provisioning" below
 ```
@@ -66,10 +85,9 @@ once per stick.
 ## 1. Configure and build
 
 ```bash
-cp .env.example .env
-openssl passwd -6                      # paste the hash into PASSWORD_CRYPTED
-$EDITOR .env                           # + WIFI_SSID, WIFI_PASS, WIFI_IFACE
-./build-iso.sh                         # ~3 seconds
+cp 1-build-iso/env.example 1-build-iso/trixie2.env
+$EDITOR 1-build-iso/trixie2.env        # SERVER_NAME, WIFI_*
+./1-build-iso/build-iso.sh trixie2     # ~3 seconds
 ```
 
 `build-iso.sh` writes `work/debbie-<name>.iso` and verifies the result rather
@@ -113,7 +131,10 @@ work.
 ## 3. Serve and boot
 
 ```bash
-./serve-preseed.sh
+cp 2-serve-preseed/env.example 2-serve-preseed/trixie2.env
+openssl passwd -6                      # paste the hash into PASSWORD_CRYPTED
+$EDITOR 2-serve-preseed/trixie2.env    # same SERVER_NAME and wifi as step 1
+./2-serve-preseed/serve-preseed.sh trixie2
 ```
 
 The script generates `overrides.cfg` with
@@ -170,13 +191,15 @@ The preseed ends in **poweroff**, not reboot, so "did the install finish?" is
 answerable without watching a console. Power the box back on, then:
 
 ```bash
-./provision.sh
+cp 3-provision/env.example 3-provision/trixie2.env
+$EDITOR 3-provision/trixie2.env        # same SERVER_NAME; ROLE_* only if it serves
+./3-provision/provision.sh trixie2
 ```
 
 That waits for SSH, **asserts the box as the installer left it**, runs
 `postinstall.sh`, reboots so the boot-time settings apply, waits for the box to
 return, and asserts again — both times with the same `vm/assert.sh` the VM
-runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from your `.env`. Exit
+runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from `3-provision/<box>.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
 back on SSH.
 
@@ -194,9 +217,9 @@ Since `#285` the box also answers to `$SERVER_NAME.local` on **first boot**:
 to reach the box to run, which is why `HOST=<ip>` was so often needed below.
 
 ```bash
-./provision.sh --assert       # assert only, box already provisioned
-./provision.sh --no-reboot    # postinstall only
-HOST=192.168.1.42 ./provision.sh   # fallback, if .local does not reach the box
+./3-provision/provision.sh trixie2 --assert       # assert only, box already provisioned
+./3-provision/provision.sh trixie2 --no-reboot    # postinstall only
+HOST=192.168.1.42 ./3-provision/provision.sh trixie2   # fallback, if .local does not reach the box
 ```
 
 ### The reboot has to be proved, not assumed
@@ -255,7 +278,7 @@ So:
   new lease is still found by name. The log says which one answered (`up on
   debbie.local`).
 
-`./provision.sh --assert` works the same way, so asserting an
+`./3-provision/provision.sh <box> --assert` works the same way, so asserting an
 already-provisioned box needs no address either.
 
 If neither answers, the error names both and says what to do about each; the
@@ -278,19 +301,19 @@ place `REQ-SERVER-005` is genuinely tested.
 ## After provisioning
 
 `provision.sh` ends with the box's roles (`roles on <name>: webserver=… tunnel=…`).
-With no `ROLE_*` in `.env` the box tracks `release` and runs nothing — the
+With no `ROLE_*` in `3-provision/<box>.env` the box tracks `release` and runs nothing — the
 safe state, and the right one for a box being set up. What is left is by hand,
 because each piece is a credential that is in no repository:
 
 | Step | Which boxes | How |
 |---|---|---|
-| **ngrok token** — SSH from off the LAN | every box | as `srv` on the box: `ngrok config add-authtoken <token>`, then re-run `./provision.sh`. Find the address: [Remote SSH](../README.md#remote-ssh-ngrok) |
-| **Serve the sites** | webservers | set `ROLE_WEBSERVER=yes` in `.env`, re-run `./provision.sh`. Without the tunnel role they are published on the LAN |
-| **Tunnel credentials** — the internet reaches this box | the ONE tunnel box | set `ROLE_TUNNEL=yes` too, copy the credentials JSON into `apps/cloudflared/credentials/` on the box ([recipe](../README.md#creating-the-tunnel-and-placing-its-credentials)), re-run `./provision.sh` |
+| **ngrok token** — SSH from off the LAN | every box | as `srv` on the box: `ngrok config add-authtoken <token>`, then re-run `./3-provision/provision.sh <box>`. Find the address: [Remote SSH](../README.md#remote-ssh-ngrok) |
+| **Serve the sites** | webservers | set `ROLE_WEBSERVER=yes` in `3-provision/<box>.env`, re-run `./3-provision/provision.sh <box>`. Without the tunnel role they are published on the LAN |
+| **Tunnel credentials** — the internet reaches this box | the ONE tunnel box | set `ROLE_TUNNEL=yes` too, copy the credentials JSON into `apps/cloudflared/credentials/` on the box ([recipe](../README.md#creating-the-tunnel-and-placing-its-credentials)), re-run `./3-provision/provision.sh <box>` |
 
 **Moving the public sites to another box** is a deliberate act, because the
 data moves with it (SQLite on local volumes): take `ROLE_TUNNEL` off the old
-box's `.env` and re-provision it (its tunnel stops), copy the data and the
+box's `3-provision/<box>.env` and re-provision it (its tunnel stops), copy the data and the
 credentials across, then set both roles on the new box and provision it. Never
 have the tunnel role on two boxes at once.
 

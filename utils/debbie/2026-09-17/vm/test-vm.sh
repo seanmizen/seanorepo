@@ -432,7 +432,7 @@ BOOT_ID_PATH=/proc/sys/kernel/random/boot_id
 #
 # Called only from do_assert, and it reads that function's ssh_opts, target and
 # QEMU_PID - a bash function sees its caller's locals. The metal sibling
-# (metal/provision.sh wait_for_ssh) reads globals instead; the mechanism below
+# (metal/3-provision/provision.sh wait_for_ssh) reads globals instead; the mechanism below
 # is the same one, minus the candidate list. There is one fixed target here: no
 # mDNS name, no DHCP lease that can move under us, so nothing to loop over.
 #

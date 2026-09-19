@@ -167,7 +167,7 @@ Read this before trusting a green run on hardware:
   wired into `nsswitch.conf`. It does **not** prove a multicast packet leaves
   the machine or that another host on the LAN can resolve it — QEMU's slirp
   networking does not carry multicast to the host. Only the real box proves
-  reachability. `metal/provision.sh` dials the name first for `#284` — the DHCP
+  reachability. `metal/3-provision/provision.sh` dials the name first for `#284` — the DHCP
   lease moves on every boot and the name does not — and falls back to a supplied
   `HOST` address precisely because this is the one thing no green run proves.
 - **A published port refused from *another machine*.** The firewall section
@@ -424,7 +424,7 @@ ssh srv@debbie.local journalctl -u custom-deploy.service -p info
 
 ### Roles (#329)
 
-What a box *does* is set by roles in `metal/.env`, passed to `postinstall.sh`
+What a box *does* is set by roles in `metal/3-provision/<box>.env`, passed to `postinstall.sh`
 by `provision.sh`. **Unset means off**, and every provisioning run makes the
 box match the file. A role is a flag file in `/etc/seanorepo/roles/` that its
 unit is conditioned on; `postinstall.sh` ends by printing the box's roles.
@@ -441,7 +441,7 @@ passed to compose as `PUBLISH_ADDR` (#309); there is no separate setting for
 it. A LAN webserver has its own SQLite data, which diverges from the public
 box's — it is for local use, never a source of truth.
 
-Change a role by editing `metal/.env` and re-running `provision.sh`. Taking
+Change a role by editing `metal/3-provision/<box>.env` and re-running `provision.sh <box>`. Taking
 `ROLE_TUNNEL` off a box stops its tunnel on that run. Check a box with
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
@@ -453,7 +453,7 @@ Four things about it are deliberate and easy to undo by accident:
 
 - **The units are written by `postinstall.sh` itself, not copied out of the
   checkout.** That script is delivered on its own — `scp`'d to `/tmp` by
-  `vm/test-vm.sh`, streamed over stdin by `metal/provision.sh` — so it can read
+  `vm/test-vm.sh`, streamed over stdin by `metal/3-provision/provision.sh` — so it can read
   nothing beside it in the repository. The only checkout it could read from is
   the one it just made, which is on `release`, which by definition holds the
   last thing *shipped*. On the first box this generation provisions, `release`

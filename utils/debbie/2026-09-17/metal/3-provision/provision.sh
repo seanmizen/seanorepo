@@ -39,15 +39,16 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-HERE="$(cd "$(dirname "$0")" && pwd)"
-GEN_DIR="$(dirname "$HERE")"
-# shellcheck source=lib.sh
-. "$HERE/lib.sh"
+HERE="$(cd "$(dirname "$0")" && pwd)"     # this step's folder: its env files
+METAL="$(dirname "$HERE")"
+GEN_DIR="$(dirname "$METAL")"
+WORK="$METAL/work"                          # shared by all three steps
+# shellcheck source=../lib.sh
+. "$METAL/lib.sh"
 
-WORK="$HERE/work"
-ENV_FILE="${ENV_FILE:-$HERE/.env}"
-
-read_env
+select_env "$HERE" "${1:-}"
+shift
+read_env SERVER_NAME DEPLOY_USER SSH_KEY ROLE_WEBSERVER ROLE_TUNNEL
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 # No default - #329. It used to be `debbie`, which on a forgotten line made the
 # NEW box claim debbie.local and made this script dial the live one.
