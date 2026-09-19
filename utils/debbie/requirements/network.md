@@ -146,3 +146,38 @@ Introduced in #273.
 - **Relations:**
   - refines REQ-SERVER-005
   - depends-on REQ-NETWORK-003
+
+## REQ-NETWORK-005 — The host is reachable over SSH from outside the local network
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #317
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** The host shall accept an SSH connection that originates outside
+  the local network, without any inbound port being opened.
+- **Rationale:** Most repair work on this box is done by hand over SSH, usually
+  while something is already broken, and often from somewhere else. `ngrok tcp
+  22` is the only path that does this: the agent dials out, so
+  `REQ-NETWORK-001` still holds. The Cloudflare SSH tunnel
+  (`ssh.seanmizen.com`) is dead and is deliberately not rebuilt.
+
+  Two properties follow from being the only way in. The agent never stops
+  retrying, because a unit that gave up during an outage would stay down on a
+  box nobody can reach. And every ngrok login reaches `sshd` from
+  `127.0.0.1`, so loopback is exempt from sshd's per-source penalties:
+  otherwise one scanner hitting the public address would lock the owner out
+  before authentication, whatever key they held. `REQ-SERVER-008` is what
+  keeps attackers out.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ngrok is dpkg-owned, not a manual binary drop"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ngrok runs as $DEPLOY_USER"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "ngrok never stops retrying"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "no other ngrok unit is enabled"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "starting ngrok without an authtoken refuses rather than looping"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "sshd exempts loopback from per-source penalties"
+  - Demonstration — an SSH login through ngrok from off the LAN, with key
+    authentication, on the real box
+- **Relations:**
+  - depends-on REQ-NETWORK-001
+  - depends-on REQ-SERVER-008
