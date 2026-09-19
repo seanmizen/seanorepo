@@ -45,7 +45,7 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv can reach origin with
     no credential"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "HEAD is on release" —
-    skipped, not passed, on a box provisioned before the first `yarn release`,
+    skipped, not passed, on a machine provisioned before the first `yarn release`,
     because until then the branch does not exist
 - **Relations:** none
 
@@ -60,7 +60,7 @@ Introduced in #273.
   the new commit without an inbound connection.
 - **Rationale:** The host sits behind a home router with no forwarded ports —
   that is `REQ-SERVER-002`. A push-based deploy would need either an open port
-  or a hosted runner holding credentials to the box, and both are a standing
+  or a hosted runner holding credentials to the machine, and both are a standing
   way in that nothing audits.
 
   Polling inverts it: the host makes an outbound request every two minutes and
@@ -71,7 +71,7 @@ Introduced in #273.
   Since #307 this is two units with one clock. `custom-release-poll` fetches
   and checks out `release` on every machine and touches nothing that runs;
   after every poll it triggers `custom-deploy`, which compares the checkout and
-  the boot id with its marker and deploys only on a box with the webserver
+  the boot id with its marker and deploys only on a machine with the webserver
   role (`/etc/seanorepo/roles/webserver`, from `ROLE_WEBSERVER`; unset is off,
   #329). The deploy has no timer of its own, so it
   can never start while a checkout is being written.
@@ -99,7 +99,7 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the release poller triggers
     the deploy"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy runs only on a
-    box with the webserver role"
+    machine with the webserver role"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "without the webserver role a
     triggered deploy runs nothing"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the release poller moves the
@@ -110,7 +110,7 @@ Introduced in #273.
     checkout and again after a reboot"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "deploy.sh present and
     executable" — **conditional, and the condition is the claim.** `deploy.sh`
-    is run from the checkout, and the checkout is on `release`, so a box
+    is run from the checkout, and the checkout is on `release`, so a machine
     provisioned before this generation shipped cannot have the file at all.
     The check therefore asks the commit on disk first — `git cat-file -e
     HEAD:utils/debbie/2026-09-17/services/deploy.sh` — and skips, naming that

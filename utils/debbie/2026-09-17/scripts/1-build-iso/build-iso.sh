@@ -39,7 +39,7 @@ read_env SERVER_NAME DEPLOY_USER WIFI_SSID WIFI_PASS WIFI_IFACE PORT SERVE_IP IS
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 # No default - #329: a forgotten name used to install a second "debbie".
 SERVER_NAME="${SERVER_NAME:-}"
-[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every box on purpose."
+[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every machine on purpose."
 PORT="${PORT:-8000}"
 
 [ -n "${WIFI_SSID:-}" ] || die "WIFI_SSID is not set in $ENV_FILE"
@@ -117,7 +117,7 @@ mv "$TMP/grub.cfg.new" "$TMP/grub.cfg"
 
 # --- BIOS: isolinux -----------------------------------------------------------
 # Kept in step so the ISO behaves the same if it is ever booted on a CSM-only
-# box. debbie is UEFI, so this path is untested there but must not be a
+# machine. debbie is UEFI, so this path is untested there but must not be a
 # silently different install.
 {
     printf 'default debbieauto\n\n'

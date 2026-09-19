@@ -27,21 +27,21 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 # unrecognised key is an error rather than a setting that silently does nothing.
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
-# Pick this step's env file for one box - #332. The box is a REQUIRED argument:
+# Pick this step's env file for one machine - #332. The machine is a REQUIRED argument:
 #   <step>.sh trixie2   ->  <step dir>/trixie2.env
 #   <step>.sh .env      ->  <step dir>/.env
 #   <step>.sh ./x.env   ->  that path (anything with a slash)
-# No argument is an error listing the boxes this step has files for, so a
-# forgotten argument can never run against some other box's settings.
+# No argument is an error listing the machines this step has files for, so a
+# forgotten argument can never run against some other machine's settings.
 #------------------------------------------------------------------------------
 select_env() {
-    local dir="$1" box="${2:-}" have
+    local dir="$1" machine="${2:-}" have
     have="$(cd "$dir" && ls -A 2> /dev/null | { grep -E '\.env$' || true; } | sed 's/\.env$//; s/^$/.env/' | tr '\n' ' ')"
-    [ -n "$box" ] || die "usage: $(basename "$0") <box>   (env files here: ${have:-none - copy .env.example to <box>.env})"
-    case "$box" in
-        */*)  ENV_FILE="$box" ;;
+    [ -n "$machine" ] || die "usage: $(basename "$0") <machine>   (env files here: ${have:-none - copy .env.example to <machine>.env})"
+    case "$machine" in
+        */*)  ENV_FILE="$machine" ;;
         .env) ENV_FILE="$dir/.env" ;;
-        *)    ENV_FILE="$dir/$box.env" ;;
+        *)    ENV_FILE="$dir/$machine.env" ;;
     esac
     [ -f "$ENV_FILE" ] || die "no $ENV_FILE. Copy $dir/.env.example to it and fill it in. (env files here: ${have:-none})"
 }
@@ -86,7 +86,7 @@ read_env() {
         esac
 
         if [ "$key" = DEBBIE_SERVES ]; then
-            die "$ENV_FILE line $lineno: DEBBIE_SERVES was replaced by ROLE_WEBSERVER in 3-provision (#329). Delete the line: unset means the box runs no sites."
+            die "$ENV_FILE line $lineno: DEBBIE_SERVES was replaced by ROLE_WEBSERVER in 3-provision (#329). Delete the line: unset means the machine runs no sites."
         fi
         case "$allowed" in
             *" $key "*) printf -v "$key" '%s' "$val" ;;
@@ -146,7 +146,7 @@ lan_ip() {
 # The first real install proved it. overrides.cfg set both netcfg/hostname and
 # netcfg/get_hostname to the intended name; netcfg had already run, fallen
 # through to a reverse-DNS lookup of the DHCP address 192.168.1.182, and split
-# it at the first dot, so the box installed itself as hostname `192` in domain
+# it at the first dot, so the machine installed itself as hostname `192` in domain
 # `168.1.182`. Both keys were correct and both were read too late.
 #
 # netcfg checks netcfg/hostname FIRST and prefers it over the DHCP-supplied
@@ -156,7 +156,7 @@ lan_ip() {
 #
 # Belt and braces, not belt alone: overrides.cfg's late_command also writes
 # /etc/hostname and /etc/hosts in the target. That cannot lose a race with
-# netcfg no matter which key wins, so a box is correctly named even if the
+# netcfg no matter which key wins, so a machine is correctly named even if the
 # reasoning above turns out to be wrong on some particular network.
 #
 # The caller places these BEFORE the '---' separator. After it, they would be

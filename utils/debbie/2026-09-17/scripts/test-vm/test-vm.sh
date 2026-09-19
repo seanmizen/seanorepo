@@ -34,8 +34,8 @@ RAM="${RAM:-2048}"
 DISK_SIZE="${DISK_SIZE:-20G}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 SERVER_NAME="${SERVER_NAME:-debbie}"
-# Roles (#329). None by default, like a box whose .env sets none: the VM then
-# proves that a box with no role tracks `release` and runs nothing. Set either
+# Roles (#329). None by default, like a machine whose .env sets none: the VM then
+# proves that a machine with no role tracks `release` and runs nothing. Set either
 # in the environment to provision the guest with it.
 ROLE_WEBSERVER="${ROLE_WEBSERVER:-}"
 ROLE_TUNNEL="${ROLE_TUNNEL:-}"
@@ -171,7 +171,7 @@ resolve_accel() {
         # SMP is not clamped here: an amd64 guest on an amd64 host can use
         # MTTCG, and the single-thread override below drops it to 1 only for
         # the x86-on-ARM case that genuinely cannot. This is the path a Windows
-        # 10 WSL2 box takes, where no accelerator exists at all.
+        # 10 WSL2 machine takes, where no accelerator exists at all.
         amd64/tcg) MACHINE="q35";                   CPU=max;         SMP=4 ;;
         *) die "no machine profile for $GUEST_ARCH/$ACCEL" ;;
     esac
@@ -471,7 +471,7 @@ wait_for_ssh() {
 
         # Without this the harness burns the full timeout on a VM that died
         # instantly, every single run. Metal has no equivalent because metal has
-        # no guest process to lose: there, a box that never comes back is a box
+        # no guest process to lose: there, a machine that never comes back is a machine
         # that is simply not answering.
         kill -0 "$QEMU_PID" 2> /dev/null || {
             if [ -n "$want_new_boot" ]; then
@@ -533,15 +533,15 @@ do_assert() {
     wait_for_ssh ""
 
     # REQ-SERVER-004, #285. Assert the INSTALLER's work before anything has
-    # been run on the box by hand. This is the run that can tell "the preseed
-    # set it" from "postinstall.sh repaired it": the box has booted once and
+    # been run on the machine by hand. This is the run that can tell "the preseed
+    # set it" from "postinstall.sh repaired it": the machine has booted once and
     # postinstall.sh has not touched it, so a green identity section here means
     # the install produced a usable hostname and a working .local name on its
     # own. The old harness only ever asserted after provisioning, which is why
-    # a box that came up as `192` looked perfect in every run.
+    # a machine that came up as `192` looked perfect in every run.
     #
     # A failure here is fatal rather than advisory. Carrying on would run
-    # postinstall.sh, repair the box, and report a pass - which is the exact
+    # postinstall.sh, repair the machine, and report a pass - which is the exact
     # shape of the bug this exists to prevent.
     log "asserting first boot (before postinstall)"
     local firstboot_rc=0
@@ -579,8 +579,8 @@ do_assert() {
     # boot id different from this one is.
     #
     # Unreadable here is fatal, where metal only warns. The difference is what
-    # the two are for: metal is pointed at a box someone already owns and a
-    # repair run against a half-broken box is legitimate, while this guest was
+    # the two are for: metal is pointed at a machine someone already owns and a
+    # repair run against a half-broken machine is legitimate, while this guest was
     # built by this harness minutes ago, so a boot_id that will not read is
     # itself a fault - and a green VM run is what gates the metal run.
     local boot_id_before

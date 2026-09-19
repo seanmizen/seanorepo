@@ -34,13 +34,13 @@ Introduced in #259.
   `HandlePowerKey` at systemd's default of `poweroff` — so a brief press was a
   graceful shutdown of every hosted site. It happened twice during the first
   evening of real use, and the second one is why a `provision.sh` run reported
-  "did not come up on SSH": the box had been switched off while the script
+  "did not come up on SSH": the machine had been switched off while the script
   waited for it, having looked dead because DHCP had moved it to a different
   address. Same failure as the lid, through a door left open. The suspend and
   hibernate keys are named for the same reason — a laptop keyboard has them.
 
   **Nothing deliberate is lost.** `systemctl poweroff` over SSH is the way to
-  shut the box down on purpose and is unaffected. Holding the power button
+  shut the machine down on purpose and is unaffected. Holding the power button
   still cuts power: that force-off is done by the firmware after roughly four
   seconds, unconditionally, and never reaches logind at all.
   `HandlePowerKeyLongPress` is logind's own *software* long press, a separate
@@ -57,7 +57,7 @@ Introduced in #259.
 
   The key assertions read the running logind manager over the bus rather than
   the drop-in file. A file logind has never read is precisely the failing
-  state, so a check satisfied by its contents would pass on a box that was
+  state, so a check satisfied by its contents would pass on a machine that was
   still about to switch itself off.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "lid-close drop-in present"
@@ -80,7 +80,7 @@ Introduced in #259.
 - **Priority:** P1
 - **Statement:** The host shall accept inbound connections on exactly ports
   22/tcp, 80/tcp, 443/tcp and 5353/udp, and refuse every other port, including
-  every port published by a container. The one exception is a box with the
+  every port published by a container. The one exception is a machine with the
   webserver role and without the tunnel role (#329), which publishes its apps
   on ports 4000-4999 to the LAN by design.
 - **Rationale:** Everything public arrives through the Cloudflare tunnel, which
@@ -100,8 +100,8 @@ Introduced in #259.
   `-p 4000:4000` gets a DNAT rule that is consulted *before* ufw's — so the port
   answered from the LAN while `ufw status` said, correctly for ufw and falsely
   for the host, that nothing but the four was open. The requirement claimed
-  something the box did not do, and the test agreed with the requirement instead
-  of with the box.
+  something the machine did not do, and the test agreed with the requirement instead
+  of with the machine.
 
   **How it is met.** `payload/postinstall.sh` writes `/etc/docker/daemon.json`
   with `{"ip": "127.0.0.1"}`, which is dockerd's `--ip`, "Host IP for port
@@ -158,7 +158,7 @@ Introduced in #259.
   The previous generation's preseed created a user named `sean` on a host named
   `debbie2`, while every systemd unit, the sudoers drop-in and all the docs
   assumed `srv` on `debbie`. Nothing reconciled the username, so following those
-  files end to end produced a box on which none of the units could start. Naming
+  files end to end produced a machine on which none of the units could start. Naming
   the user in a requirement is what stops the two halves drifting apart again.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "user srv exists"
@@ -176,7 +176,7 @@ Introduced in #259.
 - **Statement:** The host shall answer to its own hostname over mDNS on the
   local network from its first boot after installation, with no provisioning
   step having been run.
-- **Rationale:** Every runbook step reaches the box as `debbie.local`, because
+- **Rationale:** Every runbook step reaches the machine as `debbie.local`, because
   its LAN address has moved more than once and a written-down IP goes stale
   silently. mDNS keeps the name working across an address change.
 
@@ -186,9 +186,9 @@ Introduced in #259.
   `postinstall.sh` made the name start working only after the step that needed
   it, and the hostname it would have advertised was wrong as well: netcfg
   preferred a reverse-DNS answer over the preseeded name, split
-  `192.168.1.182` at its first dot, and installed the box as `192`. Both halves
+  `192.168.1.182` at its first dot, and installed the machine as `192`. Both halves
   are one fault, because avahi advertises the system hostname — fixing either
-  alone leaves the box unreachable by name.
+  alone leaves the machine unreachable by name.
 
   Worth knowing when diagnosing: where a host has two interfaces on one subnet,
   `debbie.local` may resolve to either address, so it is not a safe way to reach
@@ -233,7 +233,7 @@ Introduced in #259.
   plugin marks an interface listed in `/etc/network/interfaces` as unmanaged,
   so `nmcli` does not drive the wifi and neither half is in charge. Migrating
   means removing the stanza and writing an NM connection profile in one step —
-  and if that step is wrong, the result is a headless box with no network and
+  and if that step is wrong, the result is a headless machine with no network and
   no way in. It is therefore deliberately **not** coupled to installing the
   machine, and lands with `REQ-NETWORK-*`.
 - **Verification:**
@@ -252,7 +252,7 @@ Introduced in #259.
 - **Priority:** P1
 - **Statement:** The host shall install updates from the security suite
   unattended and without rebooting itself.
-- **Rationale:** Nobody logs into this box for months at a time. An unpatched
+- **Rationale:** Nobody logs into this machine for months at a time. An unpatched
   internet-facing host that is also never looked at is the worst combination of
   the two, and "I will run apt upgrade when I next SSH in" has empirically
   meant sixteen months — see #136, where cloudflared's self-update failed
@@ -411,7 +411,7 @@ Introduced in #259.
 - **Priority:** P3
 - **Statement:** The host shall give the deploy user the configured interactive
   shell and prompt.
-- **Rationale:** Most of what is done on this box is done by hand over SSH,
+- **Rationale:** Most of what is done on this machine is done by hand over SSH,
   usually while something is broken. A shell with history search, completion
   and a prompt showing the git branch is the difference between diagnosing a
   bad deploy and mistyping a `git checkout` on the wrong branch.
@@ -540,16 +540,16 @@ Introduced in #259.
 - **Statement:** Where a provisioning setting is unset, the host shall take the
   choice that runs nothing, or refuse to provision.
 - **Rationale:** `DEBBIE_SERVES` (#307) defaulted to on, so a forgotten line
-  made a box run `yarn prod:docker`, and `SERVER_NAME` defaulted to `debbie`,
+  made a machine run `yarn prod:docker`, and `SERVER_NAME` defaulted to `debbie`,
   so a forgotten line installed a second `debbie.local` and pointed
-  `provision.sh` at the live box. Both failures are silent until they matter.
+  `provision.sh` at the live machine. Both failures are silent until they matter.
 
   So roles (`ROLE_WEBSERVER`, `ROLE_TUNNEL`) are off unless set to `yes`, and
-  every provisioning run makes the box's roles match the settings exactly.
+  every provisioning run makes the machine's roles match the settings exactly.
   `SERVER_NAME` has no default in any script. A retired setting is refused by
   name rather than ignored.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "roles on this box are
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "roles on this machine are
     exactly '${EXPECT_ROLES:-none}'" — the VM sets no roles, so no role file
     may exist
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "without the webserver role a
