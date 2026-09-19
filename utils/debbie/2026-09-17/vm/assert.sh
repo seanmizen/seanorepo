@@ -984,7 +984,13 @@ if [ "$PHASE" = provisioned ]; then
     fi
     # Asked of sshd, not of the drop-in (#313's lesson). Skipped, not passed,
     # where sshd predates per-source penalties: there is nothing to exempt.
-    if sudo -n sshd -T 2> /dev/null | grep -qi '^persourcepenaltyexemptlist'; then
+    # `case`, not `| grep -q`, for the pipefail/SIGPIPE reason in postinstall.sh.
+    case "$(sudo -n sshd -T 2> /dev/null || true)" in
+        *persourcepenaltyexemptlist*) sshd_has_penalties=yes ;;
+        *) sshd_has_penalties=no ;;
+    esac
+    echo "      sshd reports: $(sudo -n sshd -T 2> /dev/null | grep -i '^persourcepenalt' | tr '\n' ';' || true)"
+    if [ "$sshd_has_penalties" = yes ]; then
         check "sshd exempts loopback from per-source penalties" \
             '[ "$(sshd_effective PerSourcePenaltyExemptList)" = "127.0.0.1,::1" ]'
     else

@@ -1268,7 +1268,15 @@ fi
 # failure this box cannot be talked out of remotely.
 #------------------------------------------------------------------------------
 NGROK_SSHD_DROPIN=/etc/ssh/sshd_config.d/20-debbie-ngrok-loopback.conf
-if sshd -T 2> /dev/null | grep -qi '^persourcepenaltyexemptlist'; then
+# Matched with `case` on captured output, not `sshd -T | grep -q`: under
+# pipefail, grep -q exits at the first match, sshd takes SIGPIPE writing the
+# rest, and the pipeline reports failure - so the answer depended on timing.
+# Two VM runs of the same image disagreed before this.
+case "$(sshd -T 2> /dev/null || true)" in
+    *persourcepenaltyexemptlist*) sshd_has_penalties=yes ;;
+    *) sshd_has_penalties=no ;;
+esac
+if [ "$sshd_has_penalties" = yes ]; then
     log "  exempting loopback from sshd per-source penalties"
     cat > "$NGROK_SSHD_DROPIN" <<'EOF'
 # Managed by utils/debbie postinstall.sh - #317. ngrok arrives from loopback.
