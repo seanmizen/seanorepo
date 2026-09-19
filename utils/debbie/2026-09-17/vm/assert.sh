@@ -934,6 +934,77 @@ else
     sk "the unit deploy.sh restarts is the unit that is installed" "postinstall.sh writes the unit"
 fi
 
+# REQ-NETWORK-005 - remote SSH through ngrok, #317.
+#
+# Like the tunnel, no VM has an authtoken and none ever will, so nothing here
+# proves the agent connects or that a login from off the LAN works - the first
+# proof of that is the box itself. What it proves: the binary is a package,
+# one agent at most, runs unprivileged, never gives up once it has a token,
+# and without one refuses rather than loops. Plus the sshd half, which a VM
+# CAN prove: loopback, where every ngrok login comes from, is exempt from
+# sshd's per-source penalties.
+echo
+echo "== ngrok ssh tunnel (REQ-NETWORK-005) =="
+NGROK_UNIT=custom-ngrok.service
+NGROK_CONFIG="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)/.config/ngrok/ngrok.yml"
+if [ "$PHASE" = provisioned ]; then
+    check "ngrok installed" \
+        'dpkg-query -W -f="\${Status}" ngrok 2>/dev/null | grep -q "^install ok installed"'
+    check "exactly one ngrok apt source" \
+        '[ "$(grep -rhs "ngrok-agent.s3.amazonaws.com" /etc/apt/sources.list /etc/apt/sources.list.d/ | grep -vc "^#")" = 1 ]'
+    # The package itself installs /usr/local/bin/ngrok, so the path proves
+    # nothing; who owns it does. A hand-dropped binary there is #135.
+    check "ngrok is dpkg-owned, not a manual binary drop" \
+        'dpkg -S /usr/local/bin/ngrok 2>/dev/null | grep -q "^ngrok:"'
+    check "$NGROK_UNIT installed in /usr/local/lib/systemd/system" \
+        "[ -f /usr/local/lib/systemd/system/$NGROK_UNIT ]"
+    check "ngrok runs as $DEPLOY_USER" \
+        "[ \"\$(systemctl show -p User --value $NGROK_UNIT)\" = '$DEPLOY_USER' ]"
+    # The way back in must outlast an outage: no start limit, always restart.
+    check "ngrok never stops retrying" \
+        "[ \"\$(systemctl show -p StartLimitIntervalUSec --value $NGROK_UNIT)\" = 0 ] \
+         && [ \"\$(systemctl show -p Restart --value $NGROK_UNIT)\" = always ]"
+    check "no other ngrok unit is enabled" \
+        'for u in ngrok.service ngrok-custom.service; do
+             if systemctl is-enabled "$u" 2>/dev/null | grep -qx enabled; then exit 1; fi
+         done; true'
+    check "ngrok config directory is private to $DEPLOY_USER" \
+        "[ \"\$(sudo -n stat -c '%a %U' \"\$(dirname '$NGROK_CONFIG')\" 2>/dev/null)\" = '700 $DEPLOY_USER' ]"
+    if sudo -n grep -qs authtoken "$NGROK_CONFIG"; then
+        check "$NGROK_UNIT enabled (authtoken present)" "systemctl is-enabled $NGROK_UNIT"
+    else
+        check "ngrok is NOT enabled while the authtoken is absent" \
+            '[ "$(systemctl is-enabled "$NGROK_UNIT" 2>&1)" != enabled ]'
+        # Safe to start: with no token there is no tunnel to disturb.
+        check "starting ngrok without an authtoken refuses rather than looping" \
+            'sudo -n systemctl start "$NGROK_UNIT" > /dev/null 2>&1;
+             sleep 2;
+             [ "$(systemctl is-active "$NGROK_UNIT" 2>&1)" = inactive ] \
+             && [ "$(systemctl is-failed "$NGROK_UNIT" 2>&1)" != failed ]'
+    fi
+    # Asked of sshd, not of the drop-in (#313's lesson). Skipped, not passed,
+    # where sshd predates per-source penalties: there is nothing to exempt.
+    if sudo -n sshd -T 2> /dev/null | grep -qi '^persourcepenaltyexemptlist'; then
+        check "sshd exempts loopback from per-source penalties" \
+            '[ "$(sshd_effective PerSourcePenaltyExemptList)" = "127.0.0.1,::1" ]'
+    else
+        sk "sshd exempts loopback from per-source penalties" "this sshd has no per-source penalties"
+    fi
+else
+    sk "ngrok installed"                            "postinstall.sh installs it"
+    sk "exactly one ngrok apt source"               "postinstall.sh writes it"
+    sk "ngrok is dpkg-owned, not a manual binary drop" "postinstall.sh installs it"
+    sk "$NGROK_UNIT installed in /usr/local/lib/systemd/system" "postinstall.sh writes it"
+    sk "ngrok runs as $DEPLOY_USER"                 "postinstall.sh writes the unit"
+    sk "ngrok never stops retrying"                 "postinstall.sh writes the unit"
+    sk "no other ngrok unit is enabled"             "postinstall.sh disables them"
+    sk "ngrok config directory is private to $DEPLOY_USER" "postinstall.sh creates it"
+    sk "$NGROK_UNIT enabled (authtoken present)"    "postinstall.sh decides this"
+    sk "ngrok is NOT enabled while the authtoken is absent" "postinstall.sh decides this"
+    sk "starting ngrok without an authtoken refuses rather than looping" "postinstall.sh writes the unit"
+    sk "sshd exempts loopback from per-source penalties" "postinstall.sh writes the drop-in"
+fi
+
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
