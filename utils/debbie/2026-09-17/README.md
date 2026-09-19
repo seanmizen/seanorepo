@@ -350,7 +350,7 @@ re-pays the two minutes and the 2G.
 
 In: install, provision, assert — in a VM and on metal, plus the repository
 checkout itself (`REQ-DEPLOY-001`): `postinstall.sh` clones seanorepo as the
-deploy user and puts it on `release`. Since #279 the deploy poller is in too,
+deploy user and puts it on `release`. Since #279 the deploy poller is in too (split in two by #307),
 and since #280 the Cloudflare tunnel (`REQ-NETWORK-001`, `REQ-NETWORK-002`).
 Out: the network failover watchdog (`REQ-NETWORK-003`, #281) and the wifi
 migration to NetworkManager (`REQ-NETWORK-004`, #282).
@@ -397,18 +397,43 @@ daemon **restart**, not on `SIGHUP`. dockerd's live reload covers a named subset
 of settings and `ip` is not in it — writing the file and reloading leaves a
 later `-p 4000:4000` still on `0.0.0.0`, which looks exactly like it worked.
 
-### The deploy poller
+### The release poller and the deploy
 
-`postinstall.sh` installs `custom-deploy-poll.timer`, which runs
-`scripts/deploy.sh` every two minutes. The host pulls, because nothing can
-reach in — `REQ-SERVER-002` forwards no port and `REQ-DEPLOY-002` is the
-consequence. Follow a deploy with:
+Two units, one clock (#307):
+
+- `custom-release-poll.timer` runs `scripts/release-poll.sh` every two
+  minutes on **every** machine. It fetches and checks out `release` and does
+  nothing else: no containers, no units, no yarn. A standby box is therefore
+  always at the right SHA.
+- `custom-deploy.service` runs `scripts/deploy.sh`. It has no timer and no
+  `[Install]`; the release poller triggers it (`OnSuccess=`) after every
+  poll, and `deploy.sh` exits at once unless the checkout or the boot id
+  differs from what it last deployed. It runs only where
+  **`/etc/seanorepo/serving`** exists: the serving switch.
+
+The host pulls, because nothing can reach in — `REQ-SERVER-002` forwards no
+port and `REQ-DEPLOY-002` is the consequence.
 
 ```bash
-ssh srv@debbie.local journalctl -u custom-deploy-poll.service -f
+ssh srv@debbie.local journalctl -u custom-release-poll.service -u custom-deploy.service -f
 # decisions only, without the ~720 "up to date" lines a day
-ssh srv@debbie.local journalctl -u custom-deploy-poll.service -p info
+ssh srv@debbie.local journalctl -u custom-deploy.service -p info
+
+# the serving switch - provision a standby with DEBBIE_SERVES=no, or later:
+ssh srv@debbie.local sudo rm /etc/seanorepo/serving     # stop deploying here
+ssh srv@debbie.local sudo touch /etc/seanorepo/serving  # deploy here
 ```
+
+A file rather than `systemctl enable`, because the deploy unit is started by
+the poller, never by boot, and a condition is what systemd checks each time it
+is triggered. Only one machine may serve: the apps are SQLite on local
+volumes, so two serving machines means two diverging databases (see
+[`future-spec.md`](../future-spec.md)). Nothing enforces that yet except the
+tunnel credentials living on one box.
+
+Per-app rebuild detection was measured and rejected in #307: `yarn
+prod:docker` against an unchanged tree takes 12–13s on the real box, because
+the layer cache already skips unchanged apps.
 
 Four things about it are deliberate and easy to undo by accident:
 

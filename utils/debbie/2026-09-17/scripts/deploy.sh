@@ -1,20 +1,23 @@
 #!/bin/bash
-# deploy.sh - put origin/release on this host and start it.
+# deploy.sh - start what the checkout holds on this host.
 #
 # Invoked two ways:
-#   deploy.sh          from custom-deploy-poll.timer, every two minutes.
-#                      Deploys only when there is a reason to - REQ-DEPLOY-002.
+#   deploy.sh          from custom-deploy.service, which custom-release-poll
+#                      triggers after every poll (#307). Deploys only when
+#                      there is a reason to - REQ-DEPLOY-002. Runs only on a
+#                      machine that serves: see SERVING_FLAG in postinstall.sh.
 #   deploy.sh --force  by hand over SSH. Deploys regardless of the marker.
 #
 # PULL, NOT PUSH - REQ-DEPLOY-002. The box sits behind a domestic router with
 # no forwarded port (REQ-SERVER-002, REQ-NETWORK-001), so nothing can reach in
-# to trigger a deploy. The host asks instead: one `git ls-remote` every two
-# minutes, compared against a marker recording what it last deployed. The cost
+# to trigger a deploy. The host asks instead: release-poll.sh runs one `git
+# ls-remote` every two minutes, and this script compares the checkout against
+# a marker recording what it last deployed. The cost
 # is up to two minutes of latency, which for a personal site is not a cost.
 #
 # Output goes to the journal:
-#   journalctl -u custom-deploy-poll.service -f          everything
-#   journalctl -u custom-deploy-poll.service -p info     decisions only
+#   journalctl -u custom-deploy.service -u custom-release-poll.service -f
+#   journalctl -u custom-deploy.service -p info     decisions only
 #
 # Lines are prefixed <6>/<7>/<3> when stdout is not a terminal, which systemd
 # reads as a syslog priority (SyslogLevelPrefix= is on by default). That is
@@ -34,8 +37,6 @@ IFS=$'\n\t'
 # carried forward: this generation is REPO_DIR throughout, and the two
 # generations never run on the same box.
 REPO_DIR="${REPO_DIR:-$HOME/projects/seanorepo}"
-RELEASE_BRANCH="${RELEASE_BRANCH:-release}"
-REMOTE="origin"
 
 # State lives under the deploy user's own directory rather than /tmp. A
 # predictable /tmp path is a file any other account can create first, and the
@@ -133,15 +134,14 @@ cd "$REPO_DIR" 2> /dev/null \
 git rev-parse --git-dir > /dev/null 2>&1 \
     || { err "$REPO_DIR is not a git checkout"; exit 1; }
 
-# ls-remote is a single ref lookup against the remote. Cheaper than fetching
-# objects, and it keeps the object store from growing on every one of the ~720
-# polls a day that find nothing to do.
-REMOTE_SHA="$(git ls-remote "$REMOTE" "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
-if [ -z "$REMOTE_SHA" ]; then
-    # Not an error, and the exit status stays zero. `release` is created by the
-    # first `yarn release`, so a box provisioned before then has nothing to
-    # deploy and is behaving correctly - REQ-DEPLOY-001.
-    debug "$REMOTE/$RELEASE_BRANCH does not exist yet - nothing to deploy"
+# What to deploy is whatever the checkout holds. release-poll.sh moved it -
+# #307 - and this script never fetches or checks out: converging services and
+# tracking `release` are separate jobs, so a machine that does not serve still
+# tracks `release` and a machine that does never deploys a half-written tree
+# (they share the lock above).
+HEAD_SHA="$(git rev-parse HEAD 2> /dev/null || true)"
+if [ -z "$HEAD_SHA" ]; then
+    debug "the checkout has no commit yet - nothing to deploy"
     exit 0
 fi
 
@@ -152,9 +152,8 @@ fi
 # ABSENT ON THE FIRST RUN, and that is a normal state rather than a case to
 # defend against: both reads yield the empty string, neither matches, and the
 # deploy proceeds. A marker holding a SHA that no longer exists - a force-push,
-# or a rebuilt `release` - behaves the same way: it simply does not equal the
-# new remote SHA, so the host deploys. Nothing here ever dereferences the
-# recorded SHA, so a dead one cannot wedge the poller.
+# or a rebuilt `release` - behaves the same way: it simply does not equal HEAD,
+# so the host deploys.
 marker_sha="$(sed -n 1p "$MARKER" 2> /dev/null || true)"
 marker_boot="$(sed -n 2p "$MARKER" 2> /dev/null || true)"
 
@@ -162,56 +161,43 @@ marker_boot="$(sed -n 2p "$MARKER" 2> /dev/null || true)"
 # the SHA is what brings the sites back after a power cut: no app compose file
 # sets a restart policy, so after a reboot the containers are down even though
 # `release` has not moved, and a SHA comparison alone would never notice. The
-# previous generation solved this with a second unit that forced a deploy at
-# boot; one line in the marker replaces it.
+# release poller triggers this unit after every run, so the first poll after a
+# boot is what finds it.
 boot_id="$(cat /proc/sys/kernel/random/boot_id 2> /dev/null || true)"
 
 reason=""
 if [ "$FORCE" = true ]; then
     reason="--force"
-elif [ "$REMOTE_SHA" != "$marker_sha" ]; then
-    reason="$REMOTE/$RELEASE_BRANCH moved to ${REMOTE_SHA:0:7} (last deployed ${marker_sha:-none})"
+elif [ "$HEAD_SHA" != "$marker_sha" ]; then
+    reason="the checkout moved to ${HEAD_SHA:0:7} (last deployed ${marker_sha:-none})"
 elif [ -n "$boot_id" ] && [ "$boot_id" != "$marker_boot" ]; then
-    reason="the host has rebooted since ${REMOTE_SHA:0:7} was deployed - the containers are not running"
+    reason="the host has rebooted since ${HEAD_SHA:0:7} was deployed - the containers are not running"
 else
-    debug "up to date at ${REMOTE_SHA:0:7} - nothing to do"
+    debug "up to date at ${HEAD_SHA:0:7} - nothing to do"
     exit 0
 fi
 
 #------------------------------------------------------------------------------
 # Deploy
 #------------------------------------------------------------------------------
-# May be empty on a checkout with an unborn HEAD, which the tunnel decision
-# below treats as "cannot prove the config is unchanged".
-OLD_SHA="$(git rev-parse HEAD 2> /dev/null || true)"
+# The tunnel decision below diffs what was last DEPLOYED against what is about
+# to be, which is the marker, not the checkout's previous HEAD - the poller
+# may have moved the checkout several times while this machine was not
+# serving. Empty on a first deploy, which the tunnel decision treats as
+# "cannot prove the config is unchanged".
+OLD_SHA="$marker_sha"
+NEW_SHA="$HEAD_SHA"
 
 log "deploying: $reason"
 
-git fetch "$REMOTE" --prune
-
-# checkout -f -B rather than `reset --hard`: the box may still be sitting on
-# whatever branch it was cloned onto, and -B moves the local branch as well as
-# the working tree.
-#
-# THERE IS DELIBERATELY NO `git clean` HERE - REQ-DEPLOY-006.
+# THERE IS DELIBERATELY NO `git clean` IN THE DEPLOY PATH - REQ-DEPLOY-006.
 # apps/cloudflared/credentials/ is gitignored and holds the tunnel's
 # credentials file, which exists only on this host and is in no repository. A
-# `git clean -fdx` added to make checkouts deterministic would delete it, the
+# `git clean -fdx` added to make trees deterministic would delete it, the
 # tunnel would fail to start on its next restart, and every site would go down
 # with nothing in the repository's history to explain why. Untracked host data
-# under uploads/ goes the same way. -f discards modifications to TRACKED files,
-# which on a deploy host is exactly right and is as far as this is allowed to
-# go. Do not add a clean step to this script.
-git checkout -f -B "$RELEASE_BRANCH" "$REMOTE/$RELEASE_BRANCH"
-
-# Re-read HEAD rather than trusting REMOTE_SHA. If `release` moved between the
-# ls-remote above and this fetch, the checkout is at the newer commit and
-# REMOTE_SHA now names something that may not even be in the object store - and
-# diffing against an absent object would fail after the containers were already
-# up. NEW_SHA is by construction a commit this host holds, so the marker
-# records what is genuinely deployed, and the next poll sees the remaining
-# difference and deploys again.
-NEW_SHA="$(git rev-parse HEAD)"
+# under uploads/ goes the same way. Do not add a clean step here or to
+# release-poll.sh.
 
 yarn install --immutable
 yarn prod:docker
