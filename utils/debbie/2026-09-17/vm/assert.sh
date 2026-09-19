@@ -88,7 +88,9 @@ check() { if ( eval "$2" ) > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 # sshd has not read is precisely the bug REQ-SERVER-008 exists to catch, so a
 # check the file could satisfy would pass in the failing state.
 sshd_effective() {
-    sshd -T 2> /dev/null | awk -v k="$(printf '%s' "$1" | tr 'A-Z' 'a-z')" \
+    # sudo: sshd is in /usr/sbin, off the deploy user's PATH, and needs root
+    # to read the host keys - #320.
+    sudo -n sshd -T 2> /dev/null | awk -v k="$(printf '%s' "$1" | tr 'A-Z' 'a-z')" \
         'tolower($1) == k { print tolower($2); exit }'
 }
 
@@ -260,7 +262,7 @@ if [ "$PHASE" = provisioned ]; then
     # KbdInteractiveAuthentication already defaults to `no` on trixie, so that
     # one check is a regression guard rather than a reproduction - it cannot be
     # shown red by removing the drop-in. The other two can, and were.
-    check "sshd config is valid"           'sshd -t'
+    check "sshd config is valid"           'sudo -n sshd -t'
     check "ssh passwords refused"          '[ "$(sshd_effective PasswordAuthentication)" = no ]'
     check "ssh keyboard-interactive refused" '[ "$(sshd_effective KbdInteractiveAuthentication)" = no ]'
     check "ssh root login refused"         '[ "$(sshd_effective PermitRootLogin)" = no ]'
