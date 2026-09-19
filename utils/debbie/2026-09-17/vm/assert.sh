@@ -1137,6 +1137,35 @@ else
     sk "sshd exempts loopback from per-source penalties" "postinstall.sh writes the drop-in"
 fi
 
+# REQ-SERVER-010 - the deploy user's shell, #290.
+echo
+echo "== interactive shell (REQ-SERVER-010) =="
+if [ "$PHASE" = provisioned ]; then
+    check "deploy user shell is zsh" \
+        '[ "$(getent passwd "$DEPLOY_USER" | cut -d: -f7)" = "$(command -v zsh)" ]'
+    check "oh-my-zsh and both plugins present" \
+        'h=$(getent passwd "$DEPLOY_USER" | cut -d: -f6);
+         sudo -n test -f "$h/.oh-my-zsh/oh-my-zsh.sh" \
+         && sudo -n test -d "$h/.oh-my-zsh/custom/plugins/zsh-autosuggestions" \
+         && sudo -n test -d "$h/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"'
+    # The VM harness hashes .zshrc either side of a second postinstall run and
+    # leaves both lines here. On metal there is no second run, so no file.
+    if [ -r /var/tmp/debbie-rerun ]; then
+        check "shell config is idempotent" \
+            '[ "$(wc -l < /var/tmp/debbie-rerun)" -eq 2 ] \
+             && [ "$(sed -n 1p /var/tmp/debbie-rerun)" = "$(sed -n 2p /var/tmp/debbie-rerun)" ]'
+    else
+        sk "shell config is idempotent" "no second provisioning run on this host (the VM harness does one)"
+    fi
+    check "zsh starts cleanly with that config" \
+        "sudo -n -u '$DEPLOY_USER' -i zsh -ic exit 2>&1 | grep -qiE 'error|not found|no such' && exit 1; true"
+else
+    sk "deploy user shell is zsh"            "postinstall.sh sets it"
+    sk "oh-my-zsh and both plugins present"  "postinstall.sh installs them"
+    sk "shell config is idempotent"          "postinstall.sh writes it"
+    sk "zsh starts cleanly with that config" "postinstall.sh writes it"
+fi
+
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
