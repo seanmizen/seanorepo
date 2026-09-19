@@ -398,7 +398,7 @@ Introduced in #259.
 
 ## REQ-SERVER-010 — The interactive shell is the one described in the repository
 
-- **Status:** proposed
+- **Status:** active
 - **Source:** sean
 - **Origin:** #273
 - **Type:** quality
@@ -417,6 +417,10 @@ Introduced in #259.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "deploy user shell is zsh"
   - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "shell config is idempotent"
+    — the VM harness runs `postinstall.sh` twice and hashes `.zshrc` either
+    side of the second run; skipped on metal, where there is no second run
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "oh-my-zsh and both plugins present"
+  - Test — `utils/debbie/2026-09-17/vm/assert.sh` › "zsh starts cleanly with that config"
 - **Relations:** none
 
 ## REQ-SERVER-011 — Our systemd units live apart from the distribution's

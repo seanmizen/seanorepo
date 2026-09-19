@@ -565,6 +565,21 @@ do_assert() {
     ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER bash /tmp/postinstall.sh" \
         || die_code 2 "postinstall failed"
 
+    # Run it AGAIN - REQ-SERVER-010, #290. Every re-provisioning step this
+    # generation documents (adding tunnel credentials, an ngrok token) is "re-run
+    # postinstall.sh", so a second run must succeed and change nothing it owns.
+    # The deploy user's .zshrc is hashed either side of it, and assert.sh
+    # compares the two: the previous generation appended its prompt on every run
+    # while calling itself idempotent. /var/tmp, because /tmp does not survive
+    # the reboot below.
+    log "provisioning again, to prove a re-run changes nothing"
+    ssh "${ssh_opts[@]}" "$target" "sudo -n sha256sum ~$DEPLOY_USER/.zshrc | cut -d' ' -f1 | sudo -n tee /var/tmp/debbie-rerun > /dev/null" \
+        || die_code 2 "could not hash .zshrc before the second run"
+    ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER bash /tmp/postinstall.sh > /dev/null" \
+        || die_code 2 "postinstall failed on its second run - it is not safe to re-run"
+    ssh "${ssh_opts[@]}" "$target" "sudo -n sha256sum ~$DEPLOY_USER/.zshrc | cut -d' ' -f1 | sudo -n tee -a /var/tmp/debbie-rerun > /dev/null" \
+        || die_code 2 "could not hash .zshrc after the second run"
+
     # The lid-close drop-in is only read at boot, so assert after a restart.
     #
     # Read the boot id BEFORE asking for the reboot - #298. Nothing after this
