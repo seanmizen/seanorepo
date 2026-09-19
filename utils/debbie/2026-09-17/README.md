@@ -11,7 +11,7 @@ explains; the requirements bind. CI validates them on every PR.
 
 | Folder | What | Runs where |
 |---|---|---|
-| `scripts/` | what you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`, each with its `.env.example` and `<box>.env` files; `lib.sh`, `write-overrides.sh` | your laptop |
+| `scripts/` | what you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`, each with its `.env.example` and `<machine>.env` files; `lib.sh`, `write-overrides.sh` | your computer |
 | `payload/` | sent to a target machine to install, configure and check it: `preseed.cfg`, `postinstall.sh`, `assert.sh`. Idempotent. Runs when you run a script | the installer, then the target machine |
 | `services/` | runs on a target machine for as long as it is up: `release-poll.sh`, `deploy.sh`. systemd starts them from the `release` checkout | the target machine |
 | `working/` | output: ISOs, the SSH key, VM images (gitignored) | — |
