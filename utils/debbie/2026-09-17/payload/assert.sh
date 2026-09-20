@@ -1153,10 +1153,15 @@ if [ "$PHASE" = provisioned ]; then
         'dpkg-query -W -f="\${Status}" tailscale 2>/dev/null | grep -q "^install ok installed"'
     check "tailscaled enabled"        'systemctl is-enabled tailscaled'
     check "tailscaled active"         'systemctl is-active tailscaled'
-    # Logged in or not, the daemon must be healthy. A machine with no account
-    # yet reports "Logged out", which is a normal state rather than a fault.
+    # Logged in or not, the daemon must answer for itself. A machine with no
+    # account yet says NeedsLogin, which is a normal state rather than a fault.
+    #
+    # Read from --json, and the output captured before it is matched. `tailscale
+    # status` EXITS 1 while logged out, so a pipeline would fail under pipefail
+    # even where the text matched.
     check "tailscale reports its state" \
-        'sudo -n tailscale status 2>&1 | grep -qE "Logged out|^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"'
+        'state="$(sudo -n tailscale status --json 2>/dev/null | sed -n "s/.*\"BackendState\": *\"\([^\"]*\)\".*/\1/p" | head -1)";
+         case "$state" in Running|NeedsLogin|Starting|Stopped) true ;; *) false ;; esac'
 
     # Asked of sshd, not of the drop-in (#313's lesson). Skipped, not passed,
     # where sshd predates per-source penalties: there is nothing to exempt.
