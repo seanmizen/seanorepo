@@ -1289,6 +1289,11 @@ else
     log "  sshd has no per-source penalties - nothing to exempt"
 fi
 
+# The .deb files apt keeps after installing. Nothing reads them again, and this
+# machine has a 128 GB disk shared with Docker images and the SQLite volumes.
+log "clearing the apt cache"
+apt-get clean
+
 log "================================================================"
 log "roles on $SERVER_NAME: webserver=$ROLE_WEBSERVER tunnel=$ROLE_TUNNEL"
 [ "$ROLE_WEBSERVER" = yes ] || log "  this machine tracks release but runs NO sites (ROLE_WEBSERVER unset)"

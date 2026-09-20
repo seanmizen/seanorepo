@@ -16,9 +16,8 @@
 #   3. Node 20, corepack and Yarn
 #   4. Docker
 #   5. Go, then shist (built from source)
-#   6. Claude Code
-#   7. ~/projects, the seanorepo clone, and the git config from config-anywhere
-#   8. iTerm2 and its preferences (macOS only)
+#   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
+#   7. iTerm2 and its preferences (macOS only)
 #
 # It is idempotent: a second run leaves the machine in the same state. .zshrc
 # is written whole every run, so edit this file rather than that one. Put
@@ -77,10 +76,6 @@ as_user() {
         bash -lc "$*"
     fi
 }
-# Asked of the file rather than of PATH: a fresh install is not on PATH until
-# the next login shell.
-have_user_bin() { [ -x "$USER_HOME/.local/bin/$1" ]; }
-
 log "setting up $DEV_USER on $OS ($USER_HOME)"
 
 #------------------------------------------------------------------------------
@@ -260,17 +255,7 @@ if ! as_user "[ -x '$USER_HOME/go/bin/shist' ]"; then
 fi
 
 #------------------------------------------------------------------------------
-# 6. Claude Code
-#------------------------------------------------------------------------------
-log "claude code"
-if have_user_bin claude || command -v claude > /dev/null 2>&1; then
-    log "  already installed"
-else
-    as_user "curl -fsSL https://claude.ai/install.sh | bash"
-fi
-
-#------------------------------------------------------------------------------
-# 7. seanorepo and the git config
+# 6. seanorepo and the git config
 #
 # The clone is anonymous HTTPS, because the repository is public. On a target
 # machine setup-server-environment.sh runs next and moves this checkout to the
@@ -293,7 +278,7 @@ if as_user "[ -f '$REPO_DIR/package.json' ]"; then
 fi
 
 #------------------------------------------------------------------------------
-# 8. iTerm2 (macOS only)
+# 7. iTerm2 (macOS only)
 #------------------------------------------------------------------------------
 if [ "$OS" = Darwin ]; then
     log "iterm2"
@@ -309,6 +294,13 @@ if [ "$OS" = Darwin ]; then
         defaults import com.googlecode.iterm2 "$ITERM_PLIST"
         log "  preferences imported"
     fi
+fi
+
+# The .deb files apt keeps after installing are worth hundreds of megabytes on
+# a machine that installs Docker, Go and Node. Nothing reads them again.
+if [ "$OS" = Linux ]; then
+    log "clearing the apt cache"
+    apt-get clean
 fi
 
 log "done. Open a new shell to pick up zsh and PATH."

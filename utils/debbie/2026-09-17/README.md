@@ -85,7 +85,7 @@ bash ~/projects/seanorepo/utils/debbie/2026-09-17/payload/setup-developer-enviro
 
 Do not use sudo: Homebrew refuses to run as root. It installs Homebrew,
 zsh with oh-my-zsh and the shared prompt, Node 20, corepack and Yarn, Docker,
-Go, shist, Claude Code, the seanorepo clone, the git config from
+Go, shist, the seanorepo clone, the git config from
 `utils/config-anywhere`, and iTerm2 with its preferences.
 
 It rewrites `~/.zshrc` on every run, so put your own shell settings in

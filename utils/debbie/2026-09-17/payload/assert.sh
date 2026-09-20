@@ -546,15 +546,15 @@ if [ "$PHASE" = provisioned ]; then
     fi
     # The tools setup-developer-environment.sh installs for its own sake.
     # shist is built from source, so its presence also proves Go works.
+    check "apt cache is empty"        '[ -z "$(ls -A /var/cache/apt/archives/*.deb 2>/dev/null)" ]'
     check "go installed"              'go version | grep -qE "go1\.(2[4-9]|[3-9][0-9])"'
     check "shist built"               "sudo -n test -x ~$DEPLOY_USER/go/bin/shist"
-    check "claude code installed"     "sudo -n test -x ~$DEPLOY_USER/.local/bin/claude"
     check "git config came from config-anywhere" \
         "sudo -n test -s ~$DEPLOY_USER/.gitconfig"
 else
+    sk "apt cache is empty"           "setup-server-environment.sh clears it"
     sk "go installed"                 "setup-developer-environment.sh installs it"
     sk "shist built"                  "setup-developer-environment.sh builds it"
-    sk "claude code installed"        "setup-developer-environment.sh installs it"
     sk "git config came from config-anywhere" "setup-developer-environment.sh applies it"
     sk "node 20 installed"            "setup-developer-environment.sh installs it"
     sk "corepack installed"           "setup-developer-environment.sh installs it"
