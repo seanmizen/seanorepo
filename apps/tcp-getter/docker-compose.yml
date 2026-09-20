@@ -10,6 +10,14 @@ x-tcp-getter-base: &tcp-getter-base
     - "${PUBLISH_ADDR:-127.0.0.1}:4120:4120"
   extra_hosts:
     - "host.docker.internal:host-gateway"
+  volumes:
+    # The public half of the machine's SSH host key, so the emailed command can
+    # pin it. Public by definition: it is what ssh shows every client that
+    # connects. Read-only, and the private key is never mounted.
+    - type: bind
+      source: /etc/ssh/ssh_host_ed25519_key.pub
+      target: /etc/ssh/ssh_host_ed25519_key.pub
+      read_only: true
 
 services:
   tcp-getter:
@@ -23,6 +31,12 @@ services:
   tcp-getter-dev:
     <<: *tcp-getter-base
     volumes:
+      # Repeated from the base above: a service's own `volumes` replaces the
+      # base list rather than adding to it.
+      - type: bind
+        source: /etc/ssh/ssh_host_ed25519_key.pub
+        target: /etc/ssh/ssh_host_ed25519_key.pub
+        read_only: true
       - type: bind
         source: ../..
         target: /app
