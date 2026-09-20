@@ -18,7 +18,7 @@ in the comments of each script.
 | Folder | Contents | Runs on |
 |---|---|---|
 | `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. Each step folder holds its `.env.example` and one `<machine>.env` per target machine. `lib.sh` holds the functions they share. | your computer |
-| `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `postinstall.sh` (configuration), `assert.sh` (checks). | the installer, then the target machine |
+| `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
 | `services/` | What runs on a target machine all the time: `release-poll.sh` and `deploy.sh`. systemd starts them from the `release` checkout. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
 
@@ -71,6 +71,25 @@ Follow [`scripts/README.md`](./scripts/README.md). In short:
    while the target machine installs from the USB stick.
 3. `3-provision/provision.sh <machine>` configures the target machine and
    checks it. Run it again whenever its configuration or roles change.
+
+## Set up a Mac
+
+`payload/setup-developer-environment.sh` installs the toolchain and shell that
+every machine of Sean's gets. Target machines run it first, before the server
+setup. A Mac runs it on its own:
+
+```bash
+git clone https://github.com/seanmizen/seanorepo ~/projects/seanorepo
+bash ~/projects/seanorepo/utils/debbie/2026-09-17/payload/setup-developer-environment.sh
+```
+
+Do not use sudo: Homebrew refuses to run as root. It installs Homebrew,
+zsh with oh-my-zsh and the shared prompt, Node 20, corepack and Yarn, Docker,
+shist, the seanorepo clone, the git config from
+`utils/config-anywhere`, and iTerm2 with its preferences.
+
+It rewrites `~/.zshrc` on every run, so put your own shell settings in
+`~/.zshrc.local`. It is safe to run again whenever the file changes.
 
 ## Roles
 

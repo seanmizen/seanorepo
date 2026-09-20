@@ -263,7 +263,7 @@ cat <<EOF
 #
 # A space separates the fields rather than a tab, for the same reason: no
 # backslash escape has to survive debconf. /etc/hosts is whitespace-delimited,
-# and postinstall.sh's repair matches either.
+# and setup-server-environment.sh's repair matches either.
 d-i preseed/late_command string \\
     echo '$SERVER_NAME' > /target/etc/hostname; \\
     grep -v '^127.0.1.1' /target/etc/hosts > /target/etc/hosts.new; \\
