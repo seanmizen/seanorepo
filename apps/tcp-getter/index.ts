@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import fastifyCors from '@fastify/cors';
 import Fastify from 'fastify';
 import nodemailer from 'nodemailer';
@@ -12,6 +14,10 @@ const NGROK_API_URL =
 const EMAIL_WHITELIST =
   process.env.EMAIL_WHITELIST?.split(',').map((e) => e.trim()) || [];
 const MOCK_TCP_TUNNEL = process.env.MOCK_TCP_TUNNEL === 'true';
+// The public half of this machine's SSH host key. docker-compose mounts it
+// read-only. It is what lets the emailed command verify the machine.
+const HOST_KEY_FILE =
+  process.env.HOST_KEY_FILE || '/etc/ssh/ssh_host_ed25519_key.pub';
 
 function validateEnvVars() {
   const required = {
@@ -66,6 +72,63 @@ const getTcpTunnelUrl = async (): Promise<{ host: string; port: string }> => {
   }
 };
 
+/**
+ * This machine's SSH host key, and the fingerprint ssh prints for it.
+ *
+ * ngrok gives a new host:port on every restart, and those addresses are reused
+ * between accounts, so an address proves nothing about which machine answers.
+ * The host key does: it stays the same whatever the address is.
+ *
+ * Returns null when the key cannot be read, so the caller can say so instead
+ * of sending a command that claims to verify and does not.
+ */
+const readHostKey = (): { line: string; fingerprint: string } | null => {
+  try {
+    const line = readFileSync(HOST_KEY_FILE, 'utf8').trim();
+    const [type, base64] = line.split(/\s+/);
+    if (!type || !base64) return null;
+    // ssh prints SHA256:<base64 of the sha256 of the key blob>, unpadded.
+    const digest = createHash('sha256')
+      .update(Buffer.from(base64, 'base64'))
+      .digest('base64')
+      .replace(/=+$/, '');
+    return { line: `${type} ${base64}`, fingerprint: `SHA256:${digest}` };
+  } catch (error) {
+    console.error(`Could not read ${HOST_KEY_FILE}:`, error);
+    return null;
+  }
+};
+
+/**
+ * The command to paste, and the note that goes under it.
+ *
+ * With the host key, ssh verifies the machine and writes nothing on the
+ * client: KnownHostsCommand feeds the key straight to ssh, so no known_hosts
+ * file is read or written. It needs OpenSSH 8.5 or newer, which is 2021
+ * onwards. Clients that are older, or that take a host and a key rather than
+ * a command line - phone SSH apps - compare the fingerprint by eye instead,
+ * which is why it is printed too.
+ *
+ * Tested against a real server on a non-standard port: the right key connects,
+ * a wrong key is refused, and ~/.ssh/known_hosts is untouched.
+ */
+const buildSshCommand = (
+  host: string,
+  port: string,
+): { command: string; note: string } => {
+  const key = readHostKey();
+  if (!key) {
+    return {
+      command: `ssh ${SSH_USERNAME}@${host} -p ${port}`,
+      note: 'WARNING: this machine could not read its own host key, so this command cannot verify what it connects to.',
+    };
+  }
+  return {
+    command: `ssh -o StrictHostKeyChecking=yes -o "KnownHostsCommand=/bin/echo '[${host}]:${port} ${key.line}'" ${SSH_USERNAME}@${host} -p ${port}`,
+    note: `Host key fingerprint: ${key.fingerprint}\nThe command above needs OpenSSH 8.5 or newer. On a phone app, or an older ssh, connect with "ssh ${SSH_USERNAME}@${host} -p ${port}" and check it shows that same fingerprint before you accept it.`,
+  };
+};
+
 const isEmailWhitelisted = (email: string): boolean => {
   if (EMAIL_WHITELIST.length === 0) {
     console.warn('No email whitelist configured - all emails will be rejected');
@@ -87,7 +150,7 @@ async function sendSSHEmail(
   options: { isStartup?: boolean } = {},
 ) {
   const { host, port } = await getTcpTunnelUrl();
-  const sshCommand = `ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ${SSH_USERNAME}@${host} -p ${port}`;
+  const { command: sshCommand, note: sshNote } = buildSshCommand(host, port);
   const timestamp = new Date().toLocaleString();
 
   const subject = options.isStartup
@@ -107,7 +170,7 @@ async function sendSSHEmail(
     to: email,
     from: MAIL_USERNAME,
     subject,
-    text: `${textPrefix}Your SSH connection command:\n\n${sshCommand}\n\nHost: ${host}\nPort: ${port}`,
+    text: `${textPrefix}Your SSH connection command:\n\n${sshCommand}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}`,
     html: `<!DOCTYPE html>
 <html>
 <head>
@@ -115,7 +178,8 @@ async function sendSSHEmail(
 </head>
 <body>
   ${htmlPrefix}<p>Your SSH connection command:</p>
-  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace;">${sshCommand}</pre>
+  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${sshCommand}</pre>
+  <p style="font-family: monospace; white-space: pre-wrap;">${sshNote}</p>
   <p><strong>Host:</strong> ${host}<br><strong>Port:</strong> ${port}</p>
   <p>${timeLabel}: ${timestamp}</p>
 </body>
