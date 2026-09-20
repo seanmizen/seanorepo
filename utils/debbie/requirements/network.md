@@ -186,3 +186,40 @@ Introduced in #273.
 - **Relations:**
   - depends-on REQ-NETWORK-001
   - depends-on REQ-SERVER-008
+
+## REQ-NETWORK-006 — Every machine is reachable for administration over one private network
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #344
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** Each machine shall join a private network that reaches it from
+  anywhere, without any inbound port being forwarded to it.
+- **Rationale:** Administration needs a path in that survives a moving DHCP
+  lease, a different network, and a home router that forwards nothing
+  (`REQ-NETWORK-001`). Tailscale gives that: each machine dials out, the
+  coordination service introduces the two ends, and WireGuard encrypts the
+  link between them.
+
+  It replaces what `REQ-NETWORK-005` does with ngrok, whose address changes on
+  every restart, and whose emailed connection string turned off SSH host-key
+  checking to cope. A Tailscale name is stable, so host-key checking works
+  normally. ngrok stays until Tailscale has been proven on real machines, and
+  `REQ-NETWORK-005` is withdrawn then rather than now.
+
+  Provisioning installs the daemon and nothing else. Joining needs an account
+  and a browser, so a person runs `sudo tailscale up` once per machine. No key
+  is written by provisioning and none is in the repository, for the same
+  reason as the tunnel credentials (`REQ-DEPLOY-006`).
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "tailscale installed"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "tailscaled enabled"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "tailscaled active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "tailscale reports its state"
+    — a machine that has never been logged in reports "Logged out", which is a
+    normal state and not a fault
+  - Demonstration — SSH to a machine by its Tailscale name, from off the LAN
+- **Relations:**
+  - depends-on REQ-NETWORK-001
+  - refines REQ-SERVER-002

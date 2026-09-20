@@ -264,6 +264,17 @@ ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 5353/udp
+# Tailscale - REQ-NETWORK-006. Two rules, and both are narrow.
+#
+# 41641/udp is the port Tailscale asks for a DIRECT connection on. Without it
+# the connection still works, through Tailscale's relay servers, but every
+# packet takes a longer path. Opening it costs nothing: what answers there is
+# WireGuard, which ignores anything it cannot authenticate with a known key.
+#
+# `allow in on tailscale0` trusts the private network itself, so SSH over
+# Tailscale works without opening 22 any wider than it already is.
+ufw allow 41641/udp
+ufw allow in on tailscale0
 ufw --force enable
 
 #------------------------------------------------------------------------------

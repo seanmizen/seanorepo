@@ -16,8 +16,9 @@
 #   3. Node 20, corepack and Yarn
 #   4. Docker
 #   5. shist, from its release
-#   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
-#   7. iTerm2 and its preferences (macOS only)
+#   6. Tailscale, the private network for reaching machines
+#   7. ~/projects, the seanorepo clone, and the git config from config-anywhere
+#   8. iTerm2 and its preferences (macOS only)
 #
 # It is idempotent: a second run leaves the machine in the same state. .zshrc
 # is written whole every run, so edit this file rather than that one. Put
@@ -266,7 +267,63 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# 6. seanorepo and the git config
+# 6. Tailscale
+#
+# A private network over WireGuard, so you can reach a machine from anywhere
+# with no inbound port (REQ-NETWORK-006). Every machine runs it, including
+# this one, because both ends of a connection need it.
+#
+# It installs the daemon and leaves the machine logged out. Logging in needs
+# an account and a browser, so it is a person's job, once per machine:
+#
+#   sudo tailscale up            # prints a URL to approve the machine
+#   tailscale status             # who else is on the network
+#
+# No key is written by this script and none is in the repository.
+#------------------------------------------------------------------------------
+log "tailscale"
+if [ "$OS" = Darwin ]; then
+    if [ ! -d /Applications/Tailscale.app ]; then
+        brew install --cask tailscale
+        log "  open Tailscale once to sign in"
+    fi
+else
+    TS_KEYRING=/usr/share/keyrings/tailscale-archive-keyring.gpg
+    TS_LIST=/etc/apt/sources.list.d/tailscale.list
+    ts_codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+    if [ ! -s "$TS_KEYRING" ]; then
+        log "  fetching Tailscale's apt signing key"
+        # Already binary, like Cloudflare's, so there is no dearmor step. A
+        # temp file first: a curl that dies mid-stream must not leave a
+        # present, unusable keyring that the guard then skips repairing.
+        ts_key_tmp="$(mktemp)"
+        curl -fsSL "https://pkgs.tailscale.com/stable/debian/$ts_codename.noarmor.gpg" -o "$ts_key_tmp"
+        install -m 0644 -o root -g root "$ts_key_tmp" "$TS_KEYRING"
+        rm -f "$ts_key_tmp"
+    fi
+    ts_deb_line="deb [signed-by=$TS_KEYRING] https://pkgs.tailscale.com/stable/debian $ts_codename main"
+    ts_repo_changed=0
+    if [ ! -f "$TS_LIST" ] || [ "$(cat "$TS_LIST")" != "$ts_deb_line" ]; then
+        log "  writing $TS_LIST"
+        printf '%s\n' "$ts_deb_line" > "$TS_LIST"
+        ts_repo_changed=1
+    fi
+    if [ "$ts_repo_changed" = 1 ] \
+        || ! dpkg-query -W -f='${Status}' tailscale 2> /dev/null | grep -q "^install ok installed"; then
+        apt-get update -y
+    fi
+    apt-get install -y tailscale
+    systemctl enable --now tailscaled
+    if tailscale status > /dev/null 2>&1; then
+        log "  logged in as $(tailscale status --json | sed -n 's/.*"DNSName": *"\([^".]*\).*/\1/p' | head -1)"
+    else
+        log "  NOT logged in. This machine is not reachable over Tailscale yet."
+        log "        Run 'sudo tailscale up' here and approve the URL it prints."
+    fi
+fi
+
+#------------------------------------------------------------------------------
+# 7. seanorepo and the git config
 #
 # The clone is anonymous HTTPS, because the repository is public. On a target
 # machine setup-server-environment.sh runs next and moves this checkout to the
@@ -289,7 +346,7 @@ if as_user "[ -f '$REPO_DIR/package.json' ]"; then
 fi
 
 #------------------------------------------------------------------------------
-# 7. iTerm2 (macOS only)
+# 8. iTerm2 (macOS only)
 #------------------------------------------------------------------------------
 if [ "$OS" = Darwin ]; then
     log "iterm2"
