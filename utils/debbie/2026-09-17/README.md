@@ -151,33 +151,6 @@ repository.
 4. Run `provision.sh <machine>` again. It enables the tunnel when the machine
    has the tunnel role and the credentials are present.
 
-### Tailscale
-
-Every machine joins one private network (REQ-NETWORK-006), so you can reach it
-from anywhere with no inbound port. `setup-developer-environment.sh` installs
-the daemon and leaves the machine logged out, because joining needs an account
-and a browser.
-
-On each machine, once:
-
-```bash
-sudo tailscale up          # prints a URL. Approve the machine there.
-tailscale status           # the machines you can reach
-```
-
-Then connect by name, with normal host-key checking:
-
-```bash
-ssh srv@trixie2
-```
-
-The firewall allows 41641/udp, which Tailscale uses for a direct connection,
-and trusts the `tailscale0` interface. Without the port it still works,
-through a relay, more slowly.
-
-ngrok stays for now, until Tailscale has been used on real machines for a
-while. Then REQ-NETWORK-005 is withdrawn and the ngrok setup goes with it.
-
 ### Remote SSH (ngrok)
 
 ngrok is the only way to reach a target machine over SSH from outside the LAN
