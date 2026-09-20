@@ -87,6 +87,17 @@ const readHostKey = (): { line: string; fingerprint: string } | null => {
     const line = readFileSync(HOST_KEY_FILE, 'utf8').trim();
     const [type, base64] = line.split(/\s+/);
     if (!type || !base64) return null;
+    // Both fields end up inside quotes in a command the reader pastes into a
+    // shell, so check them rather than trust them. The file is root-owned on
+    // the machine, so this is a second line of defence, not a live hole.
+    if (!/^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa)$/.test(type)) {
+      console.error(`Unexpected host key type in ${HOST_KEY_FILE}: ${type}`);
+      return null;
+    }
+    if (!/^[A-Za-z0-9+/=]+$/.test(base64)) {
+      console.error(`Host key in ${HOST_KEY_FILE} is not base64`);
+      return null;
+    }
     // ssh prints SHA256:<base64 of the sha256 of the key blob>, unpadded.
     const digest = createHash('sha256')
       .update(Buffer.from(base64, 'base64'))
