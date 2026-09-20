@@ -197,15 +197,16 @@ $EDITOR 3-provision/trixie2.env        # same SERVER_NAME; ROLE_* only if it ser
 ```
 
 That waits for SSH, **asserts the machine as the installer left it**, runs
-`postinstall.sh`, reboots so the boot-time settings apply, waits for the machine to
+`setup-developer-environment.sh` and then `setup-server-environment.sh`, reboots
+so the boot-time settings apply, waits for the machine to
 return, and asserts again — both times with the same `payload/assert.sh` the VM
 runs, and with `EXPECT_HOSTNAME` and `DEPLOY_USER` taken from `3-provision/<machine>.env`. Exit
 codes match the VM harness: `0` pass, `1` an assertion failed, `3` never came
 back on SSH.
 
 The **first** of those two runs is the one `#285` added, and it is the only one
-that can catch a fault the installer creates and `postinstall.sh` repairs. The
-first real install came up as hostname `192`; `postinstall.sh` corrected it, so
+that can catch a fault the installer creates and `setup-server-environment.sh` repairs. The
+first real install came up as hostname `192`; `setup-server-environment.sh` corrected it, so
 every check was green and nobody saw it for a generation. A first-boot failure
 prints a loud banner, lets the repair proceed — being pointed at a broken machine
 is a legitimate reason to run this — and still exits non-zero at the end, so a
@@ -213,12 +214,12 @@ repaired machine cannot be mistaken for a correctly installed one.
 
 Since `#285` the machine also answers to `$SERVER_NAME.local` on **first boot**:
 `avahi-daemon` and `libnss-mdns` are installed by the preseed rather than by
-`postinstall.sh`. Previously mDNS only started working after the step you had
+`setup-server-environment.sh`. Previously mDNS only started working after the step you had
 to reach the machine to run, which is why `HOST=<ip>` was so often needed below.
 
 ```bash
 ./3-provision/provision.sh trixie2 --assert       # assert only, machine already provisioned
-./3-provision/provision.sh trixie2 --no-reboot    # postinstall only
+./3-provision/provision.sh trixie2 --no-reboot    # configure only, no reboot
 HOST=192.168.1.42 ./3-provision/provision.sh trixie2   # fallback, if .local does not reach the machine
 ```
 
@@ -273,7 +274,7 @@ So:
   Check with `ping -c1 $SERVER_NAME.local` before assuming it.
 - Either way the address is **tried within seconds**, not after the 300s
   timeout: each polling round tries the name and then the address.
-- Nothing is pinned. Both waits — the one before `postinstall.sh` and the one
+- Nothing is pinned. Both waits — the one before `setup-server-environment.sh` and the one
   after the reboot — re-choose from the same list, so a machine that came back on a
   new lease is still found by name. The log says which one answered (`up on
   debbie.local`).

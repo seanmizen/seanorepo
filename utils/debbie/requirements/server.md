@@ -1,6 +1,6 @@
 # REQ-SERVER — What a provisioned debbie must be
 
-The properties `payload/postinstall.sh` establishes on a freshly installed host,
+The properties `payload/setup-server-environment.sh` establishes on a freshly installed host,
 each one paired with a check in `utils/debbie/2026-09-17/payload/assert.sh`.
 
 Only what this generation actually provisions is here. The deploy poller, the
@@ -50,7 +50,7 @@ Introduced in #259.
 
   The settings are written as one drop-in under
   `/etc/systemd/logind.conf.d/` rather than edited into `logind.conf`, which is
-  package-owned and can be reverted or conflicted by an upgrade. `postinstall.sh`
+  package-owned and can be reverted or conflicted by an upgrade. `setup-server-environment.sh`
   deliberately does not restart `systemd-logind` afterwards: doing so terminates
   the calling session and would kill the provisioning run over SSH. The drop-in
   is read at next boot, which is why this is asserted only after a reboot.
@@ -103,7 +103,7 @@ Introduced in #259.
   something the machine did not do, and the test agreed with the requirement instead
   of with the machine.
 
-  **How it is met.** `payload/postinstall.sh` writes `/etc/docker/daemon.json`
+  **How it is met.** `payload/setup-server-environment.sh` writes `/etc/docker/daemon.json`
   with `{"ip": "127.0.0.1"}`, which is dockerd's `--ip`, "Host IP for port
   publishing". A published port then binds `127.0.0.1` and no other address, so
   it is never offered to the LAN and there is no packet to filter. This was
@@ -181,9 +181,9 @@ Introduced in #259.
   silently. mDNS keeps the name working across an address change.
 
   "From its first boot" is the part #285 added, and it is not a refinement —
-  it is the requirement. `postinstall.sh` is itself a runbook step, so it is
+  it is the requirement. `setup-server-environment.sh` is itself a runbook step, so it is
   reached as `debbie.local` like every other one. Installing mDNS *from*
-  `postinstall.sh` made the name start working only after the step that needed
+  `setup-server-environment.sh` made the name start working only after the step that needed
   it, and the hostname it would have advertised was wrong as well: netcfg
   preferred a reverse-DNS answer over the preseeded name, split
   `192.168.1.182` at its first dot, and installed the machine as `192`. Both halves
@@ -200,7 +200,7 @@ Introduced in #259.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "avahi-daemon active"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "debbie.local resolves"
   - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › the `PHASE=firstboot` run,
-    which asserts all of the above before `postinstall.sh` executes and so
+    which asserts all of the above before `setup-server-environment.sh` executes and so
     distinguishes "the preseed set it" from "postinstall repaired it"
   - Inspection — `utils/debbie/2026-09-17/README.md` § "What it does not",
     which records that a VM cannot reproduce the reverse-DNS hostname fault
@@ -278,7 +278,7 @@ Introduced in #259.
   — `origin=Debian,codename=${distro_codename},label=Debian` — is the whole of
   the stable suite rather than anything security-related. A `--dry-run` against
   the stock file proposed `base-files`, `bash`, `libc6`, `perl-base` and
-  `tzdata` from `archive:stable label:Debian`. `postinstall.sh` therefore writes
+  `tzdata` from `archive:stable label:Debian`. `setup-server-environment.sh` therefore writes
   a drop-in that `#clear`s the list before setting one pattern: apt.conf list
   syntax **appends**, so a drop-in that merely names the pattern it wants leaves
   all three of Debian's in force and adds a fourth.
@@ -423,7 +423,7 @@ Introduced in #259.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "deploy user shell is zsh"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "shell config is idempotent"
-    — the VM harness runs `postinstall.sh` twice and hashes `.zshrc` either
+    — the VM harness runs `setup-developer-environment.sh` twice and hashes `.zshrc` either
     side of the second run; skipped on metal, where there is no second run
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "oh-my-zsh and both plugins present"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "zsh starts cleanly with that config"

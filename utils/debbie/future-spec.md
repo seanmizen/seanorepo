@@ -33,7 +33,7 @@ about each other — and they do not (see *Parked*, below).
 **Capability is not activation.** Every machine is *able* to run the web stack.
 One actually does. That split already exists in the current provisioning without
 having been designed for it: Docker (#276), Node 20 and Yarn 4 (#277) and the
-`release` checkout (#278) are installed on any box that runs `postinstall.sh`,
+`release` checkout (#278) are installed on any box that runs `setup-server-environment.sh`,
 with nothing role-specific about them. Roles are a thin activation layer on top.
 No rework of what landed today is implied.
 
@@ -85,7 +85,7 @@ written once per machine.
 ### 3. Role *options* are versioned. Role *assignment* is runtime
 
 The set of roles that exist is code: one `custom-role-*.target` systemd unit per
-role, shipped by `postinstall.sh`, reviewed in a PR like anything else. Which
+role, shipped by `setup-server-environment.sh`, reviewed in a PR like anything else. Which
 roles a given machine has switched on is runtime state and does not belong in
 git.
 
