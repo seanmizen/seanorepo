@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import fastifyCors from '@fastify/cors';
 import Fastify from 'fastify';
 import nodemailer from 'nodemailer';
@@ -12,14 +14,22 @@ const NGROK_API_URL =
 const EMAIL_WHITELIST =
   process.env.EMAIL_WHITELIST?.split(',').map((e) => e.trim()) || [];
 const MOCK_TCP_TUNNEL = process.env.MOCK_TCP_TUNNEL === 'true';
+// Dev only: print the email instead of sending it.
+const MAIL_DRY_RUN = process.env.MAIL_DRY_RUN === 'true';
+const CLIENT_KEY_PATH = process.env.CLIENT_KEY_PATH || '~/id_ed25519';
+// The public half of this machine's SSH host key. docker-compose mounts it
+// read-only. It is what lets the emailed command verify the machine.
+const HOST_KEY_FILE =
+  process.env.HOST_KEY_FILE || '/etc/ssh/ssh_host_ed25519_key.pub';
 
 function validateEnvVars() {
   const required = {
     SITE_BASE_URL,
     SSH_USERNAME,
     PORT,
-    MAIL_USERNAME,
-    MAIL_PASSWORD,
+    // A dry run sends nothing, so it needs no mailbox to send from.
+    MAIL_USERNAME: MAIL_DRY_RUN || MAIL_USERNAME,
+    MAIL_PASSWORD: MAIL_DRY_RUN || MAIL_PASSWORD,
     EMAIL_WHITELIST: EMAIL_WHITELIST.length > 0,
   };
 
@@ -66,6 +76,83 @@ const getTcpTunnelUrl = async (): Promise<{ host: string; port: string }> => {
   }
 };
 
+/**
+ * This machine's SSH host key, and the fingerprint ssh prints for it.
+ *
+ * ngrok gives a new host:port on every restart, and those addresses are reused
+ * between accounts, so an address proves nothing about which machine answers.
+ * The host key does: it stays the same whatever the address is.
+ *
+ * Returns null when the key cannot be read, so the caller can say so instead
+ * of sending a command that claims to verify and does not.
+ */
+const readHostKey = (): { line: string; fingerprint: string } | null => {
+  try {
+    const line = readFileSync(HOST_KEY_FILE, 'utf8').trim();
+    const [type, base64] = line.split(/\s+/);
+    if (!type || !base64) return null;
+    // Both fields end up inside quotes in a command the reader pastes into a
+    // shell, so check them rather than trust them. The file is root-owned on
+    // the machine, so this is a second line of defence, not a live hole.
+    if (!/^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa)$/.test(type)) {
+      console.error(`Unexpected host key type in ${HOST_KEY_FILE}: ${type}`);
+      return null;
+    }
+    if (!/^[A-Za-z0-9+/=]+$/.test(base64)) {
+      console.error(`Host key in ${HOST_KEY_FILE} is not base64`);
+      return null;
+    }
+    // ssh prints SHA256:<base64 of the sha256 of the key blob>, unpadded.
+    const digest = createHash('sha256')
+      .update(Buffer.from(base64, 'base64'))
+      .digest('base64')
+      .replace(/=+$/, '');
+    return { line: `${type} ${base64}`, fingerprint: `SHA256:${digest}` };
+  } catch (error) {
+    console.error(`Could not read ${HOST_KEY_FILE}:`, error);
+    return null;
+  }
+};
+
+/**
+ * The command to paste, and the note that goes under it.
+ *
+ * With the host key, ssh verifies the machine and writes nothing on the
+ * client: KnownHostsCommand feeds the key straight to ssh, so no known_hosts
+ * file is read or written. It needs OpenSSH 8.5 or newer, which is 2021
+ * onwards. Clients that are older, or that take a host and a key rather than
+ * a command line - phone SSH apps - compare the fingerprint by eye instead,
+ * which is why it is printed too.
+ *
+ * Tested against a real server on a non-standard port: the right key connects,
+ * a wrong key is refused, and ~/.ssh/known_hosts is untouched.
+ */
+const buildSshCommand = (
+  host: string,
+  port: string,
+): { command: string; borrowed: string; note: string } => {
+  const key = readHostKey();
+  const plain = `ssh ${SSH_USERNAME}@${host} -p ${port}`;
+  if (!key) {
+    return {
+      command: plain,
+      borrowed: plain,
+      note: 'WARNING: this machine could not read its own host key, so this command cannot verify what it connects to.',
+    };
+  }
+  const pin = `-o StrictHostKeyChecking=yes -o "KnownHostsCommand=/bin/echo '[${host}]:${port} ${key.line}'"`;
+  return {
+    // Your own machine: ssh finds your key by itself, in the agent or at its
+    // default path.
+    command: `ssh ${pin} ${SSH_USERNAME}@${host} -p ${port}`,
+    // A machine that is not yours: the key goes in the home folder, so it can
+    // be dragged there. IdentitiesOnly stops ssh offering that machine's own
+    // keys first, which can use up the server's attempts before yours is tried.
+    borrowed: `ssh -i ${CLIENT_KEY_PATH} -o IdentitiesOnly=yes ${pin} ${SSH_USERNAME}@${host} -p ${port}`,
+    note: `Host key fingerprint: ${key.fingerprint}\nBoth commands need OpenSSH 8.5 or newer. On a phone app, or an older ssh, connect with "${plain}" and check it shows that same fingerprint before you accept it.`,
+  };
+};
+
 const isEmailWhitelisted = (email: string): boolean => {
   if (EMAIL_WHITELIST.length === 0) {
     console.warn('No email whitelist configured - all emails will be rejected');
@@ -87,7 +174,14 @@ async function sendSSHEmail(
   options: { isStartup?: boolean } = {},
 ) {
   const { host, port } = await getTcpTunnelUrl();
-  const sshCommand = `ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ${SSH_USERNAME}@${host} -p ${port}`;
+  const {
+    command: sshCommand,
+    borrowed: sshBorrowed,
+    note: sshNote,
+  } = buildSshCommand(host, port);
+  // With the key file dropped in the home folder. chmod is not optional: ssh
+  // refuses a key other accounts can read.
+  const borrowedSteps = `chmod 600 ${CLIENT_KEY_PATH} && ${sshBorrowed}`;
   const timestamp = new Date().toLocaleString();
 
   const subject = options.isStartup
@@ -103,19 +197,31 @@ async function sendSSHEmail(
 
   const timeLabel = options.isStartup ? 'Startup time' : 'Message sent at';
 
+  if (MAIL_DRY_RUN) {
+    console.log(
+      `--- MAIL_DRY_RUN: not sending. This is the mail ${email} would get ---\n` +
+        `Subject: ${subject}\n\n${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}\n` +
+        '--- end ---',
+    );
+    return;
+  }
+
   await transporter.sendMail({
     to: email,
     from: MAIL_USERNAME,
     subject,
-    text: `${textPrefix}Your SSH connection command:\n\n${sshCommand}\n\nHost: ${host}\nPort: ${port}`,
+    text: `${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}`,
     html: `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
 </head>
 <body>
-  ${htmlPrefix}<p>Your SSH connection command:</p>
-  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace;">${sshCommand}</pre>
+  ${htmlPrefix}
+  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${sshCommand}</pre>
+  <p>or</p>
+  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${borrowedSteps}</pre>
+  <p style="font-family: monospace; white-space: pre-wrap;">${sshNote}</p>
   <p><strong>Host:</strong> ${host}<br><strong>Port:</strong> ${port}</p>
   <p>${timeLabel}: ${timestamp}</p>
 </body>
