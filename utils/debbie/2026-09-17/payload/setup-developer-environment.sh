@@ -15,7 +15,7 @@
 #   2. zsh, oh-my-zsh, the prompt and aliases, and zsh as the login shell
 #   3. Node 20, corepack and Yarn
 #   4. Docker
-#   5. Go, then shist (built from source)
+#   5. shist, from its release
 #   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
 #   7. iTerm2 and its preferences (macOS only)
 #
@@ -30,8 +30,6 @@ set -euo pipefail
 IFS=$'\n\t'
 
 NODE_MAJOR=20
-GO_MIN=1.24                       # shist needs go 1.24.2
-SHIST_REPO=https://github.com/seanmizen/shist.git
 REPO_URL="${REPO_URL:-https://github.com/seanmizen/seanorepo.git}"
 
 OS="$(uname -s)"
@@ -125,8 +123,6 @@ source "$ZSH/oh-my-zsh.sh"
 
 [ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
 export PATH="$HOME/.local/bin:$PATH"
-[ -d /usr/local/go/bin ] && export PATH="$PATH:/usr/local/go/bin"
-export PATH="$PATH:$HOME/go/bin"
 
 # Depth-based path display.
 setopt promptsubst
@@ -226,32 +222,47 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# 5. Go, then shist
+# 5. shist
 #
-# shist is Sean's shell-history tool. It is built from source because it is
-# published as a repository rather than as a package.
+# Sean's shell-history tool. It is installed from a release, so no machine
+# needs a Go toolchain (which cost 279 MB when this built shist from source).
+#
+# macOS takes it from the tap, which a daily workflow keeps in step with the
+# releases. Homebrew asks for trust before it loads a third-party tap, and
+# `brew trust --tap` answers that without a prompt.
+#
+# Linux downloads the release. The checksum is verified against the
+# checksums.txt of the same release, because this is a binary from the
+# internet, and an interrupted download is otherwise a file that runs.
 #------------------------------------------------------------------------------
-log "go"
-if [ "$OS" = Darwin ]; then
-    brew install go
-else
-    apt-get install -y golang-go
-fi
-GO_VERSION="$(as_user 'go version' | awk '{print $3}' | sed 's/^go//')"
-# Sort the two versions and see which comes first. An older Go cannot build
-# shist, and the error it gives names a module rather than the real cause.
-if [ "$(printf '%s\n%s\n' "$GO_MIN" "$GO_VERSION" | sort -V | head -1)" != "$GO_MIN" ]; then
-    die "go $GO_VERSION is older than $GO_MIN, which shist needs"
-fi
-log "  go $GO_VERSION"
-
 log "shist"
-SHIST_SRC="$USER_HOME/projects/shist"
-as_user "mkdir -p '$USER_HOME/projects' '$USER_HOME/go/bin'"
-clone_once "$SHIST_REPO" "$SHIST_SRC"
-if ! as_user "[ -x '$USER_HOME/go/bin/shist' ]"; then
-    log "  building"
-    as_user "cd '$SHIST_SRC' && go build -o '$USER_HOME/go/bin/shist' ./src/main"
+if [ "$OS" = Darwin ]; then
+    brew tap seanmizen/tap
+    brew trust --tap seanmizen/tap
+    brew list shist > /dev/null 2>&1 || brew install shist
+elif [ -x "$USER_HOME/.local/bin/shist" ]; then
+    log "  already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
+else
+    case "$(uname -m)" in
+        x86_64)  shist_arch=amd64 ;;
+        aarch64) shist_arch=arm64 ;;
+        *) die "no shist release for $(uname -m)" ;;
+    esac
+    shist_ver="$(curl -fsSL https://api.github.com/repos/seanmizen/shist/releases/latest | jq -r .tag_name)"
+    shist_ver="${shist_ver#v}"
+    [ -n "$shist_ver" ] && [ "$shist_ver" != null ] || die "could not read the latest shist release"
+    shist_tmp="$(mktemp -d)"
+    shist_tar="shist_${shist_ver}_linux_${shist_arch}.tar.gz"
+    shist_url="https://github.com/seanmizen/shist/releases/download/v$shist_ver"
+    log "  downloading $shist_tar"
+    curl -fsSL "$shist_url/$shist_tar" -o "$shist_tmp/$shist_tar"
+    curl -fsSL "$shist_url/checksums.txt" -o "$shist_tmp/checksums.txt"
+    ( cd "$shist_tmp" && grep " $shist_tar\$" checksums.txt | sha256sum -c - ) \
+        || die "the shist download does not match its published checksum"
+    tar -xzf "$shist_tmp/$shist_tar" -C "$shist_tmp" shist
+    install -m 0755 -o "$DEV_USER" -g "$USER_GROUP" "$shist_tmp/shist" "$USER_HOME/.local/bin/shist"
+    rm -rf "$shist_tmp"
+    log "  installed shist $shist_ver"
 fi
 
 #------------------------------------------------------------------------------
@@ -297,7 +308,7 @@ if [ "$OS" = Darwin ]; then
 fi
 
 # The .deb files apt keeps after installing are worth hundreds of megabytes on
-# a machine that installs Docker, Go and Node. Nothing reads them again.
+# a machine that installs Docker and Node. Nothing reads them again.
 if [ "$OS" = Linux ]; then
     log "clearing the apt cache"
     apt-get clean
