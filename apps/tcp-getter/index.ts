@@ -14,6 +14,9 @@ const NGROK_API_URL =
 const EMAIL_WHITELIST =
   process.env.EMAIL_WHITELIST?.split(',').map((e) => e.trim()) || [];
 const MOCK_TCP_TUNNEL = process.env.MOCK_TCP_TUNNEL === 'true';
+// Dev only: print the email instead of sending it.
+const MAIL_DRY_RUN = process.env.MAIL_DRY_RUN === 'true';
+const CLIENT_KEY_PATH = process.env.CLIENT_KEY_PATH || '~/id_ed25519';
 // The public half of this machine's SSH host key. docker-compose mounts it
 // read-only. It is what lets the emailed command verify the machine.
 const HOST_KEY_FILE =
@@ -24,8 +27,9 @@ function validateEnvVars() {
     SITE_BASE_URL,
     SSH_USERNAME,
     PORT,
-    MAIL_USERNAME,
-    MAIL_PASSWORD,
+    // A dry run sends nothing, so it needs no mailbox to send from.
+    MAIL_USERNAME: MAIL_DRY_RUN || MAIL_USERNAME,
+    MAIL_PASSWORD: MAIL_DRY_RUN || MAIL_PASSWORD,
     EMAIL_WHITELIST: EMAIL_WHITELIST.length > 0,
   };
 
@@ -126,17 +130,26 @@ const readHostKey = (): { line: string; fingerprint: string } | null => {
 const buildSshCommand = (
   host: string,
   port: string,
-): { command: string; note: string } => {
+): { command: string; borrowed: string; note: string } => {
   const key = readHostKey();
+  const plain = `ssh ${SSH_USERNAME}@${host} -p ${port}`;
   if (!key) {
     return {
-      command: `ssh ${SSH_USERNAME}@${host} -p ${port}`,
+      command: plain,
+      borrowed: plain,
       note: 'WARNING: this machine could not read its own host key, so this command cannot verify what it connects to.',
     };
   }
+  const pin = `-o StrictHostKeyChecking=yes -o "KnownHostsCommand=/bin/echo '[${host}]:${port} ${key.line}'"`;
   return {
-    command: `ssh -o StrictHostKeyChecking=yes -o "KnownHostsCommand=/bin/echo '[${host}]:${port} ${key.line}'" ${SSH_USERNAME}@${host} -p ${port}`,
-    note: `Host key fingerprint: ${key.fingerprint}\nThe command above needs OpenSSH 8.5 or newer. On a phone app, or an older ssh, connect with "ssh ${SSH_USERNAME}@${host} -p ${port}" and check it shows that same fingerprint before you accept it.`,
+    // Your own machine: ssh finds your key by itself, in the agent or at its
+    // default path.
+    command: `ssh ${pin} ${SSH_USERNAME}@${host} -p ${port}`,
+    // A machine that is not yours: the key goes in the home folder, so it can
+    // be dragged there. IdentitiesOnly stops ssh offering that machine's own
+    // keys first, which can use up the server's attempts before yours is tried.
+    borrowed: `ssh -i ${CLIENT_KEY_PATH} -o IdentitiesOnly=yes ${pin} ${SSH_USERNAME}@${host} -p ${port}`,
+    note: `Host key fingerprint: ${key.fingerprint}\nBoth commands need OpenSSH 8.5 or newer. On a phone app, or an older ssh, connect with "${plain}" and check it shows that same fingerprint before you accept it.`,
   };
 };
 
@@ -161,7 +174,14 @@ async function sendSSHEmail(
   options: { isStartup?: boolean } = {},
 ) {
   const { host, port } = await getTcpTunnelUrl();
-  const { command: sshCommand, note: sshNote } = buildSshCommand(host, port);
+  const {
+    command: sshCommand,
+    borrowed: sshBorrowed,
+    note: sshNote,
+  } = buildSshCommand(host, port);
+  // With the key file dropped in the home folder. chmod is not optional: ssh
+  // refuses a key other accounts can read.
+  const borrowedSteps = `chmod 600 ${CLIENT_KEY_PATH} && ${sshBorrowed}`;
   const timestamp = new Date().toLocaleString();
 
   const subject = options.isStartup
@@ -177,19 +197,30 @@ async function sendSSHEmail(
 
   const timeLabel = options.isStartup ? 'Startup time' : 'Message sent at';
 
+  if (MAIL_DRY_RUN) {
+    console.log(
+      `--- MAIL_DRY_RUN: not sending. This is the mail ${email} would get ---\n` +
+        `Subject: ${subject}\n\n${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}\n` +
+        '--- end ---',
+    );
+    return;
+  }
+
   await transporter.sendMail({
     to: email,
     from: MAIL_USERNAME,
     subject,
-    text: `${textPrefix}Your SSH connection command:\n\n${sshCommand}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}`,
+    text: `${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}`,
     html: `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
 </head>
 <body>
-  ${htmlPrefix}<p>Your SSH connection command:</p>
+  ${htmlPrefix}
   <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${sshCommand}</pre>
+  <p>or</p>
+  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${borrowedSteps}</pre>
   <p style="font-family: monospace; white-space: pre-wrap;">${sshNote}</p>
   <p><strong>Host:</strong> ${host}<br><strong>Port:</strong> ${port}</p>
   <p>${timeLabel}: ${timestamp}</p>
