@@ -79,10 +79,17 @@ Introduced in #259.
 - **Type:** constraint
 - **Priority:** P1
 - **Statement:** The host shall accept inbound connections on exactly ports
-  22/tcp, 80/tcp, 443/tcp and 5353/udp, and refuse every other port, including
-  every port published by a container. The one exception is a machine with the
+  22/tcp, 80/tcp, 443/tcp, 5353/udp and 41641/udp, plus anything arriving on
+  the Tailscale interface, and refuse every other port, including every port
+  published by a container. The one exception is a machine with the
   webserver role and without the tunnel role (#329), which publishes its apps
   on ports 4000-4999 to the LAN by design.
+
+  41641/udp and the `tailscale0` interface arrived with `REQ-NETWORK-006`.
+  41641 is where Tailscale accepts a direct connection. Closing it does not
+  block access, it only pushes every packet through a relay. What answers
+  there is WireGuard, which drops anything it cannot authenticate with a key
+  it already holds.
 - **Rationale:** Everything public arrives through the Cloudflare tunnel, which
   is an outbound connection. An open application port would therefore be a
   second, unaudited way in that nothing is watching — the app ports in the
@@ -126,8 +133,10 @@ Introduced in #259.
   published probe port rather than either configuration.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "41641 open for tailscale"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tailscale interface is trusted"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw allows no port beyond
-    the four"
+    the five"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "docker publishes to
     loopback by default"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "nothing outside the four
