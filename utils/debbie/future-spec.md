@@ -13,8 +13,8 @@ after the deploy chain (#276 → #277 → #278 → #279 → #280) landed.
 
 ## The problem
 
-`debbie` is one machine. It is about to be several: a box that provisions the
-others, a box that serves the websites, and boxes that *could* serve the
+`debbie` is one machine. It is about to be several: a machine that provisions the
+others, a machine that serves the websites, and machines that *could* serve the
 websites but do not. They sit on a normal home wifi network shared with people
 who are not running a datacentre and did not agree to one.
 
@@ -33,7 +33,7 @@ about each other — and they do not (see *Parked*, below).
 **Capability is not activation.** Every machine is *able* to run the web stack.
 One actually does. That split already exists in the current provisioning without
 having been designed for it: Docker (#276), Node 20 and Yarn 4 (#277) and the
-`release` checkout (#278) are installed on any box that runs `setup-server-environment.sh`,
+`release` checkout (#278) are installed on any machine that runs `setup-server-environment.sh`,
 with nothing role-specific about them. Roles are a thin activation layer on top.
 No rework of what landed today is implied.
 
@@ -99,11 +99,11 @@ must be named `custom-*` and live in `/usr/local/lib/systemd/system` — #292, a
 
 **Built (#329), as flag files rather than targets so far:** `webserver` (runs
 the sites) and `tunnel` (the Cloudflare tunnel; requires `webserver`; exactly
-one box). Set as `ROLE_<NAME>=yes` in `scripts/3-provision/<box>.env`, **unset means off**, and
+one machine). Set as `ROLE_<NAME>=yes` in `scripts/3-provision/<machine>.env`, **unset means off**, and
 written to `/etc/seanorepo/roles/<name>` on every provisioning run. A
 `webserver` without `tunnel` publishes on the LAN, for local use. So the
 invariant this document cares about is **exactly one `tunnel`**, not exactly
-one `webserver`: only the tunnel box's data is public.
+one `webserver`: only the tunnel machine's data is public.
 
 **Reserved, not built:** `provisioner`, `preseeder`. They take the same
 `ROLE_<NAME>` form when they are. Roles are deliberately **not** mutually
@@ -116,7 +116,7 @@ carries both directions: the machine posts its heartbeat and reads back its
 declared role.
 
 This is the same pull pattern as the deploy poller (`REQ-DEPLOY-002`) for the
-same reason — no inbound ports, nothing pushing at a box behind a firewall.
+same reason — no inbound ports, nothing pushing at a machine behind a firewall.
 
 Critically: **an unreachable control plane must never cause a role change.** A
 machine that cannot reach the provisioner keeps doing exactly what it was last
@@ -151,7 +151,7 @@ later.
 
 ### 6. The provisioner gets its own keypair
 
-An always-on box holding a key that can root every machine on the network is a
+An always-on machine holding a key that can root every machine on the network is a
 materially different security posture from a key on a laptop that is plugged in
 occasionally. It is a lateral-movement hub, and it should have a blast radius
 that can be described in one sentence.
@@ -167,14 +167,14 @@ Decided in #307. The poller splits in two:
 - `custom-deploy.service` runs `yarn prod:docker`. The release poller
   triggers it after every poll (`OnSuccess=`), and it has no timer of its own.
   It deploys only when the checkout or the boot id changed, and only on a
-  box with the `webserver` role (#329).
+  machine with the `webserver` role (#329).
 
-A standby box is then already at the right SHA, and promoting it takes seconds
+A standby machine is then already at the right SHA, and promoting it takes seconds
 of `docker compose up`, not a fetch plus a cold build. The switch is
-`ROLE_WEBSERVER` in `scripts/3-provision/<box>.env` (§3); later the role files become
+`ROLE_WEBSERVER` in `scripts/3-provision/<machine>.env` (§3); later the role files become
 `custom-role-*.target` units.
 
-Per-app rebuild detection was rejected in the same ticket. On the real box
+Per-app rebuild detection was rejected in the same ticket. On the real machine
 `yarn prod:docker` against an unchanged tree measured 12–13s, because the layer
 cache already skips unchanged apps.
 
@@ -232,7 +232,7 @@ Genuinely undecided. Listed so they are not mistaken for decisions.
 - **How a role change physically moves the tunnel credentials.** Decided that it
   is a human act; not decided what that act *is*, or what stops the old
   webserver continuing to serve after it stops being one.
-- **Backups.** Not discussed at all. A fleet makes the single-writer SQLite box
+- **Backups.** Not discussed at all. A fleet makes the single-writer SQLite machine
   more obviously a single point of loss, not less.
 
 ---
