@@ -1149,20 +1149,6 @@ if [ "$PHASE" = provisioned ]; then
              [ "$(systemctl is-active "$NGROK_UNIT" 2>&1)" = inactive ] \
              && [ "$(systemctl is-failed "$NGROK_UNIT" 2>&1)" != failed ]'
     fi
-    check "tailscale installed" \
-        'dpkg-query -W -f="\${Status}" tailscale 2>/dev/null | grep -q "^install ok installed"'
-    check "tailscaled enabled"        'systemctl is-enabled tailscaled'
-    check "tailscaled active"         'systemctl is-active tailscaled'
-    # Logged in or not, the daemon must answer for itself. A machine with no
-    # account yet says NeedsLogin, which is a normal state rather than a fault.
-    #
-    # Read from --json, and the output captured before it is matched. `tailscale
-    # status` EXITS 1 while logged out, so a pipeline would fail under pipefail
-    # even where the text matched.
-    check "tailscale reports its state" \
-        'state="$(sudo -n tailscale status --json 2>/dev/null | sed -n "s/.*\"BackendState\": *\"\([^\"]*\)\".*/\1/p" | head -1)";
-         case "$state" in Running|NeedsLogin|Starting|Stopped) true ;; *) false ;; esac'
-
     # Asked of sshd, not of the drop-in (#313's lesson). Skipped, not passed,
     # where sshd predates per-source penalties: there is nothing to exempt.
     # `case`, not `| grep -q`, for the pipefail/SIGPIPE reason in setup-server-environment.sh.
@@ -1189,10 +1175,6 @@ else
     sk "$NGROK_UNIT enabled (authtoken present)"    "setup-server-environment.sh decides this"
     sk "ngrok is NOT enabled while the authtoken is absent" "setup-server-environment.sh decides this"
     sk "starting ngrok without an authtoken refuses rather than looping" "setup-server-environment.sh writes the unit"
-    sk "tailscale installed"          "setup-developer-environment.sh installs it"
-    sk "tailscaled enabled"           "setup-developer-environment.sh enables it"
-    sk "tailscaled active"            "setup-developer-environment.sh enables it"
-    sk "tailscale reports its state"  "setup-developer-environment.sh installs it"
     sk "sshd exempts loopback from per-source penalties" "setup-server-environment.sh writes the drop-in"
 fi
 
@@ -1355,11 +1337,8 @@ if [ "$PHASE" = provisioned ]; then
     # Renamed from "no other ports open", which is a claim this cannot make.
     # It says what ufw was asked for, and nothing about what Docker does behind
     # it - that is the next four checks.
-    check "41641 open for tailscale"  'sudo -n ufw status | grep -q "^41641/udp"'
-    check "the tailscale interface is trusted" \
-        'sudo -n ufw status | grep -q "Anywhere on tailscale0"'
-    check "ufw allows no port beyond the five" \
-        '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 5 ]'
+    check "ufw allows no port beyond the four" \
+        '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
 
     # The configured default. `ip` is dockerd's `--ip`, "Host IP for port
     # publishing". Parsed with node rather than grepped, which also proves the
@@ -1522,9 +1501,7 @@ else
     sk "80 open"    "setup-server-environment.sh installs and enables it"
     sk "443 open"   "setup-server-environment.sh installs and enables it"
     sk "5353 open"  "setup-server-environment.sh installs and enables it"
-    sk "41641 open for tailscale"     "setup-server-environment.sh opens it"
-    sk "the tailscale interface is trusted" "setup-server-environment.sh allows it"
-    sk "ufw allows no port beyond the five" "setup-server-environment.sh installs and enables it"
+    sk "ufw allows no port beyond the four" "setup-server-environment.sh installs and enables it"
     sk "docker publishes to loopback by default" "setup-server-environment.sh writes daemon.json"
     sk "docker's userland proxy is not disabled" "setup-server-environment.sh writes daemon.json"
     sk "nothing outside the four ports listens on a non-loopback address" \
