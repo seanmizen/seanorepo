@@ -1,9 +1,9 @@
 #!/bin/bash
 # test-vm.sh: installs Debian 13 in a VM on your computer, configures it with
-# postinstall.sh, and checks it with assert.sh.
+# setup-server-environment.sh, and checks it with assert.sh.
 #
 # Where: your computer, with QEMU.
-# When:  after every change to preseed.cfg, postinstall.sh or assert.sh, and
+# When:  after every change to preseed.cfg, setup-server-environment.sh or assert.sh, and
 #        before any hardware install.
 # Why:   it tests a change in minutes, with no hardware and no console to
 #        watch. The result is an exit code. ../../README.md lists what a VM
@@ -534,32 +534,39 @@ do_assert() {
 
     # REQ-SERVER-004, #285. Assert the INSTALLER's work before anything has
     # been run on the machine by hand. This is the run that can tell "the preseed
-    # set it" from "postinstall.sh repaired it": the machine has booted once and
-    # postinstall.sh has not touched it, so a green identity section here means
+    # set it" from "setup-server-environment.sh repaired it": the machine has booted once and
+    # setup-server-environment.sh has not touched it, so a green identity section here means
     # the install produced a usable hostname and a working .local name on its
     # own. The old harness only ever asserted after provisioning, which is why
     # a machine that came up as `192` looked perfect in every run.
     #
     # A failure here is fatal rather than advisory. Carrying on would run
-    # postinstall.sh, repair the machine, and report a pass - which is the exact
+    # setup-server-environment.sh, repair the machine, and report a pass - which is the exact
     # shape of the bug this exists to prevent.
-    log "asserting first boot (before postinstall)"
+    log "asserting first boot (before configuration)"
     local firstboot_rc=0
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER PHASE=firstboot bash -s" \
         < "$GEN_DIR/payload/assert.sh" || firstboot_rc=$?
     [ "$firstboot_rc" = 0 ] \
-        || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; postinstall.sh repairs the hostname and mDNS, so it would go green regardless."
+        || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; setup-server-environment.sh repairs the hostname and mDNS, so it would go green regardless."
 
     log "provisioning"
-    scp "${scp_opts[@]}" "$GEN_DIR/payload/postinstall.sh" "$target:/tmp/postinstall.sh" > /dev/null \
-        || die_code 2 "could not copy postinstall.sh into the guest"
-    ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/postinstall.sh" \
-        || die_code 2 "postinstall failed"
+    scp "${scp_opts[@]}" "$GEN_DIR/payload/setup-developer-environment.sh" \
+        "$GEN_DIR/payload/setup-server-environment.sh" "$target:/tmp/" > /dev/null \
+        || die_code 2 "could not copy the setup scripts into the guest"
+    run_setup() {
+        ssh "${ssh_opts[@]}" "$target" "sudo -n DEV_USER=$DEPLOY_USER bash /tmp/setup-developer-environment.sh ${1:-}" \
+            || die_code 2 "setup-developer-environment.sh failed${2:-}"
+        ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/setup-server-environment.sh ${1:-}" \
+            || die_code 2 "setup-server-environment.sh failed${2:-}"
+    }
+    run_setup
 
-    # Run it AGAIN - REQ-SERVER-010, #290. Every re-provisioning step this
-    # generation documents (adding tunnel credentials, an ngrok token) is "re-run
-    # postinstall.sh", so a second run must succeed and change nothing it owns.
+    # Run both AGAIN - REQ-SERVER-010. Every re-provisioning step this
+    # generation documents (adding tunnel credentials, an ngrok token) is
+    # "run provision.sh again", so a second run must succeed and change
+    # nothing the scripts own.
     # The deploy user's .zshrc is hashed either side of it, and assert.sh
     # compares the two: the previous generation appended its prompt on every run
     # while calling itself idempotent. /var/tmp, because /tmp does not survive
@@ -567,8 +574,7 @@ do_assert() {
     log "provisioning again, to prove a re-run changes nothing"
     ssh "${ssh_opts[@]}" "$target" "sudo -n sha256sum ~$DEPLOY_USER/.zshrc | cut -d' ' -f1 | sudo -n tee /var/tmp/debbie-rerun > /dev/null" \
         || die_code 2 "could not hash .zshrc before the second run"
-    ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/postinstall.sh > /dev/null" \
-        || die_code 2 "postinstall failed on its second run - it is not safe to re-run"
+    run_setup "> /dev/null" " on its second run - it is not safe to re-run"
     ssh "${ssh_opts[@]}" "$target" "sudo -n sha256sum ~$DEPLOY_USER/.zshrc | cut -d' ' -f1 | sudo -n tee -a /var/tmp/debbie-rerun > /dev/null" \
         || die_code 2 "could not hash .zshrc after the second run"
 

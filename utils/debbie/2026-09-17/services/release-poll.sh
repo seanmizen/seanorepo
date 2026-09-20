@@ -50,7 +50,7 @@ elif [ "$lock_status" -ne 0 ]; then
 fi
 
 cd "$REPO_DIR" 2> /dev/null \
-    || { err "no checkout at $REPO_DIR - postinstall.sh clones it"; exit 1; }
+    || { err "no checkout at $REPO_DIR - setup-developer-environment.sh clones it"; exit 1; }
 git rev-parse --git-dir > /dev/null 2>&1 \
     || { err "$REPO_DIR is not a git checkout"; exit 1; }
 

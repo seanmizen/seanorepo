@@ -33,7 +33,7 @@ Introduced in #273.
 - **Verification:**
   - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` checks out
     `$RELEASE_BRANCH`, which defaults to `release`
-  - Inspection — `utils/debbie/2026-09-17/payload/postinstall.sh` checks out
+  - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` checks out
     `$RELEASE_BRANCH` after cloning, and never creates the branch when it is
     absent
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "checkout exists at
@@ -206,7 +206,7 @@ Introduced in #273.
     with a pathspec rather than piping into `grep`, and restarts when it cannot
     prove the config unchanged — a first recorded deploy, or a previous commit
     no longer in the object store
-  - Inspection — `utils/debbie/2026-09-17/payload/postinstall.sh` writes the
+  - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` writes the
     drop-in to a temporary path, validates it with `visudo -c`, and installs it
     mode 0440 root:root only once it parses
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the one rule is a single
