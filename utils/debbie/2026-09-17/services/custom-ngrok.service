@@ -1,0 +1,19 @@
+# Written by payload/setup-server-environment.sh from services/custom-ngrok.service.
+# Edit that file, not this copy. - REQ-NETWORK-005
+[Unit]
+Description=ngrok TCP tunnel to sshd - the only remote way in
+Documentation=https://github.com/seanmizen/seanorepo/issues/317
+After=network-online.target ssh.service
+Wants=network-online.target
+ConditionFileNotEmpty=${NGROK_CONFIG}
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=${DEPLOY_USER}
+ExecStart=/usr/local/bin/ngrok tcp 22 --config ${NGROK_CONFIG} --log stdout --log-format logfmt
+Restart=always
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target

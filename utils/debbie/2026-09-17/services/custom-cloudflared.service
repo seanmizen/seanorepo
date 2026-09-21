@@ -1,0 +1,43 @@
+# Written by payload/setup-server-environment.sh from services/custom-cloudflared.service.
+# Edit that file, not this copy. - REQ-NETWORK-001
+[Unit]
+Description=Cloudflare tunnel - public ingress for every site this host serves
+Documentation=https://github.com/seanmizen/seanorepo/issues/280
+# The tunnel's first act is to dial out to Cloudflare, so it wants a route.
+After=network-online.target
+Wants=network-online.target
+
+# REFUSE, RATHER THAN FAIL IN A LOOP. Both of these are absent on a machine that
+# has been provisioned but whose tunnel has never been set up by hand, which is
+# a normal first-boot state rather than an error. A condition that is not met
+# makes systemd log one line and leave the unit inactive - it does NOT count as
+# a failure, does not trigger Restart=, and cannot fill the journal. Starting
+# without credentials would instead be an authentication failure every
+# RestartSec forever, flooding the journal - capped since #287, but still - and hiding the
+# one fact that matters: nobody has put the credentials on this machine.
+ConditionPathExists=${CLOUDFLARED_CONFIG}
+ConditionDirectoryNotEmpty=${CLOUDFLARED_CREDS_DIR}
+# The role, #329. Credentials alone are not enough: a machine holding a copy of
+# them without the tunnel role must not start pulling public traffic.
+ConditionPathExists=${ROLES_DIR}/tunnel
+
+# The backstop for a failure the conditions cannot see - credentials that are
+# present but rejected, or a config.yml that does not parse. Five attempts in
+# ten minutes, then systemd gives up and leaves the unit in `failed`, which is
+# a state `systemctl status` reports and a human can find. Without this,
+# Restart=on-failure means "retry every ten seconds until the disk fills".
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=${DEPLOY_USER}
+# Not optional - see the note above this unit. config.yml's credentials-file is
+# a relative path and cloudflared resolves it from here.
+WorkingDirectory=${CLOUDFLARED_DIR}
+ExecStart=/usr/bin/cloudflared --no-autoupdate --config ${CLOUDFLARED_CONFIG} tunnel run
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

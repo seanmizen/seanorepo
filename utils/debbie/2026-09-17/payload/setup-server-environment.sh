@@ -666,81 +666,49 @@ write_unit() {
     rm -f "$tmp"
 }
 
-write_unit custom-release-poll.service <<EOF
-# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-002
-[Unit]
-Description=Check out origin/release on this host if it has moved
-Documentation=https://github.com/seanmizen/seanorepo/issues/307
-After=network-online.target
-Wants=network-online.target
-# The one trigger for a deploy - #307. After EVERY successful poll, not only
-# when the SHA moved: deploy.sh compares the checkout and the boot id with its
-# marker and exits in milliseconds when there is nothing to do, and running it
-# every time is what brings the containers back after a power cut. On a
-# machine that does not serve, the deploy unit's condition skips it.
-OnSuccess=custom-deploy.service
+#------------------------------------------------------------------------------
+# Render one unit from services/, then install it.
+#
+# The unit files live beside the scripts they run - services/deploy.sh next to
+# services/custom-deploy.service. A unit is then a file systemd-analyze can
+# read and git can diff, rather than a heredoc in the middle of this script.
+#
+# The templates come from $GEN_DIR/services, which is the checkout this script
+# made at REQ-DEPLOY-001. The units already name that path in ExecStart, so it
+# is the same guarantee: no template, no clone, and the clone happens first.
+#
+# Substitution takes an explicit allowlist, and the render FAILS when any
+# ${...} survives it. envsubst would write an empty string instead, and a unit
+# with a blank ExecStart installs cleanly and fails at runtime - which is the
+# failure this generation keeps designing out. read_env refuses an unknown key
+# for the same reason. An unset variable stops provisioning here, loudly.
+#------------------------------------------------------------------------------
+UNIT_TEMPLATE_VARS="DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
+TCP_GETTER_DIR BUN_BIN CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG"
 
-[Service]
-Type=oneshot
-User=$DEPLOY_USER
-WorkingDirectory=$REPO_DIR
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$RELEASE_POLL_SCRIPT
-TimeoutStartSec=5min
+render_unit() {
+    local unit="$1" template="$GEN_DIR/services/$1" rendered v
+    [ -f "$template" ] || die "no unit template at $template"
+    rendered="$(cat "$template")"
+    for v in $UNIT_TEMPLATE_VARS; do
+        # Indirect expansion. An unset variable leaves the placeholder in place
+        # rather than substituting empty, and the check below then catches it.
+        [ -n "${!v-}" ] || continue
+        rendered="${rendered//\$\{$v\}/${!v}}"
+    done
+    case "$rendered" in
+        *'${'*)
+            die "$template: unresolved placeholder(s): $(printf '%s' "$rendered" \
+                | grep -oE '\$\{[A-Za-z_][A-Za-z_0-9]*\}' | sort -u | tr '\n' ' ')" ;;
+    esac
+    printf '%s\n' "$rendered" | write_unit "$unit"
+}
 
-# No [Install] section. custom-release-poll.timer owns this unit.
-EOF
+render_unit custom-release-poll.service
 
-write_unit custom-release-poll.timer <<EOF
-# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-002
-[Unit]
-Description=Poll origin/release every two minutes
-Documentation=https://github.com/seanmizen/seanorepo/issues/307
+render_unit custom-release-poll.timer
 
-[Timer]
-# Late enough after boot that docker and the network are up. The poll it
-# triggers is also what triggers the post-boot deploy.
-OnBootSec=3min
-OnUnitActiveSec=2min
-# The poll costs one ls-remote. Letting systemd batch it saves wakeups and
-# nobody can tell the difference at a two-minute period.
-AccuracySec=30s
-Unit=custom-release-poll.service
-
-[Install]
-WantedBy=timers.target
-EOF
-
-write_unit custom-deploy.service <<EOF
-# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-002
-[Unit]
-Description=Start what the checkout holds, on a machine that serves
-Documentation=https://github.com/seanmizen/seanorepo/issues/307
-# docker.service because the deploy is \`yarn prod:docker\`.
-After=network-online.target docker.service
-Wants=network-online.target
-# The serving switch. Unmet, the trigger is skipped with one log line and the
-# unit is never marked failed.
-ConditionPathExists=$ROLES_DIR/webserver
-
-[Service]
-Type=oneshot
-User=$DEPLOY_USER
-WorkingDirectory=$REPO_DIR
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$DEPLOY_SCRIPT
-
-# Stated rather than inherited. A cold \`yarn install\` plus a rebuild of every
-# workspace is tens of minutes, and the default for a oneshot unit is not worth
-# guessing at when being wrong means SIGKILL half way through a docker build.
-# Being killed is survivable either way: the deploy holds its lock on a file
-# descriptor, so the kernel releases it when the process dies and the next
-# poll picks up cleanly - REQ-DEPLOY-003.
-TimeoutStartSec=30min
-
-# No [Install] section and no timer, deliberately - #307. The release poller is
-# the only thing that starts it: one clock, so a deploy never races a checkout.
-EOF
+render_unit custom-deploy.service
 
 # The pre-#307 units did both jobs in one. Removed, not just disabled: two
 # pollers would each fetch, and the old one would deploy on a machine the
@@ -1006,50 +974,7 @@ fi
 #------------------------------------------------------------------------------
 units_changed=0
 
-write_unit "$CLOUDFLARED_UNIT" <<EOF
-# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-NETWORK-001
-[Unit]
-Description=Cloudflare tunnel - public ingress for every site this host serves
-Documentation=https://github.com/seanmizen/seanorepo/issues/280
-# The tunnel's first act is to dial out to Cloudflare, so it wants a route.
-After=network-online.target
-Wants=network-online.target
-
-# REFUSE, RATHER THAN FAIL IN A LOOP. Both of these are absent on a machine that
-# has been provisioned but whose tunnel has never been set up by hand, which is
-# a normal first-boot state rather than an error. A condition that is not met
-# makes systemd log one line and leave the unit inactive - it does NOT count as
-# a failure, does not trigger Restart=, and cannot fill the journal. Starting
-# without credentials would instead be an authentication failure every
-# RestartSec forever, flooding the journal - capped since #287, but still - and hiding the
-# one fact that matters: nobody has put the credentials on this machine.
-ConditionPathExists=$CLOUDFLARED_CONFIG
-ConditionDirectoryNotEmpty=$CLOUDFLARED_CREDS_DIR
-# The role, #329. Credentials alone are not enough: a machine holding a copy of
-# them without the tunnel role must not start pulling public traffic.
-ConditionPathExists=$ROLES_DIR/tunnel
-
-# The backstop for a failure the conditions cannot see - credentials that are
-# present but rejected, or a config.yml that does not parse. Five attempts in
-# ten minutes, then systemd gives up and leaves the unit in \`failed\`, which is
-# a state \`systemctl status\` reports and a human can find. Without this,
-# Restart=on-failure means "retry every ten seconds until the disk fills".
-StartLimitIntervalSec=10min
-StartLimitBurst=5
-
-[Service]
-Type=simple
-User=$DEPLOY_USER
-# Not optional - see the note above this unit. config.yml's credentials-file is
-# a relative path and cloudflared resolves it from here.
-WorkingDirectory=$CLOUDFLARED_DIR
-ExecStart=/usr/bin/cloudflared --no-autoupdate --config $CLOUDFLARED_CONFIG tunnel run
-Restart=on-failure
-RestartSec=10s
-
-[Install]
-WantedBy=multi-user.target
-EOF
+render_unit "$CLOUDFLARED_UNIT"
 
 if [ "$units_changed" = 1 ]; then
     systemctl daemon-reload
@@ -1206,26 +1131,7 @@ install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$(dirname "$NGROK_CONFI
 #------------------------------------------------------------------------------
 units_changed=0
 
-write_unit "$NGROK_UNIT" <<EOF
-# Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-NETWORK-005
-[Unit]
-Description=ngrok TCP tunnel to sshd - the only remote way in
-Documentation=https://github.com/seanmizen/seanorepo/issues/317
-After=network-online.target ssh.service
-Wants=network-online.target
-ConditionFileNotEmpty=$NGROK_CONFIG
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-User=$DEPLOY_USER
-ExecStart=/usr/local/bin/ngrok tcp 22 --config $NGROK_CONFIG --log stdout --log-format logfmt
-Restart=always
-RestartSec=30s
-
-[Install]
-WantedBy=multi-user.target
-EOF
+render_unit "$NGROK_UNIT"
 
 if [ "$units_changed" = 1 ]; then
     systemctl daemon-reload

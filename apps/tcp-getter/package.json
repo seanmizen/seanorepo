@@ -3,9 +3,6 @@
   "packageManager": "yarn@4.8.1",
   "scripts": {
     "start": "bun --hot --no-clear-screen index.ts",
-    "DISABLEDstart:docker": "docker compose --profile dev up --build",
-    "DISABLEDprod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
-    "down": "docker compose --profile dev --profile prod down",
     "build": "bun build index.ts --outdir dist --target bun",
     "prod": "NODE_ENV=production bun dist/index.js"
   },
