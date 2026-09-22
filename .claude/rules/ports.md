@@ -6,7 +6,6 @@ paths:
   - "apps/cloudflared/**"
   - "utils/fly-io/**"
   - "scripts/test-deployment.sh"
-  - "docs/DEPLOYMENT-TESTING.md"
 ---
 
 # Ports
@@ -39,8 +38,28 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 | 4060 / 4061 | inside.seanmizen.com FE / BE |
 | 4120 | tcp-getter (host unit, reached at `seanmizen.com/tcp/*`) |
 
-A new service gets the next free `40x0` pair, and a hostname in
-`apps/cloudflared/config.yml`.
+### Add a service
+
+1. Take the next free `40x0` pair: `40x0` for the frontend, `40x1` for the
+   backend.
+2. Publish both ports with `${PUBLISH_ADDR:-127.0.0.1}` in the app's
+   `docker-compose.yml`.
+3. Add its hostname rules to `apps/cloudflared/config.yml`. Put the `/api/*`
+   rule before the hostname's catch-all rule. Put a specific hostname above any
+   wildcard that also matches it, such as `*.seanmizen.com`. The
+   `http_status:404` rule stays last.
+
+```yaml
+  - hostname: new-service.com
+    path: /api/*
+    service: http://localhost:4071
+  - hostname: new-service.com
+    service: http://localhost:4070
+```
+
+4. Add the ports to `scripts/test-deployment.sh`.
+5. Decide where its data lives. SQLite and uploads go in named Docker volumes,
+   and those volumes exist only on the tunnel machine.
 
 seanscards and ffmpeg-converter run locally only (`yarn cards`,
 `yarn converter`). Root `prod:docker` excludes them, and the tunnel has no
