@@ -10,8 +10,8 @@ More instructions load only when they are relevant:
   files: Docker and ports, deployment, carolinemizen.art.
 - `.claude/skills/workflow/` - the ticket, branch, PR and merge procedure. Use
   it whenever you create an issue or open a PR.
-- A `CLAUDE.md` inside an app or util (`apps/inside`, `apps/converter`,
-  `utils/swindowzig`, ...) loads when you work in that directory.
+- A `CLAUDE.md` inside an app or util (`apps/inside`, `utils/swindowzig`,
+  ...) loads when you work in that directory.
 
 ## Setup
 
