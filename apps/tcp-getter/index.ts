@@ -16,7 +16,7 @@ const EMAIL_WHITELIST =
 const MOCK_TCP_TUNNEL = process.env.MOCK_TCP_TUNNEL === 'true';
 // Dev only: print the email instead of sending it.
 const MAIL_DRY_RUN = process.env.MAIL_DRY_RUN === 'true';
-const CLIENT_KEY_PATH = process.env.CLIENT_KEY_PATH || '~/id_ed25519';
+const CLIENT_KEY_PATH = process.env.CLIENT_KEY_PATH || '~/seanorepo-admin';
 // The public half of this machine's SSH host key. docker-compose mounts it
 // read-only. It is what lets the emailed command verify the machine.
 const HOST_KEY_FILE =
@@ -130,13 +130,14 @@ const readHostKey = (): { line: string; fingerprint: string } | null => {
 const buildSshCommand = (
   host: string,
   port: string,
-): { command: string; borrowed: string; note: string } => {
+): { command: string; borrowed: string; hop: string; note: string } => {
   const key = readHostKey();
   const plain = `ssh ${SSH_USERNAME}@${host} -p ${port}`;
   if (!key) {
     return {
       command: plain,
       borrowed: plain,
+      hop: `ssh -A ${SSH_USERNAME}@${host} -p ${port}`,
       note: 'WARNING: this machine could not read its own host key, so this command cannot verify what it connects to.',
     };
   }
@@ -149,6 +150,12 @@ const buildSshCommand = (
     // be dragged there. IdentitiesOnly stops ssh offering that machine's own
     // keys first, which can use up the server's attempts before yours is tried.
     borrowed: `ssh -i ${CLIENT_KEY_PATH} -o IdentitiesOnly=yes ${pin} ${SSH_USERNAME}@${host} -p ${port}`,
+    // Reaching a SIBLING machine. -A lends your agent to this machine, so a
+    // second `ssh srv@<name>.local` from its shell works. No machine holds a
+    // private key, so without -A that second hop has nothing to offer.
+    //
+    // Run `ssh-add` first: -A uses an agent, and the admin key has a passphrase.
+    hop: `ssh -A -i ${CLIENT_KEY_PATH} -o IdentitiesOnly=yes ${pin} ${SSH_USERNAME}@${host} -p ${port}`,
     note: `Host key fingerprint: ${key.fingerprint}\nBoth commands need OpenSSH 8.5 or newer. On a phone app, or an older ssh, connect with "${plain}" and check it shows that same fingerprint before you accept it.`,
   };
 };
@@ -177,11 +184,15 @@ async function sendSSHEmail(
   const {
     command: sshCommand,
     borrowed: sshBorrowed,
+    hop: sshHop,
     note: sshNote,
   } = buildSshCommand(host, port);
   // With the key file dropped in the home folder. chmod is not optional: ssh
   // refuses a key other accounts can read.
   const borrowedSteps = `chmod 600 ${CLIENT_KEY_PATH} && ${sshBorrowed}`;
+  // To reach a SIBLING machine. Only this machine has a tunnel, and no machine
+  // holds a private key, so the second hop needs your agent lent forward.
+  const hopSteps = `ssh-add ${CLIENT_KEY_PATH} && ${sshHop}`;
   const timestamp = new Date().toLocaleString();
 
   const subject = options.isStartup
@@ -200,7 +211,7 @@ async function sendSSHEmail(
   if (MAIL_DRY_RUN) {
     console.log(
       `--- MAIL_DRY_RUN: not sending. This is the mail ${email} would get ---\n` +
-        `Subject: ${subject}\n\n${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}\n` +
+        `Subject: ${subject}\n\n${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\nsibling hop:\n${hopSteps}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}\n` +
         '--- end ---',
     );
     return;
@@ -210,7 +221,7 @@ async function sendSSHEmail(
     to: email,
     from: MAIL_USERNAME,
     subject,
-    text: `${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}`,
+    text: `${textPrefix}${sshCommand}\n\nor\n\n${borrowedSteps}\n\nTo reach another machine on the same network, lend your agent forward and hop:\n\n${hopSteps}\nthen: ssh srv@<machine>.local\n\n${sshNote}\n\nHost: ${host}\nPort: ${port}`,
     html: `<!DOCTYPE html>
 <html>
 <head>
@@ -221,6 +232,9 @@ async function sendSSHEmail(
   <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${sshCommand}</pre>
   <p>or</p>
   <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${borrowedSteps}</pre>
+  <p>To reach another machine on the same network, lend your agent forward and hop:</p>
+  <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">${hopSteps}
+then: ssh srv@&lt;machine&gt;.local</pre>
   <p style="font-family: monospace; white-space: pre-wrap;">${sshNote}</p>
   <p><strong>Host:</strong> ${host}<br><strong>Port:</strong> ${port}</p>
   <p>${timeLabel}: ${timestamp}</p>
