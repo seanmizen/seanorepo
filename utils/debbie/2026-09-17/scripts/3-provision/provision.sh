@@ -335,7 +335,14 @@ log "asserting"
 # assertion would exit here before the code could be captured, and the script
 # would report nothing at all rather than "an assertion failed".
 rc=0
-sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=provisioned bash -s" \
+# EXPECT_ROLES, built the same way test-vm.sh builds it. assert.sh reads it to
+# check /etc/seanorepo/roles against what was asked for, and an unset value
+# means "no roles" - so without this every machine provisioned WITH a role
+# failed that check while being configured perfectly. Latent until trixie2
+# became the first machine given a role through this script.
+EXPECT_ROLES="$( { [ "${ROLE_WEBSERVER:-}" = yes ] && echo webserver; [ "${ROLE_TUNNEL:-}" = yes ] && echo tunnel; true; } | tr '\n' ' ' | sed 's/ $//')"
+
+sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
     < "$GEN_DIR/payload/assert.sh" || rc=$?
 
 # A green provisioned run on top of a red first-boot run is not a pass. It is
