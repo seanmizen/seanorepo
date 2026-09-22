@@ -1,0 +1,21 @@
+# Written by payload/setup-server-environment.sh from services/custom-net-failover.service.
+# Edit that file, not this copy.
+[Unit]
+Description=Move the default route off a link that cannot reach its gateway
+Documentation=https://github.com/seanmizen/seanorepo/issues/281
+# No After=network-online.target. This unit exists for the case where the
+# network is NOT online, and ordering it after a target that may never be
+# reached would stop it running exactly when it is needed.
+
+[Service]
+Type=oneshot
+# root, unlike every other unit here. It reads /sys, calls ping -I, and writes
+# NetworkManager connection profiles, none of which $DEPLOY_USER can do. The
+# script takes no arguments and no input, so there is nothing to pass in.
+User=root
+ExecStart=${NET_FAILOVER_SCRIPT}
+# A probe of two pings at two seconds, twice over, plus a settle. Anything
+# longer than this is hung, and a hung watchdog on a one-minute timer stacks up.
+TimeoutStartSec=90
+
+# No [Install] section. custom-net-failover.timer owns this unit.
