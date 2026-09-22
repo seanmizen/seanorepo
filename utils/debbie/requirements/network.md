@@ -118,12 +118,12 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the watchdog names no
     interface and no gateway" — it takes no configuration, so every machine is
     protected rather than only the one an env file described
-  - Test — `assert.sh` › "case 1+8: a healthy run changes nothing and logs
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 1+8: a healthy run changes nothing and logs
     nothing" — a healthy link is never bounced, and the journal stays readable
-  - Test — `assert.sh` › "case 4: upstream dead with carrier up moves the
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 4: upstream dead with carrier up moves the
     default route" — the 2026-08-14 failure, reproduced by blackholing the
     gateway while the carrier stays up
-  - Test — `assert.sh` › "case 7: the route does not fail back on its own"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 7: the route does not fail back on its own"
   - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › "case 5:
     pulling the cable on n1" — carrier loss, driven through QEMU's monitor
     because only the emulator can take a link away
