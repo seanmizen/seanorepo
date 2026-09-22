@@ -1,394 +1,60 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Sean's personal polyglot monorepo: Yarn 4 workspaces under `apps/*` and
+`utils/*`. Node/React (RSBuild), Bun + Fastify backends, Go services, Zig. The
+readme's philosophy applies: "this is mine, so I will commit wantonly".
 
-## Repository Overview
+More instructions load only when they are relevant:
 
-This is a **polyglot monorepo** managed with Yarn 4 workspaces. It contains personal projects spanning web apps, backend services, utilities, and system tools. The codebase intentionally mixes technologies (Node.js, Bun, Go, React) based on what's appropriate for each project.
+- `.claude/rules/` - rules scoped to paths. They load when you touch matching
+  files: Docker and ports, deployment, carolinemizen.art.
+- `.claude/skills/workflow/` - the ticket, branch, PR and merge procedure. Use
+  it whenever you create an issue or open a PR.
+- A `CLAUDE.md` inside an app or util (`apps/inside`, `apps/converter`,
+  `utils/swindowzig`, ...) loads when you work in that directory.
 
 ## Setup
 
-Requires **Yarn 4** via corepack:
-
 ```bash
-corepack enable
-corepack prepare
-yarn
+corepack enable && corepack prepare && yarn
 ```
 
-## Build Commands
-
-### Root-level shortcuts
-
-- `yarn sean` - Start seanmizen.com dev server
-- `yarn caroline` - Start carolinemizen.art dev server
-- `yarn cards` - Start seanscards dev server
-- `yarn gosniff` - Start gosniff Go service
-
-**Code quality:**
-- `yarn format` - Auto-format code (spacing, quotes, etc.)
-- `yarn format:check` - Check formatting without fixing
-- `yarn lint` - Check for code issues (unused vars, bugs, etc.)
-- `yarn lint:fix` - Auto-fix linting issues
-- `yarn check` - Run both lint and format checks (for CI)
-- `yarn fix` - Auto-fix both lint and format issues
-
-### Docker orchestration
-
-- `yarn start:docker` - Start all workspaces in dev mode (hot reload)
-- `yarn prod:docker` - **Production deployment command** - starts all workspaces in production mode
-- `yarn down` - Stop all Docker containers
-- `yarn fly:deploy` - Deploy to Fly.io
-
-### Per-workspace commands
-
-Navigate to any `apps/*` or `utils/*` directory:
-
-- `yarn start` - Start dev server (equivalent to `yarn dev`)
-- `yarn build` - Production build
-- `yarn start:docker` - Run this workspace in Docker dev mode
-- `yarn prod:docker` - Run this workspace in Docker production mode
-- `yarn down` - Stop this workspace's containers
-
-## Architecture
-
-### Workspace Structure
-
-- **`apps/`** - Individual applications and services
-- **`utils/`** - Shared utilities and tools
-
-### Frontend Apps (React + RSBuild)
-
-**Stack**: React 19, React Router 7, RSBuild (Rspack), Emotion/styled-components, Material-UI, TanStack Query
-
-Apps: `seanmizen.com`, `planning-poker` (frontend), `carolinemizen.art` (frontend), `mui-dockview`, `seanscards`
-
-- Special: `seanmizen.com` uses Three.js for 3D graphics
-- Build tool: RSBuild for fast React compilation
-- Styling: CSS-in-JS with Emotion or styled-components
-
-### Backend Services (Bun + Fastify)
-
-**Stack**: Bun runtime, Fastify, SQLite, WebSockets, Nodemailer
-
-Apps: `planning-poker` (backend), `tcp-getter`, `carolinemizen.art` (backend), `seanscards` (backend)
-
-- Framework: Fastify with hot reload via Bun
-- Real-time: @fastify/websocket for live communication
-- Database: SQLite with named Docker volumes
-- Auth: JWT plugins where needed
-- All API routes use `/api` prefix
-
-### carolinemizen.art (Art Portfolio Platform)
-
-A full-stack art portfolio CMS for showcasing artwork. **Note: This is NOT an e-commerce platform** - all Stripe/payment/order functionality has been removed.
-
-**Key Features:**
-- **Homepage Carousel**: Managed image carousel for highlighting featured artwork
-- **Featured Galleries**: Up to 7 galleries can be featured on homepage with cover images and drag-drop reordering
-- **Gallery Management**: Create collections with SEO-friendly slugs, cover images, and custom artwork ordering
-- **Image Library**: Upload and manage images with pagination
-- **Magic Link Auth**: Passwordless authentication for admin access
-- **Content Management**: Editable hero section and site content
-
-**Tech Details:**
-- Frontend (React + RSBuild) on port 4020
-- Backend (Bun + Fastify) on port 4021 with `/api` prefix
-- SQLite database with migrations
-- Local file storage with abstracted provider interface (ready for S3/R2)
-- SEO: sitemap.xml, robots.txt, ai.txt, meta tags
-
-**CRITICAL: Bun is RUNTIME ONLY**
-
-- ⛔ NEVER use `bun install` or `bun build` in Dockerfiles or package management
-- ✅ ALWAYS use Yarn 4 for package management and installation
-- ✅ Bun is used ONLY to run the application (`bun index.ts`, `bun ./dist/index.js`)
-- If you see `bun install` or `bun build` anywhere, remove it and replace with Yarn
-- Bundling is handled by the build tool (Rspack, esbuild, etc.), not Bun
-
-### Go Services
-
-App: `gosniff` - Network packet sniffer
-
-### Utilities
-
-- `tty-dashboard` - Terminal UI dashboard using Ink (React for terminals), FFmpeg, ytdl-core, Puppeteer
-- `fly-io` - Deployment configurations
-- `config-anywhere` - Configuration management
-- `guides` - Documentation
-
-### Docker Architecture
-
-**Pattern**: Multi-stage Dockerfiles with `dev` and `prod` targets
-
-- Build context is always monorepo root (`context: ../..`)
-- Dockerfile location: `apps/[app-name]/dockerfile`
-- Dev mode: Bind mounts entire monorepo with named volumes for node_modules
-- Prod mode: Self-contained images with production builds
-- Build target controlled via `BUILD_TARGET` env var
-
-**Profiles**:
-
-- `dev` profile: Hot reload enabled, source mounted
-- `prod` profile: Production build, detached mode
-
-**Example docker-compose pattern**:
-
-```yaml
-x-frontend-base: &frontend-base
-  build:
-    context: ../..
-    dockerfile: apps/[app]/dockerfile
-    target: ${BUILD_TARGET:-dev}
-
-services:
-  frontend:
-    <<: *frontend-base
-    profiles: ["prod"]
-
-  frontend-dev:
-    <<: *frontend-base
-    volumes:
-      - type: bind
-        source: ../..
-        target: /app
-    profiles: ["dev"]
-```
-
-## Code Quality
-
-**Linter/Formatter**: Biome v2.3.8
-
-Configuration (`biome.json`):
-
-- Single quotes for JS/TS
-- Space indentation
-- Import organization enabled
-- CSS Modules support
-- Git integration with .gitignore respect
-- Notable rules disabled: `useExhaustiveDependencies`, `useLiteralKeys`
-- Files excluded: Anything with "Glasto" in the name
-
-**Usage:**
-- Check only: `yarn lint` (linting) or `yarn format:check` (formatting) or `yarn check` (both)
-- Auto-fix: `yarn lint:fix` (linting) or `yarn format` (formatting) or `yarn fix` (both)
-
-**IMPORTANT FOR CLAUDE**:
-
-- Always run `yarn fix` from the monorepo root before completing tasks (auto-fixes formatting + linting)
-- For CI-style checks without auto-fix, use `yarn check`
-- Always run `tsc --noEmit` in backend TypeScript projects to check for type errors
-- Fix all TypeScript errors before marking tasks as complete
-
-## Development Patterns
-
-### Port Allocation
-
-**Every `ports:` entry names its host address** (#309):
-
-```yaml
-ports:
-  - "${PUBLISH_ADDR:-127.0.0.1}:4000:4000"
-```
-
-Unset, it binds loopback: the Cloudflare tunnel reaches `localhost:4xxx`, and
-nothing else on the LAN should. Each workspace's `start:docker` script sets
-`PUBLISH_ADDR=0.0.0.0`, so a dev server is still reachable from another device
-on the wifi. On debbie machines `deploy.sh` sets it from the machine's roles (#329):
-loopback on the tunnel machine, `0.0.0.0` on a LAN-only webserver. Never write a bare `"4000:4000"` or
-`"0.0.0.0:4000:4000"`.
-
-The repository uses **dual port schemes** for different deployment targets:
-
-**Cloudflared (Home Server) - 4xxx range:**
-
-- 4000: seanmizen.com (FE)
-- 4010: seanscards (FE)
-- 4011: seanscards (BE)
-- 4020: carolinemizen.art (FE)
-- 4021: carolinemizen.art (BE)
-- 4030: planning-poker (FE)
-- 4031: planning-poker (BE)
-- 4040: RESERVED — ngrok web inspector squats this port by default
-- 4042: minecraft.seanmizen.com (FE)
-- 4050: seansconverter.com / converter (FE)
-- 4051: seansconverter.com / converter (BE)
-- 4060: inside.seanmizen.com (FE)
-- 4061: inside.seanmizen.com (BE)
-
-**Fly.io (Cloud) - 5xxx range:**
-
-- 5000: seanmizen.com (FE)
-- 5010: seanscards (FE)
-- 5011: seanscards (BE)
-- 5020: carolinemizen.art (FE)
-- 5021: carolinemizen.art (BE)
-- 5030: planning-poker (FE)
-- 5031: planning-poker (BE)
-- 5050: seansconverter.com / converter (FE)
-- 5051: seansconverter.com / converter (BE)
-- 5060: inside.seanmizen.com (FE)
-- 5061: inside.seanmizen.com (BE)
-- 8080: Fly.io nginx gateway
-
-### Concurrent Development
-
-Multiple apps use `concurrently` to run frontend + backend simultaneously with named logging.
-
-### Deployment Model
-
-**Dual Deployment Architecture:**
-
-1. **Cloudflared (Home Server)**
-
-   - Uses 4xxx port range
-   - Each app runs in separate Docker containers
-   - Cloudflared tunnels traffic to localhost ports
-   - Command: `yarn prod:docker`
-
-2. **Fly.io (Cloud)**
-   - Uses 5xxx port range
-   - Single container with nginx gateway (port 8080)
-   - All services bundled together with domain-based routing
-   - Build: `docker build -f utils/fly-io/dockerfile`
-
-**Testing Deployments:**
-See `docs/DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
-
-- Port scheme documentation
-- Service smoke tests (`scripts/test-deployment.sh`)
-- Instructions for adding new services
-
-**Production Deployment:**
-The home server (debbie) deploys the **`release` branch**, not `main`. Merging to `main`
-changes nothing in production.
-
-To ship, from a clean `main` on a dev machine:
-
-```bash
-yarn release
-```
-
-This fast-forwards `origin/release` to `main`. debbie polls `origin/release` every 2
-minutes (`deploy-poll-custom.timer`) and, when the SHA moves, runs
-`utils/debbie/2025-10-08b/scripts/deploy.sh`: checkout, `yarn prod:docker`, and a
-`cloudflared-custom.service` restart **only** if `apps/cloudflared/config.yml` changed.
-`yarn prod:docker` is still the command that does the actual work.
-
-Follow a deploy with `ssh srv@debbie.local journalctl -u deploy-poll-custom.service -f`.
-See `utils/debbie/2025-10-08b/docs/architecture.md` for the full flow.
-
-### Branch Naming Convention
-
-```
-SEAN-{number}/{short-description}
-```
-
-- Lowercase, hyphenated, max 5 words
-- Every branch must have a ticket ref
-
-**Valid examples:**
-
-- `SEAN-42/fix-hover-flicker`
-- `SEAN-7/add-avif-support`
-- `SEAN-1/setup-commitlint-husky`
-
-**Invalid examples:**
-
-- `main` (not a feature branch)
-- `fix-hover-flicker` (no ticket ref)
-- `SEAN-42` (no description)
-- `SEAN-42/Fix-Hover` (uppercase)
-- `feature/new-thing` (wrong prefix)
-
-### Commit Message Convention
-
-```
-[SEAN-{number}] {type}: {description}
-```
-
-**Valid types:** `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`
-
-**Examples:**
-
-- `[SEAN-42] fix: resolve hover flicker on subsection cards`
-- `[SEAN-7] feat: add webp-to-avif conversion support`
-
-**Important:** Agents must NEVER use `--no-verify` to bypass git hooks.
-
-## Agile Process
-
-**Tracking:** GitHub Issues + GitHub Projects (kanban). See `docs/archive/seanorepo-agile-blueprint.md` for full methodology.
-
-**Agent SOP:** See [`AGENTS.md`](./AGENTS.md) for the authoritative agent workflow — ticket lifecycle, gh CLI commands, branch/commit conventions, out-of-scope handling, and merge conflict resolution.
-
-### Workflow References
-
-Concise per-phase checklists for agents. Not enforced by tooling — just SOPs.
-
-- [`.claude/workflows/new-ticket.md`](./.claude/workflows/new-ticket.md) — steps for creating a well-formed issue
-- [`.claude/workflows/start-work.md`](./.claude/workflows/start-work.md) — checklist for starting a ticket
-- [`.claude/workflows/submit-pr.md`](./.claude/workflows/submit-pr.md) — checklist for opening a PR
-
-**Org:** Sean (CEO) → Dispatch (COO / orchestrator) → Workers (Claude Code agents on individual issues).
-
-### Ticket Lifecycle
-
-```
-Idea → Backlog → Ready → In Progress → In Review → Merged → Done
-```
-
-Agents update issue labels at each transition: `backlog` → `ready` → `in-progress` → `in-review`. Issues auto-close on PR merge.
-
-### Branch Naming
-
-```
-SEAN-{number}/{short-description}
-```
-
-Lowercase, hyphenated, max 5 words. Every branch must have a ticket ref. Examples: `SEAN-42/fix-hover-flicker`, `SEAN-7/add-avif-support`.
-
-### Commit Messages
-
-```
-[SEAN-{number}] {type}: {description}
-```
-
-Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`. Never use `--no-verify`.
-
-### Squash-Merge Policy
-
-Always squash-merge PRs. No merge commits, no fast-forward. Squash message: `[SEAN-{number}] {type}: {description} (#{pr_number})`.
-
-### Scope Discipline
-
-One ticket = one branch = one PR. If you discover out-of-scope work, create a new issue — do not do it in the current branch.
-
-### Issue Templates
-
-All issues must be created using the YAML-based GitHub Issue Forms in `.github/ISSUE_TEMPLATE/`:
-
-| Template | File | Use for |
-|---|---|---|
-| Feature | `feature.yml` | New features and enhancements |
-| Bug | `bug.yml` | Unexpected behaviour or regressions |
-| Chore | `chore.yml` | Maintenance, refactoring, dependency updates |
-
-Every template pre-populates the `backlog` label and requires **Acceptance Criteria** and **Priority**. Agents creating issues programmatically must include these same fields (even if not using the web form):
-
-- **Context** (feature/chore) or **Steps to Reproduce + Expected/Actual** (bug)
-- **Acceptance Criteria** — checklist of done conditions
-- **Files Likely Touched** — expected files to create or modify
-- **Priority** — `P0` through `P3`
-
-### WIP Limits
-
-Cap concurrent `in-progress` issues at 3–5 to prevent merge conflicts between parallel agents.
-
-## Working Philosophy
-
-From readme.md:
-
-> "this is mine, so I will commit wantonly and whenever I like. PRs and proper codebase sanitation can be done in other projects."
-
-This is a personal monorepo - conventional best practices may be relaxed. Docker is used even for non-containerized apps just for orchestration convenience ("Not a JS/Node project? it is now").
+Root `package.json` scripts are the entry points (`yarn sean`, `yarn caroline`,
+`yarn prod:docker`, `yarn release`, ...). Read them rather than guessing.
+
+## Hard rules
+
+- **Yarn 4 only.** Never `npm install` or `bun install`. Bun is a runtime only
+  (`bun index.ts`). Bundling belongs to the build tool, never `bun build`.
+- **Before you finish:** run `yarn fix` from the root (Biome: lint and format).
+  Run `tsc --noEmit` in every TypeScript backend you touched. Fix every error.
+- **Never `--no-verify`.** The hooks run commitlint.
+- **Every published port names its host address:**
+  `"${PUBLISH_ADDR:-127.0.0.1}:4000:4000"`. Never a bare `"4000:4000"`. See
+  `.claude/rules/ports.md`.
+- **Merging to `main` deploys nothing.** Production runs the `release` branch.
+  `yarn release` fast-forwards it to `main`. Run it only when Sean asks.
+- **All backend API routes use the `/api` prefix.**
+
+## Conventions
+
+- Branch: `SEAN-{issue}/{short-description}`. Lowercase, hyphenated, at most 5
+  words.
+- Commit and PR title: `[SEAN-{issue}] {type}: {description}`. Types: `feat fix
+  chore docs refactor test style perf ci`.
+- One ticket = one branch = one PR, squash-merged. Out-of-scope work gets a new
+  issue, not a commit on this branch.
+- Work in a worktree, never on the `main` checkout.
+
+Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
+
+## Layout
+
+- `apps/` - one directory per site or service. Frontend and backend share a
+  `docker-compose.yml`, and backends sit beside their frontends.
+- `utils/` - tooling. `utils/debbie/` provisions and deploys the home servers.
+  `utils/fly-io/` is the Fly.io bundle.
+- `scripts/` - repo-level scripts (`promote-release.sh`, `test-deployment.sh`).
+- `requirements/` - the requirements index and its checker
+  (`yarn requirements:check`).
+- `docs/` - deployment testing and archived process docs.
