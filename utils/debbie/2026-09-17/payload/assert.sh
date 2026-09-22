@@ -707,6 +707,12 @@ if [ "$PHASE" = provisioned ]; then
          && ! grep -qsx 'Unit=custom-deploy.service' $UD/*.timer /etc/systemd/system/*.timer"
     check "the release poller triggers the deploy" \
         'systemctl show -p OnSuccess --value custom-release-poll.service | grep -qw custom-deploy.service'
+    # #380. The poller's behaviour is proved against a scratch repo below, never
+    # against this checkout. A single-branch or shallow clone passed all of that
+    # and still could not see `release`, so nothing ever deployed. No network.
+    check "the checkout fetches every branch, with full history" \
+        "git -C '$REPO_DIR' config --get-all remote.origin.fetch | grep -qxF '+refs/heads/*:refs/remotes/origin/*' \
+         && [ \"\$(git -C '$REPO_DIR' rev-parse --is-shallow-repository)\" = false ]"
     # #329: roles. Unset means off, so the files present must be EXACTLY the
     # roles this machine was provisioned with - EXPECT_ROLES, which the VM harness
     # sets (default: none) and provision.sh derives from the machine env file.
@@ -857,6 +863,7 @@ else
     sk "custom-release-poll.service is timer-owned (static)" "setup-server-environment.sh installs it"
     sk "custom-deploy.service is not on a timer" "setup-server-environment.sh installs it"
     sk "the release poller triggers the deploy" "setup-server-environment.sh installs it"
+    sk "the checkout fetches every branch, with full history" "setup-server-environment.sh repairs it"
     sk "the deploy runs only on a machine with the webserver role" "setup-server-environment.sh installs it"
     sk "the tunnel runs only on a machine with the tunnel role" "setup-server-environment.sh installs it"
     sk "roles on this machine are exactly '${EXPECT_ROLES:-none}'" "setup-server-environment.sh writes them"

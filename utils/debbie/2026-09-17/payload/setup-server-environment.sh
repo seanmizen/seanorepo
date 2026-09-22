@@ -578,10 +578,21 @@ else
     repo_cloned=0
 fi
 
+# Every branch, full history - #380. setup-developer-environment.sh clones with
+# --depth 1, which implies --single-branch: the refspec then names only main,
+# no fetch ever brings `release` in, and the release poller fails forever on a
+# machine that provisioned green. set-branches rewrites the refspec, and
+# --unshallow gives deploy.sh the history it diffs across.
+sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" remote set-branches origin '*'
+unshallow=""
+if [ "$(sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" rev-parse --is-shallow-repository)" = true ]; then
+    unshallow="--unshallow"
+fi
+
 # Always fetch, clone or no clone: this is what makes a second run cheap and
 # correct rather than a re-clone. --prune so a branch deleted upstream does not
 # linger as a remote-tracking ref that a later checkout could resolve against.
-sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" fetch --prune origin
+sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" fetch --prune $unshallow origin
 
 # `|| true` because symbolic-ref exits non-zero on a detached HEAD, which is a
 # state to report rather than to die on, and `set -e` would otherwise take the
