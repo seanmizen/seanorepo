@@ -95,7 +95,7 @@ its local branch.
 - State: `idea` `backlog` `ready` `in-progress` `in-review`.
 - Type: `bug` `enhancement` `chore` `infra` `docs` `ci` `regression`.
 - Project: `seanmizen.com` `carolinemizen.art` `planning-poker` `seanscards`
-  `converter` `minecraft` `swindowzig` `tty-dashboard` `fly-io`.
+  `converter` `minecraft` `swindowzig` `tty-dashboard`.
 - Board: https://github.com/users/seanmizen/projects/1/views/1
 
 To hand an issue to a background worker agent, use the `dispatch` skill.

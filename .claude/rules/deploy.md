@@ -25,7 +25,7 @@ The flow:
    `apps/cloudflared/config.yml` changed.
 
 Before you ask Sean to release, run `yarn prod:docker` locally, then
-`scripts/test-deployment.sh cloudflared`. If ports or hostnames changed,
+`scripts/test-deployment.sh`. If ports or hostnames changed,
 update `apps/cloudflared/config.yml` in the same PR.
 
 ```bash
