@@ -35,7 +35,7 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 | 4030 / 4031 | planning-poker FE / BE |
 | 4040 | RESERVED - the ngrok web inspector binds it |
 | 4042 | minecraft.seanmizen.com |
-| 4050 / 4051 | seansconverter.com (apps/converter) FE / BE |
+| 4050 / 4051 | ffmpeg-converter (seansconverter.com). Local only. Not deployed. |
 | 4060 / 4061 | inside.seanmizen.com FE / BE |
 | 4120 | tcp-getter (host unit, reached at `seanmizen.com/tcp/*`) |
 

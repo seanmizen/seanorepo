@@ -178,7 +178,7 @@ This will:
 
 ### 1. Choose Port Numbers
 
-- Cloudflared: 4xxx (e.g., 4050 for FE, 4051 for BE)
+- Cloudflared: 4xxx (e.g., 4070 for FE, 4071 for BE)
 - Fly.io: 5xxx (e.g., 5050 for FE, 5051 for BE)
 
 ### 2. Update Cloudflared Config
@@ -186,12 +186,12 @@ This will:
 Edit `apps/cloudflared/config.yml`:
 
 ```yaml
-# new-service.com - Ports 4050 (FE) / 4051 (BE)
+# new-service.com - Ports 4070 (FE) / 4071 (BE)
 - hostname: new-service.com
   path: /api/*
-  service: http://localhost:4051
+  service: http://localhost:4071
 - hostname: new-service.com
-  service: http://localhost:4050
+  service: http://localhost:4070
 ```
 
 ### 3. Update Fly.io Setup

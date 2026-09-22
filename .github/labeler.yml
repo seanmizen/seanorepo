@@ -19,7 +19,7 @@ planning-poker:
 
 converter:
   - changed-files:
-      - any-glob-to-any-file: 'apps/converter/**'
+      - any-glob-to-any-file: 'apps/ffmpeg-converter/**'
 
 gosniff:
   - changed-files:
