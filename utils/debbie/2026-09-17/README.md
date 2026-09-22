@@ -107,6 +107,52 @@ The tunnel needs the webserver role on the same machine. A LAN webserver keeps
 its own data, separate from the public machine's. To see a machine's roles:
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
+### Move the tunnel to another machine
+
+Set the role and provision. Then stop the tunnel on the machine that had it.
+
+```bash
+# 1. the new machine serves the sites on the LAN. Check every site by IP.
+#    ROLE_WEBSERVER=yes, ROLE_TUNNEL unset in 3-provision/<new>.env
+scripts/3-provision/provision.sh <new>
+
+# 2. give it the tunnel role. The reboot at the end of this run starts the
+#    tunnel, so both machines serve it from here until step 3.
+#    ROLE_TUNNEL=yes in 3-provision/<new>.env
+scripts/3-provision/provision.sh <new>
+
+# 3. stop the tunnel on the old machine.
+ssh -t srv@<old>.local sudo systemctl disable --now cloudflared-custom.service
+```
+
+The unit is `cloudflared-custom.service` on a 2025-10-08b machine and
+`custom-cloudflared.service` here. `systemctl list-units 'c*cloudflared*'` names
+it.
+
+**Set the role in the env file. Do not enable the unit by hand.** `provision.sh`
+stops a tunnel with `systemctl disable --now` and starts one with plain
+`systemctl enable` — off is immediate, on waits for the reboot the step
+triggers. A unit enabled by hand runs while the env file says it should not, and
+the next `provision.sh` run stops it, immediately. Each run of `provision.sh` makes the
+machine match the env file.
+
+Between step 2 and step 3 both machines serve the tunnel. Cloudflare balances
+across the two connections, so there is no gap, and both answer the same sites
+from their own copy of the data. Keep that window short and do not take writes
+in it. A machine holding the tunnel role it should not hold is the state
+`REQ-NETWORK-002` exists to prevent, so step 3 is not optional.
+
+Two things provisioning does not move:
+
+- **ngrok.** One agent session, and it is an admin path rather than user
+  traffic. Add the authtoken on the new machine and start `custom-ngrok.service`
+  there. The address and the SSH host key both change, so the command
+  tcp-getter emails will not match the one you have.
+- **Site data.** Copy it before step 2 and check it renders over the LAN. You
+  lose any write that reaches the old machine after you copy its database.
+  carolinemizen.art takes admin writes only, so the window is small and the
+  cost is one re-upload, but nothing here protects you from it.
+
 ## Operate a target machine
 
 All commands run from your computer. Replace `<name>` with the target machine's
