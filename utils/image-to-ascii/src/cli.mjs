@@ -101,8 +101,16 @@ const readSpec = (file) => {
   };
 };
 
+// `yarn ascii` runs from this workspace's folder. Yarn sets INIT_CWD to the
+// folder the user ran it from, so paths on the command line resolve there.
+const callerDir = process.env.INIT_CWD ?? process.cwd();
+const fromCaller = (p) => (p === undefined ? p : resolve(callerDir, p));
+
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
+  args.image = fromCaller(args.image);
+  args.spec = fromCaller(args.spec);
+  args.out = fromCaller(args.out);
   if (args.help) {
     process.stdout.write(HELP);
     return;
