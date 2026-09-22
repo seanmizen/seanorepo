@@ -1,0 +1,42 @@
+{
+  "image": "/Users/seanmizen/projects/seanorepo/apps/seanmizen.com/src/components/shader-sean/IMG_4011_crop2.jpeg",
+  "options": {
+    "width": 120,
+    "chars": "abcdefghijklmnopqrstuvwxyz"
+  },
+  "keyframes": {
+    "contrast": {
+      "0": 110,
+      "20": 200,
+      "40": 300,
+      "60": 500
+    },
+    "brightness": {
+      "0": 100,
+      "40": 100,
+      "60": 300,
+      "70": 1000
+    }
+  },
+  "ease": "smooth",
+  "frames": 75,
+  "fps": 17,
+  "text": [
+    {
+      "text": "{hostname}",
+      "anchor": "bottom-left",
+      "from": 40
+    },
+    {
+      "text": "uptime: {uptime}",
+      "anchor": "bottom-right",
+      "from": 40
+    },
+    {
+      "text": "welcome",
+      "anchor": "center",
+      "from": 50
+    }
+  ],
+  "clearFrom": 65
+}
