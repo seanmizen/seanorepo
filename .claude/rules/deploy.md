@@ -10,8 +10,8 @@ paths:
 
 Production is the home server **asus** (`ROLE_WEBSERVER` and `ROLE_TUNNEL`).
 **surface** is a second machine with no roles: it tracks `release` and serves
-nothing. Both run the `utils/debbie/2026-09-17` generation. The names `debbie`
-and `trixie2` are retired.
+nothing. Both run the `utils/debbie/2026-09-17` generation. No machine uses
+the names `debbie` or `trixie2` now.
 
 The flow:
 
@@ -19,7 +19,7 @@ The flow:
 2. `yarn release` (runs `scripts/promote-release.sh`) fast-forwards
    `origin/release` to `main`. Run it only when Sean asks.
 3. On every machine, `custom-release-poll.timer` checks `origin/release`
-   every two minutes. When it has moved, the checkout moves and
+   every two minutes. When it moves, the checkout moves and
    `custom-deploy.service` runs `utils/debbie/2026-09-17/services/deploy.sh`.
    That script runs `yarn prod:docker`, and restarts cloudflared only if
    `apps/cloudflared/config.yml` changed.

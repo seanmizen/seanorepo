@@ -11,7 +11,7 @@ paths:
 
 # Ports
 
-## Every published port names its host address (#309)
+## Every published port names its host address (REQ-SERVER-002)
 
 ```yaml
 ports:
@@ -21,7 +21,7 @@ ports:
 Unset, it binds loopback: the Cloudflare tunnel reaches `localhost:4xxx`, and
 nothing else on the LAN should. Each workspace's `start:docker` sets
 `PUBLISH_ADDR=0.0.0.0`, so a dev server is reachable from another device on the
-wifi. On a home server, `deploy.sh` sets it from the machine's roles (#329):
+wifi. On a home server, `deploy.sh` sets it from the machine's roles:
 loopback on the tunnel machine, `0.0.0.0` on a LAN-only webserver. Never write
 a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 
