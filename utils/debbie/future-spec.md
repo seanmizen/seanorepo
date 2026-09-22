@@ -31,34 +31,63 @@ any change on a shared network. PXE ROMs also need ethernet.
 **Every machine tracks `release`.** See REQ-DEPLOY-001 and REQ-DEPLOY-002 in
 [`deploy.md`](./2026-09-17/requirements/deploy.md).
 
-## Not built
+## Not built: the herd
 
-**Control-plane state in SQLite on the provisioner.** Machines poll the control
-plane. One endpoint takes the heartbeat and returns the declared roles. This is
-the pull pattern of REQ-DEPLOY-002, so no machine opens an inbound port. **An
-unreachable control plane never causes a role change.** The machine keeps its
-last roles. Role assignment stays out of git, because a role change in git
-needs a commit, a poll, and push credentials for the dashboard.
+The next generation is a herd. Every machine runs the same agent and holds the
+same picture of every machine. Any machine can answer for all of them. No
+server of ours sits in the middle. Cloudflare is the only hub.
 
-**Heartbeat and dashboard first, read-only.** Build this before any role
-machinery. It makes machine state visible before anything changes it. It serves
-`dash.seanmizen.com` on ports **4070** (FE) and **4071** (BE). The heartbeat
-sends hostname, boot id, uptime, disk, Docker status, checkout SHA, and declared
-roles against actual roles. **The loudest alarm is more than one machine with
-the `tunnel` role.**
+**One agent per machine. Each machine writes only its own record.** The agent
+collects its own facts: hostname, boot id, uptime, disk, Docker status,
+checkout SHA, declared and actual roles, timer state, and the last failover
+action. It gossips that record to the other agents. A record has one writer,
+so two agents never disagree about it, and monitoring needs no vote. A machine
+that stops answering stays in the picture with the time it was last seen.
+**Losing contact with a peer never causes a role change.** A machine keeps its
+last roles.
 
-**The provisioner gets its own keypair.** An always-on machine with a root key
-to every machine is a lateral-movement hub. Its blast radius must fit in one
-sentence. Every machine already trusts one durable admin key,
-[`seanorepo-admin.pub`](./2026-09-17/payload/seanorepo-admin.pub). The
-provisioner key is a second, dedicated key.
+**Machines reach each other over Cloudflare Mesh.** Mesh gives each machine a
+private IP in `100.96.0.0/12`. Every packet goes through Cloudflare, so
+machines can live in any house or on a VPS with no port forward. Mesh opens no
+inbound port, so REQ-SERVER-002 keeps its port list. Gossip listens only on
+the Mesh interface. Mesh is in beta. #417 tests it on surface first. If Mesh
+fails, the fallback is WireGuard that the agent configures itself. The agent
+needs only a peer IP, so the choice of network does not change it.
+
+**The dashboard is `dash.seanmizen.com`, on a second tunnel.** The production
+tunnel stays on one machine because of the SQLite data. The herd tunnel has
+one hostname, and every machine runs a connector for it. Cloudflare sends each
+request to a live connector, so the dashboard survives the loss of any one
+machine. Every agent serves the dashboard page itself, on port **4070**.
+Cloudflare Access puts a login in front of the hostname, so the agent needs no
+auth code. The `dash.` ingress rule sits above the `*.seanmizen.com` wildcard.
+**The loudest alarm is more than one machine with the `tunnel` role.**
+
+**Declared roles come from the dashboard.** Sean sets a machine's roles there.
+The agents copy that versioned record to every machine. Sean is its only
+writer, so it needs no vote either. Role assignment stays out of git, because
+a role change in git needs a commit, a poll, and push credentials for the
+dashboard. Each machine shows where it differs from its declared roles.
+
+**Phases.** Each phase is useful on its own.
+
+1. The agent and dashboard, served from asus alone.
+2. The herd: every machine gossips and serves the dashboard.
+3. Declared roles: set in the dashboard, and machines report drift. Nothing
+   acts on it yet.
+4. Self-provisioning: a machine sets itself up from its declared roles. A new
+   machine from the generic USB joins the herd after Sean approves it. Only
+   stateless roles act automatically.
+5. Automatic failover of the tunnel role. See Parked.
 
 ## Parked
 
-**Automatic role negotiation.** Declared roles come first, because negotiation
-needs a place to write its answer and a way to override it. A wrong answer for
-a stateless role costs a retry. A wrong answer for a stateful role loses data.
-Before a stateful role negotiates, answer these questions:
+**Automatic failover of a stateful role.** Two machines cannot fail over
+safely. A majority of two is both machines, so neither can tell a dead peer
+from a lost link. If both take the tunnel, the data splits and does not come
+back. Failover needs a third voter, the data on the standby before the switch
+(Litestream streaming the SQLite WAL), and fencing. Before a stateful role
+fails over automatically, answer these questions:
 
 - What fences a superseded machine before it writes?
 - What happens during a partition, as a chosen tradeoff?
@@ -66,9 +95,23 @@ Before a stateful role negotiates, answer these questions:
   is fencing, and quorum does not apply.
 - How does a human override a wrong answer while it happens?
 
+**A provisioner key.** In a herd, each machine sets itself up from its own
+checkout. No machine needs a root key to another. If that changes, the
+provisioning machine gets its own dedicated key. Every machine already trusts
+one durable admin key,
+[`seanorepo-admin.pub`](./2026-09-17/payload/seanorepo-admin.pub).
+
 **systemd targets and slices.** A `custom-role-*.target` per role, a
 `custom.target` for the whole stack, and a `custom.slice` with `MemoryMax=`.
 Add them when there is a real list of services to group.
+
+## Open questions
+
+- **The agent's language.** Go with HashiCorp's `memberlist` is the
+  recommendation: one static binary, no runtime on the host, and mature gossip
+  and failure detection.
+- **A third machine.** A Raspberry Pi is enough to vote. Without one, phase 5
+  stays the manual runbook.
 
 ## Open question: backups
 
