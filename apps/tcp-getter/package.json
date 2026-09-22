@@ -2,18 +2,21 @@
   "name": "tcp-getter",
   "packageManager": "yarn@4.8.1",
   "scripts": {
-    "start": "bun --hot --no-clear-screen index.ts",
-    "DISABLEDstart:docker": "docker compose --profile dev up --build",
-    "DISABLEDprod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
-    "down": "docker compose --profile dev --profile prod down",
-    "build": "bun build index.ts --outdir dist --target bun",
-    "prod": "NODE_ENV=production bun dist/index.js"
+    "start": "concurrently -n build,run -c blue,green 'rslib build --watch' 'node --watch --env-file=.env dist/index.mjs'",
+    "build": "rslib build",
+    "prod": "NODE_ENV=production node --env-file=.env dist/index.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
-    "@types/nodemailer": "^7.0.4",
     "fastify": "^5.6.2",
     "nodemailer": "^7.0.11"
+  },
+  "devDependencies": {
+    "@rslib/core": "^0.18.3",
+    "@types/node": "^22.19.1",
+    "@types/nodemailer": "^7.0.4",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
   }
 }

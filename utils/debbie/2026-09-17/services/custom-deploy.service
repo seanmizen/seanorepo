@@ -1,0 +1,29 @@
+# Written by payload/setup-server-environment.sh from services/custom-deploy.service.
+# Edit that file, not this copy. - REQ-DEPLOY-002
+[Unit]
+Description=Start what the checkout holds, on a machine that serves
+Documentation=https://github.com/seanmizen/seanorepo/issues/307
+# docker.service because the deploy is `yarn prod:docker`.
+After=network-online.target docker.service
+Wants=network-online.target
+# The serving switch. Unmet, the trigger is skipped with one log line and the
+# unit is never marked failed.
+ConditionPathExists=${ROLES_DIR}/webserver
+
+[Service]
+Type=oneshot
+User=${DEPLOY_USER}
+WorkingDirectory=${REPO_DIR}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=${DEPLOY_SCRIPT}
+
+# Stated rather than inherited. A cold `yarn install` plus a rebuild of every
+# workspace is tens of minutes, and the default for a oneshot unit is not worth
+# guessing at when being wrong means SIGKILL half way through a docker build.
+# Being killed is survivable either way: the deploy holds its lock on a file
+# descriptor, so the kernel releases it when the process dies and the next
+# poll picks up cleanly - REQ-DEPLOY-003.
+TimeoutStartSec=30min
+
+# No [Install] section and no timer, deliberately - #307. The release poller is
+# the only thing that starts it: one clock, so a deploy never races a checkout.
