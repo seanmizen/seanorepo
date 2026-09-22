@@ -59,7 +59,6 @@ Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
 - `apps/` - one directory per site or service. Frontend and backend share a
   `docker-compose.yml`, and backends sit beside their frontends.
 - `utils/` - tooling. `utils/debbie/` provisions and deploys the home servers.
-  `utils/fly-io/` is the Fly.io bundle.
 - `scripts/` - repo-level scripts (`promote-release.sh`, `test-deployment.sh`).
 - `requirements/` - the requirements index and its checker
   (`yarn requirements:check`).

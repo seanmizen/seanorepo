@@ -1,7 +1,12 @@
 #!/bin/bash
-# Deployment Smoke Test Script
-# Tests all services for both Cloudflared (4xxx) and Fly.io (5xxx) setups
-# Usage: scripts/test-deployment.sh [cloudflared|flyio|both]
+# test-deployment.sh: checks that every deployed site answers on its 4xxx port.
+#
+# Where: a machine that runs `yarn prod:docker`, usually your own computer.
+# When:  before you ask for a release, after `yarn prod:docker` has started.
+# Why:   the Cloudflare tunnel sends each hostname to a localhost port. A site
+#        that does not answer here returns an error to the public.
+#
+# Usage: scripts/test-deployment.sh
 
 set -e
 
@@ -10,8 +15,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
-
-MODE="${1:-both}"
 
 print_header() {
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -100,136 +103,14 @@ test_cloudflared() {
   fi
 }
 
-test_flyio() {
-  print_header "Testing Fly.io Setup (Port Range: 6xxx local → 5xxx container)"
-
-  local failed=0
-
-  # Test seanmizen.com (Frontend only)
-  echo -e "\n${YELLOW}seanmizen.com${NC}"
-  test_endpoint "http://localhost:6000" "Frontend" || ((failed++))
-
-  # Test seanscards.com (FE + BE)
-  echo -e "\n${YELLOW}seanscards.com${NC}"
-  test_endpoint "http://localhost:6010" "Frontend" || ((failed++))
-  test_endpoint "http://localhost:6011/api" "Backend API" || ((failed++))
-
-  # Test carolinemizen.art (FE + BE)
-  echo -e "\n${YELLOW}carolinemizen.art${NC}"
-  test_endpoint "http://localhost:6020" "Frontend" || ((failed++))
-  test_endpoint "http://localhost:6021" "Backend API" || ((failed++))
-
-  # Test planning-poker (FE + BE)
-  echo -e "\n${YELLOW}pp.seanmizen.com (planning-poker)${NC}"
-  test_endpoint "http://localhost:6030" "Frontend" || ((failed++))
-  test_endpoint "http://localhost:6031" "Backend API" || ((failed++))
-
-  # Test inside (FE + BE)
-  echo -e "\n${YELLOW}inside.seanmizen.com${NC}"
-  test_endpoint "http://localhost:6060" "Frontend" || ((failed++))
-  test_endpoint "http://localhost:6061/api/health" "Backend API" || ((failed++))
-
-  echo ""
-  if [ $failed -eq 0 ]; then
-    print_success "All Fly.io services passed!"
-    return 0
-  else
-    print_error "$failed Fly.io service(s) failed"
-    return 1
-  fi
-}
-
-test_flyio_nginx() {
-  print_header "Testing Fly.io Nginx Gateway (Port 8080)"
-
-  local failed=0
-
-  echo -e "\n${YELLOW}Testing nginx routing${NC}"
-
-  # Test with localhost (should route to seanmizen.com)
-  test_endpoint "http://localhost:8080" "localhost → seanmizen.com" || ((failed++))
-
-  # Test with Host headers (simulating domain routing)
-  echo -e "\nTesting domain-based routing (via Host header)..."
-
-  local status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: seanscards.com" "http://localhost:8080" 2>/dev/null || echo "000")
-  if [ "$status" = "200" ]; then
-    print_success "seanscards.com routing → $status"
-  else
-    print_error "seanscards.com routing → $status"
-    ((failed++))
-  fi
-
-  local status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: carolinemizen.art" "http://localhost:8080" 2>/dev/null || echo "000")
-  if [ "$status" = "200" ]; then
-    print_success "carolinemizen.art routing → $status"
-  else
-    print_error "carolinemizen.art routing → $status"
-    ((failed++))
-  fi
-
-  local status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: pp.seanmizen.com" "http://localhost:8080" 2>/dev/null || echo "000")
-  if [ "$status" = "200" ]; then
-    print_success "pp.seanmizen.com routing → $status"
-  else
-    print_error "pp.seanmizen.com routing → $status"
-    ((failed++))
-  fi
-
-  local status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: inside.seanmizen.com" "http://localhost:8080" 2>/dev/null || echo "000")
-  if [ "$status" = "200" ]; then
-    print_success "inside.seanmizen.com routing → $status"
-  else
-    print_error "inside.seanmizen.com routing → $status"
-    ((failed++))
-  fi
-
-  # nginx has no default_server, so an unmatched Host silently falls through to
-  # the first block (seanmizen.com). Assert on the response body, not just the
-  # status, or a misnamed server_name passes.
-  local body=$(curl -s -H "Host: inside.seanmizen.com" "http://localhost:8080" 2>/dev/null || echo "")
-  if echo "$body" | grep -qiE "marketplace for architects|<title>inside"; then
-    print_success "inside.seanmizen.com serves the inside frontend"
-  else
-    print_error "inside.seanmizen.com did not serve the inside frontend (fell through?)"
-    ((failed++))
-  fi
-
-  local status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: inside.seanmizen.com" "http://localhost:8080/api/health" 2>/dev/null || echo "000")
-  if [ "$status" = "200" ]; then
-    print_success "inside.seanmizen.com/api/health → $status"
-  else
-    print_error "inside.seanmizen.com/api/health → $status"
-    ((failed++))
-  fi
-
-  echo ""
-  if [ $failed -eq 0 ]; then
-    print_success "Nginx gateway passed!"
-    return 0
-  else
-    print_error "$failed nginx route(s) failed"
-    return 1
-  fi
-}
-
 main() {
   print_header "Deployment Smoke Test"
-  echo "Mode: $MODE"
   echo ""
 
   local total_failed=0
 
-  if [ "$MODE" = "cloudflared" ] || [ "$MODE" = "both" ]; then
-    test_cloudflared || ((total_failed++))
-    echo ""
-  fi
-
-  if [ "$MODE" = "flyio" ] || [ "$MODE" = "both" ]; then
-    test_flyio || ((total_failed++))
-    test_flyio_nginx || ((total_failed++))
-    echo ""
-  fi
+  test_cloudflared || ((total_failed++))
+  echo ""
 
   print_header "Test Summary"
   if [ $total_failed -eq 0 ]; then
