@@ -17,7 +17,7 @@ in the comments of each script.
 
 | Folder | Contents | Runs on |
 |---|---|---|
-| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. Each step folder holds its `.env.example` and one `<machine>.env` per target machine. `lib.sh` holds the functions they share. | your computer |
+| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `4-cutover/`, `test-vm/`. Each step folder holds its `.env.example` and one `<machine>.env` per target machine. `lib.sh` holds the functions they share. | your computer |
 | `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
 | `services/` | What runs on a target machine all the time: `release-poll.sh` and `deploy.sh`. systemd starts them from the `release` checkout. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
@@ -106,6 +106,33 @@ Roles set what a target machine does. Set them in
 The tunnel needs the webserver role on the same machine. A LAN webserver keeps
 its own data, separate from the public machine's. To see a machine's roles:
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
+
+### Move the tunnel to another machine
+
+`provision.sh` cannot do this in one go. It stops a tunnel with
+`systemctl disable --now` and starts one with plain `systemctl enable`, so
+setting `ROLE_TUNNEL=yes` and provisioning serves the tunnel only after the
+reboot that step triggers. Use step 4:
+
+```bash
+scripts/4-cutover/4-cutover.sh <old-machine> <new-machine>
+```
+
+It stops the tunnel on the old machine, starts it on the new one, and writes
+`ROLE_TUNNEL` into both `3-provision/<machine>.env` files so the next
+`provision.sh` run on either machine agrees with what is running. Skip that last
+part by doing it with `systemctl` by hand and the next provisioning run stops the
+tunnel again, immediately.
+
+Downtime is however long cloudflared takes to connect: a couple of seconds.
+
+Two things it does not do. It does not touch ngrok, which allows one agent
+session and is an admin path rather than user traffic - start it on the new
+machine by hand, and expect the address and the host key to change, so the
+command tcp-getter emails you will differ. And it does not protect
+carolinemizen.art from losing a write: a write that lands on the old machine
+after its database was copied is lost. The window is seconds, the site takes
+admin writes only, and making that site safe to move belongs to that site.
 
 ## Operate a target machine
 
