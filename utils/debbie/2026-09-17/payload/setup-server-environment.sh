@@ -89,17 +89,10 @@ DEPLOY_USER="${DEPLOY_USER:-srv}"
 #
 #   - payload/assert.sh reads the same default, and its checkout and yarn-version
 #     assertions look here.
-#   - 2025-10-08b/scripts/deploy.sh - what production runs today - resolves
-#     "${REPO_PATH:-$HOME/projects/seanorepo}" as the deploy user, which for
+#   - services/deploy.sh and services/release-poll.sh resolve
+#     "${REPO_DIR:-$HOME/projects/seanorepo}" as the deploy user, which for
 #     DEPLOY_USER=srv is this exact path.
 #   - setup-developer-environment.sh clones the repository to this path.
-#
-# deploy.sh's override is spelled REPO_PATH and this one REPO_DIR, which is a
-# wart inherited from the older generation. They are left as they are rather
-# than renamed here: renaming the one in 2025-10-08b would edit what production
-# runs, and this generation does not own that file. The DEFAULTS agree, which
-# is what actually matters, and the next generation's deploy script should
-# adopt REPO_DIR.
 REPO_DIR="${REPO_DIR:-/home/$DEPLOY_USER/projects/seanorepo}"
 REPO_URL="${REPO_URL:-https://github.com/seanmizen/seanorepo.git}"
 # The host deploys `release` and never `main` - REQ-DEPLOY-001. `release` moves
