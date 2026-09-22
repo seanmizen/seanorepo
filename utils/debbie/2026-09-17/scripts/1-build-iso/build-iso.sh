@@ -32,8 +32,13 @@ WORK="$GEN_DIR/working"                          # shared by all three steps
 # shellcheck source=../lib.sh
 . "$SCRIPTS/lib.sh"
 
-select_env "$HERE" "${1:-.env}"
-shift
+# The machine argument is optional since #376, so a flag must not be mistaken
+# for one. `./build-iso.sh --show-cmdline` used to put the flag in $1 only after
+# a machine name had been consumed; now there is no machine name to consume.
+case "${1:-}" in
+    '' | -*) select_env "$HERE" .env ;;
+    *)       select_env "$HERE" "$1"; shift ;;
+esac
 PORT="${PORT:-8000}"
 read_env SERVER_NAME DEPLOY_USER WIFI_SSID WIFI_PASS WIFI_IFACE PORT SERVE_IP ISO
 [ -z "${SERVER_NAME:-}" ] || warn "SERVER_NAME is set in $ENV_FILE and ignored here since #376. One USB installs any machine; step 2 names it. Delete the line, or move this file to $HERE/.env and drop the machine argument."
