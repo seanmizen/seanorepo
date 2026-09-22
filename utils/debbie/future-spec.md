@@ -1,245 +1,84 @@
 # debbie fleet — future spec
 
-**This is not a plan of record.** Nothing here is committed to, scheduled, or
-implemented. It is where a decision lives after it has been reasoned about and
-before it has earned a `REQ-` in [`requirements/`](./2026-09-17/requirements/). Some of it
-will become requirements. Some will be thrown away. The value is that neither
-outcome requires re-deriving the argument.
+**This is not a plan of record.** Nothing here is on a schedule or built.
+A decision lives here after someone reasons about it and before it earns a
+`REQ-`. This file is also the seed for the next debbie generation.
 
-Origin: #304, from the architecture conversation on 2026-09-18, immediately
-after the deploy chain (#276 → #277 → #278 → #279 → #280) landed.
+## Built
 
----
+These decisions are real now. Each one keeps only the reason that stops a bad
+idea from coming back.
 
-## The problem
+**A machine is told its roles.** It does not work them out, and it does not
+vote. The apps keep SQLite on local Docker volumes, so two public webservers
+make two databases that cannot merge. Cloudflare already runs the real
+election: the machine with the tunnel credential gets the traffic. See
+[Roles](./2026-09-17/README.md#roles). `cloudflared` can run one tunnel from
+several replicas, and that suits stateless origins. The
+[cutover runbook](./2026-09-17/README.md#move-the-tunnel-from-machine-a-to-machine-b)
+runs two connectors for a short, planned overlap. That is fine for a cutover.
+As a standing high-availability setup it is wrong.
 
-`debbie` is one machine. It is about to be several: a machine that provisions the
-others, a machine that serves the websites, and machines that *could* serve the
-websites but do not. They sit on a normal home wifi network shared with people
-who are not running a datacentre and did not agree to one.
+**USB install, permanently. No PXE.** PXE needs a change to the household DHCP
+server. Proxy DHCP (`dnsmasq`) got the same answer, because the objection is to
+any change on a shared network. PXE ROMs also need ethernet.
 
-Three things have to be decided that a single machine never had to answer: who
-does what, who decides, and how anyone can see the answer.
+**Roles are flag files.** `ROLE_<NAME>=yes` in
+`scripts/3-provision/<machine>.env` sets a role. The invariant is **exactly one
+`tunnel`**, because only the tunnel machine's data is public. The names
+`provisioner` and `preseeder` stay free for later roles of the same form.
 
----
+**Every machine tracks `release`.** See REQ-DEPLOY-001 and REQ-DEPLOY-002 in
+[`deploy.md`](./2026-09-17/requirements/deploy.md).
 
-## Shape
+## Not built
 
-**Control plane and data plane, in a star.** Machines talk to one control plane
-and never to each other. There is no gossip, no membership protocol and no peer
-awareness, because peer awareness only earns its keep if peers make decisions
-about each other — and they do not (see *Parked*, below).
+**Control-plane state in SQLite on the provisioner.** Machines poll the control
+plane. One endpoint takes the heartbeat and returns the declared roles. This is
+the pull pattern of REQ-DEPLOY-002, so no machine opens an inbound port. **An
+unreachable control plane never causes a role change.** The machine keeps its
+last roles. Role assignment stays out of git, because a role change in git
+needs a commit, a poll, and push credentials for the dashboard.
 
-**Capability is not activation.** Every machine is *able* to run the web stack.
-One actually does. That split already exists in the current provisioning without
-having been designed for it: Docker (#276), Node 20 and Yarn 4 (#277) and the
-`release` checkout (#278) are installed on any machine that runs `setup-server-environment.sh`,
-with nothing role-specific about them. Roles are a thin activation layer on top.
-No rework of what landed today is implied.
+**Heartbeat and dashboard first, read-only.** Build this before any role
+machinery. It makes machine state visible before anything changes it. It serves
+`dash.seanmizen.com` on ports **4070** (FE) and **4071** (BE). The heartbeat
+sends hostname, boot id, uptime, disk, Docker status, checkout SHA, and declared
+roles against actual roles. **The loudest alarm is more than one machine with
+the `tunnel` role.**
 
----
-
-## Decided
-
-### 1. Roles are declared, not negotiated
-
-A machine is told what it is. It does not work it out, and it does not vote.
-
-The reason is not that consensus is hard, although it is. It is that the
-webserver role has no safe wrong answer. The apps are SQLite on local Docker
-volumes, so two machines concluding they are both the webserver produces two
-divergent databases and no way to merge them. A role whose failure mode is
-silent data loss cannot be *usually* exactly-one.
-
-The election that matters already exists and Cloudflare runs it: whatever holds
-the tunnel credentials and the `config.yml` ingress is what the internet
-reaches. `apps/cloudflared/credentials/` is host-specific and gitignored, and
-`REQ-DEPLOY-006` already exists to stop a deploy deleting it. Moving the
-webserver role means moving credentials, which is a deliberate act by a human.
-For a single-writer datastore that is a feature, not friction.
-
-> Note for later: `cloudflared` does support running one tunnel from several
-> replicas, with Cloudflare load-balancing across them. That is built for
-> stateless origins. It is the wrong tool here and should not be reached for as
-> a shortcut to high availability.
-
-### 2. No PXE. USB, permanently
-
-Not a staging decision — a standing one. PXE would mean touching the household
-DHCP server, and the network is shared with people who need it to work.
-
-This was reconsidered once and still rejected. `dnsmasq` can run in **proxy DHCP
-mode** (`dhcp-range=<subnet>,proxy`), answering only the PXE portion of the
-conversation and leaving addressing entirely to the existing router — the
-standard answer to exactly this constraint. It was declined anyway, because the
-objection is to perturbing the network at all, not to the specific mechanism.
-Recorded so it is not re-proposed as though it were news. (It would also have
-needed ethernet at install time, since PXE ROMs do not do wifi.)
-
-**Consequence, and it is a good one.** USB-booted machines can still fetch their
-preseed over HTTP from the provisioner, which is what `serve-preseed.sh` already
-does. So the provisioner's value is not booting — it is that **changing the
-preseed does not mean rebuilding ISOs**. The USB stick becomes a dumb bootloader
-written once per machine.
-
-### 3. Role *options* are versioned. Role *assignment* is runtime
-
-The set of roles that exist is code: one `custom-role-*.target` systemd unit per
-role, shipped by `setup-server-environment.sh`, reviewed in a PR like anything else. Which
-roles a given machine has switched on is runtime state and does not belong in
-git.
-
-Adding a role is a pull request. Assigning one is a click.
-
-systemd targets are the right mechanism rather than a bespoke supervisor:
-declarative, ordering is free via `Wants=`/`BindsTo=`, and `systemctl enable
---now` / `disable --now` on a target is the whole of the activation logic. Units
-must be named `custom-*` and live in `/usr/local/lib/systemd/system` — #292, and
-`payload/assert.sh` already enforces both.
-
-**Built (#329), as flag files rather than targets so far:** `webserver` (runs
-the sites) and `tunnel` (the Cloudflare tunnel; requires `webserver`; exactly
-one machine). Set as `ROLE_<NAME>=yes` in `scripts/3-provision/<machine>.env`, **unset means off**, and
-written to `/etc/seanorepo/roles/<name>` on every provisioning run. A
-`webserver` without `tunnel` publishes on the LAN, for local use. So the
-invariant this document cares about is **exactly one `tunnel`**, not exactly
-one `webserver`: only the tunnel machine's data is public.
-
-**Reserved, not built:** `provisioner`, `preseeder`. They take the same
-`ROLE_<NAME>` form when they are. Roles are deliberately **not** mutually
-exclusive.
-
-### 4. Control-plane state in SQLite on the provisioner; machines poll it
-
-Machines poll the control plane and converge on what it tells them. One endpoint
-carries both directions: the machine posts its heartbeat and reads back its
-declared role.
-
-This is the same pull pattern as the deploy poller (`REQ-DEPLOY-002`) for the
-same reason — no inbound ports, nothing pushing at a machine behind a firewall.
-
-Critically: **an unreachable control plane must never cause a role change.** A
-machine that cannot reach the provisioner keeps doing exactly what it was last
-told. The control plane being down is not an event.
-
-Roles were considered for git, given the poller precedent, and rejected:
-flipping a role would become a commit plus a two-minute poll, and the dashboard
-would need push credentials. Config in git, assignment in the database.
-
-### 5. Heartbeat and dashboard first, read-only
-
-Before any role machinery. It is independently useful, it is the thing that gets
-looked at daily, and it de-risks everything after it by making machine state
-observable *before* anything starts changing machine state.
-
-Served at `dash.seanmizen.com`. Ports **4070** (FE) and **4071** (BE) on the
-cloudflared scheme, **5070**/**5071** on Fly — 4060/4061 is `inside`, and 4040 is
-squatted by ngrok's web inspector.
-
-Heartbeat payload falls out of what already exists: hostname, boot id (the
-plumbing arrived free with #295), uptime, disk, Docker status, checkout SHA,
-declared role versus actual role.
-
-**One alarm matters more than the rest: more than one machine reporting the
-webserver role.** The thing that must never happen should be the loudest thing on
-the page.
-
-Bootstrap wrinkle: the first deployment target is the existing `debbie`, which
-runs the `2025-10-08b` generation rather than `2026-09-17`. That is still the
-right call for a proof of concept; the newer generation inherits the dashboard
-later.
-
-### 6. The provisioner gets its own keypair
-
-An always-on machine holding a key that can root every machine on the network is a
-materially different security posture from a key on a laptop that is plugged in
-occasionally. It is a lateral-movement hub, and it should have a blast radius
-that can be described in one sentence.
-
-A dedicated provisioning keypair, not a personal one.
-
-### 7. Every machine tracks `release`; only a serving machine deploys
-
-Decided in #307. The poller splits in two:
-
-- `custom-release-poll.timer` fetches and checks out `release` on **every**
-  machine. It has no effect on anything running, so it is always safe.
-- `custom-deploy.service` runs `yarn prod:docker`. The release poller
-  triggers it after every poll (`OnSuccess=`), and it has no timer of its own.
-  It deploys only when the checkout or the boot id changed, and only on a
-  machine with the `webserver` role (#329).
-
-A standby machine is then already at the right SHA, and promoting it takes seconds
-of `docker compose up`, not a fetch plus a cold build. The switch is
-`ROLE_WEBSERVER` in `scripts/3-provision/<machine>.env` (§3); later the role files become
-`custom-role-*.target` units.
-
-Per-app rebuild detection was rejected in the same ticket. On the real machine
-`yarn prod:docker` against an unchanged tree measured 12–13s, because the layer
-cache already skips unchanged apps.
-
-### 8. The Mac stays the cold-start path
-
-`provision.sh` runs from a workstation today and will keep working. It becomes
-the bootstrap stand-in: what builds machine zero when the fleet is being started
-from nothing, and otherwise unused.
-
----
+**The provisioner gets its own keypair.** An always-on machine with a root key
+to every machine is a lateral-movement hub. Its blast radius must fit in one
+sentence. Every machine already trusts one durable admin key,
+[`seanorepo-admin.pub`](./2026-09-17/payload/seanorepo-admin.pub). The
+provisioner key is a second, dedicated key.
 
 ## Parked
 
-### Automatic role negotiation
+**Automatic role negotiation.** Declared roles come first, because negotiation
+needs a place to write its answer and a way to override it. A wrong answer for
+a stateless role costs a retry. A wrong answer for a stateful role loses data.
+Before a stateful role negotiates, answer these questions:
 
-**Parked, not rejected.** The position on record is that it is solvable with a
-defined protocol, and that is not disputed here — what is disputed is the order
-of operations. Declared roles are a prerequisite for negotiated ones regardless,
-since negotiation needs somewhere to write its answer and something to override
-it when it is wrong.
+- What fences a superseded machine before it writes?
+- What happens during a partition, as a chosen tradeoff?
+- Does the data layer still assume one local SQLite writer? If so, the answer
+  is fencing, and quorum does not apply.
+- How does a human override a wrong answer while it happens?
 
-The asymmetry worth carrying forward: **the objection is not to consensus, it is
-to local SQLite.** A wrong answer about `preseeder` costs a retry. A wrong answer
-about `webserver` costs data that does not come back. So the two are not one
-feature, and stateless roles could safely negotiate long before the webserver
-role could.
+**systemd targets and slices.** A `custom-role-*.target` per role, a
+`custom.target` for the whole stack, and a `custom.slice` with `MemoryMax=`.
+Add them when there is a real list of services to group.
 
-Before negotiation is safe for a stateful role, this document wants answers to:
+## Open question: backups
 
-- What fences a machine that believes it is the webserver but has been
-  superseded — before it writes, not after.
-- What happens during a partition, stated as a chosen tradeoff rather than
-  discovered behaviour.
-- Whether the data layer still assumes a single local SQLite writer by then. If
-  it does, the answer above has to be fencing rather than quorum.
-- How a human overrides a wrong negotiated answer while it is happening.
-
----
-
-### systemd targets and slices
-
-Parked until there is a list of real services to group. A **target** would let
-`systemctl restart custom.target` act on the whole stack. A **slice** would let
-the services share a memory cap (`Slice=custom.slice`, `MemoryMax=`). Both can
-be added later with no rework. Today `systemctl list-units 'custom-*'` is enough,
-because Docker already groups most of what runs.
-
-## Open questions
-
-Genuinely undecided. Listed so they are not mistaken for decisions.
-
-- **Naming.** `debbie` names a machine and also, informally, the generation of
-  provisioning that produced it. Several machines need a scheme that keeps those
-  two apart.
-- **How a role change physically moves the tunnel credentials.** Decided that it
-  is a human act; not decided what that act *is*, or what stops the old
-  webserver continuing to serve after it stops being one.
-- **Backups.** Not discussed at all. A fleet makes the single-writer SQLite machine
-  more obviously a single point of loss, not less.
-
----
+A fleet makes the single SQLite writer a clearer single point of loss. On
+2026-09-22 the production data survived a wiped machine only because a
+migration bundle was on a laptop. Open work: #408.
 
 ## What this does not cover
 
-Anything already in [`requirements/`](./2026-09-17/requirements/). The requirements
-describe one host and are validated by CI; this document describes a fleet and
-is validated by nothing. When something here becomes real it moves there and
-gets a `REQ-` and a test, and its section here should be replaced by a pointer.
+Anything in [`2026-09-17/requirements/`](./2026-09-17/requirements/), which CI
+checks. Each generation owns its `requirements/`. A new generation copies the
+previous one's and moves the decisions it builds from here into them. The
+decision here then becomes a pointer.
