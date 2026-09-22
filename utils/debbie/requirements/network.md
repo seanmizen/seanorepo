@@ -3,9 +3,9 @@
 The path from the public internet to a container on the host, and the
 behaviour that keeps that path alive without anyone watching.
 
-`2025-10-08b/` implements these on the machine running today. `2026-09-17/` has
-rebuilt the tunnel half (`REQ-NETWORK-001`, `REQ-NETWORK-002`, in #280) and has
-not rebuilt the failover half. The August 2026 outage recorded in
+`2026-09-17/` implements these: the tunnel half (`REQ-NETWORK-001`,
+`REQ-NETWORK-002`, #280) and the failover half (#281). The Inspection evidence
+below still cites `archive/2025-10-08b/`, where both were first built. The August 2026 outage recorded in
 `REQ-NETWORK-003` is why the failover half exists at all.
 
 Introduced in #273.
@@ -38,7 +38,7 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other cloudflared unit
     is enabled" — two daemons dialling out for one tunnel is the failure this
     catches
-  - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
+  - Inspection — `utils/debbie/archive/2025-10-08b/services/cloudflared-custom.service`
     (what production runs today, until a machine is rebuilt on `2026-09-17/`)
 - **Relations:** none
 
@@ -81,7 +81,7 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel is NOT enabled
     while credentials are absent" — a host with no credentials refuses to run
     the tunnel rather than restarting against it forever
-  - Inspection — `utils/debbie/2025-10-08b/services/cloudflared-custom.service`
+  - Inspection — `utils/debbie/archive/2025-10-08b/services/cloudflared-custom.service`
     points at the checkout's `config.yml`
 - **Relations:**
   - depends-on REQ-NETWORK-001

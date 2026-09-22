@@ -26,10 +26,8 @@ IFS=$'\n\t'
 # clones and where payload/assert.sh looks. The override is spelled REPO_DIR to
 # agree with setup-server-environment.sh and payload/assert.sh.
 #
-# 2025-10-08b/scripts/deploy.sh - what production runs today - spells the same
-# override REPO_PATH and resolves the same default path. The wart is not
-# carried forward: this generation is REPO_DIR throughout, and the two
-# generations never run on the same machine.
+# The retired generation (archive/2025-10-08b) spelled this override
+# REPO_PATH. This generation is REPO_DIR throughout.
 REPO_DIR="${REPO_DIR:-$HOME/projects/seanorepo}"
 
 # State lives under the deploy user's own directory rather than /tmp. A

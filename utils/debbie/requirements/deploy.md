@@ -1,9 +1,9 @@
 # REQ-DEPLOY — How code reaches debbie
 
 What has to be true for a commit to become a running site. These describe the
-mechanism that `2025-10-08b/` implements today and that `2026-09-17/` has not
-yet rebuilt — the directory is what production runs, and it is the reference,
-not the specification.
+mechanism that `2026-09-17/` implements. It was first built in
+`archive/2025-10-08b/`, and the Inspection evidence below still cites that
+generation.
 
 Written before the rebuild rather than after it, so the rebuild has something
 to answer to. `REQ-SERVER-*` describes the host; these describe what the host
@@ -31,7 +31,7 @@ Introduced in #273.
   eventually wonders why their fix is not live. That is the accepted trade: a
   confusing question beats an unintended deploy.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` checks out
+  - Inspection — `utils/debbie/archive/2025-10-08b/scripts/deploy.sh` checks out
     `$RELEASE_BRANCH`, which defaults to `release`
   - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` checks out
     `$RELEASE_BRANCH` after cloning, and never creates the branch when it is
@@ -76,8 +76,8 @@ Introduced in #273.
   #329). The deploy has no timer of its own, so it
   can never start while a checkout is being written.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/services/deploy-poll-custom.timer`
-  - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` compares
+  - Inspection — `utils/debbie/archive/2025-10-08b/services/deploy-poll-custom.timer`
+  - Inspection — `utils/debbie/archive/2025-10-08b/scripts/deploy.sh` compares
     `git ls-remote` against a recorded marker
   - Inspection — `utils/debbie/2026-09-17/services/release-poll.sh` compares
     `git ls-remote` against `HEAD` and checks out on a difference; no marker
@@ -138,7 +138,7 @@ Introduced in #273.
   while a deploy holds it, the poller leaves the checkout alone and tries again
   on the next tick.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` takes
+  - Inspection — `utils/debbie/archive/2025-10-08b/scripts/deploy.sh` takes
     `$DEPLOY_LOCK_FILE` before doing any work
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` takes `flock -n`
     on a file descriptor before doing any work, so the kernel releases the lock
@@ -168,7 +168,7 @@ Introduced in #273.
   `./deploy.sh --force`, and why the poller is a thin wrapper rather than the
   mechanism.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` runs
+  - Inspection — `utils/debbie/archive/2025-10-08b/scripts/deploy.sh` runs
     `yarn install --immutable` then `yarn prod:docker`
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "docker info works as srv
     without sudo"
@@ -198,9 +198,9 @@ Introduced in #273.
   This is also the only place the deploy needs root, which is why the sudoers
   drop-in grants exactly one command rather than general privilege.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` diffs the old and
+  - Inspection — `utils/debbie/archive/2025-10-08b/scripts/deploy.sh` diffs the old and
     new SHA for `$CLOUDFLARED_CONFIG` before restarting
-  - Inspection — `utils/debbie/2025-10-08b/setup/sudoers-seanorepo-deploy`
+  - Inspection — `utils/debbie/archive/2025-10-08b/setup/sudoers-seanorepo-deploy`
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` diffs the last
     deployed SHA (the marker, since #307) against `HEAD`
     with a pathspec rather than piping into `grep`, and restarts when it cannot
@@ -249,7 +249,7 @@ Introduced in #273.
   future reader tidying up the deploy script would reasonably add `git clean
   -fdx` to make checkouts deterministic, and that is the failure this forbids.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/scripts/deploy.sh` carries a comment
+  - Inspection — `utils/debbie/archive/2025-10-08b/scripts/deploy.sh` carries a comment
     stating that the absence of `git clean` is deliberate
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no git clean anywhere in
     the deploy path" — asserted as an absence, against the DEPLOYED script, so
