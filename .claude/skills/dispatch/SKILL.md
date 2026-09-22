@@ -105,9 +105,8 @@ WORKFLOW:
 
 5. Stage and commit your changes:
    git add {specific files}
-   git commit -m "[SEAN-$ARGUMENTS] {type}: {description}
-
-   Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+   git commit -m "[SEAN-$ARGUMENTS] {type}: {description}"
+   (End the message with the Co-Authored-By line your harness gives you.)
 
 6. Push your branch:
    git push -u origin SEAN-$ARGUMENTS/{short-desc}
