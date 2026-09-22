@@ -1,4 +1,4 @@
-# REQ-SERVER — What a provisioned debbie must be
+# REQ-SERVER — What a provisioned server must be
 
 The properties `payload/setup-server-environment.sh` establishes on a freshly installed host,
 each one paired with a check in `utils/debbie/2026-09-17/payload/assert.sh`.
@@ -464,7 +464,7 @@ Introduced in #259.
   works.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no repo units in /etc/systemd/system"
-  - Inspection — every unit installed by `2026-09-17/` resolves to
+  - Inspection — every unit installed by `utils/debbie/2026-09-17/` resolves to
     `/usr/local/lib/systemd/system` under `systemctl cat`
 - **Relations:** none
 
