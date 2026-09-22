@@ -13147,6 +13147,9 @@ __metadata:
     "@biomejs/biome": "npm:2.3.8"
     "@commitlint/cli": "npm:^20.5.0"
     husky: "npm:^9.1.7"
+  dependenciesMeta:
+    rsbuild-plugin-glsl@1.0.1:
+      built: false
   languageName: unknown
   linkType: soft
 
