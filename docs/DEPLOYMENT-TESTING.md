@@ -332,7 +332,7 @@ Cloudflare 1033 downtime.
 
 A failed deploy is retried on the next tick, so pushing a fix is all that is needed.
 Progress and failures go to the journal. See
-`utils/debbie/2025-10-08b/docs/architecture.md` for the full flow.
+`utils/debbie/archive/2025-10-08b/docs/architecture.md` for the full flow.
 
 ## Deployment Checklist
 

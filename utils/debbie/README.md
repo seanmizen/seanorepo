@@ -5,11 +5,12 @@ directory; the dates record when work started, **not** which one is live.
 
 | Directory | What it is |
 |---|---|
-| `2026-09-17/` | Current. A VM harness that installs Debian 13 and asserts the result. See its [README](./2026-09-17/README.md). |
-| `2025-12-27/` | A generic rewrite plus the first real QEMU attempt. Superseded by `2026-09-17/`. |
-| `2025-10-08b/` | **What production runs today.** The deploy poller, Cloudflare tunnel and network failover watchdog all live here. |
-| `2025-10-08/` | Reference only. Do not edit. |
-| `archive/` | Historical PXE, netboot, cobbler and Raspberry Pi experiments. Do not edit. |
+| `2026-09-17/` | **Current, and what production runs** (asus, surface). Installs Debian 13, provisions it, and asserts the result, on metal or in a VM. See its [README](./2026-09-17/README.md). |
+| `archive/` | Retired generations, one dated folder each. Do not edit. |
+| `archive/2025-12-27/` | A generic rewrite plus the first real QEMU attempt. |
+| `archive/2025-10-08b/` | The generation production ran until September 2026: the first deploy poller, Cloudflare tunnel unit and failover watchdog. |
+| `archive/2025-10-08/` | The first 2025-10 attempt. |
+| `archive/2025-04-14/` | PXE, netboot, cobbler and Raspberry Pi experiments. |
 
 Requirements are in [`requirements/`](./requirements/) and are validated by CI on
 every PR — `REQ-EMU-*` constrain the VM harness, `REQ-SERVER-*` describe what a

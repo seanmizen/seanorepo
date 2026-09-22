@@ -24,9 +24,9 @@ EXPECT_HOSTNAME="${EXPECT_HOSTNAME:?EXPECT_HOSTNAME must be set - the name this 
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
 # Must match the default in payload/setup-developer-environment.sh, which clones here, and the
-# path 2025-10-08b/scripts/deploy.sh resolves as the deploy user. A check that
-# depends on the checkout and cannot find one SKIPS with the path it looked at
-# printed, so a disagreement between the three is visible rather than silent.
+# path services/deploy.sh resolves as the deploy user. A check that depends on
+# the checkout and cannot find one SKIPS with the path it looked at printed, so
+# a disagreement between the three is visible rather than silent.
 REPO_DIR="${REPO_DIR:-/home/$DEPLOY_USER/projects/seanorepo}"
 RELEASE_BRANCH="${RELEASE_BRANCH:-release}"
 
