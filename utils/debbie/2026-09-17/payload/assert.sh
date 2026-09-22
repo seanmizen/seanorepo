@@ -1293,8 +1293,15 @@ if [ "$PHASE" = provisioned ]; then
         'bad=0; for p in /sys/class/net/*; do [ -e "$p/device" ] || continue;
              i=$(basename "$p");
              ip -4 -o addr show "$i" | grep -q inet || bad=1; done; [ "$bad" = 0 ]'
-    check "more than one interface holds a default route" \
-        '[ "$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\") print \$(i+1)}" | sort -u | wc -l)" -ge 2 ]'
+    # Every physical interface, not "more than one". A machine with one link
+    # has exactly one default route and that is correct - the first version of
+    # this check demanded two and failed on trixie2, which has only wifi.
+    # What it proves either way is that the per-interface addressing above
+    # produced a route for every link the watchdog could promote.
+    check "every physical interface holds a default route" \
+        'want=$(ls -d /sys/class/net/*/device 2>/dev/null | wc -l);
+         got=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\") print \$(i+1)}" | sort -u | wc -l);
+         [ "$want" -gt 0 ] && [ "$got" = "$want" ]'
 
     # --- the matrix, cases that need no QEMU monitor -----------------------
     # Case 1 and 8: a healthy machine is a no-op, and a second run changes
@@ -1349,7 +1356,7 @@ else
     sk "the watchdog names no interface and no gateway" "setup-server-environment.sh installs it"
     sk "the watchdog does not depend on nmcli" "setup-server-environment.sh installs it"
     sk "every physical interface has an address" "setup-server-environment.sh addresses them"
-    sk "more than one interface holds a default route" "setup-server-environment.sh addresses them"
+    sk "every physical interface holds a default route" "setup-server-environment.sh addresses them"
     sk "case 1+8: a healthy run succeeds, changes nothing and logs nothing" "setup-server-environment.sh installs it"
     sk "case 4: upstream dead with carrier up moves the default route" "setup-server-environment.sh installs it"
     sk "case 7: the route does not fail back on its own" "setup-server-environment.sh installs it"
