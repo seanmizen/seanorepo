@@ -1262,6 +1262,99 @@ fi
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
 echo
+echo "== network failover watchdog (REQ-NETWORK-003) =="
+NF_TIMER=custom-net-failover.timer
+NF_SERVICE=custom-net-failover.service
+NF_SCRIPT=/usr/local/lib/seanorepo/net-failover.sh
+if [ "$PHASE" = provisioned ]; then
+    check "$NF_TIMER installed and enabled" \
+        "[ -f /usr/local/lib/systemd/system/$NF_TIMER ] && systemctl is-enabled --quiet $NF_TIMER"
+    # The unit must not point into the checkout: that tracks release, so the
+    # script would be missing on any machine that has not deployed this commit.
+    check "the watchdog is installed outside the checkout" \
+        "[ -x $NF_SCRIPT ] && systemctl show -p ExecStart --value $NF_SERVICE | grep -q '$NF_SCRIPT' \
+         && ! systemctl show -p ExecStart --value $NF_SERVICE | grep -q projects/seanorepo"
+    check "$NF_SERVICE runs as root" \
+        "[ \"\$(systemctl show -p User --value $NF_SERVICE)\" = root ]"
+    # The old generation's units would fight this one over route metrics.
+    check "no old net-failover-custom unit is enabled" \
+        'for u in net-failover-custom.timer net-failover-custom.service; do
+             if systemctl is-enabled "$u" 2>/dev/null | grep -qx enabled; then exit 1; fi
+         done; true'
+    # NIC-agnostic by construction: an interface name in here is a machine this
+    # does not protect. #281 replaced an env file that named debbie's two.
+    check "the watchdog names no interface and no gateway" \
+        "! grep -vE '^[[:space:]]*#' '$NF_SCRIPT' | grep -qE '(enp|eth|wlp|wlan)[0-9]|[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+'"
+    # It must not depend on NetworkManager: this generation has none, and a
+    # watchdog that finds no candidates fails silently.
+    check "the watchdog does not depend on nmcli" \
+        "! grep -vE '^[[:space:]]*#' '$NF_SCRIPT' | grep -q nmcli"
+    check "every physical interface has an address" \
+        'bad=0; for p in /sys/class/net/*; do [ -e "$p/device" ] || continue;
+             i=$(basename "$p");
+             ip -4 -o addr show "$i" | grep -q inet || bad=1; done; [ "$bad" = 0 ]'
+    check "more than one interface holds a default route" \
+        '[ "$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\") print \$(i+1)}" | sort -u | wc -l)" -ge 2 ]'
+
+    # --- the matrix, cases that need no QEMU monitor -----------------------
+    # Case 1 and 8: a healthy machine is a no-op, and a second run changes
+    # nothing. Silence matters: this runs every minute.
+    # The start must SUCCEED, not merely be attempted. An earlier version of
+    # this passed because the unit could not find its script: nothing ran, so
+    # nothing changed, and "changes nothing" was satisfied by a broken unit.
+    check "case 1+8: a healthy run succeeds, changes nothing and logs nothing" \
+        'before=$(ip -4 route show default);
+         sudo -n systemctl start '"$NF_SERVICE"' || exit 1;
+         [ "$(systemctl show -p Result --value '"$NF_SERVICE"')" = success ] || exit 1;
+         sudo -n systemctl start '"$NF_SERVICE"' || exit 1;
+         after=$(ip -4 route show default);
+         [ "$before" = "$after" ] \
+         && [ -z "$(sudo -n journalctl -t net-failover --since "-30s" --no-pager -q 2>/dev/null)" ]'
+
+    # Cases 2 and 4 need a gateway this machine cannot reach, and the honest way
+    # to make one is to blackhole the real one. Only meaningful with a second
+    # link to move to, so a one-link machine skips rather than lies.
+    # Interfaces holding a default route. nmcli is not installed on this
+    # generation, and a link with no gateway is not somewhere the route can go.
+    nf_links=$(ip -4 route show default 2>/dev/null \
+               | awk '{for(i=1;i<NF;i++) if($i=="dev") print $(i+1)}' | sort -u | wc -l)
+    if [ "${nf_links:-0}" -ge 2 ]; then
+        # Case 4: carrier up, gateway unreachable. The 2026-08-14 failure.
+        check "case 4: upstream dead with carrier up moves the default route" \
+            'dev=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}");
+             gw=$(ip -4 route show default dev "$dev" | awk "{for(i=1;i<NF;i++) if(\$i==\"via\"){print \$(i+1);exit}}");
+             sudo -n ip route add blackhole "$gw"/32 || exit 1;
+             sudo -n systemctl start '"$NF_SERVICE"' ;
+             new=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}");
+             sudo -n ip route del blackhole "$gw"/32;
+             [ -n "$new" ] && [ "$new" != "$dev" ]'
+
+        # Case 7: no failback. The promoted link keeps the route after the
+        # original recovers, because promotion happens only when the ACTIVE path
+        # is dead. Flapping between two marginal links is the failure this avoids.
+        check "case 7: the route does not fail back on its own" \
+            'before=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}");
+             sudo -n systemctl start '"$NF_SERVICE"' ;
+             after=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}");
+             [ "$before" = "$after" ]'
+    else
+        sk "case 4: upstream dead with carrier up moves the default route" "one link only - nothing to move to"
+        sk "case 7: the route does not fail back on its own" "one link only"
+    fi
+else
+    sk "$NF_TIMER installed and enabled" "setup-server-environment.sh installs it"
+    sk "the watchdog is installed outside the checkout" "setup-server-environment.sh installs it"
+    sk "$NF_SERVICE runs as root" "setup-server-environment.sh installs it"
+    sk "no old net-failover-custom unit is enabled" "setup-server-environment.sh installs it"
+    sk "the watchdog names no interface and no gateway" "setup-server-environment.sh installs it"
+    sk "the watchdog does not depend on nmcli" "setup-server-environment.sh installs it"
+    sk "every physical interface has an address" "setup-server-environment.sh addresses them"
+    sk "more than one interface holds a default route" "setup-server-environment.sh addresses them"
+    sk "case 1+8: a healthy run succeeds, changes nothing and logs nothing" "setup-server-environment.sh installs it"
+    sk "case 4: upstream dead with carrier up moves the default route" "setup-server-environment.sh installs it"
+    sk "case 7: the route does not fail back on its own" "setup-server-environment.sh installs it"
+fi
+
 echo "== network =="
 if [ -n "$(ls -d /sys/class/net/*/wireless 2> /dev/null)" ]; then
     # netcfg persists wifi as an ifupdown stanza plus wpasupplicant in the
