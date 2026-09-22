@@ -17,7 +17,7 @@ in the comments of each script.
 
 | Folder | Contents | Runs on |
 |---|---|---|
-| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. Each step folder holds its `.env.example` and one `<machine>.env` per target machine. `lib.sh` holds the functions they share. | your computer |
+| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. `1-build-iso/` holds one `.env` for every machine; the other steps hold one `<machine>.env` each. `lib.sh` holds the functions they share. | your computer |
 | `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
 | `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh` and `net-failover.sh`, with the systemd unit beside each. systemd starts them from the `release` checkout. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
@@ -66,7 +66,8 @@ Test these on a real target machine:
 
 Follow [`scripts/README.md`](./scripts/README.md). In short:
 
-1. `1-build-iso/build-iso.sh <machine>` builds a USB installer.
+1. `1-build-iso/build-iso.sh` builds a USB installer. **One stick installs any
+   machine** since #376, so this step runs once and never again.
 2. `2-serve-preseed/serve-preseed.sh <machine>` serves the installer's answers
    while the target machine installs from the USB stick.
 3. `3-provision/provision.sh <machine>` configures the target machine and
