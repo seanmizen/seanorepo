@@ -41,6 +41,11 @@ apps/<app>/requirements/         # app-level requirements
   <prefix>.md                    # e.g. chips.md holds REQ-CHIPS-*
 ```
 
+The checker finds a `requirements/` folder at any depth under `apps/` and
+`utils/`, e.g. `utils/debbie/2026-09-17/requirements/`. It skips every
+`archive/` directory, for requirements and for citations. Retired work does not
+count.
+
 `REQ-NAV-014` is in a file named `nav.md`. That is a string rule, not a lookup:
 an agent following a relation reads the ID, derives the filename, and opens it.
 No index, no grep, no tooling. The prefix registry below says which level a
@@ -63,17 +68,17 @@ Prefixes are globally unique. Add a row when you add a file.
 | `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |
 | `DATA` | `apps/inside/requirements/data.md` | inside — schema, migrations, storage, vocabulary |
-| `DEPLOY` | `utils/debbie/requirements/deploy.md` | debbie — how code reaches the host |
+| `DEPLOY` | `utils/debbie/2026-09-17/requirements/deploy.md` | debbie — how code reaches the host |
 | `DISCOVERY` | `apps/inside/requirements/discovery.md` | inside — public visibility and filtering |
-| `EMU` | `utils/debbie/requirements/emu.md` | debbie — the VM test harness |
+| `EMU` | `utils/debbie/2026-09-17/requirements/emu.md` | debbie — the VM test harness |
 | `NET` | `apps/inside/requirements/net.md` | inside — API transport and failure handling |
 | `FAIL` | `apps/inside/requirements/fail.md` | inside — failure surfaces |
 | `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
-| `NETWORK` | `utils/debbie/requirements/network.md` | debbie — tunnel ingress and route failover |
+| `NETWORK` | `utils/debbie/2026-09-17/requirements/network.md` | debbie — tunnel ingress and route failover |
 | `ONBOARD` | `apps/inside/requirements/onboard.md` | inside — designer onboarding |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
 | `QUALITY` | `apps/inside/requirements/quality.md` | inside — testing conventions |
-| `SERVER` | `utils/debbie/requirements/server.md` | debbie — provisioned host configuration |
+| `SERVER` | `utils/debbie/2026-09-17/requirements/server.md` | debbie — provisioned host configuration |
 | `SLUG` | `apps/inside/requirements/slug.md` | inside — public slugs and their history |
 | `STATE` | `apps/inside/requirements/state.md` | inside — request-state honesty |
 | `THEME` | `apps/inside/requirements/theme.md` | inside — light, dark and auto |
@@ -152,6 +157,19 @@ A `Test` link must point at a file that exists — the validator opens it. A tes
 renamed or deleted out from under a requirement turns CI red, which is the
 whole point.
 
+`Test` and `Inspection` links follow the same rule, plus one more. Write the
+path from the repo root. The file has to sit inside the **unit** that owns the
+requirements folder, which is the folder's parent: `apps/inside/` for
+`apps/inside/requirements/`, and `utils/debbie/2026-09-17/` for that
+generation's. No link may point into `archive/`. So one generation's
+requirements cannot be met by another generation's code. The root
+`requirements/` folder's unit is the whole repo.
+
+A `Test` cites the first path in backticks. An `Inspection` cites the first
+backticked repo path, so it may name a setting or a host path such as
+`/usr/local/lib/systemd/system` first. An `Inspection` with no repo path
+inspects the running system and is not checked.
+
 ### Relations
 
 Six, with inverses. Keep the vocabulary small so an agent can hold it.
@@ -211,7 +229,7 @@ free to happen the other way round:
 
 | Direction | Rule |
 |---|---|
-| requirement → test | A `Verification` link of method `Test` must name a file that exists. A spec renamed out from under a requirement turns CI red. |
+| requirement → test | A `Verification` link of method `Test` must name a file that exists, inside its unit and outside `archive/`. So must an `Inspection` link that names a repo path. A spec renamed out from under a requirement turns CI red. |
 | code → requirement | Every `REQ-...` cited anywhere outside `requirements/` must be a declared ID. A citation of a **superseded** or **withdrawn** requirement warns instead of failing — legitimate while the code still implements the old behaviour, but never invisible. |
 
 Plus, on the requirements themselves: ID format and prefix/filename agreement,
