@@ -35,6 +35,12 @@ Root `package.json` scripts are the entry points (`yarn sean`, `yarn caroline`,
 - **Merging to `main` deploys nothing.** Production runs the `release` branch.
   `yarn release` fast-forwards it to `main`. Run it only when Sean asks.
 - **All backend API routes use the `/api` prefix.**
+- **Write in STE.** Load the `ste` skill (`.claude/skills/ste/`) before you
+  write prose. Use Strict mode for error messages, tool descriptions and agent
+  instructions. Use STE-flavored mode for docs, comments, commit messages, PR
+  bodies and replies to Sean. Run `.claude/skills/ste/scripts/ste-lint.py` on
+  new prose. In code comments and docs, cite the requirement (`REQ-DEPLOY-002`)
+  and never the issue or PR number.
 
 ## Conventions
 
