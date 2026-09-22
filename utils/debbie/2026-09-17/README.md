@@ -17,7 +17,7 @@ in the comments of each script.
 
 | Folder | Contents | Runs on |
 |---|---|---|
-| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `4-cutover/`, `test-vm/`. Each step folder holds its `.env.example` and one `<machine>.env` per target machine. `lib.sh` holds the functions they share. | your computer |
+| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. Each step folder holds its `.env.example` and one `<machine>.env` per target machine. `lib.sh` holds the functions they share. | your computer |
 | `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
 | `services/` | What runs on a target machine all the time: `release-poll.sh` and `deploy.sh`. systemd starts them from the `release` checkout. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
@@ -109,30 +109,49 @@ its own data, separate from the public machine's. To see a machine's roles:
 
 ### Move the tunnel to another machine
 
-`provision.sh` cannot do this in one go. It stops a tunnel with
-`systemctl disable --now` and starts one with plain `systemctl enable`, so
-setting `ROLE_TUNNEL=yes` and provisioning serves the tunnel only after the
-reboot that step triggers. Use step 4:
+Set the role and provision. Then stop the tunnel on the machine that had it.
 
 ```bash
-scripts/4-cutover/4-cutover.sh <old-machine> <new-machine>
+# 1. the new machine serves the sites on the LAN. Check every site by IP.
+#    ROLE_WEBSERVER=yes, ROLE_TUNNEL unset in 3-provision/<new>.env
+scripts/3-provision/provision.sh <new>
+
+# 2. give it the tunnel role. The reboot at the end of this run starts the
+#    tunnel, so both machines serve it from here until step 3.
+#    ROLE_TUNNEL=yes in 3-provision/<new>.env
+scripts/3-provision/provision.sh <new>
+
+# 3. stop the tunnel on the old machine.
+ssh -t srv@<old>.local sudo systemctl disable --now cloudflared-custom.service
 ```
 
-It stops the tunnel on the old machine, starts it on the new one, and writes
-`ROLE_TUNNEL` into both `3-provision/<machine>.env` files so the next
-`provision.sh` run on either machine agrees with what is running. Skip that last
-part by doing it with `systemctl` by hand and the next provisioning run stops the
-tunnel again, immediately.
+The unit is `cloudflared-custom.service` on a 2025-10-08b machine and
+`custom-cloudflared.service` here. `systemctl list-units 'c*cloudflared*'` names
+it.
 
-Downtime is however long cloudflared takes to connect: a couple of seconds.
+**Set the role in the env file. Do not enable the unit by hand.** `provision.sh`
+stops a tunnel with `systemctl disable --now` and starts one with plain
+`systemctl enable` — off is immediate, on waits for the reboot the step
+triggers. A unit enabled by hand runs while the env file says it should not, and
+the next `provision.sh` run stops it, immediately. Each run of `provision.sh` makes the
+machine match the env file.
 
-Two things it does not do. It does not touch ngrok, which allows one agent
-session and is an admin path rather than user traffic - start it on the new
-machine by hand, and expect the address and the host key to change, so the
-command tcp-getter emails you will differ. And it does not protect
-carolinemizen.art from losing a write: a write that lands on the old machine
-after its database was copied is lost. The window is seconds, the site takes
-admin writes only, and making that site safe to move belongs to that site.
+Between step 2 and step 3 both machines serve the tunnel. Cloudflare balances
+across the two connections, so there is no gap, and both answer the same sites
+from their own copy of the data. Keep that window short and do not take writes
+in it. A machine holding the tunnel role it should not hold is the state
+`REQ-NETWORK-002` exists to prevent, so step 3 is not optional.
+
+Two things provisioning does not move:
+
+- **ngrok.** One agent session, and it is an admin path rather than user
+  traffic. Add the authtoken on the new machine and start `custom-ngrok.service`
+  there. The address and the SSH host key both change, so the command
+  tcp-getter emails will not match the one you have.
+- **Site data.** Copy it before step 2 and check it renders over the LAN. You
+  lose any write that reaches the old machine after you copy its database.
+  carolinemizen.art takes admin writes only, so the window is small and the
+  cost is one re-upload, but nothing here protects you from it.
 
 ## Operate a target machine
 
