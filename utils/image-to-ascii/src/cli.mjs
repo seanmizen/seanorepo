@@ -37,6 +37,8 @@ Animation:
   --frames N               default: the last keyframe plus one
   --ease linear|smooth     default: linear
   --pingpong               play forward, then back
+  --clear-from N           blank the image from frame N. Text layers stay.
+                           In a spec: "clearFrom": N
   --spec FILE.json         read all of the above from a file. Flags override it.
 
 Text (in a --spec file only):
@@ -87,6 +89,7 @@ const parseArgs = (argv) => {
       args.vars[value.slice(0, at)] = value.slice(at + 1);
     } else if (name === 'sweep') args.sweeps.push(value);
     else if (['frames', 'fps'].includes(name)) args[name] = Number(value);
+    else if (name === 'clear-from') args.clearFrom = Number(value);
     else if (['out', 'ease', 'spec'].includes(name)) args[name] = value;
     else if (name in DEFAULTS || name === 'threshold') {
       args.options[name] = NUMERIC.has(name) ? Number(value) : value;
@@ -111,6 +114,7 @@ const readSpec = (file) => {
     ),
     text: spec.text ?? [],
     vars: spec.vars ?? {},
+    clearFrom: spec.clearFrom,
     frames: spec.frames,
     fps: spec.fps,
     ease: spec.ease,
@@ -230,13 +234,19 @@ const main = async () => {
   const count =
     frames ??
     Math.max(Object.keys(tracks).length ? frameCount(tracks) : 1, lastText);
+  const clearFrom = args.clearFrom ?? spec.clearFrom;
   const rendered = [];
   for (let f = 0; f < count; f++) {
     const frameOptions = { ...options };
     for (const [name, track] of Object.entries(tracks)) {
       frameOptions[name] = valueAt(track, f, ease);
     }
-    rendered.push(layered(await toAscii(loaded, frameOptions), f));
+    let ascii = await toAscii(loaded, frameOptions);
+    // From clearFrom on, the image is blank and only the text layers show.
+    if (clearFrom !== undefined && f >= clearFrom) {
+      ascii = ascii.replace(/[^\n]/g, ' ');
+    }
+    rendered.push(layered(ascii, f));
   }
   if (args.pingpong ?? spec.pingpong) {
     rendered.push(...rendered.slice(1, -1).reverse());
