@@ -1346,13 +1346,26 @@ if [ "$PHASE" = provisioned ]; then
                | awk '{for(i=1;i<NF;i++) if($i=="dev") print $(i+1)}' | sort -u | wc -l)
     if [ "${nf_links:-0}" -ge 2 ]; then
         # Case 4: carrier up, gateway unreachable. The 2026-08-14 failure.
+        #
+        # Cut the ACTIVE link only - #381. A blackhole in the main table cuts
+        # the gateway from every link, so on a machine whose links share one
+        # gateway (asus) nothing could be promoted. The blackhole goes in a
+        # spare table, reached by the active link's source address: the
+        # watchdog's `ping -I <iface>` sources from it. An `oif` rule does not
+        # work - the lookup still returns the on-link route.
+        # Teardown leaves the promoted route alone. Case 7 reads it.
         check "case 4: upstream dead with carrier up moves the default route" \
             'dev=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}");
              gw=$(ip -4 route show default dev "$dev" | awk "{for(i=1;i<NF;i++) if(\$i==\"via\"){print \$(i+1);exit}}");
-             sudo -n ip route add blackhole "$gw"/32 || exit 1;
+             src=$(ip -4 route show default dev "$dev" | awk "{for(i=1;i<NF;i++) if(\$i==\"src\"){print \$(i+1);exit}}");
+             [ -n "$src" ] || exit 1;
+             sudo -n ip route add blackhole "$gw"/32 table 99 || exit 1;
+             sudo -n ip rule add from "$src" table 99 priority 100 \
+                 || { sudo -n ip route del blackhole "$gw"/32 table 99; exit 1; };
              sudo -n systemctl start '"$NF_SERVICE"' ;
              new=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}");
-             sudo -n ip route del blackhole "$gw"/32;
+             sudo -n ip rule del from "$src" table 99;
+             sudo -n ip route del blackhole "$gw"/32 table 99;
              [ -n "$new" ] && [ "$new" != "$dev" ]'
 
         # Case 7: no failback. The promoted link keeps the route after the
