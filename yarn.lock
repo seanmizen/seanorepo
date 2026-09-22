@@ -9280,6 +9280,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"image-to-ascii@workspace:utils/image-to-ascii":
+  version: 0.0.0-use.local
+  resolution: "image-to-ascii@workspace:utils/image-to-ascii"
+  dependencies:
+    sharp: "npm:^0.34.4"
+  bin:
+    image-to-ascii: ./src/cli.mjs
+  languageName: unknown
+  linkType: soft
+
 "import-fresh@npm:^3.2.1, import-fresh@npm:^3.3.0":
   version: 3.3.1
   resolution: "import-fresh@npm:3.3.1"
