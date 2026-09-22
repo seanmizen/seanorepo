@@ -344,8 +344,17 @@ VM_PASSWORD_CRYPTED='$6$debbievmtest$iLHeK/mfyeqbwDyW9O6Khy8qQknk/sM.dPztrhTcIOm
 cleanup() {
     [ -n "${HTTP_PID:-}" ] && kill "$HTTP_PID" 2> /dev/null || true
     [ -n "${QEMU_PID:-}" ] && kill "$QEMU_PID" 2> /dev/null || true
+    # The monitor socket lives in /tmp rather than the run directory, so it is
+    # not removed with the rest of the run's output.
+    [ -n "${MONITOR_SOCK:-}" ] && rm -f "$MONITOR_SOCK" || true
 }
 trap cleanup EXIT
+
+# Send one command to QEMU's human monitor. Used only by the failover test.
+monitor() {
+    [ -S "${MONITOR_SOCK:-}" ] || return 0
+    printf '%s\n' "$1" | nc -U "$MONITOR_SOCK" > /dev/null 2>&1 || true
+}
 
 qemu_common() {
     printf '%s\n' \
@@ -514,8 +523,32 @@ do_assert() {
         qemu-img create -f qcow2 -F qcow2 -b "$BASE_IMG" "$DISK" > /dev/null
     fi
 
-    log "booting installed system (ssh on :$SSH_PORT)"
-    "$QEMU_BIN" $(qemu_common) -serial "file:$RUN_DIR/boot.log" -monitor none &
+    # Two extra NICs and a monitor socket, for REQ-NETWORK-003 - #281. Only on
+    # this phase: the installer would have three interfaces to choose between,
+    # and which one netcfg picks is not what this harness tests.
+    #
+    # n0 is the management path and is never touched. Blackholing or unplugging
+    # the interface under test must not cut this script off from the machine it
+    # is testing, which is the one mistake that makes a failover test unreadable.
+    #
+    # Each netdev gets its own /24, so each interface has a DIFFERENT gateway.
+    # One shared gateway would let a probe through the wrong interface succeed
+    # and the watchdog would look healthy while routing through a dead link.
+    # /tmp, not $RUN_DIR, and not by preference. A unix socket path is capped
+    # at 104 bytes by sockaddr_un, and $RUN_DIR under a worktree or a deep
+    # checkout is longer than that on its own - QEMU refuses to start with
+    # "UNIX socket path is too long". The short name is the only thing that
+    # makes this work from any checkout.
+    MONITOR_SOCK="/tmp/dbvm-$$.sock"
+    rm -f "$MONITOR_SOCK"
+    log "booting installed system (ssh on :$SSH_PORT, 3 NICs, monitor on $(basename "$MONITOR_SOCK"))"
+    "$QEMU_BIN" $(qemu_common) \
+        -netdev "user,id=n1,net=10.0.3.0/24,host=10.0.3.2" \
+        -device virtio-net-pci,netdev=n1 \
+        -netdev "user,id=n2,net=10.0.4.0/24,host=10.0.4.2" \
+        -device virtio-net-pci,netdev=n2 \
+        -serial "file:$RUN_DIR/boot.log" \
+        -monitor "unix:$MONITOR_SOCK,server,nowait" &
     QEMU_PID=$!
 
     # ssh takes -p for the port, scp takes -P. Sharing one array between them
@@ -618,6 +651,56 @@ do_assert() {
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
         < "$GEN_DIR/payload/assert.sh" || rc=$?
+
+    #--------------------------------------------------------------------------
+    # Case 5 of the failover matrix: a cable pulled out - REQ-NETWORK-003, #281.
+    #
+    # This one cannot live in assert.sh. Carrier is a property of the emulated
+    # link, so only QEMU can take it away, and assert.sh runs inside the guest.
+    # `set_link off` drops the carrier while leaving the interface
+    # administratively up, which is what an unplugged cable looks like and is a
+    # different failure from the blackholed gateway assert.sh covers.
+    #
+    # n1, never n0: n0 carries this script's SSH session.
+    #--------------------------------------------------------------------------
+    if [ "$rc" = 0 ] && [ -S "$MONITOR_SOCK" ]; then
+        log "case 5: pulling the cable on n1"
+        local dev_before dev_after
+        dev_before="$(ssh "${ssh_opts[@]}" "$target" \
+            "ip -4 route show default | awk '{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}'" 2> /dev/null || true)"
+
+        monitor "set_link n1 off"
+        # Long enough for the kernel to report carrier 0 and NetworkManager to
+        # notice, short enough that a hung guest is still a failed test.
+        sleep 5
+        ssh "${ssh_opts[@]}" "$target" "sudo -n systemctl start custom-net-failover.service" 2> /dev/null || true
+        sleep 2
+        dev_after="$(ssh "${ssh_opts[@]}" "$target" \
+            "ip -4 route show default | awk '{for(i=1;i<NF;i++) if(\$i==\"dev\"){print \$(i+1);exit}}'" 2> /dev/null || true)"
+
+        local carrier
+        carrier="$(ssh "${ssh_opts[@]}" "$target" \
+            "for i in /sys/class/net/e*; do [ \"\$(cat \$i/carrier 2>/dev/null)\" = 0 ] && basename \$i; done" 2> /dev/null | tr -d '\r' || true)"
+        monitor "set_link n1 on"
+
+        if [ -z "$carrier" ]; then
+            log "  SKIP: no interface lost carrier, so the guest did not see the unplug"
+        elif [ -n "$dev_after" ] && [ "$dev_after" != "$dev_before" ]; then
+            log "  PASS: default route moved from ${dev_before:-none} to $dev_after"
+        elif [ -n "$dev_after" ]; then
+            # The route may already have been on a healthy interface, in which
+            # case not moving is correct. Only a route on the dead one is a fail.
+            if printf '%s\n' "$carrier" | grep -qx "$dev_after"; then
+                log "  FAIL: default route is still on $dev_after, which has no carrier"
+                rc=1
+            else
+                log "  PASS: default route on $dev_after, which kept its carrier"
+            fi
+        else
+            log "  FAIL: no default route at all after the unplug"
+            rc=1
+        fi
+    fi
 
     mkdir -p "$RUN_DIR/artifacts"
     scp "${scp_opts[@]}" "$target:/etc/fstab" "$RUN_DIR/artifacts/" > /dev/null 2>&1 || true

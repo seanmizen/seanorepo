@@ -1,0 +1,20 @@
+# Written by payload/setup-server-environment.sh from services/custom-net-failover.timer.
+# Edit that file, not this copy.
+[Unit]
+Description=Check every minute that the default route still reaches a gateway
+Documentation=https://github.com/seanmizen/seanorepo/issues/281
+
+[Timer]
+# A minute, because this is the outage clock: seanmizen.com was down on
+# 2026-08-14 for as long as nobody looked at it. A healthy run is silent and
+# costs two pings, so a short period is nearly free.
+OnBootSec=1min
+OnUnitActiveSec=1min
+# NOT batched. AccuracySec is left at its default deliberately, unlike the
+# release poller: coalescing this with other timers would let systemd defer the
+# one check that decides whether the machine is reachable at all.
+AccuracySec=1s
+Unit=custom-net-failover.service
+
+[Install]
+WantedBy=timers.target

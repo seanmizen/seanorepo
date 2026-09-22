@@ -112,10 +112,28 @@ Introduced in #273.
   route, and a healthy link must never be bounced — an unnecessary failover is
   its own outage.
 - **Verification:**
-  - Inspection — `utils/debbie/2025-10-08b/scripts/net-failover.sh` pings the
-    gateway with `-I <iface>` and exits without acting when it succeeds
-  - Inspection — `utils/debbie/2025-10-08b/services/net-failover-custom.timer`
+  - Inspection — `utils/debbie/2026-09-17/services/net-failover.sh` probes the
+    gateway with `ping -I <iface>` through the interface that owns the route,
+    and exits without acting when it succeeds
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the watchdog names no
+    interface and no gateway" — it takes no configuration, so every machine is
+    protected rather than only the one an env file described
+  - Test — `assert.sh` › "case 1+8: a healthy run changes nothing and logs
+    nothing" — a healthy link is never bounced, and the journal stays readable
+  - Test — `assert.sh` › "case 4: upstream dead with carrier up moves the
+    default route" — the 2026-08-14 failure, reproduced by blackholing the
+    gateway while the carrier stays up
+  - Test — `assert.sh` › "case 7: the route does not fail back on its own"
+  - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › "case 5:
+    pulling the cable on n1" — carrier loss, driven through QEMU's monitor
+    because only the emulator can take a link away
+  - Demonstration — a machine with one link runs the watchdog and finds nothing
+    to promote. Not asserted in the VM, which always has three.
 - **Relations:** depends-on REQ-NETWORK-001
+
+  Not covered by a VM run: `nmcli` association and WPA. QEMU has no wireless
+  device, so the matrix proves the probe, the promotion and the demotion, and
+  wifi is proven on metal only.
 
 ## REQ-NETWORK-004 — The failover watchdog and the wifi configuration agree on an owner
 
