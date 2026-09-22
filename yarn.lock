@@ -7194,12 +7194,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"egstack@workspace:apps/egstack":
-  version: 0.0.0-use.local
-  resolution: "egstack@workspace:apps/egstack"
-  languageName: unknown
-  linkType: soft
-
 "electron-to-chromium@npm:^1.5.249":
   version: 1.5.259
   resolution: "electron-to-chromium@npm:1.5.259"
