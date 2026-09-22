@@ -12,8 +12,8 @@ The repository uses separate port ranges to avoid conflicts:
 | Service                | Cloudflared | Fly.io |
 | ---------------------- | ----------- | ------ |
 | seanmizen.com (FE)     | 4000        | 5000   |
-| seanscards (FE)        | 4010        | 5010   |
-| seanscards (BE)        | 4011        | 5011   |
+| seanscards (FE)        | 4010 (local only) | 5010   |
+| seanscards (BE)        | 4011 (local only) | 5011   |
 | carolinemizen.art (FE) | 4020        | 5020   |
 | carolinemizen.art (BE) | 4021        | 5021   |
 | planning-poker (FE)    | 4030        | 5030   |
@@ -34,7 +34,6 @@ yarn prod:docker
 
 # Or start individual apps (from their respective directories)
 cd apps/seanmizen.com && yarn prod:docker
-cd apps/seanscards && yarn prod:docker
 cd apps/carolinemizen.art && yarn prod:docker
 cd apps/planning-poker && yarn prod:docker
 ```
@@ -50,8 +49,6 @@ scripts/test-deployment.sh cloudflared
 Visit these URLs in your browser:
 
 - http://localhost:4000 - seanmizen.com
-- http://localhost:4010 - seanscards.com
-- http://localhost:4011/api - seanscards API
 - http://localhost:4020 - carolinemizen.art
 - http://localhost:4021 - carolinemizen.art API (hello world)
 - http://localhost:4030 - planning-poker

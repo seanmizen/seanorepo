@@ -147,7 +147,7 @@ every hostname moves with it.
 
 ```bash
 ssh srv@<B>.local '~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force'
-for p in 4000 4010 4020 4021 4030 4042 4060; do printf "%s " "$(curl -s -m5 -o /dev/null -w %{http_code} http://<B-ip>:$p/)"; done
+for p in 4000 4020 4021 4030 4042 4060; do printf "%s " "$(curl -s -m5 -o /dev/null -w %{http_code} http://<B-ip>:$p/)"; done
 ```
 
 Click the sites. Check the data. This is the last moment anything is cheap.

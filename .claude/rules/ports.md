@@ -30,7 +30,7 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 | Port | Service |
 |---|---|
 | 4000 | seanmizen.com |
-| 4010 / 4011 | seanscards FE / BE |
+| 4010 / 4011 | seanscards FE / BE. Local only. Not deployed. |
 | 4020 / 4021 | carolinemizen.art FE / BE |
 | 4030 / 4031 | planning-poker FE / BE |
 | 4040 | RESERVED - the ngrok web inspector binds it |
@@ -41,6 +41,10 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 
 A new service gets the next free `40x0` pair, and a hostname in
 `apps/cloudflared/config.yml`.
+
+seanscards and ffmpeg-converter run locally only (`yarn cards`,
+`yarn converter`). Root `prod:docker` excludes them, and the tunnel has no
+hostname for them. Their ports stay reserved.
 
 ## Fly.io: 5xxx in the container, 6xxx on the host
 
