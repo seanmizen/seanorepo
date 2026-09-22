@@ -19,7 +19,7 @@ in the comments of each script.
 |---|---|---|
 | `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. Each step folder holds its `.env.example` and one `<machine>.env` per target machine. `lib.sh` holds the functions they share. | your computer |
 | `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
-| `services/` | What runs on a target machine all the time: `release-poll.sh` and `deploy.sh`. systemd starts them from the `release` checkout. | the target machine |
+| `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh` and `net-failover.sh`, with the systemd unit beside each. systemd starts them from the `release` checkout. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
 
 ## Test a change in the VM
@@ -152,6 +152,37 @@ Two things provisioning does not move:
   lose any write that reaches the old machine after you copy its database.
   carolinemizen.art takes admin writes only, so the window is small and the
   cost is one re-upload, but nothing here protects you from it.
+
+## Network failover
+
+Every machine runs `custom-net-failover.timer`, once a minute, with no role and
+no configuration. It probes the gateway **through** the interface that holds the
+default route. A success changes nothing and logs nothing. A failure promotes an
+interface that does reach its own gateway, and demotes the rest.
+
+It needs no interface names. `/sys/class/net/<iface>/wireless` says which links
+are wireless, so the rule is "prefer wired, then whichever reaches upstream",
+and the same build protects a machine with one link, two links, or a pair this
+repository has never seen. The previous generation named debbie's two interfaces
+in an env file, which left every other machine unprotected.
+
+It does not fail back. Promotion happens only when the **active** path is dead,
+so after a failover the machine stays where it is until that path dies too.
+Flapping between two marginal links is worse than sitting on the second one.
+
+Read its decisions with `journalctl -t net-failover`. An empty log is the
+healthy state.
+
+Two failures, and the second is the one that caused an outage:
+
+| Failure | What the machine sees | Who catches it |
+|---|---|---|
+| cable unplugged | carrier goes to 0 | NetworkManager, then this watchdog |
+| switch port dead, access point stopped forwarding | carrier stays 1, packets vanish | this watchdog only |
+
+On 2026-08-14 the second one returned Cloudflare Error 1033 for seanmizen.com
+while `cloudflared` ran normally, shouting into a disconnected wire. There is no
+event for "still has carrier, stopped forwarding", which is why this is a timer.
 
 ## Operate a target machine
 

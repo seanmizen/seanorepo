@@ -647,6 +647,15 @@ UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
 DEPLOY_SCRIPT="$GEN_DIR/services/deploy.sh"
 RELEASE_POLL_SCRIPT="$GEN_DIR/services/release-poll.sh"
+# /usr/local/lib, NOT the checkout. deploy.sh and release-poll.sh legitimately
+# run from the checkout - deploying whatever `release` holds is their job. The
+# watchdog is different: it has to work on a machine that has never deployed,
+# and REQ-DEPLOY-001 says the checkout tracks `release`, so a watchdog living
+# there is absent on exactly the machines that have not caught up yet. It is
+# installed from the payload instead, and is therefore version-locked to the
+# provisioner that installed it.
+NET_FAILOVER_DIR=/usr/local/lib/seanorepo
+NET_FAILOVER_SCRIPT="$NET_FAILOVER_DIR/net-failover.sh"
 
 # tcp-getter runs on the host, not in a container - #359. It reads this host's
 # ngrok agent API and this host's SSH host key, which is why it is a host unit
@@ -712,6 +721,7 @@ write_unit() {
 # variable name. An array needs no splitting.
 UNIT_TEMPLATE_VARS=(
     DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
+    NET_FAILOVER_SCRIPT
     TCP_GETTER_DIR NODE_BIN
     CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG
 )
@@ -1182,6 +1192,107 @@ else
     log "          ngrok config add-authtoken <token>   # dashboard.ngrok.com"
     log "        then re-run this script. See utils/debbie/2026-09-17/README.md."
 fi
+
+#------------------------------------------------------------------------------
+# Every physical interface gets an address - #281.
+#
+# The installer configures only the interface it installed over, so a machine
+# with two NICs comes up with one configured link and one dark one. A failover
+# watchdog on such a machine is theatre: there is nothing to fail over to.
+#
+# One file per interface under interfaces.d, never an edit to
+# /etc/network/interfaces. That file is the installer's, it already sources this
+# directory, and appending to it is how two tools come to disagree about who
+# owns a stanza.
+#
+# allow-hotplug, not auto. `auto` makes boot wait for DHCP on an interface whose
+# cable may not be plugged in; allow-hotplug configures it when the kernel says
+# the link appeared and shrugs when it never does.
+#
+# A real NIC has a device symlink in /sys/class/net. Loopback, docker0, bridges
+# and veths do not, which is the same test the watchdog uses - one rule, not two
+# lists of name prefixes drifting apart.
+#------------------------------------------------------------------------------
+log "addressing every physical interface"
+
+install -d -m 0755 /etc/network/interfaces.d
+
+for net_path in /sys/class/net/*; do
+    net_if="$(basename "$net_path")"
+    [ -e "$net_path/device" ] || continue
+
+    # Already spoken for by the installer's own file? Leave it completely alone.
+    if grep -qE "^[[:space:]]*(auto|allow-hotplug|iface)[[:space:]]+$net_if\b" \
+        /etc/network/interfaces 2> /dev/null; then
+        log "  $net_if is configured by the installer - leaving it alone"
+        continue
+    fi
+
+    net_stanza="/etc/network/interfaces.d/$net_if"
+    net_tmp="$(mktemp)"
+    {
+        echo "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - #281"
+        echo "allow-hotplug $net_if"
+        echo "iface $net_if inet dhcp"
+    } > "$net_tmp"
+
+    if [ ! -f "$net_stanza" ] || ! cmp -s "$net_tmp" "$net_stanza"; then
+        log "  writing $net_stanza"
+        install -m 0644 -o root -g root "$net_tmp" "$net_stanza"
+        # ifup, not a restart of networking: bringing the whole stack down would
+        # take the interface this script arrived over with it.
+        ifup "$net_if" > /dev/null 2>&1 || log "    $net_if did not come up - no cable, or no DHCP server"
+    fi
+    rm -f "$net_tmp"
+done
+
+#------------------------------------------------------------------------------
+# The failover watchdog - REQ-NETWORK-003, #281.
+#
+# NetworkManager reacts to carrier, not to reachability. An interface with
+# carrier and no upstream keeps its default route and blackholes every packet.
+# On 2026-08-14 that returned Cloudflare Error 1033 for seanmizen.com while
+# cloudflared ran normally. There is no event for "still has carrier, stopped
+# forwarding", which is why this is a timer and not a dispatcher hook.
+#
+# UNCONDITIONAL. No role, no config, no per-machine interface name. A machine
+# with one link runs it and finds nothing to do; a machine with two is
+# protected. The old generation named its interfaces in an env file, which made
+# every machine that was not debbie unprotected by default.
+#
+# Enabled, not started. The timer's OnBootSec brings it up after the reboot that
+# follows provisioning, and starting it here would probe a network this script
+# is still reconfiguring.
+#------------------------------------------------------------------------------
+log "network failover watchdog"
+
+install -d -m 0755 "$NET_FAILOVER_DIR"
+if [ ! -f "$NET_FAILOVER_SCRIPT" ] \
+    || ! cmp -s "$SERVICES_SRC/net-failover.sh" "$NET_FAILOVER_SCRIPT"; then
+    log "  installing $NET_FAILOVER_SCRIPT"
+    install -m 0755 -o root -g root "$SERVICES_SRC/net-failover.sh" "$NET_FAILOVER_SCRIPT"
+fi
+
+units_changed=0
+
+render_unit custom-net-failover.service
+render_unit custom-net-failover.timer
+
+if [ "$units_changed" = 1 ]; then
+    systemctl daemon-reload
+fi
+
+# The old generation's units, if this machine ever ran them. Two watchdogs
+# writing route metrics would fight, and the loser is whoever ran last.
+for stale_unit in net-failover-custom.timer net-failover-custom.service; do
+    if systemctl is-enabled --quiet "$stale_unit" 2> /dev/null \
+        || systemctl is-active --quiet "$stale_unit" 2> /dev/null; then
+        log "  disabling $stale_unit - superseded by custom-net-failover.timer"
+        systemctl disable --now "$stale_unit" || true
+    fi
+done
+
+systemctl enable custom-net-failover.timer
 
 #------------------------------------------------------------------------------
 # tcp-getter - the service that tells you the ngrok address, #359.
