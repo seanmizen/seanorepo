@@ -5,10 +5,10 @@ debbie server, and checks the result. It works the same way on real hardware
 and in a local VM, so you can test a change in the VM before it reaches a real
 machine.
 
-Production still runs the `2025-10-08b` generation. Nothing here changes it.
+Production (asus) and surface both run this generation.
 
 The rules a target machine must follow are in
-[`../requirements/`](../requirements/). Each requirement states its reason and
+[`requirements/`](./requirements/). Each requirement states its reason and
 names the check that proves it. CI validates them on every PR. This README
 tells you how to use the generation. The reasons live in the requirements and
 in the comments of each script.

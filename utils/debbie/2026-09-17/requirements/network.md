@@ -1,12 +1,12 @@
-# REQ-NETWORK — How traffic reaches debbie, and how it keeps reaching it
+# REQ-NETWORK — How traffic reaches the server, and how it keeps reaching it
 
 The path from the public internet to a container on the host, and the
 behaviour that keeps that path alive without anyone watching.
 
 `2026-09-17/` implements these: the tunnel half (`REQ-NETWORK-001`,
-`REQ-NETWORK-002`, #280) and the failover half (#281). The Inspection evidence
-below still cites `archive/2025-10-08b/`, where both were first built. The August 2026 outage recorded in
-`REQ-NETWORK-003` is why the failover half exists at all.
+`REQ-NETWORK-002`, #280) and the failover half (#281). The evidence below cites
+that generation's files. The August 2026 outage recorded in `REQ-NETWORK-003`
+is why the failover half exists at all.
 
 Introduced in #273.
 
@@ -38,8 +38,8 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other cloudflared unit
     is enabled" — two daemons dialling out for one tunnel is the failure this
     catches
-  - Inspection — `utils/debbie/archive/2025-10-08b/services/cloudflared-custom.service`
-    (what production runs today, until a machine is rebuilt on `2026-09-17/`)
+  - Inspection — `utils/debbie/2026-09-17/services/custom-cloudflared.service`
+    runs `cloudflared tunnel run`, which dials out, and opens no port
 - **Relations:** none
 
 ## REQ-NETWORK-002 — Ingress rules live in the repository
@@ -81,8 +81,10 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel is NOT enabled
     while credentials are absent" — a host with no credentials refuses to run
     the tunnel rather than restarting against it forever
-  - Inspection — `utils/debbie/archive/2025-10-08b/services/cloudflared-custom.service`
-    points at the checkout's `config.yml`
+  - Inspection — `utils/debbie/2026-09-17/services/custom-cloudflared.service`
+    passes `--config` the checkout's `apps/cloudflared/config.yml` and runs in
+    the checkout's `apps/cloudflared`, as rendered by
+    `payload/setup-server-environment.sh`
 - **Relations:**
   - depends-on REQ-NETWORK-001
   - depends-on REQ-DEPLOY-005

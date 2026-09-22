@@ -12,9 +12,10 @@ directory; the dates record when work started, **not** which one is live.
 | `archive/2025-10-08/` | The first 2025-10 attempt. |
 | `archive/2025-04-14/` | PXE, netboot, cobbler and Raspberry Pi experiments. |
 
-Requirements are in [`requirements/`](./requirements/) and are validated by CI on
-every PR — `REQ-EMU-*` constrain the VM harness, `REQ-SERVER-*` describe what a
-provisioned host must be.
+Requirements are in [`2026-09-17/requirements/`](./2026-09-17/requirements/) and
+are validated by CI on every PR — `REQ-EMU-*` constrain the VM harness,
+`REQ-SERVER-*` describe what a provisioned host must be. Each generation owns its
+`requirements/`, and a new generation starts by copying the previous one's.
 
 [`future-spec.md`](./future-spec.md) is the opposite end: decisions about a
 **fleet** of these machines that have been reasoned about but not built, and are

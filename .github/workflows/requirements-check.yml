@@ -36,3 +36,6 @@ jobs:
       # job stays fast enough that nobody is tempted to skip it.
       - name: Validate requirements
         run: node requirements/check.mjs
+
+      - name: Test the validator
+        run: node --test requirements/check.test.mjs
