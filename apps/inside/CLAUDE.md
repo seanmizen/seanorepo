@@ -141,7 +141,7 @@ Every surface that can fail, be empty, or be pending needs one — including the
 pending state. `apps/inside/CLAUDE.md` already says "test the in-flight state".
 An untestable in-flight state is the same rule broken one step earlier.
 
-**Enforced by `requirements/check-test-ids.mjs`, in CI on every PR touching
+**Enforced by `apps/inside/scripts/check-test-ids.mjs`, in CI on every PR touching
 `apps/inside`** (REQ-QUALITY-001). It parses every `data-testid`/`testId`
 under `inside-fe/src` and fails on:
 

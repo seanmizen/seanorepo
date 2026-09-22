@@ -34,8 +34,8 @@ and, as REQ-QUALITY-001 shows, the two are not as separate as they sound.
   Documented in `apps/inside/CLAUDE.md` so somebody applies it while writing a
   page, rather than sweeping afterwards.
 - **Verification:**
-  - Test — `requirements/check-test-ids.mjs`, run in CI by `.github/workflows/inside-check.yml` over every `data-testid`/`testId` under `apps/inside/inside-fe/src`. Catches a `-missing`/`-empty` id gated by an unnarrowed `isError` (the #231 shape), an id reused across non-exclusive branches, and a suffix outside the reserved vocabulary. Whether the copy inside an alert is honest stays Inspection — #234.
-  - Test — `requirements/check-test-ids.test.mjs`, run with `node --test`. Reintroduces the #231 shape as a fixture and asserts the checker fails on it. A check that cannot fail this way could silently stop catching what it was built for.
+  - Test — `apps/inside/scripts/check-test-ids.mjs`, run in CI by `.github/workflows/inside-check.yml` over every `data-testid`/`testId` under `apps/inside/inside-fe/src`. Catches a `-missing`/`-empty` id gated by an unnarrowed `isError` (the #231 shape), an id reused across non-exclusive branches, and a suffix outside the reserved vocabulary. Whether the copy inside an alert is honest stays Inspection — #234.
+  - Test — `apps/inside/scripts/check-test-ids.test.mjs`, run with `node --test`. Reintroduces the #231 shape as a fixture and asserts the checker fails on it. A check that cannot fail this way could silently stop catching what it was built for.
   - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a 404 is the missing piece, in its own right"
   - Test — `apps/inside/inside-fe/tests/e2e/failure-surfaces.spec.ts` › "a 500 is a failure, not a deletion"
 - **Relations:** refines REQ-NET-007

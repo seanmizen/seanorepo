@@ -2,7 +2,7 @@
 
 **This is not a plan of record.** Nothing here is committed to, scheduled, or
 implemented. It is where a decision lives after it has been reasoned about and
-before it has earned a `REQ-` in [`requirements/`](./requirements/). Some of it
+before it has earned a `REQ-` in [`requirements/`](./2026-09-17/requirements/). Some of it
 will become requirements. Some will be thrown away. The value is that neither
 outcome requires re-deriving the argument.
 
@@ -239,7 +239,7 @@ Genuinely undecided. Listed so they are not mistaken for decisions.
 
 ## What this does not cover
 
-Anything already in [`requirements/`](./requirements/). The requirements
+Anything already in [`requirements/`](./2026-09-17/requirements/). The requirements
 describe one host and are validated by CI; this document describes a fleet and
 is validated by nothing. When something here becomes real it moves there and
 gets a `REQ-` and a test, and its section here should be replaced by a pointer.
