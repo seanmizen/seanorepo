@@ -192,8 +192,9 @@ Introduced in #273.
   rules are the only thing the tunnel reads from the repository, so a diff
   against that one path is a sufficient trigger.
 
-  This is also the only place the deploy needs root, which is why the sudoers
-  drop-in grants exactly one command rather than general privilege.
+  This is one of the two places the deploy needs root. The sudoers drop-in
+  grants exactly two commands, a restart of the tunnel unit and a restart of
+  the tcp-getter unit, rather than general privilege.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` writes
     the sudoers drop-in. It grants the deploy user `systemctl restart` of the
@@ -206,11 +207,11 @@ Introduced in #273.
   - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` writes the
     drop-in to a temporary path, validates it with `visudo -c`, and installs it
     mode 0440 root:root only once it parses
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the one rule is a single
-    systemctl restart of a single unit" — the grant is matched whole against an
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "every rule is a single
+    systemctl restart of a single unit" — each grant is matched whole against an
     anchored pattern, so nothing can be appended to it
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in has exactly
-    one rule"
+    two rules"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in grants no
     wildcard"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in grants no
@@ -221,10 +222,10 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in is owned by
     root:root"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in parses"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the unit deploy.sh restarts
-    is the unit sudo permits" — the drop-in and `deploy.sh` name the unit
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "every unit deploy.sh
+    restarts is a unit sudo permits" — the drop-in and `deploy.sh` name each unit
     separately, and a rename that moves only one of them would fail exactly
-    once, on the ingress change it was needed for
+    once, on the change it was needed for
 - **Relations:** depends-on REQ-DEPLOY-004
 
 ## REQ-DEPLOY-006 — A deploy leaves untracked credentials alone

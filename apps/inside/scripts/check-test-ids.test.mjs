@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Tests for requirements/check-test-ids.mjs.
+ * Tests for apps/inside/scripts/check-test-ids.mjs.
  *
  * `node:test` and `node:assert` are Node stdlib — no new dependency, in
  * keeping with the checker itself. Run with:
  *
- *   node --test requirements/check-test-ids.test.mjs
+ *   node --test apps/inside/scripts/check-test-ids.test.mjs
  */
 
 import assert from 'node:assert/strict';

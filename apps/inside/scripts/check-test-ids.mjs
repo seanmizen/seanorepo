@@ -9,8 +9,8 @@
  * `severity="info"`, because its branch tested `isError` without narrowing on
  * a specific status. Inspection missed it for months. This makes it a check.
  *
- *   node requirements/check-test-ids.mjs             validate apps/inside/inside-fe/src
- *   node requirements/check-test-ids.mjs <dir>        validate a different directory
+ *   node apps/inside/scripts/check-test-ids.mjs             validate apps/inside/inside-fe/src
+ *   node apps/inside/scripts/check-test-ids.mjs <dir>        validate a different directory
  *
  * Uses the TypeScript compiler API for real JSX/AST parsing rather than
  * regex — `typescript` is already a devDependency of inside-fe and inside-be
@@ -49,7 +49,7 @@ import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const DEFAULT_TARGET = join(ROOT, 'apps/inside/inside-fe/src');
 
 const RESERVED_SUFFIXES = ['loading', 'empty', 'missing', 'failure'];
