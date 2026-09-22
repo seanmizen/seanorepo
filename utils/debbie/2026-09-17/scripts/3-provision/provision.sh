@@ -96,6 +96,27 @@ SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no
 sshto() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$HOST" "$@"; }
 
 #------------------------------------------------------------------------------
+# Send payload/ and services/ as one tar, then run one script from it.
+#
+# `bash -s` over stdin used to be enough, when every systemd unit was a heredoc
+# inside the script. The units are files under services/ since #359, and they
+# have to travel with the script that installs them: the machine's own checkout
+# tracks `release` (REQ-DEPLOY-001), so it does not hold a unit that is still on
+# a feature branch.
+#
+# One tar, one connection, and the remote temp directory goes whether the script
+# passes or fails.
+#------------------------------------------------------------------------------
+send_and_run() {
+    local script="$1" envs="$2"
+    tar czf - -C "$GEN_DIR" payload services \
+        | sshto "d=\$(mktemp -d) \
+            && tar xzf - -C \"\$d\" \
+            && sudo $envs bash \"\$d/payload/$script\"; \
+            rc=\$?; rm -rf \"\$d\"; exit \$rc"
+}
+
+#------------------------------------------------------------------------------
 # The boot id - #295.
 #
 # /proc/sys/kernel/random/boot_id is a random UUID the kernel generates once per
@@ -263,15 +284,14 @@ if [ "$MODE" != assert ]; then
     # same way and in this order everywhere, because the server script expects
     # Docker, Node and the checkout to be there already.
     log "running setup-developer-environment.sh"
-    sshto "sudo DEV_USER='$DEPLOY_USER' bash -s" \
-        < "$GEN_DIR/payload/setup-developer-environment.sh"
+    send_and_run "setup-developer-environment.sh" "DEV_USER='$DEPLOY_USER'"
 
     log "running setup-server-environment.sh"
     # Roles from .env (#329). Passed even when empty, so the machine's roles always
     # match this file: a role that is not set here is switched OFF there.
     log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
-    sshto "sudo SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' bash -s" \
-        < "$GEN_DIR/payload/setup-server-environment.sh"
+    send_and_run "setup-server-environment.sh" \
+        "SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}'"
 
     if [ "$MODE" = noreboot ]; then
         log "setup done; skipping reboot and assertions (--no-reboot)"

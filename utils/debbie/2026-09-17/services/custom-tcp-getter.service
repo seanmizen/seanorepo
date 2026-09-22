@@ -1,0 +1,45 @@
+# Written by payload/setup-server-environment.sh from services/custom-tcp-getter.service.
+# Edit that file, not this copy.
+[Unit]
+Description=tcp-getter - emails this host's current ngrok address and SSH command
+Documentation=https://github.com/seanmizen/seanorepo/issues/359
+After=network-online.target
+Wants=network-online.target
+
+# REFUSE RATHER THAN LOOP. Both files are absent on a machine that has been
+# provisioned but whose ngrok and tcp-getter setup nobody has finished, which is
+# a normal first-boot state. An unmet condition makes systemd log one line and
+# leave the unit inactive. It does not count as a failure and cannot fill the
+# journal. The ngrok config is the same gate custom-ngrok.service uses: this
+# service reads that agent's API, so it is useless without it.
+ConditionFileNotEmpty=${NGROK_CONFIG}
+ConditionFileNotEmpty=${TCP_GETTER_DIR}/.env
+# The build output. deploy.sh writes it. Without it there is nothing to run.
+ConditionPathExists=${TCP_GETTER_DIR}/dist/index.mjs
+
+# The backstop for a failure the conditions cannot see: a .env that is present
+# but incomplete, which validateEnvVars() exits on. Five attempts in ten
+# minutes, then systemd leaves the unit failed, which a human can find.
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=${DEPLOY_USER}
+WorkingDirectory=${TCP_GETTER_DIR}
+
+# --env-file, and this is the difference between Node and bun rather than a
+# style choice. bun reads .env from the working directory by itself. Node does
+# not, so without this flag the service starts and then exits on a missing
+# MAIL_PASSWORD. apps/carolinemizen.art/caroline-be passes it explicitly for
+# the same reason.
+#
+# dist/index.mjs, not index.ts. Node 20 cannot run TypeScript, so deploy.sh
+# builds this workspace with rslib first - the Condition above is what stops
+# this unit starting before it has.
+ExecStart=${NODE_BIN} --env-file=.env dist/index.mjs
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

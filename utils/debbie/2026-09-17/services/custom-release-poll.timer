@@ -1,0 +1,18 @@
+# Written by payload/setup-server-environment.sh from services/custom-release-poll.timer.
+# Edit that file, not this copy. - REQ-DEPLOY-002
+[Unit]
+Description=Poll origin/release every two minutes
+Documentation=https://github.com/seanmizen/seanorepo/issues/307
+
+[Timer]
+# Late enough after boot that docker and the network are up. The poll it
+# triggers is also what triggers the post-boot deploy.
+OnBootSec=3min
+OnUnitActiveSec=2min
+# The poll costs one ls-remote. Letting systemd batch it saves wakeups and
+# nobody can tell the difference at a two-minute period.
+AccuracySec=30s
+Unit=custom-release-poll.service
+
+[Install]
+WantedBy=timers.target
