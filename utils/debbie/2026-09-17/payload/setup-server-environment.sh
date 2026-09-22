@@ -123,6 +123,7 @@ die() { echo "[postinstall] ERROR: $*" >&2; exit 1; }
 # that only `release` has - which is how the first VM run of #359 failed.
 PAYLOAD_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICES_SRC="$PAYLOAD_DIR/../services"
+ADMIN_PUBKEY="$PAYLOAD_DIR/seanorepo-admin.pub"
 
 [ "$(id -u)" -eq 0 ] || { echo "must run as root (use sudo)" >&2; exit 1; }
 
@@ -1191,6 +1192,57 @@ else
     log "        On the machine, as $DEPLOY_USER:"
     log "          ngrok config add-authtoken <token>   # dashboard.ngrok.com"
     log "        then re-run this script. See utils/debbie/2026-09-17/README.md."
+fi
+
+#------------------------------------------------------------------------------
+# authorized_keys, written on EVERY run - #369.
+#
+# It used to be written once, by the installer's late_command, and never again.
+# With PasswordAuthentication no (REQ-SERVER-008) that made one file on one
+# laptop the only way into the machine: losing it meant the physical console,
+# and rotating the key meant a reinstall.
+#
+# Writing it here makes rotation a provisioning run. The source is the admin
+# public key committed beside this script, so it travels with the installer and
+# every machine trusts the same key by construction - no env key, nothing to
+# remember, and revoking is a commit somebody can audit.
+#
+# THE GUARD IS THE POINT. An authorized_keys with no valid key, on a host that
+# refuses passwords, is a brick that only a monitor and a keyboard can fix. So
+# the file is built in a temp file, checked for at least one key line, and only
+# then installed. A missing or empty source leaves the existing file untouched
+# and says so.
+#------------------------------------------------------------------------------
+log "authorized_keys for $DEPLOY_USER"
+
+deploy_home="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
+AUTH_KEYS="$deploy_home/.ssh/authorized_keys"
+
+if [ ! -s "$ADMIN_PUBKEY" ]; then
+    log "  WARNING: no admin public key at $ADMIN_PUBKEY."
+    log "           Leaving $AUTH_KEYS exactly as it is. This machine keeps"
+    log "           whatever key already opens it, and gains none."
+else
+    auth_tmp="$(mktemp)"
+    {
+        echo "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - #369"
+        echo "# Edit payload/seanorepo-admin.pub, not this file: a provisioning run rewrites it."
+        grep -vE '^[[:space:]]*(#.*)?$' "$ADMIN_PUBKEY"
+    } > "$auth_tmp"
+
+    # At least one line that looks like a key. Counting non-comment lines is not
+    # enough - a truncated file could leave a fragment that opens nothing.
+    if [ "$(grep -cE '^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-|sk-)' "$auth_tmp")" -lt 1 ]; then
+        rm -f "$auth_tmp"
+        die "$ADMIN_PUBKEY holds no usable public key. Refusing to write $AUTH_KEYS: with passwords refused, that would lock this machine to its console."
+    fi
+
+    install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$deploy_home/.ssh"
+    if [ ! -f "$AUTH_KEYS" ] || ! cmp -s "$auth_tmp" "$AUTH_KEYS"; then
+        log "  writing $AUTH_KEYS ($(grep -cE '^ssh-|^ecdsa-|^sk-' "$auth_tmp") key(s))"
+        install -m 0600 -o "$DEPLOY_USER" -g "$deploy_group" "$auth_tmp" "$AUTH_KEYS"
+    fi
+    rm -f "$auth_tmp"
 fi
 
 #------------------------------------------------------------------------------

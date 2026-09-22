@@ -49,11 +49,22 @@ esac
 # invalidate anything that already trusts it.
 #------------------------------------------------------------------------------
 mkdir -p "$WORK"
-KEY="${SSH_KEY:-$WORK/id_ed25519}"
-if [ ! -f "$KEY.pub" ]; then
-    log "generating deploy key $KEY"
-    ssh-keygen -t ed25519 -N '' -C "debbie-$SERVER_NAME" -f "$KEY" > /dev/null
-fi
+# The admin key's PUBLIC half, committed beside the payload - #369. Nothing is
+# generated here any more: a per-checkout keypair meant a fresh clone orphaned
+# every machine built from the old one, and the installer only ever needed the
+# public half.
+ADMIN_PUBKEY="${ADMIN_PUBKEY:-$GEN_DIR/payload/seanorepo-admin.pub}"
+
+# SSH_KEY is still accepted so existing <machine>.env files keep parsing -
+# read_env rejects an unknown key - but this step no longer uses it. The key it
+# installs is the committed admin public key above.
+[ -z "${SSH_KEY:-}" ] || warn "SSH_KEY is set in $ENV_FILE and ignored here since #369. This step installs $ADMIN_PUBKEY. 3-provision still reads SSH_KEY, to choose which private key to log in with."
+[ -s "$ADMIN_PUBKEY" ] || die "no admin public key at $ADMIN_PUBKEY.
+       Every machine this installs trusts that key and nothing else, so an
+       install without it produces a machine nobody can log in to - sshd
+       refuses passwords (REQ-SERVER-008). Create one and commit the .pub:
+         ssh-keygen -t ed25519 -C sean-admin -f ~/.ssh/seanorepo-admin
+         cp ~/.ssh/seanorepo-admin.pub $ADMIN_PUBKEY"
 
 #------------------------------------------------------------------------------
 # The served directory - identical in shape to the harness's
@@ -63,7 +74,7 @@ mkdir -p "$HTTP_ROOT"
 cp "$GEN_DIR/payload/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
 
 # No CONSOLE here: the target machine has no serial port (see write_overrides).
-SSH_PUBKEY_FILE="$KEY.pub" write_overrides > "$HTTP_ROOT/overrides.cfg"
+SSH_PUBKEY_FILE="$ADMIN_PUBKEY" write_overrides > "$HTTP_ROOT/overrides.cfg"
 
 #------------------------------------------------------------------------------
 # Which address the target should fetch from. The loopback address the harness
