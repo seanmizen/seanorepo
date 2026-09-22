@@ -119,3 +119,34 @@ test('an unknown charset is an error, and chars is literal', () => {
     ['a', 'b'],
   );
 });
+
+test('clearFrom blanks the image and keeps the text', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtempSync, readFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'ascii-'));
+  const img = new URL(
+    '../../../apps/seanmizen.com/src/components/shader-sean/IMG_4011_crop2.jpeg',
+    import.meta.url,
+  ).pathname;
+  const cli = new URL('./cli.mjs', import.meta.url).pathname;
+  execFileSync(
+    'node',
+    [
+      cli,
+      img,
+      '--width',
+      '30',
+      '--key',
+      'contrast=0:100,2:200',
+      '--clear-from',
+      '1',
+      '--out',
+      dir,
+    ],
+    { stdio: 'ignore' },
+  );
+  assert.match(readFileSync(join(dir, '0000.txt'), 'utf8'), /[^\s]/);
+  assert.equal(readFileSync(join(dir, '0002.txt'), 'utf8').trim(), '');
+});
