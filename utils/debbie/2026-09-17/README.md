@@ -107,82 +107,125 @@ The tunnel needs the webserver role on the same machine. A LAN webserver keeps
 its own data, separate from the public machine's. To see a machine's roles:
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
-### Move the tunnel to another machine
+### Move the tunnel from machine A to machine B
 
-Set the role and provision. Then stop the tunnel on the machine that had it.
+A runs the sites and the tunnel. B has whatever roles you gave it. This moves
+the public traffic to B with no gap, and keeps A one command from taking it back.
+
+Ordering matters more than anything else here. **The tunnel must not start
+before the sites are up.** `provision.sh` enables the tunnel and reboots, but
+the sites arrive when the release poller fires at `OnBootSec=3min`. Give B the
+tunnel role and walk away, and for three minutes it holds the tunnel with
+nothing behind it, while Cloudflare balances half your traffic into it.
+
+#### 1. Make B serve everything, on the LAN
+
+`ROLE_WEBSERVER=yes` and **no** `ROLE_TUNNEL` in `3-provision/<B>.env`.
 
 ```bash
-# 1. the new machine serves the sites on the LAN. Check every site by IP.
-#    ROLE_WEBSERVER=yes, ROLE_TUNNEL unset in 3-provision/<new>.env
-scripts/3-provision/provision.sh <new>
+scripts/3-provision/provision.sh <B>
+```
 
-# 2. give it the tunnel role. The reboot at the end of this run starts the
-#    tunnel, so both machines serve it from here until step 3.
-#    ROLE_TUNNEL=yes in 3-provision/<new>.env
-scripts/3-provision/provision.sh <new>
+Without the tunnel role B publishes on the LAN, so you can see it.
 
-# 3. stop the tunnel on the old machine.
-ssh -t srv@<old>.local sudo systemctl disable --now cloudflared-custom.service
+#### 2. Copy what does not travel in git
+
+The tunnel credential is host-specific and in no repository:
+
+```bash
+scp apps/cloudflared/credentials/<uuid>.json srv@<B>.local:/tmp/
+ssh srv@<B>.local 'install -d -m 0700 ~/projects/seanorepo/apps/cloudflared/credentials \
+  && install -m 0600 /tmp/<uuid>.json ~/projects/seanorepo/apps/cloudflared/credentials/ && rm /tmp/<uuid>.json'
+```
+
+Then every `.env` each app needs, and any site data. Check the `uuid` matches
+`tunnel:` in `apps/cloudflared/config.yml`, or B serves a different tunnel and
+every hostname moves with it.
+
+#### 3. Deploy, and prove B on the LAN
+
+```bash
+ssh srv@<B>.local '~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force'
+for p in 4000 4010 4020 4021 4030 4042 4060; do printf "%s " "$(curl -s -m5 -o /dev/null -w %{http_code} http://<B-ip>:$p/)"; done
+```
+
+Click the sites. Check the data. This is the last moment anything is cheap.
+
+#### 4. Give B the tunnel role
+
+`ROLE_TUNNEL=yes` in `3-provision/<B>.env`, then:
+
+```bash
+scripts/3-provision/provision.sh <B>
+```
+
+The reboot starts the tunnel, and the changed boot id makes B deploy again -
+this time publishing on **loopback only**, because a tunnel machine must not
+answer on the LAN (REQ-SERVER-002). The LAN addresses stop working. That is
+correct.
+
+**Watch for the three-minute window.** If B holds the tunnel before its
+containers are up, take it out until they are:
+
+```bash
+ssh -t srv@<B>.local sudo systemctl stop custom-cloudflared.service
+# ...wait for the deploy, then:
+ssh -t srv@<B>.local sudo systemctl start custom-cloudflared.service
+```
+
+#### 5. Both machines now serve. Check, then stop A
+
+Cloudflare balances across both connections, so there is no gap. Probe each
+hostname more than once - a single 200 does not prove both machines answer:
+
+```bash
+for u in seanmizen.com carolinemizen.art pp.seanmizen.com inside.seanmizen.com
+do printf "%-26s " "$u"; for i in 1 2 3; do printf "%s " "$(curl -s -m12 -o /dev/null -w %{http_code} https://$u)"; done; echo; done
+```
+
+Take no admin writes in this window: a write can land on either machine.
+
+```bash
+ssh -t srv@<A>.local sudo systemctl disable --now cloudflared-custom.service
 ```
 
 The unit is `cloudflared-custom.service` on a 2025-10-08b machine and
-`custom-cloudflared.service` here. `systemctl list-units 'c*cloudflared*'` names
-it.
+`custom-cloudflared.service` here. `systemctl list-units "*cloudflared*"` names it.
 
-**Set the role in the env file. Do not enable the unit by hand.** `provision.sh`
-stops a tunnel with `systemctl disable --now` and starts one with plain
-`systemctl enable` — off is immediate, on waits for the reboot the step
-triggers. A unit enabled by hand runs while the env file says it should not, and
-the next `provision.sh` run stops it, immediately. Each run of `provision.sh` makes the
-machine match the env file.
+#### 6. ngrok, separately
 
-Between step 2 and step 3 both machines serve the tunnel. Cloudflare balances
-across the two connections, so there is no gap, and both answer the same sites
-from their own copy of the data. Keep that window short and do not take writes
-in it. A machine holding the tunnel role it should not hold is the state
-`REQ-NETWORK-002` exists to prevent, so step 3 is not optional.
+It does not move with the role. On B:
 
-Two things provisioning does not move:
+```bash
+ssh srv@<B>.local 'ngrok config add-authtoken <token>'
+ssh -t srv@<B>.local 'sudo systemctl enable --now custom-ngrok.service'
+```
 
-- **ngrok.** One agent session, and it is an admin path rather than user
-  traffic. Add the authtoken on the new machine and start `custom-ngrok.service`
-  there. The address and the SSH host key both change, so the command
-  tcp-getter emails will not match the one you have.
-- **Site data.** Copy it before step 2 and check it renders over the LAN. You
-  lose any write that reaches the old machine after you copy its database.
-  carolinemizen.art takes admin writes only, so the window is small and the
-  cost is one re-upload, but nothing here protects you from it.
+The address **and** the SSH host key both change, so the command tcp-getter
+emails you will not match the one you have. Expect that rather than debug it.
 
-## Network failover
+#### Rollback
 
-Every machine runs `custom-net-failover.timer`, once a minute, with no role and
-no configuration. It probes the gateway **through** the interface that holds the
-default route. A success changes nothing and logs nothing. A failure promotes an
-interface that does reach its own gateway, and demotes the rest.
+One command, for as long as A still runs:
 
-It needs no interface names. `/sys/class/net/<iface>/wireless` says which links
-are wireless, so the rule is "prefer wired, then whichever reaches upstream",
-and the same build protects a machine with one link, two links, or a pair this
-repository has never seen. The previous generation named debbie's two interfaces
-in an env file, which left every other machine unprotected.
+```bash
+ssh -t srv@<A>.local sudo systemctl enable --now cloudflared-custom.service
+ssh -t srv@<B>.local sudo systemctl stop custom-cloudflared.service
+```
 
-It does not fail back. Promotion happens only when the **active** path is dead,
-so after a failover the machine stays where it is until that path dies too.
-Flapping between two marginal links is worse than sitting on the second one.
+Leave A powered for a week. That is also what keeps any data you did not copy.
 
-Read its decisions with `journalctl -t net-failover`. An empty log is the
-healthy state.
+#### Things that bite
 
-Two failures, and the second is the one that caused an outage:
-
-| Failure | What the machine sees | Who catches it |
-|---|---|---|
-| cable unplugged | carrier goes to 0 | NetworkManager, then this watchdog |
-| switch port dead, access point stopped forwarding | carrier stays 1, packets vanish | this watchdog only |
-
-On 2026-08-14 the second one returned Cloudflare Error 1033 for seanmizen.com
-while `cloudflared` ran normally, shouting into a disconnected wire. There is no
-event for "still has carrier, stopped forwarding", which is why this is a timer.
+- **A `.env` edited for a LAN test survives every deploy.** `deploy.sh` never
+  touches `.env`. A `CORS_ORIGIN` pointed at a LAN address gives a public site
+  that refuses its own frontend. Put it back before step 4.
+- **A frontend rebuilt with a LAN `API_URL` does not survive** - `deploy.sh
+  --force` rebuilds it with `/api`. Run it anyway, to be sure.
+- **`working/id_ed25519` is not the key any more.** A machine installed by this
+  generation trusts `payload/seanorepo-admin.pub`. Add the new key alongside the
+  old one and prove it works **before** removing anything: sshd refuses
+  passwords, so a wrong `authorized_keys` leaves only the console.
 
 ## Operate a target machine
 
