@@ -4,7 +4,6 @@ paths:
   - "**/dockerfile"
   - "**/Dockerfile"
   - "apps/cloudflared/**"
-  - "utils/fly-io/**"
   - "scripts/test-deployment.sh"
 ---
 
@@ -65,12 +64,4 @@ seanscards and ffmpeg-converter run locally only (`yarn cards`,
 `yarn converter`). Root `prod:docker` excludes them, and the tunnel has no
 hostname for them. Their ports stay reserved.
 
-## Fly.io: 5xxx in the container, 6xxx on the host
-
-One container, with an nginx gateway on 8080 routing by domain
-(`utils/fly-io/nginx.conf`). The services listen on 5xxx inside it:
-seanmizen.com 5000, seanscards 5010/5011, carolinemizen.art 5020/5021,
-planning-poker 5030/5031, inside 5060/5061. `docker-compose.fly.yml` maps them
-to 6xxx on the host for local testing. The converter is not in the Fly bundle.
-
-Smoke test for both targets: `scripts/test-deployment.sh [cloudflared|flyio|both]`.
+Smoke test: `scripts/test-deployment.sh`.

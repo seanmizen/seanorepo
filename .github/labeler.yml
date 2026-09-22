@@ -33,10 +33,6 @@ tty-dashboard:
   - changed-files:
       - any-glob-to-any-file: 'utils/tty-dashboard/**'
 
-fly-io:
-  - changed-files:
-      - any-glob-to-any-file: 'utils/fly-io/**'
-
 ci:
   - changed-files:
       - any-glob-to-any-file: '.github/**'
