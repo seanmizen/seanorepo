@@ -48,7 +48,7 @@ test('the #231 shape: isError alone collapses everything into -missing', () => {
 
 test('narrowing on a specific status clears the #231 check', () => {
   // The fixed shape: a 404 (checked via `.status`) is the only thing allowed
-  // to render `-missing`; everything else falls through to FailureNotice.
+  // to render `-missing`. Everything else falls through to FailureNotice.
   const source = `
     const AdminDesignerReview = () => {
       if (review.isError || !review.data) {
