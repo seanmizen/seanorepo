@@ -1262,6 +1262,25 @@ fi
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
 echo
+echo "== authorized_keys (#369) =="
+AUTH_KEYS="/home/$DEPLOY_USER/.ssh/authorized_keys"
+if [ "$PHASE" = provisioned ]; then
+    # With PasswordAuthentication no, this file is the only gate on the machine.
+    # Every check here is a way to be locked out of production.
+    check "authorized_keys exists and is not empty" "sudo -n test -s '$AUTH_KEYS'"
+    check "authorized_keys is mode 600, owned by $DEPLOY_USER" \
+        "[ \"\$(sudo -n stat -c '%a %U' '$AUTH_KEYS' 2>/dev/null)\" = '600 $DEPLOY_USER' ]"
+    check "authorized_keys holds at least one usable key" \
+        "[ \"\$(sudo -n grep -cE '^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-|sk-)' '$AUTH_KEYS' 2>/dev/null)\" -ge 1 ]"
+    check ".ssh is mode 700, owned by $DEPLOY_USER" \
+        "[ \"\$(sudo -n stat -c '%a %U' '/home/$DEPLOY_USER/.ssh' 2>/dev/null)\" = '700 $DEPLOY_USER' ]"
+else
+    sk "authorized_keys exists and is not empty" "the installer writes it"
+    sk "authorized_keys is mode 600, owned by $DEPLOY_USER" "the installer writes it"
+    sk "authorized_keys holds at least one usable key" "the installer writes it"
+    sk ".ssh is mode 700, owned by $DEPLOY_USER" "the installer writes it"
+fi
+
 echo "== network failover watchdog (REQ-NETWORK-003) =="
 NF_TIMER=custom-net-failover.timer
 NF_SERVICE=custom-net-failover.service
