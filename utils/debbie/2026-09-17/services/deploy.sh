@@ -49,6 +49,7 @@ MARKER="${DEPLOY_MARKER:-$STATE_DIR/last-deployed}"
 # setup-server-environment.sh installs, and payload/assert.sh asserts that the two agree. If #280
 # picks a different name, both move together or the assertion goes red.
 CLOUDFLARED_UNIT="custom-cloudflared.service"
+TCP_GETTER_UNIT="custom-tcp-getter.service"
 CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"
 
 # Absolute, and matching the sudoers drop-in character for character. sudo
@@ -211,6 +212,34 @@ fi
 
 yarn install --immutable
 yarn prod:docker
+
+#------------------------------------------------------------------------------
+# tcp-getter - built here, because nothing else builds it. #359.
+#
+# It is a host unit rather than a container, so `yarn prod:docker` above skips
+# it, and the unit runs Node against dist/index.mjs. Node cannot run
+# TypeScript, so without this step the unit either runs the previous commit's
+# bundle or refuses to start at all.
+#
+# The build runs here rather than in the unit's ExecStartPre because this is
+# the step that knows the code moved. ExecStartPre would rebuild on every
+# restart and put a yarn invocation inside systemd's startup path.
+#
+# NOT FATAL. A tcp-getter that fails to build must not stop a deploy that has
+# already brought every site up. The sites are the point; this reports an
+# address. It is logged loudly and the deploy continues.
+#------------------------------------------------------------------------------
+if yarn workspace tcp-getter build; then
+    if ! $SYSTEMCTL cat -- "$TCP_GETTER_UNIT" > /dev/null 2>&1; then
+        debug "$TCP_GETTER_UNIT is not installed on this host - nothing to restart"
+    elif sudo -n "$SYSTEMCTL" restart "$TCP_GETTER_UNIT"; then
+        log "rebuilt tcp-getter and restarted $TCP_GETTER_UNIT"
+    else
+        err "rebuilt tcp-getter but could not restart $TCP_GETTER_UNIT - it may be serving the previous bundle"
+    fi
+else
+    err "tcp-getter failed to build - the unit keeps the previous bundle, and this machine's ngrok address may go unreported"
+fi
 
 # THE MARKER IS WRITTEN HERE, not at the end - REQ-DEPLOY-002.
 #
