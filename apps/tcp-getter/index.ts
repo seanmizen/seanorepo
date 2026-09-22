@@ -7,6 +7,8 @@ import nodemailer from 'nodemailer';
 const SITE_BASE_URL = process.env.SITE_BASE_URL;
 const SSH_USERNAME = process.env.SSH_USERNAME;
 const PORT = Number(process.env.PORT);
+// Loopback by default. See the listen call for why.
+const HOST = process.env.HOST || '127.0.0.1';
 const MAIL_USERNAME = process.env.MAIL_USERNAME;
 const MAIL_PASSWORD = process.env.MAIL_PASSWORD;
 const NGROK_API_URL =
@@ -306,7 +308,16 @@ async function start() {
     process.exit(0);
   });
 
-  await fastify.listen({ port: PORT, host: '0.0.0.0' });
+  // Loopback, not 0.0.0.0 - REQ-SERVER-002, #374. cloudflared reaches this at
+  // http://localhost:4120 and nothing else has any business reaching it: the
+  // route it serves hands out an SSH address.
+  //
+  // 0.0.0.0 was correct while this ran in a container, where binding all
+  // interfaces INSIDE the container is what makes a published port work, and
+  // docker-compose decided what the host exposed. #359 made it a host process,
+  // so the same line started publishing 4120 to the LAN, and assert.sh caught
+  // it on the first machine to run both the tunnel role and this unit.
+  await fastify.listen({ port: PORT, host: HOST });
   console.log(`tcp-getter running on port ${PORT}`);
 
   // Send startup email with connection details
