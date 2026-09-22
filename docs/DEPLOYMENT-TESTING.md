@@ -42,7 +42,7 @@ cd apps/planning-poker && yarn prod:docker
 ### Run Tests
 
 ```bash
-./test-deployment.sh cloudflared
+scripts/test-deployment.sh cloudflared
 ```
 
 ### Manual Verification
@@ -114,7 +114,7 @@ docker run -p 8080:8080 -p 5000:5000 -p 5010:5010 -p 5011:5011 -p 5020:5020 -p 5
 ### Run Tests
 
 ```bash
-./test-deployment.sh flyio
+scripts/test-deployment.sh flyio
 ```
 
 ### Manual Verification
@@ -165,7 +165,7 @@ docker stop $(docker ps -q --filter ancestor=seanmizen-flyio)
 Run all tests:
 
 ```bash
-./test-deployment.sh both
+scripts/test-deployment.sh both
 ```
 
 This will:
@@ -266,7 +266,7 @@ the shape of that note.
 
 ### 5. Update Test Script
 
-Edit `test-deployment.sh` to include the new service in both test functions.
+Edit `scripts/test-deployment.sh` to include the new service in both test functions.
 
 ## Environment-Specific Backend Configuration
 
@@ -338,8 +338,8 @@ Progress and failures go to the journal. See
 
 Before promoting to production:
 
-- [ ] All Cloudflared tests pass (`./test-deployment.sh cloudflared`)
-- [ ] All Fly.io tests pass (`./test-deployment.sh flyio`)
+- [ ] All Cloudflared tests pass (`scripts/test-deployment.sh cloudflared`)
+- [ ] All Fly.io tests pass (`scripts/test-deployment.sh flyio`)
 - [ ] Both setups have identical service list
 - [ ] All backends support PORT env var override
 - [ ] Nginx config matches all services in Fly.io
