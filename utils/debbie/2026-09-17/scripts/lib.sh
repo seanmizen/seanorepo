@@ -54,7 +54,8 @@ key_home() {
         SSH_KEY)                     echo "2-serve-preseed, 3-provision" ;;
         ROLE_WEBSERVER|ROLE_TUNNEL)  echo 3-provision ;;
         WIFI_*|PORT|SERVE_IP)        echo "1-build-iso, 2-serve-preseed" ;;
-        SERVER_NAME|DEPLOY_USER)     echo "all three" ;;
+        SERVER_NAME)                 echo "2-serve-preseed, 3-provision" ;;
+        DEPLOY_USER)                 echo "all three" ;;
         *)                           echo "no step" ;;
     esac
 }
@@ -177,8 +178,16 @@ installer_params() {
         # Wired, e.g. the VM: take the first interface with a link.
         params="$params netcfg/choose_interface=auto"
     fi
-    params="$params netcfg/hostname=$SERVER_NAME"
-    params="$params netcfg/get_hostname=$SERVER_NAME"
+    # These name the INSTALLER, not the installed machine - #376. The machine
+    # is named by write_overrides' late_command, which step 2 serves, and
+    # repaired by setup-server-environment.sh (REQ-SERVER-004). So step 1 needs
+    # no machine name and one USB serves every machine.
+    #
+    # SET, never empty. An unset netcfg/hostname is what let netcfg fall through
+    # to a reverse-DNS lookup and name a machine `192` for a whole generation
+    # (#285). The placeholder is what stops it asking or guessing.
+    params="$params netcfg/hostname=${SERVER_NAME:-debbie-installer}"
+    params="$params netcfg/get_hostname=${SERVER_NAME:-debbie-installer}"
     printf '%s' "$params"
 }
 

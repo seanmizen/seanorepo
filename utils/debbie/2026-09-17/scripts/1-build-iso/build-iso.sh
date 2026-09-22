@@ -32,14 +32,15 @@ WORK="$GEN_DIR/working"                          # shared by all three steps
 # shellcheck source=../lib.sh
 . "$SCRIPTS/lib.sh"
 
-select_env "$HERE" "${1:-}"
+select_env "$HERE" "${1:-.env}"
 shift
 PORT="${PORT:-8000}"
 read_env SERVER_NAME DEPLOY_USER WIFI_SSID WIFI_PASS WIFI_IFACE PORT SERVE_IP ISO
+[ -z "${SERVER_NAME:-}" ] || warn "SERVER_NAME is set in $ENV_FILE and ignored here since #376. One USB installs any machine; step 2 names it. Delete the line, or move this file to $HERE/.env and drop the machine argument."
 DEPLOY_USER="${DEPLOY_USER:-srv}"
-# No default - #329: a forgotten name used to install a second "debbie".
-SERVER_NAME="${SERVER_NAME:-}"
-[ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every machine on purpose."
+# No SERVER_NAME here since #376. One USB installs any machine: the name is set
+# by step 2, which serves the preseed, and repaired by step 3. The installer
+# calls itself debbie-installer for the few minutes it runs.
 PORT="${PORT:-8000}"
 
 [ -n "${WIFI_SSID:-}" ] || die "WIFI_SSID is not set in $ENV_FILE"
@@ -78,7 +79,7 @@ fi
     || die "no source ISO found. Set ISO=/path/to/debian-13.7.0-amd64-netinst.iso in $ENV_FILE."
 
 mkdir -p "$WORK"
-OUT="$WORK/debbie-$SERVER_NAME.iso"
+OUT="$WORK/debbie-installer.iso"
 
 log "source : $ISO"
 log "output : $OUT"
@@ -106,7 +107,7 @@ chmod u+w "$TMP/grub.cfg" "$TMP/txt.cfg" "$TMP/md5sum.txt"
 # --- UEFI: GRUB ---------------------------------------------------------------
 {
     printf 'set default=0\nset timeout=5\n\n'
-    printf "menuentry 'Install debbie (%s) - automated, no keystrokes' {\n" "$SERVER_NAME"
+    printf "menuentry 'Install debbie - automated, no keystrokes' {\n"
     printf '    set background_color=black\n'
     printf '    linux    /install.amd/vmlinuz %s vga=788 --- quiet\n' "$PARAMS"
     printf '    initrd   /install.amd/initrd.gz\n'
@@ -122,7 +123,7 @@ mv "$TMP/grub.cfg.new" "$TMP/grub.cfg"
 {
     printf 'default debbieauto\n\n'
     printf 'label debbieauto\n'
-    printf '\tmenu label ^Install debbie (%s) - automated\n' "$SERVER_NAME"
+    printf '\tmenu label ^Install debbie - automated\n'
     printf '\tmenu default\n'
     printf '\tkernel /install.amd/vmlinuz\n'
     printf '\tappend %s vga=788 initrd=/install.amd/initrd.gz --- quiet\n\n' "$PARAMS"
