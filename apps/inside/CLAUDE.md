@@ -87,112 +87,15 @@ touching `apps/inside`.
 | `yarn workspace inside test:all` | everything |
 | `yarn workspace inside seed` | fill an empty database with demo data |
 
-### What to test where
+More rules load only when you touch matching files:
 
-**Backend unit/integration** — `inside-be/src/tests/*.test.ts`, `bun test`.
-
-- **Suites share one process, one server and one database.** `bun test` runs
-  every file in a single process, and the modules under test capture their
-  config at import — `services/storage/index.ts` reads `UPLOADS_PATH` on
-  import, `src/index.ts` builds the Fastify instance on import. Those imports
-  stay cached, so giving a suite its own environment isolates nothing. It only
-  decides which suite's settings win.
-- Get the server with `await getApp()` from `./setup` — already migrated and
-  ready. Call `getTestEnv()` if you only need paths. Both memoise their result.
-- **Never call `app.close()` in a suite.** Every suite shares one instance, so closing
-  it breaks every other suite. Teardown happens once at process exit.
-- **Keep suites independent by using unique data, not a clean database.**
-  `uniqueEmail()` is in `./setup`. Do the same for filenames and slugs. Never
-  write a test that assumes a table is empty, and never bulk-mutate shared
-  state — a query like `UPDATE sessions SET expires_at = ...` with no `WHERE`
-  will sign out accounts other suites are mid-way through using. Scope every
-  write to the row you created.
-- Anything imported from `src/` must be imported *after* `getTestEnv()` or
-  `getApp()` has run, so that call sets the env first. Use a top-level
-  `await import(...)`.
-- Tests must never create `database.db` or `uploads/` in the repo. CI fails if
-  a run leaves artefacts behind, and a leak means your setup is wrong.
-- Drive HTTP with `app.inject()`, not a real listening port. `src/index.ts`
-  exports `app` without listening precisely for this.
-- Schema work must assert constraints **actually bite** — insert a bad enum
-  value and an orphan FK and expect a throw. `PRAGMA foreign_keys` is
-  per-connection, so set it on your test connection.
-
-### Test id conventions — `REQ-QUALITY-001`
-
-One suffix, one meaning. The convention drifted once and became actively
-misleading: `-missing` came to mean "any failure" and rendered as
-`severity="info"`, so a page told a visitor a studio was unlisted when the
-backend was down. `portfolio-empty` marked both a genuinely empty list and a
-404, so a test asserting it could not tell which it had caught.
-
-| Suffix | Means |
-|---|---|
-| `-loading` | A request is in flight. |
-| `-empty` | A request succeeded and there is genuinely nothing. |
-| `-missing` | This specific record does not exist. Only where the page knows that, not "something failed". |
-| `-failure` | A request failed. Cause unknown to the surface — `describeFailure` decides the wording. |
-
-No id may mark two conditions. If you need to distinguish a load failure from
-an action failure on the same page, they are two ids
-(`portfolio-load-failure`, `portfolio-action-failure`), not one used twice.
-
-Every surface that can fail, be empty, or be pending needs one — including the
-pending state. `apps/inside/CLAUDE.md` already says "test the in-flight state".
-An untestable in-flight state is the same rule broken one step earlier.
-
-**Enforced by `apps/inside/scripts/check-test-ids.mjs`, in CI on every PR touching
-`apps/inside`** (REQ-QUALITY-001). It parses every `data-testid`/`testId`
-under `inside-fe/src` and fails on:
-
-- A `-missing` or `-empty` id rendered from a branch that tests `isError`
-  without also narrowing on a specific status (e.g. `error instanceof
-  ApiError && error.status === 404`). This is the #231 shape. The check
-  catches it mechanically, not whoever happens to review the diff.
-- The same id used at locations that are not mutually exclusive branches of
-  one condition. A link-vs-text ternary for one crumb is fine. The same id on
-  two unrelated surfaces is not.
-- A `testId` handed to `FailureNotice`/`FailureAlert` that does not end
-  `-failure`. Both are failure surfaces by construction.
-- A suffix that reads as one of the four above but isn't — `-error` where
-  `-failure` was meant, `-gone` where `-missing` was meant, and so on.
-
-What it does **not** and cannot check: whether the words inside the alert are
-honest. That stays a matter for review.
-
-**False positive?** Add a comment containing `test-id-lint-ignore` and the
-reason, on the same line as the attribute or the line above it:
-
-```tsx
-{/* test-id-lint-ignore: a render crash, not a query state (REQ-FAIL-001) */}
-<Alert severity="error" data-testid="render-error">
-```
-
-`error-boundary.tsx` uses this for exactly that reason — a render crash is
-REQ-FAIL-001's territory, not this suffix vocabulary's.
-
-**Frontend E2E** — `inside-fe/tests/e2e/*.spec.ts`, Playwright.
-
-- Runs the real app against the real backend on ports 4160/4161, so a running
-  `yarn start` on 4060/4061 never collides with a test run.
-- Prefer **retrying** assertions (`expect(locator).toHaveClass(...)`) over a
-  synchronous `page.evaluate()` read. State lands on a React re-render, and a
-  bare read races it — this is the single most common flake here.
-- Select by role and accessible name, not by CSS class. MUI class names are
-  generated and will churn.
-- Assert no console errors on any page you add. `smoke.spec.ts` shows the
-  pattern.
-- **Every new route goes into `a11y.spec.ts` and `keyboard.spec.ts`.** The axe
-  scan runs each route in *both* themes — dark-mode contrast is what usually
-  breaks — and must report zero WCAG 2.1 AA violations. `test:e2e` excludes the
-  `@axe` tag and `test:axe` selects it, so the two never run twice.
-- Keyboard cover is separate because axe cannot see it: whether a control is
-  reachable by Tab and whether focus is *visible* are runtime properties. The
-  focus ring is a theme concern — `app/theme.ts` defines it once for everything
-  focusable. Do not restyle focus per component.
-- Share fixtures via `tests/e2e/helpers.ts` (`signIn`, `uniqueEmail`,
-  `waitForApp`). `signIn` must not return until the URL has left *both*
-  `/login` and `/verify`, or the sign-in silently doesn't stick.
+- `.claude/rules/inside-testing.md`: what to test where, and the test id
+  conventions (`REQ-QUALITY-001`). Loads for tests and for frontend components.
+- `.claude/rules/inside-frontend.md`: routing and navigation (`REQ-NAV-*`),
+  state you have not verified (`REQ-STATE-*`), and theming (`REQ-THEME-*`).
+  Loads for `inside-fe/**`.
+- `.claude/rules/inside-auth.md`: magic-link auth (`REQ-AUTH-*`). Loads for
+  `inside-be/**` and auth files in the frontend.
 
 ### Bar for new work
 
@@ -204,82 +107,7 @@ REQ-FAIL-001's territory, not this suffix vocabulary's.
 - New shared module (storage, images, email) → contract tests written against
   the interface, not the implementation, so a future provider passes unchanged.
 - New route → an entry in `inside-fe/src/app/routes.ts`, plus its parent route
-  if the URL is nested. See the routing rule below.
-
-## Routing and navigation
-
-`inside-fe/src/app/routes.ts` declares the routes as **data**. The router,
-the breadcrumb and the guard that polices both all read that one
-table — never from a second list kept alongside it.
-
-### NO DEAD INTERMEDIATE PATHS — a standing constraint, not a one-off
-
-**Every ancestor of every route must itself be a real, visitable page.**
-`REQ-NAV-001`, with `REQ-NAV-002` covering URLs nobody declared.
-
-If `/designers/:slug` exists, `/designers` must exist and render something
-worth landing on. The breadcrumb renders every intermediate segment as a link,
-so a parent that 404s is a broken link the app itself is offering. This is a
-rule about route *design*: no ticket may introduce a nested URL without also
-providing its parent. `/me` and `/admin` arrive with their own feature tickets
-and must comply the moment they do — `/me/projects/:id` requires both `/me`
-and `/me/projects`.
-
-`findMissingAncestors` in `routes.ts` enforces it, and
-`tests/e2e/navigation.spec.ts` fails CI on a non-empty result and again on any
-ancestor that does not actually resolve in a browser. The guard reads the route
-table, so a nested route added without its parent fails **without anyone
-touching the test**. Do not work around a failure by hiding the crumb — add the
-parent page.
-
-### Adding a route
-
-1. Add it to `ROUTES` with a lower-case `label` (the crumb reads
-   `home › subsection › page`, one sentence).
-2. Give it an element in `ELEMENTS` in `router.tsx`. `RoutePath` types it,
-   so a route with no element — or an element with no route — is a
-   compile error.
-3. Parameterised? Give it `params` with a representative fixture value, or the
-   guard cannot visit it. Needs a session? Set `requiresAuth`. Needs a query
-   string to render? Set `search`.
-4. Add its parent if the URL is nested. Non-negotiable, see above.
-5. Add it to `a11y.spec.ts` and `keyboard.spec.ts` like any other route.
-
-### Crumb labels — `REQ-NAV-003`
-
-A crumb shows the best name available, in this order: a real name supplied by
-the page at runtime, then — for a **static** segment only — the route table's
-`label`, then the humanised URL segment. A crumb is never blank.
-
-The crumb skips the label for a **parameterised** segment, because the label
-cannot tell one instance from another: the table calls `/designers/:slug`
-"studio",
-which would read the same for every studio. The concrete segment
-(`northlight-architects` → "northlight architects") is strictly more
-informative, so it wins until a real name arrives.
-
-Pages supply real names with `useCrumbTitles({ [path]: name })`, keyed **by
-path** rather than "the current page" — a nested page knows its ancestors'
-names too, and a placeholder in the middle of a trail is as unhelpful as one at
-the end. A portfolio piece names both itself and the studio above it. Entries
-that are `undefined` or blank do nothing, so passing `data?.name` straight
-through degrades gracefully while loading. The hook clears every name on unmount
-so a name never leaks onto the next page. `useBreadcrumbTitle(name)` remains as
-a thin wrapper for the common case of naming only your own crumb.
-
-Because any crumb's wording can be replaced at runtime, tests that need to
-identify a crumb structurally select it by `href`, not by accessible name.
-
-A crumb only becomes a **link** when a route actually serves that path. On a
-URL nobody declared, the intermediate crumbs are inert text rather than an
-invitation into a 404.
-
-### Layout
-
-`RootLayout` renders the breadcrumb for every route, so pages never opt in. The
-fixed furniture has assigned corners and they must stay clear of each other at
-375px: status chips top-left, theme toggle top-right, breadcrumb below the
-chips on the left. `navigation.spec.ts` asserts they do not collide.
+  if the URL is nested. See `.claude/rules/inside-frontend.md`.
 
 ## Conventions
 
@@ -304,38 +132,6 @@ chips on the left. `navigation.spec.ts` asserts they do not collide.
 - rsbuild bakes the frontend's API base in at **build time**, through
   `source.define`. There is deliberately no runtime hostname detection — do not
   add a second strategy.
-
-## Auth — `REQ-AUTH-001` … `REQ-AUTH-007`
-
-Magic link only. There are no passwords. See `services/auth.ts`,
-`services/session.ts`, `middleware/auth.ts`.
-
-- **Roles are `buyer`, `designer`, `admin`.** `admin` comes *only* from the
-  `ADMIN_EMAILS` env whitelist — it is never accepted from a request body.
-- **Logging in never rewrites an existing user's buyer/designer role.** That
-  role is chosen once at signup and owns the link to their profile and
-  portfolio.
-- **Session TTL and cookie `maxAge` are both derived from `SESSION_TTL_MS`.**
-  If you change one, change it there — a mismatch silently 401s users who still
-  hold a cookie the browser considers valid.
-- Sessions store `sha256(jwt)`, never the raw token. Middleware checks the
-  signature **and** that the session is unrevoked, or logout would be cosmetic.
-- **`GET /api/auth/me` answers 200 with `user: null` when signed out.**
-  Anonymous browsing is a first-class flow, so "nobody" is an answer, not an
-  error. A cookie that is present but invalid or revoked still 401s. Keep this
-  shape for any other endpoint an anonymous visitor hits on page load.
-- **Validate `returnTo` on both sides** with the existing helpers
-  (`safeReturnTo`). Relative paths only — reject protocol-relative URLs like
-  `//evil.example`, which a leading-slash check lets through.
-- Guard routes by putting them in an encapsulated scope with `requireRole(...)`
-  as an `onRequest` hook. A Fastify v5 async hook must **return** the reply to
-  halt the lifecycle. Awaiting `reply.send()` alone lets the handler run and
-  send twice.
-- Local dev and E2E use `DANGEROUS_BYPASS_EMAIL_MAGIC_LINK=true`, which returns
-  the link in the response instead of emailing it. Production ignores it.
-- The frontend's `AuthProvider` boot check defers to an explicit sign-in or
-  sign-out, because on `/verify` it races the sign-in and would otherwise
-  overwrite a fresh session with `null`. Preserve that guard.
 
 ## Build the state you need, not the state you imagine
 
@@ -369,49 +165,6 @@ Rules:
   same intent, so they are the same endpoint returning the same row — the UI
   does not have to know which state it is in, and there is no third state to
   get stuck in.
-
-## Never assert what you have not verified — `REQ-STATE-001` … `REQ-STATE-004`
-
-**Loading, loaded and failed are three distinct states, and every surface must
-make clear which one it is in.**
-
-This is not a style preference. The backend status chip once rendered green
-with the tooltip "API reachable" while its request was still in flight — the
-app telling the user something it did not know. A fallback that looks identical
-to real data is a lie with a happy path.
-
-Rules:
-
-- **Derive every presentation from ONE value.** When label, colour and tooltip
-  each branch on the query separately, they will eventually disagree. Compute a
-  single status (`'checking' | 'ok' | 'down'`) and map it to a presentation, so
-  a contradictory combination is unrepresentable rather than merely unlikely.
-- **A pending state must never look like a successful one.** Not green, not a
-  reassuring word, not a plausible placeholder. Neutral or explicitly unknown.
-- **Do not invent content for data you have not received.** `data?.x ?? 'some
-  default'` renders a guess that is indistinguishable from the truth. Use a
-  skeleton while pending, and render nothing rather than a fabrication on
-  failure. The exception is genuinely static branding that never came from the
-  server — the site's own name is not "data".
-- **Handle the failure branch explicitly.** `isError` collapsing into the
-  success path is the same bug wearing a different hat.
-- **Test the in-flight state.** Most netcode bugs live there and never appear
-  in a test that only covers success and failure. Playwright can hold a
-  response open (`route.fulfill` after a delay) — use it.
-
-## Theming — `REQ-THEME-001`, `REQ-THEME-002`
-
-MUI, three-state light / dark / auto, persisted to `localStorage['theme-mode']`.
-
-- One source of truth: `ThemeModeContext`. Components read it via
-  `useThemeMode()`. Never keep a second copy of the mode in local state.
-- `auto` subscribes to `matchMedia`, so the app follows a live OS theme change
-  without a reload. Keep that.
-- A blocking script in `public/index.html` sets the body class pre-paint to
-  avoid a flash. It must read the same key the app writes.
-- The current palette is a restrained neutral placeholder. The real editorial
-  identity is a separate ticket — don't scatter hardcoded colours in
-  components. Extend `app/theme.ts`.
 
 ## Ports
 
