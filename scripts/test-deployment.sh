@@ -1,7 +1,7 @@
 #!/bin/bash
 # Deployment Smoke Test Script
 # Tests all services for both Cloudflared (4xxx) and Fly.io (5xxx) setups
-# Usage: ./test-deployment.sh [cloudflared|flyio|both]
+# Usage: scripts/test-deployment.sh [cloudflared|flyio|both]
 
 set -e
 
