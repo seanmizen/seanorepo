@@ -13,6 +13,7 @@ import {
   trackFromJson,
   valueAt,
 } from './keyframes.mjs';
+import { checkLayers, machineVars, stampLayers } from './text.mjs';
 
 const HELP = `image-to-ascii IMAGE [flags]
 
@@ -25,7 +26,8 @@ Image settings (the asciiart.eu sliders, with the site's defaults):
   --threshold N        (0-255, off by default)
   --dithering none|FloydSteinberg|JJN|Stucki|Atkinson
   --charset normal|minimalist|normal2|alphabetic|alphanumeric|numerical|
-            extended|math|arrow|grayscale|codepage437|blockelement|<chars>
+            extended|math|arrow|grayscale|codepage437|blockelement
+  --chars STRING       your own characters, darkest first. Overrides --charset.
   --reverse            flip the charset, for a dark terminal
 
 Animation:
@@ -37,10 +39,19 @@ Animation:
   --pingpong               play forward, then back
   --spec FILE.json         read all of the above from a file. Flags override it.
 
+Text (in a --spec file only):
+  "text": [{ "text": "{hostname}", "anchor": "bottom-left", "from": 20, "to": 60 }]
+  Anchors: center, top-left, top-right, bottom-left, bottom-right.
+  --var name=value         set a variable. {hostname} and {uptime} default to
+                           this machine's values.
+
 Output (an animation needs at least one):
   --out DIR                write frames as DIR/0000.txt, DIR/0001.txt, ...
   --play                   play the frames in this terminal
   --fps 30                 playback speed for --play
+  --fit                    with --play, shrink the width to fit the terminal.
+                           Skip playback if the terminal is too small.
+  Any key during --play jumps to the last frame.
 `;
 
 const BOOLEAN_FLAGS = new Set([
@@ -49,11 +60,12 @@ const BOOLEAN_FLAGS = new Set([
   'reverse',
   'play',
   'pingpong',
+  'fit',
   'help',
 ]);
 
 const parseArgs = (argv) => {
-  const args = { options: {}, keys: [], sweeps: [] };
+  const args = { options: {}, keys: [], sweeps: [], vars: {} };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (!token.startsWith('--')) {
@@ -69,7 +81,11 @@ const parseArgs = (argv) => {
     const value = argv[++i];
     if (value === undefined) throw new Error(`--${name} needs a value`);
     if (name === 'key') args.keys.push(value);
-    else if (name === 'sweep') args.sweeps.push(value);
+    else if (name === 'var') {
+      const at = value.indexOf('=');
+      if (at < 1) throw new Error(`--var needs name=value, got "${value}"`);
+      args.vars[value.slice(0, at)] = value.slice(at + 1);
+    } else if (name === 'sweep') args.sweeps.push(value);
     else if (['frames', 'fps'].includes(name)) args[name] = Number(value);
     else if (['out', 'ease', 'spec'].includes(name)) args[name] = value;
     else if (name in DEFAULTS || name === 'threshold') {
@@ -93,6 +109,8 @@ const readSpec = (file) => {
         trackFromJson(v),
       ]),
     ),
+    text: spec.text ?? [],
+    vars: spec.vars ?? {},
     frames: spec.frames,
     fps: spec.fps,
     ease: spec.ease,
@@ -106,6 +124,39 @@ const readSpec = (file) => {
 const callerDir = process.env.INIT_CWD ?? process.cwd();
 const fromCaller = (p) => (p === undefined ? p : resolve(callerDir, p));
 
+// Plays the frames once. Any key jumps to the last frame. The cursor and the
+// terminal mode come back however playback ends.
+const play = async (frames, fps) => {
+  const delay = 1000 / fps;
+  const stdin = process.stdin;
+  let skip = false;
+  const restore = () => {
+    process.stdout.write('\x1b[?25h');
+    if (stdin.isTTY) stdin.setRawMode(false);
+    stdin.pause();
+  };
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => {
+      restore();
+      process.exit(130);
+    });
+  }
+  if (stdin.isTTY) {
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.once('data', () => {
+      skip = true;
+    });
+  }
+  process.stdout.write('\x1b[?25l\x1b[2J');
+  for (let i = 0; i < frames.length; i++) {
+    if (skip) i = frames.length - 1;
+    process.stdout.write(`\x1b[H${frames[i]}\n`);
+    if (i < frames.length - 1) await new Promise((r) => setTimeout(r, delay));
+  }
+  restore();
+};
+
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
   args.image = fromCaller(args.image);
@@ -115,7 +166,11 @@ const main = async () => {
     process.stdout.write(HELP);
     return;
   }
-  const spec = args.spec ? readSpec(args.spec) : { options: {}, tracks: {} };
+  const spec = args.spec
+    ? readSpec(args.spec)
+    : { options: {}, tracks: {}, text: [], vars: {} };
+  checkLayers(spec.text);
+  const vars = { ...machineVars(), ...spec.vars, ...args.vars };
 
   const image = args.image ?? spec.image;
   if (!image) throw new Error('no image. Pass IMAGE, or "image" in --spec.');
@@ -144,8 +199,23 @@ const main = async () => {
   }
 
   const loaded = await loadImage(image);
-  if (Object.keys(tracks).length === 0) {
-    process.stdout.write(`${await toAscii(loaded, options)}\n`);
+  if (args.fit && args.play) {
+    if (!process.stdout.isTTY) return;
+    // Rows are 0.55 * width / aspect. Keep one row free for the prompt.
+    const byRows = Math.floor(
+      ((process.stdout.rows - 1) / 0.55) * loaded.aspect,
+    );
+    const width = Math.min(
+      options.width ?? DEFAULTS.width,
+      process.stdout.columns,
+      byRows,
+    );
+    if (width < 20) return; // too small to be worth showing
+    options.width = width;
+  }
+  const layered = (ascii, f) => stampLayers(ascii, spec.text, f, vars);
+  if (Object.keys(tracks).length === 0 && !args.play) {
+    process.stdout.write(`${layered(await toAscii(loaded, options), 0)}\n`);
     return;
   }
 
@@ -153,14 +223,20 @@ const main = async () => {
   const ease = EASINGS[easeName];
   if (!ease)
     throw new Error(`unknown ease "${easeName}": use linear or smooth`);
-  const count = frames ?? frameCount(tracks);
+  const lastText = Math.max(
+    0,
+    ...spec.text.map((t) => Math.max(t.from ?? 0, t.to ?? 0) + 1),
+  );
+  const count =
+    frames ??
+    Math.max(Object.keys(tracks).length ? frameCount(tracks) : 1, lastText);
   const rendered = [];
   for (let f = 0; f < count; f++) {
     const frameOptions = { ...options };
     for (const [name, track] of Object.entries(tracks)) {
       frameOptions[name] = valueAt(track, f, ease);
     }
-    rendered.push(await toAscii(loaded, frameOptions));
+    rendered.push(layered(await toAscii(loaded, frameOptions), f));
   }
   if (args.pingpong ?? spec.pingpong) {
     rendered.push(...rendered.slice(1, -1).reverse());
@@ -180,20 +256,7 @@ const main = async () => {
     });
     process.stderr.write(`wrote ${rendered.length} frames to ${out}\n`);
   }
-  if (args.play) {
-    const delay = 1000 / (args.fps ?? spec.fps ?? 30);
-    const restore = () => process.stdout.write('\x1b[?25h');
-    process.on('SIGINT', () => {
-      restore();
-      process.exit(130);
-    });
-    process.stdout.write('\x1b[?25l\x1b[2J');
-    for (const frame of rendered) {
-      process.stdout.write(`\x1b[H${frame}\n`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-    restore();
-  }
+  if (args.play) await play(rendered, args.fps ?? spec.fps ?? 30);
 };
 
 main().catch((err) => {

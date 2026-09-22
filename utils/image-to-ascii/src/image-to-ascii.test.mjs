@@ -75,3 +75,47 @@ test('an image converts to the expected shape', async () => {
   assert.ok(lines.every((l) => l.length === 20));
   assert.ok(lines.every((l) => l.startsWith('#####') && l.endsWith('     ')));
 });
+
+test('text layers land on their anchors, and only in their frames', async () => {
+  const { stampLayers } = await import('./text.mjs');
+  const blank = Array.from({ length: 5 }, () => '.'.repeat(20)).join('\n');
+  const layers = [
+    { text: '{hostname}', anchor: 'bottom-left' },
+    { text: 'up {uptime}', anchor: 'bottom-right' },
+    { text: 'hi', anchor: 'center', from: 3, to: 4 },
+  ];
+  const vars = { hostname: 'asus', uptime: '2h 5m' };
+  const f0 = stampLayers(blank, layers, 0, vars).split('\n');
+  assert.equal(f0[4], `asus${'.'.repeat(8)}up 2h 5m`);
+  assert.ok(f0[4].startsWith('asus'));
+  assert.ok(f0[4].endsWith('up 2h 5m'));
+  assert.equal(f0[2], '.'.repeat(20));
+  const f3 = stampLayers(blank, layers, 3, vars).split('\n');
+  assert.equal(f3[2], `${'.'.repeat(9)}hi${'.'.repeat(9)}`);
+  assert.equal(
+    stampLayers(blank, layers, 5, vars).split('\n')[2],
+    '.'.repeat(20),
+  );
+});
+
+test('uptime reads as days, hours and minutes', async () => {
+  const { formatUptime, fillVars } = await import('./text.mjs');
+  assert.equal(
+    formatUptime(300 * 86400 + 2 * 3600 + 34 * 60 + 9),
+    '300d 2h 34m',
+  );
+  assert.equal(formatUptime(2 * 3600 + 60), '2h 1m');
+  assert.equal(formatUptime(59), '0m');
+  assert.equal(fillVars('{a} {b}', { a: 1 }), '1 {b}');
+});
+
+test('an unknown charset is an error, and chars is literal', () => {
+  assert.throws(
+    () => glyphsFor({ charset: 'alphabetical', spaceDensity: 0 }),
+    /unknown charset/,
+  );
+  assert.deepEqual(
+    glyphsFor({ chars: 'ab', charset: 'nope', spaceDensity: 0 }),
+    ['a', 'b'],
+  );
+});
