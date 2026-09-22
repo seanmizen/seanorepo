@@ -256,7 +256,7 @@ Multiple apps use `concurrently` to run frontend + backend simultaneously with n
 See `docs/DEPLOYMENT-TESTING.md` for comprehensive testing procedures including:
 
 - Port scheme documentation
-- Service smoke tests (`./test-deployment.sh`)
+- Service smoke tests (`scripts/test-deployment.sh`)
 - Instructions for adding new services
 
 **Production Deployment:**
