@@ -552,13 +552,16 @@ do_assert() {
         || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. Do not read a later pass as a fix; setup-server-environment.sh repairs the hostname and mDNS, so it would go green regardless."
 
     log "provisioning"
-    scp "${scp_opts[@]}" "$GEN_DIR/payload/setup-developer-environment.sh" \
-        "$GEN_DIR/payload/setup-server-environment.sh" "$target:/tmp/" > /dev/null \
+    # payload/ AND services/, because the unit templates travel with the script
+    # that installs them since #359 - the VM's checkout is on `release` and does
+    # not hold a unit from a feature branch.
+    tar czf - -C "$GEN_DIR" payload services \
+        | ssh "${ssh_opts[@]}" "$target" 'rm -rf /tmp/debbie-payload && mkdir -p /tmp/debbie-payload && tar xzf - -C /tmp/debbie-payload' \
         || die_code 2 "could not copy the setup scripts into the guest"
     run_setup() {
-        ssh "${ssh_opts[@]}" "$target" "sudo -n DEV_USER=$DEPLOY_USER bash /tmp/setup-developer-environment.sh ${1:-}" \
+        ssh "${ssh_opts[@]}" "$target" "sudo -n DEV_USER=$DEPLOY_USER bash /tmp/debbie-payload/payload/setup-developer-environment.sh ${1:-}" \
             || die_code 2 "setup-developer-environment.sh failed${2:-}"
-        ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/setup-server-environment.sh ${1:-}" \
+        ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/debbie-payload/payload/setup-server-environment.sh ${1:-}" \
             || die_code 2 "setup-server-environment.sh failed${2:-}"
     }
     run_setup

@@ -108,6 +108,21 @@ REPO_URL="${REPO_URL:-https://github.com/seanmizen/seanorepo.git}"
 RELEASE_BRANCH="${RELEASE_BRANCH:-release}"
 
 log() { echo "[postinstall] $*"; }
+# Fatal. The script had no such helper: every other failure path logs and calls
+# exit 1 inline. render_unit needs one, and scripts/lib.sh's die() stays on the
+# laptop - it is not in this file's world.
+die() { echo "[postinstall] ERROR: $*" >&2; exit 1; }
+
+# Where this script and its unit templates were unpacked. provision.sh and
+# test-vm.sh both send payload/ and services/ as one tar and run this file by
+# path, so $0 is real in both.
+#
+# NOT the checkout at $GEN_DIR. That tracks `release` by REQ-DEPLOY-001, while
+# this script arrives from whatever branch the operator is on. Reading templates
+# from the checkout means provisioning from a feature branch looks for units
+# that only `release` has - which is how the first VM run of #359 failed.
+PAYLOAD_DIR="$(cd "$(dirname "$0")" && pwd)"
+SERVICES_SRC="$PAYLOAD_DIR/../services"
 
 [ "$(id -u)" -eq 0 ] || { echo "must run as root (use sudo)" >&2; exit 1; }
 
@@ -682,9 +697,8 @@ write_unit() {
 # services/custom-deploy.service. A unit is then a file systemd-analyze can
 # read and git can diff, rather than a heredoc in the middle of this script.
 #
-# The templates come from $GEN_DIR/services, which is the checkout this script
-# made at REQ-DEPLOY-001. The units already name that path in ExecStart, so it
-# is the same guarantee: no template, no clone, and the clone happens first.
+# The templates come from SERVICES_SRC - the services/ directory unpacked
+# beside this script, not the checkout. See the note on PAYLOAD_DIR.
 #
 # Substitution takes an explicit allowlist, and the render FAILS when any
 # ${...} survives it. envsubst would write an empty string instead, and a unit
@@ -692,14 +706,21 @@ write_unit() {
 # failure this generation keeps designing out. read_env refuses an unknown key
 # for the same reason. An unset variable stops provisioning here, loudly.
 #------------------------------------------------------------------------------
-UNIT_TEMPLATE_VARS="DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
-TCP_GETTER_DIR NODE_BIN CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG"
+# An ARRAY, not a space-separated string. This script sets IFS=$'\n\t', so a
+# string would word-split on newlines and tabs only: every name on one line
+# would arrive as a single word and ${!v} would reject it as an invalid
+# variable name. An array needs no splitting.
+UNIT_TEMPLATE_VARS=(
+    DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
+    TCP_GETTER_DIR NODE_BIN
+    CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG
+)
 
 render_unit() {
-    local unit="$1" template="$GEN_DIR/services/$1" rendered v
+    local unit="$1" template="$SERVICES_SRC/$1" rendered v
     [ -f "$template" ] || die "no unit template at $template"
     rendered="$(cat "$template")"
-    for v in $UNIT_TEMPLATE_VARS; do
+    for v in "${UNIT_TEMPLATE_VARS[@]}"; do
         # Indirect expansion. An unset variable leaves the placeholder in place
         # rather than substituting empty, and the check below then catches it.
         [ -n "${!v-}" ] || continue

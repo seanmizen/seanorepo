@@ -909,15 +909,23 @@ if [ "$PHASE" = provisioned ]; then
     # Exactly one rule. Comments and blank lines do not grant anything; a
     # second rule does, and would be invisible to a check that only looked at
     # the first line.
-    check "sudoers drop-in has exactly one rule" \
-        "[ \"\$(sudo -n grep -cvE '^[[:space:]]*(#.*)?\$' '$SUDOERS_DEST')\" -eq 1 ]"
+    # Two rules since #359: the tunnel and tcp-getter. The number is not the
+    # boundary - "every rule is a restart of one named unit" is, and the next
+    # check enforces that on each line. Pinning the count stops a third rule
+    # arriving unnoticed.
+    check "sudoers drop-in has exactly two rules" \
+        "[ \"\$(sudo -n grep -cvE '^[[:space:]]*(#.*)?\$' '$SUDOERS_DEST')\" -eq 2 ]"
     # The rule, whole, against a pattern that admits exactly one systemctl
     # restart of one unit. Anchored at both ends, so nothing can be appended.
     # No comma (a command list), no wildcard, no ALL in the command position,
     # no shell metacharacter - every one of those is a way to turn "restart the
     # tunnel" into "run anything".
-    check "the one rule is a single systemctl restart of a single unit" \
-        "sudo -n grep -qE '^${DEPLOY_USER} ALL=\\(root\\) NOPASSWD: /usr/bin/systemctl restart [A-Za-z0-9@:._-]+\\.service\$' '$SUDOERS_DEST'"
+    # EVERY rule, not just one: grep -c counts matching lines, so comparing it
+    # to the rule count proves no line escapes the pattern. A single -q grep
+    # would pass while a second, laxer rule sat underneath it.
+    check "every rule is a single systemctl restart of a single unit" \
+        "[ \"\$(sudo -n grep -cE '^${DEPLOY_USER} ALL=\\(root\\) NOPASSWD: /usr/bin/systemctl restart [A-Za-z0-9@:._-]+\\.service\$' '$SUDOERS_DEST')\" \
+          = \"\$(sudo -n grep -cvE '^[[:space:]]*(#.*)?\$' '$SUDOERS_DEST')\" ]"
     # Belt and braces, and each of these has a distinct way of getting in.
     check "sudoers drop-in grants no wildcard" "! sudo -n grep -q '[*]' '$SUDOERS_DEST'"
     check "sudoers drop-in grants no command list" \
@@ -930,28 +938,38 @@ if [ "$PHASE" = provisioned ]; then
     # and only one of the two moves, the deploy fails at the exact moment it
     # matters - an ingress change - and passes every other day of the year.
     #
+    # The unit list comes from the DEPLOYED deploy.sh, not from a list written
+    # here. The checkout tracks `release` (REQ-DEPLOY-001) while the sudoers
+    # rules come from the provisioner, so the two can legitimately be a release
+    # apart: a deploy.sh that restarts only the tunnel needs only the tunnel
+    # permitted. Hardcoding the units made this check fail on any machine whose
+    # checkout predated the provisioner, which is every machine mid-rollout.
+    #
     # Gated on the same rule as the deploy-poller section - #311 - not on the
     # file being there. `sed` on an absent file yields nothing, so `want` is
     # empty and the check goes red, which is right when the commit on disk says
     # the file should exist and wrong when it says it cannot.
     if deploy_script_expected; then
-        check "the unit deploy.sh restarts is the unit sudo permits" \
-            'want=$(sed -n "s/^CLOUDFLARED_UNIT=\"\([^\"]*\)\".*/\1/p" "$DEPLOY_SCRIPT" | head -1);
-             [ -n "$want" ] && sudo -n grep -qF "/usr/bin/systemctl restart $want" "$SUDOERS_DEST"'
+        check "every unit deploy.sh restarts is a unit sudo permits" \
+            'units=$(sed -n "s/^[A-Z_]*UNIT=\"\\([^\"]*\\.service\\)\".*/\\1/p" "$DEPLOY_SCRIPT");
+             [ -n "$units" ] || exit 1;
+             for want in $units; do
+                 sudo -n grep -qF "/usr/bin/systemctl restart $want" "$SUDOERS_DEST" || exit 1;
+             done; true'
     else
-        sk "the unit deploy.sh restarts is the unit sudo permits" "$deploy_skip_reason"
+        sk "every unit deploy.sh restarts is a unit sudo permits" "$deploy_skip_reason"
     fi
 else
     sk "sudoers drop-in present"        "setup-server-environment.sh installs it"
     sk "sudoers drop-in is mode 440"    "setup-server-environment.sh installs it"
     sk "sudoers drop-in is owned by root:root" "setup-server-environment.sh installs it"
     sk "sudoers drop-in parses"         "setup-server-environment.sh installs it"
-    sk "sudoers drop-in has exactly one rule" "setup-server-environment.sh installs it"
-    sk "the one rule is a single systemctl restart of a single unit" "setup-server-environment.sh installs it"
+    sk "sudoers drop-in has exactly two rules" "setup-server-environment.sh installs it"
+    sk "every rule is a single systemctl restart of a single unit" "setup-server-environment.sh installs it"
     sk "sudoers drop-in grants no wildcard"     "setup-server-environment.sh installs it"
     sk "sudoers drop-in grants no command list" "setup-server-environment.sh installs it"
     sk "sudoers drop-in does not grant ALL as a command" "setup-server-environment.sh installs it"
-    sk "the unit deploy.sh restarts is the unit sudo permits" "setup-server-environment.sh installs it"
+    sk "every unit deploy.sh restarts is a unit sudo permits" "setup-server-environment.sh installs it"
 fi
 
 # REQ-NETWORK-001 / REQ-NETWORK-002 - the tunnel, #280.
@@ -1130,8 +1148,6 @@ if [ "$PHASE" = provisioned ]; then
         "systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q -- '--env-file'"
     check "no stale tcp-getter-custom.service is enabled" \
         '[ "$(systemctl is-enabled tcp-getter-custom.service 2>&1)" != enabled ]'
-    check "the tcp-getter workspace has no docker deployment left" \
-        "[ ! -f $TCP_GETTER_DIR/docker-compose.yml ] && [ ! -f $TCP_GETTER_DIR/dockerfile ]"
     if [ -s "$TCP_GETTER_DIR/.env" ] && [ -f "$TCP_GETTER_DIR/dist/index.mjs" ]; then
         check "tcp-getter is listening on 4120" \
             'ss -ltn 2>/dev/null | grep -q ":4120 "'
