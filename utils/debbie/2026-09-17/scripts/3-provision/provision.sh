@@ -47,7 +47,10 @@ DEPLOY_USER="${DEPLOY_USER:-srv}"
 # NEW machine claim debbie.local and made this script dial the live one.
 SERVER_NAME="${SERVER_NAME:-}"
 [ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every machine on purpose."
-KEY="${SSH_KEY:-$WORK/id_ed25519}"
+# The admin key - #369. A machine installed by this generation trusts it and
+# nothing else. Override with SSH_KEY in the env file while migrating a machine
+# that still carries an older per-checkout key.
+KEY="${SSH_KEY:-$HOME/.ssh/seanorepo-admin}"
 SSH_WAIT="${SSH_WAIT:-300}"
 
 #------------------------------------------------------------------------------
