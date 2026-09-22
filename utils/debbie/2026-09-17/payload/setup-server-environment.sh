@@ -632,6 +632,15 @@ UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
 DEPLOY_SCRIPT="$GEN_DIR/services/deploy.sh"
 RELEASE_POLL_SCRIPT="$GEN_DIR/services/release-poll.sh"
+
+# tcp-getter runs on the host, not in a container - #359. It reads this host's
+# ngrok agent API and this host's SSH host key, which is why it is a host unit
+# alongside cloudflared and ngrok rather than a workspace in `yarn prod:docker`.
+TCP_GETTER_DIR="$REPO_DIR/apps/tcp-getter"
+TCP_GETTER_UNIT=custom-tcp-getter.service
+# From the nodejs package that setup-developer-environment.sh installs. Stated
+# absolutely because a unit gets no PATH worth trusting.
+NODE_BIN=/usr/bin/node
 # Must match CLOUDFLARED_UNIT in that deploy.sh. The unit itself is written by
 # the tunnel section at the bottom of this script (#280); this is the name the
 # deploy is permitted to restart, and payload/assert.sh asserts that all three - the
@@ -684,7 +693,7 @@ write_unit() {
 # for the same reason. An unset variable stops provisioning here, loudly.
 #------------------------------------------------------------------------------
 UNIT_TEMPLATE_VARS="DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
-TCP_GETTER_DIR BUN_BIN CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG"
+TCP_GETTER_DIR NODE_BIN CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG"
 
 render_unit() {
     local unit="$1" template="$GEN_DIR/services/$1" rendered v
@@ -775,8 +784,9 @@ sudoers_tmp="$(mktemp)"
 
 cat > "$sudoers_tmp" <<EOF
 # Managed by utils/debbie/2026-09-17/payload/postinstall.sh - REQ-DEPLOY-005.
-# Exactly one command. See the deploy poller section of that script for why.
+# Two commands, both restarts. See the deploy poller section for why.
 $DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $CLOUDFLARED_UNIT
+$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $TCP_GETTER_UNIT
 EOF
 
 if visudo -cf "$sudoers_tmp" > /dev/null; then
@@ -1150,6 +1160,52 @@ else
     log "        On the machine, as $DEPLOY_USER:"
     log "          ngrok config add-authtoken <token>   # dashboard.ngrok.com"
     log "        then re-run this script. See utils/debbie/2026-09-17/README.md."
+fi
+
+#------------------------------------------------------------------------------
+# tcp-getter - the service that tells you the ngrok address, #359.
+#
+# ngrok gives a new host:port on every agent restart, and nothing else on this
+# machine reports it. Lose this and remote access still works but becomes
+# undiscoverable, which is the same thing the first time you are away from home.
+#
+# A HOST UNIT, NOT A CONTAINER. It reads this host's ngrok agent on loopback and
+# this host's /etc/ssh/ssh_host_ed25519_key.pub to pin the host key in the
+# command it emails (#348). A bridge-networked container reaches neither without
+# moving the ngrok inspector off loopback and mounting the key in.
+#
+# NODE, NOT BUN. Nothing provisions bun: the old machine ran a 104 MB binary
+# dropped into a home directory with no package owner, which is the #135 failure
+# that left cloudflared un-updated for sixteen months. The host already has
+# Node and yarn. Node cannot run TypeScript, so deploy.sh builds the workspace
+# with rslib and this unit runs the output. CLAUDE.md gives bundling to the
+# build tool rather than to bun.
+#------------------------------------------------------------------------------
+log "tcp-getter"
+
+units_changed=0
+
+render_unit "$TCP_GETTER_UNIT"
+
+if [ "$units_changed" = 1 ]; then
+    systemctl daemon-reload
+fi
+
+# Enabled whenever it could run. The unit's own Conditions decide each start,
+# so enabling it before the .env or the build exists costs one skipped start
+# and one log line rather than a restart loop. Never disabled in the else
+# branch, matching the tunnel and ngrok: a re-provisioning run must not take
+# remote access discovery down.
+if [ -d "$TCP_GETTER_DIR" ]; then
+    log "  enabling $TCP_GETTER_UNIT"
+    systemctl enable "$TCP_GETTER_UNIT"
+    [ -s "$TCP_GETTER_DIR/.env" ] || {
+        log "  NOTE: $TCP_GETTER_DIR/.env does not exist, so the unit will be"
+        log "        skipped at boot. Copy .env.example and fill it in. Until"
+        log "        then nothing reports this machine's ngrok address."
+    }
+else
+    log "  $TCP_GETTER_DIR is not in the checkout yet - nothing to enable"
 fi
 
 #------------------------------------------------------------------------------

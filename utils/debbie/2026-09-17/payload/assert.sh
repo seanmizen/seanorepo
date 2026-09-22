@@ -1111,6 +1111,41 @@ fi
 # CAN prove: loopback, where every ngrok login comes from, is exempt from
 # sshd's per-source penalties.
 echo
+echo "== tcp-getter (#359) =="
+TCP_GETTER_UNIT=custom-tcp-getter.service
+TCP_GETTER_DIR="/home/$DEPLOY_USER/projects/seanorepo/apps/tcp-getter"
+if [ "$PHASE" = provisioned ]; then
+    check "$TCP_GETTER_UNIT installed in /usr/local/lib/systemd/system" \
+        "[ -f /usr/local/lib/systemd/system/$TCP_GETTER_UNIT ]"
+    check "tcp-getter runs as $DEPLOY_USER" \
+        "[ \"\$(systemctl show -p User --value $TCP_GETTER_UNIT)\" = '$DEPLOY_USER' ]"
+    # Node, not bun. Nothing on this machine provisions bun, and a unit that
+    # named it would be depending on a hand-dropped binary - #135, #359.
+    check "tcp-getter runs node, not bun" \
+        "systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q '/usr/bin/node' \
+         && ! systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q bun"
+    # bun reads .env by itself and node does not. Without the flag the service
+    # starts and then exits on a missing MAIL_PASSWORD.
+    check "tcp-getter passes --env-file, which node needs and bun did not" \
+        "systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q -- '--env-file'"
+    check "no stale tcp-getter-custom.service is enabled" \
+        '[ "$(systemctl is-enabled tcp-getter-custom.service 2>&1)" != enabled ]'
+    check "the tcp-getter workspace has no docker deployment left" \
+        "[ ! -f $TCP_GETTER_DIR/docker-compose.yml ] && [ ! -f $TCP_GETTER_DIR/dockerfile ]"
+    if [ -s "$TCP_GETTER_DIR/.env" ] && [ -f "$TCP_GETTER_DIR/dist/index.mjs" ]; then
+        check "tcp-getter is listening on 4120" \
+            'ss -ltn 2>/dev/null | grep -q ":4120 "'
+    else
+        # A provisioned machine before its first deploy has neither, and the
+        # unit's Conditions are what keep that state quiet.
+        check "tcp-getter refuses to start while .env or the build is absent" \
+            "sudo -n systemctl start $TCP_GETTER_UNIT > /dev/null 2>&1;
+             sleep 2;
+             [ \"\$(systemctl is-active $TCP_GETTER_UNIT 2>&1)\" = inactive ] \
+             && [ \"\$(systemctl is-failed $TCP_GETTER_UNIT 2>&1)\" != failed ]"
+    fi
+fi
+
 echo "== ngrok ssh tunnel (REQ-NETWORK-005) =="
 NGROK_UNIT=custom-ngrok.service
 NGROK_CONFIG="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)/.config/ngrok/ngrok.yml"
