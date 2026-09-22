@@ -24,6 +24,10 @@ The flow:
    That script runs `yarn prod:docker`, and restarts cloudflared only if
    `apps/cloudflared/config.yml` changed.
 
+Before you ask Sean to release, run `yarn prod:docker` locally, then
+`scripts/test-deployment.sh cloudflared`. If ports or hostnames changed,
+update `apps/cloudflared/config.yml` in the same PR.
+
 ```bash
 ssh srv@asus.local journalctl -u custom-release-poll.service -u custom-deploy.service -f
 ssh srv@asus.local ~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force

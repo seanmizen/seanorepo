@@ -63,4 +63,3 @@ Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
 - `scripts/` - repo-level scripts (`promote-release.sh`, `test-deployment.sh`).
 - `requirements/` - the requirements index and its checker
   (`yarn requirements:check`).
-- `docs/` - deployment testing and archived process docs.
