@@ -1,0 +1,77 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import sharp from 'sharp';
+import { glyphFor, glyphsFor, loadImage, toAscii } from './convert.mjs';
+import {
+  EASINGS,
+  frameCount,
+  parseTrack,
+  trackFromJson,
+  valueAt,
+} from './keyframes.mjs';
+
+test('a track parses, sorts, and rejects bad input', () => {
+  assert.deepEqual(parseTrack('20:250,0:100'), [
+    [0, 100],
+    [20, 250],
+  ]);
+  assert.throws(() => parseTrack('0:100,0:200'), /two keyframes/);
+  assert.throws(() => parseTrack('x:1'), /bad keyframe/);
+  assert.deepEqual(trackFromJson({ 40: 80, 0: 100 }), [
+    [0, 100],
+    [40, 80],
+  ]);
+});
+
+test('values hold outside the keyframes and interpolate between them', () => {
+  const track = parseTrack('10:100,20:200,40:0');
+  assert.equal(valueAt(track, 0), 100);
+  assert.equal(valueAt(track, 15), 150);
+  assert.equal(valueAt(track, 30), 100);
+  assert.equal(valueAt(track, 99), 0);
+  assert.equal(valueAt(track, 15, EASINGS.smooth), 150);
+  assert.ok(valueAt(track, 12, EASINGS.smooth) < valueAt(track, 12));
+});
+
+test('the frame count reaches the last keyframe of any track', () => {
+  assert.equal(
+    frameCount({ a: parseTrack('0:1,80:2'), b: parseTrack('0:1,50:2') }),
+    81,
+  );
+});
+
+test('the darkest pixel gets the first glyph, and reverse flips it', () => {
+  const glyphs = glyphsFor({ charset: 'minimalist', spaceDensity: 1 });
+  assert.deepEqual(glyphs, ['#', '+', '-', '.', ' ']);
+  assert.equal(glyphFor(glyphs, 0), '#');
+  assert.equal(glyphFor(glyphs, 255), ' ');
+  const flipped = glyphsFor({
+    charset: 'minimalist',
+    spaceDensity: 1,
+    reverse: true,
+  });
+  assert.equal(glyphFor(flipped, 0), ' ');
+});
+
+test('an image converts to the expected shape', async () => {
+  // Left half black, right half white, 200x100.
+  const raw = Buffer.alloc(200 * 100 * 3);
+  for (let y = 0; y < 100; y++) {
+    for (let x = 100; x < 200; x++)
+      raw.fill(255, (y * 200 + x) * 3, (y * 200 + x) * 3 + 3);
+  }
+  const png = await sharp(raw, {
+    raw: { width: 200, height: 100, channels: 3 },
+  })
+    .png()
+    .toBuffer();
+  const ascii = await toAscii(await loadImage(png), {
+    width: 20,
+    charset: 'minimalist',
+  });
+  const lines = ascii.split('\n');
+  // Rows: floor(0.55 * floor(20 / 2)) = 5.
+  assert.equal(lines.length, 5);
+  assert.ok(lines.every((l) => l.length === 20));
+  assert.ok(lines.every((l) => l.startsWith('#####') && l.endsWith('     ')));
+});

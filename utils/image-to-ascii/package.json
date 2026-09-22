@@ -1,0 +1,15 @@
+{
+  "name": "image-to-ascii",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Image to ASCII art, with the asciiart.eu controls and keyframe animation",
+  "bin": "./src/cli.mjs",
+  "scripts": {
+    "ascii": "node src/cli.mjs",
+    "test": "node --test src/"
+  },
+  "dependencies": {
+    "sharp": "^0.34.4"
+  }
+}
