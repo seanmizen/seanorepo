@@ -22,7 +22,7 @@ Introduced in #259.
   unusable for the chosen guest architecture, then the harness shall refuse to
   start and name the reason.
 - **Rationale:** This is the defect that killed the December 2025 attempt.
-  `2025-12-27/preseed/test-preseed.sh` asked `sysctl kern.hv_support`, which is
+  `archive/2025-12-27/preseed/test-preseed.sh` asked `sysctl kern.hv_support`, which is
   true on an Apple Silicon Mac, and then passed `-accel hvf` to
   `qemu-system-x86_64`. Hardware virtualisation is same-architecture only, so
   that combination cannot work. The script had two independent settings — a
