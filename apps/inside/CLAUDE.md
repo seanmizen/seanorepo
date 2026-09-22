@@ -168,10 +168,10 @@ Rules:
 
 ## Ports
 
-| | Cloudflared | Fly.io | E2E |
-|---|---|---|---|
-| Frontend | 4060 | 5060 (reserved) | 4160 |
-| Backend | 4061 | 5061 (reserved) | 4161 |
+| | Cloudflared | E2E |
+|---|---|---|
+| Frontend | 4060 | 4160 |
+| Backend | 4061 | 4161 |
 
 Cloudflared ingress for `inside.seanmizen.com` **must stay above** the
 `*.seanmizen.com` wildcard in `apps/cloudflared/config.yml`, or the wildcard

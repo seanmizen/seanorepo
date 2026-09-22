@@ -6,10 +6,10 @@ project managers browse and get in touch. Positioning is high-brow and luxury.
 
 ## Ports
 
-| | Cloudflared | Fly.io |
-|---|---|---|
-| Frontend | 4060 | 5060 |
-| Backend | 4061 | 5061 |
+| | Cloudflared |
+|---|---|
+| Frontend | 4060 |
+| Backend | 4061 |
 
 ## Running it
 
@@ -81,34 +81,11 @@ file and the uploads directory are named Docker volumes there, so they survive
 rebuilds. This is where the data lives.
 
 > **`SITE_NAME` lives on the host, not in the repo.** It is `inside.space`, and
-> the deployed `.env` on debbie needs the same value. `.env.example` carries it
+> the deployed `.env` on the production server (asus) needs the same value. `.env.example` carries it
 > for a fresh checkout only. A stale `SITE_NAME` signs every magic-link email
 > with the old name, and nothing in CI can see that.
 
-**Fly.io (5060/5061) is a stateless mirror.** We attach no Fly volume, so the
-database and every uploaded asset are lost on each deploy or machine restart —
-`auto_stop_machines` is on, so that is often. The app boots, migrates an empty
-schema and serves. It just does not remember anything.
-
-That is a deliberate choice, not an oversight:
-
-- The Fly image is one container shared by every site in the monorepo
-  (`utils/fly-io/dockerfile`). A volume attaches to a single machine in a
-  single region, so adding one for `inside` would pin the whole stack.
-- `carolinemizen.art`, the other app here with a CMS and large uploads, is
-  already deployed the same way.
-- Nothing on Fly is the source of truth. If `inside` ever needs durable cloud
-  storage, the answer is the S3 swap the `StorageProvider` interface is already
-  shaped for, plus a hosted database — not a Fly volume.
-
-Fly needs two secrets, or the backend refuses to boot (by design — see
-`requireSecret` in `inside-be/src/index.ts`):
-
-```bash
-fly secrets set JWT_SECRET=... COOKIE_SECRET=...
-```
-
-The Fly build runs the backend's TypeScript directly rather than bundling it,
-matching `inside-be/dockerfile`. Bundling breaks two things: `runMigrations`
-resolves its `.sql` files relative to its own module path, and `sharp` ships a
-native binary that cannot be inlined.
+The production image runs the backend's TypeScript source directly (see
+`inside-be/dockerfile`). Do not add a bundling step. Bundling breaks two
+things: `runMigrations` finds its `.sql` files relative to its own module path,
+and `sharp` ships a native binary that a bundler cannot inline.
