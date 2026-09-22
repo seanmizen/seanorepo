@@ -594,7 +594,10 @@ do_assert() {
     run_setup() {
         ssh "${ssh_opts[@]}" "$target" "sudo -n DEV_USER=$DEPLOY_USER bash /tmp/debbie-payload/payload/setup-developer-environment.sh ${1:-}" \
             || die_code 2 "setup-developer-environment.sh failed${2:-}"
-        ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL bash /tmp/debbie-payload/payload/setup-server-environment.sh ${1:-}" \
+        # EXTRA_AUTHORIZED_KEYS keeps this harness's throwaway key in
+        # authorized_keys - #369 makes that file authoritative, so without this
+        # the first provisioning run locks the harness out of its own guest.
+        ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL EXTRA_AUTHORIZED_KEYS='$(cat "$KEY.pub")' bash /tmp/debbie-payload/payload/setup-server-environment.sh ${1:-}" \
             || die_code 2 "setup-server-environment.sh failed${2:-}"
     }
     run_setup

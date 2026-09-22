@@ -1223,11 +1223,19 @@ if [ ! -s "$ADMIN_PUBKEY" ]; then
     log "           Leaving $AUTH_KEYS exactly as it is. This machine keeps"
     log "           whatever key already opens it, and gains none."
 else
+    # EXTRA_AUTHORIZED_KEYS holds whole public-key lines, newline separated.
+    # It exists for two callers. The VM harness generates a throwaway keypair
+    # and would lock itself out on this very run without it. And a machine being
+    # migrated to the admin key keeps the key that currently opens it, so the
+    # new one can be PROVEN before the old one is removed - a rewrite that drops
+    # the working key before anybody has tested the replacement is how you end
+    # up at a physical console.
     auth_tmp="$(mktemp)"
     {
         echo "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - #369"
         echo "# Edit payload/seanorepo-admin.pub, not this file: a provisioning run rewrites it."
         grep -vE '^[[:space:]]*(#.*)?$' "$ADMIN_PUBKEY"
+        [ -z "${EXTRA_AUTHORIZED_KEYS:-}" ] || printf '%s\n' "$EXTRA_AUTHORIZED_KEYS"
     } > "$auth_tmp"
 
     # At least one line that looks like a key. Counting non-comment lines is not
