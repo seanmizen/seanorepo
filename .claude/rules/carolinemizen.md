@@ -5,8 +5,8 @@ paths:
 
 # carolinemizen.art
 
-An art portfolio CMS. **It is not a shop.** All Stripe, payment and order code
-was removed. The `orders` table still exists in old databases, but nothing
+An art portfolio CMS. **It is not a shop.** The code has no Stripe, payment or
+order logic. The `orders` table still exists in old databases, but nothing
 uses it. Do not add commerce back.
 
 - Frontend: React + RSBuild, port 4020. Backend: Bun + Fastify, port 4021,
