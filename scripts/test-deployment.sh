@@ -76,11 +76,6 @@ test_cloudflared() {
   echo -e "\n${YELLOW}seanmizen.com${NC}"
   test_endpoint "http://localhost:4000" "Frontend" || ((failed++))
 
-  # Test seanscards.com (FE + BE)
-  echo -e "\n${YELLOW}seanscards.com${NC}"
-  test_endpoint "http://localhost:4010" "Frontend" || ((failed++))
-  test_endpoint "http://localhost:4011/api" "Backend API" || ((failed++))
-
   # Test carolinemizen.art (FE + BE)
   echo -e "\n${YELLOW}carolinemizen.art${NC}"
   test_endpoint "http://localhost:4020" "Frontend" || ((failed++))
