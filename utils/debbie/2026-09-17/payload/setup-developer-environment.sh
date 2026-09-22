@@ -143,6 +143,19 @@ alias cls=clear
 # Project-local completions, if the directory you are in provides them.
 [[ -f ./completions.zsh ]] && source ./completions.zsh
 
+# Login animation, from utils/image-to-ascii. It plays once, on an interactive
+# SSH login only. scp, rsync and `ssh host cmd` are not interactive, so they
+# stay silent. A key press skips to the last frame. `timeout` caps it, and any
+# error is hidden, so it never blocks the prompt.
+_ascii_repo="$HOME/projects/seanorepo/utils/image-to-ascii"
+if [[ -o interactive && -n "$SSH_TTY" && -f "$_ascii_repo/examples/login.json" ]] \
+  && command -v node > /dev/null && command -v timeout > /dev/null; then
+  timeout 8 node "$_ascii_repo/src/cli.mjs" --spec "$_ascii_repo/examples/login.json" \
+    --play --fit 2> /dev/null
+  printf '\033[?25h'
+fi
+unset _ascii_repo
+
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
 ZSHRC_EOF
 install -m 0644 -o "$DEV_USER" -g "$USER_GROUP" "$zshrc_tmp" "$USER_HOME/.zshrc"

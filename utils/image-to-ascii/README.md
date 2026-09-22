@@ -16,6 +16,10 @@ yarn ascii IMAGE --key contrast=0:100,20:250,40:80,50:300,80:120 --play
 yarn ascii --spec utils/image-to-ascii/examples/sean.json --play
 ```
 
+`--charset` takes one of the site's 12 names. A wrong name is an error, and
+the error lists the names. `--chars "abc..."` sets your own characters,
+darkest first.
+
 `--reverse` flips the charset. Use it on a dark terminal. The site assumes
 dark text on a light page.
 
@@ -39,6 +43,35 @@ keyframes, at any frames:
 A spec file holds the same things, and is easier to change and run again.
 Flags override the file. Paths in the file are relative to the file. See
 [`examples/sean.json`](./examples/sean.json).
+
+## Text
+
+A spec file can put text over the frames. Each layer has an anchor
+(`center`, `top-left`, `top-right`, `bottom-left` or `bottom-right`), the frame
+it appears on (`from`), and optionally the frame it leaves (`to`).
+
+```json
+"text": [{ "text": "uptime: {uptime}", "anchor": "bottom-right", "from": 10 }]
+```
+
+`{hostname}` and `{uptime}` hold this machine's values. `--var name=value`
+sets any variable, for example to preview another machine:
+`--var hostname=asus`.
+
+## Login
+
+[`examples/login.json`](./examples/login.json) plays on every interactive SSH
+login to a debbie machine. The managed `.zshrc` in
+`utils/debbie/2026-09-17/payload/setup-developer-environment.sh` runs it with
+`--play --fit`. `--fit` shrinks the width to fit the terminal, and skips a
+terminal that is too small. A key press jumps to the last frame. A timeout
+caps it, and errors are hidden.
+
+Preview it on your own machine:
+
+```bash
+yarn ascii --spec utils/image-to-ascii/examples/login.json --play --fit --var hostname=asus
+```
 
 ## Output
 

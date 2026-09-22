@@ -31,6 +31,7 @@ export const CHARSETS = {
 export const DEFAULTS = {
   width: 100,
   charset: 'normal',
+  chars: null, // literal characters, darkest first. Overrides charset.
   brightness: 100, // percent
   contrast: 100, // percent
   saturation: 100, // percent
@@ -268,15 +269,20 @@ const KERNELS = {
 };
 
 /**
- * The characters for one set of options, darkest first.
- * An unknown charset name is used as a literal string of characters.
+ * The characters for one set of options, darkest first. `chars` wins over
+ * `charset`. An unknown charset name is an error.
  */
 export const glyphsFor = (o) => {
-  const base = CHARSETS[o.charset] ?? String(o.charset);
-  const glyphs = [
-    ...base,
-    ...' '.repeat(Math.max(0, Math.round(o.spaceDensity))),
-  ];
+  let base;
+  if (o.chars) base = String(o.chars);
+  else if (Object.hasOwn(CHARSETS, o.charset)) base = CHARSETS[o.charset];
+  else {
+    throw new Error(
+      `unknown charset "${o.charset}". Use one of: ${Object.keys(CHARSETS).join(', ')}. For your own characters, use --chars.`,
+    );
+  }
+  const spaces = ' '.repeat(Math.max(0, Math.round(o.spaceDensity)));
+  const glyphs = [...base, ...spaces];
   return o.reverse ? glyphs.reverse() : glyphs;
 };
 

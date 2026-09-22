@@ -1,0 +1,20 @@
+{
+  "image": "../../../apps/seanmizen.com/src/components/shader-sean/IMG_4011_crop2.jpeg",
+  "options": {
+    "width": 80,
+    "chars": "abcdefghijklmnopqrstuvwxyz",
+    "reverse": true
+  },
+  "keyframes": {
+    "contrast": { "0": 100, "15": 220, "30": 150 },
+    "brightness": { "0": 100, "35": 100, "55": 0 }
+  },
+  "ease": "smooth",
+  "frames": 70,
+  "fps": 25,
+  "text": [
+    { "text": "{hostname}", "anchor": "bottom-left", "from": 10 },
+    { "text": "uptime: {uptime}", "anchor": "bottom-right", "from": 10 },
+    { "text": "welcome", "anchor": "center", "from": 50 }
+  ]
+}
