@@ -1,7 +1,7 @@
 # Build context is always the monorepo root (see docker-compose.yml).
 
-# dev — deps are installed into the image so the named node_modules volume in
-# docker-compose is seeded from it; source arrives via the bind mount.
+# dev — the image installs the dependencies. docker-compose fills its named
+# node_modules volume from them. The source arrives through the bind mount.
 FROM node:23-slim AS dev
 WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.18.0
@@ -21,8 +21,8 @@ WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.18.0
 
 COPY package.json yarn.lock .yarnrc.yml ./
-# `inside` declares nested workspaces, so its package.json is needed for the
-# install to resolve.
+# `inside` declares nested workspaces, so the install needs its package.json
+# to resolve.
 COPY apps/inside/package.json ./apps/inside/
 COPY apps/inside/inside-fe/package.json ./apps/inside/inside-fe/
 COPY apps/inside/inside-be/package.json ./apps/inside/inside-be/
