@@ -40,8 +40,11 @@ The home page has the same button. After the user chooses a file, it asks
 - **No technical words on the page.** No ffmpeg commands, codec flags or
   operation names. A unit test checks the page text for ffmpeg flags.
 - **Honest.** The copy says that the file goes to our server and that the
-  server deletes it after one hour. The Go service does that. Do not say
-  "in your browser" until the browser really does the conversion.
+  server deletes it after one hour. The Go service does that. Say "on this
+  device" only for a conversion that the user chose to run on the device.
+- **Server first.** The server converts by default. On video pages,
+  desktop browsers also get "Convert on this device". Only that choice
+  loads ffmpeg.wasm (10 MB). Audio and images always use the server.
 - **A promise is a guarantee.** "Compress to 10 MB" gives a file under
   10 MB, or it shows an error. It never gives a larger file.
 - **Plain errors.** Tell the user what happened and what to do next. Keep
