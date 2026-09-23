@@ -160,6 +160,10 @@ unset _ascii_repo
 ZSHRC_EOF
 install -m 0644 -o "$DEV_USER" -g "$USER_GROUP" "$zshrc_tmp" "$USER_HOME/.zshrc"
 rm -f "$zshrc_tmp"
+# An empty ~/.hushlogin silences the login text for this user: the uname line
+# from /etc/update-motd.d, /etc/motd, and sshd's last-login line. The login
+# animation in the .zshrc above shows the hostname and uptime instead.
+as_user "touch '$USER_HOME/.hushlogin'"
 as_user "mkdir -p '$USER_HOME/.local/bin'"
 
 ZSH_PATH="$(command -v zsh)"
