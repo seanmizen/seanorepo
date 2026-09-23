@@ -1,5 +1,5 @@
 # Written by payload/setup-server-environment.sh from services/custom-net-failover.service.
-# Edit that file, not this copy.
+# Edit that file, not this copy. - REQ-NETWORK-003
 [Unit]
 Description=Move the default route off a link that cannot reach its gateway
 Documentation=https://github.com/seanmizen/seanorepo/issues/281
@@ -9,9 +9,10 @@ Documentation=https://github.com/seanmizen/seanorepo/issues/281
 
 [Service]
 Type=oneshot
-# root, unlike every other unit here. It reads /sys, calls ping -I, and writes
-# NetworkManager connection profiles, none of which $DEPLOY_USER can do. The
-# script takes no arguments and no input, so there is nothing to pass in.
+# root, unlike every other unit here. The script reads /sys, calls ping -I,
+# replaces the default route with `ip route`, and restarts the tunnel unit with
+# systemctl. $DEPLOY_USER cannot change routes or restart units. The script
+# takes no arguments and no input, so there is nothing to pass in.
 User=root
 ExecStart=${NET_FAILOVER_SCRIPT}
 # A probe of two pings at two seconds, twice over, plus a settle. Anything
