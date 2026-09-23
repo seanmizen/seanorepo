@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,6 +17,11 @@ type Handler struct {
 	Jobs    *JobTracker
 	Ops     map[string]*Operation
 	Billing *BillingHandler
+	// MaxUploadBytes limits the request body of /convert. 0 means no limit.
+	MaxUploadBytes int64
+	// slots limits how many async jobs run ffmpeg at the same time. The
+	// other async jobs stay pending until a slot is free. nil means no limit.
+	slots chan struct{}
 }
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
@@ -48,8 +55,17 @@ func (h *Handler) Convert(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "POST only")
 		return
 	}
-	// Max 64 MiB in memory for multipart. Tiny-by-design.
+	if h.MaxUploadBytes > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, h.MaxUploadBytes)
+	}
+	// Max 64 MiB in memory for multipart. Larger parts spill to temp files.
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeErr(w, http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("file too large: the limit is %d MB", h.MaxUploadBytes>>20))
+			return
+		}
 		writeErr(w, http.StatusBadRequest, "bad multipart: "+err.Error())
 		return
 	}
@@ -125,19 +141,34 @@ func (h *Handler) Convert(w http.ResponseWriter, r *http.Request) {
 	outPath := h.Store.OutputPath(job.ID, ext)
 
 	h.Jobs.Update(job.ID, func(j *Job) { j.Status = StatusRunning })
+	oc := OpContext{Inputs: inputs, Output: outPath, Args: args}
 
-	ctx := r.Context()
-	if err := op.Run(ctx, OpContext{Inputs: inputs, Output: outPath, Args: args}); err != nil {
-		h.fail(job, err)
-		writeErr(w, http.StatusUnprocessableEntity, err.Error())
+	// With async=1 the job runs after the response. The website uses this,
+	// because a proxy (Cloudflare: 100 s) closes a slow response. The client
+	// polls GET /jobs/{id} until the status is done or error.
+	if args["async"] == "1" {
+		h.Jobs.Update(job.ID, func(j *Job) { j.Status = StatusPending })
+		go func() {
+			if h.slots != nil {
+				h.slots <- struct{}{}
+				defer func() { <-h.slots }()
+			}
+			h.Jobs.Update(job.ID, func(j *Job) { j.Status = StatusRunning })
+			_ = h.run(context.Background(), job, op, oc)
+		}()
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"job_id": job.ID,
+			"status": StatusPending,
+			"op":     opName,
+			"output": "/jobs/" + job.ID + "/output",
+		})
 		return
 	}
 
-	h.Jobs.Update(job.ID, func(j *Job) {
-		j.Status = StatusDone
-		j.OutputPath = outPath
-		j.EndedAt = time.Now()
-	})
+	if err := h.run(r.Context(), job, op, oc); err != nil {
+		writeErr(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"job_id":     job.ID,
@@ -178,6 +209,20 @@ func (h *Handler) JobOrOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, j.OutputPath)
+}
+
+// run executes op and records the result on the job.
+func (h *Handler) run(ctx context.Context, job *Job, op *Operation, oc OpContext) error {
+	if err := op.Run(ctx, oc); err != nil {
+		h.fail(job, err)
+		return err
+	}
+	h.Jobs.Update(job.ID, func(j *Job) {
+		j.Status = StatusDone
+		j.OutputPath = oc.Output
+		j.EndedAt = time.Now()
+	})
+	return nil
 }
 
 func (h *Handler) fail(j *Job, err error) {

@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -21,6 +23,11 @@ func main() {
 		log.Fatalf("ffmpeg not found on PATH: %v (install with `brew install ffmpeg` or equivalent)", err)
 	}
 	log.Printf("ffmpeg found at %s", ffmpegPath)
+	if out, err := exec.Command("ffmpeg", "-hide_banner", "-version").Output(); err == nil {
+		if major, minor, ok := ffmpegVersion(string(out)); ok && (major < 7 || major == 7 && minor < 1) {
+			log.Printf("WARN: ffmpeg %d.%d is older than 7.1. HEIC photos will fail. The site offers HEIC to JPG and HEIC to PNG.", major, minor)
+		}
+	}
 	if _, err := exec.LookPath("ffprobe"); err != nil {
 		log.Printf("WARN: ffprobe not found — silence-detect and a few probing ops will fail")
 	}
@@ -55,8 +62,38 @@ func main() {
 		log.Printf("billing disabled (STRIPE_SECRET_KEY not set)")
 	}
 
+	// Remove uploads and outputs after FILE_TTL (default 1h). Running jobs
+	// keep their directory, because ffmpeg writes to it and so updates it.
+	ttl, err := time.ParseDuration(getenv("FILE_TTL", "1h"))
+	if err != nil {
+		log.Fatalf("bad FILE_TTL: %v", err)
+	}
+	go func() {
+		for range time.Tick(ttl / 12) {
+			cutoff := time.Now().Add(-ttl)
+			if n := store.Sweep(cutoff, jobs.Busy); n > 0 {
+				log.Printf("swept %d job dir(s) older than %s", n, ttl)
+			}
+			jobs.Prune(cutoff)
+		}
+	}()
+
+	maxUploadMB, err := strconv.ParseInt(getenv("MAX_UPLOAD_MB", "2048"), 10, 64)
+	if err != nil {
+		log.Fatalf("bad MAX_UPLOAD_MB: %v", err)
+	}
+
+	maxJobs, err := strconv.Atoi(getenv("MAX_JOBS", "2"))
+	if err != nil || maxJobs < 1 {
+		log.Fatalf("bad MAX_JOBS: %q", getenv("MAX_JOBS", "2"))
+	}
+
 	mux := http.NewServeMux()
-	h := &Handler{Store: store, Jobs: jobs, Ops: ops, Billing: bh}
+	h := &Handler{
+		Store: store, Jobs: jobs, Ops: ops, Billing: bh,
+		MaxUploadBytes: maxUploadMB << 20,
+		slots:          make(chan struct{}, maxJobs),
+	}
 	mux.HandleFunc("/health", h.Health)
 	mux.HandleFunc("/ops", h.ListOps)
 	mux.HandleFunc("/convert", h.Convert)
@@ -91,11 +128,14 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      mux,
-		ReadTimeout:  2 * time.Minute,
-		WriteTimeout: 2 * time.Minute,
-		IdleTimeout:  60 * time.Second,
+		Addr:    ":" + port,
+		Handler: mux,
+		// Large uploads on a slow connection take many minutes. Async jobs
+		// answer fast, but a synchronous /convert or a large download can not.
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Minute,
+		WriteTimeout:      30 * time.Minute,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	_, cancel := context.WithCancel(context.Background())
@@ -124,4 +164,17 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// ffmpegVersion reads the version from `ffmpeg -version` output, for example
+// "ffmpeg version 7.0.2-static" or "ffmpeg version n8.1.3-20260923".
+// Builds from git ("N-12345-g...") return ok=false.
+func ffmpegVersion(out string) (major, minor int, ok bool) {
+	m := regexp.MustCompile(`^ffmpeg version n?(\d+)\.(\d+)`).FindStringSubmatch(out)
+	if m == nil {
+		return 0, 0, false
+	}
+	major, _ = strconv.Atoi(m[1])
+	minor, _ = strconv.Atoi(m[2])
+	return major, minor, true
 }
