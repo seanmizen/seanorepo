@@ -644,9 +644,9 @@ fi
 #------------------------------------------------------------------------------
 # The release poller, the deploy unit and the roles - REQ-DEPLOY-002
 #
-# Node, corepack and Yarn come from setup-developer-environment.sh. The deploy
-# runs `yarn install --immutable` then `yarn prod:docker`, and the Yarn version
-# comes from the repository's own packageManager field.
+# Node and Yarn come from setup-developer-environment.sh. The deploy runs
+# `yarn install --immutable` then `yarn prod:docker`. The system yarn gives
+# control to the release that yarnPath in the repository's .yarnrc.yml names.
 #------------------------------------------------------------------------------
 UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"

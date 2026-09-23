@@ -279,7 +279,9 @@ docgen_tmp/
 # old C-R-A build folder
 build
 
-.yarn
+# Yarn's own files, except the release that yarnPath in .yarnrc.yml runs.
+.yarn/*
+!.yarn/releases
 
 *.sqlite
 

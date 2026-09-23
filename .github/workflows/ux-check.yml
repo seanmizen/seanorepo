@@ -36,9 +36,6 @@ jobs:
         # on the runner image's bundled toolchain.
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
-      - name: Enable Corepack (Yarn 4)
-        run: corepack enable
-
       - name: Install dependencies
         run: yarn install --immutable
 

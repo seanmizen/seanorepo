@@ -88,6 +88,5 @@ CMD ["serve", "-s", ".", "-l", "4042"]
 # =============================================================================
 FROM node:23-slim AS dev
 WORKDIR /app
-RUN corepack enable && corepack prepare yarn@4.18.0
 # Source is mounted in via docker-compose's bind mount.
 CMD ["sh", "-c", "echo 'minecraft.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]
