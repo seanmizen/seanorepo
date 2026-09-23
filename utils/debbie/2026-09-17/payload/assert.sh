@@ -518,18 +518,16 @@ echo
 echo "== node and yarn (REQ-DEPLOY-004) =="
 if [ "$PHASE" = provisioned ]; then
     check "node installed"            'node --version | grep -qE "^v[0-9]+\."'
-    check "corepack installed" \
-        'dpkg-query -W -f="\${Status}" node-corepack 2>/dev/null | grep -q "^install ok installed"'
-    # THE point of #277, stated as something that can fail. `npm install -g
-    # yarn` puts a real Yarn 1 tarball in /usr/local/bin, which precedes
-    # /usr/bin on PATH, so the machine would run Yarn 1 against a Yarn 4
-    # repository while `command -v yarn` still answered. Resolving the shim
-    # tells the two apart: corepack's is a symlink into its own dist, an
-    # npm-installed one is not, and because `command -v` takes whichever comes
-    # first on PATH this also catches the shadowing case rather than just the
-    # replacing one.
-    check "yarn is corepack's shim, not a global npm install" \
-        'readlink -f "$(command -v yarn)" | grep -q corepack'
+    check "yarnpkg installed" \
+        'dpkg-query -W -f="\${Status}" yarnpkg 2>/dev/null | grep -q "^install ok installed"'
+    # The repository carries its own Yarn release (yarnPath in .yarnrc.yml),
+    # so the system Yarn only starts it. apt owns that system Yarn: the yarn on
+    # PATH must resolve to the yarnpkg package, not to a global npm install or
+    # a corepack shim. `command -v` takes whichever comes first on PATH, so
+    # this also catches a yarn that shadows the apt one.
+    check "yarn is apt's yarnpkg" \
+        '[ "$(readlink -f "$(command -v yarn)")" = "$(readlink -f /usr/bin/yarnpkg)" ]'
+    check "corepack is not installed" '! command -v corepack'
     # No version is written here either. The expected value is read out of the
     # repository's own packageManager field at assertion time, so this check
     # cannot drift from the repo any more than setup-server-environment.sh can - if the repo
@@ -558,8 +556,9 @@ else
     sk "shist runs"                   "setup-developer-environment.sh installs it"
     sk "git config came from config-anywhere" "setup-developer-environment.sh applies it"
     sk "node installed"               "setup-developer-environment.sh installs it"
-    sk "corepack installed"           "setup-developer-environment.sh installs it"
-    sk "yarn is corepack's shim, not a global npm install" "setup-developer-environment.sh enables it"
+    sk "yarnpkg installed"            "setup-developer-environment.sh installs it"
+    sk "yarn is apt's yarnpkg"        "setup-developer-environment.sh links it"
+    sk "corepack is not installed"    "setup-developer-environment.sh removes it"
     sk "yarn --version matches the repo's packageManager"  "setup-developer-environment.sh enables it"
 fi
 
