@@ -2,7 +2,7 @@
 
 # dev — the image installs the dependencies. docker-compose fills its named
 # node_modules volume from them. The source arrives through the bind mount.
-FROM node:23-slim AS dev
+FROM node:lts-slim AS dev
 WORKDIR /app
 
 COPY package.json yarn.lock .yarnrc.yml ./
@@ -16,7 +16,7 @@ WORKDIR /app/apps/inside/inside-fe
 EXPOSE 4060
 CMD ["yarn", "rsbuild", "dev", "--port", "4060", "--host", "0.0.0.0"]
 
-FROM node:23-slim AS prod-build
+FROM node:lts-slim AS prod-build
 WORKDIR /app
 
 COPY package.json yarn.lock .yarnrc.yml ./
@@ -43,7 +43,7 @@ ENV NODE_ENV=production
 ENV API_URL=${API_URL}
 RUN yarn workspace inside-fe build
 
-FROM node:23-slim AS prod
+FROM node:lts-slim AS prod
 WORKDIR /app
 COPY --from=prod-build /app/apps/inside/inside-fe/dist .
 RUN npm install -g serve
