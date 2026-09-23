@@ -13,7 +13,7 @@ import {
   trackFromJson,
   valueAt,
 } from './keyframes.mjs';
-import { checkLayers, machineVars, stampLayers } from './text.mjs';
+import { addMargin, checkLayers, machineVars, stampLayers } from './text.mjs';
 
 const HELP = `image-to-ascii IMAGE [flags]
 
@@ -38,6 +38,7 @@ Animation:
   --ease linear|smooth     default: linear
   --pingpong               play forward, then back
   --clear-from N           blank the image from frame N. Text layers stay.
+  --margin N               N spaces around every frame. In a spec: "margin": N
                            In a spec: "clearFrom": N
   --spec FILE.json         read all of the above from a file. Flags override it.
 
@@ -90,6 +91,7 @@ const parseArgs = (argv) => {
     } else if (name === 'sweep') args.sweeps.push(value);
     else if (['frames', 'fps'].includes(name)) args[name] = Number(value);
     else if (name === 'clear-from') args.clearFrom = Number(value);
+    else if (name === 'margin') args.margin = Number(value);
     else if (['out', 'ease', 'spec'].includes(name)) args[name] = value;
     else if (name in DEFAULTS || name === 'threshold') {
       args.options[name] = NUMERIC.has(name) ? Number(value) : value;
@@ -115,6 +117,7 @@ const readSpec = (file) => {
     text: spec.text ?? [],
     vars: spec.vars ?? {},
     clearFrom: spec.clearFrom,
+    margin: spec.margin,
     frames: spec.frames,
     fps: spec.fps,
     ease: spec.ease,
@@ -203,21 +206,23 @@ const main = async () => {
   }
 
   const loaded = await loadImage(image);
+  const margin = Math.max(0, Math.round(args.margin ?? spec.margin ?? 0));
   if (args.fit && args.play) {
     if (!process.stdout.isTTY) return;
     // Rows are 0.55 * width / aspect. Keep one row free for the prompt.
     const byRows = Math.floor(
-      ((process.stdout.rows - 1) / 0.55) * loaded.aspect,
+      ((process.stdout.rows - 1 - 2 * margin) / 0.55) * loaded.aspect,
     );
     const width = Math.min(
       options.width ?? DEFAULTS.width,
-      process.stdout.columns,
+      process.stdout.columns - 2 * margin,
       byRows,
     );
     if (width < 20) return; // too small to be worth showing
     options.width = width;
   }
-  const layered = (ascii, f) => stampLayers(ascii, spec.text, f, vars);
+  const layered = (ascii, f) =>
+    addMargin(stampLayers(ascii, spec.text, f, vars), margin);
   if (Object.keys(tracks).length === 0 && !args.play) {
     process.stdout.write(`${layered(await toAscii(loaded, options), 0)}\n`);
     return;
