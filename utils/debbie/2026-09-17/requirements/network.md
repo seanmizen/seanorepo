@@ -70,6 +70,9 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel runs only on a
     machine with the tunnel role"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel is NOT enabled
+    without the tunnel role" — credentials alone, the state between two steps
+    of the runbook's tunnel move, must not enable the tunnel
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel reads config.yml
     from the checkout"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel runs in the

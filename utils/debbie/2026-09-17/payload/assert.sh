@@ -1070,14 +1070,24 @@ if [ "$PHASE" = provisioned ]; then
         sk "credentials directory belongs to $DEPLOY_USER" "no $CLOUDFLARED_DIR in the checkout"
     fi
 
-    # The branch that matters is the SECOND one. It is the state
-    # every VM run is in, and the state a freshly provisioned machine is in.
+    # Three states. The unit must be enabled only with the tunnel role AND the
+    # credentials. Credentials without the role are a normal state: the
+    # runbook's move of the tunnel from one machine to another copies the
+    # credentials before it gives the new machine the role. The last branch,
+    # no credentials, is the state of every VM run and of a new machine.
     #
-    # Neither branch is a skip. "No credentials" is not a reason to assert
+    # No branch is a skip. "No credentials" is not a reason to assert
     # nothing. It is a reason to assert the refusal.
+    tunnel_creds=no
     if [ -f "$CLOUDFLARED_CONFIG" ] && [ -n "$(ls -A "$CLOUDFLARED_CREDS_DIR" 2> /dev/null)" ]; then
+        tunnel_creds=yes
+    fi
+    if [ "$tunnel_creds" = yes ] && [ -e /etc/seanorepo/roles/tunnel ]; then
         check "$CLOUDFLARED_UNIT enabled (credentials are present)" \
             "systemctl is-enabled $CLOUDFLARED_UNIT"
+    elif [ "$tunnel_creds" = yes ]; then
+        check "the tunnel is NOT enabled without the tunnel role" \
+            '[ "$(systemctl is-enabled "$CLOUDFLARED_UNIT" 2>&1)" != enabled ]'
     else
         check "the tunnel is NOT enabled while credentials are absent" \
             '[ "$(systemctl is-enabled "$CLOUDFLARED_UNIT" 2>&1)" != enabled ]'
@@ -1128,6 +1138,7 @@ else
     # Both names, because which of the two runs depends on whether the machine has
     # credentials and a reader of a firstboot log should be able to find either.
     sk "$CLOUDFLARED_UNIT enabled (credentials are present)" "setup-server-environment.sh decides this"
+    sk "the tunnel is NOT enabled without the tunnel role" "setup-server-environment.sh decides this"
     sk "the tunnel is NOT enabled while credentials are absent" "setup-server-environment.sh decides this"
     sk "starting it without credentials refuses rather than looping" "setup-server-environment.sh writes the unit"
     sk "the unit deploy.sh restarts is the unit that is installed" "setup-server-environment.sh writes the unit"
