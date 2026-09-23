@@ -28,7 +28,8 @@ PORT="${PORT:-8000}"
 read_env SERVER_NAME DEPLOY_USER PASSWORD_CRYPTED WIFI_SSID WIFI_PASS WIFI_IFACE PORT SERVE_IP SSH_KEY
 
 DEPLOY_USER="${DEPLOY_USER:-srv}"
-# No default - #329: a forgotten name used to install a second "debbie".
+# No default - REQ-SERVER-014. A default name would install a second machine
+# with the name of a live one.
 SERVER_NAME="${SERVER_NAME:-}"
 [ -n "$SERVER_NAME" ] || die "SERVER_NAME is not set in $ENV_FILE. It has no default - name every machine on purpose."
 
@@ -45,20 +46,19 @@ case "$PASSWORD_CRYPTED" in
 esac
 
 #------------------------------------------------------------------------------
-# SSH key. Reuse the deploy key if it exists, so reinstalling the machine does not
-# invalidate anything that already trusts it.
+# SSH key: the admin key, so every machine trusts the same key.
 #------------------------------------------------------------------------------
 mkdir -p "$WORK"
-# The admin key's PUBLIC half, committed beside the payload - #369. Nothing is
-# generated here any more: a per-checkout keypair meant a fresh clone orphaned
-# every machine built from the old one, and the installer only ever needed the
-# public half.
+# The PUBLIC half of the admin key, committed beside the payload -
+# REQ-SERVER-008. This step makes no key. A key made for each checkout would
+# lock a new clone out of every machine that an older clone built, and the
+# installer needs only the public half.
 ADMIN_PUBKEY="${ADMIN_PUBKEY:-$GEN_DIR/payload/seanorepo-admin.pub}"
 
-# SSH_KEY is still accepted so existing <machine>.env files keep parsing -
-# read_env rejects an unknown key - but this step no longer uses it. The key it
-# installs is the committed admin public key above.
-[ -z "${SSH_KEY:-}" ] || warn "SSH_KEY is set in $ENV_FILE and ignored here since #369. This step installs $ADMIN_PUBKEY. 3-provision still reads SSH_KEY, to choose which private key to log in with."
+# SSH_KEY is accepted so that older <machine>.env files parse (read_env
+# rejects an unknown key), but this step does not use it. The key it installs
+# is the committed admin public key above.
+[ -z "${SSH_KEY:-}" ] || warn "SSH_KEY is set in $ENV_FILE and ignored here. This step installs $ADMIN_PUBKEY. 3-provision reads SSH_KEY, to choose the private key to log in with."
 [ -s "$ADMIN_PUBKEY" ] || die "no admin public key at $ADMIN_PUBKEY.
        Every machine this installs trusts that key and nothing else, so an
        install without it produces a machine nobody can log in to - sshd
@@ -67,7 +67,7 @@ ADMIN_PUBKEY="${ADMIN_PUBKEY:-$GEN_DIR/payload/seanorepo-admin.pub}"
          cp ~/.ssh/seanorepo-admin.pub $ADMIN_PUBKEY"
 
 #------------------------------------------------------------------------------
-# The served directory - identical in shape to the harness's
+# The served directory, with the same layout as the harness's
 #------------------------------------------------------------------------------
 HTTP_ROOT="$WORK/http"
 mkdir -p "$HTTP_ROOT"
@@ -77,11 +77,11 @@ cp "$GEN_DIR/payload/preseed.cfg" "$HTTP_ROOT/preseed.cfg"
 SSH_PUBKEY_FILE="$ADMIN_PUBKEY" write_overrides > "$HTTP_ROOT/overrides.cfg"
 
 #------------------------------------------------------------------------------
-# Which address the target should fetch from. The loopback address the harness
-# uses is no good here - the installer is on another machine.
+# Which address the target fetches from. The harness's loopback address does
+# not work here: the installer is on another machine.
 #------------------------------------------------------------------------------
 IP="${SERVE_IP:-$(lan_ip || true)}"
-[ -n "$IP" ] || die "could not work out this machine's LAN address. Set SERVE_IP=x.x.x.x and re-run."
+[ -n "$IP" ] || die "could not find this machine's LAN address. Set SERVE_IP=x.x.x.x and run again."
 
 #------------------------------------------------------------------------------
 # Serve
@@ -92,11 +92,11 @@ trap 'kill "$HTTP_PID" 2>/dev/null || true' EXIT
 sleep 1
 kill -0 "$HTTP_PID" 2> /dev/null || die "could not serve on :$PORT - is something already using it?"
 
-# Prove it is actually reachable on the LAN address, not just on loopback. A
-# macOS firewall prompt that nobody clicked is otherwise discovered halfway
+# Prove that it is reachable on the LAN address, not only on loopback.
+# Otherwise a macOS firewall prompt that nobody clicked shows up halfway
 # through an install, as a hang.
 curl -fsS --max-time 5 "http://$IP:$PORT/preseed.cfg" > /dev/null \
-    || die "serving on :$PORT but http://$IP:$PORT/preseed.cfg is not reachable. Allow incoming connections for python3 (System Settings > Network > Firewall) and re-run."
+    || die "serving on :$PORT, but http://$IP:$PORT/preseed.cfg is not reachable. Allow incoming connections for python3 (System Settings > Network > Firewall) and run again."
 
 PARAMS="$(installer_params "http://$IP:$PORT/preseed.cfg")"
 
@@ -105,7 +105,7 @@ cat <<EOF
   serving $HTTP_ROOT on http://$IP:$PORT  (verified reachable)
 
   If you built an ISO with build-iso.sh, there is nothing to type: the
-  automated entry is the default and boots after 5 seconds. Just boot it.
+  automated entry is the default and boots after 5 seconds. Boot the stick.
 
   Otherwise, at the installer GRUB menu highlight "Install", press 'e', put the
   cursor at the end of the "linux" line, move it back to just before " --- quiet"
@@ -113,18 +113,19 @@ cat <<EOF
 
     $PARAMS
 
-  Then Ctrl-X - from inside the editor. Esc or Enter discards the edit, which
-  looks identical to the params never having worked.
+  Then press Ctrl-X from inside the editor. Esc or Enter discards the edit,
+  and that looks the same as params that do not work.
 
-  Two things that are load-bearing:
-    - The params go BEFORE the '---'. After it they are copied into the
-      installed system's bootloader, persisting the passphrase on its disk.
+  Two things are necessary:
+    - The params go BEFORE the '---'. After it, the installer copies them into
+      the bootloader of the installed system, and the passphrase stays on
+      its disk.
     - The wifi values are mandatory, not a convenience. priority=critical
       suppresses the prompt, so netcfg takes an empty passphrase and fails
-      with "either too long or too short" - which blames the password.
+      with "either too long or too short", which blames the password.
 
-  After the install the machine powers off (the preseed ends in poweroff, so that
-  "did it finish?" is answerable without watching). Power it back on, then:
+  After the install, the machine powers off. The preseed ends in poweroff, so
+  you can tell that it finished without watching. Power it on, then:
 
     ./scripts/3-provision/provision.sh <machine>
 
