@@ -1795,6 +1795,43 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@ffmpeg/core-mt@npm:0.12.10":
+  version: 0.12.10
+  resolution: "@ffmpeg/core-mt@npm:0.12.10"
+  checksum: 10c0/dcb377667c7070eb3b2fcfe28ad7aaffc0aa665fb4f37b59c07d0734163e09f9b8061aea3f025f4eb31e8ac76de9e950d44a8053e7d74cc23156bcb1b9216f5f
+  languageName: node
+  linkType: hard
+
+"@ffmpeg/core@npm:0.12.10":
+  version: 0.12.10
+  resolution: "@ffmpeg/core@npm:0.12.10"
+  checksum: 10c0/099a739f0ac6419d638e8fde175307722dddf53a0dbab744a045475f0fa1b4bbb28036ab51c990298b6f88d2907d44612e0a02e57a72bb0beb36837ca742e7a2
+  languageName: node
+  linkType: hard
+
+"@ffmpeg/ffmpeg@npm:0.12.15":
+  version: 0.12.15
+  resolution: "@ffmpeg/ffmpeg@npm:0.12.15"
+  dependencies:
+    "@ffmpeg/types": "npm:^0.12.4"
+  checksum: 10c0/80c44459ca31ec7596d5624572370fd4c6ecf31701c6b23ec52cce85b4bddabaaa68c3ad050adfbba4db3ae4956c5538828690c51e1c258930850fe1a182599e
+  languageName: node
+  linkType: hard
+
+"@ffmpeg/types@npm:^0.12.4":
+  version: 0.12.4
+  resolution: "@ffmpeg/types@npm:0.12.4"
+  checksum: 10c0/8dba8e728a11158fbee94baffd648bf3446ad891506f5e65ffc64f5510e8afc33dffc2dd4abcf2966736fbd7d3c4919e9ce9fcf71f7d22607015caae431b83dd
+  languageName: node
+  linkType: hard
+
+"@ffmpeg/util@npm:^0.12.2":
+  version: 0.12.2
+  resolution: "@ffmpeg/util@npm:0.12.2"
+  checksum: 10c0/a1c8ab735762f2b1e3174bf96125feb541be528327843c9719042012381603a17d511d01afd2c8c2e7349453a8001ae6bf1ba8769779d305342e7f42ed704a9d
+  languageName: node
+  linkType: hard
+
 "@humanfs/core@npm:^0.19.1":
   version: 0.19.1
   resolution: "@humanfs/core@npm:0.19.1"
@@ -7605,6 +7642,10 @@ __metadata:
   resolution: "ffmpeg-converter-next@workspace:apps/ffmpeg-converter/web"
   dependencies:
     "@axe-core/playwright": "npm:^4.10.2"
+    "@ffmpeg/core": "npm:0.12.10"
+    "@ffmpeg/core-mt": "npm:0.12.10"
+    "@ffmpeg/ffmpeg": "npm:0.12.15"
+    "@ffmpeg/util": "npm:^0.12.2"
     "@playwright/test": "npm:^1.49.1"
     "@types/node": "npm:^22.10.5"
     "@types/react": "npm:^19.0.7"
