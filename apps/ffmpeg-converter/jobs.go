@@ -60,3 +60,25 @@ func (jt *JobTracker) Update(id string, fn func(*Job)) {
 		fn(j)
 	}
 }
+
+// Prune removes jobs that started before cutoff and returns their IDs.
+func (jt *JobTracker) Prune(cutoff time.Time) []string {
+	jt.mu.Lock()
+	defer jt.mu.Unlock()
+	var ids []string
+	for id, j := range jt.jobs {
+		if j.StartedAt.Before(cutoff) && j.Status != StatusRunning {
+			delete(jt.jobs, id)
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// Busy reports whether the job is pending or running.
+func (jt *JobTracker) Busy(id string) bool {
+	jt.mu.RLock()
+	defer jt.mu.RUnlock()
+	j, ok := jt.jobs[id]
+	return ok && (j.Status == StatusPending || j.Status == StatusRunning)
+}
