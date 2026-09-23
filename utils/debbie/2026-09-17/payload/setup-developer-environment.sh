@@ -31,11 +31,13 @@
 #           sudo DEV_USER=<user> bash setup-developer-environment.sh
 #
 # Output (the flag, or VERBOSITY=quiet|default|verbose):
-#   (default)       one line per step, with a count of the packages it
-#                   installed. Command output goes to a log file.
+#   (default)       one line per step and one line per result, with a
+#                   timestamp. Command output goes to a log file.
 #   -q, --quiet     warnings, errors and the last line only.
 #   -v, --verbose   the full output of every command, as it runs.
 # A failed command shows its last 20 lines and the path of the full log.
+# On a terminal the lines have colours: green for a result, yellow for a
+# warning, red for an error. NO_COLOR=1 removes them.
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -56,10 +58,18 @@ done
 # Every command's output goes to this log, in all modes.
 SETUP_LOG="$(mktemp "${TMPDIR:-/tmp}/dev-setup.XXXXXX")"
 
-log() { [ "$VERBOSITY" = quiet ] || echo "[dev-setup] $*"; }
-warn() { echo "[dev-setup] WARNING: $*" >&2; }
-die() { echo "[dev-setup] ERROR: $*" >&2; echo "[dev-setup] full log: $SETUP_LOG" >&2; exit 1; }
-trap 'echo "[dev-setup] ERROR: line $LINENO failed. Full log: $SETUP_LOG" >&2' ERR
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    C_OK=$'\033[32m' C_WARN=$'\033[33m' C_ERR=$'\033[31m' C_OFF=$'\033[0m'
+else
+    C_OK='' C_WARN='' C_ERR='' C_OFF=''
+fi
+# say COLOUR MESSAGE: one output line, with the prefix and a timestamp.
+say() { printf '%s[dev-setup] [%s] %s%s\n' "$1" "$(date '+%Y-%m-%d %H:%M:%S')" "$2" "$C_OFF"; }
+log() { [ "$VERBOSITY" = quiet ] || say "" "$*"; }
+ok() { [ "$VERBOSITY" = quiet ] || say "$C_OK" "  $*"; }
+warn() { say "$C_WARN" "WARNING: $*" >&2; }
+die() { say "$C_ERR" "ERROR: $*" >&2; say "$C_ERR" "full log: $SETUP_LOG" >&2; exit 1; }
+trap 'say "$C_ERR" "ERROR: line $LINENO failed. Full log: $SETUP_LOG" >&2' ERR
 
 # Run a command and keep its output in the log. In verbose mode the output is
 # also shown. Otherwise it is shown only when the command fails. stdin is
@@ -77,25 +87,30 @@ run() {
     cat "$RUN_OUT" >> "$SETUP_LOG"
     if [ "$rc" -ne 0 ]; then
         if [ "$VERBOSITY" != verbose ]; then
-            echo "[dev-setup] the last lines of: $*" >&2
+            say "$C_ERR" "the last lines of: $*" >&2
             tail -n 20 "$RUN_OUT" | sed 's/^/    /' >&2
         fi
         die "command failed (exit $rc): $*"
     fi
 }
 
-# Install packages and log how many are new. apt states the count itself.
-# brew does not, so the count is the change in the installed list.
+# Install packages and log what changed. apt states the counts itself: one
+# "is already the newest version" line for each package that is current. brew
+# does not, so the count of new packages is the change in the installed list.
 pkg_install() {
     local before after
     if [ "$OS" = Darwin ]; then
         before="$(brew list -1 | wc -l)"
         run brew install "$@"
         after="$(brew list -1 | wc -l)"
-        log "  $(( after - before )) new of $# packages"
+        ok "$# packages: $(( after - before )) new, $(( $# - (after - before) )) already installed or upgraded"
     else
         run as_root apt-get install -y "$@"
-        log "  $(grep -Eo '[0-9]+ upgraded, [0-9]+ newly installed' "$RUN_OUT" || echo "$# packages checked")"
+        local new upgraded current
+        new="$(grep -Eo '[0-9]+ newly installed' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
+        upgraded="$(grep -Eo '^[0-9]+ upgraded' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
+        current="$(grep -c 'is already the newest version' "$RUN_OUT" || true)"
+        ok "$# packages: $new new, $upgraded upgraded, $current already up to date"
     fi
 }
 export HOMEBREW_NO_ENV_HINTS=1
@@ -159,13 +174,20 @@ as_root() {
 # WSL: a Linux that runs inside Windows. It gets Windows-only extras (section 8).
 IS_WSL=0
 [ "$OS" = Linux ] && grep -qi microsoft /proc/version && IS_WSL=1
-log "setting up $DEV_USER on $OS ($USER_HOME)"
+if [ "$OS" = Darwin ]; then
+    OS_NAME="macOS $(sw_vers -productVersion)"
+else
+    OS_NAME="$(. /etc/os-release && echo "$PRETTY_NAME")"
+    [ "$IS_WSL" = 0 ] || OS_NAME="$OS_NAME, WSL"
+fi
+log "setting up user $DEV_USER on $OS_NAME, home $USER_HOME"
+log "full log: $SETUP_LOG"
 
 #------------------------------------------------------------------------------
 # 1. Packages
 #------------------------------------------------------------------------------
 if [ "$OS" = Darwin ]; then
-    log "homebrew and packages"
+    log "installing Homebrew packages"
     if ! command -v brew > /dev/null 2>&1 && [ ! -x /opt/homebrew/bin/brew ]; then
         warn "installing homebrew - it asks for your password"
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -174,7 +196,7 @@ if [ "$OS" = Darwin ]; then
     eval "$("$BREW" shellenv)"
     pkg_install git curl wget gnupg jq htop tree unzip zsh gh
 else
-    log "apt packages"
+    log "installing apt packages"
     run as_root apt-get update -y
     pkg_install git curl wget ca-certificates gnupg jq htop tree unzip zsh gh
 fi
@@ -185,15 +207,21 @@ fi
 # oh-my-zsh's own installer is not used: it writes its own .zshrc from a
 # template, which would fight the file written below on every run.
 #------------------------------------------------------------------------------
-log "zsh and oh-my-zsh"
+log "installing oh-my-zsh and its plugins"
 OMZ="$USER_HOME/.oh-my-zsh"
 clone_once() {
-    run as_user "[ -d '$2/.git' ] || git clone -q --depth 1 '$1' '$2'"
+    if as_user "[ -d '$2/.git' ]"; then
+        ok "${2##*/}: already cloned"
+    else
+        run as_user "git clone -q --depth 1 '$1' '$2'"
+        ok "${2##*/}: cloned"
+    fi
 }
 clone_once https://github.com/ohmyzsh/ohmyzsh.git "$OMZ"
 clone_once https://github.com/zsh-users/zsh-autosuggestions.git "$OMZ/custom/plugins/zsh-autosuggestions"
 clone_once https://github.com/zsh-users/zsh-syntax-highlighting.git "$OMZ/custom/plugins/zsh-syntax-highlighting"
 
+log "writing the zsh config and login shell"
 zshrc_tmp="$(mktemp)"
 cat > "$zshrc_tmp" <<'ZSHRC_EOF'
 # Managed by utils/debbie/2026-09-17/payload/setup-developer-environment.sh.
@@ -252,6 +280,7 @@ unset _ascii_spec
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
 ZSHRC_EOF
 install -m 0644 -o "$DEV_USER" -g "$USER_GROUP" "$zshrc_tmp" "$USER_HOME/.zshrc"
+ok "~/.zshrc written (managed: put local settings in ~/.zshrc.local)"
 rm -f "$zshrc_tmp"
 # An empty ~/.hushlogin silences the login text for this user: the uname line
 # from /etc/update-motd.d, /etc/motd, and sshd's last-login line. The login
@@ -261,13 +290,15 @@ as_user "mkdir -p '$USER_HOME/.local/bin'"
 
 ZSH_PATH="$(command -v zsh)"
 if [ "$(getent passwd "$DEV_USER" 2> /dev/null | cut -d: -f7 || dscl . -read "/Users/$DEV_USER" UserShell | awk '{print $2}')" != "$ZSH_PATH" ]; then
-    log "  making zsh the login shell"
+    ok "login shell changed to zsh"
     if [ "$OS" = Darwin ]; then
         grep -qxF "$ZSH_PATH" /etc/shells || echo "$ZSH_PATH" | sudo tee -a /etc/shells > /dev/null
         chsh -s "$ZSH_PATH"
     else
         as_root chsh -s "$ZSH_PATH" "$DEV_USER"
     fi
+else
+    ok "login shell is already zsh"
 fi
 
 #------------------------------------------------------------------------------
@@ -282,7 +313,7 @@ fi
 # the repository's own packageManager field once the checkout exists, further
 # down.
 #------------------------------------------------------------------------------
-log "node, corepack and yarn"
+log "installing node, corepack and yarn"
 if [ "$OS" = Darwin ]; then
     pkg_install node corepack
     run as_user "corepack enable --install-directory '$USER_HOME/.local/bin'"
@@ -290,11 +321,12 @@ else
     pkg_install nodejs node-corepack
     run as_root corepack enable yarn
 fi
+ok "node $(node --version)"
 
 #------------------------------------------------------------------------------
 # 4. Docker
 #------------------------------------------------------------------------------
-log "docker"
+log "installing docker"
 if [ "$OS" = Darwin ]; then
     if [ ! -d /Applications/Docker.app ]; then
         run brew install --cask docker
@@ -305,7 +337,7 @@ else
     DOCKER_LIST=/etc/apt/sources.list.d/docker.list
     as_root install -d -m 0755 /etc/apt/keyrings
     if [ ! -s "$DOCKER_KEYRING" ]; then
-        log "  fetching Docker's apt signing key"
+        ok "fetching Docker's apt signing key"
         # Dearmoured through a temp file: a curl that dies mid-stream would
         # otherwise leave a present, non-empty, unusable keyring, and the guard
         # above would skip repairing it forever.
@@ -318,7 +350,7 @@ else
     docker_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$DOCKER_KEYRING] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
     docker_repo_changed=0
     if [ ! -f "$DOCKER_LIST" ] || [ "$(cat "$DOCKER_LIST")" != "$docker_deb_line" ]; then
-        log "  writing $DOCKER_LIST"
+        ok "writing $DOCKER_LIST"
         printf '%s\n' "$docker_deb_line" | as_root tee "$DOCKER_LIST" > /dev/null
         docker_repo_changed=1
     fi
@@ -354,13 +386,13 @@ fi
 # checksums.txt of the same release, because this is a binary from the
 # internet, and an interrupted download is otherwise a file that runs.
 #------------------------------------------------------------------------------
-log "shist"
+log "installing shist"
 if [ "$OS" = Darwin ]; then
     run brew tap seanmizen/tap
     run brew trust --tap seanmizen/tap
     brew list shist > /dev/null 2>&1 || run brew install shist
 elif [ -x "$USER_HOME/.local/bin/shist" ]; then
-    log "  already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
+    ok "already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
 else
     case "$(uname -m)" in
         x86_64)  shist_arch=amd64 ;;
@@ -373,7 +405,7 @@ else
     shist_tmp="$(mktemp -d)"
     shist_tar="shist_${shist_ver}_linux_${shist_arch}.tar.gz"
     shist_url="https://github.com/seanmizen/shist/releases/download/v$shist_ver"
-    log "  downloading $shist_tar"
+    ok "downloading $shist_tar"
     curl -fsSL "$shist_url/$shist_tar" -o "$shist_tmp/$shist_tar"
     curl -fsSL "$shist_url/checksums.txt" -o "$shist_tmp/checksums.txt"
     ( cd "$shist_tmp" && grep " $shist_tar\$" checksums.txt | sha256sum -c - ) \
@@ -381,7 +413,7 @@ else
     tar -xzf "$shist_tmp/$shist_tar" -C "$shist_tmp" shist
     install -m 0755 -o "$DEV_USER" -g "$USER_GROUP" "$shist_tmp/shist" "$USER_HOME/.local/bin/shist"
     rm -rf "$shist_tmp"
-    log "  installed shist $shist_ver"
+    ok "installed shist $shist_ver"
 fi
 
 #------------------------------------------------------------------------------
@@ -394,13 +426,13 @@ fi
 # The git config comes from utils/config-anywhere, which is the one place that
 # holds it. An existing ~/.gitconfig is left alone.
 #------------------------------------------------------------------------------
-log "seanorepo"
+log "cloning seanorepo and applying the git config"
 REPO_DIR="${REPO_DIR:-$USER_HOME/projects/seanorepo}"
 clone_once "$REPO_URL" "$REPO_DIR"
 if as_user "[ -f '$USER_HOME/.gitconfig' ]"; then
-    log "  ~/.gitconfig exists - leaving it alone"
+    ok "~/.gitconfig exists, so it is kept. To apply config-anywhere, remove it and run again"
 else
-    log "  applying utils/config-anywhere/gitconfig.txt"
+    ok "applying utils/config-anywhere/gitconfig.txt"
     run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
 fi
 if as_user "[ -f '$REPO_DIR/package.json' ]"; then
@@ -411,18 +443,18 @@ fi
 # 7. iTerm2 (macOS only)
 #------------------------------------------------------------------------------
 if [ "$OS" = Darwin ]; then
-    log "iterm2"
+    log "installing iTerm2 and its preferences"
     if [ ! -d /Applications/iTerm.app ] && [ ! -d "$USER_HOME/Applications/iTerm.app" ]; then
         run brew install --cask iterm2
     fi
     ITERM_PLIST="$HERE/com.googlecode.iterm2.plist"
     if [ ! -f "$ITERM_PLIST" ]; then
-        log "  no preferences file beside this script - skipping the import"
+        warn "no preferences file beside this script - skipping the import"
     elif pgrep -qx iTerm2 2> /dev/null; then
         warn "iTerm2 is running - quit it and run this again to import preferences"
     else
         run defaults import com.googlecode.iterm2 "$ITERM_PLIST"
-        log "  preferences imported"
+        ok "preferences imported"
     fi
 fi
 
@@ -438,18 +470,18 @@ fi
 # jq cannot read (it has comments) is not changed.
 #------------------------------------------------------------------------------
 if [ "$IS_WSL" = 1 ]; then
-    log "windows terminal"
+    log "applying the Windows Terminal colours, font and keys"
     wt_appdata="$(as_user "cmd.exe /c 'echo %LOCALAPPDATA%' 2> /dev/null" | tr -d '\r' || true)"
     WT_SETTINGS="$(wslpath -u "$wt_appdata" 2> /dev/null || true)/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
     if [ ! -f "$WT_SETTINGS" ]; then
-        log "  no Windows Terminal settings.json - skipping"
+        warn "no Windows Terminal settings.json - skipping"
     elif wt_tmp="$(mktemp)" && jq --slurpfile wt "$HERE/windows-terminal.json" '
             .schemes = ([.schemes[]? | select(.name != $wt[0].scheme.name)] + [$wt[0].scheme])
             | .profiles.defaults += $wt[0].defaults
             | .actions = ([.actions[]? | select(.keys as $k | $wt[0].actions | map(.keys) | index($k) | not)] + $wt[0].actions)' "$WT_SETTINGS" > "$wt_tmp"; then
         cp "$WT_SETTINGS" "$WT_SETTINGS.bak"
         cat "$wt_tmp" > "$WT_SETTINGS"
-        log "  scheme and font applied (the old file is settings.json.bak)"
+        ok "applied (the old file is settings.json.bak)"
     else
         warn "jq cannot read $WT_SETTINGS - skipping"
     fi
@@ -461,9 +493,14 @@ fi
 if [ "$OS" = Linux ]; then
     log "clearing the apt cache"
     run as_root apt-get clean
+    ok "cleared"
 fi
 
 rm -f "$RUN_OUT"
-echo "[dev-setup] done. Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
-[ "$OS" = Linux ] && log "log out and in again for the docker group, or run: newgrp docker"
+# The docker group applies to new logins only. The warning is for a user who
+# runs this script as themself and is not in the group yet in this session.
+if [ "$OS" = Linux ] && [ "$(id -un)" = "$DEV_USER" ] && ! id -nG | grep -qw docker; then
+    warn "log out and in again for the docker group, or run: newgrp docker"
+fi
+say "$C_OK" "done. Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
 exit 0
