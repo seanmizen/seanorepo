@@ -33,9 +33,9 @@ WorkingDirectory=${TCP_GETTER_DIR}
 # service starts and then exits on a missing MAIL_PASSWORD.
 # apps/carolinemizen.art/caroline-be passes it explicitly for the same reason.
 #
-# The unit runs dist/index.mjs. Node 20 cannot run TypeScript, so deploy.sh
-# builds this workspace with rslib first. The Condition above stops this unit
-# from starting before that build exists.
+# The unit runs dist/index.mjs. Debian 13 ships Node 20, which cannot run
+# TypeScript, so deploy.sh builds this workspace with rslib first. The
+# Condition above stops this unit from starting before that build exists.
 ExecStart=${NODE_BIN} --env-file=.env dist/index.mjs
 Restart=on-failure
 RestartSec=10s
