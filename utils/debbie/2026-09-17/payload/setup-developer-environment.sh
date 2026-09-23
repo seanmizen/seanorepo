@@ -36,8 +36,9 @@
 #   -q, --quiet     warnings, errors and the last line only.
 #   -v, --verbose   the full output of every command, as it runs.
 # A failed command shows its last 20 lines and the path of the full log.
-# On a terminal the lines have colours: green for a result, yellow for a
-# warning, red for an error. NO_COLOR=1 removes them.
+# On a terminal, colour marks what changed or went wrong: green for a change
+# ("2 new", "cloned"), a yellow warning, a red error. A run that changes
+# nothing has no colour. NO_COLOR=1 removes the colours.
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -63,13 +64,18 @@ if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
 else
     C_OK='' C_WARN='' C_ERR='' C_OFF=''
 fi
-# say COLOUR MESSAGE: one output line, with the prefix and a timestamp.
-say() { printf '%s[dev-setup] [%s] %s%s\n' "$1" "$(date '+%Y-%m-%d %H:%M:%S')" "$2" "$C_OFF"; }
-log() { [ "$VERBOSITY" = quiet ] || say "" "$*"; }
-ok() { [ "$VERBOSITY" = quiet ] || say "$C_OK" "  $*"; }
-warn() { say "$C_WARN" "WARNING: $*" >&2; }
-die() { say "$C_ERR" "ERROR: $*" >&2; say "$C_ERR" "full log: $SETUP_LOG" >&2; exit 1; }
-trap 'say "$C_ERR" "ERROR: line $LINENO failed. Full log: $SETUP_LOG" >&2' ERR
+# say MESSAGE: one output line, with the prefix and a timestamp. The prefix
+# and the timestamp never have colour.
+say() { printf '[dev-setup] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
+# green TEXT: the TEXT in green, for the part of a line that is a change.
+green() { printf '%s%s%s' "$C_OK" "$*" "$C_OFF"; }
+# count N WORD: "N WORD", green when N is more than 0.
+count() { if [ "$1" -gt 0 ]; then green "$1 $2"; else printf '%s %s' "$1" "$2"; fi; }
+log() { [ "$VERBOSITY" = quiet ] || say "$*"; }
+note() { log "  $*"; }
+warn() { say "${C_WARN}WARNING: $*${C_OFF}" >&2; }
+die() { say "${C_ERR}ERROR: $*${C_OFF}" >&2; say "${C_ERR}full log: $SETUP_LOG${C_OFF}" >&2; exit 1; }
+trap 'say "${C_ERR}ERROR: line $LINENO failed. Full log: $SETUP_LOG${C_OFF}" >&2' ERR
 
 # Run a command and keep its output in the log. In verbose mode the output is
 # also shown. Otherwise it is shown only when the command fails. stdin is
@@ -87,7 +93,7 @@ run() {
     cat "$RUN_OUT" >> "$SETUP_LOG"
     if [ "$rc" -ne 0 ]; then
         if [ "$VERBOSITY" != verbose ]; then
-            say "$C_ERR" "the last lines of: $*" >&2
+            say "${C_ERR}the last lines of: $*${C_OFF}" >&2
             tail -n 20 "$RUN_OUT" | sed 's/^/    /' >&2
         fi
         die "command failed (exit $rc): $*"
@@ -103,14 +109,14 @@ pkg_install() {
         before="$(brew list -1 | wc -l)"
         run brew install "$@"
         after="$(brew list -1 | wc -l)"
-        ok "$# packages: $(( after - before )) new, $(( $# - (after - before) )) already installed or upgraded"
+        note "$# packages: $(count $(( after - before )) new), $(( $# - (after - before) )) already installed or upgraded"
     else
         run as_root apt-get install -y "$@"
         local new upgraded current
         new="$(grep -Eo '[0-9]+ newly installed' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
         upgraded="$(grep -Eo '^[0-9]+ upgraded' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
         current="$(grep -c 'is already the newest version' "$RUN_OUT" || true)"
-        ok "$# packages: $new new, $upgraded upgraded, $current already up to date"
+        note "$# packages: $(count "$new" new), $(count "$upgraded" upgraded), $current already up to date"
     fi
 }
 export HOMEBREW_NO_ENV_HINTS=1
@@ -211,10 +217,10 @@ log "installing oh-my-zsh and its plugins"
 OMZ="$USER_HOME/.oh-my-zsh"
 clone_once() {
     if as_user "[ -d '$2/.git' ]"; then
-        ok "${2##*/}: already cloned"
+        note "${2##*/}: already cloned"
     else
         run as_user "git clone -q --depth 1 '$1' '$2'"
-        ok "${2##*/}: cloned"
+        note "${2##*/}: $(green cloned)"
     fi
 }
 clone_once https://github.com/ohmyzsh/ohmyzsh.git "$OMZ"
@@ -279,8 +285,12 @@ unset _ascii_spec
 
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
 ZSHRC_EOF
-install -m 0644 -o "$DEV_USER" -g "$USER_GROUP" "$zshrc_tmp" "$USER_HOME/.zshrc"
-ok "~/.zshrc written (managed: put local settings in ~/.zshrc.local)"
+if cmp -s "$zshrc_tmp" "$USER_HOME/.zshrc"; then
+    note "~/.zshrc is current (managed: put local settings in ~/.zshrc.local)"
+else
+    install -m 0644 -o "$DEV_USER" -g "$USER_GROUP" "$zshrc_tmp" "$USER_HOME/.zshrc"
+    note "~/.zshrc $(green updated) (managed: put local settings in ~/.zshrc.local)"
+fi
 rm -f "$zshrc_tmp"
 # An empty ~/.hushlogin silences the login text for this user: the uname line
 # from /etc/update-motd.d, /etc/motd, and sshd's last-login line. The login
@@ -290,7 +300,7 @@ as_user "mkdir -p '$USER_HOME/.local/bin'"
 
 ZSH_PATH="$(command -v zsh)"
 if [ "$(getent passwd "$DEV_USER" 2> /dev/null | cut -d: -f7 || dscl . -read "/Users/$DEV_USER" UserShell | awk '{print $2}')" != "$ZSH_PATH" ]; then
-    ok "login shell changed to zsh"
+    note "login shell $(green "changed to zsh")"
     if [ "$OS" = Darwin ]; then
         grep -qxF "$ZSH_PATH" /etc/shells || echo "$ZSH_PATH" | sudo tee -a /etc/shells > /dev/null
         chsh -s "$ZSH_PATH"
@@ -298,7 +308,7 @@ if [ "$(getent passwd "$DEV_USER" 2> /dev/null | cut -d: -f7 || dscl . -read "/U
         as_root chsh -s "$ZSH_PATH" "$DEV_USER"
     fi
 else
-    ok "login shell is already zsh"
+    note "login shell is already zsh"
 fi
 
 #------------------------------------------------------------------------------
@@ -321,7 +331,7 @@ else
     pkg_install nodejs node-corepack
     run as_root corepack enable yarn
 fi
-ok "node $(node --version)"
+note "node $(node --version)"
 
 #------------------------------------------------------------------------------
 # 4. Docker
@@ -337,7 +347,7 @@ else
     DOCKER_LIST=/etc/apt/sources.list.d/docker.list
     as_root install -d -m 0755 /etc/apt/keyrings
     if [ ! -s "$DOCKER_KEYRING" ]; then
-        ok "fetching Docker's apt signing key"
+        note "$(green "fetching Docker's apt signing key")"
         # Dearmoured through a temp file: a curl that dies mid-stream would
         # otherwise leave a present, non-empty, unusable keyring, and the guard
         # above would skip repairing it forever.
@@ -350,7 +360,7 @@ else
     docker_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$DOCKER_KEYRING] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
     docker_repo_changed=0
     if [ ! -f "$DOCKER_LIST" ] || [ "$(cat "$DOCKER_LIST")" != "$docker_deb_line" ]; then
-        ok "writing $DOCKER_LIST"
+        note "$(green "writing $DOCKER_LIST")"
         printf '%s\n' "$docker_deb_line" | as_root tee "$DOCKER_LIST" > /dev/null
         docker_repo_changed=1
     fi
@@ -392,7 +402,7 @@ if [ "$OS" = Darwin ]; then
     run brew trust --tap seanmizen/tap
     brew list shist > /dev/null 2>&1 || run brew install shist
 elif [ -x "$USER_HOME/.local/bin/shist" ]; then
-    ok "already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
+    note "already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
 else
     case "$(uname -m)" in
         x86_64)  shist_arch=amd64 ;;
@@ -405,7 +415,7 @@ else
     shist_tmp="$(mktemp -d)"
     shist_tar="shist_${shist_ver}_linux_${shist_arch}.tar.gz"
     shist_url="https://github.com/seanmizen/shist/releases/download/v$shist_ver"
-    ok "downloading $shist_tar"
+    note "downloading $shist_tar"
     curl -fsSL "$shist_url/$shist_tar" -o "$shist_tmp/$shist_tar"
     curl -fsSL "$shist_url/checksums.txt" -o "$shist_tmp/checksums.txt"
     ( cd "$shist_tmp" && grep " $shist_tar\$" checksums.txt | sha256sum -c - ) \
@@ -413,7 +423,7 @@ else
     tar -xzf "$shist_tmp/$shist_tar" -C "$shist_tmp" shist
     install -m 0755 -o "$DEV_USER" -g "$USER_GROUP" "$shist_tmp/shist" "$USER_HOME/.local/bin/shist"
     rm -rf "$shist_tmp"
-    ok "installed shist $shist_ver"
+    note "$(green "installed shist $shist_ver")"
 fi
 
 #------------------------------------------------------------------------------
@@ -430,9 +440,9 @@ log "cloning seanorepo and applying the git config"
 REPO_DIR="${REPO_DIR:-$USER_HOME/projects/seanorepo}"
 clone_once "$REPO_URL" "$REPO_DIR"
 if as_user "[ -f '$USER_HOME/.gitconfig' ]"; then
-    ok "~/.gitconfig exists, so it is kept. To apply config-anywhere, remove it and run again"
+    note "~/.gitconfig exists, so it is kept. To apply config-anywhere, remove it and run again"
 else
-    ok "applying utils/config-anywhere/gitconfig.txt"
+    note "$(green applying) utils/config-anywhere/gitconfig.txt"
     run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
 fi
 if as_user "[ -f '$REPO_DIR/package.json' ]"; then
@@ -454,7 +464,7 @@ if [ "$OS" = Darwin ]; then
         warn "iTerm2 is running - quit it and run this again to import preferences"
     else
         run defaults import com.googlecode.iterm2 "$ITERM_PLIST"
-        ok "preferences imported"
+        note "preferences imported"
     fi
 fi
 
@@ -479,9 +489,14 @@ if [ "$IS_WSL" = 1 ]; then
             .schemes = ([.schemes[]? | select(.name != $wt[0].scheme.name)] + [$wt[0].scheme])
             | .profiles.defaults += $wt[0].defaults
             | .actions = ([.actions[]? | select(.keys as $k | $wt[0].actions | map(.keys) | index($k) | not)] + $wt[0].actions)' "$WT_SETTINGS" > "$wt_tmp"; then
-        cp "$WT_SETTINGS" "$WT_SETTINGS.bak"
-        cat "$wt_tmp" > "$WT_SETTINGS"
-        ok "applied (the old file is settings.json.bak)"
+        # Compare the JSON, not the bytes: Windows Terminal reformats the file.
+        if [ "$(jq -S . "$wt_tmp")" = "$(jq -S . "$WT_SETTINGS")" ]; then
+            note "already applied"
+        else
+            cp "$WT_SETTINGS" "$WT_SETTINGS.bak"
+            cat "$wt_tmp" > "$WT_SETTINGS"
+            note "$(green applied) (the old file is settings.json.bak)"
+        fi
     else
         warn "jq cannot read $WT_SETTINGS - skipping"
     fi
@@ -493,7 +508,7 @@ fi
 if [ "$OS" = Linux ]; then
     log "clearing the apt cache"
     run as_root apt-get clean
-    ok "cleared"
+    note "cleared"
 fi
 
 rm -f "$RUN_OUT"
@@ -502,5 +517,5 @@ rm -f "$RUN_OUT"
 if [ "$OS" = Linux ] && [ "$(id -un)" = "$DEV_USER" ] && ! id -nG | grep -qw docker; then
     warn "log out and in again for the docker group, or run: newgrp docker"
 fi
-say "$C_OK" "done. Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
+say "done. Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
 exit 0
