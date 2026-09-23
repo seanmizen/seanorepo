@@ -40,8 +40,8 @@ async function resolveFile(
 
   // Extensionless module import → try .ts fallback (e.g. ./billing → ./billing.ts).
   if (!/\.\w+$/.test(abs)) {
-    const tsFile = Bun.file(abs + '.ts');
-    if (await tsFile.exists()) return { file: tsFile, path: abs + '.ts' };
+    const tsFile = Bun.file(`${abs}.ts`);
+    if (await tsFile.exists()) return { file: tsFile, path: `${abs}.ts` };
   }
   return null;
 }
@@ -58,13 +58,13 @@ async function serveStatic(pathname: string): Promise<Response> {
   if (!resolved) {
     // SPA fallback: serve index.html for unmatched routes so the client
     // router can handle /plans, /compare, /faq, etc.
-    const indexFile = Bun.file(ROOT.replace(/\/$/, '') + '/index.html');
+    const indexFile = Bun.file(`${ROOT.replace(/\/$/, '')}/index.html`);
     if (await indexFile.exists()) {
       return new Response(indexFile, {
         headers: { 'cache-control': 'no-store' },
       });
     }
-    return new Response('not found: ' + rel, { status: 404 });
+    return new Response(`not found: ${rel}`, { status: 404 });
   }
 
   // Transpile .ts on the fly so browsers get plain JS.
@@ -105,7 +105,7 @@ function mockApi(req: Request, url: URL): Response {
       job_id: id,
       status: 'done (mock)',
       op: 'mock',
-      output: '/jobs/' + id + '/output',
+      output: `/jobs/${id}/output`,
       local_path: '(mock — no file produced; start the Go backend)',
     });
   }
@@ -114,7 +114,7 @@ function mockApi(req: Request, url: URL): Response {
       headers: { 'content-type': 'text/plain' },
     });
   }
-  return new Response('mock: no handler for ' + path, { status: 404 });
+  return new Response(`mock: no handler for ${path}`, { status: 404 });
 }
 
 async function proxyToBackend(req: Request, url: URL): Promise<Response> {
