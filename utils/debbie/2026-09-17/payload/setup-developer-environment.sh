@@ -364,7 +364,9 @@ fi
 # 8. Windows Terminal (WSL only)
 #
 # windows-terminal.json holds the iTerm2 colours as a Windows Terminal scheme,
-# and the profile defaults that use it. Monaco is not on Windows, so the font
+# the profile defaults that use it, and key actions. Shift+Enter sends ESC+CR,
+# which Claude Code reads as a newline. Ctrl+Backspace sends ^W, which deletes
+# one word in zsh and in Claude Code. Monaco is not on Windows, so the font
 # is Cascadia Mono, which comes with Windows Terminal. The merge replaces the
 # scheme of the same name and keeps all other settings. A settings.json that
 # jq cannot read (it has comments) is not changed.
@@ -377,7 +379,8 @@ if [ "$IS_WSL" = 1 ]; then
         log "  no Windows Terminal settings.json - skipping"
     elif wt_tmp="$(mktemp)" && jq --slurpfile wt "$HERE/windows-terminal.json" '
             .schemes = ([.schemes[]? | select(.name != $wt[0].scheme.name)] + [$wt[0].scheme])
-            | .profiles.defaults += $wt[0].defaults' "$WT_SETTINGS" > "$wt_tmp"; then
+            | .profiles.defaults += $wt[0].defaults
+            | .actions = ([.actions[]? | select(.keys as $k | $wt[0].actions | map(.keys) | index($k) | not)] + $wt[0].actions)' "$WT_SETTINGS" > "$wt_tmp"; then
         cp "$WT_SETTINGS" "$WT_SETTINGS.bak"
         cat "$wt_tmp" > "$WT_SETTINGS"
         log "  scheme and font applied (the old file is settings.json.bak)"
