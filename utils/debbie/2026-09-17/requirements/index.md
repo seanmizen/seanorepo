@@ -20,7 +20,7 @@
 | [`REQ-NETWORK-001`](network.md#req-network-001--nothing-is-published-by-opening-a-port) | Nothing is published by opening a port | active | constraint | P0 | sean |
 | [`REQ-NETWORK-002`](network.md#req-network-002--ingress-rules-live-in-the-repository) | Ingress rules live in the repository | active | constraint | P1 | sean |
 | [`REQ-NETWORK-003`](network.md#req-network-003--a-link-with-carrier-but-no-route-is-treated-as-dead) | A link with carrier but no route is treated as dead | active | functional | P0 | sean |
-| [`REQ-NETWORK-004`](network.md#req-network-004--the-failover-watchdog-and-the-wifi-configuration-agree-on-an-owner) | The failover watchdog and the wifi configuration agree on an owner | proposed | constraint | P1 | sean |
+| [`REQ-NETWORK-004`](network.md#req-network-004--the-failover-watchdog-and-the-wifi-configuration-agree-on-an-owner) | The failover watchdog and the wifi configuration agree on an owner | withdrawn | constraint | P1 | sean |
 | [`REQ-NETWORK-005`](network.md#req-network-005--the-host-is-reachable-over-ssh-from-outside-the-local-network) | The host is reachable over SSH from outside the local network | active | functional | P1 | sean |
 | [`REQ-SERVER-001`](server.md#req-server-001--no-local-event-takes-the-server-down) | No local event takes the server down | active | constraint | P0 | sean |
 | [`REQ-SERVER-002`](server.md#req-server-002--only-four-ports-are-reachable) | Only four ports are reachable | active | constraint | P1 | sean |
@@ -93,6 +93,7 @@ graph TD
   REQ_SERVER_013 -->|depends-on| REQ_SERVER_011
   REQ_SERVER_014 -->|refines| REQ_DEPLOY_002
   REQ_SERVER_014 -->|refines| REQ_NETWORK_002
+  style REQ_NETWORK_004 stroke-dasharray: 4 4
   style REQ_SERVER_009 stroke-dasharray: 4 4
 ```
 

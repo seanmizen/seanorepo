@@ -141,7 +141,7 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
 
 ## REQ-NETWORK-004 — The failover watchdog and the wifi configuration agree on an owner
 
-- **Status:** proposed
+- **Status:** withdrawn
 - **Source:** sean
 - **Origin:** #273
 - **Type:** constraint
@@ -162,11 +162,12 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
   `/etc/network/interfaces` as unmanaged. A watchdog built on `nmcli` then
   silently does nothing, and that looks the same as a watchdog that works.
 
-  The status is **proposed** because the migration carries the risk. The
-  requirement itself is simple. The migration must delete the stanza and
-  write an NM connection profile in a single step. A mistake leaves a headless
-  machine with no network and no way in. That step is worth doing with
-  physical access to the machine, so it is separate from the machine install.
+  **Withdrawn 2026-09-23.** This requirement existed to justify a move of the
+  wifi to NetworkManager, for a watchdog built on `nmcli`. The watchdog uses
+  `ip` only, so it works with the ifupdown configuration that the installer
+  writes, and there is no move to make. A move would add the risk of a
+  headless machine with no network, for no gain. `REQ-SERVER-005` covers the
+  wifi, and `REQ-NETWORK-003` covers the watchdog.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wifi config persisted"
     (skipped where the host has no wireless interface, which is every VM run)
