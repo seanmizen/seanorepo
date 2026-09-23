@@ -202,6 +202,11 @@ if [ "$OS" = Darwin ]; then
     fi
     BREW="$(command -v brew || echo /opt/homebrew/bin/brew)"
     eval "$("$BREW" shellenv)"
+    # shellenv does not move Homebrew to the front when it is on the PATH
+    # already. An older Node earlier on the PATH (an Intel-era /usr/local/bin
+    # or an nvm install) then runs instead of Homebrew's, and Yarn 4 does not
+    # run on it. This script uses Homebrew's tools, so they come first.
+    PATH="$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin:$PATH"
     pkg_install git curl wget gnupg jq htop tree unzip zsh gh
 else
     log "Installing apt packages"
@@ -367,7 +372,10 @@ else
         note "$(green "Linked /usr/local/bin/yarn to yarnpkg")"
     fi
 fi
-note "Node $(node --version), system Yarn $(cd / && yarn --version)"
+run node --version
+node_version="$(cat "$RUN_OUT")"
+run bash -c "cd / && yarn --version"
+note "Node $node_version, system Yarn $(cat "$RUN_OUT")"
 
 #------------------------------------------------------------------------------
 # 4. Docker
@@ -481,7 +489,8 @@ else
     note "$(green "Applying utils/config-anywhere/gitconfig.txt")"
     run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
 fi
-note "Yarn $(as_user "cd '$REPO_DIR' && yarn --version") in the repository"
+run as_user "cd '$REPO_DIR' && yarn --version"
+note "Yarn $(cat "$RUN_OUT") in the repository"
 
 #------------------------------------------------------------------------------
 # 7. iTerm2 (macOS only)
