@@ -92,6 +92,19 @@ esac
 
 [ -f "$KEY" ] || die "no SSH key at $KEY. Was this machine installed by this checkout's serve-preseed.sh?"
 
+# A key with a passphrase cannot load in batch mode (below), so it works only
+# when an ssh-agent holds it. Check that here. Without the check, the machine
+# refuses the key on every attempt, and the wait reports that as a machine that
+# does not answer.
+if ! ssh-keygen -y -P '' -f "$KEY" > /dev/null 2>&1; then
+    key_fp="$(ssh-keygen -lf "$KEY" 2> /dev/null | awk '{ print $2 }')"
+    if [ -z "$key_fp" ] || ! ssh-add -l 2> /dev/null | grep -qF "$key_fp"; then
+        die "$KEY has a passphrase, and no ssh-agent holds it. provision.sh runs ssh in batch mode, which cannot ask for a passphrase. Load the key into an agent, then run provision.sh again:
+    eval \"\$(ssh-agent -s)\"
+    ssh-add $KEY"
+    fi
+fi
+
 # BatchMode, so a missing key fails at once and does not prompt for a password
 # that does not exist: the account accepts keys only.
 SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no
@@ -99,6 +112,25 @@ SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no
           -o ConnectTimeout=5)
 
 sshto() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$HOST" "$@"; }
+
+# The error output of the last ssh in the wait, so that a refused key is not
+# reported as a machine that does not answer.
+SSH_ERR="$(mktemp)"
+trap 'rm -f "$SSH_ERR"' EXIT
+
+# stop_if_refused CANDIDATE: exit when the last ssh to CANDIDATE failed on
+# authentication. The machine answered, so a longer wait does not help, and the
+# advice about leases and mDNS does not apply.
+stop_if_refused() {
+    grep -q 'Permission denied' "$SSH_ERR" || return 0
+    echo >&2
+    echo "ERROR: $1 answered SSH, but refused the key $KEY." >&2
+    echo "  * check the key by hand: ssh -i $KEY $DEPLOY_USER@$1" >&2
+    echo "  * a key with a passphrase works only from an ssh-agent: ssh-add $KEY" >&2
+    echo "  * the machine trusts payload/seanorepo-admin.pub. Check that $KEY is" >&2
+    echo "    its private half, or set SSH_KEY in $ENV_FILE." >&2
+    exit 3
+}
 
 #------------------------------------------------------------------------------
 # Send payload/ and services/ as one tar, then run one script from it.
@@ -135,7 +167,7 @@ send_and_run() {
 #------------------------------------------------------------------------------
 BOOT_ID_PATH=/proc/sys/kernel/random/boot_id
 
-boot_id_of() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$1" "cat $BOOT_ID_PATH" 2> /dev/null; }
+boot_id_of() { ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$1" "cat $BOOT_ID_PATH" 2> "$SSH_ERR"; }
 
 # Try every candidate on every round, not the whole deadline on the first one.
 # A name that does not resolve fails in milliseconds, and a dead address fails
@@ -164,15 +196,16 @@ wait_for_ssh() {
         for cand in "${CANDIDATES[@]}"; do
             if [ -z "$want_new_boot" ]; then
                 # No reboot to prove: any answer satisfies the wait.
-                if ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$cand" true 2> /dev/null; then
+                if ssh "${SSH_OPTS[@]}" "$DEPLOY_USER@$cand" true 2> "$SSH_ERR"; then
                     HOST="$cand"
                     log "up on $HOST"
                     return 0
                 fi
+                stop_if_refused "$cand"
                 continue
             fi
 
-            id="$(boot_id_of "$cand")" || continue
+            id="$(boot_id_of "$cand")" || { stop_if_refused "$cand"; continue; }
             if [ -z "$id" ]; then
                 # It answered, but did not say which boot it is. That is no
                 # proof either way, so keep waiting, and report it if the
