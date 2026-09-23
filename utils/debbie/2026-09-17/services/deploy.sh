@@ -22,12 +22,12 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Resolves to /home/srv/projects/seanorepo, which is where setup-server-environment.sh
-# clones and where payload/assert.sh looks. The override is spelled REPO_DIR to
+# Resolves to /home/srv/projects/seanorepo. setup-server-environment.sh clones
+# there, and payload/assert.sh looks there. The override is named REPO_DIR to
 # agree with setup-server-environment.sh and payload/assert.sh.
 #
-# The retired generation (archive/2025-10-08b) spelled this override
-# REPO_PATH. This generation is REPO_DIR throughout.
+# The archived generation archive/2025-10-08b names this override REPO_PATH.
+# This generation uses REPO_DIR in every file.
 REPO_DIR="${REPO_DIR:-$HOME/projects/seanorepo}"
 
 # State lives under the deploy user's own directory rather than /tmp. A
@@ -37,15 +37,15 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/seanorepo"
 LOCK_FILE="${DEPLOY_LOCK_FILE:-$STATE_DIR/deploy.lock}"
 MARKER="${DEPLOY_MARKER:-$STATE_DIR/last-deployed}"
 
-# THE UNIT NAME IS NOT YET REAL. #280 provisions the tunnel and will create it.
-# It is written here as the name #280 must use: `custom-` prefixed per
-# REQ-SERVER-013, and deliberately NOT `cloudflared.service`, because a file of
-# that name in /usr/local/lib/systemd/system would silently displace the one
-# Cloudflare's apt package ships - REQ-SERVER-012.
+# The tunnel unit (REQ-NETWORK-001). The name has the `custom-` prefix
+# (REQ-SERVER-013). A file named `cloudflared.service` in
+# /usr/local/lib/systemd/system would silently displace the unit that
+# Cloudflare's apt package ships (REQ-SERVER-012).
 #
-# This name appears in exactly two places, here and in the sudoers drop-in
-# setup-server-environment.sh installs, and payload/assert.sh asserts that the two agree. If #280
-# picks a different name, both move together or the assertion goes red.
+# setup-server-environment.sh sets the same name for the unit file and for the
+# sudoers drop-in. payload/assert.sh asserts that the unit on disk, this name
+# and the name sudo permits all agree. A change to the name must change both
+# scripts, or the assertion fails.
 CLOUDFLARED_UNIT="custom-cloudflared.service"
 TCP_GETTER_UNIT="custom-tcp-getter.service"
 CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"
@@ -54,7 +54,8 @@ CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"
 # matches the command as written, so a PATH-resolved `systemctl` is a grant
 # that works until the day PATH differs.
 SYSTEMCTL=/usr/bin/systemctl
-# Role flags written by setup-server-environment.sh (#329). Overridable for the tests only.
+# Role flags that setup-server-environment.sh writes (REQ-SERVER-014). The
+# override is for the tests only.
 ROLES_DIR="${ROLES_DIR:-/etc/seanorepo/roles}"
 
 #------------------------------------------------------------------------------
@@ -86,18 +87,18 @@ done
 # running `git checkout -f` underneath it, and the tree ends up matching no
 # commit at all.
 #
-# flock on a file descriptor, not a PID file. The kernel releases it when the
-# process dies, whatever kills it - a failure under `set -e`, a SIGKILL, the
-# unit's TimeoutStartSec, a reboot mid-deploy. There is no stale-lock case to
-# clean up and no cleanup path that can itself be skipped, which is exactly the
-# failure mode a PID file has.
+# The lock is flock on a file descriptor. The kernel releases it when the
+# process dies, whatever kills it: a failure under `set -e`, a SIGKILL, the
+# unit's TimeoutStartSec, a reboot mid-deploy. There is no stale lock to clean
+# up, and no cleanup path that can itself be skipped. A PID file has exactly
+# that failure mode.
 #
-# -n, so a second invocation returns immediately rather than queueing. Queueing
-# would be worse than useless here: 720 polls a day all blocking on one slow
+# -n makes a second invocation return immediately. It does not queue. A queue
+# would be worse than useless here: 720 polls a day that all block on one slow
 # deploy would stack up 720 processes that then deploy the same commit in turn.
-# Exiting 0 is deliberate too - being asked to deploy while a deploy is running
-# is the timer working correctly, not a failure, and a non-zero exit would put
-# the unit in `failed` and mean nothing.
+# The exit status 0 is intentional too. A request to deploy while a deploy runs
+# is the timer working correctly. It is not a failure, and a non-zero exit
+# would put the unit in `failed` and mean nothing.
 #
 # --force takes the lock as well. Two deploys racing is exactly as bad when a
 # human started one of them.
@@ -129,11 +130,11 @@ cd "$REPO_DIR" 2> /dev/null \
 git rev-parse --git-dir > /dev/null 2>&1 \
     || { err "$REPO_DIR is not a git checkout"; exit 1; }
 
-# What to deploy is whatever the checkout holds. release-poll.sh moved it -
-# #307 - and this script never fetches or checks out: converging services and
-# tracking `release` are separate jobs, so a machine that does not serve still
-# tracks `release` and a machine that does never deploys a half-written tree
-# (they share the lock above).
+# What to deploy is whatever the checkout holds. release-poll.sh moves the
+# checkout (REQ-DEPLOY-002). This script never fetches or checks out.
+# Converging services and tracking `release` are separate jobs. So a machine
+# that does not serve still tracks `release`, and a machine that serves never
+# deploys a half-written tree (the two scripts share the lock above).
 HEAD_SHA="$(git rev-parse HEAD 2> /dev/null || true)"
 if [ -z "$HEAD_SHA" ]; then
     debug "the checkout has no commit yet - nothing to deploy"
@@ -144,11 +145,11 @@ fi
 # under. Two lines rather than two fields because IFS is $'\n\t' here, so a
 # space-separated read would not split.
 #
-# ABSENT ON THE FIRST RUN, and that is a normal state rather than a case to
-# defend against: both reads yield the empty string, neither matches, and the
-# deploy proceeds. A marker holding a SHA that no longer exists - a force-push,
-# or a rebuilt `release` - behaves the same way: it simply does not equal HEAD,
-# so the host deploys.
+# ABSENT ON THE FIRST RUN. That is a normal state, and no code defends against
+# it. Both reads yield the empty string, neither matches, and the deploy
+# proceeds. A marker that holds a SHA that is gone, after a force-push or a
+# rebuilt `release`, behaves the same way. It does not equal HEAD, so the host
+# deploys.
 marker_sha="$(sed -n 1p "$MARKER" 2> /dev/null || true)"
 marker_boot="$(sed -n 2p "$MARKER" 2> /dev/null || true)"
 
@@ -176,16 +177,16 @@ fi
 # Deploy
 #------------------------------------------------------------------------------
 # The tunnel decision below diffs what was last DEPLOYED against what is about
-# to be, which is the marker, not the checkout's previous HEAD - the poller
-# may have moved the checkout several times while this machine was not
-# serving. Empty on a first deploy, which the tunnel decision treats as
-# "cannot prove the config is unchanged".
+# to be. That is the marker. The checkout's previous HEAD does not work here,
+# because the poller may have moved the checkout several times while this
+# machine was not serving. The marker is empty on a first deploy, which the
+# tunnel decision treats as "cannot prove the config is unchanged".
 OLD_SHA="$marker_sha"
 NEW_SHA="$HEAD_SHA"
 
 log "deploying: $reason"
 
-# THERE IS DELIBERATELY NO `git clean` IN THE DEPLOY PATH - REQ-DEPLOY-006.
+# THE DEPLOY PATH HAS NO `git clean` (REQ-DEPLOY-006).
 # apps/cloudflared/credentials/ is gitignored and holds the tunnel's
 # credentials file, which exists only on this host and is in no repository. A
 # `git clean -fdx` added to make trees deterministic would delete it, the
@@ -194,12 +195,12 @@ log "deploying: $reason"
 # under uploads/ goes the same way. Do not add a clean step here or to
 # release-poll.sh.
 
-# Where the apps publish - #329, derived from the roles rather than set. A
-# webserver that is also the tunnel machine publishes on loopback only: the tunnel
-# reaches localhost:4xxx and nothing on the LAN should (REQ-SERVER-002). A
-# webserver WITHOUT the tunnel publishes on the LAN, because being reached
-# from the LAN is the only reason to run one. Every compose port reads
-# ${PUBLISH_ADDR:-127.0.0.1} (#309).
+# Where the apps publish (REQ-SERVER-014). The roles decide it. No setting
+# does. A webserver that is also the tunnel machine publishes on loopback only.
+# The tunnel reaches localhost:4xxx, and nothing on the LAN should
+# (REQ-SERVER-002). A webserver WITHOUT the tunnel publishes on the LAN,
+# because the only reason to run one is to be reached from the LAN. Every
+# compose port reads ${PUBLISH_ADDR:-127.0.0.1} (REQ-SERVER-002).
 if [ -e "$ROLES_DIR/tunnel" ]; then
     export PUBLISH_ADDR=127.0.0.1
     log "publishing on loopback (tunnel machine)"
@@ -212,7 +213,7 @@ yarn install --immutable
 yarn prod:docker
 
 #------------------------------------------------------------------------------
-# tcp-getter - built here, because nothing else builds it. #359.
+# tcp-getter - built here, because nothing else builds it.
 #
 # It is a host unit rather than a container, so `yarn prod:docker` above skips
 # it, and the unit runs Node against dist/index.mjs. Node cannot run
@@ -224,8 +225,9 @@ yarn prod:docker
 # restart and put a yarn invocation inside systemd's startup path.
 #
 # NOT FATAL. A tcp-getter that fails to build must not stop a deploy that has
-# already brought every site up. The sites are the point; this reports an
-# address. It is logged loudly and the deploy continues.
+# already brought every site up. The sites are the point. tcp-getter only
+# reports an address. The failure goes to the log as an error, and the deploy
+# continues.
 #------------------------------------------------------------------------------
 if yarn workspace tcp-getter build; then
     if ! $SYSTEMCTL cat -- "$TCP_GETTER_UNIT" > /dev/null 2>&1; then
@@ -239,7 +241,7 @@ else
     err "tcp-getter failed to build - the unit keeps the previous bundle, and this machine's ngrok address may go unreported"
 fi
 
-# THE MARKER IS WRITTEN HERE, not at the end - REQ-DEPLOY-002.
+# THE SCRIPT WRITES THE MARKER HERE, BEFORE THE END (REQ-DEPLOY-002).
 #
 # It means "this commit has been deployed", and after `yarn prod:docker` it
 # has. The two steps below are follow-ups: re-running the whole deploy would
@@ -271,7 +273,7 @@ exit_status=0
 #------------------------------------------------------------------------------
 tunnel_restart=no
 if [ -z "$marker_sha" ]; then
-    # FIRST DEPLOY THIS HOST HAS RECORDED. Chosen deliberately: restart.
+    # FIRST DEPLOY THIS HOST HAS RECORDED. The chosen action is a restart.
     # Nothing here knows what configuration the tunnel is running against - it
     # may have been started before this checkout existed, or against a config
     # from a previous provisioning. Not restarting leaves that mismatch in
@@ -305,22 +307,23 @@ fi
 if [ "$tunnel_restart" = no ]; then
     debug "not restarting $CLOUDFLARED_UNIT: $tunnel_why"
 elif ! $SYSTEMCTL cat -- "$CLOUDFLARED_UNIT" > /dev/null 2>&1; then
-    # Expected until #280 lands, and stated rather than swallowed. Dying here
-    # instead would leave the marker written, the sites up, and the unit in
-    # `failed` on every poll - a red light for something that is not this
-    # script's job yet.
+    # A host without the unit has no tunnel to restart. The script logs this
+    # and continues. An exit here would leave the marker written, the sites
+    # up, and the unit in `failed` on every poll. That is a red light for
+    # something that is not this script's job.
     log "$CLOUDFLARED_UNIT is not installed on this host, so there is nothing to restart"
-    log "  (#280 provisions the tunnel. A restart was wanted because: $tunnel_why)"
+    log "  (setup-server-environment.sh installs it. A restart was wanted because: $tunnel_why)"
 else
     log "restarting $CLOUDFLARED_UNIT: $tunnel_why"
     # The one command this account is allowed to run as root, and the whole
     # reason the sudoers drop-in grants a single command rather than general
     # privilege - REQ-DEPLOY-005.
     if ! sudo -n "$SYSTEMCTL" restart "$CLOUDFLARED_UNIT"; then
-        # Reported, not fatal, and the marker above is already written. The new
-        # code is live; what failed is the tunnel pickup. Re-deploying would
-        # not fix it, so the exit code carries the failure to systemd and the
-        # journal without putting the host into a rebuild loop.
+        # The script reports this failure and continues. The marker above is
+        # already written. The new code is live. What failed is the tunnel
+        # pickup, and a new deploy would not fix it. So the exit code carries
+        # the failure to systemd and the journal, and the host does not enter
+        # a rebuild loop.
         err "failed to restart $CLOUDFLARED_UNIT - the new commit is live but the tunnel may be serving stale ingress"
         exit_status=1
     fi
