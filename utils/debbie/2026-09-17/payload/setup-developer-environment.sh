@@ -360,6 +360,13 @@ if [ "$OS" = Darwin ]; then
         note "$(green "Removed the corepack formula")"
     fi
     pkg_install node yarn
+    # brew install does not link a formula that is installed but unlinked, for
+    # example after `brew unlink`. Then an older node elsewhere on the PATH
+    # runs instead, and Yarn 4 does not run on it.
+    if [ "$(command -v node)" != "$HOMEBREW_PREFIX/bin/node" ]; then
+        run brew link --overwrite node
+        note "$(green "Linked Homebrew's node")"
+    fi
 else
     remove_corepack_shims root /usr/bin
     if dpkg-query -W -f='${Status}' node-corepack 2> /dev/null | grep -q "^install ok installed"; then
