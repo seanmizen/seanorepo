@@ -13,7 +13,7 @@
 # What it installs, in this order:
 #   1. Homebrew (macOS) or apt packages (Debian)
 #   2. zsh, oh-my-zsh, the prompt and aliases, and zsh as the login shell
-#   3. Node 20, corepack and Yarn
+#   3. Node, corepack and Yarn
 #   4. Docker
 #   5. shist, from its release
 #   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
@@ -32,7 +32,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-NODE_MAJOR=20
 REPO_URL="${REPO_URL:-https://github.com/seanmizen/seanorepo.git}"
 
 OS="$(uname -s)"
@@ -73,13 +72,15 @@ case "$OS" in
 esac
 USER_GROUP="$(id -gn "$DEV_USER")"
 
-# Run a command as DEV_USER. On a Mac that is the current user already, so the
-# command runs as it stands. Quoting note: the argument is one shell string.
+# Run a command as DEV_USER. Quoting note: the argument is one shell string.
+# As root, a login shell gives DEV_USER its own environment. As the current
+# user, the command keeps this script's PATH. A login shell would load the
+# profile again, which can put an old Node in front of the one installed here.
 as_user() {
     if [ "$(id -u)" -eq 0 ]; then
         sudo -H -u "$DEV_USER" bash -lc "$*"
     else
-        bash -lc "$*"
+        bash -c "$*"
     fi
 }
 
@@ -211,14 +212,18 @@ fi
 #------------------------------------------------------------------------------
 # 3. Node, corepack and Yarn
 #
-# Debian 13 ships Node 20 and a corepack package, so apt owns both and the
-# security updates cover them. Yarn's version comes from the repository's own
-# packageManager field once the checkout exists, further down.
+# No Node version is pinned. Each system takes the Node that its package
+# manager ships: the latest release from Homebrew, and the release's Node from
+# Debian's apt. The package manager then keeps it updated.
+#
+# Node 25 and later do not include corepack, so macOS installs the corepack
+# formula. Debian ships corepack as its own package. Yarn's version comes from
+# the repository's own packageManager field once the checkout exists, further
+# down.
 #------------------------------------------------------------------------------
-log "node $NODE_MAJOR, corepack and yarn"
+log "node, corepack and yarn"
 if [ "$OS" = Darwin ]; then
-    brew install "node@$NODE_MAJOR"
-    brew link --overwrite --force "node@$NODE_MAJOR"
+    brew install node corepack
     as_user "corepack enable --install-directory '$USER_HOME/.local/bin'"
 else
     as_root apt-get install -y nodejs node-corepack
