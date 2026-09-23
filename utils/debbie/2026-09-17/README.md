@@ -257,24 +257,43 @@ its own, so a kernel fix waits until you reboot it.
 
 ### Upgrade or roll back cloudflared and ngrok
 
-apt owns both binaries, from their vendors' repositories, so an upgrade and a
-rollback are each one apt command. Unattended upgrades take the Debian
-security suite only (REQ-SERVER-006), so they do not update these two. Run
-these commands from the LAN: a restart of `custom-ngrok.service` ends an SSH
-session that came through ngrok.
+`custom-vendor-upgrade.timer` updates both, once a day at about 05:30. It
+installs a version only when it has been the newest version for 7 days
+(REQ-SERVER-015). After a cloudflared install it restarts the tunnel. It never
+restarts ngrok, because a restart gives a new public address: the new ngrok
+starts at the next restart of `custom-ngrok.service`.
 
 ```bash
-# see the installed version and the versions apt can install
-ssh srv@<name>.local apt-cache policy cloudflared ngrok
+# what the timer did, and what it waits for
+ssh srv@<name>.local journalctl -u custom-vendor-upgrade.service -n 20
+```
 
-# upgrade both, then restart the units that run them
+To upgrade now, without the wait, run these from the LAN (a restart of
+`custom-ngrok.service` ends an SSH session that came through ngrok):
+
+```bash
 ssh -t srv@<name>.local 'sudo apt-get update && sudo apt-get install --only-upgrade cloudflared ngrok \
   && sudo systemctl restart custom-cloudflared.service custom-ngrok.service'
-
-# roll back one package to a version from the list above
-ssh -t srv@<name>.local 'sudo apt-get install --allow-downgrades cloudflared=<version> \
-  && sudo systemctl restart custom-cloudflared.service'
 ```
+
+**Roll back.** Hold the package after the rollback, or the timer upgrades it
+again after 7 days. `sudo apt-mark unhold <package>` ends the hold.
+
+- **cloudflared:** Cloudflare's apt repository holds only the newest version,
+  so apt cannot install an older one. Use the `.deb` from the GitHub release:
+  ```bash
+  ssh -t srv@<name>.local 'v=<version>; a=$(dpkg --print-architecture); \
+    curl -fsSLO https://github.com/cloudflare/cloudflared/releases/download/$v/cloudflared-linux-$a.deb \
+    && sudo dpkg -i cloudflared-linux-$a.deb && sudo apt-mark hold cloudflared \
+    && sudo systemctl restart custom-cloudflared.service'
+  ```
+- **ngrok:** its repository holds every version, so apt can install an older
+  one:
+  ```bash
+  ssh srv@<name>.local apt-cache policy ngrok     # the versions apt can install
+  ssh -t srv@<name>.local 'sudo apt-get install --allow-downgrades ngrok=<version> \
+    && sudo apt-mark hold ngrok'
+  ```
 
 The units run `/usr/bin/cloudflared` and `/usr/local/bin/ngrok`, the paths
 that the packages install. dpkg replaces a binary in one step, so there is no
