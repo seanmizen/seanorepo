@@ -437,7 +437,8 @@ fi
 # 5. shist
 #
 # Sean's shell-history tool. It is installed from a release, so no machine
-# needs a Go toolchain (which cost 279 MB when this built shist from source).
+# needs a Go toolchain. A build from source needs that toolchain, which costs
+# 279 MB.
 #
 # macOS takes it from the tap, which a daily workflow keeps in step with the
 # releases. Homebrew asks for trust before it loads a third-party tap, and
@@ -576,5 +577,5 @@ rm -f "$RUN_OUT"
 if [ "$OS" = Linux ] && [ "$(id -un)" = "$DEV_USER" ] && ! id -nG | grep -qw docker; then
     warn "Log out and in again for the docker group, or run: newgrp docker"
 fi
-say "$(green Done.) Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
+say "$(green Done.) Open a new shell to load zsh and the new PATH. Full log: $SETUP_LOG"
 exit 0

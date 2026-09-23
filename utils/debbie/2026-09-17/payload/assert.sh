@@ -19,7 +19,7 @@
 set -uo pipefail
 
 EXPECT_ARCH="${EXPECT_ARCH:-}"
-# No default - #329. provision.sh and test-vm.sh always pass it.
+# No default (REQ-SERVER-014). provision.sh and test-vm.sh always pass it.
 EXPECT_HOSTNAME="${EXPECT_HOSTNAME:?EXPECT_HOSTNAME must be set - the name this machine should have}"
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 PHASE="${PHASE:-provisioned}"
@@ -42,48 +42,32 @@ skip=0
 ok()   { printf '  \033[32m/\033[0m %s\n' "$1"; pass=$((pass + 1)); }
 no()   { printf '  \033[31mX\033[0m %s\n' "$1"; fail=$((fail + 1)); }
 sk()   { printf '  \033[33m-\033[0m %s \033[33m(skipped: %s)\033[0m\n' "$1" "$2"; skip=$((skip + 1)); }
-# The eval runs in a SUBSHELL, deliberately. `eval` in the current shell lets a
-# check containing `exit` terminate assert.sh itself: the checks after it never
-# run, the summary never prints, and the script exits with whatever that `exit`
-# said - reporting success for assertions that were never made. That happened.
-# A wireless check written with a bare `exit 0` silently skipped the whole
-# firewall section on real hardware and returned 0, and because QEMU has no
-# 802.11 device the guarded branch made it unreachable in every VM run, so no
-# amount of green in the harness could have caught it.
+# The eval runs in a SUBSHELL. `eval` in the current shell lets a check that
+# contains `exit` stop assert.sh itself. The checks after it do not run, the
+# summary does not print, and the script exits with the code of that `exit`.
+# The run then reports success for checks that did not run. This fault
+# occurred once: a wireless check with a bare `exit 0` skipped the whole
+# firewall section on real hardware and returned 0. QEMU has no 802.11 device,
+# so no VM run reached that branch, and the harness could not catch the fault.
 #
-# Subshelling here fixes the whole class rather than that one call site.
+# The subshell fixes the whole class of fault, for every check.
 check() { if ( eval "$2" ) > /dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 
-# logind's LIVE view of one of its Handle* properties, printed bare.
-#
-# `busctl get-property ... HandlePowerKey` answers `s "ignore"`, which is the
-# same text #283 quoted off the real machine when it still said `poweroff`. This is
-# the running configuration, not the file: a drop-in that was written but never
-# read still reports the compiled-in default here, which is exactly the state
-# that took the machine down twice and exactly why REQ-SERVER-001 is asserted only
-# after a reboot.
-#
-# Deliberately NOT `loginctl show-session`. debbie is headless and assert.sh
-# arrives over SSH, so there is no seat and no graphical session to interrogate;
-# the manager object exists whether anyone is logged in or not. Equally
-# deliberately, there is no fall back to grepping the drop-in - a file that
-# logind has not read is the bug, so a check satisfied by the file's contents
-# would pass in the failing state.
 # sshd's OWN value for one keyword, lowercased and printed bare.
 #
-# `sshd -T` is sshd parsing its own configuration exactly as it will at the next
-# connection, drop-ins and Match blocks and lexical precedence all resolved. It
-# is therefore the EFFECTIVE configuration, not a file: a keyword set in a
-# drop-in that sorts too late, or under a filename sshd never globs, reports the
-# compiled-in default here while `grep` on that file is perfectly happy.
+# `sshd -T` makes sshd parse its own configuration exactly as it will at the
+# next connection, with drop-ins, Match blocks and lexical precedence all
+# resolved. The result is the EFFECTIVE configuration. A keyword in a drop-in
+# that sorts too late, or in a file that sshd never globs, reports the
+# compiled-in default here, while `grep` on that file finds the keyword.
 #
-# That is #283's and #313's lesson applied to sshd, and it is why there is
-# deliberately no fall back to grepping 10-debbie-keys-only.conf. A drop-in that
-# sshd has not read is precisely the bug REQ-SERVER-008 exists to catch, so a
-# check the file could satisfy would pass in the failing state.
+# This is the logind_handler rule applied to sshd, and it is why there is no
+# fall back to a grep of 10-debbie-keys-only.conf. A drop-in that sshd has not
+# read is the bug REQ-SERVER-008 exists to catch, so a check that the file
+# could satisfy would pass in the failing state.
 sshd_effective() {
     # sudo: sshd is in /usr/sbin, off the deploy user's PATH, and needs root
-    # to read the host keys - #320.
+    # to read the host keys.
     sudo -n sshd -T 2> /dev/null | awk -v k="$(printf '%s' "$1" | tr 'A-Z' 'a-z')" \
         'tolower($1) == k { print tolower($2); exit }'
 }
@@ -92,15 +76,16 @@ sshd_effective() {
 # reported it, e.g. `1.0G`.
 #
 # journald logs "System Journal (...) is 8.0M, max 1.0G, 990.1M free." each
-# time it opens /var/log/journal, and the `max` there is the limit it computed
-# from its configuration. That is the effective value, not the drop-in: a file
-# journald never read reports the default here (10% of the filesystem), which
-# is #313's lesson applied to journald. The last such line of this boot is the
-# current daemon's.
+# time it opens /var/log/journal. The `max` there is the limit it computed
+# from its configuration, so it is the effective value. If journald never read
+# the drop-in, this line reports the default (10% of the filesystem). This is
+# the logind_handler rule applied to journald. The last such line of this boot
+# comes from the running daemon.
 #
-# Matched by syslog identifier, not `-u`: journald's reports about its own
-# files are not reliably tagged with its unit. The size is printed as `1.0G` or
-# `1G` depending on the systemd version, so both count.
+# The match uses the syslog identifier. `-u` is not reliable here, because
+# journald does not always tag its reports about its own files with its unit.
+# The size is printed as `1.0G` or `1G` depending on the systemd version, so
+# both count.
 journal_usage_line() {
     sudo -n journalctl -b -t systemd-journald -o cat --no-pager 2> /dev/null |
         grep -E '^System Journal .* max ' | tail -n 1
@@ -109,6 +94,22 @@ journal_max_use() {
     journal_usage_line | sed -n 's/.* max \([0-9.]*[KMGT]\).*/\1/p' | sed 's/\.0\([KMGT]\)$/\1/'
 }
 
+# logind's LIVE view of one of its Handle* properties, printed bare.
+#
+# `busctl get-property ... HandlePowerKey` answers `s "ignore"`. The answer is
+# the running configuration. It does not come from the file. A drop-in that was
+# written but never read reports the compiled-in default here. That state took
+# the machine down twice, and it is why REQ-SERVER-001 is asserted only after a
+# reboot.
+#
+# The function does not use `loginctl show-session`. The server is headless and
+# assert.sh arrives over SSH, so there is no seat and no graphical session to
+# query. The manager object exists whether a user is logged in or not.
+#
+# There is also no fall back to a grep of the drop-in. A file that logind has
+# not read is the bug, so a check that the file's contents satisfy would pass
+# in the failing state. The functions below apply the same rule to sshd,
+# journald and apt.
 logind_handler() {
     busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
         org.freedesktop.login1.Manager "$1" 2>/dev/null |
@@ -118,14 +119,14 @@ logind_handler() {
 # apt's OWN value for one configuration key, printed bare, or EMPTY if nothing
 # under /etc/apt/apt.conf.d sets it.
 #
-# `apt-config shell` is apt's parser reading apt's own configuration tree, which
-# is the same tree unattended-upgrades reads - it asks python-apt for
-# `Unattended-Upgrade::Automatic-Reboot` and gets whatever this prints. So this
-# is the EFFECTIVE configuration, not a file: a key in a file apt never reads -
-# wrong directory, wrong name, or a syntax error earlier in the file that made
-# apt discard the rest - reports empty here while `grep` on that file is
-# perfectly happy. That is #283's and #313's lesson applied to apt, and it is
-# why there is deliberately no fall back to grepping 50unattended-upgrades.
+# `apt-config shell` is apt's parser reading apt's own configuration tree.
+# unattended-upgrades reads the same tree: it asks python-apt for
+# `Unattended-Upgrade::Automatic-Reboot` and gets the value this prints. So
+# this is the EFFECTIVE configuration. A key in a file that apt never reads
+# reports empty here, while `grep` on that file finds the key. Causes include
+# the wrong directory, the wrong name, or an earlier syntax error that made apt
+# discard the rest of the file. This is the logind_handler rule applied to apt,
+# and it is why there is no fall back to a grep of 50unattended-upgrades.
 #
 # Empty for an unset key is the whole point for REQ-SERVER-006. The package
 # default for Automatic-Reboot is already false, so a check that accepted
@@ -177,15 +178,15 @@ check "Debian 13 (trixie)"        '. /etc/os-release; [ "$VERSION_CODENAME" = tr
 check "timezone is Europe/London" '[ "$(timedatectl show -p Timezone --value)" = Europe/London ]'
 check "DNS and routing work"      'getent hosts deb.debian.org'
 
-# REQ-SERVER-004 - #285. Asserted in BOTH phases, which is the fix: in
-# `firstboot` nothing but the installer has touched the machine, so a pass here
-# means the preseed produced a usable identity, and a failure here followed by
-# a pass in `provisioned` means setup-server-environment.sh papered over it.
+# REQ-SERVER-004. Asserted in BOTH phases. In `firstboot` only the installer
+# has touched the machine, so a pass here means the preseed produced a usable
+# identity. A failure here and a pass in `provisioned` means that
+# setup-server-environment.sh hid an install fault.
 #
-# The hostname is checked three ways because the failure mode split them: the
-# running hostname, the static one in /etc/hostname, and the 127.0.1.1 line.
-# The real machine had `192` in all three; a machine repaired by hostnamectl alone
-# would have the first two right and the third stale.
+# The hostname is checked in three places, because the fault can split them:
+# the running hostname, the static one in /etc/hostname, and the 127.0.1.1
+# line. The machine that showed the fault had `192` in all three. A machine
+# repaired by hostnamectl alone has the first two right and the third stale.
 echo
 echo "== identity (REQ-SERVER-004) =="
 check "hostname is $EXPECT_HOSTNAME" \
@@ -245,51 +246,52 @@ if [ "$PHASE" = provisioned ]; then
     # the engine, whose package creates it. Skipped rather than failed at first
     # boot, because its absence there is correct rather than a regression.
     #
-    # This check alone is NOT evidence that Docker works - see the docker
-    # section below, which is what #276 added after this one spent a generation
-    # passing against an empty group.
+    # This check alone is NOT evidence that Docker works. A group can exist
+    # with no daemon behind it. The docker section below checks the daemon.
     check "$DEPLOY_USER in docker" "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx docker"
 
     # REQ-SERVER-001 - asserted after a reboot, which is when the drop-in takes
-    # effect. setup-server-environment.sh deliberately does not restart logind.
+    # effect. setup-server-environment.sh does not restart logind, on purpose.
     check "lid-close drop-in present" '[ -f /etc/systemd/logind.conf.d/10-debbie-nosleep.conf ]'
-    # #313. Asked of the running manager via logind_handler, like the keys
-    # below, with no fall back to the drop-in's text: a file logind never read
-    # is the fault. setup-server-environment.sh sets all three lid handlers, so all three
-    # are asserted - on external power or docked, logind consults the latter
-    # two instead of HandleLidSwitch. HandleLidSwitchDocked already defaults
-    # to `ignore` in systemd, so that one is a regression guard and cannot be
-    # shown red by removing its line; the other two default to suspending.
+    # Asked of the running manager through logind_handler, like the keys
+    # below, with no fall back to the text of the drop-in. A file that logind
+    # never read is the fault. setup-server-environment.sh sets all three lid
+    # handlers, so all three are asserted. On external power or when docked,
+    # logind reads the latter two instead of HandleLidSwitch.
+    # HandleLidSwitchDocked defaults to `ignore` in systemd, so that check is a
+    # regression guard: removing its line does not make it red. The other two
+    # default to suspend.
     check "lid close ignored"         '[ "$(logind_handler HandleLidSwitch)" = ignore ]'
     check "lid close on power ignored" '[ "$(logind_handler HandleLidSwitchExternalPower)" = ignore ]'
     check "lid close docked ignored"  '[ "$(logind_handler HandleLidSwitchDocked)" = ignore ]'
     check "sleep.target masked"       '[ "$(systemctl is-enabled sleep.target 2>&1)" = masked ]'
-    # #283. The lid was covered and the power button was not, so systemd's
-    # default of HandlePowerKey=poweroff stood: a brief press cleanly shut the
-    # whole machine down, twice in one evening. Asserted against the running
-    # manager, so `poweroff` here fails the run.
+    # REQ-SERVER-001. systemd's default is HandlePowerKey=poweroff, so a brief
+    # press shuts the whole machine down cleanly. That took the server down
+    # twice in one evening. Asserted against the running manager, so
+    # `poweroff` here fails the run.
     check "power key ignored"         '[ "$(logind_handler HandlePowerKey)" = ignore ]'
-    # Not `poweroff`. The deliberate shutdown path is `systemctl poweroff` over
-    # SSH; the emergency one is the firmware's own force-off, which holds the
-    # rail down without consulting logind. Setting this to poweroff would only
-    # re-open the hole for anyone who held the button a moment too long.
+    # The value is `ignore`. The planned shutdown path is `systemctl poweroff`
+    # over SSH. The emergency path is the firmware's own force-off, which holds
+    # the rail down and does not consult logind. A value of poweroff would open
+    # the hole again for anyone who held the button a moment too long.
     check "long power press ignored"  '[ "$(logind_handler HandlePowerKeyLongPress)" = ignore ]'
     check "suspend key ignored"       '[ "$(logind_handler HandleSuspendKey)" = ignore ]'
     check "hibernate key ignored"     '[ "$(logind_handler HandleHibernateKey)" = ignore ]'
 
-    # REQ-SERVER-007, #287. Read from the running journald, not the drop-in.
+    # REQ-SERVER-007. Read from the running journald. The drop-in is not read.
     check "journald size capped"      '[ "$(journal_max_use)" = 1G ]'
     echo "      journald reports: $(journal_usage_line || true)"
 
-    # REQ-SERVER-008, #288. Asked of sshd, not of the drop-in - a file sshd
-    # never read is the fault being tested for. `no` exactly, never "no or
-    # unset": measured on stock trixie, `sshd -T` reports
-    # PasswordAuthentication=yes and PermitRootLogin=without-password, so an
-    # unset key here IS the failing state for both.
+    # REQ-SERVER-008. Asked of sshd. The drop-in is not read, because a file
+    # that sshd never read is the fault under test. The value must be exactly
+    # `no`, and "no or unset" is not enough. Measured on stock trixie,
+    # `sshd -T` reports PasswordAuthentication=yes and
+    # PermitRootLogin=without-password, so an unset key IS the failing state
+    # for both.
     #
-    # KbdInteractiveAuthentication already defaults to `no` on trixie, so that
-    # one check is a regression guard rather than a reproduction - it cannot be
-    # shown red by removing the drop-in. The other two can, and were.
+    # KbdInteractiveAuthentication defaults to `no` on trixie, so that check is
+    # a regression guard: removing the drop-in does not make it red. Removing
+    # the drop-in makes the other two red, and a test run showed this.
     check "sshd config is valid"           'sudo -n sshd -t'
     check "ssh passwords refused"          '[ "$(sshd_effective PasswordAuthentication)" = no ]'
     check "ssh keyboard-interactive refused" '[ "$(sshd_effective KbdInteractiveAuthentication)" = no ]'
@@ -321,13 +323,12 @@ fi
 # never reboots itself to do it.
 #
 # TWO INDEPENDENT HALVES, and a machine can have either without the other. The apt
-# configuration says what may be upgraded; the systemd timers say whether
+# configuration says what may be upgraded. The systemd timers say whether
 # anything ever asks. A perfect 50unattended-upgrades on a host with
-# apt-daily-upgrade.timer masked has applied no patch since the day it was
-# installed and says nothing about it, which is the #136 failure mode exactly -
-# a thing that was supposed to keep itself current, quietly not doing so for
-# sixteen months with nothing reporting it. So the timers are asserted against
-# systemd rather than against the presence of a config file.
+# apt-daily-upgrade.timer masked applies no patch after installation and
+# reports nothing. cloudflared's self-update once failed in this way: it did
+# not keep itself current for sixteen months, and nothing reported it. So the
+# timers are asserted against systemd, and a config file is not enough.
 #
 # Both timers, not just the upgrade one. apt-daily.timer refreshes the package
 # lists; apt-daily-upgrade.timer invokes unattended-upgrade. The second can only
@@ -352,9 +353,10 @@ check "the security suite is in apt's sources" \
 if [ "$PHASE" = provisioned ]; then
     check "unattended-upgrades installed" \
         'dpkg-query -W -f="\${Status}" unattended-upgrades 2>/dev/null | grep -q "^install ok installed"'
-    # Not installed, deliberately - see the note in setup-server-environment.sh. With it
-    # present, unattended-upgrades skips every run while the machine is on
-    # battery, and debbie is a laptop, so its battery is always discoverable.
+    # powermgmt-base is not installed, on purpose. See the note in
+    # setup-server-environment.sh. With it present, unattended-upgrades skips
+    # every run while the machine is on battery. The server is a laptop, so its
+    # battery is always discoverable.
     check "powermgmt-base absent, so a battery cannot pause patching" \
         '! dpkg-query -W -f="\${Status}" powermgmt-base 2>/dev/null | grep -q "^install ok installed"'
     check "apt-daily.timer enabled"          '[ "$(systemctl is-enabled apt-daily.timer 2>/dev/null)" = enabled ]'
@@ -366,9 +368,9 @@ if [ "$PHASE" = provisioned ]; then
     check "apt's periodic unattended upgrade is on" \
         '[ "$(apt_config_value APT::Periodic::Unattended-Upgrade)" = 1 ]'
 
-    # AC 1. Printed before the check, like the firewall section's offenders: a
-    # bare red line saying the origins are wrong, without saying what they are,
-    # is a bad afternoon.
+    # Printed before the check, like the firewall section's offenders. A bare
+    # red line that says the origins are wrong, but not what they are, is a bad
+    # afternoon.
     uu_origins="$(unattended_upgrade_origins)"
     echo "  allowed origins: ${uu_origins:-<none reported>}"
     echo "  expected:        $EXPECT_SECURITY_ORIGIN"
@@ -380,10 +382,10 @@ if [ "$PHASE" = provisioned ]; then
     check "only the security suite is upgraded unattended" \
         "[ \"\$uu_origins\" = '$EXPECT_SECURITY_ORIGIN' ]"
 
-    # THE ONE THAT MATTERS MOST. debbie serves from a shelf on wifi, and an
-    # unattended reboot that fails to bring the network back up is an outage
-    # nobody is watching for - #282 is still open precisely because that wifi
-    # story is unsettled.
+    # THE ONE THAT MATTERS MOST. The server runs unattended. A reboot that
+    # does not restore the network is an outage that nobody watches for. The
+    # wifi configuration is not settled: REQ-NETWORK-004 has the status
+    # proposed.
     #
     # `= false`, not "false or unset". The package default is already false, so
     # accepting unset would pass on a machine where nobody had ever considered the
@@ -408,9 +410,9 @@ fi
 # REQ-DEPLOY-004 - the deploy is `yarn prod:docker`, so the engine has to be
 # there and has to be usable by the account the deploy runs as.
 #
-# The membership check above is deliberately not repeated here, because on its
-# own it proves nothing: a group can exist with no daemon behind it, and for a
-# generation that is exactly what it asserted. `docker info` is the check that
+# The membership check above is not repeated here, because on its own it
+# proves nothing: a group can exist with no daemon behind it. `docker info` is
+# the check that
 # cannot be satisfied by an empty group - it opens /var/run/docker.sock and
 # asks the daemon its version.
 #
@@ -443,7 +445,7 @@ if [ "$PHASE" = provisioned ]; then
     check "docker compose plugin present" 'docker compose version'
 else
     sk "docker-ce installed"          "setup-developer-environment.sh installs it"
-    sk "apt keyring present"          "setup-server-environment.sh fetches it"
+    sk "apt keyring present"          "setup-developer-environment.sh fetches it"
     sk "exactly one docker apt source" "setup-developer-environment.sh writes it"
     sk "docker.service enabled"       "setup-developer-environment.sh installs it"
     sk "docker.service active"        "setup-developer-environment.sh installs it"
@@ -467,8 +469,8 @@ echo
 echo "== repository checkout (REQ-DEPLOY-001) =="
 if [ "$PHASE" = provisioned ]; then
     check "checkout exists at $REPO_DIR" '[ -d "$REPO_DIR/.git" ]'
-    # AC 1, and the reason it is spelled this way rather than as a stat of the
-    # top directory: `sudo git clone` into a pre-made srv-owned directory
+    # The check reads every file, because a stat of the top directory is not
+    # enough: `sudo git clone` into a pre-made srv-owned directory
     # leaves the directory right and everything inside it root-owned, and the
     # next unattended fetch is the thing that finds out.
     check "every file under $REPO_DIR is owned by $DEPLOY_USER" \
@@ -536,9 +538,9 @@ if [ "$PHASE" = provisioned ]; then
         check "yarn --version matches the repo's packageManager" \
             'want=$(sed -n "s/.*\"packageManager\"[[:space:]]*:[[:space:]]*\"yarn@\([^\"+]*\).*/\1/p" "$REPO_DIR/package.json" | head -1); [ -n "$want" ] && [ "$(cd "$REPO_DIR" && yarn --version)" = "$want" ]'
     else
-        # Reachable only if the checkout section above already failed, so this
-        # skip is a consequence rather than an independent gap. Since #278 a
-        # provisioned machine has the repository, and this check does run.
+        # Reachable only if the checkout section above failed, so this skip is
+        # a consequence and not an independent gap. A provisioned machine has
+        # the repository, so on a healthy machine this check runs.
         sk "yarn --version matches the repo's packageManager" \
             "no package.json at $REPO_DIR - see the checkout section above"
     fi
@@ -562,7 +564,7 @@ else
     sk "yarn --version matches the repo's packageManager"  "setup-developer-environment.sh enables it"
 fi
 
-# REQ-DEPLOY-002 / -003 / -005 / -006 - the deploy poller, #279.
+# REQ-DEPLOY-002 / -003 / -005 / -006 - the deploy poller.
 #
 # The timer and the sudoers drop-in are what a machine HAS; the two properties that
 # matter most are things deploy.sh DOES, and both are asserted as behaviour or
@@ -575,27 +577,26 @@ RELEASE_POLL_SCRIPT_REL="utils/debbie/2026-09-17/services/release-poll.sh"
 RELEASE_POLL_SCRIPT="$REPO_DIR/$RELEASE_POLL_SCRIPT_REL"
 
 #------------------------------------------------------------------------------
-# One rule for every check that reads deploy.sh - #311.
+# One rule for every check that reads deploy.sh.
 #
-# deploy.sh lives in the checkout, and the checkout is on `release`. A machine
-# provisioned before the generation shipped is on a `release` that does not
-# contain this directory at all, so the file CANNOT be there. setup-server-environment.sh
-# says so in as many words and leaves the timer enabled deliberately.
+# deploy.sh lives in the checkout, and the checkout is on `release`. A
+# `release` commit older than this generation does not contain this directory,
+# so on such a machine the file CANNOT be there. setup-server-environment.sh
+# says so and leaves the timer enabled on purpose.
 #
-# Until #311 this section held two rules for that one state: the three checks
-# that READ deploy.sh skipped with the reason printed, while the check for its
-# PRESENCE failed hard. Both cannot be right about the same machine, and the failing
-# one made every `--full` run red for a reason having nothing to do with the
-# branch under test - REQ-EMU-003's exit code stopped being a gate.
+# One state needs one rule. If the checks that READ deploy.sh skip in this
+# state while the check for its PRESENCE fails, the two disagree about the same
+# machine. The failure makes every `--full` run red for a reason unrelated to
+# the branch under test, and REQ-EMU-003's exit code stops being a gate.
 #
-# A BARE SKIP IS NOT THE FIX EITHER, and this is the whole point of the ticket.
-# Skipping whenever deploy.sh is missing would make a green run unable to tell
-# "this machine legitimately predates the poller" from "the poller should be here
-# and is gone", and the second is a genuine fault - a broken clone, a lost mode
-# bit, a file deleted on the machine. That is exactly the shape #300 removed from
-# the firewall section: a check reporting green over a real hole.
+# A BARE SKIP IS NOT THE FIX EITHER. A skip whenever deploy.sh is missing makes
+# a green run unable to tell "this machine legitimately predates the poller"
+# from "the poller should be here and is gone". The second is a real fault: a
+# broken clone, a lost mode bit, a file deleted on the machine. The firewall
+# section forbids the same shape (REQ-SERVER-002): a check that reports green
+# over a real hole.
 #
-# So the skip is conditional on the CAUSE, and the cause is answerable locally:
+# So the skip depends on the CAUSE, and the machine can answer that locally:
 #
 #   the checked-out commit does not track deploy.sh  -> the machine cannot have it
 #                                                       -> SKIP, with the reason
@@ -605,10 +606,9 @@ RELEASE_POLL_SCRIPT="$REPO_DIR/$RELEASE_POLL_SCRIPT_REL"
 # Asked with `git cat-file -e HEAD:<path>` rather than with `ls-tree` of the
 # generation DIRECTORY, and against HEAD rather than against origin/release:
 #
-#   - the exact path, not the directory, because the directory landed before
-#     deploy.sh did (#279 added the script). A `release` in between has the
-#     directory and no script, and on such a machine the file still cannot exist.
-#     The directory test would call that a fault; it is not one.
+#   - the exact path, not the directory, because some commits have the
+#     directory and no deploy.sh. On such a machine the file cannot exist.
+#     The directory test calls that a fault, and it is not one.
 #   - HEAD, because HEAD is what produced this working tree. origin/release is
 #     a remote-tracking ref that may be stale (never fetched) or ahead of the
 #     checkout, and either way it answers a question about a commit that is not
@@ -630,8 +630,8 @@ fi
 # so all of them agree about a machine rather than coinciding by accident.
 deploy_script_expected() { [ "$deploy_expected" = yes ]; }
 
-# Same rule for release-poll.sh (#307), asked separately: a `release` between
-# #279 and #307 tracks deploy.sh and not the poller.
+# Same rule for release-poll.sh, asked separately: some `release` commits
+# track deploy.sh and not the poller.
 release_poll_expected=no
 release_poll_skip_reason=
 if [ ! -d "$REPO_DIR/.git" ]; then
@@ -639,7 +639,7 @@ if [ ! -d "$REPO_DIR/.git" ]; then
 elif git -C "$REPO_DIR" cat-file -e "HEAD:$RELEASE_POLL_SCRIPT_REL" 2> /dev/null; then
     release_poll_expected=yes
 else
-    release_poll_skip_reason="the commit on disk ($(git -C "$REPO_DIR" rev-parse --short HEAD 2> /dev/null || echo unreadable)) does not track $RELEASE_POLL_SCRIPT_REL - '$RELEASE_BRANCH' predates #307"
+    release_poll_skip_reason="the commit on disk ($(git -C "$REPO_DIR" rev-parse --short HEAD 2> /dev/null || echo unreadable)) does not track $RELEASE_POLL_SCRIPT_REL - '$RELEASE_BRANCH' predates the release poller"
 fi
 
 # The BEHAVIOUR of the two scripts is tested against whichever copy is the one
@@ -686,9 +686,9 @@ scratch_release() {
 if [ "$PHASE" = provisioned ]; then
     UD=/usr/local/lib/systemd/system
     check "custom-release-poll.timer enabled"   'systemctl is-enabled custom-release-poll.timer'
-    # Active, not merely enabled. setup-server-environment.sh deliberately does not start it
-    # - that would deploy in the middle of provisioning - so this is a claim
-    # about the reboot the harness performs.
+    # Active as well as enabled. setup-server-environment.sh does not start
+    # the timer, because a start would deploy in the middle of provisioning.
+    # So this is a claim about the reboot the harness performs.
     check "custom-release-poll.timer active"    'systemctl is-active custom-release-poll.timer'
     # Two minutes is the upper bound on deploy latency that REQ-DEPLOY-002
     # trades for needing no inbound port. Read from `systemctl cat`, so it is
@@ -697,7 +697,7 @@ if [ "$PHASE" = provisioned ]; then
         'systemctl cat custom-release-poll.timer | grep -qx "OnUnitActiveSec=2min"'
     check "custom-release-poll.service is timer-owned (static)" \
         '[ "$(systemctl is-enabled custom-release-poll.service 2>&1)" = static ]'
-    # #307: one clock. The deploy has no [Install] and no timer of its own, so
+    # REQ-DEPLOY-002: one clock. The deploy has no [Install] and no timer of its own, so
     # the poller is the only thing that can start it and a deploy can never
     # race a checkout.
     check "custom-deploy.service is not on a timer" \
@@ -713,13 +713,14 @@ if [ "$PHASE" = provisioned ]; then
     check "custom-host-tools.service runs as $DEPLOY_USER, with no role condition" \
         "[ \"\$(systemctl show -p User --value custom-host-tools.service)\" = '$DEPLOY_USER' ] \
          && ! systemctl cat custom-host-tools.service | grep -q '/etc/seanorepo/roles'"
-    # #380. The poller's behaviour is proved against a scratch repo below, never
-    # against this checkout. A single-branch or shallow clone passed all of that
-    # and still could not see `release`, so nothing ever deployed. No network.
+    # The poller's behaviour is proved below against a scratch repo, never
+    # against this checkout. A single-branch or shallow clone passes all of
+    # those checks but cannot see `release`, so nothing deploys. This check
+    # needs no network.
     check "the checkout fetches every branch, with full history" \
         "git -C '$REPO_DIR' config --get-all remote.origin.fetch | grep -qxF '+refs/heads/*:refs/remotes/origin/*' \
          && [ \"\$(git -C '$REPO_DIR' rev-parse --is-shallow-repository)\" = false ]"
-    # #329: roles. Unset means off, so the files present must be EXACTLY the
+    # REQ-SERVER-014: roles. Unset means off, so the files present must be EXACTLY the
     # roles this machine was provisioned with - EXPECT_ROLES, which the VM harness
     # sets (default: none) and provision.sh derives from the machine env file.
     check "the deploy runs only on a machine with the webserver role" \
@@ -730,7 +731,7 @@ if [ "$PHASE" = provisioned ]; then
         '[ "$(ls /etc/seanorepo/roles 2>/dev/null | sort | tr "\n" " " | sed "s/ $//")" = "$(printf "%s" "${EXPECT_ROLES:-}" | tr " " "\n" | sort | tr "\n" " " | sed "s/ $//")" ]'
     check "the #307 serving flag is gone" '[ ! -e /etc/seanorepo/serving ]'
     if [ ! -e /etc/seanorepo/roles/webserver ]; then
-        # The whole point of #329: with no role, a triggered deploy is
+        # REQ-SERVER-014: with no role, a triggered deploy is
         # skipped by its condition and runs nothing.
         check "without the webserver role a triggered deploy runs nothing" \
             'sudo -n systemctl start custom-deploy.service > /dev/null 2>&1;
@@ -783,13 +784,13 @@ if [ "$PHASE" = provisioned ]; then
         #
         # The `[ -r ]` is load-bearing, not belt-and-braces. This check is an
         # inverted grep, and grep on a file that does not exist exits 2 - which `!`
-        # turns into a pass. Under the old guard that was unreachable; under the
-        # one rule it is exactly the case that must go red, so the readability of
-        # the file is asserted as part of the claim rather than assumed by a guard.
+        # turns into a pass. Under the one rule above, that is exactly the case
+        # that must go red. So the check asserts that the file is readable, and
+        # does not assume it.
         check "no git clean anywhere in the deploy path" \
             '[ -r "$DEPLOY_SCRIPT" ] \
              && ! grep -qE "^[^#]*\bgit[[:space:]]+clean\b" "$DEPLOY_SCRIPT"'
-        # AC 6 asks for the comment as well as the absence, because an absence
+        # REQ-DEPLOY-006 asks for the comment as well as the absence, because an absence
         # with no explanation is what gets tidied away. No `[ -r ]` needed: this
         # grep is not inverted, so a missing file fails it already.
         check "deploy.sh says why there is no git clean" \
@@ -811,11 +812,11 @@ if [ "$PHASE" = provisioned ]; then
         sk "no git clean in the release poller"     "$release_poll_skip_reason"
     fi
 
-    # Behaviour, #307 - against a scratch origin and a scratch machine, with every
+    # Behaviour, against a scratch origin and a scratch machine, with every
     # service command replaced by a shim that only records it. Nothing here can
     # touch this host's real checkout, containers or units.
     if [ -z "$behaviour_skip_reason" ]; then
-        # The whole point of the split: a machine that does not serve keeps
+        # The purpose of the split: a machine that does not serve keeps
         # tracking `release`, and tracking it changes nothing that runs.
         check "the release poller moves the checkout and touches no service" \
             't=$(mktemp -d); want=$(scratch_release "$t");
@@ -834,7 +835,7 @@ if [ "$PHASE" = provisioned ]; then
         # REQ-DEPLOY-002/004: the deploy is `yarn prod:docker`, it runs when the
         # checkout differs from what was deployed, and not again until the
         # checkout moves or the host reboots.
-        # #329: the address comes from the roles. The yarn shim records
+        # REQ-SERVER-002: the address comes from the roles. The yarn shim records
         # PUBLISH_ADDR, and ROLES_DIR points at a scratch directory.
         check "the deploy publishes on loopback with the tunnel and on the LAN without" \
             't=$(mktemp -d); scratch_release "$t" > /dev/null; git -C "$t/machine" pull -q;
@@ -903,7 +904,7 @@ fi
 #
 # What this does NOT prove, stated plainly: the machine also carries
 # /etc/sudoers.d/90-$DEPLOY_USER from the installer, granting NOPASSWD:ALL
-# (see write_overrides in scripts/lib.sh), so $DEPLOY_USER has general root today
+# (see write_overrides in scripts/lib.sh), so $DEPLOY_USER has general root
 # regardless of what this file says. `sudo -l` would therefore pass no matter
 # how broad this drop-in became, which is exactly why these checks read the
 # file itself. The narrow grant is what lets REQ-SERVER-008 tighten the blanket
@@ -921,13 +922,11 @@ if [ "$PHASE" = provisioned ]; then
     check "sudoers drop-in is owned by root:root" \
         "[ \"\$(sudo -n stat -c '%U:%G' '$SUDOERS_DEST' 2>/dev/null)\" = root:root ]"
     check "sudoers drop-in parses" "sudo -n visudo -cf '$SUDOERS_DEST'"
-    # Exactly one rule. Comments and blank lines do not grant anything; a
-    # second rule does, and would be invisible to a check that only looked at
-    # the first line.
-    # Two rules since #359: the tunnel and tcp-getter. The number is not the
-    # boundary - "every rule is a restart of one named unit" is, and the next
-    # check enforces that on each line. Pinning the count stops a third rule
-    # arriving unnoticed.
+    # Exactly two rules: the tunnel and tcp-getter. Comments and blank lines
+    # grant nothing. An extra rule grants something, and a check that read only
+    # the first line would miss it. The count is not the boundary. The boundary
+    # is "every rule restarts one named unit", and the next check enforces that
+    # on each line. The fixed count stops a third rule from arriving unnoticed.
     check "sudoers drop-in has exactly two rules" \
         "[ \"\$(sudo -n grep -cvE '^[[:space:]]*(#.*)?\$' '$SUDOERS_DEST')\" -eq 2 ]"
     # The rule, whole, against a pattern that admits exactly one systemctl
@@ -948,19 +947,19 @@ if [ "$PHASE" = provisioned ]; then
     check "sudoers drop-in does not grant ALL as a command" \
         "! sudo -n grep -qE 'NOPASSWD:[[:space:]]*ALL' '$SUDOERS_DEST'"
 
-    # The divergence this is really for. deploy.sh names the unit it restarts
-    # and the drop-in names the unit sudo permits; if #280 renames the tunnel
-    # and only one of the two moves, the deploy fails at the exact moment it
-    # matters - an ingress change - and passes every other day of the year.
+    # The divergence this check is for. deploy.sh names the unit it restarts,
+    # and the drop-in names the unit sudo permits. If a rename of the tunnel
+    # unit changes only one of the two, the deploy fails at the exact moment it
+    # matters (an ingress change) and passes every other day of the year.
     #
     # The unit list comes from the DEPLOYED deploy.sh, not from a list written
-    # here. The checkout tracks `release` (REQ-DEPLOY-001) while the sudoers
+    # here. The checkout tracks `release` (REQ-DEPLOY-001), and the sudoers
     # rules come from the provisioner, so the two can legitimately be a release
-    # apart: a deploy.sh that restarts only the tunnel needs only the tunnel
-    # permitted. Hardcoding the units made this check fail on any machine whose
-    # checkout predated the provisioner, which is every machine mid-rollout.
+    # apart. A deploy.sh that restarts only the tunnel needs only the tunnel
+    # permitted. A hardcoded unit list fails on any machine whose checkout is
+    # older than the provisioner, and during a rollout that is every machine.
     #
-    # Gated on the same rule as the deploy-poller section - #311 - not on the
+    # Gated on the same rule as the deploy-poller section, and not on the
     # file being there. `sed` on an absent file yields nothing, so `want` is
     # empty and the check goes red, which is right when the commit on disk says
     # the file should exist and wrong when it says it cannot.
@@ -987,7 +986,7 @@ else
     sk "every unit deploy.sh restarts is a unit sudo permits" "setup-server-environment.sh installs it"
 fi
 
-# REQ-NETWORK-001 / REQ-NETWORK-002 - the tunnel, #280.
+# REQ-NETWORK-001 / REQ-NETWORK-002 - the tunnel.
 #
 # What a VM run can and cannot prove, stated once here rather than implied by
 # each check: there are no Cloudflare credentials in any VM and there never
@@ -1011,18 +1010,18 @@ if [ "$PHASE" = provisioned ]; then
     check "exactly one cloudflared apt source" \
         '[ "$(grep -rhsE "^deb .*pkg\.cloudflare\.com" /etc/apt/sources.list /etc/apt/sources.list.d/ | wc -l)" -eq 1 ]'
 
-    # #135, as something that can fail. The old arrangement curled the binary
-    # into /usr/local/bin, where dpkg cannot see it and no update path reaches
-    # it. Asking dpkg who owns the binary is the difference between "a
-    # cloudflared exists" and "cloudflared is a package".
+    # A binary fetched with curl into /usr/local/bin is invisible to dpkg, and
+    # no update path reaches it. Asking dpkg who owns the binary is the
+    # difference between "a cloudflared exists" and "cloudflared is a package".
     check "cloudflared is dpkg-owned, not a manual binary drop" \
         'dpkg -S /usr/bin/cloudflared 2>/dev/null | grep -q "^cloudflared:"'
-    # The subtle half of #135, and the reason this is not simply "nothing in
+    # The subtle half, and the reason this check is not simply "nothing in
     # /usr/local/bin": the package's own postinst CREATES
     # /usr/local/bin/cloudflared as a symlink to /usr/bin/cloudflared, so the
-    # path being occupied is normal. A REGULAR FILE there is the #135 shape -
-    # a hand-installed binary shadowing the packaged one, since /usr/local/bin
-    # precedes /usr/bin on PATH. Absent is fine too; a non-symlink is not.
+    # path being occupied is normal. A REGULAR FILE there is the fault: a
+    # hand-installed binary that shadows the packaged one, because
+    # /usr/local/bin precedes /usr/bin on PATH. An absent path passes. A path
+    # that is not a symlink fails.
     check "/usr/local/bin/cloudflared is the package symlink, not a binary" \
         '[ ! -e /usr/local/bin/cloudflared ] \
          || { [ -L /usr/local/bin/cloudflared ] \
@@ -1030,8 +1029,7 @@ if [ "$PHASE" = provisioned ]; then
 
     check "$CLOUDFLARED_UNIT installed in /usr/local/lib/systemd/system" \
         "[ -f /usr/local/lib/systemd/system/$CLOUDFLARED_UNIT ]"
-    # REQ-NETWORK-002, and the AC that says "config path points into the
-    # checkout". Read from `systemctl cat`, so it is the EFFECTIVE unit rather
+    # REQ-NETWORK-002: the config path points into the checkout. Read from `systemctl cat`, so it is the EFFECTIVE unit rather
     # than the file - a drop-in overriding ExecStart would show up here.
     check "the tunnel reads config.yml from the checkout" \
         "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -qF -- '--config $CLOUDFLARED_CONFIG'"
@@ -1041,23 +1039,23 @@ if [ "$PHASE" = provisioned ]; then
     # credentials.
     check "the tunnel runs in the checkout's cloudflared directory" \
         "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -qx 'WorkingDirectory=$CLOUDFLARED_DIR'"
-    # #136. Self-update is what failed silently for sixteen months; the package
-    # is now upgraded by REQ-SERVER-006 instead.
+    # cloudflared's self-update once failed silently for sixteen months.
+    # REQ-SERVER-006 upgrades the package instead.
     check "the tunnel does not self-update" \
         "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -q -- '--no-autoupdate'"
 
     # Two daemons for one tunnel. `cloudflared service install` writes a
-    # cloudflared.service and is the documented way to set this up, so it is
-    # what a future repair session would reach for; cloudflared-custom.service
-    # is the previous generation's unit. Either being enabled alongside ours
-    # means requests are dealt between two processes and restarting "the
-    # tunnel" fixes half of them.
+    # cloudflared.service and is the documented way to set this up, so a
+    # repair session might use it. cloudflared-custom.service is the unit name
+    # from an archived generation. If either is enabled with ours, the two
+    # processes share the requests, and a restart of "the tunnel" fixes half
+    # of them.
     check "no other cloudflared unit is enabled" \
         'for u in cloudflared.service cloudflared-custom.service; do
              if systemctl is-enabled "$u" 2>/dev/null | grep -qx enabled; then exit 1; fi
          done; true'
 
-    # AC 3 - the path is defined and private. The credentials are a bearer
+    # The path is defined and private. The credentials are a bearer
     # token for every hostname this machine serves, so group or world read is a
     # finding, not a detail.
     if [ -d "$CLOUDFLARED_DIR" ]; then
@@ -1072,7 +1070,7 @@ if [ "$PHASE" = provisioned ]; then
         sk "credentials directory belongs to $DEPLOY_USER" "no $CLOUDFLARED_DIR in the checkout"
     fi
 
-    # AC 4, and the branch that matters is the SECOND one - it is the state
+    # The branch that matters is the SECOND one. It is the state
     # every VM run is in, and the state a freshly provisioned machine is in.
     #
     # Neither branch is a skip. "No credentials" is not a reason to assert
@@ -1083,9 +1081,10 @@ if [ "$PHASE" = provisioned ]; then
     else
         check "the tunnel is NOT enabled while credentials are absent" \
             '[ "$(systemctl is-enabled "$CLOUDFLARED_UNIT" 2>&1)" != enabled ]'
-        # The behavioural half, and the whole point of AC 4: a unit that
-        # restarts forever against missing credentials floods the journal
-        # (capped since #287, but still) and buries the real problem.
+        # The behavioural half, and the main point: a unit that restarts
+        # forever against missing credentials floods the journal and buries the
+        # real problem. REQ-SERVER-007 caps the journal, and the flood buries
+        # the problem all the same.
         #
         # Asking it to start is safe precisely because the credentials are
         # absent - there is no tunnel to disturb. A unit whose conditions are
@@ -1104,7 +1103,7 @@ if [ "$PHASE" = provisioned ]; then
     # deploy.sh and the sudoers drop-in name the same unit; this proves the
     # unit that actually exists is that same one. Without it all three could
     # agree on a name that nothing installed.
-    # Same rule as the other two sections - #311.
+    # Same rule as the other two sections.
     if deploy_script_expected; then
         check "the unit deploy.sh restarts is the unit that is installed" \
             'want=$(sed -n "s/^CLOUDFLARED_UNIT=\"\([^\"]*\)\".*/\1/p" "$DEPLOY_SCRIPT" | head -1);
@@ -1119,8 +1118,8 @@ else
     sk "cloudflared is dpkg-owned, not a manual binary drop" "setup-server-environment.sh installs it"
     sk "/usr/local/bin/cloudflared is the package symlink, not a binary" "setup-server-environment.sh installs it"
     sk "$CLOUDFLARED_UNIT installed in /usr/local/lib/systemd/system" "setup-server-environment.sh writes it"
-    sk "the tunnel reads config.yml from the checkout" "setup-developer-environment.sh writes the unit"
-    sk "the tunnel runs in the checkout's cloudflared directory" "setup-developer-environment.sh writes the unit"
+    sk "the tunnel reads config.yml from the checkout" "setup-server-environment.sh writes the unit"
+    sk "the tunnel runs in the checkout's cloudflared directory" "setup-server-environment.sh writes the unit"
     sk "the tunnel does not self-update"        "setup-server-environment.sh writes the unit"
     sk "no other cloudflared unit is enabled"   "setup-server-environment.sh disables them"
     sk "credentials directory exists"           "setup-server-environment.sh creates it"
@@ -1134,17 +1133,8 @@ else
     sk "the unit deploy.sh restarts is the unit that is installed" "setup-server-environment.sh writes the unit"
 fi
 
-# REQ-NETWORK-005 - remote SSH through ngrok, #317.
-#
-# Like the tunnel, no VM has an authtoken and none ever will, so nothing here
-# proves the agent connects or that a login from off the LAN works - the first
-# proof of that is the machine itself. What it proves: the binary is a package,
-# one agent at most, runs unprivileged, never gives up once it has a token,
-# and without one refuses rather than loops. Plus the sshd half, which a VM
-# CAN prove: loopback, where every ngrok login comes from, is exempt from
-# sshd's per-source penalties.
 echo
-echo "== tcp-getter (#359) =="
+echo "== tcp-getter =="
 TCP_GETTER_UNIT=custom-tcp-getter.service
 TCP_GETTER_DIR="/home/$DEPLOY_USER/projects/seanorepo/apps/tcp-getter"
 if [ "$PHASE" = provisioned ]; then
@@ -1152,8 +1142,8 @@ if [ "$PHASE" = provisioned ]; then
         "[ -f /usr/local/lib/systemd/system/$TCP_GETTER_UNIT ]"
     check "tcp-getter runs as $DEPLOY_USER" \
         "[ \"\$(systemctl show -p User --value $TCP_GETTER_UNIT)\" = '$DEPLOY_USER' ]"
-    # Node, not bun. Nothing on this machine provisions bun, and a unit that
-    # named it would be depending on a hand-dropped binary - #135, #359.
+    # The unit runs node. Nothing on this machine provisions bun, so a unit
+    # that named bun would depend on a hand-dropped binary.
     check "tcp-getter runs node, not bun" \
         "systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q '/usr/bin/node' \
          && ! systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q bun"
@@ -1177,6 +1167,15 @@ if [ "$PHASE" = provisioned ]; then
     fi
 fi
 
+# REQ-NETWORK-005 - remote SSH through ngrok.
+#
+# Like the tunnel, no VM has an authtoken and none ever will, so nothing here
+# proves the agent connects or that a login from off the LAN works. Only the
+# machine itself can prove that. What this section proves: the binary is a
+# package, there is one agent at most, it runs unprivileged, it never gives up
+# once it has a token, and without one it refuses rather than loops. Plus the
+# sshd half, which a VM CAN prove: loopback, where every ngrok login comes
+# from, is exempt from sshd's per-source penalties.
 echo "== ngrok ssh tunnel (REQ-NETWORK-005) =="
 NGROK_UNIT=custom-ngrok.service
 NGROK_CONFIG="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)/.config/ngrok/ngrok.yml"
@@ -1186,7 +1185,8 @@ if [ "$PHASE" = provisioned ]; then
     check "exactly one ngrok apt source" \
         '[ "$(grep -rhs "ngrok-agent.s3.amazonaws.com" /etc/apt/sources.list /etc/apt/sources.list.d/ | grep -vc "^#")" = 1 ]'
     # The package itself installs /usr/local/bin/ngrok, so the path proves
-    # nothing; who owns it does. A hand-dropped binary there is #135.
+    # nothing. Its dpkg owner proves it. A hand-dropped binary there is the
+    # fault.
     check "ngrok is dpkg-owned, not a manual binary drop" \
         'dpkg -S /usr/local/bin/ngrok 2>/dev/null | grep -q "^ngrok:"'
     check "$NGROK_UNIT installed in /usr/local/lib/systemd/system" \
@@ -1215,8 +1215,9 @@ if [ "$PHASE" = provisioned ]; then
              [ "$(systemctl is-active "$NGROK_UNIT" 2>&1)" = inactive ] \
              && [ "$(systemctl is-failed "$NGROK_UNIT" 2>&1)" != failed ]'
     fi
-    # Asked of sshd, not of the drop-in (#313's lesson). Skipped, not passed,
-    # where sshd predates per-source penalties: there is nothing to exempt.
+    # Asked of sshd, and not of the drop-in (the logind_handler rule). Skipped,
+    # and not passed, where sshd predates per-source penalties: there is
+    # nothing to exempt.
     # `case`, not `| grep -q`, for the pipefail/SIGPIPE reason in setup-server-environment.sh.
     case "$(sudo -n sshd -T 2> /dev/null || true)" in
         *persourcepenaltyexemptlist*) sshd_has_penalties=yes ;;
@@ -1244,7 +1245,7 @@ else
     sk "sshd exempts loopback from per-source penalties" "setup-server-environment.sh writes the drop-in"
 fi
 
-# REQ-SERVER-010 - the deploy user's shell, #290.
+# REQ-SERVER-010 - the deploy user's shell.
 echo
 echo "== interactive shell (REQ-SERVER-010) =="
 if [ "$PHASE" = provisioned ]; then
@@ -1273,11 +1274,8 @@ else
     sk "zsh starts cleanly with that config" "setup-developer-environment.sh writes it"
 fi
 
-# REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
-# passed in a VM: QEMU has no 802.11 device the installer would drive, so a
-# green VM run says nothing at all about this and must not pretend otherwise.
 echo
-echo "== authorized_keys (#369) =="
+echo "== authorized_keys (REQ-SERVER-008) =="
 AUTH_KEYS="/home/$DEPLOY_USER/.ssh/authorized_keys"
 if [ "$PHASE" = provisioned ]; then
     # With PasswordAuthentication no, this file is the only gate on the machine.
@@ -1310,13 +1308,14 @@ if [ "$PHASE" = provisioned ]; then
          && ! systemctl show -p ExecStart --value $NF_SERVICE | grep -q projects/seanorepo"
     check "$NF_SERVICE runs as root" \
         "[ \"\$(systemctl show -p User --value $NF_SERVICE)\" = root ]"
-    # The old generation's units would fight this one over route metrics.
+    # The units of the archived generations would fight this one over route
+    # metrics.
     check "no old net-failover-custom unit is enabled" \
         'for u in net-failover-custom.timer net-failover-custom.service; do
              if systemctl is-enabled "$u" 2>/dev/null | grep -qx enabled; then exit 1; fi
          done; true'
     # NIC-agnostic by construction: an interface name in here is a machine this
-    # does not protect. #281 replaced an env file that named debbie's two.
+    # does not protect.
     check "the watchdog names no interface and no gateway" \
         "! grep -vE '^[[:space:]]*#' '$NF_SCRIPT' | grep -qE '(enp|eth|wlp|wlan)[0-9]|[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+'"
     # It must not depend on NetworkManager: this generation has none, and a
@@ -1327,9 +1326,9 @@ if [ "$PHASE" = provisioned ]; then
         'bad=0; for p in /sys/class/net/*; do [ -e "$p/device" ] || continue;
              i=$(basename "$p");
              ip -4 -o addr show "$i" | grep -q inet || bad=1; done; [ "$bad" = 0 ]'
-    # Every physical interface, not "more than one". A machine with one link
-    # has exactly one default route and that is correct - the first version of
-    # this check demanded two and failed on trixie2, which has only wifi.
+    # Every physical interface, and not "more than one". A machine with one
+    # link has exactly one default route, and that is correct. A check that
+    # demands two fails on a machine that has only wifi.
     # What it proves either way is that the per-interface addressing above
     # produced a route for every link the watchdog could promote.
     check "every physical interface holds a default route" \
@@ -1340,9 +1339,9 @@ if [ "$PHASE" = provisioned ]; then
     # --- the matrix, cases that need no QEMU monitor -----------------------
     # Case 1 and 8: a healthy machine is a no-op, and a second run changes
     # nothing. Silence matters: this runs every minute.
-    # The start must SUCCEED, not merely be attempted. An earlier version of
-    # this passed because the unit could not find its script: nothing ran, so
-    # nothing changed, and "changes nothing" was satisfied by a broken unit.
+    # The start must SUCCEED. An attempt is not enough. If the unit cannot find
+    # its script, nothing runs and nothing changes, so a broken unit satisfies
+    # "changes nothing".
     check "case 1+8: a healthy run succeeds, changes nothing and logs nothing" \
         'before=$(ip -4 route show default);
          sudo -n systemctl start '"$NF_SERVICE"' || exit 1;
@@ -1362,7 +1361,7 @@ if [ "$PHASE" = provisioned ]; then
     if [ "${nf_links:-0}" -ge 2 ]; then
         # Case 4: carrier up, gateway unreachable. The 2026-08-14 failure.
         #
-        # Cut the ACTIVE link only - #381. A blackhole in the main table cuts
+        # Cut the ACTIVE link only. A blackhole in the main table cuts
         # the gateway from every link, so on a machine whose links share one
         # gateway (asus) nothing could be promoted. The blackhole goes in a
         # spare table, reached by the active link's source address: the
@@ -1409,10 +1408,14 @@ else
     sk "case 7: the route does not fail back on its own" "setup-server-environment.sh installs it"
 fi
 
+# REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
+# passed in a VM: QEMU has no 802.11 device the installer would drive, so a
+# green VM run says nothing at all about this and must not pretend otherwise.
 echo "== network =="
 if [ -n "$(ls -d /sys/class/net/*/wireless 2> /dev/null)" ]; then
     # netcfg persists wifi as an ifupdown stanza plus wpasupplicant in the
-    # target. Either that, or a NetworkManager profile once REQ-NETWORK-* lands.
+    # target. The check also accepts a NetworkManager profile, for the setup
+    # that REQ-NETWORK-004 proposes.
     check "wifi config persisted" \
         'sudo -n grep -rqs "wpa-ssid\|wpa-psk" /etc/network/interfaces /etc/network/interfaces.d/ \
          || sudo -n grep -rqs "^ssid=\|wifi.ssid" /etc/NetworkManager/system-connections/'
@@ -1438,9 +1441,9 @@ echo "== systemd unit layout =="
 # was put there by us, and that is precisely the violation. Verified on the
 # real machine: `find /etc/systemd/system -maxdepth 1 -type f` returns nothing.
 #
-# An earlier draft filtered by modification time instead. That would have
-# rotted the moment the hardcoded date passed, and would have missed a unit
-# restored from a backup with an old mtime.
+# A filter by modification time does not work for this check. It fails when
+# its fixed date passes, and it misses a unit restored from a backup with an
+# old mtime.
 check "no repo units in /etc/systemd/system" \
     '! find /etc/systemd/system -maxdepth 1 -type f \( -name "*.service" -o -name "*.timer" -o -name "*.socket" \) | grep -q .'
 # REQ-SERVER-013. Vacuously true until the first unit is installed, which is
@@ -1457,12 +1460,11 @@ check "no shadowed package units" \
 # ufw is installed and enabled by setup-server-environment.sh, on purpose: enabling it
 # during the install would close 22 before anything could provision the machine.
 #
-# READING `ufw status` IS NOT ENOUGH, and until #300 that is all this section
-# did. Docker writes its own chains into `nat` and `filter`, and a container
-# published with `-p 4000:4000` gets a DNAT rule consulted BEFORE ufw's - so
-# the port answers from the LAN and `ufw status` never mentions it. The old
-# "no other ports open" check therefore did not merely miss the hole: it
-# reported green over it, because the tool it asked was not the tool that knew.
+# READING `ufw status` IS NOT ENOUGH. Docker writes its own chains into `nat`
+# and `filter`, and a container published with `-p 4000:4000` gets a DNAT rule
+# that the kernel consults BEFORE ufw's. So the port answers from the LAN, and
+# `ufw status` never mentions it. A check that reads only ufw reports green
+# over that hole, because ufw is not the tool that knows.
 #
 # The checks below are ordered from what the machine is CONFIGURED to do to what it
 # is OBSERVED doing, and the later ones do not trust the earlier ones. The
@@ -1482,7 +1484,7 @@ echo "== firewall (REQ-SERVER-002) =="
 # assertion switched off. Every port Docker publishes for this repository is
 # TCP, and the nat-chain check below covers a UDP publish regardless.
 # A webserver WITHOUT the tunnel role publishes its apps on the LAN on
-# purpose (#329) - that is the only reason to run one - so on such a machine the
+# purpose (REQ-SERVER-002) - that is the only reason to run one - so on such a machine the
 # app range 4000-4999 is expected off-loopback. Everywhere else, including the
 # tunnel machine, nothing in it may be.
 if [ -e /etc/seanorepo/roles/webserver ] && [ ! -e /etc/seanorepo/roles/tunnel ]; then
@@ -1511,7 +1513,8 @@ lan_tcp_listeners() {
 # loopback destination. That is exactly the shape of a port published to the
 # LAN: with the daemon default in place the rule carries `-d 127.0.0.1/32`,
 # and without it the rule has no `-d` at all and matches every address the machine
-# holds. The chain not existing is vacuously fine - nothing has published yet.
+# holds. The chain not existing is vacuously fine: nothing has published a
+# port.
 #
 # This is the half that survives `"userland-proxy": false`, under which a
 # published port has no listening socket for the check above to see and the
@@ -1532,9 +1535,9 @@ if [ "$PHASE" = provisioned ]; then
     # ufw prints a v4 rule and a matching "(v6)" rule for every allow, so a
     # naive line count sees eight where four were asked for. Count v4 only.
     #
-    # Renamed from "no other ports open", which is a claim this cannot make.
-    # It says what ufw was asked for, and nothing about what Docker does behind
-    # it - that is the next four checks.
+    # The check name makes no claim about open ports, because this check
+    # cannot prove one. It says what ufw was asked for, and nothing about what
+    # Docker does behind it. The next four checks cover Docker.
     check "ufw allows no port beyond the four" \
         '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
 
@@ -1565,14 +1568,14 @@ if [ "$PHASE" = provisioned ]; then
         echo "$lan_listeners" | sed 's/^/    /'
     fi
     # The `grep :22` is not decoration. An `ss` that is missing, or that fails,
-    # yields nothing, and "nothing" is indistinguishable from "no offenders" -
-    # which is the precise failure this whole ticket is about: a check that
-    # reports green because it asked something that could not answer. sshd
+    # yields nothing, and "nothing" is indistinguishable from "no offenders".
+    # That is the failure REQ-SERVER-002 guards against: a check that reports
+    # green because it asked something that could not answer. sshd
     # always listens on 22, so an empty result means the tool is broken rather
     # than the machine is clean, and this goes red instead.
     # Matched on the LOCAL ADDRESS column rather than on the whole line: `ss`
     # prints the peer column last, so every line ends "0.0.0.0:*" and anchoring
-    # `:22$` against the line never matches. Found by writing it that way first.
+    # `:22$` against the line never matches.
     check "nothing outside the four ports listens on a non-loopback address" \
         'ss -H -ltn 2>/dev/null | awk "\$4 ~ /:22\$/" | grep -q . \
          && [ -z "$(lan_tcp_listeners)" ]'
@@ -1591,7 +1594,7 @@ if [ "$PHASE" = provisioned ]; then
         'sudo -n iptables -t nat -S > /dev/null 2>&1 && [ -z "$(docker_lan_dnat)" ]'
 
     #--------------------------------------------------------------------------
-    # The live probe - #300 AC 4.
+    # The live probe (REQ-SERVER-002).
     #
     # Everything above reads a machine that may simply have nothing published on it,
     # and on a freshly provisioned VM that is exactly the case: no `release`
@@ -1634,13 +1637,13 @@ if [ "$PHASE" = provisioned ]; then
         # apps/*/docker-compose.yml uses, so what is measured here is what the
         # deploy will do.
         #
-        # A REAL LISTENER INSIDE, not `sleep`. Publishing alone binds the host
-        # socket, so `sleep` is enough for the binding check - but it is not
-        # enough for the connection check below, and that difference was found
-        # by running this against a deliberately LAN-published port: with an
-        # empty container the connection is refused by the BACKEND, so the
-        # check passed while the port was wide open. busybox's httpd answers,
-        # which makes a refusal mean the host-side binding and nothing else.
+        # A REAL LISTENER INSIDE, and not `sleep`. Publishing alone binds the
+        # host socket, so `sleep` is enough for the binding check. It is not
+        # enough for the connection check below. A run against a deliberately
+        # LAN-published port showed why: with an empty container the BACKEND
+        # refuses the connection, so the check passed while the port was wide
+        # open. busybox's httpd answers, so a refusal means the host-side
+        # binding and nothing else.
         docker run -d --name "$PROBE_NAME" -p "$PROBE_PORT:$PROBE_PORT" \
             "$PROBE_IMAGE" httpd -f -p "$PROBE_PORT" -h /tmp > /dev/null 2>&1
         sleep 2
@@ -1703,9 +1706,9 @@ else
     sk "docker publishes to loopback by default" "setup-server-environment.sh writes daemon.json"
     sk "docker's userland proxy is not disabled" "setup-server-environment.sh writes daemon.json"
     sk "nothing outside the four ports listens on a non-loopback address" \
-        "setup-developer-environment.sh installs docker and the firewall"
-    sk "no docker DNAT rule reaches a non-loopback address" "setup-server-environment.sh installs docker"
-    sk "a deliberately published port binds loopback and nothing else" "setup-server-environment.sh installs docker"
+        "setup-developer-environment.sh installs docker and setup-server-environment.sh enables the firewall"
+    sk "no docker DNAT rule reaches a non-loopback address" "setup-developer-environment.sh installs docker"
+    sk "a deliberately published port binds loopback and nothing else" "setup-developer-environment.sh installs docker"
     sk "that port refuses a connection to the host's own routable address" "setup-developer-environment.sh installs docker"
 fi
 
