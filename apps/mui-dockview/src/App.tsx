@@ -738,7 +738,9 @@ function Component() {
       }),
     ];
 
-    return () => disposables.forEach((d) => d.dispose());
+    return () => {
+      for (const d of disposables) d.dispose();
+    };
   }, [api, disablePanelDrag, disableGroupDrag, disableOverlay]);
 
   const onReady = (event: DockviewReadyEvent) => {
