@@ -13129,8 +13129,8 @@ __metadata:
     "@commitlint/cli": "npm:^20.5.0"
     husky: "npm:^9.1.7"
   dependenciesMeta:
-    rsbuild-plugin-glsl@1.0.1:
-      built: false
+    puppeteer:
+      built: true
   languageName: unknown
   linkType: soft
 
