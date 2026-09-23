@@ -1,26 +1,26 @@
 {
   "scheme": {
     "name": "Natural Key Feel",
-    "background": "#1d262a",
-    "foreground": "#e7ebed",
-    "cursorColor": "#eaeaea",
-    "selectionBackground": "#4e6a78",
-    "black": "#435b67",
-    "red": "#fc3841",
-    "green": "#5cf19e",
-    "yellow": "#fed032",
-    "blue": "#37b6ff",
-    "purple": "#fc226e",
-    "cyan": "#59ffd1",
-    "white": "#ffffff",
-    "brightBlack": "#a1b0b8",
-    "brightRed": "#fc746d",
-    "brightGreen": "#adf7be",
-    "brightYellow": "#fee16c",
-    "brightBlue": "#70cfff",
-    "brightPurple": "#fc669b",
-    "brightCyan": "#9affe6",
-    "brightWhite": "#ffffff"
+    "background": "#1D262A",
+    "foreground": "#E7EBED",
+    "cursorColor": "#EAEAEA",
+    "selectionBackground": "#4E6A78",
+    "black": "#435B67",
+    "red": "#FC3841",
+    "green": "#5CF19E",
+    "yellow": "#FED032",
+    "blue": "#37B6FF",
+    "purple": "#FC226E",
+    "cyan": "#59FFD1",
+    "white": "#FFFFFF",
+    "brightBlack": "#A1B0B8",
+    "brightRed": "#FC746D",
+    "brightGreen": "#ADF7BE",
+    "brightYellow": "#FEE16C",
+    "brightBlue": "#70CFFF",
+    "brightPurple": "#FC669B",
+    "brightCyan": "#9AFFE6",
+    "brightWhite": "#FFFFFF"
   },
   "defaults": {
     "colorScheme": "Natural Key Feel",
@@ -37,13 +37,23 @@
         "action": "sendInput",
         "input": "\u001b\r"
       },
-      "keys": "shift+enter"
+      "id": "User.sendInput.8F63D3A9"
     },
     {
       "command": {
         "action": "sendInput",
         "input": "\u0017"
       },
+      "id": "User.sendInput.817164EE"
+    }
+  ],
+  "keybindings": [
+    {
+      "id": "User.sendInput.8F63D3A9",
+      "keys": "shift+enter"
+    },
+    {
+      "id": "User.sendInput.817164EE",
       "keys": "ctrl+backspace"
     }
   ]
