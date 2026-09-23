@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Store holds uploaded inputs and produced outputs on disk.
@@ -53,6 +54,30 @@ func (s *Store) SaveUpload(jobID, name string, r io.Reader) (string, error) {
 
 // OutputPath returns where a job's output should be written.
 // ext should include the leading dot, e.g. ".mp4".
+// Sweep removes each job directory that has not changed since cutoff,
+// unless busy reports that the job still runs. The website tells users
+// that files are deleted after one hour.
+func (s *Store) Sweep(cutoff time.Time, busy func(jobID string) bool) int {
+	entries, err := os.ReadDir(s.DataDir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || info.ModTime().After(cutoff) || busy(e.Name()) {
+			continue
+		}
+		if os.RemoveAll(filepath.Join(s.DataDir, e.Name())) == nil {
+			n++
+		}
+	}
+	return n
+}
+
 func (s *Store) OutputPath(jobID, ext string) string {
 	return filepath.Join(s.jobDir(jobID), "out"+ext)
 }

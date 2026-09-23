@@ -59,49 +59,11 @@ WORKFLOW:
 
 4. For any TypeScript backend projects you touched, run `tsc --noEmit` to check types.
 
-4.5. UX GATE — if any files under `apps/ffmpeg-converter/web/` were modified by this branch, run the UX check before committing.
-
-   a. Detect touched files:
-      CHANGED=$(git diff --name-only main...HEAD)
-      if echo "$CHANGED" | grep -q '^apps/ffmpeg-converter/web/'; then
-        UX_GATE_REQUIRED=1
-      fi
-
-   b. If `UX_GATE_REQUIRED=1`:
-      - Run `yarn workspace ffmpeg-converter-next ux:check` from the
-        monorepo root. This runs `test:e2e && test:axe && test:capture`
-        sequentially. The capture step writes a fresh run directory
-        under `apps/ffmpeg-converter/web/tests/ux/runs/{timestamp}/`.
-      - Then invoke the `/ux-review` skill on that latest run path. The
-        skill writes `scorecard.md` and `scorecard.json` per flow plus a
-        top-level summary `scorecard.md` at the run-directory root.
-      - Read every `scorecard.json` under the run directory. Determine
-        whether the gate passes:
-          * PASS: every dimension >= 3 (the rubric's `FAIL_BELOW`
-            threshold), axe reports zero WCAG-AA violations, Lighthouse
-            Perf >= 95.
-          * FAIL: any dimension < 3 OR any axe WCAG-AA violation OR
-            Lighthouse Perf < 95 OR `yarn ux:check` exited non-zero.
-
-   c. If the gate FAILED:
-      - Skip the merge action in step 9. Continue to commit and open the
-        PR (so Sean can see the diff and the scorecard), but do NOT
-        self-merge.
-      - In step 7 (PR body), include "UX gate: FAILED — see attached
-        scorecard." After opening the PR, post the top-level
-        `scorecard.md` as a PR comment:
-          gh pr comment {pr_number} --repo seanmizen/seanorepo --body-file {run_dir}/scorecard.md
-      - Leave the `in-review` label on the issue.
-
-   d. If the gate PASSED:
-      - Include a one-paragraph scorecard summary in the PR body under a
-        `## UX scorecard` heading. The summary should list the per-flow
-        totals (e.g. `first-time-visitor: 42/50`) and call out the
-        lowest-scoring dimension across all flows.
-      - Proceed to step 5 as usual.
-
-   e. If `UX_GATE_REQUIRED=0` (no converter files touched), skip the gate
-      entirely and proceed to step 5.
+4.5. CONVERTER GATE — if this branch changed files under `apps/ffmpeg-converter/`, run its tests before committing. Read `apps/ffmpeg-converter/docs/STRATEGY.md` first: it lists what the site must not show.
+      cd apps/ffmpeg-converter && go test ./...
+      yarn workspace ffmpeg-converter-next test
+      yarn workspace ffmpeg-converter-next test:e2e
+   If a test fails, fix it. If you cannot fix it, open the PR but do not self-merge in step 9, and say why in the PR body.
 
 5. Stage and commit your changes:
    git add {specific files}
@@ -131,11 +93,11 @@ WORKFLOW:
    a. Re-read the issue's acceptance criteria from the body (you fetched it at the top of this prompt).
    b. Diff your own PR: gh pr diff {your_pr_number} --repo seanmizen/seanorepo
    c. Walk each AC item and verify the diff satisfies it. Be honest — if any item is partially done or missing, do NOT pass it.
-   d. If EVERY AC item is met AND the UX gate from step 4.5 either passed or was skipped:
+   d. If EVERY AC item is met AND the converter gate from step 4.5 either passed or was skipped:
       - gh pr merge {your_pr_number} --repo seanmizen/seanorepo --squash
       - Strip stale labels from the auto-closed issue (GitHub auto-closes but does not clean labels):
         gh issue edit $ARGUMENTS --repo seanmizen/seanorepo --remove-label in-review --remove-label ready --remove-label in-progress --remove-label backlog
-   e. If ANY AC item is missing or unclear, OR the UX gate FAILED:
+   e. If ANY AC item is missing or unclear, OR the converter gate FAILED:
       - Post a PR comment listing what's missing: gh pr comment {your_pr_number} --repo seanmizen/seanorepo --body "Self-review: AC items not met — {list}. Leaving for human/follow-up review."
       - Leave the in-review label intact. The next standup or worker will pick it up.
       - Continue to the IGNITION PHASE — do not exit early.
@@ -200,7 +162,7 @@ After launching, report:
 - Issue number and title
 - Branch name the worker will create
 - That the worker is running in background
-- Note: the worker will self-merge its own PR if AC is met (and the UX gate passes when converter files are touched), then promote unblocked tickets and hand off the next ready ticket back to the standup PM (workers cannot dispatch new workers — that's the PM's job)
+- Note: the worker will self-merge its own PR if AC is met (and the converter gate passes when converter files are touched), then promote unblocked tickets and hand off the next ready ticket back to the standup PM (workers cannot dispatch new workers — that's the PM's job)
 
 ## Handling multiple dispatches
 

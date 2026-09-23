@@ -1,26 +1,20 @@
 # ffmpeg-converter
 
-Small HTTP service in Go that shells out to `ffmpeg` for one-shot media
-conversion jobs. Imagine it powering the backend of "some website that turns
-files into other files" — 50 operations across video, audio, image, and a
-couple of specials.
+Sean's Converter (seansconverter.com): convert video, audio and images in
+one click. Read [`docs/STRATEGY.md`](./docs/STRATEGY.md) before you change
+the site.
 
-**Not deployed.** Code + local test suite only.
+**Not deployed yet.**
 
-## Directory layout
+| Path     | What it is                                                     |
+| -------- | -------------------------------------------------------------- |
+| `./`     | Go HTTP service. It runs ffmpeg. Documented below.             |
+| `./web/` | Next.js site. One static page per conversion, `/api/*` proxies to Go. |
 
-This workspace contains three components:
-
-| Path                 | What it is                                       | Status                                   |
-| -------------------- | ------------------------------------------------ | ---------------------------------------- |
-| `./` (root)          | Go HTTP service — the conversion engine          | Active. The 50-op backend documented below. |
-| `./web-spa/`         | Vanilla-TS single-page app (drop zone + preset UI) | **Legacy reference.** Patterns port into the Next.js app; do not extend. |
-| `./web/`             | Next.js 15 (App Router) frontend                 | **Phase 1 — coming next.** Will be the production frontend. Not present yet. |
-
-See [`phased-spec.md`](./phased-spec.md) for the full delivery plan: Phase 0 is the
-`web/` → `web-spa/` rename and this documentation update; Phase 1 stands up the new
-Next.js app at `web/`. The Go backend at the root of this directory powers both
-frontends via `/api/*` proxy.
+Run both: `yarn converter` from the repo root. Tests: `go test ./...` here,
+`yarn workspace ffmpeg-converter-next test` for the tool list, and
+`yarn workspace ffmpeg-converter-next test:e2e` for the browser flow (it
+needs the Go server and ffmpeg).
 
 ## Requirements
 
@@ -41,13 +35,17 @@ go run .
 
 Env:
 
-| var        | default  | meaning                                     |
-| ---------- | -------- | ------------------------------------------- |
-| `PORT`     | `9876`   | HTTP listen port                            |
-| `DATA_DIR` | `./data` | where uploads and outputs are stored        |
+| var             | default  | meaning                                          |
+| --------------- | -------- | ------------------------------------------------ |
+| `PORT`          | `9876`   | HTTP listen port                                 |
+| `DATA_DIR`      | `./data` | where uploads and outputs are stored             |
+| `FILE_TTL`      | `1h`     | job files are deleted after this time            |
+| `MAX_UPLOAD_MB` | `2048`   | largest request body for `/convert`              |
+| `MAX_JOBS`      | `2`      | async jobs that run ffmpeg at the same time      |
 
-Data dir is `.gitignore`d and wiped by the test runner each run — nothing
-persistent lives here.
+Data dir is `.gitignore`d and wiped by the test runner each run. The server
+also deletes each job directory `FILE_TTL` after its last change. The website
+promises this to users.
 
 ## HTTP API
 
@@ -69,7 +67,12 @@ Multipart form:
 - Any other form fields are passed as op-specific args (`width=64`,
   `timestamp=00:00:00.5`, etc.).
 
-Response (synchronous — the server runs ffmpeg inline):
+With `async=1`, the server saves the upload, answers `202` with the
+`job_id` and status `pending`, and runs the job in the background. Poll
+`GET /jobs/{id}` until the status is `done` or `error`. The website uses
+this, because a proxy such as Cloudflare closes a response after 100 s.
+
+Without `async`, the response is synchronous:
 
 ```json
 {
