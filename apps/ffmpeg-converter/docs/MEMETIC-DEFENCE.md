@@ -155,3 +155,9 @@ fails line 1 as "premium". It passes as "private".
   cheaper for us.
 - **Before launch:** fill in the table with numbers from the WASM spike.
   If the numbers change the facts above, change the words.
+
+The spike filled in the table: see [`WASM-SPIKE.md`](./WASM-SPIKE.md). It
+changed one fact. For audio and images, local conversion is as fast as
+the server and needs no upload, so both sides gain. There, local is the
+default and needs no special button. For video, the recommendation above
+stands, with the measured factor ("about 7 times slower") in the words.
