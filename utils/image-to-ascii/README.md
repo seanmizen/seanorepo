@@ -79,6 +79,8 @@ yarn ascii --spec utils/image-to-ascii/examples/login.json --play --fit --var ho
 - `--out DIR`: frames as `DIR/0000.txt`, `DIR/0001.txt`, and so on.
 - `--play`: plays the frames in this terminal, at `--fps` (default 30).
 - `--pingpong`: plays forward, then back.
+- `--margin N` (spec: `"margin": N`): N spaces on each side of every frame,
+  and N blank lines above and below. `--fit` leaves room for it.
 
 ## Test
 
