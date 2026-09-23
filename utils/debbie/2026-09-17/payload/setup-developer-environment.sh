@@ -437,7 +437,8 @@ fi
 # 5. shist
 #
 # Sean's shell-history tool. It is installed from a release, so no machine
-# needs a Go toolchain (which cost 279 MB when this built shist from source).
+# needs a Go toolchain. A build from source needs that toolchain, which costs
+# 279 MB.
 #
 # macOS takes it from the tap, which a daily workflow keeps in step with the
 # releases. Homebrew asks for trust before it loads a third-party tap, and
@@ -537,7 +538,7 @@ if [ "$IS_WSL" = 1 ]; then
     WT_SETTINGS="$(wslpath -u "$wt_appdata" 2> /dev/null || true)/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
     if [ ! -f "$WT_SETTINGS" ]; then
         warn "No Windows Terminal settings.json - skipping"
-    # upsert(NEW; KEY): replace each entry of NEW in place where KEY matches,
+    # upsert NEW KEY: replace each entry of NEW in place where KEY matches,
     # and append the others. The order of the other entries does not change,
     # so a second run gives the same file.
     elif wt_tmp="$(mktemp)" && jq --slurpfile wt "$HERE/windows-terminal.json" '
@@ -576,5 +577,5 @@ rm -f "$RUN_OUT"
 if [ "$OS" = Linux ] && [ "$(id -un)" = "$DEV_USER" ] && ! id -nG | grep -qw docker; then
     warn "Log out and in again for the docker group, or run: newgrp docker"
 fi
-say "$(green Done.) Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
+say "$(green Done.) Open a new shell to load zsh and the new PATH. Full log: $SETUP_LOG"
 exit 0
