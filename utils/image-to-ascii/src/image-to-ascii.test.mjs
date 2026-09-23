@@ -150,3 +150,9 @@ test('clearFrom blanks the image and keeps the text', async () => {
   assert.match(readFileSync(join(dir, '0000.txt'), 'utf8'), /[^\s]/);
   assert.equal(readFileSync(join(dir, '0002.txt'), 'utf8').trim(), '');
 });
+
+test('margin pads every side', async () => {
+  const { addMargin } = await import('./text.mjs');
+  assert.equal(addMargin('ab\nc', 1), '    \n ab \n c  \n    ');
+  assert.equal(addMargin('ab', 0), 'ab');
+});
