@@ -19,6 +19,9 @@ const config: Config = {
         'accent-fg': token('accent-fg'),
         'accent-text': token('accent-text'),
         danger: token('danger'),
+        local: token('local'),
+        'local-hover': token('local-hover'),
+        'local-fg': token('local-fg'),
       },
       keyframes: {
         slide: {
