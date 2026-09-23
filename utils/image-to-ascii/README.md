@@ -8,6 +8,28 @@ in the browser. Every slider on the site is a flag here, with the same default.
 The CSS filters use the formulas of the Filter Effects spec, so the output
 should be very close to the site's.
 
+## Two versions, for review
+
+This folder holds two implementations of the same tool. They read the same
+flags and the same spec files.
+
+- **Go** (`cmd/`, `internal/`): one standalone binary of about 5 MB. It needs
+  no runtime and no `node_modules`. This is the version to keep.
+- **JS** (`src/`): the first version. It stays until the Go version is
+  reviewed, and then it goes.
+
+```bash
+yarn ascii-go --spec utils/image-to-ascii/examples/sean-login.json --play --fit --hold
+yarn ascii    --spec utils/image-to-ascii/examples/sean-login.json --play --fit
+yarn workspace image-to-ascii parity   # how many characters differ, per case
+```
+
+The Go version resizes by area averaging. `sharp` in the JS version uses
+Lanczos. So a few percent of characters differ, and more with dithering, edge
+detection or a long charset. The frame shape is always the same. The Go
+version also has `--hold` (spec: `"hold": true`): the last frame stays until a
+key press.
+
 ## Use
 
 ```bash
