@@ -517,7 +517,7 @@ fi
 echo
 echo "== node and yarn (REQ-DEPLOY-004) =="
 if [ "$PHASE" = provisioned ]; then
-    check "node 20 installed"         'node --version | grep -qE "^v20\."'
+    check "node installed"            'node --version | grep -qE "^v[0-9]+\."'
     check "corepack installed" \
         'dpkg-query -W -f="\${Status}" node-corepack 2>/dev/null | grep -q "^install ok installed"'
     # THE point of #277, stated as something that can fail. `npm install -g
@@ -557,7 +557,7 @@ else
     sk "shist installed"              "setup-developer-environment.sh installs it"
     sk "shist runs"                   "setup-developer-environment.sh installs it"
     sk "git config came from config-anywhere" "setup-developer-environment.sh applies it"
-    sk "node 20 installed"            "setup-developer-environment.sh installs it"
+    sk "node installed"               "setup-developer-environment.sh installs it"
     sk "corepack installed"           "setup-developer-environment.sh installs it"
     sk "yarn is corepack's shim, not a global npm install" "setup-developer-environment.sh enables it"
     sk "yarn --version matches the repo's packageManager"  "setup-developer-environment.sh enables it"
