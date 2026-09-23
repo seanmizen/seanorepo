@@ -11,6 +11,9 @@ Wants=network-online.target
 # every time is what brings the containers back after a power cut. On a
 # machine that does not serve, the deploy unit's condition skips it.
 OnSuccess=custom-deploy.service
+# The host tools follow the checkout on every machine, serving or not -
+# REQ-DEPLOY-007. host-tools.sh exits in milliseconds when they are current.
+OnSuccess=custom-host-tools.service
 
 [Service]
 Type=oneshot

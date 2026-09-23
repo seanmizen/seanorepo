@@ -652,6 +652,7 @@ UNIT_DIR=/usr/local/lib/systemd/system
 GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
 DEPLOY_SCRIPT="$GEN_DIR/services/deploy.sh"
 RELEASE_POLL_SCRIPT="$GEN_DIR/services/release-poll.sh"
+HOST_TOOLS_SCRIPT="$GEN_DIR/services/host-tools.sh"
 # /usr/local/lib, NOT the checkout. deploy.sh and release-poll.sh legitimately
 # run from the checkout - deploying whatever `release` holds is their job. The
 # watchdog is different: it has to work on a machine that has never deployed,
@@ -726,6 +727,7 @@ write_unit() {
 # variable name. An array needs no splitting.
 UNIT_TEMPLATE_VARS=(
     DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
+    HOST_TOOLS_SCRIPT
     NET_FAILOVER_SCRIPT
     TCP_GETTER_DIR NODE_BIN
     CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG
@@ -754,6 +756,8 @@ render_unit custom-release-poll.service
 render_unit custom-release-poll.timer
 
 render_unit custom-deploy.service
+
+render_unit custom-host-tools.service
 
 # The pre-#307 units did both jobs in one. Removed, not just disabled: two
 # pollers would each fetch, and the old one would deploy on a machine the
@@ -789,6 +793,14 @@ rm -f /etc/seanorepo/serving
 if [ "$units_changed" = 1 ]; then
     systemctl daemon-reload
 fi
+
+# Install the host tools now, so the first login has them - REQ-DEPLOY-007.
+# From the payload copy, because the checkout's `release` may predate the
+# script. After this, custom-host-tools.service keeps them current. A build
+# that CI has not published yet is not a failure here: the next poll retries.
+log "  host tools (image-to-ascii)"
+sudo -u "$DEPLOY_USER" -H REPO_DIR="$REPO_DIR" bash "$SERVICES_SRC/host-tools.sh" \
+    || log "    host-tools.sh failed - the release poller tries again"
 
 #------------------------------------------------------------------------------
 # The sudoers drop-in - REQ-DEPLOY-005

@@ -143,18 +143,16 @@ alias cls=clear
 # Project-local completions, if the directory you are in provides them.
 [[ -f ./completions.zsh ]] && source ./completions.zsh
 
-# Login animation, from utils/image-to-ascii. It plays once, on an interactive
-# SSH login only. scp, rsync and `ssh host cmd` are not interactive, so they
-# stay silent. A key press skips to the last frame. `timeout` caps it, and any
-# error is hidden, so it never blocks the prompt.
-_ascii_repo="$HOME/projects/seanorepo/utils/image-to-ascii"
-if [[ -o interactive && -n "$SSH_TTY" && -f "$_ascii_repo/examples/login.json" ]] \
-  && command -v node > /dev/null && command -v timeout > /dev/null; then
-  timeout 8 node "$_ascii_repo/src/cli.mjs" --spec "$_ascii_repo/examples/login.json" \
-    --play --fit 2> /dev/null
+# Login animation: the image-to-ascii Go binary, which host-tools.sh installs
+# (REQ-DEPLOY-007). It plays once, on an interactive SSH login only. scp, rsync
+# and `ssh host cmd` are not interactive, so they stay silent. It holds the
+# last frame until a key press. Any error is hidden.
+_ascii_spec="$HOME/projects/seanorepo/utils/image-to-ascii/examples/sean-login.json"
+if [[ -o interactive && -n "$SSH_TTY" && -x "$HOME/.local/bin/image-to-ascii" && -f "$_ascii_spec" ]]; then
+  "$HOME/.local/bin/image-to-ascii" --spec "$_ascii_spec" --play --fit --hold 2> /dev/null
   printf '\033[?25h'
 fi
-unset _ascii_repo
+unset _ascii_spec
 
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
 ZSHRC_EOF
