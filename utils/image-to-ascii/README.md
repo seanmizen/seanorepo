@@ -8,27 +8,42 @@ in the browser. Every slider on the site is a flag here, with the same default.
 The CSS filters use the formulas of the Filter Effects spec, so the output
 should be very close to the site's.
 
-## Two versions, for review
+## Two versions
 
-This folder holds two implementations of the same tool. They read the same
-flags and the same spec files.
+This folder holds two implementations of the same tool. Both stay. They read
+the same flags and the same spec files, so a spec works in either.
 
-- **Go** (`cmd/`, `internal/`): one standalone binary of about 5 MB. It needs
-  no runtime and no `node_modules`. This is the version to keep.
-- **JS** (`src/`): the first version. It stays until the Go version is
-  reviewed, and then it goes.
+| | JS (`src/`) | Go (`cmd/`, `internal/`) |
+|---|---|---|
+| Needs | Node and `sharp` from `node_modules` | nothing: one static binary, about 5 MB |
+| Use it for | trying looks on your computer | the login animation on the machines |
+| Resize | Lanczos, from `sharp` | area average, with alpha weighting |
+| `--hold` | no | yes: the last frame stays until a key press |
+
+The two resize methods differ, so a few percent of characters differ between
+the versions. More differ with dithering, edge detection or a long charset,
+because each of those magnifies small changes. The frame shape is always the
+same. `parity` shows the difference for each case.
+
+### Run
+
+From the repo root, paths are relative to the folder you run in:
 
 ```bash
-yarn ascii-go --spec utils/image-to-ascii/examples/sean-login.json --play --fit --hold
 yarn ascii    --spec utils/image-to-ascii/examples/sean-login.json --play --fit
-yarn workspace image-to-ascii parity   # how many characters differ, per case
+yarn ascii-go --spec utils/image-to-ascii/examples/sean-login.json --play --fit --hold
 ```
 
-The Go version resizes by area averaging. `sharp` in the JS version uses
-Lanczos. So a few percent of characters differ, and more with dithering, edge
-detection or a long charset. The frame shape is always the same. The Go
-version also has `--hold` (spec: `"hold": true`): the last frame stays until a
-key press.
+### Build and test
+
+```bash
+yarn workspace image-to-ascii build:go   # writes bin/image-to-ascii (gitignored)
+yarn workspace image-to-ascii test       # test:js, then test:go
+yarn workspace image-to-ascii parity     # JS and Go on 16 cases, per-case difference
+```
+
+Go needs the toolchain named in `go.mod`. To build for a Linux server from a
+Mac: `GOOS=linux GOARCH=amd64 go build ./cmd/image-to-ascii`.
 
 ## Use
 
