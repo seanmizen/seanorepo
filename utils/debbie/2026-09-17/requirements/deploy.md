@@ -1,14 +1,11 @@
 # REQ-DEPLOY — How code reaches the server
 
-What has to be true for a commit to become a running site. These describe the
-mechanism that `2026-09-17/` implements, and the evidence below cites that
-generation's files. It was first built in `archive/2025-10-08b/`.
+What has to be true for a commit to become a running site. These requirements
+describe the mechanism that `2026-09-17/` implements, and the evidence below
+cites the files of that generation.
 
-Written before the rebuild rather than after it, so the rebuild has something
-to answer to. `REQ-SERVER-*` describes the host; these describe what the host
+`REQ-SERVER-*` describes the host. These requirements describe what the host
 does with the repository.
-
-Introduced in #273.
 
 ---
 
@@ -27,8 +24,8 @@ Introduced in #273.
   until someone chooses to promote it.
 
   The cost is that `main` and production can silently diverge, and somebody
-  eventually wonders why their fix is not live. That is the accepted trade: a
-  confusing question beats an unintended deploy.
+  eventually asks why their fix is not live. That is the accepted trade: a
+  confusing question is better than an unintended deploy.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/release-poll.sh` checks out
     `$RELEASE_BRANCH`, which defaults to `release`
@@ -44,8 +41,8 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv can reach origin with
     no credential"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "HEAD is on release" —
-    skipped, not passed, on a machine provisioned before the first `yarn release`,
-    because until then the branch does not exist
+    the check skips, and does not pass, while the checkout has no
+    `origin/release` ref. That is the case before the first `yarn release`
 - **Relations:** none
 
 ## REQ-DEPLOY-002 — A deploy needs no access to the host
@@ -62,24 +59,25 @@ Introduced in #273.
   or a hosted runner holding credentials to the machine, and both are a standing
   way in that nothing audits.
 
-  Polling inverts it: the host makes an outbound request every two minutes and
-  compares the remote SHA to what it last deployed. Nothing needs to reach in.
-  The cost is up to two minutes of latency on every deploy, which for a
-  personal site is not a cost at all.
+  Polling reverses the direction. The host makes an outbound request every two
+  minutes and compares the remote SHA with the checkout. Nothing needs to
+  reach in. The cost is up to two minutes of latency on every deploy. For a
+  personal site, that cost does not matter.
 
-  Since #307 this is two units with one clock. `custom-release-poll` fetches
-  and checks out `release` on every machine and touches nothing that runs;
-  after every poll it triggers `custom-deploy`, which compares the checkout and
-  the boot id with its marker and deploys only on a machine with the webserver
-  role (`/etc/seanorepo/roles/webserver`, from `ROLE_WEBSERVER`; unset is off,
-  #329). The deploy has no timer of its own, so it
-  can never start while a checkout is being written.
+  Two units share one clock. `custom-release-poll` fetches and checks out
+  `release` on every machine, and it touches nothing that runs. After every
+  poll it triggers `custom-deploy`. That unit compares the checkout and the
+  boot id with its marker. It deploys only on a machine with the webserver
+  role (`/etc/seanorepo/roles/webserver`, from `ROLE_WEBSERVER`, off when
+  unset, per `REQ-SERVER-014`). The deploy has no timer of its own, so it can
+  never start while the poller writes a checkout.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/custom-release-poll.timer`
     starts the release poll two minutes after the last one, and three minutes
     after boot
   - Inspection — `utils/debbie/2026-09-17/services/release-poll.sh` compares
-    `git ls-remote` against `HEAD` and checks out on a difference; no marker
+    `git ls-remote` against `HEAD` and checks out on a difference. It keeps no
+    marker
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` compares `HEAD`
     against a marker recording the deployed SHA and the boot id it was deployed
     under, and never dereferences the recorded SHA, so a marker left by a
@@ -89,8 +87,8 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-release-poll.timer
     active"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the timer polls every two
-    minutes" — the two-minute period is the latency bound this requirement
-    trades for needing no inbound port, so it is asserted rather than assumed
+    minutes" — the two-minute period is the latency bound that this
+    requirement accepts in exchange for no inbound port, so the check asserts it
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-release-poll.service
     is timer-owned (static)"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-deploy.service is not
@@ -109,14 +107,14 @@ Introduced in #273.
     checkout and again after a reboot"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "deploy.sh present and
     executable" — **conditional, and the condition is the claim.** `deploy.sh`
-    is run from the checkout, and the checkout is on `release`, so a machine
-    provisioned before this generation shipped cannot have the file at all.
-    The check therefore asks the commit on disk first — `git cat-file -e
-    HEAD:utils/debbie/2026-09-17/services/deploy.sh` — and skips, naming that
-    commit and that path, when the answer is no. It runs, and can fail, exactly
-    when the commit says the file should be there. A green run in which it
-    skipped does not verify this requirement's deploy path; it verifies the
-    timer, the interval, the unit ownership and the sudoers boundary only
+    runs from the checkout, and the checkout is on `release`. A checkout at a
+    commit older than this generation cannot have the file. So the check first
+    asks the commit on disk, with `git cat-file -e
+    HEAD:utils/debbie/2026-09-17/services/deploy.sh`. When the answer is no, it
+    skips and names that commit and that path. It runs, and can fail, exactly
+    when the commit says the file must be there. A green run in which it
+    skipped does not verify the deploy path of this requirement. It verifies
+    only the timer, the interval, the unit ownership and the sudoers boundary
 - **Relations:** depends-on REQ-DEPLOY-001
 
 ## REQ-DEPLOY-003 — Two deploys cannot run at once
@@ -133,17 +131,17 @@ Introduced in #273.
   a second one running `git checkout -f` underneath it, and the result is a
   working tree that matches no commit.
 
-  Since #307 the checkout is the release poller's, and it takes the same lock:
-  while a deploy holds it, the poller leaves the checkout alone and tries again
+  The release poller owns the checkout, and it takes the same lock. While a
+  deploy holds the lock, the poller leaves the checkout alone and tries again
   on the next tick.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` takes `flock -n`
     on a file descriptor before doing any work, so the kernel releases the lock
     on every exit path including SIGKILL and the unit's `TimeoutStartSec`
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "a second deploy exits
-    cleanly while one holds the lock" — asserted as behaviour, not as a grep
-    for `flock`: a lock is held and `deploy.sh` is then run against it, and it
-    must exit 0 and say why rather than block, queue or proceed
+    cleanly while one holds the lock" — the check tests behaviour and does not
+    grep for `flock`. It holds a lock and then runs `deploy.sh` against it.
+    `deploy.sh` must exit 0 and say why. It must not block, queue or proceed
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "a release poll leaves the
     checkout alone while a deploy holds the lock"
 - **Relations:** depends-on REQ-DEPLOY-002
@@ -156,14 +154,13 @@ Introduced in #273.
 - **Type:** constraint
 - **Priority:** P1
 - **Statement:** The host shall deploy by running `yarn prod:docker`.
-- **Rationale:** The thing that starts the sites in production has to be the
-  thing that can be run by hand when a deploy has gone wrong at midnight. A
-  separate orchestration path that only the timer exercises is a second system
-  that is never debugged until it fails.
+- **Rationale:** The command that starts the sites in production must be the
+  command that a person can run by hand when a deploy goes wrong at midnight.
+  A separate orchestration path that only the timer uses is a second system.
+  Nobody debugs it until it fails.
 
-  This is what makes the deploy runnable from an SSH session with
-  `./deploy.sh --force`, and why the poller is a thin wrapper rather than the
-  mechanism.
+  For this reason a person can run the deploy from an SSH session with
+  `./deploy.sh --force`. The poller is only a thin wrapper around it.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` runs
     `yarn install --immutable` then `yarn prod:docker`
@@ -192,18 +189,18 @@ Introduced in #273.
   rules are the only thing the tunnel reads from the repository, so a diff
   against that one path is a sufficient trigger.
 
-  This is one of the two places the deploy needs root. The sudoers drop-in
-  grants exactly two commands, a restart of the tunnel unit and a restart of
-  the tcp-getter unit, rather than general privilege.
+  This is one of the two places where the deploy needs root. The sudoers
+  drop-in grants exactly two commands: a restart of the tunnel unit and a
+  restart of the tcp-getter unit. It grants no general privilege.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` writes
     the sudoers drop-in. It grants the deploy user `systemctl restart` of the
     tunnel unit and of the tcp-getter unit, and nothing else
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` diffs the last
-    deployed SHA (the marker, since #307) against `HEAD`
-    with a pathspec rather than piping into `grep`, and restarts when it cannot
-    prove the config unchanged — a first recorded deploy, or a previous commit
-    no longer in the object store
+    deployed SHA (from the marker) against `HEAD` with a pathspec, and does not
+    pipe into `grep`. It restarts when it cannot prove the config unchanged:
+    on a first recorded deploy, or when the previous commit is absent from the
+    object store
   - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` writes the
     drop-in to a temporary path, validates it with `visudo -c`, and installs it
     mode 0440 root:root only once it parses
@@ -243,20 +240,20 @@ Introduced in #273.
   restart, and every site would go down with no change to the repository to
   explain why.
 
-  Recorded as a requirement because the omission looks like an oversight. A
-  future reader tidying up the deploy script would reasonably add `git clean
-  -fdx` to make checkouts deterministic, and that is the failure this forbids.
+  This is a requirement because the omission looks like an oversight. A
+  reader who tidies the deploy script could reasonably add `git clean -fdx` to
+  make checkouts deterministic. This requirement forbids that failure.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` carries a comment
     stating that the absence of `git clean` is deliberate
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no git clean anywhere in
-    the deploy path" — asserted as an absence, against the DEPLOYED script, so
-    it catches the tidy-up after it has shipped as well as before
+    the deploy path" — the check asserts an absence in the DEPLOYED script, so
+    it catches the tidy-up before and after it ships
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "deploy.sh says why there is
-    no git clean" — an unexplained absence is what gets tidied away, so the
-    explanation is asserted too
+    no git clean" — somebody will tidy away an unexplained absence, so the
+    check also asserts the explanation
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no git clean in the release
-    poller" — since #307 the checkout happens there
+    poller" — the release poller does the checkout
 - **Relations:** depends-on REQ-DEPLOY-004
 
 ## REQ-DEPLOY-007 — Every machine installs the host tools that match its checkout
@@ -276,7 +273,7 @@ Introduced in #273.
   once per tree hash, so the machine can name the exact build it needs. The
   deploy unit runs only on a webserver, so the install has its own unit. The
   CI workflow that publishes the builds is
-  .github/workflows/image-to-ascii-release.yml.
+  `.github/workflows/image-to-ascii-release.yml`.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/host-tools.sh` downloads the
     release tagged with the checkout's tree hash, checks it against

@@ -1,13 +1,12 @@
 # REQ-EMU — The VM test harness
 
-Constraints on `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh`, which installs Debian
-into a VM so a provisioning change can be proven before it touches hardware.
+Constraints on `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh`. The
+harness installs Debian into a VM, so a provisioning change can be proven
+before it touches hardware.
 
-Three earlier attempts at this loop exist in the repository and all three were
-abandoned. These requirements exist mostly to stop the fourth going the same
-way, so each Rationale names the failure it is guarding against.
-
-Introduced in #259.
+Three earlier attempts at this loop were abandoned, and `utils/debbie/archive/`
+keeps them. These requirements guard against the same failures, so each
+Rationale names the failure that it prevents.
 
 ---
 
@@ -22,22 +21,22 @@ Introduced in #259.
   unusable for the chosen guest architecture, then the harness shall refuse to
   start and name the reason.
 - **Rationale:** This is the defect that killed the December 2025 attempt.
-  `archive/2025-12-27/preseed/test-preseed.sh` asked `sysctl kern.hv_support`, which is
-  true on an Apple Silicon Mac, and then passed `-accel hvf` to
-  `qemu-system-x86_64`. Hardware virtualisation is same-architecture only, so
-  that combination cannot work. The script had two independent settings — a
-  hardcoded `amd64` guest and a host-probed accelerator — and nothing tying them
-  together.
+  `archive/2025-12-27/preseed/test-preseed.sh` asked `sysctl kern.hv_support`,
+  which is true on an Apple Silicon Mac, and then passed `-accel hvf` to
+  `qemu-system-x86_64`. Hardware virtualisation works only within one
+  architecture, so that combination cannot work. The script had two
+  independent settings, a hardcoded `amd64` guest and a host-probed
+  accelerator, and nothing tied them together.
 
-  The fix is to ask the binary rather than the host: `qemu-system-* -accel help`
-  answers exactly the right question and is impossible to get wrong. Guest
-  architecture is derived from host architecture through a single table, so the
-  mismatched pair is unrepresentable rather than merely unlikely.
+  The harness asks the binary and does not ask the host.
+  `qemu-system-* -accel help` answers exactly the right question. The harness
+  derives guest architecture from host architecture through a single table, so
+  it cannot represent the mismatched pair.
 
-  Refusing matters as much as detecting. An automatic fall back to software
-  emulation turns a five-minute mistake into a two-hour one that nobody is
-  watching, so an explicitly requested accelerator that cannot be honoured is a
-  hard failure.
+  The refusal matters as much as the detection. An automatic fall back to
+  software emulation turns a five-minute mistake into a two-hour one that
+  nobody watches. So an explicitly requested accelerator that the harness
+  cannot honour is a hard failure.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh`'s `resolve_accel` probes `-accel help` on the resolved binary and exits non-zero on an unsatisfiable explicit request, never downgrading it silently.
   - Demonstration — `DEBBIE_ACCEL=hvf DEBBIE_GUEST_ARCH=amd64 ./test-vm.sh` on an arm64 host exits non-zero naming the architecture mismatch.
@@ -52,13 +51,13 @@ Introduced in #259.
 - **Priority:** P0
 - **Statement:** The harness shall complete an installation with no interactive
   prompt and no keystroke.
-- **Rationale:** An install that stops on one unanswered debconf question is
-  indistinguishable, from outside, from one that is merely slow — so the loop
-  only saves time if finishing is unattended by construction.
+- **Rationale:** From outside, an install that stops on one unanswered
+  debconf question looks the same as a slow install. So the loop saves time
+  only if the install finishes unattended by construction.
 
-  The installed system powers itself off rather than rebooting, which is what
-  turns "did it finish?" into a process exit code the harness can read. Without
-  that, phase one never terminates on its own.
+  The installed system powers itself off and does not reboot. That turns "did
+  it finish?" into a process exit code that the harness can read. Without it,
+  phase one never terminates on its own.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › the `--install` phase, which wraps QEMU in a hard timeout and treats expiry as a failure.
   - Inspection — `utils/debbie/2026-09-17/payload/preseed.cfg` sets `debian-installer/exit/poweroff` so the installer halts the machine on success.
@@ -73,14 +72,14 @@ Introduced in #259.
 - **Priority:** P1
 - **Statement:** The harness shall report the outcome of a run through its exit
   status.
-- **Rationale:** The previous attempt ended with a scratch file of
-  hand-run QEMU commands and notes reading "more stable" — the point at which
-  the harness had stopped being trusted and a human was reading the console
-  instead. A loop whose result needs interpreting is one that gets skipped.
+- **Rationale:** The December 2025 attempt ended with a scratch file of
+  hand-run QEMU commands and notes that read "more stable". At that point
+  nobody trusted the harness, and a human read the console. People skip a loop
+  whose result needs interpretation.
 
-  Distinct codes rather than a single non-zero, so a failure says which stage
-  broke without anyone opening the log: install failure, boot or SSH timeout,
-  and assertion failure are different problems with different fixes.
+  Each stage has its own exit code, so a failure names the stage that broke,
+  and nobody has to open the log. Install failure, boot or SSH timeout, and
+  assertion failure are different problems with different fixes.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › the trailing `[ "$fail" -eq 0 ]`, which fails the run if any single check failed.
   - Inspection — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` documents and uses 0 pass, 1 assertion failure, 2 install failure, 3 boot/SSH timeout, 124 timeout.
@@ -95,20 +94,21 @@ Introduced in #259.
 - **Priority:** P1
 - **Statement:** The harness shall boot the guest through UEFI firmware with a
   writable variable store.
-- **Rationale:** The target laptop is a UEFI machine, so a VM booting through
-  legacy BIOS would leave the partitioning and bootloader half of the preseed —
-  where installs actually fail — completely untested.
+- **Rationale:** The target laptop is a UEFI machine. A VM that boots through
+  legacy BIOS would leave the partitioning and bootloader half of the preseed
+  untested, and that half is where installs fail.
 
-  The variable store has to be writable, and per-VM. The installer writes its
-  GRUB boot entry into UEFI NVRAM; supplying firmware with `-bios` gives a
-  read-only store, that write is discarded, and the installed disk then will not
-  boot in phase two. Supplying it as a `pflash` pair is therefore not a stylistic
-  preference, it is what makes a two-phase harness possible at all.
+  The variable store must be writable, and each VM must have its own. The
+  installer writes its GRUB boot entry into UEFI NVRAM. Firmware supplied
+  with `-bios` gives a read-only store. The installer's write is then lost,
+  and the installed disk does not boot in phase two. A `pflash` pair is
+  therefore what makes a two-phase harness possible.
 
-  Homebrew ships an aarch64 firmware image with no matching variables template.
-  A 64 MiB zero-filled file is the correct substitute — EDK2 detects an
-  unformatted varstore and initialises it on first boot. The similarly named
-  `edk2-arm-vars.fd` is 32-bit ARM and already populated, and must not be used.
+  Homebrew ships an aarch64 firmware image with no matching variables
+  template. A 64 MiB zero-filled file is the correct substitute: EDK2 detects
+  an unformatted varstore and initialises it on first boot. Do not use the
+  similarly named `edk2-arm-vars.fd`. It is 32-bit ARM, and it already
+  contains data.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "booted via UEFI"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "removable-path loader"
@@ -129,17 +129,17 @@ Introduced in #259.
   thing to keep in step, and the copy that is not being iterated on is the one
   that rots.
 
-  Anything genuinely arch-dependent is injected by the harness into a generated
-  overrides file, layered on through `preseed/include`. That leaves the tracked
-  preseed honestly portable rather than portable by coincidence.
+  The harness puts anything that truly depends on the architecture into a
+  generated overrides file, which `preseed/include` adds. So the tracked
+  preseed is portable by design.
 
-  The December 2025 file showed what the drift looks like: it hardcoded
+  The December 2025 file showed what the drift looks like. It hardcoded
   `partman-auto/disk` to `/dev/vda` *and* declared an `early_command` that
-  auto-detects the disk, two mechanisms fighting, where the hardcoded one passes
-  under QEMU and is wrong on real hardware. Disk selection now happens once, and
-  filters out removable devices so the installer cannot target the USB stick it
-  booted from.
+  auto-detects the disk. The two mechanisms conflicted: the hardcoded one
+  passes under QEMU and is wrong on real hardware. Disk selection happens
+  once, and it ignores removable devices, so the installer cannot target the
+  USB stick that it booted from.
 - **Verification:**
-  - Inspection — `utils/debbie/2026-09-17/payload/preseed.cfg` names no architecture, no `grub-efi-*` package and no disk device; `grub-installer` selects the bootloader from the detected architecture.
+  - Inspection — `utils/debbie/2026-09-17/payload/preseed.cfg` names no architecture, no `grub-efi-*` package and no disk device. `grub-installer` selects the bootloader from the detected architecture.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "architecture is $EXPECT_ARCH"
 - **Relations:** none
