@@ -1,0 +1,69 @@
+# Builds the image-to-ascii Go binary once per version of its source, and
+# publishes it for the debbie machines to download - REQ-DEPLOY-007.
+#
+# The release tag is the git tree hash of utils/image-to-ascii. The same
+# source always gives the same tag, so a machine on `release` finds the build
+# that main already published for that source.
+name: image-to-ascii binaries
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'utils/image-to-ascii/**'
+      - '.github/workflows/image-to-ascii-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag from the tree hash
+        id: tag
+        run: echo "tag=image-to-ascii-$(git rev-parse HEAD:utils/image-to-ascii)" >> "$GITHUB_OUTPUT"
+
+      - name: Skip a tree that is already published
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.tag.outputs.tag }}" > /dev/null 2>&1; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+            echo "${{ steps.tag.outputs.tag }} is already published"
+          fi
+
+      - uses: actions/setup-go@v5
+        if: steps.published.outputs.yes != 'true'
+        with:
+          go-version-file: utils/image-to-ascii/go.mod
+          cache-dependency-path: utils/image-to-ascii/go.sum
+
+      - name: Test and build
+        if: steps.published.outputs.yes != 'true'
+        working-directory: utils/image-to-ascii
+        run: |
+          go test ./...
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+              go build -trimpath -ldflags "-s -w" \
+              -o "dist/image-to-ascii-linux-$arch" ./cmd/image-to-ascii
+          done
+          cd dist && sha256sum image-to-ascii-linux-* > SHA256SUMS && cat SHA256SUMS
+
+      - name: Publish
+        if: steps.published.outputs.yes != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            utils/image-to-ascii/dist/* \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "${{ steps.tag.outputs.tag }}" \
+            --notes "image-to-ascii built from commit $GITHUB_SHA. The tag is the tree hash of utils/image-to-ascii. The debbie machines download from here (services/host-tools.sh)."
