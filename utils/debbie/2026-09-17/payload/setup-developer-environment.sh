@@ -538,7 +538,7 @@ if [ "$IS_WSL" = 1 ]; then
     WT_SETTINGS="$(wslpath -u "$wt_appdata" 2> /dev/null || true)/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
     if [ ! -f "$WT_SETTINGS" ]; then
         warn "No Windows Terminal settings.json - skipping"
-    # upsert(NEW; KEY): replace each entry of NEW in place where KEY matches,
+    # upsert NEW KEY: replace each entry of NEW in place where KEY matches,
     # and append the others. The order of the other entries does not change,
     # so a second run gives the same file.
     elif wt_tmp="$(mktemp)" && jq --slurpfile wt "$HERE/windows-terminal.json" '

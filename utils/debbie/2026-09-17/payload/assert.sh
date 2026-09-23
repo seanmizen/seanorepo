@@ -331,7 +331,7 @@ fi
 # timers are asserted against systemd, and a config file is not enough.
 #
 # Both timers, not just the upgrade one. apt-daily.timer refreshes the package
-# lists; apt-daily-upgrade.timer invokes unattended-upgrade. The second can only
+# lists. apt-daily-upgrade.timer invokes unattended-upgrade. The second can only
 # install what the first has told apt about, so a machine with stale lists installs
 # the security fixes it heard about last, forever.
 echo
@@ -364,7 +364,7 @@ if [ "$PHASE" = provisioned ]; then
     check "apt-daily-upgrade.timer enabled"  '[ "$(systemctl is-enabled apt-daily-upgrade.timer 2>/dev/null)" = enabled ]'
     check "apt-daily-upgrade.timer active"   'systemctl is-active apt-daily-upgrade.timer'
     # What turns the timer's daily run into an actual upgrade. 20auto-upgrades
-    # sets it; this reads apt's parsed value, so a file apt never read is red.
+    # sets it. This reads apt's parsed value, so a file apt never read is red.
     check "apt's periodic unattended upgrade is on" \
         '[ "$(apt_config_value APT::Periodic::Unattended-Upgrade)" = 1 ]'
 
@@ -419,7 +419,7 @@ fi
 # Run WITHOUT sudo, on purpose. `sudo docker info` would pass on a machine where
 # the deploy user has no access at all, which is the failure this is for.
 # assert.sh arrives over a fresh SSH connection, so the session carries the
-# docker group; a session that predates `usermod -aG` would not, and the right
+# docker group. A session that predates `usermod -aG` would not, and the right
 # answer to that is to log in again rather than to reach for sudo.
 echo
 echo "== docker (REQ-DEPLOY-004) =="
@@ -510,7 +510,7 @@ else
 fi
 
 # REQ-DEPLOY-004 - the other half of `yarn prod:docker`. Docker above proves the
-# machine can run the containers; this proves it can get as far as asking.
+# machine can run the containers. This proves it can get as far as asking.
 #
 # Everything here runs as $DEPLOY_USER over a fresh SSH connection, WITHOUT
 # sudo, on purpose. The failure being guarded is a yarn that only root can
@@ -566,7 +566,7 @@ fi
 
 # REQ-DEPLOY-002 / -003 / -005 / -006 - the deploy poller.
 #
-# The timer and the sudoers drop-in are what a machine HAS; the two properties that
+# The timer and the sudoers drop-in are what a machine HAS. The two properties that
 # matter most are things deploy.sh DOES, and both are asserted as behaviour or
 # as the absence of a thing rather than as the presence of a comment.
 echo
@@ -1035,7 +1035,7 @@ if [ "$PHASE" = provisioned ]; then
         "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -qF -- '--config $CLOUDFLARED_CONFIG'"
     # Load-bearing and easy to delete as noise. config.yml's credentials-file
     # is a RELATIVE path, which cloudflared resolves against the working
-    # directory; without this the daemon starts and then cannot find its
+    # directory. Without this the daemon starts and then cannot find its
     # credentials.
     check "the tunnel runs in the checkout's cloudflared directory" \
         "systemctl cat $CLOUDFLARED_UNIT 2>/dev/null | grep -qx 'WorkingDirectory=$CLOUDFLARED_DIR'"
@@ -1074,7 +1074,7 @@ if [ "$PHASE" = provisioned ]; then
     # every VM run is in, and the state a freshly provisioned machine is in.
     #
     # Neither branch is a skip. "No credentials" is not a reason to assert
-    # nothing; it is a reason to assert the refusal.
+    # nothing. It is a reason to assert the refusal.
     if [ -f "$CLOUDFLARED_CONFIG" ] && [ -n "$(ls -A "$CLOUDFLARED_CREDS_DIR" 2> /dev/null)" ]; then
         check "$CLOUDFLARED_UNIT enabled (credentials are present)" \
             "systemctl is-enabled $CLOUDFLARED_UNIT"
@@ -1100,7 +1100,7 @@ if [ "$PHASE" = provisioned ]; then
     fi
 
     # The third corner of the triangle. The sudoers section above proves
-    # deploy.sh and the sudoers drop-in name the same unit; this proves the
+    # deploy.sh and the sudoers drop-in name the same unit. This proves the
     # unit that actually exists is that same one. Without it all three could
     # agree on a name that nothing installed.
     # Same rule as the other two sections.
@@ -1475,7 +1475,7 @@ echo
 echo "== firewall (REQ-SERVER-002) =="
 
 # Every TCP socket listening on an address that is not loopback, minus the
-# ports REQ-SERVER-002 opens. Printed as "addr:port", one per line; empty is
+# ports REQ-SERVER-002 opens. Printed as "addr:port", one per line. Empty is
 # the passing state.
 #
 # TCP only, deliberately. A DHCP client on 0.0.0.0:68, avahi's query socket and
@@ -1689,7 +1689,7 @@ if [ "$PHASE" = provisioned ]; then
         fi
     else
         # Honest rather than silent. The probe needs one small image and the
-        # machine may have no route to a registry; saying so beats a green run that
+        # machine may have no route to a registry. Saying so beats a green run that
         # quietly asserted nothing.
         sk "a deliberately published port binds loopback and nothing else" \
             "could not obtain the $PROBE_IMAGE image to publish a port with"
