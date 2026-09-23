@@ -1,13 +1,21 @@
 {
   "image": "../../../apps/seanmizen.com/src/components/shader-sean/IMG_4011_crop2.jpeg",
-  "options": {
-    "width": 80,
-    "charset": "normal",
-    "reverse": true
-  },
+  "width": 80,
+  "charset": "normal",
+  "reverse": true,
   "keyframes": {
-    "contrast": { "0": 100, "20": 250, "40": 80, "50": 300, "80": 120 },
-    "brightness": { "0": 40, "20": 100, "80": 100 }
+    "contrast": {
+      "0": 100,
+      "20": 250,
+      "40": 80,
+      "50": 300,
+      "80": 120
+    },
+    "brightness": {
+      "0": 40,
+      "20": 100,
+      "80": 100
+    }
   },
   "ease": "smooth",
   "fps": 30

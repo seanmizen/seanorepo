@@ -41,6 +41,9 @@ keyframes, at any frames:
   says otherwise.
 
 A spec file holds the same things, and is easier to change and run again.
+It uses the flag names at the top level, such as `"width": 120` or
+`"clearFrom": 65`. Only `keyframes` and `text` are nested. An unknown key is
+an error.
 Flags override the file. Paths in the file are relative to the file. See
 [`examples/sean.json`](./examples/sean.json).
 

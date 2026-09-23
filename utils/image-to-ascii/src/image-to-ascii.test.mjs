@@ -156,3 +156,27 @@ test('margin pads every side', async () => {
   assert.equal(addMargin('ab\nc', 1), '    \n ab \n c  \n    ');
   assert.equal(addMargin('ab', 0), 'ab');
 });
+
+test('a spec with options, or an unknown key, is an error', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'spec-'));
+  const cli = new URL('./cli.mjs', import.meta.url).pathname;
+  const run = (spec) => {
+    const file = join(dir, 'spec.json');
+    writeFileSync(file, JSON.stringify(spec));
+    try {
+      execFileSync('node', [cli, '--spec', file], { stdio: 'pipe' });
+      return '';
+    } catch (err) {
+      return String(err.stderr);
+    }
+  };
+  assert.match(
+    run({ image: 'x.jpg', options: { width: 10 } }),
+    /"options" is gone/,
+  );
+  assert.match(run({ image: 'x.jpg', widht: 10 }), /unknown key "widht"/);
+});
