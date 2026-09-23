@@ -253,28 +253,35 @@ BOOT_ID_BEFORE=""
 if [ "$MODE" != assert ]; then
     wait_for_ssh ""
 
-    # REQ-SERVER-004, #285. Assert what the INSTALLER produced, before
-    # setup-server-environment.sh has a chance to repair it.
+    # Check what the installer produced, before setup-server-environment.sh
+    # can repair it (REQ-SERVER-004). setup-server-environment.sh fixes the
+    # hostname and installs mDNS. After it runs, those checks pass whether the
+    # install was right or not. So a fault in the install shows only here.
     #
-    # This is the only moment the distinction is observable. setup-server-environment.sh
-    # fixes the hostname and installs mDNS, so every assertion that runs after
-    # it passes whether the install was right or not - which is how a machine that
-    # came up as `192` went unnoticed. The result is recorded and reported at
-    # the end rather than aborting here, because a repair run is a legitimate
-    # reason to be pointed at a machine that is already wrong; the exit code still
-    # goes red so it cannot be mistaken for a clean install.
-    log "asserting first boot (before configuration)"
-    sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=firstboot bash -s" \
-        < "$GEN_DIR/payload/assert.sh" || FIRSTBOOT_RC=$?
+    # Only on a machine that setup-server-environment.sh has not configured.
+    # It creates /etc/seanorepo/roles, so the directory marks a configured
+    # machine. On such a machine the install is long past, and a failure here
+    # says nothing about it.
+    #
+    # A failure does not stop the run. A repair run on a broken machine is a
+    # valid use of this script. The exit code still goes red, so a repaired
+    # machine does not pass for a clean install.
+    if sshto "[ -d /etc/seanorepo/roles ]"; then
+        log "already provisioned - skipping the first-boot checks"
+    else
+        log "asserting first boot (before configuration)"
+        sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' PHASE=firstboot bash -s" \
+            < "$GEN_DIR/payload/assert.sh" || FIRSTBOOT_RC=$?
+    fi
     if [ "$FIRSTBOOT_RC" -ne 0 ]; then
         echo >&2
         echo "  ################################################################" >&2
-        echo "  # THE INSTALL IS WRONG, NOT THE PROVISIONING." >&2
+        echo "  # THE INSTALL IS WRONG. THE PROVISIONING IS NOT AT FAULT." >&2
         echo "  #" >&2
-        echo "  # setup-server-environment.sh will now repair this machine and the assertions" >&2
-        echo "  # after it will very likely pass. Do not read that as a fix." >&2
+        echo "  # setup-server-environment.sh now repairs this machine, and the" >&2
+        echo "  # checks after it will probably pass. That is not a fix." >&2
         echo "  # Something in the preseed, the generated overrides.cfg or the" >&2
-        echo "  # installer boot line is not taking effect - see REQ-SERVER-004" >&2
+        echo "  # installer boot line does not take effect. See REQ-SERVER-004" >&2
         echo "  # and the notes in payload/preseed.cfg." >&2
         echo "  ################################################################" >&2
         echo >&2
