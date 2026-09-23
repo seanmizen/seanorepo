@@ -74,7 +74,7 @@ count() { if [ "$1" -gt 0 ]; then green "$1 $2"; else printf '%s %s' "$1" "$2"; 
 log() { [ "$VERBOSITY" = quiet ] || say "$*"; }
 note() { log "  $*"; }
 warn() { say "${C_WARN}WARNING: $*${C_OFF}" >&2; }
-die() { say "${C_ERR}ERROR: $*${C_OFF}" >&2; say "${C_ERR}full log: $SETUP_LOG${C_OFF}" >&2; exit 1; }
+die() { say "${C_ERR}ERROR: $*${C_OFF}" >&2; say "${C_ERR}Full log: $SETUP_LOG${C_OFF}" >&2; exit 1; }
 trap 'say "${C_ERR}ERROR: line $LINENO failed. Full log: $SETUP_LOG${C_OFF}" >&2' ERR
 
 # Run a command and keep its output in the log. In verbose mode the output is
@@ -93,7 +93,7 @@ run() {
     cat "$RUN_OUT" >> "$SETUP_LOG"
     if [ "$rc" -ne 0 ]; then
         if [ "$VERBOSITY" != verbose ]; then
-            say "${C_ERR}the last lines of: $*${C_OFF}" >&2
+            say "${C_ERR}The last lines of: $*${C_OFF}" >&2
             tail -n 20 "$RUN_OUT" | sed 's/^/    /' >&2
         fi
         die "command failed (exit $rc): $*"
@@ -186,23 +186,23 @@ else
     OS_NAME="$(. /etc/os-release && echo "$PRETTY_NAME")"
     [ "$IS_WSL" = 0 ] || OS_NAME="$OS_NAME, WSL"
 fi
-log "setting up user $DEV_USER on $OS_NAME, home $USER_HOME"
-log "full log: $SETUP_LOG"
+log "Setting up user $DEV_USER on $OS_NAME, home $USER_HOME"
+log "Full log: $SETUP_LOG"
 
 #------------------------------------------------------------------------------
 # 1. Packages
 #------------------------------------------------------------------------------
 if [ "$OS" = Darwin ]; then
-    log "installing Homebrew packages"
+    log "Installing Homebrew packages"
     if ! command -v brew > /dev/null 2>&1 && [ ! -x /opt/homebrew/bin/brew ]; then
-        warn "installing homebrew - it asks for your password"
+        warn "Installing Homebrew - it asks for your password"
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
     BREW="$(command -v brew || echo /opt/homebrew/bin/brew)"
     eval "$("$BREW" shellenv)"
     pkg_install git curl wget gnupg jq htop tree unzip zsh gh
 else
-    log "installing apt packages"
+    log "Installing apt packages"
     run as_root apt-get update -y
     pkg_install git curl wget ca-certificates gnupg jq htop tree unzip zsh gh
 fi
@@ -213,7 +213,7 @@ fi
 # oh-my-zsh's own installer is not used: it writes its own .zshrc from a
 # template, which would fight the file written below on every run.
 #------------------------------------------------------------------------------
-log "installing oh-my-zsh and its plugins"
+log "Installing oh-my-zsh and its plugins"
 OMZ="$USER_HOME/.oh-my-zsh"
 clone_once() {
     if as_user "[ -d '$2/.git' ]"; then
@@ -227,7 +227,7 @@ clone_once https://github.com/ohmyzsh/ohmyzsh.git "$OMZ"
 clone_once https://github.com/zsh-users/zsh-autosuggestions.git "$OMZ/custom/plugins/zsh-autosuggestions"
 clone_once https://github.com/zsh-users/zsh-syntax-highlighting.git "$OMZ/custom/plugins/zsh-syntax-highlighting"
 
-log "writing the zsh config and login shell"
+log "Writing the zsh config and login shell"
 zshrc_tmp="$(mktemp)"
 cat > "$zshrc_tmp" <<'ZSHRC_EOF'
 # Managed by utils/debbie/2026-09-17/payload/setup-developer-environment.sh.
@@ -300,7 +300,7 @@ as_user "mkdir -p '$USER_HOME/.local/bin'"
 
 ZSH_PATH="$(command -v zsh)"
 if [ "$(getent passwd "$DEV_USER" 2> /dev/null | cut -d: -f7 || dscl . -read "/Users/$DEV_USER" UserShell | awk '{print $2}')" != "$ZSH_PATH" ]; then
-    note "login shell $(green "changed to zsh")"
+    note "Login shell $(green "changed to zsh")"
     if [ "$OS" = Darwin ]; then
         grep -qxF "$ZSH_PATH" /etc/shells || echo "$ZSH_PATH" | sudo tee -a /etc/shells > /dev/null
         chsh -s "$ZSH_PATH"
@@ -308,7 +308,7 @@ if [ "$(getent passwd "$DEV_USER" 2> /dev/null | cut -d: -f7 || dscl . -read "/U
         as_root chsh -s "$ZSH_PATH" "$DEV_USER"
     fi
 else
-    note "login shell is already zsh"
+    note "Login shell is already zsh"
 fi
 
 #------------------------------------------------------------------------------
@@ -323,7 +323,7 @@ fi
 # the repository's own packageManager field once the checkout exists, further
 # down.
 #------------------------------------------------------------------------------
-log "installing node, corepack and yarn"
+log "Installing node, corepack and yarn"
 if [ "$OS" = Darwin ]; then
     pkg_install node corepack
     run as_user "corepack enable --install-directory '$USER_HOME/.local/bin'"
@@ -331,23 +331,23 @@ else
     pkg_install nodejs node-corepack
     run as_root corepack enable yarn
 fi
-note "node $(node --version)"
+note "Node $(node --version)"
 
 #------------------------------------------------------------------------------
 # 4. Docker
 #------------------------------------------------------------------------------
-log "installing docker"
+log "Installing docker"
 if [ "$OS" = Darwin ]; then
     if [ ! -d /Applications/Docker.app ]; then
         run brew install --cask docker
-        warn "start Docker Desktop once to finish its setup"
+        warn "Start Docker Desktop once to finish its setup"
     fi
 else
     DOCKER_KEYRING=/etc/apt/keyrings/docker.gpg
     DOCKER_LIST=/etc/apt/sources.list.d/docker.list
     as_root install -d -m 0755 /etc/apt/keyrings
     if [ ! -s "$DOCKER_KEYRING" ]; then
-        note "$(green "fetching Docker's apt signing key")"
+        note "$(green "Fetching Docker's apt signing key")"
         # Dearmoured through a temp file: a curl that dies mid-stream would
         # otherwise leave a present, non-empty, unusable keyring, and the guard
         # above would skip repairing it forever.
@@ -360,7 +360,7 @@ else
     docker_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$DOCKER_KEYRING] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
     docker_repo_changed=0
     if [ ! -f "$DOCKER_LIST" ] || [ "$(cat "$DOCKER_LIST")" != "$docker_deb_line" ]; then
-        note "$(green "writing $DOCKER_LIST")"
+        note "$(green "Writing $DOCKER_LIST")"
         printf '%s\n' "$docker_deb_line" | as_root tee "$DOCKER_LIST" > /dev/null
         docker_repo_changed=1
     fi
@@ -376,7 +376,7 @@ else
     if [ -d /run/systemd/system ]; then
         run as_root systemctl enable --now docker
     else
-        warn "no systemd - set systemd=true in /etc/wsl.conf, then run: wsl --shutdown"
+        warn "No systemd - set systemd=true in /etc/wsl.conf, then run: wsl --shutdown"
     fi
     getent group docker > /dev/null || as_root groupadd docker
     as_root usermod -aG docker "$DEV_USER"
@@ -396,13 +396,13 @@ fi
 # checksums.txt of the same release, because this is a binary from the
 # internet, and an interrupted download is otherwise a file that runs.
 #------------------------------------------------------------------------------
-log "installing shist"
+log "Installing shist"
 if [ "$OS" = Darwin ]; then
     run brew tap seanmizen/tap
     run brew trust --tap seanmizen/tap
     brew list shist > /dev/null 2>&1 || run brew install shist
 elif [ -x "$USER_HOME/.local/bin/shist" ]; then
-    note "already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
+    note "Already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
 else
     case "$(uname -m)" in
         x86_64)  shist_arch=amd64 ;;
@@ -415,7 +415,7 @@ else
     shist_tmp="$(mktemp -d)"
     shist_tar="shist_${shist_ver}_linux_${shist_arch}.tar.gz"
     shist_url="https://github.com/seanmizen/shist/releases/download/v$shist_ver"
-    note "downloading $shist_tar"
+    note "Downloading $shist_tar"
     curl -fsSL "$shist_url/$shist_tar" -o "$shist_tmp/$shist_tar"
     curl -fsSL "$shist_url/checksums.txt" -o "$shist_tmp/checksums.txt"
     ( cd "$shist_tmp" && grep " $shist_tar\$" checksums.txt | sha256sum -c - ) \
@@ -423,7 +423,7 @@ else
     tar -xzf "$shist_tmp/$shist_tar" -C "$shist_tmp" shist
     install -m 0755 -o "$DEV_USER" -g "$USER_GROUP" "$shist_tmp/shist" "$USER_HOME/.local/bin/shist"
     rm -rf "$shist_tmp"
-    note "$(green "installed shist $shist_ver")"
+    note "$(green "Installed shist $shist_ver")"
 fi
 
 #------------------------------------------------------------------------------
@@ -436,13 +436,13 @@ fi
 # The git config comes from utils/config-anywhere, which is the one place that
 # holds it. An existing ~/.gitconfig is left alone.
 #------------------------------------------------------------------------------
-log "cloning seanorepo and applying the git config"
+log "Cloning seanorepo and applying the git config"
 REPO_DIR="${REPO_DIR:-$USER_HOME/projects/seanorepo}"
 clone_once "$REPO_URL" "$REPO_DIR"
 if as_user "[ -f '$USER_HOME/.gitconfig' ]"; then
     note "~/.gitconfig exists, so it is kept. To apply config-anywhere, remove it and run again"
 else
-    note "$(green applying) utils/config-anywhere/gitconfig.txt"
+    note "$(green Applying) utils/config-anywhere/gitconfig.txt"
     run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
 fi
 if as_user "[ -f '$REPO_DIR/package.json' ]"; then
@@ -453,18 +453,18 @@ fi
 # 7. iTerm2 (macOS only)
 #------------------------------------------------------------------------------
 if [ "$OS" = Darwin ]; then
-    log "installing iTerm2 and its preferences"
+    log "Installing iTerm2 and its preferences"
     if [ ! -d /Applications/iTerm.app ] && [ ! -d "$USER_HOME/Applications/iTerm.app" ]; then
         run brew install --cask iterm2
     fi
     ITERM_PLIST="$HERE/com.googlecode.iterm2.plist"
     if [ ! -f "$ITERM_PLIST" ]; then
-        warn "no preferences file beside this script - skipping the import"
+        warn "No preferences file beside this script - skipping the import"
     elif pgrep -qx iTerm2 2> /dev/null; then
         warn "iTerm2 is running - quit it and run this again to import preferences"
     else
         run defaults import com.googlecode.iterm2 "$ITERM_PLIST"
-        note "preferences imported"
+        note "Preferences imported"
     fi
 fi
 
@@ -472,7 +472,9 @@ fi
 # 8. Windows Terminal (WSL only)
 #
 # windows-terminal.json holds the iTerm2 colours as a Windows Terminal scheme,
-# the profile defaults that use it, and key actions. Shift+Enter sends ESC+CR,
+# the profile defaults that use it, and key actions. It uses the format that
+# Windows Terminal writes back (upper-case colours, actions with an id and a
+# separate keybindings list), so a second run finds no change. Shift+Enter sends ESC+CR,
 # which Claude Code reads as a newline. Ctrl+Backspace sends ^W, which deletes
 # one word in zsh and in Claude Code. Monaco is not on Windows, so the font
 # is Cascadia Mono, which comes with Windows Terminal. The merge replaces the
@@ -480,25 +482,32 @@ fi
 # jq cannot read (it has comments) is not changed.
 #------------------------------------------------------------------------------
 if [ "$IS_WSL" = 1 ]; then
-    log "applying the Windows Terminal colours, font and keys"
+    log "Applying the Windows Terminal colours, font and keys"
     wt_appdata="$(as_user "cmd.exe /c 'echo %LOCALAPPDATA%' 2> /dev/null" | tr -d '\r' || true)"
     WT_SETTINGS="$(wslpath -u "$wt_appdata" 2> /dev/null || true)/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
     if [ ! -f "$WT_SETTINGS" ]; then
-        warn "no Windows Terminal settings.json - skipping"
+        warn "No Windows Terminal settings.json - skipping"
+    # upsert(NEW; KEY): replace each entry of NEW in place where KEY matches,
+    # and append the others. The order of the other entries does not change,
+    # so a second run gives the same file.
     elif wt_tmp="$(mktemp)" && jq --slurpfile wt "$HERE/windows-terminal.json" '
-            .schemes = ([.schemes[]? | select(.name != $wt[0].scheme.name)] + [$wt[0].scheme])
-            | .profiles.defaults += $wt[0].defaults
-            | .actions = ([.actions[]? | select(.keys as $k | $wt[0].actions | map(.keys) | index($k) | not)] + $wt[0].actions)' "$WT_SETTINGS" > "$wt_tmp"; then
+            def upsert($new; f): reduce $new[] as $n (. // [];
+                if any(.[]; f == ($n | f)) then map(if f == ($n | f) then $n else . end) else . + [$n] end);
+            $wt[0] as $w
+            | .schemes |= upsert([$w.scheme]; .name)
+            | .profiles.defaults += $w.defaults
+            | .actions |= upsert($w.actions; .id)
+            | .keybindings |= upsert($w.keybindings; .keys)' "$WT_SETTINGS" > "$wt_tmp"; then
         # Compare the JSON, not the bytes: Windows Terminal reformats the file.
         if [ "$(jq -S . "$wt_tmp")" = "$(jq -S . "$WT_SETTINGS")" ]; then
-            note "already applied"
+            note "Already applied"
         else
             cp "$WT_SETTINGS" "$WT_SETTINGS.bak"
             cat "$wt_tmp" > "$WT_SETTINGS"
-            note "$(green applied) (the old file is settings.json.bak)"
+            note "$(green Applied) (the old file is settings.json.bak)"
         fi
     else
-        warn "jq cannot read $WT_SETTINGS - skipping"
+        warn "Cannot read $WT_SETTINGS with jq - skipping"
     fi
     rm -f "${wt_tmp:-}"
 fi
@@ -506,16 +515,16 @@ fi
 # The .deb files apt keeps after installing are worth hundreds of megabytes on
 # a machine that installs Docker and Node. Nothing reads them again.
 if [ "$OS" = Linux ]; then
-    log "clearing the apt cache"
+    log "Clearing the apt cache"
     run as_root apt-get clean
-    note "cleared"
+    note "Cleared"
 fi
 
 rm -f "$RUN_OUT"
 # The docker group applies to new logins only. The warning is for a user who
 # runs this script as themself and is not in the group yet in this session.
 if [ "$OS" = Linux ] && [ "$(id -un)" = "$DEV_USER" ] && ! id -nG | grep -qw docker; then
-    warn "log out and in again for the docker group, or run: newgrp docker"
+    warn "Log out and in again for the docker group, or run: newgrp docker"
 fi
-say "done. Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
+say "$(green Done.) Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
 exit 0
