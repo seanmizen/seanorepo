@@ -78,3 +78,17 @@ export const stampLayers = (ascii, layers, frame, vars) => {
   }
   return rows.map((r) => r.join('')).join('\n');
 };
+
+/** Pads a frame with `n` spaces on each side and `n` blank lines above and below. */
+export const addMargin = (ascii, n) => {
+  if (!n || n < 1) return ascii;
+  const rows = ascii.split('\n');
+  const w = Math.max(...rows.map((r) => [...r].length));
+  const side = ' '.repeat(n);
+  const blank = ' '.repeat(w + 2 * n);
+  const padded = rows.map(
+    (r) => side + r + ' '.repeat(w - [...r].length) + side,
+  );
+  const edge = Array.from({ length: n }, () => blank);
+  return [...edge, ...padded, ...edge].join('\n');
+};
