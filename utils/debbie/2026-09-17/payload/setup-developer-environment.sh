@@ -116,7 +116,9 @@ pkg_install() {
         new="$(grep -Eo '[0-9]+ newly installed' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
         upgraded="$(grep -Eo '^[0-9]+ upgraded' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
         current="$(grep -c 'is already the newest version' "$RUN_OUT" || true)"
-        note "$# packages: $(count "$new" new), $(count "$upgraded" upgraded), $current already up to date"
+        # apt's counts include the dependencies it pulls in, so they are not
+        # counts of the packages named here.
+        note "$# packages, $current already up to date. apt: $(count "$new" new), $(count "$upgraded" upgraded), dependencies included"
     fi
 }
 export HOMEBREW_NO_ENV_HINTS=1
