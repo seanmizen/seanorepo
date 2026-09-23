@@ -1,12 +1,12 @@
 FROM node:23-slim AS dev
 WORKDIR /app
-RUN corepack enable && corepack prepare yarn@4.8.1
+RUN corepack enable && corepack prepare yarn@4.18.0
 # Note: source will be mounted via docker-compose volume
 CMD ["yarn", "rsbuild", "dev", "--port", "4010"]
 
 FROM node:23-slim AS prod-build
 WORKDIR /app
-RUN corepack enable && corepack prepare yarn@4.8.1
+RUN corepack enable && corepack prepare yarn@4.18.0
 
 # Copy workspace root files
 COPY package.json yarn.lock .yarnrc.yml ./
@@ -34,6 +34,6 @@ RUN yarn workspace seanscards-fe build
 FROM node:23-slim AS prod
 WORKDIR /app
 COPY --from=prod-build /app/apps/seanscards/frontend/dist .
-RUN corepack enable && corepack prepare yarn@4.8.1 && yarn global add serve
+RUN corepack enable && corepack prepare yarn@4.18.0 && yarn global add serve
 EXPOSE 4010
 CMD ["serve", "-s", ".", "-l", "4010"]
