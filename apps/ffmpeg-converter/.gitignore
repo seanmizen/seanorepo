@@ -9,3 +9,4 @@ ffmpeg-converter.exe
 test/.ffmpeg-converter
 test/server.log
 web/tests/.fixtures/
+web/public/ffmpeg/

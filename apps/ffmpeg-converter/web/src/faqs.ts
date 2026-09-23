@@ -1,3 +1,4 @@
+import { toolRunsLocally } from './local';
 import { type Faq, MAX_UPLOAD_MB, type Tool } from './tools';
 
 // Questions that every page answers, after the page's own questions.
@@ -10,7 +11,11 @@ export function faqsFor(tool: Tool): Faq[] {
     },
     {
       q: 'What happens to my file?',
-      a: 'Your file goes to our server, and the server converts it. The server deletes your file and the result after one hour. We do not share your files.',
+      a: `Your file goes to our server, and the server converts it. The server deletes your file and the result after one hour. We do not share your files.${
+        toolRunsLocally(tool)
+          ? ' On a computer, you can choose "Convert on this device" instead. Then your file does not leave your computer.'
+          : ''
+      }`,
     },
     {
       q: 'How large can the file be?',

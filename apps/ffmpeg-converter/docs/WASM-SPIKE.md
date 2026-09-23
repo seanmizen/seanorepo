@@ -6,6 +6,12 @@ same conversions and the same settings as the site (`web/src/tools.ts`).
 
 The harness is in `web/spike/wasm/`. See "Run it again" at the end.
 
+**Decision after the spike (Sean):** the server stays the default for all
+conversions, audio and images included. On video pages, desktop users can
+choose "Convert on this device", and only that choice loads ffmpeg.wasm.
+The core moves to a CDN later. This replaces "Next steps" 2 below. The
+site code is in `web/src/local.ts`.
+
 ## Answer
 
 - **Audio and images: yes.** Local conversion is as fast as the server,

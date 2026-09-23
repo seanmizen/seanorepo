@@ -1825,13 +1825,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ffmpeg/util@npm:^0.12.2":
-  version: 0.12.2
-  resolution: "@ffmpeg/util@npm:0.12.2"
-  checksum: 10c0/a1c8ab735762f2b1e3174bf96125feb541be528327843c9719042012381603a17d511d01afd2c8c2e7349453a8001ae6bf1ba8769779d305342e7f42ed704a9d
-  languageName: node
-  linkType: hard
-
 "@humanfs/core@npm:^0.19.1":
   version: 0.19.1
   resolution: "@humanfs/core@npm:0.19.1"
@@ -7645,7 +7638,6 @@ __metadata:
     "@ffmpeg/core": "npm:0.12.10"
     "@ffmpeg/core-mt": "npm:0.12.10"
     "@ffmpeg/ffmpeg": "npm:0.12.15"
-    "@ffmpeg/util": "npm:^0.12.2"
     "@playwright/test": "npm:^1.49.1"
     "@types/node": "npm:^22.10.5"
     "@types/react": "npm:^19.0.7"

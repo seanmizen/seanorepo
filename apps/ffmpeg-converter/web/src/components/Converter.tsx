@@ -5,9 +5,17 @@
 //   convert → download.
 // A tool without controls starts as soon as the user chooses a file.
 // There is no drag and drop. The page has one obvious button.
+// On video pages, desktop browsers also get a second button: convert on
+// this device. Only that button loads ffmpeg.wasm (src/local.ts).
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { ConvertError, startJob, waitForJob } from '@/convert';
+import {
+  convertLocally,
+  deviceRunsLocally,
+  LocalError,
+  toolRunsLocally,
+} from '@/local';
 import {
   acceptFor,
   downloadName,
@@ -16,13 +24,18 @@ import {
   type Tool,
 } from '@/tools';
 
+/** Where the conversion runs. The server is the default. */
+type Mode = 'server' | 'local';
+
 type State =
   | { step: 'idle' }
-  | { step: 'setup'; file: File }
+  | { step: 'setup'; file: File; mode: Mode }
   | { step: 'upload'; file: File; progress: number }
   | { step: 'convert'; file: File }
-  | { step: 'done'; file: File; url: string; name: string }
-  | { step: 'error'; file?: File; message: string };
+  | { step: 'load-local'; file: File }
+  | { step: 'convert-local'; file: File; progress: number }
+  | { step: 'done'; file: File; url: string; name: string; local: boolean }
+  | { step: 'error'; file?: File; mode?: Mode; message: string };
 
 export interface ConverterProps {
   tool: Tool;
@@ -38,10 +51,25 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
   const [shortSide, setShortSide] = useState('720');
   const abort = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const localInputRef = useRef<HTMLInputElement>(null);
+  const blobUrl = useRef<string | undefined>(undefined);
+  // Decided after the first render, so the server HTML and the first
+  // client render match.
+  const [localOk, setLocalOk] = useState(false);
 
-  useEffect(() => () => abort.current?.abort(), []);
+  useEffect(() => {
+    setLocalOk(toolRunsLocally(tool) && deviceRunsLocally());
+  }, [tool]);
 
-  const run = async (file: File) => {
+  useEffect(
+    () => () => {
+      abort.current?.abort();
+      if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+    },
+    [],
+  );
+
+  const run = async (file: File, mode: Mode = 'server') => {
     abort.current?.abort();
     const ctl = new AbortController();
     abort.current = ctl;
@@ -54,6 +82,38 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
     if (tool.controls === 'resolution') {
       extra.short_side = shortSide;
       nameExtra = `-${shortSide}p`;
+    }
+    const name = downloadName(file.name, tool, nameExtra);
+    if (mode === 'local') {
+      try {
+        const url = await convertLocally(
+          file,
+          tool,
+          extra,
+          (step, progress) =>
+            setState(
+              step === 'load'
+                ? { step: 'load-local', file }
+                : { step: 'convert-local', file, progress: progress ?? 0 },
+            ),
+          ctl.signal,
+        );
+        if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+        blobUrl.current = url;
+        setState({ step: 'done', file, url, name, local: true });
+      } catch (e) {
+        if (ctl.signal.aborted) return;
+        setState({
+          step: 'error',
+          file,
+          mode,
+          message:
+            e instanceof LocalError
+              ? e.message
+              : 'Something went wrong. Please try again.',
+        });
+      }
+      return;
     }
     setState({ step: 'upload', file, progress: 0 });
     try {
@@ -70,13 +130,15 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
         step: 'done',
         file,
         url: job.downloadUrl,
-        name: downloadName(file.name, tool, nameExtra),
+        name,
+        local: false,
       });
     } catch (e) {
       if (ctl.signal.aborted) return;
       setState({
         step: 'error',
         file,
+        mode,
         message:
           e instanceof ConvertError
             ? e.message
@@ -85,7 +147,7 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
     }
   };
 
-  const choose = (file: File) => {
+  const choose = (file: File, mode: Mode = 'server') => {
     const kind = kindOfFile(file);
     if (kind !== tool.kind) {
       setState({
@@ -103,9 +165,9 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
     }
     if (tool.controls) {
       setClip({ start: 0, end: 0 });
-      setState({ step: 'setup', file });
+      setState({ step: 'setup', file, mode });
     } else {
-      void run(file);
+      void run(file, mode);
     }
   };
 
@@ -122,6 +184,7 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
     }
     setState({ step: 'idle' });
     if (inputRef.current) inputRef.current.value = '';
+    if (localInputRef.current) localInputRef.current.value = '';
   };
 
   const noun =
@@ -148,6 +211,27 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
             Free. Up to {MAX_UPLOAD_MB / 1024} GB. Files are deleted after one
             hour.
           </p>
+          {localOk && (
+            <div className="mt-6 border-t border-line pt-6">
+              <label className="inline-flex min-h-14 w-full cursor-pointer items-center justify-center rounded-xl bg-local px-6 text-lg font-semibold text-local-fg shadow-sm transition-colors hover:bg-local-hover focus-within:outline focus-within:outline-4 focus-within:outline-offset-2 focus-within:outline-local sm:w-auto">
+                Convert on this device
+                <input
+                  ref={localInputRef}
+                  type="file"
+                  accept={acceptFor(tool)}
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) choose(f, 'local');
+                  }}
+                />
+              </label>
+              <p className="mx-auto mt-3 max-w-md text-sm text-muted">
+                Your file stays on this computer. It is slower than our server,
+                and it downloads a 10 MB converter first.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -159,7 +243,9 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
           setClip={setClip}
           shortSide={shortSide}
           setShortSide={setShortSide}
-          onStart={() => run(state.file)}
+          onStart={() => run(state.file, 'server')}
+          onStartLocal={localOk ? () => run(state.file, 'local') : undefined}
+          preferLocal={state.mode === 'local'}
           onCancel={reset}
         />
       )}
@@ -180,6 +266,23 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
         />
       )}
 
+      {state.step === 'load-local' && (
+        <Progress
+          label="Loading the converter"
+          hint="About 10 MB, only the first time. Your file stays on this computer."
+          onCancel={reset}
+        />
+      )}
+
+      {state.step === 'convert-local' && (
+        <Progress
+          label={`Converting to ${tool.outputExt.toUpperCase()} on this device`}
+          fraction={state.progress}
+          hint="Keep this tab open."
+          onCancel={reset}
+        />
+      )}
+
       {state.step === 'done' && (
         <div className="text-center">
           <p className="text-lg font-semibold text-fg">
@@ -193,6 +296,11 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
             Download {tool.outputExt.toUpperCase()}
           </a>
           <p className="mt-3 break-all text-sm text-muted">{state.name}</p>
+          {state.local && (
+            <p className="mt-1 text-sm text-muted">
+              Converted on this device. Your file did not leave it.
+            </p>
+          )}
           <button
             type="button"
             onClick={reset}
@@ -210,10 +318,11 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
             {state.file && (
               <button
                 type="button"
-                onClick={() => state.file && choose(state.file)}
+                // After a failure on the device, the retry uses the server.
+                onClick={() => state.file && choose(state.file, 'server')}
                 className="min-h-12 rounded-xl bg-accent px-6 font-semibold text-accent-fg hover:bg-accent-hover"
               >
-                Try again
+                {state.mode === 'local' ? 'Convert on our server' : 'Try again'}
               </button>
             )}
             <button
@@ -292,6 +401,8 @@ function Setup({
   shortSide,
   setShortSide,
   onStart,
+  onStartLocal,
+  preferLocal,
   onCancel,
 }: {
   tool: Tool;
@@ -301,8 +412,13 @@ function Setup({
   shortSide: string;
   setShortSide: (s: string) => void;
   onStart: () => void;
+  /** Present when the device can convert. */
+  onStartLocal?: () => void;
+  /** The user chose "Convert on this device" for this file. */
+  preferLocal: boolean;
   onCancel: () => void;
 }) {
+  const local = preferLocal && onStartLocal !== undefined;
   const [src, setSrc] = useState<string>();
   const [duration, setDuration] = useState(0);
   // MKV, AVI and WMV often do not play in a browser. Then the user types
@@ -442,18 +558,23 @@ function Setup({
       <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row">
         <button
           type="button"
-          onClick={onStart}
+          onClick={local ? onStartLocal : onStart}
           disabled={
             Boolean(clipError) ||
             (tool.controls === 'clip' && duration === 0 && !noPreview)
           }
-          className="min-h-14 w-full rounded-xl bg-accent px-8 text-lg font-semibold text-accent-fg shadow-sm hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          className={`min-h-14 w-full rounded-xl px-8 text-lg font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ${
+            local
+              ? 'bg-local text-local-fg hover:bg-local-hover'
+              : 'bg-accent text-accent-fg hover:bg-accent-hover'
+          }`}
         >
           {tool.controls === 'clip'
             ? isGif
               ? 'Make GIF'
               : 'Trim video'
             : 'Resize video'}
+          {local && ' on this device'}
         </button>
         <button
           type="button"
