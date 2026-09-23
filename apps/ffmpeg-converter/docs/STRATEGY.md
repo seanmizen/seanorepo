@@ -63,9 +63,8 @@ Each item below makes the page worse for the visitor:
 The paid plan stays: a Pro tier and a paid API, with Stripe code in the Go
 service. The free flow never shows an upsell. A paid feature must be
 better for the customer, and not only cheaper for us. Local conversion in
-the browser (ffmpeg WASM) is a candidate. Its name and copy wait for the
-"memetic defence" research, which sets the rules for honest premium
-framing.
+the browser (ffmpeg WASM) is a candidate. Before you name, word or price
+any premium feature, apply [`MEMETIC-DEFENCE.md`](./MEMETIC-DEFENCE.md).
 
 ## Where to look
 
