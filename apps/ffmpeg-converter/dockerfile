@@ -5,14 +5,14 @@
 #   dev   — hot-reload Next.js dev server. Source mounted via compose volume.
 #   prod  — standalone production build. Self-contained image.
 
-FROM node:23-slim AS dev
+FROM node:lts-slim AS dev
 WORKDIR /app
 # Note: source will be mounted via docker-compose volume in dev profile
 EXPOSE 4050
 CMD ["yarn", "workspace", "ffmpeg-converter-next", "dev"]
 
 
-FROM node:23-slim AS prod-build
+FROM node:lts-slim AS prod-build
 WORKDIR /app
 
 # Copy workspace root files
@@ -47,7 +47,7 @@ ENV NODE_ENV=production
 RUN yarn workspace ffmpeg-converter-next build
 
 
-FROM node:23-slim AS prod
+FROM node:lts-slim AS prod
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4050

@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 'lts/*'
 
       - name: Install ffmpeg
         # The test:fixtures step synthesises tiny media files via lavfi,

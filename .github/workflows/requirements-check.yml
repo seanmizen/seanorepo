@@ -30,7 +30,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 'lts/*'
 
       # No install step on purpose: the validator is dependency-free so this
       # job stays fast enough that nobody is tempted to skip it.

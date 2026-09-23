@@ -66,7 +66,7 @@ RUN bun build /build/apps/minecraft.seanmizen.com/src/boot.ts \
 # =============================================================================
 # Stage 3: Production runtime — static file server
 # =============================================================================
-FROM node:23-slim AS prod
+FROM node:lts-slim AS prod
 WORKDIR /app
 
 # `serve` is a tiny static server with correct MIME types for .wasm — the same
@@ -86,7 +86,7 @@ CMD ["serve", "-s", ".", "-l", "4042"]
 # to point at. The real dev loop for this app is `bun utils/swindowzig/backends/
 # wasm/dev-server.ts` run directly on the host.
 # =============================================================================
-FROM node:23-slim AS dev
+FROM node:lts-slim AS dev
 WORKDIR /app
 # Source is mounted in via docker-compose's bind mount.
 CMD ["sh", "-c", "echo 'minecraft.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]

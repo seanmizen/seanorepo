@@ -1,5 +1,5 @@
 # deps stage - install with yarn (standalone)
-FROM node:23-slim AS deps
+FROM node:lts-slim AS deps
 WORKDIR /app
 
 # Install build dependencies for native modules (better-sqlite3)
