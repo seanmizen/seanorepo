@@ -6,10 +6,11 @@
 FROM node:23-slim AS deps
 WORKDIR /app
 COPY package.json .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
 # Overwrite the root package.json with the backend's so this resolves
 # standalone instead of pulling in the whole monorepo.
 COPY apps/inside/inside-be/package.json ./package.json
-RUN corepack enable && corepack prepare yarn@4.18.0 && yarn install
+RUN yarn install
 
 # dev — node_modules sits at /app, so docker-compose fills its named volume
 # from this image. The source arrives through the bind mount. Module

@@ -4,7 +4,7 @@
     "includes": [
       "**",
       "!**/*Glasto*",
-      "!apps/seanmizen.com/src/features/cous/script.js"
+      "!apps/seanmizen.com/src/features/cous/script.js", "!.yarn"
     ]
   },
   "assist": {

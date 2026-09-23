@@ -3,12 +3,13 @@ WORKDIR /app
 
 # Copy root package.json and .yarnrc.yml for Yarn 4 configuration
 COPY package.json .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
 
 # Copy backend package.json and install dependencies directly
 COPY apps/seanscards/backend/package.json ./package.json
 
 # Install with yarn (standalone, not as workspace)
-RUN corepack enable && corepack prepare yarn@4.18.0 && yarn install
+RUN yarn install
 
 # dev target - run source directly
 FROM oven/bun:latest AS dev
