@@ -1,0 +1,20 @@
+# Written by payload/setup-server-environment.sh from services/custom-host-tools.service.
+# Edit that file, not this copy. - REQ-DEPLOY-007
+[Unit]
+Description=Install the host tools that match this checkout (image-to-ascii)
+After=network-online.target
+Wants=network-online.target
+# A checkout from before this script existed has nothing to run. An unmet
+# condition skips the unit without a failure.
+ConditionPathExists=${HOST_TOOLS_SCRIPT}
+
+[Service]
+Type=oneshot
+User=${DEPLOY_USER}
+WorkingDirectory=${REPO_DIR}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=${HOST_TOOLS_SCRIPT}
+TimeoutStartSec=5min
+
+# No [Install] section. custom-release-poll.service starts it after every
+# successful poll, on every machine. It has no role condition.
