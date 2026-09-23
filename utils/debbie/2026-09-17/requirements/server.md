@@ -557,3 +557,51 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Relations:**
   - refines REQ-DEPLOY-002
   - refines REQ-NETWORK-002
+
+## REQ-SERVER-015 — Vendor packages update only when a release is 7 days old
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #476
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** When a new version of `cloudflared` or `ngrok` has been the
+  newest version for 7 days, the host shall install it unattended.
+- **Rationale:** `REQ-SERVER-006` takes the Debian security suite only, so it
+  never updates these two packages, which come from their vendors' apt
+  repositories. Without an update path, a daemon on the internet stays at an
+  old version with no report, which is the reason `cloudflared` runs from a
+  package at all.
+
+  The vendors put every release in one suite, so apt cannot tell a security
+  fix from a feature release or a bad one. The history of `cloudflared`
+  decided the rule. Its two security advisories are local, and for Windows. It
+  has no remote vulnerability in the daemon. Its bad releases were short:
+  2024.1.3 (a CPU spike on Linux), 2024.9.0 (reverted the same day), and
+  2026.8.0 and 2026.8.1 (path normalization that broke applications, marked
+  "do not use", and reverted in 2026.8.2). Each one was fixed or reverted
+  within 2 days. A 7-day minimum age skips all of them, and costs little
+  against that history.
+
+  The repositories record no publish date, and Cloudflare's holds only the
+  newest version. So the host records when it first sees each version. A
+  newer version resets the count, so a series of quick fixes waits until the
+  releases stop.
+
+  After an install the host restarts the tunnel, which drops requests for a
+  few seconds, so the timer runs early in the morning. It never restarts
+  ngrok: on the free plan, a restart gives a new public address. The new ngrok
+  version starts at the next restart of the unit. `unattended-upgrades` keeps
+  its security-only configuration, and this is a separate timer.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-vendor-upgrade.timer installed and enabled"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade is installed outside the checkout"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade gate is 7 days"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade installs nothing before a version is 7 days old"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade installs both packages on day 7"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade restarts cloudflared and never ngrok"
+  - Inspection — `utils/debbie/2026-09-17/services/vendor-upgrade.sh` skips a
+    package that `apt-mark hold` holds, so a rollback stays in place
+- **Relations:**
+  - refines REQ-SERVER-006
+  - depends-on REQ-NETWORK-005

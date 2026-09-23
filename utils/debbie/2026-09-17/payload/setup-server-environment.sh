@@ -17,6 +17,7 @@
 #          8. SSH keys for the deploy user, an address for each network
 #             interface, and the failover watchdog
 #          9. tcp-getter, and loopback exempt from sshd penalties
+#         10. the gated upgrade of cloudflared and ngrok
 #
 # Docker, Node, Yarn, the shell and the seanorepo clone come from
 # setup-developer-environment.sh, which runs first.
@@ -655,6 +656,9 @@ HOST_TOOLS_SCRIPT="$GEN_DIR/services/host-tools.sh"
 # from the payload instead, so it matches the provisioner that installed it.
 NET_FAILOVER_DIR=/usr/local/lib/seanorepo
 NET_FAILOVER_SCRIPT="$NET_FAILOVER_DIR/net-failover.sh"
+# The gated upgrade of cloudflared and ngrok, from the payload for the same
+# reason as the watchdog: it must work on a machine that has never deployed.
+VENDOR_UPGRADE_SCRIPT="$NET_FAILOVER_DIR/vendor-upgrade.sh"
 
 # tcp-getter runs on the host, not in a container. It reads this host's ngrok
 # agent API and this host's SSH host key. So it is a host unit, like
@@ -722,6 +726,7 @@ UNIT_TEMPLATE_VARS=(
     DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
     HOST_TOOLS_SCRIPT
     NET_FAILOVER_SCRIPT
+    VENDOR_UPGRADE_SCRIPT
     TCP_GETTER_DIR NODE_BIN
     CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG
 )
@@ -872,8 +877,8 @@ fi
 # FROM CLOUDFLARE'S APT REPOSITORY, NOT A BINARY COPIED IN BY HAND. A binary
 # copied into /usr/local/bin is invisible to dpkg and gets no updates, except
 # from cloudflared's own self-update, which can fail with no report. As a
-# package, REQ-SERVER-006's unattended upgrades update it like any other
-# package, and `dpkg -S` can say where it came from.
+# package, custom-vendor-upgrade.timer updates it, 7 days after a release
+# (REQ-SERVER-015), and `dpkg -S` can say where it came from.
 #------------------------------------------------------------------------------
 CLOUDFLARED_KEYRING=/usr/share/keyrings/cloudflare-main.gpg
 CLOUDFLARED_LIST=/etc/apt/sources.list.d/cloudflared.list
@@ -1008,9 +1013,9 @@ fi
 # gave it.
 #
 # --no-autoupdate, for a reason, not for style. cloudflared's self-update can
-# fail with no report. As a package, REQ-SERVER-006's unattended upgrades own
-# the version, and a self-update would be a second mechanism that writes the
-# same binary. It also runs as $DEPLOY_USER, which cannot write /usr/bin, so it
+# fail with no report. As a package, custom-vendor-upgrade.timer owns the
+# version (REQ-SERVER-015), and a self-update would be a second mechanism that
+# writes the same binary. It also runs as $DEPLOY_USER, which cannot write /usr/bin, so it
 # could only fail, with no report.
 #
 # /usr/bin/cloudflared, not /usr/local/bin/cloudflared. The second is the link
@@ -1084,8 +1089,8 @@ fi
 # machine is reachable from the LAN only, and the first sign is a failed login
 # from somewhere else.
 #
-# From ngrok's apt repository, so dpkg owns the binary and REQ-SERVER-006 keeps
-# it current, like cloudflared. The package installs /usr/local/bin/ngrok and
+# From ngrok's apt repository, so dpkg owns the binary, and
+# custom-vendor-upgrade.timer updates it like cloudflared (REQ-SERVER-015). The package installs /usr/local/bin/ngrok and
 # nothing else: no unit, no postinst. That path is the package's own choice,
 # checked by unpacking ngrok_3.39.11-0_arm64.deb. So, unlike for cloudflared,
 # the path is not a sign of a manual install, and payload/assert.sh asks dpkg
@@ -1359,6 +1364,37 @@ for stale_unit in net-failover-custom.timer net-failover-custom.service; do
 done
 
 systemctl enable custom-net-failover.timer
+
+#------------------------------------------------------------------------------
+# The gated upgrade of cloudflared and ngrok - REQ-SERVER-015.
+#
+# unattended-upgrades takes the Debian security suite only (REQ-SERVER-006), so
+# it never updates these two vendor packages. This timer installs a new
+# version when it has been the newest version for 7 days. It restarts the
+# tunnel after a cloudflared install, and never restarts ngrok. See
+# services/vendor-upgrade.sh for the reasons.
+#
+# Enabled, not started, like the other timers. Persistent=true runs a missed
+# day at the next boot.
+#------------------------------------------------------------------------------
+log "gated upgrade of cloudflared and ngrok"
+
+if [ ! -f "$VENDOR_UPGRADE_SCRIPT" ] \
+    || ! cmp -s "$SERVICES_SRC/vendor-upgrade.sh" "$VENDOR_UPGRADE_SCRIPT"; then
+    log "  installing $VENDOR_UPGRADE_SCRIPT"
+    install -m 0755 -o root -g root "$SERVICES_SRC/vendor-upgrade.sh" "$VENDOR_UPGRADE_SCRIPT"
+fi
+
+units_changed=0
+
+render_unit custom-vendor-upgrade.service
+render_unit custom-vendor-upgrade.timer
+
+if [ "$units_changed" = 1 ]; then
+    systemctl daemon-reload
+fi
+
+systemctl enable custom-vendor-upgrade.timer
 
 #------------------------------------------------------------------------------
 # tcp-getter - the service that tells you the ngrok address.
