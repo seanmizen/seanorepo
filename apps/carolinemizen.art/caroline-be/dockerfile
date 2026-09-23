@@ -1,5 +1,5 @@
 # deps stage - install with yarn (standalone)
-FROM node:23-slim AS deps
+FROM node:lts-slim AS deps
 WORKDIR /app
 
 # Install build dependencies for native modules (better-sqlite3)
@@ -13,12 +13,13 @@ RUN apt-get update && apt-get install -y \
 
 # Copy root package.json and .yarnrc.yml for Yarn 4 configuration
 COPY package.json .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
 
 # Copy backend package.json and install dependencies directly
 COPY apps/carolinemizen.art/caroline-be/package.json ./package.json
 
 # Install with yarn (standalone, not as workspace)
-RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
+RUN yarn install
 
 # dev target - run source directly
 FROM oven/bun:latest AS dev

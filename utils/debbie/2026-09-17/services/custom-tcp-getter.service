@@ -6,9 +6,9 @@ Documentation=https://github.com/seanmizen/seanorepo/issues/359
 After=network-online.target
 Wants=network-online.target
 
-# REFUSE RATHER THAN LOOP. Both files are absent on a machine that has been
-# provisioned but whose ngrok and tcp-getter setup nobody has finished, which is
-# a normal first-boot state. An unmet condition makes systemd log one line and
+# REFUSE TO START. DO NOT LOOP. A provisioned machine whose ngrok and
+# tcp-getter setup nobody finished has neither file. That is a normal first-boot
+# state. An unmet condition makes systemd log one line and
 # leave the unit inactive. It does not count as a failure and cannot fill the
 # journal. The ngrok config is the same gate custom-ngrok.service uses: this
 # service reads that agent's API, so it is useless without it.
@@ -28,15 +28,14 @@ Type=simple
 User=${DEPLOY_USER}
 WorkingDirectory=${TCP_GETTER_DIR}
 
-# --env-file, and this is the difference between Node and bun rather than a
-# style choice. bun reads .env from the working directory by itself. Node does
-# not, so without this flag the service starts and then exits on a missing
-# MAIL_PASSWORD. apps/carolinemizen.art/caroline-be passes it explicitly for
-# the same reason.
+# --env-file is required because Node and bun differ here. bun reads .env
+# from the working directory by itself. Node does not. Without this flag, the
+# service starts and then exits on a missing MAIL_PASSWORD.
+# apps/carolinemizen.art/caroline-be passes it explicitly for the same reason.
 #
-# dist/index.mjs, not index.ts. Node 20 cannot run TypeScript, so deploy.sh
-# builds this workspace with rslib first - the Condition above is what stops
-# this unit starting before it has.
+# The unit runs dist/index.mjs. Debian 13 ships Node 20, which cannot run
+# TypeScript, so deploy.sh builds this workspace with rslib first. The
+# Condition above stops this unit from starting before that build exists.
 ExecStart=${NODE_BIN} --env-file=.env dist/index.mjs
 Restart=on-failure
 RestartSec=10s

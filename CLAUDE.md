@@ -16,8 +16,12 @@ More instructions load only when they are relevant:
 ## Setup
 
 ```bash
-corepack enable && corepack prepare && yarn
+yarn
 ```
+
+The repository carries its Yarn 4 release in `.yarn/releases`, and
+`.yarnrc.yml` names it in `yarnPath`. Any system `yarn` runs that release,
+Yarn 1 included. Do not use corepack.
 
 Root `package.json` scripts are the entry points (`yarn sean`, `yarn caroline`,
 `yarn prod:docker`, `yarn release`, ...). Read them rather than guessing.

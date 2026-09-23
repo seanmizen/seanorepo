@@ -1,22 +1,12 @@
 import { designerFilters } from '@shared/filters';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import {
   findPublicPortfolioProject,
   listApprovedDesigners,
   listPublicPortfolio,
 } from '../services/discovery';
 import { parseQuery } from '../services/query';
-import { MAX_SEARCH_LENGTH } from '../services/search';
-import {
-  AVAILABILITIES,
-  BUDGET_BANDS,
-  boundedInt,
-  DESIGNER_SORTS,
-  optionalEnum,
-  optionalString,
-  ValidationError,
-  WORK_TYPES,
-} from '../services/validation';
+import { boundedInt } from '../services/validation';
 import { withValidation } from './helpers';
 
 /**

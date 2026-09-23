@@ -4,8 +4,8 @@
 Description=Install the host tools that match this checkout (image-to-ascii)
 After=network-online.target
 Wants=network-online.target
-# A checkout from before this script existed has nothing to run. An unmet
-# condition skips the unit without a failure.
+# A checkout without host-tools.sh has nothing to run. An unmet condition
+# skips the unit without a failure.
 ConditionPathExists=${HOST_TOOLS_SCRIPT}
 
 [Service]

@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 'lts/*'
 
       - name: Install ffmpeg
         # The test:fixtures step synthesises tiny media files via lavfi,
@@ -35,9 +35,6 @@ jobs:
         # most cases, but make it explicit so the workflow does not rely
         # on the runner image's bundled toolchain.
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-
-      - name: Enable Corepack (Yarn 4)
-        run: corepack enable
 
       - name: Install dependencies
         run: yarn install --immutable

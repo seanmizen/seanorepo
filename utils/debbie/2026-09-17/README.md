@@ -5,11 +5,13 @@ debbie server, and checks the result. It works the same way on real hardware
 and in a local VM, so you can test a change in the VM before it reaches a real
 machine.
 
-Production (asus) and surface both run this generation.
+Both target machines run this generation. asus is production, with the
+webserver and tunnel roles. surface has no roles. Older generations are in
+[`../archive/`](../archive/).
 
 The rules a target machine must follow are in
 [`requirements/`](./requirements/). Each requirement states its reason and
-names the check that proves it. CI validates them on every PR. This README
+names the check that proves it. CI checks them on every PR. This README
 tells you how to use the generation. The reasons live in the requirements and
 in the comments of each script.
 
@@ -17,9 +19,9 @@ in the comments of each script.
 
 | Folder | Contents | Runs on |
 |---|---|---|
-| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. `1-build-iso/` holds one `.env` for every machine; the other steps hold one `<machine>.env` each. `lib.sh` holds the functions they share. | your computer |
+| `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. `1-build-iso/` holds one `.env` for every machine. The other steps hold one `<machine>.env` each. `lib.sh` holds the functions they share. | your computer |
 | `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
-| `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh` and `net-failover.sh`, with the systemd unit beside each. systemd starts them from the `release` checkout. | the target machine |
+| `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh`, `host-tools.sh` and `net-failover.sh`, with the systemd unit beside each. It also holds the units for cloudflared, ngrok and tcp-getter. systemd starts the first three scripts from the `release` checkout. `setup-server-environment.sh` installs `net-failover.sh` in `/usr/local/lib/seanorepo`. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
 
 ## Test a change in the VM
@@ -60,14 +62,16 @@ Test these on a real target machine:
 - mDNS from another machine on the LAN, and a published port refused from another machine
 - a Cloudflare tunnel or ngrok session that connects (no VM has credentials)
 - an unattended security update that installs, which takes weeks and a real advisory
-- the deploy scripts in the checkout, until `release` contains this generation
+- the deploy units with the scripts under test: the units in the VM run the
+  scripts from the guest's `release` checkout, and `assert.sh` runs the scripts
+  under test only against a scratch repo
 
 ## Install and configure a target machine
 
 Follow [`scripts/README.md`](./scripts/README.md). In short:
 
 1. `1-build-iso/build-iso.sh` builds a USB installer. **One stick installs any
-   machine** since #376, so this step runs once and never again.
+   machine**, so this step runs once and never again.
 2. `2-serve-preseed/serve-preseed.sh <machine>` serves the installer's answers
    while the target machine installs from the USB stick.
 3. `3-provision/provision.sh <machine>` configures the target machine and
@@ -85,7 +89,7 @@ bash ~/projects/seanorepo/utils/debbie/2026-09-17/payload/setup-developer-enviro
 ```
 
 Do not use sudo: Homebrew refuses to run as root. It installs Homebrew,
-zsh with oh-my-zsh and the shared prompt, Node 20, corepack and Yarn, Docker,
+zsh with oh-my-zsh and the shared prompt, Node and Yarn, Docker,
 shist, the seanorepo clone, the git config from
 `utils/config-anywhere`, and iTerm2 with its preferences.
 
@@ -163,7 +167,7 @@ scripts/3-provision/provision.sh <B>
 The reboot starts the tunnel, and the changed boot id makes B deploy again -
 this time publishing on **loopback only**, because a tunnel machine must not
 answer on the LAN (REQ-SERVER-002). The LAN addresses stop working. That is
-correct.
+the intended result.
 
 **Watch for the three-minute window.** If B holds the tunnel before its
 containers are up, take it out until they are:
@@ -174,7 +178,7 @@ ssh -t srv@<B>.local sudo systemctl stop custom-cloudflared.service
 ssh -t srv@<B>.local sudo systemctl start custom-cloudflared.service
 ```
 
-#### 5. Both machines now serve. Check, then stop A
+#### 5. Both machines serve. Check, then stop A
 
 Cloudflare balances across both connections, so there is no gap. Probe each
 hostname more than once - a single 200 does not prove both machines answer:
@@ -187,11 +191,12 @@ do printf "%-26s " "$u"; for i in 1 2 3; do printf "%s " "$(curl -s -m12 -o /dev
 Take no admin writes in this window: a write can land on either machine.
 
 ```bash
-ssh -t srv@<A>.local sudo systemctl disable --now cloudflared-custom.service
+ssh -t srv@<A>.local sudo systemctl disable --now custom-cloudflared.service
 ```
 
-The unit is `cloudflared-custom.service` on a 2025-10-08b machine and
-`custom-cloudflared.service` here. `systemctl list-units "*cloudflared*"` names it.
+The unit is `custom-cloudflared.service` on a machine that runs this
+generation, and `cloudflared-custom.service` on a machine that runs the archived
+2025-10-08b generation. `systemctl list-units "*cloudflared*"` names it.
 
 #### 6. ngrok, separately
 
@@ -207,10 +212,10 @@ emails you will not match the one you have. Expect that rather than debug it.
 
 #### Rollback
 
-One command, for as long as A still runs:
+One command on each machine, while A runs:
 
 ```bash
-ssh -t srv@<A>.local sudo systemctl enable --now cloudflared-custom.service
+ssh -t srv@<A>.local sudo systemctl enable --now custom-cloudflared.service
 ssh -t srv@<B>.local sudo systemctl stop custom-cloudflared.service
 ```
 
@@ -223,10 +228,11 @@ Leave A powered for a week. That is also what keeps any data you did not copy.
   that refuses its own frontend. Put it back before step 4.
 - **A frontend rebuilt with a LAN `API_URL` does not survive** - `deploy.sh
   --force` rebuilds it with `/api`. Run it anyway, to be sure.
-- **`working/id_ed25519` is not the key any more.** A machine installed by this
-  generation trusts `payload/seanorepo-admin.pub`. Add the new key alongside the
-  old one and prove it works **before** removing anything: sshd refuses
-  passwords, so a wrong `authorized_keys` leaves only the console.
+- **`working/id_ed25519` is not the admin key.** A machine installed by this
+  generation trusts `payload/seanorepo-admin.pub`. On a machine that trusts a
+  different key, add the new key beside the old one. Prove that it works
+  **before** you remove anything. sshd refuses passwords, so a wrong
+  `authorized_keys` leaves only the console.
 
 ## Operate a target machine
 

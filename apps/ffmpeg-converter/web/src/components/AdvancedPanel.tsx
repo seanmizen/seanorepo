@@ -467,7 +467,6 @@ export function AdvancedPanel({
                 Live ffmpeg command
               </div>
               <pre
-                aria-label="Live ffmpeg command preview"
                 className={[
                   'overflow-x-auto rounded-lg border border-gray-800 bg-gray-950',
                   'px-3 py-2 text-gray-200 text-xs leading-relaxed',
