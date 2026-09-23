@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Image to ASCII art, with the asciiart.eu controls and keyframe animation",
+  "description": "Image to ASCII art, with the asciiart.eu controls and keyframe animation. A JS version and a Go version.",
   "bin": "./src/cli.mjs",
   "scripts": {
     "ascii": "node src/cli.mjs",
-    "test": "node --test src/ && go test ./...",
+    "ascii:go": "go run ./cmd/image-to-ascii",
+    "build:go": "go build -o bin/image-to-ascii ./cmd/image-to-ascii",
+    "test": "yarn test:js && yarn test:go",
+    "test:js": "node --test src/",
+    "test:go": "go test ./...",
     "parity": "node parity/compare.mjs"
   },
   "dependencies": {
