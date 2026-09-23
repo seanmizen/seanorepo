@@ -102,7 +102,7 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
   had carrier but no upstream, so every outbound packet was blackholed. The
   tunnel sent into a disconnected wire, and nothing noticed.
 
-  NetworkManager reacts to carrier loss. It does not react to lost
+  The network stack reacts to carrier loss. It does not react to lost
   reachability. So a dead switch port, or a cable unplugged at the far end,
   keeps its address and its route indefinitely. Static metrics do not help.
   The preferred interface is preferred without evidence, so the failure only
@@ -132,7 +132,7 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
     to promote. The VM always has three links, so no VM check covers this.
 - **Relations:** depends-on REQ-NETWORK-001
 
-  A VM run does not cover `nmcli` association and WPA. QEMU has no wireless
+  A VM run does not cover wifi association and WPA. QEMU has no wireless
   device. The VM matrix proves the probe, the promotion and the demotion. Only
   a run on metal proves wifi.
 
@@ -145,17 +145,19 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
 - **Priority:** P1
 - **Statement:** Where the host reaches the network over wifi, the interface
   shall be managed by the subsystem the failover watchdog drives.
-- **Rationale:** `net-failover.sh` promotes and demotes routes through `nmcli`,
-  so it can act only on interfaces that NetworkManager manages. A wifi-only
-  host installed by `netcfg` has no such interface. `netcfg` persists wifi as
-  a `wpa-ssid`/`wpa-psk` stanza in `/etc/network/interfaces` and installs
-  `wpasupplicant`, which is ifupdown.
+- **Rationale:** A wifi-only host installed by `netcfg` has its wifi in
+  ifupdown. `netcfg` persists wifi as a `wpa-ssid`/`wpa-psk` stanza in
+  `/etc/network/interfaces` and installs `wpasupplicant`. The watchdog must act
+  on the interface that owns the route, so the watchdog and the wifi
+  configuration must agree on the subsystem that manages that interface.
 
-  If `network-manager` is installed next to that stanza, the result is the
-  worst of the three available states. The ifupdown plugin of NetworkManager
-  marks any interface listed in `/etc/network/interfaces` as unmanaged. So
-  ifupdown drives the wifi, and `nmcli` does not. The watchdog then silently
-  does nothing, and that looks the same as a watchdog that works.
+  In this generation, `net-failover.sh` uses `ip` only and never `nmcli`, and
+  `network-manager` is not installed, so the two agree. The risk is a partial
+  move to NetworkManager. If `network-manager` is installed next to the
+  stanza, the result is the worst of the three available states. The ifupdown
+  plugin of NetworkManager marks any interface listed in
+  `/etc/network/interfaces` as unmanaged. A watchdog built on `nmcli` then
+  silently does nothing, and that looks the same as a watchdog that works.
 
   The status is **proposed** because the migration carries the risk. The
   requirement itself is simple. The migration must delete the stanza and

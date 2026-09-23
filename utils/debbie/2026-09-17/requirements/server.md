@@ -219,8 +219,7 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   `/etc/network/interfaces` and installs `wpasupplicant` into the target. That
   is **ifupdown**, and it satisfies this requirement.
 
-  The obvious next step is a trap. `services/net-failover.sh` drives routes
-  through `nmcli`, so it is tempting to add `network-manager` to the package
+  The obvious next step is a trap: `network-manager` added to the package
   list. With the `netcfg` stanza in place, that gives the worst of both. The
   ifupdown plugin of NetworkManager marks an interface listed in
   `/etc/network/interfaces` as unmanaged. `nmcli` then does not drive the
@@ -479,10 +478,11 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   package upgrade, and it gives no clue to a person who debugs why a
   documented default does not apply.
 
-  The risk is real. `cloudflared` comes from Cloudflare's apt repository,
-  which ships `cloudflared.service`. A unit of the same name in the
-  higher-precedence directory would quietly replace it. For that reason the
-  tunnel unit of this repository is `custom-cloudflared.service`.
+  The risk is real. A unit named `ssh.service` in the higher-precedence
+  directory would quietly replace the one that `openssh-server` ships. The
+  `cloudflared` package ships no unit, but `cloudflared service install`
+  writes a `cloudflared.service`. For that reason the tunnel unit of this
+  repository is `custom-cloudflared.service`.
 
   A drop-in states only what is different, adds to whatever the package
   ships, and shows in `systemctl cat`, where a person will find it.
