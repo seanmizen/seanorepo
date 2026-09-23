@@ -1,5 +1,5 @@
 {
-  "image": "/Users/seanmizen/projects/seanorepo/apps/seanmizen.com/src/components/shader-sean/IMG_4011_crop2.jpeg",
+  "image": "../../../apps/seanmizen.com/src/components/shader-sean/IMG_4011_crop2.jpeg",
   "width": 120,
   "margin": 1,
   "chars": "abcdefghijklmnopqrstuvwxyz",

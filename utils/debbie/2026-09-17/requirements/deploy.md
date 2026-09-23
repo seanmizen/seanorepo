@@ -258,3 +258,31 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no git clean in the release
     poller" — since #307 the checkout happens there
 - **Relations:** depends-on REQ-DEPLOY-004
+
+## REQ-DEPLOY-007 — Every machine installs the host tools that match its checkout
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #436
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** After each successful release poll, every target machine,
+  whatever its roles, shall install the `image-to-ascii` binary built from the
+  `utils/image-to-ascii` tree in its own checkout, with no Go toolchain on the
+  machine.
+- **Rationale:** The login animation runs this binary on every machine, and
+  the spec files it reads come from the checkout. A binary from another
+  version of the source could reject a spec or draw it differently. CI builds
+  once per tree hash, so the machine can name the exact build it needs. The
+  deploy unit runs only on a webserver, so the install has its own unit. The
+  CI workflow that publishes the builds is
+  .github/workflows/image-to-ascii-release.yml.
+- **Verification:**
+  - Inspection — `utils/debbie/2026-09-17/services/host-tools.sh` downloads the
+    release tagged with the checkout's tree hash, checks it against
+    `SHA256SUMS`, and does nothing when the installed build matches
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the release poller
+    triggers the host tools"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-host-tools.service
+    runs as $DEPLOY_USER, with no role condition"
+- **Relations:** depends-on REQ-DEPLOY-002

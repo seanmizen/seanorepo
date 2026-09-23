@@ -707,6 +707,13 @@ if [ "$PHASE" = provisioned ]; then
          && ! grep -qsx 'Unit=custom-deploy.service' $UD/*.timer /etc/systemd/system/*.timer"
     check "the release poller triggers the deploy" \
         'systemctl show -p OnSuccess --value custom-release-poll.service | grep -qw custom-deploy.service'
+    # REQ-DEPLOY-007. The host tools follow the checkout on every machine, so
+    # the unit has no role condition, and it runs as the deploy user.
+    check "the release poller triggers the host tools" \
+        'systemctl show -p OnSuccess --value custom-release-poll.service | grep -qw custom-host-tools.service'
+    check "custom-host-tools.service runs as $DEPLOY_USER, with no role condition" \
+        "[ \"\$(systemctl show -p User --value custom-host-tools.service)\" = '$DEPLOY_USER' ] \
+         && ! systemctl cat custom-host-tools.service | grep -q '/etc/seanorepo/roles'"
     # #380. The poller's behaviour is proved against a scratch repo below, never
     # against this checkout. A single-branch or shallow clone passed all of that
     # and still could not see `release`, so nothing ever deployed. No network.
@@ -863,6 +870,8 @@ else
     sk "custom-release-poll.service is timer-owned (static)" "setup-server-environment.sh installs it"
     sk "custom-deploy.service is not on a timer" "setup-server-environment.sh installs it"
     sk "the release poller triggers the deploy" "setup-server-environment.sh installs it"
+    sk "the release poller triggers the host tools" "setup-server-environment.sh installs it"
+    sk "custom-host-tools.service runs as $DEPLOY_USER, with no role condition" "setup-server-environment.sh installs it"
     sk "the checkout fetches every branch, with full history" "setup-server-environment.sh repairs it"
     sk "the deploy runs only on a machine with the webserver role" "setup-server-environment.sh installs it"
     sk "the tunnel runs only on a machine with the tunnel role" "setup-server-environment.sh installs it"

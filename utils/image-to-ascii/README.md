@@ -100,17 +100,27 @@ sets any variable, for example to preview another machine:
 
 ## Login
 
-[`examples/login.json`](./examples/login.json) plays on every interactive SSH
-login to a debbie machine. The managed `.zshrc` in
-`utils/debbie/2026-09-17/payload/setup-developer-environment.sh` runs it with
-`--play --fit`. `--fit` shrinks the width to fit the terminal, and skips a
-terminal that is too small. A key press jumps to the last frame. A timeout
-caps it, and errors are hidden.
+The debbie machines play [`examples/sean-login.json`](./examples/sean-login.json)
+on every interactive SSH login. It works like this:
+
+1. A merge to `main` that changes this folder starts the
+   `image-to-ascii binaries` workflow. It builds linux/amd64 and linux/arm64,
+   and publishes them with `SHA256SUMS` as a GitHub prerelease tagged
+   `image-to-ascii-<tree hash>`. The tree hash is the git hash of this folder,
+   so the same source always has the same tag.
+2. On every machine, after each release poll, `host-tools.sh` in
+   `utils/debbie/2026-09-17/services/` downloads the build for the tree the
+   machine has checked out. It checks the checksum and installs
+   `~/.local/bin/image-to-ascii`. The machine needs no Go and no
+   `node_modules`.
+3. The managed `.zshrc` runs that binary with `--play --fit --hold` when the
+   login is interactive and over SSH. `scp`, `rsync` and `ssh host cmd` stay
+   silent. A key press gives you the prompt. Errors are hidden.
 
 Preview it on your own machine:
 
 ```bash
-yarn ascii --spec utils/image-to-ascii/examples/login.json --play --fit --var hostname=asus
+yarn ascii-go --spec utils/image-to-ascii/examples/sean-login.json --play --fit --hold --var hostname=asus
 ```
 
 ## Output

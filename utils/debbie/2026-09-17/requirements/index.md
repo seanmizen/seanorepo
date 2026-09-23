@@ -11,6 +11,7 @@
 | [`REQ-DEPLOY-004`](deploy.md#req-deploy-004--a-deploy-is-the-same-command-a-human-would-run) | A deploy is the same command a human would run | active | constraint | P1 | sean |
 | [`REQ-DEPLOY-005`](deploy.md#req-deploy-005--the-tunnel-restarts-only-when-its-own-configuration-changes) | The tunnel restarts only when its own configuration changes | active | constraint | P2 | sean |
 | [`REQ-DEPLOY-006`](deploy.md#req-deploy-006--a-deploy-leaves-untracked-credentials-alone) | A deploy leaves untracked credentials alone | active | constraint | P0 | sean |
+| [`REQ-DEPLOY-007`](deploy.md#req-deploy-007--every-machine-installs-the-host-tools-that-match-its-checkout) | Every machine installs the host tools that match its checkout | active | functional | P2 | sean |
 | [`REQ-EMU-001`](emu.md#req-emu-001--an-accelerator-is-never-assumed-from-the-host-alone) | An accelerator is never assumed from the host alone | active | constraint | P0 | sean |
 | [`REQ-EMU-002`](emu.md#req-emu-002--an-install-completes-without-being-watched) | An install completes without being watched | active | functional | P0 | sean |
 | [`REQ-EMU-003`](emu.md#req-emu-003--the-harness-reports-by-exit-code) | The harness reports by exit code | active | constraint | P1 | sean |
@@ -46,6 +47,7 @@ graph TD
   REQ_DEPLOY_004["REQ-DEPLOY-004<br/>A deploy is the same command a human would run"]
   REQ_DEPLOY_005["REQ-DEPLOY-005<br/>The tunnel restarts only when its own configuration changes"]
   REQ_DEPLOY_006["REQ-DEPLOY-006<br/>A deploy leaves untracked credentials alone"]
+  REQ_DEPLOY_007["REQ-DEPLOY-007<br/>Every machine installs the host tools that match its checkout"]
   REQ_EMU_001["REQ-EMU-001<br/>An accelerator is never assumed from the host alone"]
   REQ_EMU_002["REQ-EMU-002<br/>An install completes without being watched"]
   REQ_EMU_003["REQ-EMU-003<br/>The harness reports by exit code"]
@@ -75,6 +77,7 @@ graph TD
   REQ_DEPLOY_004 -->|depends-on| REQ_DEPLOY_002
   REQ_DEPLOY_005 -->|depends-on| REQ_DEPLOY_004
   REQ_DEPLOY_006 -->|depends-on| REQ_DEPLOY_004
+  REQ_DEPLOY_007 -->|depends-on| REQ_DEPLOY_002
   REQ_NETWORK_002 -->|depends-on| REQ_NETWORK_001
   REQ_NETWORK_002 -->|depends-on| REQ_DEPLOY_005
   REQ_NETWORK_002 -->|depends-on| REQ_DEPLOY_006
@@ -96,7 +99,7 @@ graph TD
 ## Derived reverse links
 
 - `REQ-DEPLOY-001` — required-by REQ-DEPLOY-002
-- `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004, refined-by REQ-SERVER-014
+- `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004, required-by REQ-DEPLOY-007, refined-by REQ-SERVER-014
 - `REQ-DEPLOY-004` — required-by REQ-DEPLOY-005, required-by REQ-DEPLOY-006
 - `REQ-DEPLOY-005` — required-by REQ-NETWORK-002
 - `REQ-DEPLOY-006` — required-by REQ-NETWORK-002
