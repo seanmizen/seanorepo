@@ -220,7 +220,7 @@ clone_once() {
         note "${2##*/}: already cloned"
     else
         run as_user "git clone -q --depth 1 '$1' '$2'"
-        note "${2##*/}: $(green cloned)"
+        note "$(green "${2##*/}: cloned")"
     fi
 }
 clone_once https://github.com/ohmyzsh/ohmyzsh.git "$OMZ"
@@ -289,7 +289,7 @@ if cmp -s "$zshrc_tmp" "$USER_HOME/.zshrc"; then
     note "~/.zshrc is current (managed: put local settings in ~/.zshrc.local)"
 else
     install -m 0644 -o "$DEV_USER" -g "$USER_GROUP" "$zshrc_tmp" "$USER_HOME/.zshrc"
-    note "~/.zshrc $(green updated) (managed: put local settings in ~/.zshrc.local)"
+    note "$(green "~/.zshrc updated") (managed: put local settings in ~/.zshrc.local)"
 fi
 rm -f "$zshrc_tmp"
 # An empty ~/.hushlogin silences the login text for this user: the uname line
@@ -300,7 +300,7 @@ as_user "mkdir -p '$USER_HOME/.local/bin'"
 
 ZSH_PATH="$(command -v zsh)"
 if [ "$(getent passwd "$DEV_USER" 2> /dev/null | cut -d: -f7 || dscl . -read "/Users/$DEV_USER" UserShell | awk '{print $2}')" != "$ZSH_PATH" ]; then
-    note "Login shell $(green "changed to zsh")"
+    note "$(green "Login shell changed to zsh")"
     if [ "$OS" = Darwin ]; then
         grep -qxF "$ZSH_PATH" /etc/shells || echo "$ZSH_PATH" | sudo tee -a /etc/shells > /dev/null
         chsh -s "$ZSH_PATH"
@@ -442,7 +442,7 @@ clone_once "$REPO_URL" "$REPO_DIR"
 if as_user "[ -f '$USER_HOME/.gitconfig' ]"; then
     note "~/.gitconfig exists, so it is kept. To apply config-anywhere, remove it and run again"
 else
-    note "$(green Applying) utils/config-anywhere/gitconfig.txt"
+    note "$(green "Applying utils/config-anywhere/gitconfig.txt")"
     run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
 fi
 if as_user "[ -f '$REPO_DIR/package.json' ]"; then
@@ -504,7 +504,7 @@ if [ "$IS_WSL" = 1 ]; then
         else
             cp "$WT_SETTINGS" "$WT_SETTINGS.bak"
             cat "$wt_tmp" > "$WT_SETTINGS"
-            note "$(green Applied) (the old file is settings.json.bak)"
+            note "$(green "Settings applied") (the old file is settings.json.bak)"
         fi
     else
         warn "Cannot read $WT_SETTINGS with jq - skipping"
