@@ -30,5 +30,21 @@
     },
     "cursorShape": "bar",
     "padding": "8"
-  }
+  },
+  "actions": [
+    {
+      "command": {
+        "action": "sendInput",
+        "input": "\u001b\r"
+      },
+      "keys": "shift+enter"
+    },
+    {
+      "command": {
+        "action": "sendInput",
+        "input": "\u0017"
+      },
+      "keys": "ctrl+backspace"
+    }
+  ]
 }
