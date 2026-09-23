@@ -1419,6 +1419,67 @@ else
     sk "case 7: the route does not fail back on its own" "setup-server-environment.sh installs it"
 fi
 
+echo "== gated upgrade of cloudflared and ngrok (REQ-SERVER-015) =="
+VU_TIMER=custom-vendor-upgrade.timer
+VU_SERVICE=custom-vendor-upgrade.service
+VU_SCRIPT=/usr/local/lib/seanorepo/vendor-upgrade.sh
+
+# vu_scenario: run the INSTALLED script against stub commands, with no root.
+# The stubs record every apt-get and systemctl call in $1/calls. cloudflared and
+# ngrok each have a newer candidate. The script runs on day 0, day 6 and day 7,
+# and the calls after each run go to $1/calls.dayN.
+vu_scenario() {
+    local t="$1" day
+    mkdir -p "$t/bin"
+    printf '%s\n' '#!/bin/sh' 'for a; do p=$a; done; cat "$VU/installed-$p" 2>/dev/null' > "$t/bin/dpkg-query"
+    printf '%s\n' '#!/bin/sh' 'echo "  Candidate: $(cat "$VU/candidate-$2")"' > "$t/bin/apt-cache"
+    printf '%s\n' '#!/bin/sh' 'echo "apt-get $*" >> "$VU/calls"' > "$t/bin/apt-get"
+    printf '%s\n' '#!/bin/sh' 'true' > "$t/bin/apt-mark"
+    printf '%s\n' '#!/bin/sh' 'case "$1" in is-active) exit 0 ;; esac; echo "systemctl $*" >> "$VU/calls"' > "$t/bin/systemctl"
+    chmod +x "$t"/bin/*
+    echo 2026.9.1 > "$t/installed-cloudflared"; echo 2026.9.2 > "$t/candidate-cloudflared"
+    echo 3.39.11 > "$t/installed-ngrok"; echo 3.40.0 > "$t/candidate-ngrok"
+    for day in 0 6 7; do
+        : > "$t/calls"
+        VU="$t" PATH="$t/bin:$PATH" STATE_DIR="$t/state" NOW=$((1790000000 + day * 86400)) \
+            bash "$VU_SCRIPT" > /dev/null 2>&1 || return 1
+        cp "$t/calls" "$t/calls.day$day"
+    done
+}
+
+if [ "$PHASE" = provisioned ]; then
+    check "$VU_TIMER installed and enabled" \
+        "[ -f /usr/local/lib/systemd/system/$VU_TIMER ] && systemctl is-enabled --quiet $VU_TIMER"
+    # Outside the checkout, like the watchdog: the checkout tracks release.
+    check "the vendor upgrade is installed outside the checkout" \
+        "[ -x $VU_SCRIPT ] && systemctl show -p ExecStart --value $VU_SERVICE | grep -q '$VU_SCRIPT' \
+         && ! systemctl show -p ExecStart --value $VU_SERVICE | grep -q projects/seanorepo"
+    check "the vendor upgrade gate is 7 days" \
+        "grep -qx 'MIN_AGE_DAYS=\"\${MIN_AGE_DAYS:-7}\"' '$VU_SCRIPT'"
+    # Behaviour, not a grep: the installed script against stub commands.
+    VU_DIR="$(mktemp -d)"
+    if vu_scenario "$VU_DIR"; then
+        check "the vendor upgrade installs nothing before a version is 7 days old" \
+            '[ ! -s "$VU_DIR/calls.day0" ] && [ ! -s "$VU_DIR/calls.day6" ]'
+        check "the vendor upgrade installs both packages on day 7" \
+            'grep -q "install .*cloudflared=2026.9.2" "$VU_DIR/calls.day7" && grep -q "install .*ngrok=3.40.0" "$VU_DIR/calls.day7"'
+        check "the vendor upgrade restarts cloudflared and never ngrok" \
+            'grep -q "restart custom-cloudflared.service" "$VU_DIR/calls.day7" && ! grep -qi "restart .*ngrok" "$VU_DIR/calls.day7"'
+    else
+        no "the vendor upgrade installs nothing before a version is 7 days old"
+        no "the vendor upgrade installs both packages on day 7"
+        no "the vendor upgrade restarts cloudflared and never ngrok"
+    fi
+    rm -rf "$VU_DIR"
+else
+    sk "$VU_TIMER installed and enabled" "setup-server-environment.sh installs it"
+    sk "the vendor upgrade is installed outside the checkout" "setup-server-environment.sh installs it"
+    sk "the vendor upgrade gate is 7 days" "setup-server-environment.sh installs it"
+    sk "the vendor upgrade installs nothing before a version is 7 days old" "setup-server-environment.sh installs it"
+    sk "the vendor upgrade installs both packages on day 7" "setup-server-environment.sh installs it"
+    sk "the vendor upgrade restarts cloudflared and never ngrok" "setup-server-environment.sh installs it"
+fi
+
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.

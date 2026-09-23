@@ -1,0 +1,17 @@
+# Written by payload/setup-server-environment.sh from services/custom-vendor-upgrade.timer.
+# Edit that file, not this copy. - REQ-SERVER-015
+[Unit]
+Description=Once a day, install cloudflared or ngrok versions that are 7 days old
+
+[Timer]
+# Early, because a cloudflared install restarts the tunnel for a few seconds.
+# Before apt-daily-upgrade.timer (06:00), so the two seldom want the dpkg lock
+# at the same time.
+OnCalendar=*-*-* 05:30
+RandomizedDelaySec=15min
+# A machine that was off at 05:30 runs it at the next boot.
+Persistent=true
+Unit=custom-vendor-upgrade.service
+
+[Install]
+WantedBy=timers.target
