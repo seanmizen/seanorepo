@@ -17,22 +17,22 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 #------------------------------------------------------------------------------
 # Parse .env LITERALLY, never source it.
 #
-# `. .env` runs the file as shell, which expands anything in it - and a
-# sha512-crypt hash is full of '$'. Sourcing a correct .env failed on first use
-# with "line 12: $6: unbound variable", the shell reading $6 as a positional
-# parameter. Quoting works but is a foot-gun in a file whose main value always
-# contains '$'.
+# `. .env` runs the file as shell, which expands anything in it, and a
+# sha512-crypt hash is full of '$'. A correct .env that is sourced fails with
+# "line 12: $6: unbound variable": the shell reads $6 as a positional
+# parameter. Quotes work, but they are easy to forget in a file whose main
+# value always contains '$'.
 #
-# Values are taken verbatim: no expansion, no command substitution, and an
-# unrecognised key is an error rather than a setting that silently does nothing.
+# Values are taken as written: no expansion, no command substitution. An
+# unknown key is an error, not a setting that does nothing with no report.
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
-# Pick this step's env file for one machine - #332. The machine is a REQUIRED argument:
-#   <step>.sh trixie2   ->  <step dir>/trixie2.env
+# Pick this step's env file for one machine. The machine is a REQUIRED argument:
+#   <step>.sh surface   ->  <step dir>/surface.env
 #   <step>.sh .env      ->  <step dir>/.env
 #   <step>.sh ./x.env   ->  that path (anything with a slash)
-# No argument is an error listing the machines this step has files for, so a
-# forgotten argument can never run against some other machine's settings.
+# No argument is an error that lists the machines this step has files for. So
+# a forgotten argument cannot run with another machine's settings.
 #------------------------------------------------------------------------------
 select_env() {
     local dir="$1" machine="${2:-}" have
@@ -87,7 +87,7 @@ read_env() {
         esac
 
         if [ "$key" = DEBBIE_SERVES ]; then
-            die "$ENV_FILE line $lineno: DEBBIE_SERVES was replaced by ROLE_WEBSERVER in 3-provision (#329). Delete the line: unset means the machine runs no sites."
+            die "$ENV_FILE line $lineno: DEBBIE_SERVES is not supported. Set ROLE_WEBSERVER=yes in 3-provision instead, or delete the line: an unset role runs no sites."
         fi
         case "$allowed" in
             *" $key "*) printf -v "$key" '%s' "$val" ;;
@@ -120,49 +120,48 @@ lan_ip() {
 # The installer kernel parameters, in one place, used by both the served-URL
 # route and the baked-into-the-ISO route.
 #
-# Every one of these is load-bearing, and three of them have already cost an
-# evening:
+# Every one of these is necessary, and three of them are easy to get wrong:
 #
-#   auto=true         postpones locale/keyboard/hostname until the preseed has
-#                     been fetched. Without it the installer asks them first.
-#   priority=critical suppresses every non-critical prompt. This is why the
-#                     wifi values below are MANDATORY rather than a
-#                     convenience: with the prompt suppressed, netcfg takes the
-#                     empty default for the passphrase and fails with "either
-#                     too long or too short", which reads like a bad password.
-#   show_essids=manual a separate question from the ESSID, offering a scanned
-#                     list. Unset, the install stops even with the ESSID given.
-#   security_type=wpa the select's values are 'wep/open' and 'wpa'. WPA2 PSK is
-#                     'wpa'; there is no 'wpa2'.
-#   netcfg/hostname   REQ-SERVER-004, #285. See below - this one cost a whole
-#                     install, not an evening.
+#   auto=true         delays locale, keyboard and hostname until the installer
+#                     has the preseed. Without it, the installer asks them
+#                     first.
+#   priority=critical suppresses every non-critical prompt. So the wifi values
+#                     below are MANDATORY, not a convenience: with the prompt
+#                     suppressed, netcfg takes the empty default for the
+#                     passphrase and fails with "either too long or too short",
+#                     which looks like a bad password.
+#   show_essids=manual a separate question from the ESSID, which offers a
+#                     scanned list. Without it, the install stops even with the
+#                     ESSID given.
+#   security_type=wpa the values of the select are 'wep/open' and 'wpa'. WPA2
+#                     PSK is 'wpa'. There is no 'wpa2'.
+#   netcfg/hostname   REQ-SERVER-004. See below.
 #
-# The hostname is here, on the boot line, for the same structural reason the
-# wifi credentials are: EVERY netcfg/* ANSWER MUST ARRIVE BEFORE NETCFG RUNS,
-# and netcfg runs before the preseed is fetched, because the preseed is fetched
-# over the network. The Debian guide says it outright - "preseeding the network
-# configuration won't work if you're loading your preconfiguration file from
-# the network" (B.4.3).
+# The hostname is here, on the boot line, for the same reason as the wifi
+# credentials: EVERY netcfg/* ANSWER MUST ARRIVE BEFORE NETCFG RUNS. netcfg
+# runs before the installer fetches the preseed, because the preseed comes over
+# the network. The Debian guide says so: "preseeding the network configuration
+# won't work if you're loading your preconfiguration file from the network"
+# (B.4.3).
 #
-# The first real install proved it. overrides.cfg set both netcfg/hostname and
-# netcfg/get_hostname to the intended name; netcfg had already run, fallen
-# through to a reverse-DNS lookup of the DHCP address 192.168.1.182, and split
-# it at the first dot, so the machine installed itself as hostname `192` in domain
-# `168.1.182`. Both keys were correct and both were read too late.
+# Without the key here, netcfg/hostname and netcfg/get_hostname in
+# overrides.cfg arrive too late. netcfg then does a reverse-DNS lookup of the
+# DHCP address (for example 192.168.1.182) and splits it at the first dot. The
+# machine installs as hostname `192` in domain `168.1.182`.
 #
-# netcfg checks netcfg/hostname FIRST and prefers it over the DHCP-supplied
-# name and over reverse DNS - that is what Debian #606636 added in netcfg 1.99,
-# and it is the first branch of the HOSTNAME case in netcfg's dhcp.c. Given
-# here, it is in debconf before netcfg starts, so that branch is taken.
+# netcfg checks netcfg/hostname FIRST, and prefers it over the name from DHCP
+# and over reverse DNS. Debian bug 606636 added that in netcfg 1.99, and it is
+# the first branch of the HOSTNAME case in netcfg's dhcp.c. Given here, the key
+# is in debconf before netcfg starts, so netcfg takes that branch.
 #
-# Belt and braces, not belt alone: overrides.cfg's late_command also writes
-# /etc/hostname and /etc/hosts in the target. That cannot lose a race with
-# netcfg no matter which key wins, so a machine is correctly named even if the
-# reasoning above turns out to be wrong on some particular network.
+# Two layers, not one: overrides.cfg's late_command also writes /etc/hostname
+# and /etc/hosts in the target. That cannot lose a race with netcfg, whichever
+# key wins. So a machine gets the correct name even if the reasoning above is
+# wrong on some network.
 #
-# The caller places these BEFORE the '---' separator. After it, they would be
-# copied into the installed system's bootloader config, persisting the wifi
-# passphrase in plaintext on the target's disk.
+# The caller puts these BEFORE the '---' separator. After it, the installer
+# copies them into the bootloader config of the installed system, and the wifi
+# passphrase stays in plaintext on the target's disk.
 #------------------------------------------------------------------------------
 installer_params() {
     local url="$1" params
@@ -178,14 +177,14 @@ installer_params() {
         # Wired, e.g. the VM: take the first interface with a link.
         params="$params netcfg/choose_interface=auto"
     fi
-    # These name the INSTALLER, not the installed machine - #376. The machine
-    # is named by write_overrides' late_command, which step 2 serves, and
-    # repaired by setup-server-environment.sh (REQ-SERVER-004). So step 1 needs
-    # no machine name and one USB serves every machine.
+    # These name the INSTALLER, not the installed machine. write_overrides'
+    # late_command, which step 2 serves, names the machine, and
+    # setup-server-environment.sh repairs the name (REQ-SERVER-004). So step 1
+    # needs no machine name, and one USB serves every machine.
     #
-    # SET, never empty. An unset netcfg/hostname is what let netcfg fall through
-    # to a reverse-DNS lookup and name a machine `192` for a whole generation
-    # (#285). The placeholder is what stops it asking or guessing.
+    # SET, never empty. With netcfg/hostname unset, netcfg does a reverse-DNS
+    # lookup and can name a machine `192`. The placeholder stops it from asking
+    # or guessing.
     params="$params netcfg/hostname=${SERVER_NAME:-debbie-installer}"
     params="$params netcfg/get_hostname=${SERVER_NAME:-debbie-installer}"
     printf '%s' "$params"
@@ -222,20 +221,20 @@ cat <<EOF
 # preseed/include - later values win. Do not edit; edit the generator.
 d-i passwd/username string $DEPLOY_USER
 
-# These two are BELIEVED NOT TO TAKE EFFECT and nothing may depend on them -
-# REQ-SERVER-004, #285. This file is fetched over the network, so netcfg has
-# already run and already picked a hostname before it is read; see the long
-# note in preseed.cfg. They are kept because they cost nothing and are correct
-# if this preseed is ever driven from a local file instead.
+# These two are BELIEVED TO HAVE NO EFFECT, and nothing may depend on them -
+# REQ-SERVER-004. The installer fetches this file over the network, so netcfg
+# runs and picks a hostname before it reads the file. See the long note in
+# preseed.cfg. They stay because they cost nothing, and they are correct if a
+# local file drives this preseed.
 #
 # What binds is netcfg/hostname= on the KERNEL COMMAND LINE (the caller's job -
 # installer_params in scripts/lib.sh), and the late_command below.
 d-i netcfg/get_hostname string $SERVER_NAME
 d-i netcfg/hostname string $SERVER_NAME
 
-# The password hash is injected rather than committed. The previous generation
-# shipped 'password changeme' in the clear in a public repository for nine
-# months; this generation's preseed.cfg holds no hash at all.
+# The password hash comes from the env file and is never committed. The
+# repository is public, so a committed password or hash would be public too.
+# preseed.cfg holds no hash at all.
 d-i passwd/user-password-crypted password $PASSWORD_CRYPTED
 EOF
 
@@ -245,30 +244,29 @@ fi
 
 cat <<EOF
 
-# Only ONE late_command may exist across all included files - last wins,
-# silently - so it is defined here and nowhere else. EXTEND it; never add a
-# second one anywhere.
+# Only ONE late_command may exist across all included files. The last one
+# wins, with no warning, so it is defined here and nowhere else. EXTEND it.
+# Never add a second one.
 #
-# The first three commands impose the hostname on the installed filesystem -
-# REQ-SERVER-004, #285. This is the layer that is guaranteed, as opposed to the
-# netcfg/* keys above (read too late) and the boot-line key (right, but only
-# provable on hardware). It works because of where late_command sits in the
-# finish-install sequence:
+# The first three commands set the hostname on the installed filesystem -
+# REQ-SERVER-004. This layer is certain, unlike the netcfg/* keys above (read
+# too late) and the boot-line key (correct, but provable only on hardware). It
+# works because of where late_command sits in the finish-install sequence:
 #
 #   netcfg runs -> /etc/hostname and /etc/hosts are written from whatever it
 #   decided -> base-installer copies them into /target -> pkgsel ->
 #   finish-install.d/07 (THIS) -> finish-install.d/55netcfg-copy-config.
 #
-# So the target's identity files already exist when this runs, and the only
-# netcfg script that runs afterwards is 55netcfg-copy-config, which writes
-# interface configuration into netplan/NetworkManager/ifupdown and does not
-# touch /etc/hostname or /etc/hosts. Nothing overwrites what is set here.
+# So the target's identity files exist when this runs. The only netcfg script
+# that runs after it is 55netcfg-copy-config, which writes interface
+# configuration into netplan, NetworkManager or ifupdown, and does not touch
+# /etc/hostname or /etc/hosts. Nothing overwrites what this sets.
 #
-# The 127.0.1.1 line is REPLACED, not appended to: netcfg writes its own, and
-# on the failing install that line read '127.0.1.1 192.168.1.182 192'. The grep
-# pattern leaves the dots unescaped on purpose - backslashes inside a debconf
-# value that is already using line continuations are a needless risk, and an
-# anchored '^127.0.1.1' cannot plausibly match anything else in /etc/hosts.
+# The 127.0.1.1 line is REPLACED, not appended to. netcfg writes its own, and
+# with a reverse-DNS name that line reads '127.0.1.1 192.168.1.182 192'. The
+# grep pattern leaves the dots unescaped on purpose: backslashes inside a
+# debconf value with line continuations are an unnecessary risk, and an
+# anchored '^127.0.1.1' cannot match anything else in /etc/hosts.
 #
 # A space separates the fields rather than a tab, for the same reason: no
 # backslash escape has to survive debconf. /etc/hosts is whitespace-delimited,

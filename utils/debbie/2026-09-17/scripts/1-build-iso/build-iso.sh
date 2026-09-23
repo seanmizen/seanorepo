@@ -1,25 +1,27 @@
 #!/bin/bash
-# build-iso.sh: copies the Debian netinst ISO and adds one target machine's
-# boot line to the copy, ready to write to a USB stick.
+# build-iso.sh: copies the Debian netinst ISO and adds the installer boot line
+# to the copy, ready to write to a USB stick. One stick installs every machine.
 #
-# The boot line is the settings the installer reads the moment it starts:
-# wifi, hostname, and the address of the preseed server that step 2 runs.
+# The boot line holds the settings that the installer reads when it starts:
+# wifi, a placeholder hostname, and the address of the preseed server that
+# step 2 runs.
 #
 # Where: your computer. Step 1 of 3.
-# When:  once per target machine, and again if its boot line changes. A
-#        preseed edit needs no new ISO, because step 2 serves the preseed.
-# Why:   typing the 200-character boot line at the boot menu failed three
-#        times on the first hardware install. We know the values in
-#        advance, so a file holds them.
+# When:  once, and again if the boot line changes (wifi, or the address of the
+#        preseed server). A preseed edit needs no new ISO, because step 2
+#        serves the preseed.
+# Why:   a 200-character boot line typed at the boot menu is easy to get
+#        wrong. The values are known in advance, so a file holds them.
 #
 # What happens:
-#   1. It writes working/debbie-<name>.iso and checks the result.
+#   1. It writes working/debbie-installer.iso and checks the result.
 #   2. It prints the commands to write the ISO to a USB stick.
 #   3. You write the stick, start step 2, and boot the target from the stick.
 #
 # Usage:
-#   ./build-iso.sh <machine>                  build the ISO
-#   ./build-iso.sh <machine> --show-cmdline   print the boot line and stop
+#   ./build-iso.sh                  build the ISO from 1-build-iso/.env
+#   ./build-iso.sh --show-cmdline   print the boot line and stop
+#   ./build-iso.sh <machine>        read 1-build-iso/<machine>.env instead
 #
 # The ISO contains the wifi passphrase in plaintext. working/ is gitignored.
 set -euo pipefail
@@ -32,20 +34,19 @@ WORK="$GEN_DIR/working"                          # shared by all three steps
 # shellcheck source=../lib.sh
 . "$SCRIPTS/lib.sh"
 
-# The machine argument is optional since #376, so a flag must not be mistaken
-# for one. `./build-iso.sh --show-cmdline` used to put the flag in $1 only after
-# a machine name had been consumed; now there is no machine name to consume.
+# The machine argument is optional, so a flag must not look like a machine
+# name. With no argument, or a flag first, the script reads .env.
 case "${1:-}" in
     '' | -*) select_env "$HERE" .env ;;
     *)       select_env "$HERE" "$1"; shift ;;
 esac
 PORT="${PORT:-8000}"
 read_env SERVER_NAME DEPLOY_USER WIFI_SSID WIFI_PASS WIFI_IFACE PORT SERVE_IP ISO
-[ -z "${SERVER_NAME:-}" ] || warn "SERVER_NAME is set in $ENV_FILE and ignored here since #376. One USB installs any machine; step 2 names it. Delete the line, or move this file to $HERE/.env and drop the machine argument."
+[ -z "${SERVER_NAME:-}" ] || warn "SERVER_NAME is set in $ENV_FILE and ignored here. One USB installs any machine, and step 2 names it. Delete the line, or move this file to $HERE/.env and drop the machine argument."
 DEPLOY_USER="${DEPLOY_USER:-srv}"
-# No SERVER_NAME here since #376. One USB installs any machine: the name is set
-# by step 2, which serves the preseed, and repaired by step 3. The installer
-# calls itself debbie-installer for the few minutes it runs.
+# No SERVER_NAME here. One USB installs any machine: step 2, which serves the
+# preseed, sets the name, and step 3 repairs it. The installer calls itself
+# debbie-installer for the few minutes that it runs.
 PORT="${PORT:-8000}"
 
 [ -n "${WIFI_SSID:-}" ] || die "WIFI_SSID is not set in $ENV_FILE"
@@ -54,9 +55,9 @@ PORT="${PORT:-8000}"
 # netcfg rejects a WPA passphrase outside 8-64 characters, and does it with a
 # message that blames the passphrase. Catch it here, where the cause is obvious.
 case "${#WIFI_PASS}" in
-    [0-7]) die "WIFI_PASS is ${#WIFI_PASS} characters; WPA requires at least 8" ;;
+    [0-7]) die "WIFI_PASS is ${#WIFI_PASS} characters. WPA requires at least 8." ;;
 esac
-[ "${#WIFI_PASS}" -le 64 ] || die "WIFI_PASS is ${#WIFI_PASS} characters; WPA allows at most 64"
+[ "${#WIFI_PASS}" -le 64 ] || die "WIFI_PASS is ${#WIFI_PASS} characters. WPA allows at most 64."
 
 command -v xorriso > /dev/null || die "xorriso not found. macOS: brew install xorriso. Debian: sudo apt install xorriso"
 
@@ -122,9 +123,9 @@ chmod u+w "$TMP/grub.cfg" "$TMP/txt.cfg" "$TMP/md5sum.txt"
 mv "$TMP/grub.cfg.new" "$TMP/grub.cfg"
 
 # --- BIOS: isolinux -----------------------------------------------------------
-# Kept in step so the ISO behaves the same if it is ever booted on a CSM-only
-# machine. debbie is UEFI, so this path is untested there but must not be a
-# silently different install.
+# Kept the same as the GRUB entry, so the ISO behaves the same if a CSM-only
+# machine boots it. The target machines boot UEFI, so this path is not tested
+# on hardware, but it must not give a different install.
 {
     printf 'default debbieauto\n\n'
     printf 'label debbieauto\n'
@@ -137,9 +138,9 @@ mv "$TMP/grub.cfg.new" "$TMP/grub.cfg"
 mv "$TMP/txt.cfg.new" "$TMP/txt.cfg"
 
 # --- md5sum.txt ---------------------------------------------------------------
-# The ISO ships checksums for its own contents, used by the "Check disc for
-# defects" menu entry. Leaving them stale would make that entry report
-# corruption on a perfectly good disc.
+# The ISO has checksums for its own contents, which the "Check disc for
+# defects" menu entry uses. Old checksums would make that entry report
+# corruption on a good disc.
 md5_of() {
     if command -v md5sum > /dev/null; then md5sum "$1" | awk '{print $1}';
     else md5 -q "$1"; fi
@@ -159,10 +160,10 @@ done
 #------------------------------------------------------------------------------
 # Rebuild.
 #
-# `-boot_image any replay` is what makes this work: it reproduces the source
-# image's own boot arrangement - the isohybrid MBR, the El Torito catalogue and
-# the EFI boot image - rather than trying to describe it again by hand. Without
-# it the result is a data ISO that no firmware will boot.
+# `-boot_image any replay` makes this work. It copies the boot layout of the
+# source image (the isohybrid MBR, the El Torito catalogue and the EFI boot
+# image), and does not describe it again by hand. Without it, the result is a
+# data ISO that no firmware boots.
 #------------------------------------------------------------------------------
 rm -f "$OUT"
 xorriso -indev "$ISO" -outdev "$OUT" \
@@ -172,10 +173,10 @@ xorriso -indev "$ISO" -outdev "$OUT" \
     -map "$TMP/txt.cfg" /isolinux/txt.cfg \
     -map "$TMP/md5sum.txt" /md5sum.txt \
     > "$WORK/build-iso.log" 2>&1 \
-    || { tail -20 "$WORK/build-iso.log" >&2; die "xorriso failed; see $WORK/build-iso.log"; }
+    || { tail -20 "$WORK/build-iso.log" >&2; die "xorriso failed. See $WORK/build-iso.log"; }
 
 #------------------------------------------------------------------------------
-# Prove the result carries what it should, rather than trusting the build.
+# Prove that the result has what it should. Do not trust the build.
 #------------------------------------------------------------------------------
 V="$(mktemp -d)"; trap 'rm -rf "$TMP" "$V"' EXIT
 xorriso -osirrox on -indev "$OUT" -extract /boot/grub/grub.cfg "$V/g" > /dev/null 2>&1 \
@@ -196,7 +197,7 @@ cat <<EOF
   Verified: default entry present, preseed URL and wifi params baked in before
   the '---' separator, El Torito catalogue intact.
 
-  Write it, being certain of the disk number - dd takes the whole device:
+  Write it. Make sure of the disk number: dd takes the whole device.
 
     diskutil list
     diskutil unmountDisk force /dev/diskN
@@ -207,7 +208,7 @@ cat <<EOF
 
     2-serve-preseed/serve-preseed.sh <machine>
 
-  This ISO contains your wifi passphrase in plaintext. working/ is gitignored;
-  treat the stick as a credential.
+  This ISO contains your wifi passphrase in plaintext. working/ is gitignored.
+  Treat the stick as a credential.
 
 EOF
