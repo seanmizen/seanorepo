@@ -9,9 +9,10 @@
 #        containers, no units, no yarn. So a standby target is always at the
 #        right commit.
 #
-# After each successful run, systemd starts custom-deploy.service (OnSuccess=).
-# That is the only trigger for a deploy, so a deploy never starts during a
-# checkout. deploy.sh then decides whether there is anything to do.
+# After each successful run, systemd starts custom-deploy.service and
+# custom-host-tools.service (OnSuccess=). This is the only trigger for a
+# deploy, so a deploy never starts during a checkout. deploy.sh then decides
+# whether there is anything to do.
 set -euo pipefail
 IFS=$'\n\t'
 

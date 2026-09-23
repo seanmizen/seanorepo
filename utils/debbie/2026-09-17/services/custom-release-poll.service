@@ -5,11 +5,12 @@ Description=Check out origin/release on this host if it has moved
 Documentation=https://github.com/seanmizen/seanorepo/issues/307
 After=network-online.target
 Wants=network-online.target
-# The one trigger for a deploy - #307. After EVERY successful poll, not only
-# when the SHA moved: deploy.sh compares the checkout and the boot id with its
-# marker and exits in milliseconds when there is nothing to do, and running it
-# every time is what brings the containers back after a power cut. On a
-# machine that does not serve, the deploy unit's condition skips it.
+# The one trigger for a deploy (REQ-DEPLOY-002). It fires after EVERY
+# successful poll, also when the SHA did not move. deploy.sh compares the
+# checkout and the boot id with its marker, and exits in milliseconds when there
+# is nothing to do. A run after every poll is what brings the containers back
+# after a power cut. On a machine that does not serve, the deploy unit's
+# condition skips it.
 OnSuccess=custom-deploy.service
 # The host tools follow the checkout on every machine, serving or not -
 # REQ-DEPLOY-007. host-tools.sh exits in milliseconds when they are current.
