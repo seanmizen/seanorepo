@@ -3,12 +3,11 @@
 The path from the public internet to a container on the host, and the
 behaviour that keeps that path alive without anyone watching.
 
-`2026-09-17/` implements these: the tunnel half (`REQ-NETWORK-001`,
-`REQ-NETWORK-002`, #280) and the failover half (#281). The evidence below cites
-that generation's files. The August 2026 outage recorded in `REQ-NETWORK-003`
-is why the failover half exists at all.
-
-Introduced in #273.
+`2026-09-17/` implements these requirements, and the evidence below cites the
+files of that generation. `REQ-NETWORK-001` and `REQ-NETWORK-002` cover the
+tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
+`REQ-NETWORK-005` covers remote SSH. The outage of 2026-08-14, recorded in
+`REQ-NETWORK-003`, is the reason for the failover requirements.
 
 ---
 
@@ -21,23 +20,22 @@ Introduced in #273.
 - **Priority:** P0
 - **Statement:** The host shall serve public traffic through an outbound
   tunnel, without any inbound port being forwarded.
-- **Rationale:** The machine is a laptop on a domestic connection with a dynamic
-  address. Port forwarding would expose it directly, tie the sites to an
-  address that changes, and put TLS termination on a machine nobody patches on
-  a schedule.
+- **Rationale:** The machine is a laptop on a domestic connection with a
+  dynamic address. Port forwarding would expose it directly, tie the sites to
+  an address that changes, and put TLS termination on a machine that nobody
+  patches on a schedule.
 
-  A Cloudflare tunnel dials out, so the router needs no configuration, the
-  address can change freely, and TLS terminates at the edge. It also means the
-  firewall can stay closed — `REQ-SERVER-002` allows four ports and none of
-  them is an application port.
+  A Cloudflare tunnel dials out. The router needs no configuration, the
+  address can change freely, and TLS terminates at the edge. The firewall can
+  also stay closed. `REQ-SERVER-002` allows four ports, and none of them is an
+  application port.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other ports open"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "cloudflared installed"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-cloudflared.service
     installed in /usr/local/lib/systemd/system"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other cloudflared unit
-    is enabled" — two daemons dialling out for one tunnel is the failure this
-    catches
+    is enabled" — the check catches two daemons that dial out for one tunnel
   - Inspection — `utils/debbie/2026-09-17/services/custom-cloudflared.service`
     runs `cloudflared tunnel run`, which dials out, and opens no port
 - **Relations:** none
@@ -51,24 +49,24 @@ Introduced in #273.
 - **Priority:** P1
 - **Statement:** The host shall take its tunnel ingress rules from
   `apps/cloudflared/config.yml` in the deployed checkout.
-- **Rationale:** Hostname-to-port mapping is the thing that changes whenever an
-  app is added, and it is the thing most likely to be edited in a hurry. Keeping
-  it in the repository means a routing change is reviewable, revertable and
-  visible in the same history as the app it routes to, rather than being a file
-  edited over SSH that exists in one place and is backed up nowhere.
+- **Rationale:** The hostname-to-port map changes whenever an app is added,
+  and people are likely to edit it in a hurry. In the repository, a routing
+  change is reviewable, revertable and visible in the same history as the app
+  it routes to. A file edited over SSH exists in one place and has no backup.
 
-  The credentials are the deliberate exception: they are host-specific and
-  gitignored, which is what `REQ-DEPLOY-006` protects. Provisioning defines
-  where they go and creates the directory; it never writes their content, and
-  re-running it never overwrites a set that is already there.
+  The credentials are the one exception. They are specific to the host and
+  gitignored, and `REQ-DEPLOY-006` protects them. Provisioning defines where
+  they go and creates the directory. It never writes their content, and a
+  second run never overwrites a set that exists.
 
-  Because `config.yml` names its `credentials-file` by a path *relative* to
-  itself, the unit has to run with its working directory set to
-  `apps/cloudflared`. Without that the daemon starts and then cannot find the
-  credentials, which reads as an authentication problem rather than a path one.
-  Since #329 the tunnel also runs only on the machine with the tunnel role
-  (`ROLE_TUNNEL`, exactly one machine). Credentials alone are not enough: a copy on
-  a second machine must not pull public traffic to it.
+  `config.yml` names its `credentials-file` by a path *relative* to itself, so
+  the unit must run with its working directory set to `apps/cloudflared`.
+  Without that, the daemon starts and then cannot find the credentials. The
+  error looks like an authentication problem, but the cause is the path.
+
+  The tunnel runs only on the machine with the tunnel role (`ROLE_TUNNEL`,
+  exactly one machine). Credentials alone are not sufficient: a copy on a
+  second machine must not pull public traffic to it.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel runs only on a
     machine with the tunnel role"
@@ -79,8 +77,8 @@ Introduced in #273.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "credentials directory is
     mode 700"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel is NOT enabled
-    while credentials are absent" — a host with no credentials refuses to run
-    the tunnel rather than restarting against it forever
+    while credentials are absent" — a host with no credentials does not run
+    the tunnel, so the unit does not restart forever
   - Inspection — `utils/debbie/2026-09-17/services/custom-cloudflared.service`
     passes `--config` the checkout's `apps/cloudflared/config.yml` and runs in
     the checkout's `apps/cloudflared`, as rendered by
@@ -100,42 +98,43 @@ Introduced in #273.
 - **Statement:** When the interface holding the default route cannot reach the
   gateway, the host shall move the default route to an interface that can.
 - **Rationale:** On 2026-08-14 `seanmizen.com` returned Cloudflare Error 1033
-  while `cloudflared` was running normally: the interface holding the default
-  route had carrier but no upstream, so every outbound packet was blackholed.
-  The tunnel was shouting into a disconnected wire and nothing noticed.
+  while `cloudflared` ran normally. The interface that held the default route
+  had carrier but no upstream, so every outbound packet was blackholed. The
+  tunnel sent into a disconnected wire, and nothing noticed.
 
-  NetworkManager reacts to carrier loss, not to reachability, so a dead switch
-  port or a cable unplugged at the far end keeps its address and its route
-  indefinitely. Static metrics do not help either: whichever interface is
-  preferred is preferred on faith, so the failure simply waits for that one to
-  die.
+  NetworkManager reacts to carrier loss. It does not react to lost
+  reachability. So a dead switch port, or a cable unplugged at the far end,
+  keeps its address and its route indefinitely. Static metrics do not help.
+  The preferred interface is preferred without evidence, so the failure only
+  waits for that interface to die.
 
-  The probe therefore has to go *through* the interface that currently owns the
-  route, and a healthy link must never be bounced — an unnecessary failover is
-  its own outage.
+  So the probe must go *through* the interface that owns the route. A healthy
+  link must never be bounced, because an unnecessary failover is an outage
+  too.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/net-failover.sh` probes the
     gateway with `ping -I <iface>` through the interface that owns the route,
     and exits without acting when it succeeds
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the watchdog names no
-    interface and no gateway" — it takes no configuration, so every machine is
-    protected rather than only the one an env file described
+    interface and no gateway" — the watchdog takes no configuration, so it
+    protects every machine, and not only a machine that an env file describes
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 1+8: a healthy run changes nothing and logs
-    nothing" — a healthy link is never bounced, and the journal stays readable
+    nothing" — the watchdog never bounces a healthy link, and the journal stays
+    readable
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 4: upstream dead with carrier up moves the
-    default route" — the 2026-08-14 failure, reproduced by blackholing the
-    gateway while the carrier stays up
+    default route" — the check reproduces the 2026-08-14 failure: it blackholes
+    the gateway while the carrier stays up
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 7: the route does not fail back on its own"
   - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › "case 5:
-    pulling the cable on n1" — carrier loss, driven through QEMU's monitor
-    because only the emulator can take a link away
+    pulling the cable on n1" — carrier loss, driven through the QEMU monitor,
+    because only the emulator can remove a link
   - Demonstration — a machine with one link runs the watchdog and finds nothing
-    to promote. Not asserted in the VM, which always has three.
+    to promote. The VM always has three links, so no VM check covers this.
 - **Relations:** depends-on REQ-NETWORK-001
 
-  Not covered by a VM run: `nmcli` association and WPA. QEMU has no wireless
-  device, so the matrix proves the probe, the promotion and the demotion, and
-  wifi is proven on metal only.
+  A VM run does not cover `nmcli` association and WPA. QEMU has no wireless
+  device. The VM matrix proves the probe, the promotion and the demotion. Only
+  a run on metal proves wifi.
 
 ## REQ-NETWORK-004 — The failover watchdog and the wifi configuration agree on an owner
 
@@ -147,22 +146,22 @@ Introduced in #273.
 - **Statement:** Where the host reaches the network over wifi, the interface
   shall be managed by the subsystem the failover watchdog drives.
 - **Rationale:** `net-failover.sh` promotes and demotes routes through `nmcli`,
-  so it can only act on interfaces NetworkManager manages. A wifi-only host
-  installed by `netcfg` does not have one: `netcfg` persists wifi as a
-  `wpa-ssid`/`wpa-psk` stanza in `/etc/network/interfaces` and installs
+  so it can act only on interfaces that NetworkManager manages. A wifi-only
+  host installed by `netcfg` has no such interface. `netcfg` persists wifi as
+  a `wpa-ssid`/`wpa-psk` stanza in `/etc/network/interfaces` and installs
   `wpasupplicant`, which is ifupdown.
 
-  Installing `network-manager` alongside that stanza produces the worst of the
-  three available states rather than the best. NetworkManager's ifupdown plugin
-  marks any interface listed in `/etc/network/interfaces` as unmanaged, so
-  `nmcli` does not drive the wifi, ifupdown does — and the watchdog silently
-  does nothing, which is indistinguishable from the watchdog working.
+  If `network-manager` is installed next to that stanza, the result is the
+  worst of the three available states. The ifupdown plugin of NetworkManager
+  marks any interface listed in `/etc/network/interfaces` as unmanaged. So
+  ifupdown drives the wifi, and `nmcli` does not. The watchdog then silently
+  does nothing, and that looks the same as a watchdog that works.
 
-  Held at **proposed** because the migration is the risky part, not the
-  requirement. It has to delete the stanza and write an NM connection profile
-  in a single step, and a mistake leaves a headless machine with no network and
-  no way in. That is worth doing with physical access to the machine, which is why
-  it is deliberately not coupled to installing one.
+  The status is **proposed** because the migration carries the risk. The
+  requirement itself is simple. The migration must delete the stanza and
+  write an NM connection profile in a single step. A mistake leaves a headless
+  machine with no network and no way in. That step is worth doing with
+  physical access to the machine, so it is separate from the machine install.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wifi config persisted"
     (skipped where the host has no wireless interface, which is every VM run)
@@ -181,19 +180,19 @@ Introduced in #273.
 - **Priority:** P1
 - **Statement:** The host shall accept an SSH connection that originates outside
   the local network, without any inbound port being opened.
-- **Rationale:** Most repair work on this machine is done by hand over SSH, usually
-  while something is already broken, and often from somewhere else. `ngrok tcp
-  22` is the only path that does this: the agent dials out, so
-  `REQ-NETWORK-001` still holds. The Cloudflare SSH tunnel
-  (`ssh.seanmizen.com`) is dead and is deliberately not rebuilt.
+- **Rationale:** Most repair work on this machine is done by hand over SSH,
+  usually while something is broken, and often from somewhere else. `ngrok tcp
+  22` is the only path that does this. The agent dials out, so
+  `REQ-NETWORK-001` holds. The Cloudflare SSH tunnel (`ssh.seanmizen.com`)
+  does not work, and this generation does not build it.
 
-  Two properties follow from being the only way in. The agent never stops
-  retrying, because a unit that gave up during an outage would stay down on a
-  machine nobody can reach. And every ngrok login reaches `sshd` from
-  `127.0.0.1`, so loopback is exempt from sshd's per-source penalties:
-  otherwise one scanner hitting the public address would lock the owner out
-  before authentication, whatever key they held. `REQ-SERVER-008` is what
-  keeps attackers out.
+  ngrok is the only way in, and two properties follow from that. The agent
+  never stops retrying, because a unit that stopped during an outage would
+  stay down on a machine that nobody can reach. Every ngrok login reaches
+  `sshd` from `127.0.0.1`, so loopback is exempt from the per-source penalties
+  of sshd. Without the exemption, one scanner on the public address would
+  lock the owner out before authentication, whatever key the owner held.
+  `REQ-SERVER-008` keeps attackers out.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok is dpkg-owned, not a manual binary drop"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok runs as $DEPLOY_USER"
