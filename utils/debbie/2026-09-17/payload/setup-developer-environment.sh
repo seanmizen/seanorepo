@@ -18,6 +18,7 @@
 #   5. shist, from its release
 #   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
 #   7. iTerm2 and its preferences (macOS only)
+#   8. Windows Terminal colours and font (WSL only)
 #
 # It is idempotent: a second run leaves the machine in the same state. .zshrc
 # is written whole every run, so edit this file rather than that one. Put
@@ -25,7 +26,9 @@
 #
 # Usage:
 #   macOS:  bash setup-developer-environment.sh
-#   Debian: sudo DEV_USER=<user> bash setup-developer-environment.sh
+#   Debian: bash setup-developer-environment.sh (it asks for your sudo password)
+#   As root for another account (provision.sh does this):
+#           sudo DEV_USER=<user> bash setup-developer-environment.sh
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -43,9 +46,10 @@ die() { echo "[dev-setup] ERROR: $*" >&2; exit 1; }
 # On a Mac the answer is "you", and running as root would put Homebrew and the
 # shell config in root's home. Homebrew refuses to run as root anyway.
 #
-# On Debian the script runs as root and configures another account, because
-# provision.sh sends it to a machine where it must create files for the deploy
-# user. DEV_USER names that account.
+# On Debian there are two ways to run it:
+# - As you (a WSL install or a desktop). The steps that need root use sudo.
+# - As root, for another account. provision.sh does this, because it must
+#   create files for the deploy user. DEV_USER names that account.
 #------------------------------------------------------------------------------
 case "$OS" in
     Darwin)
@@ -54,9 +58,13 @@ case "$OS" in
         USER_HOME="$HOME"
         ;;
     Linux)
-        [ "$(id -u)" -eq 0 ] || die "on Debian, run this with sudo"
-        DEV_USER="${DEV_USER:-${SUDO_USER:-}}"
-        [ -n "$DEV_USER" ] || die "DEV_USER is not set, and there is no SUDO_USER to fall back on"
+        if [ "$(id -u)" -eq 0 ]; then
+            DEV_USER="${DEV_USER:-${SUDO_USER:-}}"
+            [ -n "$DEV_USER" ] || die "DEV_USER is not set, and there is no SUDO_USER to fall back on"
+        else
+            DEV_USER="$(id -un)"
+            sudo -v || die "the Debian steps need sudo"
+        fi
         id "$DEV_USER" > /dev/null 2>&1 || die "no such user: $DEV_USER"
         USER_HOME="$(getent passwd "$DEV_USER" | cut -d: -f6)"
         export DEBIAN_FRONTEND=noninteractive
@@ -74,6 +82,21 @@ as_user() {
         bash -lc "$*"
     fi
 }
+
+# Run a command as root. The script is root already under provision.sh, and
+# uses sudo when you run it as yourself. sudo removes most of the environment,
+# so env gives apt its non-interactive setting again.
+as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo env DEBIAN_FRONTEND=noninteractive "$@"
+    fi
+}
+
+# WSL: a Linux that runs inside Windows. It gets Windows-only extras (section 8).
+IS_WSL=0
+[ "$OS" = Linux ] && grep -qi microsoft /proc/version && IS_WSL=1
 log "setting up $DEV_USER on $OS ($USER_HOME)"
 
 #------------------------------------------------------------------------------
@@ -87,11 +110,11 @@ if [ "$OS" = Darwin ]; then
     fi
     BREW="$(command -v brew || echo /opt/homebrew/bin/brew)"
     eval "$("$BREW" shellenv)"
-    brew install git curl wget gnupg jq htop tree unzip zsh
+    brew install git curl wget gnupg jq htop tree unzip zsh gh
 else
     log "apt packages"
-    apt-get update -y
-    apt-get install -y git curl wget ca-certificates gnupg jq htop tree unzip zsh
+    as_root apt-get update -y
+    as_root apt-get install -y git curl wget ca-certificates gnupg jq htop tree unzip zsh gh
 fi
 
 #------------------------------------------------------------------------------
@@ -140,6 +163,16 @@ arrow='%(?:%F{green}➜%f:%F{red}➜%f)'
 PROMPT='%B${arrow}%b %B%F{blue}%m%f%b %B%F{cyan}${prompt_path}%f%b $(git_prompt_info)'
 
 alias cls=clear
+# pwdw: the Windows path of the current directory, for Explorer or a Windows
+# app. Only WSL has a Windows path, so other systems get a warning.
+pwdw() {
+  if command -v wslpath > /dev/null; then
+    wslpath -w "$PWD"
+  else
+    echo "pwdw: this is not WSL, so there is no Windows path" >&2
+    return 1
+  fi
+}
 # Project-local completions, if the directory you are in provides them.
 [[ -f ./completions.zsh ]] && source ./completions.zsh
 
@@ -171,7 +204,7 @@ if [ "$(getent passwd "$DEV_USER" 2> /dev/null | cut -d: -f7 || dscl . -read "/U
         grep -qxF "$ZSH_PATH" /etc/shells || echo "$ZSH_PATH" | sudo tee -a /etc/shells > /dev/null
         chsh -s "$ZSH_PATH"
     else
-        chsh -s "$ZSH_PATH" "$DEV_USER"
+        as_root chsh -s "$ZSH_PATH" "$DEV_USER"
     fi
 fi
 
@@ -188,8 +221,8 @@ if [ "$OS" = Darwin ]; then
     brew link --overwrite --force "node@$NODE_MAJOR"
     as_user "corepack enable --install-directory '$USER_HOME/.local/bin'"
 else
-    apt-get install -y nodejs node-corepack
-    corepack enable yarn
+    as_root apt-get install -y nodejs node-corepack
+    as_root corepack enable yarn
 fi
 
 #------------------------------------------------------------------------------
@@ -204,7 +237,7 @@ if [ "$OS" = Darwin ]; then
 else
     DOCKER_KEYRING=/etc/apt/keyrings/docker.gpg
     DOCKER_LIST=/etc/apt/sources.list.d/docker.list
-    install -d -m 0755 /etc/apt/keyrings
+    as_root install -d -m 0755 /etc/apt/keyrings
     if [ ! -s "$DOCKER_KEYRING" ]; then
         log "  fetching Docker's apt signing key"
         # Dearmoured through a temp file: a curl that dies mid-stream would
@@ -212,15 +245,15 @@ else
         # above would skip repairing it forever.
         docker_key_tmp="$(mktemp)"
         curl -fsSL https://download.docker.com/linux/debian/gpg -o "$docker_key_tmp"
-        gpg --batch --yes --dearmor -o "$DOCKER_KEYRING" "$docker_key_tmp"
+        as_root gpg --batch --yes --dearmor -o "$DOCKER_KEYRING" "$docker_key_tmp"
         rm -f "$docker_key_tmp"
-        chmod 0644 "$DOCKER_KEYRING"
+        as_root chmod 0644 "$DOCKER_KEYRING"
     fi
     docker_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$DOCKER_KEYRING] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
     docker_repo_changed=0
     if [ ! -f "$DOCKER_LIST" ] || [ "$(cat "$DOCKER_LIST")" != "$docker_deb_line" ]; then
         log "  writing $DOCKER_LIST"
-        printf '%s\n' "$docker_deb_line" > "$DOCKER_LIST"
+        printf '%s\n' "$docker_deb_line" | as_root tee "$DOCKER_LIST" > /dev/null
         docker_repo_changed=1
     fi
     # Refresh the package lists only when there is a reason to. The second test
@@ -228,12 +261,17 @@ else
     # before installing.
     if [ "$docker_repo_changed" = 1 ] \
         || ! dpkg-query -W -f='${Status}' docker-ce 2> /dev/null | grep -q "^install ok installed"; then
-        apt-get update -y
+        as_root apt-get update -y
     fi
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    systemctl enable --now docker
-    getent group docker > /dev/null || groupadd docker
-    usermod -aG docker "$DEV_USER"
+    as_root apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    # A WSL install without systemd=true in /etc/wsl.conf has no systemd.
+    if [ -d /run/systemd/system ]; then
+        as_root systemctl enable --now docker
+    else
+        log "  no systemd - set systemd=true in /etc/wsl.conf, then run: wsl --shutdown"
+    fi
+    getent group docker > /dev/null || as_root groupadd docker
+    as_root usermod -aG docker "$DEV_USER"
 fi
 
 #------------------------------------------------------------------------------
@@ -322,11 +360,38 @@ if [ "$OS" = Darwin ]; then
     fi
 fi
 
+#------------------------------------------------------------------------------
+# 8. Windows Terminal (WSL only)
+#
+# windows-terminal.json holds the iTerm2 colours as a Windows Terminal scheme,
+# and the profile defaults that use it. Monaco is not on Windows, so the font
+# is Cascadia Mono, which comes with Windows Terminal. The merge replaces the
+# scheme of the same name and keeps all other settings. A settings.json that
+# jq cannot read (it has comments) is not changed.
+#------------------------------------------------------------------------------
+if [ "$IS_WSL" = 1 ]; then
+    log "windows terminal"
+    wt_appdata="$(as_user "cmd.exe /c 'echo %LOCALAPPDATA%' 2> /dev/null" | tr -d '\r' || true)"
+    WT_SETTINGS="$(wslpath -u "$wt_appdata" 2> /dev/null || true)/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
+    if [ ! -f "$WT_SETTINGS" ]; then
+        log "  no Windows Terminal settings.json - skipping"
+    elif wt_tmp="$(mktemp)" && jq --slurpfile wt "$HERE/windows-terminal.json" '
+            .schemes = ([.schemes[]? | select(.name != $wt[0].scheme.name)] + [$wt[0].scheme])
+            | .profiles.defaults += $wt[0].defaults' "$WT_SETTINGS" > "$wt_tmp"; then
+        cp "$WT_SETTINGS" "$WT_SETTINGS.bak"
+        cat "$wt_tmp" > "$WT_SETTINGS"
+        log "  scheme and font applied (the old file is settings.json.bak)"
+    else
+        log "  jq cannot read $WT_SETTINGS - skipping"
+    fi
+    rm -f "${wt_tmp:-}"
+fi
+
 # The .deb files apt keeps after installing are worth hundreds of megabytes on
 # a machine that installs Docker and Node. Nothing reads them again.
 if [ "$OS" = Linux ]; then
     log "clearing the apt cache"
-    apt-get clean
+    as_root apt-get clean
 fi
 
 log "done. Open a new shell to pick up zsh and PATH."
