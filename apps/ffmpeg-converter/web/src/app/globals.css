@@ -15,6 +15,9 @@
   --accent-fg: 255 255 255;
   --accent-text: 29 78 216;
   --danger: 185 28 28;
+  --local: 15 118 110;
+  --local-hover: 17 94 89;
+  --local-fg: 255 255 255;
   color-scheme: light;
 }
 
@@ -30,6 +33,9 @@
     --accent-fg: 255 255 255;
     --accent-text: 125 170 255;
     --danger: 248 113 113;
+    --local: 13 148 136;
+    --local-hover: 20 184 166;
+    --local-fg: 255 255 255;
     color-scheme: dark;
   }
 }

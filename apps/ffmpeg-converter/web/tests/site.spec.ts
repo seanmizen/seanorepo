@@ -74,3 +74,73 @@ for (const url of ['/', '/mov-to-mp4', '/trim-video']) {
     expect(bad.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 }
+
+test.describe('on this device', () => {
+  test('loads nothing until the user chooses it', async ({
+    page,
+    isMobile,
+  }) => {
+    const wasm: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('/ffmpeg/')) wasm.push(r.url());
+    });
+    await page.goto('/mov-to-mp4');
+    const button = page.getByLabel('Convert on this device');
+    if (isMobile) {
+      // No phone measurements yet, so phones do not get the option.
+      await expect(button).toHaveCount(0);
+    } else {
+      await expect(button).toBeVisible();
+    }
+    await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
+    await expectDownload(page, 'clip.mp4');
+    expect(wasm).toEqual([]);
+  });
+
+  test('converts on the device', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'desktop only');
+    const uploads: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('/api/convert')) uploads.push(r.url());
+    });
+    await page.goto('/mov-to-mp4');
+    await page
+      .getByLabel('Convert on this device')
+      .setInputFiles(fixture('clip.mov'));
+    const link = page.getByRole('link', { name: 'Download MP4' });
+    await expect(link).toBeVisible({ timeout: 90_000 });
+    await expect(link).toHaveAttribute('href', /^blob:/);
+    await expect(link).toHaveAttribute('download', 'clip.mp4');
+    await expect(page.getByText('Your file did not leave it.')).toBeVisible();
+    expect(uploads).toEqual([]);
+  });
+
+  test('makes a GIF on the device', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'desktop only');
+    await page.goto('/mp4-to-gif');
+    await page
+      .getByLabel('Convert on this device')
+      .setInputFiles(fixture('clip.mp4'));
+    await expect(page.getByText(/Clip length: 3\.0 seconds/)).toBeVisible();
+    await page.getByRole('button', { name: 'Make GIF on this device' }).click();
+    const link = page.getByRole('link', { name: 'Download GIF' });
+    await expect(link).toBeVisible({ timeout: 90_000 });
+    const size = await page.evaluate(
+      async (href) => (await (await fetch(href)).blob()).size,
+      (await link.getAttribute('href')) ?? '',
+    );
+    expect(size).toBeGreaterThan(1000);
+  });
+
+  test('audio and image pages have no device option', async ({ page }) => {
+    for (const url of [
+      '/mp4-to-mp3',
+      '/png-to-jpg',
+      '/compress-video-to-10mb',
+    ]) {
+      await page.goto(url);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(page.getByLabel('Convert on this device')).toHaveCount(0);
+    }
+  });
+});
