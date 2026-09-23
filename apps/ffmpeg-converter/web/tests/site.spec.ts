@@ -1,0 +1,76 @@
+import path from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, type Page, test } from '@playwright/test';
+import { FIXTURES } from './fixtures';
+
+const fixture = (name: string) => path.join(FIXTURES, name);
+
+async function expectDownload(page: Page, name: string) {
+  const link = page.getByRole('link', { name: /^Download/ });
+  await expect(link).toBeVisible({ timeout: 60_000 });
+  await expect(link).toHaveAttribute('download', name);
+  const href = await link.getAttribute('href');
+  const res = await page.request.get(href ?? '');
+  expect(res.status()).toBe(200);
+  expect((await res.body()).length).toBeGreaterThan(100);
+}
+
+test('a tool page converts after one click', async ({ page }) => {
+  await page.goto('/mov-to-mp4');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'MOV to MP4',
+  );
+  await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
+  await expectDownload(page, 'clip.mp4');
+  await page.getByRole('button', { name: 'Convert another file' }).click();
+  await expect(page.getByText('Choose MOV file')).toBeVisible();
+});
+
+test('the home page asks what to do with the file', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Choose a file').setInputFiles(fixture('clip.mp4'));
+  await page.getByRole('button', { name: 'Save the sound as MP3' }).click();
+  await expectDownload(page, 'clip.mp3');
+});
+
+test('trim asks for a start and an end', async ({ page }) => {
+  await page.goto('/trim-video');
+  await page.getByLabel('Choose video file').setInputFiles(fixture('clip.mp4'));
+  await expect(page.getByText(/Clip length: 3\.0 seconds/)).toBeVisible();
+  await page.getByLabel('Start (seconds)').fill('1');
+  await page.getByRole('button', { name: 'Trim video' }).click();
+  await expectDownload(page, 'clip-trimmed.mp4');
+});
+
+test('the wrong kind of file gets a plain error', async ({ page }) => {
+  await page.goto('/mov-to-mp4');
+  await page
+    .getByLabel('Choose MOV file')
+    .setInputFiles(fixture('picture.png'));
+  await expect(page.getByRole('alert').filter({ hasText: /\S/ })).toContainText(
+    'This page converts video files',
+  );
+});
+
+test('there is no drop zone and no ffmpeg jargon', async ({ page }) => {
+  for (const url of ['/', '/mov-to-mp4', '/compress-video-to-10mb']) {
+    await page.goto(url);
+    const text = await page.locator('body').innerText();
+    expect(text).not.toMatch(
+      /ffmpeg -i|-crf|libx264|Advanced|drag and drop|drop (a|your) file/i,
+    );
+  }
+});
+
+for (const url of ['/', '/mov-to-mp4', '/trim-video']) {
+  test(`no serious accessibility problems on ${url}`, async ({ page }) => {
+    await page.goto(url);
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    const bad = violations.filter(
+      (v) => v.impact === 'serious' || v.impact === 'critical',
+    );
+    expect(bad.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  });
+}

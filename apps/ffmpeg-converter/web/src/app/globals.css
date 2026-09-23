@@ -3,17 +3,41 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Brand: dark by default, matches the legacy web-spa palette
- * (--bg #0f0f11, --surface #1a1a1f, --accent #6c6ef7). */
+/* RGB triples for tailwind.config.ts. Light first, dark by system setting. */
 :root {
-  --background: 15 15 17;
-  --foreground: 232 232 240;
+  --bg: 246 247 249;
+  --surface: 255 255 255;
+  --fg: 17 24 39;
+  --muted: 75 85 99;
+  --line: 223 227 232;
+  --accent: 37 99 235;
+  --accent-hover: 29 78 216;
+  --accent-fg: 255 255 255;
+  --accent-text: 29 78 216;
+  --danger: 185 28 28;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 15 17 21;
+    --surface: 24 27 33;
+    --fg: 236 238 242;
+    --muted: 160 168 180;
+    --line: 48 54 64;
+    --accent: 59 130 246;
+    --accent-hover: 96 150 250;
+    --accent-fg: 255 255 255;
+    --accent-text: 125 170 255;
+    --danger: 248 113 113;
+    color-scheme: dark;
+  }
 }
 
 html,
 body {
-  background: rgb(var(--background));
-  color: rgb(var(--foreground));
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
   font-family:
     ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, sans-serif;

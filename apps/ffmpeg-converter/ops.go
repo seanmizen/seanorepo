@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -72,12 +75,17 @@ func runTranscode(ctx context.Context, oc OpContext, defaultVCodec, defaultACode
 		args = append(args, "-r", fps)
 	}
 
+	// yuv420p and faststart make the file play in browsers, QuickTime and
+	// Windows, and start before the download is complete.
 	args = append(args,
+		"-pix_fmt", "yuv420p",
 		"-c:a", defaultACodec,
 		"-b:a", arg(oc, "audio_bitrate", defaultABitrate),
-		oc.Output,
 	)
-	return ffmpegRun(ctx, args...)
+	if ext := strings.ToLower(filepath.Ext(oc.Output)); ext == ".mp4" || ext == ".mov" || ext == ".m4v" {
+		args = append(args, "-movflags", "+faststart")
+	}
+	return ffmpegRun(ctx, append(args, oc.Output)...)
 }
 
 // SEAN-95 — VP9/Opus-flavoured transcode runner. VP9 doesn't have libx264-style
@@ -98,12 +106,17 @@ func runTranscodeVPx(ctx context.Context, oc OpContext, defaultVCodec, defaultAC
 		args = append(args, "-r", fps)
 	}
 
+	// yuv420p and faststart make the file play in browsers, QuickTime and
+	// Windows, and start before the download is complete.
 	args = append(args,
+		"-pix_fmt", "yuv420p",
 		"-c:a", defaultACodec,
 		"-b:a", arg(oc, "audio_bitrate", defaultABitrate),
-		oc.Output,
 	)
-	return ffmpegRun(ctx, args...)
+	if ext := strings.ToLower(filepath.Ext(oc.Output)); ext == ".mp4" || ext == ".mov" || ext == ".m4v" {
+		args = append(args, "-movflags", "+faststart")
+	}
+	return ffmpegRun(ctx, append(args, oc.Output)...)
 }
 
 // RegisterOps returns the full operation map. The names are deliberately
@@ -151,15 +164,25 @@ func RegisterOps() map[string]*Operation {
 	})
 	add(&Operation{
 		Name: "resize", Category: "video",
-		Description: "Resize video; args: width, height",
+		Description: "Resize video; args: width, height or short_side, crf, preset",
 		DefaultExt:  ".mp4",
 		Run: func(ctx context.Context, oc OpContext) error {
 			w := arg(oc, "width", "64")
 			h := arg(oc, "height", "36")
+			vf := fmt.Sprintf("scale=%s:%s", w, h)
+			// short_side=720 gives 1280x720 for landscape and 720x1280 for
+			// portrait. That is what people mean by "720p".
+			if s := arg(oc, "short_side", ""); s != "" {
+				if _, err := strconv.Atoi(s); err != nil {
+					return fmt.Errorf("bad short_side %q", s)
+				}
+				vf = fmt.Sprintf("scale=%s:%s:force_original_aspect_ratio=increase:force_divisible_by=2", s, s)
+			}
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-vf", fmt.Sprintf("scale=%s:%s", w, h),
-				"-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
-				"-c:a", "copy", oc.Output)
+				"-vf", vf,
+				"-c:v", "libx264", "-preset", arg(oc, "preset", "ultrafast"),
+				"-crf", arg(oc, "crf", "30"), "-pix_fmt", "yuv420p",
+				"-c:a", "copy", "-movflags", "+faststart", oc.Output)
 		},
 	})
 	add(&Operation{
@@ -186,9 +209,12 @@ func RegisterOps() map[string]*Operation {
 	})
 	add(&Operation{
 		Name: "change_bitrate", Category: "video",
-		Description: "Set video bitrate; args: bitrate (default 150k)",
+		Description: "Set video bitrate; args: bitrate (default 150k), or target_size_mb",
 		DefaultExt:  ".mp4",
 		Run: func(ctx context.Context, oc OpContext) error {
+			if mb := arg(oc, "target_size_mb", ""); mb != "" {
+				return runCompressToSize(ctx, oc, mb)
+			}
 			br := arg(oc, "bitrate", "150k")
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
 				"-c:v", "libx264", "-preset", "ultrafast", "-b:v", br,
@@ -197,14 +223,16 @@ func RegisterOps() map[string]*Operation {
 	})
 	add(&Operation{
 		Name: "trim", Category: "video",
-		Description: "Trim a video; args: start (s), duration (s)",
+		Description: "Trim a video; args: start (s), duration (s), crf, preset, audio_bitrate",
 		DefaultExt:  ".mp4",
 		Run: func(ctx context.Context, oc OpContext) error {
 			start := arg(oc, "start", "0")
 			dur := arg(oc, "duration", "1")
 			return ffmpegRun(ctx, "-ss", start, "-i", oc.Inputs[0], "-t", dur,
-				"-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
-				"-c:a", "aac", "-b:a", "64k", oc.Output)
+				"-c:v", "libx264", "-preset", arg(oc, "preset", "ultrafast"),
+				"-crf", arg(oc, "crf", "30"), "-pix_fmt", "yuv420p",
+				"-c:a", "aac", "-b:a", arg(oc, "audio_bitrate", "64k"),
+				"-movflags", "+faststart", oc.Output)
 		},
 	})
 	add(&Operation{
@@ -435,7 +463,7 @@ func RegisterOps() map[string]*Operation {
 		DefaultExt:  ".mp3",
 		Run: func(ctx context.Context, oc OpContext) error {
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-vn", "-c:a", "libmp3lame", "-b:a", "64k", oc.Output)
+				"-vn", "-c:a", "libmp3lame", "-b:a", arg(oc, "audio_bitrate", "64k"), oc.Output)
 		},
 	})
 	add(&Operation{
@@ -444,7 +472,7 @@ func RegisterOps() map[string]*Operation {
 		DefaultExt:  ".opus",
 		Run: func(ctx context.Context, oc OpContext) error {
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-vn", "-c:a", "libopus", "-b:a", "32k", oc.Output)
+				"-vn", "-c:a", "libopus", "-b:a", arg(oc, "audio_bitrate", "32k"), oc.Output)
 		},
 	})
 	add(&Operation{
@@ -462,7 +490,7 @@ func RegisterOps() map[string]*Operation {
 		DefaultExt:  ".m4a",
 		Run: func(ctx context.Context, oc OpContext) error {
 			return ffmpegRun(ctx, "-i", oc.Inputs[0],
-				"-vn", "-c:a", "aac", "-b:a", "64k", oc.Output)
+				"-vn", "-c:a", "aac", "-b:a", arg(oc, "audio_bitrate", "64k"), oc.Output)
 		},
 	})
 	add(&Operation{
@@ -619,7 +647,7 @@ func RegisterOps() map[string]*Operation {
 		Description: "Convert image to JPEG",
 		DefaultExt:  ".jpg",
 		Run: func(ctx context.Context, oc OpContext) error {
-			return ffmpegRun(ctx, "-i", oc.Inputs[0], "-q:v", "5", oc.Output)
+			return ffmpegRun(ctx, "-i", oc.Inputs[0], "-q:v", arg(oc, "quality", "5"), oc.Output)
 		},
 	})
 	add(&Operation{
@@ -812,4 +840,67 @@ func RegisterOps() map[string]*Operation {
 	})
 
 	return ops
+}
+
+// runCompressToSize encodes H.264 with two passes so that the output is
+// smaller than targetMB megabytes (1 MB = 1,000,000 bytes). It returns an
+// error when the video is too long for the size, or when the output is
+// still too large.
+func runCompressToSize(ctx context.Context, oc OpContext, targetMB string) error {
+	mb, err := strconv.ParseFloat(targetMB, 64)
+	if err != nil || mb <= 0 {
+		return fmt.Errorf("bad target_size_mb %q", targetMB)
+	}
+	secs, err := probeDuration(ctx, oc.Inputs[0])
+	if err != nil {
+		return err
+	}
+	const audioKbps = 96
+	// Keep 8% for container overhead and encoder overshoot.
+	totalKbps := mb * 1e6 * 8 / 1000 / secs * 0.92
+	videoKbps := int(totalKbps) - audioKbps
+	if videoKbps < 100 {
+		return fmt.Errorf("video too long: %.0f s does not fit in %s MB", secs, targetMB)
+	}
+	// A low bitrate looks better at a lower resolution.
+	vf := "scale=-2:'min(1080,ih)'"
+	if videoKbps < 1500 {
+		vf = "scale=-2:'min(720,ih)'"
+	}
+	if videoKbps < 600 {
+		vf = "scale=-2:'min(480,ih)'"
+	}
+	br := fmt.Sprintf("%dk", videoKbps)
+	passlog := filepath.Join(filepath.Dir(oc.Output), "pass")
+	common := []string{"-i", oc.Inputs[0], "-vf", vf, "-c:v", "libx264",
+		"-preset", "veryfast", "-b:v", br, "-pix_fmt", "yuv420p", "-passlogfile", passlog}
+	if err := ffmpegRun(ctx, append(common, "-pass", "1", "-an", "-f", "null", os.DevNull)...); err != nil {
+		return err
+	}
+	if err := ffmpegRun(ctx, append(common, "-pass", "2",
+		"-c:a", "aac", "-b:a", fmt.Sprintf("%dk", audioKbps), "-movflags", "+faststart", oc.Output)...); err != nil {
+		return err
+	}
+	info, err := os.Stat(oc.Output)
+	if err != nil {
+		return err
+	}
+	if float64(info.Size()) > mb*1e6 {
+		return fmt.Errorf("output is %.1f MB, larger than %s MB", float64(info.Size())/1e6, targetMB)
+	}
+	return nil
+}
+
+// probeDuration returns the length of a media file in seconds.
+func probeDuration(ctx context.Context, path string) (float64, error) {
+	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error",
+		"-show_entries", "format=duration", "-of", "default=nw=1:nk=1", path).Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe: %w", err)
+	}
+	secs, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	if err != nil || secs <= 0 {
+		return 0, fmt.Errorf("could not read the video duration")
+	}
+	return secs, nil
 }
