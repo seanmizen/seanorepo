@@ -9,7 +9,7 @@ COPY package.json .yarnrc.yml ./
 # Overwrite the root package.json with the backend's so this resolves
 # standalone instead of pulling in the whole monorepo.
 COPY apps/inside/inside-be/package.json ./package.json
-RUN corepack enable && corepack prepare yarn@4.8.1 && yarn install
+RUN corepack enable && corepack prepare yarn@4.18.0 && yarn install
 
 # dev — node_modules sits at /app so the named volume in docker-compose is
 # seeded from this image; source arrives via the bind mount. Module resolution
