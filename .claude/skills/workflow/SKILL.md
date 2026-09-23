@@ -42,8 +42,11 @@ git worktree add -b SEAN-{n}/{short-description} ../seanorepo-{n} origin/main
 
 - Branch: lowercase, hyphenated, at most 5 words, e.g. `SEAN-42/fix-hover-flicker`.
 - Work in the worktree. Never edit the `main` checkout.
-- A worktree has no `node_modules`, and the commit hook needs it. Symlink it:
-  `ln -s <main checkout>/node_modules node_modules`. Do not install into it.
+- A worktree has no `node_modules`, and the commit hook needs it. Run
+  `yarn install` in the worktree. The global Yarn cache makes it take about
+  40 s. Never symlink `node_modules` from the main checkout: a tool that
+  deletes through the link (for example `next dev` when it cleans `.next`)
+  then deletes files in the main checkout.
 - Read the acceptance criteria before writing code. For out-of-scope work you
   find, create a new issue. Do not do it on this branch.
 
