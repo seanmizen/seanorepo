@@ -62,16 +62,13 @@ Images (flat storage)
 
 ### Prerequisites
 
-- Yarn 4 (via corepack)
+- Yarn (any version: the repository carries its Yarn 4 release)
 - Docker & Docker Compose
 - Email account for SMTP (Gmail recommended, for magic link authentication)
 
 ### Installation
 
 ```bash
-# Enable corepack for Yarn 4
-corepack enable
-
 # Install dependencies from monorepo root
 yarn install
 ```

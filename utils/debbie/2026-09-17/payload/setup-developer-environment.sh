@@ -13,7 +13,7 @@
 # What it installs, in this order:
 #   1. Homebrew (macOS) or apt packages (Debian)
 #   2. zsh, oh-my-zsh, the prompt and aliases, and zsh as the login shell
-#   3. Node, corepack and Yarn
+#   3. Node and Yarn
 #   4. Docker
 #   5. shist, from its release
 #   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
@@ -116,7 +116,9 @@ pkg_install() {
         new="$(grep -Eo '[0-9]+ newly installed' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
         upgraded="$(grep -Eo '^[0-9]+ upgraded' "$RUN_OUT" | grep -Eo '^[0-9]+' || echo 0)"
         current="$(grep -c 'is already the newest version' "$RUN_OUT" || true)"
-        note "$# packages: $(count "$new" new), $(count "$upgraded" upgraded), $current already up to date"
+        # apt's counts include the dependencies it pulls in, so they are not
+        # counts of the packages named here.
+        note "$# packages, $current already up to date. apt: $(count "$new" new), $(count "$upgraded" upgraded), dependencies included"
     fi
 }
 export HOMEBREW_NO_ENV_HINTS=1
@@ -200,6 +202,11 @@ if [ "$OS" = Darwin ]; then
     fi
     BREW="$(command -v brew || echo /opt/homebrew/bin/brew)"
     eval "$("$BREW" shellenv)"
+    # shellenv does not move Homebrew to the front when it is on the PATH
+    # already. An older Node earlier on the PATH (an Intel-era /usr/local/bin
+    # or an nvm install) then runs instead of Homebrew's, and Yarn 4 does not
+    # run on it. This script uses Homebrew's tools, so they come first.
+    PATH="$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin:$PATH"
     pkg_install git curl wget gnupg jq htop tree unzip zsh gh
 else
     log "Installing apt packages"
@@ -312,26 +319,70 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# 3. Node, corepack and Yarn
+# 3. Node and Yarn
 #
 # No Node version is pinned. Each system takes the Node that its package
 # manager ships: the latest release from Homebrew, and the release's Node from
 # Debian's apt. The package manager then keeps it updated.
 #
-# Node 25 and later do not include corepack, so macOS installs the corepack
-# formula. Debian ships corepack as its own package. Yarn's version comes from
-# the repository's own packageManager field once the checkout exists, further
-# down.
+# There is no corepack. The repository carries its own Yarn release, and
+# .yarnrc.yml names it in yarnPath. Any `yarn` on the PATH gives control to
+# that release, so the system Yarn must only exist:
+# - macOS: Homebrew's yarn formula (Yarn 1).
+# - Debian: the yarnpkg package (Yarn 4). It installs the command as yarnpkg
+#   only, so /usr/local/bin/yarn links to it. deploy.sh finds yarn there.
+#
+# A machine that an older version of this script set up has corepack and its
+# yarn shims. The shims come first on the PATH, so this step removes them, and
+# removes corepack.
 #------------------------------------------------------------------------------
-log "Installing node, corepack and yarn"
+log "Installing node and yarn"
+# remove_corepack_shims OWNER DIR: remove each package manager link in DIR
+# that points into corepack. OWNER is user or root, for who owns DIR.
+remove_corepack_shims() {
+    local f
+    for f in "$2"/yarn "$2"/yarnpkg "$2"/pnpm "$2"/pnpx; do
+        if [ -L "$f" ] && readlink "$f" | grep -q corepack; then
+            if [ "$1" = root ]; then
+                run as_root rm -f "$f"
+            else
+                run as_user "rm -f '$f'"
+            fi
+            note "$(green "Removed the corepack shim $f")"
+        fi
+    done
+}
 if [ "$OS" = Darwin ]; then
-    pkg_install node corepack
-    run as_user "corepack enable --install-directory '$USER_HOME/.local/bin'"
+    remove_corepack_shims user "$USER_HOME/.local/bin"
+    # The corepack formula conflicts with the yarn formula.
+    if brew list corepack > /dev/null 2>&1; then
+        run brew uninstall corepack
+        note "$(green "Removed the corepack formula")"
+    fi
+    pkg_install node yarn
+    # brew install does not link a formula that is installed but unlinked, for
+    # example after `brew unlink`. Then an older node elsewhere on the PATH
+    # runs instead, and Yarn 4 does not run on it.
+    if [ "$(command -v node)" != "$HOMEBREW_PREFIX/bin/node" ]; then
+        run brew link --overwrite node
+        note "$(green "Linked Homebrew's node")"
+    fi
 else
-    pkg_install nodejs node-corepack
-    run as_root corepack enable yarn
+    remove_corepack_shims root /usr/bin
+    if dpkg-query -W -f='${Status}' node-corepack 2> /dev/null | grep -q "^install ok installed"; then
+        run as_root apt-get purge -y node-corepack
+        note "$(green "Removed the node-corepack package")"
+    fi
+    pkg_install nodejs yarnpkg
+    if [ "$(readlink /usr/local/bin/yarn 2> /dev/null || true)" != /usr/bin/yarnpkg ]; then
+        run as_root ln -sfn /usr/bin/yarnpkg /usr/local/bin/yarn
+        note "$(green "Linked /usr/local/bin/yarn to yarnpkg")"
+    fi
 fi
-note "Node $(node --version)"
+run node --version
+node_version="$(cat "$RUN_OUT")"
+run bash -c "cd / && yarn --version"
+note "Node $node_version, system Yarn $(cat "$RUN_OUT")"
 
 #------------------------------------------------------------------------------
 # 4. Docker
@@ -445,9 +496,8 @@ else
     note "$(green "Applying utils/config-anywhere/gitconfig.txt")"
     run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
 fi
-if as_user "[ -f '$REPO_DIR/package.json' ]"; then
-    run as_user "cd '$REPO_DIR' && corepack prepare --activate"
-fi
+run as_user "cd '$REPO_DIR' && yarn --version"
+note "Yarn $(cat "$RUN_OUT") in the repository"
 
 #------------------------------------------------------------------------------
 # 7. iTerm2 (macOS only)

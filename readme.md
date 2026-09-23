@@ -3,14 +3,15 @@
 Ok, so I've turned my ancient FE repo into a monorepo. soon we'll have all funky stuff in here.
 
 ## Getting started
-This monorepo uses yarn ^4.0.0, which is a bit tricky. running 'yarn install' on a new repo defaults to ^1.0.0
-so you'll need to use corepack, a strange node thing, to allow the relevant yarn 4 to be auto-installed.
+This monorepo uses yarn 4, and carries its own copy in `.yarn/releases`. any `yarn` you have hands over to it,
+even yarn 1, so a fresh clone needs just:
 
 ```bash
-corepack enable
-corepack prepare
 yarn
 ```
+
+no yarn at all? `brew install yarn` on a mac, or `sudo apt install yarnpkg` on debian (the command is `yarnpkg` there).
+`utils/debbie/2026-09-17/payload/setup-developer-environment.sh` does all of this for you.
 
 ## Ways of working
 Barely any. this is mine, so I will commit wantonly and whenever I like.

@@ -71,12 +71,10 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Enable Corepack (Yarn 4)
-        run: corepack enable
-
       - name: Install dependencies
         # Yarn 4 is the package manager. Bun is the runtime only — never
-        # `bun install` here.
+        # `bun install` here. The runner's Yarn 1 runs the release that
+        # .yarnrc.yml names in yarnPath.
         run: yarn install --immutable
 
       - name: Type-check (frontend and backend)
