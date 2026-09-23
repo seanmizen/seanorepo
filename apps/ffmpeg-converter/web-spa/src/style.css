@@ -25,6 +25,7 @@
 
 /* Route-based visibility — hides sections not on the current page. */
 .page-hidden {
+  /* biome-ignore lint/complexity/noImportantStyles: a utility class that must win over every page's own display rule. */
   display: none !important;
 }
 

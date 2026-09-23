@@ -1,5 +1,4 @@
 import { adminDesignerFilters } from '@shared/filters';
-import type { DesignerProfileStatus } from '@shared/types';
 import type { FastifyInstance } from 'fastify';
 import { getAuthUser } from '../middleware/auth';
 import {
@@ -11,13 +10,6 @@ import {
 import { sendReviewDecisionEmail } from '../services/email';
 import { parseQuery } from '../services/query';
 import { optionalString, ValidationError } from '../services/validation';
-
-const STATUSES: DesignerProfileStatus[] = [
-  'draft',
-  'pending',
-  'approved',
-  'rejected',
-];
 
 /**
  * Registered INSIDE the admin scope in controllers/index.ts, which attaches

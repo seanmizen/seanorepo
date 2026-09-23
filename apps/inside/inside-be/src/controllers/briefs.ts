@@ -17,9 +17,6 @@ import {
 } from '../services/validation';
 import { withValidation } from './helpers';
 
-const DEFAULT_LIMIT = 24;
-const MAX_LIMIT = 100;
-
 const readBriefFields = (body: unknown): briefs.BriefFields => {
   const b = (body ?? {}) as Record<string, unknown>;
   return {
