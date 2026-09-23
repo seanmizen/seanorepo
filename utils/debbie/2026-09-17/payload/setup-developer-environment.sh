@@ -29,6 +29,13 @@
 #   Debian: bash setup-developer-environment.sh (it asks for your sudo password)
 #   As root for another account (provision.sh does this):
 #           sudo DEV_USER=<user> bash setup-developer-environment.sh
+#
+# Output (the flag, or VERBOSITY=quiet|default|verbose):
+#   (default)       one line per step, with a count of the packages it
+#                   installed. Command output goes to a log file.
+#   -q, --quiet     warnings, errors and the last line only.
+#   -v, --verbose   the full output of every command, as it runs.
+# A failed command shows its last 20 lines and the path of the full log.
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -36,8 +43,62 @@ REPO_URL="${REPO_URL:-https://github.com/seanmizen/seanorepo.git}"
 
 OS="$(uname -s)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-log() { echo "[dev-setup] $*"; }
-die() { echo "[dev-setup] ERROR: $*" >&2; exit 1; }
+VERBOSITY="${VERBOSITY:-default}"
+for arg in "$@"; do
+    case "$arg" in
+        -q | --quiet) VERBOSITY=quiet ;;
+        -v | --verbose) VERBOSITY=verbose ;;
+        -h | --help) sed -n '2,/^set -euo/{/^#/s/^# \{0,1\}//p}' "$0"; exit 0 ;;
+        *) echo "[dev-setup] ERROR: unknown option: $arg (use --help)" >&2; exit 2 ;;
+    esac
+done
+
+# Every command's output goes to this log, in all modes.
+SETUP_LOG="$(mktemp "${TMPDIR:-/tmp}/dev-setup.XXXXXX")"
+
+log() { [ "$VERBOSITY" = quiet ] || echo "[dev-setup] $*"; }
+warn() { echo "[dev-setup] WARNING: $*" >&2; }
+die() { echo "[dev-setup] ERROR: $*" >&2; echo "[dev-setup] full log: $SETUP_LOG" >&2; exit 1; }
+trap 'echo "[dev-setup] ERROR: line $LINENO failed. Full log: $SETUP_LOG" >&2' ERR
+
+# Run a command and keep its output in the log. In verbose mode the output is
+# also shown. Otherwise it is shown only when the command fails. stdin is
+# closed, so a command that asks a question fails and does not wait for an
+# answer that nobody sees. RUN_OUT holds the output of the last command.
+RUN_OUT="$(mktemp)"
+run() {
+    local rc=0
+    echo "\$ $*" >> "$SETUP_LOG"
+    if [ "$VERBOSITY" = verbose ]; then
+        "$@" < /dev/null 2>&1 | tee "$RUN_OUT" || rc=$?
+    else
+        "$@" < /dev/null > "$RUN_OUT" 2>&1 || rc=$?
+    fi
+    cat "$RUN_OUT" >> "$SETUP_LOG"
+    if [ "$rc" -ne 0 ]; then
+        if [ "$VERBOSITY" != verbose ]; then
+            echo "[dev-setup] the last lines of: $*" >&2
+            tail -n 20 "$RUN_OUT" | sed 's/^/    /' >&2
+        fi
+        die "command failed (exit $rc): $*"
+    fi
+}
+
+# Install packages and log how many are new. apt states the count itself.
+# brew does not, so the count is the change in the installed list.
+pkg_install() {
+    local before after
+    if [ "$OS" = Darwin ]; then
+        before="$(brew list -1 | wc -l)"
+        run brew install "$@"
+        after="$(brew list -1 | wc -l)"
+        log "  $(( after - before )) new of $# packages"
+    else
+        run as_root apt-get install -y "$@"
+        log "  $(grep -Eo '[0-9]+ upgraded, [0-9]+ newly installed' "$RUN_OUT" || echo "$# packages checked")"
+    fi
+}
+export HOMEBREW_NO_ENV_HINTS=1
 
 #------------------------------------------------------------------------------
 # Who this is for.
@@ -106,16 +167,16 @@ log "setting up $DEV_USER on $OS ($USER_HOME)"
 if [ "$OS" = Darwin ]; then
     log "homebrew and packages"
     if ! command -v brew > /dev/null 2>&1 && [ ! -x /opt/homebrew/bin/brew ]; then
-        log "  installing homebrew (it asks for your password)"
+        warn "installing homebrew - it asks for your password"
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
     BREW="$(command -v brew || echo /opt/homebrew/bin/brew)"
     eval "$("$BREW" shellenv)"
-    brew install git curl wget gnupg jq htop tree unzip zsh gh
+    pkg_install git curl wget gnupg jq htop tree unzip zsh gh
 else
     log "apt packages"
-    as_root apt-get update -y
-    as_root apt-get install -y git curl wget ca-certificates gnupg jq htop tree unzip zsh gh
+    run as_root apt-get update -y
+    pkg_install git curl wget ca-certificates gnupg jq htop tree unzip zsh gh
 fi
 
 #------------------------------------------------------------------------------
@@ -127,7 +188,7 @@ fi
 log "zsh and oh-my-zsh"
 OMZ="$USER_HOME/.oh-my-zsh"
 clone_once() {
-    as_user "[ -d '$2/.git' ] || git clone -q --depth 1 '$1' '$2'"
+    run as_user "[ -d '$2/.git' ] || git clone -q --depth 1 '$1' '$2'"
 }
 clone_once https://github.com/ohmyzsh/ohmyzsh.git "$OMZ"
 clone_once https://github.com/zsh-users/zsh-autosuggestions.git "$OMZ/custom/plugins/zsh-autosuggestions"
@@ -223,11 +284,11 @@ fi
 #------------------------------------------------------------------------------
 log "node, corepack and yarn"
 if [ "$OS" = Darwin ]; then
-    brew install node corepack
-    as_user "corepack enable --install-directory '$USER_HOME/.local/bin'"
+    pkg_install node corepack
+    run as_user "corepack enable --install-directory '$USER_HOME/.local/bin'"
 else
-    as_root apt-get install -y nodejs node-corepack
-    as_root corepack enable yarn
+    pkg_install nodejs node-corepack
+    run as_root corepack enable yarn
 fi
 
 #------------------------------------------------------------------------------
@@ -236,8 +297,8 @@ fi
 log "docker"
 if [ "$OS" = Darwin ]; then
     if [ ! -d /Applications/Docker.app ]; then
-        brew install --cask docker
-        log "  start Docker Desktop once to finish its setup"
+        run brew install --cask docker
+        warn "start Docker Desktop once to finish its setup"
     fi
 else
     DOCKER_KEYRING=/etc/apt/keyrings/docker.gpg
@@ -266,14 +327,14 @@ else
     # before installing.
     if [ "$docker_repo_changed" = 1 ] \
         || ! dpkg-query -W -f='${Status}' docker-ce 2> /dev/null | grep -q "^install ok installed"; then
-        as_root apt-get update -y
+        run as_root apt-get update -y
     fi
-    as_root apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    pkg_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     # A WSL install without systemd=true in /etc/wsl.conf has no systemd.
     if [ -d /run/systemd/system ]; then
-        as_root systemctl enable --now docker
+        run as_root systemctl enable --now docker
     else
-        log "  no systemd - set systemd=true in /etc/wsl.conf, then run: wsl --shutdown"
+        warn "no systemd - set systemd=true in /etc/wsl.conf, then run: wsl --shutdown"
     fi
     getent group docker > /dev/null || as_root groupadd docker
     as_root usermod -aG docker "$DEV_USER"
@@ -295,9 +356,9 @@ fi
 #------------------------------------------------------------------------------
 log "shist"
 if [ "$OS" = Darwin ]; then
-    brew tap seanmizen/tap
-    brew trust --tap seanmizen/tap
-    brew list shist > /dev/null 2>&1 || brew install shist
+    run brew tap seanmizen/tap
+    run brew trust --tap seanmizen/tap
+    brew list shist > /dev/null 2>&1 || run brew install shist
 elif [ -x "$USER_HOME/.local/bin/shist" ]; then
     log "  already installed: $(as_user "$USER_HOME/.local/bin/shist --version" 2>/dev/null || echo present)"
 else
@@ -340,10 +401,10 @@ if as_user "[ -f '$USER_HOME/.gitconfig' ]"; then
     log "  ~/.gitconfig exists - leaving it alone"
 else
     log "  applying utils/config-anywhere/gitconfig.txt"
-    as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
+    run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
 fi
 if as_user "[ -f '$REPO_DIR/package.json' ]"; then
-    as_user "cd '$REPO_DIR' && corepack prepare --activate"
+    run as_user "cd '$REPO_DIR' && corepack prepare --activate"
 fi
 
 #------------------------------------------------------------------------------
@@ -352,15 +413,15 @@ fi
 if [ "$OS" = Darwin ]; then
     log "iterm2"
     if [ ! -d /Applications/iTerm.app ] && [ ! -d "$USER_HOME/Applications/iTerm.app" ]; then
-        brew install --cask iterm2
+        run brew install --cask iterm2
     fi
     ITERM_PLIST="$HERE/com.googlecode.iterm2.plist"
     if [ ! -f "$ITERM_PLIST" ]; then
         log "  no preferences file beside this script - skipping the import"
     elif pgrep -qx iTerm2 2> /dev/null; then
-        log "  iTerm2 is running - quit it and run this again to import preferences"
+        warn "iTerm2 is running - quit it and run this again to import preferences"
     else
-        defaults import com.googlecode.iterm2 "$ITERM_PLIST"
+        run defaults import com.googlecode.iterm2 "$ITERM_PLIST"
         log "  preferences imported"
     fi
 fi
@@ -390,7 +451,7 @@ if [ "$IS_WSL" = 1 ]; then
         cat "$wt_tmp" > "$WT_SETTINGS"
         log "  scheme and font applied (the old file is settings.json.bak)"
     else
-        log "  jq cannot read $WT_SETTINGS - skipping"
+        warn "jq cannot read $WT_SETTINGS - skipping"
     fi
     rm -f "${wt_tmp:-}"
 fi
@@ -399,9 +460,10 @@ fi
 # a machine that installs Docker and Node. Nothing reads them again.
 if [ "$OS" = Linux ]; then
     log "clearing the apt cache"
-    as_root apt-get clean
+    run as_root apt-get clean
 fi
 
-log "done. Open a new shell to pick up zsh and PATH."
+rm -f "$RUN_OUT"
+echo "[dev-setup] done. Open a new shell to pick up zsh and PATH. Full log: $SETUP_LOG"
 [ "$OS" = Linux ] && log "log out and in again for the docker group, or run: newgrp docker"
 exit 0
