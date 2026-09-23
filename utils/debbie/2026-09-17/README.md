@@ -255,6 +255,31 @@ the power button for four seconds. The firmware then cuts the power.
 Security updates install automatically. The target machine never reboots on
 its own, so a kernel fix waits until you reboot it.
 
+### Upgrade or roll back cloudflared and ngrok
+
+apt owns both binaries, from their vendors' repositories, so an upgrade and a
+rollback are each one apt command. Unattended upgrades take the Debian
+security suite only (REQ-SERVER-006), so they do not update these two. Run
+these commands from the LAN: a restart of `custom-ngrok.service` ends an SSH
+session that came through ngrok.
+
+```bash
+# see the installed version and the versions apt can install
+ssh srv@<name>.local apt-cache policy cloudflared ngrok
+
+# upgrade both, then restart the units that run them
+ssh -t srv@<name>.local 'sudo apt-get update && sudo apt-get install --only-upgrade cloudflared ngrok \
+  && sudo systemctl restart custom-cloudflared.service custom-ngrok.service'
+
+# roll back one package to a version from the list above
+ssh -t srv@<name>.local 'sudo apt-get install --allow-downgrades cloudflared=<version> \
+  && sudo systemctl restart custom-cloudflared.service'
+```
+
+The units run `/usr/bin/cloudflared` and `/usr/local/bin/ngrok`, the paths
+that the packages install. dpkg replaces a binary in one step, so there is no
+moment when a unit points at a missing file.
+
 ### Set up the Cloudflare tunnel
 
 Only the machine with `ROLE_TUNNEL=yes` needs this. The credentials are in no
