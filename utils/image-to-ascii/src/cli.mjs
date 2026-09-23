@@ -100,14 +100,44 @@ const parseArgs = (argv) => {
   return args;
 };
 
-// A spec file holds the same things as the flags. Paths in it are relative to
-// the file.
+// A spec file holds the same things as the flags, flat, with the same names.
+// keyframes and text stay nested. Paths in it are relative to the file.
+// The keys a spec may hold beside the image settings in DEFAULTS.
+const SPEC_KEYS = [
+  'image',
+  'keyframes',
+  'text',
+  'vars',
+  'frames',
+  'fps',
+  'ease',
+  'pingpong',
+  'clearFrom',
+  'margin',
+  'out',
+];
+
 const readSpec = (file) => {
   const spec = JSON.parse(readFileSync(file, 'utf8'));
+  if ('options' in spec) {
+    throw new Error(
+      `${file}: "options" is gone. Move its keys to the top level of the spec.`,
+    );
+  }
+  const unknown = Object.keys(spec).filter(
+    (k) => !(k in DEFAULTS) && !SPEC_KEYS.includes(k),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `${file}: unknown key "${unknown[0]}". Valid keys: ${[...Object.keys(DEFAULTS), ...SPEC_KEYS].join(', ')}.`,
+    );
+  }
   const base = dirname(resolve(file));
   return {
     image: spec.image ? resolve(base, spec.image) : undefined,
-    options: spec.options ?? {},
+    options: Object.fromEntries(
+      Object.entries(spec).filter(([k]) => k in DEFAULTS),
+    ),
     tracks: Object.fromEntries(
       Object.entries(spec.keyframes ?? {}).map(([k, v]) => [
         k,
