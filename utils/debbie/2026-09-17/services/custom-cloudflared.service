@@ -7,18 +7,18 @@ Documentation=https://github.com/seanmizen/seanorepo/issues/280
 After=network-online.target
 Wants=network-online.target
 
-# REFUSE, RATHER THAN FAIL IN A LOOP. Both of these are absent on a machine that
-# has been provisioned but whose tunnel has never been set up by hand, which is
-# a normal first-boot state rather than an error. A condition that is not met
-# makes systemd log one line and leave the unit inactive - it does NOT count as
-# a failure, does not trigger Restart=, and cannot fill the journal. Starting
-# without credentials would instead be an authentication failure every
-# RestartSec forever, flooding the journal - capped since #287, but still - and hiding the
-# one fact that matters: nobody has put the credentials on this machine.
+# REFUSE TO START. DO NOT FAIL IN A LOOP. A provisioned machine whose tunnel
+# nobody set up by hand has neither of these paths. That is a normal first-boot
+# state. It is not an error. When a condition is not met, systemd logs one line
+# and leaves the unit inactive. That does NOT count as a failure, does not
+# trigger Restart=, and cannot fill the journal. A start without credentials is
+# an authentication failure every RestartSec, with no end. It floods the
+# journal, even with the journal size cap (REQ-SERVER-007). It also hides the
+# one fact that matters: nobody put the credentials on this machine.
 ConditionPathExists=${CLOUDFLARED_CONFIG}
 ConditionDirectoryNotEmpty=${CLOUDFLARED_CREDS_DIR}
-# The role, #329. Credentials alone are not enough: a machine holding a copy of
-# them without the tunnel role must not start pulling public traffic.
+# The role (REQ-SERVER-014). Credentials alone are not enough. A machine that
+# holds a copy of them without the tunnel role must not pull public traffic.
 ConditionPathExists=${ROLES_DIR}/tunnel
 
 # The backstop for a failure the conditions cannot see - credentials that are
@@ -32,8 +32,9 @@ StartLimitBurst=5
 [Service]
 Type=simple
 User=${DEPLOY_USER}
-# Not optional - see the note above this unit. config.yml's credentials-file is
-# a relative path and cloudflared resolves it from here.
+# Required. See the WorkingDirectory note in the tunnel section of
+# setup-server-environment.sh. config.yml's credentials-file is a relative
+# path, and cloudflared resolves it from this directory.
 WorkingDirectory=${CLOUDFLARED_DIR}
 ExecStart=/usr/bin/cloudflared --no-autoupdate --config ${CLOUDFLARED_CONFIG} tunnel run
 Restart=on-failure

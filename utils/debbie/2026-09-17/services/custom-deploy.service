@@ -25,5 +25,6 @@ ExecStart=${DEPLOY_SCRIPT}
 # poll picks up cleanly - REQ-DEPLOY-003.
 TimeoutStartSec=30min
 
-# No [Install] section and no timer, deliberately - #307. The release poller is
-# the only thing that starts it: one clock, so a deploy never races a checkout.
+# No [Install] section and no timer (REQ-DEPLOY-002). The release poller is
+# the only thing that starts this unit. There is one clock, so a deploy never
+# races a checkout.

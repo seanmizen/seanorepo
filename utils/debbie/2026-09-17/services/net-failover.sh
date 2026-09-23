@@ -4,7 +4,7 @@
 # Where: a provisioned machine. custom-net-failover.timer runs it.
 # When:  every minute, and on nothing else. There is no event to wait for -
 #        that is the whole problem.
-# Why:   REQ-NETWORK-003. A DHCP client reacts to carrier, not to
+# Why:   REQ-NETWORK-003. A DHCP client reacts to carrier. It does not check
 #        reachability. An interface with carrier and no upstream - a dead switch
 #        port, a cable unplugged at the far end, an access point that stopped
 #        forwarding - keeps its address and its default route indefinitely and
@@ -16,10 +16,10 @@
 # hardcoded name is a machine this does not protect. Candidates, their
 # gateways, and which of them are wireless all come from the running system.
 #
-# `ip` only, never nmcli. This generation has no NetworkManager - it is ifupdown
-# and dhcpcd, and `nmcli` is not installed. A watchdog built on nmcli finds no
-# candidates and does nothing, silently, which is worse than not having one.
-# `ip` works whatever configured the interface.
+# The script uses `ip` only. It never uses nmcli. This generation has no
+# NetworkManager. It uses ifupdown and dhcpcd, and `nmcli` is not installed. A
+# watchdog built on nmcli finds no candidates and silently does nothing, which
+# is worse than no watchdog. `ip` works whatever configured the interface.
 #
 # It never bounces a healthy link. An unnecessary failover is its own outage,
 # so the probe goes THROUGH the interface that owns the route, and a success
@@ -44,9 +44,9 @@ log() { logger -t net-failover -- "$*" 2> /dev/null || echo "net-failover: $*"; 
 #------------------------------------------------------------------------------
 # The interface that owns the default route, and what it calls its gateway.
 #
-# Per interface, not one global address. A machine with two links on two
-# networks has two gateways, and the old generation's single GATEWAY=192.168.1.1
-# was a third machine waiting to be unprotected.
+# Each interface has its own gateway. A machine with two links on two networks
+# has two gateways. One global setting such as GATEWAY=192.168.1.1 protects
+# only the machines whose gateway has that address.
 #------------------------------------------------------------------------------
 route_owner() {
     ip -4 route show default 2> /dev/null \
@@ -130,7 +130,7 @@ done <<< "$(candidates)"
 #------------------------------------------------------------------------------
 # Nothing to promote. Say so and change nothing.
 #
-# Exit 0, not 1. Every link being down is a fact about the network, not a fault
+# Exit 0. Every link being down is a fact about the network. It is not a fault
 # in this unit, and a failed unit on a timer is noise that outlives the outage.
 # The log line is the report.
 #------------------------------------------------------------------------------
@@ -149,10 +149,10 @@ log "promoting $NEW_DEV via $NEW_GW"
 # routes are left alone: deleting dhcpcd's routes would have it put them back on
 # its next renewal, and a fight with the DHCP client is not a fix.
 #
-# This does NOT survive a reboot, deliberately. dhcpcd rebuilds its own metrics
-# at boot and the timer re-runs a minute later, so the machine re-decides with
-# fresh evidence instead of inheriting a choice made during an outage that may
-# be over.
+# This route does NOT survive a reboot, by design. dhcpcd rebuilds its own
+# metrics at boot, and the timer runs again a minute later. So the machine
+# decides again with fresh evidence. It does not inherit a choice made during
+# an outage that may be over.
 if ! ip -4 route replace default via "$NEW_GW" dev "$NEW_DEV" metric "$METRIC_GOOD"; then
     log "ERROR: could not add a default route via $NEW_DEV - routing is unchanged"
     exit 1
