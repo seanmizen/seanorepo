@@ -15,16 +15,6 @@ resource "cloudflare_dns_record" "seanmizen_com_google_domainkey_txt" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
-resource "cloudflare_dns_record" "seanmizen_com_stealthly_cname" {
-  comment = "I am trying to go straight to the tunnel here, rather than via seanmizen.com."
-  content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
-  name    = "stealthly.seanmizen.com"
-  proxied = true
-  ttl     = 1
-  type    = "CNAME"
-  zone_id = cloudflare_zone.seanmizen_com.id
-}
-
 resource "cloudflare_dns_record" "seanmizen_com_pp_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
   name    = "pp.seanmizen.com"
@@ -34,6 +24,8 @@ resource "cloudflare_dns_record" "seanmizen_com_pp_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
+# A placeholder address (192.0.2.1). A Cloudflare redirect rule, not in
+# OpenTofu yet, sends hue.seanmizen.com to an image on carolinemizen.art.
 resource "cloudflare_dns_record" "seanmizen_com_hue_a" {
   comment = "Created during Cloudflare Rules deployment process for page_rules"
   content = "192.0.2.1"
@@ -150,20 +142,3 @@ resource "cloudflare_dns_record" "seanmizen_com_www_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
-resource "cloudflare_dns_record" "seanmizen_com_mail_cname" {
-  content = "ext-sq.squarespace.com"
-  name    = "mail.seanmizen.com"
-  proxied = true
-  ttl     = 1
-  type    = "CNAME"
-  zone_id = cloudflare_zone.seanmizen_com.id
-}
-
-resource "cloudflare_dns_record" "seanmizen_com_ssh_cname" {
-  content = "31578e9a-f953-4425-8d0f-cc7886b2d974.cfargotunnel.com"
-  name    = "ssh.seanmizen.com"
-  proxied = false
-  ttl     = 1
-  type    = "CNAME"
-  zone_id = cloudflare_zone.seanmizen_com.id
-}

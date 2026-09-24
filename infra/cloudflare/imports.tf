@@ -113,11 +113,6 @@ import {
 }
 
 import {
-  to = cloudflare_dns_record.seanmizen_com_mail_cname
-  id = "428a9a9f5e22c95bc7e67faa7d5ab942/ce387843b136e2813e994a5a51625043"
-}
-
-import {
   to = cloudflare_dns_record.seanmizen_com_minecraft_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/ad222b4342cb7f554ab007ecdbbb9938"
 }
@@ -135,16 +130,6 @@ import {
 import {
   to = cloudflare_dns_record.seanmizen_com_apex_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/ed22725d11359601f770db5b28a601b6"
-}
-
-import {
-  to = cloudflare_dns_record.seanmizen_com_ssh_cname
-  id = "428a9a9f5e22c95bc7e67faa7d5ab942/a432b0f33410138cbca2b9e38e743292"
-}
-
-import {
-  to = cloudflare_dns_record.seanmizen_com_stealthly_cname
-  id = "428a9a9f5e22c95bc7e67faa7d5ab942/1cfdc5fbf820aed0dee904a84c0f7695"
 }
 
 import {
