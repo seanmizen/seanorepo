@@ -308,8 +308,9 @@ repository.
    ```bash
    cloudflared tunnel login
    cloudflared tunnel create debbie                    # writes ~/.cloudflared/<uuid>.json
-   cloudflared tunnel route dns debbie seanmizen.com   # once per hostname
    ```
+   Do not use `cloudflared tunnel route dns`. The DNS records are in
+   `infra/cloudflare/` (OpenTofu). Add the tunnel and its records there.
 2. Copy the credentials to the target machine, as `srv`:
    ```bash
    install -m 600 <uuid>.json ~/projects/seanorepo/apps/cloudflared/credentials/<uuid>.json

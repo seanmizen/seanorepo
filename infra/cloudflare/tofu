@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Runs the pinned OpenTofu for this directory. Downloads it on first use,
+# checks the SHA-256 against the sums below, and keeps it in .tofu/
+# (gitignored). Loads the API token and the state passphrase from
+# ~/.config/seanorepo/cloudflare.secrets.
+#   ./tofu plan     ./tofu apply
+set -euo pipefail
+
+VERSION=1.12.6
+declare -A SUMS=(
+  [linux_amd64]=5dc43da4f750f33873dc25e94587128709e819e544b7be9016b255316153c3a8
+  [linux_arm64]=e573979ba68a17fe7b881752051a694a7efcd970e39521f6a25775197861ed4d
+  [darwin_amd64]=166388e5feed47e107e11721b6366bf91d21e47eccbced75f3cbe0c7184ffd9b
+  [darwin_arm64]=e083ee43790ab9e19ad66d9933e24a7244a1412e1d5728f37999ae2163fdac95
+)
+
+here="$(cd "$(dirname "$0")" && pwd)"
+os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+arch="$(uname -m)"
+case "$arch" in x86_64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; esac
+platform="${os}_${arch}"
+sum="${SUMS[$platform]:-}"
+[ -n "$sum" ] || { echo "tofu: no pinned build for $platform" >&2; exit 1; }
+
+bin="$here/.tofu/$VERSION/tofu"
+if [ ! -x "$bin" ]; then
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  zip="tofu_${VERSION}_${platform}.zip"
+  echo "tofu: downloading OpenTofu $VERSION ($platform)" >&2
+  curl -fsSL -o "$tmp/$zip" "https://github.com/opentofu/opentofu/releases/download/v$VERSION/$zip"
+  got="$( (sha256sum "$tmp/$zip" 2>/dev/null || shasum -a 256 "$tmp/$zip") | cut -d' ' -f1)"
+  if [ "$got" != "$sum" ]; then
+    echo "tofu: checksum mismatch for $zip. Expected $sum, got $got." >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$bin")"
+  (cd "$tmp" && unzip -q "$zip" tofu)
+  mv "$tmp/tofu" "$bin"
+  chmod +x "$bin"
+fi
+
+# The secrets file holds CLOUDFLARE_API_TOKEN and TF_VAR_state_passphrase.
+# It lives outside the repo, so every checkout and worktree shares one copy.
+# It must not be readable by other users. See README.md.
+secrets="${CLOUDFLARE_SECRETS:-$HOME/.config/seanorepo/cloudflare.secrets}"
+if [ -f "$secrets" ]; then
+  mode="$(stat -c %a "$secrets" 2>/dev/null || stat -f %Lp "$secrets")"
+  if [ "$mode" != 600 ]; then
+    echo "tofu: $secrets has mode $mode. Run: chmod 600 $secrets" >&2
+    exit 1
+  fi
+  set -a
+  # shellcheck source=/dev/null
+  . "$secrets"
+  set +a
+fi
+
+cd "$here"
+exec "$bin" "$@"
