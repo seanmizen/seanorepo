@@ -16,7 +16,7 @@ jobs:
   ux-check:
     name: Go tests, unit tests, Playwright e2e + axe
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,6 +55,14 @@ jobs:
       - name: Go tests
         working-directory: apps/ffmpeg-converter
         run: go test ./...
+
+      - name: Go tests on production's ffmpeg (Debian 13)
+        # asus runs Debian's ffmpeg 7.1, not the 8.1 above. Some behaviour
+        # differs (HEIC tiles, trim speed), so the Go tests also run in the
+        # backend's dev image, which has the same ffmpeg as production.
+        run: |
+          docker build --target dev -t converter-backend-dev -f apps/ffmpeg-converter/dockerfile .
+          docker run --rm -v "$PWD":/app -w /app/apps/ffmpeg-converter converter-backend-dev go test ./...
 
       - name: Unit tests
         run: yarn workspace ffmpeg-converter-next test

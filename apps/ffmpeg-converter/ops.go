@@ -225,14 +225,10 @@ func RegisterOps() map[string]*Operation {
 		Name: "trim", Category: "video",
 		Description: "Trim a video; args: start (s), duration (s), crf, preset, audio_bitrate",
 		DefaultExt:  ".mp4",
+		// A long clip of an H.264 input takes the smart cut (smarttrim.go).
 		Run: func(ctx context.Context, oc OpContext) error {
-			start := arg(oc, "start", "0")
-			dur := arg(oc, "duration", "1")
-			return ffmpegRun(ctx, "-ss", start, "-i", oc.Inputs[0], "-t", dur,
-				"-c:v", "libx264", "-preset", arg(oc, "preset", "ultrafast"),
-				"-crf", arg(oc, "crf", "30"), "-pix_fmt", "yuv420p",
-				"-c:a", "aac", "-b:a", arg(oc, "audio_bitrate", "64k"),
-				"-movflags", "+faststart", oc.Output)
+			_, err := trimVideo(ctx, oc)
+			return err
 		},
 	})
 	add(&Operation{
