@@ -5,5 +5,6 @@
 .secrets
 # The state itself is encrypted and committed. Its backup is not needed.
 *.tfstate.backup
+*.tfstate.*.backup
 # Plans hold the same data as the state.
 *.tfplan
