@@ -1,0 +1,9 @@
+# The pinned OpenTofu binary and the provider plugins.
+.tofu/
+.terraform/
+# The API token and the state passphrase.
+.secrets
+# The state itself is encrypted and committed. Its backup is not needed.
+*.tfstate.backup
+# Plans hold the same data as the state.
+*.tfplan

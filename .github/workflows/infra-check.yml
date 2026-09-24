@@ -1,0 +1,36 @@
+name: Infra check (OpenTofu)
+
+# Checks infra/cloudflare without secrets: format, and validate on a copy
+# without the encrypted state (validate does not need it). Plan and apply
+# need the token and the passphrase, so they run on Sean's machine only.
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: tofu fmt + validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Format
+        working-directory: infra/cloudflare
+        run: ./tofu fmt -check -recursive
+
+      - name: Validate
+        env:
+          CLOUDFLARE_SECRETS: /nonexistent
+          TF_VAR_state_passphrase: ci-placeholder-no-state-is-read
+        run: |
+          tmp="$(mktemp -d)"
+          cp infra/cloudflare/*.tf infra/cloudflare/.terraform.lock.hcl infra/cloudflare/tofu "$tmp/"
+          cd "$tmp"
+          ./tofu init -input=false
+          ./tofu validate
