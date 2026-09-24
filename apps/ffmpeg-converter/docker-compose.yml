@@ -63,6 +63,9 @@ services:
   backend:
     <<: *backend-base
     profiles: ["prod"]
+    # ffmpeg takes every core it can get. 3 of asus's 8 leave room for the
+    # other sites while conversions run. CI checks this value.
+    cpus: 3
 
   backend-dev:
     <<: *backend-base
