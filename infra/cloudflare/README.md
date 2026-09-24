@@ -39,10 +39,11 @@ including the state. The state is encrypted.
 
 3. Run `./tofu init`.
 
-The wrapper `./tofu` downloads the pinned OpenTofu on first use, checks
-its SHA-256, and loads the secrets file. It needs `curl`, `unzip` and
-`sha256sum`. You do not install OpenTofu yourself. From the repo root,
-`yarn tofu <command>` runs the same wrapper.
+`./tofu` calls the shared wrapper `infra/tofu`. It downloads the pinned
+OpenTofu on first use, checks its SHA-256, and loads the secrets file. It
+needs `curl`, `unzip` and `sha256sum`. You do not install OpenTofu
+yourself. From the repo root, `yarn tofu cloudflare <command>` does the
+same. The other stack is `../github`.
 
 ## Every change
 

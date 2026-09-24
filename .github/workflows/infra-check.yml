@@ -14,23 +14,32 @@ permissions:
 
 jobs:
   check:
-    name: tofu fmt + validate
+    name: tofu fmt + validate (${{ matrix.stack }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      # One stack's failure must not cancel the other's check.
+      fail-fast: false
+      matrix:
+        stack: [cloudflare, github]
+    # Placeholders: nothing here reads the state or calls an API. The github
+    # stack's wrapper wants a token even for fmt.
+    env:
+      CLOUDFLARE_SECRETS: /nonexistent
+      GITHUB_TOKEN: ci-placeholder
+      TF_VAR_state_passphrase: ci-placeholder-no-state-is-read
     steps:
       - uses: actions/checkout@v4
 
       - name: Format
-        working-directory: infra/cloudflare
-        run: ./tofu fmt -check -recursive
+        run: infra/tofu ${{ matrix.stack }} fmt -check -recursive
 
       - name: Validate
-        env:
-          CLOUDFLARE_SECRETS: /nonexistent
-          TF_VAR_state_passphrase: ci-placeholder-no-state-is-read
         run: |
+          # A copy without the encrypted state: validate does not need it.
           tmp="$(mktemp -d)"
-          cp infra/cloudflare/*.tf infra/cloudflare/.terraform.lock.hcl infra/cloudflare/tofu "$tmp/"
-          cd "$tmp"
-          ./tofu init -input=false
-          ./tofu validate
+          mkdir -p "$tmp/${{ matrix.stack }}"
+          cp infra/tofu "$tmp/"
+          cp infra/${{ matrix.stack }}/*.tf infra/${{ matrix.stack }}/.terraform.lock.hcl "$tmp/${{ matrix.stack }}/"
+          "$tmp/tofu" ${{ matrix.stack }} init -input=false
+          "$tmp/tofu" ${{ matrix.stack }} validate

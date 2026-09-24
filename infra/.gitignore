@@ -1,0 +1,2 @@
+# The pinned OpenTofu binary, shared by every stack.
+.tofu/
