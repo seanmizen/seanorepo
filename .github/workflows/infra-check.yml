@@ -18,8 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
+      # One stack's failure must not cancel the other's check.
+      fail-fast: false
       matrix:
         stack: [cloudflare, github]
+    # Placeholders: nothing here reads the state or calls an API. The github
+    # stack's wrapper wants a token even for fmt.
+    env:
+      CLOUDFLARE_SECRETS: /nonexistent
+      GITHUB_TOKEN: ci-placeholder
+      TF_VAR_state_passphrase: ci-placeholder-no-state-is-read
     steps:
       - uses: actions/checkout@v4
 
@@ -27,10 +35,6 @@ jobs:
         run: infra/tofu ${{ matrix.stack }} fmt -check -recursive
 
       - name: Validate
-        env:
-          CLOUDFLARE_SECRETS: /nonexistent
-          GITHUB_TOKEN: ci-placeholder
-          TF_VAR_state_passphrase: ci-placeholder-no-state-is-read
         run: |
           # A copy without the encrypted state: validate does not need it.
           tmp="$(mktemp -d)"
