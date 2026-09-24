@@ -7,8 +7,8 @@
     "caroline-be"
   ],
   "scripts": {
-    "start": "concurrently --prefix \"{time} {name} \u2020\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace caroline-fe start\" \"yarn workspace caroline-be start\"",
-    "test": "yarn test:types && yarn test:unit && echo \"\u2705 All tests passed! Run 'yarn test:smoke' to test a live server.\"",
+    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace caroline-fe start\" \"yarn workspace caroline-be start\"",
+    "test": "yarn test:types && yarn test:unit && echo \"✅ All tests passed! Run 'yarn test:smoke' to test a live server.\"",
     "test:unit": "yarn workspace caroline-be test",
     "test:types": "yarn workspace caroline-be tsc --noEmit",
     "test:smoke": "./scripts/smoke-test.sh",
