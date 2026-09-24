@@ -22,6 +22,11 @@ services:
   frontend:
     <<: *frontend-base
     profiles: ["prod"]
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [planning-poker-frontend]
 
   frontend-dev:
     <<: *frontend-base
@@ -35,6 +40,11 @@ services:
   backend:
     <<: *backend-base
     profiles: ["prod"]
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [planning-poker-backend]
     volumes:
       - sqlite_data:/app/db
 
@@ -53,3 +63,8 @@ volumes:
   sqlite_data:
   fe_node_modules:
   be_node_modules:
+
+networks:
+  # Shared with infra/edge. deploy.sh and prod:docker create it.
+  edge:
+    external: true

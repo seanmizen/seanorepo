@@ -11,6 +11,11 @@ services:
   frontend:
     <<: *frontend-base
     profiles: ["prod"]
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [minecraft-seanmizen-com]
 
   frontend-dev:
     <<: *frontend-base
@@ -23,3 +28,8 @@ services:
 
 volumes:
   fe_node_modules:
+
+networks:
+  # Shared with infra/edge. deploy.sh and prod:docker create it.
+  edge:
+    external: true

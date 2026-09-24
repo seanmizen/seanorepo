@@ -76,13 +76,14 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Priority:** P1
 - **Statement:** The host shall accept inbound connections on exactly ports
   22/tcp, 80/tcp, 443/tcp and 5353/udp, and refuse every other port, including
-  every port published by a container. The one exception is a machine with the
-  webserver role and without the tunnel role, which publishes its apps
-  on ports 4000-4999 to the LAN by design.
+  every port published by a container. A webserver without the tunnel role
+  serves its sites to the LAN through Caddy on port 80, one of the four
+  (REQ-SERVER-016). Its apps stay on loopback.
 - **Rationale:** Everything public arrives through the Cloudflare tunnel, which
   is an outbound connection. An open application port is a second way in that
-  nobody audits or watches. Outside the exception in the Statement, the app
-  ports in the 4000-4061 range stay closed, also on the LAN.
+  nobody audits or watches. The app ports (4000-4999) stay closed on every
+  machine, also on the LAN. A LAN webserver used to publish them. It now
+  serves the same sites through one port, 80, so there is no exception.
 
   The checks assert the count as well as the membership. A check that only
   finds the four would let a fifth port appear silently, and that is the drift
@@ -113,8 +114,8 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   from another host. For that reason every `apps/*/docker-compose.yml` port
   names its address as `"${PUBLISH_ADDR:-127.0.0.1}:PORT:PORT"`. The address
   is loopback unless something sets `PUBLISH_ADDR`. `deploy.sh` sets it to
-  `0.0.0.0` only on a webserver without the tunnel role, which is the
-  exception in the Statement. A dev script can also set it. The daemon default
+  `0.0.0.0` only for the edge's Caddy, on a webserver without the tunnel
+  role: port 80, one of the four. A dev script can also set it. The daemon default
   is the second layer. The checks below read listening sockets, the `nat`
   chain and a published probe port. They do not read either configuration.
 - **Verification:**
@@ -131,8 +132,8 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
     port binds loopback and nothing else"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "that port refuses a
     connection to the host's own routable address"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy publishes on
-    loopback with the tunnel and on the LAN without"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy publishes the
+    apps on loopback, with or without the tunnel"
 - **Relations:** none
 
 ## REQ-SERVER-003 — The deploy user can deploy without a password
@@ -605,3 +606,40 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Relations:**
   - refines REQ-SERVER-006
   - depends-on REQ-NETWORK-005
+
+## REQ-SERVER-016 — The roles decide the edge
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #523
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** The LAN edge (Caddy on port 80, with the names
+  `<site>.<hostname>.local` published over mDNS) shall run on a machine only
+  when that machine has the webserver role and does not have the tunnel role.
+- **Rationale:** The sites are reached through one door, the edge
+  (`infra/edge`). Each app's production services join the Docker network
+  `edge` under a stable name, and the edge routes to that name. The apps then
+  need no port of their own on the LAN (REQ-SERVER-002).
+
+  On the tunnel machine the door is the tunnel. A second door there, on the
+  LAN, is a way in that nobody watches. A webserver without the tunnel role
+  exists to serve the LAN, so its door is Caddy. The names follow the machine:
+  `seanmizen.surface.local` is seanmizen.com on surface. The edge's Caddyfile
+  is the one list of LAN sites. The mDNS script reads its names from there, so
+  a site cannot be routed without its name, or named without a route. Caddy
+  answers any other name with 404.
+
+  The roles decide it, as REQ-SERVER-014 requires: no setting can turn Caddy on
+  by default. `deploy.sh` stops Caddy on a machine that has the tunnel role,
+  and the mDNS unit is conditioned on the role files.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy starts the LAN
+    edge without the tunnel and stops it with"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the LAN edge follows the
+    roles"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the LAN names follow the
+    roles"
+- **Relations:**
+  - depends-on REQ-SERVER-002
+  - depends-on REQ-SERVER-014

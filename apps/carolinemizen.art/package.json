@@ -13,7 +13,7 @@
     "test:types": "yarn workspace caroline-be tsc --noEmit",
     "test:smoke": "./scripts/smoke-test.sh",
     "start:docker": "PUBLISH_ADDR=0.0.0.0 API_URL=http://localhost:4021/api docker compose --profile dev up --build",
-    "prod:docker": "BUILD_TARGET=prod BACKEND_CMD=\"bun ./dist/index.js\" docker compose --profile prod up --build --detach",
+    "prod:docker": "docker network create edge >/dev/null 2>&1; BUILD_TARGET=prod BACKEND_CMD=\"bun ./dist/index.js\" docker compose --profile prod up --build --detach",
     "down": "docker compose --profile dev --profile prod down"
   },
   "module": "index.ts",

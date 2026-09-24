@@ -5,6 +5,7 @@ paths:
   - "**/Dockerfile"
   - "apps/cloudflared/**"
   - "scripts/test-deployment.sh"
+  - "infra/edge/**"
 ---
 
 # Ports
@@ -19,9 +20,15 @@ ports:
 Unset, it binds loopback: the Cloudflare tunnel reaches `localhost:4xxx`, and
 nothing else on the LAN should. Each workspace's `start:docker` sets
 `PUBLISH_ADDR=0.0.0.0`, so a dev server is reachable from another device on the
-wifi. On a home server, `deploy.sh` sets it from the machine's roles:
-loopback on the tunnel machine, `0.0.0.0` on a LAN-only webserver. Never write
-a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
+wifi. On a home server, `deploy.sh` publishes every app on loopback. Never
+write a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
+
+## The LAN reaches the sites through the edge (REQ-SERVER-016)
+
+`infra/edge` is Caddy on port 80. It runs only on a webserver without the
+tunnel role, and serves each site at `http://<site>.<hostname>.local`. It
+reaches the apps over the shared Docker network `edge`, by alias. It does not
+use their host ports. See `infra/edge/README.md`.
 
 ## Home servers (Cloudflare tunnel): 4xxx
 
@@ -56,8 +63,11 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
     service: http://localhost:4070
 ```
 
-4. Add the ports to `scripts/test-deployment.sh`.
-5. Decide where its data lives. SQLite and uploads go in named Docker volumes,
+4. Put each prod service on the `edge` network with an alias, and add a
+   `http://<site>.{$EDGE_HOST}.local` block to `infra/edge/Caddyfile`. The
+   LAN names script reads its names from that file.
+5. Add the ports to `scripts/test-deployment.sh`.
+6. Decide where its data lives. SQLite and uploads go in named Docker volumes,
    and those volumes exist only on the tunnel machine.
 
 seanscards runs locally only (`yarn cards`). Root `prod:docker` excludes it,

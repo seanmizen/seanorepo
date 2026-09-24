@@ -1,0 +1,64 @@
+# The sites on the LAN (REQ-SERVER-016). Each is http://<site>.<hostname>.local,
+# and routes to an app on the `edge` network by its alias.
+#
+# This file is the one list of LAN sites. services/lan-names.sh reads the
+# names below and publishes each over mDNS, so a name here needs no second
+# entry anywhere.
+
+{
+	# Plain HTTP on the LAN. There are no certificates for .local names.
+	auto_https off
+	admin off
+}
+
+http://seanmizen.{$EDGE_HOST}.local {
+	reverse_proxy seanmizen-com:4000
+}
+
+http://carolinemizen.{$EDGE_HOST}.local {
+	handle /api/* {
+		reverse_proxy carolinemizen-backend:4021
+	}
+	handle {
+		reverse_proxy carolinemizen-frontend:4020
+	}
+}
+
+http://planning-poker.{$EDGE_HOST}.local {
+	handle /api/* {
+		reverse_proxy planning-poker-backend:4031
+	}
+	handle /ws/* {
+		reverse_proxy planning-poker-backend:4031
+	}
+	handle {
+		reverse_proxy planning-poker-frontend:4030
+	}
+}
+
+http://inside.{$EDGE_HOST}.local {
+	handle /api/* {
+		reverse_proxy inside-backend:4061
+	}
+	handle {
+		reverse_proxy inside-frontend:4060
+	}
+}
+
+http://minecraft.{$EDGE_HOST}.local {
+	reverse_proxy minecraft-seanmizen-com:4042
+}
+
+http://seansconverter.{$EDGE_HOST}.local {
+	handle /api/* {
+		reverse_proxy seansconverter-backend:4051
+	}
+	handle {
+		reverse_proxy seansconverter-frontend:4050
+	}
+}
+
+# Any other name: a plain 404, never another site.
+http:// {
+	respond "No site at this name." 404
+}

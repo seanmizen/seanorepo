@@ -1,0 +1,19 @@
+# custom-lan-names.service: publishes <site>.<hostname>.local over mDNS, so the
+# LAN finds the sites that Caddy serves (REQ-SERVER-016). Enabled only on a
+# webserver without the tunnel role, by setup-server-environment.sh.
+[Unit]
+Description=Publish the LAN site names over mDNS
+After=avahi-daemon.service network-online.target
+Wants=avahi-daemon.service network-online.target
+ConditionPathExists=${ROLES_DIR}/webserver
+ConditionPathExists=!${ROLES_DIR}/tunnel
+
+[Service]
+Type=simple
+User=${DEPLOY_USER}
+ExecStart=${LAN_NAMES_SCRIPT} ${EDGE_CADDYFILE}
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
