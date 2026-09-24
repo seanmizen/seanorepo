@@ -52,14 +52,13 @@ export default function RootLayout({
             ))}
           </nav>
           <p className="mx-auto max-w-5xl px-4 pb-4 text-sm text-muted sm:px-6">
-            Your files go to our server for conversion, unless you choose
-            &ldquo;Convert on this device&rdquo;. The server deletes them after
-            one hour.
+            On a computer, video conversions run in your browser, so your file
+            never leaves your device. Other files go to our server, which
+            deletes them after one hour.
           </p>
           <p className="mx-auto max-w-5xl px-4 pb-10 text-xs text-muted sm:px-6">
-            &ldquo;Convert on this device&rdquo; uses ffmpeg.wasm. Its core
-            (@ffmpeg/core 0.12.10) is licensed under the GNU GPL, version 2 or
-            later.{' '}
+            Conversion in your browser uses ffmpeg.wasm. Its core (@ffmpeg/core
+            0.12.10) is licensed under the GNU GPL, version 2 or later.{' '}
             <a
               href="https://github.com/ffmpegwasm/ffmpeg.wasm/tree/v0.12.10"
               className="underline underline-offset-2 hover:text-fg"

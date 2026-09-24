@@ -6,23 +6,66 @@ import { FIXTURES, TEST_CHUNK_BYTES } from './fixtures';
 
 const fixture = (name: string) => path.join(FIXTURES, name);
 
-async function expectDownload(page: Page, name: string) {
+/** Waits for the Download link and checks the file. Returns its href. */
+async function expectDownload(page: Page, name: string): Promise<string> {
   const link = page.getByRole('link', { name: /^Download/ });
-  await expect(link).toBeVisible({ timeout: 60_000 });
+  await expect(link).toBeVisible({ timeout: 90_000 });
   await expect(link).toHaveAttribute('download', name);
-  const href = await link.getAttribute('href');
-  const res = await page.request.get(href ?? '');
-  expect(res.status()).toBe(200);
-  expect((await res.body()).length).toBeGreaterThan(100);
+  const href = (await link.getAttribute('href')) ?? '';
+  // A device conversion gives a blob: URL, which only the page can read.
+  const size = href.startsWith('blob:')
+    ? await page.evaluate(
+        async (h) => (await (await fetch(h)).blob()).size,
+        href,
+      )
+    : (await (await page.request.get(href)).body()).length;
+  expect(size).toBeGreaterThan(100);
+  return href;
 }
 
-test('a tool page converts after one click', async ({ page }) => {
-  await page.goto('/mov-to-mp4');
+const DEVICE_PROMISE = 'Your file never leaves your device.';
+
+/**
+ * On desktop, video pages make the device the default once the page knows
+ * this browser can do it. Wait for that, so a test never catches the brief
+ * server-only first paint.
+ */
+async function ready(page: Page, url: string, isMobile: boolean) {
+  await page.goto(url);
+  if (!isMobile)
+    await expect(page.getByText(DEVICE_PROMISE, { exact: true })).toBeVisible();
+}
+
+/** Choose a file for the server: the secondary link on desktop video pages. */
+async function chooseOnServer(
+  page: Page,
+  isMobile: boolean,
+  primary: string,
+  file: string,
+) {
+  const label = isMobile ? primary : 'Or convert on our servers';
+  await page.getByLabel(label).setInputFiles(fixture(file));
+}
+
+/** Records requests whose URL contains one of the parts. */
+function record(page: Page, ...parts: string[]) {
+  const seen: string[] = [];
+  page.on('request', (r) => {
+    if (parts.some((p) => r.url().includes(p)))
+      seen.push(`${r.method()} ${r.url()}`);
+  });
+  return seen;
+}
+
+test('a tool page converts after one click', async ({ page, isMobile }) => {
+  await ready(page, '/mov-to-mp4', isMobile);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'MOV to MP4',
   );
   await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
-  await expectDownload(page, 'clip.mp4');
+  const href = await expectDownload(page, 'clip.mp4');
+  // Desktop: on the device. Phone: our server.
+  expect(href.startsWith('blob:')).toBe(!isMobile);
   await page.getByRole('button', { name: 'Convert another file' }).click();
   await expect(page.getByText('Choose MOV file')).toBeVisible();
 });
@@ -34,17 +77,33 @@ test('the home page asks what to do with the file', async ({ page }) => {
   await expectDownload(page, 'clip.mp3');
 });
 
-test('trim asks for a start and an end', async ({ page }) => {
-  await page.goto('/trim-video');
+test('the home page converts video on the device on desktop', async ({
+  page,
+  isMobile,
+}) => {
+  const server = record(page, '/api/uploads', '/api/convert');
+  await page.goto('/');
+  await page.getByLabel('Choose a file').setInputFiles(fixture('clip.mp4'));
+  await page.getByRole('button', { name: 'Convert to MOV' }).click();
+  const href = await expectDownload(page, 'clip.mov');
+  expect(href.startsWith('blob:')).toBe(!isMobile);
+  expect(server.length > 0).toBe(isMobile);
+});
+
+test('trim asks for a start and an end', async ({ page, isMobile }) => {
+  await ready(page, '/trim-video', isMobile);
   await page.getByLabel('Choose video file').setInputFiles(fixture('clip.mp4'));
   await expect(page.getByText(/Clip length: 3\.0 seconds/)).toBeVisible();
   await page.getByLabel('Start (seconds)').fill('1');
-  await page.getByRole('button', { name: 'Trim video' }).click();
+  await page.getByRole('button', { name: /^Trim video/ }).click();
   await expectDownload(page, 'clip-trimmed.mp4');
 });
 
-test('the wrong kind of file gets a plain error', async ({ page }) => {
-  await page.goto('/mov-to-mp4');
+test('the wrong kind of file gets a plain error', async ({
+  page,
+  isMobile,
+}) => {
+  await ready(page, '/mov-to-mp4', isMobile);
   await page
     .getByLabel('Choose MOV file')
     .setInputFiles(fixture('picture.png'));
@@ -53,19 +112,36 @@ test('the wrong kind of file gets a plain error', async ({ page }) => {
   );
 });
 
-test('there is no drop zone and no ffmpeg jargon', async ({ page }) => {
-  for (const url of ['/', '/mov-to-mp4', '/compress-video-to-10mb']) {
+test('no drop zone, no ffmpeg jargon, no "slower"', async ({
+  page,
+  isMobile,
+}) => {
+  for (const url of [
+    '/',
+    '/mov-to-mp4',
+    '/compress-video-to-10mb',
+    '/trim-video',
+  ]) {
     await page.goto(url);
+    if (!isMobile && url !== '/' && !url.startsWith('/compress-video-to')) {
+      await expect(
+        page.getByText(DEVICE_PROMISE, { exact: true }),
+      ).toBeVisible();
+    }
     const text = await page.locator('body').innerText();
     expect(text).not.toMatch(
       /ffmpeg -i|-crf|libx264|Advanced|drag and drop|drop (a|your) file/i,
     );
+    expect(text).not.toMatch(/slower/i);
   }
 });
 
 for (const url of ['/', '/mov-to-mp4', '/trim-video']) {
-  test(`no serious accessibility problems on ${url}`, async ({ page }) => {
-    await page.goto(url);
+  test(`no serious accessibility problems on ${url}`, async ({
+    page,
+    isMobile,
+  }) => {
+    await ready(page, url, isMobile || url === '/');
     const { violations } = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();
@@ -76,64 +152,69 @@ for (const url of ['/', '/mov-to-mp4', '/trim-video']) {
   });
 }
 
-test.describe('on this device', () => {
-  test('loads nothing until the user chooses it', async ({
+test.describe('the device is the default on desktop', () => {
+  test('the default converts on the device, with nothing uploaded', async ({
     page,
     isMobile,
   }) => {
-    const wasm: string[] = [];
-    page.on('request', (r) => {
-      if (r.url().includes('/ffmpeg/')) wasm.push(r.url());
-    });
-    await page.goto('/mov-to-mp4');
-    const button = page.getByLabel('Convert on this device');
-    if (isMobile) {
-      // No phone measurements yet, so phones do not get the option.
-      await expect(button).toHaveCount(0);
-    } else {
-      await expect(button).toBeVisible();
-    }
+    test.skip(isMobile, 'desktop only');
+    const wasm = record(page, '/ffmpeg/');
+    const server = record(page, '/api/uploads', '/api/convert');
+    await ready(page, '/mov-to-mp4', false);
+    await expect(page.getByText('Nothing to upload')).toBeVisible();
+    // Nothing of ffmpeg.wasm loads until a file is chosen.
+    expect(wasm).toEqual([]);
     await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
-    await expectDownload(page, 'clip.mp4');
+    const href = await expectDownload(page, 'clip.mp4');
+    expect(href).toMatch(/^blob:/);
+    await expect(
+      page.getByText('Done. Your file never left your device.'),
+    ).toBeVisible();
+    expect(wasm.length).toBeGreaterThan(0);
+    expect(server).toEqual([]);
+  });
+
+  test('the server option still works on desktop', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'desktop only');
+    const wasm = record(page, '/ffmpeg/');
+    const server = record(page, '/api/uploads');
+    await ready(page, '/mov-to-mp4', false);
+    await chooseOnServer(page, false, 'Choose MOV file', 'clip.mov');
+    const href = await expectDownload(page, 'clip.mp4');
+    expect(href).toMatch(/^\/api\/jobs\//);
+    expect(server.length).toBeGreaterThan(0);
     expect(wasm).toEqual([]);
   });
 
-  test('converts on the device', async ({ page, isMobile }) => {
+  test('a GIF is made on the device by default', async ({ page, isMobile }) => {
     test.skip(isMobile, 'desktop only');
-    const uploads: string[] = [];
-    page.on('request', (r) => {
-      if (r.url().includes('/api/convert')) uploads.push(r.url());
-    });
-    await page.goto('/mov-to-mp4');
-    await page
-      .getByLabel('Convert on this device')
-      .setInputFiles(fixture('clip.mov'));
-    const link = page.getByRole('link', { name: 'Download MP4' });
-    await expect(link).toBeVisible({ timeout: 90_000 });
-    await expect(link).toHaveAttribute('href', /^blob:/);
-    await expect(link).toHaveAttribute('download', 'clip.mp4');
-    await expect(page.getByText('Your file did not leave it.')).toBeVisible();
-    expect(uploads).toEqual([]);
-  });
-
-  test('makes a GIF on the device', async ({ page, isMobile }) => {
-    test.skip(isMobile, 'desktop only');
-    await page.goto('/mp4-to-gif');
-    await page
-      .getByLabel('Convert on this device')
-      .setInputFiles(fixture('clip.mp4'));
+    await ready(page, '/mp4-to-gif', false);
+    await page.getByLabel('Choose MP4 file').setInputFiles(fixture('clip.mp4'));
     await expect(page.getByText(/Clip length: 3\.0 seconds/)).toBeVisible();
-    await page.getByRole('button', { name: 'Make GIF on this device' }).click();
-    const link = page.getByRole('link', { name: 'Download GIF' });
-    await expect(link).toBeVisible({ timeout: 90_000 });
-    const size = await page.evaluate(
-      async (href) => (await (await fetch(href)).blob()).size,
-      (await link.getAttribute('href')) ?? '',
-    );
-    expect(size).toBeGreaterThan(1000);
+    await page.getByRole('button', { name: 'Make GIF on your device' }).click();
+    const href = await expectDownload(page, 'clip.gif');
+    expect(href).toMatch(/^blob:/);
   });
 
-  test('audio and image pages have no device option', async ({ page }) => {
+  test('phones use the server, with no device promise', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'phone only');
+    const server = record(page, '/api/uploads');
+    await page.goto('/mov-to-mp4');
+    await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
+    await expectDownload(page, 'clip.mp4');
+    expect(server.length).toBeGreaterThan(0);
+    await expect(page.getByText(DEVICE_PROMISE, { exact: true })).toHaveCount(
+      0,
+    );
+  });
+
+  test('audio, image and size pages use the server only', async ({ page }) => {
     for (const url of [
       '/mp4-to-mp3',
       '/png-to-jpg',
@@ -141,25 +222,20 @@ test.describe('on this device', () => {
     ]) {
       await page.goto(url);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-      await expect(page.getByLabel('Convert on this device')).toHaveCount(0);
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByText(DEVICE_PROMISE, { exact: true })).toHaveCount(
+        0,
+      );
+      await expect(page.getByLabel('Or convert on our servers')).toHaveCount(0);
     }
   });
 });
 
 test.describe('chunked upload', () => {
-  // The Go server under test uses TEST_CHUNK_BYTES (playwright.config.ts).
-  const chunkRequests = (page: Page) => {
-    const urls: string[] = [];
-    page.on('request', (r) => {
-      if (r.method() === 'PUT' && r.url().includes('/api/uploads/')) {
-        urls.push(r.url());
-      }
-    });
-    return urls;
-  };
-
+  // The Go server under test uses TEST_CHUNK_BYTES (fixtures.ts).
   test('a file goes up in chunks, each under the chunk size', async ({
     page,
+    isMobile,
   }) => {
     // Playwright does not show a Blob body, so read Content-Length: the
     // number that Cloudflare checks.
@@ -169,14 +245,13 @@ test.describe('chunked upload', () => {
         sizes.push(r.allHeaders().then((h) => Number(h['content-length'])));
       }
     });
-    const urls = chunkRequests(page);
     const size = statSync(fixture('clip.mov')).size;
-    await page.goto('/mov-to-mp4');
-    await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
+    await ready(page, '/mov-to-mp4', isMobile);
+    await chooseOnServer(page, isMobile, 'Choose MOV file', 'clip.mov');
     await expectDownload(page, 'clip.mp4');
-    expect(urls.length).toBe(Math.ceil(size / TEST_CHUNK_BYTES));
-    expect(urls.length).toBeGreaterThan(1);
     const got = await Promise.all(sizes);
+    expect(got.length).toBe(Math.ceil(size / TEST_CHUNK_BYTES));
+    expect(got.length).toBeGreaterThan(1);
     for (const s of got) {
       expect(s).toBeGreaterThan(0);
       expect(s).toBeLessThanOrEqual(TEST_CHUNK_BYTES);
@@ -186,6 +261,7 @@ test.describe('chunked upload', () => {
 
   test('a failed chunk is sent again, and the upload finishes', async ({
     page,
+    isMobile,
   }) => {
     let failed = 0;
     await page.route('**/api/uploads/*/1', async (route) => {
@@ -196,11 +272,13 @@ test.describe('chunked upload', () => {
       }
       await route.continue();
     });
-    const urls = chunkRequests(page);
-    await page.goto('/mov-to-mp4');
-    await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
+    const chunks = record(page, '/api/uploads/');
+    await ready(page, '/mov-to-mp4', isMobile);
+    await chooseOnServer(page, isMobile, 'Choose MOV file', 'clip.mov');
     await expectDownload(page, 'clip.mp4');
     expect(failed).toBe(1);
-    expect(urls.filter((u) => u.endsWith('/1'))).toHaveLength(2);
+    expect(
+      chunks.filter((u) => u.startsWith('PUT') && u.endsWith('/1')),
+    ).toHaveLength(2);
   });
 });

@@ -39,12 +39,17 @@ The home page has the same button. After the user chooses a file, it asks
   bitrate, codec or preset. The args are in `web/src/tools.ts`.
 - **No technical words on the page.** No ffmpeg commands, codec flags or
   operation names. A unit test checks the page text for ffmpeg flags.
-- **Honest.** The copy says that the file goes to our server and that the
-  server deletes it after one hour. The Go service does that. Say "on this
-  device" only for a conversion that the user chose to run on the device.
-- **Server first.** The server converts by default. On video pages,
-  desktop browsers also get "Convert on this device". Only that choice
-  loads ffmpeg.wasm (10 MB). Audio and images always use the server.
+- **Honest.** Every claim is true for the path the user is on. On the
+  device path: the file never leaves the device. On the server path: the
+  server deletes the file after one hour, and the Go service does that.
+- **Device first on desktop video (Sean's decision).** On video pages that
+  the WASM build can do, a desktop browser converts on the device by
+  default: the big button. The server is a small secondary option. ffmpeg.wasm
+  loads only when a conversion starts on the device. Phones, audio, images
+  and compress-to-size use the server.
+- **Sell the real benefits.** The device button leads with what the user
+  gets: the file never leaves the device, nothing to upload. Do not claim
+  what is not true, for example "instant" (the converter downloads once).
 - **A promise is a guarantee.** "Compress to 10 MB" gives a file under
   10 MB, or it shows an error. It never gives a larger file.
 - **Plain errors.** Tell the user what happened and what to do next. Keep
