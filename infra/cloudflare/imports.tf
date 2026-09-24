@@ -1,6 +1,7 @@
-# Import blocks for everything that existed before OpenTofu managed it.
-# After the first apply they do nothing. They stay, so that a lost state
-# can be rebuilt: delete terraform.tfstate, then run ./tofu apply.
+# One import block for each resource, so a lost state can be rebuilt with
+# one apply: delete terraform.tfstate, then run ./tofu apply. The plan
+# shows only imports. infra/check-imports.sh fails when a resource has no
+# block. See README.md.
 
 import {
   to = cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3
@@ -147,3 +148,14 @@ import {
   id = "bc66a0dc112f15ae7d5ae2b9d395168a"
 }
 
+
+# OpenTofu created these. The import blocks make a lost state rebuildable.
+import {
+  to = cloudflare_dns_record.seansconverter_com_apex_cname
+  id = "bc66a0dc112f15ae7d5ae2b9d395168a/37cb979af22dec939787171387838b5a"
+}
+
+import {
+  to = cloudflare_dns_record.seansconverter_com_www_cname
+  id = "bc66a0dc112f15ae7d5ae2b9d395168a/182d5b326cc19610706ea946848c7f6f"
+}

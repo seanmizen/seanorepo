@@ -1,4 +1,6 @@
 .terraform/
+# The state is a local cache. The import blocks rebuild it (README.md).
+*.tfstate
 *.tfstate.backup
 *.tfstate.*.backup
 *.tfplan

@@ -10,16 +10,17 @@ whatever lands on `release`, so these settings decide who can deploy.
 
 ## Use
 
+The workflow is the same as for `../cloudflare`: apply only from the
+`release` checkout, and one import block for each resource. See its
+README, "Every change" and "The state".
+
 ```bash
 ./tofu init
 ./tofu plan
-./tofu apply
-git add terraform.tfstate *.tf && git commit
+./tofu apply    # in the release checkout only
 ```
 
-The token comes from your gh login (`gh auth token`). The state passphrase
-is the one in `~/.config/seanorepo/cloudflare.secrets`, as for
-`../cloudflare`.
+The token comes from your gh login (`gh auth token`).
 
 ## A deliberate history rewrite
 
@@ -27,4 +28,7 @@ The ruleset blocks force-pushes to `main` and `release`, for everyone.
 
 1. In `main.tf`, set the ruleset's `enforcement = "disabled"`. Apply.
 2. Rewrite and force-push.
-3. Set `enforcement = "active"` again. Apply. Commit the state.
+3. Set `enforcement = "active"` again. Apply.
+
+The ruleset change goes through a PR and `yarn release` each time, because
+apply runs only from `release`.
