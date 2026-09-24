@@ -1,7 +1,8 @@
+import { statSync } from 'node:fs';
 import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { FIXTURES } from './fixtures';
+import { FIXTURES, TEST_CHUNK_BYTES } from './fixtures';
 
 const fixture = (name: string) => path.join(FIXTURES, name);
 
@@ -142,5 +143,64 @@ test.describe('on this device', () => {
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expect(page.getByLabel('Convert on this device')).toHaveCount(0);
     }
+  });
+});
+
+test.describe('chunked upload', () => {
+  // The Go server under test uses TEST_CHUNK_BYTES (playwright.config.ts).
+  const chunkRequests = (page: Page) => {
+    const urls: string[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'PUT' && r.url().includes('/api/uploads/')) {
+        urls.push(r.url());
+      }
+    });
+    return urls;
+  };
+
+  test('a file goes up in chunks, each under the chunk size', async ({
+    page,
+  }) => {
+    // Playwright does not show a Blob body, so read Content-Length: the
+    // number that Cloudflare checks.
+    const sizes: Promise<number>[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'PUT' && r.url().includes('/api/uploads/')) {
+        sizes.push(r.allHeaders().then((h) => Number(h['content-length'])));
+      }
+    });
+    const urls = chunkRequests(page);
+    const size = statSync(fixture('clip.mov')).size;
+    await page.goto('/mov-to-mp4');
+    await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
+    await expectDownload(page, 'clip.mp4');
+    expect(urls.length).toBe(Math.ceil(size / TEST_CHUNK_BYTES));
+    expect(urls.length).toBeGreaterThan(1);
+    const got = await Promise.all(sizes);
+    for (const s of got) {
+      expect(s).toBeGreaterThan(0);
+      expect(s).toBeLessThanOrEqual(TEST_CHUNK_BYTES);
+    }
+    expect(got.reduce((a, b) => a + b, 0)).toBe(size);
+  });
+
+  test('a failed chunk is sent again, and the upload finishes', async ({
+    page,
+  }) => {
+    let failed = 0;
+    await page.route('**/api/uploads/*/1', async (route) => {
+      if (failed === 0) {
+        failed++;
+        await route.fulfill({ status: 502, body: 'Bad gateway' });
+        return;
+      }
+      await route.continue();
+    });
+    const urls = chunkRequests(page);
+    await page.goto('/mov-to-mp4');
+    await page.getByLabel('Choose MOV file').setInputFiles(fixture('clip.mov'));
+    await expectDownload(page, 'clip.mp4');
+    expect(failed).toBe(1);
+    expect(urls.filter((u) => u.endsWith('/1'))).toHaveLength(2);
   });
 });

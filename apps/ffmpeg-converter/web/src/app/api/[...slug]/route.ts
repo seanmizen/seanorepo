@@ -47,3 +47,4 @@ async function handle(
 
 export const GET = handle;
 export const POST = handle;
+export const PUT = handle;
