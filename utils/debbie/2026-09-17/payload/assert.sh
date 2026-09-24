@@ -529,7 +529,11 @@ if [ "$PHASE" = provisioned ]; then
     # this also catches a yarn that shadows the apt one.
     check "yarn is apt's yarnpkg" \
         '[ "$(readlink -f "$(command -v yarn)")" = "$(readlink -f /usr/bin/yarnpkg)" ]'
-    check "corepack is not installed" '! command -v corepack'
+    # corepack itself may be installed: on Debian 13 nodejs depends on it.
+    # What must not exist is a corepack shim that a package manager command
+    # resolves to.
+    check "no corepack shim on PATH" \
+        '! for c in yarn yarnpkg pnpm pnpx; do p="$(command -v "$c")" && readlink -f "$p"; done | grep -q corepack'
     # No version is written here either. The expected value is read out of the
     # repository's own packageManager field at assertion time, so this check
     # cannot drift from the repo any more than setup-server-environment.sh can - if the repo
@@ -560,7 +564,7 @@ else
     sk "node installed"               "setup-developer-environment.sh installs it"
     sk "yarnpkg installed"            "setup-developer-environment.sh installs it"
     sk "yarn is apt's yarnpkg"        "setup-developer-environment.sh links it"
-    sk "corepack is not installed"    "setup-developer-environment.sh removes it"
+    sk "no corepack shim on PATH"     "setup-developer-environment.sh removes the shims"
     sk "yarn --version matches the repo's packageManager"  "setup-developer-environment.sh enables it"
 fi
 

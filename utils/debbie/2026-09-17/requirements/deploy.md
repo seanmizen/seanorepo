@@ -170,7 +170,7 @@ does with the repository.
     present"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "node installed"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn is apt's yarnpkg"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "corepack is not installed"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no corepack shim on PATH"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn --version matches the
     repo's packageManager"
 - **Relations:** depends-on REQ-DEPLOY-002
