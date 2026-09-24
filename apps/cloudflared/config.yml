@@ -58,5 +58,19 @@ ingress:
   - hostname: "*.carolinemizen.art"
     service: http://localhost:4020
 
+  # seansconverter.com - Ports 4050 (FE) / 4051 (BE)
+  # /api/* goes straight to the Go backend: chunked uploads skip the
+  # frontend. Each chunk is under Cloudflare's 100 MB request limit.
+  - hostname: seansconverter.com
+    path: /api/*
+    service: http://localhost:4051
+  - hostname: seansconverter.com
+    service: http://localhost:4050
+  - hostname: www.seansconverter.com
+    path: /api/*
+    service: http://localhost:4051
+  - hostname: www.seansconverter.com
+    service: http://localhost:4050
+
   # Catch-all for unmatched routes
   - service: http_status:404

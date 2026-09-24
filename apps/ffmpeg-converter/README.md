@@ -4,7 +4,32 @@ Sean's Converter (seansconverter.com): convert video, audio and images in
 one click. Read [`docs/STRATEGY.md`](./docs/STRATEGY.md) before you change
 the site.
 
-**Not deployed yet.**
+Runs on asus behind the Cloudflare tunnel. `yarn release` deploys it with the
+other sites.
+
+## Deployment
+
+| Piece | Where |
+| ----- | ----- |
+| Frontend | `web/dockerfile`, port 4050 |
+| Backend | `dockerfile` (Go on Debian 13, with ffmpeg and libheif), port 4051 |
+| Data | the `converter_data` volume: uploads, outputs, the billing DB |
+| Tunnel | `apps/cloudflared/config.yml`: `/api/*` to 4051, the rest to 4050 |
+| DNS | `infra/cloudflare/seansconverter_com.tf` |
+
+Local check of the production images:
+
+```bash
+cd apps/ffmpeg-converter
+BUILD_TARGET=prod docker compose --profile prod up --build --detach
+SERVER=http://localhost:4051 bash test/run_all.sh
+bash ../../scripts/test-deployment.sh
+```
+
+HEIC: Debian's ffmpeg 7.1 reads only one tile of an iPhone photo, so the
+image ops decode HEIC with libheif's `heif-dec` first (`withHEIFDecode` in
+`ops.go`). The service warns at start when it has neither `heif-dec` nor
+ffmpeg 8.
 
 | Path     | What it is                                                     |
 | -------- | -------------------------------------------------------------- |

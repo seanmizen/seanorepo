@@ -839,6 +839,10 @@ func RegisterOps() map[string]*Operation {
 		},
 	})
 
+	// HEIC photos: see withHEIFDecode.
+	for _, name := range []string{"image_resize", "image_to_jpg", "image_to_png", "image_to_webp", "image_to_avif"} {
+		ops[name].Run = withHEIFDecode(ops[name].Run)
+	}
 	return ops
 }
 
@@ -903,4 +907,77 @@ func probeDuration(ctx context.Context, path string) (float64, error) {
 		return 0, fmt.Errorf("could not read the video duration")
 	}
 	return secs, nil
+}
+
+// heifDecoder is libheif's decoder (Debian: libheif-examples), or "".
+var heifDecoder = func() string {
+	for _, name := range []string{"heif-dec", "heif-convert"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	return ""
+}()
+
+// withHEIFDecode decodes a HEIC or HEIF input to PNG with libheif first, when
+// libheif's decoder is installed. An iPhone photo is a grid of tiles, and
+// ffmpeg before 8 reads only one tile. libheif reads the whole photo and
+// applies its rotation. Without the decoder, ffmpeg reads the file itself.
+func withHEIFDecode(run func(context.Context, OpContext) error) func(context.Context, OpContext) error {
+	return func(ctx context.Context, oc OpContext) error {
+		if heifDecoder == "" || len(oc.Inputs) == 0 {
+			return run(ctx, oc)
+		}
+		ext := strings.ToLower(filepath.Ext(oc.Inputs[0]))
+		if ext != ".heic" && ext != ".heif" {
+			return run(ctx, oc)
+		}
+		png := filepath.Join(filepath.Dir(oc.Output), "heif-decoded.png")
+		if out, err := exec.CommandContext(ctx, heifDecoder, oc.Inputs[0], png).CombinedOutput(); err != nil {
+			tail := string(out)
+			if len(tail) > 2048 {
+				tail = tail[len(tail)-2048:]
+			}
+			return fmt.Errorf("heif decode failed: %w\n%s", err, tail)
+		}
+		decoded, err := heifPrimaryOutput(ctx, oc.Inputs[0], png)
+		if err != nil {
+			return err
+		}
+		oc.Inputs = append([]string{decoded}, oc.Inputs[1:]...)
+		return run(ctx, oc)
+	}
+}
+
+// heifPrimaryOutput finds the decoded primary image. For a file with one
+// image, the decoder writes the name it was given. For more (for example a
+// photo and its depth map), it writes name-1.png, name-2.png, ... in the
+// order that heif-info lists them, and heif-info marks the primary one.
+func heifPrimaryOutput(ctx context.Context, input, png string) (string, error) {
+	if _, err := os.Stat(png); err == nil {
+		return png, nil
+	}
+	base := strings.TrimSuffix(png, ".png")
+	primary := 1
+	if info, err := exec.LookPath("heif-info"); err == nil {
+		if out, err := exec.CommandContext(ctx, info, input).Output(); err == nil {
+			n := 0
+			for _, line := range strings.Split(string(out), "\n") {
+				if strings.HasPrefix(line, "image:") {
+					n++
+					if strings.Contains(line, "primary") {
+						primary = n
+						break
+					}
+				}
+			}
+		}
+	}
+	for _, i := range []int{primary, 1} {
+		p := fmt.Sprintf("%s-%d.png", base, i)
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("heif decode wrote no image for %s", filepath.Base(input))
 }
