@@ -26,6 +26,15 @@ SERVER=http://localhost:4051 bash test/run_all.sh
 bash ../../scripts/test-deployment.sh
 ```
 
+Trim: a clip of 20 s or more of an H.264 input takes a smart cut
+(`smarttrim.go`). Only the head (start to the next keyframe) and the tail
+(last keyframe to the end) are re-encoded. The middle is copied, and AAC
+audio is copied too. Each result is decoded around its joins and its
+length is checked. On any failure the trim falls back to a full re-encode.
+The clip is every frame with a timestamp in [start, end), on every path.
+The tests stamp a frame number into each test frame, and check every
+output frame against a frame-exact reference.
+
 HEIC: Debian's ffmpeg 7.1 reads only one tile of an iPhone photo, so the
 image ops decode HEIC with libheif's `heif-dec` first (`withHEIFDecode` in
 `ops.go`). The service warns at start when it has neither `heif-dec` nor
