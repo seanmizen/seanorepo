@@ -243,6 +243,14 @@ cat > "$zshrc_tmp" <<'ZSHRC_EOF'
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="robbyrussell"
 plugins=(git docker node yarn zsh-autosuggestions zsh-syntax-highlighting)
+# One ssh-agent for all shells, on WSL only. macOS has its own (launchd), and
+# a second agent there would bypass the Keychain. The servers hold no keys.
+# Lazy: the agent starts empty. AddKeysToAgent (~/.ssh/config.d/seanorepo)
+# adds a key the first time ssh uses it, so the passphrase is asked once.
+if grep -qi microsoft /proc/version 2> /dev/null; then
+  plugins+=(ssh-agent)
+  zstyle :omz:plugins:ssh-agent lazy yes
+fi
 # No self-update: it prompts on login and pulls from the network.
 zstyle ':omz:update' mode disabled
 source "$ZSH/oh-my-zsh.sh"
@@ -475,6 +483,62 @@ else
     install -m 0755 -o "$DEV_USER" -g "$USER_GROUP" "$shist_tmp/shist" "$USER_HOME/.local/bin/shist"
     rm -rf "$shist_tmp"
     note "$(green "Installed shist $shist_ver")"
+fi
+
+#------------------------------------------------------------------------------
+# SSH config (only when you run this as yourself: the Mac and WSL)
+#
+# ~/.ssh/config.d/seanorepo is written whole every run: the home servers, and
+# AddKeysToAgent, so ssh loads a key into the agent the first time it uses
+# it. UseKeychain also keeps the passphrase in the macOS Keychain. Only
+# Apple's ssh knows it, so IgnoreUnknown makes other ssh skip it.
+# ~/.ssh/config gets one line, `Include config.d/*`, at the top, and nothing
+# else in it changes. ssh takes the first value that it finds for a setting,
+# so the managed file wins over a copy in your own config.
+# A server is set up as root (provision.sh) and holds no keys: it skips this.
+#------------------------------------------------------------------------------
+if [ "$(id -u)" -ne 0 ]; then
+    log "Writing the SSH config"
+    ssh_dir="$USER_HOME/.ssh"
+    ssh_tmp="$(mktemp)"
+    cat > "$ssh_tmp" <<'SSH_EOF'
+# Managed by utils/debbie/2026-09-17/payload/setup-developer-environment.sh.
+# Rewritten whole on every run. Put your own hosts in ~/.ssh/config.
+
+# The home servers. provision.sh installs this key on them.
+Host asus.local surface.local
+  User srv
+  IdentityFile ~/.ssh/seanorepo-admin
+
+# Load a key into the agent the first time ssh uses it: one passphrase per
+# session. UseKeychain (Apple's ssh only) also keeps it in the macOS Keychain.
+Host *
+  AddKeysToAgent yes
+  IgnoreUnknown UseKeychain
+  UseKeychain yes
+SSH_EOF
+    install -d -m 0700 "$ssh_dir" "$ssh_dir/config.d"
+    if cmp -s "$ssh_tmp" "$ssh_dir/config.d/seanorepo"; then
+        note "~/.ssh/config.d/seanorepo is current"
+    else
+        install -m 0600 "$ssh_tmp" "$ssh_dir/config.d/seanorepo"
+        note "$(green "~/.ssh/config.d/seanorepo updated")"
+    fi
+    rm -f "$ssh_tmp"
+    if [ ! -f "$ssh_dir/config" ]; then
+        printf 'Include config.d/*\n' > "$ssh_dir/config"
+        chmod 0600 "$ssh_dir/config"
+        note "$(green "~/.ssh/config created, with Include config.d/*")"
+    elif ! grep -qE '^[[:space:]]*Include[[:space:]]+config\.d/\*[[:space:]]*$' "$ssh_dir/config"; then
+        # At the top: an Include after a Host line would belong to that host.
+        ssh_cfg_tmp="$(mktemp)"
+        { printf 'Include config.d/*\n\n'; cat "$ssh_dir/config"; } > "$ssh_cfg_tmp"
+        cat "$ssh_cfg_tmp" > "$ssh_dir/config"
+        rm -f "$ssh_cfg_tmp"
+        note "$(green "~/.ssh/config: added Include config.d/* at the top")"
+    else
+        note "~/.ssh/config includes config.d"
+    fi
 fi
 
 #------------------------------------------------------------------------------
