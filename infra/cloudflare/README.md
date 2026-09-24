@@ -1,8 +1,9 @@
 # Cloudflare as code
 
 The Cloudflare setup for all of Sean's sites, in OpenTofu: the zones, the
-DNS records, the tunnel and its ingress rules. Git holds all of it,
-including the state. The state is encrypted.
+DNS records, the tunnel and its ingress rules. Git holds the code. The
+state is a local cache that git ignores. One import block for each
+resource rebuilds it (see "The state").
 
 ## Setup (once per machine)
 
@@ -20,8 +21,7 @@ including the state. The state is encrypted.
    Under *Zone Resources*, include only seanmizen.com, carolinemizen.art
    and seansconverter.com.
 
-2. Put the token and the state passphrase in
-   `~/.config/seanorepo/cloudflare.secrets`:
+2. Put the token in `~/.config/seanorepo/cloudflare.secrets`:
 
    ```bash
    mkdir -p ~/.config/seanorepo
@@ -34,10 +34,15 @@ including the state. The state is encrypted.
    checkout and worktree uses it. `CLOUDFLARE_SECRETS=<path>` picks
    another file.
 
-   Make the passphrase with `openssl rand -base64 32`. Keep a copy where
-   you keep other secrets. It decrypts the state in git.
+3. Make a checkout of `release` for apply, once. `yarn release` pushes
+   to `origin/release` and does not change this checkout, so pull it
+   before each apply:
 
-3. Run `./tofu init`.
+   ```bash
+   git worktree add ~/projects/seanorepo-release release
+   ```
+
+4. Run `./tofu init`.
 
 `./tofu` calls the shared wrapper `infra/tofu`. It downloads the pinned
 OpenTofu on first use, checks its SHA-256, and loads the secrets file. It
@@ -47,13 +52,24 @@ same. The other stack is `../github`.
 
 ## Every change
 
-```bash
-./tofu plan     # shows what would change. Read it.
-./tofu apply    # makes the change, and writes the encrypted state
-git add terraform.tfstate *.tf && git commit
-```
+`release` is what is live, so apply runs only from the `release` checkout.
+The wrapper refuses apply, destroy, import and `state rm`/`mv` in any other
+checkout, with changes that are not committed, or behind `origin/release`.
+Plan runs anywhere.
 
-Commit `terraform.tfstate` after every apply. It is encrypted.
+1. Change the `.tf` files on a branch. Run `./tofu plan` and read it.
+2. Merge the PR, then run `yarn release`.
+3. In the `release` checkout:
+
+   ```bash
+   git pull --ff-only
+   ./tofu plan     # shows what would change. Read it.
+   ./tofu apply
+   ```
+
+4. If the apply created a resource, add its import block to `imports.tf`
+   in a new PR. The ID is in `./tofu state show <resource>`. Until then,
+   `infra/check-imports.sh` fails in CI.
 
 If `plan` shows a change that you did not make, someone changed Cloudflare
 by hand. Apply puts it back to what git says. To keep the manual change,
@@ -64,9 +80,9 @@ copy it into the `.tf` files first.
 - `main.tf`: the account ID.
 - `<zone>.tf`: one file for each zone, with its DNS records.
 - `tunnel.tf`: the tunnel.
-- `imports.tf`: import blocks for everything that existed before OpenTofu.
-  They do nothing after the first apply. They make a rebuild possible.
-- `terraform.tfstate`: the encrypted state.
+- `imports.tf`: one import block for each resource. They do nothing when
+  the state has the resource. They rebuild a lost state.
+- `terraform.tfstate`: the state. Git ignores it.
 
 ## Add a hostname for a tunnel site
 
@@ -85,24 +101,27 @@ copy it into the `.tf` files first.
 
 2. Add the ingress rule to `apps/cloudflared/config.yml`. The tunnel is
    locally managed today, so its ingress is still in that file.
-3. `./tofu plan`, `./tofu apply`, commit.
+3. Follow "Every change", including the import block after the apply.
 
-## Lost passphrase or state
+## The state
 
-The Cloudflare resources still exist, and `imports.tf` knows their IDs.
+The state maps each resource in the code to the ID of the live object.
+Cloudflare holds the settings. So a lost or old state loses no settings.
+It only makes OpenTofu forget which object is which. The import blocks
+give it the IDs again:
 
 1. Delete `terraform.tfstate`.
-2. Put a new passphrase in the secrets file.
-3. `./tofu init`, then `./tofu apply`. The plan must show only imports.
-4. Commit the new state.
+2. `./tofu init`, then `./tofu plan`. The plan must show only imports.
+3. `./tofu apply` from the `release` checkout.
 
-A resource that you added after the first import has no import block.
-Add one before step 3, or apply creates a second copy of it.
+To delete a resource, the state must hold it. Without it, OpenTofu does
+not know the object, and removing the code leaves the object live. So
+apply once first (step 3 above), then remove the code and its import
+block, and apply again.
 
 ## Rules
 
 - Change Cloudflare only through these files. A change in the dashboard
   is lost at the next apply.
-- One person applies at a time. The state is in git, so there is no lock:
-  pull before you plan, and push after you apply.
+- Apply from one `release` checkout only. Its state is the cache.
 - Never commit `.tofu/`, `.terraform/` or a plan file.

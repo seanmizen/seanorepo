@@ -63,7 +63,7 @@ Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
 - `apps/` - one directory per site or service. Frontend and backend share a
   `docker-compose.yml`, and backends sit beside their frontends.
 - `utils/` - tooling. `utils/debbie/` provisions and deploys the home servers.
-- `infra/` - settings as code (OpenTofu, encrypted state in git). Change these
+- `infra/` - settings as code (OpenTofu). Apply only from `release`. Change these
   only here. `infra/cloudflare/`: zones, DNS, the tunnel. `infra/github/`:
   Actions token permissions, and the ruleset that protects `main` and
   `release` (no force-push, no deletion). See each README.

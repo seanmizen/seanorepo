@@ -1,8 +1,8 @@
 name: Infra check (OpenTofu)
 
-# Checks infra/cloudflare without secrets: format, and validate on a copy
-# without the encrypted state (validate does not need it). Plan and apply
-# need the token and the passphrase, so they run on Sean's machine only.
+# Checks the OpenTofu stacks without secrets: format, validate, and one
+# import block for each resource. Plan and apply need the tokens, so they
+# run on Sean's machine only. Apply runs only from release (infra/tofu).
 
 on:
   pull_request:
@@ -22,12 +22,11 @@ jobs:
       fail-fast: false
       matrix:
         stack: [cloudflare, github]
-    # Placeholders: nothing here reads the state or calls an API. The github
-    # stack's wrapper wants a token even for fmt.
+    # Placeholders: nothing here calls an API. The github stack's wrapper
+    # wants a token even for fmt.
     env:
       CLOUDFLARE_SECRETS: /nonexistent
       GITHUB_TOKEN: ci-placeholder
-      TF_VAR_state_passphrase: ci-placeholder-no-state-is-read
     steps:
       - uses: actions/checkout@v4
 
@@ -36,10 +35,8 @@ jobs:
 
       - name: Validate
         run: |
-          # A copy without the encrypted state: validate does not need it.
-          tmp="$(mktemp -d)"
-          mkdir -p "$tmp/${{ matrix.stack }}"
-          cp infra/tofu "$tmp/"
-          cp infra/${{ matrix.stack }}/*.tf infra/${{ matrix.stack }}/.terraform.lock.hcl "$tmp/${{ matrix.stack }}/"
-          "$tmp/tofu" ${{ matrix.stack }} init -input=false
-          "$tmp/tofu" ${{ matrix.stack }} validate
+          infra/tofu ${{ matrix.stack }} init -input=false
+          infra/tofu ${{ matrix.stack }} validate
+
+      - name: Every resource has an import block
+        run: infra/check-imports.sh

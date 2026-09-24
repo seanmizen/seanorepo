@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Runs the pinned OpenTofu for one stack (a directory under infra/).
 # Downloads it on first use, checks the SHA-256 against the sums below, and
-# keeps it in infra/.tofu/ (gitignored). Loads the Cloudflare token and the
-# state passphrase from ~/.config/seanorepo/cloudflare.secrets. The github
-# stack takes its token from your gh login (`gh auth token`).
+# keeps it in infra/.tofu/ (gitignored). Loads the Cloudflare token from
+# ~/.config/seanorepo/cloudflare.secrets. The github stack takes its token
+# from your gh login (`gh auth token`).
+#
+# `release` is what is live, so the commands that change live settings or
+# the state (apply, destroy, import, state rm/mv/push) run only from a
+# checkout of `release` that is clean and equal to origin/release. plan
+# runs anywhere.
 #   infra/tofu cloudflare plan      infra/tofu github apply
 # Each stack also has ./tofu, which calls this with its own name.
 set -euo pipefail
@@ -23,6 +28,29 @@ if [ -z "$stack" ] || [ ! -f "$here/$stack/versions.tf" ]; then
   exit 2
 fi
 shift
+
+case "${1:-}" in
+  apply | destroy | import | state)
+    if [ "${1:-}" != state ] || [[ "${2:-}" =~ ^(rm|mv|push|replace-provider)$ ]]; then
+      repo="$(git -C "$here" rev-parse --show-toplevel)"
+      branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD)"
+      if [ "$branch" != release ]; then
+        echo "tofu: $1 runs only from a checkout of release. This checkout is on $branch. See infra/cloudflare/README.md." >&2
+        exit 1
+      fi
+      if [ -n "$(git -C "$repo" status --porcelain)" ]; then
+        echo "tofu: the checkout has changes that are not committed. Commit or remove them, then run $1 again." >&2
+        exit 1
+      fi
+      git -C "$repo" fetch --quiet origin release
+      if [ "$(git -C "$repo" rev-parse HEAD)" != "$(git -C "$repo" rev-parse origin/release)" ]; then
+        echo "tofu: this checkout is not equal to origin/release. Run git pull --ff-only, then run $1 again." >&2
+        exit 1
+      fi
+    fi
+    ;;
+esac
+
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
 case "$arch" in x86_64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; esac
@@ -48,7 +76,7 @@ if [ ! -x "$bin" ]; then
   chmod +x "$bin"
 fi
 
-# The secrets file holds CLOUDFLARE_API_TOKEN and TF_VAR_state_passphrase.
+# The secrets file holds CLOUDFLARE_API_TOKEN.
 # It lives outside the repo, so every checkout and worktree shares one copy.
 # It must not be readable by other users. See README.md.
 secrets="${CLOUDFLARE_SECRETS:-$HOME/.config/seanorepo/cloudflare.secrets}"
