@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 # OpenTofu for this stack. See ../tofu.
-exec "$(dirname "$0")/../tofu" cloudflare "$@"
+exec "$(dirname "$0")/../tofu" github "$@"
