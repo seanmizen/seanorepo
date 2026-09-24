@@ -63,6 +63,8 @@ Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
 - `apps/` - one directory per site or service. Frontend and backend share a
   `docker-compose.yml`, and backends sit beside their frontends.
 - `utils/` - tooling. `utils/debbie/` provisions and deploys the home servers.
+- `infra/cloudflare/` - Cloudflare as code (OpenTofu): zones, DNS, the tunnel
+  and its ingress. Change Cloudflare only here. See its README.
 - `scripts/` - repo-level scripts (`promote-release.sh`, `test-deployment.sh`).
 - `requirements/` - the requirements index and its checker
   (`yarn requirements:check`).
