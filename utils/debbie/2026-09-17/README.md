@@ -184,7 +184,7 @@ Cloudflare balances across both connections, so there is no gap. Probe each
 hostname more than once - a single 200 does not prove both machines answer:
 
 ```bash
-for u in seanmizen.com carolinemizen.art pp.seanmizen.com inside.seanmizen.com
+for u in seanmizen.com carolinemizen.art planning-poker.seanmizen.com inside.seanmizen.com
 do printf "%-26s " "$u"; for i in 1 2 3; do printf "%s " "$(curl -s -m12 -o /dev/null -w %{http_code} https://$u)"; done; echo; done
 ```
 

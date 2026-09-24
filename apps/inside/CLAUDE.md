@@ -173,6 +173,6 @@ Rules:
 | Frontend | 4060 | 4160 |
 | Backend | 4061 | 4161 |
 
-Cloudflared ingress for `inside.seanmizen.com` **must stay above** the
-`*.seanmizen.com` wildcard in `apps/cloudflared/config.yml`, or the wildcard
-swallows it and serves seanmizen.com instead.
+Cloudflared ingress for `inside.seanmizen.com` is its own rule in
+`apps/cloudflared/config.yml`. There is no `*.seanmizen.com` wildcard, so a
+hostname without a rule gets a 404.

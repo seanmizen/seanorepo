@@ -99,7 +99,7 @@ sudo systemctl reload cloudflared     # to pick up the new config.yml
 
 Port used: **4040** (cloudflared 4xxx range). Cloudflared ingress rule
 lives in `apps/cloudflared/config.yml` and routes `minecraft.seanmizen.com`
-→ `http://localhost:4040` *before* the `*.seanmizen.com` wildcard.
+→ `http://localhost:4042`. There is no `*.seanmizen.com` wildcard.
 
 ## Known limitations
 
