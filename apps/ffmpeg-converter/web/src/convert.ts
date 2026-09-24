@@ -11,14 +11,40 @@ export interface Job {
 
 export class ConvertError extends Error {}
 
-/** Uploads the file. onProgress receives 0..1. */
-export function startJob(
+/** Retries of one chunk after the first try, for a network drop or a 5xx. */
+const CHUNK_RETRIES = 3;
+
+/**
+ * Uploads the file in chunks, then starts the job. onProgress receives 0..1.
+ * Every request stays under Cloudflare's 100 MB body limit: the server says
+ * how large a chunk may be (uploads.go).
+ */
+export async function startJob(
   file: File,
   tool: Tool,
   extraArgs: Record<string, string>,
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
 ): Promise<Job> {
+  const started = await send('POST', '/api/uploads', null, signal);
+  if (started.status !== 201 || !started.body.upload_id) {
+    throw new ConvertError(messageFor(started.status, started.body));
+  }
+  const uploadId = started.body.upload_id;
+  const chunkSize = started.body.chunk_size ?? 32 * 1024 * 1024;
+  const chunks = Math.max(1, Math.ceil(file.size / chunkSize));
+
+  let sent = 0;
+  for (let n = 0; n < chunks; n++) {
+    const chunk = file.slice(n * chunkSize, (n + 1) * chunkSize);
+    await withRetries(signal, () =>
+      send('PUT', `/api/uploads/${uploadId}/${n}`, chunk, signal, (loaded) =>
+        onProgress((sent + loaded) / Math.max(1, file.size)),
+      ),
+    );
+    sent += chunk.size;
+  }
+
   const form = new FormData();
   form.append('op', tool.op);
   form.append('ext', tool.outputExt);
@@ -26,35 +52,79 @@ export function startJob(
   for (const [k, v] of Object.entries({ ...tool.args, ...extraArgs })) {
     form.append(k, v);
   }
-  form.append('file', file);
+  form.append('upload_id', uploadId);
+  form.append('chunks', String(chunks));
+  form.append('filename', file.name);
+  const res = await send('POST', '/api/convert', form, signal);
+  if (res.status < 200 || res.status >= 300 || !res.body.job_id) {
+    throw new ConvertError(messageFor(res.status, res.body));
+  }
+  return {
+    id: res.body.job_id,
+    downloadUrl: `/api/jobs/${res.body.job_id}/output`,
+  };
+}
 
-  // fetch() has no upload progress, so this uses XMLHttpRequest.
+/** Network errors and 5xx answers try again, after 1, 2 and 4 seconds. */
+async function withRetries(
+  signal: AbortSignal,
+  attempt: () => Promise<{ status: number; body: Body }>,
+): Promise<void> {
+  for (let tries = 0; ; tries++) {
+    let res: { status: number; body: Body } | undefined;
+    try {
+      res = await attempt();
+    } catch (e) {
+      if (signal.aborted || tries >= CHUNK_RETRIES) throw e;
+    }
+    if (res && res.status >= 200 && res.status < 300) return;
+    if (res && res.status < 500) {
+      throw new ConvertError(messageFor(res.status, res.body));
+    }
+    if (tries >= CHUNK_RETRIES) {
+      throw new ConvertError(
+        res
+          ? messageFor(res.status, res.body)
+          : 'The upload stopped. Check your connection and try again.',
+      );
+    }
+    await sleep(1000 * 2 ** tries, signal);
+  }
+}
+
+/**
+ * One request. It resolves with any HTTP status. It rejects on a network
+ * error or a cancel. fetch() has no upload progress, so this uses
+ * XMLHttpRequest.
+ */
+function send(
+  method: string,
+  url: string,
+  body: Blob | FormData | null,
+  signal: AbortSignal,
+  onUpload?: (loaded: number) => void,
+): Promise<{ status: number; body: Body }> {
   return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Cancelled', 'AbortError'));
+      return;
+    }
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/convert');
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(e.loaded / e.total);
-    };
-    xhr.onload = () => {
-      const body = parse(xhr.responseText);
-      if (xhr.status >= 200 && xhr.status < 300 && body.job_id) {
-        resolve({
-          id: body.job_id,
-          downloadUrl: `/api/jobs/${body.job_id}/output`,
-        });
-      } else {
-        reject(new ConvertError(messageFor(xhr.status, body)));
-      }
-    };
+    xhr.open(method, url);
+    if (onUpload) xhr.upload.onprogress = (e) => onUpload(e.loaded);
+    xhr.onload = () =>
+      resolve({ status: xhr.status, body: parse(xhr.responseText) });
     xhr.onerror = () =>
       reject(
         new ConvertError(
           'The upload stopped. Check your connection and try again.',
         ),
       );
-    signal.addEventListener('abort', () => xhr.abort());
+    const onAbort = () => xhr.abort();
+    signal.addEventListener('abort', onAbort, { once: true });
     xhr.onabort = () => reject(new DOMException('Cancelled', 'AbortError'));
-    xhr.send(form);
+    xhr.onloadend = () => signal.removeEventListener('abort', onAbort);
+    xhr.send(body);
   });
 }
 
@@ -82,6 +152,8 @@ export async function waitForJob(job: Job, signal: AbortSignal): Promise<void> {
 
 interface Body {
   job_id?: string;
+  upload_id?: string;
+  chunk_size?: number;
   status?: string;
   error?: string;
   message?: string;

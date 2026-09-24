@@ -6,6 +6,9 @@ import path from 'node:path';
 
 export const FIXTURES = path.join(__dirname, '.fixtures');
 
+/** Chunk size of the Go server under test, so small files go in chunks. */
+export const TEST_CHUNK_BYTES = 16 * 1024;
+
 const make: Record<string, string[]> = {
   'clip.mov': [
     '-f',

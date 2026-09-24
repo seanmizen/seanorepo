@@ -42,6 +42,7 @@ Env:
 | `FILE_TTL`      | `1h`     | job files are deleted after this time            |
 | `MAX_UPLOAD_MB` | `2048`   | largest request body for `/convert`              |
 | `MAX_JOBS`      | `2`      | async jobs that run ffmpeg at the same time      |
+| `UPLOAD_CHUNK_BYTES` | `33554432` | largest chunk of a chunked upload (32 MiB) |
 
 Data dir is `.gitignore`d and wiped by the test runner each run. The server
 also deletes each job directory `FILE_TTL` after its last change. The website
@@ -56,6 +57,22 @@ POST /convert               # multipart form — see below
 GET  /jobs/{id}             # JSON status for a job
 GET  /jobs/{id}/output      # download the converted file
 ```
+
+### Chunked uploads
+
+Cloudflare (Free plan) refuses a request body over 100 MB, and the site
+sends every file through it. So the site uploads in chunks:
+
+```
+POST /uploads                -> 201 {"upload_id": "...", "chunk_size": 33554432}
+PUT  /uploads/{id}/{n}       -> 204   (chunk n, 0-based, at most chunk_size bytes)
+POST /convert  upload_id=... chunks=N filename=...  (instead of a multipart file)
+```
+
+A repeat of a chunk replaces it, so a client retries a failed chunk. A chunk
+over `chunk_size` gets 413, and so does the chunk that takes the upload over
+`MAX_UPLOAD_MB`. `/convert` joins chunks 0 to N-1 (400 if one is missing) and
+removes the upload. The one-hour sweep removes an abandoned upload.
 
 ### POST /convert
 

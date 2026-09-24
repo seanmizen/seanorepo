@@ -83,6 +83,13 @@ func main() {
 		log.Fatalf("bad MAX_UPLOAD_MB: %v", err)
 	}
 
+	// Each chunk is one request through Cloudflare, which refuses a body
+	// over 100 MB on the Free plan.
+	chunkBytes, err := strconv.ParseInt(getenv("UPLOAD_CHUNK_BYTES", strconv.Itoa(DefaultChunkBytes)), 10, 64)
+	if err != nil || chunkBytes < 1 {
+		log.Fatalf("bad UPLOAD_CHUNK_BYTES: %q", getenv("UPLOAD_CHUNK_BYTES", ""))
+	}
+
 	maxJobs, err := strconv.Atoi(getenv("MAX_JOBS", "2"))
 	if err != nil || maxJobs < 1 {
 		log.Fatalf("bad MAX_JOBS: %q", getenv("MAX_JOBS", "2"))
@@ -92,11 +99,14 @@ func main() {
 	h := &Handler{
 		Store: store, Jobs: jobs, Ops: ops, Billing: bh,
 		MaxUploadBytes: maxUploadMB << 20,
+		ChunkBytes:     chunkBytes,
 		slots:          make(chan struct{}, maxJobs),
 	}
 	mux.HandleFunc("/health", h.Health)
 	mux.HandleFunc("/ops", h.ListOps)
 	mux.HandleFunc("/convert", h.Convert)
+	mux.HandleFunc("/uploads", h.Uploads)   // POST: start a chunked upload
+	mux.HandleFunc("/uploads/", h.Uploads)  // PUT /uploads/{id}/{n}: one chunk
 	mux.HandleFunc("/jobs/", h.JobOrOutput) // /jobs/{id} or /jobs/{id}/output
 
 	// Billing routes (always registered; handlers gracefully handle disabled state).

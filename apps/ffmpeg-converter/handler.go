@@ -8,16 +8,24 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// formOverhead is the room for multipart headers and form fields in /convert.
+const formOverhead = 1 << 20
 
 type Handler struct {
 	Store   *Store
 	Jobs    *JobTracker
 	Ops     map[string]*Operation
 	Billing *BillingHandler
-	// MaxUploadBytes limits the request body of /convert. 0 means no limit.
+	// ChunkBytes is the largest chunk of a chunked upload. 0 means
+	// DefaultChunkBytes.
+	ChunkBytes int64
+	// MaxUploadBytes limits the request body of /convert, and the total
+	// size of a chunked upload. 0 means no limit.
 	MaxUploadBytes int64
 	// slots limits how many async jobs run ffmpeg at the same time. The
 	// other async jobs stay pending until a slot is free. nil means no limit.
@@ -55,8 +63,10 @@ func (h *Handler) Convert(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "POST only")
 		return
 	}
+	// The limit is for the file. The multipart headers and the form fields
+	// come on top, so allow 1 MiB more for them.
 	if h.MaxUploadBytes > 0 {
-		r.Body = http.MaxBytesReader(w, r.Body, h.MaxUploadBytes)
+		r.Body = http.MaxBytesReader(w, r.Body, h.MaxUploadBytes+formOverhead)
 	}
 	// Max 64 MiB in memory for multipart. Larger parts spill to temp files.
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
@@ -91,6 +101,29 @@ func (h *Handler) Convert(w http.ResponseWriter, r *http.Request) {
 
 	job := h.Jobs.Create(opName)
 
+	// A chunked upload (see uploads.go) replaces the multipart file.
+	if uploadID := r.FormValue("upload_id"); uploadID != "" {
+		chunks, err := strconv.Atoi(r.FormValue("chunks"))
+		if err != nil {
+			h.fail(job, err)
+			writeErr(w, http.StatusBadRequest, "chunks must be a number")
+			return
+		}
+		path, err := h.Store.Assemble(uploadID, chunks, r.FormValue("filename"), job.ID, h.MaxUploadBytes)
+		if err != nil {
+			h.fail(job, err)
+			var ue *uploadError
+			if errors.As(err, &ue) {
+				writeErr(w, ue.status, ue.msg)
+			} else {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+		h.start(w, r, job, op, opName, []string{path})
+		return
+	}
+
 	files := r.MultipartForm.File["file"]
 	if len(files) == 0 && op.MinInputs > 0 {
 		writeErr(w, http.StatusBadRequest, "missing 'file' upload")
@@ -100,6 +133,15 @@ func (h *Handler) Convert(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest,
 			fmt.Sprintf("op %q requires at least %d file(s), got %d", opName, op.MinInputs, len(files)))
 		return
+	}
+
+	for _, fh := range files {
+		if h.MaxUploadBytes > 0 && fh.Size > h.MaxUploadBytes {
+			h.fail(job, fmt.Errorf("file too large"))
+			writeErr(w, http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("file too large: the limit is %d MB", h.MaxUploadBytes>>20))
+			return
+		}
 	}
 
 	inputs := make([]string, 0, len(files))
@@ -119,11 +161,17 @@ func (h *Handler) Convert(w http.ResponseWriter, r *http.Request) {
 		}
 		inputs = append(inputs, path)
 	}
+	h.start(w, r, job, op, opName, inputs)
+}
 
+// start runs a job whose inputs are saved: at once with async=1, else
+// before the response.
+func (h *Handler) start(w http.ResponseWriter, r *http.Request, job *Job, op *Operation, opName string, inputs []string) {
 	// Collect form args (excluding reserved).
 	args := map[string]string{}
 	for k, v := range r.MultipartForm.Value {
-		if k == "op" || k == "file" {
+		switch k {
+		case "op", "file", "upload_id", "chunks", "filename":
 			continue
 		}
 		if len(v) > 0 {

@@ -67,6 +67,8 @@ func buildMux(store *Store, jobs *JobTracker, ops map[string]*Operation, bh *Bil
 	mux.HandleFunc("/health", h.Health)
 	mux.HandleFunc("/ops", h.ListOps)
 	mux.HandleFunc("/convert", h.Convert)
+	mux.HandleFunc("/uploads", h.Uploads)
+	mux.HandleFunc("/uploads/", h.Uploads)
 	mux.HandleFunc("/jobs/", h.JobOrOutput)
 
 	if bh != nil {
