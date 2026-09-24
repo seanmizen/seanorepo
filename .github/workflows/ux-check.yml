@@ -44,6 +44,14 @@ jobs:
         working-directory: apps/ffmpeg-converter/web
         run: yarn playwright install --with-deps chromium
 
+      - name: Backend CPU cap
+        # The backend may use 3 cores on asus, so the other sites keep theirs.
+        working-directory: apps/ffmpeg-converter
+        run: |
+          cpus="$(docker compose --profile prod config --format json | jq -r '.services.backend.cpus')"
+          echo "backend cpus: $cpus"
+          [ "$cpus" = 3 ] || { echo "::error::backend cpus must be 3, got $cpus"; exit 1; }
+
       - name: Go tests
         working-directory: apps/ffmpeg-converter
         run: go test ./...
