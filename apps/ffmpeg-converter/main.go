@@ -17,6 +17,12 @@ import (
 )
 
 func main() {
+	// `ffmpeg-converter -healthcheck` asks the running server for /health.
+	// The Docker healthcheck uses it: the image has no curl.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		os.Exit(healthcheck(getenv("PORT", "9876")))
+	}
+
 	// Fail fast if ffmpeg isn't on PATH — every op shells out to it.
 	ffmpegPath, err := exec.LookPath("ffmpeg")
 	if err != nil {
@@ -24,8 +30,10 @@ func main() {
 	}
 	log.Printf("ffmpeg found at %s", ffmpegPath)
 	if out, err := exec.Command("ffmpeg", "-hide_banner", "-version").Output(); err == nil {
-		if major, minor, ok := ffmpegVersion(string(out)); ok && (major < 7 || major == 7 && minor < 1) {
-			log.Printf("WARN: ffmpeg %d.%d is older than 7.1. HEIC photos will fail. The site offers HEIC to JPG and HEIC to PNG.", major, minor)
+		// ffmpeg before 8 reads one tile of an iPhone photo. libheif's
+		// decoder reads the whole photo (withHEIFDecode in ops.go).
+		if major, minor, ok := ffmpegVersion(string(out)); ok && major < 8 && heifDecoder == "" {
+			log.Printf("WARN: ffmpeg %d.%d and no heif-dec. HEIC photos come out as one tile. Install libheif-examples. The site offers HEIC to JPG and HEIC to PNG.", major, minor)
 		}
 	}
 	if _, err := exec.LookPath("ffprobe"); err != nil {
@@ -139,7 +147,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    ":" + port,
-		Handler: mux,
+		Handler: withAPIPrefix(mux),
 		// Large uploads on a slow connection take many minutes. Async jobs
 		// answer fast, but a synchronous /convert or a large download can not.
 		ReadHeaderTimeout: 10 * time.Second,
@@ -187,4 +195,27 @@ func ffmpegVersion(out string) (major, minor int, ok bool) {
 	major, _ = strconv.Atoi(m[1])
 	minor, _ = strconv.Atoi(m[2])
 	return major, minor, true
+}
+
+// withAPIPrefix serves every route twice: at /convert and at /api/convert.
+// Backend routes use /api (CLAUDE.md), and the tunnel sends
+// seansconverter.com/api/* here. The bare paths stay for the test suite.
+func withAPIPrefix(mux http.Handler) http.Handler {
+	root := http.NewServeMux()
+	root.Handle("/api/", http.StripPrefix("/api", mux))
+	root.Handle("/", mux)
+	return root
+}
+
+func healthcheck(port string) int {
+	client := http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/health")
+	if err != nil {
+		return 1
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }

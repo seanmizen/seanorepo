@@ -33,7 +33,7 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 | 4030 / 4031 | planning-poker FE / BE |
 | 4040 | RESERVED - the ngrok web inspector binds it |
 | 4042 | minecraft.seanmizen.com |
-| 4050 / 4051 | ffmpeg-converter (seansconverter.com). Local only. Not deployed. |
+| 4050 / 4051 | seansconverter.com FE / BE (apps/ffmpeg-converter) |
 | 4060 / 4061 | inside.seanmizen.com FE / BE |
 | 4120 | tcp-getter (host unit, reached at `seanmizen.com/tcp/*`) |
 
@@ -60,8 +60,7 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 5. Decide where its data lives. SQLite and uploads go in named Docker volumes,
    and those volumes exist only on the tunnel machine.
 
-seanscards and ffmpeg-converter run locally only (`yarn cards`,
-`yarn converter`). Root `prod:docker` excludes them, and the tunnel has no
-hostname for them. Their ports stay reserved.
+seanscards runs locally only (`yarn cards`). Root `prod:docker` excludes it,
+and the tunnel has no hostname for it. Its ports stay reserved.
 
 Smoke test: `scripts/test-deployment.sh`.

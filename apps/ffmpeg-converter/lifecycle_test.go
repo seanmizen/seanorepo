@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -133,5 +134,87 @@ func TestFfmpegVersion(t *testing.T) {
 	}
 	if _, _, ok := ffmpegVersion("ffmpeg version N-118000-gabc"); ok {
 		t.Error("git build: want ok=false")
+	}
+}
+
+func TestAPIPrefix_ServesTheSameRoutes(t *testing.T) {
+	store := NewStore(t.TempDir())
+	h := &Handler{Store: store, Jobs: NewJobTracker(), Ops: synthOps()}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", h.Health)
+	mux.HandleFunc("/uploads", h.Uploads)
+	ts := httptest.NewServer(withAPIPrefix(mux))
+	defer ts.Close()
+	for _, p := range []string{"/health", "/api/health"} {
+		resp, err := http.Get(ts.URL + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("GET %s: want 200, got %d", p, resp.StatusCode)
+		}
+	}
+	resp, err := http.Post(ts.URL+"/api/uploads", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("POST /api/uploads: want 201, got %d", resp.StatusCode)
+	}
+}
+
+func TestWithHEIFDecode_UsesTheDecoderForHEICOnly(t *testing.T) {
+	dir := t.TempDir()
+	// A fake decoder: writes "decoded" to its second argument.
+	fake := filepath.Join(dir, "fake-heif-dec")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho decoded > \"$2\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := heifDecoder
+	heifDecoder = fake
+	defer func() { heifDecoder = old }()
+
+	var got string
+	run := withHEIFDecode(func(_ context.Context, oc OpContext) error {
+		data, _ := os.ReadFile(oc.Inputs[0])
+		got = oc.Inputs[0] + ":" + string(data)
+		return nil
+	})
+	for in, want := range map[string]string{
+		"IMG_0001.HEIC": filepath.Join(dir, "heif-decoded.png") + ":decoded\n",
+		"photo.heif":    filepath.Join(dir, "heif-decoded.png") + ":decoded\n",
+		"photo.png":     filepath.Join(dir, "photo.png") + ":original",
+	} {
+		path := filepath.Join(dir, in)
+		_ = os.WriteFile(path, []byte("original"), 0o644)
+		if err := run(context.Background(), OpContext{Inputs: []string{path}, Output: filepath.Join(dir, "out.jpg")}); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("%s: got %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestHEIFPrimaryOutput_PicksThePrimaryOfSeveral(t *testing.T) {
+	dir := t.TempDir()
+	png := filepath.Join(dir, "heif-decoded.png")
+	for _, name := range []string{"heif-decoded-1.png", "heif-decoded-2.png"} {
+		_ = os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644)
+	}
+	// A fake heif-info that marks the second image as primary.
+	bin := t.TempDir()
+	info := "#!/bin/sh\necho 'image: 320x212 (id=1)'\necho 'image: 1280x854 (id=2), primary'\n"
+	_ = os.WriteFile(filepath.Join(bin, "heif-info"), []byte(info), 0o755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	got, err := heifPrimaryOutput(context.Background(), "in.heic", png)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, "heif-decoded-2.png"); got != want {
+		t.Fatalf("got %s, want %s", got, want)
 	}
 }

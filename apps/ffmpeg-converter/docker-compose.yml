@@ -1,34 +1,53 @@
-# Docker Compose for the ffmpeg-converter Next.js frontend.
+# seansconverter.com: the Next.js frontend (4050) and the Go backend (4051).
 #
-# The Go backend is not yet containerised (future ticket). For now, run it
-# on the host (`go run .` from this directory) and the frontend container
-# will reach it via host.docker.internal:9876. If the backend is offline,
-# the proxy falls back to an in-memory mock so the FE still renders.
+# The tunnel sends seansconverter.com/api/* to the backend and everything
+# else to the frontend (apps/cloudflared/config.yml). The frontend also
+# proxies /api to the backend, for a machine without the tunnel.
 #
 # Profiles:
-#   dev   — bind-mounts the monorepo, hot-reload on file change
-#   prod  — production build, detached
+#   dev   - bind-mounts the monorepo, hot reload
+#   prod  - production images, detached
 
 x-frontend-base: &frontend-base
   container_name: frontend-converter
   build:
     context: ../..
-    dockerfile: apps/ffmpeg-converter/dockerfile
+    dockerfile: apps/ffmpeg-converter/web/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
     - "${PUBLISH_ADDR:-127.0.0.1}:4050:4050"
   environment:
-    # When the backend runs on the host, reach it via host.docker.internal
-    # (works on Docker Desktop for macOS/Windows; on Linux, add the
-    # host-gateway extra_host below).
-    BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:9876}
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
+    BACKEND_URL: http://backend-converter:4051
+  labels:
+    - "com.docker.compose.service.primary=true"
+    - "description=seansconverter.com - Frontend (http://localhost:4050)"
+
+x-backend-base: &backend-base
+  container_name: backend-converter
+  build:
+    context: ../..
+    dockerfile: apps/ffmpeg-converter/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "${PUBLISH_ADDR:-127.0.0.1}:4051:4051"
+  environment:
+    PORT: "4051"
+    DATA_DIR: /data
+    # The tests shrink it (web/tests/fixtures.ts). Cloudflare refuses a
+    # request over 100 MB, so production keeps the 32 MiB default.
+    UPLOAD_CHUNK_BYTES: ${UPLOAD_CHUNK_BYTES:-33554432}
+    # Uploads, outputs and the billing database. The service deletes job
+    # files after FILE_TTL (1h).
+  volumes:
+    - converter_data:/data
+  labels:
+    - "description=seansconverter.com - Backend (http://localhost:4051/api/health)"
 
 services:
   frontend:
     <<: *frontend-base
     profiles: ["prod"]
+    depends_on: [backend]
 
   frontend-dev:
     <<: *frontend-base
@@ -39,7 +58,22 @@ services:
       - fe_node_modules:/app/node_modules
       - fe_next_cache:/app/apps/ffmpeg-converter/web/.next
     profiles: ["dev"]
+    depends_on: [backend-dev]
+
+  backend:
+    <<: *backend-base
+    profiles: ["prod"]
+
+  backend-dev:
+    <<: *backend-base
+    profiles: ["dev"]
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+      - converter_data:/data
 
 volumes:
+  converter_data:
   fe_node_modules:
   fe_next_cache:
