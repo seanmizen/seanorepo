@@ -1,0 +1,33 @@
+# The edge: the door through which the sites are reached.
+#
+# Every app's production services join the `edge` network under a stable
+# name (for example `seansconverter-frontend`). The edge routes to them by
+# that name, so the apps need no port on the host.
+#
+# Profiles (deploy.sh picks one from the machine's roles, REQ-SERVER-016):
+#   lan  - Caddy on port 80, for a webserver without the tunnel role. The
+#          LAN reaches each site at <site>.<hostname>.local.
+#   tunnel - reserved for cloudflared as a container (#496). Not used yet:
+#          the tunnel machine still runs cloudflared as a host unit.
+
+services:
+  caddy:
+    profiles: ["lan"]
+    container_name: edge-caddy
+    image: caddy:2.10-alpine
+    restart: "no"
+    ports:
+      # The one port a LAN webserver opens (REQ-SERVER-002). deploy.sh sets
+      # PUBLISH_ADDR=0.0.0.0 for this compose file only.
+      - "${PUBLISH_ADDR:-127.0.0.1}:80:80"
+    environment:
+      # The machine's hostname: the sites are <site>.${EDGE_HOST}.local.
+      EDGE_HOST: ${EDGE_HOST:?EDGE_HOST must be the machine hostname}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true

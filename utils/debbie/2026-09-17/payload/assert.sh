@@ -731,6 +731,22 @@ if [ "$PHASE" = provisioned ]; then
         'systemctl cat custom-deploy.service | grep -qx "ConditionPathExists=/etc/seanorepo/roles/webserver"'
     check "the tunnel runs only on a machine with the tunnel role" \
         'systemctl cat custom-cloudflared.service | grep -qx "ConditionPathExists=/etc/seanorepo/roles/tunnel"'
+    # REQ-SERVER-016: the roles decide the edge. Caddy runs only on a webserver
+    # without the tunnel role, and only once a deploy has a checkout with
+    # infra/edge. The LAN names unit is enabled on the same machines.
+    if [ -e /etc/seanorepo/roles/webserver ] && [ ! -e /etc/seanorepo/roles/tunnel ]; then
+        check "the LAN edge follows the roles" \
+            "[ ! -e '$REPO_DIR/infra/edge/docker-compose.yml' ] \
+             || [ \"\$(docker inspect -f '{{.State.Running}}' edge-caddy 2>/dev/null)\" = true ]"
+        check "the LAN names follow the roles" \
+            'systemctl is-enabled custom-lan-names.service > /dev/null'
+    else
+        check "the LAN edge follows the roles" \
+            '[ "$(docker inspect -f "{{.State.Running}}" edge-caddy 2>/dev/null)" != true ]'
+        check "the LAN names follow the roles" \
+            '! systemctl is-active custom-lan-names.service > /dev/null 2>&1 \
+             && ! systemctl is-enabled custom-lan-names.service > /dev/null 2>&1'
+    fi
     check "roles on this machine are exactly '${EXPECT_ROLES:-none}'" \
         '[ "$(ls /etc/seanorepo/roles 2>/dev/null | sort | tr "\n" " " | sed "s/ $//")" = "$(printf "%s" "${EXPECT_ROLES:-}" | tr " " "\n" | sort | tr "\n" " " | sed "s/ $//")" ]'
     check "the #307 serving flag is gone" '[ ! -e /etc/seanorepo/serving ]'
@@ -839,18 +855,31 @@ if [ "$PHASE" = provisioned ]; then
         # REQ-DEPLOY-002/004: the deploy is `yarn prod:docker`, it runs when the
         # checkout differs from what was deployed, and not again until the
         # checkout moves or the host reboots.
-        # REQ-SERVER-002: the address comes from the roles. The yarn shim records
-        # PUBLISH_ADDR, and ROLES_DIR points at a scratch directory.
-        check "the deploy publishes on loopback with the tunnel and on the LAN without" \
-            't=$(mktemp -d); scratch_release "$t" > /dev/null; git -C "$t/machine" pull -q;
-             printf "#!/bin/sh\necho \"yarn \$* PUBLISH_ADDR=\$PUBLISH_ADDR\" >> \"%s/calls\"\n" "$t" > "$t/bin/yarn";
+        # REQ-SERVER-002: the apps publish on loopback on every machine. The
+        # shims record PUBLISH_ADDR. ROLES_DIR points at a scratch directory.
+        # REQ-SERVER-016: the roles decide the edge. Caddy starts, with port 80
+        # on the LAN, only without the tunnel role, and stops with it.
+        edge_run='t=$(mktemp -d); scratch_release "$t" > /dev/null; git -C "$t/machine" pull -q;
+             for c in yarn docker; do
+                 printf "#!/bin/sh\necho \"%s \$* PUBLISH_ADDR=\$PUBLISH_ADDR\" >> \"%s/calls\"\n" "$c" "$t" > "$t/bin/$c"; chmod +x "$t/bin/$c";
+             done;
              mkdir -p "$t/roles"; touch "$t/roles/webserver" "$t/roles/tunnel";
              run() { PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
                      DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" --force > /dev/null 2>&1; };
-             run; a=$(grep "^yarn prod:docker" "$t/calls" | tail -1);
-             rm "$t/roles/tunnel"; run; b=$(grep "^yarn prod:docker" "$t/calls" | tail -1);
+             run; cp "$t/calls" "$t/with-tunnel"; : > "$t/calls";
+             rm "$t/roles/tunnel"; run; cp "$t/calls" "$t/without-tunnel";'
+        check "the deploy publishes the apps on loopback, with or without the tunnel" \
+            "$edge_run"'
+             a=$(grep "^yarn prod:docker" "$t/with-tunnel" | tail -1); b=$(grep "^yarn prod:docker" "$t/without-tunnel" | tail -1);
              rm -rf "$t";
-             [ "$a" = "yarn prod:docker PUBLISH_ADDR=127.0.0.1" ] && [ "$b" = "yarn prod:docker PUBLISH_ADDR=0.0.0.0" ]'
+             [ "$a" = "yarn prod:docker PUBLISH_ADDR=127.0.0.1" ] && [ "$b" = "yarn prod:docker PUBLISH_ADDR=127.0.0.1" ]'
+        check "the deploy starts the LAN edge without the tunnel and stops it with" \
+            "$edge_run"'
+             up=$(grep -c "^docker compose -f .*/infra/edge/docker-compose.yml --profile lan up .*PUBLISH_ADDR=0.0.0.0$" "$t/without-tunnel");
+             down=$(grep -c "^docker compose -f .*/infra/edge/docker-compose.yml --profile lan down" "$t/with-tunnel");
+             stray=$(grep -c "infra/edge/docker-compose.yml --profile lan up" "$t/with-tunnel");
+             rm -rf "$t";
+             [ "$up" = 1 ] && [ "$down" = 1 ] && [ "$stray" = 0 ]'
         check "the deploy runs once per checkout and again after a reboot" \
             't=$(mktemp -d); scratch_release "$t" > /dev/null; git -C "$t/machine" pull -q;
              run() { PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" \
@@ -865,7 +894,8 @@ if [ "$PHASE" = provisioned ]; then
         sk "the release poller moves the checkout and touches no service" "$behaviour_skip_reason"
         sk "a release poll leaves the checkout alone while a deploy holds the lock" "$behaviour_skip_reason"
         sk "the deploy runs once per checkout and again after a reboot" "$behaviour_skip_reason"
-        sk "the deploy publishes on loopback with the tunnel and on the LAN without" "$behaviour_skip_reason"
+        sk "the deploy publishes the apps on loopback, with or without the tunnel" "$behaviour_skip_reason"
+        sk "the deploy starts the LAN edge without the tunnel and stops it with" "$behaviour_skip_reason"
     fi
 else
     sk "custom-release-poll.timer enabled"  "setup-server-environment.sh installs it"
@@ -879,10 +909,13 @@ else
     sk "the checkout fetches every branch, with full history" "setup-server-environment.sh repairs it"
     sk "the deploy runs only on a machine with the webserver role" "setup-server-environment.sh installs it"
     sk "the tunnel runs only on a machine with the tunnel role" "setup-server-environment.sh installs it"
+    sk "the LAN edge follows the roles" "setup-server-environment.sh writes the roles"
+    sk "the LAN names follow the roles" "setup-server-environment.sh installs it"
     sk "roles on this machine are exactly '${EXPECT_ROLES:-none}'" "setup-server-environment.sh writes them"
     sk "the #307 serving flag is gone" "setup-server-environment.sh removes it"
     sk "without the webserver role a triggered deploy runs nothing" "setup-server-environment.sh installs it"
-    sk "the deploy publishes on loopback with the tunnel and on the LAN without" "setup-developer-environment.sh clones the checkout"
+    sk "the deploy publishes the apps on loopback, with or without the tunnel" "setup-developer-environment.sh clones the checkout"
+    sk "the deploy starts the LAN edge without the tunnel and stops it with" "setup-developer-environment.sh clones the checkout"
     sk "the pre-#307 poller units are gone" "setup-server-environment.sh removes them"
     sk "deploy.sh present and executable"  "setup-developer-environment.sh clones the checkout"
     sk "a second deploy exits cleanly while one holds the lock" "setup-developer-environment.sh clones the checkout"
@@ -1559,17 +1592,16 @@ echo "== firewall (REQ-SERVER-002) =="
 # them would make this red on a correct machine - the fastest way to get a security
 # assertion switched off. Every port Docker publishes for this repository is
 # TCP, and the nat-chain check below covers a UDP publish regardless.
-# A webserver WITHOUT the tunnel role publishes its apps on the LAN on
-# purpose (REQ-SERVER-002) - that is the only reason to run one - so on such a machine the
-# app range 4000-4999 is expected off-loopback. Everywhere else, including the
-# tunnel machine, nothing in it may be.
+# A webserver WITHOUT the tunnel role serves the LAN through the edge's Caddy
+# on port 80 (REQ-SERVER-016), one of the four ports. The apps stay on
+# loopback on every machine, so no app port is an exception anywhere.
 if [ -e /etc/seanorepo/roles/webserver ] && [ ! -e /etc/seanorepo/roles/tunnel ]; then
-    LAN_APPS=yes
+    LAN_EDGE=yes
 else
-    LAN_APPS=no
+    LAN_EDGE=no
 fi
 lan_tcp_listeners() {
-    ss -H -ltn 2> /dev/null | awk -v lan_apps="$LAN_APPS" '
+    ss -H -ltn 2> /dev/null | awk '
         {
             a = $4
             if (match(a, /:[0-9]+$/) == 0) next
@@ -1577,7 +1609,6 @@ lan_tcp_listeners() {
             addr = substr(a, 1, RSTART - 1)
             gsub(/^\[|\]$/, "", addr)
             if (port == "22" || port == "80" || port == "443") next
-            if (lan_apps == "yes" && port >= 4000 && port <= 4999) next
             if (addr ~ /^127\./) next
             if (addr == "::1") next
             if (addr ~ /^::ffff:127\./) next
@@ -1599,7 +1630,7 @@ docker_lan_dnat() {
     sudo -n iptables -t nat -S DOCKER 2> /dev/null \
         | grep -- '-j DNAT' \
         | grep -v -- '-d 127\.' \
-        | if [ "$LAN_APPS" = yes ]; then grep -vE -- '--dport 4[0-9]{3}( |$)'; else cat; fi
+        | if [ "$LAN_EDGE" = yes ]; then grep -vE -- '--dport 80( |$)'; else cat; fi
 }
 
 if [ "$PHASE" = provisioned ]; then

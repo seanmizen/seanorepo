@@ -8,7 +8,7 @@
     "build": "bash ./build.sh",
     "start": "bash ./build.sh && npx --yes serve -s public -l 4042",
     "start:docker": "PUBLISH_ADDR=0.0.0.0 docker compose --profile dev up --build",
-    "prod:docker": "BUILD_TARGET=prod docker compose --profile prod up --build --detach",
+    "prod:docker": "docker network create edge >/dev/null 2>&1; BUILD_TARGET=prod docker compose --profile prod up --build --detach",
     "down": "docker compose --profile dev --profile prod down"
   }
 }

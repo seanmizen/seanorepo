@@ -195,22 +195,33 @@ log "deploying: $reason"
 # under uploads/ goes the same way. Do not add a clean step here or to
 # release-poll.sh.
 
-# Where the apps publish (REQ-SERVER-014). The roles decide it. No setting
-# does. A webserver that is also the tunnel machine publishes on loopback only.
-# The tunnel reaches localhost:4xxx, and nothing on the LAN should
-# (REQ-SERVER-002). A webserver WITHOUT the tunnel publishes on the LAN,
-# because the only reason to run one is to be reached from the LAN. Every
-# compose port reads ${PUBLISH_ADDR:-127.0.0.1} (REQ-SERVER-002).
-if [ -e "$ROLES_DIR/tunnel" ]; then
-    export PUBLISH_ADDR=127.0.0.1
-    log "publishing on loopback (tunnel machine)"
-else
-    export PUBLISH_ADDR=0.0.0.0
-    log "publishing on the LAN (webserver without the tunnel role)"
-fi
+# The apps publish on loopback on every machine (REQ-SERVER-002). The tunnel
+# reaches localhost:4xxx. The LAN reaches a webserver without the tunnel role
+# through Caddy on port 80 (REQ-SERVER-016), never an app port. Every compose
+# port reads ${PUBLISH_ADDR:-127.0.0.1}.
+export PUBLISH_ADDR=127.0.0.1
+
+# The apps' production services join the shared `edge` network, which the
+# edge (infra/edge) routes on. Their compose files need it to exist.
+docker network inspect edge > /dev/null 2>&1 || docker network create edge > /dev/null
 
 yarn install --immutable
 yarn prod:docker
+
+# The edge (REQ-SERVER-016). The roles decide it (REQ-SERVER-014). A webserver
+# without the tunnel role runs Caddy, so the LAN reaches each site at
+# <site>.<hostname>.local. On the tunnel machine Caddy must not run, so it is
+# stopped there: a machine that gains the tunnel role loses its LAN edge.
+EDGE_COMPOSE="$REPO_DIR/infra/edge/docker-compose.yml"
+if [ -e "$ROLES_DIR/tunnel" ]; then
+    EDGE_HOST="$(hostname -s)" docker compose -f "$EDGE_COMPOSE" --profile lan down --remove-orphans > /dev/null 2>&1 || true
+    log "edge: the tunnel (no LAN edge on the tunnel machine)"
+else
+    # The one port that this compose file publishes on the LAN.
+    EDGE_HOST="$(hostname -s)" PUBLISH_ADDR=0.0.0.0 \
+        docker compose -f "$EDGE_COMPOSE" --profile lan up --detach --remove-orphans
+    log "edge: Caddy serves the sites on the LAN at <site>.$(hostname -s).local"
+fi
 
 #------------------------------------------------------------------------------
 # tcp-getter - built here, because nothing else builds it.

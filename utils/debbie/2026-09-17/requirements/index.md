@@ -37,6 +37,7 @@
 | [`REQ-SERVER-013`](server.md#req-server-013--our-units-are-identifiable-in-systemctl-output) | Our units are identifiable in systemctl output | active | constraint | P2 | sean |
 | [`REQ-SERVER-014`](server.md#req-server-014--a-forgotten-setting-never-switches-anything-on) | A forgotten setting never switches anything on | active | constraint | P0 | sean |
 | [`REQ-SERVER-015`](server.md#req-server-015--vendor-packages-update-only-when-a-release-is-7-days-old) | Vendor packages update only when a release is 7 days old | active | functional | P2 | sean |
+| [`REQ-SERVER-016`](server.md#req-server-016--the-roles-decide-the-edge) | The roles decide the edge | active | functional | P1 | sean |
 
 ## Dependency graph
 
@@ -74,6 +75,7 @@ graph TD
   REQ_SERVER_013["REQ-SERVER-013<br/>Our units are identifiable in systemctl output"]
   REQ_SERVER_014["REQ-SERVER-014<br/>A forgotten setting never switches anything on"]
   REQ_SERVER_015["REQ-SERVER-015<br/>Vendor packages update only when a release is 7 days old"]
+  REQ_SERVER_016["REQ-SERVER-016<br/>The roles decide the edge"]
   REQ_DEPLOY_002 -->|depends-on| REQ_DEPLOY_001
   REQ_DEPLOY_003 -->|depends-on| REQ_DEPLOY_002
   REQ_DEPLOY_004 -->|depends-on| REQ_DEPLOY_002
@@ -97,6 +99,8 @@ graph TD
   REQ_SERVER_014 -->|refines| REQ_NETWORK_002
   REQ_SERVER_015 -->|refines| REQ_SERVER_006
   REQ_SERVER_015 -->|depends-on| REQ_NETWORK_005
+  REQ_SERVER_016 -->|depends-on| REQ_SERVER_002
+  REQ_SERVER_016 -->|depends-on| REQ_SERVER_014
   style REQ_NETWORK_004 stroke-dasharray: 4 4
   style REQ_SERVER_009 stroke-dasharray: 4 4
 ```
@@ -112,9 +116,10 @@ graph TD
 - `REQ-NETWORK-002` — refined-by REQ-SERVER-014
 - `REQ-NETWORK-003` — required-by REQ-NETWORK-004
 - `REQ-NETWORK-005` — required-by REQ-SERVER-015
-- `REQ-SERVER-002` — required-by REQ-SERVER-008
+- `REQ-SERVER-002` — required-by REQ-SERVER-008, required-by REQ-SERVER-016
 - `REQ-SERVER-003` — required-by REQ-SERVER-008
 - `REQ-SERVER-005` — refined-by REQ-NETWORK-004
 - `REQ-SERVER-006` — refined-by REQ-SERVER-015
 - `REQ-SERVER-008` — required-by REQ-NETWORK-005, refined-by REQ-SERVER-009
 - `REQ-SERVER-011` — required-by REQ-SERVER-012, required-by REQ-SERVER-013
+- `REQ-SERVER-014` — required-by REQ-SERVER-016

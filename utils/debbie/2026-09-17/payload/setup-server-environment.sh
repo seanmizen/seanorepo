@@ -648,6 +648,10 @@ GEN_DIR="$REPO_DIR/utils/debbie/2026-09-17"
 DEPLOY_SCRIPT="$GEN_DIR/services/deploy.sh"
 RELEASE_POLL_SCRIPT="$GEN_DIR/services/release-poll.sh"
 HOST_TOOLS_SCRIPT="$GEN_DIR/services/host-tools.sh"
+# The LAN names (REQ-SERVER-016). The script reads the site names from the
+# edge's Caddyfile in the checkout.
+LAN_NAMES_SCRIPT="$GEN_DIR/services/lan-names.sh"
+EDGE_CADDYFILE="$REPO_DIR/infra/edge/Caddyfile"
 # /usr/local/lib, NOT the checkout. deploy.sh and release-poll.sh run from the
 # checkout, because their job is to deploy what `release` holds. The watchdog
 # is different: it must work on a machine that has never deployed. The
@@ -725,6 +729,7 @@ write_unit() {
 UNIT_TEMPLATE_VARS=(
     DEPLOY_USER REPO_DIR ROLES_DIR RELEASE_POLL_SCRIPT DEPLOY_SCRIPT
     HOST_TOOLS_SCRIPT
+    LAN_NAMES_SCRIPT EDGE_CADDYFILE
     NET_FAILOVER_SCRIPT
     VENDOR_UPGRADE_SCRIPT
     TCP_GETTER_DIR NODE_BIN
@@ -756,6 +761,8 @@ render_unit custom-release-poll.timer
 render_unit custom-deploy.service
 
 render_unit custom-host-tools.service
+
+render_unit custom-lan-names.service
 
 # custom-deploy-poll did both jobs in one unit. This script removes it, not
 # only disables it: two pollers would each fetch, and custom-deploy-poll would
@@ -790,6 +797,18 @@ rm -f /etc/seanorepo/serving
 
 if [ "$units_changed" = 1 ]; then
     systemctl daemon-reload
+fi
+
+# The LAN names follow the roles (REQ-SERVER-016): on for a webserver without
+# the tunnel role, off everywhere else. The unit's Conditions say the same,
+# so a machine that loses the role also stops publishing at the next boot.
+if [ "$ROLE_WEBSERVER" = yes ] && [ "$ROLE_TUNNEL" != yes ]; then
+    log "  LAN webserver - enabling custom-lan-names.service (<site>.$SERVER_NAME.local)"
+    systemctl enable custom-lan-names.service
+elif systemctl is-enabled --quiet custom-lan-names.service 2> /dev/null \
+    || systemctl is-active --quiet custom-lan-names.service 2> /dev/null; then
+    log "  not a LAN webserver - stopping and disabling custom-lan-names.service"
+    systemctl disable --now custom-lan-names.service || true
 fi
 
 # Install the host tools during provisioning, so the first login has them -
