@@ -332,9 +332,12 @@ fi
 # - Debian: the yarnpkg package (Yarn 4). It installs the command as yarnpkg
 #   only, so /usr/local/bin/yarn links to it. deploy.sh finds yarn there.
 #
-# A machine that an older version of this script set up has corepack and its
-# yarn shims. The shims come first on the PATH, so this step removes them, and
-# removes corepack.
+# A machine that an older version of this script set up has corepack's yarn
+# shims. The shims come first on the PATH, so this step removes them. On macOS
+# it also removes the corepack formula. On Debian 13 the corepack package
+# stays: the nodejs package depends on node-corepack, so a purge also removes
+# Node, and the next install brings all of it back. Without its shims,
+# corepack changes nothing.
 #------------------------------------------------------------------------------
 log "Installing node and yarn"
 # remove_corepack_shims OWNER DIR: remove each package manager link in DIR
@@ -369,10 +372,6 @@ if [ "$OS" = Darwin ]; then
     fi
 else
     remove_corepack_shims root /usr/bin
-    if dpkg-query -W -f='${Status}' node-corepack 2> /dev/null | grep -q "^install ok installed"; then
-        run as_root apt-get purge -y node-corepack
-        note "$(green "Removed the node-corepack package")"
-    fi
     pkg_install nodejs yarnpkg
     if [ "$(readlink /usr/local/bin/yarn 2> /dev/null || true)" != /usr/bin/yarnpkg ]; then
         run as_root ln -sfn /usr/bin/yarnpkg /usr/local/bin/yarn
