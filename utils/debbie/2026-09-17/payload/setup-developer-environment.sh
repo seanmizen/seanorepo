@@ -486,17 +486,15 @@ fi
 # release branch.
 #
 # The git config comes from utils/config-anywhere, which is the one place that
-# holds it. An existing ~/.gitconfig is left alone.
+# holds it. get-gitconfig.sh sets only the keys that gitconfig.txt names, and
+# only when a value differs, so it runs every time: a changed value reaches
+# every machine on the next run. Other keys in ~/.gitconfig stay as they are.
 #------------------------------------------------------------------------------
 log "Cloning seanorepo and applying the git config"
 REPO_DIR="${REPO_DIR:-$USER_HOME/projects/seanorepo}"
 clone_once "$REPO_URL" "$REPO_DIR"
-if as_user "[ -f '$USER_HOME/.gitconfig' ]"; then
-    note "~/.gitconfig exists, so it is kept. To apply config-anywhere, remove it and run again"
-else
-    note "$(green "Applying utils/config-anywhere/gitconfig.txt")"
-    run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
-fi
+run as_user "cd '$REPO_DIR' && bash utils/config-anywhere/get-gitconfig.sh"
+note "git config: $(count "$(grep -c '^set ' "$RUN_OUT" || true)" changed)"
 run as_user "cd '$REPO_DIR' && yarn --version"
 note "Yarn $(cat "$RUN_OUT") in the repository"
 
