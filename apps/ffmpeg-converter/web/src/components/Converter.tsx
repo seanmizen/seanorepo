@@ -171,9 +171,15 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
     }
   };
 
-  // The home page hands over a file it already has.
+  // The home page hands over a file it already has. On a desktop video tool
+  // the device is the default, as with the page's own button.
   useEffect(() => {
-    if (initialFile) choose(initialFile);
+    if (initialFile) {
+      choose(
+        initialFile,
+        toolRunsLocally(tool) && deviceRunsLocally() ? 'local' : 'server',
+      );
+    }
   }, [initialFile]);
 
   const reset = () => {
@@ -192,48 +198,77 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm sm:p-8">
-      {state.step === 'idle' && (
-        <div className="text-center">
-          <label className="inline-flex min-h-16 w-full cursor-pointer items-center justify-center rounded-xl bg-accent px-8 text-xl font-semibold text-accent-fg shadow-sm transition-colors hover:bg-accent-hover focus-within:outline focus-within:outline-4 focus-within:outline-offset-2 focus-within:outline-accent sm:w-auto">
-            Choose {noun} file
-            <input
-              ref={inputRef}
-              type="file"
-              accept={acceptFor(tool)}
-              className="sr-only"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) choose(f);
-              }}
-            />
-          </label>
-          <p className="mt-4 text-sm text-muted">
-            Free. Up to {MAX_UPLOAD_MB / 1024} GB. Files are deleted after one
-            hour.
-          </p>
-          {localOk && (
-            <div className="mt-6 border-t border-line pt-6">
-              <label className="inline-flex min-h-14 w-full cursor-pointer items-center justify-center rounded-xl bg-local px-6 text-lg font-semibold text-local-fg shadow-sm transition-colors hover:bg-local-hover focus-within:outline focus-within:outline-4 focus-within:outline-offset-2 focus-within:outline-local sm:w-auto">
-                Convert on this device
-                <input
-                  ref={localInputRef}
-                  type="file"
-                  accept={acceptFor(tool)}
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) choose(f, 'local');
-                  }}
-                />
-              </label>
-              <p className="mx-auto mt-3 max-w-md text-sm text-muted">
-                Your file stays on this computer. It is slower than our server,
-                and it downloads a 10 MB converter first.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+      {state.step === 'idle' &&
+        (localOk ? (
+          <div className="text-center">
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-local/10 px-3 py-1 text-sm font-semibold text-local-text">
+              <LockIcon className="h-4 w-4" />
+              Private by design
+            </p>
+            <label className="device-cta mt-4 flex min-h-20 w-full cursor-pointer items-center justify-center gap-3 rounded-2xl px-8 text-2xl font-bold text-white focus-within:outline focus-within:outline-4 focus-within:outline-offset-2 focus-within:outline-local">
+              <LockIcon className="h-6 w-6 shrink-0" />
+              Choose {noun} file
+              <input
+                ref={localInputRef}
+                type="file"
+                accept={acceptFor(tool)}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) choose(f, 'local');
+                }}
+              />
+            </label>
+            <p className="mt-5 text-lg font-semibold text-fg">
+              Your file never leaves your device.
+            </p>
+            <ul className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted">
+              {[
+                'Nothing to upload',
+                'Converts right in your browser',
+                'Free, no sign-up',
+              ].map((point) => (
+                <li key={point} className="inline-flex items-center gap-1.5">
+                  <CheckIcon className="h-4 w-4 text-local-text" />
+                  {point}
+                </li>
+              ))}
+            </ul>
+            <label className="mt-6 inline-block cursor-pointer text-sm text-muted underline underline-offset-4 hover:text-fg focus-within:outline focus-within:outline-2 focus-within:outline-offset-2">
+              Or convert on our servers
+              <input
+                ref={inputRef}
+                type="file"
+                accept={acceptFor(tool)}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) choose(f, 'server');
+                }}
+              />
+            </label>
+          </div>
+        ) : (
+          <div className="text-center">
+            <label className="inline-flex min-h-16 w-full cursor-pointer items-center justify-center rounded-xl bg-accent px-8 text-xl font-semibold text-accent-fg shadow-sm transition-colors hover:bg-accent-hover focus-within:outline focus-within:outline-4 focus-within:outline-offset-2 focus-within:outline-accent sm:w-auto">
+              Choose {noun} file
+              <input
+                ref={inputRef}
+                type="file"
+                accept={acceptFor(tool)}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) choose(f, 'server');
+                }}
+              />
+            </label>
+            <p className="mt-4 text-sm text-muted">
+              Free. Up to {MAX_UPLOAD_MB / 1024} GB. Files are deleted after one
+              hour.
+            </p>
+          </div>
+        ))}
 
       {state.step === 'setup' && (
         <Setup
@@ -268,15 +303,15 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
 
       {state.step === 'load-local' && (
         <Progress
-          label="Loading the converter"
-          hint="About 10 MB, only the first time. Your file stays on this computer."
+          label="Getting the converter ready"
+          hint="A one-time download. Your file stays on your device."
           onCancel={reset}
         />
       )}
 
       {state.step === 'convert-local' && (
         <Progress
-          label={`Converting to ${tool.outputExt.toUpperCase()} on this device`}
+          label={`Converting to ${tool.outputExt.toUpperCase()} on your device`}
           fraction={state.progress}
           hint="Keep this tab open."
           onCancel={reset}
@@ -291,15 +326,22 @@ export function Converter({ tool, initialFile, onReset }: ConverterProps) {
           <a
             href={state.url}
             download={state.name}
-            className="mt-5 inline-flex min-h-16 w-full items-center justify-center rounded-xl bg-accent px-8 text-xl font-semibold text-accent-fg shadow-sm transition-colors hover:bg-accent-hover sm:w-auto"
+            className={`mt-5 inline-flex min-h-16 w-full items-center justify-center rounded-xl px-8 text-xl font-semibold shadow-sm transition-colors sm:w-auto ${
+              state.local
+                ? 'device-cta text-white'
+                : 'bg-accent text-accent-fg hover:bg-accent-hover'
+            }`}
           >
             Download {tool.outputExt.toUpperCase()}
           </a>
           <p className="mt-3 break-all text-sm text-muted">{state.name}</p>
           {state.local && (
-            <p className="mt-1 text-sm text-muted">
-              Converted on this device. Your file did not leave it.
-            </p>
+            <div className="mt-3">
+              <p className="inline-flex items-center gap-1.5 rounded-full bg-local/10 px-3 py-1 text-sm font-semibold text-local-text">
+                <LockIcon className="h-4 w-4" />
+                Done. Your file never left your device.
+              </p>
+            </div>
           )}
           <button
             type="button"
@@ -565,7 +607,7 @@ function Setup({
           }
           className={`min-h-14 w-full rounded-xl px-8 text-lg font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ${
             local
-              ? 'bg-local text-local-fg hover:bg-local-hover'
+              ? 'device-cta text-white'
               : 'bg-accent text-accent-fg hover:bg-accent-hover'
           }`}
         >
@@ -574,7 +616,7 @@ function Setup({
               ? 'Make GIF'
               : 'Trim video'
             : 'Resize video'}
-          {local && ' on this device'}
+          {local && ' on your device'}
         </button>
         <button
           type="button"
@@ -585,5 +627,40 @@ function Setup({
         </button>
       </div>
     </div>
+  );
+}
+
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
   );
 }

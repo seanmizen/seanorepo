@@ -22,6 +22,7 @@ const config: Config = {
         local: token('local'),
         'local-hover': token('local-hover'),
         'local-fg': token('local-fg'),
+        'local-text': token('local-text'),
       },
       keyframes: {
         slide: {
