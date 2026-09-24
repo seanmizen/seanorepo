@@ -85,7 +85,7 @@ test_cloudflared() {
   test_endpoint "http://localhost:4021" "Backend API" || ((failed++))
 
   # Test planning-poker (FE + BE)
-  echo -e "\n${YELLOW}pp.seanmizen.com (planning-poker)${NC}"
+  echo -e "\n${YELLOW}planning-poker.seanmizen.com${NC}"
   test_endpoint "http://localhost:4030" "Frontend" || ((failed++))
   test_endpoint "http://localhost:4031" "Backend API" || ((failed++))
 

@@ -44,8 +44,8 @@ a bare `"4000:4000"` or `"0.0.0.0:4000:4000"`.
 2. Publish both ports with `${PUBLISH_ADDR:-127.0.0.1}` in the app's
    `docker-compose.yml`.
 3. Add its hostname rules to `apps/cloudflared/config.yml`. Put the `/api/*`
-   rule before the hostname's catch-all rule. Put a specific hostname above any
-   wildcard that also matches it, such as `*.seanmizen.com`. The
+   rule before the hostname's catch-all rule. List every hostname: there is no
+   `*.seanmizen.com` wildcard, so an unlisted subdomain gets the 404. The
    `http_status:404` rule stays last.
 
 ```yaml

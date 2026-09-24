@@ -8,28 +8,27 @@ credentials-file: ./credentials/0f63e5e3-ee1c-425a-9916-cd037524731d.json
 # 2. Add hostname rules following the pattern below
 # 3. API requests (/api/* or /ws/*) should route to backend port
 # 4. All other requests route to frontend port
-# 5. Include wildcard subdomain rules if needed
+# 5. List every hostname. There is no *.seanmizen.com wildcard: a subdomain
+#    without a rule gets the 404 at the end, not the wrong site.
 
 ingress:
-  # planning-poker (pp.seanmizen.com) - Ports 4030 (FE) / 4031 (BE)
-  # MUST come before *.seanmizen.com wildcard!
-  - hostname: pp.seanmizen.com
+  # planning-poker.seanmizen.com - Ports 4030 (FE) / 4031 (BE)
+  # pp.seanmizen.com has no rule, so it gets the 404.
+  - hostname: planning-poker.seanmizen.com
     path: /api/*
     service: http://localhost:4031
-  - hostname: pp.seanmizen.com
+  - hostname: planning-poker.seanmizen.com
     path: /ws/*
     service: http://localhost:4031
-  - hostname: pp.seanmizen.com
+  - hostname: planning-poker.seanmizen.com
     service: http://localhost:4030
 
   # minecraft.seanmizen.com - Port 4042 (Frontend only, static WebGPU voxel)
-  # MUST come before *.seanmizen.com wildcard below — first match wins.
   # Note: 4040 is reserved by ngrok's web inspector — do not use.
   - hostname: minecraft.seanmizen.com
     service: http://localhost:4042
 
   # inside.seanmizen.com - Ports 4060 (FE) / 4061 (BE)
-  # MUST come before *.seanmizen.com wildcard below — first match wins.
   - hostname: inside.seanmizen.com
     path: /api/*
     service: http://localhost:4061
@@ -43,7 +42,10 @@ ingress:
     service: http://localhost:4120
   - hostname: seanmizen.com
     service: http://localhost:4000
-  - hostname: "*.seanmizen.com"
+  - hostname: www.seanmizen.com
+    path: /tcp/*
+    service: http://localhost:4120
+  - hostname: www.seanmizen.com
     service: http://localhost:4000
 
   # carolinemizen.art - Ports 4020 (FE) / 4021 (BE)

@@ -10,9 +10,9 @@ type ConfigType = typeof devConfig;
 export const configs: Record<'development' | 'production', ConfigType> = {
   development: devConfig,
   production: {
-    appDomain: 'https://pp.seanmizen.com',
+    appDomain: 'https://planning-poker.seanmizen.com',
     backendPort: 4031, // <- must match docker-compose
-    apiPath: 'https://pp.seanmizen.com/api',
+    apiPath: 'https://planning-poker.seanmizen.com/api',
     dbName: 'production.sqlite',
   },
 };

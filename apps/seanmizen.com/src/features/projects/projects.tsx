@@ -22,7 +22,7 @@ const projectList: Project[] = [
   {
     name: 'Planning Poker',
     blurb: 'agile estimation for teams',
-    href: 'https://pp.seanmizen.com',
+    href: 'https://planning-poker.seanmizen.com',
   },
   {
     name: 'carolinemizen.art',
