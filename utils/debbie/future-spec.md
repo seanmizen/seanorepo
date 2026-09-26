@@ -80,6 +80,67 @@ dashboard. Each machine shows where it differs from its declared roles.
    stateless roles act automatically.
 5. Automatic failover of the tunnel role. See Parked.
 
+## Not built: minix and Wake-on-LAN
+
+**The machine.** minix is a Minix NEO Z83-4 MAX V2, an ex-kiosk mini PC with
+an Intel Atom x7-Z8750. It is amd64, so the current generation can install
+it. Its name on the LAN is `minix.local` (REQ-SERVER-004). It currently runs
+the kiosk's Windows image. Its firmware has a Wake-on-LAN (WoL) setting.
+
+**What WoL is.** A sleeping or powered-off machine keeps its network card
+powered. A "magic packet" that contains the card's MAC address turns the
+machine on. The packet is a layer-2 broadcast, and it carries no password.
+
+**Facts that shape every use:**
+
+- **The name does not work while the machine sleeps.** avahi does not run, so
+  `minix.local` does not resolve. The sender needs the MAC address. Record it
+  at install time. The IP address is not enough.
+- **The sender must be on the same LAN.** Routers do not forward the
+  broadcast. Cloudflare Mesh does not carry it either. From outside the house,
+  SSH into a LAN machine (asus, over ngrok) and send the packet from there.
+- **WoL needs a setting in the firmware and a setting in the OS.** In the
+  firmware, enable WoL and disable any deep-sleep or ErP setting. In Debian,
+  set `WakeOnLan=magic` in a systemd `.link` file for the ethernet port. A
+  setting made with `ethtool` alone is lost at reboot.
+- **WoL does not help after a power cut.** For that, use the firmware setting
+  "restore on AC power loss". The two settings do different jobs. Set both.
+
+**Possible uses, most useful first:**
+
+1. **Cold standby for the tunnel role.** minix sleeps until the
+   [cutover runbook](./2026-09-17/README.md#move-the-tunnel-from-machine-a-to-machine-b)
+   needs it. The runbook gets one new first step: wake machine B, then wait
+   for `ssh srv@<B>.local` to connect. A sleeping machine misses releases and
+   security updates. After it wakes, the release poller catches up within two
+   minutes. Wait for that deploy before the cutover continues.
+2. **A backup target that sleeps.** asus wakes minix each night, pushes the
+   SQLite backup, and then minix powers off. This could answer the open
+   backup question below.
+   minix's own `rtcwake` timer can do the same job without WoL. With WoL, the
+   machine that has the data decides when a backup runs.
+3. **A wake button in the herd dashboard.** Each agent puts its own MAC
+   address in its record. Any agent on the same LAN can then send the packet.
+   A sleeping machine stays in the picture with the time it was last seen.
+   That follows the rule that a lost peer never causes a role change.
+4. **The third voter.** The Parked section needs a third machine to vote.
+   minix could do this in place of a Raspberry Pi. A voter must stay awake, so
+   this use does not need WoL and does not combine with uses 1 and 2.
+
+**WoL is never a failover mechanism.** Automatic failover of a stateful role
+stays Parked. To wake a standby automatically when the tunnel machine goes
+quiet is the same two-machine failover, with a longer delay. Only a human
+wakes a machine for a role change.
+
+**Open questions:**
+
+- Does the Z83-4 wake from full power-off (S5), or only from sleep? Test this
+  on the hardware before use 2 depends on it.
+- How much power does it use asleep and awake? If the difference is small,
+  keep it awake and use it as the third voter.
+- Is the firmware locked with a kiosk password? If so, clear the CMOS before
+  the install.
+
 ## Parked
 
 **Automatic failover of a stateful role.** Two machines cannot fail over
