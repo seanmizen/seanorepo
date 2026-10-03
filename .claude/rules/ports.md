@@ -42,6 +42,7 @@ use their host ports. See `infra/edge/README.md`.
 | 4042 | minecraft.seanmizen.com |
 | 4050 / 4051 | seansconverter.com FE / BE (apps/ffmpeg-converter) |
 | 4060 / 4061 | inside.seanmizen.com FE / BE |
+| 4070 / 4071 | sonycam. Local only. Not deployed. One server on 4070 serves the page and `/api`; 4071 is reserved. |
 | 4120 | tcp-getter (host unit, reached at `seanmizen.com/tcp/*`) |
 
 ### Add a service
@@ -70,7 +71,8 @@ use their host ports. See `infra/edge/README.md`.
 6. Decide where its data lives. SQLite and uploads go in named Docker volumes,
    and those volumes exist only on the tunnel machine.
 
-seanscards runs locally only (`yarn cards`). Root `prod:docker` excludes it,
-and the tunnel has no hostname for it. Its ports stay reserved.
+seanscards (`yarn cards`) and sonycam (`yarn sonycam`) run locally only. Root
+`prod:docker` excludes seanscards, and sonycam has no Docker config. The tunnel
+has no hostname for either. Their ports stay reserved.
 
 Smoke test: `scripts/test-deployment.sh`.
