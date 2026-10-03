@@ -5,6 +5,9 @@ export type SourceKind = 'wifi' | 'usb';
 
 export interface Source {
   readonly kind: SourceKind;
+  // Known after start(): the camera decides what it supports.
+  readonly canRecord: boolean;
+  readonly canPhoto: boolean;
   start(onFrame: (jpeg: Uint8Array) => void): Promise<void>;
   stop(): Promise<void>;
   record?(on: boolean): Promise<void>;
@@ -29,6 +32,9 @@ export class WifiSource implements Source {
   private base: string | null = null;
   private abort: AbortController | null = null;
   private mode: 'still' | 'movie' | null = null;
+  private modes: string[] = [];
+  canRecord = false;
+  readonly canPhoto = true;
 
   constructor(private readonly bases: string[] = configuredBases()) {}
 
@@ -79,6 +85,12 @@ export class WifiSource implements Source {
     // Older bodies (the A6000 included) must enter remote mode first.
     // Newer bodies do not know this method, so ignore an error.
     await this.call('startRecMode').catch(() => undefined);
+    // The A6000 supports "still" only over Wi-Fi, so it cannot record video.
+    const [modes] = (await this.call('getSupportedShootMode').catch(() => [
+      ['still'],
+    ])) as [string[]];
+    this.modes = modes;
+    this.canRecord = modes.includes('movie');
     const [url] = (await this.call('startLiveview')) as [string];
     this.abort = new AbortController();
     const res = await fetch(url, { signal: this.abort.signal });
@@ -106,7 +118,11 @@ export class WifiSource implements Source {
 
   private async shootMode(mode: 'still' | 'movie'): Promise<void> {
     if (this.mode === mode) return;
-    await this.call('setShootMode', [mode]);
+    if (!this.modes.includes(mode)) {
+      throw new CameraError(`This camera does not support ${mode} mode.`);
+    }
+    // A camera with one mode refuses setShootMode, and needs no switch.
+    if (this.modes.length > 1) await this.call('setShootMode', [mode]);
     this.mode = mode;
   }
 
@@ -119,6 +135,8 @@ export class WifiSource implements Source {
     }
   }
 
+  // The A6000 does not list actTakePicture in getAvailableApiList, but it
+  // obeys it. The mode dial must be on P or Auto: Movie blocks the shutter.
   async photo(): Promise<string | null> {
     await this.shootMode('still');
     const [urls] = (await this.call('actTakePicture')) as [string[]];
@@ -135,6 +153,8 @@ const configuredBases = (): string[] => {
 
 export class UsbSource implements Source {
   readonly kind = 'usb';
+  readonly canRecord = false;
+  readonly canPhoto = false;
   private proc: ChildProcess | null = null;
 
   async start(onFrame: (jpeg: Uint8Array) => void): Promise<void> {

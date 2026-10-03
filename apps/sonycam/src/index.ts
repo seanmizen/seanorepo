@@ -37,7 +37,8 @@ app.get('/api/status', () => ({
   recording,
   frames: broadcaster.frames,
   clients: broadcaster.clientCount,
-  canRecord: Boolean(source?.record),
+  canRecord: source?.canRecord ?? false,
+  canPhoto: source?.canPhoto ?? false,
 }));
 
 app.post<{ Body: { kind: SourceKind } }>('/api/source', async (req) => {
@@ -64,10 +65,10 @@ app.delete('/api/source', async () => {
 });
 
 app.post<{ Body: { on: boolean } }>('/api/record', async (req, reply) => {
-  if (!source?.record) {
+  if (!source?.canRecord || !source.record) {
     return reply
       .status(409)
-      .send({ error: 'Recording needs the Wi-Fi source.' });
+      .send({ error: 'This camera cannot record video from this source.' });
   }
   await source.record(req.body.on);
   recording = req.body.on;
@@ -75,7 +76,7 @@ app.post<{ Body: { on: boolean } }>('/api/record', async (req, reply) => {
 });
 
 app.post('/api/photo', async (_req, reply) => {
-  if (!source?.photo) {
+  if (!source?.canPhoto || !source.photo) {
     return reply.status(409).send({ error: 'Photos need the Wi-Fi source.' });
   }
   return { url: await source.photo() };

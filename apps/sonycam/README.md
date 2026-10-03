@@ -12,11 +12,11 @@ yarn sonycam          # http://localhost:4070
 
 | Source | Live view | Record video | Take photo | Setup |
 |---|---|---|---|---|
-| Wi-Fi | Yes | Yes, full quality, to the camera's SD card | Yes | Join the camera's Wi-Fi |
+| Wi-Fi | Yes | Only if the camera supports it. **The A6000 does not** | Yes | Join the camera's Wi-Fi |
 | USB | Yes | No | No | usbipd + gphoto2 in WSL |
 
-Live view from either source is low resolution (about 640×424) at about 10 to
-15 fps. That is the camera's preview stream, not its video output. For a full
+Live view from either source is low resolution (about 640×424). Over Wi-Fi,
+the A6000 sends about 5 fps. That is the camera's preview stream, not its video output. For a full
 1080p webcam, use an HDMI capture dongle (see the end of this file).
 
 ## Where it runs
@@ -27,18 +27,26 @@ The USB source runs `gphoto2` inside WSL through `wsl.exe`.
 
 ## Wi-Fi setup
 
-1. On the camera: **Menu → Application → Application List → Smart Remote
+1. Set the mode dial to **P** or **Auto**. On **Movie**, the camera does not
+   take photos.
+2. On the camera: **Menu → Application → Application List → Smart Remote
    Embedded**. The camera shows a network name (`DIRECT-xxxx:ILCE-6000`) and a
    password. If the app is not in the list, update the camera firmware.
-2. On the PC: connect to that Wi-Fi network. The PC loses internet while it is
+3. On the PC: connect to that Wi-Fi network. The PC loses internet while it is
    connected.
-3. In sonycam, click **Wi-Fi**.
+4. In sonycam, click **Wi-Fi**.
 
 The server tries `http://192.168.122.1:8080/sony`, then port `10000`. To use a
 different address, set `SONYCAM_CAMERA_URL`.
 
-**Record** starts and stops a movie on the camera's SD card at full quality.
-**Photo** takes a still. Copy the files from the SD card afterwards.
+**Photo** takes a still at full resolution on the SD card. The page shows a
+2 MP preview link.
+
+**Record** starts and stops a movie on the camera's SD card. sonycam enables it only
+when the camera reports the `movie` shoot mode. The A6000 reports `still` only,
+and refuses `setShootMode("movie")`. To record video on the A6000, press the
+camera's record button, or use an infrared remote with a movie button (Sony
+RMT-DSLR2 or a copy).
 
 ## USB setup
 
@@ -75,16 +83,19 @@ All routes are under `/api`.
 
 | Route | Does |
 |---|---|
-| `GET /api/status` | Active source, recording state, frame count, viewer count |
+| `GET /api/status` | Active source, recording state, frame count, viewer count, `canRecord`, `canPhoto` |
 | `POST /api/source` `{"kind":"wifi"\|"usb"}` | Start a source (stops the previous one) |
 | `DELETE /api/source` | Stop the source |
 | `GET /api/live.mjpeg` | Live view as `multipart/x-mixed-replace` |
 | `GET /api/frame.jpg` | The latest frame |
-| `POST /api/record` `{"on":true\|false}` | Start or stop movie recording (Wi-Fi) |
+| `POST /api/record` `{"on":true\|false}` | Start or stop movie recording (Wi-Fi, if the camera supports it) |
 | `POST /api/photo` | Take a photo (Wi-Fi) |
 
 ## Limits
 
+- **A6000 over Wi-Fi: no video recording.** Its Smart Remote app supports
+  still mode only. It also does not list `actTakePicture` in
+  `getAvailableApiList`, but it obeys it.
 - **Battery.** The A6000 does not run from USB power. One battery gives about
   1 to 1.5 hours of live view. For long sessions, use a dummy battery
   (NP-FW50 shape) on a mains adapter.
