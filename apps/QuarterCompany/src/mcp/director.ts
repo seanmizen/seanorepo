@@ -7,8 +7,10 @@ import { z } from 'zod';
 import { Rule } from '../cast.ts';
 import { runUntil } from '../engine.ts';
 import { Run } from '../run.ts';
+import { checkInjectSender, seatsOf } from '../scenario.ts';
 import { labelOf, ordOf } from '../time.ts';
 import { costReport, playback, retake, statusLines } from '../timeline.ts';
+import { TOOLS } from '../tools/index.ts';
 import { normalize } from '../vfs.ts';
 
 const text = (t: string, isError = false) => ({
@@ -113,7 +115,7 @@ export async function serveDirector(initial: Run) {
     'inject_mail',
     {
       description:
-        'Schedule an email into the world. Without "at", it arrives at the start of the next turn.',
+        'Schedule an email from outside the simulation, for example from a customer. Without "at", it arrives at the start of the next turn. For mail from a person in the simulation, use compel.',
       inputSchema: {
         at: z.string().optional(),
         from: z.string(),
@@ -135,12 +137,51 @@ export async function serveDirector(initial: Run) {
         const at = a.at ?? labelOf(r.lastOrd() + 1, cal);
         if (ordOf(at, cal) <= r.lastOrd())
           throw new Error(`Turn ${at} has happened. Give a later turn.`);
+        checkInjectSender(r.scenario, a.from);
         r.info.injects.push({
           at,
           mail: { from: a.from, to: a.to, subject: a.subject, body: a.body },
         });
         r.saveInfo();
         return `Mail is scheduled for ${at}.`;
+      },
+    ),
+  );
+
+  server.registerTool(
+    'compel',
+    {
+      description:
+        'Make a seat run one tool at the start of a turn, in its own session. Use this for mail from a person in the simulation, so that the mail is in their sent folder. Without "at", it runs in the next turn.',
+      inputSchema: {
+        seat: z.string(),
+        tool: z.string(),
+        args: z.record(z.string(), z.unknown()).default({}),
+        at: z.string().optional(),
+      },
+    },
+    guard(
+      (a: {
+        seat: string;
+        tool: string;
+        args: Record<string, unknown>;
+        at?: string;
+      }) => {
+        const r = reopen();
+        const cal = r.scenario.calendar;
+        const at = a.at ?? labelOf(r.lastOrd() + 1, cal);
+        if (ordOf(at, cal) <= r.lastOrd())
+          throw new Error(`Turn ${at} has happened. Give a later turn.`);
+        if (!seatsOf(r.scenario).some((s) => s.id === a.seat))
+          throw new Error(`Seat ${a.seat} does not exist.`);
+        if (!TOOLS.some((t) => t.name === a.tool))
+          throw new Error(`Tool "${a.tool}" does not exist.`);
+        r.info.compel = [
+          ...(r.info.compel ?? []),
+          { at, seat: a.seat, do: [{ tool: a.tool, args: a.args }] },
+        ];
+        r.saveInfo();
+        return `${a.seat} will run ${a.tool} at the start of ${at}.`;
       },
     ),
   );

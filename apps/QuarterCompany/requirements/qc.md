@@ -240,3 +240,41 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   - Test — `apps/QuarterCompany/test/mind.test.ts` › "a thought never enters the world, and root cannot find it"
   - Test — `apps/QuarterCompany/test/mind.test.ts` › "the next briefing recalls the thought"
 - **Relations:** depends-on REQ-QC-001
+
+## REQ-QC-015 — Injected mail comes only from outside the simulation
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #546
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** If an injected mail has a sender address in the domain of a
+  simulated company, then the simulator shall refuse the inject.
+- **Rationale:** An inject in Priya's name was not in her sent folder, and she
+  did not know about it. If Tom asked her about it, the world contradicted
+  itself. Mail from a person inside the simulation must be that person's own
+  action (REQ-QC-016). Mail from outside keeps a sent copy on the internet
+  host.
+- **Verification:** Test — `apps/QuarterCompany/test/compel.test.ts` › "an inject from a person in the simulation is refused"
+- **Relations:** none
+
+## REQ-QC-016 — A scenario makes a seat act through the seat's own session
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #546
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** When a scenario or the director compels a seat to act in a
+  turn, the simulator shall run those tool calls in that seat's own session,
+  before its brain.
+- **Rationale:** The world then records the action like any other: the
+  journal marks the calls as compelled, they use the seat's minutes, and the
+  results (a sent copy, a file) are real. The seat's briefing tells it what it
+  did, so it can answer questions about it later. A compelled seat works even
+  when it is asleep. A seat with no account cannot act, and the journal
+  records `compel.skipped`.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/compel.test.ts` › "a compelled mail is the seat’s own: in its sent folder, and marked in the journal"
+  - Test — `apps/QuarterCompany/test/compel.test.ts` › "the briefing tells the seat what it was made to do"
+- **Relations:** depends-on REQ-QC-008

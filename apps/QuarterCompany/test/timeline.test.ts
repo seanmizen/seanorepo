@@ -139,7 +139,7 @@ describe('external seats through qc-worker', () => {
     run.info.injects.push({
       at: 'fy1-q1-d1-t1',
       mail: {
-        from: 'boss@acme.example',
+        from: 'boss@example.org',
         to: 'alice@acme.example',
         subject: 'Hello',
         body: 'Welcome.',

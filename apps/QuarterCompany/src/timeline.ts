@@ -47,7 +47,7 @@ export function narrate(e: JournalEvent, verbose = false): string | undefined {
   switch (e.type) {
     case 'tool.call': {
       const mark = e.ok ? '' : `  ✗ ${short(e.result, 70)}`;
-      const line = `  ${e.seat.padEnd(28)} ${e.tool} ${argSummary(e.tool, e.args as Record<string, unknown>)} (${e.minutes} min)${mark}`;
+      const line = `  ${e.seat.padEnd(28)} ${e.tool} ${argSummary(e.tool, e.args as Record<string, unknown>)} (${e.minutes} min)${e.compelled ? ` [compelled by the ${e.compelled}]` : ''}${mark}`;
       return verbose && e.ok
         ? `${line}\n${e.result
             .split('\n')
@@ -59,12 +59,14 @@ export function narrate(e: JournalEvent, verbose = false): string | undefined {
     case 'seat.end':
       if (!e.note && !verbose) return undefined;
       return `  ${e.seat.padEnd(28)} ⏹ ${e.wake === 'on_mail' ? 'sleeps until mail' : 'done'}${e.note ? `: "${short(e.note, 90)}"` : ''}`;
+    case 'compel.skipped':
+      return `  ⚠ ${e.seat}: compelled actions did not run: ${e.reason}`;
     case 'thought':
       return `  ${e.seat.padEnd(28)} (thinks) "${short(e.text, 100)}"`;
     case 'seat.skip':
       return verbose ? `  ${e.seat.padEnd(28)} 💤 ${e.reason}` : undefined;
     case 'inject':
-      return `  ✉ ${e.source ?? 'scenario'} mail, in the name of ${e.from} → ${e.to.join(', ')}: "${short(e.subject, 60)}"`;
+      return `  ✉ mail from outside (${e.source ?? 'scenario'}): ${e.from} → ${e.to.join(', ')}: "${short(e.subject, 60)}"`;
     case 'mail.bounce':
       return `  ✉ bounce: ${e.messageId} to ${e.to} (${e.reason})`;
     case 'fs.conflict':

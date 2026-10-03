@@ -185,7 +185,7 @@ A message is an RFC 822-style `.eml` text file. Delivery puts it in
 `/var/mail/<user>/new/` on the recipient's company host. `read_mail` moves it
 to `cur/`. The sender keeps a copy in `sent/`. Mail goes out at the end of the
 turn. Mail to an unknown or locked user bounces from `MAILER-DAEMON`. Mail to a
-domain outside the simulation goes to `world/internet/mx/<address>/`.
+domain outside the simulation goes to `world/internet/mx/<address>/inbox/`.
 
 ## Scenario files
 
@@ -197,6 +197,34 @@ actors.yaml          actors and tiers
 casts/<name>.yaml    casts
 scripts/*.yaml       tool calls for the script actor
 ```
+
+### Scenario events: compel and inject
+
+A scenario starts the story in two ways, and the difference matters:
+
+- **`compel`**: a person in the simulation acts. At the given turn, the seat
+  runs the given tool calls in its own session, before its brain, with its own
+  minutes (REQ-QC-016). The journal marks the calls as compelled. A compelled
+  mail is in the sender's `sent/` folder, and the seat's briefing says what it
+  did, so it can talk about it later. Use this for all mail from inside.
+- **`injects`**: mail from outside the simulation, for example a customer. The
+  sender's domain must not belong to a simulated company (REQ-QC-015). The
+  internet host keeps the sender's copy in `world/internet/mx/<sender>/sent/`.
+
+```yaml
+compel:
+  - at: fy1-q1-d1-t1
+    seat: priya@brindlehart.example
+    do:
+      - tool: send_mail
+        args: { to: dave@brindlehart.example, subject: "New starter", body: "..." }
+injects:
+  - at: fy1-q1-d1-t3
+    mail: { from: orders@cartwright-stationers.example, to: maria@brindlehart.example, subject: "...", body: "..." }
+```
+
+During a run, `qc compel` and `qc inject` (or the director's MCP tools) add
+the same things.
 
 A person with `provisioned: false` has no account at genesis. Their seat
 starts to work in the turn after IT makes the account.

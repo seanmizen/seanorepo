@@ -210,7 +210,7 @@ main {
   <section aria-labelledby="log-h" style="min-width:0">
     <h2 class="pane-title" id="log-h">Turn log</h2>
     <div class="printout">
-      <div class="printout-head"><span id="log-title"></span><span class="log-tools"><button class="btn small" id="expand" type="button">Expand all</button><button class="btn small" id="collapse" type="button">Collapse all</button></span><span class="legend"><span class="badge-inject" tabindex="0" data-tip="Scenario mail: the scenario file schedules this mail to start the story. No seat wrote it, even when it carries a seat's address. Director mail is the same thing, added during the run.">Scenario mail</span><span id="log-side"></span></span></div>
+      <div class="printout-head"><span id="log-title"></span><span class="log-tools"><button class="btn small" id="expand" type="button">Expand all</button><button class="btn small" id="collapse" type="button">Collapse all</button></span><span class="legend"><span class="badge-inject" tabindex="0" data-tip="Purple marks what the scenario or the director caused. Outside mail comes from a sender outside the simulation. Compelled actions are real actions that a person was made to take, in their own session.">Scenario</span><span id="log-side"></span></span></div>
       <ol class="log" id="log"></ol>
     </div>
   </section>
@@ -399,11 +399,13 @@ main {
 
   // ----- mail and documents in the log -----
   const INJECT_TIP = {
-    scenario: 'Scenario mail: the scenario file schedules this mail to start the story. No seat wrote it, even though it carries the address ',
-    director: 'Director mail: the director added this mail during the run. No seat wrote it, even though it carries the address ',
+    scenario: 'Mail from outside the simulation. The scenario file schedules it. The sender is not a person in any company here, so only the internet host keeps a sent copy. Sender: ',
+    director: 'Mail from outside the simulation. The director added it during the run. Sender: ',
   };
   const injectBadge = (source, from) =>
-    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': INJECT_TIP[source || 'scenario'] + from + '.' }, (source || 'scenario') + ' mail');
+    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': INJECT_TIP[source || 'scenario'] + from + '.' }, 'outside mail');
+  const compelBadge = (source, seat) =>
+    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': 'Compelled by the ' + source + ': ' + seat + ' did this at the start of the turn, in their own session and with their own minutes. It is a real action in the world. Their briefing tells them that they did it.' }, 'compelled');
   function parseMail(text) {
     const cut = text.indexOf('\n\n');
     const head = cut === -1 ? text : text.slice(0, cut);
@@ -486,7 +488,8 @@ main {
         case 'tool.call': {
           spent.set(e.seat, (spent.get(e.seat) || 0) + e.minutes);
           if (e.tool === 'think_privately' && e.ok) break; // the thought row shows it
-          rows.push(h('li', null, time, h('div', { style: 'min-width:0' },
+          rows.push(h('li', { class: e.compelled ? 'inject' : null }, time, h('div', { style: 'min-width:0' },
+            e.compelled ? compelBadge(e.compelled, short(e.seat)) : null,
             who, h('span', { class: 'tool' }, e.tool), ' ', FOLDED.has(e.tool) && e.ok ? '' : argSummary(e.tool, e.args) + ' ', h('span', { class: 'mins' }, '(' + e.minutes + ' min)'),
             toolDetail(e, fs),
           )));
@@ -501,6 +504,9 @@ main {
             text ? fold(['Email from ', gist(e.from + ' · “' + e.subject + '”')], mailCard(parseMail(text), null, true)) : ' “' + e.subject + '”')));
           break;
         }
+        case 'compel.skipped':
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'COMPEL SKIPPED ' + short(e.seat) + ': ' + e.reason)));
+          break;
         case 'thought':
           rows.push(h('li', { class: 'thought' }, time, h('div', { style: 'min-width:0' },
             who, h('span', { class: 'thinks', title: 'A private thought. Nobody in the company can see it, the IT administrator included.' }, 'thinks'),

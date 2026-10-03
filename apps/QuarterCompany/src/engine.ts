@@ -16,10 +16,11 @@ import type { EventBody, JournalEvent } from './events.ts';
 import { Ops } from './ops.ts';
 import { briefing, systemPrompt } from './prompt.ts';
 import { type Run, type SimState, tagOf } from './run.ts';
-import { type Seat, seatsOf } from './scenario.ts';
+import { type Compel, type Seat, seatsOf } from './scenario.ts';
 import { Session } from './session.ts';
 import { describeTurn, GENESIS, isFirstSlotOfDay, labelOf } from './time.ts';
 import { Directory } from './users.ts';
+import type { Vfs } from './vfs.ts';
 import { deliver, injectMail, seedWorld } from './world.ts';
 
 export interface TurnReport {
@@ -73,8 +74,61 @@ export const unreadSince = (state: SimState, seat: Seat, sinceOrd: number) =>
     .children(seat.host, `/var/mail/${seat.person.user}/new`)
     .filter((k) => k.node.mtime >= sinceOrd).length;
 
-const unreadCount = (state: SimState, seat: Seat) =>
-  state.vfs.children(seat.host, `/var/mail/${seat.person.user}/new`).length;
+const unreadIn = (vfs: Vfs, seat: Seat) =>
+  vfs.children(seat.host, `/var/mail/${seat.person.user}/new`).length;
+
+export interface CompelledCall {
+  tool: string;
+  args: Record<string, unknown>;
+  source: 'scenario' | 'director';
+}
+
+/** The calls that the scenario and the director compel a seat to make in a turn. */
+export function compelledFor(
+  run: Run,
+  label: string,
+  seat: string,
+): CompelledCall[] {
+  const pick = (list: Compel[], source: CompelledCall['source']) =>
+    list
+      .filter((c) => c.at === label && c.seat === seat)
+      .flatMap((c) => c.do.map((d) => ({ ...d, source })));
+  return [
+    ...pick(run.scenario.compel, 'scenario'),
+    ...pick(run.info.compel ?? [], 'director'),
+  ];
+}
+
+/**
+ * Run compelled calls in the seat's own session, before its brain. They use
+ * the seat's minutes and appear in the journal as its tool calls, marked as
+ * compelled. Returns one line per call, for the briefing. See REQ-QC-016.
+ */
+export async function runCompelled(
+  session: Session,
+  calls: CompelledCall[],
+): Promise<string[]> {
+  const did: string[] = [];
+  for (const c of calls) {
+    const r = await session.call(c.tool, c.args, { compelled: c.source });
+    did.push(describeCall(c.tool, c.args, r.ok ? undefined : r.text));
+  }
+  return did;
+}
+
+function describeCall(
+  tool: string,
+  args: Record<string, unknown>,
+  error?: string,
+): string {
+  const list = (v: unknown) =>
+    Array.isArray(v) ? v.join(', ') : String(v ?? '');
+  const what =
+    tool === 'send_mail'
+      ? `You sent mail to ${list(args.to)}${args.cc ? ` (cc ${list(args.cc)})` : ''}: "${args.subject ?? ''}"`
+      : `You ran ${tool} ${JSON.stringify(args)}`;
+  return error ? `${what}. It failed: ${error}` : `${what}.`;
+}
 
 async function pool<T>(
   items: T[],
@@ -143,11 +197,29 @@ export async function runTurn(
   };
 
   // 2. Decide who works, then let them work.
-  const sessions: { seat: Seat; session: Session; casting: Casting }[] = [];
+  const sessions: {
+    seat: Seat;
+    session: Session;
+    casting: Casting;
+    compelled: CompelledCall[];
+  }[] = [];
   const skipped: string[] = [];
   for (const seat of seatsOf(scenario)) {
     const dir = Directory.load(state.vfs, run.objects, seat.host);
-    if (!dir.canLogin(seat.person.user)) continue;
+    const compelled = compelledFor(run, label, seat.id);
+    if (!dir.canLogin(seat.person.user)) {
+      if (compelled.length) {
+        events.push({
+          actor: 'engine',
+          body: {
+            type: 'compel.skipped',
+            seat: seat.id,
+            reason: 'the seat has no account that can log in',
+          },
+        });
+      }
+      continue;
+    }
     const casting = resolveCast(run.models, cast, seat, ord, cal);
     // A sleeping seat costs nothing. Scripts name their own turns, so they never sleep.
     const prev = state.seats.get(seat.id);
@@ -155,7 +227,8 @@ export async function runTurn(
       prev?.wake === 'on_mail' &&
       !isFirstSlotOfDay(label) &&
       unreadSince(state, seat, prev.lastActiveOrd) === 0;
-    if (asleep && casting.actor.provider !== 'script') {
+    // A compelled seat works even when it is asleep.
+    if (asleep && casting.actor.provider !== 'script' && !compelled.length) {
       events.push({
         actor: 'engine',
         body: { type: 'seat.skip', seat: seat.id, reason: 'asleep until mail' },
@@ -166,6 +239,7 @@ export async function runTurn(
     sessions.push({
       seat,
       casting,
+      compelled,
       session: new Session(
         seat,
         scenario,
@@ -181,7 +255,8 @@ export async function runTurn(
   await pool(
     sessions,
     scenario.concurrency,
-    async ({ seat, session, casting }) => {
+    async ({ seat, session, casting, compelled }) => {
+      const did = await runCompelled(session, compelled);
       const brain = brainFor(
         casting.actor.provider,
         run.models.providers[casting.actor.provider]?.kind,
@@ -196,8 +271,9 @@ export async function runTurn(
           briefing: briefing(
             session,
             state.seats.get(seat.id),
-            unreadCount(state, seat),
+            unreadIn(session.vfs, seat),
             state.thoughts.get(seat.id),
+            did,
           ),
           record: (c) => {
             costUsd += c.costUsd;

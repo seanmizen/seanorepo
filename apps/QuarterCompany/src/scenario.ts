@@ -51,6 +51,25 @@ export type MailInject = z.infer<typeof MailInject>;
 const Inject = z.object({ at: z.string(), mail: MailInject });
 export type Inject = z.infer<typeof Inject>;
 
+/**
+ * A compelled action: at a turn, a seat runs these tool calls in its own
+ * session, before its brain. The world records them like any other action,
+ * so the seat's mailbox and files stay true. See REQ-QC-016.
+ */
+export const Compel = z.object({
+  at: z.string(),
+  seat: z.string(),
+  do: z
+    .array(
+      z.object({
+        tool: z.string(),
+        args: z.record(z.string(), z.unknown()).default({}),
+      }),
+    )
+    .min(1),
+});
+export type Compel = z.infer<typeof Compel>;
+
 const ScenarioFile = z.object({
   name: z.string(),
   description: z.string().default(''),
@@ -70,6 +89,7 @@ const ScenarioFile = z.object({
   concurrency: z.number().default(4),
   companies: z.array(z.string()),
   injects: z.array(Inject).default([]),
+  compel: z.array(Compel).default([]),
 });
 
 export interface Scenario {
@@ -81,6 +101,7 @@ export interface Scenario {
   concurrency: number;
   companies: Company[];
   injects: Inject[];
+  compel: Compel[];
 }
 
 export const readYaml = (path: string): unknown =>
@@ -104,7 +125,7 @@ export function loadScenario(dir: string): Scenario {
       throw new Error(`Two companies use the domain ${c.domain}.`);
     domains.add(c.domain);
   }
-  return {
+  const scenario: Scenario = {
     dir,
     name: s.name,
     description: s.description,
@@ -113,7 +134,31 @@ export function loadScenario(dir: string): Scenario {
     concurrency: s.concurrency,
     companies,
     injects: s.injects,
+    compel: s.compel,
   };
+  for (const inj of s.injects) checkInjectSender(scenario, inj.mail.from);
+  const seats = new Set(seatsOf(scenario).map((x) => x.id));
+  for (const c of s.compel) {
+    if (!seats.has(c.seat))
+      throw new Error(
+        `A compel entry names seat ${c.seat}. No company has that person.`,
+      );
+  }
+  return scenario;
+}
+
+/**
+ * Injected mail comes from outside the simulation. Mail from a person inside
+ * it must come from that person's own action: use compel. See REQ-QC-015.
+ */
+export function checkInjectSender(s: Scenario, from: string) {
+  const domain = from.slice(from.lastIndexOf('@') + 1).toLowerCase();
+  const company = s.companies.find((c) => c.domain === domain);
+  if (company) {
+    throw new Error(
+      `Mail from ${from} cannot be injected: ${domain} belongs to ${company.name}. Use compel, so that the sender sends the mail and keeps a copy.`,
+    );
+  }
 }
 
 export const hostOf = (c: Company) => `${c.id}/${c.host}`;

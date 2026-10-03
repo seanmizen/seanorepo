@@ -1,16 +1,19 @@
 # A scripted Monday and Tuesday morning. Seat id -> turn -> tool calls.
 # No model runs, so `yarn demo` is free and gives the same result every time.
 # Several people work in the same turns, as in a real office. Message ids are
-# <turn>.<user>.<n> for sent mail and <turn>.inject.<n> for scenario mail.
+# <turn>.<user>.<n> for sent mail and <turn>.inject.<n> for mail from outside.
+# Priya's two requests are compelled in scenario.yaml, so they are her own mail.
 
 dave@brindlehart.example:
   fy1-q1-d1-t1:
     - { tool: list_mail }
-    - { tool: read_mail, args: { id: fy1-q1-d1-t1.inject.1 } }
+    - { tool: think_privately, args: { thought: "Empty inbox on a Monday. That never lasts." } }
+    - { tool: end_turn, args: { note: "Nothing yet." } }
+  fy1-q1-d1-t2:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t1.priya.1 } }
     - { tool: think_privately, args: { thought: "The day before, again. One day Priya will give me a week's notice for a new starter. Not today." } }
     - { tool: read_file, args: { path: /srv/handbook/it-policy.md } }
-    - { tool: end_turn, args: { note: "Sophie starts tomorrow. Make her account next, from the runbook." } }
-  fy1-q1-d1-t2:
     - { tool: read_file, args: { path: runbook.md } }
     - { tool: useradd, args: { username: sophie, full_name: Sophie Turner, groups: [sales] } }
     - tool: send_mail
@@ -82,7 +85,7 @@ tom@brindlehart.example:
     - { tool: end_turn, args: { note: "Ledger has three invoices. Nothing to do yet.", wake: on_mail } }
   fy1-q1-d1-t6:
     - { tool: list_mail }
-    - { tool: read_mail, args: { id: fy1-q1-d1-t5.inject.1 } }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t5.priya.1 } }
     - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv } }
     - tool: send_mail
       args:
@@ -121,7 +124,11 @@ tom@brindlehart.example:
 maria@brindlehart.example:
   fy1-q1-d1-t1:
     - { tool: list_mail }
-    - { tool: read_mail, args: { id: fy1-q1-d1-t1.inject.1 } }
+    - { tool: think_privately, args: { thought: "Harrogate renewal is this month. If I land it, my bonus is safe." } }
+    - { tool: end_turn, args: { note: "Quiet start. Chase Harrogate this week." } }
+  fy1-q1-d1-t2:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t1.priya.1 } }
     - { tool: think_privately, args: { thought: "A new person on my team. Good. I can give her the small accounts and keep Harrogate for myself." } }
     - tool: write_file
       args:

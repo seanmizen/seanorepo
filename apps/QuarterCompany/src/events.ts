@@ -35,6 +35,8 @@ export type InfoEvent =
   | {
       type: 'tool.call';
       seat: string;
+      /** Set when the scenario or the director made the seat do this. */
+      compelled?: 'scenario' | 'director';
       tool: string;
       args: unknown;
       ok: boolean;
@@ -80,7 +82,8 @@ export type InfoEvent =
       subject: string;
       hash?: string; // object hash of the message text
     }
-  | { type: 'security'; seat: string; message: string };
+  | { type: 'security'; seat: string; message: string }
+  | { type: 'compel.skipped'; seat: string; reason: string };
 
 export type EventBody = StateEvent | InfoEvent;
 

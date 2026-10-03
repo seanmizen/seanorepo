@@ -19,6 +19,8 @@
 | [`REQ-QC-012`](qc.md#req-qc-012--a-retake-always-makes-a-new-timeline) | A retake always makes a new timeline | active | functional | P1 | sean |
 | [`REQ-QC-013`](qc.md#req-qc-013--the-simulator-runs-on-linux-only) | The simulator runs on Linux only | withdrawn | constraint | P1 | sean |
 | [`REQ-QC-014`](qc.md#req-qc-014--private-thoughts-never-enter-the-world) | Private thoughts never enter the world | active | constraint | P1 | sean |
+| [`REQ-QC-015`](qc.md#req-qc-015--injected-mail-comes-only-from-outside-the-simulation) | Injected mail comes only from outside the simulation | active | constraint | P1 | sean |
+| [`REQ-QC-016`](qc.md#req-qc-016--a-scenario-makes-a-seat-act-through-the-seats-own-session) | A scenario makes a seat act through the seat's own session | active | functional | P1 | sean |
 
 ## Dependency graph
 
@@ -38,11 +40,15 @@ graph TD
   REQ_QC_012["REQ-QC-012<br/>A retake always makes a new timeline"]
   REQ_QC_013["REQ-QC-013<br/>The simulator runs on Linux only"]
   REQ_QC_014["REQ-QC-014<br/>Private thoughts never enter the world"]
+  REQ_QC_015["REQ-QC-015<br/>Injected mail comes only from outside the simulation"]
+  REQ_QC_016["REQ-QC-016<br/>A scenario makes a seat act through the seat's own session"]
   REQ_QC_008 -->|depends-on| REQ_QC_001
   REQ_QC_014 -->|depends-on| REQ_QC_001
+  REQ_QC_016 -->|depends-on| REQ_QC_008
   style REQ_QC_013 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links
 
 - `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014
+- `REQ-QC-008` — required-by REQ-QC-016

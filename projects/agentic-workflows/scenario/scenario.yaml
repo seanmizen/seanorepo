@@ -9,22 +9,43 @@ calendar:
 concurrency: 4
 companies:
   - brindlehart
-injects:
+# Mail from a person in the simulation is compelled: that person sends it in
+# their own session, so it is in their sent folder and they remember it.
+compel:
   - at: fy1-q1-d1-t1
-    mail:
-      from: priya@brindlehart.example
-      to: dave@brindlehart.example
-      cc: maria@brindlehart.example
-      subject: "New starter tomorrow: Sophie Turner (Sales)"
-      body: |
-        Hi Dave,
+    seat: priya@brindlehart.example
+    do:
+      - tool: send_mail
+        args:
+          to: dave@brindlehart.example
+          cc: maria@brindlehart.example
+          subject: "New starter tomorrow: Sophie Turner (Sales)"
+          body: |
+            Hi Dave,
 
-        Sophie Turner joins the sales team tomorrow morning as a Sales Executive.
-        Please set up her account today so that she can start work at 9:00.
-        She needs the same access as Maria.
+            Sophie Turner joins the sales team tomorrow morning as a Sales Executive.
+            Please set up her account today so that she can start work at 9:00.
+            She needs the same access as Maria.
 
-        Thanks,
-        Priya
+            Thanks,
+            Priya
+  - at: fy1-q1-d1-t5
+    seat: priya@brindlehart.example
+    do:
+      - tool: send_mail
+        args:
+          to: tom@brindlehart.example
+          subject: "Q1 revenue so far"
+          body: |
+            Tom,
+
+            Before the board call on Friday, please send me a short summary of Q1
+            revenue so far, by customer. One paragraph is fine.
+
+            Priya
+
+# Injects are only for mail from outside the simulation.
+injects:
   - at: fy1-q1-d1-t3
     mail:
       from: orders@cartwright-stationers.example
@@ -42,15 +63,3 @@ injects:
         Regards,
         Graham Cartwright
         Cartwright Stationers
-  - at: fy1-q1-d1-t5
-    mail:
-      from: priya@brindlehart.example
-      to: tom@brindlehart.example
-      subject: "Q1 revenue so far"
-      body: |
-        Tom,
-
-        Before the board call on Friday, please send me a short summary of Q1
-        revenue so far, by customer. One paragraph is fine.
-
-        Priya
