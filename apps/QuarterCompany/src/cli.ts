@@ -1,9 +1,16 @@
 // qc: the QuarterCompany command line. Runs live in $QC_RUNS, or ./runs.
-import { existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Rule } from './cast.ts';
 import { genesis, runUntil } from './engine.ts';
+import { exportHtml } from './export.ts';
 import { Run } from './run.ts';
 import { labelOf, ordOf, turnsPerDay } from './time.ts';
 import {
@@ -35,6 +42,9 @@ Usage: qc <command> [options]
                          Schedule an email into the world.
   materialize <run> --at <turn> --out <dir>
                          Build the world at a turn into a folder.
+  export <run> [--out <file>] [--fragment]
+                         Write one HTML file that plays the run back.
+                         Default: runs/<run>.html. No server needed.
   cost <run> [--by seat|actor|role|company]
                          Model cost so far.
   mcp-worker <run> --seat <id>
@@ -67,6 +77,7 @@ const { positionals, values } = parseArgs({
     body: { type: 'string' },
     out: { type: 'string' },
     by: { type: 'string' },
+    fragment: { type: 'boolean' },
     help: { type: 'boolean', short: 'h' },
   },
 });
@@ -204,6 +215,14 @@ async function main() {
         fail(`Folder ${out} is not empty.`);
       materialize(run, required(values.at, 'at'), out);
       console.log(`Wrote the world at ${values.at} to ${out}.`);
+      return;
+    }
+    case 'export': {
+      const run = Run.open(runName());
+      const out = values.out ?? join(Run.runsDir(), `${runName()}.html`);
+      mkdirSync(dirname(out), { recursive: true });
+      writeFileSync(out, exportHtml(run, { fragment: values.fragment }));
+      console.log(`Wrote ${out}. Open it in a browser.`);
       return;
     }
     case 'cost': {

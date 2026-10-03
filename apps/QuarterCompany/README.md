@@ -34,6 +34,26 @@ yarn qc cost ep1 --by role
 
 Runs go to `./runs`, or to `$QC_RUNS`.
 
+## Seeing a run
+
+```bash
+yarn qc export demo            # writes runs/demo.html
+```
+
+The file is one self-contained page. Open it in any browser, with no server.
+It steps through the turns with Prev, Next, Play and a slider. The arrow
+keys also work. Quiet turns are hidden until you tick "Show quiet turns".
+For each turn it shows:
+
+- the staff: working, asleep or no account, minutes used, and the last note
+- the turn log, with a clock time for each tool call
+- the disk at the end of the turn, with new and changed files marked
+
+Click a file, or "open" on a mail line, to read it. The page builds the disk
+from the journal in the browser, so it always agrees with the engine. A link
+that ends in `#fy1-q1-d1-t4` opens at that turn. `--fragment` writes the page
+without the html, head and body tags, for a host page that wraps it.
+
 ## Words
 
 | Word | Meaning |
