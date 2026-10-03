@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { describe, expect, test } from 'vitest';
 import { loadModels, resolveCast } from '../src/cast.ts';
 import { runUntil } from '../src/engine.ts';
 import { workerSession } from '../src/mcp/worker.ts';

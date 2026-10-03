@@ -201,3 +201,20 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   a replay. The new run records its parent run and turn.
 - **Verification:** Test — `apps/QuarterCompany/test/timeline.test.ts` › "retake makes a new run from a turn and leaves the original alone"
 - **Relations:** none
+
+## REQ-QC-013 — The simulator runs on Linux only
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #534
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** If the process platform is not Linux, then the qc command
+  shall stop before it reads or writes a run.
+- **Rationale:** Sean runs QuarterCompany in WSL. The first build used Bun,
+  and the `bun` on the WSL path was the Windows `bun.exe`. It saw UNC paths
+  and called Windows git, so the run folders and their git history were not
+  reliable. QuarterCompany now runs on Node with `tsx`, and it refuses any
+  platform other than Linux.
+- **Verification:** Inspection — `apps/QuarterCompany/src/cli.ts` checks `process.platform` at the start of `main`
+- **Relations:** none

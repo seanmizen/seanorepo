@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 // qc: the QuarterCompany command line. Runs live in $QC_RUNS, or ./runs.
 import { existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
@@ -82,6 +81,12 @@ const required = (v: string | undefined, flag: string): string =>
 const runName = () => name ?? fail('Give the run name.');
 
 async function main() {
+  // QuarterCompany runs on Linux only: WSL, or a Linux host. A Windows
+  // runtime sees UNC paths and Windows git.
+  if (process.platform !== 'linux')
+    fail(
+      `QuarterCompany runs on Linux only. This process runs on ${process.platform}. Use WSL.`,
+    );
   if (!command || values.help) {
     console.log(HELP);
     return;

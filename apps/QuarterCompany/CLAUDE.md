@@ -5,6 +5,9 @@ Read `README.md` for the design. The requirements are in
 
 ## Rules
 
+- QuarterCompany runs on Node with `tsx`, on Linux only (REQ-QC-013). It does
+  not use Bun. Never call a Windows binary (`bun.exe`, `npx`, `node.exe`)
+  from WSL. Use `yarn` scripts, which run the Linux `node`.
 - The journal is the only truth (REQ-QC-001). Never read state back from
   `world/` or from git. Change state only through `fs.*` events.
 - Never remove an object, a journal file or a run folder (REQ-QC-002).

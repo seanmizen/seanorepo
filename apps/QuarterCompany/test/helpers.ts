@@ -7,12 +7,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { stringify } from 'yaml';
 import { genesis } from '../src/engine.ts';
 import { Run } from '../src/run.ts';
 
-export const FIXTURE = join(import.meta.dir, 'fixture');
+export const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixture');
 
 export type Script = Record<
   string,

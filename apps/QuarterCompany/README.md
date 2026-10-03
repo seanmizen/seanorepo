@@ -7,6 +7,13 @@ company. You can browse the whole world as folders.
 
 Requirements: [`requirements/qc.md`](requirements/qc.md).
 
+## Platform
+
+QuarterCompany runs on Node 20.19 or later, on Linux only: WSL or a Linux
+host (REQ-QC-013). `tsx` compiles the TypeScript when the CLI starts, so
+there is no build step. The CLI stops at once on Windows or macOS. A Windows
+runtime in WSL sees UNC paths and calls Windows git.
+
 ## Quick start
 
 ```bash
@@ -133,8 +140,8 @@ Example `.mcp.json` entry:
 {
   "mcpServers": {
     "qc-director": {
-      "command": "bun",
-      "args": ["apps/QuarterCompany/src/cli.ts", "mcp-director", "ep1"],
+      "command": "node",
+      "args": ["apps/QuarterCompany/bin/qc.js", "mcp-director", "ep1"],
       "env": { "QC_RUNS": "projects/agentic-workflows/runs" }
     }
   }
@@ -179,5 +186,5 @@ yarn workspace quarter-company test
 yarn workspace quarter-company typecheck
 ```
 
-The tests use a small fixture scenario in `test/fixture/` and a fake model
-server. They make no paid model calls.
+The tests run on Vitest 3, which supports Node 20. They use a small fixture
+scenario in `test/fixture/` and a fake model server. They make no paid model calls.

@@ -1,6 +1,8 @@
-import { afterAll, describe, expect, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { runUntil } from '../src/engine.ts';
 import { costReport } from '../src/timeline.ts';
 import { makeRun } from './helpers.ts';
@@ -8,17 +10,28 @@ import { makeRun } from './helpers.ts';
 // A fake model service. Each request gets the next canned reply.
 const requests: { path: string; body: Record<string, unknown> }[] = [];
 let replies: unknown[] = [];
-const server = Bun.serve({
-  port: 0,
-  async fetch(req) {
+const server = createServer((req, res) => {
+  let raw = '';
+  req.on('data', (chunk) => {
+    raw += chunk;
+  });
+  req.on('end', () => {
     requests.push({
-      path: new URL(req.url).pathname,
-      body: (await req.json()) as Record<string, unknown>,
+      path: new URL(req.url ?? '/', 'http://x').pathname,
+      body: JSON.parse(raw),
     });
-    return Response.json(replies.shift());
-  },
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(replies.shift()));
+  });
 });
-afterAll(() => server.stop());
+let port = 0;
+beforeAll(async () => {
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+  port = (server.address() as AddressInfo).port;
+});
+afterAll(() => {
+  server.close();
+});
 
 const withProvider = (kind: string, base: string) => (dir: string) => {
   writeFileSync(
@@ -77,7 +90,7 @@ describe('anthropic brain', () => {
       {},
       'one',
       'r',
-      withProvider('anthropic', `http://localhost:${server.port}`),
+      withProvider('anthropic', `http://127.0.0.1:${port}`),
     );
     await runUntil(run, 1);
     expect(requests.map((r) => r.path)).toEqual([
@@ -147,7 +160,7 @@ describe('openai-compatible brain', () => {
       {},
       'one',
       'r',
-      withProvider('openai-compatible', `http://localhost:${server.port}/v1`),
+      withProvider('openai-compatible', `http://127.0.0.1:${port}/v1`),
     );
     await runUntil(run, 1);
     expect(requests.map((r) => r.path)).toEqual([
