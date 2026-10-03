@@ -168,7 +168,7 @@
         $('wifi').setAttribute('aria-pressed', s.source === 'wifi');
         $('usb').setAttribute('aria-pressed', s.source === 'usb');
         $('rec').disabled = !s.canRecord;
-        $('photo').disabled = !s.canRecord;
+        $('photo').disabled = !s.canPhoto;
         $('rec').setAttribute('aria-pressed', s.recording);
         $('rec').textContent = s.recording ? 'Stop recording' : 'Record';
         const now = Date.now();
