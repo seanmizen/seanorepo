@@ -53,6 +53,12 @@ export function exportData(run: Run): ExportData {
     for (const e of events) {
       if (e.type === 'fs.write' && !(e.hash in objects))
         objects[e.hash] = run.objects.get(e.hash);
+      if (
+        (e.type === 'inject' || e.type === 'mail.send') &&
+        e.hash &&
+        !(e.hash in objects)
+      )
+        objects[e.hash] = run.objects.get(e.hash);
       if (e.type === 'cast.rule') rules.push(e.rule as Rule);
     }
     const cast: CastFile = {

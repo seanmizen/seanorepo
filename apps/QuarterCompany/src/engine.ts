@@ -103,11 +103,12 @@ export function turnStart(run: Run, ops: Ops, label: string) {
   const clock = describeTurn(label, run.scenario.calendar);
   for (const rule of run.info.pendingCastRules ?? [])
     ops.emit('director', { type: 'cast.rule', rule });
-  const injects = [...run.scenario.injects, ...run.info.injects].filter(
-    (i) => i.at === label,
-  );
+  const injects = [
+    ...run.scenario.injects.map((i) => ({ ...i, source: 'scenario' as const })),
+    ...run.info.injects.map((i) => ({ ...i, source: 'director' as const })),
+  ].filter((i) => i.at === label);
   injects.forEach((inj, n) => {
-    injectMail(ops, run.scenario, label, clock, inj.mail, n + 1);
+    injectMail(ops, run.scenario, label, clock, inj.mail, n + 1, inj.source);
   });
 }
 

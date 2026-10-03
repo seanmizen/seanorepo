@@ -157,6 +157,7 @@ export const MAIL_TOOLS = [
         messageId: id,
         to: [...to, ...cc],
         subject: a.subject,
+        hash: s.objects.put(text),
       });
       return `Message ${id} is queued. The mail system delivers it at the end of this turn.`;
     },
