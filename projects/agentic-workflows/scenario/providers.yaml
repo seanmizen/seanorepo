@@ -1,0 +1,7 @@
+# How to reach each model service. API keys come from the environment.
+anthropic:
+  kind: anthropic
+  key_env: ANTHROPIC_API_KEY
+ollama:
+  kind: openai-compatible
+  base_url: http://localhost:11434/v1

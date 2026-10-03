@@ -1,0 +1,124 @@
+# A scripted first day and a half. Seat id -> turn -> tool calls.
+# This needs no model, so `yarn demo` is free and gives the same result each time.
+
+dave@brindlehart.example:
+  fy1-q1-d1-t2:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t1.inject.1 } }
+    - { tool: read_file, args: { path: /srv/handbook/it-policy.md } }
+    - { tool: useradd, args: { username: sophie, full_name: Sophie Turner, groups: [sales] } }
+    - tool: send_mail
+      args:
+        to: priya@brindlehart.example
+        cc: maria@brindlehart.example
+        subject: "Re: New starter tomorrow: Sophie Turner (Sales)"
+        body: |
+          Hi Priya,
+
+          Sophie's account is ready. Her user name is sophie, and she is in the
+          sales group, the same as Maria.
+
+          Dave
+    - { tool: end_turn, args: { note: "Made Sophie's account. Nothing else open.", wake: on_mail } }
+  fy1-q1-d1-t8:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t7.maria.1 } }
+    - { tool: read_file, args: { path: /var/log/auth.log, sudo: true } }
+    - tool: send_mail
+      args:
+        to: maria@brindlehart.example
+        subject: "Re: Could not open the ledger"
+        body: |
+          Hi Maria,
+
+          The ledger is for the finance team only, so sudo is not the answer.
+          Please ask Tom for the numbers that you need.
+
+          Dave
+    - { tool: end_turn, args: { note: "Told Maria to ask Tom.", wake: on_mail } }
+
+maria@brindlehart.example:
+  fy1-q1-d1-t4:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t3.inject.1 } }
+    - { tool: read_file, args: { path: /srv/sales/price-list.csv } }
+    - tool: send_mail
+      args:
+        to: orders@cartwright-stationers.example
+        subject: "Re: Quote request: paper and toner"
+        body: |
+          Hello Graham,
+
+          Thank you for your request. Our quote:
+            - 40 x A4 copier paper 80gsm (box of 5 reams) at GBP 21.50 = GBP 860.00
+            - 12 x HP 59A toner cartridge at GBP 96.00 = GBP 1,152.00
+          Total: GBP 2,012.00 excluding VAT. Delivery to Leeds by Friday next week.
+
+          Kind regards,
+          Maria Lopez, Brindle & Hart
+    - { tool: append_file, args: { path: /srv/sales/pipeline.csv, content: "Cartwright Stationers,quoted,2012.00,maria\n" } }
+    - { tool: end_turn, args: { note: "Quoted Cartwright GBP 2012. Follow up next week.", wake: on_mail } }
+  fy1-q1-d1-t6:
+    - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv } }
+    - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv, sudo: true } }
+    - { tool: end_turn, args: { note: "Could not open the ledger to check Cartwright's history. Ask Dave." } }
+  fy1-q1-d1-t7:
+    - tool: send_mail
+      args:
+        to: dave@brindlehart.example
+        subject: "Could not open the ledger"
+        body: |
+          Hi Dave,
+
+          I tried to open /srv/finance/ledger-q1.csv to check a customer's
+          history, but I get "Permission denied". Can you give me access?
+
+          Maria
+    - { tool: end_turn, args: { note: "Asked Dave for ledger access.", wake: on_mail } }
+
+tom@brindlehart.example:
+  fy1-q1-d1-t6:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t5.inject.1 } }
+    - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv } }
+    - tool: send_mail
+      args:
+        to: priya@brindlehart.example
+        subject: "Re: Q1 revenue so far"
+        body: |
+          Priya,
+
+          Q1 revenue so far is GBP 6,273.25 from three invoices: Harrogate
+          Council GBP 4,120.75, Cartwright Stationers GBP 1,840.00 and Pennine
+          Dental GBP 312.50. Harrogate is 66% of the total.
+
+          Tom
+    - { tool: end_turn, args: { note: "Sent Priya the Q1 summary.", wake: on_mail } }
+
+priya@brindlehart.example:
+  fy1-q1-d1-t3:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t2.dave.1 } }
+    - { tool: end_turn, args: { note: "Sophie's account is ready.", wake: on_mail } }
+
+sophie@brindlehart.example:
+  fy1-q1-d2-t1:
+    - { tool: whoami }
+    - { tool: list_mail }
+    - { tool: ls, args: { path: /srv/sales } }
+    - { tool: read_file, args: { path: /srv/sales/pipeline.csv } }
+    - { tool: write_file, args: { path: notes.md, content: "# Notes\n\n- Sales files are in /srv/sales.\n- Maria quoted Cartwright on day 1.\n" } }
+    - { tool: end_turn, args: { note: "First morning. Found the sales files. Ask Maria what to do first." } }
+  fy1-q1-d2-t2:
+    - tool: send_mail
+      args:
+        to: maria@brindlehart.example
+        subject: "Hello from Sophie"
+        body: |
+          Hi Maria,
+
+          I am set up and I can see the sales folder. What would you like me to
+          start on?
+
+          Sophie
+    - { tool: end_turn, args: { note: "Asked Maria for work.", wake: on_mail } }

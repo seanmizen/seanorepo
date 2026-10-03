@@ -1,0 +1,7 @@
+# The episode 1 experiment: what happens when IT runs on the cheapest model?
+default: standard
+rules:
+  - match: { role: it-admin }
+    use: cheap
+  - match: { role: md }
+    use: premium

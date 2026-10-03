@@ -1,0 +1,13 @@
+name: Acme Ltd
+domain: acme.example
+host: acme-mf01
+groups: [finance]
+people:
+  - { user: alice, name: Alice Admin, role: it-admin, title: IT Administrator, groups: [wheel] }
+  - { user: bob, name: Bob Books, role: finance, title: Accountant, groups: [finance] }
+  - { user: carol, name: Carol Clerk, role: clerk, title: Clerk }
+  - { user: dan, name: Dan New, role: clerk, title: Clerk, provisioned: false }
+files:
+  - { path: /srv/finance, dir: true, owner: bob, group: finance, mode: "770" }
+  - { path: /srv/finance/ledger.csv, owner: bob, group: finance, mode: "660", content: "a,1\n" }
+  - { path: /tmp/shared.txt, owner: root, mode: "666", content: "shared\n" }

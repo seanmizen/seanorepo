@@ -1,0 +1,5 @@
+name: Globex
+domain: globex.example
+host: gx01
+people:
+  - { user: gina, name: Gina G, role: md, title: Director }

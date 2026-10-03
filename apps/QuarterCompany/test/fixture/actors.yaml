@@ -1,0 +1,9 @@
+actors:
+  scripted: { provider: script, script: scripts/test.yaml }
+  idle: { provider: idle }
+  external: { provider: external }
+  cheap-model: { provider: idle, price: { in: 1, out: 2 } }
+  big-model: { provider: idle, price: { in: 5, out: 25 } }
+tiers:
+  cheap: cheap-model
+  premium: big-model

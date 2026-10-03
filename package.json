@@ -9,7 +9,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "utils/*"
+    "utils/*",
+    "projects/*"
   ],
   "scripts": {
     "sean": "yarn workspace seanmizen.com start",
@@ -20,6 +21,7 @@
     "converter": "yarn workspace ffmpeg-converter start",
     "voxel": "yarn workspace swindowzig native:voxel",
     "voxel:web": "yarn workspace swindowzig dev:voxel",
+    "qc": "yarn workspace quarter-company qc",
     "ascii": "node utils/image-to-ascii/src/cli.mjs",
     "ascii-go": "go run -C utils/image-to-ascii ./cmd/image-to-ascii",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",

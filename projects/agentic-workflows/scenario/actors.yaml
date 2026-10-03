@@ -1,0 +1,17 @@
+# Actors are named models with their settings and price (USD per million
+# tokens). The providers script, idle and external are built in.
+actors:
+  scripted: { provider: script, script: scripts/demo.yaml }
+  idle: { provider: idle }
+  external: { provider: external }
+  haiku: { provider: anthropic, model: claude-haiku-4-5, max_tokens: 4000, price: { in: 1, out: 5 } }
+  sonnet: { provider: anthropic, model: claude-sonnet-5-5, max_tokens: 8000, effort: medium, price: { in: 2, out: 10 } }
+  opus: { provider: anthropic, model: claude-opus-5-5, max_tokens: 16000, effort: medium, price: { in: 4, out: 20 } }
+  qwen-local: { provider: ollama, model: "qwen3:8b", max_tokens: 4000 }
+
+# Tiers are aliases. Change one line to change every seat on a tier.
+tiers:
+  local: qwen-local
+  cheap: haiku
+  standard: sonnet
+  premium: opus
