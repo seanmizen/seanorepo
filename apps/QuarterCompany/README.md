@@ -9,10 +9,10 @@ Requirements: [`requirements/qc.md`](requirements/qc.md).
 
 ## Platform
 
-QuarterCompany runs on Node 20.19 or later, on Linux only: WSL or a Linux
-host (REQ-QC-013). `tsx` compiles the TypeScript when the CLI starts, so
-there is no build step. The CLI stops at once on Windows or macOS. A Windows
-runtime in WSL sees UNC paths and calls Windows git.
+QuarterCompany runs on Node 20.19 or later, on Linux, macOS or another
+Unix-like system. `tsx` compiles the TypeScript when the CLI starts, so there
+is no build step. Windows is not supported: use WSL. Inside WSL, use the Linux
+`node` and `git`, not a Windows binary on the path.
 
 ## Quick start
 

@@ -17,7 +17,7 @@
 | [`REQ-QC-010`](qc.md#req-qc-010--each-tool-is-defined-once-for-every-transport) | Each tool is defined once for every transport | active | constraint | P2 | sean |
 | [`REQ-QC-011`](qc.md#req-qc-011--playback-never-calls-a-model) | Playback never calls a model | active | functional | P1 | sean |
 | [`REQ-QC-012`](qc.md#req-qc-012--a-retake-always-makes-a-new-timeline) | A retake always makes a new timeline | active | functional | P1 | sean |
-| [`REQ-QC-013`](qc.md#req-qc-013--the-simulator-runs-on-linux-only) | The simulator runs on Linux only | active | constraint | P1 | sean |
+| [`REQ-QC-013`](qc.md#req-qc-013--the-simulator-runs-on-linux-only) | The simulator runs on Linux only | withdrawn | constraint | P1 | sean |
 
 ## Dependency graph
 
@@ -37,6 +37,7 @@ graph TD
   REQ_QC_012["REQ-QC-012<br/>A retake always makes a new timeline"]
   REQ_QC_013["REQ-QC-013<br/>The simulator runs on Linux only"]
   REQ_QC_008 -->|depends-on| REQ_QC_001
+  style REQ_QC_013 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links

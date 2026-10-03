@@ -204,7 +204,7 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
 
 ## REQ-QC-013 — The simulator runs on Linux only
 
-- **Status:** active
+- **Status:** withdrawn
 - **Source:** sean
 - **Origin:** #534
 - **Type:** constraint
@@ -216,5 +216,8 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   and called Windows git, so the run folders and their git history were not
   reliable. QuarterCompany now runs on Node with `tsx`, and it refuses any
   platform other than Linux.
-- **Verification:** Inspection — `apps/QuarterCompany/src/cli.ts` checks `process.platform` at the start of `main`
+  Withdrawn in #538: Sean meant only that Windows is not supported. macOS and
+  other Unix-like systems are fine, and Sean wants no platform guard. Nothing
+  replaces this requirement.
+- **Verification:** Inspection — `apps/QuarterCompany/src/cli.ts` (withdrawn: the check is removed)
 - **Relations:** none
