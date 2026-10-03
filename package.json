@@ -18,6 +18,7 @@
     "inside": "yarn workspace inside start",
     "gosniff": "yarn workspace gosniff start",
     "converter": "yarn workspace ffmpeg-converter start",
+    "sonycam": "yarn workspace sonycam start",
     "voxel": "yarn workspace swindowzig native:voxel",
     "voxel:web": "yarn workspace swindowzig dev:voxel",
     "ascii": "node utils/image-to-ascii/src/cli.mjs",
