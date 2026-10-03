@@ -237,7 +237,7 @@ main {
   // ----- helpers -----
   const seatIndex = new Map(D.seats.map((s, i) => [s.id, i]));
   const short = (id) => id.split('@')[0];
-  const hhmm = (clock) => (clock.match(/(\d\d):(\d\d)$/) || [, '09', '00']).slice(1).map(Number);
+  const hhmm = (clock) => (clock.match(/(\d\d):(\d\d)$/) || ['', '09', '00']).slice(1).map(Number);
   const fmtTime = ([hh, mm], add) => {
     const t = hh * 60 + mm + add;
     return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
