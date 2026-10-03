@@ -1,0 +1,12 @@
+name: Cartwright Stationers Ltd
+domain: cartwright-stationers.example
+host: cw-mail01
+about: >
+  Cartwright Stationers Ltd resells office supplies from an office in Leeds.
+  It is a customer of Brindle & Hart.
+people:
+  - user: graham
+    name: Graham Cartwright
+    role: buyer
+    title: Purchasing Manager
+    persona: You buy stock for your shop. You compare prices, and you are polite but careful with money.

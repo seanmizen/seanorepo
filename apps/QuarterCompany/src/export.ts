@@ -20,13 +20,13 @@ export interface ExportData {
     parent?: { run: string; turn: string };
   };
   turnMinutes: number;
-  companies: { id: string; name: string; domain: string; host: string }[];
+  orgs: { id: string; name: string; domain: string; host: string }[];
   seats: {
     id: string;
     name: string;
     title: string;
     role: string;
-    company: string;
+    org: string;
     host: string;
   }[];
   turns: {
@@ -54,7 +54,7 @@ export function exportData(run: Run): ExportData {
       if (e.type === 'fs.write' && !(e.hash in objects))
         objects[e.hash] = run.objects.get(e.hash);
       if (
-        (e.type === 'inject' || e.type === 'mail.send') &&
+        (e.type === 'mail.send' || e.type === 'mail.queued') &&
         e.hash &&
         !(e.hash in objects)
       )
@@ -85,7 +85,7 @@ export function exportData(run: Run): ExportData {
       parent: run.info.parent,
     },
     turnMinutes: run.scenario.turnMinutes,
-    companies: run.scenario.companies.map((c) => ({
+    orgs: run.scenario.orgs.map((c) => ({
       id: c.id,
       name: c.name,
       domain: c.domain,
@@ -96,7 +96,7 @@ export function exportData(run: Run): ExportData {
       name: s.person.name,
       title: s.person.title,
       role: s.person.role,
-      company: s.company.id,
+      org: s.org.id,
       host: s.host,
     })),
     turns,

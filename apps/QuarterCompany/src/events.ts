@@ -1,7 +1,8 @@
 // The journal event vocabulary. See REQ-QC-001.
 //
-// Only `fs.*`, `seat.end`, `seat.skip`, `cast.rule` and `thought` events change
-// state. A thought changes the seat's memory, never the world (REQ-QC-014).
+// StateEvent changes state: the filesystem, seat memory, casts, system events
+// and the mail queue. A thought changes the seat's memory, never the world
+// (REQ-QC-014). InfoEvent records what happened, for playback and cost.
 // The other events record what happened, for playback and cost reports.
 
 export interface Meta {
@@ -25,7 +26,30 @@ export type StateEvent =
   | { type: 'seat.end'; seat: string; note: string; wake: Wake }
   | { type: 'seat.skip'; seat: string; reason: string }
   | { type: 'cast.rule'; rule: unknown }
-  | { type: 'thought'; seat: string; text: string };
+  | { type: 'thought'; seat: string; text: string }
+  | {
+      type: 'system.start';
+      kind: 'host.down' | 'mail.down' | 'disk.full';
+      org: string;
+      host: string;
+      note: string;
+      source: 'scenario' | 'director';
+    }
+  | {
+      type: 'system.end';
+      kind: 'host.down' | 'mail.down' | 'disk.full';
+      org: string;
+      host: string;
+    }
+  | {
+      type: 'mail.queued';
+      messageId: string;
+      hash: string;
+      from: string;
+      rcpt: string;
+      reason: string;
+    }
+  | { type: 'mail.dequeued'; messageId: string; rcpt: string };
 
 export type Wake = 'next_turn' | 'on_mail';
 
@@ -71,18 +95,8 @@ export type InfoEvent =
       hash?: string; // object hash of the message text
     }
   | { type: 'mail.bounce'; messageId: string; to: string; reason: string }
-  | {
-      type: 'inject';
-      kind: 'mail';
-      /** Who wrote the mail: the scenario file, or the director during the run. */
-      source?: 'scenario' | 'director';
-      messageId: string;
-      from: string;
-      to: string[];
-      subject: string;
-      hash?: string; // object hash of the message text
-    }
   | { type: 'security'; seat: string; message: string }
+  | { type: 'seat.blocked'; seat: string; reason: string }
   | { type: 'compel.skipped'; seat: string; reason: string };
 
 export type EventBody = StateEvent | InfoEvent;

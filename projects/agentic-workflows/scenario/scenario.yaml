@@ -7,10 +7,11 @@ calendar:
   dayEnd: "17:00"
   slotMinutes: 15
 concurrency: 4
-companies:
+orgs:
   - brindlehart
-# Mail from a person in the simulation is compelled: that person sends it in
-# their own session, so it is in their sent folder and they remember it.
+  - cartwright
+# The scenario starts the story through people: a compelled action runs in
+# that person's own session, so their sent folder and memory stay true.
 compel:
   - at: fy1-q1-d1-t1
     seat: priya@brindlehart.example
@@ -29,6 +30,25 @@ compel:
 
             Thanks,
             Priya
+  - at: fy1-q1-d1-t3
+    seat: graham@cartwright-stationers.example
+    do:
+      - tool: send_mail
+        args:
+          to: maria@brindlehart.example
+          subject: "Quote request: paper and toner"
+          body: |
+            Hello Maria,
+
+            Please can you quote for:
+              - 40 boxes of A4 copier paper (80gsm)
+              - 12 HP 59A toner cartridges
+
+            Delivery to our Leeds office by the end of next week.
+
+            Regards,
+            Graham Cartwright
+            Cartwright Stationers
   - at: fy1-q1-d1-t5
     seat: priya@brindlehart.example
     do:
@@ -44,22 +64,10 @@ compel:
 
             Priya
 
-# Injects are only for mail from outside the simulation.
+# Injects are system events only: the physics of the world, never a person.
 injects:
-  - at: fy1-q1-d1-t3
-    mail:
-      from: orders@cartwright-stationers.example
-      to: maria@brindlehart.example
-      subject: "Quote request: paper and toner"
-      body: |
-        Hello Maria,
-
-        Please can you quote for:
-          - 40 boxes of A4 copier paper (80gsm)
-          - 12 HP 59A toner cartridges
-
-        Delivery to our Leeds office by the end of next week.
-
-        Regards,
-        Graham Cartwright
-        Cartwright Stationers
+  - at: fy1-q1-d1-t9
+    until: fy1-q1-d1-t11
+    kind: mail.down
+    org: brindlehart
+    note: The mail server restarts for an upgrade.

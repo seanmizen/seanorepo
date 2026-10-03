@@ -120,7 +120,7 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
 - **Verification:**
   - Test — `apps/QuarterCompany/test/engine.test.ts` › "mail arrives at the end of the turn, between companies too"
   - Test — `apps/QuarterCompany/test/engine.test.ts` › "mail to an unknown or locked user bounces"
-- **Relations:** none
+- **Relations:** amended-by REQ-QC-018
 
 ## REQ-QC-008 — Seats work on one snapshot and merge in seat-id order
 
@@ -243,7 +243,7 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
 
 ## REQ-QC-015 — Injected mail comes only from outside the simulation
 
-- **Status:** active
+- **Status:** superseded
 - **Source:** sean
 - **Origin:** #546
 - **Type:** constraint
@@ -256,7 +256,7 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   action (REQ-QC-016). Mail from outside keeps a sent copy on the internet
   host.
 - **Verification:** Test — `apps/QuarterCompany/test/compel.test.ts` › "an inject from a person in the simulation is refused"
-- **Relations:** none
+- **Relations:** superseded-by REQ-QC-017
 
 ## REQ-QC-016 — A scenario makes a seat act through the seat's own session
 
@@ -278,3 +278,57 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   - Test — `apps/QuarterCompany/test/compel.test.ts` › "a compelled mail is the seat’s own: in its sent folder, and marked in the journal"
   - Test — `apps/QuarterCompany/test/compel.test.ts` › "the briefing tells the seat what it was made to do"
 - **Relations:** depends-on REQ-QC-008
+
+## REQ-QC-017 — Injects are system events, never people
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #548
+- **Type:** constraint
+- **Priority:** P0
+- **Statement:** The simulator shall accept as an inject only a system event
+  on the host of an organisation in the world.
+- **Rationale:** Sean: injects are system-wide and never simulate actors. A
+  file system outage can be injected, but an external person cannot: that
+  person is an actor in another organisation. Every sender is then a person
+  with a mailbox and a sent folder, so the world never contradicts itself.
+  The system events are `host.down`, `mail.down` and `disk.full`. To make a
+  person act, a scenario uses compel (REQ-QC-016).
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/compel.test.ts` › "an inject cannot carry mail: injects are system events only"
+  - Test — `apps/QuarterCompany/test/system.test.ts` › "host.down: nobody logs in, mail to the host waits, then arrives"
+- **Relations:** supersedes REQ-QC-015
+
+## REQ-QC-018 — The world is closed: mail to an unknown domain bounces
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #548
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** If mail goes to a domain that no organisation in the world
+  owns, then the simulator shall bounce it to the sender.
+- **Rationale:** Nothing exists outside the world. A mail directory maps each
+  domain to the host that holds its mailboxes. The old `internet/mx` host is
+  gone. Customers, suppliers and consumers are organisations, so mail to them
+  needs a real mailbox.
+- **Verification:** Test — `apps/QuarterCompany/test/compel.test.ts` › "mail to a domain outside the world bounces"
+- **Relations:** amends REQ-QC-007
+
+## REQ-QC-019 — Blocked mail waits in a queue that the journal holds
+
+- **Status:** active
+- **Source:** agent:SEAN-548
+- **Origin:** #548
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** While a system event blocks the sender host or the
+  recipient host, the simulator shall hold the mail in a queue, and deliver it
+  at the start of the first turn when nothing blocks it.
+- **Rationale:** An outage must delay mail, not lose it. The queue is state:
+  `mail.queued` and `mail.dequeued` events build it, so playback and the fold
+  of the journal agree with the live run.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/system.test.ts` › "mail.down: people work, but their outgoing mail waits"
+  - Test — `apps/QuarterCompany/test/system.test.ts` › "the fold of the journal gives the same world, queue included"
+- **Relations:** depends-on REQ-QC-001

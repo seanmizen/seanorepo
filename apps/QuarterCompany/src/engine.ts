@@ -16,12 +16,12 @@ import type { EventBody, JournalEvent } from './events.ts';
 import { Ops } from './ops.ts';
 import { briefing, systemPrompt } from './prompt.ts';
 import { type Run, type SimState, tagOf } from './run.ts';
-import { type Compel, type Seat, seatsOf } from './scenario.ts';
+import { type Compel, hostOf, type Seat, seatsOf } from './scenario.ts';
 import { Session } from './session.ts';
 import { describeTurn, GENESIS, isFirstSlotOfDay, labelOf } from './time.ts';
 import { Directory } from './users.ts';
 import type { Vfs } from './vfs.ts';
-import { deliver, injectMail, seedWorld } from './world.ts';
+import { deliver, releaseQueue, seedWorld } from './world.ts';
 
 export interface TurnReport {
   label: string;
@@ -150,20 +150,51 @@ async function pool<T>(
 
 /**
  * Events at the start of a turn, before any seat works: the director's
- * recasts, then injected mail. The qc-worker server runs the same step on a
+ * recasts, then system events (ends before starts), then the release of
+ * queued mail that nothing blocks now. System and queue events change `state`
+ * at once, as the fold does. The qc-worker server runs the same step on a
  * copy, so an external agent sees the same snapshot as the engine.
  */
-export function turnStart(run: Run, ops: Ops, label: string) {
-  const clock = describeTurn(label, run.scenario.calendar);
+export function turnStart(run: Run, state: SimState, ops: Ops, label: string) {
   for (const rule of run.info.pendingCastRules ?? [])
     ops.emit('director', { type: 'cast.rule', rule });
-  const injects = [
+  const events = [
     ...run.scenario.injects.map((i) => ({ ...i, source: 'scenario' as const })),
     ...run.info.injects.map((i) => ({ ...i, source: 'director' as const })),
-  ].filter((i) => i.at === label);
-  injects.forEach((inj, n) => {
-    injectMail(ops, run.scenario, label, clock, inj.mail, n + 1, inj.source);
-  });
+  ];
+  const hostFor = (orgId: string) => {
+    const org = run.scenario.orgs.find((o) => o.id === orgId);
+    if (!org)
+      throw new Error(
+        `A system event names organisation "${orgId}". The scenario has no such organisation.`,
+      );
+    return hostOf(org);
+  };
+  for (const e of events.filter((x) => x.until === label)) {
+    const body = {
+      type: 'system.end' as const,
+      kind: e.kind,
+      org: e.org,
+      host: hostFor(e.org),
+    };
+    ops.emit(e.source, body);
+    state.applyLive(body);
+  }
+  for (const e of events.filter((x) => x.at === label)) {
+    const body = {
+      type: 'system.start' as const,
+      kind: e.kind,
+      org: e.org,
+      host: hostFor(e.org),
+      note: e.note,
+      source: e.source,
+    };
+    ops.emit(e.source, body);
+    state.applyLive(body);
+  }
+  const mark = ops.list.length;
+  releaseQueue(ops, run.scenario, [...state.queue], state.system);
+  for (const op of ops.list.slice(mark)) state.applyLive(op.body);
 }
 
 export async function runTurn(
@@ -177,16 +208,16 @@ export async function runTurn(
   const label = labelOf(ord, cal);
   const clock = describeTurn(label, cal);
   const events: { actor: string; body: EventBody }[] = [];
-  const main = new Ops(state.vfs, run.objects, ord);
+  const main = new Ops(state.vfs, run.objects, ord, state.system);
   const drain = () => {
     events.push(...main.list);
     main.list = [];
   };
 
   main.emit('engine', { type: 'turn.start', label, clock });
-  // 1. Recasts from the director, then injected mail.
+  // 1. Recasts from the director, system events, queued mail.
   const pendingRules = run.info.pendingCastRules ?? [];
-  turnStart(run, main, label);
+  turnStart(run, state, main, label);
   drain();
   const castRules = [...state.castRules];
   for (const e of events)
@@ -207,6 +238,22 @@ export async function runTurn(
   for (const seat of seatsOf(scenario)) {
     const dir = Directory.load(state.vfs, run.objects, seat.host);
     const compelled = compelledFor(run, label, seat.id);
+    if (
+      state.system.get(seat.host)?.has('host.down') &&
+      dir.canLogin(seat.person.user)
+    ) {
+      const reason = `host ${seat.org.host} is down`;
+      events.push({
+        actor: 'engine',
+        body: { type: 'seat.blocked', seat: seat.id, reason },
+      });
+      if (compelled.length)
+        events.push({
+          actor: 'engine',
+          body: { type: 'compel.skipped', seat: seat.id, reason },
+        });
+      continue;
+    }
     if (!dir.canLogin(seat.person.user)) {
       if (compelled.length) {
         events.push({
@@ -247,6 +294,7 @@ export async function runTurn(
         ord,
         state.vfs.clone(),
         run.objects,
+        state.system,
       ),
     });
   }
@@ -339,7 +387,10 @@ export async function runTurn(
 
   // 4. Mail.
   for (const { session } of sessions)
-    for (const env of session.outbox) deliver(main, scenario, env);
+    for (const env of session.outbox)
+      deliver(main, scenario, env, state.system);
+  // Queue events change state at once, as in turnStart.
+  for (const op of main.list) state.applyLive(op.body);
   drain();
   main.emit('engine', { type: 'turn.end', label });
   drain();

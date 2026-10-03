@@ -44,8 +44,10 @@ export class Session {
     ord: number,
     vfs: Vfs,
     readonly objects: ObjectStore,
+    /** Active system events per host, for example a full disk. */
+    readonly system: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
   ) {
-    this.ops = new Ops(vfs, objects, ord);
+    this.ops = new Ops(vfs, objects, ord, system);
     this.user = seat.person.user;
     this.host = seat.host;
     this.home = `/home/${this.user}`;
@@ -153,7 +155,7 @@ export class Session {
     rawArgs: unknown,
   ): { result: ToolResult & { minutes: number }; staged: Op[] } {
     const real = this.ops;
-    this.ops = new Ops(real.vfs.clone(), this.objects, real.ord);
+    this.ops = new Ops(real.vfs.clone(), this.objects, real.ord, this.system);
     try {
       const result = this.execute(name, rawArgs);
       const staged = result.ok

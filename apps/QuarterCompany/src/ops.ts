@@ -17,9 +17,17 @@ export class Ops {
     readonly vfs: Vfs,
     readonly objects: ObjectStore,
     readonly ord: number,
+    /** Active system events per host. A full disk refuses new content. */
+    readonly system: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
   ) {}
 
   emit(actor: string, body: EventBody) {
+    if (
+      (body.type === 'fs.write' || body.type === 'fs.mkdir') &&
+      this.system.get(body.host)?.has('disk.full')
+    ) {
+      throw new Error(`${body.path}: No space left on device`);
+    }
     if (body.type.startsWith('fs.') && body.type !== 'fs.conflict') {
       const reason = this.vfs.apply(body as StateEvent, this.ord);
       if (reason)

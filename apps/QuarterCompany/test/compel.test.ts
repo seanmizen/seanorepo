@@ -117,40 +117,35 @@ describe('compelled actions', () => {
   });
 });
 
-describe('injects', () => {
-  test('an inject from a person in the simulation is refused', () => {
+describe('a closed world', () => {
+  test('an inject cannot carry mail: injects are system events only', () => {
     const bad = (dir: string) => {
       const p = join(dir, 'scenario.yaml');
       writeFileSync(
         p,
-        `${readFileSync(p, 'utf8')}injects:\n  - at: fy1-q1-d1-t1\n    mail: { from: bob@acme.example, to: carol@acme.example, subject: x, body: y }\n`,
+        `${readFileSync(p, 'utf8')}injects:\n  - at: fy1-q1-d1-t1\n    mail: { from: client@example.org, to: bob@acme.example, subject: x, body: y }\n`,
       );
     };
-    expect(() => makeRun({}, 'scripted', 'r', bad)).toThrow(/Use compel/);
+    expect(() => makeRun({}, 'scripted', 'r', bad)).toThrow();
   });
 
-  test('mail from outside keeps a sent copy on the internet host', async () => {
+  test('mail to a domain outside the world bounces', async () => {
     const run = makeRun({
-      'bob@acme.example': { 'fy1-q1-d1-t1': [call('whoami')] },
-    });
-    run.info.injects.push({
-      at: 'fy1-q1-d1-t1',
-      mail: {
-        from: 'client@example.org',
-        to: 'bob@acme.example',
-        subject: 'Hi',
-        body: 'Hello.',
+      'bob@acme.example': {
+        'fy1-q1-d1-t1': [
+          call('send_mail', {
+            to: 'someone@nowhere.example',
+            subject: 'x',
+            body: 'y',
+          }),
+        ],
       },
     });
-    run.saveInfo();
     await runUntil(run, 1);
-    expect(
-      run
-        .load()
-        .vfs.exists(
-          'internet/mx',
-          '/client@example.org/sent/fy1-q1-d1-t1.inject.1.eml',
-        ),
-    ).toBe(true);
+    const b = run
+      .readTurn('fy1-q1-d1-t1')
+      .find((e) => e.type === 'mail.bounce');
+    expect(b && 'reason' in b && b.reason).toBe('no such domain');
+    expect(run.load().vfs.children(HOST, '/var/mail/bob/new').length).toBe(1);
   });
 });

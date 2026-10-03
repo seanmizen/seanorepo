@@ -9,14 +9,14 @@ export function systemPrompt(
   slotMinutes: number,
   turnMinutes: number,
 ): string {
-  const { person, company } = seat;
+  const { person, org } = seat;
   return [
-    `You are ${person.name}, ${person.title} at ${company.name}. Your email address is ${seat.id}.`,
-    company.about.trim(),
+    `You are ${person.name}, ${person.title} at ${org.name}. Your email address is ${seat.id}.`,
+    org.about.trim(),
     person.persona.trim(),
     '',
     'How your work happens:',
-    `- You work at a computer on the host ${company.host}. You use the computer only through the tools.`,
+    `- You work at a computer on the host ${org.host}. You use the computer only through the tools.`,
     `- The working day has slots of ${slotMinutes} minutes. In each slot you get one turn of ${turnMinutes} minutes.`,
     '- Each tool uses some minutes. When your minutes are finished, the turn ends.',
     '- You remember nothing between turns. You keep only the note that you give to end_turn, and your files.',
@@ -43,7 +43,7 @@ export function briefing(
   const recent = thoughts.slice(-RECALLED_THOUGHTS);
   return [
     `It is ${session.clock} (turn ${session.label}).`,
-    `You are logged in to ${session.seat.company.host} as ${session.user}. You have ${session.minutesLeft} minutes in this turn.`,
+    `You are logged in to ${session.seat.org.host} as ${session.user}. You have ${session.minutesLeft} minutes in this turn.`,
     `Unread mail: ${unread}.`,
     prev
       ? `Your note from your last turn: "${prev.note || '(no note)'}"`

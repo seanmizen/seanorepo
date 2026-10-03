@@ -12,7 +12,7 @@ import { Rule } from './cast.ts';
 import { genesis, runUntil } from './engine.ts';
 import { exportHtml } from './export.ts';
 import { Run } from './run.ts';
-import { checkInjectSender, seatsOf } from './scenario.ts';
+import { checkInject, Inject, seatsOf } from './scenario.ts';
 import { labelOf, ordOf, turnsPerDay } from './time.ts';
 import {
   costReport,
@@ -37,20 +37,21 @@ Usage: qc <command> [options]
                          Show turns that happened. No model calls.
   retake <run> --from <turn> [--cast <name>] [--as <new run>]
                          Run again from a turn, in a new run folder.
-  recast <run> --use <tier|actor> [--user <id>] [--company <id>] [--role <role>]
+  recast <run> --use <tier|actor> [--user <id>] [--org <id>] [--role <role>]
                          [--from <turn>] [--until <turn>]
                          Add a cast rule. It applies from the next turn.
-  inject <run> --at <turn> --from <addr> --to <addr> --subject <s> --body <b>
-                         Schedule an email from outside the simulation.
+  inject <run> --kind host.down|mail.down|disk.full --org <id>
+         [--at <turn>] [--until <turn>] [--note <text>]
+                         Schedule a system event: the physics of the world.
+                         It never acts as a person: use compel for that.
   compel <run> --seat <id> --tool <name> [--args <json>] [--at <turn>]
-                         Make a seat run a tool at the start of a turn.
-                         Use this for mail from a person in the simulation.
+                         Make a person run a tool at the start of a turn.
   materialize <run> --at <turn> --out <dir>
                          Build the world at a turn into a folder.
   export <run> [--out <file>] [--fragment]
                          Write one HTML file that plays the run back.
                          Default: runs/<run>.html. No server needed.
-  cost <run> [--by seat|actor|role|company]
+  cost <run> [--by seat|actor|role|org]
                          Model cost so far.
   mcp-worker <run> --seat <id>
                          MCP server (stdio): work as one seat.
@@ -75,7 +76,7 @@ const { positionals, values } = parseArgs({
     as: { type: 'string' },
     use: { type: 'string' },
     user: { type: 'string' },
-    company: { type: 'string' },
+    org: { type: 'string' },
     role: { type: 'string' },
     at: { type: 'string' },
     subject: { type: 'string' },
@@ -84,6 +85,8 @@ const { positionals, values } = parseArgs({
     by: { type: 'string' },
     fragment: { type: 'boolean' },
     tool: { type: 'string' },
+    kind: { type: 'string' },
+    note: { type: 'string' },
     args: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
@@ -174,7 +177,7 @@ async function main() {
       const rule = Rule.parse({
         match: {
           user: values.user,
-          company: values.company,
+          org: values.org,
           role: values.role,
         },
         use: required(values.use, 'use'),
@@ -193,21 +196,25 @@ async function main() {
     }
     case 'inject': {
       const run = Run.open(runName());
-      const at = required(values.at, 'at');
-      if (ordOf(at, run.scenario.calendar) <= run.lastOrd())
+      const cal = run.scenario.calendar;
+      const at = values.at ?? labelOf(run.lastOrd() + 1, cal);
+      if (ordOf(at, cal) <= run.lastOrd())
         fail(`Turn ${at} has happened. Give a later turn.`);
-      checkInjectSender(run.scenario, required(values.from, 'from'));
-      run.info.injects.push({
+      if (values.until && ordOf(values.until, cal) <= ordOf(at, cal))
+        fail('--until must be after --at.');
+      const inj = Inject.parse({
         at,
-        mail: {
-          from: required(values.from, 'from'),
-          to: required(values.to, 'to'),
-          subject: required(values.subject, 'subject'),
-          body: required(values.body, 'body'),
-        },
+        until: values.until,
+        kind: required(values.kind, 'kind'),
+        org: required(values.org, 'org'),
+        note: values.note ?? '',
       });
+      checkInject(run.scenario, inj);
+      run.info.injects.push(inj);
       run.saveInfo();
-      console.log(`Mail is scheduled for ${at}.`);
+      console.log(
+        `${inj.kind} on ${inj.org} is scheduled from ${at}${inj.until ? ` until ${inj.until}` : ''}.`,
+      );
       return;
     }
     case 'compel': {
@@ -255,7 +262,7 @@ async function main() {
     }
     case 'cost': {
       const run = Run.open(runName());
-      const by = (values.by ?? 'seat') as 'seat' | 'actor' | 'role' | 'company';
+      const by = (values.by ?? 'seat') as 'seat' | 'actor' | 'role' | 'org';
       const rows = costReport(run, by);
       if (!rows.length) {
         console.log('No model calls yet.');

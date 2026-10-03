@@ -39,16 +39,34 @@ export function workerSession(run: Run, seatId: string) {
     const { state } = cached;
     const ord = state.ord + 1;
     const label = labelOf(ord, run.scenario.calendar);
-    const start = new Ops(state.vfs.clone(), run.objects, ord);
-    turnStart(run, start, label);
+    // Preview the turn start on a copy: system events and released mail.
+    const preview = state.clone();
+    turnStart(
+      run,
+      preview,
+      new Ops(preview.vfs, run.objects, ord, preview.system),
+      label,
+    );
+    const hostDown = !!preview.system.get(seat.host)?.has('host.down');
     const session = new Session(
       seat,
       run.scenario,
       label,
       ord,
-      start.vfs.clone(),
+      preview.vfs.clone(),
       run.objects,
+      preview.system,
     );
+    if (hostDown) {
+      session.endTurn('', 'next_turn'); // nobody can log in to a host that is down
+      return {
+        session,
+        state,
+        path: pendingPathOf(run.dir, label, seat.id),
+        did: [] as string[],
+        hostDown,
+      };
+    }
     // Compelled calls first, as in the engine. They are not the agent's, so
     // they never go to the pending file. See REQ-QC-016.
     const did = await runCompelled(session, compelledFor(run, label, seat.id));
@@ -61,11 +79,16 @@ export function workerSession(run: Run, seatId: string) {
         await session.call(c.tool, c.args);
       }
     }
-    return { session, state, path, did };
+    return { session, state, path, did, hostDown };
   };
 
   const call = async (tool: string, args: unknown) => {
-    const { session, path } = await open();
+    const { session, path, hostDown } = await open();
+    if (hostDown)
+      return {
+        ok: false,
+        text: `Host ${seat.org.host} is down. Nobody can log in until it is up again.`,
+      };
     if (session.done)
       return {
         ok: false,

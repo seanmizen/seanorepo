@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { Rule } from '../cast.ts';
 import { runUntil } from '../engine.ts';
 import { Run } from '../run.ts';
-import { checkInjectSender, seatsOf } from '../scenario.ts';
+import { checkInject, Inject, SYSTEM_KINDS, seatsOf } from '../scenario.ts';
 import { labelOf, ordOf } from '../time.ts';
 import { costReport, playback, retake, statusLines } from '../timeline.ts';
 import { TOOLS } from '../tools/index.ts';
@@ -91,12 +91,12 @@ export async function serveDirector(initial: Run) {
     {
       description:
         'Read a file or list a folder in the world at the last turn. The director has no permission limits.',
-      inputSchema: { company: z.string(), path: z.string() },
+      inputSchema: { org: z.string(), path: z.string() },
     },
-    guard(({ company, path }: { company: string; path: string }) => {
+    guard(({ org, path }: { org: string; path: string }) => {
       const r = reopen();
-      const c = r.scenario.companies.find((x) => x.id === company);
-      if (!c) throw new Error(`Company "${company}" does not exist.`);
+      const c = r.scenario.orgs.find((x) => x.id === org);
+      if (!c) throw new Error(`Organisation "${org}" does not exist.`);
       const host = `${c.id}/${c.host}`;
       const state = r.load();
       const p = normalize(path);
@@ -112,38 +112,38 @@ export async function serveDirector(initial: Run) {
   );
 
   server.registerTool(
-    'inject_mail',
+    'inject',
     {
       description:
-        'Schedule an email from outside the simulation, for example from a customer. Without "at", it arrives at the start of the next turn. For mail from a person in the simulation, use compel.',
+        'Schedule a system event on one organisation\'s host: host.down, mail.down or disk.full. It starts at "at" (default: the next turn) and ends at the start of "until". A system event never acts as a person. To make a person act, use compel.',
       inputSchema: {
+        kind: z.enum(SYSTEM_KINDS),
+        org: z.string(),
         at: z.string().optional(),
-        from: z.string(),
-        to: z.string(),
-        subject: z.string(),
-        body: z.string(),
+        until: z.string().optional(),
+        note: z.string().default(''),
       },
     },
     guard(
       (a: {
+        kind: (typeof SYSTEM_KINDS)[number];
+        org: string;
         at?: string;
-        from: string;
-        to: string;
-        subject: string;
-        body: string;
+        until?: string;
+        note: string;
       }) => {
         const r = reopen();
         const cal = r.scenario.calendar;
         const at = a.at ?? labelOf(r.lastOrd() + 1, cal);
         if (ordOf(at, cal) <= r.lastOrd())
           throw new Error(`Turn ${at} has happened. Give a later turn.`);
-        checkInjectSender(r.scenario, a.from);
-        r.info.injects.push({
-          at,
-          mail: { from: a.from, to: a.to, subject: a.subject, body: a.body },
-        });
+        if (a.until && ordOf(a.until, cal) <= ordOf(at, cal))
+          throw new Error('"until" must be after "at".');
+        const inj = Inject.parse({ ...a, at });
+        checkInject(r.scenario, inj);
+        r.info.injects.push(inj);
         r.saveInfo();
-        return `Mail is scheduled for ${at}.`;
+        return `${inj.kind} on ${inj.org} is scheduled from ${at}${inj.until ? ` until ${inj.until}` : ''}.`;
       },
     ),
   );
@@ -152,7 +152,7 @@ export async function serveDirector(initial: Run) {
     'compel',
     {
       description:
-        'Make a seat run one tool at the start of a turn, in its own session. Use this for mail from a person in the simulation, so that the mail is in their sent folder. Without "at", it runs in the next turn.',
+        'Make a seat run one tool at the start of a turn, in its own session. The action is real: for example, a compelled mail is in the sent folder of the sender. Without "at", it runs in the next turn.',
       inputSchema: {
         seat: z.string(),
         tool: z.string(),
@@ -190,11 +190,11 @@ export async function serveDirector(initial: Run) {
     'recast',
     {
       description:
-        'Give seats to a different actor or tier, from the next turn. Match by user, company or role.',
+        'Give seats to a different actor or tier, from the next turn. Match by user, org or role.',
       inputSchema: {
         use: z.string(),
         user: z.string().optional(),
-        company: z.string().optional(),
+        org: z.string().optional(),
         role: z.string().optional(),
         from: z.string().optional(),
         until: z.string().optional(),
@@ -204,14 +204,14 @@ export async function serveDirector(initial: Run) {
       (a: {
         use: string;
         user?: string;
-        company?: string;
+        org?: string;
         role?: string;
         from?: string;
         until?: string;
       }) => {
         const r = reopen();
         const rule = Rule.parse({
-          match: { user: a.user, company: a.company, role: a.role },
+          match: { user: a.user, org: a.org, role: a.role },
           use: a.use,
           from: a.from,
           until: a.until,
@@ -248,10 +248,10 @@ export async function serveDirector(initial: Run) {
     {
       description: 'Show model cost so far.',
       inputSchema: {
-        by: z.enum(['seat', 'actor', 'role', 'company']).default('seat'),
+        by: z.enum(['seat', 'actor', 'role', 'org']).default('seat'),
       },
     },
-    guard(({ by }: { by: 'seat' | 'actor' | 'role' | 'company' }) => {
+    guard(({ by }: { by: 'seat' | 'actor' | 'role' | 'org' }) => {
       const rows = costReport(reopen(), by);
       if (!rows.length) return 'No model calls yet.';
       return rows

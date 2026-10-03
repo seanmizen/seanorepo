@@ -1,6 +1,7 @@
-// Scenario files: the companies, their people and the seed files. A scenario
-// says who exists. It never names a model: that is the cast's job.
-// See REQ-QC-006.
+// Scenario files: the organisations, their people and the seed files. A
+// scenario says who exists. It never names a model: that is the cast's job
+// (REQ-QC-006). The world is closed: every sender is a person in an
+// organisation in the scenario (REQ-QC-017).
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -28,7 +29,14 @@ const SeedFile = z.object({
   dir: z.boolean().default(false),
 });
 
-const Company = z.object({
+/**
+ * Kinds of organisation. Only `company` exists now. `population` (many
+ * generated people) and `provider` (hosts other people's mailboxes) follow.
+ */
+const ORG_KINDS = ['company'] as const;
+
+const Org = z.object({
+  kind: z.enum(ORG_KINDS).default('company'),
   name: z.string(),
   domain: z.string(),
   host: z.string(),
@@ -37,18 +45,28 @@ const Company = z.object({
   people: z.array(Person),
   files: z.array(SeedFile).default([]),
 });
-export type Company = z.infer<typeof Company> & { id: string };
+export type Org = z.infer<typeof Org> & { id: string };
 
-const MailInject = z.object({
-  from: z.string(),
-  to: z.union([z.string(), z.array(z.string())]),
-  cc: z.union([z.string(), z.array(z.string())]).optional(),
-  subject: z.string(),
-  body: z.string(),
-});
-export type MailInject = z.infer<typeof MailInject>;
-
-const Inject = z.object({ at: z.string(), mail: MailInject });
+/**
+ * A system event: the physics of the world, never a person. It acts on one
+ * organisation's host from turn `at`, and ends at the start of turn `until`.
+ * Without `until`, it lasts to the end of the run. See REQ-QC-017.
+ *
+ * - host.down: nobody on the host can log in. Mail to and from it waits.
+ * - mail.down: people work, but mail to and from the host waits.
+ * - disk.full: writes on the host fail. Mail to it waits.
+ */
+export const SYSTEM_KINDS = ['host.down', 'mail.down', 'disk.full'] as const;
+export type SystemKind = (typeof SYSTEM_KINDS)[number];
+export const Inject = z
+  .object({
+    at: z.string(),
+    until: z.string().optional(),
+    kind: z.enum(SYSTEM_KINDS),
+    org: z.string(),
+    note: z.string().default(''),
+  })
+  .strict();
 export type Inject = z.infer<typeof Inject>;
 
 /**
@@ -87,7 +105,7 @@ const ScenarioFile = z.object({
   turnMinutes: z.number().optional(),
   /** Seats that run at the same time inside one turn. */
   concurrency: z.number().default(4),
-  companies: z.array(z.string()),
+  orgs: z.array(z.string()),
   injects: z.array(Inject).default([]),
   compel: z.array(Compel).default([]),
 });
@@ -99,7 +117,7 @@ export interface Scenario {
   calendar: Calendar;
   turnMinutes: number;
   concurrency: number;
-  companies: Company[];
+  orgs: Org[];
   injects: Inject[];
   compel: Compel[];
 }
@@ -115,14 +133,16 @@ export function loadScenario(dir: string): Scenario {
     );
   const s = ScenarioFile.parse(readYaml(file));
   const calendar = { ...DEFAULT_CALENDAR, ...s.calendar };
-  const companies = s.companies.map((id) => ({
-    id,
-    ...Company.parse(readYaml(join(dir, 'companies', `${id}.yaml`))),
-  }));
+  const orgs = s.orgs.map((id) => {
+    const file = join(dir, 'orgs', `${id}.yaml`);
+    if (!existsSync(file))
+      throw new Error(`Organisation file ${file} does not exist.`);
+    return { id, ...Org.parse(readYaml(file)) };
+  });
   const domains = new Set<string>();
-  for (const c of companies) {
+  for (const c of orgs) {
     if (domains.has(c.domain))
-      throw new Error(`Two companies use the domain ${c.domain}.`);
+      throw new Error(`Two organisations use the domain ${c.domain}.`);
     domains.add(c.domain);
   }
   const scenario: Scenario = {
@@ -132,51 +152,55 @@ export function loadScenario(dir: string): Scenario {
     calendar,
     turnMinutes: s.turnMinutes ?? calendar.slotMinutes,
     concurrency: s.concurrency,
-    companies,
+    orgs,
     injects: s.injects,
     compel: s.compel,
   };
-  for (const inj of s.injects) checkInjectSender(scenario, inj.mail.from);
+  for (const inj of s.injects) checkInject(scenario, inj);
   const seats = new Set(seatsOf(scenario).map((x) => x.id));
   for (const c of s.compel) {
     if (!seats.has(c.seat))
       throw new Error(
-        `A compel entry names seat ${c.seat}. No company has that person.`,
+        `A compel entry names seat ${c.seat}. No organisation has that person.`,
       );
   }
   return scenario;
 }
 
-/**
- * Injected mail comes from outside the simulation. Mail from a person inside
- * it must come from that person's own action: use compel. See REQ-QC-015.
- */
-export function checkInjectSender(s: Scenario, from: string) {
-  const domain = from.slice(from.lastIndexOf('@') + 1).toLowerCase();
-  const company = s.companies.find((c) => c.domain === domain);
-  if (company) {
+/** Check that a system event names a real organisation and real turns. */
+export function checkInject(s: Scenario, inj: Inject) {
+  if (!s.orgs.some((o) => o.id === inj.org)) {
     throw new Error(
-      `Mail from ${from} cannot be injected: ${domain} belongs to ${company.name}. Use compel, so that the sender sends the mail and keeps a copy.`,
+      `A system event names organisation "${inj.org}". The scenario has no such organisation.`,
     );
   }
 }
 
-export const hostOf = (c: Company) => `${c.id}/${c.host}`;
-export const seatOf = (c: Company, p: Person) => `${p.user}@${c.domain}`;
+/** The mail directory: the host that holds the mailboxes of a domain. */
+export function mailHostOf(
+  s: Scenario,
+  domain: string,
+): { org: Org; host: string } | undefined {
+  const org = s.orgs.find((o) => o.domain === domain.toLowerCase());
+  return org ? { org, host: hostOf(org) } : undefined;
+}
+
+export const hostOf = (c: Org) => `${c.id}/${c.host}`;
+export const seatOf = (c: Org, p: Person) => `${p.user}@${c.domain}`;
 
 export interface Seat {
   id: string; // user@domain
-  company: Company;
+  org: Org;
   person: Person;
   host: string;
 }
 
 export function seatsOf(s: Scenario): Seat[] {
-  return s.companies
+  return s.orgs
     .flatMap((c) =>
       c.people.map((p) => ({
         id: seatOf(c, p),
-        company: c,
+        org: c,
         person: p,
         host: hostOf(c),
       })),

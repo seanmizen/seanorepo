@@ -15,9 +15,13 @@ Brindle & Hart Ltd sells office supplies. It has five staff on one host,
 | tom@brindlehart.example | finance | Owns `/srv/finance` |
 | maria@brindlehart.example | sales | Owns `/srv/sales` |
 | sophie@brindlehart.example | sales | Starts on Tuesday. No account at genesis. |
+| graham@cartwright-stationers.example | buyer | A customer. Cartwright Stationers is its own organisation, with host `cw-mail01`. |
 
-On Monday morning, Priya asks Dave to set up Sophie's account. A customer
-asks Maria for a quote. Priya asks Tom for Q1 revenue.
+On Monday morning, Priya asks Dave to set up Sophie's account. Graham at
+Cartwright Stationers asks Maria for a quote. Priya asks Tom for Q1 revenue.
+The scenario makes Priya and Graham send these mails themselves (compel), so
+the mails are in their sent folders. From 11:00 to 11:30 the mail server is
+down (a system event), so mail waits in the queue.
 
 ## Casts
 

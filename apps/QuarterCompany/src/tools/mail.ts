@@ -131,7 +131,7 @@ export const MAIL_TOOLS = [
           date: s.clock,
           body: a.body,
         },
-        s.seat.company.domain,
+        s.seat.org.domain,
       );
       ensureMailbox(s.ops, s.host, s.user, s.dir().primaryGroup(s.user));
       s.ops.write(
