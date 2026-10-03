@@ -12,7 +12,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { z } from 'zod';
 import { pendingPathOf } from '../brains/index.ts';
 import { resolveCast } from '../cast.ts';
-import { turnStart } from '../engine.ts';
+import { compelledFor, runCompelled, turnStart } from '../engine.ts';
 import { Ops } from '../ops.ts';
 import { briefing, systemPrompt } from '../prompt.ts';
 import type { Run, SimState } from '../run.ts';
@@ -49,6 +49,9 @@ export function workerSession(run: Run, seatId: string) {
       start.vfs.clone(),
       run.objects,
     );
+    // Compelled calls first, as in the engine. They are not the agent's, so
+    // they never go to the pending file. See REQ-QC-016.
+    const did = await runCompelled(session, compelledFor(run, label, seat.id));
     const path = pendingPathOf(run.dir, label, seat.id);
     if (existsSync(path)) {
       for (const line of readFileSync(path, 'utf8')
@@ -58,7 +61,7 @@ export function workerSession(run: Run, seatId: string) {
         await session.call(c.tool, c.args);
       }
     }
-    return { session, state, path };
+    return { session, state, path, did };
   };
 
   const call = async (tool: string, args: unknown) => {
@@ -75,7 +78,7 @@ export function workerSession(run: Run, seatId: string) {
   };
 
   const brief = async () => {
-    const { session, state } = await open();
+    const { session, state, did } = await open();
     const unread = session.vfs.children(
       seat.host,
       `/var/mail/${seat.person.user}/new`,
@@ -95,7 +98,7 @@ export function workerSession(run: Run, seatId: string) {
       casting.actor.provider === 'external'
         ? ''
         : `\n\nWARNING: the cast gives this seat to actor "${casting.actorName}", not to an external actor. The engine ignores your calls.`;
-    return `${systemPrompt(seat, run.scenario.calendar.slotMinutes, run.scenario.turnMinutes)}\n\n${briefing(session, state.seats.get(seat.id), unread, state.thoughts.get(seat.id))}${warn}`;
+    return `${systemPrompt(seat, run.scenario.calendar.slotMinutes, run.scenario.turnMinutes)}\n\n${briefing(session, state.seats.get(seat.id), unread, state.thoughts.get(seat.id), did)}${warn}`;
   };
 
   return { seat, call, brief, open };

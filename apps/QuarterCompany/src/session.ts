@@ -120,12 +120,17 @@ export class Session {
     this.done = true;
   }
 
-  async call(name: string, rawArgs: unknown): Promise<ToolResult> {
+  async call(
+    name: string,
+    rawArgs: unknown,
+    opts: { compelled?: 'scenario' | 'director' } = {},
+  ): Promise<ToolResult> {
     const { result, staged } = this.stage(name, rawArgs ?? {});
     // The call goes in the journal before its effects, so playback reads in order.
     this.ops.emit(this.seat.id, {
       type: 'tool.call',
       seat: this.seat.id,
+      ...(opts.compelled ? { compelled: opts.compelled } : {}),
       tool: name,
       args: rawArgs ?? {},
       ok: result.ok,

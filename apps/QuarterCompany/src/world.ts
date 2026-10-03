@@ -142,8 +142,8 @@ export function deliver(ops: Ops, s: Scenario, env: Envelope, bounces = true) {
     const { local, domain } = splitAddress(rcpt);
     const company = s.companies.find((c) => c.domain === domain);
     if (!company) {
-      ops.mkdirp('mta', INTERNET_HOST, `/${rcpt}`, ROOT_DIR);
-      ops.write('mta', INTERNET_HOST, `/${rcpt}/${env.id}.eml`, text, {
+      ops.mkdirp('mta', INTERNET_HOST, `/${rcpt}/inbox`, ROOT_DIR);
+      ops.write('mta', INTERNET_HOST, `/${rcpt}/inbox/${env.id}.eml`, text, {
         ...ROOT_DIR,
         mode: 0o644,
       });
@@ -238,6 +238,15 @@ export function injectMail(
     subject: m.subject,
     hash,
   });
+  // The sender is outside the simulation: keep its sent copy on the internet host.
+  ops.mkdirp('mta', INTERNET_HOST, `/${m.from.toLowerCase()}/sent`, ROOT_DIR);
+  ops.write(
+    'mta',
+    INTERNET_HOST,
+    `/${m.from.toLowerCase()}/sent/${id}.eml`,
+    text,
+    { ...ROOT_DIR, mode: 0o644 },
+  );
   deliver(ops, s, {
     id,
     hash,

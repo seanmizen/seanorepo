@@ -29,7 +29,13 @@ import {
 } from './cast.ts';
 import type { JournalEvent, StateEvent, Wake } from './events.ts';
 import { ObjectStore } from './objects.ts';
-import { type Inject, loadScenario, type Scenario } from './scenario.ts';
+import {
+  type Compel,
+  checkInjectSender,
+  type Inject,
+  loadScenario,
+  type Scenario,
+} from './scenario.ts';
 import { describeTurn, journalPathOf, labelOf, ordOf } from './time.ts';
 import { modeString, Vfs } from './vfs.ts';
 
@@ -40,6 +46,8 @@ export interface RunInfo {
   parent?: { run: string; turn: string };
   /** Mail that the director scheduled during the run. */
   injects: Inject[];
+  /** Actions that the director compelled during the run. */
+  compel?: Compel[];
   /** Cast rules from the director. The next turn journals them. */
   pendingCastRules?: Rule[];
 }
@@ -120,6 +128,8 @@ export class Run {
     this.scenario = loadScenario(join(dir, 'scenario'));
     this.models = loadModels(join(dir, 'scenario'));
     this.castFile = loadCast(join(dir, 'scenario'), this.info.cast);
+    for (const inj of this.info.injects)
+      checkInjectSender(this.scenario, inj.mail.from);
   }
 
   static runsDir(): string {

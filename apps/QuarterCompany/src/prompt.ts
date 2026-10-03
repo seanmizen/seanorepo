@@ -38,6 +38,7 @@ export function briefing(
   prev: SeatState | undefined,
   unread: number,
   thoughts: { label: string; text: string }[] = [],
+  compelled: string[] = [],
 ): string {
   const recent = thoughts.slice(-RECALLED_THOUGHTS);
   return [
@@ -47,6 +48,12 @@ export function briefing(
     prev
       ? `Your note from your last turn: "${prev.note || '(no note)'}"`
       : 'This is your first turn.',
+    ...(compelled.length
+      ? [
+          'At the start of this turn, you did these things:',
+          ...compelled.map((c) => `- ${c}`),
+        ]
+      : []),
     ...(recent.length
       ? [
           'Your recent private thoughts:',

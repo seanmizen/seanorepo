@@ -12,6 +12,7 @@ import { Rule } from './cast.ts';
 import { genesis, runUntil } from './engine.ts';
 import { exportHtml } from './export.ts';
 import { Run } from './run.ts';
+import { checkInjectSender, seatsOf } from './scenario.ts';
 import { labelOf, ordOf, turnsPerDay } from './time.ts';
 import {
   costReport,
@@ -20,6 +21,7 @@ import {
   retake,
   statusLines,
 } from './timeline.ts';
+import { TOOLS } from './tools/index.ts';
 
 const HELP = `qc - QuarterCompany, a turn-based workplace simulator
 
@@ -39,7 +41,10 @@ Usage: qc <command> [options]
                          [--from <turn>] [--until <turn>]
                          Add a cast rule. It applies from the next turn.
   inject <run> --at <turn> --from <addr> --to <addr> --subject <s> --body <b>
-                         Schedule an email into the world.
+                         Schedule an email from outside the simulation.
+  compel <run> --seat <id> --tool <name> [--args <json>] [--at <turn>]
+                         Make a seat run a tool at the start of a turn.
+                         Use this for mail from a person in the simulation.
   materialize <run> --at <turn> --out <dir>
                          Build the world at a turn into a folder.
   export <run> [--out <file>] [--fragment]
@@ -78,6 +83,8 @@ const { positionals, values } = parseArgs({
     out: { type: 'string' },
     by: { type: 'string' },
     fragment: { type: 'boolean' },
+    tool: { type: 'string' },
+    args: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
 });
@@ -189,6 +196,7 @@ async function main() {
       const at = required(values.at, 'at');
       if (ordOf(at, run.scenario.calendar) <= run.lastOrd())
         fail(`Turn ${at} has happened. Give a later turn.`);
+      checkInjectSender(run.scenario, required(values.from, 'from'));
       run.info.injects.push({
         at,
         mail: {
@@ -200,6 +208,32 @@ async function main() {
       });
       run.saveInfo();
       console.log(`Mail is scheduled for ${at}.`);
+      return;
+    }
+    case 'compel': {
+      const run = Run.open(runName());
+      const cal = run.scenario.calendar;
+      const at = values.at ?? labelOf(run.lastOrd() + 1, cal);
+      if (ordOf(at, cal) <= run.lastOrd())
+        fail(`Turn ${at} has happened. Give a later turn.`);
+      const seat = required(values.seat, 'seat');
+      if (!seatsOf(run.scenario).some((s) => s.id === seat))
+        fail(`Seat ${seat} does not exist.`);
+      const tool = required(values.tool, 'tool');
+      if (!TOOLS.some((t) => t.name === tool))
+        fail(`Tool "${tool}" does not exist.`);
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(values.args ?? '{}');
+      } catch {
+        fail('--args is not valid JSON.');
+      }
+      run.info.compel = [
+        ...(run.info.compel ?? []),
+        { at, seat, do: [{ tool, args }] },
+      ];
+      run.saveInfo();
+      console.log(`${seat} will run ${tool} at the start of ${at}.`);
       return;
     }
     case 'materialize': {
