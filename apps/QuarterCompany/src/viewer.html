@@ -20,6 +20,9 @@
   --bad: #a22b2b;
   --sleep: #4f5d96;
   --chg: #fff0b8;
+  --inject: #7b3a94;
+  --inject-bg: #f4e9f8;
+  --card: #fffffb;
   --font-display: 'IBM Plex Sans Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
   --font-body: 'IBM Plex Sans', 'Helvetica Neue', Arial, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
@@ -28,13 +31,13 @@
   :root:not([data-theme="light"]) {
     --paper: #111613; --bar: #17201a; --panel: #151b17; --ink: #dce6dd; --muted: #93a396;
     --rule: #2a362e; --accent: #7cc39a; --accent-ink: #0d1510; --hole: #0b0f0c;
-    --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; color-scheme: dark;
+    --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; --inject: #d6a0ec; --inject-bg: #281c2e; --card: #1a211c; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #111613; --bar: #17201a; --panel: #151b17; --ink: #dce6dd; --muted: #93a396;
   --rule: #2a362e; --accent: #7cc39a; --accent-ink: #0d1510; --hole: #0b0f0c;
-  --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; color-scheme: dark;
+  --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; --inject: #d6a0ec; --inject-bg: #281c2e; --card: #1a211c; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { background: var(--paper); color: var(--ink); }
@@ -138,6 +141,30 @@ main {
 .file h3 { margin: 0 0 4px; font: 600 13px/1.3 var(--font-mono); overflow-wrap: anywhere; }
 .ls { font: 11.5px/1.4 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
 .removed { font: 12px/1.5 var(--font-mono); color: var(--bad); }
+/* Mail and documents, printed into the log so a narrator can read them on screen. */
+.mail { margin-top: 6px; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 12px; max-width: 72ch; }
+.mail-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 10px; font: 12px/1.5 var(--font-mono); color: var(--muted); padding-bottom: 6px; border-bottom: 1px dashed var(--rule); }
+.mail-head dt { font-weight: 600; }
+.mail-head dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.mail-head dd.subj { font-weight: 600; }
+.mail-body { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13.5px/1.55 var(--font-body); color: var(--ink); }
+.mail-kind { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.doc { margin-top: 6px; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 10px; max-width: 72ch; }
+.doc pre { margin: 0; }
+.inbox { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; max-width: 72ch; }
+.inbox li { display: grid; grid-template-columns: 3.5em minmax(0, 1fr); gap: 8px; font-size: 12px; }
+.inbox .new { color: var(--accent); font-weight: 600; }
+
+/* Scenario mail has its own colour: the scenario wrote it, not a seat. */
+.log > li.inject { background: var(--inject-bg); box-shadow: inset 3px 0 0 var(--inject); }
+.mail.inject { border-color: var(--inject); box-shadow: inset 3px 0 0 var(--inject); }
+.badge-inject { position: relative; display: inline-block; font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--inject); border: 1px solid var(--inject); border-radius: 3px; padding: 3px 5px; cursor: help; margin-right: 6px; }
+.badge-inject:hover::after, .badge-inject:focus::after {
+  content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 6px); z-index: 4; width: min(320px, 70vw);
+  background: var(--panel); color: var(--ink); border: 1px solid var(--inject); border-radius: 4px; padding: 8px 10px;
+  font: 12px/1.45 var(--font-body); letter-spacing: 0; text-transform: none; white-space: normal; box-shadow: 0 4px 14px rgba(0,0,0,.15);
+}
+.legend { display: inline-flex; align-items: center; gap: 4px; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 
@@ -167,7 +194,7 @@ main {
   <section aria-labelledby="log-h" style="min-width:0">
     <h2 class="pane-title" id="log-h">Turn log</h2>
     <div class="printout">
-      <div class="printout-head"><span id="log-title"></span><span id="log-side"></span></div>
+      <div class="printout-head"><span id="log-title"></span><span class="legend"><span class="badge-inject" tabindex="0" data-tip="Scenario mail: the scenario file schedules this mail to start the story. No seat wrote it, even when it carries a seat's address. Director mail is the same thing, added during the run.">Scenario mail</span><span id="log-side"></span></span></div>
       <ol class="log" id="log"></ol>
     </div>
   </section>
@@ -342,15 +369,76 @@ main {
     $('staff').replaceChildren(...nodes);
   }
 
-  function openMessage(id, prefer, fs) {
-    const name = '/' + id + '.eml';
-    let best = null;
-    for (const [k] of fs) {
-      if (!k.endsWith(name)) continue;
-      const [host, path] = [k.slice(0, k.indexOf(':')), k.slice(k.indexOf(':') + 1)];
-      if (!best || (prefer && path.includes('/' + prefer + '/'))) best = { host, path };
+
+
+  // ----- mail and documents in the log -----
+  const INJECT_TIP = {
+    scenario: 'Scenario mail: the scenario file schedules this mail to start the story. No seat wrote it, even though it carries the address ',
+    director: 'Director mail: the director added this mail during the run. No seat wrote it, even though it carries the address ',
+  };
+  const injectBadge = (source, from) =>
+    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': INJECT_TIP[source || 'scenario'] + from + '.' }, (source || 'scenario') + ' mail');
+  function parseMail(text) {
+    const cut = text.indexOf('\n\n');
+    const head = cut === -1 ? text : text.slice(0, cut);
+    const hd = {};
+    for (const line of head.split('\n')) {
+      const c = line.indexOf(':');
+      if (c > 0) hd[line.slice(0, c).toLowerCase()] = line.slice(c + 1).trim();
     }
-    if (best) { selected = best; render(); $('file').scrollIntoView({ block: 'nearest' }); }
+    return { from: hd.from || '', to: hd.to || '', cc: hd.cc || '', subject: hd.subject || '', date: hd.date || '', body: cut === -1 ? '' : text.slice(cut + 2).replace(/\n+$/, '') };
+  }
+  function mailCard(m, kind, inject) {
+    const rows = [['From', m.from], ['To', m.to], m.cc ? ['Cc', m.cc] : null, m.date ? ['Date', m.date] : null, ['Subject', m.subject]].filter(Boolean);
+    return h('div', { class: 'mail' + (inject ? ' inject' : '') },
+      kind ? h('div', { class: 'mail-kind' }, kind) : null,
+      h('dl', { class: 'mail-head' }, ...rows.flatMap(([k, v]) => [h('dt', null, k), h('dd', { class: k === 'Subject' ? 'subj' : null }, v)])),
+      h('div', { class: 'mail-body' }, m.body));
+  }
+  function messageText(id, fs) {
+    const name = '/' + id + '.eml';
+    for (const [k, n] of fs) if (k.endsWith(name) && n.hash && D.objects[n.hash] != null) return D.objects[n.hash];
+    return null;
+  }
+  const injectOf = new Map();
+  for (const t of D.turns) for (const e of t.events) if (e.type === 'inject') injectOf.set(e.messageId, e);
+  function docBlock(text) {
+    const lines = text.replace(/\n+$/, '').split('\n');
+    const pre = h('pre', null, text.replace(/\n+$/, ''));
+    if (lines.length <= 14) return h('div', { class: 'doc' }, pre);
+    return h('details', { class: 'doc' }, h('summary', null, lines.length + ' lines · show'), pre);
+  }
+  function toolDetail(e, fs, turnFs) {
+    const a = e.args || {};
+    if (!e.ok) return h('div', { class: 'fail' }, '✗ ' + e.result);
+    switch (e.tool) {
+      case 'list_mail': {
+        const items = e.result.split('\n').map((l) => l.match(/^(NEW )?\s*(\S+)\s+from (\S+)\s+"(.*)"$/)).filter(Boolean);
+        if (!items.length) return h('div', { class: 'dim' }, e.result);
+        return h('ul', { class: 'inbox' }, ...items.map((m) => h('li', null, h('span', { class: m[1] ? 'new' : 'dim' }, m[1] ? 'NEW' : 'read'), h('span', null, m[3] + ' · “' + m[4] + '”'))));
+      }
+      case 'read_mail': {
+        const text = messageText(a.id, turnFs) || e.result;
+        const inj = injectOf.get(a.id);
+        return h('div', null, inj ? h('div', { style: 'margin-top:4px' }, injectBadge(inj.source, inj.from)) : null, mailCard(parseMail(text), null, !!inj));
+      }
+      case 'send_mail': {
+        const list = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
+        return mailCard({ from: e.seat, to: list(a.to), cc: list(a.cc), subject: a.subject || '', body: String(a.body || '').replace(/\n+$/, '') }, 'Sent · delivered at the end of this turn');
+      }
+      case 'read_file':
+        return docBlock(e.result);
+      case 'write_file':
+      case 'append_file':
+        return docBlock(String(a.content || ''));
+      case 'end_turn':
+        return null;
+      case 'ls':
+      case 'whoami':
+        return h('details', null, h('summary', null, 'output'), h('pre', null, e.result));
+      default:
+        return h('div', { class: 'dim' }, e.result);
+    }
   }
 
   function renderLog(i, turn, fs) {
@@ -364,21 +452,21 @@ main {
       switch (e.type) {
         case 'tool.call': {
           spent.set(e.seat, (spent.get(e.seat) || 0) + e.minutes);
-          rows.push(h('li', null, time, h('div', null,
+          rows.push(h('li', null, time, h('div', { style: 'min-width:0' },
             who, h('span', { class: 'tool' }, e.tool), ' ', argSummary(e.tool, e.args), ' ', h('span', { class: 'mins' }, '(' + e.minutes + ' min)'),
-            e.ok ? null : h('div', { class: 'fail' }, '✗ ' + e.result),
-            e.ok && e.result && e.tool !== 'end_turn' ? h('details', null, h('summary', null, 'output'), h('pre', null, e.result)) : null,
+            toolDetail(e, fs, fs),
           )));
           break;
         }
         case 'mail.send':
-          rows.push(h('li', null, time, h('div', { class: 'dim' }, '↳ mail ' + e.messageId + ' queued for ', e.to.join(', '), ' · ',
-            h('button', { class: 'linkish', type: 'button', onclick: () => openMessage(e.messageId, short(e.seat), fs) }, 'open'))));
+          break; // the send_mail card shows the message
+        case 'inject': {
+          const text = (e.hash && D.objects[e.hash]) || messageText(e.messageId, fs);
+          rows.push(h('li', { class: 'inject' }, time, h('div', { style: 'min-width:0' },
+            injectBadge(e.source, e.from), 'arrives for ' + e.to.join(', '),
+            text ? mailCard(parseMail(text), null, true) : ' “' + e.subject + '”')));
           break;
-        case 'inject':
-          rows.push(h('li', null, time, h('div', null, h('span', { class: 'warn' }, 'MAIL IN '), e.from + ' → ' + e.to.join(', ') + ' “' + e.subject + '” · ',
-            h('button', { class: 'linkish', type: 'button', onclick: () => openMessage(e.messageId, short(e.to[0] || ''), fs) }, 'open'))));
-          break;
+        }
         case 'seat.end':
           if (e.note || turn.events.some((x) => x.type === 'tool.call' && x.seat === e.seat))
             rows.push(h('li', null, time, h('div', null, who, h('span', { class: e.wake === 'on_mail' ? 'sleep' : 'dim' }, e.wake === 'on_mail' ? 'sleeps until mail' : 'ends turn'), e.note ? ': “' + e.note + '”' : '')));

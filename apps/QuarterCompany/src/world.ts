@@ -215,6 +215,7 @@ export function injectMail(
   clock: string,
   m: MailInject,
   n: number,
+  source: 'scenario' | 'director',
 ) {
   const id = `${label}.inject.${n}`;
   const list = (v: string | string[] | undefined) =>
@@ -226,17 +227,20 @@ export function injectMail(
     { id, from: m.from, to, cc, subject: m.subject, date: clock, body: m.body },
     domain || 'invalid',
   );
+  const hash = ops.objects.put(text);
   ops.emit('director', {
     type: 'inject',
     kind: 'mail',
+    source,
     messageId: id,
     from: m.from,
     to: [...to, ...cc],
     subject: m.subject,
+    hash,
   });
   deliver(ops, s, {
     id,
-    hash: ops.objects.put(text),
+    hash,
     from: m.from,
     rcpts: [...new Set([...to, ...cc])],
   });

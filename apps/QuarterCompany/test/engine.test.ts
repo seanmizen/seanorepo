@@ -110,7 +110,7 @@ describe('nothing is permanently deleted', () => {
       .find(
         (e) => e.type === 'fs.write' && e.path === '/srv/finance/ledger.csv',
       );
-    expect(write && 'hash' in write && run.objects.get(write.hash)).toBe(
+    expect(write?.type === 'fs.write' && run.objects.get(write.hash)).toBe(
       'a,1\n',
     );
     expect(run.load().vfs.exists(HOST, '/srv/finance/ledger.csv')).toBe(false);

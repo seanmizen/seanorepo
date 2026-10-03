@@ -64,15 +64,19 @@ export type InfoEvent =
       messageId: string;
       to: string[];
       subject: string;
+      hash?: string; // object hash of the message text
     }
   | { type: 'mail.bounce'; messageId: string; to: string; reason: string }
   | {
       type: 'inject';
       kind: 'mail';
+      /** Who wrote the mail: the scenario file, or the director during the run. */
+      source?: 'scenario' | 'director';
       messageId: string;
       from: string;
       to: string[];
       subject: string;
+      hash?: string; // object hash of the message text
     }
   | { type: 'security'; seat: string; message: string };
 

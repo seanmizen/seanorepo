@@ -62,7 +62,7 @@ export function narrate(e: JournalEvent, verbose = false): string | undefined {
     case 'seat.skip':
       return verbose ? `  ${e.seat.padEnd(28)} 💤 ${e.reason}` : undefined;
     case 'inject':
-      return `  ✉ ${e.from} → ${e.to.join(', ')}: "${short(e.subject, 60)}" (injected)`;
+      return `  ✉ ${e.source ?? 'scenario'} mail, in the name of ${e.from} → ${e.to.join(', ')}: "${short(e.subject, 60)}"`;
     case 'mail.bounce':
       return `  ✉ bounce: ${e.messageId} to ${e.to} (${e.reason})`;
     case 'fs.conflict':
