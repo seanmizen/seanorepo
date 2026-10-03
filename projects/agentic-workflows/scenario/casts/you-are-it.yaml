@@ -1,0 +1,6 @@
+# You play the IT administrator through the qc-worker MCP server.
+# Everyone else follows the script.
+default: scripted
+rules:
+  - match: { role: it-admin }
+    use: external

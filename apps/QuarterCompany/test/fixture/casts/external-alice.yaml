@@ -1,0 +1,4 @@
+default: scripted
+rules:
+  - match: { user: alice@acme.example }
+    use: external

@@ -1,0 +1,2 @@
+# Everyone on a local model through Ollama. Free, and slow.
+default: local

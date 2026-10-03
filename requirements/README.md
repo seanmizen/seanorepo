@@ -77,6 +77,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `NETWORK` | `utils/debbie/2026-09-17/requirements/network.md` | debbie — tunnel ingress and route failover |
 | `ONBOARD` | `apps/inside/requirements/onboard.md` | inside — designer onboarding |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
+| `QC` | `apps/QuarterCompany/requirements/qc.md` | QuarterCompany — journal, filesystem, turns, casts |
 | `QUALITY` | `apps/inside/requirements/quality.md` | inside — testing conventions |
 | `SERVER` | `utils/debbie/2026-09-17/requirements/server.md` | debbie — provisioned host configuration |
 | `SLUG` | `apps/inside/requirements/slug.md` | inside — public slugs and their history |

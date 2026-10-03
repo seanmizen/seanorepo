@@ -1,0 +1,105 @@
+name: Brindle & Hart Ltd
+domain: brindlehart.example
+host: bh-mf01
+about: >
+  Brindle & Hart Ltd sells office supplies to businesses in the north of
+  England. It has five staff and one shared computer, bh-mf01.
+groups: [management, finance, sales]
+people:
+  - user: priya
+    name: Priya Shah
+    role: md
+    title: Managing Director
+    groups: [management]
+    persona: You run the company. You delegate work, and you expect short, clear replies.
+  - user: dave
+    name: Dave Okafor
+    role: it-admin
+    title: IT Administrator
+    groups: [wheel]
+    persona: >
+      You look after bh-mf01: user accounts, groups and file permissions. Follow
+      the IT policy in /srv/handbook/it-policy.md. Keep your runbook in your
+      home folder up to date.
+  - user: tom
+    name: Tom Fletcher
+    role: finance
+    title: Finance Manager
+    groups: [finance, management]
+    persona: You keep the ledger in /srv/finance. You are careful with numbers.
+  - user: maria
+    name: Maria Lopez
+    role: sales
+    title: Sales Lead
+    groups: [sales]
+    persona: >
+      You lead sales. Customers email you for quotes. Prices are in
+      /srv/sales/price-list.csv and open deals are in /srv/sales/pipeline.csv.
+  - user: sophie
+    name: Sophie Turner
+    role: sales
+    title: Sales Executive
+    groups: [sales]
+    provisioned: false
+    persona: You are new. This is your first week. Learn where things are, and help Maria.
+files:
+  - path: /srv/handbook/it-policy.md
+    owner: root
+    mode: "644"
+    content: |
+      # Brindle & Hart IT policy
+
+      1. Every person has their own account. Never share an account.
+      2. Give each account only the groups that its role needs:
+         - sales staff: sales
+         - finance staff: finance
+         - directors: management
+      3. Only the IT administrator is in the wheel group.
+      4. Lock the account of a person who leaves. Never delete it.
+      5. Shared files live in /srv/<team>. Team folders have mode 770.
+  - path: /home/dave/runbook.md
+    owner: dave
+    mode: "600"
+    content: |
+      # Dave's runbook
+
+      ## New starter
+      1. Read the request. Check the role.
+      2. useradd with the groups from the IT policy.
+      3. Email the manager when the account is ready.
+  - path: /srv/finance
+    dir: true
+    owner: tom
+    group: finance
+    mode: "770"
+  - path: /srv/finance/ledger-q1.csv
+    owner: tom
+    group: finance
+    mode: "660"
+    content: |
+      date,customer,invoice,amount_gbp
+      fy1-q1-d1,Cartwright Stationers,INV-1041,1840.00
+      fy1-q1-d1,Pennine Dental,INV-1042,312.50
+      fy1-q1-d1,Harrogate Council,INV-1043,4120.75
+  - path: /srv/sales
+    dir: true
+    owner: maria
+    group: sales
+    mode: "770"
+  - path: /srv/sales/price-list.csv
+    owner: maria
+    group: sales
+    mode: "664"
+    content: |
+      sku,item,unit,price_gbp
+      PAP-A4-80,A4 copier paper 80gsm,box of 5 reams,21.50
+      TON-HP59A,HP 59A toner cartridge,each,96.00
+      PEN-BLK-50,Black ballpoint pens,box of 50,7.80
+  - path: /srv/sales/pipeline.csv
+    owner: maria
+    group: sales
+    mode: "660"
+    content: |
+      customer,stage,value_gbp,owner
+      Pennine Dental,proposal,900.00,maria
+      Harrogate Council,negotiation,12500.00,maria

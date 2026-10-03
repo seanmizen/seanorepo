@@ -1,0 +1,56 @@
+name: brindle-and-hart
+description: >
+  Episode 1. Brindle & Hart is a small office-supplies firm with five staff.
+  A new sales executive starts on Tuesday. Nobody has made her account yet.
+calendar:
+  dayStart: "09:00"
+  dayEnd: "17:00"
+  slotMinutes: 15
+concurrency: 4
+companies:
+  - brindlehart
+injects:
+  - at: fy1-q1-d1-t1
+    mail:
+      from: priya@brindlehart.example
+      to: dave@brindlehart.example
+      cc: maria@brindlehart.example
+      subject: "New starter tomorrow: Sophie Turner (Sales)"
+      body: |
+        Hi Dave,
+
+        Sophie Turner joins the sales team tomorrow morning as a Sales Executive.
+        Please set up her account today so that she can start work at 9:00.
+        She needs the same access as Maria.
+
+        Thanks,
+        Priya
+  - at: fy1-q1-d1-t3
+    mail:
+      from: orders@cartwright-stationers.example
+      to: maria@brindlehart.example
+      subject: "Quote request: paper and toner"
+      body: |
+        Hello Maria,
+
+        Please can you quote for:
+          - 40 boxes of A4 copier paper (80gsm)
+          - 12 HP 59A toner cartridges
+
+        Delivery to our Leeds office by the end of next week.
+
+        Regards,
+        Graham Cartwright
+        Cartwright Stationers
+  - at: fy1-q1-d1-t5
+    mail:
+      from: priya@brindlehart.example
+      to: tom@brindlehart.example
+      subject: "Q1 revenue so far"
+      body: |
+        Tom,
+
+        Before the board call on Friday, please send me a short summary of Q1
+        revenue so far, by customer. One paragraph is fine.
+
+        Priya

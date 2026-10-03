@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Sean's personal polyglot monorepo: Yarn 4 workspaces under `apps/*` and
-`utils/*`. Node/React (RSBuild), Bun + Fastify backends, Go services, Zig. The
+Sean's personal polyglot monorepo: Yarn 4 workspaces under `apps/*`,
+`utils/*` and `projects/*`. Node/React (RSBuild), Bun + Fastify backends, Go services, Zig. The
 readme's philosophy applies: "this is mine, so I will commit wantonly".
 
 More instructions load only when they are relevant:
@@ -62,6 +62,8 @@ Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
 
 - `apps/` - one directory per site or service. Frontend and backend share a
   `docker-compose.yml`, and backends sit beside their frontends.
+- `projects/` - client and video projects. Each one is a workspace, for
+  example `projects/agentic-workflows` (it uses `apps/QuarterCompany`).
 - `utils/` - tooling. `utils/debbie/` provisions and deploys the home servers.
 - `infra/` - settings as code (OpenTofu). Apply only from `release`. Change these
   only here. `infra/cloudflare/`: zones, DNS, the tunnel. `infra/github/`:
