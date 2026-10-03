@@ -92,6 +92,7 @@ runs/<run>/
   objects/        content-addressed store: file versions and model payloads
   world/          the projection: <company>/<host>/... plus <host>.ls-lR
   pending/        calls from external agents, waiting for their turn
+  minds/          private thoughts per seat (derived, out of universe)
   .git            one commit and one tag per turn
 ```
 
@@ -137,6 +138,7 @@ servers use the same definitions.
 
 | Group | Tools |
 |---|---|
+| mind | `think_privately` |
 | workstation | `whoami`, `ls`, `read_file`, `write_file`, `append_file`, `mkdir`, `mv`, `rm`, `chmod`, `end_turn` |
 | mail | `list_mail`, `read_mail`, `send_mail` |
 | admin (wheel only) | `useradd`, `usermod`, `groupadd`, `chown`, `restore` |
@@ -167,6 +169,15 @@ Example `.mcp.json` entry:
   }
 }
 ```
+
+## Private thoughts
+
+`think_privately` keeps a thought that no person in the simulation can read,
+the IT administrator included (REQ-QC-014). A thought is a journal event, not
+a file in the world. It costs no minutes. The engine writes each seat's
+thoughts to `runs/<run>/minds/<seat>.md`, beside `world/`. A seat's briefing
+repeats its last 5 thoughts, so a seat remembers what it felt. The viewer shows
+thoughts in their own colour, and each staff card shows the latest one.
 
 ## Mail
 

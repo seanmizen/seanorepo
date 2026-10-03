@@ -2,7 +2,7 @@
 import type { z } from 'zod';
 import type { Session } from '../session.ts';
 
-export type Server = 'workstation' | 'mail' | 'admin';
+export type Server = 'workstation' | 'mail' | 'admin' | 'mind';
 
 export interface ToolDef<S extends z.ZodType = z.ZodType> {
   name: string;

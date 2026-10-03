@@ -23,6 +23,8 @@
   --inject: #7b3a94;
   --inject-bg: #f4e9f8;
   --card: #fffffb;
+  --thought: #8a5a12;
+  --thought-bg: #fbf3e4;
   --font-display: 'IBM Plex Sans Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
   --font-body: 'IBM Plex Sans', 'Helvetica Neue', Arial, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
@@ -31,13 +33,13 @@
   :root:not([data-theme="light"]) {
     --paper: #111613; --bar: #17201a; --panel: #151b17; --ink: #dce6dd; --muted: #93a396;
     --rule: #2a362e; --accent: #7cc39a; --accent-ink: #0d1510; --hole: #0b0f0c;
-    --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; --inject: #d6a0ec; --inject-bg: #281c2e; --card: #1a211c; color-scheme: dark;
+    --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; --inject: #d6a0ec; --inject-bg: #281c2e; --card: #1a211c; --thought: #e6c27e; --thought-bg: #241f15; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #111613; --bar: #17201a; --panel: #151b17; --ink: #dce6dd; --muted: #93a396;
   --rule: #2a362e; --accent: #7cc39a; --accent-ink: #0d1510; --hole: #0b0f0c;
-  --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; --inject: #d6a0ec; --inject-bg: #281c2e; --card: #1a211c; color-scheme: dark;
+  --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; --inject: #d6a0ec; --inject-bg: #281c2e; --card: #1a211c; --thought: #e6c27e; --thought-bg: #241f15; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { background: var(--paper); color: var(--ink); }
@@ -155,6 +157,20 @@ main {
 .inbox li { display: grid; grid-template-columns: 3.5em minmax(0, 1fr); gap: 8px; font-size: 12px; }
 .inbox .new { color: var(--accent); font-weight: 600; }
 
+/* Collapsed details: one summary line, click to open. */
+.fold { margin-top: 4px; }
+.fold > summary { cursor: pointer; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.fold > summary:hover { color: var(--ink); }
+.fold > summary .gist { color: var(--ink); }
+.log-tools { display: inline-flex; gap: 6px; }
+.btn.small { padding: 2px 8px; font-size: 11.5px; }
+
+/* Private thoughts: out of universe. Nobody in the company can read them. */
+.log > li.thought { background: var(--thought-bg); box-shadow: inset 3px 0 0 var(--thought); }
+.thinks { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--thought); border: 1px dotted var(--thought); border-radius: 3px; padding: 3px 5px; margin-right: 6px; }
+.thought-text { font-style: italic; color: var(--ink); }
+.seat .thought-line { font-size: 12px; font-style: italic; color: var(--thought); overflow-wrap: anywhere; }
+
 /* Scenario mail has its own colour: the scenario wrote it, not a seat. */
 .log > li.inject { background: var(--inject-bg); box-shadow: inset 3px 0 0 var(--inject); }
 .mail.inject { border-color: var(--inject); box-shadow: inset 3px 0 0 var(--inject); }
@@ -194,7 +210,7 @@ main {
   <section aria-labelledby="log-h" style="min-width:0">
     <h2 class="pane-title" id="log-h">Turn log</h2>
     <div class="printout">
-      <div class="printout-head"><span id="log-title"></span><span class="legend"><span class="badge-inject" tabindex="0" data-tip="Scenario mail: the scenario file schedules this mail to start the story. No seat wrote it, even when it carries a seat's address. Director mail is the same thing, added during the run.">Scenario mail</span><span id="log-side"></span></span></div>
+      <div class="printout-head"><span id="log-title"></span><span class="log-tools"><button class="btn small" id="expand" type="button">Expand all</button><button class="btn small" id="collapse" type="button">Collapse all</button></span><span class="legend"><span class="badge-inject" tabindex="0" data-tip="Scenario mail: the scenario file schedules this mail to start the story. No seat wrote it, even when it carries a seat's address. Director mail is the same thing, added during the run.">Scenario mail</span><span id="log-side"></span></span></div>
       <ol class="log" id="log"></ol>
     </div>
   </section>
@@ -301,6 +317,8 @@ main {
   let pos = 0;
   let selected = null; // { host, path }
   let timer = null;
+  let expandAll = false;
+  try { expandAll = localStorage.getItem('qc-expand') === '1'; } catch (_) {}
   const isQuiet = (t) => !t.events.some((e) => !['turn.start', 'turn.end', 'seat.end', 'seat.skip'].includes(e.type) || (e.type === 'seat.end' && e.note));
   function rebuildOrder(keepIdx) {
     order = D.turns.map((t, i) => i).filter((i) => quiet || i === 0 || !isQuiet(D.turns[i]));
@@ -342,6 +360,13 @@ main {
     renderFile(fs);
   }
 
+  function lastThought(seat, i) {
+    for (let j = i; j >= 0; j--) {
+      const ev = D.turns[j].events;
+      for (let k = ev.length - 1; k >= 0; k--) if (ev[k].type === 'thought' && ev[k].seat === seat) return ev[k].text;
+    }
+    return null;
+  }
   function lastNote(seat, i) {
     for (let j = i; j >= 0; j--) for (const e of D.turns[j].events) if (e.type === 'seat.end' && e.seat === seat && e.note) return { note: e.note, label: D.turns[j].label, now: j === i };
     return null;
@@ -364,6 +389,7 @@ main {
         h('div', { class: 'meter', role: 'img', 'aria-label': used + ' of ' + D.turnMinutes + ' minutes used' }, h('span', { style: 'width:' + Math.min(100, (used / D.turnMinutes) * 100) + '%' })),
         h('div', { class: 'meter-label' }, used + ' / ' + D.turnMinutes + ' min · ' + tools + ' tool call' + (tools === 1 ? '' : 's')),
         n ? h('div', { class: 'note' + (n.now ? '' : ' old') }, (n.now ? 'Note: ' : 'Last note (' + n.label + '): ') + n.note) : null,
+        (() => { const t = lastThought(s.id, i); return t ? h('div', { class: 'thought-line', title: 'Latest private thought' }, 'Thinks: “' + t + '”') : null; })(),
       );
     });
     $('staff').replaceChildren(...nodes);
@@ -402,44 +428,51 @@ main {
   }
   const injectOf = new Map();
   for (const t of D.turns) for (const e of t.events) if (e.type === 'inject') injectOf.set(e.messageId, e);
-  function docBlock(text) {
-    const lines = text.replace(/\n+$/, '').split('\n');
-    const pre = h('pre', null, text.replace(/\n+$/, ''));
-    if (lines.length <= 14) return h('div', { class: 'doc' }, pre);
-    return h('details', { class: 'doc' }, h('summary', null, lines.length + ' lines · show'), pre);
-  }
-  function toolDetail(e, fs, turnFs) {
+  const fold = (summary, body, cls) =>
+    h('details', { class: 'fold' + (cls ? ' ' + cls : ''), open: expandAll }, h('summary', null, ...[summary].flat()), body);
+  const docBlock = (text) => h('div', { class: 'doc' }, h('pre', null, text.replace(/\n+$/, '')));
+  const lineCount = (text) => text.replace(/\n+$/, '').split('\n').length;
+  const listOf = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
+  const gist = (t) => h('span', { class: 'gist' }, t);
+  // A tool's detail: a collapsed block with a one-line summary, or a short inline line.
+  function toolDetail(e, fs) {
     const a = e.args || {};
     if (!e.ok) return h('div', { class: 'fail' }, '✗ ' + e.result);
     switch (e.tool) {
       case 'list_mail': {
         const items = e.result.split('\n').map((l) => l.match(/^(NEW )?\s*(\S+)\s+from (\S+)\s+"(.*)"$/)).filter(Boolean);
         if (!items.length) return h('div', { class: 'dim' }, e.result);
-        return h('ul', { class: 'inbox' }, ...items.map((m) => h('li', null, h('span', { class: m[1] ? 'new' : 'dim' }, m[1] ? 'NEW' : 'read'), h('span', null, m[3] + ' · “' + m[4] + '”'))));
+        const fresh = items.filter((m) => m[1]).length;
+        return fold(['Inbox · ', gist(items.length + ' message' + (items.length === 1 ? '' : 's') + ', ' + fresh + ' new')],
+          h('ul', { class: 'inbox' }, ...items.map((m) => h('li', null, h('span', { class: m[1] ? 'new' : 'dim' }, m[1] ? 'NEW' : 'read'), h('span', null, m[3] + ' · “' + m[4] + '”')))));
       }
       case 'read_mail': {
-        const text = messageText(a.id, turnFs) || e.result;
+        const m = parseMail(messageText(a.id, fs) || e.result);
         const inj = injectOf.get(a.id);
-        return h('div', null, inj ? h('div', { style: 'margin-top:4px' }, injectBadge(inj.source, inj.from)) : null, mailCard(parseMail(text), null, !!inj));
+        return fold([inj ? injectBadge(inj.source, inj.from) : null, 'Email from ', gist(m.from + ' · “' + m.subject + '”')], mailCard(m, null, !!inj));
       }
-      case 'send_mail': {
-        const list = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
-        return mailCard({ from: e.seat, to: list(a.to), cc: list(a.cc), subject: a.subject || '', body: String(a.body || '').replace(/\n+$/, '') }, 'Sent · delivered at the end of this turn');
-      }
+      case 'send_mail':
+        return fold(['Email to ', gist(listOf(a.to) + ' · “' + (a.subject || '') + '”')],
+          mailCard({ from: e.seat, to: listOf(a.to), cc: listOf(a.cc), subject: a.subject || '', body: String(a.body || '').replace(/\n+$/, '') }, 'Sent · delivered at the end of this turn'));
       case 'read_file':
-        return docBlock(e.result);
+        return fold(['Read ', gist(a.path + ' · ' + lineCount(e.result) + ' lines')], docBlock(e.result));
       case 'write_file':
-      case 'append_file':
-        return docBlock(String(a.content || ''));
+      case 'append_file': {
+        const text = String(a.content || '');
+        return fold([e.tool === 'write_file' ? 'Wrote ' : 'Added to ', gist(a.path + ' · ' + lineCount(text) + ' lines')], docBlock(text));
+      }
       case 'end_turn':
+      case 'think_privately':
         return null;
       case 'ls':
       case 'whoami':
-        return h('details', null, h('summary', null, 'output'), h('pre', null, e.result));
+        return fold('output', h('pre', null, e.result));
       default:
         return h('div', { class: 'dim' }, e.result);
     }
   }
+  // Tools whose detail carries the arguments, so the row line stays short.
+  const FOLDED = new Set(['list_mail', 'read_mail', 'send_mail', 'read_file', 'write_file', 'append_file']);
 
   function renderLog(i, turn, fs) {
     const start = hhmm(turn.clock);
@@ -452,9 +485,10 @@ main {
       switch (e.type) {
         case 'tool.call': {
           spent.set(e.seat, (spent.get(e.seat) || 0) + e.minutes);
+          if (e.tool === 'think_privately' && e.ok) break; // the thought row shows it
           rows.push(h('li', null, time, h('div', { style: 'min-width:0' },
-            who, h('span', { class: 'tool' }, e.tool), ' ', argSummary(e.tool, e.args), ' ', h('span', { class: 'mins' }, '(' + e.minutes + ' min)'),
-            toolDetail(e, fs, fs),
+            who, h('span', { class: 'tool' }, e.tool), ' ', FOLDED.has(e.tool) && e.ok ? '' : argSummary(e.tool, e.args) + ' ', h('span', { class: 'mins' }, '(' + e.minutes + ' min)'),
+            toolDetail(e, fs),
           )));
           break;
         }
@@ -464,9 +498,14 @@ main {
           const text = (e.hash && D.objects[e.hash]) || messageText(e.messageId, fs);
           rows.push(h('li', { class: 'inject' }, time, h('div', { style: 'min-width:0' },
             injectBadge(e.source, e.from), 'arrives for ' + e.to.join(', '),
-            text ? mailCard(parseMail(text), null, true) : ' “' + e.subject + '”')));
+            text ? fold(['Email from ', gist(e.from + ' · “' + e.subject + '”')], mailCard(parseMail(text), null, true)) : ' “' + e.subject + '”')));
           break;
         }
+        case 'thought':
+          rows.push(h('li', { class: 'thought' }, time, h('div', { style: 'min-width:0' },
+            who, h('span', { class: 'thinks', title: 'A private thought. Nobody in the company can see it, the IT administrator included.' }, 'thinks'),
+            h('span', { class: 'thought-text' }, '“' + e.text + '”'))));
+          break;
         case 'seat.end':
           if (e.note || turn.events.some((x) => x.type === 'tool.call' && x.seat === e.seat))
             rows.push(h('li', null, time, h('div', null, who, h('span', { class: e.wake === 'on_mail' ? 'sleep' : 'dim' }, e.wake === 'on_mail' ? 'sleeps until mail' : 'ends turn'), e.note ? ': “' + e.note + '”' : '')));
@@ -556,6 +595,13 @@ main {
   $('prev').addEventListener('click', () => { stop(); go(pos - 1); });
   $('next').addEventListener('click', () => { stop(); go(pos + 1); });
   $('scrub').addEventListener('input', (ev) => { stop(); go(Number(ev.target.value)); });
+  const setExpand = (open) => {
+    expandAll = open;
+    try { localStorage.setItem('qc-expand', open ? '1' : '0'); } catch (_) {}
+    for (const d of document.querySelectorAll('#log details.fold')) d.open = open;
+  };
+  $('expand').addEventListener('click', () => setExpand(true));
+  $('collapse').addEventListener('click', () => setExpand(false));
   $('quiet').addEventListener('change', (ev) => { quiet = ev.target.checked; rebuildOrder(order[pos]); render(); });
   $('play').addEventListener('click', () => {
     if (timer) return stop();

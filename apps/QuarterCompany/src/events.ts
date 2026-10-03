@@ -1,6 +1,7 @@
 // The journal event vocabulary. See REQ-QC-001.
 //
-// Only `fs.*`, `seat.end`, `seat.skip` and `cast.rule` events change state.
+// Only `fs.*`, `seat.end`, `seat.skip`, `cast.rule` and `thought` events change
+// state. A thought changes the seat's memory, never the world (REQ-QC-014).
 // The other events record what happened, for playback and cost reports.
 
 export interface Meta {
@@ -23,7 +24,8 @@ export type StateEvent =
   | ({ type: 'fs.meta'; host: string; path: string } & Partial<Meta>)
   | { type: 'seat.end'; seat: string; note: string; wake: Wake }
   | { type: 'seat.skip'; seat: string; reason: string }
-  | { type: 'cast.rule'; rule: unknown };
+  | { type: 'cast.rule'; rule: unknown }
+  | { type: 'thought'; seat: string; text: string };
 
 export type Wake = 'next_turn' | 'on_mail';
 

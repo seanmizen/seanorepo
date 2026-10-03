@@ -22,6 +22,7 @@ export function systemPrompt(
     '- You remember nothing between turns. You keep only the note that you give to end_turn, and your files.',
     '- Keep longer notes in a file in your home folder, for example notes.md.',
     '- Other people work at the same time. Use email to speak to them. Mail arrives at the end of a turn.',
+    '- You can think privately with think_privately. Nobody else can see your thoughts. Be honest in them.',
     '- If you have no work, call end_turn with wake set to "on_mail".',
     '- Do the work of your role. Write as a professional in a small company.',
   ]
@@ -29,11 +30,16 @@ export function systemPrompt(
     .join('\n');
 }
 
+/** Thoughts from earlier turns that the briefing repeats. */
+const RECALLED_THOUGHTS = 5;
+
 export function briefing(
   session: Session,
   prev: SeatState | undefined,
   unread: number,
+  thoughts: { label: string; text: string }[] = [],
 ): string {
+  const recent = thoughts.slice(-RECALLED_THOUGHTS);
   return [
     `It is ${session.clock} (turn ${session.label}).`,
     `You are logged in to ${session.seat.company.host} as ${session.user}. You have ${session.minutesLeft} minutes in this turn.`,
@@ -41,5 +47,13 @@ export function briefing(
     prev
       ? `Your note from your last turn: "${prev.note || '(no note)'}"`
       : 'This is your first turn.',
+    ...(recent.length
+      ? [
+          'Your recent private thoughts:',
+          ...recent.map(
+            (t) => `- (${t.label}) ${t.text.replace(/\s+/g, ' ').trim()}`,
+          ),
+        ]
+      : []),
   ].join('\n');
 }

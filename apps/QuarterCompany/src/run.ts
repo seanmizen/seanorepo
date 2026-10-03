@@ -30,7 +30,7 @@ import {
 import type { JournalEvent, StateEvent, Wake } from './events.ts';
 import { ObjectStore } from './objects.ts';
 import { type Inject, loadScenario, type Scenario } from './scenario.ts';
-import { journalPathOf, labelOf, ordOf } from './time.ts';
+import { describeTurn, journalPathOf, labelOf, ordOf } from './time.ts';
 import { modeString, Vfs } from './vfs.ts';
 
 export interface RunInfo {
@@ -54,6 +54,8 @@ export class SimState {
   vfs = new Vfs();
   seats = new Map<string, SeatState>();
   castRules: Rule[] = [];
+  /** Private thoughts per seat, oldest first. Never part of the world. */
+  thoughts = new Map<string, { label: string; text: string }[]>();
   ord = -1;
 
   apply(e: JournalEvent): string | undefined {
@@ -71,6 +73,12 @@ export class SimState {
       case 'cast.rule':
         this.castRules.push(Rule.parse(e.rule));
         return;
+      case 'thought': {
+        const list = this.thoughts.get(e.seat) ?? [];
+        list.push({ label: e.turn, text: e.text });
+        this.thoughts.set(e.seat, list);
+        return;
+      }
       default:
         if (e.type.startsWith('fs.') && e.type !== 'fs.conflict')
           return this.vfs.apply(e as StateEvent, e.ord);
@@ -276,6 +284,32 @@ export class Run {
     for (const [host, lines] of listings)
       writeFileSync(join(outDir, `${host}.ls-lR`), `${lines.join('\n')}\n`);
     writeFileSync(manifestPath, JSON.stringify(next));
+  }
+
+  /**
+   * Write each seat's private thoughts to minds/<seat>.md, outside world/.
+   * Like world/, this is derived from the journal. See REQ-QC-014.
+   */
+  writeMinds(state: SimState) {
+    const dir = join(this.dir, 'minds');
+    const names = new Map(
+      this.scenario.companies.flatMap((c) =>
+        c.people.map((p) => [`${p.user}@${c.domain}`, p.name]),
+      ),
+    );
+    for (const [seat, list] of state.thoughts) {
+      mkdirSync(dir, { recursive: true });
+      const body = list
+        .map(
+          (t) =>
+            `## ${t.label} (${describeTurn(t.label, this.scenario.calendar)})\n\n${t.text.trim()}\n`,
+        )
+        .join('\n');
+      writeFileSync(
+        join(dir, `${seat}.md`),
+        `# Private thoughts of ${names.get(seat) ?? seat}\n\nNobody in the simulation can read this file.\n\n${body}`,
+      );
+    }
   }
 
   commit(label: string, message: string) {
