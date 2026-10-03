@@ -1,0 +1,491 @@
+<title>QuarterCompany Playback</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a sticky console bar over three panes. Staff on the left, the turn
+   printed on green-bar fanfold paper in the middle, the host's disk on the
+   right. The panes stack at phone width. */
+:root {
+  --paper: #f6f7f1;
+  --bar: #e4eedb;
+  --panel: #ffffff;
+  --ink: #1d2721;
+  --muted: #5d6b62;
+  --rule: #cfd9ca;
+  --accent: #2c6a4c;
+  --accent-ink: #ffffff;
+  --hole: #dfe4d9;
+  --warn: #9a4d12;
+  --bad: #a22b2b;
+  --sleep: #4f5d96;
+  --chg: #fff0b8;
+  --font-display: 'IBM Plex Sans Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Helvetica Neue', Arial, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111613; --bar: #17201a; --panel: #151b17; --ink: #dce6dd; --muted: #93a396;
+    --rule: #2a362e; --accent: #7cc39a; --accent-ink: #0d1510; --hole: #0b0f0c;
+    --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111613; --bar: #17201a; --panel: #151b17; --ink: #dce6dd; --muted: #93a396;
+  --rule: #2a362e; --accent: #7cc39a; --accent-ink: #0d1510; --hole: #0b0f0c;
+  --warn: #e2a062; --bad: #ec7b7b; --sleep: #a2addf; --chg: #3d3812; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--paper); color: var(--ink); }
+body { margin: 0; font: 14px/1.5 var(--font-body); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.console {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--panel); border-bottom: 1px solid var(--rule);
+  padding-block: 12px; padding-inline: 16px;
+  display: grid; gap: 10px;
+}
+.console-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+.eyebrow { font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.run-name { font: 700 22px/1.1 var(--font-display); margin: 0; text-wrap: balance; }
+.run-meta { color: var(--muted); font-size: 13px; }
+.transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.btn {
+  border: 1px solid var(--rule); background: var(--paper); border-radius: 4px;
+  padding: 4px 10px; cursor: pointer; font: 500 13px/1.4 var(--font-mono);
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.clock { font: 600 18px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+.label { font: 500 13px/1.2 var(--font-mono); color: var(--muted); }
+#scrub { flex: 1 1 220px; min-width: 0; accent-color: var(--accent); }
+.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 12px/1.4 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats b { color: var(--ink); font-weight: 600; }
+
+main {
+  display: grid; gap: 16px; padding-block: 16px; padding-inline: 16px;
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr) minmax(280px, 380px);
+  align-items: start;
+}
+@media (max-width: 1080px) { main { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); } .disk { grid-column: 1 / -1; } }
+@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); } }
+.pane-title { font: 600 15px/1.2 var(--font-display); letter-spacing: .04em; text-transform: uppercase; margin: 0 0 8px; color: var(--muted); }
+
+.staff { display: grid; gap: 8px; }
+.seat { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
+.seat-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.seat-name { font-weight: 600; }
+.seat-title { color: var(--muted); font-size: 12px; }
+.pill { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 6px; border-radius: 3px; white-space: nowrap; border: 1px solid currentColor; }
+.pill.working { color: var(--accent); }
+.pill.asleep { color: var(--sleep); }
+.pill.absent { color: var(--muted); border-style: dashed; }
+.pill.idle { color: var(--muted); }
+.actor { font: 12px/1.3 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.meter { height: 6px; background: var(--bar); border-radius: 3px; overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--accent); }
+.meter-label { font: 11px/1.2 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.note { font-size: 12px; color: var(--ink); border-left: 2px solid var(--rule); padding-left: 8px; overflow-wrap: anywhere; }
+.note.old { color: var(--muted); }
+
+/* The turn log is a printout: tractor-feed holes in the margin, green bars every other line. */
+.printout {
+  position: relative; background: var(--paper); border: 1px solid var(--rule); border-radius: 2px;
+  padding: 0 28px; min-width: 0;
+  background-image:
+    radial-gradient(circle at 12px 14px, var(--hole) 0 5px, transparent 5.5px),
+    radial-gradient(circle at calc(100% - 12px) 14px, var(--hole) 0 5px, transparent 5.5px);
+  background-size: 100% 28px; background-repeat: repeat-y;
+}
+.printout-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 12px 6px 10px; border-bottom: 1px dashed var(--rule); font: 12px/1.4 var(--font-mono); color: var(--muted); }
+.log { list-style: none; margin: 0; padding: 0; font: 12.5px/1.55 var(--font-mono); }
+.log > li { padding: 5px 6px; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 0 10px; }
+.log > li:nth-child(odd) { background: var(--bar); }
+.log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.who { font-weight: 600; }
+.tool { color: var(--accent); font-weight: 600; }
+.fail { color: var(--bad); }
+.warn { color: var(--warn); }
+.sleep { color: var(--sleep); }
+.dim { color: var(--muted); }
+.mins { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log details { margin-top: 2px; }
+.log summary { cursor: pointer; color: var(--muted); font-size: 11.5px; }
+.log pre, .file pre { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 var(--font-mono); }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.empty { padding: 18px 6px; color: var(--muted); font: 12.5px/1.5 var(--font-mono); }
+
+.disk { display: grid; gap: 12px; min-width: 0; }
+.tree, .file { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.tree { font: 12.5px/1.6 var(--font-mono); max-height: 60vh; overflow: auto; }
+.tree details > div { padding-left: 14px; }
+.tree summary { cursor: pointer; list-style: none; }
+.tree summary::-webkit-details-marker { display: none; }
+.tree summary::before { content: '▸ '; color: var(--muted); }
+.tree details[open] > summary::before { content: '▾ '; }
+.tree .f { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0 0 0 1.2em; cursor: pointer; font: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree .f:hover, .tree .f.sel { color: var(--accent); }
+.tree .chg { background: var(--chg); border-radius: 2px; }
+.tag { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); margin-left: 6px; }
+.host { font-weight: 600; }
+.file h3 { margin: 0 0 4px; font: 600 13px/1.3 var(--font-mono); overflow-wrap: anywhere; }
+.ls { font: 11.5px/1.4 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.removed { font: 12px/1.5 var(--font-mono); color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<header class="console">
+  <div class="console-top">
+    <span class="eyebrow">QuarterCompany playback</span>
+    <h1 class="run-name" id="run-name">Run</h1>
+    <span class="run-meta" id="run-meta"></span>
+  </div>
+  <div class="transport">
+    <button class="btn" id="prev" type="button" aria-label="Previous turn">◀ Prev</button>
+    <button class="btn primary" id="play" type="button">Play</button>
+    <button class="btn" id="next" type="button" aria-label="Next turn">Next ▶</button>
+    <span class="clock" id="clock">--:--</span>
+    <span class="label" id="turn-label"></span>
+    <input id="scrub" type="range" min="0" max="0" value="0" aria-label="Turn">
+    <label class="toggle"><input id="quiet" type="checkbox"> Show quiet turns</label>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<main>
+  <section aria-labelledby="staff-h">
+    <h2 class="pane-title" id="staff-h">Staff</h2>
+    <div class="staff" id="staff"></div>
+  </section>
+  <section aria-labelledby="log-h" style="min-width:0">
+    <h2 class="pane-title" id="log-h">Turn log</h2>
+    <div class="printout">
+      <div class="printout-head"><span id="log-title"></span><span id="log-side"></span></div>
+      <ol class="log" id="log"></ol>
+    </div>
+  </section>
+  <section class="disk" aria-labelledby="disk-h">
+    <div>
+      <h2 class="pane-title" id="disk-h">Disk at end of turn</h2>
+      <div class="tree" id="tree"></div>
+    </div>
+    <div class="file" id="file"><div class="empty">Select a file to read it. Changed files are marked.</div></div>
+  </section>
+</main>
+
+<script type="application/json" id="qc-data">"__QC_DATA__"</script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('qc-data').textContent);
+  const $ = (id) => document.getElementById(id);
+  const h = (tag, attrs, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') n.className = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) n.append(kid instanceof Node ? kid : String(kid));
+    return n;
+  };
+
+  // ----- fold the journal, the same way the engine does -----
+  const key = (host, path) => host + ':' + path;
+  function apply(fs, e, label) {
+    switch (e.type) {
+      case 'fs.mkdir':
+        if (!fs.has(key(e.host, e.path))) fs.set(key(e.host, e.path), { kind: 'dir', owner: e.owner, group: e.group, mode: e.mode, mtime: label });
+        break;
+      case 'fs.write':
+        fs.set(key(e.host, e.path), { kind: 'file', hash: e.hash, size: e.size, owner: e.owner, group: e.group, mode: e.mode, mtime: label });
+        break;
+      case 'fs.rm':
+        fs.delete(key(e.host, e.path));
+        break;
+      case 'fs.mv': {
+        const from = key(e.host, e.from);
+        const moved = [...fs].filter(([k]) => k === from || k.startsWith(from + '/'));
+        for (const [k] of moved) fs.delete(k);
+        for (const [k, n] of moved) fs.set(key(e.host, e.to) + k.slice(from.length), k === from ? { ...n, mtime: label } : n);
+        break;
+      }
+      case 'fs.meta': {
+        const n = fs.get(key(e.host, e.path));
+        if (n) fs.set(key(e.host, e.path), { ...n, owner: e.owner ?? n.owner, group: e.group ?? n.group, mode: e.mode ?? n.mode, mtime: label });
+        break;
+      }
+    }
+  }
+  const snaps = [];
+  function snapshot(i) {
+    let start = i;
+    while (start >= 0 && !snaps[start]) start--;
+    let fs = start >= 0 ? snaps[start] : new Map();
+    for (let j = start + 1; j <= i; j++) {
+      fs = new Map(fs);
+      for (const e of D.turns[j].events) apply(fs, e, D.turns[j].label);
+      snaps[j] = fs;
+    }
+    return snaps[i];
+  }
+
+  // ----- helpers -----
+  const seatIndex = new Map(D.seats.map((s, i) => [s.id, i]));
+  const short = (id) => id.split('@')[0];
+  const hhmm = (clock) => (clock.match(/(\d\d):(\d\d)$/) || ['', '09', '00']).slice(1).map(Number);
+  const fmtTime = ([hh, mm], add) => {
+    const t = hh * 60 + mm + add;
+    return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+  };
+  const modeStr = (n) => {
+    let s = n.kind === 'dir' ? 'd' : '-';
+    const bits = 'rwxrwxrwx';
+    for (let i = 0; i < 9; i++) s += n.mode & (1 << (8 - i)) ? bits[i] : '-';
+    return s;
+  };
+  const clip = (v, n) => {
+    const s = (typeof v === 'string' ? v : JSON.stringify(v)).replace(/\s+/g, ' ');
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  };
+  const argSummary = (tool, a) => {
+    a = a || {};
+    if (tool === 'send_mail') return 'to ' + clip(a.to, 50) + ' “' + clip(a.subject || '', 60) + '”';
+    if (tool === 'write_file' || tool === 'append_file') return (a.path || '') + ' (' + String(a.content || '').length + ' chars)';
+    if (tool === 'end_turn') return '';
+    return Object.entries(a).map(([k, v]) => (k === 'sudo' ? (v ? 'sudo' : '') : clip(v, 48))).filter(Boolean).join(' ');
+  };
+  function passwdUsers(fs, host) {
+    const n = fs.get(key(host, '/etc/passwd'));
+    if (!n) return new Set();
+    return new Set(D.objects[n.hash].split('\n').filter((l) => l && !l.endsWith(':/sbin/nologin')).map((l) => l.split(':')[0]));
+  }
+
+  // ----- view state -----
+  let quiet = false;
+  let order = [];
+  let pos = 0;
+  let selected = null; // { host, path }
+  let timer = null;
+  const isQuiet = (t) => !t.events.some((e) => !['turn.start', 'turn.end', 'seat.end', 'seat.skip'].includes(e.type) || (e.type === 'seat.end' && e.note));
+  function rebuildOrder(keepIdx) {
+    order = D.turns.map((t, i) => i).filter((i) => quiet || i === 0 || !isQuiet(D.turns[i]));
+    $('scrub').max = String(Math.max(0, order.length - 1));
+    const at = order.findIndex((i) => i >= keepIdx);
+    pos = at === -1 ? order.length - 1 : at;
+  }
+
+  // ----- render -----
+  function render() {
+    const i = order[pos];
+    const turn = D.turns[i];
+    const fs = snapshot(i);
+    const prev = i > 0 ? snapshot(i - 1) : new Map();
+    $('scrub').value = String(pos);
+    $('clock').textContent = turn.ord === 0 ? 'Genesis' : turn.clock;
+    $('turn-label').textContent = turn.label;
+    try { history.replaceState(null, '', '#' + turn.label); } catch (_) {}
+
+    // stats
+    let cost = 0, calls = 0;
+    for (let j = 0; j <= i; j++) for (const e of D.turns[j].events) if (e.type === 'model.call') { cost += e.costUsd; calls++; }
+    const working = new Set(), asleep = new Set();
+    for (const e of turn.events) {
+      if (e.type === 'tool.call' || e.type === 'seat.end') working.add(e.seat);
+      if (e.type === 'seat.skip') asleep.add(e.seat);
+    }
+    $('stats').replaceChildren(
+      h('span', null, 'Turn ', h('b', null, String(pos + 1)), ' of ', String(order.length), quiet ? '' : ' with activity'),
+      h('span', null, 'Working ', h('b', null, String(working.size))),
+      h('span', null, 'Asleep ', h('b', null, String(asleep.size))),
+      h('span', null, 'Model calls ', h('b', null, String(calls))),
+      h('span', null, 'Cost so far ', h('b', null, '$' + cost.toFixed(4))),
+    );
+
+    renderStaff(i, turn, fs);
+    renderLog(i, turn, fs);
+    renderTree(i, turn, fs, prev);
+    renderFile(fs);
+  }
+
+  function lastNote(seat, i) {
+    for (let j = i; j >= 0; j--) for (const e of D.turns[j].events) if (e.type === 'seat.end' && e.seat === seat && e.note) return { note: e.note, label: D.turns[j].label, now: j === i };
+    return null;
+  }
+
+  function renderStaff(i, turn, fs) {
+    const nodes = D.seats.map((s, si) => {
+      const ev = turn.events.filter((e) => e.seat === s.id);
+      const used = ev.filter((e) => e.type === 'tool.call').reduce((a, e) => a + e.minutes, 0);
+      const tools = ev.filter((e) => e.type === 'tool.call').length;
+      let state = 'idle', text = 'Idle';
+      if (ev.some((e) => e.type === 'seat.skip')) { state = 'asleep'; text = 'Asleep'; }
+      else if (tools) { state = 'working'; text = 'Working'; }
+      else if (!passwdUsers(snapshot(Math.max(0, i - 1)), s.host).has(short(s.id)) && !ev.length) { state = 'absent'; text = 'No account'; }
+      const n = lastNote(s.id, i);
+      return h('article', { class: 'seat' },
+        h('div', { class: 'seat-head' }, h('span', { class: 'seat-name' }, s.name), h('span', { class: 'pill ' + state }, text)),
+        h('div', { class: 'seat-title' }, s.title + ' · ' + s.role),
+        h('div', { class: 'actor' }, s.id + ' · played by ' + turn.actors[si]),
+        h('div', { class: 'meter', role: 'img', 'aria-label': used + ' of ' + D.turnMinutes + ' minutes used' }, h('span', { style: 'width:' + Math.min(100, (used / D.turnMinutes) * 100) + '%' })),
+        h('div', { class: 'meter-label' }, used + ' / ' + D.turnMinutes + ' min · ' + tools + ' tool call' + (tools === 1 ? '' : 's')),
+        n ? h('div', { class: 'note' + (n.now ? '' : ' old') }, (n.now ? 'Note: ' : 'Last note (' + n.label + '): ') + n.note) : null,
+      );
+    });
+    $('staff').replaceChildren(...nodes);
+  }
+
+  function openMessage(id, prefer, fs) {
+    const name = '/' + id + '.eml';
+    let best = null;
+    for (const [k] of fs) {
+      if (!k.endsWith(name)) continue;
+      const [host, path] = [k.slice(0, k.indexOf(':')), k.slice(k.indexOf(':') + 1)];
+      if (!best || (prefer && path.includes('/' + prefer + '/'))) best = { host, path };
+    }
+    if (best) { selected = best; render(); $('file').scrollIntoView({ block: 'nearest' }); }
+  }
+
+  function renderLog(i, turn, fs) {
+    const start = hhmm(turn.clock);
+    const spent = new Map();
+    const rows = [];
+    for (const e of turn.events) {
+      const at = e.seat ? fmtTime(start, spent.get(e.seat) || 0) : fmtTime(start, 0);
+      const time = h('time', null, turn.ord === 0 ? '' : at);
+      const who = e.seat ? h('span', { class: 'who' }, short(e.seat) + ' ') : null;
+      switch (e.type) {
+        case 'tool.call': {
+          spent.set(e.seat, (spent.get(e.seat) || 0) + e.minutes);
+          rows.push(h('li', null, time, h('div', null,
+            who, h('span', { class: 'tool' }, e.tool), ' ', argSummary(e.tool, e.args), ' ', h('span', { class: 'mins' }, '(' + e.minutes + ' min)'),
+            e.ok ? null : h('div', { class: 'fail' }, '✗ ' + e.result),
+            e.ok && e.result && e.tool !== 'end_turn' ? h('details', null, h('summary', null, 'output'), h('pre', null, e.result)) : null,
+          )));
+          break;
+        }
+        case 'mail.send':
+          rows.push(h('li', null, time, h('div', { class: 'dim' }, '↳ mail ' + e.messageId + ' queued for ', e.to.join(', '), ' · ',
+            h('button', { class: 'linkish', type: 'button', onclick: () => openMessage(e.messageId, short(e.seat), fs) }, 'open'))));
+          break;
+        case 'inject':
+          rows.push(h('li', null, time, h('div', null, h('span', { class: 'warn' }, 'MAIL IN '), e.from + ' → ' + e.to.join(', ') + ' “' + e.subject + '” · ',
+            h('button', { class: 'linkish', type: 'button', onclick: () => openMessage(e.messageId, short(e.to[0] || ''), fs) }, 'open'))));
+          break;
+        case 'seat.end':
+          if (e.note || turn.events.some((x) => x.type === 'tool.call' && x.seat === e.seat))
+            rows.push(h('li', null, time, h('div', null, who, h('span', { class: e.wake === 'on_mail' ? 'sleep' : 'dim' }, e.wake === 'on_mail' ? 'sleeps until mail' : 'ends turn'), e.note ? ': “' + e.note + '”' : '')));
+          break;
+        case 'seat.skip':
+          rows.push(h('li', null, time, h('div', { class: 'sleep' }, short(e.seat) + ' is asleep (' + e.reason + ')')));
+          break;
+        case 'mail.bounce':
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'BOUNCE ' + e.messageId + ' to ' + e.to + ': ' + e.reason)));
+          break;
+        case 'fs.conflict':
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'CONFLICT ' + short(e.seat) + ' ' + e.op + ' ' + e.path + ': ' + e.reason)));
+          break;
+        case 'security':
+          rows.push(h('li', null, time, h('div', { class: 'fail' }, 'SECURITY ' + short(e.seat) + ': ' + e.message)));
+          break;
+        case 'model.call':
+          rows.push(h('li', null, time, h('div', { class: 'dim' }, short(e.seat) + ' thinks · ' + e.actor + ' (' + e.model + ') ' + e.inputTokens + ' in / ' + e.outputTokens + ' out · $' + e.costUsd.toFixed(4))));
+          break;
+        case 'model.error':
+          rows.push(h('li', null, time, h('div', { class: 'fail' }, short(e.seat) + ' model error: ' + e.message)));
+          break;
+        case 'cast.rule':
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'RECAST ' + JSON.stringify(e.rule))));
+          break;
+      }
+    }
+    if (turn.ord === 0) {
+      const files = turn.events.filter((e) => e.type === 'fs.write').length;
+      const dirs = turn.events.filter((e) => e.type === 'fs.mkdir').length;
+      rows.unshift(h('li', null, h('time', null, ''), h('div', null, 'Genesis: the scenario creates ' + dirs + ' folders and ' + files + ' files. Accounts, homes, mailboxes and seed files are ready.')));
+    }
+    $('log-title').textContent = turn.label + ' · ' + (turn.ord === 0 ? 'before day 1' : turn.clock);
+    $('log-side').textContent = D.run.name;
+    $('log').replaceChildren(...(rows.length ? rows : [h('li', null, h('time', null, ''), h('div', { class: 'dim' }, 'Nothing happened in this turn.'))]));
+  }
+
+  function renderTree(i, turn, fs, prev) {
+    const changed = new Map();
+    const removed = [];
+    for (const e of turn.events) {
+      if (e.type === 'fs.write') changed.set(key(e.host, e.path), prev.has(key(e.host, e.path)) ? 'changed' : 'new');
+      else if (e.type === 'fs.mkdir') changed.set(key(e.host, e.path), 'new');
+      else if (e.type === 'fs.mv') changed.set(key(e.host, e.to), 'moved');
+      else if (e.type === 'fs.meta') changed.set(key(e.host, e.path), 'mode');
+      else if (e.type === 'fs.rm') removed.push(e.host + ':' + e.path);
+    }
+    const hosts = [...new Set([...fs.keys()].map((k) => k.slice(0, k.indexOf(':'))))].sort();
+    const out = [];
+    for (const host of hosts) {
+      const paths = [...fs.keys()].filter((k) => k.startsWith(host + ':')).map((k) => k.slice(host.length + 1)).sort();
+      const openDirs = new Set(['/']);
+      const mark = (p) => { for (let d = p; d && d !== '/'; d = d.slice(0, d.lastIndexOf('/')) || '/') openDirs.add(d); };
+      for (const [k] of changed) if (k.startsWith(host + ':') && turn.ord > 0) mark(k.slice(host.length + 1).replace(/\/[^/]*$/, '') || '/');
+      if (selected && selected.host === host) mark(selected.path.replace(/\/[^/]*$/, '') || '/');
+      const build = (dir) => {
+        const prefix = dir === '/' ? '/' : dir + '/';
+        const kids = paths.filter((p) => p !== dir && p.startsWith(prefix) && !p.slice(prefix.length).includes('/'));
+        return kids.map((p) => {
+          const n = fs.get(key(host, p));
+          const name = p.slice(prefix.length);
+          const tag = changed.get(key(host, p));
+          const label = [h('span', { class: tag ? 'chg' : null }, name + (n.kind === 'dir' ? '/' : '')), tag && turn.ord > 0 ? h('span', { class: 'tag' }, tag) : null];
+          if (n.kind === 'dir') return h('details', { open: openDirs.has(p) }, h('summary', null, ...label), h('div', null, ...build(p)));
+          const isSel = selected && selected.host === host && selected.path === p;
+          return h('button', { class: 'f' + (isSel ? ' sel' : ''), type: 'button', title: p, onclick: () => { selected = { host, path: p }; render(); } }, ...label);
+        });
+      };
+      out.push(h('details', { open: true }, h('summary', null, h('span', { class: 'host' }, host)), h('div', null, ...build('/'))));
+    }
+    if (removed.length && turn.ord > 0) out.push(h('div', { class: 'removed' }, 'Removed this turn: ' + removed.join(', ')));
+    $('tree').replaceChildren(...out);
+  }
+
+  function renderFile(fs) {
+    if (!selected) return;
+    const n = fs.get(key(selected.host, selected.path));
+    const title = h('h3', null, selected.host + ':' + selected.path);
+    if (!n) { $('file').replaceChildren(title, h('div', { class: 'empty' }, 'This file does not exist at this turn.')); return; }
+    const ls = h('div', { class: 'ls' }, [modeStr(n), n.owner, n.group, (n.size ?? 0) + ' B', 'changed ' + n.mtime].join('  '));
+    $('file').replaceChildren(title, ls, n.kind === 'file' ? h('pre', null, D.objects[n.hash] ?? '') : h('div', { class: 'empty' }, 'Folder.'));
+  }
+
+  // ----- controls -----
+  const go = (p) => { pos = Math.max(0, Math.min(order.length - 1, p)); render(); };
+  const stop = () => { clearInterval(timer); timer = null; $('play').textContent = 'Play'; };
+  $('prev').addEventListener('click', () => { stop(); go(pos - 1); });
+  $('next').addEventListener('click', () => { stop(); go(pos + 1); });
+  $('scrub').addEventListener('input', (ev) => { stop(); go(Number(ev.target.value)); });
+  $('quiet').addEventListener('change', (ev) => { quiet = ev.target.checked; rebuildOrder(order[pos]); render(); });
+  $('play').addEventListener('click', () => {
+    if (timer) return stop();
+    if (pos >= order.length - 1) pos = -1;
+    $('play').textContent = 'Pause';
+    go(pos + 1);
+    timer = setInterval(() => (pos >= order.length - 1 ? stop() : go(pos + 1)), 1600);
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.target instanceof HTMLInputElement && ev.target.type !== 'range') return;
+    if (ev.key === 'ArrowRight') { stop(); go(pos + 1); ev.preventDefault(); }
+    if (ev.key === 'ArrowLeft') { stop(); go(pos - 1); ev.preventDefault(); }
+  });
+
+  // ----- start -----
+  $('run-name').textContent = D.run.name;
+  $('run-meta').textContent = 'Scenario ' + D.run.scenario + ' · cast ' + D.run.cast + (D.run.parent ? ' · retake of ' + D.run.parent.run + ' from ' + D.run.parent.turn : '');
+  const wanted = D.turns.findIndex((t) => '#' + t.label === location.hash);
+  rebuildOrder(0);
+  if (wanted > 0) { quiet = !order.includes(wanted) || quiet; if (quiet) { $('quiet').checked = true; rebuildOrder(wanted); } pos = Math.max(0, order.indexOf(wanted)); }
+  else pos = Math.min(1, order.length - 1);
+  render();
+})();
+</script>

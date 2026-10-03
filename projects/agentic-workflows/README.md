@@ -33,6 +33,7 @@ asks Maria for a quote. Priya asks Tom for Q1 revenue.
 ```bash
 yarn demo                                    # scripted run to Tuesday 09:30
 yarn qc playback demo                        # show what happened
+yarn qc export demo                          # runs/demo.html: open it in a browser
 yarn qc playback demo --seat dave@brindlehart.example --verbose
 yarn qc new ep1 --scenario scenario --cast budget-it
 yarn qc run ep1 --days 1
