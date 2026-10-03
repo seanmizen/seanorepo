@@ -221,3 +221,22 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   replaces this requirement.
 - **Verification:** Inspection — `apps/QuarterCompany/src/cli.ts` (withdrawn: the check is removed)
 - **Relations:** none
+
+## REQ-QC-014 — Private thoughts never enter the world
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #544
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** The simulator shall keep each private thought out of the
+  world filesystem, so that no tool in the simulation can read it.
+- **Rationale:** Thoughts show the workers' personalities to the people who
+  watch a run. They are out of universe: no person in the company can see
+  them, the IT administrator included, with sudo or with restore. A thought is
+  a journal event. The engine writes `minds/<seat>.md` beside `world/`, never
+  inside it. The seat itself recalls its recent thoughts in its briefing.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/mind.test.ts` › "a thought never enters the world, and root cannot find it"
+  - Test — `apps/QuarterCompany/test/mind.test.ts` › "the next briefing recalls the thought"
+- **Relations:** depends-on REQ-QC-001

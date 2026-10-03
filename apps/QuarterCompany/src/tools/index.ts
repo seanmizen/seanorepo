@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ADMIN_TOOLS } from './admin.ts';
 import type { ToolDef } from './def.ts';
 import { MAIL_TOOLS } from './mail.ts';
+import { MIND_TOOLS } from './mind.ts';
 import { WORKSTATION_TOOLS } from './workstation.ts';
 
 export type { Server, ToolDef } from './def.ts';
@@ -11,6 +12,7 @@ export type { Server, ToolDef } from './def.ts';
 export const TOOLS: ToolDef[] = [
   ...WORKSTATION_TOOLS,
   ...MAIL_TOOLS,
+  ...MIND_TOOLS,
   ...ADMIN_TOOLS,
 ];
 

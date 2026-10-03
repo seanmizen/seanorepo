@@ -95,7 +95,7 @@ export function workerSession(run: Run, seatId: string) {
       casting.actor.provider === 'external'
         ? ''
         : `\n\nWARNING: the cast gives this seat to actor "${casting.actorName}", not to an external actor. The engine ignores your calls.`;
-    return `${systemPrompt(seat, run.scenario.calendar.slotMinutes, run.scenario.turnMinutes)}\n\n${briefing(session, state.seats.get(seat.id), unread)}${warn}`;
+    return `${systemPrompt(seat, run.scenario.calendar.slotMinutes, run.scenario.turnMinutes)}\n\n${briefing(session, state.seats.get(seat.id), unread, state.thoughts.get(seat.id))}${warn}`;
   };
 
   return { seat, call, brief, open };

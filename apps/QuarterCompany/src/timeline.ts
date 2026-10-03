@@ -59,6 +59,8 @@ export function narrate(e: JournalEvent, verbose = false): string | undefined {
     case 'seat.end':
       if (!e.note && !verbose) return undefined;
       return `  ${e.seat.padEnd(28)} ⏹ ${e.wake === 'on_mail' ? 'sleeps until mail' : 'done'}${e.note ? `: "${short(e.note, 90)}"` : ''}`;
+    case 'thought':
+      return `  ${e.seat.padEnd(28)} (thinks) "${short(e.text, 100)}"`;
     case 'seat.skip':
       return verbose ? `  ${e.seat.padEnd(28)} 💤 ${e.reason}` : undefined;
     case 'inject':
@@ -181,7 +183,9 @@ export function retake(
   };
   run.saveInfo();
   const fresh = new Run(dst); // reload with the new cast
-  fresh.project(fresh.load());
+  const loaded = fresh.load();
+  fresh.project(loaded);
+  fresh.writeMinds(loaded);
   g('add', '-A');
   g(
     'commit',

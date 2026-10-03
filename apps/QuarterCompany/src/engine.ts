@@ -197,6 +197,7 @@ export async function runTurn(
             session,
             state.seats.get(seat.id),
             unreadCount(state, seat),
+            state.thoughts.get(seat.id),
           ),
           record: (c) => {
             costUsd += c.costUsd;
@@ -270,7 +271,8 @@ export async function runTurn(
   // 5. Persist.
   const stamped = stamp(events, label, ord);
   for (const e of stamped)
-    if (e.type === 'seat.end' || e.type === 'cast.rule') state.apply(e);
+    if (e.type === 'seat.end' || e.type === 'cast.rule' || e.type === 'thought')
+      state.apply(e);
   state.ord = ord;
   run.writeTurn(label, stamped);
   if (pendingRules.length) {
@@ -278,6 +280,7 @@ export async function runTurn(
     run.saveInfo();
   }
   run.project(state);
+  run.writeMinds(state);
   const active = sessions.map((s) => s.seat.id);
   run.commit(label, `${active.length} working, ${skipped.length} asleep`);
   return { label, active, skipped, events: stamped.length, costUsd };

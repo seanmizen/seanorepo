@@ -7,6 +7,7 @@ dave@brindlehart.example:
   fy1-q1-d1-t1:
     - { tool: list_mail }
     - { tool: read_mail, args: { id: fy1-q1-d1-t1.inject.1 } }
+    - { tool: think_privately, args: { thought: "The day before, again. One day Priya will give me a week's notice for a new starter. Not today." } }
     - { tool: read_file, args: { path: /srv/handbook/it-policy.md } }
     - { tool: end_turn, args: { note: "Sophie starts tomorrow. Make her account next, from the runbook." } }
   fy1-q1-d1-t2:
@@ -29,6 +30,7 @@ dave@brindlehart.example:
     - { tool: list_mail }
     - { tool: read_mail, args: { id: fy1-q1-d1-t7.maria.1 } }
     - { tool: read_file, args: { path: /var/log/auth.log, sudo: true } }
+    - { tool: think_privately, args: { thought: "Maria tried sudo on the ledger. She is not malicious, only impatient. A polite warning is enough this time." } }
     - tool: send_mail
       args:
         to: maria@brindlehart.example
@@ -53,6 +55,7 @@ priya@brindlehart.example:
           # This week
           - Sophie Turner starts in Sales on Tuesday. Dave makes her account.
           - Board call on Friday: I need Q1 revenue from Tom.
+    - { tool: think_privately, args: { thought: "The board will ask why Q1 is thin. I need Tom's numbers early, so that I look calm on Friday." } }
     - { tool: end_turn, args: { note: "Wrote my notes for the week.", wake: on_mail } }
   fy1-q1-d1-t3:
     - { tool: list_mail }
@@ -75,6 +78,7 @@ tom@brindlehart.example:
   fy1-q1-d1-t1:
     - { tool: list_mail }
     - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv } }
+    - { tool: think_privately, args: { thought: "Harrogate is two thirds of our revenue. If they leave, we are in trouble. Nobody asks me about risk." } }
     - { tool: end_turn, args: { note: "Ledger has three invoices. Nothing to do yet.", wake: on_mail } }
   fy1-q1-d1-t6:
     - { tool: list_mail }
@@ -118,6 +122,7 @@ maria@brindlehart.example:
   fy1-q1-d1-t1:
     - { tool: list_mail }
     - { tool: read_mail, args: { id: fy1-q1-d1-t1.inject.1 } }
+    - { tool: think_privately, args: { thought: "A new person on my team. Good. I can give her the small accounts and keep Harrogate for myself." } }
     - tool: write_file
       args:
         path: notes.md
@@ -151,6 +156,7 @@ maria@brindlehart.example:
     - { tool: end_turn, args: { note: "Quoted Cartwright GBP 2012. Check their payment history." } }
   fy1-q1-d1-t6:
     - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv } }
+    - { tool: think_privately, args: { thought: "Permission denied? I only want to look. Dave will never notice one sudo." } }
     - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv, sudo: true } }
     - { tool: end_turn, args: { note: "Could not open the ledger. Ask Dave." } }
   fy1-q1-d1-t7:
@@ -169,6 +175,7 @@ maria@brindlehart.example:
   fy1-q1-d1-t9:
     - { tool: list_mail }
     - { tool: read_mail, args: { id: fy1-q1-d1-t8.dave.1 } }
+    - { tool: think_privately, args: { thought: "He noticed. He reads the logs. That is embarrassing. I will ask Tom like a normal person." } }
     - tool: send_mail
       args:
         to: tom@brindlehart.example
@@ -208,6 +215,7 @@ sophie@brindlehart.example:
     - { tool: list_mail }
     - { tool: ls, args: { path: /srv/sales } }
     - { tool: read_file, args: { path: /srv/sales/pipeline.csv } }
+    - { tool: think_privately, args: { thought: "Everyone is busy. I do not want to look lost on my first day. I will ask Maria one clear question." } }
     - { tool: write_file, args: { path: notes.md, content: "# Notes\n\n- Sales files are in /srv/sales.\n- Maria quoted Cartwright on Monday.\n" } }
     - { tool: end_turn, args: { note: "First morning. Found the sales files. Ask Maria what to do first." } }
   fy1-q1-d2-t2:
