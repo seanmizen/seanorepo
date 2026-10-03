@@ -3,7 +3,7 @@
 A turn-based workplace simulator. AI agents work as the staff of one or more
 companies. A working day is a set of 15-minute turns, as in a turn-based
 strategy game. Everything is text in a Unix-style filesystem, one host per
-company. You can browse the whole world as folders.
+organisation. You can browse the whole world as folders.
 
 Requirements: [`requirements/qc.md`](requirements/qc.md).
 
@@ -59,7 +59,7 @@ without the html, head and body tags, for a host page that wraps it.
 | Word | Meaning |
 |---|---|
 | **Turn** | One slot of the working day. Labels look like `fy1-q1-d1-t1`, with no padding. `fy1-q1-d1-t0` is genesis. |
-| **Seat** | One person in a company, `user@domain`. |
+| **Seat** | One person in an organisation, `user@domain`. |
 | **Actor** | A named model with its settings and price. |
 | **Cast** | The rules that give each seat an actor. |
 | **Playback** | Show turns that happened, from the journal. It never calls a model. |
@@ -90,7 +90,7 @@ runs/<run>/
   scenario/       copy of the scenario at creation time
   journal/        fy1/q1/d1/t1.jsonl ...   the truth, append-only
   objects/        content-addressed store: file versions and model payloads
-  world/          the projection: <company>/<host>/... plus <host>.ls-lR
+  world/          the projection: <org>/<host>/... plus <host>.ls-lR
   pending/        calls from external agents, waiting for their turn
   minds/          private thoughts per seat (derived, out of universe)
   .git            one commit and one tag per turn
@@ -106,7 +106,7 @@ administrator can `restore` a removed file.
 ## Models: four layers
 
 The scenario says who exists. It never names a model. The cast says which
-model plays each person. One company can run with many casts.
+model plays each person. One scenario can run with many casts.
 
 1. **Providers** (`providers.yaml`): how to reach a service. Kinds:
    `anthropic`, `openai-compatible` (Ollama, llama.cpp, vLLM, OpenRouter).
@@ -114,7 +114,7 @@ model plays each person. One company can run with many casts.
    providers `script`, `idle` and `external` are built in.
 3. **Tiers** (`actors.yaml`): aliases such as `cheap` or `premium`. Change one
    line to change every seat on that tier.
-4. **Casts** (`casts/*.yaml`): rules that match by `user`, `company` or
+4. **Casts** (`casts/*.yaml`): rules that match by `user`, `org` or
    `role`, with optional `from` and `until` turns. The most specific rule
    wins. On a tie, the later rule wins.
 
@@ -182,45 +182,59 @@ thoughts in their own colour, and each staff card shows the latest one.
 ## Mail
 
 A message is an RFC 822-style `.eml` text file. Delivery puts it in
-`/var/mail/<user>/new/` on the recipient's company host. `read_mail` moves it
+`/var/mail/<user>/new/` on the host of the recipient's organisation. `read_mail` moves it
 to `cur/`. The sender keeps a copy in `sent/`. Mail goes out at the end of the
-turn. Mail to an unknown or locked user bounces from `MAILER-DAEMON`. Mail to a
-domain outside the simulation goes to `world/internet/mx/<address>/inbox/`.
+turn. Mail to an unknown or locked user bounces from `MAILER-DAEMON`, and so
+does mail to a domain that no organisation owns. A system event can make mail
+wait in the queue.
 
 ## Scenario files
 
 ```
-scenario.yaml        name, calendar, companies, scheduled mail (injects)
-companies/<id>.yaml  domain, host, groups, people, seed files
+scenario.yaml        name, calendar, orgs, compel (people act), injects (system events)
+orgs/<id>.yaml       kind, domain, host, groups, people, seed files
 providers.yaml       model services
 actors.yaml          actors and tiers
 casts/<name>.yaml    casts
 scripts/*.yaml       tool calls for the script actor
 ```
 
-### Scenario events: compel and inject
+### A closed world: organisations, compel and inject
 
-A scenario starts the story in two ways, and the difference matters:
+Every person belongs to an organisation in `orgs/<id>.yaml`. A customer or a
+supplier is an organisation too, with its own host and mailboxes. A mail
+directory maps each domain to its host. Mail to a domain that no organisation
+owns bounces: nothing exists outside the world (REQ-QC-018).
 
-- **`compel`**: a person in the simulation acts. At the given turn, the seat
-  runs the given tool calls in its own session, before its brain, with its own
-  minutes (REQ-QC-016). The journal marks the calls as compelled. A compelled
-  mail is in the sender's `sent/` folder, and the seat's briefing says what it
-  did, so it can talk about it later. Use this for all mail from inside.
-- **`injects`**: mail from outside the simulation, for example a customer. The
-  sender's domain must not belong to a simulated company (REQ-QC-015). The
-  internet host keeps the sender's copy in `world/internet/mx/<sender>/sent/`.
+A scenario changes the world in two ways only:
+
+- **`compel`**: a person acts. At the given turn, the seat runs the given tool
+  calls in its own session, before its brain, with its own minutes
+  (REQ-QC-016). A compelled mail is in the sender's `sent/` folder, and the
+  seat's briefing says what it did.
+- **`injects`**: system events, the physics of the world. They never act as a
+  person (REQ-QC-017). Each acts on one organisation's host from `at`, and
+  ends at the start of `until`:
+  - `host.down`: nobody on the host can log in. Mail to and from it waits.
+  - `mail.down`: people work, but mail to and from the host waits.
+  - `disk.full`: writes on the host fail. Mail to it waits.
+
+Waiting mail is in a queue that the journal holds. The queue delivers it at
+the start of the first turn when nothing blocks it (REQ-QC-019).
 
 ```yaml
 compel:
-  - at: fy1-q1-d1-t1
-    seat: priya@brindlehart.example
+  - at: fy1-q1-d1-t3
+    seat: graham@cartwright-stationers.example
     do:
       - tool: send_mail
-        args: { to: dave@brindlehart.example, subject: "New starter", body: "..." }
+        args: { to: maria@brindlehart.example, subject: "Quote request", body: "..." }
 injects:
-  - at: fy1-q1-d1-t3
-    mail: { from: orders@cartwright-stationers.example, to: maria@brindlehart.example, subject: "...", body: "..." }
+  - at: fy1-q1-d1-t9
+    until: fy1-q1-d1-t11
+    kind: mail.down
+    org: brindlehart
+    note: The mail server restarts for an upgrade.
 ```
 
 During a run, `qc compel` and `qc inject` (or the director's MCP tools) add

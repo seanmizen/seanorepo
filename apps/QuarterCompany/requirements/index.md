@@ -19,8 +19,11 @@
 | [`REQ-QC-012`](qc.md#req-qc-012--a-retake-always-makes-a-new-timeline) | A retake always makes a new timeline | active | functional | P1 | sean |
 | [`REQ-QC-013`](qc.md#req-qc-013--the-simulator-runs-on-linux-only) | The simulator runs on Linux only | withdrawn | constraint | P1 | sean |
 | [`REQ-QC-014`](qc.md#req-qc-014--private-thoughts-never-enter-the-world) | Private thoughts never enter the world | active | constraint | P1 | sean |
-| [`REQ-QC-015`](qc.md#req-qc-015--injected-mail-comes-only-from-outside-the-simulation) | Injected mail comes only from outside the simulation | active | constraint | P1 | sean |
+| [`REQ-QC-015`](qc.md#req-qc-015--injected-mail-comes-only-from-outside-the-simulation) | Injected mail comes only from outside the simulation | superseded | constraint | P1 | sean |
 | [`REQ-QC-016`](qc.md#req-qc-016--a-scenario-makes-a-seat-act-through-the-seats-own-session) | A scenario makes a seat act through the seat's own session | active | functional | P1 | sean |
+| [`REQ-QC-017`](qc.md#req-qc-017--injects-are-system-events-never-people) | Injects are system events, never people | active | constraint | P0 | sean |
+| [`REQ-QC-018`](qc.md#req-qc-018--the-world-is-closed-mail-to-an-unknown-domain-bounces) | The world is closed: mail to an unknown domain bounces | active | constraint | P1 | sean |
+| [`REQ-QC-019`](qc.md#req-qc-019--blocked-mail-waits-in-a-queue-that-the-journal-holds) | Blocked mail waits in a queue that the journal holds | active | functional | P1 | agent:SEAN-548 |
 
 ## Dependency graph
 
@@ -42,13 +45,22 @@ graph TD
   REQ_QC_014["REQ-QC-014<br/>Private thoughts never enter the world"]
   REQ_QC_015["REQ-QC-015<br/>Injected mail comes only from outside the simulation"]
   REQ_QC_016["REQ-QC-016<br/>A scenario makes a seat act through the seat's own session"]
+  REQ_QC_017["REQ-QC-017<br/>Injects are system events, never people"]
+  REQ_QC_018["REQ-QC-018<br/>The world is closed: mail to an unknown domain bounces"]
+  REQ_QC_019["REQ-QC-019<br/>Blocked mail waits in a queue that the journal holds"]
+  REQ_QC_007 -->|amended-by| REQ_QC_018
   REQ_QC_008 -->|depends-on| REQ_QC_001
   REQ_QC_014 -->|depends-on| REQ_QC_001
+  REQ_QC_015 -->|superseded-by| REQ_QC_017
   REQ_QC_016 -->|depends-on| REQ_QC_008
+  REQ_QC_017 -->|supersedes| REQ_QC_015
+  REQ_QC_018 -->|amends| REQ_QC_007
+  REQ_QC_019 -->|depends-on| REQ_QC_001
   style REQ_QC_013 stroke-dasharray: 4 4
+  style REQ_QC_015 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links
 
-- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014
+- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019
 - `REQ-QC-008` — required-by REQ-QC-016

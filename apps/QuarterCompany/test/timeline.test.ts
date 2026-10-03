@@ -21,7 +21,7 @@ describe('cast', () => {
     default: 'cheap',
     rules: [
       { match: { role: 'finance' }, use: 'premium' },
-      { match: { company: 'acme' }, use: 'idle' },
+      { match: { org: 'acme' }, use: 'idle' },
       {
         match: { user: 'carol@acme.example' },
         use: 'premium',
@@ -33,8 +33,8 @@ describe('cast', () => {
     resolveCast(models, cast, seat(id), ord, scenario.calendar).actorName;
 
   test('the most specific rule wins', () => {
-    expect(actor('bob@acme.example', 1)).toBe('big-model'); // role beats company
-    expect(actor('alice@acme.example', 1)).toBe('idle'); // company
+    expect(actor('bob@acme.example', 1)).toBe('big-model'); // role beats org
+    expect(actor('alice@acme.example', 1)).toBe('idle'); // org
     expect(actor('gina@globex.example', 1)).toBe('cheap-model'); // default tier
   });
 
@@ -134,24 +134,36 @@ describe('playback and retake', () => {
 });
 
 describe('external seats through qc-worker', () => {
-  test('the worker sees mail injected at the start of its turn', async () => {
-    const run = makeRun({}, 'external-alice');
+  test('the worker sees mail that the queue releases at the start of its turn', async () => {
+    const run = makeRun(
+      {
+        'bob@acme.example': {
+          'fy1-q1-d1-t1': [
+            call('send_mail', {
+              to: 'alice@acme.example',
+              subject: 'Hello',
+              body: 'Welcome.',
+            }),
+          ],
+        },
+      },
+      'external-alice',
+    );
     run.info.injects.push({
       at: 'fy1-q1-d1-t1',
-      mail: {
-        from: 'boss@example.org',
-        to: 'alice@acme.example',
-        subject: 'Hello',
-        body: 'Welcome.',
-      },
+      until: 'fy1-q1-d1-t2',
+      kind: 'mail.down',
+      org: 'acme',
+      note: '',
     });
     run.saveInfo();
+    await runUntil(run, 1); // the mail waits in the queue
     const w = workerSession(run, 'alice@acme.example');
     const r = await w.call('list_mail', {});
     expect(r.text).toContain('"Hello"');
-    await runUntil(run, 1);
+    await runUntil(run, 2);
     const replayed = run
-      .readTurn('fy1-q1-d1-t1')
+      .readTurn('fy1-q1-d1-t2')
       .find((e) => e.type === 'tool.call' && e.seat === 'alice@acme.example');
     expect(replayed && 'result' in replayed && replayed.result).toBe(r.text);
   });

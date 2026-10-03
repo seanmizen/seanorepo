@@ -65,8 +65,16 @@ export function narrate(e: JournalEvent, verbose = false): string | undefined {
       return `  ${e.seat.padEnd(28)} (thinks) "${short(e.text, 100)}"`;
     case 'seat.skip':
       return verbose ? `  ${e.seat.padEnd(28)} 💤 ${e.reason}` : undefined;
-    case 'inject':
-      return `  ✉ mail from outside (${e.source ?? 'scenario'}): ${e.from} → ${e.to.join(', ')}: "${short(e.subject, 60)}"`;
+    case 'system.start':
+      return `  ⚙ system (${e.source}): ${e.kind} on ${e.host}${e.note ? ` — ${e.note}` : ''}`;
+    case 'system.end':
+      return `  ⚙ system: ${e.kind} on ${e.host} is over`;
+    case 'mail.queued':
+      return `  ✉ ${e.messageId} to ${e.rcpt} waits: ${e.reason}`;
+    case 'mail.dequeued':
+      return `  ✉ ${e.messageId} to ${e.rcpt} is delivered after a wait`;
+    case 'seat.blocked':
+      return `  ${e.seat.padEnd(28)} cannot work: ${e.reason}`;
     case 'mail.bounce':
       return `  ✉ bounce: ${e.messageId} to ${e.to} (${e.reason})`;
     case 'fs.conflict':
@@ -208,10 +216,10 @@ export interface CostRow {
 
 export function costReport(
   run: Run,
-  by: 'seat' | 'actor' | 'role' | 'company' = 'seat',
+  by: 'seat' | 'actor' | 'role' | 'org' = 'seat',
 ): CostRow[] {
   const seats = new Map(
-    run.scenario.companies.flatMap((c) =>
+    run.scenario.orgs.flatMap((c) =>
       c.people.map((p) => [
         `${p.user}@${c.domain}`,
         { role: p.role, company: c.id },

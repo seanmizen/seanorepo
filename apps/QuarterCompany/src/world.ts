@@ -1,13 +1,14 @@
 // World setup at genesis, and mail transport at turn boundaries.
 // Both write ordinary journal events through an Ops buffer.
-import { formatMessage, INTERNET_HOST, splitAddress } from './mail.ts';
+import { formatMessage, splitAddress } from './mail.ts';
 import type { Ops } from './ops.ts';
 import {
-  type Company,
   hostOf,
-  type MailInject,
+  mailHostOf,
+  type Org,
   parseMode,
   type Scenario,
+  type SystemKind,
 } from './scenario.ts';
 import { ensureMailbox } from './tools/mail.ts';
 import {
@@ -31,7 +32,7 @@ const SYSTEM_DIRS: [string, number][] = [
 ];
 
 /** Seed one company host: system folders, accounts, homes and seed files. */
-export function seedCompany(ops: Ops, c: Company) {
+export function seedOrg(ops: Ops, c: Org) {
   const host = hostOf(c);
   const actor = 'genesis';
   ops.mkdir(actor, host, '/', ROOT_DIR);
@@ -120,8 +121,7 @@ export function seedCompany(ops: Ops, c: Company) {
 }
 
 export function seedWorld(ops: Ops, s: Scenario) {
-  for (const c of s.companies) seedCompany(ops, c);
-  ops.mkdir('genesis', INTERNET_HOST, '/', ROOT_DIR);
+  for (const c of s.orgs) seedOrg(ops, c);
 }
 
 export interface Envelope {
@@ -131,45 +131,149 @@ export interface Envelope {
   rcpts: string[];
 }
 
+export type SystemStatus = Map<string, Set<SystemKind>>;
+
+export interface QueuedMail {
+  messageId: string;
+  hash: string;
+  from: string;
+  rcpt: string;
+}
+
+const has = (st: SystemStatus, host: string | undefined, kind: SystemKind) =>
+  !!host && !!st.get(host)?.has(kind);
+/** Why a host cannot send mail now, if it cannot. */
+const sendBlock = (st: SystemStatus, host: string | undefined) =>
+  has(st, host, 'host.down')
+    ? 'the sender host is down'
+    : has(st, host, 'mail.down')
+      ? 'the sender mail service is down'
+      : undefined;
+/** Why a host cannot take mail now, if it cannot. */
+const receiveBlock = (st: SystemStatus, host: string) =>
+  has(st, host, 'host.down')
+    ? 'the recipient host is down'
+    : has(st, host, 'mail.down')
+      ? 'the recipient mail service is down'
+      : has(st, host, 'disk.full')
+        ? 'the recipient disk is full'
+        : undefined;
+
 /**
- * Deliver one message to every recipient. A recipient with no account, or a
- * locked account, gets a bounce back to the sender. Mail to a domain outside
- * the simulation goes to the internet host. See REQ-QC-007.
+ * Deliver one message to every recipient. The mail directory gives the host
+ * for each domain. A domain that is not in the world bounces: nothing exists
+ * outside it (REQ-QC-017). A recipient with no account, or a locked account,
+ * bounces. Mail waits in the queue while a system event blocks the sender
+ * or the recipient host. See REQ-QC-007.
  */
-export function deliver(ops: Ops, s: Scenario, env: Envelope, bounces = true) {
-  const text = ops.objects.get(env.hash);
+export function deliver(
+  ops: Ops,
+  s: Scenario,
+  env: Envelope,
+  system: SystemStatus,
+  bounces = true,
+) {
+  const sender = mailHostOf(s, splitAddress(env.from).domain);
   for (const rcpt of env.rcpts) {
-    const { local, domain } = splitAddress(rcpt);
-    const company = s.companies.find((c) => c.domain === domain);
-    if (!company) {
-      ops.mkdirp('mta', INTERNET_HOST, `/${rcpt}/inbox`, ROOT_DIR);
-      ops.write('mta', INTERNET_HOST, `/${rcpt}/inbox/${env.id}.eml`, text, {
-        ...ROOT_DIR,
-        mode: 0o644,
-      });
-      continue;
-    }
-    const host = hostOf(company);
-    const dir = Directory.load(ops.vfs, ops.objects, host);
-    if (!dir.canLogin(local) || local === 'root') {
-      const reason = dir.account(local) ? 'account is locked' : 'user unknown';
+    const dest = mailHostOf(s, splitAddress(rcpt).domain);
+    if (!dest) {
       ops.emit('mta', {
         type: 'mail.bounce',
         messageId: env.id,
         to: rcpt,
-        reason,
+        reason: 'no such domain',
       });
-      if (bounces) bounce(ops, s, env, rcpt, reason);
+      if (bounces) bounce(ops, s, env, rcpt, 'no such domain', system);
       continue;
     }
-    const group = dir.primaryGroup(local);
-    ensureMailbox(ops, host, local, group);
-    ops.write('mta', host, `/var/mail/${local}/new/${env.id}.eml`, text, {
+    const reason =
+      sendBlock(system, sender?.host) ?? receiveBlock(system, dest.host);
+    if (reason) {
+      ops.emit('mta', {
+        type: 'mail.queued',
+        messageId: env.id,
+        hash: env.hash,
+        from: env.from,
+        rcpt,
+        reason,
+      });
+      continue;
+    }
+    deliverOne(ops, s, env, rcpt, dest.host, system, bounces);
+  }
+}
+
+function deliverOne(
+  ops: Ops,
+  s: Scenario,
+  env: Envelope,
+  rcpt: string,
+  host: string,
+  system: SystemStatus,
+  bounces: boolean,
+) {
+  const { local } = splitAddress(rcpt);
+  const dir = Directory.load(ops.vfs, ops.objects, host);
+  if (!dir.canLogin(local) || local === 'root') {
+    const reason = dir.account(local) ? 'account is locked' : 'user unknown';
+    ops.emit('mta', {
+      type: 'mail.bounce',
+      messageId: env.id,
+      to: rcpt,
+      reason,
+    });
+    if (bounces) bounce(ops, s, env, rcpt, reason, system);
+    return;
+  }
+  const group = dir.primaryGroup(local);
+  ensureMailbox(ops, host, local, group);
+  ops.write(
+    'mta',
+    host,
+    `/var/mail/${local}/new/${env.id}.eml`,
+    ops.objects.get(env.hash),
+    {
       owner: local,
       group,
       mode: 0o600,
+    },
+  );
+}
+
+/** Deliver the queued mail that no system event blocks now, in queue order. */
+export function releaseQueue(
+  ops: Ops,
+  s: Scenario,
+  queue: QueuedMail[],
+  system: SystemStatus,
+): QueuedMail[] {
+  const released: QueuedMail[] = [];
+  for (const q of queue) {
+    const sender = mailHostOf(s, splitAddress(q.from).domain);
+    const dest = mailHostOf(s, splitAddress(q.rcpt).domain);
+    if (
+      !dest ||
+      sendBlock(system, sender?.host) ||
+      receiveBlock(system, dest.host)
+    )
+      continue;
+    ops.emit('mta', {
+      type: 'mail.dequeued',
+      messageId: q.messageId,
+      rcpt: q.rcpt,
     });
+    deliverOne(
+      ops,
+      s,
+      { id: q.messageId, hash: q.hash, from: q.from, rcpts: [q.rcpt] },
+      q.rcpt,
+      dest.host,
+      system,
+      true,
+    );
+    released.push(q);
   }
+  return released;
 }
 
 function bounce(
@@ -178,9 +282,10 @@ function bounce(
   env: Envelope,
   rcpt: string,
   reason: string,
+  system: SystemStatus,
 ) {
   const { domain } = splitAddress(env.from);
-  if (!s.companies.some((c) => c.domain === domain)) return;
+  if (!mailHostOf(s, domain)) return;
   const id = `${env.id}.bounce.${rcpt.replace(/[^a-z0-9]/gi, '_')}`;
   const text = formatMessage(
     {
@@ -188,7 +293,7 @@ function bounce(
       from: `MAILER-DAEMON@${domain}`,
       to: [env.from],
       cc: [],
-      subject: `Undelivered Mail Returned to Sender`,
+      subject: 'Undelivered Mail Returned to Sender',
       date: '',
       body: `Your message ${env.id} could not be delivered to ${rcpt}: ${reason}.\n\n--- Original message ---\n${ops.objects.get(env.hash)}`,
     },
@@ -203,54 +308,7 @@ function bounce(
       from: `MAILER-DAEMON@${domain}`,
       rcpts: [env.from],
     },
+    system,
     false,
   );
-}
-
-/** Mail that the scenario or the director puts into the world. */
-export function injectMail(
-  ops: Ops,
-  s: Scenario,
-  label: string,
-  clock: string,
-  m: MailInject,
-  n: number,
-  source: 'scenario' | 'director',
-) {
-  const id = `${label}.inject.${n}`;
-  const list = (v: string | string[] | undefined) =>
-    (Array.isArray(v) ? v : v ? [v] : []).map((x) => x.toLowerCase());
-  const to = list(m.to);
-  const cc = list(m.cc);
-  const { domain } = splitAddress(m.from);
-  const text = formatMessage(
-    { id, from: m.from, to, cc, subject: m.subject, date: clock, body: m.body },
-    domain || 'invalid',
-  );
-  const hash = ops.objects.put(text);
-  ops.emit('director', {
-    type: 'inject',
-    kind: 'mail',
-    source,
-    messageId: id,
-    from: m.from,
-    to: [...to, ...cc],
-    subject: m.subject,
-    hash,
-  });
-  // The sender is outside the simulation: keep its sent copy on the internet host.
-  ops.mkdirp('mta', INTERNET_HOST, `/${m.from.toLowerCase()}/sent`, ROOT_DIR);
-  ops.write(
-    'mta',
-    INTERNET_HOST,
-    `/${m.from.toLowerCase()}/sent/${id}.eml`,
-    text,
-    { ...ROOT_DIR, mode: 0o644 },
-  );
-  deliver(ops, s, {
-    id,
-    hash,
-    from: m.from,
-    rcpts: [...new Set([...to, ...cc])],
-  });
 }

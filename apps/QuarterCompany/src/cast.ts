@@ -40,7 +40,7 @@ const ActorsFile = z.object({
 export const Match = z
   .object({
     user: z.string().optional(), // seat id, user@domain
-    company: z.string().optional(),
+    org: z.string().optional(),
     role: z.string().optional(),
   })
   .default({});
@@ -97,11 +97,11 @@ export function loadCast(scenarioDir: string, name: string): CastFile {
 }
 
 const specificity = (m: Rule['match']) =>
-  m.user ? 4 : m.company && m.role ? 3 : m.role ? 2 : m.company ? 1 : 0;
+  m.user ? 4 : m.org && m.role ? 3 : m.role ? 2 : m.org ? 1 : 0;
 
 const matches = (m: Rule['match'], seat: Seat) =>
   (!m.user || m.user === seat.id) &&
-  (!m.company || m.company === seat.company.id) &&
+  (!m.org || m.org === seat.org.id) &&
   (!m.role || m.role === seat.person.role);
 
 export interface Casting {

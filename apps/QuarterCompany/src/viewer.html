@@ -210,7 +210,7 @@ main {
   <section aria-labelledby="log-h" style="min-width:0">
     <h2 class="pane-title" id="log-h">Turn log</h2>
     <div class="printout">
-      <div class="printout-head"><span id="log-title"></span><span class="log-tools"><button class="btn small" id="expand" type="button">Expand all</button><button class="btn small" id="collapse" type="button">Collapse all</button></span><span class="legend"><span class="badge-inject" tabindex="0" data-tip="Purple marks what the scenario or the director caused. Outside mail comes from a sender outside the simulation. Compelled actions are real actions that a person was made to take, in their own session.">Scenario</span><span id="log-side"></span></span></div>
+      <div class="printout-head"><span id="log-title"></span><span class="log-tools"><button class="btn small" id="expand" type="button">Expand all</button><button class="btn small" id="collapse" type="button">Collapse all</button></span><span class="legend"><span class="badge-inject" tabindex="0" data-tip="Purple marks what the scenario or the director caused. A system event is the physics of the world, such as a host or mail outage. A compelled action is a real action that a person was made to take, in their own session.">Scenario</span><span id="log-side"></span></span></div>
       <ol class="log" id="log"></ol>
     </div>
   </section>
@@ -378,7 +378,8 @@ main {
       const used = ev.filter((e) => e.type === 'tool.call').reduce((a, e) => a + e.minutes, 0);
       const tools = ev.filter((e) => e.type === 'tool.call').length;
       let state = 'idle', text = 'Idle';
-      if (ev.some((e) => e.type === 'seat.skip')) { state = 'asleep'; text = 'Asleep'; }
+      if (ev.some((e) => e.type === 'seat.blocked')) { state = 'absent'; text = 'Host down'; }
+      else if (ev.some((e) => e.type === 'seat.skip')) { state = 'asleep'; text = 'Asleep'; }
       else if (tools) { state = 'working'; text = 'Working'; }
       else if (!passwdUsers(snapshot(Math.max(0, i - 1)), s.host).has(short(s.id)) && !ev.length) { state = 'absent'; text = 'No account'; }
       const n = lastNote(s.id, i);
@@ -398,12 +399,8 @@ main {
 
 
   // ----- mail and documents in the log -----
-  const INJECT_TIP = {
-    scenario: 'Mail from outside the simulation. The scenario file schedules it. The sender is not a person in any company here, so only the internet host keeps a sent copy. Sender: ',
-    director: 'Mail from outside the simulation. The director added it during the run. Sender: ',
-  };
-  const injectBadge = (source, from) =>
-    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': INJECT_TIP[source || 'scenario'] + from + '.' }, 'outside mail');
+  const systemBadge = (source, kind, host) =>
+    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': 'A system event from the ' + source + ': the physics of the world, not a person. ' + kind + ' on ' + host + '. While it lasts, mail to or from the host waits in a queue.' }, 'system');
   const compelBadge = (source, seat) =>
     h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': 'Compelled by the ' + source + ': ' + seat + ' did this at the start of the turn, in their own session and with their own minutes. It is a real action in the world. Their briefing tells them that they did it.' }, 'compelled');
   function parseMail(text) {
@@ -428,8 +425,6 @@ main {
     for (const [k, n] of fs) if (k.endsWith(name) && n.hash && D.objects[n.hash] != null) return D.objects[n.hash];
     return null;
   }
-  const injectOf = new Map();
-  for (const t of D.turns) for (const e of t.events) if (e.type === 'inject') injectOf.set(e.messageId, e);
   const fold = (summary, body, cls) =>
     h('details', { class: 'fold' + (cls ? ' ' + cls : ''), open: expandAll }, h('summary', null, ...[summary].flat()), body);
   const docBlock = (text) => h('div', { class: 'doc' }, h('pre', null, text.replace(/\n+$/, '')));
@@ -450,8 +445,7 @@ main {
       }
       case 'read_mail': {
         const m = parseMail(messageText(a.id, fs) || e.result);
-        const inj = injectOf.get(a.id);
-        return fold([inj ? injectBadge(inj.source, inj.from) : null, 'Email from ', gist(m.from + ' · “' + m.subject + '”')], mailCard(m, null, !!inj));
+        return fold(['Email from ', gist(m.from + ' · “' + m.subject + '”')], mailCard(m, null, false));
       }
       case 'send_mail':
         return fold(['Email to ', gist(listOf(a.to) + ' · “' + (a.subject || '') + '”')],
@@ -497,15 +491,22 @@ main {
         }
         case 'mail.send':
           break; // the send_mail card shows the message
-        case 'inject': {
-          const text = (e.hash && D.objects[e.hash]) || messageText(e.messageId, fs);
-          rows.push(h('li', { class: 'inject' }, time, h('div', { style: 'min-width:0' },
-            injectBadge(e.source, e.from), 'arrives for ' + e.to.join(', '),
-            text ? fold(['Email from ', gist(e.from + ' · “' + e.subject + '”')], mailCard(parseMail(text), null, true)) : ' “' + e.subject + '”')));
+        case 'system.start': {
+          const what = { 'host.down': 'HOST DOWN', 'mail.down': 'MAIL DOWN', 'disk.full': 'DISK FULL' }[e.kind] || e.kind;
+          rows.push(h('li', { class: 'inject' }, time, h('div', null, systemBadge(e.source, e.kind, e.host), h('b', null, what), ' on ' + e.host + (e.note ? ' — ' + e.note : ''))));
           break;
         }
-        case 'compel.skipped':
-          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'COMPEL SKIPPED ' + short(e.seat) + ': ' + e.reason)));
+        case 'system.end':
+          rows.push(h('li', { class: 'inject' }, time, h('div', null, systemBadge('scenario', e.kind, e.host), e.kind + ' on ' + e.host + ' is over')));
+          break;
+        case 'mail.queued':
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'MAIL WAITS ' + e.messageId + ' → ' + e.rcpt + ': ' + e.reason)));
+          break;
+        case 'mail.dequeued':
+          rows.push(h('li', null, time, h('div', { class: 'dim' }, '↳ ' + e.messageId + ' → ' + e.rcpt + ' delivered after a wait')));
+          break;
+        case 'seat.blocked':
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, short(e.seat) + ' cannot work: ' + e.reason)));
           break;
         case 'thought':
           rows.push(h('li', { class: 'thought' }, time, h('div', { style: 'min-width:0' },

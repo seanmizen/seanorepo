@@ -1,8 +1,9 @@
 # A scripted Monday and Tuesday morning. Seat id -> turn -> tool calls.
 # No model runs, so `yarn demo` is free and gives the same result every time.
 # Several people work in the same turns, as in a real office. Message ids are
-# <turn>.<user>.<n> for sent mail and <turn>.inject.<n> for mail from outside.
-# Priya's two requests are compelled in scenario.yaml, so they are her own mail.
+# <turn>.<user>.<n>. Priya's two requests and Graham's quote request are
+# compelled in scenario.yaml, so they are their own mail. Mail is down from
+# 11:00 to 11:30, so Maria's question to Tom waits in the queue.
 
 dave@brindlehart.example:
   fy1-q1-d1-t1:
@@ -104,7 +105,7 @@ tom@brindlehart.example:
     - { tool: list_mail }
     - { tool: read_mail, args: { id: fy1-q1-d1-t7.priya.1 } }
     - { tool: end_turn, args: { note: "Priya has the Q1 numbers.", wake: on_mail } }
-  fy1-q1-d1-t10:
+  fy1-q1-d1-t11:
     - { tool: list_mail }
     - { tool: read_mail, args: { id: fy1-q1-d1-t9.maria.1 } }
     - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv } }
@@ -140,14 +141,15 @@ maria@brindlehart.example:
     - { tool: end_turn, args: { note: "Planned Sophie's first week.", wake: on_mail } }
   fy1-q1-d1-t3:
     - { tool: list_mail }
-    - { tool: read_mail, args: { id: fy1-q1-d1-t3.inject.1 } }
     - { tool: read_mail, args: { id: fy1-q1-d1-t2.dave.1 } }
-    - { tool: read_file, args: { path: /srv/sales/price-list.csv } }
-    - { tool: end_turn, args: { note: "Cartwright wants paper and toner. Quote them next." } }
+    - { tool: end_turn, args: { note: "Sophie's account is ready." } }
   fy1-q1-d1-t4:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t3.graham.1 } }
+    - { tool: read_file, args: { path: /srv/sales/price-list.csv } }
     - tool: send_mail
       args:
-        to: orders@cartwright-stationers.example
+        to: graham@cartwright-stationers.example
         subject: "Re: Quote request: paper and toner"
         body: |
           Hello Graham,
@@ -167,6 +169,8 @@ maria@brindlehart.example:
     - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv, sudo: true } }
     - { tool: end_turn, args: { note: "Could not open the ledger. Ask Dave." } }
   fy1-q1-d1-t7:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t6.graham.1 } }
     - tool: send_mail
       args:
         to: dave@brindlehart.example
@@ -197,7 +201,7 @@ maria@brindlehart.example:
     - { tool: end_turn, args: { note: "Asked Tom about Cartwright.", wake: on_mail } }
   fy1-q1-d2-t1:
     - { tool: list_mail }
-    - { tool: read_mail, args: { id: fy1-q1-d1-t10.tom.1 } }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t11.tom.1 } }
     - { tool: read_file, args: { path: notes.md } }
     - { tool: end_turn, args: { note: "Cartwright pays on time. Sophie starts today.", wake: on_mail } }
   fy1-q1-d2-t3:
@@ -243,3 +247,18 @@ sophie@brindlehart.example:
     - { tool: read_mail, args: { id: fy1-q1-d2-t3.maria.1 } }
     - { tool: read_file, args: { path: /srv/sales/price-list.csv } }
     - { tool: end_turn, args: { note: "Read the price list. Call with Maria and Cartwright at 11:00.", wake: on_mail } }
+
+graham@cartwright-stationers.example:
+  fy1-q1-d1-t6:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t4.maria.1 } }
+    - { tool: think_privately, args: { thought: "GBP 2,012. Fair, but I will check Office Direct before I sign." } }
+    - tool: send_mail
+      args:
+        to: maria@brindlehart.example
+        subject: "Re: Quote request: paper and toner"
+        body: |
+          Thank you, Maria. I will confirm by Friday.
+
+          Graham
+    - { tool: end_turn, args: { note: "Confirm the Brindle & Hart quote by Friday.", wake: on_mail } }

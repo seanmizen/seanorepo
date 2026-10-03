@@ -27,17 +27,18 @@ import {
   type Models,
   Rule,
 } from './cast.ts';
-import type { JournalEvent, StateEvent, Wake } from './events.ts';
+import type { EventBody, JournalEvent, StateEvent, Wake } from './events.ts';
 import { ObjectStore } from './objects.ts';
 import {
   type Compel,
-  checkInjectSender,
+  checkInject,
   type Inject,
   loadScenario,
   type Scenario,
 } from './scenario.ts';
 import { describeTurn, journalPathOf, labelOf, ordOf } from './time.ts';
 import { modeString, Vfs } from './vfs.ts';
+import type { QueuedMail, SystemStatus } from './world.ts';
 
 export interface RunInfo {
   name: string;
@@ -64,7 +65,55 @@ export class SimState {
   castRules: Rule[] = [];
   /** Private thoughts per seat, oldest first. Never part of the world. */
   thoughts = new Map<string, { label: string; text: string }[]>();
+  /** Active system events per host. See REQ-QC-017. */
+  system: SystemStatus = new Map();
+  /** Mail that waits for a host or a mail service. One item per recipient. */
+  queue: QueuedMail[] = [];
   ord = -1;
+
+  /** A copy for a preview, for example the qc-worker server. */
+  clone(): SimState {
+    const c = new SimState();
+    c.vfs = this.vfs.clone();
+    c.seats = new Map(this.seats);
+    c.castRules = [...this.castRules];
+    c.thoughts = new Map(this.thoughts);
+    c.system = new Map([...this.system].map(([h, k]) => [h, new Set(k)]));
+    c.queue = [...this.queue];
+    c.ord = this.ord;
+    return c;
+  }
+
+  /**
+   * Apply the system and queue events at once. The engine calls this during
+   * a turn, and the fold calls it through apply, so both agree.
+   */
+  applyLive(e: EventBody) {
+    switch (e.type) {
+      case 'system.start': {
+        const set = this.system.get(e.host) ?? new Set();
+        set.add(e.kind);
+        this.system.set(e.host, set);
+        return;
+      }
+      case 'system.end':
+        this.system.get(e.host)?.delete(e.kind);
+        return;
+      case 'mail.queued':
+        this.queue.push({
+          messageId: e.messageId,
+          hash: e.hash,
+          from: e.from,
+          rcpt: e.rcpt,
+        });
+        return;
+      case 'mail.dequeued':
+        this.queue = this.queue.filter(
+          (q) => !(q.messageId === e.messageId && q.rcpt === e.rcpt),
+        );
+        return;
+    }
+  }
 
   apply(e: JournalEvent): string | undefined {
     this.ord = Math.max(this.ord, e.ord);
@@ -80,6 +129,12 @@ export class SimState {
         return;
       case 'cast.rule':
         this.castRules.push(Rule.parse(e.rule));
+        return;
+      case 'system.start':
+      case 'system.end':
+      case 'mail.queued':
+      case 'mail.dequeued':
+        this.applyLive(e);
         return;
       case 'thought': {
         const list = this.thoughts.get(e.seat) ?? [];
@@ -128,8 +183,7 @@ export class Run {
     this.scenario = loadScenario(join(dir, 'scenario'));
     this.models = loadModels(join(dir, 'scenario'));
     this.castFile = loadCast(join(dir, 'scenario'), this.info.cast);
-    for (const inj of this.info.injects)
-      checkInjectSender(this.scenario, inj.mail.from);
+    for (const inj of this.info.injects) checkInject(this.scenario, inj);
   }
 
   static runsDir(): string {
@@ -303,7 +357,7 @@ export class Run {
   writeMinds(state: SimState) {
     const dir = join(this.dir, 'minds');
     const names = new Map(
-      this.scenario.companies.flatMap((c) =>
+      this.scenario.orgs.flatMap((c) =>
         c.people.map((p) => [`${p.user}@${c.domain}`, p.name]),
       ),
     );
