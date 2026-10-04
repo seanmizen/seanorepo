@@ -2,6 +2,7 @@
 // `call`, which checks the time budget, runs the tool and records it.
 // See REQ-QC-008 and REQ-QC-009.
 import type { Wake } from './events.ts';
+import type { Live } from './live.ts';
 import type { ObjectStore } from './objects.ts';
 import { type Op, Ops } from './ops.ts';
 import type { Member, People, Scenario, Seat } from './scenario.ts';
@@ -35,6 +36,8 @@ export class Session {
   done = false;
   note = '';
   wake: Wake = 'next_turn';
+  /** A listener for `qc run --watch`. It gets each tool call (REQ-QC-035). */
+  live?: Live;
   /** The people in the world, with the joins and leaves of this session. */
   people: Map<string, Member>;
   private sent = 0;
@@ -152,6 +155,10 @@ export class Session {
     opts: { compelled?: 'scenario' | 'director'; population?: string } = {},
   ): Promise<ToolResult> {
     const { result, staged } = this.stage(name, rawArgs ?? {});
+    const logged =
+      result.text.length > RESULT_LOG_LIMIT
+        ? `${result.text.slice(0, RESULT_LOG_LIMIT)}…`
+        : result.text;
     // The call goes in the journal before its effects, so playback reads in order.
     this.ops.emit(this.seat.id, {
       type: 'tool.call',
@@ -162,12 +169,18 @@ export class Session {
       args: rawArgs ?? {},
       ok: result.ok,
       minutes: result.minutes,
-      result:
-        result.text.length > RESULT_LOG_LIMIT
-          ? `${result.text.slice(0, RESULT_LOG_LIMIT)}…`
-          : result.text,
+      result: logged,
     });
     for (const op of staged) this.ops.emit(op.actor, op.body);
+    this.live?.({
+      type: 'tool',
+      seat: this.seat.id,
+      tool: name,
+      args: rawArgs ?? {},
+      ok: result.ok,
+      minutes: result.minutes,
+      result: logged,
+    });
     return { ok: result.ok, text: result.text };
   }
 
@@ -177,12 +190,23 @@ export class Session {
    */
   reject(name: string, rawArgs: unknown, reason: string): ToolResult {
     const text = `The tool call is not valid. ${reason}`;
+    // Text that is not JSON goes in the journal as it came.
+    const args =
+      typeof rawArgs === 'string' ? { raw: rawArgs } : (rawArgs ?? {});
     this.ops.emit(this.seat.id, {
       type: 'tool.call',
       seat: this.seat.id,
       tool: name,
-      // Text that is not JSON goes in the journal as it came.
-      args: typeof rawArgs === 'string' ? { raw: rawArgs } : (rawArgs ?? {}),
+      args,
+      ok: false,
+      minutes: 0,
+      result: text,
+    });
+    this.live?.({
+      type: 'tool',
+      seat: this.seat.id,
+      tool: name,
+      args,
       ok: false,
       minutes: 0,
       result: text,

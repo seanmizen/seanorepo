@@ -693,3 +693,31 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   - depends-on REQ-QC-024
   - depends-on REQ-QC-030
   - depends-on REQ-QC-033
+
+## REQ-QC-035 — A run can be watched live in the viewer
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #564
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** When `qc run` has `--watch`, the simulator shall serve the
+  viewer on a loopback address, show each turn when the engine writes it,
+  and show the model text and the tool calls of each seat while the turn
+  runs.
+- **Rationale:** A local model is slow, so one turn can take many minutes.
+  Sean wants to see the workers type. The finished turns come from the
+  journal, the same as `qc export`. The live events are only for the
+  viewer. The journal does not record them. A run without `--watch` makes no
+  live events. The `openai-compatible` brain asks for a streamed reply
+  only in watch mode, and it builds the same reply object from the stream.
+  The server keeps the events of the current turn, so a page that opens
+  during a turn shows the turn so far.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/watch.test.ts` › "the chunks of a stream build the same reply as one full reply"
+  - Test — `apps/QuarterCompany/test/watch.test.ts` › "the live stream shows the model text and each tool call, and the journal is the same as a run without it"
+  - Test — `apps/QuarterCompany/test/watch.test.ts` › "a page that opens during a turn gets the turn so far, and the turns come from the journal"
+  - Demonstration — Sean runs `qc run --watch` with the `local` cast and watches a turn
+- **Relations:**
+  - depends-on REQ-QC-001
+  - depends-on REQ-QC-011

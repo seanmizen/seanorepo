@@ -7,6 +7,7 @@
 //   timeout per provider, and a limit on parallel requests per provider. A
 //   local server on one GPU does one request at a time, and one request can
 //   take many minutes.
+// - postSse (REQ-QC-035): the same POST, with a streamed reply.
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import type { Actor, Models, Provider } from '../cast.ts';
@@ -91,25 +92,28 @@ async function withSlot<T>(
 }
 
 /**
- * POST JSON to a provider and return the parsed reply. The total timeout is
- * `timeout_s` of the provider (default 1800 seconds). Throws on an HTTP error.
- * `ms` is the time of the request only. It starts when the request gets its
- * slot, so the wait for the slot is not in it (REQ-QC-032).
+ * POST JSON to a provider. With `onText`, the body of a good reply goes to
+ * `onText` part by part, and `text` is empty. Without it, `text` is the full
+ * body. The total timeout is `timeout_s` of the provider (default 1800
+ * seconds). Throws on an HTTP error. `ms` is the time of the request only.
+ * It starts when the request gets its slot, so the wait for the slot is not
+ * in it (REQ-QC-032).
  */
-export function postJson(
+function post(
   providerName: string,
   provider: Provider,
   url: string,
   body: unknown,
-  headers: Record<string, string> = {},
-): Promise<{ body: unknown; ms: number }> {
+  headers: Record<string, string>,
+  onText?: (text: string) => void,
+): Promise<{ text: string; ms: number }> {
   checkOffline(providerName, url);
   const timeoutMs = (provider.timeout_s ?? 1800) * 1000;
   return withSlot(
     providerName,
     provider.concurrency,
     () =>
-      new Promise<{ body: unknown; ms: number }>((resolve, reject) => {
+      new Promise<{ text: string; ms: number }>((resolve, reject) => {
         const t0 = performance.now();
         const u = new URL(url);
         const data = Buffer.from(JSON.stringify(body));
@@ -124,14 +128,23 @@ export function postJson(
             },
           },
           (res) => {
-            const chunks: Buffer[] = [];
-            res.on('data', (c: Buffer) => chunks.push(c));
+            const status = res.statusCode ?? 0;
+            const good = status >= 200 && status < 300;
+            let text = '';
+            res.setEncoding('utf8');
+            res.on('data', (c: string) => {
+              if (good && onText) {
+                try {
+                  onText(c);
+                } catch (err) {
+                  req.destroy(err as Error);
+                }
+              } else text += c;
+            });
             res.on('error', reject);
             res.on('end', () => {
               clearTimeout(timer);
-              const text = Buffer.concat(chunks).toString('utf8');
-              const status = res.statusCode ?? 0;
-              if (status < 200 || status >= 300) {
+              if (!good) {
                 reject(
                   new Error(
                     `${url} returned HTTP ${status}: ${text.slice(0, 300)}`,
@@ -139,18 +152,7 @@ export function postJson(
                 );
                 return;
               }
-              try {
-                resolve({
-                  body: JSON.parse(text),
-                  ms: Math.round(performance.now() - t0),
-                });
-              } catch {
-                reject(
-                  new Error(
-                    `${url} returned text that is not JSON: ${text.slice(0, 300)}`,
-                  ),
-                );
-              }
+              resolve({ text, ms: Math.round(performance.now() - t0) });
             });
           },
         );
@@ -168,4 +170,67 @@ export function postJson(
         req.end(data);
       }),
   );
+}
+
+/** POST JSON to a provider and return the parsed reply. See `post`. */
+export async function postJson(
+  providerName: string,
+  provider: Provider,
+  url: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ body: unknown; ms: number }> {
+  const { text, ms } = await post(providerName, provider, url, body, headers);
+  try {
+    return { body: JSON.parse(text), ms };
+  } catch {
+    throw new Error(
+      `${url} returned text that is not JSON: ${text.slice(0, 300)}`,
+    );
+  }
+}
+
+/**
+ * POST JSON to a provider and read a server-sent event stream. Each `data:`
+ * line goes to `onEvent` as parsed JSON. `data: [DONE]` ends the stream.
+ * See `post`.
+ */
+export async function postSse(
+  providerName: string,
+  provider: Provider,
+  url: string,
+  body: unknown,
+  headers: Record<string, string>,
+  onEvent: (data: unknown) => void,
+): Promise<{ ms: number }> {
+  let rest = '';
+  const line = (raw: string) => {
+    const l = raw.trim();
+    if (!l.startsWith('data:')) return;
+    const payload = l.slice(5).trim();
+    if (!payload || payload === '[DONE]') return;
+    let value: unknown;
+    try {
+      value = JSON.parse(payload);
+    } catch {
+      throw new Error(
+        `${url} sent a stream event that is not JSON: ${payload.slice(0, 300)}`,
+      );
+    }
+    onEvent(value);
+  };
+  const { ms } = await post(
+    providerName,
+    provider,
+    url,
+    body,
+    headers,
+    (text) => {
+      const lines = (rest + text).split('\n');
+      rest = lines.pop() ?? '';
+      for (const l of lines) line(l);
+    },
+  );
+  line(rest);
+  return { ms };
 }
