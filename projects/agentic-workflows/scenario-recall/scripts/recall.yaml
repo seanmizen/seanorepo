@@ -1,0 +1,311 @@
+# The K2 recall, scripted over three working days. Seat id -> turn -> tool
+# calls. A key "<from>..<to>" is a range of turns: the calls run in each
+# turn of the range. A turn label beats a range (REQ-QC-028).
+#
+# Day 1: the recall starts at 09:30. Owners write to support@. Jess takes the
+# mail into the case system and gives cases to Liam and Aisha. Each reply
+# takes about 5 minutes, so the team closes about 7 cases in a turn. More
+# than that arrive. At 14:15 Jess tells Ruth. Ruth asks Staffline for two
+# temps and Northgate for three consultants.
+# Day 2: Kwame makes the accounts in the support group. The temps start at
+# 09:15 and the consultants at 09:30. The backlog falls.
+# Day 3: the team clears the backlog by 13:00. Each customer who chased got
+# an answer within a day, so nobody escalates to Ruth. Northgate ends the
+# contract at 15:45, and Kwame locks the consultants' accounts.
+#
+# Message ids are <turn>.<user>.<n>. A case reply uses the same counter as
+# send_mail, so a seat that reads a message id sends that mail first.
+
+x-reply: &reply |
+  Hello,
+
+  Thank you for your message about the Corvel K2 kettle recall. Please stop
+  using the kettle now, and unplug the base.
+
+  We give you a full refund to the card that you paid with. It arrives in
+  5 working days. We attach a prepaid return label. Put the kettle and its
+  base in any box, and post it back to us with the label.
+
+  We are sorry for the trouble.
+
+x-agent: &agent
+  - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+  - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+  - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+
+grace@corvel.example:
+  fy1-q1-d1-t2:
+    - { tool: think_privately, args: { thought: "Every retailer gets the same mail today. Halden sold more K2s than anyone. They will feel it first." } }
+    - { tool: end_turn, args: { note: "Recall notice sent to Halden Home.", wake: on_mail } }
+
+ruth@haldenhome.example:
+  fy1-q1-d1-t2:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t1.grace.1 } }
+    - { tool: think_privately, args: { thought: "Fourteen hundred K2s. If this goes badly, the papers will name us, not Corvel." } }
+    - tool: send_mail
+      args:
+        to: jess@haldenhome.example
+        subject: "K2 recall: refunds for everyone"
+        body: |
+          Jess,
+
+          Corvel recalls the K2 kettle today. Give every owner who writes in a
+          full refund and a return label. Use the template in
+          /srv/handbook/recall-k2.md. Tell me if the queue gets out of hand.
+
+          Ruth
+    - { tool: end_turn, args: { note: "Told Jess: refunds for every K2 owner.", wake: on_mail } }
+  fy1-q1-d1-t23:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t22.jess.1 } }
+    - { tool: think_privately, args: { thought: "Three people cannot answer a thousand customers. Temps are cheap but slow to train. Consultants are dear but ready. I will buy both." } }
+    - tool: send_mail
+      args:
+        to: marcus@staffline.example
+        subject: "Two temps for customer service, from tomorrow"
+        body: |
+          Marcus,
+
+          We need two customer service temps from tomorrow at 09:00, for two
+          weeks. The work is product recall refunds. Please send names today.
+
+          Ruth Halden
+          Halden Home
+    - tool: send_mail
+      args:
+        to: helen@northgate.example
+        cc: jess@haldenhome.example
+        subject: "Urgent: a customer service team for a product recall"
+        body: |
+          Helen,
+
+          A kettle recall gives us about a thousand customer emails. Can
+          Northgate put three consultants on our case system from tomorrow
+          morning? Please send a price today.
+
+          Ruth Halden
+          Halden Home
+    - { tool: end_turn, args: { note: "Asked Staffline for two temps and Northgate for three consultants.", wake: on_mail } }
+  fy1-q1-d1-t26:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t24.helen.1 } }
+    - tool: send_mail
+      args:
+        to: helen@northgate.example
+        cc: jess@haldenhome.example
+        subject: "Re: Urgent: a customer service team for a product recall"
+        body: |
+          Helen,
+
+          Agreed. Three consultants from tomorrow, until the queue is clear.
+
+          Ruth
+    - { tool: end_turn, args: { note: "Northgate starts tomorrow.", wake: on_mail } }
+
+jess@haldenhome.example:
+  fy1-q1-d1-t2:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t1.grace.1 } }
+    - { tool: read_file, args: { path: /srv/handbook/recall-k2.md } }
+    - { tool: think_privately, args: { thought: "A recall at 09:30 on a Monday. The radio will send every K2 owner to our support address." } }
+    - { tool: case_list }
+    - { tool: end_turn, args: { note: "Recall starts. Take the support mail into the case system every turn." } }
+  fy1-q1-d1-t3..fy1-q1-d2-t1:
+    - { tool: case_intake }
+    - { tool: case_assign, args: { to: [liam, aisha], count: 6 } }
+    - { tool: case_assign, args: { to: jess, count: 1 } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+  fy1-q1-d1-t22:
+    - tool: send_mail
+      args:
+        to: ruth@haldenhome.example
+        subject: "Recall queue: we cannot keep up"
+        body: |
+          Ruth,
+
+          The support address gets about 25 recall emails every 15 minutes.
+          Liam, Aisha and I close about 7. The open cases grow by about 20 in
+          each slot, and the oldest customers wait longer every hour.
+
+          We need more people on the case system by tomorrow morning.
+
+          Jess
+    - { tool: case_intake }
+    - { tool: case_assign, args: { to: [liam, aisha], count: 6 } }
+    - { tool: think_privately, args: { thought: "I hate to ask for help on day one. But the numbers do not lie." } }
+  fy1-q1-d2-t2:
+    - { tool: case_intake }
+    - { tool: case_assign, args: { to: [liam, aisha, zara, connor], count: 12 } }
+    - { tool: case_assign, args: { to: jess, count: 1 } }
+    - { tool: think_privately, args: { thought: "Two temps. I give them the same template and three cases each. They learn on the job." } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+  fy1-q1-d2-t3..fy1-q1-d3-t28:
+    - { tool: case_intake }
+    - { tool: case_assign, args: { to: [liam, aisha, zara, connor, ines, tobias, mei], count: 21 } }
+    - { tool: case_assign, args: { to: jess, count: 1 } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+  fy1-q1-d3-t29..fy1-q1-d3-t31:
+    - { tool: case_intake }
+    - { tool: case_assign, args: { to: [liam, aisha, zara, connor], count: 12 } }
+    - { tool: case_assign, args: { to: jess, count: 1 } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+  fy1-q1-d3-t32:
+    - { tool: case_intake }
+    - { tool: case_list }
+    - { tool: think_privately, args: { thought: "Three days. Next recall, I want the temps on the first morning." } }
+    - { tool: end_turn, args: { note: "End of the recall week. Check the queue in the morning." } }
+
+liam@haldenhome.example:
+  fy1-q1-d1-t3..fy1-q1-d3-t32: *agent
+  fy1-q1-d1-t8:
+    - { tool: think_privately, args: { thought: "Same email forty times. Same reply forty times. At least the template is good." } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+
+aisha@haldenhome.example:
+  fy1-q1-d1-t3..fy1-q1-d3-t32: *agent
+  fy1-q1-d1-t16:
+    - { tool: case_list }
+    - { tool: think_privately, args: { thought: "Hundreds of open cases, and the oldest is from this morning. Those people heard the radio and still have no answer." } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+
+marcus@staffline.example:
+  fy1-q1-d1-t24:
+    - { tool: read_mail, args: { id: fy1-q1-d1-t23.ruth.1 } }
+    - { tool: place_person, args: { client: haldenhome.example, username: zara, full_name: Zara Hussain, role: support, title: Customer Service Advisor (temp), persona: "You are a temp. You learn fast and follow the template." } }
+    - { tool: place_person, args: { client: haldenhome.example, username: connor, full_name: Connor Walsh, role: support, title: Customer Service Advisor (temp), persona: "You are a temp. You worked in a call centre for two years." } }
+    - tool: send_mail
+      args:
+        to: kwame@haldenhome.example
+        cc: ruth@haldenhome.example
+        subject: "Two temps start tomorrow: accounts please"
+        body: |
+          Hi Kwame,
+
+          Zara Hussain (zara) and Connor Walsh (connor) start in customer service
+          tomorrow at 09:00. Please make their accounts before then.
+
+          Marcus Reid
+          Staffline Recruitment
+    - { tool: end_turn, args: { note: "Placed Zara and Connor at Halden Home.", wake: on_mail } }
+
+helen@northgate.example:
+  fy1-q1-d1-t24:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t23.ruth.2 } }
+    - { tool: think_privately, args: { thought: "A recall with a deadline. They will pay the day rate without a fight." } }
+    - tool: send_mail
+      args:
+        to: ruth@haldenhome.example
+        subject: "Re: Urgent: a customer service team for a product recall"
+        body: |
+          Ruth,
+
+          Yes. Ines, Tobias and Mei can start tomorrow at 09:00. Our day rate
+          is 450 GBP for each consultant, for at least three days.
+
+          Helen Price
+          Northgate CX Consulting
+    - { tool: end_turn, args: { note: "Offered three consultants to Halden Home.", wake: on_mail } }
+  fy1-q1-d1-t27:
+    - { tool: read_mail, args: { id: fy1-q1-d1-t26.ruth.1 } }
+    - { tool: place_person, args: { client: haldenhome.example, username: ines, full_name: Ines Moreau, role: support, title: CX Consultant, persona: "You run recall queues for Northgate clients." } }
+    - { tool: place_person, args: { client: haldenhome.example, username: tobias, full_name: Tobias Lind, role: support, title: CX Consultant, persona: "You are a Northgate consultant. You like a clean queue." } }
+    - { tool: end_turn, args: { note: "Placed Ines and Tobias. Place Mei next.", wake: next_turn } }
+  fy1-q1-d1-t28:
+    - { tool: place_person, args: { client: haldenhome.example, username: mei, full_name: Mei Chen, role: support, title: CX Consultant, persona: "You are a Northgate consultant. You write short, kind replies." } }
+    - tool: send_mail
+      args:
+        to: kwame@haldenhome.example
+        cc: [ruth@haldenhome.example, ines@northgate.example, tobias@northgate.example, mei@northgate.example]
+        subject: "Three Northgate consultants: accounts on hh-srv01"
+        body: |
+          Hi Kwame,
+
+          Ines (ines), Tobias (tobias) and Mei (mei) work on your case system
+          from tomorrow at 09:00. Please make their accounts on hh-srv01.
+
+          Helen Price
+          Northgate CX Consulting
+    - { tool: end_turn, args: { note: "Placed three consultants at Halden Home.", wake: on_mail } }
+  fy1-q1-d3-t28:
+    - { tool: end_placement, args: { address: ines@northgate.example } }
+    - { tool: end_placement, args: { address: tobias@northgate.example } }
+    - { tool: end_placement, args: { address: mei@northgate.example } }
+    - tool: send_mail
+      args:
+        to: ruth@haldenhome.example
+        cc: kwame@haldenhome.example
+        subject: "Recall project: the team leaves today"
+        body: |
+          Ruth,
+
+          The queue is under control, so our team leaves at the end of today.
+          Kwame, please lock the three accounts.
+
+          Helen
+    - { tool: end_turn, args: { note: "Ended the Halden Home placements.", wake: on_mail } }
+
+kwame@haldenhome.example:
+  fy1-q1-d2-t1:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t24.marcus.1 } }
+    - { tool: read_file, args: { path: /srv/handbook/it-policy.md } }
+    - { tool: useradd, args: { username: zara, full_name: Zara Hussain (temp), groups: [support] } }
+    - { tool: useradd, args: { username: connor, full_name: Connor Walsh (temp), groups: [support] } }
+    - tool: send_mail
+      args:
+        to: marcus@staffline.example
+        cc: jess@haldenhome.example
+        subject: "Re: Two temps start tomorrow: accounts please"
+        body: |
+          Marcus,
+
+          zara and connor are ready, in the support group.
+
+          Kwame
+    - { tool: end_turn, args: { note: "Made the temps' accounts.", wake: on_mail } }
+  fy1-q1-d2-t2:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t28.helen.1 } }
+    - { tool: think_privately, args: { thought: "Five new accounts in two turns. Policy rule 3: lock them when the contract ends. I will put that in my notes." } }
+    - { tool: useradd, args: { username: ines, full_name: Ines Moreau (Northgate), groups: [support] } }
+    - { tool: useradd, args: { username: tobias, full_name: Tobias Lind (Northgate), groups: [support] } }
+    - { tool: useradd, args: { username: mei, full_name: Mei Chen (Northgate), groups: [support] } }
+    - { tool: write_file, args: { path: notes.md, content: "# Contract accounts\n\n- zara, connor: Staffline temps, two weeks.\n- ines, tobias, mei: Northgate. Lock when Helen ends the contract.\n" } }
+    - { tool: end_turn, args: { note: "Made the Northgate accounts. Lock them when the contract ends.", wake: on_mail } }
+  fy1-q1-d3-t29:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d3-t28.helen.1 } }
+    - { tool: usermod, args: { username: ines, lock: true } }
+    - { tool: usermod, args: { username: tobias, lock: true } }
+    - { tool: usermod, args: { username: mei, lock: true } }
+    - { tool: end_turn, args: { note: "Locked the Northgate accounts.", wake: on_mail } }
+
+zara@haldenhome.example:
+  fy1-q1-d2-t2..fy1-q1-d3-t32: *agent
+  fy1-q1-d2-t3:
+    - { tool: think_privately, args: { thought: "First day, and the queue has hundreds of open cases. Nobody panics, so I will not." } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+
+connor@haldenhome.example:
+  fy1-q1-d2-t2..fy1-q1-d3-t32: *agent
+
+ines@northgate.example:
+  fy1-q1-d2-t3..fy1-q1-d3-t28: *agent
+  fy1-q1-d2-t4:
+    - { tool: case_list, args: { assignee: none, limit: 5 } }
+    - { tool: think_privately, args: { thought: "The usual recall curve. The peak is behind them. Three days of work at most." } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+    - { tool: case_close, args: { resolution: refund and label sent, reply: *reply } }
+
+tobias@northgate.example:
+  fy1-q1-d2-t3..fy1-q1-d3-t28: *agent
+
+mei@northgate.example:
+  fy1-q1-d2-t3..fy1-q1-d3-t28: *agent

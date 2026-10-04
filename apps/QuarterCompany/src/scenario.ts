@@ -112,6 +112,12 @@ const Org = z.object({
   about: z.string().default(''),
   groups: z.array(z.string()).default([]),
   people: z.array(Person).default([]),
+  /**
+   * Role mailboxes, for example "support". Each one is an account that
+   * takes mail, with no person and no seat. A case system reads it.
+   * See REQ-QC-027.
+   */
+  mailboxes: z.array(z.string().regex(/^[a-z][a-z0-9_-]*$/)).default([]),
   files: z.array(SeedFile).default([]),
   /** For a population: the id of the provider organisation. */
   provider: z.string().optional(),
@@ -256,15 +262,28 @@ function checkOrg(c: Org, orgs: Org[]) {
   if (c.kind !== 'population') {
     if (!c.domain || !c.host)
       throw new Error(`Organisation "${c.id}" must have a domain and a host.`);
+    const clash = c.mailboxes.find(
+      (m) => m === 'root' || c.people.some((p) => p.user === m),
+    );
+    if (clash)
+      throw new Error(
+        `Organisation "${c.id}" has the mailbox "${clash}". A person or root has that user name. Use another name.`,
+      );
     if (c.provider || c.members || c.behaviour.length)
       throw new Error(
         `Organisation "${c.id}" has provider, members or behaviour. Only a population can have them.`,
       );
     return;
   }
-  if (c.domain || c.host || c.people.length || c.files.length)
+  if (
+    c.domain ||
+    c.host ||
+    c.people.length ||
+    c.files.length ||
+    c.mailboxes.length
+  )
     throw new Error(
-      `Population "${c.id}" has a domain, a host, people or files. A population has none of them. Its provider holds the mailboxes.`,
+      `Population "${c.id}" has a domain, a host, people, mailboxes or files. A population has none of them. Its provider holds the mailboxes.`,
     );
   if (!c.members) throw new Error(`Population "${c.id}" must have "members".`);
   const provider = orgs.find((o) => o.id === c.provider);

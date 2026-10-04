@@ -19,7 +19,8 @@ import type { Run, SimState } from '../run.ts';
 import { seatOfMember } from '../scenario.ts';
 import { Session } from '../session.ts';
 import { labelOf } from '../time.ts';
-import { toolsFor } from '../tools/index.ts';
+import { CASES_ROOT } from '../tools/cases.ts';
+import { type Server, toolsFor } from '../tools/index.ts';
 import { Directory } from '../users.ts';
 
 const text = (t: string, isError = false) => ({
@@ -132,15 +133,20 @@ export function workerSession(run: Run, seatId: string) {
   return { seat, call, brief, open };
 }
 
-export async function serveWorker(run: Run, seatId: string) {
+/**
+ * Serve one seat over MCP. With `only`, the server has just that tool
+ * group: `qc mcp-cases` serves the case tools (REQ-QC-026). The tools come
+ * from the one registry in src/tools (REQ-QC-010).
+ */
+export async function serveWorker(run: Run, seatId: string, only?: Server) {
   const w = workerSession(run, seatId);
-  const admin = Directory.load(
-    run.load().vfs,
-    run.objects,
-    w.seat.host,
-  ).isAdmin(w.seat.person.user);
+  const state = run.load();
+  const admin = Directory.load(state.vfs, run.objects, w.seat.host).isAdmin(
+    w.seat.person.user,
+  );
+  const cases = state.vfs.exists(w.seat.host, CASES_ROOT);
   const server = new McpServer({
-    name: `qc-worker-${seatId}`,
+    name: `qc-${only ?? 'worker'}-${seatId}`,
     version: '0.1.0',
   });
   server.registerTool(
@@ -151,7 +157,14 @@ export async function serveWorker(run: Run, seatId: string) {
     },
     async () => text(await w.brief()),
   );
-  for (const t of toolsFor(admin, w.seat.org.kind)) {
+  const tools = toolsFor(admin, w.seat.org.kind, cases).filter(
+    (t) => !only || t.server === only,
+  );
+  if (only && !tools.length)
+    throw new Error(
+      `Seat ${seatId} has no ${only} tools. The host ${w.seat.host} has no ${only} system.`,
+    );
+  for (const t of tools) {
     const handler = async (args: unknown) => {
       const r = await w.call(t.name, args);
       return text(r.text, !r.ok);

@@ -1,0 +1,13 @@
+kind: agency
+name: Staffline Recruitment
+domain: staffline.example
+host: sl-mail01
+about: >
+  Staffline Recruitment places temporary staff. A temp becomes an employee
+  of the client.
+people:
+  - user: marcus
+    name: Marcus Reid
+    role: recruiter
+    title: Senior Recruiter
+    persona: You fill temp jobs fast. You like a client who knows what they want.

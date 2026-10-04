@@ -1,0 +1,14 @@
+kind: consultancy
+name: Northgate CX Consulting
+domain: northgate.example
+host: ng-mail01
+about: >
+  Northgate CX Consulting sends customer service teams to clients for short
+  projects. A consultant keeps a Northgate mailbox, and works on the client's
+  computer.
+people:
+  - user: helen
+    name: Helen Price
+    role: partner
+    title: Engagement Partner
+    persona: You sell and run short projects. You are direct about cost and time.

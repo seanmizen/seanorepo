@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { type OrgKind, PLACES_PEOPLE } from '../scenario.ts';
 import { ADMIN_TOOLS } from './admin.ts';
+import { CASE_TOOLS } from './cases.ts';
 import type { ToolDef } from './def.ts';
 import { MAIL_TOOLS } from './mail.ts';
 import { MIND_TOOLS } from './mind.ts';
@@ -17,17 +18,24 @@ export const TOOLS: ToolDef[] = [
   ...MIND_TOOLS,
   ...ADMIN_TOOLS,
   ...STAFFING_TOOLS,
+  ...CASE_TOOLS,
 ];
 
 /**
  * Admin tools appear only for the wheel group. Staffing tools appear only
- * for the staff of an agency or a consultancy (REQ-QC-020).
+ * for the staff of an agency or a consultancy (REQ-QC-020). Case tools
+ * appear only on a host that has a case system (REQ-QC-026).
  */
-export const toolsFor = (admin: boolean, kind: OrgKind = 'company') =>
+export const toolsFor = (
+  admin: boolean,
+  kind: OrgKind = 'company',
+  cases = false,
+) =>
   TOOLS.filter(
     (t) =>
       (admin || t.server !== 'admin') &&
-      (t.server !== 'staffing' || PLACES_PEOPLE.includes(kind)),
+      (t.server !== 'staffing' || PLACES_PEOPLE.includes(kind)) &&
+      (t.server !== 'cases' || cases),
   );
 
 export interface JsonTool {

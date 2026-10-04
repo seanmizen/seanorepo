@@ -1,0 +1,47 @@
+name: k2-recall
+description: >
+  Corvel Appliances recalls the K2 kettle. About 1,400 owners bought it from
+  Halden Home, and they write to support@haldenhome.example. Three people
+  work the case system. The backlog grows faster than they can clear it, so
+  Halden Home hires two temps through an agency and contracts three
+  consultants.
+calendar:
+  dayStart: "09:00"
+  dayEnd: "17:00"
+  slotMinutes: 15
+concurrency: 8
+orgs:
+  - halden
+  - corvel
+  - staffline
+  - northgate
+  - postbox
+  - k2-owners
+# The manufacturer starts the story. Grace sends the recall notice herself,
+# so it is in her sent folder (REQ-QC-016).
+compel:
+  - at: fy1-q1-d1-t1
+    seat: grace@corvel.example
+    do:
+      - tool: send_mail
+        args:
+          to: ruth@haldenhome.example
+          cc: jess@haldenhome.example
+          subject: "Product recall: Corvel K2 kettle (all batches)"
+          body: |
+            Dear Ruth,
+
+            Corvel Appliances recalls the K2 cordless kettle, all batches,
+            from today. The base can overheat. Owners must stop using the
+            kettle at once.
+
+            We announce the recall on the radio and online at 09:30. The
+            notice tells owners to contact the retailer where they bought
+            the kettle. Retailers give a full refund and a prepaid return
+            label. Corvel pays you back for each refund.
+
+            We expect many contacts from your customers today.
+
+            Regards,
+            Grace Whitfield
+            Product Safety Manager, Corvel Appliances

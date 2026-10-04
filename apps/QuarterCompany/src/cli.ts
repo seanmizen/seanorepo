@@ -55,6 +55,8 @@ Usage: qc <command> [options]
                          Model cost so far.
   mcp-worker <run> --seat <id>
                          MCP server (stdio): work as one seat.
+  mcp-cases <run> --seat <id>
+                         MCP server (stdio): the case system, as one seat.
   mcp-director <run>     MCP server (stdio): drive the simulation.
   list                   List runs.
 
@@ -284,6 +286,15 @@ async function main() {
     case 'mcp-worker': {
       const { serveWorker } = await import('./mcp/worker.ts');
       await serveWorker(Run.open(runName()), required(values.seat, 'seat'));
+      return;
+    }
+    case 'mcp-cases': {
+      const { serveWorker } = await import('./mcp/worker.ts');
+      await serveWorker(
+        Run.open(runName()),
+        required(values.seat, 'seat'),
+        'cases',
+      );
       return;
     }
     case 'mcp-director': {

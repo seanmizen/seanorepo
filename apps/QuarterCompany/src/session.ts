@@ -6,6 +6,7 @@ import type { ObjectStore } from './objects.ts';
 import { type Op, Ops } from './ops.ts';
 import type { Member, People, Scenario, Seat } from './scenario.ts';
 import { describeTurn } from './time.ts';
+import { CASES_ROOT } from './tools/cases.ts';
 import { TOOLS, type ToolDef, toolsFor } from './tools/index.ts';
 import { AccessError, Directory } from './users.ts';
 import { normalize, type Vfs } from './vfs.ts';
@@ -93,9 +94,16 @@ export class Session {
     return normalize(path, this.home);
   }
 
-  /** Tools this seat can see. Admin tools appear only for the wheel group. */
+  /**
+   * Tools this seat can see. Admin tools appear only for the wheel group.
+   * Case tools appear only when the work host has a case system.
+   */
   tools(): ToolDef[] {
-    return toolsFor(this.dir().isAdmin(this.user), this.seat.org.kind);
+    return toolsFor(
+      this.dir().isAdmin(this.user),
+      this.seat.org.kind,
+      this.vfs.exists(this.host, CASES_ROOT),
+    );
   }
 
   /**

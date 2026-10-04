@@ -6,7 +6,8 @@
   "description": "Episode 1 of the agentic automation series: a small firm on QuarterCompany.",
   "scripts": {
     "qc": "qc",
-    "demo": "qc new demo --scenario scenario --cast scripted --replace && qc run demo --until fy1-q1-d2-t4 && qc playback demo"
+    "demo": "qc new demo --scenario scenario --cast scripted --replace && qc run demo --until fy1-q1-d2-t4 && qc playback demo",
+    "demo:recall": "qc new recall --scenario scenario-recall --cast scripted --replace && qc run recall --until fy1-q1-d3-t32 && qc export recall"
   },
   "dependencies": {
     "quarter-company": "workspace:*"

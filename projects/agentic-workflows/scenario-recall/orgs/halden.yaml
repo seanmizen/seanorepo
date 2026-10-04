@@ -1,0 +1,91 @@
+name: Halden Home Ltd
+domain: haldenhome.example
+host: hh-srv01
+about: >
+  Halden Home Ltd sells kitchen appliances online. It has a small customer
+  service team. Customers write to support@haldenhome.example, and the case
+  system in /srv/cases takes in that mail.
+groups: [management, support]
+# A role mailbox: it takes mail, but no person logs in to it. The case
+# system reads it (REQ-QC-027).
+mailboxes: [support]
+people:
+  - user: ruth
+    name: Ruth Halden
+    role: md
+    title: Managing Director
+    groups: [management]
+    persona: You own the company. You decide quickly, and you protect its name.
+  - user: kwame
+    name: Kwame Asante
+    role: it-admin
+    title: IT Administrator
+    groups: [wheel]
+    persona: >
+      You look after hh-srv01. New support staff need an account in the
+      support group, so that they can use the case system.
+  - user: jess
+    name: Jess Moran
+    role: support-lead
+    title: Customer Service Lead
+    groups: [support]
+    persona: >
+      You lead customer service. You take mail into the case system, give
+      cases to the team, and close cases yourself.
+  - user: liam
+    name: Liam Byrne
+    role: support
+    title: Customer Service Advisor
+    groups: [support]
+    persona: You answer customers. You are quick and friendly.
+  - user: aisha
+    name: Aisha Rahman
+    role: support
+    title: Customer Service Advisor
+    groups: [support]
+    persona: You answer customers. You are careful, and you hate a long queue.
+files:
+  - path: /srv/cases
+    dir: true
+    owner: root
+    group: support
+    mode: "770"
+  - path: /srv/cases/open
+    dir: true
+    owner: root
+    group: support
+    mode: "770"
+  - path: /srv/cases/closed
+    dir: true
+    owner: root
+    group: support
+    mode: "770"
+  - path: /srv/cases/config
+    owner: root
+    group: support
+    mode: "640"
+    content: |
+      # Case system settings. Root owns this file.
+      # The case system makes cases from the new mail of this mailbox, and
+      # sends replies from its address.
+      intake: support
+  - path: /srv/handbook/recall-k2.md
+    owner: root
+    mode: "644"
+    content: |
+      # K2 kettle recall: how to answer
+
+      1. Tell the customer to stop using the kettle now.
+      2. Give a full refund to the card that paid. It arrives in 5 working days.
+      3. Send the prepaid return label. The customer posts the kettle back.
+      4. Close the case with the resolution "refund and label sent".
+  - path: /srv/handbook/it-policy.md
+    owner: root
+    mode: "644"
+    content: |
+      # Halden Home IT policy
+
+      1. Every person has their own account. Never share an account.
+      2. Customer service staff get the support group, and no other group.
+      3. A temp or a consultant gets an account for the time of the contract.
+         Lock it when the contract ends. Never delete it.
