@@ -300,6 +300,33 @@ describe('one local model for every seat', () => {
     expect(maxInFlight).toBeGreaterThan(1);
   });
 
+  test('the time of a model call does not count the wait for its slot', async () => {
+    const seats = [
+      'alice@acme.example',
+      'bob@acme.example',
+      'carol@acme.example',
+    ];
+    const run = makeRun(
+      {},
+      'local',
+      'r',
+      withLocal(`http://127.0.0.1:${port}/v1`, seats, ', concurrency: 1'),
+    );
+    delayMs = 100;
+    await runUntil(run, 1);
+    const ms = run
+      .readTurn(run.turns().at(-1) as string)
+      .filter((e) => e.type === 'model.call')
+      .map((e) => (e as { ms: number }).ms);
+    expect(ms).toHaveLength(3);
+    // The third request waits about 200 ms for its slot. Its time is still
+    // about 100 ms.
+    for (const t of ms) {
+      expect(t).toBeGreaterThanOrEqual(90);
+      expect(t).toBeLessThan(190);
+    }
+  });
+
   test('a request with no reply in timeout_s is a model error, and the run continues', async () => {
     const run = makeRun(
       {},

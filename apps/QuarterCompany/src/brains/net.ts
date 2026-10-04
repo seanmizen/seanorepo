@@ -93,6 +93,8 @@ async function withSlot<T>(
 /**
  * POST JSON to a provider and return the parsed reply. The total timeout is
  * `timeout_s` of the provider (default 1800 seconds). Throws on an HTTP error.
+ * `ms` is the time of the request only. It starts when the request gets its
+ * slot, so the wait for the slot is not in it (REQ-QC-032).
  */
 export function postJson(
   providerName: string,
@@ -100,14 +102,15 @@ export function postJson(
   url: string,
   body: unknown,
   headers: Record<string, string> = {},
-): Promise<unknown> {
+): Promise<{ body: unknown; ms: number }> {
   checkOffline(providerName, url);
   const timeoutMs = (provider.timeout_s ?? 1800) * 1000;
   return withSlot(
     providerName,
     provider.concurrency,
     () =>
-      new Promise<unknown>((resolve, reject) => {
+      new Promise<{ body: unknown; ms: number }>((resolve, reject) => {
+        const t0 = performance.now();
         const u = new URL(url);
         const data = Buffer.from(JSON.stringify(body));
         const req = (u.protocol === 'https:' ? httpsRequest : httpRequest)(
@@ -137,7 +140,10 @@ export function postJson(
                 return;
               }
               try {
-                resolve(JSON.parse(text));
+                resolve({
+                  body: JSON.parse(text),
+                  ms: Math.round(performance.now() - t0),
+                });
               } catch {
                 reject(
                   new Error(

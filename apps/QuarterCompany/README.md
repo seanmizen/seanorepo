@@ -550,7 +550,8 @@ continues (REQ-QC-031). The brain removes `<think>` blocks from the text.
 ### Time and tokens
 
 Each `model.call` event has `ms`, the wall-clock time of the request
-(REQ-QC-032). `qc run` prints the time of each turn. `qc cost --by turn`
+(REQ-QC-032). The time starts when the request gets its slot, so the wait
+for the slot is not in it. `qc run` prints the time of each turn. `qc cost --by turn`
 shows the calls, tokens and request seconds of each turn. `--by role` shows
 them for each role. A local actor has no price, so the cost is 0.
 

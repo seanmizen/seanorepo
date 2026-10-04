@@ -64,13 +64,14 @@ export async function complete(
     ],
     ...actor.extra_body,
   };
-  const response = (await postJson(
+  const reply = await postJson(
     actor.provider,
     provider,
     `${base}/chat/completions`,
     request,
     key ? { authorization: `Bearer ${key}` } : {},
-  )) as {
+  );
+  const response = reply.body as {
     model?: string;
     choices?: { message?: { content?: string | null } }[];
     usage?: { prompt_tokens: number; completion_tokens: number };
@@ -86,7 +87,7 @@ export async function complete(
       inputTokens: inTok,
       outputTokens: outTok,
       costUsd: (inTok * actor.price.in + outTok * actor.price.out) / 1e6,
-      ms: Math.round(performance.now() - t0),
+      ms: reply.ms,
     },
   };
 }

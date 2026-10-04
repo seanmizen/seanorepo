@@ -639,8 +639,13 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
 - **Rationale:** A local model costs nothing, so tokens and time are the
   measures of a run. `qc run` prints the time of each turn. The time of a
   turn is not in the journal, because it is not part of the world. A
-  population's pool call has the role `population`.
-- **Verification:** Test — `apps/QuarterCompany/test/local.test.ts` › "the cost report shows request seconds and tokens by turn and by role, at zero cost"
+  population's pool call has the role `population`. The time of a request
+  starts when it gets its slot (REQ-QC-033). The wait for the slot is not
+  in it. With `concurrency: 1`, the request seconds of a turn are then not
+  more than the time of the turn.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "the cost report shows request seconds and tokens by turn and by role, at zero cost"
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "the time of a model call does not count the wait for its slot"
 - **Relations:** none
 
 ## REQ-QC-033 — One local model serves every seat, one request at a time
