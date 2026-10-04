@@ -457,6 +457,20 @@ each turn, and some hours for one simulated day.
   - `llama3.1:8b` (4.9 GB) has the same memory problem as `qwen3:8b` and
     weaker tool calls.
 
+> **Sean's choice for the first offline run: Qwen 3.5 4B Uncensored.**
+> A community build is on Ollama as `vaultbox/qwen3.5-uncensored:4b`. Other
+> builds of this model are on Hugging Face. To use it:
+>
+> 1. Run the setup script with `QC_LOCAL_MODEL=vaultbox/qwen3.5-uncensored:4b`.
+> 2. Set `model` of `qwen-local` in `actors.yaml` to the same tag.
+> 3. Run `ollama show vaultbox/qwen3.5-uncensored:4b` and make sure that
+>    `tools` is in the capabilities. If it is not, Ollama does not give tool
+>    calls to QuarterCompany, and every seat fails.
+>
+> A 4B model fits completely in 6 GB of VRAM, so it is faster than
+> `qwen3:8b`. An uncensored build can make worse tool calls than the base
+> model. Count the failed tool calls in the run (REQ-QC-031).
+
 **One model for every seat.** The `local` tier points to one actor, so every
 seat uses the same model. Ollama keeps one loaded copy
 (`OLLAMA_MAX_LOADED_MODELS=1`) and runs one request at a time
