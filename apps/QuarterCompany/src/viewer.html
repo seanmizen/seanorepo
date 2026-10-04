@@ -222,7 +222,7 @@ main {
 .ltext .call.fail { color: var(--bad); }
 .lcard.typing .ltext::after { content: '▍'; color: var(--accent); animation: pulse 1s steps(2) infinite; }
 .lnote { font-size: 12px; border-left: 2px solid var(--rule); padding-left: 8px; overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } .live.on .dot, .lcard.typing .ltext::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } .live.on .dot, .lcard.typing .ltext::after { animation: none; } }
 </style>
 
 <header class="console">
@@ -286,7 +286,7 @@ main {
   };
 
   // ----- fold the journal, the same way the engine does -----
-  const key = (host, path) => host + ':' + path;
+  const key = (host, path) => `${host}:${path}`;
   function apply(fs, e, label) {
     switch (e.type) {
       case 'fs.mkdir':
@@ -300,7 +300,7 @@ main {
         break;
       case 'fs.mv': {
         const from = key(e.host, e.from);
-        const moved = [...fs].filter(([k]) => k === from || k.startsWith(from + '/'));
+        const moved = [...fs].filter(([k]) => k === from || k.startsWith(`${from}/`));
         for (const [k] of moved) fs.delete(k);
         for (const [k, n] of moved) fs.set(key(e.host, e.to) + k.slice(from.length), k === from ? { ...n, mtime: label } : n);
         break;
@@ -331,7 +331,7 @@ main {
   const hhmm = (clock) => (clock.match(/(\d\d):(\d\d)$/) || ['', '09', '00']).slice(1).map(Number);
   const fmtTime = ([hh, mm], add) => {
     const t = hh * 60 + mm + add;
-    return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
   };
   const modeStr = (n) => {
     let s = n.kind === 'dir' ? 'd' : '-';
@@ -341,17 +341,17 @@ main {
   };
   const clip = (v, n) => {
     const s = (typeof v === 'string' ? v : JSON.stringify(v)).replace(/\s+/g, ' ');
-    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+    return s.length > n ? `${s.slice(0, n - 1)}…` : s;
   };
   const argSummary = (tool, a) => {
     a = a || {};
-    if (tool === 'send_mail') return 'to ' + clip(a.to, 50) + ' “' + clip(a.subject || '', 60) + '”';
-    if (tool === 'write_file' || tool === 'append_file') return (a.path || '') + ' (' + String(a.content || '').length + ' chars)';
+    if (tool === 'send_mail') return `to ${clip(a.to, 50)} “${clip(a.subject || '', 60)}”`;
+    if (tool === 'write_file' || tool === 'append_file') return `${a.path || ''} (${String(a.content || '').length} chars)`;
     if (tool === 'end_turn') return '';
-    if (tool === 'place_person') return (a.full_name || '') + ' (' + (a.username || '') + ') at ' + (a.client || '');
-    if (tool === 'case_close') return (a.id || 'oldest own case') + (a.reply ? ' · with a reply' : '') + ' · ' + clip(a.resolution || '', 40);
+    if (tool === 'place_person') return `${a.full_name || ''} (${a.username || ''}) at ${a.client || ''}`;
+    if (tool === 'case_close') return `${(a.id || 'oldest own case') + (a.reply ? ' · with a reply' : '')} · ${clip(a.resolution || '', 40)}`;
     if (tool === 'case_update') return (a.id || '') + (a.reply ? ' · with a reply' : '');
-    if (tool === 'case_assign') return (a.id || (a.count || 1) + ' oldest') + ' to ' + clip(a.to, 60);
+    if (tool === 'case_assign') return `${a.id || `${a.count || 1} oldest`} to ${clip(a.to, 60)}`;
     return Object.entries(a).map(([k, v]) => (k === 'sudo' ? (v ? 'sudo' : '') : clip(v, 48))).filter(Boolean).join(' ');
   };
   const passwdCache = new Map();
@@ -375,7 +375,7 @@ main {
   try { expandAll = localStorage.getItem('qc-expand') === '1'; } catch (_) {}
   const isQuiet = (t) => !t.events.some((e) => !['turn.start', 'turn.end', 'seat.end', 'seat.skip'].includes(e.type) || (e.type === 'seat.end' && e.note));
   function rebuildOrder(keepIdx) {
-    order = D.turns.map((t, i) => i).filter((i) => quiet || i === 0 || !isQuiet(D.turns[i]));
+    order = D.turns.map((_t, i) => i).filter((i) => quiet || i === 0 || !isQuiet(D.turns[i]));
     $('scrub').max = String(Math.max(0, order.length - 1));
     const at = order.findIndex((i) => i >= keepIdx);
     pos = at === -1 ? order.length - 1 : at;
@@ -390,7 +390,7 @@ main {
     $('scrub').value = String(pos);
     $('clock').textContent = turn.ord === 0 ? 'Genesis' : turn.clock;
     $('turn-label').textContent = turn.label;
-    try { history.replaceState(null, '', '#' + turn.label); } catch (_) {}
+    try { history.replaceState(null, '', `#${turn.label}`); } catch (_) {}
 
     // stats
     let cost = 0, calls = 0;
@@ -416,7 +416,7 @@ main {
       pops.length ? h('span', null, 'Population mail ', h('b', null, String(popMail))) : null,
       cases >= 0 ? h('span', null, 'Open cases ', h('b', null, String(cases))) : null,
       h('span', null, 'Model calls ', h('b', null, String(calls))),
-      h('span', null, 'Cost so far ', h('b', null, '$' + cost.toFixed(4))),
+      h('span', null, 'Cost so far ', h('b', null, `$${cost.toFixed(4)}`)),
     ].filter(Boolean));
 
     renderStaff(i, turn, fs);
@@ -442,7 +442,7 @@ main {
   // A person is on the staff list from the turn they join to the turn they leave.
   const present = (s, ord) => s.joined <= ord && (s.left === undefined || s.left >= ord);
 
-  function renderStaff(i, turn, fs) {
+  function renderStaff(i, turn, _fs) {
     const nodes = D.seats.map((s, si) => {
       if (!present(s, turn.ord)) return null;
       const ev = turn.events.filter((e) => e.seat === s.id);
@@ -457,14 +457,14 @@ main {
       if (joinedNow) { state = 'joined'; text = 'Joined'; }
       if (s.left === turn.ord) { state = 'left'; text = 'Leaves'; }
       const n = lastNote(s.id, i);
-      return h('article', { class: 'seat' + (joinedNow ? ' new' : '') },
-        h('div', { class: 'seat-head' }, h('span', { class: 'seat-name' }, s.name), h('span', { class: 'pill ' + state }, text)),
-        h('div', { class: 'seat-title' }, s.title + ' · ' + s.role + (s.site ? ' · ' + orgName(s.org) + ', on contract at ' + orgName(s.site) : '')),
-        h('div', { class: 'actor' }, s.id + ' · played by ' + turn.actors[si]),
-        h('div', { class: 'meter', role: 'img', 'aria-label': used + ' of ' + D.turnMinutes + ' minutes used' }, h('span', { style: 'width:' + Math.min(100, (used / D.turnMinutes) * 100) + '%' })),
-        h('div', { class: 'meter-label' }, used + ' / ' + D.turnMinutes + ' min · ' + tools + ' tool call' + (tools === 1 ? '' : 's')),
-        n ? h('div', { class: 'note' + (n.now ? '' : ' old') }, (n.now ? 'Note: ' : 'Last note (' + n.label + '): ') + n.note) : null,
-        (() => { const t = lastThought(s.id, i); return t ? h('div', { class: 'thought-line', title: 'Latest private thought' }, 'Thinks: “' + t + '”') : null; })(),
+      return h('article', { class: `seat${joinedNow ? ' new' : ''}` },
+        h('div', { class: 'seat-head' }, h('span', { class: 'seat-name' }, s.name), h('span', { class: `pill ${state}` }, text)),
+        h('div', { class: 'seat-title' }, `${s.title} · ${s.role}${s.site ? ` · ${orgName(s.org)}, on contract at ${orgName(s.site)}` : ''}`),
+        h('div', { class: 'actor' }, `${s.id} · played by ${turn.actors[si]}`),
+        h('div', { class: 'meter', role: 'img', 'aria-label': `${used} of ${D.turnMinutes} minutes used` }, h('span', { style: `width:${Math.min(100, (used / D.turnMinutes) * 100)}%` })),
+        h('div', { class: 'meter-label' }, `${used} / ${D.turnMinutes} min · ${tools} tool call${tools === 1 ? '' : 's'}`),
+        n ? h('div', { class: `note${n.now ? '' : ' old'}` }, (n.now ? 'Note: ' : `Last note (${n.label}): `) + n.note) : null,
+        (() => { const t = lastThought(s.id, i); return t ? h('div', { class: 'thought-line', title: 'Latest private thought' }, `Thinks: “${t}”`) : null; })(),
       );
     });
     const popCards = pops.map((p) => {
@@ -472,9 +472,9 @@ main {
       let total = 0;
       for (let j = 0; j <= i; j++) for (const e of D.turns[j].events) if (e.type === 'tool.call' && e.population === p.id && e.ok) total++;
       return h('article', { class: 'seat pop' },
-        h('div', { class: 'seat-head' }, h('span', { class: 'seat-name' }, p.name), h('span', { class: 'pill ' + (mails ? 'working' : 'idle') }, mails ? mails + ' mails' : 'Quiet')),
-        h('div', { class: 'seat-title' }, 'Population · ' + p.size + ' people · mail at ' + p.domain),
-        h('div', { class: 'actor' }, total + ' mails so far'));
+        h('div', { class: 'seat-head' }, h('span', { class: 'seat-name' }, p.name), h('span', { class: `pill ${mails ? 'working' : 'idle'}` }, mails ? `${mails} mails` : 'Quiet')),
+        h('div', { class: 'seat-title' }, `Population · ${p.size} people · mail at ${p.domain}`),
+        h('div', { class: 'actor' }, `${total} mails so far`));
     });
     $('staff').replaceChildren(...nodes.filter(Boolean), ...popCards);
   }
@@ -483,9 +483,9 @@ main {
 
   // ----- mail and documents in the log -----
   const systemBadge = (source, kind, host) =>
-    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': 'A system event from the ' + source + ': the physics of the world, not a person. ' + kind + ' on ' + host + '. While it lasts, mail to or from the host waits in a queue.' }, 'system');
+    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': `A system event from the ${source}: the physics of the world, not a person. ${kind} on ${host}. While it lasts, mail to or from the host waits in a queue.` }, 'system');
   const compelBadge = (source, seat) =>
-    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': 'Compelled by the ' + source + ': ' + seat + ' did this at the start of the turn, in their own session and with their own minutes. It is a real action in the world. Their briefing tells them that they did it.' }, 'compelled');
+    h('span', { class: 'badge-inject', tabindex: '0', 'data-tip': `Compelled by the ${source}: ${seat} did this at the start of the turn, in their own session and with their own minutes. It is a real action in the world. Their briefing tells them that they did it.` }, 'compelled');
   function parseMail(text) {
     const cut = text.indexOf('\n\n');
     const head = cut === -1 ? text : text.slice(0, cut);
@@ -498,18 +498,18 @@ main {
   }
   function mailCard(m, kind, inject) {
     const rows = [['From', m.from], ['To', m.to], m.cc ? ['Cc', m.cc] : null, m.date ? ['Date', m.date] : null, ['Subject', m.subject]].filter(Boolean);
-    return h('div', { class: 'mail' + (inject ? ' inject' : '') },
+    return h('div', { class: `mail${inject ? ' inject' : ''}` },
       kind ? h('div', { class: 'mail-kind' }, kind) : null,
       h('dl', { class: 'mail-head' }, ...rows.flatMap(([k, v]) => [h('dt', null, k), h('dd', { class: k === 'Subject' ? 'subj' : null }, v)])),
       h('div', { class: 'mail-body' }, m.body));
   }
   function messageText(id, fs) {
-    const name = '/' + id + '.eml';
+    const name = `/${id}.eml`;
     for (const [k, n] of fs) if (k.endsWith(name) && n.hash && D.objects[n.hash] != null) return D.objects[n.hash];
     return null;
   }
   const fold = (summary, body, cls) =>
-    h('details', { class: 'fold' + (cls ? ' ' + cls : ''), open: expandAll }, h('summary', null, ...[summary].flat()), body);
+    h('details', { class: `fold${cls ? ` ${cls}` : ''}`, open: expandAll }, h('summary', null, ...[summary].flat()), body);
   const docBlock = (text) => h('div', { class: 'doc' }, h('pre', null, text.replace(/\n+$/, '')));
   const lineCount = (text) => text.replace(/\n+$/, '').split('\n').length;
   const listOf = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
@@ -517,28 +517,28 @@ main {
   // A tool's detail: a collapsed block with a one-line summary, or a short inline line.
   function toolDetail(e, fs) {
     const a = e.args || {};
-    if (!e.ok) return h('div', { class: 'fail' }, '✗ ' + e.result);
+    if (!e.ok) return h('div', { class: 'fail' }, `✗ ${e.result}`);
     switch (e.tool) {
       case 'list_mail': {
         const items = e.result.split('\n').map((l) => l.match(/^(NEW )?\s*(\S+)\s+from (\S+)\s+"(.*)"$/)).filter(Boolean);
         if (!items.length) return h('div', { class: 'dim' }, e.result);
         const fresh = items.filter((m) => m[1]).length;
-        return fold(['Inbox · ', gist(items.length + ' message' + (items.length === 1 ? '' : 's') + ', ' + fresh + ' new')],
-          h('ul', { class: 'inbox' }, ...items.map((m) => h('li', null, h('span', { class: m[1] ? 'new' : 'dim' }, m[1] ? 'NEW' : 'read'), h('span', null, m[3] + ' · “' + m[4] + '”')))));
+        return fold(['Inbox · ', gist(`${items.length} message${items.length === 1 ? '' : 's'}, ${fresh} new`)],
+          h('ul', { class: 'inbox' }, ...items.map((m) => h('li', null, h('span', { class: m[1] ? 'new' : 'dim' }, m[1] ? 'NEW' : 'read'), h('span', null, `${m[3]} · “${m[4]}”`)))));
       }
       case 'read_mail': {
         const m = parseMail(messageText(a.id, fs) || e.result);
-        return fold(['Email from ', gist(m.from + ' · “' + m.subject + '”')], mailCard(m, null, false));
+        return fold(['Email from ', gist(`${m.from} · “${m.subject}”`)], mailCard(m, null, false));
       }
       case 'send_mail':
-        return fold(['Email to ', gist(listOf(a.to) + ' · “' + (a.subject || '') + '”')],
+        return fold(['Email to ', gist(`${listOf(a.to)} · “${a.subject || ''}”`)],
           mailCard({ from: e.seat, to: listOf(a.to), cc: listOf(a.cc), subject: a.subject || '', body: String(a.body || '').replace(/\n+$/, '') }, 'Sent · delivered at the end of this turn'));
       case 'read_file':
-        return fold(['Read ', gist(a.path + ' · ' + lineCount(e.result) + ' lines')], docBlock(e.result));
+        return fold(['Read ', gist(`${a.path} · ${lineCount(e.result)} lines`)], docBlock(e.result));
       case 'write_file':
       case 'append_file': {
         const text = String(a.content || '');
-        return fold([e.tool === 'write_file' ? 'Wrote ' : 'Added to ', gist(a.path + ' · ' + lineCount(text) + ' lines')], docBlock(text));
+        return fold([e.tool === 'write_file' ? 'Wrote ' : 'Added to ', gist(`${a.path} · ${lineCount(text)} lines`)], docBlock(text));
       }
       case 'end_turn':
       case 'think_privately':
@@ -568,7 +568,7 @@ main {
   // A details row whose body is built only when it opens. A crowd can send
   // hundreds of mails in a turn, and the page must stay quick.
   function lazyFold(summary, build, cls) {
-    const d = h('details', { class: 'fold' + (cls ? ' ' + cls : '') }, h('summary', null, ...[summary].flat()));
+    const d = h('details', { class: `fold${cls ? ` ${cls}` : ''}` }, h('summary', null, ...[summary].flat()));
     let built = false;
     d.addEventListener('toggle', () => { if (d.open && !built) { built = true; d.append(build()); } });
     return d;
@@ -581,7 +581,7 @@ main {
       const next = items.slice(shown, shown + PAGE);
       shown += next.length;
       for (const it of next) ul.append(render(it));
-      if (shown < items.length) ul.append(h('li', null, h('button', { class: 'linkish more', type: 'button', onclick: (ev) => { ev.target.closest('li').remove(); more(); } }, 'Show ' + Math.min(PAGE, items.length - shown) + ' more of ' + (items.length - shown))));
+      if (shown < items.length) ul.append(h('li', null, h('button', { class: 'linkish more', type: 'button', onclick: (ev) => { ev.target.closest('li').remove(); more(); } }, `Show ${Math.min(PAGE, items.length - shown)} more of ${items.length - shown}`)));
     };
     more();
     return ul;
@@ -589,22 +589,22 @@ main {
   function popRow(popId, calls, time) {
     const ok = calls.filter((e) => e.ok);
     const byTo = new Map();
-    for (const e of ok) { const to = listOf((e.args || {}).to); byTo.set(to, (byTo.get(to) || 0) + 1); }
-    const split = [...byTo].map(([to, n]) => n + ' to ' + to).join(', ');
+    for (const e of ok) { const to = listOf(e.args?.to); byTo.set(to, (byTo.get(to) || 0) + 1); }
+    const split = [...byTo].map(([to, n]) => `${n} to ${to}`).join(', ');
     const failed = calls.length - ok.length;
     return h('li', { class: 'pop' }, h('time', null, time), h('div', { style: 'min-width:0' },
       h('span', { class: 'pop-tag', title: 'A population: many people with one bulk brain. Each mail is the person\'s own send_mail call.' }, 'crowd'),
-      h('b', null, ok.length + ' mail' + (ok.length === 1 ? '' : 's') + ' from ' + popName(popId)),
-      ' · ' + split + (failed ? ' · ' + failed + ' failed' : ''),
-      lazyFold(['Open ', gist(ok.length + ' messages')], () => paged(calls, (e) => h('li', null,
-        e.ok ? fold([gist(short(e.seat)), ' · “' + ((e.args || {}).subject || '') + '”'],
-          mailCard({ from: e.seat, to: listOf((e.args || {}).to), subject: (e.args || {}).subject || '', body: String((e.args || {}).body || '').replace(/\n+$/, '') }, null, false))
-          : h('div', { class: 'fail' }, short(e.seat) + ' ✗ ' + e.result)))),
+      h('b', null, `${ok.length} mail${ok.length === 1 ? '' : 's'} from ${popName(popId)}`),
+      ` · ${split}${failed ? ` · ${failed} failed` : ''}`,
+      lazyFold(['Open ', gist(`${ok.length} messages`)], () => paged(calls, (e) => h('li', null,
+        e.ok ? fold([gist(short(e.seat)), ` · “${e.args?.subject || ''}”`],
+          mailCard({ from: e.seat, to: listOf(e.args?.to), subject: e.args?.subject || '', body: String(e.args?.body || '').replace(/\n+$/, '') }, null, false))
+          : h('div', { class: 'fail' }, `${short(e.seat)} ✗ ${e.result}`)))),
     ));
   }
   // Mail system rows of one kind, folded when there are many of them.
   const MTA_FOLD = 10;
-  function renderLog(i, turn, fs) {
+  function renderLog(_i, turn, fs) {
     const start = hhmm(turn.clock);
     const spent = new Map();
     const rows = [];
@@ -625,14 +625,14 @@ main {
       const clockOf = e.type === 'person.join' || e.type === 'person.leave' ? e.via : e.seat;
       const at = clockOf ? fmtTime(start, spent.get(clockOf) || 0) : fmtTime(start, 0);
       const time = h('time', null, turn.ord === 0 ? '' : at);
-      const who = e.seat ? h('span', { class: 'who' }, short(e.seat) + ' ') : null;
+      const who = e.seat ? h('span', { class: 'who' }, `${short(e.seat)} `) : null;
       switch (e.type) {
         case 'tool.call': {
           spent.set(e.seat, (spent.get(e.seat) || 0) + e.minutes);
           if (e.tool === 'think_privately' && e.ok) break; // the thought row shows it
           rows.push(h('li', { class: e.compelled ? 'inject' : null }, time, h('div', { style: 'min-width:0' },
             e.compelled ? compelBadge(e.compelled, short(e.seat)) : null,
-            who, h('span', { class: 'tool' }, e.tool), ' ', FOLDED.has(e.tool) && e.ok ? '' : argSummary(e.tool, e.args) + ' ', h('span', { class: 'mins' }, '(' + e.minutes + ' min)'),
+            who, h('span', { class: 'tool' }, e.tool), ' ', FOLDED.has(e.tool) && e.ok ? '' : `${argSummary(e.tool, e.args)} `, h('span', { class: 'mins' }, `(${e.minutes} min)`),
             toolDetail(e, fs),
           )));
           break;
@@ -641,68 +641,68 @@ main {
           break; // the send_mail card shows the message
         case 'system.start': {
           const what = { 'host.down': 'HOST DOWN', 'mail.down': 'MAIL DOWN', 'disk.full': 'DISK FULL' }[e.kind] || e.kind;
-          rows.push(h('li', { class: 'inject' }, time, h('div', null, systemBadge(e.source, e.kind, e.host), h('b', null, what), ' on ' + e.host + (e.note ? ' — ' + e.note : ''))));
+          rows.push(h('li', { class: 'inject' }, time, h('div', null, systemBadge(e.source, e.kind, e.host), h('b', null, what), ` on ${e.host}${e.note ? ` — ${e.note}` : ''}`)));
           break;
         }
         case 'system.end':
-          rows.push(h('li', { class: 'inject' }, time, h('div', null, systemBadge('scenario', e.kind, e.host), e.kind + ' on ' + e.host + ' is over')));
+          rows.push(h('li', { class: 'inject' }, time, h('div', null, systemBadge('scenario', e.kind, e.host), `${e.kind} on ${e.host} is over`)));
           break;
         case 'seat.blocked':
-          rows.push(h('li', null, time, h('div', { class: 'warn' }, short(e.seat) + ' cannot work: ' + e.reason)));
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, `${short(e.seat)} cannot work: ${e.reason}`)));
           break;
         case 'thought':
           rows.push(h('li', { class: 'thought' }, time, h('div', { style: 'min-width:0' },
             who, h('span', { class: 'thinks', title: 'A private thought. Nobody in the company can see it, the IT administrator included.' }, 'thinks'),
-            h('span', { class: 'thought-text' }, '“' + e.text + '”'))));
+            h('span', { class: 'thought-text' }, `“${e.text}”`))));
           break;
         case 'seat.end':
           if (e.note || turn.events.some((x) => x.type === 'tool.call' && x.seat === e.seat))
-            rows.push(h('li', null, time, h('div', null, who, h('span', { class: e.wake === 'on_mail' ? 'sleep' : 'dim' }, e.wake === 'on_mail' ? 'sleeps until mail' : 'ends turn'), e.note ? ': “' + e.note + '”' : '')));
+            rows.push(h('li', null, time, h('div', null, who, h('span', { class: e.wake === 'on_mail' ? 'sleep' : 'dim' }, e.wake === 'on_mail' ? 'sleeps until mail' : 'ends turn'), e.note ? `: “${e.note}”` : '')));
           break;
         case 'seat.skip':
-          rows.push(h('li', null, time, h('div', { class: 'sleep' }, short(e.seat) + ' is asleep (' + e.reason + ')')));
+          rows.push(h('li', null, time, h('div', { class: 'sleep' }, `${short(e.seat)} is asleep (${e.reason})`)));
           break;
         case 'fs.conflict':
-          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'CONFLICT ' + short(e.seat) + ' ' + e.op + ' ' + e.path + ': ' + e.reason)));
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, `CONFLICT ${short(e.seat)} ${e.op} ${e.path}: ${e.reason}`)));
           break;
         case 'security':
-          rows.push(h('li', null, time, h('div', { class: 'fail' }, 'SECURITY ' + short(e.seat) + ': ' + e.message)));
+          rows.push(h('li', null, time, h('div', { class: 'fail' }, `SECURITY ${short(e.seat)}: ${e.message}`)));
           break;
         case 'model.call':
-          rows.push(h('li', null, time, h('div', { class: 'dim' }, short(e.seat) + ' thinks · ' + e.actor + ' (' + e.model + ') ' + e.inputTokens + ' in / ' + e.outputTokens + ' out · $' + e.costUsd.toFixed(4))));
+          rows.push(h('li', null, time, h('div', { class: 'dim' }, `${short(e.seat)} thinks · ${e.actor} (${e.model}) ${e.inputTokens} in / ${e.outputTokens} out · $${e.costUsd.toFixed(4)}`)));
           break;
         case 'model.error':
-          rows.push(h('li', null, time, h('div', { class: 'fail' }, short(e.seat) + ' model error: ' + e.message)));
+          rows.push(h('li', null, time, h('div', { class: 'fail' }, `${short(e.seat)} model error: ${e.message}`)));
           break;
         case 'cast.rule':
-          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'RECAST ' + JSON.stringify(e.rule))));
+          rows.push(h('li', null, time, h('div', { class: 'warn' }, `RECAST ${JSON.stringify(e.rule)}`)));
           break;
         case 'person.join':
           if (e.via === 'scenario') break; // the genesis line counts them
           rows.push(h('li', { class: 'join' }, time, h('div', null, h('span', { class: 'join-tag' }, 'joins'),
-            h('b', null, e.person.name), ' (' + e.seat + ') joins ' + orgName(e.org) + ' as ' + e.person.title + (e.site ? ', on contract at ' + orgName(e.site) : '') + '. Placed by ' + seatName(e.via) + '.')));
+            h('b', null, e.person.name), ` (${e.seat}) joins ${orgName(e.org)} as ${e.person.title}${e.site ? `, on contract at ${orgName(e.site)}` : ''}. Placed by ${seatName(e.via)}.`)));
           break;
         case 'population.step':
           rows.push(h('li', { class: 'pop' }, time, h('div', null, h('span', { class: 'pop-tag' }, 'crowd'),
-            popName(e.org) + ' · ' + e.rule + ': ' + e.users.length + (e.stage === 'answered' ? ' got a reply' : ' at step “' + e.stage + '”'))));
+            `${popName(e.org)} · ${e.rule}: ${e.users.length}${e.stage === 'answered' ? ' got a reply' : ` at step “${e.stage}”`}`)));
           break;
         case 'population.pool':
           rows.push(h('li', { class: 'pop' }, time, h('div', null, h('span', { class: 'pop-tag' }, 'crowd'),
-            popName(e.org) + ' · ' + e.rule + ': ' + e.actor + ' wrote the mail variants. Members use them from now on.')));
+            `${popName(e.org)} · ${e.rule}: ${e.actor} wrote the mail variants. Members use them from now on.`)));
           break;
         case 'population.skip':
-          rows.push(h('li', { class: 'pop' }, time, h('div', { class: 'warn' }, popName(e.org) + ' cannot act: ' + e.reason)));
+          rows.push(h('li', { class: 'pop' }, time, h('div', { class: 'warn' }, `${popName(e.org)} cannot act: ${e.reason}`)));
           break;
         case 'person.leave':
           rows.push(h('li', { class: 'join' }, time, h('div', null, h('span', { class: 'join-tag' }, 'leaves'),
-            h('b', null, seatName(e.seat)), ' (' + e.seat + ') leaves at the end of this turn. Ended by ' + seatName(e.via) + '.')));
+            h('b', null, seatName(e.seat)), ` (${e.seat}) leaves at the end of this turn. Ended by ${seatName(e.via)}.`)));
           break;
       }
     }
     const mtaLine = (e) => {
-      if (e.type === 'mail.queued') return h('div', { class: 'warn' }, 'MAIL WAITS ' + e.messageId + ' → ' + e.rcpt + ': ' + e.reason);
-      if (e.type === 'mail.dequeued') return h('div', { class: 'dim' }, '↳ ' + e.messageId + ' → ' + e.rcpt + ' delivered after a wait');
-      return h('div', { class: 'warn' }, 'BOUNCE ' + e.messageId + ' to ' + e.to + ': ' + e.reason);
+      if (e.type === 'mail.queued') return h('div', { class: 'warn' }, `MAIL WAITS ${e.messageId} → ${e.rcpt}: ${e.reason}`);
+      if (e.type === 'mail.dequeued') return h('div', { class: 'dim' }, `↳ ${e.messageId} → ${e.rcpt} delivered after a wait`);
+      return h('div', { class: 'warn' }, `BOUNCE ${e.messageId} to ${e.to}: ${e.reason}`);
     };
     const MTA_TITLE = { 'mail.queued': 'messages wait in the queue', 'mail.dequeued': 'messages leave the queue', 'mail.bounce': 'messages bounce' };
     for (let r = rows.length - 1; r >= 0; r--) {
@@ -712,7 +712,7 @@ main {
       const list = mta[row.mta];
       const time = h('time', null, turn.ord === 0 ? '' : fmtTime(start, 0));
       if (list.length <= MTA_FOLD) rows.splice(r, 1, ...list.map((e) => h('li', null, h('time', null, turn.ord === 0 ? '' : fmtTime(start, 0)), mtaLine(e))));
-      else rows.splice(r, 1, h('li', null, time, h('div', { style: 'min-width:0' }, h('span', { class: row.mta === 'mail.dequeued' ? 'dim' : 'warn' }, list.length + ' ' + MTA_TITLE[row.mta]),
+      else rows.splice(r, 1, h('li', null, time, h('div', { style: 'min-width:0' }, h('span', { class: row.mta === 'mail.dequeued' ? 'dim' : 'warn' }, `${list.length} ${MTA_TITLE[row.mta]}`),
         lazyFold('Open the list', () => paged(list, (e) => h('li', null, mtaLine(e)))))));
     }
     if (turn.ord === 0) {
@@ -720,14 +720,14 @@ main {
       const dirs = turn.events.filter((e) => e.type === 'fs.mkdir').length;
       const people = turn.events.filter((e) => e.type === 'person.join').length
         + turn.events.filter((e) => e.type === 'population.join').reduce((n, e) => n + e.members.size, 0);
-      rows.unshift(h('li', null, h('time', null, ''), h('div', null, 'Genesis: ' + people + ' people join the world. The scenario creates ' + dirs + ' folders and ' + files + ' files. Accounts, homes, mailboxes and seed files are ready.')));
+      rows.unshift(h('li', null, h('time', null, ''), h('div', null, `Genesis: ${people} people join the world. The scenario creates ${dirs} folders and ${files} files. Accounts, homes, mailboxes and seed files are ready.`)));
     }
-    $('log-title').textContent = turn.label + ' · ' + (turn.ord === 0 ? 'before day 1' : turn.clock);
+    $('log-title').textContent = `${turn.label} · ${turn.ord === 0 ? 'before day 1' : turn.clock}`;
     $('log-side').textContent = D.run.name;
     $('log').replaceChildren(...(rows.length ? rows : [h('li', null, h('time', null, ''), h('div', { class: 'dim' }, 'Nothing happened in this turn.'))]));
   }
 
-  function renderTree(i, turn, fs, prev) {
+  function renderTree(_i, turn, fs, prev) {
     const changed = new Map();
     const removed = [];
     for (const e of turn.events) {
@@ -735,7 +735,7 @@ main {
       else if (e.type === 'fs.mkdir') changed.set(key(e.host, e.path), 'new');
       else if (e.type === 'fs.mv') changed.set(key(e.host, e.to), 'moved');
       else if (e.type === 'fs.meta') changed.set(key(e.host, e.path), 'mode');
-      else if (e.type === 'fs.rm') removed.push(e.host + ':' + e.path);
+      else if (e.type === 'fs.rm') removed.push(`${e.host}:${e.path}`);
     }
     const hosts = [...new Set([...fs.keys()].map((k) => k.slice(0, k.indexOf(':'))))].sort();
     const out = [];
@@ -744,7 +744,7 @@ main {
       // thousands of mailboxes.
       const kidsOf = new Map();
       for (const k of fs.keys()) {
-        if (!k.startsWith(host + ':')) continue;
+        if (!k.startsWith(`${host}:`)) continue;
         const p = k.slice(host.length + 1);
         if (p === '/') continue;
         const parent = p.slice(0, p.lastIndexOf('/')) || '/';
@@ -753,10 +753,10 @@ main {
       }
       const openDirs = new Set(['/']);
       const mark = (p) => { for (let d = p; d && d !== '/'; d = d.slice(0, d.lastIndexOf('/')) || '/') openDirs.add(d); };
-      for (const [k] of changed) if (k.startsWith(host + ':') && turn.ord > 0) mark(k.slice(host.length + 1).replace(/\/[^/]*$/, '') || '/');
+      for (const [k] of changed) if (k.startsWith(`${host}:`) && turn.ord > 0) mark(k.slice(host.length + 1).replace(/\/[^/]*$/, '') || '/');
       if (selected && selected.host === host) mark(selected.path.replace(/\/[^/]*$/, '') || '/');
       const build = (dir) => {
-        const prefix = dir === '/' ? '/' : dir + '/';
+        const prefix = dir === '/' ? '/' : `${dir}/`;
         const kids = (kidsOf.get(dir) || []).slice().sort();
         const SHOW = 200;
         const shown = kids.length > SHOW ? kids.filter((p, n) => n < SHOW || openDirs.has(p) || (selected && selected.host === host && selected.path === p)) : kids;
@@ -773,23 +773,23 @@ main {
             return d;
           }
           const isSel = selected && selected.host === host && selected.path === p;
-          return h('button', { class: 'f' + (isSel ? ' sel' : ''), type: 'button', title: p, onclick: () => { selected = { host, path: p }; render(); } }, ...label);
+          return h('button', { class: `f${isSel ? ' sel' : ''}`, type: 'button', title: p, onclick: () => { selected = { host, path: p }; render(); } }, ...label);
         });
-        if (shown.length < kids.length) out.push(h('div', { class: 'more' }, '… ' + (kids.length - shown.length) + ' more in ' + dir));
+        if (shown.length < kids.length) out.push(h('div', { class: 'more' }, `… ${kids.length - shown.length} more in ${dir}`));
         return out;
       };
       out.push(h('details', { open: true }, h('summary', null, h('span', { class: 'host' }, host)), h('div', null, ...build('/'))));
     }
-    if (removed.length && turn.ord > 0) out.push(h('div', { class: 'removed' }, 'Removed this turn: ' + removed.join(', ')));
+    if (removed.length && turn.ord > 0) out.push(h('div', { class: 'removed' }, `Removed this turn: ${removed.join(', ')}`));
     $('tree').replaceChildren(...out);
   }
 
   function renderFile(fs) {
     if (!selected) return;
     const n = fs.get(key(selected.host, selected.path));
-    const title = h('h3', null, selected.host + ':' + selected.path);
+    const title = h('h3', null, `${selected.host}:${selected.path}`);
     if (!n) { $('file').replaceChildren(title, h('div', { class: 'empty' }, 'This file does not exist at this turn.')); return; }
-    const ls = h('div', { class: 'ls' }, [modeStr(n), n.owner, n.group, (n.size ?? 0) + ' B', 'changed ' + n.mtime].join('  '));
+    const ls = h('div', { class: 'ls' }, [modeStr(n), n.owner, n.group, `${n.size ?? 0} B`, `changed ${n.mtime}`].join('  '));
     $('file').replaceChildren(title, ls, n.kind === 'file' ? h('pre', null, D.objects[n.hash] ?? '') : h('div', { class: 'empty' }, 'Folder.'));
   }
 
@@ -835,7 +835,7 @@ main {
       if (loading) return loading;
       loading = (async () => {
         const last = D.turns.length ? D.turns[D.turns.length - 1].ord : -1;
-        const r = await (await fetch('/api/turns?after=' + last, { cache: 'no-store' })).json();
+        const r = await (await fetch(`/api/turns?after=${last}`, { cache: 'no-store' })).json();
         if (!r.turns.length) return;
         const following = order[pos] === D.turns.length - 1;
         D.seats = r.seats;
@@ -867,8 +867,8 @@ main {
       return c;
     }
     function setState(c, state, label) {
-      c.el.className = 'lcard ' + state;
-      c.pill.className = 'pill ' + state;
+      c.el.className = `lcard ${state}`;
+      c.pill.className = `pill ${state}`;
       c.pill.textContent = label;
     }
     // Keep the text box at the bottom, unless the reader scrolled up.
@@ -884,14 +884,14 @@ main {
         case 'turn.begin':
           cards.clear();
           $('live-seats').replaceChildren();
-          $('live-title').textContent = e.label + ' · ' + e.clock;
+          $('live-title').textContent = `${e.label} · ${e.clock}`;
           panel.classList.add('on');
-          status(e.seats.length ? e.seats.length + ' seat' + (e.seats.length === 1 ? '' : 's') + ' work in this turn' : 'Nobody works in this turn');
-          for (const s of e.seats) card(s.seat).actor.textContent = s.seat + ' · ' + s.actor;
+          status(e.seats.length ? `${e.seats.length} seat${e.seats.length === 1 ? '' : 's'} work in this turn` : 'Nobody works in this turn');
+          for (const s of e.seats) card(s.seat).actor.textContent = `${s.seat} · ${s.actor}`;
           break;
         case 'seat.begin': {
           const c = card(e.seat);
-          c.actor.textContent = e.seat + ' · ' + e.actor;
+          c.actor.textContent = `${e.seat} · ${e.actor}`;
           setState(c, 'started', 'Started');
           break;
         }
@@ -912,8 +912,8 @@ main {
           const c = card(e.seat);
           setState(c, 'started', 'Working');
           stick(c, () => {
-            c.text.append(h('span', { class: 'call' + (e.ok ? '' : ' fail') },
-              (e.ok ? '✓ ' : '✗ ') + [e.tool, argSummary(e.tool, e.args), '(' + e.minutes + ' min)'].filter(Boolean).join(' ') + (e.ok ? '' : ': ' + clip(e.result, 160))));
+            c.text.append(h('span', { class: `call${e.ok ? '' : ' fail'}` },
+              (e.ok ? '✓ ' : '✗ ') + [e.tool, argSummary(e.tool, e.args), `(${e.minutes} min)`].filter(Boolean).join(' ') + (e.ok ? '' : `: ${clip(e.result, 160)}`)));
             c.last = null;
           });
           break;
@@ -921,17 +921,17 @@ main {
         case 'model.error': {
           const c = card(e.seat);
           setState(c, 'error', 'Error');
-          stick(c, () => { c.text.append(h('span', { class: 'call fail' }, '✗ model error: ' + e.message)); c.last = null; });
+          stick(c, () => { c.text.append(h('span', { class: 'call fail' }, `✗ model error: ${e.message}`)); c.last = null; });
           break;
         }
         case 'seat.end': {
           const c = card(e.seat);
           if (!c.el.classList.contains('error')) setState(c, 'done', 'Done');
-          if (e.note) { c.note.hidden = false; c.note.textContent = 'Note: ' + e.note; }
+          if (e.note) { c.note.hidden = false; c.note.textContent = `Note: ${e.note}`; }
           break;
         }
         case 'turn.end':
-          status('The engine wrote ' + e.label + '. Waiting for the next turn.');
+          status(`The engine wrote ${e.label}. Waiting for the next turn.`);
           loadTurns();
           break;
         case 'run.end':
@@ -950,8 +950,8 @@ main {
 
   // ----- start -----
   $('run-name').textContent = D.run.name;
-  $('run-meta').textContent = 'Scenario ' + D.run.scenario + ' · cast ' + D.run.cast + (D.run.parent ? ' · retake of ' + D.run.parent.run + ' from ' + D.run.parent.turn : '');
-  const wanted = D.turns.findIndex((t) => '#' + t.label === location.hash);
+  $('run-meta').textContent = `Scenario ${D.run.scenario} · cast ${D.run.cast}${D.run.parent ? ` · retake of ${D.run.parent.run} from ${D.run.parent.turn}` : ''}`;
+  const wanted = D.turns.findIndex((t) => `#${t.label}` === location.hash);
   rebuildOrder(0);
   if (wanted > 0) { quiet = !order.includes(wanted) || quiet; if (quiet) { $('quiet').checked = true; rebuildOrder(wanted); } pos = Math.max(0, order.indexOf(wanted)); }
   else pos = Math.min(1, order.length - 1);
