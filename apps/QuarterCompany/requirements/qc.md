@@ -341,7 +341,8 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
 - **Type:** functional
 - **Priority:** P1
 - **Statement:** The simulator shall build the set of people in the world
-  only by folding the `person.join` and `person.leave` events in the journal.
+  only by folding the `person.join`, `person.leave` and `population.join`
+  events in the journal.
 - **Rationale:** A company must react inside the simulation, for example
   hire through an agency. The scenario seeds its people as `person.join`
   events at genesis. During a run, a person joins only through an action of
@@ -350,8 +351,8 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   has a seat, but cannot work until IT makes an account on the host where the
   person works. A second join of the same person in one turn is a conflict
   (REQ-QC-008). Casts match a new person by org and role, as for any person.
-  A generated population needs no scenario entry for each person, because the
-  journal holds each person in full.
+  A population is one `population.join` event, which the fold expands
+  (REQ-QC-022).
 - **Verification:**
   - Test — `apps/QuarterCompany/test/people.test.ts` › "the scenario seeds the people at genesis, as person.join events"
   - Test — `apps/QuarterCompany/test/people.test.ts` › "an agency places a new employee, who works only after IT makes the account"
@@ -380,3 +381,97 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   make an account on the client's host before the consultant can work.
 - **Verification:** Test — `apps/QuarterCompany/test/people.test.ts` › "a consultant belongs to the consultancy: mail on its host, work on the client host"
 - **Relations:** depends-on REQ-QC-020
+
+## REQ-QC-022 — A population is one journal event that the fold expands
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #551
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** The simulator shall record a population as one
+  `population.join` event with its seed, and make the same members from that
+  event in every fold.
+- **Rationale:** Sean wants thousands of consumers in a run. One event per
+  member would make the journal and the fold slow. The event holds the size,
+  the seed and the traits, such as `owns: [kettle-k2]`, so the fold of the
+  journal still equals the live state. Populations on one provider share its
+  user names, so the fold expands them together, in join order. A member has
+  an account on the provider's host from genesis. The mailbox appears with
+  the first mail. The scenario has no entry for each member.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "a population is one event at genesis, and the fold makes the members"
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "the fold of the journal equals the live state, populations included"
+- **Relations:**
+  - depends-on REQ-QC-001
+  - depends-on REQ-QC-020
+
+## REQ-QC-023 — A population acts through one seeded bulk brain
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #551
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** In each turn, the simulator shall run one bulk brain for
+  each population, and record each action of a member as that member's own
+  tool call.
+- **Rationale:** Sean chose seeded rules by default, because they are free
+  and repeatable. A behaviour starts at a turn. Each member with the trait
+  writes in with probability `p` in each turn. A member with no reply chases,
+  then escalates. The same seed gives the same journal. A population is an
+  actor in the world, not an inject (REQ-QC-017): each mail is a `send_mail`
+  call in the member's own session, with a copy in the member's sent folder.
+  The journal marks the call with the population, so playback and the viewer
+  show one row per population and turn. While the provider host is down, the
+  population does not act.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "members write in, chase with no reply, then escalate, each as their own tool call"
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "seeded rules give the same journal for the same seed"
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "a system event on the provider host stops the population"
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "the viewer data groups population mail by population"
+- **Relations:**
+  - depends-on REQ-QC-008
+  - depends-on REQ-QC-017
+  - depends-on REQ-QC-022
+
+## REQ-QC-024 — A model writes a population's mail variants once
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #551
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** When a population has `model_mail` set to true, the
+  simulator shall get the variant pool of each behaviour from one model
+  call, keep the pool in the object store, and reuse it for every member.
+- **Rationale:** Model-written mail reads better than templates, but one call
+  per member costs too much at scale. One call per behaviour keeps the cost
+  flat. The cast chooses the actor, through the normal provider layer, so a
+  local `openai-compatible` model such as Ollama can write the pool offline.
+  A `population.pool` event records the hash, so a playback and a retake
+  reuse the pool. The switch is off by default. With the switch on and a cast
+  that gives no model, the journal records a model error and nobody writes.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "a model writes the pool once, the object store keeps it, and members reuse it"
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "model_mail with a cast that gives no model is a model error, and nobody writes"
+- **Relations:**
+  - depends-on REQ-QC-006
+  - depends-on REQ-QC-023
+
+## REQ-QC-025 — A turn with 5,000 members and 500 mails runs in seconds
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #551
+- **Type:** quality
+- **Priority:** P2
+- **Statement:** The simulator shall run a turn with 5,000 population members
+  and about 500 population mails in less than 10 seconds.
+- **Rationale:** Sean wants to simulate a backlog, for example a product
+  recall with thousands of mails in an inbox. A full copy of the filesystem
+  for each seat and each tool call does not scale. A filesystem view is a
+  copy-on-write layer with an index of folder names. A population runs as
+  one bulk session. Parsed account files and recent objects stay in memory.
+- **Verification:** Test — `apps/QuarterCompany/test/population.test.ts` › "a turn with about 500 mails from 5,000 members runs in seconds"
+- **Relations:** depends-on REQ-QC-023

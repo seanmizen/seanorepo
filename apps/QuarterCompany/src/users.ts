@@ -50,25 +50,43 @@ export const formatPasswd = (accounts: Account[]) =>
 export const formatGroup = (groups: Group[]) =>
   `${groups.map((g) => [g.name, 'x', g.gid, g.members.join(',')].join(':')).join('\n')}\n`;
 
+/** Parsed directories by file hashes. A provider host has thousands of accounts. */
+const loaded = new Map<string, Directory>();
+
 export class Directory {
+  private index?: Map<string, Account>;
+  private indexed = -1;
+
   constructor(
     readonly accounts: Account[],
     readonly groups: Group[],
   ) {}
 
+  /**
+   * Accounts on a host. The result is shared between callers by file hash,
+   * so a caller must copy it before a change.
+   */
   static load(vfs: Vfs, objects: ObjectStore, host: string): Directory {
-    const read = (path: string) => {
-      const n = vfs.get(host, path);
-      return n?.hash ? objects.get(n.hash) : '';
-    };
-    return new Directory(
-      parsePasswd(read('/etc/passwd')),
-      parseGroup(read('/etc/group')),
+    const passwd = vfs.get(host, '/etc/passwd')?.hash;
+    const group = vfs.get(host, '/etc/group')?.hash;
+    const cacheKey = `${passwd}:${group}`;
+    const hit = loaded.get(cacheKey);
+    if (hit) return hit;
+    const dir = new Directory(
+      parsePasswd(passwd ? objects.get(passwd) : ''),
+      parseGroup(group ? objects.get(group) : ''),
     );
+    if (loaded.size > 256) loaded.clear();
+    loaded.set(cacheKey, dir);
+    return dir;
   }
 
   account(name: string) {
-    return this.accounts.find((a) => a.name === name);
+    if (!this.index || this.indexed !== this.accounts.length) {
+      this.index = new Map(this.accounts.map((a) => [a.name, a]));
+      this.indexed = this.accounts.length;
+    }
+    return this.index.get(name);
   }
 
   group(name: string) {

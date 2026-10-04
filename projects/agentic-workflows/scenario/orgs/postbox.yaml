@@ -1,0 +1,7 @@
+kind: provider
+name: Postbox Mail
+domain: postbox.example
+host: pb-mx01
+about: >
+  Postbox Mail is a free consumer mail service. Its host holds the mailboxes
+  of the people in a population.

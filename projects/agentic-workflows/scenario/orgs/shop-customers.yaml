@@ -1,0 +1,55 @@
+# A small population: shop owners who buy from Brindle & Hart. A seed makes
+# the members. One bulk brain acts for all of them (REQ-QC-023). The scale
+# case, with 5,000 members, is in the QuarterCompany tests.
+kind: population
+name: Corner-shop customers
+about: Owners of small shops who buy paper and toner from Brindle & Hart.
+provider: postbox
+members:
+  size: 24
+  seed: 2026
+  traits:
+    - { key: waits_for, value: toner order, share: 0.5 }
+behaviour:
+  - id: late-order
+    from: fy1-q1-d1-t6
+    who: { waits_for: toner order }
+    p: 0.05
+    write:
+      to: maria@brindlehart.example
+      subject:
+        - "Where is my {waits_for}?"
+        - "Late delivery"
+      body:
+        - |
+          Hello,
+
+          I placed a {waits_for} with you last week. It has not arrived. When can I expect it?
+
+          {name}
+        - |
+          Hi Maria,
+
+          My {waits_for} is late and my shop is nearly out of toner. Please tell me the delivery date.
+
+          Thanks,
+          {first}
+    chase:
+      after: 12t
+      subject: "Re: my {waits_for}"
+      body: |
+        Hello again,
+
+        I have had no reply. Please tell me where my {waits_for} is.
+
+        {name}
+    escalate:
+      after: 12t
+      to: priya@brindlehart.example
+      subject: "Complaint: nobody answers about my {waits_for}"
+      body: |
+        Dear Ms Shah,
+
+        I wrote to Maria twice about my {waits_for}. Nobody answered. I will take my business elsewhere.
+
+        {name}

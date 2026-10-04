@@ -2,9 +2,11 @@
 //
 //   1. Journal the director's recasts. Deliver injected mail.
 //   2. Every active seat works on its own copy of the same snapshot, at the
-//      same time.
-//   3. Merge the seats' changes in seat-id order. A change that no longer
-//      applies becomes an fs.conflict event.
+//      same time. Each population works as one bulk session on its own
+//      copy (REQ-QC-023).
+//   3. Merge the seats' changes in seat-id order, then the populations' in
+//      org-id order. A change that no longer applies becomes an fs.conflict
+//      event.
 //   4. Deliver the turn's mail.
 //   5. Write the journal, update the projection, commit and tag.
 //
@@ -13,7 +15,8 @@
 import { brainFor } from './brains/index.ts';
 import { type Casting, resolveCast } from './cast.ts';
 import type { EventBody, JournalEvent } from './events.ts';
-import { Ops } from './ops.ts';
+import { type Op, Ops } from './ops.ts';
+import { type PopulationTurn, populationTurn } from './population.ts';
 import { briefing, systemPrompt } from './prompt.ts';
 import { type Run, type SimState, tagOf } from './run.ts';
 import { type Compel, hostOf, type Seat, seatsIn } from './scenario.ts';
@@ -27,6 +30,8 @@ export interface TurnReport {
   label: string;
   active: string[];
   skipped: string[];
+  /** Mails that population members sent in the turn. */
+  populationMails: number;
   events: number;
   costUsd: number;
 }
@@ -58,7 +63,9 @@ export function genesis(run: Run): SimState {
   seedWorld(ops, run.scenario);
   ops.emit('engine', { type: 'turn.end', label: GENESIS });
   const events = stamp(ops.list, GENESIS, 0);
-  for (const e of events) if (e.type === 'person.join') state.applyPerson(e, 0);
+  for (const e of events)
+    if (e.type === 'person.join') state.applyPerson(e, 0);
+    else if (e.type === 'population.join') state.apply(e);
   state.ord = 0;
   run.writeTurn(GENESIS, events);
   run.project(state);
@@ -372,9 +379,19 @@ export async function runTurn(
     },
   );
 
-  // 3. Merge in seat order.
-  for (const { seat, session } of sessions) {
-    for (const op of session.ops.list) {
+  // Populations: one bulk session each, on the same snapshot as the seats.
+  const bulk: PopulationTurn[] = [];
+  for (const pop of scenario.orgs
+    .filter((o) => o.kind === 'population' && state.populations.has(o.id))
+    .sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    const t = await populationTurn(run, state, pop, label, ord, cast);
+    costUsd += t.costUsd;
+    bulk.push(t);
+  }
+
+  // 3. Merge in seat order, then the populations.
+  const merge = (list: Op[], seatId?: string) => {
+    for (const op of list) {
       const b = op.body;
       // A join or a leave changes the people at once, so a second join of
       // the same person in this turn is a conflict. See REQ-QC-020.
@@ -385,7 +402,7 @@ export async function runTurn(
             actor: 'engine',
             body: {
               type: 'fs.conflict',
-              seat: seat.id,
+              seat: seatId ?? op.actor,
               op: b.type,
               path: b.seat,
               reason,
@@ -402,7 +419,7 @@ export async function runTurn(
             actor: 'engine',
             body: {
               type: 'fs.conflict',
-              seat: seat.id,
+              seat: seatId ?? op.actor,
               op: b.type,
               path,
               reason,
@@ -413,6 +430,9 @@ export async function runTurn(
       }
       events.push(op);
     }
+  };
+  for (const { seat, session } of sessions) {
+    merge(session.ops.list, seat.id);
     events.push({
       actor: 'engine',
       body: {
@@ -424,10 +444,14 @@ export async function runTurn(
     });
   }
 
+  for (const t of bulk) merge(t.ops.list);
+
   // 4. Mail.
   for (const { session } of sessions)
     for (const env of session.outbox)
       deliver(main, scenario, env, state.system);
+  for (const t of bulk)
+    for (const env of t.outbox) deliver(main, scenario, env, state.system);
   // Queue events change state at once, as in turnStart.
   for (const op of main.list) state.applyLive(op.body);
   drain();
@@ -437,7 +461,13 @@ export async function runTurn(
   // 5. Persist.
   const stamped = stamp(events, label, ord);
   for (const e of stamped)
-    if (e.type === 'seat.end' || e.type === 'cast.rule' || e.type === 'thought')
+    if (
+      e.type === 'seat.end' ||
+      e.type === 'cast.rule' ||
+      e.type === 'thought' ||
+      e.type === 'population.step' ||
+      e.type === 'population.pool'
+    )
       state.apply(e);
   state.ord = ord;
   run.writeTurn(label, stamped);
@@ -448,8 +478,19 @@ export async function runTurn(
   run.project(state);
   run.writeMinds(state);
   const active = sessions.map((s) => s.seat.id);
-  run.commit(label, `${active.length} working, ${skipped.length} asleep`);
-  return { label, active, skipped, events: stamped.length, costUsd };
+  const populationMails = bulk.reduce((n, t) => n + t.mails, 0);
+  run.commit(
+    label,
+    `${active.length} working, ${skipped.length} asleep${populationMails ? `, ${populationMails} population mails` : ''}`,
+  );
+  return {
+    label,
+    active,
+    skipped,
+    populationMails,
+    events: stamped.length,
+    costUsd,
+  };
 }
 
 export async function runUntil(
@@ -463,7 +504,7 @@ export async function runUntil(
   while (state.ord < untilOrd) {
     const r = await runTurn(run, state, log);
     log(
-      `${r.label}  ${describeTurn(r.label, run.scenario.calendar)}  working: ${r.active.length}  asleep: ${r.skipped.length}  $${r.costUsd.toFixed(4)}`,
+      `${r.label}  ${describeTurn(r.label, run.scenario.calendar)}  working: ${r.active.length}  asleep: ${r.skipped.length}${r.populationMails ? `  population mails: ${r.populationMails}` : ''}  $${r.costUsd.toFixed(4)}`,
     );
     reports.push(r);
   }

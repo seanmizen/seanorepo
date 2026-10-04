@@ -2,6 +2,7 @@
 // Both write ordinary journal events through an Ops buffer.
 import { formatMessage, splitAddress } from './mail.ts';
 import type { Ops } from './ops.ts';
+import { expand, type PopMember, scenarioPopulations } from './population.ts';
 import {
   hostOf,
   mailHostOf,
@@ -32,8 +33,16 @@ const SYSTEM_DIRS: [string, number][] = [
   ['/var/mail', 0o755],
 ];
 
-/** Seed one company host: system folders, accounts, homes and seed files. */
-export function seedOrg(ops: Ops, c: Org) {
+/** The primary group of all population members on a provider host. */
+export const MEMBERS_GROUP = { name: 'members', gid: 3000 };
+
+/**
+ * Seed one organisation host: system folders, accounts, homes and seed
+ * files. A provider host also gets an account for each population member.
+ * A member's mailbox appears with the first mail, so genesis stays small.
+ * See REQ-QC-022.
+ */
+export function seedOrg(ops: Ops, c: Org, members: PopMember[] = []) {
   const host = hostOf(c);
   const actor = 'genesis';
   ops.mkdir(actor, host, '/', ROOT_DIR);
@@ -79,6 +88,20 @@ export function seedOrg(ops: Ops, c: Org) {
     for (const g of p.groups)
       groups.find((x) => x.name === g)?.members.push(p.user);
   }
+  const own = accounts.filter((x) => x.uid >= 1000);
+  if (c.kind === 'provider') {
+    groups.push({ ...MEMBERS_GROUP, members: [] });
+    members.forEach((m, i) => {
+      accounts.push({
+        name: m.user,
+        uid: 10000 + i,
+        gid: MEMBERS_GROUP.gid,
+        gecos: m.name,
+        home: `/home/${m.user}`,
+        shell: '/bin/sh',
+      });
+    });
+  }
   ops.write(actor, host, '/etc/passwd', formatPasswd(accounts), {
     ...ROOT_DIR,
     mode: 0o644,
@@ -88,7 +111,7 @@ export function seedOrg(ops: Ops, c: Org) {
     mode: 0o644,
   });
   ops.mkdir(actor, host, '/root', { ...ROOT_DIR, mode: 0o700 });
-  for (const a of accounts.filter((x) => x.uid >= 1000)) {
+  for (const a of own) {
     ops.mkdir(actor, host, a.home, {
       owner: a.name,
       group: a.name,
@@ -127,7 +150,23 @@ export function seedOrg(ops: Ops, c: Org) {
  */
 export function seedWorld(ops: Ops, s: Scenario) {
   for (const j of scenarioJoins(s)) ops.emit('genesis', j);
-  for (const c of s.orgs) seedOrg(ops, c);
+  const pops = scenarioPopulations(s);
+  for (const p of pops)
+    ops.emit('genesis', { type: 'population.join', ...p, via: 'scenario' });
+  const members = expand(pops);
+  for (const c of s.orgs) {
+    if (c.kind === 'population') continue;
+    const mine = pops
+      .filter((p) => p.provider === c.id)
+      .flatMap((p) => members.get(p.org) ?? []);
+    const staff = new Set(c.people.map((p) => p.user));
+    const clash = mine.find((m) => staff.has(m.user));
+    if (clash)
+      throw new Error(
+        `Population member "${clash.user}" has the same user name as a person at ${c.name}. Change the person's user name.`,
+      );
+    seedOrg(ops, c, mine);
+  }
 }
 
 export interface Envelope {

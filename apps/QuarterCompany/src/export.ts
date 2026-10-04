@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type CastFile, type Rule, resolveCast } from './cast.ts';
 import type { JournalEvent } from './events.ts';
+import { providerOf } from './population.ts';
 import type { Run } from './run.ts';
 import { hostOf, seatOfMember } from './scenario.ts';
 import { describeTurn, ordOf } from './time.ts';
@@ -21,6 +22,17 @@ export interface ExportData {
   };
   turnMinutes: number;
   orgs: { id: string; name: string; domain: string; host: string }[];
+  /**
+   * Populations. Their members are not staff cards: the viewer shows their
+   * tool calls as one row per population and turn. See REQ-QC-023.
+   */
+  populations: {
+    id: string;
+    name: string;
+    provider: string;
+    domain: string;
+    size: number;
+  }[];
   seats: {
     id: string;
     name: string;
@@ -103,12 +115,23 @@ export function exportData(run: Run): ExportData {
       parent: run.info.parent,
     },
     turnMinutes: run.scenario.turnMinutes,
-    orgs: run.scenario.orgs.map((c) => ({
-      id: c.id,
-      name: c.name,
-      domain: c.domain,
-      host: hostOf(c),
-    })),
+    populations: run.scenario.orgs
+      .filter((o) => o.kind === 'population')
+      .map((o) => ({
+        id: o.id,
+        name: o.name,
+        provider: o.provider as string,
+        domain: providerOf(run.scenario, o).domain,
+        size: o.members?.size ?? 0,
+      })),
+    orgs: run.scenario.orgs
+      .filter((o) => o.kind !== 'population')
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        domain: c.domain,
+        host: hostOf(c),
+      })),
     seats: seats.map(({ seat: s, member: m }) => ({
       id: s.id,
       name: s.person.name,
