@@ -2,6 +2,10 @@
 anthropic:
   kind: anthropic
   key_env: ANTHROPIC_API_KEY
+# Ollama on this PC. One GPU runs one request at a time, so the seats wait in
+# turn (concurrency: 1). A slow request on an old GPU can take many minutes.
 ollama:
   kind: openai-compatible
-  base_url: http://localhost:11434/v1
+  base_url: http://127.0.0.1:11434/v1
+  concurrency: 1
+  timeout_s: 1800

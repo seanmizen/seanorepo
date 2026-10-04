@@ -10,6 +10,8 @@ export interface ModelCallRecord {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  /** Wall-clock milliseconds of the request (REQ-QC-032). */
+  ms: number;
 }
 
 export interface BrainContext {

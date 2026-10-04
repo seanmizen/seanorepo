@@ -273,6 +273,8 @@ describe('populations', () => {
 
 // A fake openai-compatible model service, for the model-written pool.
 const requests: unknown[] = [];
+// Set to true to answer as a local reasoning model: a <think> block first.
+let thinking = false;
 const server = createServer((req, res) => {
   let raw = '';
   req.on('data', (c) => {
@@ -296,7 +298,11 @@ const server = createServer((req, res) => {
       JSON.stringify({
         model: 'fake-writer',
         choices: [
-          { message: { content: `Here it is:\n${JSON.stringify(pool)}` } },
+          {
+            message: {
+              content: `${thinking ? '<think>The keys are {"write", "chase"}.</think>\n' : ''}Here it is:\n${JSON.stringify(pool)}`,
+            },
+          },
         ],
         usage: { prompt_tokens: 300, completion_tokens: 200 },
       }),
@@ -361,6 +367,29 @@ describe('model-written variant pool', () => {
     );
     // A retake reads the pool from the journal too.
     expect(run.load().pools.get('kettle-owners/k2-fault')).toBe(pool.hash);
+  });
+
+  test('a local model writes the pool in offline mode, after its <think> block', async () => {
+    requests.length = 0;
+    thinking = true;
+    process.env.QC_OFFLINE = '1';
+    try {
+      const run = makeRun(
+        {},
+        'writer',
+        'r',
+        withWriter({ size: 5, modelMail: true }),
+      );
+      await runUntil(run, 1);
+      expect(requests).toHaveLength(1);
+      const t1 = run.readTurn('fy1-q1-d1-t1');
+      expect(t1.find((e) => e.type === 'population.pool')).toBeTruthy();
+      expect(t1.find((e) => e.type === 'model.error')).toBeUndefined();
+      expect(toolCalls(t1)).toHaveLength(5);
+    } finally {
+      thinking = false;
+      delete process.env.QC_OFFLINE;
+    }
   });
 
   test('model_mail with a cast that gives no model is a model error, and nobody writes', async () => {

@@ -245,14 +245,23 @@ export interface CostRow {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  /** Wall-clock seconds of the model requests. See REQ-QC-032. */
+  seconds: number;
 }
 
-export function costReport(
-  run: Run,
-  by: 'seat' | 'actor' | 'role' | 'org' = 'seat',
-): CostRow[] {
+export type CostBy = 'seat' | 'actor' | 'role' | 'org' | 'turn';
+
+/**
+ * Model calls, tokens, request time and cost, grouped by a key. Rows by turn
+ * are in turn order. Other rows are in cost order, then token order, so a
+ * free local model still shows the busiest group first.
+ */
+export function costReport(run: Run, by: CostBy = 'seat'): CostRow[] {
   const people = run.load().people;
-  const rows = new Map<string, CostRow>();
+  const pops = new Set(
+    run.scenario.orgs.filter((o) => o.kind === 'population').map((o) => o.id),
+  );
+  const rows = new Map<string, CostRow & { ord: number }>();
   for (const e of run.events()) {
     if (e.type !== 'model.call') continue;
     const info = people.get(e.seat);
@@ -261,23 +270,71 @@ export function costReport(
         ? e.seat
         : by === 'actor'
           ? e.actor
-          : by === 'role'
-            ? (info?.person.role ?? '?')
-            : (info?.org ?? '?');
+          : by === 'turn'
+            ? e.turn
+            : by === 'role'
+              ? (info?.person.role ?? (pops.has(e.seat) ? 'population' : '?'))
+              : (info?.org ?? (pops.has(e.seat) ? e.seat : '?'));
     const row = rows.get(key) ?? {
       key,
+      ord: e.ord,
       calls: 0,
       inputTokens: 0,
       outputTokens: 0,
       costUsd: 0,
+      seconds: 0,
     };
     row.calls += 1;
     row.inputTokens += e.inputTokens;
     row.outputTokens += e.outputTokens;
     row.costUsd += e.costUsd;
+    row.seconds += (e.ms ?? 0) / 1000;
     rows.set(key, row);
   }
-  return [...rows.values()].sort((a, b) => b.costUsd - a.costUsd);
+  const list = [...rows.values()];
+  if (by === 'turn') list.sort((a, b) => a.ord - b.ord);
+  else
+    list.sort(
+      (a, b) =>
+        b.costUsd - a.costUsd ||
+        b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens),
+    );
+  return list.map(({ ord: _ord, ...r }) => r);
+}
+
+/** The cost report as text lines, with a total line. */
+export function costLines(rows: CostRow[], by: CostBy): string[] {
+  const line = (
+    key: string,
+    calls: string,
+    inp: string,
+    out: string,
+    sec: string,
+    usd: string,
+  ) =>
+    `${key.padEnd(32)} ${calls.padStart(6)} ${inp.padStart(10)} ${out.padStart(9)} ${sec.padStart(9)} ${usd.padStart(9)}`;
+  const sum = (f: (r: CostRow) => number) => rows.reduce((a, r) => a + f(r), 0);
+  return [
+    line(by, 'calls', 'in', 'out', 'seconds', 'USD'),
+    ...rows.map((r) =>
+      line(
+        r.key,
+        String(r.calls),
+        String(r.inputTokens),
+        String(r.outputTokens),
+        r.seconds.toFixed(1),
+        r.costUsd.toFixed(4),
+      ),
+    ),
+    line(
+      'total',
+      String(sum((r) => r.calls)),
+      String(sum((r) => r.inputTokens)),
+      String(sum((r) => r.outputTokens)),
+      sum((r) => r.seconds).toFixed(1),
+      sum((r) => r.costUsd).toFixed(4),
+    ),
+  ];
 }
 
 export function statusLines(run: Run): string[] {

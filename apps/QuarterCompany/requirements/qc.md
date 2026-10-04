@@ -576,3 +576,115 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   - depends-on REQ-QC-026
   - depends-on REQ-QC-027
   - depends-on REQ-QC-028
+## REQ-QC-030 — Offline mode refuses a model host that is not local
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #559
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** While `QC_OFFLINE` is set, the simulator shall send no
+  model request to a host that is not a loopback host, and stop the run
+  before a seat works if the seat's actor uses a provider on such a host.
+- **Rationale:** Sean runs QuarterCompany on one PC with no network. A
+  provider that points to a remote host would fail late, or make a paid
+  call. The check uses the actor of each seat before the seats work, and
+  each request again, so a population pool is also checked. A loopback host
+  is `localhost`, a name that ends in `.localhost`, `127.x.x.x` or `::1`.
+  The Anthropic provider with no `base_url` goes to `api.anthropic.com`, so
+  it always stops an offline run. The engine writes no journal for the turn
+  that stops. An unset `QC_OFFLINE` changes nothing.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "only loopback hosts count as local"
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "an unset QC_OFFLINE turns nothing on"
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "offline mode stops the run when a cast actor uses a host that is not local"
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "offline mode lets a run use a model server on 127.0.0.1, with the actor extra_body"
+- **Relations:** depends-on REQ-QC-005
+
+## REQ-QC-031 — A tool call that the brain cannot read is a failed action
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #559
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** When a model reply has a tool call with no tool name, with
+  arguments that are not a JSON object, or with an unknown tool, the
+  simulator shall journal a failed `tool.call` that costs no minutes, give the
+  error to the model as the tool result, and continue the turn.
+- **Rationale:** Small local models sometimes write a bad tool call. One bad
+  call must not stop a turn or a run, and the journal must show it. The
+  `openai-compatible` brain reads native tool calls first. When a reply has
+  none, it reads `<tool_call>` blocks (the Hermes form) from the text. It
+  also reads arguments that are an object, or JSON that is encoded two
+  times. It removes `<think>` blocks from the text.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "a malformed tool call is a failed action in the journal, and the turn continues"
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "an unreadable tool call in the text is a failed action"
+- **Relations:**
+  - depends-on REQ-QC-008
+  - depends-on REQ-QC-010
+
+## REQ-QC-032 — Each model call records its time, and the report shows time and tokens
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #559
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** The simulator shall record the wall-clock time of each
+  model request in its `model.call` event, and show the calls, tokens,
+  request seconds and cost in the cost report, by seat, actor, role,
+  organisation or turn.
+- **Rationale:** A local model costs nothing, so tokens and time are the
+  measures of a run. `qc run` prints the time of each turn. The time of a
+  turn is not in the journal, because it is not part of the world. A
+  population's pool call has the role `population`.
+- **Verification:** Test — `apps/QuarterCompany/test/local.test.ts` › "the cost report shows request seconds and tokens by turn and by role, at zero cost"
+- **Relations:** none
+
+## REQ-QC-033 — One local model serves every seat, one request at a time
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #559
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** When a provider has `concurrency` set, the simulator shall
+  send no more than that number of requests to the provider at the same
+  time, and fail a request with no reply in `timeout_s` seconds as a model
+  error.
+- **Rationale:** The PC has one 6 GB GPU. It holds one copy of one model and
+  runs one request at a time. A change of model between seats is too slow,
+  so the `local` cast gives every seat the same actor. A request waits for
+  its slot in QuarterCompany, and not in the server, so the timeout counts
+  only its own work. One slow request can take many minutes. The default
+  timeout is 1800 seconds. An unset `concurrency` sets no limit.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "with concurrency 1, the seats wait in turn for the model server"
+  - Test — `apps/QuarterCompany/test/local.test.ts` › "a request with no reply in timeout_s is a model error, and the run continues"
+- **Relations:** depends-on REQ-QC-008
+
+## REQ-QC-034 — A full run works on one PC with no network
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #559
+- **Type:** quality
+- **Priority:** P1
+- **Statement:** The simulator shall make a run, run one day with the
+  `local` cast, write the model-written variant pool, and export the run,
+  with no network connection.
+- **Rationale:** Sean wants to run all of QuarterCompany on his own PC, with
+  open-weight models only. Slow is acceptable. A setup script pulls Ollama,
+  the model and the Node packages while the PC is online, one time. The
+  README section "Run offline on one PC" records the hardware, the choice of
+  server and model, and the steps of the offline proof.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/population.test.ts` › "a local model writes the pool in offline mode, after its <think> block"
+  - Inspection — `apps/QuarterCompany/scripts/setup-local-pc.sh`
+  - Demonstration — Sean runs the offline proof in the README on the PC, with the network off
+- **Relations:**
+  - depends-on REQ-QC-024
+  - depends-on REQ-QC-030
+  - depends-on REQ-QC-033

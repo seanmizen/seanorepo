@@ -126,6 +126,8 @@ export type InfoEvent =
       inputTokens: number;
       outputTokens: number;
       costUsd: number;
+      /** Wall-clock milliseconds of the request. See REQ-QC-032. */
+      ms?: number;
       request: string; // object hash
       response: string; // object hash
     }

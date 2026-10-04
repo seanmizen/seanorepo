@@ -10,6 +10,13 @@ export const Provider = z.object({
   kind: z.enum(['anthropic', 'openai-compatible']),
   base_url: z.string().optional(),
   key_env: z.string().optional(),
+  /**
+   * The most requests at the same time. Unset means no limit. A local server
+   * on one GPU needs 1, so the seats wait in turn (REQ-QC-033).
+   */
+  concurrency: z.number().int().positive().optional(),
+  /** Seconds before one request fails. Default 1800. Read by brains/net.ts. */
+  timeout_s: z.number().positive().optional(),
 });
 export type Provider = z.infer<typeof Provider>;
 
@@ -27,6 +34,12 @@ export const Actor = z.object({
     .default({ in: 0, out: 0 }),
   /** Model requests allowed in one turn, before the engine ends the turn. */
   max_steps: z.number().default(12),
+  /**
+   * More fields for each request of an `openai-compatible` provider, for
+   * example `{ reasoning_effort: none }` to stop a Qwen3 model thinking.
+   * Unset adds nothing. Read by brains/openai.ts and brains/complete.ts.
+   */
+  extra_body: z.record(z.string(), z.unknown()).optional(),
   /** Script file for the `script` provider, relative to the scenario. */
   script: z.string().optional(),
 });

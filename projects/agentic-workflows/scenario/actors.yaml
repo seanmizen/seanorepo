@@ -7,7 +7,15 @@ actors:
   haiku: { provider: anthropic, model: claude-haiku-4-5, max_tokens: 4000, price: { in: 1, out: 5 } }
   sonnet: { provider: anthropic, model: claude-sonnet-5-5, max_tokens: 8000, effort: medium, price: { in: 2, out: 10 } }
   opus: { provider: anthropic, model: claude-opus-5-5, max_tokens: 16000, effort: medium, price: { in: 4, out: 20 } }
-  qwen-local: { provider: ollama, model: "qwen3:8b", max_tokens: 4000 }
+  # Qwen3 8B at Q4_K_M (5.2 GB) through Ollama. Free, offline, slow. See the
+  # README section "Run offline on one PC". reasoning_effort none stops the
+  # model thinking, so each step uses fewer tokens.
+  qwen-local:
+    provider: ollama
+    model: "qwen3:8b"
+    max_tokens: 4000
+    max_steps: 12
+    extra_body: { reasoning_effort: none }
 
 # Tiers are aliases. Change one line to change every seat on a tier.
 tiers:

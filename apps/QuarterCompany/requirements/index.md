@@ -34,6 +34,11 @@
 | [`REQ-QC-027`](qc.md#req-qc-027--the-case-system-takes-in-a-role-mailbox-and-replies-from-its-address) | The case system takes in a role mailbox and replies from its address | active | functional | P1 | sean |
 | [`REQ-QC-028`](qc.md#req-qc-028--a-script-can-give-the-calls-for-a-range-of-turns) | A script can give the calls for a range of turns | active | functional | P2 | agent:SEAN-552 |
 | [`REQ-QC-029`](qc.md#req-qc-029--the-recall-scenario-tells-its-story-with-no-model) | The recall scenario tells its story with no model | active | functional | P2 | sean |
+| [`REQ-QC-030`](qc.md#req-qc-030--offline-mode-refuses-a-model-host-that-is-not-local) | Offline mode refuses a model host that is not local | active | constraint | P1 | sean |
+| [`REQ-QC-031`](qc.md#req-qc-031--a-tool-call-that-the-brain-cannot-read-is-a-failed-action) | A tool call that the brain cannot read is a failed action | active | functional | P1 | sean |
+| [`REQ-QC-032`](qc.md#req-qc-032--each-model-call-records-its-time-and-the-report-shows-time-and-tokens) | Each model call records its time, and the report shows time and tokens | active | functional | P2 | sean |
+| [`REQ-QC-033`](qc.md#req-qc-033--one-local-model-serves-every-seat-one-request-at-a-time) | One local model serves every seat, one request at a time | active | functional | P2 | sean |
+| [`REQ-QC-034`](qc.md#req-qc-034--a-full-run-works-on-one-pc-with-no-network) | A full run works on one PC with no network | active | quality | P1 | sean |
 
 ## Dependency graph
 
@@ -68,6 +73,11 @@ graph TD
   REQ_QC_027["REQ-QC-027<br/>The case system takes in a role mailbox and replies from its address"]
   REQ_QC_028["REQ-QC-028<br/>A script can give the calls for a range of turns"]
   REQ_QC_029["REQ-QC-029<br/>The recall scenario tells its story with no model"]
+  REQ_QC_030["REQ-QC-030<br/>Offline mode refuses a model host that is not local"]
+  REQ_QC_031["REQ-QC-031<br/>A tool call that the brain cannot read is a failed action"]
+  REQ_QC_032["REQ-QC-032<br/>Each model call records its time, and the report shows time and tokens"]
+  REQ_QC_033["REQ-QC-033<br/>One local model serves every seat, one request at a time"]
+  REQ_QC_034["REQ-QC-034<br/>A full run works on one PC with no network"]
   REQ_QC_007 -->|amended-by| REQ_QC_018
   REQ_QC_008 -->|depends-on| REQ_QC_001
   REQ_QC_014 -->|depends-on| REQ_QC_001
@@ -97,6 +107,13 @@ graph TD
   REQ_QC_029 -->|depends-on| REQ_QC_026
   REQ_QC_029 -->|depends-on| REQ_QC_027
   REQ_QC_029 -->|depends-on| REQ_QC_028
+  REQ_QC_030 -->|depends-on| REQ_QC_005
+  REQ_QC_031 -->|depends-on| REQ_QC_008
+  REQ_QC_031 -->|depends-on| REQ_QC_010
+  REQ_QC_033 -->|depends-on| REQ_QC_008
+  REQ_QC_034 -->|depends-on| REQ_QC_024
+  REQ_QC_034 -->|depends-on| REQ_QC_030
+  REQ_QC_034 -->|depends-on| REQ_QC_033
   style REQ_QC_013 stroke-dasharray: 4 4
   style REQ_QC_015 stroke-dasharray: 4 4
 ```
@@ -105,14 +122,18 @@ graph TD
 
 - `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019, required-by REQ-QC-020, required-by REQ-QC-022
 - `REQ-QC-004` — required-by REQ-QC-026
+- `REQ-QC-005` — required-by REQ-QC-030
 - `REQ-QC-006` — required-by REQ-QC-024
-- `REQ-QC-008` — required-by REQ-QC-016, required-by REQ-QC-023
+- `REQ-QC-008` — required-by REQ-QC-016, required-by REQ-QC-023, required-by REQ-QC-031, required-by REQ-QC-033
 - `REQ-QC-009` — required-by REQ-QC-026
-- `REQ-QC-010` — required-by REQ-QC-026
+- `REQ-QC-010` — required-by REQ-QC-026, required-by REQ-QC-031
 - `REQ-QC-017` — required-by REQ-QC-020, required-by REQ-QC-023
 - `REQ-QC-020` — required-by REQ-QC-021, required-by REQ-QC-022, required-by REQ-QC-029
 - `REQ-QC-022` — required-by REQ-QC-023
 - `REQ-QC-023` — required-by REQ-QC-024, required-by REQ-QC-025, required-by REQ-QC-027, required-by REQ-QC-029
+- `REQ-QC-024` — required-by REQ-QC-034
 - `REQ-QC-026` — required-by REQ-QC-027, required-by REQ-QC-029
 - `REQ-QC-027` — required-by REQ-QC-029
 - `REQ-QC-028` — required-by REQ-QC-029
+- `REQ-QC-030` — required-by REQ-QC-034
+- `REQ-QC-033` — required-by REQ-QC-034

@@ -15,6 +15,8 @@ import { Run } from './run.ts';
 import { checkCompelSeat, checkInject, Inject } from './scenario.ts';
 import { labelOf, ordOf, turnsPerDay } from './time.ts';
 import {
+  type CostBy,
+  costLines,
   costReport,
   materialize,
   playback,
@@ -51,8 +53,8 @@ Usage: qc <command> [options]
   export <run> [--out <file>] [--fragment]
                          Write one HTML file that plays the run back.
                          Default: runs/<run>.html. No server needed.
-  cost <run> [--by seat|actor|role|org]
-                         Model cost so far.
+  cost <run> [--by seat|actor|role|org|turn]
+                         Model calls, tokens, request seconds and cost so far.
   mcp-worker <run> --seat <id>
                          MCP server (stdio): work as one seat.
   mcp-cases <run> --seat <id>
@@ -61,6 +63,8 @@ Usage: qc <command> [options]
   list                   List runs.
 
 Turn labels look like fy1-q1-d1-t1.`;
+
+const COST_BY: CostBy[] = ['seat', 'actor', 'role', 'org', 'turn'];
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -263,24 +267,15 @@ async function main() {
     }
     case 'cost': {
       const run = Run.open(runName());
-      const by = (values.by ?? 'seat') as 'seat' | 'actor' | 'role' | 'org';
-      const rows = costReport(run, by);
+      const by = values.by ?? 'seat';
+      if (!COST_BY.includes(by as CostBy))
+        fail(`--by must be one of: ${COST_BY.join(', ')}.`);
+      const rows = costReport(run, by as CostBy);
       if (!rows.length) {
         console.log('No model calls yet.');
         return;
       }
-      console.log(
-        `${by.padEnd(32)} ${'calls'.padStart(6)} ${'in'.padStart(10)} ${'out'.padStart(9)} ${'USD'.padStart(9)}`,
-      );
-      for (const r of rows) {
-        console.log(
-          `${r.key.padEnd(32)} ${String(r.calls).padStart(6)} ${String(r.inputTokens).padStart(10)} ${String(r.outputTokens).padStart(9)} ${r.costUsd.toFixed(4).padStart(9)}`,
-        );
-      }
-      const total = rows.reduce((a, r) => a + r.costUsd, 0);
-      console.log(
-        `${'total'.padEnd(32)} ${''.padStart(6)} ${''.padStart(10)} ${''.padStart(9)} ${total.toFixed(4).padStart(9)}`,
-      );
+      for (const line of costLines(rows, by as CostBy)) console.log(line);
       return;
     }
     case 'mcp-worker': {

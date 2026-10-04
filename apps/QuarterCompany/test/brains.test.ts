@@ -117,6 +117,7 @@ describe('anthropic brain', () => {
       inputTokens: 200,
       outputTokens: 40,
       costUsd: (200 * 1 + 40 * 10) / 1e6,
+      seconds: expect.any(Number),
     });
   });
 });

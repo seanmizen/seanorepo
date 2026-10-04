@@ -1,2 +1,4 @@
-# Everyone on a local model through Ollama. Free, and slow.
+# Everyone on one local model through Ollama, on one PC. Free, offline and
+# slow. All seats share one loaded copy of the model. A population with
+# model_mail: true writes its variant pool with the same model.
 default: local
