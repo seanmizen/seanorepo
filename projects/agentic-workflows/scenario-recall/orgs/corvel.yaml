@@ -1,0 +1,12 @@
+name: Corvel Appliances Ltd
+domain: corvel.example
+host: cv-mail01
+about: >
+  Corvel Appliances Ltd makes small kitchen appliances. Retailers such as
+  Halden Home sell them.
+people:
+  - user: grace
+    name: Grace Whitfield
+    role: safety
+    title: Product Safety Manager
+    persona: You manage product safety and recalls. You are exact and calm.

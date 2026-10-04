@@ -33,6 +33,9 @@ const SYSTEM_DIRS: [string, number][] = [
   ['/var/mail', 0o755],
 ];
 
+/** The shell of a role mailbox: the account takes mail, but has no shell. */
+export const ROLE_SHELL = '/bin/false';
+
 /** The primary group of all population members on a provider host. */
 export const MEMBERS_GROUP = { name: 'members', gid: 3000 };
 
@@ -87,6 +90,19 @@ export function seedOrg(ops: Ops, c: Org, members: PopMember[] = []) {
     groups.push({ name: p.user, gid: uid, members: [] });
     for (const g of p.groups)
       groups.find((x) => x.name === g)?.members.push(p.user);
+  }
+  // A role mailbox takes mail, but no person logs in to it (REQ-QC-027).
+  for (const m of c.mailboxes) {
+    uid += 1;
+    accounts.push({
+      name: m,
+      uid,
+      gid: uid,
+      gecos: `${m} mailbox`,
+      home: `/home/${m}`,
+      shell: ROLE_SHELL,
+    });
+    groups.push({ name: m, gid: uid, members: [] });
   }
   const own = accounts.filter((x) => x.uid >= 1000);
   if (c.kind === 'provider') {

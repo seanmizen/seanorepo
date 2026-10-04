@@ -1,0 +1,2 @@
+# Every seat follows scripts/recall.yaml. No model calls, no cost.
+default: scripted

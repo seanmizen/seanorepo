@@ -1,0 +1,63 @@
+# Customers of Halden Home. About 35% of them own a Corvel K2 kettle. One
+# bulk brain acts for all of them, with seeded rules (REQ-QC-023). The
+# scripted cast never calls a model, so model_mail stays off.
+kind: population
+name: Halden Home customers
+about: Members of the public who bought kitchen appliances from Halden Home.
+provider: postbox
+members:
+  size: 4000
+  seed: 552
+  traits:
+    - { key: owns, value: Corvel K2 kettle, share: 0.35 }
+behaviour:
+  - id: k2-recall
+    from: fy1-q1-d1-t3
+    who: { owns: Corvel K2 kettle }
+    p: 0.025
+    write:
+      to: support@haldenhome.example
+      subject:
+        - "Recall: my {owns}"
+        - "{owns} recall - refund please"
+        - "Is my kettle part of the recall?"
+      body:
+        - |
+          Hello,
+
+          I heard on the radio that the {owns} is recalled. I bought one from you last year. What do I do now?
+
+          {name}
+        - |
+          Hi,
+
+          My {owns} is in the recall. I want a refund, please. I still have the box.
+
+          Thanks,
+          {first}
+        - |
+          Dear Halden Home,
+
+          The {owns} that you sold me is unsafe, the news says. I have stopped using it. Please tell me how to send it back and get my money.
+
+          Regards,
+          {name}
+    chase:
+      after: 1d
+      subject: "Re: Recall: my {owns}"
+      body: |
+        Hello,
+
+        I wrote yesterday about the {owns} recall. Nobody answered. Please reply.
+
+        {name}
+    escalate:
+      after: 1d
+      to: ruth@haldenhome.example
+      subject: "Complaint: no answer about the {owns} recall"
+      body: |
+        Dear Ms Halden,
+
+        I wrote to your support address twice about the {owns} recall. Nobody answered. I will report this to Trading Standards.
+
+        {name}

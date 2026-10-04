@@ -30,6 +30,10 @@
 | [`REQ-QC-023`](qc.md#req-qc-023--a-population-acts-through-one-seeded-bulk-brain) | A population acts through one seeded bulk brain | active | functional | P1 | sean |
 | [`REQ-QC-024`](qc.md#req-qc-024--a-model-writes-a-populations-mail-variants-once) | A model writes a population's mail variants once | active | functional | P2 | sean |
 | [`REQ-QC-025`](qc.md#req-qc-025--a-turn-with-5000-members-and-500-mails-runs-in-seconds) | A turn with 5,000 members and 500 mails runs in seconds | active | quality | P2 | sean |
+| [`REQ-QC-026`](qc.md#req-qc-026--a-case-system-is-a-business-tool-group-over-files) | A case system is a business tool group over files | active | functional | P1 | sean |
+| [`REQ-QC-027`](qc.md#req-qc-027--the-case-system-takes-in-a-role-mailbox-and-replies-from-its-address) | The case system takes in a role mailbox and replies from its address | active | functional | P1 | sean |
+| [`REQ-QC-028`](qc.md#req-qc-028--a-script-can-give-the-calls-for-a-range-of-turns) | A script can give the calls for a range of turns | active | functional | P2 | agent:SEAN-552 |
+| [`REQ-QC-029`](qc.md#req-qc-029--the-recall-scenario-tells-its-story-with-no-model) | The recall scenario tells its story with no model | active | functional | P2 | sean |
 
 ## Dependency graph
 
@@ -60,6 +64,10 @@ graph TD
   REQ_QC_023["REQ-QC-023<br/>A population acts through one seeded bulk brain"]
   REQ_QC_024["REQ-QC-024<br/>A model writes a population's mail variants once"]
   REQ_QC_025["REQ-QC-025<br/>A turn with 5,000 members and 500 mails runs in seconds"]
+  REQ_QC_026["REQ-QC-026<br/>A case system is a business tool group over files"]
+  REQ_QC_027["REQ-QC-027<br/>The case system takes in a role mailbox and replies from its address"]
+  REQ_QC_028["REQ-QC-028<br/>A script can give the calls for a range of turns"]
+  REQ_QC_029["REQ-QC-029<br/>The recall scenario tells its story with no model"]
   REQ_QC_007 -->|amended-by| REQ_QC_018
   REQ_QC_008 -->|depends-on| REQ_QC_001
   REQ_QC_014 -->|depends-on| REQ_QC_001
@@ -79,6 +87,16 @@ graph TD
   REQ_QC_024 -->|depends-on| REQ_QC_006
   REQ_QC_024 -->|depends-on| REQ_QC_023
   REQ_QC_025 -->|depends-on| REQ_QC_023
+  REQ_QC_026 -->|depends-on| REQ_QC_004
+  REQ_QC_026 -->|depends-on| REQ_QC_009
+  REQ_QC_026 -->|depends-on| REQ_QC_010
+  REQ_QC_027 -->|depends-on| REQ_QC_023
+  REQ_QC_027 -->|depends-on| REQ_QC_026
+  REQ_QC_029 -->|depends-on| REQ_QC_020
+  REQ_QC_029 -->|depends-on| REQ_QC_023
+  REQ_QC_029 -->|depends-on| REQ_QC_026
+  REQ_QC_029 -->|depends-on| REQ_QC_027
+  REQ_QC_029 -->|depends-on| REQ_QC_028
   style REQ_QC_013 stroke-dasharray: 4 4
   style REQ_QC_015 stroke-dasharray: 4 4
 ```
@@ -86,9 +104,15 @@ graph TD
 ## Derived reverse links
 
 - `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019, required-by REQ-QC-020, required-by REQ-QC-022
+- `REQ-QC-004` — required-by REQ-QC-026
 - `REQ-QC-006` — required-by REQ-QC-024
 - `REQ-QC-008` — required-by REQ-QC-016, required-by REQ-QC-023
+- `REQ-QC-009` — required-by REQ-QC-026
+- `REQ-QC-010` — required-by REQ-QC-026
 - `REQ-QC-017` — required-by REQ-QC-020, required-by REQ-QC-023
-- `REQ-QC-020` — required-by REQ-QC-021, required-by REQ-QC-022
+- `REQ-QC-020` — required-by REQ-QC-021, required-by REQ-QC-022, required-by REQ-QC-029
 - `REQ-QC-022` — required-by REQ-QC-023
-- `REQ-QC-023` — required-by REQ-QC-024, required-by REQ-QC-025
+- `REQ-QC-023` — required-by REQ-QC-024, required-by REQ-QC-025, required-by REQ-QC-027, required-by REQ-QC-029
+- `REQ-QC-026` — required-by REQ-QC-027, required-by REQ-QC-029
+- `REQ-QC-027` — required-by REQ-QC-029
+- `REQ-QC-028` — required-by REQ-QC-029

@@ -20,6 +20,7 @@ is no build step. Windows is not supported: use WSL. Inside WSL, use the Linux
 yarn                                  # from the repo root
 cd projects/agentic-workflows
 yarn demo                             # scripted day: no model, no cost
+yarn demo:recall                      # a 3-day product recall: runs/recall.html
 yarn qc playback demo                 # show what happened
 ls runs/demo/world/brindlehart/bh-mf01/var/mail/
 ```
@@ -143,17 +144,20 @@ servers use the same definitions.
 | mail | `list_mail`, `read_mail`, `send_mail` |
 | admin (wheel only) | `useradd`, `usermod`, `groupadd`, `chown`, `restore` |
 | staffing (agency and consultancy staff only) | `place_person`, `end_placement` |
+| cases (only on a host with `/srv/cases`) | `case_list`, `case_show`, `case_intake`, `case_open`, `case_assign`, `case_update`, `case_close` |
 
 Workstation tools take `sudo: true`. It works only for the wheel group. Other
 users get the classic refusal, and the attempt goes to `/var/log/auth.log`.
 
-Two MCP servers, both on stdio:
+Three MCP servers, all on stdio:
 
 - `qc mcp-worker <run> --seat <id>`: work as one seat from Claude Code or any
   MCP client. Cast that seat to the `external` actor. Each call runs at once
   against the next turn's snapshot, and goes to `pending/`. When the engine
   runs the turn, it replays the calls, so the journal holds the results that
   the agent saw.
+- `qc mcp-cases <run> --seat <id>`: the case system only, as one seat. It
+  works as `mcp-worker` does, with the case tools and the briefing.
 - `qc mcp-director <run>`: run turns, play back, read the world, inject mail,
   recast, retake, and show cost.
 
@@ -170,6 +174,50 @@ Example `.mcp.json` entry:
   }
 }
 ```
+
+## The case system
+
+A case system is a business tool group (REQ-QC-026). Each case is a text
+file on the host where the seat works: `/srv/cases/open/<id>.case`, or
+`/srv/cases/closed/<id>.case` after `case_close`. A case file has a header
+(id, status, subject, customer, assignee, opened, updated, number of
+messages) and a log of the mail, notes, assignments and replies.
+
+| Tool | What it does | Minutes |
+|---|---|---|
+| `case_list` | Counts and the oldest cases. Filter by status and assignee (`me`, `none`, a user). | 1 |
+| `case_show` | One case. With no id, your oldest open case. | reading |
+| `case_intake` | Make cases from the new mail of the intake mailbox. A message from a customer with an open case goes into that case. | 1, plus 1 for each 10 messages |
+| `case_open` | Open a case by hand. | writing |
+| `case_assign` | One case to one person, or the N oldest unassigned cases to a list of people, in turn. | 1, plus 1 for each 10 more cases |
+| `case_update` | Add a note, a reply, or both. | writing |
+| `case_close` | Close a case, with an optional reply. With no id, your oldest open case. | reading, plus writing |
+
+The case system is a service on the host. It acts for a user who can write
+`/srv/cases/open`, so the IT administrator gives access with the group of
+that folder. The case tools appear only on a host that has `/srv/cases`.
+
+`/srv/cases/config` names the intake mailbox, with the line
+`intake: support`. That is a role mailbox: an account that takes mail, with
+no person and no seat (REQ-QC-027). Declare it in the organisation file:
+
+```yaml
+groups: [support]
+mailboxes: [support]          # support@<domain> takes mail
+files:
+  - { path: /srv/cases, dir: true, owner: root, group: support, mode: "770" }
+  - { path: /srv/cases/open, dir: true, owner: root, group: support, mode: "770" }
+  - { path: /srv/cases/closed, dir: true, owner: root, group: support, mode: "770" }
+  - { path: /srv/cases/config, owner: root, group: support, mode: "640", content: "intake: support\n" }
+```
+
+A reply goes from the intake address, for example
+`support@haldenhome.example`, with the name of the seat in the signature.
+The sent copy is in the sent folder of the role mailbox. A reply from a
+consultant also comes from the company's domain, so a population member
+counts it as an answer. Two seats can change one case in the same turn. The
+merge keeps the later seat's write (REQ-QC-008), so give each case to one
+person.
 
 ## Private thoughts
 
@@ -195,11 +243,26 @@ wait in the queue.
 scenario.yaml        name, calendar, orgs, compel (people act), injects (system events)
 orgs/<id>.yaml       kind (company, agency, consultancy, provider,
                      population), domain, host,
-                     groups, people, seed files
+                     groups, people, role mailboxes, seed files
 providers.yaml       model services
 actors.yaml          actors and tiers
 casts/<name>.yaml    casts
 scripts/*.yaml       tool calls for the script actor
+```
+
+A script file maps a seat id to turns, and a turn to tool calls. A key
+`<from>..<to>` is a range: its calls run in each turn from `from` to `to`
+(REQ-QC-028). A key that names one turn beats a range. When two ranges
+include a turn, the later range wins. A top-level key that starts with `x-`
+holds YAML anchors, for example a reply that many seats use.
+
+```yaml
+x-reply: &reply "Thank you. Your refund is on its way."
+liam@haldenhome.example:
+  fy1-q1-d1-t3..fy1-q1-d3-t32:
+    - { tool: case_close, args: { resolution: refunded, reply: *reply } }
+  fy1-q1-d1-t8:                  # this turn only
+    - { tool: think_privately, args: { thought: "Same email forty times." } }
 ```
 
 ### A closed world: organisations, compel and inject

@@ -316,6 +316,9 @@ main {
     if (tool === 'write_file' || tool === 'append_file') return (a.path || '') + ' (' + String(a.content || '').length + ' chars)';
     if (tool === 'end_turn') return '';
     if (tool === 'place_person') return (a.full_name || '') + ' (' + (a.username || '') + ') at ' + (a.client || '');
+    if (tool === 'case_close') return (a.id || 'oldest own case') + (a.reply ? ' · with a reply' : '') + ' · ' + clip(a.resolution || '', 40);
+    if (tool === 'case_update') return (a.id || '') + (a.reply ? ' · with a reply' : '');
+    if (tool === 'case_assign') return (a.id || (a.count || 1) + ' oldest') + ' to ' + clip(a.to, 60);
     return Object.entries(a).map(([k, v]) => (k === 'sudo' ? (v ? 'sudo' : '') : clip(v, 48))).filter(Boolean).join(' ');
   };
   const passwdCache = new Map();
@@ -366,14 +369,22 @@ main {
       if (e.type === 'tool.call' || e.type === 'seat.end') working.add(e.seat);
       if (e.type === 'seat.skip') asleep.add(e.seat);
     }
-    $('stats').replaceChildren(
+    // A case system keeps one file per open case in /srv/cases/open (REQ-QC-026).
+    let cases = -1;
+    for (const [k, n] of fs) {
+      if (k.endsWith(':/srv/cases/open')) cases = Math.max(cases, 0);
+      else if (n.kind === 'file' && k.includes(':/srv/cases/open/') && k.endsWith('.case')) cases = Math.max(cases, 0) + 1;
+    }
+    // replaceChildren writes null as text, so drop the stats that do not apply.
+    $('stats').replaceChildren(...[
       h('span', null, 'Turn ', h('b', null, String(pos + 1)), ' of ', String(order.length), quiet ? '' : ' with activity'),
       h('span', null, 'Working ', h('b', null, String(working.size))),
       h('span', null, 'Asleep ', h('b', null, String(asleep.size))),
       pops.length ? h('span', null, 'Population mail ', h('b', null, String(popMail))) : null,
+      cases >= 0 ? h('span', null, 'Open cases ', h('b', null, String(cases))) : null,
       h('span', null, 'Model calls ', h('b', null, String(calls))),
       h('span', null, 'Cost so far ', h('b', null, '$' + cost.toFixed(4))),
-    );
+    ].filter(Boolean));
 
     renderStaff(i, turn, fs);
     renderLog(i, turn, fs);
@@ -502,6 +513,18 @@ main {
       case 'ls':
       case 'whoami':
         return fold('output', h('pre', null, e.result));
+      case 'case_list':
+      case 'case_show':
+        return fold(['Cases · ', gist(e.result.split('\n')[0])], h('pre', null, e.result));
+      case 'case_close':
+      case 'case_update':
+        if (!a.reply) return h('div', { class: 'dim' }, e.result);
+        {
+          // The reply is a real message in the sent folder of the intake mailbox (REQ-QC-027).
+          const mid = (e.result.match(/Reply (\S+) goes to/) || [])[1];
+          const text = mid ? messageText(mid, fs) : null;
+          return fold([gist(e.result)], text ? mailCard(parseMail(text), 'Reply · sent from the intake address') : h('div', { class: 'mail-body' }, String(a.reply)));
+        }
       default:
         return h('div', { class: 'dim' }, e.result);
     }

@@ -475,3 +475,104 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   one bulk session. Parsed account files and recent objects stay in memory.
 - **Verification:** Test — `apps/QuarterCompany/test/population.test.ts` › "a turn with about 500 mails from 5,000 members runs in seconds"
 - **Relations:** depends-on REQ-QC-023
+
+## REQ-QC-026 — A case system is a business tool group over files
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #552
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** The simulator shall keep each case of a case system as a
+  text file in `/srv/cases/open` or `/srv/cases/closed` on the host, and
+  change cases only through tools in the `cases` group, each with a minute
+  cost.
+- **Rationale:** A recall makes a backlog, and a backlog needs a place to
+  live. A case is a file, so the journal, playback and the viewer show it
+  like any other file (REQ-QC-001). The tools are `case_list`, `case_show`,
+  `case_intake`, `case_open`, `case_assign`, `case_update` and `case_close`.
+  They are defined once, so the model adapters, `qc mcp-worker` and the case
+  server `qc mcp-cases` use the same definitions (REQ-QC-010). A case costs
+  staff time: reading and writing a reply cost minutes (REQ-QC-009). The
+  case system is a service on the host. It acts for a user who can write
+  `/srv/cases/open`, so the IT administrator gives access with the group of
+  that folder (REQ-QC-004). The case tools appear only on a host that has
+  the folder.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/cases.test.ts` › "a case system is a tool group over files in /srv/cases, with minute costs"
+  - Test — `apps/QuarterCompany/test/cases.test.ts` › "every case tool has a minute cost and one definition"
+  - Test — `apps/QuarterCompany/test/cases.test.ts` › "the case MCP server serves the registry definitions, and the engine replays its calls"
+  - Test — `apps/QuarterCompany/test/cases.test.ts` › "only the case group can use the case system, and only a host with one shows the tools"
+- **Relations:**
+  - depends-on REQ-QC-004
+  - depends-on REQ-QC-009
+  - depends-on REQ-QC-010
+
+## REQ-QC-027 — The case system takes in a role mailbox and replies from its address
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #552
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** The case system shall take in the new mail of the role
+  mailbox that `/srv/cases/config` names, and send each case reply from the
+  address of that mailbox.
+- **Rationale:** Consumers write to `support@`, not to a person. A role
+  mailbox (`mailboxes:` in the organisation file) is an account that takes
+  mail, with no person and no seat. A message from a customer who has an
+  open case goes into that case, because a chase has no `In-Reply-To`
+  header. A reply comes from the role address, so it counts as an answer
+  from the company's domain, also when a consultant sends it (REQ-QC-021,
+  REQ-QC-023). The sent copy is in the role mailbox, so the world never
+  contradicts itself.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/cases.test.ts` › "a role mailbox is an account that takes mail, with no person"
+  - Test — `apps/QuarterCompany/test/cases.test.ts` › "a reply goes from the intake address, and the customer counts as answered"
+  - Test — `apps/QuarterCompany/test/cases.test.ts` › "a chase goes into the open case of the same customer"
+- **Relations:**
+  - depends-on REQ-QC-023
+  - depends-on REQ-QC-026
+
+## REQ-QC-028 — A script can give the calls for a range of turns
+
+- **Status:** active
+- **Source:** agent:SEAN-552
+- **Origin:** #552
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** When a key of a seat in a script file has the form
+  `<from>..<to>`, the script actor shall run its calls in each turn from
+  `from` to `to`, both included, unless a key names the turn itself.
+- **Rationale:** A scripted story over three days has about 100 turns for
+  each seat. Without ranges, the script repeats the same calls hundreds of
+  times. When two ranges include a turn, the later range wins, as a later
+  cast rule does (REQ-QC-005). A top-level key that starts with `x-` holds
+  YAML anchors, not a seat.
+- **Verification:** Test — `apps/QuarterCompany/test/cases.test.ts` › "a range runs in each turn of the range, and a turn label beats it"
+- **Relations:** none
+
+## REQ-QC-029 — The recall scenario tells its story with no model
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #552
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** The recall scenario in
+  `projects/agentic-workflows/scenario-recall` shall run with its scripted
+  cast, with no model call, from the recall notice to the end of the backlog.
+- **Rationale:** A manufacturer recalls a kettle. The owners write to the
+  retailer's `support@` address faster than three staff can answer. The
+  retailer reacts inside the world: an agency places two temps and a
+  consultancy places three consultants (REQ-QC-020). The IT administrator
+  makes their accounts in the support group, and the backlog falls. The
+  scripted cast gives the episode a free and repeatable baseline, and a
+  model cast can retake any turn.
+- **Verification:** Test — `apps/QuarterCompany/test/cases.test.ts` › "the backlog grows faster than the staff clear it, and the company hires: all scripted, no model"
+- **Relations:**
+  - depends-on REQ-QC-020
+  - depends-on REQ-QC-023
+  - depends-on REQ-QC-026
+  - depends-on REQ-QC-027
+  - depends-on REQ-QC-028

@@ -28,6 +28,58 @@ export function ensureMailbox(
   }
 }
 
+/**
+ * Queue one message for delivery at the end of the turn, and keep a copy in
+ * the sent folder of `user` on `host`. The caller checks who can send as
+ * `from`. See REQ-QC-007.
+ */
+export function postMessage(
+  s: Session,
+  m: {
+    from: string;
+    domain: string;
+    host: string;
+    user: string;
+    to: string[];
+    cc: string[];
+    subject: string;
+    body: string;
+  },
+): string {
+  const id = s.nextMessageId();
+  const text = formatMessage(
+    {
+      id,
+      from: m.from,
+      to: m.to,
+      cc: m.cc,
+      subject: m.subject,
+      date: s.clock,
+      body: m.body,
+    },
+    m.domain,
+  );
+  const group = s.dir(m.host).primaryGroup(m.user);
+  ensureMailbox(s.ops, m.host, m.user, group);
+  s.ops.write(s.seat.id, m.host, `${mailboxOf(m.user)}/sent/${id}.eml`, text, {
+    owner: m.user,
+    group,
+    mode: 0o600,
+  });
+  const hash = s.objects.put(text);
+  const rcpts = [...new Set([...m.to, ...m.cc])];
+  s.outbox.push({ id, hash, from: m.from, rcpts });
+  s.ops.emit(s.seat.id, {
+    type: 'mail.send',
+    seat: s.seat.id,
+    messageId: id,
+    to: [...m.to, ...m.cc],
+    subject: m.subject,
+    hash,
+  });
+  return id;
+}
+
 function listBox(s: Session, box: 'new' | 'cur') {
   const dir = `${mailboxOf(s.user)}/${box}`;
   if (!s.vfs.exists(s.mailHost, dir)) return [];
@@ -122,49 +174,15 @@ export const MAIL_TOOLS = [
         (x) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x),
       );
       if (bad) throw new AccessError(`"${bad}" is not a valid email address.`);
-      const id = s.nextMessageId();
-      const text = formatMessage(
-        {
-          id,
-          from: s.seat.id,
-          to,
-          cc,
-          subject: a.subject,
-          date: s.clock,
-          body: a.body,
-        },
-        s.seat.org.domain,
-      );
-      ensureMailbox(
-        s.ops,
-        s.mailHost,
-        s.user,
-        s.dir(s.mailHost).primaryGroup(s.user),
-      );
-      s.ops.write(
-        s.seat.id,
-        s.mailHost,
-        `${mailboxOf(s.user)}/sent/${id}.eml`,
-        text,
-        {
-          owner: s.user,
-          group: s.dir(s.mailHost).primaryGroup(s.user),
-          mode: 0o600,
-        },
-      );
-      s.outbox.push({
-        id,
-        hash: s.objects.put(text),
+      const id = postMessage(s, {
         from: s.seat.id,
-        rcpts: [...new Set([...to, ...cc])],
-      });
-      s.ops.emit(s.seat.id, {
-        type: 'mail.send',
-        seat: s.seat.id,
-        messageId: id,
-        to: [...to, ...cc],
+        domain: s.seat.org.domain,
+        host: s.mailHost,
+        user: s.user,
+        to,
+        cc,
         subject: a.subject,
-        hash: s.objects.put(text),
+        body: a.body,
       });
       return `Message ${id} is queued. The mail system delivers it at the end of this turn.`;
     },

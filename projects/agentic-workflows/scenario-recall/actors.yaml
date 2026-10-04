@@ -1,0 +1,6 @@
+# The recall runs with the script actor only: no model, no cost. The
+# providers script, idle and external are built in.
+actors:
+  scripted: { provider: script, script: scripts/recall.yaml }
+  idle: { provider: idle }
+  external: { provider: external }
