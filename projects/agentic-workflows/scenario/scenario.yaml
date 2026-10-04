@@ -12,6 +12,8 @@ orgs:
   - brindlehart
   - cartwright
   - ledgerline
+  - postbox
+  - shop-customers
 # The scenario starts the story through people: a compelled action runs in
 # that person's own session, so their sent folder and memory stay true.
 compel:

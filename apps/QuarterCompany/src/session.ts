@@ -49,9 +49,14 @@ export class Session {
     /** Active system events per host, for example a full disk. */
     readonly system: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
     people: People = new Map(),
+    /**
+     * A buffer that other sessions share. The members of a population act
+     * on one view, as one bulk session. See REQ-QC-023.
+     */
+    shared?: Ops,
   ) {
     this.people = new Map(people);
-    this.ops = new Ops(vfs, objects, ord, system);
+    this.ops = shared ?? new Ops(vfs, objects, ord, system);
     this.user = seat.person.user;
     this.host = seat.host;
     this.home = `/home/${this.user}`;
@@ -136,7 +141,7 @@ export class Session {
   async call(
     name: string,
     rawArgs: unknown,
-    opts: { compelled?: 'scenario' | 'director' } = {},
+    opts: { compelled?: 'scenario' | 'director'; population?: string } = {},
   ): Promise<ToolResult> {
     const { result, staged } = this.stage(name, rawArgs ?? {});
     // The call goes in the journal before its effects, so playback reads in order.
@@ -144,6 +149,7 @@ export class Session {
       type: 'tool.call',
       seat: this.seat.id,
       ...(opts.compelled ? { compelled: opts.compelled } : {}),
+      ...(opts.population ? { population: opts.population } : {}),
       tool: name,
       args: rawArgs ?? {},
       ok: result.ok,

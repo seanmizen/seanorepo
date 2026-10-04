@@ -1,5 +1,12 @@
 // The virtual filesystem. It is a fold over `fs.*` journal events and nothing
 // else, so playback can rebuild it at any turn. See REQ-QC-001.
+//
+// A view is copy-on-write (REQ-QC-025). `clone()` gives a layer over this
+// view: reads go through to the base, and writes stay in the layer. Each
+// layer keeps an index of the names in each folder, so a listing does not
+// scan every path in the world. The base must not change while a layer
+// over it is in use. The engine merges the layers of a turn only after all
+// sessions end.
 import { posix } from 'node:path';
 import type { Meta, StateEvent } from './events.ts';
 
@@ -11,6 +18,9 @@ export interface Node extends Meta {
 }
 
 const key = (host: string, path: string) => `${host}:${path}`;
+const parentKey = (host: string, path: string) =>
+  path === '/' ? undefined : key(host, posix.dirname(path));
+const nameOf = (path: string) => posix.basename(path);
 
 export function normalize(path: string, cwd = '/'): string {
   const abs = posix.isAbsolute(path) ? path : posix.join(cwd, path);
@@ -22,56 +32,124 @@ export const parentOf = (path: string) =>
   path === '/' ? '/' : posix.dirname(path);
 
 export class Vfs {
-  nodes = new Map<string, Node>();
-  /** The last version of each removed path. Admins restore from here. */
-  graveyard = new Map<string, Node>();
+  /** Nodes that this layer sets. Null marks a path that this layer removes. */
+  private own = new Map<string, Node | null>();
+  /** Per folder key: names that this layer adds (true) or removes (false). */
+  private kids = new Map<string, Map<string, boolean>>();
+  /** The last version of each removed path, by layer. Admins restore from here. */
+  private graves = new Map<string, Node>();
 
+  constructor(private readonly base?: Vfs) {}
+
+  /** A copy-on-write layer over this view. */
   clone(): Vfs {
-    const v = new Vfs();
-    v.nodes = new Map(this.nodes);
-    v.graveyard = new Map(this.graveyard);
-    return v;
+    return new Vfs(this);
+  }
+
+  private getKey(k: string): Node | undefined {
+    const n = this.own.get(k);
+    if (n !== undefined) return n ?? undefined;
+    return this.base?.getKey(k);
   }
 
   get(host: string, path: string): Node | undefined {
-    return this.nodes.get(key(host, path));
+    return this.getKey(key(host, path));
   }
 
   exists(host: string, path: string) {
-    return this.nodes.has(key(host, path));
+    return this.getKey(key(host, path)) !== undefined;
+  }
+
+  private names(dirKey: string): Set<string> {
+    const out = this.base ? this.base.names(dirKey) : new Set<string>();
+    const delta = this.kids.get(dirKey);
+    if (delta)
+      for (const [name, present] of delta)
+        if (present) out.add(name);
+        else out.delete(name);
+    return out;
+  }
+
+  private mark(host: string, path: string, present: boolean) {
+    const pk = parentKey(host, path);
+    if (!pk) return;
+    let delta = this.kids.get(pk);
+    if (!delta) {
+      delta = new Map();
+      this.kids.set(pk, delta);
+    }
+    // The bottom layer keeps only the names that exist.
+    if (present || this.base) delta.set(nameOf(path), present);
+    else delta.delete(nameOf(path));
+  }
+
+  private set(host: string, path: string, node: Node) {
+    const k = key(host, path);
+    const had = this.getKey(k) !== undefined;
+    this.own.set(k, node);
+    if (!had) this.mark(host, path, true);
+  }
+
+  private remove(host: string, path: string) {
+    const k = key(host, path);
+    if (this.base) this.own.set(k, null);
+    else this.own.delete(k);
+    this.mark(host, path, false);
   }
 
   /** Direct children of a directory, sorted by name. */
   children(host: string, dir: string): { name: string; node: Node }[] {
-    const prefix = key(host, dir === '/' ? '/' : `${dir}/`);
+    const prefix = dir === '/' ? '/' : `${dir}/`;
     const out: { name: string; node: Node }[] = [];
-    for (const [k, node] of this.nodes) {
-      if (!k.startsWith(prefix) || k === prefix) continue;
-      const rest = k.slice(prefix.length);
-      if (rest.length > 0 && !rest.includes('/'))
-        out.push({ name: rest, node });
+    for (const name of this.names(key(host, dir))) {
+      const node = this.get(host, `${prefix}${name}`);
+      if (node) out.push({ name, node });
     }
     return out.sort((a, b) => (a.name < b.name ? -1 : 1));
+  }
+
+  /** Every key in this view. */
+  private keys(): Set<string> {
+    const out = this.base ? this.base.keys() : new Set<string>();
+    for (const [k, n] of this.own)
+      if (n) out.add(k);
+      else out.delete(k);
+    return out;
   }
 
   /** Every path on a host, sorted. Used by the projection. */
   entries(host: string): { path: string; node: Node }[] {
     const prefix = `${host}:`;
     const out: { path: string; node: Node }[] = [];
-    for (const [k, node] of this.nodes)
+    for (const k of this.keys())
       if (k.startsWith(prefix))
-        out.push({ path: k.slice(prefix.length), node });
+        out.push({
+          path: k.slice(prefix.length),
+          node: this.getKey(k) as Node,
+        });
     return out.sort((a, b) => (a.path < b.path ? -1 : 1));
   }
 
   hosts(): string[] {
     const set = new Set<string>();
-    for (const k of this.nodes.keys()) set.add(k.slice(0, k.indexOf(':')));
+    for (const k of this.keys()) set.add(k.slice(0, k.indexOf(':')));
     return [...set].sort();
   }
 
-  graveOf(host: string, path: string) {
-    return this.graveyard.get(key(host, path));
+  graveOf(host: string, path: string): Node | undefined {
+    return this.graves.get(key(host, path)) ?? this.base?.graveOf(host, path);
+  }
+
+  /** The path and every path below it, parents first. */
+  private subtree(host: string, path: string): string[] {
+    const out = [path];
+    const node = this.get(host, path);
+    if (node?.kind === 'dir')
+      for (const { name } of this.children(host, path))
+        out.push(
+          ...this.subtree(host, path === '/' ? `/${name}` : `${path}/${name}`),
+        );
+    return out;
   }
 
   /**
@@ -82,7 +160,7 @@ export class Vfs {
     switch (e.type) {
       case 'fs.mkdir': {
         if (this.exists(e.host, e.path)) return 'path exists';
-        this.nodes.set(key(e.host, e.path), {
+        this.set(e.host, e.path, {
           kind: 'dir',
           owner: e.owner,
           group: e.group,
@@ -96,7 +174,7 @@ export class Vfs {
         if (cur?.kind === 'dir') return 'path is a directory';
         if (!this.exists(e.host, parentOf(e.path)))
           return 'parent directory does not exist';
-        this.nodes.set(key(e.host, e.path), {
+        this.set(e.host, e.path, {
           kind: 'file',
           hash: e.hash,
           size: e.size,
@@ -112,8 +190,8 @@ export class Vfs {
         if (!cur) return 'path does not exist';
         if (cur.kind === 'dir' && this.children(e.host, e.path).length > 0)
           return 'directory is not empty';
-        this.graveyard.set(key(e.host, e.path), cur);
-        this.nodes.delete(key(e.host, e.path));
+        this.graves.set(key(e.host, e.path), cur);
+        this.remove(e.host, e.path);
         return;
       }
       case 'fs.mv': {
@@ -124,24 +202,22 @@ export class Vfs {
           return 'destination directory does not exist';
         if (e.to.startsWith(`${e.from}/`))
           return 'cannot move a directory into itself';
-        const from = key(e.host, e.from);
-        const moved: [string, Node][] = [];
-        for (const [k, node] of this.nodes) {
-          if (k === from || k.startsWith(`${from}/`)) moved.push([k, node]);
-        }
-        for (const [k] of moved) this.nodes.delete(k);
-        for (const [k, node] of moved) {
-          this.nodes.set(
-            key(e.host, e.to) + k.slice(from.length),
-            k === from ? { ...node, mtime: ord } : node,
+        const moved = this.subtree(e.host, e.from).map(
+          (p) => [p, this.get(e.host, p) as Node] as const,
+        );
+        for (const [p] of [...moved].reverse()) this.remove(e.host, p);
+        for (const [p, node] of moved)
+          this.set(
+            e.host,
+            e.to + p.slice(e.from.length),
+            p === e.from ? { ...node, mtime: ord } : node,
           );
-        }
         return;
       }
       case 'fs.meta': {
         const cur = this.get(e.host, e.path);
         if (!cur) return 'path does not exist';
-        this.nodes.set(key(e.host, e.path), {
+        this.set(e.host, e.path, {
           ...cur,
           owner: e.owner ?? cur.owner,
           group: e.group ?? cur.group,

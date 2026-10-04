@@ -5,7 +5,10 @@
 // (REQ-QC-014). InfoEvent records what happened, for playback and cost.
 // The other events record what happened, for playback and cost reports.
 
-import type { Person } from './scenario.ts';
+import type { MemberSpec, Person } from './scenario.ts';
+
+/** Where a population member is in a behaviour. See REQ-QC-023. */
+export type PopulationStage = 'write' | 'chase' | 'escalate' | 'answered';
 
 export interface Meta {
   owner: string;
@@ -67,7 +70,35 @@ export type StateEvent =
       /** "scenario", or the seat id that made the placement. */
       via: string;
     }
-  | { type: 'person.leave'; seat: string; via: string };
+  | { type: 'person.leave'; seat: string; via: string }
+  | {
+      /**
+       * A population joins the world. The fold makes its members from the
+       * seed, so the journal holds one event, not one per member.
+       * See REQ-QC-022.
+       */
+      type: 'population.join';
+      org: string;
+      provider: string;
+      members: MemberSpec;
+      via: string;
+    }
+  | {
+      /** Members of a population move to a stage of a behaviour. */
+      type: 'population.step';
+      org: string;
+      rule: string;
+      stage: PopulationStage;
+      users: string[];
+    }
+  | {
+      /** A model wrote the variant pool of a behaviour. See REQ-QC-024. */
+      type: 'population.pool';
+      org: string;
+      rule: string;
+      hash: string;
+      actor: string;
+    };
 
 export type Wake = 'next_turn' | 'on_mail';
 
@@ -79,6 +110,8 @@ export type InfoEvent =
       seat: string;
       /** Set when the scenario or the director made the seat do this. */
       compelled?: 'scenario' | 'director';
+      /** Set when a population's bulk brain made the call. See REQ-QC-023. */
+      population?: string;
       tool: string;
       args: unknown;
       ok: boolean;
@@ -115,7 +148,8 @@ export type InfoEvent =
   | { type: 'mail.bounce'; messageId: string; to: string; reason: string }
   | { type: 'security'; seat: string; message: string }
   | { type: 'seat.blocked'; seat: string; reason: string }
-  | { type: 'compel.skipped'; seat: string; reason: string };
+  | { type: 'compel.skipped'; seat: string; reason: string }
+  | { type: 'population.skip'; org: string; reason: string };
 
 export type EventBody = StateEvent | InfoEvent;
 

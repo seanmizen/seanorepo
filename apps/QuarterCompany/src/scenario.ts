@@ -37,21 +37,96 @@ const SeedFile = z.object({
 /**
  * Kinds of organisation. An `agency` places new employees at a client. A
  * `consultancy` places its own consultants at a client. Staff of both kinds
- * get the placement tools (REQ-QC-020).
+ * get the placement tools (REQ-QC-020). A `provider` is a consumer mail
+ * service: its host holds the mailboxes of population members. A
+ * `population` is a crowd of people that a seed makes, with one bulk brain
+ * (REQ-QC-023).
  */
-export const ORG_KINDS = ['company', 'agency', 'consultancy'] as const;
+export const ORG_KINDS = [
+  'company',
+  'agency',
+  'consultancy',
+  'provider',
+  'population',
+] as const;
 export type OrgKind = (typeof ORG_KINDS)[number];
 export const PLACES_PEOPLE: readonly OrgKind[] = ['agency', 'consultancy'];
+
+/** Text for one step of a behaviour. A list gives variants. */
+const Lines = z.union([z.string(), z.array(z.string()).min(1)]);
+const StepText = z.object({
+  /** Default: the address of the write step. */
+  to: z.string().optional(),
+  subject: Lines,
+  body: Lines,
+});
+const Duration = z.union([z.string().regex(/^\d+[dt]$/), z.number().int()]);
+
+/**
+ * One rule of a population's bulk brain. From turn `from`, each member that
+ * matches `who` writes to `write.to` with probability `p` in each turn. A
+ * member with no reply chases after `chase.after`, then escalates after
+ * `escalate.after`. A duration is turns ("4t") or working days ("2d").
+ */
+export const Behaviour = z
+  .object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/),
+    from: z.string(),
+    until: z.string().optional(),
+    who: z.record(z.string(), z.string()).default({}),
+    p: z.number().min(0).max(1),
+    write: StepText.extend({ to: z.string() }),
+    chase: StepText.extend({ after: Duration }).optional(),
+    escalate: StepText.extend({ after: Duration }).optional(),
+  })
+  .strict();
+export type Behaviour = z.infer<typeof Behaviour>;
+
+/** How a seed makes the members of a population. See REQ-QC-022. */
+export const MemberSpec = z
+  .object({
+    size: z.number().int().min(1).max(100_000),
+    seed: z.number().int(),
+    /** Each trait: a key, a value and the share of members that have it. */
+    traits: z
+      .array(
+        z
+          .object({
+            key: z.string().regex(/^[a-z][a-z0-9_]*$/),
+            value: z.string(),
+            share: z.number().min(0).max(1),
+          })
+          .strict(),
+      )
+      .default([]),
+  })
+  .strict();
+export type MemberSpec = z.infer<typeof MemberSpec>;
 
 const Org = z.object({
   kind: z.enum(ORG_KINDS).default('company'),
   name: z.string(),
-  domain: z.string(),
-  host: z.string(),
+  /** A population has no domain and no host: its provider has them. */
+  domain: z.string().default(''),
+  host: z.string().default(''),
   about: z.string().default(''),
   groups: z.array(z.string()).default([]),
-  people: z.array(Person),
+  people: z.array(Person).default([]),
   files: z.array(SeedFile).default([]),
+  /** For a population: the id of the provider organisation. */
+  provider: z.string().optional(),
+  /** For a population: how to make the members. */
+  members: MemberSpec.optional(),
+  /** For a population: the rules of the bulk brain. */
+  behaviour: z.array(Behaviour).default([]),
+  /**
+   * For a population: false (the default) uses the text in the scenario.
+   * True: a model writes a pool of variants once, and members use the pool.
+   * The cast chooses the model. See REQ-QC-024.
+   */
+  model_mail: z.boolean().default(false),
+  /** Variants for each step when model_mail is true. */
+  pool_size: z.number().int().min(1).max(50).default(8),
 });
 export type Org = z.infer<typeof Org> & { id: string };
 
@@ -147,8 +222,10 @@ export function loadScenario(dir: string): Scenario {
       throw new Error(`Organisation file ${file} does not exist.`);
     return { id, ...Org.parse(readYaml(file)) };
   });
+  for (const c of orgs) checkOrg(c, orgs);
   const domains = new Set<string>();
   for (const c of orgs) {
+    if (c.kind === 'population') continue;
     if (domains.has(c.domain))
       throw new Error(`Two organisations use the domain ${c.domain}.`);
     domains.add(c.domain);
@@ -175,6 +252,34 @@ export function loadScenario(dir: string): Scenario {
   return scenario;
 }
 
+function checkOrg(c: Org, orgs: Org[]) {
+  if (c.kind !== 'population') {
+    if (!c.domain || !c.host)
+      throw new Error(`Organisation "${c.id}" must have a domain and a host.`);
+    if (c.provider || c.members || c.behaviour.length)
+      throw new Error(
+        `Organisation "${c.id}" has provider, members or behaviour. Only a population can have them.`,
+      );
+    return;
+  }
+  if (c.domain || c.host || c.people.length || c.files.length)
+    throw new Error(
+      `Population "${c.id}" has a domain, a host, people or files. A population has none of them. Its provider holds the mailboxes.`,
+    );
+  if (!c.members) throw new Error(`Population "${c.id}" must have "members".`);
+  const provider = orgs.find((o) => o.id === c.provider);
+  if (provider?.kind !== 'provider')
+    throw new Error(
+      `Population "${c.id}" names provider "${c.provider}". The provider must be an organisation of kind "provider" in the scenario.`,
+    );
+  const ids = new Set<string>();
+  for (const b of c.behaviour) {
+    if (ids.has(b.id))
+      throw new Error(`Population "${c.id}" has two behaviours "${b.id}".`);
+    ids.add(b.id);
+  }
+}
+
 /**
  * A compel can name a person who joins later in the run, so only the domain
  * is checked here. The engine records compel.skipped when the person is not
@@ -190,11 +295,16 @@ export function checkCompelSeat(s: Scenario, seat: string) {
 
 /** Check that a system event names a real organisation and real turns. */
 export function checkInject(s: Scenario, inj: Inject) {
-  if (!s.orgs.some((o) => o.id === inj.org)) {
+  const org = s.orgs.find((o) => o.id === inj.org);
+  if (!org) {
     throw new Error(
       `A system event names organisation "${inj.org}". The scenario has no such organisation.`,
     );
   }
+  if (org.kind === 'population')
+    throw new Error(
+      `A system event names population "${inj.org}". A population has no host. Name its provider "${org.provider}".`,
+    );
 }
 
 /** The mail directory: the host that holds the mailboxes of a domain. */
@@ -202,7 +312,8 @@ export function mailHostOf(
   s: Scenario,
   domain: string,
 ): { org: Org; host: string } | undefined {
-  const org = s.orgs.find((o) => o.domain === domain.toLowerCase());
+  const d = domain.toLowerCase();
+  const org = s.orgs.find((o) => o.kind !== 'population' && o.domain === d);
   return org ? { org, host: hostOf(org) } : undefined;
 }
 

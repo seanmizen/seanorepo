@@ -26,6 +26,10 @@
 | [`REQ-QC-019`](qc.md#req-qc-019--blocked-mail-waits-in-a-queue-that-the-journal-holds) | Blocked mail waits in a queue that the journal holds | active | functional | P1 | agent:SEAN-548 |
 | [`REQ-QC-020`](qc.md#req-qc-020--the-people-in-the-world-are-world-state) | The people in the world are world state | active | functional | P1 | sean |
 | [`REQ-QC-021`](qc.md#req-qc-021--a-consultant-has-a-mailbox-at-the-employer-and-works-at-the-client) | A consultant has a mailbox at the employer and works at the client | active | functional | P2 | sean |
+| [`REQ-QC-022`](qc.md#req-qc-022--a-population-is-one-journal-event-that-the-fold-expands) | A population is one journal event that the fold expands | active | functional | P1 | sean |
+| [`REQ-QC-023`](qc.md#req-qc-023--a-population-acts-through-one-seeded-bulk-brain) | A population acts through one seeded bulk brain | active | functional | P1 | sean |
+| [`REQ-QC-024`](qc.md#req-qc-024--a-model-writes-a-populations-mail-variants-once) | A model writes a population's mail variants once | active | functional | P2 | sean |
+| [`REQ-QC-025`](qc.md#req-qc-025--a-turn-with-5000-members-and-500-mails-runs-in-seconds) | A turn with 5,000 members and 500 mails runs in seconds | active | quality | P2 | sean |
 
 ## Dependency graph
 
@@ -52,6 +56,10 @@ graph TD
   REQ_QC_019["REQ-QC-019<br/>Blocked mail waits in a queue that the journal holds"]
   REQ_QC_020["REQ-QC-020<br/>The people in the world are world state"]
   REQ_QC_021["REQ-QC-021<br/>A consultant has a mailbox at the employer and works at the client"]
+  REQ_QC_022["REQ-QC-022<br/>A population is one journal event that the fold expands"]
+  REQ_QC_023["REQ-QC-023<br/>A population acts through one seeded bulk brain"]
+  REQ_QC_024["REQ-QC-024<br/>A model writes a population's mail variants once"]
+  REQ_QC_025["REQ-QC-025<br/>A turn with 5,000 members and 500 mails runs in seconds"]
   REQ_QC_007 -->|amended-by| REQ_QC_018
   REQ_QC_008 -->|depends-on| REQ_QC_001
   REQ_QC_014 -->|depends-on| REQ_QC_001
@@ -63,13 +71,24 @@ graph TD
   REQ_QC_020 -->|depends-on| REQ_QC_001
   REQ_QC_020 -->|depends-on| REQ_QC_017
   REQ_QC_021 -->|depends-on| REQ_QC_020
+  REQ_QC_022 -->|depends-on| REQ_QC_001
+  REQ_QC_022 -->|depends-on| REQ_QC_020
+  REQ_QC_023 -->|depends-on| REQ_QC_008
+  REQ_QC_023 -->|depends-on| REQ_QC_017
+  REQ_QC_023 -->|depends-on| REQ_QC_022
+  REQ_QC_024 -->|depends-on| REQ_QC_006
+  REQ_QC_024 -->|depends-on| REQ_QC_023
+  REQ_QC_025 -->|depends-on| REQ_QC_023
   style REQ_QC_013 stroke-dasharray: 4 4
   style REQ_QC_015 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links
 
-- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019, required-by REQ-QC-020
-- `REQ-QC-008` — required-by REQ-QC-016
-- `REQ-QC-017` — required-by REQ-QC-020
-- `REQ-QC-020` — required-by REQ-QC-021
+- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019, required-by REQ-QC-020, required-by REQ-QC-022
+- `REQ-QC-006` — required-by REQ-QC-024
+- `REQ-QC-008` — required-by REQ-QC-016, required-by REQ-QC-023
+- `REQ-QC-017` — required-by REQ-QC-020, required-by REQ-QC-023
+- `REQ-QC-020` — required-by REQ-QC-021, required-by REQ-QC-022
+- `REQ-QC-022` — required-by REQ-QC-023
+- `REQ-QC-023` — required-by REQ-QC-024, required-by REQ-QC-025

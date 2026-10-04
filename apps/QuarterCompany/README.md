@@ -193,7 +193,8 @@ wait in the queue.
 
 ```
 scenario.yaml        name, calendar, orgs, compel (people act), injects (system events)
-orgs/<id>.yaml       kind (company, agency, consultancy), domain, host,
+orgs/<id>.yaml       kind (company, agency, consultancy, provider,
+                     population), domain, host,
                      groups, people, seed files
 providers.yaml       model services
 actors.yaml          actors and tiers
@@ -269,6 +270,70 @@ In both cases, the new seat cannot work until the client's IT administrator
 runs `useradd` on the client's host. Casts match a new person by `org` and
 `role`, as for any other person. A scenario that wants a placement at a given
 turn compels the recruiter to call `place_person`.
+
+### Populations: consumers at scale
+
+A `population` is a crowd of people, for example 5,000 owners of a kettle.
+A `provider` is a consumer mail service, for example `postbox.example`. The
+provider's host holds the mailboxes of the population's members, and the
+mail directory maps the provider's domain to that host.
+
+```yaml
+# orgs/postbox.yaml
+kind: provider
+name: Postbox Mail
+domain: postbox.example
+host: pb01
+
+# orgs/kettle-owners.yaml
+kind: population
+name: Kettle owners
+provider: postbox
+members:
+  size: 5000
+  seed: 7
+  traits:
+    - { key: owns, value: kettle-k2, share: 0.4 }
+behaviour:
+  - id: k2-fault
+    from: fy1-q1-d2-t1
+    who: { owns: kettle-k2 }
+    p: 0.02                       # chance to write in, per member and turn
+    write:
+      to: support@brindlehart.example
+      subject: ["My {owns} is faulty", "Problem with {owns}"]
+      body: "Hello,\n\nMy {owns} switches off.\n\n{name}"
+    chase: { after: 2d, subject: "Re: my {owns}", body: "No reply yet. {first}" }
+    escalate: { after: 1d, to: priya@brindlehart.example, subject: Complaint, body: "..." }
+```
+
+- **Members** come from the seed: names, user names and traits. The
+  journal holds the population as one `population.join` event, and the fold
+  makes the same members from it (REQ-QC-022). Each member has an account on
+  the provider's host. A mailbox appears with the first mail.
+- **The bulk brain** runs once for each population in each turn
+  (REQ-QC-023). From `from`, each member that matches `who` writes in with
+  probability `p`. A member with no reply from the recipient's domain chases
+  after `chase.after`, then escalates after `escalate.after`. A duration is
+  turns (`4t`) or working days (`2d`). `population.step` events record the
+  progress. The same seed gives the same journal. Each mail is the member's
+  own `send_mail` call, in the member's own session, so it is in the
+  member's sent folder.
+- **Text** can have variants. For each member, the brain replaces
+  `{first}`, `{last}`, `{name}`, `{address}` and each key of `who` (here
+  `{owns}`).
+- **Model-written mail** is off by default. With `model_mail: true`, a model
+  writes `pool_size` variants of each step once, and the members use the
+  pool (REQ-QC-024). The cast chooses the model, for example
+  `match: { org: kettle-owners }`. The pool goes in the object store, and a
+  `population.pool` event records its hash, so a playback and a retake use
+  the same pool. A local `openai-compatible` provider such as Ollama works.
+- **Scale**: a turn with 5,000 members and about 500 mails runs in about
+  1.5 seconds (REQ-QC-025). A filesystem view is a copy-on-write layer, so
+  no seat or tool call copies the whole world.
+- **Playback and the viewer** show one row for each population and turn,
+  for example "312 mails from Kettle owners". Open the row to read each
+  mail.
 
 The default calendar is 09:00 to 17:00 in 15-minute slots: 32 turns a day,
 65 working days a quarter, and 4 quarters a year. Day 1 is a Monday. Weekends

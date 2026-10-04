@@ -97,6 +97,16 @@ export function narrate(e: JournalEvent, verbose = false): string | undefined {
       return `  ➕ ${e.person.name} (${e.seat}) joins ${e.org} as ${e.person.title}${e.site ? `, on contract at ${e.site}` : ''}. Placed by ${e.via}.`;
     case 'person.leave':
       return `  ➖ ${e.seat} leaves at the end of the turn. Ended by ${e.via}.`;
+    case 'population.join':
+      return verbose
+        ? `  ➕ population ${e.org}: ${e.members.size} members on ${e.provider} (seed ${e.members.seed})`
+        : undefined;
+    case 'population.step':
+      return `  👥 ${e.org} ${e.rule}: ${e.users.length} ${e.stage === 'answered' ? 'got a reply' : `at step ${e.stage}`}`;
+    case 'population.pool':
+      return `  👥 ${e.org} ${e.rule}: ${e.actor} wrote the mail pool`;
+    case 'population.skip':
+      return `  👥 ${e.org} cannot act: ${e.reason}`;
     case 'fs.write':
     case 'fs.mkdir':
     case 'fs.rm':
@@ -128,11 +138,26 @@ export function* playback(
     if (ord < from) continue;
     if (ord > to) return;
     const lines: string[] = [];
+    // Population mail is one line per population and recipient, unless
+    // the reader asks for every call (REQ-QC-023).
+    const bulk = new Map<string, number>();
     for (const e of run.readTurn(label)) {
       if (opts.seat && 'seat' in e && e.seat !== opts.seat) continue;
+      if (
+        e.type === 'tool.call' &&
+        e.population &&
+        !opts.verbose &&
+        !opts.seat
+      ) {
+        const to = (e.args as { to?: unknown }).to;
+        const k = `${e.population} ${e.tool}${to ? ` to ${String(to)}` : ''}${e.ok ? '' : ' (failed)'}`;
+        bulk.set(k, (bulk.get(k) ?? 0) + 1);
+        continue;
+      }
       const line = narrate(e, opts.verbose);
       if (line) lines.push(line);
     }
+    for (const [k, n] of bulk) lines.push(`  👥 ${k}: ${n} calls`);
     if (!lines.length && !opts.verbose) continue;
     yield `── ${label}  ${describeTurn(label, cal)} ──`;
     yield* lines;

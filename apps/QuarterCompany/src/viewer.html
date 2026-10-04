@@ -187,6 +187,12 @@ main {
   font: 12px/1.45 var(--font-body); letter-spacing: 0; text-transform: none; white-space: normal; box-shadow: 0 4px 14px rgba(0,0,0,.15);
 }
 .legend { display: inline-flex; align-items: center; gap: 4px; }
+/* Populations: a crowd is one row per turn, not one row per person (REQ-QC-023). */
+.seat.pop { border-style: dashed; }
+.log > li.pop { box-shadow: inset 3px 0 0 var(--sleep); }
+.pop-tag { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--sleep); border: 1px solid var(--sleep); border-radius: 3px; padding: 3px 5px; margin-right: 6px; }
+.pop-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.more { color: var(--muted); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 
@@ -312,11 +318,16 @@ main {
     if (tool === 'place_person') return (a.full_name || '') + ' (' + (a.username || '') + ') at ' + (a.client || '');
     return Object.entries(a).map(([k, v]) => (k === 'sudo' ? (v ? 'sudo' : '') : clip(v, 48))).filter(Boolean).join(' ');
   };
+  const passwdCache = new Map();
   function passwdUsers(fs, host) {
     const n = fs.get(key(host, '/etc/passwd'));
     if (!n) return new Set();
-    return new Set(D.objects[n.hash].split('\n').filter((l) => l && !l.endsWith(':/sbin/nologin')).map((l) => l.split(':')[0]));
+    if (!passwdCache.has(n.hash))
+      passwdCache.set(n.hash, new Set(D.objects[n.hash].split('\n').filter((l) => l && !l.endsWith(':/sbin/nologin')).map((l) => l.split(':')[0])));
+    return passwdCache.get(n.hash);
   }
+  const pops = D.populations || [];
+  const popName = (id) => (pops.find((p) => p.id === id) || { name: id }).name;
 
   // ----- view state -----
   let quiet = false;
@@ -349,7 +360,9 @@ main {
     let cost = 0, calls = 0;
     for (let j = 0; j <= i; j++) for (const e of D.turns[j].events) if (e.type === 'model.call') { cost += e.costUsd; calls++; }
     const working = new Set(), asleep = new Set();
+    let popMail = 0;
     for (const e of turn.events) {
+      if (e.type === 'tool.call' && e.population) { if (e.tool === 'send_mail' && e.ok) popMail++; continue; }
       if (e.type === 'tool.call' || e.type === 'seat.end') working.add(e.seat);
       if (e.type === 'seat.skip') asleep.add(e.seat);
     }
@@ -357,6 +370,7 @@ main {
       h('span', null, 'Turn ', h('b', null, String(pos + 1)), ' of ', String(order.length), quiet ? '' : ' with activity'),
       h('span', null, 'Working ', h('b', null, String(working.size))),
       h('span', null, 'Asleep ', h('b', null, String(asleep.size))),
+      pops.length ? h('span', null, 'Population mail ', h('b', null, String(popMail))) : null,
       h('span', null, 'Model calls ', h('b', null, String(calls))),
       h('span', null, 'Cost so far ', h('b', null, '$' + cost.toFixed(4))),
     );
@@ -409,7 +423,16 @@ main {
         (() => { const t = lastThought(s.id, i); return t ? h('div', { class: 'thought-line', title: 'Latest private thought' }, 'Thinks: “' + t + '”') : null; })(),
       );
     });
-    $('staff').replaceChildren(...nodes.filter(Boolean));
+    const popCards = pops.map((p) => {
+      const mails = turn.events.filter((e) => e.type === 'tool.call' && e.population === p.id && e.ok).length;
+      let total = 0;
+      for (let j = 0; j <= i; j++) for (const e of D.turns[j].events) if (e.type === 'tool.call' && e.population === p.id && e.ok) total++;
+      return h('article', { class: 'seat pop' },
+        h('div', { class: 'seat-head' }, h('span', { class: 'seat-name' }, p.name), h('span', { class: 'pill ' + (mails ? 'working' : 'idle') }, mails ? mails + ' mails' : 'Quiet')),
+        h('div', { class: 'seat-title' }, 'Population · ' + p.size + ' people · mail at ' + p.domain),
+        h('div', { class: 'actor' }, total + ' mails so far'));
+    });
+    $('staff').replaceChildren(...nodes.filter(Boolean), ...popCards);
   }
 
 
@@ -486,11 +509,62 @@ main {
   // Tools whose detail carries the arguments, so the row line stays short.
   const FOLDED = new Set(['list_mail', 'read_mail', 'send_mail', 'read_file', 'write_file', 'append_file']);
 
+  // A details row whose body is built only when it opens. A crowd can send
+  // hundreds of mails in a turn, and the page must stay quick.
+  function lazyFold(summary, build, cls) {
+    const d = h('details', { class: 'fold' + (cls ? ' ' + cls : '') }, h('summary', null, ...[summary].flat()));
+    let built = false;
+    d.addEventListener('toggle', () => { if (d.open && !built) { built = true; d.append(build()); } });
+    return d;
+  }
+  const PAGE = 100;
+  function paged(items, render) {
+    const ul = h('ul', { class: 'pop-list' });
+    let shown = 0;
+    const more = () => {
+      const next = items.slice(shown, shown + PAGE);
+      shown += next.length;
+      for (const it of next) ul.append(render(it));
+      if (shown < items.length) ul.append(h('li', null, h('button', { class: 'linkish more', type: 'button', onclick: (ev) => { ev.target.closest('li').remove(); more(); } }, 'Show ' + Math.min(PAGE, items.length - shown) + ' more of ' + (items.length - shown))));
+    };
+    more();
+    return ul;
+  }
+  function popRow(popId, calls, time) {
+    const ok = calls.filter((e) => e.ok);
+    const byTo = new Map();
+    for (const e of ok) { const to = listOf((e.args || {}).to); byTo.set(to, (byTo.get(to) || 0) + 1); }
+    const split = [...byTo].map(([to, n]) => n + ' to ' + to).join(', ');
+    const failed = calls.length - ok.length;
+    return h('li', { class: 'pop' }, h('time', null, time), h('div', { style: 'min-width:0' },
+      h('span', { class: 'pop-tag', title: 'A population: many people with one bulk brain. Each mail is the person\'s own send_mail call.' }, 'crowd'),
+      h('b', null, ok.length + ' mail' + (ok.length === 1 ? '' : 's') + ' from ' + popName(popId)),
+      ' · ' + split + (failed ? ' · ' + failed + ' failed' : ''),
+      lazyFold(['Open ', gist(ok.length + ' messages')], () => paged(calls, (e) => h('li', null,
+        e.ok ? fold([gist(short(e.seat)), ' · “' + ((e.args || {}).subject || '') + '”'],
+          mailCard({ from: e.seat, to: listOf((e.args || {}).to), subject: (e.args || {}).subject || '', body: String((e.args || {}).body || '').replace(/\n+$/, '') }, null, false))
+          : h('div', { class: 'fail' }, short(e.seat) + ' ✗ ' + e.result)))),
+    ));
+  }
+  // Mail system rows of one kind, folded when there are many of them.
+  const MTA_FOLD = 10;
   function renderLog(i, turn, fs) {
     const start = hhmm(turn.clock);
     const spent = new Map();
     const rows = [];
+    const popCalls = new Map();
+    const mta = { 'mail.queued': [], 'mail.dequeued': [], 'mail.bounce': [] };
     for (const e of turn.events) {
+      if (e.type === 'tool.call' && e.population) {
+        if (!popCalls.has(e.population)) { popCalls.set(e.population, []); rows.push({ pop: e.population }); }
+        popCalls.get(e.population).push(e);
+        continue;
+      }
+      if (mta[e.type]) {
+        if (!mta[e.type].length) rows.push({ mta: e.type });
+        mta[e.type].push(e);
+        continue;
+      }
       // A join or a leave happens at the clock of the person who placed them.
       const clockOf = e.type === 'person.join' || e.type === 'person.leave' ? e.via : e.seat;
       const at = clockOf ? fmtTime(start, spent.get(clockOf) || 0) : fmtTime(start, 0);
@@ -517,12 +591,6 @@ main {
         case 'system.end':
           rows.push(h('li', { class: 'inject' }, time, h('div', null, systemBadge('scenario', e.kind, e.host), e.kind + ' on ' + e.host + ' is over')));
           break;
-        case 'mail.queued':
-          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'MAIL WAITS ' + e.messageId + ' → ' + e.rcpt + ': ' + e.reason)));
-          break;
-        case 'mail.dequeued':
-          rows.push(h('li', null, time, h('div', { class: 'dim' }, '↳ ' + e.messageId + ' → ' + e.rcpt + ' delivered after a wait')));
-          break;
         case 'seat.blocked':
           rows.push(h('li', null, time, h('div', { class: 'warn' }, short(e.seat) + ' cannot work: ' + e.reason)));
           break;
@@ -537,9 +605,6 @@ main {
           break;
         case 'seat.skip':
           rows.push(h('li', null, time, h('div', { class: 'sleep' }, short(e.seat) + ' is asleep (' + e.reason + ')')));
-          break;
-        case 'mail.bounce':
-          rows.push(h('li', null, time, h('div', { class: 'warn' }, 'BOUNCE ' + e.messageId + ' to ' + e.to + ': ' + e.reason)));
           break;
         case 'fs.conflict':
           rows.push(h('li', null, time, h('div', { class: 'warn' }, 'CONFLICT ' + short(e.seat) + ' ' + e.op + ' ' + e.path + ': ' + e.reason)));
@@ -561,16 +626,44 @@ main {
           rows.push(h('li', { class: 'join' }, time, h('div', null, h('span', { class: 'join-tag' }, 'joins'),
             h('b', null, e.person.name), ' (' + e.seat + ') joins ' + orgName(e.org) + ' as ' + e.person.title + (e.site ? ', on contract at ' + orgName(e.site) : '') + '. Placed by ' + seatName(e.via) + '.')));
           break;
+        case 'population.step':
+          rows.push(h('li', { class: 'pop' }, time, h('div', null, h('span', { class: 'pop-tag' }, 'crowd'),
+            popName(e.org) + ' · ' + e.rule + ': ' + e.users.length + (e.stage === 'answered' ? ' got a reply' : ' at step “' + e.stage + '”'))));
+          break;
+        case 'population.pool':
+          rows.push(h('li', { class: 'pop' }, time, h('div', null, h('span', { class: 'pop-tag' }, 'crowd'),
+            popName(e.org) + ' · ' + e.rule + ': ' + e.actor + ' wrote the mail variants. Members use them from now on.')));
+          break;
+        case 'population.skip':
+          rows.push(h('li', { class: 'pop' }, time, h('div', { class: 'warn' }, popName(e.org) + ' cannot act: ' + e.reason)));
+          break;
         case 'person.leave':
           rows.push(h('li', { class: 'join' }, time, h('div', null, h('span', { class: 'join-tag' }, 'leaves'),
             h('b', null, seatName(e.seat)), ' (' + e.seat + ') leaves at the end of this turn. Ended by ' + seatName(e.via) + '.')));
           break;
       }
     }
+    const mtaLine = (e) => {
+      if (e.type === 'mail.queued') return h('div', { class: 'warn' }, 'MAIL WAITS ' + e.messageId + ' → ' + e.rcpt + ': ' + e.reason);
+      if (e.type === 'mail.dequeued') return h('div', { class: 'dim' }, '↳ ' + e.messageId + ' → ' + e.rcpt + ' delivered after a wait');
+      return h('div', { class: 'warn' }, 'BOUNCE ' + e.messageId + ' to ' + e.to + ': ' + e.reason);
+    };
+    const MTA_TITLE = { 'mail.queued': 'messages wait in the queue', 'mail.dequeued': 'messages leave the queue', 'mail.bounce': 'messages bounce' };
+    for (let r = rows.length - 1; r >= 0; r--) {
+      const row = rows[r];
+      if (row instanceof Node) continue;
+      if (row.pop) { rows.splice(r, 1, popRow(row.pop, popCalls.get(row.pop), turn.ord === 0 ? '' : fmtTime(start, 0))); continue; }
+      const list = mta[row.mta];
+      const time = h('time', null, turn.ord === 0 ? '' : fmtTime(start, 0));
+      if (list.length <= MTA_FOLD) rows.splice(r, 1, ...list.map((e) => h('li', null, h('time', null, turn.ord === 0 ? '' : fmtTime(start, 0)), mtaLine(e))));
+      else rows.splice(r, 1, h('li', null, time, h('div', { style: 'min-width:0' }, h('span', { class: row.mta === 'mail.dequeued' ? 'dim' : 'warn' }, list.length + ' ' + MTA_TITLE[row.mta]),
+        lazyFold('Open the list', () => paged(list, (e) => h('li', null, mtaLine(e)))))));
+    }
     if (turn.ord === 0) {
       const files = turn.events.filter((e) => e.type === 'fs.write').length;
       const dirs = turn.events.filter((e) => e.type === 'fs.mkdir').length;
-      const people = turn.events.filter((e) => e.type === 'person.join').length;
+      const people = turn.events.filter((e) => e.type === 'person.join').length
+        + turn.events.filter((e) => e.type === 'population.join').reduce((n, e) => n + e.members.size, 0);
       rows.unshift(h('li', null, h('time', null, ''), h('div', null, 'Genesis: ' + people + ' people join the world. The scenario creates ' + dirs + ' folders and ' + files + ' files. Accounts, homes, mailboxes and seed files are ready.')));
     }
     $('log-title').textContent = turn.label + ' · ' + (turn.ord === 0 ? 'before day 1' : turn.clock);
@@ -591,23 +684,43 @@ main {
     const hosts = [...new Set([...fs.keys()].map((k) => k.slice(0, k.indexOf(':'))))].sort();
     const out = [];
     for (const host of hosts) {
-      const paths = [...fs.keys()].filter((k) => k.startsWith(host + ':')).map((k) => k.slice(host.length + 1)).sort();
+      // Index the children of each folder once. A provider host can hold
+      // thousands of mailboxes.
+      const kidsOf = new Map();
+      for (const k of fs.keys()) {
+        if (!k.startsWith(host + ':')) continue;
+        const p = k.slice(host.length + 1);
+        if (p === '/') continue;
+        const parent = p.slice(0, p.lastIndexOf('/')) || '/';
+        if (!kidsOf.has(parent)) kidsOf.set(parent, []);
+        kidsOf.get(parent).push(p);
+      }
       const openDirs = new Set(['/']);
       const mark = (p) => { for (let d = p; d && d !== '/'; d = d.slice(0, d.lastIndexOf('/')) || '/') openDirs.add(d); };
       for (const [k] of changed) if (k.startsWith(host + ':') && turn.ord > 0) mark(k.slice(host.length + 1).replace(/\/[^/]*$/, '') || '/');
       if (selected && selected.host === host) mark(selected.path.replace(/\/[^/]*$/, '') || '/');
       const build = (dir) => {
         const prefix = dir === '/' ? '/' : dir + '/';
-        const kids = paths.filter((p) => p !== dir && p.startsWith(prefix) && !p.slice(prefix.length).includes('/'));
-        return kids.map((p) => {
+        const kids = (kidsOf.get(dir) || []).slice().sort();
+        const SHOW = 200;
+        const shown = kids.length > SHOW ? kids.filter((p, n) => n < SHOW || openDirs.has(p) || (selected && selected.host === host && selected.path === p)) : kids;
+        const out = shown.map((p) => {
           const n = fs.get(key(host, p));
           const name = p.slice(prefix.length);
           const tag = changed.get(key(host, p));
           const label = [h('span', { class: tag ? 'chg' : null }, name + (n.kind === 'dir' ? '/' : '')), tag && turn.ord > 0 ? h('span', { class: 'tag' }, tag) : null];
-          if (n.kind === 'dir') return h('details', { open: openDirs.has(p) }, h('summary', null, ...label), h('div', null, ...build(p)));
+          if (n.kind === 'dir') {
+            if (openDirs.has(p)) return h('details', { open: true }, h('summary', null, ...label), h('div', null, ...build(p)));
+            const d = h('details', null, h('summary', null, ...label));
+            let built = false;
+            d.addEventListener('toggle', () => { if (d.open && !built) { built = true; d.append(h('div', null, ...build(p))); } });
+            return d;
+          }
           const isSel = selected && selected.host === host && selected.path === p;
           return h('button', { class: 'f' + (isSel ? ' sel' : ''), type: 'button', title: p, onclick: () => { selected = { host, path: p }; render(); } }, ...label);
         });
+        if (shown.length < kids.length) out.push(h('div', { class: 'more' }, '… ' + (kids.length - shown.length) + ' more in ' + dir));
+        return out;
       };
       out.push(h('details', { open: true }, h('summary', null, h('span', { class: 'host' }, host)), h('div', null, ...build('/'))));
     }

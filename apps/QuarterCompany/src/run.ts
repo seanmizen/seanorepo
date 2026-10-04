@@ -27,7 +27,13 @@ import {
   type Models,
   Rule,
 } from './cast.ts';
-import type { EventBody, JournalEvent, StateEvent, Wake } from './events.ts';
+import type {
+  EventBody,
+  JournalEvent,
+  PopulationStage,
+  StateEvent,
+  Wake,
+} from './events.ts';
 import { ObjectStore } from './objects.ts';
 import {
   type Compel,
@@ -35,6 +41,7 @@ import {
   type Inject,
   loadScenario,
   type Member,
+  type MemberSpec,
   type Scenario,
 } from './scenario.ts';
 import { describeTurn, journalPathOf, labelOf, ordOf } from './time.ts';
@@ -72,6 +79,18 @@ export class SimState {
   queue: QueuedMail[] = [];
   /** Every person who joined the world, by seat id. See REQ-QC-020. */
   people = new Map<string, Member>();
+  /** Populations in the world, in join order. See REQ-QC-022. */
+  populations = new Map<
+    string,
+    { provider: string; members: MemberSpec; joined: number }
+  >();
+  /** Per "<org>/<rule>": the stage of each member in a behaviour. */
+  progress = new Map<
+    string,
+    Map<string, { stage: PopulationStage; ord: number }>
+  >();
+  /** Per "<org>/<rule>": the object hash of a model-written pool. */
+  pools = new Map<string, string>();
   ord = -1;
 
   /** A copy for a preview, for example the qc-worker server. */
@@ -84,6 +103,9 @@ export class SimState {
     c.system = new Map([...this.system].map(([h, k]) => [h, new Set(k)]));
     c.queue = [...this.queue];
     c.people = new Map(this.people);
+    c.populations = new Map(this.populations);
+    c.progress = new Map([...this.progress].map(([k, v]) => [k, new Map(v)]));
+    c.pools = new Map(this.pools);
     c.ord = this.ord;
     return c;
   }
@@ -169,6 +191,24 @@ export class SimState {
       case 'person.join':
       case 'person.leave':
         return this.applyPerson(e, e.ord);
+      case 'population.join':
+        this.populations.set(e.org, {
+          provider: e.provider,
+          members: e.members,
+          joined: e.ord,
+        });
+        return;
+      case 'population.step': {
+        const key = `${e.org}/${e.rule}`;
+        const map = this.progress.get(key) ?? new Map();
+        for (const user of e.users)
+          map.set(user, { stage: e.stage, ord: e.ord });
+        this.progress.set(key, map);
+        return;
+      }
+      case 'population.pool':
+        this.pools.set(`${e.org}/${e.rule}`, e.hash);
+        return;
       case 'thought': {
         const list = this.thoughts.get(e.seat) ?? [];
         list.push({ label: e.turn, text: e.text });
