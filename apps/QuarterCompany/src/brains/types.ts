@@ -1,6 +1,7 @@
 // A brain decides what a seat does in one turn. It acts only through
 // `session.call`. See REQ-QC-005.
 import type { Casting, Models } from '../cast.ts';
+import type { Live } from '../live.ts';
 import type { Session } from '../session.ts';
 
 export interface ModelCallRecord {
@@ -22,6 +23,11 @@ export interface BrainContext {
   briefing: string;
   /** The run folder. Script and external brains read files from it. */
   runDir: string;
+  /**
+   * A listener for `qc run --watch` (REQ-QC-035). When it is set, a brain
+   * can stream the text of the model to it.
+   */
+  live?: Live;
   record(call: ModelCallRecord): void;
 }
 

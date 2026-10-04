@@ -56,6 +56,34 @@ from the journal in the browser, so it always agrees with the engine. A link
 that ends in `#fy1-q1-d1-t4` opens at that turn. `--fragment` writes the page
 without the html, head and body tags, for a host page that wraps it.
 
+### Watch a run live
+
+```bash
+yarn qc run demo --days 1 --watch          # http://127.0.0.1:4560/
+yarn qc run demo --watch --port 4600       # another port
+```
+
+`--watch` serves the same viewer during the run (REQ-QC-035). The server
+listens on 127.0.0.1 only. A "Live" panel above the panes shows the turn
+that runs now, with one card for each seat that works:
+
+- the text that the model writes, part by part. Reasoning is in italics.
+  The text of a tool call is in green.
+- each tool call when the seat makes it, with a tick or a cross
+- the state of the seat: queued, started, typing, working, done or error
+
+The text arrives part by part only from the `openai-compatible` brain
+(Ollama, llama.cpp). Other brains show their tool calls only. When the
+engine writes a turn, the page adds it from the journal. If you look at the
+last turn, the page moves to the new turn. The live text is only for the
+viewer. The journal does not record it. A page that opens during a turn shows
+the turn so far. When the run stops, the server stays open until you press
+Ctrl+C.
+
+Without `--watch`, the run sends the same requests as before. With it, the
+`openai-compatible` brain asks for a streamed reply and builds the same
+reply object for the journal.
+
 ## Words
 
 | Word | Meaning |

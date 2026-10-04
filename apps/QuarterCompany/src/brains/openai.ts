@@ -6,8 +6,14 @@
 // in the Hermes form `<tool_call>{"name": ..., "arguments": ...}</tool_call>`.
 // A call that the brain cannot read goes in the journal as a failed tool
 // call, and the turn continues (REQ-QC-031).
+//
+// With a live listener (`qc run --watch`), the brain asks for a streamed
+// reply and sends each part of the text to the listener. It builds the same
+// reply object from the parts, so the journal records the same form
+// (REQ-QC-035).
+import type { Live } from '../live.ts';
 import { jsonSchemaOf } from '../tools/index.ts';
-import { baseOf, postJson } from './net.ts';
+import { baseOf, postJson, postSse } from './net.ts';
 import type { Brain } from './types.ts';
 
 interface ToolCall {
@@ -33,6 +39,101 @@ interface ChatResponse {
     finish_reason?: string;
   }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
+interface StreamChunk {
+  model?: string;
+  choices?: {
+    delta?: {
+      content?: string | null;
+      reasoning?: string | null;
+      reasoning_content?: string | null;
+      tool_calls?: {
+        index?: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }[];
+    };
+    finish_reason?: string | null;
+  }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
+/**
+ * Build a reply from the chunks of a streamed reply. `onText` gets each part
+ * of the text: the content, the reasoning and the tool calls.
+ */
+export class StreamReader {
+  private model?: string;
+  private usage?: ChatResponse['usage'];
+  private finish?: string;
+  private content = '';
+  private calls: { id?: string; name: string; arguments: string }[] = [];
+
+  constructor(
+    private readonly onText: (
+      kind: 'content' | 'reasoning' | 'tool',
+      text: string,
+    ) => void = () => {},
+  ) {}
+
+  add(raw: unknown) {
+    const c = raw as StreamChunk;
+    if (c.model) this.model ??= c.model;
+    if (c.usage) this.usage = c.usage;
+    const choice = c.choices?.[0];
+    if (!choice) return;
+    if (choice.finish_reason) this.finish = choice.finish_reason;
+    const d = choice.delta ?? {};
+    const reasoning = d.reasoning ?? d.reasoning_content;
+    if (reasoning) this.onText('reasoning', reasoning);
+    if (d.content) {
+      this.content += d.content;
+      this.onText('content', d.content);
+    }
+    for (const t of d.tool_calls ?? []) {
+      const i = t.index ?? this.calls.length;
+      if (!this.calls[i]) {
+        this.calls[i] = { name: '', arguments: '' };
+        if (i > 0 || this.content) this.onText('tool', '\n');
+      }
+      const slot = this.calls[i];
+      if (t.id) slot.id = t.id;
+      if (t.function?.name) {
+        slot.name += t.function.name;
+        this.onText('tool', `${t.function.name} `);
+      }
+      if (t.function?.arguments) {
+        slot.arguments += t.function.arguments;
+        this.onText('tool', t.function.arguments);
+      }
+    }
+  }
+
+  response(): ChatResponse {
+    const calls = this.calls.filter(Boolean);
+    return {
+      model: this.model,
+      usage: this.usage,
+      choices: [
+        {
+          finish_reason: this.finish,
+          message: {
+            content: this.content || null,
+            ...(calls.length
+              ? {
+                  tool_calls: calls.map((c) => ({
+                    id: c.id,
+                    type: 'function',
+                    function: { name: c.name, arguments: c.arguments },
+                  })),
+                }
+              : {}),
+          },
+        },
+      ],
+    };
+  }
 }
 
 /** One tool call as the brain read it. `error` is set when it is not usable. */
@@ -160,6 +261,11 @@ export const openaiBrain: Brain = async (ctx) => {
     { role: 'system', content: ctx.system },
     { role: 'user', content: ctx.briefing },
   ];
+  const headers: Record<string, string> = key
+    ? { authorization: `Bearer ${key}` }
+    : {};
+  const live: Live | undefined = ctx.live;
+  const seat = session.seat.id;
 
   for (let step = 0; step < actor.max_steps && !session.done; step++) {
     const request = {
@@ -168,15 +274,33 @@ export const openaiBrain: Brain = async (ctx) => {
       messages,
       tools,
       ...actor.extra_body,
+      ...(live
+        ? { stream: true, stream_options: { include_usage: true } }
+        : {}),
     };
     const t0 = performance.now();
-    const response = (await postJson(
-      actor.provider,
-      provider,
-      `${base}/chat/completions`,
-      request,
-      key ? { authorization: `Bearer ${key}` } : {},
-    )) as ChatResponse;
+    let response: ChatResponse;
+    if (live) {
+      const reader = new StreamReader((kind, text) =>
+        live({ type: 'text', seat, kind, text }),
+      );
+      await postSse(
+        actor.provider,
+        provider,
+        `${base}/chat/completions`,
+        request,
+        headers,
+        (chunk) => reader.add(chunk),
+      );
+      response = reader.response();
+    } else
+      response = (await postJson(
+        actor.provider,
+        provider,
+        `${base}/chat/completions`,
+        request,
+        headers,
+      )) as ChatResponse;
     const inTok = response.usage?.prompt_tokens ?? 0;
     const outTok = response.usage?.completion_tokens ?? 0;
     ctx.record({
