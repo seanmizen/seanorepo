@@ -438,38 +438,34 @@ each turn, and some hours for one simulated day.
   requests, and queues the requests. vLLM needs compute capability 7.0 or
   later, so it does not run on this card.
 
-**Model: `qwen3:8b` (Qwen3 8B, Q4_K_M, 5.2 GB), with thinking off.**
+**Model: `huihui_ai/qwen3.5-abliterated:4B` (Qwen 3.5 4B, Q4_K, 3.3 GB),
+with thinking off.**
 
-- Alibaba trained Qwen3 for native tool calls, and Ollama parses its tool calls
-  into the OpenAI `tool_calls` field.
+- This is an abliterated build of Qwen 3.5 4B. Abliteration removes the
+  refusal direction from the weights, so the model does not refuse a prompt.
+  Sean chose an uncensored model for the first offline run.
+- Ollama lists `tools`, `thinking` and `vision` for this model. Ollama parses
+  its tool calls into the OpenAI `tool_calls` field.
 - `reasoning_effort: none` (in `actors.yaml`) stops the thinking. One step
   then uses tens of tokens, not hundreds. Remove the line to compare.
-- Memory: the weights are 5.2 GB. An 8,192-token context adds about 1.2 GB
-  of KV cache. That is more than 6 GB, so Ollama puts most layers on the GPU
-  and the remainder on the CPU. `ollama ps` shows the split. The 32 GB of RAM
-  holds the remainder with no problem.
-- Other models that we did not choose:
+- Memory: the weights are 3.3 GB. With an 8,192-token context, the model fits
+  completely in 6 GB of VRAM. `ollama ps` must show `100% GPU`.
+- An abliterated model can make worse tool calls than the base model. Count
+  the failed tool calls in the run (REQ-QC-031). If there are too many, try
+  `qwen3.5:4b` (the base model) or `qwen3:8b`.
+- Other models that we did not choose first:
+  - `qwen3:8b` (5.2 GB) makes more reliable tool calls. The weights and the
+    KV cache are more than 6 GB, so Ollama puts some layers on the CPU, and
+    the model runs more slowly.
   - `qwen3.5:9b` (6.6 GB) does not fit in 6 GB.
-  - `qwen3:4b` (2.5 GB) and `qwen3.5:4b` (3.4 GB) fit completely on the GPU
-    and run faster. Their tool calls are less reliable. Set
-    `QC_LOCAL_MODEL=qwen3:4b` for the setup script, and change `model` in
-    `actors.yaml`, to try one.
   - `llama3.1:8b` (4.9 GB) has the same memory problem as `qwen3:8b` and
     weaker tool calls.
 
-> **Sean's choice for the first offline run: Qwen 3.5 4B Uncensored.**
-> A community build is on Ollama as `vaultbox/qwen3.5-uncensored:4b`. Other
-> builds of this model are on Hugging Face. To use it:
->
-> 1. Run the setup script with `QC_LOCAL_MODEL=vaultbox/qwen3.5-uncensored:4b`.
-> 2. Set `model` of `qwen-local` in `actors.yaml` to the same tag.
-> 3. Run `ollama show vaultbox/qwen3.5-uncensored:4b` and make sure that
->    `tools` is in the capabilities. If it is not, Ollama does not give tool
->    calls to QuarterCompany, and every seat fails.
->
-> A 4B model fits completely in 6 GB of VRAM, so it is faster than
-> `qwen3:8b`. An uncensored build can make worse tool calls than the base
-> model. Count the failed tool calls in the run (REQ-QC-031).
+To change the model, set `QC_LOCAL_MODEL` for the setup script, and set
+`model` of `qwen-local` in `actors.yaml` to the same tag. Then run
+`ollama show <tag>` and make sure that `tools` is in the capabilities. If it
+is not, Ollama does not give tool calls to QuarterCompany, and every seat
+fails.
 
 **One model for every seat.** The `local` tier points to one actor, so every
 seat uses the same model. Ollama keeps one loaded copy
@@ -477,7 +473,7 @@ seat uses the same model. Ollama keeps one loaded copy
 (`OLLAMA_NUM_PARALLEL=1`). The `ollama` provider has `concurrency: 1`, so
 QuarterCompany sends one request at a time and each request waits for its
 slot, not for the server (REQ-QC-033). A change of model between seats would
-reload 5 GB each time, and that is too slow on this card.
+reload 3 to 5 GB each time, and that is too slow on this card.
 
 **Fallbacks.** If CUDA does not work in WSL (`ollama ps` shows `100% CPU`):
 
@@ -500,8 +496,8 @@ git clone https://github.com/seanmizen/seanorepo && cd seanorepo
 bash apps/QuarterCompany/scripts/setup-local-pc.sh
 ```
 
-The script installs Ollama, sets the server environment, pulls `qwen3:8b`
-(about 5.2 GB), runs `yarn install`, and sends one test request with a tool.
+The script installs Ollama, sets the server environment, pulls the model
+(about 3.3 GB), runs `yarn install`, and sends one test request with a tool.
 
 ### Offline mode
 
