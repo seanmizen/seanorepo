@@ -172,6 +172,25 @@ export class Session {
   }
 
   /**
+   * Journal a tool call that the brain could not read, for example arguments
+   * that are not JSON. It changes nothing and costs no minutes. See REQ-QC-031.
+   */
+  reject(name: string, rawArgs: unknown, reason: string): ToolResult {
+    const text = `The tool call is not valid. ${reason}`;
+    this.ops.emit(this.seat.id, {
+      type: 'tool.call',
+      seat: this.seat.id,
+      tool: name,
+      // Text that is not JSON goes in the journal as it came.
+      args: typeof rawArgs === 'string' ? { raw: rawArgs } : (rawArgs ?? {}),
+      ok: false,
+      minutes: 0,
+      result: text,
+    });
+    return { ok: false, text };
+  }
+
+  /**
    * Run a tool against a scratch copy of the view. A tool that fails changes
    * nothing, except the security log. See REQ-QC-008.
    */

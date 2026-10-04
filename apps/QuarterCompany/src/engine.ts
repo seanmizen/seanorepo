@@ -13,6 +13,7 @@
 // The order in step 3 does not depend on which seat finished first, so the
 // journal is the same for the same decisions. See REQ-QC-008.
 import { brainFor } from './brains/index.ts';
+import { checkActorOffline, OfflineError } from './brains/net.ts';
 import { type Casting, resolveCast } from './cast.ts';
 import type { EventBody, JournalEvent } from './events.ts';
 import { type Op, Ops } from './ops.ts';
@@ -34,6 +35,8 @@ export interface TurnReport {
   populationMails: number;
   events: number;
   costUsd: number;
+  /** Wall-clock milliseconds of the turn. Not in the journal. See REQ-QC-032. */
+  ms: number;
 }
 
 type Logger = (line: string) => void;
@@ -210,6 +213,7 @@ export async function runTurn(
   state: SimState,
   log: Logger = () => {},
 ): Promise<TurnReport> {
+  const t0 = performance.now();
   const { scenario } = run;
   const cal = scenario.calendar;
   const ord = state.ord + 1;
@@ -327,6 +331,9 @@ export async function runTurn(
     });
   }
 
+  // Offline mode: stop before any seat works (REQ-QC-030).
+  for (const s of sessions) checkActorOffline(run.models, s.casting.actor);
+
   let costUsd = 0;
   await pool(
     sessions,
@@ -361,12 +368,15 @@ export async function runTurn(
               inputTokens: c.inputTokens,
               outputTokens: c.outputTokens,
               costUsd: c.costUsd,
+              ms: c.ms,
               request: run.objects.putJson(c.request),
               response: run.objects.putJson(c.response),
             });
           },
         });
       } catch (err) {
+        // Offline mode stops the run (REQ-QC-030).
+        if (err instanceof OfflineError) throw err;
         const message = err instanceof Error ? err.message : String(err);
         session.ops.emit(seat.id, {
           type: 'model.error',
@@ -490,6 +500,7 @@ export async function runTurn(
     populationMails,
     events: stamped.length,
     costUsd,
+    ms: Math.round(performance.now() - t0),
   };
 }
 
@@ -504,7 +515,7 @@ export async function runUntil(
   while (state.ord < untilOrd) {
     const r = await runTurn(run, state, log);
     log(
-      `${r.label}  ${describeTurn(r.label, run.scenario.calendar)}  working: ${r.active.length}  asleep: ${r.skipped.length}${r.populationMails ? `  population mails: ${r.populationMails}` : ''}  $${r.costUsd.toFixed(4)}`,
+      `${r.label}  ${describeTurn(r.label, run.scenario.calendar)}  working: ${r.active.length}  asleep: ${r.skipped.length}${r.populationMails ? `  population mails: ${r.populationMails}` : ''}  $${r.costUsd.toFixed(4)}  ${(r.ms / 1000).toFixed(1)} s`,
     );
     reports.push(r);
   }

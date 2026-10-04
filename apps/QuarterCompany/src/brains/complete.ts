@@ -4,6 +4,8 @@
 // such as Ollama works offline.
 import Anthropic from '@anthropic-ai/sdk';
 import type { Actor, Models } from '../cast.ts';
+import { anthropicBase, baseOf, checkOffline, postJson } from './net.ts';
+import { stripThinking } from './openai.ts';
 import type { ModelCallRecord } from './types.ts';
 
 export async function complete(
@@ -18,7 +20,9 @@ export async function complete(
       `Actor provider "${actor.provider}" is not in providers.yaml.`,
     );
   const key = provider.key_env ? process.env[provider.key_env] : undefined;
+  const t0 = performance.now();
   if (provider.kind === 'anthropic') {
+    checkOffline(actor.provider, anthropicBase(provider.base_url));
     const client = new Anthropic({
       ...(key ? { apiKey: key } : {}),
       ...(provider.base_url ? { baseURL: provider.base_url } : {}),
@@ -46,13 +50,11 @@ export async function complete(
           (u.input_tokens * actor.price.in +
             u.output_tokens * actor.price.out) /
           1e6,
+        ms: Math.round(performance.now() - t0),
       },
     };
   }
-  const base = (provider.base_url ?? 'http://localhost:11434/v1').replace(
-    /\/$/,
-    '',
-  );
+  const base = baseOf(provider);
   const request = {
     model: actor.model,
     max_tokens: actor.max_tokens,
@@ -60,28 +62,24 @@ export async function complete(
       { role: 'system', content: system },
       { role: 'user', content: prompt },
     ],
+    ...actor.extra_body,
   };
-  const res = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(key ? { authorization: `Bearer ${key}` } : {}),
-    },
-    body: JSON.stringify(request),
-  });
-  if (!res.ok)
-    throw new Error(
-      `${base} returned HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`,
-    );
-  const response = (await res.json()) as {
+  const reply = await postJson(
+    actor.provider,
+    provider,
+    `${base}/chat/completions`,
+    request,
+    key ? { authorization: `Bearer ${key}` } : {},
+  );
+  const response = reply.body as {
     model?: string;
-    choices: { message: { content: string | null } }[];
+    choices?: { message?: { content?: string | null } }[];
     usage?: { prompt_tokens: number; completion_tokens: number };
   };
   const inTok = response.usage?.prompt_tokens ?? 0;
   const outTok = response.usage?.completion_tokens ?? 0;
   return {
-    text: response.choices[0]?.message.content ?? '',
+    text: stripThinking(response.choices?.[0]?.message?.content ?? ''),
     call: {
       model: response.model ?? actor.model ?? '',
       request,
@@ -89,6 +87,7 @@ export async function complete(
       inputTokens: inTok,
       outputTokens: outTok,
       costUsd: (inTok * actor.price.in + outTok * actor.price.out) / 1e6,
+      ms: reply.ms,
     },
   };
 }

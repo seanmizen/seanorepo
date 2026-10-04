@@ -14,7 +14,14 @@ import {
   SYSTEM_KINDS,
 } from '../scenario.ts';
 import { labelOf, ordOf } from '../time.ts';
-import { costReport, playback, retake, statusLines } from '../timeline.ts';
+import {
+  type CostBy,
+  costLines,
+  costReport,
+  playback,
+  retake,
+  statusLines,
+} from '../timeline.ts';
 import { TOOLS } from '../tools/index.ts';
 import { normalize } from '../vfs.ts';
 
@@ -250,20 +257,16 @@ export async function serveDirector(initial: Run) {
   server.registerTool(
     'cost',
     {
-      description: 'Show model cost so far.',
+      description:
+        'Show model calls, tokens, request seconds and cost so far. Group the rows by seat, actor, role, org or turn.',
       inputSchema: {
-        by: z.enum(['seat', 'actor', 'role', 'org']).default('seat'),
+        by: z.enum(['seat', 'actor', 'role', 'org', 'turn']).default('seat'),
       },
     },
-    guard(({ by }: { by: 'seat' | 'actor' | 'role' | 'org' }) => {
+    guard(({ by }: { by: CostBy }) => {
       const rows = costReport(reopen(), by);
       if (!rows.length) return 'No model calls yet.';
-      return rows
-        .map(
-          (r) =>
-            `${r.key}: ${r.calls} calls, ${r.inputTokens} in, ${r.outputTokens} out, $${r.costUsd.toFixed(4)}`,
-        )
-        .join('\n');
+      return costLines(rows, by).join('\n');
     }),
   );
 

@@ -11,6 +11,7 @@
 // `model_mail`, a model writes a pool of message variants once, and the
 // members use the pool (REQ-QC-024).
 import { complete } from './brains/complete.ts';
+import { OfflineError } from './brains/net.ts';
 import { BUILTIN_PROVIDERS, type CastFile, resolveCast } from './cast.ts';
 import type { PopulationStage } from './events.ts';
 import { parseMessage, splitAddress } from './mail.ts';
@@ -444,6 +445,7 @@ async function poolFor(
     inputTokens: call.inputTokens,
     outputTokens: call.outputTokens,
     costUsd: call.costUsd,
+    ms: call.ms,
     request: run.objects.putJson(call.request),
     response: run.objects.putJson(call.response),
   });
@@ -534,6 +536,8 @@ export async function populationTurn(
         result.costUsd += got.costUsd;
       } else pool = templatePool(b);
     } catch (err) {
+      // Offline mode stops the run (REQ-QC-030).
+      if (err instanceof OfflineError) throw err;
       ops.emit(pop.id, {
         type: 'model.error',
         seat: pop.id,

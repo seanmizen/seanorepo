@@ -2,6 +2,7 @@
 // the loop because the turn's time budget decides when it stops.
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOf } from '../tools/index.ts';
+import { anthropicBase, checkOffline } from './net.ts';
 import type { Brain } from './types.ts';
 
 const textOf = (content: Anthropic.ContentBlock[]) =>
@@ -15,6 +16,7 @@ export const anthropicBrain: Brain = async (ctx) => {
   const { session, casting } = ctx;
   const { actor } = casting;
   const provider = ctx.models.providers[actor.provider];
+  checkOffline(actor.provider, anthropicBase(provider.base_url));
   const apiKey = provider.key_env ? process.env[provider.key_env] : undefined;
   const client = new Anthropic({
     ...(apiKey ? { apiKey } : {}),
@@ -40,6 +42,7 @@ export const anthropicBrain: Brain = async (ctx) => {
       messages,
       ...(actor.effort ? { output_config: { effort: actor.effort } } : {}),
     };
+    const t0 = performance.now();
     const response = await client.messages.create(params);
     const u = response.usage;
     const cacheWrite = u.cache_creation_input_tokens ?? 0;
@@ -55,6 +58,7 @@ export const anthropicBrain: Brain = async (ctx) => {
           actor.price.in +
           u.output_tokens * actor.price.out) /
         1e6,
+      ms: Math.round(performance.now() - t0),
     });
     messages.push({ role: 'assistant', content: response.content });
 

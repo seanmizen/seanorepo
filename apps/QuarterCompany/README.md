@@ -25,7 +25,8 @@ yarn qc playback demo                 # show what happened
 ls runs/demo/world/brindlehart/bh-mf01/var/mail/
 ```
 
-With models (needs `ANTHROPIC_API_KEY`, or Ollama for the `local` tier):
+With models (needs `ANTHROPIC_API_KEY`, or Ollama for the `local` tier. See
+[Run offline on one PC](#run-offline-on-one-pc)):
 
 ```bash
 yarn qc new ep1 --scenario scenario --cast budget-it
@@ -111,8 +112,11 @@ model plays each person. One scenario can run with many casts.
 
 1. **Providers** (`providers.yaml`): how to reach a service. Kinds:
    `anthropic`, `openai-compatible` (Ollama, llama.cpp, vLLM, OpenRouter).
+   `concurrency` limits the requests at the same time (unset: no limit).
+   `timeout_s` sets the time for one request (default 1800 seconds).
 2. **Actors** (`actors.yaml`): a model, its settings and its price. The
-   providers `script`, `idle` and `external` are built in.
+   providers `script`, `idle` and `external` are built in. `extra_body` adds
+   fields to each `openai-compatible` request.
 3. **Tiers** (`actors.yaml`): aliases such as `cheap` or `premium`. Change one
    line to change every seat on that tier.
 4. **Casts** (`casts/*.yaml`): rules that match by `user`, `org` or
@@ -401,6 +405,155 @@ behaviour:
 The default calendar is 09:00 to 17:00 in 15-minute slots: 32 turns a day,
 65 working days a quarter, and 4 quarters a year. Day 1 is a Monday. Weekends
 are not simulated.
+
+## Run offline on one PC
+
+The `local` cast runs every seat on one open-weight model, on the same PC,
+with no network. It is free and slow. Expect tens of seconds for each seat in
+each turn, and some hours for one simulated day.
+
+### The PC
+
+| Part | Value |
+|---|---|
+| GPU | NVIDIA GTX 980 Ti: Maxwell, compute capability 5.2, 6 GB VRAM |
+| CPU | Intel Core i7, 6th generation (Skylake), AVX2 |
+| RAM | 32 GB |
+| OS | Windows, with QuarterCompany and Ollama in WSL 2 (Ubuntu) |
+
+### Server and model
+
+**Server: Ollama 0.12 or later, installed in WSL.**
+
+- Ollama supports NVIDIA compute capability 5.0 and later. Cards from 5.0 to
+  6.2 need driver 570 or later.
+- CUDA 13 removed Maxwell, Pascal and Volta. Ollama ships a CUDA 12 runner
+  next to the CUDA 13 runner, and it selects the CUDA 12 runner for an older
+  card. llama.cpp also still ships CUDA 12 builds.
+- The NVIDIA 580 driver branch is the last branch for Maxwell. The 590 branch
+  does not support the GTX 900 series. Keep the Windows driver on the 580
+  branch. WSL uses the Windows driver, so do not install a Linux driver in
+  WSL. `setup-local-pc.sh` prints a warning for a driver below 570 or from 590.
+- Ollama gives an OpenAI-compatible API, loads one copy of a model for all
+  requests, and queues the requests. vLLM needs compute capability 7.0 or
+  later, so it does not run on this card.
+
+**Model: `huihui_ai/qwen3.5-abliterated:4B` (Qwen 3.5 4B, Q4_K, 3.3 GB),
+with thinking off.**
+
+- This is an abliterated build of Qwen 3.5 4B. Abliteration removes the
+  refusal direction from the weights, so the model does not refuse a prompt.
+  Sean chose an uncensored model for the first offline run.
+- Ollama lists `tools`, `thinking` and `vision` for this model. Ollama parses
+  its tool calls into the OpenAI `tool_calls` field.
+- `reasoning_effort: none` (in `actors.yaml`) stops the thinking. One step
+  then uses tens of tokens, not hundreds. Remove the line to compare.
+- Memory: the weights are 3.3 GB. With an 8,192-token context, the model fits
+  completely in 6 GB of VRAM. `ollama ps` must show `100% GPU`.
+- An abliterated model can make worse tool calls than the base model. Count
+  the failed tool calls in the run (REQ-QC-031). If there are too many, try
+  `qwen3.5:4b` (the base model) or `qwen3:8b`.
+- Other models that we did not choose first:
+  - `qwen3:8b` (5.2 GB) makes more reliable tool calls. The weights and the
+    KV cache are more than 6 GB, so Ollama puts some layers on the CPU, and
+    the model runs more slowly.
+  - `qwen3.5:9b` (6.6 GB) does not fit in 6 GB.
+  - `llama3.1:8b` (4.9 GB) has the same memory problem as `qwen3:8b` and
+    weaker tool calls.
+
+To change the model, set `QC_LOCAL_MODEL` for the setup script, and set
+`model` of `qwen-local` in `actors.yaml` to the same tag. Then run
+`ollama show <tag>` and make sure that `tools` is in the capabilities. If it
+is not, Ollama does not give tool calls to QuarterCompany, and every seat
+fails.
+
+**One model for every seat.** The `local` tier points to one actor, so every
+seat uses the same model. Ollama keeps one loaded copy
+(`OLLAMA_MAX_LOADED_MODELS=1`) and runs one request at a time
+(`OLLAMA_NUM_PARALLEL=1`). The `ollama` provider has `concurrency: 1`, so
+QuarterCompany sends one request at a time and each request waits for its
+slot, not for the server (REQ-QC-033). A change of model between seats would
+reload 3 to 5 GB each time, and that is too slow on this card.
+
+**Fallbacks.** If CUDA does not work in WSL (`ollama ps` shows `100% CPU`):
+
+1. Check that `nvidia-smi` works in WSL. If it does not, install the Windows
+   driver from the 580 branch and run `wsl --shutdown`.
+2. CPU only: Ollama uses the CPU when it finds no GPU. The Skylake CPU with
+   AVX2 gives a few tokens each second. The run still works, more slowly.
+3. llama.cpp `llama-server` with a CUDA 12 build, or a Vulkan build on
+   Windows, with `--jinja` for tool calls and `-c 8192`. Point the `ollama`
+   provider `base_url` to `http://127.0.0.1:8080/v1`. A server on the
+   Windows side is reachable from WSL as 127.0.0.1 only with mirrored
+   networking (`networkingMode=mirrored` in `.wslconfig`).
+
+### Set up the PC (online, one time)
+
+In WSL, with the network on:
+
+```bash
+git clone https://github.com/seanmizen/seanorepo && cd seanorepo
+bash apps/QuarterCompany/scripts/setup-local-pc.sh
+```
+
+The script installs Ollama, sets the server environment, pulls the model
+(about 3.3 GB), runs `yarn install`, and sends one test request with a tool.
+
+### Offline mode
+
+`QC_OFFLINE=1` turns on offline mode (REQ-QC-030). Unset, it does nothing.
+In offline mode, QuarterCompany checks the actor of each seat before the
+seat works, and checks each model request. A provider host that is not
+`localhost`, `127.x.x.x` or `::1` stops the run with an error, and the turn
+is not written. The `anthropic` provider always stops an offline run.
+
+### Prove it offline
+
+```bash
+cd projects/agentic-workflows
+export QC_OFFLINE=1
+# Turn off the network in Windows (airplane mode). Then this must fail:
+curl -sS --max-time 5 https://example.com && echo "STOP: the network is on"
+yarn qc new offline --scenario scenario --cast local --replace
+time yarn qc run offline --days 1 2>&1 | tee offline-run.log
+yarn qc cost offline --by turn
+yarn qc cost offline --by role
+yarn qc export offline            # writes runs/offline.html
+```
+
+The model-written variant pool (REQ-QC-024), on a copy of the scenario with
+`model_mail` on. The staff follow the script, and only the population uses
+the local model:
+
+```bash
+rm -rf /tmp/qc-pool && cp -r scenario /tmp/qc-pool
+sed -i 's/^kind: population$/kind: population\nmodel_mail: true\npool_size: 3/' \
+  /tmp/qc-pool/orgs/shop-customers.yaml
+printf 'default: scripted\nrules:\n  - match: { org: shop-customers }\n    use: local\n' \
+  > /tmp/qc-pool/casts/pool.yaml
+yarn qc new pool --scenario /tmp/qc-pool --cast pool --replace
+yarn qc run pool --until fy1-q1-d1-t6
+yarn qc playback pool --from fy1-q1-d1-t6 | grep -e "mail pool" -e shop-customers
+yarn qc cost pool --by role       # the "population" row is the pool call
+```
+
+### Bad tool calls
+
+A small model sometimes writes a bad tool call. The `openai-compatible`
+brain reads native `tool_calls` first. If a reply has none, it reads
+`<tool_call>{"name": ..., "arguments": ...}</tool_call>` blocks from the
+text. A call with arguments that are not a JSON object, with no tool name,
+or with an unknown tool goes in the journal as a failed `tool.call` with 0
+minutes. The model gets the error as the tool result, and the turn
+continues (REQ-QC-031). The brain removes `<think>` blocks from the text.
+
+### Time and tokens
+
+Each `model.call` event has `ms`, the wall-clock time of the request
+(REQ-QC-032). The time starts when the request gets its slot, so the wait
+for the slot is not in it. `qc run` prints the time of each turn. `qc cost --by turn`
+shows the calls, tokens and request seconds of each turn. `--by role` shows
+them for each role. A local actor has no price, so the cost is 0.
 
 ## Commands
 
