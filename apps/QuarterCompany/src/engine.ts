@@ -16,6 +16,7 @@ import { brainFor } from './brains/index.ts';
 import { checkActorOffline, OfflineError } from './brains/net.ts';
 import { type Casting, resolveCast } from './cast.ts';
 import type { EventBody, JournalEvent } from './events.ts';
+import type { Live } from './live.ts';
 import { type Op, Ops } from './ops.ts';
 import { type PopulationTurn, populationTurn } from './population.ts';
 import { briefing, systemPrompt } from './prompt.ts';
@@ -212,6 +213,8 @@ export async function runTurn(
   run: Run,
   state: SimState,
   log: Logger = () => {},
+  /** A listener for `qc run --watch` (REQ-QC-035). */
+  live?: Live,
 ): Promise<TurnReport> {
   const t0 = performance.now();
   const { scenario } = run;
@@ -333,12 +336,23 @@ export async function runTurn(
 
   // Offline mode: stop before any seat works (REQ-QC-030).
   for (const s of sessions) checkActorOffline(run.models, s.casting.actor);
+  live?.({
+    type: 'turn.begin',
+    label,
+    clock,
+    seats: sessions.map((s) => ({
+      seat: s.seat.id,
+      actor: s.casting.actorName,
+    })),
+  });
 
   let costUsd = 0;
   await pool(
     sessions,
     scenario.concurrency,
     async ({ seat, session, casting, compelled }) => {
+      session.live = live;
+      live?.({ type: 'seat.begin', seat: seat.id, actor: casting.actorName });
       const did = await runCompelled(session, compelled);
       const brain = brainFor(
         casting.actor.provider,
@@ -350,6 +364,7 @@ export async function runTurn(
           casting,
           models: run.models,
           runDir: run.dir,
+          live,
           system: systemPrompt(seat, cal.slotMinutes, scenario.turnMinutes),
           briefing: briefing(
             session,
@@ -385,7 +400,9 @@ export async function runTurn(
           message,
         });
         log(`  ${seat.id}: ${message}`);
+        live?.({ type: 'model.error', seat: seat.id, message });
       }
+      live?.({ type: 'seat.end', seat: seat.id, note: session.note });
     },
   );
 
@@ -493,6 +510,7 @@ export async function runTurn(
     label,
     `${active.length} working, ${skipped.length} asleep${populationMails ? `, ${populationMails} population mails` : ''}`,
   );
+  live?.({ type: 'turn.end', label });
   return {
     label,
     active,
@@ -508,12 +526,13 @@ export async function runUntil(
   run: Run,
   untilOrd: number,
   log: Logger = () => {},
+  live?: Live,
 ) {
   const state = run.load();
   if (state.ord < 0) throw new Error('This run has no genesis turn.');
   const reports: TurnReport[] = [];
   while (state.ord < untilOrd) {
-    const r = await runTurn(run, state, log);
+    const r = await runTurn(run, state, log, live);
     log(
       `${r.label}  ${describeTurn(r.label, run.scenario.calendar)}  working: ${r.active.length}  asleep: ${r.skipped.length}${r.populationMails ? `  population mails: ${r.populationMails}` : ''}  $${r.costUsd.toFixed(4)}  ${(r.ms / 1000).toFixed(1)} s`,
     );

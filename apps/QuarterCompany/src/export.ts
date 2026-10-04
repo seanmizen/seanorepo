@@ -58,6 +58,29 @@ export interface ExportData {
   }[];
   /** File content by hash, for every version that a turn wrote. */
   objects: Record<string, string>;
+  /**
+   * True when `qc run --watch` serves the page. The page then gets new turns
+   * and live events from the server (REQ-QC-035).
+   */
+  live?: boolean;
+}
+
+/**
+ * The turns after `ord`, the staff list, and the file content that those
+ * turns use. A live page adds them to the data that it has (REQ-QC-035).
+ */
+export function exportTurnsAfter(
+  run: Run,
+  ord: number,
+): Pick<ExportData, 'seats' | 'turns' | 'objects'> {
+  const all = exportData(run);
+  const turns = all.turns.filter((t) => t.ord > ord);
+  const objects: Record<string, string> = {};
+  for (const t of turns)
+    for (const e of t.events)
+      if ('hash' in e && typeof e.hash === 'string' && e.hash in all.objects)
+        objects[e.hash] = all.objects[e.hash];
+  return { seats: all.seats, turns, objects };
 }
 
 export function exportData(run: Run): ExportData {
@@ -157,10 +180,12 @@ const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), 'viewer.html');
  */
 export function exportHtml(
   run: Run,
-  opts: { fragment?: boolean } = {},
+  opts: { fragment?: boolean; live?: boolean } = {},
 ): string {
+  const data = exportData(run);
+  if (opts.live) data.live = true;
   // Escape "<" so that no file content can close the data script tag.
-  const json = JSON.stringify(exportData(run)).replace(/</g, '\\u003c');
+  const json = JSON.stringify(data).replace(/</g, '\\u003c');
   const body = readFileSync(TEMPLATE, 'utf8').replace(
     '"__QC_DATA__"',
     () => json,

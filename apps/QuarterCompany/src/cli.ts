@@ -24,6 +24,7 @@ import {
   statusLines,
 } from './timeline.ts';
 import { TOOLS } from './tools/index.ts';
+import { DEFAULT_WATCH_PORT, startWatch } from './watch.ts';
 
 const HELP = `qc - QuarterCompany, a turn-based workplace simulator
 
@@ -32,8 +33,11 @@ Usage: qc <command> [options]
   new <run> --scenario <dir> --cast <name> [--replace]
                          Make a run and write its genesis turn.
                          --replace moves an old run of that name to runs/.trash.
-  run <run> [--turns N | --days N | --until <turn>]
+  run <run> [--turns N | --days N | --until <turn>] [--watch [--port N]]
                          Run turns with the models. Default: 1 turn.
+                         --watch serves the viewer on 127.0.0.1 during the
+                         run. It shows each seat's model text and tool
+                         calls when they happen. Default port: ${DEFAULT_WATCH_PORT}.
   status <run>           Show the last turn and who plays each seat.
   playback <run> [--from <turn>] [--to <turn>] [--seat <id>] [--verbose]
                          Show turns that happened. No model calls.
@@ -94,6 +98,8 @@ const { positionals, values } = parseArgs({
     kind: { type: 'string' },
     note: { type: 'string' },
     args: { type: 'string' },
+    watch: { type: 'boolean' },
+    port: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
 });
@@ -148,7 +154,24 @@ async function main() {
           ? last + Number(values.days) * turnsPerDay(cal)
           : last + Number(values.turns ?? 1);
       if (target <= last) fail(`The run is already at ${labelOf(last, cal)}.`);
-      await runUntil(run, target, (l) => console.log(l));
+      if (!values.watch) {
+        await runUntil(run, target, (l) => console.log(l));
+        return;
+      }
+      const port = Number(values.port ?? DEFAULT_WATCH_PORT);
+      if (!Number.isInteger(port) || port < 0 || port > 65535)
+        fail(`--port ${values.port} is not a port number.`);
+      const watch = await startWatch(run, port);
+      console.log(`Watch the run at ${watch.url}`);
+      try {
+        await runUntil(run, target, (l) => console.log(l), watch.live);
+      } finally {
+        watch.live({ type: 'run.end' });
+      }
+      // The server keeps the process open, so the page stays usable.
+      console.log(
+        `The run stopped. The viewer is still at ${watch.url}. Press Ctrl+C to stop it.`,
+      );
       return;
     }
     case 'status': {

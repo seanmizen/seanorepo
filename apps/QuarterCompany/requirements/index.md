@@ -39,6 +39,7 @@
 | [`REQ-QC-032`](qc.md#req-qc-032--each-model-call-records-its-time-and-the-report-shows-time-and-tokens) | Each model call records its time, and the report shows time and tokens | active | functional | P2 | sean |
 | [`REQ-QC-033`](qc.md#req-qc-033--one-local-model-serves-every-seat-one-request-at-a-time) | One local model serves every seat, one request at a time | active | functional | P2 | sean |
 | [`REQ-QC-034`](qc.md#req-qc-034--a-full-run-works-on-one-pc-with-no-network) | A full run works on one PC with no network | active | quality | P1 | sean |
+| [`REQ-QC-035`](qc.md#req-qc-035--a-run-can-be-watched-live-in-the-viewer) | A run can be watched live in the viewer | active | functional | P2 | sean |
 
 ## Dependency graph
 
@@ -78,6 +79,7 @@ graph TD
   REQ_QC_032["REQ-QC-032<br/>Each model call records its time, and the report shows time and tokens"]
   REQ_QC_033["REQ-QC-033<br/>One local model serves every seat, one request at a time"]
   REQ_QC_034["REQ-QC-034<br/>A full run works on one PC with no network"]
+  REQ_QC_035["REQ-QC-035<br/>A run can be watched live in the viewer"]
   REQ_QC_007 -->|amended-by| REQ_QC_018
   REQ_QC_008 -->|depends-on| REQ_QC_001
   REQ_QC_014 -->|depends-on| REQ_QC_001
@@ -114,19 +116,22 @@ graph TD
   REQ_QC_034 -->|depends-on| REQ_QC_024
   REQ_QC_034 -->|depends-on| REQ_QC_030
   REQ_QC_034 -->|depends-on| REQ_QC_033
+  REQ_QC_035 -->|depends-on| REQ_QC_001
+  REQ_QC_035 -->|depends-on| REQ_QC_011
   style REQ_QC_013 stroke-dasharray: 4 4
   style REQ_QC_015 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links
 
-- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019, required-by REQ-QC-020, required-by REQ-QC-022
+- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019, required-by REQ-QC-020, required-by REQ-QC-022, required-by REQ-QC-035
 - `REQ-QC-004` — required-by REQ-QC-026
 - `REQ-QC-005` — required-by REQ-QC-030
 - `REQ-QC-006` — required-by REQ-QC-024
 - `REQ-QC-008` — required-by REQ-QC-016, required-by REQ-QC-023, required-by REQ-QC-031, required-by REQ-QC-033
 - `REQ-QC-009` — required-by REQ-QC-026
 - `REQ-QC-010` — required-by REQ-QC-026, required-by REQ-QC-031
+- `REQ-QC-011` — required-by REQ-QC-035
 - `REQ-QC-017` — required-by REQ-QC-020, required-by REQ-QC-023
 - `REQ-QC-020` — required-by REQ-QC-021, required-by REQ-QC-022, required-by REQ-QC-029
 - `REQ-QC-022` — required-by REQ-QC-023

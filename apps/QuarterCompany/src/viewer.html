@@ -193,7 +193,36 @@ main {
 .pop-tag { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--sleep); border: 1px solid var(--sleep); border-radius: 3px; padding: 3px 5px; margin-right: 6px; }
 .pop-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
 .more { color: var(--muted); font-size: 12px; }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+/* Live: the seats of the turn that runs now, with the text of their model
+   as it arrives (REQ-QC-035). Only `qc run --watch` shows this panel. */
+.live { grid-column: 1 / -1; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: grid; gap: 10px; min-width: 0; }
+.live-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.live-head b { font: 600 13px/1.3 var(--font-mono); }
+.live-status { font: 12px/1.3 var(--font-mono); color: var(--muted); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); align-self: center; }
+.live.on .dot { background: var(--bad); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.live-seats { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.lcard { border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; display: grid; align-content: start; gap: 6px; min-width: 0; background: var(--paper); }
+.lcard.queued { opacity: .55; }
+.lcard.typing { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.lcard.error { border-color: var(--bad); }
+.lcard-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; min-width: 0; }
+.lcard-head .actor { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill.typing, .pill.started { color: var(--accent); }
+.pill.queued, .pill.done { color: var(--muted); }
+.pill.error { color: var(--bad); }
+.ltext { margin: 0; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 var(--font-mono); }
+.ltext:empty { display: none; }
+.lcard.done .ltext { max-height: 96px; }
+.ltext .reasoning { color: var(--thought); font-style: italic; }
+.ltext .tool { font-weight: 500; }
+.ltext .call { display: block; margin: 4px 0; color: var(--ink); }
+.ltext .call.fail { color: var(--bad); }
+.lcard.typing .ltext::after { content: '▍'; color: var(--accent); animation: pulse 1s steps(2) infinite; }
+.lnote { font-size: 12px; border-left: 2px solid var(--rule); padding-left: 8px; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } .live.on .dot, .lcard.typing .ltext::after { animation: none; } }
 </style>
 
 <header class="console">
@@ -215,6 +244,10 @@ main {
 </header>
 
 <main>
+  <section class="live" id="live" aria-labelledby="live-h" hidden>
+    <div class="live-head"><span class="dot" aria-hidden="true"></span><h2 class="pane-title" id="live-h" style="margin:0">Live</h2><b id="live-title"></b><span class="live-status" id="live-status">Connecting…</span></div>
+    <div class="live-seats" id="live-seats"></div>
+  </section>
   <section aria-labelledby="staff-h">
     <h2 class="pane-title" id="staff-h">Staff</h2>
     <div class="staff" id="staff"></div>
@@ -787,6 +820,134 @@ main {
     if (ev.key === 'ArrowLeft') { stop(); go(pos - 1); ev.preventDefault(); }
   });
 
+  // ----- live: qc run --watch (REQ-QC-035) -----
+  // Finished turns come from /api/turns, which reads the journal. The event
+  // stream /api/live shows the turn that runs now. It is for display only.
+  function startLive() {
+    document.querySelector('.console .eyebrow').textContent = 'QuarterCompany live';
+    const panel = $('live');
+    panel.hidden = false;
+    const cards = new Map();
+    let loading = null;
+    const status = (t) => { $('live-status').textContent = t; };
+
+    async function loadTurns() {
+      if (loading) return loading;
+      loading = (async () => {
+        const last = D.turns.length ? D.turns[D.turns.length - 1].ord : -1;
+        const r = await (await fetch('/api/turns?after=' + last, { cache: 'no-store' })).json();
+        if (!r.turns.length) return;
+        const following = order[pos] === D.turns.length - 1;
+        D.seats = r.seats;
+        seatIndex.clear();
+        D.seats.forEach((s, i) => seatIndex.set(s.id, i));
+        Object.assign(D.objects, r.objects);
+        D.turns.push(...r.turns);
+        rebuildOrder(order[pos]);
+        if (following) pos = order.length - 1;
+        render();
+      })().catch(() => status('Could not load the new turns. Reload the page.')).finally(() => { loading = null; });
+      return loading;
+    }
+
+    function card(seat) {
+      let c = cards.get(seat);
+      if (c) return c;
+      const s = D.seats[seatIndex.get(seat)];
+      const pill = h('span', { class: 'pill queued' }, 'Queued');
+      const actor = h('span', { class: 'actor' }, '');
+      const text = h('pre', { class: 'ltext' });
+      const note = h('div', { class: 'lnote', hidden: true });
+      const el = h('article', { class: 'lcard queued' },
+        h('div', { class: 'lcard-head' }, h('span', { class: 'seat-name' }, s ? s.name : short(seat)), pill),
+        actor, text, note);
+      c = { el, pill, actor, text, note, last: null, lastKind: null };
+      cards.set(seat, c);
+      $('live-seats').append(el);
+      return c;
+    }
+    function setState(c, state, label) {
+      c.el.className = 'lcard ' + state;
+      c.pill.className = 'pill ' + state;
+      c.pill.textContent = label;
+    }
+    // Keep the text box at the bottom, unless the reader scrolled up.
+    function stick(c, fn) {
+      const t = c.text;
+      const atEnd = t.scrollHeight - t.scrollTop - t.clientHeight < 24;
+      fn();
+      if (atEnd) t.scrollTop = t.scrollHeight;
+    }
+
+    function onEvent(e) {
+      switch (e.type) {
+        case 'turn.begin':
+          cards.clear();
+          $('live-seats').replaceChildren();
+          $('live-title').textContent = e.label + ' · ' + e.clock;
+          panel.classList.add('on');
+          status(e.seats.length ? e.seats.length + ' seat' + (e.seats.length === 1 ? '' : 's') + ' work in this turn' : 'Nobody works in this turn');
+          for (const s of e.seats) card(s.seat).actor.textContent = s.seat + ' · ' + s.actor;
+          break;
+        case 'seat.begin': {
+          const c = card(e.seat);
+          c.actor.textContent = e.seat + ' · ' + e.actor;
+          setState(c, 'started', 'Started');
+          break;
+        }
+        case 'text': {
+          const c = card(e.seat);
+          if (!c.el.classList.contains('typing')) setState(c, 'typing', 'Typing');
+          stick(c, () => {
+            if (c.lastKind !== e.kind || !c.last) {
+              c.last = document.createTextNode('');
+              c.lastKind = e.kind;
+              c.text.append(h('span', { class: e.kind }, c.last));
+            }
+            c.last.appendData(e.text);
+          });
+          break;
+        }
+        case 'tool': {
+          const c = card(e.seat);
+          setState(c, 'started', 'Working');
+          stick(c, () => {
+            c.text.append(h('span', { class: 'call' + (e.ok ? '' : ' fail') },
+              (e.ok ? '✓ ' : '✗ ') + [e.tool, argSummary(e.tool, e.args), '(' + e.minutes + ' min)'].filter(Boolean).join(' ') + (e.ok ? '' : ': ' + clip(e.result, 160))));
+            c.last = null;
+          });
+          break;
+        }
+        case 'model.error': {
+          const c = card(e.seat);
+          setState(c, 'error', 'Error');
+          stick(c, () => { c.text.append(h('span', { class: 'call fail' }, '✗ model error: ' + e.message)); c.last = null; });
+          break;
+        }
+        case 'seat.end': {
+          const c = card(e.seat);
+          if (!c.el.classList.contains('error')) setState(c, 'done', 'Done');
+          if (e.note) { c.note.hidden = false; c.note.textContent = 'Note: ' + e.note; }
+          break;
+        }
+        case 'turn.end':
+          status('The engine wrote ' + e.label + '. Waiting for the next turn.');
+          loadTurns();
+          break;
+        case 'run.end':
+          panel.classList.remove('on');
+          status('The run stopped.');
+          loadTurns();
+          break;
+      }
+    }
+
+    const es = new EventSource('/api/live');
+    es.addEventListener('open', () => { status('Connected. Waiting for the next turn.'); loadTurns(); });
+    es.addEventListener('error', () => { panel.classList.remove('on'); status('Not connected. The page tries again.'); });
+    es.addEventListener('message', (m) => onEvent(JSON.parse(m.data)));
+  }
+
   // ----- start -----
   $('run-name').textContent = D.run.name;
   $('run-meta').textContent = 'Scenario ' + D.run.scenario + ' · cast ' + D.run.cast + (D.run.parent ? ' · retake of ' + D.run.parent.run + ' from ' + D.run.parent.turn : '');
@@ -795,5 +956,6 @@ main {
   if (wanted > 0) { quiet = !order.includes(wanted) || quiet; if (quiet) { $('quiet').checked = true; rebuildOrder(wanted); } pos = Math.max(0, order.indexOf(wanted)); }
   else pos = Math.min(1, order.length - 1);
   render();
+  if (D.live) startLive();
 })();
 </script>
