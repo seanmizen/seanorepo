@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { type CastFile, type Rule, resolveCast } from './cast.ts';
 import type { JournalEvent } from './events.ts';
 import type { Run } from './run.ts';
-import { hostOf, seatsOf } from './scenario.ts';
+import { hostOf, seatOfMember } from './scenario.ts';
 import { describeTurn, ordOf } from './time.ts';
 
 export interface ExportData {
@@ -28,12 +28,19 @@ export interface ExportData {
     role: string;
     org: string;
     host: string;
+    /** For a consultant: the client organisation where the seat works. */
+    site?: string;
+    /** The ord of the turn when the person joined, and left. */
+    joined: number;
+    left?: number;
+    /** "scenario", or the seat that placed the person. */
+    via: string;
   }[];
   turns: {
     label: string;
     ord: number;
     clock: string;
-    /** Actor name for each seat, in the order of `seats`. */
+    /** Actor name for each seat, in the order of `seats`. Empty when the person is not in the world. */
     actors: string[];
     events: JournalEvent[];
   }[];
@@ -43,7 +50,17 @@ export interface ExportData {
 
 export function exportData(run: Run): ExportData {
   const cal = run.scenario.calendar;
-  const seats = seatsOf(run.scenario);
+  // Every person who was ever in the world: the scenario's people first,
+  // then the people who joined, in join order (REQ-QC-020).
+  const members = [...run.load().people].sort(
+    ([a, x], [b, y]) => x.joined - y.joined || (a < b ? -1 : 1),
+  );
+  const seats = members.map(([id, m]) => ({
+    seat: seatOfMember(run.scenario, id, m),
+    member: m,
+  }));
+  const present = (m: (typeof members)[number][1], ord: number) =>
+    m.joined <= ord && (m.left === undefined || m.left >= ord);
   const objects: Record<string, string> = {};
   const rules: Rule[] = [];
   const turns: ExportData['turns'] = [];
@@ -69,9 +86,10 @@ export function exportData(run: Run): ExportData {
       label,
       ord,
       clock: describeTurn(label, cal),
-      actors: seats.map(
-        (s) =>
-          resolveCast(run.models, cast, s, Math.max(ord, 1), cal).actorName,
+      actors: seats.map(({ seat, member }) =>
+        present(member, ord)
+          ? resolveCast(run.models, cast, seat, Math.max(ord, 1), cal).actorName
+          : '',
       ),
       events,
     });
@@ -91,13 +109,17 @@ export function exportData(run: Run): ExportData {
       domain: c.domain,
       host: hostOf(c),
     })),
-    seats: seats.map((s) => ({
+    seats: seats.map(({ seat: s, member: m }) => ({
       id: s.id,
       name: s.person.name,
       title: s.person.title,
       role: s.person.role,
       org: s.org.id,
       host: s.host,
+      ...(m.site ? { site: m.site } : {}),
+      joined: m.joined,
+      ...(m.left !== undefined ? { left: m.left } : {}),
+      via: m.via,
     })),
     turns,
     objects,

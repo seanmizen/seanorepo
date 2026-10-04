@@ -5,6 +5,8 @@
 // (REQ-QC-014). InfoEvent records what happened, for playback and cost.
 // The other events record what happened, for playback and cost reports.
 
+import type { Person } from './scenario.ts';
+
 export interface Meta {
   owner: string;
   group: string;
@@ -49,7 +51,23 @@ export type StateEvent =
       rcpt: string;
       reason: string;
     }
-  | { type: 'mail.dequeued'; messageId: string; rcpt: string };
+  | { type: 'mail.dequeued'; messageId: string; rcpt: string }
+  | {
+      /**
+       * A person joins an organisation. Genesis writes one for each person in
+       * the scenario. A placement tool writes one during a run. See REQ-QC-020.
+       */
+      type: 'person.join';
+      seat: string;
+      /** The employer. The mailbox is on this organisation's host. */
+      org: string;
+      /** For a consultant: the client organisation, where the seat works. */
+      site?: string;
+      person: Person;
+      /** "scenario", or the seat id that made the placement. */
+      via: string;
+    }
+  | { type: 'person.leave'; seat: string; via: string };
 
 export type Wake = 'next_turn' | 'on_mail';
 

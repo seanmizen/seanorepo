@@ -1,4 +1,6 @@
-// qc-mail: the seat's mailbox. See REQ-QC-007.
+// qc-mail: the seat's mailbox. It is on the employer's host. For a
+// consultant, that is not the host where the seat works. See REQ-QC-007 and
+// REQ-QC-021.
 import { z } from 'zod';
 import { formatMessage, parseMessage } from '../mail.ts';
 import type { Session } from '../session.ts';
@@ -28,15 +30,15 @@ export function ensureMailbox(
 
 function listBox(s: Session, box: 'new' | 'cur') {
   const dir = `${mailboxOf(s.user)}/${box}`;
-  if (!s.vfs.exists(s.host, dir)) return [];
+  if (!s.vfs.exists(s.mailHost, dir)) return [];
   return s.vfs
-    .children(s.host, dir)
+    .children(s.mailHost, dir)
     .filter((k) => k.name.endsWith('.eml'))
     .map((k) => ({
       box,
       ...parseMessage(
         k.name.slice(0, -4),
-        s.ops.read(s.host, `${dir}/${k.name}`) ?? '',
+        s.ops.read(s.mailHost, `${dir}/${k.name}`) ?? '',
       ),
     }));
 }
@@ -44,7 +46,7 @@ function listBox(s: Session, box: 'new' | 'cur') {
 function findMessage(s: Session, id: string) {
   for (const box of ['new', 'cur'] as const) {
     const p = `${mailboxOf(s.user)}/${box}/${id}.eml`;
-    if (s.vfs.exists(s.host, p)) return { box, path: p };
+    if (s.vfs.exists(s.mailHost, p)) return { box, path: p };
   }
   throw new AccessError(`Message ${id} is not in your mailbox.`);
 }
@@ -83,15 +85,15 @@ export const MAIL_TOOLS = [
     input: z.object({ id: z.string() }),
     minutes: (s, a) => {
       const { path } = findMessage(s, a.id);
-      return readingMinutes(s.vfs.get(s.host, path)?.size ?? 0);
+      return readingMinutes(s.vfs.get(s.mailHost, path)?.size ?? 0);
     },
     run: (s, a) => {
       const found = findMessage(s, a.id);
-      const text = s.ops.read(s.host, found.path) ?? '';
+      const text = s.ops.read(s.mailHost, found.path) ?? '';
       if (found.box === 'new') {
         s.ops.emit(s.seat.id, {
           type: 'fs.mv',
-          host: s.host,
+          host: s.mailHost,
           from: found.path,
           to: `${mailboxOf(s.user)}/cur/${a.id}.eml`,
         });
@@ -133,15 +135,20 @@ export const MAIL_TOOLS = [
         },
         s.seat.org.domain,
       );
-      ensureMailbox(s.ops, s.host, s.user, s.dir().primaryGroup(s.user));
+      ensureMailbox(
+        s.ops,
+        s.mailHost,
+        s.user,
+        s.dir(s.mailHost).primaryGroup(s.user),
+      );
       s.ops.write(
         s.seat.id,
-        s.host,
+        s.mailHost,
         `${mailboxOf(s.user)}/sent/${id}.eml`,
         text,
         {
           owner: s.user,
-          group: s.dir().primaryGroup(s.user),
+          group: s.dir(s.mailHost).primaryGroup(s.user),
           mode: 0o600,
         },
       );

@@ -12,7 +12,7 @@ import { Rule } from './cast.ts';
 import { genesis, runUntil } from './engine.ts';
 import { exportHtml } from './export.ts';
 import { Run } from './run.ts';
-import { checkInject, Inject, seatsOf } from './scenario.ts';
+import { checkCompelSeat, checkInject, Inject } from './scenario.ts';
 import { labelOf, ordOf, turnsPerDay } from './time.ts';
 import {
   costReport,
@@ -224,8 +224,7 @@ async function main() {
       if (ordOf(at, cal) <= run.lastOrd())
         fail(`Turn ${at} has happened. Give a later turn.`);
       const seat = required(values.seat, 'seat');
-      if (!seatsOf(run.scenario).some((s) => s.id === seat))
-        fail(`Seat ${seat} does not exist.`);
+      checkCompelSeat(run.scenario, seat);
       const tool = required(values.tool, 'tool');
       if (!TOOLS.some((t) => t.name === tool))
         fail(`Tool "${tool}" does not exist.`);

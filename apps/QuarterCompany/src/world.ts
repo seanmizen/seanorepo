@@ -9,6 +9,7 @@ import {
   parseMode,
   type Scenario,
   type SystemKind,
+  scenarioJoins,
 } from './scenario.ts';
 import { ensureMailbox } from './tools/mail.ts';
 import {
@@ -120,7 +121,12 @@ export function seedOrg(ops: Ops, c: Org) {
   }
 }
 
+/**
+ * Genesis: the scenario's people join the world, then each organisation's
+ * host gets its folders, accounts and seed files. See REQ-QC-020.
+ */
 export function seedWorld(ops: Ops, s: Scenario) {
+  for (const j of scenarioJoins(s)) ops.emit('genesis', j);
   for (const c of s.orgs) seedOrg(ops, c);
 }
 

@@ -4,6 +4,9 @@
 # <turn>.<user>.<n>. Priya's two requests and Graham's quote request are
 # compelled in scenario.yaml, so they are their own mail. Mail is down from
 # 11:00 to 11:30, so Maria's question to Tom waits in the queue.
+# Nadia at Ledgerline places a consultant, Oliver, with Brindle & Hart. He
+# joins the world on Monday. His mailbox is on Ledgerline's host. He works on
+# bh-mf01 from Tuesday, after Dave makes his account.
 
 dave@brindlehart.example:
   fy1-q1-d1-t1:
@@ -48,6 +51,24 @@ dave@brindlehart.example:
 
           Dave
     - { tool: end_turn, args: { note: "Told Maria to ask Tom for ledger numbers.", wake: on_mail } }
+  fy1-q1-d1-t9:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t8.nadia.1 } }
+    - { tool: think_privately, args: { thought: "A contractor in finance. Policy rule 6: finance group only, and a lock when the contract ends." } }
+    - { tool: useradd, args: { username: oliver, full_name: Oliver Grant (Ledgerline), groups: [finance] } }
+    - tool: send_mail
+      args:
+        to: nadia@ledgerline.example
+        cc: [priya@brindlehart.example, oliver@ledgerline.example]
+        subject: "Re: Finance consultant for the Q1 close"
+        body: |
+          Hi Nadia,
+
+          Oliver's account on bh-mf01 is ready. His user name is oliver, and he
+          is in the finance group.
+
+          Dave
+    - { tool: end_turn, args: { note: "Made Oliver's contractor account.", wake: on_mail } }
 
 priya@brindlehart.example:
   fy1-q1-d1-t1:
@@ -76,7 +97,18 @@ priya@brindlehart.example:
           Thanks Tom. That is what I need for Friday.
 
           Priya
-    - { tool: end_turn, args: { note: "Have the Q1 numbers for the board call.", wake: on_mail } }
+    - tool: send_mail
+      args:
+        to: nadia@ledgerline.example
+        subject: "Finance consultant for the Q1 close"
+        body: |
+          Hello Nadia,
+
+          Tom, our Finance Manager, needs help with the Q1 close this week.
+          Can you send us a finance consultant from tomorrow?
+
+          Priya Shah, Brindle & Hart
+    - { tool: end_turn, args: { note: "Have the Q1 numbers. Asked Ledgerline for a consultant.", wake: on_mail } }
 
 tom@brindlehart.example:
   fy1-q1-d1-t1:
@@ -121,6 +153,21 @@ tom@brindlehart.example:
 
           Tom
     - { tool: end_turn, args: { note: "Sent Maria the Cartwright history.", wake: on_mail } }
+  fy1-q1-d2-t3:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d2-t2.oliver.1 } }
+    - tool: send_mail
+      args:
+        to: oliver@ledgerline.example
+        subject: "Re: Hello from Oliver (Ledgerline)"
+        body: |
+          Welcome, Oliver.
+
+          Please match each invoice in ledger-q1.csv to a bank receipt, and
+          list the invoices that are not paid.
+
+          Tom
+    - { tool: end_turn, args: { note: "Gave Oliver the receipts check.", wake: on_mail } }
 
 maria@brindlehart.example:
   fy1-q1-d1-t1:
@@ -247,6 +294,74 @@ sophie@brindlehart.example:
     - { tool: read_mail, args: { id: fy1-q1-d2-t3.maria.1 } }
     - { tool: read_file, args: { path: /srv/sales/price-list.csv } }
     - { tool: end_turn, args: { note: "Read the price list. Call with Maria and Cartwright at 11:00.", wake: on_mail } }
+
+nadia@ledgerline.example:
+  fy1-q1-d1-t8:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t7.priya.2 } }
+    - { tool: think_privately, args: { thought: "Oliver is free this week, and a small client is a gentle start for him." } }
+    - tool: place_person
+      args:
+        client: brindlehart.example
+        username: oliver
+        full_name: Oliver Grant
+        role: finance
+        title: Finance Consultant
+        persona: You are a Ledgerline consultant on contract at Brindle & Hart. Help Tom close Q1.
+    - tool: send_mail
+      args:
+        to: priya@brindlehart.example
+        cc: dave@brindlehart.example
+        subject: "Re: Finance consultant for the Q1 close"
+        body: |
+          Hello Priya,
+
+          Oliver Grant starts with you tomorrow at 9:00. His address is
+          oliver@ledgerline.example.
+
+          Dave: please make the account oliver on bh-mf01, in the finance group.
+
+          Nadia Brooks, Ledgerline Consulting
+    - tool: send_mail
+      args:
+        to: oliver@ledgerline.example
+        subject: "Your placement: Brindle & Hart"
+        body: |
+          Hi Oliver,
+
+          From tomorrow you are on contract at Brindle & Hart. Help Tom Fletcher
+          (tom@brindlehart.example) with the Q1 close. Their IT administrator,
+          Dave, makes your account on bh-mf01.
+
+          Nadia
+    - { tool: end_turn, args: { note: "Placed Oliver at Brindle & Hart.", wake: on_mail } }
+
+oliver@ledgerline.example:
+  fy1-q1-d2-t1:
+    - { tool: whoami }
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d1-t8.nadia.2 } }
+    - { tool: ls, args: { path: /srv/finance } }
+    - { tool: read_file, args: { path: /srv/finance/ledger-q1.csv } }
+    - { tool: think_privately, args: { thought: "Three invoices, and one customer is two thirds of the revenue. Tom must lose sleep over Harrogate." } }
+    - { tool: end_turn, args: { note: "On site at Brindle & Hart. Read the Q1 ledger. Introduce myself to Tom." } }
+  fy1-q1-d2-t2:
+    - tool: send_mail
+      args:
+        to: tom@brindlehart.example
+        subject: "Hello from Oliver (Ledgerline)"
+        body: |
+          Hi Tom,
+
+          I am the Ledgerline consultant for your Q1 close. I can read the
+          ledger in /srv/finance. Where do you want me to start?
+
+          Oliver
+    - { tool: end_turn, args: { note: "Asked Tom where to start.", wake: on_mail } }
+  fy1-q1-d2-t4:
+    - { tool: list_mail }
+    - { tool: read_mail, args: { id: fy1-q1-d2-t3.tom.1 } }
+    - { tool: end_turn, args: { note: "Tom wants the invoices matched to bank receipts.", wake: on_mail } }
 
 graham@cartwright-stationers.example:
   fy1-q1-d1-t6:

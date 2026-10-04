@@ -5,15 +5,21 @@ import { loadModels, resolveCast } from '../src/cast.ts';
 import { runUntil } from '../src/engine.ts';
 import { workerSession } from '../src/mcp/worker.ts';
 import { Run } from '../src/run.ts';
-import { loadScenario, seatsOf } from '../src/scenario.ts';
+import { loadScenario, scenarioJoins, seatsIn } from '../src/scenario.ts';
 import { playback, retake } from '../src/timeline.ts';
 import { call, FIXTURE, makeRun } from './helpers.ts';
 
 describe('cast', () => {
   const scenario = loadScenario(FIXTURE);
   const models = loadModels(FIXTURE);
+  const people = new Map(
+    scenarioJoins(scenario).map((j) => [
+      j.seat,
+      { org: j.org, person: j.person, via: j.via, joined: 0 },
+    ]),
+  );
   const seat = (id: string) => {
-    const s = seatsOf(scenario).find((x) => x.id === id);
+    const s = seatsIn(scenario, people).find((x) => x.id === id);
     if (!s) throw new Error(id);
     return s;
   };

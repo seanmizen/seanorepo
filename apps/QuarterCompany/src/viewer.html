@@ -93,6 +93,12 @@ main {
 .pill.asleep { color: var(--sleep); }
 .pill.absent { color: var(--muted); border-style: dashed; }
 .pill.idle { color: var(--muted); }
+/* People who join or leave during the run (REQ-QC-020). */
+.pill.joined { color: var(--accent); background: var(--bar); }
+.pill.left { color: var(--warn); border-style: dashed; }
+.seat.new { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.log > li.join { box-shadow: inset 3px 0 0 var(--accent); }
+.join-tag { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 3px 5px; margin-right: 6px; }
 .actor { font: 12px/1.3 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
 .meter { height: 6px; background: var(--bar); border-radius: 3px; overflow: hidden; }
 .meter > span { display: block; height: 100%; background: var(--accent); }
@@ -303,6 +309,7 @@ main {
     if (tool === 'send_mail') return 'to ' + clip(a.to, 50) + ' “' + clip(a.subject || '', 60) + '”';
     if (tool === 'write_file' || tool === 'append_file') return (a.path || '') + ' (' + String(a.content || '').length + ' chars)';
     if (tool === 'end_turn') return '';
+    if (tool === 'place_person') return (a.full_name || '') + ' (' + (a.username || '') + ') at ' + (a.client || '');
     return Object.entries(a).map(([k, v]) => (k === 'sudo' ? (v ? 'sudo' : '') : clip(v, 48))).filter(Boolean).join(' ');
   };
   function passwdUsers(fs, host) {
@@ -372,8 +379,14 @@ main {
     return null;
   }
 
+  const orgName = (id) => (D.orgs.find((o) => o.id === id) || { name: id }).name;
+  const seatName = (id) => { const s = D.seats[seatIndex.get(id)]; return s ? s.name : short(id); };
+  // A person is on the staff list from the turn they join to the turn they leave.
+  const present = (s, ord) => s.joined <= ord && (s.left === undefined || s.left >= ord);
+
   function renderStaff(i, turn, fs) {
     const nodes = D.seats.map((s, si) => {
+      if (!present(s, turn.ord)) return null;
       const ev = turn.events.filter((e) => e.seat === s.id);
       const used = ev.filter((e) => e.type === 'tool.call').reduce((a, e) => a + e.minutes, 0);
       const tools = ev.filter((e) => e.type === 'tool.call').length;
@@ -382,10 +395,13 @@ main {
       else if (ev.some((e) => e.type === 'seat.skip')) { state = 'asleep'; text = 'Asleep'; }
       else if (tools) { state = 'working'; text = 'Working'; }
       else if (!passwdUsers(snapshot(Math.max(0, i - 1)), s.host).has(short(s.id)) && !ev.length) { state = 'absent'; text = 'No account'; }
+      const joinedNow = turn.ord > 0 && s.joined === turn.ord;
+      if (joinedNow) { state = 'joined'; text = 'Joined'; }
+      if (s.left === turn.ord) { state = 'left'; text = 'Leaves'; }
       const n = lastNote(s.id, i);
-      return h('article', { class: 'seat' },
+      return h('article', { class: 'seat' + (joinedNow ? ' new' : '') },
         h('div', { class: 'seat-head' }, h('span', { class: 'seat-name' }, s.name), h('span', { class: 'pill ' + state }, text)),
-        h('div', { class: 'seat-title' }, s.title + ' · ' + s.role),
+        h('div', { class: 'seat-title' }, s.title + ' · ' + s.role + (s.site ? ' · ' + orgName(s.org) + ', on contract at ' + orgName(s.site) : '')),
         h('div', { class: 'actor' }, s.id + ' · played by ' + turn.actors[si]),
         h('div', { class: 'meter', role: 'img', 'aria-label': used + ' of ' + D.turnMinutes + ' minutes used' }, h('span', { style: 'width:' + Math.min(100, (used / D.turnMinutes) * 100) + '%' })),
         h('div', { class: 'meter-label' }, used + ' / ' + D.turnMinutes + ' min · ' + tools + ' tool call' + (tools === 1 ? '' : 's')),
@@ -393,7 +409,7 @@ main {
         (() => { const t = lastThought(s.id, i); return t ? h('div', { class: 'thought-line', title: 'Latest private thought' }, 'Thinks: “' + t + '”') : null; })(),
       );
     });
-    $('staff').replaceChildren(...nodes);
+    $('staff').replaceChildren(...nodes.filter(Boolean));
   }
 
 
@@ -475,7 +491,9 @@ main {
     const spent = new Map();
     const rows = [];
     for (const e of turn.events) {
-      const at = e.seat ? fmtTime(start, spent.get(e.seat) || 0) : fmtTime(start, 0);
+      // A join or a leave happens at the clock of the person who placed them.
+      const clockOf = e.type === 'person.join' || e.type === 'person.leave' ? e.via : e.seat;
+      const at = clockOf ? fmtTime(start, spent.get(clockOf) || 0) : fmtTime(start, 0);
       const time = h('time', null, turn.ord === 0 ? '' : at);
       const who = e.seat ? h('span', { class: 'who' }, short(e.seat) + ' ') : null;
       switch (e.type) {
@@ -538,12 +556,22 @@ main {
         case 'cast.rule':
           rows.push(h('li', null, time, h('div', { class: 'warn' }, 'RECAST ' + JSON.stringify(e.rule))));
           break;
+        case 'person.join':
+          if (e.via === 'scenario') break; // the genesis line counts them
+          rows.push(h('li', { class: 'join' }, time, h('div', null, h('span', { class: 'join-tag' }, 'joins'),
+            h('b', null, e.person.name), ' (' + e.seat + ') joins ' + orgName(e.org) + ' as ' + e.person.title + (e.site ? ', on contract at ' + orgName(e.site) : '') + '. Placed by ' + seatName(e.via) + '.')));
+          break;
+        case 'person.leave':
+          rows.push(h('li', { class: 'join' }, time, h('div', null, h('span', { class: 'join-tag' }, 'leaves'),
+            h('b', null, seatName(e.seat)), ' (' + e.seat + ') leaves at the end of this turn. Ended by ' + seatName(e.via) + '.')));
+          break;
       }
     }
     if (turn.ord === 0) {
       const files = turn.events.filter((e) => e.type === 'fs.write').length;
       const dirs = turn.events.filter((e) => e.type === 'fs.mkdir').length;
-      rows.unshift(h('li', null, h('time', null, ''), h('div', null, 'Genesis: the scenario creates ' + dirs + ' folders and ' + files + ' files. Accounts, homes, mailboxes and seed files are ready.')));
+      const people = turn.events.filter((e) => e.type === 'person.join').length;
+      rows.unshift(h('li', null, h('time', null, ''), h('div', null, 'Genesis: ' + people + ' people join the world. The scenario creates ' + dirs + ' folders and ' + files + ' files. Accounts, homes, mailboxes and seed files are ready.')));
     }
     $('log-title').textContent = turn.label + ' · ' + (turn.ord === 0 ? 'before day 1' : turn.clock);
     $('log-side').textContent = D.run.name;

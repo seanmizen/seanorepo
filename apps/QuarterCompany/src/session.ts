@@ -4,7 +4,7 @@
 import type { Wake } from './events.ts';
 import type { ObjectStore } from './objects.ts';
 import { type Op, Ops } from './ops.ts';
-import type { Scenario, Seat } from './scenario.ts';
+import type { Member, People, Scenario, Seat } from './scenario.ts';
 import { describeTurn } from './time.ts';
 import { TOOLS, type ToolDef, toolsFor } from './tools/index.ts';
 import { AccessError, Directory } from './users.ts';
@@ -34,8 +34,10 @@ export class Session {
   done = false;
   note = '';
   wake: Wake = 'next_turn';
+  /** The people in the world, with the joins and leaves of this session. */
+  people: Map<string, Member>;
   private sent = 0;
-  private dirCache?: { key: string; dir: Directory };
+  private dirCache = new Map<string, { key: string; dir: Directory }>();
 
   constructor(
     readonly seat: Seat,
@@ -46,7 +48,9 @@ export class Session {
     readonly objects: ObjectStore,
     /** Active system events per host, for example a full disk. */
     readonly system: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+    people: People = new Map(),
   ) {
+    this.people = new Map(people);
     this.ops = new Ops(vfs, objects, ord, system);
     this.user = seat.person.user;
     this.host = seat.host;
@@ -62,15 +66,22 @@ export class Session {
     return describeTurn(this.label, this.scenario.calendar);
   }
 
-  /** Accounts on this host, reloaded when passwd or group changes. */
-  dir(): Directory {
-    const key = `${this.vfs.get(this.host, '/etc/passwd')?.hash}:${this.vfs.get(this.host, '/etc/group')?.hash}`;
-    if (this.dirCache?.key !== key)
-      this.dirCache = {
-        key,
-        dir: Directory.load(this.vfs, this.objects, this.host),
-      };
-    return this.dirCache.dir;
+  /** The host that holds this seat's mailbox. See REQ-QC-021. */
+  get mailHost() {
+    return this.seat.mailHost;
+  }
+
+  /**
+   * Accounts on a host, reloaded when passwd or group changes. The default
+   * is the host where the seat works.
+   */
+  dir(host = this.host): Directory {
+    const key = `${this.vfs.get(host, '/etc/passwd')?.hash}:${this.vfs.get(host, '/etc/group')?.hash}`;
+    const hit = this.dirCache.get(host);
+    if (hit?.key === key) return hit.dir;
+    const dir = Directory.load(this.vfs, this.objects, host);
+    this.dirCache.set(host, { key, dir });
+    return dir;
   }
 
   resolve(path: string) {
@@ -79,7 +90,7 @@ export class Session {
 
   /** Tools this seat can see. Admin tools appear only for the wheel group. */
   tools(): ToolDef[] {
-    return toolsFor(this.dir().isAdmin(this.user));
+    return toolsFor(this.dir().isAdmin(this.user), this.seat.org.kind);
   }
 
   /**
@@ -155,9 +166,13 @@ export class Session {
     rawArgs: unknown,
   ): { result: ToolResult & { minutes: number }; staged: Op[] } {
     const real = this.ops;
+    const people = this.people;
     this.ops = new Ops(real.vfs.clone(), this.objects, real.ord, this.system);
+    this.people = new Map(people);
+    let ok = false;
     try {
       const result = this.execute(name, rawArgs);
+      ok = result.ok;
       const staged = result.ok
         ? this.ops.list
         : this.ops.list.filter(
@@ -166,6 +181,7 @@ export class Session {
       return { result, staged };
     } finally {
       this.ops = real;
+      if (!ok) this.people = people;
     }
   }
 

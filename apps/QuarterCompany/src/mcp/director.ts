@@ -7,7 +7,12 @@ import { z } from 'zod';
 import { Rule } from '../cast.ts';
 import { runUntil } from '../engine.ts';
 import { Run } from '../run.ts';
-import { checkInject, Inject, SYSTEM_KINDS, seatsOf } from '../scenario.ts';
+import {
+  checkCompelSeat,
+  checkInject,
+  Inject,
+  SYSTEM_KINDS,
+} from '../scenario.ts';
 import { labelOf, ordOf } from '../time.ts';
 import { costReport, playback, retake, statusLines } from '../timeline.ts';
 import { TOOLS } from '../tools/index.ts';
@@ -172,8 +177,7 @@ export async function serveDirector(initial: Run) {
         const at = a.at ?? labelOf(r.lastOrd() + 1, cal);
         if (ordOf(at, cal) <= r.lastOrd())
           throw new Error(`Turn ${at} has happened. Give a later turn.`);
-        if (!seatsOf(r.scenario).some((s) => s.id === a.seat))
-          throw new Error(`Seat ${a.seat} does not exist.`);
+        checkCompelSeat(r.scenario, a.seat);
         if (!TOOLS.some((t) => t.name === a.tool))
           throw new Error(`Tool "${a.tool}" does not exist.`);
         r.info.compel = [

@@ -16,12 +16,19 @@ Brindle & Hart Ltd sells office supplies. It has five staff on one host,
 | maria@brindlehart.example | sales | Owns `/srv/sales` |
 | sophie@brindlehart.example | sales | Starts on Tuesday. No account at genesis. |
 | graham@cartwright-stationers.example | buyer | A customer. Cartwright Stationers is its own organisation, with host `cw-mail01`. |
+| nadia@ledgerline.example | partner | Ledgerline Consulting, a consultancy with host `ll-mail01`. |
+| oliver@ledgerline.example | finance | Not in the scenario. Nadia places him at Brindle & Hart on Monday. |
 
 On Monday morning, Priya asks Dave to set up Sophie's account. Graham at
 Cartwright Stationers asks Maria for a quote. Priya asks Tom for Q1 revenue.
 The scenario makes Priya and Graham send these mails themselves (compel), so
 the mails are in their sent folders. From 11:00 to 11:30 the mail server is
 down (a system event), so mail waits in the queue.
+
+Priya asks Ledgerline Consulting for a finance consultant. Nadia places
+Oliver Grant with `place_person`, so he joins the world during the run. His
+mailbox is on `ll-mail01`. Dave makes his account on `bh-mf01`, and Oliver
+starts work with Tom on Tuesday.
 
 ## Casts
 
