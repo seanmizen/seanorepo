@@ -13,7 +13,7 @@ import {
 import { tool } from './def.ts';
 import { ensureMailbox } from './mail.ts';
 
-const username = z
+export const username = z
   .string()
   .regex(
     /^[a-z][a-z0-9_-]{0,31}$/,
@@ -26,15 +26,9 @@ function requireAdmin(s: Session) {
     throw new AccessError('You are not in the wheel group.');
 }
 
-function save(s: Session, dir: Directory) {
-  s.ops.write(
-    s.seat.id,
-    s.host,
-    '/etc/passwd',
-    formatPasswd(dir.accounts),
-    ETC,
-  );
-  s.ops.write(s.seat.id, s.host, '/etc/group', formatGroup(dir.groups), ETC);
+function save(s: Session, dir: Directory, host = s.host) {
+  s.ops.write(s.seat.id, host, '/etc/passwd', formatPasswd(dir.accounts), ETC);
+  s.ops.write(s.seat.id, host, '/etc/group', formatGroup(dir.groups), ETC);
 }
 
 const copy = (d: Directory) =>
@@ -42,6 +36,53 @@ const copy = (d: Directory) =>
     d.accounts.map((a) => ({ ...a })),
     d.groups.map((g) => ({ ...g, members: [...g.members] })),
   );
+
+/**
+ * Make an account on a host: a line in /etc/passwd, a private group, a home
+ * folder (mode 700) and a mailbox. The caller checks who can do this.
+ */
+export function addUser(
+  s: Session,
+  host: string,
+  username: string,
+  fullName: string,
+  groups: string[],
+): { uid: number; home: string } {
+  const d = copy(s.dir(host));
+  if (d.account(username))
+    throw new AccessError(`useradd: user '${username}' already exists`);
+  if (d.group(username))
+    throw new AccessError(`useradd: group '${username}' already exists`);
+  const missing = groups.find((g) => !d.group(g));
+  if (missing)
+    throw new AccessError(`useradd: group '${missing}' does not exist`);
+  const uid =
+    Math.max(
+      1000,
+      ...d.accounts.map((x) => x.uid),
+      ...d.groups.map((g) => (g.gid < 2000 ? g.gid : 0)),
+    ) + 1;
+  const home = `/home/${username}`;
+  d.accounts.push({
+    name: username,
+    uid,
+    gid: uid,
+    gecos: fullName,
+    home,
+    shell: '/bin/sh',
+  });
+  d.groups.push({ name: username, gid: uid, members: [] });
+  for (const g of groups) d.group(g)?.members.push(username);
+  save(s, d, host);
+  if (!s.vfs.exists(host, home))
+    s.ops.mkdir(s.seat.id, host, home, {
+      owner: username,
+      group: username,
+      mode: 0o700,
+    });
+  ensureMailbox(s.ops, host, username, username);
+  return { uid, home };
+}
 
 export const ADMIN_TOOLS = [
   tool({
@@ -60,39 +101,13 @@ export const ADMIN_TOOLS = [
     minutes: () => 3,
     run: (s, a) => {
       requireAdmin(s);
-      const d = copy(s.dir());
-      if (d.account(a.username))
-        throw new AccessError(`useradd: user '${a.username}' already exists`);
-      if (d.group(a.username))
-        throw new AccessError(`useradd: group '${a.username}' already exists`);
-      const missing = a.groups.find((g) => !d.group(g));
-      if (missing)
-        throw new AccessError(`useradd: group '${missing}' does not exist`);
-      const uid =
-        Math.max(
-          1000,
-          ...d.accounts.map((x) => x.uid),
-          ...d.groups.map((g) => (g.gid < 2000 ? g.gid : 0)),
-        ) + 1;
-      const home = `/home/${a.username}`;
-      d.accounts.push({
-        name: a.username,
-        uid,
-        gid: uid,
-        gecos: a.full_name,
-        home,
-        shell: '/bin/sh',
-      });
-      d.groups.push({ name: a.username, gid: uid, members: [] });
-      for (const g of a.groups) d.group(g)?.members.push(a.username);
-      save(s, d);
-      if (!s.vfs.exists(s.host, home))
-        s.ops.mkdir(s.seat.id, s.host, home, {
-          owner: a.username,
-          group: a.username,
-          mode: 0o700,
-        });
-      ensureMailbox(s.ops, s.host, a.username, a.username);
+      const { uid, home } = addUser(
+        s,
+        s.host,
+        a.username,
+        a.full_name,
+        a.groups,
+      );
       return `Made user ${a.username} (uid ${uid}) with home ${home}. Groups: ${[a.username, ...a.groups].join(' ')}.`;
     },
   }),

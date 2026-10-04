@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 import { loadCast, resolveCast } from './cast.ts';
 import type { JournalEvent } from './events.ts';
 import { Run, tagOf } from './run.ts';
-import { seatsOf } from './scenario.ts';
+import { seatsIn } from './scenario.ts';
 import { describeTurn, labelOf, ordOf } from './time.ts';
 
 export interface PlaybackOptions {
@@ -34,6 +34,8 @@ const argSummary = (tool: string, args: Record<string, unknown>) => {
       return `${args.path} (${String(args.content ?? '').length} chars)`;
     case 'end_turn':
       return '';
+    case 'place_person':
+      return `${args.full_name} (${args.username}) at ${args.client}`;
     default:
       return Object.entries(args)
         .map(([k, v]) => (k === 'sudo' ? (v ? 'sudo' : '') : `${short(v, 50)}`))
@@ -89,6 +91,12 @@ export function narrate(e: JournalEvent, verbose = false): string | undefined {
       return `  🔒 ${e.seat}: ${e.message}`;
     case 'cast.rule':
       return `  🎭 recast: ${short(e.rule, 100)}`;
+    case 'person.join':
+      // Genesis seeds every person in the scenario. Show them only on request.
+      if (e.via === 'scenario' && !verbose) return undefined;
+      return `  ➕ ${e.person.name} (${e.seat}) joins ${e.org} as ${e.person.title}${e.site ? `, on contract at ${e.site}` : ''}. Placed by ${e.via}.`;
+    case 'person.leave':
+      return `  ➖ ${e.seat} leaves at the end of the turn. Ended by ${e.via}.`;
     case 'fs.write':
     case 'fs.mkdir':
     case 'fs.rm':
@@ -218,26 +226,19 @@ export function costReport(
   run: Run,
   by: 'seat' | 'actor' | 'role' | 'org' = 'seat',
 ): CostRow[] {
-  const seats = new Map(
-    run.scenario.orgs.flatMap((c) =>
-      c.people.map((p) => [
-        `${p.user}@${c.domain}`,
-        { role: p.role, company: c.id },
-      ]),
-    ),
-  );
+  const people = run.load().people;
   const rows = new Map<string, CostRow>();
   for (const e of run.events()) {
     if (e.type !== 'model.call') continue;
-    const info = seats.get(e.seat);
+    const info = people.get(e.seat);
     const key =
       by === 'seat'
         ? e.seat
         : by === 'actor'
           ? e.actor
           : by === 'role'
-            ? (info?.role ?? '?')
-            : (info?.company ?? '?');
+            ? (info?.person.role ?? '?')
+            : (info?.org ?? '?');
     const row = rows.get(key) ?? {
       key,
       calls: 0,
@@ -275,7 +276,7 @@ export function statusLines(run: Run): string[] {
       ...(run.info.pendingCastRules ?? []),
     ],
   };
-  for (const seat of seatsOf(run.scenario)) {
+  for (const seat of seatsIn(run.scenario, state.people)) {
     const c = resolveCast(run.models, cast, seat, next, cal);
     const s = state.seats.get(seat.id);
     const mode = s

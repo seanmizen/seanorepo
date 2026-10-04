@@ -1,10 +1,12 @@
 // The tool registry. Each tool is defined once. MCP servers and model
 // adapters expose the same definitions. See REQ-QC-010.
 import { z } from 'zod';
+import { type OrgKind, PLACES_PEOPLE } from '../scenario.ts';
 import { ADMIN_TOOLS } from './admin.ts';
 import type { ToolDef } from './def.ts';
 import { MAIL_TOOLS } from './mail.ts';
 import { MIND_TOOLS } from './mind.ts';
+import { STAFFING_TOOLS } from './staffing.ts';
 import { WORKSTATION_TOOLS } from './workstation.ts';
 
 export type { Server, ToolDef } from './def.ts';
@@ -14,10 +16,19 @@ export const TOOLS: ToolDef[] = [
   ...MAIL_TOOLS,
   ...MIND_TOOLS,
   ...ADMIN_TOOLS,
+  ...STAFFING_TOOLS,
 ];
 
-export const toolsFor = (admin: boolean) =>
-  TOOLS.filter((t) => admin || t.server !== 'admin');
+/**
+ * Admin tools appear only for the wheel group. Staffing tools appear only
+ * for the staff of an agency or a consultancy (REQ-QC-020).
+ */
+export const toolsFor = (admin: boolean, kind: OrgKind = 'company') =>
+  TOOLS.filter(
+    (t) =>
+      (admin || t.server !== 'admin') &&
+      (t.server !== 'staffing' || PLACES_PEOPLE.includes(kind)),
+  );
 
 export interface JsonTool {
   name: string;

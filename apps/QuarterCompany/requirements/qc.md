@@ -332,3 +332,51 @@ the `fy1-q1-d1-t1` labels, and the words Playback and Retake.
   - Test — `apps/QuarterCompany/test/system.test.ts` › "mail.down: people work, but their outgoing mail waits"
   - Test — `apps/QuarterCompany/test/system.test.ts` › "the fold of the journal gives the same world, queue included"
 - **Relations:** depends-on REQ-QC-001
+
+## REQ-QC-020 — The people in the world are world state
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #550
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** The simulator shall build the set of people in the world
+  only by folding the `person.join` and `person.leave` events in the journal.
+- **Rationale:** A company must react inside the simulation, for example
+  hire through an agency. The scenario seeds its people as `person.join`
+  events at genesis. During a run, a person joins only through an action of
+  another person: the staff of an `agency` or a `consultancy` use
+  `place_person` and `end_placement`, directly or through compel. A new person
+  has a seat, but cannot work until IT makes an account on the host where the
+  person works. A second join of the same person in one turn is a conflict
+  (REQ-QC-008). Casts match a new person by org and role, as for any person.
+  A generated population needs no scenario entry for each person, because the
+  journal holds each person in full.
+- **Verification:**
+  - Test — `apps/QuarterCompany/test/people.test.ts` › "the scenario seeds the people at genesis, as person.join events"
+  - Test — `apps/QuarterCompany/test/people.test.ts` › "an agency places a new employee, who works only after IT makes the account"
+  - Test — `apps/QuarterCompany/test/people.test.ts` › "casts resolve for new people by org and role"
+  - Test — `apps/QuarterCompany/test/people.test.ts` › "a second join of the same person in one turn is a conflict"
+  - Test — `apps/QuarterCompany/test/people.test.ts` › "a person whose placement ends stops working, and a compel for them is skipped"
+  - Test — `apps/QuarterCompany/test/people.test.ts` › "the fold of the journal equals the live state, people included"
+- **Relations:**
+  - depends-on REQ-QC-001
+  - depends-on REQ-QC-017
+
+## REQ-QC-021 — A consultant has a mailbox at the employer and works at the client
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #550
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** When a consultancy places a consultant at a client, the
+  simulator shall keep the consultant's mailbox on the consultancy's host,
+  and run the consultant's other tools on the client's host.
+- **Rationale:** A consultant belongs to their own organisation. Their
+  address is in the consultancy's domain, so the mail directory delivers
+  their mail to the consultancy's host. The consultancy makes that account at
+  once, because it is the employer. The client's IT administrator must still
+  make an account on the client's host before the consultant can work.
+- **Verification:** Test — `apps/QuarterCompany/test/people.test.ts` › "a consultant belongs to the consultancy: mail on its host, work on the client host"
+- **Relations:** depends-on REQ-QC-020

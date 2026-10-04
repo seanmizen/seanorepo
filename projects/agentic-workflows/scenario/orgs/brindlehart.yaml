@@ -57,6 +57,8 @@ files:
       3. Only the IT administrator is in the wheel group.
       4. Lock the account of a person who leaves. Never delete it.
       5. Shared files live in /srv/<team>. Team folders have mode 770.
+      6. A consultant gets an account with the groups of their work. Lock
+         it when the contract ends.
   - path: /home/dave/runbook.md
     owner: dave
     mode: "600"

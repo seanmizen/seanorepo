@@ -16,7 +16,7 @@ import type { EventBody, JournalEvent } from './events.ts';
 import { Ops } from './ops.ts';
 import { briefing, systemPrompt } from './prompt.ts';
 import { type Run, type SimState, tagOf } from './run.ts';
-import { type Compel, hostOf, type Seat, seatsOf } from './scenario.ts';
+import { type Compel, hostOf, type Seat, seatsIn } from './scenario.ts';
 import { Session } from './session.ts';
 import { describeTurn, GENESIS, isFirstSlotOfDay, labelOf } from './time.ts';
 import { Directory } from './users.ts';
@@ -58,6 +58,7 @@ export function genesis(run: Run): SimState {
   seedWorld(ops, run.scenario);
   ops.emit('engine', { type: 'turn.end', label: GENESIS });
   const events = stamp(ops.list, GENESIS, 0);
+  for (const e of events) if (e.type === 'person.join') state.applyPerson(e, 0);
   state.ord = 0;
   run.writeTurn(GENESIS, events);
   run.project(state);
@@ -71,11 +72,11 @@ export function genesis(run: Run): SimState {
  */
 export const unreadSince = (state: SimState, seat: Seat, sinceOrd: number) =>
   state.vfs
-    .children(seat.host, `/var/mail/${seat.person.user}/new`)
+    .children(seat.mailHost, `/var/mail/${seat.person.user}/new`)
     .filter((k) => k.node.mtime >= sinceOrd).length;
 
 const unreadIn = (vfs: Vfs, seat: Seat) =>
-  vfs.children(seat.host, `/var/mail/${seat.person.user}/new`).length;
+  vfs.children(seat.mailHost, `/var/mail/${seat.person.user}/new`).length;
 
 export interface CompelledCall {
   tool: string;
@@ -235,14 +236,33 @@ export async function runTurn(
     compelled: CompelledCall[];
   }[] = [];
   const skipped: string[] = [];
-  for (const seat of seatsOf(scenario)) {
+  const seats = seatsIn(scenario, state.people);
+  // A compel for a person who is not in the world does not run. The person
+  // can join later in the run, so the scenario cannot check this at load.
+  const absent = [
+    ...new Set(
+      [...scenario.compel, ...(run.info.compel ?? [])]
+        .filter((c) => c.at === label && !seats.some((x) => x.id === c.seat))
+        .map((c) => c.seat),
+    ),
+  ].sort();
+  for (const seat of absent)
+    events.push({
+      actor: 'engine',
+      body: {
+        type: 'compel.skipped',
+        seat,
+        reason: 'the person is not in the world',
+      },
+    });
+  for (const seat of seats) {
     const dir = Directory.load(state.vfs, run.objects, seat.host);
     const compelled = compelledFor(run, label, seat.id);
     if (
       state.system.get(seat.host)?.has('host.down') &&
       dir.canLogin(seat.person.user)
     ) {
-      const reason = `host ${seat.org.host} is down`;
+      const reason = `host ${(seat.site ?? seat.org).host} is down`;
       events.push({
         actor: 'engine',
         body: { type: 'seat.blocked', seat: seat.id, reason },
@@ -295,6 +315,7 @@ export async function runTurn(
         state.vfs.clone(),
         run.objects,
         state.system,
+        state.people,
       ),
     });
   }
@@ -355,6 +376,24 @@ export async function runTurn(
   for (const { seat, session } of sessions) {
     for (const op of session.ops.list) {
       const b = op.body;
+      // A join or a leave changes the people at once, so a second join of
+      // the same person in this turn is a conflict. See REQ-QC-020.
+      if (b.type === 'person.join' || b.type === 'person.leave') {
+        const reason = state.applyPerson(b, ord);
+        if (reason) {
+          events.push({
+            actor: 'engine',
+            body: {
+              type: 'fs.conflict',
+              seat: seat.id,
+              op: b.type,
+              path: b.seat,
+              reason,
+            },
+          });
+          continue;
+        }
+      }
       if (b.type.startsWith('fs.') && b.type !== 'fs.conflict') {
         const reason = state.vfs.apply(b as never, ord);
         if (reason) {

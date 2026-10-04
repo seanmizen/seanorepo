@@ -16,7 +16,7 @@ import { compelledFor, runCompelled, turnStart } from '../engine.ts';
 import { Ops } from '../ops.ts';
 import { briefing, systemPrompt } from '../prompt.ts';
 import type { Run, SimState } from '../run.ts';
-import { seatsOf } from '../scenario.ts';
+import { seatOfMember } from '../scenario.ts';
 import { Session } from '../session.ts';
 import { labelOf } from '../time.ts';
 import { toolsFor } from '../tools/index.ts';
@@ -28,8 +28,12 @@ const text = (t: string, isError = false) => ({
 });
 
 export function workerSession(run: Run, seatId: string) {
-  const seat = seatsOf(run.scenario).find((s) => s.id === seatId);
-  if (!seat) throw new Error(`Seat ${seatId} does not exist in this scenario.`);
+  // The set of people is world state (REQ-QC-020): a person who joins later
+  // has no seat yet.
+  const member = run.load().people.get(seatId);
+  if (!member || member.left !== undefined)
+    throw new Error(`Seat ${seatId} is not a person in the world now.`);
+  const seat = seatOfMember(run.scenario, seatId, member);
   let cached: { ord: number; state: SimState } | undefined;
 
   /** A session for the next turn, with this seat's pending calls already done. */
@@ -56,6 +60,7 @@ export function workerSession(run: Run, seatId: string) {
       preview.vfs.clone(),
       run.objects,
       preview.system,
+      preview.people,
     );
     if (hostDown) {
       session.endTurn('', 'next_turn'); // nobody can log in to a host that is down
@@ -87,7 +92,7 @@ export function workerSession(run: Run, seatId: string) {
     if (hostDown)
       return {
         ok: false,
-        text: `Host ${seat.org.host} is down. Nobody can log in until it is up again.`,
+        text: `Host ${(seat.site ?? seat.org).host} is down. Nobody can log in until it is up again.`,
       };
     if (session.done)
       return {
@@ -103,7 +108,7 @@ export function workerSession(run: Run, seatId: string) {
   const brief = async () => {
     const { session, state, did } = await open();
     const unread = session.vfs.children(
-      seat.host,
+      seat.mailHost,
       `/var/mail/${seat.person.user}/new`,
     ).length;
     const cast = {
@@ -146,7 +151,7 @@ export async function serveWorker(run: Run, seatId: string) {
     },
     async () => text(await w.brief()),
   );
-  for (const t of toolsFor(admin)) {
+  for (const t of toolsFor(admin, w.seat.org.kind)) {
     const handler = async (args: unknown) => {
       const r = await w.call(t.name, args);
       return text(r.text, !r.ok);

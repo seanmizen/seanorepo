@@ -24,6 +24,8 @@
 | [`REQ-QC-017`](qc.md#req-qc-017--injects-are-system-events-never-people) | Injects are system events, never people | active | constraint | P0 | sean |
 | [`REQ-QC-018`](qc.md#req-qc-018--the-world-is-closed-mail-to-an-unknown-domain-bounces) | The world is closed: mail to an unknown domain bounces | active | constraint | P1 | sean |
 | [`REQ-QC-019`](qc.md#req-qc-019--blocked-mail-waits-in-a-queue-that-the-journal-holds) | Blocked mail waits in a queue that the journal holds | active | functional | P1 | agent:SEAN-548 |
+| [`REQ-QC-020`](qc.md#req-qc-020--the-people-in-the-world-are-world-state) | The people in the world are world state | active | functional | P1 | sean |
+| [`REQ-QC-021`](qc.md#req-qc-021--a-consultant-has-a-mailbox-at-the-employer-and-works-at-the-client) | A consultant has a mailbox at the employer and works at the client | active | functional | P2 | sean |
 
 ## Dependency graph
 
@@ -48,6 +50,8 @@ graph TD
   REQ_QC_017["REQ-QC-017<br/>Injects are system events, never people"]
   REQ_QC_018["REQ-QC-018<br/>The world is closed: mail to an unknown domain bounces"]
   REQ_QC_019["REQ-QC-019<br/>Blocked mail waits in a queue that the journal holds"]
+  REQ_QC_020["REQ-QC-020<br/>The people in the world are world state"]
+  REQ_QC_021["REQ-QC-021<br/>A consultant has a mailbox at the employer and works at the client"]
   REQ_QC_007 -->|amended-by| REQ_QC_018
   REQ_QC_008 -->|depends-on| REQ_QC_001
   REQ_QC_014 -->|depends-on| REQ_QC_001
@@ -56,11 +60,16 @@ graph TD
   REQ_QC_017 -->|supersedes| REQ_QC_015
   REQ_QC_018 -->|amends| REQ_QC_007
   REQ_QC_019 -->|depends-on| REQ_QC_001
+  REQ_QC_020 -->|depends-on| REQ_QC_001
+  REQ_QC_020 -->|depends-on| REQ_QC_017
+  REQ_QC_021 -->|depends-on| REQ_QC_020
   style REQ_QC_013 stroke-dasharray: 4 4
   style REQ_QC_015 stroke-dasharray: 4 4
 ```
 
 ## Derived reverse links
 
-- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019
+- `REQ-QC-001` — required-by REQ-QC-008, required-by REQ-QC-014, required-by REQ-QC-019, required-by REQ-QC-020
 - `REQ-QC-008` — required-by REQ-QC-016
+- `REQ-QC-017` — required-by REQ-QC-020
+- `REQ-QC-020` — required-by REQ-QC-021

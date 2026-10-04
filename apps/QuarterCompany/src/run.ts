@@ -34,6 +34,7 @@ import {
   checkInject,
   type Inject,
   loadScenario,
+  type Member,
   type Scenario,
 } from './scenario.ts';
 import { describeTurn, journalPathOf, labelOf, ordOf } from './time.ts';
@@ -69,6 +70,8 @@ export class SimState {
   system: SystemStatus = new Map();
   /** Mail that waits for a host or a mail service. One item per recipient. */
   queue: QueuedMail[] = [];
+  /** Every person who joined the world, by seat id. See REQ-QC-020. */
+  people = new Map<string, Member>();
   ord = -1;
 
   /** A copy for a preview, for example the qc-worker server. */
@@ -80,6 +83,7 @@ export class SimState {
     c.thoughts = new Map(this.thoughts);
     c.system = new Map([...this.system].map(([h, k]) => [h, new Set(k)]));
     c.queue = [...this.queue];
+    c.people = new Map(this.people);
     c.ord = this.ord;
     return c;
   }
@@ -115,6 +119,32 @@ export class SimState {
     }
   }
 
+  /**
+   * Apply a join or a leave. Returns the reason when the event does not
+   * apply: a join for a person who is in the world, or a leave for a person
+   * who is not. The engine records that as a conflict (REQ-QC-008).
+   */
+  applyPerson(
+    e: Extract<EventBody, { type: 'person.join' | 'person.leave' }>,
+    ord: number,
+  ): string | undefined {
+    const cur = this.people.get(e.seat);
+    const present = !!cur && cur.left === undefined;
+    if (e.type === 'person.join') {
+      if (present) return 'the person is in the world';
+      this.people.set(e.seat, {
+        org: e.org,
+        person: e.person,
+        ...(e.site ? { site: e.site } : {}),
+        via: e.via,
+        joined: ord,
+      });
+      return;
+    }
+    if (!cur || !present) return 'the person is not in the world';
+    this.people.set(e.seat, { ...cur, left: ord });
+  }
+
   apply(e: JournalEvent): string | undefined {
     this.ord = Math.max(this.ord, e.ord);
     switch (e.type) {
@@ -136,6 +166,9 @@ export class SimState {
       case 'mail.dequeued':
         this.applyLive(e);
         return;
+      case 'person.join':
+      case 'person.leave':
+        return this.applyPerson(e, e.ord);
       case 'thought': {
         const list = this.thoughts.get(e.seat) ?? [];
         list.push({ label: e.turn, text: e.text });
@@ -356,11 +389,6 @@ export class Run {
    */
   writeMinds(state: SimState) {
     const dir = join(this.dir, 'minds');
-    const names = new Map(
-      this.scenario.orgs.flatMap((c) =>
-        c.people.map((p) => [`${p.user}@${c.domain}`, p.name]),
-      ),
-    );
     for (const [seat, list] of state.thoughts) {
       mkdirSync(dir, { recursive: true });
       const body = list
@@ -371,7 +399,7 @@ export class Run {
         .join('\n');
       writeFileSync(
         join(dir, `${seat}.md`),
-        `# Private thoughts of ${names.get(seat) ?? seat}\n\nNobody in the simulation can read this file.\n\n${body}`,
+        `# Private thoughts of ${state.people.get(seat)?.person.name ?? seat}\n\nNobody in the simulation can read this file.\n\n${body}`,
       );
     }
   }

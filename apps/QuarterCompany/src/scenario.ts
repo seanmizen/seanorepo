@@ -17,6 +17,11 @@ const Person = z.object({
   groups: z.array(z.string()).default([]),
   /** False: the person exists but has no account yet. IT must create it. */
   provisioned: z.boolean().default(true),
+  /**
+   * For a consultant: the id of the client organisation where the person
+   * works. The mailbox stays on the employer's host. See REQ-QC-021.
+   */
+  site: z.string().optional(),
 });
 export type Person = z.infer<typeof Person>;
 
@@ -30,10 +35,13 @@ const SeedFile = z.object({
 });
 
 /**
- * Kinds of organisation. Only `company` exists now. `population` (many
- * generated people) and `provider` (hosts other people's mailboxes) follow.
+ * Kinds of organisation. An `agency` places new employees at a client. A
+ * `consultancy` places its own consultants at a client. Staff of both kinds
+ * get the placement tools (REQ-QC-020).
  */
-const ORG_KINDS = ['company'] as const;
+export const ORG_KINDS = ['company', 'agency', 'consultancy'] as const;
+export type OrgKind = (typeof ORG_KINDS)[number];
+export const PLACES_PEOPLE: readonly OrgKind[] = ['agency', 'consultancy'];
 
 const Org = z.object({
   kind: z.enum(ORG_KINDS).default('company'),
@@ -157,14 +165,27 @@ export function loadScenario(dir: string): Scenario {
     compel: s.compel,
   };
   for (const inj of s.injects) checkInject(scenario, inj);
-  const seats = new Set(seatsOf(scenario).map((x) => x.id));
-  for (const c of s.compel) {
-    if (!seats.has(c.seat))
-      throw new Error(
-        `A compel entry names seat ${c.seat}. No organisation has that person.`,
-      );
-  }
+  for (const o of orgs)
+    for (const p of o.people)
+      if (p.site && !orgs.some((x) => x.id === p.site && x.id !== o.id))
+        throw new Error(
+          `${p.user}@${o.domain} has site "${p.site}". The site must be another organisation in the scenario.`,
+        );
+  for (const c of s.compel) checkCompelSeat(scenario, c.seat);
   return scenario;
+}
+
+/**
+ * A compel can name a person who joins later in the run, so only the domain
+ * is checked here. The engine records compel.skipped when the person is not
+ * in the world at that turn.
+ */
+export function checkCompelSeat(s: Scenario, seat: string) {
+  const domain = seat.split('@')[1] ?? '';
+  if (!mailHostOf(s, domain))
+    throw new Error(
+      `A compel entry names seat ${seat}. No organisation in the world has the domain "${domain}".`,
+    );
 }
 
 /** Check that a system event names a real organisation and real turns. */
@@ -190,23 +211,72 @@ export const seatOf = (c: Org, p: Person) => `${p.user}@${c.domain}`;
 
 export interface Seat {
   id: string; // user@domain
+  /** The employer. */
   org: Org;
   person: Person;
+  /** For a consultant: the client organisation where the seat works. */
+  site?: Org;
+  /** The host where the seat logs in and works. */
   host: string;
+  /** The host that holds the seat's mailbox: the employer's host. */
+  mailHost: string;
 }
 
-export function seatsOf(s: Scenario): Seat[] {
-  return s.orgs
-    .flatMap((c) =>
-      c.people.map((p) => ({
-        id: seatOf(c, p),
-        org: c,
-        person: p,
-        host: hostOf(c),
-      })),
-    )
+/**
+ * A person in the world. The fold of person.join and person.leave events
+ * builds the set of people (REQ-QC-020). A person who left stays in the map,
+ * so old journal entries still have a name.
+ */
+export interface Member {
+  org: string;
+  person: Person;
+  site?: string;
+  via: string;
+  joined: number;
+  left?: number;
+}
+
+export type People = ReadonlyMap<string, Member>;
+
+const orgById = (s: Scenario, id: string) => {
+  const o = s.orgs.find((x) => x.id === id);
+  if (!o) throw new Error(`Organisation "${id}" does not exist.`);
+  return o;
+};
+
+export function seatOfMember(s: Scenario, id: string, m: Member): Seat {
+  const org = orgById(s, m.org);
+  const site = m.site ? orgById(s, m.site) : undefined;
+  return {
+    id,
+    org,
+    person: m.person,
+    site,
+    host: hostOf(site ?? org),
+    mailHost: hostOf(org),
+  };
+}
+
+/** The people in the world now, as seats in seat-id order. */
+export function seatsIn(s: Scenario, people: People): Seat[] {
+  return [...people]
+    .filter(([, m]) => m.left === undefined)
+    .map(([id, m]) => seatOfMember(s, id, m))
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 }
+
+/** The person.join events that genesis writes for the scenario's people. */
+export const scenarioJoins = (s: Scenario) =>
+  s.orgs.flatMap((o) =>
+    o.people.map((p) => ({
+      type: 'person.join' as const,
+      seat: seatOf(o, p),
+      org: o.id,
+      ...(p.site ? { site: p.site } : {}),
+      person: p,
+      via: 'scenario',
+    })),
+  );
 
 /**
  * Modes are octal. YAML reads an unquoted `0770` as the decimal number 770,

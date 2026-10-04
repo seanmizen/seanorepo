@@ -142,6 +142,7 @@ servers use the same definitions.
 | workstation | `whoami`, `ls`, `read_file`, `write_file`, `append_file`, `mkdir`, `mv`, `rm`, `chmod`, `end_turn` |
 | mail | `list_mail`, `read_mail`, `send_mail` |
 | admin (wheel only) | `useradd`, `usermod`, `groupadd`, `chown`, `restore` |
+| staffing (agency and consultancy staff only) | `place_person`, `end_placement` |
 
 Workstation tools take `sudo: true`. It works only for the wheel group. Other
 users get the classic refusal, and the attempt goes to `/var/log/auth.log`.
@@ -192,7 +193,8 @@ wait in the queue.
 
 ```
 scenario.yaml        name, calendar, orgs, compel (people act), injects (system events)
-orgs/<id>.yaml       kind, domain, host, groups, people, seed files
+orgs/<id>.yaml       kind (company, agency, consultancy), domain, host,
+                     groups, people, seed files
 providers.yaml       model services
 actors.yaml          actors and tiers
 casts/<name>.yaml    casts
@@ -242,6 +244,31 @@ the same things.
 
 A person with `provisioned: false` has no account at genesis. Their seat
 starts to work in the turn after IT makes the account.
+
+### People who join during a run
+
+The set of people is world state. The journal holds it as `person.join` and
+`person.leave` events (REQ-QC-020). Genesis writes one `person.join` for each
+person in the scenario. After genesis, a person joins only through the action
+of another person.
+
+An organisation has a `kind`: `company` (the default), `agency` or
+`consultancy`. The staff of an agency or a consultancy get two tools:
+
+- `place_person`: a new person joins at the end of the turn.
+  - From an agency, the person is an employee of the client:
+    `<user>@<client domain>`.
+  - From a consultancy, the person is a consultant of the consultancy:
+    `<user>@<consultancy domain>`. The consultancy makes the account and the
+    mailbox on its own host at once. The consultant works on the client's
+    host (REQ-QC-021).
+- `end_placement`: the person leaves at the end of the turn. Their accounts
+  stay, and the client's IT administrator must lock them.
+
+In both cases, the new seat cannot work until the client's IT administrator
+runs `useradd` on the client's host. Casts match a new person by `org` and
+`role`, as for any other person. A scenario that wants a placement at a given
+turn compels the recruiter to call `place_person`.
 
 The default calendar is 09:00 to 17:00 in 15-minute slots: 32 turns a day,
 65 working days a quarter, and 4 quarters a year. Day 1 is a Monday. Weekends

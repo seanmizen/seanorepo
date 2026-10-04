@@ -2,6 +2,7 @@ name: brindle-and-hart
 description: >
   Episode 1. Brindle & Hart is a small office-supplies firm with five staff.
   A new sales executive starts on Tuesday. Nobody has made her account yet.
+  On Monday, Priya asks Ledgerline Consulting for a finance consultant.
 calendar:
   dayStart: "09:00"
   dayEnd: "17:00"
@@ -10,6 +11,7 @@ concurrency: 4
 orgs:
   - brindlehart
   - cartwright
+  - ledgerline
 # The scenario starts the story through people: a compelled action runs in
 # that person's own session, so their sent folder and memory stay true.
 compel:

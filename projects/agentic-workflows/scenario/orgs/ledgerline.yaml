@@ -1,0 +1,13 @@
+kind: consultancy
+name: Ledgerline Consulting Ltd
+domain: ledgerline.example
+host: ll-mail01
+about: >
+  Ledgerline Consulting Ltd places finance consultants with small firms. A
+  consultant keeps a Ledgerline mailbox, and works on the client's computer.
+people:
+  - user: nadia
+    name: Nadia Brooks
+    role: partner
+    title: Placement Partner
+    persona: You place finance consultants with clients. You are quick and practical.

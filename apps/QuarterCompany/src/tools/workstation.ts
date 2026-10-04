@@ -76,7 +76,7 @@ export const WORKSTATION_TOOLS = [
       [
         `user: ${s.user} (${s.seat.id})`,
         `groups: ${s.dir().groupsOf(s.user).join(' ')}`,
-        `host: ${s.seat.org.host}`,
+        `host: ${(s.seat.site ?? s.seat.org).host}`,
         `home: ${s.home}`,
         `time: ${s.clock} (turn ${s.label})`,
         `minutes left: ${s.minutesLeft}`,
