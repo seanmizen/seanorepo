@@ -37,7 +37,28 @@ the same PC (GTX 980 Ti, Ollama 0.35.1), so that we can choose a faster one.
   in the reply text. In its 3 failures, it used all 600 tokens before a tool
   call. The abliterated build obeys the setting.
 
+## One real turn
+
+`QC_OFFLINE=1 yarn qc run smoke --turns 1` with the `local` cast, on
+`huihui_ai/qwen3-abliterated:4b`:
+
+| Thinking | Time | Model calls | Tool calls | Failed |
+|---|---|---|---|---|
+| off (`reasoning_effort: none`) | 87 s | 7 | 3 | 0 |
+| on | 637 s | 22 | 23 | 2 |
+
+- With thinking off, 5 of 6 seats wrote text and made no tool call. The
+  brain ends a turn at a reply with no tool call, so the text became the
+  note. Maria's note was "Have a great day!".
+- With thinking on, every seat worked or chose to wait for mail. The notes
+  agree with the journal. Graham made 2 failed calls (an empty `ls` path and a
+  bad address). After each one, he made a correct call.
+- Most requests still read the full prompt of 1,600 to 1,900 tokens,
+  because the seats take turns on the one server slot.
+- The first local run on Qwen 3.5 took 67 minutes for one turn.
+
 ## Choice
 
 The `local` tier now uses `huihui_ai/qwen3-abliterated:4b`. It reads 16
-times faster than Qwen 3.5 and made all 8 tool calls correctly.
+times faster than Qwen 3.5 and made all 8 tool calls correctly. Its
+thinking stays on.

@@ -9,14 +9,13 @@ actors:
   opus: { provider: anthropic, model: claude-opus-5-5, max_tokens: 16000, effort: medium, price: { in: 4, out: 20 } }
   # Qwen3 4B, abliterated (uncensored), at Q4_K_M (2.5 GB) through Ollama.
   # Free and offline. See the README section "Run offline on one PC".
-  # reasoning_effort none stops the model thinking, so each step uses fewer
-  # tokens.
+  # Thinking stays on. With reasoning_effort none, most seats wrote text and
+  # made no tool call, so their turn ended with no work.
   qwen-local:
     provider: ollama
     model: "huihui_ai/qwen3-abliterated:4b"
     max_tokens: 4000
     max_steps: 12
-    extra_body: { reasoning_effort: none }
 
 # Tiers are aliases. Change one line to change every seat on a tier.
 tiers:

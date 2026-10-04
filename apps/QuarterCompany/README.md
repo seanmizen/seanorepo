@@ -437,7 +437,8 @@ are not simulated.
 ## Run offline on one PC
 
 The `local` cast runs every seat on one open-weight model, on the same PC,
-with no network. It is free, and slower than a paid model.
+with no network. It is free, and slower than a paid model. On the PC below,
+one turn with six seats took 10.6 minutes (2026-10-04).
 
 ### The PC
 
@@ -466,15 +467,16 @@ with no network. It is free, and slower than a paid model.
   later, so it does not run on this card.
 
 **Model: `huihui_ai/qwen3-abliterated:4b` (Qwen3 4B, Q4_K_M, 2.5 GB),
-with thinking off.**
+with thinking on.**
 
 - This is an abliterated build of Qwen3 4B. Abliteration removes the
   refusal direction from the weights, so the model does not refuse a prompt.
   Sean chose an uncensored model for the offline runs.
 - Ollama lists `tools` and `thinking` for this model. Ollama parses its tool
   calls into the OpenAI `tool_calls` field.
-- `reasoning_effort: none` (in `actors.yaml`) stops the thinking. One step
-  then uses tens of tokens, not hundreds. Remove the line to compare.
+- Keep the thinking on. With `reasoning_effort: none`, 5 of 6 seats wrote
+  text and made no tool call, so their turn ended with no work. With
+  thinking, one step writes about 300 to 700 tokens, and the seats work.
 - Memory: Ollama uses 4.0 GB with an 8,192-token context, so the model fits
   completely in 6 GB of VRAM. `ollama ps` must show `100% GPU`.
 - Count the failed tool calls in each run (REQ-QC-031).
@@ -496,6 +498,9 @@ each:
 - Qwen 3.5 is a hybrid model, and it cannot use the cache for a prompt that
   shares only its start with the last prompt. Qwen3 can. Both use the cache
   when a request adds text to the last prompt.
+- One turn of the `local` cast, six seats: 637 seconds, 22 model calls,
+  23 tool calls, 2 failed. The first local run on Qwen 3.5 took 67 minutes
+  for one turn.
 - `qwen3:4b` does not obey `reasoning_effort: none`. It writes its reasoning
   in the reply text, and in 3 of 8 requests it used all 600 tokens before a
   tool call.
