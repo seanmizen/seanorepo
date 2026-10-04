@@ -437,8 +437,8 @@ are not simulated.
 ## Run offline on one PC
 
 The `local` cast runs every seat on one open-weight model, on the same PC,
-with no network. It is free and slow. Expect tens of seconds for each seat in
-each turn, and some hours for one simulated day.
+with no network. It is free, and slower than a paid model. On the PC below,
+one turn with six seats took 10.6 minutes (2026-10-04).
 
 ### The PC
 
@@ -466,25 +466,47 @@ each turn, and some hours for one simulated day.
   requests, and queues the requests. vLLM needs compute capability 7.0 or
   later, so it does not run on this card.
 
-**Model: `huihui_ai/qwen3.5-abliterated:4B` (Qwen 3.5 4B, Q4_K, 3.3 GB),
-with thinking off.**
+**Model: `huihui_ai/qwen3-abliterated:4b` (Qwen3 4B, Q4_K_M, 2.5 GB),
+with thinking on.**
 
-- This is an abliterated build of Qwen 3.5 4B. Abliteration removes the
+- This is an abliterated build of Qwen3 4B. Abliteration removes the
   refusal direction from the weights, so the model does not refuse a prompt.
-  Sean chose an uncensored model for the first offline run.
-- Ollama lists `tools`, `thinking` and `vision` for this model. Ollama parses
-  its tool calls into the OpenAI `tool_calls` field.
-- `reasoning_effort: none` (in `actors.yaml`) stops the thinking. One step
-  then uses tens of tokens, not hundreds. Remove the line to compare.
-- Memory: the weights are 3.3 GB. With an 8,192-token context, the model fits
+  Sean chose an uncensored model for the offline runs.
+- Ollama lists `tools` and `thinking` for this model. Ollama parses its tool
+  calls into the OpenAI `tool_calls` field.
+- Keep the thinking on. With `reasoning_effort: none`, 5 of 6 seats wrote
+  text and made no tool call, so their turn ended with no work. With
+  thinking, one step writes about 300 to 700 tokens, and the seats work.
+- Memory: Ollama uses 4.0 GB with an 8,192-token context, so the model fits
   completely in 6 GB of VRAM. `ollama ps` must show `100% GPU`.
-- An abliterated model can make worse tool calls than the base model. Count
-  the failed tool calls in the run (REQ-QC-031). If there are too many, try
-  `qwen3.5:4b` (the base model) or `qwen3:8b`.
-- Other models that we did not choose first:
-  - `qwen3:8b` (5.2 GB) makes more reliable tool calls. The weights and the
-    KV cache are more than 6 GB, so Ollama puts some layers on the CPU, and
-    the model runs more slowly.
+- Count the failed tool calls in each run (REQ-QC-031).
+
+The benchmark of 2026-10-04 on this PC, with a prompt of about 1,950 tokens.
+Each request has the 14 tools of a worker. The tool test has 4 tasks, 2 times
+each:
+
+| Model | Prompt read | Write | Memory | Correct tool calls |
+|---|---|---|---|---|
+| `huihui_ai/qwen3-abliterated:4b` | 378 tok/s | 31 to 40 tok/s | 4.0 GB | 8 of 8 |
+| `qwen3:4b` | 371 tok/s | 29 to 36 tok/s | 4.0 GB | 5 of 8 |
+| `huihui_ai/qwen3.5-abliterated:4B` | 23 tok/s | 33 to 52 tok/s | 8.0 GB | not tested |
+
+- Qwen 3.5 reads its prompt 16 times more slowly. Ollama gives it 8.0 GB on
+  the 6 GB card, so part of it is probably in shared system memory. Its
+  hybrid layers on a Maxwell card can also be the cause. We did not test
+  which one.
+- Qwen 3.5 is a hybrid model, and it cannot use the cache for a prompt that
+  shares only its start with the last prompt. Qwen3 can. Both use the cache
+  when a request adds text to the last prompt.
+- One turn of the `local` cast, six seats: 637 seconds, 22 model calls,
+  23 tool calls, 2 failed. The first local run on Qwen 3.5 took 67 minutes
+  for one turn.
+- `qwen3:4b` does not obey `reasoning_effort: none`. It writes its reasoning
+  in the reply text, and in 3 of 8 requests it used all 600 tokens before a
+  tool call.
+- Other models that we did not choose:
+  - `qwen3:8b` (5.2 GB): the weights and the KV cache are more than 6 GB, so
+    Ollama puts some layers on the CPU, and the model runs more slowly.
   - `qwen3.5:9b` (6.6 GB) does not fit in 6 GB.
   - `llama3.1:8b` (4.9 GB) has the same memory problem as `qwen3:8b` and
     weaker tool calls.

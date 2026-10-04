@@ -8,12 +8,12 @@
 #        packages on the disk before the network goes off.
 #
 # The script installs Ollama, sets the server for one 6 GB GPU, pulls the
-# model (about 3.3 GB), runs `yarn install`, and sends one test request with
+# model (about 2.5 GB), runs `yarn install`, and sends one test request with
 # a tool. QC_LOCAL_MODEL changes the model. The default is the model of
 # qwen-local in actors.yaml.
 set -euo pipefail
 
-MODEL="${QC_LOCAL_MODEL:-huihui_ai/qwen3.5-abliterated:4B}"
+MODEL="${QC_LOCAL_MODEL:-huihui_ai/qwen3-abliterated:4b}"
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 say() { printf '\n== %s\n' "$*"; }
