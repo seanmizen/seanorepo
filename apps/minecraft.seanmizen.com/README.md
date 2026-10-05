@@ -36,7 +36,8 @@ apps/minecraft.seanmizen.com/
 
 ## Building locally
 
-Requires Zig 0.15.2 and Bun 1.x on your PATH.
+Requires Bun 1.x and the Zig version in `utils/swindowzig/build.zig.zon`
+(`minimum_zig_version`) on your PATH.
 
 ```bash
 # From the monorepo root:

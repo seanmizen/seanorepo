@@ -53,7 +53,7 @@ if command -v zig >/dev/null 2>&1; then
     echo "       See apps/minecraft.seanmizen.com/INVESTIGATION.md § Phase 2 for the delta."
   fi
 else
-  echo "    ⚠️  zig not found on PATH — skipping WASM build. Install Zig 0.15.2 to fix."
+  echo "    ⚠️  zig not found on PATH — skipping WASM build. Install the Zig version in utils/swindowzig/build.zig.zon."
 fi
 
 # --- 2. Bun JS bundle -------------------------------------------------------
