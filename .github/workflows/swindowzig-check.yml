@@ -97,6 +97,9 @@ jobs:
         run: |
           echo "If the change to the frames is deliberate, run this from the repo root and commit the result:"
           echo
+          echo "  rm utils/swindowzig/examples/voxel/assets/goldens/lavapipe/*.ppm.gz"
           echo "  gh run download ${{ github.run_id }} -R ${{ github.repository }} -n voxel-lavapipe-goldens -D utils/swindowzig/examples/voxel/assets/goldens/lavapipe"
+          echo
+          echo "(gh run download does not overwrite files, so remove the old goldens first.)"
           echo
           echo "If not, the frames and logs are in the voxel-frames artifact."
