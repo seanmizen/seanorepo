@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Frames and logs go to --out DIR when given (CI uploads it), else to a temp
-# dir that is removed on exit.
+# dir that the EXIT trap removes.
 if [[ -n "$OUT_DIR" ]]; then
     mkdir -p "$OUT_DIR"
     TMP_DIR="$OUT_DIR"
