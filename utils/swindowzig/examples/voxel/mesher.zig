@@ -1794,6 +1794,42 @@ fn greedyFaceExtents(face: Face) struct { i_max: i32, j_max: i32, d_max: i32 } {
     };
 }
 
+/// One row of a greedy slice as bits: bit j in word j / 64 (j < 256).
+const Row = [4]u64;
+
+fn rowGet(r: Row, j: usize) bool {
+    return (r[j / 64] >> @intCast(j % 64)) & 1 != 0;
+}
+
+fn rowSet(r: *Row, j: usize) void {
+    r[j / 64] |= @as(u64, 1) << @intCast(j % 64);
+}
+
+fn rowAndNot(a: Row, b: Row) Row {
+    return .{ a[0] & ~b[0], a[1] & ~b[1], a[2] & ~b[2], a[3] & ~b[3] };
+}
+
+fn lowestBit(r: Row) ?usize {
+    for (r, 0..) |word, k| {
+        if (word != 0) return k * 64 + @ctz(word);
+    }
+    return null;
+}
+
+/// Iterator over the set bits of a row, lowest first.
+fn rowBits(r: Row) RowBits {
+    return .{ .r = r };
+}
+
+const RowBits = struct {
+    r: Row,
+    fn next(self: *RowBits) ?usize {
+        const j = lowestBit(self.r) orelse return null;
+        self.r[j / 64] &= self.r[j / 64] - 1;
+        return j;
+    }
+};
+
 /// Every visible face of a chunk, as bit masks: for each face direction and
 /// column (x, z), bit y is set when the block at (x, y, z) is not air and its
 /// neighbour in the face direction is air. Inside the chunk the masks come
@@ -1805,6 +1841,8 @@ fn greedyFaceExtents(face: Face) struct { i_max: i32, j_max: i32, d_max: i32 } {
 const VisibleFaces = struct {
     /// [face][x][z]: 256 bits over y, bit y in word y / 64.
     masks: [6][CHUNK_W][CHUNK_W][4]u64,
+    /// [face]: bit d is set when slice d has a visible face (d < 256).
+    nonempty: [6][4]u64,
 
     const Col = [4]u64;
 
@@ -1812,13 +1850,7 @@ const VisibleFaces = struct {
         comptime std.debug.assert(CHUNK_H == 256);
         const self = try allocator.create(VisibleFaces);
         var solid: [CHUNK_W][CHUNK_W]Col = undefined;
-        for (0..CHUNK_W) |x| for (0..CHUNK_W) |z| {
-            var col: Col = .{ 0, 0, 0, 0 };
-            for (0..CHUNK_H) |y| {
-                if (chunk.resolveBlockRaw(@intCast(x), @intCast(y), @intCast(z)) != .air) col[y / 64] |= @as(u64, 1) << @intCast(y % 64);
-            }
-            solid[x][z] = col;
-        };
+        chunk.solidColumns(&solid);
 
         for (0..CHUNK_W) |x| for (0..CHUNK_W) |z| {
             const s = solid[x][z];
@@ -1858,6 +1890,20 @@ const VisibleFaces = struct {
                 }
             }
         };
+        for (0..6) |f| {
+            var any: Col = .{ 0, 0, 0, 0 };
+            for (0..CHUNK_W) |x| for (0..CHUNK_W) |z| {
+                const c = self.masks[f][x][z];
+                switch (@as(Face, @enumFromInt(f))) {
+                    // y faces: slice d is layer y = d, so OR the columns.
+                    .py, .ny => any = .{ any[0] | c[0], any[1] | c[1], any[2] | c[2], any[3] | c[3] },
+                    // x faces: slice d is x = d. z faces: slice d is z = d.
+                    .px, .nx => if (c[0] | c[1] | c[2] | c[3] != 0) rowSet(&any, x),
+                    .pz, .nz => if (c[0] | c[1] | c[2] | c[3] != 0) rowSet(&any, z),
+                }
+            };
+            self.nonempty[f] = any;
+        }
         return self;
     }
 
@@ -1866,23 +1912,27 @@ const VisibleFaces = struct {
         return self.masks[@intFromEnum(face)][@intCast(x)][@intCast(z)][yu / 64] >> @intCast(yu % 64) & 1 != 0;
     }
 
-    /// True when slice d of this face direction has a visible face.
-    fn sliceHasFace(self: *const VisibleFaces, face: Face, d: i32) bool {
+    /// Row ii of slice d, as greedyIJToLocalBlock maps it: bit jj is set when
+    /// the face at (d, ii, jj) is visible.
+    fn sliceRow(self: *const VisibleFaces, face: Face, d: i32, ii: usize) Row {
         const f = @intFromEnum(face);
         const du: usize = @intCast(d);
-        switch (face) {
-            .px, .nx => for (self.masks[f][du]) |col| {
-                if (col[0] | col[1] | col[2] | col[3] != 0) return true;
+        return switch (face) {
+            .px, .nx => self.masks[f][du][ii], // i = Z, j = Y: the column (x = d, z = ii)
+            .pz, .nz => self.masks[f][ii][du], // i = X, j = Y: the column (x = ii, z = d)
+            .py, .ny => blk: { // i = X, j = Z: bit d of each column (x = ii, z = jj)
+                var r: Row = .{ 0, 0, 0, 0 };
+                for (0..CHUNK_W) |z| {
+                    if (rowGet(self.masks[f][ii][z], du)) r[0] |= @as(u64, 1) << @intCast(z);
+                }
+                break :blk r;
             },
-            .pz, .nz => for (self.masks[f]) |row| {
-                const col = row[du];
-                if (col[0] | col[1] | col[2] | col[3] != 0) return true;
-            },
-            .py, .ny => for (self.masks[f]) |row| for (row) |col| {
-                if (col[du / 64] >> @intCast(du % 64) & 1 != 0) return true;
-            },
-        }
-        return false;
+        };
+    }
+
+    /// True when slice d of this face direction has a visible face.
+    fn sliceHasFace(self: *const VisibleFaces, face: Face, d: i32) bool {
+        return rowGet(self.nonempty[@intFromEnum(face)], @intCast(d));
     }
 
     fn andNot(a: Col, b: Col) Col {
@@ -1915,10 +1965,11 @@ const VisibleFaces = struct {
 /// walks the grid growing rectangles of bit-identical (block_type, ao, sky)
 /// cells. One merged quad is emitted per rectangle.
 ///
-/// Complexity per chunk: O(d_max × i_max × j_max × signature_cost). Same as
-/// naive in the limit — the greedy walk only touches each cell O(1) extra
-/// times via the `visited` mask. On flatland/hilly terrain the merged quad
-/// count drops 5–50×; the cost of the scan dominates the cost of the merges.
+/// Cost per chunk: VisibleFaces makes the visible faces as bit masks, one
+/// 256-bit column per face direction. Slices with no visible face are
+/// skipped, cells are computed only for visible faces, and the walk jumps to
+/// the next free bit of each row. So the cost scales with the visible faces,
+/// not with the chunk volume (6 × 65 536 cells). bench_mesher measures it.
 ///
 /// The mesher allocates two scratch buffers per call (one GreedyCell grid +
 /// one `bool` visited mask). Each is sized for the largest possible slice
@@ -1943,8 +1994,6 @@ pub fn generateMeshGreedy(
 
     const cells = try mesh.allocator.alloc(GreedyCell, slice_len);
     defer mesh.allocator.free(cells);
-    const visited = try mesh.allocator.alloc(bool, slice_len);
-    defer mesh.allocator.free(visited);
 
     const vis = try VisibleFaces.compute(mesh.allocator, chunk, getter, world_ox, world_oz);
     defer mesh.allocator.destroy(vis);
@@ -1987,23 +2036,26 @@ pub fn generateMeshGreedy(
         const d_max: i32 = ext.d_max;
         const i_max_usz: usize = @intCast(i_max);
         const j_max_usz: usize = @intCast(j_max);
-        const active_slice: usize = i_max_usz * j_max_usz;
 
         var d: i32 = 0;
         while (d < d_max) : (d += 1) {
             // A slice with no visible face of this direction emits nothing.
             if (!vis.sliceHasFace(face, d)) continue;
 
-            // ---- populate cell grid for this plane ----
-            // Only visible faces get a cell. The others stay empty (.{}).
-            @memset(cells[0..active_slice], .{});
-            var ii: i32 = 0;
-            while (ii < i_max) : (ii += 1) {
-                var jj: i32 = 0;
-                while (jj < j_max) : (jj += 1) {
-                    const bp = greedyIJToLocalBlock(face, d, ii, jj);
-                    if (!vis.has(face, bp.x, bp.y, bp.z)) continue;
-                    const cell = computeGreedyCell(
+            // Rows of the slice as bit masks: row ii, bit jj. `present` has the
+            // visible faces, `visited` the cells that a quad already covers.
+            // Cells are computed only where `present` has a bit, so the cell
+            // grid needs no clear: a cell is read only where its bit is set.
+            var present: [CHUNK_W]Row = undefined;
+            var visited_rows: [CHUNK_W]Row = @splat(.{ 0, 0, 0, 0 });
+            for (0..i_max_usz) |ii| present[ii] = vis.sliceRow(face, d, @intCast(ii));
+
+            // ---- populate cells for the visible faces ----
+            for (0..i_max_usz) |ii| {
+                var it = rowBits(present[ii]);
+                while (it.next()) |jj| {
+                    const bp = greedyIJToLocalBlock(face, d, @intCast(ii), @intCast(jj));
+                    cells[ii * j_max_usz + jj] = computeGreedyCell(
                         chunk,
                         getter,
                         world_ox,
@@ -2016,51 +2068,44 @@ pub fn generateMeshGreedy(
                         ao_strategy,
                         lighting_mode,
                     );
-                    const ii_usz: usize = @intCast(ii);
-                    const jj_usz: usize = @intCast(jj);
-                    cells[ii_usz * j_max_usz + jj_usz] = cell;
                 }
             }
 
             // ---- greedy walk ----
-            @memset(visited[0..active_slice], false);
+            // Seeds in the same order as a scan of ja upward in each row ia:
+            // the lowest present bit that no quad covers yet.
             var ia: i32 = 0;
             while (ia < i_max) : (ia += 1) {
-                var ja: i32 = 0;
-                while (ja < j_max) : (ja += 1) {
-                    const ia_usz: usize = @intCast(ia);
-                    const ja_usz: usize = @intCast(ja);
-                    const idx0 = ia_usz * j_max_usz + ja_usz;
-                    if (visited[idx0]) continue;
-                    const seed = cells[idx0];
-                    if (!seed.present) {
-                        visited[idx0] = true;
-                        continue;
-                    }
+                const ia_usz: usize = @intCast(ia);
+                while (lowestBit(rowAndNot(present[ia_usz], visited_rows[ia_usz]))) |ja_usz| {
+                    const ja: i32 = @intCast(ja_usz);
+                    const seed = cells[ia_usz * j_max_usz + ja_usz];
+                    const free = struct {
+                        fn at(p: *const [CHUNK_W]Row, v: *const [CHUNK_W]Row, i: usize, j: usize) bool {
+                            return rowGet(p[i], j) and !rowGet(v[i], j);
+                        }
+                    }.at;
 
-                    // Grow width along i (within this j row) — walk +i while
-                    // cells keep matching the seed signature and we haven't
-                    // hit the painter's-sort cap.
+                    // Grow width along i (within this j row) while cells match
+                    // the seed and the cap allows.
                     var w: i32 = 1;
                     while (ia + w < i_max and w < MAX_GREEDY_DIM) {
                         const iw_usz: usize = @intCast(ia + w);
-                        const idxw = iw_usz * j_max_usz + ja_usz;
-                        if (visited[idxw]) break;
-                        if (!greedyCellEq(seed, cells[idxw])) break;
+                        if (!free(&present, &visited_rows, iw_usz, ja_usz)) break;
+                        if (!greedyCellEq(seed, cells[iw_usz * j_max_usz + ja_usz])) break;
                         w += 1;
                     }
 
-                    // Grow height along j — every row in [ja+1 .. ja+h) must
-                    // be fully available across the w-wide strip and match seed.
+                    // Grow height along j: every row in [ja+1 .. ja+h) must be
+                    // free and match across the w-wide strip.
                     var h: i32 = 1;
                     grow_h: while (ja + h < j_max and h < MAX_GREEDY_DIM) {
                         var k: i32 = 0;
                         while (k < w) : (k += 1) {
-                            const iw_usz: usize = @intCast(ia + k);
+                            const ik_usz: usize = @intCast(ia + k);
                             const jh_usz: usize = @intCast(ja + h);
-                            const idxk = iw_usz * j_max_usz + jh_usz;
-                            if (visited[idxk]) break :grow_h;
-                            if (!greedyCellEq(seed, cells[idxk])) break :grow_h;
+                            if (!free(&present, &visited_rows, ik_usz, jh_usz)) break :grow_h;
+                            if (!greedyCellEq(seed, cells[ik_usz * j_max_usz + jh_usz])) break :grow_h;
                         }
                         h += 1;
                     }
@@ -2070,9 +2115,7 @@ pub fn generateMeshGreedy(
                     while (rk < w) : (rk += 1) {
                         var rl: i32 = 0;
                         while (rl < h) : (rl += 1) {
-                            const ri_usz: usize = @intCast(ia + rk);
-                            const rj_usz: usize = @intCast(ja + rl);
-                            visited[ri_usz * j_max_usz + rj_usz] = true;
+                            rowSet(&visited_rows[@intCast(ia + rk)], @intCast(ja + rl));
                         }
                     }
 
