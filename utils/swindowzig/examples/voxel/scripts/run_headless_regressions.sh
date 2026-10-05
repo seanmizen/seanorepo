@@ -125,6 +125,7 @@ for entry in "${RUNS[@]}"; do
         # shellcheck disable=SC2086
         if ! "$BIN" --headless --tas "$tas_path" --dump-frame="$out_ppm" $args > "$out_log" 2>&1; then
             printf "%-28s %-9s %s\n" "$name" "ERROR" "capture crashed — see $out_log"
+            tail -n 15 "$out_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             continue
         fi
@@ -172,6 +173,7 @@ for entry in "${RUNS[@]}"; do
             ;;
         *)
             printf "%-28s %-9s %s\n" "$name" "ERROR" "voxel exited $rc — see $out_log"
+            tail -n 15 "$out_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             ;;
     esac

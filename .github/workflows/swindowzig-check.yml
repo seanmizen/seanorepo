@@ -74,7 +74,7 @@ jobs:
 
       - name: Make new goldens
         if: failure()
-        run: ./examples/voxel/scripts/run_headless_regressions.sh --update
+        run: ./examples/voxel/scripts/run_headless_regressions.sh --update --out "$RUNNER_TEMP/frames/update"
 
       - name: Upload the new goldens
         if: failure()
