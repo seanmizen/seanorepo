@@ -840,7 +840,9 @@ main {
         const following = order[pos] === D.turns.length - 1;
         D.seats = r.seats;
         seatIndex.clear();
-        D.seats.forEach((s, i) => seatIndex.set(s.id, i));
+        D.seats.forEach((s, i) => {
+          seatIndex.set(s.id, i);
+        });
         Object.assign(D.objects, r.objects);
         D.turns.push(...r.turns);
         rebuildOrder(order[pos]);
