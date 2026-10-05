@@ -3,7 +3,8 @@
 # minecraft.seanmizen.com — browser voxel, served over Cloudflared tunnel.
 #
 # Three stages:
-#   1. zig-build  — download Zig 0.15.2, build swindowzig's `web` step to WASM
+#   1. zig-build  — download the Zig version that utils/swindowzig/build.zig.zon
+#                   names, build swindowzig's `web` step to WASM
 #   2. js-build   — use Bun to bundle the swindowzig WASM bootstrap TS into one JS file
 #   3. prod       — copy the static output into a minimal Node image and run `serve`
 #
@@ -21,11 +22,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Pin Zig 0.15.2 — matches utils/swindowzig/CLAUDE.md and the host dev environment.
-# Note: Zig 0.15+ changed the tarball naming convention from zig-linux-ARCH to zig-ARCH-linux.
-ARG ZIG_VERSION=0.15.2
+# The Zig version comes from minimum_zig_version in build.zig.zon, the one
+# place that names it. build.zig stops on any other major.minor. The tarball
+# name is zig-ARCH-linux-VERSION (Zig 0.15 and later).
+COPY utils/swindowzig/build.zig.zon /tmp/build.zig.zon
 ARG TARGETARCH
 RUN set -e; \
+    ZIG_VERSION="$(sed -n 's/.*\.minimum_zig_version = "\([^"]*\)".*/\1/p' /tmp/build.zig.zon)"; \
+    [ -n "${ZIG_VERSION}" ] || { echo "build.zig.zon has no minimum_zig_version" >&2; exit 1; }; \
     case "${TARGETARCH:-$(uname -m)}" in \
       arm64|aarch64) ZIG_ARCH=aarch64 ;; \
       *) ZIG_ARCH=x86_64 ;; \
