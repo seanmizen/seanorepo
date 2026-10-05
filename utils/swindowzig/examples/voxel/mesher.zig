@@ -1603,6 +1603,8 @@ fn greedyCellEq(a: GreedyCell, b: GreedyCell) bool {
 /// Compute the face cell signature for a block face at local (lx, ly, lz).
 /// Mirrors the addQuad head — same AO/sky calls — so a greedy merged quad
 /// reproduces the lighting a naive quad would have had, exactly.
+/// The caller passes a visible face (VisibleFaces): `block` is not air and the
+/// neighbour in the face direction is air.
 fn computeGreedyCell(
     chunk: *const Chunk,
     getter: BlockGetter,
@@ -1612,12 +1614,10 @@ fn computeGreedyCell(
     ly: i32,
     lz: i32,
     face: Face,
+    block: BlockType,
     ao_strategy: AOStrategy,
     lighting_mode: LightingMode,
 ) GreedyCell {
-    const block = chunk.getBlock(lx, ly, lz);
-    if (block == .air) return .{};
-    if (!shouldRenderFace(chunk, getter, lx, ly, lz, world_ox, world_oz, face)) return .{};
     const wx = world_ox + lx;
     const wz = world_oz + lz;
     const ao = computeFaceAOForStrategy(chunk, getter, world_ox, world_oz, wx, ly, wz, face, ao_strategy);
@@ -1794,6 +1794,122 @@ fn greedyFaceExtents(face: Face) struct { i_max: i32, j_max: i32, d_max: i32 } {
     };
 }
 
+/// Every visible face of a chunk, as bit masks: for each face direction and
+/// column (x, z), bit y is set when the block at (x, y, z) is not air and its
+/// neighbour in the face direction is air. Inside the chunk the masks come
+/// from the solid masks of the column and its neighbour column (or the column
+/// shifted by one for the y faces). At the chunk edge, the neighbour is in
+/// another chunk: shouldRenderFace asks the getter, for solid blocks only.
+/// The result is the same as shouldRenderFace for every block, so the greedy
+/// pass computes cells only where a face is visible.
+const VisibleFaces = struct {
+    /// [face][x][z]: 256 bits over y, bit y in word y / 64.
+    masks: [6][CHUNK_W][CHUNK_W][4]u64,
+
+    const Col = [4]u64;
+
+    fn compute(allocator: std.mem.Allocator, chunk: *const Chunk, getter: BlockGetter, world_ox: i32, world_oz: i32) !*VisibleFaces {
+        comptime std.debug.assert(CHUNK_H == 256);
+        const self = try allocator.create(VisibleFaces);
+        var solid: [CHUNK_W][CHUNK_W]Col = undefined;
+        for (0..CHUNK_W) |x| for (0..CHUNK_W) |z| {
+            var col: Col = .{ 0, 0, 0, 0 };
+            for (0..CHUNK_H) |y| {
+                if (chunk.resolveBlockRaw(@intCast(x), @intCast(y), @intCast(z)) != .air) col[y / 64] |= @as(u64, 1) << @intCast(y % 64);
+            }
+            solid[x][z] = col;
+        };
+
+        for (0..CHUNK_W) |x| for (0..CHUNK_W) |z| {
+            const s = solid[x][z];
+            // +Y: neighbour above. Bit 255 has its neighbour out of the chunk.
+            var up = andNot(s, shiftDown(s));
+            up[3] &= ~(@as(u64, 1) << 63);
+            // -Y: neighbour below. Bit 0 has its neighbour out of the chunk.
+            var down = andNot(s, shiftUp(s));
+            down[0] &= ~@as(u64, 1);
+            self.masks[@intFromEnum(Face.py)][x][z] = up;
+            self.masks[@intFromEnum(Face.ny)][x][z] = down;
+            self.masks[@intFromEnum(Face.px)][x][z] = if (x + 1 < CHUNK_W) andNot(s, solid[x + 1][z]) else .{ 0, 0, 0, 0 };
+            self.masks[@intFromEnum(Face.nx)][x][z] = if (x > 0) andNot(s, solid[x - 1][z]) else .{ 0, 0, 0, 0 };
+            self.masks[@intFromEnum(Face.pz)][x][z] = if (z + 1 < CHUNK_W) andNot(s, solid[x][z + 1]) else .{ 0, 0, 0, 0 };
+            self.masks[@intFromEnum(Face.nz)][x][z] = if (z > 0) andNot(s, solid[x][z - 1]) else .{ 0, 0, 0, 0 };
+
+            // Faces with the neighbour out of the chunk: ask shouldRenderFace.
+            const xi: i32 = @intCast(x);
+            const zi: i32 = @intCast(z);
+            if (s[3] >> 63 != 0 and shouldRenderFace(chunk, getter, xi, CHUNK_H - 1, zi, world_ox, world_oz, .py)) self.masks[@intFromEnum(Face.py)][x][z][3] |= @as(u64, 1) << 63;
+            if (s[0] & 1 != 0 and shouldRenderFace(chunk, getter, xi, 0, zi, world_ox, world_oz, .ny)) self.masks[@intFromEnum(Face.ny)][x][z][0] |= 1;
+            inline for (.{ Face.px, Face.nx, Face.pz, Face.nz }) |face| {
+                const at_edge = switch (face) {
+                    .px => x + 1 == CHUNK_W,
+                    .nx => x == 0,
+                    .pz => z + 1 == CHUNK_W,
+                    .nz => z == 0,
+                    else => unreachable,
+                };
+                if (at_edge) {
+                    for (0..CHUNK_H) |y| {
+                        if (s[y / 64] >> @intCast(y % 64) & 1 == 0) continue;
+                        if (shouldRenderFace(chunk, getter, xi, @intCast(y), zi, world_ox, world_oz, face)) {
+                            self.masks[@intFromEnum(face)][x][z][y / 64] |= @as(u64, 1) << @intCast(y % 64);
+                        }
+                    }
+                }
+            }
+        };
+        return self;
+    }
+
+    fn has(self: *const VisibleFaces, face: Face, x: i32, y: i32, z: i32) bool {
+        const yu: u32 = @intCast(y);
+        return self.masks[@intFromEnum(face)][@intCast(x)][@intCast(z)][yu / 64] >> @intCast(yu % 64) & 1 != 0;
+    }
+
+    /// True when slice d of this face direction has a visible face.
+    fn sliceHasFace(self: *const VisibleFaces, face: Face, d: i32) bool {
+        const f = @intFromEnum(face);
+        const du: usize = @intCast(d);
+        switch (face) {
+            .px, .nx => for (self.masks[f][du]) |col| {
+                if (col[0] | col[1] | col[2] | col[3] != 0) return true;
+            },
+            .pz, .nz => for (self.masks[f]) |row| {
+                const col = row[du];
+                if (col[0] | col[1] | col[2] | col[3] != 0) return true;
+            },
+            .py, .ny => for (self.masks[f]) |row| for (row) |col| {
+                if (col[du / 64] >> @intCast(du % 64) & 1 != 0) return true;
+            },
+        }
+        return false;
+    }
+
+    fn andNot(a: Col, b: Col) Col {
+        return .{ a[0] & ~b[0], a[1] & ~b[1], a[2] & ~b[2], a[3] & ~b[3] };
+    }
+
+    /// Bit y of the result is bit y + 1 of `c` (the block above).
+    fn shiftDown(c: Col) Col {
+        return .{
+            (c[0] >> 1) | (c[1] << 63),
+            (c[1] >> 1) | (c[2] << 63),
+            (c[2] >> 1) | (c[3] << 63),
+            c[3] >> 1,
+        };
+    }
+
+    /// Bit y of the result is bit y - 1 of `c` (the block below).
+    fn shiftUp(c: Col) Col {
+        return .{
+            c[0] << 1,
+            (c[1] << 1) | (c[0] >> 63),
+            (c[2] << 1) | (c[1] >> 63),
+            (c[3] << 1) | (c[2] >> 63),
+        };
+    }
+};
+
 /// Greedy-merged mesh generation. For each of the 6 face directions, slices
 /// the chunk into planes, builds a per-cell `GreedyCell` signature grid, then
 /// walks the grid growing rectangles of bit-identical (block_type, ao, sky)
@@ -1829,6 +1945,9 @@ pub fn generateMeshGreedy(
     defer mesh.allocator.free(cells);
     const visited = try mesh.allocator.alloc(bool, slice_len);
     defer mesh.allocator.free(visited);
+
+    const vis = try VisibleFaces.compute(mesh.allocator, chunk, getter, world_ox, world_oz);
+    defer mesh.allocator.destroy(vis);
 
     // Merge size cap. The voxel demo uses painter's-algorithm sorting in
     // software (no hardware depth — see CLAUDE.md §macOS/Metal wgpu bug)
@@ -1872,13 +1991,18 @@ pub fn generateMeshGreedy(
 
         var d: i32 = 0;
         while (d < d_max) : (d += 1) {
+            // A slice with no visible face of this direction emits nothing.
+            if (!vis.sliceHasFace(face, d)) continue;
+
             // ---- populate cell grid for this plane ----
+            // Only visible faces get a cell. The others stay empty (.{}).
             @memset(cells[0..active_slice], .{});
             var ii: i32 = 0;
             while (ii < i_max) : (ii += 1) {
                 var jj: i32 = 0;
                 while (jj < j_max) : (jj += 1) {
                     const bp = greedyIJToLocalBlock(face, d, ii, jj);
+                    if (!vis.has(face, bp.x, bp.y, bp.z)) continue;
                     const cell = computeGreedyCell(
                         chunk,
                         getter,
@@ -1888,6 +2012,7 @@ pub fn generateMeshGreedy(
                         bp.y,
                         bp.z,
                         face,
+                        chunk.resolveBlockRaw(bp.x, bp.y, bp.z),
                         ao_strategy,
                         lighting_mode,
                     );
@@ -1964,11 +2089,8 @@ pub fn generateMeshGreedy(
     }
 }
 
-/// Dispatch helper: run the requested meshing strategy and log a one-liner
-/// comparing the emitted quad count to the naive upper bound. For greedy
-/// mode we separately count faces that *would* have been emitted by the
-/// naive mesher so the log can show the real reduction ratio; the extra
-/// pass is a straight neighbour-scan and costs <5% of the full mesh.
+/// Dispatch helper: run the requested meshing strategy and log the quad
+/// count.
 pub fn generateMeshForMode(
     chunk: *const Chunk,
     mesh: *Mesh,
@@ -1986,45 +2108,10 @@ pub fn generateMeshForMode(
             std.log.info("[MESH naive: {} quads]", .{m_count});
         },
         .greedy => {
-            // Count how many quads a naive pass would have emitted, without
-            // actually meshing them. O(chunk_volume × 6) — cheap next to the
-            // greedy pass that follows.
-            const naive_count = countNaiveFaces(chunk, getter, world_ox, world_oz);
-
             try generateMeshGreedy(chunk, mesh, world_ox, world_oz, getter, ao_strategy, lighting_mode);
-            const m_count = mesh.indices.items.len / 6;
-
-            const reduction_pct: f64 = if (naive_count == 0)
-                0.0
-            else
-                100.0 * (1.0 - @as(f64, @floatFromInt(m_count)) / @as(f64, @floatFromInt(naive_count)));
-            std.log.info(
-                "[MESH greedy: {}\u{2192}{} quads ({d:.1}% reduction)]",
-                .{ naive_count, m_count, reduction_pct },
-            );
+            std.log.info("[MESH greedy: {} quads]", .{mesh.indices.items.len / 6});
         },
     }
-}
-
-/// Count the visible face candidates that a naive mesher would emit for this
-/// chunk. Used by `generateMeshForMode` to print a reduction ratio; matches
-/// the same `shouldRenderFace` gate as `generateMesh`/`generateMeshGreedy`.
-fn countNaiveFaces(chunk: *const Chunk, getter: BlockGetter, world_ox: i32, world_oz: i32) usize {
-    var count: usize = 0;
-    var x: i32 = 0;
-    while (x < CHUNK_W) : (x += 1) {
-        var y: i32 = 0;
-        while (y < CHUNK_H) : (y += 1) {
-            var z: i32 = 0;
-            while (z < CHUNK_W) : (z += 1) {
-                if (chunk.getBlock(x, y, z) == .air) continue;
-                for ([_]Face{ .px, .nx, .py, .ny, .pz, .nz }) |face| {
-                    if (shouldRenderFace(chunk, getter, x, y, z, world_ox, world_oz, face)) count += 1;
-                }
-            }
-        }
-    }
-    return count;
 }
 
 // ============================================================================
