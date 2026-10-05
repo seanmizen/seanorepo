@@ -91,10 +91,11 @@ bash ~/projects/seanorepo/utils/debbie/2026-09-17/payload/setup-developer-enviro
 Do not use sudo: Homebrew refuses to run as root. It installs Homebrew,
 zsh with oh-my-zsh and the shared prompt, Node and Yarn, Docker,
 shist, the seanorepo clone, the git config from
-`utils/config-anywhere`, and iTerm2 with its preferences.
+`utils/config-anywhere`, and Ghostty with its config.
 
-It rewrites `~/.zshrc` on every run, so put your own shell settings in
-`~/.zshrc.local`. It is safe to run again whenever the file changes.
+It rewrites `~/.zshrc` and `~/.config/ghostty/config.ghostty` on every run.
+Put your own settings in `~/.zshrc.local` and `~/.config/ghostty/config.local`.
+It is safe to run again whenever the file changes.
 
 ## Roles
 
