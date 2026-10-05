@@ -17,7 +17,7 @@
 #   4. Docker
 #   5. shist, from its release
 #   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
-#   7. iTerm2 and its preferences (macOS only)
+#   7. Ghostty and its config (macOS only)
 #   8. Windows Terminal colours and font (WSL only)
 #
 # It is idempotent: a second run leaves the machine in the same state. .zshrc
@@ -562,28 +562,38 @@ run as_user "cd '$REPO_DIR' && yarn --version"
 note "Yarn $(cat "$RUN_OUT") in the repository"
 
 #------------------------------------------------------------------------------
-# 7. iTerm2 (macOS only)
+# 7. Ghostty (macOS only)
+#
+# This step writes ghostty.config whole on every run, as for ~/.zshrc. It loads
+# ~/.config/ghostty/config.local last, for settings on one Mac only. Ghostty
+# also reads a config in ~/Library/Application Support, after this one, so a
+# file there overrides this one. The step warns about it and does not remove it.
 #------------------------------------------------------------------------------
 if [ "$OS" = Darwin ]; then
-    log "Installing iTerm2 and its preferences"
-    if [ ! -d /Applications/iTerm.app ] && [ ! -d "$USER_HOME/Applications/iTerm.app" ]; then
-        run brew install --cask iterm2
+    log "Installing Ghostty and its config"
+    if [ ! -d /Applications/Ghostty.app ] && [ ! -d "$USER_HOME/Applications/Ghostty.app" ]; then
+        run brew install --cask ghostty
+        note "$(green "Ghostty installed")"
     fi
-    ITERM_PLIST="$HERE/com.googlecode.iterm2.plist"
-    if [ ! -f "$ITERM_PLIST" ]; then
-        warn "No preferences file beside this script - skipping the import"
-    elif pgrep -qx iTerm2 2> /dev/null; then
-        warn "iTerm2 is running - quit it and run this again to import preferences"
+    GHOSTTY_DIR="$USER_HOME/.config/ghostty"
+    mkdir -p "$GHOSTTY_DIR"
+    if cmp -s "$HERE/ghostty.config" "$GHOSTTY_DIR/config.ghostty"; then
+        note "~/.config/ghostty/config.ghostty is current (managed: put local settings in config.local)"
     else
-        run defaults import com.googlecode.iterm2 "$ITERM_PLIST"
-        note "Preferences imported"
+        install -m 0644 "$HERE/ghostty.config" "$GHOSTTY_DIR/config.ghostty"
+        note "$(green "~/.config/ghostty/config.ghostty updated") (managed: put local settings in config.local)"
     fi
+    for f in config config.ghostty; do
+        if [ -s "$USER_HOME/Library/Application Support/com.mitchellh.ghostty/$f" ]; then
+            warn "~/Library/Application Support/com.mitchellh.ghostty/$f overrides the managed config - move its settings to config.local"
+        fi
+    done
 fi
 
 #------------------------------------------------------------------------------
 # 8. Windows Terminal (WSL only)
 #
-# windows-terminal.json holds the iTerm2 colours as a Windows Terminal scheme,
+# windows-terminal.json holds the Ghostty colours as a Windows Terminal scheme,
 # the profile defaults that use it, and key actions. It uses the format that
 # Windows Terminal writes back (upper-case colours, actions with an id and a
 # separate keybindings list), so a second run finds no change. Shift+Enter sends ESC+CR,
