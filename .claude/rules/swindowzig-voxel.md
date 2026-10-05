@@ -100,6 +100,11 @@ tick, regardless of how long loading took.
 
 ## Voxel Demo — Regression Tests
 
+CI renders the regression scenes with lavapipe and compares them with
+`examples/voxel/assets/goldens/lavapipe/` (workflow `swindowzig-check`). A
+deliberate visual change needs new goldens: the failed job prints the command.
+See `examples/voxel/docs/headless-regressions.md`.
+
 TAS scripts for regression live under `examples/voxel/`:
 - `framespike.tas` — block-removal during camera pan (hilly world). Mandatory
   headless test (see "Voxel Demo — Mandatory Testing" in `utils/swindowzig/CLAUDE.md`).
