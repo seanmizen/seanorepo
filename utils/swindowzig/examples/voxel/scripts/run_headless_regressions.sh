@@ -106,6 +106,14 @@ declare -a RUNS=(
     "depth_stencil_off|examples/voxel/tests/depth_stencil_regression.tas|--aa=none --depth-stencil=off --world=flatland|2.0|4"
 )
 
+# Flags for every run, so that one TAS gives the same frame every time:
+#   --async-chunks=off  the async chunk worker is a thread, so the number of
+#                       chunks loaded at capture time changes from run to run.
+#                       The sync loop loads a fixed number of chunks per tick.
+#   --debug=off         a TAS turns on the debug overlay, which shows wall-clock
+#                       values (FPS, frame ms). debug_overlay.sh tests the overlay.
+COMMON_ARGS="--async-chunks=off --debug=off"
+
 PASS=0; FAIL=0; MISS=0
 
 # Pretty-print header
@@ -123,7 +131,7 @@ for entry in "${RUNS[@]}"; do
     if [[ $UPDATE -eq 1 ]]; then
         # Regenerate the golden for this backend.
         # shellcheck disable=SC2086
-        if ! "$BIN" --headless --tas "$tas_path" --dump-frame="$out_ppm" $args > "$out_log" 2>&1; then
+        if ! "$BIN" --headless --tas "$tas_path" --dump-frame="$out_ppm" $COMMON_ARGS $args > "$out_log" 2>&1; then
             printf "%-28s %-9s %s\n" "$name" "ERROR" "capture crashed — see $out_log"
             tail -n 15 "$out_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
@@ -157,7 +165,7 @@ for entry in "${RUNS[@]}"; do
         --compare-golden="$golden_plain" \
         --golden-max-diff-pct="$max_diff_pct" \
         --golden-max-channel-delta="$max_channel_delta" \
-        $args > "$out_log" 2>&1
+        $COMMON_ARGS $args > "$out_log" 2>&1
     rc=$?
     set -e
 
