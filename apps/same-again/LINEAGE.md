@@ -9,3 +9,4 @@ Claude Code deletes a transcript after `cleanupPeriodDays` (30 days by default).
 | Session ID | First seen (UTC) | Branch | Host |
 |---|---|---|---|
 | `775c5228-a481-4ca2-b0eb-b2943ebe1f16` | 2026-10-06 11:53 | `SEAN-623/the-usual-concept` | M1 |
+| `c141d54e-21e8-5b22-9831-f686a8660968` | 2026-10-06 12:24 | `claude/zealous-ramanujan-6eurbn` | vm |
