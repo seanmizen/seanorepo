@@ -49,3 +49,21 @@ I'd buy sameagainplease.com and sameagainplease.io
 thoughts?
 
 Once that's done I'd like you to write instructions for the cloud agent who will pick up this game.
+
+## 2026-10-06 (5)
+
+I need:
+
+portal.sameagainplease.com -> a place for advertisers and creators to contribute to the game assets. we'll need a stripe integration for advertisers and 
+
+creators can contribute assets from a set list. as the game grows, there will be more assets in need of contribution. I also may need a "Proof this wasn't AI" section, where creators post photos, videos, etc to prove they are a real human contributor. this is a major 'point' of the whole experience so pay attention here.
+
+advertisers, too, can contribute to the assets. that is how much of the advertising is done.
+
+tiered sponsors: we can advertise bigger tiers to advertisers if they want custom content: e.g. a customer in the game has a 'story' and set voice lines.
+
+Please research "cerveza cristal" star wars advertising campaign. this is a major inspiration of mine.
+
+I also want early advertisers to get better deals. e.g. first advertiser to contribute £1,000 gets something in return - we reward them with preferential treatment. the idea for this is not yet fully fleshed out in my head.
+
+Are you ready to type up an enormous product backlog so good we can give it to Sonnet? talk to me.
