@@ -122,3 +122,6 @@ Key files and what they do — read this before opening anything.
 | `libs/sw_platform/src/native_sdl.zig` | SDL2 window + event pump (native path) |
 | `libs/sw_math/src/mat4.zig` | 4×4 matrix: `perspective()`, `lookAt()`, multiply |
 | `libs/sw_math/src/vec3.zig` | Vec3 ops |
+| `libs/sw_gfx2d/src/batch.zig` | 2D shapes to vertices, indices and draw calls (no GPU code, unit tested) |
+| `libs/sw_gfx2d/src/projection.zig` | Pixel projection, origin top left, and `dpi_scale` maths |
+| `libs/sw_gfx2d/src/renderer.zig` | `Renderer`: pipeline, buffers, textures, `flush` into a render pass |
