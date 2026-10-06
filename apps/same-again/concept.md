@@ -41,3 +41,11 @@ the name 'the usual' is taken btw so we need to hunt for others.
 deep dive search for Same Again, please.
 rule: can we keep a log of every claude session (just the ID such that it could be retrieved later) inside the app folder?
 so if anything inside 'same-again' folder is edited, the AI must append to the .md file (tabulated) id, date-first-seen, etc. sensible? I'd like to trace the lineage of the app entirely.
+
+## 2026-10-06 (4)
+
+check sameagainplease? (SAP being on the logo reminding everyone it's a three word game)
+I'd buy sameagainplease.com and sameagainplease.io
+thoughts?
+
+Once that's done I'd like you to write instructions for the cloud agent who will pick up this game.
