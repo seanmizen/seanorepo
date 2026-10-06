@@ -9,7 +9,7 @@
 > 5. Copy the prompt exactly. Add a heading with the date (YYYY-MM-DD).
 > 6. Do not write your own notes, plans or summaries in this file. Put them in a different file.
 
-"the-usual" is a working name. The name "The Usual" is taken.
+"same-again" is the working name. The name "The Usual" is taken.
 
 ## 2026-10-06 (1)
 
@@ -35,3 +35,9 @@ any contributions to the game could enter the contributors into the 'contributor
 possibly we give higher rewards to earlier contributions? oh my god. this is an entire business plan in a prompt. save this prompt somewhere. under 'apps' make a new app called 'the-usual'. all load-bearing prompts from me will go into 'concept.md' with strict instruction from the AI that my unfiltered thoughts 
 
 the name 'the usual' is taken btw so we need to hunt for others.
+
+## 2026-10-06 (3)
+
+deep dive search for Same Again, please.
+rule: can we keep a log of every claude session (just the ID such that it could be retrieved later) inside the app folder?
+so if anything inside 'same-again' folder is edited, the AI must append to the .md file (tabulated) id, date-first-seen, etc. sensible? I'd like to trace the lineage of the app entirely.

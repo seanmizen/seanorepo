@@ -302,8 +302,7 @@ Amazon Q
 
 *.db
 
-# Claude Code — local settings, worktrees, memory cache (but skills/ is shared)
-.claude/settings.json
+# Claude Code — local settings, worktrees, memory cache (settings.json, hooks/ and skills/ are shared)
 .claude/settings.local.json
 .claude/worktrees/
 .claude/memory/
