@@ -31,11 +31,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Read the Zig version
+        # setup-zig reads build.zig.zon from the repo root only. The package is
+        # in utils/swindowzig, so pass minimum_zig_version as the version.
+        id: zig
+        run: |
+          version="$(sed -n 's/^ *\.minimum_zig_version = "\(.*\)",$/\1/p' utils/swindowzig/build.zig.zon)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Install Zig
-        # No version: setup-zig reads minimum_zig_version from build.zig.zon.
         uses: mlugg/setup-zig@v2
         with:
-          build-zig-zon-path: utils/swindowzig/build.zig.zon
+          version: ${{ steps.zig.outputs.version }}
 
       - name: Check the tag matches build.zig.zon
         if: startsWith(github.ref, 'refs/tags/swindowzig-v')
@@ -95,7 +102,7 @@ jobs:
           .{
               .name = .consumer,
               .version = "0.0.0",
-              .fingerprint = 0x8f1d2c3b4a596877,
+              .fingerprint = 0x705b3727bc4a41c3,
               .minimum_zig_version = "0.17.0",
               .dependencies = .{},
               .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
