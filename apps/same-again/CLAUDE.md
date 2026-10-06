@@ -37,6 +37,16 @@ source of truth for intent.
 5. **Do not write payment, advert or revenue-share code.** These are open
    decisions (see below).
 6. Use the `workflow` skill for each issue, branch and PR.
+7. **The game is proprietary.** `LICENSE` reserves all rights. Do not change
+   `LICENSE` without asking Sean. Each `package.json` in this folder must have
+   `"private": true` and `"license": "SEE LICENSE IN LICENSE"`.
+8. **Record all third-party code.** Before you add a dependency, or copy or port
+   code, examine its licence. Use only MIT, BSD, ISC, Apache-2.0 or zlib code.
+   For other licences (GPL, AGPL, LGPL, MPL, CC-BY-SA, no licence), ask Sean.
+   Add the full licence notice to `THIRD_PARTY_NOTICES.md`. In each ported
+   file, keep the copyright line of the source at the top.
+9. **Do not accept outside contributions** until a contributor agreement exists
+   (open decision 4).
 
 ## Locked decisions
 

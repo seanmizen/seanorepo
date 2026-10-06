@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # Where: Claude Code PostToolUse hook, registered in .claude/settings.json.
-# When: after each Edit, Write, NotebookEdit or Bash tool call.
+# When: after each Edit, Write or NotebookEdit tool call.
 # Why: an app opts in to lineage tracking with an apps/<app>/LINEAGE.md file.
 # When a session touches a path in that app, this hook appends one row for the
 # session to LINEAGE.md. A session gets one row only. The hook never blocks.
-# Bash calls count when the command or the working directory names the app.
+# Only edits count. A Bash call does not count, because most Bash calls only
+# read files.
 
 import json
 import os
@@ -15,18 +16,12 @@ import sys
 from datetime import datetime, timezone
 
 APP_PATH = re.compile(r"^(.*)/apps/([^/]+)(?:/|$)")
-APP_TOKEN = re.compile(r"[^\s'\"]*apps/[A-Za-z0-9._-]+")
 
 
 def candidate_paths(event):
     cwd = event.get("cwd") or os.getcwd()
     tool_input = event.get("tool_input") or {}
-    raw = []
-    if event.get("tool_name") == "Bash":
-        raw += APP_TOKEN.findall(tool_input.get("command", ""))
-        raw.append(cwd)
-    else:
-        raw += [tool_input.get("file_path"), tool_input.get("notebook_path")]
+    raw = [tool_input.get("file_path"), tool_input.get("notebook_path")]
     return [os.path.normpath(os.path.join(cwd, p)) for p in raw if p]
 
 
