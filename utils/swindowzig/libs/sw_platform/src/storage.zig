@@ -177,9 +177,9 @@ const web = if (is_wasm) struct {
 
 test "isValidKey" {
     try std.testing.expect(isValidKey("save-1_a"));
-    try std.testing.expect(isValidKey("a" ** max_key_len));
+    try std.testing.expect(isValidKey(&@as([max_key_len]u8, @splat('a'))));
     try std.testing.expect(!isValidKey(""));
-    try std.testing.expect(!isValidKey("a" ** (max_key_len + 1)));
+    try std.testing.expect(!isValidKey(&@as([max_key_len + 1]u8, @splat('a'))));
     try std.testing.expect(!isValidKey("Save"));
     try std.testing.expect(!isValidKey("a.b"));
     try std.testing.expect(!isValidKey("a/b"));
@@ -233,7 +233,7 @@ test "FileStore: invalid keys return an error" {
     try std.testing.expectError(error.InvalidKey, store.set("UPPER", "x"));
     try std.testing.expectError(error.InvalidKey, store.set("", "x"));
     try std.testing.expectError(error.InvalidKey, store.delete("a/b"));
-    try std.testing.expectError(error.InvalidKey, store.set("a" ** (max_key_len + 1), "x"));
+    try std.testing.expectError(error.InvalidKey, store.set(&@as([max_key_len + 1]u8, @splat('a')), "x"));
 }
 
 test "public API: error before the directory is set, then works" {
