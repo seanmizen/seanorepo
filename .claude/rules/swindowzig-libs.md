@@ -126,3 +126,6 @@ Key files and what they do — read this before opening anything.
 | `libs/sw_gfx2d/src/batch.zig` | 2D shapes to vertices, indices and draw calls (no GPU code, unit tested) |
 | `libs/sw_gfx2d/src/projection.zig` | Pixel projection, origin top left, and `dpi_scale` maths |
 | `libs/sw_gfx2d/src/renderer.zig` | `Renderer`: pipeline, buffers, textures, `flush` into a render pass |
+| `libs/sw_assets/src/assets.zig` | `loadBytes(allocator, path_or_url)` returns a `Request`. `request.poll()` gives `.pending`, `.bytes` or `.failed`, and never waits. Native: a thread reads a file in the base directory (`useDirectory`/`useDirectoryPath`), and an `http(s)://` URL fails with `UnsupportedUrl`. Web: `fetch` through `backends/wasm/assets.ts` |
+| `libs/sw_assets/src/png.zig` | `decodePng(allocator, bytes)` gives RGBA8 `Image`. It calls stb_image (`libs/sw_assets/c/`, licence in `THIRD_PARTY_NOTICES.md`) |
+| `libs/sw_gfx2d` `Renderer.createTextureFromPng` | Decode PNG bytes and upload them as a texture |
