@@ -119,7 +119,8 @@ Key files and what they do — read this before opening anything.
 | `libs/sw_gpu/src/native_webgpu.zig` | Raw C bindings for wgpu-native (`WGPUFoo` types) |
 | `libs/sw_gpu/src/types.zig` | Shared descriptor types used by both native and WASM paths |
 | `libs/sw_gpu/src/web_bridge.zig` | WASM/JS extern bindings |
-| `libs/sw_platform/src/native_sdl.zig` | SDL2 window + event pump (native path) |
+| `libs/sw_platform/src/native_sdl.zig` | SDL2 window + event pump (native path). `initStorage` opens the per-user save directory |
+| `libs/sw_platform/src/storage.zig` | Local key-value saves: `storageGet`/`storageSet`/`storageDelete`. Keys `[a-z0-9_-]`, 64 max. Native: files. Web: localStorage via `backends/wasm/storage.ts` |
 | `libs/sw_math/src/mat4.zig` | 4×4 matrix: `perspective()`, `lookAt()`, multiply |
 | `libs/sw_math/src/vec3.zig` | Vec3 ops |
 | `libs/sw_gfx2d/src/batch.zig` | 2D shapes to vertices, indices and draw calls (no GPU code, unit tested) |
