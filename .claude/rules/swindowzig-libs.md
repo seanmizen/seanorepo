@@ -138,7 +138,11 @@ Key files and what they do — read this before opening anything.
 | `libs/sw_math/src/vec3.zig` | Vec3 ops |
 | `libs/sw_gfx2d/src/batch.zig` | 2D shapes to vertices, indices and draw calls (no GPU code, unit tested) |
 | `libs/sw_gfx2d/src/projection.zig` | Pixel projection, origin top left, and `dpi_scale` maths |
-| `libs/sw_gfx2d/src/renderer.zig` | `Renderer`: pipeline, buffers, textures, `flush` into a render pass |
+| `libs/sw_gfx2d/src/renderer.zig` | `Renderer`: pipeline, buffers, textures, `updateTexture`, `flush` into a render pass |
+| `libs/sw_text/src/text.zig` | `TextRenderer`: glyph atlas pages filled on first use, `draw`, `drawWrapped`, `measure` |
+| `libs/sw_text/src/font.zig` | TTF reader over stb_truetype (`stb_impl.c`). stb allocates through function pointers that this file sets, so it builds for WASM |
+| `libs/sw_text/src/layout.zig` | Measuring and wrapping for any metrics type (no font, no GPU, unit tested) |
+| `libs/sw_text/src/utf8.zig`, `atlas.zig` | UTF-8 decoder (bad bytes give U+FFFD) and the shelf packer for the atlas |
 | `libs/sw_assets/src/assets.zig` | `loadBytes(allocator, path_or_url)` returns a `Request`. `request.poll()` gives `.pending`, `.bytes` or `.failed`, and never waits. Native: a thread reads a file in the base directory (`useDirectory`/`useDirectoryPath`), and an `http(s)://` URL fails with `UnsupportedUrl`. Web: `fetch` through `backends/wasm/assets.ts` |
 | `libs/sw_assets/src/png.zig` | `decodePng(allocator, bytes)` gives RGBA8 `Image`. It calls stb_image (`libs/sw_assets/c/`, licence in `THIRD_PARTY_NOTICES.md`) |
 | `libs/sw_gfx2d` `Renderer.createTextureFromPng` | Decode PNG bytes and upload them as a texture |
