@@ -97,6 +97,7 @@ pub fn build(b: *std.Build) void {
     example.root_module.addImport("sw_gpu", web_libs.gpu);
     example.root_module.addImport("sw_core", web_libs.core);
     example.root_module.addImport("sw_gfx2d", web_libs.gfx2d);
+    example.root_module.addImport("sw_text", web_libs.text);
     // sw_platform is needed by examples that drive their own wasm entry
     // (e.g. voxel, which constructs a WasmBackend directly in its
     // swindowzig_init export).
@@ -139,6 +140,7 @@ pub fn build(b: *std.Build) void {
     native_exe.root_module.addImport("sw_gpu", native_libs.gpu);
     native_exe.root_module.addImport("sw_core", native_libs.core);
     native_exe.root_module.addImport("sw_gfx2d", native_libs.gfx2d);
+    native_exe.root_module.addImport("sw_text", native_libs.text);
 
     // Link SDL2 for native builds.
     native_exe.root_module.linkSystemLibrary("SDL2", .{});
@@ -193,6 +195,10 @@ pub fn build(b: *std.Build) void {
         // sw_gfx2d: the batching and the projection maths have no GPU code.
         "libs/sw_gfx2d/src/batch.zig",
         "libs/sw_gfx2d/src/projection.zig",
+        // sw_text: UTF-8, measuring and wrapping, and the atlas packer.
+        "libs/sw_text/src/utf8.zig",
+        "libs/sw_text/src/layout.zig",
+        "libs/sw_text/src/atlas.zig",
     };
 
     inline for (test_files) |file| {
@@ -206,6 +212,21 @@ pub fn build(b: *std.Build) void {
         const run_unit_tests = b.addRunArtifact(unit_tests);
         test_step.dependOn(&run_unit_tests.step);
     }
+
+    // sw_text font tests: they read a real font through stb_truetype (C).
+    const font_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("libs/sw_text/src/font.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    addStbTruetype(b, font_tests.root_module);
+    font_tests.root_module.addAnonymousImport("test_font", .{
+        .root_source_file = b.path("examples/flat2d/assets/Lato-Regular.ttf"),
+    });
+    test_step.dependOn(&b.addRunArtifact(font_tests).step);
 
     // Mesher benchmark (no GPU): zig build bench-mesher -Doptimize=ReleaseFast
     const bench_mesher = b.addExecutable(.{
@@ -270,6 +291,7 @@ const Libs = struct {
     audio: *std.Build.Module,
     math: *std.Build.Module,
     gfx2d: *std.Build.Module,
+    text: *std.Build.Module,
     app: *std.Build.Module,
 };
 
@@ -297,11 +319,23 @@ fn addLibs(b: *std.Build, sdl: ?*std.Build.Module, exported: bool) Libs {
     const math = libModule(b, exported, "sw_math", "libs/sw_math/src/math_root.zig");
     const gfx2d = libModule(b, exported, "sw_gfx2d", "libs/sw_gfx2d/src/gfx2d_root.zig");
     gfx2d.addImport("sw_gpu", gpu);
+    const text = libModule(b, exported, "sw_text", "libs/sw_text/src/text_root.zig");
+    text.addImport("sw_gfx2d", gfx2d);
+    addStbTruetype(b, text);
     const app = libModule(b, exported, "sw_app", "libs/sw_app/src/app_root.zig");
     app.addImport("sw_core", core);
     app.addImport("sw_platform", platform);
     app.addImport("sw_gpu", gpu);
     app.addImport("sw_audio", audio);
     app.addImport("sw_math", math);
-    return .{ .core = core, .platform = platform, .gpu = gpu, .audio = audio, .math = math, .gfx2d = gfx2d, .app = app };
+    return .{ .core = core, .platform = platform, .gpu = gpu, .audio = audio, .math = math, .gfx2d = gfx2d, .text = text, .app = app };
+}
+
+/// Compile stb_truetype (with the C API that font.zig declares) into a module.
+/// The file needs no libc, so it builds for freestanding WASM too.
+fn addStbTruetype(b: *std.Build, module: *std.Build.Module) void {
+    module.addCSourceFile(.{
+        .file = b.path("libs/sw_text/src/stb_impl.c"),
+        .flags = &.{ "-std=c99", "-fno-sanitize=undefined" },
+    });
 }

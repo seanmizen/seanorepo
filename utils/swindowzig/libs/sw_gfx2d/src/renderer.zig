@@ -212,6 +212,20 @@ pub const Renderer = struct {
         return .{ .id = @intCast(self.textures.items.len - 1), .width = width, .height = height };
     }
 
+    /// Replace all texels of a texture from `createTexture`. `rgba` has the
+    /// same size as in `createTexture`. A glyph atlas uses this to add glyphs.
+    pub fn updateTexture(self: *Renderer, texture: Texture, rgba: []const u8) !void {
+        if (texture.id >= self.textures.items.len) return error.UnknownTexture;
+        if (rgba.len != @as(usize, texture.width) * texture.height * 4) return error.BadTextureSize;
+        self.gpu.writeTexture(
+            self.textures.items[texture.id].texture,
+            rgba,
+            texture.width * 4,
+            texture.height,
+            .{ .width = texture.width, .height = texture.height },
+        );
+    }
+
     /// Start a frame. `width` and `height` are the surface size in device
     /// pixels and `dpi_scale` comes from the resize event or `ctx.window()`.
     /// Drawing is in logical pixels: device pixels divided by `dpi_scale`.

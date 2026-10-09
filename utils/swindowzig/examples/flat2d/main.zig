@@ -1,10 +1,12 @@
 // flat2d - the 2D renderer (sw_gfx2d): filled rectangles, an outline, a
-// textured quad with a tint and a source rectangle, and alpha blending.
+// textured quad with a tint and a source rectangle, alpha blending, and text
+// from a TTF font (sw_text): a paragraph with accents, wrapped to a width.
 // Drawing is in logical pixels, origin at the top left.
 const std = @import("std");
 const builtin = @import("builtin");
 const sw = @import("sw_app");
 const gfx = @import("sw_gfx2d");
+const sw_text = @import("sw_text");
 
 // Freestanding WASM has no std.process.Init, so the web build gets a main
 // with no parameters. The native build passes Io to the app (ctx.io).
@@ -32,6 +34,17 @@ const checker_cell = 4;
 var renderer: ?gfx.Renderer = null;
 var checker: gfx.Texture = .{ .id = 0, .width = 1, .height = 1 };
 var ticks: u32 = 0;
+var text: ?sw_text.TextRenderer = null;
+
+// Lato, under the SIL Open Font License (assets/Lato-OFL.txt).
+const font_bytes = @embedFile("assets/Lato-Regular.ttf");
+
+const paragraph_x = 620;
+const paragraph_width = 160;
+const paragraph =
+    "Zażółć gęślą jaźń. Crème brûlée, façade, Ångström, piñata, " ++
+    "Müller, größer, naïve café, Čeština, Ğ, Ő, Ž. " ++
+    "No glyph for 中, so a box.";
 
 /// A 16x16 checkerboard in four colours, so a source rectangle shows.
 fn makeChecker() [checker_size * checker_size * 4]u8 {
@@ -69,6 +82,7 @@ const Callbacks = struct {
         const pixels = makeChecker();
         checker = try r.createTexture(checker_size, checker_size, &pixels, .nearest);
         renderer = r;
+        text = try sw_text.TextRenderer.init(ctx.allocator(), font_bytes);
         std.log.info("flat2d: GPU ready", .{});
     }
 
@@ -114,6 +128,19 @@ const Callbacks = struct {
         const x = 40 + 300 * (0.5 + 0.5 * @sin(t / 40.0));
         try r.fillRect(.{ .x = x, .y = 480, .w = 60, .h = 40 }, gfx.Color.rgba8(120, 230, 160, 255));
 
+        // Text: a heading, then a paragraph wrapped to a width. The outline
+        // shows the width.
+        if (text) |*t| {
+            t.setDpiScale(win.dpi_scale);
+            const white = gfx.Color.rgba8(240, 240, 240, 255);
+            _ = try t.draw(r, "Text (TTF)", paragraph_x, 40, .{ .size = 20, .color = white });
+            const size = try t.drawWrapped(r, paragraph, paragraph_x, 76, paragraph_width, .{
+                .size = 14,
+                .color = gfx.Color.rgba8(250, 210, 80, 255),
+            });
+            try r.strokeRect(.{ .x = paragraph_x - 4, .y = 72, .w = paragraph_width + 8, .h = size.h + 8 }, 1, gfx.Color.rgba8(90, 90, 110, 255));
+        }
+
         var view_tex = try gpu.getCurrentTextureView();
         const encoder = try gpu.createCommandEncoder();
         const pass = try encoder.beginRenderPass(.{
@@ -135,6 +162,8 @@ const Callbacks = struct {
 
     pub fn shutdown(ctx: *sw.Context) !void {
         _ = ctx;
+        if (text) |*t| t.deinit();
+        text = null;
         if (renderer) |*r| r.deinit();
         renderer = null;
     }
