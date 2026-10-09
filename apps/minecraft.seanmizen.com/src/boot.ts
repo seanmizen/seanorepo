@@ -136,6 +136,8 @@ async function main(): Promise<void> {
           document.exitPointerLock();
         }
       },
+      // The voxel game does not use text input. The import must exist.
+      jsSetTextInput: (_active: number): void => {},
       jsLog: (ptr: number, len: number): void => {
         const mem = window.wasmMemory;
         if (!mem) {
