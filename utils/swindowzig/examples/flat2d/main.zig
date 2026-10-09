@@ -130,11 +130,11 @@ const Callbacks = struct {
 
         // Text: a heading, then a paragraph wrapped to a width. The outline
         // shows the width.
-        if (text) |*t| {
-            t.setDpiScale(win.dpi_scale);
+        if (text) |*tr| {
+            tr.setDpiScale(win.dpi_scale);
             const white = gfx.Color.rgba8(240, 240, 240, 255);
-            _ = try t.draw(r, "Text (TTF)", paragraph_x, 40, .{ .size = 20, .color = white });
-            const size = try t.drawWrapped(r, paragraph, paragraph_x, 76, paragraph_width, .{
+            _ = try tr.draw(r, "Text (TTF)", paragraph_x, 40, .{ .size = 20, .color = white });
+            const size = try tr.drawWrapped(r, paragraph, paragraph_x, 76, paragraph_width, .{
                 .size = 14,
                 .color = gfx.Color.rgba8(250, 210, 80, 255),
             });
@@ -162,7 +162,7 @@ const Callbacks = struct {
 
     pub fn shutdown(ctx: *sw.Context) !void {
         _ = ctx;
-        if (text) |*t| t.deinit();
+        if (text) |*tr| tr.deinit();
         text = null;
         if (renderer) |*r| r.deinit();
         renderer = null;
