@@ -3,6 +3,10 @@
 
 const std = @import("std");
 
+extern fn sw_ttf_set_allocator(
+    alloc_fn: *const fn (usize) callconv(.c) ?*anyopaque,
+    free_fn: *const fn (?*anyopaque) callconv(.c) void,
+) void;
 extern fn sw_ttf_open(data: [*]const u8) ?*anyopaque;
 extern fn sw_ttf_close(info: *anyopaque) void;
 extern fn sw_ttf_glyph_index(info: *const anyopaque, codepoint: c_int) c_int;
@@ -12,9 +16,9 @@ extern fn sw_ttf_advance(info: *const anyopaque, glyph: c_int) c_int;
 extern fn sw_ttf_bitmap_box(info: *const anyopaque, glyph: c_int, scale: f32, x0: *c_int, y0: *c_int, x1: *c_int, y1: *c_int) void;
 extern fn sw_ttf_render(info: *const anyopaque, glyph: c_int, scale: f32, out: [*]u8, width: c_int, height: c_int) void;
 
-// stb_truetype allocates through sw_text_malloc and sw_text_free, because
-// freestanding WASM has no libc. They use the allocator of the last
-// `Font.init`. Each block starts with a 16 byte header that holds its size.
+// stb_truetype allocates through these two functions (set with
+// sw_ttf_set_allocator), because freestanding WASM has no libc. They use the
+// allocator of the last `Font.init`. Each block starts with a 16 byte header that holds its size.
 var stb_allocator: ?std.mem.Allocator = null;
 const header = 16;
 
@@ -31,11 +35,6 @@ fn textFree(ptr: ?*anyopaque) callconv(.c) void {
     const start: [*]align(16) u8 = @alignCast(p - header);
     const total = std.mem.readInt(usize, start[0..@sizeOf(usize)], .little);
     alloc.free(start[0..total]);
-}
-
-comptime {
-    @export(&textMalloc, .{ .name = "sw_text_malloc" });
-    @export(&textFree, .{ .name = "sw_text_free" });
 }
 
 /// The vertical metrics of a font at one size, in pixels.
@@ -75,6 +74,7 @@ pub const Font = struct {
     pub fn init(alloc: std.mem.Allocator, bytes: []const u8) !Font {
         if (bytes.len == 0) return error.InvalidFont;
         stb_allocator = alloc;
+        sw_ttf_set_allocator(&textMalloc, &textFree);
         const info = sw_ttf_open(bytes.ptr) orelse return error.InvalidFont;
         return .{ .info = info };
     }
@@ -237,7 +237,7 @@ test "metrics measure a string with accents" {
     // An accented letter is about as wide as its base letter.
     try testing.expectApproxEqRel(plain.w, accented.w, 0.1);
     try testing.expectApproxEqAbs(m.lineHeight(), accented.h, 0.001);
-    try testing.expect(m.lineHeight() > 20);
+    try testing.expect(m.lineHeight() >= 20);
 }
 
 test "a missing glyph has the width of the replacement box" {

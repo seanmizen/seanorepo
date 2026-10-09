@@ -4,8 +4,21 @@
 // is replaced below, so this file builds for freestanding WASM too.
 #include <stddef.h>
 
-extern void *sw_text_malloc(size_t size);
-extern void sw_text_free(void *ptr);
+// The allocator comes from Zig (font.zig sets it before any font opens). A
+// function pointer, not an extern symbol, so a program that links this file
+// and never uses sw_text still links.
+static void *(*sw_text_alloc_fn)(size_t size);
+static void (*sw_text_free_fn)(void *ptr);
+
+static void *sw_text_malloc(size_t size) { return sw_text_alloc_fn ? sw_text_alloc_fn(size) : 0; }
+static void sw_text_free(void *ptr) {
+    if (sw_text_free_fn) sw_text_free_fn(ptr);
+}
+
+void sw_ttf_set_allocator(void *(*alloc_fn)(size_t), void (*free_fn)(void *)) {
+    sw_text_alloc_fn = alloc_fn;
+    sw_text_free_fn = free_fn;
+}
 
 #define STBTT_malloc(x, u) ((void)(u), sw_text_malloc(x))
 #define STBTT_free(x, u) ((void)(u), sw_text_free(x))
