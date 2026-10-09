@@ -82,6 +82,19 @@ is no longer required for correctness. Sort key is view-space depth
 .pointer_button = .{ .button = btn, .down = true, .mods = mods }
 ```
 
+### Text input (IME)
+
+- `ctx.startTextInput()` and `ctx.stopTextInput()` turn the platform input
+  method on and off. Off is the default. While it is off, `Bus.push` drops
+  `text_input` and `text_composition`.
+- `text_input` is committed UTF-8 (32 bytes at most per event, cut on a code
+  point). `text_composition` is the uncommitted text and its caret. Empty text
+  ends the composition. `input().text` and `input().composition` hold both.
+- `text_composition` is the last member of `EventPayload` (serialize tag 10).
+  New members go after it.
+- Web: `backends/wasm/events.ts` owns a hidden `<input>`. A new `env` import
+  must also go into `apps/minecraft.seanmizen.com/src/boot.ts`.
+
 ### Known issue
 
 The replay buffer cleanup leaks memory. It is not critical. (Recorded in an
@@ -130,3 +143,6 @@ Key files and what they do — read this before opening anything.
 | `libs/sw_text/src/font.zig` | TTF reader over stb_truetype (`stb_impl.c`). stb allocates through function pointers that this file sets, so it builds for WASM |
 | `libs/sw_text/src/layout.zig` | Measuring and wrapping for any metrics type (no font, no GPU, unit tested) |
 | `libs/sw_text/src/utf8.zig`, `atlas.zig` | UTF-8 decoder (bad bytes give U+FFFD) and the shelf packer for the atlas |
+| `libs/sw_assets/src/assets.zig` | `loadBytes(allocator, path_or_url)` returns a `Request`. `request.poll()` gives `.pending`, `.bytes` or `.failed`, and never waits. Native: a thread reads a file in the base directory (`useDirectory`/`useDirectoryPath`), and an `http(s)://` URL fails with `UnsupportedUrl`. Web: `fetch` through `backends/wasm/assets.ts` |
+| `libs/sw_assets/src/png.zig` | `decodePng(allocator, bytes)` gives RGBA8 `Image`. It calls stb_image (`libs/sw_assets/c/`, licence in `THIRD_PARTY_NOTICES.md`) |
+| `libs/sw_gfx2d` `Renderer.createTextureFromPng` | Decode PNG bytes and upload them as a texture |

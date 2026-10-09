@@ -1,7 +1,12 @@
 // WASM boot loader for swindowzig
 
+import { createAssetImports } from './assets';
 import { audioImports } from './audio';
-import { attachEventListeners } from './events';
+import {
+  attachEventListeners,
+  setTextInputActive,
+  type WasmExports,
+} from './events';
 import { createStorageImports } from './storage';
 import { initWebGPU } from './webgpu';
 
@@ -81,6 +86,10 @@ async function main() {
         () =>
           (window as never as { wasmMemory: WebAssembly.Memory }).wasmMemory,
       ),
+      ...createAssetImports(
+        () =>
+          (window as never as { wasmMemory: WebAssembly.Memory }).wasmMemory,
+      ),
       jsSetPointerLock: (lock: number) => {
         if (lock) {
           canvas.requestPointerLock();
@@ -94,6 +103,9 @@ async function main() {
           // by one or two frames in some browsers.
           setCursorVisible(true);
         }
+      },
+      jsSetTextInput: (active: number) => {
+        setTextInputActive(active !== 0);
       },
       jsLog: (ptr: number, len: number) => {
         console.log('WASM log:', ptr, len);
@@ -178,9 +190,7 @@ async function main() {
   }
 
   // Cast exports for type safety
-  const wasmFunctions = exports as unknown as {
-    swindowzig_init: () => void;
-    swindowzig_frame: (timestamp: number) => void;
+  const wasmFunctions = exports as unknown as WasmExports & {
     swindowzig_event_resize: (
       width: number,
       height: number,
