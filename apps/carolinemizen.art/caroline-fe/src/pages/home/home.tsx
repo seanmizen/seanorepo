@@ -316,7 +316,8 @@ const placeholderCarouselItems = [
 const Home: FC = () => {
   const [showArrow, setShowArrow] = useState(false);
   const { artworks } = useArtworkCache();
-  const [carouselImages, setCarouselImages] = useState<Artwork[]>([]);
+  // null until the carousel request completes
+  const [carouselImages, setCarouselImages] = useState<Artwork[] | null>(null);
   const [featuredGalleries, setFeaturedGalleries] = useState<Gallery[]>([]);
 
   const displayGalleries =
@@ -329,36 +330,44 @@ const Home: FC = () => {
 
   // Fetch carousel images and featured galleries on mount
   useEffect(() => {
+    // StrictMode runs this effect two times in dev. Only the last run may
+    // set the carousel, or the slides change after the first render.
+    let cancelled = false;
+
     const fetchCarousel = async () => {
       try {
         const response = await fetch(`${API_URL}/carousel`);
-        if (response.ok) {
-          const data = await response.json();
-          // Transform carousel images to artwork-like objects for compatibility
-          const carouselArtworks: Artwork[] = (
-            data.images as CarouselImageResponse[]
-          ).map((img) => ({
-            id: img.id,
-            title: img.original_name,
-            description: null,
-            price_cents: 0,
-            currency: 'USD',
-            status: 'available' as const,
-            primary_image_id: null,
-            primary_image_path: img.storage_path,
-            primary_image_mime_type: img.mime_type,
-            primary_image_width: img.width,
-            primary_image_height: img.height,
-            primary_image_thumbhash: img.thumbhash,
-            primary_image_variants: img.variants,
-            primary_image_poster_path: img.poster_path,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }));
-          setCarouselImages(carouselArtworks);
+        if (cancelled) return;
+        if (!response.ok) {
+          setCarouselImages([]);
+          return;
         }
+        const data = await response.json();
+        // Transform carousel images to artwork-like objects for compatibility
+        const carouselArtworks: Artwork[] = (
+          data.images as CarouselImageResponse[]
+        ).map((img) => ({
+          id: img.id,
+          title: img.original_name,
+          description: null,
+          price_cents: 0,
+          currency: 'USD',
+          status: 'available' as const,
+          primary_image_id: null,
+          primary_image_path: img.storage_path,
+          primary_image_mime_type: img.mime_type,
+          primary_image_width: img.width,
+          primary_image_height: img.height,
+          primary_image_thumbhash: img.thumbhash,
+          primary_image_variants: img.variants,
+          primary_image_poster_path: img.poster_path,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        if (!cancelled) setCarouselImages(carouselArtworks);
       } catch (error) {
         console.error('Failed to fetch carousel:', error);
+        if (!cancelled) setCarouselImages([]);
       }
     };
 
@@ -376,34 +385,40 @@ const Home: FC = () => {
 
     fetchCarousel();
     fetchFeaturedGalleries();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const baseArtworks = useMemo(() => {
-    // Use carousel images if available, otherwise fall back to artworks
-    const sourceArtworks =
-      carouselImages.length > 0 ? carouselImages : artworks;
+  // Use the carousel images if there are any, otherwise the artworks. Wait
+  // for the carousel request, so the slides do not change after they show.
+  const sourceArtworks =
+    carouselImages === null
+      ? null
+      : carouselImages.length > 0
+        ? carouselImages
+        : artworks;
 
-    if (sourceArtworks.length === 0) return [];
+  // Shuffle only when the source changes. A late artworks response must not
+  // reorder a carousel that shows carousel images.
+  const baseArtworks = useMemo(() => {
+    if (!sourceArtworks || sourceArtworks.length === 0) return [];
     if (sourceArtworks.length === 1) {
       // Pad single artwork with gradients
       return [sourceArtworks[0], ...placeholderCarouselItems.slice(0, 5)];
     }
     return pickForCarousel(sourceArtworks, 12);
-  }, [carouselImages, artworks, placeholderCarouselItems]);
+  }, [sourceArtworks]);
 
   const carouselArtworks = useMemo(() => {
-    if (carouselImages.length === 0 && artworks.length === 0) {
+    if (sourceArtworks === null) return [];
+    if (sourceArtworks.length === 0) {
       // Show only gradients when no carousel images or artworks
       return [...placeholderCarouselItems, ...placeholderCarouselItems];
     }
     if (baseArtworks.length === 0) return [];
     return [...baseArtworks, ...baseArtworks];
-  }, [
-    baseArtworks,
-    carouselImages.length,
-    artworks.length,
-    placeholderCarouselItems,
-  ]);
+  }, [baseArtworks, sourceArtworks]);
 
   const readyTarget = useMemo(
     () => Math.min(3, baseArtworks.length),

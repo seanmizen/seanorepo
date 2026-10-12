@@ -1,13 +1,48 @@
-// Shows an uploaded photo or video in three stages:
+// Shows an uploaded photo or video in two stages:
 // 1. The average colour and the thumbhash blur, at once, from the API data.
-// 2. The variant that srcset selects for the screen, over the blur.
-// 3. The original file, only when the backend has no variants yet.
+// 2. The variant that srcset selects for the screen. It fades in over the
+//    blur after it loads. When the backend has no variants yet, this is the
+//    original file.
 
 import { type CSSProperties, type FC, useMemo, useState } from 'react';
+import styled, { css } from 'styled-components';
 import { thumbHashToAverageRGBA, thumbHashToDataURL } from 'thumbhash';
 import type { ImageMedia, JoinedMedia } from '@/types';
 
 const API_URL = import.meta.env.API_URL;
+
+// The frame holds the placeholder. The caller's className sets its size.
+const Frame = styled.span`
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+`;
+
+// The photo or video stays invisible until it is ready, then fades in.
+const fill = css<{ $loaded: boolean }>`
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: ${(p) => (p.$loaded ? 1 : 0)};
+  transition: opacity 400ms ease;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`;
+
+const FillImage = styled.img<{ $loaded: boolean }>`
+  ${fill}
+`;
+
+const FillVideo = styled.video<{ $loaded: boolean }>`
+  ${fill}
+`;
 
 interface Variant {
   width: number;
@@ -76,15 +111,13 @@ export const Media: FC<MediaProps> = ({
 }) => {
   const [loaded, setLoaded] = useState(false);
 
-  const placeholder = useMemo<CSSProperties>(() => {
-    if (!media.thumbhash) return {};
+  const placeholder = useMemo<CSSProperties | undefined>(() => {
+    if (!media.thumbhash) return undefined;
     const hash = decodeThumbhash(media.thumbhash);
     const { r, g, b, a } = thumbHashToAverageRGBA(hash);
     return {
       backgroundColor: `rgba(${r * 255}, ${g * 255}, ${b * 255}, ${a})`,
       backgroundImage: `url(${thumbHashToDataURL(hash)})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
     };
   }, [media.thumbhash]);
 
@@ -93,39 +126,37 @@ export const Media: FC<MediaProps> = ({
     [media.variants],
   );
 
-  // A transparent photo must not show the blur behind it after it loads.
-  const style = loaded ? undefined : placeholder;
-  const handleReady = () => {
+  const reveal = () => {
     setLoaded(true);
     onReady?.();
   };
 
   const isVideo = media.mime_type.startsWith('video/');
   const posterUrl = media.poster_path ? uploadUrl(media.poster_path) : null;
+  const largest = variants[variants.length - 1];
 
   if (isVideo && !(video === 'poster' && posterUrl)) {
-    const largest = variants[variants.length - 1];
     return (
-      <video
-        className={className}
-        style={style}
-        src={uploadUrl(largest ? largest.path : media.storage_path)}
-        poster={posterUrl ?? undefined}
-        width={media.width ?? undefined}
-        height={media.height ?? undefined}
-        autoPlay={video === 'autoplay'}
-        controls={video === 'controls'}
-        preload={video === 'autoplay' ? 'auto' : 'metadata'}
-        loop
-        muted
-        playsInline
-        onLoadedData={handleReady}
-        onError={handleReady}
-      />
+      <Frame className={className} style={placeholder}>
+        <FillVideo
+          $loaded={loaded}
+          src={uploadUrl(largest ? largest.path : media.storage_path)}
+          poster={posterUrl ?? undefined}
+          autoPlay={video === 'autoplay'}
+          controls={video === 'controls'}
+          preload={video === 'autoplay' ? 'auto' : 'metadata'}
+          loop
+          muted
+          playsInline
+          onLoadedData={reveal}
+          // With preload="metadata", some browsers never fire loadeddata.
+          onLoadedMetadata={video === 'controls' ? reveal : undefined}
+          onError={reveal}
+        />
+      </Frame>
     );
   }
 
-  const largest = variants[variants.length - 1];
   const src = isVideo
     ? (posterUrl as string)
     : uploadUrl(largest ? largest.path : media.storage_path);
@@ -135,19 +166,24 @@ export const Media: FC<MediaProps> = ({
       undefined;
 
   return (
-    <img
-      className={className}
-      style={style}
-      src={src}
-      srcSet={srcSet}
-      sizes={srcSet ? sizes : undefined}
-      alt={alt}
-      width={media.width ?? undefined}
-      height={media.height ?? undefined}
-      loading={eager ? 'eager' : 'lazy'}
-      decoding="async"
-      onLoad={handleReady}
-      onError={handleReady}
-    />
+    <Frame className={className} style={placeholder}>
+      <FillImage
+        $loaded={loaded}
+        src={src}
+        srcSet={srcSet}
+        sizes={srcSet ? sizes : undefined}
+        alt={alt}
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+        // Decode before the fade, so the photo never paints in strips.
+        onLoad={(event) => {
+          event.currentTarget
+            .decode()
+            .catch(() => {})
+            .finally(reveal);
+        }}
+        onError={reveal}
+      />
+    </Frame>
   );
 };
