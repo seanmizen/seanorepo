@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { openDbConnection } from '../services/db';
+import { mediaFilePaths, queueMediaProcessing } from '../services/media';
 import { storage } from '../services/storage';
 
 interface Image {
@@ -14,6 +15,9 @@ interface Image {
   height: number | null;
   storage_path: string;
   alt_text: string | null;
+  thumbhash: string | null;
+  variants: string | null;
+  poster_path: string | null;
   created_at: string;
 }
 
@@ -97,6 +101,10 @@ export async function imageRoutes(fastify: FastifyInstance) {
               ...image,
               url,
             });
+
+            // Runs in the background. The site serves the original until
+            // the variants exist.
+            queueMediaProcessing(imageId);
           }
 
           if (uploadedImages.length === 0) {
@@ -221,8 +229,10 @@ export async function imageRoutes(fastify: FastifyInstance) {
             return reply.status(404).send({ error: 'Image not found' });
           }
 
-          // Delete from storage
-          await storage.delete(image.storage_path);
+          // Delete the original and every variant from storage
+          await Promise.all(
+            mediaFilePaths(image).map((p) => storage.delete(p)),
+          );
 
           // Delete from database
           db.run('DELETE FROM images WHERE id = ?', [imageId]);

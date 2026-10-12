@@ -1,9 +1,16 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { seedDatabase } from '../services/db';
 
 // Test database path
 export const TEST_DB_PATH = ':memory:'; // In-memory DB for tests
+
+// The storage provider reads UPLOADS_PATH one time, on first import.
+// Without this line, tests write to the production default /app/uploads.
+process.env.UPLOADS_PATH ||= mkdtempSync(join(tmpdir(), 'caroline-test-'));
 
 // Global test database instance
 let testDb: Database | null = null;

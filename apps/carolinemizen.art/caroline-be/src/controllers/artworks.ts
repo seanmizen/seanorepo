@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { requireAdmin } from '../middleware/auth';
 import { openDbConnection } from '../services/db';
+import { mediaColumns } from '../services/media';
 
 interface Artwork {
   id: number;
@@ -64,7 +65,8 @@ export async function artworkRoutes(fastify: FastifyInstance) {
           let query = `
             SELECT a.*,
                    i.storage_path as primary_image_path,
-                   i.mime_type as primary_image_mime_type
+                   i.mime_type as primary_image_mime_type,
+                   ${mediaColumns('i', 'primary_image')}
             FROM artworks a
             LEFT JOIN images i ON a.primary_image_id = i.id
           `;
@@ -81,7 +83,8 @@ export async function artworkRoutes(fastify: FastifyInstance) {
             query = `
               SELECT a.*,
                      i.storage_path as primary_image_path,
-                     i.mime_type as primary_image_mime_type
+                     i.mime_type as primary_image_mime_type,
+                   ${mediaColumns('i', 'primary_image')}
               FROM artworks a
               LEFT JOIN images i ON a.primary_image_id = i.id
               JOIN gallery_artworks ga ON a.id = ga.artwork_id

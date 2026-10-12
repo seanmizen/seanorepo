@@ -25,8 +25,11 @@ RUN yarn install
 FROM oven/bun:latest AS dev
 WORKDIR /app
 
-# Install runtime dependencies for native modules
-RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies: python3 for native modules, ffmpeg for the
+# video variants (services/media.ts)
+RUN apt-get update && apt-get install -y python3 \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -38,8 +41,11 @@ CMD ["bun", "--hot", "--no-clear-screen", "src/index.ts"]
 FROM oven/bun:latest AS prod
 WORKDIR /app
 
-# Install runtime dependencies for native modules
-RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies: python3 for native modules, ffmpeg for the
+# video variants (services/media.ts)
+RUN apt-get update && apt-get install -y python3 \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy application source first
 COPY apps/carolinemizen.art/caroline-be ./

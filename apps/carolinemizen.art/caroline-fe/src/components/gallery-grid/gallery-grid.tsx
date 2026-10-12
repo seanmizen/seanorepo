@@ -1,20 +1,18 @@
 import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import styled, { css } from 'styled-components';
+import type { JoinedMedia } from '@/types';
+import { joinedMedia, Media } from '../media';
 
-const API_URL = import.meta.env.API_URL;
-
-export interface Gallery {
+export interface Gallery extends JoinedMedia<'cover_image'> {
   id: number;
   name: string;
   slug: string;
   description: string | null;
-  cover_image_path?: string | null;
-  cover_image_mime_type?: string | null;
   is_featured?: boolean;
 }
 
-interface PlaceholderGallery {
+export interface PlaceholderGallery {
   id: number;
   name: string;
   slug: string;
@@ -136,13 +134,12 @@ const CardMedia = css`
   display: block;
 `;
 
-const CoverImage = styled.img`
+const Cover = styled(Media)`
   ${CardMedia}
 `;
 
-const CoverVideo = styled.video`
-  ${CardMedia}
-`;
+// The featured card spans half of a grid that is at most 1040px wide.
+const COVER_SIZES = '(max-width: 380px) 100vw, (max-width: 1100px) 50vw, 520px';
 
 const GradientPlaceholder = styled.div<{
   $variant: 'purple' | 'blue' | 'green';
@@ -206,6 +203,10 @@ export const GalleryGrid: FC<GalleryGridProps> = ({
         const isFeatured = featured && idx === 0;
         const isPlaceholder = gallery.id < 0;
         const gradient = 'gradient' in gallery ? gallery.gradient : null;
+        const cover =
+          !isPlaceholder && 'cover_image_path' in gallery
+            ? joinedMedia(gallery, 'cover_image')
+            : null;
 
         return (
           <Card
@@ -218,25 +219,8 @@ export const GalleryGrid: FC<GalleryGridProps> = ({
             $featured={isFeatured}
             $isPlaceholder={isPlaceholder}
           >
-            {!isPlaceholder &&
-            'cover_image_path' in gallery &&
-            gallery.cover_image_path ? (
-              gallery.cover_image_mime_type?.startsWith('video/') ? (
-                <CoverVideo
-                  src={`${API_URL}/uploads/${gallery.cover_image_path}`}
-                  loop
-                  autoPlay
-                  muted
-                  playsInline
-                />
-              ) : (
-                <CoverImage
-                  src={`${API_URL}/uploads/${gallery.cover_image_path}`}
-                  alt={gallery.name}
-                  loading="lazy"
-                  decoding="async"
-                />
-              )
+            {cover ? (
+              <Cover media={cover} alt={gallery.name} sizes={COVER_SIZES} />
             ) : gradient ? (
               <GradientPlaceholder $variant={gradient} />
             ) : (

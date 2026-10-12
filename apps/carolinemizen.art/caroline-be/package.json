@@ -35,7 +35,9 @@
     "fastify": "^5.6.2",
     "humps": "^2.0.1",
     "nodemailer": "^6.9.16",
-    "stripe": "^18.5.0"
+    "sharp": "^0.35.5",
+    "stripe": "^18.5.0",
+    "thumbhash": "^0.1.1"
   },
   "devDependencies": {
     "@rslib/core": "^0.18.3",

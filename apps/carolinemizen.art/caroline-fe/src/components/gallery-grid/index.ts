@@ -1,2 +1,2 @@
-export type { Gallery } from './gallery-grid';
+export type { Gallery, PlaceholderGallery } from './gallery-grid';
 export { GalleryGrid } from './gallery-grid';

@@ -13,6 +13,11 @@ export interface StorageProvider {
   ): Promise<{ path: string; url: string }>;
 
   /**
+   * Read a file from storage
+   */
+  read(path: string): Promise<Buffer>;
+
+  /**
    * Delete a file from storage
    */
   delete(path: string): Promise<void>;

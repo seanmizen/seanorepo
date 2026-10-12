@@ -7,18 +7,22 @@ import {
   useState,
 } from 'react';
 import styled, { css } from 'styled-components';
-import { FullScreenComponent, GalleryPreview, Nav } from '@/components';
+import {
+  FullScreenComponent,
+  GalleryPreview,
+  joinedMedia,
+  Media,
+  Nav,
+} from '@/components';
 import type { Gallery } from '@/components/gallery-grid';
 import { useArtworkCache } from '@/contexts/artwork-cache-context';
-import type { Artwork } from '@/types';
+import type { Artwork, ImageMedia } from '@/types';
 
 const API_URL = import.meta.env.API_URL;
 
-interface CarouselImageResponse {
+interface CarouselImageResponse extends ImageMedia {
   id: number;
   original_name: string;
-  storage_path: string;
-  mime_type: string;
 }
 
 const groupHalo = css`
@@ -226,13 +230,20 @@ const CarouselMedia = css`
   filter: grayscale(0.2) contrast(1.05);
 `;
 
-const CarouselImage = styled.img`
+const CarouselImage = styled(Media)`
   ${CarouselMedia}
 `;
 
-const CarouselVideo = styled.video`
-  ${CarouselMedia}
-`;
+/**
+ * Each slide is min(40vw, 900px) wide and as tall as the screen, and the
+ * media covers it. A wide picture must be wider than the slide to fill the
+ * height.
+ */
+const carouselSizes = (media: ImageMedia) => {
+  const slide = 'min(40vw, 900px)';
+  if (!media.width || !media.height) return slide;
+  return `max(${slide}, ${(media.width / media.height).toFixed(3)} * 100vh)`;
+};
 
 const CarouselGradient = styled.div<{ $variant: 'purple' | 'blue' | 'green' }>`
   height: 100%;
@@ -336,6 +347,11 @@ const Home: FC = () => {
             primary_image_id: null,
             primary_image_path: img.storage_path,
             primary_image_mime_type: img.mime_type,
+            primary_image_width: img.width,
+            primary_image_height: img.height,
+            primary_image_thumbhash: img.thumbhash,
+            primary_image_variants: img.variants,
+            primary_image_poster_path: img.poster_path,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }));
@@ -463,34 +479,17 @@ const Home: FC = () => {
                   );
                 }
 
-                const isVideo =
-                  item.primary_image_mime_type?.startsWith('video/');
-
-                if (isVideo) {
-                  return (
-                    <CarouselVideo
-                      key={`${item.id}-${index}`}
-                      src={`${API_URL}/uploads/${item.primary_image_path}`}
-                      loop
-                      autoPlay
-                      muted
-                      playsInline
-                      onLoadedData={onResolved}
-                      onError={onResolved}
-                    />
-                  );
-                }
+                const media = joinedMedia(item, 'primary_image');
+                if (!media) return null;
 
                 return (
                   <CarouselImage
                     key={`${item.id}-${index}`}
-                    src={`${API_URL}/uploads/${item.primary_image_path}`}
+                    media={media}
                     alt=""
-                    aria-hidden="true"
-                    loading={eager ? 'eager' : 'lazy'}
-                    decoding="async"
-                    onLoad={onResolved}
-                    onError={onResolved}
+                    sizes={carouselSizes(media)}
+                    eager={eager}
+                    onReady={onResolved}
                   />
                 );
               })}

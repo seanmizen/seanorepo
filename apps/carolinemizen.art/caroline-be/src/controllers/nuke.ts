@@ -1,4 +1,4 @@
-import { copyFile, readdir, stat, unlink } from 'node:fs/promises';
+import { copyFile, readdir, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { seedDatabase } from '../services/db';
@@ -52,6 +52,12 @@ export async function nukeRoutes(fastify: FastifyInstance) {
         // If images folder doesn't exist, that's fine
         console.log('✓ No images folder to clean');
       }
+
+      // Delete all variants
+      await rm(path.join(uploadsPath, 'variants'), {
+        recursive: true,
+        force: true,
+      });
 
       // Reset database
       await seedDatabase();

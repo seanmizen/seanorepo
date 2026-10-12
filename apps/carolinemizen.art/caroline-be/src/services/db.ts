@@ -29,7 +29,10 @@ const runQuery = (connection: DatabaseType, query: string) => {
 const seedDatabase = async () => {
   const connection = await openDbConnection();
 
-  // Drop all tables in reverse dependency order
+  // Drop all tables in reverse dependency order.
+  // The migrations run again at the end, so their tables go too.
+  await runQuery(connection, 'DROP TABLE IF EXISTS schema_migrations');
+  await runQuery(connection, 'DROP TABLE IF EXISTS carousel_images');
   await runQuery(connection, 'DROP TABLE IF EXISTS sessions');
   await runQuery(connection, 'DROP TABLE IF EXISTS magic_tokens');
   await runQuery(connection, 'DROP TABLE IF EXISTS orders');
@@ -245,6 +248,11 @@ const seedDatabase = async () => {
   }
 
   connection.close();
+
+  // Dynamic import: migrations.ts imports this file.
+  const { runMigrations } = await import('./migrations');
+  await runMigrations();
+
   console.debug('Database seeded with new CMS schema');
 };
 
