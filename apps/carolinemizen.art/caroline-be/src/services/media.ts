@@ -257,6 +257,13 @@ export const queueMediaProcessing = (imageId: number): Promise<void> => {
   queue = queue
     .then(() => processMedia(imageId))
     .catch((error) => {
+      // A row without its file fails at each startup. One line is sufficient.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.warn(
+          `[Media] Skipped image ${imageId}: the original file does not exist`,
+        );
+        return;
+      }
       console.error(`[Media] Failed to process image ${imageId}:`, error);
     });
   return queue;
