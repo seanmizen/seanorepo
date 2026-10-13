@@ -2,6 +2,7 @@ import { copyFile, readdir, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { seedDatabase } from '../services/db';
+import { uploadsPath } from '../services/storage/uploads-path';
 
 export async function nukeRoutes(fastify: FastifyInstance) {
   /**
@@ -28,8 +29,7 @@ export async function nukeRoutes(fastify: FastifyInstance) {
       console.log(`✓ Database backed up to: ${backupPath}`);
 
       // Delete all images from storage
-      const uploadsPath = process.env.UPLOADS_PATH || './uploads';
-      const imagesPath = path.join(uploadsPath, 'images');
+      const imagesPath = path.join(uploadsPath(), 'images');
 
       let deletedCount = 0;
       try {
@@ -54,7 +54,7 @@ export async function nukeRoutes(fastify: FastifyInstance) {
       }
 
       // Delete all variants
-      await rm(path.join(uploadsPath, 'variants'), {
+      await rm(path.join(uploadsPath(), 'variants'), {
         recursive: true,
         force: true,
       });

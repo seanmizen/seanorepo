@@ -1,9 +1,10 @@
 import { LocalStorageProvider } from './local-storage';
 import type { StorageProvider } from './storage.interface';
+import { uploadsPath } from './uploads-path';
 
 // Configuration from environment variables
 const STORAGE_TYPE = process.env.STORAGE_TYPE || 'local';
-const UPLOADS_PATH = process.env.UPLOADS_PATH || '/app/uploads';
+const UPLOADS_PATH = uploadsPath();
 const UPLOADS_URL = process.env.UPLOADS_URL || 'http://localhost:4021/uploads';
 
 // Factory function to create storage provider
