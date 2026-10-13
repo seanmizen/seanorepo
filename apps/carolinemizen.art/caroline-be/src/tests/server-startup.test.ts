@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { seedDatabase } from '../services/db';
+import { storage } from '../services/storage';
+import { uploadsPath } from '../services/storage/uploads-path';
 
 describe('Server Startup Integration Test', () => {
   let server: FastifyInstance;
@@ -59,6 +63,17 @@ describe('Server Startup Integration Test', () => {
     const data = (await response.json()) as { artworks: unknown[] };
     expect(data).toHaveProperty('artworks');
     expect(Array.isArray(data.artworks)).toBe(true);
+  });
+
+  test('the server serves an upload at the URL that the storage returns', async () => {
+    const storagePath = 'images/url-check.txt';
+    await mkdir(join(uploadsPath(), 'images'), { recursive: true });
+    await writeFile(join(uploadsPath(), storagePath), 'url-check');
+
+    const { pathname } = new URL(storage.getUrl(storagePath));
+    const response = await fetch(`${serverUrl}${pathname}`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('url-check');
   });
 
   test('admin artworks endpoint should require auth', async () => {

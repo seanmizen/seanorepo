@@ -1,4 +1,10 @@
 /**
+ * The route that serves the uploads. The static route in src/index.ts and the
+ * default UPLOADS_URL both use it, so the URLs that the API returns resolve.
+ */
+export const UPLOADS_ROUTE = '/api/uploads';
+
+/**
  * The directory that holds the uploads. Every reader of UPLOADS_PATH uses
  * this function, so the static route and the storage provider agree. Docker
  * sets UPLOADS_PATH to /app/uploads.

@@ -15,7 +15,7 @@ import {
 } from './services/db';
 import { queueUnprocessedMedia } from './services/media';
 import { runMigrations } from './services/migrations';
-import { uploadsPath } from './services/storage/uploads-path';
+import { UPLOADS_ROUTE, uploadsPath } from './services/storage/uploads-path';
 
 // Validate required environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -74,7 +74,7 @@ console.log(
 const UPLOADS_PATH = uploadsPath();
 fastify.register(fastifyStatic, {
   root: path.resolve(UPLOADS_PATH),
-  prefix: '/api/uploads/',
+  prefix: `${UPLOADS_ROUTE}/`,
   decorateReply: false,
   // Every upload and variant has a unique name and never changes.
   cacheControl: false,
