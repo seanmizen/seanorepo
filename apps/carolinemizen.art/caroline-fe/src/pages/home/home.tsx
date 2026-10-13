@@ -163,6 +163,10 @@ const HeaderTextContainer = styled.div`
   ${glassmorphismStyle}
   padding: 1rem 2rem;
   width: 100%;
+  /* The padding stays inside the screen width. */
+  box-sizing: border-box;
+  /* A heading that wraps on a narrow screen stays centred. */
+  text-align: center;
   display: flex;
   justify-content: center;
   overflow: hidden;

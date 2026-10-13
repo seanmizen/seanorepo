@@ -69,7 +69,10 @@ const Grid = styled.div<{ $featured: boolean }>`
         `}
 `;
 
-const Card = styled(Link)<{ $featured: boolean; $isPlaceholder: boolean }>`
+// The featured grid has 12 columns above 1100px: the first card spans 6 and
+// the others span 3. The other grid makes its own columns, so a card there
+// has no span.
+const Card = styled(Link)<{ $span?: 6 | 3; $isPlaceholder: boolean }>`
   --card-max-h: 25rem;
   /* --card-max-h: 70vh; */
 
@@ -105,24 +108,15 @@ const Card = styled(Link)<{ $featured: boolean; $isPlaceholder: boolean }>`
     `}
 
   ${(p) =>
-    p.$featured &&
+    p.$span &&
     css`
-      grid-column: span 6;
+      grid-column: span ${p.$span};
 
       @media (max-width: 1100px) {
         grid-column: auto;
       }
     `}
 
-  ${(p) =>
-    !p.$featured &&
-    css`
-      grid-column: span 3;
-
-      @media (max-width: 1100px) {
-        grid-column: auto;
-      }
-    `}
 `;
 
 const CardMedia = css`
@@ -216,7 +210,7 @@ export const GalleryGrid: FC<GalleryGridProps> = ({
             style={
               isPlaceholder ? { cursor: 'default', opacity: 0.7 } : undefined
             }
-            $featured={isFeatured}
+            $span={featured ? (isFeatured ? 6 : 3) : undefined}
             $isPlaceholder={isPlaceholder}
           >
             {cover ? (

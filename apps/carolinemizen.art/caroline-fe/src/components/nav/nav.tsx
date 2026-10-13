@@ -34,6 +34,9 @@ export const StyledNav = styled.nav<{ $dock?: NavDock }>`
   top: ${(p) => (p.$dock === 'bottom' ? 'auto' : '0')};
   bottom: ${(p) => (p.$dock === 'bottom' ? '0' : 'auto')};
   z-index: 1000;
+  /* The halo of each group goes 28px past the group. Clip it at the screen
+     edge, or a narrow screen scrolls horizontally. clip keeps sticky. */
+  overflow-x: clip;
 
   /* background: var(--nav-background-color); */
   backdrop-filter: blur(10px);
