@@ -25,6 +25,20 @@ interface CarouselImageResponse extends ImageMedia {
   original_name: string;
 }
 
+// The request starts when the bundle loads, before React mounts. The browser
+// gives it the response of the preload in public/index.html. A body can be
+// read one time only, so every mount shares the parsed result. It is null
+// when the request fails.
+const carouselRequest: Promise<CarouselImageResponse[] | null> = fetch(
+  `${API_URL}/carousel`,
+)
+  .then((response) => (response.ok ? response.json() : null))
+  .then((data) => (data ? (data.images as CarouselImageResponse[]) : null))
+  .catch((error) => {
+    console.error('Failed to fetch carousel:', error);
+    return null;
+  });
+
 const groupHalo = css`
   position: relative;
   isolation: isolate;
@@ -328,47 +342,39 @@ const Home: FC = () => {
   const [ready, setReady] = useState(false);
   const [duration, setDuration] = useState(90);
 
-  // Fetch carousel images and featured galleries on mount
+  // Read the carousel images and fetch the featured galleries on mount
   useEffect(() => {
     // StrictMode runs this effect two times in dev. Only the last run may
     // set the carousel, or the slides change after the first render.
     let cancelled = false;
 
     const fetchCarousel = async () => {
-      try {
-        const response = await fetch(`${API_URL}/carousel`);
-        if (cancelled) return;
-        if (!response.ok) {
-          setCarouselImages([]);
-          return;
-        }
-        const data = await response.json();
-        // Transform carousel images to artwork-like objects for compatibility
-        const carouselArtworks: Artwork[] = (
-          data.images as CarouselImageResponse[]
-        ).map((img) => ({
-          id: img.id,
-          title: img.original_name,
-          description: null,
-          price_cents: 0,
-          currency: 'USD',
-          status: 'available' as const,
-          primary_image_id: null,
-          primary_image_path: img.storage_path,
-          primary_image_mime_type: img.mime_type,
-          primary_image_width: img.width,
-          primary_image_height: img.height,
-          primary_image_thumbhash: img.thumbhash,
-          primary_image_variants: img.variants,
-          primary_image_poster_path: img.poster_path,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-        if (!cancelled) setCarouselImages(carouselArtworks);
-      } catch (error) {
-        console.error('Failed to fetch carousel:', error);
-        if (!cancelled) setCarouselImages([]);
+      const images = await carouselRequest;
+      if (cancelled) return;
+      if (!images) {
+        setCarouselImages([]);
+        return;
       }
+      // Transform carousel images to artwork-like objects for compatibility
+      const carouselArtworks: Artwork[] = images.map((img) => ({
+        id: img.id,
+        title: img.original_name,
+        description: null,
+        price_cents: 0,
+        currency: 'USD',
+        status: 'available' as const,
+        primary_image_id: null,
+        primary_image_path: img.storage_path,
+        primary_image_mime_type: img.mime_type,
+        primary_image_width: img.width,
+        primary_image_height: img.height,
+        primary_image_thumbhash: img.thumbhash,
+        primary_image_variants: img.variants,
+        primary_image_poster_path: img.poster_path,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+      setCarouselImages(carouselArtworks);
     };
 
     const fetchFeaturedGalleries = async () => {
