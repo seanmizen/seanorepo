@@ -2,6 +2,7 @@
 
 import { Database } from 'bun:sqlite';
 import { existsSync, unlinkSync } from 'node:fs';
+import { uploadsPath } from './storage/uploads-path';
 
 type DatabaseType = Database;
 
@@ -344,8 +345,7 @@ const ingestOrphanedImages = async () => {
   const { readdir, stat } = await import('node:fs/promises');
   const path = await import('node:path');
 
-  const uploadsPath = process.env.UPLOADS_PATH || './uploads';
-  const imagesPath = path.join(uploadsPath, 'images');
+  const imagesPath = path.join(uploadsPath(), 'images');
 
   try {
     // Check if images folder exists
