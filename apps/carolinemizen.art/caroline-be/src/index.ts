@@ -8,6 +8,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { routes } from './controllers';
+import { corsOrigin, corsOriginWarning } from './services/cors-origin';
 import {
   ingestOrphanedImages,
   needsSeeding,
@@ -41,7 +42,7 @@ const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
 });
 
 fastify.register(cors, {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:4020',
+  origin: corsOrigin(),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
@@ -111,6 +112,9 @@ const start = async () => {
     await fastify.close();
     process.exit(0);
   });
+
+  const corsWarning = corsOriginWarning(process.env.NODE_ENV, corsOrigin());
+  if (corsWarning) console.warn(`⚠️  ${corsWarning}`);
 
   // Check if database needs seeding on startup
   if (await needsSeeding()) {
