@@ -1,7 +1,8 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import styled from 'styled-components';
-import type { Artwork as ArtworkType } from '@/types';
+import styled, { css } from 'styled-components';
+import type { Artwork as ArtworkType, ImageMedia } from '@/types';
+import { Media } from '../components/media';
 import { Nav } from '../components/nav';
 
 const Container = styled.div`
@@ -41,8 +42,10 @@ const ContentGrid = styled.div`
 
 const GallerySection = styled.div``;
 
-const MainImage = styled.img`
+const MainMedia = css`
+  display: block;
   width: 100%;
+  height: auto;
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 8px;
@@ -50,14 +53,17 @@ const MainImage = styled.img`
   margin-bottom: 1rem;
 `;
 
-const MainVideo = styled.video`
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 8px;
-  background: #f5f5f5;
-  margin-bottom: 1rem;
+const MainImage = styled(Media)`
+  ${MainMedia}
 `;
+
+const MainImagePlaceholder = styled.div`
+  ${MainMedia}
+`;
+
+// Half of a page that is at most 1200px wide, or the full width on a phone.
+const MAIN_SIZES = '(max-width: 768px) 100vw, 600px';
+const THUMBNAIL_SIZES = '160px';
 
 const ThumbnailGrid = styled.div`
   display: grid;
@@ -78,13 +84,8 @@ const Thumbnail = styled.div<{ selected: boolean }>`
   }
 `;
 
-const ThumbnailImage = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-`;
-
-const ThumbnailVideo = styled.video`
+const ThumbnailImage = styled(Media)`
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -207,14 +208,9 @@ const ErrorMessage = styled.div`
 
 const API_URL = import.meta.env.API_URL;
 
-const getImageUrl = (storagePath: string) =>
-  `${API_URL}/uploads/${storagePath}`;
-
-interface Image {
+interface Image extends ImageMedia {
   id: number;
   filename: string;
-  mime_type: string;
-  storage_path: string;
 }
 
 const formatPrice = (cents: number, currency: string): string => {
@@ -308,23 +304,16 @@ const Artwork: FC = () => {
         <ContentGrid>
           <GallerySection>
             {selectedImage ? (
-              selectedImage.mime_type.startsWith('video/') ? (
-                <MainVideo
-                  key={selectedImage.id}
-                  src={getImageUrl(selectedImage.storage_path)}
-                  controls
-                  loop
-                  muted
-                  playsInline
-                />
-              ) : (
-                <MainImage
-                  src={getImageUrl(selectedImage.storage_path)}
-                  alt={artwork.title}
-                />
-              )
+              <MainImage
+                key={selectedImage.id}
+                media={selectedImage}
+                alt={artwork.title}
+                sizes={MAIN_SIZES}
+                video="controls"
+                eager
+              />
             ) : (
-              <MainImage as="div" />
+              <MainImagePlaceholder />
             )}
 
             {images.length > 1 && (
@@ -335,18 +324,12 @@ const Artwork: FC = () => {
                     selected={index === selectedImageIndex}
                     onClick={() => setSelectedImageIndex(index)}
                   >
-                    {image.mime_type.startsWith('video/') ? (
-                      <ThumbnailVideo
-                        src={getImageUrl(image.storage_path)}
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      <ThumbnailImage
-                        src={getImageUrl(image.storage_path)}
-                        alt={`${artwork.title} - view ${index + 1}`}
-                      />
-                    )}
+                    <ThumbnailImage
+                      media={image}
+                      alt={`${artwork.title} - view ${index + 1}`}
+                      sizes={THUMBNAIL_SIZES}
+                      video="poster"
+                    />
                   </Thumbnail>
                 ))}
               </ThumbnailGrid>

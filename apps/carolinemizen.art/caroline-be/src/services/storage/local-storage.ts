@@ -1,4 +1,4 @@
-import { access, mkdir, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { StorageProvider } from './storage.interface';
 
@@ -31,6 +31,10 @@ export class LocalStorageProvider implements StorageProvider {
       path: filePath,
       url: this.getUrl(filePath),
     };
+  }
+
+  async read(storagePath: string): Promise<Buffer> {
+    return readFile(path.join(this.basePath, storagePath));
   }
 
   async delete(storagePath: string): Promise<void> {

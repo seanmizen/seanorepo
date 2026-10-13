@@ -1,9 +1,13 @@
 import type { FC } from 'react';
 import styled from 'styled-components';
-import { type Gallery, GalleryGrid } from '../gallery-grid';
+import {
+  type Gallery,
+  GalleryGrid,
+  type PlaceholderGallery,
+} from '../gallery-grid';
 
 interface GalleryPreviewProps {
-  galleries: Gallery[];
+  galleries: Gallery[] | PlaceholderGallery[];
   featured?: boolean;
   isGhost?: boolean;
 }

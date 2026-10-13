@@ -1,6 +1,8 @@
 import { type FC, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
+import type { JoinedMedia } from '@/types';
+import { joinedMedia, Media } from '../components/media';
 import { Nav } from '../components/nav';
 
 const Container = styled.div`
@@ -66,19 +68,25 @@ const ArtworkCard = styled(Link)`
   }
 `;
 
-const ArtworkImage = styled.img`
+const ArtworkMedia = css`
+  display: block;
   width: 100%;
+  height: auto;
   aspect-ratio: 1;
   object-fit: cover;
   background: #f5f5f5;
 `;
 
-const ArtworkVideo = styled.video`
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  background: #f5f5f5;
+const ArtworkImage = styled(Media)`
+  ${ArtworkMedia}
 `;
+
+const ArtworkImagePlaceholder = styled.div`
+  ${ArtworkMedia}
+`;
+
+// The grid columns are at least 280px wide, in a page at most 1200px wide.
+const ARTWORK_SIZES = '(max-width: 640px) 100vw, 400px';
 
 const ArtworkInfo = styled.div`
   padding: 1.25rem;
@@ -146,7 +154,7 @@ interface Gallery {
   description: string | null;
 }
 
-interface Artwork {
+interface Artwork extends JoinedMedia<'primary_image'> {
   id: number;
   title: string;
   description: string | null;
@@ -154,8 +162,6 @@ interface Artwork {
   currency: string;
   status: string;
   primary_image_id: number | null;
-  primary_image_path: string | null;
-  primary_image_mime_type: string | null;
 }
 
 const formatPrice = (cents: number, currency: string): string => {
@@ -240,44 +246,38 @@ const Collection: FC = () => {
           <EmptyMessage>No artworks in this collection yet</EmptyMessage>
         ) : (
           <ArtworkGrid>
-            {artworks.map((artwork) => (
-              <ArtworkCard
-                key={artwork.id}
-                to={`/collections/${id}/${artwork.id}`}
-              >
-                {artwork.primary_image_path ? (
-                  artwork.primary_image_mime_type?.startsWith('video/') ? (
-                    <ArtworkVideo
-                      src={`${API_URL}/uploads/${artwork.primary_image_path}`}
-                      loop
-                      autoPlay
-                      muted
-                      playsInline
+            {artworks.map((artwork) => {
+              const media = joinedMedia(artwork, 'primary_image');
+              return (
+                <ArtworkCard
+                  key={artwork.id}
+                  to={`/collections/${id}/${artwork.id}`}
+                >
+                  {media ? (
+                    <ArtworkImage
+                      media={media}
+                      alt={artwork.title}
+                      sizes={ARTWORK_SIZES}
                     />
                   ) : (
-                    <ArtworkImage
-                      src={`${API_URL}/uploads/${artwork.primary_image_path}`}
-                      alt={artwork.title}
-                    />
-                  )
-                ) : (
-                  <ArtworkImage as="div" />
-                )}
-                <ArtworkInfo>
-                  <ArtworkTitle>{artwork.title}</ArtworkTitle>
-                  {artwork.status !== 'sold' && (
-                    <ArtworkPrice>
-                      {formatPrice(artwork.price_cents, artwork.currency)}
-                    </ArtworkPrice>
+                    <ArtworkImagePlaceholder />
                   )}
-                  <ArtworkStatus status={artwork.status}>
-                    {artwork.status === 'sold'
-                      ? 'sold - but commissions are available'
-                      : artwork.status}
-                  </ArtworkStatus>
-                </ArtworkInfo>
-              </ArtworkCard>
-            ))}
+                  <ArtworkInfo>
+                    <ArtworkTitle>{artwork.title}</ArtworkTitle>
+                    {artwork.status !== 'sold' && (
+                      <ArtworkPrice>
+                        {formatPrice(artwork.price_cents, artwork.currency)}
+                      </ArtworkPrice>
+                    )}
+                    <ArtworkStatus status={artwork.status}>
+                      {artwork.status === 'sold'
+                        ? 'sold - but commissions are available'
+                        : artwork.status}
+                    </ArtworkStatus>
+                  </ArtworkInfo>
+                </ArtworkCard>
+              );
+            })}
           </ArtworkGrid>
         )}
       </Container>

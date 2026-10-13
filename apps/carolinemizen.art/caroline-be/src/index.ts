@@ -13,6 +13,7 @@ import {
   needsSeeding,
   seedDatabase,
 } from './services/db';
+import { queueUnprocessedMedia } from './services/media';
 import { runMigrations } from './services/migrations';
 
 // Validate required environment variables
@@ -77,6 +78,11 @@ fastify.register(fastifyStatic, {
   root: path.resolve(UPLOADS_PATH),
   prefix: '/api/uploads/',
   decorateReply: false,
+  // Every upload and variant has a unique name and never changes.
+  cacheControl: false,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  },
 });
 
 console.log(`📁 Serving uploads from: ${path.resolve(UPLOADS_PATH)}`);
@@ -123,6 +129,9 @@ const start = async () => {
   // Ingest orphaned images from filesystem on startup
   console.log('🔍 Scanning for orphaned images...');
   await ingestOrphanedImages();
+
+  // Make the variants for uploads that do not have them yet
+  await queueUnprocessedMedia();
 
   const port = process.env.PORT ? Number(process.env.PORT) : 4021;
   try {

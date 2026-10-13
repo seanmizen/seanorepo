@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { requireAdmin } from '../middleware/auth';
 import { openDbConnection } from '../services/db';
+import { mediaColumns } from '../services/media';
 
 interface Gallery {
   id: number;
@@ -52,7 +53,8 @@ export async function galleryRoutes(fastify: FastifyInstance) {
           let query = `
             SELECT g.*,
                    i.storage_path as cover_image_path,
-                   i.mime_type as cover_image_mime_type
+                   i.mime_type as cover_image_mime_type,
+                   ${mediaColumns('i', 'cover_image')}
             FROM galleries g
             LEFT JOIN images i ON g.cover_image_id = i.id
           `;
@@ -137,7 +139,8 @@ export async function galleryRoutes(fastify: FastifyInstance) {
             .query(
               `SELECT a.*,
                       i.storage_path as primary_image_path,
-                      i.mime_type as primary_image_mime_type
+                      i.mime_type as primary_image_mime_type,
+                   ${mediaColumns('i', 'primary_image')}
                FROM artworks a
                JOIN gallery_artworks ga ON a.id = ga.artwork_id
                LEFT JOIN images i ON a.primary_image_id = i.id
@@ -372,7 +375,8 @@ export async function galleryRoutes(fastify: FastifyInstance) {
             .query(
               `SELECT a.*,
                       i.storage_path as primary_image_path,
-                      i.mime_type as primary_image_mime_type
+                      i.mime_type as primary_image_mime_type,
+                   ${mediaColumns('i', 'primary_image')}
                FROM artworks a
                JOIN gallery_artworks ga ON a.id = ga.artwork_id
                LEFT JOIN images i ON a.primary_image_id = i.id
@@ -549,7 +553,8 @@ export async function galleryRoutes(fastify: FastifyInstance) {
             .query(
               `SELECT g.*,
                       i.storage_path as cover_image_path,
-                      i.mime_type as cover_image_mime_type
+                      i.mime_type as cover_image_mime_type,
+                   ${mediaColumns('i', 'cover_image')}
                FROM galleries g
                LEFT JOIN images i ON g.cover_image_id = i.id
                WHERE g.is_featured = 1

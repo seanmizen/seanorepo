@@ -7,19 +7,37 @@ import {
   useState,
 } from 'react';
 import styled, { css } from 'styled-components';
-import { FullScreenComponent, GalleryPreview, Nav } from '@/components';
+import {
+  FullScreenComponent,
+  GalleryPreview,
+  joinedMedia,
+  Media,
+  Nav,
+} from '@/components';
 import type { Gallery } from '@/components/gallery-grid';
 import { useArtworkCache } from '@/contexts/artwork-cache-context';
-import type { Artwork } from '@/types';
+import type { Artwork, ImageMedia } from '@/types';
 
 const API_URL = import.meta.env.API_URL;
 
-interface CarouselImageResponse {
+interface CarouselImageResponse extends ImageMedia {
   id: number;
   original_name: string;
-  storage_path: string;
-  mime_type: string;
 }
+
+// The request starts when the bundle loads, before React mounts. The browser
+// gives it the response of the preload in public/index.html. A body can be
+// read one time only, so every mount shares the parsed result. It is null
+// when the request fails.
+const carouselRequest: Promise<CarouselImageResponse[] | null> = fetch(
+  `${API_URL}/carousel`,
+)
+  .then((response) => (response.ok ? response.json() : null))
+  .then((data) => (data ? (data.images as CarouselImageResponse[]) : null))
+  .catch((error) => {
+    console.error('Failed to fetch carousel:', error);
+    return null;
+  });
 
 const groupHalo = css`
   position: relative;
@@ -226,13 +244,20 @@ const CarouselMedia = css`
   filter: grayscale(0.2) contrast(1.05);
 `;
 
-const CarouselImage = styled.img`
+const CarouselImage = styled(Media)`
   ${CarouselMedia}
 `;
 
-const CarouselVideo = styled.video`
-  ${CarouselMedia}
-`;
+/**
+ * Each slide is min(40vw, 900px) wide and as tall as the screen, and the
+ * media covers it. A wide picture must be wider than the slide to fill the
+ * height.
+ */
+const carouselSizes = (media: ImageMedia) => {
+  const slide = 'min(40vw, 900px)';
+  if (!media.width || !media.height) return slide;
+  return `max(${slide}, ${(media.width / media.height).toFixed(3)} * 100vh)`;
+};
 
 const CarouselGradient = styled.div<{ $variant: 'purple' | 'blue' | 'green' }>`
   height: 100%;
@@ -305,7 +330,8 @@ const placeholderCarouselItems = [
 const Home: FC = () => {
   const [showArrow, setShowArrow] = useState(false);
   const { artworks } = useArtworkCache();
-  const [carouselImages, setCarouselImages] = useState<Artwork[]>([]);
+  // null until the carousel request completes
+  const [carouselImages, setCarouselImages] = useState<Artwork[] | null>(null);
   const [featuredGalleries, setFeaturedGalleries] = useState<Gallery[]>([]);
 
   const displayGalleries =
@@ -316,34 +342,39 @@ const Home: FC = () => {
   const [ready, setReady] = useState(false);
   const [duration, setDuration] = useState(90);
 
-  // Fetch carousel images and featured galleries on mount
+  // Read the carousel images and fetch the featured galleries on mount
   useEffect(() => {
+    // StrictMode runs this effect two times in dev. Only the last run may
+    // set the carousel, or the slides change after the first render.
+    let cancelled = false;
+
     const fetchCarousel = async () => {
-      try {
-        const response = await fetch(`${API_URL}/carousel`);
-        if (response.ok) {
-          const data = await response.json();
-          // Transform carousel images to artwork-like objects for compatibility
-          const carouselArtworks: Artwork[] = (
-            data.images as CarouselImageResponse[]
-          ).map((img) => ({
-            id: img.id,
-            title: img.original_name,
-            description: null,
-            price_cents: 0,
-            currency: 'USD',
-            status: 'available' as const,
-            primary_image_id: null,
-            primary_image_path: img.storage_path,
-            primary_image_mime_type: img.mime_type,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }));
-          setCarouselImages(carouselArtworks);
-        }
-      } catch (error) {
-        console.error('Failed to fetch carousel:', error);
+      const images = await carouselRequest;
+      if (cancelled) return;
+      if (!images) {
+        setCarouselImages([]);
+        return;
       }
+      // Transform carousel images to artwork-like objects for compatibility
+      const carouselArtworks: Artwork[] = images.map((img) => ({
+        id: img.id,
+        title: img.original_name,
+        description: null,
+        price_cents: 0,
+        currency: 'USD',
+        status: 'available' as const,
+        primary_image_id: null,
+        primary_image_path: img.storage_path,
+        primary_image_mime_type: img.mime_type,
+        primary_image_width: img.width,
+        primary_image_height: img.height,
+        primary_image_thumbhash: img.thumbhash,
+        primary_image_variants: img.variants,
+        primary_image_poster_path: img.poster_path,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+      setCarouselImages(carouselArtworks);
     };
 
     const fetchFeaturedGalleries = async () => {
@@ -360,34 +391,40 @@ const Home: FC = () => {
 
     fetchCarousel();
     fetchFeaturedGalleries();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const baseArtworks = useMemo(() => {
-    // Use carousel images if available, otherwise fall back to artworks
-    const sourceArtworks =
-      carouselImages.length > 0 ? carouselImages : artworks;
+  // Use the carousel images if there are any, otherwise the artworks. Wait
+  // for the carousel request, so the slides do not change after they show.
+  const sourceArtworks =
+    carouselImages === null
+      ? null
+      : carouselImages.length > 0
+        ? carouselImages
+        : artworks;
 
-    if (sourceArtworks.length === 0) return [];
+  // Shuffle only when the source changes. A late artworks response must not
+  // reorder a carousel that shows carousel images.
+  const baseArtworks = useMemo(() => {
+    if (!sourceArtworks || sourceArtworks.length === 0) return [];
     if (sourceArtworks.length === 1) {
       // Pad single artwork with gradients
       return [sourceArtworks[0], ...placeholderCarouselItems.slice(0, 5)];
     }
     return pickForCarousel(sourceArtworks, 12);
-  }, [carouselImages, artworks, placeholderCarouselItems]);
+  }, [sourceArtworks]);
 
   const carouselArtworks = useMemo(() => {
-    if (carouselImages.length === 0 && artworks.length === 0) {
+    if (sourceArtworks === null) return [];
+    if (sourceArtworks.length === 0) {
       // Show only gradients when no carousel images or artworks
       return [...placeholderCarouselItems, ...placeholderCarouselItems];
     }
     if (baseArtworks.length === 0) return [];
     return [...baseArtworks, ...baseArtworks];
-  }, [
-    baseArtworks,
-    carouselImages.length,
-    artworks.length,
-    placeholderCarouselItems,
-  ]);
+  }, [baseArtworks, sourceArtworks]);
 
   const readyTarget = useMemo(
     () => Math.min(3, baseArtworks.length),
@@ -463,34 +500,17 @@ const Home: FC = () => {
                   );
                 }
 
-                const isVideo =
-                  item.primary_image_mime_type?.startsWith('video/');
-
-                if (isVideo) {
-                  return (
-                    <CarouselVideo
-                      key={`${item.id}-${index}`}
-                      src={`${API_URL}/uploads/${item.primary_image_path}`}
-                      loop
-                      autoPlay
-                      muted
-                      playsInline
-                      onLoadedData={onResolved}
-                      onError={onResolved}
-                    />
-                  );
-                }
+                const media = joinedMedia(item, 'primary_image');
+                if (!media) return null;
 
                 return (
                   <CarouselImage
                     key={`${item.id}-${index}`}
-                    src={`${API_URL}/uploads/${item.primary_image_path}`}
+                    media={media}
                     alt=""
-                    aria-hidden="true"
-                    loading={eager ? 'eager' : 'lazy'}
-                    decoding="async"
-                    onLoad={onResolved}
-                    onError={onResolved}
+                    sizes={carouselSizes(media)}
+                    eager={eager}
+                    onReady={onResolved}
                   />
                 );
               })}
