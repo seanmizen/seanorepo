@@ -12,9 +12,12 @@ import type { ImageMedia, JoinedMedia } from '@/types';
 const API_URL = import.meta.env.API_URL;
 
 // The frame holds the placeholder. The caller's className sets its size.
+// The photo or video is in an absolute layer, so the frame takes the aspect
+// ratio of the media, as an <img> does. A caller's aspect-ratio overrides it.
 const Frame = styled.span`
   display: block;
   position: relative;
+  aspect-ratio: var(--media-ratio, auto);
   overflow: hidden;
   background-size: cover;
   background-position: center;
@@ -111,15 +114,21 @@ export const Media: FC<MediaProps> = ({
 }) => {
   const [loaded, setLoaded] = useState(false);
 
-  const placeholder = useMemo<CSSProperties | undefined>(() => {
-    if (!media.thumbhash) return undefined;
-    const hash = decodeThumbhash(media.thumbhash);
-    const { r, g, b, a } = thumbHashToAverageRGBA(hash);
-    return {
-      backgroundColor: `rgba(${r * 255}, ${g * 255}, ${b * 255}, ${a})`,
-      backgroundImage: `url(${thumbHashToDataURL(hash)})`,
+  const frameStyle = useMemo<CSSProperties>(() => {
+    const style: CSSProperties & Record<'--media-ratio', string> = {
+      '--media-ratio':
+        media.width && media.height
+          ? `${media.width} / ${media.height}`
+          : 'auto',
     };
-  }, [media.thumbhash]);
+    if (media.thumbhash) {
+      const hash = decodeThumbhash(media.thumbhash);
+      const { r, g, b, a } = thumbHashToAverageRGBA(hash);
+      style.backgroundColor = `rgba(${r * 255}, ${g * 255}, ${b * 255}, ${a})`;
+      style.backgroundImage = `url(${thumbHashToDataURL(hash)})`;
+    }
+    return style;
+  }, [media.width, media.height, media.thumbhash]);
 
   const variants = useMemo(
     () => parseVariants(media.variants),
@@ -137,7 +146,7 @@ export const Media: FC<MediaProps> = ({
 
   if (isVideo && !(video === 'poster' && posterUrl)) {
     return (
-      <Frame className={className} style={placeholder}>
+      <Frame className={className} style={frameStyle}>
         <FillVideo
           $loaded={loaded}
           src={uploadUrl(largest ? largest.path : media.storage_path)}
@@ -166,7 +175,7 @@ export const Media: FC<MediaProps> = ({
       undefined;
 
   return (
-    <Frame className={className} style={placeholder}>
+    <Frame className={className} style={frameStyle}>
       <FillImage
         $loaded={loaded}
         src={src}
