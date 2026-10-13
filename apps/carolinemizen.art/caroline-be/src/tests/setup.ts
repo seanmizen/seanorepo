@@ -12,6 +12,10 @@ export const TEST_DB_PATH = ':memory:'; // In-memory DB for tests
 // Without this line, tests write to the production default /app/uploads.
 process.env.UPLOADS_PATH ||= mkdtempSync(join(tmpdir(), 'caroline-test-'));
 
+// The database for the tests. An empty DB_PATH makes src/services/db.ts open
+// ./database.db, which is the local development database.
+const TEST_DB_DIR = mkdtempSync(join(tmpdir(), 'caroline-test-db-'));
+
 // Global test database instance
 let testDb: Database | null = null;
 
@@ -24,8 +28,7 @@ export function getTestDb(): Database {
 
 // Setup: Create fresh database before each test
 beforeEach(async () => {
-  // Override DB_PATH for tests
-  process.env.DB_PATH = '';
+  process.env.DB_PATH = TEST_DB_DIR;
   process.env.TEST_MODE = 'true';
 
   // Seed database
