@@ -1,0 +1,81 @@
+# Win10: labwc theme that copies the Windows 10 (1809 and later) window frame.
+# Values come from Windows 10 with "Show accent color on title bars" off.
+
+border.width: 1
+window.titlebar.padding.width: 0
+window.titlebar.padding.height: 0
+
+# Frame
+window.active.border.color: #707070
+window.inactive.border.color: #aaaaaa
+window.active.indicator.toggled-keybind.color: #707070
+
+# Title bar: white for active and inactive windows. Inactive text is grey.
+window.active.title.bg.color: #ffffff
+window.inactive.title.bg.color: #ffffff
+window.active.label.text.color: #000000
+window.inactive.label.text.color: #999999
+window.label.text.justify: left
+
+# Caption buttons are 46 x 30 px. The SVG files hold the glyphs and hover colors.
+window.button.width: 46
+window.button.height: 30
+window.button.spacing: 0
+window.button.hover.bg.corner-radius: 0
+window.active.button.unpressed.image.color: #000000
+window.inactive.button.unpressed.image.color: #999999
+
+# Shadows: wide and soft on the active window, smaller on inactive windows
+window.active.shadow.size: 24
+window.inactive.shadow.size: 14
+window.active.shadow.color: #00000048
+window.inactive.shadow.color: #00000028
+
+# Context menus: the Windows 10 light menu
+menu.overlap.x: 0
+menu.overlap.y: 0
+menu.width.min: 200
+menu.width.max: 360
+menu.border.width: 1
+menu.border.color: #cccccc
+menu.items.bg.color: #f2f2f2
+menu.items.text.color: #000000
+menu.items.disabled.text.color: #6d6d6d
+menu.items.active.bg.color: #91c9f7
+menu.items.active.text.color: #000000
+menu.items.padding.x: 32
+menu.items.padding.y: 5
+menu.separator.width: 1
+menu.separator.padding.width: 2
+menu.separator.padding.height: 4
+menu.separator.color: #919191
+menu.title.bg.color: #f2f2f2
+menu.title.text.color: #000000
+menu.title.text.justify: left
+
+# Alt+Tab switcher: dark, as in Windows 10
+osd.bg.color: #1f1f1f
+osd.border.color: #1f1f1f
+osd.border.width: 1
+osd.label.text.color: #ffffff
+osd.window-switcher.width: 50%
+osd.window-switcher.padding: 12
+osd.window-switcher.item.padding.x: 12
+osd.window-switcher.item.padding.y: 8
+osd.window-switcher.item.active.border.width: 2
+osd.window-switcher.preview.border.width: 2
+osd.window-switcher.preview.border.color: #ffffff
+osd.workspace-switcher.boxes.width: 20
+osd.workspace-switcher.boxes.height: 20
+
+# Aero Snap preview: translucent white box with a light border
+snapping.overlay.region.bg.enabled: yes
+snapping.overlay.edge.bg.enabled: yes
+snapping.overlay.region.border.enabled: yes
+snapping.overlay.edge.border.enabled: yes
+snapping.overlay.region.bg.color: #ffffff40
+snapping.overlay.edge.bg.color: #ffffff40
+snapping.overlay.region.border.width: 1
+snapping.overlay.edge.border.width: 1
+snapping.overlay.region.border.color: #ffffffa0
+snapping.overlay.edge.border.color: #ffffffa0

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Run an lxqt-panel shortcut over D-Bus. labwc keybinds call this script,
+# because lxqt-globalkeys cannot grab keys on Wayland.
+#   winlike-panel fancymenu/show_hide    open or close the start menu
+#   winlike-panel showdesktop/show_hide  show the desktop
+#   winlike-panel taskbar/task_N         activate taskbar button N
+#   winlike-panel volume/up|down|mute    change the volume
+set -eu
+name=$(busctl --user list --no-legend 2>/dev/null | awk '$3 == "lxqt-panel" { print $1; exit }')
+[ -n "$name" ] || { echo "winlike-panel: lxqt-panel is not on the session bus" >&2; exit 1; }
+exec gdbus call --session --dest "$name" \
+  --object-path "/global_key_shortcuts/panel/$1" \
+  --method org.lxqt.global_key_shortcuts.client.activated >/dev/null

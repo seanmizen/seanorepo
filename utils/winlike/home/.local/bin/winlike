@@ -1,0 +1,15 @@
+#!/bin/sh
+# Start the winlike desktop in a window (nested in WSLg or any Wayland session).
+# Close the window, or use Win+X > Sign out, to stop it.
+set -eu
+
+# WSLg mounts /tmp/.X11-unix read-only and without the sticky bit. Xwayland in
+# labwc needs to write its socket there.
+if [ -d /mnt/wslg ] && ! touch /tmp/.X11-unix/.winlike-check 2>/dev/null; then
+  echo "winlike: make /tmp/.X11-unix writable for Xwayland (sudo)"
+  sudo mount -o remount,rw /tmp/.X11-unix
+  sudo chmod +t /tmp/.X11-unix
+fi
+rm -f /tmp/.X11-unix/.winlike-check
+
+exec dbus-run-session labwc "$@"

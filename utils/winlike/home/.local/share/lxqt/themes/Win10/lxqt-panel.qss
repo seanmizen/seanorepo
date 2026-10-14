@@ -1,0 +1,281 @@
+/*
+ * Win10: LXQt panel theme that copies the Windows 10 dark taskbar.
+ * Taskbar #101010, 40 px high, white glyphs, light-blue running indicator.
+ */
+
+LXQtPanel #BackgroundWidget {
+    background: #101010;
+}
+
+QToolTip {
+    background: #2b2b2b;
+    color: #ffffff;
+    border: 1px solid #767676;
+    padding: 4px 6px;
+}
+
+Plugin,
+LXQtPanelPlugin {
+    padding: 0;
+    spacing: 0;
+    qproperty-moveMarkerColor: #76b9ed;
+}
+
+Plugin > QWidget,
+Plugin > QWidget > QWidget {
+    color: #ffffff;
+}
+
+Plugin > QToolButton,
+Plugin > QWidget > QToolButton,
+Plugin > QWidget > QToolButton > QWidget > QToolButton,
+LXQtPanelPlugin > QToolButton {
+    margin: 0;
+    padding: 0;
+    border: none;
+    color: #ffffff;
+    qproperty-iconSize: 24px;
+}
+
+Plugin > QToolButton:hover,
+Plugin > QWidget > QToolButton:hover,
+LXQtPanelPlugin > QToolButton:hover {
+    background: rgba(255, 255, 255, 10%);
+}
+
+Plugin > QToolButton:pressed,
+Plugin > QWidget > QToolButton:pressed,
+LXQtPanelPlugin > QToolButton:pressed {
+    background: rgba(255, 255, 255, 5%);
+}
+
+/* Start button: 48 px wide, Windows logo */
+#FancyMenu {
+    min-width: 48px;
+    max-width: 48px;
+    border: none;
+    background: transparent;
+    qproperty-icon: url(mainmenu.svg);
+    qproperty-iconSize: 16px;
+}
+
+#FancyMenu:hover {
+    background: rgba(255, 255, 255, 10%);
+}
+
+/* Start menu: Windows 10 dark */
+LXQtFancyMenuWindow {
+    background: #1f1f1f;
+    color: #ffffff;
+    border: 1px solid #2b2b2b;
+}
+
+LXQtFancyMenuWindow QLabel {
+    color: #ffffff;
+}
+
+#FancyMenu QLineEdit {
+    background: #ffffff;
+    color: #000000;
+    border: 2px solid #0078d7;
+    padding: 4px 6px;
+    margin: 4px;
+    selection-background-color: #0078d7;
+}
+
+#FancyMenu #AppView,
+#FancyMenu QListView {
+    border: none;
+    background: transparent;
+    color: #ffffff;
+}
+
+#FancyMenu QListView::item {
+    color: #ffffff;
+    border: none;
+    padding: 6px 8px;
+}
+
+#FancyMenu QListView::item:hover {
+    background: rgba(255, 255, 255, 10%);
+}
+
+#FancyMenu QListView::item:selected {
+    background: rgba(255, 255, 255, 18%);
+}
+
+#FancyMenu QListView::focus {
+    outline: transparent;
+}
+
+#FancyMenu QToolButton {
+    margin: 2px;
+    border: none;
+    padding: 6px;
+    background: transparent;
+    color: #ffffff;
+}
+
+#FancyMenu QToolButton:hover,
+#FancyMenu QToolButton:focus {
+    background: rgba(255, 255, 255, 10%);
+}
+
+#FancyMenu QScrollBar:vertical {
+    background: transparent;
+    width: 6px;
+}
+
+#FancyMenu QScrollBar::handle:vertical {
+    background: #7a7a7a;
+    min-height: 40px;
+}
+
+#FancyMenu QScrollBar::add-line:vertical,
+#FancyMenu QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+/* Pinned apps and running apps: 48 px icon-only buttons */
+#QuickLaunchPlaceHolder {
+    color: #7a7a7a;
+    padding: 0 6px;
+}
+
+#QuickLaunch QToolButton {
+    min-width: 48px;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+#QuickLaunch QToolButton:hover {
+    background: rgba(255, 255, 255, 10%);
+}
+
+#TaskBar QToolButton {
+    min-width: 48px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-bottom: 2px solid #76b9ed;
+    color: #ffffff;
+}
+
+#TaskBar QToolButton:hover {
+    background: rgba(255, 255, 255, 10%);
+}
+
+#TaskBar QToolButton:on {
+    background: rgba(255, 255, 255, 15%);
+}
+
+#TaskBar QToolButton:on:hover {
+    background: rgba(255, 255, 255, 20%);
+}
+
+#TaskBar QToolButton[urgent="true"] {
+    background: #d77800;
+}
+
+#TaskBar LXQtGroupPopup {
+    background: #2b2b2b;
+    border: 1px solid #2b2b2b;
+}
+
+/* Tray, volume and clock */
+#Tray,
+TrayIcon {
+    margin: 0;
+}
+
+#WorldClock,
+#WorldClockContent {
+    color: #ffffff;
+    padding: 0 8px;
+}
+
+#WorldClock:hover {
+    background: rgba(255, 255, 255, 10%);
+}
+
+/* Show desktop: thin strip at the far right with a separator line */
+#ShowDesktop > QToolButton {
+    min-width: 5px;
+    max-width: 5px;
+    border: none;
+    border-left: 1px solid #5d5d5d;
+    margin-left: 2px;
+    qproperty-icon: url(blank.svg);
+}
+
+#ShowDesktop > QToolButton:hover {
+    background: rgba(255, 255, 255, 10%);
+}
+
+/* Context menus on the taskbar: Windows 10 dark */
+QMenu {
+    background: #2b2b2b;
+    color: #ffffff;
+    border: 1px solid #767676;
+    padding: 4px 0;
+}
+
+QMenu::item {
+    padding: 6px 32px 6px 12px;
+    background: transparent;
+}
+
+QMenu::item:selected {
+    background: #414141;
+}
+
+QMenu::item:disabled {
+    color: #7a7a7a;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: #767676;
+    margin: 4px 0;
+}
+
+/* Volume popup */
+VolumePopup {
+    background: #1f1f1f;
+}
+
+VolumePopup > QPushButton {
+    border: none;
+    color: #ffffff;
+    background: transparent;
+    padding: 4px;
+}
+
+VolumePopup > QSlider::groove:vertical {
+    background: #7a7a7a;
+    width: 2px;
+}
+
+VolumePopup > QSlider::handle:vertical {
+    background: #0078d7;
+    height: 22px;
+    margin: 0 -5px;
+    border-radius: 6px;
+}
+
+VolumePopup > QSlider::add-page:vertical {
+    background: #0078d7;
+}
+
+/* Calendar popup */
+QCalendarWidget QAbstractItemView:enabled {
+    color: #ffffff;
+    background: #1f1f1f;
+    selection-background-color: #0078d7;
+    selection-color: #ffffff;
+}
+
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    background: #1f1f1f;
+}

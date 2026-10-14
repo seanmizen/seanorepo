@@ -1,0 +1,194 @@
+<?xml version="1.0"?>
+<!--
+  winlike: labwc config that copies Windows 10 behavior.
+  This file sets every keybind and mousebind. It does not load the labwc
+  defaults, because some defaults (Alt+drag, title bar scroll to shade) do
+  not exist in Windows.
+-->
+<labwc_config>
+
+  <core>
+    <decoration>server</decoration>
+    <gap>0</gap>
+  </core>
+
+  <placement>
+    <policy>cascade</policy>
+  </placement>
+
+  <theme>
+    <name>Win10</name>
+    <icon>We10X</icon>
+    <fallbackAppIcon>application-x-executable</fallbackAppIcon>
+    <titlebar>
+      <layout>icon:iconify,max,close</layout>
+      <showTitle>yes</showTitle>
+    </titlebar>
+    <cornerRadius>0</cornerRadius>
+    <keepBorder>yes</keepBorder>
+    <dropShadows>yes</dropShadows>
+    <font place="ActiveWindow"><name>Segoe UI</name><size>9</size></font>
+    <font place="InactiveWindow"><name>Segoe UI</name><size>9</size></font>
+    <font place="MenuHeader"><name>Segoe UI</name><size>9</size></font>
+    <font place="MenuItem"><name>Segoe UI</name><size>9</size></font>
+    <font place="OnScreenDisplay"><name>Segoe UI</name><size>9</size></font>
+  </theme>
+
+  <windowSwitcher show="yes" preview="yes" outlines="no" allWorkspaces="no">
+    <fields>
+      <field content="title" width="100%" />
+    </fields>
+  </windowSwitcher>
+
+  <focus>
+    <followMouse>no</followMouse>
+    <raiseOnFocus>no</raiseOnFocus>
+  </focus>
+
+  <!-- Aero Snap: drag to the top edge to maximize, to a side edge to snap half. -->
+  <snapping>
+    <range>1</range>
+    <overlay enabled="yes">
+      <delay inner="0" outer="0" />
+    </overlay>
+    <topMaximize>yes</topMaximize>
+    <notifyClient>always</notifyClient>
+  </snapping>
+
+  <resistance>
+    <screenEdgeStrength>0</screenEdgeStrength>
+    <windowEdgeStrength>0</windowEdgeStrength>
+    <unSnapThreshold>10</unSnapThreshold>
+    <unMaximizeThreshold>10</unMaximizeThreshold>
+  </resistance>
+
+  <!-- Windows 10 has one desktop by default. -->
+  <desktops number="1" />
+
+  <keyboard>
+    <repeatRate>31</repeatRate>
+    <repeatDelay>500</repeatDelay>
+
+    <!-- Windows -->
+    <keybind key="A-F4"><action name="Close" /></keybind>
+    <keybind key="A-Tab"><action name="NextWindow" /></keybind>
+    <keybind key="A-S-Tab"><action name="PreviousWindow" /></keybind>
+    <keybind key="W-Tab"><action name="NextWindow" /></keybind>
+    <keybind key="A-space"><action name="ShowMenu" menu="client-menu" atCursor="no" /></keybind>
+
+    <!-- Snap: Win+arrows -->
+    <keybind key="W-Left"><action name="SnapToEdge" direction="left" /></keybind>
+    <keybind key="W-Right"><action name="SnapToEdge" direction="right" /></keybind>
+    <keybind key="W-Up"><action name="Maximize" /></keybind>
+    <keybind key="W-Down">
+      <action name="If">
+        <query maximized="both" />
+        <query tiled="left" />
+        <query tiled="right" />
+        <then><action name="UnSnap" /></then>
+        <else><action name="Iconify" /></else>
+      </action>
+    </keybind>
+    <keybind key="W-S-Up"><action name="Maximize" direction="vertical" /></keybind>
+
+    <!-- Desktop -->
+    <keybind key="W-d"><action name="Execute" command="winlike-panel showdesktop/show_hide" /></keybind>
+    <keybind key="W-m"><action name="Execute" command="winlike-panel showdesktop/show_hide" /></keybind>
+
+    <!-- Start menu: the Win key alone, or Ctrl+Esc -->
+    <keybind key="Super_L" onRelease="yes"><action name="Execute" command="winlike-panel fancymenu/show_hide" /></keybind>
+    <keybind key="Super_R" onRelease="yes"><action name="Execute" command="winlike-panel fancymenu/show_hide" /></keybind>
+    <keybind key="C-Escape"><action name="Execute" command="winlike-panel fancymenu/show_hide" /></keybind>
+
+    <!-- Taskbar: Win+1 to Win+9 -->
+    <keybind key="W-1"><action name="Execute" command="winlike-panel taskbar/task_1" /></keybind>
+    <keybind key="W-2"><action name="Execute" command="winlike-panel taskbar/task_2" /></keybind>
+    <keybind key="W-3"><action name="Execute" command="winlike-panel taskbar/task_3" /></keybind>
+    <keybind key="W-4"><action name="Execute" command="winlike-panel taskbar/task_4" /></keybind>
+    <keybind key="W-5"><action name="Execute" command="winlike-panel taskbar/task_5" /></keybind>
+    <keybind key="W-6"><action name="Execute" command="winlike-panel taskbar/task_6" /></keybind>
+    <keybind key="W-7"><action name="Execute" command="winlike-panel taskbar/task_7" /></keybind>
+    <keybind key="W-8"><action name="Execute" command="winlike-panel taskbar/task_8" /></keybind>
+    <keybind key="W-9"><action name="Execute" command="winlike-panel taskbar/task_9" /></keybind>
+
+    <!-- Apps -->
+    <keybind key="W-e"><action name="Execute" command="pcmanfm-qt" /></keybind>
+    <keybind key="W-r"><action name="Execute" command="lxqt-runner" /></keybind>
+    <keybind key="W-i"><action name="Execute" command="lxqt-config" /></keybind>
+    <keybind key="W-x"><action name="ShowMenu" menu="root-menu" /></keybind>
+    <keybind key="C-S-Escape"><action name="Execute" command="qps" /></keybind>
+
+    <!-- Screenshots -->
+    <keybind key="Print"><action name="Execute" command="winlike-screenshot clipboard" /></keybind>
+    <keybind key="W-Print"><action name="Execute" command="winlike-screenshot file" /></keybind>
+    <keybind key="W-S-s"><action name="Execute" command="winlike-screenshot region" /></keybind>
+
+    <!-- Media keys -->
+    <keybind key="XF86_AudioLowerVolume"><action name="Execute" command="winlike-panel volume/down" /></keybind>
+    <keybind key="XF86_AudioRaiseVolume"><action name="Execute" command="winlike-panel volume/up" /></keybind>
+    <keybind key="XF86_AudioMute"><action name="Execute" command="winlike-panel volume/mute" /></keybind>
+  </keyboard>
+
+  <mouse>
+    <doubleClickTime>500</doubleClickTime>
+
+    <!-- Resize from every edge and corner -->
+    <context name="Top"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+    <context name="Bottom"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+    <context name="Left"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+    <context name="Right"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+    <context name="TLCorner"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+    <context name="TRCorner"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+    <context name="BLCorner"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+    <context name="BRCorner"><mousebind button="Left" action="Drag"><action name="Resize" /></mousebind></context>
+
+    <!-- Title bar: press to focus, drag to move, double-click to maximize, right-click for the window menu -->
+    <context name="TitleBar">
+      <mousebind button="Left" action="Press"><action name="Focus" /><action name="Raise" /></mousebind>
+      <mousebind button="Right" action="Press"><action name="Focus" /><action name="Raise" /></mousebind>
+    </context>
+    <context name="Title">
+      <mousebind button="Left" action="Drag"><action name="Move" /></mousebind>
+      <mousebind button="Left" action="DoubleClick"><action name="ToggleMaximize" /></mousebind>
+      <mousebind button="Right" action="Click"><action name="ShowMenu" menu="client-menu" /></mousebind>
+    </context>
+
+    <!-- Window icon: click for the window menu, double-click to close -->
+    <context name="Icon">
+      <mousebind button="Left" action="Click"><action name="ShowMenu" menu="client-menu" atCursor="no" /></mousebind>
+      <mousebind button="Left" action="DoubleClick"><action name="Close" /></mousebind>
+      <mousebind button="Right" action="Click"><action name="ShowMenu" menu="client-menu" /></mousebind>
+    </context>
+
+    <!-- Caption buttons -->
+    <context name="Iconify"><mousebind button="Left" action="Click"><action name="Iconify" /></mousebind></context>
+    <context name="Maximize"><mousebind button="Left" action="Click"><action name="ToggleMaximize" /></mousebind></context>
+    <context name="Close"><mousebind button="Left" action="Click"><action name="Close" /></mousebind></context>
+
+    <!-- Window contents: any click focuses and raises -->
+    <context name="Client">
+      <mousebind button="Left" action="Press"><action name="Focus" /><action name="Raise" /></mousebind>
+      <mousebind button="Middle" action="Press"><action name="Focus" /><action name="Raise" /></mousebind>
+      <mousebind button="Right" action="Press"><action name="Focus" /><action name="Raise" /></mousebind>
+    </context>
+
+    <!-- The desktop belongs to pcmanfm-qt. This context only applies if pcmanfm-qt is not running. -->
+    <context name="Root">
+      <mousebind button="Right" action="Press"><action name="ShowMenu" menu="root-menu" /></mousebind>
+    </context>
+  </mouse>
+
+  <windowRules>
+    <!--
+      The Win key opens the start menu over D-Bus. In LXQt 2.1 the menu then
+      opens as a normal window, so these rules make it look like a popup at
+      the bottom-left corner.
+    -->
+    <windowRule identifier="lxqt-panel" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes">
+      <action name="MoveToEdge" direction="left" snapWindows="no" />
+      <action name="MoveToEdge" direction="down" snapWindows="no" />
+    </windowRule>
+    <windowRule identifier="lxqt-runner" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes" />
+  </windowRules>
+
+</labwc_config>

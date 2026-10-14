@@ -1,0 +1,4 @@
+# winlike: the desktop (wallpaper and icons), the taskbar, and notifications.
+pcmanfm-qt --desktop --profile=winlike &
+lxqt-panel &
+lxqt-notificationd &
