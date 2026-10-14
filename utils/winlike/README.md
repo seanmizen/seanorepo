@@ -14,6 +14,7 @@ name of the app that it opens.
 | Window manager (compositor) | [labwc](https://labwc.github.io/) 0.8 with the `winlike` theme from this directory |
 | Taskbar and start menu | `lxqt-panel` 2.1 with the `winlike` LXQt theme from this directory |
 | Desktop (wallpaper, icons, rubber-band select) | `pcmanfm-qt --desktop` |
+| Terminal | [Ghostty](https://ghostty.org/) 1.3.1. It runs your login shell (zsh). See [Terminal](#terminal). |
 | Icons | breeze (`breeze-icon-theme`). The taskbar volume glyph comes from breeze-dark. |
 | Cursors | Breeze_Light (`breeze-cursor-theme`) |
 | GTK theme | Adwaita, the GTK default |
@@ -76,13 +77,63 @@ utils/winlike/uninstall.sh   # remove it all
 The config does not load the labwc default mouse binds. Windows does not move a
 window with Alt+drag, or roll it up when you scroll on the title bar.
 
+## Terminal
+
+The terminal is [Ghostty](https://ghostty.org/). These items open it:
+
+- Win+X, then **Ghostty**.
+- The Ghostty button on the taskbar (quick launch).
+- **Ghostty** in the start menu.
+- **Open in Terminal** in PCManFM-Qt (F4). Ghostty opens in that folder.
+
+Ghostty runs your login shell, and your login shell is zsh. The session starts
+in `~`, so Ghostty from the menu or the taskbar opens in `~`. There is no
+Ghostty config file. Ghostty uses its default font (JetBrains Mono) and its
+default theme.
+
+Ghostty draws with OpenGL 3.3 or later. On WSLg, Mesa in Debian 13 selects
+`llvmpipe`, which renders on the CPU. Thus `~/.config/labwc/environment` sets
+`GALLIUM_DRIVER=d3d12`, and Mesa then renders on the GPU through Direct3D 12.
+Ghostty gets OpenGL 4.6 from `D3D12 (<your GPU>)`.
+
+Ghostty keybinds (the defaults):
+
+| Keys | Action |
+|---|---|
+| Ctrl+Shift+C, Ctrl+Insert | Copy |
+| Ctrl+Shift+V | Paste |
+| Shift+Insert | Paste the selection |
+| Ctrl+Shift+T | New tab |
+| Ctrl+Shift+W | Close the tab |
+| Ctrl+Tab, Ctrl+Shift+Tab | Next tab, previous tab |
+| Alt+1 to Alt+8, Alt+9 | Go to tab N, go to the last tab |
+| Ctrl+Shift+N | New window |
+| Alt+F4 | Close the window |
+| Ctrl+Shift+O | Split to the right |
+| Ctrl+Shift+E | Split down |
+| Ctrl+Shift+F | Find |
+| Ctrl+Shift+P | Command palette |
+| Ctrl+Enter | Full screen |
+| Ctrl+, | Open the config file |
+| Ctrl+Shift+, | Reload the config file |
+
 ## What install.sh changes
 
 1. **Debian packages.** It installs these with `apt` if they are missing:
    `labwc layer-shell-qt lxqt-panel lxqt-qtplugin lxqt-notificationd
-   lxqt-config lxqt-runner pcmanfm-qt qterminal featherpad qps grim slurp
+   lxqt-config lxqt-runner pcmanfm-qt featherpad qps grim slurp
    wl-clipboard breeze-icon-theme breeze-cursor-theme fonts-open-sans
-   fontconfig desktop-base`.
+   fontconfig desktop-base curl ca-certificates`.
+   An earlier version also installed `qterminal`. winlike does not use it now.
+   To remove it: `sudo apt-get remove qterminal`.
+
+   **Ghostty.** Debian 13 does not have Ghostty. The script downloads the
+   community `.deb` for trixie from
+   [mkasberg/ghostty-ubuntu](https://github.com/mkasberg/ghostty-ubuntu),
+   release `1.3.1-0-ppa2`. It checks the SHA-256, then installs the file with
+   `sudo apt-get install`. apt also installs `libadwaita-1-0`. The package
+   makes Ghostty the `x-terminal-emulator`. `uninstall.sh` removes the
+   package.
 2. **Files from older versions.** Older versions of `install.sh` copied
    Windows themes, icons, cursors, fonts and the Windows wallpaper. The script
    removes them: `~/.local/share/themes/Windows-10`, `themes/Win10`,
@@ -105,11 +156,12 @@ The config files:
 |---|---|
 | `.config/labwc/rc.xml` | Keybinds, mouse binds, snapping, theme name, fonts, window rules |
 | `.config/labwc/menu.xml` | Window menu and Win+X menu |
-| `.config/labwc/environment` | Wayland, LXQt platform theme, cursor |
+| `.config/labwc/environment` | Wayland, LXQt platform theme, cursor, Mesa GPU driver |
 | `.config/labwc/autostart` | Starts the desktop, the taskbar and notifications |
 | `.config/lxqt/lxqt.conf` | LXQt theme, icons, cursor, Qt font, Fusion style, Windows 10 colors |
 | `.config/lxqt/panel.conf` | Taskbar layout, start button logo |
-| `.config/pcmanfm-qt/winlike/settings.conf.in` | Desktop: wallpaper, Recycle Bin, icon size, font |
+| `.config/pcmanfm-qt/winlike/settings.conf.in` | Desktop: wallpaper, Recycle Bin, icon size, font. Terminal: Ghostty |
+| `.local/share/libfm-qt/terminals.list` | How PCManFM-Qt starts Ghostty in a folder |
 | `.config/gtk-3.0/settings.ini` | GTK theme, icons, cursor, font |
 | `.config/fontconfig/fonts.conf` | ClearType-style text: full hinting, RGB subpixel antialiasing, Open Sans as `sans-serif` |
 | `.local/bin/winlike` | Starts the session |

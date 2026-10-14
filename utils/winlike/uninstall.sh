@@ -47,6 +47,12 @@ done
 
 fc-cache -f > /dev/null
 
+# install.sh installs Ghostty from a .deb outside Debian. Remove it here.
+if dpkg-query -W -f='${Status}' ghostty 2>/dev/null | grep -q 'install ok installed'; then
+  echo "==> Ghostty"
+  sudo apt-get remove -y ghostty
+fi
+
 echo
 echo "Done. To remove the packages too:"
-echo "  sudo apt-get remove labwc layer-shell-qt lxqt-panel lxqt-qtplugin lxqt-notificationd lxqt-config lxqt-runner pcmanfm-qt qterminal featherpad qps grim slurp wl-clipboard breeze-cursor-theme fonts-open-sans"
+echo "  sudo apt-get remove labwc layer-shell-qt lxqt-panel lxqt-qtplugin lxqt-notificationd lxqt-config lxqt-runner pcmanfm-qt featherpad qps grim slurp wl-clipboard breeze-cursor-theme fonts-open-sans"

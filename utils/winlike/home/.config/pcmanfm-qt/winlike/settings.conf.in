@@ -1,7 +1,7 @@
 [System]
 IconThemeName=breeze
 FallbackIconThemeName=breeze
-Terminal=qterminal
+Terminal=ghostty
 Archiver=lxqt-archiver
 
 [Behavior]

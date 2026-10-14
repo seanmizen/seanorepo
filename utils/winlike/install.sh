@@ -13,10 +13,10 @@ cd "$HOME"
 packages=(
   labwc layer-shell-qt
   lxqt-panel lxqt-qtplugin lxqt-notificationd lxqt-config lxqt-runner
-  pcmanfm-qt qterminal featherpad qps
+  pcmanfm-qt featherpad qps
   grim slurp wl-clipboard
   breeze-icon-theme breeze-cursor-theme fonts-open-sans fontconfig
-  desktop-base
+  desktop-base curl ca-certificates
 )
 missing=()
 for p in "${packages[@]}"; do
@@ -43,6 +43,19 @@ for d in \
     echo "==> removed old file: ~/$d"
   fi
 done
+
+# Ghostty (the terminal). Debian 13 does not have it. This is the community
+# .deb for trixie from github.com/mkasberg/ghostty-ubuntu, pinned by SHA-256.
+ghostty_version=1.3.1-0~ppa2
+ghostty_url=https://github.com/mkasberg/ghostty-ubuntu/releases/download/1.3.1-0-ppa2/ghostty_1.3.1-0.ppa2_amd64_trixie.deb
+ghostty_sha256=9fda8e418d7a7f58149ba3ba823a255d6b80f8bb5431b3bd7e912ff597715b2e
+if [ "$(dpkg-query -W -f='${Version}' ghostty 2>/dev/null)" != "$ghostty_version" ]; then
+  echo "==> Ghostty $ghostty_version"
+  deb="$(mktemp -d)/ghostty.deb"
+  curl -fsSL -o "$deb" "$ghostty_url"
+  echo "$ghostty_sha256  $deb" | sha256sum -c --quiet
+  sudo apt-get install -y --no-install-recommends "$deb"
+fi
 
 # 3. Config files
 #    The first install copies each file it will replace into
