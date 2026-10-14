@@ -17,6 +17,7 @@ packages=(
   grim slurp wl-clipboard
   breeze-icon-theme breeze-cursor-theme fonts-open-sans fontconfig
   desktop-base curl ca-certificates
+  wlr-randr python3-gi gir1.2-gtk-3.0
 )
 missing=()
 for p in "${packages[@]}"; do

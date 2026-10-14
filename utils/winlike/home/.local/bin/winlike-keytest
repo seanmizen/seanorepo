@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Find which key combinations get through the WSLg window to labwc.
+
+Usage:
+  winlike-keytest            start a test session in a new window
+  winlike-keytest --window   (internal) the key logger in that session
+
+The test session is labwc with a config that has no keybinds, so every key
+that labwc receives goes on to the logger window. Press each combination in
+the list. A row turns green when the key gets to labwc. Close the window to
+stop. The results go to stdout and to /tmp/winlike-keytest.txt.
+
+Run it two times: one time without winlike-capture.ahk, and one time with it
+(capture on). Do not test Win+L: Windows always locks the screen.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+RESULTS = "/tmp/winlike-keytest.txt"
+
+# (labwc key name, what to press). The same names as in rc.xml.
+TESTS = [
+    ("Super_L", "Win (press and release)"),
+    ("W-e", "Win+E"),
+    ("W-r", "Win+R"),
+    ("W-i", "Win+I"),
+    ("W-x", "Win+X"),
+    ("W-1", "Win+1"),
+    ("W-Tab", "Win+Tab"),
+    ("W-Left", "Win+Left"),
+    ("W-Right", "Win+Right"),
+    ("W-Up", "Win+Up"),
+    ("W-Down", "Win+Down"),
+    ("W-S-Up", "Win+Shift+Up"),
+    ("W-S-s", "Win+Shift+S"),
+    ("W-Print", "Win+PrtScn"),
+    ("W-m", "Win+M (Windows can minimize this window)"),
+    ("W-d", "Win+D (Windows can minimize this window)"),
+    ("A-Tab", "Alt+Tab"),
+    ("A-S-Tab", "Alt+Shift+Tab"),
+    ("A-space", "Alt+Space"),
+    ("C-Escape", "Ctrl+Esc"),
+    ("C-S-Escape", "Ctrl+Shift+Esc"),
+    ("Print", "PrtScn"),
+    ("A-F4", "Alt+F4 (do this last: it can close the session)"),
+]
+
+MODIFIER_KEYS = {
+    "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R",
+    "Meta_L", "Meta_R", "ISO_Level3_Shift",
+}
+
+RC_XML = """<?xml version="1.0"?>
+<!-- winlike-keytest: one keybind on a key that nobody presses. With no
+     keybinds at all, labwc loads its default keybinds. -->
+<labwc_config>
+  <keyboard>
+    <keybind key="XF86_Launch9"><action name="None" /></keybind>
+  </keyboard>
+</labwc_config>
+"""
+
+
+def run_session():
+    """Start labwc with a test config and the logger window in it."""
+    conf = tempfile.mkdtemp(prefix="winlike-keytest.")
+    with open(os.path.join(conf, "rc.xml"), "w") as f:
+        f.write(RC_XML)
+    # Use the winlike environment (keyboard layout, the winlike:capture option).
+    env_file = os.path.expanduser("~/.config/labwc/environment")
+    if os.path.exists(env_file):
+        shutil.copy(env_file, os.path.join(conf, "environment"))
+    open(RESULTS, "w").close()
+    me = os.path.realpath(__file__)
+    # The winlike launcher makes /tmp/.X11-unix writable, then starts labwc.
+    launcher = shutil.which("winlike") or "labwc"
+    cmd = [launcher, "-C", conf, "-S", f"python3 {me} --window"]
+    if launcher == "labwc":
+        cmd = ["dbus-run-session", *cmd]
+    subprocess.run(cmd, stderr=subprocess.DEVNULL, check=False)
+    with open(RESULTS) as f:
+        print(f.read(), end="")
+    print(f"Results: {RESULTS}")
+
+
+def key_name(keyval_name, state, Gdk):
+    """Make a labwc key name, for example W-S-s, from a GTK key event."""
+    mods = ""
+    if state & Gdk.ModifierType.CONTROL_MASK:
+        mods += "C-"
+    if state & Gdk.ModifierType.MOD1_MASK:
+        mods += "A-"
+    if state & Gdk.ModifierType.SHIFT_MASK:
+        mods += "S-"
+    if state & (Gdk.ModifierType.SUPER_MASK | Gdk.ModifierType.MOD4_MASK):
+        mods += "W-"
+    if keyval_name in ("Super_L", "Super_R"):
+        return keyval_name
+    if keyval_name == "ISO_Left_Tab":
+        keyval_name = "Tab"
+    if len(keyval_name) == 1:
+        keyval_name = keyval_name.lower()
+    # The order W, C, A, S is the order in rc.xml (W-S-s, C-S-Escape).
+    order = [m for m in ("W-", "C-", "A-", "S-") if m in mods]
+    return "".join(order) + keyval_name
+
+
+def run_window():
+    """The logger window. It runs inside the test session."""
+    import gi
+
+    gi.require_version("Gtk", "3.0")
+    gi.require_version("Gdk", "3.0")
+    from gi.repository import Gdk, Gtk
+
+    seen = {}
+    rows = {}
+    log = Gtk.Label(label="Last key: (none)", xalign=0)
+
+    def write_results():
+        with open(RESULTS, "w") as f:
+            f.write("| Keys | Gets to labwc |\n|---|---|\n")
+            for name, label in TESTS:
+                f.write(f"| {label.split(' (')[0]} | {'yes' if name in seen else 'no'} |\n")
+            other = [n for n in seen if n not in rows]
+            if other:
+                f.write(f"\nOther keys: {', '.join(other)}\n")
+
+    def on_key(_widget, event):
+        name = Gdk.keyval_name(event.keyval) or str(event.keyval)
+        if name in MODIFIER_KEYS:
+            return True
+        full = key_name(name, event.state, Gdk)
+        seen[full] = True
+        log.set_text(f"Last key: {full}   (hardware code {event.hardware_keycode})")
+        if full in rows:
+            rows[full].get_style_context().add_class("ok")
+        write_results()
+        return True  # Stop GTK: Tab must not move the focus.
+
+    css = Gtk.CssProvider()
+    css.load_from_data(b".ok { background: #3c8c3c; color: white; } label { padding: 1px 8px; }")
+    Gtk.StyleContext.add_provider_for_screen(
+        Gdk.Screen.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+
+    win = Gtk.Window(title="winlike-keytest")
+    win.set_default_size(640, 660)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    box.pack_start(
+        Gtk.Label(
+            label="Press each combination. Green = it got to labwc.\n"
+            "Do not press Win+L. Close this window to stop.",
+            xalign=0,
+        ),
+        False, False, 6,
+    )
+    box.pack_start(log, False, False, 6)
+    for name, label in TESTS:
+        row = Gtk.Label(label=f"{label}    [{name}]", xalign=0)
+        rows[name] = row
+        box.pack_start(row, False, False, 0)
+    win.add(box)
+    win.connect("key-press-event", on_key)
+    win.connect("destroy", Gtk.main_quit)
+    write_results()
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--window"]:
+        run_window()
+    elif sys.argv[1:]:
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
+    else:
+        run_session()

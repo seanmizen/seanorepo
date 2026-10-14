@@ -1,0 +1,6 @@
+// winlike: add the winlike:capture option to the system rules.
+// libxkbcommon reads ~/.config/xkb before the system directory.
+! include %S/evdev
+
+! option = symbols
+  winlike:capture = +winlike(capture)
