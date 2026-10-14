@@ -15,7 +15,7 @@ Each item says how we know the facts:
 - **S**: read in the source code.
 - **D**: from documentation or a log file.
 
-Other work that is already open, so this page does not repeat it:
+Other work that is already merged, so this page does not repeat it:
 
 - #665: Debian assets in place of Microsoft assets, and true app names.
 - #666: Ghostty terminal with zsh.
@@ -51,8 +51,9 @@ first day of the week, 24-hour clock) come from Windows settings.
 - The WSLg log shows the Windows keyboard: `kbd_layout:0x809` and
   `layout=gb` (D, `/mnt/wslg/weston.log`).
 - labwc makes its own keymap from the `XKB_DEFAULT_*` variables. The
-  default layout is `us` (D, labwc documentation). winlike does not set
-  these variables in `.config/labwc/environment`. Thus apps in winlike
+  default layout is `us` (D, labwc documentation). winlike sets only
+  `XKB_DEFAULT_OPTIONS=winlike:capture` (from #668) in
+  `.config/labwc/environment`, not the layout. Thus apps in winlike
   probably get a US layout on a UK keyboard: `"` and `@` change places, and
   `#` and `\` move. We did not test this with a physical key, because the
   test sends keys through `wtype`, which has its own keymap.
@@ -107,10 +108,11 @@ menus, `#cce8ff` selection in the Explorer file view.
 
 **winlike:**
 
-- GTK 3 apps use the B00merang `Windows-10` theme. Qt apps use the Fusion
-  style with a Windows palette. The two look different: compare the Thunar
-  and PCManFM-Qt screenshots in [file-managers.md](file-managers.md) (T).
-- GTK 4 and libadwaita apps ignore both themes (D).
+- GTK 3 apps use Adwaita, the GTK default (#665 removed the B00merang
+  theme). Qt apps use the Fusion style with a Windows palette. The two look
+  different: compare the Thunar and PCManFM-Qt screenshots in
+  [file-managers.md](file-managers.md) (T).
+- GTK 4 and libadwaita apps have the GNOME look (D).
 - The Qt palette uses `#0078d7` for every selection (D, `lxqt.conf`). Kali
   Undercover uses the Explorer color `#cce8ff` with black text (S, see
   [kali-undercover.md](kali-undercover.md)).
@@ -131,7 +133,8 @@ slider with the output device name.
 **winlike:**
 
 - The clock opens a small dark calendar that starts on Sunday, without the
-  large time (T, screenshot in item 1).
+  large time. The weekday names are dark on a dark background, and the
+  popup touches the right edge of the screen (T, screenshot in item 1).
 - The speaker opens a narrow vertical slider labeled "Mixer" (T).
 
 ![Volume flyout](img/gap-volume-flyout.png)

@@ -20,8 +20,8 @@ for winlike.
    nothing, and users cannot change the shortcuts. No chevrons.
 4. **Nemo** (Cinnamon). Breadcrumbs with a toggle button. Backspace goes up.
 5. **Caja** (MATE). Breadcrumbs with a toggle button. Backspace goes up.
-6. **Nautilus** (GNOME). GTK 4 and libadwaita ignore the GTK 3 Windows 10
-   theme, and the app draws its own title bar. Not a fit.
+6. **Nautilus** (GNOME). GTK 4 and libadwaita give it the GNOME look, not
+   the winlike look, and the app draws its own title bar. Not a fit.
 
 To install the recommendation, Sean runs this command (it needs root):
 
@@ -255,11 +255,11 @@ Gaps that config cannot close in Dolphin:
 | Rank | File manager | Why | Config closes |
 |---|---|---|---|
 | 1 | Dolphin | Breadcrumb chevrons, the leftmost chevron, click to edit, autocomplete list, Backspace goes back, Shift+F10, user-configurable shortcuts. Qt, so it uses the winlike Fusion palette. | F4, Ctrl+E, Ctrl+Shift+1 to 8, no terminal panel, one tab at start |
-| 2 | Thunar | Backspace goes back. A click on the empty end of the path bar opens the entry. Shortcuts in `accels.scm`. Explorer-like context menu with "Send To". GTK 3, so it uses the B00merang theme. | Shortcuts (`accels.scm`), buttons style (`xfconf`). |
+| 2 | Thunar | Backspace goes back. A click on the empty end of the path bar opens the entry. Shortcuts in `accels.scm`. Explorer-like context menu with "Send To". GTK 3, so it uses the winlike GTK theme (Adwaita today). | Shortcuts (`accels.scm`), buttons style (`xfconf`). |
 | 3 | PCManFM-Qt | Click to edit with the text selected, autocomplete list, two-step Esc. Already installed. | Nothing for shortcuts. The code sets them. |
 | 4 | Nemo | Breadcrumbs, inline completion | Some shortcuts (accel map) |
 | 5 | Caja | Breadcrumbs, inline completion, one-step Esc | Some shortcuts (accel map) |
-| 6 | Nautilus | GTK 4 and libadwaita: no GTK 3 theme, own title bar | Little |
+| 6 | Nautilus | GTK 4 and libadwaita: GNOME look, own title bar | Little |
 
 Dolphin needs root to install, so this branch does not change the file
 manager. A follow-up issue switches Win+E to Dolphin and adds the config

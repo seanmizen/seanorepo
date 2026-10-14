@@ -49,20 +49,20 @@ Legend for the winlike column:
 
 | Setting | Kali value | winlike | Status |
 |---|---|---|---|
-| Window theme | `Windows-10` (xfwm4 theme from B00merang) | Own labwc theme `Win10`: 46 x 30 px caption buttons, red close hover | Done |
+| Window theme | `Windows-10` (xfwm4 theme from B00merang) | Own labwc theme `winlike`: 46 x 30 px caption buttons, red close hover | Done |
 | Button layout | `O|HMC` (window menu icon at left. Minimize, maximize, close at right) | `icon:iconify,max,close` | Done |
 | Title alignment | `left` | Left (labwc default) | Done |
-| Title font | `Liberation Sans 9` | `Segoe UI 9` (issue #665 replaces Segoe UI) | Done |
+| Title font | `Liberation Sans 9` | Open Sans 9 | Done |
 | Maximized windows keep borders | `borderless_maximize false` | Not set (labwc default) | Skipped. Small. |
 
 ### GTK settings (`xsettings` channel)
 
 | Setting | Kali value | winlike | Status |
 |---|---|---|---|
-| GTK theme | `Windows-10` | `Windows-10` (same B00merang theme, from GitHub) | Done |
-| Icon theme | `Windows-10-Icons` (B00merang icon pack, in the package) | `We10X` (issue #665 replaces it) | Done |
-| Cursor theme | `Windows-10-Icons` | `We10XOS-cursors` (issue #665 replaces it) | Done |
-| Font | `Liberation Sans 11` | `Segoe UI 9` | Done |
+| GTK theme | `Windows-10` | Adwaita, the GTK default | Skipped on purpose. #665 removed the imitation themes. See [gaps.md](gaps.md), item 4. |
+| Icon theme | `Windows-10-Icons` (B00merang icon pack, in the package) | breeze | Skipped on purpose (#665) |
+| Cursor theme | `Windows-10-Icons` | Breeze_Light | Skipped on purpose (#665) |
+| Font | `Liberation Sans 11` | Open Sans 9 | Done |
 | `DecorationLayout` (client-side title bars) | `:minimize,maximize,close` | Not set | Skipped. labwc draws the title bar for most apps. A GTK app that draws its own title bar uses the GTK theme default. |
 | Icons in buttons | `ButtonImages false` | Not set | Skipped. The GTK 3 default is already no icons in buttons. |
 | Icons in menus | `MenuImages true` | Not set | Skipped. Small. GTK 3 ignores most menu images. |
@@ -93,7 +93,7 @@ not run the plugin, so we do not know which line shows first.
 
 | Setting | Kali value | winlike | Status |
 |---|---|---|---|
-| Wallpaper | `Windows-10.jpg` (in the package), zoomed | Windows 10 `img0` from `C:\Windows` (issue #665 replaces it) | Done |
+| Wallpaper | `Windows-10.jpg` (in the package), zoomed | Debian default from `desktop-base` | Skipped on purpose (#665) |
 | Background color | `#2068b2` | `#000000` | Done. The color shows only if the wallpaper is missing. |
 | Desktop icons | File system, home, removable drives, trash | Trash only | Done. Windows 10 shows only the Recycle Bin by default. |
 | Icon size | 48 px | 48 px | Done |
@@ -111,9 +111,9 @@ not run the plugin, so we do not know which line shows first.
 
 | Change | How | winlike | Status |
 |---|---|---|---|
-| Qt style and colors | Copies `qt5ct.conf` and `qt6ct.conf`. They set Fusion style, `Windows-10-Icons`, palette `Windows.conf` and `Liberation Sans 11`. | `lxqt.conf`: Fusion style, Windows palette, Segoe UI 9. | Done |
+| Qt style and colors | Copies `qt5ct.conf` and `qt6ct.conf`. They set Fusion style, `Windows-10-Icons`, palette `Windows.conf` and `Liberation Sans 11`. | `lxqt.conf`: Fusion style, Windows palette, Open Sans 9. | Done |
 | Selection color | `Windows.conf` sets highlight `#cce8ff` with black text: the Explorer item color | `#0078d7` with white text: the Win32 list and menu color | Partial. See [gaps.md](gaps.md), item "Explorer selection color". |
-| Terminal look | Copies `qterminal.org/qterminal.ini`: white on black, `Liberation Mono 11`, no margin | Issue #666 (Ghostty) | Skipped here |
+| Terminal look | Copies `qterminal.org/qterminal.ini`: white on black, `Liberation Mono 11`, no margin | Ghostty with its default theme (#666) | Skipped. Ghostty replaces QTerminal. |
 | Shell prompt | Appends a line to `~/.bashrc` and `~/.zshrc` that sources a prompt file. The prompt is `C:${PWD//\//\\}> ` | None | Skipped. See [gaps.md](gaps.md), item "Command prompt look". |
 | User picture | Moves `~/.face` to `~/.face.undercover` and copies a plain avatar to `~/.face` | None | Skipped. The LXQt start menu shows no user picture. |
 | Firefox light theme | `gsettings set org.gnome.desktop.interface color-scheme 'default'` | None | Skipped. See [gaps.md](gaps.md), item "Dark and light mode for apps". |
@@ -146,3 +146,5 @@ not run the plugin, so we do not know which line shows first.
 - The desktop shows only the Trash, as Windows 10 shows only the Recycle
   Bin.
 - Show desktop sits at the right end of the taskbar.
+- No Microsoft files and no imitation Windows themes (#665). Kali Undercover
+  ships a Windows 10 wallpaper, icon pack and GTK theme.
