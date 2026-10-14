@@ -29,6 +29,8 @@ Tested on Debian 13 (trixie) in WSL2 on Windows 10, with WSLg.
 ```bash
 utils/winlike/install.sh     # install or update. Safe to run again.
 winlike                      # start the desktop in a window
+winlike --fullscreen         # start it at the size of the Windows monitor
+winlike-keytest              # find which keys get through to labwc
 utils/winlike/uninstall.sh   # remove it all
 ```
 
@@ -36,6 +38,15 @@ utils/winlike/uninstall.sh   # remove it all
 `/tmp/.X11-unix` read-only, and Xwayland needs to write there.
 
 ## Keyboard
+
+Windows probably keeps these keys for itself (run `winlike-keytest` to
+check): every Win combination, Alt+Tab,
+Alt+Space, Ctrl+Esc, Ctrl+Shift+Esc and PrtScn. They get to winlike only
+when [`windows/winlike-capture.ahk`](windows/winlike-capture.ahk) captures
+the keyboard. Right Ctrl releases it, as in VMware. Without capture, Alt+F4
+can close the whole WSLg window. Windows always gets Win+L and Ctrl+Alt+Del.
+See [docs/keyboard-capture.md](docs/keyboard-capture.md) for the setup and
+the test results.
 
 | Keys | Action |
 |---|---|
@@ -59,6 +70,8 @@ utils/winlike/uninstall.sh   # remove it all
 | PrtScn | Copy the screen to the clipboard |
 | Win+PrtScn | Save `~/Pictures/Screenshots/Screenshot (N).png` |
 | Win+Shift+S | Select an area and copy it to the clipboard |
+| Right Ctrl (alone) | Turn keyboard capture off or on (`winlike-capture.ahk`) |
+| Ctrl+Alt+Enter | Full screen on or off (`winlike-capture.ahk`) |
 
 ## Mouse
 
@@ -123,7 +136,8 @@ Ghostty keybinds (the defaults):
    `labwc layer-shell-qt lxqt-panel lxqt-qtplugin lxqt-notificationd
    lxqt-config lxqt-runner pcmanfm-qt featherpad qps grim slurp
    wl-clipboard breeze-icon-theme breeze-cursor-theme fonts-open-sans
-   fontconfig desktop-base curl ca-certificates`.
+   fontconfig desktop-base curl ca-certificates wlr-randr python3-gi
+   gir1.2-gtk-3.0`.
    An earlier version also installed `qterminal`. winlike does not use it now.
    To remove it: `sudo apt-get remove qterminal`.
 
@@ -164,7 +178,9 @@ The config files:
 | `.local/share/libfm-qt/terminals.list` | How PCManFM-Qt starts Ghostty in a folder |
 | `.config/gtk-3.0/settings.ini` | GTK theme, icons, cursor, font |
 | `.config/fontconfig/fonts.conf` | ClearType-style text: full hinting, RGB subpixel antialiasing, Open Sans as `sans-serif` |
-| `.local/bin/winlike` | Starts the session |
+| `.local/bin/winlike` | Starts the session. `--size WxH` and `--fullscreen` set the output size. |
+| `.local/bin/winlike-keytest` | Shows which keys get through the WSLg window to labwc |
+| `.config/xkb/` | The `winlike:capture` option: F13 to F18 from `winlike-capture.ahk` become Win, Tab, Esc, Space, PrtScn and F4 |
 | `.local/bin/winlike-panel` | Sends a taskbar shortcut over D-Bus (start menu, show desktop, Win+N) |
 | `.local/bin/winlike-screenshot` | PrtScn, Win+PrtScn and Win+Shift+S |
 | `.local/share/themes/winlike/labwc/` | Window frame theme and caption button SVGs |

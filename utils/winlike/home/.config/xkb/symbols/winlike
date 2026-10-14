@@ -1,0 +1,15 @@
+// winlike: keys that windows/winlike-capture.ahk sends in place of the keys
+// that Windows keeps for itself. Windows does nothing with F13 to F18, so
+// they get through the WSLg window. This layout turns them back into the
+// real keys. labwc loads it with XKB_DEFAULT_OPTIONS=winlike:capture (see
+// ~/.config/labwc/environment).
+partial modifier_keys function_keys
+xkb_symbols "capture" {
+    key <FK13> { [ Super_L ] };              // Win
+    modifier_map Mod4 { <FK13> };
+    key <FK14> { [ Tab, ISO_Left_Tab ] };    // Tab in Alt+Tab
+    key <FK15> { [ Escape ] };               // Esc in Ctrl+Esc, Ctrl+Shift+Esc
+    key <FK16> { [ space ] };                // Space in Alt+Space
+    key <FK17> { [ Print ] };                // PrtScn
+    key <FK18> { [ F4 ] };                   // F4 in Alt+F4
+};

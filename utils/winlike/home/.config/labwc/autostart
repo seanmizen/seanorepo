@@ -1,3 +1,6 @@
+# winlike: the output size from `winlike --size` or `winlike --fullscreen`.
+# This runs first, so the taskbar starts at the correct size.
+[ -n "${WINLIKE_SIZE:-}" ] && wlr-randr --output WL-1 --custom-mode "$WINLIKE_SIZE"
 # winlike: the desktop (wallpaper and icons), the taskbar, and notifications.
 pcmanfm-qt --desktop --profile=winlike &
 lxqt-panel &
