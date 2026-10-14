@@ -1,0 +1,7 @@
+# winlike: "Open in Terminal" in pcmanfm-qt (Terminal=ghostty).
+# libfm-qt reads this file before /usr/share/libfm-qt6/terminals.list.
+# No desktop_id: the Ghostty .desktop file starts one shared instance,
+# and that instance ignores the folder that pcmanfm-qt gives.
+[ghostty]
+open_arg=-e
+noclose_arg=--wait-after-command -e

@@ -5,3 +5,5 @@ QT_QPA_PLATFORM=wayland
 QT_QPA_PLATFORMTHEME=lxqt
 XCURSOR_THEME=Breeze_Light
 XCURSOR_SIZE=24
+# Mesa in Debian 13 selects llvmpipe (CPU) on WSLg. This selects the GPU (D3D12).
+GALLIUM_DRIVER=d3d12

@@ -12,4 +12,6 @@ if [ -d /mnt/wslg ] && ! touch /tmp/.X11-unix/.winlike-check 2>/dev/null; then
 fi
 rm -f /tmp/.X11-unix/.winlike-check
 
+# Apps that the session starts (Ghostty from Win+X, for example) open in ~.
+cd "$HOME"
 exec dbus-run-session labwc "$@"
