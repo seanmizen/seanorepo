@@ -1,0 +1,26 @@
+#!/bin/sh
+# Screenshots with Windows 10 behavior.
+#   winlike-screenshot clipboard  PrtScn: copy the full screen to the clipboard
+#   winlike-screenshot file       Win+PrtScn: save "Screenshot (N).png" in ~/Pictures/Screenshots
+#   winlike-screenshot region     Win+Shift+S: select an area, copy it to the clipboard
+set -eu
+case "${1:-}" in
+  clipboard)
+    grim - | wl-copy --type image/png
+    ;;
+  file)
+    dir="$HOME/Pictures/Screenshots"
+    mkdir -p "$dir"
+    n=1
+    while [ -e "$dir/Screenshot ($n).png" ]; do n=$((n + 1)); done
+    grim "$dir/Screenshot ($n).png"
+    ;;
+  region)
+    geometry=$(slurp -d -b '#ffffff40' -c '#ffffffff' -w 1) || exit 0
+    grim -g "$geometry" - | wl-copy --type image/png
+    ;;
+  *)
+    echo "usage: winlike-screenshot clipboard|file|region" >&2
+    exit 2
+    ;;
+esac

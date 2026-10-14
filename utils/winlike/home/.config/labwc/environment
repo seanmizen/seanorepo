@@ -1,0 +1,7 @@
+# winlike: environment for the labwc session and every app it starts.
+XDG_SESSION_TYPE=wayland
+XDG_CURRENT_DESKTOP=LXQt:wlroots
+QT_QPA_PLATFORM=wayland
+QT_QPA_PLATFORMTHEME=lxqt
+XCURSOR_THEME=We10XOS-cursors
+XCURSOR_SIZE=24
