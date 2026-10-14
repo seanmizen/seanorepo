@@ -1,5 +1,5 @@
 /*
- * Win10: LXQt panel theme that copies the Windows 10 dark taskbar.
+ * winlike: our own LXQt panel theme. It copies the layout of the Windows 10 dark taskbar.
  * Taskbar #101010, 40 px high, white glyphs, light-blue running indicator.
  */
 
@@ -49,14 +49,13 @@ LXQtPanelPlugin > QToolButton:pressed {
     background: rgba(255, 255, 255, 5%);
 }
 
-/* Start button: 48 px wide, Windows logo */
+/* Start button: 48 px wide. panel.conf sets the icon: the white Debian logo from desktop-base. */
 #FancyMenu {
     min-width: 48px;
     max-width: 48px;
     border: none;
     background: transparent;
-    qproperty-icon: url(mainmenu.svg);
-    qproperty-iconSize: 16px;
+    qproperty-iconSize: 20px;
 }
 
 #FancyMenu:hover {

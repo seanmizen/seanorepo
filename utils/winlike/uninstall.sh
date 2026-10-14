@@ -22,9 +22,14 @@ while IFS= read -r -d '' rel; do
   fi
 done < <(cd "$here/home" && find . -type f -print0 | sort -z)
 
-echo "==> Themes, icons, cursors, fonts, wallpaper"
+echo "==> Themes"
 # Literal paths, relative to $HOME (the cd above).
+# Windows-10, Win10, We10X*, fonts/windows: older versions of install.sh wrote
+# these. Machines that have them get them removed too.
 for d in \
+  .local/share/themes/winlike \
+  .local/share/lxqt/themes/winlike \
+  .local/share/icons/winlike \
   .local/share/themes/Windows-10 \
   .local/share/themes/Win10 \
   .local/share/lxqt/themes/Win10 \
@@ -44,4 +49,4 @@ fc-cache -f > /dev/null
 
 echo
 echo "Done. To remove the packages too:"
-echo "  sudo apt-get remove labwc layer-shell-qt lxqt-panel lxqt-qtplugin lxqt-notificationd lxqt-config lxqt-runner pcmanfm-qt qterminal featherpad qps grim slurp wl-clipboard"
+echo "  sudo apt-get remove labwc layer-shell-qt lxqt-panel lxqt-qtplugin lxqt-notificationd lxqt-config lxqt-runner pcmanfm-qt qterminal featherpad qps grim slurp wl-clipboard breeze-cursor-theme fonts-open-sans"

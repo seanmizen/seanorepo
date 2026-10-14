@@ -1,5 +1,5 @@
 [System]
-IconThemeName=We10X
+IconThemeName=breeze
 FallbackIconThemeName=breeze
 Terminal=qterminal
 Archiver=lxqt-archiver
@@ -13,7 +13,7 @@ QuickExec=false
 
 [Desktop]
 DesktopShortcuts=Trash
-Wallpaper=@HOME@/.local/share/winlike/wallpaper.jpg
+Wallpaper=/usr/share/images/desktop-base/desktop-background
 WallpaperMode=zoom
 BgColor=#000000
 FgColor=#ffffff
@@ -23,7 +23,7 @@ SortOrder=ascending
 SortColumn=name
 DesktopIconSize=48
 DesktopCellMargins=@Size(3 1)
-Font="Segoe UI,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+Font="Open Sans,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
 ShowWmMenu=false
 
 [FolderView]

@@ -1,5 +1,6 @@
-# Win10: labwc theme that copies the Windows 10 (1809 and later) window frame.
-# Values come from Windows 10 with "Show accent color on title bars" off.
+# winlike: our own labwc theme. It copies the layout and colors of the Windows 10
+# (1809 and later) window frame, with "Show accent color on title bars" off.
+# We drew the caption button SVGs. They are not Microsoft files.
 
 border.width: 1
 window.titlebar.padding.width: 0

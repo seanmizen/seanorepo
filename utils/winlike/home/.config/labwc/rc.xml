@@ -17,8 +17,8 @@
   </placement>
 
   <theme>
-    <name>Win10</name>
-    <icon>We10X</icon>
+    <name>winlike</name>
+    <icon>breeze</icon>
     <fallbackAppIcon>application-x-executable</fallbackAppIcon>
     <titlebar>
       <layout>icon:iconify,max,close</layout>
@@ -27,11 +27,11 @@
     <cornerRadius>0</cornerRadius>
     <keepBorder>yes</keepBorder>
     <dropShadows>yes</dropShadows>
-    <font place="ActiveWindow"><name>Segoe UI</name><size>9</size></font>
-    <font place="InactiveWindow"><name>Segoe UI</name><size>9</size></font>
-    <font place="MenuHeader"><name>Segoe UI</name><size>9</size></font>
-    <font place="MenuItem"><name>Segoe UI</name><size>9</size></font>
-    <font place="OnScreenDisplay"><name>Segoe UI</name><size>9</size></font>
+    <font place="ActiveWindow"><name>Open Sans</name><size>9</size></font>
+    <font place="InactiveWindow"><name>Open Sans</name><size>9</size></font>
+    <font place="MenuHeader"><name>Open Sans</name><size>9</size></font>
+    <font place="MenuItem"><name>Open Sans</name><size>9</size></font>
+    <font place="OnScreenDisplay"><name>Open Sans</name><size>9</size></font>
   </theme>
 
   <windowSwitcher show="yes" preview="yes" outlines="no" allWorkspaces="no">
