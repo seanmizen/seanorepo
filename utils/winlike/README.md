@@ -1,5 +1,10 @@
 # winlike
 
+> **Prototype.** winlike was a one-day experiment (2026-10-14). It is not
+> installed on any machine, and nobody maintains it. The scripts and the
+> config files stay here as a record. See
+> [Potential improvements](#potential-improvements) for the work that stopped.
+
 A Linux desktop with the behavior and layout of Windows 10. It runs in a window
 on the Windows desktop through WSLg, so you can change it and test it quickly.
 
@@ -229,3 +234,27 @@ Windows 10. We drew the caption button SVGs. They are not Microsoft files.
 - **LXQt on labwc**: the [openSUSE LXQt labwc page](https://en.opensuse.org/openSUSE:LXQt_labwc)
   and the [lxqt-wayland-session 0.4.0 release](https://lxqt-project.org/release/2026/04/20/lxqt-wayland-session-0-4-0/),
   which adds `openmenu`.
+
+## Potential improvements
+
+These issues are closed as "not planned". Reopen one to continue.
+
+- [#672](https://github.com/seanmizen/seanorepo/issues/672): keyboard layout and regional format follow Windows (UK layout, week starts on Monday).
+- [#673](https://github.com/seanmizen/seanorepo/issues/673): Dolphin as the file manager, with Explorer shortcuts.
+- [#674](https://github.com/seanmizen/seanorepo/issues/674): GTK apps use the same file dialog as Qt apps.
+- [#675](https://github.com/seanmizen/seanorepo/issues/675): GTK and Qt apps share one Windows 10 look.
+- [#676](https://github.com/seanmizen/seanorepo/issues/676): clock and volume flyouts look like Windows 10.
+- [#677](https://github.com/seanmizen/seanorepo/issues/677): notifications and Action Center look like Windows 10.
+- [#678](https://github.com/seanmizen/seanorepo/issues/678): search button and Win+S.
+
+Known problems when the work stopped:
+
+- `winlike --fullscreen` sets the desktop to the monitor size, but Windows
+  puts the WSLg window, with its title bar, where it chooses. Part of the
+  desktop is then off the screen. Only the AutoHotkey script moves the window
+  over the whole monitor.
+- Nobody ran `windows/winlike-capture.ahk` on Windows. The key table in
+  [keyboard-capture.md](docs/keyboard-capture.md) is an expectation, not a
+  measurement.
+- Windows probably keeps most Win key combinations and Alt+Tab. Thus most of
+  the keybinds in this README do not reach labwc without the capture script.
