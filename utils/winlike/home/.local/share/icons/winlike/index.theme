@@ -1,0 +1,16 @@
+# winlike: the Debian breeze icon theme, plus white volume glyphs for the dark
+# taskbar. install.sh links the glyphs from breeze-dark into status/.
+# lxqt-panel asks for "audio-volume-*-panel" icons. breeze does not have them,
+# so without this theme the panel shows the dark breeze glyph on the dark taskbar.
+[Icon Theme]
+Name=winlike
+Comment=breeze, with breeze-dark volume glyphs for the taskbar
+Inherits=breeze
+Directories=status
+
+[status]
+Size=22
+MinSize=16
+MaxSize=256
+Context=Status
+Type=Scalable

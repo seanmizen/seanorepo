@@ -1,19 +1,25 @@
 # winlike
 
-A Linux desktop with the look and feel of Windows 10. It runs in a window on
-the Windows desktop through WSLg, so you can change it and test it quickly.
+A Linux desktop with the behavior and layout of Windows 10. It runs in a window
+on the Windows desktop through WSLg, so you can change it and test it quickly.
+
+It uses no Microsoft files and no copies of them. The icons, cursors, font,
+wallpaper and start button logo are Debian defaults. Each menu label gives the
+name of the app that it opens.
 
 ![winlike desktop](screenshot.png)
 
 | Part | Tool |
 |---|---|
-| Window manager (compositor) | [labwc](https://labwc.github.io/) 0.8 with the `Win10` theme from this directory |
-| Taskbar and start menu | `lxqt-panel` 2.1 with the `Win10` LXQt theme from this directory |
+| Window manager (compositor) | [labwc](https://labwc.github.io/) 0.8 with the `winlike` theme from this directory |
+| Taskbar and start menu | `lxqt-panel` 2.1 with the `winlike` LXQt theme from this directory |
 | Desktop (wallpaper, icons, rubber-band select) | `pcmanfm-qt --desktop` |
-| Icons | [We10X](https://github.com/yeyushengfan258/We10X-icon-theme) |
-| Cursors | [We10XOS-cursors](https://github.com/yeyushengfan258/We10XOS-cursors) |
-| GTK theme | [B00merang Windows-10](https://github.com/B00merang-Project/Windows-10) |
-| Fonts and wallpaper | Segoe UI, Consolas and `img0` from `C:\Windows` |
+| Icons | breeze (`breeze-icon-theme`). The taskbar volume glyph comes from breeze-dark. |
+| Cursors | Breeze_Light (`breeze-cursor-theme`) |
+| GTK theme | Adwaita, the GTK default |
+| Font | Open Sans (`fonts-open-sans`). Monospace stays the Debian default, DejaVu Sans Mono. |
+| Wallpaper | The Debian default (`desktop-base`) |
+| Start button | The Debian logo (`desktop-base`) |
 
 Tested on Debian 13 (trixie) in WSL2 on Windows 10, with WSLg.
 
@@ -44,11 +50,11 @@ utils/winlike/uninstall.sh   # remove it all
 | Win+Shift+Up | Stretch the window to full height |
 | Win+D, Win+M | Show the desktop |
 | Win+1 to Win+9 | Open the app at that taskbar position |
-| Win+E | File Explorer (`pcmanfm-qt`) |
-| Win+R | Run (`lxqt-runner`) |
-| Win+I | Settings (`lxqt-config`) |
-| Win+X | Quick Link menu |
-| Ctrl+Shift+Esc | Task Manager (`qps`) |
+| Win+E | PCManFM-Qt file manager (`pcmanfm-qt`) |
+| Win+R | LXQt Runner (`lxqt-runner`) |
+| Win+I | LXQt Configuration Center (`lxqt-config`) |
+| Win+X | Win+X menu (Windows calls it the Quick Link menu) |
+| Ctrl+Shift+Esc | Qps process viewer (`qps`) |
 | PrtScn | Copy the screen to the clipboard |
 | Win+PrtScn | Save `~/Pictures/Screenshots/Screenshot (N).png` |
 | Win+Shift+S | Select an area and copy it to the clipboard |
@@ -75,23 +81,21 @@ window with Alt+drag, or roll it up when you scroll on the title bar.
 1. **Debian packages.** It installs these with `apt` if they are missing:
    `labwc layer-shell-qt lxqt-panel lxqt-qtplugin lxqt-notificationd
    lxqt-config lxqt-runner pcmanfm-qt qterminal featherpad qps grim slurp
-   wl-clipboard fontconfig curl ca-certificates`.
-2. **Themes from GitHub.** The script pins each one to a commit:
-
-   | Repository | Commit | Installed to |
-   |---|---|---|
-   | `B00merang-Project/Windows-10` | `3a41166` | `~/.local/share/themes/Windows-10` |
-   | `yeyushengfan258/We10X-icon-theme` | `0f52ff2` | `~/.local/share/icons/We10X`, `We10X-dark` |
-   | `yeyushengfan258/We10XOS-cursors` | `b971891` | `~/.local/share/icons/We10XOS-cursors` |
-
-3. **Files from Windows.** It copies Segoe UI and Consolas to
-   `~/.local/share/fonts/windows/`, and the Windows 10 wallpaper to
-   `~/.local/share/winlike/wallpaper.jpg`. These files come with your Windows
-   license. Do not commit them or share them.
-4. **Config files.** It copies every file in [`home/`](home/) to the same path
+   wl-clipboard breeze-icon-theme breeze-cursor-theme fonts-open-sans
+   fontconfig desktop-base`.
+2. **Files from older versions.** Older versions of `install.sh` copied
+   Windows themes, icons, cursors, fonts and the Windows wallpaper. The script
+   removes them: `~/.local/share/themes/Windows-10`, `themes/Win10`,
+   `lxqt/themes/Win10`, `icons/We10X`, `icons/We10X-dark`,
+   `icons/We10XOS-cursors`, `fonts/windows` and `winlike/wallpaper.jpg`.
+3. **Config files.** It copies every file in [`home/`](home/) to the same path
    under `~`. A file that ends in `.in` gets `@HOME@` replaced. The first
    install copies each file it replaces into `~/.local/share/winlike/backup/`.
    `uninstall.sh` puts these files back.
+4. **Taskbar volume glyphs.** It links the white breeze-dark volume glyphs into
+   `~/.local/share/icons/winlike/status/`. lxqt-panel asks for
+   `audio-volume-*-panel` icons. breeze does not have them, and its dark glyph
+   is not legible on the dark taskbar.
 5. **`~/Desktop`.** It makes this directory if it does not exist.
    `uninstall.sh` keeps it.
 
@@ -103,20 +107,24 @@ The config files:
 | `.config/labwc/menu.xml` | Window menu and Win+X menu |
 | `.config/labwc/environment` | Wayland, LXQt platform theme, cursor |
 | `.config/labwc/autostart` | Starts the desktop, the taskbar and notifications |
-| `.config/lxqt/lxqt.conf` | LXQt theme, icons, cursor, Qt font, Fusion style, Windows palette |
-| `.config/lxqt/panel.conf` | Taskbar layout |
+| `.config/lxqt/lxqt.conf` | LXQt theme, icons, cursor, Qt font, Fusion style, Windows 10 colors |
+| `.config/lxqt/panel.conf` | Taskbar layout, start button logo |
 | `.config/pcmanfm-qt/winlike/settings.conf.in` | Desktop: wallpaper, Recycle Bin, icon size, font |
 | `.config/gtk-3.0/settings.ini` | GTK theme, icons, cursor, font |
-| `.config/fontconfig/fonts.conf` | ClearType-style text: full hinting, RGB subpixel antialiasing, Segoe UI as `sans-serif` |
+| `.config/fontconfig/fonts.conf` | ClearType-style text: full hinting, RGB subpixel antialiasing, Open Sans as `sans-serif` |
 | `.local/bin/winlike` | Starts the session |
 | `.local/bin/winlike-panel` | Sends a taskbar shortcut over D-Bus (start menu, show desktop, Win+N) |
 | `.local/bin/winlike-screenshot` | PrtScn, Win+PrtScn and Win+Shift+S |
-| `.local/share/themes/Win10/labwc/` | Window frame theme and caption button SVGs |
-| `.local/share/lxqt/themes/Win10/` | Taskbar and start menu theme, start button logo |
+| `.local/share/themes/winlike/labwc/` | Window frame theme and caption button SVGs |
+| `.local/share/lxqt/themes/winlike/` | Taskbar and start menu theme |
+| `.local/share/icons/winlike/` | Icon theme: breeze, with white volume glyphs on the taskbar |
 
 ## Windows 10 values in the theme
 
-- Title bar: white, 30 px high. Title in Segoe UI 9, black when active and
+We made the `winlike` labwc and LXQt themes. They copy the sizes and colors of
+Windows 10. We drew the caption button SVGs. They are not Microsoft files.
+
+- Title bar: white, 30 px high. Title in Open Sans 9, black when active and
   `#999999` when inactive.
 - Caption buttons: 46 x 30 px with 10 px glyphs. Hover is `#e5e5e5`. Close
   hover is `#e81123` with a white glyph.
@@ -141,10 +149,12 @@ The config files:
 ## Prior work
 
 - **Kali Undercover** (Kali 2019.4) makes Xfce look like Windows 10 with the
-  B00merang theme, a Windows 10 icon theme and an Xfce panel profile.
+  B00merang theme, a Windows 10 icon theme and an Xfce panel profile. winlike
+  does not use these themes.
 - **B00merang Windows-10** has an `openbox-3` theme. labwc can read it, but the
   Openbox format cannot give the 46 px buttons or the red close hover. Thus
-  this directory has a labwc theme of its own.
+  this directory has a labwc theme of its own. winlike does not use the
+  B00merang theme.
 - **LXQt on labwc**: the [openSUSE LXQt labwc page](https://en.opensuse.org/openSUSE:LXQt_labwc)
   and the [lxqt-wayland-session 0.4.0 release](https://lxqt-project.org/release/2026/04/20/lxqt-wayland-session-0-4-0/),
   which adds `openmenu`.
