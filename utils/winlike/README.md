@@ -213,6 +213,9 @@ Windows 10. We drew the caption button SVGs. They are not Microsoft files.
 - **Snap.** There is no quarter snap in the corners and no Snap Assist.
 - **Not done:** Win+L (no screen locker), Task View, the search box on the
   taskbar, and thumbnail previews when you hover on a taskbar button.
+- **Research:** [file managers](docs/file-managers.md) compared with
+  Explorer, [Kali Undercover](docs/kali-undercover.md), and a ranked list of
+  [other gaps](docs/gaps.md).
 
 ## Prior work
 
