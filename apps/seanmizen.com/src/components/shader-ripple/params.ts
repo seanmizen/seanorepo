@@ -13,8 +13,14 @@ type RippleParams = {
   crest: number;
   wobble: number;
   lobes: number;
+  warp: number;
+  warpScale: number;
+  warpSpeed: number;
   push: number;
   // The light
+  nebula: number;
+  nebulaScale: number;
+  nebulaSpeed: number;
   glowFade: number;
   trail: number;
   trailLen: number;
@@ -33,6 +39,7 @@ type RippleParams = {
   particleSize: number;
   // Clicks and time
   strength: number;
+  heartChance: number;
   maxTaps: number;
   timeScale: number;
   // Colours
@@ -67,11 +74,17 @@ const DEFAULTS: RippleParams = {
   widthGrow: 1,
   wave: 3,
   crest: 0.6,
-  wobble: 0.35,
+  wobble: 0,
   lobes: 5,
+  warp: 0.8,
+  warpScale: 2.5,
+  warpSpeed: 0.12,
   push: 0.1,
+  nebula: 0.9,
+  nebulaScale: 3,
+  nebulaSpeed: 0.1,
   glowFade: 1,
-  trail: 0.7,
+  trail: 0.3,
   trailLen: 5,
   tintLo: 0.04,
   tintHi: 0.3,
@@ -85,6 +98,7 @@ const DEFAULTS: RippleParams = {
   chargeGain: 0.03,
   particleSize: 40,
   strength: 1,
+  heartChance: 0.15,
   maxTaps: 8,
   timeScale: 1,
   lightInk: '#000000',
@@ -155,11 +169,11 @@ const GROUPS: ParamGroup[] = [
       },
       {
         key: 'wobble',
-        label: 'wobble',
+        label: 'lobe depth',
         min: 0,
         max: 3,
         step: 0.05,
-        hint: 'How far the outline strays from a circle.',
+        hint: 'How far regular lobes push the outline out. The starfish look.',
       },
       {
         key: 'lobes',
@@ -167,7 +181,31 @@ const GROUPS: ParamGroup[] = [
         min: 0,
         max: 16,
         step: 1,
-        hint: 'How many bulges the outline has.',
+        hint: 'How many regular lobes the outline has.',
+      },
+      {
+        key: 'warp',
+        label: 'warp',
+        min: 0,
+        max: 4,
+        step: 0.05,
+        hint: 'How far noise bends the outline off a circle.',
+      },
+      {
+        key: 'warpScale',
+        label: 'warp size',
+        min: 0.3,
+        max: 12,
+        step: 0.1,
+        hint: 'The size of a bend. Small values give a ragged edge, large values a lopsided ring.',
+      },
+      {
+        key: 'warpSpeed',
+        label: 'warp drift',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: 'How fast the bends change as the ring grows.',
       },
       {
         key: 'push',
@@ -182,6 +220,30 @@ const GROUPS: ParamGroup[] = [
   {
     title: 'Light',
     params: [
+      {
+        key: 'nebula',
+        label: 'nebula',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: '0: the front glows evenly. 1: it lights only where a drifting cloud is thick, so the ring breaks into patches.',
+      },
+      {
+        key: 'nebulaScale',
+        label: 'cloud size',
+        min: 0.5,
+        max: 12,
+        step: 0.1,
+        hint: 'The size of a cloud patch.',
+      },
+      {
+        key: 'nebulaSpeed',
+        label: 'cloud drift',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: 'How fast the clouds change.',
+      },
       {
         key: 'glowFade',
         label: 'glow fade',
@@ -310,6 +372,14 @@ const GROUPS: ParamGroup[] = [
         hint: 'Strength of each new click.',
       },
       {
+        key: 'heartChance',
+        label: 'heart chance',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: 'The chance that a click runs out as a heart instead of a ring.',
+      },
+      {
         key: 'maxTaps',
         label: 'ripples at once',
         min: 1,
@@ -330,7 +400,15 @@ const GROUPS: ParamGroup[] = [
 ];
 
 const PRESETS: Record<string, Partial<RippleParams>> = {
-  default: {},
+  nebula: {},
+  // The first version: a regular 5-lobed ring that glows evenly.
+  starfish: {
+    wobble: 0.35,
+    warp: 0,
+    nebula: 0,
+    trail: 0.7,
+    heartChance: 0,
+  },
   gentle: {
     reach: 10,
     push: 0.05,
@@ -353,8 +431,8 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
     push: 0.18,
     crest: 1,
     wave: 1.6,
-    wobble: 1.2,
-    lobes: 7,
+    warp: 1.8,
+    warpScale: 1.5,
     spring: 0.05,
     springDamp: 0.04,
   },

@@ -30,6 +30,12 @@ const RIPPLE_KEYS = [
   'crest',
   'wobble',
   'lobes',
+  'warp',
+  'warpScale',
+  'warpSpeed',
+  'nebula',
+  'nebulaScale',
+  'nebulaSpeed',
   'glowFade',
   'trail',
   'trailLen',
@@ -51,8 +57,9 @@ const FOV = 75;
 const HALF_EXTENT = CAMERA_Z * Math.tan(((FOV / 2) * Math.PI) / 180);
 
 type ShaderRippleHandle = {
-  /* Fire `n` clicks at random points over the portrait. */
-  burst: (n: number) => void;
+  /* Fire `n` clicks at random points over the portrait. `heart` forces
+     the heart shape; otherwise each click is a heart by `heartChance`. */
+  burst: (n: number, heart?: boolean) => void;
   /* Forget every ripple in flight. */
   clear: () => void;
 };
@@ -103,7 +110,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
   const api = useRef<ShaderRippleHandle>({ burst: () => {}, clear: () => {} });
   useImperativeHandle(ref, () => ({
-    burst: (n) => api.current.burst(n),
+    burst: (n, heart) => api.current.burst(n, heart),
     clear: () => api.current.clear(),
   }));
 
@@ -233,23 +240,26 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     let nTaps = 0;
     let now = 0;
 
-    const addTap = (x: number, y: number) => {
+    const addTap = (x: number, y: number, heart?: boolean) => {
       const slots = Math.max(
         1,
         Math.min(MAX_TAPS, live.current.params.maxTaps),
       );
       const taps = rippleUniforms.u_taps.value as THREE.Vector4[];
-      taps[nTaps % slots].set(x, y, now, live.current.params.strength);
+      const { strength, heartChance } = live.current.params;
+      // A negative strength tells the shader to run a heart, not a ring.
+      const isHeart = heart ?? Math.random() < heartChance;
+      taps[nTaps % slots].set(x, y, now, isHeart ? -strength : strength);
       nTaps++;
       rippleUniforms.u_tapCount.value = Math.min(nTaps, slots);
     };
 
     api.current = {
-      burst: (count) => {
+      burst: (count, heart) => {
         for (let i = 0; i < count; i++) {
           const a = 2 * Math.PI * Math.random();
           const d = 8 * Math.sqrt(Math.random());
-          addTap(d * Math.cos(a), d * Math.sin(a));
+          addTap(d * Math.cos(a), d * Math.sin(a), heart);
         }
       },
       clear: () => {

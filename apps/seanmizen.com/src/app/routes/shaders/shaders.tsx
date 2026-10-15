@@ -21,6 +21,17 @@ import styles from './shaders.module.css';
 
 const CANVAS_SIZES = [300, 400, 500, 700, 900];
 
+const PRESET_NAMES = Object.keys(PRESETS);
+
+/* The preset the params match exactly, or '' once a slider moves off it. */
+const presetOf = (params: RippleParams) =>
+  PRESET_NAMES.find((name) => {
+    const preset: RippleParams = { ...DEFAULTS, ...PRESETS[name] };
+    return (Object.keys(preset) as (keyof RippleParams)[]).every(
+      (key) => preset[key] === params[key],
+    );
+  }) ?? '';
+
 const COLOR_KEYS = [
   ['lightInk', 'light ink'],
   ['lightAccent', 'light ripple'],
@@ -92,6 +103,20 @@ const Shaders: FC = () => {
     flash('loaded');
   };
 
+  const preset = presetOf(params);
+  const applyPreset = (name: string) => {
+    const values = PRESETS[name];
+    if (values) setParams({ ...DEFAULTS, ...values });
+  };
+  // Step through the presets in order, wrapping at both ends. From custom
+  // settings, step from the start of the list.
+  const stepPreset = (by: number) => {
+    const at = PRESET_NAMES.indexOf(preset);
+    const from = at === -1 ? (by > 0 ? -1 : 0) : at;
+    const n = PRESET_NAMES.length;
+    applyPreset(PRESET_NAMES[(from + by + n) % n]);
+  };
+
   const set = <K extends keyof RippleParams>(key: K, value: RippleParams[K]) =>
     setParams((p) => ({ ...p, [key]: value }));
 
@@ -154,25 +179,37 @@ const Shaders: FC = () => {
 
         <section className={styles.section}>
           <div className={styles.row}>
+            <button
+              type="button"
+              aria-label="Previous preset"
+              onClick={() => stepPreset(-1)}
+            >
+              ‹
+            </button>
             <label className={styles.inline}>
               preset
               <select
-                value=""
-                onChange={(e) => {
-                  const preset = PRESETS[e.target.value];
-                  if (preset) setParams({ ...DEFAULTS, ...preset });
-                }}
+                id="ripple-preset"
+                value={preset}
+                onChange={(e) => applyPreset(e.target.value)}
               >
                 <option value="" disabled>
-                  choose…
+                  custom
                 </option>
-                {Object.keys(PRESETS).map((name) => (
+                {PRESET_NAMES.map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              aria-label="Next preset"
+              onClick={() => stepPreset(1)}
+            >
+              ›
+            </button>
           </div>
           <div className={styles.row}>
             <button type="button" onClick={() => shader.current?.burst(1)}>
@@ -180,6 +217,12 @@ const Shaders: FC = () => {
             </button>
             <button type="button" onClick={() => shader.current?.burst(5)}>
               burst ×5
+            </button>
+            <button
+              type="button"
+              onClick={() => shader.current?.burst(1, true)}
+            >
+              heart
             </button>
             <button type="button" onClick={() => shader.current?.clear()}>
               clear
