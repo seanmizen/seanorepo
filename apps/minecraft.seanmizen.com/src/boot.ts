@@ -13,7 +13,10 @@
 //     without copying them (bun bundles them in at build time)
 
 import { audioImports } from '#/utils/swindowzig/backends/wasm/audio';
-import { attachEventListeners } from '#/utils/swindowzig/backends/wasm/events';
+import {
+  attachEventListeners,
+  setPointerLock,
+} from '#/utils/swindowzig/backends/wasm/events';
 import { initWebGPU } from '#/utils/swindowzig/backends/wasm/webgpu';
 
 interface OverlayElements {
@@ -130,11 +133,7 @@ async function main(): Promise<void> {
     env: {
       jsGetTime: (): number => performance.now(),
       jsSetPointerLock: (lock: number): void => {
-        if (lock) {
-          canvas.requestPointerLock();
-        } else if (document.pointerLockElement === canvas) {
-          document.exitPointerLock();
-        }
+        setPointerLock(canvas, lock !== 0);
       },
       // The voxel game does not use text input. The import must exist.
       jsSetTextInput: (_active: number): void => {},
