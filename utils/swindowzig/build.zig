@@ -317,6 +317,37 @@ pub fn build(b: *std.Build) void {
     terrain_hash_tests.root_module.addImport("sw_gpu", web_libs.gpu);
     test_step.dependOn(&b.addRunArtifact(terrain_hash_tests).step);
 
+    // Chunk stage benchmark (no GPU), native and wasm. See stage_bench.zig.
+    //   zig build bench-stages -Doptimize=ReleaseFast
+    //   zig build bench-stages-wasm -Doptimize=ReleaseFast
+    //   node examples/voxel/scripts/bench_stages.mjs zig-out/bin/stage_bench.wasm
+    const stage_bench_native = b.addExecutable(.{
+        .name = "stage_bench",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/voxel/stage_bench.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    stage_bench_native.root_module.addImport("sw_gpu", web_libs.gpu);
+    const stage_bench_step = b.step("bench-stages", "Time each voxel chunk stage natively and print the terrain hashes");
+    stage_bench_step.dependOn(&b.addRunArtifact(stage_bench_native).step);
+    const stage_bench_wasm = b.addExecutable(.{
+        .name = "stage_bench",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/voxel/stage_bench.zig"),
+            .target = wasm_target,
+            .optimize = optimize,
+        }),
+    });
+    stage_bench_wasm.root_module.addImport("sw_gpu", web_libs.gpu);
+    stage_bench_wasm.entry = .disabled;
+    stage_bench_wasm.rdynamic = true;
+    // Chunk.init makes a large value on the stack. Use the same stack as app.wasm.
+    stage_bench_wasm.stack_size = 16 * 1024 * 1024;
+    const stage_bench_wasm_step = b.step("bench-stages-wasm", "Build zig-out/bin/stage_bench.wasm (run it with examples/voxel/scripts/bench_stages.mjs)");
+    stage_bench_wasm_step.dependOn(&b.addInstallArtifact(stage_bench_wasm, .{}).step);
+
     // Voxel mesher tests: the packed-quad round trip checks that vs_chunk's
     // decode (mirrored in mesher.unpackCorner) gives back the CPU vertices.
     const mesher_tests = b.addTest(.{

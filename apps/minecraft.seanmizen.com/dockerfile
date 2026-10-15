@@ -53,8 +53,9 @@ RUN zig build web -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 # =============================================================================
 # Stage 2: JS bundle (Bun)
 # =============================================================================
-# Bundles apps/minecraft.seanmizen.com/src/boot.ts — which imports the
-# swindowzig WebGPU/event/audio bridges — into a single self-contained boot.js.
+# Bundles apps/minecraft.seanmizen.com/src/boot.ts into one boot.js. boot.ts
+# imports the swindowzig wasm loader (backends/wasm/loader.ts), so the COPY
+# below takes all of backends/wasm.
 FROM oven/bun:1.1-slim AS js-build
 WORKDIR /build
 
