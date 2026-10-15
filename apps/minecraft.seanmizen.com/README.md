@@ -50,9 +50,9 @@ yarn workspace minecraft.seanmizen.com build
 The script:
 1. Runs `zig build web -Dexample=voxel` in `utils/swindowzig/` — produces
    `zig-out/bin/app.wasm` and copies it into `public/app.wasm`.
-2. Runs `bun build src/boot.ts` — bundles the swindowzig WebGPU bridge
-   (from `utils/swindowzig/backends/wasm/{webgpu,events,audio}.ts`) into
-   `public/boot.js`.
+2. Runs `bun build src/boot.ts`. It bundles the swindowzig wasm loader
+   (`utils/swindowzig/backends/wasm/loader.ts`) and the modules that it
+   imports into `public/boot.js`. The dev page uses the same loader.
 3. Each step is idempotent and prints a warning if a tool is missing.
 
 Preview it with any static file server:
