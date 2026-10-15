@@ -389,6 +389,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_revealR: { value: 0 },
       u_revealEdge: { value: REVEAL_EDGE },
       u_revealMoving: { value: 0 },
+      u_revealGlow: { value: 0 },
       u_revealFade: { value: 1 },
       u_clearFace: { value: 0 },
       u_clearSoft: { value: 1 },
@@ -587,9 +588,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         revealState.duration = reducedMotion.matches
           ? 0.3
           : Math.max(0.05, (h?.revealTime ?? 1) * distance);
-        // Opening sends a front out from the face, so the portrait pulses
-        // as the text is written.
-        if (wantReveal && !reducedMotion.matches) addTap(0, 0);
         // The content has just changed size (the list opened or closed), so
         // measure now rather than a few frames late.
         measureClear();
@@ -661,6 +659,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           lightUniforms.u_revealMoving.value =
             reduced || progress >= 1 ? 0 : 1 - progress ** 4;
           lightUniforms.u_revealFade.value = reduced ? revealState.r : 1;
+          lightUniforms.u_revealGlow.value = h.revealGlow;
           lightUniforms.u_clearFace.value = h.clearFace;
           lightUniforms.u_clearSoft.value = h.clearSoft;
           lightUniforms.u_clearRect.value.copy(clearBox);

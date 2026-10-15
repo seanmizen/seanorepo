@@ -14,6 +14,7 @@ type HireSettings = {
   clearSoft: number;
   crossfade: number;
   revealTime: number;
+  revealGlow: number;
 };
 
 type HireNumericKey = Exclude<keyof HireSettings, 'message'>;
@@ -30,12 +31,13 @@ type HireDef = {
 const HIRE_DEFAULTS: HireSettings = {
   message: 'hire me ',
   letterSize: 14,
-  textStrength: 0.22,
-  textDrift: 0.5,
+  textStrength: 0.11,
+  textDrift: 1,
   clearFace: 10,
-  clearSoft: 0.6,
+  clearSoft: 2,
   crossfade: 9,
-  revealTime: 1.6,
+  revealTime: 5,
+  revealGlow: 0.3,
 };
 
 const HIRE_DEFS: HireDef[] = [
@@ -94,6 +96,14 @@ const HIRE_DEFS: HireDef[] = [
     max: 5,
     step: 0.05,
     hint: 'Seconds for the reveal front to write the text out to the edges.',
+  },
+  {
+    key: 'revealGlow',
+    label: 'edge glow',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    hint: 'How brightly the reveal front glows as it writes the text. It scrambles the letters either way.',
   },
 ];
 

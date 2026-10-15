@@ -23,7 +23,8 @@ uniform float u_textStrength;  // how strongly the resting text shows
 uniform float u_textDrift;     // how much the drifting cloud makes it breathe
 uniform float u_revealR;       // the reveal front's distance from the middle
 uniform float u_revealEdge;    // how soft that front is
-uniform float u_revealMoving;  // 1 while the front is moving, so it glows
+uniform float u_revealMoving;  // 1 while the front is moving
+uniform float u_revealGlow;    // how brightly the moving front glows
 uniform float u_revealFade;    // an overall fade, for reduced motion
 uniform float u_clearFace;     // the radius kept clear around the face
 uniform float u_clearSoft;     // how soft the clear edges are, against u_clearFace
@@ -51,12 +52,12 @@ void main() {
   float lit;
 
   if (u_hire > 0.5) {
-    // The text exists behind the reveal front, and the front itself glows
-    // and scrambles as it passes.
+    // The text exists behind the reveal front. The front scrambles the
+    // letters as it passes and glows only as far as u_revealGlow.
     float behind = u_revealR - length(p);
     float shown = smoothstep(-u_revealEdge, u_revealEdge, behind);
     float front = u_revealMoving * exp(-behind * behind / (u_revealEdge * u_revealEdge));
-    tint = max(tint, 0.9 * front);
+    tint = max(tint, u_revealGlow * front);
     roused += 1.5 * front;
 
     // Resting text breathes with the drifting cloud.
