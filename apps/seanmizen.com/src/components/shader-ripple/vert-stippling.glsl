@@ -8,8 +8,14 @@ uniform float u_height;
 uniform float u_particleSize;
 uniform float u_nActiveParticles;
 uniform sampler2D u_positionTexture;
+uniform sampler2D u_offsetTexture; // ripple displacement from home (xy)
 uniform sampler2D u_bgTexture;
 uniform vec2 u_textureOffset;
+
+uniform float u_swell;  // how much a roused particle grows
+
+// How strongly the passing ripples tint this particle
+varying vec3 v_light;
 
 /*
  * Returns the texture background color at the given position
@@ -27,6 +33,7 @@ void main() {
         // Get the particle position
         vec2 uv = vec2((mod(a_index, u_width) + 0.5) / u_width, (floor(a_index / u_width) + 0.5) / u_height);
         vec3 position = texture2D(u_positionTexture, uv).xyz;
+        position.xy += texture2D(u_offsetTexture, uv).xy;
 
         // Calculate the model view position
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
@@ -35,11 +42,18 @@ void main() {
         vec3 bgColor = get_background_color(position);
         float relativeSize = 1.0 - 0.3 * dot(bgColor, vec3(1.0));
 
+        // A roused particle swells, where the cloud lets the ripple show
+        vec3 light;
+        float roused = rippleAt(position.xy, light).z;
+        relativeSize *= 1.0 + u_swell * min(roused, 1.5) * light.z;
+        v_light = light;
+
         // Vertex shader output
         gl_PointSize = -u_particleSize * relativeSize / mvPosition.z;
         gl_Position = projectionMatrix * mvPosition;
     } else {
         // Vertex shader output
+        v_light = vec3(0.0, 0.0, 1.0);
         gl_PointSize = 0.0;
         gl_Position = vec4(-1000000.0);
     }

@@ -4,6 +4,11 @@ uniform float u_dt;
 uniform float u_nActiveParticles;
 uniform sampler2D u_bgTexture;
 uniform vec2 u_textureOffset;
+uniform float u_push;       // how hard a ripple shoves the particles
+uniform float u_springBack; // 1: ripples move the offset, not the sim
+uniform float u_repel;      // how hard the particles push each other apart
+uniform float u_chargeBase; // a particle's reach on white
+uniform float u_chargeGain; // how much further it reaches on dark
 
 // Simulation constants
 const float width = resolution.x;
@@ -25,7 +30,7 @@ vec3 get_background_color(vec3 position) {
  * Calculates the charge size for the given background color
  */
 float calculate_charge_size(vec3 bgColor) {
-    return 0.045 + 0.03 * pow(dot(bgColor, vec3(1.0)), 2.0);
+    return u_chargeBase + u_chargeGain * pow(dot(bgColor, vec3(1.0)), 2.0);
 }
 
 /*
@@ -75,9 +80,14 @@ void main() {
             // charge size
             if (distance != 0.0 && distance < totalChargeSize) {
                 // Add the particle repulsion force
-                totalForce += 0.03 * pow(totalChargeSize / (distance + softening), 2.0) * (forceDirection / distance);
+                totalForce += u_repel * pow(totalChargeSize / (distance + softening), 2.0) * (forceDirection / distance);
             }
         }
+
+        // Add the push from any click ripples passing through, unless the
+        // offset sim takes it so the particles can spring back home
+        vec3 light;
+        totalForce.xy += (1.0 - u_springBack) * u_push * rippleAt(position.xy, light).xy;
 
         // Return the new particle velocity
         gl_FragColor = vec4(u_dt * totalForce, 1.0);

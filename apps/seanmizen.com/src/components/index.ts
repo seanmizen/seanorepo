@@ -5,7 +5,7 @@ export { ExternalLink } from './external-link';
 export { HomeLi } from './home-li';
 export { HomeLink } from './home-link';
 export { LastUpdated } from './last-updated';
-export { ShaderSean } from './shader-sean';
+export { ShaderRipple } from './shader-ripple';
 export { Spacer } from './spacer';
 export { SSHModal } from './ssh-modal';
 export { ThemeToggle } from './theme-toggle';
