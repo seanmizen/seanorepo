@@ -230,10 +230,18 @@ const world_gen = @import("world_gen.zig");
 const clock = @import("clock.zig");
 const async_chunks_mod = if (!is_wasm) @import("async_chunks.zig") else struct {
     pub const Pipeline = struct {
-        pub fn init(_: std.mem.Allocator, _: std.Io) !*Pipeline { unreachable; }
-        pub fn drainSorted(_: *Pipeline, _: *std.ArrayList(Result), _: std.mem.Allocator) !void { unreachable; }
-        pub fn submit(_: *Pipeline, _: anytype) !void { unreachable; }
-        pub fn deinit(_: *Pipeline) void { unreachable; }
+        pub fn init(_: std.mem.Allocator, _: std.Io) !*Pipeline {
+            unreachable;
+        }
+        pub fn drainSorted(_: *Pipeline, _: *std.ArrayList(Result), _: std.mem.Allocator) !void {
+            unreachable;
+        }
+        pub fn submit(_: *Pipeline, _: anytype) !void {
+            unreachable;
+        }
+        pub fn deinit(_: *Pipeline) void {
+            unreachable;
+        }
     };
     pub const Result = struct {
         cx: i32 = 0,
@@ -1336,18 +1344,18 @@ fn voxelInit(ctx: *sw.Context) !void {
     // and disable the feature so a bad path doesn't crash the TAS run.
     if (comptime !is_wasm) {
         if (state.profile_csv_path) |p| {
-        if (std.Io.Dir.cwd().createFile(ctx.io.?, p, .{ .truncate = true })) |f| {
-            state.profile_csv_file = f;
-            const header = "tick,loading,chunk_w,tick_ns,gen_ns,gen_count,mesh_ns,mesh_count,upload_ns,upload_count,render_ns\n";
-            f.writeStreamingAll(ctx.io.?, header) catch |err| {
-                std.log.err("--profile-csv: header write failed: {}", .{err});
-            };
-            std.log.info("--profile-csv: writing to '{s}' (chunk_w={d})", .{ p, chunk_mod.CHUNK_W });
-        } else |err| {
-            std.log.err("--profile-csv: failed to open '{s}': {}", .{ p, err });
-            state.profile_csv_file = null;
-            state.profile_csv_path = null;
-        }
+            if (std.Io.Dir.cwd().createFile(ctx.io.?, p, .{ .truncate = true })) |f| {
+                state.profile_csv_file = f;
+                const header = "tick,loading,chunk_w,tick_ns,gen_ns,gen_count,mesh_ns,mesh_count,upload_ns,upload_count,render_ns\n";
+                f.writeStreamingAll(ctx.io.?, header) catch |err| {
+                    std.log.err("--profile-csv: header write failed: {}", .{err});
+                };
+                std.log.info("--profile-csv: writing to '{s}' (chunk_w={d})", .{ p, chunk_mod.CHUNK_W });
+            } else |err| {
+                std.log.err("--profile-csv: failed to open '{s}': {}", .{ p, err });
+                state.profile_csv_file = null;
+                state.profile_csv_path = null;
+            }
         }
     }
 
@@ -1358,8 +1366,8 @@ fn voxelInit(ctx: *sw.Context) !void {
     if (comptime !is_wasm) {
         if (state.async_chunks_enabled) {
             state.async_pipeline = async_chunks_mod.Pipeline.init(ctx.allocator(), ctx.io.?) catch |init_err| blk: {
-            std.log.err("Async pipeline init failed ({}) — falling back to sync mesh loop", .{init_err});
-            state.async_chunks_enabled = false;
+                std.log.err("Async pipeline init failed ({}) — falling back to sync mesh loop", .{init_err});
+                state.async_chunks_enabled = false;
                 break :blk null;
             };
         }
@@ -1803,8 +1811,8 @@ fn asyncTick(p: *async_chunks_mod.Pipeline, world: *world_mod.World, player_pos:
         // fresh gen+mesh from dirty-neighbour remesh.
         const kind_tag: []const u8 = if (r.chunk != null) "gen+mesh" else "mesh-only";
         std.log.info("[ASYNC] chunk ({},{}) {s} worker_us={} quads={}", .{
-            r.cx,                             r.cz,
-            kind_tag,                         r.worker_us,
+            r.cx,              r.cz,
+            kind_tag,          r.worker_us,
             r.indices.len / 6,
         });
         if (r.chunk) |new_chunk| {
@@ -2408,93 +2416,93 @@ fn voxelTick(ctx: *sw.Context) !void {
         //      are about to be evicted, or that have just been evicted and are
         //      sitting in the hysteresis dead zone with `mesh_dirty = true`).
         {
-        var mesh_gens: usize = 0;
-        var it = state.world.chunks.iterator();
-        while (it.next()) |entry| {
-            if (mesh_gens >= MESH_GENS_PER_TICK) break;
-            const lc = entry.value_ptr.*;
-            if (!lc.mesh_dirty) continue;
-            const dcx = lc.cx - player_cx;
-            const dcz = lc.cz - player_cz;
-            if (dcx * dcx + dcz * dcz > state.world.meshRadiusSq()) continue;
-            if (!state.world.hasAllNeighborsGenerated(lc.cx, lc.cz)) continue;
-            if (ChunkDeadline.spent(chunk_deadline, mesh_gens)) break;
-            const t0 = perfNowNs();
-            mesher_mod.generateMeshForMode(
-                &lc.chunk,
-                &lc.mesh,
-                lc.worldX(),
-                lc.worldZ(),
-                state.world.asBlockGetter(),
-                state.ao_strategy,
-                state.lighting_mode,
-                state.meshing_mode,
-            ) catch |err| {
-                std.log.err("Mesh gen failed for chunk ({},{}): {}", .{ lc.cx, lc.cz, err });
-                continue;
-            };
-            const mesh_dt_ns: i128 = perfNowNs() - t0;
-            const t_us = @divTrunc(mesh_dt_ns, 1000);
-            std.log.info("[MESH] chunk ({},{}) gen={}us quads={}", .{ lc.cx, lc.cz, t_us, lc.mesh.indices.items.len / 6 });
-            if (state.profile_csv_file != null) {
-                state.mesh_ns +%= @intCast(mesh_dt_ns);
-                state.mesh_count +%= 1;
+            var mesh_gens: usize = 0;
+            var it = state.world.chunks.iterator();
+            while (it.next()) |entry| {
+                if (mesh_gens >= MESH_GENS_PER_TICK) break;
+                const lc = entry.value_ptr.*;
+                if (!lc.mesh_dirty) continue;
+                const dcx = lc.cx - player_cx;
+                const dcz = lc.cz - player_cz;
+                if (dcx * dcx + dcz * dcz > state.world.meshRadiusSq()) continue;
+                if (!state.world.hasAllNeighborsGenerated(lc.cx, lc.cz)) continue;
+                if (ChunkDeadline.spent(chunk_deadline, mesh_gens)) break;
+                const t0 = perfNowNs();
+                mesher_mod.generateMeshForMode(
+                    &lc.chunk,
+                    &lc.mesh,
+                    lc.worldX(),
+                    lc.worldZ(),
+                    state.world.asBlockGetter(),
+                    state.ao_strategy,
+                    state.lighting_mode,
+                    state.meshing_mode,
+                ) catch |err| {
+                    std.log.err("Mesh gen failed for chunk ({},{}): {}", .{ lc.cx, lc.cz, err });
+                    continue;
+                };
+                const mesh_dt_ns: i128 = perfNowNs() - t0;
+                const t_us = @divTrunc(mesh_dt_ns, 1000);
+                std.log.info("[MESH] chunk ({},{}) gen={}us quads={}", .{ lc.cx, lc.cz, t_us, lc.mesh.indices.items.len / 6 });
+                if (state.profile_csv_file != null) {
+                    state.mesh_ns +%= @intCast(mesh_dt_ns);
+                    state.mesh_count +%= 1;
+                }
+                lc.state = .meshed;
+                lc.mesh_dirty = false;
+                lc.neighbor_ao_dirty = false;
+                lc.mesh_incremental_dirty = true;
+                mesh_gens += 1;
+                if (comptime is_wasm) state.web_frame_chunk_jobs += 1;
+                tick_mesh_us += t_us;
+                tick_mesh_chunks += 1;
             }
-            lc.state = .meshed;
-            lc.mesh_dirty = false;
-            lc.neighbor_ao_dirty = false;
-            lc.mesh_incremental_dirty = true;
-            mesh_gens += 1;
-            if (comptime is_wasm) state.web_frame_chunk_jobs += 1;
-            tick_mesh_us += t_us;
-            tick_mesh_chunks += 1;
-        }
 
-        // AO re-mesh pass: handle neighbor_ao_dirty chunks that sit outside
-        // MESH_RADIUS_SQ (in the hysteresis dead zone). These already have
-        // meshes but their AO was computed against missing neighbours. Cap
-        // at 2 per tick to avoid frame spikes.
-        const AO_REMESH_CAP: usize = 2;
-        var ao_remeshes: usize = 0;
-        var ao_it = state.world.chunks.iterator();
-        while (ao_it.next()) |entry| {
-            if (ao_remeshes >= AO_REMESH_CAP) break;
-            const lc = entry.value_ptr.*;
-            if (!lc.neighbor_ao_dirty) continue;
-            if (!lc.mesh_dirty) continue;
-            if (lc.state != .meshed) continue;
-            if (!state.world.hasAllNeighborsGenerated(lc.cx, lc.cz)) continue;
-            // Skip chunks already handled by the regular pass above.
-            const dcx = lc.cx - player_cx;
-            const dcz = lc.cz - player_cz;
-            if (dcx * dcx + dcz * dcz <= state.world.meshRadiusSq()) continue;
-            if (ChunkDeadline.spent(chunk_deadline, ao_remeshes)) break;
-            const t0 = perfNowNs();
-            mesher_mod.generateMeshForMode(
-                &lc.chunk,
-                &lc.mesh,
-                lc.worldX(),
-                lc.worldZ(),
-                state.world.asBlockGetter(),
-                state.ao_strategy,
-                state.lighting_mode,
-                state.meshing_mode,
-            ) catch |err| {
-                std.log.err("AO re-mesh failed for chunk ({},{}): {}", .{ lc.cx, lc.cz, err });
-                continue;
-            };
-            const mesh_dt_ns: i128 = perfNowNs() - t0;
-            const t_us = @divTrunc(mesh_dt_ns, 1000);
-            std.log.info("[AO-REMESH] chunk ({},{}) gen={}us quads={}", .{ lc.cx, lc.cz, t_us, lc.mesh.indices.items.len / 6 });
-            lc.mesh_dirty = false;
-            lc.neighbor_ao_dirty = false;
-            lc.mesh_incremental_dirty = true;
-            ao_remeshes += 1;
-            if (comptime is_wasm) state.web_frame_chunk_jobs += 1;
-            tick_mesh_us += t_us;
-            tick_mesh_chunks += 1;
+            // AO re-mesh pass: handle neighbor_ao_dirty chunks that sit outside
+            // MESH_RADIUS_SQ (in the hysteresis dead zone). These already have
+            // meshes but their AO was computed against missing neighbours. Cap
+            // at 2 per tick to avoid frame spikes.
+            const AO_REMESH_CAP: usize = 2;
+            var ao_remeshes: usize = 0;
+            var ao_it = state.world.chunks.iterator();
+            while (ao_it.next()) |entry| {
+                if (ao_remeshes >= AO_REMESH_CAP) break;
+                const lc = entry.value_ptr.*;
+                if (!lc.neighbor_ao_dirty) continue;
+                if (!lc.mesh_dirty) continue;
+                if (lc.state != .meshed) continue;
+                if (!state.world.hasAllNeighborsGenerated(lc.cx, lc.cz)) continue;
+                // Skip chunks already handled by the regular pass above.
+                const dcx = lc.cx - player_cx;
+                const dcz = lc.cz - player_cz;
+                if (dcx * dcx + dcz * dcz <= state.world.meshRadiusSq()) continue;
+                if (ChunkDeadline.spent(chunk_deadline, ao_remeshes)) break;
+                const t0 = perfNowNs();
+                mesher_mod.generateMeshForMode(
+                    &lc.chunk,
+                    &lc.mesh,
+                    lc.worldX(),
+                    lc.worldZ(),
+                    state.world.asBlockGetter(),
+                    state.ao_strategy,
+                    state.lighting_mode,
+                    state.meshing_mode,
+                ) catch |err| {
+                    std.log.err("AO re-mesh failed for chunk ({},{}): {}", .{ lc.cx, lc.cz, err });
+                    continue;
+                };
+                const mesh_dt_ns: i128 = perfNowNs() - t0;
+                const t_us = @divTrunc(mesh_dt_ns, 1000);
+                std.log.info("[AO-REMESH] chunk ({},{}) gen={}us quads={}", .{ lc.cx, lc.cz, t_us, lc.mesh.indices.items.len / 6 });
+                lc.mesh_dirty = false;
+                lc.neighbor_ao_dirty = false;
+                lc.mesh_incremental_dirty = true;
+                ao_remeshes += 1;
+                if (comptime is_wasm) state.web_frame_chunk_jobs += 1;
+                tick_mesh_us += t_us;
+                tick_mesh_chunks += 1;
+            }
         }
-    }
     }
 
     // ====================================================================
@@ -4904,6 +4912,44 @@ fn wasmFrameImpl(timestamp_ms: f64) callconv(.c) void {
     wasm_bus.clear();
 }
 
+// Debug counts for the headless wasm test (backends/wasm/headless.ts).
+// The test reads 8 i32 values at the returned address:
+//   0, 1: the chunk coordinates (cx, cz) of the player
+//   2:    the loaded chunks in the square of `radius` chunks around the player
+//   3:    the meshed chunks in the same square
+//   4:    the number of chunks in the square, (2 * radius + 1)^2
+//   5, 6: the loaded and meshed chunks in the whole world
+//   7:    1 while the loading screen shows, else 0
+var wasm_debug_counts: [8]i32 = @splat(0);
+
+fn wasmDebugChunkCounts(radius: i32) callconv(.c) [*]const i32 {
+    const r = @max(radius, 0);
+    const pcx = world_mod.chunkCoordOf(@as(i32, @intFromFloat(@floor(state.player.feet_pos[0]))));
+    const pcz = world_mod.chunkCoordOf(@as(i32, @intFromFloat(@floor(state.player.feet_pos[2]))));
+    var loaded_near: i32 = 0;
+    var meshed_near: i32 = 0;
+    var cz = pcz - r;
+    while (cz <= pcz + r) : (cz += 1) {
+        var cx = pcx - r;
+        while (cx <= pcx + r) : (cx += 1) {
+            const lc = state.world.chunks.get(.{ .cx = cx, .cz = cz }) orelse continue;
+            loaded_near += 1;
+            if (lc.state == .meshed) meshed_near += 1;
+        }
+    }
+    wasm_debug_counts = .{
+        pcx,
+        pcz,
+        loaded_near,
+        meshed_near,
+        (2 * r + 1) * (2 * r + 1),
+        @intCast(state.world.chunks.count()),
+        @intCast(countMeshedChunks(&state.world)),
+        @intFromBool(state.world_loading),
+    };
+    return &wasm_debug_counts;
+}
+
 // Constants read by boot.ts for canvas configuration.
 const wasm_config_disable_context_menu: u8 = 1;
 const wasm_config_hide_cursor: u8 = 0;
@@ -4912,6 +4958,7 @@ comptime {
     if (is_wasm) {
         @export(&wasmInitImpl, .{ .name = "swindowzig_init" });
         @export(&wasmFrameImpl, .{ .name = "swindowzig_frame" });
+        @export(&wasmDebugChunkCounts, .{ .name = "voxel_debug_chunk_counts" });
         @export(&wasm_config_disable_context_menu, .{ .name = "swindowzig_config_disable_context_menu" });
         @export(&wasm_config_hide_cursor, .{ .name = "swindowzig_config_hide_cursor" });
     }
