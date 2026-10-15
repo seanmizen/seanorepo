@@ -52,6 +52,9 @@ jobs:
         # No version: setup-zig reads minimum_zig_version from build.zig.zon.
         uses: mlugg/setup-zig@v2
 
+      - name: Format
+        run: zig fmt --check .
+
       - name: Install wgpu-native
         # The same version as the bindings in libs/sw_gpu/src/native_webgpu.zig.
         run: |
