@@ -29,6 +29,21 @@ were already correct.
   the packed quads of a fixed world. The quad hash is `4b4f00654f783b36`.
   A mesher change that must not change the output must keep this hash.
 
+### Chunk stages (voxel/pipeline/stages.zig)
+
+- `generate`, `light` and `mesh` are pure functions of a bounded
+  neighbourhood (C2, P3). They read no World and no globals. `main.zig` does
+  not use them yet.
+- `light` lights a window 44 cells wide (16 + 2 × 14) from the blocks of
+  the 3×3 chunks. It gives the same light as World after all 3×3
+  neighbours load. `mesh` reads at most `BORDER` (3) cells of each
+  neighbour. A read further than that stops debug builds.
+- `Inputs` records the versions that a job reads (C3). Install a result
+  only when `Inputs.isCurrent` is true.
+- `stages_test.zig` holds the equivalence, install-order and edit tests.
+  `zig build bench-stages` prints the time of each stage and
+  `stage_match=yes` when the stages give the output of World.
+
 ---
 
 ## Voxel Demo — CLI Flags
