@@ -1077,6 +1077,8 @@ pub const Chunk = struct {
     /// never trips).
     pub fn generateTerrain(self: *Chunk, cx: i32, cz: i32, config: world_gen.WorldGenConfig) !void {
         const t_fill_start = clock.nowNs();
+        // The world seed, mixed for the hash functions. Seed 0 keeps the old terrain.
+        const key = config.seedKey();
         var x: i32 = 0;
         while (x < CHUNK_W) : (x += 1) {
             var z: i32 = 0;
@@ -1091,7 +1093,7 @@ pub const Chunk = struct {
                 // For flatland (noise_octaves == 0) we skip biome sampling entirely —
                 // flatland is always grass-only as specified.
                 const biome: world_gen.Biome = if (config.noise_octaves > 0)
-                    world_gen.dominantBiome(wx, wz)
+                    world_gen.dominantBiome(wx, wz, key)
                 else
                     .plains;
 
@@ -1142,7 +1144,7 @@ pub const Chunk = struct {
                     const seed = @as(u32, @bitCast(wx)) *% 374761393 +%
                         @as(u32, @bitCast(wz)) *% 668265263 +%
                         @as(u32, @bitCast(gy)) *% 2654435761;
-                    const h = (seed ^ (seed >> 16)) *% 0x45d9f3b;
+                    const h = world_gen.mixSeed((seed ^ (seed >> 16)) *% 0x45d9f3b, key);
                     if ((h & 0x1FF) == 0) { // ~1/512 chance
                         try self.setBlock(x, gy, z, .glowstone);
                     }
@@ -1164,7 +1166,7 @@ pub const Chunk = struct {
                     // Carve from Y=4 (above bedrock zone) to surface-5 (preserve topsoil).
                     var wy: i32 = 4;
                     while (wy < surface - 4) : (wy += 1) {
-                        if (world_gen.shouldCarve(wx, wy, wz)) {
+                        if (world_gen.shouldCarve(wx, wy, wz, key)) {
                             try self.setBlock(cx_idx, wy, cz_idx, .air);
                         }
                     }
@@ -1182,15 +1184,15 @@ pub const Chunk = struct {
             while (tree_wx < cx * CHUNK_W + CHUNK_W + TREE_SEARCH) : (tree_wx += 1) {
                 var tree_wz: i32 = cz * CHUNK_W - TREE_SEARCH;
                 while (tree_wz < cz * CHUNK_W + CHUNK_W + TREE_SEARCH) : (tree_wz += 1) {
-                    if (!world_gen.isTreeCenter(tree_wx, tree_wz)) continue;
+                    if (!world_gen.isTreeCenter(tree_wx, tree_wz, key)) continue;
 
                     // Trees only spawn in forest biome — check the dominant biome
                     // at the tree's root column before placing it.
-                    const tree_biome = world_gen.dominantBiome(tree_wx, tree_wz);
+                    const tree_biome = world_gen.dominantBiome(tree_wx, tree_wz, key);
                     if (tree_biome != .forest) continue;
 
                     const tree_surface = world_gen.sampleHeightBiomeBlended(tree_wx, tree_wz, config);
-                    const trunk_h = world_gen.treeHeight(tree_wx, tree_wz);
+                    const trunk_h = world_gen.treeHeight(tree_wx, tree_wz, key);
                     const trunk_base = tree_surface + 1;
                     const trunk_top = tree_surface + trunk_h;
 
