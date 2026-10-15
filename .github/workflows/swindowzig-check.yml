@@ -66,6 +66,19 @@ jobs:
       - name: Unit tests
         run: zig build test --summary all
 
+      - name: Terrain hash, native and wasm
+        # Terrain must be identical on every platform and in every engine.
+        # Native and wasm (in Node) print the block hash of each seed. The
+        # two outputs must be equal. Seed 0 must keep its pinned hash.
+        run: |
+          zig build terrain-hash -Doptimize=ReleaseFast
+          ./zig-out/bin/terrain_hash 0 1 12345 > "$RUNNER_TEMP/terrain-native.txt"
+          node examples/voxel/scripts/terrain_hash_wasm.mjs 0 1 12345 > "$RUNNER_TEMP/terrain-wasm.txt"
+          echo "native:" && cat "$RUNNER_TEMP/terrain-native.txt"
+          echo "wasm (node $(node --version)):" && cat "$RUNNER_TEMP/terrain-wasm.txt"
+          diff "$RUNNER_TEMP/terrain-native.txt" "$RUNNER_TEMP/terrain-wasm.txt"
+          grep -qx '0 db5d8508a4c6cd54' "$RUNNER_TEMP/terrain-native.txt"
+
       - name: Web build
         run: zig build web -Dexample=voxel -Doptimize=ReleaseFast
 

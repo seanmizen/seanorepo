@@ -14,30 +14,20 @@ Read with `utils/swindowzig/CLAUDE.md`. The mandatory tests are there.
 order so geometric normal matches the intended outward face normal. +X and -X
 were already correct.
 
-### Incremental mesh update (voxel/mesher.zig)
-Full `generateMesh` scans 27,648 blocks — O(chunk_volume). For block add/remove,
-only 7 blocks are affected (changed block + 6 neighbours). Use `updateForBlockChange`:
+### Mesher output and block edits (voxel/mesher.zig)
 
-```zig
-// After chunk.setBlock(bx, by, bz, .air):
-mesh.updateForBlockChange(&chunk, bx, by, bz, camera_pos) catch {
-    mesh_dirty = true; // fallback to full regen
-};
-mesh_incremental_dirty = true; // GPU buffers need recreation
-```
-
-**How it works:**
-- `quad_block: ArrayList(u32)` — parallel array tracking which block owns each quad
-- `swapRemoveQuad(qi)` — O(1) removal: moves last quad into slot `qi`, rewrites its 6 indices
-- Collects affected quads via linear scan of `quad_block` (~6k entries), removes them, re-meshes 7 blocks
-- Maintains `sort_scratch` through the update so `sortByDepth` uses insertion sort (O(n)) instead of pdqsort (O(n log n)) on the next frame. Scratch is compacted by filtering entries with `.idx >= new_quad_count`, then new entries are appended with computed distances. Scratch is grown with +64 headroom when quad count increases.
-
-**Measured improvement (48×256×48 chunk, ~6144 quads):**
-- Before: 3891µs (mesh 2308 + sort 1341 + upload 242)
-- After: ~840µs (tick update 210 + sort 565 + upload 280) — **78% reduction**
-
-**`sortByDepth` latent bug fixed:** after scratch reallocation, must set `sort_valid = false`
-(previously, growing scratch left it with garbage values but sort_valid could still be true).
+- Greedy meshing is the only mesher. `generateMesh` writes one 16-byte
+  `PackedQuad` per quad to `Mesh.quads`, and the y range to `Mesh.y_min`
+  and `Mesh.y_max`. This is the GPU format. The upload copies the bytes and
+  does not convert them.
+- A greedy quad spans many blocks. A dig or a place meshes the whole chunk
+  again, on the main thread, in the same tick. If the block is at a chunk
+  edge, `updateBoundaryNeighbors` also meshes the neighbour chunk.
+- With `--depth-stencil=off`, `sortByDepth` writes the quads back to front
+  into `Mesh.sorted_quads`, and the upload writes that list.
+- `bench_mesher` (`zig build bench-mesher -Doptimize=ReleaseFast`) hashes
+  the packed quads of a fixed world. The quad hash is `4b4f00654f783b36`.
+  A mesher change that must not change the output must keep this hash.
 
 ---
 
@@ -55,15 +45,15 @@ comment blocks at the top of `examples/voxel/tests/ao_corners.tas`,
 | `--tas <path>` | Load and play a TAS script. Physical input blocked during playback. |
 | `--headless` | No window, no GPU. Ticks unlimited speed. Exits when TAS finishes. |
 | `--tas-step` | Frame-by-frame TAS stepping. Right arrow = advance one TAS tick. Implies `--gpu-debug`. |
-| `--gpu-debug` | Highlight freshly rebuilt mesh faces (orange tint, fades ~0.5s). Also toggled with Cmd+G / Ctrl+G at runtime. |
+| `--gpu-debug` | Tint each chunk orange after its mesh is rebuilt. The tint fades in about 0.5 s. Cmd+G / Ctrl+G toggles it at runtime. |
 | `--aa=<mode>` | Anti-aliasing method. Accepted: `none`, `msaa` (hardware multisample), `fxaa` (FXAA 3.11 post-process, **default at `medium` quality**). `--aa=fxaa` renders the scene to an offscreen bgra8unorm texture then runs a fullscreen FXAA pass to the swapchain. Can be combined with `--msaa=N` / `--fxaa-quality=<tier>` to control the per-method quality knob. |
 | `--msaa=N` | MSAA sample count. Accepted: `none`/`0` (no AA), `1`, `2`, `4`, `8`. Implies `--aa=msaa` when given. The `bgra8unorm` surface format supports [1, 2, 4] on native and [1, 4] on WebGPU. Values outside that range are clamped (e.g. `--msaa=8` → 4×). |
 | `--fxaa-quality=<tier>` | FXAA 3.11 quality tier. Accepted: `low` (4-step edge search, 0.5 subpix cap, 0.166 edge threshold), `medium` (12-step, 0.75, 0.125 — **default**. Matches the pre-quality-tier baseline so old FXAA diffs stay valid), `high` (32-step, 0.85, 0.063). Tiers map to roughly FXAA 3.11 presets 12/25/39. A change in the Settings menu at runtime rebuilds the FXAA shader and pipeline. WGSL has no specialisation constants, so `configureFXAA` substitutes the tier into `fxaa.wgsl` by text replacement. |
 | `--render-distance=N` | Chunk-radius circular cull distance. Accepted: integer in [1, 32]. **Default: 4.** Frozen for the lifetime of the World. The in-game Settings picker is display-only until live spiral-offset rebuild lands. See `world.zig: DEFAULT_RENDER_DISTANCE`. |
 | `--world=<preset>` | Worldgen preset. Accepted: `flatland` (flat Y=63), `hilly` (default — procedural noise terrain). |
+| `--seed=<u64>` | World seed. **Default: 0.** Generation mixes the seed into each random source: the height and biome noise, the caves, the trees and the glowstone. Seed 0 gives the terrain from before the seed existed. Native only. The web build uses seed 0. `zig build terrain-hash` builds a tool that prints the block hash of a 9×9 hilly area for each seed, from native and from wasm. CI compares the two. |
 | `--ao=<mode>` | Ambient-occlusion sampler. Accepted: `none` (no AO, full brightness), `classic` (per-vertex Mojang face-plane AO), `moore` (**default** — extended sampler that adds the outward+2 slab at half weight to darken indoor corners). `propagated` and `ssao` are reserved enum values that fall back to `classic` with a one-shot warning. Read at startup only — runtime changes (future settings menu) require remeshing all loaded chunks. |
 | `--lighting=<mode>` | World-lighting mode for the mesher. Accepted: `none` (every face fully lit by sky — A baseline for the cave-darkness regression) and `skylight` (default — per-chunk skylight propagation. Caves and overhangs go dark). Skylight is baked per-vertex at mesh time, so the in-game settings menu picker remeshes every loaded chunk on toggle. Digging or placing a block triggers a full-chunk `computeSkylight()` + `computeBlockLight()` + mesh regen. See `examples/voxel/docs/lighting.md` for the algorithm and phase 3 (block light / glowstone) design. |
-| `--meshing=<mode>` | Mesher strategy. Accepted: `naive` (one quad per visible block face — preserves the `quad_block` parallel-array invariant used by `updateForBlockChange`) and `greedy` (the default). Greedy merges coplanar faces with the same material, AO and skylight into larger rectangles: about 35× fewer quads on flatland and 3× on hilly. Greedy quads span multiple blocks, so `updateForBlockChange` cannot patch them. A dig or place event sets `mesh_dirty = true` on the chunk, and the next tick rebuilds the whole mesh. Merge dimension capped at 6 blocks to stay within the painter's-algorithm sort tolerance (see `examples/voxel/docs/memory.md` §Rank 5). |
 | `--place-block=<type>` | Block type emitted by right-click placement. Accepted: `stone` (default) and `glowstone`. Added with phase-3 block light so `tests/glowstone_cave.tas` can place an emitter from a TAS without needing an in-game block picker UI. |
 | `--dump-frame=<path>` | Capture one rendered frame to a PPM file, then exit. Waits for world loading to complete. If a TAS is running, waits for TAS to finish. If `--async-chunks=on`, also waits for the background pipeline to fully drain so the captured state is deterministic. |
 | `--async-chunks=<on\|off>` | Run chunk gen+mesh on a background worker thread (default: `on`). When on, the main thread only drains results and enqueues new jobs — the 30–150 ms per-chunk mesh spike is moved off the render thread. `off` restores the legacy time-budgeted sync loop (`MESH_GENS_PER_TICK`) as an escape hatch. Design + web-worker port plan: [`examples/voxel/docs/async-chunks.md`](examples/voxel/docs/async-chunks.md). |
@@ -130,12 +120,6 @@ TAS scripts for regression live under `examples/voxel/`:
   byte-identical PPMs (the camera-inside-bounding-sphere shortcut and the
   3×3 camera-neighbourhood safety net both fire). Mean brightness ≈ 103/255
   on the default flatland scene. "black" would be < 5/255.
-- `tests/greedy_vs_naive.tas` + `tests/greedy_vs_naive.sh` — captures the
-  same flatland pit scene under `--meshing=naive` and `--meshing=greedy`
-  and runs an RMS diff. Asserts `< 2/255` per channel (greedy is within
-  0.65/255 at the current cap=6 setting). Used to guard the painter's-sort
-  cap in `examples/voxel/mesher.zig` — bumping the cap too high causes
-  visible sort inversions against pit walls and this test catches them.
 - `tests/dig_relight.tas` — flatland small pit (4 dig clicks from a
   steep pitch-clamped look-down), used to verify `World.setBlock` now
   recomputes chunk skylight on dig. Diff vs. a local branch that
@@ -200,20 +184,26 @@ phase-1 limitations (no cross-chunk seams, no relight on dig):
 
 ## Voxel Demo — GPU Debug System
 
-Tracks which mesh quads were rebuilt and visualises them with an orange tint.
+Shows which chunks got a new mesh: the shader tints the chunk orange, and the tint
+fades in about 0.5 s.
 
 **Data path:**
-- `mesher.zig: quad_highlight: ArrayList(u8)` — parallel to `quad_block`, intensity 0–255 per quad
-- `addQuad(..., highlight)` — new quads start at 255 (incremental rebuild and full rebuild)
-- `swapRemoveQuad` — keeps `quad_highlight` in sync with other parallel arrays
-- `decayHighlights(amount)` — saturating subtract each tick (amount=4 → ~60 ticks / 0.5s fade)
-- `uploadMeshToGPU` — encodes highlight into upper 8 bits of `block_type` u32 at GPU upload time, restores after
-- `voxel.wgsl` — shader extracts `(block_type >> 16) & 0xFF`, mixes orange `vec3(1.0, 0.5, 0.1)` with base colour
+- `State.debug_tick` (main.zig) is the debug clock. It advances one step per
+  tick. In TAS step mode it advances only on executing ticks, so the tint
+  stays between steps.
+- `uploadChunkMeshToGPU` writes the clock value into `ChunkGPU.rebuilt_tick`
+  when the mesh is new. The 16-byte header of the quad buffer holds it:
+  (origin x, rebuilt tick, origin z, 0).
+- The uniforms hold `debug_tick`: the clock when GPU debug is on, 0 when off.
+- `rebuildTint` in `voxel.wgsl` gives `(255 - 4 × age) / 255` for an age of
+  0 to 63 ticks, else 0. `fs_main` mixes orange `vec3(1.0, 0.5, 0.1)` with
+  the base colour.
 
 **Key design choices:**
-- Piggybacks on existing `block_type: u32` (only uses lower 8 bits) — no vertex layout changes
-- Zero overhead when off: highlights are 0, shader multiplies by 0, vertex re-upload skipped
-- In TAS step mode, highlights only decay on executing ticks (persists between steps)
+- One value for each chunk, not one value for each quad. The mesher output
+  has no debug data.
+- No upload for the fade: the shader calculates it from the two ticks.
+- With GPU debug off, the tint is 0 and the frame does not change.
 
 ---
 
@@ -329,7 +319,7 @@ for the experiment and "why MC's 16×16 is the right default" writeup.
 | `chunk.zig` | `Chunk` struct, `BlockType` enum, `setBlock`/`getBlock`, world-gen call |
 | `world.zig` | Multi-chunk world, chunk map, load/unload, `World.init(allocator, preset)` |
 | `world_gen.zig` | Procedural terrain, `Preset` enum (flatland / hilly), `presetConfig()`, value-noise `sampleHeight` |
-| `mesher.zig` | Greedy quad mesher, incremental `updateForBlockChange`, `sortByDepth` |
+| `mesher.zig` | Greedy quad mesher (writes `PackedQuad`), `sortByDepth` |
 | `camera.zig` | FPS camera, view/projection matrices |
 | `player.zig` | Movement, gravity, collision |
 | `raycast.zig` | Block-face hit test for place/destroy |
@@ -337,7 +327,8 @@ for the experiment and "why MC's 16×16 is the right default" writeup.
 | `bitmap_font.zig` | 5×7 glyph table + `drawText`/`drawStepHud` helpers |
 | `game_state.zig` | Pure-state struct (no GPU deps), shared across files |
 | `keyboard_hud.zig` | On-screen keyboard layout diagram |
-| `voxel.wgsl` | Voxel vertex+fragment shader, GPU debug highlight decode |
+| `voxel.wgsl` | Voxel vertex+fragment shader, `PackedQuad` decode, GPU debug tint |
 | `libs/sw_gpu/src/fxaa.wgsl` | FXAA 3.11 post-process shader, fullscreen triangle VS + luminance-based edge search FS |
+| `terrain_hash.zig` | Block hash of a 9×9 hilly area for a seed. Native CLI and tests. `terrain_hash_wasm.zig` is the wasm root, and `scripts/terrain_hash_wasm.mjs` runs it in Node or Bun |
 | `framespike.tas` | TAS script used by the mandatory headless regression test |
 | `tests/msaa_flatland.tas` | MSAA regression test — flatland, block-remove, camera pan |
