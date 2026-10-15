@@ -27,7 +27,11 @@ uniform float u_lobes;       // how many regular lobes the outline has
 uniform float u_warp;        // how far noise bends the outline off a circle
 uniform float u_warpScale;   // the size of a bend
 uniform float u_warpSpeed;   // how fast the bends drift
-uniform float u_nebula;      // 0: the front glows evenly; 1: only where the cloud is thick
+uniform float u_banding;     // 0: the front lights evenly; 1: in crest and trough rings
+uniform float u_nebula;      // 0: the front shows everywhere; 1: only where it clears the cloud
+uniform float u_cloudLevel;  // the level the cloud plus the ripple must clear to show
+uniform float u_cloudSoft;   // how soft the edge of a lit patch is
+uniform float u_cloudGain;   // how much the ripple adds to the cloud
 uniform float u_nebulaScale; // the size of a cloud
 uniform float u_nebulaSpeed; // how fast the clouds drift
 uniform float u_glowFade;    // seconds for the front's tint to die away
@@ -83,11 +87,12 @@ float heartReach(vec2 dir) {
   return max(0.5 * (lo + hi), 0.05);
 }
 
-// Returns the push (xy) and how roused the place is (z). Out: the ripple's
-// tint, from 0 (none) up.
-vec3 rippleAt(vec2 p, out float glow) {
+// Returns the push (xy) and how roused the place is (z). Out, in `light`:
+// the ripple's tint (x, from 0 up), its afterlight (y, from 0 up), and how
+// much of it the cloud lets show here (z, 0 to 1).
+vec3 rippleAt(vec2 p, out vec3 light) {
   vec3 sum = vec3(0.0);
-  glow = 0.0;
+  light = vec3(0.0, 0.0, 1.0);
   if (u_tapCount == 0) return sum;
 
   // Read every front a little off true, through smooth drifting noise, so
@@ -109,40 +114,40 @@ vec3 rippleAt(vec2 p, out float glow) {
     float d = length(away);
     vec2 dir = away / max(d, 0.001);
     float reach = tap.w < 0.0 ? d / heartReach(dir) : d;
+    float strength = abs(tap.w);
 
     // Regular lobes, turning slowly and different per click: the starfish.
     float lobes = sin(u_lobes * atan(away.y, away.x) + 7.0 * tap.z + 0.8 * age);
     reach += u_wobble * lobes * min(d, 1.0);
-    float strength = abs(tap.w);
 
     float behind = u_reach * (1.0 - exp(-age / u_slow)) - reach;
     float width = u_frontWidth + u_widthGrow * age;
     float front = smoothstep(-0.4, 0.25, behind) * exp(-behind * behind / (width * width));
     float swell = strength * exp(-age / u_fade) * front;
 
-    // Outward on the crest, back in the trough as far as u_crest allows.
-    float wave = (1.0 - u_crest) + u_crest * cos(behind * (6.2831853 / u_wave));
-    sum.xy += dir * swell * wave;
-    sum.z += swell;
+    // Crest and trough: outward on the crest, back in the trough as far as
+    // u_crest allows. The same bands light the air, as far as u_banding
+    // allows, which draws rings inside the ring.
+    float ring = cos(behind * (6.2831853 / u_wave));
+    sum.xy += dir * swell * ((1.0 - u_crest) + u_crest * ring);
+    sum.z += swell * ((1.0 - u_banding) + u_banding * (0.25 + 0.75 * ring));
 
     // The front glows and leaves an afterlight inside the ring. Guard the
     // trail ahead of the front, where exp() of a negative would overflow.
     float trail = smoothstep(0.0, 1.2, behind) * exp(-max(behind, 0.0) / u_trailLen);
-    glow += strength * (exp(-age / u_glowFade) * front + u_trail * exp(-age / u_slow) * trail);
+    light.x += strength * (exp(-age / u_glowFade) * front + u_trail * exp(-age / u_slow) * trail);
+    // A softer haze that gathers just after the front passes and lingers.
+    light.y += strength * (1.0 - exp(-age / 0.2)) * exp(-age / 1.2) * trail;
   }
 
-  // The fronts light a drifting cloud rather than glowing evenly: where the
-  // cloud is thin they barely show, where it is thick they flare. That is
-  // what breaks a ring into a nebula.
-  if (u_nebula > 0.0) {
-    float c = cloud(vec3(p / u_nebulaScale, u_now * u_nebulaSpeed));
-    // Thin cloud goes all the way to nothing, so it survives the steep tint
-    // curve; thick cloud flares past the plain front.
-    float thick = smoothstep(-0.1, 0.5, c) * 1.6;
-    float k = mix(1.0, thick, u_nebula);
-    glow *= k;
-    sum.z *= k;
-  }
+  // What shows is a threshold, not a dimmer: a drifting cloud plus the
+  // ripple's banded strength must clear a level. Where the cloud is thick a
+  // little ripple shows; where it is thin only the crests break through. So
+  // a front lights in clumps that grow and join as it passes.
+  float c = cloud(vec3(p / u_nebulaScale, u_now * u_nebulaSpeed));
+  float field = c + u_cloudGain * sum.z;
+  float shows = smoothstep(u_cloudLevel - u_cloudSoft, u_cloudLevel + u_cloudSoft, field);
+  light.z = mix(1.0, shows, u_nebula);
 
   return sum;
 }

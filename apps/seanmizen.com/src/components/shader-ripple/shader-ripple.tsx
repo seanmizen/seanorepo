@@ -33,7 +33,11 @@ const RIPPLE_KEYS = [
   'warp',
   'warpScale',
   'warpSpeed',
+  'banding',
   'nebula',
+  'cloudLevel',
+  'cloudSoft',
+  'cloudGain',
   'nebulaScale',
   'nebulaSpeed',
   'glowFade',
@@ -225,6 +229,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_accent: { value: new THREE.Color() },
       u_tintEdge: { value: new THREE.Vector2() },
       u_swell: { value: 0 },
+      u_rest: { value: 1 },
+      u_afterglow: { value: 0 },
     };
 
     const material = new THREE.ShaderMaterial({
@@ -316,6 +322,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       uniforms.u_particleSize.value =
         p.particleSize * Math.min(devicePixelRatio, 2);
       uniforms.u_swell.value = p.swell;
+      uniforms.u_rest.value = p.rest;
+      uniforms.u_afterglow.value = p.afterglow;
       uniforms.u_tintEdge.value.set(
         p.tintLo,
         Math.max(p.tintHi, p.tintLo + 0.001),

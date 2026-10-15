@@ -18,7 +18,13 @@ type RippleParams = {
   warpSpeed: number;
   push: number;
   // The light
+  rest: number;
+  banding: number;
+  afterglow: number;
   nebula: number;
+  cloudLevel: number;
+  cloudSoft: number;
+  cloudGain: number;
   nebulaScale: number;
   nebulaSpeed: number;
   glowFade: number;
@@ -80,7 +86,13 @@ const DEFAULTS: RippleParams = {
   warpScale: 2.5,
   warpSpeed: 0.12,
   push: 0.1,
+  rest: 0.7,
+  banding: 0.75,
+  afterglow: 0.6,
   nebula: 0.9,
+  cloudLevel: 0.2,
+  cloudSoft: 0.15,
+  cloudGain: 0.8,
   nebulaScale: 3,
   nebulaSpeed: 0.1,
   glowFade: 1,
@@ -221,12 +233,60 @@ const GROUPS: ParamGroup[] = [
     title: 'Light',
     params: [
       {
+        key: 'rest',
+        label: 'resting ink',
+        min: 0.1,
+        max: 1,
+        step: 0.01,
+        hint: 'How bright the plain dots are. Below 1 leaves headroom, so a lit dot rises above the rest and reads as glow.',
+      },
+      {
+        key: 'banding',
+        label: 'banding',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: '0: the front lights evenly. 1: it lights in crest and trough rings, spaced by wavelength.',
+      },
+      {
+        key: 'afterglow',
+        label: 'haze',
+        min: 0,
+        max: 3,
+        step: 0.05,
+        hint: 'A soft accent haze that gathers just behind the front and lingers.',
+      },
+      {
         key: 'nebula',
         label: 'nebula',
         min: 0,
         max: 1,
         step: 0.01,
-        hint: '0: the front glows evenly. 1: it lights only where a drifting cloud is thick, so the ring breaks into patches.',
+        hint: '0: the front shows everywhere. 1: it shows only where cloud plus ripple clears the cloud level, so it lights in clumps.',
+      },
+      {
+        key: 'cloudLevel',
+        label: 'cloud level',
+        min: -0.8,
+        max: 1.2,
+        step: 0.01,
+        hint: 'What cloud plus ripple must reach to show. Higher leaves fewer, smaller patches.',
+      },
+      {
+        key: 'cloudSoft',
+        label: 'patch edge',
+        min: 0.01,
+        max: 0.6,
+        step: 0.01,
+        hint: 'How soft the edge of a lit patch is.',
+      },
+      {
+        key: 'cloudGain',
+        label: 'ripple lift',
+        min: 0,
+        max: 3,
+        step: 0.05,
+        hint: 'How much the ripple adds to the cloud. Higher lets strong crests break through thin cloud.',
       },
       {
         key: 'nebulaScale',
@@ -399,16 +459,22 @@ const GROUPS: ParamGroup[] = [
   },
 ];
 
+/* The first version: a regular 5-lobed ring in one even colour. The
+   uniform-colour presets build on it. */
+const STARFISH: Partial<RippleParams> = {
+  wobble: 0.35,
+  warp: 0,
+  rest: 1,
+  banding: 0,
+  afterglow: 0,
+  nebula: 0,
+  trail: 0.7,
+  heartChance: 0,
+};
+
 const PRESETS: Record<string, Partial<RippleParams>> = {
   nebula: {},
-  // The first version: a regular 5-lobed ring that glows evenly.
-  starfish: {
-    wobble: 0.35,
-    warp: 0,
-    nebula: 0,
-    trail: 0.7,
-    heartChance: 0,
-  },
+  starfish: STARFISH,
   gentle: {
     reach: 10,
     push: 0.05,
@@ -418,6 +484,7 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
     swell: 0.2,
   },
   tsunami: {
+    ...STARFISH,
     reach: 30,
     slow: 2.2,
     fade: 3,

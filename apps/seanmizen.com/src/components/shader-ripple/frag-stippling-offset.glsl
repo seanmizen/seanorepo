@@ -17,8 +17,8 @@ void main() {
   // Ripples are read where the particle is drawn, so a pushed particle meets
   // the next front where it now is.
   vec3 home = texture2D(u_positionTexture, uv).xyz;
-  float glow;
-  vec2 push = u_springBack * u_push * rippleAt(home.xy + offset, glow).xy;
+  vec3 light;
+  vec2 push = u_springBack * u_push * rippleAt(home.xy + offset, light).xy;
 
   speed = speed * (1.0 - u_springDamp) + push - u_spring * offset;
   offset += speed;

@@ -86,8 +86,8 @@ void main() {
 
         // Add the push from any click ripples passing through, unless the
         // offset sim takes it so the particles can spring back home
-        float glow;
-        totalForce.xy += (1.0 - u_springBack) * u_push * rippleAt(position.xy, glow).xy;
+        vec3 light;
+        totalForce.xy += (1.0 - u_springBack) * u_push * rippleAt(position.xy, light).xy;
 
         // Return the new particle velocity
         gl_FragColor = vec4(u_dt * totalForce, 1.0);
