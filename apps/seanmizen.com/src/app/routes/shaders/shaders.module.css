@@ -1,10 +1,14 @@
+/* The site pads html, body and #root. This page is full bleed, so it
+   pins itself to the viewport instead of sitting inside that padding. */
 .page {
+  position: fixed;
+  inset: 0;
   display: flex;
-  min-height: 100vh;
   padding: 0;
 }
 
 .stage {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -15,11 +19,15 @@
 }
 
 .tip {
+  position: absolute;
+  bottom: 1rem;
+  pointer-events: none;
   opacity: 0.6;
   font-size: 0.85rem;
 }
 
 .panel {
+  box-sizing: border-box;
   width: 340px;
   flex-shrink: 0;
   height: 100vh;
@@ -142,10 +150,12 @@
 @media (max-width: 760px) {
   .page {
     flex-direction: column;
+    overflow-y: auto;
   }
 
   .stage {
-    min-height: 60vh;
+    flex: none;
+    height: 60vh;
   }
 
   .panel {

@@ -2,6 +2,21 @@
    onto a `u_<key>` uniform unless `uniform` says otherwise; the rest are
    read on the CPU side. */
 
+/* Characters the glyph background cycles through. A roused cell steps
+   through its set, so order matters a little: neighbours look related. */
+const GLYPH_SETS = {
+  ascii: '.:-=+*#%@abcdefghijklmnopqrstuvwxyz0123456789',
+  code: '{}[]()<>/\\|;:=+-*&%$#!?_~^',
+  dots: '\u00b7\u2219\u2022\u25e6\u25cb\u25cf',
+  blocks:
+    '\u2591\u2592\u2593\u2588\u2596\u2597\u2598\u259d\u259a\u259e\u2599\u259b\u259c\u259f',
+  binary: '01',
+  katakana:
+    '\uff71\uff72\uff73\uff74\uff75\uff76\uff77\uff78\uff79\uff7a\uff7b\uff7c\uff7d\uff7e\uff7f\uff80\uff81\uff82\uff83\uff84\uff85\uff86\uff87\uff88\uff89\uff8a\uff8b\uff8c\uff8d\uff8e\uff8f\uff90\uff91\uff92\uff93\uff94\uff95\uff96\uff97\uff98\uff99\uff9a\uff9b\uff9c\uff9d',
+} as const;
+
+type GlyphSet = keyof typeof GLYPH_SETS;
+
 type RippleParams = {
   // The front
   reach: number;
@@ -48,6 +63,16 @@ type RippleParams = {
   heartChance: number;
   maxTaps: number;
   timeScale: number;
+  // The glyph background
+  grid: boolean;
+  glyphs: GlyphSet;
+  cellSize: number;
+  fill: number;
+  gridAlpha: number;
+  gridIdle: number;
+  flicker: number;
+  spin: number;
+  calm: number;
   // Colours
   lightInk: string;
   lightAccent: string;
@@ -113,6 +138,15 @@ const DEFAULTS: RippleParams = {
   heartChance: 0.15,
   maxTaps: 8,
   timeScale: 1,
+  grid: false,
+  glyphs: 'ascii',
+  cellSize: 14,
+  fill: 0.85,
+  gridAlpha: 0.9,
+  gridIdle: 0.12,
+  flicker: 0.4,
+  spin: 6,
+  calm: 0.6,
   lightInk: '#000000',
   lightAccent: '#e0262b',
   darkInk: '#dddddd',
@@ -421,6 +455,67 @@ const GROUPS: ParamGroup[] = [
     ],
   },
   {
+    title: 'Glyph background',
+    params: [
+      {
+        key: 'cellSize',
+        label: 'cell size',
+        min: 6,
+        max: 40,
+        step: 1,
+        hint: 'The size of one glyph cell, in CSS pixels.',
+      },
+      {
+        key: 'fill',
+        label: 'fill',
+        min: 0.05,
+        max: 1,
+        step: 0.01,
+        hint: 'The share of cells that hold a glyph.',
+      },
+      {
+        key: 'gridAlpha',
+        label: 'strength',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: 'How strongly a lit glyph shows.',
+      },
+      {
+        key: 'gridIdle',
+        label: 'idle drift',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: 'How much of the drifting cloud shows as glyphs with no ripple at all.',
+      },
+      {
+        key: 'flicker',
+        label: 'flicker',
+        min: 0,
+        max: 4,
+        step: 0.05,
+        hint: 'How many times a second a resting glyph changes, on average.',
+      },
+      {
+        key: 'spin',
+        label: 'spin',
+        min: 0,
+        max: 24,
+        step: 1,
+        hint: 'How many glyphs a cell runs through as a front passes, and back as it settles.',
+      },
+      {
+        key: 'calm',
+        label: 'calm behind portrait',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        hint: 'How much the grid thins out behind the portrait.',
+      },
+    ],
+  },
+  {
     title: 'Clicks and time',
     params: [
       {
@@ -470,6 +565,20 @@ const STARFISH: Partial<RippleParams> = {
   nebula: 0,
   trail: 0.7,
   heartChance: 0,
+  grid: false,
+};
+
+/* The home page's look: a big, slow, even-coloured starfish. */
+const TSUNAMI: Partial<RippleParams> = {
+  ...STARFISH,
+  reach: 30,
+  slow: 2.2,
+  fade: 3,
+  frontWidth: 3,
+  push: 0.25,
+  crest: 0.8,
+  trail: 1.2,
+  trailLen: 10,
 };
 
 const PRESETS: Record<string, Partial<RippleParams>> = {
@@ -483,17 +592,7 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
     trail: 0.4,
     swell: 0.2,
   },
-  tsunami: {
-    ...STARFISH,
-    reach: 30,
-    slow: 2.2,
-    fade: 3,
-    frontWidth: 3,
-    push: 0.25,
-    crest: 0.8,
-    trail: 1.2,
-    trailLen: 10,
-  },
+  tsunami: TSUNAMI,
   jelly: {
     push: 0.18,
     crest: 1,
@@ -504,6 +603,8 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
     springDamp: 0.04,
   },
   physical: { springBack: false },
+  'glyph field': { grid: true },
+  'tsunami field': { ...TSUNAMI, grid: true },
   'slow-mo': { timeScale: 0.2 },
   'hard edge': { tintLo: 0.2, tintHi: 0.22, trail: 0, glowFade: 0.6 },
 };
@@ -512,6 +613,7 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
 const HOME_PARAMS: RippleParams = { ...DEFAULTS, ...PRESETS.tsunami };
 
 /* Settings that rebuild the sim or only affect the playground. */
+/* `size` is the canvas edge in CSS pixels, or 0 to fill the stage. */
 type StageSettings = { simSize: number; size: number };
 
 const STAGE_DEFAULTS: StageSettings = { simSize: 64, size: 500 };
@@ -568,21 +670,28 @@ const deserialise = (
   if (typeof input.springBack === 'boolean') {
     params.springBack = input.springBack;
   }
+  if (typeof input.grid === 'boolean') params.grid = input.grid;
+  if (typeof input.glyphs === 'string' && input.glyphs in GLYPH_SETS) {
+    params.glyphs = input.glyphs as GlyphSet;
+  }
 
   const stage: StageSettings = { ...STAGE_DEFAULTS };
   if (SIM_SIZES.includes(input.simSize as number)) {
     stage.simSize = input.simSize as number;
   }
-  if (typeof input.size === 'number' && Number.isFinite(input.size)) {
+  if (input.size === 0) {
+    stage.size = 0;
+  } else if (typeof input.size === 'number' && Number.isFinite(input.size)) {
     stage.size = Math.min(1000, Math.max(200, Math.round(input.size)));
   }
 
   return { params, stage };
 };
 
-export type { ParamDef, ParamGroup, RippleParams, StageSettings };
+export type { GlyphSet, ParamDef, ParamGroup, RippleParams, StageSettings };
 export {
   DEFAULTS,
+  GLYPH_SETS,
   HOME_PARAMS,
   deserialise,
   GROUPS,
