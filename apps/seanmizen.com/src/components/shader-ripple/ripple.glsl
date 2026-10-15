@@ -38,6 +38,17 @@ uniform float u_glowFade;    // seconds for the front's tint to die away
 uniform float u_trail;       // how strong the afterlight inside the ring is
 uniform float u_trailLen;    // how far behind the front the afterlight reaches
 
+// A second look further out. Between u_lookNear and u_lookFar from the
+// middle, these take over from u_warp, u_wobble, u_banding and u_nebula, so
+// one front can leave the portrait in one look and run on in another.
+// With u_lookNear beyond the view, only the first look shows.
+uniform float u_lookNear;
+uniform float u_lookFar;
+uniform float u_outerWarp;
+uniform float u_outerWobble;
+uniform float u_outerBanding;
+uniform float u_outerNebula;
+
 // Hash and value noise in plain floats, so they run on WebGL1 as well.
 float hash31(vec3 p) {
   p = fract(p * 0.1031);
@@ -95,10 +106,17 @@ vec3 rippleAt(vec2 p, out vec3 light) {
   light = vec3(0.0, 0.0, 1.0);
   if (u_tapCount == 0) return sum;
 
+  // How far into the outer look this place is, and that look's values.
+  float outer = smoothstep(u_lookNear, u_lookFar, length(p));
+  float warpBy = mix(u_warp, u_outerWarp, outer);
+  float wobbleBy = mix(u_wobble, u_outerWobble, outer);
+  float bandingBy = mix(u_banding, u_outerBanding, outer);
+  float nebulaBy = mix(u_nebula, u_outerNebula, outer);
+
   // Read every front a little off true, through smooth drifting noise, so
   // its outline bends irregularly instead of being a drawn circle.
   float drift = u_now * u_warpSpeed;
-  vec2 near = p + u_warp * vec2(
+  vec2 near = p + warpBy * vec2(
     noise3(vec3(p / u_warpScale, drift)),
     noise3(vec3(p / u_warpScale + 9.1, drift + 4.0))
   );
@@ -118,7 +136,7 @@ vec3 rippleAt(vec2 p, out vec3 light) {
 
     // Regular lobes, turning slowly and different per click: the starfish.
     float lobes = sin(u_lobes * atan(away.y, away.x) + 7.0 * tap.z + 0.8 * age);
-    reach += u_wobble * lobes * min(d, 1.0);
+    reach += wobbleBy * lobes * min(d, 1.0);
 
     float behind = u_reach * (1.0 - exp(-age / u_slow)) - reach;
     float width = u_frontWidth + u_widthGrow * age;
@@ -130,7 +148,7 @@ vec3 rippleAt(vec2 p, out vec3 light) {
     // allows, which draws rings inside the ring.
     float ring = cos(behind * (6.2831853 / u_wave));
     sum.xy += dir * swell * ((1.0 - u_crest) + u_crest * ring);
-    sum.z += swell * ((1.0 - u_banding) + u_banding * (0.25 + 0.75 * ring));
+    sum.z += swell * ((1.0 - bandingBy) + bandingBy * (0.25 + 0.75 * ring));
 
     // The front glows and leaves an afterlight inside the ring. Guard the
     // trail ahead of the front, where exp() of a negative would overflow.
@@ -147,7 +165,7 @@ vec3 rippleAt(vec2 p, out vec3 light) {
   float c = cloud(vec3(p / u_nebulaScale, u_now * u_nebulaSpeed));
   float field = c + u_cloudGain * sum.z;
   float shows = smoothstep(u_cloudLevel - u_cloudSoft, u_cloudLevel + u_cloudSoft, field);
-  light.z = mix(1.0, shows, u_nebula);
+  light.z = mix(1.0, shows, nebulaBy);
 
   return sum;
 }

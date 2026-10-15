@@ -185,11 +185,8 @@ span[class*="is-closed"] + div {
   z-index: -1;
 }
 
-@media (max-width: 880px) {
-  .shader-container {
-    transform: scale(0.5);
-  }
-}
+/* Below 880px the shader draws the portrait at half size itself (its
+   portraitScale), so the canvas still fills the viewport. */
 
 .bottom-right-controls {
   position: fixed;

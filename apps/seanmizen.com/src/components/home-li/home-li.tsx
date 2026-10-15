@@ -9,6 +9,9 @@ interface HomeLiProps {
   subLink?: string;
   /** Says where the sublink goes. "visit" said nothing at all. */
   subLinkLabel?: string;
+  /** Called when the section opens and closes. Keep these stable. */
+  onOpen?: () => void;
+  onClose?: () => void;
 }
 
 const HomeLi: FC<HomeLiProps> = ({
@@ -16,9 +19,11 @@ const HomeLi: FC<HomeLiProps> = ({
   trigger,
   subLink,
   subLinkLabel = 'see all',
+  onOpen,
+  onClose,
 }) => (
   <Entity>
-    <Accordion trigger={trigger}>
+    <Accordion trigger={trigger} onOpen={onOpen} onClose={onClose}>
       {/*
         The sublink is an entity like any other, so it wears the same chevron
         as the rows beneath it and lines up with them. It used to be a bare
