@@ -27,6 +27,9 @@ const HireLab: FC = () => {
   const initial = useMemo(readHash, []);
   const [hire, setHire] = useState<HireSettings>(initial ?? HIRE_DEFAULTS);
   const [status, setStatus] = useState('');
+  // Bumped by "restart" to remount the page: projects closed, no text, no
+  // ripples, and a fresh portrait.
+  const [run, setRun] = useState(0);
 
   const serialised = serialiseHire(hire);
   const [draft, setDraft] = useState(serialised);
@@ -67,7 +70,7 @@ const HireLab: FC = () => {
 
   return (
     <>
-      <Home hire={hire} />
+      <Home key={run} hire={hire} />
       <details className={styles.panel} data-no-ripple open>
         <summary className={styles.title}>hire field</summary>
         <p className={styles.hint}>
@@ -134,6 +137,9 @@ const HireLab: FC = () => {
           </button>
           <button type="button" onClick={() => setHire(HIRE_DEFAULTS)}>
             reset
+          </button>
+          <button type="button" onClick={() => setRun((r) => r + 1)}>
+            restart
           </button>
           <output className={styles.status}>{status}</output>
         </div>
