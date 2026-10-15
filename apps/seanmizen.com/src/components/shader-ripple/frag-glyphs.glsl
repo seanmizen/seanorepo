@@ -16,6 +16,9 @@ uniform float u_gridIdle;    // how much of the cloud shows with no ripple
 uniform float u_flicker;     // resting glyph changes per second
 uniform float u_spin;        // glyphs a cell runs through as a front passes
 uniform float u_calm;        // how much the grid thins behind the portrait
+uniform float u_message;     // 1: the cells read the set in order, as text
+uniform float u_rowShift;    // in text, how far each row starts on from the last
+uniform float u_cellAspect;  // a cell's width against its height (text is narrow)
 
 uniform vec3 u_color;        // the plain ink
 uniform vec3 u_accent;       // the ripple tint
@@ -26,15 +29,16 @@ void main() {
   // Cells are laid out in CSS pixels from the bottom left, so a glyph keeps
   // its size on any screen.
   vec2 css = gl_FragCoord.xy / u_dpr;
-  vec2 cell = floor(css / u_cellSize);
-  vec2 local = css / u_cellSize - cell;
+  vec2 cellPx = vec2(u_cellSize * u_cellAspect, u_cellSize);
+  vec2 cell = floor(css / cellPx);
+  vec2 local = css / cellPx - cell;
 
   float own = hash31(vec3(cell, 1.0));
   if (own >= u_fill) discard;
 
   // Everything about the light is read once, at the cell's middle, so a
   // glyph lights as a whole.
-  vec2 middle = (cell + 0.5) * u_cellSize / u_viewPx * 2.0 - 1.0;
+  vec2 middle = (cell + 0.5) * cellPx / u_viewPx * 2.0 - 1.0;
   vec2 p = middle * u_halfExtent;
 
   vec3 light;
@@ -58,11 +62,21 @@ void main() {
   float pace = hash31(vec3(cell, 2.0));
   float steps = floor(u_now * u_flicker * (0.6 + 0.8 * pace) + hash31(vec3(cell, 3.0)));
   steps += floor(u_spin * roused + hash31(vec3(cell, 4.0)));
-  float g = mod(floor(own / u_fill * u_glyphCount) + steps, u_glyphCount);
+  // As text, a cell takes the next character along its row, and each row
+  // (counted from the top) starts a few characters on from the one above,
+  // so the words never line up in columns. Otherwise it starts anywhere.
+  float rowFromTop = floor(u_viewPx.y / u_cellSize) - cell.y;
+  float start = u_message > 0.5
+    ? cell.x + rowFromTop * u_rowShift
+    : floor(own / u_fill * u_glyphCount);
+  float g = mod(start + steps, u_glyphCount);
 
   // The atlas is drawn from the top left; textures read from the bottom.
   vec2 at = vec2(mod(g, u_atlasGrid.x), floor(g / u_atlasGrid.x));
-  vec2 uv = vec2((at.x + local.x) / u_atlasGrid.x, 1.0 - (at.y + 1.0 - local.y) / u_atlasGrid.y);
+  // A narrow cell reads only the middle of its square atlas cell, so the
+  // glyph keeps its own shape instead of being squeezed.
+  float across = 0.5 + (local.x - 0.5) * u_cellAspect;
+  vec2 uv = vec2((at.x + across) / u_atlasGrid.x, 1.0 - (at.y + 1.0 - local.y) / u_atlasGrid.y);
   float ink = texture2D(u_atlas, uv).a;
   if (ink <= 0.0) discard;
 

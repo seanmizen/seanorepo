@@ -11,6 +11,8 @@ const GLYPH_SETS = {
   blocks:
     '\u2591\u2592\u2593\u2588\u2596\u2597\u2598\u259d\u259a\u259e\u2599\u259b\u259c\u259f',
   binary: '01',
+  // Not a set of its own: the cells read the `message` param as text.
+  message: '',
   katakana:
     '\uff71\uff72\uff73\uff74\uff75\uff76\uff77\uff78\uff79\uff7a\uff7b\uff7c\uff7d\uff7e\uff7f\uff80\uff81\uff82\uff83\uff84\uff85\uff86\uff87\uff88\uff89\uff8a\uff8b\uff8c\uff8d\uff8e\uff8f\uff90\uff91\uff92\uff93\uff94\uff95\uff96\uff97\uff98\uff99\uff9a\uff9b\uff9c\uff9d',
 } as const;
@@ -73,6 +75,9 @@ type RippleParams = {
   flicker: number;
   spin: number;
   calm: number;
+  message: string;
+  rowShift: number;
+  textWidth: number;
   // Colours
   lightInk: string;
   lightAccent: string;
@@ -96,6 +101,7 @@ type ParamDef = {
 type ParamGroup = { title: string; params: ParamDef[] };
 
 const MAX_TAPS = 16; // must match MAX_TAPS in ripple.glsl
+const MAX_MESSAGE = 64; // characters in the glyph background's message
 
 const DEFAULTS: RippleParams = {
   reach: 16,
@@ -147,6 +153,9 @@ const DEFAULTS: RippleParams = {
   flicker: 0.4,
   spin: 6,
   calm: 0.6,
+  message: 'hire me ',
+  rowShift: 3,
+  textWidth: 0.6,
   lightInk: '#000000',
   lightAccent: '#e0262b',
   darkInk: '#dddddd',
@@ -513,6 +522,22 @@ const GROUPS: ParamGroup[] = [
         step: 0.01,
         hint: 'How much the grid thins out behind the portrait.',
       },
+      {
+        key: 'rowShift',
+        label: 'row shift',
+        min: 0,
+        max: 16,
+        step: 1,
+        hint: 'With the message set: how many characters each row starts on from the row above.',
+      },
+      {
+        key: 'textWidth',
+        label: 'letter width',
+        min: 0.4,
+        max: 1,
+        step: 0.01,
+        hint: "With the message set: a cell's width against its height. Lower sets the letters closer, like a terminal.",
+      },
     ],
   },
   {
@@ -605,6 +630,14 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
   physical: { springBack: false },
   'glyph field': { grid: true },
   'tsunami field': { ...TSUNAMI, grid: true },
+  'hire me': {
+    grid: true,
+    glyphs: 'message',
+    message: 'hire me ',
+    fill: 1,
+    flicker: 0,
+    gridIdle: 0.3,
+  },
   'slow-mo': { timeScale: 0.2 },
   'hard edge': { tintLo: 0.2, tintHi: 0.22, trail: 0, glowFade: 0.6 },
 };
@@ -674,6 +707,13 @@ const deserialise = (
   if (typeof input.glyphs === 'string' && input.glyphs in GLYPH_SETS) {
     params.glyphs = input.glyphs as GlyphSet;
   }
+  if (
+    typeof input.message === 'string' &&
+    input.message.length > 0 &&
+    input.message.length <= MAX_MESSAGE
+  ) {
+    params.message = input.message;
+  }
 
   const stage: StageSettings = { ...STAGE_DEFAULTS };
   if (SIM_SIZES.includes(input.simSize as number)) {
@@ -695,6 +735,7 @@ export {
   HOME_PARAMS,
   deserialise,
   GROUPS,
+  MAX_MESSAGE,
   MAX_TAPS,
   PRESETS,
   SIM_SIZES,

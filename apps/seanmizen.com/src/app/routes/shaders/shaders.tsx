@@ -12,6 +12,7 @@ import {
   deserialise,
   GLYPH_SETS,
   GROUPS,
+  MAX_MESSAGE,
   PRESETS,
   ShaderRipple,
   SIM_SIZES,
@@ -303,8 +304,23 @@ const Shaders: FC = () => {
                     ))}
                   </select>
                 </label>
+                {params.glyphs === 'message' && (
+                  <label className={styles.inline}>
+                    message
+                    <input
+                      id="ripple-message"
+                      type="text"
+                      value={params.message}
+                      maxLength={MAX_MESSAGE}
+                      spellCheck={false}
+                      onChange={(e) => set('message', e.target.value || ' ')}
+                    />
+                  </label>
+                )}
                 <p className={styles.hint}>
                   Tip: set the stage canvas to fill so the grid covers the page.
+                  With the message set, end the message with a space so the
+                  words do not run together.
                 </p>
               </>
             )}

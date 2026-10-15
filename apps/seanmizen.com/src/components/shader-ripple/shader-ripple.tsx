@@ -69,10 +69,12 @@ const TAN_HALF_FOV = Math.tan(((FOV / 2) * Math.PI) / 180);
 const ATLAS_COLS = 16;
 const ATLAS_CELL = 64;
 
-/* Draw a glyph set into a texture, white on clear, left to right and top
-   to bottom. */
-const makeAtlas = (set: GlyphSet) => {
-  const chars = [...GLYPH_SETS[set]];
+/* Draw a glyph set (or the message) into a texture, white on clear, left
+   to right and top to bottom. */
+const makeAtlas = (set: GlyphSet, message: string) => {
+  // The message set draws the message itself, in order, spaces and all;
+  // a space draws nothing, so it shows as a gap.
+  const chars = [...(set === 'message' ? message || ' ' : GLYPH_SETS[set])];
   const rows = Math.ceil(chars.length / ATLAS_COLS);
   const canvas = document.createElement('canvas');
   canvas.width = ATLAS_COLS * ATLAS_CELL;
@@ -82,7 +84,7 @@ const makeAtlas = (set: GlyphSet) => {
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `${ATLAS_CELL * 0.72}px "Red Hat Mono", ui-monospace, Menlo, Consolas, monospace`;
+    ctx.font = `600 ${ATLAS_CELL * 0.8}px ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace`;
     chars.forEach((ch, i) => {
       const x = (i % ATLAS_COLS) * ATLAS_CELL + ATLAS_CELL / 2;
       const y = Math.floor(i / ATLAS_COLS) * ATLAS_CELL + ATLAS_CELL / 2;
@@ -308,8 +310,13 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
     // The glyph background: one triangle that covers the whole canvas,
     // drawn before the particles.
-    let atlasSet = live.current.params.glyphs;
-    let atlas = makeAtlas(atlasSet);
+    // The atlas is redrawn when the set or the message changes.
+    const atlasKey = (p: RippleParams) => `${p.glyphs}\n${p.message}`;
+    let atlasFor = atlasKey(live.current.params);
+    let atlas = makeAtlas(
+      live.current.params.glyphs,
+      live.current.params.message,
+    );
     const gridUniforms = {
       ...rippleUniforms,
       u_atlas: { value: atlas.texture },
@@ -325,6 +332,9 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_flicker: { value: 0 },
       u_spin: { value: 0 },
       u_calm: { value: 0 },
+      u_message: { value: 0 },
+      u_rowShift: { value: 0 },
+      u_cellAspect: { value: 1 },
       u_color: uniforms.u_color,
       u_accent: uniforms.u_accent,
       u_tintEdge: uniforms.u_tintEdge,
@@ -445,10 +455,10 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
       grid.visible = p.grid;
       if (p.grid) {
-        if (p.glyphs !== atlasSet) {
+        if (atlasKey(p) !== atlasFor) {
           atlas.texture.dispose();
-          atlasSet = p.glyphs;
-          atlas = makeAtlas(atlasSet);
+          atlasFor = atlasKey(p);
+          atlas = makeAtlas(p.glyphs, p.message);
           gridUniforms.u_atlas.value = atlas.texture;
           gridUniforms.u_atlasGrid.value.set(ATLAS_COLS, atlas.rows);
           gridUniforms.u_glyphCount.value = atlas.count;
@@ -463,6 +473,11 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         gridUniforms.u_flicker.value = p.flicker;
         gridUniforms.u_spin.value = p.spin;
         gridUniforms.u_calm.value = p.calm;
+        gridUniforms.u_message.value = p.glyphs === 'message' ? 1 : 0;
+        gridUniforms.u_rowShift.value = p.rowShift;
+        // Text sets in narrow cells, like a terminal; other sets are square.
+        gridUniforms.u_cellAspect.value =
+          p.glyphs === 'message' ? p.textWidth : 1;
       }
 
       gpuSim.compute();
