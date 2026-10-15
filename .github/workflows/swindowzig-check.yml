@@ -69,6 +69,17 @@ jobs:
       - name: Web build
         run: zig build web -Dexample=voxel -Doptimize=ReleaseFast
 
+      - name: Set up Bun for the headless web run
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Headless run of the voxel web build in Bun
+        # app.wasm runs with stub WebGPU imports. The player flies 5 chunks
+        # from spawn. The step fails if the chunks near the player are not
+        # loaded and meshed. CI then tests the wasm-only code paths too.
+        run: bun backends/wasm/headless.ts --wasm zig-out/bin/app.wasm
+
       - name: Native build
         run: zig build native -Dexample=voxel
 
