@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { HomeLink, ThemeToggle } from '@/components';
 import type {
+  GlyphSet,
   RippleParams,
   ShaderRippleHandle,
   StageSettings,
@@ -9,7 +10,9 @@ import type {
 import {
   DEFAULTS,
   deserialise,
+  GLYPH_SETS,
   GROUPS,
+  MAX_MESSAGE,
   PRESETS,
   ShaderRipple,
   SIM_SIZES,
@@ -19,7 +22,8 @@ import {
 import { ThemeContext } from '@/providers';
 import styles from './shaders.module.css';
 
-const CANVAS_SIZES = [300, 400, 500, 700, 900];
+/* 0 fills the stage. */
+const CANVAS_SIZES = [0, 300, 400, 500, 700, 900];
 
 const PRESET_NAMES = Object.keys(PRESETS);
 
@@ -262,7 +266,7 @@ const Shaders: FC = () => {
                 .sort((a, b) => a - b)
                 .map((n) => (
                   <option key={n} value={n}>
-                    {n}px
+                    {n === 0 ? 'fill' : `${n}px`}
                   </option>
                 ))}
             </select>
@@ -276,6 +280,50 @@ const Shaders: FC = () => {
         {GROUPS.map((group) => (
           <details key={group.title} className={styles.section} open>
             <summary className={styles.heading}>{group.title}</summary>
+            {group.title === 'Glyph background' && (
+              <>
+                <label className={styles.inline}>
+                  <input
+                    type="checkbox"
+                    checked={params.grid}
+                    onChange={(e) => set('grid', e.target.checked)}
+                  />
+                  show glyph background
+                </label>
+                <label className={styles.inline}>
+                  glyphs
+                  <select
+                    id="ripple-glyphs"
+                    value={params.glyphs}
+                    onChange={(e) => set('glyphs', e.target.value as GlyphSet)}
+                  >
+                    {(Object.keys(GLYPH_SETS) as GlyphSet[]).map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {params.glyphs === 'message' && (
+                  <label className={styles.inline}>
+                    message
+                    <input
+                      id="ripple-message"
+                      type="text"
+                      value={params.message}
+                      maxLength={MAX_MESSAGE}
+                      spellCheck={false}
+                      onChange={(e) => set('message', e.target.value || ' ')}
+                    />
+                  </label>
+                )}
+                <p className={styles.hint}>
+                  Tip: set the stage canvas to fill so the grid covers the page.
+                  With the message set, end the message with a space so the
+                  words do not run together.
+                </p>
+              </>
+            )}
             {group.title === 'Spring back' && (
               <label
                 className={styles.inline}

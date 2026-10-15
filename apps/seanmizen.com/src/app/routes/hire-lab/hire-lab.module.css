@@ -1,0 +1,110 @@
+/* A small panel over the real home page, top right, out of the way of the
+   content column. */
+.panel {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top, 0px));
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  z-index: 10;
+  box-sizing: border-box;
+  width: min(300px, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 1.5rem);
+  overflow-y: auto;
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--subsection-background) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color) 15%, transparent);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* The site pads every element; inside the panel only these rules space. */
+.panel * {
+  padding: 0;
+}
+
+.title {
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.heading {
+  font-weight: bold;
+  margin-top: 0.3rem;
+}
+
+.hint {
+  opacity: 0.65;
+  font-size: 0.75rem;
+}
+
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.inline input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.1rem 0.3rem;
+}
+
+.slider {
+  display: grid;
+  grid-template-columns: 7rem 1fr 2.5rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.slider input {
+  width: 100%;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.75rem;
+}
+
+.changed {
+  color: var(--highlight);
+  font-weight: bold;
+}
+
+.string {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.7rem;
+  padding: 0.3rem;
+  resize: vertical;
+  word-break: break-all;
+  background: var(--background);
+  color: var(--color);
+  border: 1px solid color-mix(in srgb, var(--color) 30%, transparent);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.row button {
+  padding: 0.2rem 0.6rem;
+}
+
+.status {
+  opacity: 0.8;
+}
