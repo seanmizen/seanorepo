@@ -508,6 +508,9 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
   'hard edge': { tintLo: 0.2, tintHi: 0.22, trail: 0, glowFade: 0.6 },
 };
 
+/* What the home page runs: the tsunami preset. */
+const HOME_PARAMS: RippleParams = { ...DEFAULTS, ...PRESETS.tsunami };
+
 /* Settings that rebuild the sim or only affect the playground. */
 type StageSettings = { simSize: number; size: number };
 
@@ -580,6 +583,7 @@ const deserialise = (
 export type { ParamDef, ParamGroup, RippleParams, StageSettings };
 export {
   DEFAULTS,
+  HOME_PARAMS,
   deserialise,
   GROUPS,
   MAX_TAPS,

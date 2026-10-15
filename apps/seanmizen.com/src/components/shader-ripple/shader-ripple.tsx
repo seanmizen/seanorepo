@@ -3,14 +3,14 @@ import { useContext, useEffect, useImperativeHandle, useRef } from 'react';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three-stdlib';
 import { ThemeContext } from '@/providers';
-import bgImage from '../shader-sean/IMG_4011_crop2.jpeg';
-import particleTex from '../shader-sean/particle2.png';
 import frag from './frag-stippling.glsl';
 import offsetSim from './frag-stippling-offset.glsl';
 import posSim from './frag-stippling-pos.glsl';
 import velSim from './frag-stippling-vel.glsl';
+import bgImage from './IMG_4011_crop2.jpeg';
 import type { RippleParams } from './params';
 import { MAX_TAPS } from './params';
+import particleTex from './particle2.png';
 import ripple from './ripple.glsl';
 import vert from './vert-stippling.glsl';
 

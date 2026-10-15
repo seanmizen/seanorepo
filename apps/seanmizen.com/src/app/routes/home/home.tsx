@@ -4,11 +4,12 @@ import {
   EntityList,
   HomeLi,
   LastUpdated,
-  ShaderSean,
+  ShaderRipple,
   Spacer,
   SSHModal,
   ThemeToggle,
 } from '@/components';
+import { HOME_PARAMS } from '@/components/shader-ripple';
 import { Donate, Github, Projects, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 import { ThemeContext } from '@/providers';
@@ -53,7 +54,7 @@ const Home: FC = () => {
       </EntityList>
       <Spacer />
       <div className="shader-container">
-        <ShaderSean />
+        <ShaderRipple params={HOME_PARAMS} />
       </div>
       <div className="bottom-right-controls">
         <LastUpdated
