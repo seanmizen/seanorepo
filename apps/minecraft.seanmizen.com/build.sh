@@ -57,9 +57,8 @@ else
 fi
 
 # --- 2. Bun JS bundle -------------------------------------------------------
-# Our src/boot.ts imports the swindowzig WebGPU bridge, event pump, and audio
-# shim — bun resolves those relative imports and produces one self-contained
-# boot.js at the production path.
+# src/boot.ts imports the swindowzig wasm loader (backends/wasm/loader.ts).
+# bun resolves the imports and makes one boot.js at the production path.
 if command -v bun >/dev/null 2>&1; then
   echo "==> bun build src/boot.ts → public/boot.js"
   if bun build "${SCRIPT_DIR}/src/boot.ts" \

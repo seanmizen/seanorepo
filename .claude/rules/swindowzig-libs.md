@@ -92,8 +92,10 @@ is no longer required for correctness. Sort key is view-space depth
   ends the composition. `input().text` and `input().composition` hold both.
 - `text_composition` is the last member of `EventPayload` (serialize tag 10).
   New members go after it.
-- Web: `backends/wasm/events.ts` owns a hidden `<input>`. A new `env` import
-  must also go into `apps/minecraft.seanmizen.com/src/boot.ts`.
+- Web: `backends/wasm/events.ts` owns a hidden `<input>`.
+- Web: `backends/wasm/loader.ts` builds the full wasm import table for the dev
+  page and for minecraft.seanmizen.com. Put a new import there only. The two
+  `boot.ts` files only give options to the loader.
 
 ### UI tree (sw_ui)
 
