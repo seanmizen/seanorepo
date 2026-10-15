@@ -79,10 +79,6 @@ void main() {
             }
         }
 
-        // Add the push from any click ripples passing through
-        float glow;
-        totalForce.xy += 0.1 * rippleAt(position.xy, glow).xy;
-
         // Return the new particle velocity
         gl_FragColor = vec4(u_dt * totalForce, 1.0);
     } else {

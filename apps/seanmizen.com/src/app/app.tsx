@@ -2,7 +2,7 @@ import type { FC } from 'react';
 import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { MapNetwork } from '@/features/Glasto/Map';
 import { ThemeProvider } from '@/providers';
-import { Apps, Cous, Home } from './routes';
+import { Apps, Cous, Home, Shaders } from './routes';
 import '../index.css';
 
 const App: FC = () => {
@@ -13,6 +13,7 @@ const App: FC = () => {
           <Route path="/apps" element={<Apps />} />
           <Route path="/cous" element={<Cous />} />
           <Route path="/glasto" element={<MapNetwork />} />
+          <Route path="/shaders" element={<Shaders />} />
           <Route path="/*" element={<Home />} />
         </Routes>
       </Router>
