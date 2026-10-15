@@ -8,6 +8,7 @@ uniform float u_height;
 uniform float u_particleSize;
 uniform float u_nActiveParticles;
 uniform sampler2D u_positionTexture;
+uniform sampler2D u_offsetTexture; // ripple displacement from home (xy)
 uniform sampler2D u_bgTexture;
 uniform vec2 u_textureOffset;
 
@@ -32,6 +33,7 @@ void main() {
         // Get the particle position
         vec2 uv = vec2((mod(a_index, u_width) + 0.5) / u_width, (floor(a_index / u_width) + 0.5) / u_height);
         vec3 position = texture2D(u_positionTexture, uv).xyz;
+        position.xy += texture2D(u_offsetTexture, uv).xy;
 
         // Calculate the model view position
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);

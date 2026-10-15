@@ -5,6 +5,7 @@ uniform float u_nActiveParticles;
 uniform sampler2D u_bgTexture;
 uniform vec2 u_textureOffset;
 uniform float u_push;       // how hard a ripple shoves the particles
+uniform float u_springBack; // 1: ripples move the offset, not the sim
 uniform float u_repel;      // how hard the particles push each other apart
 uniform float u_chargeBase; // a particle's reach on white
 uniform float u_chargeGain; // how much further it reaches on dark
@@ -83,9 +84,10 @@ void main() {
             }
         }
 
-        // Add the push from any click ripples passing through
+        // Add the push from any click ripples passing through, unless the
+        // offset sim takes it so the particles can spring back home
         float glow;
-        totalForce.xy += u_push * rippleAt(position.xy, glow).xy;
+        totalForce.xy += (1.0 - u_springBack) * u_push * rippleAt(position.xy, glow).xy;
 
         // Return the new particle velocity
         gl_FragColor = vec4(u_dt * totalForce, 1.0);

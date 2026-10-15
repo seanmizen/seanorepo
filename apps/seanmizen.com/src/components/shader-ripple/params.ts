@@ -21,6 +21,10 @@ type RippleParams = {
   tintLo: number;
   tintHi: number;
   swell: number;
+  // Springing back home
+  springBack: boolean;
+  spring: number;
+  springDamp: number;
   // The particles
   dt: number;
   repel: number;
@@ -72,6 +76,9 @@ const DEFAULTS: RippleParams = {
   tintLo: 0.04,
   tintHi: 0.3,
   swell: 0.4,
+  springBack: true,
+  spring: 0.03,
+  springDamp: 0.12,
   dt: 0.78,
   repel: 0.03,
   chargeBase: 0.045,
@@ -226,6 +233,27 @@ const GROUPS: ParamGroup[] = [
     ],
   },
   {
+    title: 'Spring back',
+    params: [
+      {
+        key: 'spring',
+        label: 'stiffness',
+        min: 0.002,
+        max: 0.2,
+        step: 0.001,
+        hint: 'How hard a pushed particle is pulled back to where it would have been. Only with "spring back home" on.',
+      },
+      {
+        key: 'springDamp',
+        label: 'damping',
+        min: 0.01,
+        max: 0.6,
+        step: 0.01,
+        hint: 'How much of its speed a returning particle loses each frame. Low values overshoot and wobble.',
+      },
+    ],
+  },
+  {
     title: 'Particles',
     params: [
       {
@@ -327,16 +355,18 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
     wave: 1.6,
     wobble: 1.2,
     lobes: 7,
-    repel: 0.06,
+    spring: 0.05,
+    springDamp: 0.04,
   },
+  physical: { springBack: false },
   'slow-mo': { timeScale: 0.2 },
   'hard edge': { tintLo: 0.2, tintHi: 0.22, trail: 0, glowFade: 0.6 },
 };
 
 /* Settings that rebuild the sim or only affect the playground. */
-type StageSettings = { simSize: number; size: number; orbit: boolean };
+type StageSettings = { simSize: number; size: number };
 
-const STAGE_DEFAULTS: StageSettings = { simSize: 64, size: 500, orbit: true };
+const STAGE_DEFAULTS: StageSettings = { simSize: 64, size: 500 };
 const SIM_SIZES = [32, 48, 64, 80, 96];
 
 /* Everything a setup needs, as one string: a version tag, then compact
@@ -387,6 +417,10 @@ const deserialise = (
     if (typeof v === 'string' && HEX.test(v)) params[key] = v;
   }
 
+  if (typeof input.springBack === 'boolean') {
+    params.springBack = input.springBack;
+  }
+
   const stage: StageSettings = { ...STAGE_DEFAULTS };
   if (SIM_SIZES.includes(input.simSize as number)) {
     stage.simSize = input.simSize as number;
@@ -394,7 +428,6 @@ const deserialise = (
   if (typeof input.size === 'number' && Number.isFinite(input.size)) {
     stage.size = Math.min(1000, Math.max(200, Math.round(input.size)));
   }
-  if (typeof input.orbit === 'boolean') stage.orbit = input.orbit;
 
   return { params, stage };
 };

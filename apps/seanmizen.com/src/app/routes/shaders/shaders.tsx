@@ -50,6 +50,8 @@ const Shaders: FC = () => {
   const [fps, setFps] = useState(0);
   const [status, setStatus] = useState('');
   const shader = useRef<ShaderRippleHandle>(null);
+  // Bumped by "restart" to remount the shader with a fresh seed.
+  const [run, setRun] = useState(0);
 
   const serialised = serialise(params, stage);
   const [draft, setDraft] = useState(serialised);
@@ -97,16 +99,14 @@ const Shaders: FC = () => {
     <main className={styles.page}>
       <div className={styles.stage}>
         <ShaderRipple
+          key={run}
           ref={shader}
           params={params}
           simSize={stage.simSize}
           size={stage.size}
-          orbit={stage.orbit}
           onFps={setFps}
         />
-        <p className={styles.tip}>
-          click anywhere · drag to orbit · scroll to zoom
-        </p>
+        <p className={styles.tip}>click anywhere</p>
       </div>
 
       <aside className={styles.panel} data-no-ripple aria-label="Controls">
@@ -184,6 +184,9 @@ const Shaders: FC = () => {
             <button type="button" onClick={() => shader.current?.clear()}>
               clear
             </button>
+            <button type="button" onClick={() => setRun((r) => r + 1)}>
+              restart
+            </button>
           </div>
         </section>
 
@@ -221,16 +224,6 @@ const Shaders: FC = () => {
                 ))}
             </select>
           </label>
-          <label className={styles.inline}>
-            <input
-              type="checkbox"
-              checked={stage.orbit}
-              onChange={(e) =>
-                setStage((s) => ({ ...s, orbit: e.target.checked }))
-              }
-            />
-            orbit controls
-          </label>
           <p className={styles.hint}>
             Particle count and canvas size rebuild the sim. More particles costs
             n² per frame.
@@ -240,6 +233,19 @@ const Shaders: FC = () => {
         {GROUPS.map((group) => (
           <details key={group.title} className={styles.section} open>
             <summary className={styles.heading}>{group.title}</summary>
+            {group.title === 'Spring back' && (
+              <label
+                className={styles.inline}
+                title="On: a pushed particle springs back to exactly where the undisturbed sim puts it. Off: the push moves the sim itself, and the particles find a new arrangement."
+              >
+                <input
+                  type="checkbox"
+                  checked={params.springBack}
+                  onChange={(e) => set('springBack', e.target.checked)}
+                />
+                spring back home
+              </label>
+            )}
             {group.params.map((def) => (
               <label key={def.key} className={styles.slider} title={def.hint}>
                 <span className={styles.name}>{def.label}</span>

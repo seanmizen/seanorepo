@@ -1,11 +1,12 @@
 import type { FC, Ref } from 'react';
 import { useContext, useEffect, useImperativeHandle, useRef } from 'react';
 import * as THREE from 'three';
-import { GPUComputationRenderer, OrbitControls } from 'three-stdlib';
+import { GPUComputationRenderer } from 'three-stdlib';
 import { ThemeContext } from '@/providers';
 import bgImage from '../shader-sean/IMG_4011_crop2.jpeg';
 import particleTex from '../shader-sean/particle2.png';
 import frag from './frag-stippling.glsl';
+import offsetSim from './frag-stippling-offset.glsl';
 import posSim from './frag-stippling-pos.glsl';
 import velSim from './frag-stippling-vel.glsl';
 import type { RippleParams } from './params';
@@ -33,7 +34,21 @@ const RIPPLE_KEYS = [
   'trail',
   'trailLen',
 ] as const;
-const SIM_KEYS = ['push', 'repel', 'chargeBase', 'chargeGain'] as const;
+const SIM_KEYS = [
+  'push',
+  'repel',
+  'chargeBase',
+  'chargeGain',
+  'spring',
+  'springDamp',
+] as const;
+
+/* The camera looks straight down the z axis from here, with this vertical
+   field of view. The particles live on the z = 0 plane, so the visible
+   half-height of that plane is fixed, and a click maps onto it linearly. */
+const CAMERA_Z = 20;
+const FOV = 75;
+const HALF_EXTENT = CAMERA_Z * Math.tan(((FOV / 2) * Math.PI) / 180);
 
 type ShaderRippleHandle = {
   /* Fire `n` clicks at random points over the portrait. */
@@ -48,7 +63,6 @@ type ShaderRippleProps = {
   simSize?: number;
   /* Canvas size in CSS pixels. Changing it rebuilds the sim. */
   size?: number;
-  orbit?: boolean;
   onFps?: (fps: number) => void;
   ref?: Ref<ShaderRippleHandle>;
 };
@@ -76,7 +90,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
   params,
   simSize = 64,
   size = 500,
-  orbit = true,
   onFps,
   ref,
 }) => {
@@ -85,8 +98,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
   // Read every frame by the render loop, so slider changes land without a
   // rebuild.
-  const live = useRef({ params, theme, orbit, onFps });
-  live.current = { params, theme, orbit, onFps };
+  const live = useRef({ params, theme, onFps });
+  live.current = { params, theme, onFps };
 
   const api = useRef<ShaderRippleHandle>({ burst: () => {}, clear: () => {} });
   useImperativeHandle(ref, () => ({
@@ -106,11 +119,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 5_000);
-    camera.position.z = 20;
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enablePan = false;
+    const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 5_000);
+    camera.position.z = CAMERA_Z;
 
     const gpuSim = new GPUComputationRenderer(simSize, simSize, renderer);
 
@@ -132,8 +142,15 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       `${ripple}\n${velSim}`,
       velTex,
     );
+    // The offset sim starts at zero: every particle at home.
+    const offVar = gpuSim.addVariable(
+      'u_offsetTexture',
+      `${ripple}\n${offsetSim}`,
+      gpuSim.createTexture(),
+    );
     gpuSim.setVariableDependencies(posVar, [posVar, velVar]);
     gpuSim.setVariableDependencies(velVar, [posVar, velVar]);
+    gpuSim.setVariableDependencies(offVar, [posVar, offVar]);
 
     const shared = {
       u_dt: { value: params.dt },
@@ -156,6 +173,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     for (const key of SIM_KEYS) {
       simUniforms[uniformName(key)] = { value: params[key] };
     }
+    simUniforms.u_springBack = { value: params.springBack ? 1 : 0 };
 
     const bgTexture = { value: new THREE.TextureLoader().load(bgImage) };
     const textureOffset = { value: new THREE.Vector2(12, 12) };
@@ -167,6 +185,10 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       ...simUniforms,
       u_bgTexture: bgTexture,
       u_textureOffset: textureOffset,
+    });
+    Object.assign(offVar.material.uniforms, {
+      ...rippleUniforms,
+      ...simUniforms,
     });
 
     if (gpuSim.init()) throw new Error('GPUComputation init failed');
@@ -188,6 +210,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_particleSize: { value: 0 },
       u_nActiveParticles: { value: 1 },
       u_positionTexture: { value: null as THREE.Texture | null },
+      u_offsetTexture: { value: null as THREE.Texture | null },
       u_bgTexture: bgTexture,
       u_textureOffset: textureOffset,
       u_texture: { value: new THREE.TextureLoader().load(particleTex) },
@@ -207,10 +230,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
     scene.add(new THREE.Points(geometry, material));
 
-    const raycaster = new THREE.Raycaster();
-    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-    const pointer = new THREE.Vector2();
-    const hit = new THREE.Vector3();
     let nTaps = 0;
     let now = 0;
 
@@ -248,15 +267,13 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         .some((node) => node instanceof Element && node.matches(INTERACTIVE));
       if (clicked) return;
 
-      // Cast the click through the camera onto the z = 0 plane the particles
-      // live on, so the ripple starts under the pointer from any view angle.
+      // Map the click onto the particles' plane. The canvas is square and
+      // the camera fixed, so this is a straight scale from the canvas
+      // centre. Clicks outside the canvas land off to the side.
       const bounds = renderer.domElement.getBoundingClientRect();
-      pointer.set(
-        ((e.clientX - bounds.left) / bounds.width) * 2 - 1,
-        -((e.clientY - bounds.top) / bounds.height) * 2 + 1,
-      );
-      raycaster.setFromCamera(pointer, camera);
-      if (raycaster.ray.intersectPlane(plane, hit)) addTap(hit.x, hit.y);
+      const x = ((e.clientX - bounds.left) / bounds.width) * 2 - 1;
+      const y = 1 - ((e.clientY - bounds.top) / bounds.height) * 2;
+      addTap(x * HALF_EXTENT, y * HALF_EXTENT);
     };
     window.addEventListener('click', startRipple, true);
 
@@ -284,6 +301,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       for (const key of SIM_KEYS) {
         simUniforms[uniformName(key)].value = p[key];
       }
+      simUniforms.u_springBack.value = p.springBack ? 1 : 0;
       shared.u_dt.value = p.dt;
       uniforms.u_particleSize.value =
         p.particleSize * Math.min(devicePixelRatio, 2);
@@ -296,7 +314,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       const dark = live.current.theme !== 'light';
       uniforms.u_color.value.set(dark ? p.darkInk : p.lightInk);
       uniforms.u_accent.value.set(dark ? p.darkAccent : p.lightAccent);
-      controls.enabled = live.current.orbit;
 
       gpuSim.compute();
 
@@ -306,6 +323,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       uniforms.u_nActiveParticles.value = active;
       uniforms.u_positionTexture.value =
         gpuSim.getCurrentRenderTarget(posVar).texture;
+      uniforms.u_offsetTexture.value =
+        gpuSim.getCurrentRenderTarget(offVar).texture;
 
       renderer.render(scene, camera);
 
@@ -321,7 +340,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('click', startRipple, true);
-      controls.dispose();
       gpuSim.dispose();
       geometry.dispose();
       material.dispose();
