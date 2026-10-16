@@ -32,8 +32,8 @@ were already correct.
 ### Chunk stages (voxel/pipeline/stages.zig)
 
 - `generate`, `light` and `mesh` are pure functions of a bounded
-  neighbourhood (C2, P3). They read no World and no globals. `main.zig` does
-  not use them yet.
+  neighbourhood (C2, P3). They read no World and no globals. The chunk
+  workers (`pipeline/worker_world.zig`) run them.
 - `light` lights a window 44 cells wide (16 + 2 × 14) from the blocks of
   the 3×3 chunks. It gives the same light as World after all 3×3
   neighbours load. `mesh` reads at most `BORDER` (3) cells of each
@@ -72,6 +72,7 @@ comment blocks at the top of `examples/voxel/tests/ao_corners.tas`,
 | `--place-block=<type>` | Block type emitted by right-click placement. Accepted: `stone` (default) and `glowstone`. Added with phase-3 block light so `tests/glowstone_cave.tas` can place an emitter from a TAS without needing an in-game block picker UI. |
 | `--dump-frame=<path>` | Capture one rendered frame to a PPM file, then exit. Waits for world loading to complete. If a TAS is running, waits for the TAS to finish. Then waits for the chunk scheduler to be idle (`Scheduler.isIdle`), so the captured state does not depend on timing. |
 | `--debug-page=<general\|pipeline>` | The first page of the debug overlay. `pipeline` shows the chunk pipeline counters (C12). Cmd+P (Ctrl+P) changes the page at runtime. |
+| `--chunk-workers=N` | Native only. The chunk worker threads of the ThreadPool executor, 0 to 4. **Default: min(CPU count - 1, 4).** 0 runs the chunk jobs on the main thread (the Inline executor). Each worker has its own world copy and a 64 MB cache (C4, C14). See `examples/voxel/docs/chunk-pipeline.md`. |
 | `--depth-stencil=<on\|off>` | Enable or disable hardware depth testing (default: `on`). When `off`, no depth texture is allocated, both render pipelines omit the depth_stencil descriptor, and the render pass omits the depth_stencil_attachment. Geometry is ordered by painter's-algorithm chunk sort only. Primary use: benchmarking — compare frame timing with and without the depth pass to isolate the GPU cost. Regression: `tests/depth_stencil_regression.sh`. |
 | `--frustum=<mode>` | Per-chunk cull strategy. Accepted: `none`, `sphere`, `cone` and `frustum`. `frustum` is the default: it tests each chunk's box (the y range of its mesh) against the planes of the view-projection matrix. `none` draws every loaded chunk. `sphere` is a cheap radial cutoff at render_distance plus slack. `cone` tests each sphere against a cone along the camera's forward vector, with the FOV set by `--frustum-fov-deg`. No strategy ever culls the camera's own chunk or its 8 horizontal neighbours. `examples/voxel/frustum.zig` has the math notes and edge-case tests. Cmd+F (Ctrl+F on Win/Linux) freezes the live frustum at its current transform so you can fly around and see what got culled. Settings menu has a live picker for the strategy. |
 | `--frustum-fov-deg=<degrees>` | Total fov of the cone strategy in degrees. With no flag, each frame uses the screen-diagonal fov of the camera (about 100° at 60° vertical and 16:9). The test uses each chunk's full-height bounding sphere, so this cone keeps every chunk on screen. Range [0, 360]. Half-angle ≥ 90° always returns true. |
@@ -178,10 +179,14 @@ Regenerating the diffs / refreshing the doc's embedded PNGs:
 
 ## Voxel Demo — Chunk Pipeline
 
-One chunk scheduler (`examples/voxel/pipeline/scheduler.zig`) and the Inline
-executor (`pipeline/exec_inline.zig`) load chunks on every platform. They run
-in the frame phase (`voxelFrame`), never in a tick. The stages are in
-`pipeline/stages.zig`. Design, "ready", budgets and numbers:
+One chunk scheduler (`examples/voxel/pipeline/scheduler.zig`) loads chunks
+on every platform. It runs in the frame phase (`voxelFrame`), never in a
+tick. Workers own the world (C4): native runs the ThreadPool executor
+(`pipeline/exec_threads.zig`, `--chunk-workers=N`), and the web build runs
+the Inline executor (`pipeline/exec_inline.zig`). All messages are the
+bytes of `pipeline/protocol.zig` (P6). Main keeps blocks only for the
+prefetch radius (2 chunks) and no light. Design, protocol layout, "ready",
+budgets and numbers:
 [`examples/voxel/docs/chunk-pipeline.md`](examples/voxel/docs/chunk-pipeline.md).
 
 ---
@@ -333,7 +338,10 @@ for the experiment and "why MC's 16×16 is the right default" writeup.
 | `world.zig` | Multi-chunk world, chunk map, chunk versions, `World.init(allocator, preset)` |
 | `pipeline/stages.zig` | The pure chunk stages: generate, light, mesh (C2), and versions (C3) |
 | `pipeline/scheduler.zig` | The chunk scheduler: desired state, priority, version checks, eviction, edits (C8) |
-| `pipeline/exec_inline.zig` | The Inline executor: chunk jobs on the main thread within a frame budget (C7) |
+| `pipeline/exec_inline.zig` | The Inline executor: one in-process worker on the main thread, within a frame budget (C7) |
+| `pipeline/exec_threads.zig` | The ThreadPool executor: native worker threads, spatial affinity, install budget (C4, C9) |
+| `pipeline/worker_world.zig` | The world of a chunk worker: seed, edit log, LRU cache with a memory limit (C4, C14). Builds for wasm32 |
+| `pipeline/protocol.zig` | The chunk protocol: Hello, Edit, Job, Result, Error bytes (P6) |
 | `world_gen.zig` | Procedural terrain, `Preset` enum (flatland / hilly), `presetConfig()`, value-noise `sampleHeight` |
 | `mesher.zig` | Greedy quad mesher (writes `PackedQuad`), `sortByDepth` |
 | `camera.zig` | FPS camera, view/projection matrices |
