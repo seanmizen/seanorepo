@@ -96,6 +96,12 @@ is no longer required for correctness. Sort key is view-space depth
 - Web: `backends/wasm/loader.ts` builds the full wasm import table for the dev
   page and for minecraft.seanmizen.com. Put a new import there only. The two
   `boot.ts` files only give options to the loader.
+- Web: the loader starts the chunk worker pool (`backends/wasm/worker-pool.ts`)
+  first, and gives it to the "chunks" imports. `chunk-worker.ts` runs in each
+  Web Worker. It has no imports, so the dev server sends it as one file.
+- Headless: `backends/wasm/headless-app.ts` runs `app.wasm` in Bun with stub
+  WebGPU imports and the real worker pool. `headless.ts` (CI) and
+  `worker-pool.test.ts` use it.
 
 ### UI tree (sw_ui)
 

@@ -8,8 +8,10 @@
 #
 # What it does:
 #   1. cd into utils/swindowzig and run `zig build web` to produce app.wasm
-#   2. Use `bun build` to bundle the swindowzig WASM bootstrap TS into one JS
-#   3. Copy both artefacts into apps/minecraft.seanmizen.com/public/
+#      and chunks.wasm (the chunk worker)
+#   2. Run bundle.sh: `bun build` makes boot.js and the chunk worker bundle,
+#      and the chunk files get content-hashed names (C9)
+#   3. Copy the artefacts into apps/minecraft.seanmizen.com/public/
 #
 # Neither step writes outside the repo. Skip any step that fails with a
 # warning — the fallback boot.js + missing-app.wasm message in public/ will
@@ -57,17 +59,16 @@ else
 fi
 
 # --- 2. Bun JS bundle -------------------------------------------------------
-# src/boot.ts imports the swindowzig wasm loader (backends/wasm/loader.ts).
-# bun resolves the imports and makes one boot.js at the production path.
+# bundle.sh bundles src/boot.ts (with the swindowzig wasm loader,
+# backends/wasm/loader.ts) and the chunk worker (backends/wasm/chunk-worker.ts).
+# It copies chunks.wasm. The chunk files get content-hashed names, and
+# boot.js holds the names (C9).
 if command -v bun >/dev/null 2>&1; then
-  echo "==> bun build src/boot.ts → public/boot.js"
-  if bun build "${SCRIPT_DIR}/src/boot.ts" \
-      --outfile "${PUBLIC_DIR}/boot.js" \
-      --target browser \
-      --minify; then
-    echo "    ✅ boot.js bundled"
+  echo "==> bundle.sh → public/boot.js, public/chunks-*.wasm, public/chunk-worker-*.js"
+  if bash "${SCRIPT_DIR}/bundle.sh" "${SWINDOWZIG}/zig-out/bin/chunks.wasm" "${PUBLIC_DIR}"; then
+    echo "    ✅ boot.js and the chunk worker files bundled"
   else
-    echo "    ⚠️  bun build failed — keeping previously committed boot.js"
+    echo "    ⚠️  bundle.sh failed — keeping previously committed boot.js"
   fi
 else
   echo "    ⚠️  bun not found on PATH — keeping previously committed boot.js"

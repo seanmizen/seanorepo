@@ -91,7 +91,18 @@ jobs:
         # app.wasm runs with stub WebGPU imports. The player flies 5 chunks
         # from spawn. The step fails if the chunks near the player are not
         # loaded and meshed. CI then tests the wasm-only code paths too.
-        run: bun backends/wasm/headless.ts --wasm zig-out/bin/app.wasm
+        # The first run uses the chunk worker pool (real Bun Web Workers
+        # with chunks.wasm), and fails if a chunk job runs on the main
+        # thread. The second run uses the Inline executor (no pool).
+        run: |
+          bun backends/wasm/headless.ts --wasm zig-out/bin/app.wasm
+          bun backends/wasm/headless.ts --wasm zig-out/bin/app.wasm --workers 0
+
+      - name: Chunk worker pool tests in Bun
+        # Real Web Workers: the pool gives the state of the Inline executor
+        # with random edits, a worker that stops starts again, the fallback
+        # works, and a chunks.wasm of another build does not start.
+        run: bun test backends/wasm/worker-pool.test.ts
 
       - name: Native build
         run: zig build native -Dexample=voxel
