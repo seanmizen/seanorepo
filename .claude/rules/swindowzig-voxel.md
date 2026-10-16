@@ -48,9 +48,9 @@ were already correct.
 
 ## Voxel Demo — CLI Flags
 
-**Default changes (April 2026):** `--ao=moore`, `--aa=fxaa` (quality=medium),
-and `--render-distance=4` are now the startup defaults when no CLI flags are
-given. Existing regression tests that captured frames under the old defaults
+**Default changes (April 2026):** `--ao=moore` and `--aa=fxaa`
+(quality=medium) are the startup defaults when no CLI flags are given. The
+default render distance is 12 (`world.zig: DEFAULT_RENDER_DISTANCE`). Existing regression tests that captured frames under the old defaults
 (classic AO, no AA) continue to pass the previous flags explicitly — see the
 comment blocks at the top of `examples/voxel/tests/ao_corners.tas`,
 `cave_skylight.tas`, and `tests/aa_regression.sh`.
@@ -64,14 +64,14 @@ comment blocks at the top of `examples/voxel/tests/ao_corners.tas`,
 | `--aa=<mode>` | Anti-aliasing method. Accepted: `none`, `msaa` (hardware multisample), `fxaa` (FXAA 3.11 post-process, **default at `medium` quality**). `--aa=fxaa` renders the scene to an offscreen bgra8unorm texture then runs a fullscreen FXAA pass to the swapchain. Can be combined with `--msaa=N` / `--fxaa-quality=<tier>` to control the per-method quality knob. |
 | `--msaa=N` | MSAA sample count. Accepted: `none`/`0` (no AA), `1`, `2`, `4`, `8`. Implies `--aa=msaa` when given. The `bgra8unorm` surface format supports [1, 2, 4] on native and [1, 4] on WebGPU. Values outside that range are clamped (e.g. `--msaa=8` → 4×). |
 | `--fxaa-quality=<tier>` | FXAA 3.11 quality tier. Accepted: `low` (4-step edge search, 0.5 subpix cap, 0.166 edge threshold), `medium` (12-step, 0.75, 0.125 — **default**. Matches the pre-quality-tier baseline so old FXAA diffs stay valid), `high` (32-step, 0.85, 0.063). Tiers map to roughly FXAA 3.11 presets 12/25/39. A change in the Settings menu at runtime rebuilds the FXAA shader and pipeline. WGSL has no specialisation constants, so `configureFXAA` substitutes the tier into `fxaa.wgsl` by text replacement. |
-| `--render-distance=N` | Chunk-radius circular cull distance. Accepted: integer in [1, 32]. **Default: 4.** Frozen for the lifetime of the World. The in-game Settings picker is display-only until live spiral-offset rebuild lands. See `world.zig: DEFAULT_RENDER_DISTANCE`. |
+| `--render-distance=N` | Chunk-radius circular render distance. Accepted: integer in [1, 32]. **Default: 12.** The Settings picker changes it at runtime: the chunk scheduler loads and evicts for the new value. See `examples/voxel/docs/chunk-pipeline.md`. |
 | `--world=<preset>` | Worldgen preset. Accepted: `flatland` (flat Y=63), `hilly` (default — procedural noise terrain). |
 | `--seed=<u64>` | World seed. **Default: 0.** Generation mixes the seed into each random source: the height and biome noise, the caves, the trees and the glowstone. Seed 0 gives the terrain from before the seed existed. Native only. The web build uses seed 0. `zig build terrain-hash` builds a tool that prints the block hash of a 9×9 hilly area for each seed, from native and from wasm. CI compares the two. |
 | `--ao=<mode>` | Ambient-occlusion sampler. Accepted: `none` (no AO, full brightness), `classic` (per-vertex Mojang face-plane AO), `moore` (**default** — extended sampler that adds the outward+2 slab at half weight to darken indoor corners). `propagated` and `ssao` are reserved enum values that fall back to `classic` with a one-shot warning. Read at startup only — runtime changes (future settings menu) require remeshing all loaded chunks. |
 | `--lighting=<mode>` | World-lighting mode for the mesher. Accepted: `none` (every face fully lit by sky — A baseline for the cave-darkness regression) and `skylight` (default — per-chunk skylight propagation. Caves and overhangs go dark). Skylight is baked per-vertex at mesh time, so the in-game settings menu picker remeshes every loaded chunk on toggle. Digging or placing a block triggers a full-chunk `computeSkylight()` + `computeBlockLight()` + mesh regen. See `examples/voxel/docs/lighting.md` for the algorithm and phase 3 (block light / glowstone) design. |
 | `--place-block=<type>` | Block type emitted by right-click placement. Accepted: `stone` (default) and `glowstone`. Added with phase-3 block light so `tests/glowstone_cave.tas` can place an emitter from a TAS without needing an in-game block picker UI. |
-| `--dump-frame=<path>` | Capture one rendered frame to a PPM file, then exit. Waits for world loading to complete. If a TAS is running, waits for TAS to finish. If `--async-chunks=on`, also waits for the background pipeline to fully drain so the captured state is deterministic. |
-| `--async-chunks=<on\|off>` | Run chunk gen+mesh on a background worker thread (default: `on`). When on, the main thread only drains results and enqueues new jobs — the 30–150 ms per-chunk mesh spike is moved off the render thread. `off` restores the legacy time-budgeted sync loop (`MESH_GENS_PER_TICK`) as an escape hatch. Design + web-worker port plan: [`examples/voxel/docs/async-chunks.md`](examples/voxel/docs/async-chunks.md). |
+| `--dump-frame=<path>` | Capture one rendered frame to a PPM file, then exit. Waits for world loading to complete. If a TAS is running, waits for the TAS to finish. Then waits for the chunk scheduler to be idle (`Scheduler.isIdle`), so the captured state does not depend on timing. |
+| `--debug-page=<general\|pipeline>` | The first page of the debug overlay. `pipeline` shows the chunk pipeline counters (C12). Cmd+P (Ctrl+P) changes the page at runtime. |
 | `--depth-stencil=<on\|off>` | Enable or disable hardware depth testing (default: `on`). When `off`, no depth texture is allocated, both render pipelines omit the depth_stencil descriptor, and the render pass omits the depth_stencil_attachment. Geometry is ordered by painter's-algorithm chunk sort only. Primary use: benchmarking — compare frame timing with and without the depth pass to isolate the GPU cost. Regression: `tests/depth_stencil_regression.sh`. |
 | `--frustum=<mode>` | Per-chunk cull strategy. Accepted: `none`, `sphere`, `cone` and `frustum`. `frustum` is the default: it tests each chunk's box (the y range of its mesh) against the planes of the view-projection matrix. `none` draws every loaded chunk. `sphere` is a cheap radial cutoff at render_distance plus slack. `cone` tests each sphere against a cone along the camera's forward vector, with the FOV set by `--frustum-fov-deg`. No strategy ever culls the camera's own chunk or its 8 horizontal neighbours. `examples/voxel/frustum.zig` has the math notes and edge-case tests. Cmd+F (Ctrl+F on Win/Linux) freezes the live frustum at its current transform so you can fly around and see what got culled. Settings menu has a live picker for the strategy. |
 | `--frustum-fov-deg=<degrees>` | Total fov of the cone strategy in degrees. With no flag, each frame uses the screen-diagonal fov of the camera (about 100° at 60° vertical and 16:9). The test uses each chunk's full-height bounding sphere, so this cone keeps every chunk on screen. Range [0, 360]. Half-angle ≥ 90° always returns true. |
@@ -82,8 +82,10 @@ comment blocks at the top of `examples/voxel/tests/ao_corners.tas`,
 
 **Loading screen** (`main.zig:renderLoadingScreen`): on first launch, the render
 loop shows a dark purple background with animated wavy strips and a centred
-"WORLD LOADING!!!" title. The screen remains until the spawn chunk is generated
-*and* its mesh is built (`state.world_loading = false`). While loading, `voxelTick`
+"WORLD LOADING!!!" title. The screen remains until the chunk scheduler is
+"ready" (`Scheduler.isReady`, radius 5): the simulation radius has blocks
+and the chunks near spawn have current meshes. Then `state.world_loading`
+is false. While loading, `voxelTick`
 skips all gameplay input, and the TAS replayer stays `.stopped`.
 
 **First spawn**: when loading completes, `resolveSpawnPos()` scans upward from the
@@ -174,17 +176,13 @@ Regenerating the diffs / refreshing the doc's embedded PNGs:
 
 ---
 
-## Voxel Demo — Async Chunks
+## Voxel Demo — Chunk Pipeline
 
-Chunk gen+mesh runs on a background `std.Thread` worker via
-`examples/voxel/async_chunks.zig`. Mutex+condvar FIFO job queue, `[9]?*Chunk`
-snapshots (self + 8 neighbours, c_allocator-owned copies) so the worker is
-pointer-isolated from the world HashMap. Main drains per tick, sorts by
-`(cx, cz)` before applying for determinism. Dump-frame gates on
-`asyncHasPendingWork()` so captured PPMs are bit-identical with the sync
-path. Design + Web Worker port path + baseline numbers:
-[`examples/voxel/docs/async-chunks.md`](examples/voxel/docs/async-chunks.md).
-Toggle via `--async-chunks=on|off`.
+One chunk scheduler (`examples/voxel/pipeline/scheduler.zig`) and the Inline
+executor (`pipeline/exec_inline.zig`) load chunks on every platform. They run
+in the frame phase (`voxelFrame`), never in a tick. The stages are in
+`pipeline/stages.zig`. Design, "ready", budgets and numbers:
+[`examples/voxel/docs/chunk-pipeline.md`](examples/voxel/docs/chunk-pipeline.md).
 
 ---
 
@@ -332,7 +330,10 @@ for the experiment and "why MC's 16×16 is the right default" writeup.
 |------|---------|
 | `main.zig` | Entry point, TAS wiring, render loop, pause menu, debug overlay, loading screen, `resolveSpawnPos`/`doRespawn` |
 | `chunk.zig` | `Chunk` struct, `BlockType` enum, `setBlock`/`getBlock`, world-gen call |
-| `world.zig` | Multi-chunk world, chunk map, load/unload, `World.init(allocator, preset)` |
+| `world.zig` | Multi-chunk world, chunk map, chunk versions, `World.init(allocator, preset)` |
+| `pipeline/stages.zig` | The pure chunk stages: generate, light, mesh (C2), and versions (C3) |
+| `pipeline/scheduler.zig` | The chunk scheduler: desired state, priority, version checks, eviction, edits (C8) |
+| `pipeline/exec_inline.zig` | The Inline executor: chunk jobs on the main thread within a frame budget (C7) |
 | `world_gen.zig` | Procedural terrain, `Preset` enum (flatland / hilly), `presetConfig()`, value-noise `sampleHeight` |
 | `mesher.zig` | Greedy quad mesher (writes `PackedQuad`), `sortByDepth` |
 | `camera.zig` | FPS camera, view/projection matrices |
