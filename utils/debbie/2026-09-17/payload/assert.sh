@@ -534,6 +534,12 @@ if [ "$PHASE" = provisioned ]; then
     # resolves to.
     check "no corepack shim on PATH" \
         '! for c in yarn yarnpkg pnpm pnpx; do p="$(command -v "$c")" && readlink -f "$p"; done | grep -q corepack'
+    # The deploy timer runs /usr/bin/node. A person who deploys from an SSH
+    # prompt must get the same Node, so the interactive shell must not put a
+    # different Node first. fnm, nvm or a global install would do that.
+    # setup-developer-environment.sh installs fnm on dev machines only.
+    check "$DEPLOY_USER's interactive zsh runs /usr/bin/node" \
+        "[ \"\$(sudo -n -u '$DEPLOY_USER' -i zsh -ic 'command -v node' 2> /dev/null | tail -1)\" = /usr/bin/node ]"
     # No version is written here either. The expected value is read out of the
     # repository's own packageManager field at assertion time, so this check
     # cannot drift from the repo any more than setup-server-environment.sh can - if the repo
@@ -565,6 +571,7 @@ else
     sk "yarnpkg installed"            "setup-developer-environment.sh installs it"
     sk "yarn is apt's yarnpkg"        "setup-developer-environment.sh links it"
     sk "no corepack shim on PATH"     "setup-developer-environment.sh removes the shims"
+    sk "$DEPLOY_USER's interactive zsh runs /usr/bin/node" "setup-developer-environment.sh writes the shell config"
     sk "yarn --version matches the repo's packageManager"  "setup-developer-environment.sh enables it"
 fi
 

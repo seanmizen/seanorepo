@@ -161,6 +161,10 @@ does with the repository.
 
   For this reason a person can run the deploy from an SSH session with
   `./deploy.sh --force`. The poller is only a thin wrapper around it.
+
+  The SSH session and the timer also run the same Node, `/usr/bin/node`. If
+  they ran different Nodes, a deploy by hand could build native modules for a
+  different ABI. The development Node (fnm) is on dev machines only.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` runs
     `yarn install --immutable` then `yarn prod:docker`
@@ -171,6 +175,8 @@ does with the repository.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "node installed"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn is apt's yarnpkg"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no corepack shim on PATH"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv's interactive zsh runs
+    /usr/bin/node"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn --version matches the
     repo's packageManager"
 - **Relations:** depends-on REQ-DEPLOY-002
