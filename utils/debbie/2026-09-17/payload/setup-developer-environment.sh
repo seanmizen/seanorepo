@@ -13,7 +13,7 @@
 # What it installs, in this order:
 #   1. Homebrew (macOS) or apt packages (Debian)
 #   2. zsh, oh-my-zsh, the prompt and aliases, and zsh as the login shell
-#   3. Node and Yarn
+#   3. the system Node and Yarn, and fnm with the LTS Node (dev machines)
 #   4. Docker
 #   5. shist, from its release
 #   6. ~/projects, the seanorepo clone, and the git config from config-anywhere
@@ -258,6 +258,25 @@ source "$ZSH/oh-my-zsh.sh"
 [ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
 export PATH="$HOME/.local/bin:$PATH"
 
+# WSL appends the Windows PATH. A Windows Node on it (nvm-windows, or the
+# Node.js installer) supplies npm, npx and pnpm in place of the Linux ones.
+# Remove only those entries: code, explorer.exe and cmd.exe also come from it.
+if grep -qi microsoft /proc/version 2> /dev/null; then
+  path=(${path:#/mnt/*/(nvm|nvm4w/nodejs|nodejs)(/|)})
+fi
+# fnm: the development Node, on the Mac and WSL only. A server has no fnm,
+# so its node is /usr/bin/node, the same as the deploy timer (REQ-DEPLOY-004).
+# --use-on-cd selects the Node that a project names in engines.node,
+# .node-version or .nvmrc, when you cd into it.
+[ -x "$HOME/.local/share/fnm/fnm" ] && export PATH="$HOME/.local/share/fnm:$PATH"
+if command -v fnm > /dev/null; then
+  eval "$(fnm env --use-on-cd --shell zsh)"
+fi
+nvm() {
+  echo "nvm not installed - setup-developer-environment instead installed fnm" >&2
+  return 1
+}
+
 # Depth-based path display.
 setopt promptsubst
 autoload -U colors && colors
@@ -329,9 +348,16 @@ fi
 #------------------------------------------------------------------------------
 # 3. Node and Yarn
 #
-# No Node version is pinned. Each system takes the Node that its package
-# manager ships: the latest release from Homebrew, and the release's Node from
-# Debian's apt. The package manager then keeps it updated.
+# There are two Node layers:
+# - The system Node. Each system takes the Node that its package manager
+#   ships: the latest release from Homebrew, and the release's Node from
+#   Debian's apt. The package manager then keeps it updated. Nothing pins its
+#   version. It runs the system Yarn, and on a server it runs the units and
+#   the deploy. Do not remove it: Debian's yarnpkg depends on nodejs.
+# - The development Node, from fnm, on the Mac and WSL only. A project that
+#   pins its Node (engines.node, .node-version or .nvmrc) gets that Node from
+#   fnm. The default is the LTS. Each run installs the newest LTS and makes it
+#   the default. The older Nodes stay installed.
 #
 # There is no corepack. The repository carries its own Yarn release, and
 # .yarnrc.yml names it in yarnPath. Any `yarn` on the PATH gives control to
@@ -347,7 +373,7 @@ fi
 # Node, and the next install brings all of it back. Without its shims,
 # corepack changes nothing.
 #------------------------------------------------------------------------------
-log "Installing node and yarn"
+log "Installing node, yarn and fnm"
 # remove_corepack_shims OWNER DIR: remove each package manager link in DIR
 # that points into corepack. OWNER is user or root, for who owns DIR.
 remove_corepack_shims() {
@@ -370,7 +396,7 @@ if [ "$OS" = Darwin ]; then
         run brew uninstall corepack
         note "$(green "Removed the corepack formula")"
     fi
-    pkg_install node yarn
+    pkg_install node yarn fnm
     # brew install does not link a formula that is installed but unlinked, for
     # example after `brew unlink`. Then an older node elsewhere on the PATH
     # runs instead, and Yarn 4 does not run on it.
@@ -386,10 +412,54 @@ else
         note "$(green "Linked /usr/local/bin/yarn to yarnpkg")"
     fi
 fi
-run node --version
+# By its path: a shell with fnm active gives this script fnm's node first.
+if [ "$OS" = Darwin ]; then
+    run "$HOMEBREW_PREFIX/bin/node" --version
+else
+    run /usr/bin/node --version
+fi
 node_version="$(cat "$RUN_OUT")"
 run bash -c "cd / && yarn --version"
-note "Node $node_version, system Yarn $(cat "$RUN_OUT")"
+note "System Node $node_version, system Yarn $(cat "$RUN_OUT")"
+
+# The development Node (REQ-DEPLOY-004). A run as root is for another
+# account: provision.sh sets up a server that way. A server gets no fnm. The
+# deploy timer runs /usr/bin/node, and a deploy that a person starts from an
+# SSH prompt must run the same Node.
+#
+# macOS installs fnm with Homebrew, above. Debian has no fnm package, so fnm's
+# own installer puts it in ~/.local/share/fnm, the installer's default. The
+# script names that directory, so that the installer, this step and .zshrc
+# agree. The installer runs every time, because that is how fnm upgrades.
+# --skip-shell stops it from appending to .zshrc, which section 2 writes.
+# fnm publishes no checksums, so this step cannot verify the download as
+# section 5 verifies shist. A truncated zip fails unzip, and the installer
+# then stops.
+if [ "$(id -u)" -eq 0 ]; then
+    note "fnm: not installed, because a run as root sets up a server"
+else
+    if [ "$OS" = Darwin ]; then
+        FNM="$HOMEBREW_PREFIX/bin/fnm"
+    else
+        fnm_dir="$USER_HOME/.local/share/fnm"
+        FNM="$fnm_dir/fnm"
+        fnm_installer="$(mktemp)"
+        curl -fsSL https://fnm.vercel.app/install -o "$fnm_installer"
+        run bash "$fnm_installer" --install-dir "$fnm_dir" --skip-shell
+        rm -f "$fnm_installer"
+    fi
+    run "$FNM" --version
+    fnm_version="$(cat "$RUN_OUT")"
+    run "$FNM" install --lts
+    if grep -q 'already installed' "$RUN_OUT"; then
+        lts_state="already installed"
+    else
+        lts_state="$(green installed)"
+    fi
+    run "$FNM" default lts-latest
+    run "$FNM" exec --using default node --version
+    note "$fnm_version, default Node $(cat "$RUN_OUT") (the LTS): $lts_state"
+fi
 
 #------------------------------------------------------------------------------
 # 4. Docker

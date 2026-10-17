@@ -89,13 +89,36 @@ bash ~/projects/seanorepo/utils/debbie/2026-09-17/payload/setup-developer-enviro
 ```
 
 Do not use sudo: Homebrew refuses to run as root. It installs Homebrew,
-zsh with oh-my-zsh and the shared prompt, Node and Yarn, Docker,
+zsh with oh-my-zsh and the shared prompt, Node and Yarn, fnm, Docker,
 shist, the seanorepo clone, the git config from
 `utils/config-anywhere`, and Ghostty with its config.
 
 It rewrites `~/.zshrc` and `~/.config/ghostty/config.ghostty` on every run.
 Put your own settings in `~/.zshrc.local` and `~/.config/ghostty/config.local`.
 It is safe to run again whenever the file changes.
+
+### Two Node layers
+
+- **The system Node** comes from the package manager: Homebrew's `node`, or
+  Debian's `nodejs`. It runs the system Yarn. On a server it runs the units
+  and the deploy. Nothing pins its version.
+- **The development Node** comes from [fnm](https://github.com/Schniz/fnm), on
+  the Mac and WSL only. Each run installs the newest Node LTS and makes it the
+  default. In a new zsh, `node` and `npm` run on that Node. On Debian, `yarn`
+  does too, because apt's `yarnpkg` starts with `#!/usr/bin/env node`. When you
+  `cd` into a project that names a Node in `engines.node`, `.node-version` or
+  `.nvmrc`, fnm selects an installed Node that matches. If no installed Node
+  matches, run `fnm install <version>`.
+
+A server gets no fnm, so a deploy from an SSH prompt runs on `/usr/bin/node`,
+the same as the timer (REQ-DEPLOY-004). `nvm` is a zsh function that prints a
+message, because nvm is not installed. On WSL, the generated `~/.zshrc`
+removes the Windows Node directories (nvm-windows and the Node.js installer)
+from `PATH`, and keeps the other Windows entries.
+
+fnm does not manage npm, and each Node includes its own npm. A project that
+needs a newer npm runs `npm install --global npm@<major>` in its fnm Node.
+Do it again after fnm installs a new patch of that Node.
 
 ## Roles
 
