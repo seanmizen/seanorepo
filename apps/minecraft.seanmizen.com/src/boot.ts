@@ -5,12 +5,31 @@
 // public/boot.js. This file gives the loader its options:
 //
 //   - It loads ./app.wasm, in the same directory as index.html.
+//   - It starts the chunk worker pool (C9) with the content-hashed chunk
+//     files. bundle.sh gives their names to `bun build --define`. Without
+//     the names, the main thread runs the chunk jobs.
 //   - It shows each failure in the styled overlay of public/index.html.
 
 import {
   type LoadFailure,
   loadWasm,
 } from '#/utils/swindowzig/backends/wasm/loader';
+
+// bundle.sh defines these names, for example './chunks-0123456789abcdef.wasm'.
+declare const __CHUNKS_WASM_URL__: string | undefined;
+declare const __CHUNK_WORKER_URL__: string | undefined;
+
+function chunkWorkerFiles():
+  | { wasmUrl: string; workerUrl: string }
+  | undefined {
+  if (
+    typeof __CHUNKS_WASM_URL__ !== 'string' ||
+    typeof __CHUNK_WORKER_URL__ !== 'string'
+  ) {
+    return undefined;
+  }
+  return { wasmUrl: __CHUNKS_WASM_URL__, workerUrl: __CHUNK_WORKER_URL__ };
+}
 
 interface OverlayElements {
   overlay: HTMLElement;
@@ -122,6 +141,7 @@ async function main(): Promise<void> {
   await loadWasm({
     canvas,
     wasmUrl: './app.wasm',
+    chunkWorkers: chunkWorkerFiles(),
     logPrefix: '[minecraft]',
     canvasSize: 'device',
     lockOnClick: true,

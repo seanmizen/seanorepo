@@ -5,7 +5,8 @@
 # Three stages:
 #   1. zig-build  — download the Zig version that utils/swindowzig/build.zig.zon
 #                   names, build swindowzig's `web` step to WASM
-#   2. js-build   — use Bun to bundle the swindowzig WASM bootstrap TS into one JS file
+#   2. js-build   — bundle.sh: Bun bundles boot.js and the chunk worker, and
+#                   the chunk files get content-hashed names
 #   3. prod       — copy the static output into a minimal Node image and run `serve`
 #
 # The dev target is a no-op: for dev you'd run `yarn build` locally and open the dist
@@ -44,7 +45,8 @@ RUN set -e; \
 COPY utils/swindowzig /build/swindowzig
 WORKDIR /build/swindowzig
 
-# Build the voxel example for WASM. examples/voxel/main.zig has the
+# Build the voxel example for WASM: app.wasm and chunks.wasm (the chunk
+# worker). examples/voxel/main.zig has the
 # `swindowzig_init` / `swindowzig_frame` entry exports at the bottom and
 # gates all posix-dependent code (CLI args, TAS file IO, frame dumps,
 # std.process.exit) behind `if (comptime !is_wasm)`.
@@ -53,20 +55,24 @@ RUN zig build web -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 # =============================================================================
 # Stage 2: JS bundle (Bun)
 # =============================================================================
-# Bundles apps/minecraft.seanmizen.com/src/boot.ts into one boot.js. boot.ts
-# imports the swindowzig wasm loader (backends/wasm/loader.ts), so the COPY
-# below takes all of backends/wasm.
+# bundle.sh (the script that build.sh runs too) makes /build/out/:
+#   boot.js                 apps/minecraft.seanmizen.com/src/boot.ts and the
+#                           swindowzig wasm loader (backends/wasm/loader.ts)
+#   chunk-worker-<hash>.js  the chunk worker (backends/wasm/chunk-worker.ts)
+#   chunks-<hash>.wasm      chunks.wasm from stage 1
+# The chunk files have content-hashed names, and boot.js holds the names
+# (C9). The COPY below takes all of backends/wasm.
 FROM oven/bun:1.1-slim AS js-build
 WORKDIR /build
 
 COPY utils/swindowzig/backends/wasm /build/utils/swindowzig/backends/wasm
 COPY apps/minecraft.seanmizen.com/src /build/apps/minecraft.seanmizen.com/src
 COPY apps/minecraft.seanmizen.com/tsconfig.json /build/apps/minecraft.seanmizen.com/tsconfig.json
+COPY apps/minecraft.seanmizen.com/bundle.sh /build/apps/minecraft.seanmizen.com/bundle.sh
+COPY --from=zig-build /build/swindowzig/zig-out/bin/chunks.wasm /build/chunks.wasm
 
-RUN bun build /build/apps/minecraft.seanmizen.com/src/boot.ts \
-    --outfile /build/boot.js \
-    --target browser \
-    --minify
+RUN bash /build/apps/minecraft.seanmizen.com/bundle.sh /build/chunks.wasm /build/out \
+    && ls -la /build/out
 
 # =============================================================================
 # Stage 3: Production runtime — static file server
@@ -80,7 +86,8 @@ RUN npm install -g serve
 
 # Copy the static assets (index.html etc.) and overlay freshly-built artefacts.
 COPY apps/minecraft.seanmizen.com/public /app
-COPY --from=js-build /build/boot.js /app/boot.js
+# boot.js, chunk-worker-<hash>.js and chunks-<hash>.wasm.
+COPY --from=js-build /build/out/ /app/
 COPY --from=zig-build /build/swindowzig/zig-out/bin/app.wasm /app/app.wasm
 
 EXPOSE 4042

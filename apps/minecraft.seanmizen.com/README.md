@@ -26,12 +26,16 @@ apps/minecraft.seanmizen.com/
 ├── dockerfile          ← multi-stage zig + bun + serve
 ├── docker-compose.yml  ← mirrors apps/seanmizen.com/docker-compose.yml
 ├── build.sh            ← host-side build script (zig + bun)
+├── bundle.sh           ← bun bundles and content-hashed chunk files (build.sh and the dockerfile run it)
 ├── src/
 │   └── boot.ts         ← production WASM bootstrap (bundled to public/boot.js)
 └── public/
     ├── index.html      ← fullscreen canvas + status overlay
+    ├── serve.json      ← cache headers: no-cache, and immutable for the hashed chunk files
     ├── boot.js         ← bundled bootstrap (generated)
-    └── app.wasm        ← voxel engine wasm artefact (generated)
+    ├── app.wasm        ← voxel engine wasm artefact (generated)
+    ├── chunks-<hash>.wasm       ← the chunk worker wasm (generated)
+    └── chunk-worker-<hash>.js   ← the Web Worker script (generated)
 ```
 
 ## Building locally
@@ -50,9 +54,15 @@ yarn workspace minecraft.seanmizen.com build
 The script:
 1. Runs `zig build web -Dexample=voxel` in `utils/swindowzig/` — produces
    `zig-out/bin/app.wasm` and copies it into `public/app.wasm`.
-2. Runs `bun build src/boot.ts`. It bundles the swindowzig wasm loader
+   The same build writes `chunks.wasm`, the chunk worker.
+2. Runs `bundle.sh`. It bundles the swindowzig wasm loader
    (`utils/swindowzig/backends/wasm/loader.ts`) and the modules that it
-   imports into `public/boot.js`. The dev page uses the same loader.
+   imports into `public/boot.js`. The dev page uses the same loader. It
+   bundles the Web Worker script (`backends/wasm/chunk-worker.ts`), and
+   copies `chunks.wasm`. The two chunk files get content-hashed names, and
+   `boot.js` holds the names. So a browser cache cannot pair an old chunk
+   worker with a new `app.wasm`. See
+   `utils/swindowzig/examples/voxel/docs/chunk-pipeline.md`.
 3. Each step is idempotent and prints a warning if a tool is missing.
 
 Preview it with any static file server:

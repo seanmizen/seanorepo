@@ -8,3 +8,7 @@ public/boot.js
 
 # node_modules if any future tooling ends up pulling them in.
 node_modules/
+
+# Generated chunk worker files, with content-hashed names (bundle.sh).
+public/chunks-*.wasm
+public/chunk-worker-*.js

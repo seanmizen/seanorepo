@@ -72,7 +72,7 @@ comment blocks at the top of `examples/voxel/tests/ao_corners.tas`,
 | `--place-block=<type>` | Block type emitted by right-click placement. Accepted: `stone` (default) and `glowstone`. Added with phase-3 block light so `tests/glowstone_cave.tas` can place an emitter from a TAS without needing an in-game block picker UI. |
 | `--dump-frame=<path>` | Capture one rendered frame to a PPM file, then exit. Waits for world loading to complete. If a TAS is running, waits for the TAS to finish. Then waits for the chunk scheduler to be idle (`Scheduler.isIdle`), so the captured state does not depend on timing. |
 | `--debug-page=<general\|pipeline>` | The first page of the debug overlay. `pipeline` shows the chunk pipeline counters (C12). Cmd+P (Ctrl+P) changes the page at runtime. |
-| `--chunk-workers=N` | Native only. The chunk worker threads of the ThreadPool executor, 0 to 4. **Default: min(CPU count - 1, 4).** 0 runs the chunk jobs on the main thread (the Inline executor). Each worker has its own world copy and a 64 MB cache (C4, C14). See `examples/voxel/docs/chunk-pipeline.md`. |
+| `--chunk-workers=N` | Native only. The chunk worker threads of the ThreadPool executor, 0 to 4. **Default: min(CPU count - 1, 4).** 0 runs the chunk jobs on the main thread (the Inline executor). Each worker has its own world copy and a 64 MB cache (C4, C14). The web build uses min(`navigator.hardwareConcurrency` - 1, 4) Web Workers. See `examples/voxel/docs/chunk-pipeline.md`. |
 | `--depth-stencil=<on\|off>` | Enable or disable hardware depth testing (default: `on`). When `off`, no depth texture is allocated, both render pipelines omit the depth_stencil descriptor, and the render pass omits the depth_stencil_attachment. Geometry is ordered by painter's-algorithm chunk sort only. Primary use: benchmarking — compare frame timing with and without the depth pass to isolate the GPU cost. Regression: `tests/depth_stencil_regression.sh`. |
 | `--frustum=<mode>` | Per-chunk cull strategy. Accepted: `none`, `sphere`, `cone` and `frustum`. `frustum` is the default: it tests each chunk's box (the y range of its mesh) against the planes of the view-projection matrix. `none` draws every loaded chunk. `sphere` is a cheap radial cutoff at render_distance plus slack. `cone` tests each sphere against a cone along the camera's forward vector, with the FOV set by `--frustum-fov-deg`. No strategy ever culls the camera's own chunk or its 8 horizontal neighbours. `examples/voxel/frustum.zig` has the math notes and edge-case tests. Cmd+F (Ctrl+F on Win/Linux) freezes the live frustum at its current transform so you can fly around and see what got culled. Settings menu has a live picker for the strategy. |
 | `--frustum-fov-deg=<degrees>` | Total fov of the cone strategy in degrees. With no flag, each frame uses the screen-diagonal fov of the camera (about 100° at 60° vertical and 16:9). The test uses each chunk's full-height bounding sphere, so this cone keeps every chunk on screen. Range [0, 360]. Half-angle ≥ 90° always returns true. |
@@ -183,11 +183,28 @@ One chunk scheduler (`examples/voxel/pipeline/scheduler.zig`) loads chunks
 on every platform. It runs in the frame phase (`voxelFrame`), never in a
 tick. Workers own the world (C4): native runs the ThreadPool executor
 (`pipeline/exec_threads.zig`, `--chunk-workers=N`), and the web build runs
-the Inline executor (`pipeline/exec_inline.zig`). All messages are the
-bytes of `pipeline/protocol.zig` (P6). Main keeps blocks only for the
-prefetch radius (2 chunks) and no light. Design, protocol layout, "ready",
-budgets and numbers:
+the WorkerPool executor (`pipeline/exec_web.zig`): Web Workers that run
+`chunks.wasm`. The Inline executor (`pipeline/exec_inline.zig`) is the
+fallback when no worker runs. All messages are the bytes of
+`pipeline/protocol.zig` (P6). Main keeps blocks only for the prefetch
+radius (2 chunks) and no light. Design, protocol layout, "ready", budgets
+and numbers:
 [`examples/voxel/docs/chunk-pipeline.md`](examples/voxel/docs/chunk-pipeline.md).
+
+Web Worker pool rules (C9):
+
+- `zig build web -Dexample=voxel` writes `app.wasm` and `chunks.wasm`. The
+  only wasm imports of `chunks.wasm` are `env.jsGetTime` and `env.jsLog`.
+  Do not import a WebGPU function into it.
+- Both files export the protocol version, the build hash and the build id
+  (a hash of the `.zig` files under `examples/voxel`, from `build.zig`).
+  The pool starts only when the three values are equal.
+- `apps/minecraft.seanmizen.com/bundle.sh` gives the chunk files
+  content-hashed names. Each deploy file must be in `bundle.sh`, the
+  dockerfile and `serve.json`.
+- `bun test backends/wasm/worker-pool.test.ts` runs the pool with real
+  Bun Web Workers. Run it 10 times after a change to the pool, to look
+  for races.
 
 ---
 
@@ -340,6 +357,8 @@ for the experiment and "why MC's 16×16 is the right default" writeup.
 | `pipeline/scheduler.zig` | The chunk scheduler: desired state, priority, version checks, eviction, edits (C8) |
 | `pipeline/exec_inline.zig` | The Inline executor: one in-process worker on the main thread, within a frame budget (C7) |
 | `pipeline/exec_threads.zig` | The ThreadPool executor: native worker threads, spatial affinity, install budget (C4, C9) |
+| `pipeline/exec_web.zig` | The WorkerPool executor: the main side of the Web Worker pool, through the "chunks" imports (C9) |
+| `pipeline/chunk_worker_main.zig` | The exports of `chunks.wasm`, the chunk worker of the web build. `chunks_wasm.zig` is its build root (C9) |
 | `pipeline/worker_world.zig` | The world of a chunk worker: seed, edit log, LRU cache with a memory limit (C4, C14). Builds for wasm32 |
 | `pipeline/protocol.zig` | The chunk protocol: Hello, Edit, Job, Result, Error bytes (P6) |
 | `world_gen.zig` | Procedural terrain, `Preset` enum (flatland / hilly), `presetConfig()`, value-noise `sampleHeight` |
