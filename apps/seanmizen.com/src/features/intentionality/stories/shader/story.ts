@@ -156,6 +156,21 @@ remove endOpacity too btw. since the singularity is many dots overlapping, opaci
       ],
       sample: 's08-venom',
     },
+    {
+      title: 'a wider mask',
+      messages: [
+        {
+          from: 'sean',
+          text: `click in the space near the projects section's body. the 'hire me' text will show very vividly how our current system of blocking the body is, in my opinion, too tightly wrapped around our content. a wider scope for this would be nice. did we call this 'halo' or something else?
+It will be helpful to extract a side-by-side comparison of before and after for this.`,
+        },
+        {
+          from: 'claude',
+          text: 'The halo was the CSS attempt in stage 7. What stayed is the content mask. Its clear space is now whole to 16 px from content and gone by 56 px. Before, it was 4 px and 16 px. Only the blur of each box goes on the mask, so the edge fades evenly. A bug on the way: screen reader text, such as "(opens in a new tab)", was in the mask. It is not on the screen, so a parent that clips its text now clips the box too. To compare, run stage 8 and this stage, open projects, and click beside the text.',
+        },
+      ],
+      sample: 's09-wider-mask',
+    },
   ],
 };
 

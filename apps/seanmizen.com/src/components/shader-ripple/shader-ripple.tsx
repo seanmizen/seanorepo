@@ -180,10 +180,10 @@ const wander = (t: number, seed: number) => {
    the line boxes of every text node, plus the boxes of the elements below,
    so it fits any page with no selectors. MASK_SCALE is texels per CSS
    pixel. MASK_PAD is the clear space around content, and MASK_SOFT is the
-   distance over which that space fades out, both in CSS pixels. */
+   distance over which that space then fades out, both in CSS pixels. */
 const MASK_SCALE = 0.5;
-const MASK_PAD = 4;
-const MASK_SOFT = 12;
+const MASK_PAD = 16;
+const MASK_SOFT = 40;
 const MASK_ELEMENTS = 'img, svg, video, input, button, select, textarea';
 /* The computed background of an element that paints none. */
 const NO_BACKGROUND = 'rgba(0, 0, 0, 0)';
@@ -397,26 +397,50 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       maskCtx.clearRect(0, 0, w, h);
       maskCtx.fillStyle = '#fff';
       maskCtx.shadowColor = '#fff';
-      maskCtx.shadowBlur = MASK_SOFT * MASK_SCALE;
-      const fill = (box: DOMRect) => {
-        if (box.width === 0 || box.height === 0) return;
+      // Only the blur of each box goes on the canvas: the box itself is
+      // drawn one canvas width to the left, off the canvas. The blur is
+      // whole MASK_SOFT / 2 inside the box edge, and gone MASK_SOFT / 2
+      // outside it, so each box grows by MASK_PAD + MASK_SOFT / 2.
+      maskCtx.shadowBlur = (MASK_SOFT / 2) * MASK_SCALE;
+      maskCtx.shadowOffsetX = w;
+      const grow = MASK_PAD + MASK_SOFT / 2;
+      type Box = { left: number; top: number; right: number; bottom: number };
+      const fill = ({ left, top, right, bottom }: Box) => {
+        if (right <= left || bottom <= top) return;
         maskCtx.fillRect(
-          (box.left - bounds.left - MASK_PAD) * MASK_SCALE,
-          (box.top - bounds.top - MASK_PAD) * MASK_SCALE,
-          (box.width + 2 * MASK_PAD) * MASK_SCALE,
-          (box.height + 2 * MASK_PAD) * MASK_SCALE,
+          (left - bounds.left - grow) * MASK_SCALE - w,
+          (top - bounds.top - grow) * MASK_SCALE,
+          (right - left + 2 * grow) * MASK_SCALE,
+          (bottom - top + 2 * grow) * MASK_SCALE,
         );
       };
       // One box a line of text, so a paragraph clears its own shape and
-      // not the whole width of its column.
+      // not the whole width of its column. A parent that clips its text,
+      // such as screen reader text, clips the box too.
       const walker = document.createTreeWalker(
         document.body,
         NodeFilter.SHOW_TEXT,
       );
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         if (!/\S/.test(node.nodeValue ?? '')) continue;
+        const parent = node.parentElement;
+        const clip =
+          parent && getComputedStyle(parent).overflow !== 'visible'
+            ? parent.getBoundingClientRect()
+            : null;
         range.selectNodeContents(node);
-        for (const box of range.getClientRects()) fill(box);
+        for (const box of range.getClientRects()) {
+          fill(
+            clip
+              ? {
+                  left: Math.max(box.left, clip.left),
+                  top: Math.max(box.top, clip.top),
+                  right: Math.min(box.right, clip.right),
+                  bottom: Math.min(box.bottom, clip.bottom),
+                }
+              : box,
+          );
+        }
       }
       // One whole box for each control, icon and image, and for anything
       // that paints its own background, such as a code block or a swatch.

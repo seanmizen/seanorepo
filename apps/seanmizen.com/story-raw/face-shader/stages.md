@@ -173,3 +173,28 @@ Screenshots: `08-venom/`. `reported-code-block.png` is Sean's screenshot.
 `code-block.png` is the fix. `venom-sheet.png` shows the cursor as it comes
 near, is eaten, and comes back out. `tendril-clumping-bug.png` is the bug.
 `tendril-cases.png` is the fix, with four settings.
+
+## 09: a wider mask
+
+Sean:
+
+```text
+click in the space near the projects section's body. the 'hire me' text will show very vividly how our current system of blocking the body is, in my opinion, too tightly wrapped around our content. a wider scope for this would be nice. did we call this 'halo' or something else?
+It will be helpful to extract a side-by-side comparison of before and after for this.
+```
+
+The halo was the CSS attempt in stage 7. What stayed is the content mask.
+Claude widened its clear space: whole to 16 px from content and gone by
+56 px, not 4 px and 16 px. Only the blur of each box goes on the mask now,
+so the edge fades evenly. Claude also found that screen reader text, such as
+"(opens in a new tab)", was in the mask. A parent that clips its text now
+clips the box too. This was the first stage frozen as it happened, with
+`scripts/freeze-stage.mjs`.
+
+"Before" is the stage 8 sample and "after" is the live site, with the same
+clicks. The captures pick the last mask canvas: in dev, StrictMode mounts the
+shader twice and leaves a stale first mask.
+
+Screenshots: `09-wider-mask/`. `projects-before-after.png` shows the lit
+glyphs over 5 s of clicks beside the text, and the mask in pink.
+`home-closed-before-after.png` shows that the face on home is the same.
