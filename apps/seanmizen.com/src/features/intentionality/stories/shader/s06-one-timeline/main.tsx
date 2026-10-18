@@ -1,6 +1,7 @@
 /* Stage 6 of the face shader story, as a page of its own. This is the
    only file in the folder written for the story. The rest are copies of the
-   site's code at this stage, with only their import paths changed. */
+   site's code at this stage, with only their import paths changed, and
+   the tuning panel set to show outside the dev server. */
 import { Route } from 'react-router-dom';
 import { mountSample } from '@/features/intentionality/mount-sample';
 import { Layout } from './layout';

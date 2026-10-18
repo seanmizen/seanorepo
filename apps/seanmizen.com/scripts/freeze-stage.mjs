@@ -13,8 +13,9 @@
   portrait, HomeLi, the home and projects pages, the tuning panel, and the
   layout route cut out of app.tsx. Only import paths change. Everything
   else (params.ts, the photo, site components, features, hooks, index.css)
-  stays a live import. It also writes the stage's main.tsx. It never writes
-  over a stage that exists.
+  stays a live import. A tuning panel is set to show in the sample, with a
+  storage key of its own. It also writes the stage's main.tsx. It never
+  writes over a stage that exists.
 
   Then add the stage to the story's story.ts, with Sean's message verbatim.
 */
@@ -145,6 +146,19 @@ for (const panel of panels) {
     "from './routes/hire-lab/hire-lab.module.css';",
     "from '@/app/routes/hire-lab/hire-lab.module.css';",
   );
+  // A tuning panel is a beat of the story, so a sample always shows it. Its
+  // own storage key makes each stage open on that stage's defaults.
+  text = replaceOnce(
+    text,
+    "const DEV = process.env.NODE_ENV === 'development';\n",
+    '// Changed for the story: on the site the panel showed only on the dev\n' +
+      '// server. In a story sample it always shows.\n' +
+      'const DEV = true;\n',
+  );
+  text = text.replace(
+    /const STORAGE_KEY = '([^']+)';/,
+    `const STORAGE_KEY = '$1:${story}-${stage}';`,
+  );
   write(panel, text);
 }
 
@@ -187,7 +201,11 @@ write(
   'main.tsx',
   `/* Stage ${stage} of the ${story} story, as a page of its own. This is the
    only file in the folder written for the story. The rest are copies of the
-   site's code at this stage, with only their import paths changed. */
+   site's code at this stage, with only their import paths changed${
+     panels.length
+       ? ', and\n   the tuning panel set to show outside the dev server'
+       : ''
+   }. */
 import { Route } from 'react-router-dom';
 import { mountSample } from '@/features/intentionality/mount-sample';
 import { Layout } from './layout';

@@ -93,7 +93,7 @@ Do this with the same margin-from-bottom that the theme mode toggle button has? 
         },
         {
           from: 'claude',
-          text: 'A parabolic flight, a panel of sliders with a copy/paste settings string, and the theme toggle in the shared layout. The panel only shows on the dev server.',
+          text: 'A parabolic flight, a panel of sliders with a copy/paste settings string, and the theme toggle in the shared layout. Tune the throw with the panel, top right.',
         },
       ],
       sample: 's05-throw-panel',

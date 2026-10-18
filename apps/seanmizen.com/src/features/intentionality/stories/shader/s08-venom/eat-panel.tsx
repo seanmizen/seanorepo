@@ -13,8 +13,10 @@ import {
    the values are settled, they become constants, and this file goes (see
    components/shader-ripple/eat.ts). */
 
-const DEV = process.env.NODE_ENV === 'development';
-const STORAGE_KEY = 'eat-settings';
+// Changed for the story: on the site the panel showed only on the dev
+// server. In a story sample it always shows.
+const DEV = true;
+const STORAGE_KEY = 'eat-settings:shader-s08-venom';
 
 const readStored = () => {
   try {
