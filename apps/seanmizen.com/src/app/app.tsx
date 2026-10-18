@@ -9,6 +9,7 @@ import {
   useMatch,
 } from 'react-router-dom';
 import { LastUpdated, Portrait, ThemeToggle } from '@/components';
+import { StoryPage, stories } from '@/features';
 import { MapNetwork } from '@/features/Glasto/Map';
 import { ThemeContext, ThemeProvider } from '@/providers';
 import { EatPanel, useEat } from './eat-panel';
@@ -63,6 +64,14 @@ const App: FC = () => {
           {/* One path segment: assets load from a relative prefix, so a nested
               path would ask for them under /shaders/. */}
           <Route path="/shaders-hire" element={<HireLab />} />
+          {/* The intentionality stories: one page each. */}
+          {stories.map((story) => (
+            <Route
+              key={story.slug}
+              path={`/${story.slug}`}
+              element={<StoryPage story={story} />}
+            />
+          ))}
           <Route element={<Layout />}>
             <Route path="/projects" element={<Projects />} />
             <Route path="/*" element={<Home />} />

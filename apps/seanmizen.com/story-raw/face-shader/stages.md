@@ -5,7 +5,18 @@ message as he wrote it, what Claude did, and the screenshots from that
 stage. Claude took the screenshots in headless Chrome. Its software GPU runs
 at about 2 frames a second, so motion shows as contact sheets, not video.
 
-Branch: `SEAN-736/projects-page-persistent-face`. Ticket: #736.
+Branch: `SEAN-736/projects-page-persistent-face`. Tickets: #736, #737.
+
+The live story is at `/shader-intentionality-story`. Its code is in
+`src/features/intentionality/stories/shader/`.
+
+Stages 1 to 8 were not committed while they happened. Claude rebuilt them
+with the scripts in `replay/`: each script makes the edits of one stage, as
+exact string swaps, from `main`. Biome runs after each stage, as `yarn fix`
+did in the session. The replay through every stage gives the committed code
+of stage 8 exactly, file for file. `replay/freeze.py` then copied each stage
+into the story. From stage 9 on, `scripts/freeze-stage.mjs` freezes a stage
+as it happens.
 
 ## 01: projects becomes a link
 
