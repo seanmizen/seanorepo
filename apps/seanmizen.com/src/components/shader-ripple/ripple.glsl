@@ -14,6 +14,9 @@ uniform float u_now;
 uniform int u_tapCount;
 // Each: origin (xy), start time in seconds (z), strength (w; below 0 is a heart).
 uniform vec4 u_taps[MAX_TAPS];
+// Ripples that started before this time are skipped. The face's passes
+// set it when the face comes home, so older ripples leave the face alone.
+uniform float u_tapsFrom;
 
 uniform float u_reach;       // how far a front gets before it stalls
 uniform float u_slow;        // seconds for the front to lose most of its speed
@@ -126,7 +129,7 @@ vec3 rippleAt(vec2 p, out vec3 light) {
 
     vec4 tap = u_taps[i];
     float age = u_now - tap.z;
-    if (age < 0.0) continue;
+    if (age < 0.0 || tap.z < u_tapsFrom) continue;
 
     vec2 away = near - tap.xy;
     float d = length(away);

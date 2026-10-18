@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { Portrait } from '@/components';
 import type { HireSettings } from '@/components/shader-ripple';
 import {
   deserialiseHire,
@@ -8,7 +9,7 @@ import {
   MAX_MESSAGE,
   serialiseHire,
 } from '@/components/shader-ripple';
-import { Home } from '../home';
+import { Projects } from '../projects';
 import styles from './hire-lab.module.css';
 
 /* The settings string also lives in the URL hash, so a reload or a shared
@@ -21,14 +22,16 @@ const readHash = () => {
   }
 };
 
-/* The real home page, with a small panel to tune its hire field. Open
-   "projects" to see the reveal; close it to see it run back. */
+/* The real projects page, with a small panel to tune its hire field. Turn
+   "show text" off to see the text fade out, and on to see it fade in. */
 const HireLab: FC = () => {
   const initial = useMemo(readHash, []);
   const [hire, setHire] = useState<HireSettings>(initial ?? HIRE_DEFAULTS);
+  const [reveal, setReveal] = useState(true);
+  const [thrown, setThrown] = useState(true);
   const [status, setStatus] = useState('');
-  // Bumped by "restart" to remount the page: projects closed, no text, no
-  // ripples, and a fresh portrait.
+  // Bumped by "restart" to remount the portrait: no text, no ripples, and a
+  // fresh face. The text then fades in again.
   const [run, setRun] = useState(0);
 
   const serialised = serialiseHire(hire);
@@ -70,13 +73,30 @@ const HireLab: FC = () => {
 
   return (
     <>
-      <Home key={run} hire={hire} />
+      <Projects />
+      <Portrait key={run} hire={hire} reveal={reveal} thrown={thrown} />
       <details className={styles.panel} data-no-ripple open>
         <summary className={styles.title}>hire field</summary>
         <p className={styles.hint}>
-          Open and close "projects" to see the reveal. Click anywhere for a
+          Turn "show text" off and on to see the fade. Click anywhere for a
           ripple.
         </p>
+        <label className={styles.inline}>
+          <input
+            type="checkbox"
+            checked={reveal}
+            onChange={(e) => setReveal(e.target.checked)}
+          />
+          show text
+        </label>
+        <label className={styles.inline}>
+          <input
+            type="checkbox"
+            checked={thrown}
+            onChange={(e) => setThrown(e.target.checked)}
+          />
+          throw face
+        </label>
         <label className={styles.inline}>
           message
           <input

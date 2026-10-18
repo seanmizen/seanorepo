@@ -1,3 +1,4 @@
+export * from './eat';
 export * from './hire';
 export * from './params';
 export type { ShaderRippleHandle } from './shader-ripple';

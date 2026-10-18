@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import { HomeLink, Spacer } from '@/components';
-import { Projects } from '@/features';
-import styles from './apps.module.css';
+import { Projects as ProjectList } from '@/features';
+import styles from './projects.module.css';
 
 /*
   No skip link here any more. It was `<a href="#main-content" class="skip-link">`
@@ -11,11 +11,11 @@ import styles from './apps.module.css';
   Blocks asks for a way past content *repeated across pages*; this page has no
   such block, and <main> is already a landmark for anyone navigating by them.
 */
-const Apps: FC = () => (
+const Projects: FC = () => (
   <main className="container">
     <h1 className={styles.static}>seanmizen.com</h1>
     <h2 className={styles.heading}>projects</h2>
-    <Projects />
+    <ProjectList />
     <Spacer />
     <nav aria-label="Site">
       <HomeLink />
@@ -23,4 +23,4 @@ const Apps: FC = () => (
   </main>
 );
 
-export { Apps };
+export { Projects };

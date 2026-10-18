@@ -1,8 +1,9 @@
-import type { FC, Ref } from 'react';
+import type { FC, Ref, RefObject } from 'react';
 import { useContext, useEffect, useImperativeHandle, useRef } from 'react';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three-stdlib';
 import { ThemeContext } from '@/providers';
+import type { EatSettings } from './eat';
 import glyphLightFrag from './frag-glyph-light.glsl';
 import glyphFrag from './frag-glyphs.glsl';
 import frag from './frag-stippling.glsl';
@@ -116,19 +117,82 @@ type ShaderRippleProps = {
   size?: number;
   onFps?: (fps: number) => void;
   /* Turns on the hire field: the message as text around the edges of the
-     view, written out by a reveal front while `reveal` is true. */
+     view, faded in while `reveal` is true. */
   hire?: HireSettings;
   reveal?: boolean;
-  /* Elements whose combined box the hire field keeps clear of text. */
-  clearSelector?: string;
+  /* While true, the face is thrown: it flies to `landing` and shrinks into
+     a small pulsing core on the way. When false, it flies back and opens
+     out into the face again. */
+  thrown?: boolean;
+  /* The core lands in the middle of this element. Without it, or while it
+     has no size, the core lands near the bottom middle of the view. */
+  landing?: RefObject<HTMLElement | null>;
+  /* Venom: once the core has landed, it reaches for the cursor and eats
+     it. Without it, the core leaves the cursor alone. */
+  eat?: EatSettings;
+  /* Keeps every dot and glyph off the page's content: its text, icons and
+     controls. See the content mask below. */
+  clearOfContent?: boolean;
   /* Draws the portrait at this scale; the view around it is unchanged. */
   portraitScale?: number;
   ref?: Ref<ShaderRippleHandle>;
 };
 
-/* The reveal front's soft edge, in world units. */
-const REVEAL_EDGE = 2.5;
+/* The throw: seconds from the face in the middle to the core landed (the
+   way back takes the same), how far into it the face has become the core,
+   and how far the core rises before it falls, in CSS pixels. */
+const THROW_TIME = 0.35;
+const CORE_BY = 0.25;
+const THROW_ARC = 90;
+/* With no landing element, the core lands this far above the bottom middle
+   of the view, in CSS pixels. */
+const LAND_FALLBACK = 40;
 
+/* Set on the root element while the core has eaten the cursor. index.css
+   hides the cursor for it. */
+const EATEN_CLASS = 'cursor-eaten';
+
+/* The core: its radius in world units (the face is about 8 across), how
+   much it pulses either way, and how far its middle wanders. */
+const CORE_RADIUS = 0.15;
+const CORE_PULSE = 0.25;
+const CORE_DRIFT = 0.07;
+/* How fast the pulse and the drift wander, in rough cycles a second. */
+const CORE_PACE = 0.7;
+
+/* Smooth noise from -1 to 1: two layers of value noise, so it never
+   settles into a rhythm. Each `seed` gives its own stream. */
+const wander = (t: number, seed: number) => {
+  const layer = (x: number) => {
+    const i = Math.floor(x);
+    const f = x - i;
+    const at = (n: number) => {
+      const h = Math.sin(n * 127.1 + seed * 311.7) * 43758.5453;
+      return 2 * (h - Math.floor(h)) - 1;
+    };
+    return at(i) + (at(i + 1) - at(i)) * f * f * (3 - 2 * f);
+  };
+  return 0.65 * layer(t) + 0.35 * layer(2.3 * t + 17);
+};
+
+/* The content mask: a small texture, white wherever the page has content.
+   The dots and the glyphs fade out wherever it is white. It is built from
+   the line boxes of every text node, plus the boxes of the elements below,
+   so it fits any page with no selectors. MASK_SCALE is texels per CSS
+   pixel. MASK_PAD is the clear space around content, and MASK_SOFT is the
+   distance over which that space fades out, both in CSS pixels. */
+const MASK_SCALE = 0.5;
+const MASK_PAD = 4;
+const MASK_SOFT = 12;
+const MASK_ELEMENTS = 'img, svg, video, input, button, select, textarea';
+/* The computed background of an element that paints none. */
+const NO_BACKGROUND = 'rgba(0, 0, 0, 0)';
+
+const easeInCubic = (x: number) => x ** 3;
+const smoothstep = (from: number, to: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - from) / (to - from)));
+  return t * t * (3 - 2 * t);
+};
 const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
 
 const seed = (pos: Float32Array, vel: Float32Array) => {
@@ -157,7 +221,10 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
   onFps,
   hire,
   reveal = false,
-  clearSelector,
+  thrown = false,
+  landing,
+  eat,
+  clearOfContent = false,
   portraitScale = 1,
   ref,
 }) => {
@@ -172,7 +239,10 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     onFps,
     hire,
     reveal,
-    clearSelector,
+    thrown,
+    landing,
+    eat,
+    clearOfContent,
     portraitScale,
   });
   live.current = {
@@ -181,7 +251,10 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     onFps,
     hire,
     reveal,
-    clearSelector,
+    thrown,
+    landing,
+    eat,
+    clearOfContent,
     portraitScale,
   };
 
@@ -291,6 +364,73 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     for (const key of RIPPLE_KEYS) {
       rippleUniforms[uniformName(key)] = { value: params[key] };
     }
+    // The face's passes skip ripples that started before this time on the
+    // ripple clock. It moves on when the face comes home, so ripples from
+    // /projects leave the face alone. The text field sees every ripple.
+    const faceTaps = { u_tapsFrom: { value: -1 } };
+
+    // The content mask. A resize makes a new texture: a texture keeps the
+    // size of its first upload.
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = 1;
+    maskCanvas.height = 1;
+    const maskCtx = maskCanvas.getContext('2d');
+    const makeMaskTexture = () => {
+      const texture = new THREE.CanvasTexture(maskCanvas);
+      texture.minFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      return texture;
+    };
+    const contentMask = { value: makeMaskTexture() };
+    const range = document.createRange();
+    const drawMask = () => {
+      if (!maskCtx) return;
+      const bounds = renderer.domElement.getBoundingClientRect();
+      const w = Math.max(1, Math.round(bounds.width * MASK_SCALE));
+      const h = Math.max(1, Math.round(bounds.height * MASK_SCALE));
+      if (maskCanvas.width !== w || maskCanvas.height !== h) {
+        maskCanvas.width = w;
+        maskCanvas.height = h;
+        contentMask.value.dispose();
+        contentMask.value = makeMaskTexture();
+      }
+      maskCtx.clearRect(0, 0, w, h);
+      maskCtx.fillStyle = '#fff';
+      maskCtx.shadowColor = '#fff';
+      maskCtx.shadowBlur = MASK_SOFT * MASK_SCALE;
+      const fill = (box: DOMRect) => {
+        if (box.width === 0 || box.height === 0) return;
+        maskCtx.fillRect(
+          (box.left - bounds.left - MASK_PAD) * MASK_SCALE,
+          (box.top - bounds.top - MASK_PAD) * MASK_SCALE,
+          (box.width + 2 * MASK_PAD) * MASK_SCALE,
+          (box.height + 2 * MASK_PAD) * MASK_SCALE,
+        );
+      };
+      // One box a line of text, so a paragraph clears its own shape and
+      // not the whole width of its column.
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+      );
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!/\S/.test(node.nodeValue ?? '')) continue;
+        range.selectNodeContents(node);
+        for (const box of range.getClientRects()) fill(box);
+      }
+      // One whole box for each control, icon and image, and for anything
+      // that paints its own background, such as a code block or a swatch.
+      for (const el of document.body.getElementsByTagName('*')) {
+        if (
+          el.matches(MASK_ELEMENTS) ||
+          getComputedStyle(el).backgroundColor !== NO_BACKGROUND
+        ) {
+          fill(el.getBoundingClientRect());
+        }
+      }
+      contentMask.value.needsUpdate = true;
+    };
+
     const simUniforms: Record<string, THREE.IUniform> = {};
     for (const key of SIM_KEYS) {
       simUniforms[uniformName(key)] = { value: params[key] };
@@ -304,12 +444,14 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     Object.assign(velVar.material.uniforms, {
       ...shared,
       ...rippleUniforms,
+      ...faceTaps,
       ...simUniforms,
       u_bgTexture: bgTexture,
       u_textureOffset: textureOffset,
     });
     Object.assign(offVar.material.uniforms, {
       ...rippleUniforms,
+      ...faceTaps,
       ...simUniforms,
     });
 
@@ -320,6 +462,9 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     const indices = new Float32Array(n);
     for (let i = 0; i < n; i++) indices[i] = i;
     geometry.setAttribute('a_index', new THREE.BufferAttribute(indices, 1));
+    const random = new Float32Array(4 * n);
+    for (let i = 0; i < random.length; i++) random[i] = Math.random();
+    geometry.setAttribute('a_random', new THREE.BufferAttribute(random, 4));
     geometry.setAttribute(
       'position',
       new THREE.BufferAttribute(new Float32Array(3 * n), 3),
@@ -327,6 +472,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
     const uniforms = {
       ...rippleUniforms,
+      ...faceTaps,
+      u_contentMask: contentMask,
       u_width: { value: simSize },
       u_height: { value: simSize },
       u_particleSize: { value: 0 },
@@ -340,6 +487,17 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_accent: { value: new THREE.Color() },
       u_tintEdge: { value: new THREE.Vector2() },
       u_swell: { value: 0 },
+      u_collapse: { value: 0 },
+      u_coreSize: { value: CORE_RADIUS },
+      u_coreAt: { value: new THREE.Vector2() },
+      u_throwAt: { value: new THREE.Vector2() },
+      u_cursor: { value: new THREE.Vector2() },
+      u_grab: { value: 0 },
+      u_tendrils: { value: 1 },
+      u_tendrilShare: { value: 0 },
+      u_spread: { value: 0 },
+      u_strand: { value: 0 },
+      u_wiggle: { value: 0 },
       u_rest: { value: 1 },
       u_afterglow: { value: 0 },
     };
@@ -376,6 +534,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     });
     const lightUniforms = {
       ...rippleUniforms,
+      u_tapsFrom: { value: -1 },
+      u_contentMask: contentMask,
       u_viewPx: { value: new THREE.Vector2() },
       u_cellPx: { value: new THREE.Vector2() },
       u_halfExtent: { value: new THREE.Vector2() },
@@ -386,14 +546,9 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_hire: { value: 0 },
       u_textStrength: { value: 0 },
       u_textDrift: { value: 0 },
-      u_revealR: { value: 0 },
-      u_revealEdge: { value: REVEAL_EDGE },
-      u_revealMoving: { value: 0 },
-      u_revealGlow: { value: 0 },
-      u_revealFade: { value: 1 },
+      u_revealFade: { value: 0 },
       u_clearFace: { value: 0 },
       u_clearSoft: { value: 1 },
-      u_clearRect: { value: new THREE.Vector4() },
     };
     const lightMaterial = new THREE.ShaderMaterial({
       uniforms: lightUniforms,
@@ -441,9 +596,9 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     grid.renderOrder = -1;
     scene.add(grid);
 
-    // The reveal: `r` runs from 0 (no text) to 1 (text out to the corners).
-    // A change of `reveal` eases it from where it is to the other end.
-    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    // The reveal: `r` runs from 0 (no text) to 1 (the text at full
+    // strength). A change of `reveal` eases it from where it is to the
+    // other end.
     const revealState = {
       target: false,
       from: 0,
@@ -452,36 +607,36 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       duration: 1,
     };
 
-    // The content box the text keeps clear of, in world units.
-    const clearBox = new THREE.Vector4();
-    const measureClear = () => {
-      clearBox.set(0, 0, 0, 0);
-      const selector = live.current.clearSelector;
-      if (!selector) return;
-      let left = Infinity;
-      let top = Infinity;
-      let right = -Infinity;
-      let bottom = -Infinity;
-      // Measure each element's contents, not its box: a block is as wide as
-      // its container, but its text may take a third of that.
-      const range = document.createRange();
-      for (const el of document.querySelectorAll(selector)) {
-        range.selectNodeContents(el);
-        const box = range.getBoundingClientRect();
-        if (box.width === 0 || box.height === 0) continue;
-        left = Math.min(left, box.left);
-        top = Math.min(top, box.top);
-        right = Math.max(right, box.right);
-        bottom = Math.max(bottom, box.bottom);
-      }
-      if (right <= left) return;
-      const bounds = renderer.domElement.getBoundingClientRect();
-      const toX = (x: number) =>
-        ((x - bounds.left) / bounds.width) * 2 * view.halfX - view.halfX;
-      const toY = (y: number) =>
-        view.halfY - ((y - bounds.top) / bounds.height) * 2 * view.halfY;
-      clearBox.set(toX(left), toY(bottom), toX(right), toY(top));
+    // The throw: `at` runs at a steady rate from 0 (the face in the middle)
+    // to 1 (the core landed) while `thrown` is true, and back to 0 while it
+    // is false. Everything the throw draws depends on `at` alone, so a turn
+    // at any point plays the throw backward from there.
+    // `thrown` is the value from the last frame, to see the face turn for
+    // home.
+    const throwState = { at: 0, thrown: false };
+
+    // Where the core lands, in CSS pixels from the canvas's top left. It
+    // keeps the last place it saw, so the way back still has a start once
+    // the landing element is gone.
+    const land = { x: 0, y: 0, seen: false };
+
+    // Venom: how far the tendrils reach (0 to 1), whether the core has
+    // eaten the cursor, and when it last ate it, in real seconds.
+    const eatState = { grab: 0, eaten: false, gulpAt: -1e9 };
+
+    // The cursor, in client pixels. Touch has no cursor to eat.
+    const pointer = { x: 0, y: 0, in: false };
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return;
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+      pointer.in = true;
     };
+    const onPointerLeave = () => {
+      pointer.in = false;
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    document.documentElement.addEventListener('pointerleave', onPointerLeave);
 
     let nTaps = 0;
     let now = 0;
@@ -547,7 +702,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       // The ripples keep their own clock, so time scale slows them without
       // touching the sim step. Clamp the gap so a background tab does not
       // jump every ripple to its end.
-      now += (Math.min(t - last, 100) / 1000) * p.timeScale;
+      const gap = Math.min(t - last, 100) / 1000;
+      now += gap * p.timeScale;
       last = t;
       rippleUniforms.u_now.value = now;
 
@@ -576,6 +732,9 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
       if (live.current.portraitScale !== view.scale) resize(view.w, view.h);
 
+      // Often enough to follow a scroll, a resize or a section opening.
+      if (live.current.clearOfContent && frames % 4 === 0) drawMask();
+
       // The reveal follows `reveal`, in real seconds.
       const h = live.current.hire;
       const wantReveal = Boolean(h && live.current.reveal);
@@ -585,12 +744,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         revealState.from = revealState.r;
         revealState.since = realNow;
         const distance = wantReveal ? 1 - revealState.r : revealState.r;
-        revealState.duration = reducedMotion.matches
-          ? 0.3
-          : Math.max(0.05, (h?.revealTime ?? 1) * distance);
-        // The content has just changed size (the list opened or closed), so
-        // measure now rather than a few frames late.
-        measureClear();
+        revealState.duration = Math.max(0.05, (h?.revealTime ?? 1) * distance);
       }
       const progress = Math.min(
         1,
@@ -600,6 +754,93 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         revealState.from +
         ((revealState.target ? 1 : 0) - revealState.from) *
           easeOutCubic(progress);
+
+      // The throw moves `at` toward its end at a steady rate.
+      const thrown = live.current.thrown;
+      if (throwState.thrown && !thrown) faceTaps.u_tapsFrom.value = now;
+      throwState.thrown = thrown;
+      const step = (thrown ? gap : -gap) / THROW_TIME;
+      throwState.at = Math.min(1, Math.max(0, throwState.at + step));
+      const at = throwState.at;
+
+      // The face falls into its core by CORE_BY of the way: slowly at
+      // first, then faster and faster. Played backward, it bursts out fast
+      // and slows.
+      uniforms.u_collapse.value = easeInCubic(Math.min(1, at / CORE_BY));
+
+      const bounds = renderer.domElement.getBoundingClientRect();
+      const worldPerPx = (2 * view.halfY) / Math.max(view.h, 1);
+      const slot = live.current.landing?.current;
+      if (slot) {
+        const box = slot.getBoundingClientRect();
+        land.seen = box.width > 0;
+        land.x = box.left + box.width / 2 - bounds.left;
+        land.y = box.top + box.height / 2 - bounds.top;
+      }
+      if (!land.seen) {
+        land.x = view.w / 2;
+        land.y = view.h - LAND_FALLBACK;
+      }
+
+      // The path, in CSS pixels from the middle with y up: x moves at a
+      // steady speed, and y = a at + b at^2 tops out THROW_ARC above the
+      // start and ends `drop` below it.
+      const drop = Math.max(0, land.y - view.h / 2);
+      const a =
+        2 * THROW_ARC + 2 * Math.sqrt(THROW_ARC * THROW_ARC + THROW_ARC * drop);
+      const b = -drop - a;
+      uniforms.u_throwAt.value.set(
+        (land.x - view.w / 2) * at * worldPerPx,
+        (a * at + b * at * at) * worldPerPx,
+      );
+
+      // Venom: once the core has landed, its tendrils reach for a cursor
+      // that comes inside `reach`, and touch it at `eatRadius`. There the
+      // core eats the cursor: the tendrils pull back, the core gulps, and
+      // the cursor stays hidden until it moves out past `release`.
+      const e = live.current.eat;
+      let reachFor = 0;
+      if (e && at >= 1 && pointer.in) {
+        const d = Math.hypot(
+          pointer.x - bounds.left - land.x,
+          pointer.y - bounds.top - land.y,
+        );
+        if (eatState.eaten ? d > e.release : d < e.eatRadius) {
+          eatState.eaten = !eatState.eaten;
+          if (eatState.eaten) eatState.gulpAt = realNow;
+        }
+        if (!eatState.eaten) reachFor = smoothstep(e.reach, e.eatRadius, d);
+      } else {
+        eatState.eaten = false;
+      }
+      document.documentElement.classList.toggle(EATEN_CLASS, eatState.eaten);
+      eatState.grab +=
+        (reachFor - eatState.grab) * (1 - Math.exp(-gap * (e?.lunge ?? 10)));
+      uniforms.u_grab.value = eatState.grab;
+      uniforms.u_cursor.value.set(
+        (pointer.x - bounds.left - view.w / 2) * worldPerPx,
+        (view.h / 2 - (pointer.y - bounds.top)) * worldPerPx,
+      );
+      if (e) {
+        uniforms.u_tendrils.value = e.tendrils;
+        uniforms.u_tendrilShare.value = e.share;
+        uniforms.u_spread.value = e.spread;
+        uniforms.u_strand.value = e.strand * worldPerPx;
+        uniforms.u_wiggle.value = e.wiggle * worldPerPx;
+      }
+      // The gulp: a quick swell that dies away.
+      const sinceGulp = realNow - eatState.gulpAt;
+      const gulp =
+        (e?.gulp ?? 0) * Math.min(1, sinceGulp * 25) * Math.exp(-sinceGulp * 7);
+
+      // The core pulses and wanders about its middle.
+      const pace = realNow * CORE_PACE;
+      uniforms.u_coreSize.value =
+        CORE_RADIUS * (1 + CORE_PULSE * wander(pace, 1)) * (1 + gulp);
+      uniforms.u_coreAt.value.set(
+        CORE_DRIFT * wander(pace, 2),
+        CORE_DRIFT * wander(pace, 3),
+      );
 
       // Crossfade a click front from the inner look to the nebula look.
       if (h) {
@@ -645,24 +886,13 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         gridUniforms.u_message.value = isText ? 1 : 0;
 
         if (h) {
-          // Often enough to follow an opening list and a scroll.
-          if (frames % 4 === 0) measureClear();
-          const reach = Math.hypot(view.halfX, view.halfY) + 2 * REVEAL_EDGE;
-          const reduced = reducedMotion.matches;
           lightUniforms.u_hire.value = 1;
           lightUniforms.u_afterglow.value = 0.6;
           lightUniforms.u_textStrength.value = h.textStrength;
           lightUniforms.u_textDrift.value = h.textDrift;
-          lightUniforms.u_revealR.value = reduced
-            ? reach
-            : revealState.r * reach;
-          lightUniforms.u_revealMoving.value =
-            reduced || progress >= 1 ? 0 : 1 - progress ** 4;
-          lightUniforms.u_revealFade.value = reduced ? revealState.r : 1;
-          lightUniforms.u_revealGlow.value = h.revealGlow;
+          lightUniforms.u_revealFade.value = revealState.r;
           lightUniforms.u_clearFace.value = h.clearFace;
           lightUniforms.u_clearSoft.value = h.clearSoft;
-          lightUniforms.u_clearRect.value.copy(clearBox);
           gridUniforms.u_fill.value = 1;
           gridUniforms.u_gridAlpha.value = 1;
           gridUniforms.u_flicker.value = 0;
@@ -710,6 +940,12 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('click', startRipple, true);
+      window.removeEventListener('pointermove', onPointerMove);
+      document.documentElement.removeEventListener(
+        'pointerleave',
+        onPointerLeave,
+      );
+      document.documentElement.classList.remove(EATEN_CLASS);
       gpuSim.dispose();
       geometry.dispose();
       material.dispose();
@@ -718,6 +954,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       lightMaterial.dispose();
       lightTarget.dispose();
       atlas.texture.dispose();
+      contentMask.value.dispose();
       observer?.disconnect();
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) {

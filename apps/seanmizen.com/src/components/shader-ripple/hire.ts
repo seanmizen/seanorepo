@@ -1,10 +1,11 @@
 import type { RippleParams } from './params';
 import { DEFAULTS, MAX_MESSAGE } from './params';
 
-/* The home page's text field: a message that a reveal front writes out
-   from the face when "projects" opens, kept clear of the face and of the
-   page content. A click's front runs out from the portrait in the home
-   page's look and, past `crossfade`, in the nebula look. */
+/* The projects page's text field: a message that fades in around the
+   face on /projects, kept clear of the face. The content mask keeps it
+   off the page's content. A
+   click's front runs out from the portrait in the home page's look and,
+   past `crossfade`, in the nebula look. */
 type HireSettings = {
   message: string;
   letterSize: number;
@@ -14,7 +15,6 @@ type HireSettings = {
   clearSoft: number;
   crossfade: number;
   revealTime: number;
-  revealGlow: number;
 };
 
 type HireNumericKey = Exclude<keyof HireSettings, 'message'>;
@@ -37,7 +37,6 @@ const HIRE_DEFAULTS: HireSettings = {
   clearSoft: 2,
   crossfade: 9,
   revealTime: 5,
-  revealGlow: 0.3,
 };
 
 const HIRE_DEFS: HireDef[] = [
@@ -79,7 +78,7 @@ const HIRE_DEFS: HireDef[] = [
     min: 0.05,
     max: 2,
     step: 0.05,
-    hint: 'How gently the text fades in at the edge of the clear areas.',
+    hint: 'How gently the text fades in at the edge of the clear area.',
   },
   {
     key: 'crossfade',
@@ -91,19 +90,11 @@ const HIRE_DEFS: HireDef[] = [
   },
   {
     key: 'revealTime',
-    label: 'reveal time',
+    label: 'fade time',
     min: 0.3,
     max: 5,
     step: 0.05,
-    hint: 'Seconds for the reveal front to write the text out to the edges.',
-  },
-  {
-    key: 'revealGlow',
-    label: 'edge glow',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    hint: 'How brightly the reveal front glows as it writes the text. It scrambles the letters either way.',
+    hint: 'Seconds for the text to fade in, and to fade out again.',
   },
 ];
 

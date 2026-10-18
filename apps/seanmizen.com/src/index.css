@@ -199,6 +199,21 @@ span[class*="is-closed"] + div {
   z-index: 10;
 }
 
+/* Where the thrown face lands on /projects: an empty space the size of the
+   theme toggle, to its left, as if it were one more button. */
+.singularity-slot {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+/* The core on /projects has eaten the cursor. :root lifts this above the
+   one-class rules that set a cursor, such as a button's pointer. */
+:root.cursor-eaten,
+:root.cursor-eaten * {
+  cursor: none;
+}
+
 /* enforce auto color theme for mobile users */
 @media only screen and (max-width: 440px) {
   .bottom-right-controls {
