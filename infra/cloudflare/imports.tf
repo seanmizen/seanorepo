@@ -84,6 +84,11 @@ import {
 }
 
 import {
+  to = cloudflare_dns_record.seanmizen_com_cous_cname
+  id = "428a9a9f5e22c95bc7e67faa7d5ab942/1a7bc02f7247eb066cbfeb28ea4c53da"
+}
+
+import {
   to = cloudflare_dns_record.seanmizen_com_minecraft_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/ad222b4342cb7f554ab007ecdbbb9938"
 }
