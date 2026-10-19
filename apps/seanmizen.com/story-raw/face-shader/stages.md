@@ -219,3 +219,35 @@ mask how much space it needs.
 Screenshots: `10-tight-toggle/`. `toggle-before-after.png` shows the core
 and its tendrils with the cursor near. `circle-before-after.png` shows the
 whole page. "Before" is the stage 9 sample in both.
+
+## 11: springy venom
+
+Sean:
+
+```text
+Venom right now looks too deterministic. the tendrils are predictable (you might want to consider a noisier function to compute the flailing angle and distance) and I don't like the way in which it reaches out. not springy enough.
+```
+
+Before, one value moved all the tendrils: it eased toward its target with no
+overshoot, the tendrils fanned out at fixed angles, and a sine wave writhed
+them. Claude moved the tendrils into JavaScript. Each tip is a damped spring,
+and its bend is a slower spring behind it, so the tendril whips. Each tendril
+has its own speed and its own rough noise (four layers of value noise), which
+swings the tip off the line to the cursor and stretches it. Now and then a
+twitch kicks a tip. A tendril that lets go pulls back with no bounce. The
+shader only draws each tendril from its tip and bend, and noise writhes it.
+
+The reach changed too. Before, a tendril was as long as the cursor was
+close, so at the edge of reach it hardly left the core. Now the tendrils
+strike once the cursor is 15% inside reach, and are at most 80% of reach
+long. A cursor near the edge is just out of their grasp. The panel lost
+"lunge speed" and got spring, damping, flail angle, flail length, flail pace
+and twitches.
+
+A trap on the way: rsbuild finds the samples when the dev server starts. A
+sample frozen after that serves the live site, so the first "before" sheet
+showed the new code. The freeze script now says to restart the dev server.
+
+Screenshots: `11-springy-venom/venom-before-after.png`. The cursor stops
+108 px from the core, then 56 px, then goes away. Headless Chrome draws
+about 2 frames a second, so this shows shapes, not the spring.

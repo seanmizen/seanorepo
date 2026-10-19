@@ -175,6 +175,43 @@ const wander = (t: number, seed: number) => {
   return 0.65 * layer(t) + 0.35 * layer(2.3 * t + 17);
 };
 
+/* Rougher noise from about -1 to 1: wander() with a faster wander() on
+   top, so it jerks as well as drifts. */
+const jitter = (t: number, seed: number) =>
+  0.6 * wander(t, seed) + 0.4 * wander(3.7 * t, seed + 50);
+
+/* Venom: the most tendrils the shader draws. eat.ts holds the tendrils
+   slider to this. */
+const TENDRILS_MAX = 8;
+/* A tendril strikes once the cursor is this share of `reach` inside it, and
+   is at most this share of `reach` long. A cursor near the edge of reach is
+   just out of its grasp. */
+const STRIKE_IN = 0.15;
+const TENDRIL_LENGTH = 0.8;
+/* A twitch kicks a tendril's tip about this share of its length off its
+   course. */
+const TWITCH_KICK = 0.4;
+
+type Point = { x: number; y: number };
+
+/* One step of a damped spring that pulls `p` toward `to`. `hz` is how fast
+   it swings. `damping` is its damping ratio: 1 does not overshoot, and
+   lower bounces more. */
+const springStep = (
+  p: Point,
+  v: Point,
+  to: Point,
+  hz: number,
+  damping: number,
+  dt: number,
+) => {
+  const w = 2 * Math.PI * hz;
+  v.x += (w * w * (to.x - p.x) - 2 * damping * w * v.x) * dt;
+  v.y += (w * w * (to.y - p.y) - 2 * damping * w * v.y) * dt;
+  p.x += v.x * dt;
+  p.y += v.y * dt;
+};
+
 /* The content mask: a small texture, white wherever the page has content.
    The dots and the glyphs fade out wherever it is white. It is built from
    the line boxes of every text node, plus the boxes of the elements below,
@@ -527,11 +564,12 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_coreSize: { value: CORE_RADIUS },
       u_coreAt: { value: new THREE.Vector2() },
       u_throwAt: { value: new THREE.Vector2() },
-      u_cursor: { value: new THREE.Vector2() },
+      u_tendril: {
+        value: Array.from({ length: TENDRILS_MAX }, () => new THREE.Vector4()),
+      },
       u_grab: { value: 0 },
       u_tendrils: { value: 1 },
       u_tendrilShare: { value: 0 },
-      u_spread: { value: 0 },
       u_strand: { value: 0 },
       u_wiggle: { value: 0 },
       u_rest: { value: 1 },
@@ -654,9 +692,20 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     // the landing element is gone.
     const land = { x: 0, y: 0, seen: false };
 
-    // Venom: how far the tendrils reach (0 to 1), whether the core has
-    // eaten the cursor, and when it last ate it, in real seconds.
-    const eatState = { grab: 0, eaten: false, gulpAt: -1e9 };
+    // Venom: whether the core has eaten the cursor, and when it last ate
+    // it, in real seconds.
+    const eatState = { eaten: false, gulpAt: -1e9 };
+    // Each tendril's tip and bend, and their speeds, in CSS pixels from
+    // the core's middle (y down). `pace` and `seed` make each tendril move
+    // in its own way.
+    const tendrils = Array.from({ length: TENDRILS_MAX }, () => ({
+      tip: { x: 0, y: 0 },
+      tipV: { x: 0, y: 0 },
+      bend: { x: 0, y: 0 },
+      bendV: { x: 0, y: 0 },
+      pace: 0.75 + 0.5 * Math.random(),
+      seed: 1000 * Math.random(),
+    }));
 
     // The cursor, in client pixels. Touch has no cursor to eat.
     const pointer = { x: 0, y: 0, in: false };
@@ -828,37 +877,84 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         (a * at + b * at * at) * worldPerPx,
       );
 
-      // Venom: once the core has landed, its tendrils reach for a cursor
-      // that comes inside `reach`, and touch it at `eatRadius`. There the
-      // core eats the cursor: the tendrils pull back, the core gulps, and
-      // the cursor stays hidden until it moves out past `release`.
+      // Venom: once the core has landed, its tendrils strike at a cursor
+      // that comes inside `reach`. Inside `eatRadius` the core eats the
+      // cursor: the tendrils pull back, the core gulps, and the cursor
+      // stays hidden until it moves out past `release`.
       const e = live.current.eat;
+      const cx = pointer.x - bounds.left - land.x;
+      const cy = pointer.y - bounds.top - land.y;
       let reachFor = 0;
       if (e && at >= 1 && pointer.in) {
-        const d = Math.hypot(
-          pointer.x - bounds.left - land.x,
-          pointer.y - bounds.top - land.y,
-        );
+        const d = Math.hypot(cx, cy);
         if (eatState.eaten ? d > e.release : d < e.eatRadius) {
           eatState.eaten = !eatState.eaten;
           if (eatState.eaten) eatState.gulpAt = realNow;
         }
-        if (!eatState.eaten) reachFor = smoothstep(e.reach, e.eatRadius, d);
+        if (!eatState.eaten) {
+          reachFor = smoothstep(e.reach, (1 - STRIKE_IN) * e.reach, d);
+        }
       } else {
         eatState.eaten = false;
       }
       document.documentElement.classList.toggle(EATEN_CLASS, eatState.eaten);
-      eatState.grab +=
-        (reachFor - eatState.grab) * (1 - Math.exp(-gap * (e?.lunge ?? 10)));
-      uniforms.u_grab.value = eatState.grab;
-      uniforms.u_cursor.value.set(
-        (pointer.x - bounds.left - view.w / 2) * worldPerPx,
-        (view.h / 2 - (pointer.y - bounds.top)) * worldPerPx,
-      );
+
+      // Each tip springs toward the cursor, swung off the line to it and
+      // stretched by noise of its own. Each bend springs after its tip,
+      // more slowly, so the tendril whips. Now and then a twitch kicks a
+      // tip. A tendril that lets go springs back with no bounce.
+      const count = e ? Math.min(e.tendrils, TENDRILS_MAX) : 0;
+      const steps = Math.ceil(gap * 240);
+      let longest = 0;
+      for (const [k, td] of tendrils.entries()) {
+        const out = e && k < count ? reachFor : 0;
+        const t = realNow * (e?.flailPace ?? 1) * td.pace;
+        const toTip = { x: 0, y: 0 };
+        let hz = 1.5 * (e?.spring ?? 3) * td.pace;
+        let damping = 1;
+        if (e && out > 0) {
+          const angle =
+            Math.atan2(cy, cx) +
+            ((e.flail * Math.PI) / 180) * jitter(t, td.seed);
+          const length =
+            Math.min(Math.hypot(cx, cy), TENDRIL_LENGTH * e.reach) *
+            out *
+            (1 + e.stretch * jitter(t, td.seed + 1));
+          toTip.x = length * Math.cos(angle);
+          toTip.y = length * Math.sin(angle);
+          hz = e.spring * td.pace;
+          damping = e.damping;
+          if (Math.random() < e.twitch * gap) {
+            const kick = TWITCH_KICK * length * 2 * Math.PI * hz;
+            const way = 2 * Math.PI * Math.random();
+            td.tipV.x += kick * Math.cos(way);
+            td.tipV.y += kick * Math.sin(way);
+          }
+        }
+        const fan = count > 1 ? (2 * k) / (count - 1) - 1 : 0;
+        const side = (e?.spread ?? 0) * (fan + 0.5 * jitter(t, td.seed + 2));
+        for (let i = 0; i < steps; i++) {
+          const dt = gap / steps;
+          springStep(td.tip, td.tipV, toTip, hz, damping, dt);
+          const toBend = {
+            x: 0.5 * td.tip.x - side * td.tip.y,
+            y: 0.5 * td.tip.y + side * td.tip.x,
+          };
+          springStep(td.bend, td.bendV, toBend, 0.6 * hz, damping, dt);
+        }
+        // To world units, y up.
+        uniforms.u_tendril.value[k].set(
+          td.tip.x * worldPerPx,
+          -td.tip.y * worldPerPx,
+          td.bend.x * worldPerPx,
+          -td.bend.y * worldPerPx,
+        );
+        longest = Math.max(longest, Math.hypot(td.tip.x, td.tip.y));
+      }
+      uniforms.u_grab.value = longest * worldPerPx;
       if (e) {
-        uniforms.u_tendrils.value = e.tendrils;
+        uniforms.u_tendrils.value = count;
         uniforms.u_tendrilShare.value = e.share;
-        uniforms.u_spread.value = e.spread;
         uniforms.u_strand.value = e.strand * worldPerPx;
         uniforms.u_wiggle.value = e.wiggle * worldPerPx;
       }

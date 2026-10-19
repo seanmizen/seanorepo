@@ -3,13 +3,19 @@
    shader-ripple.tsx, and this file and the panel go.
 
    Once the thrown core has landed, a few tendrils reach out of it for a
-   cursor that comes near. A cursor that comes closer still is eaten: it is
-   hidden until it moves away again. */
+   cursor that comes near. Each one moves on springs, and noise swings and
+   stretches it. A cursor that comes closer still is eaten: it is hidden
+   until it moves away again. */
 type EatSettings = {
   reach: number;
   eatRadius: number;
   release: number;
-  lunge: number;
+  spring: number;
+  damping: number;
+  flail: number;
+  stretch: number;
+  flailPace: number;
+  twitch: number;
   tendrils: number;
   share: number;
   spread: number;
@@ -31,7 +37,12 @@ const EAT_DEFAULTS: EatSettings = {
   reach: 120,
   eatRadius: 14,
   release: 28,
-  lunge: 10,
+  spring: 3,
+  damping: 0.3,
+  flail: 30,
+  stretch: 0.25,
+  flailPace: 1.5,
+  twitch: 0.6,
   tendrils: 3,
   share: 0.15,
   spread: 0.3,
@@ -47,7 +58,7 @@ const EAT_DEFS: EatDef[] = [
     min: 20,
     max: 400,
     step: 5,
-    hint: 'The tendrils reach for a cursor inside this distance from the core, in CSS pixels.',
+    hint: 'The tendrils strike at a cursor inside this distance from the core, in CSS pixels. A tendril is at most 80% of it long.',
   },
   {
     key: 'eatRadius',
@@ -66,17 +77,58 @@ const EAT_DEFS: EatDef[] = [
     hint: 'An eaten cursor comes back out past this distance, in CSS pixels. Keep it under 32, or the cursor stays hidden over the theme toggle.',
   },
   {
-    key: 'lunge',
-    label: 'lunge speed',
-    min: 1,
-    max: 40,
-    step: 0.5,
-    hint: 'How fast the tendrils reach out and pull back. Higher is snappier.',
+    key: 'spring',
+    label: 'spring',
+    min: 0.5,
+    max: 10,
+    step: 0.1,
+    hint: 'How fast a tendril swings toward where it reaches, in swings a second. Each tendril is a little faster or slower than this.',
+  },
+  {
+    key: 'damping',
+    label: 'damping',
+    min: 0.05,
+    max: 1,
+    step: 0.01,
+    hint: 'How fast a bounce dies. Lower is springier. At 1 a tendril does not overshoot. A tendril that lets go always pulls back with no bounce.',
+  },
+  {
+    key: 'flail',
+    label: 'flail angle',
+    min: 0,
+    max: 90,
+    step: 1,
+    hint: 'How far noise swings a tendril off the line to the cursor, in degrees.',
+  },
+  {
+    key: 'stretch',
+    label: 'flail length',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    hint: 'How much noise makes a tendril longer or shorter, against its length.',
+  },
+  {
+    key: 'flailPace',
+    label: 'flail pace',
+    min: 0.1,
+    max: 6,
+    step: 0.05,
+    hint: 'How fast the flailing changes, in rough changes a second.',
+  },
+  {
+    key: 'twitch',
+    label: 'twitches',
+    min: 0,
+    max: 5,
+    step: 0.05,
+    hint: 'How often a tendril twitches while it reaches, in twitches a second. A twitch kicks its tip off course.',
   },
   {
     key: 'tendrils',
     label: 'tendrils',
     min: 1,
+    // TENDRILS_MAX in shader-ripple.tsx, and the size of u_tendril.
     max: 8,
     step: 1,
     hint: 'How many tendrils reach for the cursor.',

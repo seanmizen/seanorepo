@@ -237,4 +237,8 @@ mountSample(
 `,
 );
 
-console.log(`Froze ${dest}. Run yarn fix, then add the stage to story.ts.`);
+// rsbuild.config.js finds the stages when the dev server starts. Until it
+// restarts, the new sample's page serves the live site instead.
+console.log(
+  `Froze ${dest}. Run yarn fix, then add the stage to story.ts. Restart the dev server to serve the new sample.`,
+);

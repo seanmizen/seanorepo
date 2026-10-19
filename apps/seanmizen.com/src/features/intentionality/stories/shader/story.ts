@@ -185,6 +185,20 @@ It will be helpful to extract a side-by-side comparison of before and after for 
       ],
       sample: 's10-tight-toggle',
     },
+    {
+      title: 'springy venom',
+      messages: [
+        {
+          from: 'sean',
+          text: `Venom right now looks too deterministic. the tendrils are predictable (you might want to consider a noisier function to compute the flailing angle and distance) and I don't like the way in which it reaches out. not springy enough.`,
+        },
+        {
+          from: 'claude',
+          text: 'Each tendril tip is now a damped spring, and its bend is a slower spring behind it, so the tendril whips. Rough noise of its own swings each tip off the line to the cursor and stretches it, and now and then a twitch kicks it. Noise writhes it, not a sine wave. The reach changed too: the tendrils strike as soon as the cursor comes into reach, but they cannot reach all the way out. The panel has new sliders for the spring and the flailing.',
+        },
+      ],
+      sample: 's11-springy-venom',
+    },
   ],
 };
 

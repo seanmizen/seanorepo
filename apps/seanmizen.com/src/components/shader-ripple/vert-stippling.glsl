@@ -23,12 +23,12 @@ uniform vec2 u_coreAt;       // how far the core has wandered off its middle
 uniform vec2 u_throwAt;      // where the throw has carried the shape, in world units
 uniform sampler2D u_contentMask;  // white where the page has content
 
-// Venom: tendrils from the core that reach for the cursor.
-uniform vec2 u_cursor;         // the cursor, in world units
-uniform float u_grab;          // 0: no tendrils; 1: their tips touch the cursor
+// Venom: tendrils from the core that reach for the cursor. JavaScript moves
+// each tendril's tip and bend on springs. Here they are only drawn.
+uniform vec4 u_tendril[8];     // a tendril's tip (xy) and bend (zw), from the core's middle, in world units
+uniform float u_grab;          // the longest tendril, in world units; 0: none out
 uniform float u_tendrils;      // how many tendrils
 uniform float u_tendrilShare;  // the share of the core's dots that make them
-uniform float u_spread;        // how far they fan out, against their length
 uniform float u_strand;        // a tendril's width at its root, in world units
 uniform float u_wiggle;        // how far a tendril writhes, in world units
 
@@ -72,30 +72,32 @@ void main() {
         position.xy += u_throwAt;
 
         // Venom: a share of the core's dots leave it and reach for the
-        // cursor, as a few curved tendrils that fan out and meet at the tip.
-        // Each dot keeps its own tendril, its place along it (f, 0 at the
-        // core) and its place across it.
+        // cursor, as a few curved tendrils. Each dot keeps its own tendril,
+        // its place along it (f, 0 at the core) and its place across it.
         if (u_grab > 0.001 && a_random.x < u_tendrilShare) {
-            float k = floor(a_random.y * u_tendrils);
+            float k = min(floor(a_random.y * u_tendrils), 7.0);
+            vec4 tendril = u_tendril[int(k)];
             float f = a_random.z;
             vec2 root = u_throwAt + u_coreAt;
-            vec2 tip = mix(root, u_cursor, u_grab);
-            vec2 along = tip - root;
-            vec2 side = vec2(-along.y, along.x);
-            vec2 unitSide = side / max(length(side), 0.0001);
-            float fan = u_tendrils > 1.0 ? 2.0 * k / (u_tendrils - 1.0) - 1.0 : 0.0;
-            vec2 bend = root + 0.5 * along + fan * u_spread * side;
+            vec2 bend = root + tendril.zw;
+            vec2 tip = root + tendril.xy;
             vec2 onCurve = mix(mix(root, bend, f), mix(bend, tip, f), f);
-            // Thick at the root and thin at the tip. A wave runs out along
-            // the tendril, held still at both ends.
+            vec2 along = mix(bend - root, tip - bend, f);
+            vec2 unitSide = vec2(-along.y, along.x) / max(length(along), 0.0001);
+            // Thick at the root and thin at the tip. Noise writhes it, held
+            // still at both ends. The noise runs out along the tendril and
+            // changes its shape as it goes, so no two writhes are the same.
             float across = u_strand * (1.0 - f) * (a_random.w - 0.5);
-            float writhe = u_wiggle * 4.0 * f * (1.0 - f) * sin(9.0 * f - 7.0 * u_now + 2.1 * k);
+            float wave = noise3(vec3(3.0 * f - 2.3 * u_now, 5.7 * k, 0.9 * u_now));
+            float writhe = u_wiggle * 6.0 * f * (1.0 - f) * wave;
             onCurve += unitSide * (across + writhe);
-            position.xy = mix(position.xy, onCurve, u_collapse);
+            // A tendril that has pulled back takes its dots into the core.
+            float extended = smoothstep(0.0, 2.0 * u_coreSize, length(tendril.xy));
+            position.xy = mix(position.xy, onCurve, extended * u_collapse);
             // The face sizes a dot by how dark its place in the photo is,
             // which leaves most dots too small to see once spread out. In a
             // tendril every dot takes one size.
-            relativeSize = mix(relativeSize, 0.8, u_collapse);
+            relativeSize = mix(relativeSize, 0.8, extended * u_collapse);
         }
 
         // Calculate the model view position
