@@ -132,6 +132,9 @@ type ShaderRippleProps = {
   clearOfContent?: boolean;
   /* Draws the portrait at this scale; the view around it is unchanged. */
   portraitScale?: number;
+  /* The picture the dots draw: a URL of a square image. Without it, Sean's
+     portrait. Changing it rebuilds the sim. */
+  image?: string;
   ref?: Ref<ShaderRippleHandle>;
 };
 
@@ -368,6 +371,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
   landing,
   clearOfContent = false,
   portraitScale = 1,
+  image = bgImage,
   ref,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -608,7 +612,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     }
     simUniforms.u_springBack = { value: params.springBack ? 1 : 0 };
 
-    const bgTexture = { value: new THREE.TextureLoader().load(bgImage) };
+    const bgTexture = { value: new THREE.TextureLoader().load(image) };
     const textureOffset = { value: new THREE.Vector2(12, 12) };
 
     Object.assign(posVar.material.uniforms, shared);
@@ -1326,9 +1330,9 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         mount.removeChild(renderer.domElement);
       }
     };
-    // Only the sim's shape rebuilds it. Every other param is read live,
-    // through `live`.
-  }, [simSize, size]);
+    // Only the sim's shape and its picture rebuild it. Every other param is
+    // read live, through `live`.
+  }, [simSize, size, image]);
 
   // A fill stage (size 0) covers its positioned parent; the canvas then
   // tracks that size.

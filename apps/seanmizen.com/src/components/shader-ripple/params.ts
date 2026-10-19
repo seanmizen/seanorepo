@@ -649,7 +649,8 @@ const HOME_PARAMS: RippleParams = { ...DEFAULTS, ...PRESETS.tsunami };
 /* `size` is the canvas edge in CSS pixels, or 0 to fill the stage. */
 type StageSettings = { simSize: number; size: number };
 
-const STAGE_DEFAULTS: StageSettings = { simSize: 64, size: 500 };
+/* size 0 fills the stage. */
+const STAGE_DEFAULTS: StageSettings = { simSize: 64, size: 0 };
 const SIM_SIZES = [32, 48, 64, 80, 96];
 
 /* Everything a setup needs, as one string: a version tag, then compact
