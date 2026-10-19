@@ -12,12 +12,13 @@
 }
 
 /*
-  A line of text (as on home) belongs to the title, so it keeps close to it
-  and takes 0.5rem more below, before the list. A heading (as on /projects)
+  A line of text (as on home) belongs to the title, so it keeps close to it,
+  is not dimmed, and takes 0.5rem more below, before the list. A heading (as on /projects)
   belongs to the list under it: the 0.5rem goes above the first one instead
   (see projects.module.css). The first entity lands at the same height on
   both pages.
 */
 p.subtitle {
   padding-bottom: 0.7rem;
+  opacity: 1;
 }
