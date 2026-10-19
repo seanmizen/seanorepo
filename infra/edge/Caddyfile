@@ -49,6 +49,10 @@ http://minecraft.{$EDGE_HOST}.local {
 	reverse_proxy minecraft-seanmizen-com:4042
 }
 
+http://cous.{$EDGE_HOST}.local {
+	reverse_proxy cous:4070
+}
+
 http://seansconverter.{$EDGE_HOST}.local {
 	handle /api/* {
 		reverse_proxy seansconverter-backend:4051

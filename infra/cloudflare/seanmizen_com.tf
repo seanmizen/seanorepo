@@ -36,6 +36,15 @@ resource "cloudflare_dns_record" "seanmizen_com_hue_a" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
+resource "cloudflare_dns_record" "seanmizen_com_cous_cname" {
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
+  name    = "cous.seanmizen.com"
+  proxied = true
+  ttl     = 1
+  type    = "CNAME"
+  zone_id = cloudflare_zone.seanmizen_com.id
+}
+
 resource "cloudflare_dns_record" "seanmizen_com_minecraft_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
   name    = "minecraft.seanmizen.com"

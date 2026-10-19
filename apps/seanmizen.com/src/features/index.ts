@@ -1,4 +1,3 @@
-export { Cous } from './cous';
 export { Donate } from './donate';
 export { Github } from './github';
 export { Intentionality, StoryPage, stories } from './intentionality';

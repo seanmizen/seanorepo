@@ -1,0 +1,26 @@
+FROM node:lts-slim AS dev
+WORKDIR /app/apps/cous
+# Source is mounted by docker-compose's dev profile.
+CMD ["yarn", "rsbuild", "dev", "--port", "4070", "--host", "0.0.0.0"]
+
+FROM node:lts-slim AS prod-build
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+COPY apps/cous/package.json ./apps/cous/
+RUN yarn workspaces focus cous
+
+COPY apps/cous/src ./apps/cous/src
+COPY apps/cous/public ./apps/cous/public
+COPY apps/cous/rsbuild.config.js apps/cous/tsconfig.json ./apps/cous/
+
+ENV NODE_ENV=production
+RUN yarn workspace cous rsbuild build
+
+FROM node:lts-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/cous/dist .
+RUN npm install -g serve
+EXPOSE 4070
+CMD ["serve", "-s", ".", "-l", "4070"]
