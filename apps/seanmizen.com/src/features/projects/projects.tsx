@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { Entity, EntityList, ExternalLink } from '@/components';
+import { Entity, EntityList, ExternalLink, Subtitle } from '@/components';
 import styles from './projects.module.css';
 
 interface Project {
@@ -69,7 +69,7 @@ const Projects: FC = () => (
   <>
     {sections.map(({ title, projects }) => (
       <section key={title} className={styles.section}>
-        <h2 className={styles.title}>{title}</h2>
+        <Subtitle as="h2">{title}</Subtitle>
         <EntityList>
           {projects.map(({ href, blurb, description }) => (
             <Entity key={href} className={styles.row}>

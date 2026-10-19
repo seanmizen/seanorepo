@@ -1,4 +1,6 @@
+/* The text starts where the chevrons start, 0.1rem in. */
 .title {
+  padding-left: 0.1rem;
   font-size: 1.5rem;
   font-weight: normal;
 }

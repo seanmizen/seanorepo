@@ -10,18 +10,6 @@
   padding: 0 0 0.75rem;
 }
 
-.section ul {
-  padding: 0;
-}
-
-/* Lines up with the names, after the chevron column. */
-.title {
-  padding: 0.4rem 0 0.2rem 1.2rem;
-  font-size: 0.95rem;
-  font-weight: normal;
-  opacity: 0.6;
-}
-
 /* An Entity is as wide as its content. A row is as wide as the listing. The
    left column fits the longest name, planning-poker.seanmizen.com. */
 .row {

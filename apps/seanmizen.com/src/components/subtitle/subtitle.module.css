@@ -1,0 +1,21 @@
+/* The text starts where an entity's text starts, after the chevron column
+   (see entity-list.module.css). */
+.subtitle {
+  position: relative;
+  padding: 0.4rem 0 0.2rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: normal;
+  opacity: 0.6;
+}
+
+/* Where and how dim a static chevron is. The subtitle is already at 0.6, so
+   0.35 / 0.6 brings the marker to the chevron's 0.35. */
+.subtitle::before {
+  content: "-";
+  position: absolute;
+  left: 0.1rem;
+  top: 0.4rem;
+  padding: 0;
+  font-size: 1rem;
+  opacity: calc(0.35 / 0.6);
+}

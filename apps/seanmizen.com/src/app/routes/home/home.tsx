@@ -8,10 +8,10 @@ import {
   SiteTitle,
   Spacer,
   SSHModal,
+  Subtitle,
 } from '@/components';
 import { Donate, Github, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
-import styles from './home.module.css';
 
 const Home: FC = () => {
   const [isSSHModalOpen, setIsSSHModalOpen] = useState(false);
@@ -32,7 +32,7 @@ const Home: FC = () => {
   return (
     <main className="container">
       <SiteTitle />
-      <p className={styles.subtitle}>developer | automator | person</p>
+      <Subtitle>developer | automator | person</Subtitle>
       <EntityList>
         {/* Projects has a page of its own. The other sections open here. */}
         <Entity>
