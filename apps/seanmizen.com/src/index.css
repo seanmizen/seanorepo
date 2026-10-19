@@ -112,7 +112,10 @@ a:hover {
 a {
   padding: 0px;
 }
-a:link {
+/* A visited link keeps the link colour. Without this rule, the browser's
+   own purple shows. :active comes after it, so its highlight still shows. */
+a:link,
+a:visited {
   color: var(--link);
 }
 
