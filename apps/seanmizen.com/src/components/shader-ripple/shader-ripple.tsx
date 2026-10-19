@@ -322,8 +322,10 @@ const springStep = (
    so it fits any page with no selectors. MASK_SCALE is texels per CSS
    pixel. MASK_PAD is the clear space around content, and MASK_SOFT is the
    distance over which that space then fades out, both in CSS pixels.
-   Content inside a [data-mask="tight"] element, such as the theme toggle
-   beside the thrown face, uses TIGHT_PAD and TIGHT_SOFT. */
+   Content inside a [data-mask="tight"] element, such as the theme toggle,
+   goes on a second mask with TIGHT_PAD and TIGHT_SOFT. Only the glyphs
+   fade out there. The dots draw over it, so the face and the core pass
+   over the toggle, which sits below this canvas. */
 const MASK_SCALE = 0.5;
 const MASK_PAD = 16;
 const MASK_SOFT = 40;
@@ -513,50 +515,60 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     // /projects leave the face alone. The text field sees every ripple.
     const faceTaps = { u_tapsFrom: { value: -1 } };
 
-    // The content mask. A resize makes a new texture: a texture keeps the
-    // size of its first upload.
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = 1;
-    maskCanvas.height = 1;
-    const maskCtx = maskCanvas.getContext('2d');
-    const makeMaskTexture = () => {
-      const texture = new THREE.CanvasTexture(maskCanvas);
-      texture.minFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-      return texture;
+    // The content masks: one canvas and one texture each. A resize makes a
+    // new texture: a texture keeps the size of its first upload.
+    const makeMask = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const make = () => {
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+        return texture;
+      };
+      const texture = { value: make() };
+      const ctx = canvas.getContext('2d');
+      const start = (w: number, h: number) => {
+        if (!ctx) return;
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+          texture.value.dispose();
+          texture.value = make();
+        }
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#fff';
+        // Only the blur of each box goes on the canvas: the box itself is
+        // drawn one canvas width to the left, off the canvas. The blur is
+        // whole soft / 2 inside the box edge, and gone soft / 2 outside it,
+        // so each box grows by pad + soft / 2.
+        ctx.shadowOffsetX = w;
+      };
+      return { ctx, texture, start };
     };
-    const contentMask = { value: makeMaskTexture() };
+    const contentMask = makeMask();
+    const tightMask = makeMask();
     const range = document.createRange();
     const drawMask = () => {
-      if (!maskCtx) return;
       const bounds = renderer.domElement.getBoundingClientRect();
       const w = Math.max(1, Math.round(bounds.width * MASK_SCALE));
       const h = Math.max(1, Math.round(bounds.height * MASK_SCALE));
-      if (maskCanvas.width !== w || maskCanvas.height !== h) {
-        maskCanvas.width = w;
-        maskCanvas.height = h;
-        contentMask.value.dispose();
-        contentMask.value = makeMaskTexture();
-      }
-      maskCtx.clearRect(0, 0, w, h);
-      maskCtx.fillStyle = '#fff';
-      maskCtx.shadowColor = '#fff';
-      // Only the blur of each box goes on the canvas: the box itself is
-      // drawn one canvas width to the left, off the canvas. The blur is
-      // whole soft / 2 inside the box edge, and gone soft / 2 outside it,
-      // so each box grows by pad + soft / 2.
-      maskCtx.shadowOffsetX = w;
+      contentMask.start(w, h);
+      tightMask.start(w, h);
       type Box = { left: number; top: number; right: number; bottom: number };
       const fill = (
         { left, top, right, bottom }: Box,
         tight: Element | null,
       ) => {
-        if (right <= left || bottom <= top) return;
+        const ctx = (tight ? tightMask : contentMask).ctx;
+        if (!ctx || right <= left || bottom <= top) return;
         const pad = tight ? TIGHT_PAD : MASK_PAD;
         const soft = tight ? TIGHT_SOFT : MASK_SOFT;
         const grow = pad + soft / 2;
-        maskCtx.shadowBlur = (soft / 2) * MASK_SCALE;
-        maskCtx.fillRect(
+        ctx.shadowBlur = (soft / 2) * MASK_SCALE;
+        ctx.fillRect(
           (left - bounds.left - grow) * MASK_SCALE - w,
           (top - bounds.top - grow) * MASK_SCALE,
           (right - left + 2 * grow) * MASK_SCALE,
@@ -603,7 +615,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           fill(el.getBoundingClientRect(), el.closest(TIGHT));
         }
       }
-      contentMask.value.needsUpdate = true;
+      contentMask.texture.value.needsUpdate = true;
+      tightMask.texture.value.needsUpdate = true;
     };
 
     const simUniforms: Record<string, THREE.IUniform> = {};
@@ -648,7 +661,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     const uniforms = {
       ...rippleUniforms,
       ...faceTaps,
-      u_contentMask: contentMask,
+      u_contentMask: contentMask.texture,
       u_width: { value: simSize },
       u_height: { value: simSize },
       u_particleSize: { value: 0 },
@@ -719,7 +732,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     const lightUniforms = {
       ...rippleUniforms,
       u_tapsFrom: { value: -1 },
-      u_contentMask: contentMask,
+      u_contentMask: contentMask.texture,
+      u_tightMask: tightMask.texture,
       u_viewPx: { value: new THREE.Vector2() },
       u_cellPx: { value: new THREE.Vector2() },
       u_halfExtent: { value: new THREE.Vector2() },
@@ -1323,7 +1337,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       lightMaterial.dispose();
       lightTarget.dispose();
       atlas.texture.dispose();
-      contentMask.value.dispose();
+      contentMask.texture.value.dispose();
+      tightMask.texture.value.dispose();
       observer?.disconnect();
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) {
