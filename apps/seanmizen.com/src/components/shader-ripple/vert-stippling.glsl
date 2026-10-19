@@ -22,6 +22,9 @@ uniform float u_coreSize;    // the core's radius, in world units
 uniform vec2 u_coreAt;       // how far the core has moved off its middle
 uniform float u_wrap;        // 0: the core is a disk; 1: it is a ring around the cursor
 uniform float u_wrapRadius;  // the ring's radius, in world units
+uniform vec2 u_massV;        // how fast the whole core moves, in world units a second
+uniform float u_sway;        // 0: the core is still; 1: it moves fast enough to bend fully
+uniform vec2 u_jumpDir;      // the way the core last jumped, a unit vector
 uniform vec2 u_throwAt;      // where the throw has carried the shape, in world units
 uniform sampler2D u_contentMask;  // white where the page has content
 
@@ -67,16 +70,31 @@ void main() {
         // where the dot sits in the face.
         float angle = 6.2831853 * hash31(vec3(a_index, 1.0, 7.0));
         float inside = sqrt(hash31(vec3(a_index, 2.0, 7.0)));
+        vec2 dir = vec2(cos(angle), sin(angle));
         // When Venom jumps, the core opens into a rough band around the
-        // cursor, which noise makes wobble.
-        float lump = noise3(vec3(2.0 * cos(angle), 2.0 * sin(angle), 3.0 * u_now));
-        float ring = u_wrapRadius * (1.0 + 0.3 * (inside - 0.5) + 0.2 * lump);
-        float reach = mix(u_coreSize * inside, ring, u_wrap);
-        vec2 core = u_coreAt + reach * vec2(cos(angle), sin(angle));
+        // cursor, which noise makes wobble. The band carries the jump's
+        // momentum: while it moves, it squashes at the front, stretches at
+        // the back, and wobbles more.
+        vec2 heading = u_massV / max(length(u_massV), 0.0001);
+        float lump = noise3(vec3(2.0 * dir, 3.0 * u_now));
+        float ring = u_wrapRadius * (1.0 + 0.3 * (inside - 0.5) + (0.2 + 0.3 * u_sway) * lump);
+        ring *= 1.0 - 0.5 * u_sway * dot(dir, heading);
+        // The ring is wider at the back, toward where the core came from.
+        // It opens front first and shuts back first, so its far side
+        // wraps round the cursor last.
+        float front = dot(dir, u_jumpDir);
+        ring *= 1.0 - 0.4 * front;
+        float wrap = clamp((u_wrap - 0.5 * (0.5 - 0.5 * front)) / 0.5, 0.0, 1.0);
+        float reach = mix(u_coreSize * inside, ring, wrap);
+        // Each dot lags behind the moving core by its own time, mostly
+        // short and now and then long. The core leaves a trail back along
+        // its path.
+        float lag = 0.12 * a_random.w * a_random.w * a_random.w;
+        vec2 core = u_coreAt + reach * dir - u_massV * lag;
         position.xy = mix(position.xy, core, u_collapse);
-        // Spread out into a ring, the dots need one size to show, as in a
-        // tendril below.
-        relativeSize = mix(relativeSize, 0.8, u_wrap * u_collapse);
+        // Spread out into a ring or a trail, the dots need one size to
+        // show, as in a tendril below.
+        relativeSize = mix(relativeSize, 0.8, max(wrap, u_sway) * u_collapse);
 
         // The throw carries the whole shape along its path.
         position.xy += u_throwAt;

@@ -290,3 +290,41 @@ Screenshots: `12-venom-jump/`. `jump-frames.png` is the eat at 60 frames a
 second, frame by frame. The arrow marks the pointer: red while it shows,
 green once it is hidden. `feel-eat-follow-let-go.png` is the whole sequence
 at the normal clock.
+
+## 13: momentum, and the pull home
+
+Sean:
+
+```text
+That's great. Two points:
+The surround is too uniform, it seems disconnected to the origin of the singularity. It is cartoonish - it should look like it has momentum from jumping and therefore be a little less uniform when swallowing the mouse.
+Then, after swallowing, it should be "pulling" the mouse to its origin. right now the mouse is seen to have too much control over the location of the post-swallow singularity.
+```
+
+For momentum, the shader gets the core's speed. Each dot lags behind the
+moving core by its own time, mostly short and now and then long, so the
+jump leaves a trail back toward where it came from. While the core moves,
+the ring squashes at the front, stretches at the back and wobbles more.
+
+That alone left the ring round at the moment of the swallow, because the
+core was still by then. So the ring is also wider at the back, toward
+where the core came from. It opens front first and shuts back first, so its
+far side wraps round the cursor last. Claude tried two triggers for the
+shut:
+
+1. With the cursor at half the ring, the ring stayed round and open for
+   about 70 ms, then shut (`try-1-round-hold.png`).
+2. With the cursor anywhere inside the ring, it shut before the core
+   arrived, and slammed into the cursor as a filled blob
+   (`try-2-shut-too-early.png`).
+
+The trigger that stayed is the cursor 60% of the way in, with a shut that
+is fastest at first. The cursor hides while the far side still wraps it.
+
+For the pull, once the cursor is hidden, the core no longer follows the
+pointer. It drags the cursor home on a heavier spring (half the jump speed,
+damping 0.9). A new "tug" setting (0.15) lets the pointer pull it that share
+of the way out.
+
+Screenshots: `13-momentum-pull/eat-and-pull-frames.png` is the jump, the
+swallow and the drag home at 60 frames a second, frame by frame.

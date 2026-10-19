@@ -215,6 +215,22 @@ First, set that. Then, I want to see a real "jump" to swallow the mouse. At the 
       ],
       sample: 's12-venom-jump',
     },
+    {
+      title: 'momentum, and the pull home',
+      messages: [
+        {
+          from: 'sean',
+          text: `That's great. Two points:
+The surround is too uniform, it seems disconnected to the origin of the singularity. It is cartoonish - it should look like it has momentum from jumping and therefore be a little less uniform when swallowing the mouse.
+Then, after swallowing, it should be "pulling" the mouse to its origin. right now the mouse is seen to have too much control over the location of the post-swallow singularity.`,
+        },
+        {
+          from: 'claude',
+          text: 'Each dot now lags behind the moving core by its own time, so the jump leaves a trail back toward where it came from. While the core moves, the ring squashes at the front and stretches at the back. The ring is also wider at the back, it opens front first and it shuts back first, so its far side wraps round the cursor last. It starts to shut while the core still moves. Once the cursor is gone, the core drags it home on a heavier spring, and the pointer only tugs at it.',
+        },
+      ],
+      sample: 's13-momentum-pull',
+    },
   ],
 };
 

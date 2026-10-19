@@ -6,13 +6,14 @@
    for a cursor that comes near. Each one moves on springs, and noise swings
    and stretches it. For a cursor that comes closer still, the whole core
    jumps onto it, opens into a ring around it, and snaps shut over it. The
-   core then holds the cursor, hidden, and follows the pointer, until the
-   pointer goes far enough from where the core rests. */
+   core then drags the hidden cursor home, and the pointer only tugs at it,
+   until the pointer goes far enough from where the core rests. */
 type EatSettings = {
   reach: number;
   jump: number;
   jumpSpring: number;
   ring: number;
+  tug: number;
   release: number;
   spring: number;
   damping: number;
@@ -42,6 +43,7 @@ const EAT_DEFAULTS: EatSettings = {
   jump: 40,
   jumpSpring: 3,
   ring: 18,
+  tug: 0.15,
   release: 86,
   spring: 8.3,
   damping: 0.28,
@@ -80,7 +82,7 @@ const EAT_DEFS: EatDef[] = [
     min: 1,
     max: 15,
     step: 0.1,
-    hint: 'How fast the core jumps, in swings a second. While it holds the cursor, it follows the pointer twice as fast.',
+    hint: 'How fast the core jumps, in swings a second. It drags an eaten cursor home at half this, more heavily.',
   },
   {
     key: 'ring',
@@ -88,7 +90,15 @@ const EAT_DEFS: EatDef[] = [
     min: 6,
     max: 40,
     step: 1,
-    hint: 'The radius of the ring the core opens into around the cursor, in CSS pixels. The ring snaps shut once the cursor is inside half of it.',
+    hint: 'The radius of the ring the core opens into around the cursor, in CSS pixels. The ring snaps shut once the cursor is well inside it.',
+  },
+  {
+    key: 'tug',
+    label: 'tug',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    hint: 'How far the pointer pulls the core out while the core holds the cursor, against how far the pointer is from where the core rests. 0: the pointer cannot move it. 1: the core follows the pointer.',
   },
   {
     key: 'release',
