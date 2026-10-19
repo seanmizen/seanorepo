@@ -24,6 +24,12 @@ import {
 import { ThemeContext } from '@/providers';
 import styles from './shaders.module.css';
 
+/* The playground's own defaults. Home builds on DEFAULTS too (see
+   HOME_PARAMS), so a default for the playground only goes here. Presets
+   apply on top of BASE, so the dark ripple stays matrix green. */
+const BASE: RippleParams = { ...DEFAULTS, darkAccent: '#00ff41' };
+const START: RippleParams = { ...BASE, ...PRESETS['glyph field'] };
+
 /* 0 fills the stage. */
 const CANVAS_SIZES = [0, 300, 400, 500, 700, 900];
 
@@ -32,7 +38,7 @@ const PRESET_NAMES = Object.keys(PRESETS);
 /* The preset the params match exactly, or '' once a slider moves off it. */
 const presetOf = (params: RippleParams) =>
   PRESET_NAMES.find((name) => {
-    const preset: RippleParams = { ...DEFAULTS, ...PRESETS[name] };
+    const preset: RippleParams = { ...BASE, ...PRESETS[name] };
     return (Object.keys(preset) as (keyof RippleParams)[]).every(
       (key) => preset[key] === params[key],
     );
@@ -73,9 +79,7 @@ const squareImage = async (file: File) => {
 const Shaders: FC = () => {
   const { mode, toggleMode } = useContext(ThemeContext);
   const initial = useMemo(() => readHash(deserialise), []);
-  const [params, setParams] = useState<RippleParams>(
-    initial?.params ?? DEFAULTS,
-  );
+  const [params, setParams] = useState<RippleParams>(initial?.params ?? START);
   const [stage, setStage] = useState<StageSettings>(
     initial?.stage ?? STAGE_DEFAULTS,
   );
@@ -127,7 +131,7 @@ const Shaders: FC = () => {
   const preset = presetOf(params);
   const applyPreset = (name: string) => {
     const values = PRESETS[name];
-    if (values) setParams({ ...DEFAULTS, ...values });
+    if (values) setParams({ ...BASE, ...values });
   };
   // Step through the presets in order, wrapping at both ends. From custom
   // settings, step from the start of the list.
@@ -192,7 +196,7 @@ const Shaders: FC = () => {
             <button
               type="button"
               onClick={() => {
-                setParams(DEFAULTS);
+                setParams(START);
                 setStage(STAGE_DEFAULTS);
               }}
             >
@@ -397,11 +401,11 @@ const Shaders: FC = () => {
                   step={def.step}
                   value={params[def.key]}
                   onChange={(e) => set(def.key, Number(e.target.value))}
-                  onDoubleClick={() => set(def.key, DEFAULTS[def.key])}
+                  onDoubleClick={() => set(def.key, BASE[def.key])}
                 />
                 <span
                   className={
-                    params[def.key] === DEFAULTS[def.key]
+                    params[def.key] === BASE[def.key]
                       ? styles.value
                       : `${styles.value} ${styles.changed}`
                   }
