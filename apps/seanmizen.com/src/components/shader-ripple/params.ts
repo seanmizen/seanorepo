@@ -628,7 +628,7 @@ const PRESETS: Record<string, Partial<RippleParams>> = {
     springDamp: 0.04,
   },
   physical: { springBack: false },
-  'glyph field': { grid: true },
+  'glyph field': { grid: true, glyphs: 'katakana' },
   'tsunami field': { ...TSUNAMI, grid: true },
   'hire me': {
     grid: true,
