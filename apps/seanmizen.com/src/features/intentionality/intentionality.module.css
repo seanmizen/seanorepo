@@ -1,0 +1,10 @@
+.subtitle {
+  opacity: 0.75;
+  padding-left: 1.2rem;
+}
+
+/* Dimmed like the project blurbs, so a scan hits the story names first. */
+.blurb {
+  padding: 0;
+  opacity: 0.75;
+}

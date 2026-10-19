@@ -51,6 +51,11 @@
   padding: 0.1rem 0.3rem;
 }
 
+/* A checkbox keeps its own size. Only the text box grows. */
+.inline input[type="checkbox"] {
+  flex: none;
+}
+
 .slider {
   display: grid;
   grid-template-columns: 7rem 1fr 2.5rem;

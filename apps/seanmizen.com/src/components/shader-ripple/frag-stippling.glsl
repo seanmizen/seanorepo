@@ -11,6 +11,9 @@ uniform float u_afterglow; // how strong the haze left behind the front is
 // From the vertex shader: the ripple's tint (x), its afterlight (y), and how
 // much of it the cloud lets show here (z).
 varying vec3 v_light;
+// From the vertex shader: how strongly this dot shows. It is 0 over the
+// page's content.
+varying float v_alpha;
 
 void main() {
   float a = texture2D(u_texture, gl_PointCoord).a;
@@ -28,5 +31,5 @@ void main() {
   float bright = mix(u_rest, 1.0, lit);
   vec3 color = mix(u_color, u_accent, max(tint, 0.8 * haze));
 
-  gl_FragColor = vec4(color, a * bright);
+  gl_FragColor = vec4(color, a * bright * v_alpha);
 }

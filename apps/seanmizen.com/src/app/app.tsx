@@ -1,23 +1,81 @@
 import type { FC } from 'react';
-import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { useContext, useRef } from 'react';
+import {
+  Navigate,
+  Outlet,
+  Route,
+  BrowserRouter as Router,
+  Routes,
+  useMatch,
+} from 'react-router-dom';
+import { LastUpdated, Portrait, ThemeToggle } from '@/components';
+import { StoryPage, stories } from '@/features';
 import { MapNetwork } from '@/features/Glasto/Map';
-import { ThemeProvider } from '@/providers';
-import { Apps, Cous, HireLab, Home, Shaders } from './routes';
+import { ThemeContext, ThemeProvider } from '@/providers';
+import { EatPanel, useEat } from './eat-panel';
+import { Cous, HireLab, Home, Projects, Shaders } from './routes';
 import '../index.css';
+
+/* What the home page and /projects share. It stays mounted as you move
+   between them, so the face does not restart and the theme toggle stays
+   put. On /projects, the face is thrown into the slot beside the theme
+   toggle and shrinks into a core on the way, and the hire text fades in. */
+const Layout: FC = () => {
+  const { mode, toggleMode } = useContext(ThemeContext);
+  const onProjects = useMatch('/projects') !== null;
+  const slot = useRef<HTMLSpanElement>(null);
+  const [eat, setEat] = useEat();
+  return (
+    <>
+      <Outlet />
+      <Portrait
+        reveal={onProjects}
+        thrown={onProjects}
+        landing={slot}
+        eat={eat}
+      />
+      <div className="bottom-right-controls">
+        {!onProjects && (
+          <LastUpdated
+            apiRepoUrl="https://api.github.com/repos/seanmizen/seanorepo"
+            branch="release"
+          />
+        )}
+        {onProjects && (
+          <span ref={slot} className="singularity-slot" aria-hidden="true" />
+        )}
+        <ThemeToggle mode={mode} toggleMode={toggleMode} />
+      </div>
+      <EatPanel eat={eat} setEat={setEat} />
+    </>
+  );
+};
 
 const App: FC = () => {
   return (
     <ThemeProvider>
       <Router basename="/">
         <Routes>
-          <Route path="/apps" element={<Apps />} />
+          {/* The old name for /projects. Old links still land. */}
+          <Route path="/apps" element={<Navigate to="/projects" replace />} />
           <Route path="/cous" element={<Cous />} />
           <Route path="/glasto" element={<MapNetwork />} />
           <Route path="/shaders" element={<Shaders />} />
           {/* One path segment: assets load from a relative prefix, so a nested
               path would ask for them under /shaders/. */}
           <Route path="/shaders-hire" element={<HireLab />} />
-          <Route path="/*" element={<Home />} />
+          {/* The intentionality stories: one page each. */}
+          {stories.map((story) => (
+            <Route
+              key={story.slug}
+              path={`/${story.slug}`}
+              element={<StoryPage story={story} />}
+            />
+          ))}
+          <Route element={<Layout />}>
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/*" element={<Home />} />
+          </Route>
         </Routes>
       </Router>
     </ThemeProvider>

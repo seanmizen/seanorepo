@@ -21,6 +21,9 @@ const ThemeToggle: FC<ThemeToggleProps> = ({ mode, toggleMode }) => {
       onClick={toggleMode}
       aria-label={`Current theme: ${mode}. Click to change.`}
       className={styles['theme-toggle-button']}
+      // A small icon needs little clear space. A wide one here would fade
+      // the thrown face, which rests beside it.
+      data-mask="tight"
     >
       {iconMap[mode]}
     </button>
