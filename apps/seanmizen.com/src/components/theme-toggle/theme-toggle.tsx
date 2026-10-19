@@ -21,8 +21,8 @@ const ThemeToggle: FC<ThemeToggleProps> = ({ mode, toggleMode }) => {
       onClick={toggleMode}
       aria-label={`Current theme: ${mode}. Click to change.`}
       className={styles['theme-toggle-button']}
-      // A small icon needs little clear space. A wide one here would fade
-      // the thrown face, which rests beside it.
+      // The glyphs keep a small clear space around the icon. The face and
+      // the thrown core draw over it (see the content mask in shader-ripple).
       data-mask="tight"
     >
       {iconMap[mode]}
