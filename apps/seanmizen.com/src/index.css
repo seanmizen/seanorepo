@@ -27,9 +27,8 @@ body {
   --subsection-background: #444;
   /* --highlight: #969; */
   --link: #cecece;
-  /* #555 was hardcoded for both themes, but it lands 1.6:1 from this
-     background — the halo had nothing to render against and hover was
-     invisible in dark mode. #aaa mirrors light's relationship instead. */
+  /* #aaa keeps the hover halo visible on this background, as #555 does on
+     light's. */
   --link-hover-glow: #aaa;
   /* TODO: get display-p3 working even though it's only supported on safari */
   /* vibrant colors, yo */
@@ -61,15 +60,12 @@ body {
 }
 
 /*
-  There used to be a `li div { overflow: overlay }` here to stop long content
-  running off the screen. `overlay` is deprecated and now computes to `auto`,
-  which turned every div in a list into a scroll container — and an outline is
-  painted outside the border box, so `outline-offset: 2px` put every focus ring
-  just past the clip edge. It silently ate 13 of the 21 focus rings on this
-  page (WCAG 2.4.7), while the page still overflowed horizontally regardless.
+  Do not set `overflow` on the content of lists. It makes a scroll container,
+  which clips the focus rings (they draw outside the border box, with
+  `outline-offset: 2px`), and focus must stay visible (WCAG 2.4.7).
 
-  Anything that can genuinely get too wide is capped where it lives instead
-  (see .input-wrapper in donate), which contains it without clipping anything.
+  Cap anything that can get too wide where it lives instead (see
+  .input-wrapper in donate). That contains it without clipping anything.
 */
 
 h1 {
