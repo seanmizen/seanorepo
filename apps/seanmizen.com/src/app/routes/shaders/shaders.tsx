@@ -95,6 +95,7 @@ const Shaders: FC = () => {
   // A picture of the visitor's own. Not in the settings string: it is too
   // big for a URL.
   const [image, setImage] = useState<string>();
+  const [imageNote, setImageNote] = useState('');
 
   const serialised = serialise(params, stage);
   const [draft, setDraft] = useState(serialised);
@@ -274,8 +275,18 @@ const Shaders: FC = () => {
                 type="file"
                 accept="image/*"
                 onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file) setImage(await squareImage(file));
+                  const input = e.currentTarget;
+                  const file = input.files?.[0];
+                  // Cleared, so the same file can be picked again.
+                  input.value = '';
+                  if (!file) return;
+                  try {
+                    setImage(await squareImage(file));
+                    setImageNote('');
+                  } catch {
+                    // Chrome cannot decode some formats, HEIC among them.
+                    setImageNote(`can't read ${file.name}: try a JPEG or PNG`);
+                  }
                 }}
               />
             </label>
@@ -284,6 +295,7 @@ const Shaders: FC = () => {
                 default image
               </button>
             )}
+            <output className={styles.status}>{imageNote}</output>
           </div>
         </section>
 
