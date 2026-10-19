@@ -25,6 +25,7 @@ uniform float u_wrapRadius;  // the ring's radius, in world units
 uniform vec2 u_massV;        // how fast the whole core moves, in world units a second
 uniform float u_sway;        // 0: the core is still; 1: it moves fast enough to bend fully
 uniform vec2 u_jumpDir;      // the way the core last jumped, a unit vector
+uniform vec2 u_tail[4];      // the core's tail, link by link, from the core's middle, in world units
 uniform vec2 u_throwAt;      // where the throw has carried the shape, in world units
 uniform sampler2D u_contentMask;  // white where the page has content
 
@@ -86,11 +87,15 @@ void main() {
         ring *= 1.0 - 0.4 * front;
         float wrap = clamp((u_wrap - 0.5 * (0.5 - 0.5 * front)) / 0.5, 0.0, 1.0);
         float reach = mix(u_coreSize * inside, ring, wrap);
-        // Each dot lags behind the moving core by its own time, mostly
-        // short and now and then long. The core leaves a trail back along
-        // its path.
-        float lag = 0.12 * a_random.w * a_random.w * a_random.w;
-        vec2 core = u_coreAt + reach * dir - u_massV * lag;
+        // Each dot sits its own way back along the core's tail, most of
+        // them near the core and a few far back, so the tail thins to a
+        // point. The tail lags behind the moving core and swings on past
+        // where it stops.
+        float back = 4.0 * a_random.w * a_random.w * a_random.w;
+        float link = floor(back);
+        vec2 behind = u_tail[int(max(link - 1.0, 0.0))] * step(0.5, link);
+        vec2 trail = mix(behind, u_tail[int(link)], back - link);
+        vec2 core = u_coreAt + reach * dir + trail;
         position.xy = mix(position.xy, core, u_collapse);
         // Spread out into a ring or a trail, the dots need one size to
         // show, as in a tendril below.

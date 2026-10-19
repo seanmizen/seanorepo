@@ -370,3 +370,52 @@ The log came out before the commit.
 
 Screenshots: `14-swallow-hold/feel-jump-swallow-hold-frames.png` is the
 feel, the jump, the swallow and the start of the hold, frame by frame.
+
+## 15: a jump that commits, and a real tail
+
+Sean:
+
+```text
+'c:/Users/sean/Desktop/sean\'s site - Google Chrome 2026-10-19 10-11-33 - Trim - crop.mp4'
+The halfway jump is still an issue. I don't know what you just did fixes much.
+When moving the mouse once captured, the springiness of the singularity has been done wrong. a weird anti-inertial tail forms.
+```
+
+The video is `15-commit-and-tail/seans-video.mp4`. The machine had no ffmpeg,
+so Claude decoded it in headless Chrome, frame by frame, and tiled the
+frames. The home dot and the theme toggle are 52 px apart on the page and
+53 px apart in the video, so a video pixel is a CSS pixel.
+
+The halfway jump: the jump fired with the pointer 71 px from home, past the
+default jump distance (40 px). So Sean's panel had a jump distance past 71,
+and the core hovered, so his release distance was under 71. Claude
+reproduced it with jump 80 and release 60. The mode flipped between jump
+and rest every frame, and the core sat 32 px out with a speed of about
+420 px/s, reversed each frame. A jump that fired was past release in the
+next frame and gave up. The jump delay did not stop the next jump, because
+the pointer never left. The tests in stages 12 to 14 used the defaults,
+where release is past the jump distance, so they never showed it.
+
+The tail: each dot sat at minus the core's speed times its own lag. The
+speed reverses in one frame on a spring, so the whole tail flipped side in
+one frame.
+
+The fixes:
+
+1. A jump commits. It gives up only on a pointer that leaves reach.
+2. Release counts from the core, not from where the core rests, and only
+   in the hold.
+3. A cursor the core let go must leave the jump distance before the core
+   can catch it again, so no settings can make it loop.
+4. The tail is four points on springs (12 swings a second, damping 0.6),
+   each behind the one before it, the first behind the core. The dots
+   spread back along it, most of them near the core. It lags in a move and
+   swings on past a stop.
+
+With jump 80 and release 60, the core now jumps once, swallows, pulls the
+cursor home, and lets it go 60 px from the pointer.
+
+Screenshots: `15-commit-and-tail/`. `seans-video-*.png` are the video's
+frames, and `seans-video-the-hover.png` is the hover, 3 times the size.
+`jump-swallow-swing-frames.png` is the new jump, the swallow and a hold
+with the pointer swung left and right, frame by frame.

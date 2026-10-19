@@ -194,7 +194,8 @@ const TWITCH_KICK = 0.4;
 /* Venom's jump. Once the pointer has stayed inside `jump` for JUMP_DELAY
    seconds, the whole core springs onto the cursor's middle, CURSOR_MIDDLE
    CSS pixels from its hot spot, with damping ratio MASS_DAMPING. On the
-   way it opens into a ring around the cursor in WRAP_OPEN seconds.
+   way it opens into a ring around the cursor in WRAP_OPEN seconds. A jump
+   commits: it gives up only on a pointer that leaves reach.
 
    The swallow: once the cursor is SHUT_INSIDE of the way into the ring,
    the core stays on the cursor and the ring snaps shut in WRAP_CLOSE
@@ -206,7 +207,9 @@ const TWITCH_KICK = 0.4;
    HOLD_SPRING times as fast as the jump, with damping ratio HOLD_DAMPING.
    The pointer's movement drags the core: at `tug` 1, the core's speed
    closes on the pointer's speed at DRAG_RATE a second. Where the pointer
-   is does not move the core, only how it moves. */
+   is does not move the core, only how it moves. Once the pointer is more
+   than `release` from the core, the core lets the cursor go. A cursor it
+   let go must leave `jump` before the core can catch it again. */
 const CURSOR_MIDDLE = { x: 5, y: 9 };
 const JUMP_DELAY = 0.12;
 const WRAP_OPEN = 0.1;
@@ -223,6 +226,15 @@ const DRAG_MAX_SPEED = 3000;
 /* The core's shape bends with its speed, fully from this speed on, in CSS
    pixels a second. */
 const SWAY_SPEED = 300;
+/* The core's tail: TAIL_LINKS points, each on a spring behind the one
+   before it, the first behind the core. The springs swing TAIL_SPRING
+   times a second, with damping ratio TAIL_DAMPING. The core's dots spread
+   back along the tail, so the core trails behind where it goes and swings
+   on past where it stops. vert-stippling.glsl holds u_tail to this
+   size. */
+const TAIL_LINKS = 4;
+const TAIL_SPRING = 12;
+const TAIL_DAMPING = 0.6;
 
 type Point = { x: number; y: number };
 
@@ -607,6 +619,9 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_massV: { value: new THREE.Vector2() },
       u_sway: { value: 0 },
       u_jumpDir: { value: new THREE.Vector2() },
+      u_tail: {
+        value: Array.from({ length: TAIL_LINKS }, () => new THREE.Vector2()),
+      },
       u_throwAt: { value: new THREE.Vector2() },
       u_tendril: {
         value: Array.from({ length: TENDRILS_MAX }, () => new THREE.Vector4()),
@@ -739,19 +754,25 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     // Venom: the core rests, jumps at the cursor, swallows it, or holds
     // it. `since` is when it took that mode, `nearSince` is when the
     // pointer came inside `jump` (-1: it is outside), and `gulpAt` is when
-    // the core last ate, all in real seconds. `jumpDir` is the way it last
-    // jumped, a unit vector (y down).
+    // the core last ate, all in real seconds. `armed` is false from when
+    // the core lets a cursor go until that cursor leaves `jump`. `jumpDir`
+    // is the way it last jumped, a unit vector (y down).
     type EatMode = 'rest' | 'jump' | 'swallow' | 'hold';
     const eatState = {
       mode: 'rest' as EatMode,
       since: 0,
       nearSince: -1,
       gulpAt: -1e9,
+      armed: true,
       jumpDir: { x: 0, y: 0 },
     };
-    // The whole core, and its speed, in CSS pixels from where it rests
-    // (y down).
+    // The whole core and its tail, and their speeds, in CSS pixels from
+    // where the core rests (y down).
     const mass = { at: { x: 0, y: 0 }, v: { x: 0, y: 0 } };
+    const tail = Array.from({ length: TAIL_LINKS }, () => ({
+      at: { x: 0, y: 0 },
+      v: { x: 0, y: 0 },
+    }));
     // Where the pointer was last frame, in the same space, for its speed.
     const lastPointer = { x: 0, y: 0 };
     // Each tendril's tip and bend, and their speeds, in CSS pixels from
@@ -940,9 +961,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       // that comes inside `reach`, to feel for it. Once the pointer has
       // stayed inside `jump` for a moment, the whole core jumps onto the
       // cursor, opens into a ring around it, and swallows it. Then it
-      // holds the hidden cursor and pulls it home. Past `release` from
-      // where the core rests, it lets the cursor go. A jump that misses
-      // gives up there too.
+      // holds the hidden cursor and pulls it home, until the pointer is
+      // `release` from the core.
       const e = live.current.eat;
       const cx = pointer.x - bounds.left - land.x;
       const cy = pointer.y - bounds.top - land.y;
@@ -963,12 +983,21 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         eatState.mode = mode;
         eatState.since = realNow;
       };
+      const letGo = () => {
+        setMode('rest');
+        eatState.armed = false;
+        eatState.nearSince = -1;
+      };
       if (!e || at < 1 || !pointer.in) {
         if (eatState.mode !== 'rest') setMode('rest');
+        eatState.armed = true;
         eatState.nearSince = -1;
       } else if (eatState.mode === 'rest') {
         if (d >= e.jump) {
+          eatState.armed = true;
           eatState.nearSince = -1;
+        } else if (!eatState.armed) {
+          // A cursor the core let go must leave `jump` first.
         } else if (eatState.nearSince < 0) {
           eatState.nearSince = realNow;
         } else if (realNow - eatState.nearSince >= JUMP_DELAY) {
@@ -977,19 +1006,19 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           eatState.jumpDir.x = (prey.x - mass.at.x) / Math.max(gapToPrey, 1);
           eatState.jumpDir.y = (prey.y - mass.at.y) / Math.max(gapToPrey, 1);
         }
-      } else if (d > e.release) {
-        setMode('rest');
-      } else if (
-        eatState.mode === 'jump' &&
-        Math.hypot(prey.x - mass.at.x, prey.y - mass.at.y) <
+      } else if (eatState.mode === 'jump') {
+        if (d > Math.max(e.reach, e.jump)) {
+          letGo();
+        } else if (
+          Math.hypot(prey.x - mass.at.x, prey.y - mass.at.y) <
           (1 - SHUT_INSIDE) * e.ring
-      ) {
-        setMode('swallow');
-      } else if (
-        eatState.mode === 'swallow' &&
-        realNow - eatState.since >= WRAP_CLOSE
-      ) {
-        setMode('hold');
+        ) {
+          setMode('swallow');
+        }
+      } else if (eatState.mode === 'swallow') {
+        if (realNow - eatState.since >= WRAP_CLOSE) setMode('hold');
+      } else if (Math.hypot(cx - mass.at.x, cy - mass.at.y) > e.release) {
+        letGo();
       }
       const since = realNow - eatState.since;
       let wrap = 0;
@@ -1011,7 +1040,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
       // The whole core springs to its prey and stays on it through the
       // swallow. In the hold, a spring pulls it home and the pointer's
-      // movement drags it. At rest, it springs home.
+      // movement drags it. At rest, it springs home. Each tail link
+      // springs after the one before it.
       const steps = Math.ceil(gap * 240);
       const jumpHz = e?.jumpSpring ?? 3;
       const onPrey = eatState.mode === 'jump' || eatState.mode === 'swallow';
@@ -1027,6 +1057,16 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           holding ? (e?.tug ?? 0) * DRAG_RATE : 0,
           pointerV,
         );
+        for (const [k, link] of tail.entries()) {
+          springStep(
+            link.at,
+            link.v,
+            k === 0 ? mass.at : tail[k - 1].at,
+            TAIL_SPRING,
+            TAIL_DAMPING,
+            gap / steps,
+          );
+        }
       }
 
       // Each tip springs toward the cursor, swung off the line to it and
@@ -1118,6 +1158,12 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         Math.hypot(mass.v.x, mass.v.y) / SWAY_SPEED,
       );
       uniforms.u_jumpDir.value.set(eatState.jumpDir.x, -eatState.jumpDir.y);
+      for (const [k, link] of tail.entries()) {
+        uniforms.u_tail.value[k].set(
+          (link.at.x - mass.at.x) * worldPerPx,
+          -(link.at.y - mass.at.y) * worldPerPx,
+        );
+      }
 
       // Crossfade a click front from the inner look to the nebula look.
       if (h) {

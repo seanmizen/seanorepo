@@ -75,7 +75,7 @@ const EAT_DEFS: EatDef[] = [
     min: 5,
     max: 110,
     step: 1,
-    hint: 'The whole core jumps onto a cursor inside this distance from where it rests, in CSS pixels. The theme toggle starts 32 px from it.',
+    hint: 'The whole core jumps onto a cursor that stays inside this distance from where it rests, in CSS pixels. Once it jumps, it does not give up until the cursor leaves reach. The theme toggle starts 32 px from it.',
   },
   {
     key: 'jumpSpring',
@@ -107,7 +107,7 @@ const EAT_DEFS: EatDef[] = [
     min: 4,
     max: 160,
     step: 1,
-    hint: 'Past this distance from where the core rests, in CSS pixels, the core lets the cursor go and springs home. A jump that misses gives up here too. Keep it above the jump distance.',
+    hint: 'While the core holds the cursor, it lets it go once the pointer is this far from the core, in CSS pixels. A cursor it let go must leave the jump distance before it can be caught again.',
   },
   {
     key: 'spring',

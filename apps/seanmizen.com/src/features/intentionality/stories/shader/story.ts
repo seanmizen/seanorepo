@@ -247,6 +247,22 @@ Needs a cleanup. Take a look yourself at co-ordinate increments.`,
       ],
       sample: 's14-swallow-hold',
     },
+    {
+      title: 'a jump that commits, and a real tail',
+      messages: [
+        {
+          from: 'sean',
+          text: `'c:/Users/sean/Desktop/sean\\'s site - Google Chrome 2026-10-19 10-11-33 - Trim - crop.mp4'
+The halfway jump is still an issue. I don't know what you just did fixes much.
+When moving the mouse once captured, the springiness of the singularity has been done wrong. a weird anti-inertial tail forms.`,
+        },
+        {
+          from: 'claude',
+          text: "Sean's video showed the jump fire with the pointer 71 px out, so his jump distance was further out than his release distance. Then each jump gave up in the next frame, and 0.12 s later it jumped again: the core flapped between home and the cursor, and looked to hover halfway. The tail had a fault too: each dot sat at minus the core's speed times a lag, so the whole tail flipped the moment the speed reversed. Now a jump commits until the pointer leaves reach. Release counts from the core, only in the hold, and a cursor the core let go must leave the jump distance before it can be caught again. The tail is four links on springs, each behind the one before it, so it swings through.",
+        },
+      ],
+      sample: 's15-commit-and-tail',
+    },
   ],
 };
 
