@@ -12,7 +12,6 @@ import { LastUpdated, Portrait, ThemeToggle } from '@/components';
 import { StoryPage, stories } from '@/features';
 import { MapNetwork } from '@/features/Glasto/Map';
 import { ThemeContext, ThemeProvider } from '@/providers';
-import { EatPanel, useEat } from './eat-panel';
 import { Cous, HireLab, Home, Projects, Shaders } from './routes';
 import '../index.css';
 
@@ -24,16 +23,10 @@ const Layout: FC = () => {
   const { mode, toggleMode } = useContext(ThemeContext);
   const onProjects = useMatch('/projects') !== null;
   const slot = useRef<HTMLSpanElement>(null);
-  const [eat, setEat] = useEat();
   return (
     <>
       <Outlet />
-      <Portrait
-        reveal={onProjects}
-        thrown={onProjects}
-        landing={slot}
-        eat={eat}
-      />
+      <Portrait reveal={onProjects} thrown={onProjects} landing={slot} />
       <div className="bottom-right-controls">
         {!onProjects && (
           <LastUpdated
@@ -46,7 +39,6 @@ const Layout: FC = () => {
         )}
         <ThemeToggle mode={mode} toggleMode={toggleMode} />
       </div>
-      <EatPanel eat={eat} setEat={setEat} />
     </>
   );
 };
