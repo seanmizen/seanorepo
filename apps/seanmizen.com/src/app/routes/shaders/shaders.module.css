@@ -7,6 +7,20 @@
   padding: 0;
 }
 
+/* The title sits where it sits on every other page. The site pads html,
+   body and #root 0.2rem each, which this fixed page skips, so the box takes
+   that 0.6rem back. Only the links in it take the pointer. */
+.crumbs {
+  position: absolute;
+  inset: 0.6rem 0.6rem auto;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.crumbs a {
+  pointer-events: auto;
+}
+
 .stage {
   position: relative;
   flex: 1;
@@ -54,6 +68,7 @@
 
 .title {
   font-size: 1.1rem;
+  font-weight: normal;
   flex: 1;
 }
 

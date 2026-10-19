@@ -1,20 +1,18 @@
 /*
-  This file used to declare a bare `h2 { ... }`. CSS Modules only hash class
-  selectors — element selectors are emitted as-is — so that rule was styling
-  every h2 on the site from a file named after one route. Scoped to a class
-  now, which is what it always meant.
+  The content ends at the middle of the page. The right half is kept free.
+
+  The container's content starts 1rem in from its left edge. On a page wider
+  than the container (72rem), that edge is (100vw - 72rem) / 2 from the left
+  of the page, so the content is 35rem wide whatever the width. On a
+  narrower page the edge is at 0, so the content is 50vw - 1rem wide.
+  Phones get the full width.
 */
-.heading {
-  padding-top: 0.2rem;
-  padding-bottom: 0.5rem;
-  /* Lines up with the chevron column of the list it introduces. */
-  padding-left: 1.2rem;
-  font-size: 1.1rem;
-  font-weight: normal;
-  opacity: 0.75;
+@media (min-width: 48rem) {
+  .half {
+    max-width: min(35rem, calc(50vw - 1rem));
+  }
 }
 
-/* The h1 slide-in belongs to arriving at the site, not to every page of it. */
-.static {
-  animation: none;
+.half {
+  padding: 0;
 }

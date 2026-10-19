@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { HomeLink, ThemeToggle } from '@/components';
+import { SiteTitle, ThemeToggle } from '@/components';
 import type {
   GlyphSet,
   RippleParams,
@@ -43,6 +43,31 @@ const COLOR_KEYS = [
   ['darkAccent', 'dark ripple'],
 ] as const;
 
+/* A picture as the shader wants it: a centred square, 512px a side. The
+   file stays in the browser. */
+const IMAGE_SIZE = 512;
+const squareImage = async (file: File) => {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = IMAGE_SIZE;
+  canvas
+    .getContext('2d')
+    ?.drawImage(
+      bitmap,
+      (bitmap.width - side) / 2,
+      (bitmap.height - side) / 2,
+      side,
+      side,
+      0,
+      0,
+      IMAGE_SIZE,
+      IMAGE_SIZE,
+    );
+  bitmap.close();
+  return canvas.toDataURL('image/jpeg', 0.9);
+};
+
 /* The settings string also lives in the URL hash, so a reload or a shared
    link comes back to the same setup. */
 const readHash = () => {
@@ -67,6 +92,10 @@ const Shaders: FC = () => {
   const shader = useRef<ShaderRippleHandle>(null);
   // Bumped by "restart" to remount the shader with a fresh seed.
   const [run, setRun] = useState(0);
+  // A picture of the visitor's own. Not in the settings string: it is too
+  // big for a URL.
+  const [image, setImage] = useState<string>();
+  const [imageNote, setImageNote] = useState('');
 
   const serialised = serialise(params, stage);
   const [draft, setDraft] = useState(serialised);
@@ -126,6 +155,9 @@ const Shaders: FC = () => {
 
   return (
     <main className={styles.page}>
+      <div className={`container ${styles.crumbs}`} data-no-ripple>
+        <SiteTitle path="projects/shaders" />
+      </div>
       <div className={styles.stage}>
         <ShaderRipple
           key={run}
@@ -133,6 +165,7 @@ const Shaders: FC = () => {
           params={params}
           simSize={stage.simSize}
           size={stage.size}
+          image={image}
           onFps={setFps}
         />
         <p className={styles.tip}>click anywhere</p>
@@ -140,7 +173,7 @@ const Shaders: FC = () => {
 
       <aside className={styles.panel} data-no-ripple aria-label="Controls">
         <header className={styles.header}>
-          <h1 className={styles.title}>ripple playground</h1>
+          <h2 className={styles.title}>ripple playground</h2>
           <span className={styles.fps}>{fps.toFixed(0)} fps</span>
           <ThemeToggle mode={mode} toggleMode={toggleMode} />
         </header>
@@ -234,6 +267,35 @@ const Shaders: FC = () => {
             <button type="button" onClick={() => setRun((r) => r + 1)}>
               restart
             </button>
+          </div>
+          <div className={styles.row}>
+            <label>
+              use your own image{' '}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const input = e.currentTarget;
+                  const file = input.files?.[0];
+                  // Cleared, so the same file can be picked again.
+                  input.value = '';
+                  if (!file) return;
+                  try {
+                    setImage(await squareImage(file));
+                    setImageNote('');
+                  } catch {
+                    // Chrome cannot decode some formats, HEIC among them.
+                    setImageNote(`can't read ${file.name}: try a JPEG or PNG`);
+                  }
+                }}
+              />
+            </label>
+            {image && (
+              <button type="button" onClick={() => setImage(undefined)}>
+                default image
+              </button>
+            )}
+            <output className={styles.status}>{imageNote}</output>
           </div>
         </section>
 
@@ -382,9 +444,6 @@ const Shaders: FC = () => {
           Hover a slider for what it does. Double-click a slider to reset it.
           Changed values are highlighted.
         </p>
-        <nav aria-label="Site">
-          <HomeLink />
-        </nav>
       </aside>
     </main>
   );

@@ -1,16 +1,16 @@
 import type { FC } from 'react';
-import { Entity, EntityList, ExternalLink } from '@/components';
+import { Link } from 'react-router-dom';
+import { Entity, EntityList, ExternalLink, Subtitle } from '@/components';
 import styles from './projects.module.css';
 
 interface Project {
-  /** Doubles as the link text, so it has to stand on its own. */
-  name: string;
+  /** The name column shows this URL without the protocol. A path that
+      starts with "/" is a page of this site. */
+  href: string;
   /** One line, lowercase, no repetition of the name. */
   blurb?: string;
-  /** A longer note, in Sean's words, in a paragraph of its own under the name. */
+  /** A longer note, in Sean's words, in a paragraph of its own. */
   description?: string;
-  /** Absent for anything not currently reachable. */
-  href?: string;
 }
 
 interface Section {
@@ -23,24 +23,24 @@ const sections: Section[] = [
     title: "things I'd like you to see",
     projects: [
       {
-        name: 'carolinemizen.art',
-        blurb: 'art portfolio',
         href: 'https://carolinemizen.art',
+        blurb: 'art portfolio',
       },
       {
-        name: 'Planning Poker',
-        blurb: 'agile estimation for teams',
         href: 'https://planning-poker.seanmizen.com',
+        blurb: 'agile estimation for teams',
       },
       {
-        name: 'shist',
-        blurb: "sean's history tool",
         href: 'https://github.com/seanmizen/shist',
+        blurb: "sean's history tool",
       },
       {
-        name: 'seanmizen.com',
-        blurb: 'this site',
         href: 'https://seanmizen.com',
+        blurb: 'this site',
+      },
+      {
+        href: '/projects/shaders',
+        blurb: 'ripple playground',
       },
     ],
   },
@@ -48,10 +48,9 @@ const sections: Section[] = [
     title: 'things which are notable',
     projects: [
       {
-        name: 'minecraft.seanmizen.com',
+        href: 'https://minecraft.seanmizen.com',
         description:
           "I created a zig-based game engine from scratch. My first demo is a minecraft clone - it's up until Microsoft find out and sue me! It compiles to WASM and utilises WebGPU. dead fast.",
-        href: 'https://minecraft.seanmizen.com',
       },
     ],
   },
@@ -59,24 +58,35 @@ const sections: Section[] = [
     title: 'things which are certainly not done',
     projects: [
       {
-        name: 'inside',
-        blurb: 'a marketplace for interior designers',
         href: 'https://inside.seanmizen.com',
+        blurb: 'a marketplace for interior designers',
       },
     ],
   },
 ];
 
+/* The clean URL: no protocol, no trailing slash. */
+const cleanUrl = (href: string) => {
+  const url = new URL(href, 'https://seanmizen.com');
+  return `${url.host}${url.pathname}`.replace(/\/$/, '');
+};
+
 const Projects: FC = () => (
   <>
     {sections.map(({ title, projects }) => (
       <section key={title} className={styles.section}>
-        <h3 className={styles.title}>{title}</h3>
+        <Subtitle>{title}</Subtitle>
         <EntityList>
-          {projects.map(({ name, blurb, description, href }) => (
-            <Entity key={name}>
-              {href ? <ExternalLink href={href}>{name}</ExternalLink> : name}
-              {blurb && <span className={styles.blurb}> - {blurb}</span>}
+          {projects.map(({ href, blurb, description }) => (
+            <Entity key={href} className={styles.row}>
+              <span className={styles.name}>
+                {href.startsWith('/') ? (
+                  <Link to={href}>{cleanUrl(href)}</Link>
+                ) : (
+                  <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
+                )}
+              </span>
+              {blurb && <span className={styles.blurb}>{blurb}</span>}
               {description && (
                 <p className={styles.description}>{description}</p>
               )}

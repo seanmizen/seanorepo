@@ -1,0 +1,7 @@
+/* The text starts where the title starts, on the chevron column, 0.1rem in. */
+.subtitle {
+  padding: 0.4rem 0 0.2rem 0.1rem;
+  font-size: 0.95rem;
+  font-weight: normal;
+  opacity: 0.6;
+}

@@ -1,27 +1,52 @@
 /*
-  The name carries the emphasis; everything after it is supporting detail and
-  is dimmed to match the weight of a static chevron, so a scan down the column
-  hits the names first.
-*/
-.blurb {
-  padding: 0;
-  opacity: 0.75;
-}
+  Two columns: the name, and the blurb or the description, which starts on
+  the name's line. The name carries the emphasis and the blurb is dimmed.
+  Below 48rem each row stacks, so the page never scrolls sideways.
 
-.description {
-  padding: 0.2rem 0 0.4rem;
-  opacity: 0.75;
-  max-width: 36rem;
-}
+  Each row is an Entity, so it keeps the site's chevron.
+*/
 
 .section {
   padding: 0 0 0.75rem;
 }
 
-/* Lines up with the names, after the chevron column, like the page heading. */
-.title {
-  padding: 0.4rem 0 0.2rem 1.2rem;
-  font-size: 0.95rem;
-  font-weight: normal;
-  opacity: 0.6;
+/* Home has a line of text and a spacer line under its title. This gap
+   takes up the same height, so the first entity lands where it lands on
+   home (measured with Karla at 16px). */
+.section:first-of-type {
+  padding-top: 1.39rem;
+}
+
+/* An Entity is as wide as its content. A row is as wide as the listing. The
+   left column fits the longest name, seanmizen.com/projects/shaders. */
+.row {
+  display: grid;
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  grid-template-areas: "name blurb";
+  column-gap: 1rem;
+  width: auto;
+}
+
+.name {
+  grid-area: name;
+  overflow-wrap: anywhere;
+}
+
+.blurb,
+.description {
+  grid-area: blurb;
+  opacity: 0.85;
+}
+
+.description {
+  padding-bottom: 0.4rem;
+}
+
+@media (max-width: 48rem) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "name"
+      "blurb";
+  }
 }

@@ -1,7 +1,14 @@
 import type { FC } from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Entity, EntityList, HomeLi, Spacer, SSHModal } from '@/components';
+import {
+  Entity,
+  EntityList,
+  HomeLi,
+  SiteTitle,
+  Spacer,
+  SSHModal,
+} from '@/components';
 import { Donate, Github, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 
@@ -23,7 +30,7 @@ const Home: FC = () => {
 
   return (
     <main className="container">
-      <h1>seanmizen.com</h1>
+      <SiteTitle />
       <p>developer | automator | person</p>
       <Spacer />
       <EntityList>

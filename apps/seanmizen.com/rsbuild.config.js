@@ -31,6 +31,8 @@ export default defineConfig({
     template: './public/index.html',
   },
   output: {
-    assetPrefix: './',
+    /* Absolute, so a nested route such as /projects/shaders loads its
+       scripts from /static and not from /projects/static. */
+    assetPrefix: '/',
   },
 });

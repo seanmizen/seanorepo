@@ -28,6 +28,10 @@
 
 .list {
   list-style: none;
+  /* The global `* { padding: 0.2rem }` would push every list, and so every
+     chevron, 0.2rem to the right of the text above it. The chevron column
+     starts where the page starts. */
+  padding: 0;
 }
 
 .row {
