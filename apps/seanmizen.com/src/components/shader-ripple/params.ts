@@ -658,6 +658,25 @@ const SIM_SIZES = [32, 48, 64, 80, 96];
    read with the new meaning. */
 const PREFIX = 'ripple-v1:';
 
+/* A playground keeps its setup string in the URL hash, so a reload or a
+   shared link comes back to the same setup. readHash gives null when the
+   hash holds no setup. */
+const readHash = <T>(parse: (text: string) => T): T | null => {
+  try {
+    return parse(decodeURIComponent(location.hash.slice(1)));
+  } catch {
+    return null;
+  }
+};
+
+const writeHash = (text: string) => {
+  try {
+    history.replaceState(null, '', `#${encodeURIComponent(text)}`);
+  } catch {
+    // A sandboxed frame can refuse this. The setup string still works.
+  }
+};
+
 const serialise = (params: RippleParams, stage: StageSettings) =>
   PREFIX + JSON.stringify({ ...params, ...stage });
 
@@ -741,5 +760,7 @@ export {
   PRESETS,
   SIM_SIZES,
   STAGE_DEFAULTS,
+  readHash,
+  writeHash,
   serialise,
 };

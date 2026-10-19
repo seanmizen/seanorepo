@@ -7,19 +7,18 @@
     tabbable  -> dimmed at rest, brightens and slides on hover/focus
     static    -> permanently dimmed, never moves
 
-  This is the only marker system on the site. Anything that points somewhere
-  is an entity and wears a chevron; the only thing that varies is which way it
-  points (see .back). Navigation used to be three unrelated idioms — ">" here,
-  "→ " on the home page's sublinks, "<< " on the back link — which is why a
-  page could not be read as one consistent set of affordances.
+  This is the only marker system on the site, so a page reads as one
+  consistent set of affordances. Anything that points somewhere is an entity
+  and wears a chevron; the only thing that varies is which way it points (see
+  .back).
 
   Every chevron sits in the same place at the same weight until you touch it,
   so a list reads as one column of markers rather than two.
 
-  The slide is deliberately short. At the original 0.5rem the glyph travelled
-  8px from a rest position 9.6px into a gutter whose focus ring starts at
-  15.2px, so an active chevron ended up 2.4px inside the ring of the thing it
-  was pointing at. 0.2rem keeps the motion while leaving the ring alone.
+  The slide is deliberately short. The focus ring of an entity's link starts
+  15.2px into the gutter and the chevron rests 9.6px in, so a longer slide
+  puts an active chevron inside that ring. 0.2rem keeps the motion and
+  leaves the ring alone.
 
   Which of the two applies is decided by :has() below, so it can never drift
   out of sync with the markup: put a link in an entity and it becomes

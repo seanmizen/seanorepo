@@ -44,7 +44,6 @@ const Home: FC = () => {
           </HomeLi>
         ))}
       </EntityList>
-      <Spacer />
       <SSHModal
         isOpen={isSSHModalOpen}
         onClose={() => setIsSSHModalOpen(false)}

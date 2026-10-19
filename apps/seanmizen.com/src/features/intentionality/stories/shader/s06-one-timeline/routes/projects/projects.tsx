@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import { HomeLink, Spacer } from '@/components';
-import { Projects as ProjectList } from '@/features';
+import { Projects as ProjectList } from '../../features/projects/projects';
 import styles from './projects.module.css';
 
 /*
