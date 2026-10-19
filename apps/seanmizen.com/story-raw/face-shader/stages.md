@@ -198,3 +198,24 @@ shader twice and leaves a stale first mask.
 Screenshots: `09-wider-mask/`. `projects-before-after.png` shows the lit
 glyphs over 5 s of clicks beside the text, and the mask in pink.
 `home-closed-before-after.png` shows that the face on home is the same.
+
+## 10: a tight toggle, and no circle
+
+Sean:
+
+```text
+The content mask around the theme toggle can be greatly shrunk. it is interfering with the venom. Also, the empty-face sized circle can be removed for the hire me text.
+```
+
+The wider mask of stage 9 reached the rest point beside the toggle. The mask
+there was 0.78, so the core showed at about a fifth of its strength. Claude
+added a tight mask for any element marked `data-mask="tight"`: no clear
+space past its box, and gone 4 px past it. The theme toggle uses it, and the
+mask at the core is now 0. Claude also removed the clear circle around the
+face from the hire text, with its two settings. From this stage on, the
+freeze script copies the theme toggle too, because the toggle now tells the
+mask how much space it needs.
+
+Screenshots: `10-tight-toggle/`. `toggle-before-after.png` shows the core
+and its tendrils with the cursor near. `circle-before-after.png` shows the
+whole page. "Before" is the stage 9 sample in both.

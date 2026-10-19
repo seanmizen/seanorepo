@@ -180,10 +180,15 @@ const wander = (t: number, seed: number) => {
    the line boxes of every text node, plus the boxes of the elements below,
    so it fits any page with no selectors. MASK_SCALE is texels per CSS
    pixel. MASK_PAD is the clear space around content, and MASK_SOFT is the
-   distance over which that space then fades out, both in CSS pixels. */
+   distance over which that space then fades out, both in CSS pixels.
+   Content inside a [data-mask="tight"] element, such as the theme toggle
+   beside the thrown face, uses TIGHT_PAD and TIGHT_SOFT. */
 const MASK_SCALE = 0.5;
 const MASK_PAD = 16;
 const MASK_SOFT = 40;
+const TIGHT_PAD = 0;
+const TIGHT_SOFT = 8;
+const TIGHT = '[data-mask="tight"]';
 const MASK_ELEMENTS = 'img, svg, video, input, button, select, textarea';
 /* The computed background of an element that paints none. */
 const NO_BACKGROUND = 'rgba(0, 0, 0, 0)';
@@ -399,14 +404,19 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       maskCtx.shadowColor = '#fff';
       // Only the blur of each box goes on the canvas: the box itself is
       // drawn one canvas width to the left, off the canvas. The blur is
-      // whole MASK_SOFT / 2 inside the box edge, and gone MASK_SOFT / 2
-      // outside it, so each box grows by MASK_PAD + MASK_SOFT / 2.
-      maskCtx.shadowBlur = (MASK_SOFT / 2) * MASK_SCALE;
+      // whole soft / 2 inside the box edge, and gone soft / 2 outside it,
+      // so each box grows by pad + soft / 2.
       maskCtx.shadowOffsetX = w;
-      const grow = MASK_PAD + MASK_SOFT / 2;
       type Box = { left: number; top: number; right: number; bottom: number };
-      const fill = ({ left, top, right, bottom }: Box) => {
+      const fill = (
+        { left, top, right, bottom }: Box,
+        tight: Element | null,
+      ) => {
         if (right <= left || bottom <= top) return;
+        const pad = tight ? TIGHT_PAD : MASK_PAD;
+        const soft = tight ? TIGHT_SOFT : MASK_SOFT;
+        const grow = pad + soft / 2;
+        maskCtx.shadowBlur = (soft / 2) * MASK_SCALE;
         maskCtx.fillRect(
           (left - bounds.left - grow) * MASK_SCALE - w,
           (top - bounds.top - grow) * MASK_SCALE,
@@ -428,6 +438,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           parent && getComputedStyle(parent).overflow !== 'visible'
             ? parent.getBoundingClientRect()
             : null;
+        const tight = parent?.closest(TIGHT) ?? null;
         range.selectNodeContents(node);
         for (const box of range.getClientRects()) {
           fill(
@@ -439,6 +450,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
                   bottom: Math.min(box.bottom, clip.bottom),
                 }
               : box,
+            tight,
           );
         }
       }
@@ -449,7 +461,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           el.matches(MASK_ELEMENTS) ||
           getComputedStyle(el).backgroundColor !== NO_BACKGROUND
         ) {
-          fill(el.getBoundingClientRect());
+          fill(el.getBoundingClientRect(), el.closest(TIGHT));
         }
       }
       contentMask.value.needsUpdate = true;
@@ -571,8 +583,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       u_textStrength: { value: 0 },
       u_textDrift: { value: 0 },
       u_revealFade: { value: 0 },
-      u_clearFace: { value: 0 },
-      u_clearSoft: { value: 1 },
     };
     const lightMaterial = new THREE.ShaderMaterial({
       uniforms: lightUniforms,
@@ -915,8 +925,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           lightUniforms.u_textStrength.value = h.textStrength;
           lightUniforms.u_textDrift.value = h.textDrift;
           lightUniforms.u_revealFade.value = revealState.r;
-          lightUniforms.u_clearFace.value = h.clearFace;
-          lightUniforms.u_clearSoft.value = h.clearSoft;
           gridUniforms.u_fill.value = 1;
           gridUniforms.u_gridAlpha.value = 1;
           gridUniforms.u_flicker.value = 0;

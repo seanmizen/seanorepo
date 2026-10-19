@@ -171,6 +171,20 @@ It will be helpful to extract a side-by-side comparison of before and after for 
       ],
       sample: 's09-wider-mask',
     },
+    {
+      title: 'a tight toggle, and no circle',
+      messages: [
+        {
+          from: 'sean',
+          text: 'The content mask around the theme toggle can be greatly shrunk. it is interfering with the venom. Also, the empty-face sized circle can be removed for the hire me text.',
+        },
+        {
+          from: 'claude',
+          text: 'The wider mask of stage 9 reached the rest point beside the toggle, so the core showed at about a fifth of its strength. An element can now ask for a tight mask, and the toggle does: none of its clear space reaches the core now. The hire text no longer keeps a circle clear for a face that is not there.',
+        },
+      ],
+      sample: 's10-tight-toggle',
+    },
   ],
 };
 

@@ -1,18 +1,15 @@
 import type { RippleParams } from './params';
 import { DEFAULTS, MAX_MESSAGE } from './params';
 
-/* The projects page's text field: a message that fades in around the
-   face on /projects, kept clear of the face. The content mask keeps it
-   off the page's content. A
-   click's front runs out from the portrait in the home page's look and,
+/* The projects page's text field: a message that fades in on /projects.
+   The content mask keeps it off the page's content. A click's front runs
+   out from the portrait in the home page's look and,
    past `crossfade`, in the nebula look. */
 type HireSettings = {
   message: string;
   letterSize: number;
   textStrength: number;
   textDrift: number;
-  clearFace: number;
-  clearSoft: number;
   crossfade: number;
   revealTime: number;
 };
@@ -33,8 +30,6 @@ const HIRE_DEFAULTS: HireSettings = {
   letterSize: 14,
   textStrength: 0.11,
   textDrift: 1,
-  clearFace: 10,
-  clearSoft: 2,
   crossfade: 9,
   revealTime: 5,
 };
@@ -63,22 +58,6 @@ const HIRE_DEFS: HireDef[] = [
     max: 1,
     step: 0.01,
     hint: 'How much a slow drifting cloud makes the resting text come and go.',
-  },
-  {
-    key: 'clearFace',
-    label: 'clear around face',
-    min: 0,
-    max: 30,
-    step: 0.5,
-    hint: 'The radius kept clear of text around the portrait (world units; the portrait is about 8).',
-  },
-  {
-    key: 'clearSoft',
-    label: 'clear softness',
-    min: 0.05,
-    max: 2,
-    step: 0.05,
-    hint: 'How gently the text fades in at the edge of the clear area.',
   },
   {
     key: 'crossfade',

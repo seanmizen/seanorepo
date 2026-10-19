@@ -16,15 +16,13 @@ uniform float u_afterglow;  // how strong the haze behind the front is
 uniform float u_gridIdle;   // how much of the cloud shows with no ripple
 uniform float u_calm;       // how much the grid thins behind the portrait
 
-// The hire field: text that fades in around the face, clear of the face.
-// The content mask keeps it off the page's content.
+// The hire field: text that fades in on /projects. The content mask keeps
+// it off the page's content.
 uniform float u_hire;          // 1: the hire field; 0: the playground grid
 uniform float u_textStrength;  // how strongly the resting text shows
 uniform float u_textDrift;     // how much the drifting cloud makes it breathe
 uniform float u_revealFade;    // how far the text has faded in, 0 to 1
 uniform sampler2D u_contentMask;  // white where the page has content
-uniform float u_clearFace;     // the radius kept clear around the face
-uniform float u_clearSoft;     // how soft the clear edges are, against u_clearFace
 
 void main() {
   vec2 cell = gl_FragCoord.xy - 0.5;
@@ -44,11 +42,7 @@ void main() {
     // Resting text breathes with the drifting cloud.
     float breath = mix(1.0, smoothstep(-0.45, 0.5, c), u_textDrift);
     lit = max(u_textStrength * breath, max(max(tint, haze), rouse));
-
-    // Keep the face clear, with a soft edge.
-    float soft = max(u_clearSoft * u_clearFace, 0.001);
-    float face = smoothstep(u_clearFace, u_clearFace + soft, length(p));
-    lit *= face * u_revealFade;
+    lit *= u_revealFade;
   } else {
     // With no ripple, the drifting cloud shows faintly where it is thick.
     float idle = u_gridIdle * smoothstep(u_cloudLevel - u_cloudSoft, u_cloudLevel + u_cloudSoft, c);

@@ -10,8 +10,8 @@
   app folder. `out` replaces the stories folder, for a dry run.
 
   The stage gets copies of the files the story is about: the shader, the
-  portrait, HomeLi, the home and projects pages, the tuning panel, and the
-  layout route cut out of app.tsx. Only import paths change. Everything
+  portrait, HomeLi, the theme toggle, the home and projects pages, the
+  tuning panel, and the layout route cut out of app.tsx. Only import paths change. Everything
   else (params.ts, the photo, site components, features, hooks, index.css)
   stays a live import. A tuning panel is set to show in the sample, with a
   storage key of its own. It also writes the stage's main.tsx. It never
@@ -114,6 +114,17 @@ for (const component of ['home-li', 'portrait']) {
   }
 }
 
+// The theme toggle, which tells the mask how much space it needs. Its
+// icons stay live.
+for (const name of readdirSync(join(SRC, 'components/theme-toggle'))) {
+  if (name === 'icons') continue;
+  const text = read(`components/theme-toggle/${name}`).replaceAll(
+    "from './icons'",
+    "from '@/components/theme-toggle/icons'",
+  );
+  write(`components/theme-toggle/${name}`, text);
+}
+
 // The home and projects pages.
 write(
   'routes/home/home.tsx',
@@ -181,9 +192,14 @@ write(
     "import type { FC } from 'react';\n",
     `import { ${['useContext', 'useRef'].filter(uses).join(', ')} } from 'react';\n`,
     "import { Outlet, useMatch } from 'react-router-dom';\n",
-    `import { ${['LastUpdated', 'ThemeToggle'].filter(uses).join(', ')} } from '@/components';\n`,
+    ...(uses('LastUpdated')
+      ? ["import { LastUpdated } from '@/components';\n"]
+      : []),
     "import { ThemeContext } from '@/providers';\n",
     "import { Portrait } from './components/portrait';\n",
+    ...(uses('ThemeToggle')
+      ? ["import { ThemeToggle } from './components/theme-toggle';\n"]
+      : []),
     ...(uses('ShaderRippleHandle')
       ? [
           "import type { ShaderRippleHandle } from './components/shader-ripple';\n",
