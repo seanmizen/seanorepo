@@ -1,27 +1,153 @@
 /*
-  The name carries the emphasis; everything after it is supporting detail and
-  is dimmed to match the weight of a static chevron, so a scan down the column
-  hits the names first.
+  The /projects listing: `ls -l` with columns that are facts from git.
+
+  The grid is in `ch`, so every column starts on a character cell, the way a
+  terminal lays out `ls -l`. The cells sit in the DOM in reading order (name
+  first) and the grid areas put them in listing order. Below 60rem each row
+  stacks into three lines, so the page never scrolls sideways.
 */
-.blurb {
+
+.listing {
+  --muted: 0.7;
+  container-type: inline-size;
+}
+
+.listing * {
   padding: 0;
-  opacity: 0.75;
+}
+
+.total {
+  opacity: var(--muted);
+}
+
+.columns,
+.row {
+  display: grid;
+  grid-template-columns: 7ch 13ch 12ch minmax(0, 28ch) minmax(0, 1fr);
+  grid-template-areas: "commits touched activity name what";
+  column-gap: 3ch;
+}
+
+.columns {
+  margin-top: 3em;
+  opacity: var(--muted);
+  border-bottom: 1px solid currentColor;
+}
+
+.rows {
+  list-style: none;
+}
+
+.title {
+  margin-top: 1.75em;
+  font-size: inherit;
+  font-weight: inherit;
+  opacity: var(--muted);
+}
+
+.commits {
+  grid-area: commits;
+  text-align: right;
+  opacity: var(--muted);
+}
+
+.touched {
+  grid-area: touched;
+  opacity: var(--muted);
+}
+
+.activity {
+  grid-area: activity;
+  display: flex;
+  align-items: flex-end;
+  align-self: center;
+  height: 1em;
+  color: var(--accent);
+}
+
+.bar {
+  flex: 0 0 1ch;
+  box-sizing: border-box;
+  /* A 1px gap each side, so the bars read as months. */
+  border-inline: 1px solid transparent;
+  background: currentColor;
+  background-clip: padding-box;
+  /* A hairline at least, so an empty month still marks the track. */
+  height: max(1px, calc(var(--h) * 1em));
+}
+
+/* "nov ──── oct", exactly as wide as the bars under it. */
+.activityHeading {
+  grid-area: activity;
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+}
+
+.rule {
+  flex: 1;
+  border-top: 1px solid currentColor;
+}
+
+.name {
+  grid-area: name;
+  overflow-wrap: anywhere;
+}
+
+.name a {
+  text-decoration: none;
+}
+
+.name a:hover,
+.name a:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.what {
+  grid-area: what;
+  opacity: 0.85;
+}
+
+/* The one project with a description. Its count and its name take the
+   accent weight, and the description reads at full strength. */
+.notable {
+  grid-template-areas:
+    "commits touched activity name what"
+    ".       .       .        desc desc";
+}
+
+.notable .commits {
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 700;
+}
+
+.notable .name {
+  font-weight: 700;
 }
 
 .description {
-  padding: 0.2rem 0 0.4rem;
-  opacity: 0.75;
-  max-width: 36rem;
+  grid-area: desc;
+  margin-top: 0.5em;
+  max-width: 64ch;
 }
 
-.section {
-  padding: 0 0 0.75rem;
-}
+@container (max-width: 60rem) {
+  .columns {
+    display: none;
+  }
 
-/* Lines up with the names, after the chevron column, like the page heading. */
-.title {
-  padding: 0.4rem 0 0.2rem 1.2rem;
-  font-size: 0.95rem;
-  font-weight: normal;
-  opacity: 0.6;
+  .row,
+  .notable {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name     commits"
+      "what     what"
+      "desc     desc"
+      "activity touched";
+    column-gap: 2ch;
+    margin-top: 1.5em;
+  }
 }

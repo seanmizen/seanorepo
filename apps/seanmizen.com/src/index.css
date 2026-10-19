@@ -21,6 +21,9 @@ body {
   --link-visted: #636;
   /* Sits between --background and --link so the halo reads against both. */
   --link-hover-glow: #555;
+  /* The one accent: the notable project and the activity sparks on
+     /projects. Dark enough for 5.5:1 on --background. */
+  --accent: #8a5000;
 }
 .dark {
   --color: #cecece;
@@ -33,6 +36,8 @@ body {
      background — the halo had nothing to render against and hover was
      invisible in dark mode. #aaa mirrors light's relationship instead. */
   --link-hover-glow: #aaa;
+  /* 7:1 on --background. */
+  --accent: #f0b866;
   /* TODO: get display-p3 working even though it's only supported on safari */
   /* vibrant colors, yo */
   --highlight: color(display-p3 9 6 9);

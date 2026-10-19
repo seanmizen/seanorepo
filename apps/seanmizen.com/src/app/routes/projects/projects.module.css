@@ -1,20 +1,67 @@
 /*
-  This file used to declare a bare `h2 { ... }`. CSS Modules only hash class
-  selectors — element selectors are emitted as-is — so that rule was styling
-  every h2 on the site from a file named after one route. Scoped to a class
-  now, which is what it always meant.
+  One font and one size for the whole page, like a terminal. Hierarchy comes
+  from weight, the accent and the muted opacity, never from size.
 */
-.heading {
-  padding-top: 0.2rem;
-  padding-bottom: 0.5rem;
-  /* Lines up with the chevron column of the list it introduces. */
-  padding-left: 1.2rem;
-  font-size: 1.1rem;
-  font-weight: normal;
-  opacity: 0.75;
+.page {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+  font-size: 0.95rem;
+  line-height: 1.75;
 }
 
-/* The h1 slide-in belongs to arriving at the site, not to every page of it. */
-.static {
+.page,
+.page * {
+  font-family: "Red Hat Mono", "Courier New", Courier, monospace;
+  font-weight: 400;
+}
+
+.page * {
+  padding: 0;
+}
+
+.home {
+  opacity: 0.7;
+  text-decoration: none;
+}
+
+.home:hover,
+.home:focus-visible {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+/* The h1 slide-in belongs to arriving at the site, not to every page. */
+.command {
+  font-size: inherit;
   animation: none;
+}
+
+.prompt {
+  color: var(--accent);
+}
+
+.cursorLine {
+  margin-top: 3em;
+}
+
+.cursor {
+  display: inline-block;
+  width: 1ch;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: blink 1.1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
 }
