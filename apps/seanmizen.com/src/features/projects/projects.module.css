@@ -1,10 +1,7 @@
 /*
-  Two columns. The left holds the name and, under it, the commit count. The
-  right holds the blurb or the description, which starts on the name's
-  line. The listing gets half the page, too narrow for the count as a third
-  column. The name carries the emphasis. The blurb is dimmed, and the count
-  is dimmer again: it is evidence, read after the rest. Below 48rem each row
-  stacks, so the page never scrolls sideways.
+  Two columns: the name, and the blurb or the description, which starts on
+  the name's line. The name carries the emphasis and the blurb is dimmed.
+  Below 48rem each row stacks, so the page never scrolls sideways.
 
   Each row is an Entity, so it keeps the site's chevron.
 */
@@ -30,10 +27,7 @@
 .row {
   display: grid;
   grid-template-columns: 14.5rem minmax(0, 1fr);
-  grid-template-areas:
-    "name    blurb"
-    "commits blurb";
-  grid-template-rows: auto 1fr;
+  grid-template-areas: "name blurb";
   column-gap: 1rem;
   width: auto;
 }
@@ -53,19 +47,11 @@
   padding-bottom: 0.4rem;
 }
 
-/* 0.7 is the dimmest that keeps 4.5:1 on both themes' backgrounds. */
-.commits {
-  grid-area: commits;
-  opacity: 0.7;
-}
-
 @media (max-width: 48rem) {
   .row {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
     grid-template-areas:
       "name"
-      "commits"
       "blurb";
   }
 }
