@@ -1,12 +1,16 @@
-/* The text starts where the chevrons start, 0.1rem in. */
+/* The text starts where the chevrons start, 0.1rem in. "seanmizen.com"
+   keeps the h1's own size and weight. The path after it is smaller. */
 .title {
   padding-left: 0.1rem;
-  font-size: 1.5rem;
-  font-weight: normal;
 }
 
 .title * {
   padding: 0;
+}
+
+.path {
+  font-size: 1.5rem;
+  font-weight: normal;
 }
 
 .page {

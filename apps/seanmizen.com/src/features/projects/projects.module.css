@@ -10,11 +10,11 @@
   padding: 0 0 0.75rem;
 }
 
-/* The 0.5rem that home's subtitle takes below itself (see
-   subtitle.module.css). Here it separates the first heading from the title,
-   so the first entity lands at the same height as on home. */
+/* Home has a line of text and a spacer line under its title. This gap
+   takes up the same height, so the first entity lands where it lands on
+   home (measured with Karla at 16px). */
 .section:first-of-type {
-  padding-top: 0.5rem;
+  padding-top: 1.39rem;
 }
 
 /* An Entity is as wide as its content. A row is as wide as the listing. The

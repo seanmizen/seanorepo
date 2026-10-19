@@ -1,24 +1,7 @@
-/*
-  The text starts where the title starts, on the chevron column, 0.1rem in.
-
-  A subtitle sits 0.4rem under the title's own 0.5rem, and 0.2rem over the
-  first entity's own 0.2rem.
-*/
+/* The text starts where the title starts, on the chevron column, 0.1rem in. */
 .subtitle {
   padding: 0.4rem 0 0.2rem 0.1rem;
   font-size: 0.95rem;
   font-weight: normal;
   opacity: 0.6;
-}
-
-/*
-  A line of text (as on home) belongs to the title, so it keeps close to it,
-  is not dimmed, and takes 0.5rem more below, before the list. A heading (as on /projects)
-  belongs to the list under it: the 0.5rem goes above the first one instead
-  (see projects.module.css). The first entity lands at the same height on
-  both pages.
-*/
-p.subtitle {
-  padding-bottom: 0.7rem;
-  opacity: 1;
 }

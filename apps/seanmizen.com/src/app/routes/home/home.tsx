@@ -8,7 +8,6 @@ import {
   SiteTitle,
   Spacer,
   SSHModal,
-  Subtitle,
 } from '@/components';
 import { Donate, Github, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
@@ -32,7 +31,8 @@ const Home: FC = () => {
   return (
     <main className="container">
       <SiteTitle />
-      <Subtitle>developer | automator | person</Subtitle>
+      <p>developer | automator | person</p>
+      <Spacer />
       <EntityList>
         {/* Projects has a page of its own. The other sections open here. */}
         <Entity>

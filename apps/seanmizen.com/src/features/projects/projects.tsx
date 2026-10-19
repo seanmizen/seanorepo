@@ -75,7 +75,7 @@ const Projects: FC = () => (
   <>
     {sections.map(({ title, projects }) => (
       <section key={title} className={styles.section}>
-        <Subtitle as="h2">{title}</Subtitle>
+        <Subtitle>{title}</Subtitle>
         <EntityList>
           {projects.map(({ href, blurb, description }) => (
             <Entity key={href} className={styles.row}>

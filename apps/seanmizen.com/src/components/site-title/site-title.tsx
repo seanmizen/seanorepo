@@ -19,12 +19,14 @@ const SiteTitle: FC<SiteTitleProps> = ({ path }) => {
   return (
     <h1 className={styles.title}>
       <Link to="/">seanmizen.com</Link>
-      {parts.map((part, i) => (
-        <span key={part}>
-          /<Link to={`/${parts.slice(0, i + 1).join('/')}`}>{part}</Link>
-        </span>
-      ))}
-      <span className={styles.page}>/{page}</span>
+      <span className={styles.path}>
+        {parts.map((part, i) => (
+          <span key={part}>
+            /<Link to={`/${parts.slice(0, i + 1).join('/')}`}>{part}</Link>
+          </span>
+        ))}
+        <span className={styles.page}>/{page}</span>
+      </span>
     </h1>
   );
 };
