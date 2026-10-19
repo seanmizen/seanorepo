@@ -9,7 +9,10 @@
 
 /* The title sits where it sits on every other page. The site pads html,
    body and #root 0.2rem each, which this fixed page skips, so the box takes
-   that 0.6rem back. Only the links in it take the pointer. */
+   that 0.6rem back. Only the links in it take the pointer.
+
+   The global .container goes on a child, never on this box: both set
+   `position`, and which one wins depends on the order of the CSS bundles. */
 .crumbs {
   position: absolute;
   inset: 0.6rem 0.6rem auto;

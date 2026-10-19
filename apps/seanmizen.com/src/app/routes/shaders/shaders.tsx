@@ -147,8 +147,10 @@ const Shaders: FC = () => {
 
   return (
     <main className={styles.page}>
-      <div className={`container ${styles.crumbs}`} data-no-ripple>
-        <SiteTitle path="projects/shaders" />
+      <div className={styles.crumbs} data-no-ripple>
+        <div className="container">
+          <SiteTitle path="projects/shaders" />
+        </div>
       </div>
       <div className={styles.stage}>
         <ShaderRipple
