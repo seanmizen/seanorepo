@@ -6950,6 +6950,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cous@workspace:apps/cous":
+  version: 0.0.0-use.local
+  resolution: "cous@workspace:apps/cous"
+  dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
+    "@rsbuild/plugin-react": "npm:^1.4.2"
+    "@types/react": "npm:^19.2.7"
+    "@types/react-dom": "npm:^19.2.3"
+    react: "npm:^19.2.1"
+    react-dom: "npm:^19.2.1"
+    typescript: "npm:^5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "create-require@npm:^1.1.0":
   version: 1.1.1
   resolution: "create-require@npm:1.1.1"

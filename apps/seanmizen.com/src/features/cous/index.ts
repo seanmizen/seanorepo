@@ -1,1 +1,0 @@
-export { Cous } from './cous';

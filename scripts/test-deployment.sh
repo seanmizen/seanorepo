@@ -93,6 +93,9 @@ test_cloudflared() {
   test_endpoint "http://localhost:4060" "Frontend" || ((failed++))
   test_endpoint "http://localhost:4061/api/health" "Backend API" || ((failed++))
 
+  echo -e "\n${YELLOW}cous.seanmizen.com${NC}"
+  test_endpoint "http://localhost:4070" "Frontend" || ((failed++))
+
   echo -e "\n${YELLOW}seansconverter.com${NC}"
   test_endpoint "http://localhost:4050" "Frontend" || ((failed++))
   test_endpoint "http://localhost:4051/api/health" "Backend API" || ((failed++))

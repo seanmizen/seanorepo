@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useContext, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import {
   Navigate,
   Outlet,
@@ -12,7 +12,7 @@ import {
 import { LastUpdated, Portrait, ThemeToggle } from '@/components';
 import { StoryPage, stories } from '@/features';
 import { ThemeContext, ThemeProvider } from '@/providers';
-import { Cous, HireLab, Home, Projects, Shaders } from './routes';
+import { HireLab, Home, Projects, Shaders } from './routes';
 import '../index.css';
 
 /* What the home page and /projects share. It stays mounted as you move
@@ -49,6 +49,14 @@ const ShadersMoved: FC = () => (
   <Navigate to={`/projects/shaders${useLocation().hash}`} replace />
 );
 
+/* cous is a site of its own. Old links still land there. */
+const CousMoved: FC = () => {
+  useEffect(() => {
+    location.replace('https://cous.seanmizen.com');
+  }, []);
+  return null;
+};
+
 const App: FC = () => {
   return (
     <ThemeProvider>
@@ -56,7 +64,7 @@ const App: FC = () => {
         <Routes>
           {/* The old name for /projects. Old links still land. */}
           <Route path="/apps" element={<Navigate to="/projects" replace />} />
-          <Route path="/cous" element={<Cous />} />
+          <Route path="/cous" element={<CousMoved />} />
           <Route path="/shaders" element={<ShadersMoved />} />
           <Route path="/projects/shaders" element={<Shaders />} />
           <Route path="/shaders-hire" element={<HireLab />} />
