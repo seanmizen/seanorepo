@@ -419,3 +419,21 @@ Screenshots: `15-commit-and-tail/`. `seans-video-*.png` are the video's
 frames, and `seans-video-the-hover.png` is the hover, 3 times the size.
 `jump-swallow-swing-frames.png` is the new jump, the swallow and a hold
 with the pointer swung left and right, frame by frame.
+
+## Final: stage 15
+
+Sean:
+
+```text
+Great. That's it. Make note of that as a "final" step for this easter-egg. finish this first draft of the 'intentionality' story but also hide intentionality. I will return to it later. Commit and get ready for my next task.
+```
+
+Stage 15 is the final step of the Venom easter egg. The story marks it
+"final". This is the first draft of the story. The intentionality section
+is gone from the home page until Sean comes back to it. The story page
+still answers at `/shader-intentionality-story`.
+
+Still open: the Venom settings panel is temporary and shows only on the dev
+server. Sean's own panel values made the final look, and they are in his
+browser, not in the code. When he sends his settings string, the values
+become constants, and `eat.ts` and `eat-panel.tsx` go.

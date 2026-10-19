@@ -3,8 +3,14 @@
 type Message = { from: 'sean' | 'claude'; text: string };
 
 /* One stage of a story: the messages that led to it, and the folder of its
-   frozen sample, when the stage changed code. */
-type Stage = { title: string; messages: Message[]; sample?: string };
+   frozen sample, when the stage changed code. `final` marks the stage Sean
+   called the end of the piece. */
+type Stage = {
+  title: string;
+  messages: Message[];
+  sample?: string;
+  final?: boolean;
+};
 
 /* How a piece of the site was built with AI, stage by stage. `id` is the
    story's folder under stories/, and `slug` is its page. */

@@ -2,7 +2,7 @@ import type { FC } from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Entity, EntityList, HomeLi, Spacer, SSHModal } from '@/components';
-import { Donate, Github, Intentionality, ThisPage } from '@/features';
+import { Donate, Github, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 
 const Home: FC = () => {
@@ -13,8 +13,9 @@ const Home: FC = () => {
     poop: () => alert('oops, poop!'),
   });
 
+  // The intentionality section is hidden while its first story is a draft.
+  // Its story pages still answer at their own paths.
   const subsections = [
-    { component: <Intentionality />, trigger: 'intentionality' },
     { component: <Github />, trigger: 'github' },
     { component: <Donate />, trigger: 'donate' },
     { component: <ThisPage />, trigger: 'this page' },

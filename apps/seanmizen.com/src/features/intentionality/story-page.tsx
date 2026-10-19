@@ -19,6 +19,7 @@ const StoryPage: FC<{ story: Story }> = ({ story }) => (
         <li key={stage.title} className={styles.stage}>
           <h4 className={styles.stageTitle}>
             {i}. {stage.title}
+            {stage.final && <span className={styles.final}> final</span>}
           </h4>
           {stage.messages.map((message) =>
             message.from === 'sean' ? (
