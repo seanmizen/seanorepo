@@ -1,0 +1,7 @@
+/* Set like a section title on /projects, so the two pages share one
+   structure: the path, a dim line, then the entities. */
+.subtitle {
+  padding: 0.4rem 0 0.2rem 1.2rem;
+  font-size: 0.95rem;
+  opacity: 0.6;
+}

@@ -1,0 +1,12 @@
+/* The h1 slide-in belongs to arriving at the site, not to every page. */
+.title {
+  animation: none;
+}
+
+.title * {
+  padding: 0;
+}
+
+.page {
+  opacity: 0.6;
+}

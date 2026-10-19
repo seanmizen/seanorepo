@@ -1,9 +1,17 @@
 import type { FC } from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Entity, EntityList, HomeLi, Spacer, SSHModal } from '@/components';
+import {
+  Entity,
+  EntityList,
+  HomeLi,
+  SiteTitle,
+  Spacer,
+  SSHModal,
+} from '@/components';
 import { Donate, Github, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
+import styles from './home.module.css';
 
 const Home: FC = () => {
   const [isSSHModalOpen, setIsSSHModalOpen] = useState(false);
@@ -23,9 +31,8 @@ const Home: FC = () => {
 
   return (
     <main className="container">
-      <h1>seanmizen.com</h1>
-      <p>developer | automator | person</p>
-      <Spacer />
+      <SiteTitle />
+      <p className={styles.subtitle}>developer | automator | person</p>
       <EntityList>
         {/* Projects has a page of its own. The other sections open here. */}
         <Entity>

@@ -7,6 +7,7 @@ export { HomeLink } from './home-link';
 export { LastUpdated } from './last-updated';
 export { Portrait } from './portrait';
 export { ShaderRipple } from './shader-ripple';
+export { SiteTitle } from './site-title';
 export { Spacer } from './spacer';
 export { SSHModal } from './ssh-modal';
 export { ThemeToggle } from './theme-toggle';

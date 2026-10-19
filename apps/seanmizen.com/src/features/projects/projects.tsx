@@ -10,9 +10,12 @@ interface Project {
       sum of two paths counts a commit that touches both twice. */
   repo: string;
   path?: string;
+  /** The month of the first commit, YYYY-MM. It is a fixed fact, so it lives
+      here with the href and costs no request. */
+  since: string;
   /** One line, lowercase, no repetition of the name. */
   blurb?: string;
-  /** A longer note, in Sean's words. It takes the place of the blurb. */
+  /** A longer note, in Sean's words, in a paragraph of its own. */
   description?: string;
 }
 
@@ -31,23 +34,27 @@ const sections: Section[] = [
         href: 'https://carolinemizen.art',
         repo: MONOREPO,
         path: 'apps/carolinemizen.art',
+        since: '2024-12',
         blurb: 'art portfolio',
       },
       {
         href: 'https://planning-poker.seanmizen.com',
         repo: MONOREPO,
         path: 'apps/planning-poker',
+        since: '2025-12',
         blurb: 'agile estimation for teams',
       },
       {
         href: 'https://github.com/seanmizen/shist',
         repo: 'seanmizen/shist',
+        since: '2025-04',
         blurb: "sean's history tool",
       },
       {
         href: 'https://seanmizen.com',
         repo: MONOREPO,
         path: 'apps/seanmizen.com',
+        since: '2024-12',
         blurb: 'this site',
       },
     ],
@@ -59,6 +66,7 @@ const sections: Section[] = [
         href: 'https://minecraft.seanmizen.com',
         repo: MONOREPO,
         path: 'utils/swindowzig',
+        since: '2026-01',
         description:
           "I created a zig-based game engine from scratch. My first demo is a minecraft clone - it's up until Microsoft find out and sue me! It compiles to WASM and utilises WebGPU. dead fast.",
       },
@@ -71,6 +79,7 @@ const sections: Section[] = [
         href: 'https://inside.seanmizen.com',
         repo: MONOREPO,
         path: 'apps/inside',
+        since: '2026-09',
         blurb: 'a marketplace for interior designers',
       },
     ],
@@ -83,95 +92,88 @@ const cleanUrl = (href: string) => {
   return `${url.host}${url.pathname}`.replace(/\/$/, '');
 };
 
-interface Stats {
-  commits: number;
-  touched: Date;
-}
+/* Three letters, the same in every browser. */
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/* "2024-12" -> "Dec 2024". */
+const formatMonth = (yyyyMm: string) => {
+  const [year, month] = yyyyMm.split('-');
+  return `${MONTHS[Number(month) - 1]} ${year}`;
+};
 
 /*
-  One request gives both numbers. With per_page=1, the response holds the
-  newest commit, and the page number of the `rel="last"` link is the commit
-  count. No `last` link means the whole history fits on the one page.
+  The commit count, from one request. With per_page=1, the page number of
+  the `rel="last"` link is the number of commits. No `last` link means the
+  whole history fits on the one page.
 */
-const fetchStats = async ({ repo, path }: Project): Promise<Stats> => {
+const fetchCommits = async ({ repo, path }: Project): Promise<number> => {
   const query = new URLSearchParams({ per_page: '1' });
   if (path) query.set('path', path);
   const response = await fetch(
     `https://api.github.com/repos/${repo}/commits?${query}`,
   );
   if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-  const [latest] = await response.json();
+  const page = await response.json();
   const last = response.headers
     .get('Link')
     ?.match(/[?&]page=(\d+)>; rel="last"/);
-  return {
-    commits: last ? Number(last[1]) : latest ? 1 : 0,
-    touched: new Date(latest.commit.committer.date),
-  };
+  return last ? Number(last[1]) : page.length;
 };
 
-const DAY = 24 * 60 * 60 * 1000;
-
-const ago = (date: Date) => {
-  const days = Math.floor((Date.now() - date.getTime()) / DAY);
-  if (days < 1) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 60) return `${days} days ago`;
-  return `${Math.floor(days / 30)} months ago`;
-};
-
-const useStats = () => {
-  const [stats, setStats] = useState<Record<string, Stats>>({});
+const useCommits = () => {
+  const [commits, setCommits] = useState<Record<string, number>>({});
   useEffect(() => {
     for (const project of sections.flatMap((s) => s.projects)) {
-      fetchStats(project)
-        .then((s) => setStats((all) => ({ ...all, [project.href]: s })))
+      fetchCommits(project)
+        .then((n) => setCommits((all) => ({ ...all, [project.href]: n })))
         .catch((error) =>
           console.error(`Failed to fetch commits for ${project.href}:`, error),
         );
     }
   }, []);
-  return stats;
+  return commits;
 };
 
 const Projects: FC = () => {
-  const stats = useStats();
+  const commits = useCommits();
   return (
-    <div className={styles.listing}>
-      <div className={styles.columns} aria-hidden="true">
-        <span className={styles.commits}>commits</span>
-        <span className={styles.touched}>last</span>
-        <span className={styles.name}>name</span>
-        <span className={styles.what}>what</span>
-      </div>
+    <>
       {sections.map(({ title, projects }) => (
-        <section key={title}>
-          <h2 className={styles.title}># {title}</h2>
+        <section key={title} className={styles.section}>
+          <h2 className={styles.title}>{title}</h2>
           <EntityList>
-            {projects.map((project) => {
-              const { href, blurb, description } = project;
-              const s = stats[href];
-              return (
-                <Entity key={href} className={styles.row}>
-                  <span className={styles.name}>
-                    <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
-                  </span>
-                  <span className={styles.what}>{description ?? blurb}</span>
-                  <span className={styles.commits}>
-                    {s?.commits}
-                    {s && <span className={styles.unit}> commits</span>}
-                  </span>
-                  <span className={styles.touched}>
-                    {s && <span className="sr-only">last commit </span>}
-                    {s && ago(s.touched)}
-                  </span>
-                </Entity>
-              );
-            })}
+            {projects.map(({ href, since, blurb, description }) => (
+              <Entity key={href} className={styles.row}>
+                <span className={styles.name}>
+                  <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
+                </span>
+                {blurb && <span className={styles.blurb}>{blurb}</span>}
+                <span className={styles.commits}>
+                  {href in commits &&
+                    `${commits[href]} commits since ${formatMonth(since)}`}
+                </span>
+                {description && (
+                  <p className={styles.description}>{description}</p>
+                )}
+              </Entity>
+            ))}
           </EntityList>
         </section>
       ))}
-    </div>
+    </>
   );
 };
 
