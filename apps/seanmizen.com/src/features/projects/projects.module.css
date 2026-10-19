@@ -10,6 +10,13 @@
   padding: 0 0 0.75rem;
 }
 
+/* The 0.5rem that home's subtitle takes below itself (see
+   subtitle.module.css). Here it separates the first heading from the title,
+   so the first entity lands at the same height as on home. */
+.section:first-of-type {
+  padding-top: 0.5rem;
+}
+
 /* An Entity is as wide as its content. A row is as wide as the listing. The
    left column fits the longest name, planning-poker.seanmizen.com. */
 .row {
