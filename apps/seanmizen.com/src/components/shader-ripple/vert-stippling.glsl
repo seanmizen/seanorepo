@@ -19,7 +19,9 @@ uniform vec2 u_textureOffset;
 uniform float u_swell;  // how much a roused particle grows
 uniform float u_collapse;    // 0: the face; 1: every dot pulled into the core
 uniform float u_coreSize;    // the core's radius, in world units
-uniform vec2 u_coreAt;       // how far the core has wandered off its middle
+uniform vec2 u_coreAt;       // how far the core has moved off its middle
+uniform float u_wrap;        // 0: the core is a disk; 1: it is a ring around the cursor
+uniform float u_wrapRadius;  // the ring's radius, in world units
 uniform vec2 u_throwAt;      // where the throw has carried the shape, in world units
 uniform sampler2D u_contentMask;  // white where the page has content
 
@@ -64,9 +66,17 @@ void main() {
         // of the face is left in the core. The size above is read first,
         // where the dot sits in the face.
         float angle = 6.2831853 * hash31(vec3(a_index, 1.0, 7.0));
-        float reach = u_coreSize * sqrt(hash31(vec3(a_index, 2.0, 7.0)));
+        float inside = sqrt(hash31(vec3(a_index, 2.0, 7.0)));
+        // When Venom jumps, the core opens into a rough band around the
+        // cursor, which noise makes wobble.
+        float lump = noise3(vec3(2.0 * cos(angle), 2.0 * sin(angle), 3.0 * u_now));
+        float ring = u_wrapRadius * (1.0 + 0.3 * (inside - 0.5) + 0.2 * lump);
+        float reach = mix(u_coreSize * inside, ring, u_wrap);
         vec2 core = u_coreAt + reach * vec2(cos(angle), sin(angle));
         position.xy = mix(position.xy, core, u_collapse);
+        // Spread out into a ring, the dots need one size to show, as in a
+        // tendril below.
+        relativeSize = mix(relativeSize, 0.8, u_wrap * u_collapse);
 
         // The throw carries the whole shape along its path.
         position.xy += u_throwAt;

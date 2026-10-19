@@ -251,3 +251,42 @@ showed the new code. The freeze script now says to restart the dev server.
 Screenshots: `11-springy-venom/venom-before-after.png`. The cursor stops
 108 px from the core, then 56 px, then goes away. Headless Chrome draws
 about 2 frames a second, so this shows shapes, not the spring.
+
+## 12: the jump
+
+Sean:
+
+```text
+A new default: eat-v1:{"reach":120,"eatRadius":14,"release":86,"spring":8.3,"damping":0.28,"flail":30,"stretch":0.25,"flailPace":1.5,"twitch":0.6,"tendrils":5,"share":0.25,"spread":0.3,"strand":3,"wiggle":5.5,"gulp":1}
+
+First, set that. Then, I want to see a real "jump" to swallow the mouse. At the moment the core of the singularity does not move. I would ideally see (as the mouse approaches) the tendrils come out to 'feel', then at a critical distance the whole mass jumps to surround the mouse. This might involve some timing, javascript, and co-ordination to disappear the cursor at the right time. the dots should "surround" the cursor so it can be visibly eaten.
+```
+
+Claude set the new defaults. Venom now has three modes:
+
+1. Rest: the core stays home and the tendrils feel for the cursor.
+2. Jump: inside the jump distance (40 px), the whole core springs onto the
+   cursor's middle. On the way it opens into a rough ring (18 px), so it
+   lands around the cursor. The tendrils grab the cursor as it goes.
+3. Eaten: once the cursor is inside half the ring, the ring snaps shut in
+   0.15 s, and the cursor is hidden when the ring is half shut. The core
+   then follows the pointer, so it shows where the hidden cursor is.
+
+Past the release distance (86 px) from where the core rests, the core lets
+the cursor go and springs home. A jump that misses gives up there too. The
+eat radius setting went, and jump distance, jump speed and ring size came
+in.
+
+The first jump spring (6 swings a second) covered 34 px in about 4 frames,
+too fast to see as a jump. The default is now 3.
+
+To see the eat frame by frame, Claude gave the page a frame clock it can
+stop: requestAnimationFrame and performance.now() both read it, and the test
+moves it 1/60 s at a time. The first try faked only the frame time stamp.
+The shader's loop reads performance.now(), so its springs jumped 100 ms a
+frame.
+
+Screenshots: `12-venom-jump/`. `jump-frames.png` is the eat at 60 frames a
+second, frame by frame. The arrow marks the pointer: red while it shows,
+green once it is hidden. `feel-eat-follow-let-go.png` is the whole sequence
+at the normal clock.

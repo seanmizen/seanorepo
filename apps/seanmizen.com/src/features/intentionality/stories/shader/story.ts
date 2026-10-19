@@ -199,6 +199,22 @@ It will be helpful to extract a side-by-side comparison of before and after for 
       ],
       sample: 's11-springy-venom',
     },
+    {
+      title: 'the jump',
+      messages: [
+        {
+          from: 'sean',
+          text: `A new default: eat-v1:{"reach":120,"eatRadius":14,"release":86,"spring":8.3,"damping":0.28,"flail":30,"stretch":0.25,"flailPace":1.5,"twitch":0.6,"tendrils":5,"share":0.25,"spread":0.3,"strand":3,"wiggle":5.5,"gulp":1}
+
+First, set that. Then, I want to see a real "jump" to swallow the mouse. At the moment the core of the singularity does not move. I would ideally see (as the mouse approaches) the tendrils come out to 'feel', then at a critical distance the whole mass jumps to surround the mouse. This might involve some timing, javascript, and co-ordination to disappear the cursor at the right time. the dots should "surround" the cursor so it can be visibly eaten.`,
+        },
+        {
+          from: 'claude',
+          text: 'The tendrils still feel for the cursor. Inside the jump distance, the whole core springs onto the cursor and opens into a rough ring on the way, so it lands around the cursor. Then the ring snaps shut, and the cursor is hidden once the ring is half shut. The core then holds the cursor and follows the pointer, until the pointer goes past the release distance from where the core rests. The first jump spring covered the distance in about 4 frames, too fast to see as a jump, so the default is slower.',
+        },
+      ],
+      sample: 's12-venom-jump',
+    },
   ],
 };
 

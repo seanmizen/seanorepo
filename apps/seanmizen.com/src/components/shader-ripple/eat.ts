@@ -2,13 +2,17 @@
    app/eat-panel.tsx. When the values are settled, they become constants in
    shader-ripple.tsx, and this file and the panel go.
 
-   Once the thrown core has landed, a few tendrils reach out of it for a
-   cursor that comes near. Each one moves on springs, and noise swings and
-   stretches it. A cursor that comes closer still is eaten: it is hidden
-   until it moves away again. */
+   Once the thrown core has landed, a few tendrils reach out of it to feel
+   for a cursor that comes near. Each one moves on springs, and noise swings
+   and stretches it. For a cursor that comes closer still, the whole core
+   jumps onto it, opens into a ring around it, and snaps shut over it. The
+   core then holds the cursor, hidden, and follows the pointer, until the
+   pointer goes far enough from where the core rests. */
 type EatSettings = {
   reach: number;
-  eatRadius: number;
+  jump: number;
+  jumpSpring: number;
+  ring: number;
   release: number;
   spring: number;
   damping: number;
@@ -35,19 +39,21 @@ type EatDef = {
 
 const EAT_DEFAULTS: EatSettings = {
   reach: 120,
-  eatRadius: 14,
-  release: 28,
-  spring: 3,
-  damping: 0.3,
+  jump: 40,
+  jumpSpring: 3,
+  ring: 18,
+  release: 86,
+  spring: 8.3,
+  damping: 0.28,
   flail: 30,
   stretch: 0.25,
   flailPace: 1.5,
   twitch: 0.6,
-  tendrils: 3,
-  share: 0.15,
+  tendrils: 5,
+  share: 0.25,
   spread: 0.3,
   strand: 3,
-  wiggle: 4,
+  wiggle: 5.5,
   gulp: 1,
 };
 
@@ -61,20 +67,36 @@ const EAT_DEFS: EatDef[] = [
     hint: 'The tendrils strike at a cursor inside this distance from the core, in CSS pixels. A tendril is at most 80% of it long.',
   },
   {
-    key: 'eatRadius',
-    label: 'eat radius',
-    min: 2,
-    max: 60,
+    key: 'jump',
+    label: 'jump distance',
+    min: 5,
+    max: 110,
     step: 1,
-    hint: 'The core eats a cursor inside this distance, in CSS pixels. The theme toggle starts 32 px from the core.',
+    hint: 'The whole core jumps onto a cursor inside this distance from where it rests, in CSS pixels. The theme toggle starts 32 px from it.',
+  },
+  {
+    key: 'jumpSpring',
+    label: 'jump speed',
+    min: 1,
+    max: 15,
+    step: 0.1,
+    hint: 'How fast the core jumps, in swings a second. While it holds the cursor, it follows the pointer twice as fast.',
+  },
+  {
+    key: 'ring',
+    label: 'ring size',
+    min: 6,
+    max: 40,
+    step: 1,
+    hint: 'The radius of the ring the core opens into around the cursor, in CSS pixels. The ring snaps shut once the cursor is inside half of it.',
   },
   {
     key: 'release',
     label: 'release',
     min: 4,
-    max: 120,
+    max: 160,
     step: 1,
-    hint: 'An eaten cursor comes back out past this distance, in CSS pixels. Keep it under 32, or the cursor stays hidden over the theme toggle.',
+    hint: 'Past this distance from where the core rests, in CSS pixels, the core lets the cursor go and springs home. A jump that misses gives up here too. Keep it above the jump distance.',
   },
   {
     key: 'spring',
