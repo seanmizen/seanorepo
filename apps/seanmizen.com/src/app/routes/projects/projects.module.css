@@ -1,67 +1,20 @@
 /*
-  One font and one size for the whole page, like a terminal. Hierarchy comes
-  from weight, the accent and the muted opacity, never from size.
+  The path is the page title, at the size of the listing under it. The h1
+  slide-in belongs to arriving at the site, not to every page of it.
 */
-.page {
-  padding-top: 4rem;
-  padding-bottom: 4rem;
-  font-size: 0.95rem;
-  line-height: 1.75;
-}
-
-.page,
-.page * {
+.path {
+  padding: 1rem 0 0.4rem 1.2rem;
   font-family: "Red Hat Mono", "Courier New", Courier, monospace;
-  font-weight: 400;
-}
-
-.page * {
-  padding: 0;
-}
-
-.home {
-  opacity: 0.7;
-  text-decoration: none;
-}
-
-.home:hover,
-.home:focus-visible {
-  opacity: 1;
-  text-decoration: underline;
-  text-underline-offset: 0.25em;
-}
-
-/* The h1 slide-in belongs to arriving at the site, not to every page. */
-.command {
-  font-size: inherit;
+  font-size: 0.85rem;
+  font-weight: 300;
   animation: none;
 }
 
-.prompt {
-  color: var(--accent);
+.path * {
+  padding: 0;
+  font-family: inherit;
 }
 
-.cursorLine {
-  margin-top: 3em;
-}
-
-.cursor {
-  display: inline-block;
-  width: 1ch;
-  height: 1.1em;
-  vertical-align: text-bottom;
-  background: currentColor;
-  animation: blink 1.1s step-end infinite;
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cursor {
-    animation: none;
-  }
+.here {
+  opacity: 0.6;
 }
