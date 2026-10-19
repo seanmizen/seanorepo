@@ -231,6 +231,22 @@ Then, after swallowing, it should be "pulling" the mouse to its origin. right no
       ],
       sample: 's13-momentum-pull',
     },
+    {
+      title: 'a cleanup, by the numbers',
+      messages: [
+        {
+          from: 'sean',
+          text: `It's not so good. it prematurely jumps and stops halfway if you get close but stop.
+Then, the inertial movement once captured is now completely broken.
+Needs a cleanup. Take a look yourself at co-ordinate increments.`,
+        },
+        {
+          from: 'claude',
+          text: "Claude logged the core's place and speed every frame. Two faults showed. The core began to pull home the moment the cursor was hidden, at the top of its leap, so it turned back before it settled on the cursor. And once it held the cursor, it moved about 7 px while the pointer circled 50 px out. Now Venom has four modes. It jumps only once the pointer has stayed close for 0.12 s. It stays on the cursor until the ring is shut. Then a spring pulls it home, and the pointer's movement drags it, not where the pointer is.",
+        },
+      ],
+      sample: 's14-swallow-hold',
+    },
   ],
 };
 

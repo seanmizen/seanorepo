@@ -328,3 +328,45 @@ of the way out.
 
 Screenshots: `13-momentum-pull/eat-and-pull-frames.png` is the jump, the
 swallow and the drag home at 60 frames a second, frame by frame.
+
+## 14: a cleanup, by the numbers
+
+Sean:
+
+```text
+It's not so good. it prematurely jumps and stops halfway if you get close but stop.
+Then, the inertial movement once captured is now completely broken.
+Needs a cleanup. Take a look yourself at co-ordinate increments.
+```
+
+Claude added a temporary log of the core's state in each frame: the mode,
+the pointer and the core in CSS pixels from where the core rests, and the
+core's speed. A test drove the pointer one step a frame on the 60 fps test
+clock. Two faults showed:
+
+1. The pointer stopped 32 px out, and the jump began while it still came
+   in. The core leapt about 23 px to the cursor's middle and began to shut
+   3 px short. At the top of its overshoot the cursor hid, and in that frame
+   the core turned for home. It never settled on the cursor. To Sean, it
+   jumped, stopped halfway, and went back.
+2. Once the core held the cursor, the pointer circled 50 px out, and the
+   core moved about 7 px. The tug was a share of where the pointer was
+   (0.15), on a heavy spring (damping 0.9), so the core all but ignored the
+   pointer.
+
+Venom now has four modes: rest, jump, swallow and hold.
+
+- Jump: only once the pointer has stayed inside the jump distance for
+  0.12 s, so a pointer that passes by is safe, and one that stops gets
+  caught.
+- Swallow: the core stays on the cursor until the ring is shut.
+- Hold: a spring pulls the core home. The pointer's movement drags it, not
+  where the pointer is. "Tug" now sets how strongly (default 0.5). With the
+  pointer still, the core drifts home in about 0.7 s. With the pointer
+  circling, the core swings round home, about 25 px out. A flick past
+  release throws it after the pointer before it lets go.
+
+The log came out before the commit.
+
+Screenshots: `14-swallow-hold/feel-jump-swallow-hold-frames.png` is the
+feel, the jump, the swallow and the start of the hold, frame by frame.
