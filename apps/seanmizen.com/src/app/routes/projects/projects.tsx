@@ -6,7 +6,7 @@ import styles from './projects.module.css';
 const Projects: FC = () => (
   <main className="container">
     <div className={styles.half}>
-      <SiteTitle page="projects" />
+      <SiteTitle path="projects" />
       <ProjectList />
     </div>
   </main>

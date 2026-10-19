@@ -6,6 +6,7 @@ import {
   Route,
   BrowserRouter as Router,
   Routes,
+  useLocation,
   useMatch,
 } from 'react-router-dom';
 import { LastUpdated, Portrait, ThemeToggle } from '@/components';
@@ -43,6 +44,12 @@ const Layout: FC = () => {
   );
 };
 
+/* The old path of the shader playground. Old links still land, with their
+   settings in the hash. */
+const ShadersMoved: FC = () => (
+  <Navigate to={`/projects/shaders${useLocation().hash}`} replace />
+);
+
 const App: FC = () => {
   return (
     <ThemeProvider>
@@ -52,9 +59,8 @@ const App: FC = () => {
           <Route path="/apps" element={<Navigate to="/projects" replace />} />
           <Route path="/cous" element={<Cous />} />
           <Route path="/glasto" element={<MapNetwork />} />
-          <Route path="/shaders" element={<Shaders />} />
-          {/* One path segment: assets load from a relative prefix, so a nested
-              path would ask for them under /shaders/. */}
+          <Route path="/shaders" element={<ShadersMoved />} />
+          <Route path="/projects/shaders" element={<Shaders />} />
           <Route path="/shaders-hire" element={<HireLab />} />
           {/* The intentionality stories: one page each. */}
           {stories.map((story) => (

@@ -1,9 +1,11 @@
 import type { FC } from 'react';
+import { Link } from 'react-router-dom';
 import { Entity, EntityList, ExternalLink, Subtitle } from '@/components';
 import styles from './projects.module.css';
 
 interface Project {
-  /** The name column shows this URL without the protocol. */
+  /** The name column shows this URL without the protocol. A path that
+      starts with "/" is a page of this site. */
   href: string;
   /** One line, lowercase, no repetition of the name. */
   blurb?: string;
@@ -36,6 +38,10 @@ const sections: Section[] = [
         href: 'https://seanmizen.com',
         blurb: 'this site',
       },
+      {
+        href: '/projects/shaders',
+        blurb: 'ripple playground',
+      },
     ],
   },
   {
@@ -61,7 +67,7 @@ const sections: Section[] = [
 
 /* The clean URL: no protocol, no trailing slash. */
 const cleanUrl = (href: string) => {
-  const url = new URL(href);
+  const url = new URL(href, 'https://seanmizen.com');
   return `${url.host}${url.pathname}`.replace(/\/$/, '');
 };
 
@@ -74,7 +80,11 @@ const Projects: FC = () => (
           {projects.map(({ href, blurb, description }) => (
             <Entity key={href} className={styles.row}>
               <span className={styles.name}>
-                <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
+                {href.startsWith('/') ? (
+                  <Link to={href}>{cleanUrl(href)}</Link>
+                ) : (
+                  <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
+                )}
               </span>
               {blurb && <span className={styles.blurb}>{blurb}</span>}
               {description && (

@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { HomeLink, ThemeToggle } from '@/components';
+import { SiteTitle, ThemeToggle } from '@/components';
 import type {
   GlyphSet,
   RippleParams,
@@ -126,6 +126,9 @@ const Shaders: FC = () => {
 
   return (
     <main className={styles.page}>
+      <div className={`container ${styles.crumbs}`} data-no-ripple>
+        <SiteTitle path="projects/shaders" />
+      </div>
       <div className={styles.stage}>
         <ShaderRipple
           key={run}
@@ -140,7 +143,7 @@ const Shaders: FC = () => {
 
       <aside className={styles.panel} data-no-ripple aria-label="Controls">
         <header className={styles.header}>
-          <h1 className={styles.title}>ripple playground</h1>
+          <h2 className={styles.title}>ripple playground</h2>
           <span className={styles.fps}>{fps.toFixed(0)} fps</span>
           <ThemeToggle mode={mode} toggleMode={toggleMode} />
         </header>
@@ -382,9 +385,6 @@ const Shaders: FC = () => {
           Hover a slider for what it does. Double-click a slider to reset it.
           Changed values are highlighted.
         </p>
-        <nav aria-label="Site">
-          <HomeLink />
-        </nav>
       </aside>
     </main>
   );
