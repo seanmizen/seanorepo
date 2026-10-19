@@ -7,25 +7,17 @@ import {
   HIRE_DEFAULTS,
   HIRE_DEFS,
   MAX_MESSAGE,
+  readHash,
   serialiseHire,
+  writeHash,
 } from '@/components/shader-ripple';
 import { Projects } from '../projects';
 import styles from './hire-lab.module.css';
 
-/* The settings string also lives in the URL hash, so a reload or a shared
-   link comes back to the same setup. */
-const readHash = () => {
-  try {
-    return deserialiseHire(decodeURIComponent(location.hash.slice(1)));
-  } catch {
-    return null;
-  }
-};
-
 /* The real projects page, with a small panel to tune its hire field. Turn
    "show text" off to see the text fade out, and on to see it fade in. */
 const HireLab: FC = () => {
-  const initial = useMemo(readHash, []);
+  const initial = useMemo(() => readHash(deserialiseHire), []);
   const [hire, setHire] = useState<HireSettings>(initial ?? HIRE_DEFAULTS);
   const [reveal, setReveal] = useState(true);
   const [thrown, setThrown] = useState(true);
@@ -38,11 +30,7 @@ const HireLab: FC = () => {
   const [draft, setDraft] = useState(serialised);
   useEffect(() => {
     setDraft(serialised);
-    try {
-      history.replaceState(null, '', `#${encodeURIComponent(serialised)}`);
-    } catch {
-      // A sandboxed frame can refuse this. The string box still works.
-    }
+    writeHash(serialised);
   }, [serialised]);
 
   const flash = (text: string) => {

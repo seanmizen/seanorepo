@@ -11,7 +11,6 @@ import {
 } from 'react-router-dom';
 import { LastUpdated, Portrait, ThemeToggle } from '@/components';
 import { StoryPage, stories } from '@/features';
-import { MapNetwork } from '@/features/Glasto/Map';
 import { ThemeContext, ThemeProvider } from '@/providers';
 import { Cous, HireLab, Home, Projects, Shaders } from './routes';
 import '../index.css';
@@ -58,7 +57,6 @@ const App: FC = () => {
           {/* The old name for /projects. Old links still land. */}
           <Route path="/apps" element={<Navigate to="/projects" replace />} />
           <Route path="/cous" element={<Cous />} />
-          <Route path="/glasto" element={<MapNetwork />} />
           <Route path="/shaders" element={<ShadersMoved />} />
           <Route path="/projects/shaders" element={<Shaders />} />
           <Route path="/shaders-hire" element={<HireLab />} />

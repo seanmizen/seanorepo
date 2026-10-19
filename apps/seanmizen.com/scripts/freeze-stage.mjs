@@ -11,9 +11,9 @@
 
   The stage gets copies of the files the story is about: the shader, the
   portrait, HomeLi, the theme toggle, the home and projects pages, the
-  tuning panel, and the layout route cut out of app.tsx. Only import paths change. Everything
-  else (params.ts, the photo, site components, features, hooks, index.css)
-  stays a live import. A tuning panel is set to show in the sample, with a
+  projects listing, the tuning panel, and the layout route cut out of
+  app.tsx. Only import paths change. Everything else (params.ts, the photo,
+  site components, other features, hooks, index.css) stays a live import. A tuning panel is set to show in the sample, with a
   storage key of its own. It also writes the stage's main.tsx. It never
   writes over a stage that exists.
 
@@ -134,8 +134,21 @@ write(
   ),
 );
 for (const name of readdirSync(join(SRC, 'app/routes/projects'))) {
+  if (name === 'index.ts') continue;
+  let text = read(`app/routes/projects/${name}`);
+  // The page shows the listing as it is now, so the stage keeps a copy.
+  if (name === 'projects.tsx') {
+    text = replaceOnce(
+      text,
+      "import { Projects as ProjectList } from '@/features';",
+      "import { Projects as ProjectList } from '../../features/projects/projects';",
+    );
+  }
+  write(`routes/projects/${name}`, text);
+}
+for (const name of readdirSync(join(SRC, 'features/projects'))) {
   if (name !== 'index.ts') {
-    write(`routes/projects/${name}`, read(`app/routes/projects/${name}`));
+    write(`features/projects/${name}`, read(`features/projects/${name}`));
   }
 }
 

@@ -14,10 +14,12 @@ import {
   GROUPS,
   MAX_MESSAGE,
   PRESETS,
+  readHash,
   ShaderRipple,
   SIM_SIZES,
   STAGE_DEFAULTS,
   serialise,
+  writeHash,
 } from '@/components/shader-ripple';
 import { ThemeContext } from '@/providers';
 import styles from './shaders.module.css';
@@ -68,19 +70,9 @@ const squareImage = async (file: File) => {
   return canvas.toDataURL('image/jpeg', 0.9);
 };
 
-/* The settings string also lives in the URL hash, so a reload or a shared
-   link comes back to the same setup. */
-const readHash = () => {
-  try {
-    return deserialise(decodeURIComponent(location.hash.slice(1)));
-  } catch {
-    return null;
-  }
-};
-
 const Shaders: FC = () => {
   const { mode, toggleMode } = useContext(ThemeContext);
-  const initial = useMemo(readHash, []);
+  const initial = useMemo(() => readHash(deserialise), []);
   const [params, setParams] = useState<RippleParams>(
     initial?.params ?? DEFAULTS,
   );
@@ -101,11 +93,7 @@ const Shaders: FC = () => {
   const [draft, setDraft] = useState(serialised);
   useEffect(() => {
     setDraft(serialised);
-    try {
-      history.replaceState(null, '', `#${encodeURIComponent(serialised)}`);
-    } catch {
-      // A sandboxed frame can refuse this. The string box still works.
-    }
+    writeHash(serialised);
   }, [serialised]);
 
   const flash = (text: string) => {

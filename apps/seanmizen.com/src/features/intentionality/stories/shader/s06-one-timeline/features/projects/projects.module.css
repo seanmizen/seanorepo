@@ -1,0 +1,27 @@
+/*
+  The name carries the emphasis; everything after it is supporting detail and
+  is dimmed to match the weight of a static chevron, so a scan down the column
+  hits the names first.
+*/
+.blurb {
+  padding: 0;
+  opacity: 0.75;
+}
+
+.description {
+  padding: 0.2rem 0 0.4rem;
+  opacity: 0.75;
+  max-width: 36rem;
+}
+
+.section {
+  padding: 0 0 0.75rem;
+}
+
+/* Lines up with the names, after the chevron column, like the page heading. */
+.title {
+  padding: 0.4rem 0 0.2rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: normal;
+  opacity: 0.6;
+}
