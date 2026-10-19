@@ -1,11 +1,14 @@
 import type { FC } from 'react';
 import { SiteTitle } from '@/components';
 import { Projects as ProjectList } from '@/features';
+import styles from './projects.module.css';
 
 const Projects: FC = () => (
   <main className="container">
-    <SiteTitle page="projects" />
-    <ProjectList />
+    <div className={styles.half}>
+      <SiteTitle page="projects" />
+      <ProjectList />
+    </div>
   </main>
 );
 
