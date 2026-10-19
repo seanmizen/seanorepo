@@ -1,6 +1,12 @@
-/* The text starts where the title starts, on the chevron column, 0.1rem in. */
+/*
+  The text starts where the title starts, on the chevron column, 0.1rem in.
+
+  The gap above the text and the gap below it are both 1.2rem. Above, the
+  title's 0.5rem bottom padding adds to 0.7rem here. Below, 1rem here adds
+  to the first entity's 0.2rem top padding.
+*/
 .subtitle {
-  padding: 0.4rem 0 0.2rem 0.1rem;
+  padding: 0.7rem 0 1rem 0.1rem;
   font-size: 0.95rem;
   font-weight: normal;
   opacity: 0.6;
