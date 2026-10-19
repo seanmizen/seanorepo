@@ -9,7 +9,7 @@ import type { Story } from './types';
    notes, and each stage's code running in a frame. */
 const StoryPage: FC<{ story: Story }> = ({ story }) => (
   <main className="container">
-    <h1 className={styles.static}>seanmizen.com</h1>
+    <h1>seanmizen.com</h1>
     <h2 className={styles.heading}>intentionality</h2>
     <p className={styles.subtitle}>how I get results from AI</p>
     <h3 className={styles.title}>{story.title}</h3>

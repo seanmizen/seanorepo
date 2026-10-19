@@ -100,24 +100,6 @@ a:hover {
   text-decoration-thickness: 2px;
 }
 
-h1 {
-  animation: slideInFromTop 1s;
-  -moz-animation: slideInFromTop 1s; /* Firefox */
-  -webkit-animation: slideInFromTop 1s; /* Safari and Chrome */
-  -o-animation: slideInFromTop 1s; /* Opera */
-}
-
-@keyframes slideInFromTop {
-  0% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .container {
   /*
     The site is otherwise on the default content-box, where `max-width: 100%`

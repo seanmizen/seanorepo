@@ -18,7 +18,7 @@ const SiteTitle: FC<SiteTitleProps> = ({ page }) =>
       <span className={styles.page}>/{page}</span>
     </h1>
   ) : (
-    <h1>~/seanmizen.com</h1>
+    <h1 className={styles.title}>~/seanmizen.com</h1>
   );
 
 export { SiteTitle };
