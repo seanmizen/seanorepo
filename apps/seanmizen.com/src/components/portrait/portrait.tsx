@@ -1,16 +1,7 @@
 import type { FC, Ref, RefObject } from 'react';
 import { useMatchMedia } from '@/hooks';
-import type {
-  EatSettings,
-  HireSettings,
-  ShaderRippleHandle,
-} from '../shader-ripple';
-import {
-  EAT_DEFAULTS,
-  HIRE_DEFAULTS,
-  HOME_PARAMS,
-  ShaderRipple,
-} from '../shader-ripple';
+import type { HireSettings, ShaderRippleHandle } from '../shader-ripple';
+import { HIRE_DEFAULTS, HOME_PARAMS, ShaderRipple } from '../shader-ripple';
 
 /* Below this width the portrait draws at half size. */
 const NARROW = '(max-width: 880px)';
@@ -22,12 +13,11 @@ type PortraitProps = {
   /* While true, the hire text fades in. When false, it fades out. */
   reveal?: boolean;
   /* While true, the face is thrown to `landing` and shrinks into a small
-     pulsing core on the way. */
+     pulsing core on the way. The landed core reaches for the cursor and
+     eats it. */
   thrown?: boolean;
   /* The element the core lands in the middle of. */
   landing?: RefObject<HTMLElement | null>;
-  /* How the landed core reaches for the cursor and eats it. */
-  eat?: EatSettings;
   ref?: Ref<ShaderRippleHandle>;
 };
 
@@ -38,7 +28,6 @@ const Portrait: FC<PortraitProps> = ({
   reveal = false,
   thrown = false,
   landing,
-  eat = EAT_DEFAULTS,
   ref,
 }) => {
   const narrow = useMatchMedia(NARROW);
@@ -52,7 +41,6 @@ const Portrait: FC<PortraitProps> = ({
         reveal={reveal}
         thrown={thrown}
         landing={landing}
-        eat={eat}
         clearOfContent
         portraitScale={narrow ? 0.5 : 1}
       />

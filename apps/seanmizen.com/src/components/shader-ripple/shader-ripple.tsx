@@ -3,7 +3,6 @@ import { useContext, useEffect, useImperativeHandle, useRef } from 'react';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three-stdlib';
 import { ThemeContext } from '@/providers';
-import type { EatSettings } from './eat';
 import glyphLightFrag from './frag-glyph-light.glsl';
 import glyphFrag from './frag-glyphs.glsl';
 import frag from './frag-stippling.glsl';
@@ -122,14 +121,12 @@ type ShaderRippleProps = {
   reveal?: boolean;
   /* While true, the face is thrown: it flies to `landing` and shrinks into
      a small pulsing core on the way. When false, it flies back and opens
-     out into the face again. */
+     out into the face again. Once the core has landed, Venom reaches for
+     the cursor and eats it: see VENOM. */
   thrown?: boolean;
   /* The core lands in the middle of this element. Without it, or while it
      has no size, the core lands near the bottom middle of the view. */
   landing?: RefObject<HTMLElement | null>;
-  /* Venom: once the core has landed, it reaches for the cursor and eats
-     it. Without it, the core leaves the cursor alone. */
-  eat?: EatSettings;
   /* Keeps every dot and glyph off the page's content: its text, icons and
      controls. See the content mask below. */
   clearOfContent?: boolean;
@@ -180,8 +177,61 @@ const wander = (t: number, seed: number) => {
 const jitter = (t: number, seed: number) =>
   0.6 * wander(t, seed) + 0.4 * wander(3.7 * t, seed + 50);
 
-/* Venom: the most tendrils the shader draws. eat.ts holds the tendrils
-   slider to this. */
+/* Venom, the easter egg: once the thrown core has landed, a few tendrils
+   reach out of it to feel for a cursor that comes near. For a cursor that
+   comes closer still, the whole core jumps onto it, opens into a ring
+   around it, and snaps shut over it. The core then pulls the hidden cursor
+   home, until the pointer goes far enough away. Distances are in CSS
+   pixels, and speeds in swings a second. */
+const VENOM = {
+  /* The tendrils strike at a cursor inside this distance from the core. */
+  reach: 120,
+  /* The whole core jumps onto a cursor that stays inside this distance from
+     where it rests. Once it jumps, it does not give up until the cursor
+     leaves reach. The theme toggle starts 32 px from it. */
+  jump: 40,
+  /* How fast the core jumps. It pulls a swallowed cursor home at half this. */
+  jumpSpring: 3,
+  /* The radius of the ring the core opens into around the cursor. */
+  ring: 18,
+  /* How strongly the pointer's movement drags the core while the core holds
+     the cursor. Only the movement counts, not where the pointer is. */
+  tug: 0.5,
+  /* While the core holds the cursor, it lets it go once the pointer is this
+     far from the core. A cursor it let go must leave `jump` before it can
+     be caught again. */
+  release: 86,
+  /* How fast a tendril swings toward where it reaches. Each tendril is a
+     little faster or slower than this. */
+  spring: 8.3,
+  /* How fast a tendril's bounce dies: lower is springier, and 1 does not
+     overshoot. A tendril that lets go always pulls back with no bounce. */
+  damping: 0.28,
+  /* How far noise swings a tendril off the line to the cursor, in degrees,
+     and how much longer or shorter it makes it, against its length. */
+  flail: 30,
+  stretch: 0.25,
+  /* How fast the flailing changes, in rough changes a second. */
+  flailPace: 1.5,
+  /* How often a reaching tendril twitches, in twitches a second. A twitch
+     kicks its tip off course. */
+  twitch: 0.6,
+  /* How many tendrils, and the share of the core's dots that make them. */
+  tendrils: 5,
+  share: 0.25,
+  /* How far the tendrils fan out on the way, against their length. */
+  spread: 0.3,
+  /* How wide a tendril is at the core (it thins to a point at the tip), and
+     how far it writhes from side to side. */
+  strand: 3,
+  wiggle: 5.5,
+  /* How much the core swells for a moment when it eats the cursor. 1
+     doubles its size. */
+  gulp: 1,
+};
+
+/* Venom: the most tendrils the shader draws, the size of u_tendril.
+   VENOM.tendrils must not be more. */
 const TENDRILS_MAX = 8;
 /* A tendril strikes once the cursor is this share of `reach` inside it, and
    is at most this share of `reach` long. A cursor near the edge of reach is
@@ -316,7 +366,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
   reveal = false,
   thrown = false,
   landing,
-  eat,
   clearOfContent = false,
   portraitScale = 1,
   ref,
@@ -334,7 +383,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     reveal,
     thrown,
     landing,
-    eat,
     clearOfContent,
     portraitScale,
   });
@@ -346,7 +394,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     reveal,
     thrown,
     landing,
-    eat,
     clearOfContent,
     portraitScale,
   };
@@ -963,7 +1010,6 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       // cursor, opens into a ring around it, and swallows it. Then it
       // holds the hidden cursor and pulls it home, until the pointer is
       // `release` from the core.
-      const e = live.current.eat;
       const cx = pointer.x - bounds.left - land.x;
       const cy = pointer.y - bounds.top - land.y;
       const d = Math.hypot(cx, cy);
@@ -988,12 +1034,12 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         eatState.armed = false;
         eatState.nearSince = -1;
       };
-      if (!e || at < 1 || !pointer.in) {
+      if (at < 1 || !pointer.in) {
         if (eatState.mode !== 'rest') setMode('rest');
         eatState.armed = true;
         eatState.nearSince = -1;
       } else if (eatState.mode === 'rest') {
-        if (d >= e.jump) {
+        if (d >= VENOM.jump) {
           eatState.armed = true;
           eatState.nearSince = -1;
         } else if (!eatState.armed) {
@@ -1007,17 +1053,17 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           eatState.jumpDir.y = (prey.y - mass.at.y) / Math.max(gapToPrey, 1);
         }
       } else if (eatState.mode === 'jump') {
-        if (d > Math.max(e.reach, e.jump)) {
+        if (d > Math.max(VENOM.reach, VENOM.jump)) {
           letGo();
         } else if (
           Math.hypot(prey.x - mass.at.x, prey.y - mass.at.y) <
-          (1 - SHUT_INSIDE) * e.ring
+          (1 - SHUT_INSIDE) * VENOM.ring
         ) {
           setMode('swallow');
         }
       } else if (eatState.mode === 'swallow') {
         if (realNow - eatState.since >= WRAP_CLOSE) setMode('hold');
-      } else if (Math.hypot(cx - mass.at.x, cy - mass.at.y) > e.release) {
+      } else if (Math.hypot(cx - mass.at.x, cy - mass.at.y) > VENOM.release) {
         letGo();
       }
       const since = realNow - eatState.since;
@@ -1043,7 +1089,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       // movement drags it. At rest, it springs home. Each tail link
       // springs after the one before it.
       const steps = Math.ceil(gap * 240);
-      const jumpHz = e?.jumpSpring ?? 3;
+      const jumpHz = VENOM.jumpSpring;
       const onPrey = eatState.mode === 'jump' || eatState.mode === 'swallow';
       const holding = eatState.mode === 'hold';
       for (let i = 0; i < steps; i++) {
@@ -1054,7 +1100,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           holding ? HOLD_SPRING * jumpHz : jumpHz,
           holding ? HOLD_DAMPING : MASS_DAMPING,
           gap / steps,
-          holding ? (e?.tug ?? 0) * DRAG_RATE : 0,
+          holding ? VENOM.tug * DRAG_RATE : 0,
           pointerV,
         );
         for (const [k, link] of tail.entries()) {
@@ -1076,33 +1122,33 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       // feel for the cursor at rest, grab it in a jump, and let go once
       // the core holds it.
       let reachFor = 0;
-      if (e && eatState.mode === 'rest' && at >= 1 && pointer.in) {
-        reachFor = smoothstep(e.reach, (1 - STRIKE_IN) * e.reach, d);
+      if (eatState.mode === 'rest' && at >= 1 && pointer.in) {
+        reachFor = smoothstep(VENOM.reach, (1 - STRIKE_IN) * VENOM.reach, d);
       }
       if (eatState.mode === 'jump') reachFor = 1;
       const rx = cx - mass.at.x;
       const ry = cy - mass.at.y;
-      const count = e ? Math.min(e.tendrils, TENDRILS_MAX) : 0;
+      const count = VENOM.tendrils;
       let longest = 0;
       for (const [k, td] of tendrils.entries()) {
-        const out = e && k < count ? reachFor : 0;
-        const t = realNow * (e?.flailPace ?? 1) * td.pace;
+        const out = k < count ? reachFor : 0;
+        const t = realNow * VENOM.flailPace * td.pace;
         const toTip = { x: 0, y: 0 };
-        let hz = 1.5 * (e?.spring ?? 3) * td.pace;
+        let hz = 1.5 * VENOM.spring * td.pace;
         let damping = 1;
-        if (e && out > 0) {
+        if (out > 0) {
           const angle =
             Math.atan2(ry, rx) +
-            ((e.flail * Math.PI) / 180) * jitter(t, td.seed);
+            ((VENOM.flail * Math.PI) / 180) * jitter(t, td.seed);
           const length =
-            Math.min(Math.hypot(rx, ry), TENDRIL_LENGTH * e.reach) *
+            Math.min(Math.hypot(rx, ry), TENDRIL_LENGTH * VENOM.reach) *
             out *
-            (1 + e.stretch * jitter(t, td.seed + 1));
+            (1 + VENOM.stretch * jitter(t, td.seed + 1));
           toTip.x = length * Math.cos(angle);
           toTip.y = length * Math.sin(angle);
-          hz = e.spring * td.pace;
-          damping = e.damping;
-          if (Math.random() < e.twitch * gap) {
+          hz = VENOM.spring * td.pace;
+          damping = VENOM.damping;
+          if (Math.random() < VENOM.twitch * gap) {
             const kick = TWITCH_KICK * length * 2 * Math.PI * hz;
             const way = 2 * Math.PI * Math.random();
             td.tipV.x += kick * Math.cos(way);
@@ -1110,7 +1156,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
           }
         }
         const fan = count > 1 ? (2 * k) / (count - 1) - 1 : 0;
-        const side = (e?.spread ?? 0) * (fan + 0.5 * jitter(t, td.seed + 2));
+        const side = VENOM.spread * (fan + 0.5 * jitter(t, td.seed + 2));
         for (let i = 0; i < steps; i++) {
           const dt = gap / steps;
           springStep(td.tip, td.tipV, toTip, hz, damping, dt);
@@ -1130,16 +1176,14 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         longest = Math.max(longest, Math.hypot(td.tip.x, td.tip.y));
       }
       uniforms.u_grab.value = longest * worldPerPx;
-      if (e) {
-        uniforms.u_tendrils.value = count;
-        uniforms.u_tendrilShare.value = e.share;
-        uniforms.u_strand.value = e.strand * worldPerPx;
-        uniforms.u_wiggle.value = e.wiggle * worldPerPx;
-      }
+      uniforms.u_tendrils.value = count;
+      uniforms.u_tendrilShare.value = VENOM.share;
+      uniforms.u_strand.value = VENOM.strand * worldPerPx;
+      uniforms.u_wiggle.value = VENOM.wiggle * worldPerPx;
       // The gulp: a quick swell that dies away.
       const sinceGulp = realNow - eatState.gulpAt;
       const gulp =
-        (e?.gulp ?? 0) * Math.min(1, sinceGulp * 25) * Math.exp(-sinceGulp * 7);
+        VENOM.gulp * Math.min(1, sinceGulp * 25) * Math.exp(-sinceGulp * 7);
 
       // The core pulses and wanders about its middle.
       const pace = realNow * CORE_PACE;
@@ -1150,7 +1194,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         CORE_DRIFT * wander(pace, 3) - mass.at.y * worldPerPx,
       );
       uniforms.u_wrap.value = wrap;
-      uniforms.u_wrapRadius.value = (e?.ring ?? 0) * worldPerPx;
+      uniforms.u_wrapRadius.value = VENOM.ring * worldPerPx;
       // To world units, y up.
       uniforms.u_massV.value.set(mass.v.x * worldPerPx, -mass.v.y * worldPerPx);
       uniforms.u_sway.value = Math.min(
