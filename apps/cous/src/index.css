@@ -1,19 +1,37 @@
+/* The seanmizen.com colours: never pure black or pure white. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-family: monospace;
+  --color: #111;
+  --background: #eee;
 }
 
-/* useTheme sets data-theme. Without JS the system scheme applies. */
-:root[data-theme="light"] {
-  color-scheme: light;
+/* useTheme sets data-theme. Before it runs, the system scheme applies. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color: #cecece;
+    --background: #333;
+  }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --color: #cecece;
+  --background: #333;
+}
+
+/* The seanmizen.com fade between themes. */
+* {
+  transition:
+    background-color 100ms linear,
+    color 40ms linear;
 }
 
 body {
   margin: 0;
+  color: var(--color);
+  background: var(--background);
 }
 
 main {
