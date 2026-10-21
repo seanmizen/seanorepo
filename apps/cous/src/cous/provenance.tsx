@@ -40,7 +40,12 @@ const SOURCES: Source[] = [
     results: [cousSupermanUrl, cat1Url, cat2Url],
   },
   { sprite: 'blink', source: shelfUrl, results: [cousBlinkUrl] },
-  { sprite: 'crash', source: shockedUrl, results: [cousCrashUrl] },
+  // The app icon (public/icons) is a square crop of the same photo.
+  {
+    sprite: 'crash and app icon',
+    source: shockedUrl,
+    results: [cousCrashUrl, '/icons/icon-192.png'],
+  },
   {
     sprite: 'restart',
     source: washingMachineUrl,
