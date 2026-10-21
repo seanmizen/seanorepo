@@ -9,9 +9,6 @@ import cousRun2Url from './assets/cous/cous-run-2.png';
 import cousSupermanUrl from './assets/cous/cous-superman.png';
 import cousTreeUrl from './assets/cous/cous-tree.png';
 import cousWashingMachineUrl from './assets/cous/cous-washing-machine.png';
-import palmLarge1Url from './assets/cous/palm-large-1.png';
-import palmSmall1Url from './assets/cous/palm-small-1.png';
-import cousSheetUrl from './assets/cous-200-1.png';
 import shelfUrl from './assets/sources/shelf.jpg';
 import shockedUrl from './assets/sources/shocked.jpg';
 import supermanUrl from './assets/sources/superman.jpg';
@@ -24,83 +21,32 @@ import styles from './provenance.module.css';
 
 /** One source image and the sprites made from it. */
 type Source = {
-  /** The sprite (or sprites) that the source became. */
+  /** The sprite (or sprites) that the source became. Used in alt text. */
   sprite: string;
   source: string;
   /** The images that the game draws. */
   results: string[];
-  /** What was done to the source, in order. */
-  steps: string;
 };
 
 // Add an entry here for every new source image. See the README.
 const SOURCES: Source[] = [
+  { sprite: 'run, frame 1', source: walk00Url, results: [cousRun1Url] },
+  { sprite: 'run, frame 2', source: walk11Url, results: [cousRun2Url] },
+  { sprite: 'jump', source: windowLedgeUrl, results: [cousJumpUrl] },
+  // Sean made the crouch frames (first cous sheet) from this photo too.
   {
-    sprite: 'run, frame 1 (and idle)',
-    source: walk00Url,
-    results: [cousRun1Url],
-    steps:
-      'Frame at 0.0 s of a video. Subject mask, legs swung 10° (scripts/legs.py), resized.',
-  },
-  {
-    sprite: 'run, frame 2',
-    source: walk11Url,
-    results: [cousRun2Url],
-    steps:
-      'Frame at 1.1 s of the same video. Subject mask, legs swung 10° the other way, resized.',
-  },
-  {
-    sprite: 'jump',
-    source: windowLedgeUrl,
-    results: [cousJumpUrl],
-    steps: 'Subject mask, flipped, resized.',
-  },
-  {
-    sprite: 'jump (superman)',
+    sprite: 'superman jump and crouch',
     source: supermanUrl,
-    results: [cousSupermanUrl],
-    steps:
-      'Subject mask, rotated 90°, resized. Each jump picks this pose or the one above.',
+    results: [cousSupermanUrl, cat1Url, cat2Url],
   },
+  { sprite: 'blink', source: shelfUrl, results: [cousBlinkUrl] },
+  { sprite: 'crash', source: shockedUrl, results: [cousCrashUrl] },
   {
-    sprite: 'duck',
-    source: cousSheetUrl,
-    results: [cat1Url, cat2Url],
-    steps:
-      'The two crouch frames from the duck cells of the first cous sprite sheet. Sean edited the legs by hand in that sheet.',
-  },
-  {
-    sprite: 'blink',
-    source: shelfUrl,
-    results: [cousBlinkUrl],
-    steps: 'Subject mask, flipped, resized.',
-  },
-  {
-    sprite: 'crash',
-    source: shockedUrl,
-    results: [cousCrashUrl],
-    steps: 'Subject mask, resized.',
-  },
-  {
-    sprite: 'restart (washing machine)',
+    sprite: 'restart',
     source: washingMachineUrl,
     results: [cousWashingMachineUrl],
-    steps: 'Circular crop of the porthole, resized. No mask.',
   },
-  {
-    sprite: 'giant tree',
-    source: treeUrl,
-    results: [cousTreeUrl],
-    steps:
-      'Colour key on the blue sky (scripts/skykey.py), cropped above the roofs, resized. No mask model. One of the large obstacles.',
-  },
-  {
-    sprite: 'palm trees',
-    source: cousSheetUrl,
-    results: [palmSmall1Url, palmLarge1Url],
-    steps:
-      'Cut from the first cous sprite sheet, one palm per cell. 12 palms in total.',
-  },
+  { sprite: 'tree', source: treeUrl, results: [cousTreeUrl] },
 ];
 
 /**
@@ -118,33 +64,26 @@ const Provenance: FC = () => (
     </p>
     <ul className={styles.items}>
       {SOURCES.map((s) => (
-        <li key={s.sprite}>
-          <figure className={styles.figure}>
-            <div className={styles.pair}>
+        <li key={s.sprite} className={styles.pair}>
+          <img
+            className={styles.source}
+            src={s.source}
+            alt={`Source for the ${s.sprite} sprite`}
+            loading="lazy"
+          />
+          <span className={styles.arrow} aria-hidden="true">
+            →
+          </span>
+          <div className={styles.results}>
+            {s.results.map((r) => (
               <img
-                className={styles.source}
-                src={s.source}
-                alt={`Source for the ${s.sprite} sprite`}
+                key={r}
+                src={r}
+                alt={`The ${s.sprite} sprite`}
                 loading="lazy"
               />
-              <span className={styles.arrow} aria-hidden="true">
-                →
-              </span>
-              <div className={styles.results}>
-                {s.results.map((r) => (
-                  <img
-                    key={r}
-                    src={r}
-                    alt={`The ${s.sprite} sprite`}
-                    loading="lazy"
-                  />
-                ))}
-              </div>
-            </div>
-            <figcaption>
-              <strong>{s.sprite}</strong>: {s.steps}
-            </figcaption>
-          </figure>
+            ))}
+          </div>
         </li>
       ))}
     </ul>

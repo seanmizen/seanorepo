@@ -935,6 +935,10 @@ export class Game {
     }
   }
 
+  get crashed(): boolean {
+    return this.state === GameState.CRASHED;
+  }
+
   jump() {
     if (this.state === GameState.CRASHED) {
       this.restart();

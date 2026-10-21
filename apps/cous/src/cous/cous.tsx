@@ -96,6 +96,14 @@ const Cous: FC<CousProps> = ({ dark }) => {
     const onKeyDown = (e: KeyboardEvent) => {
       const game = gameRef.current;
       if (!game) return;
+      // After a crash, any key restarts. A held key and browser
+      // shortcuts do not.
+      if (game.crashed) {
+        if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        game.jump();
+        return;
+      }
       if (e.code === 'Space' || e.code === 'ArrowUp') {
         e.preventDefault();
         game.jump();
@@ -143,7 +151,7 @@ const Cous: FC<CousProps> = ({ dark }) => {
       {!ready && !error && <p className={styles.status}>loading sprites…</p>}
       {error && <p className={styles.error}>{error}</p>}
       <p className={styles.hint}>
-        space / ↑ to jump · ↓ to duck · enter to restart
+        space / ↑ to jump · ↓ to duck · any key to restart
       </p>
     </div>
   );
