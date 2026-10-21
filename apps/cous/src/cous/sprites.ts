@@ -407,7 +407,12 @@ export type Box = { x: number; y: number; width: number; height: number };
 
 /** One sprite, resolved and ready to draw. */
 export type Frame = {
-  image: HTMLImageElement;
+  /** The image for the current theme. `applyTheme` sets it. */
+  image: CanvasImageSource;
+  /** The image in light mode. */
+  imageLight: CanvasImageSource;
+  /** The image in dark mode: the inverted sheet, or the same cutout. */
+  imageDark: CanvasImageSource;
   sx: number;
   sy: number;
   sw: number;
@@ -424,7 +429,11 @@ export type Frame = {
 
 export type LoadedTheme = {
   theme: SpriteTheme;
-  sheet: HTMLImageElement;
+  /** The sheet for the current theme. `applyTheme` sets it. */
+  sheet: CanvasImageSource;
+  sheetLight: CanvasImageSource;
+  /** The sheet with inverted colours, for the pixel art in dark mode. */
+  sheetDark: CanvasImageSource;
   /** Every sprite, with one frame per variant. */
   frames: Record<SpriteName, Frame[]>;
 };
@@ -440,7 +449,7 @@ const BOX_ALPHA = 128;
  * from its leftmost to its rightmost opaque pixel.
  */
 function computeBoxes(
-  image: HTMLImageElement,
+  image: CanvasImageSource,
   sx: number,
   sy: number,
   sw: number,
@@ -492,6 +501,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 
 function sheetFrame(
   sheet: HTMLImageElement,
+  sheetDark: CanvasImageSource,
   theme: SpriteTheme,
   name: SpriteName,
 ): Frame {
@@ -503,6 +513,8 @@ function sheetFrame(
   const sh = s.height * theme.scale;
   return {
     image: sheet,
+    imageLight: sheet,
+    imageDark: sheetDark,
     sx,
     sy,
     sw,
@@ -525,6 +537,8 @@ function cutoutFrame(
   const sh = image.naturalHeight;
   return {
     image,
+    imageLight: image,
+    imageDark: image,
     sx: 0,
     sy: 0,
     sw,
@@ -553,6 +567,7 @@ export async function loadTheme(theme: SpriteTheme): Promise<LoadedTheme> {
     [...urls].map(async (url) => images.set(url, await loadImage(url))),
   );
   const sheet = images.get(theme.sheetUrl) as HTMLImageElement;
+  const sheetDark = invert(sheet);
 
   const frames = {} as Record<SpriteName, Frame[]>;
   for (const name of Object.keys(SPRITES) as SpriteName[]) {
@@ -568,7 +583,39 @@ export async function loadTheme(theme: SpriteTheme): Promise<LoadedTheme> {
             scaleY,
           );
         })
-      : [sheetFrame(sheet, theme, name)];
+      : [sheetFrame(sheet, sheetDark, theme, name)];
   }
-  return { theme, sheet, frames };
+  return { theme, sheet, sheetLight: sheet, sheetDark, frames };
+}
+
+/**
+ * Makes a copy of the sheet with inverted colours. The grey pixel art
+ * (#535353) becomes light grey (#acacac), as in the Chromium dark mode.
+ */
+function invert(sheet: HTMLImageElement): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = sheet.naturalWidth;
+  canvas.height = sheet.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  ctx.drawImage(sheet, 0, 0);
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    px[i] = 255 - px[i];
+    px[i + 1] = 255 - px[i + 1];
+    px[i + 2] = 255 - px[i + 2];
+  }
+  ctx.putImageData(data, 0, 0);
+  return canvas;
+}
+
+/** Points every sheet sprite at the light or the dark sheet. */
+export function applyTheme(loaded: LoadedTheme, dark: boolean) {
+  loaded.sheet = dark ? loaded.sheetDark : loaded.sheetLight;
+  for (const variants of Object.values(loaded.frames)) {
+    for (const frame of variants) {
+      frame.image = dark ? frame.imageDark : frame.imageLight;
+    }
+  }
 }
