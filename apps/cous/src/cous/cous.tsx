@@ -71,9 +71,6 @@ const Cous: FC<CousProps> = ({ dark, onCrash }) => {
           canvas,
           loaded,
           {
-            onInvertChange: (inverted: boolean) => {
-              canvas.classList.toggle(styles.inverted, inverted);
-            },
             onStart: () => setWaiting(false),
             onCrash: (score, durationMs, birds) =>
               onCrashRef.current?.(score, durationMs, birds),

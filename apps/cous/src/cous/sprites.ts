@@ -182,11 +182,9 @@ export const SPRITE_THEMES = {
       // Cous up a cordyline, cut out with scripts/skykey.py, is every
       // ground obstacle: 35 px tall (small) and 50 px tall (large).
       cactusSmall: { urls: [cousTreeUrl], scale: 200 / 35 },
-      // The five garden birds that cats catch most, perched. They take
-      // the place of the pterodactyl, and the cat eats them. Both
-      // pterodactyl frames draw the same bird, so a bird does not flap.
-      pterodactyl1: perchedBirds,
-      pterodactyl2: perchedBirds,
+      // The five garden birds that cats catch most, perched. The cat eats
+      // them. The pterodactyls keep the sheet art, and kill.
+      bird: perchedBirds,
       cactusLarge: { urls: [cousTreeUrl], scale: 4 },
     },
   },
@@ -311,6 +309,15 @@ export const SPRITES = {
     width: 46,
     height: 40,
     description: 'Flying pterodactyl, wings DOWN. Pair with pterodactyl1.',
+  },
+  bird: {
+    group: 'pterodactyl',
+    frameX: 0,
+    width: 46,
+    height: 40,
+    description:
+      'A perched bird that the player eats. Only a theme with a bird cutout ' +
+      'spawns it (see cutoutOnly in game.ts), so this sheet art never draws.',
   },
   cactusSmall: {
     group: 'cactusSmall',

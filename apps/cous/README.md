@@ -95,10 +95,13 @@ and starling stand on the robin's branch:
 ```bash
 uv run --with pillow python scripts/skykey.py --dark bird-robin.jpg branch.png 0,555,540,690
 uv run --with pillow python scripts/perch.py bird.png branch.png out.png 6
+# The sparrow's tail hangs below its feet, so give the feet (x,y):
+uv run --with pillow python scripts/perch.py sparrow.png branch.png out.png 6 180,418
 ```
 
 The player eats a bird for 50 points (`BIRD_POINTS` in `game.ts`). The
-backend permits the bonus: see `cous-be/src/validation.ts`.
+backend permits the bonus: see `cous-be/src/validation.ts`. The
+pterodactyls (from score 200) still kill.
 
 The page shows every source image beside the sprite made from it, in the
 "where the sprites come from" accordion (`src/cous/provenance.tsx`).
