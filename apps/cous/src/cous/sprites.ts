@@ -62,18 +62,6 @@ import cousRun2Url from './assets/cous/cous-run-2.png';
 import cousSupermanUrl from './assets/cous/cous-superman.png';
 import cousTreeUrl from './assets/cous/cous-tree.png';
 import cousWashingMachineUrl from './assets/cous/cous-washing-machine.png';
-import palmLarge1Url from './assets/cous/palm-large-1.png';
-import palmLarge2Url from './assets/cous/palm-large-2.png';
-import palmLarge3Url from './assets/cous/palm-large-3.png';
-import palmLarge4Url from './assets/cous/palm-large-4.png';
-import palmLarge5Url from './assets/cous/palm-large-5.png';
-import palmLarge6Url from './assets/cous/palm-large-6.png';
-import palmSmall1Url from './assets/cous/palm-small-1.png';
-import palmSmall2Url from './assets/cous/palm-small-2.png';
-import palmSmall3Url from './assets/cous/palm-small-3.png';
-import palmSmall4Url from './assets/cous/palm-small-4.png';
-import palmSmall5Url from './assets/cous/palm-small-5.png';
-import palmSmall6Url from './assets/cous/palm-small-6.png';
 
 /**
  * Game canvas dimensions (CSS / logical px). The horizon sprite must be
@@ -174,30 +162,10 @@ export const SPRITE_THEMES = {
       trexDuck2: { urls: [cat2Url], scale: 2.6 },
       // The washing machine porthole: a spin cycle to restart.
       restart: cous(cousWashingMachineUrl),
-      cactusSmall: {
-        urls: [
-          palmSmall1Url,
-          palmSmall2Url,
-          palmSmall3Url,
-          palmSmall4Url,
-          palmSmall5Url,
-          palmSmall6Url,
-        ],
-        scale: 2,
-      },
-      cactusLarge: {
-        urls: [
-          palmLarge1Url,
-          palmLarge2Url,
-          palmLarge3Url,
-          palmLarge4Url,
-          palmLarge5Url,
-          palmLarge6Url,
-          // Cous up a cordyline, cut out with scripts/skykey.py.
-          { url: cousTreeUrl, scale: 4 },
-        ],
-        scale: 2,
-      },
+      // Cous up a cordyline, cut out with scripts/skykey.py, is every
+      // ground obstacle: 35 px tall (small) and 50 px tall (large).
+      cactusSmall: { urls: [cousTreeUrl], scale: 200 / 35 },
+      cactusLarge: { urls: [cousTreeUrl], scale: 4 },
     },
   },
   classic: {

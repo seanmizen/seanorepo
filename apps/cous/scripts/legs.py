@@ -14,8 +14,8 @@
 #             the foot right (forward).
 #
 # The run frames used these values (in px of the lifted video frames):
-#   cous-run-1: 0,175,320,76,-10   175,<width>,306,262,10
-#   cous-run-2: 0,185,300,88,10    185,<width>,302,270,-10
+#   cous-run-1: 0,175,320,76,-20   175,<width>,306,262,20
+#   cous-run-2: 0,185,300,88,20    185,<width>,302,270,-20
 import sys
 from PIL import Image, ImageChops
 OVERLAP = 14  # px above the cut that rotate with the leg, hidden by the body
@@ -30,7 +30,9 @@ for spec in sys.argv[3:]:
     region = (x0, cut - OVERLAP, x1, src.height)
     layer = Image.new("RGBA", src.size, (0, 0, 0, 0))
     layer.paste(src.crop(region), region[:2])
-    layer = layer.rotate(angle, resample=Image.BICUBIC, center=(pivotx, cut))
+    # Pivot at the bottom of the kept leg top, so that the rotated leg
+    # meets the original there with no step.
+    layer = layer.rotate(angle, resample=Image.BICUBIC, center=(pivotx, cut + KEEP))
     # Near the joint, the leg stays inside the original outline.
     a = layer.getchannel("A")
     near = Image.new("L", src.size, 0)
