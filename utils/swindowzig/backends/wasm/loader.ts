@@ -229,8 +229,9 @@ export function createImports(
     // The Zig extern declarations use the module name "webgpu".
     webgpu: gpu.imports,
     audio: audioImports,
-    // The chunk worker pool (pipeline/exec_web.zig).
-    chunks: chunkImports(pool, getMemory),
+    // The chunk worker pool (pipeline/exec_web.zig). The results go into the
+    // held-bytes store of the WebGPU bridge (C5).
+    chunks: chunkImports(pool, getMemory, gpu.held),
   } as WebAssembly.Imports;
 }
 
