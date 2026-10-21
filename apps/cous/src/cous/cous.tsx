@@ -4,10 +4,15 @@ import { Game } from './game';
 import {
   CANVAS,
   DEFAULT_THEME_ID,
-  loadSpriteSheet,
+  loadTheme,
   SPRITE_THEMES,
   type SpriteThemeId,
 } from './sprites';
+
+// `?hitboxes` in the URL draws the collision boxes.
+const SHOW_HITBOXES = new URLSearchParams(window.location.search).has(
+  'hitboxes',
+);
 
 const Cous: FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,14 +50,19 @@ const Cous: FC = () => {
     gameRef.current?.stop();
     gameRef.current = null;
 
-    loadSpriteSheet(theme)
-      .then((sheet) => {
+    loadTheme(theme)
+      .then((loaded) => {
         if (cancelled) return;
-        gameRef.current = new Game(canvas, sheet, theme, {
-          onInvertChange: (inverted: boolean) => {
-            canvas.classList.toggle(styles.inverted, inverted);
+        gameRef.current = new Game(
+          canvas,
+          loaded,
+          {
+            onInvertChange: (inverted: boolean) => {
+              canvas.classList.toggle(styles.inverted, inverted);
+            },
           },
-        });
+          { showHitboxes: SHOW_HITBOXES },
+        );
         gameRef.current.start();
         setReady(true);
       })
@@ -98,7 +108,7 @@ const Cous: FC = () => {
   return (
     <div className={styles.wrapper}>
       <label className={styles.themePicker}>
-        sprite sheet:{' '}
+        theme:{' '}
         <select
           value={themeId}
           onChange={(e) => setThemeId(e.target.value as SpriteThemeId)}

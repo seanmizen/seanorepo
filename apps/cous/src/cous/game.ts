@@ -14,55 +14,39 @@
 //     theme is one of `SPRITE_THEMES` in ./sprites.ts.
 //   - Removed: sound FX, alt game mode, mobile-speed coefficient, RTL,
 //     audio cues, achievement flashing.
+//   - Sprite sizes and collision boxes come from the loaded theme
+//     (`loadTheme` in ./sprites.ts), not from hand-made constants.
+//     The player and ground obstacles stand on `CANVAS.FLOOR_Y`.
 
 import {
+  type Box,
   CANVAS,
   DIGITS,
-  SPRITES,
-  type Sprite,
+  type Frame,
+  type LoadedTheme,
   type SpriteName,
-  type SpriteTheme,
 } from './sprites';
 
 const FPS = 60;
 
-/**
- * Draws a named sprite from the active theme's sheet at (dx, dy).
- * Composes the source UV from the theme's group position plus the
- * sprite's logical (1×) sub-offset, scaled by the theme's `scale`.
- */
+/** Draws a frame with its top-left corner at (dx, dy). */
 function drawSprite(
   ctx: CanvasRenderingContext2D,
-  sheet: HTMLImageElement,
-  theme: SpriteTheme,
-  name: SpriteName,
+  frame: Frame,
   dx: number,
   dy: number,
 ) {
-  const s = SPRITES[name] as Sprite;
-  const groupPos = theme.positions[s.group];
-  const sx = groupPos.x + (s.frameX ?? 0) * theme.scale;
-  const sy = groupPos.y + (s.frameY ?? 0) * theme.scale;
   ctx.drawImage(
-    sheet,
-    sx,
-    sy,
-    s.width * theme.scale,
-    s.height * theme.scale,
+    frame.image,
+    frame.sx,
+    frame.sy,
+    frame.sw,
+    frame.sh,
     dx,
     dy,
-    s.width,
-    s.height,
+    frame.width,
+    frame.height,
   );
-}
-
-class CollisionBox {
-  constructor(
-    public x: number,
-    public y: number,
-    public width: number,
-    public height: number,
-  ) {}
 }
 
 // ── Trex ─────────────────────────────────────────────────────────────────
@@ -80,13 +64,12 @@ const defaultTrexConfig = {
   dropVelocity: -5,
   flashOff: 175,
   flashOn: 100,
+  // The jump physics use the T-rex height. Every frame draws with its
+  // bottom edge at yPos + height, whatever the size of the frame.
   height: 47,
-  heightDuck: 25,
   introDuration: 1500,
   speedDropCoefficient: 3,
   startXPos: 50,
-  width: 44,
-  widthDuck: 59,
 };
 
 const normalJumpConfig = {
@@ -117,18 +100,6 @@ const trexAnimFrames: Record<
   },
 };
 
-const trexCollisionBoxes = {
-  ducking: [new CollisionBox(1, 18, 55, 25)],
-  running: [
-    new CollisionBox(22, 0, 17, 16),
-    new CollisionBox(1, 18, 30, 9),
-    new CollisionBox(10, 35, 14, 8),
-    new CollisionBox(1, 24, 29, 5),
-    new CollisionBox(5, 30, 21, 4),
-    new CollisionBox(9, 34, 15, 4),
-  ],
-};
-
 class Trex {
   config = trexConfig;
   xPos = 0;
@@ -154,10 +125,9 @@ class Trex {
 
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private sheet: HTMLImageElement,
-    private theme: SpriteTheme,
+    private loaded: LoadedTheme,
   ) {
-    this.groundYPos = CANVAS.HEIGHT - this.config.height - 10;
+    this.groundYPos = CANVAS.FLOOR_Y - this.config.height;
     this.yPos = this.groundYPos;
     this.minJumpHeight = this.groundYPos - this.config.minJumpHeight;
     this.update(0, Status.WAITING);
@@ -205,13 +175,12 @@ class Trex {
 
   draw(spriteName: SpriteName) {
     if (!spriteName) return;
+    const frame = this.loaded.frames[spriteName][0];
     drawSprite(
       this.ctx,
-      this.sheet,
-      this.theme,
-      spriteName,
+      frame,
       Math.round(this.xPos),
-      Math.round(this.yPos),
+      Math.round(this.yPos + this.config.height - frame.height),
     );
   }
 
@@ -224,6 +193,9 @@ class Trex {
         this.animStartTime = time;
         this.blinkCount++;
       }
+    } else {
+      // The canvas clears every frame, so draw the open eyes too.
+      this.draw('trexIdle');
     }
   }
 
@@ -292,19 +264,22 @@ class Trex {
     this.jumpCount = 0;
   }
 
-  getCollisionBoxes(): CollisionBox[] {
-    return this.ducking
-      ? trexCollisionBoxes.ducking
-      : trexCollisionBoxes.running;
+  private activeFrame(): Frame {
+    return this.loaded.frames[this.currentAnimFrames[this.currentFrame]][0];
   }
 
-  getBoundingBox(): CollisionBox {
-    return new CollisionBox(
-      this.xPos,
-      this.yPos,
-      this.ducking ? this.config.widthDuck : this.config.width,
-      this.config.height,
-    );
+  getCollisionBoxes(): Box[] {
+    return this.activeFrame().boxes;
+  }
+
+  getBoundingBox(): Box {
+    const frame = this.activeFrame();
+    return {
+      x: this.xPos,
+      y: this.yPos + this.config.height - frame.height,
+      width: frame.width,
+      height: frame.height,
+    };
   }
 }
 
@@ -327,8 +302,7 @@ class Cloud {
 
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private sheet: HTMLImageElement,
-    private theme: SpriteTheme,
+    private loaded: LoadedTheme,
     containerWidth: number,
   ) {
     this.xPos = containerWidth;
@@ -346,9 +320,7 @@ class Cloud {
   draw() {
     drawSprite(
       this.ctx,
-      this.sheet,
-      this.theme,
-      'cloud',
+      this.loaded.frames.cloud[0],
       Math.round(this.xPos),
       Math.round(this.yPos),
     );
@@ -376,8 +348,7 @@ class HorizonLine {
 
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private sheet: HTMLImageElement,
-    private theme: SpriteTheme,
+    private loaded: LoadedTheme,
   ) {
     this.xPos = [0, this.dimensions.width];
     this.yPos = CANVAS.GROUND_Y;
@@ -385,22 +356,9 @@ class HorizonLine {
   }
 
   draw() {
-    drawSprite(
-      this.ctx,
-      this.sheet,
-      this.theme,
-      'horizon',
-      Math.round(this.xPos[0]),
-      this.yPos,
-    );
-    drawSprite(
-      this.ctx,
-      this.sheet,
-      this.theme,
-      'horizon',
-      Math.round(this.xPos[1]),
-      this.yPos,
-    );
+    const frame = this.loaded.frames.horizon[0];
+    drawSprite(this.ctx, frame, Math.round(this.xPos[0]), this.yPos);
+    drawSprite(this.ctx, frame, Math.round(this.xPos[1]), this.yPos);
   }
 
   updateXPos(pos: number, increment: number) {
@@ -452,8 +410,7 @@ class DistanceMeter {
 
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private sheet: HTMLImageElement,
-    private theme: SpriteTheme,
+    private loaded: LoadedTheme,
     canvasWidth: number,
   ) {
     this.x = canvasWidth - this.cellWidth * (this.maxScoreUnits + 1);
@@ -469,8 +426,9 @@ class DistanceMeter {
   draw(digitPos: number, value: number, isHighScore: boolean) {
     const cw = this.cellWidth;
     const ch = this.cellHeight;
-    const groupPos = this.theme.positions[DIGITS.group];
-    const scale = this.theme.scale;
+    const { sheet, theme } = this.loaded;
+    const groupPos = theme.positions[DIGITS.group];
+    const scale = theme.scale;
     const sourceX = groupPos.x + (DIGITS.frameX + cw * value) * scale;
     const sourceY = groupPos.y + DIGITS.frameY * scale;
     const targetX = digitPos * cw;
@@ -483,7 +441,7 @@ class DistanceMeter {
       this.ctx.translate(this.x, this.y);
     }
     this.ctx.drawImage(
-      this.sheet,
+      sheet,
       sourceX,
       sourceY,
       cw * scale,
@@ -571,13 +529,14 @@ class DistanceMeter {
 
 type ObstacleType = {
   type: 'cactusSmall' | 'cactusLarge' | 'pterodactyl';
-  width: number;
-  height: number;
-  yPos: number | number[];
+  /**
+   * Top Y of a flying obstacle. Each one picks a value at random.
+   * Ground obstacles stand on `CANVAS.FLOOR_Y`.
+   */
+  flyingYPos?: number[];
   multipleSpeed: number;
   minGap: number;
   minSpeed: number;
-  collisionBoxes: CollisionBox[];
   numFrames?: number;
   frameRate?: number;
   speedOffset?: number;
@@ -588,49 +547,24 @@ type ObstacleType = {
 const obstacleTypes: ObstacleType[] = [
   {
     type: 'cactusSmall',
-    width: 17,
-    height: 35,
-    yPos: 105,
     multipleSpeed: 4,
     minGap: 120,
     minSpeed: 0,
-    collisionBoxes: [
-      new CollisionBox(0, 7, 5, 27),
-      new CollisionBox(4, 0, 6, 34),
-      new CollisionBox(10, 4, 7, 14),
-    ],
     spriteFrames: ['cactusSmall'],
   },
   {
     type: 'cactusLarge',
-    width: 25,
-    height: 50,
-    yPos: 90,
     multipleSpeed: 7,
     minGap: 120,
     minSpeed: 0,
-    collisionBoxes: [
-      new CollisionBox(0, 12, 7, 38),
-      new CollisionBox(8, 0, 7, 49),
-      new CollisionBox(13, 10, 10, 38),
-    ],
     spriteFrames: ['cactusLarge'],
   },
   {
     type: 'pterodactyl',
-    width: 46,
-    height: 40,
-    yPos: [100, 75, 50],
+    flyingYPos: [100, 75, 50],
     multipleSpeed: 999,
     minSpeed: 8.5,
     minGap: 150,
-    collisionBoxes: [
-      new CollisionBox(15, 15, 16, 5),
-      new CollisionBox(18, 21, 24, 6),
-      new CollisionBox(2, 14, 4, 3),
-      new CollisionBox(6, 10, 4, 7),
-      new CollisionBox(10, 8, 6, 9),
-    ],
     numFrames: 2,
     frameRate: 1000 / 6,
     speedOffset: 0.8,
@@ -642,23 +576,25 @@ const MAX_GAP_COEFFICIENT = 1.5;
 const MAX_OBSTACLE_LENGTH = 3;
 
 class Obstacle {
-  collisionBoxes: CollisionBox[] = [];
+  collisionBoxes: Box[] = [];
   followingObstacleCreated = false;
   gap = 0;
   remove = false;
   size: number;
   width = 0;
+  height = 0;
   xPos: number;
   yPos = 0;
   speedOffset = 0;
   currentFrame = 0;
   timer = 0;
+  /** The variant that each copy draws. */
+  private variants: number[] = [];
 
   constructor(
     private ctx: CanvasRenderingContext2D,
     public typeConfig: ObstacleType,
-    private sheet: HTMLImageElement,
-    private theme: SpriteTheme,
+    private loaded: LoadedTheme,
     canvasWidth: number,
     private gapCoefficient: number,
     speed: number,
@@ -666,25 +602,32 @@ class Obstacle {
   ) {
     this.size = getRandomNum(1, MAX_OBSTACLE_LENGTH);
     this.xPos = canvasWidth + xOffset;
-    this.cloneCollisionBoxes();
     if (this.size > 1 && this.typeConfig.multipleSpeed > speed) {
       this.size = 1;
     }
-    this.width = this.typeConfig.width * this.size;
-    if (Array.isArray(this.typeConfig.yPos)) {
-      const yPosArr = this.typeConfig.yPos;
-      this.yPos = yPosArr[getRandomNum(0, yPosArr.length - 1)];
-    } else {
-      this.yPos = this.typeConfig.yPos;
+    const variantCount = loaded.frames[typeConfig.spriteFrames[0]].length;
+    for (let i = 0; i < this.size; i++) {
+      this.variants.push(getRandomNum(0, variantCount - 1));
     }
+    // The copies stand side by side, each on the bottom edge. The
+    // collision boxes of each copy move by the widths before it.
+    const frames = this.copyFrames();
+    this.height = Math.max(...frames.map((f) => f.height));
+    for (const frame of frames) {
+      for (const box of frame.boxes) {
+        this.collisionBoxes.push({
+          ...box,
+          x: box.x + this.width,
+          y: box.y + this.height - frame.height,
+        });
+      }
+      this.width += frame.width;
+    }
+    const { flyingYPos } = this.typeConfig;
+    this.yPos = flyingYPos
+      ? flyingYPos[getRandomNum(0, flyingYPos.length - 1)]
+      : CANVAS.FLOOR_Y - this.height;
     this.draw();
-    if (this.size > 1) {
-      this.collisionBoxes[1].width =
-        this.width -
-        this.collisionBoxes[0].width -
-        this.collisionBoxes[2].width;
-      this.collisionBoxes[2].x = this.width - this.collisionBoxes[2].width;
-    }
     if (this.typeConfig.speedOffset) {
       this.speedOffset =
         Math.random() > 0.5
@@ -694,17 +637,23 @@ class Obstacle {
     this.gap = this.getGap(this.gapCoefficient, speed);
   }
 
+  /** The frame that each copy draws for the current animation frame. */
+  private copyFrames(): Frame[] {
+    const variants =
+      this.loaded.frames[this.typeConfig.spriteFrames[this.currentFrame]];
+    return this.variants.map((v) => variants[v % variants.length]);
+  }
+
   draw() {
-    const name = this.typeConfig.spriteFrames[this.currentFrame];
-    for (let i = 0; i < this.size; i++) {
+    let x = this.xPos;
+    for (const frame of this.copyFrames()) {
       drawSprite(
         this.ctx,
-        this.sheet,
-        this.theme,
-        name,
-        Math.round(this.xPos + i * this.typeConfig.width),
-        Math.round(this.yPos),
+        frame,
+        Math.round(x),
+        Math.round(this.yPos + this.height - frame.height),
       );
+      x += frame.width;
     }
   }
 
@@ -738,25 +687,13 @@ class Obstacle {
     return this.xPos + this.width > 0;
   }
 
-  getBoundingBox(): CollisionBox {
-    return new CollisionBox(
-      this.xPos,
-      this.yPos,
-      this.width,
-      this.typeConfig.height,
-    );
-  }
-
-  private cloneCollisionBoxes() {
-    const src = this.typeConfig.collisionBoxes;
-    for (let i = src.length - 1; i >= 0; i--) {
-      this.collisionBoxes[i] = new CollisionBox(
-        src[i].x,
-        src[i].y,
-        src[i].width,
-        src[i].height,
-      );
-    }
+  getBoundingBox(): Box {
+    return {
+      x: this.xPos,
+      y: this.yPos,
+      width: this.width,
+      height: this.height,
+    };
   }
 }
 
@@ -779,13 +716,12 @@ class Horizon {
 
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private sheet: HTMLImageElement,
-    private theme: SpriteTheme,
+    private loaded: LoadedTheme,
     private canvasWidth: number,
     private gapCoefficient: number,
   ) {
     this.addCloud();
-    this.horizonLine = new HorizonLine(ctx, sheet, theme);
+    this.horizonLine = new HorizonLine(ctx, loaded);
   }
 
   update(deltaTime: number, currentSpeed: number, updateObstacles: boolean) {
@@ -844,12 +780,11 @@ class Horizon {
       new Obstacle(
         this.ctx,
         obstacleType,
-        this.sheet,
-        this.theme,
+        this.loaded,
         this.canvasWidth,
         this.gapCoefficient,
         currentSpeed,
-        obstacleType.width,
+        this.loaded.frames[obstacleType.spriteFrames[0]][0].width,
       ),
     );
     this.obstacleHistory.unshift(obstacleType.type);
@@ -867,9 +802,7 @@ class Horizon {
   }
 
   addCloud() {
-    this.clouds.push(
-      new Cloud(this.ctx, this.sheet, this.theme, this.canvasWidth),
-    );
+    this.clouds.push(new Cloud(this.ctx, this.loaded, this.canvasWidth));
   }
 
   reset() {
@@ -907,11 +840,16 @@ export type GameCallbacks = {
   onInvertChange?: (inverted: boolean) => void;
 };
 
+export type GameOptions = {
+  /** Draws the collision boxes of the player and the obstacles. */
+  showHitboxes?: boolean;
+};
+
 export class Game {
   private ctx: CanvasRenderingContext2D;
-  private sheet: HTMLImageElement;
-  private theme: SpriteTheme;
+  private loaded: LoadedTheme;
   private callbacks: GameCallbacks;
+  private options: GameOptions;
 
   private state: GameState = GameState.WAITING;
   private rafId: number | null = null;
@@ -929,29 +867,28 @@ export class Game {
 
   constructor(
     canvas: HTMLCanvasElement,
-    sheet: HTMLImageElement,
-    theme: SpriteTheme,
+    loaded: LoadedTheme,
     callbacks: GameCallbacks = {},
+    options: GameOptions = {},
   ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('cous: 2d context unavailable');
     this.ctx = ctx;
-    this.sheet = sheet;
-    this.theme = theme;
+    this.loaded = loaded;
     this.callbacks = callbacks;
+    this.options = options;
 
     const stored = Number(localStorage.getItem('cous:highScore'));
     if (Number.isFinite(stored) && stored > 0) this.highestScore = stored;
 
-    this.trex = new Trex(ctx, sheet, theme);
+    this.trex = new Trex(ctx, loaded);
     this.horizon = new Horizon(
       ctx,
-      sheet,
-      theme,
+      loaded,
       CANVAS.WIDTH,
       runnerConfig.GAP_COEFFICIENT,
     );
-    this.distanceMeter = new DistanceMeter(ctx, sheet, theme, CANVAS.WIDTH);
+    this.distanceMeter = new DistanceMeter(ctx, loaded, CANVAS.WIDTH);
     this.distanceMeter.setHighScore(this.highestScore);
     this.draw();
   }
@@ -1022,6 +959,7 @@ export class Game {
 
     if (this.state === GameState.WAITING) {
       this.draw();
+      this.horizon.horizonLine.draw();
       this.trex.update(dt);
       return;
     }
@@ -1068,37 +1006,44 @@ export class Game {
       // Update trex animation (jump physics, frame swaps).
       if (this.trex.jumping) this.trex.updateJump(dt);
       this.trex.update(dt);
+      if (this.options.showHitboxes) this.drawHitboxes();
     }
+    // A crash keeps the last frame on the canvas until the restart.
+  }
 
-    if (this.state === GameState.CRASHED) {
-      this.draw();
-      this.trex.update(dt);
+  private drawHitboxes() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineWidth = 1;
+    const stroke = (parent: Box, boxes: Box[], colour: string) => {
+      ctx.strokeStyle = colour;
+      ctx.strokeRect(parent.x, parent.y, parent.width, parent.height);
+      for (const b of boxes) {
+        ctx.strokeRect(parent.x + b.x, parent.y + b.y, b.width, b.height);
+      }
+    };
+    stroke(this.trex.getBoundingBox(), this.trex.getCollisionBoxes(), 'red');
+    for (const o of this.horizon.obstacles) {
+      stroke(o.getBoundingBox(), o.collisionBoxes, 'blue');
     }
+    ctx.restore();
   }
 
   private draw() {
     this.ctx.clearRect(0, 0, CANVAS.WIDTH, CANVAS.HEIGHT);
-    if (this.state === GameState.CRASHED) {
-      const go = SPRITES.gameOver;
-      const restart = SPRITES.restart;
-      const cx = CANVAS.WIDTH / 2;
-      drawSprite(
-        this.ctx,
-        this.sheet,
-        this.theme,
-        'gameOver',
-        Math.round(cx - go.width / 2),
-        30,
-      );
-      drawSprite(
-        this.ctx,
-        this.sheet,
-        this.theme,
-        'restart',
-        Math.round(cx - restart.width / 2),
-        50 + go.height,
-      );
-    }
+  }
+
+  private drawGameOver() {
+    const go = this.loaded.frames.gameOver[0];
+    const restart = this.loaded.frames.restart[0];
+    const cx = CANVAS.WIDTH / 2;
+    drawSprite(this.ctx, go, Math.round(cx - go.width / 2), 30);
+    drawSprite(
+      this.ctx,
+      restart,
+      Math.round(cx - restart.width / 2),
+      50 + go.height,
+    );
   }
 
   private setInverted(value: boolean) {
@@ -1109,12 +1054,19 @@ export class Game {
 
   private gameOver() {
     this.state = GameState.CRASHED;
-    this.trex.update(100, Status.CRASHED);
     if (this.distanceRan > this.highestScore) {
       this.highestScore = Math.ceil(this.distanceRan);
       localStorage.setItem('cous:highScore', String(this.highestScore));
       this.distanceMeter.setHighScore(this.highestScore);
     }
+    // Paint the last frame once, with the crash sprite. It stays on the
+    // canvas until the restart.
+    this.draw();
+    this.horizon.update(0, this.currentSpeed, true);
+    this.distanceMeter.update(0, Math.ceil(this.distanceRan));
+    this.trex.update(100, Status.CRASHED);
+    this.drawGameOver();
+    if (this.options.showHitboxes) this.drawHitboxes();
   }
 
   // ── Collision detection ────────────────────────────────────────────────
@@ -1144,7 +1096,7 @@ function getRandomNum(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function boxIntersect(a: CollisionBox, b: CollisionBox): boolean {
+function boxIntersect(a: Box, b: Box): boolean {
   return (
     a.x < b.x + b.width &&
     a.x + a.width > b.x &&
@@ -1153,11 +1105,11 @@ function boxIntersect(a: CollisionBox, b: CollisionBox): boolean {
   );
 }
 
-function adjust(parent: CollisionBox, local: CollisionBox): CollisionBox {
-  return new CollisionBox(
-    parent.x + local.x,
-    parent.y + local.y,
-    local.width,
-    local.height,
-  );
+function adjust(parent: Box, local: Box): Box {
+  return {
+    x: parent.x + local.x,
+    y: parent.y + local.y,
+    width: local.width,
+    height: local.height,
+  };
 }
