@@ -125,6 +125,8 @@ class Trex {
   reachedMinHeight = false;
   minJumpHeight: number;
   playingIntro = false;
+  /** The variant that each pose draws. A change of pose picks again. */
+  variant = 0;
 
   constructor(
     private ctx: CanvasRenderingContext2D,
@@ -145,6 +147,7 @@ class Trex {
     if (status !== undefined) {
       this.status = status;
       this.currentFrame = 0;
+      this.variant = Math.floor(Math.random() * 1000);
       this.msPerFrame = trexAnimFrames[status].msPerFrame;
       this.currentAnimFrames = trexAnimFrames[status].frames;
       if (status === Status.WAITING) {
@@ -178,7 +181,7 @@ class Trex {
 
   draw(spriteName: SpriteName) {
     if (!spriteName) return;
-    const frame = this.loaded.frames[spriteName][0];
+    const frame = this.pick(spriteName);
     drawSprite(
       this.ctx,
       frame,
@@ -267,8 +270,13 @@ class Trex {
     this.jumpCount = 0;
   }
 
+  private pick(name: SpriteName): Frame {
+    const variants = this.loaded.frames[name];
+    return variants[this.variant % variants.length];
+  }
+
   private activeFrame(): Frame {
-    return this.loaded.frames[this.currentAnimFrames[this.currentFrame]][0];
+    return this.pick(this.currentAnimFrames[this.currentFrame]);
   }
 
   getCollisionBoxes(): Box[] {

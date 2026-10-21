@@ -5,14 +5,20 @@ import cousDuckUrl from './assets/cous/cous-duck.png';
 import cousJumpUrl from './assets/cous/cous-jump.png';
 import cousRun1Url from './assets/cous/cous-run-1.png';
 import cousRun2Url from './assets/cous/cous-run-2.png';
+import cousSupermanUrl from './assets/cous/cous-superman.png';
+import cousTreeUrl from './assets/cous/cous-tree.png';
+import cousWashingMachineUrl from './assets/cous/cous-washing-machine.png';
 import palmLarge1Url from './assets/cous/palm-large-1.png';
 import palmSmall1Url from './assets/cous/palm-small-1.png';
 import cousSheetUrl from './assets/cous-200-1.png';
 import shelfUrl from './assets/sources/shelf.jpg';
 import shockedUrl from './assets/sources/shocked.jpg';
 import stretchUrl from './assets/sources/stretch.jpg';
+import supermanUrl from './assets/sources/superman.jpg';
+import treeUrl from './assets/sources/tree.jpg';
 import walk00Url from './assets/sources/walk-0.0s.jpg';
 import walk11Url from './assets/sources/walk-1.1s.jpg';
+import washingMachineUrl from './assets/sources/washing-machine.jpg';
 import windowLedgeUrl from './assets/sources/window-ledge.jpg';
 import styles from './provenance.module.css';
 
@@ -50,6 +56,13 @@ const SOURCES: Source[] = [
     steps: 'Subject mask, flipped, resized.',
   },
   {
+    sprite: 'jump (superman)',
+    source: supermanUrl,
+    results: [cousSupermanUrl],
+    steps:
+      'Subject mask, rotated 90°, resized. Each jump picks this pose or the one above.',
+  },
+  {
     sprite: 'duck',
     source: stretchUrl,
     results: [cousDuckUrl],
@@ -66,6 +79,19 @@ const SOURCES: Source[] = [
     source: shockedUrl,
     results: [cousCrashUrl],
     steps: 'Subject mask, resized.',
+  },
+  {
+    sprite: 'restart (washing machine)',
+    source: washingMachineUrl,
+    results: [cousWashingMachineUrl],
+    steps: 'Circular crop of the porthole, resized. No mask.',
+  },
+  {
+    sprite: 'giant tree',
+    source: treeUrl,
+    results: [cousTreeUrl],
+    steps:
+      'Colour key on the blue sky (scripts/skykey.py), cropped above the roofs, resized. No mask model. One of the large obstacles.',
   },
   {
     sprite: 'palm trees',
@@ -85,9 +111,9 @@ const Provenance: FC = () => (
     <summary>where the sprites come from</summary>
     <p className={styles.intro}>
       Every image of Cous is a real photo or video frame. The processing is a
-      subject mask (the macOS Vision framework, scripts/lift.swift), flips,
-      rotations, resizing and the leg swing. No image is generated. The source
-      images have no metadata.
+      subject mask (the macOS Vision framework, scripts/lift.swift) or a colour
+      key on blue sky (scripts/skykey.py), crops, flips, rotations, resizing and
+      the leg swing. No image is generated. The source images have no metadata.
     </p>
     <ul className={styles.items}>
       {SOURCES.map((s) => (

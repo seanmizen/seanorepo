@@ -18,6 +18,8 @@ Every image of Cous in the game is a real photo or video frame. The
 permitted processing is:
 
 - a subject mask (`scripts/lift.swift`, the macOS Vision framework)
+- a colour key on blue sky (`scripts/skykey.py`), when Vision finds no
+  subject
 - flips, rotations, crops and resizing
 - the leg swing (`scripts/legs.py`), which moves the photo's own pixels
 
