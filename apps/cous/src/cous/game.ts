@@ -978,7 +978,10 @@ export class Game {
       this.horizon.update(dt, this.currentSpeed, hasObstacles);
 
       if (hasObstacles && this.checkForCollision()) {
+        // gameOver paints the last frame. Stop here, or the player draws
+        // a second time on top of it.
         this.gameOver();
+        return;
       } else {
         this.distanceRan += (this.currentSpeed * dt) / (1000 / FPS);
         const playAch = this.distanceMeter.update(
