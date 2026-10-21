@@ -9,6 +9,9 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn/releases ./.yarn/releases
 COPY apps/cous/package.json ./apps/cous/
+# cous names cous-be as a workspace. Its package.json keeps the workspace
+# tree the same as in yarn.lock. Its own image is cous-be/dockerfile.
+COPY apps/cous/cous-be/package.json ./apps/cous/cous-be/
 RUN yarn workspaces focus cous
 
 COPY apps/cous/src ./apps/cous/src

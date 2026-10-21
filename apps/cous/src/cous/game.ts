@@ -863,6 +863,11 @@ export type GameCallbacks = {
   onInvertChange?: (inverted: boolean) => void;
   /** The first jump starts the game. */
   onStart?: () => void;
+  /**
+   * A crash ends the run. `score` is the number on the meter. `durationMs`
+   * is the game time of the run, the time that moved the player.
+   */
+  onCrash?: (score: number, durationMs: number) => void;
 };
 
 export type GameOptions = {
@@ -882,6 +887,8 @@ export class Game {
   private runningTime = 0;
   private currentSpeed = runnerConfig.SPEED;
   private distanceRan = 0;
+  /** The game time of the current run, in ms. */
+  private runMs = 0;
   private highestScore = 0;
   private inverted = false;
   private invertTimer = 0;
@@ -978,6 +985,7 @@ export class Game {
     this.currentSpeed = runnerConfig.SPEED;
     this.runningTime = 0;
     this.distanceRan = 0;
+    this.runMs = 0;
     this.invertTimer = 0;
     this.setInverted(false);
     this.horizon.reset();
@@ -1014,6 +1022,7 @@ export class Game {
         return;
       } else {
         this.distanceRan += (this.currentSpeed * dt) / (1000 / FPS);
+        this.runMs += dt;
         const playAch = this.distanceMeter.update(
           dt,
           Math.ceil(this.distanceRan),
@@ -1104,6 +1113,10 @@ export class Game {
       this.distanceMeter.setHighScore(this.highestScore);
     }
     this.paintCrash();
+    this.callbacks.onCrash?.(
+      this.distanceMeter.getActualDistance(Math.ceil(this.distanceRan)),
+      Math.round(this.runMs),
+    );
   }
 
   /**

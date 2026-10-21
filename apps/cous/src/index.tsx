@@ -1,6 +1,7 @@
-import { type FC, StrictMode } from 'react';
+import { type FC, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Cous } from './cous/cous';
+import { Leaderboard, type Run } from './cous/leaderboard';
 import { Provenance } from './cous/provenance';
 import { RotateHint, useLandscapeLock } from './landscape';
 import { registerServiceWorker } from './pwa/register';
@@ -10,11 +11,18 @@ import './index.css';
 const App: FC = () => {
   const { mode, theme, toggleMode } = useTheme();
   useLandscapeLock();
+  const [run, setRun] = useState<Run | null>(null);
   return (
     <>
       <main>
         <h1>Cous Cous Bruus-Barnett</h1>
-        <Cous dark={theme === 'dark'} />
+        <Cous
+          dark={theme === 'dark'}
+          onCrash={(score, durationMs) =>
+            setRun({ id: Date.now(), score, durationMs })
+          }
+        />
+        <Leaderboard run={run} />
         <a href="https://seanmizen.com">seanmizen.com</a>
         <Provenance />
       </main>
