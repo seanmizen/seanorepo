@@ -97,7 +97,7 @@ const Provenance: FC = () => (
               <img
                 className={styles.source}
                 src={s.source}
-                alt={`Source image for the ${s.sprite} sprite`}
+                alt={`Source for the ${s.sprite} sprite`}
                 loading="lazy"
               />
               <span className={styles.arrow} aria-hidden="true">
