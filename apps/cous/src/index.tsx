@@ -15,7 +15,7 @@ const App: FC = () => {
   return (
     <>
       <main>
-        <h1>Cous Cous Bruus-Barnett</h1>
+        <h1>cous</h1>
         <Cous
           dark={theme === 'dark'}
           onCrash={(score, durationMs, birds) =>
