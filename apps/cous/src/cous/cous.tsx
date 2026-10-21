@@ -18,7 +18,7 @@ type CousProps = {
   /** Draws the pixel art in dark-mode colours. */
   dark: boolean;
   /** A crash ends a run (see GameCallbacks.onCrash). */
-  onCrash?: (score: number, durationMs: number) => void;
+  onCrash?: (score: number, durationMs: number, birds: number) => void;
 };
 
 const Cous: FC<CousProps> = ({ dark, onCrash }) => {
@@ -75,8 +75,8 @@ const Cous: FC<CousProps> = ({ dark, onCrash }) => {
               canvas.classList.toggle(styles.inverted, inverted);
             },
             onStart: () => setWaiting(false),
-            onCrash: (score, durationMs) =>
-              onCrashRef.current?.(score, durationMs),
+            onCrash: (score, durationMs, birds) =>
+              onCrashRef.current?.(score, durationMs, birds),
           },
           { showHitboxes: SHOW_HITBOXES },
         );

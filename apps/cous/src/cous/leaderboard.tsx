@@ -7,6 +7,8 @@ type Run = {
   id: number;
   score: number;
   durationMs: number;
+  /** Birds eaten in the run. The backend permits their bonus points. */
+  birds: number;
 };
 
 type ScoreRow = { name: string; score: number; createdAt: string };
@@ -88,6 +90,7 @@ const Leaderboard: FC<{ run: Run | null }> = ({ run }) => {
           name: trimmed,
           score: run.score,
           durationMs: run.durationMs,
+          birds: run.birds,
         }),
       });
       const body = await res.json().catch(() => ({}));

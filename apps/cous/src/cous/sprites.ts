@@ -52,6 +52,11 @@
 // reference.
 
 import chromium200Url from './assets/chromium-200-offline-sprite.png';
+import birdBlackbirdUrl from './assets/cous/bird-blackbird.png';
+import birdBluetitUrl from './assets/cous/bird-bluetit.png';
+import birdRobinUrl from './assets/cous/bird-robin.png';
+import birdSparrowUrl from './assets/cous/bird-sparrow.png';
+import birdStarlingUrl from './assets/cous/bird-starling.png';
 import cat1Url from './assets/cous/cat-1.png';
 import cat2Url from './assets/cous/cat-2.png';
 import cousBlinkUrl from './assets/cous/cous-blink.png';
@@ -138,6 +143,18 @@ const chromiumSheet = {
   },
 };
 
+/** The bird cutouts, each exported 160 px tall (40 logical px). */
+const perchedBirds: Cutout = {
+  urls: [
+    birdSparrowUrl,
+    birdBluetitUrl,
+    birdBlackbirdUrl,
+    birdStarlingUrl,
+    birdRobinUrl,
+  ],
+  scale: 4,
+};
+
 /** A Cous photo cutout, exported at 4 image px per logical px. */
 const cous = (url: string): Cutout => ({ urls: [url], scale: 4 });
 
@@ -165,6 +182,11 @@ export const SPRITE_THEMES = {
       // Cous up a cordyline, cut out with scripts/skykey.py, is every
       // ground obstacle: 35 px tall (small) and 50 px tall (large).
       cactusSmall: { urls: [cousTreeUrl], scale: 200 / 35 },
+      // The five garden birds that cats catch most, perched. They take
+      // the place of the pterodactyl, and the cat eats them. Both
+      // pterodactyl frames draw the same bird, so a bird does not flap.
+      pterodactyl1: perchedBirds,
+      pterodactyl2: perchedBirds,
       cactusLarge: { urls: [cousTreeUrl], scale: 4 },
     },
   },

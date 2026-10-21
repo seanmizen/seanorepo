@@ -66,11 +66,39 @@ permitted processing is:
 
 - a subject mask (`scripts/lift.swift`, the macOS Vision framework)
 - a colour key on blue sky (`scripts/skykey.py`), when Vision finds no
-  subject
+  subject. With `--dark`, the key cuts a dark subject (a branch) out of a
+  light background.
 - flips, rotations, crops and resizing
 - the leg swing (`scripts/legs.py`), which moves the photo's own pixels
+- a perch (`scripts/perch.py`): a real branch put under a bird's feet
 
 Do not use generated or AI-edited images.
+
+### Bird photos
+
+The birds (the cous theme draws them in place of the pterodactyl) are
+photos from Wikimedia Commons. Their licences require credit, and the
+gallery gives it. A sprite made from a CC BY-SA photo has the same
+licence.
+
+| Bird | Photographer | Licence |
+|---|---|---|
+| [House sparrow](https://commons.wikimedia.org/wiki/File:House_sparrow_(Passer_domesticus)_male_2.jpg) | Charles J. Sharp | CC BY-SA 4.0 |
+| [Blue tit](https://commons.wikimedia.org/wiki/File:Eurasian_Blue_Tit_2025_04_07.jpg) | Alexis Lours | CC BY 4.0 |
+| [Blackbird](https://commons.wikimedia.org/wiki/File:Common_blackbird_(Turdus_merula)_male,_young_adult.jpg) | Charles J. Sharp | CC BY-SA 4.0 |
+| [Starling](https://commons.wikimedia.org/wiki/File:Sturnus_vulgaris_(European_starling)_at_Bodega_Head-1209.jpg) | Frank Schulenburg | CC BY-SA 4.0 |
+| [Robin](https://commons.wikimedia.org/wiki/File:European_robin_Cr%C3%A9teil_2.jpg) | Alexis Lours | CC BY 4.0 |
+
+The robin and the blue tit keep their own perch. The sparrow, blackbird
+and starling stand on the robin's branch:
+
+```bash
+uv run --with pillow python scripts/skykey.py --dark bird-robin.jpg branch.png 0,555,540,690
+uv run --with pillow python scripts/perch.py bird.png branch.png out.png 6
+```
+
+The player eats a bird for 50 points (`BIRD_POINTS` in `game.ts`). The
+backend permits the bonus: see `cous-be/src/validation.ts`.
 
 The page shows every source image beside the sprite made from it, in the
 "where the sprites come from" accordion (`src/cous/provenance.tsx`).
