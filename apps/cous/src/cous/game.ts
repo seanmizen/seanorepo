@@ -66,9 +66,11 @@ const defaultTrexConfig = {
   dropVelocity: -5,
   flashOff: 175,
   flashOn: 100,
-  // The jump physics use the T-rex height. Every frame draws with its
-  // bottom edge at yPos + height, whatever the size of the frame.
+  // The jump physics use the T-rex box (width × height). Every frame
+  // draws with its bottom edge at yPos + height and its centre at
+  // xPos + width / 2, whatever the size of the frame.
   height: 47,
+  width: 44,
   introDuration: 1500,
   speedDropCoefficient: 3,
   startXPos: 50,
@@ -185,7 +187,7 @@ class Trex {
     drawSprite(
       this.ctx,
       frame,
-      Math.round(this.xPos),
+      Math.round(this.frameX(frame)),
       Math.round(this.yPos + this.config.height - frame.height),
     );
   }
@@ -270,6 +272,11 @@ class Trex {
     this.jumpCount = 0;
   }
 
+  /** The left edge of a frame that shares the centre of the T-rex box. */
+  private frameX(frame: Frame): number {
+    return this.xPos + (this.config.width - frame.width) / 2;
+  }
+
   private pick(name: SpriteName): Frame {
     const variants = this.loaded.frames[name];
     return variants[this.variant % variants.length];
@@ -286,7 +293,7 @@ class Trex {
   getBoundingBox(): Box {
     const frame = this.activeFrame();
     return {
-      x: this.xPos,
+      x: this.frameX(frame),
       y: this.yPos + this.config.height - frame.height,
       width: frame.width,
       height: frame.height,
@@ -573,7 +580,10 @@ const obstacleTypes: ObstacleType[] = [
   },
   {
     type: 'pterodactyl',
-    flyingYPos: [100, 75, 50],
+    // Chromium uses 75 for the middle height. The collision boxes here
+    // include the wingtips, so the middle bird flies 3 px higher to leave
+    // room for a crouch.
+    flyingYPos: [100, 72, 50],
     multipleSpeed: 999,
     minSpeed: 8.5,
     minGap: 150,
