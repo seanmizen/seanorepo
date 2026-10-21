@@ -1,4 +1,5 @@
-/* The seanmizen.com colours: never pure black or pure white. */
+/* Never pure black or pure white. Light is the seanmizen.com colour.
+   Dark is #202124, the Chrome dark background. */
 :root {
   color-scheme: light;
   font-family: monospace;
@@ -11,14 +12,14 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --color: #cecece;
-    --background: #333;
+    --background: #202124;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
   --color: #cecece;
-  --background: #333;
+  --background: #202124;
 }
 
 /* The seanmizen.com fade between themes. */
