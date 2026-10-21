@@ -168,9 +168,10 @@ export const SPRITE_THEMES = {
       trexRun2: cous(cousRun2Url),
       trexJump: { urls: [cousJumpUrl, cousSupermanUrl], scale: 4 },
       trexCrash: cous(cousCrashUrl),
-      // The crouch from the first cous sheet, at its sheet scale.
-      trexDuck1: { urls: [cat1Url], scale: 2 },
-      trexDuck2: { urls: [cat2Url], scale: 2 },
+      // The crouch from the first cous sheet. Scale 2.6 keeps it low
+      // enough to pass under the middle pterodactyl.
+      trexDuck1: { urls: [cat1Url], scale: 2.6 },
+      trexDuck2: { urls: [cat2Url], scale: 2.6 },
       // The washing machine porthole: a spin cycle to restart.
       restart: cous(cousWashingMachineUrl),
       cactusSmall: {
