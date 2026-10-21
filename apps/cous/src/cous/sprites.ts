@@ -4,58 +4,72 @@
 //
 // Theme + sprite registry — adapted from Chromium's
 //   components/neterror/resources/dino_game/offline_sprite_definitions.ts
-//   components/neterror/resources/images/default_100_percent/offline/100-offline-sprite.png
 //   components/neterror/resources/images/default_200_percent/offline/200-offline-sprite.png
 //
 // ──────────────────────────────────────────────────────────────────────
 //  HOW THIS WORKS
 // ──────────────────────────────────────────────────────────────────────
-// One sprite sheet per `SpriteTheme`. Each theme has:
-//   - sheetUrl   : the PNG (1× or 2× density)
-//   - scale      : 1 for LDPI, 2 for HDPI — the renderer multiplies
-//                  frame offsets and source-pixel sizes by this.
-//   - positions  : SHEET-SPACE (x, y) coordinates of each sprite GROUP
-//                  (e.g. tRex, cactusLarge, textSprite). These are
-//                  already in the sheet's native pixel space, so they
-//                  are NOT scaled by `scale`.
+// Every theme starts from a sprite sheet:
+//   - sheetUrl   : the PNG
+//   - scale      : sheet px per logical px (2 for the HDPI sheet)
+//   - positions  : SHEET-SPACE (x, y) of each sprite GROUP. These are in
+//                  the sheet's native pixels, so `scale` does not apply.
 //
 // Each entry in `SPRITES` describes a single drawable in LOGICAL
-// (1×) coordinates: which group it belongs to, its sub-offset within
-// the group (`frameX`, `frameY`), and its width / height. The renderer
-// composes the final sheet UV as:
+// (1×) coordinates: its group, its sub-offset within the group
+// (`frameX`, `frameY`), and its width / height. The sheet UV is:
 //
 //   sx = positions[group].x + frameX * scale
 //   sy = positions[group].y + frameY * scale
 //   sw = width  * scale
 //   sh = height * scale
 //
-// Destination size on the canvas is always (width, height) — the canvas
-// stays at 600 × 150 logical px regardless of which theme is chosen.
+// A theme can also replace any sprite with standalone cutout PNGs
+// (`cutouts`). A cutout's size comes from its image, so a photo of any
+// aspect ratio works.
+//
+// `loadTheme` resolves every sprite to `Frame`s: an image, a source
+// rect, a drawn size and collision boxes. The collision boxes come from
+// the opaque pixels of each frame, so no sprite needs hand-made boxes.
+// Add `?hitboxes` to the URL to draw them.
+//
+// The canvas stays at 600 × 150 logical px for every theme.
 //
 // ──────────────────────────────────────────────────────────────────────
-//  ADDING YOUR OWN SHEET
+//  ADDING A CUTOUT
 // ──────────────────────────────────────────────────────────────────────
-// Drop your PNG in ./assets/, import it below, and add an entry to
-// `SPRITE_THEMES`. You'll need the (x, y) of each sprite group on your
-// sheet — see the LDPI / HDPI tables below for examples. Width/heights
-// are shared across themes (in `SPRITES`), so unless you change sprite
-// dimensions you only need to fill in `positions`.
+// 1. Cut the subject out of the photo. Keep a transparent background
+//    and crop tight. Drop the PNG in ./assets/cous/.
+// 2. Import it below and add it to the `cutouts` of the cous theme.
+// 3. Set `scale` until the size looks right. Use `scaleY` to squash.
 
-import chromium100Url from './assets/chromium-100-offline-sprite.png';
 import chromium200Url from './assets/chromium-200-offline-sprite.png';
-import cous100Url from './assets/cous-100-offline-sprite.png';
-import cous200Url from './assets/cous-200-1.png';
+import cat1Url from './assets/cous/cat-1.png';
+import cat2Url from './assets/cous/cat-2.png';
+import palmLarge1Url from './assets/cous/palm-large-1.png';
+import palmLarge2Url from './assets/cous/palm-large-2.png';
+import palmLarge3Url from './assets/cous/palm-large-3.png';
+import palmLarge4Url from './assets/cous/palm-large-4.png';
+import palmLarge5Url from './assets/cous/palm-large-5.png';
+import palmLarge6Url from './assets/cous/palm-large-6.png';
+import palmSmall1Url from './assets/cous/palm-small-1.png';
+import palmSmall2Url from './assets/cous/palm-small-2.png';
+import palmSmall3Url from './assets/cous/palm-small-3.png';
+import palmSmall4Url from './assets/cous/palm-small-4.png';
+import palmSmall5Url from './assets/cous/palm-small-5.png';
+import palmSmall6Url from './assets/cous/palm-small-6.png';
 
 /**
- * Game canvas dimensions (CSS / logical px). Keep in sync with the
- * `lines` config in `Horizon`. The horizon sprite must be exactly
- * `WIDTH` wide so it tiles seamlessly.
+ * Game canvas dimensions (CSS / logical px). The horizon sprite must be
+ * exactly `WIDTH` wide so it tiles seamlessly.
  */
 export const CANVAS = {
   WIDTH: 600,
   HEIGHT: 150,
-  /** Y of the ground line. Sprites with their feet at this Y land flush. */
+  /** Y of the ground line. */
   GROUND_Y: 127,
+  /** Y where the player and ground obstacles put their bottom edge. */
+  FLOOR_Y: 140,
 } as const;
 
 /**
@@ -75,93 +89,98 @@ export type SpritePositions = {
   tRex: SpritePosition;
 };
 
+/** Standalone PNGs that replace one sprite of the sheet. */
+export type Cutout = {
+  /** One PNG per variant. Each obstacle copy picks one at random. */
+  urls: string[];
+  /** Image px per logical px. A larger value draws the cutout smaller. */
+  scale: number;
+  /** Vertical image px per logical px. Default: `scale`. */
+  scaleY?: number;
+};
+
 export type SpriteTheme = {
   /** Human-readable name for the dropdown. */
   label: string;
   /** URL of the PNG (RSBuild hashes this in production). */
   sheetUrl: string;
-  /** 1 for LDPI, 2 for HDPI. */
-  scale: 1 | 2;
+  /** Sheet px per logical px. */
+  scale: number;
   /** Sheet-space (x, y) of every sprite group. */
   positions: SpritePositions;
+  /** Sprites drawn from cutout PNGs instead of the sheet. */
+  cutouts?: Partial<Record<SpriteName, Cutout>>;
 };
+
+const chromiumSheet = {
+  sheetUrl: chromium200Url,
+  scale: 2,
+  // Verbatim from offline_sprite_definitions.ts → spriteDefinitionByType.original.hdpi
+  positions: {
+    cactusLarge: { x: 652, y: 2 },
+    cactusSmall: { x: 446, y: 2 },
+    cloud: { x: 166, y: 2 },
+    horizon: { x: 2, y: 104 },
+    pterodactyl: { x: 260, y: 2 },
+    restart: { x: 2, y: 130 },
+    textSprite: { x: 1294, y: 2 },
+    tRex: { x: 1678, y: 2 },
+  },
+};
+
+const catRun1: Cutout = { urls: [cat1Url], scale: 1.8 };
+const catRun2: Cutout = { urls: [cat2Url], scale: 1.8 };
 
 /**
  * The available sprite themes. The dropdown in `cous.tsx` exposes one
- * &lt;option&gt; per key. Add a new entry here to make a new theme available.
+ * &lt;option&gt; per key.
  */
 export const SPRITE_THEMES = {
-  'chromium-1x': {
-    label: 'Chromium 1x (LDPI)',
-    sheetUrl: chromium100Url,
-    scale: 1,
-    // Verbatim from offline_sprite_definitions.ts → spriteDefinitionByType.original.ldpi
-    positions: {
-      cactusLarge: { x: 332, y: 2 },
-      cactusSmall: { x: 228, y: 2 },
-      cloud: { x: 86, y: 2 },
-      horizon: { x: 2, y: 54 },
-      pterodactyl: { x: 134, y: 2 },
-      restart: { x: 2, y: 68 },
-      textSprite: { x: 655, y: 2 },
-      tRex: { x: 848, y: 2 },
+  cous: {
+    label: 'Cous',
+    ...chromiumSheet,
+    cutouts: {
+      trexIdle: catRun1,
+      trexBlink: catRun1,
+      trexRun1: catRun1,
+      trexRun2: catRun2,
+      trexCrash: catRun1,
+      // Ducking squashes the running frames flat.
+      trexDuck1: { ...catRun1, scaleY: 2.8 },
+      trexDuck2: { ...catRun2, scaleY: 2.4 },
+      cactusSmall: {
+        urls: [
+          palmSmall1Url,
+          palmSmall2Url,
+          palmSmall3Url,
+          palmSmall4Url,
+          palmSmall5Url,
+          palmSmall6Url,
+        ],
+        scale: 2,
+      },
+      cactusLarge: {
+        urls: [
+          palmLarge1Url,
+          palmLarge2Url,
+          palmLarge3Url,
+          palmLarge4Url,
+          palmLarge5Url,
+          palmLarge6Url,
+        ],
+        scale: 2,
+      },
     },
   },
-  'chromium-2x': {
-    label: 'Chromium 2x (HDPI)',
-    sheetUrl: chromium200Url,
-    scale: 2,
-    // Verbatim from offline_sprite_definitions.ts → spriteDefinitionByType.original.hdpi
-    // Note: NOT just 2× of LDPI — the 2× sheet was hand-packed tighter.
-    positions: {
-      cactusLarge: { x: 652, y: 2 },
-      cactusSmall: { x: 446, y: 2 },
-      cloud: { x: 166, y: 2 },
-      horizon: { x: 2, y: 104 },
-      pterodactyl: { x: 260, y: 2 },
-      restart: { x: 2, y: 130 },
-      textSprite: { x: 1294, y: 2 },
-      tRex: { x: 1678, y: 2 },
-    },
-  },
-  'cous-1x': {
-    label: 'Cous 1x (LDPI)',
-    sheetUrl: cous100Url,
-    scale: 1,
-    // Verbatim from offline_sprite_definitions.ts → spriteDefinitionByType.original.ldpi
-    positions: {
-      cactusLarge: { x: 332, y: 2 },
-      cactusSmall: { x: 228, y: 2 },
-      cloud: { x: 86, y: 2 },
-      horizon: { x: 2, y: 54 },
-      pterodactyl: { x: 134, y: 2 },
-      restart: { x: 2, y: 68 },
-      textSprite: { x: 655, y: 2 },
-      tRex: { x: 848, y: 2 },
-    },
-  },
-  'cous-2x': {
-    label: 'Cous 2x (HDPI)',
-    sheetUrl: cous200Url,
-    scale: 2,
-    // Verbatim from offline_sprite_definitions.ts → spriteDefinitionByType.original.hdpi
-    // Note: NOT just 2× of LDPI — the 2× sheet was hand-packed tighter.
-    positions: {
-      cactusLarge: { x: 652, y: 2 },
-      cactusSmall: { x: 446, y: 2 },
-      cloud: { x: 166, y: 2 },
-      horizon: { x: 2, y: 104 },
-      pterodactyl: { x: 260, y: 2 },
-      restart: { x: 2, y: 130 },
-      textSprite: { x: 1294, y: 2 },
-      tRex: { x: 1678, y: 2 },
-    },
+  classic: {
+    label: 'Classic',
+    ...chromiumSheet,
   },
 } as const satisfies Record<string, SpriteTheme>;
 
 export type SpriteThemeId = keyof typeof SPRITE_THEMES;
 
-export const DEFAULT_THEME_ID: SpriteThemeId = 'chromium-2x';
+export const DEFAULT_THEME_ID: SpriteThemeId = 'cous';
 
 /**
  * One drawable sprite. `frameX` / `frameY` are LOGICAL-pixel sub-offsets
@@ -347,20 +366,158 @@ export const DIGITS: SpriteStrip = {
     'cellWidth × cellHeight; the renderer indexes by cellWidth × digitValue.',
 };
 
+/** A rectangle in logical px, relative to the top-left of its frame. */
+export type Box = { x: number; y: number; width: number; height: number };
+
+/** One sprite, resolved and ready to draw. */
+export type Frame = {
+  image: HTMLImageElement;
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+  /** Drawn width in logical px. */
+  width: number;
+  /** Drawn height in logical px. */
+  height: number;
+  /** Collision boxes, from the opaque pixels of the frame. */
+  boxes: Box[];
+};
+
+export type LoadedTheme = {
+  theme: SpriteTheme;
+  sheet: HTMLImageElement;
+  /** Every sprite, with one frame per variant. */
+  frames: Record<SpriteName, Frame[]>;
+};
+
+/** Rows of logical px in each collision box. */
+const BOX_BAND = 4;
+/** Alpha above this value is solid for collisions. */
+const BOX_ALPHA = 128;
+
 /**
- * Loads a theme's sheet into an HTMLImageElement, decoded and ready to
- * draw. Reject if decoding fails.
+ * Makes collision boxes from the opaque pixels of a frame. The frame is
+ * cut into horizontal bands of `BOX_BAND` rows. Each band gets one box
+ * from its leftmost to its rightmost opaque pixel.
  */
-export async function loadSpriteSheet(
-  theme: SpriteTheme,
-): Promise<HTMLImageElement> {
+function computeBoxes(
+  image: HTMLImageElement,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  width: number,
+  height: number,
+): Box[] {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return [{ x: 0, y: 0, width, height }];
+  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
+  const { data } = ctx.getImageData(0, 0, width, height);
+  const boxes: Box[] = [];
+  for (let top = 0; top < height; top += BOX_BAND) {
+    const bottom = Math.min(top + BOX_BAND, height);
+    let left = width;
+    let right = -1;
+    for (let y = top; y < bottom; y++) {
+      for (let x = 0; x < width; x++) {
+        if (data[(y * width + x) * 4 + 3] > BOX_ALPHA) {
+          if (x < left) left = x;
+          if (x > right) right = x;
+        }
+      }
+    }
+    if (right >= left) {
+      boxes.push({
+        x: left,
+        y: top,
+        width: right - left + 1,
+        height: bottom - top,
+      });
+    }
+  }
+  return boxes;
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () =>
-      reject(
-        new Error(`cous: failed to load sprite sheet at ${theme.sheetUrl}`),
-      );
-    img.src = theme.sheetUrl;
+      reject(new Error(`cous: failed to load sprite image at ${url}`));
+    img.src = url;
   });
+}
+
+function sheetFrame(
+  sheet: HTMLImageElement,
+  theme: SpriteTheme,
+  name: SpriteName,
+): Frame {
+  const s = SPRITES[name] as Sprite;
+  const groupPos = theme.positions[s.group];
+  const sx = groupPos.x + (s.frameX ?? 0) * theme.scale;
+  const sy = groupPos.y + (s.frameY ?? 0) * theme.scale;
+  const sw = s.width * theme.scale;
+  const sh = s.height * theme.scale;
+  return {
+    image: sheet,
+    sx,
+    sy,
+    sw,
+    sh,
+    width: s.width,
+    height: s.height,
+    boxes: computeBoxes(sheet, sx, sy, sw, sh, s.width, s.height),
+  };
+}
+
+function cutoutFrame(image: HTMLImageElement, cutout: Cutout): Frame {
+  const width = Math.round(image.naturalWidth / cutout.scale);
+  const height = Math.round(
+    image.naturalHeight / (cutout.scaleY ?? cutout.scale),
+  );
+  const sw = image.naturalWidth;
+  const sh = image.naturalHeight;
+  return {
+    image,
+    sx: 0,
+    sy: 0,
+    sw,
+    sh,
+    width,
+    height,
+    boxes: computeBoxes(image, 0, 0, sw, sh, width, height),
+  };
+}
+
+/**
+ * Loads a theme's sheet and cutouts, and resolves every sprite to its
+ * frames. Rejects if an image fails to load.
+ */
+export async function loadTheme(theme: SpriteTheme): Promise<LoadedTheme> {
+  const cutouts: Partial<Record<SpriteName, Cutout>> = theme.cutouts ?? {};
+  const urls = new Set<string>([theme.sheetUrl]);
+  for (const cutout of Object.values(cutouts)) {
+    for (const url of cutout?.urls ?? []) urls.add(url);
+  }
+  const images = new Map<string, HTMLImageElement>();
+  await Promise.all(
+    [...urls].map(async (url) => images.set(url, await loadImage(url))),
+  );
+  const sheet = images.get(theme.sheetUrl) as HTMLImageElement;
+
+  const frames = {} as Record<SpriteName, Frame[]>;
+  for (const name of Object.keys(SPRITES) as SpriteName[]) {
+    const cutout = cutouts[name];
+    frames[name] = cutout
+      ? cutout.urls.map((url) =>
+          cutoutFrame(images.get(url) as HTMLImageElement, cutout),
+        )
+      : [sheetFrame(sheet, theme, name)];
+  }
+  return { theme, sheet, frames };
 }

@@ -1,12 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": [
-      "**",
-      "!**/*Glasto*",
-      "!apps/seanmizen.com/src/features/cous/script.js",
-      "!.yarn"
-    ]
+    "includes": ["**", "!**/*Glasto*", "!.yarn"]
   },
   "assist": {
     "actions": {
