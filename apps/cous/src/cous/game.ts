@@ -13,7 +13,9 @@
 //     `theme.positions[group] + frameOffset × theme.scale`. The active
 //     theme is one of `SPRITE_THEMES` in ./sprites.ts.
 //   - Removed: sound FX, alt game mode, mobile-speed coefficient, RTL,
-//     audio cues, achievement flashing.
+//     audio cues, achievement flashing, and the night mode that inverted
+//     the canvas every 700 points (it made the photos into negatives, and
+//     the theme toggle gives day and night).
 //   - Sprite sizes and collision boxes come from the loaded theme
 //     (`loadTheme` in ./sprites.ts), not from hand-made constants.
 //     The player and ground obstacles stand on `CANVAS.FLOOR_Y`.
@@ -548,7 +550,7 @@ class DistanceMeter {
 // ── Obstacles ────────────────────────────────────────────────────────────
 
 type ObstacleType = {
-  type: 'cactusSmall' | 'cactusLarge' | 'pterodactyl';
+  type: 'cactusSmall' | 'cactusLarge' | 'pterodactyl' | 'bird';
   /**
    * Top Y of a flying obstacle. Each one picks a value at random.
    * Ground obstacles stand on `CANVAS.FLOOR_Y`.
@@ -560,6 +562,11 @@ type ObstacleType = {
   minScore: number;
   /** The player eats this obstacle (for BIRD_POINTS) and does not crash. */
   edible?: boolean;
+  /**
+   * Spawns only in a theme that gives its first sprite a cutout. The sheet
+   * has no bird, so the classic theme has pterodactyls only.
+   */
+  cutoutOnly?: boolean;
   numFrames?: number;
   frameRate?: number;
   speedOffset?: number;
@@ -589,15 +596,25 @@ const obstacleTypes: ObstacleType[] = [
     // room for a crouch.
     flyingYPos: [100, 72, 50],
     multipleSpeed: 999,
-    // Chromium starts the pterodactyl at speed 8.5 (about 40 s).
-    minScore: 100,
-    // The cous theme draws garden birds here. The cat eats them.
-    edible: true,
+    // Chromium starts the pterodactyl at speed 8.5 (about 40 s). Here
+    // the birds come first (100), then the pterodactyls.
+    minScore: 200,
     minGap: 150,
     numFrames: 2,
     frameRate: 1000 / 6,
     speedOffset: 0.8,
     spriteFrames: ['pterodactyl1', 'pterodactyl2'],
+  },
+  {
+    // A perched garden bird. The cat eats it.
+    type: 'bird',
+    flyingYPos: [100, 72, 50],
+    multipleSpeed: 999,
+    minScore: 100,
+    edible: true,
+    cutoutOnly: true,
+    minGap: 150,
+    spriteFrames: ['bird'],
   },
 ];
 
@@ -749,12 +766,17 @@ class Horizon {
     private canvasWidth: number,
     private gapCoefficient: number,
   ) {
+    this.types = obstacleTypes.filter(
+      (t) => !t.cutoutOnly || loaded.theme.cutouts?.[t.spriteFrames[0]],
+    );
     this.addCloud();
     this.horizonLine = new HorizonLine(ctx, loaded);
   }
 
   /** The current score. Game sets it each frame. */
   score = 0;
+  /** The obstacle types that this theme can draw. */
+  private types: ObstacleType[];
 
   update(deltaTime: number, currentSpeed: number, updateObstacles: boolean) {
     this.horizonLine.update(deltaTime, currentSpeed);
@@ -799,8 +821,8 @@ class Horizon {
   }
 
   addNewObstacle(currentSpeed: number) {
-    const idx = getRandomNum(0, obstacleTypes.length - 1);
-    const obstacleType = obstacleTypes[idx];
+    const idx = getRandomNum(0, this.types.length - 1);
+    const obstacleType = this.types[idx];
     if (
       this.duplicateObstacleCheck(obstacleType.type) ||
       this.score < obstacleType.minScore
@@ -866,8 +888,6 @@ const runnerConfig = {
   SPEED: 6,
   SPEED_DROP_COEFFICIENT: 3,
   CLEAR_TIME: 3000,
-  INVERT_DISTANCE: 700,
-  INVERT_FADE_DURATION: 12000,
 };
 
 const GameState = {
@@ -878,8 +898,6 @@ const GameState = {
 type GameState = (typeof GameState)[keyof typeof GameState];
 
 export type GameCallbacks = {
-  /** Toggles a CSS "inverted" class on the canvas wrapper for night mode. */
-  onInvertChange?: (inverted: boolean) => void;
   /** The first jump starts the game. */
   onStart?: () => void;
   /**
@@ -912,8 +930,6 @@ export class Game {
   /** "Bird eaten!" messages that float up and fade. */
   private floaters: Floater[] = [];
   private highestScore = 0;
-  private inverted = false;
-  private invertTimer = 0;
 
   private trex: Trex;
   private horizon: Horizon;
@@ -1010,8 +1026,6 @@ export class Game {
     this.runMs = 0;
     this.birdsEaten = 0;
     this.floaters = [];
-    this.invertTimer = 0;
-    this.setInverted(false);
     this.horizon.reset();
     this.trex.reset();
     this.distanceMeter.reset();
@@ -1062,23 +1076,6 @@ export class Game {
         if (playAch) {
           /* achievement reached — sound omitted */
         }
-
-        // Night mode: every INVERT_DISTANCE points, flip palette for
-        // INVERT_FADE_DURATION ms then revert.
-        if (this.invertTimer > runnerConfig.INVERT_FADE_DURATION) {
-          this.invertTimer = 0;
-          this.setInverted(false);
-        } else if (this.invertTimer) {
-          this.invertTimer += dt;
-        } else {
-          const actual = this.distanceMeter.getActualDistance(
-            Math.ceil(this.distanceRan),
-          );
-          if (actual > 0 && actual % runnerConfig.INVERT_DISTANCE === 0) {
-            this.invertTimer += dt;
-            this.setInverted(true);
-          }
-        }
       }
 
       // Update trex animation (jump physics, frame swaps).
@@ -1123,12 +1120,6 @@ export class Game {
       Math.round(cx - restart.width / 2),
       50 + go.height,
     );
-  }
-
-  private setInverted(value: boolean) {
-    if (this.inverted === value) return;
-    this.inverted = value;
-    this.callbacks.onInvertChange?.(value);
   }
 
   /** Draws the sheet sprites in light or dark colours. */

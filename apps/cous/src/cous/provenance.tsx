@@ -29,6 +29,18 @@ import washingMachineUrl from './assets/sources/washing-machine.jpg';
 import windowLedgeUrl from './assets/sources/window-ledge.jpg';
 import styles from './provenance.module.css';
 
+const BY_SA = 'https://creativecommons.org/licenses/by-sa/4.0/';
+const BY = 'https://creativecommons.org/licenses/by/4.0/';
+const COMMONS = 'https://commons.wikimedia.org/wiki/File:';
+
+/** The credit that the licence of a photo from someone else requires. */
+type Credit = {
+  /** The file name on Wikimedia Commons. */
+  file: string;
+  author: string;
+  licence: 'CC BY 4.0' | 'CC BY-SA 4.0';
+};
+
 /** One source image and the sprites made from it. */
 type Source = {
   /** The sprite (or sprites) that the source became. Used in alt text. */
@@ -36,6 +48,8 @@ type Source = {
   source: string;
   /** The images that the game draws. */
   results: string[];
+  /** Shown under the pair. Every photo from someone else needs one. */
+  credit?: Credit;
 };
 
 // Add an entry here for every new source image. See the README.
@@ -62,58 +76,55 @@ const SOURCES: Source[] = [
     results: [cousWashingMachineUrl],
   },
   { sprite: 'tree', source: treeUrl, results: [cousTreeUrl] },
-  // The bird photos are from Wikimedia Commons (see BIRD_CREDITS).
-  { sprite: 'house sparrow', source: srcSparrowUrl, results: [birdSparrowUrl] },
-  { sprite: 'blue tit', source: srcBluetitUrl, results: [birdBluetitUrl] },
+  {
+    sprite: 'house sparrow',
+    source: srcSparrowUrl,
+    results: [birdSparrowUrl],
+    credit: {
+      file: 'House_sparrow_(Passer_domesticus)_male_2.jpg',
+      author: 'Charles J. Sharp',
+      licence: 'CC BY-SA 4.0',
+    },
+  },
+  {
+    sprite: 'blue tit',
+    source: srcBluetitUrl,
+    results: [birdBluetitUrl],
+    credit: {
+      file: 'Eurasian_Blue_Tit_2025_04_07.jpg',
+      author: 'Alexis Lours',
+      licence: 'CC BY 4.0',
+    },
+  },
   {
     sprite: 'blackbird',
     source: srcBlackbirdUrl,
     results: [birdBlackbirdUrl],
-  },
-  { sprite: 'starling', source: srcStarlingUrl, results: [birdStarlingUrl] },
-  { sprite: 'robin', source: srcRobinUrl, results: [birdRobinUrl] },
-];
-
-const BY_SA = 'https://creativecommons.org/licenses/by-sa/4.0/';
-const BY = 'https://creativecommons.org/licenses/by/4.0/';
-const COMMONS = 'https://commons.wikimedia.org/wiki/File:';
-
-/** The licences of the bird photos require this credit. */
-const BIRD_CREDITS = [
-  {
-    bird: 'house sparrow',
-    file: 'House_sparrow_(Passer_domesticus)_male_2.jpg',
-    author: 'Charles J. Sharp',
-    licence: 'CC BY-SA 4.0',
-    licenceUrl: BY_SA,
+    credit: {
+      file: 'Common_blackbird_(Turdus_merula)_male,_young_adult.jpg',
+      author: 'Charles J. Sharp',
+      licence: 'CC BY-SA 4.0',
+    },
   },
   {
-    bird: 'blue tit',
-    file: 'Eurasian_Blue_Tit_2025_04_07.jpg',
-    author: 'Alexis Lours',
-    licence: 'CC BY 4.0',
-    licenceUrl: BY,
+    sprite: 'starling',
+    source: srcStarlingUrl,
+    results: [birdStarlingUrl],
+    credit: {
+      file: 'Sturnus_vulgaris_(European_starling)_at_Bodega_Head-1209.jpg',
+      author: 'Frank Schulenburg',
+      licence: 'CC BY-SA 4.0',
+    },
   },
   {
-    bird: 'blackbird',
-    file: 'Common_blackbird_(Turdus_merula)_male,_young_adult.jpg',
-    author: 'Charles J. Sharp',
-    licence: 'CC BY-SA 4.0',
-    licenceUrl: BY_SA,
-  },
-  {
-    bird: 'starling',
-    file: 'Sturnus_vulgaris_(European_starling)_at_Bodega_Head-1209.jpg',
-    author: 'Frank Schulenburg',
-    licence: 'CC BY-SA 4.0',
-    licenceUrl: BY_SA,
-  },
-  {
-    bird: 'robin',
-    file: 'European_robin_Créteil_2.jpg',
-    author: 'Alexis Lours',
-    licence: 'CC BY 4.0',
-    licenceUrl: BY,
+    sprite: 'robin',
+    source: srcRobinUrl,
+    results: [birdRobinUrl],
+    credit: {
+      file: 'European_robin_Créteil_2.jpg',
+      author: 'Alexis Lours',
+      licence: 'CC BY 4.0',
+    },
   },
 ];
 
@@ -131,40 +142,44 @@ const Provenance: FC = () => (
       the leg swing. No image is generated. The source images have no metadata.
     </p>
     <p className={styles.intro}>
-      The bird photos are from Wikimedia Commons. Each bird is cut out, flipped
-      to face left and resized. The sparrow, blackbird and starling stand on a
-      branch cut from the robin photo. Each bird sprite has the licence of its
-      photo:{' '}
-      {BIRD_CREDITS.map((c, i) => (
-        <span key={c.bird}>
-          <a href={`${COMMONS}${c.file}`}>{c.bird}</a> by {c.author} (
-          <a href={c.licenceUrl}>{c.licence}</a>)
-          {i < BIRD_CREDITS.length - 1 ? ', ' : '.'}
-        </span>
-      ))}
+      The bird photos are from Wikimedia Commons, credited under each one. Each
+      bird is cut out, flipped to face left and resized. The sparrow, blackbird
+      and starling stand on a branch cut from the robin photo. Each bird sprite
+      has the licence of its photo.
     </p>
     <ul className={styles.items}>
       {SOURCES.map((s) => (
-        <li key={s.sprite} className={styles.pair}>
-          <img
-            className={styles.source}
-            src={s.source}
-            alt={`Source for the ${s.sprite} sprite`}
-            loading="lazy"
-          />
-          <span className={styles.arrow} aria-hidden="true">
-            →
-          </span>
-          <div className={styles.results}>
-            {s.results.map((r) => (
-              <img
-                key={r}
-                src={r}
-                alt={`The ${s.sprite} sprite`}
-                loading="lazy"
-              />
-            ))}
+        <li key={s.sprite}>
+          <div className={styles.pair}>
+            <img
+              className={styles.source}
+              src={s.source}
+              alt={`Source for the ${s.sprite} sprite`}
+              loading="lazy"
+            />
+            <span className={styles.arrow} aria-hidden="true">
+              →
+            </span>
+            <div className={styles.results}>
+              {s.results.map((r) => (
+                <img
+                  key={r}
+                  src={r}
+                  alt={`The ${s.sprite} sprite`}
+                  loading="lazy"
+                />
+              ))}
+            </div>
           </div>
+          {s.credit && (
+            <p className={styles.credit}>
+              <a href={`${COMMONS}${s.credit.file}`}>photo</a>:{' '}
+              {s.credit.author},{' '}
+              <a href={s.credit.licence === 'CC BY 4.0' ? BY : BY_SA}>
+                {s.credit.licence}
+              </a>
+            </p>
+          )}
         </li>
       ))}
     </ul>

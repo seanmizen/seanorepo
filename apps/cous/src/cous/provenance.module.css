@@ -57,3 +57,10 @@
   max-width: 100%;
   object-fit: contain;
 }
+
+/* The credit that a photo from someone else needs. */
+.credit {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
