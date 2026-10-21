@@ -157,4 +157,22 @@ describe('the API', () => {
     expect((await post('10.0.0.9')).statusCode).toBe(429);
     expect((await post('10.0.0.10')).statusCode).toBe(201);
   });
+
+  test('the rate limit uses cf-connecting-ip, not X-Forwarded-For', async () => {
+    const post = (forwardedFor: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/scores',
+        payload: { name: 'spoof', score: 1, durationMs: 1000 },
+        remoteAddress: '127.0.0.1',
+        headers: {
+          'cf-connecting-ip': '203.0.113.7',
+          'x-forwarded-for': forwardedFor,
+        },
+      });
+    expect((await post('1.1.1.1')).statusCode).toBe(201);
+    expect((await post('2.2.2.2')).statusCode).toBe(201);
+    expect((await post('3.3.3.3')).statusCode).toBe(201);
+    expect((await post('4.4.4.4')).statusCode).toBe(429);
+  });
 });

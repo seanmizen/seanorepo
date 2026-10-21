@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import type { ScoreStore } from './db';
 import { createRateLimiter } from './rate-limit';
 import { validateScore } from './validation';
@@ -11,6 +11,19 @@ type AppOptions = {
   postWindowMs?: number;
 };
 
+/**
+ * The key for the rate limit. cloudflared sets `cf-connecting-ip` to the
+ * player's address, and a client cannot override it. A client can write
+ * its own `X-Forwarded-For`, so the app does not trust that header. With
+ * no Cloudflare in front (local dev, the tests, the edge on the LAN), the
+ * key is the address of the socket.
+ */
+const clientKey = (request: FastifyRequest): string => {
+  const cf = request.headers['cf-connecting-ip'];
+  const value = Array.isArray(cf) ? cf[0] : cf;
+  return value?.trim() || request.ip;
+};
+
 /** Makes the Fastify app. The tests use it with an in-memory store. */
 const buildApp = ({
   store,
@@ -20,10 +33,8 @@ const buildApp = ({
 }: AppOptions) => {
   const app = Fastify({
     logger,
-    // cloudflared is in front of the app. Without this, every request has
-    // the IP address of the tunnel, and the rate limit counts all players
-    // as one.
-    trustProxy: true,
+    // A client can write its own X-Forwarded-For. See clientKey.
+    trustProxy: false,
     bodyLimit: 1024,
   });
   const limiter = createRateLimiter(postLimit, postWindowMs);
@@ -33,7 +44,7 @@ const buildApp = ({
   app.get('/api/scores', async () => ({ scores: store.top() }));
 
   app.post('/api/scores', async (request, reply) => {
-    if (!limiter.allow(request.ip)) {
+    if (!limiter.allow(clientKey(request))) {
       return reply
         .code(429)
         .send({ error: 'Too many scores. Wait one minute and try again.' });

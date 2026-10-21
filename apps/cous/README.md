@@ -51,6 +51,10 @@ returns `400` with an `error` message when one of these checks fails:
   change, change that file too.
 
 Each IP address can send 10 scores each minute. More requests get `429`.
+The backend gets the IP address from the `cf-connecting-ip` header, which
+Cloudflare sets. It ignores `X-Forwarded-For`, because a client can write
+that header. With no `cf-connecting-ip` (local dev, the LAN edge), the
+backend uses the address of the connection.
 
 After a crash, the game asks for a name when the score is in the top 10.
 It keeps the last name in localStorage (`cous:name`).
