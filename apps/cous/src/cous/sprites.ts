@@ -58,6 +58,9 @@ import cousDuckUrl from './assets/cous/cous-duck.png';
 import cousJumpUrl from './assets/cous/cous-jump.png';
 import cousRun1Url from './assets/cous/cous-run-1.png';
 import cousRun2Url from './assets/cous/cous-run-2.png';
+import cousSupermanUrl from './assets/cous/cous-superman.png';
+import cousTreeUrl from './assets/cous/cous-tree.png';
+import cousWashingMachineUrl from './assets/cous/cous-washing-machine.png';
 import palmLarge1Url from './assets/cous/palm-large-1.png';
 import palmLarge2Url from './assets/cous/palm-large-2.png';
 import palmLarge3Url from './assets/cous/palm-large-3.png';
@@ -101,10 +104,16 @@ export type SpritePositions = {
   tRex: SpritePosition;
 };
 
+/** A cutout variant with its own scale. */
+export type CutoutVariant = { url: string; scale: number };
+
 /** Standalone PNGs that replace one sprite of the sheet. */
 export type Cutout = {
-  /** One PNG per variant. Each obstacle copy picks one at random. */
-  urls: string[];
+  /**
+   * One PNG per variant. Each obstacle copy, and each change of player
+   * pose, picks one at random. A variant can set its own scale.
+   */
+  urls: (string | CutoutVariant)[];
   /** Image px per logical px. A larger value draws the cutout smaller. */
   scale: number;
   /** Vertical image px per logical px. Default: `scale`. */
@@ -156,10 +165,12 @@ export const SPRITE_THEMES = {
       trexBlink: cous(cousBlinkUrl),
       trexRun1: cous(cousRun1Url),
       trexRun2: cous(cousRun2Url),
-      trexJump: cous(cousJumpUrl),
+      trexJump: { urls: [cousJumpUrl, cousSupermanUrl], scale: 4 },
       trexCrash: cous(cousCrashUrl),
       trexDuck1: cous(cousDuckUrl),
       trexDuck2: cous(cousDuckUrl),
+      // The washing machine porthole: a spin cycle to restart.
+      restart: cous(cousWashingMachineUrl),
       cactusSmall: {
         urls: [
           palmSmall1Url,
@@ -179,6 +190,8 @@ export const SPRITE_THEMES = {
           palmLarge4Url,
           palmLarge5Url,
           palmLarge6Url,
+          // Cous up a cordyline, cut out with scripts/skykey.py.
+          { url: cousTreeUrl, scale: 4 },
         ],
         scale: 2,
       },
@@ -498,11 +511,13 @@ function sheetFrame(
   };
 }
 
-function cutoutFrame(image: HTMLImageElement, cutout: Cutout): Frame {
-  const width = Math.round(image.naturalWidth / cutout.scale);
-  const height = Math.round(
-    image.naturalHeight / (cutout.scaleY ?? cutout.scale),
-  );
+function cutoutFrame(
+  image: HTMLImageElement,
+  scale: number,
+  scaleY: number,
+): Frame {
+  const width = Math.round(image.naturalWidth / scale);
+  const height = Math.round(image.naturalHeight / scaleY);
   const sw = image.naturalWidth;
   const sh = image.naturalHeight;
   return {
@@ -525,8 +540,10 @@ function cutoutFrame(image: HTMLImageElement, cutout: Cutout): Frame {
 export async function loadTheme(theme: SpriteTheme): Promise<LoadedTheme> {
   const cutouts: Partial<Record<SpriteName, Cutout>> = theme.cutouts ?? {};
   const urls = new Set<string>([theme.sheetUrl]);
+  const variantUrl = (v: string | CutoutVariant) =>
+    typeof v === 'string' ? v : v.url;
   for (const cutout of Object.values(cutouts)) {
-    for (const url of cutout?.urls ?? []) urls.add(url);
+    for (const v of cutout?.urls ?? []) urls.add(variantUrl(v));
   }
   const images = new Map<string, HTMLImageElement>();
   await Promise.all(
@@ -538,9 +555,16 @@ export async function loadTheme(theme: SpriteTheme): Promise<LoadedTheme> {
   for (const name of Object.keys(SPRITES) as SpriteName[]) {
     const cutout = cutouts[name];
     frames[name] = cutout
-      ? cutout.urls.map((url) =>
-          cutoutFrame(images.get(url) as HTMLImageElement, cutout),
-        )
+      ? cutout.urls.map((v) => {
+          const scale = typeof v === 'string' ? cutout.scale : v.scale;
+          const scaleY =
+            typeof v === 'string' ? (cutout.scaleY ?? scale) : scale;
+          return cutoutFrame(
+            images.get(variantUrl(v)) as HTMLImageElement,
+            scale,
+            scaleY,
+          );
+        })
       : [sheetFrame(sheet, theme, name)];
   }
   return { theme, sheet, frames };
