@@ -5,6 +5,8 @@
   font-family: monospace;
   --color: #111;
   --background: #eee;
+  /* The grey of the game's pixel art (the sheet), for each theme. */
+  --pixel-grey: #535353;
 }
 
 /* useTheme sets data-theme. Before it runs, the system scheme applies. */
@@ -13,6 +15,7 @@
     color-scheme: dark;
     --color: #cecece;
     --background: #202124;
+    --pixel-grey: #acacac;
   }
 }
 
@@ -20,6 +23,7 @@
   color-scheme: dark;
   --color: #cecece;
   --background: #202124;
+  --pixel-grey: #acacac;
 }
 
 /* The seanmizen.com fade between themes. */
@@ -50,4 +54,19 @@ h1 {
 
 a {
   color: inherit;
+}
+
+/* Below the game: the links and the gallery, and the Top Ten Ever board.
+   They stack on a narrow screen, and sit side by side on a wide one. */
+.below {
+  display: grid;
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 48rem) {
+  .below {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
 }

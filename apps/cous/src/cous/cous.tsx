@@ -102,6 +102,8 @@ const Cous: FC<CousProps> = ({ dark, onCrash }) => {
     const onKeyDown = (e: KeyboardEvent) => {
       const game = gameRef.current;
       if (!game) return;
+      // A modal (the high-score name) has the keys.
+      if (document.querySelector('dialog[open]')) return;
       // Before the first run and after a crash, any key starts the game.
       // A held key, browser shortcuts and keys for a form control (the
       // theme picker, the toggle) do not.
