@@ -1,12 +1,14 @@
 # Where: any machine with Python 3 and Pillow
 #        (`uv run --with pillow python scripts/skykey.py ...`).
 # When: the subject of a photo stands against blue sky, and
-#       scripts/lift.swift finds no subject (for example, a tree).
-# Why: a colour key makes the blue sky transparent. It uses no model.
+#       scripts/lift.swift finds no subject (for example, a tree). With
+#       --dark: a dark subject against a light background (for example,
+#       a branch against pale sky).
+# Why: a colour key makes the background transparent. It uses no model.
 #      The key keeps the largest connected shape, so that small separate
 #      shapes (other leaves, an aerial) go too.
 #
-# Usage: skykey.py in.jpg out.png x0,y0,x1,y1 [clear x0,y0,x1,y1 ...]
+# Usage: skykey.py [--dark] in.jpg out.png x0,y0,x1,y1 [clear x0,y0,x1,y1 ...]
 #   x0,y0,x1,y1 : the crop, in px of the photo
 #   clear       : rectangles (in px of the photo) to make transparent
 #                 before the key, for objects that are not sky
@@ -16,9 +18,13 @@ from PIL import Image
 KEY_START = 0  # sky score where the pixel starts to fade
 KEY_FULL = 30  # sky score where the pixel is fully transparent
 
-src = Image.open(sys.argv[1]).convert("RGBA")
-x0, y0, x1, y1 = (int(v) for v in sys.argv[3].split(","))
-clears = [tuple(int(v) for v in r.split(",")) for r in sys.argv[4:]]
+args = sys.argv[1:]
+dark = args[0] == "--dark"
+if dark:
+    args = args[1:]
+src = Image.open(args[0]).convert("RGBA")
+x0, y0, x1, y1 = (int(v) for v in args[2].split(","))
+clears = [tuple(int(v) for v in r.split(",")) for r in args[3:]]
 px = src.load()
 for cx0, cy0, cx1, cy1 in clears:
     for y in range(cy0, cy1):
@@ -33,14 +39,18 @@ for y in range(h):
         r, g, b, a = px[x, y]
         if not a:
             continue
-        # How much bluer than red and green the pixel is.
-        score = min(b - r - 40, b - g - 10)
+        if dark:
+            # How much lighter than the subject the pixel is.
+            score = (r + g + b) // 3 - 125
+        else:
+            # How much bluer than red and green the pixel is.
+            score = min(b - r - 40, b - g - 10)
         if score >= KEY_FULL:
             px[x, y] = (0, 0, 0, 0)
         elif score > KEY_START:
             alpha = round(255 * (KEY_FULL - score) / (KEY_FULL - KEY_START))
             # Remove the blue tint of the sky from the edge.
-            px[x, y] = (r, g, min(b, max(r, g)), alpha)
+            px[x, y] = (r, g, b if dark else min(b, max(r, g)), alpha)
 
 # Keep the largest connected shape.
 seen = set()
@@ -63,4 +73,4 @@ keep = Image.new("RGBA", img.size, (0, 0, 0, 0))
 kpx = keep.load()
 for xy in best:
     kpx[xy] = px[xy]
-keep.crop(keep.getbbox()).save(sys.argv[2])
+keep.crop(keep.getbbox()).save(args[1])

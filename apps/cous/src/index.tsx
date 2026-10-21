@@ -18,8 +18,8 @@ const App: FC = () => {
         <h1>Cous Cous Bruus-Barnett</h1>
         <Cous
           dark={theme === 'dark'}
-          onCrash={(score, durationMs) =>
-            setRun({ id: Date.now(), score, durationMs })
+          onCrash={(score, durationMs, birds) =>
+            setRun({ id: Date.now(), score, durationMs, birds })
           }
         />
         <Leaderboard run={run} />

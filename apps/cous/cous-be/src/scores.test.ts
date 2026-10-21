@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { buildApp } from './app';
 import { openScoreStore } from './db';
 import { createRateLimiter } from './rate-limit';
-import { maxScoreFor, validateScore } from './validation';
+import { maxBirdsFor, maxScoreFor, validateScore } from './validation';
 
 const valid = { name: 'cous', score: 100, durationMs: 60_000 };
 
@@ -80,6 +80,25 @@ describe('validateScore', () => {
     expect(validateScore({ ...valid, score: 5000, durationMs: 1000 }).ok).toBe(
       false,
     );
+  });
+
+  test('permits 50 points for each bird eaten', () => {
+    expect(maxScoreFor(10_000, 2)).toBe(296);
+    const run = { ...valid, durationMs: 10_000 };
+    expect(validateScore({ ...run, score: 296, birds: 2 }).ok).toBe(true);
+    expect(validateScore({ ...run, score: 297, birds: 2 }).ok).toBe(false);
+    // With no birds field, the run has no bonus.
+    expect(validateScore({ ...run, score: 246 }).ok).toBe(false);
+  });
+
+  test('rejects a bad or impossible number of birds', () => {
+    const run = { ...valid, durationMs: 10_000 };
+    expect(maxBirdsFor(10_000)).toBe(20);
+    expect(validateScore({ ...run, birds: 20 }).ok).toBe(true);
+    expect(validateScore({ ...run, birds: 21 }).ok).toBe(false);
+    expect(validateScore({ ...run, birds: -1 }).ok).toBe(false);
+    expect(validateScore({ ...run, birds: 1.5 }).ok).toBe(false);
+    expect(validateScore({ ...run, birds: '3' }).ok).toBe(false);
   });
 });
 

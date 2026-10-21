@@ -8,6 +8,14 @@ const FPS = 60;
 /** meterConfig.COEFFICIENT in game.ts: the score is distance × 0.025. */
 const COEFFICIENT = 0.025;
 
+/** BIRD_POINTS in game.ts: points for each bird eaten. */
+const BIRD_POINTS = 50;
+/**
+ * Birds come at most about one each second. Two each second leaves
+ * room, and still stops a client that claims a flock.
+ */
+const MAX_BIRDS_PER_SECOND = 2;
+
 const NAME_MAX = 12;
 const SCORE_MAX = 99_999;
 /** A run longer than one day is not a real run. */
@@ -19,8 +27,14 @@ const DURATION_MAX_MS = 24 * 60 * 60 * 1000;
  * MAX_SPEED × FPS / 1000 px for each ms. The +1 permits the rounding in
  * DistanceMeter.getActualDistance.
  */
-const maxScoreFor = (durationMs: number): number =>
-  Math.floor(((durationMs * MAX_SPEED * FPS) / 1000) * COEFFICIENT) + 1;
+const maxScoreFor = (durationMs: number, birds = 0): number =>
+  Math.floor(((durationMs * MAX_SPEED * FPS) / 1000) * COEFFICIENT) +
+  1 +
+  birds * BIRD_POINTS;
+
+/** The most birds that a run of `durationMs` can eat. */
+const maxBirdsFor = (durationMs: number): number =>
+  Math.ceil((durationMs / 1000) * MAX_BIRDS_PER_SECOND);
 
 // Printable: no control or format characters, and no separator other than
 // the plain space.
@@ -37,7 +51,12 @@ const validateScore = (body: unknown): Validation => {
   if (typeof body !== 'object' || body === null) {
     return { ok: false, error: 'The body must be a JSON object.' };
   }
-  const { name, score, durationMs } = body as Record<string, unknown>;
+  const {
+    name,
+    score,
+    durationMs,
+    birds = 0,
+  } = body as Record<string, unknown>;
 
   if (typeof name !== 'string') {
     return { ok: false, error: 'The name must be a string.' };
@@ -81,7 +100,19 @@ const validateScore = (body: unknown): Validation => {
     };
   }
 
-  if (score > maxScoreFor(durationMs)) {
+  if (
+    typeof birds !== 'number' ||
+    !Number.isInteger(birds) ||
+    birds < 0 ||
+    birds > maxBirdsFor(durationMs)
+  ) {
+    return {
+      ok: false,
+      error: 'The number of birds must be a whole number that the run permits.',
+    };
+  }
+
+  if (score > maxScoreFor(durationMs, birds)) {
     return {
       ok: false,
       error: 'The score is too high for the duration of the run.',
@@ -91,5 +122,5 @@ const validateScore = (body: unknown): Validation => {
   return { ok: true, value: { name: trimmed, score, durationMs } };
 };
 
-export { maxScoreFor, validateScore };
+export { maxBirdsFor, maxScoreFor, validateScore };
 export type { ScoreInput };

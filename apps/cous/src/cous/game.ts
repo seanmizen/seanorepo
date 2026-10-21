@@ -558,6 +558,8 @@ type ObstacleType = {
   minGap: number;
   /** The score (as on the distance meter) where this obstacle starts. */
   minScore: number;
+  /** The player eats this obstacle (for BIRD_POINTS) and does not crash. */
+  edible?: boolean;
   numFrames?: number;
   frameRate?: number;
   speedOffset?: number;
@@ -589,6 +591,8 @@ const obstacleTypes: ObstacleType[] = [
     multipleSpeed: 999,
     // Chromium starts the pterodactyl at speed 8.5 (about 40 s).
     minScore: 100,
+    // The cous theme draws garden birds here. The cat eats them.
+    edible: true,
     minGap: 150,
     numFrames: 2,
     frameRate: 1000 / 6,
@@ -842,6 +846,16 @@ class Horizon {
 
 // ── Game (Runner equivalent) ────────────────────────────────────────────
 
+/** Points for each bird eaten. cous-be/src/validation.ts uses it too. */
+const BIRD_POINTS = 50;
+const EAT_MESSAGES = ['Bird eaten!', 'Delicious!', 'Take that, Greta'];
+const FLOATER_COLOUR = '#2bb24c';
+const FLOATER_LIFE_MS = 1000;
+/** Logical px each ms that a message rises. */
+const FLOATER_RISE = 0.03;
+
+type Floater = { text: string; x: number; y: number; age: number };
+
 const runnerConfig = {
   ACCELERATION: 0.001,
   GAP_COEFFICIENT: 0.6,
@@ -872,7 +886,7 @@ export type GameCallbacks = {
    * A crash ends the run. `score` is the number on the meter. `durationMs`
    * is the game time of the run, the time that moved the player.
    */
-  onCrash?: (score: number, durationMs: number) => void;
+  onCrash?: (score: number, durationMs: number, birds: number) => void;
 };
 
 export type GameOptions = {
@@ -894,6 +908,9 @@ export class Game {
   private distanceRan = 0;
   /** The game time of the current run, in ms. */
   private runMs = 0;
+  private birdsEaten = 0;
+  /** "Bird eaten!" messages that float up and fade. */
+  private floaters: Floater[] = [];
   private highestScore = 0;
   private inverted = false;
   private invertTimer = 0;
@@ -991,6 +1008,8 @@ export class Game {
     this.runningTime = 0;
     this.distanceRan = 0;
     this.runMs = 0;
+    this.birdsEaten = 0;
+    this.floaters = [];
     this.invertTimer = 0;
     this.setInverted(false);
     this.horizon.reset();
@@ -1023,7 +1042,12 @@ export class Game {
       );
       this.horizon.update(dt, this.currentSpeed, hasObstacles);
 
-      if (hasObstacles && this.checkForCollision()) {
+      let hit = hasObstacles ? this.checkForCollision() : null;
+      if (hit?.typeConfig.edible) {
+        this.eat(hit);
+        hit = null;
+      }
+      if (hit) {
         // gameOver paints the last frame. Stop here, or the player draws
         // a second time on top of it.
         this.gameOver();
@@ -1060,6 +1084,7 @@ export class Game {
       // Update trex animation (jump physics, frame swaps).
       if (this.trex.jumping) this.trex.updateJump(dt);
       this.trex.update(dt);
+      this.updateFloaters(dt);
       if (this.options.showHitboxes) this.drawHitboxes();
     }
     // A crash keeps the last frame on the canvas until the restart.
@@ -1124,6 +1149,7 @@ export class Game {
     this.callbacks.onCrash?.(
       this.distanceMeter.getActualDistance(Math.ceil(this.distanceRan)),
       Math.round(this.runMs),
+      this.birdsEaten,
     );
   }
 
@@ -1141,9 +1167,11 @@ export class Game {
   }
 
   // ── Collision detection ────────────────────────────────────────────────
-  private checkForCollision(): boolean {
+  /** The first obstacle that touches the player, or null. */
+  private checkForCollision(): Obstacle | null {
     const trexBox = this.trex.getBoundingBox();
     for (const obstacle of this.horizon.obstacles) {
+      if (obstacle.remove) continue;
       const obstacleBox = obstacle.getBoundingBox();
       if (boxIntersect(trexBox, obstacleBox)) {
         const trexBoxes = this.trex.getCollisionBoxes();
@@ -1152,12 +1180,45 @@ export class Game {
           const adjTb = adjust(trexBox, tb);
           for (const ob of obstacleBoxes) {
             const adjOb = adjust(obstacleBox, ob);
-            if (boxIntersect(adjTb, adjOb)) return true;
+            if (boxIntersect(adjTb, adjOb)) return obstacle;
           }
         }
       }
     }
-    return false;
+    return null;
+  }
+
+  /** The player eats an edible obstacle: it goes, and the score grows. */
+  private eat(obstacle: Obstacle) {
+    obstacle.remove = true;
+    this.birdsEaten++;
+    // The meter shows distance × COEFFICIENT, so add the bonus as distance.
+    this.distanceRan += BIRD_POINTS / meterConfig.COEFFICIENT;
+    const message =
+      EAT_MESSAGES[Math.floor(Math.random() * EAT_MESSAGES.length)];
+    this.floaters.push({
+      text: `${message} +${BIRD_POINTS}`,
+      x: obstacle.xPos + obstacle.width / 2,
+      y: obstacle.yPos,
+      age: 0,
+    });
+  }
+
+  /** Moves each floating message up and fades it, then draws it. */
+  private updateFloaters(dt: number) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = FLOATER_COLOUR;
+    for (const f of this.floaters) {
+      f.age += dt;
+      f.y -= FLOATER_RISE * dt;
+      ctx.globalAlpha = Math.max(0, 1 - f.age / FLOATER_LIFE_MS);
+      ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.restore();
+    this.floaters = this.floaters.filter((f) => f.age < FLOATER_LIFE_MS);
   }
 }
 
