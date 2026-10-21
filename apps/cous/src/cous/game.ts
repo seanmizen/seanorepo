@@ -19,6 +19,7 @@
 //     The player and ground obstacles stand on `CANVAS.FLOOR_Y`.
 
 import {
+  applyTheme,
   type Box,
   CANVAS,
   DIGITS,
@@ -1077,6 +1078,13 @@ export class Game {
     this.callbacks.onInvertChange?.(value);
   }
 
+  /** Draws the sheet sprites in light or dark colours. */
+  setDark(dark: boolean) {
+    applyTheme(this.loaded, dark);
+    // A frozen game-over frame does not repaint by itself.
+    if (this.state === GameState.CRASHED) this.paintCrash();
+  }
+
   private gameOver() {
     this.state = GameState.CRASHED;
     if (this.distanceRan > this.highestScore) {
@@ -1084,8 +1092,14 @@ export class Game {
       localStorage.setItem('cous:highScore', String(this.highestScore));
       this.distanceMeter.setHighScore(this.highestScore);
     }
-    // Paint the last frame once, with the crash sprite. It stays on the
-    // canvas until the restart.
+    this.paintCrash();
+  }
+
+  /**
+   * Paints the last frame once, with the crash sprite. It stays on the
+   * canvas until the restart.
+   */
+  private paintCrash() {
     this.draw();
     this.horizon.update(0, this.currentSpeed, true);
     this.distanceMeter.update(0, Math.ceil(this.distanceRan));

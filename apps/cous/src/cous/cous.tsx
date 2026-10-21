@@ -14,12 +14,19 @@ const SHOW_HITBOXES = new URLSearchParams(window.location.search).has(
   'hitboxes',
 );
 
-const Cous: FC = () => {
+type CousProps = {
+  /** Draws the pixel art in dark-mode colours. */
+  dark: boolean;
+};
+
+const Cous: FC<CousProps> = ({ dark }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [themeId, setThemeId] = useState<SpriteThemeId>(DEFAULT_THEME_ID);
+  const darkRef = useRef(dark);
+  darkRef.current = dark;
 
   // Size the backing store to the displayed size × devicePixelRatio, and
   // scale the context so that the game logic stays in logical px
@@ -65,6 +72,7 @@ const Cous: FC = () => {
           },
           { showHitboxes: SHOW_HITBOXES },
         );
+        gameRef.current.setDark(darkRef.current);
         gameRef.current.start();
         setReady(true);
       })
@@ -79,6 +87,10 @@ const Cous: FC = () => {
       gameRef.current = null;
     };
   }, [themeId]);
+
+  useEffect(() => {
+    gameRef.current?.setDark(dark);
+  }, [dark]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

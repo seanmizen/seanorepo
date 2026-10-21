@@ -1,0 +1,41 @@
+.toggle {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  line-height: 0;
+  opacity: 0.7;
+  /* A 40px target around a 24px icon. */
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.toggle:hover {
+  opacity: 1;
+}
+
+.toggle:active {
+  opacity: 0.5;
+}
+
+.toggle svg {
+  display: block;
+}
+
+/* The focus ring traces the icon, not the 40px target. */
+.toggle:focus-visible {
+  outline: none;
+}
+
+.toggle:focus-visible svg {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
