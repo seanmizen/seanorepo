@@ -556,7 +556,8 @@ type ObstacleType = {
   flyingYPos?: number[];
   multipleSpeed: number;
   minGap: number;
-  minSpeed: number;
+  /** The score (as on the distance meter) where this obstacle starts. */
+  minScore: number;
   numFrames?: number;
   frameRate?: number;
   speedOffset?: number;
@@ -569,14 +570,14 @@ const obstacleTypes: ObstacleType[] = [
     type: 'cactusSmall',
     multipleSpeed: 4,
     minGap: 120,
-    minSpeed: 0,
+    minScore: 0,
     spriteFrames: ['cactusSmall'],
   },
   {
     type: 'cactusLarge',
     multipleSpeed: 7,
     minGap: 120,
-    minSpeed: 0,
+    minScore: 0,
     spriteFrames: ['cactusLarge'],
   },
   {
@@ -586,7 +587,8 @@ const obstacleTypes: ObstacleType[] = [
     // room for a crouch.
     flyingYPos: [100, 72, 50],
     multipleSpeed: 999,
-    minSpeed: 8.5,
+    // Chromium starts the pterodactyl at speed 8.5 (about 40 s).
+    minScore: 100,
     minGap: 150,
     numFrames: 2,
     frameRate: 1000 / 6,
@@ -747,6 +749,9 @@ class Horizon {
     this.horizonLine = new HorizonLine(ctx, loaded);
   }
 
+  /** The current score. Game sets it each frame. */
+  score = 0;
+
   update(deltaTime: number, currentSpeed: number, updateObstacles: boolean) {
     this.horizonLine.update(deltaTime, currentSpeed);
     this.updateClouds(deltaTime, currentSpeed);
@@ -794,7 +799,7 @@ class Horizon {
     const obstacleType = obstacleTypes[idx];
     if (
       this.duplicateObstacleCheck(obstacleType.type) ||
-      currentSpeed < obstacleType.minSpeed
+      this.score < obstacleType.minScore
     ) {
       this.addNewObstacle(currentSpeed);
       return;
@@ -1005,6 +1010,9 @@ export class Game {
       }
 
       this.draw();
+      this.horizon.score = this.distanceMeter.getActualDistance(
+        Math.ceil(this.distanceRan),
+      );
       this.horizon.update(dt, this.currentSpeed, hasObstacles);
 
       if (hasObstacles && this.checkForCollision()) {
