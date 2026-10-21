@@ -41,8 +41,9 @@ The body of `POST /api/scores` is
 `{ "name": "cous", "score": 123, "durationMs": 45000 }`. The backend
 returns `400` with an `error` message when one of these checks fails:
 
-- `name`: 1 to 12 printable characters, after the backend trims it.
-- `score`: a whole number from 0 to 99999.
+- `name`: 1 to 10 printable characters, after the backend trims it.
+- `score`: a whole number from 0 to 999999999. The board shows it in 5
+  characters (00500, 0240K, 0120M), with the exact score on hover or tap.
 - `durationMs`: the game time of the run, from 0 to 86400000 ms.
 - The score must be possible in that time. The top speed is 13 px per
   frame at 60 fps, and the score is distance × 0.025. Thus a run can get

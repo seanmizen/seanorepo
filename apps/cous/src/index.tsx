@@ -22,9 +22,14 @@ const App: FC = () => {
             setRun({ id: Date.now(), score, durationMs, birds })
           }
         />
-        <Leaderboard run={run} />
-        <a href="https://seanmizen.com">seanmizen.com</a>
-        <Provenance />
+        {/* Two columns on a wide screen: links and gallery, then the board. */}
+        <div className="below">
+          <div>
+            <a href="https://seanmizen.com">seanmizen.com</a>
+            <Provenance />
+          </div>
+          <Leaderboard run={run} />
+        </div>
       </main>
       <ThemeToggle mode={mode} toggleMode={toggleMode} />
       <RotateHint />

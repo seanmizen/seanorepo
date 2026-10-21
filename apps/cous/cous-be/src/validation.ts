@@ -16,8 +16,9 @@ const BIRD_POINTS = 50;
  */
 const MAX_BIRDS_PER_SECOND = 2;
 
-const NAME_MAX = 12;
-const SCORE_MAX = 99_999;
+const NAME_MAX = 10;
+/** The board shows a score as 4 characters, up to 999M. */
+const SCORE_MAX = 999_999_999;
 /** A run longer than one day is not a real run. */
 const DURATION_MAX_MS = 24 * 60 * 60 * 1000;
 

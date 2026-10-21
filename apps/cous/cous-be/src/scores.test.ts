@@ -22,13 +22,13 @@ describe('validateScore', () => {
     expect(validateScore({ ...valid, name: '   ' }).ok).toBe(false);
   });
 
-  test('accepts 12 characters and rejects 13', () => {
-    expect(validateScore({ ...valid, name: 'a'.repeat(12) }).ok).toBe(true);
-    expect(validateScore({ ...valid, name: 'a'.repeat(13) }).ok).toBe(false);
+  test('accepts 10 characters and rejects 11', () => {
+    expect(validateScore({ ...valid, name: 'a'.repeat(10) }).ok).toBe(true);
+    expect(validateScore({ ...valid, name: 'a'.repeat(11) }).ok).toBe(false);
   });
 
   test('counts characters, not UTF-16 units', () => {
-    expect(validateScore({ ...valid, name: '🐈'.repeat(12) }).ok).toBe(true);
+    expect(validateScore({ ...valid, name: '🐈'.repeat(10) }).ok).toBe(true);
   });
 
   test('rejects control and format characters', () => {
@@ -46,11 +46,14 @@ describe('validateScore', () => {
     expect(validateScore({ ...valid, name: 42 }).ok).toBe(false);
   });
 
-  test('accepts scores from 0 to 99999 only', () => {
+  test('accepts scores from 0 to 999999999 only', () => {
     expect(validateScore({ ...valid, score: 0 }).ok).toBe(true);
-    const long = { ...valid, durationMs: 86_400_000 };
-    expect(validateScore({ ...long, score: 99_999 }).ok).toBe(true);
-    expect(validateScore({ ...long, score: 100_000 }).ok).toBe(false);
+    // A long run with many birds can pass 99999.
+    const long = { ...valid, durationMs: 86_400_000, birds: 100_000 };
+    expect(validateScore({ ...long, score: 6_000_000 }).ok).toBe(true);
+    const tooBig = validateScore({ ...long, score: 1_000_000_000 });
+    expect(tooBig.ok).toBe(false);
+    expect(!tooBig.ok && tooBig.error).toContain('whole number');
     expect(validateScore({ ...valid, score: -1 }).ok).toBe(false);
   });
 
