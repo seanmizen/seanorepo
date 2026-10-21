@@ -1,7 +1,8 @@
 import type { FC } from 'react';
+import cat1Url from './assets/cous/cat-1.png';
+import cat2Url from './assets/cous/cat-2.png';
 import cousBlinkUrl from './assets/cous/cous-blink.png';
 import cousCrashUrl from './assets/cous/cous-crash.png';
-import cousDuckUrl from './assets/cous/cous-duck.png';
 import cousJumpUrl from './assets/cous/cous-jump.png';
 import cousRun1Url from './assets/cous/cous-run-1.png';
 import cousRun2Url from './assets/cous/cous-run-2.png';
@@ -13,7 +14,6 @@ import palmSmall1Url from './assets/cous/palm-small-1.png';
 import cousSheetUrl from './assets/cous-200-1.png';
 import shelfUrl from './assets/sources/shelf.jpg';
 import shockedUrl from './assets/sources/shocked.jpg';
-import stretchUrl from './assets/sources/stretch.jpg';
 import supermanUrl from './assets/sources/superman.jpg';
 import treeUrl from './assets/sources/tree.jpg';
 import walk00Url from './assets/sources/walk-0.0s.jpg';
@@ -64,9 +64,10 @@ const SOURCES: Source[] = [
   },
   {
     sprite: 'duck',
-    source: stretchUrl,
-    results: [cousDuckUrl],
-    steps: 'Subject mask, rotated 57°, resized.',
+    source: cousSheetUrl,
+    results: [cat1Url, cat2Url],
+    steps:
+      'The two crouch frames from the duck cells of the first cous sprite sheet. Sean edited the legs by hand in that sheet.',
   },
   {
     sprite: 'blink',
