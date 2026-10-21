@@ -164,6 +164,39 @@ const Cous: FC<CousProps> = ({ dark }) => {
           <p className={styles.prompt}>press any key to get going (or tap)</p>
         )}
       </div>
+      {/* Touch devices only (see cous.module.css), once the game starts. */}
+      {ready && !waiting && (
+        <div className={styles.touchControls}>
+          <button
+            type="button"
+            className={styles.touchButton}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              // The button keeps the pointer, so the release always
+              // arrives here, even when the finger slides off.
+              e.currentTarget.setPointerCapture(e.pointerId);
+              gameRef.current?.duck(true);
+            }}
+            onPointerUp={() => gameRef.current?.duck(false)}
+            onPointerCancel={() => gameRef.current?.duck(false)}
+            onLostPointerCapture={() => gameRef.current?.duck(false)}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            duck
+          </button>
+          <button
+            type="button"
+            className={styles.touchButton}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              gameRef.current?.jump();
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            jump
+          </button>
+        </div>
+      )}
       {!ready && !error && <p className={styles.status}>loading sprites…</p>}
       {error && <p className={styles.error}>{error}</p>}
       <p className={styles.hint}>
