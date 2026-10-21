@@ -861,6 +861,8 @@ type GameState = (typeof GameState)[keyof typeof GameState];
 export type GameCallbacks = {
   /** Toggles a CSS "inverted" class on the canvas wrapper for night mode. */
   onInvertChange?: (inverted: boolean) => void;
+  /** The first jump starts the game. */
+  onStart?: () => void;
 };
 
 export type GameOptions = {
@@ -939,6 +941,10 @@ export class Game {
     return this.state === GameState.CRASHED;
   }
 
+  get waiting(): boolean {
+    return this.state === GameState.WAITING;
+  }
+
   jump() {
     if (this.state === GameState.CRASHED) {
       this.restart();
@@ -947,6 +953,7 @@ export class Game {
     if (this.state === GameState.WAITING) {
       this.state = GameState.RUNNING;
       this.trex.playingIntro = true;
+      this.callbacks.onStart?.();
     }
     if (!this.trex.jumping && !this.trex.ducking) {
       this.trex.startJump(this.currentSpeed);
