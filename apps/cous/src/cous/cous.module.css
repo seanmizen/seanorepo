@@ -3,16 +3,16 @@
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  padding: 1rem;
+  padding: 1rem 0;
 }
 
 .canvas {
   display: block;
-  image-rendering: pixelated;
   touch-action: manipulation;
   cursor: pointer;
-  max-width: 100%;
-  height: auto;
+  /* cous.tsx sizes the backing store to match. */
+  width: 100%;
+  aspect-ratio: 600 / 150;
   transition: filter 0.5s ease;
 }
 

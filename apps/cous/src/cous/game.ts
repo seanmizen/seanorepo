@@ -36,6 +36,8 @@ function drawSprite(
   dx: number,
   dy: number,
 ) {
+  ctx.imageSmoothingEnabled = frame.smooth;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(
     frame.image,
     frame.sx,
@@ -85,7 +87,8 @@ const BLINK_TIMING = 7000;
 
 // Per-status animation: sequence of sprite names + ms-per-frame.
 // Frame names match the original Chromium animFrames in trex.ts:
-//   WAITING blinks between blink (44) and idle (0); JUMPING reuses idle (0).
+//   WAITING blinks between blink (44) and idle (0). JUMPING draws
+//   trexJump, which is the idle art (0) on the sheet.
 const trexAnimFrames: Record<
   Status,
   { frames: SpriteName[]; msPerFrame: number }
@@ -93,7 +96,7 @@ const trexAnimFrames: Record<
   [Status.WAITING]: { frames: ['trexBlink', 'trexIdle'], msPerFrame: 1000 / 3 },
   [Status.RUNNING]: { frames: ['trexRun1', 'trexRun2'], msPerFrame: 1000 / 12 },
   [Status.CRASHED]: { frames: ['trexCrash'], msPerFrame: 1000 / 60 },
-  [Status.JUMPING]: { frames: ['trexIdle'], msPerFrame: 1000 / 60 },
+  [Status.JUMPING]: { frames: ['trexJump'], msPerFrame: 1000 / 60 },
   [Status.DUCKING]: {
     frames: ['trexDuck1', 'trexDuck2'],
     msPerFrame: 1000 / 8,
@@ -440,6 +443,7 @@ class DistanceMeter {
     } else {
       this.ctx.translate(this.x, this.y);
     }
+    this.ctx.imageSmoothingEnabled = false;
     this.ctx.drawImage(
       sheet,
       sourceX,
@@ -1014,7 +1018,7 @@ export class Game {
   private drawHitboxes() {
     const ctx = this.ctx;
     ctx.save();
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.5;
     const stroke = (parent: Box, boxes: Box[], colour: string) => {
       ctx.strokeStyle = colour;
       ctx.strokeRect(parent.x, parent.y, parent.width, parent.height);

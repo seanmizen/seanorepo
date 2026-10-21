@@ -42,10 +42,22 @@
 //    and crop tight. Drop the PNG in ./assets/cous/.
 // 2. Import it below and add it to the `cutouts` of the cous theme.
 // 3. Set `scale` until the size looks right. Use `scaleY` to squash.
+//
+// The Cous photo cutouts are exported at 4 image px per logical px
+// (`scale: 4`). The canvas backing store follows the displayed size and
+// the device pixel ratio, so that detail reaches the screen.
+//
+// Some PNGs are not imported: the 1× sheets, the first cous sheet and
+// the first cat cutouts (cous/cat-1.png, cous/cat-2.png). They stay in
+// the repo for reference.
 
 import chromium200Url from './assets/chromium-200-offline-sprite.png';
-import cat1Url from './assets/cous/cat-1.png';
-import cat2Url from './assets/cous/cat-2.png';
+import cousBlinkUrl from './assets/cous/cous-blink.png';
+import cousCrashUrl from './assets/cous/cous-crash.png';
+import cousDuckUrl from './assets/cous/cous-duck.png';
+import cousJumpUrl from './assets/cous/cous-jump.png';
+import cousRun1Url from './assets/cous/cous-run-1.png';
+import cousRun2Url from './assets/cous/cous-run-2.png';
 import palmLarge1Url from './assets/cous/palm-large-1.png';
 import palmLarge2Url from './assets/cous/palm-large-2.png';
 import palmLarge3Url from './assets/cous/palm-large-3.png';
@@ -128,8 +140,8 @@ const chromiumSheet = {
   },
 };
 
-const catRun1: Cutout = { urls: [cat1Url], scale: 1.8 };
-const catRun2: Cutout = { urls: [cat2Url], scale: 1.8 };
+/** A Cous photo cutout, exported at 4 image px per logical px. */
+const cous = (url: string): Cutout => ({ urls: [url], scale: 4 });
 
 /**
  * The available sprite themes. The dropdown in `cous.tsx` exposes one
@@ -140,14 +152,14 @@ export const SPRITE_THEMES = {
     label: 'Cous',
     ...chromiumSheet,
     cutouts: {
-      trexIdle: catRun1,
-      trexBlink: catRun1,
-      trexRun1: catRun1,
-      trexRun2: catRun2,
-      trexCrash: catRun1,
-      // Ducking squashes the running frames flat.
-      trexDuck1: { ...catRun1, scaleY: 2.8 },
-      trexDuck2: { ...catRun2, scaleY: 2.4 },
+      trexIdle: cous(cousRun1Url),
+      trexBlink: cous(cousBlinkUrl),
+      trexRun1: cous(cousRun1Url),
+      trexRun2: cous(cousRun2Url),
+      trexJump: cous(cousJumpUrl),
+      trexCrash: cous(cousCrashUrl),
+      trexDuck1: cous(cousDuckUrl),
+      trexDuck2: cous(cousDuckUrl),
       cactusSmall: {
         urls: [
           palmSmall1Url,
@@ -242,6 +254,14 @@ export const SPRITES = {
     width: 44,
     height: 47,
     description: 'T-Rex running, right leg forward.',
+  },
+  trexJump: {
+    group: 'tRex',
+    frameX: 0,
+    width: 44,
+    height: 47,
+    description:
+      'T-Rex in the air. The sheet uses the trexIdle art. A theme can give it its own cutout.',
   },
   trexCrash: {
     group: 'tRex',
@@ -382,6 +402,8 @@ export type Frame = {
   height: number;
   /** Collision boxes, from the opaque pixels of the frame. */
   boxes: Box[];
+  /** True for photo cutouts. Sheet pixel art draws without smoothing. */
+  smooth: boolean;
 };
 
 export type LoadedTheme = {
@@ -472,6 +494,7 @@ function sheetFrame(
     width: s.width,
     height: s.height,
     boxes: computeBoxes(sheet, sx, sy, sw, sh, s.width, s.height),
+    smooth: false,
   };
 }
 
@@ -491,6 +514,7 @@ function cutoutFrame(image: HTMLImageElement, cutout: Cutout): Frame {
     width,
     height,
     boxes: computeBoxes(image, 0, 0, sw, sh, width, height),
+    smooth: true,
   };
 }
 
