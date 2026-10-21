@@ -48,13 +48,14 @@
 // the device pixel ratio, so that detail reaches the screen.
 //
 // Some PNGs are not imported: the 1× sheets, the first cous sheet and
-// the first cat cutouts (cous/cat-1.png, cous/cat-2.png). They stay in
-// the repo for reference.
+// the full-stretch duck (cous/cous-duck.png). They stay in the repo for
+// reference.
 
 import chromium200Url from './assets/chromium-200-offline-sprite.png';
+import cat1Url from './assets/cous/cat-1.png';
+import cat2Url from './assets/cous/cat-2.png';
 import cousBlinkUrl from './assets/cous/cous-blink.png';
 import cousCrashUrl from './assets/cous/cous-crash.png';
-import cousDuckUrl from './assets/cous/cous-duck.png';
 import cousJumpUrl from './assets/cous/cous-jump.png';
 import cousRun1Url from './assets/cous/cous-run-1.png';
 import cousRun2Url from './assets/cous/cous-run-2.png';
@@ -167,8 +168,9 @@ export const SPRITE_THEMES = {
       trexRun2: cous(cousRun2Url),
       trexJump: { urls: [cousJumpUrl, cousSupermanUrl], scale: 4 },
       trexCrash: cous(cousCrashUrl),
-      trexDuck1: cous(cousDuckUrl),
-      trexDuck2: cous(cousDuckUrl),
+      // The crouch from the first cous sheet, at its sheet scale.
+      trexDuck1: { urls: [cat1Url], scale: 2 },
+      trexDuck2: { urls: [cat2Url], scale: 2 },
       // The washing machine porthole: a spin cycle to restart.
       restart: cous(cousWashingMachineUrl),
       cactusSmall: {
