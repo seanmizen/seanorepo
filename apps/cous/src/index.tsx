@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Cous } from './cous/cous';
+import { Provenance } from './cous/provenance';
 import './index.css';
 
 const root = document.getElementById('root');
@@ -12,6 +13,7 @@ createRoot(root).render(
       <h1>cous</h1>
       <Cous />
       <a href="https://seanmizen.com">seanmizen.com</a>
+      <Provenance />
     </main>
   </StrictMode>,
 );

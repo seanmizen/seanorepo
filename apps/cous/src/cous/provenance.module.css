@@ -1,0 +1,65 @@
+.provenance {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.provenance summary {
+  cursor: pointer;
+}
+
+.intro {
+  max-width: 40rem;
+  opacity: 0.8;
+}
+
+.items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.figure {
+  margin: 0;
+}
+
+.pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 10rem;
+}
+
+.source {
+  flex: 3;
+  min-width: 0;
+  height: 100%;
+  object-fit: contain;
+}
+
+.arrow {
+  opacity: 0.6;
+}
+
+.results {
+  flex: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 0;
+  height: 100%;
+}
+
+.results img {
+  min-width: 0;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.figure figcaption {
+  margin-top: 0.5rem;
+  opacity: 0.8;
+}
