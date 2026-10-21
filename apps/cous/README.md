@@ -1,16 +1,59 @@
 # cous
 
 A runner game in the style of the Chrome offline dino, at
-`https://cous.seanmizen.com`. It is a small React app (RSBuild) that serves
-as static files.
+`https://cous.seanmizen.com`. The frontend is a small React app (RSBuild)
+that serves as static files. The backend (`cous-be/`) keeps the shared
+high-score leaderboard.
 
 ```bash
-yarn workspace cous start      # dev server on port 4070
+yarn workspace cous start      # frontend only, dev server on port 4070
+yarn workspace cous start:all  # frontend on 4070 and backend on 4071
+yarn workspace cous-be start   # backend only, on port 4071
 yarn workspace cous build      # static build in dist/
+yarn workspace cous test       # backend tests
+yarn workspace cous start:docker  # both, in Docker (dev profile)
 ```
 
-Production runs the `prod` Docker target (`serve` on port 4070) behind the
-Cloudflare tunnel. The ports and hostnames are in `.claude/rules/ports.md`.
+The dev server sends `/api` requests to `http://localhost:4071`. The
+frontend works with no backend. The leaderboard then shows "the
+leaderboard is offline".
+
+Production runs the `prod` Docker targets: `serve` on port 4070 and the
+backend on port 4071, behind the Cloudflare tunnel. The tunnel sends
+`cous.seanmizen.com/api/*` to the backend. The ports and hostnames are in
+`.claude/rules/ports.md`.
+
+## Leaderboard backend
+
+`cous-be/` is Bun and Fastify. It keeps the scores in SQLite
+(`bun:sqlite`). In Docker, the database file is
+`/app/db/scores.sqlite` on the named volume `scores_data`, so a redeploy
+keeps the scores. Outside Docker, the file is `cous-be/db/scores.sqlite`.
+The environment variables `PORT` and `DB_PATH` change these defaults.
+
+| Route | Result |
+|---|---|
+| `GET /api/health` | `{ "ok": true }` |
+| `GET /api/scores` | `{ "scores": [{ "name", "score", "createdAt" }] }`, the top 10, highest first |
+| `POST /api/scores` | Stores one score. Returns `201` and the new top 10 |
+
+The body of `POST /api/scores` is
+`{ "name": "cous", "score": 123, "durationMs": 45000 }`. The backend
+returns `400` with an `error` message when one of these checks fails:
+
+- `name`: 1 to 12 printable characters, after the backend trims it.
+- `score`: a whole number from 0 to 99999.
+- `durationMs`: the game time of the run, from 0 to 86400000 ms.
+- The score must be possible in that time. The top speed is 13 px per
+  frame at 60 fps, and the score is distance × 0.025. Thus a run can get
+  at most 19.5 points each second (`maxScoreFor` in
+  `cous-be/src/validation.ts`). If the game rules in `src/cous/game.ts`
+  change, change that file too.
+
+Each IP address can send 10 scores each minute. More requests get `429`.
+
+After a crash, the game asks for a name when the score is in the top 10.
+It keeps the last name in localStorage (`cous:name`).
 
 ## Provenance
 

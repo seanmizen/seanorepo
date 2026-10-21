@@ -74,7 +74,10 @@ ingress:
   - hostname: www.seansconverter.com
     service: http://localhost:4050
 
-  # cous.seanmizen.com - Port 4070 (Frontend only, static)
+  # cous.seanmizen.com - Ports 4070 (FE) / 4071 (BE, the leaderboard)
+  - hostname: cous.seanmizen.com
+    path: /api/*
+    service: http://localhost:4071
   - hostname: cous.seanmizen.com
     service: http://localhost:4070
 

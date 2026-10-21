@@ -17,9 +17,11 @@ const SHOW_HITBOXES = new URLSearchParams(window.location.search).has(
 type CousProps = {
   /** Draws the pixel art in dark-mode colours. */
   dark: boolean;
+  /** A crash ends a run (see GameCallbacks.onCrash). */
+  onCrash?: (score: number, durationMs: number) => void;
 };
 
-const Cous: FC<CousProps> = ({ dark }) => {
+const Cous: FC<CousProps> = ({ dark, onCrash }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,8 @@ const Cous: FC<CousProps> = ({ dark }) => {
   const [themeId, setThemeId] = useState<SpriteThemeId>(DEFAULT_THEME_ID);
   const darkRef = useRef(dark);
   darkRef.current = dark;
+  const onCrashRef = useRef(onCrash);
+  onCrashRef.current = onCrash;
 
   // Size the backing store to the displayed size × devicePixelRatio, and
   // scale the context so that the game logic stays in logical px
@@ -71,6 +75,8 @@ const Cous: FC<CousProps> = ({ dark }) => {
               canvas.classList.toggle(styles.inverted, inverted);
             },
             onStart: () => setWaiting(false),
+            onCrash: (score, durationMs) =>
+              onCrashRef.current?.(score, durationMs),
           },
           { showHitboxes: SHOW_HITBOXES },
         );

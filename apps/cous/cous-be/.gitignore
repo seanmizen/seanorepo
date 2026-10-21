@@ -1,0 +1,2 @@
+# The default SQLite location when the backend runs outside Docker.
+db/

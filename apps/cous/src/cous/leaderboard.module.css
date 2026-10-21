@@ -1,0 +1,67 @@
+/* The same look as the provenance accordion (provenance.module.css). */
+.leaderboard {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.leaderboard summary {
+  cursor: pointer;
+}
+
+.message {
+  opacity: 0.8;
+}
+
+.list {
+  max-width: 20rem;
+  margin: 0.5rem 0 0;
+  padding-left: 2.5rem;
+}
+
+.list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.name {
+  overflow-wrap: anywhere;
+}
+
+.score {
+  font-variant-numeric: tabular-nums;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.form button,
+.input {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  padding: 0.2rem 0.4rem;
+}
+
+.form button {
+  cursor: pointer;
+}
+
+.input {
+  width: 12ch;
+}
+
+.error {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: #c00;
+}

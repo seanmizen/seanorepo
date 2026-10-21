@@ -1,0 +1,95 @@
+// Validation for POST /api/scores. These values copy the game rules in
+// ../src/cous/game.ts. Change both files together.
+
+/** runnerConfig.MAX_SPEED in game.ts: px per frame. */
+const MAX_SPEED = 13;
+/** game.ts runs the physics at 60 frames per second. */
+const FPS = 60;
+/** meterConfig.COEFFICIENT in game.ts: the score is distance × 0.025. */
+const COEFFICIENT = 0.025;
+
+const NAME_MAX = 12;
+const SCORE_MAX = 99_999;
+/** A run longer than one day is not a real run. */
+const DURATION_MAX_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The highest score that a run of `durationMs` can get. The game never goes
+ * faster than MAX_SPEED, so the distance is at most
+ * MAX_SPEED × FPS / 1000 px for each ms. The +1 permits the rounding in
+ * DistanceMeter.getActualDistance.
+ */
+const maxScoreFor = (durationMs: number): number =>
+  Math.floor(((durationMs * MAX_SPEED * FPS) / 1000) * COEFFICIENT) + 1;
+
+// Printable: no control or format characters, and no separator other than
+// the plain space.
+const PRINTABLE = /^(?:[^\p{C}\p{Z}]| )+$/u;
+
+type ScoreInput = { name: string; score: number; durationMs: number };
+
+type Validation =
+  | { ok: true; value: ScoreInput }
+  | { ok: false; error: string };
+
+/** Checks the body of POST /api/scores. The name comes back trimmed. */
+const validateScore = (body: unknown): Validation => {
+  if (typeof body !== 'object' || body === null) {
+    return { ok: false, error: 'The body must be a JSON object.' };
+  }
+  const { name, score, durationMs } = body as Record<string, unknown>;
+
+  if (typeof name !== 'string') {
+    return { ok: false, error: 'The name must be a string.' };
+  }
+  const trimmed = name.trim();
+  const length = [...trimmed].length;
+  if (length < 1 || length > NAME_MAX) {
+    return {
+      ok: false,
+      error: `The name must have 1 to ${NAME_MAX} characters.`,
+    };
+  }
+  if (!PRINTABLE.test(trimmed)) {
+    return {
+      ok: false,
+      error: 'The name must have printable characters only.',
+    };
+  }
+
+  if (
+    typeof score !== 'number' ||
+    !Number.isInteger(score) ||
+    score < 0 ||
+    score > SCORE_MAX
+  ) {
+    return {
+      ok: false,
+      error: `The score must be a whole number from 0 to ${SCORE_MAX}.`,
+    };
+  }
+
+  if (
+    typeof durationMs !== 'number' ||
+    !Number.isFinite(durationMs) ||
+    durationMs < 0 ||
+    durationMs > DURATION_MAX_MS
+  ) {
+    return {
+      ok: false,
+      error: 'The duration must be a number of ms from 0 to 86400000.',
+    };
+  }
+
+  if (score > maxScoreFor(durationMs)) {
+    return {
+      ok: false,
+      error: 'The score is too high for the duration of the run.',
+    };
+  }
+
+  return { ok: true, value: { name: trimmed, score, durationMs } };
+};
+
+export { maxScoreFor, validateScore };
+export type { ScoreInput };

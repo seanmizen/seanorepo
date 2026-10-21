@@ -50,7 +50,12 @@ http://minecraft.{$EDGE_HOST}.local {
 }
 
 http://cous.{$EDGE_HOST}.local {
-	reverse_proxy cous:4070
+	handle /api/* {
+		reverse_proxy cous-backend:4071
+	}
+	handle {
+		reverse_proxy cous:4070
+	}
 }
 
 http://seansconverter.{$EDGE_HOST}.local {

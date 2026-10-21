@@ -4,12 +4,18 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "cous-be"
+  ],
   "scripts": {
     "start": "yarn rsbuild dev --open",
     "start:noopen": "yarn rsbuild dev --port 4070",
+    "start:all": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn start\" \"yarn workspace cous-be start\"",
     "start:docker": "PUBLISH_ADDR=0.0.0.0 docker compose --profile dev up --build",
     "prod:docker": "docker network create edge >/dev/null 2>&1; BUILD_TARGET=prod docker compose --profile prod up --build --detach",
     "build": "yarn && yarn rsbuild build",
+    "test": "yarn workspace cous-be test",
+    "test:types": "tsc --noEmit && yarn workspace cous-be tsc --noEmit",
     "down": "docker compose --profile dev --profile prod down"
   },
   "dependencies": {
@@ -21,6 +27,7 @@
     "@rsbuild/plugin-react": "^1.4.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "concurrently": "^9.2.1",
     "typescript": "^5.9.3"
   }
 }
