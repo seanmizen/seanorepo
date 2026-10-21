@@ -24,6 +24,7 @@ const Cous: FC<CousProps> = ({ dark }) => {
   const gameRef = useRef<Game | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [waiting, setWaiting] = useState(true);
   const [themeId, setThemeId] = useState<SpriteThemeId>(DEFAULT_THEME_ID);
   const darkRef = useRef(dark);
   darkRef.current = dark;
@@ -69,12 +70,14 @@ const Cous: FC<CousProps> = ({ dark }) => {
             onInvertChange: (inverted: boolean) => {
               canvas.classList.toggle(styles.inverted, inverted);
             },
+            onStart: () => setWaiting(false),
           },
           { showHitboxes: SHOW_HITBOXES },
         );
         gameRef.current.setDark(darkRef.current);
         gameRef.current.start();
         setReady(true);
+        setWaiting(true);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -96,10 +99,18 @@ const Cous: FC<CousProps> = ({ dark }) => {
     const onKeyDown = (e: KeyboardEvent) => {
       const game = gameRef.current;
       if (!game) return;
-      // After a crash, any key restarts. A held key and browser
-      // shortcuts do not.
-      if (game.crashed) {
+      // Before the first run and after a crash, any key starts the game.
+      // A held key, browser shortcuts and keys for a form control (the
+      // theme picker, the toggle) do not.
+      if (game.waiting || game.crashed) {
         if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        const { target } = e;
+        if (
+          target instanceof Element &&
+          target.closest('select, button, input, textarea')
+        ) {
+          return;
+        }
         e.preventDefault();
         game.jump();
         return;
@@ -142,12 +153,17 @@ const Cous: FC<CousProps> = ({ dark }) => {
           ))}
         </select>
       </label>
-      <canvas
-        ref={canvasRef}
-        className={styles.canvas}
-        onPointerDown={() => gameRef.current?.jump()}
-        aria-label="cous, a chrome-dino-style runner game"
-      />
+      <div className={styles.stage}>
+        <canvas
+          ref={canvasRef}
+          className={styles.canvas}
+          onPointerDown={() => gameRef.current?.jump()}
+          aria-label="cous, a chrome-dino-style runner game"
+        />
+        {ready && waiting && (
+          <p className={styles.prompt}>press any key to get going (or tap)</p>
+        )}
+      </div>
       {!ready && !error && <p className={styles.status}>loading sprites…</p>}
       {error && <p className={styles.error}>{error}</p>}
       <p className={styles.hint}>
