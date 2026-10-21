@@ -21,22 +21,24 @@ const Cous: FC = () => {
   const [ready, setReady] = useState(false);
   const [themeId, setThemeId] = useState<SpriteThemeId>(DEFAULT_THEME_ID);
 
-  // Set up canvas backing store once.
+  // Size the backing store to the displayed size × devicePixelRatio, and
+  // scale the context so that the game logic stays in logical px
+  // (CANVAS.WIDTH × CANVAS.HEIGHT).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    // Scale the canvas for HiDPI: render at devicePixelRatio internally
-    // but keep the CSS-pixel coordinate system so all logic is in CSS px.
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = CANVAS.WIDTH * dpr;
-    canvas.height = CANVAS.HEIGHT * dpr;
-    canvas.style.width = `${CANVAS.WIDTH}px`;
-    canvas.style.height = `${CANVAS.HEIGHT}px`;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.scale(dpr, dpr);
-      ctx.imageSmoothingEnabled = false;
-    }
+    const fit = () => {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const width = Math.round(canvas.clientWidth * dpr);
+      canvas.width = width;
+      canvas.height = Math.round((width * CANVAS.HEIGHT) / CANVAS.WIDTH);
+      const k = width / CANVAS.WIDTH;
+      canvas.getContext('2d')?.setTransform(k, 0, 0, k, 0, 0);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(canvas);
+    return () => observer.disconnect();
   }, []);
 
   // (Re-)instantiate the game when the theme changes.
