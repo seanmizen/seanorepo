@@ -442,3 +442,85 @@ struct SkyOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
   let d = normalize(b.xyz / b.w - a.xyz / a.w);
   return vec4f(skyColor(d, true), 1.0);
 }
+
+// ---- Translucent pass ------------------------------------------------------
+// Smoke and the debug blast volume (grenade.zig). Alpha blended, drawn after
+// the opaque scene with the depth test on and no depth write.
+//   - mat < 0: a billboard. nrm.xy is the quad UV in [-1, 1], nrm.z the
+//     emission, -mat the alpha. The alpha falls off to the edge, so a quad
+//     is a soft round puff.
+//   - mat > 0: a shaded volume. nrm is the face normal, mat the alpha.
+// The light is simple: the hemisphere ambient, the sun (no shadow), the
+// point lights and the same fog as the opaque scene.
+
+struct TOut {
+  @builtin(position) clip: vec4f,
+  @location(0) wpos: vec3f,
+  @location(1) nrm: vec3f,
+  @location(2) col: vec3f,
+  @location(3) mat: f32,
+};
+
+@vertex fn vs_trans(v: VIn) -> TOut {
+  var o: TOut;
+  var c = u.view_proj * vec4f(v.pos, 1.0);
+  c.z = VM_SPLIT * c.w + (1.0 - VM_SPLIT) * c.z;
+  o.clip = c;
+  o.wpos = v.pos;
+  o.nrm = v.nrm;
+  o.col = v.col;
+  o.mat = v.mat;
+  return o;
+}
+
+@fragment fn fs_trans(in: TOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  let to_cam = u.cam.xyz - in.wpos;
+  let dist = length(to_cam);
+  let V = to_cam / dist;
+  let out_k = outdoors(in.wpos.y);
+  var alpha = abs(in.mat);
+  var N = V;
+  var emit = 0.0;
+  if (in.mat < 0.0) {
+    let r2 = dot(in.nrm.xy, in.nrm.xy);
+    if (r2 >= 1.0) { discard; }
+    // A soft edge, and a little noise so the puffs do not look like discs.
+    let wisp = 0.75 + 0.5 * noise3(in.wpos * 3.0 + vec3f(0.0, -u.cam.w * 0.4, 0.0));
+    alpha = alpha * (1.0 - r2) * (1.0 - r2) * wisp;
+    emit = in.nrm.z;
+  } else {
+    N = normalize(in.nrm);
+    if (!front) { N = -N; }
+    // A volume fades out near the eye, so it does not fill the view.
+    alpha = alpha * smoothstep(0.6, 3.0, dist);
+  }
+  if (emit > 0.0) {
+    return vec4f(in.col * emit, clamp(alpha, 0.0, 1.0));
+  }
+  let sky_amb = vec3f(0.22, 0.30, 0.48);
+  let gnd_amb = vec3f(0.30, 0.20, 0.14);
+  var light = mix(gnd_amb, sky_amb, N.y * 0.5 + 0.5) * mix(0.05, 1.0, out_k);
+  // A billboard takes the sun from all sides (smoke scatters it).
+  var ndl = 0.5;
+  if (in.mat > 0.0) { ndl = max(dot(N, u.sun_dir.xyz), 0.0); }
+  light += u.sun_col.rgb * ndl * out_k * 0.6;
+  let nl = u32(u.info.y);
+  for (var i = 0u; i < nl; i++) {
+    let d = u.lp[i].xyz - in.wpos;
+    let ld = length(d);
+    let r = u.lp[i].w;
+    if (ld < r) {
+      let k = 1.0 - (ld * ld) / (r * r);
+      light += u.lc[i].rgb * k * k / (1.0 + ld * ld * 0.35) * 0.6;
+    }
+  }
+  var c = in.col * light;
+  let dens_out = u.info.z * exp(-max(in.wpos.y, 0.0) * 0.12);
+  let dens = mix(0.012, dens_out, out_k);
+  let f = 1.0 - exp(-dist * dens);
+  let vd = -V;
+  let fc_out = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
+  let fc = mix(vec3f(0.012, 0.011, 0.01), fc_out, out_k);
+  c = mix(c, fc, f);
+  return vec4f(c, clamp(alpha, 0.0, 1.0));
+}

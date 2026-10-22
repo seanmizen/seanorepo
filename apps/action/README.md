@@ -9,8 +9,8 @@ A first-person shooter in the browser, on swindowzig (Zig to wasm, WebGPU).
   red centre scores 150, the plate 100. The best score stays in local storage.
 
 Controls: WASD, Space jump, mouse look, left click fire, right click aim down
-the sights, R reload, E press a button (lifts), Tab scores, Esc releases the
-mouse, M menu (paused).
+the sights, R reload, G grenade, E press a button (lifts), Tab scores, Esc
+releases the mouse, M menu (paused).
 
 Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, 1 to 9 go to
 a spawn point.
@@ -28,6 +28,23 @@ zig build floorplan -- earls_court section-z -22.5 out.ppm # side view at z = -2
 zig build floorplan -- earls_court audit                  # decoration a player can walk through
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
+
+## Grenades
+
+G throws an impact grenade. It goes off when it touches a wall, the floor or
+a player. A thin smoke trail shows its path. `game/src/grenade.zig` has the
+model:
+
+- The blast radius is 5 m. The damage is 100 to 1.5 m, then it falls to 0 at
+  5 m. The thrower can also get hurt.
+- Cover counts. The blast checks three points on each player: the legs, the
+  chest and the head. Each point that the blast can see gives a third of the
+  damage at its distance.
+- Deathmatch: 3 grenades in each life. Practice: no limit. A grenade knocks
+  down the plates that it can see in the radius.
+- With the debug screen on, a dotted line shows the path of the aimed throw.
+  Small translucent cubes show where a player would get hit, for the aimed
+  throw and for each grenade in the air. Red is the centre, yellow the edge.
 
 ## Maps
 
@@ -92,7 +109,9 @@ bun apps/action/scripts/convert-gun.ts --list   # print the parts, to find the m
 JSON text on `/api/ws`. The message list is at the top of `server/index.ts`.
 The client sends its own position and its hits. The server checks the fire
 rate, the match phase and that both players are alive. It does not check line
-of sight.
+of sight. For a grenade, the thrower's client calculates the damage, cover
+included, and sends it in one `blast` message. The server checks the throws
+left in the life, the damage range and the distance to each target.
 
 ## Deploy
 

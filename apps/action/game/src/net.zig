@@ -52,6 +52,9 @@ pub const Msg = struct {
     lifts: ?[][4]f32 = null,
     // The deep train clock, seconds into its cycle.
     tt: ?f32 = null,
+    // A grenade throw (t "nade"): the velocity. `o` is the start point and
+    // `id` the thrower.
+    v: ?[3]f32 = null,
 };
 
 pub const Client = struct {
