@@ -5430,6 +5430,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"action@workspace:apps/action":
+  version: 0.0.0-use.local
+  resolution: "action@workspace:apps/action"
+  dependencies:
+    bun-types: "npm:^1.3.4"
+    typescript: "npm:^5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "agent-base@npm:^7.1.0, agent-base@npm:^7.1.2":
   version: 7.1.3
   resolution: "agent-base@npm:7.1.3"

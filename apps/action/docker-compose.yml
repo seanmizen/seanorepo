@@ -1,0 +1,35 @@
+# action - action.seanmizen.com
+# Port 4080: the game and the deathmatch lobby (/api/ws), one Bun process.
+# 4081 is reserved for the pair and not used.
+
+x-action-base: &action-base
+  container_name: action-seanmizen-com
+  build:
+    context: ../..
+    dockerfile: apps/action/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "${PUBLISH_ADDR:-127.0.0.1}:4080:4080"
+
+services:
+  frontend:
+    <<: *action-base
+    profiles: ["prod"]
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [action-seanmizen-com]
+
+  frontend-dev:
+    <<: *action-base
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+    profiles: ["dev"]
+
+networks:
+  # Shared with infra/edge. deploy.sh and prod:docker create it.
+  edge:
+    external: true

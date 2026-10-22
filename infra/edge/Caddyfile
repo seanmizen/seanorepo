@@ -58,6 +58,10 @@ http://cous.{$EDGE_HOST}.local {
 	}
 }
 
+http://action.{$EDGE_HOST}.local {
+	reverse_proxy action-seanmizen-com:4080
+}
+
 http://seansconverter.{$EDGE_HOST}.local {
 	handle /api/* {
 		reverse_proxy seansconverter-backend:4051

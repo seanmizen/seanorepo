@@ -81,5 +81,10 @@ ingress:
   - hostname: cous.seanmizen.com
     service: http://localhost:4070
 
+  # action.seanmizen.com - Port 4080. One Bun process serves the game and
+  # the deathmatch lobby (/api/ws, a WebSocket).
+  - hostname: action.seanmizen.com
+    service: http://localhost:4080
+
   # Catch-all for unmatched routes
   - service: http_status:404

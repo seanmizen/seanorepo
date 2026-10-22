@@ -43,6 +43,7 @@ use their host ports. See `infra/edge/README.md`.
 | 4050 / 4051 | seansconverter.com FE / BE (apps/ffmpeg-converter) |
 | 4060 / 4061 | inside.seanmizen.com FE / BE |
 | 4070 / 4071 | cous.seanmizen.com FE / BE |
+| 4080 | action.seanmizen.com (game and lobby in one process). 4081 reserved. |
 | 4120 | tcp-getter (host unit, reached at `seanmizen.com/tcp/*`) |
 
 ### Add a service

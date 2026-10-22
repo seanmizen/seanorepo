@@ -20,6 +20,7 @@ import {
   setTextInputActive,
   type WasmExports,
 } from './events';
+import { createNetImports } from './net';
 import { createStorageImports } from './storage';
 import { type GPUBridge, initWebGPU } from './webgpu';
 import {
@@ -229,6 +230,8 @@ export function createImports(
     // The Zig extern declarations use the module name "webgpu".
     webgpu: gpu.imports,
     audio: audioImports,
+    // WebSocket bridge (backends/wasm/net.ts).
+    net: createNetImports(getMemory),
     // The chunk worker pool (pipeline/exec_web.zig).
     chunks: chunkImports(pool, getMemory),
   } as WebAssembly.Imports;
