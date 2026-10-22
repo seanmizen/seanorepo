@@ -298,6 +298,29 @@ fn buildTrain(tr: map.Train) void {
     dyn.box(v3(b.min[0] - 0.24, y0 + 0.9, zf - 0.8), v3(b.min[0] - 0.19, y0 + 1.15, zf - 0.4), v3(1.0, 0.97, 0.9), 4);
 }
 
+/// The escalator steps are static boxes. Their yellow edges slide along
+/// each tread, so the steps look as if they move: down in the left lane,
+/// up in the right lane (map.zig escalators, the same speed).
+fn buildEscalatorSteps() void {
+    const ec = @import("maps/earls_court.zig");
+    const lanes = [_]struct { x0: f32, x1: f32, dir: f32 }{
+        .{ .x0 = -3.6, .x1 = -0.35, .dir = -1 },
+        .{ .x0 = 0.35, .x1 = 3.6, .dir = 1 },
+    };
+    const k = @mod(time * 0.65 / ec.esc_run, 1.0);
+    for (lanes) |lane| {
+        const f = if (lane.dir < 0) k else 1 - k;
+        for (0..ec.esc_steps) |i| {
+            const fi: f32 = @floatFromInt(i);
+            const top = -ec.esc_rise * (fi + 1);
+            const za = ec.esc_top_z - ec.esc_run * (fi + 1);
+            const z = za + ec.esc_run * (1 - f);
+            dyn.box(v3(lane.x0, top, z - 0.05), v3(lane.x1, top + 0.01, z), v3(0.85, 0.68, 0.08), 0);
+            dyn.box(v3(lane.x0, top, z - 0.36), v3(lane.x1, top + 0.006, z - 0.33), v3(0.3, 0.3, 0.32), 3);
+        }
+    }
+}
+
 fn pressButton(i: usize) void {
     const b = map.buttons[i];
     if (mode == .deathmatch) {
@@ -1271,6 +1294,7 @@ fn gameRender(ctx: *sw.Context) !void {
     }
     for (remotes[0..remote_n]) |*r| buildRemote(r);
     if (map.train) |tr| buildTrain(tr);
+    if (map.id == .earls_court) buildEscalatorSteps();
     if (mode == .practice) for (&targets) |*t| buildTarget(t);
     buildEffects();
     buildViewmodel();

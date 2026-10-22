@@ -509,10 +509,10 @@ fn train() void {
 
 // ---- Escalators to the Piccadilly line ----------------------------------------
 
-const esc_top_z: f32 = -30;
-const esc_steps = 36;
-const esc_run: f32 = 0.69;
-const esc_rise: f32 = 16.0 / 36.0;
+pub const esc_top_z: f32 = -30;
+pub const esc_steps = 36;
+pub const esc_run: f32 = 0.69;
+pub const esc_rise: f32 = 16.0 / 36.0;
 const esc_bottom_z: f32 = esc_top_z - esc_run * esc_steps;
 
 fn escalators() void {
@@ -522,9 +522,6 @@ fn escalators() void {
         const za = esc_top_z - esc_run * (fi + 1);
         const top = -esc_rise * (fi + 1);
         boxNoAo(v3(-3.7, deep_floor, za), v3(3.7, top, za + esc_run), v3(0.16, 0.16, 0.17), .metal);
-        // The yellow nosing of each step on both lanes.
-        deco(v3(-3.6, top, za + esc_run - 0.05), v3(-0.35, top + 0.008, za + esc_run), yellow, .paint);
-        deco(v3(0.35, top, za + esc_run - 0.05), v3(3.6, top + 0.008, za + esc_run), yellow, .paint);
     }
     // Shaft walls, tiled, from the deep floor to rail height at the top.
     box(v3(-4.3, deep_floor, esc_bottom_z), v3(-4, 1.1, esc_top_z), tile_c, .wall_tile);
