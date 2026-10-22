@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tube Sounds</title>
+    <style>
+      :root {
+        --bg: #f4f2ee;
+        --panel: #ffffff;
+        --ink: #1d1d1b;
+        --muted: #6b6860;
+        --line: #d9d5cc;
+        --accent: #dc241f; /* roundel red */
+        --accent-2: #0019a8; /* Piccadilly blue */
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121212;
+          --panel: #1c1c1c;
+          --ink: #ecebe7;
+          --muted: #9a978f;
+          --line: #333;
+          --accent: #ff4b45;
+          --accent-2: #6b86ff;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.45 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 24px 16px 48px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 4px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .roundel {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 5px solid var(--accent);
+        position: relative;
+        flex: none;
+      }
+      .roundel::after {
+        content: '';
+        position: absolute;
+        left: -9px;
+        right: -9px;
+        top: 50%;
+        height: 6px;
+        margin-top: -3px;
+        background: var(--accent-2);
+      }
+      p.lede {
+        color: var(--muted);
+        margin: 0 0 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+        gap: 14px;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 10px;
+      }
+      label.row {
+        display: grid;
+        grid-template-columns: 80px 1fr 64px;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+      }
+      label.row output {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        color: var(--muted);
+      }
+      input[type='range'] {
+        width: 100%;
+        accent-color: var(--accent-2);
+      }
+      select,
+      button {
+        font: inherit;
+        color: inherit;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 7px 11px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--accent-2);
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .check {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin: 8px 0 0;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 3px 14px;
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      dt {
+        color: var(--muted);
+      }
+      dd {
+        margin: 0;
+        font-family: ui-monospace, monospace;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 220px;
+        border-radius: 8px;
+        background: #000;
+      }
+      .wide {
+        grid-column: 1 / -1;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 8px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1><span class="roundel" aria-hidden="true"></span> Tube Sounds</h1>
+      <p class="lede">
+        Procedural London Underground train sounds. Everything is synthesised live with the Web
+        Audio API: no samples.
+      </p>
+
+      <div class="grid">
+        <section>
+          <h2>Train</h2>
+          <div class="buttons">
+            <button id="start" class="primary">Start audio</button>
+            <select id="stock" aria-label="Stock">
+              <option value="1973">1973 Stock (Piccadilly)</option>
+              <option value="S7">S7 Stock (District)</option>
+            </select>
+            <select id="motor" aria-label="Motor type">
+              <option value="">Stock default motor</option>
+              <option value="dc-camshaft">DC camshaft</option>
+              <option value="vvvf-igbt">IGBT VVVF</option>
+              <option value="vvvf-gto">GTO VVVF (stepped)</option>
+            </select>
+          </div>
+          <p class="hint">Changing stock or motor rebuilds the train.</p>
+        </section>
+
+        <section>
+          <h2>Scripts</h2>
+          <div class="buttons">
+            <button id="arrival">Arrival</button>
+            <button id="departure">Departure</button>
+            <button id="service">Full service</button>
+            <button id="open">Doors open</button>
+            <button id="close">Doors close</button>
+            <button id="stopScript">Stop script</button>
+          </div>
+          <label class="check"><input type="checkbox" id="loop" /> Repeat the service every 70 s</label>
+          <p class="hint">
+            Service timeline: brakes at t = 0 (100 m out at 20 m/s), stop at 9 s, doors 10 to 24 s,
+            depart at 27 s.
+          </p>
+        </section>
+
+        <section>
+          <h2>Controls</h2>
+          <label class="row">Speed <input id="speed" type="range" min="0" max="28" step="0.1" value="0" /><output id="speedOut"></output></label>
+          <label class="row">Throttle <input id="throttle" type="range" min="0" max="1" step="0.01" value="0" /><output id="throttleOut"></output></label>
+          <label class="row">Brake <input id="brake" type="range" min="0" max="1" step="0.01" value="0" /><output id="brakeOut"></output></label>
+          <label class="row">Distance <input id="distance" type="range" min="-200" max="800" step="1" value="400" /><output id="distanceOut"></output></label>
+          <label class="row">Curve <input id="curve" type="range" min="0" max="1" step="0.01" value="0" /><output id="curveOut"></output></label>
+          <label class="check"><input type="checkbox" id="trackCurves" checked /> Use the track's curves (ignore the slider)</label>
+          <label class="check"><input type="checkbox" id="physics" /> Physics: throttle and brake drive the speed</label>
+          <p class="hint">Moving a control stops a running script.</p>
+        </section>
+
+        <section>
+          <h2>Mix</h2>
+          <label class="row">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8" /><output id="volumeOut"></output></label>
+          <dl id="readout"></dl>
+        </section>
+
+        <section class="wide">
+          <h2>Spectrum (log frequency, 40 Hz to 10 kHz)</h2>
+          <canvas id="spectrum" width="960" height="220"></canvas>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>

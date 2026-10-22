@@ -1,0 +1,22 @@
+{
+  "name": "tube-sounds",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Procedural London Underground train sounds for the Web Audio API",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "demo": "esbuild demo/main.ts --bundle --format=esm --sourcemap --outdir=demo/dist --servedir=demo --serve=127.0.0.1:4790",
+    "build:demo": "esbuild demo/main.ts --bundle --format=esm --minify --outdir=demo/dist",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.5",
+    "esbuild": "~0.28.0",
+    "typescript": "^5.9.3"
+  }
+}

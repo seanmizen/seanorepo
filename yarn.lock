@@ -15409,6 +15409,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"tube-sounds@workspace:utils/tube-sounds":
+  version: 0.0.0-use.local
+  resolution: "tube-sounds@workspace:utils/tube-sounds"
+  dependencies:
+    "@types/bun": "npm:^1.3.5"
+    esbuild: "npm:~0.28.0"
+    typescript: "npm:^5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "tunnel-agent@npm:^0.6.0":
   version: 0.6.0
   resolution: "tunnel-agent@npm:0.6.0"
