@@ -17,6 +17,7 @@
 //   {t:"st", x, y, z, yaw, pitch}                 20 times a second
 //   {t:"fire", o:[x,y,z], e:[x,y,z], hit:id|-1, head:bool}
 //   {t:"use", i, l}                               call lift i to level l
+//   {t:"shock"}                                   the player touched the live rail
 // Server to client:
 //   {t:"welcome", id}
 //   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,hp,k,d,alive}],
@@ -45,26 +46,30 @@ const MAX_PLAYERS = 16;
 // The lobby map is Earl's Court. The same spawn points (x, y, z) as
 // apps/action/game/src/maps/earls_court.zig.
 const SPAWNS: [number, number, number][] = [
-  [-12, 0, 0],
-  [12, 0, 0],
-  [-12, 0, -35],
-  [12, 0, -35],
-  [0, 0, -10],
-  [-5, 6, 32],
-  [5, 6, 32],
-  [0, 6, 43],
-  [-17, 6, 56],
-  [17, 6, 56],
-  [-20, -16, -58],
-  [20, -16, -58],
+  [-40, 0, -14.8],
+  [40, 0, 6.4],
+  [30, -15, -26],
+  [30, -15, -19],
+  [-10, 0, -15.5],
+  [-10, 0, 2],
+  [-20, 4.8, -19.7],
+  [55, 4.8, 0],
+  [-55, 4.8, 0],
+  [85, 4.8, -20],
+  [0, -5.6, -12.8],
+  [-5, -15, -22.5],
 ];
 
 // The lifts: the same state machine as map.zig (callLift, stepLifts). The
 // phase numbers are the order of map.zig Phase.
-const LIFT_LEVELS = [0.02, 6.02];
+// Each lift: its two floor heights (2 cm proud of the landing) and its
+// speed. Two District lifts, then the deep Piccadilly lift.
+const LIFTS: { levels: [number, number]; speed: number }[] = [
+  { levels: [0.02, 4.82], speed: 1.6 },
+  { levels: [0.02, 4.82], speed: 1.6 },
+  { levels: [-14.98, 4.82], speed: 3.2 },
+];
 const TRAIN_CYCLE = 70;
-const LIFT_COUNT = 2;
-const LIFT_SPEED = 1.6;
 const DOOR_TIME = 0.8;
 const DOOR_HOLD = 6;
 enum Phase {
@@ -75,6 +80,8 @@ enum Phase {
   Moving = 4,
 }
 interface Lift {
+  levels: [number, number];
+  speed: number;
   y: number;
   level: number;
   door: number;
@@ -82,8 +89,10 @@ interface Lift {
   hold: number;
   pending: number | null;
 }
-const lifts: Lift[] = Array.from({ length: LIFT_COUNT }, () => ({
-  y: LIFT_LEVELS[0],
+const lifts: Lift[] = LIFTS.map((def) => ({
+  levels: def.levels,
+  speed: def.speed,
+  y: def.levels[0],
   level: 0,
   door: 0,
   phase: Phase.Idle,
@@ -94,7 +103,7 @@ const lifts: Lift[] = Array.from({ length: LIFT_COUNT }, () => ({
 function callLift(l: Lift, level: number): void {
   switch (l.phase) {
     case Phase.Idle:
-      if (l.level === level && Math.abs(l.y - LIFT_LEVELS[level]) < 0.01) {
+      if (l.level === level && Math.abs(l.y - l.levels[level]) < 0.01) {
         l.phase = Phase.Opening;
       } else {
         l.level = level;
@@ -123,10 +132,10 @@ function callLift(l: Lift, level: number): void {
 function stepLift(l: Lift, dt: number): void {
   switch (l.phase) {
     case Phase.Moving: {
-      const d = LIFT_LEVELS[l.level] - l.y;
-      const step = LIFT_SPEED * dt;
+      const d = l.levels[l.level] - l.y;
+      const step = l.speed * dt;
       if (Math.abs(d) <= step) {
-        l.y = LIFT_LEVELS[l.level];
+        l.y = l.levels[l.level];
         l.phase = Phase.Opening;
       } else l.y += Math.sign(d) * step;
       break;
@@ -249,10 +258,10 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
   if (!p.alive || phase !== 'play' || now - p.lastFire < MIN_FIRE_MS) return;
   p.lastFire = now;
   const o = Array.isArray(msg.o)
-    ? msg.o.map((v) => num(v, -150, 150) ?? 0)
+    ? msg.o.map((v) => num(v, -450, 450) ?? 0)
     : null;
   const e = Array.isArray(msg.e)
-    ? msg.e.map((v) => num(v, -300, 300) ?? 0)
+    ? msg.e.map((v) => num(v, -450, 450) ?? 0)
     : null;
   if (o?.length === 3 && e?.length === 3)
     broadcast({ t: 'shot', id: p.id, o, e }, p.id);
@@ -414,17 +423,31 @@ const server = Bun.serve<Conn>({
         if (phase === 'play') spawn(p);
         else p.respawnAt = 0;
       } else if (msg.t === 'st' && p.alive) {
-        p.x = num(msg.x, -40, 40) ?? p.x;
+        p.x = num(msg.x, -420, 420) ?? p.x;
         p.y = num(msg.y, -30, 30) ?? p.y;
-        p.z = num(msg.z, -80, 80) ?? p.z;
+        p.z = num(msg.z, -60, 60) ?? p.z;
         p.yaw = num(msg.yaw, -1e4, 1e4) ?? p.yaw;
         p.pitch = num(msg.pitch, -2, 2) ?? p.pitch;
       } else if (msg.t === 'fire') {
         onFire(p, msg);
+      } else if (msg.t === 'shock' && p.alive && phase === 'play') {
+        // The live rail far out along the lines (the client checks where).
+        p.alive = false;
+        p.hp = 0;
+        p.d++;
+        p.respawnAt = Date.now() + RESPAWN_MS;
+        broadcast({
+          t: 'kill',
+          killer: p.id,
+          victim: p.id,
+          head: false,
+          kname: 'LIVE RAIL',
+          vname: p.name,
+        });
       } else if (msg.t === 'use') {
         const i = Number(msg.i);
         const level = Number(msg.l);
-        if (!p.alive || !(i in lifts) || !(level in LIFT_LEVELS)) return;
+        if (!p.alive || !(i in lifts) || !(level === 0 || level === 1)) return;
         callLift(lifts[i], level);
         broadcast({ t: 'lift', i, l: level });
       }

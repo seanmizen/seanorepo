@@ -1,21 +1,26 @@
-// Earl's Court tube station, from its public layout (not a survey; the
-// sizes are approximate).
+// Earl's Court tube station, from its public layout (Wikipedia; a
+// level-by-level station description). The sizes are approximate.
 //
-//   z  62 ┌──────────── Earls Court Road: pavement, road, a bus, the TARDIS ─┐
-//   z  50 │        cream faience front, three doorways, the roundel          │
-//   z  36 │  ticket hall (street level, y 6), ticket gates                    │
-//   z  28 │  footbridge (y 6) over the District line, two lifts, two stairs  │
-//         │                                                                  │
-//         │  train shed: an iron arch roof, brick side walls                 │
-//         │  T1 | island 1/2 | T2 (train) | centre | T3 | island 3/4 | T4    │
-//         │                                 escalator top (z -30)            │
-//   z -45 └── south wall, tunnel mouths ──────────────────────────────────────┘
-//            escalators down to y -16
-//   z -55..-66  Piccadilly line platform 5: a deep tiled tunnel, one track
+// X is east, Z is south (north is -Z), Y is up. Both lines run east-west.
 //
-// Platform level is y 0, the track bed y -0.85, the street y 6, the deep
-// platform y -16. server/index.ts has a copy of the spawns and the lift
-// levels.
+//   y  4.8  street and concourse: the Earls Court Road entrance (east), the
+//           Warwick Road entrance (west, 1937, with the glass rotunda), the
+//           high-level walkway along the north side of the train shed, and
+//           a spur that turns south off it mid-station, with the lifts down
+//           to the District line islands.
+//   y  0    District line: two island platforms under the 1878 train shed.
+//           Platforms 1 and 2 (eastbound) are north of 3 and 4 (westbound).
+//           Steps from both concourses.
+//   y -5.6  intermediate level: a broken ring of passages. Each island has
+//           two sets of steps down. The escalators leave its north-west
+//           corner and go down to the east.
+//   y -15   Piccadilly line: one island, platform 5 (eastbound, north) and
+//           platform 6 (westbound, south), with a corridor between them.
+//           A deep lift goes up to the Earls Court Road concourse.
+//
+// The lines run far out of the station both ways. Past |x| = shock_x the
+// live rail kills (main.zig). server/index.ts has a copy of the spawns and
+// the lift levels.
 const std = @import("std");
 const map = @import("../map.zig");
 const vec = @import("../vec.zig");
@@ -23,23 +28,83 @@ const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
 const Mat = map.Mat;
+const Rect = map.Rect;
 
-pub const street_y: f32 = 6;
-pub const deep_y: f32 = -16;
+// Levels.
+pub const street_y: f32 = 4.8;
+pub const deck_y: f32 = street_y - 0.8; // the underside of the decks
 pub const bed_y: f32 = -0.85;
+pub const mid_y: f32 = -5.6; // the intermediate level floor
+pub const mid_ceil: f32 = -3.2;
+pub const deep_y: f32 = -15;
+pub const deep_ceil: f32 = deep_y + 4.6;
+/// Past this |x| along the lines the live rail kills.
+pub const shock_x: f32 = 200;
+pub const line_end: f32 = 400;
+
+// The train shed.
+const shed_x0: f32 = -45;
+const shed_x1: f32 = 45;
+const wall_n: f32 = -21;
+const wall_s: f32 = 12.6;
+// Track beds and islands, north to south: [z0, z1].
+const e1 = [2]f32{ -21, -16.8 };
+const island_a = [2]f32{ -16.8, -8.8 };
+const e2 = [2]f32{ -8.8, -4.6 };
+const w1 = [2]f32{ -3.8, 0.4 };
+const island_b = [2]f32{ 0.4, 8.4 };
+const w2 = [2]f32{ 8.4, 12.6 };
+const tracks = [_][2]f32{ e1, e2, w1, w2 };
+const ca: f32 = -12.8; // island centres
+const cb: f32 = 4.4;
+// The stair wells from the islands down to the intermediate level.
+const well_x = [2][2]f32{ .{ -29, -22 }, .{ 22, 29 } };
+// The walkway (north side) and the spur.
+const walk_z1: f32 = -18.4;
+const spur_x = [2]f32{ -3, 3 };
+// District lift shafts in the spur, doors on the north face.
+const lift_a = Rect{ .x0 = -1.2, .x1 = 1.2, .z0 = -12.2, .z1 = -9.8 };
+const lift_b = Rect{ .x0 = -1.2, .x1 = 1.2, .z0 = 4.6, .z1 = 7.0 };
+// Concourses and the buildings beyond them.
+const east_x = [2]f32{ 45, 66 };
+const west_x = [2]f32{ -66, -45 };
+const conc_z0: f32 = -25;
+const hall_x1: f32 = 78; // the Earls Court Road front
+const street_e = [2]f32{ 78.6, 92.6 };
+const warwick_x0: f32 = -84; // the Warwick Road front
+const street_w = [2]f32{ -96, -84 };
+// The escalators and the deep level.
+const esc_z = [2]f32{ -24, -21 };
+pub const esc_top_x: f32 = -30;
+pub const esc_steps = 21;
+pub const esc_rise: f32 = (mid_y - deep_y) / 21.0;
+pub const esc_run: f32 = esc_rise * 1.732; // 30 degrees
+pub const esc_bottom_x: f32 = esc_top_x + esc_run * esc_steps;
+const corr_z = [2]f32{ -24, -21 }; // the deep corridor between the platforms
+const p5 = [2]f32{ -27.5, -24.5 }; // platform 5 (north)
+const t5 = [2]f32{ -31, -27.5 };
+const p6 = [2]f32{ -20.5, -17.5 }; // platform 6 (south)
+const t6 = [2]f32{ -17.5, -14 };
+const plat_x = [2]f32{ 0, 60 };
+const deep_lift = Rect{ .x0 = 62.4, .x1 = 64.8, .z0 = -24, .z1 = -21.6 };
 
 // Colours.
 const brick = v3(0.45, 0.21, 0.13);
+const red_brick = v3(0.55, 0.2, 0.12);
 const iron = v3(0.07, 0.1, 0.08);
 const platform_c = v3(0.46, 0.44, 0.41);
 const ballast = v3(0.25, 0.22, 0.2);
 const yellow = v3(0.85, 0.68, 0.08);
 const cream = v3(0.86, 0.8, 0.64);
 const tile_c = v3(0.8, 0.76, 0.63);
+const tile_green = v3(0.2, 0.38, 0.3);
 const red = v3(0.75, 0.06, 0.05);
 const blue = v3(0.04, 0.12, 0.45);
 const steel = v3(0.35, 0.36, 0.37);
 const dark = v3(0.012, 0.012, 0.014);
+const deck_c = v3(0.42, 0.4, 0.38);
+const concrete_c = v3(0.2, 0.19, 0.18);
+const pave = v3(0.55, 0.54, 0.52);
 const warm = v3(1.0, 0.72, 0.42);
 const cool = v3(0.78, 0.88, 1.0);
 
@@ -49,20 +114,24 @@ fn rnd() f32 {
     return vec.hash(seed * 7919);
 }
 
+fn box(min: V3, max: V3, color: V3, mat: Mat) void {
+    _ = map.add(min, max, color, mat);
+}
+
 /// A box that does not count for the ambient occlusion.
 fn boxNoAo(min: V3, max: V3, color: V3, mat: Mat) void {
     map.add(min, max, color, mat).ao = false;
-}
-
-fn box(min: V3, max: V3, color: V3, mat: Mat) void {
-    _ = map.add(min, max, color, mat);
 }
 
 fn deco(min: V3, max: V3, color: V3, mat: Mat) void {
     map.addDecor(Mat4.identity(), min, max, color, mat);
 }
 
-/// A roundel facing +Z (turn = 0) or another way (turn = yaw).
+fn rect(x0: f32, x1: f32, z0: f32, z1: f32) Rect {
+    return .{ .x0 = x0, .x1 = x1, .z0 = z0, .z1 = z1 };
+}
+
+/// A roundel facing +Z, turned by `turn` about Y.
 fn roundel(p: V3, turn: f32, size: f32) void {
     const m = vec.translate(p).mul(Mat4.rotationY(turn));
     map.addDisc(m, 0.62 * size, 0.05, red, .paint);
@@ -70,582 +139,769 @@ fn roundel(p: V3, turn: f32, size: f32) void {
     map.addDecor(m, v3(-0.82 * size, -0.15 * size, 0.035), v3(0.82 * size, 0.15 * size, 0.07), blue, .paint);
 }
 
+/// A railing: a solid panel with a timber cap, at floor height y. One of
+/// the two ranges is thin.
+fn railing(x0: f32, x1: f32, z0: f32, z1: f32, y: f32) void {
+    boxNoAo(v3(x0, y, z0), v3(x1, y + 1.1, z1), iron, .metal);
+    deco(v3(x0 - 0.04, y + 1.1, z0 - 0.04), v3(x1 + 0.04, y + 1.17, z1 + 0.04), v3(0.3, 0.15, 0.08), .wood);
+}
+
+/// Stairs along X, `width` wide about z = cz. The top step starts at x_top
+/// at height y_top, and `n` steps go down toward `dir` (+1 east, -1 west).
+fn stairs(x_top: f32, dir: f32, cz: f32, width: f32, y_top: f32, n: usize, color: V3) void {
+    const rise = 0.4;
+    const run = 0.5;
+    const z0 = cz - width / 2;
+    const z1 = cz + width / 2;
+    const fn_: f32 = @floatFromInt(n);
+    const bottom = y_top - rise * fn_ - 0.5;
+    for (0..n) |i| {
+        const fi: f32 = @floatFromInt(i);
+        const top = y_top - rise * fi;
+        const xa = x_top + dir * run * fi;
+        const xb = xa + dir * run;
+        boxNoAo(v3(@min(xa, xb), bottom, z0), v3(@max(xa, xb), top, z1), color, .concrete);
+        const nose = if (dir > 0) @min(xa, xb) else @max(xa, xb) - 0.06;
+        deco(v3(nose, top, z0), v3(nose + 0.06, top + 0.012, z1), yellow, .paint);
+    }
+    // Handrails: a beam to see, boxes to stop the player.
+    const x_end = x_top + dir * run * fn_;
+    const y_end = y_top - rise * (fn_ - 1);
+    for ([_]f32{ z0 + 0.03, z1 - 0.03 }) |z| {
+        map.beam(v3(x_top, y_top + 0.95, z), v3(x_end, y_end + 0.95, z), 0.06, 0.06, v3(0, 1, 0), steel, .metal);
+        var k: usize = 0;
+        while (k < n) : (k += 3) {
+            const fa: f32 = @floatFromInt(k);
+            const fb: f32 = @floatFromInt(@min(k + 3, n));
+            const xa = x_top + dir * run * fa;
+            const xb = x_top + dir * run * fb;
+            map.addSolid(v3(@min(xa, xb), y_top - rise * (fb - 1) - 0.5, z - 0.05), v3(@max(xa, xb), y_top - rise * fa + 1.0, z + 0.05));
+        }
+    }
+}
+
 pub fn build() void {
     seed = 1;
-    map.shadow_centre = v3(0, 0, 4);
-    map.shadow_half = 58;
+    map.shadow_centre = v3(0, 0, -4);
+    map.shadow_half = 80;
     map.underground_y = -3;
     map.kill_y = -30;
 
-    shed();
-    footbridge();
+    districtLevel();
+    roof();
+    walkwayAndSpur();
     lifts();
-    ticketHall();
-    street();
-    train();
+    eastEnd();
+    westEnd();
+    lines();
+    districtTrain();
+    intermediateLevel();
     escalators();
-    deepPlatform();
+    deepLevel();
 
-    // Spawns: the islands, the centre, the bridge, the hall, the street and
-    // the deep platform.
-    // The debug teleport (Cmd+D, then 1 to 9) uses this order.
+    // Spawns. The debug teleport (Cmd+D, then 1 to 9) uses this order.
     const sp = [_]V3{
-        v3(-12, 0, 0),       v3(12, 0, 0),        v3(-20, deep_y, -58),  v3(20, deep_y, -58),
-        v3(-12, 0, -35),     v3(12, 0, -35),      v3(0, 0, -10),         v3(-5, street_y, 32),
-        v3(0, street_y, 43), v3(5, street_y, 32), v3(-17, street_y, 56), v3(17, street_y, 56),
+        v3(-40, 0, ca - 2),   v3(40, 0, cb + 2),     v3(30, deep_y, -26),      v3(30, deep_y, -19),
+        v3(-10, 0, -15.5),    v3(-10, 0, 2),         v3(-20, street_y, -19.7), v3(55, street_y, 0),
+        v3(-55, street_y, 0), v3(85, street_y, -20), v3(0, mid_y, ca),         v3(-5, deep_y, -22.5),
     };
     for (sp) |p| map.addSpawn(p);
 }
 
-// ---- The District line train shed ----------------------------------------
+// ---- District level ------------------------------------------------------------
 
-fn shed() void {
-    const z0: f32 = -45;
-    const z1: f32 = 36;
-    // The ground under the tracks. The centre strip stops at the escalator.
-    box(v3(-21, -3, z0), v3(-4, bed_y, z1), ballast, .concrete);
-    box(v3(4, -3, z0), v3(21, bed_y, z1), ballast, .concrete);
-    box(v3(-4, -3, -30), v3(4, bed_y, z1), ballast, .concrete);
+fn districtLevel() void {
+    // The ground under the tracks, with the stair wells cut out.
+    var wells: [4]Rect = undefined;
+    var nw: usize = 0;
+    for ([_]f32{ ca, cb }) |cz| {
+        for (well_x) |wx| {
+            wells[nw] = rect(wx[0], wx[1], cz - 1.2, cz + 1.2);
+            nw += 1;
+        }
+    }
+    map.carve(rect(shed_x0, shed_x1, wall_n, wall_s), -3, bed_y, &wells, ballast, .concrete);
 
-    // Island platforms and the centre platform.
-    const islands = [_][2]f32{ .{ -16, -8 }, .{ 8, 16 } };
-    for (islands) |is| {
-        box(v3(is[0], bed_y, z0), v3(is[1], 0, z1), platform_c, .concrete);
-        deco(v3(is[0], 0, z0), v3(is[0] + 0.45, 0.012, z1), yellow, .paint);
-        deco(v3(is[1] - 0.45, 0, z0), v3(is[1], 0.012, z1), yellow, .paint);
+    // Islands, with their wells, and the yellow edges.
+    for ([_][2]f32{ island_a, island_b }, 0..) |is, k| {
+        const cz = (is[0] + is[1]) / 2;
+        map.carve(rect(shed_x0, shed_x1, is[0], is[1]), bed_y, 0, wells[k * 2 .. k * 2 + 2], platform_c, .concrete);
+        deco(v3(shed_x0, 0, is[0]), v3(shed_x1, 0.012, is[0] + 0.45), yellow, .paint);
+        deco(v3(shed_x0, 0, is[1] - 0.45), v3(shed_x1, 0.012, is[1]), yellow, .paint);
+        // Railings round the wells, open at the top of the stairs.
+        for (well_x) |wx| {
+            railing(wx[0], wx[1], cz - 1.3, cz - 1.2, 0);
+            railing(wx[0], wx[1], cz + 1.2, cz + 1.3, 0);
+            const end = if (wx[0] < 0) wx[0] - 0.1 else wx[1];
+            railing(end, end + 0.1, cz - 1.3, cz + 1.3, 0);
+        }
         // Benches and roundels on posts.
-        for ([_]f32{ -25, -5, 15 }) |z| {
-            const cx = (is[0] + is[1]) / 2;
-            boxNoAo(v3(cx - 0.25, 0, z - 1.0), v3(cx + 0.25, 0.45, z + 1.0), v3(0.35, 0.2, 0.1), .wood);
-            map.addDecor(Mat4.identity(), v3(cx - 0.05, 0, z + 4), v3(cx + 0.05, 2.4, z + 4.1), iron, .metal);
-            roundel(v3(cx, 2.6, z + 4.05), std.math.pi / 2.0, 0.9);
-            roundel(v3(cx, 2.6, z + 4.05), -std.math.pi / 2.0, 0.9);
+        for ([_]f32{ -36, -12, 12, 36 }) |x| {
+            boxNoAo(v3(x - 1.0, 0, cz - 0.25), v3(x + 1.0, 0.45, cz + 0.25), v3(0.35, 0.2, 0.1), .wood);
+            deco(v3(x + 4 - 0.05, 0, cz - 0.05), v3(x + 4 + 0.05, 2.4, cz + 0.05), iron, .metal);
+            map.addSolid(v3(x + 3.9, 0, cz - 0.1), v3(x + 4.1, 2.4, cz + 0.1));
+            roundel(v3(x + 4, 2.6, cz), 0, 0.9);
+            roundel(v3(x + 4, 2.6, cz), std.math.pi, 0.9);
         }
     }
-    box(v3(-4, bed_y, -30), v3(4, 0, z1), platform_c, .concrete);
-    deco(v3(-4, 0, -30), v3(-3.55, 0.012, z1), yellow, .paint);
-    deco(v3(3.55, 0, -30), v3(4, 0.012, z1), yellow, .paint);
+    // The fence between the eastbound and westbound pairs.
+    boxNoAo(v3(shed_x0, bed_y, e2[1]), v3(shed_x1, bed_y + 1.2, w1[0]), v3(0.2, 0.2, 0.2), .metal);
 
-    // Rails and sleepers.
-    const tracks = [_]f32{ -18.5, -6, 6, 18.5 };
-    for (tracks) |tx| {
-        for ([_]f32{ -0.72, 0.72 }) |off| {
-            boxNoAo(v3(tx + off - 0.04, bed_y, z0), v3(tx + off + 0.04, bed_y + 0.16, z1), steel, .metal);
-        }
-        var z: f32 = z0 + 0.4;
-        while (z < z1) : (z += 0.9) {
-            deco(v3(tx - 1.25, bed_y, z), v3(tx + 1.25, bed_y + 0.07, z + 0.26), v3(0.16, 0.11, 0.08), .wood);
-        }
-        // Buffer stops at the north end.
-        deco(v3(tx - 1.1, bed_y, z1 - 0.6), v3(tx + 1.1, bed_y + 1.0, z1 - 0.2), red, .paint);
+    // Brick side walls. Below the decks they run the whole length of the
+    // lines (lines()); above, only along the shed.
+    box(v3(shed_x0, deck_y, wall_n - 0.6), v3(shed_x1, 7.5, wall_n), brick, .brick);
+    box(v3(shed_x0, deck_y, wall_s), v3(shed_x1, 7.5, wall_s + 0.6), brick, .brick);
+    var px: f32 = shed_x0;
+    while (px <= shed_x1) : (px += 6) {
+        boxNoAo(v3(px - 0.35, street_y, wall_n), v3(px + 0.35, 7.5, wall_n + 0.25), brick * vec.s(0.85), .brick);
+        boxNoAo(v3(px - 0.35, bed_y, wall_s - 0.25), v3(px + 0.35, 7.5, wall_s), brick * vec.s(0.85), .brick);
     }
 
-    // Brick side walls with pilasters.
-    box(v3(-21.6, -3, z0), v3(-21, 7.5, z1), brick, .brick);
-    box(v3(21, -3, z0), v3(21.6, 7.5, z1), brick, .brick);
-    var pz: f32 = z0;
-    while (pz <= z1) : (pz += 6) {
-        deco(v3(-21, -1, pz - 0.35), v3(-20.75, 7.5, pz + 0.35), brick * vec.s(0.85), .brick);
-        deco(v3(20.75, -1, pz - 0.35), v3(21, 7.5, pz + 0.35), brick * vec.s(0.85), .brick);
-    }
-
-    // The south wall, with a tunnel mouth over each track.
-    const sw0: f32 = z0 - 0.6;
-    box(v3(-21, 4.4, sw0), v3(21, 7.5, z0), brick, .brick);
-    const piers = [_][2]f32{ .{ -21, -20.8 }, .{ -16.2, -7.8 }, .{ -4.2, 4.2 }, .{ 7.8, 16.2 }, .{ 20.8, 21 } };
-    // The centre pier goes down to the escalator ceiling behind it.
-    for (piers) |p| box(v3(p[0], if (p[0] == -4.2) -5.8 else -3, sw0), v3(p[1], 4.4, z0), brick, .brick);
-    for (tracks) |tx| {
-        // The dark tunnel behind the mouth: back, sides, roof, and a red
-        // signal.
-        box(v3(tx - 2.4, -3, sw0 - 8), v3(tx + 2.4, 4.4, sw0 - 7.6), dark, .paint);
-        boxNoAo(v3(tx - 2.6, bed_y, sw0 - 8), v3(tx - 2.4, 4.4, sw0), dark, .paint);
-        boxNoAo(v3(tx + 2.4, bed_y, sw0 - 8), v3(tx + 2.6, 4.4, sw0), dark, .paint);
-        box(v3(tx - 2.6, 4.4, sw0 - 8), v3(tx + 2.6, 4.7, sw0), dark, .paint);
-        deco(v3(tx + 1.6, 2.4, sw0 - 0.2), v3(tx + 1.8, 2.6, sw0), v3(1.0, 0.05, 0.02), .emissive);
-    }
-
-    roof(z0, z1);
-
-    // Lamps hung from the roof over the islands.
-    for ([_]f32{ -12, 12 }) |x| {
-        for ([_]f32{ -25, 10 }) |z| {
-            deco(v3(x - 0.02, 4.9, z - 0.02), v3(x + 0.02, 11, z + 0.02), iron, .metal);
-            deco(v3(x - 0.35, 4.6, z - 0.35), v3(x + 0.35, 4.9, z + 0.35), iron, .metal);
-            map.add(v3(x - 0.25, 4.5, z - 0.25), v3(x + 0.25, 4.6, z + 0.25), warm, .emissive).solid = false;
-            map.addLight(v3(x, 4.3, z), v3(1.2, 0.8, 0.45), 11);
+    // Lamps hung from the roof over the islands. Each light is just under
+    // its shade.
+    for ([_]f32{ ca, cb }) |cz| {
+        for ([_]f32{ -25, 15 }) |x| {
+            deco(v3(x - 0.02, 4.9, cz - 0.02), v3(x + 0.02, 12, cz + 0.02), iron, .metal);
+            deco(v3(x - 0.35, 4.6, cz - 0.35), v3(x + 0.35, 4.9, cz + 0.35), iron, .metal);
+            map.add(v3(x - 0.25, 4.5, cz - 0.25), v3(x + 0.25, 4.6, cz + 0.25), warm, .emissive).solid = false;
+            map.addLight(v3(x, 4.3, cz), v3(1.2, 0.8, 0.45), 11);
         }
     }
 }
 
-/// The iron arch roof: ribs every 6 m, purlins along the shed, and solid
-/// panels near the eaves. The middle is open, so the sun throws the shadow
-/// of the ironwork onto the platforms.
-fn roof(z0: f32, z1: f32) void {
-    const springing: f32 = 7.5;
-    const half_w: f32 = 21;
-    const rise: f32 = 8.5;
-    const segs = 16;
+/// The iron arch roof over the shed: ribs every 6 m along X, purlins, slate
+/// panels near the eaves, a raised lantern. The tie rods are at 11.5 m, out
+/// of reach from the walkway (4.8 m).
+fn roof() void {
     const at = struct {
-        fn p(t: f32, z: f32) V3 {
+        fn p(t: f32, x: f32) V3 {
             const a = t * std.math.pi;
-            return v3(-@cos(a) * 21, 7.5 + @sin(a) * 8.5, z);
+            return v3(x, 7.5 + @sin(a) * 7.0, -4.2 - @cos(a) * 16.8);
         }
         fn n(t: f32) V3 {
             const a = t * std.math.pi;
-            return vec.norm(v3(-@cos(a) / 21.0, @sin(a) / 8.5, 0));
+            return vec.norm(v3(0, @sin(a) / 7.0, -@cos(a) / 16.8));
         }
     };
-    _ = springing;
-    _ = half_w;
-    _ = rise;
-    var z = z0;
-    while (z <= z1 + 0.01) : (z += 6) {
+    const segs = 16;
+    var x = shed_x0;
+    while (x <= shed_x1 + 0.01) : (x += 6) {
         for (0..segs) |i| {
             const ta = @as(f32, @floatFromInt(i)) / segs;
             const tb = @as(f32, @floatFromInt(i + 1)) / segs;
-            map.beam(at.p(ta, z), at.p(tb, z), 0.28, 0.5, v3(0, 0, 1), iron, .metal);
+            map.beam(at.p(ta, x), at.p(tb, x), 0.28, 0.5, v3(1, 0, 0), iron, .metal);
         }
-        // A tie rod across the arch and its hangers.
-        map.beam(at.p(0, z), at.p(1, z), 0.08, 0.08, v3(0, 1, 0), iron, .metal);
+        // The arch is 11.5 m high 34.8 degrees up from the springing.
+        const t_tie: f32 = 34.8 / 180.0;
+        map.beam(at.p(t_tie, x), at.p(1 - t_tie, x), 0.08, 0.08, v3(0, 1, 0), iron, .metal);
     }
-    // Purlins.
     for (1..14) |i| {
         const t = @as(f32, @floatFromInt(i)) / 14;
-        const p = at.p(t, z0);
-        map.beam(p, v3(p[0], p[1], z1), 0.16, 0.16, at.n(t), iron, .metal);
+        const a = at.p(t, shed_x0);
+        map.beam(a, v3(shed_x1, a[1], a[2]), 0.16, 0.16, at.n(t), iron, .metal);
     }
-    // Slate panels near the eaves, both sides.
     const bands = [_][2]f32{ .{ 0, 0.09 }, .{ 0.09, 0.17 }, .{ 0.83, 0.91 }, .{ 0.91, 1.0 } };
     for (bands) |b| {
-        const a = at.p(b[0], z0);
-        const c = at.p(b[1], z0);
-        const mid = (a + c) * vec.s(0.5) + at.n((b[0] + b[1]) / 2) * vec.s(0.2);
-        map.beam(mid, v3(mid[0], mid[1], z1), vec.len(c - a), 0.08, at.n((b[0] + b[1]) / 2), v3(0.16, 0.16, 0.18), .concrete);
+        const a = at.p(b[0], shed_x0);
+        const c = at.p(b[1], shed_x0);
+        const nrm = at.n((b[0] + b[1]) / 2);
+        const mid = (a + c) * vec.s(0.5) + nrm * vec.s(0.2);
+        map.beam(mid, v3(shed_x1, mid[1], mid[2]), vec.len(c - a), 0.08, nrm, v3(0.16, 0.16, 0.18), .concrete);
     }
-    // A raised lantern at the ridge, on short posts.
-    map.beam(v3(0, 16.9, z0), v3(0, 16.9, z1), 5, 0.1, v3(0, 1, 0), v3(0.16, 0.16, 0.18), .concrete);
-    var zp = z0;
-    while (zp <= z1) : (zp += 6) {
-        for ([_]f32{ -2.3, 2.3 }) |x| map.beam(v3(x, 15.8, zp), v3(x, 16.9, zp), 0.15, 0.15, v3(0, 0, 1), iron, .metal);
-    }
-}
-
-// ---- The footbridge ----------------------------------------------------------
-
-const bridge_z0: f32 = 28;
-const bridge_z1: f32 = 36;
-const shaft_z0: f32 = 31;
-const shaft_z1: f32 = 33.4;
-const shafts = [_][2]f32{ .{ -15.7, -13.3 }, .{ 13.3, 15.7 } };
-const stairs = [_][2]f32{ .{ -12.2, -9.8 }, .{ 9.8, 12.2 } };
-
-fn footbridge() void {
-    const y0 = street_y - 0.4;
-    const y1 = street_y;
-    const deck = v3(0.42, 0.4, 0.38);
-    box(v3(-21, y0, bridge_z0), v3(21, y1, shaft_z0), deck, .concrete);
-    box(v3(-21, y0, shaft_z1), v3(21, y1, bridge_z1), deck, .concrete);
-    box(v3(-21, y0, shaft_z0), v3(shafts[0][0], y1, shaft_z1), deck, .concrete);
-    box(v3(shafts[0][1], y0, shaft_z0), v3(shafts[1][0], y1, shaft_z1), deck, .concrete);
-    box(v3(shafts[1][1], y0, shaft_z0), v3(21, y1, shaft_z1), deck, .concrete);
-    // Girders under the deck.
-    deco(v3(-21, y0 - 0.6, bridge_z0), v3(21, y0, bridge_z0 + 0.3), iron, .metal);
-    deco(v3(-21, y0 - 0.6, bridge_z1 - 0.3), v3(21, y0, bridge_z1), iron, .metal);
-
-    // The railing on the south edge, open at the stairs.
-    const rz0 = bridge_z0 - 0.12;
-    const spans = [_][2]f32{ .{ -21, stairs[0][0] }, .{ stairs[0][1], stairs[1][0] }, .{ stairs[1][1], 21 } };
-    for (spans) |s| {
-        boxNoAo(v3(s[0], y1, rz0), v3(s[1], y1 + 1.1, bridge_z0), iron, .metal);
-        deco(v3(s[0], y1 + 1.1, rz0 - 0.05), v3(s[1], y1 + 1.18, bridge_z0 + 0.05), v3(0.3, 0.15, 0.08), .wood);
-    }
-
-    // Stairs from the deck down to each island.
-    for (stairs) |st| {
-        for (0..15) |i| {
-            const fi: f32 = @floatFromInt(i);
-            const top = 0.4 * (fi + 1);
-            const za = bridge_z0 - 0.5 * (15 - fi);
-            boxNoAo(v3(st[0], 0, za), v3(st[1], top, za + 0.5), platform_c, .concrete);
-            deco(v3(st[0], top, za), v3(st[1], top + 0.01, za + 0.06), yellow, .paint);
-        }
-        // Handrails.
-        for ([_]f32{ st[0], st[1] }) |x| {
-            map.beam(v3(x, 1.0, bridge_z0 - 7.5), v3(x, street_y + 1.0, bridge_z0), 0.06, 0.06, v3(1, 0, 0), steel, .metal);
-        }
-    }
-
-    // The old train indicator boards hang from the bridge over the stairs.
-    for ([_]f32{ -12, 12 }) |x| {
-        deco(v3(x - 1.8, 3.9, bridge_z0 - 0.3), v3(x + 1.8, 5.2, bridge_z0 - 0.1), v3(0.03, 0.03, 0.03), .wood);
-        for (0..3) |row| {
-            const ry = 4.95 - @as(f32, @floatFromInt(row)) * 0.35;
-            deco(v3(x - 1.5, ry - 0.08, bridge_z0 - 0.32), v3(x + 1.5 - 0.4 * @as(f32, @floatFromInt(row)), ry, bridge_z0 - 0.3), v3(1.0, 0.6, 0.1), .emissive);
-        }
-    }
-    map.addLight(v3(-8, 8.6, 32), warm, 9);
-    map.addLight(v3(8, 8.6, 32), warm, 9);
-    for ([_]f32{ -8, 8 }) |x| {
-        map.add(v3(x - 0.6, 9.2, 31.8), v3(x + 0.6, 9.3, 32.2), warm, .emissive).solid = false;
-        deco(v3(x - 0.02, 9.3, 31.98), v3(x + 0.02, 12, 32.02), iron, .metal);
+    map.beam(v3(shed_x0, 15.4, -4.2), v3(shed_x1, 15.4, -4.2), 5, 0.1, v3(0, 1, 0), v3(0.16, 0.16, 0.18), .concrete);
+    var xp = shed_x0;
+    while (xp <= shed_x1) : (xp += 6) {
+        for ([_]f32{ -6.5, -1.9 }) |z| map.beam(v3(xp, 14.4, z), v3(xp, 15.4, z), 0.15, 0.15, v3(1, 0, 0), iron, .metal);
     }
 }
 
-// ---- Lifts ---------------------------------------------------------------
+// ---- Street level inside the shed: the walkway and the spur --------------------
+
+fn walkwayAndSpur() void {
+    // The high-level walkway along the north wall, open at the spur.
+    box(v3(shed_x0, deck_y, wall_n), v3(shed_x1, street_y, walk_z1), deck_c, .concrete);
+    deco(v3(shed_x0, deck_y - 0.5, walk_z1 - 0.3), v3(shed_x1, deck_y, walk_z1), iron, .metal);
+    railing(shed_x0, spur_x[0], walk_z1 - 0.12, walk_z1, street_y);
+    railing(spur_x[1], shed_x1, walk_z1 - 0.12, walk_z1, street_y);
+
+    // The spur south across the tracks, with the two lift shafts cut out.
+    map.carve(rect(spur_x[0], spur_x[1], walk_z1, wall_s), deck_y, street_y, &.{ lift_a, lift_b }, deck_c, .concrete);
+    deco(v3(spur_x[0], deck_y - 0.6, walk_z1), v3(spur_x[0] + 0.3, deck_y, wall_s), iron, .metal);
+    deco(v3(spur_x[1] - 0.3, deck_y - 0.6, walk_z1), v3(spur_x[1], deck_y, wall_s), iron, .metal);
+    railing(spur_x[0], spur_x[0] + 0.12, walk_z1, wall_s, street_y);
+    railing(spur_x[1] - 0.12, spur_x[1], walk_z1, wall_s, street_y);
+
+    // The old train indicator board on the walkway at the spur.
+    deco(v3(-1.8, street_y + 2.2, wall_n + 0.1), v3(1.8, street_y + 3.4, wall_n + 0.3), v3(0.03, 0.03, 0.03), .wood);
+    for (0..3) |row| {
+        const ry = street_y + 3.2 - @as(f32, @floatFromInt(row)) * 0.32;
+        deco(v3(-1.5, ry - 0.08, wall_n + 0.3), v3(1.5 - 0.4 * @as(f32, @floatFromInt(row)), ry, wall_n + 0.32), v3(1.0, 0.6, 0.1), .emissive);
+    }
+    map.add(v3(-0.6, street_y + 3.9, -4.4), v3(0.6, street_y + 4.0, -4.0), warm, .emissive).solid = false;
+    deco(v3(-0.02, street_y + 4.0, -4.22), v3(0.02, 13, -4.18), iron, .metal);
+    map.addLight(v3(0, street_y + 3.6, -4.2), warm, 10);
+}
+
+// ---- Lifts -------------------------------------------------------------------
+
+const frame_c = v3(0.1, 0.12, 0.11);
+const glass_c = v3(0.06, 0.08, 0.09);
+
+/// Two corners of a box on a door face. `on_x`: the face is at x (fa..fb)
+/// and runs along z (aa..ab); else it is at z and runs along x.
+fn face(on_x: bool, aa: f32, ab: f32, ya: f32, yb: f32, fa: f32, fb: f32) [2]V3 {
+    return if (on_x) .{ v3(fa, ya, aa), v3(fb, yb, ab) } else .{ v3(aa, ya, fa), v3(ab, yb, fb) };
+}
+
+/// A lift shaft from levels[0] to levels[1] with its cab, doors and
+/// buttons. `door_on_x`: the doors are on the west (x0) face, else on the
+/// north (z0) face.
+fn lift(r: Rect, levels: [2]f32, door_on_x: bool, speed: f32) void {
+    const top = levels[1] + 3.2;
+    const bottom = levels[0];
+    // Three walls and a roof. The door face is below.
+    if (door_on_x) {
+        boxNoAo(v3(r.x0, bottom, r.z0), v3(r.x1, top, r.z0 + 0.1), glass_c, .metal);
+        boxNoAo(v3(r.x0, bottom, r.z1 - 0.1), v3(r.x1, top, r.z1), glass_c, .metal);
+        boxNoAo(v3(r.x1 - 0.1, bottom, r.z0), v3(r.x1, top, r.z1), glass_c, .metal);
+    } else {
+        boxNoAo(v3(r.x0, bottom, r.z0), v3(r.x0 + 0.1, top, r.z1), glass_c, .metal);
+        boxNoAo(v3(r.x1 - 0.1, bottom, r.z0), v3(r.x1, top, r.z1), glass_c, .metal);
+        boxNoAo(v3(r.x0, bottom, r.z1 - 0.1), v3(r.x1, top, r.z1), glass_c, .metal);
+    }
+    box(v3(r.x0, top, r.z0), v3(r.x1, top + 0.2, r.z1), frame_c, .metal);
+
+    // The door face: jambs, and panels between and over the openings.
+    const a0 = if (door_on_x) r.z0 else r.x0;
+    const a1 = if (door_on_x) r.z1 else r.x1;
+    const f0 = if (door_on_x) r.x0 else r.z0;
+    const f1 = f0 + 0.1;
+    const da0 = a0 + 0.35;
+    const da1 = a1 - 0.35;
+    for ([_][2]f32{ .{ a0, da0 }, .{ da1, a1 } }) |j| {
+        const p = face(door_on_x, j[0], j[1], bottom, top, f0, f1);
+        boxNoAo(p[0], p[1], frame_c, .metal);
+    }
+    const mid_panel = face(door_on_x, da0, da1, levels[0] + 2.3, levels[1], f0, f1);
+    boxNoAo(mid_panel[0], mid_panel[1], frame_c, .metal);
+    const top_panel = face(door_on_x, da0, da1, levels[1] + 2.3, top, f0, f1);
+    boxNoAo(top_panel[0], top_panel[1], frame_c, .metal);
+    for (levels) |ly| {
+        const p = face(door_on_x, da0, da1, ly + 2.35, ly + 2.6, f0 - 0.04, f0);
+        deco(p[0], p[1], v3(0.05, 0.25, 0.6), .emissive);
+    }
+
+    // The cab: a floor and a lit ceiling (dynamic).
+    const inner_min = if (door_on_x) v3(f1, -0.15, r.z0 + 0.1) else v3(r.x0 + 0.1, -0.15, f1);
+    const inner_max = v3(r.x1 - 0.1, 0, r.z1 - 0.1);
+    const floor_b = map.box_count;
+    const fb = map.add(inner_min, inner_max, v3(0.25, 0.25, 0.27), .metal);
+    fb.dynamic = true;
+    fb.ao = false;
+    const ceil_b = map.box_count;
+    const cbx = map.add(v3(inner_min[0], 2.45, inner_min[2]), v3(inner_max[0], 2.57, inner_max[2]), v3(0.55, 0.6, 0.65), .emissive);
+    cbx.dynamic = true;
+    cbx.ao = false;
+
+    var l: map.Lift = .{
+        // The cab floor stands 2 cm proud of the landing, so the two faces
+        // do not fight in the depth buffer.
+        .levels = .{ levels[0] + 0.02, levels[1] + 0.02 },
+        .floor_box = floor_b,
+        .ceil_box = ceil_b,
+        .door_box = undefined,
+        .door_closed = undefined,
+        .y = levels[0] + 0.02,
+        .speed = speed,
+        .door_on_x = door_on_x,
+    };
+    const mid = (da0 + da1) / 2;
+    for (levels, 0..) |ly, lv| {
+        const halves = [2][2]f32{ .{ da0, mid }, .{ mid, da1 } };
+        for (halves, 0..) |h, hi| {
+            const p = face(door_on_x, h[0], h[1], ly, ly + 2.3, f0 + 0.02, f1 - 0.02);
+            l.door_box[lv][hi] = map.box_count;
+            const db = map.add(p[0], p[1], steel, .metal);
+            db.dynamic = true;
+            db.ao = false;
+            l.door_closed[lv][hi] = .{ p[0], p[1] };
+        }
+    }
+    const idx = map.addLift(l);
+
+    // Call buttons on a jamb; cab buttons on a side wall inside.
+    for (levels, 0..) |ly, lv| {
+        const cp = face(door_on_x, a1 - 0.27, a1 - 0.13, ly + 1.05, ly + 1.2, f0 - 0.05, f0);
+        map.addButton(.{ .min = cp[0], .max = cp[1], .lift = idx, .level = lv, .in_cab = false });
+        const yb = 1.0 + 0.22 * @as(f32, @floatFromInt(lv));
+        const bp = if (door_on_x)
+            [2]V3{ v3(f1 + 0.6, yb, r.z0 + 0.1), v3(f1 + 0.75, yb + 0.12, r.z0 + 0.16) }
+        else
+            [2]V3{ v3(r.x0 + 0.1, yb, f1 + 0.6), v3(r.x0 + 0.16, yb + 0.12, f1 + 0.75) };
+        map.addButton(.{ .min = bp[0], .max = bp[1], .lift = idx, .level = lv, .in_cab = true });
+    }
+}
 
 fn lifts() void {
-    const top: f32 = street_y + 3.2;
-    const frame = v3(0.1, 0.12, 0.11);
-    const glass = v3(0.06, 0.08, 0.09);
-    const levels = [2]f32{ 0, street_y };
-    for (shafts, 0..) |sx, li| {
-        const x0 = sx[0];
-        const x1 = sx[1];
-        // Shaft: west, east and north walls, a roof, and the south face
-        // around the two door openings.
-        boxNoAo(v3(x0, 0, shaft_z0), v3(x0 + 0.1, top, shaft_z1), glass, .metal);
-        boxNoAo(v3(x1 - 0.1, 0, shaft_z0), v3(x1, top, shaft_z1), glass, .metal);
-        boxNoAo(v3(x0, 0, shaft_z1 - 0.1), v3(x1, top, shaft_z1), glass, .metal);
-        box(v3(x0, top, shaft_z0), v3(x1, top + 0.2, shaft_z1), frame, .metal);
-        const dx0 = x0 + 0.35;
-        const dx1 = x1 - 0.35;
-        const fz0 = shaft_z0;
-        const fz1 = shaft_z0 + 0.1;
-        boxNoAo(v3(x0, 0, fz0), v3(dx0, top, fz1), frame, .metal);
-        boxNoAo(v3(dx1, 0, fz0), v3(x1, top, fz1), frame, .metal);
-        boxNoAo(v3(dx0, 2.3, fz0), v3(dx1, street_y, fz1), frame, .metal);
-        boxNoAo(v3(dx0, street_y + 2.3, fz0), v3(dx1, top, fz1), frame, .metal);
-        // A lift sign over each door.
-        for (levels) |ly| deco(v3(dx0, ly + 2.35, fz0 - 0.04), v3(dx1, ly + 2.6, fz0), v3(0.05, 0.25, 0.6), .emissive);
-
-        // The cab: a floor and a lit ceiling (dynamic).
-        const floor_b = map.box_count;
-        const fb = map.add(v3(x0 + 0.1, -0.15, fz1), v3(x1 - 0.1, 0, shaft_z1 - 0.1), v3(0.25, 0.25, 0.27), .metal);
-        fb.dynamic = true;
-        fb.ao = false;
-        const ceil_b = map.box_count;
-        const cb = map.add(v3(x0 + 0.1, 2.45, fz1), v3(x1 - 0.1, 2.57, shaft_z1 - 0.1), v3(0.55, 0.6, 0.65), .emissive);
-        cb.dynamic = true;
-        cb.ao = false;
-
-        // Landing doors, two halves at each level (dynamic).
-        var lift: map.Lift = .{
-            // The cab floor stands 2 cm proud of the landing, so the two
-            // faces do not fight in the depth buffer.
-            .levels = .{ levels[0] + 0.02, levels[1] + 0.02 },
-            .floor_box = floor_b,
-            .ceil_box = ceil_b,
-            .door_box = undefined,
-            .door_closed = undefined,
-            .y = levels[0] + 0.02,
-        };
-        const mid = (dx0 + dx1) / 2;
-        for (levels, 0..) |ly, lv| {
-            const halves = [2][2]f32{ .{ dx0, mid }, .{ mid, dx1 } };
-            for (halves, 0..) |hx, h| {
-                const mn = v3(hx[0], ly, fz0 + 0.02);
-                const mx = v3(hx[1], ly + 2.3, fz1 - 0.02);
-                lift.door_box[lv][h] = map.box_count;
-                const db = map.add(mn, mx, steel, .metal);
-                db.dynamic = true;
-                db.ao = false;
-                lift.door_closed[lv][h] = .{ mn, mx };
-            }
-        }
-        const idx = map.addLift(lift);
-
-        // Call buttons on the jamb, cab buttons on the cab's west wall.
-        for (levels, 0..) |ly, lv| {
-            map.addButton(.{
-                .min = v3(x1 - 0.27, ly + 1.05, fz0 - 0.05),
-                .max = v3(x1 - 0.13, ly + 1.2, fz0),
-                .lift = idx,
-                .level = lv,
-                .in_cab = false,
-            });
-            map.addButton(.{
-                .min = v3(x0 + 0.1, 1.0 + 0.22 * @as(f32, @floatFromInt(lv)), 32.35),
-                .max = v3(x0 + 0.16, 1.12 + 0.22 * @as(f32, @floatFromInt(lv)), 32.5),
-                .lift = idx,
-                .level = lv,
-                .in_cab = true,
-            });
-        }
-        _ = li;
-    }
+    // District lifts, from the spur down to each island (doors north).
+    lift(lift_a, .{ 0, street_y }, false, 1.6);
+    lift(lift_b, .{ 0, street_y }, false, 1.6);
+    // The deep lift: the Earls Court Road concourse to the Piccadilly
+    // corridor (doors west), 19.8 m, faster.
+    lift(deep_lift, .{ deep_y, street_y }, true, 3.2);
 }
 
-// ---- Ticket hall and the street -----------------------------------------------
+// ---- The east end: Earls Court Road ----------------------------------------------
 
-fn ticketHall() void {
+fn eastEnd() void {
     const y = street_y;
-    // The ground of the north half, street level.
-    box(v3(-21, -3, bridge_z1), v3(21, y, 63), v3(0.45, 0.44, 0.42), .tile);
-    // Hall walls, the roof and the lintel to the bridge.
-    box(v3(-14.4, y, bridge_z1), v3(-14, y + 5.5, 50.5), cream, .paint);
-    box(v3(14, y, bridge_z1), v3(14.4, y + 5.5, 50.5), cream, .paint);
-    box(v3(-14.4, y + 5.5, bridge_z1), v3(14.4, y + 6, 50.5), v3(0.75, 0.72, 0.66), .concrete);
-    boxNoAo(v3(-14, y + 4, bridge_z1 - 0.2), v3(14, y + 5.5, bridge_z1 + 0.2), cream, .paint);
-    // The Earls Court Road front: cream faience with three doorways.
-    const fz0: f32 = 50;
-    const fz1: f32 = 50.6;
-    const piers = [_][2]f32{ .{ -14.4, -10 }, .{ -7, -1.5 }, .{ 1.5, 7 }, .{ 10, 14.4 } };
-    for (piers) |p| box(v3(p[0], y, fz0), v3(p[1], y + 7, fz1), cream, .paint);
-    const doors = [_][2]f32{ .{ -10, -7 }, .{ -1.5, 1.5 }, .{ 7, 10 } };
-    for (doors) |d| boxNoAo(v3(d[0], y + 3.8, fz0), v3(d[1], y + 7, fz1), cream, .paint);
-    // The name band and a big roundel.
-    deco(v3(-13, y + 5.6, fz1), v3(13, y + 6.4, fz1 + 0.12), blue, .paint);
-    deco(v3(-12.6, y + 5.85, fz1 + 0.12), v3(12.6, y + 6.15, fz1 + 0.14), v3(0.9, 0.88, 0.8), .paint);
-    roundel(v3(0, y + 4.6, fz1 + 0.15), 0, 1.6);
-    // A cornice.
-    deco(v3(-14.8, y + 7, fz0 - 0.2), v3(14.8, y + 7.4, fz1 + 0.3), cream * vec.s(0.9), .paint);
+    const x0 = east_x[0];
+    const x1 = east_x[1];
+    // The concourse deck over the tracks, with the deep lift shaft cut out,
+    // and the ground north of the tracks under it.
+    map.carve(rect(x0, x1, conc_z0, wall_s), deck_y, y, &.{deep_lift}, deck_c, .concrete);
+    map.carve(rect(x0, x1, conc_z0 - 0.6, wall_n - 0.6), -3, deck_y, &.{deep_lift}, ballast, .concrete);
+    // The concourse walls, its roof, the wall above the shed opening.
+    box(v3(x0, y, conc_z0 - 0.6), v3(x1, y + 6.5, conc_z0), red_brick, .brick);
+    box(v3(x0, y, wall_s), v3(x1, y + 6.5, wall_s + 0.6), red_brick, .brick);
+    box(v3(x0 - 0.6, y + 6.5, conc_z0 - 0.6), v3(x1 + 0.6, y + 7.0, wall_s + 0.6), v3(0.3, 0.29, 0.27), .concrete);
+    box(v3(x0 - 0.6, y + 3.4, wall_n), v3(x0, y + 6.5, wall_s), red_brick, .brick);
+    // The railing along the shed edge, open at the stairs; the stairs down
+    // to each island, westward.
+    railing(x0, x0 + 0.12, walk_z1, ca - 1.2, y);
+    railing(x0, x0 + 0.12, ca + 1.2, cb - 1.2, y);
+    railing(x0, x0 + 0.12, cb + 1.2, wall_s, y);
+    stairs(x0, -1, ca, 2.4, y, 12, platform_c);
+    stairs(x0, -1, cb, 2.4, y, 12, platform_c);
+    map.add(v3(54.5, y + 6.3, -6.3), v3(56.5, y + 6.45, -5.7), v3(1.0, 0.9, 0.75), .emissive).solid = false;
+    map.addLight(v3(55.5, y + 5.6, -6), v3(1.3, 1.05, 0.8), 13);
 
-    // Ticket gates: posts with gaps.
-    var x: f32 = -9;
-    while (x <= 9.01) : (x += 1.5) {
-        boxNoAo(v3(x - 0.13, y, 39.4), v3(x + 0.13, y + 1.0, 40.6), v3(0.55, 0.56, 0.58), .metal);
-        deco(v3(x - 0.13, y + 1.0, 39.9), v3(x + 0.13, y + 1.04, 40.1), v3(0.2, 1.0, 0.3), .emissive);
+    // Ground under the hall and the street; the lines pass under it.
+    const gx1 = street_e[1] + 1;
+    map.carve(rect(x1, gx1, -40.6, 30.6), -3, deck_y, &.{rect(x1, gx1, wall_n - 0.6, wall_s + 0.6)}, ballast, .concrete);
+    box(v3(x1, deck_y, -40.6), v3(gx1, y, 30.6), v3(0.45, 0.44, 0.42), .tile);
+
+    // The ticket hall, then the 1915 front on Earls Court Road.
+    const hz0: f32 = -12;
+    const hz1: f32 = 8;
+    box(v3(x1, y, conc_z0 - 0.6), v3(x1 + 0.4, y + 6.5, hz0), red_brick, .brick);
+    box(v3(x1, y, hz1), v3(x1 + 0.4, y + 6.5, wall_s + 0.6), red_brick, .brick);
+    box(v3(x1, y, hz0 - 0.4), v3(hall_x1, y + 5.5, hz0), cream, .paint);
+    box(v3(x1, y, hz1), v3(hall_x1, y + 5.5, hz1 + 0.4), cream, .paint);
+    box(v3(x1, y + 5.5, hz0 - 0.4), v3(hall_x1 + 0.6, y + 6, hz1 + 0.4), v3(0.75, 0.72, 0.66), .concrete);
+    const doors = [_][2]f32{ .{ -10, -7 }, .{ -3.5, -0.5 }, .{ 3, 6 } };
+    var zc: f32 = hz0 - 0.4;
+    for (doors) |d| {
+        box(v3(hall_x1, y, zc), v3(hall_x1 + 0.6, y + 7, d[0]), red_brick, .brick);
+        boxNoAo(v3(hall_x1, y + 3.8, d[0]), v3(hall_x1 + 0.6, y + 7, d[1]), red_brick, .brick);
+        zc = d[1];
     }
-    // Ceiling lights.
-    for ([_]f32{ -6, 6 }) |lx| {
-        map.add(v3(lx - 1.5, y + 5.35, 42.6), v3(lx + 1.5, y + 5.5, 43.4), v3(1.0, 0.9, 0.75), .emissive).solid = false;
-        map.addLight(v3(lx, y + 4.8, 43), v3(1.3, 1.05, 0.8), 12);
+    box(v3(hall_x1, y, zc), v3(hall_x1 + 0.6, y + 7, hz1 + 0.4), red_brick, .brick);
+    deco(v3(hall_x1 + 0.6, y + 5.6, hz0), v3(hall_x1 + 0.72, y + 6.4, hz1), cream, .paint);
+    deco(v3(hall_x1 + 0.72, y + 5.85, hz0 + 0.5), v3(hall_x1 + 0.74, y + 6.15, hz1 - 0.5), blue, .paint);
+    roundel(v3(hall_x1 + 0.75, y + 4.6, -2), std.math.pi / 2.0, 1.6);
+    deco(v3(hall_x1 - 0.2, y + 7, hz0 - 0.8), v3(hall_x1 + 0.9, y + 7.4, hz1 + 0.8), cream * vec.s(0.9), .paint);
+    var z: f32 = hz0 + 0.8;
+    while (z <= hz1 - 0.8) : (z += 1.5) {
+        boxNoAo(v3(70.4, y, z - 0.13), v3(71.6, y + 1.0, z + 0.13), v3(0.55, 0.56, 0.58), .metal);
+        deco(v3(70.9, y + 1.0, z - 0.13), v3(71.1, y + 1.04, z + 0.13), v3(0.2, 1.0, 0.3), .emissive);
     }
-}
+    map.add(v3(71.5, y + 5.35, -3), v3(73.5, y + 5.5, -1), v3(1.0, 0.9, 0.75), .emissive).solid = false;
+    map.addLight(v3(72.5, y + 4.8, -2), v3(1.3, 1.05, 0.8), 12);
+    // Buildings either side of the hall, out to the road.
+    box(v3(x1, y, -40.6), v3(street_e[0], y + 7, conc_z0 - 0.6), concrete_c, .concrete);
+    box(v3(x1 + 0.4, y, wall_s + 0.6), v3(street_e[0], y + 7, 30.6), concrete_c, .concrete);
+    box(v3(hall_x1, y, conc_z0 - 0.6), v3(street_e[0], y + 7, hz0 - 0.4), red_brick, .brick);
+    box(v3(hall_x1, y, hz1 + 0.4), v3(street_e[0], y + 7, wall_s + 0.6), red_brick, .brick);
 
-fn street() void {
-    const y = street_y;
-    // Pavements, kerbs and the road markings.
-    box(v3(-21, y, 50.6), v3(21, y + 0.12, 54), v3(0.55, 0.54, 0.52), .tile);
-    box(v3(-21, y, 60), v3(21, y + 0.12, 63), v3(0.55, 0.54, 0.52), .tile);
-    deco(v3(-21, y, 54), v3(21, y + 0.004, 60), v3(0.1, 0.1, 0.11), .concrete);
-    var mx: f32 = -20;
-    while (mx < 21) : (mx += 4) deco(v3(mx, y + 0.004, 56.9), v3(mx + 2, y + 0.01, 57.1), v3(0.9, 0.9, 0.85), .paint);
-    // Side walls.
-    box(v3(-21.6, y, bridge_z1), v3(-21, y + 7, 63), brick, .brick);
-    box(v3(21, y, bridge_z1), v3(21.6, y + 7, 63), brick, .brick);
-
-    // The terrace across the road, with lit and dark windows.
-    box(v3(-21, y, 63), v3(21, y + 13, 64), v3(0.84, 0.8, 0.72), .paint);
-    deco(v3(-21, y + 3.6, 62.8), v3(21, y + 3.9, 63), v3(0.78, 0.74, 0.66), .paint);
-    var wx: f32 = -19;
-    while (wx < 20) : (wx += 3) {
+    // Earls Court Road: pavements, the road, the terrace opposite.
+    const sx0 = street_e[0];
+    box(v3(sx0, y, -40), v3(sx0 + 3, y + 0.12, 30), pave, .tile);
+    box(v3(sx0 + 11, y, -40), v3(sx0 + 14, y + 0.12, 30), pave, .tile);
+    deco(v3(sx0 + 3, y, -40), v3(sx0 + 11, y + 0.004, 30), v3(0.1, 0.1, 0.11), .concrete);
+    var mz: f32 = -40;
+    while (mz < 30) : (mz += 4) deco(v3(sx0 + 6.9, y + 0.004, mz), v3(sx0 + 7.1, y + 0.01, mz + 2), v3(0.9, 0.9, 0.85), .paint);
+    box(v3(sx0 + 14, y, -40.6), v3(sx0 + 15, y + 13, 30.6), v3(0.84, 0.8, 0.72), .paint);
+    box(v3(sx0, y, -40.6), v3(sx0 + 14, y + 7, -40), brick, .brick);
+    box(v3(sx0, y, 30), v3(sx0 + 14, y + 7, 30.6), brick, .brick);
+    var wz: f32 = -38;
+    while (wz < 28) : (wz += 3) {
         for (0..3) |row| {
             const wy = y + 1.2 + @as(f32, @floatFromInt(row)) * 3.6;
             const lit = rnd() < 0.45;
             const c = if (lit) v3(0.55, 0.36, 0.16) else v3(0.03, 0.035, 0.045);
-            deco(v3(wx, wy, 62.94), v3(wx + 1.3, wy + 1.9, 63), c, if (lit) .emissive else .paint);
+            deco(v3(sx0 + 13.94, wy, wz), v3(sx0 + 14, wy + 1.9, wz + 1.3), c, if (lit) .emissive else .paint);
         }
     }
-
-    // The TARDIS (a police box) and a phone box, by the entrance.
-    const tx: f32 = -12.5;
-    const tz: f32 = 52.2;
+    // The TARDIS (a police box) on the pavement north of the entrance, a
+    // phone box, a bus, a black cab and a street lamp.
+    const tx = sx0 + 1.4;
+    const tz: f32 = -15;
     box(v3(tx - 0.62, y + 0.12, tz - 0.62), v3(tx + 0.62, y + 2.75, tz + 0.62), v3(0.03, 0.1, 0.36), .paint);
     deco(v3(tx - 0.66, y + 2.35, tz - 0.66), v3(tx + 0.66, y + 2.6, tz + 0.66), v3(0.02, 0.02, 0.025), .paint);
     deco(v3(tx - 0.5, y + 2.75, tz - 0.5), v3(tx + 0.5, y + 2.9, tz + 0.5), v3(0.03, 0.1, 0.36), .paint);
     deco(v3(tx - 0.08, y + 2.9, tz - 0.08), v3(tx + 0.08, y + 3.15, tz + 0.08), v3(0.9, 0.95, 1.0), .emissive);
-    for (0..2) |row| {
-        const wy = y + 1.7 + @as(f32, @floatFromInt(row)) * 0.3;
-        deco(v3(tx - 0.45, wy, tz + 0.62), v3(tx + 0.45, wy + 0.22, tz + 0.65), v3(0.85, 0.9, 1.0), .emissive);
-    }
-    box(v3(-15.9, y + 0.12, 51.5), v3(-15, y + 2.6, 52.4), v3(0.7, 0.04, 0.03), .paint);
-
-    // A red bus and a black cab on Earls Court Road.
+    box(v3(tx - 0.45, y + 0.12, -18.5), v3(tx + 0.45, y + 2.6, -17.6), v3(0.7, 0.04, 0.03), .paint);
     const bus_red = v3(0.72, 0.05, 0.04);
-    box(v3(-9, y + 0.3, 56.2), v3(2, y + 4.4, 58.7), bus_red, .paint);
-    for ([_]f32{ 1.4, 3.3 }) |wy| {
-        deco(v3(-8.8, y + wy, 56.15), v3(1.8, y + wy + 0.9, 58.75), v3(0.04, 0.05, 0.06), .paint);
-    }
-    deco(v3(-9.02, y + 3.6, 56.6), v3(-8.98, y + 4.1, 58.3), v3(1.0, 0.75, 0.2), .emissive);
-    for ([_]f32{ -7, 0 }) |wx2| {
-        deco(v3(wx2 - 0.5, y, 56.1), v3(wx2 + 0.5, y + 1.0, 58.8), v3(0.02, 0.02, 0.02), .paint);
-    }
-    box(v3(7, y + 0.2, 58.2), v3(11.5, y + 1.3, 59.9), v3(0.02, 0.02, 0.025), .paint);
-    deco(v3(8, y + 1.3, 58.3), v3(10.6, y + 1.85, 59.8), v3(0.02, 0.02, 0.025), .paint);
-    deco(v3(11.5, y + 0.6, 58.4), v3(11.55, y + 0.85, 59.7), v3(1.0, 0.95, 0.8), .emissive);
-
-    // A street lamp.
-    deco(v3(11.9, y, 53.4), v3(12.1, y + 5.2, 53.6), iron, .metal);
-    deco(v3(11.6, y + 5.2, 53.1), v3(12.4, y + 5.4, 53.9), iron, .metal);
-    map.add(v3(11.7, y + 5.05, 53.2), v3(12.3, y + 5.2, 53.8), v3(1.0, 0.7, 0.35), .emissive).solid = false;
-    map.addLight(v3(12, y + 4.6, 53.5), v3(1.6, 1.0, 0.45), 14);
+    box(v3(sx0 + 3.6, y + 0.3, -8), v3(sx0 + 6.1, y + 4.4, 3), bus_red, .paint);
+    for ([_]f32{ 1.4, 3.3 }) |wy| deco(v3(sx0 + 3.55, y + wy, -7.8), v3(sx0 + 6.15, y + wy + 0.9, 2.8), v3(0.04, 0.05, 0.06), .paint);
+    box(v3(sx0 + 7.8, y + 0.2, 12), v3(sx0 + 9.5, y + 1.3, 16.5), v3(0.02, 0.02, 0.025), .paint);
+    deco(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.2, 19.6), iron, .metal);
+    map.addSolid(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.2, 19.6));
+    map.add(v3(sx0 + 2.2, y + 5.05, 19.2), v3(sx0 + 2.8, y + 5.2, 19.8), v3(1.0, 0.7, 0.35), .emissive).solid = false;
+    map.addLight(v3(sx0 + 2.5, y + 4.6, 19.5), v3(1.6, 1.0, 0.45), 14);
 }
 
-// ---- The District line train -----------------------------------------------
+// ---- The west end: Warwick Road -----------------------------------------------
 
-fn train() void {
-    const x0: f32 = -7.45;
-    const x1: f32 = -4.55;
-    const za: f32 = -40;
-    const zb: f32 = 24;
-    const white = v3(0.86, 0.86, 0.84);
-    box(v3(x0, -0.55, za), v3(x1, 3.1, zb), white, .metal);
-    deco(v3(x0 + 0.1, 3.1, za), v3(x1 - 0.1, 3.4, zb), v3(0.32, 0.33, 0.34), .metal);
-    for ([_]f32{ x0 - 0.02, x1 }) |sx| {
-        const sx1 = sx + 0.02;
-        deco(v3(sx, -0.55, za), v3(sx1, 0.1, zb), blue, .paint);
-        deco(v3(sx, 1.15, za), v3(sx1, 2.05, zb), v3(0.03, 0.04, 0.05), .paint);
-        // Doors: three pairs a car, four cars.
-        for (0..4) |car| {
-            const cz = za + 16 * @as(f32, @floatFromInt(car));
-            for ([_]f32{ 2.8, 8, 13.2 }) |dz| {
-                deco(v3(sx - 0.01, 0.1, cz + dz - 0.8), v3(sx1 + 0.01, 2.1, cz + dz + 0.8), red, .paint);
-                deco(v3(sx - 0.02, 1.15, cz + dz - 0.55), v3(sx1 + 0.02, 1.9, cz + dz + 0.55), v3(0.04, 0.05, 0.06), .paint);
-            }
-            // The gangway between cars.
-            if (car > 0) deco(v3(sx - 0.03, -0.55, cz - 0.15), v3(sx1 + 0.03, 3.1, cz + 0.15), v3(0.05, 0.05, 0.05), .paint);
+fn westEnd() void {
+    const y = street_y;
+    const x0 = west_x[0];
+    const x1 = west_x[1];
+    map.carve(rect(x0, x1, conc_z0, wall_s), deck_y, y, &.{}, deck_c, .concrete);
+    box(v3(x0, -3, conc_z0 - 0.6), v3(x1, deck_y, wall_n - 0.6), ballast, .concrete);
+    box(v3(x0, y, conc_z0 - 0.6), v3(x1, y + 6.5, conc_z0), brick, .brick);
+    box(v3(x0, y, wall_s), v3(x1, y + 6.5, wall_s + 0.6), brick, .brick);
+    box(v3(x0 - 0.6, y + 6.5, conc_z0 - 0.6), v3(x1 + 0.6, y + 7.0, wall_s + 0.6), v3(0.3, 0.29, 0.27), .concrete);
+    box(v3(x1, y + 3.4, wall_n), v3(x1 + 0.6, y + 6.5, wall_s), brick, .brick);
+    railing(x1 - 0.12, x1, walk_z1, ca - 1.2, y);
+    railing(x1 - 0.12, x1, ca + 1.2, cb - 1.2, y);
+    railing(x1 - 0.12, x1, cb + 1.2, wall_s, y);
+    stairs(x1, 1, ca, 2.4, y, 12, platform_c);
+    stairs(x1, 1, cb, 2.4, y, 12, platform_c);
+    map.add(v3(-56.5, y + 6.3, -6.3), v3(-54.5, y + 6.45, -5.7), v3(1.0, 0.9, 0.75), .emissive).solid = false;
+
+    // Ground under the passage, the entrance and the road; the lines pass
+    // under it in a covered way.
+    const gx0 = street_w[0] - 1;
+    map.carve(rect(gx0, x0, -30.6, 25.6), -3, deck_y, &.{rect(gx0, x0, wall_n - 0.6, wall_s + 0.6)}, ballast, .concrete);
+    box(v3(gx0, deck_y, -30.6), v3(x0, y, 25.6), v3(0.45, 0.44, 0.42), .tile);
+
+    // The Warwick Road passage, west to the 1937 entrance.
+    const pz0: f32 = -6;
+    const pz1: f32 = 2;
+    box(v3(x0 - 0.4, y, conc_z0 - 0.6), v3(x0, y + 6.5, pz0), brick, .brick);
+    box(v3(x0 - 0.4, y, pz1), v3(x0, y + 6.5, wall_s + 0.6), brick, .brick);
+    box(v3(-78, y, pz0 - 0.4), v3(x0 - 0.4, y + 3.6, pz0), tile_c, .wall_tile);
+    box(v3(-78, y, pz1), v3(x0 - 0.4, y + 3.6, pz1 + 0.4), tile_c, .wall_tile);
+    box(v3(-78, y + 3.6, pz0 - 0.4), v3(x0 - 0.4, y + 4.0, pz1 + 0.4), v3(0.7, 0.68, 0.62), .concrete);
+    deco(v3(-78, y + 1.2, pz0), v3(x0 - 0.4, y + 1.4, pz0 + 0.02), tile_green, .wall_tile);
+    deco(v3(-78, y + 1.2, pz1 - 0.02), v3(x0 - 0.4, y + 1.4, pz1), tile_green, .wall_tile);
+    map.add(v3(-72.5, y + 3.45, -2.3), v3(-70.5, y + 3.6, -1.7), v3(1.0, 0.9, 0.75), .emissive).solid = false;
+    map.addLight(v3(-71.5, y + 3.0, -2), v3(1.2, 1.0, 0.75), 11);
+    // Solid blocks beside the passage.
+    box(v3(-78, y, conc_z0 - 0.6), v3(x0 - 0.4, y + 7, pz0 - 0.4), concrete_c, .concrete);
+    box(v3(-78, y, pz1 + 0.4), v3(x0 - 0.4, y + 7, wall_s + 0.6), concrete_c, .concrete);
+    // The entrance hall: brick piers, a tall glass front, the rotunda on top.
+    const ex = warwick_x0;
+    box(v3(ex, y, -14), v3(-78, y + 6.5, pz0 - 0.4), brick, .brick);
+    box(v3(ex, y, pz1 + 0.4), v3(-78, y + 6.5, 10), brick, .brick);
+    box(v3(ex, y + 6.5, -14), v3(-78, y + 7.0, 10), v3(0.3, 0.29, 0.27), .concrete);
+    box(v3(ex, y + 3.8, pz0 - 0.4), v3(ex + 0.3, y + 6.5, pz1 + 0.4), v3(0.3, 0.42, 0.5), .metal);
+    deco(v3(ex - 0.1, y + 6.0, -14), v3(ex, y + 6.5, 10), cream, .paint);
+    roundel(v3(ex - 0.12, y + 5.0, -2), -std.math.pi / 2.0, 1.4);
+    const rot = vec.translate(v3(-81, y + 8.5, -2)).mul(Mat4.rotationX(std.math.pi / 2.0));
+    var k: usize = 0;
+    while (k < 6) : (k += 1) {
+        const fk: f32 = @floatFromInt(k);
+        map.addDisc(rot.mul(vec.translate(v3(0, 0, -fk * 0.5 + 1.5))), 3.6 - fk * 0.05, 0.42, v3(0.25, 0.38, 0.45), .metal);
+    }
+    map.addDisc(rot.mul(vec.translate(v3(0, 0, -1.7))), 3.8, 0.2, v3(0.15, 0.15, 0.17), .metal);
+    box(v3(ex, y, -30.6), v3(-78, y + 7, -14), concrete_c, .concrete);
+    box(v3(ex, y, 10), v3(-78, y + 7, 25.6), concrete_c, .concrete);
+    // Warwick Road.
+    box(v3(street_w[1] - 3, y, -30), v3(street_w[1], y + 0.12, 25), pave, .tile);
+    deco(v3(street_w[0], y, -30), v3(street_w[1] - 3, y + 0.004, 25), v3(0.1, 0.1, 0.11), .concrete);
+    box(v3(street_w[0] - 1, y, -30.6), v3(street_w[0], y + 13, 25.6), v3(0.78, 0.74, 0.66), .paint);
+    box(v3(street_w[0], y, -30.6), v3(ex, y + 7, -30), brick, .brick);
+    box(v3(street_w[0], y, 25), v3(ex, y + 7, 25.6), brick, .brick);
+}
+
+// ---- The lines out of the station ----------------------------------------------
+
+fn lines() void {
+    // The ground and the side walls of the line, the whole length. Covered
+    // ways run under both ends; past them, the cuttings are open.
+    box(v3(shed_x1, -3, wall_n), v3(line_end, bed_y, wall_s), ballast, .concrete);
+    box(v3(-line_end, -3, wall_n), v3(shed_x0, bed_y, wall_s), ballast, .concrete);
+    box(v3(-line_end, -3, wall_n - 0.6), v3(line_end, deck_y, wall_n), brick, .brick);
+    box(v3(-line_end, -3, wall_s), v3(line_end, deck_y, wall_s + 0.6), brick, .brick);
+    for ([_][2]f32{ .{ street_e[1] + 1, line_end }, .{ -line_end, street_w[0] - 1 } }) |r| {
+        box(v3(r[0], deck_y, wall_n - 0.6), v3(r[1], street_y + 0.6, wall_n), brick, .brick);
+        box(v3(r[0], deck_y, wall_s), v3(r[1], street_y + 0.6, wall_s + 0.6), brick, .brick);
+        box(v3(r[0], 3.0, wall_n - 30), v3(r[1], street_y, wall_n - 0.6), v3(0.3, 0.32, 0.22), .concrete);
+        box(v3(r[0], 3.0, wall_s + 0.6), v3(r[1], street_y, wall_s + 30), v3(0.3, 0.32, 0.22), .concrete);
+    }
+    box(v3(-line_end, -3, wall_n), v3(-line_end + 0.6, street_y + 3, wall_s), dark, .paint);
+    box(v3(line_end - 0.6, -3, wall_n), v3(line_end, street_y + 3, wall_s), dark, .paint);
+    // The rails, the sleepers and the live rails (the 4th rail between the
+    // running rails, the 3rd outside).
+    for (tracks) |t| {
+        const c = (t[0] + t[1]) / 2;
+        for ([_]f32{ -0.72, 0.72 }) |off| {
+            boxNoAo(v3(-line_end, bed_y, c + off - 0.04), v3(line_end, bed_y + 0.16, c + off + 0.04), steel, .metal);
+        }
+        deco(v3(-line_end, bed_y, c - 0.05), v3(line_end, bed_y + 0.12, c + 0.05), v3(0.5, 0.45, 0.4), .metal);
+        deco(v3(-line_end, bed_y, c + 1.15), v3(line_end, bed_y + 0.12, c + 1.25), v3(0.5, 0.45, 0.4), .metal);
+        var x: f32 = -line_end + 0.4;
+        while (x < line_end) : (x += if (@abs(x) > 90) 2.7 else 0.9) {
+            deco(v3(x, bed_y, c - 1.25), v3(x + 0.26, bed_y + 0.07, c + 1.25), v3(0.16, 0.11, 0.08), .wood);
+        }
+        // Buffer-free ends: a dark wall at each end of the world.
+    }
+    // A lamp now and then in the covered ways.
+    var lx: f32 = east_x[1] + 10;
+    while (lx < line_end) : (lx += 30) {
+        deco(v3(lx, 3.0, wall_n), v3(lx + 0.6, 3.15, wall_n + 0.15), v3(0.9, 0.7, 0.4), .emissive);
+        deco(v3(-lx - 0.6, 3.0, wall_n), v3(-lx, 3.15, wall_n + 0.15), v3(0.9, 0.7, 0.4), .emissive);
+    }
+    // Danger boards where the live rail starts to kill.
+    for ([_]f32{ -shock_x, shock_x }) |sx| {
+        for (tracks) |t| {
+            deco(v3(sx - 0.05, 0.4, t[0] + 0.2), v3(sx + 0.05, 1.6, t[0] + 1.4), yellow, .paint);
+            map.addSolid(v3(sx - 0.1, bed_y, t[0] + 0.2), v3(sx + 0.1, 1.6, t[0] + 1.4));
+            deco(v3(sx - 0.06, 0.7, t[0] + 0.4), v3(sx + 0.06, 1.3, t[0] + 1.2), v3(0.02, 0.02, 0.02), .paint);
         }
     }
-    // The cab front at the north end: red, a windscreen, lights.
-    deco(v3(x0, -0.55, zb), v3(x1, 3.1, zb + 0.25), red, .paint);
-    deco(v3(x0 + 0.3, 1.3, zb + 0.25), v3(x1 - 0.3, 2.3, zb + 0.28), v3(0.02, 0.03, 0.04), .paint);
-    for ([_]f32{ x0 + 0.4, x1 - 0.7 }) |hx| deco(v3(hx, 0.4, zb + 0.25), v3(hx + 0.3, 0.6, zb + 0.3), v3(1.0, 0.95, 0.85), .emissive);
-    // Bogies.
-    var bz = za + 2;
-    while (bz < zb) : (bz += 8) deco(v3(x0 + 0.3, bed_y, bz), v3(x1 - 0.3, -0.55, bz + 2.4), v3(0.05, 0.05, 0.05), .metal);
 }
 
-// ---- Escalators to the Piccadilly line ----------------------------------------
+// ---- The District train in the shed --------------------------------------------
 
-pub const esc_top_z: f32 = -30;
-pub const esc_steps = 36;
-pub const esc_run: f32 = 0.69;
-pub const esc_rise: f32 = 16.0 / 36.0;
-const esc_bottom_z: f32 = esc_top_z - esc_run * esc_steps;
+fn districtTrain() void {
+    const z0: f32 = (e2[0] + e2[1]) / 2 - 1.45;
+    const z1: f32 = z0 + 2.9;
+    const xa: f32 = -40;
+    const xb: f32 = 24;
+    const white = v3(0.86, 0.86, 0.84);
+    // The body is solid with its roof and cab front: a player can drop
+    // onto it from the spur.
+    box(v3(xa, -0.55, z0), v3(xb + 0.25, 3.1, z1), white, .metal);
+    box(v3(xa, 3.1, z0 + 0.1), v3(xb, 3.4, z1 - 0.1), v3(0.32, 0.33, 0.34), .metal);
+    for ([_]f32{ z0 - 0.02, z1 }) |sz| {
+        const sz1 = sz + 0.02;
+        deco(v3(xa, -0.55, sz), v3(xb, 0.1, sz1), blue, .paint);
+        deco(v3(xa, 1.15, sz), v3(xb, 2.05, sz1), v3(0.03, 0.04, 0.05), .paint);
+        for (0..4) |car| {
+            const cx = xa + 16 * @as(f32, @floatFromInt(car));
+            for ([_]f32{ 2.8, 8, 13.2 }) |dx| {
+                deco(v3(cx + dx - 0.8, 0.1, sz - 0.01), v3(cx + dx + 0.8, 2.1, sz1 + 0.01), red, .paint);
+                deco(v3(cx + dx - 0.55, 1.15, sz - 0.02), v3(cx + dx + 0.55, 1.9, sz1 + 0.02), v3(0.04, 0.05, 0.06), .paint);
+            }
+            if (car > 0) deco(v3(cx - 0.15, -0.55, sz - 0.03), v3(cx + 0.15, 3.1, sz1 + 0.03), v3(0.05, 0.05, 0.05), .paint);
+        }
+    }
+    deco(v3(xb + 0.25, -0.55, z0), v3(xb + 0.26, 3.1, z1), red, .paint);
+    deco(v3(xb + 0.26, 1.3, z0 + 0.3), v3(xb + 0.28, 2.3, z1 - 0.3), v3(0.02, 0.03, 0.04), .paint);
+    var bx = xa + 2;
+    while (bx < xb) : (bx += 8) deco(v3(bx, bed_y, z0 + 0.3), v3(bx + 2.4, -0.55, z1 - 0.3), v3(0.05, 0.05, 0.05), .metal);
+}
+
+// ---- The intermediate level ------------------------------------------------------
+
+fn intermediateLevel() void {
+    // Passages: north (under island A), the two south pieces (under island
+    // B, with the stair wells), the west and east sides, and the way north
+    // from the west side to the escalators.
+    const pa0 = ca - 1.8;
+    const pa1 = ca + 1.8;
+    const pb0 = cb - 1.8;
+    const pb1 = cb + 1.8;
+    const holes = [_]Rect{
+        rect(-34, 34, pa0, pa1),
+        rect(-34, -22, pb0, pb1),
+        rect(22, 34, pb0, pb1),
+        rect(-34, -30, esc_z[0], pb1),
+        rect(30, 34, pa0, pb1),
+        rect(esc_top_x, -16, esc_z[0], esc_z[1]),
+    };
+    const area = rect(-36, 36, -26, 9);
+    map.carve(area, mid_y - 1, mid_y, &.{rect(esc_top_x, -12, esc_z[0], esc_z[1])}, v3(0.3, 0.29, 0.27), .concrete);
+    map.carve(area, mid_y, mid_ceil, &holes, tile_c, .wall_tile);
+    box(v3(area.x0, mid_ceil, area.z0), v3(area.x1, -3, area.z1), v3(0.12, 0.11, 0.1), .concrete);
+
+    // Stairs from the island wells down to this level: one west and one
+    // east on each island. On island B they lead in opposite directions,
+    // with no passage between them.
+    for ([_]f32{ ca, cb }) |cz| {
+        stairs(well_x[0][1], -1, cz, 2.4, -0.4, 14, platform_c);
+        stairs(well_x[1][0], 1, cz, 2.4, -0.4, 14, platform_c);
+    }
+    for ([_][2]f32{ .{ pa0, pa0 + 0.02 }, .{ pa1 - 0.02, pa1 } }) |zz| {
+        deco(v3(-22, mid_y + 1.3, zz[0]), v3(22, mid_y + 1.5, zz[1]), tile_green, .wall_tile);
+    }
+    for ([_]f32{ -14, 12 }) |x| {
+        map.add(v3(x - 1.1, mid_ceil - 0.08, ca - 0.1), v3(x + 1.1, mid_ceil, ca + 0.1), cool, .emissive).solid = false;
+        map.addLight(v3(x, mid_ceil - 0.3, ca), cool * vec.s(1.4), 12);
+    }
+    map.add(v3(-32.1, mid_ceil - 0.08, -6.1), v3(-31.9, mid_ceil, -3.9), cool, .emissive).solid = false;
+    map.addLight(v3(-32, mid_ceil - 0.3, -5), cool * vec.s(1.4), 11);
+    roundel(v3(0, mid_y + 1.5, pa0 + 0.05), 0, 1.0);
+}
+
+// ---- Escalators ---------------------------------------------------------------
 
 fn escalators() void {
-    const deep_floor = deep_y - 1;
+    const z0 = esc_z[0];
+    const z1 = esc_z[1];
+    const zd = [2]f32{ -22.7, -22.3 }; // the divider between the lanes
     for (0..esc_steps) |i| {
         const fi: f32 = @floatFromInt(i);
-        const za = esc_top_z - esc_run * (fi + 1);
-        const top = -esc_rise * (fi + 1);
-        boxNoAo(v3(-3.7, deep_floor, za), v3(3.7, top, za + esc_run), v3(0.16, 0.16, 0.17), .metal);
+        const xa = esc_top_x + esc_run * fi;
+        const top = mid_y - esc_rise * (fi + 1);
+        boxNoAo(v3(xa, deep_y - 1, z0), v3(xa + esc_run, top, z1), v3(0.16, 0.16, 0.17), .metal);
     }
-    // Shaft walls, tiled, from the deep floor to rail height at the top.
-    box(v3(-4.3, deep_floor, esc_bottom_z), v3(-4, 1.1, esc_top_z), tile_c, .wall_tile);
-    box(v3(4, deep_floor, esc_bottom_z), v3(4.3, 1.1, esc_top_z), tile_c, .wall_tile);
-    // Under the station the shaft has a lid.
-    box(v3(-4.3, 0, esc_bottom_z), v3(4.3, 1, -45.6), v3(0.3, 0.29, 0.27), .concrete);
-    // Fill the sides of the shaft south of the station.
-    box(v3(-21, deep_y + 4.5, -55), v3(-4.3, bed_y, -45.6), ballast, .concrete);
-    box(v3(4.3, deep_y + 4.5, -55), v3(21, bed_y, -45.6), ballast, .concrete);
-
-    // The sloped ceiling, the side panels, the centre divider and its
-    // uplighters (the classic tube escalator lamps).
-    // 4.45 m over the step line, from the south wall down.
-    const top_a = v3(0, -esc_rise * ((esc_top_z + 45.6) / esc_run) + 4.45, -45.6);
-    const top_b = v3(0, deep_y + 4.4, esc_bottom_z);
-    const slope = vec.norm(top_b - top_a);
-    const up = vec.cross(slope, v3(1, 0, 0)) * vec.s(-1);
-    map.beam(top_a, top_b, 8.6, 0.25, up, v3(0.75, 0.72, 0.62), .wall_tile);
-    for ([_]f32{ -3.8, 0, 3.8 }) |x| {
-        const a = v3(x, 0.55, esc_top_z);
-        const b = v3(x, deep_y + 0.55, esc_bottom_z);
-        map.beam(a, b, if (x == 0) 0.7 else 0.2, 1.0, up, v3(0.33, 0.27, 0.2), .wood);
+    box(v3(esc_top_x, deep_y - 1, z0 - 0.3), v3(esc_bottom_x, mid_ceil, z0), tile_c, .wall_tile);
+    box(v3(esc_top_x, deep_y - 1, z1), v3(esc_bottom_x, mid_ceil, z1 + 0.3), tile_c, .wall_tile);
+    const slope = vec.norm(v3(esc_bottom_x - esc_top_x, deep_y - mid_y, 0));
+    const up = vec.norm(vec.cross(v3(0, 0, 1), slope));
+    const top_c = v3(esc_top_x, mid_y + 4.0, (z0 + z1) / 2);
+    const bot_c = v3(esc_bottom_x, deep_y + 4.0, (z0 + z1) / 2);
+    map.beam(top_c, bot_c, 3.6, 0.25, up, v3(0.75, 0.72, 0.62), .wall_tile);
+    for ([_]f32{ z0 + 0.1, (zd[0] + zd[1]) / 2, z1 - 0.1 }) |z| {
+        const w: f32 = if (z > zd[0] and z < zd[1]) 0.4 else 0.2;
+        map.beam(v3(esc_top_x, mid_y + 0.55, z), v3(esc_bottom_x, deep_y + 0.55, z), w, 1.0, up, v3(0.33, 0.27, 0.2), .wood);
     }
-    for (0..8) |i| {
-        const t = (@as(f32, @floatFromInt(i)) + 0.5) / 8;
-        const p = vec.lerp(v3(0, 1.1, esc_top_z), v3(0, deep_y + 1.1, esc_bottom_z), t);
-        deco(p - v3(0.12, 0, 0.12), p + v3(0.12, 0.45, 0.12), v3(1.0, 0.8, 0.5), .emissive);
+    // The divider and the side balustrades stop the player too: coarse
+    // boxes along the slope.
+    for ([_][2]f32{ zd, .{ z0, z0 + 0.2 }, .{ z1 - 0.2, z1 } }) |zz| {
+        var k: usize = 0;
+        while (k < esc_steps) : (k += 3) {
+            const fa: f32 = @floatFromInt(k);
+            const fb: f32 = @floatFromInt(@min(k + 3, esc_steps));
+            map.addSolid(
+                v3(esc_top_x + esc_run * fa, mid_y - esc_rise * fb, zz[0]),
+                v3(esc_top_x + esc_run * fb, mid_y - esc_rise * fa + 1.05, zz[1]),
+            );
+        }
     }
-    // Strip lights along the sloped ceiling.
     for (0..6) |i| {
         const t = (@as(f32, @floatFromInt(i)) + 0.5) / 6;
-        const p = vec.lerp(top_a, top_b, t) - up * vec.s(0.2);
-        if (p[2] > -45) continue;
+        const p = vec.lerp(v3(esc_top_x, mid_y + 1.05, -22.5), v3(esc_bottom_x, deep_y + 1.05, -22.5), t);
+        deco(p - v3(0.12, 0, 0.12), p + v3(0.12, 0.45, 0.12), v3(1.0, 0.8, 0.5), .emissive);
+    }
+    for (0..4) |i| {
+        const t = (@as(f32, @floatFromInt(i)) + 0.5) / 4;
+        const p = vec.lerp(top_c, bot_c, t) - up * vec.s(0.15);
         map.beam(p - slope * vec.s(0.8), p + slope * vec.s(0.8), 0.25, 0.06, up, cool, .emissive);
     }
-    map.addLight(v3(0, -2.5, -38), cool, 10);
-    map.addLight(v3(0, -10, -48), v3(1.1, 0.85, 0.6), 11);
+    map.addLight(v3((esc_top_x + esc_bottom_x) / 2, (mid_y + deep_y) / 2 + 3, -22.5), v3(1.1, 0.85, 0.6), 12);
 
-    // The lanes: left goes down, right goes up.
-    map.addEscalator(.{ .min = v3(-3.7, deep_y - 0.5, esc_bottom_z), .max = v3(-0.3, 0.5, esc_top_z), .vel = v3(0, 0, -0.65) });
-    map.addEscalator(.{ .min = v3(0.3, deep_y - 0.5, esc_bottom_z), .max = v3(3.7, 0.5, esc_top_z), .vel = v3(0, 0, 0.65) });
+    // The lanes: the north lane goes down (east), the south lane comes up.
+    map.addEscalator(.{ .min = v3(esc_top_x, deep_y - 0.5, z0), .max = v3(esc_bottom_x, mid_y + 0.5, zd[0]), .vel = v3(0.65, 0, 0) });
+    map.addEscalator(.{ .min = v3(esc_top_x, deep_y - 0.5, zd[1]), .max = v3(esc_bottom_x, mid_y + 0.5, z1), .vel = v3(-0.65, 0, 0) });
 }
 
-// ---- The deep-level Piccadilly line platform ----------------------------------
+// ---- The deep level: the Piccadilly line ---------------------------------------------
 
-fn deepPlatform() void {
+fn deepLevel() void {
     const y = deep_y;
-    const z_back = esc_bottom_z; // the north wall
-    const z_edge: f32 = -62;
-    const z_wall: f32 = -65.5;
-    const ceil: f32 = y + 4.6;
-    const x0: f32 = -30;
-    const x1: f32 = 30;
     const floor_c = v3(0.3, 0.29, 0.27);
+    const x0 = esc_bottom_x;
+    const arches = [_]f32{ 6, 18, 30, 42, 54 };
 
-    box(v3(x0, y - 1, z_edge), v3(x1, y, z_back), floor_c, .concrete);
-    deco(v3(x0, y, z_edge), v3(x1, y + 0.012, z_edge + 0.45), yellow, .paint);
-    box(v3(x0, y - 1.2, z_wall), v3(x1, y - 0.85, z_edge), ballast * vec.s(0.7), .concrete);
-    for ([_]f32{ -0.72, 0.72 }) |off| {
-        boxNoAo(v3(x0 - 4, y - 0.85, -63.75 + off - 0.04), v3(x1 + 4, y - 0.69, -63.75 + off + 0.04), steel, .metal);
+    // The floor under the corridor and the platforms.
+    box(v3(x0, y - 1, corr_z[0]), v3(deep_lift.x1, y, corr_z[1]), floor_c, .concrete);
+    for ([_][2]f32{ p5, p6 }) |p| box(v3(plat_x[0], y - 1, p[0]), v3(plat_x[1], y, p[1]), floor_c, .concrete);
+    // The walls between the corridor and the platforms, with arches. West
+    // of the platforms they are the corridor walls; the lift closes the east
+    // end.
+    for ([_][2]f32{ .{ p5[1], corr_z[0] }, .{ corr_z[1], p6[0] } }) |wz| {
+        var xa = x0;
+        for (arches) |ax| {
+            box(v3(xa, y, wz[0]), v3(ax - 1.5, deep_ceil, wz[1]), tile_c, .wall_tile);
+            boxNoAo(v3(ax - 1.5, y + 2.5, wz[0]), v3(ax + 1.5, deep_ceil, wz[1]), tile_c, .wall_tile);
+            xa = ax + 1.5;
+        }
+        box(v3(xa, y, wz[0]), v3(deep_lift.x1, deep_ceil, wz[1]), tile_c, .wall_tile);
     }
-    var sx: f32 = x0;
-    while (sx < x1) : (sx += 0.9) deco(v3(sx, y - 0.85, -65), v3(sx + 0.26, y - 0.79, -62.5), v3(0.1, 0.08, 0.06), .wood);
-
-    // North wall (with the escalator opening), the wall across the track,
-    // the ends with tunnel mouths, and the ceiling.
-    box(v3(x0, y, z_back), v3(-4.3, ceil, z_back + 0.35), tile_c, .wall_tile);
-    box(v3(4.3, y, z_back), v3(x1, ceil, z_back + 0.35), tile_c, .wall_tile);
-    box(v3(-4.3, deep_y + 4.4, z_back), v3(4.3, ceil, z_back + 0.35), tile_c, .wall_tile);
-    box(v3(x0, y - 1.2, z_wall - 0.4), v3(x1, ceil, z_wall), tile_c, .wall_tile);
-    box(v3(x0 - 0.4, y - 1.2, z_edge), v3(x0, ceil, z_back + 0.35), tile_c, .wall_tile);
-    box(v3(x1, y - 1.2, z_edge), v3(x1 + 0.4, ceil, z_back + 0.35), tile_c, .wall_tile);
-    box(v3(x0 - 0.4, y + 3.4, z_wall), v3(x0, ceil, z_edge), tile_c, .wall_tile);
-    box(v3(x1, y + 3.4, z_wall), v3(x1 + 0.4, ceil, z_edge), tile_c, .wall_tile);
-    box(v3(x0 - 6, y - 1.2, z_wall), v3(x0 - 5.6, y + 3.4, z_edge), dark, .paint);
-    box(v3(x1 + 5.6, y - 1.2, z_wall), v3(x1 + 6, y + 3.4, z_edge), dark, .paint);
-    deco(v3(x0 - 5.6, y + 3.4, z_wall), v3(x0, y + 3.5, z_edge), dark, .paint);
-    deco(v3(x1, y + 3.4, z_wall), v3(x1 + 5.6, y + 3.5, z_edge), dark, .paint);
-    deco(v3(x1 + 0.5, y + 1.8, z_edge - 0.3), v3(x1 + 0.7, y + 2.0, z_edge - 0.1), v3(1.0, 0.05, 0.02), .emissive);
-    box(v3(x0 - 0.4, ceil, z_wall - 0.4), v3(x1 + 0.4, ceil + 0.6, z_back + 0.35), v3(0.12, 0.11, 0.1), .concrete);
-    // Curved haunches where the walls meet the ceiling.
-    map.beam(v3(x0, ceil - 0.55, z_back + 0.05), v3(x1, ceil - 0.55, z_back + 0.05), 1.3, 0.2, vec.norm(v3(0, -1, -1)), tile_c * vec.s(0.9), .wall_tile);
-    map.beam(v3(x0, ceil - 0.55, z_wall - 0.05), v3(x1, ceil - 0.55, z_wall - 0.05), 1.3, 0.2, vec.norm(v3(0, -1, 1)), tile_c * vec.s(0.9), .wall_tile);
-
-    // Tile bands: a deep blue frieze and a maroon line, both walls.
-    for ([_][2]f32{ .{ z_back - 0.03, z_back }, .{ z_wall, z_wall + 0.03 } }) |zz| {
-        deco(v3(x0, y + 2.3, zz[0]), v3(x1, y + 2.7, zz[1]), v3(0.05, 0.13, 0.4), .wall_tile);
-        deco(v3(x0, y + 1.15, zz[0]), v3(x1, y + 1.25, zz[1]), v3(0.38, 0.05, 0.06), .wall_tile);
+    box(v3(deep_lift.x0, y, deep_lift.z1), v3(deep_lift.x1, deep_ceil, corr_z[1]), tile_c, .wall_tile);
+    // Platforms 5 and 6: the yellow edges, the track beds and rails the
+    // whole length, the walls across the tracks, the ends, the ceiling.
+    deco(v3(plat_x[0], y, p5[0]), v3(plat_x[1], y + 0.012, p5[0] + 0.45), yellow, .paint);
+    deco(v3(plat_x[0], y, p6[1] - 0.45), v3(plat_x[1], y + 0.012, p6[1]), yellow, .paint);
+    for ([_][2]f32{ t5, t6 }) |t| {
+        const c = (t[0] + t[1]) / 2;
+        box(v3(-line_end, y - 1.2, t[0]), v3(line_end, y - 0.85, t[1]), ballast * vec.s(0.7), .concrete);
+        for ([_]f32{ -0.72, 0.72 }) |off| {
+            boxNoAo(v3(-line_end, y - 0.85, c + off - 0.04), v3(line_end, y - 0.69, c + off + 0.04), steel, .metal);
+        }
+        deco(v3(-line_end, y - 0.85, c - 0.05), v3(line_end, y - 0.73, c + 0.05), v3(0.5, 0.45, 0.4), .metal);
+        var sx: f32 = -line_end;
+        while (sx < line_end) : (sx += if (@abs(sx - 30) > 60) 2.7 else 0.9) {
+            deco(v3(sx, y - 0.85, t[0] + 0.25), v3(sx + 0.26, y - 0.79, t[1] - 0.25), v3(0.1, 0.08, 0.06), .wood);
+        }
     }
-    // Roundels and posters on the wall across the track.
-    for ([_]f32{ -18, 0, 18 }) |rx| roundel(v3(rx, y + 1.6, z_wall + 0.05), 0, 1.4);
+    box(v3(-line_end, y - 1.2, t5[0] - 0.4), v3(line_end, deep_ceil, t5[0]), tile_c, .wall_tile);
+    box(v3(-line_end, y - 1.2, t6[1]), v3(line_end, deep_ceil, t6[1] + 0.4), tile_c, .wall_tile);
+    box(v3(-line_end, y - 1.2, t5[1]), v3(plat_x[0], deep_ceil, t5[1] + 0.3), concrete_c, .concrete);
+    box(v3(plat_x[1], y - 1.2, t5[1]), v3(line_end, deep_ceil, t5[1] + 0.3), concrete_c, .concrete);
+    box(v3(-line_end, y - 1.2, t6[0] - 0.3), v3(plat_x[0], deep_ceil, t6[0]), concrete_c, .concrete);
+    box(v3(plat_x[1], y - 1.2, t6[0] - 0.3), v3(line_end, deep_ceil, t6[0]), concrete_c, .concrete);
+    for ([_]f32{ plat_x[0] - 0.3, plat_x[1] }) |xa| {
+        for ([_][2]f32{ .{ t5[1] + 0.3, p5[1] }, .{ p6[0], t6[0] - 0.3 } }) |p| box(v3(xa, y, p[0]), v3(xa + 0.3, deep_ceil, p[1]), tile_c, .wall_tile);
+    }
+    // The ceiling, with the escalator shaft cut out (its riders need head
+    // room), and the dark ends of the world.
+    map.carve(rect(-line_end, line_end, t5[0] - 0.4, t6[1] + 0.4), deep_ceil, deep_ceil + 0.6, &.{rect(esc_top_x, esc_bottom_x, esc_z[0] - 0.3, esc_z[1] + 0.3)}, v3(0.12, 0.11, 0.1), .concrete);
+    box(v3(-line_end, y - 1.2, t5[0] - 0.4), v3(-line_end + 0.4, deep_ceil, t6[1] + 0.4), dark, .paint);
+    box(v3(line_end - 0.4, y - 1.2, t5[0] - 0.4), v3(line_end, deep_ceil, t6[1] + 0.4), dark, .paint);
+
+    // Tile bands, roundels and posters on the walls across the tracks.
+    for ([_]f32{ t5[0], t6[1] - 0.03 }) |wz| {
+        deco(v3(plat_x[0], y + 2.3, wz), v3(plat_x[1], y + 2.7, wz + 0.03), v3(0.05, 0.13, 0.4), .wall_tile);
+        deco(v3(plat_x[0], y + 1.15, wz), v3(plat_x[1], y + 1.25, wz + 0.03), v3(0.38, 0.05, 0.06), .wall_tile);
+    }
+    for ([_]f32{ 12, 30, 48 }) |rx| {
+        roundel(v3(rx, y + 1.6, t5[0] + 0.05), 0, 1.4);
+        roundel(v3(rx, y + 1.6, t6[1] - 0.05), std.math.pi, 1.4);
+    }
     const poster_cols = [_]V3{ v3(0.8, 0.35, 0.1), v3(0.1, 0.4, 0.55), v3(0.85, 0.75, 0.2), v3(0.45, 0.1, 0.35), v3(0.15, 0.5, 0.25), v3(0.9, 0.9, 0.85) };
-    for ([_]f32{ -26, -9, 9, 26 }, 0..) |px, i| {
-        deco(v3(px - 2, y + 0.4, z_wall + 0.02), v3(px + 2, y + 3.2, z_wall + 0.06), v3(0.08, 0.08, 0.08), .paint);
-        deco(v3(px - 1.85, y + 0.55, z_wall + 0.06), v3(px + 1.85, y + 3.05, z_wall + 0.08), poster_cols[i % poster_cols.len], .paint);
-        deco(v3(px - 1.85, y + 1.6, z_wall + 0.08), v3(px + 0.6, y + 2.4, z_wall + 0.09), poster_cols[(i + 3) % poster_cols.len], .paint);
+    for ([_]f32{ 4, 21, 39, 56 }, 0..) |px, i| {
+        deco(v3(px - 2, y + 0.4, t5[0]), v3(px + 2, y + 3.2, t5[0] + 0.04), v3(0.08, 0.08, 0.08), .paint);
+        deco(v3(px - 1.85, y + 0.55, t5[0] + 0.04), v3(px + 1.85, y + 3.05, t5[0] + 0.06), poster_cols[i % poster_cols.len], .paint);
+        deco(v3(px - 2, y + 0.4, t6[1] - 0.04), v3(px + 2, y + 3.2, t6[1]), v3(0.08, 0.08, 0.08), .paint);
+        deco(v3(px - 1.85, y + 0.55, t6[1] - 0.06), v3(px + 1.85, y + 3.05, t6[1] - 0.04), poster_cols[(i + 2) % poster_cols.len], .paint);
     }
-    // Benches on the platform, and a roundel on the north wall.
-    for ([_]f32{ -22, -12, 12, 22 }) |bx| boxNoAo(v3(bx - 1.2, y, z_back - 1.0), v3(bx + 1.2, y + 0.45, z_back - 0.5), v3(0.3, 0.17, 0.09), .wood);
-    for ([_]f32{ -17, 17 }) |rx| roundel(v3(rx, y + 2.0, z_back - 0.05), std.math.pi, 1.1);
+    for ([_]f32{ 12, 48 }) |bx| {
+        boxNoAo(v3(bx - 1.2, y, p5[1] - 1.0), v3(bx + 1.2, y + 0.45, p5[1] - 0.5), v3(0.3, 0.17, 0.09), .wood);
+        boxNoAo(v3(bx - 1.2, y, p6[0] + 0.5), v3(bx + 1.2, y + 0.45, p6[0] + 1.0), v3(0.3, 0.17, 0.09), .wood);
+    }
+    for ([_]f32{ t5[0] + 0.4, t6[1] - 0.4 }) |pz| {
+        map.beam(v3(plat_x[0] - 30, deep_ceil - 0.3, pz), v3(plat_x[1] + 30, deep_ceil - 0.3, pz), 0.18, 0.18, v3(0, 1, 0), v3(0.12, 0.11, 0.1), .metal);
+    }
 
-    // Fluorescent strips over the platform, and their lights. One of them
-    // flickers (main.zig).
-    var lx: f32 = x0 + 3;
-    while (lx < x1) : (lx += 6) {
-        map.add(v3(lx - 1.2, ceil - 0.12, -58.7), v3(lx + 1.2, ceil - 0.04, -58.4), v3(0.85, 0.95, 1.0), .emissive).solid = false;
+    // Fluorescent tubes over each platform. Each light hangs just under its
+    // tube. One tube flickers: its box is dynamic (main.zig).
+    const flicker_x: f32 = 21;
+    var tx: f32 = 3;
+    while (tx < 60) : (tx += 6) {
+        for ([_][2]f32{ p5, p6 }, 0..) |p, side| {
+            if (side == 1 and tx == flicker_x) continue;
+            const cz = (p[0] + p[1]) / 2;
+            map.add(v3(tx - 1.2, deep_ceil - 0.12, cz - 0.15), v3(tx + 1.2, deep_ceil - 0.04, cz + 0.15), v3(0.85, 0.95, 1.0), .emissive).solid = false;
+        }
     }
-    // The Piccadilly line train (map.zig Train): one solid body box.
-    const body = map.add(v3(-400, y - 0.75, -65.2), v3(-340, y + 3.0, -62.25), v3(0.62, 0.64, 0.66), .metal);
+    for ([_]f32{ 9, 33, 57 }, 0..) |lx, i| {
+        const tint = if (i % 2 == 0) v3(0.8, 1.0, 0.9) else v3(1.0, 0.95, 0.82);
+        map.addLight(v3(lx, deep_ceil - 0.35, (p5[0] + p5[1]) / 2), tint * vec.s(2.3), 15);
+    }
+    const fz = (p6[0] + p6[1]) / 2;
+    map.flicker_light = map.light_count;
+    map.addLight(v3(flicker_x, deep_ceil - 0.35, fz), v3(0.85, 1.0, 0.95) * vec.s(2.3), 15);
+    const fl = map.add(v3(flicker_x - 1.2, deep_ceil - 0.12, fz - 0.15), v3(flicker_x + 1.2, deep_ceil - 0.04, fz + 0.15), v3(0.85, 1.0, 0.95), .emissive);
+    fl.solid = false;
+    fl.dynamic = true;
+    fl.ao = false;
+    map.flicker_box = map.box_count - 1;
+    // A red signal in the tunnel east of platform 5.
+    deco(v3(plat_x[1] + 8, y + 1.8, t5[0] + 0.05), v3(plat_x[1] + 8.2, y + 2.0, t5[0] + 0.15), v3(1.0, 0.05, 0.02), .emissive);
+    map.addLight(v3(plat_x[1] + 8, y + 1.9, t5[0] + 0.6), v3(2.5, 0.08, 0.03), 5);
+
+    // The Piccadilly train on platform 5 (map.zig Train).
+    const tz0 = t5[0] + 0.4;
+    const tz1 = t5[1] - 0.45;
+    const body = map.add(v3(-400, y - 0.75, tz0), v3(-340, y + 3.0, tz1), v3(0.62, 0.64, 0.66), .metal);
     body.dynamic = true;
     body.ao = false;
-    map.train = .{ .box = map.box_count - 1, .stop_x = 0, .z0 = -65.2, .z1 = -62.25, .y0 = y - 0.75, .y1 = y + 3.0, .half_len = 30 };
-    map.flicker_light = map.light_count + 2;
-    for ([_]f32{ -21, -7, 7, 21 }, 0..) |px, i| {
-        // Tubes age to different whites.
-        const tint = if (i % 2 == 0) v3(0.8, 1.0, 0.9) else v3(1.0, 0.95, 0.82);
-        map.addLight(v3(px, ceil - 0.9, -58.5), tint * vec.s(2.3), 15);
-    }
-    // Pipes and cable runs along the ceiling, and a cable tray on the wall
-    // across the track.
-    for ([_]f32{ -55.4, -56.1, -65.0 }) |pz| {
-        map.beam(v3(x0, ceil - 0.3, pz), v3(x1, ceil - 0.3, pz), 0.18, 0.18, v3(0, 1, 0), v3(0.12, 0.11, 0.1), .metal);
-    }
-    map.beam(v3(x0, ceil - 0.55, -55.2), v3(x1, ceil - 0.55, -55.2), 0.4, 0.06, v3(0, 1, 0), v3(0.15, 0.14, 0.12), .metal);
-    map.beam(v3(x0, y + 3.6, z_wall + 0.15), v3(x1, y + 3.6, z_wall + 0.15), 0.25, 0.12, v3(0, 1, 0), v3(0.07, 0.07, 0.07), .metal);
-    map.addLight(v3(x1 + 0.5, y + 1.9, z_edge - 0.6), v3(2.5, 0.08, 0.03), 5);
+    map.train = .{ .box = map.box_count - 1, .stop_x = 30, .z0 = tz0, .z1 = tz1, .y0 = y - 0.75, .y1 = y + 3.0, .half_len = 30 };
 }

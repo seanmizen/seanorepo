@@ -37,7 +37,7 @@ pub const SceneUniforms = extern struct {
 };
 
 /// The map lights and two muzzle flashes. scene.wgsl has the same size.
-pub const max_lights = 24;
+pub const max_lights = 30;
 
 const PostUniforms = extern struct {
     texel: [2]f32,
@@ -131,12 +131,17 @@ pub fn loadMap(gpu: *gpu_mod.GPU, static_mesh: []const mesh.Vertex) !void {
     gpu.writeBuffer(static_vb, 0, std.mem.sliceAsBytes(static_mesh));
 }
 
-/// Upload the ambient-occlusion boxes. The lifts move, so each frame does.
-fn uploadBoxes(gpu: *gpu_mod.GPU) u32 {
+/// Upload the ambient-occlusion boxes near the eye. The lifts move, so
+/// each frame does. Only boxes within 45 m count: the shader loops over
+/// all of them for each pixel.
+fn uploadBoxes(gpu: *gpu_mod.GPU, eye: V3) u32 {
     var data: [map.max_boxes][8]f32 = undefined;
     var n: usize = 0;
     for (map.boxes[0..map.box_count]) |b| {
         if (!b.ao) continue;
+        const q = @max(b.min - eye, eye - b.max);
+        const out = @max(q, vec.s(0));
+        if (vec.dot(out, out) > 45 * 45) continue;
         data[n] = .{ b.min[0], b.min[1], b.min[2], 0, b.max[0], b.max[1], b.max[2], 0 };
         n += 1;
     }
@@ -355,7 +360,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     su.sun_dir = .{ sun_dir[0], sun_dir[1], sun_dir[2], 0 };
     su.sun_col = .{ sun_col[0], sun_col[1], sun_col[2], 0 };
     const nl = @min(p.lights.len, max_lights);
-    su.info = .{ @floatFromInt(uploadBoxes(gpu)), @floatFromInt(nl), 0.0045, 1 };
+    su.info = .{ @floatFromInt(uploadBoxes(gpu, p.eye)), @floatFromInt(nl), 0.0045, 1 };
     su.info2 = .{ map.underground_y, 1, 0, 0 };
     for (p.lights[0..nl], 0..) |l, i| {
         su.lp[i] = .{ l.pos[0], l.pos[1], l.pos[2], l.radius };

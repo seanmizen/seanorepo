@@ -80,6 +80,7 @@ var killed_by_len: usize = 0;
 var static_mesh: mesh.Mesh = undefined;
 var map_loaded = false;
 var door_reopened: [4]bool = @splat(false);
+var shocked = false;
 var dyn: mesh.Mesh = undefined;
 var hud: ?gfx.Renderer = null;
 var text: ?sw_text.TextRenderer = null;
@@ -117,6 +118,8 @@ const Remote = struct {
     fall: f32 = 0,
     stride: f32 = 0,
     seen: bool = true,
+    /// The time of its last shot: the minimap shows a shooter for a moment.
+    shot_t: f32 = -100,
 };
 var remotes: [24]Remote = undefined;
 var remote_n: usize = 0;
@@ -210,6 +213,7 @@ fn pushFeed(line: []const u8, mine: bool) void {
 }
 
 fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
+    shocked = false;
     me = .{ .pos = v3(x, y, z), .yaw = yaw };
     const reserve = gun.reserve;
     gun.reset();
@@ -226,7 +230,7 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     map_loaded = true;
     static_mesh.clear();
     for (map.boxes[0..map.box_count]) |b| {
-        if (!b.dynamic) static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
+        if (!b.dynamic and b.visible) static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
     }
     for (map.decor.items) |d| {
         const m: f32 = @floatFromInt(@backingInt(d.mat));
@@ -303,22 +307,29 @@ fn buildTrain(tr: map.Train) void {
 /// up in the right lane (map.zig escalators, the same speed).
 fn buildEscalatorSteps() void {
     const ec = @import("maps/earls_court.zig");
-    const lanes = [_]struct { x0: f32, x1: f32, dir: f32 }{
-        .{ .x0 = -3.6, .x1 = -0.35, .dir = -1 },
-        .{ .x0 = 0.35, .x1 = 3.6, .dir = 1 },
+    // The steps go down to the east. The north lane runs down, the south
+    // lane up (maps/earls_court.zig escalators, the same speed).
+    const lanes = [_]struct { z0: f32, z1: f32, dir: f32 }{
+        .{ .z0 = -23.9, .z1 = -22.75, .dir = 1 },
+        .{ .z0 = -22.25, .z1 = -21.1, .dir = -1 },
     };
     const k = @mod(time * 0.65 / ec.esc_run, 1.0);
     for (lanes) |lane| {
-        const f = if (lane.dir < 0) k else 1 - k;
+        const f = if (lane.dir > 0) k else 1 - k;
         for (0..ec.esc_steps) |i| {
             const fi: f32 = @floatFromInt(i);
-            const top = -ec.esc_rise * (fi + 1);
-            const za = ec.esc_top_z - ec.esc_run * (fi + 1);
-            const z = za + ec.esc_run * (1 - f);
-            dyn.box(v3(lane.x0, top, z - 0.05), v3(lane.x1, top + 0.01, z), v3(0.85, 0.68, 0.08), 0);
-            dyn.box(v3(lane.x0, top, z - 0.36), v3(lane.x1, top + 0.006, z - 0.33), v3(0.3, 0.3, 0.32), 3);
+            const top = ec.mid_y - ec.esc_rise * (fi + 1);
+            const x = ec.esc_top_x + ec.esc_run * (fi + f);
+            dyn.box(v3(x, top, lane.z0), v3(x + 0.05, top + 0.01, lane.z1), v3(0.85, 0.68, 0.08), 0);
+            dyn.box(v3(x + 0.33, top, lane.z0), v3(x + 0.36, top + 0.006, lane.z1), v3(0.3, 0.3, 0.32), 3);
         }
     }
+}
+
+/// True while the tired tube is lit (see map.flicker_light).
+fn flickerOn() bool {
+    const t = time * 9.0;
+    return vec.hash(@intFromFloat(@floor(t))) > 0.18 or vec.hash(@intFromFloat(@floor(t * 7.0))) > 0.5;
 }
 
 fn pressButton(i: usize) void {
@@ -589,6 +600,7 @@ fn handleNet() void {
                 addTracer(a, b);
                 addSparks(b, vec.norm(a - b), v3(1.0, 0.75, 0.4), 4);
                 remote_flash = .{ .p = a, .life = 0.05 };
+                if (findRemote(m.id orelse 0)) |r| r.shot_t = time;
                 const dist = vec.len(a - me.eyePos());
                 gunshotSound(std.math.clamp(6 / (dist + 4), 0.05, 0.6));
             }
@@ -814,6 +826,19 @@ fn tick(ctx: *sw.Context) void {
         if (mode != .menu and me.pos[1] < map.underground_y - 4) trainSounds(train_t0, tr.t);
     }
 
+    // The live rail: far out along the lines it kills (maps/earls_court.zig
+    // shock_x). The server makes it a death.
+    if (map.id == .earls_court and mode == .deathmatch and alive and !shocked and
+        @abs(me.pos[0]) > @import("maps/earls_court.zig").shock_x and me.pos[1] < 2)
+    {
+        shocked = true;
+        client.send("{{\"t\":\"shock\"}}", .{});
+        addSparks(me.pos + v3(0, 0.2, 0), v3(0, 1, 0), v3(0.5, 0.7, 1.0), 30);
+        sound(1, null, 0.5, .noise, 0.5);
+        sound(120, 60, 0.6, .square, 0.25);
+        damage_flash = 1;
+    }
+
     // Lifts carry a player who stands in the cab.
     const riding = map.liftUnder(me.pos, player_mod.radius);
     map.stepLifts(dt);
@@ -937,10 +962,10 @@ fn buildViewmodel() void {
 
 fn eyeForRender() struct { eye: V3, yaw: f32, pitch: f32 } {
     if (mode == .menu) {
-        // A slow drift down the train shed, looking north to the bridge.
-        const z = -12 + 22 * @sin(time * 0.035);
-        const x = 9 * @sin(time * 0.05);
-        return .{ .eye = v3(x, 3.2 + 1.5 * @sin(time * 0.04), z), .yaw = std.math.pi + 0.35 * @sin(time * 0.045), .pitch = 0.16 + 0.08 * @sin(time * 0.03) };
+        // A slow drift along the train shed, over the islands.
+        const x = 26 * @sin(time * 0.03);
+        const z = -4.2 + 5 * @sin(time * 0.05);
+        return .{ .eye = v3(x, 7.0 + 1.0 * @sin(time * 0.04), z), .yaw = std.math.pi / 2.0 + 0.4 * @sin(time * 0.045), .pitch = -0.06 + 0.1 * @sin(time * 0.03) };
     }
     if (mode == .deathmatch and !alive) {
         // Death cam: drop low and look up a little.
@@ -1217,6 +1242,57 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     }
 }
 
+/// The minimap, north up, centred on the player: a slice of the map at
+/// body height (the walls) over a slice at foot height (the floors). The
+/// same slices as `zig build floorplan`. A remote player shows for a
+/// moment after it fires.
+fn drawMinimap(r: *gfx.Renderer, h: f32) !void {
+    const size: f32 = 180;
+    const scale: f32 = 2.4; // pixels a metre
+    const ox: f32 = 20;
+    const oy = h - 96 - size;
+    const cx = ox + size / 2;
+    const cy = oy + size / 2;
+    try r.fillRect(.{ .x = ox, .y = oy, .w = size, .h = size }, gfx.Color.rgba8(8, 10, 14, 170));
+    const feet = me.pos[1];
+    const Clip = struct {
+        fn rect(min: V3, max: V3, p: V3, sc: f32, x0: f32, y0: f32, sz: f32) ?gfx.Rect {
+            const ax = std.math.clamp((min[0] - p[0]) * sc + x0 + sz / 2, x0, x0 + sz);
+            const bx = std.math.clamp((max[0] - p[0]) * sc + x0 + sz / 2, x0, x0 + sz);
+            const ay = std.math.clamp((min[2] - p[2]) * sc + y0 + sz / 2, y0, y0 + sz);
+            const by = std.math.clamp((max[2] - p[2]) * sc + y0 + sz / 2, y0, y0 + sz);
+            if (bx - ax < 0.5 or by - ay < 0.5) return null;
+            return .{ .x = ax, .y = ay, .w = bx - ax, .h = by - ay };
+        }
+    };
+    // Floors near the feet, then the walls at body height.
+    for ([_]bool{ false, true }) |walls| {
+        for (map.boxes[0..map.box_count]) |b| {
+            if (!b.solid) continue;
+            const hit = if (walls) b.min[1] < feet + 1.6 and b.max[1] > feet + 0.4 else @abs(b.max[1] - feet) < 0.5;
+            if (!hit) continue;
+            const rc = Clip.rect(b.min, b.max, me.pos, scale, ox, oy, size) orelse continue;
+            const col = if (b.dynamic) gfx.Color.rgba8(70, 130, 230, 220) else if (walls) gfx.Color.rgba8(200, 195, 185, 200) else gfx.Color.rgba8(60, 62, 66, 200);
+            try r.fillRect(rc, col);
+        }
+    }
+    for (remotes[0..remote_n]) |rm| {
+        if (time - rm.shot_t > 1.5 or !rm.alive) continue;
+        const px = cx + (rm.pos[0] - me.pos[0]) * scale;
+        const py = cy + (rm.pos[2] - me.pos[2]) * scale;
+        if (px < ox or px > ox + size or py < oy or py > oy + size) continue;
+        try r.fillRect(.{ .x = px - 3, .y = py - 3, .w = 6, .h = 6 }, red);
+    }
+    // The player, and a line of dots for the view direction.
+    const f = vec.forward(me.yaw, 0);
+    for (1..6) |i| {
+        const d: f32 = @floatFromInt(i * 3);
+        try r.fillRect(.{ .x = cx + f[0] * d - 1, .y = cy + f[2] * d - 1, .w = 2, .h = 2 }, accent);
+    }
+    try r.fillRect(.{ .x = cx - 3, .y = cy - 3, .w = 6, .h = 6 }, white);
+    try r.strokeRect(.{ .x = ox, .y = oy, .w = size, .h = size }, 1, gfx.Color.rgba8(255, 255, 255, 40));
+}
+
 fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     const win = ctx.window();
     r.beginFrame(win.width, win.height, win.dpi_scale);
@@ -1236,9 +1312,10 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
     if (captured) if (aimedButton()) |bi| {
         const b = map.buttons[bi];
-        const label = if (b.in_cab) (if (b.level == 0) "E   PLATFORM" else "E   FOOTBRIDGE") else "E   CALL LIFT";
+        const label = if (b.in_cab) (if (b.level == 0) "E   GO DOWN" else "E   GO UP") else "E   CALL LIFT";
         txtCenter(r, label, w / 2, h / 2 + 22, 15, white);
     };
+    try drawMinimap(r, h);
     try drawHealth(r, h);
     try drawAmmo(r, w, h);
 
@@ -1282,8 +1359,10 @@ fn gameInit(ctx: *sw.Context) !void {
 
 fn gameRender(ctx: *sw.Context) !void {
     dyn.clear();
-    for (map.boxes[0..map.box_count]) |b| {
-        if (b.dynamic) dyn.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
+    for (map.boxes[0..map.box_count], 0..) |b, bi| {
+        if (!b.dynamic or !b.visible) continue;
+        const col = if (map.flicker_box == bi and !flickerOn()) b.color * vec.s(0.04) else b.color;
+        dyn.box(b.min, b.max, col, @floatFromInt(@backingInt(b.mat)));
     }
     const aimed = aimedButton();
     for (map.buttons[0..map.button_count], 0..) |*b, i| {
@@ -1306,9 +1385,7 @@ fn gameRender(ctx: *sw.Context) !void {
         lights[n] = l;
         if (map.flicker_light == i) {
             // A tired tube: mostly on, with short drops and stutters.
-            const t = time * 9.0;
-            const on = vec.hash(@intFromFloat(@floor(t))) > 0.18 or vec.hash(@intFromFloat(@floor(t * 7.0))) > 0.5;
-            lights[n].color = l.color * vec.s(if (on) 1.0 else 0.08);
+            lights[n].color = l.color * vec.s(if (flickerOn()) 1.0 else 0.08);
         }
         n += 1;
     }

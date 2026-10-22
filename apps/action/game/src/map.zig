@@ -41,6 +41,9 @@ pub const Box = struct {
     ao: bool = true,
     /// A dynamic box moves (lift parts). It is not in the static mesh.
     dynamic: bool = false,
+    /// An invisible box is collision only (handrails, balustrades whose
+    /// visible part is a decoration beam).
+    visible: bool = true,
 };
 
 pub const Decor = struct {
@@ -61,8 +64,8 @@ pub const Light = struct {
 
 pub const Spawn = struct { pos: V3, yaw: f32 };
 
-pub const max_boxes = 400;
-pub const max_lights = 16;
+pub const max_boxes = 640;
+pub const max_lights = 20;
 
 pub var id: Id = .arena;
 pub var boxes: [max_boxes]Box = undefined;
@@ -80,8 +83,10 @@ pub var shadow_half: f32 = 40;
 pub var underground_y: f32 = -1000;
 /// A player below this height respawns.
 pub var kill_y: f32 = -5;
-/// A light that flickers (a tired fluorescent tube), or null.
+/// A light that flickers (a tired fluorescent tube), or null, and the box
+/// of its tube (dynamic, so it flickers too).
 pub var flicker_light: ?usize = null;
+pub var flicker_box: ?usize = null;
 
 var alloc: std.mem.Allocator = undefined;
 
@@ -105,6 +110,7 @@ pub fn load(map: Id) void {
     underground_y = -1000;
     kill_y = -5;
     flicker_light = null;
+    flicker_box = null;
     switch (map) {
         .arena => @import("maps/arena.zig").build(),
         .earls_court => @import("maps/earls_court.zig").build(),
@@ -121,6 +127,65 @@ pub fn add(min: V3, max: V3, color: V3, mat: Mat) *Box {
     boxes[box_count] = .{ .min = min, .max = max, .color = color, .mat = mat };
     box_count += 1;
     return &boxes[box_count - 1];
+}
+
+/// A collision-only box (see Box.visible).
+pub fn addSolid(min: V3, max: V3) void {
+    const b = add(min, max, v3(0, 0, 0), .paint);
+    b.visible = false;
+    b.ao = false;
+}
+
+pub const Rect = struct { x0: f32, x1: f32, z0: f32, z1: f32 };
+
+/// Solid mass from y0 to y1 over the rectangle `area`, less the `holes`.
+/// The holes are rooms and passages: the mass around them is their walls.
+/// It sweeps along X: between two hole edges, the free Z ranges become
+/// boxes.
+pub fn carve(area: Rect, y0: f32, y1: f32, holes: []const Rect, color: V3, mat: Mat) void {
+    var xs: [130]f32 = undefined;
+    var n: usize = 0;
+    xs[n] = area.x0;
+    n += 1;
+    xs[n] = area.x1;
+    n += 1;
+    for (holes) |h| {
+        for ([_]f32{ h.x0, h.x1 }) |x| {
+            if (x > area.x0 and x < area.x1 and n < xs.len) {
+                xs[n] = x;
+                n += 1;
+            }
+        }
+    }
+    std.mem.sort(f32, xs[0..n], {}, std.sort.asc(f32));
+    var i: usize = 0;
+    while (i + 1 < n) : (i += 1) {
+        const xa = xs[i];
+        const xb = xs[i + 1];
+        if (xb - xa < 1e-4) continue;
+        const xm = (xa + xb) / 2;
+        // The Z ranges that holes cover in this X strip.
+        var cut: [64][2]f32 = undefined;
+        var c: usize = 0;
+        for (holes) |h| {
+            if (h.x0 < xm and h.x1 > xm and c < cut.len) {
+                cut[c] = .{ @max(h.z0, area.z0), @min(h.z1, area.z1) };
+                c += 1;
+            }
+        }
+        const S = struct {
+            fn less(_: void, a: [2]f32, b: [2]f32) bool {
+                return a[0] < b[0];
+            }
+        };
+        std.mem.sort([2]f32, cut[0..c], {}, S.less);
+        var z = area.z0;
+        for (cut[0..c]) |r| {
+            if (r[0] > z + 1e-4) _ = add(v3(xa, y0, z), v3(xb, y1, r[0]), color, mat);
+            z = @max(z, r[1]);
+        }
+        if (area.z1 > z + 1e-4) _ = add(v3(xa, y0, z), v3(xb, y1, area.z1), color, mat);
+    }
 }
 
 /// A box from its centre on the floor (x, z), its size and its base height.
@@ -188,6 +253,11 @@ pub const Lift = struct {
     pending: ?usize = null,
     /// The height change of the last step, to carry a rider.
     dy: f32 = 0,
+    /// Metres a second.
+    speed: f32 = 1.6,
+    /// The landing doors are on an X face and slide along Z (true), or on
+    /// a Z face and slide along X (false).
+    door_on_x: bool = false,
 };
 
 pub const lift_speed: f32 = 1.6;
@@ -243,7 +313,7 @@ pub fn stepLifts(dt: f32) void {
             .moving => {
                 const target = l.levels[l.level];
                 const d = target - l.y;
-                const step = lift_speed * dt;
+                const step = l.speed * dt;
                 if (@abs(d) <= step) {
                     l.y = target;
                     l.phase = .opening;
@@ -307,9 +377,11 @@ fn placeLift(l: *Lift) void {
         const open = if (here) l.door else 0;
         for (0..2) |half| {
             const closed = l.door_closed[lv][half];
-            const w = closed[1][0] - closed[0][0];
+            const ax: usize = if (l.door_on_x) 2 else 0;
+            const w = comp(closed[1], ax) - comp(closed[0], ax);
             const dir: f32 = if (half == 0) -1 else 1;
-            const off = v3(dir * w * 0.92 * vec.smooth(open), 0, 0);
+            const d = dir * w * 0.92 * vec.smooth(open);
+            const off = if (l.door_on_x) v3(0, 0, d) else v3(d, 0, 0);
             boxes[l.door_box[lv][half]].min = closed[0] + off;
             boxes[l.door_box[lv][half]].max = closed[1] + off;
         }
@@ -379,6 +451,15 @@ fn placeTrain(tr: *Train) void {
     const x = tr.stop_x + trainX(tr.t);
     boxes[tr.box].min = v3(x - tr.half_len, tr.y0, tr.z0);
     boxes[tr.box].max = v3(x + tr.half_len, tr.y1, tr.z1);
+}
+
+/// One component of a vector, by a run-time index.
+fn comp(v: V3, i: usize) f32 {
+    return switch (i) {
+        0 => v[0],
+        1 => v[1],
+        else => v[2],
+    };
 }
 
 // ---- Buttons ---------------------------------------------------------------
@@ -524,7 +605,11 @@ pub fn doorwayAt(feet: V3) ?struct { lift: usize, level: usize } {
         for (0..2) |lv| {
             const mn = l.door_closed[lv][0][0];
             const mx = l.door_closed[lv][1][1];
-            if (feet[0] > mn[0] and feet[0] < mx[0] and feet[2] > mn[2] - 0.6 and feet[2] < mx[2] + 0.6 and
+            // Along the doors, and up to 0.6 m in front of or behind them.
+            const a: usize = if (l.door_on_x) 2 else 0;
+            const b: usize = if (l.door_on_x) 0 else 2;
+            if (comp(feet, a) > comp(mn, a) and comp(feet, a) < comp(mx, a) and
+                comp(feet, b) > comp(mn, b) - 0.6 and comp(feet, b) < comp(mx, b) + 0.6 and
                 feet[1] > mn[1] - 0.3 and feet[1] < mn[1] + 1.0) return .{ .lift = i, .level = lv };
         }
     }
