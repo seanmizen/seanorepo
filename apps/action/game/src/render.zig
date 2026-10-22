@@ -99,6 +99,9 @@ const Targets = struct {
     bloom_b_v: gpu_mod.TextureView = undefined,
 };
 var targets: Targets = .{};
+/// The size of the 3D passes, for the debug screen.
+pub var scene_w: u32 = 0;
+pub var scene_h: u32 = 0;
 var ready = false;
 
 const vertex_layout = [_]T.VertexBufferLayout{.{
@@ -309,6 +312,8 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     const w: u32 = @max(1, @as(u32, @intFromFloat(@as(f32, @floatFromInt(win.width)) * scale)));
     const h: u32 = @max(1, @as(u32, @intFromFloat(@as(f32, @floatFromInt(win.height)) * scale)));
     try resize(gpu, w, h);
+    scene_w = w;
+    scene_h = h;
 
     const aspect = @as(f32, @floatFromInt(w)) / @as(f32, @floatFromInt(h));
     const proj = @import("sw_math").perspective(p.fov, aspect, 0.04, 260);

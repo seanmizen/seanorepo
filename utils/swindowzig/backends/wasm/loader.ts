@@ -161,6 +161,11 @@ export function createImports(
         // late in some browsers.
         setCursorVisible(lock === 0);
       },
+      // 1 while the canvas has the pointer lock. A game reads the real
+      // state here, so a lock that the browser refused or ended cannot
+      // leave the game without the mouse.
+      jsPointerLocked: (): number =>
+        document.pointerLockElement === canvas ? 1 : 0,
       jsSetTextInput: (active: number): void => {
         setTextInputActive(active !== 0);
       },

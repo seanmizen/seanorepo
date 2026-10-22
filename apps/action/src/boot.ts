@@ -37,7 +37,8 @@ if (canvas) {
     logPrefix: '[action]',
     canvasSize: 'device',
     cursorFollowsLock: true,
-    lockOnClick: true,
+    // No lockOnClick: the game asks for the lock (ctx.setMouseCapture) on
+    // the click that it wants, and reads the state with jsPointerLocked.
     onFailure,
     onStart: () => document.getElementById('overlay')?.classList.add('hidden'),
   }).catch((err) => show('Start failed', String(err)));

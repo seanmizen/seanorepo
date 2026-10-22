@@ -35,6 +35,8 @@ pub fn main() void {}
 pub const std_options: std.Options = .{ .logFn = logFn, .log_level = .info };
 
 extern fn jsLog(ptr: [*]const u8, len: u32) void;
+// 1 while the canvas has the pointer lock (backends/wasm/loader.ts).
+extern fn jsPointerLocked() u32;
 
 fn logFn(comptime level: std.log.Level, comptime scope: @TypeOf(.enum_literal), comptime fmt: []const u8, args: anytype) void {
     _ = scope;
@@ -53,7 +55,11 @@ const Mode = enum { menu, deathmatch, practice };
 
 var alloc: std.mem.Allocator = undefined;
 var mode: Mode = .menu;
+// True while the canvas has the pointer lock. Each tick reads the real
+// state, so a refused or lost lock always shows "click to play".
 var captured = false;
+var show_debug = false;
+var frame_ms: f32 = 16;
 var time: f32 = 0;
 var ticks: u64 = 0;
 var rng: std.Random.DefaultPrng = .init(7);
@@ -213,7 +219,6 @@ fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
 fn enterMenu(ctx: *sw.Context) void {
     if (mode == .deathmatch) client.close();
     mode = .menu;
-    captured = false;
     remote_n = 0;
     ctx.setMouseCapture(false);
 }
@@ -500,7 +505,9 @@ fn gameplayTick(ctx: *sw.Context) void {
     me.pitch = std.math.clamp(me.pitch - in.mouse.delta_y * 0.0022 * zoom, -1.5, 1.5);
 
     var wish = v3(0, 0, 0);
-    if (!frozen) {
+    // Ctrl and Cmd start a shortcut (Cmd+D debug): no movement while held.
+    const shortcut = in.mods.ctrl or in.mods.super;
+    if (!frozen and !shortcut) {
         const fwd = v3(-@sin(me.yaw), 0, -@cos(me.yaw));
         const right = v3(@cos(me.yaw), 0, -@sin(me.yaw));
         if (in.keyDown(.W)) wish += fwd;
@@ -613,11 +620,10 @@ fn tick(ctx: *sw.Context) void {
     time += dt;
     const in = ctx.input();
 
-    // Esc: the browser releases the pointer lock and sends Escape.
-    if (in.keyPressed(.Escape)) {
-        captured = false;
-        ctx.setMouseCapture(false);
-    }
+    captured = jsPointerLocked() != 0;
+
+    // Cmd+D (macOS) / Ctrl+D: the debug screen, as in the voxel example.
+    if (in.keyPressed(.D) and (in.mods.super or in.mods.ctrl)) show_debug = !show_debug;
 
     switch (mode) {
         .menu => {
@@ -630,8 +636,9 @@ fn tick(ctx: *sw.Context) void {
                 for (b, 0..) |r, i| {
                     if (mx >= r.x and mx <= r.x + r.w and my >= r.y and my <= r.y + r.h) {
                         if (i == 0) enterDeathmatch() else enterPractice();
-                        // The same click starts the pointer lock (boot.ts).
-                        captured = true;
+                        // The click is a user gesture, so the lock request
+                        // in this frame is allowed.
+                        ctx.setMouseCapture(true);
                         return;
                     }
                 }
@@ -661,8 +668,7 @@ fn tick(ctx: *sw.Context) void {
             enterMenu(ctx);
             return;
         }
-        // The click also starts the pointer lock (lockOnClick in boot.ts).
-        if (in.buttonPressed(.left)) captured = true;
+        if (in.buttonPressed(.left)) ctx.setMouseCapture(true);
     } else {
         gameplayTick(ctx);
     }
@@ -989,6 +995,41 @@ fn drawPractice(r: *gfx.Renderer, w: f32, h: f32) !void {
     }
 }
 
+/// The debug screen (Cmd+D / Ctrl+D): frame, render, player, input, net.
+fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
+    const win = ctx.window();
+    const in = ctx.input();
+    var lines: [16][96]u8 = undefined;
+    var n: usize = 0;
+    const L = struct {
+        fn add(buf: *[16][96]u8, count: *usize, comptime fmt: []const u8, args: anytype) void {
+            if (count.* >= buf.len) return;
+            _ = std.fmt.bufPrint(&buf[count.*], fmt ++ "\x00", args) catch return;
+            count.* += 1;
+        }
+    };
+    const fps = if (frame_ms > 0) 1000 / frame_ms else 0;
+    L.add(&lines, &n, "{d:.0} fps   {d:.2} ms", .{ fps, frame_ms });
+    L.add(&lines, &n, "canvas {d}x{d}  dpi {d:.2}  scene {d}x{d}", .{ win.width, win.height, win.dpi_scale, render.scene_w, render.scene_h });
+    L.add(&lines, &n, "triangles: map {d}  dynamic {d}  boxes {d}", .{ static_mesh.verts.items.len / 3, dyn.verts.items.len / 3, map.box_count });
+    L.add(&lines, &n, "mode {s}  pointer lock {s}", .{ @tagName(mode), if (captured) "yes" else "no" });
+    L.add(&lines, &n, "pos {d:.2} {d:.2} {d:.2}  {s}", .{ me.pos[0], me.pos[1], me.pos[2], if (me.grounded) "grounded" else "air" });
+    L.add(&lines, &n, "vel {d:.2} {d:.2} {d:.2}", .{ me.vel[0], me.vel[1], me.vel[2] });
+    L.add(&lines, &n, "yaw {d:.3}  pitch {d:.3}", .{ me.yaw, me.pitch });
+    L.add(&lines, &n, "mouse {d:.0},{d:.0}  delta {d:.1},{d:.1}", .{ in.mouse.x, in.mouse.y, in.mouse.delta_x, in.mouse.delta_y });
+    L.add(&lines, &n, "mods ctrl {}  cmd {}  shift {}  alt {}", .{ @intFromBool(in.mods.ctrl), @intFromBool(in.mods.super), @intFromBool(in.mods.shift), @intFromBool(in.mods.alt) });
+    L.add(&lines, &n, "gun ammo {d}/{d}  reload {d:.2}  ads {d:.2}  heat {d:.2}", .{ gun.ammo, gun.reserve, gun.reloading, gun.ads, gun.heat });
+    if (mode == .deathmatch) {
+        L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(client.state()), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
+    }
+    const lh: f32 = 17;
+    try r.fillRect(.{ .x = 10, .y = 76, .w = 420, .h = 12 + lh * @as(f32, @floatFromInt(n)) }, gfx.Color.rgba8(0, 0, 0, 170));
+    for (lines[0..n], 0..) |*line, i| {
+        const len = std.mem.indexOfScalar(u8, line, 0) orelse line.len;
+        txt(r, line[0..len], 18, 82 + lh * @as(f32, @floatFromInt(i)), 13, gfx.Color.rgba8(170, 255, 170, 255));
+    }
+}
+
 fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     const win = ctx.window();
     r.beginFrame(win.width, win.height, win.dpi_scale);
@@ -997,6 +1038,7 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     const w = l.w;
     const h = l.h;
 
+    defer if (show_debug) drawDebug(ctx, r) catch {};
     if (mode == .menu) return drawMenu(ctx, r, w, h);
     var crosshair = true;
     if (mode == .deathmatch) {
@@ -1133,6 +1175,7 @@ fn wasmFrame(timestamp_ms: f64) callconv(.c) void {
     // Clamp a long frame (a background tab), so the game does not run
     // hundreds of ticks at once.
     const frame_ns = @min(now - wasm_last_ns, 100 * std.time.ns_per_ms);
+    frame_ms += (@as(f32, @floatFromInt(frame_ns)) / 1e6 - frame_ms) * 0.05;
     wasm_last_ns = now;
     const n = wasm_timeline.advance(frame_ns);
     if (n > 0) {
