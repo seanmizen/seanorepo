@@ -15,6 +15,20 @@ mouse, M menu (paused).
 Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, 1 to 9 go to
 a spawn point.
 
+The HUD has a minimap: north up, the walls at body height over the floors at
+foot height. A player who fires shows on it for a moment.
+
+## The floorplan tool
+
+`zig build floorplan` (in `game/`) slices a map into images and audits it:
+
+```bash
+zig build floorplan -- earls_court plan 1 out.ppm         # top view at y = 1
+zig build floorplan -- earls_court section-z -22.5 out.ppm # side view at z = -22.5
+zig build floorplan -- earls_court audit                  # decoration a player can walk through
+sips -s format png out.ppm --out out.png                  # macOS, to view it
+```
+
 ## Maps
 
 - **Earl's Court** (deathmatch, and the menu background): the station from

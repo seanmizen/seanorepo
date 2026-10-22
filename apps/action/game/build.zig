@@ -26,4 +26,21 @@ pub fn build(b: *std.Build) void {
     exe.rdynamic = true;
     exe.stack_size = 4 * 1024 * 1024;
     b.installArtifact(exe);
+
+    // `zig build floorplan -- <map> <plan|section-z|section-x|audit> ...`:
+    // the map slicer and audit, a native tool (src/floorplan.zig).
+    const host = b.graph.host;
+    const sw_host = b.dependency("swindowzig", .{ .target = host, .optimize = optimize });
+    const tool = b.addExecutable(.{
+        .name = "floorplan",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/floorplan.zig"),
+            .target = host,
+            .optimize = optimize,
+        }),
+    });
+    tool.root_module.addImport("sw_math", sw_host.module("sw_math"));
+    const run = b.addRunArtifact(tool);
+    run.addPassthruArgs();
+    b.step("floorplan", "Slice a map into images, or audit it").dependOn(&run.step);
 }
