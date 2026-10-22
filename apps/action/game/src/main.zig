@@ -60,6 +60,8 @@ var mode: Mode = .menu;
 var captured = false;
 var show_debug = false;
 var frame_ms: f32 = 16;
+// Eye adaptation: the exposure moves toward the target of where the eye is.
+var exposure: f32 = 0.68;
 var time: f32 = 0;
 var ticks: u64 = 0;
 var rng: std.Random.DefaultPrng = .init(7);
@@ -76,6 +78,8 @@ var killed_by: [24]u8 = undefined;
 var killed_by_len: usize = 0;
 
 var static_mesh: mesh.Mesh = undefined;
+var map_loaded = false;
+var door_reopened: [4]bool = @splat(false);
 var dyn: mesh.Mesh = undefined;
 var hud: ?gfx.Renderer = null;
 var text: ?sw_text.TextRenderer = null;
@@ -214,6 +218,125 @@ fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
     hp = 100;
 }
 
+/// Build a map and upload its static mesh. Nothing happens if it is the
+/// map already loaded.
+fn loadMap(ctx: *sw.Context, id: map.Id) void {
+    if (map_loaded and map.id == id) return;
+    map.load(id);
+    map_loaded = true;
+    static_mesh.clear();
+    for (map.boxes[0..map.box_count]) |b| {
+        if (!b.dynamic) static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
+    }
+    for (map.decor.items) |d| {
+        const m: f32 = @floatFromInt(@backingInt(d.mat));
+        if (d.disc) static_mesh.disc(d.m, d.min[0], d.min[1], d.color, m) else static_mesh.orientedBox(d.m, d.min, d.max, d.color, m);
+    }
+    render.loadMap(ctx.gpu(), static_mesh.verts.items) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
+}
+
+fn crossed(a: f32, b: f32, at: f32) bool {
+    return a < at and b >= at;
+}
+
+fn trainSounds(a: f32, b: f32) void {
+    if (crossed(a, b, 0.05)) {
+        sound(70, 38, 6.0, .sawtooth, 0.12);
+        sound(1, null, 5.0, .noise, 0.08);
+    }
+    if (crossed(a, b, 7.5)) sound(900, 300, 1.6, .sine, 0.05); // brakes
+    if (crossed(a, b, 10)) {
+        sound(784, null, 0.35, .sine, 0.12);
+        sound(523, null, 0.6, .sine, 0.1);
+    }
+    if (crossed(a, b, 23.5)) {
+        sound(659, null, 0.25, .sine, 0.12);
+        sound(659, null, 0.25, .sine, 0.12);
+    }
+    if (crossed(a, b, 27)) sound(120, 400, 6.0, .sawtooth, 0.06); // traction motors
+}
+
+/// The details of the deep train over its body box: windows lit from
+/// inside, red doors that slide open, cab ends, a roof and a skirt.
+fn buildTrain(tr: map.Train) void {
+    const b = map.boxes[tr.box];
+    if (b.max[0] < -60 or b.min[0] > 60) return;
+    const zf = b.max[2]; // the platform face
+    const zb = b.min[2];
+    const y0 = b.min[1];
+    const open = map.trainDoors(tr.t);
+    dyn.box(v3(b.min[0], b.max[1], zb + 0.15), v3(b.max[0], b.max[1] + 0.25, zf - 0.15), v3(0.32, 0.33, 0.35), 3);
+    for ([_]f32{ zf, zb - 0.02 }) |z| {
+        const zz = z + 0.0;
+        dyn.box(v3(b.min[0], y0, zz), v3(b.max[0], y0 + 0.55, zz + 0.02), v3(0.05, 0.12, 0.42), 0);
+        var x = b.min[0] + 0.6;
+        var car: usize = 0;
+        while (x < b.max[0] - 1) : (x += 10) {
+            // A car: two windows and two doors on this side.
+            dyn.box(v3(x + 0.5, y0 + 1.75, zz - 0.005), v3(x + 3.2, y0 + 2.7, zz + 0.025), v3(0.42, 0.33, 0.2), 4);
+            dyn.box(v3(x + 5.6, y0 + 1.75, zz - 0.005), v3(x + 8.3, y0 + 2.7, zz + 0.025), v3(0.42, 0.33, 0.2), 4);
+            for ([_]f32{ 3.6, 8.7 }) |dx| {
+                const slide = if (z == zf) open * 0.65 else 0;
+                for ([_]f32{ -1, 1 }) |side| {
+                    const c = x + dx + side * (0.33 + slide);
+                    dyn.box(v3(c - 0.32, y0 + 0.6, zz - 0.01), v3(c + 0.32, y0 + 2.9, zz + 0.035), v3(0.7, 0.05, 0.04), 0);
+                }
+                if (z == zf and open > 0.02) {
+                    // The lit car floor shows through the open doors.
+                    dyn.box(v3(x + dx - 0.6 * open, y0 + 0.6, zz - 0.02), v3(x + dx + 0.6 * open, y0 + 2.9, zz - 0.01), v3(0.36, 0.3, 0.2), 4);
+                }
+            }
+            car += 1;
+        }
+    }
+    for ([_]f32{ b.min[0] - 0.2, b.max[0] }) |ex| {
+        dyn.box(v3(ex, y0, zb), v3(ex + 0.2, b.max[1], zf), v3(0.7, 0.05, 0.04), 0);
+        dyn.box(v3(ex - 0.01, y0 + 1.8, zb + 0.5), v3(ex + 0.21, y0 + 2.6, zf - 0.5), v3(0.02, 0.03, 0.04), 0);
+    }
+    // Headlights at the leading (-X) end.
+    dyn.box(v3(b.min[0] - 0.24, y0 + 0.9, zb + 0.4), v3(b.min[0] - 0.19, y0 + 1.15, zb + 0.8), v3(1.0, 0.97, 0.9), 4);
+    dyn.box(v3(b.min[0] - 0.24, y0 + 0.9, zf - 0.8), v3(b.min[0] - 0.19, y0 + 1.15, zf - 0.4), v3(1.0, 0.97, 0.9), 4);
+}
+
+/// The escalator steps are static boxes. Their yellow edges slide along
+/// each tread, so the steps look as if they move: down in the left lane,
+/// up in the right lane (map.zig escalators, the same speed).
+fn buildEscalatorSteps() void {
+    const ec = @import("maps/earls_court.zig");
+    const lanes = [_]struct { x0: f32, x1: f32, dir: f32 }{
+        .{ .x0 = -3.6, .x1 = -0.35, .dir = -1 },
+        .{ .x0 = 0.35, .x1 = 3.6, .dir = 1 },
+    };
+    const k = @mod(time * 0.65 / ec.esc_run, 1.0);
+    for (lanes) |lane| {
+        const f = if (lane.dir < 0) k else 1 - k;
+        for (0..ec.esc_steps) |i| {
+            const fi: f32 = @floatFromInt(i);
+            const top = -ec.esc_rise * (fi + 1);
+            const za = ec.esc_top_z - ec.esc_run * (fi + 1);
+            const z = za + ec.esc_run * (1 - f);
+            dyn.box(v3(lane.x0, top, z - 0.05), v3(lane.x1, top + 0.01, z), v3(0.85, 0.68, 0.08), 0);
+            dyn.box(v3(lane.x0, top, z - 0.36), v3(lane.x1, top + 0.006, z - 0.33), v3(0.3, 0.3, 0.32), 3);
+        }
+    }
+}
+
+fn pressButton(i: usize) void {
+    const b = map.buttons[i];
+    if (mode == .deathmatch) {
+        client.send("{{\"t\":\"use\",\"i\":{d},\"l\":{d}}}", .{ b.lift, b.level });
+    } else {
+        map.callLift(b.lift, b.level);
+    }
+    sound(1100, null, 0.05, .sine, 0.15);
+}
+
+/// The button under the crosshair, within reach.
+fn aimedButton() ?usize {
+    if (mode == .menu or (mode == .deathmatch and !alive)) return null;
+    return map.pickButton(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
 // ---- Modes -----------------------------------------------------------------
 
 fn enterMenu(ctx: *sw.Context) void {
@@ -221,9 +344,11 @@ fn enterMenu(ctx: *sw.Context) void {
     mode = .menu;
     remote_n = 0;
     ctx.setMouseCapture(false);
+    loadMap(ctx, .earls_court);
 }
 
-fn enterPractice() void {
+fn enterPractice(ctx: *sw.Context) void {
+    loadMap(ctx, .arena);
     mode = .practice;
     gun.reserve = 9999;
     spawnAt(0, 1.6, 2.5, 0);
@@ -236,7 +361,8 @@ fn enterPractice() void {
     for (&targets, 0..) |*t, i| placeTarget(t, i);
 }
 
-fn enterDeathmatch() void {
+fn enterDeathmatch(ctx: *sw.Context) void {
+    loadMap(ctx, .earls_court);
     mode = .deathmatch;
     remote_n = 0;
     feed_n = 0;
@@ -247,8 +373,8 @@ fn enterDeathmatch() void {
     alive = false;
     dead_time = 0;
     killed_by_len = 0;
-    const s = map.spawns[@intFromFloat(rand() * 7.99)];
-    spawnAt(s[0], 0, s[1], 0);
+    const s = map.spawns[@intFromFloat(rand() * (@as(f32, @floatFromInt(map.spawn_count)) - 0.01))];
+    spawnAt(s.pos[0], s.pos[1], s.pos[2], s.yaw);
     alive = false;
     client.connect();
 }
@@ -398,6 +524,10 @@ fn findRemote(id: u32) ?*Remote {
 fn handleSnap(m: net.Msg) void {
     phase_end = if (m.phase) |p| std.mem.eql(u8, p, "end") else false;
     time_left = m.left orelse 0;
+    if (m.tt) |tt| map.syncTrain(tt);
+    if (m.lifts) |ls| for (ls, 0..) |l, i| {
+        map.syncLift(i, l[0], l[1], @intFromFloat(@max(0, l[2])), @intFromFloat(@max(0, l[3])));
+    };
     for (remotes[0..remote_n]) |*r| r.seen = false;
     for (m.players orelse &.{}) |p| {
         if (p.id == my_id) {
@@ -488,6 +618,8 @@ fn handleNet() void {
                 sound(1350, null, 0.12, .sine, 0.2);
             }
             if (findRemote(victim)) |r| r.alive = false;
+        } else if (std.mem.eql(u8, m.t, "lift")) {
+            map.callLift(m.i orelse 99, m.l orelse 0);
         } else if (std.mem.eql(u8, m.t, "match")) {
             pushFeed("NEW MATCH", false);
         }
@@ -520,6 +652,9 @@ fn gameplayTick(ctx: *sw.Context) void {
     const speed_scale: f32 = 1 - 0.45 * gun.ads;
     if (mode != .deathmatch or alive) me.step(dt, wish, jump, speed_scale);
 
+    if (!frozen and in.keyPressed(.E)) {
+        if (aimedButton()) |b| pressButton(b);
+    }
     const can_shoot = !frozen and !(mode == .practice and practice_phase == .countdown);
     if (can_shoot and in.keyPressed(.R)) {
         if (gun.startReload()) sound(500, 380, 0.05, .square, 0.08);
@@ -627,15 +762,15 @@ fn tick(ctx: *sw.Context) void {
 
     switch (mode) {
         .menu => {
-            if (in.keyPressed(.Num1)) enterDeathmatch();
-            if (in.keyPressed(.Num2)) enterPractice();
+            if (in.keyPressed(.Num1)) enterDeathmatch(ctx);
+            if (in.keyPressed(.Num2)) enterPractice(ctx);
             if (in.buttonPressed(.left)) {
                 const b = menuButtons(ctx);
                 const mx = in.mouse.x;
                 const my = in.mouse.y;
                 for (b, 0..) |r, i| {
                     if (mx >= r.x and mx <= r.x + r.w and my >= r.y and my <= r.y + r.h) {
-                        if (i == 0) enterDeathmatch() else enterPractice();
+                        if (i == 0) enterDeathmatch(ctx) else enterPractice(ctx);
                         // The click is a user gesture, so the lock request
                         // in this frame is allowed.
                         ctx.setMouseCapture(true);
@@ -649,7 +784,7 @@ fn tick(ctx: *sw.Context) void {
         .deathmatch => {
             handleNet();
             if (!alive) dead_time += dt;
-            if (client.state() == .closed and in.keyPressed(.Enter)) enterDeathmatch();
+            if (client.state() == .closed and in.keyPressed(.Enter)) enterDeathmatch(ctx);
             if (ticks % 6 == 0 and alive) {
                 client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3}}}", .{
                     me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch,
@@ -659,8 +794,54 @@ fn tick(ctx: *sw.Context) void {
         .practice => {
             practiceTick();
             const again = in.keyPressed(.Enter) or (captured and in.buttonPressed(.left) and practice_t < -1);
-            if (practice_phase == .results and again) enterPractice();
+            if (practice_phase == .results and again) enterPractice(ctx);
         },
+    }
+
+    // The deep train: it shoves a player off the track, and it is loud.
+    const train_t0 = if (map.train) |tr| tr.t else 0;
+    map.stepTrain(dt);
+    if (map.train) |tr| {
+        const b = map.boxes[tr.box];
+        const r = player_mod.radius;
+        if (me.pos[0] + r > b.min[0] and me.pos[0] - r < b.max[0] and me.pos[2] + r > b.min[2] and
+            me.pos[2] - r < b.max[2] and me.pos[1] < b.max[1] and me.pos[1] + player_mod.height > b.min[1])
+        {
+            me.pos[2] = b.max[2] + r + 0.05;
+            me.pos[1] = @max(me.pos[1], tr.y0 + 0.75);
+            me.vel = v3(0, 2, 4);
+        }
+        if (mode != .menu and me.pos[1] < map.underground_y - 4) trainSounds(train_t0, tr.t);
+    }
+
+    // Lifts carry a player who stands in the cab.
+    const riding = map.liftUnder(me.pos, player_mod.radius);
+    map.stepLifts(dt);
+    if (riding) |li| me.pos[1] += map.lifts[li].dy;
+    // Closing doors open again for a player in the doorway, once each time.
+    for (map.lifts[0..map.lift_count], 0..) |l, i| {
+        if (l.phase != .closing) door_reopened[i] = false;
+    }
+    if (mode != .menu and (mode != .deathmatch or alive)) if (map.doorwayAt(me.pos)) |dw| {
+        const l = map.lifts[dw.lift];
+        if (l.phase == .closing and l.level == dw.level and !door_reopened[dw.lift]) {
+            door_reopened[dw.lift] = true;
+            if (mode == .deathmatch) {
+                client.send("{{\"t\":\"use\",\"i\":{d},\"l\":{d}}}", .{ dw.lift, dw.level });
+            } else map.callLift(dw.lift, dw.level);
+        }
+    };
+
+    // Debug teleport: with the debug screen open, 1 to 9 go to a spawn.
+    if (show_debug and mode != .menu) {
+        const keys = [_]core.KeyCode{ .Num1, .Num2, .Num3, .Num4, .Num5, .Num6, .Num7, .Num8, .Num9 };
+        for (keys, 0..) |k, i| {
+            if (in.keyPressed(k) and i < map.spawn_count) {
+                me.pos = map.spawns[i].pos;
+                me.vel = v3(0, 0, 0);
+                me.yaw = map.spawns[i].yaw;
+            }
+        }
     }
 
     if (!captured) {
@@ -756,8 +937,10 @@ fn buildViewmodel() void {
 
 fn eyeForRender() struct { eye: V3, yaw: f32, pitch: f32 } {
     if (mode == .menu) {
-        const a = time * 0.05;
-        return .{ .eye = v3(@sin(a) * 22, 9, @cos(a) * 22), .yaw = a, .pitch = -0.3 };
+        // A slow drift down the train shed, looking north to the bridge.
+        const z = -12 + 22 * @sin(time * 0.035);
+        const x = 9 * @sin(time * 0.05);
+        return .{ .eye = v3(x, 3.2 + 1.5 * @sin(time * 0.04), z), .yaw = std.math.pi + 0.35 * @sin(time * 0.045), .pitch = 0.16 + 0.08 * @sin(time * 0.03) };
     }
     if (mode == .deathmatch and !alive) {
         // Death cam: drop low and look up a little.
@@ -1012,7 +1195,11 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     L.add(&lines, &n, "{d:.0} fps   {d:.2} ms", .{ fps, frame_ms });
     L.add(&lines, &n, "canvas {d}x{d}  dpi {d:.2}  scene {d}x{d}", .{ win.width, win.height, win.dpi_scale, render.scene_w, render.scene_h });
     L.add(&lines, &n, "triangles: map {d}  dynamic {d}  boxes {d}", .{ static_mesh.verts.items.len / 3, dyn.verts.items.len / 3, map.box_count });
-    L.add(&lines, &n, "mode {s}  pointer lock {s}", .{ @tagName(mode), if (captured) "yes" else "no" });
+    L.add(&lines, &n, "mode {s}  map {s}  pointer lock {s}", .{ @tagName(mode), @tagName(map.id), if (captured) "yes" else "no" });
+    if (map.lift_count > 0) {
+        const l0 = map.lifts[0];
+        L.add(&lines, &n, "lift 0: y {d:.2} {s} door {d:.2}", .{ l0.y, @tagName(l0.phase), l0.door });
+    }
     L.add(&lines, &n, "pos {d:.2} {d:.2} {d:.2}  {s}", .{ me.pos[0], me.pos[1], me.pos[2], if (me.grounded) "grounded" else "air" });
     L.add(&lines, &n, "vel {d:.2} {d:.2} {d:.2}", .{ me.vel[0], me.vel[1], me.vel[2] });
     L.add(&lines, &n, "yaw {d:.3}  pitch {d:.3}", .{ me.yaw, me.pitch });
@@ -1047,6 +1234,11 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     }
     if (mode == .practice) try drawPractice(r, w, h);
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
+    if (captured) if (aimedButton()) |bi| {
+        const b = map.buttons[bi];
+        const label = if (b.in_cab) (if (b.level == 0) "E   PLATFORM" else "E   FOOTBRIDGE") else "E   CALL LIFT";
+        txtCenter(r, label, w / 2, h / 2 + 22, 15, white);
+    };
     try drawHealth(r, h);
     try drawAmmo(r, w, h);
 
@@ -1062,12 +1254,12 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
 fn gameInit(ctx: *sw.Context) !void {
     alloc = ctx.allocator();
     rng = .init(ctx.timeNs());
-    map.build();
+    map.init(alloc);
     try weapon.loadModel(alloc);
     static_mesh = mesh.Mesh.init(alloc);
     dyn = mesh.Mesh.init(alloc);
-    for (map.boxes[0..map.box_count]) |b| static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
-    try render.init(ctx.gpu(), static_mesh.verts.items);
+    try render.init(ctx.gpu());
+    loadMap(ctx, .earls_court);
     hud = try gfx.Renderer.init(alloc, ctx.gpu(), .{});
     text = try sw_text.TextRenderer.init(alloc, font_bytes);
     audio = audio_mod.Audio.init();
@@ -1090,27 +1282,67 @@ fn gameInit(ctx: *sw.Context) !void {
 
 fn gameRender(ctx: *sw.Context) !void {
     dyn.clear();
+    for (map.boxes[0..map.box_count]) |b| {
+        if (b.dynamic) dyn.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
+    }
+    const aimed = aimedButton();
+    for (map.buttons[0..map.button_count], 0..) |*b, i| {
+        const bb = map.buttonBounds(b);
+        const lit = map.buttonLit(b);
+        const col = if (lit) v3(1.0, 0.55, 0.1) else if (aimed == i) v3(0.9, 0.9, 0.85) else v3(0.5, 0.06, 0.05);
+        dyn.box(bb[0], bb[1], col, if (lit) 4 else 0);
+    }
     for (remotes[0..remote_n]) |*r| buildRemote(r);
+    if (map.train) |tr| buildTrain(tr);
+    if (map.id == .earls_court) buildEscalatorSteps();
     if (mode == .practice) for (&targets) |*t| buildTarget(t);
     buildEffects();
     buildViewmodel();
     const cam = eyeForRender();
 
-    var lights: [8]map.Light = undefined;
+    var lights: [render.max_lights]map.Light = undefined;
     var n: usize = 0;
-    for (map.lights[0..map.light_count]) |l| {
+    for (map.lights[0..map.light_count], 0..) |l, i| {
         lights[n] = l;
+        if (map.flicker_light == i) {
+            // A tired tube: mostly on, with short drops and stutters.
+            const t = time * 9.0;
+            const on = vec.hash(@intFromFloat(@floor(t))) > 0.18 or vec.hash(@intFromFloat(@floor(t * 7.0))) > 0.5;
+            lights[n].color = l.color * vec.s(if (on) 1.0 else 0.08);
+        }
         n += 1;
     }
-    if (gun.flash > 0 and mode != .menu) {
+    // The train: a warm glow from its windows and a headlight.
+    if (map.train) |tr| {
+        const b = map.boxes[tr.box];
+        if (b.max[0] > -60 and b.min[0] < 60 and n + 2 <= render.max_lights) {
+            const mid = (b.min[0] + b.max[0]) / 2;
+            lights[n] = .{ .pos = v3(std.math.clamp(mid, -25, 25), b.min[1] + 2.2, b.max[2] + 0.8), .color = v3(1.4, 1.05, 0.65), .radius = 16 };
+            lights[n + 1] = .{ .pos = v3(b.min[0] - 1.5, b.min[1] + 1.2, (b.min[2] + b.max[2]) / 2), .color = v3(3.0, 2.9, 2.6), .radius = 14 };
+            n += 2;
+        }
+    }
+    // A light rides in each lift cab.
+    for (map.lifts[0..map.lift_count]) |l| {
+        if (n >= render.max_lights) break;
+        const fb = map.boxes[l.floor_box];
+        const c = (fb.min + fb.max) * vec.s(0.5);
+        lights[n] = .{ .pos = v3(c[0], l.y + 2.2, c[2]), .color = v3(1.1, 1.05, 0.95), .radius = 4.5 };
+        n += 1;
+    }
+    if (gun.flash > 0 and mode != .menu and n < render.max_lights) {
         const p = me.eyePos() + vec.forward(me.yaw, me.pitch) * vec.s(0.8);
         lights[n] = .{ .pos = p, .color = v3(9, 5.5, 2.5), .radius = 9 };
         n += 1;
     }
-    if (remote_flash.life > 0 and n < 8) {
+    if (remote_flash.life > 0 and n < render.max_lights) {
         lights[n] = .{ .pos = remote_flash.p, .color = v3(9, 5.5, 2.5), .radius = 8 };
         n += 1;
     }
+    // Underground the eye opens up: about 2.4 times the outdoor exposure.
+    const out_k = vec.smooth((cam.eye[1] - (map.underground_y - 5)) / 5);
+    const target_exposure = 0.68 * (2.4 - 1.4 * out_k);
+    exposure += (target_exposure - exposure) * @min(1, frame_ms / 1000 * 1.5);
     const fov: f32 = (74 - 22 * gun.ads) * std.math.pi / 180;
     if (hud) |*r| try drawHud(ctx, r);
     try render.draw(ctx, .{
@@ -1120,6 +1352,7 @@ fn gameRender(ctx: *sw.Context) !void {
         .fov = fov,
         .time = time,
         .damage = damage_flash,
+        .exposure = exposure,
         .lights = lights[0..n],
     }, dyn.verts.items, if (hud) |*r| r else null);
 }

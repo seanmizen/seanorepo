@@ -1,14 +1,19 @@
 // The scene shader: world boxes, players, targets and the view-model gun.
 //
 // Light: a low sun with a 3x3 PCF shadow map, a sky and ground hemisphere
-// ambient, ambient occlusion from the box SDF, up to 8 point lights, a
-// Blinn-Phong highlight with Fresnel, sky reflections on metal, and height
-// fog that takes the sun colour. The output is linear HDR. post.wgsl tone
-// maps it.
+// ambient, ambient occlusion from the box SDF, up to 24 point lights, a
+// Blinn-Phong highlight with Fresnel, sky reflections on metal, height fog
+// that takes the sun colour, and in-scatter: the haze glows around each
+// point light. Below the underground height there is no sun, the ambient
+// falls away, the fog thickens and darkens, dirt collects in the corners
+// and runs down the walls, and the floor has wet patches. The output is
+// linear HDR. post.wgsl tone maps it.
 //
 // Vertex `mat`: the material id (map.zig Mat). 100 is added for the
 // view-model: it gets the near depth range [0, 0.08], the world gets
 // [0.08, 1], so the gun never goes into a wall.
+
+const MAX_LIGHTS: u32 = 24u;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -17,9 +22,10 @@ struct Scene {
   cam: vec4f,      // xyz camera position, w time in seconds
   sun_dir: vec4f,  // xyz toward the sun
   sun_col: vec4f,
-  info: vec4f,     // x box count, y light count, z fog density, w shadow on
-  lp: array<vec4f, 8>, // xyz position, w radius
-  lc: array<vec4f, 8>, // rgb colour
+  info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
+  info2: vec4f,    // x underground height, y in-scatter strength
+  lp: array<vec4f, 24>, // xyz position, w radius
+  lc: array<vec4f, 24>, // rgb colour
 };
 
 struct BoxG { mn: vec4f, mx: vec4f };
@@ -121,7 +127,7 @@ fn skyColor(d: vec3f, with_sun: bool) -> vec3f {
   }
   if (with_sun) {
     c += u.sun_col.rgb * 30.0 * smoothstep(0.9993, 0.9997, sd);
-    // Clouds: a sheet of fbm on a plane high above the arena.
+    // Clouds: a sheet of fbm on a plane high above the map.
     if (y > 0.01) {
       let p = d / y * 400.0;
       let n = fbm(vec3f(p.xz * 0.0045 + vec2f(u.cam.w * 0.004, 0.0), 0.0));
@@ -190,6 +196,11 @@ fn ambientOcclusion(p: vec3f, n: vec3f) -> f32 {
   return clamp(1.0 - 1.1 * occ, 0.0, 1.0);
 }
 
+// 1 above ground, 0 deep underground.
+fn outdoors(y: f32) -> f32 {
+  return smoothstep(u.info2.x - 5.0, u.info2.x, y);
+}
+
 // ---- Materials -------------------------------------------------------------
 
 struct Surface { albedo: vec3f, n: vec3f, rough: f32, metal: f32, emit: f32 };
@@ -228,14 +239,14 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
         s.n = normalize(n0 + t * sin(a * 3.14159) * 0.35);
       }
       let grime = fbm(wp * 0.8);
-      s.albedo = col * (0.75 + 0.35 * grime) * mix(0.75, 1.0, smoothstep(0.0, 0.8, wp.y));
+      s.albedo = col * (0.75 + 0.35 * grime);
       s.rough = 0.45;
       s.metal = 0.6;
     }
     case 4u: { // emissive
       s.emit = 7.0;
     }
-    case 5u: { // wooden crate: planks and a frame
+    case 5u: { // wood: planks
       let plank = fract(uv.y * 4.0);
       let lines = smoothstep(0.0, 0.06, plank) * smoothstep(1.0, 0.94, plank);
       let grain = 0.85 + 0.15 * noise3(vec3f(uv.x * 1.5, uv.y * 30.0, 0.0));
@@ -246,12 +257,56 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
       s.albedo = col * (0.9 + 0.1 * noise3(wp * 40.0));
       s.rough = 0.95;
     }
-    default: { // paint, and the gun (low roughness metal)
+    case 7u: { // glazed wall tiles, 150 x 75 mm, with grout
+      let t = uv / vec2f(0.15, 0.075);
+      let row = floor(t.y);
+      let tx = t.x + 0.5 * (row % 2.0);
+      let f = vec2f(fract(tx), fract(t.y));
+      let grout = smoothstep(0.0, 0.06, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y) * 2.0));
+      let id = vec3f(floor(tx), row, 3.0);
+      // Some tiles are a shade off, a few are cracked or stained.
+      let tone = 0.9 + 0.12 * hash3(id) - 0.25 * step(0.97, hash3(id + 9.0));
+      s.albedo = col * tone * mix(0.35, 1.0, grout);
+      s.rough = mix(0.8, 0.12, grout);
+      // The glaze: each tile bows a little.
+      if (an.y < 0.5) {
+        var tt = vec3f(1.0, 0.0, 0.0);
+        if (an.x > 0.5) { tt = vec3f(0.0, 0.0, 1.0); }
+        s.n = normalize(n0 + tt * (f.x - 0.5) * 0.12 + vec3f(0.0, 1.0, 0.0) * (f.y - 0.5) * 0.12);
+      }
+    }
+    case 8u: { // brick, stretcher bond
+      let t = uv / vec2f(0.225, 0.075);
+      let row = floor(t.y);
+      let tx = t.x + 0.5 * (row % 2.0);
+      let f = vec2f(fract(tx), fract(t.y));
+      let mortar = smoothstep(0.0, 0.05, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y) * 3.0));
+      let id = vec3f(floor(tx), row, 5.0);
+      let tone = 0.75 + 0.35 * hash3(id) + 0.1 * noise3(wp * 6.0);
+      s.albedo = mix(vec3f(0.42, 0.4, 0.36), col * tone, mortar);
+      s.rough = 0.9;
+    }
+    default: { // paint, and the gun
       s.rough = 0.4;
       s.metal = 0.35;
     }
   }
   return s;
+}
+
+// The haze in front of a point light: the integral of 1 / d^2 along the
+// view ray, from the camera to the surface (or `far`).
+fn inScatter(ro: vec3f, rd: vec3f, far: f32) -> vec3f {
+  var acc = vec3f(0.0);
+  let nl = u32(u.info.y);
+  for (var i = 0u; i < nl; i++) {
+    let lp = u.lp[i].xyz;
+    let tc = dot(lp - ro, rd);
+    let h = max(length(ro + rd * tc - lp), 0.25);
+    let k = (atan((far - tc) / h) - atan(-tc / h)) / h;
+    acc += u.lc[i].rgb * k;
+  }
+  return acc;
 }
 
 // ---- Lighting --------------------------------------------------------------
@@ -261,22 +316,51 @@ fn shade(in: VOut, front: bool) -> vec3f {
   let mat = in.mat % 100u;
   var n0 = normalize(in.nrm);
   if (!front) { n0 = -n0; }
-  let s = surface(in.col, mat, in.wpos, n0);
+  var s = surface(in.col, mat, in.wpos, n0);
+  let out_k = outdoors(in.wpos.y);
+  let to_cam = u.cam.xyz - in.wpos;
+  let dist = length(to_cam);
+  let V = to_cam / dist;
   if (s.emit > 0.0) {
-    return s.albedo * s.emit;
+    var e = s.albedo * s.emit;
+    if (!vm) { e += inScatter(u.cam.xyz, -V, dist) * u.info2.y * mix(0.022, 0.004, out_k); }
+    return e;
   }
+  var ao = 1.0;
+  if (!vm) { ao = ambientOcclusion(in.wpos, n0); }
+  var wet = 0.0;
+
+  // Grime: dirt in the corners (where the AO is), streaks down the walls,
+  // and wet patches on the floor. More of it underground.
+  if (!vm && mat != 4u) {
+    let dirt = mix(1.3, 0.45, out_k);
+    s.albedo *= mix(1.0, 0.55, (1.0 - ao) * dirt);
+    if (abs(n0.y) < 0.5) {
+      let streak = fbm(vec3f(in.wpos.x * 3.1 + in.wpos.z * 2.3, in.wpos.y * 0.25, in.wpos.z * 0.7));
+      // Water runs down the walls underground; outside it is faint.
+      s.albedo *= 1.0 - smoothstep(0.5, 0.8, streak) * mix(0.5, 0.06, out_k);
+    }
+    if (n0.y > 0.5) {
+      let soil = fbm(in.wpos * 0.9);
+      s.albedo *= 1.0 - smoothstep(0.45, 0.75, soil) * 0.3 * dirt;
+      wet = smoothstep(0.5, 0.6, fbm(in.wpos * vec3f(0.35, 1.0, 0.35) + 3.0)) * (1.0 - out_k);
+      s.albedo *= 1.0 - wet * 0.45;
+      s.rough = mix(s.rough, 0.04, wet);
+    }
+    if (n0.y < -0.5) {
+      s.albedo *= mix(1.0, 0.5, 1.0 - out_k); // soot on the ceilings
+    }
+  }
+
   let N = s.n;
-  let V = normalize(u.cam.xyz - in.wpos);
   let L = u.sun_dir.xyz;
   let H = normalize(L + V);
   let ndl = max(dot(N, L), 0.0);
   let ndv = max(dot(N, V), 0.0);
-  var shadow = 1.0;
-  if (u.info.w > 0.5) { shadow = sunShadow(in.wpos, n0); }
-  var ao = 1.0;
-  if (!vm) { ao = ambientOcclusion(in.wpos, n0); }
+  var shadow = out_k;
+  if (u.info.w > 0.5 && out_k > 0.0) { shadow *= sunShadow(in.wpos, n0); }
 
-  let shin = mix(256.0, 8.0, s.rough);
+  let shin = mix(512.0, 8.0, s.rough);
   let f0 = mix(vec3f(0.04), s.albedo, s.metal);
   let fres = f0 + (vec3f(1.0) - f0) * pow(1.0 - ndv, 5.0);
   let spec = pow(max(dot(N, H), 0.0), shin) * (shin + 8.0) / 25.0;
@@ -284,45 +368,54 @@ fn shade(in: VOut, front: bool) -> vec3f {
 
   var c = u.sun_col.rgb * ndl * shadow * (diff + fres * spec);
 
-  // Hemisphere ambient: sky above, warm ground bounce below.
+  // Hemisphere ambient: sky above, warm ground bounce below. Underground
+  // only a trace of it is left.
   let sky_amb = vec3f(0.22, 0.30, 0.48);
   let gnd_amb = vec3f(0.30, 0.20, 0.14);
-  let hemi = mix(gnd_amb, sky_amb, N.y * 0.5 + 0.5);
+  let hemi = mix(gnd_amb, sky_amb, N.y * 0.5 + 0.5) * mix(0.05, 1.0, out_k);
   c += diff * hemi * ao;
   // Sky reflection.
   let R = reflect(-V, N);
   var refl = 0.6;
   if (vm) { refl = 0.1; } // The sky behind the camera is not the one in front.
-  c += skyColor(R, false) * fres * (1.0 - s.rough) * ao * refl;
+  c += skyColor(R, false) * fres * (1.0 - s.rough) * ao * refl * out_k;
 
   // Point lights.
   let nl = u32(u.info.y);
   for (var i = 0u; i < nl; i++) {
     let d = u.lp[i].xyz - in.wpos;
-    let dist = length(d);
+    let ld = length(d);
     let r = u.lp[i].w;
-    if (dist < r) {
-      let l = d / dist;
-      let k = 1.0 - (dist * dist) / (r * r);
-      let att = k * k / (1.0 + dist * dist * 0.35);
+    if (ld < r) {
+      let l = d / ld;
+      let k = 1.0 - (ld * ld) / (r * r);
+      let att = k * k / (1.0 + ld * ld * 0.35);
       let h2 = normalize(l + V);
       let sp = pow(max(dot(N, h2), 0.0), shin) * (shin + 8.0) / 25.0;
       c += u.lc[i].rgb * att * max(dot(N, l), 0.0) * (diff + fres * sp) * mix(1.0, ao, 0.5);
     }
+    // A wet floor mirrors the lights: a long glint toward each one.
+    if (wet > 0.01 && ld < 30.0) {
+      let l = d / ld;
+      let g = pow(max(dot(R, l), 0.0), 180.0) * 2.5 + pow(max(dot(R, l), 0.0), 24.0) * 0.12;
+      c += u.lc[i].rgb * g * wet / (1.0 + ld * ld * 0.015);
+    }
   }
   if (vm) {
     // A soft rim keeps the gun readable against a dark wall.
-    c += vec3f(0.5, 0.42, 0.36) * pow(1.0 - ndv, 3.0) * 0.25;
+    c += vec3f(0.5, 0.42, 0.36) * pow(1.0 - ndv, 3.0) * 0.25 * mix(0.3, 1.0, out_k);
   }
 
-  // Height fog with the sun colour in the scatter direction.
   if (!vm) {
-    let dist = length(u.cam.xyz - in.wpos);
-    let dens = u.info.z * exp(-max(in.wpos.y, 0.0) * 0.12);
+    // Fog: thin warm haze outside, a thicker dark haze underground.
+    let dens_out = u.info.z * exp(-max(in.wpos.y, 0.0) * 0.12);
+    let dens = mix(0.012, dens_out, out_k);
     let f = 1.0 - exp(-dist * dens);
     let vd = -V;
-    let fc = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
+    let fc_out = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
+    let fc = mix(vec3f(0.012, 0.011, 0.01), fc_out, out_k);
     c = mix(c, fc, f);
+    c += inScatter(u.cam.xyz, vd, dist) * u.info2.y * mix(0.022, 0.004, out_k);
   }
   return c;
 }

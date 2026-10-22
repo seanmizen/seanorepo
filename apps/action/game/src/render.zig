@@ -30,9 +30,14 @@ pub const SceneUniforms = extern struct {
     sun_dir: [4]f32,
     sun_col: [4]f32,
     info: [4]f32,
-    lp: [8][4]f32,
-    lc: [8][4]f32,
+    /// x: the underground height, y: the in-scatter strength.
+    info2: [4]f32,
+    lp: [max_lights][4]f32,
+    lc: [max_lights][4]f32,
 };
+
+/// The map lights and two muzzle flashes. scene.wgsl has the same size.
+pub const max_lights = 24;
 
 const PostUniforms = extern struct {
     texel: [2]f32,
@@ -50,6 +55,8 @@ pub const FrameParams = struct {
     fov: f32,
     time: f32,
     damage: f32,
+    /// The exposure of the tone map (eye adaptation in main.zig).
+    exposure: f32 = 0.68,
     lights: []const map.Light,
 };
 
@@ -70,6 +77,7 @@ var scene_ubo: gpu_mod.Buffer = undefined;
 var box_buf: gpu_mod.Buffer = undefined;
 var static_vb: gpu_mod.Buffer = undefined;
 var static_count: u32 = 0;
+var has_static = false;
 var dyn_vb: gpu_mod.Buffer = undefined;
 var post_ubo: [4]gpu_mod.Buffer = undefined;
 
@@ -114,21 +122,33 @@ const vertex_layout = [_]T.VertexBufferLayout{.{
     },
 }};
 
-pub fn init(gpu: *gpu_mod.GPU, static_mesh: []const mesh.Vertex) !void {
+/// Upload the static mesh of a new map.
+pub fn loadMap(gpu: *gpu_mod.GPU, static_mesh: []const mesh.Vertex) !void {
+    if (has_static) static_vb.destroy();
+    has_static = true;
+    static_count = @intCast(static_mesh.len);
+    static_vb = try gpu.createBuffer(.{ .size = @max(64, static_mesh.len * @sizeOf(mesh.Vertex)), .usage = .{ .vertex = true, .copy_dst = true } });
+    gpu.writeBuffer(static_vb, 0, std.mem.sliceAsBytes(static_mesh));
+}
+
+/// Upload the ambient-occlusion boxes. The lifts move, so each frame does.
+fn uploadBoxes(gpu: *gpu_mod.GPU) u32 {
+    var data: [map.max_boxes][8]f32 = undefined;
+    var n: usize = 0;
+    for (map.boxes[0..map.box_count]) |b| {
+        if (!b.ao) continue;
+        data[n] = .{ b.min[0], b.min[1], b.min[2], 0, b.max[0], b.max[1], b.max[2], 0 };
+        n += 1;
+    }
+    if (n > 0) gpu.writeBuffer(box_buf, 0, std.mem.sliceAsBytes(data[0..n]));
+    return @intCast(n);
+}
+
+pub fn init(gpu: *gpu_mod.GPU) !void {
     scene_ubo = try gpu.createBuffer(.{ .size = @sizeOf(SceneUniforms), .usage = .{ .uniform = true, .copy_dst = true } });
     box_buf = try gpu.createBuffer(.{ .size = map.max_boxes * 32, .usage = .{ .storage = true, .copy_dst = true } });
     for (&post_ubo) |*b| b.* = try gpu.createBuffer(.{ .size = 256, .usage = .{ .uniform = true, .copy_dst = true } });
     dyn_vb = try gpu.createBuffer(.{ .size = max_dynamic * @sizeOf(mesh.Vertex), .usage = .{ .vertex = true, .copy_dst = true } });
-
-    static_count = @intCast(static_mesh.len);
-    static_vb = try gpu.createBuffer(.{ .size = @max(64, static_mesh.len * @sizeOf(mesh.Vertex)), .usage = .{ .vertex = true, .copy_dst = true } });
-    gpu.writeBuffer(static_vb, 0, std.mem.sliceAsBytes(static_mesh));
-
-    var box_data: [map.max_boxes][8]f32 = undefined;
-    for (map.boxes[0..map.box_count], 0..) |b, i| {
-        box_data[i] = .{ b.min[0], b.min[1], b.min[2], 0, b.max[0], b.max[1], b.max[2], 0 };
-    }
-    gpu.writeBuffer(box_buf, 0, std.mem.sliceAsBytes(box_data[0..map.box_count]));
 
     const shadow_tex = try gpu.createTexture(.{
         .size = .{ .width = shadow_size, .height = shadow_size, .depth_or_array_layers = 1 },
@@ -318,12 +338,14 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     const aspect = @as(f32, @floatFromInt(w)) / @as(f32, @floatFromInt(h));
     const proj = @import("sw_math").perspective(p.fov, aspect, 0.04, 260);
     const view_proj = proj.mul(viewMatrix(p.eye, p.yaw, p.pitch));
+    const c = map.shadow_centre;
     const light_view = @import("sw_math").lookAt(
-        .{ .x = sun_dir[0] * 90, .y = sun_dir[1] * 90, .z = sun_dir[2] * 90 },
-        .{ .x = 0, .y = 0, .z = 0 },
+        .{ .x = c[0] + sun_dir[0] * 110, .y = c[1] + sun_dir[1] * 110, .z = c[2] + sun_dir[2] * 110 },
+        .{ .x = c[0], .y = c[1], .z = c[2] },
         .{ .x = 0, .y = 1, .z = 0 },
     );
-    const light_vp = ortho(-40, 40, -40, 40, 10, 200).mul(light_view);
+    const sh = map.shadow_half;
+    const light_vp = ortho(-sh, sh, -sh, sh, 10, 240).mul(light_view);
 
     var su = std.mem.zeroes(SceneUniforms);
     su.view_proj = view_proj.data;
@@ -332,8 +354,9 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     su.cam = .{ p.eye[0], p.eye[1], p.eye[2], p.time };
     su.sun_dir = .{ sun_dir[0], sun_dir[1], sun_dir[2], 0 };
     su.sun_col = .{ sun_col[0], sun_col[1], sun_col[2], 0 };
-    const nl = @min(p.lights.len, 8);
-    su.info = .{ @floatFromInt(map.box_count), @floatFromInt(nl), 0.0045, 1 };
+    const nl = @min(p.lights.len, max_lights);
+    su.info = .{ @floatFromInt(uploadBoxes(gpu)), @floatFromInt(nl), 0.0045, 1 };
+    su.info2 = .{ map.underground_y, 1, 0, 0 };
     for (p.lights[0..nl], 0..) |l, i| {
         su.lp[i] = .{ l.pos[0], l.pos[1], l.pos[2], l.radius };
         su.lc[i] = .{ l.color[0], l.color[1], l.color[2], 0 };
@@ -351,7 +374,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
         .{ .texel = .{ 1 / fw, 1 / fh }, .dir = .{ 0, 0 }, .exposure = 1, .damage = 0, .time = 0, .bloom = 0 },
         .{ .texel = .{ 1 / bw, 1 / bh }, .dir = .{ 1, 0 }, .exposure = 1, .damage = 0, .time = 0, .bloom = 0 },
         .{ .texel = .{ 1 / bw, 1 / bh }, .dir = .{ 0, 1 }, .exposure = 1, .damage = 0, .time = 0, .bloom = 0 },
-        .{ .texel = .{ 1 / fw, 1 / fh }, .dir = .{ 0, 0 }, .exposure = 0.68, .damage = p.damage, .time = @mod(p.time, 100), .bloom = 0.55 },
+        .{ .texel = .{ 1 / fw, 1 / fh }, .dir = .{ 0, 0 }, .exposure = p.exposure, .damage = p.damage, .time = @mod(p.time, 100), .bloom = 0.55 },
     };
     for (posts, 0..) |pu, i| gpu.writeBuffer(post_ubo[i], 0, std.mem.asBytes(&pu));
 
