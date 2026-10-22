@@ -62,6 +62,7 @@ const SPAWNS: [number, number, number][] = [
 // The lifts: the same state machine as map.zig (callLift, stepLifts). The
 // phase numbers are the order of map.zig Phase.
 const LIFT_LEVELS = [0.02, 6.02];
+const TRAIN_CYCLE = 70;
 const LIFT_COUNT = 2;
 const LIFT_SPEED = 1.6;
 const DOOR_TIME = 0.8;
@@ -301,6 +302,8 @@ function snapshot(): object {
     phase,
     left: Math.max(0, (phaseEndsAt - Date.now()) / 1000),
     players: list,
+    // The deep train clock (map.zig Train), the same cycle length.
+    tt: +((Date.now() / 1000) % TRAIN_CYCLE).toFixed(2),
     lifts: lifts.map((l) => [
       +l.y.toFixed(3),
       +l.door.toFixed(3),

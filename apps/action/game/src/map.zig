@@ -99,6 +99,7 @@ pub fn load(map: Id) void {
     lift_count = 0;
     button_count = 0;
     escalator_count = 0;
+    train = null;
     shadow_centre = v3(0, 0, 0);
     shadow_half = 40;
     underground_y = -1000;
@@ -313,6 +314,71 @@ fn placeLift(l: *Lift) void {
             boxes[l.door_box[lv][half]].max = closed[1] + off;
         }
     }
+}
+
+// ---- The deep-level train ------------------------------------------------------
+//
+// A train runs through the deep platform on a fixed timetable. The server
+// sends its clock (the time in the cycle), so all the clients agree.
+// server/index.ts has the same cycle length.
+
+pub const Train = struct {
+    /// The solid body box (dynamic).
+    box: usize,
+    /// The track: the stop position on X, the track z range, the floor y.
+    stop_x: f32,
+    z0: f32,
+    z1: f32,
+    y0: f32,
+    y1: f32,
+    half_len: f32,
+    /// Seconds into the cycle.
+    t: f32 = 0,
+};
+
+pub const train_cycle: f32 = 70;
+pub var train: ?Train = null;
+
+/// The front position of the train at a time in the cycle: it brakes into
+/// the platform from +X, waits with its doors open, and pulls out to -X.
+pub fn trainX(t: f32) f32 {
+    if (t < 9) {
+        const k = 1 - t / 9;
+        return 100 * k * k;
+    }
+    if (t < 27) return 0;
+    if (t < 36) {
+        const k = (t - 27) / 9;
+        return -100 * k * k;
+    }
+    return -400;
+}
+
+/// 0 closed, 1 open.
+pub fn trainDoors(t: f32) f32 {
+    return vec.smooth((t - 10) / 1.2) * (1 - vec.smooth((t - 24) / 1.2));
+}
+
+pub fn stepTrain(dt: f32) void {
+    const tr = &(train orelse return);
+    tr.t = @mod(tr.t + dt, train_cycle);
+    placeTrain(tr);
+}
+
+/// Follow the server's train clock.
+pub fn syncTrain(t: f32) void {
+    const tr = &(train orelse return);
+    var d = t - tr.t;
+    if (d > train_cycle / 2) d -= train_cycle;
+    if (d < -train_cycle / 2) d += train_cycle;
+    if (@abs(d) > 0.5) tr.t = t else tr.t = @mod(tr.t + d * 0.1, train_cycle);
+    placeTrain(tr);
+}
+
+fn placeTrain(tr: *Train) void {
+    const x = tr.stop_x + trainX(tr.t);
+    boxes[tr.box].min = v3(x - tr.half_len, tr.y0, tr.z0);
+    boxes[tr.box].max = v3(x + tr.half_len, tr.y1, tr.z1);
 }
 
 // ---- Buttons ---------------------------------------------------------------

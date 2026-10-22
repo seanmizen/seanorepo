@@ -37,7 +37,7 @@ pub const SceneUniforms = extern struct {
 };
 
 /// The map lights and two muzzle flashes. scene.wgsl has the same size.
-pub const max_lights = 20;
+pub const max_lights = 24;
 
 const PostUniforms = extern struct {
     texel: [2]f32,

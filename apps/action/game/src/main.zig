@@ -235,6 +235,69 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     render.loadMap(ctx.gpu(), static_mesh.verts.items) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
 }
 
+fn crossed(a: f32, b: f32, at: f32) bool {
+    return a < at and b >= at;
+}
+
+fn trainSounds(a: f32, b: f32) void {
+    if (crossed(a, b, 0.05)) {
+        sound(70, 38, 6.0, .sawtooth, 0.12);
+        sound(1, null, 5.0, .noise, 0.08);
+    }
+    if (crossed(a, b, 7.5)) sound(900, 300, 1.6, .sine, 0.05); // brakes
+    if (crossed(a, b, 10)) {
+        sound(784, null, 0.35, .sine, 0.12);
+        sound(523, null, 0.6, .sine, 0.1);
+    }
+    if (crossed(a, b, 23.5)) {
+        sound(659, null, 0.25, .sine, 0.12);
+        sound(659, null, 0.25, .sine, 0.12);
+    }
+    if (crossed(a, b, 27)) sound(120, 400, 6.0, .sawtooth, 0.06); // traction motors
+}
+
+/// The details of the deep train over its body box: windows lit from
+/// inside, red doors that slide open, cab ends, a roof and a skirt.
+fn buildTrain(tr: map.Train) void {
+    const b = map.boxes[tr.box];
+    if (b.max[0] < -60 or b.min[0] > 60) return;
+    const zf = b.max[2]; // the platform face
+    const zb = b.min[2];
+    const y0 = b.min[1];
+    const open = map.trainDoors(tr.t);
+    dyn.box(v3(b.min[0], b.max[1], zb + 0.15), v3(b.max[0], b.max[1] + 0.25, zf - 0.15), v3(0.32, 0.33, 0.35), 3);
+    for ([_]f32{ zf, zb - 0.02 }) |z| {
+        const zz = z + 0.0;
+        dyn.box(v3(b.min[0], y0, zz), v3(b.max[0], y0 + 0.55, zz + 0.02), v3(0.05, 0.12, 0.42), 0);
+        var x = b.min[0] + 0.6;
+        var car: usize = 0;
+        while (x < b.max[0] - 1) : (x += 10) {
+            // A car: two windows and two doors on this side.
+            dyn.box(v3(x + 0.5, y0 + 1.75, zz - 0.005), v3(x + 3.2, y0 + 2.7, zz + 0.025), v3(0.42, 0.33, 0.2), 4);
+            dyn.box(v3(x + 5.6, y0 + 1.75, zz - 0.005), v3(x + 8.3, y0 + 2.7, zz + 0.025), v3(0.42, 0.33, 0.2), 4);
+            for ([_]f32{ 3.6, 8.7 }) |dx| {
+                const slide = if (z == zf) open * 0.65 else 0;
+                for ([_]f32{ -1, 1 }) |side| {
+                    const c = x + dx + side * (0.33 + slide);
+                    dyn.box(v3(c - 0.32, y0 + 0.6, zz - 0.01), v3(c + 0.32, y0 + 2.9, zz + 0.035), v3(0.7, 0.05, 0.04), 0);
+                }
+                if (z == zf and open > 0.02) {
+                    // The lit car floor shows through the open doors.
+                    dyn.box(v3(x + dx - 0.6 * open, y0 + 0.6, zz - 0.02), v3(x + dx + 0.6 * open, y0 + 2.9, zz - 0.01), v3(0.36, 0.3, 0.2), 4);
+                }
+            }
+            car += 1;
+        }
+    }
+    for ([_]f32{ b.min[0] - 0.2, b.max[0] }) |ex| {
+        dyn.box(v3(ex, y0, zb), v3(ex + 0.2, b.max[1], zf), v3(0.7, 0.05, 0.04), 0);
+        dyn.box(v3(ex - 0.01, y0 + 1.8, zb + 0.5), v3(ex + 0.21, y0 + 2.6, zf - 0.5), v3(0.02, 0.03, 0.04), 0);
+    }
+    // Headlights at the leading (-X) end.
+    dyn.box(v3(b.min[0] - 0.24, y0 + 0.9, zb + 0.4), v3(b.min[0] - 0.19, y0 + 1.15, zb + 0.8), v3(1.0, 0.97, 0.9), 4);
+    dyn.box(v3(b.min[0] - 0.24, y0 + 0.9, zf - 0.8), v3(b.min[0] - 0.19, y0 + 1.15, zf - 0.4), v3(1.0, 0.97, 0.9), 4);
+}
+
 fn pressButton(i: usize) void {
     const b = map.buttons[i];
     if (mode == .deathmatch) {
@@ -438,6 +501,7 @@ fn findRemote(id: u32) ?*Remote {
 fn handleSnap(m: net.Msg) void {
     phase_end = if (m.phase) |p| std.mem.eql(u8, p, "end") else false;
     time_left = m.left orelse 0;
+    if (m.tt) |tt| map.syncTrain(tt);
     if (m.lifts) |ls| for (ls, 0..) |l, i| {
         map.syncLift(i, l[0], l[1], @intFromFloat(@max(0, l[2])), @intFromFloat(@max(0, l[3])));
     };
@@ -709,6 +773,22 @@ fn tick(ctx: *sw.Context) void {
             const again = in.keyPressed(.Enter) or (captured and in.buttonPressed(.left) and practice_t < -1);
             if (practice_phase == .results and again) enterPractice(ctx);
         },
+    }
+
+    // The deep train: it shoves a player off the track, and it is loud.
+    const train_t0 = if (map.train) |tr| tr.t else 0;
+    map.stepTrain(dt);
+    if (map.train) |tr| {
+        const b = map.boxes[tr.box];
+        const r = player_mod.radius;
+        if (me.pos[0] + r > b.min[0] and me.pos[0] - r < b.max[0] and me.pos[2] + r > b.min[2] and
+            me.pos[2] - r < b.max[2] and me.pos[1] < b.max[1] and me.pos[1] + player_mod.height > b.min[1])
+        {
+            me.pos[2] = b.max[2] + r + 0.05;
+            me.pos[1] = @max(me.pos[1], tr.y0 + 0.75);
+            me.vel = v3(0, 2, 4);
+        }
+        if (mode != .menu and me.pos[1] < map.underground_y - 4) trainSounds(train_t0, tr.t);
     }
 
     // Lifts carry a player who stands in the cab.
@@ -1190,6 +1270,7 @@ fn gameRender(ctx: *sw.Context) !void {
         dyn.box(bb[0], bb[1], col, if (lit) 4 else 0);
     }
     for (remotes[0..remote_n]) |*r| buildRemote(r);
+    if (map.train) |tr| buildTrain(tr);
     if (mode == .practice) for (&targets) |*t| buildTarget(t);
     buildEffects();
     buildViewmodel();
@@ -1206,6 +1287,16 @@ fn gameRender(ctx: *sw.Context) !void {
             lights[n].color = l.color * vec.s(if (on) 1.0 else 0.08);
         }
         n += 1;
+    }
+    // The train: a warm glow from its windows and a headlight.
+    if (map.train) |tr| {
+        const b = map.boxes[tr.box];
+        if (b.max[0] > -60 and b.min[0] < 60 and n + 2 <= render.max_lights) {
+            const mid = (b.min[0] + b.max[0]) / 2;
+            lights[n] = .{ .pos = v3(std.math.clamp(mid, -25, 25), b.min[1] + 2.2, b.max[2] + 0.8), .color = v3(1.4, 1.05, 0.65), .radius = 16 };
+            lights[n + 1] = .{ .pos = v3(b.min[0] - 1.5, b.min[1] + 1.2, (b.min[2] + b.max[2]) / 2), .color = v3(3.0, 2.9, 2.6), .radius = 14 };
+            n += 2;
+        }
     }
     // A light rides in each lift cab.
     for (map.lifts[0..map.lift_count]) |l| {

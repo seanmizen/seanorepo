@@ -50,6 +50,8 @@ pub const Msg = struct {
     l: ?u32 = null,
     // The lifts in a snapshot: [y, door, level, phase] each.
     lifts: ?[][4]f32 = null,
+    // The deep train clock, seconds into its cycle.
+    tt: ?f32 = null,
 };
 
 pub const Client = struct {

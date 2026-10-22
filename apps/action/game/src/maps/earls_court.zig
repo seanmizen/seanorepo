@@ -632,6 +632,11 @@ fn deepPlatform() void {
     while (lx < x1) : (lx += 6) {
         map.add(v3(lx - 1.2, ceil - 0.12, -58.7), v3(lx + 1.2, ceil - 0.04, -58.4), v3(0.85, 0.95, 1.0), .emissive).solid = false;
     }
+    // The Piccadilly line train (map.zig Train): one solid body box.
+    const body = map.add(v3(-400, y - 0.75, -65.2), v3(-340, y + 3.0, -62.25), v3(0.62, 0.64, 0.66), .metal);
+    body.dynamic = true;
+    body.ao = false;
+    map.train = .{ .box = map.box_count - 1, .stop_x = 0, .z0 = -65.2, .z1 = -62.25, .y0 = y - 0.75, .y1 = y + 3.0, .half_len = 30 };
     map.flicker_light = map.light_count + 2;
     for ([_]f32{ -21, -7, 7, 21 }, 0..) |px, i| {
         // Tubes age to different whites.

@@ -1,7 +1,7 @@
 // The scene shader: world boxes, players, targets and the view-model gun.
 //
 // Light: a low sun with a 3x3 PCF shadow map, a sky and ground hemisphere
-// ambient, ambient occlusion from the box SDF, up to 20 point lights, a
+// ambient, ambient occlusion from the box SDF, up to 24 point lights, a
 // Blinn-Phong highlight with Fresnel, sky reflections on metal, height fog
 // that takes the sun colour, and in-scatter: the haze glows around each
 // point light. Below the underground height there is no sun, the ambient
@@ -13,7 +13,7 @@
 // view-model: it gets the near depth range [0, 0.08], the world gets
 // [0.08, 1], so the gun never goes into a wall.
 
-const MAX_LIGHTS: u32 = 20u;
+const MAX_LIGHTS: u32 = 24u;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -24,8 +24,8 @@ struct Scene {
   sun_col: vec4f,
   info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
   info2: vec4f,    // x underground height, y in-scatter strength
-  lp: array<vec4f, 20>, // xyz position, w radius
-  lc: array<vec4f, 20>, // rgb colour
+  lp: array<vec4f, 24>, // xyz position, w radius
+  lc: array<vec4f, 24>, // rgb colour
 };
 
 struct BoxG { mn: vec4f, mx: vec4f };
