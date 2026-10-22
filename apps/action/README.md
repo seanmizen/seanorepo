@@ -9,7 +9,21 @@ A first-person shooter in the browser, on swindowzig (Zig to wasm, WebGPU).
   red centre scores 150, the plate 100. The best score stays in local storage.
 
 Controls: WASD, Space jump, mouse look, left click fire, right click aim down
-the sights, R reload, Tab scores, Esc releases the mouse, M menu (paused).
+the sights, R reload, E press a button (lifts), Tab scores, Esc releases the
+mouse, M menu (paused).
+
+Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, 1 to 9 go to
+a spawn point.
+
+## Maps
+
+- **Earl's Court** (deathmatch, and the menu background): the station from
+  its public layout, not from a survey. Earls Court Road with a bus and the
+  TARDIS, the ticket hall, the footbridge, the District line train shed with
+  its iron arch roof and a train, two lifts (E on the call buttons and the
+  cab buttons), escalators that carry you, and the deep Piccadilly line
+  platform. The server runs the lifts, so every player sees the same cab.
+- **Arena** (target practice): an open square with cover.
 
 ## Layout
 
@@ -23,7 +37,8 @@ apps/action/
 │       ├── scene.wgsl    lighting: sun + PCF shadows, SDF ambient occlusion, sky, fog
 │       ├── post.wgsl     bloom and the final pass (ACES, vignette, damage tint)
 │       ├── weapon.zig    rifle state, recoil, the procedural reload animation
-│       ├── map.zig       the arena boxes (mesh, collision, hit scan, AO shapes)
+│       ├── map.zig       the current map: boxes, decoration, lights, lifts, buttons, escalators
+│       ├── maps/         arena.zig, earls_court.zig
 │       ├── player.zig    movement and collision
 │       ├── mesh.zig      vertex lists and shape builders
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)

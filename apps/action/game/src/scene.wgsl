@@ -337,7 +337,8 @@ fn shade(in: VOut, front: bool) -> vec3f {
     s.albedo *= mix(1.0, 0.55, (1.0 - ao) * dirt);
     if (abs(n0.y) < 0.5) {
       let streak = fbm(vec3f(in.wpos.x * 3.1 + in.wpos.z * 2.3, in.wpos.y * 0.25, in.wpos.z * 0.7));
-      s.albedo *= 1.0 - smoothstep(0.5, 0.8, streak) * 0.45 * dirt;
+      // Water runs down the walls underground; outside it is faint.
+      s.albedo *= 1.0 - smoothstep(0.5, 0.8, streak) * mix(0.5, 0.06, out_k);
     }
     if (n0.y > 0.5) {
       let soil = fbm(in.wpos * 0.9);
