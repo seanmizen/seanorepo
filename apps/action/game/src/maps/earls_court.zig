@@ -717,7 +717,16 @@ fn intermediateLevel() void {
     const area = rect(-36, 36, -26, 9);
     map.carve(area, mid_y - 1, mid_y, &.{rect(esc_top_x, -12, esc_z[0], esc_z[1])}, v3(0.3, 0.29, 0.27), .concrete);
     map.carve(area, mid_y, mid_ceil, &holes, tile_c, .wall_tile);
-    box(v3(area.x0, mid_ceil, area.z0), v3(area.x1, -3, area.z1), v3(0.12, 0.11, 0.1), .concrete);
+    // The ceiling, open over the four stair wells.
+    var wells: [4]Rect = undefined;
+    var nw: usize = 0;
+    for ([_]f32{ ca, cb }) |cz| {
+        for (well_x) |wx| {
+            wells[nw] = rect(wx[0], wx[1], cz - 1.2, cz + 1.2);
+            nw += 1;
+        }
+    }
+    map.carve(area, mid_ceil, -3, &wells, v3(0.12, 0.11, 0.1), .concrete);
 
     // Stairs from the island wells down to this level: one west and one
     // east on each island. On island B they lead in opposite directions,
