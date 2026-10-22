@@ -9,8 +9,10 @@
 // END_SECONDS, the scores reset, and the next match starts. The clock runs
 // with or without players.
 //
-// Trust model: casual. The client sends its own position and its hits; the
+// Trust model: casual. The client sends its own position and its hits. The
 // server checks the fire rate, the phase, and that both players are alive.
+// For a grenade it also checks the throws left in this life, that each blast
+// has a throw, the damage range, and that each target is near the blast.
 //
 // Messages (JSON text). Client to server:
 //   {t:"hello", name}
@@ -18,6 +20,11 @@
 //   {t:"fire", o:[x,y,z], e:[x,y,z], hit:id|-1, head:bool}
 //   {t:"use", i, l}                               call lift i to level l
 //   {t:"shock"}                                   the player touched the live rail
+//   {t:"nade", o:[x,y,z], v:[x,y,z]}              a grenade throw: start, velocity
+//   {t:"blast", p:[x,y,z], hits:[{id, dmg}]}      the thrower's grenade went off.
+//                                                 The thrower's client calculates
+//                                                 the damage (cover included), and
+//                                                 the thrower can be in the list.
 // Server to client:
 //   {t:"welcome", id}
 //   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,hp,k,d,alive}],
@@ -25,6 +32,8 @@
 //   {t:"lift", i, l}             a lift call; each client applies it
 //   {t:"spawn", x, y, z, yaw}
 //   {t:"shot", id, o, e}          another player fired
+//   {t:"nade", id, o, v}          another player threw a grenade. Each client
+//                                 flies the same path for the visuals.
 //   {t:"hit", from, dmg, hp}      you took damage
 //   {t:"kill", killer, victim, head, kname, vname}
 //   {t:"match"}                   a new match started
@@ -42,6 +51,13 @@ const BODY_DAMAGE = 26;
 const HEAD_DAMAGE = 100;
 const MIN_FIRE_MS = 85;
 const MAX_PLAYERS = 16;
+// Grenades: the same numbers as apps/action/game/src/grenade.zig.
+const NADES_PER_LIFE = 3;
+const MIN_NADE_MS = 700;
+const NADE_RADIUS = 5;
+// A blast more than this far from the server position of a target cannot
+// hit it (the radius, plus the lag of the positions).
+const NADE_REACH = NADE_RADIUS + 3;
 
 // The lobby map is Earl's Court. The same spawn points (x, y, z) as
 // apps/action/game/src/maps/earls_court.zig.
@@ -186,6 +202,11 @@ interface Player {
   respawnAt: number;
   lastFire: number;
   joined: boolean;
+  /** Grenades left in this life. */
+  nades: number;
+  /** Throws that have not gone off. A blast needs one. */
+  nadesInAir: number;
+  lastNade: number;
 }
 
 interface Conn {
@@ -250,6 +271,7 @@ function spawn(p: Player): void {
   p.pitch = 0;
   p.hp = 100;
   p.alive = true;
+  p.nades = NADES_PER_LIFE;
   send(p, { t: 'spawn', x: p.x, y: p.y, z: p.z, yaw: p.yaw });
 }
 
@@ -268,23 +290,75 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
 
   const target = players.get(Number(msg.hit));
   if (!target || target.id === p.id || !target.alive || !target.joined) return;
-  const dmg = msg.head === true ? HEAD_DAMAGE : BODY_DAMAGE;
+  const head = msg.head === true;
+  damage(p, target, head ? HEAD_DAMAGE : BODY_DAMAGE, head);
+}
+
+/** Apply damage from an attacker: the hit message, and a kill at 0 hp. A
+ * player can damage itself with a grenade. That kill gives no score. */
+function damage(p: Player, target: Player, dmg: number, head: boolean): void {
   target.hp -= dmg;
   send(target, { t: 'hit', from: p.id, dmg, hp: Math.max(0, target.hp) });
   if (target.hp <= 0) {
     target.alive = false;
     target.hp = 0;
     target.d++;
-    target.respawnAt = now + RESPAWN_MS;
-    p.k++;
+    target.respawnAt = Date.now() + RESPAWN_MS;
+    if (target.id !== p.id) p.k++;
     broadcast({
       t: 'kill',
       killer: p.id,
       victim: target.id,
-      head: msg.head === true,
+      head,
       kname: p.name,
       vname: target.name,
     });
+  }
+}
+
+const vec3 = (v: unknown, lim: number): number[] | null => {
+  if (!Array.isArray(v) || v.length !== 3) return null;
+  const out = v.map((x) => num(x, -lim, lim));
+  return out.every((x) => x !== null) ? (out as number[]) : null;
+};
+
+function onNade(p: Player, msg: Record<string, unknown>): void {
+  const now = Date.now();
+  if (!p.alive || phase !== 'play' || p.nades <= 0) return;
+  if (now - p.lastNade < MIN_NADE_MS) return;
+  const o = vec3(msg.o, 150);
+  const v = vec3(msg.v, 40);
+  if (!o || !v) return;
+  p.lastNade = now;
+  p.nades--;
+  p.nadesInAir++;
+  broadcast({ t: 'nade', id: p.id, o, v }, p.id);
+}
+
+/** A grenade of p went off. The thrower may be dead by now: a grenade in
+ * the air still counts. */
+function onBlast(p: Player, msg: Record<string, unknown>): void {
+  if (phase !== 'play' || p.nadesInAir <= 0) return;
+  p.nadesInAir--;
+  const at = vec3(msg.p, 300);
+  if (!at || !Array.isArray(msg.hits)) return;
+  const seen = new Set<number>();
+  for (const h of msg.hits.slice(0, MAX_PLAYERS)) {
+    if (typeof h !== 'object' || h === null) continue;
+    const { id, dmg } = h as Record<string, unknown>;
+    const target = players.get(Number(id));
+    const amount = Math.round(Number(dmg));
+    if (!target || !target.alive || !target.joined || seen.has(target.id))
+      continue;
+    if (!Number.isFinite(amount) || amount < 1 || amount > 100) continue;
+    const far = Math.hypot(
+      target.x - at[0],
+      target.y - at[1],
+      target.z - at[2],
+    );
+    if (far > NADE_REACH) continue;
+    seen.add(target.id);
+    damage(p, target, amount, false);
   }
 }
 
@@ -404,6 +478,9 @@ const server = Bun.serve<Conn>({
         respawnAt: 0,
         lastFire: 0,
         joined: false,
+        nades: 0,
+        nadesInAir: 0,
+        lastNade: 0,
       };
       players.set(p.id, p);
     },
@@ -444,6 +521,10 @@ const server = Bun.serve<Conn>({
           kname: 'LIVE RAIL',
           vname: p.name,
         });
+      } else if (msg.t === 'nade') {
+        onNade(p, msg);
+      } else if (msg.t === 'blast') {
+        onBlast(p, msg);
       } else if (msg.t === 'use') {
         const i = Number(msg.i);
         const level = Number(msg.l);

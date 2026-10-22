@@ -21,6 +21,8 @@ const hdr_format: T.TextureFormat = .rgba16float;
 const depth_format: T.TextureFormat = .depth32float;
 const swap_format: T.TextureFormat = .bgra8unorm;
 const max_dynamic = 120_000;
+/// The translucent vertices (smoke, the debug blast volume) per frame.
+const max_translucent = 150_000;
 
 pub const SceneUniforms = extern struct {
     view_proj: [16]f32,
@@ -58,6 +60,9 @@ pub const FrameParams = struct {
     /// The exposure of the tone map (eye adaptation in main.zig).
     exposure: f32 = 0.68,
     lights: []const map.Light,
+    /// Alpha-blended triangles, drawn after the opaque scene with no depth
+    /// write (scene.wgsl fs_trans has the vertex encoding).
+    translucent: []const mesh.Vertex = &.{},
 };
 
 pub const sun_dir = blk: {
@@ -72,6 +77,7 @@ var shadow_pipe: T.RenderPipeline = undefined;
 var bright_pipe: T.RenderPipeline = undefined;
 var blur_pipe: T.RenderPipeline = undefined;
 var final_pipe: T.RenderPipeline = undefined;
+var trans_pipe: T.RenderPipeline = undefined;
 
 var scene_ubo: gpu_mod.Buffer = undefined;
 var box_buf: gpu_mod.Buffer = undefined;
@@ -79,6 +85,7 @@ var static_vb: gpu_mod.Buffer = undefined;
 var static_count: u32 = 0;
 var has_static = false;
 var dyn_vb: gpu_mod.Buffer = undefined;
+var trans_vb: gpu_mod.Buffer = undefined;
 var post_ubo: [4]gpu_mod.Buffer = undefined;
 
 var scene_bgl: gpu_mod.BindGroupLayout = undefined;
@@ -154,6 +161,7 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
     box_buf = try gpu.createBuffer(.{ .size = map.max_boxes * 32, .usage = .{ .storage = true, .copy_dst = true } });
     for (&post_ubo) |*b| b.* = try gpu.createBuffer(.{ .size = 256, .usage = .{ .uniform = true, .copy_dst = true } });
     dyn_vb = try gpu.createBuffer(.{ .size = max_dynamic * @sizeOf(mesh.Vertex), .usage = .{ .vertex = true, .copy_dst = true } });
+    trans_vb = try gpu.createBuffer(.{ .size = max_translucent * @sizeOf(mesh.Vertex), .usage = .{ .vertex = true, .copy_dst = true } });
 
     const shadow_tex = try gpu.createTexture(.{
         .size = .{ .width = shadow_size, .height = shadow_size, .depth_or_array_layers = 1 },
@@ -216,6 +224,19 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .fragment = .{ .module = &scene_mod, .entry_point = "fs_sky", .targets = &[_]T.ColorTargetState{.{ .format = hdr_format }} },
         .primitive = no_cull,
         .depth_stencil = .{ .format = depth_format, .depth_write_enabled = false, .depth_compare = .less_equal },
+        .multisample = ms,
+    });
+    // Straight alpha blending: out = src * src.a + dst * (1 - src.a).
+    const alpha_blend: T.BlendState = .{
+        .color = .{ .operation = .add, .src_factor = .src_alpha, .dst_factor = .one_minus_src_alpha },
+        .alpha = .{ .operation = .add, .src_factor = .one, .dst_factor = .one_minus_src_alpha },
+    };
+    trans_pipe = try gpu.createRenderPipeline(.{
+        .layout = &scene_layout,
+        .vertex = .{ .module = &scene_mod, .entry_point = "vs_trans", .buffers = &vertex_layout },
+        .fragment = .{ .module = &scene_mod, .entry_point = "fs_trans", .targets = &[_]T.ColorTargetState{.{ .format = hdr_format, .blend = alpha_blend }} },
+        .primitive = no_cull,
+        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = false, .depth_compare = .less },
         .multisample = ms,
     });
     shadow_pipe = try gpu.createRenderPipeline(.{
@@ -370,6 +391,8 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
 
     const dyn_count: u32 = @intCast(@min(dynamic.len, max_dynamic));
     if (dyn_count > 0) gpu.writeBuffer(dyn_vb, 0, std.mem.sliceAsBytes(dynamic[0..dyn_count]));
+    const trans_count: u32 = @intCast(@min(p.translucent.len, max_translucent));
+    if (trans_count > 0) gpu.writeBuffer(trans_vb, 0, std.mem.sliceAsBytes(p.translucent[0..trans_count]));
 
     const bw: f32 = @floatFromInt(@max(1, w / 4));
     const bh: f32 = @floatFromInt(@max(1, h / 4));
@@ -423,6 +446,11 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
         }
         pass.setPipeline(sky_pipe);
         pass.draw(3, 1, 0, 0);
+        if (trans_count > 0) {
+            pass.setPipeline(trans_pipe);
+            pass.setVertexBuffer(0, trans_vb, 0, trans_count * @sizeOf(mesh.Vertex));
+            pass.draw(trans_count, 1, 0, 0);
+        }
         pass.end();
     }
     // Bloom.

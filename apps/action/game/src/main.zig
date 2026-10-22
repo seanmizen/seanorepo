@@ -8,7 +8,8 @@
 //   - practice: offline. 60 seconds of pop-up targets, with a best score.
 //
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
-// aim, R reload, Tab scores, Esc release the mouse, M menu (while paused).
+// aim, R reload, G grenade, Tab scores, Esc release the mouse, M menu (while
+// paused).
 const std = @import("std");
 const sw = @import("sw_app");
 const core = @import("sw_core");
@@ -24,6 +25,7 @@ const render = @import("render.zig");
 const weapon = @import("weapon.zig");
 const player_mod = @import("player.zig");
 const net = @import("net.zig");
+const grenade = @import("grenade.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -76,12 +78,17 @@ var hit_marker_kill = false;
 var dead_time: f32 = 0;
 var killed_by: [24]u8 = undefined;
 var killed_by_len: usize = 0;
+// Grenades left in this life (deathmatch), and the time to the next throw.
+var nades: u32 = grenade.per_life;
+var nade_cd: f32 = 0;
 
 var static_mesh: mesh.Mesh = undefined;
 var map_loaded = false;
 var door_reopened: [4]bool = @splat(false);
 var shocked = false;
 var dyn: mesh.Mesh = undefined;
+// The alpha-blended triangles of a frame (smoke, the debug blast volume).
+var trans: mesh.Mesh = undefined;
 var hud: ?gfx.Renderer = null;
 var text: ?sw_text.TextRenderer = null;
 var audio: audio_mod.Audio = undefined;
@@ -220,6 +227,8 @@ fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
     if (mode == .practice) gun.reserve = reserve;
     alive = true;
     hp = 100;
+    nades = grenade.per_life;
+    nade_cd = 0;
 }
 
 /// Build a map and upload its static mesh. Nothing happens if it is the
@@ -354,6 +363,7 @@ fn enterMenu(ctx: *sw.Context) void {
     if (mode == .deathmatch) client.close();
     mode = .menu;
     remote_n = 0;
+    grenade.reset();
     ctx.setMouseCapture(false);
     loadMap(ctx, .earls_court);
 }
@@ -361,6 +371,7 @@ fn enterMenu(ctx: *sw.Context) void {
 fn enterPractice(ctx: *sw.Context) void {
     loadMap(ctx, .arena);
     mode = .practice;
+    grenade.reset();
     gun.reserve = 9999;
     spawnAt(0, 1.6, 2.5, 0);
     practice_phase = .countdown;
@@ -375,6 +386,7 @@ fn enterPractice(ctx: *sw.Context) void {
 fn enterDeathmatch(ctx: *sw.Context) void {
     loadMap(ctx, .earls_court);
     mode = .deathmatch;
+    grenade.reset();
     remote_n = 0;
     feed_n = 0;
     my_id = 0;
@@ -525,6 +537,144 @@ fn recoilKick() void {
     me.yaw += (rand() - 0.5) * 0.008;
 }
 
+// ---- Grenades --------------------------------------------------------------
+// grenade.zig has the flight, the smoke and the damage model. This part
+// connects it to the players, the plates, the HUD and the lobby.
+
+/// The id of the practice plates as grenade bodies (no player has it).
+const plate_id: u32 = 0xFFFF_FFFF;
+
+/// The boxes that stop a grenade: the remote players (head and body, as in
+/// rayRemotes), this player in deathmatch (for the grenades of others), and
+/// the practice plates.
+fn grenadeBodies(buf: []grenade.Body) []grenade.Body {
+    var n: usize = 0;
+    for (remotes[0..remote_n]) |r| {
+        if (!r.alive or n + 2 > buf.len) continue;
+        const head_c = r.pos + v3(0, 1.62, 0);
+        buf[n] = .{ .min = head_c - vec.s(0.16), .max = head_c + vec.s(0.16), .id = r.id };
+        buf[n + 1] = .{ .min = r.pos - v3(0.3, 0, 0.3), .max = r.pos + v3(0.3, 1.46, 0.3), .id = r.id };
+        n += 2;
+    }
+    if (mode == .deathmatch and alive and n < buf.len) {
+        buf[n] = .{ .min = me.pos - v3(0.3, 0, 0.3), .max = me.pos + v3(0.3, 1.78, 0.3), .id = my_id };
+        n += 1;
+    }
+    if (mode == .practice) for (&targets) |*t| {
+        if (!t.up or n == buf.len) continue;
+        const c = targetPlate(t).c;
+        buf[n] = .{ .min = c - vec.s(0.4), .max = c + vec.s(0.4), .id = plate_id };
+        n += 1;
+    };
+    return buf[0..n];
+}
+
+fn throwGrenade() void {
+    if (nade_cd > 0) return;
+    if (mode == .deathmatch and nades == 0) {
+        sound(1200, 900, 0.03, .square, 0.1);
+        return;
+    }
+    if (mode == .deathmatch) nades -= 1;
+    nade_cd = grenade.cooldown;
+    const th = grenade.throwFrom(me.eyePos(), me.yaw, me.pitch, me.vel);
+    grenade.spawn(th.o, th.v, my_id, true);
+    if (mode == .deathmatch) {
+        client.send("{{\"t\":\"nade\",\"o\":[{d:.3},{d:.3},{d:.3}],\"v\":[{d:.3},{d:.3},{d:.3}]}}", .{
+            th.o[0], th.o[1], th.o[2], th.v[0], th.v[1], th.v[2],
+        });
+    }
+    sound(1, null, 0.14, .noise, 0.1);
+    sound(420, 180, 0.12, .sine, 0.08);
+}
+
+/// The aimed throw, flown ahead for the debug view. Null when no throw is
+/// possible.
+fn aimPrediction() ?grenade.Prediction {
+    if (mode == .menu or (mode == .deathmatch and !alive)) return null;
+    const th = grenade.throwFrom(me.eyePos(), me.yaw, me.pitch, me.vel);
+    var buf: [64]grenade.Body = undefined;
+    return grenade.predict(th.o, th.v, dt, grenadeBodies(&buf), my_id);
+}
+
+/// A blast: the sound and sparks for all grenades. For a grenade of this
+/// client also the damage: practice applies it here, deathmatch sends it to
+/// the server, which applies it as it does a hit.
+fn onBlast(b: grenade.Blast) void {
+    const dist = vec.len(b.pos - me.eyePos());
+    const vol = std.math.clamp(8 / (dist + 4), 0.08, 1);
+    sound(1, null, 0.8, .noise, 0.75 * vol);
+    sound(110, 28, 0.7, .sine, 0.9 * vol);
+    addSparks(b.pos, b.normal, v3(1.0, 0.6, 0.25), 30);
+    if (!b.mine) return;
+    switch (mode) {
+        .practice => {
+            if (practice_phase == .running) for (&targets) |*t| {
+                if (!t.up or !grenade.reaches(b, targetPlate(t).c)) continue;
+                t.up = false;
+                t.down_time = 0;
+                hits += 1;
+                score += 100;
+                hit_marker = 0.18;
+                hit_marker_kill = false;
+            };
+            const d = grenade.damageTo(b, me.pos);
+            if (d >= 1) {
+                hp -= @intFromFloat(@round(d));
+                damage_flash = @min(1, damage_flash + 0.6);
+                sound(220, 90, 0.12, .sawtooth, 0.25);
+                if (hp <= 0) {
+                    // No death in practice: back to the start.
+                    spawnAt(0, 1.6, 2.5, 0);
+                    sound(300, 60, 0.6, .sawtooth, 0.3);
+                }
+            }
+        },
+        .deathmatch => {
+            // The hits: {"id":n,"dmg":n} for each player in the blast, this
+            // player too. The list stays inside the 512-byte send buffer.
+            var list: [400]u8 = undefined;
+            var len: usize = 0;
+            var any = false;
+            for (remotes[0..remote_n]) |r| {
+                if (!r.alive) continue;
+                const d = grenade.damageTo(b, r.pos);
+                if (d < 1) continue;
+                const item = std.fmt.bufPrint(list[len..], "{s}{{\"id\":{d},\"dmg\":{d}}}", .{
+                    if (len > 0) "," else "", r.id, @as(u32, @intFromFloat(@round(d))),
+                }) catch break;
+                len += item.len;
+                any = true;
+            }
+            if (alive) {
+                const d = grenade.damageTo(b, me.pos);
+                if (d >= 1) {
+                    if (std.fmt.bufPrint(list[len..], "{s}{{\"id\":{d},\"dmg\":{d}}}", .{
+                        if (len > 0) "," else "", my_id, @as(u32, @intFromFloat(@round(d))),
+                    })) |item| {
+                        len += item.len;
+                    } else |_| {}
+                }
+            }
+            client.send("{{\"t\":\"blast\",\"p\":[{d:.2},{d:.2},{d:.2}],\"hits\":[{s}]}}", .{
+                b.pos[0], b.pos[1], b.pos[2], list[0..len],
+            });
+            if (any) {
+                hit_marker = 0.18;
+                hit_marker_kill = false;
+                sound(1500, 1300, 0.04, .square, 0.12);
+            }
+        },
+        .menu => {},
+    }
+}
+
+fn stepGrenades() void {
+    nade_cd = @max(0, nade_cd - dt);
+    var buf: [64]grenade.Body = undefined;
+    for (grenade.step(dt, grenadeBodies(&buf))) |b| onBlast(b);
+}
+
 // ---- Networking ------------------------------------------------------------
 
 fn findRemote(id: u32) ?*Remote {
@@ -630,6 +780,11 @@ fn handleNet() void {
                 sound(1350, null, 0.12, .sine, 0.2);
             }
             if (findRemote(victim)) |r| r.alive = false;
+        } else if (std.mem.eql(u8, m.t, "nade")) {
+            // Another player threw: fly the same path, for the visuals.
+            if (m.o != null and m.v != null) {
+                grenade.spawn(v3(m.o.?[0], m.o.?[1], m.o.?[2]), v3(m.v.?[0], m.v.?[1], m.v.?[2]), m.id orelse 0, false);
+            }
         } else if (std.mem.eql(u8, m.t, "lift")) {
             map.callLift(m.i orelse 99, m.l orelse 0);
         } else if (std.mem.eql(u8, m.t, "match")) {
@@ -668,6 +823,7 @@ fn gameplayTick(ctx: *sw.Context) void {
         if (aimedButton()) |b| pressButton(b);
     }
     const can_shoot = !frozen and !(mode == .practice and practice_phase == .countdown);
+    if (can_shoot and !shortcut and in.keyPressed(.G)) throwGrenade();
     if (can_shoot and in.keyPressed(.R)) {
         if (gun.startReload()) sound(500, 380, 0.05, .square, 0.08);
     }
@@ -878,6 +1034,7 @@ fn tick(ctx: *sw.Context) void {
     } else {
         gameplayTick(ctx);
     }
+    stepGrenades();
     effectsTick();
 }
 
@@ -949,7 +1106,7 @@ fn buildViewmodel() void {
     if (mode == .deathmatch and !alive) return;
     const speed = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
     const pose = gun.pose(me.stride * 1.7, if (me.grounded) speed else 0);
-    const gm = cameraMatrix().mul(pose.gun);
+    const gm = cameraMatrix().mul(grenade.viewDip()).mul(pose.gun);
     weapon.addRifle(&dyn, gm, pose.mag, 100);
     if (gun.flash > 0) {
         // A star of two crossed emissive blades at the muzzle.
@@ -1050,6 +1207,11 @@ fn drawAmmo(r: *gfx.Renderer, w: f32, h: f32) !void {
         const rs = std.fmt.bufPrint(&buf, "/ {d}", .{gun.reserve}) catch "";
         txt(r, rs, w - 92, h - 64, 20, dim);
     }
+    // The grenades, in a small panel to the left.
+    try r.fillRect(.{ .x = w - 290, .y = h - 86, .w = 72, .h = 66 }, panel);
+    const gs = if (mode == .practice) "inf" else std.fmt.bufPrint(&buf, "{d}", .{nades}) catch "";
+    txtCenter(r, gs, w - 254, h - 80, 30, if (mode == .deathmatch and nades == 0) red else white);
+    txtCenter(r, "G  NADE", w - 254, h - 40, 12, dim);
     if (gun.reloading >= 0) {
         const k = gun.reloading / weapon.reload_time;
         try r.fillRect(.{ .x = w - 210, .y = h - 20, .w = 190 * k, .h = 4 }, accent);
@@ -1134,7 +1296,7 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
         var buf: [32]u8 = undefined;
         txtCenter(r, std.fmt.bufPrint(&buf, "practice best: {d}", .{best}) catch "", cx, b[1].y + 84, 14, dim);
     }
-    txtCenter(r, "WASD move  -  SPACE jump  -  MOUSE aim  -  RIGHT CLICK sights  -  R reload  -  TAB scores", cx, h - 48, 14, dim);
+    txtCenter(r, "WASD move  -  SPACE jump  -  MOUSE aim  -  RIGHT CLICK sights  -  R reload  -  G grenade  -  TAB scores", cx, h - 48, 14, dim);
     txtCenter(r, "Rifle model: Quaternius Ultimate Gun Pack (CC0)", cx, h - 26, 12, dim);
 }
 
@@ -1231,6 +1393,7 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     L.add(&lines, &n, "mouse {d:.0},{d:.0}  delta {d:.1},{d:.1}", .{ in.mouse.x, in.mouse.y, in.mouse.delta_x, in.mouse.delta_y });
     L.add(&lines, &n, "mods ctrl {}  cmd {}  shift {}  alt {}", .{ @intFromBool(in.mods.ctrl), @intFromBool(in.mods.super), @intFromBool(in.mods.shift), @intFromBool(in.mods.alt) });
     L.add(&lines, &n, "gun ammo {d}/{d}  reload {d:.2}  ads {d:.2}  heat {d:.2}", .{ gun.ammo, gun.reserve, gun.reloading, gun.ads, gun.heat });
+    L.add(&lines, &n, "grenades live {d}  left {d}  smoke {d}  blast cells {d}", .{ grenade.count, nades, grenade.puffCount(), grenade.debug_cells });
     if (mode == .deathmatch) {
         L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(client.state()), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
     }
@@ -1335,6 +1498,7 @@ fn gameInit(ctx: *sw.Context) !void {
     try weapon.loadModel(alloc);
     static_mesh = mesh.Mesh.init(alloc);
     dyn = mesh.Mesh.init(alloc);
+    trans = mesh.Mesh.init(alloc);
     try render.init(ctx.gpu());
     loadMap(ctx, .earls_court);
     hud = try gfx.Renderer.init(alloc, ctx.gpu(), .{});
@@ -1376,8 +1540,16 @@ fn gameRender(ctx: *sw.Context) !void {
     if (map.id == .earls_court) buildEscalatorSteps();
     if (mode == .practice) for (&targets) |*t| buildTarget(t);
     buildEffects();
+    grenade.buildOpaque(&dyn);
     buildViewmodel();
     const cam = eyeForRender();
+    // The smoke faces the camera. The debug view adds the throw path and
+    // the blast volumes.
+    trans.clear();
+    const cam_f = vec.forward(cam.yaw, cam.pitch);
+    const cam_r = v3(@cos(cam.yaw), 0, -@sin(cam.yaw));
+    grenade.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
+    if (show_debug) grenade.buildDebug(alloc, &dyn, &trans, aimPrediction());
 
     var lights: [render.max_lights]map.Light = undefined;
     var n: usize = 0;
@@ -1416,6 +1588,7 @@ fn gameRender(ctx: *sw.Context) !void {
         lights[n] = .{ .pos = remote_flash.p, .color = v3(9, 5.5, 2.5), .radius = 8 };
         n += 1;
     }
+    n += grenade.lights(lights[n..]);
     // Underground the eye opens up: about 2.4 times the outdoor exposure.
     const out_k = vec.smooth((cam.eye[1] - (map.underground_y - 5)) / 5);
     const target_exposure = 0.68 * (2.4 - 1.4 * out_k);
@@ -1431,6 +1604,7 @@ fn gameRender(ctx: *sw.Context) !void {
         .damage = damage_flash,
         .exposure = exposure,
         .lights = lights[0..n],
+        .translucent = trans.verts.items,
     }, dyn.verts.items, if (hud) |*r| r else null);
 }
 
