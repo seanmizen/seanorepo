@@ -16,9 +16,12 @@
 //   {t:"hello", name}
 //   {t:"st", x, y, z, yaw, pitch}                 20 times a second
 //   {t:"fire", o:[x,y,z], e:[x,y,z], hit:id|-1, head:bool}
+//   {t:"use", i, l}                               call lift i to level l
 // Server to client:
 //   {t:"welcome", id}
-//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,hp,k,d,alive}]}
+//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,hp,k,d,alive}],
+//    lifts:[[y, door, level, phase]]}
+//   {t:"lift", i, l}             a lift call; each client applies it
 //   {t:"spawn", x, y, z, yaw}
 //   {t:"shot", id, o, e}          another player fired
 //   {t:"hit", from, dmg, hp}      you took damage
@@ -39,17 +42,123 @@ const HEAD_DAMAGE = 100;
 const MIN_FIRE_MS = 85;
 const MAX_PLAYERS = 16;
 
-// The same spawn points as apps/action/game/src/map.zig.
-const SPAWNS: [number, number][] = [
-  [-24, -24],
-  [24, 24],
-  [-24, 24],
-  [24, -24],
-  [0, -25],
-  [0, 25],
-  [-25, 0],
-  [25, 0],
+// The lobby map is Earl's Court. The same spawn points (x, y, z) as
+// apps/action/game/src/maps/earls_court.zig.
+const SPAWNS: [number, number, number][] = [
+  [-12, 0, 0],
+  [12, 0, 0],
+  [-12, 0, -35],
+  [12, 0, -35],
+  [0, 0, -10],
+  [-5, 6, 32],
+  [5, 6, 32],
+  [0, 6, 43],
+  [-17, 6, 56],
+  [17, 6, 56],
+  [-20, -16, -58],
+  [20, -16, -58],
 ];
+
+// The lifts: the same state machine as map.zig (callLift, stepLifts). The
+// phase numbers are the order of map.zig Phase.
+const LIFT_LEVELS = [0.02, 6.02];
+const LIFT_COUNT = 2;
+const LIFT_SPEED = 1.6;
+const DOOR_TIME = 0.8;
+const DOOR_HOLD = 6;
+enum Phase {
+  Idle = 0,
+  Opening = 1,
+  Open = 2,
+  Closing = 3,
+  Moving = 4,
+}
+interface Lift {
+  y: number;
+  level: number;
+  door: number;
+  phase: Phase;
+  hold: number;
+  pending: number | null;
+}
+const lifts: Lift[] = Array.from({ length: LIFT_COUNT }, () => ({
+  y: LIFT_LEVELS[0],
+  level: 0,
+  door: 0,
+  phase: Phase.Idle,
+  hold: 0,
+  pending: null,
+}));
+
+function callLift(l: Lift, level: number): void {
+  switch (l.phase) {
+    case Phase.Idle:
+      if (l.level === level && Math.abs(l.y - LIFT_LEVELS[level]) < 0.01) {
+        l.phase = Phase.Opening;
+      } else {
+        l.level = level;
+        l.phase = Phase.Moving;
+      }
+      break;
+    case Phase.Open:
+    case Phase.Opening:
+      if (level === l.level) {
+        l.hold = DOOR_HOLD;
+      } else {
+        l.pending = level;
+        l.phase = Phase.Closing;
+      }
+      break;
+    case Phase.Closing:
+      if (level === l.level) l.phase = Phase.Opening;
+      else l.pending = level;
+      break;
+    case Phase.Moving:
+      l.pending = level;
+      break;
+  }
+}
+
+function stepLift(l: Lift, dt: number): void {
+  switch (l.phase) {
+    case Phase.Moving: {
+      const d = LIFT_LEVELS[l.level] - l.y;
+      const step = LIFT_SPEED * dt;
+      if (Math.abs(d) <= step) {
+        l.y = LIFT_LEVELS[l.level];
+        l.phase = Phase.Opening;
+      } else l.y += Math.sign(d) * step;
+      break;
+    }
+    case Phase.Opening:
+      l.door = Math.min(1, l.door + dt / DOOR_TIME);
+      if (l.door >= 1) {
+        l.phase = Phase.Open;
+        l.hold = DOOR_HOLD;
+      }
+      break;
+    case Phase.Open:
+      l.hold -= dt;
+      if (l.hold <= 0) l.phase = Phase.Closing;
+      break;
+    case Phase.Closing:
+      l.door = Math.max(0, l.door - dt / DOOR_TIME);
+      if (l.door <= 0) {
+        l.phase = Phase.Idle;
+        if (l.pending !== null) {
+          const p = l.pending;
+          l.pending = null;
+          if (p !== l.level) {
+            l.level = p;
+            l.phase = Phase.Moving;
+          }
+        }
+      }
+      break;
+    case Phase.Idle:
+      break;
+  }
+}
 
 interface Player {
   id: number;
@@ -111,7 +220,10 @@ function spawn(p: Player): void {
     let nearest = 1e9;
     for (const o of players.values()) {
       if (o.id === p.id || !o.alive || !o.joined) continue;
-      nearest = Math.min(nearest, Math.hypot(o.x - s[0], o.z - s[1]));
+      nearest = Math.min(
+        nearest,
+        Math.hypot(o.x - s[0], o.y - s[1], o.z - s[2]),
+      );
     }
     // A little randomness, so two spawns in a row do not always match.
     const score = nearest + Math.random() * 6;
@@ -121,8 +233,8 @@ function spawn(p: Player): void {
     }
   }
   p.x = best[0];
-  p.y = 0;
-  p.z = best[1];
+  p.y = best[1];
+  p.z = best[2];
   // Face the centre of the arena. Yaw 0 looks to -Z.
   p.yaw = Math.atan2(p.x, p.z);
   p.pitch = 0;
@@ -136,7 +248,7 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
   if (!p.alive || phase !== 'play' || now - p.lastFire < MIN_FIRE_MS) return;
   p.lastFire = now;
   const o = Array.isArray(msg.o)
-    ? msg.o.map((v) => num(v, -100, 100) ?? 0)
+    ? msg.o.map((v) => num(v, -150, 150) ?? 0)
     : null;
   const e = Array.isArray(msg.e)
     ? msg.e.map((v) => num(v, -300, 300) ?? 0)
@@ -189,11 +301,22 @@ function snapshot(): object {
     phase,
     left: Math.max(0, (phaseEndsAt - Date.now()) / 1000),
     players: list,
+    lifts: lifts.map((l) => [
+      +l.y.toFixed(3),
+      +l.door.toFixed(3),
+      l.level,
+      l.phase,
+    ]),
   };
 }
 
+let lastStep = Date.now();
+
 function step(): void {
   const now = Date.now();
+  const dt = Math.min(0.2, (now - lastStep) / 1000);
+  lastStep = now;
+  for (const l of lifts) stepLift(l, dt);
   if (now >= phaseEndsAt) {
     if (phase === 'play') {
       phase = 'end';
@@ -289,12 +412,18 @@ const server = Bun.serve<Conn>({
         else p.respawnAt = 0;
       } else if (msg.t === 'st' && p.alive) {
         p.x = num(msg.x, -40, 40) ?? p.x;
-        p.y = num(msg.y, -10, 30) ?? p.y;
-        p.z = num(msg.z, -40, 40) ?? p.z;
+        p.y = num(msg.y, -30, 30) ?? p.y;
+        p.z = num(msg.z, -80, 80) ?? p.z;
         p.yaw = num(msg.yaw, -1e4, 1e4) ?? p.yaw;
         p.pitch = num(msg.pitch, -2, 2) ?? p.pitch;
       } else if (msg.t === 'fire') {
         onFire(p, msg);
+      } else if (msg.t === 'use') {
+        const i = Number(msg.i);
+        const level = Number(msg.l);
+        if (!p.alive || !(i in lifts) || !(level in LIFT_LEVELS)) return;
+        callLift(lifts[i], level);
+        broadcast({ t: 'lift', i, l: level });
       }
     },
     close(ws) {

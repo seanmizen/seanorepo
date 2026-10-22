@@ -1,12 +1,21 @@
-// The arena: a list of axis-aligned boxes. The boxes are the render mesh,
-// the collision shapes, the hit-scan targets and the ambient-occlusion
-// shapes (the shader reads them from a storage buffer).
+// The current map: axis-aligned boxes, decoration, lights, spawns, lifts,
+// buttons and escalators.
 //
-// The server (apps/action/server/src/index.ts) has a copy of `spawns`.
+// - Boxes are the render mesh, the collision shapes, the hit-scan targets
+//   and the ambient-occlusion shapes (the shader reads them from a storage
+//   buffer). A dynamic box (a lift part) moves, so it is drawn each frame.
+// - Decoration is visual only: oriented boxes and discs (roof ribs, signs).
+//   It casts shadows. It has no collision.
+//
+// The maps are in maps/. The server (apps/action/server/index.ts) has a
+// copy of the Earl's Court spawns and lift levels.
 const std = @import("std");
 const vec = @import("vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
+const Mat4 = vec.Mat4;
+
+pub const Id = enum { arena, earls_court };
 
 pub const Mat = enum(u8) {
     paint = 0,
@@ -16,6 +25,8 @@ pub const Mat = enum(u8) {
     emissive = 4,
     wood = 5,
     cloth = 6,
+    wall_tile = 7,
+    brick = 8,
 };
 
 pub const Box = struct {
@@ -23,8 +34,23 @@ pub const Box = struct {
     max: V3,
     color: V3,
     mat: Mat,
-    /// Hit scan and collision ignore a box with solid = false (lamp bulbs).
+    /// Collision and hit scan skip a box with solid = false (lamp bulbs).
     solid: bool = true,
+    /// The ambient occlusion skips a box with ao = false (small parts,
+    /// escalator steps).
+    ao: bool = true,
+    /// A dynamic box moves (lift parts). It is not in the static mesh.
+    dynamic: bool = false,
+};
+
+pub const Decor = struct {
+    m: Mat4,
+    min: V3,
+    max: V3,
+    color: V3,
+    mat: Mat,
+    /// A disc of radius min[0] and thickness min[1] along local Z.
+    disc: bool = false,
 };
 
 pub const Light = struct {
@@ -33,134 +59,337 @@ pub const Light = struct {
     radius: f32,
 };
 
-pub const max_boxes = 160;
+pub const Spawn = struct { pos: V3, yaw: f32 };
+
+pub const max_boxes = 400;
+pub const max_lights = 16;
+
+pub var id: Id = .arena;
 pub var boxes: [max_boxes]Box = undefined;
 pub var box_count: usize = 0;
-pub var lights: [8]Light = undefined;
+pub var decor: std.ArrayList(Decor) = .empty;
+pub var lights: [max_lights]Light = undefined;
 pub var light_count: usize = 0;
+pub var spawns: [16]Spawn = undefined;
+pub var spawn_count: usize = 0;
 
-pub const half: f32 = 30;
-pub const wall_h: f32 = 7;
+/// The shadow map covers a square of this half size around shadow_centre.
+pub var shadow_centre: V3 = v3(0, 0, 0);
+pub var shadow_half: f32 = 40;
+/// Below this height there is no sun and little sky light (underground).
+pub var underground_y: f32 = -1000;
+/// A player below this height respawns.
+pub var kill_y: f32 = -5;
+/// A light that flickers (a tired fluorescent tube), or null.
+pub var flicker_light: ?usize = null;
 
-pub const spawns = [_][2]f32{
-    .{ -24, -24 }, .{ 24, 24 }, .{ -24, 24 }, .{ 24, -24 },
-    .{ 0, -25 },   .{ 0, 25 },  .{ -25, 0 },  .{ 25, 0 },
-};
+var alloc: std.mem.Allocator = undefined;
 
-fn add(min: V3, max: V3, color: V3, mat: Mat) void {
-    if (box_count >= max_boxes) return;
+pub fn init(a: std.mem.Allocator) void {
+    alloc = a;
+}
+
+/// Build a map. This clears the lifts, the buttons and the escalators too.
+pub fn load(map: Id) void {
+    id = map;
+    box_count = 0;
+    light_count = 0;
+    spawn_count = 0;
+    decor.clearRetainingCapacity();
+    lift_count = 0;
+    button_count = 0;
+    escalator_count = 0;
+    shadow_centre = v3(0, 0, 0);
+    shadow_half = 40;
+    underground_y = -1000;
+    kill_y = -5;
+    flicker_light = null;
+    switch (map) {
+        .arena => @import("maps/arena.zig").build(),
+        .earls_court => @import("maps/earls_court.zig").build(),
+    }
+}
+
+// ---- Builders for the maps -------------------------------------------------
+
+pub fn add(min: V3, max: V3, color: V3, mat: Mat) *Box {
+    if (box_count >= max_boxes) {
+        std.log.warn("map: more than {d} boxes", .{max_boxes});
+        return &boxes[max_boxes - 1];
+    }
     boxes[box_count] = .{ .min = min, .max = max, .color = color, .mat = mat };
     box_count += 1;
+    return &boxes[box_count - 1];
 }
 
 /// A box from its centre on the floor (x, z), its size and its base height.
-fn put(x: f32, z: f32, sx: f32, sy: f32, sz: f32, y0: f32, color: V3, mat: Mat) void {
-    add(v3(x - sx / 2, y0, z - sz / 2), v3(x + sx / 2, y0 + sy, z + sz / 2), color, mat);
+pub fn put(x: f32, z: f32, sx: f32, sy: f32, sz: f32, y0: f32, color: V3, mat: Mat) *Box {
+    return add(v3(x - sx / 2, y0, z - sz / 2), v3(x + sx / 2, y0 + sy, z + sz / 2), color, mat);
 }
 
-fn lamp(x: f32, z: f32, h: f32) void {
-    put(x, z, 0.16, h, 0.16, 0, v3(0.12, 0.12, 0.13), .metal);
-    put(x, z, 0.5, 0.12, 0.5, h, v3(0.12, 0.12, 0.13), .metal);
-    add(v3(x - 0.2, h - 0.22, z - 0.2), v3(x + 0.2, h, z + 0.2), v3(1.0, 0.62, 0.28), .emissive);
-    boxes[box_count - 1].solid = false;
-    if (light_count < 6) {
-        lights[light_count] = .{ .pos = v3(x, h - 0.5, z), .color = v3(1.0, 0.55, 0.22), .radius = 11 };
-        light_count += 1;
+pub fn addDecor(m: Mat4, min: V3, max: V3, color: V3, mat: Mat) void {
+    decor.append(alloc, .{ .m = m, .min = min, .max = max, .color = color, .mat = mat }) catch {};
+}
+
+pub fn addDisc(m: Mat4, r: f32, t: f32, color: V3, mat: Mat) void {
+    decor.append(alloc, .{ .m = m, .min = v3(r, t, 0), .max = v3(0, 0, 0), .color = color, .mat = mat, .disc = true }) catch {};
+}
+
+/// A decoration beam from a to b, w wide and h high. `up` turns the cross
+/// section.
+pub fn beam(a: V3, b: V3, w: f32, h: f32, up: V3, color: V3, mat: Mat) void {
+    const d = b - a;
+    const l = vec.len(d);
+    if (l < 1e-4) return;
+    const f = d / vec.s(l);
+    const r = vec.norm(vec.cross(f, up));
+    const u = vec.cross(r, f);
+    const m = Mat4{ .data = .{ r[0], r[1], r[2], 0, u[0], u[1], u[2], 0, f[0], f[1], f[2], 0, a[0], a[1], a[2], 1 } };
+    addDecor(m, v3(-w / 2, -h / 2, 0), v3(w / 2, h / 2, l), color, mat);
+}
+
+pub fn addLight(pos: V3, color: V3, radius: f32) void {
+    if (light_count >= max_lights) return;
+    lights[light_count] = .{ .pos = pos, .color = color, .radius = radius };
+    light_count += 1;
+}
+
+pub fn addSpawn(pos: V3) void {
+    if (spawn_count >= spawns.len) return;
+    // Face the middle of the map. Yaw 0 looks to -Z.
+    spawns[spawn_count] = .{ .pos = pos, .yaw = std.math.atan2(pos[0], pos[2]) };
+    spawn_count += 1;
+}
+
+// ---- Lifts -----------------------------------------------------------------
+//
+// A lift is a cab that moves between floor heights (levels). Each level has
+// landing doors that open when the cab is there. server/index.ts runs the
+// same state machine: a call goes to the server, the server sends it to
+// every client, and each client applies it. So all the cabs agree.
+
+pub const Phase = enum { idle, opening, open, closing, moving };
+
+pub const Lift = struct {
+    levels: [2]f32,
+    /// The cab floor and cab ceiling boxes (dynamic).
+    floor_box: usize,
+    ceil_box: usize,
+    /// The landing door halves, [level][half] (dynamic).
+    door_box: [2][2]usize,
+    /// The closed bounds of each door half, [level][half][min, max].
+    door_closed: [2][2][2]V3,
+    y: f32,
+    level: usize = 0, // the level the cab is at, or goes to
+    door: f32 = 0, // 0 closed, 1 open
+    phase: Phase = .idle,
+    hold: f32 = 0,
+    pending: ?usize = null,
+    /// The height change of the last step, to carry a rider.
+    dy: f32 = 0,
+};
+
+pub const lift_speed: f32 = 1.6;
+pub const door_time: f32 = 0.8;
+pub const door_hold: f32 = 6.0;
+pub const cab_height: f32 = 2.45;
+
+pub var lifts: [4]Lift = undefined;
+pub var lift_count: usize = 0;
+
+pub fn addLift(l: Lift) usize {
+    lifts[lift_count] = l;
+    lift_count += 1;
+    placeLift(&lifts[lift_count - 1]);
+    return lift_count - 1;
+}
+
+/// Call a lift to a level: a button press offline, or the server's echo of
+/// a press in deathmatch.
+pub fn callLift(i: usize, level: usize) void {
+    if (i >= lift_count) return;
+    const l = &lifts[i];
+    if (level >= l.levels.len) return;
+    switch (l.phase) {
+        .idle => {
+            if (l.level == level and @abs(l.y - l.levels[level]) < 0.01) {
+                l.phase = .opening;
+            } else {
+                l.level = level;
+                l.phase = .moving;
+            }
+        },
+        .open, .opening => {
+            if (level == l.level) {
+                l.hold = door_hold;
+            } else {
+                l.pending = level;
+                l.phase = .closing;
+            }
+        },
+        .closing => {
+            if (level == l.level) l.phase = .opening else l.pending = level;
+        },
+        .moving => l.pending = level,
     }
 }
 
-fn crate(x: f32, z: f32, size: f32, y0: f32) void {
-    put(x, z, size, size, size, y0, v3(0.55, 0.38, 0.22), .wood);
+pub fn stepLifts(dt: f32) void {
+    for (lifts[0..lift_count]) |*l| {
+        const before = l.y;
+        switch (l.phase) {
+            .idle => {},
+            .moving => {
+                const target = l.levels[l.level];
+                const d = target - l.y;
+                const step = lift_speed * dt;
+                if (@abs(d) <= step) {
+                    l.y = target;
+                    l.phase = .opening;
+                } else l.y += std.math.sign(d) * step;
+            },
+            .opening => {
+                l.door = @min(1, l.door + dt / door_time);
+                if (l.door >= 1) {
+                    l.phase = .open;
+                    l.hold = door_hold;
+                }
+            },
+            .open => {
+                l.hold -= dt;
+                if (l.hold <= 0) l.phase = .closing;
+            },
+            .closing => {
+                l.door = @max(0, l.door - dt / door_time);
+                if (l.door <= 0) {
+                    l.phase = .idle;
+                    if (l.pending) |p| {
+                        l.pending = null;
+                        if (p != l.level) {
+                            l.level = p;
+                            l.phase = .moving;
+                        }
+                    }
+                }
+            },
+        }
+        l.dy = l.y - before;
+        placeLift(l);
+    }
 }
 
-/// A shipping container, long side on X when `along_x`.
-fn container(x: f32, z: f32, along_x: bool, color: V3) void {
-    if (along_x) put(x, z, 6.0, 2.6, 2.4, 0, color, .metal) else put(x, z, 2.4, 2.6, 6.0, 0, color, .metal);
+/// Correct a lift from the server state: y, door, level and the phase
+/// number (the order of Phase).
+pub fn syncLift(i: usize, y: f32, door: f32, level: usize, phase: usize) void {
+    if (i >= lift_count or level >= 2 or phase > 4) return;
+    const l = &lifts[i];
+    if (@abs(l.y - y) > 0.3) l.y = y;
+    if (@abs(l.door - door) > 0.3) l.door = door;
+    l.level = level;
+    l.phase = @fromBackingInt(@intCast(phase));
+    placeLift(l);
 }
 
-pub fn build() void {
-    box_count = 0;
-    light_count = 0;
-    const sand = v3(0.78, 0.66, 0.52);
-    const terracotta = v3(0.72, 0.36, 0.24);
-    const bone = v3(0.86, 0.82, 0.74);
-    const teal = v3(0.13, 0.42, 0.45);
-    const rust = v3(0.55, 0.22, 0.12);
-    const navy = v3(0.16, 0.22, 0.36);
-
-    // Floor and the outer walls.
-    add(v3(-half - 2, -1, -half - 2), v3(half + 2, 0, half + 2), v3(0.44, 0.41, 0.38), .tile);
-    add(v3(-half - 1, 0, -half - 1), v3(half + 1, wall_h, -half), sand, .concrete);
-    add(v3(-half - 1, 0, half), v3(half + 1, wall_h, half + 1), sand, .concrete);
-    add(v3(-half - 1, 0, -half), v3(-half, wall_h, half), sand, .concrete);
-    add(v3(half, 0, -half), v3(half + 1, wall_h, half), sand, .concrete);
-    // A trim along the top of the walls.
-    add(v3(-half - 1.2, wall_h, -half - 1.2), v3(half + 1.2, wall_h + 0.3, -half + 0.2), terracotta, .concrete);
-    add(v3(-half - 1.2, wall_h, half - 0.2), v3(half + 1.2, wall_h + 0.3, half + 1.2), terracotta, .concrete);
-    add(v3(-half - 1.2, wall_h, -half), v3(-half + 0.2, wall_h + 0.3, half), terracotta, .concrete);
-    add(v3(half - 0.2, wall_h, -half), v3(half + 1.2, wall_h + 0.3, half), terracotta, .concrete);
-
-    // The centre platform, with stairs on the north and south sides.
-    put(0, 0, 10, 1.6, 10, 0, bone, .concrete);
-    for (0..4) |i| {
-        const f: f32 = @floatFromInt(i);
-        const h = 0.4 * (f + 1);
-        put(0, 5.0 + 0.6 * (3 - f) + 0.3, 3, h, 0.6, 0, bone, .concrete);
-        put(0, -5.0 - 0.6 * (3 - f) - 0.3, 3, h, 0.6, 0, bone, .concrete);
+fn placeLift(l: *Lift) void {
+    const fb = &boxes[l.floor_box];
+    const h = fb.max[1] - fb.min[1];
+    fb.max[1] = l.y;
+    fb.min[1] = l.y - h;
+    const cb = &boxes[l.ceil_box];
+    const ch = cb.max[1] - cb.min[1];
+    cb.min[1] = l.y + cab_height;
+    cb.max[1] = cb.min[1] + ch;
+    // Only the doors of the level where the cab stands open. The two
+    // halves slide apart along X.
+    for (0..2) |lv| {
+        const here = @abs(l.y - l.levels[lv]) < 0.05;
+        const open = if (here) l.door else 0;
+        for (0..2) |half| {
+            const closed = l.door_closed[lv][half];
+            const w = closed[1][0] - closed[0][0];
+            const dir: f32 = if (half == 0) -1 else 1;
+            const off = v3(dir * w * 0.92 * vec.smooth(open), 0, 0);
+            boxes[l.door_box[lv][half]].min = closed[0] + off;
+            boxes[l.door_box[lv][half]].max = closed[1] + off;
+        }
     }
-    put(-3.2, 0, 0.5, 1.0, 4, 1.6, terracotta, .concrete);
-    put(3.2, 0, 0.5, 1.0, 4, 1.6, terracotta, .concrete);
-    crate(0, 0, 1.2, 1.6);
-
-    // Four corner buildings: two walls each, with a doorway gap.
-    const corners = [_][2]f32{ .{ -1, -1 }, .{ 1, -1 }, .{ -1, 1 }, .{ 1, 1 } };
-    for (corners) |c| {
-        const cx = c[0] * 17;
-        const cz = c[1] * 17;
-        put(cx, cz + c[1] * 3.5, 8, 3.4, 0.6, 0, terracotta, .concrete);
-        put(cx + c[0] * 3.7, cz - c[1] * 0.5, 0.6, 3.4, 4, 0, terracotta, .concrete);
-        // A roof slab gives shade over half of the floor.
-        put(cx + c[0] * 1, cz + c[1] * 1.6, 6.2, 0.3, 4.4, 3.4, bone, .concrete);
-        crate(cx - c[0] * 1.5, cz + c[1] * 1.8, 1.0, 0);
-    }
-
-    // Containers on the sides.
-    container(-12, 0, false, teal);
-    container(12, 0, false, rust);
-    container(0, -14, true, navy);
-    container(0, 14, true, teal);
-    put(-12, 0, 2.4, 2.6, 2.6, 2.6, rust, .metal);
-
-    // Pillars.
-    const pillars = [_][2]f32{ .{ -8, -8 }, .{ 8, -8 }, .{ -8, 8 }, .{ 8, 8 } };
-    for (pillars) |p| {
-        put(p[0], p[1], 1.0, 5.0, 1.0, 0, bone, .concrete);
-        put(p[0], p[1], 1.3, 0.3, 1.3, 5.0, terracotta, .concrete);
-    }
-
-    // Low cover walls and crates.
-    put(-20, -6, 4, 1.1, 0.5, 0, sand, .concrete);
-    put(20, 6, 4, 1.1, 0.5, 0, sand, .concrete);
-    put(-6, 21, 0.5, 1.1, 4, 0, sand, .concrete);
-    put(6, -21, 0.5, 1.1, 4, 0, sand, .concrete);
-    crate(-22, 10, 1.4, 0);
-    crate(-20.6, 10.3, 1.2, 0);
-    crate(-21.6, 10.2, 1.0, 1.4);
-    crate(22, -10, 1.4, 0);
-    crate(20.6, -10.3, 1.2, 0);
-    crate(9, 23, 1.2, 0);
-    crate(-9, -23, 1.2, 0);
-    crate(25, 18, 1.4, 0);
-    crate(-25, -18, 1.4, 0);
-
-    // Lamps along the routes.
-    lamp(-12, 5, 4.2);
-    lamp(12, -5, 4.2);
-    lamp(-5, -14, 4.2);
-    lamp(5, 14, 4.2);
-    lamp(-24, -12, 4.2);
-    lamp(24, 12, 4.2);
 }
+
+// ---- Buttons ---------------------------------------------------------------
+
+pub const Button = struct {
+    min: V3,
+    max: V3,
+    lift: usize,
+    level: usize,
+    /// A cab button moves with the cab: its y is relative to the cab floor.
+    in_cab: bool,
+};
+
+pub var buttons: [16]Button = undefined;
+pub var button_count: usize = 0;
+
+pub fn addButton(b: Button) void {
+    if (button_count >= buttons.len) return;
+    buttons[button_count] = b;
+    button_count += 1;
+}
+
+pub fn buttonBounds(b: *const Button) [2]V3 {
+    if (!b.in_cab) return .{ b.min, b.max };
+    const y = lifts[b.lift].y;
+    return .{ b.min + v3(0, y, 0), b.max + v3(0, y, 0) };
+}
+
+/// True while the lift of the button goes to, or waits at, its level.
+pub fn buttonLit(b: *const Button) bool {
+    const l = &lifts[b.lift];
+    if (l.pending) |p| if (p == b.level) return true;
+    return l.level == b.level and l.phase != .idle;
+}
+
+/// The button that the ray points at within reach, if no wall is nearer.
+pub fn pickButton(o: V3, d: V3, reach: f32) ?usize {
+    var best: ?usize = null;
+    var best_t: f32 = reach;
+    for (buttons[0..button_count], 0..) |*b, i| {
+        const bb = buttonBounds(b);
+        if (rayBox(o, d, bb[0] - vec.s(0.05), bb[1] + vec.s(0.05))) |h| {
+            if (h.t < best_t) {
+                best_t = h.t;
+                best = i;
+            }
+        }
+    }
+    if (best == null) return null;
+    if (raycast(o, d, best_t)) |wall| if (wall.t < best_t - 0.08) return null;
+    return best;
+}
+
+// ---- Escalators ------------------------------------------------------------
+
+/// A zone that moves a player who stands in it, at a constant velocity.
+pub const Escalator = struct { min: V3, max: V3, vel: V3 };
+
+pub var escalators: [4]Escalator = undefined;
+pub var escalator_count: usize = 0;
+
+pub fn addEscalator(e: Escalator) void {
+    if (escalator_count >= escalators.len) return;
+    escalators[escalator_count] = e;
+    escalator_count += 1;
+}
+
+/// The escalator velocity at these feet, or zero.
+pub fn escalatorAt(p: V3) V3 {
+    for (escalators[0..escalator_count]) |e| {
+        if (p[0] > e.min[0] and p[0] < e.max[0] and p[1] > e.min[1] and p[1] < e.max[1] and
+            p[2] > e.min[2] and p[2] < e.max[2]) return e.vel;
+    }
+    return v3(0, 0, 0);
+}
+
+// ---- Queries ---------------------------------------------------------------
 
 pub const Hit = struct {
     t: f32,
@@ -221,4 +450,28 @@ pub fn overlaps(min: V3, max: V3) bool {
             min[2] < b.max[2] and max[2] > b.min[2]) return true;
     }
     return false;
+}
+
+/// The lift and level whose doorway these feet stand in, or null.
+pub fn doorwayAt(feet: V3) ?struct { lift: usize, level: usize } {
+    for (lifts[0..lift_count], 0..) |l, i| {
+        for (0..2) |lv| {
+            const mn = l.door_closed[lv][0][0];
+            const mx = l.door_closed[lv][1][1];
+            if (feet[0] > mn[0] and feet[0] < mx[0] and feet[2] > mn[2] - 0.6 and feet[2] < mx[2] + 0.6 and
+                feet[1] > mn[1] - 0.3 and feet[1] < mn[1] + 1.0) return .{ .lift = i, .level = lv };
+        }
+    }
+    return null;
+}
+
+/// The lift whose cab floor is under these feet, or null.
+pub fn liftUnder(feet: V3, radius: f32) ?usize {
+    for (lifts[0..lift_count], 0..) |l, i| {
+        const b = boxes[l.floor_box];
+        if (feet[0] + radius > b.min[0] and feet[0] - radius < b.max[0] and
+            feet[2] + radius > b.min[2] and feet[2] - radius < b.max[2] and
+            @abs(feet[1] - b.max[1]) < 0.12) return i;
+    }
+    return null;
 }

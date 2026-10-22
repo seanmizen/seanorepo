@@ -72,6 +72,12 @@ pub const Player = struct {
     /// One fixed step. `wish` is the input direction in world XZ (length 0
     /// to 1).
     pub fn step(self: *Player, dt: f32, wish: V3, jump: bool, speed_scale: f32) void {
+        // An escalator moves a player who stands on it.
+        if (self.grounded) {
+            const carry = map.escalatorAt(self.pos + v3(0, 0.05, 0));
+            if (carry[0] != 0) _ = self.moveAxis(0, carry[0] * dt);
+            if (carry[2] != 0) _ = self.moveAxis(2, carry[2] * dt);
+        }
         const target = wish * vec.s(walk_speed * speed_scale);
         const accel = if (self.grounded) ground_accel else air_accel;
         inline for (.{ 0, 2 }) |a| {
@@ -96,7 +102,10 @@ pub const Player = struct {
             // Still on the ground when a small probe down hits.
             self.grounded = falling and blocked(self.pos - v3(0, 0.04, 0));
         }
-        if (self.pos[1] < -5) self.pos = v3(0, 2, 0);
+        if (self.pos[1] < map.kill_y and map.spawn_count > 0) {
+            self.pos = map.spawns[0].pos;
+            self.vel = v3(0, 0, 0);
+        }
         const moved = self.pos - before;
         if (self.grounded) self.stride += @sqrt(moved[0] * moved[0] + moved[2] * moved[2]);
     }
