@@ -1,0 +1,10 @@
+.{
+    .name = .action,
+    .version = "0.1.0",
+    .fingerprint = 0x47cc8c923d6ae396,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .swindowzig = .{ .path = "../../../utils/swindowzig" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}

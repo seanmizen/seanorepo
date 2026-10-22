@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#16110d" />
+    <title>ACTION</title>
+    <meta name="description" content="A first-person shooter in the browser. Always-on deathmatch and target practice. WebGPU." />
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #16110d; color: #f5f0e8;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      #canvas { display: block; width: 100vw; height: 100vh; }
+      #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+      #overlay.hidden { display: none; }
+      #overlay .card { max-width: 30rem; padding: 2rem; background: rgba(12, 14, 20, 0.9); border-top: 3px solid #ffa64d; }
+      #overlay h1 { margin: 0 0 0.75rem; font-size: 1.4rem; letter-spacing: 0.04em; }
+      #overlay p { margin: 0; line-height: 1.5; color: #c8c0b4; }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+      <div class="card">
+        <h1 id="title">ACTION</h1>
+        <p id="message">Loading...</p>
+      </div>
+    </div>
+    <script type="module" src="./boot.js"></script>
+  </body>
+</html>
