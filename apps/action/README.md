@@ -17,7 +17,7 @@ Controls:
 | Key | Action |
 |---|---|
 | WASD | move |
-| Space | jump |
+| Space | jump. While you walk forward into a shape 0.5 to 1.4 m high (a wall, a railing): vault onto it. You end on top, not over it. |
 | Mouse | look |
 | Left click | fire |
 | Right click | aim down the sights |
@@ -376,7 +376,7 @@ reads the actions, not the keys (`game/src/game_console.zig`).
 | Action | Default key | Does |
 |---|---|---|
 | `+forward`, `+back`, `+moveleft`, `+moveright` | W, S, A, D | move |
-| `+jump` | Space | jump |
+| `+jump` | Space | jump. While you walk forward into a shape 0.5 to 1.4 m high (a wall, a railing): vault onto it. You end on top, not over it. |
 | `+attack` | mouse1 | fire, knife, throw the grenade in the hand |
 | `+aim` | mouse2 | the sights |
 | `+reload` | R | reload |
@@ -1175,6 +1175,22 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
   66.7 m east or west of the shed centre, just past the ends of the
   concourses. On the District line tracks, yellow danger boards show where
   it starts.
+- **Ticket gates** (Earl's Court, `game/src/gates.zig`): a gate line of 8
+  lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
+  passage. Screens close the rest of each hall.
+  - Seen from the street, the right half of a line is IN and the left half
+    is OUT. A lane has a green light at the end where you go in and a red
+    light at the other end.
+  - The paddles are closed. Aim at the yellow reader from the entry side
+    and press F (TAP OYSTER): the paddles open. From the wrong side the
+    reader shows red.
+  - A tap in shows "-£0.01 (amount pending)". 60 to 240 s later the fare
+    shows: -£3.10, the Zone 1 pay-as-you-go peak single (from March 2026).
+    If you tapped out before that, it shows a refund.
+  - A crossing of a gate line by any other way (a vault, a jump) is a fare
+    dodge. 2 s later the server kills you: `{t:"die", by:"Guilt"}`. The
+    kill feed shows Guilt, and the death screen says "Died of guilt. Fare
+    dodging is a serious crime".
 - **Pigeons** (Earl's Court, `game/src/pigeons.zig`): 12 pigeons sit on
   the tie rods of the train shed roof, at 11.5 m. They bob, look round,
   peck, coo, and now and then take a short flight and land again.
@@ -1229,6 +1245,7 @@ apps/action/
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
 │       ├── shooter.zig   the NPC shooter of the range: the NPC, its rounds, the control panel
 │       ├── shooter_hud.zig  the text of the NPC shooter panel, on the HUD
+│       ├── gates.zig     the ticket gates: the lanes, the paddles, the Oyster readers, the fares, the fare dodge
 │       ├── pigeons.zig   the pigeons of the train shed: the perches, the flights, the bodies
 │       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights
 │       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung

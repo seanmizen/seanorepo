@@ -56,6 +56,7 @@ const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
 const pigeons = @import("pigeons.zig");
 const vapes = @import("vapes.zig");
+const gates = @import("gates.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -310,7 +311,89 @@ fn pushFeed(line: []const u8, mine: bool) void {
     feed_n += 1;
 }
 
+/// A vault (Space while walking into a waist-high shape): the feet at the
+/// start and on top, and the progress (0 to 1).
+const Vault = struct { from: V3, to: V3, k: f32 };
+var vault: ?Vault = null;
+const vault_time: f32 = 0.45;
+/// A fare dodge (gates.zig): the seconds to the death by guilt, or < 0.
+var guilt_t: f32 = -1;
+
+/// The feet on top of a shape in front of the player, for a vault: a top
+/// 0.5 to 1.4 m over the feet, in reach, with room for the body on it. The
+/// feet go over the middle of a thin shape (a railing), or 0.35 m past the
+/// edge of a wide one. Null when there is nothing to vault.
+fn findVault() ?V3 {
+    const f = v3(-@sin(me.yaw), 0, -@cos(me.yaw));
+    const r = player_mod.radius;
+    var top: ?f32 = null;
+    var d0: f32 = 0;
+    var d1: f32 = 0;
+    var d: f32 = 0.1;
+    while (d < r + 1.0) : (d += 0.04) {
+        const p = me.pos + f * vec.s(d);
+        const t = map.floorTop(v3(p[0] - 0.03, me.pos[1] + 0.5, p[2] - 0.03), v3(p[0] + 0.03, me.pos[1] + 1.4, p[2] + 0.03));
+        if (top) |t0| {
+            if (t == null or @abs(t.? - t0) > 0.05) break;
+            d1 = d;
+        } else if (t) |tt| {
+            top = tt;
+            d0 = d;
+            d1 = d;
+        } else if (d > r + 0.4) return null;
+    }
+    const y = top orelse return null;
+    const to = v3(me.pos[0], y + 0.002, me.pos[2]) + f * vec.s(@min((d0 + d1) / 2, d0 + 0.35));
+    // Room for the body on top, and over the start at the top height.
+    if (map.overlaps(to + v3(-r, 0.01, -r), to + v3(r, player_mod.height, r))) return null;
+    const up = y - me.pos[1];
+    if (map.overlaps(me.pos + v3(-r, up + 0.01, -r), me.pos + v3(r, up + player_mod.height, r))) return null;
+    return to;
+}
+
+/// One tick of a vault: the feet go up first, then along onto the top.
+fn stepVault() void {
+    const v = &vault.?;
+    v.k = @min(1, v.k + dt / vault_time);
+    const up = vec.smooth(v.k / 0.55);
+    const along = vec.smooth((v.k - 0.3) / 0.7);
+    me.pos = v3(v.from[0] + (v.to[0] - v.from[0]) * along, v.from[1] + (v.to[1] - v.from[1]) * up, v.from[2] + (v.to[2] - v.from[2]) * along);
+    me.vel = v3(0, 0, 0);
+    if (v.k >= 1) {
+        me.pos = v.to;
+        me.grounded = true;
+        vault = null;
+    }
+}
+
+/// A fare dodge: death by guilt 2 s later (deathmatch only: the server
+/// makes the death).
+fn startGuilt() void {
+    if (guilt_t < 0 and mode == .deathmatch and alive) guilt_t = 2;
+}
+
+/// The Oyster reader under the crosshair, within reach (gates.zig).
+fn aimedReader() ?usize {
+    if (mode == .menu or (mode == .deathmatch and !alive)) return null;
+    return gates.pick(me.eyePos(), vec.forward(me.yaw, me.pitch));
+}
+
+/// The fare messages of the gates, at the crosshair, like the damage
+/// numbers of the range.
+fn drawFares(r: *gfx.Renderer, cx: f32, cy: f32) void {
+    for (gates.pops[0..gates.pop_n], 0..) |p, i| {
+        const a = vec.clamp01((gates.pop_life - p.age) / 0.5);
+        const slot: f32 = @floatFromInt(gates.pop_n - 1 - i);
+        const y = cy - 70 - slot * 26 - p.age * 8;
+        const col = if (p.good) gfx.Color{ .r = 0.4, .g = 1, .b = 0.5, .a = a } else gfx.Color{ .r = 0.95, .g = 0.25, .b = 0.2, .a = a };
+        txt(r, p.text[0..p.len], cx + 27.5, y + 1.5, 20, .{ .r = 0, .g = 0, .b = 0, .a = 0.6 * a });
+        txt(r, p.text[0..p.len], cx + 26, y, 20, col);
+    }
+}
+
 fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
+    vault = null;
+    guilt_t = -1;
     shocked = false;
     vapes.stop();
     me = .{ .pos = v3(x, y, z), .yaw = yaw };
@@ -1422,7 +1505,18 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     const jump = !frozen and act.down(.jump);
     // The held weapon sets the walk speed (weapon.zig table).
     const speed_scale: f32 = (1 - 0.45 * loadout.hands.ads) * loadout.heldStats().speed;
-    if (mode != .deathmatch or alive) me.step(dt, wish, jump, speed_scale);
+    if (mode != .deathmatch or alive) {
+        // Space while walking forward, into a waist-high shape: a vault
+        // onto it. A vault onto the gates is a fare dodge.
+        if (vault == null and !frozen and !shortcut and act.pressed(.jump) and act.down(.forward) and me.grounded) {
+            if (findVault()) |to| {
+                vault = .{ .from = me.pos, .to = to, .k = 0 };
+                sound(1, null, 0.12, .noise, 0.08);
+                if (gates.onGates(to)) startGuilt();
+            }
+        }
+        if (vault != null) stepVault() else me.step(dt, wish, jump, speed_scale);
+    }
     // Q leans left and E leans right while held.
     var lean_want: f32 = 0;
     if (!frozen and !shortcut) {
@@ -1440,6 +1534,12 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
             pressPanel(b);
         } else if (aimedButton()) |b| {
             pressButton(b);
+        } else if (aimedReader()) |g| {
+            // The beep of a good tap, or the low tone of a refusal.
+            switch (gates.tap(g, me.pos)) {
+                .tapped_in, .tapped_out => sound(1850, null, 0.12, .sine, 0.2),
+                .wrong_side => sound(320, null, 0.25, .square, 0.1),
+            }
         } else if (aimedPigeon()) |i| {
             pigeons.grab(i);
             sound(420, 300, 0.05, .triangle, 0.1);
@@ -1626,6 +1726,8 @@ fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
 fn tick(ctx: *sw.Context) void {
     ticks += 1;
     time += dt;
+    // The feet at the start of the tick: the gates check the crossing.
+    const feet_before = me.pos;
     // Before the server corrections and the lift steps move a cab.
     under_feet = map.platformUnder(me.pos);
     // A press or a release of an action lasts one tick.
@@ -1810,6 +1912,17 @@ fn tick(ctx: *sw.Context) void {
     }
     if (ownBodyShows()) own_feet.update(ownPose(), dt, me.grounded);
     stepGrenades();
+    // The gates: the paddles, the fares, a fare dodge. A move of more than
+    // 2 m in a tick is a spawn or a teleport, not a crossing.
+    const play = ownBodyShows() and vec.len(me.pos - feet_before) < 2;
+    if (gates.step(dt, if (play) feet_before else null, if (play) me.pos else null, player_mod.radius, player_mod.height) == .dodged) startGuilt();
+    if (guilt_t >= 0) {
+        guilt_t -= dt;
+        if (guilt_t < 0 and mode == .deathmatch and alive) {
+            client.send("{{\"t\":\"die\",\"by\":\"Guilt\"}}", .{});
+            sound(110, 55, 0.8, .sawtooth, 0.25);
+        }
+    }
     // The pigeons: the flights, the bodies, the one in the hand, the kicks.
     pigeons.step(dt);
     if (pigeons.held != null) {
@@ -2373,7 +2486,9 @@ fn drawDeathmatch(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !bool {
             std.fmt.bufPrint(&buf, "DIED OF {s}", .{std.ascii.upperString(&cause, killed_by[0..killed_by_len])}) catch ""
         else
             std.fmt.bufPrint(&buf, "KILLED BY {s}", .{killed_by[0..killed_by_len]}) catch "";
-        txtCenter(r, t, cx, cy - 60, 30, red);
+        if (died_of and std.mem.eql(u8, killed_by[0..killed_by_len], "Guilt")) {
+            txtCenter(r, "Died of guilt. Fare dodging is a serious crime", cx, cy - 60, 28, red);
+        } else txtCenter(r, t, cx, cy - 60, 30, red);
         txtCenter(r, "you respawn in a moment", cx, cy - 20, 16, dim);
     }
     if (gcon.act.down(.scores)) try drawScoreboard(r, w, h, "SCORES");
@@ -2607,13 +2722,14 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     }
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
     if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
+    drawFares(r, w / 2, h / 2);
     if (captured) {
         // The use hint: a pigeon in the hand, a button of the shooter panel,
         // a lift button, a dead pigeon, or a vape.
         const what: ?[]const u8 = if (pigeons.held != null) "THROW PIGEON" else if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
             const b = map.buttons[bi];
             break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        } else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedVape() != null) "USE VAPE" else null;
+        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedVape() != null) "USE VAPE" else null;
         if (what) |wt| {
             var kb: [24]u8 = undefined;
             var line: [48]u8 = undefined;
@@ -2701,6 +2817,7 @@ fn gameRender(ctx: *sw.Context) !void {
     if (map.train) |tr| buildTrain(tr);
     if (map.id == .earls_court) buildEscalatorSteps();
     pigeons.build(&dyn, time);
+    gates.build(&dyn);
     if (mode == .practice) {
         for (&targets) |*t| buildTarget(t);
         for (&range.dummies) |*d| buildDummy(d);
