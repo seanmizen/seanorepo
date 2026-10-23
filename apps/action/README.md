@@ -23,7 +23,7 @@ Controls:
 | B | weapon menu (also on the pause screen) |
 | F | use: press the button under the crosshair (lifts) |
 | Q, E (hold) | lean left, lean right |
-| Tab | scores |
+| Tab | the score board: kills, deaths and the ping of each player |
 | Esc | release the mouse (pause) |
 | M (paused) | main menu |
 
@@ -100,6 +100,9 @@ of Earl's Court, and walk and ride each escalator. Each walk must keep the
 feet on the ground and the eye height smooth (at most 5 cm in a tick). It
 must not stop at a wall or a ceiling edge, and the head bob must follow
 the walking speed.
+
+`yarn workspace action test` runs the Bun tests of the server
+(`server/*.test.ts`): the ping calculation in `server/ping.test.ts`.
 
 ## Weapons
 
@@ -275,6 +278,7 @@ apps/action/
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)
 │       └── assets/       guns.bin (generated), Lato font (OFL)
 ├── server/index.ts       Bun: static files + the lobby on /api/ws, port 4080
+├── server/ping.ts        the ping of each player (ping.test.ts: bun test)
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── public/index.html
 ├── assets/guns/          the licence of the gun models
@@ -303,6 +307,39 @@ from its own table. It does not check line of sight. The other players see
 the held weapon (`w` and `m` in the `st` and `snap` messages). For a grenade, the thrower's client calculates the damage, cover
 included, and sends it in one `blast` message. The server checks the throws
 left in the life, the damage range and the distance to each target.
+
+### Ping
+
+The server measures the round-trip time to each player with its own
+messages (`server/ping.ts`). It does not use the game traffic.
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"ping", n}` | the server, to one player | ping number `n` |
+| `{t:"pong", n}` | the client, to the server | the answer to ping `n`. `net.zig` sends it in `poll`, at once. |
+| `{t:"pings", ms:[[id, ms, stale], ...]}` | the server, to all players | the ping of each player. `ms` is -1 before the first answer. `stale` is 1 after 10 s with no answer. |
+
+- **The interval is 2 s** (`PING_INTERVAL_MS` in `server/ping.ts`, the
+  only place to change it). Each round, the server sends a ping to each
+  player and one `pings` list to all players. The list is about 10 bytes
+  for each player. A ping field in the snapshot (20 times a second) costs
+  about 30 times more traffic, for a number that changes slowly.
+- **One ping at a time.** A WebSocket does not lose a message, so the
+  server waits for the answer before it sends the next ping.
+- **The sample** is the time from the ping to the pong. It includes the
+  wait for the next frame of the client, up to about 17 ms at 60 frames a
+  second.
+- **The value** is the median of the last 5 samples (10 s). The median
+  ignores one late answer, for example after a background tab, and it
+  changes little from one round to the next.
+- **The score board** (Tab) shows the value in whole milliseconds, right
+  aligned, in a smaller font than the kills and the deaths. A player with
+  no value yet shows `-`.
+- **Stale:** the server does not remove a player that gives no answer for
+  10 s (`PING_STALE_MS`). The score board shows its last value in red with
+  a question mark, for example `312?`. The next answer removes the mark. A
+  browser tab in the background does not run the game, so it gives no
+  answer.
 
 ## Deploy
 

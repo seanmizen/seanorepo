@@ -143,11 +143,16 @@ const Remote = struct {
     /// The held weapon: its class and its model.
     w: weapon.Class = .rifle,
     m: u8 = 0,
+    /// The ping in ms (-1: no value yet), and stale: no answer for 10 s.
+    ping: i32 = -1,
+    ping_stale: bool = false,
 };
 var remotes: [24]Remote = undefined;
 var remote_n: usize = 0;
 var my_k: u32 = 0;
 var my_d: u32 = 0;
+var my_ping: i32 = -1;
+var my_ping_stale = false;
 const FeedLine = struct { text: [64]u8, len: usize, life: f32, mine: bool };
 var feed: [5]FeedLine = undefined;
 var feed_n: usize = 0;
@@ -519,6 +524,8 @@ fn enterDeathmatch(ctx: *sw.Context) void {
     my_id = 0;
     my_k = 0;
     my_d = 0;
+    my_ping = -1;
+    my_ping_stale = false;
     sent_hello = false;
     alive = false;
     dead_time = 0;
@@ -948,6 +955,22 @@ fn handleSnap(m: net.Msg) void {
     }
 }
 
+/// The pings of the players, each 2 s (server/ping.ts).
+fn handlePings(m: net.Msg) void {
+    for (m.ms orelse &.{}) |row| {
+        const id: u32 = @intCast(@max(0, row[0]));
+        const ms = @max(-1, row[1]);
+        const stale = row[2] != 0;
+        if (id == my_id) {
+            my_ping = ms;
+            my_ping_stale = stale;
+        } else if (findRemote(id)) |r| {
+            r.ping = ms;
+            r.ping_stale = stale;
+        }
+    }
+}
+
 fn handleNet() void {
     client.beginFrame();
     if (client.state() == .open and !sent_hello) {
@@ -959,6 +982,8 @@ fn handleNet() void {
             my_id = m.id orelse 0;
         } else if (std.mem.eql(u8, m.t, "snap")) {
             handleSnap(m);
+        } else if (std.mem.eql(u8, m.t, "pings")) {
+            handlePings(m);
         } else if (std.mem.eql(u8, m.t, "spawn")) {
             // The spawn carries the weapons of the new life.
             if (choiceFrom(m.p, m.s)) |c| applied = c;
@@ -1662,8 +1687,15 @@ fn moreKills(_: void, a: usize, b: usize) bool {
     return kills(a) > kills(b);
 }
 
+/// A ping cell: whole ms, "-" with no value yet, and a "?" after a stale
+/// value.
+fn pingText(buf: []u8, ms: i32, stale: bool) []const u8 {
+    if (ms < 0) return "-";
+    return std.fmt.bufPrint(buf, "{d}{s}", .{ ms, if (stale) "?" else "" }) catch "";
+}
+
 fn drawScoreboard(r: *gfx.Renderer, w: f32, h: f32, title: []const u8) !void {
-    const pw: f32 = 520;
+    const pw: f32 = 600;
     const rows = remote_n + 1;
     const ph: f32 = 110 + @as(f32, @floatFromInt(rows)) * 34;
     const x = w / 2 - pw / 2;
@@ -1672,8 +1704,9 @@ fn drawScoreboard(r: *gfx.Renderer, w: f32, h: f32, title: []const u8) !void {
     try r.fillRect(.{ .x = x, .y = y, .w = pw, .h = 3 }, accent);
     txtCenter(r, title, w / 2, y + 18, 26, white);
     txt(r, "PLAYER", x + 24, y + 66, 13, dim);
-    txtRight(r, "KILLS", x + pw - 120, y + 66, 13, dim);
-    txtRight(r, "DEATHS", x + pw - 24, y + 66, 13, dim);
+    txtRight(r, "KILLS", x + pw - 200, y + 66, 13, dim);
+    txtRight(r, "DEATHS", x + pw - 110, y + 66, 13, dim);
+    txtRight(r, "PING (ms)", x + pw - 24, y + 66, 13, dim);
 
     // Sort by kills. Index remote_n is this player.
     var order: [25]usize = undefined;
@@ -1689,8 +1722,12 @@ fn drawScoreboard(r: *gfx.Renderer, w: f32, h: f32, title: []const u8) !void {
         const c = colorFor(if (is_me) my_id else remotes[idx].id);
         try r.fillRect(.{ .x = x + 24, .y = ry + 4, .w = 10, .h = 14 }, .{ .r = c[0], .g = c[1], .b = c[2], .a = 1 });
         txt(r, name, x + 44, ry, 18, if (is_me) accent else white);
-        txtRight(r, std.fmt.bufPrint(&buf, "{d}", .{kills(idx)}) catch "", x + pw - 120, ry, 18, white);
-        txtRight(r, std.fmt.bufPrint(&buf, "{d}", .{d}) catch "", x + pw - 24, ry, 18, dim);
+        txtRight(r, std.fmt.bufPrint(&buf, "{d}", .{kills(idx)}) catch "", x + pw - 200, ry, 18, white);
+        txtRight(r, std.fmt.bufPrint(&buf, "{d}", .{d}) catch "", x + pw - 110, ry, 18, dim);
+        // The ping: a smaller font than the stats, on the same baseline.
+        const ping = if (is_me) my_ping else remotes[idx].ping;
+        const stale = if (is_me) my_ping_stale else remotes[idx].ping_stale;
+        txtRight(r, pingText(&buf, ping, stale), x + pw - 24, ry + 3, 14, if (stale and ping >= 0) red else dim);
     }
 }
 
