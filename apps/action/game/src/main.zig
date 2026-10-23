@@ -122,6 +122,9 @@ var own_feet: body_mod.Feet = .{};
 var static_mesh: mesh.Mesh = undefined;
 var map_loaded = false;
 var door_reopened: [4]bool = @splat(false);
+/// The moving platform under the feet at the start of this tick, before
+/// anything moves (map.Platform): a lift cab floor.
+var under_feet: ?map.Platform = null;
 var shocked = false;
 var dyn: mesh.Mesh = undefined;
 // The alpha-blended triangles of a frame (smoke, the debug blast volume).
@@ -176,6 +179,9 @@ const Remote = struct {
     /// The ping in ms (-1: no value yet), and stale: no answer for 10 s.
     ping: i32 = -1,
     ping_stale: bool = false,
+    /// The lift whose cab the player stands in, or -1. The feet then stay
+    /// on the cab floor of this client.
+    lift: i32 = -1,
 };
 var remotes: [24]Remote = undefined;
 var remote_n: usize = 0;
@@ -1070,6 +1076,15 @@ fn findRemote(id: u32) ?*Remote {
     return null;
 }
 
+/// The lift whose cab the player stands in, or -1: the `lift` field of the
+/// st message.
+fn cabIndex() i32 {
+    const p = under_feet orelse return -1;
+    if (@reduce(.Or, p.feet != me.pos)) return -1;
+    const i = map.liftOfBox(p.box) orelse return -1;
+    return @intCast(i);
+}
+
 fn handleSnap(m: net.Msg) void {
     phase_end = if (m.phase) |p| std.mem.eql(u8, p, "end") else false;
     time_left = m.left orelse 0;
@@ -1104,6 +1119,7 @@ fn handleSnap(m: net.Msg) void {
         rem.lean_target = std.math.clamp(p.lean, -1, 1);
         rem.w = weapon.classFromId(p.w) orelse .rifle;
         rem.m = @intCast(@min(p.m, 255));
+        rem.lift = p.lift;
         rem.hp = p.hp;
         rem.k = p.k;
         rem.d = p.d;
@@ -1410,6 +1426,11 @@ fn effectsTick() void {
         const k = @min(1, dt * 14);
         const before = r.pos;
         r.pos = vec.lerp(r.pos, r.target, k);
+        // A player in a cab stands on the cab of this client. The reported
+        // height comes later than the cab (the network and the smoothing).
+        if (r.lift >= 0) if (map.cabFloorAt(@intCast(r.lift), r.pos)) |y| {
+            r.pos[1] = y;
+        };
         const mv = r.pos - before;
         r.stride += @sqrt(mv[0] * mv[0] + mv[2] * mv[2]);
         r.vel += (mv / vec.s(dt) - r.vel) * vec.s(@min(1, dt * 10));
@@ -1501,6 +1522,8 @@ fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
 fn tick(ctx: *sw.Context) void {
     ticks += 1;
     time += dt;
+    // Before the server corrections and the lift steps move a cab.
+    under_feet = map.platformUnder(me.pos);
     // A press or a release of an action lasts one tick.
     defer gcon.act.endTick();
     const in = consoleTick(ctx);
@@ -1565,9 +1588,10 @@ fn tick(ctx: *sw.Context) void {
             }
             if (ticks % 6 == 0 and alive and session.joined()) {
                 // w and m: the class and the model of the held weapon, so
-                // the others see it.
-                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d}}}", .{
-                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(),
+                // the others see it. lift: the cab that the player stands
+                // in, so the others draw the player on their own cab.
+                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d},\"lift\":{d}}}", .{
+                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(), cabIndex(),
                 });
             }
         },
@@ -1603,10 +1627,10 @@ fn tick(ctx: *sw.Context) void {
         damage_flash = 1;
     }
 
-    // Lifts carry a player who stands in the cab.
-    const riding = map.liftUnder(me.pos, player_mod.radius);
+    // A player in a cab moves with it: the lift step and the server
+    // corrections of this tick (map.Platform).
     map.stepLifts(dt);
-    if (riding) |li| me.pos[1] += map.lifts[li].dy;
+    if (under_feet) |p| me.ride(p);
     // Closing doors open again for a player in the doorway, once each time.
     for (map.lifts[0..map.lift_count], 0..) |l, i| {
         if (l.phase != .closing) door_reopened[i] = false;

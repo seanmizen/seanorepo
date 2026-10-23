@@ -883,9 +883,12 @@ fn deepLevel() void {
     for ([_]f32{ plat_x[0] - 0.3, plat_x[1] }) |xa| {
         for ([_][2]f32{ .{ t5[1] + 0.3, p5[1] }, .{ p6[0], t6[0] - 0.3 } }) |p| box(v3(xa, y, p[0]), v3(xa + 0.3, deep_ceil, p[1]), tile_c, .wall_tile, .tile);
     }
-    // The ceiling, with the escalator shaft cut out (its riders need head
-    // room), and the dark ends of the world.
-    map.carve(rect(-line_end, line_end, t5[0] - 0.4, t6[1] + 0.4), deep_ceil, deep_ceil + 0.6, &.{rect(esc_top_x, esc_bottom_x, esc_z[0] - 0.3, esc_z[1] + 0.3)}, v3(0.12, 0.11, 0.1), .concrete, .concrete);
+    // The ceiling, with the escalator shaft and the deep lift shaft cut out
+    // (their riders need head room), and the dark ends of the world. A
+    // slab across the lift shaft catches a rider on the way down: the step
+    // up puts the feet on it, and the cab goes on without the player. The
+    // floorplan audit checks each shaft.
+    map.carve(rect(-line_end, line_end, t5[0] - 0.4, t6[1] + 0.4), deep_ceil, deep_ceil + 0.6, &.{ rect(esc_top_x, esc_bottom_x, esc_z[0] - 0.3, esc_z[1] + 0.3), deep_lift }, v3(0.12, 0.11, 0.1), .concrete, .concrete);
     box(v3(-line_end, y - 1.2, t5[0] - 0.4), v3(-line_end + 0.4, deep_ceil, t6[1] + 0.4), dark, .paint, .concrete);
     box(v3(line_end - 0.4, y - 1.2, t5[0] - 0.4), v3(line_end, deep_ceil, t6[1] + 0.4), dark, .paint, .concrete);
 

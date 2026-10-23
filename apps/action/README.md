@@ -59,7 +59,7 @@ foot height. A player who fires shows on it for a moment.
 ```bash
 zig build floorplan -- earls_court plan 1 out.ppm         # top view at y = 1
 zig build floorplan -- earls_court section-z -22.5 out.ppm # side view at z = -22.5
-zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape, surface materials
+zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape, surface materials, lift shafts and landings
 zig build floorplan -- earls_court escape                 # escape holes: exit code 1 if it finds one
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
@@ -67,6 +67,14 @@ sips -s format png out.ppm --out out.png                  # macOS, to view it
 - The audit prints the boxes and the decoration of each surface material
   (see [Surface materials](#surface-materials)). Its exit code is 1 when a
   material does not fit the look of its surface.
+- The audit checks each lift (see [Lifts](#lifts)). The shaft: no static
+  solid box and no ramp may be in the space that the inside of the cab
+  sweeps. In plan that space is the cab floor. In height it goes from the
+  lowest cab floor to the highest, plus the cab height (or the player
+  height, if more). Each landing: with the cab there and the doors open,
+  lines across the doorway, from the middle of the cab to 1 m past the
+  doors, must have a floor at the level and room for the body. The exit
+  code is 1 when a shaft or a landing is not clear.
 - Every command stops with exit code 1 when the map has more boxes than
   `map.max_boxes` (see [The box limit](#the-box-limit)).
 
@@ -233,7 +241,11 @@ it does.
   Earl's Court, and walks and rides each escalator. Each walk must keep the
   feet on the ground and the eye height smooth (at most 5 cm in a tick). It
   must not stop at a wall or a ceiling edge, and the head bob must follow
-  the walking speed.
+  the walking speed. It also rides each lift up and down from six places
+  in the cab: the centre, the four corners and the middle of the doors. It
+  rides at the lift speed, at 60 m/s, and with server corrections of up to
+  1 m. The feet must stay on the cab floor and the body out of all solid
+  shapes. Then the player walks out onto the landing and back in.
 - `game/src/body_test.zig` tests your body in first person. No part that
   the camera shows comes nearer than 0.12 m to the eye, at each look up and
   down, each lean, each step of the walk and on stairs. The head, the arms
@@ -289,9 +301,10 @@ it does.
   bye.
 - `server/lobby.test.ts`: a real server on a free port. It checks the cvars
   on join, rcon, a client that tries to set a server cvar, the chat relay
-  with the join and leave lines, and the session: `GET /api/version`, the
-  build header, the welcome before the hello, the bye on SIGTERM, and a
-  new start with a new build on the same port.
+  with the join and leave lines, the `lift` field of a player in a cab, and
+  the session: `GET /api/version`, the build header, the welcome before the
+  hello, the bye on SIGTERM, and a new start with a new build on the same
+  port.
 
 ## The console
 
@@ -998,7 +1011,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 640. Earl's Court uses 594 boxes, the arena 126.
+`map.max_boxes` is 640. Earl's Court uses 597 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1008,8 +1021,8 @@ wood. `zig build test` checks the same.
 - The materials add no box, so the limit stays 640. The frame cost does
   not change. The scene shader loops over the boxes for the ambient
   occlusion within 45 m of the eye (`uploadBoxes` in
-  `game/src/render.zig`), not over `max_boxes`: at most 121 boxes at a
-  spawn point of Earl's Court (108 on average). A higher limit costs 32
+  `game/src/render.zig`), not over `max_boxes`: at most 124 boxes at a
+  spawn point of Earl's Court (110 on average). A higher limit costs 32
   bytes of GPU buffer for each box, and frame time only for the boxes
   that a map adds.
 
@@ -1083,6 +1096,49 @@ body: yours, the other players and the dummies.
 - **The cvar `own_body`** (saved, default 1): 0 hides your body. Its shadow
   stays.
 
+## Lifts
+
+Earl's Court has three lifts. Press F on a call button or on a cab button.
+
+| Lift | Levels | Doors | Speed |
+|---|---|---|---|
+| 0 and 1 (District) | the spur (4.8 m) and island A or B (0 m) | north | 1.6 m/s |
+| 2 (deep) | the Earls Court Road concourse (4.8 m) and the Piccadilly corridor (-15 m) | west | 3.2 m/s |
+
+- **The cab** is a floor and a lit ceiling, 2.45 m apart (dynamic boxes).
+  The cab floor is 2 cm above the landing. `lift()` in
+  `game/src/maps/earls_court.zig` makes a shaft, its cab, its doors and
+  its buttons.
+- **Moving platforms**: a player who stands on a dynamic solid box moves
+  with it (`map.Platform` in `game/src/map.zig`). In each tick (`tick` in
+  `game/src/main.zig`):
+  1. Before anything moves, `map.platformUnder` finds the box under the
+     centre of the feet, with its top within 0.12 m of the feet.
+  2. The boxes move: the server corrections (`syncLift`), `stepLifts` and
+     `stepTrain`.
+  3. `Player.ride` (`game/src/player.zig`) moves the player by the move of
+     that box. The feet keep their height above its top. A wall stops the
+     move along X and Z. A player that something else moved in the tick
+     (a spawn, the train push) does not ride.
+
+  Thus a rider stays on the cab floor at any speed, and through a server
+  correction. A new moving thing needs no new code: make it a dynamic
+  solid box, and the same three calls carry its riders.
+- **The shaft must be clear.** A slab across a shaft catches a rider on
+  the way down: the step up (see [Stairs and escalators](#stairs-and-escalators))
+  puts the feet on the slab, and the cab goes on without the player. On
+  the way up the slab only lifts the feet for a moment. So no map shape may
+  be in a shaft. Cut each shaft out of each floor and ceiling that it goes
+  through (`map.carve`). The floorplan audit checks each shaft and each
+  landing (see [The floorplan tool](#the-floorplan-tool)).
+- **Deathmatch**: the server runs the lifts (`server/index.ts`, the same
+  state machine as `map.zig`). A call goes to the server, and the server
+  sends it to each client. Each snapshot corrects a cab that is more than
+  0.3 m from the cab of the server. The `st` message names the cab that
+  the player stands in (`lift`, -1 for none). The other clients draw that
+  player on the floor of their own cab. So the cab and the player agree on
+  each client.
+
 ## Lean, head bob and settings
 
 - **Lean**: hold Q or E. The upper body turns about the hips. At full lean
@@ -1112,9 +1168,9 @@ body: yours, the other players and the dummies.
 - **Earl's Court** (deathmatch, and the menu background): the station from
   its public layout, not from a survey. Earls Court Road with a bus and the
   TARDIS, the ticket hall, the footbridge, the District line train shed with
-  its iron arch roof and a train, two lifts (F on the call buttons and the
-  cab buttons), escalators that carry you, and the deep Piccadilly line
-  platform. The server runs the lifts, so every player sees the same cab.
+  its iron arch roof and a train, three lifts (see [Lifts](#lifts)),
+  escalators that carry you, and the deep Piccadilly line platform. The
+  server runs the lifts, so every player sees the same cab.
   In deathmatch, the live rail kills a player on the tracks more than
   66.7 m east or west of the shed centre, just past the ends of the
   concourses. On the District line tracks, yellow danger boards show where
@@ -1139,19 +1195,19 @@ apps/action/
 │       ├── guns_test.zig the tests of the gun model
 │       ├── weapon_menu.zig  the weapon menu (B)
 │       ├── gun_compare.zig  the compare bars of two guns
-│       ├── map.zig       the current map: boxes, ramps, decoration, surface materials, lights, lifts, buttons, escalators
+│       ├── map.zig       the current map: boxes, ramps, decoration, surface materials, lights, lifts, moving platforms, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
 │       ├── shooter.zig   the NPC shooter of the range: the NPC, its rounds, the control panel
 │       ├── shooter_hud.zig  the text of the NPC shooter panel, on the HUD
 │       ├── impact_fx.zig the impact effect of each material (translucent billboards)
-│       ├── floorplan.zig the map tool: slices, the decoration and material audit (zig build floorplan)
+│       ├── floorplan.zig the map tool: slices, the decoration, material and lift audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
-│       ├── player.zig    movement, collision, the lean and the hit boxes
+│       ├── player.zig    movement, collision, the ride on a moving platform, the lean and the hit boxes
 │       ├── body.zig      the player model: your body in first person, the other players, the dummies
 │       ├── body_test.zig the tests of your body: the camera, the walk, the feet on the stairs
-│       ├── tests.zig     zig build test: the walks, your body, the console, the server cvar file, the guns, the sounds, the NPC shooter
-│       ├── player_test.zig  the walks over the stairs and escalators
+│       ├── tests.zig     zig build test: the walks, the lift rides, your body, the console, the server cvar file, the guns, the sounds, the NPC shooter
+│       ├── player_test.zig  the walks over the stairs and escalators, the lift rides
 │       ├── surfaces_test.zig  the box limit, the surface materials, a crack or a whiz for each gun
 │       ├── shooter_test.zig  the line of fire of the NPC shooter, its panel, the impact effects
 │       ├── sounds.zig    the gun sounds: the muzzle report, the near misses, the impacts (to sw_audio)

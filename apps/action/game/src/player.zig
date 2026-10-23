@@ -128,6 +128,20 @@ pub const Player = struct {
         return false;
     }
 
+    /// Move with a moving platform (map.Platform) after the platform moved:
+    /// a lift cab floor. The feet keep their height above its top, so a
+    /// rider does not leave the floor at any speed. A wall stops the move
+    /// along X and Z. A player that something else moved after
+    /// platformUnder (a spawn, a push) does not ride.
+    pub fn ride(self: *Player, p: map.Platform) void {
+        if (@reduce(.Or, self.pos != p.feet)) return;
+        const d = map.platformMove(p);
+        if (d[0] == 0 and d[1] == 0 and d[2] == 0) return;
+        self.pos[1] = map.boxes[p.box].max[1] + p.above;
+        if (d[0] != 0) _ = self.moveAxis(0, d[0]);
+        if (d[2] != 0) _ = self.moveAxis(2, d[2]);
+    }
+
     /// One fixed step. `wish` is the input direction in world XZ (length 0
     /// to 1).
     pub fn step(self: *Player, dt: f32, wish: V3, jump: bool, speed_scale: f32) void {

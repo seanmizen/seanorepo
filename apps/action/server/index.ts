@@ -46,9 +46,12 @@
 // Messages (JSON text). Client to server:
 //   {t:"hello", name, p:[c,m], s:[c,m]}           the join, after the welcome.
 //                                                 p the primary, s the secondary
-//   {t:"st", x, y, z, yaw, pitch, lean, w, m}     20 times a second. lean is
+//   {t:"st", x, y, z, yaw, pitch, lean, w, m, lift}
+//                                                 20 times a second. lean is
 //                                                 -1 (left) to 1 (right). w and
 //                                                 m: the held class and model.
+//                                                 lift: the cab that the player
+//                                                 stands in, or -1.
 //   {t:"fire", w, o:[x,y,z], e:[x,y,z], hits:[{id, b, h}]}
 //                                                 a shot of class w: b body and
 //                                                 h head pellets on player id.
@@ -71,8 +74,10 @@
 //                                 client sends the hello only when its
 //                                 protocol is the same (session.ts).
 //   {t:"bye", reason}             the server closes the connection next
-//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,hp,k,d,alive,w,m}],
+//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,lift,hp,k,d,alive,w,m}],
 //    lifts:[[y, door, level, phase]]}
+//                                 a client draws a player with lift >= 0 on
+//                                 the floor of its own cab of that lift.
 //   {t:"lift", i, l}             a lift call; each client applies it
 //   {t:"spawn", x, y, z, yaw, p, s}  p and s: the weapons of the new life
 //   {t:"loadout", p, s}           the answer to a pick: the weapons of this life
@@ -329,6 +334,9 @@ interface Player {
   pitch: number;
   /** -1 full lean left, 0 upright, 1 full lean right. */
   lean: number;
+  /** The lift whose cab the player stands in, or -1. The other clients
+   * draw the player on their own cab. */
+  lift: number;
   hp: number;
   k: number;
   d: number;
@@ -454,6 +462,12 @@ const num = (v: unknown, lo: number, hi: number): number | null => {
   return Math.min(hi, Math.max(lo, n));
 };
 
+/** The `lift` field of an st message: the index of a lift, or -1. */
+const liftIndex = (v: unknown): number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < lifts.length
+    ? v
+    : -1;
+
 /** The spawn point furthest from the living players. */
 function spawn(p: Player): void {
   let best = SPAWNS[0];
@@ -481,6 +495,7 @@ function spawn(p: Player): void {
   p.yaw = Math.atan2(p.x, p.z);
   p.pitch = 0;
   p.lean = 0;
+  p.lift = -1;
   p.hp = 100;
   p.alive = true;
   p.nades = NADES_PER_LIFE;
@@ -686,6 +701,7 @@ function snapshot(): object {
       yaw: +p.yaw.toFixed(3),
       pitch: +p.pitch.toFixed(3),
       lean: +p.lean.toFixed(2),
+      lift: p.lift,
       hp: p.hp,
       k: p.k,
       d: p.d,
@@ -804,6 +820,7 @@ const server = Bun.serve<Conn>({
         yaw: 0,
         pitch: 0,
         lean: 0,
+        lift: -1,
         hp: 100,
         k: 0,
         d: 0,
@@ -853,6 +870,7 @@ const server = Bun.serve<Conn>({
         p.yaw = num(msg.yaw, -1e4, 1e4) ?? p.yaw;
         p.pitch = num(msg.pitch, -2, 2) ?? p.pitch;
         p.lean = num(msg.lean, -1, 1) ?? 0;
+        p.lift = liftIndex(msg.lift);
         // The held weapon: a class of this life (or the knife or a
         // grenade), and any small model number.
         const w = Number(msg.w);

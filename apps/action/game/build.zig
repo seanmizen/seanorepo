@@ -97,5 +97,5 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     options.addOptionPath("guns_json", guns_json);
     tests.root_module.addOptions("build_options", options);
-    b.step("test", "Walk the player over the stairs and escalators, test the console, the session, the gun model, the maps and the bullet sounds").dependOn(&b.addRunArtifact(tests).step);
+    b.step("test", "Walk the player over the stairs and escalators, ride the lifts, test the console, the session, the gun model, the maps and the bullet sounds").dependOn(&b.addRunArtifact(tests).step);
 }

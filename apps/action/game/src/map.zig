@@ -382,8 +382,6 @@ pub const Lift = struct {
     phase: Phase = .idle,
     hold: f32 = 0,
     pending: ?usize = null,
-    /// The height change of the last step, to carry a rider.
-    dy: f32 = 0,
     /// Metres a second.
     speed: f32 = 1.6,
     /// The landing doors are on an X face and slide along Z (true), or on
@@ -438,7 +436,6 @@ pub fn callLift(i: usize, level: usize) void {
 
 pub fn stepLifts(dt: f32) void {
     for (lifts[0..lift_count]) |*l| {
-        const before = l.y;
         switch (l.phase) {
             .idle => {},
             .moving => {
@@ -475,7 +472,6 @@ pub fn stepLifts(dt: f32) void {
                 }
             },
         }
-        l.dy = l.y - before;
         placeLift(l);
     }
 }
@@ -803,13 +799,60 @@ pub fn doorwayAt(feet: V3) ?struct { lift: usize, level: usize } {
     return null;
 }
 
-/// The lift whose cab floor is under these feet, or null.
-pub fn liftUnder(feet: V3, radius: f32) ?usize {
-    for (lifts[0..lift_count], 0..) |l, i| {
-        const b = boxes[l.floor_box];
-        if (feet[0] + radius > b.min[0] and feet[0] - radius < b.max[0] and
-            feet[2] + radius > b.min[2] and feet[2] - radius < b.max[2] and
-            @abs(feet[1] - b.max[1]) < 0.12) return i;
+// ---- Moving platforms ---------------------------------------------------------
+//
+// A moving platform is a dynamic solid box that a player stands on: a lift
+// cab floor, the deep train. A player on it moves with it, in each tick:
+//   1. Before anything moves, platformUnder finds the box under the feet
+//      and keeps its position.
+//   2. The boxes move: the server corrections (syncLift), stepLifts,
+//      stepTrain.
+//   3. player.Player.ride moves the player by the move of that box. The
+//      feet keep their height above its top.
+// So a rider follows every move of the box, at any speed, and a server
+// correction too. A new moving thing needs no new code: it is a dynamic
+// solid box, and the three calls carry its riders.
+
+/// A player on a moving box: the box and its position before the move, the
+/// feet, and the height of the feet above its top.
+pub const Platform = struct { box: usize, min: V3, feet: V3, above: f32 };
+
+/// The feet are on a platform when they are this near its top.
+pub const platform_reach: f32 = 0.12;
+
+/// The moving platform under the feet, or null: the highest dynamic solid
+/// box under the feet centre whose top is within platform_reach of the
+/// feet. The centre must be over the box, so a player on a landing does
+/// not go down with a cab that the body only touches.
+pub fn platformUnder(feet: V3) ?Platform {
+    var best: ?Platform = null;
+    for (boxes[0..box_count], 0..) |b, i| {
+        if (!b.dynamic or !b.solid) continue;
+        if (feet[0] <= b.min[0] or feet[0] >= b.max[0] or feet[2] <= b.min[2] or feet[2] >= b.max[2]) continue;
+        if (@abs(feet[1] - b.max[1]) > platform_reach) continue;
+        if (best) |p| if (boxes[p.box].max[1] >= b.max[1]) continue;
+        best = .{ .box = i, .min = b.min, .feet = feet, .above = @max(0, feet[1] - b.max[1]) };
     }
+    return best;
+}
+
+/// The move of the box of a platform since platformUnder found it.
+pub fn platformMove(p: Platform) V3 {
+    return boxes[p.box].min - p.min;
+}
+
+/// The lift whose cab floor is box `b`, or null.
+pub fn liftOfBox(b: usize) ?usize {
+    for (lifts[0..lift_count], 0..) |l, i| if (l.floor_box == b) return i;
     return null;
+}
+
+/// The top of the cab floor of lift `i` when the feet are over it, or
+/// null. In deathmatch, another player in a cab stands on this client's
+/// cab.
+pub fn cabFloorAt(i: usize, feet: V3) ?f32 {
+    if (i >= lift_count) return null;
+    const b = boxes[lifts[i].floor_box];
+    if (feet[0] <= b.min[0] or feet[0] >= b.max[0] or feet[2] <= b.min[2] or feet[2] >= b.max[2]) return null;
+    return b.max[1];
 }
