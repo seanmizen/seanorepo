@@ -126,6 +126,7 @@ trackCurves.addEventListener('change', applyControls);
 
 for (const [name, el] of Object.entries(controls)) {
   el.addEventListener('input', () => {
+    showValues();
     if (name === 'volume') {
       station?.setVolume(Number(el.value));
       return;
@@ -140,6 +141,20 @@ for (const [name, el] of Object.entries(controls)) {
 }
 
 const fmt = (v: number, d = 1) => v.toFixed(d);
+
+/** Units shown beside the slider values. */
+const UNITS: Record<string, string> = { speed: 'm/s', distance: 'm' };
+
+/** Write each slider value, with its unit, into its output. */
+const showValues = () => {
+  for (const [name, el] of Object.entries(controls)) {
+    const out = document.getElementById(`${name}Out`);
+    if (!out) continue;
+    const unit = UNITS[name];
+    out.textContent = unit ? `${el.value} ${unit}` : el.value;
+  }
+};
+showValues();
 
 const frame = () => {
   requestAnimationFrame(frame);
@@ -161,10 +176,7 @@ const frame = () => {
     controls.throttle.value = String(s.throttle);
     controls.brake.value = String(s.brake);
   }
-  for (const [name, el] of Object.entries(controls)) {
-    const out = document.getElementById(`${name}Out`);
-    if (out) out.textContent = name === 'distance' ? `${el.value} m` : el.value;
-  }
+  showValues();
   const rows: [string, string][] = [
     ['speed', `${fmt(s.speed)} m/s (${fmt(s.speed * 3.6, 0)} km/h)`],
     ['distance', `${fmt(s.distance, 0)} m`],

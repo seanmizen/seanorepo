@@ -42,21 +42,34 @@ export const IGBT_SCHEDULE: CarrierStep[] = [
   { untilHz: Number.POSITIVE_INFINITY, mode: { kind: 'one-pulse' } },
 ];
 
+/** Asynchronous carrier of the GTO schedule, Hz. */
+export const GTO_ASYNC_HZ = 300;
+
 /**
- * GTO schedule with a stepped asynchronous carrier. GTO thyristors switch
- * slowly, so the carrier is low and changes in steps. These steps are tuned
- * to a major scale, in the style of the famous "singing" 1990s inverters.
+ * GTO schedule in the style of the GEC Alsthom inverter of the 1996 Stock
+ * (Jubilee line). GTO thyristors switch slowly, so the carrier stays low.
+ *
+ * - Asynchronous at 300 Hz while the train starts: a deep, steady tone.
+ * - Synchronous 21 pulse from 300 / 21 = 14.3 Hz. The carrier is 300 Hz on
+ *   both sides of this change, so the tones do not jump.
+ * - Synchronous 15 pulse from 20 Hz. The carrier falls from 420 to 300 Hz.
+ *   This is the first audible step.
+ * - 9, 5 and 3 pulse, then one pulse, at speed.
+ *
+ * Sources for the low-speed part: a 1996 Stock departure recording
+ * (Wikimedia Commons, "London Underground 1996 Stock train departing a
+ * station", CC BY 4.0) shows the 300 Hz carrier and the steps at 14.3 and
+ * 20 Hz. The ItsYa165 inductor recording of the 1996 Stock lists async
+ * 300 Hz, then 21 and 15 pulse. The real train then uses selective
+ * harmonic elimination modes (11, 7, 5, 3). This model keeps its own steps
+ * above 40 Hz.
  */
 export const GTO_SCHEDULE: CarrierStep[] = [
-  { untilHz: 4, mode: { kind: 'async', carrierHz: 349.2 } }, // F4
-  { untilHz: 7, mode: { kind: 'async', carrierHz: 392 } }, // G4
-  { untilHz: 10, mode: { kind: 'async', carrierHz: 440 } }, // A4
-  { untilHz: 13, mode: { kind: 'async', carrierHz: 466.2 } }, // B flat 4
-  { untilHz: 16, mode: { kind: 'async', carrierHz: 523.3 } }, // C5
-  { untilHz: 19, mode: { kind: 'async', carrierHz: 587.3 } }, // D5
-  { untilHz: 22, mode: { kind: 'async', carrierHz: 659.3 } }, // E5
-  { untilHz: 26, mode: { kind: 'async', carrierHz: 698.5 } }, // F5
-  { untilHz: 40, mode: { kind: 'sync', pulses: 27 } },
+  {
+    untilHz: GTO_ASYNC_HZ / 21,
+    mode: { kind: 'async', carrierHz: GTO_ASYNC_HZ },
+  },
+  { untilHz: 20, mode: { kind: 'sync', pulses: 21 } },
   { untilHz: 55, mode: { kind: 'sync', pulses: 15 } },
   { untilHz: 75, mode: { kind: 'sync', pulses: 9 } },
   { untilHz: 95, mode: { kind: 'sync', pulses: 5 } },

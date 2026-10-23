@@ -302,6 +302,28 @@ const doorThud = (
 export type DoorAction = 'open' | 'close';
 
 /**
+ * Door leaf travel time, s: from the start of the slide to the stop. Set by
+ * ear against real trains. The valve hiss, the thuds and the exhaust keep
+ * their own lengths and follow the travel time.
+ */
+export const DOOR_TRAVEL: Record<
+  'pneumatic' | 'electric',
+  Record<DoorAction, number>
+> = {
+  pneumatic: { open: 1.26, close: 1.5 },
+  electric: { open: 1.92, close: 2.28 },
+};
+
+/** Time from the valve opening to the start of the pneumatic slide, s. */
+const VALVE_LEAD = 0.08;
+
+/** Time from the start of a door close to the leaves meeting, s. */
+export const doorCloseTime = (kind: 'pneumatic' | 'electric'): number =>
+  kind === 'pneumatic'
+    ? VALVE_LEAD + DOOR_TRAVEL.pneumatic.close
+    : DOOR_TRAVEL.electric.close;
+
+/**
  * One door operation, pneumatic (1973 Stock door engines). Valve hiss,
  * slide, then the leaves reach the stop (open) or meet (close). On close,
  * the engine exhausts after the leaves meet.
@@ -312,16 +334,28 @@ export const pneumaticDoor = (
   action: DoorAction,
 ): Float32Array => {
   const rand = mulberry32(seed);
-  const seconds = 2.2;
+  const slide = DOOR_TRAVEL.pneumatic[action];
+  // The leaves meet at VALVE_LEAD + slide. The 0.6 s exhaust starts 0.12 s
+  // later.
+  const seconds = slide + 0.95;
   const out = new Float32Array(Math.ceil(seconds * sampleRate));
   const sr = sampleRate;
   mixInto(out, airBlowoff(sr, seed + 1, 0.35), 0, 0.45);
-  const slide = action === 'open' ? 1.05 : 1.25;
-  mixInto(out, doorSlide(sr, slide, rand), 0.08 * sr, 0.8);
-  mixInto(out, doorThud(sr, rand, action === 'close'), (0.08 + slide) * sr, 1);
+  mixInto(out, doorSlide(sr, slide, rand), VALVE_LEAD * sr, 0.8);
+  mixInto(
+    out,
+    doorThud(sr, rand, action === 'close'),
+    (VALVE_LEAD + slide) * sr,
+    1,
+  );
   if (action === 'close') {
     // Second leaf, a few ms later, and the exhaust after the leaves meet.
-    mixInto(out, doorThud(sr, rand, true), (0.095 + slide) * sr, 0.6);
+    mixInto(
+      out,
+      doorThud(sr, rand, true),
+      (VALVE_LEAD + 0.015 + slide) * sr,
+      0.6,
+    );
     mixInto(out, airBlowoff(sr, seed + 2, 0.6), (0.2 + slide) * sr, 0.35);
   }
   return normalise(out, 0.85);
@@ -337,11 +371,12 @@ export const electricDoor = (
   action: DoorAction,
 ): Float32Array => {
   const rand = mulberry32(seed);
-  const seconds = 2.4;
+  const run = DOOR_TRAVEL.electric[action];
+  // The leaves reach the stop at `run`, and the thud rings for 0.4 s.
+  const seconds = run + 0.5;
   const sr = sampleRate;
   const n = Math.ceil(seconds * sr);
   const out = new Float32Array(n);
-  const run = action === 'open' ? 1.6 : 1.9;
   const runN = Math.floor(run * sr);
   let phase = 0;
   const lp = new Biquad('lowpass', 1400, 0.7, sr);
@@ -380,15 +415,49 @@ export const beep = (
 };
 
 /**
+ * The London Underground door closing warning. The cadence and pitch are
+ * measured from two recordings on Wikimedia Commons (CC BY 4.0): "London
+ * Underground 1995 Stock train doors closing" and "London Underground 1996
+ * Stock train departing a station". Both give 6 beeps per second, with a
+ * short gap, at 2.23 and 2.29 kHz. The default length is in the LU range of
+ * 1.75 +/- 0.25 s from the first beep to door movement (TfL, "Increased
+ * Warning Tone Duration on Victoria Line 09TS, Trial Final Report").
+ */
+export const DOOR_WARNING = {
+  /** Beep pitch, Hz. */
+  freq: 2290,
+  /** Beep length, s. */
+  on: 0.11,
+  /** Time from the start of one beep to the start of the next, s. */
+  period: 1 / 6,
+  /** Default time from the first beep to door movement, s: 12 beeps. */
+  seconds: 2,
+};
+
+/**
+ * The beeps in a warning of `seconds`: their number, and the time at which
+ * the last beep ends. The warning always ends on a whole beep.
+ */
+export const warningBeeps = (
+  seconds: number,
+  period = DOOR_WARNING.period,
+  on = DOOR_WARNING.on,
+): { count: number; end: number } => {
+  const count = Math.max(1, Math.round(seconds / period));
+  return { count, end: (count - 1) * period + on };
+};
+
+/**
  * Door warning: `count` beeps of `on` seconds every `period` seconds. This is
- * the "doors closing" sound.
+ * the "doors closing" sound. The default buffer holds 5 s of beeps. A
+ * player stops it after the beeps it needs (`warningBeeps`).
  */
 export const doorWarning = (
   sampleRate: number,
-  freq = 2350,
-  count = 10,
-  on = 0.13,
-  period = 0.26,
+  freq = DOOR_WARNING.freq,
+  count = 30,
+  on = DOOR_WARNING.on,
+  period = DOOR_WARNING.period,
 ): Float32Array => {
   const out = new Float32Array(Math.ceil((count * period + 0.1) * sampleRate));
   const b = beep(sampleRate, freq, on);

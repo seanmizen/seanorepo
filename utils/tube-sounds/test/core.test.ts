@@ -31,18 +31,26 @@ import {
   wheelHz,
 } from '../src/core/stock';
 import {
+  DOOR_TRAVEL,
+  DOOR_WARNING,
+  doorCloseTime,
   doorWarning,
+  electricDoor,
   pneumaticDoor,
   railJointImpact,
+  warningBeeps,
   whiteNoise,
 } from '../src/core/synth';
 import { curvatureAt, DEFAULT_TRACK } from '../src/core/track';
 import {
+  type CarrierStep,
   carrierHz,
+  GTO_ASYNC_HZ,
   GTO_SCHEDULE,
   IGBT_SCHEDULE,
   inverterTones,
   pulseModeAt,
+  pulseModeIndex,
 } from '../src/core/vvvf';
 
 const SR = 48000;
@@ -253,7 +261,7 @@ describe('vvvf', () => {
     expect(pulseModeAt(IGBT_SCHEDULE, 200).kind).toBe('one-pulse');
     expect(pulseModeAt(GTO_SCHEDULE, 5)).toEqual({
       kind: 'async',
-      carrierHz: 392,
+      carrierHz: 300,
     });
   });
 
@@ -280,6 +288,78 @@ describe('vvvf', () => {
   test('one pulse leaves 6k +/- 1 harmonics', () => {
     const t = inverterTones({ kind: 'one-pulse' }, 100, 1);
     expect(t.map((x) => Math.round(x.freq))).toEqual([500, 700, 1100, 1300]);
+  });
+
+  /** Pulse number of a mode: async counts as more pulses than any sync mode. */
+  const pulses = (step: CarrierStep): number =>
+    step.mode.kind === 'async'
+      ? Number.POSITIVE_INFINITY
+      : step.mode.kind === 'sync'
+        ? step.mode.pulses
+        : 1;
+
+  test('pulse numbers never rise with speed', () => {
+    for (const schedule of [GTO_SCHEDULE, IGBT_SCHEDULE]) {
+      for (let i = 1; i < schedule.length; i++) {
+        const a = schedule[i - 1];
+        const b = schedule[i];
+        if (!a || !b) throw new Error('missing step');
+        expect(b.untilHz).toBeGreaterThan(a.untilHz);
+        expect(pulses(b)).toBeLessThan(pulses(a));
+      }
+    }
+  });
+
+  test('GTO starts asynchronous at a 300 Hz carrier, then 21 and 15 pulse', () => {
+    expect(pulseModeAt(GTO_SCHEDULE, 0.3)).toEqual({
+      kind: 'async',
+      carrierHz: GTO_ASYNC_HZ,
+    });
+    expect(pulseModeAt(GTO_SCHEDULE, 14)).toEqual({
+      kind: 'async',
+      carrierHz: 300,
+    });
+    expect(pulseModeAt(GTO_SCHEDULE, 15)).toEqual({ kind: 'sync', pulses: 21 });
+    expect(pulseModeAt(GTO_SCHEDULE, 21)).toEqual({ kind: 'sync', pulses: 15 });
+  });
+
+  test('GTO async to 21 pulse change is silent: the tones do not jump', () => {
+    const f1 = GTO_ASYNC_HZ / 21;
+    const before = inverterTones(pulseModeAt(GTO_SCHEDULE, f1 - 1e-9), f1, 0.3);
+    const after = inverterTones(pulseModeAt(GTO_SCHEDULE, f1), f1, 0.3);
+    expect(pulseModeAt(GTO_SCHEDULE, f1)).toEqual({ kind: 'sync', pulses: 21 });
+    after.forEach((t, i) => {
+      expect(t.freq).toBeCloseTo(before[i]?.freq ?? 0, 6);
+      expect(t.amp).toBeCloseTo(before[i]?.amp ?? 0, 6);
+    });
+  });
+
+  test('GTO below 40 Hz: one audible step, carrier at most 600 Hz', () => {
+    // A real GTO carrier stays near 300-420 Hz at low speed.
+    let steps = 0;
+    let last = pulseModeIndex(GTO_SCHEDULE, 0.3);
+    let prevCarrier = carrierHz(pulseModeAt(GTO_SCHEDULE, 0.3), 0.3);
+    for (let f1 = 0.3; f1 < 40; f1 += 0.01) {
+      const mode = pulseModeAt(GTO_SCHEDULE, f1);
+      const fc = carrierHz(mode, f1);
+      expect(fc).toBeGreaterThanOrEqual(GTO_ASYNC_HZ - 1e-6);
+      expect(fc).toBeLessThanOrEqual(600);
+      const i = pulseModeIndex(GTO_SCHEDULE, f1);
+      if (i !== last && Math.abs(fc - prevCarrier) > 5) steps++;
+      last = i;
+      prevCarrier = fc;
+    }
+    expect(steps).toBe(1);
+  });
+
+  test('GTO above 40 Hz keeps the 15, 9, 5, 3, 1 pulse steps', () => {
+    const at = (f1: number) => pulseModeAt(GTO_SCHEDULE, f1);
+    expect(at(40)).toEqual({ kind: 'sync', pulses: 15 });
+    expect(at(54.9)).toEqual({ kind: 'sync', pulses: 15 });
+    expect(at(55)).toEqual({ kind: 'sync', pulses: 9 });
+    expect(at(75)).toEqual({ kind: 'sync', pulses: 5 });
+    expect(at(95)).toEqual({ kind: 'sync', pulses: 3 });
+    expect(at(110)).toEqual({ kind: 'one-pulse' });
   });
 });
 
@@ -375,8 +455,11 @@ describe('scripts', () => {
     const open = s.events.find((e) => e.kind === 'doors-open');
     const close = s.events.find((e) => e.kind === 'doors-close');
     expect(open?.time).toBe(110);
-    // Warning + 1.3 s close movement: the doors are shut at t = 24.
-    expect((close?.time ?? 0) + (close?.warning ?? 0) + 1.3).toBeCloseTo(124);
+    // Warning + close movement: the doors are shut at t = 24.
+    expect(
+      (close?.time ?? 0) + (close?.warning ?? 0) + doorCloseTime('pneumatic'),
+    ).toBeCloseTo(124);
+    expect(close?.warning).toBe(DOOR_WARNING.seconds);
     expect(s.frameAt(127.5).speed).toBeGreaterThan(0);
     expect(s.frameAt(126).speed).toBe(0);
   });
@@ -414,6 +497,70 @@ describe('synthesis buffers', () => {
       }
     }
     expect(onsets).toBe(4);
+  });
+
+  /** Start times of the beeps in a warning buffer, s. */
+  const beepStarts = (w: Float32Array): number[] => {
+    const out: number[] = [];
+    let silent = SR;
+    w.forEach((v, i) => {
+      if (Math.abs(v) > 1e-6) {
+        if (silent > SR * 0.01) out.push(i / SR);
+        silent = 0;
+      } else {
+        silent++;
+      }
+    });
+    return out;
+  };
+
+  test('door warning cadence: 6 beeps per second, 0.11 s beeps, 2.29 kHz', () => {
+    const w = doorWarning(SR);
+    const starts = beepStarts(w);
+    for (let i = 1; i < starts.length; i++)
+      expect((starts[i] ?? 0) - (starts[i - 1] ?? 0)).toBeCloseTo(1 / 6, 3);
+    // The beep length: the first beep ends before the first gap.
+    let end = 0;
+    for (let i = 0; i < SR * 0.16; i++) if (Math.abs(w[i] ?? 0) > 1e-6) end = i;
+    expect(end / SR).toBeCloseTo(DOOR_WARNING.on, 2);
+    // Pitch from upward zero crossings in the first beep.
+    let ups = 0;
+    for (let i = 1; i < end; i++)
+      if ((w[i - 1] ?? 0) < 0 && (w[i] ?? 0) >= 0) ups++;
+    expect(ups / (end / SR)).toBeGreaterThan(2250);
+    expect(ups / (end / SR)).toBeLessThan(2330);
+  });
+
+  test('the default warning is 12 beeps and ends on a whole beep', () => {
+    const { count, end } = warningBeeps(DOOR_WARNING.seconds);
+    expect(count).toBe(12);
+    expect(end).toBeCloseTo(11 / 6 + 0.11, 6);
+    expect(end).toBeLessThanOrEqual(DOOR_WARNING.seconds);
+    // LU range: 1.75 +/- 0.25 s from the first beep to door movement.
+    expect(DOOR_WARNING.seconds).toBeGreaterThanOrEqual(1.5);
+    expect(DOOR_WARNING.seconds).toBeLessThanOrEqual(2);
+    // The bank buffer holds enough beeps for the default warning.
+    expect(beepStarts(doorWarning(SR)).length).toBeGreaterThanOrEqual(count);
+  });
+
+  /** Time of the loudest sample in a buffer, s. */
+  const peakTime = (b: Float32Array): number => {
+    let at = 0;
+    for (let i = 0; i < b.length; i++)
+      if (Math.abs(b[i] ?? 0) > Math.abs(b[at] ?? 0)) at = i;
+    return at / SR;
+  };
+
+  test('door sounds follow the travel time: the leaves meet at its end', () => {
+    // The thud where the leaves meet is the loudest part of a close.
+    for (const seed of [3, 7, 11]) {
+      const t = peakTime(pneumaticDoor(SR, seed, 'close'));
+      expect(t).toBeGreaterThan(doorCloseTime('pneumatic') - 0.01);
+      expect(t).toBeLessThan(doorCloseTime('pneumatic') + 0.1);
+    }
+    const e = electricDoor(SR, 5, 'close');
+    expect(e.length / SR).toBeGreaterThan(DOOR_TRAVEL.electric.close + 0.4);
+    expect(peakTime(e)).toBeGreaterThan(DOOR_TRAVEL.electric.close - 0.01);
   });
 });
 

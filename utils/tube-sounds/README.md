@@ -53,7 +53,7 @@ train.setThrottle(0.8); // 0..1, master controller
 train.setBrake(0); // 0..1, brake demand
 train.setDistance(m); // train front, metres before the listener
 train.doorsOpen();
-train.doorsClose({ warning: 2.6 }); // beeps, then the doors move
+train.doorsClose({ warning: 2 }); // 12 beeps, then the doors move
 ```
 
 A script overrides the direct controls while it runs. `train.stopScript()`
@@ -150,8 +150,14 @@ The code marks estimates with `approx`.
   as 1/f. The model drops synchronous lines on triplen harmonics, because a
   balanced 3-phase motor does not carry them. A mode change jumps the
   pitch. When the train coasts the inverter gates off and its tones stop.
-- **GTO VVVF.** The same model with a stepped asynchronous carrier tuned
-  to a major scale, in the style of the famous "singing" inverters.
+- **GTO VVVF.** The same model with the low carrier of the GEC Alsthom
+  GTO inverter on the 1996 Stock (Jubilee line). At the start the carrier
+  is asynchronous at 300 Hz: a deep, steady tone at 300 and 600 Hz. At
+  f1 = 300 / 21 = 14.3 Hz, 21 pulse takes over with no jump. At 20 Hz,
+  15 pulse drops the carrier from 420 to 300 Hz. That is the only step
+  below 40 Hz. Above 40 Hz the schedule continues with 15, 9, 5 and 3
+  pulse, then one pulse. A real 1996 Stock departure (Wikimedia Commons,
+  CC BY 4.0) shows the 300 Hz carrier and the steps at 14.3 and 20 Hz.
 
 ### 2. Rolling noise and rail joints (`audio/rolling.ts`, `core/joints.ts`)
 
@@ -194,8 +200,16 @@ tunnel before the platform.
 - 1973 Stock: pneumatic door engines. A valve hiss, the roller slide, the
   leaves hitting the stops, and an exhaust after closing.
 - S7 Stock: electric doors with a motor whir, and an open chime.
-- Both: the door-closing warning beeps. Every door of every car plays,
-  staggered by a few tens of milliseconds, from its own position.
+- The leaves take 1.26 s to open and 1.5 s to close (pneumatic), or
+  1.92 s and 2.28 s (electric). The hiss, the thuds and the exhaust keep
+  their lengths and follow the leaves.
+- Both: the door-closing warning. Beeps of 0.11 s at 2.29 kHz, 6 per
+  second, 12 beeps in the default 2 s, then the doors move. Two
+  recordings on Wikimedia Commons (1995 and 1996 Stock, CC BY 4.0) give
+  the cadence and the pitch. LU specifies 1.75 +/- 0.25 s from the first
+  beep to door movement (TfL, "Increased Warning Tone Duration on
+  Victoria Line 09TS, Trial Final Report"). Every door of every car
+  plays, staggered by a few tens of milliseconds, from its own position.
 
 ### 6. Tunnel acoustics (`core/geometry.ts`, `core/impulse.ts`, `audio/wind.ts`)
 
@@ -221,15 +235,18 @@ and now and then a distant train rumbling through the rock.
 
 ## How we checked the sound
 
-There was no listening during development. The checks used offline renders
-in headless Chrome, with spectrograms and peak lists:
+The checks used offline renders in headless Chrome, with spectrograms and
+peak lists:
 
 - The whine lines fall during rheostatic braking and rise on departure,
   one line per motor car (604-686 Hz at 20 m/s from wheel wear).
 - The commutator whistle falls from about 4 kHz.
-- The GTO schedule shows a staircase of carrier steps.
+- The GTO departure starts with a steady 600 Hz line and a weak line near
+  300 Hz, as in the 1996 Stock recording. The first step comes at
+  f1 = 20 Hz.
 - The approach builds by about 12 dB over 12 s.
-- The door warning is a 2.35 kHz line.
+- The door warning is a 2.29 kHz line that pulses at 6 Hz, as in the
+  1995 and 1996 Stock recordings.
 - The release hiss shows as a bright column.
 
 These checks found and fixed real faults: too-loud tunnel modes, a reverb
@@ -240,6 +257,9 @@ and too much current on weak-field steps.
 
 - The S7 carrier schedule and gear teeth are plausible values, not
   measurements. We found no published data.
+- The GTO schedule follows the 1996 Stock only below 20 Hz. The real
+  inverter then uses selective harmonic elimination modes. The model
+  keeps plain synchronous modes, which have a different spectrum.
 - We tuned the levels by spectrum and judgement, not by calibrated SPL.
   Real platform noise is 85-95 dBA during an arrival.
 - No fourth-rail shoe gap arcs, no announcements, no "mind the gap".
