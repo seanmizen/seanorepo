@@ -24,6 +24,7 @@
 const std = @import("std");
 const map = @import("../map.zig");
 const vapes = @import("../vapes.zig");
+const gates = @import("../gates.zig");
 const vec = @import("../vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
@@ -563,11 +564,8 @@ fn eastEnd() void {
     deco(v3(hall_x1 + 0.72, y + 5.85, hz0 + 0.5), v3(hall_x1 + 0.74, y + 6.15, hz1 - 0.5), blue, .paint, .sheet_metal);
     roundel(v3(hall_x1 + 0.75, y + 4.6, -2), std.math.pi / 2.0, 1.6);
     deco(v3(hall_x1 - 0.2, y + 7, hz0 - 0.8), v3(hall_x1 + 0.9, y + 7.4, hz1 + 0.8), cream * vec.s(0.9), .paint, .plaster);
-    var z: f32 = hz0 + 0.8;
-    while (z <= hz1 - 0.8) : (z += 1.5) {
-        boxNoAo(v3(70.4, y, z - 0.13), v3(71.6, y + 1.0, z + 0.13), v3(0.55, 0.56, 0.58), .metal, .sheet_metal);
-        deco(v3(70.9, y + 1.0, z - 0.13), v3(71.1, y + 1.04, z + 0.13), v3(0.2, 1.0, 0.3), .emissive, .glass);
-    }
+    // The gate line: 8 lanes, IN on the north half (gates.zig).
+    gates.addLine(71, y, hz0, hz1, -2, 8, -1);
     map.add(v3(71.5, y + 5.35, -3), v3(73.5, y + 5.5, -1), v3(1.0, 0.9, 0.75), .emissive, .glass).solid = false;
     map.addLight(v3(72.5, y + 4.8, -2), v3(1.3, 1.05, 0.8), 12);
     // Buildings either side of the hall, out to the road.
@@ -805,6 +803,8 @@ fn westEnd() void {
     deco(v3(-78, y + 1.2, pz1 - 0.02), v3(x0 - 0.4, y + 1.4, pz1), tile_green, .wall_tile, .tile);
     map.add(v3(-72.5, y + 3.45, -2.3), v3(-70.5, y + 3.6, -1.7), v3(1.0, 0.9, 0.75), .emissive, .glass).solid = false;
     map.addLight(v3(-71.5, y + 3.0, -2), v3(1.2, 1.0, 0.75), 11);
+    // The gate line of the passage: 4 lanes, IN on the south half.
+    gates.addLine(-74, y, pz0, pz1, -2, 4, 1);
     // Solid blocks beside the passage.
     box(v3(-78, y, conc_z0 - 0.6), v3(x0 - 0.4, y + 7, pz0 - 0.4), concrete_c, .concrete, .concrete);
     box(v3(-78, y, pz1 + 0.4), v3(x0 - 0.4, y + 7, wall_s + 0.6), concrete_c, .concrete, .concrete);
