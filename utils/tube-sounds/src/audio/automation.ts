@@ -38,6 +38,14 @@ export const gainNode = (ctx: BaseAudioContext, value = 0): GainNode => {
   return g;
 };
 
+/**
+ * Move a gain to `value`, from now, with a 50 ms time constant. For live
+ * faders. The control loop uses Track instead.
+ */
+export const fadeGain = (g: GainNode, value: number): void => {
+  g.gain.setTargetAtTime(value, g.context.currentTime, 0.05);
+};
+
 export const biquad = (
   ctx: BaseAudioContext,
   type: BiquadFilterType,

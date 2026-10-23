@@ -10,8 +10,13 @@
 // Control: set speed, throttle, brake and position directly (a game loop
 // does this), or play a script (`playArrival`, `playDeparture`,
 // `playService`). A script overrides the direct controls while it runs.
+//
+// Levels: every car sends each component through its own gain, so
+// `setMix` changes a component live. `setLevel` moves the whole train,
+// with its reverb sends. A distance lock (`setDistanceLock`) holds the
+// sound at one distance while the train runs on along the track.
 
-import { gainNode } from './audio/automation';
+import { fadeGain, gainNode } from './audio/automation';
 import { loopNoise, pick, playBuffer, type SoundBank } from './audio/bank';
 import { BrakeVoice } from './audio/brakes';
 import { CompressorVoice } from './audio/compressor';
@@ -58,13 +63,13 @@ export interface TrainOptions {
   /** Override the stock's motor type. */
   motor?: MotorType;
   track?: Partial<TrackLayout>;
-  /** Overall train level. */
+  /** Overall train level, 1 = default. `setLevel` changes it live. */
   level?: number;
   /** True: throttle and brake drive the speed (setSpeed is then ignored). */
   physics?: boolean;
   /** Main reservoir pressure at the start, 0..1. */
   reservoir?: number;
-  /** Level of each sound component, 1 = default. 0 mutes it. */
+  /** Level of each sound component, 1 = default. 0 mutes it. `setMix` changes it live. */
   mix?: Partial<Mix>;
   seed?: number;
 }
@@ -82,6 +87,35 @@ export type MixComponent =
 
 export type Mix = Record<MixComponent, number>;
 
+/** The components that each car carries. The tunnel belongs to the whole train. */
+type CarComponent = Exclude<MixComponent, 'tunnel'>;
+
+const CAR_COMPONENTS: readonly CarComponent[] = [
+  'rolling',
+  'joints',
+  'motor',
+  'control',
+  'brakes',
+  'squeal',
+  'compressor',
+  'doors',
+];
+
+/**
+ * Hold the listener at a fixed distance from the train. The train still
+ * runs along the track: speed, joints and curves change as before. The
+ * path to the listener does not change, so the sound has no Doppler shift.
+ */
+export interface DistanceLock {
+  /**
+   * Metres from the reference point to the listener, along the track.
+   * Positive = the reference point is before the listener (approach side).
+   */
+  distance: number;
+  /** Reference: the centre of this car (0 = leading car). Omit for the train front. */
+  car?: number;
+}
+
 export const DEFAULT_MIX: Mix = {
   rolling: 1,
   joints: 1,
@@ -97,9 +131,15 @@ export const DEFAULT_MIX: Mix = {
 export interface TrainState {
   speed: number;
   accel: number;
+  /** Track position of the train front, metres. */
   frontX: number;
-  /** Distance of the train front before the listener, metres. Negative = past. */
+  /**
+   * Distance of the train front before the listener, metres. Negative =
+   * past. With a distance lock, this is the distance that the listener hears.
+   */
   distance: number;
+  /** True while a distance lock holds the sound at one distance. */
+  locked: boolean;
   throttle: number;
   brake: number;
   scripted: boolean;
@@ -125,6 +165,8 @@ interface Car {
   length: number;
   wheelDiameter: number;
   spatial: SpatialChain;
+  /** One gain per component, into the spatial chain. */
+  mix: Record<CarComponent, GainNode>;
   voices: Voice[];
   motor: DcMotorVoice | VvvfMotorVoice | null;
   camshaft: Camshaft | null;
@@ -145,8 +187,14 @@ export class TubeTrain {
   readonly station: TubeStation;
   readonly stock: StockSpec;
   readonly track: TrackLayout;
+  /** The dry sound of the whole train. Its gain is the train level. */
   readonly output: GainNode;
   private readonly ctx: BaseAudioContext;
+  /** Reverb sends of the whole train. Their gain is the train level. */
+  private readonly sendStation: GainNode;
+  private readonly sendTunnel: GainNode;
+  /** The tunnel component gain, at the input of the tunnel voice. */
+  private readonly tunnelMix: GainNode;
   private readonly bank: SoundBank;
   private readonly rand: () => number;
   private readonly cars: Car[] = [];
@@ -155,10 +203,11 @@ export class TubeTrain {
   private readonly flat: { axle: number; phase: number; lastHit: number };
   private readonly reservoir: Reservoir;
   private readonly tunnel: TunnelVoice;
-  private readonly level: number;
+  private trainLevel: number;
   private readonly mix: Mix;
   private motorType: MotorType;
   private physics: boolean;
+  private lock: DistanceLock | null = null;
 
   // Direct controls.
   private speed = 0;
@@ -181,7 +230,7 @@ export class TubeTrain {
     this.track = { ...DEFAULT_TRACK, ...opts.track };
     this.motorType = opts.motor ?? this.stock.motor;
     this.physics = opts.physics ?? false;
-    this.level = opts.level ?? 1;
+    this.trainLevel = opts.level ?? 1;
     this.mix = { ...DEFAULT_MIX, ...opts.mix };
     const mix = this.mix;
     this.rand = mulberry32(opts.seed ?? station.seed + 17);
@@ -189,27 +238,38 @@ export class TubeTrain {
     // Park the train far up the tunnel, silent.
     this.frontX = station.geometry.platformStart - 3000;
 
-    this.output = gainNode(this.ctx, this.level);
+    this.output = gainNode(this.ctx, this.trainLevel);
     this.output.connect(station.dry);
+    this.sendStation = gainNode(this.ctx, this.trainLevel);
+    this.sendStation.connect(station.stationSend);
+    this.sendTunnel = gainNode(this.ctx, this.trainLevel);
+    this.sendTunnel.connect(station.tunnelSend);
 
     const tunnelNoise = loopNoise(this.ctx, this.bank.noise, this.rand);
+    this.tunnelMix = gainNode(this.ctx, mix.tunnel);
+    tunnelNoise.connect(this.tunnelMix);
     this.tunnel = new TunnelVoice(
       this.ctx,
-      tunnelNoise,
+      this.tunnelMix,
       station.geometry,
-      this.level * mix.tunnel,
+      1,
     );
-    this.tunnel.output.connect(station.dry);
-    this.tunnel.reverbSend.connect(station.stationSend);
+    this.tunnel.output.connect(this.output);
+    this.tunnel.reverbSend.connect(this.sendStation);
 
     const offsets = carOffsets(this.stock);
     this.stock.cars.forEach((spec, index) => {
       const noise = loopNoise(this.ctx, this.bank.noise, this.rand);
       const spatial = new SpatialChain(this.ctx, {
         dry: this.output,
-        station: station.stationSend,
-        tunnel: station.tunnelSend,
+        station: this.sendStation,
+        tunnel: this.sendTunnel,
       });
+      const mixGains = {} as Record<CarComponent, GainNode>;
+      for (const c of CAR_COMPONENTS) {
+        mixGains[c] = gainNode(this.ctx, mix[c]);
+        mixGains[c].connect(spatial.input);
+      }
       const car: Car = {
         index,
         offset: offsets[index] ?? 0,
@@ -220,6 +280,7 @@ export class TubeTrain {
           this.rand(),
         ),
         spatial,
+        mix: mixGains,
         voices: [],
         motor: null,
         camshaft: null,
@@ -234,33 +295,29 @@ export class TubeTrain {
       const rolling = new RollingVoice(this.ctx, noise, {
         corrugation: this.track.corrugation * (0.6 + this.rand() * 0.8),
         corrugationWavelength: this.track.corrugationWavelength,
-        level: 0.5 * mix.rolling,
+        level: 0.5,
       });
-      const brakes = new BrakeVoice(
-        this.ctx,
-        noise,
-        0.55 * mix.brakes,
-        this.rand,
-      );
+      const brakes = new BrakeVoice(this.ctx, noise, 0.55, this.rand);
+      rolling.output.connect(mixGains.rolling);
+      brakes.output.connect(mixGains.brakes);
       car.voices.push(rolling, brakes);
       if (index % 2 === 0) {
-        car.voices.push(
-          new SquealVoice(
-            this.ctx,
-            0.5 * mix.squeal,
-            this.rand,
-            0.4 + this.rand() * 0.6,
-          ),
+        const squeal = new SquealVoice(
+          this.ctx,
+          0.5,
+          this.rand,
+          0.4 + this.rand() * 0.6,
         );
+        squeal.output.connect(mixGains.squeal);
+        car.voices.push(squeal);
       }
-      for (const v of car.voices) v.output.connect(spatial.input);
       if (spec.compressor) {
         car.compressor = new CompressorVoice(this.ctx, this.bank, {
           strokeRate: 11 + this.rand() * 2,
-          level: 0.35 * mix.compressor,
+          level: 0.35,
           seed: Math.floor(this.rand() * 1e6),
         });
-        car.compressor.output.connect(spatial.input);
+        car.compressor.output.connect(mixGains.compressor);
       }
       this.cars.push(car);
     });
@@ -297,14 +354,92 @@ export class TubeTrain {
     this.brake = clamp(x, 0, 1);
   }
 
-  /** Put the train front `metres` before the listener (negative = past it). */
+  /**
+   * Put the train front `metres` before the listener (negative = past it).
+   * While a distance lock is on, this moves the train on the track only.
+   */
   setDistance(metres: number): void {
-    this.frontX = this.station.geometry.listener.x - metres;
+    this.setPosition(this.station.geometry.listener.x - metres);
   }
 
   /** Put the train front at track position x, metres. */
   setPosition(x: number): void {
     this.frontX = x;
+    this.forgetJoints();
+  }
+
+  /**
+   * Hold the listener at a fixed distance from the train, or release the
+   * hold (null). It works in every mode: direct controls, physics and
+   * scripts. After a release, the train continues from the position that
+   * the listener heard.
+   */
+  setDistanceLock(lock: DistanceLock | null): void {
+    if (!lock) {
+      if (this.lock) this.setPosition(this.heardFront());
+      this.lock = null;
+      return;
+    }
+    const { distance, car } = lock;
+    if (!Number.isFinite(distance)) {
+      throw new RangeError(
+        `setDistanceLock: distance must be a finite number. It is ${distance}.`,
+      );
+    }
+    if (
+      car !== undefined &&
+      (!Number.isInteger(car) || car < 0 || car >= this.cars.length)
+    ) {
+      throw new RangeError(
+        `setDistanceLock: car ${car} does not exist. Use 0 to ${this.cars.length - 1}.`,
+      );
+    }
+    this.lock = car === undefined ? { distance } : { distance, car };
+  }
+
+  /** The current distance lock, or null. */
+  get distanceLock(): DistanceLock | null {
+    return this.lock ? { ...this.lock } : null;
+  }
+
+  /**
+   * Overall train level, ramped over 50 ms. 1 = default, 0 = silent. It
+   * moves every component and the reverb sends of this train.
+   */
+  setLevel(level: number): void {
+    if (!Number.isFinite(level)) return;
+    this.trainLevel = Math.max(0, level);
+    fadeGain(this.output, this.trainLevel);
+    fadeGain(this.sendStation, this.trainLevel);
+    fadeGain(this.sendTunnel, this.trainLevel);
+  }
+
+  /** The train level that `setLevel` or the `level` option set. */
+  get level(): number {
+    return this.trainLevel;
+  }
+
+  /**
+   * Change the level of one or more components, ramped over 50 ms.
+   * 1 = default, 0 = off. Components that are not named keep their level.
+   */
+  setMix(mix: Partial<Mix>): void {
+    for (const c of Object.keys(DEFAULT_MIX) as MixComponent[]) {
+      const v = mix[c];
+      if (v === undefined || !Number.isFinite(v)) continue;
+      const level = Math.max(0, v);
+      this.mix[c] = level;
+      if (c === 'tunnel') {
+        fadeGain(this.tunnelMix, level);
+        continue;
+      }
+      for (const car of this.cars) fadeGain(car.mix[c], level);
+    }
+  }
+
+  /** The level of each component. */
+  get mixLevels(): Mix {
+    return { ...this.mix };
   }
 
   /** Force the curve amount (0..1) for every car. null = use the track layout. */
@@ -340,7 +475,8 @@ export class TubeTrain {
       speed: this.speed,
       accel: this.accel,
       frontX: this.frontX,
-      distance: this.station.geometry.listener.x - this.frontX,
+      distance: this.station.geometry.listener.x - this.heardFront(),
+      locked: this.lock !== null,
       throttle: this.throttle,
       brake: this.brake,
       scripted: this.script !== null,
@@ -365,22 +501,16 @@ export class TubeTrain {
     for (const car of this.cars) {
       const t0 = at + this.rand() * 0.12;
       if (this.stock.openChime) {
-        playBuffer(
-          this.ctx,
-          this.bank.chime,
-          car.spatial.input,
-          t0,
-          0.18 * this.mix.doors,
-        );
+        playBuffer(this.ctx, this.bank.chime, car.mix.doors, t0, 0.18);
       }
       const chimeLead = this.stock.openChime ? 0.6 : 0;
       for (let d = 0; d < this.stock.doorsPerSide; d++) {
         const buf = pick(this.bank.doorOpen[kind], this.rand);
-        const gain = this.doorGain(car, d) * 0.55 * this.mix.doors;
+        const gain = this.doorGain(car, d) * 0.55;
         playBuffer(
           this.ctx,
           buf,
-          car.spatial.input,
+          car.mix.doors,
           t0 + chimeLead + this.rand() * 0.15,
           gain,
           0.96 + this.rand() * 0.08,
@@ -404,9 +534,9 @@ export class TubeTrain {
         playBuffer(
           this.ctx,
           this.bank.warning,
-          car.spatial.input,
+          car.mix.doors,
           at + lag,
-          0.12 * this.mix.doors,
+          0.12,
           1,
           beepTime,
         );
@@ -414,11 +544,11 @@ export class TubeTrain {
       const t0 = at + warning + this.rand() * 0.1;
       for (let d = 0; d < this.stock.doorsPerSide; d++) {
         const buf = pick(this.bank.doorClose[kind], this.rand);
-        const gain = this.doorGain(car, d) * 0.6 * this.mix.doors;
+        const gain = this.doorGain(car, d) * 0.6;
         playBuffer(
           this.ctx,
           buf,
-          car.spatial.input,
+          car.mix.doors,
           t0 + this.rand() * 0.18,
           gain,
           0.96 + this.rand() * 0.08,
@@ -481,7 +611,7 @@ export class TubeTrain {
     const first = script.frameAt(Math.max(script.start, this.station.now));
     // Start the controls in the state the script expects, without clicks.
     this.speed = first.speed;
-    this.frontX = first.frontX;
+    this.setPosition(first.frontX);
     for (const car of this.cars)
       car.camshaft?.prime(first.speed, first.throttle);
     return new Promise((resolve) => {
@@ -505,6 +635,8 @@ export class TubeTrain {
       car.motor?.dispose();
     }
     this.output.disconnect();
+    this.sendStation.disconnect();
+    this.sendTunnel.disconnect();
     this.tunnel.output.disconnect();
   }
 
@@ -522,8 +654,11 @@ export class TubeTrain {
     // Air: friction demand per car after the electric brake share.
     let used = 0;
     const frames: CarFrame[] = [];
+    const heard = this.heardFront();
     for (const car of this.cars) {
+      // The track position sets the curve. The heard position sets the path.
       const centre = this.frontX - car.offset - car.length / 2;
+      const heardCentre = heard - car.offset - car.length / 2;
       const wHz = wheelHz(v, car.wheelDiameter);
       const motorHz = wHz * ratio;
       let load = 0;
@@ -567,7 +702,7 @@ export class TubeTrain {
         airFlow: car.cylinder.flow,
         curvature: this.curveOverride ?? curvatureAt(centre, this.track),
       });
-      car.spatial.update(sourcePath(centre, geo), time, dt);
+      car.spatial.update(sourcePath(heardCentre, geo), time, dt);
     }
 
     for (const ev of this.reservoir.step(dt, used / this.cars.length)) {
@@ -595,9 +730,9 @@ export class TubeTrain {
         playBuffer(
           this.ctx,
           pick(this.bank.lurch, this.rand),
-          car.spatial.input,
+          car.mix.brakes,
           time + i * 0.03,
-          0.5 * this.mix.brakes,
+          0.5,
         );
       });
     }
@@ -605,8 +740,8 @@ export class TubeTrain {
     this.tunnel.update({
       time,
       dt,
-      frontX: this.frontX,
-      rearX: this.frontX - this.length,
+      frontX: heard,
+      rearX: heard - this.length,
       speed: v,
     });
   }
@@ -654,9 +789,9 @@ export class TubeTrain {
         playBuffer(
           this.ctx,
           pick(this.bank.cam, this.rand),
-          car.spatial.input,
+          car.mix.control,
           at,
-          0.22 * this.mix.control,
+          0.22,
           0.95 + this.rand() * 0.1,
         );
       } else if (
@@ -667,9 +802,9 @@ export class TubeTrain {
         playBuffer(
           this.ctx,
           pick(this.bank.contactor, this.rand),
-          car.spatial.input,
+          car.mix.control,
           at,
-          0.3 * this.mix.control,
+          0.3,
         );
       } else if (e.kind === 'runback') {
         // The cam runs home fast: a quick ratchet of clicks.
@@ -678,9 +813,9 @@ export class TubeTrain {
           playBuffer(
             this.ctx,
             pick(this.bank.cam, this.rand),
-            car.spatial.input,
+            car.mix.control,
             at + k * 0.028,
-            0.1 * this.mix.control,
+            0.1,
             1.05,
           );
         }
@@ -691,7 +826,6 @@ export class TubeTrain {
   private scheduleJoints(time: number, dt: number): void {
     const v = this.speed;
     if (v < 0.3) return;
-    const geo = this.station.geometry;
     const a = this.accel;
     const intensity = Math.min(1.6, (v / 20) ** 1.2);
     if (this.track.railLength > 0) {
@@ -707,7 +841,7 @@ export class TubeTrain {
         if (hit.joint <= (this.lastJoint[hit.axle] ?? Number.NEGATIVE_INFINITY))
           continue;
         this.lastJoint[hit.axle] = hit.joint;
-        this.playImpact(hit.axle, time + hit.time, intensity, xs, geo);
+        this.playImpact(hit.axle, time + hit.time, intensity);
       }
     }
     // A wheel flat: one thump per wheel revolution on one axle.
@@ -719,47 +853,31 @@ export class TubeTrain {
       for (const hit of jointHits([x], v, a, dt, circ, this.flat.phase)) {
         if (hit.joint <= this.flat.lastHit) continue;
         this.flat.lastHit = hit.joint;
-        const xs = this.axles.map((ax) => this.frontX - ax.offset);
-        this.playImpact(
-          this.flat.axle,
-          time + hit.time,
-          intensity * 0.22,
-          xs,
-          geo,
-        );
+        this.playImpact(this.flat.axle, time + hit.time, intensity * 0.22);
       }
     }
   }
 
-  private playImpact(
-    axle: number,
-    at: number,
-    intensity: number,
-    xs: number[],
-    geo: TubeStation['geometry'],
-  ): void {
+  private playImpact(axle: number, at: number, intensity: number): void {
     const info = this.axles[axle];
     const car = info ? this.cars[info.car] : undefined;
     if (!info || !car) return;
     // The car chain carries the car-centre gain. Correct it for this axle.
-    const centre = this.frontX - car.offset - car.length / 2;
+    const geo = this.station.geometry;
+    const front = this.heardFront();
+    const centre = front - car.offset - car.length / 2;
     const near =
-      sourcePath(xs[axle] ?? centre, geo).gain / sourcePath(centre, geo).gain;
+      sourcePath(front - info.offset, geo).gain / sourcePath(centre, geo).gain;
     // The leading axle of each bogie strikes harder than the trailing one.
     const lead = axle % 2 === 0 ? 1 : 0.78;
     const gain =
-      0.55 *
-      this.mix.joints *
-      intensity *
-      lead *
-      clamp(near, 0.4, 3) *
-      (0.8 + this.rand() * 0.4);
+      0.55 * intensity * lead * clamp(near, 0.4, 3) * (0.8 + this.rand() * 0.4);
     const rate =
       (0.9 + 0.12 * Math.min(1, this.speed / 20)) * (0.97 + this.rand() * 0.06);
     playBuffer(
       this.ctx,
       pick(this.bank.joint, this.rand),
-      car.spatial.input,
+      car.mix.joints,
       at,
       gain,
       rate,
@@ -769,16 +887,36 @@ export class TubeTrain {
   /** Gain correction for door d of a car, relative to the car centre. */
   private doorGain(car: Car, d: number): number {
     const geo = this.station.geometry;
-    const centre = this.frontX - car.offset - car.length / 2;
+    const front = this.heardFront();
+    const centre = front - car.offset - car.length / 2;
     const x =
-      this.frontX -
-      car.offset -
-      ((d + 0.5) * car.length) / this.stock.doorsPerSide;
+      front - car.offset - ((d + 0.5) * car.length) / this.stock.doorsPerSide;
     return clamp(
       sourcePath(x, geo).gain / sourcePath(centre, geo).gain,
       0.4,
       3,
     );
+  }
+
+  /**
+   * The train front position that the listener hears. It is the track
+   * position, except while a distance lock holds it.
+   */
+  private heardFront(): number {
+    const lock = this.lock;
+    if (!lock) return this.frontX;
+    const car = lock.car === undefined ? undefined : this.cars[lock.car];
+    const ref = car ? car.offset + car.length / 2 : 0;
+    return this.station.geometry.listener.x - lock.distance + ref;
+  }
+
+  /**
+   * Forget the joints that played. Call it after a jump in position: the
+   * memory belongs to the old position, and it silences the joints behind it.
+   */
+  private forgetJoints(): void {
+    this.lastJoint.fill(Number.NEGATIVE_INFINITY);
+    this.flat.lastHit = Number.NEGATIVE_INFINITY;
   }
 
   private buildMotors(): void {
@@ -793,7 +931,7 @@ export class TubeTrain {
       if (type === 'dc-camshaft') {
         car.motor = new DcMotorVoice(this.ctx, {
           commutatorSegments: stock.commutatorSegments || 135,
-          level: 0.42 * this.mix.motor,
+          level: 0.42,
         });
         car.camshaft = new Camshaft({
           // At line speed on the last weak-field notch the current is about
@@ -809,10 +947,10 @@ export class TubeTrain {
           polePairs: stock.polePairs,
           baseHz:
             wheelHz(baseSpeed, car.wheelDiameter) * ratio * stock.polePairs,
-          level: 0.4 * this.mix.motor,
+          level: 0.4,
         });
       }
-      car.motor.output.connect(car.spatial.input);
+      car.motor.output.connect(car.mix.motor);
     }
   }
 }

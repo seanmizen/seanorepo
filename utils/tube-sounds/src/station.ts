@@ -7,7 +7,7 @@
 // callback therefore does not move a sound, it only uses up some latency.
 
 import { Ambient } from './audio/ambient';
-import { gainNode } from './audio/automation';
+import { fadeGain, gainNode } from './audio/automation';
 import { getBank, type SoundBank } from './audio/bank';
 import { DEFAULT_GEOMETRY, type StationGeometry } from './core/geometry';
 
@@ -23,7 +23,7 @@ const softClipCurve = (n = 2048): Float32Array<ArrayBuffer> => {
 
 export interface StationOptions {
   geometry?: Partial<StationGeometry>;
-  /** Ambience level, 0 = off. */
+  /** Ambience level, 1 = default, 0 = off. `setAmbient` changes it live. */
   ambient?: number;
   /** Mean seconds between distant trains in the ambience. 0 = none. */
   distantTrainEvery?: number;
@@ -60,7 +60,11 @@ export class TubeStation {
   readonly controlStep: number;
   readonly latency: number;
   readonly seed: number;
-  private readonly ambient: Ambient | null;
+  private ambient: Ambient | null = null;
+  /** The ambience fader. Its level is the `ambient` option. */
+  private readonly ambientBus: GainNode;
+  private ambientValue: number;
+  private readonly distantTrainEvery: number;
   private readonly master: GainNode;
   private readonly ticked = new Set<Ticked>();
   private controlTime: number;
@@ -119,19 +123,14 @@ export class TubeStation {
     const tunnelRet = gainNode(ctx, opts.tunnelReverb ?? 0.9);
     this.tunnelSend.connect(tunnelVerb).connect(tunnelRet).connect(master);
 
-    const ambientLevel = opts.ambient ?? 1;
-    if (ambientLevel > 0) {
-      this.ambient = new Ambient(ctx, this.bank, {
-        level: ambientLevel,
-        distantTrainEvery: opts.distantTrainEvery ?? 75,
-        seed: this.seed + 5,
-      });
-      this.ambient.output.connect(this.dry);
-      const send = gainNode(ctx, 0.4);
-      this.ambient.output.connect(send).connect(this.stationSend);
-    } else {
-      this.ambient = null;
-    }
+    this.ambientValue = Math.max(0, opts.ambient ?? 1);
+    this.distantTrainEvery = opts.distantTrainEvery ?? 75;
+    this.ambientBus = gainNode(ctx, this.ambientValue);
+    this.ambientBus.connect(this.dry);
+    const ambientSend = gainNode(ctx, 0.4);
+    this.ambientBus.connect(ambientSend).connect(this.stationSend);
+    // With ambient 0 the station makes no ambience nodes until setAmbient.
+    if (this.ambientValue > 0) this.makeAmbient();
   }
 
   /** The audio time of the most recent control step. Events start from here. */
@@ -141,11 +140,32 @@ export class TubeStation {
 
   /** Master gain, ramped over 50 ms. */
   setVolume(v: number): void {
-    this.master.gain.setTargetAtTime(
-      Math.max(0, v),
-      this.ctx.currentTime,
-      0.05,
-    );
+    fadeGain(this.master, Math.max(0, v));
+  }
+
+  /**
+   * Ambience level (mains hum, fans, distant trains), ramped over 50 ms.
+   * 1 = default, 0 = off.
+   */
+  setAmbient(level: number): void {
+    if (!Number.isFinite(level)) return;
+    this.ambientValue = Math.max(0, level);
+    if (this.ambientValue > 0 && !this.ambient) this.makeAmbient();
+    fadeGain(this.ambientBus, this.ambientValue);
+  }
+
+  /** The ambience level that `setAmbient` or the `ambient` option set. */
+  get ambientLevel(): number {
+    return this.ambientValue;
+  }
+
+  private makeAmbient(): void {
+    this.ambient = new Ambient(this.ctx, this.bank, {
+      level: 1,
+      distantTrainEvery: this.distantTrainEvery,
+      seed: this.seed + 5,
+    });
+    this.ambient.output.connect(this.ambientBus);
   }
 
   attach(t: Ticked): void {
