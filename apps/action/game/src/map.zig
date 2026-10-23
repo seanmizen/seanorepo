@@ -8,6 +8,10 @@
 //   escalators, so the feet move smoothly up and down them.
 // - Decoration is visual only: oriented boxes and discs (roof ribs, signs).
 //   It casts shadows. It has no collision.
+// - Each box and each decoration has a surface material (`surface`, no
+//   default): the sound of a bullet that hits it (audio/impact.zig). A hit
+//   on a box takes the material of a decoration that lies on the hit point
+//   (surfaceAt): a sleeper on the ballast, a window on a train.
 //
 // The maps are in maps/. The server (apps/action/server/index.ts) has a
 // copy of the Earl's Court spawns and lift levels.
@@ -16,6 +20,9 @@ const vec = @import("vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
+
+/// The surface material of a box or a decoration: it sets the impact sound.
+pub const Surface = @import("audio/impact.zig").Material;
 
 pub const Id = enum { arena, earls_court };
 
@@ -36,6 +43,7 @@ pub const Box = struct {
     max: V3,
     color: V3,
     mat: Mat,
+    surface: Surface,
     /// Collision and hit scan skip a box with solid = false (lamp bulbs).
     solid: bool = true,
     /// The ambient occlusion skips a box with ao = false (small parts,
@@ -54,6 +62,7 @@ pub const Decor = struct {
     max: V3,
     color: V3,
     mat: Mat,
+    surface: Surface,
     /// A disc of radius min[0] and thickness min[1] along local Z.
     disc: bool = false,
 };
@@ -69,17 +78,29 @@ pub const Light = struct {
 
 pub const Spawn = struct { pos: V3, yaw: f32 };
 
+/// The scene shader loops over the boxes near the eye for the ambient
+/// occlusion (render.zig uploadBoxes): this many at most. A map with more
+/// boxes fails `zig build test` and the floorplan tool.
 pub const max_boxes = 640;
 pub const max_lights = 20;
 
 pub var id: Id = .arena;
 pub var boxes: [max_boxes]Box = undefined;
 pub var box_count: usize = 0;
+/// The boxes that the last load could not add: more than max_boxes. They
+/// are not in the map. load() logs an error.
+pub var dropped: usize = 0;
 pub var decor: std.ArrayList(Decor) = .empty;
+/// The world bounds of each decoration, in the order of `decor` (load).
+pub var decor_bounds: std.ArrayList([2]V3) = .empty;
 pub var lights: [max_lights]Light = undefined;
 pub var light_count: usize = 0;
 pub var spawns: [16]Spawn = undefined;
 pub var spawn_count: usize = 0;
+
+/// add() returns this box when the map is full: the caller can set its
+/// fields, and no box of the map changes.
+var overflow_box: Box = undefined;
 
 /// The shadow map covers a square of this half size around shadow_centre.
 pub var shadow_centre: V3 = v3(0, 0, 0);
@@ -99,11 +120,18 @@ pub fn init(a: std.mem.Allocator) void {
     alloc = a;
 }
 
+/// Free the decoration lists. The tests use it: they check for leaks.
+pub fn deinit() void {
+    decor.clearAndFree(alloc);
+    decor_bounds.clearAndFree(alloc);
+}
+
 /// Build a map. This clears the ramps, the lifts, the buttons and the
 /// escalators too.
 pub fn load(map: Id) void {
     id = map;
     box_count = 0;
+    dropped = 0;
     ramp_count = 0;
     light_count = 0;
     spawn_count = 0;
@@ -122,23 +150,38 @@ pub fn load(map: Id) void {
         .arena => @import("maps/arena.zig").build(),
         .earls_court => @import("maps/earls_court.zig").build(),
     }
+    if (dropped > 0) std.log.err("map {s}: {d} boxes more than max_boxes ({d}). They are not in the map", .{ @tagName(map), dropped, max_boxes });
+    decor_bounds.clearRetainingCapacity();
+    decor_bounds.ensureTotalCapacity(alloc, decor.items.len) catch return;
+    for (decor.items) |d| decor_bounds.appendAssumeCapacity(decorBounds(d));
 }
 
 // ---- Builders for the maps -------------------------------------------------
 
-pub fn add(min: V3, max: V3, color: V3, mat: Mat) *Box {
+/// Add a box. When the map has max_boxes already, the box is not added:
+/// `dropped` counts it, and the pointer is to a spare box.
+pub fn add(min: V3, max: V3, color: V3, mat: Mat, surface: Surface) *Box {
+    const b: Box = .{ .min = min, .max = max, .color = color, .mat = mat, .surface = surface };
     if (box_count >= max_boxes) {
-        std.log.warn("map: more than {d} boxes", .{max_boxes});
-        return &boxes[max_boxes - 1];
+        dropped += 1;
+        overflow_box = b;
+        return &overflow_box;
     }
-    boxes[box_count] = .{ .min = min, .max = max, .color = color, .mat = mat };
+    boxes[box_count] = b;
     box_count += 1;
     return &boxes[box_count - 1];
 }
 
-/// A collision-only box (see Box.visible).
-pub fn addSolid(min: V3, max: V3) void {
-    const b = add(min, max, v3(0, 0, 0), .paint);
+/// The index of a box that add() returned, or null for the spare box.
+pub fn indexOf(b: *const Box) ?usize {
+    if (b == &overflow_box) return null;
+    return (@intFromPtr(b) - @intFromPtr(&boxes[0])) / @sizeOf(Box);
+}
+
+/// A collision-only box (see Box.visible). `surface`: the material of the
+/// visible part (a handrail, a post).
+pub fn addSolid(min: V3, max: V3, surface: Surface) void {
+    const b = add(min, max, v3(0, 0, 0), .paint, surface);
     b.visible = false;
     b.ao = false;
 }
@@ -149,7 +192,7 @@ pub const Rect = struct { x0: f32, x1: f32, z0: f32, z1: f32 };
 /// The holes are rooms and passages: the mass around them is their walls.
 /// It sweeps along X: between two hole edges, the free Z ranges become
 /// boxes.
-pub fn carve(area: Rect, y0: f32, y1: f32, holes: []const Rect, color: V3, mat: Mat) void {
+pub fn carve(area: Rect, y0: f32, y1: f32, holes: []const Rect, color: V3, mat: Mat, surface: Surface) void {
     var xs: [130]f32 = undefined;
     var n: usize = 0;
     xs[n] = area.x0;
@@ -188,29 +231,29 @@ pub fn carve(area: Rect, y0: f32, y1: f32, holes: []const Rect, color: V3, mat: 
         std.mem.sort([2]f32, cut[0..c], {}, S.less);
         var z = area.z0;
         for (cut[0..c]) |r| {
-            if (r[0] > z + 1e-4) _ = add(v3(xa, y0, z), v3(xb, y1, r[0]), color, mat);
+            if (r[0] > z + 1e-4) _ = add(v3(xa, y0, z), v3(xb, y1, r[0]), color, mat, surface);
             z = @max(z, r[1]);
         }
-        if (area.z1 > z + 1e-4) _ = add(v3(xa, y0, z), v3(xb, y1, area.z1), color, mat);
+        if (area.z1 > z + 1e-4) _ = add(v3(xa, y0, z), v3(xb, y1, area.z1), color, mat, surface);
     }
 }
 
 /// A box from its centre on the floor (x, z), its size and its base height.
-pub fn put(x: f32, z: f32, sx: f32, sy: f32, sz: f32, y0: f32, color: V3, mat: Mat) *Box {
-    return add(v3(x - sx / 2, y0, z - sz / 2), v3(x + sx / 2, y0 + sy, z + sz / 2), color, mat);
+pub fn put(x: f32, z: f32, sx: f32, sy: f32, sz: f32, y0: f32, color: V3, mat: Mat, surface: Surface) *Box {
+    return add(v3(x - sx / 2, y0, z - sz / 2), v3(x + sx / 2, y0 + sy, z + sz / 2), color, mat, surface);
 }
 
-pub fn addDecor(m: Mat4, min: V3, max: V3, color: V3, mat: Mat) void {
-    decor.append(alloc, .{ .m = m, .min = min, .max = max, .color = color, .mat = mat }) catch {};
+pub fn addDecor(m: Mat4, min: V3, max: V3, color: V3, mat: Mat, surface: Surface) void {
+    decor.append(alloc, .{ .m = m, .min = min, .max = max, .color = color, .mat = mat, .surface = surface }) catch {};
 }
 
-pub fn addDisc(m: Mat4, r: f32, t: f32, color: V3, mat: Mat) void {
-    decor.append(alloc, .{ .m = m, .min = v3(r, t, 0), .max = v3(0, 0, 0), .color = color, .mat = mat, .disc = true }) catch {};
+pub fn addDisc(m: Mat4, r: f32, t: f32, color: V3, mat: Mat, surface: Surface) void {
+    decor.append(alloc, .{ .m = m, .min = v3(r, t, 0), .max = v3(0, 0, 0), .color = color, .mat = mat, .surface = surface, .disc = true }) catch {};
 }
 
 /// A decoration beam from a to b, w wide and h high. `up` turns the cross
 /// section.
-pub fn beam(a: V3, b: V3, w: f32, h: f32, up: V3, color: V3, mat: Mat) void {
+pub fn beam(a: V3, b: V3, w: f32, h: f32, up: V3, color: V3, mat: Mat, surface: Surface) void {
     const d = b - a;
     const l = vec.len(d);
     if (l < 1e-4) return;
@@ -218,7 +261,86 @@ pub fn beam(a: V3, b: V3, w: f32, h: f32, up: V3, color: V3, mat: Mat) void {
     const r = vec.norm(vec.cross(f, up));
     const u = vec.cross(r, f);
     const m = Mat4{ .data = .{ r[0], r[1], r[2], 0, u[0], u[1], u[2], 0, f[0], f[1], f[2], 0, a[0], a[1], a[2], 1 } };
-    addDecor(m, v3(-w / 2, -h / 2, 0), v3(w / 2, h / 2, l), color, mat);
+    addDecor(m, v3(-w / 2, -h / 2, 0), v3(w / 2, h / 2, l), color, mat, surface);
+}
+
+/// The world bounds (AABB) of a decoration.
+pub fn decorBounds(d: Decor) [2]V3 {
+    var mn = v3(1e9, 1e9, 1e9);
+    var mx = v3(-1e9, -1e9, -1e9);
+    const lo = if (d.disc) v3(-d.min[0], -d.min[0], -d.min[1] / 2) else d.min;
+    const hi = if (d.disc) v3(d.min[0], d.min[0], d.min[1] / 2) else d.max;
+    for (0..8) |i| {
+        const p = vec.xform(d.m, v3(
+            if (i & 1 != 0) hi[0] else lo[0],
+            if (i & 2 != 0) hi[1] else lo[1],
+            if (i & 4 != 0) hi[2] else lo[2],
+        ));
+        mn = @min(mn, p);
+        mx = @max(mx, p);
+    }
+    return .{ mn, mx };
+}
+
+/// True when the point p is inside a decoration, or within `tol` m of it,
+/// in the frame of the decoration.
+pub fn insideDecor(d: Decor, p: V3, tol: f32) bool {
+    const m = d.m.data;
+    const c0 = v3(m[0], m[1], m[2]);
+    const c1 = v3(m[4], m[5], m[6]);
+    const c2 = v3(m[8], m[9], m[10]);
+    const det = vec.dot(c0, vec.cross(c1, c2));
+    if (@abs(det) < 1e-9) return false;
+    const q = p - v3(m[12], m[13], m[14]);
+    const l = v3(vec.dot(vec.cross(c1, c2), q), vec.dot(vec.cross(c2, c0), q), vec.dot(vec.cross(c0, c1), q)) / vec.s(det);
+    if (d.disc) {
+        const r = d.min[0] + tol;
+        return l[0] * l[0] + l[1] * l[1] < r * r and @abs(l[2]) < d.min[1] / 2 + tol;
+    }
+    return @reduce(.And, l > d.min - vec.s(tol)) and @reduce(.And, l < d.max + vec.s(tol));
+}
+
+/// The surface material at a hit point p on box `bi`: the material of the
+/// smallest decoration within 3 cm of p (a sleeper on the ballast, a
+/// window on a train, a poster on a wall), else the material of the box.
+pub fn surfaceAt(p: V3, bi: usize) Surface {
+    const tol: f32 = 0.03;
+    var best: ?usize = null;
+    var best_size: f32 = std.math.inf(f32);
+    for (decor_bounds.items, 0..) |bb, i| {
+        if (@reduce(.Or, p < bb[0] - vec.s(tol)) or @reduce(.Or, p > bb[1] + vec.s(tol))) continue;
+        const d = decor.items[i];
+        if (!insideDecor(d, p, tol)) continue;
+        const e = bb[1] - bb[0];
+        const size = e[0] + e[1] + e[2];
+        if (size < best_size) {
+            best_size = size;
+            best = i;
+        }
+    }
+    if (best) |i| return decor.items[i].surface;
+    return boxes[bi].surface;
+}
+
+/// True when a surface material fits the look (the render material) of a
+/// box or a decoration. The floorplan audit and `zig build test` check
+/// every surface of every map with it, so a typo in a map shows.
+pub fn surfaceFits(look: Mat, s: Surface) bool {
+    if (s == .flesh) return false;
+    return switch (look) {
+        .emissive => s == .glass,
+        .wood => s == .wood,
+        .brick => s == .brick,
+        .wall_tile => s == .tile,
+        .cloth => s == .fabric,
+        .tile => s == .tile or s == .concrete,
+        .concrete => switch (s) {
+            .concrete, .ballast, .earth, .plaster, .tile, .glass => true,
+            else => false,
+        },
+        .metal => s == .metal or s == .sheet_metal or s == .glass,
+        .paint => true,
+    };
 }
 
 /// A map light. It does not move, so it gets a shadow map: walls stop its

@@ -73,25 +73,30 @@ pub const Round = struct {
     reach: f32 = 200,
     /// The recoil impulse in N s: the momentum of the bullet and the gas.
     impulse: f32,
+    /// The bullet (or pellet) diameter and length in mm. The crack of a
+    /// supersonic bullet comes from them (audio/near_miss.zig). Buckshot
+    /// is a ball: the length is the diameter.
+    bullet_d: f32,
+    bullet_l: f32,
 };
 
 pub const rounds = std.enums.EnumArray(Calibre, Round).init(.{
-    .c4_6x30 = .{ .label = "4.6x30 mm", .body = 17, .head = 2.3, .velocity = 720, .barrel = 18, .near = 18, .far = 55, .min = 0.65, .impulse = 2.3 },
-    .c9x19 = .{ .label = "9x19 mm", .body = 21, .head = 2.3, .velocity = 360, .barrel = 11, .near = 12, .far = 40, .min = 0.55, .impulse = 3.4 },
-    .c40sw = .{ .label = ".40 S&W", .body = 25, .head = 2.3, .velocity = 330, .barrel = 11, .near = 12, .far = 38, .min = 0.55, .impulse = 4.3 },
-    .c10mm = .{ .label = "10 mm Auto", .body = 28, .head = 2.3, .velocity = 380, .barrel = 12, .near = 15, .far = 45, .min = 0.6, .impulse = 5.3 },
-    .c45acp = .{ .label = ".45 ACP", .body = 27, .head = 2.3, .velocity = 255, .barrel = 13, .near = 10, .far = 35, .min = 0.5, .impulse = 4.2 },
-    .c50ae = .{ .label = ".50 AE", .body = 45, .head = 2.0, .velocity = 450, .barrel = 15, .near = 20, .far = 55, .min = 0.7, .impulse = 10.3 },
-    .c38spl = .{ .label = ".38 Special", .body = 35, .head = 2.5, .velocity = 265, .barrel = 10, .near = 10, .far = 35, .min = 0.5, .impulse = 3.1 },
-    .c357mag = .{ .label = ".357 Magnum", .body = 53, .head = 2.0, .velocity = 425, .barrel = 10, .near = 15, .far = 45, .min = 0.6, .impulse = 5.5 },
-    .c44mag = .{ .label = ".44 Magnum", .body = 64, .head = 2.0, .velocity = 440, .barrel = 15, .near = 22, .far = 60, .min = 0.6, .impulse = 8.2 },
-    .c5_45x39 = .{ .label = "5.45x39 mm", .body = 23, .head = 2.5, .velocity = 880, .barrel = 41, .near = 20, .far = 60, .min = 0.65, .impulse = 4.4 },
-    .c5_56x45 = .{ .label = "5.56x45 mm", .body = 23, .head = 2.5, .velocity = 900, .barrel = 37, .near = 18, .far = 55, .min = 0.62, .impulse = 5.9 },
-    .c7_62x39 = .{ .label = "7.62x39 mm", .body = 30, .head = 2.5, .velocity = 715, .barrel = 41, .near = 25, .far = 70, .min = 0.72, .impulse = 7.8 },
-    .c300blk_sub = .{ .label = ".300 BLK subsonic", .body = 32, .head = 2.5, .velocity = 305, .barrel = 23, .near = 15, .far = 45, .min = 0.6, .impulse = 5.1 },
-    .g12 = .{ .label = "12 gauge", .body = 13, .head = 1.25, .pellets = 9, .velocity = 400, .barrel = 47, .near = 6, .far = 30, .min = 0.2, .reach = 36, .impulse = 17 },
-    .g12_mag = .{ .label = "12 gauge magnum", .body = 12, .head = 1.25, .pellets = 12, .velocity = 410, .barrel = 47, .near = 7, .far = 33, .min = 0.2, .reach = 40, .impulse = 23 },
-    .g20 = .{ .label = "20 gauge", .body = 13, .head = 1.25, .pellets = 8, .velocity = 400, .barrel = 47, .near = 5, .far = 26, .min = 0.2, .reach = 32, .impulse = 12 },
+    .c4_6x30 = .{ .label = "4.6x30 mm", .body = 17, .head = 2.3, .velocity = 720, .barrel = 18, .near = 18, .far = 55, .min = 0.65, .impulse = 2.3, .bullet_d = 4.65, .bullet_l = 16 },
+    .c9x19 = .{ .label = "9x19 mm", .body = 21, .head = 2.3, .velocity = 360, .barrel = 11, .near = 12, .far = 40, .min = 0.55, .impulse = 3.4, .bullet_d = 9.02, .bullet_l = 15.5 },
+    .c40sw = .{ .label = ".40 S&W", .body = 25, .head = 2.3, .velocity = 330, .barrel = 11, .near = 12, .far = 38, .min = 0.55, .impulse = 4.3, .bullet_d = 10.17, .bullet_l = 14 },
+    .c10mm = .{ .label = "10 mm Auto", .body = 28, .head = 2.3, .velocity = 380, .barrel = 12, .near = 15, .far = 45, .min = 0.6, .impulse = 5.3, .bullet_d = 10.17, .bullet_l = 15.5 },
+    .c45acp = .{ .label = ".45 ACP", .body = 27, .head = 2.3, .velocity = 255, .barrel = 13, .near = 10, .far = 35, .min = 0.5, .impulse = 4.2, .bullet_d = 11.48, .bullet_l = 17 },
+    .c50ae = .{ .label = ".50 AE", .body = 45, .head = 2.0, .velocity = 450, .barrel = 15, .near = 20, .far = 55, .min = 0.7, .impulse = 10.3, .bullet_d = 12.7, .bullet_l = 22 },
+    .c38spl = .{ .label = ".38 Special", .body = 35, .head = 2.5, .velocity = 265, .barrel = 10, .near = 10, .far = 35, .min = 0.5, .impulse = 3.1, .bullet_d = 9.07, .bullet_l = 18 },
+    .c357mag = .{ .label = ".357 Magnum", .body = 53, .head = 2.0, .velocity = 425, .barrel = 10, .near = 15, .far = 45, .min = 0.6, .impulse = 5.5, .bullet_d = 9.07, .bullet_l = 17 },
+    .c44mag = .{ .label = ".44 Magnum", .body = 64, .head = 2.0, .velocity = 440, .barrel = 15, .near = 22, .far = 60, .min = 0.6, .impulse = 8.2, .bullet_d = 10.9, .bullet_l = 19 },
+    .c5_45x39 = .{ .label = "5.45x39 mm", .body = 23, .head = 2.5, .velocity = 880, .barrel = 41, .near = 20, .far = 60, .min = 0.65, .impulse = 4.4, .bullet_d = 5.6, .bullet_l = 25.5 },
+    .c5_56x45 = .{ .label = "5.56x45 mm", .body = 23, .head = 2.5, .velocity = 900, .barrel = 37, .near = 18, .far = 55, .min = 0.62, .impulse = 5.9, .bullet_d = 5.7, .bullet_l = 23 },
+    .c7_62x39 = .{ .label = "7.62x39 mm", .body = 30, .head = 2.5, .velocity = 715, .barrel = 41, .near = 25, .far = 70, .min = 0.72, .impulse = 7.8, .bullet_d = 7.92, .bullet_l = 26.8 },
+    .c300blk_sub = .{ .label = ".300 BLK subsonic", .body = 32, .head = 2.5, .velocity = 305, .barrel = 23, .near = 15, .far = 45, .min = 0.6, .impulse = 5.1, .bullet_d = 7.82, .bullet_l = 38 },
+    .g12 = .{ .label = "12 gauge", .body = 13, .head = 1.25, .pellets = 9, .velocity = 400, .barrel = 47, .near = 6, .far = 30, .min = 0.2, .reach = 36, .impulse = 17, .bullet_d = 8.38, .bullet_l = 8.38 },
+    .g12_mag = .{ .label = "12 gauge magnum", .body = 12, .head = 1.25, .pellets = 12, .velocity = 410, .barrel = 47, .near = 7, .far = 33, .min = 0.2, .reach = 40, .impulse = 23, .bullet_d = 8.38, .bullet_l = 8.38 },
+    .g20 = .{ .label = "20 gauge", .body = 13, .head = 1.25, .pellets = 8, .velocity = 400, .barrel = 47, .near = 5, .far = 26, .min = 0.2, .reach = 32, .impulse = 12, .bullet_d = 6.1, .bullet_l = 6.1 },
 });
 
 pub const Weight = enum { light, medium, heavy };
@@ -517,6 +522,8 @@ pub fn derive(b: Build, number: u32) Stats {
     st.head = @round(st.body * cal.head);
     st.pellets = cal.pellets;
     st.velocity = cal.velocity * pow(r, 0.2);
+    st.bullet_d = cal.bullet_d;
+    st.bullet_l = cal.bullet_l;
     const reach = std.math.clamp(pow(r, 0.35), 0.75, 1.3);
     st.near = cal.near * reach;
     st.far = cal.far * reach;

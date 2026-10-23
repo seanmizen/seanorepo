@@ -82,8 +82,9 @@ pub fn build(b: *std.Build) void {
 
     // `zig build test`: native tests (src/tests.zig): the player movement on
     // the maps, the console framework (src/console/), the session
-    // (src/session/) and the gun model (src/guns_test.zig, which reads
-    // ../server/guns.json).
+    // (src/session/), the gun model (src/guns_test.zig, which reads
+    // ../server/guns.json), the box limit and the surface materials
+    // (src/surfaces_test.zig), and the bullet sounds (src/audio/).
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/tests.zig"),
@@ -96,5 +97,5 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     options.addOptionPath("guns_json", guns_json);
     tests.root_module.addOptions("build_options", options);
-    b.step("test", "Walk the player over the stairs and escalators, test the console, the session and the gun model").dependOn(&b.addRunArtifact(tests).step);
+    b.step("test", "Walk the player over the stairs and escalators, test the console, the session, the gun model, the maps and the bullet sounds").dependOn(&b.addRunArtifact(tests).step);
 }

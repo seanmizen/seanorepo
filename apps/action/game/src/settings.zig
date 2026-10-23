@@ -46,8 +46,8 @@ const defs = [_]console.Def{
         .min = 0,
         .max = 1,
         .flags = .{ .saved = true },
-        .description = "The effects volume, 0 to 1: the guns, the hits, the grenades and the buttons. The trains follow the master volume only.",
-        .reader = "main.zig sound",
+        .description = "The effects volume, 0 to 1: the guns, the cracks and whizzes of near misses, the impacts, the hits, the grenades and the buttons. The trains follow the master volume only.",
+        .reader = "main.zig sound, sounds.zig tone and play",
     },
     .{
         .name = "fov",

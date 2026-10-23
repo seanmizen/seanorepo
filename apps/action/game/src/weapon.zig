@@ -95,6 +95,10 @@ pub const Stats = struct {
     /// The muzzle velocity in m/s. Over guns.sound_speed the bullet is
     /// supersonic.
     velocity: f32 = 0,
+    /// The bullet diameter and length in mm (guns.zig Round). 0 for the
+    /// knife and the grenade.
+    bullet_d: f32 = 0,
+    bullet_l: f32 = 0,
     /// The walk speed multiplier while it is held.
     speed: f32 = 1,
     /// The time to take it out, in seconds.

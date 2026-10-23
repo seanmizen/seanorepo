@@ -2,14 +2,20 @@
 // When: while you build or change a map.
 // Why: draws slices of a map, so you can see what is where, and audits the
 // map: for decoration that a player can walk through, for lights inside a
-// shadow caster, and for escape holes (escape.zig).
+// shadow caster, for surface materials that do not fit their look, and for
+// escape holes (escape.zig).
 //
 //   zig build floorplan -- <map> plan <y> <out.ppm>        top view, a slice at height y
 //   zig build floorplan -- <map> section-z <z> <out.ppm>   side view (x, y), a slice at z
 //   zig build floorplan -- <map> section-x <x> <out.ppm>   end view (z, y), a slice at x
 //   zig build floorplan -- <map> audit                     reachable decoration without collision,
-//                                                           and lights inside a shadow caster
+//                                                           lights inside a shadow caster, and the
+//                                                           surface materials: exit code 1 if one
+//                                                           does not fit its look
 //   zig build floorplan -- <map> escape                    escape holes, exit code 1 if it finds one
+//
+// Every command stops with exit code 1 when the map has more boxes than
+// map.max_boxes.
 //
 // <map> is arena or earls_court. The image is a binary PPM; on macOS,
 // `sips -s format png in.ppm --out out.png` converts it.
@@ -119,24 +125,6 @@ const Canvas = struct {
     }
 };
 
-/// The world AABB of a decoration element.
-fn decorBounds(d: map.Decor) [2]V3 {
-    var mn = v3(1e9, 1e9, 1e9);
-    var mx = v3(-1e9, -1e9, -1e9);
-    const lo = if (d.disc) v3(-d.min[0], -d.min[0], -d.min[1] / 2) else d.min;
-    const hi = if (d.disc) v3(d.min[0], d.min[0], d.min[1] / 2) else d.max;
-    for (0..8) |i| {
-        const p = vec.xform(d.m, v3(
-            if (i & 1 != 0) hi[0] else lo[0],
-            if (i & 2 != 0) hi[1] else lo[1],
-            if (i & 4 != 0) hi[2] else lo[2],
-        ));
-        mn = @min(mn, p);
-        mx = @max(mx, p);
-    }
-    return .{ mn, mx };
-}
-
 const Axis = enum { plan, section_z, section_x };
 
 /// Draw one slice. For a plan: u = x, v = -z (north up), cut at y.
@@ -192,7 +180,7 @@ fn slice(alloc: std.mem.Allocator, io: std.Io, axis: Axis, at: f32, path: []cons
         c.outline(r.ua, r.v0, r.ub, r.v1, .{ 25, 25, 25 });
     }
     for (map.decor.items) |d| {
-        const bb = decorBounds(d);
+        const bb = map.decorBounds(d);
         const r = cut(axis, at, bb[0], bb[1]) orelse continue;
         c.outline(r.ua, r.v0, r.ub, r.v1, .{ 220, 60, 50 });
     }
@@ -256,7 +244,7 @@ fn flush(bb: [2]V3) bool {
 fn audit() usize {
     var count: usize = 0;
     for (map.decor.items, 0..) |d, di| {
-        const bb = decorBounds(d);
+        const bb = map.decorBounds(d);
         if (flush(bb)) continue;
         var hit = false;
         for (map.boxes[0..map.box_count]) |f| {
@@ -288,21 +276,6 @@ fn audit() usize {
     return count;
 }
 
-/// True when the point p is inside a decoration element, in the frame of
-/// the element.
-fn insideDecor(d: map.Decor, p: V3) bool {
-    const m = d.m.data;
-    const c0 = v3(m[0], m[1], m[2]);
-    const c1 = v3(m[4], m[5], m[6]);
-    const c2 = v3(m[8], m[9], m[10]);
-    const det = vec.dot(c0, vec.cross(c1, c2));
-    if (@abs(det) < 1e-9) return false;
-    const q = p - v3(m[12], m[13], m[14]);
-    const l = v3(vec.dot(vec.cross(c1, c2), q), vec.dot(vec.cross(c2, c0), q), vec.dot(vec.cross(c0, c1), q)) / vec.s(det);
-    if (d.disc) return l[0] * l[0] + l[1] * l[1] < d.min[0] * d.min[0] and @abs(l[2]) < d.min[1] / 2;
-    return @reduce(.And, l > d.min) and @reduce(.And, l < d.max);
-}
-
 /// List map lights inside a shadow caster: a visible static box or a
 /// decoration, not emissive (render.zig drawLightShadows). Such a light is
 /// in its own shadow and lights nothing.
@@ -316,7 +289,7 @@ fn auditLights() usize {
             if (@reduce(.And, p > b.min) and @reduce(.And, p < b.max)) inside = "box";
         }
         for (map.decor.items) |d| {
-            if (d.mat != .emissive and insideDecor(d, p)) inside = "decoration";
+            if (d.mat != .emissive and map.insideDecor(d, p, 0)) inside = "decoration";
         }
         if (inside) |what| {
             count += 1;
@@ -325,6 +298,43 @@ fn auditLights() usize {
     }
     std.debug.print("{d} lights inside a shadow caster\n", .{count});
     return count;
+}
+
+/// The surface materials (map.Surface, the impact sound): the boxes and
+/// the decoration of each material, and each surface whose material does
+/// not fit its look (map.surfaceFits). The compiler finds a box or a
+/// decoration with no material: the field has no default.
+fn auditSurfaces() usize {
+    const n = @typeInfo(map.Surface).@"enum".field_names.len;
+    var boxes: [n]usize = @splat(0);
+    var decor: [n]usize = @splat(0);
+    var bad: usize = 0;
+    for (map.boxes[0..map.box_count], 0..) |b, i| {
+        boxes[@backingInt(b.surface)] += 1;
+        if (!map.surfaceFits(b.mat, b.surface)) {
+            bad += 1;
+            std.debug.print("box {d}: ({d:.1} {d:.1} {d:.1}) .. ({d:.1} {d:.1} {d:.1}) look {s}, surface {s} does not fit\n", .{
+                i, b.min[0], b.min[1], b.min[2], b.max[0], b.max[1], b.max[2], @tagName(b.mat), @tagName(b.surface),
+            });
+        }
+    }
+    for (map.decor.items, 0..) |d, i| {
+        decor[@backingInt(d.surface)] += 1;
+        if (!map.surfaceFits(d.mat, d.surface)) {
+            bad += 1;
+            const bb = map.decorBounds(d);
+            std.debug.print("decor {d}: ({d:.1} {d:.1} {d:.1}) .. ({d:.1} {d:.1} {d:.1}) look {s}, surface {s} does not fit\n", .{
+                i, bb[0][0], bb[0][1], bb[0][2], bb[1][0], bb[1][1], bb[1][2], @tagName(d.mat), @tagName(d.surface),
+            });
+        }
+    }
+    std.debug.print("surface      boxes  decoration\n", .{});
+    for (std.enums.values(map.Surface)) |s| {
+        const k = @backingInt(s);
+        std.debug.print("{s:<12} {d:>5}  {d:>10}\n", .{ @tagName(s), boxes[k], decor[k] });
+    }
+    std.debug.print("{d} surfaces with a material that does not fit the look\n", .{bad});
+    return bad;
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -337,10 +347,17 @@ pub fn main(init: std.process.Init) !void {
     map.init(alloc);
     const id = std.meta.stringToEnum(map.Id, args[1]) orelse return error.UnknownMap;
     map.load(id);
-    std.debug.print("{s}: {d} boxes, {d} decoration, {d} lights, {d} lifts\n", .{ args[1], map.box_count, map.decor.items.len, map.light_count, map.lift_count });
+    std.debug.print("{s}: {d} of {d} boxes, {d} decoration, {d} lights, {d} lifts\n", .{ args[1], map.box_count, map.max_boxes, map.decor.items.len, map.light_count, map.lift_count });
+    // A map with more boxes than map.max_boxes is not the map that the
+    // maps/ file describes: every command stops.
+    if (map.dropped > 0) {
+        std.debug.print("error: {d} boxes more than max_boxes ({d}). They are not in the map\n", .{ map.dropped, map.max_boxes });
+        std.process.exit(1);
+    }
     if (std.mem.eql(u8, args[2], "audit")) {
         _ = audit();
         _ = auditLights();
+        if (auditSurfaces() > 0) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, args[2], "escape")) {
