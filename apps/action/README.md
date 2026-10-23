@@ -5,8 +5,11 @@ A first-person shooter in the browser, on swindowzig (Zig to wasm, WebGPU).
 - **Deathmatch**: one lobby that is always on. A match is 5 minutes. Then the
   score board shows for 10 seconds, the scores reset, and the next match
   starts. The clock runs with or without players.
-- **Target practice**: offline. 60 seconds of plates, some of them move. The
-  red centre scores 150, the plate 100. The best score stays in local storage.
+- **Target practice**: offline. The player starts on the firing line of the
+  range: human dummies with health bars, and the damage of each hit near the
+  crosshair (see The practice range). In the arena, a hit on a plate starts a
+  round of 60 seconds. Some plates move. The red centre scores 150, the plate
+  100. The best score stays in local storage.
 
 Controls:
 
@@ -30,7 +33,8 @@ Controls:
 On the main menu, 1, 2 and 3 pick deathmatch, practice and the settings.
 
 Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, Shift+1 to 9
-go to a spawn point.
+go to a spawn point, and in deathmatch a health bar shows over each other
+player.
 
 The HUD has a minimap: north up, the walls at body height over the floors at
 foot height. A player who fires shows on it for a moment.
@@ -91,6 +95,48 @@ The exit code is 1 when it finds an escape hole.
   such lights.
 - Underground, the floor has small damp patches: a little darker and a
   little glossy, with a narrow glint toward each light.
+
+## The practice range
+
+South of the arena, through a doorway in its south wall: a lane 24 m wide
+and 80 m long. The sun is behind the firing line, so the dummies are lit.
+`game/src/maps/arena.zig` has the layout and `game/src/range.zig` has the
+dummies.
+
+| Distance from the spawn | Dummy | Cover |
+|---|---|---|
+| 10 m | stands | a row of waist-high walls (1.05 m) |
+| 15 m | leans out from behind a pillar and back, at random times | a pillar, 2.5 m high |
+| 25 m | stands | a row of waist-high walls |
+| 35 m | walks side to side, 2.75 m each way, at up to 3 m/s | a row of waist-high walls, with gaps |
+| 50 m | stands | a row of waist-high walls |
+| 75 m | stands | a row of waist-high walls |
+
+- **A dummy is a player.** It has the player model, the player hit boxes and
+  the player lean (`game/src/player.zig`). Thus a head, body or leg hit does
+  the same damage as on a player in deathmatch. The damage comes from the
+  stats of the held weapon (`pelletDamage` in `game/src/main.zig`). A
+  grenade does the same damage as to a player, cover included.
+- **Respawn**: a dead dummy falls over, and 1 s after the death it stands
+  again at its place with full health.
+- **Heal**: a dummy that gets no hit for 4 s heals to full. Thus each test
+  starts from 100.
+- **The leaner**: upright, the pillar hides all its hit boxes from the
+  spawn. A full lean shows about 0.1 m of the head, as the lean of a player
+  does. Step to the right of the firing line to see more of it.
+- **Health bars**: a bar over each dummy, with its health and its distance
+  in metres. The bar has a fixed size on the screen, so it reads at 75 m. A
+  hit shows the lost health in white for a moment. When two bars cover each
+  other, the far one moves up, with a thin line down to its dummy.
+- **Damage numbers**: to the right of the crosshair, not in the world. Each
+  shot shows its damage on each dummy that it hits: red for the body, gold,
+  larger and with HEAD for the head. A shotgun shot with head and body
+  pellets shows two numbers. The hit that kills says KILL. A new number goes
+  at the bottom and pushes the older ones up. They fade in 1.3 s. Under the
+  crosshair, TOTAL shows the sum of a series of hits less than 1 s apart.
+- **Plates**: the plates are in the arena. A hit on a plate starts a round of
+  60 seconds. The player is never frozen, so the range stays free during a
+  round and after it.
 
 ## Tests
 
@@ -252,7 +298,8 @@ orange, and a little smoke. `game/src/grenade.zig` has the model:
   66.7 m east or west of the shed centre, just past the ends of the
   concourses. On the District line tracks, yellow danger boards show where
   it starts.
-- **Arena** (target practice): an open square with cover.
+- **Arena** (target practice): an open square with cover, and the practice
+  range to the south.
 
 ## Layout
 
@@ -269,6 +316,7 @@ apps/action/
 │       ├── weapon_menu.zig  the weapon menu (B)
 │       ├── map.zig       the current map: boxes, ramps, decoration, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
+│       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
 │       ├── floorplan.zig the map tool: slices, the decoration audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
 │       ├── player.zig    movement, collision, the lean and the hit boxes

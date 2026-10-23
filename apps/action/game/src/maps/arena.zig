@@ -1,6 +1,12 @@
 // The arena: an open square with walls, a centre platform, corner
-// buildings, containers, pillars and crates. Target practice and the menu
-// use it.
+// buildings, containers, pillars and crates. Target practice uses it.
+//
+// The practice range is south of the arena, through a doorway in the south
+// wall: a lane 24 m wide and 80 m long. Dummies (range.zig) stand 10, 15,
+// 25, 35, 50 and 75 m from the practice spawn. A row of waist-high walls
+// stands in front of each dummy, and a pillar hides the one at 15 m. The
+// sun is behind the firing line, so the dummies are lit.
+const std = @import("std");
 const map = @import("../map.zig");
 const vec = @import("../vec.zig");
 const V3 = vec.V3;
@@ -9,6 +15,39 @@ const Mat = map.Mat;
 
 pub const half: f32 = 30;
 pub const wall_h: f32 = 7;
+
+/// The range: the lane half width, the z of the firing line and of the
+/// inner face of the back wall.
+pub const range_half: f32 = 12;
+pub const range_line: f32 = 33;
+pub const range_end: f32 = 113;
+/// The practice spawn: on the firing line, facing down the range (+Z).
+pub const range_spawn: map.Spawn = .{ .pos = v3(0, 0, range_line - 0.6), .yaw = std.math.pi };
+
+/// A dummy of the range: x, and the distance d from the practice spawn. A
+/// dummy with `walk` walks side to side, `walk` metres each way. A dummy
+/// with `peek` stands behind the pillar and leans out at random times: -1
+/// leans left, 1 right (player.zig lean).
+pub const Dummy = struct { x: f32, d: f32, walk: f32 = 0, peek: f32 = 0 };
+/// Seen from the spawn, each dummy is clear of the lines of sight to the
+/// others, and the far ones are at least 5 degrees apart, so their health
+/// bars do not cover each other. The angles from the spawn: 10 m -27, 25 m
+/// -21, the walker -15 to -6, 75 m 0, 50 m 5, the leaner 11 (its pillar 10
+/// to 19).
+pub const range_dummies = [_]Dummy{
+    .{ .x = -4.5, .d = 10 },
+    .{ .x = -9, .d = 25 },
+    .{ .x = 4.5, .d = 50 },
+    .{ .x = 0, .d = 75 },
+    .{ .x = -6.25, .d = 35, .walk = 2.75 },
+    .{ .x = 3, .d = 15, .peek = -1 },
+};
+
+/// The feet of a dummy at its place: `d` from the spawn.
+pub fn dummyHome(dm: Dummy) V3 {
+    const s = range_spawn.pos;
+    return v3(dm.x, 0, s[2] + @sqrt(dm.d * dm.d - dm.x * dm.x));
+}
 
 const spawns = [_][2]f32{
     .{ -24, -24 }, .{ 24, 24 }, .{ -24, 24 }, .{ 24, -24 },
@@ -58,7 +97,10 @@ pub fn build() void {
     // Floor and the outer walls.
     a(v3(-half - 2, -1, -half - 2), v3(half + 2, 0, half + 2), v3(0.44, 0.41, 0.38), .tile);
     a(v3(-half - 1, 0, -half - 1), v3(half + 1, wall_h, -half), sand, .concrete);
-    a(v3(-half - 1, 0, half), v3(half + 1, wall_h, half + 1), sand, .concrete);
+    // The south wall has a doorway to the range, 4 m wide.
+    a(v3(-half - 1, 0, half), v3(-2, wall_h, half + 1), sand, .concrete);
+    a(v3(2, 0, half), v3(half + 1, wall_h, half + 1), sand, .concrete);
+    a(v3(-2, 3.2, half), v3(2, wall_h, half + 1), sand, .concrete);
     a(v3(-half - 1, 0, -half), v3(-half, wall_h, half), sand, .concrete);
     a(v3(half, 0, -half), v3(half + 1, wall_h, half), sand, .concrete);
     // A trim along the top of the walls.
@@ -120,6 +162,8 @@ pub fn build() void {
     crate(25, 18, 1.4, 0);
     crate(-25, -18, 1.4, 0);
 
+    range(sand, terracotta);
+
     // Lamps along the routes.
     lamp(-12, 5, 4.2);
     lamp(12, -5, 4.2);
@@ -127,4 +171,41 @@ pub fn build() void {
     lamp(5, 14, 4.2);
     lamp(-24, -12, 4.2);
     lamp(24, 12, 4.2);
+}
+
+/// The practice range, south of the arena (see the top of this file).
+fn range(sand: V3, terracotta: V3) void {
+    // The sun shadow covers the arena and the range.
+    map.shadow_centre = v3(0, 0, 41);
+    map.shadow_half = 78;
+    const w = range_half;
+    const z0 = half + 1;
+    const z1 = range_end;
+    a(v3(-w - 1, -1, z0), v3(w + 1, 0, z1 + 1), v3(0.5, 0.47, 0.43), .concrete);
+    a(v3(-w - 1, 0, z0), v3(-w, wall_h, z1), sand, .concrete);
+    a(v3(w, 0, z0), v3(w + 1, wall_h, z1), sand, .concrete);
+    a(v3(-w - 1, 0, z1), v3(w + 1, wall_h, z1 + 1), sand, .concrete);
+    a(v3(-w - 1.2, wall_h, z0), v3(-w + 0.2, wall_h + 0.3, z1 + 1.2), terracotta, .concrete);
+    a(v3(w - 0.2, wall_h, z0), v3(w + 1.2, wall_h + 0.3, z1 + 1.2), terracotta, .concrete);
+    a(v3(-w - 1.2, wall_h, z1 - 0.2), v3(w + 1.2, wall_h + 0.3, z1 + 1.2), terracotta, .concrete);
+    // The firing line: a yellow stripe on the floor, no collision.
+    const stripe = map.add(v3(-w, 0, range_line), v3(w, 0.01, range_line + 0.12), v3(0.85, 0.68, 0.1), .paint);
+    stripe.solid = false;
+    for (range_dummies) |dm| {
+        const z = dummyHome(dm)[2];
+        if (dm.peek == 0) {
+            // A row in front of the dummy: five waist-high walls 3 m long,
+            // with gaps of 1.5 m. The dummy stands 0.75 m behind its wall,
+            // so its gun does not go into the wall.
+            for ([_]f32{ -9, -4.5, 0, 4.5, 9 }) |x| put(x, z - 0.9, 3, 1.05, 0.3, 0, terracotta, .concrete);
+        } else {
+            // The pillar of the leaning dummy, 0.9 m in front of it. The
+            // dummy leans out past its west edge (to -X). The edge is 0.55 m
+            // from the dummy: the least that hides all the hit boxes of the
+            // upright dummy from the spawn. A full lean then shows about
+            // 0.1 m of the head, as a player's lean does.
+            const edge = dm.x - 0.55;
+            put(edge + 1.1, z - 1.15, 2.2, 2.5, 0.5, 0, v3(0.13, 0.42, 0.45), .concrete);
+        }
+    }
 }
