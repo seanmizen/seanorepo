@@ -25,7 +25,7 @@ Controls:
 | G | quick grenade throw, from any slot |
 | 1, 2, 3, 4 | weapon slots: primary, secondary, knife, grenade |
 | B | weapon menu (also on the pause screen) |
-| F | use: press the button under the crosshair (lifts, the panel of the NPC shooter) |
+| F | use: press the button under the crosshair (lifts, the panel of the NPC shooter), pick up or throw a dead pigeon |
 | Q, E (hold) | lean left, lean right |
 | Tab | the score board: kills, deaths and the ping of each player |
 | Y | chat to all players |
@@ -1175,6 +1175,18 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
   66.7 m east or west of the shed centre, just past the ends of the
   concourses. On the District line tracks, yellow danger boards show where
   it starts.
+- **Pigeons** (Earl's Court, `game/src/pigeons.zig`): 12 pigeons sit on
+  the tie rods of the train shed roof, at 11.5 m. They bob, look round,
+  peck, coo, and now and then take a short flight and land again.
+  - A shot near a pigeon, or near its rod, startles it, and the pigeons
+    next to it follow. A startled pigeon flies off in a random direction
+    on a path that weaves, jinks, climbs and sinks, and flaps and glides.
+    Some flights are dumb: the pigeon flies into a wall or the roof. Then
+    it leaves up through the roof and despawns. It does not come back.
+  - A hit kills a pigeon. The body falls, bounces and comes to rest on its
+    side. A shot, a grenade or a kick moves it. F picks it up and F throws
+    it. In deathmatch your kill feed shows the kill.
+  - The pigeons are local to each client. The server knows no pigeons.
 - **Arena** (target practice): an open square with cover, and the practice
   range to the south, with the NPC shooter station at its spawn.
 
@@ -1200,6 +1212,8 @@ apps/action/
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
 │       ├── shooter.zig   the NPC shooter of the range: the NPC, its rounds, the control panel
 │       ├── shooter_hud.zig  the text of the NPC shooter panel, on the HUD
+│       ├── pigeons.zig   the pigeons of the train shed: the perches, the flights, the bodies
+│       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights
 │       ├── impact_fx.zig the impact effect of each material (translucent billboards)
 │       ├── floorplan.zig the map tool: slices, the decoration, material and lift audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)

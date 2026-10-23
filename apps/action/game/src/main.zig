@@ -54,6 +54,7 @@ const sounds = @import("sounds.zig");
 const shooter = @import("shooter.zig");
 const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
+const pigeons = @import("pigeons.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -388,6 +389,7 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     if (map_loaded and map.id == id) return;
     map.load(id);
     map_loaded = true;
+    pigeons.reset(@intFromFloat(rand() * 1e6));
     static_mesh.clear();
     for (map.boxes[0..map.box_count]) |b| {
         if (!b.dynamic and b.visible) static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
@@ -506,6 +508,51 @@ fn pressButton(i: usize) void {
 fn aimedButton() ?usize {
     if (mode == .menu or (mode == .deathmatch and !alive)) return null;
     return map.pickButton(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
+/// The dead pigeon under the crosshair, within reach (pigeons.zig).
+fn aimedPigeon() ?usize {
+    if (mode == .menu or (mode == .deathmatch and !alive)) return null;
+    return pigeons.pick(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
+/// The place of a pigeon in the hand: in front of the eye, low and to the
+/// right.
+fn pigeonHand() V3 {
+    const f = vec.forward(me.yaw, me.pitch);
+    const right = v3(@cos(me.yaw), 0, -@sin(me.yaw));
+    const up = vec.cross(right, f);
+    return me.eyePos() + f * vec.s(0.6) + right * vec.s(0.18) - up * vec.s(0.12);
+}
+
+/// F with a pigeon in the hand: a throw, with the speed of the player.
+fn throwPigeon() void {
+    pigeons.release(me.vel + vec.forward(me.yaw, me.pitch) * vec.s(4.5) + v3(0, 1, 0));
+    sound(300, 180, 0.06, .triangle, 0.1);
+}
+
+/// The sounds of the pigeons (pigeons.events) at their places.
+fn pigeonSounds() void {
+    defer pigeons.event_n = 0;
+    if (mode == .menu) return;
+    for (pigeons.events[0..pigeons.event_n]) |e| switch (e.kind) {
+        // The clatter of the wings.
+        .takeoff => for (0..7) |k| sounds.toneAt(e.p, 1, null, 0.03, .noise, 0.5, @as(f32, @floatFromInt(k)) * 0.045 + rand() * 0.01),
+        .flutter => for (0..4) |k| sounds.toneAt(e.p, 1, null, 0.025, .noise, 0.25, @as(f32, @floatFromInt(k)) * 0.05),
+        .coo => {
+            sounds.toneAt(e.p, 380, 300, 0.22, .triangle, 0.18, 0);
+            sounds.toneAt(e.p, 330, 260, 0.4, .triangle, 0.16, 0.27);
+        },
+        .hit => {
+            sounds.toneAt(e.p, 1, null, 0.08, .noise, 0.4, 0);
+            sounds.toneAt(e.p, 900, 400, 0.06, .square, 0.08, 0);
+        },
+        .bonk => {
+            sounds.toneAt(e.p, 240, 110, 0.07, .sine, 0.5, 0);
+            sounds.toneAt(e.p, 1, null, 0.03, .noise, 0.2, 0);
+        },
+        .thud => sounds.toneAt(e.p, 150, 70, 0.06, .sine, 0.35, 0),
+    };
 }
 
 /// The button of the NPC shooter panel under the crosshair, within reach.
@@ -660,6 +707,8 @@ const ShotRay = struct {
     dummy: ?range.Hit = null,
     /// The NPC shooter: a body that takes no damage.
     npc: bool = false,
+    /// A pigeon, or the body of one (pigeons.zig).
+    pigeon: ?pigeons.Hit = null,
 };
 
 fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
@@ -692,6 +741,7 @@ fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
             if (t < out.t) out = .{ .t = t, .npc = true };
         }
     }
+    if (pigeons.ray(o, d, out.t)) |ph| out = .{ .t = ph.t, .pigeon = ph };
     return out;
 }
 
@@ -754,13 +804,26 @@ fn npcShot(s: shooter.Shot) void {
 fn pelletImpact(ray: ShotRay, end: V3, st: *const weapon.Stats) void {
     const surface: map.Surface = if (ray.box) |bi|
         map.surfaceAt(end, bi)
-    else if (ray.remote != null or ray.dummy != null or ray.npc)
+    else if (ray.remote != null or ray.dummy != null or ray.npc or ray.pigeon != null)
         .flesh
     else if (ray.plate != null)
         .metal
     else
         return;
     sounds.impact(end, surface, st, ray.t);
+}
+
+/// A shot or a cut hit a pigeon or the body of one: a kill shows the kill
+/// marker, and in deathmatch a line in the kill feed of this client.
+fn pigeonHit(h: pigeons.Hit, d: V3) void {
+    if (!pigeons.shoot(h, d)) return;
+    hit_marker = 0.35;
+    hit_marker_kill = true;
+    sound(1350, null, 0.08, .sine, 0.15);
+    if (mode == .deathmatch) {
+        var line: [64]u8 = undefined;
+        pushFeed(std.fmt.bufPrint(&line, "{s}  >  Pigeon", .{my_name[0..my_name_len]}) catch "Pigeon", true);
+    }
 }
 
 /// A gun shot: one ray for each pellet in the cone. In deathmatch one
@@ -817,12 +880,16 @@ fn fire() void {
             dummy_dmg[dh.idx][@intFromBool(dh.head)] += pelletDamage(st, dh.head, ray.t);
         } else if (ray.npc) {
             addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
+        } else if (ray.pigeon) |ph| {
+            pigeonHit(ph, d);
         } else if (ray.box != null and (pi < 3 or rand() < 0.3)) {
             // The effect of the material (impact_fx.zig).
             impact_fx.spawn(end, ray.normal, map.surfaceAt(end, ray.box.?), if (st.pellets > 1) 0.5 else 1, 0);
         }
     }
     sounds.muzzle(1, it.class, 0, 0);
+    // The pigeons near the path or the muzzle take off.
+    pigeons.shot(muzzle, first_end);
     for (dummy_dmg, 0..) |dd, i| {
         if (dd[0] + dd[1] > 0) dummyHit(i, dd[0], dd[1]);
     }
@@ -877,6 +944,10 @@ fn stab() void {
         }
         if (ray.plate) |p| {
             knockPlate(p, false, end, d);
+            return;
+        }
+        if (ray.pigeon) |ph| {
+            pigeonHit(ph, d);
             return;
         }
         if (ray.dummy) |dh| {
@@ -1066,7 +1137,10 @@ fn onBlast(b: grenade.Blast) void {
 fn stepGrenades() void {
     nade_cd = @max(0, nade_cd - dt);
     var buf: [64]grenade.Body = undefined;
-    for (grenade.step(dt, grenadeBodies(&buf))) |b| onBlast(b);
+    for (grenade.step(dt, grenadeBodies(&buf))) |b| {
+        onBlast(b);
+        pigeons.blast(b.pos, grenade.radius);
+    }
 }
 
 // ---- Networking ------------------------------------------------------------
@@ -1246,6 +1320,7 @@ fn handleNet(ctx: *sw.Context) void {
                 // The muzzle report, the crack or the whiz, and the impact
                 // with the effect of its material.
                 if (sounds.remoteShot(a, b, c, model)) |h| impact_fx.spawn(b, h.normal, h.surface, 1, 0);
+                pigeons.shot(a, b);
             }
         } else if (std.mem.eql(u8, m.t, "hit")) {
             hp = m.hp orelse hp;
@@ -1342,9 +1417,16 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     // F is the use key: the lift buttons, the panel of the NPC shooter, and
     // each target that a player presses.
     if (!frozen and !shortcut and act.pressed(.use)) {
-        if (aimedPanel()) |b| {
+        if (pigeons.held != null) {
+            throwPigeon();
+        } else if (aimedPanel()) |b| {
             pressPanel(b);
-        } else if (aimedButton()) |b| pressButton(b);
+        } else if (aimedButton()) |b| {
+            pressButton(b);
+        } else if (aimedPigeon()) |i| {
+            pigeons.grab(i);
+            sound(420, 300, 0.05, .triangle, 0.1);
+        }
     }
     // B: the weapon menu. It frees the mouse.
     if (!shortcut and act.pressed(.weaponmenu)) {
@@ -1566,6 +1648,9 @@ fn tick(ctx: *sw.Context) void {
                     }
                 }
             }
+            // The pigeons fly behind the menu too.
+            pigeons.step(dt);
+            pigeonSounds();
             effectsTick();
             return;
         },
@@ -1695,6 +1780,13 @@ fn tick(ctx: *sw.Context) void {
     }
     if (ownBodyShows()) own_feet.update(ownPose(), dt, me.grounded);
     stepGrenades();
+    // The pigeons: the flights, the bodies, the one in the hand, the kicks.
+    pigeons.step(dt);
+    if (pigeons.held != null) {
+        if (ownBodyShows()) pigeons.holdAt(me.eyePos(), pigeonHand(), me.yaw, dt) else pigeons.release(v3(0, 0, 0));
+    }
+    if (ownBodyShows()) pigeons.kick(me.pos, me.vel);
+    pigeonSounds();
     effectsTick();
 }
 
@@ -2480,11 +2572,12 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
     if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
     if (captured) {
-        // The use hint: a button of the shooter panel, or a lift button.
-        const what: ?[]const u8 = if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
+        // The use hint: a pigeon in the hand, a button of the shooter panel,
+        // a lift button, or a dead pigeon.
+        const what: ?[]const u8 = if (pigeons.held != null) "THROW PIGEON" else if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
             const b = map.buttons[bi];
             break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        } else null;
+        } else if (aimedPigeon() != null) "PICK UP PIGEON" else null;
         if (what) |wt| {
             var kb: [24]u8 = undefined;
             var line: [48]u8 = undefined;
@@ -2571,6 +2664,7 @@ fn gameRender(ctx: *sw.Context) !void {
     }
     if (map.train) |tr| buildTrain(tr);
     if (map.id == .earls_court) buildEscalatorSteps();
+    pigeons.build(&dyn, time);
     if (mode == .practice) {
         for (&targets) |*t| buildTarget(t);
         for (&range.dummies) |*d| buildDummy(d);
