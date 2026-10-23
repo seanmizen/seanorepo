@@ -72,9 +72,9 @@ pub const SceneUniforms = extern struct {
 };
 
 /// The map lights (map.max_lights) and the lights that move: the train,
-/// the lift cabs, the muzzle flashes, the grenades. scene.wgsl has the
-/// same size.
-pub const max_lights = 40;
+/// the lift cabs, the muzzle flashes, the grenades, a blessing of MORE.
+/// scene.wgsl has the same size.
+pub const max_lights = 44;
 
 const PostUniforms = extern struct {
     texel: [2]f32,

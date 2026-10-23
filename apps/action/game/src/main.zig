@@ -58,6 +58,7 @@ const pigeons = @import("pigeons.zig");
 const vapes = @import("vapes.zig");
 const secret = @import("secret_room.zig");
 const train_sound = @import("train_sound.zig");
+const train_car = @import("train_car.zig");
 const gates = @import("gates.zig");
 const vault_mod = @import("vault.zig");
 const V3 = vec.V3;
@@ -193,6 +194,11 @@ const Remote = struct {
     lift: i32 = -1,
     /// The seconds left of a blessing of MORE (secret_room.zig), or 0.
     blessed: f32 = 0,
+    /// A rider of the deep train: the feet x from the train centre, and
+    /// its smoothed value. The player then stands in the train of this
+    /// client.
+    tx: ?f32 = null,
+    tx_now: f32 = 0,
 };
 var remotes: [24]Remote = undefined;
 var remote_n: usize = 0;
@@ -446,46 +452,31 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     render.loadMap(ctx.gpu(), static_mesh.verts.items, map.lights[0..map.light_count]) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
 }
 
-/// The details of the deep train over its body box: windows lit from
-/// inside, red doors that slide open, cab ends, a roof and a skirt.
-fn buildTrain(tr: map.Train) void {
-    const b = map.boxes[tr.box];
-    if (b.max[0] < -60 or b.min[0] > 60) return;
-    const zf = b.max[2]; // the platform face
-    const zb = b.min[2];
-    const y0 = b.min[1];
-    const open = map.trainDoors(tr.t);
-    dyn.box(v3(b.min[0], b.max[1], zb + 0.15), v3(b.max[0], b.max[1] + 0.25, zf - 0.15), v3(0.32, 0.33, 0.35), 3);
-    for ([_]f32{ zf, zb - 0.02 }) |z| {
-        const zz = z + 0.0;
-        dyn.box(v3(b.min[0], y0, zz), v3(b.max[0], y0 + 0.55, zz + 0.02), v3(0.05, 0.12, 0.42), 0);
-        var x = b.min[0] + 0.6;
-        var car: usize = 0;
-        while (x < b.max[0] - 1) : (x += 10) {
-            // A car: two windows and two doors on this side.
-            dyn.box(v3(x + 0.5, y0 + 1.75, zz - 0.005), v3(x + 3.2, y0 + 2.7, zz + 0.025), v3(0.42, 0.33, 0.2), 4);
-            dyn.box(v3(x + 5.6, y0 + 1.75, zz - 0.005), v3(x + 8.3, y0 + 2.7, zz + 0.025), v3(0.42, 0.33, 0.2), 4);
-            for ([_]f32{ 3.6, 8.7 }) |dx| {
-                const slide = if (z == zf) open * 0.65 else 0;
-                for ([_]f32{ -1, 1 }) |side| {
-                    const c = x + dx + side * (0.33 + slide);
-                    dyn.box(v3(c - 0.32, y0 + 0.6, zz - 0.01), v3(c + 0.32, y0 + 2.9, zz + 0.035), v3(0.7, 0.05, 0.04), 0);
-                }
-                if (z == zf and open > 0.02) {
-                    // The lit car floor shows through the open doors.
-                    dyn.box(v3(x + dx - 0.6 * open, y0 + 0.6, zz - 0.02), v3(x + dx + 0.6 * open, y0 + 2.9, zz - 0.01), v3(0.36, 0.3, 0.2), 4);
-                }
-            }
-            car += 1;
-        }
+/// The sink of train_car.details for the deep train: boxes of this frame,
+/// moved to the train centre.
+const TrainDetails = struct {
+    x: f32,
+    pub fn box(self: TrainDetails, min: V3, max: V3, color: V3, mat: map.Mat, _: map.Surface) void {
+        const off = v3(self.x, 0, 0);
+        dyn.box(min + off, max + off, color, @floatFromInt(@backingInt(mat)));
     }
-    for ([_]f32{ b.min[0] - 0.2, b.max[0] }) |ex| {
-        dyn.box(v3(ex, y0, zb), v3(ex + 0.2, b.max[1], zf), v3(0.7, 0.05, 0.04), 0);
-        dyn.box(v3(ex - 0.01, y0 + 1.8, zb + 0.5), v3(ex + 0.21, y0 + 2.6, zf - 0.5), v3(0.02, 0.03, 0.04), 0);
-    }
-    // Headlights at the leading (-X) end.
-    dyn.box(v3(b.min[0] - 0.24, y0 + 0.9, zb + 0.4), v3(b.min[0] - 0.19, y0 + 1.15, zb + 0.8), v3(1.0, 0.97, 0.9), 4);
-    dyn.box(v3(b.min[0] - 0.24, y0 + 0.9, zf - 0.8), v3(b.min[0] - 0.19, y0 + 1.15, zf - 0.4), v3(1.0, 0.97, 0.9), 4);
+};
+
+/// The details of the deep train (train_car.zig): the door leaves, the
+/// windows, the cab fronts, the seat backs, the poles and the lights. Its
+/// parts are dynamic boxes: the loop over the boxes draws them. Only when
+/// the eye is in the deep level and near the train.
+fn buildTrain(tr: *const map.Train, eye: V3) void {
+    const c = tr.centre();
+    if (eye[1] > map.underground_y or @abs(eye[0] - c) > tr.body.half_len + 150) return;
+    train_car.details(&tr.body, TrainDetails{ .x = c }, map.trainDoors(tr.t));
+}
+
+/// The light inside a train (train_car.Body) whose centre is at x = c:
+/// under the ceiling, at the place in the car nearest the eye.
+fn trainLight(b: *const train_car.Body, c: f32, color: V3) map.Light {
+    const x = std.math.clamp(me.eyePos()[0] - c, -b.half_len + 2, b.half_len - 2);
+    return .{ .pos = v3(c + x, b.ceil_y - 0.25, (b.z0 + b.z1) / 2), .color = color, .radius = 9 };
 }
 
 /// The escalator steps are static boxes. Their yellow edges slide along
@@ -1326,6 +1317,15 @@ fn cabIndex() i32 {
     return @intCast(i);
 }
 
+/// The feet x from the centre of the deep train for a rider of the train,
+/// or null: the `tx` field of the st message.
+fn trainOffset() ?f32 {
+    const p = under_feet orelse return null;
+    if (@reduce(.Or, p.feet != me.pos) or !map.trainPartOf(p.box)) return null;
+    const tr = &(map.train orelse return null);
+    return me.pos[0] - tr.centre();
+}
+
 fn handleSnap(m: net.Msg) void {
     phase_end = if (m.phase) |p| std.mem.eql(u8, p, "end") else false;
     time_left = m.left orelse 0;
@@ -1361,6 +1361,8 @@ fn handleSnap(m: net.Msg) void {
         rem.w = weapon.classFromId(p.w) orelse .rifle;
         rem.m = @intCast(@min(p.m, 255));
         rem.lift = p.lift;
+        if (rem.tx == null) rem.tx_now = p.tx orelse 0;
+        rem.tx = p.tx;
         rem.hp = p.hp;
         rem.k = p.k;
         rem.d = p.d;
@@ -1741,8 +1743,16 @@ fn effectsTick() void {
     }
     for (remotes[0..remote_n]) |*r| {
         const k = @min(1, dt * 14);
-        const before = r.pos;
+        var before = r.pos;
         r.pos = vec.lerp(r.pos, r.target, k);
+        // A rider of the deep train stands in the train of this client.
+        // The legs walk only with the move in the train.
+        if (r.tx) |tx| if (map.train) |*tr| {
+            const was = r.tx_now;
+            r.tx_now += (tx - r.tx_now) * k;
+            r.pos[0] = tr.centre() + r.tx_now;
+            before[0] = r.pos[0] - (r.tx_now - was);
+        };
         // A player in a cab stands on the cab of this client. The reported
         // height comes later than the cab (the network and the smoothing).
         if (r.lift >= 0) if (map.cabFloorAt(@intCast(r.lift), r.pos)) |y| {
@@ -1842,7 +1852,7 @@ fn tick(ctx: *sw.Context) void {
     // The feet at the start of the tick: the gates check the crossing.
     const feet_before = me.pos;
     // Before the server corrections and the lift steps move a cab.
-    under_feet = map.platformUnder(me.pos);
+    under_feet = map.platformUnder(me.pos) orelse map.trainInside(me.pos);
     // A press or a release of an action lasts one tick.
     defer gcon.act.endTick();
     const in = consoleTick(ctx);
@@ -1911,30 +1921,24 @@ fn tick(ctx: *sw.Context) void {
             if (ticks % 6 == 0 and alive and session.joined()) {
                 // w and m: the class and the model of the held weapon, so
                 // the others see it. lift: the cab that the player stands
-                // in, so the others draw the player on their own cab.
-                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d},\"lift\":{d}}}", .{
-                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(), cabIndex(),
+                // in, so the others draw the player on their own cab. tx:
+                // only for a rider of the deep train, the feet x from the
+                // train centre, so the others draw the player in their own
+                // train.
+                var tx_buf: [24]u8 = undefined;
+                const tx = if (trainOffset()) |o| std.fmt.bufPrint(&tx_buf, ",\"tx\":{d:.3}", .{o}) catch "" else "";
+                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d},\"lift\":{d}{s}}}", .{
+                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(), cabIndex(), tx,
                 });
             }
         },
         .practice => practiceTick(),
     }
 
-    // The deep train: it shoves a player off the track, and it is loud.
+    // The deep train moves. Its riders move with it below (map.Platform).
     map.stepTrain(dt);
     secret.step(dt);
     for (remotes[0..remote_n]) |*r| r.blessed = @max(0, r.blessed - dt);
-    if (map.train) |tr| {
-        const b = map.boxes[tr.box];
-        const r = player_mod.radius;
-        if (me.pos[0] + r > b.min[0] and me.pos[0] - r < b.max[0] and me.pos[2] + r > b.min[2] and
-            me.pos[2] - r < b.max[2] and me.pos[1] < b.max[1] and me.pos[1] + player_mod.height > b.min[1])
-        {
-            me.pos[2] = b.max[2] + r + 0.05;
-            me.pos[1] = @max(me.pos[1], tr.y0 + 0.75);
-            me.vel = v3(0, 2, 4);
-        }
-    }
     // The sound of the train (train_sound.zig, utils/tube-sounds).
     train_sound.update(map.train, me.eyePos(), me.yaw, mode != .menu and me.pos[1] < map.underground_y - 4);
 
@@ -1946,10 +1950,23 @@ fn tick(ctx: *sw.Context) void {
         damage_flash = 1;
     }
 
-    // The live rail: far out along the lines it kills (maps/earls_court.zig
-    // shock_x). The server makes it a death.
+    // A player in a cab moves with it: the lift step and the server
+    // corrections of this tick (map.Platform).
+    map.stepLifts(dt);
+    if (under_feet) |p| me.ride(p);
+    // The deep train (map.trainPush): a closing door puts a player in the
+    // doorway into the car or onto the platform. The train shoves a player
+    // on the track onto the platform. A rider inside does not touch it.
+    if (mode != .menu) if (map.trainPush(me.pos, player_mod.radius, player_mod.height)) |push| {
+        me.pos = push.feet;
+        if (push.hit) me.vel = v3(0, 2, 4);
+    };
+
+    // The live rail kills on the tracks past the ends of the platforms
+    // (maps/earls_court.zig liveRail). The floor of a train is above the
+    // track bed, so a rider is safe. The server makes it a death.
     if (map.id == .earls_court and mode == .deathmatch and alive and !shocked and
-        @abs(me.pos[0]) > @import("maps/earls_court.zig").shock_x and me.pos[1] < 2)
+        @import("maps/earls_court.zig").liveRail(me.pos))
     {
         shocked = true;
         client.send("{{\"t\":\"shock\"}}", .{});
@@ -1958,11 +1975,6 @@ fn tick(ctx: *sw.Context) void {
         sound(120, 60, 0.6, .square, 0.25);
         damage_flash = 1;
     }
-
-    // A player in a cab moves with it: the lift step and the server
-    // corrections of this tick (map.Platform).
-    map.stepLifts(dt);
-    if (under_feet) |p| me.ride(p);
     // Closing doors open again for a player in the doorway, once each time.
     for (map.lifts[0..map.lift_count], 0..) |l, i| {
         if (l.phase != .closing) door_reopened[i] = false;
@@ -2952,7 +2964,7 @@ fn gameRender(ctx: *sw.Context) !void {
         body_mod.build(&dyn, ownPose());
         own = .{ .first = @intCast(first), .count = @intCast(dyn.verts.items.len - first), .centre = me.pos + v3(0, 0.9, 0) };
     }
-    if (map.train) |tr| buildTrain(tr);
+    if (map.train) |*tr| buildTrain(tr, me.eyePos());
     if (map.id == .earls_court) buildEscalatorSteps();
     pigeons.build(&dyn, time);
     gates.build(&dyn);
@@ -2995,6 +3007,7 @@ fn gameRender(ctx: *sw.Context) !void {
         if (aimPrediction()) |pr| grenade.buildAim(alloc, &dyn, &trans, pr);
     }
 
+    const eye_now = me.eyePos();
     var lights: [render.max_lights]map.Light = undefined;
     var n: usize = 0;
     for (map.lights[0..map.light_count], 0..) |l, i| {
@@ -3007,14 +3020,22 @@ fn gameRender(ctx: *sw.Context) !void {
         if (secret.isRoomLight(i)) lights[n].color = l.color * vec.s(secret.glow());
         n += 1;
     }
-    // The train: a warm glow from its windows and a headlight.
-    if (map.train) |tr| {
-        const b = map.boxes[tr.box];
-        if (b.max[0] > -60 and b.min[0] < 60 and n + 2 <= render.max_lights) {
-            const mid = (b.min[0] + b.max[0]) / 2;
-            lights[n] = .{ .pos = v3(std.math.clamp(mid, -25, 25), b.min[1] + 2.2, b.max[2] + 0.8), .color = v3(1.4, 1.05, 0.65), .radius = 16 };
-            lights[n + 1] = .{ .pos = v3(b.min[0] - 1.5, b.min[1] + 1.2, (b.min[2] + b.max[2]) / 2), .color = v3(3.0, 2.9, 2.6), .radius = 14 };
+    // The trains: a light inside, over the place in the car nearest the
+    // eye. It has no shadow map, so it also lights the platform through
+    // the windows. The deep train has a headlight at its front (-X).
+    if (map.train) |*tr| {
+        const c = tr.centre();
+        const b = &tr.body;
+        if (@abs(eye_now[0] - c) < b.half_len + 60 and eye_now[1] < map.underground_y and n + 2 <= render.max_lights) {
+            lights[n] = trainLight(b, c, v3(1.3, 1.35, 1.4));
+            lights[n + 1] = .{ .pos = v3(c - b.half_len - 1.5, b.floor_y + 0.6, (b.z0 + b.z1) / 2), .color = v3(3.0, 2.9, 2.6), .radius = 14 };
             n += 2;
+        }
+    }
+    if (map.parked_train) |*b| {
+        if (@abs(eye_now[0]) < b.half_len + 20 and @abs(eye_now[2] - (b.z0 + b.z1) / 2) < 25 and n < render.max_lights) {
+            lights[n] = trainLight(b, 0, v3(1.2, 1.2, 1.15));
+            n += 1;
         }
     }
     // A light rides in each lift cab.

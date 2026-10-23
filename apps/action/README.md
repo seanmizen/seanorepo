@@ -103,7 +103,8 @@ The exit code is 1 when it finds an escape hole.
   follows changes to the movement.
 - The audit errs toward an escape. It tests a player 0.1 m thinner than the
   real one, so a gap 0.54 m to 0.64 m wide can show as a hole.
-- The lift doors count as open. The deep train is not in the audit.
+- The lift doors count as open. The deep train moves, so it is not in the
+  audit. The District train is in the audit: its boxes are static.
 - It takes about 5 seconds on Earl's Court.
 
 ## Light
@@ -246,7 +247,15 @@ it does.
   in the cab: the centre, the four corners and the middle of the doors. It
   rides at the lift speed, at 60 m/s, and with server corrections of up to
   1 m. The feet must stay on the cab floor and the body out of all solid
-  shapes. Then the player walks out onto the landing and back in.
+  shapes. Then the player walks out onto the landing and back in. A
+  player boards the deep train at the platform and rides a full cycle,
+  through the tunnels and the jump at the end of the cycle. The feet must
+  stay at the same place in the car, on the floor, and off the live rail.
+  Then the player walks out at the next stop. The closing doors must put
+  a player in a doorway into the car or onto the platform, never in a
+  solid part.
+- `game/src/train_car.zig`: the trains have the real lengths, a player
+  fits through a door opening, and not through a window.
 - `game/src/vault_test.zig` tests the vault (`game/src/vault.zig`). The
   player vaults onto a waist-high wall of the range and onto the railing
   along the shed edge of the east concourse. The player must stand on the
@@ -321,8 +330,9 @@ it does.
 - `server/lobby.test.ts`: a real server on a free port. It checks the cvars
   on join, rcon, a client that tries to set a server cvar, the chat relay
   with the join and leave lines, the `lift` field of a player in a cab, the
-  gate relay, the flock on join, a pigeon kill to the other players, and
-  the session: `GET /api/version`, the build header, the welcome before the
+  `tx` field of a rider of the deep train and the train clock, the gate
+  relay, the flock on join, a pigeon kill to the other players, and the
+  session: `GET /api/version`, the build header, the welcome before the
   hello, the bye on SIGTERM, and a new start with a new build on the same
   port.
 
@@ -1011,17 +1021,17 @@ road over the floor of the ticket hall is concrete.
 
 | Material | The sound | Earl's Court boxes, decoration | Arena boxes | For example |
 |---|---|---|---|---|
-| `concrete` | a sharp crack, a thud and grit | 171, 130 | 80 | platforms, stairs, decks, pavements, the road, painted lines |
+| `concrete` | a sharp crack, a thud and grit | 174, 130 | 80 | platforms, stairs, decks, pavements, the road, painted lines |
 | `brick` | a duller crack and more crumble | 67, 0 | 0 | the shed walls, the concourses, the terraces |
-| `plaster` | a soft crack and a puff | 4, 3 | 0 | the ticket hall walls, the painted fronts on the roads |
-| `tile` | a brittle tink and shards | 53, 13 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof |
-| `metal` | a click and a long high ring | 156, 372 | 13 | rails, railings, posts, frames, escalator steps, roof ribs |
-| `sheet_metal` | a pank and a low bong | 38, 123 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
-| `glass` | a bright crack and falling shards | 46, 158 | 6 | lamps, windows, the lift shafts, the Warwick Road front and rotunda |
-| `wood` | a hollow knock and splinters | 34, 2528 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
+| `plaster` | a soft crack and a puff | 10, 4 | 0 | the ticket hall walls, the painted fronts on the roads |
+| `tile` | a brittle tink and shards | 55, 13 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof |
+| `metal` | a click and a long high ring | 158, 487 | 13 | rails, railings, posts, frames, escalator steps, roof ribs |
+| `sheet_metal` | a pank and a low bong | 115, 360 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
+| `glass` | a bright crack and falling shards | 28, 374 | 6 | lamps, windows, the lift shafts, the Warwick Road front and rotunda |
+| `wood` | a hollow knock and splinters | 39, 2626 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
 | `ballast` | a chuff and a clatter of stones | 13, 0 | 0 | the track beds |
 | `earth` | a dull thup and a spray of dirt | 12, 0 | 0 | the ground under the buildings, the banks of the cuttings |
-| `fabric` | a soft thup | 0, 6 | 0 | the gangways between the cars of the District train |
+| `fabric` | a soft thup | 78, 338 | 0 | the seats of the trains, the gangways of the District train |
 | `flesh` | a wet slap and a thud | 0, 0 | 0 | players and dummies (not a map surface) |
 
 The floorplan audit prints these counts. Its exit code is 1 when a
@@ -1031,20 +1041,23 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 768. Earl's Court uses 644 boxes, the arena 126.
+`map.max_boxes` is 1024. Earl's Court uses 765 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
 - In the game, `map.add` does not add a box past the limit, and it changes
   no box. `map.dropped` counts the boxes, and `map.load` logs an error.
   A lift or a train whose boxes are not in the map is not made.
-- The limit was 640. The secret room of VAPES N MORE needed more, so it
-  is 768. The frame cost does not change. The scene shader loops over the boxes for the ambient
-  occlusion within 45 m of the eye (`uploadBoxes` in
-  `game/src/render.zig`), not over `max_boxes`: at most 124 boxes at a
-  spawn point of Earl's Court (110 on average). A higher limit costs 32
-  bytes of GPU buffer for each box, and frame time only for the boxes
-  that a map adds.
+- The trains (see [Trains](#trains)) took the limit from 640 to 1024. The
+  deep train has 61 boxes and the District train 79. A box costs 32
+  bytes of GPU buffer: 32 KB for 1024 boxes.
+- The scene shader loops over the boxes for the ambient occlusion within
+  45 m of the eye (`uploadBoxes` in `game/src/render.zig`), not over
+  `max_boxes`: at most 109 boxes at a spawn point of Earl's Court (100 on
+  average). The train parts do not count for it, except the floor, the
+  roof and one wall of the District train. The fluorescent tubes of the
+  deep platforms are decoration, not boxes. Thus the higher limit costs no
+  frame time. The collision tests loop over all the boxes of the map.
 
 ### Listen to it
 
@@ -1133,13 +1146,15 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
   with it (`map.Platform` in `game/src/map.zig`). In each tick (`tick` in
   `game/src/main.zig`):
   1. Before anything moves, `map.platformUnder` finds the box under the
-     centre of the feet, with its top within 0.12 m of the feet.
+     centre of the feet, with its top within 0.12 m of the feet. Inside
+     the deep train, `map.trainInside` gives the train floor when no box
+     is under the feet: a player who jumps in the car moves with it.
   2. The boxes move: the server corrections (`syncLift`), `stepLifts` and
      `stepTrain`.
   3. `Player.ride` (`game/src/player.zig`) moves the player by the move of
      that box. The feet keep their height above its top. A wall stops the
      move along X and Z. A player that something else moved in the tick
-     (a spawn, the train push) does not ride.
+     (a spawn) does not ride.
 
   Thus a rider stays on the cab floor at any speed, and through a server
   correction. A new moving thing needs no new code: make it a dynamic
@@ -1158,6 +1173,61 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
   the player stands in (`lift`, -1 for none). The other clients draw that
   player on the floor of their own cab. So the cab and the player agree on
   each client.
+
+## Trains
+
+Earl's Court has two trains at their real size (`game/src/train_car.zig`).
+The platforms take the full trains, as at the real station.
+
+| Train | Stock | Cars | Length | Width | Height above the rail | Platform |
+|---|---|---|---|---|---|---|
+| District line, in the shed at island A | S7 | 7 | 117.4 m | 2.92 m | 3.68 m | islands 120 m (x -60 to 60) |
+| Piccadilly line, deep platform 5 | 1973 | 6 | 106.8 m | 2.63 m | 2.89 m | platforms 112 m (x 0 to 112) |
+
+Sources: Wikipedia, "London Underground 1973 Stock" and "London
+Underground S7 and S8 Stock", and the TfL information sheets of the two
+stocks. The door openings and the door places are approximate.
+
+- **A hollow body**: a floor, a roof, the side walls up to the window
+  sills, the cab ends, partitions between the cars of the 1973 Stock (the
+  S7 Stock has open gangways), and long seats between the doors. The
+  details only show: the door leaves, the window pillars, the seat backs,
+  the yellow poles and grab rails, and two strips of lights. A light that
+  moves with the eye lights the inside of each train.
+- **The windows have no glass.** The opening from the sill to the ceiling
+  is less than the player height, so a player does not fit through it. A
+  bullet goes through.
+- **The District train** stands with its doors open on the island side.
+  Its parts are static boxes and its details are decoration.
+- **The deep train** runs on a cycle of 80 s (`map.trainX`). It comes
+  along the east tunnel at 16 m/s, brakes in 14 s, stops at 20 s, opens
+  its doors from 21 s to 39 s, pulls out at 42 s, runs down the west
+  tunnel and stops there at 76 s, out of sight. At the end of the cycle it
+  jumps to the east tunnel. Its parts are dynamic boxes, and `main.zig`
+  draws its details each frame. The server sends its clock (`tt` in the
+  snapshot).
+- **Ride it**: a player inside the car moves with it, on the floor or in
+  the air (see the moving platforms in [Lifts](#lifts)). A rider stays in
+  the car through the tunnels and through the jump at the end of the
+  cycle. The next stop is the same platform.
+- **The doors**: a doorway is solid while the doors are less than half
+  open. When they close on a player in the doorway, `map.trainPush` moves
+  the player to the nearer side: into the car or onto the platform. A door
+  never traps a player.
+- **Hit by the train**: the train shoves a player on the track onto the
+  platform. A rider in the car does not touch it.
+- **The live rail** (`liveRail` in `game/src/maps/earls_court.zig`) kills
+  at track level only: on the District tracks more than 66.7 m from the
+  shed centre, and on the Piccadilly tracks more than 6.7 m past the ends
+  of the platforms. Yellow boards show where it starts. The floor of the
+  deep train is above the track bed, so a rider is safe.
+- **Deathmatch**: the `st` message of a rider has `tx`, the feet x from
+  the train centre. The other clients draw the player at that place in
+  their own train. The snapshot has the same `tx`.
+- **The sound** (`game/src/train_sound.zig`, `src/tube.ts`): the full
+  6-car 1973 Stock train of `utils/tube-sounds`, on the 112 m platform. It
+  uses about 300 audio nodes (about 50 a car). There is one train, and the
+  page makes it only when the player first hears the deep level.
 
 ## Lean, head bob and settings
 
@@ -1191,10 +1261,11 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
   its iron arch roof and a train, three lifts (see [Lifts](#lifts)),
   escalators that carry you, and the deep Piccadilly line platform. The
   server runs the lifts, so every player sees the same cab.
-  In deathmatch, the live rail kills a player on the tracks more than
-  66.7 m east or west of the shed centre, just past the ends of the
-  concourses. On the District line tracks, yellow danger boards show where
-  it starts.
+  Two trains at their real size: see [Trains](#trains). In deathmatch,
+  the live rail kills a player on the District tracks more than 66.7 m
+  east or west of the shed centre, just past the ends of the concourses,
+  and on the Piccadilly tracks past the ends of the platforms. Yellow
+  danger boards show where it starts.
 - **Ticket gates** (Earl's Court, `game/src/gates.zig`): a gate line of 8
   lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
   passage. Screens close the rest of each hall.
@@ -1276,8 +1347,8 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
     (`{t:"more"}`), and the door opens for each player. A player who joins
     later finds it open. A blessing goes to the other players the same
     way.
-  - The room uses 13 boxes (the door too) and 4 map lights: Earl's Court has 24 of
-    `map.max_lights` (26). `map.sealed` keeps the sun out: the sun shadow
+  - The room uses 13 boxes (the door too) and 4 map lights: Earl's Court
+    has 27 of `map.max_lights` (28). `map.sealed` keeps the sun out: the sun shadow
     map does not reach the room, and out of that map the sun goes through
     walls.
 - **Arena** (target practice): an open square with cover, and the practice
@@ -1300,7 +1371,8 @@ apps/action/
 │       ├── guns_test.zig the tests of the gun model
 │       ├── weapon_menu.zig  the weapon menu (B)
 │       ├── gun_compare.zig  the compare bars of two guns
-│       ├── map.zig       the current map: boxes, ramps, decoration, surface materials, lights, lifts, moving platforms, buttons, escalators
+│       ├── map.zig       the current map: boxes, ramps, decoration, surface materials, lights, lifts, the deep train, moving platforms, buttons, escalators
+│       ├── train_car.zig the car body of a train from its real stock: the parts that stop a player, the details
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
 │       ├── shooter.zig   the NPC shooter of the range: the NPC, its rounds, the control panel
