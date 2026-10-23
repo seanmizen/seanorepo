@@ -571,7 +571,7 @@ pub fn addRamp(r: Ramp) void {
 }
 
 /// The highest point of the ramp surface between x = a and x = b.
-fn rampTop(r: Ramp, a: f32, b: f32) f32 {
+pub fn rampTop(r: Ramp, a: f32, b: f32) f32 {
     const x = if (r.y1 > r.y0) @min(b, r.x1) else @max(a, r.x0);
     return r.y0 + (r.y1 - r.y0) * (x - r.x0) / (r.x1 - r.x0);
 }
