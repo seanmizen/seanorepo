@@ -10,7 +10,7 @@
 // than the sound in the air. A high hiss from the rail beside the platform
 // tells of a train well before the rumble arrives.
 
-import type { StationGeometry } from '../core/geometry';
+import { type StationGeometry, trackPan } from '../core/geometry';
 import { clamp, smoothstep } from '../core/math';
 import { biquad, gainNode, oscillator, Track } from './automation';
 
@@ -90,7 +90,12 @@ export class TunnelVoice {
     this.gustD.ramp(w * 0.3, t);
     this.windF.ramp(160 + 260 * clamp(this.wind, 0, 1), t);
     const mouth = fromEntry ? start : end;
-    this.windPan.ramp(clamp((mouth - g.listener.x) / 40, -0.9, 0.9), t);
+    // A listener with a right-ear direction (a game) hears the mouth from
+    // its true side.
+    const pan = g.listener.right
+      ? trackPan(mouth, g)
+      : clamp((mouth - g.listener.x) / 40, -0.9, 0.9);
+    this.windPan.ramp(pan, t);
 
     // Rail singing is strongest before the train is near. The train masks it
     // when it arrives.

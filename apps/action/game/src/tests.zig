@@ -24,6 +24,7 @@ test {
     _ = @import("audio/tests.zig");
     _ = @import("shooter_test.zig");
     _ = @import("pigeons_test.zig");
+    _ = @import("train_sound.zig");
 }
 
 test "protocol_version.txt: one number, 1 or more" {

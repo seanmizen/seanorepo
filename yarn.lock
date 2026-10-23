@@ -5435,6 +5435,7 @@ __metadata:
   resolution: "action@workspace:apps/action"
   dependencies:
     bun-types: "npm:^1.3.4"
+    tube-sounds: "workspace:*"
     typescript: "npm:^5.9.3"
   languageName: unknown
   linkType: soft
@@ -15409,7 +15410,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"tube-sounds@workspace:utils/tube-sounds":
+"tube-sounds@workspace:*, tube-sounds@workspace:utils/tube-sounds":
   version: 0.0.0-use.local
   resolution: "tube-sounds@workspace:utils/tube-sounds"
   dependencies:

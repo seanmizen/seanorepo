@@ -13,6 +13,7 @@ export {
   type SourcePath,
   type StationGeometry,
   sourcePath,
+  trackPan,
 } from './core/geometry';
 export {
   brakingProfile,

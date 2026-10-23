@@ -12,6 +12,7 @@ import {
   dopplerRatio,
   slewDelay,
   sourcePath,
+  trackPan,
 } from '../src/core/geometry';
 import { generateImpulse, tubeModes } from '../src/core/impulse';
 import { jointHits, timeToTravel } from '../src/core/joints';
@@ -380,6 +381,23 @@ describe('geometry', () => {
     expect(p.delay).toBeGreaterThan(300 / 343);
     expect(p.pan).toBeLessThan(0); // the entry mouth is to the left
     expect(p.tunnelSend).toBeGreaterThan(0);
+  });
+
+  test('the right-ear direction turns the pan', () => {
+    const x = g.listener.x + 30;
+    expect(trackPan(x, g)).toBeGreaterThan(0.5);
+    // The listener turns around: the same point is now on the left.
+    const back = {
+      ...g,
+      listener: { ...g.listener, right: { x: -1, lateral: 0 } },
+    };
+    expect(trackPan(x, back)).toBeLessThan(-0.5);
+    // The right ear points away from the track: the track is on the left.
+    const away = {
+      ...g,
+      listener: { ...g.listener, right: { x: 0, lateral: 1 } },
+    };
+    expect(trackPan(g.listener.x, away)).toBeLessThan(-0.8);
   });
 
   test('delay slew limit and Doppler ratio', () => {

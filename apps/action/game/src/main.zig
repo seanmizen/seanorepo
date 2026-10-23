@@ -56,6 +56,7 @@ const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
 const pigeons = @import("pigeons.zig");
 const vapes = @import("vapes.zig");
+const train_sound = @import("train_sound.zig");
 const gates = @import("gates.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
@@ -487,27 +488,6 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
         if (d.disc) static_mesh.disc(d.m, d.min[0], d.min[1], d.color, m) else static_mesh.orientedBox(d.m, d.min, d.max, d.color, m);
     }
     render.loadMap(ctx.gpu(), static_mesh.verts.items, map.lights[0..map.light_count]) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
-}
-
-fn crossed(a: f32, b: f32, at: f32) bool {
-    return a < at and b >= at;
-}
-
-fn trainSounds(a: f32, b: f32) void {
-    if (crossed(a, b, 0.05)) {
-        ambient(70, 38, 6.0, .sawtooth, 0.12);
-        ambient(1, null, 5.0, .noise, 0.08);
-    }
-    if (crossed(a, b, 7.5)) ambient(900, 300, 1.6, .sine, 0.05); // brakes
-    if (crossed(a, b, 10)) {
-        ambient(784, null, 0.35, .sine, 0.12);
-        ambient(523, null, 0.6, .sine, 0.1);
-    }
-    if (crossed(a, b, 23.5)) {
-        ambient(659, null, 0.25, .sine, 0.12);
-        ambient(659, null, 0.25, .sine, 0.12);
-    }
-    if (crossed(a, b, 27)) ambient(120, 400, 6.0, .sawtooth, 0.06); // traction motors
 }
 
 /// The details of the deep train over its body box: windows lit from
@@ -1808,7 +1788,6 @@ fn tick(ctx: *sw.Context) void {
     }
 
     // The deep train: it shoves a player off the track, and it is loud.
-    const train_t0 = if (map.train) |tr| tr.t else 0;
     map.stepTrain(dt);
     if (map.train) |tr| {
         const b = map.boxes[tr.box];
@@ -1820,8 +1799,9 @@ fn tick(ctx: *sw.Context) void {
             me.pos[1] = @max(me.pos[1], tr.y0 + 0.75);
             me.vel = v3(0, 2, 4);
         }
-        if (mode != .menu and me.pos[1] < map.underground_y - 4) trainSounds(train_t0, tr.t);
     }
+    // The sound of the train (train_sound.zig, utils/tube-sounds).
+    train_sound.update(map.train, me.eyePos(), me.yaw, mode != .menu and me.pos[1] < map.underground_y - 4);
 
     // A vape (vapes.zig): at the end of the effect, popcorn lung kills.
     // The server makes it a death, with the cause in the kill feed.
