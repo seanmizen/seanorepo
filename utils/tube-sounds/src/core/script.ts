@@ -5,6 +5,7 @@
 
 import { brakingProfile, departureProfile } from './kinematics';
 import { clamp, smoothstep } from './math';
+import { DOOR_WARNING, doorCloseTime } from './synth';
 
 export interface ControlFrame {
   speed: number;
@@ -181,7 +182,7 @@ export interface ServiceOptions {
   departTime?: number;
   departDistance?: number;
   approach?: number;
-  /** Length of the door warning before the doors shut, s. */
+  /** Length of the door warning before the doors move, s. */
   warning?: number;
 }
 
@@ -195,7 +196,7 @@ export const serviceScript = (o: ServiceOptions): Script => {
   const open = o.doorsOpen ?? 10;
   const closed = o.doorsClosed ?? 24;
   const depart = o.depart ?? 27;
-  const warning = o.warning ?? 2.8;
+  const warning = o.warning ?? DOOR_WARNING.seconds;
   const arrival = arrivalScript({
     brakeAt: o.at,
     stopX: o.stopX,
@@ -210,8 +211,8 @@ export const serviceScript = (o: ServiceOptions): Script => {
     duration: o.departTime,
     distance: o.departDistance,
   });
-  // The door close movement takes about 1.3 s, so start it before `closed`.
-  const closeStart = closed - 1.3;
+  // The door close movement takes about 1.6 s, so start it before `closed`.
+  const closeStart = closed - doorCloseTime('pneumatic');
   return {
     start: arrival.start,
     end: departure.end,

@@ -48,6 +48,7 @@ import {
   trainLength,
   wheelHz,
 } from './core/stock';
+import { DOOR_WARNING, warningBeeps } from './core/synth';
 import { curvatureAt, DEFAULT_TRACK, type TrackLayout } from './core/track';
 import { GTO_SCHEDULE, IGBT_SCHEDULE } from './core/vvvf';
 import type { TubeStation } from './station';
@@ -136,7 +137,7 @@ interface Car {
 export interface DoorsCloseOptions {
   /** Audio time at which the warning starts. Default: now. */
   at?: number;
-  /** Seconds of warning beeps before the doors move. */
+  /** Seconds of warning beeps before the doors move. Default 2 s (12 beeps). */
   warning?: number;
 }
 
@@ -393,7 +394,9 @@ export class TubeTrain {
   /** Sound the warning, then close all doors. */
   doorsClose(opts: DoorsCloseOptions = {}): void {
     const at = opts.at ?? this.station.now + 0.05;
-    const warning = opts.warning ?? 2.6;
+    const warning = opts.warning ?? DOOR_WARNING.seconds;
+    // Stop on a whole beep, not in the middle of one.
+    const beepTime = warningBeeps(warning).end;
     const kind = this.stock.doors;
     for (const car of this.cars) {
       if (warning > 0) {
@@ -405,7 +408,7 @@ export class TubeTrain {
           at + lag,
           0.12 * this.mix.doors,
           1,
-          warning,
+          beepTime,
         );
       }
       const t0 = at + warning + this.rand() * 0.1;
