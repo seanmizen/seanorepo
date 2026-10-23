@@ -59,6 +59,12 @@
 //   {t:"loadout", p:[c,m], s:[c,m]}               a new pick
 //   {t:"use", i, l}                               call lift i to level l
 //   {t:"shock"}                                   the player touched the live rail
+//   {t:"die", by}                                 an environment death: the
+//                                                 client kills its own player.
+//                                                 by is the cause, one of
+//                                                 ENV_DEATHS ("Popcorn lung",
+//                                                 "Guilt"). The server ignores
+//                                                 any other cause.
 //   {t:"nade", o:[x,y,z], v:[x,y,z]}              a grenade throw: start, velocity
 //   {t:"blast", p:[x,y,z], hits:[{id, dmg}]}      the thrower's grenade went off.
 //                                                 The thrower's client calculates
@@ -85,7 +91,9 @@
 //   {t:"nade", id, o, v}          another player threw a grenade. Each client
 //                                 flies the same path for the visuals.
 //   {t:"hit", from, dmg, hp}      you took damage
-//   {t:"kill", killer, victim, head, kname, vname}
+//   {t:"kill", killer, victim, head, kname, vname, by}
+//                                 by: only for a die message. Then killer is
+//                                 the victim, and kname and by are the cause.
 //   {t:"match"}                   a new match started
 //   {t:"ping", n}                 answer with pong n at once
 //   {t:"pings", ms:[[id, ms, stale]]}  each 2 s: the ping of each player in
@@ -167,6 +175,10 @@ const serverConsole = new ServerConsole(cvars, [
 const log = (line: string) => console.log(`action: ${line}`);
 
 const RESPAWN_MS = 3000;
+/// The causes that a client can give in {t:"die", by}: the kill feed shows
+/// the cause as the killer. "Popcorn lung": a vape of the vape shop
+/// (game/src/vapes.zig). "Guilt": fare dodging.
+const ENV_DEATHS: ReadonlySet<string> = new Set(['Popcorn lung', 'Guilt']);
 const MAX_PLAYERS = 16;
 
 // The class ids of the knife and the grenade (game/src/weapon.zig Class).
@@ -544,6 +556,24 @@ function fireRateOk(p: Player, w: number, cls: Gun, now: number): boolean {
   return true;
 }
 
+/// A death with no killer: the live rail, or a cause of a die message.
+/// kname is the killer in the kill feed. by is set for a die message only.
+function envDeath(p: Player, kname: string, by?: string): void {
+  p.alive = false;
+  p.hp = 0;
+  p.d++;
+  p.respawnAt = Date.now() + RESPAWN_MS;
+  broadcast({
+    t: 'kill',
+    killer: p.id,
+    victim: p.id,
+    head: false,
+    kname,
+    vname: p.name,
+    ...(by ? { by } : {}),
+  });
+}
+
 function onFire(p: Player, msg: Record<string, unknown>): void {
   const now = Date.now();
   if (!p.alive || phase !== 'play') return;
@@ -886,18 +916,16 @@ const server = Bun.serve<Conn>({
         onFire(p, msg);
       } else if (msg.t === 'shock' && p.alive && phase === 'play') {
         // The live rail far out along the lines (the client checks where).
-        p.alive = false;
-        p.hp = 0;
-        p.d++;
-        p.respawnAt = Date.now() + RESPAWN_MS;
-        broadcast({
-          t: 'kill',
-          killer: p.id,
-          victim: p.id,
-          head: false,
-          kname: 'LIVE RAIL',
-          vname: p.name,
-        });
+        envDeath(p, 'LIVE RAIL');
+      } else if (
+        msg.t === 'die' &&
+        p.alive &&
+        phase === 'play' &&
+        typeof msg.by === 'string' &&
+        ENV_DEATHS.has(msg.by)
+      ) {
+        // An environment death that the client detects (a vape).
+        envDeath(p, msg.by, msg.by);
       } else if (msg.t === 'loadout') {
         onLoadout(p, msg);
       } else if (msg.t === 'nade') {

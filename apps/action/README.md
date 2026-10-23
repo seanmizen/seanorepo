@@ -25,7 +25,7 @@ Controls:
 | G | quick grenade throw, from any slot |
 | 1, 2, 3, 4 | weapon slots: primary, secondary, knife, grenade |
 | B | weapon menu (also on the pause screen) |
-| F | use: press the button under the crosshair (lifts, the panel of the NPC shooter), pick up or throw a dead pigeon |
+| F | use the item under the crosshair: a lift button, the NPC shooter panel, a dead pigeon (pick up, throw), a vape |
 | Q, E (hold) | lean left, lean right |
 | Tab | the score board: kills, deaths and the ping of each player |
 | Y | chat to all players |
@@ -381,7 +381,7 @@ reads the actions, not the keys (`game/src/game_console.zig`).
 | `+aim` | mouse2 | the sights |
 | `+reload` | R | reload |
 | `+grenade` | G | quick grenade throw |
-| `+use` | F | press a lift button, or a button of the NPC shooter panel |
+| `+use` | F | use: a lift button, the NPC shooter panel, a pigeon, a vape |
 | `+leanleft`, `+leanright` | Q, E | lean |
 | `+slot1` to `+slot4` | 1 to 4 | weapon slots |
 | `+weaponmenu` | B | the weapon menu |
@@ -1011,7 +1011,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 640. Earl's Court uses 597 boxes, the arena 126.
+`map.max_boxes` is 640. Earl's Court uses 611 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1187,6 +1187,23 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
     side. A shot, a grenade or a kick moves it. F picks it up and F throws
     it. In deathmatch your kill feed shows the kill.
   - The pigeons are local to each client. The server knows no pigeons.
+- **VAPES N MORE** (Earl's Court, `vapeShop` in
+  `game/src/maps/earls_court.zig`, `game/src/vapes.zig`): a vape shop in
+  the terrace opposite the station, at the north end of Earls Court Road.
+  It has a black fascia with the name in neon pixel letters, a big window
+  and a door at the south end of the front. Inside are very bright
+  ceiling panels, neon strips, a cyan light and a magenta light, walls of
+  colourful boxes on lit shelves, and a counter.
+  - A row of disposable vapes stands on the counter. Aim at one and press
+    F (USE VAPE). The field of view pulses and widens for 15 s. Then
+    popcorn lung kills you. The kill feed shows "Popcorn lung" as the
+    killer, and the death screen says DIED OF POPCORN LUNG. A respawn
+    stops the effect.
+  - The death goes through the server, as an environment death (see
+    [The lobby protocol](#the-lobby-protocol)). Thus the vapes work in
+    deathmatch only. The menu and practice do not use them.
+  - The shop uses 14 boxes and the last two map lights: Earl's Court has
+    20 of `map.max_lights` (20).
 - **Arena** (target practice): an open square with cover, and the practice
   range to the south, with the NPC shooter station at its spawn.
 
@@ -1214,6 +1231,7 @@ apps/action/
 │       ├── shooter_hud.zig  the text of the NPC shooter panel, on the HUD
 │       ├── pigeons.zig   the pigeons of the train shed: the perches, the flights, the bodies
 │       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights
+│       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung
 │       ├── impact_fx.zig the impact effect of each material (translucent billboards)
 │       ├── floorplan.zig the map tool: slices, the decoration, material and lift audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
@@ -1271,6 +1289,15 @@ messages carry remote admin. The `chat` message carries the chat:
 | `{t:"chat", ch, text}` | the client, to the server | a message. `ch` is `"all"` or `"team"`. |
 | `{t:"chat", ch, id, name, text}` | the server, to the players of the channel | the message of player `id`, cleaned. The sender gets it too. |
 | `{t:"chat", ch:"server", text}` | the server, to all players, or to one | a server line: a join, a leave, a match start or end. To the sender only: "too many messages". |
+
+An environment death is a death with no killer. The client finds it, and
+the server makes it a death:
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"shock"}` | the client, to the server | the player touched the live rail. The kill feed shows LIVE RAIL. |
+| `{t:"die", by}` | the client, to the server | the player dies of `by`. The server accepts only a cause in `ENV_DEATHS` (`server/index.ts`): `"Popcorn lung"` (a vape) and `"Guilt"` (fare dodging). It ignores any other cause, a dead player and the end of a match. |
+| `{t:"kill", killer, victim, head:false, kname, vname, by}` | the server, to all players | the death. `killer` is the victim, and `kname` and `by` are the cause. Only a `die` gives `by`. With `by`, the death screen says DIED OF, not KILLED BY. |
 
 The client sends its own position, its held weapon and its hits. The server
 checks the match phase and that both players are alive. A pick must name a
