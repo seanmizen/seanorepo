@@ -1,7 +1,7 @@
 // The scene shader: world boxes, players, targets and the view-model gun.
 //
 // Light: a low sun with a 3x3 PCF shadow map, a sky and ground hemisphere
-// ambient, ambient occlusion from the box SDF, up to 30 point lights, a
+// ambient, ambient occlusion from the box SDF, up to 34 point lights, a
 // Blinn-Phong highlight with Fresnel, sky reflections on metal, height fog
 // that takes the sun colour, and in-scatter: the haze glows around each
 // point light. Each map light has a cube shadow map (render.zig), so walls
@@ -19,9 +19,9 @@
 // Your own body has its own light shadow layers (render.zig
 // drawBodyShadows): `body_l` names the lights.
 
-const MAX_LIGHTS: u32 = 30u;
+const MAX_LIGHTS: u32 = 34u;
 // The first light shadow slot of your body: map.zig max_lights.
-const BODY_SLOT: u32 = 20u;
+const BODY_SLOT: u32 = 23u;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -33,8 +33,8 @@ struct Scene {
   info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
   info2: vec4f,    // x underground height, y in-scatter strength
   body_l: vec4f,   // the light of each body slot: its index in lp and lc from 1, 0 none
-  lp: array<vec4f, 30>, // xyz position, w radius
-  lc: array<vec4f, 30>, // rgb colour, w shadow map from 1 (0: none)
+  lp: array<vec4f, 34>, // xyz position, w radius
+  lc: array<vec4f, 34>, // rgb colour, w shadow map from 1 (0: none)
 };
 
 struct BoxG { mn: vec4f, mx: vec4f };

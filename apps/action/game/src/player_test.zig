@@ -15,6 +15,7 @@ const std = @import("std");
 const map = @import("map.zig");
 const player = @import("player.zig");
 const ec = @import("maps/earls_court.zig");
+const train_car = @import("train_car.zig");
 const vec = @import("vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
@@ -364,4 +365,101 @@ test "the lifts: ride up and down from each place in the cab, and walk out at ea
         // up and down.
         try rideLift(.{ .lift = i, .from = from, .spot = .doors, .fixes = &.{ 0.5, -0.5, 1.0, -1.0 } });
     };
+}
+
+// ---- The deep train -----------------------------------------------------------
+
+/// One game tick near the deep train, in the order of main.zig tick: find
+/// the platform under the feet (or the inside of the train), step the
+/// train, ride, the train push, and then the player step.
+fn trainTick(p: *player.Player, wish: V3) ?map.Push {
+    const on = map.platformUnder(p.pos) orelse map.trainInside(p.pos);
+    map.stepTrain(dt);
+    if (on) |pl| p.ride(pl);
+    const push = map.trainPush(p.pos, player.radius, player.height);
+    if (push) |q| p.pos = q.feet;
+    p.step(dt, wish, false, 1);
+    return push;
+}
+
+/// Put the deep train at time t of its cycle.
+fn trainAt(t: f32) *map.Train {
+    const tr = &map.train.?;
+    tr.t = t;
+    map.stepTrain(0);
+    return tr;
+}
+
+/// The centre x of a pair of doors of the deep train.
+fn trainDoorX(tr: *const map.Train, i: usize) f32 {
+    var buf: [train_car.max_doors]f32 = undefined;
+    return tr.centre() + tr.body.doorXs(&buf)[i];
+}
+
+test "the deep train: board it, ride a full cycle through the tunnels, and walk out at the next stop" {
+    loadEarlsCourt();
+    defer unload();
+    const tr = trainAt(map.train_stop + 3);
+    try std.testing.expect(map.trainDoors(tr.t) > 0.99);
+    var p: player.Player = .{ .pos = v3(trainDoorX(tr, 4), ec.deep_y, -26) };
+    for (0..60) |_| _ = trainTick(&p, v3(0, 0, 0));
+    try std.testing.expect(p.grounded);
+
+    // Walk in, to the middle of the car.
+    const mid_z = (tr.body.z0 + tr.body.z1) / 2;
+    var t: usize = 0;
+    while (p.pos[2] > mid_z) : (t += 1) {
+        try std.testing.expect(t < 240);
+        try std.testing.expectEqual(@as(?map.Push, null), trainTick(&p, v3(0, 0, -1)));
+        try std.testing.expect(bodyFree(p.pos));
+    }
+    for (0..30) |_| _ = trainTick(&p, v3(0, 0, 0));
+    try std.testing.expect(map.trainInside(p.pos) != null);
+    const in_car = p.pos[0] - tr.centre();
+
+    // One full cycle: the doors close, the train runs down the west tunnel,
+    // jumps to the east tunnel and comes back to the platform. The rider
+    // stays at the same place in the car, on the floor, and the live rail
+    // does not kill.
+    const ticks: usize = @intFromFloat(map.train_cycle / dt);
+    errdefer std.debug.print("train t {d:.2}, centre {d:.2}, feet ({d:.3} {d:.3} {d:.3})\n", .{ tr.t, tr.centre(), p.pos[0], p.pos[1], p.pos[2] });
+    for (0..ticks) |_| {
+        try std.testing.expectEqual(@as(?map.Push, null), trainTick(&p, v3(0, 0, 0)));
+        try std.testing.expect(p.grounded);
+        try std.testing.expect(@abs(p.pos[0] - tr.centre() - in_car) < 1e-2);
+        try std.testing.expect(@abs(p.pos[1] - tr.body.floor_y) < 1e-3);
+        try std.testing.expect(map.trainInside(p.pos) != null);
+        try std.testing.expect(!ec.liveRail(p.pos));
+    }
+    try std.testing.expect(map.trainDoors(tr.t) > 0.99);
+
+    // Walk out onto the platform.
+    t = 0;
+    while (p.pos[2] < -26) : (t += 1) {
+        try std.testing.expect(t < 240);
+        _ = trainTick(&p, v3(0, 0, 1));
+        try std.testing.expect(bodyFree(p.pos));
+    }
+    try std.testing.expect(p.grounded and @abs(p.pos[1] - ec.deep_y) < 1e-3);
+}
+
+test "the deep train: the closing doors put a player in a doorway into the car or onto the platform" {
+    loadEarlsCourt();
+    defer unload();
+    // In the doorway: on the inside half, and on the outside half.
+    for ([_]f32{ -0.06, -0.02 }) |dz| {
+        const tr = trainAt(map.train_depart - 6);
+        var p: player.Player = .{ .pos = v3(trainDoorX(tr, 7), tr.body.floor_y, tr.body.z1 + dz) };
+        var pushed = false;
+        while (tr.t < map.train_depart + 1) {
+            if (trainTick(&p, v3(0, 0, 0))) |q| {
+                try std.testing.expect(!q.hit);
+                pushed = true;
+            }
+            try std.testing.expect(bodyFree(p.pos));
+        }
+        try std.testing.expect(pushed);
+        // Out of the doorway: in the car, or on the platform.
+        try std.testing.expect(map.trainInside(p.pos) != null or p.pos[2] > tr.body.z1);
+    }
 }
