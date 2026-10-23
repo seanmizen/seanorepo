@@ -1,9 +1,11 @@
-// The current map: axis-aligned boxes, decoration, lights, spawns, lifts,
-// buttons and escalators.
+// The current map: axis-aligned boxes, ramps, decoration, lights, spawns,
+// lifts, buttons and escalators.
 //
 // - Boxes are the render mesh, the collision shapes, the hit-scan targets
 //   and the ambient-occlusion shapes (the shader reads them from a storage
 //   buffer). A dynamic box (a lift part) moves, so it is drawn each frame.
+// - Ramps are invisible collision slopes over the stairs and the
+//   escalators, so the feet move smoothly up and down them.
 // - Decoration is visual only: oriented boxes and discs (roof ribs, signs).
 //   It casts shadows. It has no collision.
 //
@@ -94,10 +96,12 @@ pub fn init(a: std.mem.Allocator) void {
     alloc = a;
 }
 
-/// Build a map. This clears the lifts, the buttons and the escalators too.
+/// Build a map. This clears the ramps, the lifts, the buttons and the
+/// escalators too.
 pub fn load(map: Id) void {
     id = map;
     box_count = 0;
+    ramp_count = 0;
     light_count = 0;
     spawn_count = 0;
     decor.clearRetainingCapacity();
@@ -536,6 +540,41 @@ pub fn escalatorAt(p: V3) V3 {
     return v3(0, 0, 0);
 }
 
+// ---- Ramps ----------------------------------------------------------------
+//
+// A ramp is an invisible slope over a staircase or an escalator. Its
+// surface goes through the front edges of the steps, so it is on or above
+// each tread. The player stands on the ramp, not on the steps: the feet,
+// and the camera, move up and down in a straight line, with no jump at each
+// step. Only the collision uses ramps (overlaps, floorTop). Hit scan and
+// the grenades use the steps under them.
+
+/// The surface rises in a straight line along X, from y0 at x0 to y1 at x1
+/// (x0 < x1). The solid fills from `bottom` up to the surface.
+pub const Ramp = struct { x0: f32, x1: f32, z0: f32, z1: f32, y0: f32, y1: f32, bottom: f32 };
+
+pub var ramps: [16]Ramp = undefined;
+pub var ramp_count: usize = 0;
+
+pub fn addRamp(r: Ramp) void {
+    if (ramp_count >= ramps.len) {
+        std.log.warn("map: more than {d} ramps", .{ramps.len});
+        return;
+    }
+    ramps[ramp_count] = r;
+    ramp_count += 1;
+}
+
+/// The highest point of the ramp surface between x = a and x = b.
+fn rampTop(r: Ramp, a: f32, b: f32) f32 {
+    const x = if (r.y1 > r.y0) @min(b, r.x1) else @max(a, r.x0);
+    return r.y0 + (r.y1 - r.y0) * (x - r.x0) / (r.x1 - r.x0);
+}
+
+fn rampUnder(r: Ramp, min: V3, max: V3) bool {
+    return min[0] < r.x1 and max[0] > r.x0 and min[2] < r.z1 and max[2] > r.z0;
+}
+
 // ---- Queries ---------------------------------------------------------------
 
 pub const Hit = struct {
@@ -588,7 +627,7 @@ pub fn raycast(o: V3, d: V3, max_t: f32) ?Hit {
     return best;
 }
 
-/// True when an AABB overlaps a solid box.
+/// True when an AABB overlaps a solid box or a ramp.
 pub fn overlaps(min: V3, max: V3) bool {
     for (boxes[0..box_count]) |b| {
         if (!b.solid) continue;
@@ -596,7 +635,28 @@ pub fn overlaps(min: V3, max: V3) bool {
             min[1] < b.max[1] and max[1] > b.min[1] and
             min[2] < b.max[2] and max[2] > b.min[2]) return true;
     }
+    for (ramps[0..ramp_count]) |r| {
+        if (rampUnder(r, min, max) and max[1] > r.bottom and min[1] < rampTop(r, min[0], max[0])) return true;
+    }
     return false;
+}
+
+/// The highest floor under the AABB: the top of a solid box, or of a ramp,
+/// that is under min..max in X and Z and from min[1] to max[1] in height.
+/// Null when there is none.
+pub fn floorTop(min: V3, max: V3) ?f32 {
+    var best: ?f32 = null;
+    for (boxes[0..box_count]) |b| {
+        if (!b.solid) continue;
+        if (min[0] < b.max[0] and max[0] > b.min[0] and min[2] < b.max[2] and max[2] > b.min[2] and
+            b.max[1] >= min[1] and b.max[1] <= max[1]) best = @max(best orelse b.max[1], b.max[1]);
+    }
+    for (ramps[0..ramp_count]) |r| {
+        if (!rampUnder(r, min, max)) continue;
+        const t = rampTop(r, min[0], max[0]);
+        if (t >= min[1] and t <= max[1]) best = @max(best orelse t, t);
+    }
+    return best;
 }
 
 /// The lift and level whose doorway these feet stand in, or null.

@@ -45,6 +45,15 @@ zig build floorplan -- earls_court audit                  # decoration a player 
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
 
+## Tests
+
+`zig build test` (in `game/`) runs the native tests in
+`game/src/player_test.zig`. They walk a player down and up each staircase
+of Earl's Court, and walk and ride each escalator. Each walk must keep the
+feet on the ground and the eye height smooth (at most 5 cm in a tick). It
+must not stop at a wall or a ceiling edge, and the head bob must follow
+the walking speed.
+
 ## Grenades
 
 G throws an impact grenade. It goes off when it touches a wall, the floor or
@@ -61,6 +70,24 @@ model:
 - With the debug screen on, a dotted line shows the path of the aimed throw.
   Small translucent cubes show where a player would get hit, for the aimed
   throw and for each grenade in the air. Red is the centre, yellow the edge.
+
+## Stairs and escalators
+
+- **Ramps**: an invisible ramp covers each staircase and each escalator
+  (`map.Ramp` in `game/src/map.zig`). Its surface goes through the front
+  edges of the steps. The player stands on the ramp. So the feet and the
+  camera move up and down in a straight line, with no jump at each step.
+  The steps under the ramp stay the targets for shots and grenades.
+- **Step up and step down**: the player walks up a step of up to 0.45 m.
+  A player on the ground also stays on it when the floor goes down by up to
+  0.45 m. Without the step down, a player who walks down the stairs flies
+  off each step. Then the head hits the edge of the stair well at the
+  bottom. `game/src/player.zig` has the model.
+- **Escalators**: a lane carries a player who stands on it at 0.65 m/s.
+  The carry does not count as walking, so a rider has no head bob. The down
+  lane carries a rider 0.4 m past its last step, onto the floor.
+- `stairs()` in `game/src/maps/earls_court.zig` makes the ramp of a
+  staircase. Give it the floor heights at the top and at the bottom.
 
 ## Lean, head bob and settings
 
@@ -107,9 +134,10 @@ apps/action/
 │       ├── scene.wgsl    lighting: sun + PCF shadows, SDF ambient occlusion, sky, fog
 │       ├── post.wgsl     bloom and the final pass (ACES, vignette, damage tint)
 │       ├── weapon.zig    rifle state, recoil, the procedural reload animation
-│       ├── map.zig       the current map: boxes, decoration, lights, lifts, buttons, escalators
+│       ├── map.zig       the current map: boxes, ramps, decoration, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── player.zig    movement, collision, the lean and the hit boxes
+│       ├── player_test.zig  zig build test: walks over the stairs and escalators
 │       ├── settings.zig  the settings panel and its local storage
 │       ├── mesh.zig      vertex lists and shape builders
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)

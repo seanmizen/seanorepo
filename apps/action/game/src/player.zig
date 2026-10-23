@@ -1,6 +1,12 @@
 // First-person movement: walk, jump, gravity, and box collision with a
-// small step up (stairs). Also the lean (Q and E) and the hit boxes, which
-// move with the lean.
+// small step up and step down. Also the lean (Q and E) and the hit boxes,
+// which move with the lean.
+//
+// Stairs and escalators: an invisible ramp covers each one (map.zig Ramp).
+// On a ramp the step up and the step down move the feet a few millimetres
+// each tick, so the camera height changes smoothly. The step down keeps a
+// player who walks down on the ground: without it the player flies off each
+// step, and the head hits the edge of the stair well at the bottom.
 const std = @import("std");
 const vec = @import("vec.zig");
 const map = @import("map.zig");
@@ -10,6 +16,8 @@ const v3 = vec.v3;
 pub const radius: f32 = 0.32;
 pub const height: f32 = 1.75;
 pub const eye: f32 = 1.6;
+/// The highest step that a player walks up, and the deepest step down that
+/// keeps the feet on the ground.
 const step_up: f32 = 0.45;
 const gravity: f32 = 19.0;
 const jump_speed: f32 = 6.2;
@@ -82,7 +90,14 @@ pub const Player = struct {
         return map.overlaps(b[0], b[1]);
     }
 
-    /// Move along one axis. On a horizontal axis, step up onto a low box.
+    /// The highest floor under feet at p, from `down` below them to `up`
+    /// above them, or null.
+    fn floorNear(p: V3, down: f32, up: f32) ?f32 {
+        return map.floorTop(p - v3(radius, down, radius), p + v3(radius, up, radius));
+    }
+
+    /// Move along one axis. On a horizontal axis, step up onto a low box or
+    /// a ramp.
     fn moveAxis(self: *Player, comptime axis: usize, amount: f32) bool {
         var next = self.pos;
         next[axis] += amount;
@@ -91,14 +106,14 @@ pub const Player = struct {
             return true;
         }
         if (axis != 1 and self.grounded) {
-            const up = next + v3(0, step_up, 0);
-            if (!blocked(up) and !blocked(self.pos + v3(0, step_up, 0))) {
-                // Settle down onto the step.
-                var p = up;
-                var i: usize = 0;
-                while (i < 10 and !blocked(p - v3(0, 0.05, 0))) : (i += 1) p[1] -= 0.05;
-                self.pos = p;
-                return true;
+            // Put the feet on the top of the step, and check that the body
+            // fits there and above the feet before the move.
+            if (floorNear(next, 0, step_up)) |y| {
+                const up = v3(next[0], y, next[2]);
+                if (y > self.pos[1] and !blocked(up) and !blocked(v3(self.pos[0], y, self.pos[2]))) {
+                    self.pos = up;
+                    return true;
+                }
             }
         }
         // Slide to the contact in small steps.
@@ -133,6 +148,7 @@ pub const Player = struct {
             self.vel[1] = jump_speed;
             self.grounded = false;
         }
+        const on_ground = self.grounded;
         self.vel[1] -= gravity * dt;
 
         const before = self.pos;
@@ -145,6 +161,18 @@ pub const Player = struct {
         } else {
             // Still on the ground when a small probe down hits.
             self.grounded = falling and blocked(self.pos - v3(0, 0.04, 0));
+        }
+        // Step down: a player on the ground stays on it when the floor goes
+        // down by up to step_up (stairs, a ramp, an escalator, a kerb).
+        if (on_ground and falling) {
+            if (floorNear(self.pos, step_up, 0)) |y| {
+                const p = v3(self.pos[0], y, self.pos[2]);
+                if (!blocked(p)) {
+                    self.pos = p;
+                    self.vel[1] = 0;
+                    self.grounded = true;
+                }
+            }
         }
         if (self.pos[1] < map.kill_y and map.spawn_count > 0) {
             self.pos = map.spawns[0].pos;
