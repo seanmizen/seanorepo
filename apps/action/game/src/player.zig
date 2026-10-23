@@ -21,7 +21,7 @@ pub const eye: f32 = 1.6;
 const step_up: f32 = 0.45;
 const gravity: f32 = 19.0;
 const jump_speed: f32 = 6.2;
-const walk_speed: f32 = 6.4;
+pub const walk_speed: f32 = 6.4;
 const ground_accel: f32 = 70.0;
 const air_accel: f32 = 14.0;
 

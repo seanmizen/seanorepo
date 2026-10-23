@@ -12,9 +12,16 @@
 //
 // Vertex `mat`: the material id (map.zig Mat). 100 is added for the
 // view-model: it gets the near depth range [0, 0.08], the world gets
-// [0.08, 1], so the gun never goes into a wall.
+// [0.08, 1], so the gun never goes into a wall. 200 is added for a part
+// that casts a shadow only: the head, the arms and the weapon of your own
+// body (body.zig). The camera does not draw it.
+//
+// Your own body has its own light shadow layers (render.zig
+// drawBodyShadows): `body_l` names the lights.
 
 const MAX_LIGHTS: u32 = 30u;
+// The first light shadow slot of your body: map.zig max_lights.
+const BODY_SLOT: u32 = 20u;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -25,6 +32,7 @@ struct Scene {
   sun_col: vec4f,
   info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
   info2: vec4f,    // x underground height, y in-scatter strength
+  body_l: vec4f,   // the light of each body slot: its index in lp and lc from 1, 0 none
   lp: array<vec4f, 30>, // xyz position, w radius
   lc: array<vec4f, 30>, // rgb colour, w shadow map from 1 (0: none)
 };
@@ -61,6 +69,10 @@ const VM_SPLIT: f32 = 0.08;
   var o: VOut;
   var c = u.view_proj * vec4f(v.pos, 1.0);
   let m = u32(v.mat + 0.5);
+  if (m >= 200u) {
+    o.clip = vec4f(2.0, 2.0, 2.0, 1.0); // A shadow-only part.
+    return o;
+  }
   if (m >= 100u) {
     c.z = c.z * VM_SPLIT;
   } else {
@@ -77,7 +89,7 @@ const VM_SPLIT: f32 = 0.08;
 // ---- Shadow pass -----------------------------------------------------------
 
 @vertex fn vs_shadow(v: VIn) -> @builtin(position) vec4f {
-  if (v.mat >= 99.5) {
+  if (v.mat >= 99.5 && v.mat < 199.5) {
     return vec4f(2.0, 2.0, 2.0, 1.0); // The view-model casts no shadow.
   }
   return u.light_vp * vec4f(v.pos, 1.0);
@@ -86,7 +98,8 @@ const VM_SPLIT: f32 = 0.08;
 // ---- Light shadow pass -----------------------------------------------------
 // render.zig drawLightShadows: one draw of the static mesh for each layer,
 // and the instance index is the layer. The lamps (emissive) cast no shadow:
-// their light comes from inside them.
+// their light comes from inside them. render.zig draw uses the same entry
+// for the layers of your body.
 
 @vertex fn vs_light_shadow(v: VIn, @builtin(instance_index) layer: u32) -> @builtin(position) vec4f {
   if (v.mat > 3.5 && v.mat < 4.5) {
@@ -417,7 +430,16 @@ fn shade(in: VOut, front: bool) -> vec3f {
   let ndl = max(dot(N, L), 0.0);
   let ndv = max(dot(N, V), 0.0);
   var shadow = out_k;
-  if (u.info.w > 0.5 && out_k > 0.0) { shadow *= sunShadow(in.wpos, n0); }
+  if (u.info.w > 0.5 && out_k > 0.0) {
+    if (vm) {
+      // The gun tests a point 0.8 m from the eye toward the sun. Your own
+      // body is behind and below that point, so its shadow does not fall
+      // on the gun. A gun in a wall does not go dark.
+      shadow *= sunShadow(u.cam.xyz + L * 0.8, L);
+    } else {
+      shadow *= sunShadow(in.wpos, n0);
+    }
+  }
 
   let shin = mix(512.0, 8.0, s.rough);
   let f0 = mix(vec3f(0.04), s.albedo, s.metal);
@@ -458,6 +480,13 @@ fn shade(in: VOut, front: bool) -> vec3f {
       var sp = in.wpos + n0 * (0.02 + 0.012 * ld);
       if (vm) { sp = u.cam.xyz; }
       vis = lightShadow(slot - 1u, u.lp[i], sp);
+      // The shadow of your body. The gun tests the eye, and it skips this
+      // test, as it does for the sun.
+      if (!vm) {
+        for (var d = 0u; d < 4u; d++) {
+          if (u32(u.body_l[d] + 0.5) == i + 1u) { vis *= lightShadow(BODY_SLOT + d, u.lp[i], sp); }
+        }
+      }
       if (vis <= 0.0) { continue; }
     }
     let k = 1.0 - (ld * ld) / (r * r);

@@ -5,8 +5,13 @@
 // direction (a cube map in six layers of a 2D array texture). They are drawn
 // one time when a map loads (loadMap), from the static mesh. The map lights
 // and the walls do not move, so the maps stay correct. The lifts, the train
-// and the players cast no shadow from a local light. Lights that move (the
-// muzzle flash, a grenade, the train and lift lights) have no shadow map.
+// and the other players cast no shadow from a local light. Lights that move
+// (the muzzle flash, a grenade, the train and lift lights) have no shadow
+// map.
+//
+// Your own body casts a shadow from the `body_lights` nearest map lights.
+// Each frame draws your body into six more layers for each of these
+// lights (drawBodyShadows). The shader multiplies the two shadows.
 const std = @import("std");
 const sw = @import("sw_app");
 const gpu_mod = @import("sw_gpu");
@@ -30,10 +35,15 @@ const swap_format: T.TextureFormat = .bgra8unorm;
 const max_dynamic = 120_000;
 /// The translucent vertices (smoke, the debug blast volume) per frame.
 const max_translucent = 150_000;
+/// Your body casts a shadow from this many map lights: the nearest ones.
+/// scene.wgsl has the same count (the four values of `body_l`).
+pub const body_lights = 4;
 /// The size of one face of a light shadow map, and the layer count: six
-/// faces for each map light.
+/// faces for each map light, then six for each light of your body. The
+/// layers of your body start at slot map.max_lights (scene.wgsl
+/// BODY_SLOT).
 const light_shadow_size = 256;
-const light_layers = map.max_lights * 6;
+const light_layers = (map.max_lights + body_lights) * 6;
 /// tan of the half angle of a face. It is a little more than 45 degrees, so
 /// the filter taps at the edge of a face stay in that face (3 texels each
 /// side). scene.wgsl has the same two values (LIGHT_FACE_TAN, LIGHT_NEAR).
@@ -50,6 +60,9 @@ pub const SceneUniforms = extern struct {
     info: [4]f32,
     /// x: the underground height, y: the in-scatter strength.
     info2: [4]f32,
+    /// The lights of your body: for slot d, the index of the light (from
+    /// 1) in lp and lc, or 0.
+    body_l: [4]f32,
     lp: [max_lights][4]f32,
     /// rgb colour, w the shadow map of the light (map.Light.shadow).
     lc: [max_lights][4]f32,
@@ -65,6 +78,14 @@ const PostUniforms = extern struct {
     damage: f32,
     time: f32,
     bloom: f32,
+};
+
+/// Your body: a range of the dynamic vertices, and its centre. count 0:
+/// no body.
+pub const Body = struct {
+    first: u32 = 0,
+    count: u32 = 0,
+    centre: V3 = .{ 0, 0, 0 },
 };
 
 pub const FrameParams = struct {
@@ -83,6 +104,8 @@ pub const FrameParams = struct {
     /// Alpha-blended triangles, drawn after the opaque scene with no depth
     /// write (scene.wgsl fs_trans has the vertex encoding).
     translucent: []const mesh.Vertex = &.{},
+    /// Your body casts a shadow from the nearest map lights.
+    body: Body = .{},
 };
 
 pub const sun_dir = blk: {
@@ -215,6 +238,51 @@ fn drawLightShadows(gpu: *gpu_mod.GPU, lights: []const map.Light) !void {
     }
     const cmd = try encoder.finish();
     gpu.submit(&[_]T.CommandBuffer{cmd});
+}
+
+/// Draw your body into the six light shadow layers of each of its `n`
+/// lights. The face matrices are in light_face_buf already.
+fn drawBodyShadows(encoder: anytype, body: Body, n: usize, dyn_count: u32) !void {
+    for (0..n * 6) |i| {
+        const layer = map.max_lights * 6 + i;
+        const pass = try encoder.beginRenderPass(.{
+            .color_attachments = &.{},
+            .depth_stencil_attachment = .{ .view = &light_layer_views[layer], .depth_load_op = .clear, .depth_store_op = .store, .depth_clear_value = 1.0, .stencil_read_only = true },
+        });
+        pass.setPipeline(light_shadow_pipe);
+        pass.setBindGroup(0, light_shadow_bg);
+        pass.setVertexBuffer(0, dyn_vb, 0, dyn_count * @sizeOf(mesh.Vertex));
+        // The instance index selects the face matrix in the shader.
+        pass.draw(body.count, 1, body.first, @intCast(layer));
+        pass.end();
+    }
+}
+
+/// The map lights (with a shadow map) that light your body, nearest first:
+/// at most body_lights of them. Returns the count.
+fn pickBodyLights(lights: []const map.Light, centre: V3, out: *[body_lights]usize) usize {
+    var dist: [body_lights]f32 = undefined;
+    var n: usize = 0;
+    for (lights, 0..) |l, i| {
+        if (l.shadow == 0) continue;
+        const d = vec.len(l.pos - centre);
+        // The body is about 1 m from its centre to its feet and head.
+        if (d > l.radius + 1) continue;
+        // Insert in order of distance. The farthest falls off the end.
+        var at = n;
+        while (at > 0 and dist[at - 1] > d) : (at -= 1) {
+            if (at < body_lights) {
+                dist[at] = dist[at - 1];
+                out[at] = out[at - 1];
+            }
+        }
+        if (at < body_lights) {
+            dist[at] = d;
+            out[at] = i;
+        }
+        n = @min(n + 1, body_lights);
+    }
+    return n;
 }
 
 /// Upload the ambient-occlusion boxes near the eye. The lifts move, so
@@ -494,9 +562,21 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
         su.lp[i] = .{ l.pos[0], l.pos[1], l.pos[2], l.radius };
         su.lc[i] = .{ l.color[0], l.color[1], l.color[2], @floatFromInt(l.shadow) };
     }
+    const dyn_count: u32 = @intCast(@min(dynamic.len, max_dynamic));
+    var body = p.body;
+    body.count = @min(body.count, dyn_count -| body.first);
+    var body_l: [body_lights]usize = undefined;
+    const body_n = if (body.count > 0) pickBodyLights(p.lights[0..nl], body.centre, &body_l) else 0;
+    if (body_n > 0) {
+        var faces: [body_lights * 6][16]f32 = undefined;
+        for (body_l[0..body_n], 0..) |li, d| {
+            su.body_l[d] = @floatFromInt(li + 1);
+            for (0..6) |f| faces[d * 6 + f] = lightFace(p.lights[li], f).data;
+        }
+        gpu.writeBuffer(light_face_buf, map.max_lights * 6 * 64, std.mem.sliceAsBytes(faces[0 .. body_n * 6]));
+    }
     gpu.writeBuffer(scene_ubo, 0, std.mem.asBytes(&su));
 
-    const dyn_count: u32 = @intCast(@min(dynamic.len, max_dynamic));
     if (dyn_count > 0) gpu.writeBuffer(dyn_vb, 0, std.mem.sliceAsBytes(dynamic[0..dyn_count]));
     const trans_count: u32 = @intCast(@min(p.translucent.len, max_translucent));
     if (trans_count > 0) gpu.writeBuffer(trans_vb, 0, std.mem.sliceAsBytes(p.translucent[0..trans_count]));
@@ -515,6 +595,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
 
     const encoder = try gpu.createCommandEncoder();
 
+    try drawBodyShadows(encoder, body, body_n, dyn_count);
     // Shadow pass.
     {
         const pass = try encoder.beginRenderPass(.{

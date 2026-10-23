@@ -104,8 +104,10 @@ The exit code is 1 when it finds an escape hole.
   hides from a light gets no light, highlight or floor glint from it. The
   haze glow of a light also stops at a wall.
 - The shadow maps hold the static mesh only. The lifts, the train and the
-  players cast no shadow from a local light. Lamps (emissive surfaces) cast
-  none, because their light comes from inside them.
+  other players cast no shadow from a local light. Lamps (emissive
+  surfaces) cast none, because their light comes from inside them. Your
+  own body casts a shadow from the nearest lights (see
+  [Your body](#your-body)).
 - Lights that move (the muzzle flash, the grenade flash, the train and the
   lift cab lights) have no shadow map. Walls do not stop them.
 - Put a map light outside every solid shape and decoration. A light inside
@@ -166,6 +168,12 @@ dummies.
   feet on the ground and the eye height smooth (at most 5 cm in a tick). It
   must not stop at a wall or a ceiling edge, and the head bob must follow
   the walking speed.
+- `game/src/body_test.zig` tests your body in first person. No part that
+  the camera shows comes nearer than 0.12 m to the eye, at each look up and
+  down, each lean, each step of the walk and on stairs. The head, the arms
+  and the weapon cast a shadow only. A planted foot does not slide. On the
+  stairs and the escalators of Earl's Court each planted foot is on the
+  tread under it, standing (to 3 cm) and walking (to 5 cm).
 - `game/src/console/tests.zig` tests the console: the parser, the cvar
   limits, the commands, the binds and the buttons, the scripts, the saved
   config, the completion and the chat.
@@ -266,6 +274,7 @@ The client cvars:
 | `chat_fade_seconds` | 1 to 120 seconds | 10 | saved | `console/chat.zig` Chat.alpha |
 | `snd_nearmiss_distance` | 0 (off) to 200 m | 25 | saved | `sounds.zig` nearMiss: the largest miss distance of a crack or a whiz |
 | `snd_impact_distance` | 0 (off) to 300 m | 60 | saved | `sounds.zig` impactSound: the largest distance of an impact sound |
+| `own_body` | 0 or 1 | 1 | saved | `main.zig` ownPose. 0 hides your body in first person. Its shadow stays. |
 | `rcon_password` | text | empty | protected, not saved | `game_console.zig` cmdRcon |
 
 The settings panel shows the first five. The values of the old local
@@ -936,6 +945,43 @@ distance to the shooter in front of you. It prints the arrival times.
 - `stairs()` in `game/src/maps/earls_court.zig` makes the ramp of a
   staircase. Give it the floor heights at the top and at the bottom.
 
+## Your body
+
+In first person you see your own body, as in Halo. Look down to see the
+legs, the boots and the torso. `game/src/body.zig` has the model of each
+body: yours, the other players and the dummies.
+
+- **What shows**: the legs and the torso. The camera does not draw the
+  head, the arms or the weapon in your hands, so nothing blocks the view
+  and the view model has the weapon alone. These parts cast a shadow, so
+  your shadow holds the weapon.
+- **Where**: the body is 0.45 m behind the eye (`own_back`). The eye is in
+  front of the chest, so a look down shows the legs and the feet. On a
+  slope the body stands on the floor under it. No part that the camera
+  shows comes nearer than 0.3 m to the eye.
+- **The walk**: each leg has a thigh, a shin and a knee (two-bone IK). The
+  steps follow the distance on the ground, with the phase of the head bob:
+  a foot lands at the low point of the bob. A planted foot stays on the
+  floor. A strafe moves the legs to the side, and in the air the feet come
+  up. The other players and the dummies walk the same way.
+- **The lean**: the upper body turns about the hips with the camera. There
+  is no crouch.
+- **Stairs**: the camera rides the ramp over the steps (see
+  [Stairs and escalators](#stairs-and-escalators)). Your body steps on the
+  treads. Each planted foot goes to the tread under it, the body goes down
+  to the lower foot, and the knee of the higher foot bends. The model of
+  another player stays on the ramp, so it matches the hit boxes. Its feet
+  can be up to one rise over the treads. On an escalator the carry moves
+  your planted feet over the steps.
+- **Shadows**: the sun shadow pass draws your body. The sun shadow map is
+  2048 texels over the map (about 8 cm a texel), so the sun shadow is
+  soft. Each frame also draws your body into the shadow maps of the 4
+  nearest map lights (`body_lights` in `game/src/render.zig`), so
+  underground your shadow is sharp. The view model gets no shadow from your
+  body.
+- **The cvar `own_body`** (saved, default 1): 0 hides your body. Its shadow
+  stays.
+
 ## Lean, head bob and settings
 
 - **Lean**: hold Q or E. The upper body turns about the hips. At full lean
@@ -998,7 +1044,9 @@ apps/action/
 │       ├── floorplan.zig the map tool: slices, the decoration and material audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
 │       ├── player.zig    movement, collision, the lean and the hit boxes
-│       ├── tests.zig     zig build test: the walks, the console, the server cvar file, the guns, the sounds
+│       ├── body.zig      the player model: your body in first person, the other players, the dummies
+│       ├── body_test.zig the tests of your body: the camera, the walk, the feet on the stairs
+│       ├── tests.zig     zig build test: the walks, your body, the console, the server cvar file, the guns, the sounds
 │       ├── player_test.zig  the walks over the stairs and escalators
 │       ├── surfaces_test.zig  the box limit, the surface materials, a crack or a whiz for each gun
 │       ├── sounds.zig    the gun sounds: the muzzle report, the near misses, the impacts (to sw_audio)

@@ -1,18 +1,21 @@
 // Where: apps/action/game/src/tests.zig (zig build test)
-// When: after a change to the player movement, the maps, the console, the
-// session, the server cvars, the gun model or the bullet sounds.
+// When: after a change to the player movement, the player model, the maps,
+// the console, the session, the server cvars, the gun model or the bullet
+// sounds.
 // Why: one native test binary: the walks over the stairs and escalators
-// (player_test.zig), the console framework (console/tests.zig), the
-// session layer (session/tests.zig), the gun model (guns_test.zig), the
-// box limit and the surface materials (surfaces_test.zig), the bullet
-// sound models (audio/tests.zig), the server cvar file and the protocol
-// version of the game.
+// (player_test.zig), your own body in first person (body_test.zig), the
+// console framework (console/tests.zig), the session layer
+// (session/tests.zig), the gun model (guns_test.zig), the box limit and
+// the surface materials (surfaces_test.zig), the bullet sound models
+// (audio/tests.zig), the server cvar file and the protocol version of the
+// game.
 const std = @import("std");
 const schema = @import("console/schema.zig");
 const line = @import("console/line.zig");
 
 test {
     _ = @import("player_test.zig");
+    _ = @import("body_test.zig");
     _ = @import("console/tests.zig");
     _ = @import("guns_test.zig");
     _ = @import("session/tests.zig");
