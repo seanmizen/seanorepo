@@ -125,8 +125,9 @@ dummies.
 - **A dummy is a player.** It has the player model, the player hit boxes and
   the player lean (`game/src/player.zig`). Thus a head, body or leg hit does
   the same damage as on a player in deathmatch. The damage comes from the
-  stats of the held weapon (`pelletDamage` in `game/src/main.zig`). A
-  grenade does the same damage as to a player, cover included.
+  stats of the held gun, with the fall-off at the distance of the hit
+  (`pelletDamage` in `game/src/main.zig`). A grenade does the same damage
+  as to a player, cover included.
 - **Respawn**: a dead dummy falls over, and 1 s after the death it stands
   again at its place with full health.
 - **Heal**: a dummy that gets no hit for 4 s heals to full. Thus each test
@@ -161,11 +162,18 @@ dummies.
   limits, the commands, the binds and the buttons, the scripts, the saved
   config, the completion and the chat.
 - The server cvar file must be valid, with safe defaults.
+- `game/src/guns_test.zig` tests the gun model: a longer barrel gives more
+  bullet speed and less fall-off, a stock gives less recoil and a faster
+  recovery, a heavy gun is slower, the recoil pattern climbs and recovers,
+  no gun is the fastest to kill at both 10 m and 40 m, and
+  `server/guns.json` has the numbers of the model.
 
 `yarn workspace action test` (`bun test server`) runs the server tests
 (`server/*.test.ts`):
 
 - `server/ping.test.ts`: the ping calculation.
+- `server/guns.test.ts`: the gun table of the server. Its fall-off must give
+  the damage of the client model at each sample distance.
 - `server/console.test.ts`: the same parser cases, the cvar limits, the
   config file and the environment variables.
 - `server/chat.test.ts`: the chat checks. The control characters, the
@@ -385,7 +393,8 @@ stops for everyone until the minute ends.
 
 Four slots. A change of slot takes the draw time of the new weapon, and
 the weapon cannot fire until it is out. `game/src/weapon.zig` has the
-classes, the stats, the items and the hands.
+classes, the items and the hands. `game/src/guns.zig` has the gun model:
+the stats of each gun.
 
 - **1 primary**: a rifle, a carbine, a bullpup, an SMG, a shotgun or the
   sawn-off.
@@ -399,44 +408,262 @@ classes, the stats, the items and the hands.
   slot.
 
 **B** opens the weapon menu: a row for each class and a button for each
-model. The panel shows the model under the mouse in 3D, with the stats of
-its class. A click puts the model in its slot. The pick stays in local
-storage (`loadout`). Practice applies it at once. In deathmatch the server
-applies it at once while the player is within 4 m of the spawn point and
-has not fired or thrown since the spawn. Else it applies on the next
-spawn, and the HUD shows `NEXT SPAWN`.
+model. The panel shows the model under the mouse in 3D, its calibre, its
+bullet speed (supersonic or subsonic), its build and its stats. A click
+puts the model in its slot. The pick stays in local storage (`loadout`).
+Practice applies it at once. In deathmatch the server applies it at once
+while the player is within 4 m of the spawn point and has not fired or
+thrown since the spawn. Else it applies on the next spawn, and the HUD
+shows `NEXT SPAWN`. The default pick is RIFLE 2 (the AKM) and PISTOL 1.
 
-The models of one class differ only in their look. Each class has these
-stats. The damage is for one pellet:
+**Compare bars**: the panel has a bar for each stat, with the value at the
+right:
 
-| Class | Models | Body | Head | Pellets | Fire | Magazine | Reload | Hip cone (rad) | Speed | Draw |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Rifle | 5 | 30 | 75 | 1 | auto, 522 rpm | 30 + 90 | 2.3 s | 0.006, +0.032 heat | 93% | 0.45 s |
-| Carbine | 4 | 24 | 60 | 1 | auto, 706 rpm | 30 + 120 | 2.1 s | 0.005, +0.024 heat | 96% | 0.4 s |
-| Bullpup | 3 | 28 | 72 | 1 | 3-round burst, 0.06 s apart, a burst each 0.36 s | 30 + 90 | 2.5 s | 0.003, +0.012 heat | 94% | 0.45 s |
-| SMG | 5 | 18 | 40 | 1 | auto, 923 rpm | 35 + 140 | 1.8 s | 0.012, +0.04 heat | 104% | 0.3 s |
-| Shotgun | 5 | 13 | 16 | 9 | pump, 0.85 s | 6 + 24 | 2.6 s | 0.06, 35 m reach | 95% | 0.45 s |
-| Sawn-off | 1 | 11 | 13 | 10 | 0.25 s | 2 + 20 | 2.0 s | 0.095, 22 m reach | 100% | 0.35 s |
-| Pistol | 6 | 26 | 65 | 1 | semi, 0.14 s | 12 + 48 | 1.4 s | 0.005, +0.02 heat | 106% | 0.25 s |
-| Revolver | 5 | 52 | 104 | 1 | semi, 0.48 s | 6 + 30 | 2.4 s | 0.003, +0.03 heat | 104% | 0.35 s |
-| Knife | 1 | 55 | 55 | - | 0.45 s a swing | - | - | 1.6 m reach | 110% | 0.2 s |
-| Grenade | - | see Grenades | | | | 3 a life | | | 100% | 0.5 s |
+| Bar | Value | Better |
+|---|---|---|
+| DAMAGE | the body damage of a shot (all the pellets) | more |
+| FIRE RATE | rounds a minute | more |
+| RANGE | the distance at which a hit does 75% of its full damage | more |
+| RECOIL | the up kick and half the side kick of a shot, in degrees | less |
+| MOBILITY | the walk speed | more |
+| RELOAD | the reload time | less |
+
+When the gun under the mouse is not the gun in its slot, each bar compares
+the two guns. Green shows the part where the gun under the mouse is better,
+red the part where it is worse, and the value takes the same colour.
+`game/src/gun_compare.zig` draws the bars. It keeps no state, so another
+panel can draw them for any two guns of one slot.
+
+The knife: 55 damage to the body and the head, a swing each 0.45 s, 1.6 m
+reach, 110% speed, out in 0.2 s. The grenade: see Grenades.
+
+### The gun model
+
+No table has the stats of each gun by hand. `game/src/guns.zig` makes them
+from three parts:
+
+- **The calibre** sets the damage, the head multiple, the pellets, the
+  fall-off with the distance, the bullet speed and the recoil impulse.
+- **The class** sets the action: automatic, burst, pump or semi-automatic,
+  the time between shots for the reference calibre of the class, the
+  magazine, the hip cone, the reload, the draw and the shape of the recoil
+  pattern (`table` in `game/src/weapon.zig`).
+- **The build** of each gun changes them: the barrel length, a stock or no
+  stock, the weight class, and the bullpup layout.
+
+The formulas. `r` is the barrel length divided by the reference barrel of
+the calibre (0.4 to 4):
+
+| Stat | Formula |
+|---|---|
+| Damage | calibre damage x r^0.1 (0.9 to 1.1), rounded. The head damage is the calibre head multiple of it. |
+| Bullet speed | calibre speed x r^0.2. Faster than 343 m/s is supersonic. |
+| Fall-off | full damage to `near` m, then a straight line down to `min` at `far` m, then flat. `near` and `far` are the calibre values x r^0.35 (0.75 to 1.3). |
+| Fire rate | the time between shots = the class interval x the calibre shot damage / the shot damage of the class reference calibre. Thus each class keeps its damage a second, a bigger round fires more slowly, and the barrel does not change the rate. |
+| Kick | class kick x (impulse / reference impulse)^0.85 x weight (light 1.2, medium 1, heavy 0.82), x 1.4 with no stock |
+| Side kick | kick x class sway, x 1.3 with no stock |
+| Recovery | class rate x weight (light 1.1, medium 1, heavy 0.9), x 0.6 with no stock |
+| Cone at full heat | class bloom, x 1.3 with no stock |
+| Speed | class speed + weight (light +0.03, heavy -0.04), +0.02 with no stock |
+| Draw and aim | class draw time x weight (light 0.85, heavy 1.2). Aim speed x weight (light 1.2, heavy 0.8). A bullpup or a gun with no stock is short: draw x 0.9, aim speed x 1.15. |
+| Reload | class reload, x 1.14 for a bullpup (the magazine is behind the grip) |
+| Magazine | the class magazine, or the magazine that the model shows. The reserve keeps the same number of magazines. |
+
+A handgun has no stock. The kick of the pistol and the revolver class is
+for a two-hand grip, so the stock rule does not apply to them. The sawn-off
+class has no stock as its reference.
+
+The barrel length class is a name only. The formulas use the length. The
+usual barrel is 12 cm for a handgun, 20 cm for a long gun for pistol rounds,
+40 cm for a rifle and 50 cm for a shotgun. Under 0.65 of it is snub, under
+0.9 short, under 1.15 standard (1.25 for a pistol round in a long gun), and
+longer is long.
+
+The calibres. The damage, the bullet speed and the fall-off are for the
+reference barrel:
+
+| Calibre | Body | Head | Pellets | Bullet | Reference barrel | Full damage to | Down to | Impulse |
+|---|---|---|---|---|---|---|---|---|
+| 4.6x30 mm | 17 | x2.3 | 1 | 720 m/s | 18 cm | 18 m | 65% at 55 m | 2.3 N s |
+| 9x19 mm | 21 | x2.3 | 1 | 360 m/s | 11 cm | 12 m | 55% at 40 m | 3.4 N s |
+| .40 S&W | 25 | x2.3 | 1 | 330 m/s | 11 cm | 12 m | 55% at 38 m | 4.3 N s |
+| 10 mm Auto | 28 | x2.3 | 1 | 380 m/s | 12 cm | 15 m | 60% at 45 m | 5.3 N s |
+| .45 ACP | 27 | x2.3 | 1 | 255 m/s | 13 cm | 10 m | 50% at 35 m | 4.2 N s |
+| .50 AE | 45 | x2 | 1 | 450 m/s | 15 cm | 20 m | 70% at 55 m | 10.3 N s |
+| .38 Special | 35 | x2.5 | 1 | 265 m/s | 10 cm | 10 m | 50% at 35 m | 3.1 N s |
+| .357 Magnum | 53 | x2 | 1 | 425 m/s | 10 cm | 15 m | 60% at 45 m | 5.5 N s |
+| .44 Magnum | 64 | x2 | 1 | 440 m/s | 15 cm | 22 m | 60% at 60 m | 8.2 N s |
+| 5.45x39 mm | 23 | x2.5 | 1 | 880 m/s | 41 cm | 20 m | 65% at 60 m | 4.4 N s |
+| 5.56x45 mm | 23 | x2.5 | 1 | 900 m/s | 37 cm | 18 m | 62% at 55 m | 5.9 N s |
+| 7.62x39 mm | 30 | x2.5 | 1 | 715 m/s | 41 cm | 25 m | 72% at 70 m | 7.8 N s |
+| .300 BLK subsonic | 32 | x2.5 | 1 | 305 m/s | 23 cm | 15 m | 60% at 45 m | 5.1 N s |
+| 12 gauge | 13 | x1.25 | 9 | 400 m/s | 47 cm | 6 m | 20% at 30 m | 17 N s |
+| 12 gauge magnum | 12 | x1.25 | 12 | 410 m/s | 47 cm | 7 m | 20% at 33 m | 23 N s |
+| 20 gauge | 13 | x1.25 | 8 | 400 m/s | 47 cm | 5 m | 20% at 26 m | 12 N s |
+
+### The recoil pattern
+
+Each shot kicks the camera up and to the side (`Hands.kickShot` in
+`game/src/weapon.zig`). Shot n of a string (from 0) kicks:
+
+- up: kick x (1 + ramp x min(n, 8) / 8). The climb grows over the first 8
+  shots.
+- to the right: sway x (bias + wobble x sin(freq x n + phase)), and a
+  random part of up to a quarter of the sway. The phase is 1.7 x the
+  number of the model in its class, so each model starts its wave at
+  another point.
+- The sights halve the kick.
+
+The class gives the shape of the pattern:
+
+| Class | Shape | Ramp | Bias | Wobble | Freq | Recovery (1/s) |
+|---|---|---|---|---|---|---|
+| Rifle | climbs, and drifts to the right in a slow wave | 0.6 | +0.35 | 0.7 | 0.55 | 6 |
+| Carbine | climbs straight, a small drift to the left | 0.4 | -0.15 | 0.6 | 0.8 | 7 |
+| Bullpup | kicks straight back into the shoulder | 0.3 | +0.05 | 0.5 | 1.4 | 7 |
+| SMG | a fast shake from side to side | 0.5 | +0.15 | 0.9 | 1.7 | 8 |
+| Shotgun | one big kick a shot | 0 | +0.2 | 0.7 | 2.3 | 4.5 |
+| Sawn-off | one big kick a shot | 0 | +0.3 | 0.8 | 2.9 | 4 |
+| Pistol | a small kick, a random side | 0.25 | 0 | 0.8 | 2.2 | 9 |
+| Revolver | a big kick, up and to the right | 0 | +0.3 | 0.6 | 1.2 | 5 |
+
+**Recovery**: the camera goes back to the aim at the recovery rate of the
+gun (`Hands.recover`). For an automatic gun the recovery starts when the
+next shot does not come (the interval + 0.04 s). For other guns it starts
+0.12 s after the shot. A pull down of the mouse during the recoil counts as
+recovery, so the view does not go lower than the aim. A pause of 0.15 s
+more ends the string, and the next shot starts the pattern again.
+
+### The guns
+
+Each of the 34 guns, with the reason for its calibre. The models are
+low-poly, so a calibre is a guess from the look: the magazine, the barrel,
+the stock and the size.
+
+| Gun | Model | Calibre | Barrel | Stock | Weight | Why this calibre |
+|---|---|---|---|---|---|---|
+| RIFLE 1 | AssaultRifle_1 | 9x19 mm | 24 cm, standard | no | light | A straight, thin magazine on a short AK with no stock: an AK in 9 mm, as the Vityaz. |
+| RIFLE 2 | AssaultRifle_2 | 7.62x39 mm | 41 cm, standard | yes | medium | A wood stock, a curved magazine and a full barrel: the AKM. |
+| RIFLE 3 | AssaultRifle_3 | 7.62x39 mm | 31 cm, short | no | light | An AK with no stock and a short barrel: an AK pistol. |
+| RIFLE 4 | AssaultRifle_4 | 7.62x39 mm | 41 cm, standard | yes | light | A steel folding stock and a full barrel: the AKMS. |
+| RIFLE 5 | AssaultRifle_5 | 5.45x39 mm | 41 cm, standard | yes | medium | A black polymer stock and fore-end: the AK-74. |
+| CARBINE 1 | AssaultRifle2_1 | 5.56x45 mm | 51 cm, long | yes | heavy | A fixed A2 stock and the longest barrel: an M16A4. |
+| CARBINE 2 | AssaultRifle2_2 | 5.56x45 mm | 37 cm, standard | yes | medium | A fixed stock and a carbine barrel: an M4. |
+| CARBINE 3 | AssaultRifle2_3 | 5.56x45 mm | 41 cm, standard | no | light | An AR-15 with no stock and a short, straight 20-round magazine. |
+| CARBINE 4 | AssaultRifle2_4 | .300 BLK subsonic | 18 cm, snub | yes | light | A very short barrel and a short stock on an AR: a Honey Badger, made for subsonic .300 Blackout. |
+| BULLPUP 1 | Bullpup_1 | 5.56x45 mm | 51 cm, long | yes | heavy, bullpup | A long body, a vertical front grip and a straight box magazine: a Steyr AUG. |
+| BULLPUP 2 | Bullpup_2 | 5.56x45 mm | 41 cm, standard | yes | medium, bullpup | Bullpup 1 with a shorter body, so a shorter barrel. |
+| BULLPUP 3 | Bullpup_3 | 7.62x39 mm | 41 cm, standard | yes | heavy, bullpup | A curved AK magazine behind the grip: an AK bullpup, as the Valmet M82. |
+| SMG 1 | SubmachineGun_1 | .45 ACP | 14 cm, short | no | light | A straight magazine for a straight-walled case, and no stock. |
+| SMG 2 | SubmachineGun_2 | 9x19 mm | 20 cm, standard | yes | medium | A skeleton side-folding stock, as the UMP 9. |
+| SMG 3 | SubmachineGun_3 | 4.6x30 mm | 18 cm, standard | yes | light | A sliding rod stock and a vertical front grip: an MP7. |
+| SMG 4 | SubmachineGun_4 | 9x19 mm | 11 cm, snub | no | light | A curved magazine for the tapered 9 mm case, and no stock: an MP5K. |
+| SMG 5 | SubmachineGun_5 | 9x19 mm | 40 cm, long | yes | heavy | SMG 2 with a long barrel: a pistol-calibre carbine. |
+| SHOTGUN 1 | Shotgun_1 | 12 gauge | 47 cm, standard | yes | medium | A grey synthetic stock and an 18.5-inch barrel: a police pump gun. |
+| SHOTGUN 2 | Shotgun_2 | 12 gauge | 61 cm, long | yes | heavy | A long barrel, a full-length tube magazine and a wood stock: a field gun. |
+| SHOTGUN 3 | Shotgun_3 | 12 gauge magnum | 61 cm, long | yes | heavy | The longest barrel and a short tube magazine: a waterfowl gun for 3-inch magnum shells. |
+| SHOTGUN 4 | Shotgun_4 | 20 gauge | 56 cm, standard | yes | light | A thin single barrel, a short fore-end and a light frame. |
+| SHOTGUN 5 | Shotgun_ShortStock | 12 gauge | 36 cm, short | no | light | A pump with a bird's-head grip and no stock, as the Shockwave. |
+| SAWN-OFF 1 | Shotgun_SawedOff | 12 gauge | 30 cm, snub | no | light | A double-barrel 12 gauge with the barrels and the stock cut down. |
+| PISTOL 1 | Pistol_1 | .45 ACP | 13 cm, standard | no | heavy | A black 1911 with wood grips. |
+| PISTOL 2 | Pistol_2 | 9x19 mm | 13 cm, standard | no | heavy | A two-tone 1911 pattern: a steel 9 mm pistol. |
+| PISTOL 3 | Pistol_3 | .40 S&W | 11 cm, standard | no | medium | A service pistol with a rail and a heavy slide. |
+| PISTOL 4 | Pistol_4 | .50 AE | 15 cm, long | no | heavy | A tall slide and a long grip: a big-frame pistol, as the Desert Eagle. |
+| PISTOL 5 | Pistol_5 | 9x19 mm | 10 cm, short | no | light | A compact polymer pistol, as the Glock 19. |
+| PISTOL 6 | Pistol_6 | 10 mm Auto | 15 cm, long | no | medium | A long slide and a full rail: a long-slide hunting pistol. |
+| REVOLVER 1 | Revolver_1 | .357 Magnum | 10 cm, short | no | medium | A medium frame and a 4-inch barrel: a service .357. |
+| REVOLVER 2 | Revolver_2 | .44 Magnum | 15 cm, long | no | heavy | A large frame and a heavy barrel with a full under-lug. |
+| REVOLVER 3 | Revolver_3 | .357 Magnum | 15 cm, long | no | heavy | A vent rib and a full under-lug, as the Colt Python. |
+| REVOLVER 4 | Revolver_4 | .357 Magnum | 6 cm, snub | no | light | A snub barrel with a full under-lug: a .357 for carry. |
+| REVOLVER 5 | Revolver_5 | .38 Special | 15 cm, long | no | light | A slim frame and a thin barrel: a .38 target revolver. |
+
+### The stats and the time to kill
+
+`zig build guns` (in `game/`) prints these tables and writes
+`server/guns.json`. Kick is in mrad (1 mrad is 1 mm at 1 m). The time to
+kill (TTK) is from the first shot to the shot that kills a player of 100
+health when every bullet hits the body. For buckshot it uses the share of
+the pellets that hit a player aimed at the chest, with the hip cone. A dash
+means that one magazine cannot kill at that distance (buckshot does no
+damage past its reach).
+
+| Gun | Body | Head | Fire | Bullet | Range | Kick up, side | Recovery | Speed | Reload | TTK 5 m | TTK 10 m | TTK 40 m |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| RIFLE 1 | 23 | 53 | 801 rpm | 421 m/s | 36 m | 10.8, 6.3 | 4.0 | 98% | 2.3 s | 0.30 s | 0.30 s | 0.45 s |
+| RIFLE 2 | 30 | 75 | 561 rpm | 715 m/s | 65 m | 13.0, 5.9 | 6.0 | 93% | 2.3 s | 0.32 s | 0.32 s | 0.32 s |
+| RIFLE 3 | 29 | 73 | 561 rpm | 676 m/s | 59 m | 21.8, 12.8 | 4.0 | 98% | 2.3 s | 0.32 s | 0.32 s | 0.32 s |
+| RIFLE 4 | 30 | 75 | 561 rpm | 715 m/s | 65 m | 15.6, 7.0 | 6.6 | 96% | 2.3 s | 0.32 s | 0.32 s | 0.32 s |
+| RIFLE 5 | 23 | 58 | 731 rpm | 880 m/s | 49 m | 8.0, 3.6 | 6.0 | 93% | 2.3 s | 0.33 s | 0.33 s | 0.41 s |
+| CARBINE 1 | 24 | 60 | 732 rpm | 960 m/s | 47 m | 7.4, 2.6 | 6.3 | 92% | 2.1 s | 0.33 s | 0.33 s | 0.33 s |
+| CARBINE 2 | 23 | 58 | 732 rpm | 900 m/s | 42 m | 9.0, 3.1 | 7.0 | 96% | 2.1 s | 0.33 s | 0.33 s | 0.41 s |
+| CARBINE 3 | 23 | 58 | 732 rpm | 919 m/s | 44 m | 15.1, 6.9 | 4.6 | 101% | 2.1 s | 0.33 s | 0.33 s | 0.41 s |
+| CARBINE 4 | 31 | 78 | 526 rpm | 290 m/s, sub | 31 m | 9.5, 3.3 | 7.7 | 99% | 2.1 s | 0.34 s | 0.34 s | 0.57 s |
+| BULLPUP 1 | 24 | 60 | 600 rpm | 960 m/s | 47 m | 6.6, 1.6 | 6.3 | 90% | 2.5 s | 0.35 s | 0.35 s | 0.35 s |
+| BULLPUP 2 | 23 | 58 | 600 rpm | 919 m/s | 44 m | 8.0, 2.0 | 7.0 | 94% | 2.5 s | 0.35 s | 0.35 s | 0.40 s |
+| BULLPUP 3 | 30 | 75 | 460 rpm | 715 m/s | 65 m | 8.3, 2.1 | 6.3 | 90% | 2.5 s | 0.39 s | 0.39 s | 0.39 s |
+| SMG 1 | 27 | 62 | 622 rpm | 259 m/s, sub | 23 m | 12.1, 9.4 | 5.3 | 109% | 1.8 s | 0.29 s | 0.29 s | 0.68 s |
+| SMG 2 | 22 | 51 | 800 rpm | 406 m/s | 34 m | 6.0, 3.6 | 8.0 | 104% | 1.8 s | 0.30 s | 0.30 s | 0.45 s |
+| SMG 3 | 17 | 39 | 988 rpm | 720 m/s | 44 m | 5.2, 3.1 | 8.8 | 107% | 1.8 s | 0.30 s | 0.30 s | 0.43 s |
+| SMG 4 | 21 | 48 | 800 rpm | 360 m/s | 28 m | 10.1, 7.9 | 5.3 | 109% | 1.8 s | 0.30 s | 0.30 s | 0.60 s |
+| SMG 5 | 23 | 53 | 800 rpm | 466 m/s | 36 m | 4.9, 3.0 | 7.2 | 100% | 1.8 s | 0.30 s | 0.30 s | 0.45 s |
+| SHOTGUN 1 | 13 x9 | 16 x9 | 71 rpm | 400 m/s | 14 m | 45.0, 18.0 | 4.5 | 95% | 2.6 s | one shot | 0.85 s | - |
+| SHOTGUN 2 | 13 x9 | 16 x9 | 71 rpm | 421 m/s | 15 m | 36.9, 14.8 | 4.0 | 91% | 2.6 s | one shot | 0.85 s | - |
+| SHOTGUN 3 | 12 x12 | 15 x12 | 57 rpm | 432 m/s | 17 m | 47.7, 19.1 | 4.0 | 91% | 2.6 s | one shot | 1.05 s | - |
+| SHOTGUN 4 | 13 x8 | 16 x8 | 79 rpm | 414 m/s | 12 m | 40.2, 16.1 | 5.0 | 98% | 2.6 s | one shot | 1.51 s | - |
+| SHOTGUN 5 | 13 x9 | 16 x9 | 71 rpm | 379 m/s | 12 m | 75.6, 39.3 | 3.0 | 100% | 2.6 s | one shot | 0.85 s | - |
+| SAWN-OFF 1 | 12 x9 | 15 x9 | 240 rpm | 366 m/s | 12 m | 72.0, 43.2 | 4.4 | 103% | 2.0 s | 0.25 s | - | - |
+| PISTOL 1 | 27 | 62 | 389 rpm | 255 m/s, sub | 23 m | 15.7, 5.5 | 8.1 | 102% | 1.4 s | 0.46 s | 0.46 s | 1.08 s |
+| PISTOL 2 | 21 | 48 | 500 rpm | 372 m/s | 29 m | 13.1, 4.6 | 8.1 | 102% | 1.4 s | 0.48 s | 0.48 s | 0.96 s |
+| PISTOL 3 | 25 | 58 | 420 rpm | 330 m/s, sub | 26 m | 19.5, 6.8 | 9.0 | 106% | 1.4 s | 0.43 s | 0.43 s | 1.00 s |
+| PISTOL 4 | 45 | 90 | 233 rpm | 450 m/s | 49 m | 33.7, 11.8 | 8.1 | 102% | 1.4 s | 0.51 s | 0.51 s | 0.51 s |
+| PISTOL 5 | 21 | 48 | 500 rpm | 353 m/s | 27 m | 19.2, 6.7 | 9.9 | 109% | 1.4 s | 0.48 s | 0.48 s | 0.96 s |
+| PISTOL 6 | 29 | 67 | 375 rpm | 397 m/s | 36 m | 23.3, 8.2 | 9.0 | 106% | 1.4 s | 0.48 s | 0.48 s | 0.64 s |
+| REVOLVER 1 | 53 | 106 | 130 rpm | 425 m/s | 34 m | 40.0, 12.0 | 5.0 | 104% | 2.4 s | 0.46 s | 0.46 s | 0.92 s |
+| REVOLVER 2 | 64 | 128 | 108 rpm | 440 m/s | 46 m | 46.1, 13.8 | 4.5 | 100% | 2.4 s | 0.56 s | 0.56 s | 0.56 s |
+| REVOLVER 3 | 55 | 110 | 130 rpm | 461 m/s | 39 m | 32.8, 9.8 | 4.5 | 100% | 2.4 s | 0.46 s | 0.46 s | 0.92 s |
+| REVOLVER 4 | 50 | 100 | 130 rpm | 384 m/s | 28 m | 48.0, 14.4 | 5.5 | 107% | 2.4 s | 0.46 s | 0.46 s | 1.38 s |
+| REVOLVER 5 | 36 | 90 | 198 rpm | 287 m/s, sub | 26 m | 29.5, 8.8 | 5.5 | 107% | 2.4 s | 0.61 s | 0.61 s | 1.52 s |
+
+The time to kill of each class:
+
+| Class | 10 m | 40 m |
+|---|---|---|
+| Rifle | 0.30 to 0.33 s | 0.32 to 0.45 s |
+| Carbine | 0.33 to 0.34 s | 0.33 to 0.57 s |
+| Bullpup | 0.35 to 0.39 s | 0.35 to 0.40 s |
+| SMG | 0.29 to 0.30 s | 0.43 to 0.68 s |
+| Shotgun | 0.85 to 1.51 s (one shot at 5 m) | - |
+| Sawn-off | - (0.25 s at 5 m) | - |
+| Pistol | 0.43 to 0.51 s | 0.51 to 1.08 s |
+| Revolver | 0.46 to 0.61 s | 0.56 to 1.52 s |
 
 The balance, for hipfire on a laptop (100 health):
 
-- Each primary kills in about 0.33 s when every hit lands (rifle 4 hits,
-  carbine 5, SMG 6, bullpup 2 bursts). The differences are in the cone,
-  the kick and the range. A head hit is about 2.5 times a body hit, so only
-  the revolver kills with one head hit.
-- The first shot goes almost where the crosshair is. The cone grows with
-  the heat (the trigger held), with the run speed (+0.008 to +0.02) and in
-  the air (+0.05). The sights make it 75% smaller (30% for the shotguns).
-  The crosshair shows the cone.
-- The shotguns kill in one shot only up close (8 of 9 pellets), and do no
-  damage past their reach.
-- The knife and the pistols are the fastest to carry and to take out.
+- **No gun is the fastest at every range.** At 10 m the SMGs kill fastest.
+  At 40 m the 7.62x39 mm AKs and the long-barrel 5.56 mm guns kill fastest.
+  For the secondary, the .40 S&W pistol is the fastest at 10 m, and the
+  .50 AE pistol at 40 m. `zig build test` checks that the fastest gun at
+  10 m is not the fastest gun at 40 m, in each slot.
+- **The price of each strong gun.** The 7.62x39 mm AKs kick hard. The long-barrel guns are heavy and slow. A gun with no
+  stock is fast to carry and to aim, but kicks and sways much more. The
+  pistol rounds in long guns (RIFLE 1, the SMGs) lose damage fast with the
+  distance.
+- **No gun loses to another gun in everything.** `zig build guns` lists
+  each gun that another gun of its slot beats in every score: the time to
+  kill at 5 m, 10 m and 40 m, the recoil, the speed, the reload, the cone,
+  the range, and the head damage at 10 m and 40 m. The list is empty.
+- **Head hits**: about 2.5 times a body hit for rifle rounds, and 2 to 2.5
+  times for handgun rounds. Only the .357 Magnum and the .44 Magnum
+  revolvers kill with one head hit. The .44 does it to about 45 m.
+- **The cone**: the first shot goes almost where the crosshair is. The cone
+  grows with the heat (the trigger held), with the run speed (+0.008 to
+  +0.02) and in the air (+0.05). The sights make it 75% smaller (30% for
+  the shotguns). The crosshair shows the cone.
+- **Buckshot** kills in one shot up close (5 m). It does no damage past its
+  reach (31 to 44 m, longer with a longer barrel).
 
-The server has the same numbers (`WEAPONS` in `server/index.ts`).
+The server has the same numbers: `server/guns.json`. `zig build guns`
+writes it from the gun model, and `zig build test` fails when it is old.
 
 ### The models
 
@@ -544,8 +771,12 @@ apps/action/
 │       ├── render.zig    light shadow maps (at map load), shadow pass, HDR scene pass (4x MSAA), bloom, tone map
 │       ├── scene.wgsl    lighting: sun + PCF shadows, light shadow maps, SDF ambient occlusion, sky, fog
 │       ├── post.wgsl     bloom and the final pass (ACES, vignette, damage tint)
-│       ├── weapon.zig    the weapon models, classes and stats, items, slots, the hands and the view-model pose
+│       ├── weapon.zig    the weapon models, classes, items, slots, the hands, the recoil and the view-model pose
+│       ├── guns.zig      the gun model: calibres, builds, the stats of each gun, the time to kill
+│       ├── guns_tool.zig zig build guns: writes server/guns.json, prints the gun tables
+│       ├── guns_test.zig the tests of the gun model
 │       ├── weapon_menu.zig  the weapon menu (B)
+│       ├── gun_compare.zig  the compare bars of two guns
 │       ├── map.zig       the current map: boxes, ramps, decoration, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
@@ -563,6 +794,8 @@ apps/action/
 │       └── assets/       guns.bin (generated), Lato font (OFL)
 ├── server/index.ts       Bun: static files + the lobby on /api/ws, port 4080
 ├── server/ping.ts        the ping of each player (ping.test.ts: bun test)
+├── server/guns.ts        the gun table of the server and the fall-off (guns.test.ts)
+├── server/guns.json      the stats of each gun (generated: zig build guns)
 ├── server/console.ts     the server cvars, the config file, the server commands
 ├── server/chat.ts        the chat checks: clean text, length cap, rate limit, teams
 ├── server/server.cfg     the server config (a script)
@@ -595,11 +828,13 @@ messages carry remote admin. The `chat` message carries the chat:
 | `{t:"chat", ch:"server", text}` | the server, to all players, or to one | a server line: a join, a leave, a match start or end. To the sender only: "too many messages". |
 
 The client sends its own position, its held weapon and its hits. The server
-checks the match phase and that both players are alive. For each shot it
-checks the weapon: the class must be in the shooter's loadout, the shot must
-keep to the fire rate of the class, the pellets must not be more than the
-class has, and the target must be in reach. The server takes the damage
-from its own table. It does not check line of sight. The other players see
+checks the match phase and that both players are alive. A pick must name a
+gun of its class (`server/guns.json`). For each shot it checks the weapon:
+the class must be in the shooter's loadout, the shot must keep to the fire
+rate of the gun, the pellets must not be more than the gun has, and the
+target must be in reach. The server takes the damage from its own table,
+with the fall-off at its own distance between the two players
+(`server/guns.ts`). It does not check line of sight. The other players see
 the held weapon (`w` and `m` in the `st` and `snap` messages). For a grenade, the thrower's client calculates the damage, cover
 included, and sends it in one `blast` message. The server checks the throws
 left in the life, the damage range and the distance to each target.
