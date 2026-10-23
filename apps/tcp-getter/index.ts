@@ -194,7 +194,9 @@ async function sendSSHEmail(
   const borrowedSteps = `chmod 600 ${CLIENT_KEY_PATH} && ${sshBorrowed}`;
   // To reach a SIBLING machine. Only this machine has a tunnel, and no machine
   // holds a private key, so the second hop needs your agent lent forward.
-  const hopSteps = `ssh-add ${CLIENT_KEY_PATH} && ${sshHop}`;
+  // chmod first: ssh-add also refuses a key other accounts can read, and the
+  // && then stops before ssh runs.
+  const hopSteps = `chmod 600 ${CLIENT_KEY_PATH} && ssh-add ${CLIENT_KEY_PATH} && ${sshHop}`;
   const timestamp = new Date().toLocaleString();
 
   const subject = options.isStartup
