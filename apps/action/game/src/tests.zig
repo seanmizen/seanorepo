@@ -23,6 +23,7 @@ test {
     _ = @import("surfaces_test.zig");
     _ = @import("audio/tests.zig");
     _ = @import("shooter_test.zig");
+    _ = @import("pigeons_test.zig");
 }
 
 test "protocol_version.txt: one number, 1 or more" {

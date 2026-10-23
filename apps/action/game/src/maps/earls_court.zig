@@ -289,31 +289,63 @@ fn districtLevel() void {
     }
 }
 
+// The roof arch: a half ellipse across the shed, from the springing at
+// 7.5 m on the side walls to 14.5 m at z = arch_z.
+const arch_z: f32 = -4.2;
+const arch_half: f32 = 16.8;
+const arch_rise: f32 = 7.0;
+const arch_y0: f32 = 7.5;
+/// The ribs of the roof: one each `rib_step` m along X, from shed_x0 to
+/// shed_x1.
+pub const rib_x = [2]f32{ shed_x0, shed_x1 };
+pub const rib_step: f32 = 6;
+/// The tie rods are 34.8 degrees up the arch from the springing: 11.5 m
+/// high. They are 8 cm square.
+const tie_t: f32 = 34.8 / 180.0;
+pub const tie_half: f32 = 0.04;
+
+/// The point of the arch line at x, t from 0 (the north springing) to 1
+/// (the south springing).
+fn archPoint(t: f32, x: f32) V3 {
+    const a = t * std.math.pi;
+    return v3(x, arch_y0 + @sin(a) * arch_rise, arch_z - @cos(a) * arch_half);
+}
+
+/// The height of the arch line over z. Outside the span: the springing.
+pub fn archY(z: f32) f32 {
+    const c = (z - arch_z) / arch_half;
+    return arch_y0 + arch_rise * @sqrt(@max(0, 1 - c * c));
+}
+
+/// The tie rod of the rib at x: the centres of its two ends. The pigeons
+/// (pigeons.zig) sit on the tie rods.
+pub fn tieRod(x: f32) [2]V3 {
+    return .{ archPoint(tie_t, x), archPoint(1 - tie_t, x) };
+}
+
 /// The iron arch roof over the shed: ribs every 6 m along X, purlins, slate
 /// panels near the eaves, a raised lantern. The tie rods are at 11.5 m, out
 /// of reach from the walkway (4.8 m).
 fn roof() void {
     const at = struct {
         fn p(t: f32, x: f32) V3 {
-            const a = t * std.math.pi;
-            return v3(x, 7.5 + @sin(a) * 7.0, -4.2 - @cos(a) * 16.8);
+            return archPoint(t, x);
         }
         fn n(t: f32) V3 {
             const a = t * std.math.pi;
-            return vec.norm(v3(0, @sin(a) / 7.0, -@cos(a) / 16.8));
+            return vec.norm(v3(0, @sin(a) / arch_rise, -@cos(a) / arch_half));
         }
     };
     const segs = 16;
     var x = shed_x0;
-    while (x <= shed_x1 + 0.01) : (x += 6) {
+    while (x <= shed_x1 + 0.01) : (x += rib_step) {
         for (0..segs) |i| {
             const ta = @as(f32, @floatFromInt(i)) / segs;
             const tb = @as(f32, @floatFromInt(i + 1)) / segs;
             map.beam(at.p(ta, x), at.p(tb, x), 0.28, 0.5, v3(1, 0, 0), iron, .metal, .metal);
         }
-        // The arch is 11.5 m high 34.8 degrees up from the springing.
-        const t_tie: f32 = 34.8 / 180.0;
-        map.beam(at.p(t_tie, x), at.p(1 - t_tie, x), 0.08, 0.08, v3(0, 1, 0), iron, .metal, .metal);
+        const tie = tieRod(x);
+        map.beam(tie[0], tie[1], tie_half * 2, tie_half * 2, v3(0, 1, 0), iron, .metal, .metal);
     }
     for (1..14) |i| {
         const t = @as(f32, @floatFromInt(i)) / 14;

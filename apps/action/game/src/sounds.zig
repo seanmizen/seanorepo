@@ -97,6 +97,14 @@ fn tone(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f32,
     a.play(.{ .frequency = freq, .frequency_end = freq_end, .duration = dur, .waveform = wave, .volume = vol * settings.sfx_volume.float(), .pan = pan, .delay = delay });
 }
 
+/// A short tone at p: the side of p, the distance law, and the time the
+/// sound takes to arrive (after `delay`). The pigeons (pigeons.zig) use it.
+pub fn toneAt(p: V3, freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f32, delay: f32) void {
+    const dist = vec.len(p - lis.pos);
+    const k = std.math.clamp(4 / (dist + 3), 0.02, 1);
+    tone(freq, freq_end, dur, wave, vol * k, if (dist > 0.01) panOf(p) else 0, delay + dist / guns.sound_speed);
+}
+
 /// The muzzle report of a gun of class c: a noise crack and a falling
 /// thump. The shotguns are longer and deeper, the pistol and the SMG are
 /// shorter. `delay`: the seconds until its sound arrives.
