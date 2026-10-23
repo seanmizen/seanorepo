@@ -1,13 +1,15 @@
 // action.seanmizen.com: the page entry point. The swindowzig loader
 // (utils/swindowzig/backends/wasm/loader.ts) builds every wasm import,
-// the WebSocket bridge (backends/wasm/net.ts) included. bun bundles this
-// file into public/boot.js (build.sh).
+// the WebSocket bridge (backends/wasm/net.ts) included. tube.ts adds the
+// train sound (utils/tube-sounds) to the import module "env". bun bundles
+// this file into public/boot.js (build.sh).
 
 import { gameOwnsKey } from '#/utils/swindowzig/backends/wasm/events';
 import {
   type LoadFailure,
   loadWasm,
 } from '#/utils/swindowzig/backends/wasm/loader';
+import { tubeImports } from './tube';
 
 function show(title: string, message: string): void {
   const overlay = document.getElementById('overlay');
@@ -96,7 +98,9 @@ if (canvas) {
     // the click that it wants, and reads the state with jsPointerLocked.
     // jsReload: the game reloads the page to get a new version of itself
     // (game/src/game_console.zig reloadPage).
+    // jsTubeTrain: the deep train sound (tube.ts, game/src/train_sound.zig).
     env: {
+      ...tubeImports,
       jsReload: () => {
         location.reload();
         return undefined;

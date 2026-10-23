@@ -118,7 +118,7 @@ hears.
 | `level` | `TubeTrain` | Train level, with its reverb sends. `setLevel()` changes it live. |
 | `mix: { joints: 0.5, ... }` | `TubeTrain` | Level per component: `rolling joints motor control brakes squeal compressor doors tunnel`. `setMix()` changes it live. |
 | `track` | `TubeTrain` | Rail length (0 = welded rail), curves, corrugation. |
-| `geometry` | `TubeStation` | Platform start and length, listener position. |
+| `geometry` | `TubeStation` | Platform start and length, listener position. `listener.right` is the direction of the right ear, for the stereo pan. A game sets it from the player yaw. The station reads `geometry` at each control step, so a game can move the listener. |
 | `ambient`, `distantTrainEvery` | `TubeStation` | Ambience level and the mean gap between distant trains. `setAmbient()` changes the level live. |
 
 ### Offline rendering

@@ -19,6 +19,13 @@ import { clamp, SPEED_OF_SOUND, smoothstep } from './math';
 export interface Listener {
   x: number;
   lateral: number;
+  /**
+   * The direction of the right ear: `x` along the track, `lateral` away
+   * from the track centre line (towards the listener). A unit vector.
+   * The default is { x: 1, lateral: 0 }: the listener faces the track.
+   * A game sets it from the yaw of the player.
+   */
+  right?: { x: number; lateral: number };
 }
 
 export interface StationGeometry {
@@ -54,6 +61,17 @@ export interface SourcePath {
 
 const REF_DISTANCE = 5;
 
+/** Stereo pan of a point on the track centre line, -1 (left) to 1 (right). */
+export const trackPan = (x: number, g: StationGeometry): number => {
+  const { listener } = g;
+  const right = listener.right ?? { x: 1, lateral: 0 };
+  const dx = x - listener.x;
+  const d = Math.max(Math.hypot(dx, listener.lateral), 0.001);
+  // The point is at -lateral from the listener, across the track.
+  const side = dx * right.x - listener.lateral * right.lateral;
+  return clamp((side / d) * 0.85, -1, 1);
+};
+
 export const sourcePath = (x: number, g: StationGeometry): SourcePath => {
   const start = g.platformStart;
   const end = g.platformStart + g.platformLength;
@@ -77,7 +95,7 @@ export const sourcePath = (x: number, g: StationGeometry): SourcePath => {
     delay: length / SPEED_OF_SOUND,
     gain: Math.min(gain, 2.5),
     cutoff: Math.max(cutoff, 120),
-    pan: clamp((dx / Math.max(direct, 0.001)) * 0.85, -1, 1),
+    pan: trackPan(apparentX, g),
     tunnelDepth: depth,
     // The tunnel reverb is the tunnel itself ringing. It falls with depth,
     // but more slowly than the direct sound, so a deep source is mostly boom.
