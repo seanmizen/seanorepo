@@ -24,7 +24,7 @@ under the control gives the reason. The page keeps its settings in local storage
 
 | Group | Controls |
 |---|---|
-| Top bar | **Sound** is one toggle. Off pauses the audio clock, so the train and any script pause with it. A browser starts audio only after a click, so the sound is off after a reload. **Volume** is the master level (%). The chips show speed, distance, script, lock and doors at all times. **Reset to defaults**. |
+| Top bar | **Sound** is one toggle. Off pauses the audio clock, so the train and any script pause with it. A browser starts audio only after a click, so the sound is off after a reload. **Volume** is the master level (%). The chips show speed, distance, script, lock and doors at all times. The bar stays at the top of the screen. **Reset to defaults** is under the bar. |
 | Train and stock | **Stock** (1973 or S7) and **Motor**. A change of stock builds a new train at the same place and stops a script. A change of motor keeps the train and the script. |
 | Scripts | **Arrival**, **Departure** (from a stand), **Full service** and **Stop script**. **Repeat the full service every 70 s**. Stop script also turns off Repeat. **Open the doors** and **Close the doors** are one toggle. It works when the train stands and no script runs. A script button also starts the sound. |
 | Motion | **Speed from**: the speed slider or physics. In slider mode, throttle and brake still set the motor load and the brake air, but not the speed. In physics mode, throttle and brake drive the speed. **Speed** (m/s), **Throttle** (%), **Brake** (%), **Curves** (the track layout or a fixed amount, %). While a script runs, the page disables these controls, and they follow the script. When it ends, they continue from where it stopped. |

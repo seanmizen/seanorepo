@@ -121,10 +121,19 @@
         color: var(--muted);
         margin-right: 4px;
       }
+      .under-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px 12px;
+        margin: 0 0 14px;
+      }
       .bar-hint {
         color: var(--muted);
         font-size: 13px;
-        margin: 0 0 14px 4px;
+        margin: 0 0 0 4px;
+        flex: 1 1 300px;
       }
 
       .grid {
@@ -383,12 +392,19 @@
         .ch {
           grid-template-columns: 104px minmax(0, 1fr) 52px auto;
         }
-        .vol input {
-          width: 90px;
-        }
-        /* On a phone a sticky bar takes too much of the screen. */
+        /* Keep the sticky bar small on a phone: the chips scroll in one line. */
         .bar {
-          position: static;
+          gap: 8px 12px;
+          padding: 8px 10px;
+        }
+        .vol input {
+          width: 70px;
+        }
+        .chips {
+          flex: 1 1 100%;
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          scrollbar-width: none;
         }
       }
     </style>
@@ -413,9 +429,11 @@
           ></output
         ></label>
         <ul class="chips" id="chips" aria-live="off"></ul>
+      </div>
+      <div class="under-bar">
+        <p class="bar-hint" id="soundHint"></p>
         <button id="reset" type="button">Reset to defaults</button>
       </div>
-      <p class="bar-hint" id="soundHint"></p>
 
       <div class="grid">
         <section aria-labelledby="h-train">
