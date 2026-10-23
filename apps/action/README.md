@@ -27,12 +27,16 @@ Controls:
 | F | use: press the button under the crosshair (lifts) |
 | Q, E (hold) | lean left, lean right |
 | Tab | the score board: kills, deaths and the ping of each player |
+| Y | chat to all players |
+| T | chat to your team |
+| / | the chat input with "/" typed: a console command |
 | Esc | release the mouse (pause) |
 | M (paused) | main menu |
 | ` (backtick) | the console |
 
-These keys are the default binds. The console changes them (`bind`, see
-[The console](#the-console)), and the hints on the screen follow the binds.
+These keys are the default binds, except "/" and the backtick key. The
+console changes them (`bind`, see [The console](#the-console)), and the
+hints on the screen follow the binds. See [Chat](#chat).
 
 On the main menu, 1, 2 and 3 pick deathmatch, practice and the settings.
 These keys, the arrow keys of the menus, Enter and the clicks on buttons
@@ -155,7 +159,7 @@ dummies.
   the walking speed.
 - `game/src/console/tests.zig` tests the console: the parser, the cvar
   limits, the commands, the binds and the buttons, the scripts, the saved
-  config and the completion.
+  config, the completion and the chat.
 - The server cvar file must be valid, with safe defaults.
 
 `yarn workspace action test` (`bun test server`) runs the server tests
@@ -164,8 +168,12 @@ dummies.
 - `server/ping.test.ts`: the ping calculation.
 - `server/console.test.ts`: the same parser cases, the cvar limits, the
   config file and the environment variables.
+- `server/chat.test.ts`: the chat checks. The control characters, the
+  length cap in bytes, the rate limit, the team routing and the match end
+  line.
 - `server/lobby.test.ts`: a real server on a free port. It checks the cvars
-  on join, rcon, and a client that tries to set a server cvar.
+  on join, rcon, a client that tries to set a server cvar, and the chat
+  relay with the join and leave lines.
 
 ## The console
 
@@ -189,7 +197,8 @@ deathmatch the game goes on.
 The built-in commands: `help`, `find`, `cvarlist`, `cmdlist`, `set`,
 `reset`, `toggle`, `bind`, `unbind`, `bindlist`, `resetbinds`, `exec`,
 `edit`, `scriptlist`, `scriptdel`, `echo`, `clear` and `toggleconsole`.
-The game adds `rcon` and the actions.
+The chat adds `messagemode`, `messagemode2`, `say` and `say_team` (see
+[Chat](#chat)). The game adds `rcon` and the actions.
 
 ### Cvars
 
@@ -215,6 +224,7 @@ The client cvars:
 | `sfx_volume` | 0 to 1 | 1 | saved | `main.zig` sound |
 | `fov` | 60 to 100 degrees | 74 | saved | `main.zig` gameRender |
 | `sensitivity` | 0.2 to 3 | 1 | saved | `main.zig` gameplayTick |
+| `chat_fade_seconds` | 1 to 120 seconds | 10 | saved | `console/chat.zig` Chat.alpha |
 | `rcon_password` | text | empty | protected, not saved | `game_console.zig` cmdRcon |
 
 The settings panel shows the first five. The values of the old local
@@ -241,6 +251,8 @@ reads the actions, not the keys (`game/src/game_console.zig`).
 | `+scores` | Tab | the scores |
 | `+pause` | Escape | free the mouse. On Esc the browser frees it in any case. |
 | `+menu` | M | the main menu, from the pause screen |
+| `messagemode` | Y | the chat input, to all players (not a button) |
+| `messagemode2` | T | the chat input, to your team (not a button) |
 
 The key names: a to z, 0 to 9, left, right, up, down, space, enter,
 escape, tab, backspace, shift, ctrl, alt, mouse1 to mouse5. Examples:
@@ -252,10 +264,11 @@ bind e "+leanright; echo lean"
 resetbinds
 ```
 
-swindowzig has no key code for the backtick key. The web backend sends
-each key that it does not know as Unknown, and `src/boot.ts` stops every
-unknown key except the backtick key. So the backtick key is not in the
-binds, and the punctuation keys cannot have a bind.
+swindowzig has no key code for the backtick key or for "/". The web
+backend sends each key that it does not know as Unknown, and `src/boot.ts`
+stops every unknown key except the backtick key. It sends the "/" key to
+the game as the typed text "/" (see [Chat](#chat)). So the backtick key
+and "/" are not in the binds, and the punctuation keys cannot have a bind.
 
 ### Scripts and the saved config
 
@@ -272,6 +285,52 @@ binds, and the punctuation keys cannot have a bind.
 - Scripts live in local storage (`script-<name>`, and the list in
   `scripts`), in this browser only.
 
+## Chat
+
+Y opens the chat input to all players, and T to your team. "/" opens it
+with "/" typed. Enter sends the line, Esc closes it. The chat works in
+every mode. A message needs the deathmatch server.
+
+- **Keys**: Y and T are binds (`messagemode`, `messagemode2`), so `bind`
+  changes them. "/" has no key code (see [Binds and actions](#binds-and-actions)),
+  so no bind can change it. `messagemode /` does the same as "/".
+- **While the input is open**, the binds do not run: no movement, no fire
+  and no mouse look. The keys that a bind holds let go. In deathmatch the
+  game goes on.
+- **A line that starts with "/"** runs as a console command, for example
+  `/fov 90` or `/say hi`. The label is CONSOLE. It has the suggestion list
+  and the Tab completion of the console. The command and the first 8 lines
+  of its output show in the chat. The console has all of them.
+- **The input** has its own history: Up and Down. Shift+Up and Shift+Down
+  scroll the chat. A chat line stops at `chat_max_length` bytes (a server
+  cvar). A "/" line can be as long as a console line.
+- **The fade**: a line shows for `chat_fade_seconds` (default 10, saved),
+  and it fades out in its last second. While the input is open, the recent
+  lines show, faded or not.
+- **What shows**: a message to all is `Name: text`, with the name in the
+  colour of the player. A team message is `(TEAM) Name: text` in blue. The
+  server lines (a join, a leave, the start and the end of a match) are
+  yellow. The chat shows a message only when the server sends it back, so
+  the sender sees the same text as the other players.
+- **Team chat with no teams**: each player is a team of one, so a team
+  message goes to the sender only. Deathmatch has no teams. Each player on
+  the server has a team number (`team` in `server/index.ts`). 0 is no team.
+  A game mode with teams sets the numbers, and the relay
+  (`chatRecipients` in `server/chat.ts`) stays the same.
+- **The server checks** (`server/chat.ts`): it changes line breaks and tabs
+  to spaces, and removes the other control characters (Unicode Cc), the
+  format characters (Cf: the bidirectional overrides and the zero-width
+  characters) and lone surrogates. It changes each run of spaces to one
+  space, and trims the ends. It cuts the message to `chat_max_length` bytes
+  of UTF-8, on a code point boundary. A player can send at most
+  `chat_rate_messages` messages in `chat_rate_seconds`. The server drops
+  the next ones, and tells the sender how long to wait. It writes each
+  message to its log.
+
+`game/src/console/chat.zig` has the chat and `chat_view.zig` draws it. They
+import nothing from the game. `game_console.zig` has the action glue: the
+binds, the send function and the place on the HUD.
+
 ## Server config
 
 The server cvars have one definition, in `game/src/server_cvars.json`.
@@ -282,6 +341,9 @@ The client embeds the file, and the server reads it (`server/console.ts`).
 | `despawn_cadaver_timer` | seconds, at most 86400 | -1 | Nothing yet. The ragdoll bodies will read it. Unset or negative: bodies never despawn. |
 | `match_seconds` | 10 to 7200 | 300 | `server/index.ts` step. A change applies from the next match. |
 | `end_seconds` | 1 to 120 | 10 | `server/index.ts` step. A change applies from the next match end. |
+| `chat_max_length` | 1 to 240 bytes | 160 | `server/index.ts` onChat, and the chat input of the client. |
+| `chat_rate_messages` | 1 to 100 | 5 | `server/index.ts` onChat: at most this many messages in `chat_rate_seconds`. |
+| `chat_rate_seconds` | 0.5 to 600 | 5 | `server/index.ts` onChat. |
 | `admin_password` | text | empty | `server/index.ts` onRcon. Protected: it never goes to a client. |
 
 The server sets the values in this order. The last one wins.
@@ -493,15 +555,16 @@ apps/action/
 │       ├── tests.zig     zig build test: the walks, the console, the server cvar file
 │       ├── player_test.zig  the walks over the stairs and escalators
 │       ├── settings.zig  the settings panel: a view over five saved cvars
-│       ├── game_console.zig  the game side of the console: actions, binds, server cvars, rcon
+│       ├── game_console.zig  the game side of the console: actions, binds, server cvars, rcon, chat
 │       ├── server_cvars.json  the server cvars (the server reads the same file)
-│       ├── console/      the console framework, with no action imports (root.zig)
+│       ├── console/      the console framework and the chat, with no action imports (root.zig)
 │       ├── mesh.zig      vertex lists and shape builders
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)
 │       └── assets/       guns.bin (generated), Lato font (OFL)
 ├── server/index.ts       Bun: static files + the lobby on /api/ws, port 4080
 ├── server/ping.ts        the ping of each player (ping.test.ts: bun test)
 ├── server/console.ts     the server cvars, the config file, the server commands
+├── server/chat.ts        the chat checks: clean text, length cap, rate limit, teams
 ├── server/server.cfg     the server config (a script)
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── public/index.html
@@ -523,7 +586,14 @@ WebGPU only: a recent Chrome or Edge on a desktop.
 
 JSON text on `/api/ws`. The message list is at the top of `server/index.ts`.
 The `cvars` message carries the server cvars. The `rcon` and `print`
-messages carry remote admin.
+messages carry remote admin. The `chat` message carries the chat:
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"chat", ch, text}` | the client, to the server | a message. `ch` is `"all"` or `"team"`. |
+| `{t:"chat", ch, id, name, text}` | the server, to the players of the channel | the message of player `id`, cleaned. The sender gets it too. |
+| `{t:"chat", ch:"server", text}` | the server, to all players, or to one | a server line: a join, a leave, a match start or end. To the sender only: "too many messages". |
+
 The client sends its own position, its held weapon and its hits. The server
 checks the match phase and that both players are alive. For each shot it
 checks the weapon: the class must be in the shooter's loadout, the shot must

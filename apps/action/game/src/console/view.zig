@@ -7,7 +7,8 @@
 // keys, and keep the keys from the game. The toggle character typed in the
 // panel closes it, and so does Esc.
 //
-// drawPrompt and drawSuggestions also suit a chat line.
+// chat_view.zig draws the chat input line with drawPrompt and
+// drawSuggestions.
 const std = @import("std");
 const core = @import("sw_core");
 const gfx = @import("sw_gfx2d");

@@ -6,6 +6,7 @@
 // server cvar file of the game.
 const std = @import("std");
 const schema = @import("console/schema.zig");
+const line = @import("console/line.zig");
 
 test {
     _ = @import("player_test.zig");
@@ -18,6 +19,7 @@ test "server_cvars.json: valid, and the defaults are safe" {
     const defs = try schema.parseDefs(arena.allocator(), @embedFile("server_cvars.json"), .{ .server = true });
     var despawn = false;
     var admin = false;
+    var chat = false;
     for (defs) |d| {
         try std.testing.expect(d.flags.server);
         if (std.mem.eql(u8, d.name, "despawn_cadaver_timer")) {
@@ -31,6 +33,11 @@ test "server_cvars.json: valid, and the defaults are safe" {
             try std.testing.expect(d.flags.protected);
             try std.testing.expectEqualStrings("", d.default.string);
         }
+        if (std.mem.eql(u8, d.name, "chat_max_length")) {
+            chat = true;
+            // The chat input line of the client holds line.max_len bytes.
+            try std.testing.expect(d.max.? <= line.max_len);
+        }
     }
-    try std.testing.expect(despawn and admin);
+    try std.testing.expect(despawn and admin and chat);
 }

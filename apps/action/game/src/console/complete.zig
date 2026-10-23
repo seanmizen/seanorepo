@@ -153,17 +153,24 @@ pub const Cycle = struct {
 /// - More matches with a longer common start: that start.
 /// - Else: the first match, and each next Tab the next match.
 pub fn tab(con: *const console.Console, edit: *line_mod.LineEdit, cycle: *Cycle) void {
+    tabFrom(con, edit, cycle, 0);
+}
+
+/// Tab on the text of `edit` after byte `from`: the bytes before it are
+/// not part of the command. The chat completes the text after its "/".
+pub fn tabFrom(con: *const console.Console, edit: *line_mod.LineEdit, cycle: *Cycle, from: usize) void {
+    if (edit.cursor < from) return;
     var buf: [64]Suggestion = undefined;
     if (cycle.active) {
         const before = cycle.line[0..cycle.len];
         const t = target(before);
         const n = matchesForTab(con, before, &buf);
         if (n == 0) return;
-        edit.replaceBack(t.start, buf[cycle.next % n].name);
+        edit.replaceBack(from + t.start, buf[cycle.next % n].name);
         cycle.next = (cycle.next + 1) % n;
         return;
     }
-    const before = edit.text()[0..edit.cursor];
+    const before = edit.text()[from..edit.cursor];
     const t = target(before);
     if (t.quoted) return;
     const n = matchesForTab(con, before, &buf);
@@ -171,7 +178,7 @@ pub fn tab(con: *const console.Console, edit: *line_mod.LineEdit, cycle: *Cycle)
     if (n == 1) {
         var name: [80]u8 = undefined;
         const s = std.fmt.bufPrint(&name, "{s} ", .{buf[0].name}) catch buf[0].name;
-        edit.replaceBack(t.start, s);
+        edit.replaceBack(from + t.start, s);
         return;
     }
     var common = buf[0].name.len;
@@ -181,13 +188,13 @@ pub fn tab(con: *const console.Console, edit: *line_mod.LineEdit, cycle: *Cycle)
         common = k;
     }
     if (common > t.text.len) {
-        edit.replaceBack(t.start, buf[0].name[0..common]);
+        edit.replaceBack(from + t.start, buf[0].name[0..common]);
         return;
     }
     cycle.active = true;
     cycle.len = before.len;
     @memcpy(cycle.line[0..before.len], before);
-    edit.replaceBack(t.start, buf[0].name);
+    edit.replaceBack(from + t.start, buf[0].name);
     cycle.next = 1 % n;
 }
 

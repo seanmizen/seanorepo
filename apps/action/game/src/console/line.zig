@@ -1,6 +1,6 @@
-// The input line of the console (and of the chat later): the text, the
-// cursor, and the history of the lines that the player sent. No input
-// and no drawing here (prompt.zig and view.zig).
+// The input line of the console and of the chat: the text, the cursor,
+// and the history of the lines that the player sent. No input and no
+// drawing here (prompt.zig, view.zig and chat_view.zig).
 const std = @import("std");
 
 pub const max_len = 240;
@@ -10,6 +10,9 @@ pub const LineEdit = struct {
     len: usize = 0,
     /// A byte offset, always at the start of a code point.
     cursor: usize = 0,
+    /// The most bytes that `insert` lets the line hold, at most max_len.
+    /// The chat sets it to the longest chat message.
+    limit: usize = max_len,
 
     pub fn text(self: *const LineEdit) []const u8 {
         return self.buf[0..self.len];
@@ -28,7 +31,7 @@ pub const LineEdit = struct {
     }
 
     /// Insert text at the cursor. Control characters are dropped. Text that
-    /// does not fit is dropped on a code point boundary.
+    /// does not fit in `limit` is dropped on a code point boundary.
     pub fn insert(self: *LineEdit, s: []const u8) void {
         var clean: [max_len]u8 = undefined;
         var n: usize = 0;
@@ -38,7 +41,7 @@ pub const LineEdit = struct {
             clean[n] = c;
             n += 1;
         }
-        n = cut(clean[0..n], max_len - self.len);
+        n = cut(clean[0..n], @min(self.limit, max_len) -| self.len);
         if (n == 0) return;
         std.mem.copyBackwards(u8, self.buf[self.cursor + n .. self.len + n], self.buf[self.cursor..self.len]);
         @memcpy(self.buf[self.cursor..][0..n], clean[0..n]);
