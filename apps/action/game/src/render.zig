@@ -1,5 +1,12 @@
 // The frame: shadow pass, HDR scene pass (4x MSAA), bloom, final pass with
 // the tone map and the HUD.
+//
+// Local light shadows: each map light has six depth maps, one for each axis
+// direction (a cube map in six layers of a 2D array texture). They are drawn
+// one time when a map loads (loadMap), from the static mesh. The map lights
+// and the walls do not move, so the maps stay correct. The lifts, the train
+// and the players cast no shadow from a local light. Lights that move (the
+// muzzle flash, a grenade, the train and lift lights) have no shadow map.
 const std = @import("std");
 const sw = @import("sw_app");
 const gpu_mod = @import("sw_gpu");
@@ -23,6 +30,15 @@ const swap_format: T.TextureFormat = .bgra8unorm;
 const max_dynamic = 120_000;
 /// The translucent vertices (smoke, the debug blast volume) per frame.
 const max_translucent = 150_000;
+/// The size of one face of a light shadow map, and the layer count: six
+/// faces for each map light.
+const light_shadow_size = 256;
+const light_layers = map.max_lights * 6;
+/// tan of the half angle of a face. It is a little more than 45 degrees, so
+/// the filter taps at the edge of a face stay in that face (3 texels each
+/// side). scene.wgsl has the same two values (LIGHT_FACE_TAN, LIGHT_NEAR).
+const light_face_tan: f32 = @as(f32, light_shadow_size) / (light_shadow_size - 6.0);
+const light_near: f32 = 0.05;
 
 pub const SceneUniforms = extern struct {
     view_proj: [16]f32,
@@ -35,6 +51,7 @@ pub const SceneUniforms = extern struct {
     /// x: the underground height, y: the in-scatter strength.
     info2: [4]f32,
     lp: [max_lights][4]f32,
+    /// rgb colour, w the shadow map of the light (map.Light.shadow).
     lc: [max_lights][4]f32,
 };
 
@@ -81,6 +98,7 @@ var bright_pipe: T.RenderPipeline = undefined;
 var blur_pipe: T.RenderPipeline = undefined;
 var final_pipe: T.RenderPipeline = undefined;
 var trans_pipe: T.RenderPipeline = undefined;
+var light_shadow_pipe: T.RenderPipeline = undefined;
 
 var scene_ubo: gpu_mod.Buffer = undefined;
 var box_buf: gpu_mod.Buffer = undefined;
@@ -99,6 +117,14 @@ var shadow_bg: gpu_mod.BindGroup = undefined;
 var post_bg: [4]?gpu_mod.BindGroup = .{ null, null, null, null };
 
 var shadow_view: gpu_mod.TextureView = undefined;
+/// All the light shadow layers (2D array), and one view for each layer to
+/// draw into.
+var light_shadow_view: gpu_mod.TextureView = undefined;
+var light_layer_views: [light_layers]gpu_mod.TextureView = undefined;
+/// The view-projection matrix of each light shadow layer.
+var light_face_buf: gpu_mod.Buffer = undefined;
+var light_shadow_bgl: gpu_mod.BindGroupLayout = undefined;
+var light_shadow_bg: gpu_mod.BindGroup = undefined;
 var linear_smp: gpu_mod.Sampler = undefined;
 var shadow_smp: gpu_mod.Sampler = undefined;
 
@@ -132,13 +158,63 @@ const vertex_layout = [_]T.VertexBufferLayout{.{
     },
 }};
 
-/// Upload the static mesh of a new map.
-pub fn loadMap(gpu: *gpu_mod.GPU, static_mesh: []const mesh.Vertex) !void {
+/// Upload the static mesh of a new map, and draw the shadow maps of its
+/// lights.
+pub fn loadMap(gpu: *gpu_mod.GPU, static_mesh: []const mesh.Vertex, lights: []const map.Light) !void {
     if (has_static) static_vb.destroy();
     has_static = true;
     static_count = @intCast(static_mesh.len);
     static_vb = try gpu.createBuffer(.{ .size = @max(64, static_mesh.len * @sizeOf(mesh.Vertex)), .usage = .{ .vertex = true, .copy_dst = true } });
     gpu.writeBuffer(static_vb, 0, std.mem.sliceAsBytes(static_mesh));
+    try drawLightShadows(gpu, lights);
+}
+
+/// The view-projection matrix of one face of a light shadow map. Face 0 to
+/// 5 looks along +X, -X, +Y, -Y, +Z, -Z (scene.wgsl lightShadow picks the
+/// face the same way). The far plane is the light radius.
+fn lightFace(l: map.Light, face: usize) Mat4 {
+    const sm = @import("sw_math");
+    const dirs = [6]V3{ v3(1, 0, 0), v3(-1, 0, 0), v3(0, 1, 0), v3(0, -1, 0), v3(0, 0, 1), v3(0, 0, -1) };
+    const up: V3 = if (face == 2 or face == 3) v3(0, 0, 1) else v3(0, 1, 0);
+    const t = l.pos + dirs[face];
+    const view = sm.lookAt(
+        .{ .x = l.pos[0], .y = l.pos[1], .z = l.pos[2] },
+        .{ .x = t[0], .y = t[1], .z = t[2] },
+        .{ .x = up[0], .y = up[1], .z = up[2] },
+    );
+    const proj = sm.perspective(2 * std.math.atan(light_face_tan), 1, light_near, l.radius);
+    return proj.mul(view);
+}
+
+/// Draw the six shadow faces of each map light: the static mesh, from the
+/// light. Emissive surfaces (the lamps) cast no shadow (scene.wgsl
+/// vs_light_shadow).
+fn drawLightShadows(gpu: *gpu_mod.GPU, lights: []const map.Light) !void {
+    var faces: [light_layers][16]f32 = std.mem.zeroes([light_layers][16]f32);
+    var layers: usize = 0;
+    for (lights) |l| {
+        if (l.shadow == 0 or l.shadow > map.max_lights) continue;
+        const slot: usize = l.shadow - 1;
+        for (0..6) |f| faces[slot * 6 + f] = lightFace(l, f).data;
+        layers = @max(layers, slot * 6 + 6);
+    }
+    if (layers == 0) return;
+    gpu.writeBuffer(light_face_buf, 0, std.mem.sliceAsBytes(faces[0..layers]));
+    const encoder = try gpu.createCommandEncoder();
+    for (0..layers) |i| {
+        const pass = try encoder.beginRenderPass(.{
+            .color_attachments = &.{},
+            .depth_stencil_attachment = .{ .view = &light_layer_views[i], .depth_load_op = .clear, .depth_store_op = .store, .depth_clear_value = 1.0, .stencil_read_only = true },
+        });
+        pass.setPipeline(light_shadow_pipe);
+        pass.setBindGroup(0, light_shadow_bg);
+        pass.setVertexBuffer(0, static_vb, 0, static_count * @sizeOf(mesh.Vertex));
+        // The instance index selects the face matrix in the shader.
+        pass.draw(static_count, 1, 0, @intCast(i));
+        pass.end();
+    }
+    const cmd = try encoder.finish();
+    gpu.submit(&[_]T.CommandBuffer{cmd});
 }
 
 /// Upload the ambient-occlusion boxes near the eye. The lifts move, so
@@ -172,6 +248,16 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .usage = .{ .render_attachment = true, .texture_binding = true },
     });
     shadow_view = try shadow_tex.createView(.{});
+    const light_tex = try gpu.createTexture(.{
+        .size = .{ .width = light_shadow_size, .height = light_shadow_size, .depth_or_array_layers = light_layers },
+        .format = depth_format,
+        .usage = .{ .render_attachment = true, .texture_binding = true },
+    });
+    // No dimension given: a texture with more than one layer gives a 2D
+    // array view, also for the one-layer views.
+    light_shadow_view = try light_tex.createView(.{});
+    for (&light_layer_views, 0..) |*v, i| v.* = try light_tex.createView(.{ .base_array_layer = @intCast(i), .array_layer_count = 1 });
+    light_face_buf = try gpu.createBuffer(.{ .size = light_layers * 64, .usage = .{ .storage = true, .copy_dst = true } });
     linear_smp = try gpu.createSampler(.{ .mag_filter = .linear, .min_filter = .linear });
     shadow_smp = try gpu.createSampler(.{ .mag_filter = .linear, .min_filter = .linear, .compare = .less_equal });
 
@@ -181,9 +267,15 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .{ .binding = 1, .visibility = .{ .fragment = true }, .buffer = .{ .type = .read_only_storage } },
         .{ .binding = 2, .visibility = .{ .fragment = true }, .texture = .{ .sample_type = .depth } },
         .{ .binding = 3, .visibility = .{ .fragment = true }, .sampler = .{ .type = .comparison } },
+        .{ .binding = 4, .visibility = .{ .fragment = true }, .texture = .{ .sample_type = .depth, .view_dimension = .@"2d-array" } },
     } });
     shadow_bgl = try gpu.createBindGroupLayout(.{ .entries = &[_]T.BindGroupLayoutEntry{
         .{ .binding = 0, .visibility = .{ .vertex = true, .fragment = true }, .buffer = .{ .type = .uniform } },
+    } });
+    // The light shadow pass reads only the face matrices (binding 5). The
+    // scene pass calculates the same projection in the shader.
+    light_shadow_bgl = try gpu.createBindGroupLayout(.{ .entries = &[_]T.BindGroupLayoutEntry{
+        .{ .binding = 5, .visibility = .{ .vertex = true }, .buffer = .{ .type = .read_only_storage } },
     } });
     post_bgl = try gpu.createBindGroupLayout(.{ .entries = &[_]T.BindGroupLayoutEntry{
         .{ .binding = 0, .visibility = .{ .fragment = true }, .buffer = .{ .type = .uniform } },
@@ -197,13 +289,18 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .{ .binding = 1, .buffer = &box_buf, .size = map.max_boxes * 32 },
         .{ .binding = 2, .texture_view = &shadow_view },
         .{ .binding = 3, .sampler = &shadow_smp },
+        .{ .binding = 4, .texture_view = &light_shadow_view },
     } });
     shadow_bg = try gpu.createBindGroup(.{ .layout = &shadow_bgl, .entries = &[_]gpu_mod.BindGroupEntry{
         .{ .binding = 0, .buffer = &scene_ubo, .size = @sizeOf(SceneUniforms) },
     } });
+    light_shadow_bg = try gpu.createBindGroup(.{ .layout = &light_shadow_bgl, .entries = &[_]gpu_mod.BindGroupEntry{
+        .{ .binding = 5, .buffer = &light_face_buf, .size = light_layers * 64 },
+    } });
 
     var scene_layout = try gpu.createPipelineLayout(.{ .bind_group_layouts = &[_]*gpu_mod.BindGroupLayout{&scene_bgl} });
     var shadow_layout = try gpu.createPipelineLayout(.{ .bind_group_layouts = &[_]*gpu_mod.BindGroupLayout{&shadow_bgl} });
+    var light_shadow_layout = try gpu.createPipelineLayout(.{ .bind_group_layouts = &[_]*gpu_mod.BindGroupLayout{&light_shadow_bgl} });
     var post_layout = try gpu.createPipelineLayout(.{ .bind_group_layouts = &[_]*gpu_mod.BindGroupLayout{&post_bgl} });
 
     var scene_mod = try gpu.createShaderModule(.{ .code = scene_src });
@@ -245,6 +342,13 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
     shadow_pipe = try gpu.createRenderPipeline(.{
         .layout = &shadow_layout,
         .vertex = .{ .module = &scene_mod, .entry_point = "vs_shadow", .buffers = &vertex_layout },
+        .primitive = no_cull,
+        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = true, .depth_compare = .less },
+        .multisample = single,
+    });
+    light_shadow_pipe = try gpu.createRenderPipeline(.{
+        .layout = &light_shadow_layout,
+        .vertex = .{ .module = &scene_mod, .entry_point = "vs_light_shadow", .buffers = &vertex_layout },
         .primitive = no_cull,
         .depth_stencil = .{ .format = depth_format, .depth_write_enabled = true, .depth_compare = .less },
         .multisample = single,
@@ -388,7 +492,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     su.info2 = .{ map.underground_y, 1, 0, 0 };
     for (p.lights[0..nl], 0..) |l, i| {
         su.lp[i] = .{ l.pos[0], l.pos[1], l.pos[2], l.radius };
-        su.lc[i] = .{ l.color[0], l.color[1], l.color[2], 0 };
+        su.lc[i] = .{ l.color[0], l.color[1], l.color[2], @floatFromInt(l.shadow) };
     }
     gpu.writeBuffer(scene_ubo, 0, std.mem.asBytes(&su));
 

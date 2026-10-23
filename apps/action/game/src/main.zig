@@ -278,7 +278,7 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
         const m: f32 = @floatFromInt(@backingInt(d.mat));
         if (d.disc) static_mesh.disc(d.m, d.min[0], d.min[1], d.color, m) else static_mesh.orientedBox(d.m, d.min, d.max, d.color, m);
     }
-    render.loadMap(ctx.gpu(), static_mesh.verts.items) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
+    render.loadMap(ctx.gpu(), static_mesh.verts.items, map.lights[0..map.light_count]) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
 }
 
 fn crossed(a: f32, b: f32, at: f32) bool {

@@ -1,12 +1,14 @@
 // Where: apps/action/game/src/floorplan.zig (zig build floorplan)
 // When: while you build or change a map.
 // Why: draws slices of a map, so you can see what is where, and audits the
-// map for decoration that a player can walk through.
+// map for decoration that a player can walk through and for lights inside
+// a shadow caster.
 //
 //   zig build floorplan -- <map> plan <y> <out.ppm>        top view, a slice at height y
 //   zig build floorplan -- <map> section-z <z> <out.ppm>   side view (x, y), a slice at z
 //   zig build floorplan -- <map> section-x <x> <out.ppm>   end view (z, y), a slice at x
-//   zig build floorplan -- <map> audit                     reachable decoration without collision
+//   zig build floorplan -- <map> audit                     reachable decoration without collision,
+//                                                           and lights inside a shadow caster
 //
 // <map> is arena or earls_court. The image is a binary PPM; on macOS,
 // `sips -s format png in.ppm --out out.png` converts it.
@@ -284,6 +286,45 @@ fn audit() usize {
     return count;
 }
 
+/// True when the point p is inside a decoration element, in the frame of
+/// the element.
+fn insideDecor(d: map.Decor, p: V3) bool {
+    const m = d.m.data;
+    const c0 = v3(m[0], m[1], m[2]);
+    const c1 = v3(m[4], m[5], m[6]);
+    const c2 = v3(m[8], m[9], m[10]);
+    const det = vec.dot(c0, vec.cross(c1, c2));
+    if (@abs(det) < 1e-9) return false;
+    const q = p - v3(m[12], m[13], m[14]);
+    const l = v3(vec.dot(vec.cross(c1, c2), q), vec.dot(vec.cross(c2, c0), q), vec.dot(vec.cross(c0, c1), q)) / vec.s(det);
+    if (d.disc) return l[0] * l[0] + l[1] * l[1] < d.min[0] * d.min[0] and @abs(l[2]) < d.min[1] / 2;
+    return @reduce(.And, l > d.min) and @reduce(.And, l < d.max);
+}
+
+/// List map lights inside a shadow caster: a visible static box or a
+/// decoration, not emissive (render.zig drawLightShadows). Such a light is
+/// in its own shadow and lights nothing.
+fn auditLights() usize {
+    var count: usize = 0;
+    for (map.lights[0..map.light_count], 0..) |l, li| {
+        const p = l.pos;
+        var inside: ?[]const u8 = null;
+        for (map.boxes[0..map.box_count]) |b| {
+            if (!b.visible or b.dynamic or b.mat == .emissive) continue;
+            if (@reduce(.And, p > b.min) and @reduce(.And, p < b.max)) inside = "box";
+        }
+        for (map.decor.items) |d| {
+            if (d.mat != .emissive and insideDecor(d, p)) inside = "decoration";
+        }
+        if (inside) |what| {
+            count += 1;
+            std.debug.print("light {d}: ({d:.1} {d:.1} {d:.1}) is inside a {s}\n", .{ li, p[0], p[1], p[2], what });
+        }
+    }
+    std.debug.print("{d} lights inside a shadow caster\n", .{count});
+    return count;
+}
+
 pub fn main(init: std.process.Init) !void {
     const alloc = init.arena.allocator();
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -297,6 +338,7 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("{s}: {d} boxes, {d} decoration, {d} lights, {d} lifts\n", .{ args[1], map.box_count, map.decor.items.len, map.light_count, map.lift_count });
     if (std.mem.eql(u8, args[2], "audit")) {
         _ = audit();
+        _ = auditLights();
         return;
     }
     if (args.len < 5) return error.MissingArguments;

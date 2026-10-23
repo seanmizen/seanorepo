@@ -41,9 +41,27 @@ foot height. A player who fires shows on it for a moment.
 ```bash
 zig build floorplan -- earls_court plan 1 out.ppm         # top view at y = 1
 zig build floorplan -- earls_court section-z -22.5 out.ppm # side view at z = -22.5
-zig build floorplan -- earls_court audit                  # decoration a player can walk through
+zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
+
+## Light
+
+- **Local lights respect walls.** Each map light (`map.addLight`) has a
+  cube shadow map: six 256 x 256 depth faces, drawn one time when the map
+  loads (`drawLightShadows` in `game/src/render.zig`). A surface that a wall
+  hides from a light gets no light, highlight or floor glint from it. The
+  haze glow of a light also stops at a wall.
+- The shadow maps hold the static mesh only. The lifts, the train and the
+  players cast no shadow from a local light. Lamps (emissive surfaces) cast
+  none, because their light comes from inside them.
+- Lights that move (the muzzle flash, the grenade flash, the train and the
+  lift cab lights) have no shadow map. Walls do not stop them.
+- Put a map light outside every solid shape and decoration. A light inside
+  one is in its own shadow and lights nothing. The floorplan audit lists
+  such lights.
+- Underground, the floor has small damp patches: a little darker and a
+  little glossy, with a narrow glint toward each light.
 
 ## Tests
 
@@ -131,8 +149,8 @@ apps/action/
 │   ├── build.zig         zig build -> zig-out/bin/action.wasm
 │   └── src/
 │       ├── main.zig      modes, input, shooting, deathmatch sync, HUD, wasm entry
-│       ├── render.zig    shadow pass, HDR scene pass (4x MSAA), bloom, tone map
-│       ├── scene.wgsl    lighting: sun + PCF shadows, SDF ambient occlusion, sky, fog
+│       ├── render.zig    light shadow maps (at map load), shadow pass, HDR scene pass (4x MSAA), bloom, tone map
+│       ├── scene.wgsl    lighting: sun + PCF shadows, light shadow maps, SDF ambient occlusion, sky, fog
 │       ├── post.wgsl     bloom and the final pass (ACES, vignette, damage tint)
 │       ├── weapon.zig    rifle state, recoil, the procedural reload animation
 │       ├── map.zig       the current map: boxes, ramps, decoration, lights, lifts, buttons, escalators

@@ -62,6 +62,9 @@ pub const Light = struct {
     pos: V3,
     color: V3,
     radius: f32,
+    /// The shadow map of the light (render.zig), from 1. 0 for a light
+    /// that moves: it has no shadow map, and walls do not stop it.
+    shadow: u8 = 0,
 };
 
 pub const Spawn = struct { pos: V3, yaw: f32 };
@@ -218,9 +221,11 @@ pub fn beam(a: V3, b: V3, w: f32, h: f32, up: V3, color: V3, mat: Mat) void {
     addDecor(m, v3(-w / 2, -h / 2, 0), v3(w / 2, h / 2, l), color, mat);
 }
 
+/// A map light. It does not move, so it gets a shadow map: walls stop its
+/// light.
 pub fn addLight(pos: V3, color: V3, radius: f32) void {
     if (light_count >= max_lights) return;
-    lights[light_count] = .{ .pos = pos, .color = color, .radius = radius };
+    lights[light_count] = .{ .pos = pos, .color = color, .radius = radius, .shadow = @intCast(light_count + 1) };
     light_count += 1;
 }
 

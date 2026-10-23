@@ -23,12 +23,18 @@ fn put(x: f32, z: f32, sx: f32, sy: f32, sz: f32, y0: f32, color: V3, mat: Mat) 
     _ = map.put(x, z, sx, sy, sz, y0, color, mat);
 }
 
+/// A lamp post with an arm toward the middle (on X). The head hangs from
+/// the arm, clear of the post: the light must be outside every solid shape,
+/// or its shadow map hides all of it.
 fn lamp(x: f32, z: f32, h: f32) void {
-    put(x, z, 0.16, h, 0.16, 0, v3(0.12, 0.12, 0.13), .metal);
-    put(x, z, 0.5, 0.12, 0.5, h, v3(0.12, 0.12, 0.13), .metal);
-    const bulb = map.add(v3(x - 0.2, h - 0.22, z - 0.2), v3(x + 0.2, h, z + 0.2), v3(1.0, 0.62, 0.28), .emissive);
+    const iron = v3(0.12, 0.12, 0.13);
+    const hx = x + (if (x > 0) @as(f32, -0.9) else 0.9);
+    put(x, z, 0.16, h + 0.12, 0.16, 0, iron, .metal);
+    put((x + hx) / 2, z, 0.9, 0.08, 0.08, h + 0.04, iron, .metal);
+    put(hx, z, 0.5, 0.12, 0.5, h, iron, .metal);
+    const bulb = map.add(v3(hx - 0.2, h - 0.22, z - 0.2), v3(hx + 0.2, h, z + 0.2), v3(1.0, 0.62, 0.28), .emissive);
     bulb.solid = false;
-    map.addLight(v3(x, h - 0.5, z), v3(1.0, 0.55, 0.22), 11);
+    map.addLight(v3(hx, h - 0.5, z), v3(1.0, 0.55, 0.22), 11);
 }
 
 fn crate(x: f32, z: f32, size: f32, y0: f32) void {

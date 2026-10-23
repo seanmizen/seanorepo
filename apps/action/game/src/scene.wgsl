@@ -4,10 +4,11 @@
 // ambient, ambient occlusion from the box SDF, up to 30 point lights, a
 // Blinn-Phong highlight with Fresnel, sky reflections on metal, height fog
 // that takes the sun colour, and in-scatter: the haze glows around each
-// point light. Below the underground height there is no sun, the ambient
-// falls away, the fog thickens and darkens, dirt collects in the corners
-// and runs down the walls, and the floor has wet patches. The output is
-// linear HDR. post.wgsl tone maps it.
+// point light. Each map light has a cube shadow map (render.zig), so walls
+// stop its light, its highlights and its haze. Below the underground height
+// there is no sun, the ambient falls away, the fog thickens and darkens,
+// dirt collects in the corners and runs down the walls, and the floor has
+// damp patches. The output is linear HDR. post.wgsl tone maps it.
 //
 // Vertex `mat`: the material id (map.zig Mat). 100 is added for the
 // view-model: it gets the near depth range [0, 0.08], the world gets
@@ -25,7 +26,7 @@ struct Scene {
   info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
   info2: vec4f,    // x underground height, y in-scatter strength
   lp: array<vec4f, 30>, // xyz position, w radius
-  lc: array<vec4f, 30>, // rgb colour
+  lc: array<vec4f, 30>, // rgb colour, w shadow map from 1 (0: none)
 };
 
 struct BoxG { mn: vec4f, mx: vec4f };
@@ -34,6 +35,10 @@ struct BoxG { mn: vec4f, mx: vec4f };
 @group(0) @binding(1) var<storage, read> boxes: array<BoxG>;
 @group(0) @binding(2) var shadow_tex: texture_depth_2d;
 @group(0) @binding(3) var shadow_smp: sampler_comparison;
+// The light shadow maps: six layers (faces) for each map light. The light
+// shadow pass reads the view-projection matrix of each layer.
+@group(0) @binding(4) var light_shadow_tex: texture_depth_2d_array;
+@group(0) @binding(5) var<storage, read> light_faces: array<mat4x4f>;
 
 struct VIn {
   @location(0) pos: vec3f,
@@ -76,6 +81,18 @@ const VM_SPLIT: f32 = 0.08;
     return vec4f(2.0, 2.0, 2.0, 1.0); // The view-model casts no shadow.
   }
   return u.light_vp * vec4f(v.pos, 1.0);
+}
+
+// ---- Light shadow pass -----------------------------------------------------
+// render.zig drawLightShadows: one draw of the static mesh for each layer,
+// and the instance index is the layer. The lamps (emissive) cast no shadow:
+// their light comes from inside them.
+
+@vertex fn vs_light_shadow(v: VIn, @builtin(instance_index) layer: u32) -> @builtin(position) vec4f {
+  if (v.mat > 3.5 && v.mat < 4.5) {
+    return vec4f(2.0, 2.0, 2.0, 1.0);
+  }
+  return light_faces[layer] * vec4f(v.pos, 1.0);
 }
 
 // ---- Noise -----------------------------------------------------------------
@@ -156,6 +173,35 @@ fn sunShadow(wp: vec3f, n: vec3f) -> f32 {
     }
   }
   return sum / 9.0;
+}
+
+// render.zig light_face_tan and light_near.
+const LIGHT_FACE_TAN: f32 = 256.0 / 250.0;
+const LIGHT_NEAR: f32 = 0.05;
+
+// The light of map light `slot` (from 0) at the point p: 1 where it
+// reaches p, 0 where a wall hides p. `lp` is the light position and radius.
+// The face is the main axis of p - lp. q is p in that face: x and y across
+// it, z along it. This is the same as the face matrix of render.zig
+// lightFace, without a matrix read. One compare tap filters 2x2 texels.
+fn lightShadow(slot: u32, lp: vec4f, p: vec3f) -> f32 {
+  let v = p - lp.xyz;
+  let a = abs(v);
+  var face: u32;
+  var q: vec3f;
+  if (a.x >= a.y && a.x >= a.z) {
+    face = select(1u, 0u, v.x > 0.0);
+    q = select(vec3f(-v.z, v.y, -v.x), vec3f(v.z, v.y, v.x), v.x > 0.0);
+  } else if (a.y >= a.z) {
+    face = select(3u, 2u, v.y > 0.0);
+    q = select(vec3f(-v.x, v.z, -v.y), vec3f(v.x, v.z, v.y), v.y > 0.0);
+  } else {
+    face = select(5u, 4u, v.z > 0.0);
+    q = select(vec3f(v.x, v.y, -v.z), vec3f(-v.x, v.y, v.z), v.z > 0.0);
+  }
+  let uv = q.xy / (q.z * LIGHT_FACE_TAN) * vec2f(0.5, -0.5) + vec2f(0.5);
+  let depth = lp.w / (lp.w - LIGHT_NEAR) * (1.0 - LIGHT_NEAR / q.z);
+  return textureSampleCompareLevel(light_shadow_tex, shadow_smp, uv, slot * 6u + face, depth);
 }
 
 fn sdBox(p: vec3f, mn: vec3f, mx: vec3f) -> f32 {
@@ -295,7 +341,10 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
 }
 
 // The haze in front of a point light: the integral of 1 / d^2 along the
-// view ray, from the camera to the surface (or `far`).
+// view ray, from the camera to the surface (or `far`). Most of it comes
+// from the ray point nearest to the light. If a wall hides that point from
+// a map light, that light gives no haze (a lamp behind a wall does not glow
+// through it).
 fn inScatter(ro: vec3f, rd: vec3f, far: f32) -> vec3f {
   var acc = vec3f(0.0);
   let nl = u32(u.info.y);
@@ -303,7 +352,15 @@ fn inScatter(ro: vec3f, rd: vec3f, far: f32) -> vec3f {
     let lp = u.lp[i].xyz;
     let tc = dot(lp - ro, rd);
     let h = max(length(ro + rd * tc - lp), 0.25);
-    let k = (atan((far - tc) / h) - atan(-tc / h)) / h;
+    var k = (atan((far - tc) / h) - atan(-tc / h)) / h;
+    let slot = u32(u.lc[i].w + 0.5);
+    if (slot > 0u) {
+      // A little in front of the surface, so the surface does not shadow it.
+      let q = ro + rd * clamp(tc, 0.0, max(far - 0.1, 0.0));
+      if (distance(q, lp) < u.lp[i].w) {
+        k *= lightShadow(slot - 1u, u.lp[i], q);
+      }
+    }
     acc += u.lc[i].rgb * k;
   }
   return acc;
@@ -331,21 +388,23 @@ fn shade(in: VOut, front: bool) -> vec3f {
   var wet = 0.0;
 
   // Grime: dirt in the corners (where the AO is), streaks down the walls,
-  // and wet patches on the floor. More of it underground.
+  // and damp patches on the floor. More of it underground.
   if (!vm && mat != 4u) {
     let dirt = mix(1.3, 0.45, out_k);
     s.albedo *= mix(1.0, 0.55, (1.0 - ao) * dirt);
     if (abs(n0.y) < 0.5) {
       let streak = fbm(vec3f(in.wpos.x * 3.1 + in.wpos.z * 2.3, in.wpos.y * 0.25, in.wpos.z * 0.7));
-      // Water runs down the walls underground; outside it is faint.
-      s.albedo *= 1.0 - smoothstep(0.5, 0.8, streak) * mix(0.5, 0.06, out_k);
+      // Water stains down the walls underground; outside they are faint.
+      s.albedo *= 1.0 - smoothstep(0.5, 0.8, streak) * mix(0.3, 0.06, out_k);
     }
     if (n0.y > 0.5) {
       let soil = fbm(in.wpos * 0.9);
       s.albedo *= 1.0 - smoothstep(0.45, 0.75, soil) * 0.3 * dirt;
-      wet = smoothstep(0.5, 0.6, fbm(in.wpos * vec3f(0.35, 1.0, 0.35) + 3.0)) * (1.0 - out_k);
-      s.albedo *= 1.0 - wet * 0.45;
-      s.rough = mix(s.rough, 0.04, wet);
+      // Small damp patches: a little darker and a little glossy. They are
+      // not puddles.
+      wet = smoothstep(0.57, 0.67, fbm(in.wpos * vec3f(0.35, 1.0, 0.35) + 3.0)) * (1.0 - out_k);
+      s.albedo *= 1.0 - wet * 0.25;
+      s.rough = mix(s.rough, 0.45, wet);
     }
     if (n0.y < -0.5) {
       s.albedo *= mix(1.0, 0.5, 1.0 - out_k); // soot on the ceilings
@@ -380,25 +439,36 @@ fn shade(in: VOut, front: bool) -> vec3f {
   if (vm) { refl = 0.1; } // The sky behind the camera is not the one in front.
   c += skyColor(R, false) * fres * (1.0 - s.rough) * ao * refl * out_k;
 
-  // Point lights.
+  // Point lights. A map light tests its shadow map: no light, highlight or
+  // glint where a wall hides the point. The gun tests the eye position: it
+  // can reach into a wall, and the part in the wall must not go dark.
   let nl = u32(u.info.y);
   for (var i = 0u; i < nl; i++) {
     let d = u.lp[i].xyz - in.wpos;
     let ld = length(d);
     let r = u.lp[i].w;
-    if (ld < r) {
-      let l = d / ld;
-      let k = 1.0 - (ld * ld) / (r * r);
-      let att = k * k / (1.0 + ld * ld * 0.35);
-      let h2 = normalize(l + V);
-      let sp = pow(max(dot(N, h2), 0.0), shin) * (shin + 8.0) / 25.0;
-      c += u.lc[i].rgb * att * max(dot(N, l), 0.0) * (diff + fres * sp) * mix(1.0, ao, 0.5);
+    if (ld >= r) { continue; }
+    let l = d / ld;
+    let ndl_i = max(dot(N, l), 0.0);
+    if (ndl_i <= 0.0 && wet <= 0.01) { continue; }
+    var vis = 1.0;
+    let slot = u32(u.lc[i].w + 0.5);
+    if (slot > 0u) {
+      // Normal offset: about 1.5 texels of the shadow map at this distance.
+      var sp = in.wpos + n0 * (0.02 + 0.012 * ld);
+      if (vm) { sp = u.cam.xyz; }
+      vis = lightShadow(slot - 1u, u.lp[i], sp);
+      if (vis <= 0.0) { continue; }
     }
-    // A wet floor mirrors the lights: a long glint toward each one.
-    if (wet > 0.01 && ld < 30.0) {
-      let l = d / ld;
-      let g = pow(max(dot(R, l), 0.0), 180.0) * 2.5 + pow(max(dot(R, l), 0.0), 24.0) * 0.12;
-      c += u.lc[i].rgb * g * wet / (1.0 + ld * ld * 0.015);
+    let k = 1.0 - (ld * ld) / (r * r);
+    let att = k * k / (1.0 + ld * ld * 0.35);
+    let h2 = normalize(l + V);
+    let sp_i = pow(max(dot(N, h2), 0.0), shin) * (shin + 8.0) / 25.0;
+    c += u.lc[i].rgb * att * ndl_i * (diff + fres * sp_i) * mix(1.0, ao, 0.5) * vis;
+    // A damp floor gives a narrow glint toward each light.
+    if (wet > 0.01) {
+      let g = pow(max(dot(R, l), 0.0), 320.0) * 1.2;
+      c += u.lc[i].rgb * g * wet * k / (1.0 + ld * ld * 0.015) * vis;
     }
   }
   if (vm) {
