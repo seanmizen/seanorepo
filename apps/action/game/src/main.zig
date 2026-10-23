@@ -8,9 +8,9 @@
 //   - practice: offline. 60 seconds of pop-up targets, with a best score.
 //
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
-// aim, R reload, G grenade, F use (lift buttons), Q and E lean, Tab scores,
-// Esc release the mouse, M menu (while paused). The number keys 1 to 9 stay
-// free for the weapon slots.
+// aim, R reload, G grenade, F use (lift buttons), Q and E lean, 1 to 4 the
+// weapon slots (primary, secondary, knife, grenade), B the weapon menu,
+// Tab scores, Esc release the mouse, M menu (while paused).
 const std = @import("std");
 const sw = @import("sw_app");
 const core = @import("sw_core");
@@ -28,6 +28,7 @@ const player_mod = @import("player.zig");
 const net = @import("net.zig");
 const grenade = @import("grenade.zig");
 const settings = @import("settings.zig");
+const weapon_menu = @import("weapon_menu.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -71,7 +72,14 @@ var ticks: u64 = 0;
 var rng: std.Random.DefaultPrng = .init(7);
 
 var me: player_mod.Player = .{};
-var gun: weapon.Gun = .{};
+/// The four weapon slots and the hands (weapon.zig).
+var loadout: weapon.Loadout = .{};
+/// The primary and the secondary that the player picked in the weapon menu
+/// (local storage "loadout"), and the pick of this life. Practice applies a
+/// pick at once. In deathmatch the server applies it: at once at the spawn
+/// point, else at the next spawn.
+var choice: weapon.Choice = undefined;
+var applied: weapon.Choice = undefined;
 var alive = true;
 var hp: i32 = 100;
 var damage_flash: f32 = 0;
@@ -80,8 +88,8 @@ var hit_marker_kill = false;
 var dead_time: f32 = 0;
 var killed_by: [24]u8 = undefined;
 var killed_by_len: usize = 0;
-// Grenades left in this life (deathmatch), and the time to the next throw.
-var nades: u32 = grenade.per_life;
+// The time to the next grenade throw. The grenades left are in the
+// grenade slot of the loadout.
 var nade_cd: f32 = 0;
 
 var static_mesh: mesh.Mesh = undefined;
@@ -132,6 +140,9 @@ const Remote = struct {
     seen: bool = true,
     /// The time of its last shot: the minimap shows a shooter for a moment.
     shot_t: f32 = -100,
+    /// The held weapon: its class and its model.
+    w: weapon.Class = .rifle,
+    m: u8 = 0,
 };
 var remotes: [24]Remote = undefined;
 var remote_n: usize = 0;
@@ -192,9 +203,27 @@ fn ambient(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f
     audio.play(.{ .frequency = freq, .frequency_end = freq_end, .duration = dur, .waveform = wave, .volume = vol });
 }
 
-fn gunshotSound(volume: f32) void {
-    sound(1, null, 0.11, .noise, 0.55 * volume);
-    sound(160, 45, 0.16, .sine, 0.5 * volume);
+/// A shot: a noise crack and a falling thump. The shotguns are longer and
+/// deeper, the pistol and the SMG are shorter.
+fn gunshotSound(volume: f32, c: weapon.Class) void {
+    switch (c) {
+        .shotgun, .sawn_off => {
+            sound(1, null, 0.22, .noise, 0.7 * volume);
+            sound(110, 32, 0.26, .sine, 0.6 * volume);
+        },
+        .revolver => {
+            sound(1, null, 0.14, .noise, 0.6 * volume);
+            sound(150, 40, 0.2, .sine, 0.55 * volume);
+        },
+        .pistol, .smg => {
+            sound(1, null, 0.075, .noise, 0.45 * volume);
+            sound(230, 70, 0.1, .sine, 0.4 * volume);
+        },
+        else => {
+            sound(1, null, 0.11, .noise, 0.55 * volume);
+            sound(160, 45, 0.16, .sine, 0.5 * volume);
+        },
+    }
 }
 
 /// The camera of the live player: the eye with the lean, the head bob and
@@ -205,7 +234,7 @@ fn playerView() struct { eye: V3, roll: f32 } {
     var roll = -me.lean * player_mod.lean_roll;
     // The head bob: the amount follows the speed on the ground (me.bob is 0
     // in the air and when standing still), times the setting (0 is off).
-    const amp = me.bob * settings.v.bob * (1 - 0.7 * gun.ads);
+    const amp = me.bob * settings.v.bob * (1 - 0.7 * loadout.hands.ads);
     if (amp > 0) {
         // The same phase as the bob of the gun. The head is highest, and
         // furthest to the side, in the middle of each step.
@@ -255,13 +284,77 @@ fn pushFeed(line: []const u8, mine: bool) void {
 fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
     shocked = false;
     me = .{ .pos = v3(x, y, z), .yaw = yaw };
-    const reserve = gun.reserve;
-    gun.reset();
-    if (mode == .practice) gun.reserve = reserve;
+    // Practice has no end of rounds.
+    loadout.equip(applied, grenade.per_life, mode == .practice);
     alive = true;
     hp = 100;
-    nades = grenade.per_life;
     nade_cd = 0;
+}
+
+// ---- The weapon pick -------------------------------------------------------
+
+/// Read the pick from local storage ("p=AssaultRifle_3 s=Pistol_2"). A
+/// missing or bad value keeps the default.
+fn loadChoice() void {
+    choice = weapon.Choice.default();
+    const stored = (platform.storageGet(alloc, "loadout") catch null) orelse return;
+    defer alloc.free(stored);
+    var c = choice;
+    var pairs = std.mem.tokenizeScalar(u8, stored, ' ');
+    while (pairs.next()) |pair| {
+        if (pair.len < 3) continue;
+        const id = weapon.byName(pair[2..]) orelse continue;
+        if (std.mem.startsWith(u8, pair, "p=")) c.primary = id;
+        if (std.mem.startsWith(u8, pair, "s=")) c.secondary = id;
+    }
+    if (c.valid()) choice = c;
+}
+
+fn saveChoice() void {
+    var buf: [64]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "p={s} s={s}", .{ weapon.models[choice.primary].name, weapon.models[choice.secondary].name }) catch return;
+    platform.storageSet("loadout", s) catch {};
+}
+
+/// The pick as [class, model] pairs for the lobby messages.
+fn sendChoice(comptime kind: []const u8) void {
+    const p = weapon.models[choice.primary];
+    const s = weapon.models[choice.secondary];
+    client.send("{{\"t\":\"" ++ kind ++ "\",\"name\":\"{s}\",\"p\":[{d},{d}],\"s\":[{d},{d}]}}", .{
+        my_name[0..my_name_len], @backingInt(p.class), choice.primary, @backingInt(s.class), choice.secondary,
+    });
+}
+
+/// A pick from a lobby message, or null when it is not valid.
+fn choiceFrom(p: ?[2]u32, s: ?[2]u32) ?weapon.Choice {
+    const pp = p orelse return null;
+    const ss = s orelse return null;
+    if (pp[1] > 255 or ss[1] > 255) return null;
+    const c: weapon.Choice = .{ .primary = @intCast(pp[1]), .secondary = @intCast(ss[1]) };
+    return if (c.valid()) c else null;
+}
+
+/// The player picked a weapon in the menu.
+fn pickChanged() void {
+    saveChoice();
+    switch (mode) {
+        .practice => {
+            applied = choice;
+            loadout.rearm(applied, true);
+        },
+        // The server answers with the pick of this life.
+        .deathmatch => sendChoice("loadout"),
+        .menu => {},
+    }
+    sound(900, 700, 0.04, .square, 0.08);
+}
+
+/// The model to draw for a remote player: its own when it is of the right
+/// class, else the first model of the class.
+fn remoteModel(r: *const Remote) u8 {
+    if (r.w == .knife) return weapon.knife_model;
+    if (r.m < weapon.models.len and weapon.models[r.m].class == r.w) return r.m;
+    return weapon.firstOf(r.w);
 }
 
 /// Build a map and upload its static mesh. Nothing happens if it is the
@@ -397,6 +490,7 @@ fn enterMenu(ctx: *sw.Context) void {
     mode = .menu;
     remote_n = 0;
     grenade.reset();
+    weapon_menu.close();
     ctx.setMouseCapture(false);
     loadMap(ctx, .earls_court);
 }
@@ -405,7 +499,7 @@ fn enterPractice(ctx: *sw.Context) void {
     loadMap(ctx, .arena);
     mode = .practice;
     grenade.reset();
-    gun.reserve = 9999;
+    applied = choice;
     spawnAt(0, 1.6, 2.5, 0);
     practice_phase = .countdown;
     practice_t = 3;
@@ -478,36 +572,27 @@ fn rayRemotes(o: V3, d: V3) ?RemoteHit {
     return best_hit;
 }
 
-fn fire() void {
-    shots += 1;
-    const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
-    const sp = gun.spread(moving, !me.grounded);
-    const f = vec.forward(me.yaw, me.pitch);
-    const right = vec.norm(vec.cross(f, v3(0, 1, 0)));
-    const up = vec.cross(right, f);
-    const a = rand() * std.math.tau;
-    const r = @sqrt(rand()) * sp;
-    const d = vec.norm(f + right * vec.s(@cos(a) * r) + up * vec.s(@sin(a) * r));
-    const o = me.eyePos();
+/// The first thing on a shot ray: the map, a remote player or a practice
+/// plate, within `range`.
+const ShotRay = struct {
+    t: f32,
+    normal: V3 = v3(0, 1, 0),
+    world: bool = false,
+    remote: ?RemoteHit = null,
+    plate: ?usize = null,
+    bull: bool = false,
+};
 
-    var t_hit: f32 = 200;
-    var n_hit = v3(0, 1, 0);
-    var hit_world = false;
-    if (map.raycast(o, d, 200)) |h| {
-        t_hit = h.t;
-        n_hit = h.normal;
-        hit_world = true;
+fn traceShot(o: V3, d: V3, range: f32) ShotRay {
+    var out: ShotRay = .{ .t = range };
+    if (map.raycast(o, d, range)) |h| {
+        out.t = h.t;
+        out.normal = h.normal;
+        out.world = true;
     }
-
-    var remote_hit: ?RemoteHit = null;
-    var target_hit: ?usize = null;
-    var bull = false;
     if (mode == .deathmatch) {
         if (rayRemotes(o, d)) |rh| {
-            if (rh.t < t_hit) {
-                remote_hit = rh;
-                t_hit = rh.t;
-            }
+            if (rh.t < out.t) out = .{ .t = rh.t, .remote = rh };
         }
     } else if (mode == .practice and practice_phase == .running) {
         for (&targets, 0..) |*t, i| {
@@ -516,56 +601,144 @@ fn fire() void {
             const denom = vec.dot(d, pl.n);
             if (@abs(denom) < 1e-4) continue;
             const tt = vec.dot(pl.c - o, pl.n) / denom;
-            if (tt <= 0 or tt >= t_hit) continue;
+            if (tt <= 0 or tt >= out.t) continue;
             const dist = vec.len(o + d * vec.s(tt) - pl.c);
-            if (dist < 0.42) {
-                t_hit = tt;
-                target_hit = i;
-                bull = dist < 0.12;
-            }
+            if (dist < 0.42) out = .{ .t = tt, .plate = i, .bull = dist < 0.12 };
         }
     }
+    return out;
+}
 
-    const end = o + d * vec.s(t_hit);
-    const pose = gun.pose(me.stride * 1.7, 0);
+/// Knock down a practice plate and score it.
+fn knockPlate(i: usize, bull: bool, at: V3, d: V3) void {
+    const t = &targets[i];
+    if (!t.up) return;
+    t.up = false;
+    t.down_time = 0;
+    hits += 1;
+    score += if (bull) 150 else 100;
+    hit_marker = 0.18;
+    hit_marker_kill = bull;
+    addSparks(at, -d, v3(1.0, 0.8, 0.5), 8);
+    sound(if (bull) 1900 else 1400, null, 0.05, .sine, 0.2);
+}
+
+/// The hits of one shot on one remote player: body and head pellets.
+const ShotHit = struct { idx: usize, body: u32 = 0, head: u32 = 0 };
+
+/// A gun shot: one ray for each pellet in the cone. In deathmatch one
+/// "fire" message carries the hits of all the pellets. The server takes
+/// the damage of each pellet from its own table.
+fn fire() void {
+    const it = loadout.held() orelse return;
+    const st = weapon.stats(it.class);
+    shots += 1;
+    const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
+    const sp = loadout.hands.spread(it.class, moving, !me.grounded);
+    const f = vec.forward(me.yaw, me.pitch);
+    const right = vec.norm(vec.cross(f, v3(0, 1, 0)));
+    const up = vec.cross(right, f);
+    const o = me.eyePos();
+    const pose = loadout.hands.pose(it.*, me.stride * 1.7, 0);
     const muzzle = vec.xform(cameraMatrix().mul(pose.gun), pose.muzzle);
-    addTracer(muzzle, end);
-    gunshotSound(1);
 
-    if (remote_hit) |rh| {
-        addSparks(end, -d, v3(0.7, 0.05, 0.03), 10);
+    var hit_list: [8]ShotHit = undefined;
+    var nh: usize = 0;
+    var first_end = o + f * vec.s(st.range);
+    for (0..st.pellets) |pi| {
+        const a = rand() * std.math.tau;
+        const r = @sqrt(rand()) * sp;
+        const d = vec.norm(f + right * vec.s(@cos(a) * r) + up * vec.s(@sin(a) * r));
+        const ray = traceShot(o, d, st.range);
+        const end = o + d * vec.s(ray.t);
+        if (pi == 0) first_end = end;
+        // A tracer for each of the first 4 pellets. More fill the view.
+        if (pi < 4) addTracer(muzzle, end);
+        if (ray.remote) |rh| {
+            addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
+            var slot: ?*ShotHit = null;
+            for (hit_list[0..nh]) |*h| {
+                if (h.idx == rh.idx) slot = h;
+            }
+            if (slot == null and nh < hit_list.len) {
+                hit_list[nh] = .{ .idx = rh.idx };
+                slot = &hit_list[nh];
+                nh += 1;
+            }
+            if (slot) |h| {
+                if (rh.head) h.head += 1 else h.body += 1;
+            }
+        } else if (ray.plate) |i| {
+            knockPlate(i, ray.bull, end, d);
+        } else if (ray.world and (pi < 3 or rand() < 0.3)) {
+            addSparks(end, ray.normal, v3(1.0, 0.75, 0.4), if (st.pellets > 1) 2 else 6);
+        }
+    }
+    gunshotSound(1, it.class);
+    if (nh > 0) {
         hit_marker = 0.18;
         hit_marker_kill = false;
         sound(1500, 1300, 0.04, .square, 0.12);
-        const rem = &remotes[rh.idx];
-        client.send("{{\"t\":\"fire\",\"o\":[{d:.2},{d:.2},{d:.2}],\"e\":[{d:.2},{d:.2},{d:.2}],\"hit\":{d},\"head\":{s}}}", .{
-            muzzle[0], muzzle[1], muzzle[2], end[0], end[1], end[2], rem.id, if (rh.head) "true" else "false",
-        });
-        return;
     }
     if (mode == .deathmatch) {
-        client.send("{{\"t\":\"fire\",\"o\":[{d:.2},{d:.2},{d:.2}],\"e\":[{d:.2},{d:.2},{d:.2}],\"hit\":-1,\"head\":false}}", .{
-            muzzle[0], muzzle[1], muzzle[2], end[0], end[1], end[2],
+        // The hits: {"id":n,"b":n,"h":n} for each player.
+        var list: [300]u8 = undefined;
+        var len: usize = 0;
+        for (hit_list[0..nh]) |h| {
+            const item = std.fmt.bufPrint(list[len..], "{s}{{\"id\":{d},\"b\":{d},\"h\":{d}}}", .{
+                if (len > 0) "," else "", remotes[h.idx].id, h.body, h.head,
+            }) catch break;
+            len += item.len;
+        }
+        client.send("{{\"t\":\"fire\",\"w\":{d},\"o\":[{d:.2},{d:.2},{d:.2}],\"e\":[{d:.2},{d:.2},{d:.2}],\"hits\":[{s}]}}", .{
+            @backingInt(it.class), muzzle[0], muzzle[1], muzzle[2], first_end[0], first_end[1], first_end[2], list[0..len],
         });
-    }
-    if (target_hit) |i| {
-        const t = &targets[i];
-        t.up = false;
-        t.down_time = 0;
-        hits += 1;
-        score += if (bull) 150 else 100;
-        hit_marker = 0.18;
-        hit_marker_kill = bull;
-        addSparks(end, -d, v3(1.0, 0.8, 0.5), 8);
-        sound(if (bull) 1900 else 1400, null, 0.05, .sine, 0.2);
-    } else if (hit_world) {
-        addSparks(end, n_hit, v3(1.0, 0.75, 0.4), 6);
     }
 }
 
-fn recoilKick() void {
-    me.pitch = @min(1.5, me.pitch + 0.011 + 0.006 * gun.heat * (1 - 0.5 * gun.ads));
-    me.yaw += (rand() - 0.5) * 0.008;
+/// A knife swing: short rays from the eye, the centre and four around it,
+/// so a near miss still cuts. The first player or plate that a ray finds
+/// takes the hit.
+fn stab() void {
+    const st = weapon.stats(.knife);
+    const o = me.eyePos();
+    const f = vec.forward(me.yaw, me.pitch);
+    const right = vec.norm(vec.cross(f, v3(0, 1, 0)));
+    const up = vec.cross(right, f);
+    sound(1, null, 0.09, .noise, 0.1);
+    sound(500, 900, 0.08, .sine, 0.04);
+    const offsets = [_][2]f32{ .{ 0, 0 }, .{ 0.15, 0 }, .{ -0.15, 0 }, .{ 0, 0.15 }, .{ 0, -0.15 } };
+    var centre: ?ShotRay = null;
+    for (offsets, 0..) |k, i| {
+        const d = vec.norm(f + right * vec.s(k[0]) + up * vec.s(k[1]));
+        const ray = traceShot(o, d, st.range);
+        if (i == 0) centre = ray;
+        const end = o + d * vec.s(ray.t);
+        if (ray.remote) |rh| {
+            addSparks(end, -d, v3(0.7, 0.05, 0.03), 8);
+            hit_marker = 0.18;
+            hit_marker_kill = false;
+            sound(180, 90, 0.08, .sawtooth, 0.2);
+            client.send("{{\"t\":\"fire\",\"w\":{d},\"hits\":[{{\"id\":{d},\"b\":{d},\"h\":{d}}}]}}", .{
+                @backingInt(weapon.Class.knife), remotes[rh.idx].id, @intFromBool(!rh.head), @intFromBool(rh.head),
+            });
+            return;
+        }
+        if (ray.plate) |p| {
+            knockPlate(p, false, end, d);
+            return;
+        }
+    }
+    if (centre) |c| if (c.world) {
+        addSparks(o + f * vec.s(c.t), c.normal, v3(1.0, 0.85, 0.6), 4);
+        sound(2400, 1800, 0.05, .square, 0.06);
+    };
+}
+
+fn recoilKick(st: *const weapon.Stats) void {
+    const h = loadout.hands;
+    me.pitch = @min(1.5, me.pitch + st.kick * (1 + 0.5 * h.heat) * (1 - 0.5 * h.ads));
+    me.yaw += (rand() - 0.5) * st.kick * 0.7;
 }
 
 // ---- Grenades --------------------------------------------------------------
@@ -602,14 +775,24 @@ fn grenadeBodies(buf: []grenade.Body) []grenade.Body {
     return buf[0..n];
 }
 
+/// Throw a grenade: G from any slot, or a left click with the grenade in
+/// the hand (slot 4).
 fn throwGrenade() void {
     if (nade_cd > 0) return;
-    if (mode == .deathmatch and nades == 0) {
+    const nade = loadout.item(.grenade) orelse return;
+    if (mode == .deathmatch and nade.ammo == 0) {
         sound(1200, 900, 0.03, .square, 0.1);
         return;
     }
-    if (mode == .deathmatch) nades -= 1;
+    if (mode == .deathmatch) nade.ammo -= 1;
     nade_cd = grenade.cooldown;
+    // With the grenade in the hand, the next one comes up. After the last
+    // one, the hand goes back to the weapon before it.
+    if (loadout.current == .grenade) {
+        if (mode == .deathmatch and nade.ammo == 0) {
+            _ = loadout.select(loadout.last);
+        } else loadout.hands.takeOut(weapon.stats(.grenade).draw);
+    }
     const th = grenade.throwFrom(me.eyePos(), me.yaw, me.pitch, me.vel);
     grenade.spawn(th.o, th.v, my_id, true);
     if (mode == .deathmatch) {
@@ -747,6 +930,8 @@ fn handleSnap(m: net.Msg) void {
         rem.yaw = p.yaw;
         rem.pitch = p.pitch;
         rem.lean_target = std.math.clamp(p.lean, -1, 1);
+        rem.w = weapon.classFromId(p.w) orelse .rifle;
+        rem.m = @intCast(@min(p.m, 255));
         rem.hp = p.hp;
         rem.k = p.k;
         rem.d = p.d;
@@ -766,7 +951,7 @@ fn handleSnap(m: net.Msg) void {
 fn handleNet() void {
     client.beginFrame();
     if (client.state() == .open and !sent_hello) {
-        client.send("{{\"t\":\"hello\",\"name\":\"{s}\"}}", .{my_name[0..my_name_len]});
+        sendChoice("hello");
         sent_hello = true;
     }
     while (client.poll()) |m| {
@@ -775,8 +960,19 @@ fn handleNet() void {
         } else if (std.mem.eql(u8, m.t, "snap")) {
             handleSnap(m);
         } else if (std.mem.eql(u8, m.t, "spawn")) {
+            // The spawn carries the weapons of the new life.
+            if (choiceFrom(m.p, m.s)) |c| applied = c;
             spawnAt(m.x orelse 0, m.y orelse 0, m.z orelse 0, m.yaw orelse 0);
             dead_time = 0;
+        } else if (std.mem.eql(u8, m.t, "loadout")) {
+            // The answer to a pick: the weapons of this life. They change
+            // at once when the player is still at the spawn point.
+            if (choiceFrom(m.p, m.s)) |c| {
+                if (!c.eql(applied)) {
+                    applied = c;
+                    if (alive) loadout.rearm(applied, false);
+                }
+            }
         } else if (std.mem.eql(u8, m.t, "shot")) {
             if (m.o != null and m.e != null) {
                 const a = v3(m.o.?[0], m.o.?[1], m.o.?[2]);
@@ -786,7 +982,8 @@ fn handleNet() void {
                 remote_flash = .{ .p = a, .life = 0.05 };
                 if (findRemote(m.id orelse 0)) |r| r.shot_t = time;
                 const dist = vec.len(a - me.eyePos());
-                gunshotSound(std.math.clamp(6 / (dist + 4), 0.05, 0.6));
+                const c = weapon.classFromId(m.w orelse 0) orelse .rifle;
+                gunshotSound(std.math.clamp(6 / (dist + 4), 0.05, 0.6), c);
             }
         } else if (std.mem.eql(u8, m.t, "hit")) {
             hp = m.hp orelse hp;
@@ -833,7 +1030,7 @@ fn gameplayTick(ctx: *sw.Context) void {
     const in = ctx.input();
     const frozen = (mode == .deathmatch and (phase_end or !alive)) or
         (mode == .practice and practice_phase == .results);
-    const look: f32 = 0.0022 * settings.v.sens * (1 - 0.35 * gun.ads);
+    const look: f32 = 0.0022 * settings.v.sens * (1 - 0.35 * loadout.hands.ads);
     me.yaw -= in.mouse.delta_x * look;
     me.pitch = std.math.clamp(me.pitch - in.mouse.delta_y * look, -1.5, 1.5);
 
@@ -850,7 +1047,8 @@ fn gameplayTick(ctx: *sw.Context) void {
         if (vec.len(wish) > 0) wish = vec.norm(wish);
     }
     const jump = !frozen and in.keyDown(.Space);
-    const speed_scale: f32 = 1 - 0.45 * gun.ads;
+    // The held weapon sets the walk speed (weapon.zig table).
+    const speed_scale: f32 = (1 - 0.45 * loadout.hands.ads) * loadout.heldStats().speed;
     if (mode != .deathmatch or alive) me.step(dt, wish, jump, speed_scale);
     // Q leans left and E leans right while held.
     var lean_want: f32 = 0;
@@ -864,22 +1062,47 @@ fn gameplayTick(ctx: *sw.Context) void {
     if (!frozen and !shortcut and in.keyPressed(.F)) {
         if (aimedButton()) |b| pressButton(b);
     }
+    // B: the weapon menu. It frees the mouse.
+    if (!shortcut and in.keyPressed(.B)) {
+        weapon_menu.show();
+        ctx.setMouseCapture(false);
+        return;
+    }
+    // The weapon slots: 1 primary, 2 secondary, 3 knife, 4 grenade. With
+    // Shift and the debug screen, the number keys teleport instead.
+    if (!frozen and !shortcut and !in.mods.shift) {
+        const keys = [_]core.KeyCode{ .Num1, .Num2, .Num3, .Num4 };
+        for (keys, 0..) |k, i| {
+            if (!in.keyPressed(k)) continue;
+            if (loadout.select(@fromBackingInt(@intCast(i)))) {
+                sound(650, 480, 0.04, .square, 0.05);
+            } else if (i == 3 and loadout.grenades() == 0 and mode == .deathmatch) {
+                sound(1200, 900, 0.03, .square, 0.1);
+            }
+        }
+    }
+
     const can_shoot = !frozen and !(mode == .practice and practice_phase == .countdown);
+    // G: a quick throw from any slot.
     if (can_shoot and !shortcut and in.keyPressed(.G)) throwGrenade();
+    const it = loadout.held() orelse return;
+    const st = weapon.stats(it.class);
     if (can_shoot and in.keyPressed(.R)) {
-        if (gun.startReload()) sound(500, 380, 0.05, .square, 0.08);
+        if (loadout.hands.startReload(it)) sound(500, 380, 0.05, .square, 0.08);
     }
     // A short click can press and release inside one tick.
     const trigger = can_shoot and (in.buttonDown(.left) or in.buttonPressed(.left));
-    const ev = gun.update(dt, trigger, can_shoot and in.buttonPressed(.left), can_shoot and in.buttonDown(.right));
+    const pressed = can_shoot and in.buttonPressed(.left);
+    const ev = loadout.hands.update(it, dt, trigger, pressed, can_shoot and in.buttonDown(.right));
     switch (ev) {
         .fired => {
             fire();
-            recoilKick();
+            recoilKick(st);
         },
+        .swung => stab(),
         .empty => {
             sound(1200, 900, 0.03, .square, 0.1);
-            _ = gun.startReload();
+            _ = loadout.hands.startReload(it);
         },
         .mag_out => sound(700, 420, 0.06, .square, 0.12),
         .mag_in => sound(950, 600, 0.05, .square, 0.15),
@@ -887,9 +1110,11 @@ fn gameplayTick(ctx: *sw.Context) void {
             sound(1400, 700, 0.04, .square, 0.12);
             sound(600, 300, 0.07, .square, 0.1);
         },
-        .none => {},
+        .ready, .none => {},
     }
-    if (gun.ammo == 0 and gun.reloading < 0 and gun.reserve > 0 and !trigger) _ = gun.startReload();
+    // The grenade in the hand: a left click throws it.
+    if (it.class == .grenade and pressed and loadout.hands.ready()) throwGrenade();
+    if (st.mag > 0 and it.ammo == 0 and loadout.hands.ready() and it.reserve > 0 and !trigger) _ = loadout.hands.startReload(it);
 }
 
 fn effectsTick() void {
@@ -1009,8 +1234,10 @@ fn tick(ctx: *sw.Context) void {
             if (!alive) dead_time += dt;
             if (client.state() == .closed and in.keyPressed(.Enter)) enterDeathmatch(ctx);
             if (ticks % 6 == 0 and alive) {
-                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2}}}", .{
-                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean,
+                // w and m: the class and the model of the held weapon, so
+                // the others see it.
+                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d}}}", .{
+                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(),
                 });
             }
         },
@@ -1081,17 +1308,26 @@ fn tick(ctx: *sw.Context) void {
         }
     }
 
-    if (!captured) {
-        // Paused: the lean comes back.
+    if (!captured or weapon_menu.open) {
+        // Paused, or in the weapon menu: the lean comes back.
         me.updateLean(dt, 0);
         if (settings.open) {
             const l = logical(ctx);
             settings.update(in, l.w, l.h);
+        } else if (weapon_menu.open) {
+            const l = logical(ctx);
+            switch (weapon_menu.update(in, l.w, l.h, &choice)) {
+                .changed => pickChanged(),
+                // B and DONE are user gestures: the lock request is allowed.
+                .close_play => ctx.setMouseCapture(true),
+                .close_pause, .none => {},
+            }
         } else {
             if (in.keyPressed(.M)) {
                 enterMenu(ctx);
                 return;
             }
+            if (in.keyPressed(.B)) weapon_menu.show();
             if (in.buttonPressed(.left)) {
                 if (pauseScreenShows() and inRect(pauseSettingsButton(ctx), in.mouse.x, in.mouse.y)) {
                     settings.show();
@@ -1128,11 +1364,17 @@ fn buildRemote(r: *const Remote) void {
     dyn.orientedBox(upper, v3(-0.12, 1.47, -0.12), v3(0.12, 1.74, 0.12), skin, 6);
     dyn.orientedBox(upper, v3(-0.14, 1.66, -0.15), v3(0.14, 1.8, 0.15), dark, 3);
     dyn.orientedBox(upper, v3(-0.1, 1.56, -0.135), v3(0.1, 1.62, -0.11), v3(0.05, 0.05, 0.06), 3);
-    // Arms and the rifle, turned with the look pitch.
+    // Arms and the held weapon, turned with the look pitch.
     const aim = upper.mul(vec.translate(v3(0, 1.38, 0)).mul(Mat4.rotationX(r.pitch * (1 - r.fall))));
     dyn.orientedBox(aim, v3(0.16, -0.1, -0.45), v3(0.26, 0.02, 0.0), col, 6);
     dyn.orientedBox(aim, v3(-0.2, -0.12, -0.5), v3(-0.1, -0.02, -0.05), col, 6);
-    weapon.addRifle(&dyn, aim.mul(vec.translate(v3(0.08, -0.1, -0.2))), Mat4.identity(), 0);
+    switch (r.w) {
+        // A one-hand weapon sits in the right hand, further out.
+        .grenade => grenade.addBody(&dyn, aim.mul(vec.translate(v3(0.21, -0.05, -0.5))), 0),
+        .knife => weapon.addModel(&dyn, weapon.knife_model, aim.mul(vec.translate(v3(0.21, -0.06, -0.47)).mul(Mat4.rotationX(0.5))), Mat4.identity(), 0),
+        .pistol, .revolver => weapon.addModel(&dyn, remoteModel(r), aim.mul(vec.translate(v3(0.06, -0.06, -0.44))), Mat4.identity(), 0),
+        else => weapon.addModel(&dyn, remoteModel(r), aim.mul(vec.translate(v3(0.08, -0.1, -0.24))), Mat4.identity(), 0),
+    }
 }
 
 fn buildTarget(t: *const Target) void {
@@ -1173,19 +1415,61 @@ fn buildEffects() void {
 }
 
 fn buildViewmodel() void {
-    if (mode == .menu) return;
+    if (mode == .menu or weapon_menu.open) return;
     if (mode == .deathmatch and !alive) return;
+    const it = loadout.held() orelse return;
+    const hands = &loadout.hands;
     const speed = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
-    const pose = gun.pose(me.stride * 1.7, if (me.grounded) speed else 0);
+    const pose = hands.pose(it.*, me.stride * 1.7, if (me.grounded) speed else 0);
     const gm = cameraMatrix().mul(grenade.viewDip()).mul(pose.gun);
-    weapon.addRifle(&dyn, gm, pose.mag, 100);
-    if (gun.flash > 0) {
+    if (it.class == .grenade) {
+        grenade.addBody(&dyn, gm, 100);
+        return;
+    }
+    weapon.addModel(&dyn, it.model, gm, pose.mag, 100);
+    if (hands.flash > 0) {
         // A star of two crossed emissive blades at the muzzle.
-        const fm = gm.mul(vec.translate(pose.muzzle).mul(Mat4.rotationZ(gun.flash_roll)));
+        const fm = gm.mul(vec.translate(pose.muzzle).mul(Mat4.rotationZ(hands.flash_roll)));
         const s: f32 = 0.05 + rand() * 0.03;
         dyn.orientedBox(fm, v3(-s, -0.006, -s * 2.6), v3(s, 0.006, 0), v3(1.0, 0.7, 0.3), 104);
         dyn.orientedBox(fm, v3(-0.006, -s, -s * 2.6), v3(0.006, s, 0), v3(1.0, 0.7, 0.3), 104);
     }
+}
+
+/// True when the grenade is out in the hand (slot 4, the draw done): the
+/// aim view shows.
+fn grenadeAimShows() bool {
+    if (mode == .menu or weapon_menu.open or (mode == .deathmatch and !alive)) return false;
+    return loadout.heldClass() == .grenade and loadout.hands.drawing <= 0 and nade_cd <= 0;
+}
+
+/// The model under the mouse in the weapon menu, in 3D, in the window of
+/// the panel (weapon_menu.previewRect), on a dark backdrop. It turns a
+/// little from side to side.
+fn buildPreview(ctx: *sw.Context, eye: V3, yaw: f32, pitch: f32, roll: f32, fov: f32) void {
+    const l = logical(ctx);
+    const pr = weapon_menu.previewRect(l.w, l.h);
+    const th = @tan(fov / 2);
+    const aspect = l.w / l.h;
+    // The window centre and half size at a depth of 1 m, in camera space.
+    const cx = ((pr.x + pr.w / 2) / l.w * 2 - 1) * th * aspect;
+    const cy = (1 - (pr.y + pr.h / 2) / l.h * 2) * th;
+    const hw = pr.w / l.w * th * aspect;
+    const hh = pr.h / l.h * th;
+    const cam = vec.ypr(eye, yaw, pitch, roll);
+    const d: f32 = 0.6;
+    const model = weapon_menu.previewModel(choice);
+    const mdl = weapon.models[model];
+    const size = mdl.max - mdl.min;
+    const k = @min(hw * d * 1.5 / size[2], hh * d * 1.3 / size[1]);
+    const mid = (mdl.min + mdl.max) * vec.s(0.5);
+    // The muzzle to the right of the window.
+    const turn = -std.math.pi / 2.0 + 0.35 * @sin(time * 0.8);
+    const m = cam.mul(vec.translate(v3(cx * d, cy * d, -d))).mul(Mat4.rotationY(turn)).mul(Mat4.scaling(k)).mul(vec.translate(-mid));
+    weapon.addModel(&dyn, model, m, Mat4.identity(), 100);
+    const bd: f32 = 0.9;
+    const back = cam.mul(vec.translate(v3(cx * bd, cy * bd, -bd)));
+    dyn.orientedBox(back, v3(-hw * bd * 1.05, -hh * bd * 1.05, -0.01), v3(hw * bd * 1.05, hh * bd * 1.05, 0), v3(0.03, 0.033, 0.04), 100);
 }
 
 fn eyeForRender() struct { eye: V3, yaw: f32, pitch: f32, roll: f32 = 0 } {
@@ -1237,7 +1521,7 @@ fn inRect(r: gfx.Rect, x: f32, y: f32) bool {
 /// True when the pause screen ("CLICK TO PLAY") shows. Deathmatch hides it
 /// while it connects and while the score board shows.
 fn pauseScreenShows() bool {
-    if (captured or settings.open) return false;
+    if (captured or settings.open or weapon_menu.open) return false;
     return switch (mode) {
         .menu => false,
         .practice => true,
@@ -1266,16 +1550,20 @@ fn txtRight(r: *gfx.Renderer, s: []const u8, rx: f32, y: f32, size: f32, col: gf
 }
 
 fn drawCrosshair(r: *gfx.Renderer, cx: f32, cy: f32) !void {
-    const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
-    const gap = 5 + gun.spread(moving, !me.grounded) * 700;
-    const a: u8 = @intFromFloat(230 * (1 - gun.ads));
-    const c = gfx.Color.rgba8(255, 255, 255, a);
-    const len: f32 = 8;
-    try r.fillRect(.{ .x = cx - 1, .y = cy - gap - len, .w = 2, .h = len }, c);
-    try r.fillRect(.{ .x = cx - 1, .y = cy + gap, .w = 2, .h = len }, c);
-    try r.fillRect(.{ .x = cx - gap - len, .y = cy - 1, .w = len, .h = 2 }, c);
-    try r.fillRect(.{ .x = cx + gap, .y = cy - 1, .w = len, .h = 2 }, c);
-    try r.fillRect(.{ .x = cx - 1, .y = cy - 1, .w = 2, .h = 2 }, gfx.Color.rgba8(255, 255, 255, 200));
+    const c_held = loadout.heldClass();
+    // The grenade has its aim line, the knife a dot. A gun shows its cone.
+    if (c_held != .grenade and c_held != .knife) {
+        const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
+        const gap = 5 + loadout.hands.spread(c_held, moving, !me.grounded) * 700;
+        const a: u8 = @intFromFloat(230 * (1 - loadout.hands.ads));
+        const c = gfx.Color.rgba8(255, 255, 255, a);
+        const len: f32 = 8;
+        try r.fillRect(.{ .x = cx - 1, .y = cy - gap - len, .w = 2, .h = len }, c);
+        try r.fillRect(.{ .x = cx - 1, .y = cy + gap, .w = 2, .h = len }, c);
+        try r.fillRect(.{ .x = cx - gap - len, .y = cy - 1, .w = len, .h = 2 }, c);
+        try r.fillRect(.{ .x = cx + gap, .y = cy - 1, .w = len, .h = 2 }, c);
+    }
+    if (c_held != .grenade) try r.fillRect(.{ .x = cx - 1, .y = cy - 1, .w = 2, .h = 2 }, gfx.Color.rgba8(255, 255, 255, 200));
     if (hit_marker > 0) {
         const hc = if (hit_marker_kill) red else white;
         var i: f32 = 4;
@@ -1288,28 +1576,64 @@ fn drawCrosshair(r: *gfx.Renderer, cx: f32, cy: f32) !void {
     }
 }
 
+/// The weapon panel: the rounds of the held gun (or its name), the
+/// grenades, and the four slots above them.
 fn drawAmmo(r: *gfx.Renderer, w: f32, h: f32) !void {
     var buf: [32]u8 = undefined;
+    const hands = &loadout.hands;
+    const nades = loadout.grenades();
     try r.fillRect(.{ .x = w - 210, .y = h - 86, .w = 190, .h = 66 }, panel);
-    const s = std.fmt.bufPrint(&buf, "{d}", .{gun.ammo}) catch "";
-    txtRight(r, s, w - 100, h - 82, 44, if (gun.ammo <= 5) red else white);
-    if (gun.reserve > 999) {
-        txt(r, "/ inf", w - 92, h - 64, 20, dim);
-    } else {
-        const rs = std.fmt.bufPrint(&buf, "/ {d}", .{gun.reserve}) catch "";
-        txt(r, rs, w - 92, h - 64, 20, dim);
+    if (loadout.held()) |it| {
+        const st = weapon.stats(it.class);
+        if (st.mag > 0) {
+            const s = std.fmt.bufPrint(&buf, "{d}", .{it.ammo}) catch "";
+            txtRight(r, s, w - 100, h - 82, 44, if (it.ammo * 6 <= st.mag) red else white);
+            if (it.reserve > 999) {
+                txt(r, "/ inf", w - 92, h - 64, 20, dim);
+            } else {
+                const rs = std.fmt.bufPrint(&buf, "/ {d}", .{it.reserve}) catch "";
+                txt(r, rs, w - 92, h - 64, 20, dim);
+            }
+            if (hands.reloading >= 0) {
+                const k = hands.reloading / st.reload;
+                try r.fillRect(.{ .x = w - 210, .y = h - 20, .w = 190 * k, .h = 4 }, accent);
+                txtCenter(r, "RELOADING", w / 2, h / 2 + 40, 16, accent);
+            } else if (it.ammo == 0 and hands.drawing <= 0) {
+                txtCenter(r, "R TO RELOAD", w / 2, h / 2 + 40, 16, red);
+            }
+        } else {
+            txtCenter(r, st.label, w - 115, h - 70, 26, white);
+            if (it.class == .grenade) txtCenter(r, "CLICK TO THROW", w - 115, h - 38, 12, dim);
+        }
     }
     // The grenades, in a small panel to the left.
     try r.fillRect(.{ .x = w - 290, .y = h - 86, .w = 72, .h = 66 }, panel);
     const gs = if (mode == .practice) "inf" else std.fmt.bufPrint(&buf, "{d}", .{nades}) catch "";
     txtCenter(r, gs, w - 254, h - 80, 30, if (mode == .deathmatch and nades == 0) red else white);
     txtCenter(r, "G  NADE", w - 254, h - 40, 12, dim);
-    if (gun.reloading >= 0) {
-        const k = gun.reloading / weapon.reload_time;
-        try r.fillRect(.{ .x = w - 210, .y = h - 20, .w = 190 * k, .h = 4 }, accent);
-        txtCenter(r, "RELOADING", w / 2, h / 2 + 40, 16, accent);
-    } else if (gun.ammo == 0) {
-        txtCenter(r, "R TO RELOAD", w / 2, h / 2 + 40, 16, red);
+
+    // The slots, right to left: 4 GRENADE, 3 KNIFE, 2 and 1.
+    var x = w - 20;
+    var i: usize = 4;
+    while (i > 0) {
+        i -= 1;
+        const slot: weapon.Slot = @fromBackingInt(@intCast(i));
+        const name = if (loadout.slots[i]) |s| (if (s.class == .grenade) "GRENADE" else weapon.label(&buf, s.model)) else "-";
+        var line: [40]u8 = undefined;
+        const t = std.fmt.bufPrint(&line, "{d} {s}", .{ i + 1, name }) catch "";
+        const m = text.?.measure(t, 13);
+        const on = slot == loadout.current;
+        if (on) try r.fillRect(.{ .x = x - m.w - 8, .y = h - 112, .w = m.w + 12, .h = 20 }, gfx.Color.rgba8(255, 166, 77, 60));
+        txt(r, t, x - m.w - 2, h - 110, 13, if (on) accent else dim);
+        x -= m.w + 18;
+    }
+    // The pick that waits for the next spawn.
+    if (mode == .deathmatch and !choice.eql(applied)) {
+        var la: [32]u8 = undefined;
+        var lb: [32]u8 = undefined;
+        var line: [80]u8 = undefined;
+        const t = std.fmt.bufPrint(&line, "NEXT SPAWN: {s} + {s}", .{ weapon.label(&la, choice.primary), weapon.label(&lb, choice.secondary) }) catch "";
+        txtRight(r, t, w - 20, h - 134, 13, accent);
     }
 }
 
@@ -1388,8 +1712,9 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
         var buf: [32]u8 = undefined;
         txtCenter(r, std.fmt.bufPrint(&buf, "practice best: {d}", .{best}) catch "", cx, b[2].y + 84, 14, dim);
     }
-    txtCenter(r, "WASD move  -  SPACE jump  -  MOUSE aim  -  RIGHT CLICK sights  -  R reload  -  G grenade  -  Q / E lean  -  F use  -  TAB scores", cx, h - 48, 14, dim);
-    txtCenter(r, "Rifle model: Quaternius Ultimate Gun Pack (CC0)", cx, h - 26, 12, dim);
+    txtCenter(r, "WASD move  -  SPACE jump  -  MOUSE aim  -  RIGHT CLICK sights  -  R reload  -  G grenade  -  Q / E lean  -  F use  -  TAB scores", cx, h - 66, 14, dim);
+    txtCenter(r, "1 primary  -  2 secondary  -  3 knife  -  4 grenade (click throws)  -  B weapon menu", cx, h - 46, 14, dim);
+    txtCenter(r, "Gun models: Quaternius Ultimate Gun Pack (CC0)", cx, h - 24, 12, dim);
 }
 
 fn drawDeathmatch(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !bool {
@@ -1484,8 +1809,12 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     L.add(&lines, &n, "yaw {d:.3}  pitch {d:.3}  lean {d:.2}  bob {d:.2}", .{ me.yaw, me.pitch, me.lean, me.bob });
     L.add(&lines, &n, "mouse {d:.0},{d:.0}  delta {d:.1},{d:.1}", .{ in.mouse.x, in.mouse.y, in.mouse.delta_x, in.mouse.delta_y });
     L.add(&lines, &n, "mods ctrl {}  cmd {}  shift {}  alt {}", .{ @intFromBool(in.mods.ctrl), @intFromBool(in.mods.super), @intFromBool(in.mods.shift), @intFromBool(in.mods.alt) });
-    L.add(&lines, &n, "gun ammo {d}/{d}  reload {d:.2}  ads {d:.2}  heat {d:.2}", .{ gun.ammo, gun.reserve, gun.reloading, gun.ads, gun.heat });
-    L.add(&lines, &n, "grenades live {d}  left {d}  smoke {d}  blast cells {d}", .{ grenade.count, nades, grenade.puffCount(), grenade.debug_cells });
+    {
+        const h = loadout.hands;
+        const ammo = if (loadout.slots[@backingInt(loadout.current)]) |it| it.ammo else 0;
+        L.add(&lines, &n, "{s} ammo {d}  reload {d:.2}  draw {d:.2}  ads {d:.2}  heat {d:.2}", .{ @tagName(loadout.heldClass()), ammo, h.reloading, h.drawing, h.ads, h.heat });
+    }
+    L.add(&lines, &n, "grenades live {d}  left {d}  smoke {d}  blast cells {d}", .{ grenade.count, loadout.grenades(), grenade.puffCount(), grenade.debug_cells });
     if (mode == .deathmatch) {
         L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(client.state()), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
     }
@@ -1562,6 +1891,14 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
         return settings.draw(r, &text.?, in.mouse.x, in.mouse.y, w, h);
     }
     if (mode == .menu) return drawMenu(ctx, r, w, h);
+    if (weapon_menu.open) {
+        const in = ctx.input();
+        const note = switch (mode) {
+            .deathmatch => "the pick applies at once at your spawn point, else on your next spawn",
+            else => "the pick applies at once",
+        };
+        return weapon_menu.draw(r, &text.?, in.mouse.x, in.mouse.y, w, h, choice, note);
+    }
     var crosshair = true;
     if (mode == .deathmatch) {
         if (!try drawDeathmatch(ctx, r, w, h)) return;
@@ -1581,7 +1918,7 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (!captured) {
         try r.fillRect(.{ .x = 0, .y = 0, .w = w, .h = h }, gfx.Color.rgba8(5, 6, 10, 140));
         txtCenter(r, "CLICK TO PLAY", w / 2, h / 2 - 30, 34, white);
-        txtCenter(r, "M for the main menu", w / 2, h / 2 + 14, 16, dim);
+        txtCenter(r, "M for the main menu  -  B for the weapon menu", w / 2, h / 2 + 14, 16, dim);
         const sb = pauseSettingsButton(ctx);
         const in = ctx.input();
         const hover = inRect(sb, in.mouse.x, in.mouse.y);
@@ -1596,7 +1933,9 @@ fn gameInit(ctx: *sw.Context) !void {
     alloc = ctx.allocator();
     rng = .init(ctx.timeNs());
     map.init(alloc);
-    try weapon.loadModel(alloc);
+    try weapon.loadModels(alloc);
+    choice = weapon.Choice.default();
+    applied = choice;
     static_mesh = mesh.Mesh.init(alloc);
     dyn = mesh.Mesh.init(alloc);
     trans = mesh.Mesh.init(alloc);
@@ -1621,6 +1960,8 @@ fn gameInit(ctx: *sw.Context) !void {
         best = std.fmt.parseInt(u32, b, 10) catch 0;
     }
     settings.load(alloc);
+    loadChoice();
+    applied = choice;
 }
 
 fn gameRender(ctx: *sw.Context) !void {
@@ -1651,7 +1992,13 @@ fn gameRender(ctx: *sw.Context) !void {
     const cam_f = vec.forward(cam.yaw, cam.pitch);
     const cam_r = v3(@cos(cam.yaw), 0, -@sin(cam.yaw));
     grenade.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
-    if (show_debug) grenade.buildDebug(alloc, &dyn, &trans, aimPrediction());
+    if (show_debug) {
+        grenade.buildDebug(alloc, &dyn, &trans, aimPrediction());
+    } else if (grenadeAimShows()) {
+        // The grenade in the hand (slot 4): the same aim view as the debug
+        // screen.
+        if (aimPrediction()) |pr| grenade.buildAim(alloc, &dyn, &trans, pr);
+    }
 
     var lights: [render.max_lights]map.Light = undefined;
     var n: usize = 0;
@@ -1681,9 +2028,14 @@ fn gameRender(ctx: *sw.Context) !void {
         lights[n] = .{ .pos = v3(c[0], l.y + 2.2, c[2]), .color = v3(1.1, 1.05, 0.95), .radius = 4.5 };
         n += 1;
     }
-    if (gun.flash > 0 and mode != .menu and n < render.max_lights) {
+    if (loadout.hands.flash > 0 and mode != .menu and n < render.max_lights) {
         const p = me.eyePos() + vec.forward(me.yaw, me.pitch) * vec.s(0.8);
         lights[n] = .{ .pos = p, .color = v3(9, 5.5, 2.5), .radius = 9 };
+        n += 1;
+    }
+    // The weapon menu: a lamp for the model in its window.
+    if (weapon_menu.open and n < render.max_lights) {
+        lights[n] = .{ .pos = cam.eye + vec.forward(cam.yaw, cam.pitch) * vec.s(0.3) + v3(0, 0.3, 0), .color = v3(2.2, 2.1, 2.0), .radius = 2.5 };
         n += 1;
     }
     if (remote_flash.life > 0 and n < render.max_lights) {
@@ -1697,7 +2049,8 @@ fn gameRender(ctx: *sw.Context) !void {
     exposure += (target_exposure - exposure) * @min(1, frame_ms / 1000 * 1.5);
     // The field of view setting is at the hip. The sights make it narrower
     // in the same ratio as the default, 74 to 52 degrees.
-    const fov: f32 = settings.v.fov * (1 - 22.0 / 74.0 * gun.ads) * std.math.pi / 180;
+    const fov: f32 = settings.v.fov * (1 - 22.0 / 74.0 * loadout.hands.ads) * std.math.pi / 180;
+    if (weapon_menu.open and mode != .menu) buildPreview(ctx, cam.eye, cam.yaw, cam.pitch, cam.roll, fov);
     if (hud) |*r| try drawHud(ctx, r);
     try render.draw(ctx, .{
         .eye = cam.eye,

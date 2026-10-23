@@ -18,15 +18,16 @@ Controls:
 | Left click | fire |
 | Right click | aim down the sights |
 | R | reload |
-| G | grenade |
+| G | quick grenade throw, from any slot |
+| 1, 2, 3, 4 | weapon slots: primary, secondary, knife, grenade |
+| B | weapon menu (also on the pause screen) |
 | F | use: press the button under the crosshair (lifts) |
 | Q, E (hold) | lean left, lean right |
 | Tab | scores |
 | Esc | release the mouse (pause) |
 | M (paused) | main menu |
 
-The number keys 1 to 9 are free for the weapon slots. On the main menu, 1,
-2 and 3 pick deathmatch, practice and the settings.
+On the main menu, 1, 2 and 3 pick deathmatch, practice and the settings.
 
 Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, Shift+1 to 9
 go to a spawn point.
@@ -99,6 +100,83 @@ of Earl's Court, and walk and ride each escalator. Each walk must keep the
 feet on the ground and the eye height smooth (at most 5 cm in a tick). It
 must not stop at a wall or a ceiling edge, and the head bob must follow
 the walking speed.
+
+## Weapons
+
+Four slots. A change of slot takes the draw time of the new weapon, and
+the weapon cannot fire until it is out. `game/src/weapon.zig` has the
+classes, the stats, the items and the hands.
+
+- **1 primary**: a rifle, a carbine, a bullpup, an SMG, a shotgun or the
+  sawn-off.
+- **2 secondary**: a pistol or a revolver.
+- **3 knife**: melee, 1.6 m reach. Five short rays (the centre and four
+  around it), so a near miss still cuts.
+- **4 grenade**: the grenade comes up in 0.5 s. Then the aim view shows:
+  the same dotted path, impact point and blast volume as the debug screen.
+  A left click throws. The next grenade comes up, and after the last one the
+  hand goes back to the weapon before it. G still throws at once from any
+  slot.
+
+**B** opens the weapon menu: a row for each class and a button for each
+model. The panel shows the model under the mouse in 3D, with the stats of
+its class. A click puts the model in its slot. The pick stays in local
+storage (`loadout`). Practice applies it at once. In deathmatch the server
+applies it at once while the player is within 4 m of the spawn point and
+has not fired or thrown since the spawn. Else it applies on the next
+spawn, and the HUD shows `NEXT SPAWN`.
+
+The models of one class differ only in their look. Each class has these
+stats. The damage is for one pellet:
+
+| Class | Models | Body | Head | Pellets | Fire | Magazine | Reload | Hip cone (rad) | Speed | Draw |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Rifle | 5 | 30 | 75 | 1 | auto, 522 rpm | 30 + 90 | 2.3 s | 0.006, +0.032 heat | 93% | 0.45 s |
+| Carbine | 4 | 24 | 60 | 1 | auto, 706 rpm | 30 + 120 | 2.1 s | 0.005, +0.024 heat | 96% | 0.4 s |
+| Bullpup | 3 | 28 | 72 | 1 | 3-round burst, 0.06 s apart, a burst each 0.36 s | 30 + 90 | 2.5 s | 0.003, +0.012 heat | 94% | 0.45 s |
+| SMG | 5 | 18 | 40 | 1 | auto, 923 rpm | 35 + 140 | 1.8 s | 0.012, +0.04 heat | 104% | 0.3 s |
+| Shotgun | 5 | 13 | 16 | 9 | pump, 0.85 s | 6 + 24 | 2.6 s | 0.06, 35 m reach | 95% | 0.45 s |
+| Sawn-off | 1 | 11 | 13 | 10 | 0.25 s | 2 + 20 | 2.0 s | 0.095, 22 m reach | 100% | 0.35 s |
+| Pistol | 6 | 26 | 65 | 1 | semi, 0.14 s | 12 + 48 | 1.4 s | 0.005, +0.02 heat | 106% | 0.25 s |
+| Revolver | 5 | 52 | 104 | 1 | semi, 0.48 s | 6 + 30 | 2.4 s | 0.003, +0.03 heat | 104% | 0.35 s |
+| Knife | 1 | 55 | 55 | - | 0.45 s a swing | - | - | 1.6 m reach | 110% | 0.2 s |
+| Grenade | - | see Grenades | | | | 3 a life | | | 100% | 0.5 s |
+
+The balance, for hipfire on a laptop (100 health):
+
+- Each primary kills in about 0.33 s when every hit lands (rifle 4 hits,
+  carbine 5, SMG 6, bullpup 2 bursts). The differences are in the cone,
+  the kick and the range. A head hit is about 2.5 times a body hit, so only
+  the revolver kills with one head hit.
+- The first shot goes almost where the crosshair is. The cone grows with
+  the heat (the trigger held), with the run speed (+0.008 to +0.02) and in
+  the air (+0.05). The sights make it 75% smaller (30% for the shotguns).
+  The crosshair shows the cone.
+- The shotguns kill in one shot only up close (8 of 9 pellets), and do no
+  damage past their reach.
+- The knife and the pistols are the fastest to carry and to take out.
+
+The server has the same numbers (`WEAPONS` in `server/index.ts`).
+
+### The models
+
+The Quaternius "Ultimate Gun Pack" (CC0, no attribution necessary, see
+`assets/guns/LICENSE.md`): every gun except the six sniper rifles (they have
+scopes, and this is a hipfire game). No other gun has a scope. The knife is
+the `Bayonet_2` accessory. The other accessories (silencers, scopes,
+grips, stocks, bipod, tripod, flashlight) are not used.
+
+`scripts/convert-gun.ts` converts the OBJ files of the pack into one file,
+`game/src/assets/guns.bin` (364 KB): quantised positions, the faces as
+polygons, and runs of materials. The game makes the triangles at start.
+The converter finds the magazine of each rifle, carbine, bullpup and SMG
+(a tall part below the receiver, near the grip) and splits it out, so the
+reload animation can move it. The repository keeps only the output.
+
+```bash
+bun apps/action/scripts/convert-gun.ts "<pack>/OBJ"                   # write guns.bin
+bun apps/action/scripts/convert-gun.ts "<pack>/OBJ" --list Bullpup_1  # the parts of one model
+```
 
 ## Grenades
 
@@ -184,7 +262,8 @@ apps/action/
 │       ├── render.zig    light shadow maps (at map load), shadow pass, HDR scene pass (4x MSAA), bloom, tone map
 │       ├── scene.wgsl    lighting: sun + PCF shadows, light shadow maps, SDF ambient occlusion, sky, fog
 │       ├── post.wgsl     bloom and the final pass (ACES, vignette, damage tint)
-│       ├── weapon.zig    rifle state, recoil, the procedural reload animation
+│       ├── weapon.zig    the weapon models, classes and stats, items, slots, the hands and the view-model pose
+│       ├── weapon_menu.zig  the weapon menu (B)
 │       ├── map.zig       the current map: boxes, ramps, decoration, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── floorplan.zig the map tool: slices, the decoration audit (zig build floorplan)
@@ -194,12 +273,12 @@ apps/action/
 │       ├── settings.zig  the settings panel and its local storage
 │       ├── mesh.zig      vertex lists and shape builders
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)
-│       └── assets/       rifle.bin (generated), Lato font (OFL)
+│       └── assets/       guns.bin (generated), Lato font (OFL)
 ├── server/index.ts       Bun: static files + the lobby on /api/ws, port 4080
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── public/index.html
-├── assets/rifle/         the source OBJ of the rifle, and its licence
-└── scripts/convert-gun.ts  OBJ -> game/src/assets/rifle.bin
+├── assets/guns/          the licence of the gun models
+└── scripts/convert-gun.ts  the gun pack OBJ files -> game/src/assets/guns.bin
 ```
 
 ## Run it
@@ -212,25 +291,16 @@ yarn workspace action start     # build.sh, then the server on http://localhost:
 
 WebGPU only: a recent Chrome or Edge on a desktop.
 
-## The rifle
-
-The "AssaultRifle_1" model of the Quaternius Ultimate Gun Pack, CC0 (no
-attribution necessary). See `assets/rifle/LICENSE.md`. The converter splits
-the magazine from the body (its connected parts), so the reload animation can
-move it: the gun cants, the magazine drops out, a new one goes in, and the
-charging handle racks.
-
-```bash
-bun apps/action/scripts/convert-gun.ts          # write rifle.bin
-bun apps/action/scripts/convert-gun.ts --list   # print the parts, to find the magazine of a new model
-```
-
 ## The lobby protocol
 
 JSON text on `/api/ws`. The message list is at the top of `server/index.ts`.
-The client sends its own position and its hits. The server checks the fire
-rate, the match phase and that both players are alive. It does not check line
-of sight. For a grenade, the thrower's client calculates the damage, cover
+The client sends its own position, its held weapon and its hits. The server
+checks the match phase and that both players are alive. For each shot it
+checks the weapon: the class must be in the shooter's loadout, the shot must
+keep to the fire rate of the class, the pellets must not be more than the
+class has, and the target must be in reach. The server takes the damage
+from its own table. It does not check line of sight. The other players see
+the held weapon (`w` and `m` in the `st` and `snap` messages). For a grenade, the thrower's client calculates the damage, cover
 included, and sends it in one `blast` message. The server checks the throws
 left in the life, the damage range and the distance to each target.
 

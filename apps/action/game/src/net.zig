@@ -24,6 +24,9 @@ pub const PlayerMsg = struct {
     k: u32 = 0,
     d: u32 = 0,
     alive: bool = true,
+    /// The held weapon: its class (weapon.Class) and its model.
+    w: u32 = 0,
+    m: u32 = 0,
 };
 
 /// One server message. `t` names the kind; the other fields are optional.
@@ -57,6 +60,12 @@ pub const Msg = struct {
     // A grenade throw (t "nade"): the velocity. `o` is the start point and
     // `id` the thrower.
     v: ?[3]f32 = null,
+    // A shot (t "shot"): the class of the weapon.
+    w: ?u32 = null,
+    // The weapons of a life (t "spawn" and "loadout"): the primary and the
+    // secondary, as [class, model].
+    p: ?[2]u32 = null,
+    s: ?[2]u32 = null,
 };
 
 pub const Client = struct {
