@@ -31,13 +31,21 @@
 // server also writes its own lines to the chat: a join, a leave, the start
 // and the end of a match.
 //
+// The session (session.ts): the server has an instance id (new at each
+// start), a build version (public/build-version.txt) and a protocol version
+// (game/src/protocol_version.txt). GET /api/version and the welcome give
+// them. Before a planned stop (SIGTERM, SIGINT) each client gets a bye.
+// Add 1 to the protocol version for each change to a message that a client
+// of the old version cannot read: that client must reload before it joins.
+//
 // Weapons: the class ids are the order of game/src/weapon.zig Class. A pick
 // is [class, model]: the model must be a gun of the class, and the model
 // sets the stats (guns.json). A new pick applies at the next spawn, or at
 // once while the player is at the spawn point and has not fired.
 //
 // Messages (JSON text). Client to server:
-//   {t:"hello", name, p:[c,m], s:[c,m]}           p the primary, s the secondary
+//   {t:"hello", name, p:[c,m], s:[c,m]}           the join, after the welcome.
+//                                                 p the primary, s the secondary
 //   {t:"st", x, y, z, yaw, pitch, lean, w, m}     20 times a second. lean is
 //                                                 -1 (left) to 1 (right). w and
 //                                                 m: the held class and model.
@@ -58,7 +66,11 @@
 //                                                 admin). pw is admin_password.
 //   {t:"chat", ch:"all"|"team", text}             a chat message
 // Server to client:
-//   {t:"welcome", id}
+//   {t:"welcome", id, instance, build, protocol, started}
+//                                 the first message, before the hello. The
+//                                 client sends the hello only when its
+//                                 protocol is the same (session.ts).
+//   {t:"bye", reason}             the server closes the connection next
 //   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,hp,k,d,alive,w,m}],
 //    lifts:[[y, door, level, phase]]}
 //   {t:"lift", i, l}             a lift call; each client applies it
@@ -109,6 +121,16 @@ import {
   type PingState,
   pingRound,
 } from './ping';
+import {
+  BUILD_HEADER,
+  bye,
+  newIdent,
+  readBuild,
+  readProtocol,
+  stopOnSignal,
+  versionResponse,
+  welcome,
+} from './session';
 
 const PORT = Number(process.env.PORT ?? 4080);
 const PUBLIC_DIR = process.env.PUBLIC_DIR ?? join(import.meta.dir, '../public');
@@ -118,6 +140,12 @@ const SERVER_CONFIG =
 // The server cvars: defaults, then the config file, then SV_<NAME>.
 const cvars = new Cvars(
   readDefs(join(import.meta.dir, '../game/src/server_cvars.json')),
+);
+// Who this server is: a new instance id at each start (session.ts).
+const ident = newIdent(
+  readBuild(PUBLIC_DIR),
+  readProtocol(join(import.meta.dir, '../game/src/protocol_version.txt')),
+  new Date(),
 );
 const serverConsole = new ServerConsole(cvars, [
   {
@@ -637,7 +665,7 @@ function onRcon(p: Player, msg: Record<string, unknown>): void {
     rconFailTimes.push(now);
     p.rconFails++;
     reply('rcon: bad password');
-    if (p.rconFails >= RCON_TRIES) p.ws.close(1008, 'too many bad passwords');
+    if (p.rconFails >= RCON_TRIES) bye(p.ws, 'Too many bad rcon passwords.');
     return;
   }
   const cmd = typeof msg.cmd === 'string' ? msg.cmd.slice(0, 240) : '';
@@ -742,8 +770,12 @@ const server = Bun.serve<Conn>({
       const ok = srv.upgrade(req, { data: { id: nextId++ } });
       return ok ? undefined : new Response('upgrade failed', { status: 400 });
     }
+    if (url.pathname === '/api/version') return versionResponse(ident);
     if (url.pathname === '/api/health') {
-      return Response.json({ ok: true, players: players.size, phase });
+      return Response.json(
+        { ok: true, players: players.size, phase },
+        { headers: { [BUILD_HEADER]: ident.build } },
+      );
     }
     // Static files. join() removes "..", so the path stays in PUBLIC_DIR.
     const rel = decodeURIComponent(url.pathname).replace(/\\/g, '/');
@@ -755,6 +787,7 @@ const server = Bun.serve<Conn>({
     return new Response(file, {
       headers: {
         'cache-control': 'no-cache',
+        [BUILD_HEADER]: ident.build,
         ...(type ? { 'content-type': type } : {}),
       },
     });
@@ -792,6 +825,9 @@ const server = Bun.serve<Conn>({
         chatTimes: [],
       };
       players.set(p.id, p);
+      // The first message: who the server is. The client compares it with
+      // its own version before it sends the hello.
+      ws.send(welcome(ident, { id: p.id }));
     },
     message(ws, raw) {
       const p = players.get(ws.data.id);
@@ -806,7 +842,6 @@ const server = Bun.serve<Conn>({
         p.name = cleanName(msg.name);
         p.next = pickFrom(msg) ?? DEFAULT_PICK;
         p.joined = true;
-        send(p, { t: 'welcome', id: p.id });
         send(p, { t: 'cvars', cv: cvars.publicPairs() });
         serverLine(`${p.name} joined.`);
         if (phase === 'play') spawn(p);
@@ -868,9 +903,19 @@ const server = Bun.serve<Conn>({
     close(ws) {
       const p = players.get(ws.data.id);
       players.delete(ws.data.id);
-      if (p?.joined) serverLine(`${p.name} left.`);
+      if (p?.joined && !shutdown.stopping()) serverLine(`${p.name} left.`);
     },
   },
 });
 
+// A planned stop: a bye to each player first (session.ts).
+const shutdown = stopOnSignal(
+  () => [...players.values()].map((p) => p.ws),
+  () => server.stop(),
+  log,
+);
+
+log(
+  `build ${ident.build}, protocol ${ident.protocol}, instance ${ident.instance}`,
+);
 console.log(`action: http://localhost:${server.port} (lobby on /api/ws)`);

@@ -8,6 +8,10 @@ x-action-base: &action-base
     context: ../..
     dockerfile: apps/action/dockerfile
     target: ${BUILD_TARGET:-dev}
+    # The build version (scripts/build-version.sh). prod:docker sets it.
+    # Unset: the image says "dev".
+    args:
+      BUILD_VERSION: ${BUILD_VERSION:-}
   ports:
     - "${PUBLISH_ADDR:-127.0.0.1}:4080:4080"
   # Remote admin (rcon) is on only when the shell sets SV_ADMIN_PASSWORD.

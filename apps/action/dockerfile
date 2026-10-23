@@ -3,10 +3,13 @@
 # action.seanmizen.com: the game and the deathmatch lobby, one Bun process.
 #
 #   1. zig-build  download the Zig version that utils/swindowzig/build.zig.zon
-#                 names, build game/ to action.wasm
+#                 names, build game/ to action.wasm. Write the build version
+#                 (the build argument BUILD_VERSION, default "dev") into
+#                 the game and into build-version.txt.
 #   2. js-build   bundle src/boot.ts with the swindowzig wasm loader
 #   3. prod       Bun runs server/index.ts: static files and /api/ws on 4080.
-#                 It reads game/src/server_cvars.json and server/server.cfg.
+#                 It reads game/src/server_cvars.json, server/server.cfg,
+#                 game/src/protocol_version.txt and public/build-version.txt.
 #   dev           Bun runs the server from the bind mount. Build the files of
 #                 public/ on the host first (apps/action/build.sh).
 
@@ -32,7 +35,14 @@ RUN set -e; \
 COPY utils/swindowzig /build/utils/swindowzig
 COPY apps/action/game /build/apps/action/game
 WORKDIR /build/apps/action/game
-RUN zig build -Doptimize=ReleaseFast && ls -la zig-out/bin/
+# `yarn workspace action prod:docker` sets it from scripts/build-version.sh.
+# The context has no .git, so the image cannot find the commit itself.
+ARG BUILD_VERSION=dev
+RUN set -e; \
+    VERSION="${BUILD_VERSION:-dev}"; \
+    zig build -Doptimize=ReleaseFast -Dbuild_version="${VERSION}"; \
+    printf '%s\n' "${VERSION}" > zig-out/bin/build-version.txt; \
+    ls -la zig-out/bin/
 
 FROM oven/bun:1.1-slim AS js-build
 WORKDIR /build
@@ -44,11 +54,14 @@ RUN bun build /build/apps/action/src/boot.ts --outfile /build/out/boot.js --targ
 FROM oven/bun:1.1-slim AS prod
 WORKDIR /app
 COPY apps/action/server ./server
-# The server cvar definitions: the client embeds the same file.
+# The server cvar definitions and the protocol version: the client embeds
+# the same files.
 COPY apps/action/game/src/server_cvars.json ./game/src/server_cvars.json
+COPY apps/action/game/src/protocol_version.txt ./game/src/protocol_version.txt
 COPY apps/action/public ./public
 COPY --from=js-build /build/out/boot.js ./public/boot.js
 COPY --from=zig-build /build/apps/action/game/zig-out/bin/action.wasm ./public/action.wasm
+COPY --from=zig-build /build/apps/action/game/zig-out/bin/build-version.txt ./public/build-version.txt
 ENV PORT=4080
 EXPOSE 4080
 CMD ["bun", "server/index.ts"]

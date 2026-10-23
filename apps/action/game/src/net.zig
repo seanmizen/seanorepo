@@ -2,6 +2,12 @@
 // messages. The protocol is in apps/action/server/index.ts.
 const std = @import("std");
 
+/// The version of the lobby messages. The server reads the same file
+/// (server/session.ts). Add 1 to it for each change to a message that a
+/// client of the old version cannot read.
+pub const protocol_version: u32 = std.fmt.parseInt(u32, std.mem.trim(u8, @embedFile("protocol_version.txt"), " \t\r\n"), 10) catch
+    @compileError("protocol_version.txt must hold one whole number");
+
 extern "net" fn netOpen(ptr: [*]const u8, len: u32) i32;
 extern "net" fn netState(h: i32) i32;
 extern "net" fn netSend(h: i32, ptr: [*]const u8, len: u32) i32;
@@ -81,6 +87,14 @@ pub const Msg = struct {
     // and the name of the sender. `id` is the sender.
     ch: ?[]const u8 = null,
     name: ?[]const u8 = null,
+    // The welcome (t "welcome"), the first message: who the server is
+    // (session/ident.zig). `id` is the id of this player.
+    instance: ?[]const u8 = null,
+    build: ?[]const u8 = null,
+    protocol: ?u32 = null,
+    started: ?[]const u8 = null,
+    // A bye (t "bye"): why the server closes the connection.
+    reason: ?[]const u8 = null,
 };
 
 pub const Client = struct {

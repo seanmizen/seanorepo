@@ -44,7 +44,9 @@ do not go through the binds.
 
 Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, Shift+1 to 9
 go to a spawn point, and in deathmatch a health bar shows over each other
-player.
+player. It also shows the build and the protocol of the game, and in
+deathmatch those of the server and its instance id (see
+[The session](#the-session-versions-and-reconnect)).
 
 The HUD has a minimap: north up, the walls at body height over the floors at
 foot height. A player who fires shows on it for a moment.
@@ -161,7 +163,13 @@ dummies.
 - `game/src/console/tests.zig` tests the console: the parser, the cvar
   limits, the commands, the binds and the buttons, the scripts, the saved
   config, the completion and the chat.
-- The server cvar file must be valid, with safe defaults.
+- `game/src/session/tests.zig` tests the session: the compare of a
+  welcome with the last server and the game, the retry wait and its
+  maximum, and the state machine through a lost connection, a restart, a
+  new build, a new protocol, a bye and the timeouts. It also tests the
+  `version` command.
+- The server cvar file must be valid, with safe defaults. The protocol
+  version file must hold one number.
 - `game/src/guns_test.zig` tests the gun model: a longer barrel gives more
   bullet speed and less fall-off, a stock gives less recoil and a faster
   recovery, a heavy gun is slower, the recoil pattern climbs and recovers,
@@ -179,9 +187,14 @@ dummies.
 - `server/chat.test.ts`: the chat checks. The control characters, the
   length cap in bytes, the rate limit, the team routing and the match end
   line.
+- `server/session.test.ts`: the build file and its fallback, the protocol
+  file, the instance id, the `/api/version` answer, the welcome and the
+  bye.
 - `server/lobby.test.ts`: a real server on a free port. It checks the cvars
-  on join, rcon, a client that tries to set a server cvar, and the chat
-  relay with the join and leave lines.
+  on join, rcon, a client that tries to set a server cvar, the chat relay
+  with the join and leave lines, and the session: `GET /api/version`, the
+  build header, the welcome before the hello, the bye on SIGTERM, and a
+  new start with a new build on the same port.
 
 ## The console
 
@@ -206,7 +219,9 @@ The built-in commands: `help`, `find`, `cvarlist`, `cmdlist`, `set`,
 `reset`, `toggle`, `bind`, `unbind`, `bindlist`, `resetbinds`, `exec`,
 `edit`, `scriptlist`, `scriptdel`, `echo`, `clear` and `toggleconsole`.
 The chat adds `messagemode`, `messagemode2`, `say` and `say_team` (see
-[Chat](#chat)). The game adds `rcon` and the actions.
+[Chat](#chat)). The session adds `version` (see
+[The session](#the-session-versions-and-reconnect)). The game adds `rcon`,
+`reload` (reload the page) and the actions.
 
 ### Cvars
 
@@ -789,6 +804,8 @@ apps/action/
 │       ├── game_console.zig  the game side of the console: actions, binds, server cvars, rcon, chat
 │       ├── server_cvars.json  the server cvars (the server reads the same file)
 │       ├── console/      the console framework and the chat, with no action imports (root.zig)
+│       ├── session/      the session: the server identity, the reconnect state machine (no action imports)
+│       ├── protocol_version.txt  the protocol version (the server reads the same file)
 │       ├── mesh.zig      vertex lists and shape builders
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)
 │       └── assets/       guns.bin (generated), Lato font (OFL)
@@ -798,10 +815,12 @@ apps/action/
 ├── server/guns.json      the stats of each gun (generated: zig build guns)
 ├── server/console.ts     the server cvars, the config file, the server commands
 ├── server/chat.ts        the chat checks: clean text, length cap, rate limit, teams
+├── server/session.ts     the server identity, /api/version, the welcome, the bye on SIGTERM
 ├── server/server.cfg     the server config (a script)
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── public/index.html
 ├── assets/guns/          the licence of the gun models
+├── scripts/build-version.sh  prints the build version (build.sh, prod:docker)
 └── scripts/convert-gun.ts  the gun pack OBJ files -> game/src/assets/guns.bin
 ```
 
@@ -871,6 +890,81 @@ messages (`server/ping.ts`). It does not use the game traffic.
   a question mark, for example `312?`. The next answer removes the mark. A
   browser tab in the background does not run the game, so it gives no
   answer.
+
+### The session: versions and reconnect
+
+The server says who it is. The client compares that with itself and with
+the last server, and it connects again after a lost connection.
+`game/src/session/` (the client) and `server/session.ts` (the server)
+have no action game code.
+
+| Field | Value |
+|---|---|
+| `instance` | 16 hex characters, random at each start of the server process |
+| `build` | the build version: the same for each start of one build. See [The build version](#the-build-version). |
+| `protocol` | the protocol version: the number in `game/src/protocol_version.txt` |
+| `started` | the start time of the server, ISO 8601 in UTC |
+
+- `GET /api/version` gives the four fields as JSON, with
+  `cache-control: no-store`.
+- Each static file and each `/api` answer has the header
+  `x-build-version`.
+- The `welcome` message is the first message on each WebSocket. It has the
+  same four fields and the `id` of the player.
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"welcome", id, instance, build, protocol, started}` | the server, to a new connection | who the server is. The client sends the hello only when the protocol is its own. |
+| `{t:"bye", reason}` | the server, to each player | the server closes the connection next. On SIGTERM or SIGINT (a deploy, `docker stop`, Ctrl+C) the reason is "The server stops for a restart or an update." After 5 bad rcon passwords it is "Too many bad rcon passwords." |
+
+What the client does:
+
+| Case | The client |
+|---|---|
+| The connection closes | The HUD shows CONNECTION LOST, the reason of the bye, and the time to the next try. The waits are 1, 2, 4 and 8 s, then 10 s (the maximum) for each next try. Enter tries at once. M goes to the menu. The frame loop goes on: the chat, the console and the world. The player cannot move. |
+| The socket does not open in 10 s, or no welcome comes in 5 s | The same as a closed connection. |
+| The same instance | Join again. The chat says "Connected again." |
+| A new instance, the same build | Join again. The chat says "The server restarted." |
+| A new build, the same protocol | Join again. The chat says "A new version is live. Reload the page to update." A line at the bottom of the HUD, a RELOAD TO UPDATE button on the pause screen and a line on the menu stay until the page reloads. |
+| A new protocol | No join, and no more tries. The screen says A NEW VERSION IS LIVE, with a RELOAD button. Enter reloads. M goes to the menu. |
+
+- At each join the match state comes from the server: the clock, the
+  scores, the other players and the spawn. A join is a new player on the
+  server, so the kills and the deaths start from 0.
+- The build compares with the build of the page, not with the last
+  server. So a first join to a newer server also shows the reload notice.
+- The `version` console command prints the build and the protocol of the
+  game and of the server, the instance id, the start time and the state of
+  the connection. The debug screen shows the same values. `reload` reloads
+  the page.
+- **The protocol version**: add 1 to `game/src/protocol_version.txt` for
+  each change to a message that a client of the old version cannot read.
+  For example, a field that the client must have, or a field with a new
+  meaning. A new message or an optional field that an old client ignores
+  needs no change. The client embeds the file at build time (`net.zig`),
+  and the server reads it at start.
+
+### The build version
+
+`scripts/build-version.sh` prints it:
+
+1. `BUILD_VERSION`, if the environment sets it.
+2. Else the 12-character hash of the last commit that changed
+   `apps/action` or `utils/swindowzig`. `-dirty` follows it when those
+   directories have changes that are not committed. A release that changes
+   only other apps does not change the version, so the game server does
+   not restart.
+3. Else `dev`: no git, or not a checkout.
+
+- **Dev** (`yarn workspace action start`): `build.sh` gives the version to
+  the game (`zig build -Dbuild_version=...`) and writes
+  `public/build-version.txt`. The server reads that file at start. With
+  no file, the server says `dev`. A plain `zig build` also gives `dev`.
+- **Docker** (`yarn workspace action prod:docker`): the build context has
+  no `.git`. So the script gives the version to `docker compose` as the
+  build argument `BUILD_VERSION`. The `zig-build` stage writes it into the
+  game and into `build-version.txt`. With no argument, the image says
+  `dev`.
 
 ## Deploy
 

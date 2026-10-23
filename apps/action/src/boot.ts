@@ -94,6 +94,14 @@ if (canvas) {
     cursorFollowsLock: true,
     // No lockOnClick: the game asks for the lock (ctx.setMouseCapture) on
     // the click that it wants, and reads the state with jsPointerLocked.
+    // jsReload: the game reloads the page to get a new version of itself
+    // (game/src/game_console.zig reloadPage).
+    env: {
+      jsReload: () => {
+        location.reload();
+        return undefined;
+      },
+    },
     onFailure,
     onStart: () => document.getElementById('overlay')?.classList.add('hidden'),
   }).catch((err) => show('Start failed', String(err)));
