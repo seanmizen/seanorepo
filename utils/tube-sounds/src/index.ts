@@ -63,6 +63,7 @@ export { type OfflineOptions, renderOffline } from './offline';
 export { type StationOptions, type Ticked, TubeStation } from './station';
 export {
   DEFAULT_MIX,
+  type DistanceLock,
   type DoorsCloseOptions,
   type Mix,
   type MixComponent,

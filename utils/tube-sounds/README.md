@@ -14,10 +14,40 @@ TypeScript, ESM, no runtime dependencies. The package exports its source
 yarn workspace tube-sounds demo
 ```
 
-Open <http://127.0.0.1:4790/> and press **Start audio**. The page has sliders
-for speed, throttle, brake, distance and curve, buttons for arrival,
-departure, a full service and the doors, a stock and motor selector, and a
-live spectrum. Press **Full service** and stand still for 50 seconds.
+Open <http://127.0.0.1:4790/> and press **Sound**. Press **Full service**
+and stand still for 50 seconds.
+
+The page groups its controls by purpose. Every value shows its unit. The
+page disables a control that does nothing in the current state, and a line
+under the control gives the reason. The page keeps its settings in local storage.
+**Reset to defaults** clears them.
+
+| Group | Controls |
+|---|---|
+| Top bar | **Sound** is one toggle. Off pauses the audio clock, so the train and any script pause with it. A browser starts audio only after a click, so the sound is off after a reload. **Volume** is the master level (%). The chips show speed, distance, script, lock and doors at all times. **Reset to defaults**. |
+| Train and stock | **Stock** (1973 or S7) and **Motor**. A change of stock builds a new train at the same place and stops a script. A change of motor keeps the train and the script. |
+| Scripts | **Arrival**, **Departure** (from a stand), **Full service** and **Stop script**. **Repeat the full service every 70 s**. Stop script also turns off Repeat. **Open the doors** and **Close the doors** are one toggle. It works when the train stands and no script runs. A script button also starts the sound. |
+| Motion | **Speed from**: the speed slider or physics. In slider mode, throttle and brake still set the motor load and the brake air, but not the speed. In physics mode, throttle and brake drive the speed. **Speed** (m/s), **Throttle** (%), **Brake** (%), **Curves** (the track layout or a fixed amount, %). While a script runs, the page disables these controls, and they follow the script. When it ends, they continue from where it stopped. |
+| Listener | **Measure from** the train front or the centre of one car. **Distance** (m): positive = the train is still to come, negative = past. Without a lock, the slider follows the moving train, and a drag moves the train. **Lock the distance**: see below. |
+| Mixer | One fader per sound part, from 0% (off) to 200%, with a mute. **Ambient** and **Train**. Under the Train fader: **Motor**, **Control gear** (DC camshaft only), **Rolling**, **Rail joints**, **Brakes and air**, **Flange squeal**, **Compressor**, **Doors** and **Tunnel air**. |
+| Live state | Speed, acceleration, distance, track position, throttle and brake, gear mesh, camshaft or inverter, brake cylinder, main reservoir, doors and lock. |
+| Spectrum | 40 Hz to 10 kHz on a log scale, while the sound is on. |
+
+### Lock the distance
+
+With the lock on, the listener rides with the train at the slider
+distance from the train front or from the chosen car. It works in every
+mode: the speed slider, physics and scripts. The train still runs along
+the track. It accelerates and brakes, its wheels cross the rail joints and
+the curves, and the sound changes with speed. The path from the train to
+the listener stays the same, so the sound does not change with distance.
+
+Doppler: the library makes the Doppler shift from the change of the path
+delay. Under the lock the path length is constant, so there is no Doppler
+shift. This is also the physics: a listener who moves with the source
+hears no shift. A move of the slider changes the path, so the pitch glides
+for a moment. When you release the lock, the train continues from the
+position that you heard.
 
 ## Quick start
 
@@ -60,6 +90,24 @@ A script overrides the direct controls while it runs. `train.stopScript()`
 ends it. `train.state` returns speed, position, camshaft notch, inverter
 frequencies, brake and reservoir pressure, for a HUD or for debugging.
 
+### Live levels and the distance lock
+
+Every level has a live gain point, for the demo mixer and for a game:
+
+```ts
+station.setAmbient(0.5); // ambience: 0 = off, 1 = default
+station.setVolume(0.8); // master
+train.setLevel(0.8); // the whole train, with its reverb sends
+train.setMix({ joints: 0, motor: 1.5 }); // per component, 1 = default
+train.setDistanceLock({ distance: 10, car: 2 }); // ride 10 m from car 3
+train.setDistanceLock(null); // release: the train continues from there
+```
+
+`train.mixLevels`, `train.level`, `train.distanceLock` and
+`station.ambientLevel` return the current values. `state.locked` is true
+under a lock, and `state.distance` is then the distance that the listener
+hears.
+
 ### Main options
 
 | Option | Where | Effect |
@@ -67,10 +115,11 @@ frequencies, brake and reservoir pressure, for a HUD or for debugging.
 | `stock: '1973' \| 'S7'` | `TubeTrain` | Car lengths, wheels, gears, motor, doors. |
 | `motor: 'dc-camshaft' \| 'vvvf-igbt' \| 'vvvf-gto'` | `TubeTrain` | Replaces the stock's motor. `setMotorType()` changes it live. |
 | `physics: true` | `TubeTrain` | Throttle and brake drive the speed. `setSpeed` is then ignored. |
-| `mix: { joints: 0.5, ... }` | `TubeTrain` | Level per component: `rolling joints motor control brakes squeal compressor doors tunnel`. |
+| `level` | `TubeTrain` | Train level, with its reverb sends. `setLevel()` changes it live. |
+| `mix: { joints: 0.5, ... }` | `TubeTrain` | Level per component: `rolling joints motor control brakes squeal compressor doors tunnel`. `setMix()` changes it live. |
 | `track` | `TubeTrain` | Rail length (0 = welded rail), curves, corrugation. |
 | `geometry` | `TubeStation` | Platform start and length, listener position. |
-| `ambient`, `distantTrainEvery` | `TubeStation` | Ambience level and the mean gap between distant trains. |
+| `ambient`, `distantTrainEvery` | `TubeStation` | Ambience level and the mean gap between distant trains. `setAmbient()` changes the level live. |
 
 ### Offline rendering
 
@@ -278,7 +327,7 @@ and too much current on weak-field steps.
 | `src/station.ts`, `src/train.ts` | The public classes. |
 | `src/offline.ts` | `renderOffline`. |
 | `demo/` | The demo page. |
-| `test/` | `bun test` for everything in `src/core/`. |
+| `test/` | `bun test` for everything in `src/core/`, and for the gain points and the distance lock on a fake AudioContext (`test/fake-audio.ts`). |
 
 ```bash
 yarn workspace tube-sounds test
