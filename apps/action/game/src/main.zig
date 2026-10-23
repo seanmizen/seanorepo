@@ -12,7 +12,9 @@
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
 // aim, R reload, G grenade, F use (lift buttons), Q and E lean, 1 to 4 the
 // weapon slots (primary, secondary, knife, grenade), B the weapon menu,
-// Tab scores, Esc release the mouse, M menu (while paused).
+// Tab scores, Esc release the mouse, M menu (while paused). These keys are
+// the default binds (game_console.zig): the game reads the actions, not the
+// keys. The backtick key opens the console (console/).
 const std = @import("std");
 const sw = @import("sw_app");
 const core = @import("sw_core");
@@ -33,6 +35,7 @@ const settings = @import("settings.zig");
 const weapon_menu = @import("weapon_menu.zig");
 const range = @import("range.zig");
 const arena = @import("maps/arena.zig");
+const gcon = @import("game_console.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -210,7 +213,7 @@ fn copyName(dst: []u8, src: []const u8) usize {
 
 /// A sound effect: it follows the effects volume and the master volume.
 fn sound(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f32) void {
-    ambient(freq, freq_end, dur, wave, vol * settings.v.sfx);
+    ambient(freq, freq_end, dur, wave, vol * settings.sfx_volume.float());
 }
 
 /// A sound of the world (the trains): it follows the master volume only.
@@ -249,7 +252,7 @@ fn playerView() struct { eye: V3, roll: f32 } {
     var roll = -me.lean * player_mod.lean_roll;
     // The head bob: the amount follows the speed on the ground (me.bob is 0
     // in the air and when standing still), times the setting (0 is off).
-    const amp = me.bob * settings.v.bob * (1 - 0.7 * loadout.hands.ads);
+    const amp = me.bob * settings.head_bob.float() * (1 - 0.7 * loadout.hands.ads);
     if (amp > 0) {
         // The same phase as the bob of the gun. The head is highest, and
         // furthest to the side, in the middle of each step.
@@ -501,7 +504,10 @@ fn aimedButton() ?usize {
 // ---- Modes -----------------------------------------------------------------
 
 fn enterMenu(ctx: *sw.Context) void {
-    if (mode == .deathmatch) client.close();
+    if (mode == .deathmatch) {
+        client.close();
+        gcon.leftServer();
+    }
     mode = .menu;
     remote_n = 0;
     grenade.reset();
@@ -1135,16 +1141,23 @@ fn handleNet() void {
             map.callLift(m.i orelse 99, m.l orelse 0);
         } else if (std.mem.eql(u8, m.t, "match")) {
             pushFeed("NEW MATCH", false);
+        } else if (std.mem.eql(u8, m.t, "cvars")) {
+            // The server cvars: on join and on each change.
+            if (m.cv) |list| gcon.onServerCvars(list);
+        } else if (std.mem.eql(u8, m.t, "print")) {
+            if (m.text) |t| gcon.onServerPrint(t);
         }
     }
 }
 
 // ---- Tick ------------------------------------------------------------------
 
-fn gameplayTick(ctx: *sw.Context) void {
-    const in = ctx.input();
+/// The play input of one tick. The keys come through the binds as actions
+/// (game_console.zig); `in` gives the mouse movement and the modifiers.
+fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
+    const act = &gcon.act;
     const frozen = mode == .deathmatch and (phase_end or !alive);
-    const look: f32 = 0.0022 * settings.v.sens * (1 - 0.35 * loadout.hands.ads);
+    const look: f32 = 0.0022 * settings.sensitivity.float() * (1 - 0.35 * loadout.hands.ads);
     me.yaw -= in.mouse.delta_x * look;
     me.pitch = std.math.clamp(me.pitch - in.mouse.delta_y * look, -1.5, 1.5);
 
@@ -1154,30 +1167,30 @@ fn gameplayTick(ctx: *sw.Context) void {
     if (!frozen and !shortcut) {
         const fwd = v3(-@sin(me.yaw), 0, -@cos(me.yaw));
         const right = v3(@cos(me.yaw), 0, -@sin(me.yaw));
-        if (in.keyDown(.W)) wish += fwd;
-        if (in.keyDown(.S)) wish -= fwd;
-        if (in.keyDown(.D)) wish += right;
-        if (in.keyDown(.A)) wish -= right;
+        if (act.down(.forward)) wish += fwd;
+        if (act.down(.back)) wish -= fwd;
+        if (act.down(.moveright)) wish += right;
+        if (act.down(.moveleft)) wish -= right;
         if (vec.len(wish) > 0) wish = vec.norm(wish);
     }
-    const jump = !frozen and in.keyDown(.Space);
+    const jump = !frozen and act.down(.jump);
     // The held weapon sets the walk speed (weapon.zig table).
     const speed_scale: f32 = (1 - 0.45 * loadout.hands.ads) * loadout.heldStats().speed;
     if (mode != .deathmatch or alive) me.step(dt, wish, jump, speed_scale);
     // Q leans left and E leans right while held.
     var lean_want: f32 = 0;
     if (!frozen and !shortcut) {
-        if (in.keyDown(.Q)) lean_want -= 1;
-        if (in.keyDown(.E)) lean_want += 1;
+        if (act.down(.leanleft)) lean_want -= 1;
+        if (act.down(.leanright)) lean_want += 1;
     }
     me.updateLean(dt, lean_want);
 
     // F is the use key: lift buttons, and each target that a player presses.
-    if (!frozen and !shortcut and in.keyPressed(.F)) {
+    if (!frozen and !shortcut and act.pressed(.use)) {
         if (aimedButton()) |b| pressButton(b);
     }
     // B: the weapon menu. It frees the mouse.
-    if (!shortcut and in.keyPressed(.B)) {
+    if (!shortcut and act.pressed(.weaponmenu)) {
         weapon_menu.show();
         ctx.setMouseCapture(false);
         return;
@@ -1185,9 +1198,9 @@ fn gameplayTick(ctx: *sw.Context) void {
     // The weapon slots: 1 primary, 2 secondary, 3 knife, 4 grenade. With
     // Shift and the debug screen, the number keys teleport instead.
     if (!frozen and !shortcut and !in.mods.shift) {
-        const keys = [_]core.KeyCode{ .Num1, .Num2, .Num3, .Num4 };
-        for (keys, 0..) |k, i| {
-            if (!in.keyPressed(k)) continue;
+        const slots = [_]gcon.Action{ .slot1, .slot2, .slot3, .slot4 };
+        for (slots, 0..) |a, i| {
+            if (!act.pressed(a)) continue;
             if (loadout.select(@fromBackingInt(@intCast(i)))) {
                 sound(650, 480, 0.04, .square, 0.05);
             } else if (i == 3 and loadout.grenades() == 0 and mode == .deathmatch) {
@@ -1198,16 +1211,16 @@ fn gameplayTick(ctx: *sw.Context) void {
 
     const can_shoot = !frozen;
     // G: a quick throw from any slot.
-    if (can_shoot and !shortcut and in.keyPressed(.G)) throwGrenade();
+    if (can_shoot and !shortcut and act.pressed(.grenade)) throwGrenade();
     const it = loadout.held() orelse return;
     const st = weapon.stats(it.class);
-    if (can_shoot and in.keyPressed(.R)) {
+    if (can_shoot and act.pressed(.reload)) {
         if (loadout.hands.startReload(it)) sound(500, 380, 0.05, .square, 0.08);
     }
     // A short click can press and release inside one tick.
-    const trigger = can_shoot and (in.buttonDown(.left) or in.buttonPressed(.left));
-    const pressed = can_shoot and in.buttonPressed(.left);
-    const ev = loadout.hands.update(it, dt, trigger, pressed, can_shoot and in.buttonDown(.right));
+    const trigger = can_shoot and (act.down(.attack) or act.pressed(.attack));
+    const pressed = can_shoot and act.pressed(.attack);
+    const ev = loadout.hands.update(it, dt, trigger, pressed, can_shoot and act.down(.aim));
     switch (ev) {
         .fired => {
             fire();
@@ -1295,14 +1308,52 @@ fn practiceTick() void {
     }
 }
 
+/// The input of the game while the console has the keys: no keys, the
+/// mouse position only.
+var no_input: core.InputSnapshot = .{};
+var text_input_on = false;
+
+/// The console part of a tick. The backtick key opens the console: it
+/// arrives as Unknown (game_console.zig). While the console is open, the
+/// panel takes the keys and text input is on. Else the binds run. Returns
+/// the input for the rest of the tick: no keys while the console is open,
+/// and in the tick that closes it.
+fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
+    const raw = ctx.input();
+    const con = &gcon.con;
+    con.tick();
+    const was_open = con.open;
+    if (was_open) {
+        // The panel reads the events in order: text, then Enter.
+        gcon.view.update(con, ctx.bus().eventsForTick(ctx.tickId()));
+    } else if (raw.keyPressed(.Unknown) and !raw.mods.ctrl and !raw.mods.super) {
+        con.setOpen(true);
+    }
+    if (con.open != text_input_on) {
+        text_input_on = con.open;
+        if (con.open) ctx.startTextInput() else ctx.stopTextInput();
+    }
+    if (was_open or con.open) {
+        no_input.mouse.x = raw.mouse.x;
+        no_input.mouse.y = raw.mouse.y;
+        return &no_input;
+    }
+    con.processBinds(raw);
+    return raw;
+}
+
 fn tick(ctx: *sw.Context) void {
     ticks += 1;
     time += dt;
-    const in = ctx.input();
+    // A press or a release of an action lasts one tick.
+    defer gcon.act.endTick();
+    const in = consoleTick(ctx);
 
     captured = jsPointerLocked() != 0;
-    // The engine default master volume is 0.5: a setting of 100% keeps it.
-    audio.setMasterVolume(0.5 * settings.v.master);
+    // The engine default master volume is 0.5: a volume of 1 keeps it.
+    audio.setMasterVolume(0.5 * settings.volume.float());
+    // The pause action frees the mouse. On Esc the browser frees it first.
+    if (captured and gcon.act.pressed(.pause)) ctx.setMouseCapture(false);
 
     // Cmd+D (macOS) / Ctrl+D: the debug screen, as in the voxel example.
     if (in.keyPressed(.D) and (in.mods.super or in.mods.ctrl)) show_debug = !show_debug;
@@ -1421,18 +1472,18 @@ fn tick(ctx: *sw.Context) void {
             settings.update(in, l.w, l.h);
         } else if (weapon_menu.open) {
             const l = logical(ctx);
-            switch (weapon_menu.update(in, l.w, l.h, &choice)) {
+            switch (weapon_menu.update(in, l.w, l.h, &choice, gcon.act.pressed(.weaponmenu))) {
                 .changed => pickChanged(),
                 // B and DONE are user gestures: the lock request is allowed.
                 .close_play => ctx.setMouseCapture(true),
                 .close_pause, .none => {},
             }
         } else {
-            if (in.keyPressed(.M)) {
+            if (gcon.act.pressed(.menu)) {
                 enterMenu(ctx);
                 return;
             }
-            if (in.keyPressed(.B)) weapon_menu.show();
+            if (gcon.act.pressed(.weaponmenu)) weapon_menu.show();
             if (in.buttonPressed(.left)) {
                 if (pauseScreenShows() and inRect(pauseSettingsButton(ctx), in.mouse.x, in.mouse.y)) {
                     settings.show();
@@ -1440,7 +1491,7 @@ fn tick(ctx: *sw.Context) void {
             }
         }
     } else {
-        gameplayTick(ctx);
+        gameplayTick(ctx, in);
     }
     stepGrenades();
     effectsTick();
@@ -1748,7 +1799,9 @@ fn drawAmmo(r: *gfx.Renderer, w: f32, h: f32) !void {
                 try r.fillRect(.{ .x = w - 210, .y = h - 20, .w = 190 * k, .h = 4 }, accent);
                 txtCenter(r, "RELOADING", w / 2, h / 2 + 40, 16, accent);
             } else if (it.ammo == 0 and hands.drawing <= 0) {
-                txtCenter(r, "R TO RELOAD", w / 2, h / 2 + 40, 16, red);
+                var kb: [24]u8 = undefined;
+                var line: [48]u8 = undefined;
+                txtCenter(r, std.fmt.bufPrint(&line, "{s} TO RELOAD", .{gcon.keyLabel(&kb, .reload)}) catch "", w / 2, h / 2 + 40, 16, red);
             }
         } else {
             txtCenter(r, st.label, w - 115, h - 70, 26, white);
@@ -1759,7 +1812,9 @@ fn drawAmmo(r: *gfx.Renderer, w: f32, h: f32) !void {
     try r.fillRect(.{ .x = w - 290, .y = h - 86, .w = 72, .h = 66 }, panel);
     const gs = if (mode == .practice) "inf" else std.fmt.bufPrint(&buf, "{d}", .{nades}) catch "";
     txtCenter(r, gs, w - 254, h - 80, 30, if (mode == .deathmatch and nades == 0) red else white);
-    txtCenter(r, "G  NADE", w - 254, h - 40, 12, dim);
+    var kb: [24]u8 = undefined;
+    var nl: [40]u8 = undefined;
+    txtCenter(r, std.fmt.bufPrint(&nl, "{s}  NADE", .{gcon.keyLabel(&kb, .grenade)}) catch "", w - 254, h - 40, 12, dim);
 
     // The slots, right to left: 4 GRENADE, 3 KNIFE, 2 and 1.
     var x = w - 20;
@@ -1873,19 +1928,40 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
         var buf: [32]u8 = undefined;
         txtCenter(r, std.fmt.bufPrint(&buf, "practice best: {d}", .{best}) catch "", cx, b[2].y + 84, 14, dim);
     }
-    txtCenter(r, "WASD move  -  SPACE jump  -  MOUSE aim  -  RIGHT CLICK sights  -  R reload  -  G grenade  -  Q / E lean  -  F use  -  TAB scores", cx, h - 66, 14, dim);
-    txtCenter(r, "1 primary  -  2 secondary  -  3 knife  -  4 grenade (click throws)  -  B weapon menu", cx, h - 46, 14, dim);
+    // The keys of the binds (game_console.zig), so a rebind shows here.
+    var k: [14][24]u8 = undefined;
+    var l1: [256]u8 = undefined;
+    var l2: [256]u8 = undefined;
+    const L = gcon.keyLabel;
+    // "WASD" when the four move keys are letters, else with spaces.
+    const mv = [4][]const u8{ L(&k[0], .forward), L(&k[1], .moveleft), L(&k[2], .back), L(&k[3], .moveright) };
+    const short = mv[0].len == 1 and mv[1].len == 1 and mv[2].len == 1 and mv[3].len == 1;
+    var mb: [100]u8 = undefined;
+    const moves = (if (short)
+        std.fmt.bufPrint(&mb, "{s}{s}{s}{s}", .{ mv[0], mv[1], mv[2], mv[3] })
+    else
+        std.fmt.bufPrint(&mb, "{s} {s} {s} {s}", .{ mv[0], mv[1], mv[2], mv[3] })) catch "";
+    txtCenter(r, std.fmt.bufPrint(&l1, "{s} move  -  {s} jump  -  MOUSE aim  -  {s} sights  -  {s} reload  -  {s} grenade  -  {s} / {s} lean  -  {s} use  -  {s} scores", .{
+        moves,               L(&k[4], .jump),      L(&k[5], .aim),  L(&k[6], .reload),  L(&k[7], .grenade),
+        L(&k[8], .leanleft), L(&k[9], .leanright), L(&k[10], .use), L(&k[11], .scores),
+    }) catch "", cx, h - 66, 14, dim);
+    txtCenter(r, std.fmt.bufPrint(&l2, "{s} primary  -  {s} secondary  -  {s} knife  -  {s} grenade (click throws)  -  {s} weapon menu  -  ` console", .{
+        L(&k[0], .slot1), L(&k[1], .slot2), L(&k[2], .slot3), L(&k[3], .slot4), L(&k[4], .weaponmenu),
+    }) catch "", cx, h - 46, 14, dim);
     txtCenter(r, "Gun models: Quaternius Ultimate Gun Pack (CC0)", cx, h - 24, 12, dim);
 }
 
-fn drawDeathmatch(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !bool {
+fn drawDeathmatch(r: *gfx.Renderer, w: f32, h: f32) !bool {
     const cx = w / 2;
     const cy = h / 2;
     var buf: [96]u8 = undefined;
     const st = client.state();
     if (st != .open) {
         try r.fillRect(.{ .x = 0, .y = 0, .w = w, .h = h }, gfx.Color.rgba8(5, 6, 10, 160));
-        const msg = if (st == .closed) "CONNECTION LOST - press ENTER to retry, M for the menu" else "CONNECTING TO THE LOBBY...";
+        var kb: [24]u8 = undefined;
+        var line: [80]u8 = undefined;
+        const lost = std.fmt.bufPrint(&line, "CONNECTION LOST - press ENTER to retry, {s} for the menu", .{gcon.keyLabel(&kb, .menu)}) catch "";
+        const msg = if (st == .closed) lost else "CONNECTING TO THE LOBBY...";
         txtCenter(r, msg, cx, cy - 12, 22, white);
         return false;
     }
@@ -1910,7 +1986,7 @@ fn drawDeathmatch(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !bool {
         txtCenter(r, t, cx, cy - 60, 30, red);
         txtCenter(r, "you respawn in a moment", cx, cy - 20, 16, dim);
     }
-    if (ctx.input().keyDown(.Tab)) try drawScoreboard(r, w, h, "SCORES");
+    if (gcon.act.down(.scores)) try drawScoreboard(r, w, h, "SCORES");
     return true;
 }
 
@@ -2121,11 +2197,12 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
             .deathmatch => "the pick applies at once at your spawn point, else on your next spawn",
             else => "the pick applies at once",
         };
-        return weapon_menu.draw(r, &text.?, in.mouse.x, in.mouse.y, w, h, choice, note);
+        var kb: [24]u8 = undefined;
+        return weapon_menu.draw(r, &text.?, in.mouse.x, in.mouse.y, w, h, choice, note, gcon.keyLabel(&kb, .weaponmenu));
     }
     var crosshair = true;
     if (mode == .deathmatch) {
-        if (!try drawDeathmatch(ctx, r, w, h)) return;
+        if (!try drawDeathmatch(r, w, h)) return;
         crosshair = alive;
     }
     if (mode == .practice) try drawPractice(r, w);
@@ -2134,8 +2211,10 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
     if (captured) if (aimedButton()) |bi| {
         const b = map.buttons[bi];
-        const label = if (b.in_cab) (if (b.level == 0) "F   GO DOWN" else "F   GO UP") else "F   CALL LIFT";
-        txtCenter(r, label, w / 2, h / 2 + 22, 15, white);
+        const what = if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
+        var kb: [24]u8 = undefined;
+        var line: [48]u8 = undefined;
+        txtCenter(r, std.fmt.bufPrint(&line, "{s}   {s}", .{ gcon.keyLabel(&kb, .use), what }) catch "", w / 2, h / 2 + 22, 15, white);
     };
     try drawMinimap(r, h);
     try drawHealth(r, h);
@@ -2144,7 +2223,10 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (!captured) {
         try r.fillRect(.{ .x = 0, .y = 0, .w = w, .h = h }, gfx.Color.rgba8(5, 6, 10, 140));
         txtCenter(r, "CLICK TO PLAY", w / 2, h / 2 - 30, 34, white);
-        txtCenter(r, "M for the main menu  -  B for the weapon menu", w / 2, h / 2 + 14, 16, dim);
+        var ka: [24]u8 = undefined;
+        var kb: [24]u8 = undefined;
+        var line: [96]u8 = undefined;
+        txtCenter(r, std.fmt.bufPrint(&line, "{s} for the main menu  -  {s} for the weapon menu  -  ` for the console", .{ gcon.keyLabel(&ka, .menu), gcon.keyLabel(&kb, .weaponmenu) }) catch "", w / 2, h / 2 + 14, 16, dim);
         const sb = pauseSettingsButton(ctx);
         const in = ctx.input();
         const hover = inRect(sb, in.mouse.x, in.mouse.y);
@@ -2185,7 +2267,7 @@ fn gameInit(ctx: *sw.Context) !void {
     if (platform.storageGet(alloc, "practice-best") catch null) |b| {
         best = std.fmt.parseInt(u32, b, 10) catch 0;
     }
-    settings.load(alloc);
+    try gcon.init(alloc, &client);
     loadChoice();
     applied = choice;
 }
@@ -2278,10 +2360,15 @@ fn gameRender(ctx: *sw.Context) !void {
     exposure += (target_exposure - exposure) * @min(1, frame_ms / 1000 * 1.5);
     // The field of view setting is at the hip. The sights make it narrower
     // in the same ratio as the default, 74 to 52 degrees.
-    const fov: f32 = settings.v.fov * (1 - 22.0 / 74.0 * loadout.hands.ads) * std.math.pi / 180;
+    const fov: f32 = settings.fov.float() * (1 - 22.0 / 74.0 * loadout.hands.ads) * std.math.pi / 180;
     if (weapon_menu.open and mode != .menu) buildPreview(ctx, cam.eye, cam.yaw, cam.pitch, cam.roll, fov);
     hud_cam = .{ .view = render.viewMatrix(cam.eye, cam.yaw, cam.pitch, cam.roll), .th = @tan(fov / 2), .eye = cam.eye };
-    if (hud) |*r| try drawHud(ctx, r);
+    if (hud) |*r| {
+        try drawHud(ctx, r);
+        // The console covers everything, the debug screen too.
+        const l = logical(ctx);
+        try gcon.view.draw(&gcon.con, r, &text.?, l.w, l.h);
+    }
     try render.draw(ctx, .{
         .eye = cam.eye,
         .yaw = cam.yaw,

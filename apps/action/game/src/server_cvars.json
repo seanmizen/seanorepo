@@ -1,0 +1,39 @@
+{
+  "$comment": "The server cvars, defined one time for the client and the server. The client embeds this file (game_console.zig) and the server reads it (server/console.ts). Every cvar here is a server cvar: the server owns it and clients only read it. The format: game/src/console/schema.zig. The server reads the values from server/server.cfg, then from the SV_<NAME> environment variables.",
+  "cvars": [
+    {
+      "name": "despawn_cadaver_timer",
+      "type": "float",
+      "default": -1,
+      "max": 86400,
+      "description": "Seconds until a dead body despawns in deathmatch. Unset or negative: bodies never despawn.",
+      "reader": "Nothing reads it yet. The ragdoll bodies will read it."
+    },
+    {
+      "name": "match_seconds",
+      "type": "int",
+      "default": 300,
+      "min": 10,
+      "max": 7200,
+      "description": "The length of a deathmatch match, in seconds. A change applies from the next match.",
+      "reader": "server/index.ts step (the match clock)"
+    },
+    {
+      "name": "end_seconds",
+      "type": "int",
+      "default": 10,
+      "min": 1,
+      "max": 120,
+      "description": "Seconds that the score board shows after a match. A change applies from the next match end.",
+      "reader": "server/index.ts step (the match clock)"
+    },
+    {
+      "name": "admin_password",
+      "type": "string",
+      "default": "",
+      "flags": ["protected"],
+      "description": "The password of remote admin (rcon). Empty: remote admin is off. It never goes to a client.",
+      "reader": "server/index.ts onRcon"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
-// The player settings: head bob, volumes, field of view and mouse
-// sensitivity. The values apply at once and stay in local storage (the key
-// "settings"). The panel opens from the main menu and from the pause screen.
+// The settings panel: a view over five saved cvars (head bob, volumes,
+// field of view and mouse sensitivity). The panel and the console change
+// the same values. The console saves them (local storage "config").
+// The panel opens from the main menu and from the pause screen.
 //
 // Controls of the panel: click or drag a slider, or Up and Down to select a
 // row and Left and Right to change it. Esc or BACK closes it.
@@ -9,82 +10,122 @@ const core = @import("sw_core");
 const gfx = @import("sw_gfx2d");
 const sw_text = @import("sw_text");
 const platform = @import("sw_platform");
+const console = @import("console/root.zig");
 
-pub const Values = struct {
-    /// The head bob amount. 0 turns it off, 1 is the default.
-    bob: f32 = 1,
-    /// The master volume, 0 to 1. It scales every sound.
-    master: f32 = 1,
-    /// The sound effects volume, 0 to 1: the guns, the hits, the grenades
-    /// and the buttons. The trains follow the master volume only.
-    sfx: f32 = 1,
-    /// The vertical field of view in degrees, at the hip. Aiming down the
-    /// sights makes it narrower.
-    fov: f32 = 74,
-    /// The mouse sensitivity, a multiplier.
-    sens: f32 = 1,
-};
-
-pub var v: Values = .{};
+pub var head_bob: *console.Cvar = undefined;
+pub var volume: *console.Cvar = undefined;
+pub var sfx_volume: *console.Cvar = undefined;
+pub var fov: *console.Cvar = undefined;
+pub var sensitivity: *console.Cvar = undefined;
 pub var open = false;
 
-const Unit = enum { percent, degrees, times };
-const Item = struct { label: []const u8, field: []const u8, min: f32, max: f32, step: f32, unit: Unit };
-const items = [_]Item{
-    .{ .label = "HEAD BOB", .field = "bob", .min = 0, .max = 2, .step = 0.1, .unit = .percent },
-    .{ .label = "MASTER VOLUME", .field = "master", .min = 0, .max = 1, .step = 0.05, .unit = .percent },
-    .{ .label = "EFFECTS VOLUME", .field = "sfx", .min = 0, .max = 1, .step = 0.05, .unit = .percent },
-    .{ .label = "FIELD OF VIEW", .field = "fov", .min = 60, .max = 100, .step = 1, .unit = .degrees },
-    .{ .label = "MOUSE SENSITIVITY", .field = "sens", .min = 0.2, .max = 3, .step = 0.05, .unit = .times },
+var con: *console.Console = undefined;
+
+const defs = [_]console.Def{
+    .{
+        .name = "head_bob",
+        .default = .{ .float = 1 },
+        .min = 0,
+        .max = 2,
+        .flags = .{ .saved = true },
+        .description = "The head bob amount: 0 is off, 1 the default. It follows the speed on the ground.",
+        .reader = "main.zig playerView",
+    },
+    .{
+        .name = "volume",
+        .default = .{ .float = 1 },
+        .min = 0,
+        .max = 1,
+        .flags = .{ .saved = true },
+        .description = "The master volume, 0 to 1. It scales every sound.",
+        .reader = "main.zig tick (audio.setMasterVolume)",
+    },
+    .{
+        .name = "sfx_volume",
+        .default = .{ .float = 1 },
+        .min = 0,
+        .max = 1,
+        .flags = .{ .saved = true },
+        .description = "The effects volume, 0 to 1: the guns, the hits, the grenades and the buttons. The trains follow the master volume only.",
+        .reader = "main.zig sound",
+    },
+    .{
+        .name = "fov",
+        .default = .{ .float = 74 },
+        .min = 60,
+        .max = 100,
+        .flags = .{ .saved = true },
+        .description = "The vertical field of view at the hip, in degrees. The sights make it narrower.",
+        .reader = "main.zig gameRender (the camera)",
+    },
+    .{
+        .name = "sensitivity",
+        .default = .{ .float = 1 },
+        .min = 0.2,
+        .max = 3,
+        .flags = .{ .saved = true },
+        .description = "The mouse sensitivity, a multiplier.",
+        .reader = "main.zig gameplayTick (the mouse look)",
+    },
 };
+
+const Unit = enum { percent, degrees, times };
+const Item = struct { label: []const u8, step: f32, unit: Unit };
+/// The rows of the panel, in the order of `defs`.
+const items = [_]Item{
+    .{ .label = "HEAD BOB", .step = 0.1, .unit = .percent },
+    .{ .label = "MASTER VOLUME", .step = 0.05, .unit = .percent },
+    .{ .label = "EFFECTS VOLUME", .step = 0.05, .unit = .percent },
+    .{ .label = "FIELD OF VIEW", .step = 1, .unit = .degrees },
+    .{ .label = "MOUSE SENSITIVITY", .step = 0.05, .unit = .times },
+};
+var cvars: [items.len]*console.Cvar = undefined;
 
 var selected: usize = 0;
 var dragging: ?usize = null;
-var dirty = false;
 
-fn value(i: usize) *f32 {
-    inline for (items, 0..) |it, k| {
-        if (k == i) return &@field(v, it.field);
-    }
-    unreachable;
+/// Add the cvars of the panel to the console.
+pub fn register(c: *console.Console) !void {
+    con = c;
+    for (defs, 0..) |d, i| cvars[i] = try c.addCvar(d);
+    head_bob = cvars[0];
+    volume = cvars[1];
+    sfx_volume = cvars[2];
+    fov = cvars[3];
+    sensitivity = cvars[4];
+}
+
+fn value(i: usize) f32 {
+    return cvars[i].float();
 }
 
 fn set(i: usize, x: f32) void {
     const it = items[i];
-    // Snap to the step, so the values stay round.
-    const snapped = it.min + @round((x - it.min) / it.step) * it.step;
-    const nv = std.math.clamp(snapped, it.min, it.max);
-    if (value(i).* != nv) {
-        value(i).* = nv;
-        dirty = true;
-    }
+    const d = &cvars[i].def;
+    const lo: f32 = @floatCast(d.min.?);
+    // Snap to the step, so the values stay round. The cvar clamps.
+    const snapped = lo + @round((x - lo) / it.step) * it.step;
+    _ = con.setValue(cvars[i], .{ .float = snapped }, .user) catch {};
 }
 
-/// Read the settings from local storage. A missing or bad value keeps its
-/// default.
-pub fn load(alloc: std.mem.Allocator) void {
+/// Carry over the values of the old panel (local storage "settings",
+/// "bob=1.00 master=1.00 sfx=1.00 fov=74 sens=1.00") one time, then delete
+/// the old key. A missing or bad value keeps the default.
+pub fn migrate(c: *console.Console, alloc: std.mem.Allocator) void {
     const text = (platform.storageGet(alloc, "settings") catch null) orelse return;
     defer alloc.free(text);
-    // "bob=1.00 master=1.00 ...": one name=value pair for each setting.
+    const old = [_][]const u8{ "bob", "master", "sfx", "fov", "sens" };
     var pairs = std.mem.tokenizeAny(u8, text, " \n");
     while (pairs.next()) |pair| {
         const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        const x = std.fmt.parseFloat(f32, pair[eq + 1 ..]) catch continue;
-        if (!std.math.isFinite(x)) continue;
-        inline for (items, 0..) |it, i| {
-            if (std.mem.eql(u8, pair[0..eq], it.field)) set(i, x);
+        const x = std.fmt.parseFloat(f64, pair[eq + 1 ..]) catch continue;
+        for (old, 0..) |name, i| {
+            if (std.mem.eql(u8, pair[0..eq], name)) _ = c.setValue(cvars[i], .{ .float = x }, .game) catch {};
         }
     }
-    dirty = false;
-}
-
-fn save() void {
-    dirty = false;
-    var buf: [160]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, "bob={d:.2} master={d:.2} sfx={d:.2} fov={d:.0} sens={d:.2}", .{
-        v.bob, v.master, v.sfx, v.fov, v.sens,
-    }) catch return;
-    platform.storageSet("settings", s) catch {};
+    // Save the values now: the old key goes next.
+    c.saveConfig();
+    platform.storageDelete("settings") catch {};
 }
 
 pub fn show() void {
@@ -95,7 +136,6 @@ pub fn show() void {
 fn close() void {
     open = false;
     dragging = null;
-    if (dirty) save();
 }
 
 const row_h: f32 = 54;
@@ -120,6 +160,11 @@ fn inside(r: gfx.Rect, x: f32, y: f32) bool {
     return x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h;
 }
 
+fn range(i: usize) struct { lo: f32, hi: f32 } {
+    const d = &cvars[i].def;
+    return .{ .lo = @floatCast(d.min.?), .hi = @floatCast(d.max.?) };
+}
+
 /// The input of one tick while the panel is open. `w` and `h` are the
 /// logical size of the canvas, the space of the mouse position.
 pub fn update(in: *const core.InputSnapshot, w: f32, h: f32) void {
@@ -127,8 +172,8 @@ pub fn update(in: *const core.InputSnapshot, w: f32, h: f32) void {
     if (in.keyPressed(.Escape)) return close();
     if (in.keyPressed(.Up)) selected = (selected + items.len - 1) % items.len;
     if (in.keyPressed(.Down)) selected = (selected + 1) % items.len;
-    if (in.keyPressed(.Left)) set(selected, value(selected).* - items[selected].step);
-    if (in.keyPressed(.Right)) set(selected, value(selected).* + items[selected].step);
+    if (in.keyPressed(.Left)) set(selected, value(selected) - items[selected].step);
+    if (in.keyPressed(.Right)) set(selected, value(selected) + items[selected].step);
 
     const mx = in.mouse.x;
     const my = in.mouse.y;
@@ -145,17 +190,15 @@ pub fn update(in: *const core.InputSnapshot, w: f32, h: f32) void {
     }
     if (dragging) |i| {
         const t = l.tracks[i];
-        const it = items[i];
-        set(i, it.min + std.math.clamp((mx - t.x) / t.w, 0, 1) * (it.max - it.min));
+        const rg = range(i);
+        set(i, rg.lo + std.math.clamp((mx - t.x) / t.w, 0, 1) * (rg.hi - rg.lo));
     }
     // A short click can press and release inside one tick.
     if (!in.buttonDown(.left)) dragging = null;
-    // Save when a drag ends, not on each tick of it.
-    if (dirty and dragging == null) save();
 }
 
 fn valueText(buf: []u8, i: usize) []const u8 {
-    const x = value(i).*;
+    const x = value(i);
     return switch (items[i].unit) {
         .percent => if (x == 0) "OFF" else std.fmt.bufPrint(buf, "{d:.0}%", .{x * 100}) catch "",
         .degrees => std.fmt.bufPrint(buf, "{d:.0} deg", .{x}) catch "",
@@ -181,7 +224,8 @@ pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mouse_x: f32, mouse_y
         const ry = t.y - 14;
         if (i == selected) try r.fillRect(.{ .x = l.panel.x + 8, .y = ry - 6, .w = pw - 16, .h = row_h - 6 }, gfx.Color.rgba8(255, 166, 77, 30));
         _ = try text.draw(r, it.label, l.panel.x + 28, ry + 2, .{ .size = 16, .color = if (i == selected) accent else white });
-        const k = (value(i).* - it.min) / (it.max - it.min);
+        const rg = range(i);
+        const k = (value(i) - rg.lo) / (rg.hi - rg.lo);
         try r.fillRect(t, gfx.Color.rgba8(255, 255, 255, 40));
         try r.fillRect(.{ .x = t.x, .y = t.y, .w = t.w * k, .h = t.h }, accent);
         try r.fillRect(.{ .x = t.x + t.w * k - 5, .y = t.y - 7, .w = 10, .h = 20 }, white);
@@ -192,6 +236,6 @@ pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mouse_x: f32, mouse_y
     try r.fillRect(l.back, if (hover) gfx.Color.rgba8(255, 166, 77, 230) else gfx.Color.rgba8(255, 255, 255, 30));
     const bt = "BACK";
     _ = try text.draw(r, bt, w / 2 - text.measure(bt, 18).w / 2, l.back.y + 11, .{ .size = 18, .color = if (hover) gfx.Color.rgba8(20, 14, 8, 255) else white });
-    const hint = "drag a slider, or the arrow keys  -  ESC to close";
+    const hint = "drag a slider, or the arrow keys  -  ESC to close  -  the console has the same values";
     _ = try text.draw(r, hint, w / 2 - text.measure(hint, 13).w / 2, l.panel.y + l.panel.h + 12, .{ .size = 13, .color = dim });
 }

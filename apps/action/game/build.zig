@@ -46,16 +46,17 @@ pub fn build(b: *std.Build) void {
     run.addPassthruArgs();
     b.step("floorplan", "Slice a map into images, or audit it").dependOn(&run.step);
 
-    // `zig build test`: native tests of the player movement on the maps
-    // (src/player_test.zig).
+    // `zig build test`: native tests (src/tests.zig): the player movement on
+    // the maps, and the console framework (src/console/).
     const sw_host = b.dependency("swindowzig", .{ .target = host, .optimize = optimize });
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/player_test.zig"),
+            .root_source_file = b.path("src/tests.zig"),
             .target = host,
             .optimize = optimize,
         }),
     });
     tests.root_module.addImport("sw_math", sw_host.module("sw_math"));
-    b.step("test", "Walk the player over the stairs and escalators").dependOn(&b.addRunArtifact(tests).step);
+    tests.root_module.addImport("sw_core", sw_host.module("sw_core"));
+    b.step("test", "Walk the player over the stairs and escalators, test the console").dependOn(&b.addRunArtifact(tests).step);
 }

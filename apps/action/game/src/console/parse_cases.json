@@ -1,0 +1,29 @@
+{
+  "$comment": "The command line grammar cases. game/src/console/tests.zig and server/console.test.ts both run them, so the client and the server split a line in the same way. Each case: the source text, and its commands as token lists.",
+  "cases": [
+    { "src": "set fov 90", "commands": [["set", "fov", "90"]] },
+    { "src": "  set   fov\t90  ", "commands": [["set", "fov", "90"]] },
+    {
+      "src": "set fov 90; echo hi",
+      "commands": [["set", "fov", "90"], ["echo", "hi"]]
+    },
+    { "src": "set fov 90 // a comment", "commands": [["set", "fov", "90"]] },
+    { "src": "// only a comment", "commands": [] },
+    { "src": "echo \"a ; b // c\"", "commands": [["echo", "a ; b // c"]] },
+    {
+      "src": "bind k \"+jump; +attack\"",
+      "commands": [["bind", "k", "+jump; +attack"]]
+    },
+    { "src": "one\ntwo\r\n\nthree", "commands": [["one"], ["two"], ["three"]] },
+    { "src": "a;;b;", "commands": [["a"], ["b"]] },
+    { "src": "echo \"\"", "commands": [["echo", ""]] },
+    {
+      "src": "echo \"open quote; still in it",
+      "commands": [["echo", "open quote; still in it"]]
+    },
+    { "src": "echo \"open\nnext", "commands": [["echo", "open"], ["next"]] },
+    { "src": "echo a\"b c\"d", "commands": [["echo", "a", "b c", "d"]] },
+    { "src": "say http://example.com", "commands": [["say", "http:"]] },
+    { "src": "x // c; y\nz", "commands": [["x"], ["z"]] }
+  ]
+}
