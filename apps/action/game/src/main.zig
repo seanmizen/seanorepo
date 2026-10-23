@@ -16,6 +16,14 @@
 // chat. These keys are the default binds (game_console.zig): the game reads
 // the actions, not the keys. The backtick key opens the console, and "/"
 // opens the chat with "/" typed (console/).
+//
+// The connection (session/): the server sends a welcome first, with its
+// instance id, build and protocol. The game sends its hello only when the
+// protocol is the same. A lost connection shows on the HUD, and the game
+// tries again with a growing wait. The session compares each new welcome
+// with the last one: the same server, a restart, a new build (a reload
+// notice) or a new protocol (no join: reload to play). See handleNet and
+// onWelcome.
 const std = @import("std");
 const sw = @import("sw_app");
 const core = @import("sw_core");
@@ -37,6 +45,8 @@ const weapon_menu = @import("weapon_menu.zig");
 const range = @import("range.zig");
 const arena = @import("maps/arena.zig");
 const gcon = @import("game_console.zig");
+const session_mod = @import("session/root.zig");
+const build_options = @import("build_options");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -124,10 +134,11 @@ var remote_flash: struct { p: V3, life: f32 } = .{ .p = v3(0, 0, 0), .life = 0 }
 
 // Deathmatch.
 var client: net.Client = undefined;
+/// The connection to the lobby: the handshake, the retries, the versions.
+var session: session_mod.Session = .init(.{ .build = build_options.build_version, .protocol = net.protocol_version });
 var my_id: u32 = 0;
 var phase_end = false;
 var time_left: f32 = 0;
-var sent_hello = false;
 const Remote = struct {
     id: u32,
     name: [16]u8 = undefined,
@@ -507,6 +518,7 @@ fn aimedButton() ?usize {
 fn enterMenu(ctx: *sw.Context) void {
     if (mode == .deathmatch) {
         client.close();
+        session.stop(time);
         gcon.leftServer();
     }
     mode = .menu;
@@ -556,6 +568,16 @@ fn startRound() void {
 fn enterDeathmatch(ctx: *sw.Context) void {
     loadMap(ctx, .earls_court);
     mode = .deathmatch;
+    resetMatch();
+    const s = map.spawns[@intFromFloat(rand() * (@as(f32, @floatFromInt(map.spawn_count)) - 0.01))];
+    spawnAt(s.pos[0], s.pos[1], s.pos[2], s.yaw);
+    alive = false;
+    onStep(session.start(time));
+}
+
+/// Forget the match: at the start of deathmatch, and at each join, so the
+/// state of the match comes from the server. The player waits for a spawn.
+fn resetMatch() void {
     grenade.reset();
     remote_n = 0;
     feed_n = 0;
@@ -564,14 +586,10 @@ fn enterDeathmatch(ctx: *sw.Context) void {
     my_d = 0;
     my_ping = -1;
     my_ping_stale = false;
-    sent_hello = false;
+    phase_end = false;
     alive = false;
     dead_time = 0;
     killed_by_len = 0;
-    const s = map.spawns[@intFromFloat(rand() * (@as(f32, @floatFromInt(map.spawn_count)) - 0.01))];
-    spawnAt(s.pos[0], s.pos[1], s.pos[2], s.yaw);
-    alive = false;
-    client.connect();
 }
 
 fn placeTarget(t: *Target, salt: usize) void {
@@ -1073,15 +1091,65 @@ fn handlePings(m: net.Msg) void {
     }
 }
 
-fn handleNet() void {
-    client.beginFrame();
-    if (client.state() == .open and !sent_hello) {
-        sendChoice("hello");
-        sent_hello = true;
+/// Do what a session step asks.
+fn onStep(step: session_mod.Step) void {
+    switch (step) {
+        .none => {},
+        .connect => client.connect(),
+        .lost => if (session.attempt == 1) gcon.notice("Connection lost. Trying again."),
+        .timed_out => {
+            client.close();
+            if (session.attempt == 1) gcon.notice("No answer from the server. Trying again.");
+        },
     }
+}
+
+/// The first message on each connection: who the server is. The session
+/// compares it with the client and with the last server.
+fn onWelcome(ctx: *sw.Context, m: net.Msg) void {
+    const verdict = session.welcome(time, .{
+        .instance = m.instance orelse "",
+        .build = m.build orelse "",
+        .protocol = m.protocol orelse 0,
+        .started = m.started orelse "",
+    }) orelse return;
+    if (verdict == .new_protocol) {
+        // Do not join. Free the mouse for the RELOAD button.
+        client.close();
+        ctx.setMouseCapture(false);
+        gcon.notice("A new version is live. Reload the page to play.");
+        return;
+    }
+    resetMatch();
+    my_id = m.id orelse 0;
+    sendChoice("hello");
+    switch (verdict) {
+        .first, .new_protocol => {},
+        .same_instance => gcon.notice("Connected again."),
+        .restarted => gcon.notice("The server restarted."),
+        .new_build => gcon.notice("A new version is live. Reload the page to update."),
+    }
+}
+
+fn socketState() session_mod.Socket {
+    return switch (client.state()) {
+        .idle => .idle,
+        .connecting => .connecting,
+        .open => .open,
+        .closed => .closed,
+    };
+}
+
+fn handleNet(ctx: *sw.Context) void {
+    client.beginFrame();
+    // The messages first: a bye comes just before the close.
     while (client.poll()) |m| {
         if (std.mem.eql(u8, m.t, "welcome")) {
-            my_id = m.id orelse 0;
+            onWelcome(ctx, m);
+        } else if (std.mem.eql(u8, m.t, "bye")) {
+            const reason = m.reason orelse "";
+            session.bye(reason);
+            if (reason.len > 0) gcon.notice(reason);
         } else if (std.mem.eql(u8, m.t, "snap")) {
             handleSnap(m);
         } else if (std.mem.eql(u8, m.t, "pings")) {
@@ -1161,6 +1229,7 @@ fn handleNet() void {
             gcon.onChat(m.ch orelse "all", m.name orelse "?", m.text orelse "", rgb);
         }
     }
+    onStep(session.step(time, socketState()));
 }
 
 // ---- Tick ------------------------------------------------------------------
@@ -1169,7 +1238,7 @@ fn handleNet() void {
 /// (game_console.zig); `in` gives the mouse movement and the modifiers.
 fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     const act = &gcon.act;
-    const frozen = mode == .deathmatch and (phase_end or !alive);
+    const frozen = mode == .deathmatch and (phase_end or !alive or !session.joined());
     const look: f32 = 0.0022 * settings.sensitivity.float() * (1 - 0.35 * loadout.hands.ads);
     const look_up = -in.mouse.delta_y * look;
     me.yaw -= in.mouse.delta_x * look;
@@ -1420,10 +1489,23 @@ fn tick(ctx: *sw.Context) void {
             return;
         },
         .deathmatch => {
-            handleNet();
+            handleNet(ctx);
             if (!alive) dead_time += dt;
-            if (client.state() == .closed and in.keyPressed(.Enter)) enterDeathmatch(ctx);
-            if (ticks % 6 == 0 and alive) {
+            if (!session.joined()) {
+                // No connection: Enter tries again at once, or reloads for
+                // a new protocol. The menu key works with or without the
+                // pause screen.
+                const incompatible = session.state == .incompatible;
+                if (in.keyPressed(.Enter)) {
+                    if (incompatible) gcon.reloadPage() else session.retryNow(time);
+                }
+                if (incompatible and in.buttonPressed(.left) and inRect(reloadButton(ctx), in.mouse.x, in.mouse.y)) gcon.reloadPage();
+                if (gcon.act.pressed(.menu)) {
+                    enterMenu(ctx);
+                    return;
+                }
+            }
+            if (ticks % 6 == 0 and alive and session.joined()) {
                 // w and m: the class and the model of the held weapon, so
                 // the others see it.
                 client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d}}}", .{
@@ -1517,7 +1599,13 @@ fn tick(ctx: *sw.Context) void {
             if (in.buttonPressed(.left)) {
                 if (pauseScreenShows() and inRect(pauseSettingsButton(ctx), in.mouse.x, in.mouse.y)) {
                     settings.show();
-                } else ctx.setMouseCapture(true);
+                } else if (pauseScreenShows() and session.update and inRect(reloadButton(ctx), in.mouse.x, in.mouse.y)) {
+                    gcon.reloadPage();
+                } else if (mode != .deathmatch or session.state != .incompatible) {
+                    // The new protocol screen keeps the mouse for its
+                    // RELOAD button.
+                    ctx.setMouseCapture(true);
+                }
             }
         }
     } else {
@@ -1755,8 +1843,22 @@ fn pauseScreenShows() bool {
     return switch (mode) {
         .menu => false,
         .practice => true,
-        .deathmatch => client.state() == .open and !phase_end,
+        .deathmatch => session.joined() and !phase_end,
     };
+}
+
+/// The RELOAD button: under SETTINGS on the pause screen while a new
+/// version is live, and on the new protocol screen.
+fn reloadButton(ctx: *sw.Context) gfx.Rect {
+    const l = logical(ctx);
+    const y = if (session.state == .incompatible) l.h / 2 + 40 else pauseSettingsButton(ctx).y + 56;
+    return .{ .x = l.w / 2 - 110, .y = y, .w = 220, .h = 44 };
+}
+
+fn drawButton(r: *gfx.Renderer, rect: gfx.Rect, label: []const u8, mx: f32, my: f32) !void {
+    const hover = inRect(rect, mx, my);
+    try r.fillRect(rect, if (hover) gfx.Color.rgba8(255, 166, 77, 230) else panel);
+    txtCenter(r, label, rect.x + rect.w / 2, rect.y + 12, 17, if (hover) gfx.Color.rgba8(20, 14, 8, 255) else white);
 }
 
 /// The SETTINGS button of the pause screen.
@@ -1958,6 +2060,7 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
         var buf: [32]u8 = undefined;
         txtCenter(r, std.fmt.bufPrint(&buf, "practice best: {d}", .{best}) catch "", cx, b[2].y + 84, 14, dim);
     }
+    if (session.update) txtCenter(r, "A new version is live. Reload the page to update.", cx, b[2].y + 108, 15, accent);
     // The keys of the binds (game_console.zig), so a rebind shows here.
     var k: [14][24]u8 = undefined;
     var l1: [256]u8 = undefined;
@@ -1982,19 +2085,61 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
     txtCenter(r, "Gun models: Quaternius Ultimate Gun Pack (CC0)", cx, h - 24, 12, dim);
 }
 
-fn drawDeathmatch(r: *gfx.Renderer, w: f32, h: f32) !bool {
+/// The screen while the game is not in the lobby: it connects, the
+/// connection is lost (the wait to the next try), or the server has a new
+/// protocol (the RELOAD button).
+fn drawNoLobby(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
+    const cx = w / 2;
+    const cy = h / 2;
+    try r.fillRect(.{ .x = 0, .y = 0, .w = w, .h = h }, gfx.Color.rgba8(5, 6, 10, 170));
+    var kb: [24]u8 = undefined;
+    var line: [160]u8 = undefined;
+    var hint: [80]u8 = undefined;
+    const menu_key = gcon.keyLabel(&kb, .menu);
+    switch (session.state) {
+        .incompatible => {
+            txtCenter(r, "A NEW VERSION IS LIVE", cx, cy - 90, 34, accent);
+            txtCenter(r, "Reload the page to play. The server has a new protocol.", cx, cy - 40, 18, white);
+            const sp = if (session.server) |*k| k.protocol else 0;
+            txtCenter(r, std.fmt.bufPrint(&line, "server protocol {d}  -  this page: protocol {d}", .{ sp, net.protocol_version }) catch "", cx, cy - 12, 14, dim);
+            const in = ctx.input();
+            const b = reloadButton(ctx);
+            try drawButton(r, b, "RELOAD", in.mouse.x, in.mouse.y);
+            txtCenter(r, std.fmt.bufPrint(&hint, "ENTER to reload  -  {s} for the menu", .{menu_key}) catch "", cx, b.y + b.h + 14, 14, dim);
+        },
+        .lost, .connecting, .handshake => {
+            if (session.attempt == 0) {
+                txtCenter(r, "CONNECTING TO THE LOBBY...", cx, cy - 12, 22, white);
+                txtCenter(r, std.fmt.bufPrint(&hint, "{s} for the menu", .{menu_key}) catch "", cx, cy + 22, 14, dim);
+                return;
+            }
+            txtCenter(r, "CONNECTION LOST", cx, cy - 80, 34, red);
+            if (session.reason.len > 0) txtCenter(r, session.reason.get(), cx, cy - 34, 18, white);
+            const t = if (session.state == .lost)
+                std.fmt.bufPrint(&line, "Reconnecting in {d:.0} s  (try {d})", .{ @ceil(session.retryIn(time)), session.attempt + 1 }) catch ""
+            else
+                std.fmt.bufPrint(&line, "Reconnecting...  (try {d})", .{session.attempt + 1}) catch "";
+            txtCenter(r, t, cx, cy - 4, 18, white);
+            txtCenter(r, std.fmt.bufPrint(&hint, "ENTER to try now  -  {s} for the menu", .{menu_key}) catch "", cx, cy + 28, 14, dim);
+        },
+        .joined, .offline => {},
+    }
+}
+
+fn drawDeathmatch(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !bool {
     const cx = w / 2;
     const cy = h / 2;
     var buf: [96]u8 = undefined;
-    const st = client.state();
-    if (st != .open) {
-        try r.fillRect(.{ .x = 0, .y = 0, .w = w, .h = h }, gfx.Color.rgba8(5, 6, 10, 160));
-        var kb: [24]u8 = undefined;
-        var line: [80]u8 = undefined;
-        const lost = std.fmt.bufPrint(&line, "CONNECTION LOST - press ENTER to retry, {s} for the menu", .{gcon.keyLabel(&kb, .menu)}) catch "";
-        const msg = if (st == .closed) lost else "CONNECTING TO THE LOBBY...";
-        txtCenter(r, msg, cx, cy - 12, 22, white);
+    if (!session.joined()) {
+        try drawNoLobby(ctx, r, w, h);
         return false;
+    }
+    // A new build is live. The game goes on: the notice does not block.
+    if (session.update) {
+        const t = "A NEW VERSION IS LIVE  -  reload the page to update";
+        const m = text.?.measure(t, 14);
+        try r.fillRect(.{ .x = cx - m.w / 2 - 12, .y = h - 64, .w = m.w + 24, .h = 26 }, panel);
+        txtCenter(r, t, cx, h - 59, 14, accent);
     }
     try r.fillRect(.{ .x = cx - 70, .y = 14, .w = 140, .h = 44 }, panel);
     txtCenter(r, timeText(&buf, time_left), cx, 20, 28, if (time_left < 30 and !phase_end) red else white);
@@ -2117,10 +2262,10 @@ fn drawHealthBars(r: *gfx.Renderer, w: f32, h: f32) !void {
 fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     const win = ctx.window();
     const in = ctx.input();
-    var lines: [16][96]u8 = undefined;
+    var lines: [20][96]u8 = undefined;
     var n: usize = 0;
     const L = struct {
-        fn add(buf: *[16][96]u8, count: *usize, comptime fmt: []const u8, args: anytype) void {
+        fn add(buf: *[20][96]u8, count: *usize, comptime fmt: []const u8, args: anytype) void {
             if (count.* >= buf.len) return;
             _ = std.fmt.bufPrint(&buf[count.*], fmt ++ "\x00", args) catch return;
             count.* += 1;
@@ -2146,8 +2291,13 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
         L.add(&lines, &n, "{s} ammo {d}  reload {d:.2}  draw {d:.2}  ads {d:.2}  heat {d:.2}", .{ @tagName(loadout.heldClass()), ammo, h.reloading, h.drawing, h.ads, h.heat });
     }
     L.add(&lines, &n, "grenades live {d}  left {d}  smoke {d}  blast cells {d}", .{ grenade.count, loadout.grenades(), grenade.puffCount(), grenade.debug_cells });
+    L.add(&lines, &n, "game build {s}  protocol {d}", .{ build_options.build_version, net.protocol_version });
     if (mode == .deathmatch) {
-        L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(client.state()), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
+        L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(session.state), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
+        if (session.server) |*k| {
+            L.add(&lines, &n, "server build {s}  protocol {d}", .{ k.build.get(), k.protocol });
+            L.add(&lines, &n, "server instance {s}", .{k.instance.get()});
+        }
     }
     const lh: f32 = 17;
     try r.fillRect(.{ .x = 10, .y = 76, .w = 420, .h = 12 + lh * @as(f32, @floatFromInt(n)) }, gfx.Color.rgba8(0, 0, 0, 170));
@@ -2233,7 +2383,7 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     }
     var crosshair = true;
     if (mode == .deathmatch) {
-        if (!try drawDeathmatch(r, w, h)) return;
+        if (!try drawDeathmatch(ctx, r, w, h)) return;
         crosshair = alive;
     }
     if (mode == .practice) try drawPractice(r, w);
@@ -2258,11 +2408,9 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
         var kb: [24]u8 = undefined;
         var line: [96]u8 = undefined;
         txtCenter(r, std.fmt.bufPrint(&line, "{s} for the main menu  -  {s} for the weapon menu  -  ` for the console", .{ gcon.keyLabel(&ka, .menu), gcon.keyLabel(&kb, .weaponmenu) }) catch "", w / 2, h / 2 + 14, 16, dim);
-        const sb = pauseSettingsButton(ctx);
         const in = ctx.input();
-        const hover = inRect(sb, in.mouse.x, in.mouse.y);
-        try r.fillRect(sb, if (hover) gfx.Color.rgba8(255, 166, 77, 230) else panel);
-        txtCenter(r, "SETTINGS", w / 2, sb.y + 12, 17, if (hover) gfx.Color.rgba8(20, 14, 8, 255) else white);
+        try drawButton(r, pauseSettingsButton(ctx), "SETTINGS", in.mouse.x, in.mouse.y);
+        if (session.update) try drawButton(r, reloadButton(ctx), "RELOAD TO UPDATE", in.mouse.x, in.mouse.y);
     }
 }
 
@@ -2298,7 +2446,7 @@ fn gameInit(ctx: *sw.Context) !void {
     if (platform.storageGet(alloc, "practice-best") catch null) |b| {
         best = std.fmt.parseInt(u32, b, 10) catch 0;
     }
-    try gcon.init(alloc, &client);
+    try gcon.init(alloc, &client, &session);
     loadChoice();
     applied = choice;
 }

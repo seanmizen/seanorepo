@@ -1,9 +1,10 @@
 // Where: apps/action/game/src/tests.zig (zig build test)
 // When: after a change to the player movement, the maps, the console, the
-// server cvars or the gun model.
+// session, the server cvars or the gun model.
 // Why: one native test binary: the walks over the stairs and escalators
-// (player_test.zig), the console framework (console/tests.zig), the gun
-// model (guns_test.zig), and the server cvar file of the game.
+// (player_test.zig), the console framework (console/tests.zig), the
+// session layer (session/tests.zig), the gun model (guns_test.zig), the
+// server cvar file and the protocol version of the game.
 const std = @import("std");
 const schema = @import("console/schema.zig");
 const line = @import("console/line.zig");
@@ -12,6 +13,13 @@ test {
     _ = @import("player_test.zig");
     _ = @import("console/tests.zig");
     _ = @import("guns_test.zig");
+    _ = @import("session/tests.zig");
+}
+
+test "protocol_version.txt: one number, 1 or more" {
+    // net.zig reads the file at compile time. server/session.ts reads it
+    // at start.
+    try std.testing.expect(@import("net.zig").protocol_version >= 1);
 }
 
 test "server_cvars.json: valid, and the defaults are safe" {

@@ -3,13 +3,16 @@
 // Why: runs the real server (index.ts) on a free port and talks to it over
 // the WebSocket: the server cvars on join, the config file, rcon off with
 // no admin_password, a client cannot change a server cvar, an rcon set
-// goes to every player, and the chat relay with the server lines.
+// goes to every player, the chat relay with the server lines, and the
+// session: GET /api/version, the welcome before the hello, the bye on
+// SIGTERM, and a restart with a new build on the same port.
 
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Subprocess } from 'bun';
+import { BUILD_FILE, BUILD_HEADER, readProtocol, STOP_REASON } from './session';
 
 type Msg = Record<string, unknown> & { t: string };
 
@@ -27,6 +30,14 @@ async function start(
   config: string,
   env: Record<string, string>,
 ): Promise<number> {
+  return (await startProc(config, env)).port;
+}
+
+/** start, and the process too. */
+async function startProc(
+  config: string,
+  env: Record<string, string>,
+): Promise<{ port: number; proc: Subprocess }> {
   const cfg = join(dir, `server-${procs.length}.cfg`);
   writeFileSync(cfg, config);
   const proc = Bun.spawn(['bun', join(import.meta.dir, 'index.ts')], {
@@ -54,7 +65,7 @@ async function start(
       (async () => {
         while (!(await reader.read()).done) {}
       })();
-      return Number(m[1]);
+      return { port: Number(m[1]), proc };
     }
   }
 }
@@ -200,7 +211,8 @@ describe('chat', () => {
     const a = new Client(port);
     const b = new Client(port);
     await a.send({ ...hello, name: 'Alice' });
-    await a.next((m) => m.t === 'welcome');
+    // The welcome comes before the hello. The own join line comes after it.
+    await a.next((m) => chatOf(m) && m.text === 'Alice joined.');
     let n = a.msgs.length;
     await b.send({ ...hello, name: 'Bob' });
     // A join is a server line for every player.
@@ -253,5 +265,98 @@ describe('chat', () => {
     const left = await a.next((x) => chatOf(x) && x.ch === 'server', n);
     expect(left.text).toBe('Bob left.');
     a.close();
+  });
+});
+
+describe('session', () => {
+  const pub = join(dir, 'public');
+  const setBuild = (v: string) =>
+    writeFileSync(join(pub, BUILD_FILE), `${v}\n`);
+  const protocol = readProtocol(
+    join(import.meta.dir, '../game/src/protocol_version.txt'),
+  );
+
+  test('GET /api/version, the static header, the welcome first', async () => {
+    mkdirSync(pub, { recursive: true });
+    writeFileSync(join(pub, 'index.html'), '<!doctype html>');
+    setBuild('build-a');
+    const port = await start('', { PUBLIC_DIR: pub });
+
+    const res = await fetch(`http://localhost:${port}/api/version`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get(BUILD_HEADER)).toBe('build-a');
+    const v = (await res.json()) as Record<string, unknown>;
+    expect(Object.keys(v).sort()).toEqual([
+      'build',
+      'instance',
+      'protocol',
+      'started',
+    ]);
+    expect(v.build).toBe('build-a');
+    expect(v.protocol).toBe(protocol);
+    expect(String(v.instance)).toMatch(/^[0-9a-f]{16}$/);
+    expect(new Date(String(v.started)).toISOString()).toBe(String(v.started));
+
+    const page = await fetch(`http://localhost:${port}/`);
+    expect(page.status).toBe(200);
+    expect(page.headers.get(BUILD_HEADER)).toBe('build-a');
+
+    // The welcome is the first message, before the hello, with the same
+    // fields and the player id.
+    const c = new Client(port);
+    const w = await c.next((m) => m.t === 'welcome');
+    expect(c.msgs[0]).toBe(w);
+    expect(w).toEqual({ t: 'welcome', id: w.id, ...v });
+    expect(typeof w.id).toBe('number');
+    // No join before the hello: no cvars, no spawn.
+    await Bun.sleep(100);
+    expect(c.msgs.some((m) => m.t === 'cvars' || m.t === 'spawn')).toBe(false);
+    await c.send(hello);
+    await c.next((m) => m.t === 'spawn');
+    c.close();
+  });
+
+  test('SIGTERM: a bye first, then a restart with a new build', async () => {
+    mkdirSync(pub, { recursive: true });
+    setBuild('build-a');
+    const first = await startProc('', { PUBLIC_DIR: pub });
+    const a = new Client(first.port);
+    const b = new Client(first.port);
+    await a.send(hello);
+    await b.send({ ...hello, name: 'Bob' });
+    const w1 = await a.next((m) => m.t === 'welcome');
+    await a.next((m) => m.t === 'spawn');
+    await b.next((m) => m.t === 'spawn');
+
+    const n = a.msgs.length;
+    first.proc.kill('SIGTERM');
+    const bye = await a.next((m) => m.t === 'bye', n);
+    expect(bye.reason).toBe(STOP_REASON);
+    for (let i = 0; i < 100 && !a.closed; i++) await Bun.sleep(10);
+    expect(a.closed).toBe(true);
+    expect(await first.proc.exited).toBe(0);
+    // The stop sends no "left" lines.
+    const left = a.msgs
+      .slice(n)
+      .some((m) => m.t === 'chat' && String(m.text).endsWith(' left.'));
+    expect(left).toBe(false);
+
+    // A new start of a new build, on the same port: a new instance.
+    setBuild('build-b');
+    const second = await startProc('', {
+      PUBLIC_DIR: pub,
+      PORT: String(first.port),
+    });
+    expect(second.port).toBe(first.port);
+    const c = new Client(second.port);
+    const w2 = await c.next((m) => m.t === 'welcome');
+    expect(w2.instance).not.toBe(w1.instance);
+    expect(w2.build).toBe('build-b');
+    expect(w2.protocol).toBe(w1.protocol);
+    expect(Date.parse(String(w2.started))).toBeGreaterThanOrEqual(
+      Date.parse(String(w1.started)),
+    );
+    c.close();
   });
 });

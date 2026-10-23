@@ -1,7 +1,8 @@
 // The action game's side of the console framework (console/): the game
 // actions and their default binds, the server cvars (server_cvars.json),
 // rcon, the chat, and the messages of the server that change the console
-// or the chat. settings.zig adds the cvars of the settings panel.
+// or the chat. settings.zig adds the cvars of the settings panel. The
+// session (session/) adds the command "version". This file adds "reload".
 //
 // The console key is the backtick key. swindowzig has no key code for it:
 // the web backend sends every key that it does not know as Unknown, and
@@ -21,6 +22,10 @@ const platform = @import("sw_platform");
 const console = @import("console/root.zig");
 const net = @import("net.zig");
 const settings = @import("settings.zig");
+const session = @import("session/root.zig");
+
+// src/boot.ts gives it: location.reload().
+extern fn jsReload() void;
 
 /// The game actions. Each one is a button: "+forward" and "-forward".
 pub const Action = enum {
@@ -126,7 +131,7 @@ fn logLine(kind: console.LineKind, text: []const u8) void {
 
 /// Make the console: the actions, the cvars, the commands and the binds,
 /// then the saved config and the autoexec script.
-pub fn init(alloc: std.mem.Allocator, net_client: *net.Client) !void {
+pub fn init(alloc: std.mem.Allocator, net_client: *net.Client, sess: *session.Session) !void {
     client = net_client;
     con = try console.Console.init(alloc, store);
     // Cheat cvars and commands: debug builds only (OPTIMIZE=Debug build.sh).
@@ -153,6 +158,12 @@ pub fn init(alloc: std.mem.Allocator, net_client: *net.Client) !void {
         .handler = cmdRcon,
         .complete = .name,
     });
+    try sess.register(&con);
+    try con.addCommand(.{
+        .name = "reload",
+        .description = "Reload the page: the browser gets the newest version of the game.",
+        .handler = cmdReload,
+    });
     con.setDefaultBinds(&default_binds);
     // A player of an older version has no saved config: the settings
     // panel values carry over one time.
@@ -168,6 +179,21 @@ fn cmdRcon(c: *console.Console, cmd: *const console.Command, args: *const consol
     client.send("{{\"t\":\"rcon\",\"pw\":{f},\"cmd\":{f}}}", .{
         std.json.fmt(rcon_password.string(), .{}), std.json.fmt(args.rest(1), .{}),
     });
+}
+
+fn cmdReload(_: *console.Console, _: *const console.Command, _: *const console.Args) void {
+    reloadPage();
+}
+
+/// Reload the page, for a new version of the game.
+pub fn reloadPage() void {
+    jsReload();
+}
+
+/// A line of this game about the server, in the chat: the colour of the
+/// server lines. For example "The server restarted."
+pub fn notice(text: []const u8) void {
+    chat.add(.{ .kind = .server, .name = "", .text = text, .rgb = null });
 }
 
 /// The server cvars from a "cvars" message: [name, value] pairs.

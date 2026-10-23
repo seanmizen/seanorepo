@@ -1,5 +1,6 @@
 # Built by build.sh and the dockerfile.
 public/action.wasm
 public/boot.js
+public/build-version.txt
 game/zig-out/
 game/.zig-cache/
