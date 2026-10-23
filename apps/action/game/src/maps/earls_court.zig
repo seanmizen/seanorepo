@@ -199,7 +199,7 @@ pub fn build() void {
     escalators();
     deepLevel();
 
-    // Spawns. The debug teleport (Cmd+D, then 1 to 9) uses this order.
+    // Spawns. The debug teleport (Cmd+D, then Shift+1 to 9) uses this order.
     const sp = [_]V3{
         v3(-40, 0, ca - 2),   v3(40, 0, cb + 2),     v3(30, deep_y, -26),      v3(30, deep_y, -19),
         v3(-10, 0, -15.5),    v3(-10, 0, 2),         v3(-20, street_y, -19.7), v3(55, street_y, 0),

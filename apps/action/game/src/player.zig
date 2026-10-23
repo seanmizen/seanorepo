@@ -1,5 +1,6 @@
 // First-person movement: walk, jump, gravity, and box collision with a
-// small step up (stairs).
+// small step up (stairs). Also the lean (Q and E) and the hit boxes, which
+// move with the lean.
 const std = @import("std");
 const vec = @import("vec.zig");
 const map = @import("map.zig");
@@ -16,6 +17,16 @@ const walk_speed: f32 = 6.4;
 const ground_accel: f32 = 70.0;
 const air_accel: f32 = 14.0;
 
+/// The lean: the upper body turns about the hips. At full lean the eye
+/// moves `lean_reach` to the side and the camera rolls `lean_roll`.
+pub const hip: f32 = 0.9;
+pub const lean_reach: f32 = 0.34;
+pub const lean_roll: f32 = 0.14;
+/// Full lean in 1 / lean_speed seconds.
+const lean_speed: f32 = 7.0;
+/// The half size of the box around the eye that a wall stops.
+const head_r: f32 = 0.16;
+
 pub const Player = struct {
     pos: V3 = v3(0, 0, 0), // feet
     vel: V3 = v3(0, 0, 0),
@@ -24,9 +35,42 @@ pub const Player = struct {
     grounded: bool = false,
     /// The distance walked, for the view bob.
     stride: f32 = 0,
+    /// The head bob amount: the speed on the ground over the walk speed
+    /// (0 to 1.5), with a short lag. 0 in the air and when standing still.
+    bob: f32 = 0,
+    /// -1 full lean left, 0 upright, 1 full lean right.
+    lean: f32 = 0,
 
+    /// The eye, with the lean.
     pub fn eyePos(self: *const Player) V3 {
-        return self.pos + v3(0, eye, 0);
+        return self.pos + v3(0, eye, 0) + leanOffset(self.yaw, self.lean, eye);
+    }
+
+    fn headBlocked(self: *const Player, lean: f32) bool {
+        const e = self.pos + v3(0, eye, 0) + leanOffset(self.yaw, lean, eye);
+        return map.overlaps(e - vec.s(head_r), e + v3(head_r, 0.1, head_r));
+    }
+
+    /// Move the lean toward `want` (-1, 0 or 1). A wall stops the lean
+    /// before the head (and the camera) goes into it.
+    pub fn updateLean(self: *Player, dt: f32, want: f32) void {
+        const k = lean_speed * dt;
+        self.lean += std.math.clamp(want - self.lean, -k, k);
+        const mag = @abs(self.lean);
+        if (mag < 1e-4) {
+            self.lean = 0;
+            return;
+        }
+        const dir: f32 = if (self.lean > 0) 1 else -1;
+        // Samples 0.1 of a lean (3.4 cm) apart, smaller than the head box.
+        const n: usize = @intFromFloat(@ceil(mag / 0.1));
+        var free: f32 = 0;
+        for (1..n + 1) |i| {
+            const l = @min(mag, @as(f32, @floatFromInt(i)) * 0.1);
+            if (self.headBlocked(dir * l)) break;
+            free = l;
+        }
+        self.lean = dir * free;
     }
 
     fn boundsAt(p: V3) [2]V3 {
@@ -107,6 +151,49 @@ pub const Player = struct {
             self.vel = v3(0, 0, 0);
         }
         const moved = self.pos - before;
-        if (self.grounded) self.stride += @sqrt(moved[0] * moved[0] + moved[2] * moved[2]);
+        const dist = @sqrt(moved[0] * moved[0] + moved[2] * moved[2]);
+        if (self.grounded) self.stride += dist;
+        const bob_target: f32 = if (self.grounded) @min(1.5, dist / dt / walk_speed) else 0;
+        self.bob += (bob_target - self.bob) * @min(1, dt * 12);
     }
 };
+
+/// The upper-body angle about the hips for a lean (-1 to 1). Positive
+/// leans right.
+pub fn leanAngle(lean: f32) f32 {
+    return std.math.asin(std.math.clamp(lean * lean_reach / (eye - hip), -1, 1));
+}
+
+/// The move of a body point `h` above the feet for this lean. The upper
+/// body turns about the hips, so a point below the hips does not move.
+pub fn leanOffset(yaw: f32, lean: f32, h: f32) V3 {
+    if (lean == 0) return v3(0, 0, 0);
+    const above = @max(0, h - hip);
+    const a = leanAngle(lean);
+    const right = v3(@cos(yaw), 0, -@sin(yaw));
+    return right * vec.s(@sin(a) * above) + v3(0, (@cos(a) - 1) * above, 0);
+}
+
+pub const HitBox = struct { min: V3, max: V3 };
+
+/// The hit boxes of a player: the legs, the torso and the head (index 2).
+/// The torso and the head move with the lean.
+pub fn hitBoxes(feet: V3, yaw: f32, lean: f32) [3]HitBox {
+    const torso = leanOffset(yaw, lean, (hip + 1.46) / 2);
+    const head = feet + v3(0, 1.62, 0) + leanOffset(yaw, lean, 1.62);
+    return .{
+        .{ .min = feet - v3(0.3, 0, 0.3), .max = feet + v3(0.3, hip, 0.3) },
+        .{ .min = feet + torso + v3(-0.3, hip, -0.3), .max = feet + torso + v3(0.3, 1.46, 0.3) },
+        .{ .min = head - vec.s(0.16), .max = head + vec.s(0.16) },
+    };
+}
+
+/// The three points that a grenade blast checks (grenade.damageTo): the
+/// legs, the chest and the head. The chest and the head move with the lean.
+pub fn blastPoints(feet: V3, yaw: f32, lean: f32) [3]V3 {
+    return .{
+        feet + v3(0, 0.3, 0),
+        feet + v3(0, 1.2, 0) + leanOffset(yaw, lean, 1.2),
+        feet + v3(0, 1.6, 0) + leanOffset(yaw, lean, 1.6),
+    };
+}

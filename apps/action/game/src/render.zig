@@ -54,6 +54,9 @@ pub const FrameParams = struct {
     eye: V3,
     yaw: f32,
     pitch: f32,
+    /// The camera roll (the lean and the head bob). Positive tilts the
+    /// right side of the camera up.
+    roll: f32 = 0,
     fov: f32,
     time: f32,
     damage: f32,
@@ -342,10 +345,10 @@ pub fn invert(m: Mat4) Mat4 {
     return .{ .data = inv };
 }
 
-/// The camera view matrix for a yaw and pitch.
-pub fn viewMatrix(eye: V3, yaw: f32, pitch: f32) Mat4 {
-    // The inverse of translate(eye) * rotY(yaw) * rotX(pitch).
-    return Mat4.rotationX(-pitch).mul(Mat4.rotationY(-yaw).mul(vec.translate(-eye)));
+/// The camera view matrix for a yaw, pitch and roll.
+pub fn viewMatrix(eye: V3, yaw: f32, pitch: f32, roll: f32) Mat4 {
+    // The inverse of translate(eye) * rotY(yaw) * rotX(pitch) * rotZ(roll).
+    return Mat4.rotationZ(-roll).mul(Mat4.rotationX(-pitch).mul(Mat4.rotationY(-yaw).mul(vec.translate(-eye))));
 }
 
 pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud: ?*gfx.Renderer) !void {
@@ -363,7 +366,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
 
     const aspect = @as(f32, @floatFromInt(w)) / @as(f32, @floatFromInt(h));
     const proj = @import("sw_math").perspective(p.fov, aspect, 0.04, 260);
-    const view_proj = proj.mul(viewMatrix(p.eye, p.yaw, p.pitch));
+    const view_proj = proj.mul(viewMatrix(p.eye, p.yaw, p.pitch, p.roll));
     const c = map.shadow_centre;
     const light_view = @import("sw_math").lookAt(
         .{ .x = c[0] + sun_dir[0] * 110, .y = c[1] + sun_dir[1] * 110, .z = c[2] + sun_dir[2] * 110 },
