@@ -114,8 +114,10 @@ const WEAPONS: WeaponClass[] = [
 ];
 const KNIFE = 8;
 const GRENADE = 9;
-// The timers of a client run on its own clock, and the messages bunch up on
-// the way. A shot may come this much early.
+// The fire rate check. The messages bunch up on the way, so one gap can be
+// short. Over FIRE_WINDOW intervals, the rate must stay below the class
+// rate / FIRE_SLACK. Two rounds never come closer than half the gap.
+const FIRE_WINDOW = 4;
 const FIRE_SLACK = 0.8;
 // The lag of the positions: a hit may be this much further than the reach.
 const REACH_SLACK = 3;
@@ -410,21 +412,17 @@ function onLoadout(p: Player, msg: Record<string, unknown>): void {
 }
 
 /** True when a shot of class `w` now keeps to the fire rate of the class:
- * at most `burst` rounds in one interval, and `gap` between two rounds. */
+ * at most `burst` rounds an interval, over FIRE_WINDOW intervals. */
 function fireRateOk(p: Player, w: number, now: number): boolean {
   const cls = WEAPONS[w];
   const times = p.shots.get(w) ?? [];
   const last = times[times.length - 1];
-  if (last !== undefined && now - last < cls.gap * 1000 * FIRE_SLACK)
-    return false;
-  if (
-    times.length >= cls.burst &&
-    now - times[times.length - cls.burst] < cls.interval * 1000 * FIRE_SLACK
-  )
-    return false;
-  times.push(now);
-  if (times.length > cls.burst) times.shift();
-  p.shots.set(w, times);
+  if (last !== undefined && now - last < cls.gap * 500) return false;
+  const span = cls.interval * 1000 * FIRE_WINDOW * FIRE_SLACK;
+  const recent = times.filter((t) => now - t < span);
+  if (recent.length >= cls.burst * FIRE_WINDOW) return false;
+  recent.push(now);
+  p.shots.set(w, recent);
   return true;
 }
 
