@@ -268,6 +268,38 @@ describe('chat', () => {
   });
 });
 
+describe('lifts', () => {
+  test('the snapshot names the cab that a player stands in', async () => {
+    const port = await start('', {});
+    const a = new Client(port);
+    const b = new Client(port);
+    const aid = (await a.next((m) => m.t === 'welcome')).id;
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'spawn');
+    await b.send({ ...hello, name: 'Bob' });
+    // The feet on the cab floor of the deep lift (lift 2) at the bottom.
+    const st = { t: 'st', x: 63.6, y: -14.98, z: -22.8, yaw: 0, pitch: 0 };
+    const liftIn = async (lift: unknown, want: number) => {
+      const n = b.msgs.length;
+      await a.send({ ...st, lift });
+      await b.next(
+        (m) =>
+          m.t === 'snap' &&
+          (m.players as Msg[]).some((p) => p.id === aid && p.lift === want),
+        n,
+      );
+    };
+    // Each bad value is -1: no field (an old client), no such lift, not a
+    // whole number, not a number.
+    for (const bad of [undefined, 3, 1.5, -2, 'x', '1', null]) {
+      await liftIn(2, 2);
+      await liftIn(bad, -1);
+    }
+    a.close();
+    b.close();
+  });
+});
+
 describe('session', () => {
   const pub = join(dir, 'public');
   const setBuild = (v: string) =>

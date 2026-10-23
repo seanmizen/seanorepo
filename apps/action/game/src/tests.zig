@@ -3,10 +3,10 @@
 // the console, the session, the server cvars, the gun model, the bullet
 // sounds or the NPC shooter.
 // Why: one native test binary: the walks over the stairs and escalators
-// (player_test.zig), your own body in first person (body_test.zig), the
-// console framework (console/tests.zig), the session layer
-// (session/tests.zig), the gun model (guns_test.zig), the box limit and
-// the surface materials (surfaces_test.zig), the bullet sound models
+// and the lift rides (player_test.zig), your own body in first person
+// (body_test.zig), the console framework (console/tests.zig), the session
+// layer (session/tests.zig), the gun model (guns_test.zig), the box limit
+// and the surface materials (surfaces_test.zig), the bullet sound models
 // (audio/tests.zig), the NPC shooter of the range and the impact effects
 // (shooter_test.zig), the server cvar file and the protocol version of the
 // game.

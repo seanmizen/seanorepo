@@ -2,16 +2,19 @@
 // When: while you build or change a map.
 // Why: draws slices of a map, so you can see what is where, and audits the
 // map: for decoration that a player can walk through, for lights inside a
-// shadow caster, for surface materials that do not fit their look, and for
-// escape holes (escape.zig).
+// shadow caster, for surface materials that do not fit their look, for lift
+// shafts and landings that catch a player, and for escape holes
+// (escape.zig).
 //
 //   zig build floorplan -- <map> plan <y> <out.ppm>        top view, a slice at height y
 //   zig build floorplan -- <map> section-z <z> <out.ppm>   side view (x, y), a slice at z
 //   zig build floorplan -- <map> section-x <x> <out.ppm>   end view (z, y), a slice at x
 //   zig build floorplan -- <map> audit                     reachable decoration without collision,
-//                                                           lights inside a shadow caster, and the
-//                                                           surface materials: exit code 1 if one
-//                                                           does not fit its look
+//                                                           lights inside a shadow caster, the
+//                                                           surface materials, and the lift shafts
+//                                                           and landings: exit code 1 if a
+//                                                           material does not fit its look, or a
+//                                                           lift shaft or landing is not clear
 //   zig build floorplan -- <map> escape                    escape holes, exit code 1 if it finds one
 //
 // Every command stops with exit code 1 when the map has more boxes than
@@ -27,6 +30,7 @@
 const std = @import("std");
 const map = @import("map.zig");
 const escape = @import("escape.zig");
+const player = @import("player.zig");
 const vec = @import("vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
@@ -337,6 +341,87 @@ fn auditSurfaces() usize {
     return bad;
 }
 
+/// The lift shafts and the landings (map.zig Lift). Returns the number of
+/// faults.
+/// - The shaft is the space that the inside of the cab sweeps over its full
+///   travel. In plan it is the cab floor. In height it goes from the lowest
+///   cab floor to the highest cab floor, plus the cab height or the player
+///   height (the larger). No static solid box and no ramp may be in it. A
+///   slab across a shaft catches a rider on the way down: the step up
+///   (player.zig) puts the feet on the slab, and the cab goes on without
+///   the player.
+/// - At each landing, the cab is at the level and the doors are open. A
+///   player stands at points across the doorway, from the middle of the cab
+///   to 1 m past the doors. Each point must have a floor at the level (the
+///   landing, or the cab floor 2 cm above it), and the body must fit.
+fn auditLifts() usize {
+    var bad: usize = 0;
+    const r = player.radius;
+    for (map.lifts[0..map.lift_count], 0..) |*l, li| {
+        const fb = map.boxes[l.floor_box];
+        const cb = map.boxes[l.ceil_box];
+        const lo = @min(l.levels[0], l.levels[1]);
+        const hi = @max(l.levels[0], l.levels[1]) + @max(map.cab_height + (cb.max[1] - cb.min[1]), player.height);
+        const smin = v3(fb.min[0], lo, fb.min[2]);
+        const smax = v3(fb.max[0], hi, fb.max[2]);
+        var in_shaft: usize = 0;
+        for (map.boxes[0..map.box_count], 0..) |b, bi| {
+            if (!b.solid or b.dynamic) continue;
+            if (@reduce(.Or, b.max <= smin) or @reduce(.Or, b.min >= smax)) continue;
+            in_shaft += 1;
+            std.debug.print("lift {d}: box {d} ({d:.2} {d:.2} {d:.2}) .. ({d:.2} {d:.2} {d:.2}) is in the shaft\n", .{
+                li, bi, b.min[0], b.min[1], b.min[2], b.max[0], b.max[1], b.max[2],
+            });
+        }
+        for (map.ramps[0..map.ramp_count], 0..) |rp, ri| {
+            if (rp.x1 <= smin[0] or rp.x0 >= smax[0] or rp.z1 <= smin[2] or rp.z0 >= smax[2]) continue;
+            if (@max(rp.y0, rp.y1) <= smin[1] or rp.bottom >= smax[1]) continue;
+            in_shaft += 1;
+            std.debug.print("lift {d}: ramp {d} is in the shaft\n", .{ li, ri });
+        }
+
+        // The landings: the doors are on one face of the cab (door_on_x: an
+        // X face, so they slide along Z). The cab is on one side of them.
+        const a: usize = if (l.door_on_x) 2 else 0;
+        const b: usize = if (l.door_on_x) 0 else 2;
+        var gaps: usize = 0;
+        for (0..2) |lv| {
+            map.syncLift(li, l.levels[lv], 1, lv, @backingInt(map.Phase.open));
+            // Arrays: a vector takes no index that is known only at run time.
+            const d0_min: [3]f32 = l.door_closed[lv][0][0];
+            const d0_max: [3]f32 = l.door_closed[lv][0][1];
+            const d1_max: [3]f32 = l.door_closed[lv][1][1];
+            const f_min: [3]f32 = fb.min;
+            const f_max: [3]f32 = fb.max;
+            const mid_a = (d0_min[a] + d1_max[a]) / 2;
+            const face_b = (d0_min[b] + d0_max[b]) / 2;
+            const cab_b = (f_min[b] + f_max[b]) / 2;
+            const out: f32 = if (cab_b > face_b) -1 else 1;
+            for ([_]f32{ -0.4, -0.2, 0, 0.2, 0.4 }) |da| {
+                var t: f32 = 0;
+                const end = @abs(face_b - cab_b) + 1.0;
+                while (t <= end) : (t += 0.05) {
+                    var pa = [3]f32{ 0, l.levels[lv], 0 };
+                    pa[a] = mid_a + da;
+                    pa[b] = cab_b + out * t;
+                    const p: V3 = pa;
+                    const top = map.floorTop(p - v3(r, 0.1, r), p + v3(r, 0.1, r));
+                    const ok = if (top) |y| y >= l.levels[lv] - 0.05 and y <= l.levels[lv] + 0.005 and
+                        !map.overlaps(v3(p[0] - r, y, p[2] - r), v3(p[0] + r, y + player.height, p[2] + r)) else false;
+                    if (!ok) {
+                        gaps += 1;
+                        std.debug.print("lift {d} level {d}: no floor, or no room, at ({d:.2} {d:.2} {d:.2})\n", .{ li, lv, p[0], p[1], p[2] });
+                        break;
+                    }
+                }
+            }
+        }
+        std.debug.print("lift {d}: {d} shapes in the shaft ({d:.2} .. {d:.2}), {d} bad lines across the landings\n", .{ li, in_shaft, lo, hi, gaps });
+        bad += in_shaft + gaps;
+    }
+    return bad;
+}
+
 pub fn main(init: std.process.Init) !void {
     const alloc = init.arena.allocator();
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -357,7 +442,10 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, args[2], "audit")) {
         _ = audit();
         _ = auditLights();
-        if (auditSurfaces() > 0) std.process.exit(1);
+        const surfaces = auditSurfaces();
+        // Last: it moves the lifts to each level.
+        const lifts = auditLifts();
+        if (surfaces > 0 or lifts > 0) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, args[2], "escape")) {

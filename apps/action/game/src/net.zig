@@ -33,6 +33,8 @@ pub const PlayerMsg = struct {
     /// The held weapon: its class (weapon.Class) and its model.
     w: u32 = 0,
     m: u32 = 0,
+    /// The lift whose cab the player stands in, or -1.
+    lift: i32 = -1,
 };
 
 /// One server message. `t` names the kind; the other fields are optional.
