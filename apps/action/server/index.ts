@@ -79,7 +79,8 @@
 //   {t:"chat", ch:"all"|"team", id, name, text}  a chat message of player id,
 //                                 cleaned. The sender gets it back too.
 //   {t:"chat", ch:"server", text} a server line: a join, a leave, a match
-//                                 start or end, or "too fast" to the sender
+//                                 start or end, or "Too many messages" to
+//                                 the sender
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
