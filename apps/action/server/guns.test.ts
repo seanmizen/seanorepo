@@ -73,7 +73,9 @@ describe('fall-off', () => {
     expect(shotDamage(shotgun, 6, 2, 3)).toBe(
       6 * shotgun.body + 2 * shotgun.head,
     );
-    expect(shotDamage(shotgun, 9, 0, 30)).toBeLessThan(40);
+    expect(shotDamage(shotgun, 9, 0, 30)).toBeLessThan(
+      shotDamage(shotgun, 9, 0, 3) / 1.5,
+    );
   });
   test('the knife has no fall-off', () => {
     expect(pelletDamage(KNIFE_GUN, false, 1.5)).toBe(55);

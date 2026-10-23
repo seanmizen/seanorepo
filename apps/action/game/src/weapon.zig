@@ -223,7 +223,7 @@ pub const table = [class_count]Stats{
     },
     .{ // shotgun: the reference is 12 gauge
         .label = "SHOTGUN",
-        .blurb = "pump, buckshot, one shot up close",
+        .blurb = "pump, buckshot or slug, one shot up close",
         .slot = .primary,
         .interval = 0.85,
         .mag = 6,
@@ -245,7 +245,7 @@ pub const table = [class_count]Stats{
         .mag = 2,
         .reserve = 20,
         .reload = 2.0,
-        .spread = 0.095,
+        .spread = 0.075,
         .move_spread = 0.01,
         .ads_tight = 0.3,
         .kick = 0.06,
@@ -307,7 +307,7 @@ pub const table = [class_count]Stats{
     },
     .{ // grenade
         .label = "GRENADE",
-        .blurb = "impact, 5 m blast",
+        .blurb = "impact, 8 m blast",
         .slot = .grenade,
         .speed = 1.0,
         .draw = 0.5,

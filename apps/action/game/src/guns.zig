@@ -14,7 +14,10 @@
 // (0.4 to 4):
 //   damage    = calibre damage * r^0.1 (0.9 to 1.1), rounded
 //   velocity  = calibre velocity * r^0.2
-//   fall-off  = calibre near and far * r^0.35 (0.75 to 1.3)
+//   fall-off  = calibre near and far * r^0.35 (0.75 to 1.3), buckshot
+//               r^0.8 (0.75 to 1.6)
+//   cone      = buckshot: class cone * (1 / r)^2.5 (0.35 to 1). A slug:
+//               class cone * 0.12
 //   interval  = class interval * calibre shot damage / reference shot damage
 //   kick      = class kick * (impulse / reference impulse)^0.85 * weight
 //               * 1.4 with no stock
@@ -49,6 +52,7 @@ pub const Calibre = enum {
     g12,
     g12_mag,
     g20,
+    g12_slug,
 };
 
 /// The data of a calibre, for its reference barrel.
@@ -81,22 +85,23 @@ pub const Round = struct {
 };
 
 pub const rounds = std.enums.EnumArray(Calibre, Round).init(.{
-    .c4_6x30 = .{ .label = "4.6x30 mm", .body = 17, .head = 2.3, .velocity = 720, .barrel = 18, .near = 18, .far = 55, .min = 0.65, .impulse = 2.3, .bullet_d = 4.65, .bullet_l = 16 },
-    .c9x19 = .{ .label = "9x19 mm", .body = 21, .head = 2.3, .velocity = 360, .barrel = 11, .near = 12, .far = 40, .min = 0.55, .impulse = 3.4, .bullet_d = 9.02, .bullet_l = 15.5 },
-    .c40sw = .{ .label = ".40 S&W", .body = 25, .head = 2.3, .velocity = 330, .barrel = 11, .near = 12, .far = 38, .min = 0.55, .impulse = 4.3, .bullet_d = 10.17, .bullet_l = 14 },
-    .c10mm = .{ .label = "10 mm Auto", .body = 28, .head = 2.3, .velocity = 380, .barrel = 12, .near = 15, .far = 45, .min = 0.6, .impulse = 5.3, .bullet_d = 10.17, .bullet_l = 15.5 },
-    .c45acp = .{ .label = ".45 ACP", .body = 27, .head = 2.3, .velocity = 255, .barrel = 13, .near = 10, .far = 35, .min = 0.5, .impulse = 4.2, .bullet_d = 11.48, .bullet_l = 17 },
-    .c50ae = .{ .label = ".50 AE", .body = 45, .head = 2.0, .velocity = 450, .barrel = 15, .near = 20, .far = 55, .min = 0.7, .impulse = 10.3, .bullet_d = 12.7, .bullet_l = 22 },
-    .c38spl = .{ .label = ".38 Special", .body = 35, .head = 2.5, .velocity = 265, .barrel = 10, .near = 10, .far = 35, .min = 0.5, .impulse = 3.1, .bullet_d = 9.07, .bullet_l = 18 },
-    .c357mag = .{ .label = ".357 Magnum", .body = 53, .head = 2.0, .velocity = 425, .barrel = 10, .near = 15, .far = 45, .min = 0.6, .impulse = 5.5, .bullet_d = 9.07, .bullet_l = 17 },
-    .c44mag = .{ .label = ".44 Magnum", .body = 64, .head = 2.0, .velocity = 440, .barrel = 15, .near = 22, .far = 60, .min = 0.6, .impulse = 8.2, .bullet_d = 10.9, .bullet_l = 19 },
-    .c5_45x39 = .{ .label = "5.45x39 mm", .body = 23, .head = 2.5, .velocity = 880, .barrel = 41, .near = 20, .far = 60, .min = 0.65, .impulse = 4.4, .bullet_d = 5.6, .bullet_l = 25.5 },
-    .c5_56x45 = .{ .label = "5.56x45 mm", .body = 23, .head = 2.5, .velocity = 900, .barrel = 37, .near = 18, .far = 55, .min = 0.62, .impulse = 5.9, .bullet_d = 5.7, .bullet_l = 23 },
-    .c7_62x39 = .{ .label = "7.62x39 mm", .body = 30, .head = 2.5, .velocity = 715, .barrel = 41, .near = 25, .far = 70, .min = 0.72, .impulse = 7.8, .bullet_d = 7.92, .bullet_l = 26.8 },
-    .c300blk_sub = .{ .label = ".300 BLK subsonic", .body = 32, .head = 2.5, .velocity = 305, .barrel = 23, .near = 15, .far = 45, .min = 0.6, .impulse = 5.1, .bullet_d = 7.82, .bullet_l = 38 },
-    .g12 = .{ .label = "12 gauge", .body = 13, .head = 1.25, .pellets = 9, .velocity = 400, .barrel = 47, .near = 6, .far = 30, .min = 0.2, .reach = 36, .impulse = 17, .bullet_d = 8.38, .bullet_l = 8.38 },
-    .g12_mag = .{ .label = "12 gauge magnum", .body = 12, .head = 1.25, .pellets = 12, .velocity = 410, .barrel = 47, .near = 7, .far = 33, .min = 0.2, .reach = 40, .impulse = 23, .bullet_d = 8.38, .bullet_l = 8.38 },
-    .g20 = .{ .label = "20 gauge", .body = 13, .head = 1.25, .pellets = 8, .velocity = 400, .barrel = 47, .near = 5, .far = 26, .min = 0.2, .reach = 32, .impulse = 12, .bullet_d = 6.1, .bullet_l = 6.1 },
+    .c4_6x30 = .{ .label = "4.6x30 mm", .body = 22, .head = 2.3, .velocity = 720, .barrel = 18, .near = 23, .far = 72, .min = 0.75, .impulse = 2.3, .bullet_d = 4.65, .bullet_l = 16 },
+    .c9x19 = .{ .label = "9x19 mm", .body = 27, .head = 2.3, .velocity = 360, .barrel = 11, .near = 16, .far = 52, .min = 0.65, .impulse = 3.4, .bullet_d = 9.02, .bullet_l = 15.5 },
+    .c40sw = .{ .label = ".40 S&W", .body = 32, .head = 2.3, .velocity = 330, .barrel = 11, .near = 16, .far = 50, .min = 0.65, .impulse = 4.3, .bullet_d = 10.17, .bullet_l = 14 },
+    .c10mm = .{ .label = "10 mm Auto", .body = 36, .head = 2.3, .velocity = 380, .barrel = 12, .near = 20, .far = 58, .min = 0.7, .impulse = 5.3, .bullet_d = 10.17, .bullet_l = 15.5 },
+    .c45acp = .{ .label = ".45 ACP", .body = 35, .head = 2.3, .velocity = 255, .barrel = 13, .near = 13, .far = 46, .min = 0.6, .impulse = 4.2, .bullet_d = 11.48, .bullet_l = 17 },
+    .c50ae = .{ .label = ".50 AE", .body = 58, .head = 2.0, .velocity = 450, .barrel = 15, .near = 20, .far = 60, .min = 0.7, .impulse = 10.3, .bullet_d = 12.7, .bullet_l = 22 },
+    .c38spl = .{ .label = ".38 Special", .body = 45, .head = 2.5, .velocity = 265, .barrel = 10, .near = 13, .far = 46, .min = 0.6, .impulse = 3.1, .bullet_d = 9.07, .bullet_l = 18 },
+    .c357mag = .{ .label = ".357 Magnum", .body = 69, .head = 2.0, .velocity = 425, .barrel = 10, .near = 20, .far = 58, .min = 0.7, .impulse = 5.5, .bullet_d = 9.07, .bullet_l = 17 },
+    .c44mag = .{ .label = ".44 Magnum", .body = 83, .head = 2.0, .velocity = 440, .barrel = 15, .near = 29, .far = 78, .min = 0.7, .impulse = 8.2, .bullet_d = 10.9, .bullet_l = 19 },
+    .c5_45x39 = .{ .label = "5.45x39 mm", .body = 30, .head = 2.5, .velocity = 880, .barrel = 41, .near = 26, .far = 78, .min = 0.75, .impulse = 4.4, .bullet_d = 5.6, .bullet_l = 25.5 },
+    .c5_56x45 = .{ .label = "5.56x45 mm", .body = 30, .head = 2.5, .velocity = 900, .barrel = 37, .near = 23, .far = 72, .min = 0.72, .impulse = 5.9, .bullet_d = 5.7, .bullet_l = 23 },
+    .c7_62x39 = .{ .label = "7.62x39 mm", .body = 39, .head = 2.6, .velocity = 715, .barrel = 41, .near = 33, .far = 90, .min = 0.8, .impulse = 7.8, .bullet_d = 7.92, .bullet_l = 26.8 },
+    .c300blk_sub = .{ .label = ".300 BLK subsonic", .body = 42, .head = 2.5, .velocity = 305, .barrel = 23, .near = 20, .far = 58, .min = 0.7, .impulse = 5.1, .bullet_d = 7.82, .bullet_l = 38 },
+    .g12 = .{ .label = "12 gauge", .body = 16, .head = 1.25, .pellets = 9, .velocity = 400, .barrel = 47, .near = 9, .far = 40, .min = 0.35, .reach = 48, .impulse = 17, .bullet_d = 8.38, .bullet_l = 8.38 },
+    .g12_mag = .{ .label = "12 gauge magnum", .body = 15, .head = 1.25, .pellets = 12, .velocity = 410, .barrel = 47, .near = 10, .far = 44, .min = 0.35, .reach = 54, .impulse = 23, .bullet_d = 8.38, .bullet_l = 8.38 },
+    .g20 = .{ .label = "20 gauge", .body = 16, .head = 1.25, .pellets = 8, .velocity = 400, .barrel = 47, .near = 8, .far = 36, .min = 0.35, .reach = 44, .impulse = 12, .bullet_d = 6.1, .bullet_l = 6.1 },
+    .g12_slug = .{ .label = "12 gauge slug", .body = 100, .head = 1.6, .velocity = 480, .barrel = 47, .near = 20, .far = 70, .min = 0.55, .impulse = 27, .bullet_d = 18.5, .bullet_l = 22 },
 });
 
 pub const Weight = enum { light, medium, heavy };
@@ -323,11 +328,12 @@ pub const builds = [_]Build{
     },
     .{
         .name = "Shotgun_4",
-        .calibre = .g20,
+        .calibre = .g12_slug,
         .barrel = 56,
         .stock = true,
         .weight = .light,
-        .why = "A thin single barrel, a short fore-end and a light frame.",
+        .mag = 4,
+        .why = "A thin single barrel, a short fore-end and a light frame: a slug gun with a rifled barrel. It fires one heavy slug, not shot.",
     },
     .{
         .name = "Shotgun_ShortStock",
@@ -462,12 +468,16 @@ const Feel = struct {
     ramp: f32,
     /// The camera goes back to the aim at this rate (1/s).
     recovery: f32,
+    /// The head damage of a gun of the class is at least this. 100: a head
+    /// hit kills inside `near`.
+    head_min: f32 = 0,
 };
 
 fn feel(c: Class) Feel {
     return switch (c) {
         // The AK pattern climbs and drifts to the right in a slow wave.
-        .rifle => .{ .ref = .c7_62x39, .sway = 0.45, .bias = 0.35, .wobble = 0.7, .freq = 0.55, .ramp = 0.6, .recovery = 6 },
+        // A head hit from an AK kills at short range.
+        .rifle => .{ .ref = .c7_62x39, .sway = 0.45, .bias = 0.35, .wobble = 0.7, .freq = 0.55, .ramp = 0.6, .recovery = 6, .head_min = 100 },
         // The AR pattern climbs straight, with a small drift to the left.
         .carbine => .{ .ref = .c5_56x45, .sway = 0.35, .bias = -0.15, .wobble = 0.6, .freq = 0.8, .ramp = 0.4, .recovery = 7 },
         // The bullpup kicks straight back into the shoulder.
@@ -519,17 +529,35 @@ pub fn derive(b: Build, number: u32) Stats {
     var st = base;
     st.calibre = cal.label;
     st.body = @round(cal.body * std.math.clamp(pow(r, 0.1), 0.9, 1.1));
-    st.head = @round(st.body * cal.head);
+    st.head = @max(@round(st.body * cal.head), f.head_min);
     st.pellets = cal.pellets;
     st.velocity = cal.velocity * pow(r, 0.2);
     st.bullet_d = cal.bullet_d;
     st.bullet_l = cal.bullet_l;
-    const reach = std.math.clamp(pow(r, 0.35), 0.75, 1.3);
+    // Buckshot: a longer barrel keeps the pellets together for longer, so
+    // the barrel changes its fall-off and reach more.
+    const buckshot = cal.pellets > 1;
+    const reach = if (buckshot)
+        std.math.clamp(pow(r, 0.8), 0.75, 1.6)
+    else
+        std.math.clamp(pow(r, 0.35), 0.75, 1.3);
     st.near = cal.near * reach;
     st.far = cal.far * reach;
     st.min_dmg = cal.min;
     // Only buckshot has a short reach. It grows with the barrel.
-    st.range = if (cal.pellets > 1) cal.reach * reach else cal.reach;
+    st.range = if (buckshot) cal.reach * reach else cal.reach;
+
+    // The cone. A barrel longer than the reference is a choke: the cone of
+    // the buckshot is smaller, and the sights make it smaller again. A
+    // slug in a shotgun is one bullet: a small cone, as a rifle.
+    if (buckshot) {
+        const choke = std.math.clamp(pow(cal.barrel / b.barrel, 2.5), 0.35, 1);
+        st.spread = base.spread * choke;
+        st.ads_tight = 1 - (1 - base.ads_tight) * choke;
+    } else if (class == .shotgun or class == .sawn_off) {
+        st.spread = base.spread * 0.12;
+        st.ads_tight = 0.8;
+    }
 
     // The time between shots keeps the damage a second of the class for
     // each calibre. A bigger round cycles more slowly. The barrel does not
@@ -683,7 +711,7 @@ pub fn value(st: *const Stats, s: Stat) f32 {
 pub fn bar(slot: weapon.Slot, s: Stat, v: f32) f32 {
     const primary = slot == .primary;
     const x = switch (s) {
-        .damage => v / (if (primary) @as(f32, 50) else 60),
+        .damage => v / (if (primary) @as(f32, 65) else 80),
         .rate => v / (if (primary) @as(f32, 1000) else 600),
         .range => v / (if (primary) @as(f32, 80) else 50),
         .recoil => v / (if (primary) @as(f32, 0.03) else 0.1),

@@ -231,7 +231,7 @@ const SWAP_RADIUS = 4;
 // Grenades: the same numbers as apps/action/game/src/grenade.zig.
 const NADES_PER_LIFE = 3;
 const MIN_NADE_MS = 700;
-const NADE_RADIUS = 5;
+const NADE_RADIUS = 8;
 // A blast more than this far from the server position of a target cannot
 // hit it (the radius, plus the lag of the positions).
 const NADE_REACH = NADE_RADIUS + 3;

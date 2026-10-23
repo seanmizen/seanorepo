@@ -156,13 +156,55 @@ test "the time to kill stays in a fair band" {
         if (st.pellets > 1) {
             // Buckshot kills up close, and does no damage past its reach.
             try std.testing.expect(guns.ttk(st, 5).? < 0.3);
-            try std.testing.expect(guns.ttk(st, 40) == null);
+            try std.testing.expect(guns.ttk(st, st.range + 1) == null);
         } else if (st.slot == .primary) {
             try std.testing.expect(guns.ttk(st, 10).? < 0.4);
             try std.testing.expect(guns.ttk(st, 40).? < 0.7);
         } else {
             try std.testing.expect(guns.ttk(st, 10).? < 0.65);
             try std.testing.expect(guns.ttk(st, 40).? < 1.6);
+        }
+    }
+}
+
+test "a long shotgun barrel keeps the buckshot deadly further" {
+    const std_barrel = statsOf("Shotgun_1");
+    const long = statsOf("Shotgun_2");
+    try std.testing.expect(long.spread < std_barrel.spread * 0.6);
+    try std.testing.expect(long.ads_tight > std_barrel.ads_tight);
+    try std.testing.expect(long.range > 50);
+    try std.testing.expect(guns.ttk(std_barrel, 40) == null);
+    // Aimed down the sights, the long barrels kill with one shot at 20 m
+    // and with two at 40 m.
+    for ([_][]const u8{ "Shotgun_2", "Shotgun_3" }) |name| {
+        const st = statsOf(name);
+        try std.testing.expect(adsShots(st, 20) == 1);
+        try std.testing.expect(adsShots(st, 40) <= 2);
+    }
+}
+
+/// The shots to kill at `dist` m with buckshot, aimed down the sights.
+fn adsShots(st: *const weapon.Stats, dist: f32) u32 {
+    const sh = guns.pelletShare(dist, st.spread * (1 - st.ads_tight));
+    const p: f32 = @floatFromInt(st.pellets);
+    const per_shot = p * (sh.body * st.damageAt(false, dist) + sh.head * st.damageAt(true, dist));
+    return @intFromFloat(@ceil(100 / per_shot - 1e-4));
+}
+
+test "the slug gun fires one slug: a small cone and a big hit" {
+    const slug = statsOf("Shotgun_4");
+    try std.testing.expectEqual(1, slug.pellets);
+    try std.testing.expect(slug.spread < statsOf("Shotgun_1").spread * 0.2);
+    // One body hit kills up close, and one head hit kills at 50 m.
+    try std.testing.expect(slug.damageAt(false, 15) >= 100);
+    try std.testing.expect(slug.damageAt(true, 50) >= 100);
+}
+
+test "a head hit from an AK kills at short range" {
+    for (guns.builds, 0..) |b, i| {
+        const st = &guns.table[i];
+        if (guns.classOf(b.name).? == .rifle or b.calibre == .c7_62x39) {
+            try std.testing.expect(st.damageAt(true, 10) >= 100);
         }
     }
 }
