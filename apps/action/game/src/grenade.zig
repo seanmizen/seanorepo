@@ -499,22 +499,28 @@ fn drawVolume(alloc: std.mem.Allocator, trans: *mesh.Mesh, b: Blast) void {
     debug_cells += vol.cells.items.len;
 }
 
-/// The debug view: the dotted path of the aimed throw (opaque, glowing) and
-/// the blast volumes (translucent). `aim` is null when no throw is possible.
+/// The aim view of a throw: the dotted path (opaque, glowing), the impact
+/// point and its blast volume (translucent). The debug view shows it, and
+/// so does the grenade in the hand (slot 4).
+pub fn buildAim(alloc: std.mem.Allocator, dyn: *mesh.Mesh, trans: *mesh.Mesh, pr: Prediction) void {
+    frame += 1;
+    for (pr.points[0..pr.n], 0..) |p, i| {
+        // Dotted, and not the first 0.2 s: those dots fill the view.
+        if (i % 2 == 1 or i < 8) continue;
+        dyn.box(p - vec.s(0.025), p + vec.s(0.025), v3(0.3, 0.9, 1.0), 4);
+    }
+    if (pr.impact) |b| {
+        dyn.box(b.pos - vec.s(0.07), b.pos + vec.s(0.07), v3(1.0, 0.3, 0.2), 4);
+        drawVolume(alloc, trans, b);
+    }
+}
+
+/// The debug view: the aim view of the aimed throw, and the blast volumes
+/// of the live grenades. `aim` is null when no throw is possible.
 pub fn buildDebug(alloc: std.mem.Allocator, dyn: *mesh.Mesh, trans: *mesh.Mesh, aim: ?Prediction) void {
     frame += 1;
     debug_cells = 0;
-    if (aim) |pr| {
-        for (pr.points[0..pr.n], 0..) |p, i| {
-            // Dotted, and not the first 0.2 s: those dots fill the view.
-            if (i % 2 == 1 or i < 8) continue;
-            dyn.box(p - vec.s(0.025), p + vec.s(0.025), v3(0.3, 0.9, 1.0), 4);
-        }
-        if (pr.impact) |b| {
-            dyn.box(b.pos - vec.s(0.07), b.pos + vec.s(0.07), v3(1.0, 0.3, 0.2), 4);
-            drawVolume(alloc, trans, b);
-        }
-    }
+    if (aim) |pr| buildAim(alloc, dyn, trans, pr);
     for (grenades[0..count]) |g| {
         // The impact of a live grenade: fly the rest of its path.
         const pr = predict(g.pos, g.vel, 1.0 / 120.0, &.{}, g.owner);
@@ -524,14 +530,17 @@ pub fn buildDebug(alloc: std.mem.Allocator, dyn: *mesh.Mesh, trans: *mesh.Mesh, 
 
 // ---- Drawing ---------------------------------------------------------------
 
-/// The grenade bodies: a dark olive egg with a lever, spinning.
+/// One grenade body at `m`: a dark olive egg with a lever. `mat` is 0 in
+/// the world, 100 for the view-model.
+pub fn addBody(dyn: *mesh.Mesh, m: Mat4, mat: f32) void {
+    dyn.orientedBox(m, v3(-0.045, -0.06, -0.045), v3(0.045, 0.06, 0.045), v3(0.2, 0.24, 0.1), mat);
+    dyn.orientedBox(m, v3(-0.03, -0.07, -0.03), v3(0.03, 0.07, 0.03), v3(0.17, 0.2, 0.08), mat);
+    dyn.orientedBox(m, v3(0.035, 0.0, -0.01), v3(0.05, 0.08, 0.01), v3(0.4, 0.4, 0.38), mat + 3);
+}
+
+/// The grenade bodies, spinning.
 pub fn buildOpaque(dyn: *mesh.Mesh) void {
-    for (grenades[0..count]) |g| {
-        const m = vec.ypr(g.pos, g.spin * 0.6, g.spin, 0);
-        dyn.orientedBox(m, v3(-0.045, -0.06, -0.045), v3(0.045, 0.06, 0.045), v3(0.2, 0.24, 0.1), 0);
-        dyn.orientedBox(m, v3(-0.03, -0.07, -0.03), v3(0.03, 0.07, 0.03), v3(0.17, 0.2, 0.08), 0);
-        dyn.orientedBox(m, v3(0.035, 0.0, -0.01), v3(0.05, 0.08, 0.01), v3(0.4, 0.4, 0.38), 3);
-    }
+    for (grenades[0..count]) |g| addBody(dyn, vec.ypr(g.pos, g.spin * 0.6, g.spin, 0), 0);
 }
 
 /// The smoke and the blast core as camera-facing quads, and the streaks as
