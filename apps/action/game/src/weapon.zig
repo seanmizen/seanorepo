@@ -5,9 +5,11 @@
 // - Models: assets/guns.bin (scripts/convert-gun.ts). Every gun of the
 //   Quaternius Ultimate Gun Pack except the sniper rifles, and a bayonet as
 //   the knife. The name of a model gives its class.
-// - Classes: each class has its own stats (`table`). The models of one
-//   class differ only in their look. server/index.ts has the same damage
-//   and fire rate numbers for its checks.
+// - Classes: each class has its reference stats (`table`): the action, the
+//   magazine, the cone and the hands.
+// - Guns: each gun has its own stats from its calibre and its build
+//   (guns.zig). server/guns.json has the same numbers for the checks of the
+//   server (zig build guns writes it).
 // - Items: a weapon as a thing: its class, its model and its rounds. A slot
 //   holds one. An item does not know who holds it, so it can also lie in
 //   the world.
@@ -15,6 +17,7 @@
 //   the held slot and the hands. A change of slot takes the draw time of
 //   the new weapon. It cannot fire before the draw ends.
 const std = @import("std");
+const guns = @import("guns.zig");
 const vec = @import("vec.zig");
 const mesh = @import("mesh.zig");
 const V3 = vec.V3;
@@ -36,9 +39,13 @@ pub const Stats = struct {
     /// One line about the class, for the weapon menu.
     blurb: []const u8,
     slot: Slot,
-    /// The damage of one hit (one pellet), to the body and to the head.
-    body: u32 = 0,
-    head: u32 = 0,
+    /// The calibre name ("5.56x45 mm"), for the menu. Empty for the knife
+    /// and the grenade.
+    calibre: []const u8 = "",
+    /// The damage of one hit (one pellet) at full power, to the body and to
+    /// the head. Whole numbers. The gun model sets them (guns.zig).
+    body: f32 = 0,
+    head: f32 = 0,
     pellets: u32 = 1,
     /// The time from one shot (or one burst) to the next.
     interval: f32 = 1,
@@ -59,40 +66,89 @@ pub const Stats = struct {
     heat: f32 = 0,
     /// How much the sights make the cone smaller (0 to 1).
     ads_tight: f32 = 0.75,
-    /// The camera kick of one shot, in radians up. The side kick is a
-    /// random part of it.
+    /// The recoil pattern (Hands.kickShot). The camera kick up of the first
+    /// shot of a string, in radians. It grows by the part `ramp` over the
+    /// first 8 shots.
     kick: f32 = 0,
+    ramp: f32 = 0,
+    /// The side kick of shot n of a string, in radians to the right:
+    /// sway * (bias + wobble * sin(freq * n + phase)), and a small random
+    /// part.
+    sway: f32 = 0,
+    bias: f32 = 0,
+    wobble: f32 = 0,
+    freq: f32 = 1,
+    phase: f32 = 0,
+    /// The rate (1/s) at which the camera goes back to the aim after a
+    /// shot (Hands.recover).
+    recovery: f32 = 6,
     /// The kick of the view-model, a multiplier.
     shove: f32 = 1,
     /// The reach of a hit, in metres.
     range: f32 = 200,
+    /// The damage fall-off: full damage to `near` m, then a straight line
+    /// down to the fraction `min_dmg` at `far` m. Past `far` the damage
+    /// stays at `min_dmg`.
+    near: f32 = 1e6,
+    far: f32 = 2e6,
+    min_dmg: f32 = 1,
+    /// The muzzle velocity in m/s. Over guns.sound_speed the bullet is
+    /// supersonic.
+    velocity: f32 = 0,
     /// The walk speed multiplier while it is held.
     speed: f32 = 1,
     /// The time to take it out, in seconds.
     draw: f32,
+    /// The rate (1/s) to go to the sights and back.
+    aim_speed: f32 = 14,
     /// The view-model grip at the hip, and its distance at the sights.
     hip: V3 = v3(0.15, -0.18, -0.38),
     ads_z: f32 = -0.3,
     /// The player can aim down the sights.
     sights: bool = true,
+
+    /// The damage multiplier at `dist` m: 1 near, `min_dmg` far.
+    /// The math is in f64, as on the server (JavaScript numbers), so the two
+    /// round a hit to the same whole number.
+    pub fn falloff(st: *const Stats, dist: f32) f64 {
+        const d: f64 = dist;
+        const near: f64 = st.near;
+        const far: f64 = st.far;
+        const min: f64 = st.min_dmg;
+        if (d <= near) return 1;
+        if (d >= far) return min;
+        return 1 - ((1 - min) * (d - near)) / (far - near);
+    }
+
+    /// The damage of one hit (one pellet) at `dist` m, a whole number. The
+    /// server applies the same fall-off (server/guns.ts pelletDamage).
+    pub fn damageAt(st: *const Stats, head: bool, dist: f32) f32 {
+        const base: f64 = if (head) st.head else st.body;
+        return @floatCast(@round(base * st.falloff(dist)));
+    }
+
+    /// True when the bullet is faster than sound (a crack, not a whiz).
+    pub fn supersonic(st: *const Stats) bool {
+        return st.velocity > guns.sound_speed;
+    }
 };
 
-/// The stats of each class, in the order of Class. The README has the same
-/// table. Balance notes: 100 health. Each primary kills in about 0.33 s
-/// when all hits land; the rifle hits hard and kicks, the carbine is
-/// steady, the bullpup bursts and is accurate, the SMG is fast and loose,
-/// the shotguns kill in one shot up close only. A head hit is about 2.5
-/// times a body hit. Hipfire on a laptop: the first shot is accurate, the
+/// The stats of each class, in the order of Class. For a gun class they are
+/// the reference of the gun model (guns.zig): the action, the magazine, the
+/// cone and the hands, with the interval and the kick for the reference
+/// calibre of the class. The calibre and the build of each gun change them.
+/// The knife and the grenade use these stats as they are.
+///
+/// Balance notes: 100 health. Each primary kills in about 0.3 s up close
+/// when all hits land. Hipfire on a laptop: the first shot is accurate, the
 /// cone grows with the heat and the movement, and the sights make it
 /// smaller.
 pub const table = [class_count]Stats{
-    .{ // rifle
+    .{ // rifle: the reference is 7.62x39 mm
         .label = "RIFLE",
-        .blurb = "hits hard, strong kick",
+        .blurb = "AK pattern, full auto",
         .slot = .primary,
-        .body = 30,
-        .head = 75,
-        .interval = 0.115,
+        .interval = 0.107,
         .auto = true,
         .mag = 30,
         .reserve = 90,
@@ -105,13 +161,11 @@ pub const table = [class_count]Stats{
         .speed = 0.93,
         .draw = 0.45,
     },
-    .{ // carbine
+    .{ // carbine: the reference is 5.56x45 mm
         .label = "CARBINE",
-        .blurb = "fast and steady",
+        .blurb = "AR pattern, full auto",
         .slot = .primary,
-        .body = 24,
-        .head = 60,
-        .interval = 0.085,
+        .interval = 0.082,
         .auto = true,
         .mag = 30,
         .reserve = 120,
@@ -125,18 +179,16 @@ pub const table = [class_count]Stats{
         .speed = 0.96,
         .draw = 0.4,
     },
-    .{ // bullpup
+    .{ // bullpup: the reference is 5.56x45 mm
         .label = "BULLPUP",
-        .blurb = "3-round burst, very accurate",
+        .blurb = "3-round burst, the action behind the grip",
         .slot = .primary,
-        .body = 28,
-        .head = 72,
-        .interval = 0.36,
+        .interval = 0.3,
         .burst = 3,
-        .burst_gap = 0.06,
+        .burst_gap = 0.05,
         .mag = 30,
         .reserve = 90,
-        .reload = 2.5,
+        .reload = 2.2,
         .spread = 0.003,
         .move_spread = 0.014,
         .bloom = 0.012,
@@ -144,15 +196,13 @@ pub const table = [class_count]Stats{
         .kick = 0.008,
         .shove = 0.8,
         .speed = 0.94,
-        .draw = 0.45,
+        .draw = 0.5,
     },
-    .{ // smg
+    .{ // smg: the reference is 9x19 mm
         .label = "SMG",
-        .blurb = "fastest fire and feet, close range",
+        .blurb = "full auto, pistol rounds",
         .slot = .primary,
-        .body = 18,
-        .head = 40,
-        .interval = 0.065,
+        .interval = 0.075,
         .auto = true,
         .mag = 35,
         .reserve = 140,
@@ -167,13 +217,10 @@ pub const table = [class_count]Stats{
         .draw = 0.3,
         .hip = v3(0.14, -0.17, -0.36),
     },
-    .{ // shotgun
+    .{ // shotgun: the reference is 12 gauge
         .label = "SHOTGUN",
-        .blurb = "9 pellets, one shot up close",
+        .blurb = "pump, buckshot, one shot up close",
         .slot = .primary,
-        .body = 13,
-        .head = 16,
-        .pellets = 9,
         .interval = 0.85,
         .mag = 6,
         .reserve = 24,
@@ -183,17 +230,13 @@ pub const table = [class_count]Stats{
         .ads_tight = 0.3,
         .kick = 0.045,
         .shove = 1.8,
-        .range = 35,
         .speed = 0.95,
         .draw = 0.45,
     },
-    .{ // sawn_off
+    .{ // sawn_off: the reference is 12 gauge
         .label = "SAWN-OFF",
         .blurb = "2 barrels, wide spread, very close range",
         .slot = .primary,
-        .body = 11,
-        .head = 13,
-        .pellets = 10,
         .interval = 0.25,
         .mag = 2,
         .reserve = 20,
@@ -203,18 +246,15 @@ pub const table = [class_count]Stats{
         .ads_tight = 0.3,
         .kick = 0.06,
         .shove = 2,
-        .range = 22,
         .speed = 1.0,
         .draw = 0.35,
         .hip = v3(0.14, -0.18, -0.36),
     },
-    .{ // pistol
+    .{ // pistol: the reference is 9x19 mm
         .label = "PISTOL",
-        .blurb = "quick to draw, accurate",
+        .blurb = "semi-auto, quick to draw",
         .slot = .secondary,
-        .body = 26,
-        .head = 65,
-        .interval = 0.14,
+        .interval = 0.12,
         .mag = 12,
         .reserve = 48,
         .reload = 1.4,
@@ -228,13 +268,11 @@ pub const table = [class_count]Stats{
         .hip = v3(0.13, -0.15, -0.4),
         .ads_z = -0.42,
     },
-    .{ // revolver
+    .{ // revolver: the reference is .357 Magnum
         .label = "REVOLVER",
-        .blurb = "2 body hits, 1 head hit",
+        .blurb = "double action, 6 rounds",
         .slot = .secondary,
-        .body = 52,
-        .head = 104,
-        .interval = 0.48,
+        .interval = 0.46,
         .mag = 6,
         .reserve = 30,
         .reload = 2.4,
@@ -242,7 +280,7 @@ pub const table = [class_count]Stats{
         .move_spread = 0.016,
         .bloom = 0.03,
         .heat = 0.6,
-        .kick = 0.05,
+        .kick = 0.04,
         .shove = 1.6,
         .speed = 1.04,
         .draw = 0.35,
@@ -274,8 +312,24 @@ pub const table = [class_count]Stats{
     },
 };
 
+/// The stats of a class: the reference of its guns, and the stats of the
+/// knife and the grenade.
 pub fn stats(c: Class) *const Stats {
     return &table[@backingInt(c)];
+}
+
+/// The stats of a model: its gun stats (guns.zig), or the class stats for
+/// the knife.
+pub fn gunStats(model: u8) *const Stats {
+    if (model < guns.gun_count) return &guns.table[model];
+    return stats(models[model].class);
+}
+
+/// The stats of an item: the gun stats of its model, or the class stats for
+/// the knife and the grenade.
+pub fn statsOf(it: Item) *const Stats {
+    if (it.class == .knife or it.class == .grenade) return stats(it.class);
+    return gunStats(it.model);
 }
 
 /// The class of a network class id, or null.
@@ -307,22 +361,6 @@ pub const Model = struct {
 pub var models: []Model = &.{};
 pub var knife_model: u8 = 0;
 
-fn classOf(name: []const u8) ?Class {
-    const prefixes = [_]struct { []const u8, Class }{
-        .{ "AssaultRifle2_", .carbine },
-        .{ "AssaultRifle_", .rifle },
-        .{ "Bullpup_", .bullpup },
-        .{ "SubmachineGun_", .smg },
-        .{ "Shotgun_SawedOff", .sawn_off },
-        .{ "Shotgun_", .shotgun },
-        .{ "Pistol_", .pistol },
-        .{ "Revolver_", .revolver },
-        .{ "Bayonet", .knife },
-    };
-    for (prefixes) |p| if (std.mem.startsWith(u8, name, p[0])) return p[1];
-    return null;
-}
-
 fn rd(comptime T: type, b: []const u8, at: usize) T {
     return std.mem.readInt(T, b[at..][0..@sizeOf(T)], .little);
 }
@@ -336,7 +374,7 @@ fn rv(b: []const u8, at: usize) V3 {
 }
 
 /// Read guns.bin (the layout is in scripts/convert-gun.ts) and make the
-/// triangles of each model.
+/// triangles of each model. The guns must be in the order of guns.builds.
 pub fn loadModels(alloc: std.mem.Allocator) !void {
     const b: []const u8 = guns_bin;
     if (!std.mem.eql(u8, b[0..4], "GUN1")) return error.BadGunFile;
@@ -361,7 +399,9 @@ pub fn loadModels(alloc: std.mem.Allocator) !void {
         const nf = rd(u16, b, h + 22);
         const nr = rd(u16, b, h + 24);
         const nt = rd(u16, b, h + 26);
-        const class = classOf(name) orelse return error.BadGunFile;
+        const class = guns.classOf(name) orelse return error.BadGunFile;
+        if (i < guns.gun_count and !std.mem.eql(u8, name, guns.builds[i].name)) return error.BadGunFile;
+        if (i >= guns.gun_count and class != .knife) return error.BadGunFile;
         counts[@backingInt(class)] += 1;
         if (class == .knife) knife_model = @intCast(i);
         m.* = .{
@@ -468,9 +508,8 @@ pub const Item = struct {
     /// A new gun of this model: a full magazine and the reserve of its
     /// class. `infinite` gives a reserve without end (practice).
     pub fn full(model: u8, infinite: bool) Item {
-        const c = models[model].class;
-        const st = stats(c);
-        return .{ .class = c, .model = model, .ammo = st.mag, .reserve = if (infinite) 9999 else st.reserve };
+        const st = gunStats(model);
+        return .{ .class = models[model].class, .model = model, .ammo = st.mag, .reserve = if (infinite) 9999 else st.reserve };
     }
 };
 
@@ -479,8 +518,10 @@ pub const Choice = struct {
     primary: u8,
     secondary: u8,
 
+    /// The default pick: the AKM (RIFLE 2) and PISTOL 1. server/index.ts
+    /// DEFAULT_PICK has the same models.
     pub fn default() Choice {
-        return .{ .primary = firstOf(.rifle), .secondary = firstOf(.pistol) };
+        return .{ .primary = byName("AssaultRifle_2") orelse firstOf(.rifle), .secondary = firstOf(.pistol) };
     }
 
     /// True when each model exists and is in the right slot.
@@ -538,7 +579,8 @@ pub const Loadout = struct {
     }
 
     pub fn heldStats(self: *const Loadout) *const Stats {
-        return stats(self.heldClass());
+        if (self.slots[@backingInt(self.current)]) |it| return statsOf(it);
+        return stats(.knife);
     }
 
     pub fn item(self: *Loadout, slot: Slot) ?*Item {
@@ -559,7 +601,7 @@ pub const Loadout = struct {
         if (it.class == .grenade and it.ammo == 0) return false;
         self.last = self.current;
         self.current = slot;
-        self.hands.takeOut(stats(it.class).draw);
+        self.hands.takeOut(statsOf(it).draw);
         return true;
     }
 };
@@ -582,6 +624,14 @@ const sight_ref: f32 = 0.085;
 pub const Hands = struct {
     cooldown: f32 = 0,
     recoil: f32 = 0, // the kick of the view-model, 0..1
+    /// The camera recoil that the recovery has not given back yet, in
+    /// radians: up, and to the right.
+    kick_up: f32 = 0,
+    kick_side: f32 = 0,
+    /// The shots of this string (the place in the recoil pattern), and the
+    /// time since the last shot.
+    string: u32 = 0,
+    since_shot: f32 = 10,
     heat: f32 = 0, // grows while the trigger is held, makes the cone wider
     ads: f32 = 0, // 0 hip, 1 aim down the sights
     flash: f32 = 0, // the muzzle flash time left
@@ -616,7 +666,7 @@ pub const Hands = struct {
     }
 
     pub fn canReload(self: *const Hands, it: *const Item) bool {
-        const st = stats(it.class);
+        const st = statsOf(it.*);
         return st.mag > 0 and self.reloading < 0 and self.drawing <= 0 and it.ammo < st.mag and it.reserve > 0;
     }
 
@@ -638,13 +688,14 @@ pub const Hands = struct {
     /// Advance one step with the held item. Returns the event of this step
     /// for the sound and the shot.
     pub fn update(self: *Hands, it: *Item, dt: f32, trigger: bool, pressed: bool, aim: bool) Event {
-        const st = stats(it.class);
+        const st = statsOf(it.*);
         self.cooldown = @max(0, self.cooldown - dt);
         self.recoil = @max(0, self.recoil - dt * 7);
         self.flash = @max(0, self.flash - dt);
         self.heat = if (trigger) @min(1, self.heat) else @max(0, self.heat - dt * 3);
         const want_ads: f32 = if (aim and st.sights and self.ready()) 1 else 0;
-        self.ads += (want_ads - self.ads) * @min(1, dt * 14);
+        // A heavy gun goes to the sights more slowly (guns.zig weights).
+        self.ads += (want_ads - self.ads) * @min(1, dt * st.aim_speed);
         self.sway_t += dt;
         if (self.swing >= 0) {
             self.swing += dt;
@@ -722,18 +773,55 @@ pub const Hands = struct {
     }
 
     /// The cone half angle of the next shot, in radians.
-    pub fn spread(self: *const Hands, c: Class, moving: f32, airborne: bool) f32 {
-        const st = stats(c);
+    pub fn spread(self: *const Hands, st: *const Stats, moving: f32, airborne: bool) f32 {
         var a: f32 = st.spread + self.heat * st.bloom + moving * st.move_spread;
         if (airborne) a += 0.05;
         return a * (1 - st.ads_tight * self.ads);
+    }
+
+    /// The camera kick of one shot, in radians: up, and to the right. The
+    /// recoil pattern of the gun sets it: the up kick grows over the first
+    /// 8 shots of a string, and the side kick follows a wave with a drift.
+    /// `jitter` is a random number from 0 to 1. The sights halve the kick.
+    pub fn kickShot(self: *Hands, st: *const Stats, jitter: f32) [2]f32 {
+        const n: f32 = @floatFromInt(self.string);
+        const sights = 1 - 0.5 * self.ads;
+        const up = st.kick * (1 + st.ramp * @min(n, 8) / 8) * sights;
+        const side = st.sway * (st.bias + st.wobble * @sin(st.freq * n + st.phase) + 0.5 * (jitter - 0.5)) * sights;
+        self.string += 1;
+        self.since_shot = 0;
+        self.kick_up += up;
+        self.kick_side += side;
+        return .{ up, side };
+    }
+
+    /// The camera recovery of one step, in radians: up, and to the right.
+    /// The camera goes back to the aim at the recovery rate of the gun. For
+    /// an automatic gun the recovery starts when the next shot does not
+    /// come. For other guns it starts 0.12 s after the shot. `look_up` is
+    /// the pitch change that the mouse made in this step. A pull down
+    /// against the recoil counts as recovery, so the view does not go
+    /// lower than the aim.
+    pub fn recover(self: *Hands, st: *const Stats, dt: f32, look_up: f32) [2]f32 {
+        if (look_up < 0) self.kick_up = @max(0, self.kick_up + look_up);
+        self.since_shot += dt;
+        const delay: f32 = if (st.auto) st.interval + 0.04 else 0.12;
+        if (self.since_shot < delay) return .{ 0, 0 };
+        // A pause ends the string. The next shot starts the pattern again.
+        if (self.since_shot > delay + 0.15) self.string = 0;
+        const k = 1 - @exp(-st.recovery * dt);
+        const up = self.kick_up * k;
+        const side = self.kick_side * k;
+        self.kick_up -= up;
+        self.kick_side -= side;
+        return .{ -up, -side };
     }
 
     /// The view-model pose in camera space: the matrix of the grip, the
     /// magazine offset (relative to the gun), and the muzzle (in gun
     /// space).
     pub fn pose(self: *const Hands, it: Item, bob: f32, speed: f32) struct { gun: Mat4, mag: Mat4, muzzle: V3 } {
-        const st = stats(it.class);
+        const st = statsOf(it);
         const mdl = models[it.model];
         // Each gun at the hip has the top of its sights at one height, so a
         // low shotgun and a tall bullpup sit alike.

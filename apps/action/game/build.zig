@@ -46,9 +46,27 @@ pub fn build(b: *std.Build) void {
     run.addPassthruArgs();
     b.step("floorplan", "Slice a map into images, or audit it").dependOn(&run.step);
 
-    // `zig build test`: native tests (src/tests.zig): the player movement on
-    // the maps, and the console framework (src/console/).
+    // `zig build guns`: write ../server/guns.json from the gun model
+    // (src/guns.zig) and print the stat tables of the README.
     const sw_host = b.dependency("swindowzig", .{ .target = host, .optimize = optimize });
+    const guns_json = b.path("../server/guns.json");
+    const guns_tool = b.addExecutable(.{
+        .name = "guns",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/guns_tool.zig"),
+            .target = host,
+            .optimize = optimize,
+        }),
+    });
+    guns_tool.root_module.addImport("sw_math", sw_host.module("sw_math"));
+    const guns_run = b.addRunArtifact(guns_tool);
+    guns_run.addFileArg(guns_json);
+    guns_run.has_side_effects = true;
+    b.step("guns", "Write server/guns.json and print the gun tables").dependOn(&guns_run.step);
+
+    // `zig build test`: native tests (src/tests.zig): the player movement on
+    // the maps, the console framework (src/console/) and the gun model
+    // (src/guns_test.zig, which reads ../server/guns.json).
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/tests.zig"),
@@ -58,5 +76,8 @@ pub fn build(b: *std.Build) void {
     });
     tests.root_module.addImport("sw_math", sw_host.module("sw_math"));
     tests.root_module.addImport("sw_core", sw_host.module("sw_core"));
-    b.step("test", "Walk the player over the stairs and escalators, test the console").dependOn(&b.addRunArtifact(tests).step);
+    const options = b.addOptions();
+    options.addOptionPath("guns_json", guns_json);
+    tests.root_module.addOptions("build_options", options);
+    b.step("test", "Walk the player over the stairs and escalators, test the console and the gun model").dependOn(&b.addRunArtifact(tests).step);
 }

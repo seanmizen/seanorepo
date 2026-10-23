@@ -17,9 +17,10 @@
 // Trust model: casual. The client sends its own position and its hits. The
 // server checks the phase, that both players are alive, and for each shot
 // the weapon: it must be in the shooter's loadout, the fire rate of its
-// class, the pellet count and the reach. The server takes the damage from
-// its own table (WEAPONS). For a grenade it also checks the throws left in
-// this life, that each blast has a throw, the damage range, and that each
+// gun, the pellet count and the reach. The server takes the damage from
+// its own table (guns.ts), with the fall-off at its own distance between
+// the two players. For a grenade it also checks the throws left in this
+// life, that each blast has a throw, the damage range, and that each
 // target is near the blast.
 //
 // Chat (chat.ts): the server relays each chat message. It removes the
@@ -30,10 +31,10 @@
 // server also writes its own lines to the chat: a join, a leave, the start
 // and the end of a match.
 //
-// Weapons: the class ids are the order of WEAPONS (game/src/weapon.zig
-// Class). A pick is [class, model]: the class sets the stats, the model is
-// only the look. A new pick applies at the next spawn, or at once while the
-// player is at the spawn point and has not fired.
+// Weapons: the class ids are the order of game/src/weapon.zig Class. A pick
+// is [class, model]: the model must be a gun of the class, and the model
+// sets the stats (guns.json). A new pick applies at the next spawn, or at
+// once while the player is at the spawn point and has not fired.
 //
 // Messages (JSON text). Client to server:
 //   {t:"hello", name, p:[c,m], s:[c,m]}           p the primary, s the secondary
@@ -100,6 +101,7 @@ import {
   runConfigFile,
   ServerConsole,
 } from './console';
+import { type Gun, gunInPick, gunOf, type SlotName, shotDamage } from './guns';
 import {
   newPing,
   onPong,
@@ -134,54 +136,7 @@ const log = (line: string) => console.log(`action: ${line}`);
 const RESPAWN_MS = 3000;
 const MAX_PLAYERS = 16;
 
-// The weapon classes: the same order and numbers as the table in
-// apps/action/game/src/weapon.zig. body and head are the damage of one
-// pellet. interval is the time from one shot (or burst) to the next, in
-// seconds; a burst has `burst` rounds `gap` seconds apart. range is the
-// reach in metres.
-type SlotName = 'primary' | 'secondary' | 'knife' | 'grenade';
-interface WeaponClass {
-  name: string;
-  slot: SlotName;
-  body: number;
-  head: number;
-  pellets: number;
-  interval: number;
-  burst: number;
-  gap: number;
-  range: number;
-}
-const gun = (
-  name: string,
-  slot: SlotName,
-  body: number,
-  head: number,
-  interval: number,
-  more: Partial<WeaponClass> = {},
-): WeaponClass => ({
-  name,
-  slot,
-  body,
-  head,
-  interval,
-  pellets: 1,
-  burst: 1,
-  gap: interval,
-  range: 200,
-  ...more,
-});
-const WEAPONS: WeaponClass[] = [
-  gun('rifle', 'primary', 30, 75, 0.115),
-  gun('carbine', 'primary', 24, 60, 0.085),
-  gun('bullpup', 'primary', 28, 72, 0.36, { burst: 3, gap: 0.06 }),
-  gun('smg', 'primary', 18, 40, 0.065),
-  gun('shotgun', 'primary', 13, 16, 0.85, { pellets: 9, range: 35 }),
-  gun('sawn_off', 'primary', 11, 13, 0.25, { pellets: 10, range: 22 }),
-  gun('pistol', 'secondary', 26, 65, 0.14),
-  gun('revolver', 'secondary', 52, 104, 0.48),
-  gun('knife', 'knife', 55, 55, 0.45, { range: 1.6 }),
-  gun('grenade', 'grenade', 0, 0, 1),
-];
+// The class ids of the knife and the grenade (game/src/weapon.zig Class).
 const KNIFE = 8;
 const GRENADE = 9;
 // The fire rate check. The messages bunch up on the way, so one gap can be
@@ -191,8 +146,9 @@ const FIRE_WINDOW = 4;
 const FIRE_SLACK = 0.8;
 // The lag of the positions: a hit may be this much further than the reach.
 const REACH_SLACK = 3;
-// The default pick: AssaultRifle_1 and Pistol_1 (model ids 0 and 23).
-const DEFAULT_PICK: Pick = { p: [0, 0], s: [6, 23] };
+// The default pick: AssaultRifle_2 and Pistol_1 (model ids 1 and 23), as
+// game/src/weapon.zig Choice.default.
+const DEFAULT_PICK: Pick = { p: [0, 1], s: [6, 23] };
 // A new pick applies at once within this distance of the spawn point.
 const SWAP_RADIUS = 4;
 // Grenades: the same numbers as apps/action/game/src/grenade.zig.
@@ -386,13 +342,13 @@ interface Pick {
   s: [number, number];
 }
 
-/** One [class, model] pair from a message, or null. The class must be in
- * the slot; the model is only the look, any small number. */
+/** One [class, model] pair from a message, or null. The model must be a
+ * gun of the class, in the slot. */
 function pickPart(v: unknown, slot: SlotName): [number, number] | null {
   if (!Array.isArray(v) || v.length !== 2) return null;
   const [c, m] = v.map(Number);
   if (!Number.isInteger(c) || !Number.isInteger(m)) return null;
-  if (WEAPONS[c]?.slot !== slot || m < 0 || m > 255) return null;
+  if (gunOf(c, m)?.slot !== slot) return null;
   return [c, m];
 }
 
@@ -531,10 +487,9 @@ function onLoadout(p: Player, msg: Record<string, unknown>): void {
   send(p, { t: 'loadout', p: p.pick.p, s: p.pick.s });
 }
 
-/** True when a shot of class `w` now keeps to the fire rate of the class:
+/** True when a shot of class `w` now keeps to the fire rate of its gun:
  * at most `burst` rounds an interval, over FIRE_WINDOW intervals. */
-function fireRateOk(p: Player, w: number, now: number): boolean {
-  const cls = WEAPONS[w];
+function fireRateOk(p: Player, w: number, cls: Gun, now: number): boolean {
   const times = p.shots.get(w) ?? [];
   const last = times[times.length - 1];
   if (last !== undefined && now - last < cls.gap * 500) return false;
@@ -552,10 +507,10 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
   // The weapon must be one of this life: the primary, the secondary or the
   // knife.
   const w = Number(msg.w);
-  if (w !== p.pick.p[0] && w !== p.pick.s[0] && w !== KNIFE) return;
-  if (!fireRateOk(p, w, now)) return;
+  const cls = gunInPick(w, p.pick.p, p.pick.s);
+  if (!cls) return;
+  if (!fireRateOk(p, w, cls, now)) return;
   p.firedSinceSpawn = true;
-  const cls = WEAPONS[w];
   const o = vec3(msg.o, 450);
   const e = vec3(msg.e, 450);
   if (o && e) broadcast({ t: 'shot', id: p.id, w, o, e }, p.id);
@@ -579,7 +534,7 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
     if (far > cls.range + REACH_SLACK) continue;
     seen.add(target.id);
     pellets -= body + head;
-    damage(p, target, body * cls.body + head * cls.head, head > 0);
+    damage(p, target, shotDamage(cls, body, head, far), head > 0);
   }
 }
 

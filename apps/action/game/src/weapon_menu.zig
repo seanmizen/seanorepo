@@ -2,7 +2,9 @@
 // picks the primary weapon (slot 1) and the secondary weapon (slot 2). A
 // row for each class, a button for each model of the class. The right side
 // shows the model under the mouse (main.zig draws it in 3D through a
-// window in the panel) and the stats of its class.
+// window in the panel), its calibre and build, and its stats. The stat
+// bars (gun_compare.zig) compare it with the gun in the same slot: green
+// where it is better, red where it is worse.
 //
 // The mouse is free while the menu is open. The weapon menu key (B, the
 // weaponmenu action) or DONE closes it and goes back to play, Esc closes it
@@ -12,6 +14,8 @@ const core = @import("sw_core");
 const gfx = @import("sw_gfx2d");
 const sw_text = @import("sw_text");
 const weapon = @import("weapon.zig");
+const guns = @import("guns.zig");
+const gun_compare = @import("gun_compare.zig");
 
 pub var open = false;
 /// The model under the mouse, or null.
@@ -123,23 +127,9 @@ fn fillAround(r: *gfx.Renderer, outer: gfx.Rect, hole: gfx.Rect, c: gfx.Color) !
     try r.fillRect(.{ .x = hole.x + hole.w, .y = hole.y, .w = outer.x + outer.w - hole.x - hole.w, .h = hole.h }, c);
 }
 
-/// The stat bars: each value is 0 to 1.
-const Bars = struct { damage: f32, rate: f32, accuracy: f32, mobility: f32 };
-
-fn bars(st: *const weapon.Stats) Bars {
-    const shot: f32 = @floatFromInt(st.body * st.pellets);
-    const per_click: f32 = @floatFromInt(st.burst);
-    const rpm = 60 / st.interval * per_click;
-    return .{
-        .damage = vec01(shot / 120),
-        .rate = vec01(rpm / 1000),
-        .accuracy = vec01(1 - (st.spread + 0.5 * st.bloom) / 0.1),
-        .mobility = vec01((st.speed - 0.85) / 0.27),
-    };
-}
-
-fn vec01(x: f32) f32 {
-    return std.math.clamp(x, 0, 1);
+/// The gun of the player in the slot of `model`: the gun to compare with.
+pub fn currentFor(choice: weapon.Choice, model: u8) u8 {
+    return if (weapon.gunStats(model).slot == .secondary) choice.secondary else choice.primary;
 }
 
 /// Draw the menu over a dark screen. `note` is a line about when the pick
@@ -183,37 +173,48 @@ pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mx: f32, my: f32, w: 
         try T.put(r, text, n, b.x + b.w / 2 - text.measure(n, 16).w / 2, b.y + 6, 16, if (picked) ink else white);
     }
 
-    // The model under the mouse: its name, its class and the stats.
+    // The model under the mouse: its name, its calibre and build, and the
+    // stats against the gun in its slot.
     const sel = previewModel(choice);
-    const st = weapon.stats(weapon.models[sel].class);
+    const st = weapon.gunStats(sel);
+    const b = guns.builds[sel];
     const x = pv.x;
-    var y = pv.y + pv.h + 14;
+    var y = pv.y + pv.h + 12;
     try T.put(r, text, weapon.label(&buf, sel), x, y, 22, accent);
-    y += 30;
-    try T.put(r, text, st.blurb, x, y, 13, dim);
-    y += 26;
-    const b = bars(st);
-    const items = [_]struct { []const u8, f32 }{
-        .{ "DAMAGE", b.damage },
-        .{ "FIRE RATE", b.rate },
-        .{ "ACCURACY", b.accuracy },
-        .{ "MOBILITY", b.mobility },
-    };
-    for (items) |it| {
-        try T.put(r, text, it[0], x, y, 12, dim);
-        try r.fillRect(.{ .x = x + 96, .y = y + 4, .w = 220, .h = 6 }, gfx.Color.rgba8(255, 255, 255, 35));
-        try r.fillRect(.{ .x = x + 96, .y = y + 4, .w = 220 * it[1], .h = 6 }, accent);
-        y += 20;
-    }
-    y += 6;
     var line: [96]u8 = undefined;
-    const rpm = 60 / st.interval * @as(f32, @floatFromInt(st.burst));
-    const pel = if (st.pellets > 1) std.fmt.bufPrint(&buf, " x{d}", .{st.pellets}) catch "" else "";
-    const l1 = std.fmt.bufPrint(&line, "BODY {d}{s}  HEAD {d}{s}  {d:.0} RPM", .{ st.body, pel, st.head, pel, rpm }) catch "";
-    try T.put(r, text, l1, x, y, 13, white);
+    y += 28;
+    const cal = std.fmt.bufPrint(&line, "{s}, {d:.0} m/s, {s}", .{ st.calibre, st.velocity, if (st.supersonic()) "supersonic" else "subsonic" }) catch "";
+    try T.put(r, text, cal, x, y, 13, white);
+    y += 18;
+    const weight = switch (b.weight) {
+        .light => "light",
+        .medium => "medium weight",
+        .heavy => "heavy",
+    };
+    // A handgun never has a stock.
+    const stock = if (st.slot == .secondary) "" else if (b.stock) "stock, " else "no stock, ";
+    const l0 = std.fmt.bufPrint(&line, "{d:.0} cm barrel, {s}{s}{s}", .{
+        b.barrel, stock, weight, if (b.bullpup) ", bullpup" else "",
+    }) catch "";
+    try T.put(r, text, l0, x, y, 12, dim);
     y += 20;
-    const l2 = std.fmt.bufPrint(&line, "MAG {d} + {d}  RELOAD {d:.1} s  SPEED {d:.0}%", .{ st.mag, st.reserve, st.reload, st.speed * 100 }) catch "";
-    try T.put(r, text, l2, x, y, 13, white);
+    const cur = currentFor(choice, sel);
+    if (cur != sel) {
+        var lc: [32]u8 = undefined;
+        const vs = std.fmt.bufPrint(&line, "against your {s}:", .{weapon.label(&lc, cur)}) catch "";
+        try T.put(r, text, vs, x, y, 12, dim);
+        const gw = text.measure(vs, 12).w + 8;
+        try T.put(r, text, "better", x + gw, y, 12, gun_compare.better);
+        try T.put(r, text, "worse", x + gw + text.measure("better", 12).w + 8, y, 12, gun_compare.worse);
+    } else {
+        try T.put(r, text, "your gun in this slot", x, y, 12, dim);
+    }
+    y += 18;
+    y += try gun_compare.draw(r, text, x, y, pv.w, sel, cur);
+    y += 4;
+    const pel = if (st.pellets > 1) std.fmt.bufPrint(&buf, " x{d}", .{st.pellets}) catch "" else "";
+    const l1 = std.fmt.bufPrint(&line, "BODY {d:.0}{s}  HEAD {d:.0}{s}  MAG {d} + {d}", .{ st.body, pel, st.head, pel, st.mag, st.reserve }) catch "";
+    try T.put(r, text, l1, x, y, 13, white);
 
     // The loadout, the note, and DONE.
     var la: [32]u8 = undefined;

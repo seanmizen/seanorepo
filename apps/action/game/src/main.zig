@@ -676,10 +676,11 @@ fn knockPlate(i: usize, bull: bool, at: V3, d: V3) void {
 /// The hits of one shot on one remote player: body and head pellets.
 const ShotHit = struct { idx: usize, body: u32 = 0, head: u32 = 0 };
 
-/// The damage of one pellet (or one cut) on a dummy: the stats of the held
-/// weapon, as the server applies them to a player (server/index.ts WEAPONS).
-fn pelletDamage(st: *const weapon.Stats, head: bool) f32 {
-    return @floatFromInt(if (head) st.head else st.body);
+/// The damage of one pellet (or one cut) on a dummy at `dist` m: the stats
+/// of the held weapon with its fall-off, as the server applies them to a
+/// player (server/guns.ts pelletDamage).
+fn pelletDamage(st: *const weapon.Stats, head: bool, dist: f32) f32 {
+    return st.damageAt(head, dist);
 }
 
 /// A shot, a cut or a blast on a practice dummy: the damage and its
@@ -700,13 +701,14 @@ fn dummyHit(i: usize, body: f32, head: f32) void {
 
 /// A gun shot: one ray for each pellet in the cone. In deathmatch one
 /// "fire" message carries the hits of all the pellets. The server takes
-/// the damage of each pellet from its own table.
+/// the damage of each pellet from its own table (server/guns.json), with
+/// the fall-off at its own distance between the two players.
 fn fire() void {
     const it = loadout.held() orelse return;
-    const st = weapon.stats(it.class);
+    const st = weapon.statsOf(it.*);
     shots += 1;
     const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
-    const sp = loadout.hands.spread(it.class, moving, !me.grounded);
+    const sp = loadout.hands.spread(st, moving, !me.grounded);
     const f = vec.forward(me.yaw, me.pitch);
     const right = vec.norm(vec.cross(f, v3(0, 1, 0)));
     const up = vec.cross(right, f);
@@ -746,7 +748,7 @@ fn fire() void {
             knockPlate(i, ray.bull, end, d);
         } else if (ray.dummy) |dh| {
             addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
-            dummy_dmg[dh.idx][@intFromBool(dh.head)] += pelletDamage(st, dh.head);
+            dummy_dmg[dh.idx][@intFromBool(dh.head)] += pelletDamage(st, dh.head, ray.t);
         } else if (ray.world and (pi < 3 or rand() < 0.3)) {
             addSparks(end, ray.normal, v3(1.0, 0.75, 0.4), if (st.pellets > 1) 2 else 6);
         }
@@ -811,7 +813,7 @@ fn stab() void {
         if (ray.dummy) |dh| {
             addSparks(end, -d, v3(0.7, 0.05, 0.03), 8);
             sound(180, 90, 0.08, .sawtooth, 0.2);
-            const dmg = pelletDamage(st, dh.head);
+            const dmg = pelletDamage(st, dh.head, ray.t);
             dummyHit(dh.idx, if (dh.head) 0 else dmg, if (dh.head) dmg else 0);
             return;
         }
@@ -822,10 +824,13 @@ fn stab() void {
     };
 }
 
+/// The camera kick of a shot: the recoil pattern of the held gun
+/// (weapon.zig Hands.kickShot).
 fn recoilKick(st: *const weapon.Stats) void {
-    const h = loadout.hands;
-    me.pitch = @min(1.5, me.pitch + st.kick * (1 + 0.5 * h.heat) * (1 - 0.5 * h.ads));
-    me.yaw += (rand() - 0.5) * st.kick * 0.7;
+    const k = loadout.hands.kickShot(st, rand());
+    me.pitch = @min(1.5, me.pitch + k[0]);
+    // Yaw 0 looks to -Z. A kick to the right makes the yaw smaller.
+    me.yaw -= k[1];
 }
 
 // ---- Grenades --------------------------------------------------------------
@@ -1166,8 +1171,13 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     const act = &gcon.act;
     const frozen = mode == .deathmatch and (phase_end or !alive);
     const look: f32 = 0.0022 * settings.sensitivity.float() * (1 - 0.35 * loadout.hands.ads);
+    const look_up = -in.mouse.delta_y * look;
     me.yaw -= in.mouse.delta_x * look;
-    me.pitch = std.math.clamp(me.pitch - in.mouse.delta_y * look, -1.5, 1.5);
+    me.pitch = std.math.clamp(me.pitch + look_up, -1.5, 1.5);
+    // The recoil recovery: the camera goes back to the aim.
+    const back = loadout.hands.recover(loadout.heldStats(), dt, look_up);
+    me.pitch = std.math.clamp(me.pitch + back[0], -1.5, 1.5);
+    me.yaw -= back[1];
 
     var wish = v3(0, 0, 0);
     // Ctrl and Cmd start a shortcut (Cmd+D debug): no movement while held.
@@ -1221,7 +1231,7 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     // G: a quick throw from any slot.
     if (can_shoot and !shortcut and act.pressed(.grenade)) throwGrenade();
     const it = loadout.held() orelse return;
-    const st = weapon.stats(it.class);
+    const st = weapon.statsOf(it.*);
     if (can_shoot and act.pressed(.reload)) {
         if (loadout.hands.startReload(it)) sound(500, 380, 0.05, .square, 0.08);
     }
@@ -1774,7 +1784,7 @@ fn drawCrosshair(r: *gfx.Renderer, cx: f32, cy: f32) !void {
     // The grenade has its aim line, the knife a dot. A gun shows its cone.
     if (c_held != .grenade and c_held != .knife) {
         const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
-        const gap = 5 + loadout.hands.spread(c_held, moving, !me.grounded) * 700;
+        const gap = 5 + loadout.hands.spread(loadout.heldStats(), moving, !me.grounded) * 700;
         const a: u8 = @intFromFloat(230 * (1 - loadout.hands.ads));
         const c = gfx.Color.rgba8(255, 255, 255, a);
         const len: f32 = 8;
@@ -1804,7 +1814,7 @@ fn drawAmmo(r: *gfx.Renderer, w: f32, h: f32) !void {
     const nades = loadout.grenades();
     try r.fillRect(.{ .x = w - 210, .y = h - 86, .w = 190, .h = 66 }, panel);
     if (loadout.held()) |it| {
-        const st = weapon.stats(it.class);
+        const st = weapon.statsOf(it.*);
         if (st.mag > 0) {
             const s = std.fmt.bufPrint(&buf, "{d}", .{it.ammo}) catch "";
             txtRight(r, s, w - 100, h - 82, 44, if (it.ammo * 6 <= st.mag) red else white);
