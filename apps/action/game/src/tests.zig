@@ -9,7 +9,8 @@
 // (guns_test.zig), the box limit and the surface materials
 // (surfaces_test.zig), the bullet sound models (audio/tests.zig), the NPC
 // shooter of the range and the impact effects (shooter_test.zig), the
-// server cvar file and the protocol version of the game.
+// secret room of VAPES N MORE (secret_room_test.zig), the server cvar file
+// and the protocol version of the game.
 const std = @import("std");
 const schema = @import("console/schema.zig");
 const line = @import("console/line.zig");
@@ -25,6 +26,7 @@ test {
     _ = @import("audio/tests.zig");
     _ = @import("shooter_test.zig");
     _ = @import("pigeons_test.zig");
+    _ = @import("secret_room_test.zig");
     _ = @import("train_sound.zig");
 }
 

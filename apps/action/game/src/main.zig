@@ -56,6 +56,7 @@ const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
 const pigeons = @import("pigeons.zig");
 const vapes = @import("vapes.zig");
+const secret = @import("secret_room.zig");
 const train_sound = @import("train_sound.zig");
 const gates = @import("gates.zig");
 const vault_mod = @import("vault.zig");
@@ -429,6 +430,8 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     if (map_loaded and map.id == id) return;
     map.load(id);
     map_loaded = true;
+    // The choir of the secret room: made now, not on the first open.
+    if (id == .earls_court) sounds.prepareChoir();
     pigeons.reset(@intFromFloat(rand() * 1e6));
     static_mesh.clear();
     for (map.boxes[0..map.box_count]) |b| {
@@ -535,6 +538,30 @@ fn aimedButton() ?usize {
 fn aimedVape() ?usize {
     if (mode != .deathmatch or !alive or vapes.since != null) return null;
     return vapes.pick(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
+/// The GET MORE pack on the back shelf of VAPES N MORE, under the
+/// crosshair (secret_room.zig). It opens the door of the secret room.
+fn aimedGetMore() bool {
+    if (mode == .menu or !alive) return false;
+    return secret.pickGetMore(me.eyePos(), vec.forward(me.yaw, me.pitch));
+}
+
+/// The golden vape on the plinth of the secret room, under the crosshair.
+fn aimedMore() bool {
+    if (mode == .menu or !alive) return false;
+    return secret.pickMore(me.eyePos(), vec.forward(me.yaw, me.pitch));
+}
+
+/// Open the door of the secret room: the choir and a heavy click of the
+/// lock. `local`: this player pressed GET MORE, so the other players get it
+/// too.
+fn openSecret(local: bool) void {
+    if (!secret.open()) return;
+    sounds.choir(secret.doorCentre());
+    sound(70, 45, 0.35, .square, 0.12);
+    sound(1, null, 0.5, .noise, 0.05);
+    if (local and mode == .deathmatch) client.send("{{\"t\":\"more\",\"k\":\"open\"}}", .{});
 }
 
 /// The dead pigeon under the crosshair, within reach (pigeons.zig).
@@ -1471,6 +1498,11 @@ fn handleNet(ctx: *sw.Context) void {
             handleFlock(m);
         } else if (std.mem.eql(u8, m.t, "match")) {
             pushFeed("NEW MATCH", false);
+            secret.shut();
+        } else if (std.mem.eql(u8, m.t, "more")) {
+            // Another player opened the secret room, or it was open
+            // before this player joined ("now").
+            if (std.mem.eql(u8, m.k orelse "", "now")) secret.openNow() else openSecret(false);
         } else if (std.mem.eql(u8, m.t, "cvars")) {
             // The server cvars: on join and on each change.
             if (m.cv) |list| gcon.onServerCvars(list);
@@ -1563,6 +1595,13 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
         } else if (aimedPigeon()) |i| {
             pigeons.grab(i);
             sound(420, 300, 0.05, .triangle, 0.1);
+        } else if (aimedGetMore()) {
+            openSecret(true);
+        } else if (aimedMore()) {
+            // MORE: a bright chord. What it does is still open.
+            sound(1174.7, null, 0.9, .sine, 0.1);
+            sound(1480, null, 0.9, .sine, 0.08);
+            sound(1760, null, 1.2, .sine, 0.08);
         } else if (aimedVape() != null) {
             // A long drag: a hiss, and a crackle of the coil.
             vapes.start();
@@ -1829,6 +1868,7 @@ fn tick(ctx: *sw.Context) void {
 
     // The deep train: it shoves a player off the track, and it is loud.
     map.stepTrain(dt);
+    secret.step(dt);
     if (map.train) |tr| {
         const b = map.boxes[tr.box];
         const r = player_mod.radius;
@@ -2762,11 +2802,12 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     drawFares(r, w / 2, h / 2);
     if (captured) {
         // The use hint: a pigeon in the hand, a button of the shooter panel,
-        // a lift button, a dead pigeon, or a vape.
+        // a lift button, a dead pigeon, the GET MORE pack, the golden vape,
+        // or a vape.
         const what: ?[]const u8 = if (pigeons.held != null) "THROW PIGEON" else if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
             const b = map.buttons[bi];
             break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedVape() != null) "USE VAPE" else null;
+        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedGetMore()) "GET MORE" else if (aimedMore()) "MORE" else if (aimedVape() != null) "USE VAPE" else null;
         if (what) |wt| {
             var kb: [24]u8 = undefined;
             var line: [48]u8 = undefined;
@@ -2855,6 +2896,7 @@ fn gameRender(ctx: *sw.Context) !void {
     if (map.id == .earls_court) buildEscalatorSteps();
     pigeons.build(&dyn, time);
     gates.build(&dyn);
+    secret.build(&dyn);
     if (mode == .practice) {
         for (&targets) |*t| buildTarget(t);
         for (&range.dummies) |*d| buildDummy(d);
@@ -2874,6 +2916,7 @@ fn gameRender(ctx: *sw.Context) !void {
     const cam_r = v3(@cos(cam.yaw), 0, -@sin(cam.yaw));
     grenade.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
     impact_fx.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
+    secret.buildTranslucent(&trans, cam_r);
     if (show_debug) {
         grenade.buildDebug(alloc, &dyn, &trans, aimPrediction());
     } else if (grenadeAimShows()) {
@@ -2890,6 +2933,8 @@ fn gameRender(ctx: *sw.Context) !void {
             // A tired tube: mostly on, with short drops and stutters.
             lights[n].color = l.color * vec.s(if (flickerOn()) 1.0 else 0.08);
         }
+        // The secret room is dark until its door opens.
+        if (secret.isRoomLight(i)) lights[n].color = l.color * vec.s(secret.glow());
         n += 1;
     }
     // The train: a warm glow from its windows and a headlight.

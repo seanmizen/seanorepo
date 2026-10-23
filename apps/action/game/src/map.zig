@@ -81,8 +81,10 @@ pub const Spawn = struct { pos: V3, yaw: f32 };
 /// The scene shader loops over the boxes near the eye for the ambient
 /// occlusion (render.zig uploadBoxes): this many at most. A map with more
 /// boxes fails `zig build test` and the floorplan tool.
-pub const max_boxes = 640;
-pub const max_lights = 20;
+pub const max_boxes = 768;
+/// The map lights. Each one has six shadow layers (render.zig), and
+/// scene.wgsl BODY_SLOT is the same number.
+pub const max_lights = 26;
 
 pub var id: Id = .arena;
 pub var boxes: [max_boxes]Box = undefined;
@@ -109,6 +111,11 @@ pub var shadow_half: f32 = 40;
 pub var underground_y: f32 = -1000;
 /// A player below this height respawns.
 pub var kill_y: f32 = -5;
+/// A closed room with no sun and only a trace of the sky light, [min,
+/// max]. The sun shadow map (shadow_half) does not reach every room, and
+/// out of it the sun goes through the walls. No room: min is over max.
+pub var sealed: [2]V3 = no_room;
+pub const no_room = [2]V3{ v3(1, 1, 1), v3(-1, -1, -1) };
 /// A light that flickers (a tired fluorescent tube), or null, and the box
 /// of its tube (dynamic, so it flickers too).
 pub var flicker_light: ?usize = null;
@@ -144,9 +151,11 @@ pub fn load(map: Id) void {
     shadow_half = 40;
     underground_y = -1000;
     kill_y = -5;
+    sealed = no_room;
     flicker_light = null;
     flicker_box = null;
     @import("gates.zig").clear();
+    @import("secret_room.zig").clear();
     switch (map) {
         .arena => @import("maps/arena.zig").build(),
         .earls_court => @import("maps/earls_court.zig").build(),

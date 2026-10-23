@@ -24,6 +24,7 @@
 const std = @import("std");
 const map = @import("../map.zig");
 const vapes = @import("../vapes.zig");
+const secret = @import("../secret_room.zig");
 const gates = @import("../gates.zig");
 const vec = @import("../vec.zig");
 const V3 = vec.V3;
@@ -650,6 +651,11 @@ fn vapeShop() void {
     const z0 = shop_z[0];
     const z1 = shop_z[1];
     const door = [2]f32{ -31.6, -30.2 };
+    // The secret door in the back display: eight packs wide, its edges in
+    // the gaps between the packs (they are 0.16 m apart from z0 + 0.5).
+    const door_z = [2]f32{ z0 + 0.5 + 16 * 0.16 - 0.025, z0 + 0.5 + 24 * 0.16 - 0.025 };
+    const door_h: f32 = 2.5;
+    const more_z = z0 + 0.5 + 19 * 0.16;
     const fl = y + 0.12; // the floor, at the height of the pavement
     const white = v3(0.9, 0.9, 0.93);
     const chrome = v3(0.12, 0.12, 0.14);
@@ -663,7 +669,11 @@ fn vapeShop() void {
     box(v3(fx, y, z0), v3(bx, fl, z1), v3(0.85, 0.85, 0.88), .tile, .tile);
     box(v3(fx + 1, y, z0 - 0.3), v3(bx + 0.3, y + 3.4, z0), white, .paint, .plaster);
     box(v3(fx + 1, y, z1), v3(bx + 0.3, y + 3.4, z1 + 0.3), white, .paint, .plaster);
-    box(v3(bx, y, z0), v3(bx + 0.3, y + 3.4, z1), white, .paint, .plaster);
+    // The back wall, with the doorway of the secret room behind the door
+    // section of the shelf (secretRoom).
+    box(v3(bx, y, z0), v3(bx + 0.3, y + 3.4, door_z[0]), white, .paint, .plaster);
+    box(v3(bx, y, door_z[1]), v3(bx + 0.3, y + 3.4, z1), white, .paint, .plaster);
+    box(v3(bx, y + door_h, door_z[0]), v3(bx + 0.3, y + 3.4, door_z[1]), white, .paint, .plaster);
     box(v3(fx + 1, y + 3.4, z0 - 0.3), v3(bx + 0.3, y + 3.7, z1 + 0.3), white, .paint, .plaster);
     // The front: the stall riser, the window, the pier south of the door,
     // and the fascia over all of it.
@@ -726,16 +736,33 @@ fn vapeShop() void {
 
     // The wall displays: the back wall and the north wall, each a block
     // with backlit shelf edges and rows of colourful boxes on its face.
-    box(v3(bx - 0.4, y, z0 + 0.4), v3(bx, y + 2.5, z1 - 0.4), black, .paint, .wood);
+    // One section of the back display is the door of the secret room
+    // (secret_room.zig): the same block, edges and boxes, but they move.
+    box(v3(bx - 0.4, y, z0 + 0.4), v3(bx, y + door_h, door_z[0]), black, .paint, .wood);
+    box(v3(bx - 0.4, y, door_z[1]), v3(bx, y + door_h, z1 - 0.4), black, .paint, .wood);
+    secret.addDoor(v3(bx - 0.4, y, door_z[0]), v3(bx, y + door_h, door_z[1]), door_z[1] - door_z[0] + 0.1);
     box(v3(fx + 1.6, y, z0), v3(bx - 0.6, y + 2.3, z0 + 0.4), black, .paint, .wood);
-    for ([_]f32{ 0.45, 0.95, 1.45, 1.95 }) |sh| {
+    for ([_]f32{ 0.45, 0.95, 1.45, 1.95 }, 0..) |sh, row| {
         const sy = y + sh;
-        deco(v3(bx - 0.46, sy - 0.03, z0 + 0.4), v3(bx - 0.4, sy, z1 - 0.4), neon[2], .emissive, .glass);
+        deco(v3(bx - 0.46, sy - 0.03, z0 + 0.4), v3(bx - 0.4, sy, door_z[0]), neon[2], .emissive, .glass);
+        deco(v3(bx - 0.46, sy - 0.03, door_z[1]), v3(bx - 0.4, sy, z1 - 0.4), neon[2], .emissive, .glass);
+        secret.addPart(v3(bx - 0.46, sy - 0.03, door_z[0]), v3(bx - 0.4, sy, door_z[1]), neon[2], 4, false);
         deco(v3(fx + 1.6, sy - 0.03, z0 + 0.4), v3(bx - 0.6, sy, z0 + 0.46), neon[1], .emissive, .glass);
         var pz: f32 = z0 + 0.5;
         while (pz < z1 - 0.6) : (pz += 0.16) {
             const c = neon[@intFromFloat(rnd() * 7.99)];
-            deco(v3(bx - 0.45, sy, pz), v3(bx - 0.4, sy + 0.16 + rnd() * 0.14, pz + 0.11), c, .paint, .fabric);
+            const pack_top = sy + 0.16 + rnd() * 0.14;
+            if (pz > door_z[0] and pz < door_z[1]) {
+                // The GET MORE pack: the second shelf from the top, near
+                // the middle of the door. A white pack with a gold top.
+                const more = row == 2 and pz > more_z - 0.08 and pz < more_z + 0.08;
+                if (more) {
+                    secret.addPart(v3(bx - 0.45, sy, pz), v3(bx - 0.4, sy + 0.24, pz + 0.11), v3(0.92, 0.9, 0.86), 0, true);
+                    secret.addPart(v3(bx - 0.452, sy + 0.24, pz + 0.01), v3(bx - 0.41, sy + 0.27, pz + 0.1), v3(1.0, 0.72, 0.22), 3, false);
+                } else secret.addPart(v3(bx - 0.45, sy, pz), v3(bx - 0.4, pack_top, pz + 0.11), c, 0, false);
+                continue;
+            }
+            deco(v3(bx - 0.45, sy, pz), v3(bx - 0.4, pack_top, pz + 0.11), c, .paint, .fabric);
         }
         var qx: f32 = fx + 1.7;
         while (qx < bx - 0.75) : (qx += 0.16) {
@@ -763,6 +790,131 @@ fn vapeShop() void {
         vapes.add(base);
         vi += 1;
     }
+    secretRoom(bx + 0.3, door_z, door_h);
+}
+
+/// The secret room behind the back wall of VAPES N MORE: a dark chapel
+/// with a golden vape on a plinth (secret_room.zig). A shaft of light comes
+/// down on the plinth from a round light in the ceiling. Lancet windows in
+/// the neon colours of the shop glow on the side walls, a gold sunburst
+/// fills the far wall, and small stars light the ceiling. The room lights
+/// stay dark until the door opens. `x0` is the room face of the back wall
+/// of the shop, and `door_z` the doorway in it.
+fn secretRoom(x0: f32, door_z: [2]f32, door_h: f32) void {
+    const y = street_y;
+    const fl = y + 0.12;
+    const x1 = x0 + 8; // the far wall
+    const z0 = shop_z[0] - 0.3;
+    const z1 = shop_z[1] + 0.3;
+    const top = y + 6; // the ceiling
+    const cz = (door_z[0] + door_z[1]) / 2; // the axis of the room
+    const cx = x0 + 4.7; // the plinth
+    const wall = v3(0.05, 0.035, 0.09);
+    const marble = v3(0.86, 0.85, 0.82);
+    const gold = v3(1.0, 0.72, 0.28);
+    const deep_gold = v3(0.55, 0.36, 0.12);
+    const neon = [_]V3{ v3(1.0, 0.1, 0.8), v3(0.6, 0.2, 1.0), v3(0.1, 0.9, 1.0), v3(1.0, 0.8, 0.2), v3(1.0, 0.25, 0.45), v3(0.3, 0.5, 1.0) };
+
+    // The shell. The shop walls close the front up to y + 3.4.
+    box(v3(x0, y, z0), v3(x1, fl, z1), v3(0.025, 0.025, 0.03), .tile, .tile);
+    box(v3(x0 - 0.3, y, z0 - 0.3), v3(x1 + 0.3, top + 0.3, z0), wall, .paint, .plaster);
+    box(v3(x0 - 0.3, y, z1), v3(x1 + 0.3, top + 0.3, z1 + 0.3), wall, .paint, .plaster);
+    box(v3(x1, y, z0), v3(x1 + 0.3, top + 0.3, z1), wall, .paint, .plaster);
+    box(v3(x0 - 0.3, y + 3.4, z0), v3(x0, top + 0.3, z1), wall, .paint, .plaster);
+    box(v3(x0 - 0.3, top, z0), v3(x1 + 0.3, top + 0.3, z1), v3(0.015, 0.012, 0.03), .paint, .plaster);
+    // No sun and little sky light in here (map.zig sealed).
+    map.sealed = .{ v3(x0 - 0.05, y - 0.5, z0 - 0.05), v3(x1 + 0.05, top + 0.05, z1 + 0.05) };
+    // A gold frame round the doorway, on the room side only.
+    deco(v3(x0, fl, door_z[0] - 0.08), v3(x0 + 0.02, y + door_h + 0.08, door_z[0]), gold, .emissive, .glass);
+    deco(v3(x0, fl, door_z[1]), v3(x0 + 0.02, y + door_h + 0.08, door_z[1] + 0.08), gold, .emissive, .glass);
+    deco(v3(x0, y + door_h, door_z[0]), v3(x0 + 0.02, y + door_h + 0.08, door_z[1]), gold, .emissive, .glass);
+
+    // The dais and the plinth, with gold bands, and a gold square on the
+    // floor round them.
+    box(v3(cx - 1.2, fl, cz - 1.2), v3(cx + 1.2, fl + 0.15, cz + 1.2), marble, .tile, .tile);
+    box(v3(cx - 0.28, fl + 0.15, cz - 0.28), v3(cx + 0.28, fl + 1.2, cz + 0.28), marble, .paint, .plaster);
+    deco(v3(cx - 0.33, fl + 1.12, cz - 0.33), v3(cx + 0.33, fl + 1.2, cz + 0.33), marble, .paint, .plaster);
+    deco(v3(cx - 0.32, fl + 0.15, cz - 0.32), v3(cx + 0.32, fl + 0.25, cz + 0.32), marble, .paint, .plaster);
+    deco(v3(cx - 0.29, fl + 1.0, cz - 0.29), v3(cx + 0.29, fl + 1.04, cz + 0.29), gold, .emissive, .glass);
+    for ([_]f32{ -1, 1 }) |sd| {
+        deco(v3(cx - 1.22, fl + 0.12, cz + sd * 1.2 - 0.02), v3(cx + 1.22, fl + 0.155, cz + sd * 1.2 + 0.02), gold, .emissive, .glass);
+        deco(v3(cx + sd * 1.2 - 0.02, fl + 0.12, cz - 1.22), v3(cx + sd * 1.2 + 0.02, fl + 0.155, cz + 1.22), gold, .emissive, .glass);
+        deco(v3(cx - 1.8, fl, cz + sd * 1.8 - 0.025), v3(cx + 1.8, fl + 0.004, cz + sd * 1.8 + 0.025), deep_gold, .emissive, .glass);
+        deco(v3(cx + sd * 1.8 - 0.025, fl, cz - 1.8), v3(cx + sd * 1.8 + 0.025, fl + 0.004, cz + 1.8), deep_gold, .emissive, .glass);
+    }
+    secret.setPlinth(v3(cx, fl + 1.2, cz));
+
+    // Four columns round the dais, with gold capitals.
+    for ([_]f32{ -1, 1 }) |sx| for ([_]f32{ -1, 1 }) |sz| {
+        const px = cx + sx * 2.3;
+        const pz = cz + sz * 2.6;
+        box(v3(px - 0.2, fl, pz - 0.2), v3(px + 0.2, top, pz + 0.2), marble, .paint, .plaster);
+        deco(v3(px - 0.24, top - 0.35, pz - 0.24), v3(px + 0.24, top - 0.3, pz + 0.24), gold, .emissive, .glass);
+        deco(v3(px - 0.24, fl, pz - 0.24), v3(px + 0.24, fl + 0.12, pz + 0.24), marble, .paint, .plaster);
+    };
+
+    // The round light in the ceiling over the plinth, and its gold ring.
+    // The shaft of light (secret_room.zig) comes down from it.
+    const down = Mat4.rotationX(std.math.pi / 2.0);
+    map.addDisc(vec.translate(v3(cx, top - 0.01, cz)).mul(down), 1.05, 0.015, gold, .emissive, .glass);
+    map.addDisc(vec.translate(v3(cx, top - 0.02, cz)).mul(down), 0.9, 0.015, v3(1.0, 0.95, 0.82), .emissive, .glass);
+    secret.setShaft(v3(cx, top - 0.03, cz), v3(cx, fl + 0.15, cz), 0.9, 1.25);
+
+    // The sunburst on the far wall, behind the plinth: gold rays round a
+    // white sun.
+    const sun_c = v3(x1 - 0.02, fl + 3.1, cz);
+    const sun_m = vec.translate(sun_c).mul(Mat4.rotationY(-std.math.pi / 2.0));
+    map.addDisc(sun_m, 0.62, 0.02, gold, .emissive, .glass);
+    map.addDisc(sun_m.mul(vec.translate(v3(0, 0, 0.015))), 0.46, 0.02, v3(1.0, 0.96, 0.86), .emissive, .glass);
+    const rays = 24;
+    for (0..rays) |i| {
+        const a = @as(f32, @floatFromInt(i)) / rays * std.math.tau;
+        const long = i % 2 == 0;
+        const len: f32 = if (long) 2.0 else 1.2;
+        const m = vec.translate(sun_c - v3(0.005, 0, 0)).mul(Mat4.rotationX(a));
+        const c = if (long) deep_gold else deep_gold * vec.s(0.6);
+        map.addDecor(m, v3(-0.01, -0.025, 0.75), v3(0.01, 0.025, 0.75 + len), c, .emissive, .glass);
+    }
+
+    // Lancet windows of coloured light on the side walls: a tall panel and
+    // two steps for the point, a dark mullion and a transom.
+    for ([_]f32{ -1, 1 }, 0..) |side, si| {
+        const wz = if (side < 0) z0 else z1;
+        for ([_]f32{ x0 + 1.6, x0 + 4.1, x0 + 6.6 }, 0..) |wx, wi| {
+            const c = neon[(si * 3 + wi) % neon.len] * vec.s(0.55);
+            const d0 = wz - side * 0.02;
+            const za = @min(wz, d0);
+            const zb = @max(wz, d0);
+            deco(v3(wx - 0.35, fl + 1.0, za), v3(wx + 0.35, fl + 3.9, zb), c, .emissive, .glass);
+            deco(v3(wx - 0.24, fl + 3.9, za), v3(wx + 0.24, fl + 4.12, zb), c, .emissive, .glass);
+            deco(v3(wx - 0.12, fl + 4.12, za), v3(wx + 0.12, fl + 4.32, zb), c, .emissive, .glass);
+            const m0 = wz - side * 0.03;
+            const ma = @min(wz, m0);
+            const mb = @max(wz, m0);
+            deco(v3(wx - 0.025, fl + 1.0, ma), v3(wx + 0.025, fl + 4.32, mb), v3(0.02, 0.015, 0.03), .metal, .metal);
+            deco(v3(wx - 0.35, fl + 2.6, ma), v3(wx + 0.35, fl + 2.65, mb), v3(0.02, 0.015, 0.03), .metal, .metal);
+        }
+    }
+
+    // Stars on the ceiling.
+    for (0..48) |_| {
+        const sx = x0 + 0.3 + rnd() * 7.4;
+        const sz = z0 + 0.3 + rnd() * (z1 - z0 - 0.6);
+        if (@abs(sx - cx) < 1.3 and @abs(sz - cz) < 1.3) continue;
+        const sz2 = 0.02 + rnd() * 0.03;
+        const warmth = rnd();
+        deco(v3(sx, top - 0.004, sz), v3(sx + sz2, top, sz + sz2), v3(0.9, 0.85 + 0.1 * warmth, 0.7 + 0.3 * warmth), .emissive, .glass);
+    }
+
+    // The lights: the shaft over the plinth, a magenta and a cyan wash on
+    // the windows, and the glow of the sunburst. They stay dark while the
+    // door is shut (secret_room.zig glow).
+    const first = map.light_count;
+    map.addLight(v3(cx, fl + 3.4, cz), v3(3.4, 2.8, 1.9), 8);
+    map.addLight(v3(x0 + 4.1, fl + 2.6, z0 + 1.0), v3(1.5, 0.3, 1.4), 6);
+    map.addLight(v3(x0 + 4.1, fl + 2.6, z1 - 1.0), v3(0.3, 1.1, 1.6), 6);
+    map.addLight(v3(x1 - 1.2, fl + 3.1, cz), v3(1.6, 1.0, 0.4), 5);
+    secret.setLights(first, map.light_count - first);
 }
 
 // ---- The west end: Warwick Road -----------------------------------------------

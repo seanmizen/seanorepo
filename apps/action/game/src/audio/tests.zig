@@ -1,11 +1,12 @@
 // Where: apps/action/game/src/audio/tests.zig (zig build test, from
 // src/tests.zig)
 // When: after a change to the near-miss model, the impact sounds or the
-// spatial model (audio/).
+// spatial model (audio/), or the choir.
 // Why: checks the geometry of the Mach cone, Whitham's N-wave laws, the
 // order of the crack, the muzzle report and the whiz, the head cues, the
 // Doppler shift of the whiz, the distance law, and that each material
-// makes its own bounded sound.
+// makes its own bounded sound. The choir is bounded and wide, and it
+// starts and ends quiet.
 const std = @import("std");
 const testing = std.testing;
 const root = @import("root.zig");
@@ -250,4 +251,32 @@ test "the head: the far ear is later by up to about 0.66 ms" {
     const full = space.itd(1);
     try testing.expect(full > 0.0006 and full < 0.0007);
     try testing.expect(space.itd(0.5) < full);
+}
+
+test "the choir: bounded, quiet at both ends, and wide" {
+    const choir = root.choir;
+    const l = try testing.allocator.alloc(f32, choir.frames);
+    defer testing.allocator.free(l);
+    const r = try testing.allocator.alloc(f32, choir.frames);
+    defer testing.allocator.free(r);
+    choir.render(l, r, 7);
+    var peak: f32 = 0;
+    var diff: f32 = 0;
+    for (l, r) |a, b| {
+        try testing.expect(std.math.isFinite(a) and std.math.isFinite(b));
+        peak = @max(peak, @max(@abs(a), @abs(b)));
+        diff += @abs(a - b);
+    }
+    try testing.expectApproxEqAbs(@as(f32, 0.9), peak, 1e-3);
+    // The two ears are not the same: the singers stand apart.
+    try testing.expect(diff / @as(f32, @floatFromInt(choir.frames)) > 0.01);
+    // A swell from silence, and the tail dies away before the end.
+    const rate: usize = @intFromFloat(choir.rate);
+    try testing.expect(dsp.peak(l[0 .. rate / 10]) < 0.05);
+    try testing.expect(dsp.peak(l[choir.frames - rate / 2 ..]) < 0.01);
+    // The same seed gives the same sound.
+    const l2 = try testing.allocator.alloc(f32, choir.frames);
+    defer testing.allocator.free(l2);
+    choir.render(l2, r, 7);
+    try testing.expectEqualSlices(f32, l, l2);
 }

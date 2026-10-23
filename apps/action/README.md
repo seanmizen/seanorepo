@@ -26,6 +26,7 @@ Controls:
 | 1, 2, 3, 4 | weapon slots: primary, secondary, knife, grenade |
 | B | weapon menu (also on the pause screen) |
 | F | use the item under the crosshair: a lift button, the NPC shooter panel, a dead pigeon (pick up, throw), a vape |
+| F | on the back shelf of VAPES N MORE: open the secret room |
 | Q, E (hold) | lean left, lean right |
 | Tab | the score board: kills, deaths and the ping of each player |
 | Y | chat to all players |
@@ -283,7 +284,14 @@ it does.
 - `game/src/audio/tests.zig`: the Mach cone geometry, the order of the
   crack and the muzzle report, Whitham's laws for the N-wave, the head
   cues, the Doppler shift of the whiz, the distance law, the floor echo,
-  and a bounded sound of its own for each material.
+  and a bounded sound of its own for each material. The choir has a
+  fixed peak and two different ears. It starts and ends quiet, and the
+  same seed gives the same sound.
+- `game/src/secret_room_test.zig`: the secret room of VAPES N MORE. Shut,
+  the door is a wall, the GET MORE pack is in reach and the golden vape is
+  not. GET MORE opens the door, the room lights come up, and a player
+  walks from the shop to the dais. A new match shuts the door, and a late
+  join opens it at once.
 - `game/src/shooter_test.zig`: the NPC shooter. At each distance and over
   the full group, a round hits the board and passes 1 to 2 m from the head
   of the player. With no board, a round hits nothing within 60 m of the
@@ -393,7 +401,7 @@ reads the actions, not the keys (`game/src/game_console.zig`).
 | `+aim` | mouse2 | the sights |
 | `+reload` | R | reload |
 | `+grenade` | G | quick grenade throw |
-| `+use` | F | use: a lift button, the NPC shooter panel, a pigeon, a vape |
+| `+use` | F | use: a lift button, the NPC shooter panel, a pigeon, a vape, the secret room |
 | `+leanleft`, `+leanright` | Q, E | lean |
 | `+slot1` to `+slot4` | 1 to 4 | weapon slots |
 | `+weaponmenu` | B | the weapon menu |
@@ -1023,15 +1031,15 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 640. Earl's Court uses 611 boxes, the arena 126.
+`map.max_boxes` is 768. Earl's Court uses 644 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
 - In the game, `map.add` does not add a box past the limit, and it changes
   no box. `map.dropped` counts the boxes, and `map.load` logs an error.
   A lift or a train whose boxes are not in the map is not made.
-- The materials add no box, so the limit stays 640. The frame cost does
-  not change. The scene shader loops over the boxes for the ambient
+- The limit was 640. The secret room of VAPES N MORE needed more, so it
+  is 768. The frame cost does not change. The scene shader loops over the boxes for the ambient
   occlusion within 45 m of the eye (`uploadBoxes` in
   `game/src/render.zig`), not over `max_boxes`: at most 124 boxes at a
   spawn point of Earl's Court (110 on average). A higher limit costs 32
@@ -1241,8 +1249,29 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
   - The death goes through the server, as an environment death (see
     [The lobby protocol](#the-lobby-protocol)). Thus the vapes work in
     deathmatch only. The menu and practice do not use them.
-  - The shop uses 14 boxes and the last two map lights: Earl's Court has
-    20 of `map.max_lights` (20).
+  - The shop uses 17 boxes and two map lights.
+- **The secret room** (behind VAPES N MORE, `secretRoom` in
+  `game/src/maps/earls_court.zig`, `game/src/secret_room.zig`): one
+  section of the back shelf of the shop is a door. Nothing shows it.
+  - One pack on that section, a white pack with a gold top on the second
+    shelf from the top, is GET MORE. Aim at it and press F. The section
+    pushes back through the wall and slides aside. An angelic choir sings
+    (`game/src/audio/choir.zig`: synthetic voices on the vowel "a", IV to
+    I, in a hall reverb), and the room lights come up with the door.
+  - The room is a dark chapel. A shaft of warm light comes down from a
+    round light in the ceiling onto a golden vape. The vape floats and
+    turns over a marble plinth, with a halo. Four marble columns stand
+    round the dais. Lancet windows in the neon colours of the shop glow on
+    the side walls, a gold sunburst fills the far wall, and small stars
+    light the ceiling. Aim at the golden vape and press F (MORE).
+  - The door stays open until the map loads again or a new match starts.
+  - Deathmatch: the first player who opens the door tells the server
+    (`{t:"more"}`), and the door opens for each player. A player who joins
+    later finds it open.
+  - The room uses 13 boxes (the door too) and 4 map lights: Earl's Court has 24 of
+    `map.max_lights` (26). `map.sealed` keeps the sun out: the sun shadow
+    map does not reach the room, and out of that map the sun goes through
+    walls.
 - **Arena** (target practice): an open square with cover, and the practice
   range to the south, with the NPC shooter station at its spawn.
 
@@ -1272,6 +1301,8 @@ apps/action/
 │       ├── pigeons.zig   the pigeons of the train shed: the perches, the flights, the bodies
 │       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights, the return, two clients in deathmatch
 │       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung
+│       ├── secret_room.zig  the secret room of VAPES N MORE: the shelf door, GET MORE, the golden vape, the shaft of light
+│       ├── secret_room_test.zig  the shut door, GET MORE, the walk to the plinth, the room lights
 │       ├── impact_fx.zig the impact effect of each material (translucent billboards)
 │       ├── floorplan.zig the map tool: slices, the decoration, material and lift audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
@@ -1283,7 +1314,7 @@ apps/action/
 │       ├── surfaces_test.zig  the box limit, the surface materials, a crack or a whiz for each gun
 │       ├── shooter_test.zig  the line of fire of the NPC shooter, its panel, the impact effects
 │       ├── sounds.zig    the gun sounds: the muzzle report, the near misses, the impacts (to sw_audio)
-│       ├── audio/        the bullet sound models, with no action imports (root.zig): near_miss.zig, impact.zig, space.zig, dsp.zig
+│       ├── audio/        the bullet sound models and the choir, with no action imports (root.zig): near_miss.zig, impact.zig, space.zig, dsp.zig, choir.zig
 │       ├── settings.zig  the settings panel: a view over five saved cvars
 │       ├── game_console.zig  the game side of the console: actions, binds, server cvars, rcon, chat
 │       ├── server_cvars.json  the server cvars (the server reads the same file)
@@ -1386,6 +1417,9 @@ and each client flies the same path (at the same tick rate, 120 Hz).
 |---|---|---|
 | `{t:"gate", k, i}` | the client, to the server | `k:"open"`: a tap that opened lane `i`. `k:"pass"`: the player walked through lane `i`. |
 | `{t:"gate", k, i, id}` | the server, to the other players | the same, of player `id`. |
+| `{t:"more", k:"open"}` | the client, to the server | the player opened the door of the secret room (GET MORE). The server keeps only the first one of a match. |
+| `{t:"more", k:"open", id}` | the server, to the other players | player `id` opened the secret room: the door opens, with the choir. |
+| `{t:"more", k:"now"}` | the server, to a player who joins | the secret room is open: the door opens at once, with no choir. A new match shuts it. |
 | `{t:"pg", k:"up", i, sd, o, v}` | the client, to the server, to the other players | pigeon `i` takes off from `o`, or a startle in flight at `o` with velocity `v`. `sd`: the seed of the flight. Only for a pigeon that is here. |
 | `{t:"pg", k:"die", i, g, o, v}` | the client, to the server, to the other players | the kill of pigeon `i` of generation `g`: its body at `o` with velocity `v`. |
 | `{t:"pg", k:"push", i, g, o, v}` | the client, to the server, to the other players | body `[i, g]` is at `o` with velocity `v` (a push, or `v` zero at rest). |
