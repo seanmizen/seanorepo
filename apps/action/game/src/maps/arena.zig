@@ -5,7 +5,9 @@
 // wall: a lane 24 m wide and 80 m long. Dummies (range.zig) stand 10, 15,
 // 25, 35, 50 and 75 m from the practice spawn. A row of waist-high walls
 // stands in front of each dummy, and a pillar hides the one at 15 m. The
-// sun is behind the firing line, so the dummies are lit.
+// sun is behind the firing line, so the dummies are lit. The NPC shooter
+// station (shooter.zig) is at the spawn: a target board and a control
+// panel.
 const std = @import("std");
 const map = @import("../map.zig");
 const vec = @import("../vec.zig");
@@ -50,6 +52,57 @@ pub fn dummyHome(dm: Dummy) V3 {
     return v3(dm.x, 0, s[2] + @sqrt(dm.d * dm.d - dm.x * dm.x));
 }
 
+// ---- The NPC shooter station (shooter.zig) ----------------------------------
+// The practice spawn is the place of the player. The target board hangs on
+// the arena wall 1 m behind it, above it and to its left (+X: the spawn
+// faces +Z). The NPC fires at the board from down the range, so each round
+// passes 1.6 m from the eye and hits the board behind the player. The
+// control panel stands in front of the spawn, to the left, and faces it.
+
+/// The aim point of the NPC: the centre of the face of the target board,
+/// 0.45 m out from the arena wall. The line of fire goes on through the
+/// doorway of the arena, over the container in the arena. With no board, a
+/// round flies to the north wall of the arena (62 m away) or over it.
+pub const shooter_aim = v3(1.25, 2.6, half + 1.45);
+/// The half size of the target board face (x, y), and its thickness.
+pub const target_half: [2]f32 = .{ 0.6, 0.6 };
+pub const target_thick: f32 = 0.1;
+/// The places of the NPC: `d` m from the spawn along the range, at `x`.
+/// Seen from the spawn, the NPC at each place is clear of the lines of
+/// sight to the dummies (shooter_test.zig).
+pub const ShooterStop = struct { d: f32, x: f32 };
+pub const shooter_stops = [_]ShooterStop{
+    .{ .d = 10, .x = 2.5 },
+    .{ .d = 25, .x = 1.75 },
+    .{ .d = 50, .x = 1.75 },
+    .{ .d = 75, .x = 1.75 },
+};
+/// The centre of the face of the control panel. The face turns to the eye
+/// of a player on the spawn.
+pub const panel_centre = v3(1.2, 1.15, range_spawn.pos[2] + 0.75);
+/// The box of the target board (dynamic: shooter.zig sets its material,
+/// and hides it for "no surface"). build() sets it. Null for a full map.
+pub var shooter_target: ?usize = null;
+
+/// The NPC shooter station: the target board on its bracket, and the
+/// collision of the control panel (shooter.zig draws the panel).
+fn shooterStation() void {
+    const at = shooter_aim;
+    const hx = target_half[0];
+    const hy = target_half[1];
+    const board = map.add(v3(at[0] - hx, at[1] - hy, at[2] - target_thick), v3(at[0] + hx, at[1] + hy, at[2]), v3(0.62, 0.6, 0.56), .concrete, .concrete);
+    board.dynamic = true;
+    board.ao = false;
+    shooter_target = map.indexOf(board);
+    // A steel bracket holds the top of the board on the lintel of the
+    // doorway.
+    a(v3(at[0] - hx + 0.1, at[1] + hy - 0.1, half + 1), v3(at[0] + hx - 0.1, at[1] + hy + 0.08, at[2] - target_thick), v3(0.2, 0.2, 0.22), .metal, .metal);
+    // The panel: an invisible box for the collision under its face. It
+    // holds the turned face of the panel.
+    const c = panel_centre;
+    map.addSolid(v3(c[0] - 0.44, 0, c[2] - 0.58), v3(c[0] + 0.44, 0.78, c[2] + 0.58), .sheet_metal);
+}
+
 const spawns = [_][2]f32{
     .{ -24, -24 }, .{ 24, 24 }, .{ -24, 24 }, .{ 24, -24 },
     .{ 0, -25 },   .{ 0, 25 },  .{ -25, 0 },  .{ 25, 0 },
@@ -87,6 +140,7 @@ fn container(x: f32, z: f32, along_x: bool, color: V3) void {
 }
 
 pub fn build() void {
+    shooter_target = null;
     for (spawns) |sp| map.addSpawn(v3(sp[0], 0, sp[1]));
     const sand = v3(0.78, 0.66, 0.52);
     const terracotta = v3(0.72, 0.36, 0.24);
@@ -209,4 +263,5 @@ fn range(sand: V3, terracotta: V3) void {
             put(edge + 1.1, z - 1.15, 2.2, 2.5, 0.5, 0, v3(0.13, 0.42, 0.45), .concrete, .concrete);
         }
     }
+    shooterStation();
 }

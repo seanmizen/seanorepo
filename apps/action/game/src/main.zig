@@ -6,11 +6,13 @@
 //   - deathmatch: the always-on lobby on the server (/api/ws). A match is
 //     5 minutes, then the score board shows, then the next match starts.
 //   - practice: offline. The range (range.zig): dummies behind waist-high
-//     walls, with health bars and damage numbers. In the arena, a hit on a
-//     plate starts a 60 second round, with a best score.
+//     walls, with health bars and damage numbers, and the NPC shooter
+//     (shooter.zig) with its control panel. In the arena, a hit on a plate
+//     starts a 60 second round, with a best score.
 //
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
-// aim, R reload, G grenade, F use (lift buttons), Q and E lean, 1 to 4 the
+// aim, R reload, G grenade, F use (the lift buttons, the panel of the NPC
+// shooter), Q and E lean, 1 to 4 the
 // weapon slots (primary, secondary, knife, grenade), B the weapon menu,
 // Tab scores, Esc release the mouse, M menu (while paused), Y chat, T team
 // chat. These keys are the default binds (game_console.zig): the game reads
@@ -49,6 +51,9 @@ const gcon = @import("game_console.zig");
 const session_mod = @import("session/root.zig");
 const build_options = @import("build_options");
 const sounds = @import("sounds.zig");
+const shooter = @import("shooter.zig");
+const shooter_hud = @import("shooter_hud.zig");
+const impact_fx = @import("impact_fx.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -497,6 +502,18 @@ fn aimedButton() ?usize {
     return map.pickButton(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
 }
 
+/// The button of the NPC shooter panel under the crosshair, within reach.
+fn aimedPanel() ?shooter.Button {
+    if (mode != .practice) return null;
+    return shooter.pick(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
+/// Press a button of the panel: a click, or a dull click when the press
+/// changes nothing.
+fn pressPanel(b: shooter.Button) void {
+    if (shooter.press(b)) sound(1100, null, 0.05, .sine, 0.15) else sound(380, null, 0.05, .square, 0.06);
+}
+
 // ---- Modes -----------------------------------------------------------------
 
 fn enterMenu(ctx: *sw.Context) void {
@@ -508,6 +525,7 @@ fn enterMenu(ctx: *sw.Context) void {
     mode = .menu;
     remote_n = 0;
     grenade.reset();
+    impact_fx.reset();
     weapon_menu.close();
     ctx.setMouseCapture(false);
     loadMap(ctx, .earls_court);
@@ -517,6 +535,7 @@ fn enterPractice(ctx: *sw.Context) void {
     loadMap(ctx, .arena);
     mode = .practice;
     grenade.reset();
+    impact_fx.reset();
     applied = choice;
     spawnRange();
     practice_phase = .idle;
@@ -528,6 +547,7 @@ fn enterPractice(ctx: *sw.Context) void {
     new_best = false;
     for (&targets, 0..) |*t, i| placeTarget(t, i);
     range.reset();
+    shooter.reset();
 }
 
 /// The practice spawn: on the firing line of the range.
@@ -563,6 +583,7 @@ fn enterDeathmatch(ctx: *sw.Context) void {
 /// state of the match comes from the server. The player waits for a spawn.
 fn resetMatch() void {
     grenade.reset();
+    impact_fx.reset();
     remote_n = 0;
     feed_n = 0;
     my_id = 0;
@@ -631,6 +652,8 @@ const ShotRay = struct {
     plate: ?usize = null,
     bull: bool = false,
     dummy: ?range.Hit = null,
+    /// The NPC shooter: a body that takes no damage.
+    npc: bool = false,
 };
 
 fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
@@ -658,6 +681,9 @@ fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
         }
         if (range.ray(o, d)) |dh| {
             if (dh.t < out.t) out = .{ .t = dh.t, .dummy = dh };
+        }
+        if (shooter.ray(o, d)) |t| {
+            if (t < out.t) out = .{ .t = t, .npc = true };
         }
     }
     return out;
@@ -704,13 +730,25 @@ fn dummyHit(i: usize, body: f32, head: f32) void {
     } else sound(1500, 1300, 0.04, .square, 0.12);
 }
 
+/// A round of the NPC shooter (shooter.zig). It looks and sounds as the
+/// shot of another player: the tracer, the flash, the muzzle report, the
+/// crack or the whiz, and the impact with the effect of its material. It
+/// hurts nothing: shooter.zig traces it against the map only.
+fn npcShot(s: shooter.Shot) void {
+    addTracer(s.o, s.e);
+    remote_flash = .{ .p = s.o, .life = 0.05 };
+    impact_fx.flash(s.o);
+    sounds.shotTo(s.o, s.e, shooter.gun, s.surface);
+    if (s.surface) |surf| impact_fx.spawn(s.e, s.normal, surf, if (shooter.stats().pellets > 1) 0.7 else 1, s.flight);
+}
+
 /// The impact sound of one pellet (sounds.zig): the surface material of
 /// the map at the hit point, a body (a player or a dummy), or a steel
 /// plate. Nothing when the pellet hit nothing.
 fn pelletImpact(ray: ShotRay, end: V3, st: *const weapon.Stats) void {
     const surface: map.Surface = if (ray.box) |bi|
         map.surfaceAt(end, bi)
-    else if (ray.remote != null or ray.dummy != null)
+    else if (ray.remote != null or ray.dummy != null or ray.npc)
         .flesh
     else if (ray.plate != null)
         .metal
@@ -771,8 +809,11 @@ fn fire() void {
         } else if (ray.dummy) |dh| {
             addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
             dummy_dmg[dh.idx][@intFromBool(dh.head)] += pelletDamage(st, dh.head, ray.t);
-        } else if (ray.world and (pi < 3 or rand() < 0.3)) {
-            addSparks(end, ray.normal, v3(1.0, 0.75, 0.4), if (st.pellets > 1) 2 else 6);
+        } else if (ray.npc) {
+            addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
+        } else if (ray.box != null and (pi < 3 or rand() < 0.3)) {
+            // The effect of the material (impact_fx.zig).
+            impact_fx.spawn(end, ray.normal, map.surfaceAt(end, ray.box.?), if (st.pellets > 1) 0.5 else 1, 0);
         }
     }
     sounds.muzzle(1, it.class, 0, 0);
@@ -1177,7 +1218,6 @@ fn handleNet(ctx: *sw.Context) void {
                 const a = v3(m.o.?[0], m.o.?[1], m.o.?[2]);
                 const b = v3(m.e.?[0], m.e.?[1], m.e.?[2]);
                 addTracer(a, b);
-                addSparks(b, vec.norm(a - b), v3(1.0, 0.75, 0.4), 4);
                 remote_flash = .{ .p = a, .life = 0.05 };
                 const c = weapon.classFromId(m.w orelse 0) orelse .rifle;
                 // The gun: the model that the shooter holds (the snapshots),
@@ -1187,8 +1227,9 @@ fn handleNet(ctx: *sw.Context) void {
                     r.shot_t = time;
                     if (r.w == c) model = remoteModel(r);
                 }
-                // The muzzle report, the crack or the whiz, and the impact.
-                sounds.remoteShot(a, b, c, model);
+                // The muzzle report, the crack or the whiz, and the impact
+                // with the effect of its material.
+                if (sounds.remoteShot(a, b, c, model)) |h| impact_fx.spawn(b, h.normal, h.surface, 1, 0);
             }
         } else if (std.mem.eql(u8, m.t, "hit")) {
             hp = m.hp orelse hp;
@@ -1282,9 +1323,12 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     }
     me.updateLean(dt, lean_want);
 
-    // F is the use key: lift buttons, and each target that a player presses.
+    // F is the use key: the lift buttons, the panel of the NPC shooter, and
+    // each target that a player presses.
     if (!frozen and !shortcut and act.pressed(.use)) {
-        if (aimedButton()) |b| pressButton(b);
+        if (aimedPanel()) |b| {
+            pressPanel(b);
+        } else if (aimedButton()) |b| pressButton(b);
     }
     // B: the weapon menu. It frees the mouse.
     if (!shortcut and act.pressed(.weaponmenu)) {
@@ -1354,6 +1398,7 @@ fn effectsTick() void {
         }
     }
     remote_flash.life -= dt;
+    impact_fx.step(dt);
     damage_flash = @max(0, damage_flash - dt * 1.4);
     hit_marker = @max(0, hit_marker - dt);
     for (feed[0..feed_n]) |*f| f.life -= dt;
@@ -1375,6 +1420,7 @@ fn effectsTick() void {
 
 fn practiceTick() void {
     range.step(dt, rng.random());
+    if (shooter.step(dt, me.pos)) |s| npcShot(s);
     // A plate that is down comes up at a new place, also after the round.
     for (&targets, 0..) |*t, i| {
         if (t.up) {
@@ -1684,6 +1730,31 @@ fn ownPose() body_mod.Pose {
 /// True while your body is in the world: in play, and alive.
 fn ownBodyShows() bool {
     return mode != .menu and (mode != .deathmatch or alive);
+}
+
+/// The NPC shooter (shooter.zig): the player model (body.zig) with the gun
+/// of the panel, in a range blue, and the muzzle flash of each round.
+fn buildShooter() void {
+    const c = shooter.class();
+    body_mod.build(&dyn, .{
+        .pos = shooter.pos,
+        .yaw = shooter.yaw,
+        .pitch = shooter.pitch,
+        .lean = 0,
+        .stride = shooter.stride,
+        .vel = shooter.vel,
+        .color = v3(0.06, 0.16, 0.62),
+        .w = c,
+        .m = shooter.gun,
+    });
+    if (shooter.flash > 0) {
+        // The star of the view-model flash, at the muzzle of the NPC.
+        const gm = shooter.gunMatrix(shooter.pos, shooter.yaw, shooter.pitch, c);
+        const fm = gm.mul(vec.translate(weapon.models[shooter.gun].muzzle).mul(Mat4.rotationZ(shooter.flash_roll)));
+        const sz: f32 = 0.08 + rand() * 0.05;
+        dyn.orientedBox(fm, v3(-sz, -0.008, -sz * 2.6), v3(sz, 0.008, 0), v3(1.0, 0.7, 0.3), 4);
+        dyn.orientedBox(fm, v3(-0.008, -sz, -sz * 2.6), v3(0.008, sz, 0), v3(1.0, 0.7, 0.3), 4);
+    }
 }
 
 fn buildTarget(t: *const Target) void {
@@ -2379,15 +2450,23 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     }
     if (mode == .practice) try drawPractice(r, w);
     try drawHealthBars(r, w, h);
+    if (mode == .practice and map.id == .arena) {
+        shooter_hud.draw(r, &text.?, .{ .view = hud_cam.view, .th = hud_cam.th, .eye = hud_cam.eye, .w = w, .h = h }, if (captured) aimedPanel() else null);
+    }
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
     if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
-    if (captured) if (aimedButton()) |bi| {
-        const b = map.buttons[bi];
-        const what = if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        var kb: [24]u8 = undefined;
-        var line: [48]u8 = undefined;
-        txtCenter(r, std.fmt.bufPrint(&line, "{s}   {s}", .{ gcon.keyLabel(&kb, .use), what }) catch "", w / 2, h / 2 + 22, 15, white);
-    };
+    if (captured) {
+        // The use hint: a button of the shooter panel, or a lift button.
+        const what: ?[]const u8 = if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
+            const b = map.buttons[bi];
+            break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
+        } else null;
+        if (what) |wt| {
+            var kb: [24]u8 = undefined;
+            var line: [48]u8 = undefined;
+            txtCenter(r, std.fmt.bufPrint(&line, "{s}   {s}", .{ gcon.keyLabel(&kb, .use), wt }) catch "", w / 2, h / 2 + 22, 15, white);
+        }
+    }
     try drawMinimap(r, h);
     try drawHealth(r, h);
     try drawAmmo(r, w, h);
@@ -2471,6 +2550,10 @@ fn gameRender(ctx: *sw.Context) !void {
     if (mode == .practice) {
         for (&targets) |*t| buildTarget(t);
         for (&range.dummies) |*d| buildDummy(d);
+        if (map.id == .arena) {
+            buildShooter();
+            shooter.buildPanel(&dyn, aimedPanel());
+        }
     }
     buildEffects();
     grenade.buildOpaque(&dyn);
@@ -2482,6 +2565,7 @@ fn gameRender(ctx: *sw.Context) !void {
     const cam_f = vec.forward(cam.yaw, cam.pitch);
     const cam_r = v3(@cos(cam.yaw), 0, -@sin(cam.yaw));
     grenade.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
+    impact_fx.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
     if (show_debug) {
         grenade.buildDebug(alloc, &dyn, &trans, aimPrediction());
     } else if (grenadeAimShows()) {

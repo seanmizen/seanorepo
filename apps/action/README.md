@@ -7,9 +7,10 @@ A first-person shooter in the browser, on swindowzig (Zig to wasm, WebGPU).
   starts. The clock runs with or without players.
 - **Target practice**: offline. The player starts on the firing line of the
   range: human dummies with health bars, and the damage of each hit near the
-  crosshair (see The practice range). In the arena, a hit on a plate starts a
-  round of 60 seconds. Some plates move. The red centre scores 150, the plate
-  100. The best score stays in local storage.
+  crosshair (see The practice range). An NPC shooter fires at a board next
+  to the player, from a control panel (see The NPC shooter). In the arena,
+  a hit on a plate starts a round of 60 seconds. Some plates move. The red
+  centre scores 150, the plate 100. The best score stays in local storage.
 
 Controls:
 
@@ -24,7 +25,7 @@ Controls:
 | G | quick grenade throw, from any slot |
 | 1, 2, 3, 4 | weapon slots: primary, secondary, knife, grenade |
 | B | weapon menu (also on the pause screen) |
-| F | use: press the button under the crosshair (lifts) |
+| F | use: press the button under the crosshair (lifts, the panel of the NPC shooter) |
 | Q, E (hold) | lean left, lean right |
 | Tab | the score board: kills, deaths and the ping of each player |
 | Y | chat to all players |
@@ -159,6 +160,71 @@ dummies.
   60 seconds. The player is never frozen, so the range stays free during a
   round and after it.
 
+### The NPC shooter
+
+An NPC on the range fires at a target board next to the practice spawn, so
+you can see and hear what it is to be shot at. `game/src/shooter.zig` has
+the NPC and the panel, `game/src/shooter_hud.zig` the text of the panel,
+and `game/src/maps/arena.zig` the station.
+
+- **The NPC** is the player model, in blue, with the gun of the panel. It
+  stands down the range, 10, 25, 50 or 75 m from the spawn, a little to
+  the left of the line of the dummies. Seen from the spawn, it hides no
+  dummy. A new distance makes it run to the new place at 8 m/s. Each round
+  shows the muzzle flash on its gun.
+- **The target board** hangs on the arena wall behind the spawn: 1 m
+  behind your place, above it and to its left. The NPC aims at its
+  centre, with a small group (the cone of the gun at the sights, at most
+  15 cm). Each round passes 1.6 m from your head, then hits the board.
+  Turn round to see it.
+- **No surface** removes the board. The round passes your head on the same
+  line. It flies through the doorway of the arena and hits the north wall
+  of the arena 62 m away, or flies over it. That is past
+  `snd_impact_distance` (60 m), so you hear the crack or the whiz and no
+  impact.
+- **What you hear** is the shot of another player (`sounds.zig`): the crack
+  (supersonic) or the whiz (subsonic), the impact sound of the material of
+  the board, and the muzzle report after the distance / 343 s. The panel
+  shows the arrival times at your place. The impact effect of the material
+  starts when the bullet arrives (see [Impact effects](#impact-effects)).
+- **Safe**: a round of the NPC hits the map only. It never hurts you, a
+  dummy or a plate. Your shots hit the NPC (a flesh impact), but it takes
+  no damage.
+- **Start and stop**: the NPC fires only after START. STOP stops it, and so
+  does a step off the range into the arena. All of it is local to practice
+  mode: the server gets no message.
+
+The control panel stands in front of the spawn, to the left, and faces it.
+Aim at a button and press F (the use key, as for the lifts). The button
+under the crosshair is orange, and the line under the crosshair says what
+it does.
+
+| Row | Buttons | It shows |
+|---|---|---|
+| title | - | NPC SHOOTER, and the status: STOPPED, MOVING, FIRING (a red lamp) or RELOADING |
+| GUN | < > | the gun (all 34), its calibre, the bullet speed, and SUPERSONIC or SUBSONIC |
+| SURFACE | < > | the material of the board (each material, then NO SURFACE), and its sound |
+| DISTANCE | < > (nearer, further) | 10, 25, 50 or 75 m, and the arrival times of the crack (or the whiz) and the muzzle report |
+| FIRE MODE | < > | SINGLE, BURST or AUTO: the modes that the gun allows |
+| - | START, STOP | - |
+
+| Mode | The NPC fires | The guns |
+|---|---|---|
+| SINGLE | one round each second | each gun that fires one round for each pull (not the bullpups) |
+| BURST | 3 rounds at the rate of the gun, then a pause of 1 s. A bullpup fires its own burst. | the automatic guns and the bullpups |
+| AUTO | the full magazine at the rate of the gun | the automatic guns: the rifles, the carbines and the SMGs |
+
+- The NPC reloads when its magazine is empty, in the reload time of the
+  gun. START, a new gun and the arrival at a place wait 0.6 s before the
+  first round. A new gun also waits its draw time.
+- The text of the panel is on the HUD, at the place of the face in the
+  view. It fades out between 30 and 45 degrees from the centre of the
+  view, so it does not cover the HUD.
+- The face and the buttons are backlit (emissive), so the sun does not
+  wash out the text.
+- FLESH is a block of ballistic gel: the impact sound and the effect of a
+  body.
+
 ## Tests
 
 `zig build test` (in `game/`) runs the native tests (`game/src/tests.zig`):
@@ -198,6 +264,14 @@ dummies.
   crack and the muzzle report, Whitham's laws for the N-wave, the head
   cues, the Doppler shift of the whiz, the distance law, the floor echo,
   and a bounded sound of its own for each material.
+- `game/src/shooter_test.zig`: the NPC shooter. At each distance and over
+  the full group, a round hits the board and passes 1 to 2 m from the head
+  of the player. With no board, a round hits nothing within 60 m of the
+  player. The NPC hides no dummy. It fires only after START, at the rate of
+  the gun, and stops off the range. The eye on the spawn presses each
+  button. The crack comes before the muzzle report, and the gap grows with
+  the distance. Each material has an impact effect, and a late effect
+  waits.
 
 `yarn workspace action test` (`bun test server`) runs the server tests
 (`server/*.test.ts`):
@@ -294,7 +368,7 @@ reads the actions, not the keys (`game/src/game_console.zig`).
 | `+aim` | mouse2 | the sights |
 | `+reload` | R | reload |
 | `+grenade` | G | quick grenade throw |
-| `+use` | F | press a lift button |
+| `+use` | F | press a lift button, or a button of the NPC shooter panel |
 | `+leanleft`, `+leanright` | Q, E | lean |
 | `+slot1` to `+slot4` | 1 to 4 | weapon slots |
 | `+weaponmenu` | B | the weapon menu |
@@ -849,6 +923,33 @@ are estimates from the character of each material. They are not
 measurements of bullet hits. The energy of the bullet (its damage) sets
 the level.
 
+### Impact effects
+
+A bullet that hits the map shows a small effect of the material at the hit
+(`game/src/impact_fx.zig`): your shots, the shots of other players, and the
+rounds of the NPC shooter. A hit on a player shows the flesh effect. The
+effect of a round of the NPC starts when the bullet arrives. The effects
+use the cheap method of the grenade blast: translucent billboards in the
+translucent pass, with no new pipeline. A puff is a soft quad that faces
+the camera. A bit is a thin quad along its velocity, under gravity and
+drag. The pools are rings of 160 puffs and 480 bits, so automatic fire has
+a fixed cost.
+
+| Material | Effect |
+|---|---|
+| `concrete` | a grey dust cloud and grey chips |
+| `brick` | red-brown dust and chips |
+| `plaster` | a large white puff and a few flakes |
+| `tile` | white shards that fly fast, and a little powder |
+| `metal` | sparks (they glow) and a short hot flash |
+| `sheet_metal` | fewer sparks and a little paint dust |
+| `glass` | shards that glint and fall, and a faint powder |
+| `wood` | long splinters and light brown dust |
+| `ballast` | a low cloud of grey-brown dust, and stones |
+| `earth` | a spray of dirt |
+| `fabric` | a small puff of fibres |
+| `flesh` | a red mist and drops |
+
 ### Where you hear a sound
 
 - **The head.** The far ear hears a sound later, by up to 0.66 ms
@@ -877,12 +978,12 @@ road over the floor of the ticket hall is concrete.
 
 | Material | The sound | Earl's Court boxes, decoration | Arena boxes | For example |
 |---|---|---|---|---|
-| `concrete` | a sharp crack, a thud and grit | 171, 130 | 79 | platforms, stairs, decks, pavements, the road, painted lines |
+| `concrete` | a sharp crack, a thud and grit | 171, 130 | 80 | platforms, stairs, decks, pavements, the road, painted lines |
 | `brick` | a duller crack and more crumble | 67, 0 | 0 | the shed walls, the concourses, the terraces |
 | `plaster` | a soft crack and a puff | 4, 3 | 0 | the ticket hall walls, the painted fronts on the roads |
 | `tile` | a brittle tink and shards | 53, 13 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof |
-| `metal` | a click and a long high ring | 156, 372 | 12 | rails, railings, posts, frames, escalator steps, roof ribs |
-| `sheet_metal` | a pank and a low bong | 38, 123 | 11 | the trains, the containers, the bus, lift doors, ticket gates, signs |
+| `metal` | a click and a long high ring | 156, 372 | 13 | rails, railings, posts, frames, escalator steps, roof ribs |
+| `sheet_metal` | a pank and a low bong | 38, 123 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
 | `glass` | a bright crack and falling shards | 46, 158 | 6 | lamps, windows, the lift shafts, the Warwick Road front and rotunda |
 | `wood` | a hollow knock and splinters | 34, 2528 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
 | `ballast` | a chuff and a clatter of stones | 13, 0 | 0 | the track beds |
@@ -897,7 +998,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 640. Earl's Court uses 594 boxes, the arena 123.
+`map.max_boxes` is 640. Earl's Court uses 594 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1019,7 +1120,7 @@ body: yours, the other players and the dummies.
   concourses. On the District line tracks, yellow danger boards show where
   it starts.
 - **Arena** (target practice): an open square with cover, and the practice
-  range to the south.
+  range to the south, with the NPC shooter station at its spawn.
 
 ## Layout
 
@@ -1041,14 +1142,18 @@ apps/action/
 │       ├── map.zig       the current map: boxes, ramps, decoration, surface materials, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
+│       ├── shooter.zig   the NPC shooter of the range: the NPC, its rounds, the control panel
+│       ├── shooter_hud.zig  the text of the NPC shooter panel, on the HUD
+│       ├── impact_fx.zig the impact effect of each material (translucent billboards)
 │       ├── floorplan.zig the map tool: slices, the decoration and material audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
 │       ├── player.zig    movement, collision, the lean and the hit boxes
 │       ├── body.zig      the player model: your body in first person, the other players, the dummies
 │       ├── body_test.zig the tests of your body: the camera, the walk, the feet on the stairs
-│       ├── tests.zig     zig build test: the walks, your body, the console, the server cvar file, the guns, the sounds
+│       ├── tests.zig     zig build test: the walks, your body, the console, the server cvar file, the guns, the sounds, the NPC shooter
 │       ├── player_test.zig  the walks over the stairs and escalators
 │       ├── surfaces_test.zig  the box limit, the surface materials, a crack or a whiz for each gun
+│       ├── shooter_test.zig  the line of fire of the NPC shooter, its panel, the impact effects
 │       ├── sounds.zig    the gun sounds: the muzzle report, the near misses, the impacts (to sw_audio)
 │       ├── audio/        the bullet sound models, with no action imports (root.zig): near_miss.zig, impact.zig, space.zig, dsp.zig
 │       ├── settings.zig  the settings panel: a view over five saved cvars

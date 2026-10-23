@@ -1,6 +1,7 @@
 // The gun sounds of the game: the muzzle report of each class, the near
-// miss (a crack or a whiz) of the bullet of another player, and the impact
-// of a bullet on a surface material (map.Surface). audio/ has the models.
+// miss (a crack or a whiz) of the bullet of another player or of the NPC
+// shooter of the range, and the impact of a bullet on a surface material
+// (map.Surface). audio/ has the models.
 // This file gives them the listener, the room from the map, the bullet of
 // each gun (guns.zig: the speed, the diameter, the length) and the volume
 // settings, and plays the result (sw_audio).
@@ -267,23 +268,38 @@ fn shot(o: V3, e: V3, class: weapon.Class, st: *const weapon.Stats, end: End) vo
     }
 }
 
+/// What a shot path hit at its end: the material and the normal of the
+/// surface (main.zig gives them to the impact effect, impact_fx.zig).
+pub const Hit = struct { surface: map.Surface, normal: V3 };
+
 /// Another player fired from o, and its first pellet ended at e. `model`
 /// is the gun (the model that the shooter holds). The listener hears the
 /// muzzle report when its sound arrives, the crack or the whiz of the
 /// bullet, and the impact at e: on the map, or on a player when the path
-/// ends short of the reach of the gun and of the map.
-pub fn remoteShot(o: V3, e: V3, class: weapon.Class, model: u8) void {
+/// ends short of the reach of the gun and of the map. Returns what the
+/// path hit, or null when it ended in the open.
+pub fn remoteShot(o: V3, e: V3, class: weapon.Class, model: u8) ?Hit {
     const st = weapon.gunStats(model);
     const d = e - o;
     const l = vec.len(d);
-    var end: End = .nothing;
+    var hit: ?Hit = null;
     if (l > 0.01 and l < st.range - 0.5) {
-        end = .{ .surface = .flesh };
+        hit = .{ .surface = .flesh, .normal = -d / vec.s(l) };
         if (map.raycast(o, d / vec.s(l), l + 0.05)) |h| {
-            if (h.t > l - 0.08) end = .{ .surface = map.surfaceAt(o + d / vec.s(l) * vec.s(h.t), h.box) };
+            if (h.t > l - 0.08) hit = .{ .surface = map.surfaceAt(o + d / vec.s(l) * vec.s(h.t), h.box), .normal = h.normal };
         }
     }
-    shot(o, e, class, st, end);
+    shot(o, e, class, st, if (hit) |h| .{ .surface = h.surface } else .nothing);
+    return hit;
+}
+
+/// A shot of gun `model` from o whose path ends at e: on `surface`, or in
+/// the open (null). The NPC shooter of the range (shooter.zig) plays its
+/// rounds with it: the same muzzle report, near miss and impact as the
+/// shot of another player.
+pub fn shotTo(o: V3, e: V3, model: u8, surface: ?map.Surface) void {
+    const st = weapon.gunStats(model);
+    shot(o, e, weapon.models[model].class, st, if (surface) |s| .{ .surface = s } else .nothing);
 }
 
 /// The model of a gun from a name such as "rifle2": a class and the number
