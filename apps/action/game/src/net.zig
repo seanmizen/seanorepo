@@ -1,5 +1,5 @@
 // The deathmatch client: a WebSocket (backends/wasm/net.ts) with JSON text
-// messages. The protocol is in apps/action/server/src/index.ts.
+// messages. The protocol is in apps/action/server/index.ts.
 const std = @import("std");
 
 extern "net" fn netOpen(ptr: [*]const u8, len: u32) i32;
@@ -74,8 +74,13 @@ pub const Msg = struct {
     // The server cvars (t "cvars"): [name, value] pairs, the values in
     // their text form (console/cvar.zig).
     cv: ?[]const [2][]const u8 = null,
-    // A line of server text (t "print"), for example the answer to rcon.
+    // A line of server text (t "print"), for example the answer to rcon,
+    // and the text of a chat message (t "chat").
     text: ?[]const u8 = null,
+    // A chat message (t "chat"): the channel ("all", "team" or "server"),
+    // and the name of the sender. `id` is the sender.
+    ch: ?[]const u8 = null,
+    name: ?[]const u8 = null,
 };
 
 pub const Client = struct {
@@ -109,7 +114,9 @@ pub const Client = struct {
 
     pub fn send(self: *Client, comptime fmt: []const u8, args: anytype) void {
         if (self.handle == 0) return;
-        var out: [512]u8 = undefined;
+        // A chat message of 240 bytes with a quote in each byte is about
+        // 520 bytes of JSON.
+        var out: [1024]u8 = undefined;
         const text = std.fmt.bufPrint(&out, fmt, args) catch return;
         _ = netSend(self.handle, text.ptr, @intCast(text.len));
     }

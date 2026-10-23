@@ -28,6 +28,33 @@
       "reader": "server/index.ts step (the match clock)"
     },
     {
+      "name": "chat_max_length",
+      "type": "int",
+      "default": 160,
+      "min": 1,
+      "max": 240,
+      "description": "The longest chat message, in bytes of UTF-8. The server cuts a longer message. The chat input of the client stops at this length.",
+      "reader": "server/index.ts onChat, console/chat.zig Chat.maxLen"
+    },
+    {
+      "name": "chat_rate_messages",
+      "type": "int",
+      "default": 5,
+      "min": 1,
+      "max": 100,
+      "description": "A player can send at most this many chat messages in chat_rate_seconds. The server drops the next ones and tells the sender.",
+      "reader": "server/index.ts onChat"
+    },
+    {
+      "name": "chat_rate_seconds",
+      "type": "float",
+      "default": 5,
+      "min": 0.5,
+      "max": 600,
+      "description": "The time window of chat_rate_messages, in seconds.",
+      "reader": "server/index.ts onChat"
+    },
+    {
       "name": "admin_password",
       "type": "string",
       "default": "",

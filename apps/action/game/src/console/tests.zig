@@ -1,6 +1,6 @@
 // zig build test: the console core. The parser (with the cases that the
 // server also runs), the cvar limits, the commands, the binds and the
-// buttons, the scripts and the saved config, and the completion.
+// buttons, the scripts and the saved config, the completion, and the chat.
 const std = @import("std");
 const core = @import("sw_core");
 const parse = @import("parse.zig");
@@ -13,6 +13,7 @@ const editor_mod = @import("editor.zig");
 const prompt_mod = @import("prompt.zig");
 const schema = @import("schema.zig");
 const keys = @import("keys.zig");
+const chat_mod = @import("chat.zig");
 
 const testing = std.testing;
 const Console = console.Console;
@@ -570,4 +571,219 @@ test "editor: lines and columns" {
     // The column comes back on a long line.
     try testing.expectEqual(@as(usize, 2), e.position().col);
     try testing.expectEqual(@as(usize, 3), e.lineCount());
+}
+
+// ---- The chat ----------------------------------------------------------------
+
+/// The messages that the chat sent, for the tests.
+const Outbox = struct {
+    channels: [8]chat_mod.Channel = undefined,
+    texts: [8][chat_mod.max_text]u8 = undefined,
+    lens: [8]usize = @splat(0),
+    n: usize = 0,
+    /// The error that send returns, or null.
+    fail: ?[]const u8 = null,
+
+    fn send(ctx: ?*anyopaque, ch: chat_mod.Channel, msg: []const u8) ?[]const u8 {
+        const self: *Outbox = @ptrCast(@alignCast(ctx.?));
+        if (self.fail) |f| return f;
+        self.channels[self.n] = ch;
+        @memcpy(self.texts[self.n][0..msg.len], msg);
+        self.lens[self.n] = msg.len;
+        self.n += 1;
+        return null;
+    }
+
+    fn text(self: *const Outbox, i: usize) []const u8 {
+        return self.texts[i][0..self.lens[i]];
+    }
+};
+
+fn textEvent(t: []const u8) core.Event {
+    return core.Event.init(0, 0, 0, core.event.textInputPayload(t));
+}
+
+/// True when a line of the chat log holds `needle`.
+fn logHas(c: *const chat_mod.Chat, needle: []const u8) bool {
+    for (0..c.log.count()) |i| {
+        if (std.mem.indexOf(u8, c.log.get(i).text(), needle) != null) return true;
+    }
+    return false;
+}
+
+/// A console with a chat that sends to `box`. The chat is on the heap: it
+/// must stay at its address.
+fn newChat(con: *Console, box: *Outbox) !*chat_mod.Chat {
+    const c = try testing.allocator.create(chat_mod.Chat);
+    c.* = .{};
+    try c.register(con);
+    c.send_fn = Outbox.send;
+    c.send_ctx = box;
+    return c;
+}
+
+test "chat: binds open it, the keys stop, Enter sends, Esc closes" {
+    var ms: MemStore = .{ .alloc = testing.allocator };
+    defer ms.deinit();
+    var con = try Console.init(testing.allocator, ms.store());
+    defer con.deinit();
+    var act: buttons.Buttons(Action) = .{};
+    try act.register(&con, .init(.{ .forward = "move", .attack = "fire", .use = "use" }));
+    var box: Outbox = .{};
+    const c = try newChat(&con, &box);
+    defer testing.allocator.destroy(c);
+    con.setDefaultBinds(&.{ .{ .key = .w, .command = "+forward" }, .{ .key = .y, .command = "messagemode" }, .{ .key = .t, .command = "messagemode2" } });
+
+    // W moves. Y opens the chat: W lets go, and the binds stop.
+    var in = core.InputSnapshot.init();
+    in.updateFromEvents(&.{keyEvent(.W, true)});
+    con.processBinds(&in);
+    try testing.expect(act.down(.forward));
+    in.updateFromEvents(&.{keyEvent(.Y, true)});
+    con.processBinds(&in);
+    try testing.expect(c.isOpen() and c.channel.? == .all);
+    try testing.expect(con.typing and !act.down(.forward));
+    in.updateFromEvents(&.{ keyEvent(.Y, false), keyEvent(.W, true) });
+    con.processBinds(&in);
+    try testing.expect(!act.down(.forward));
+
+    // The typed text, then Enter: the message goes, and the chat closes.
+    c.update(&con, &.{ textEvent("gg "), textEvent("all"), keyEvent(.Enter, true) });
+    try testing.expect(!c.isOpen() and !con.typing);
+    try testing.expectEqual(@as(usize, 1), box.n);
+    try testing.expectEqual(chat_mod.Channel.all, box.channels[0]);
+    try testing.expectEqualStrings("gg all", box.text(0));
+    // The console grammar does not apply to a chat line.
+    c.open(&con, .all, "");
+    c.update(&con, &.{ textEvent("a; b // c"), keyEvent(.Enter, true) });
+    try testing.expectEqualStrings("a; b // c", box.text(1));
+
+    // T: the team channel. Esc closes with no message. A line of spaces
+    // sends nothing.
+    in.updateFromEvents(&.{keyEvent(.T, true)});
+    con.processBinds(&in);
+    try testing.expect(c.channel.? == .team);
+    c.update(&con, &.{ textEvent("x"), keyEvent(.Escape, true) });
+    try testing.expect(!c.isOpen());
+    c.open(&con, .team, "");
+    c.update(&con, &.{ textEvent("   "), keyEvent(.Enter, true) });
+    try testing.expectEqual(@as(usize, 2), box.n);
+    c.open(&con, .team, "");
+    c.update(&con, &.{ textEvent("push B"), keyEvent(.Enter, true) });
+    try testing.expectEqual(chat_mod.Channel.team, box.channels[2]);
+
+    // say and say_team in the console. An error of send shows.
+    con.exec("say \"hello there\"; say_team two words", .user);
+    try testing.expectEqualStrings("hello there", box.text(3));
+    try testing.expectEqual(chat_mod.Channel.team, box.channels[4]);
+    try testing.expectEqualStrings("two words", box.text(4));
+    box.fail = "chat: no server";
+    con.exec("say hi", .user);
+    try testing.expect(outHas(&con, "chat: no server"));
+    c.open(&con, .all, "");
+    c.update(&con, &.{ textEvent("hi"), keyEvent(.Enter, true) });
+    try testing.expectEqual(chat_mod.Kind.err, c.log.get(0).kind);
+
+    // A command in the console opens the chat: the panel closes.
+    con.setOpen(true);
+    con.exec("messagemode2", .user);
+    try testing.expect(!con.open and c.channel.? == .team);
+    c.close(&con);
+}
+
+test "chat: a / line runs a command, with the console completion" {
+    var ms: MemStore = .{ .alloc = testing.allocator };
+    defer ms.deinit();
+    var con = try Console.init(testing.allocator, ms.store());
+    defer con.deinit();
+    const fov = try con.addCvar(fov_def);
+    var box: Outbox = .{};
+    const c = try newChat(&con, &box);
+    defer testing.allocator.destroy(c);
+
+    // The "/" key: the line starts with "/".
+    c.open(&con, .all, "/");
+    try testing.expect(c.isCommand());
+    c.update(&con, &.{textEvent("fo")});
+    var list: [8]complete.Suggestion = undefined;
+    try testing.expectEqual(@as(usize, 1), c.suggestions(&con, &list));
+    try testing.expectEqualStrings("fov", list[0].name);
+    c.update(&con, &.{keyEvent(.Tab, true)});
+    try testing.expectEqualStrings("/fov ", c.prompt.edit.text());
+    c.update(&con, &.{ textEvent("90"), keyEvent(.Enter, true) });
+    try testing.expectEqual(@as(f32, 90), fov.float());
+    try testing.expectEqual(@as(usize, 0), box.n);
+    // The command and its output show in the chat.
+    try testing.expect(logHas(c, "> fov 90"));
+    try testing.expect(logHas(c, "fov = 90"));
+    // An error shows as an error.
+    c.open(&con, .all, "/");
+    c.update(&con, &.{ textEvent("nosuch"), keyEvent(.Enter, true) });
+    try testing.expectEqual(chat_mod.Kind.err, c.log.get(0).kind);
+    // A long output: the first lines, then the count of the rest.
+    c.open(&con, .all, "/");
+    c.update(&con, &.{ textEvent("cmdlist"), keyEvent(.Enter, true) });
+    try testing.expect(std.mem.startsWith(u8, c.log.get(0).text(), "+"));
+    try testing.expect(logHas(c, "more lines in the console"));
+    // A command can open the chat again.
+    c.open(&con, .all, "/");
+    c.update(&con, &.{ textEvent("messagemode2 /"), keyEvent(.Enter, true) });
+    try testing.expect(c.channel.? == .team and c.isCommand());
+    // A chat line that does not start with "/" has no completion.
+    c.prompt.edit.clear();
+    c.update(&con, &.{ textEvent("fo"), keyEvent(.Tab, true) });
+    try testing.expectEqualStrings("fo", c.prompt.edit.text());
+    try testing.expectEqual(@as(usize, 0), c.suggestions(&con, &list));
+    c.close(&con);
+    // The chat has its own history.
+    c.open(&con, .all, "");
+    c.update(&con, &.{keyEvent(.Up, true)});
+    try testing.expectEqualStrings("/messagemode2 /", c.prompt.edit.text());
+    c.close(&con);
+}
+
+test "chat: the length limit, the fade, the log" {
+    var ms: MemStore = .{ .alloc = testing.allocator };
+    defer ms.deinit();
+    var con = try Console.init(testing.allocator, ms.store());
+    defer con.deinit();
+    var box: Outbox = .{};
+    const c = try newChat(&con, &box);
+    defer testing.allocator.destroy(c);
+    c.limit = try con.addCvar(.{ .name = "chat_max_length", .default = .{ .int = 5 }, .min = 1, .max = 240, .flags = .{ .server = true }, .description = "d", .reader = "r" });
+
+    // A chat line stops at the limit. A command line can be longer.
+    c.open(&con, .all, "");
+    c.update(&con, &.{textEvent("abcdefgh")});
+    try testing.expectEqualStrings("abcde", c.prompt.edit.text());
+    c.close(&con);
+    c.open(&con, .all, "/");
+    c.update(&con, &.{textEvent("echo long")});
+    try testing.expectEqualStrings("/echo long", c.prompt.edit.text());
+    c.close(&con);
+
+    // A line shows for chat_fade_seconds and fades out in the last second.
+    con.exec("chat_fade_seconds 4", .user);
+    try testing.expect(con.findCvar("chat_fade_seconds").?.def.flags.saved);
+    c.add(.{ .kind = .server, .text = "Ghost42 joined" });
+    const m = c.log.get(0);
+    try testing.expectEqual(@as(f32, 1), c.alpha(m));
+    for (0..35) |_| c.tick(0.1);
+    try testing.expectApproxEqAbs(@as(f32, 0.5), c.alpha(m), 0.01);
+    for (0..10) |_| c.tick(0.1);
+    try testing.expectEqual(@as(f32, 0), c.alpha(m));
+    // While the input is open, the old lines show.
+    c.open(&con, .all, "");
+    try testing.expectEqual(@as(f32, 1), c.alpha(m));
+    c.close(&con);
+
+    // The log keeps the newest lines, and cuts a long name.
+    for (0..chat_mod.Log.size + 3) |i| {
+        var buf: [16]u8 = undefined;
+        c.add(.{ .name = "a name that is much longer than thirty-two bytes", .text = std.fmt.bufPrint(&buf, "line {d}", .{i}) catch "" });
+    }
+    try testing.expectEqual(chat_mod.Log.size, c.log.count());
+    try testing.expectEqualStrings("line 66", c.log.get(0).text());
+    try testing.expectEqualStrings("line 3", c.log.get(chat_mod.Log.size - 1).text());
+    try testing.expectEqual(chat_mod.max_name, c.log.get(0).name().len);
 }

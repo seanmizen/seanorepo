@@ -1,9 +1,11 @@
 // The console framework: cvars, commands, binds, buttons, scripts, the
-// saved config, the completion and the console panel. console.zig has the
-// start order. The game imports this file only.
+// saved config, the completion, the console panel and the chat.
+// console.zig has the start order, chat.zig the chat. The game imports
+// this file only.
 //
-// Nothing here imports the action game. The core (all files but view.zig)
-// needs std and sw_core. view.zig also needs sw_gfx2d and sw_text.
+// Nothing here imports the action game. The core (all files but view.zig
+// and chat_view.zig) needs std and sw_core. view.zig and chat_view.zig
+// also need sw_gfx2d and sw_text.
 pub const parse = @import("parse.zig");
 pub const cvar = @import("cvar.zig");
 pub const keys = @import("keys.zig");
@@ -13,6 +15,8 @@ pub const complete = @import("complete.zig");
 pub const prompt = @import("prompt.zig");
 pub const schema = @import("schema.zig");
 pub const view = @import("view.zig");
+pub const chat = @import("chat.zig");
+pub const chat_view = @import("chat_view.zig");
 const console = @import("console.zig");
 const buttons = @import("buttons.zig");
 
@@ -29,3 +33,5 @@ pub const Flags = cvar.Flags;
 pub const Args = parse.Args;
 pub const Buttons = buttons.Buttons;
 pub const View = view.View;
+pub const Chat = chat.Chat;
+pub const ChatView = chat_view.ChatView;

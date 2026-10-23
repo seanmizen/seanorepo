@@ -22,6 +22,14 @@
 // this life, that each blast has a throw, the damage range, and that each
 // target is near the blast.
 //
+// Chat (chat.ts): the server relays each chat message. It removes the
+// control characters, cuts the message to chat_max_length bytes, and
+// limits each player to chat_rate_messages in chat_rate_seconds. A team
+// message goes to the team of the sender. Deathmatch has no teams: each
+// player is a team of one, so a team message goes to the sender only. The
+// server also writes its own lines to the chat: a join, a leave, the start
+// and the end of a match.
+//
 // Weapons: the class ids are the order of WEAPONS (game/src/weapon.zig
 // Class). A pick is [class, model]: the class sets the stats, the model is
 // only the look. A new pick applies at the next spawn, or at once while the
@@ -47,6 +55,7 @@
 //   {t:"pong", n}                                 the answer to ping n (ping.ts)
 //   {t:"rcon", pw, cmd}                           run a server command (remote
 //                                                 admin). pw is admin_password.
+//   {t:"chat", ch:"all"|"team", text}             a chat message
 // Server to client:
 //   {t:"welcome", id}
 //   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,hp,k,d,alive,w,m}],
@@ -67,10 +76,22 @@
 //   {t:"cvars", cv:[[name, value]]}  server cvars, as text: all of them on
 //                                 join, then each change. Never a protected one.
 //   {t:"print", text}             a line for the console (the answer to rcon)
+//   {t:"chat", ch:"all"|"team", id, name, text}  a chat message of player id,
+//                                 cleaned. The sender gets it back too.
+//   {t:"chat", ch:"server", text} a server line: a join, a leave, a match
+//                                 start or end, or "too fast" to the sender
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import type { ServerWebSocket } from 'bun';
+import {
+  chatChannel,
+  chatRateOk,
+  chatRecipients,
+  chatWaitSeconds,
+  cleanChat,
+  matchEndText,
+} from './chat';
 import {
   applyEnv,
   Cvars,
@@ -348,6 +369,10 @@ interface Player {
   lastNade: number;
   /** The round-trip time to the client (ping.ts). */
   ping: PingState;
+  /** The team. 0: no team, a team of one (deathmatch). See chat.ts. */
+  team: number;
+  /** The send times of the recent chat messages (chat.ts chatRateOk). */
+  chatTimes: number[];
 }
 
 interface Conn {
@@ -399,6 +424,35 @@ function broadcast(msg: object, except?: number): void {
   for (const p of players.values()) {
     if (p.joined && p.id !== except) p.ws.send(text);
   }
+}
+
+/** A server line in the chat of every player. */
+function serverLine(text: string): void {
+  broadcast({ t: 'chat', ch: 'server', text });
+}
+
+/** A chat message: clean it, check the rate of the sender, and relay it.
+ * The sender gets it back too, as the others see it. */
+function onChat(p: Player, msg: Record<string, unknown>): void {
+  const ch = chatChannel(msg.ch);
+  const text = cleanChat(msg.text, cvars.number('chat_max_length'));
+  if (!ch || !text) return;
+  const now = Date.now();
+  const windowMs = cvars.number('chat_rate_seconds') * 1000;
+  if (
+    !chatRateOk(p.chatTimes, now, cvars.number('chat_rate_messages'), windowMs)
+  ) {
+    const wait = chatWaitSeconds(p.chatTimes, now, windowMs);
+    send(p, {
+      t: 'chat',
+      ch: 'server',
+      text: `Too many messages. Wait ${wait} s.`,
+    });
+    return;
+  }
+  log(`chat ${ch} ${p.name} (${p.id}): ${text}`);
+  const out = JSON.stringify({ t: 'chat', ch, id: p.id, name: p.name, text });
+  for (const q of chatRecipients(p, players.values(), ch)) q.ws.send(out);
 }
 
 function cleanName(raw: unknown): string {
@@ -672,6 +726,10 @@ function snapshot(): object {
   };
 }
 
+/** Seconds as m:ss. */
+const timeText = (secs: number): string =>
+  `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
+
 let lastStep = Date.now();
 
 function step(): void {
@@ -683,6 +741,8 @@ function step(): void {
     if (phase === 'play') {
       phase = 'end';
       phaseEndsAt = now + cvars.number('end_seconds') * 1000;
+      const scores = [...players.values()].filter((p) => p.joined);
+      serverLine(matchEndText(scores));
     } else {
       phase = 'play';
       phaseEndsAt = now + cvars.number('match_seconds') * 1000;
@@ -692,6 +752,9 @@ function step(): void {
         if (p.joined) spawn(p);
       }
       broadcast({ t: 'match' });
+      serverLine(
+        `A new match started: ${timeText(cvars.number('match_seconds'))}.`,
+      );
     }
   }
   for (const p of players.values()) {
@@ -769,6 +832,8 @@ const server = Bun.serve<Conn>({
         lastNade: 0,
         ping: newPing(Date.now()),
         rconFails: 0,
+        team: 0,
+        chatTimes: [],
       };
       players.set(p.id, p);
     },
@@ -787,6 +852,7 @@ const server = Bun.serve<Conn>({
         p.joined = true;
         send(p, { t: 'welcome', id: p.id });
         send(p, { t: 'cvars', cv: cvars.publicPairs() });
+        serverLine(`${p.name} joined.`);
         if (phase === 'play') spawn(p);
         else p.respawnAt = 0;
       } else if (msg.t === 'st' && p.alive) {
@@ -833,6 +899,8 @@ const server = Bun.serve<Conn>({
         onPong(p.ping, msg.n, Date.now());
       } else if (msg.t === 'rcon') {
         onRcon(p, msg);
+      } else if (msg.t === 'chat' && p.joined) {
+        onChat(p, msg);
       } else if (msg.t === 'use') {
         const i = Number(msg.i);
         const level = Number(msg.l);
@@ -842,7 +910,9 @@ const server = Bun.serve<Conn>({
       }
     },
     close(ws) {
+      const p = players.get(ws.data.id);
       players.delete(ws.data.id);
+      if (p?.joined) serverLine(`${p.name} left.`);
     },
   },
 });

@@ -2,8 +2,8 @@
 // When: `yarn workspace action test` (bun test server).
 // Why: runs the real server (index.ts) on a free port and talks to it over
 // the WebSocket: the server cvars on join, the config file, rcon off with
-// no admin_password, a client cannot change a server cvar, and an rcon set
-// goes to every player.
+// no admin_password, a client cannot change a server cvar, an rcon set
+// goes to every player, and the chat relay with the server lines.
 
 import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -186,5 +186,72 @@ describe('lobby with an admin_password', () => {
       await c.send({ t: 'rcon', pw: 'x', cmd: 'status' });
     for (let i = 0; i < 100 && !c.closed; i++) await Bun.sleep(10);
     expect(c.closed).toBe(true);
+  });
+});
+
+describe('chat', () => {
+  test('the relay: clean, capped, rate limited, team to the sender only', async () => {
+    const port = await start('', {
+      SV_CHAT_MAX_LENGTH: '12',
+      SV_CHAT_RATE_MESSAGES: '2',
+      SV_CHAT_RATE_SECONDS: '60',
+    });
+    const chatOf = (m: Msg) => m.t === 'chat';
+    const a = new Client(port);
+    const b = new Client(port);
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'welcome');
+    let n = a.msgs.length;
+    await b.send({ ...hello, name: 'Bob' });
+    // A join is a server line for every player.
+    const join = await a.next((m) => chatOf(m) && m.ch === 'server', n);
+    expect(join.text).toBe('Bob joined.');
+    const bid = (await b.next((m) => m.t === 'welcome')).id;
+
+    // A message to all: cleaned and cut to chat_max_length bytes. The
+    // sender gets it back.
+    n = a.msgs.length;
+    let m = b.msgs.length;
+    await b.send({
+      t: 'chat',
+      ch: 'all',
+      text: ' hi\u0007 \u202eall\nof you ',
+    });
+    const got = await a.next((x) => chatOf(x) && x.ch === 'all', n);
+    expect(got).toEqual({
+      t: 'chat',
+      ch: 'all',
+      id: bid,
+      name: 'Bob',
+      text: 'hi all of yo',
+    });
+    expect(await b.next((x) => chatOf(x) && x.ch === 'all', m)).toEqual(got);
+
+    // A team message with no teams: the sender only.
+    n = a.msgs.length;
+    m = b.msgs.length;
+    await b.send({ t: 'chat', ch: 'team', text: 'push B' });
+    const team = await b.next((x) => chatOf(x) && x.ch === 'team', m);
+    expect(team.text).toBe('push B');
+
+    // The third message in the window is dropped, and the sender learns why.
+    m = b.msgs.length;
+    await b.send({ t: 'chat', ch: 'all', text: 'spam' });
+    const slow = await b.next((x) => chatOf(x) && x.ch === 'server', m);
+    expect(String(slow.text)).toStartWith('Too many messages. Wait ');
+
+    // A client cannot send a server line. An empty message goes nowhere.
+    await a.send({ t: 'chat', ch: 'server', text: 'I am the server' });
+    await a.send({ t: 'chat', ch: 'all', text: ' \u200b ' });
+    await Bun.sleep(150);
+    const after = a.msgs.slice(n).filter(chatOf);
+    expect(after).toEqual([]);
+
+    // A leave is a server line.
+    n = a.msgs.length;
+    b.close();
+    const left = await a.next((x) => chatOf(x) && x.ch === 'server', n);
+    expect(left.text).toBe('Bob left.');
+    a.close();
   });
 });

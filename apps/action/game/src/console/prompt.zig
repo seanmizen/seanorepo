@@ -1,6 +1,6 @@
 // A text prompt: the input line, its history and the Tab completion. The
-// console panel uses one. The chat can use another one with the same
-// completion for a line that starts with "/".
+// console panel uses one. The chat (chat.zig) uses another one, with the
+// same completion for a line that starts with "/" (complete_from).
 //
 // It reads the input events of a tick in their order (not the input
 // snapshot), so a fast "ab", Enter, "cd", Enter in one frame gives two
@@ -41,6 +41,9 @@ pub const Prompt = struct {
     cycle: complete.Cycle = .{},
     sent: [line_mod.max_len]u8 = undefined,
     sent_len: usize = 0,
+    /// The completion and the suggestions read the line after this byte.
+    /// The chat sets 1 for a line that starts with "/".
+    complete_from: usize = 0,
 
     /// The line of the last `.submit`. It stays until the next submit.
     pub fn submitted(self: *const Prompt) []const u8 {
@@ -71,7 +74,7 @@ pub const Prompt = struct {
                 return .submit;
             },
             .Tab => if (!k.mods.shift) {
-                if (con) |c| complete.tab(c, &self.edit, &self.cycle);
+                if (con) |c| complete.tabFrom(c, &self.edit, &self.cycle, self.complete_from);
             },
             .Backspace => {
                 self.edit.backspace();
@@ -105,8 +108,10 @@ pub const Prompt = struct {
         self.history.stopBrowsing();
     }
 
-    /// The suggestions for the text before the cursor (complete.suggest).
+    /// The suggestions for the text before the cursor (complete.suggest),
+    /// from `complete_from`.
     pub fn suggestions(self: *const Prompt, con: *const console.Console, out: []complete.Suggestion) usize {
-        return complete.suggest(con, self.edit.text()[0..self.edit.cursor], out);
+        if (self.edit.cursor < self.complete_from) return 0;
+        return complete.suggest(con, self.edit.text()[self.complete_from..self.edit.cursor], out);
     }
 };

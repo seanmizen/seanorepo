@@ -148,6 +148,9 @@ pub const Console = struct {
     cheats: bool = false,
     /// The console panel is open: the binds do not run. Use setOpen.
     open: bool = false,
+    /// Another text line (the chat, chat.zig) has the keys: the binds do
+    /// not run. Use setTyping.
+    typing: bool = false,
     /// Ticks since a saved cvar or a bind changed, or null when the saved
     /// config is current.
     dirty_ticks: ?u32 = null,
@@ -425,11 +428,12 @@ pub const Console = struct {
     }
 
     /// Run the binds of the keys that went down and up in this tick. Nothing
-    /// runs while the console is open.
+    /// runs while the console or another text line has the keys.
     pub fn processBinds(self: *Console, in: *const core.InputSnapshot) void {
-        if (self.open) return;
+        if (self.hasKeys()) return;
         for (keys.all) |k| {
-            if (self.open) return;
+            // A bind can open the console or the chat.
+            if (self.hasKeys()) return;
             if (!keys.pressed(k, in)) continue;
             const b = self.binds[@backingInt(k)] orelse continue;
             self.held[@backingInt(k)] = true;
@@ -473,6 +477,19 @@ pub const Console = struct {
         if (open == self.open) return;
         if (open) self.releaseAll();
         self.open = open;
+    }
+
+    /// Another text line (the chat) takes the keys, or gives them back.
+    /// The keys that a bind holds let go.
+    pub fn setTyping(self: *Console, on: bool) void {
+        if (on == self.typing) return;
+        if (on) self.releaseAll();
+        self.typing = on;
+    }
+
+    /// The console panel or another text line has the keys.
+    pub fn hasKeys(self: *const Console) bool {
+        return self.open or self.typing;
     }
 
     // ---- Scripts ------------------------------------------------------------

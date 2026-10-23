@@ -12,9 +12,10 @@
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
 // aim, R reload, G grenade, F use (lift buttons), Q and E lean, 1 to 4 the
 // weapon slots (primary, secondary, knife, grenade), B the weapon menu,
-// Tab scores, Esc release the mouse, M menu (while paused). These keys are
-// the default binds (game_console.zig): the game reads the actions, not the
-// keys. The backtick key opens the console (console/).
+// Tab scores, Esc release the mouse, M menu (while paused), Y chat, T team
+// chat. These keys are the default binds (game_console.zig): the game reads
+// the actions, not the keys. The backtick key opens the console, and "/"
+// opens the chat with "/" typed (console/).
 const std = @import("std");
 const sw = @import("sw_app");
 const core = @import("sw_core");
@@ -1146,6 +1147,13 @@ fn handleNet() void {
             if (m.cv) |list| gcon.onServerCvars(list);
         } else if (std.mem.eql(u8, m.t, "print")) {
             if (m.text) |t| gcon.onServerPrint(t);
+        } else if (std.mem.eql(u8, m.t, "chat")) {
+            // The colour of the player, lighter, so the name reads on the
+            // dark panel.
+            const base = colorFor(m.id orelse 0);
+            const c = (base + (v3(1, 1, 1) - base) * vec.s(0.35)) * vec.s(255);
+            const rgb = [3]u8{ @intFromFloat(c[0]), @intFromFloat(c[1]), @intFromFloat(c[2]) };
+            gcon.onChat(m.ch orelse "all", m.name orelse "?", m.text orelse "", rgb);
         }
     }
 }
@@ -1313,32 +1321,44 @@ fn practiceTick() void {
 var no_input: core.InputSnapshot = .{};
 var text_input_on = false;
 
-/// The console part of a tick. The backtick key opens the console: it
-/// arrives as Unknown (game_console.zig). While the console is open, the
-/// panel takes the keys and text input is on. Else the binds run. Returns
-/// the input for the rest of the tick: no keys while the console is open,
-/// and in the tick that closes it.
+/// The console and chat part of a tick. The backtick key opens the
+/// console: it arrives as Unknown (game_console.zig). "/" opens the chat
+/// with "/" typed: it arrives as the text "/". A bind opens the chat (Y,
+/// T). While the console or the chat is open, it takes the keys and text
+/// input is on. Else the binds run. Returns the input for the rest of the
+/// tick: no keys while the console or the chat is open, and in the tick
+/// that closes it.
 fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
     const raw = ctx.input();
     const con = &gcon.con;
+    const chat = &gcon.chat;
     con.tick();
-    const was_open = con.open;
-    if (was_open) {
-        // The panel reads the events in order: text, then Enter.
-        gcon.view.update(con, ctx.bus().eventsForTick(ctx.tickId()));
+    chat.tick(dt);
+    const events = ctx.bus().eventsForTick(ctx.tickId());
+    const had_keys = con.hasKeys();
+    // The panel and the chat read the events in order: text, then Enter.
+    if (con.open) {
+        gcon.view.update(con, events);
+    } else if (chat.isOpen()) {
+        chat.update(con, events);
     } else if (raw.keyPressed(.Unknown) and !raw.mods.ctrl and !raw.mods.super) {
         con.setOpen(true);
+    } else if (gcon.slashTyped(events)) {
+        chat.open(con, .all, "/");
+    } else {
+        // A bind can open the chat or the console.
+        con.processBinds(raw);
     }
-    if (con.open != text_input_on) {
-        text_input_on = con.open;
-        if (con.open) ctx.startTextInput() else ctx.stopTextInput();
+    const typing = con.hasKeys();
+    if (typing != text_input_on) {
+        text_input_on = typing;
+        if (typing) ctx.startTextInput() else ctx.stopTextInput();
     }
-    if (was_open or con.open) {
+    if (had_keys or typing) {
         no_input.mouse.x = raw.mouse.x;
         no_input.mouse.y = raw.mouse.y;
         return &no_input;
     }
-    con.processBinds(raw);
     return raw;
 }
 
@@ -1945,8 +1965,9 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
         moves,               L(&k[4], .jump),      L(&k[5], .aim),  L(&k[6], .reload),  L(&k[7], .grenade),
         L(&k[8], .leanleft), L(&k[9], .leanright), L(&k[10], .use), L(&k[11], .scores),
     }) catch "", cx, h - 66, 14, dim);
-    txtCenter(r, std.fmt.bufPrint(&l2, "{s} primary  -  {s} secondary  -  {s} knife  -  {s} grenade (click throws)  -  {s} weapon menu  -  ` console", .{
-        L(&k[0], .slot1), L(&k[1], .slot2), L(&k[2], .slot3), L(&k[3], .slot4), L(&k[4], .weaponmenu),
+    txtCenter(r, std.fmt.bufPrint(&l2, "{s} primary  -  {s} secondary  -  {s} knife  -  {s} grenade (click throws)  -  {s} weapon menu  -  {s} chat  -  {s} team chat  -  / command  -  ` console", .{
+        L(&k[0], .slot1),                           L(&k[1], .slot2),                            L(&k[2], .slot3), L(&k[3], .slot4), L(&k[4], .weaponmenu),
+        gcon.commandKeyLabel(&k[5], "messagemode"), gcon.commandKeyLabel(&k[6], "messagemode2"),
     }) catch "", cx, h - 46, 14, dim);
     txtCenter(r, "Gun models: Quaternius Ultimate Gun Pack (CC0)", cx, h - 24, 12, dim);
 }
@@ -2365,8 +2386,9 @@ fn gameRender(ctx: *sw.Context) !void {
     hud_cam = .{ .view = render.viewMatrix(cam.eye, cam.yaw, cam.pitch, cam.roll), .th = @tan(fov / 2), .eye = cam.eye };
     if (hud) |*r| {
         try drawHud(ctx, r);
-        // The console covers everything, the debug screen too.
         const l = logical(ctx);
+        try gcon.drawChat(r, &text.?, l.w, l.h);
+        // The console covers everything, the debug screen too.
         try gcon.view.draw(&gcon.con, r, &text.?, l.w, l.h);
     }
     try render.draw(ctx, .{
