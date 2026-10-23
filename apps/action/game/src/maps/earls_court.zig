@@ -794,7 +794,7 @@ fn vapeShop() void {
 }
 
 /// The secret room behind the back wall of VAPES N MORE: a dark chapel
-/// with a golden vape on a plinth (secret_room.zig). A shaft of light comes
+/// with a golden pigeon on a plinth (secret_room.zig). A shaft of light comes
 /// down on the plinth from a round light in the ceiling. Lancet windows in
 /// the neon colours of the shop glow on the side walls, a gold sunburst
 /// fills the far wall, and small stars light the ceiling. The room lights

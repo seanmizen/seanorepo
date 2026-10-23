@@ -7,13 +7,18 @@
 // - The door section pushes back through the wall, then slides aside. An
 //   angelic choir sings (audio/choir.zig), and the lights of the room come
 //   up with the door.
-// - In the room a golden vape floats over a plinth, under a shaft of light
-//   from the ceiling: MORE.
+// - In the room a golden pigeon turns over a plinth, under a shaft of light
+//   from the ceiling. Aim at it and press F (MORE): the player gets a blessing
+//   for bless_time s. A halo of white pigeons circles the head, the player
+//   shines gold, moves faster, and the aim locks on the head of the enemy
+//   nearest the middle of the screen (main.zig autoAim). The guns have no
+//   spread. A death ends it.
 // - The door stays open until the map loads again or a new match starts.
 // - Deathmatch: the door is the same on each client. The client that opens
 //   it sends {t:"more", k:"open"}, and the server sends it to the other
 //   players. A player who joins later gets k "now": the door is open, with
-//   no choir.
+//   no choir. A blessing goes the same way (k "bless"), so the other
+//   players see the halo and the shine.
 //
 // The door is a dynamic box (map.zig): collision only. build draws it
 // and its packs at the place of the box.
@@ -21,6 +26,7 @@ const std = @import("std");
 const vec = @import("vec.zig");
 const map = @import("map.zig");
 const mesh = @import("mesh.zig");
+const pigeons = @import("pigeons.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -33,7 +39,12 @@ pub const slide_from: f32 = 1.3;
 pub const slide_time: f32 = 2.2;
 /// The lights of the room come up over this time from the press.
 pub const glow_time: f32 = 3.8;
-/// The use reach to the GET MORE pack and to the golden vape.
+/// The blessing of MORE: its length in s, and the walk speed factor.
+pub const bless_time: f32 = 45;
+pub const bless_speed: f32 = 1.5;
+/// The aim locks on a head within this angle of the middle of the screen.
+pub const aim_cone: f32 = 0.6;
+/// The use reach to the GET MORE pack and to the golden pigeon.
 pub const reach: f32 = 2.6;
 const pad: f32 = 0.03;
 
@@ -49,7 +60,7 @@ var closed: [2]V3 = undefined;
 var slide: f32 = 1.35;
 /// The GET MORE pack (an index in parts).
 var more_part: ?usize = null;
-/// The plinth: the top centre, where the golden vape floats.
+/// The plinth: the top centre, where the golden pigeon floats.
 var plinth_top: ?V3 = null;
 /// The shaft of light: from the ceiling to the plinth, its radius at the
 /// top and at the bottom.
@@ -62,6 +73,8 @@ var light_n: usize = 0;
 
 /// The seconds since the door started to open, or null while it is shut.
 pub var since: ?f32 = null;
+/// The seconds of blessing left for this player, or null.
+pub var blessed: ?f32 = null;
 /// The time of the scene, for the float and the turn of the vape.
 var clock: f32 = 0;
 
@@ -73,6 +86,7 @@ pub fn clear() void {
     plinth_top = null;
     light_n = 0;
     since = null;
+    blessed = null;
 }
 
 /// The door: a dynamic box at `min`..`max` that slides `slide_len` m along
@@ -157,7 +171,19 @@ fn place() void {
 pub fn step(dt: f32) void {
     clock += dt;
     if (since) |t| since = t + dt;
+    if (blessed) |b| blessed = if (b - dt > 0) b - dt else null;
     place();
+}
+
+/// MORE: bless this player for bless_time s.
+pub fn bless() void {
+    blessed = bless_time;
+}
+
+/// The shine of a blessing with `left` s to go: 0 to 1. It comes up fast
+/// and fades over the last 3 s.
+pub fn shine(left: f32) f32 {
+    return vec.smooth((bless_time - left) / 0.6) * vec.smooth(left / 3);
 }
 
 /// 0 to 1: the light of the room. A small swell over the top as the door
@@ -194,23 +220,23 @@ pub fn pickGetMore(o: V3, d: V3) bool {
     return h.t < reach and wallT(o, d, h.t);
 }
 
-/// The bounds of the golden vape over the plinth top, with its float.
-fn vapeBounds(top: V3) [2]V3 {
-    const c = top + v3(0, 0.24, 0);
-    return .{ c - v3(0.1, 0.16, 0.1), c + v3(0.1, 0.2, 0.1) };
+/// The bounds of the golden pigeon over the plinth top, with its float.
+fn pigeonBounds(top: V3) [2]V3 {
+    const c = top + v3(0, 0.2, 0);
+    return .{ c - v3(0.2, 0.15, 0.2), c + v3(0.2, 0.2, 0.2) };
 }
 
-/// True when the ray points at the golden vape within reach. Only when the
-/// door is open.
+/// True when the ray points at the golden pigeon within reach. Only when
+/// the door is open and this player has no blessing.
 pub fn pickMore(o: V3, d: V3) bool {
-    if (since == null) return false;
+    if (since == null or blessed != null) return false;
     const top = plinth_top orelse return false;
-    const bb = vapeBounds(top);
+    const bb = pigeonBounds(top);
     const h = map.rayBox(o, d, bb[0], bb[1]) orelse return false;
     return h.t < reach and wallT(o, d, h.t);
 }
 
-/// The door, its packs, the golden vape and its halo.
+/// The door, its packs, the golden pigeon and its halo.
 pub fn build(dyn: *mesh.Mesh) void {
     if (door_box) |bi| {
         const b = map.boxes[bi];
@@ -219,21 +245,66 @@ pub fn build(dyn: *mesh.Mesh) void {
         for (parts[0..part_n]) |p| dyn.box(p.min + off, p.max + off, p.color, p.mat);
     }
     const top = plinth_top orelse return;
-    // The golden vape: it floats, bobs and turns. A halo floats over it.
+    // The golden pigeon: it floats, bobs and turns, with its wings half
+    // up. A gold halo floats over it.
     const bob = 0.03 * @sin(clock * 1.6);
-    const c = top + v3(0, 0.12 + bob, 0);
-    const m = vec.translate(c).mul(Mat4.rotationY(clock * 0.9));
-    const gold = v3(1.0, 0.72, 0.22);
-    dyn.orientedBox(m, v3(-0.022, 0, -0.034), v3(0.022, 0.15, 0.034), gold, 3);
-    dyn.orientedBox(m, v3(-0.014, 0.15, -0.02), v3(0.014, 0.18, 0.02), v3(0.95, 0.93, 0.88), 3);
-    dyn.orientedBox(m, v3(-0.023, 0.05, -0.035), v3(0.023, 0.07, 0.035), v3(1.0, 0.85, 0.5), 4);
-    const halo = vec.translate(c + v3(0, 0.27 + 0.01 * @sin(clock * 2.3), 0)).mul(Mat4.rotationY(-clock * 0.5));
+    const c = top + v3(0, 0.2 + bob, 0);
+    const m = vec.translate(c).mul(Mat4.rotationY(clock * 0.9)).mul(Mat4.scaling(1.4));
+    pigeons.showModel(dyn, m, v3(1.0, 0.74, 0.24), .{ 0.5 + 0.12 * @sin(clock * 2.4), 0.25 }, 3);
+    ring(dyn, c + v3(0, 0.22 + 0.01 * @sin(clock * 2.3), 0), 0.085, -clock * 0.5);
+}
+
+/// A gold ring of light, flat, of radius r at c.
+fn ring(dyn: *mesh.Mesh, c: V3, r: f32, turn: f32) void {
+    const halo = vec.translate(c).mul(Mat4.rotationY(turn));
     const seg = 14;
     for (0..seg) |k| {
         const a = @as(f32, @floatFromInt(k)) / seg * std.math.tau;
-        const r: f32 = 0.085;
         const sm = halo.mul(vec.translate(v3(@cos(a) * r, 0, @sin(a) * r))).mul(Mat4.rotationY(-a));
-        dyn.orientedBox(sm, v3(-0.006, -0.005, -0.021), v3(0.006, 0.005, 0.021), v3(1.0, 0.82, 0.4), 4);
+        const half = r * std.math.pi / seg + 0.002;
+        dyn.orientedBox(sm, v3(-0.006, -0.005, -half), v3(0.006, 0.005, half), v3(1.0, 0.82, 0.4), 4);
+    }
+}
+
+/// The halo of a blessed player: white pigeons that fly round over the
+/// head, and a gold ring. `head`: the centre of the head. `k`: the shine
+/// (0 to 1). `t`: a clock. `phase` keeps two players apart.
+pub fn buildHalo(dyn: *mesh.Mesh, head: V3, k: f32, t: f32, phase: f32) void {
+    if (k <= 0.01) return;
+    const n = 6;
+    const r = 0.5 * k;
+    const c = head + v3(0, 0.38, 0);
+    for (0..n) |i| {
+        const a = phase + t * 1.4 + @as(f32, @floatFromInt(i)) / n * std.math.tau;
+        const p = c + v3(@cos(a) * r, 0.05 * @sin(t * 3 + @as(f32, @floatFromInt(i))), @sin(a) * r);
+        // Forward is -Z. The pigeon flies along the tangent of the circle.
+        const yaw = std.math.atan2(@sin(a), -@cos(a));
+        const flap = t * 11 + @as(f32, @floatFromInt(i)) * 1.3;
+        const m = vec.translate(p).mul(Mat4.rotationY(yaw)).mul(Mat4.rotationZ(0.35)).mul(Mat4.scaling(0.7 * k));
+        pigeons.showModel(dyn, m, v3(0.95, 0.93, 0.88), .{ 0.2 + 0.85 * @sin(flap), 0.4 * @sin(flap - 0.6) }, 6);
+    }
+    ring(dyn, head + v3(0, 0.22, 0), 0.13 * k, t * 0.8);
+}
+
+/// The shine of a blessed player: a soft gold glow round the body, as
+/// quads that face the camera. `feet`: the feet. `k`: the shine.
+pub fn buildAura(trans: *mesh.Mesh, feet: V3, k: f32, right: V3, up: V3, t: f32) void {
+    if (k <= 0.01) return;
+    const tris = [6]usize{ 0, 1, 2, 0, 2, 3 };
+    const uv = [4][2]f32{ .{ -1, -1 }, .{ 1, -1 }, .{ 1, 1 }, .{ -1, 1 } };
+    const col = v3(1.0, 0.82, 0.45);
+    // A tall glow round the body, and a bright one round the head.
+    const glows = [_]struct { y: f32, w: f32, h: f32, a: f32, e: f32 }{
+        .{ .y = 0.95, .w = 0.75, .h = 1.25, .a = 0.22, .e = 2.5 },
+        .{ .y = 1.62, .w = 0.4, .h = 0.4, .a = 0.35, .e = 4 },
+    };
+    const pulse = 0.85 + 0.15 * @sin(t * 3.1);
+    for (glows) |g| {
+        const p = feet + v3(0, g.y, 0);
+        const r = right * vec.s(g.w);
+        const u = up * vec.s(g.h);
+        const corners = [4]V3{ p - r - u, p + r - u, p + r + u, p - r + u };
+        for (tris) |ci| trans.push(corners[ci], v3(uv[ci][0], uv[ci][1], g.e), col, -(g.a * k * pulse));
     }
 }
 

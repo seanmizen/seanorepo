@@ -1299,49 +1299,58 @@ const Pose = struct {
     legs: bool = false,
     head_yaw: f32 = 0,
     peck: f32 = 0,
+    /// The mesh material (map.zig Mat): cloth for a live pigeon.
+    mat: f32 = cloth,
 };
 
 /// The model of a pigeon about its body centre. Forward is -Z.
 fn addModel(dyn: *mesh.Mesh, m: Mat4, tint: V3, pose: Pose) void {
     const body = tint;
-    dyn.orientedBox(m, v3(-0.055, -0.045, -0.07), v3(0.055, 0.05, 0.09), body, cloth);
-    dyn.orientedBox(m, v3(-0.05, -0.05, -0.115), v3(0.05, 0.04, -0.05), body * vec.s(0.9) + v3(0.05, 0.02, 0.06), cloth);
-    dyn.orientedBox(m, v3(-0.036, 0.0, -0.13), v3(0.036, 0.075, -0.07), if (tint[0] > 0.7) body else neck_c, cloth);
-    dyn.orientedBox(m, v3(-0.04, -0.005, 0.08), v3(0.04, 0.02, 0.19), body * vec.s(0.9), cloth);
-    dyn.orientedBox(m, v3(-0.041, -0.006, 0.165), v3(0.041, 0.021, 0.19), bar_c, cloth);
+    dyn.orientedBox(m, v3(-0.055, -0.045, -0.07), v3(0.055, 0.05, 0.09), body, pose.mat);
+    dyn.orientedBox(m, v3(-0.05, -0.05, -0.115), v3(0.05, 0.04, -0.05), body * vec.s(0.9) + v3(0.05, 0.02, 0.06), pose.mat);
+    dyn.orientedBox(m, v3(-0.036, 0.0, -0.13), v3(0.036, 0.075, -0.07), if (tint[0] > 0.7) body else neck_c, pose.mat);
+    dyn.orientedBox(m, v3(-0.04, -0.005, 0.08), v3(0.04, 0.02, 0.19), body * vec.s(0.9), pose.mat);
+    dyn.orientedBox(m, v3(-0.041, -0.006, 0.165), v3(0.041, 0.021, 0.19), bar_c, pose.mat);
     // The head: it turns, and dips for a peck.
     const peck = @sin(@min(1, pose.peck / 0.5) * std.math.pi);
     var hm = m.mul(vec.translate(v3(0, 0.075, -0.1))).mul(Mat4.rotationY(pose.head_yaw)).mul(Mat4.rotationX(-peck * 0.9));
     if (pose.dead) hm = m.mul(vec.translate(v3(0.02, 0.03, -0.11))).mul(Mat4.rotationY(0.9)).mul(Mat4.rotationX(-1.1));
     const head_c = if (tint[0] > 0.7) tint else v3(0.33, 0.35, 0.42);
-    dyn.orientedBox(hm, v3(-0.028, 0, -0.055), v3(0.028, 0.055, 0.005), head_c, cloth);
-    dyn.orientedBox(hm, v3(-0.007, 0.018, -0.08), v3(0.007, 0.03, -0.055), v3(0.12, 0.1, 0.1), cloth);
-    dyn.orientedBox(hm, v3(-0.009, 0.03, -0.066), v3(0.009, 0.039, -0.05), v3(0.85, 0.85, 0.82), cloth);
+    dyn.orientedBox(hm, v3(-0.028, 0, -0.055), v3(0.028, 0.055, 0.005), head_c, pose.mat);
+    dyn.orientedBox(hm, v3(-0.007, 0.018, -0.08), v3(0.007, 0.03, -0.055), v3(0.12, 0.1, 0.1), pose.mat);
+    dyn.orientedBox(hm, v3(-0.009, 0.03, -0.066), v3(0.009, 0.039, -0.05), v3(0.85, 0.85, 0.82), pose.mat);
     if (!pose.dead) {
-        dyn.orientedBox(hm, v3(0.026, 0.03, -0.04), v3(0.031, 0.04, -0.03), v3(0.9, 0.45, 0.1), cloth);
-        dyn.orientedBox(hm, v3(-0.031, 0.03, -0.04), v3(-0.026, 0.04, -0.03), v3(0.9, 0.45, 0.1), cloth);
+        dyn.orientedBox(hm, v3(0.026, 0.03, -0.04), v3(0.031, 0.04, -0.03), v3(0.9, 0.45, 0.1), pose.mat);
+        dyn.orientedBox(hm, v3(-0.031, 0.03, -0.04), v3(-0.026, 0.04, -0.03), v3(0.9, 0.45, 0.1), pose.mat);
     }
     if (pose.legs) {
         for ([_]f32{ -0.025, 0.025 }) |x| {
-            dyn.orientedBox(m, v3(x - 0.006, -perch_lift, -0.01), v3(x + 0.006, -0.045, 0.005), leg_c, cloth);
-            dyn.orientedBox(m, v3(x - 0.012, -perch_lift, -0.035), v3(x + 0.012, -perch_lift + 0.008, 0.01), leg_c, cloth);
+            dyn.orientedBox(m, v3(x - 0.006, -perch_lift, -0.01), v3(x + 0.006, -0.045, 0.005), leg_c, pose.mat);
+            dyn.orientedBox(m, v3(x - 0.012, -perch_lift, -0.035), v3(x + 0.012, -perch_lift + 0.008, 0.01), leg_c, pose.mat);
         }
     }
     for ([_]f32{ -1, 1 }) |sd| {
         const ang: ?[2]f32 = if (pose.dead) (if (sd > 0) [2]f32{ -0.25, -0.3 } else null) else pose.wings;
         if (ang) |a| {
             const wm = m.mul(vec.translate(v3(sd * 0.05, 0.03, -0.03))).mul(Mat4.rotationZ(sd * a[0]));
-            dyn.orientedBox(wm, v3(@min(0, sd * 0.16), -0.007, -0.05), v3(@max(0, sd * 0.16), 0.007, 0.08), body * vec.s(0.95), cloth);
+            dyn.orientedBox(wm, v3(@min(0, sd * 0.16), -0.007, -0.05), v3(@max(0, sd * 0.16), 0.007, 0.08), body * vec.s(0.95), pose.mat);
             for ([_]f32{ 0.0, 0.035 }) |z| {
-                dyn.orientedBox(wm, v3(@min(sd * 0.04, sd * 0.14), 0.007, z), v3(@max(sd * 0.04, sd * 0.14), 0.009, z + 0.014), bar_c, cloth);
+                dyn.orientedBox(wm, v3(@min(sd * 0.04, sd * 0.14), 0.007, z), v3(@max(sd * 0.04, sd * 0.14), 0.009, z + 0.014), bar_c, pose.mat);
             }
             const om = wm.mul(vec.translate(v3(sd * 0.16, 0, 0))).mul(Mat4.rotationZ(sd * a[1]));
-            dyn.orientedBox(om, v3(@min(0, sd * 0.17), -0.006, -0.035), v3(@max(0, sd * 0.17), 0.006, 0.07), body * vec.s(0.75), cloth);
+            dyn.orientedBox(om, v3(@min(0, sd * 0.17), -0.006, -0.035), v3(@max(0, sd * 0.17), 0.006, 0.07), body * vec.s(0.75), pose.mat);
         } else {
-            dyn.orientedBox(m, v3(@min(sd * 0.05, sd * 0.062), -0.03, -0.06), v3(@max(sd * 0.05, sd * 0.062), 0.045, 0.16), body * vec.s(0.88), cloth);
-            dyn.orientedBox(m, v3(@min(sd * 0.05, sd * 0.064), 0.0, 0.03), v3(@max(sd * 0.05, sd * 0.064), 0.03, 0.045), bar_c, cloth);
+            dyn.orientedBox(m, v3(@min(sd * 0.05, sd * 0.062), -0.03, -0.06), v3(@max(sd * 0.05, sd * 0.062), 0.045, 0.16), body * vec.s(0.88), pose.mat);
+            dyn.orientedBox(m, v3(@min(sd * 0.05, sd * 0.064), 0.0, 0.03), v3(@max(sd * 0.05, sd * 0.064), 0.03, 0.045), bar_c, pose.mat);
         }
     }
+}
+
+/// A pigeon for show, not of the flock: the golden pigeon and the halo of
+/// the secret room (secret_room.zig). `wings`: up by [inner, outer] rad,
+/// or null for folded. `mat`: the mesh material (3 metal, 4 emissive).
+pub fn showModel(dyn: *mesh.Mesh, m: Mat4, tint: V3, wings: ?[2]f32, mat: f32) void {
+    addModel(dyn, m, tint, .{ .wings = wings, .legs = wings == null, .mat = mat });
 }
 
 fn rotOf(r: V3) Mat4 {

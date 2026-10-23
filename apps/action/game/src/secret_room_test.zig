@@ -3,8 +3,8 @@
 // maps/earls_court.zig vapeShop and secretRoom) or to the player movement.
 // Why: checks that the shut door is a wall and shows nothing, that GET
 // MORE opens it, that a player then walks from the shop to the plinth,
-// that the golden vape is in reach there, and that the room lights stay
-// dark until the door opens.
+// that the golden pigeon is in reach there and gives a blessing of 45 s,
+// and that the room lights stay dark until the door opens.
 const std = @import("std");
 const testing = std.testing;
 const map = @import("map.zig");
@@ -51,7 +51,7 @@ test "the secret room: GET MORE opens the door, and the room is behind it" {
     try testing.expect(secret.pickGetMore(eye, toward(eye, pack)));
     // A pack beside it on the same shelf is an ordinary pack.
     try testing.expect(!secret.pickGetMore(eye, toward(eye, pack + v3(0, 0, 0.5))));
-    // Shut, the door is a wall, and the golden vape is out of sight.
+    // Shut, the door is a wall, and the golden pigeon is out of sight.
     const plinth = v3(bx + 0.3 + 4.7, 4.92 + 1.2 + 0.24, door_z);
     try testing.expect(map.raycast(eye, v3(1, 0, 0), 10).?.t < 1.7);
     try testing.expect(!secret.pickMore(eye, toward(eye, plinth)));
@@ -68,8 +68,19 @@ test "the secret room: GET MORE opens the door, and the room is behind it" {
     // A player walks from the shop through the doorway to the dais.
     const end = walk(v3(bx - 1.5, 4.92, door_z), 4);
     try testing.expect(end[0] > bx + 3);
-    // In front of the plinth, the golden vape is in reach.
+    // In front of the plinth, the golden pigeon is in reach.
     const near = v3(plinth[0] - 1.5, 4.92 + 0.15 + 1.6, door_z);
+    try testing.expect(secret.pickMore(near, toward(near, plinth)));
+    // MORE: a blessing of 45 s. The golden pigeon is out of use until it
+    // ends. The shine comes up fast and fades at the end.
+    secret.bless();
+    try testing.expect(!secret.pickMore(near, toward(near, plinth)));
+    try testing.expect(secret.shine(secret.bless_time - 1) > 0.99);
+    try testing.expect(secret.shine(0.5) < 0.2);
+    for (0..@as(usize, @intFromFloat(44 / dt))) |_| secret.step(dt);
+    try testing.expect(secret.blessed != null);
+    for (0..@as(usize, @intFromFloat(1.5 / dt))) |_| secret.step(dt);
+    try testing.expect(secret.blessed == null);
     try testing.expect(secret.pickMore(near, toward(near, plinth)));
 
     // The room has no sun, and four lights that follow the door.

@@ -288,10 +288,10 @@ it does.
   fixed peak and two different ears. It starts and ends quiet, and the
   same seed gives the same sound.
 - `game/src/secret_room_test.zig`: the secret room of VAPES N MORE. Shut,
-  the door is a wall, the GET MORE pack is in reach and the golden vape is
-  not. GET MORE opens the door, the room lights come up, and a player
-  walks from the shop to the dais. A new match shuts the door, and a late
-  join opens it at once.
+  the door is a wall, the GET MORE pack is in reach and the golden pigeon
+  is not. GET MORE opens the door, the room lights come up, and a player
+  walks from the shop to the dais. MORE gives a blessing of 45 s. A new
+  match shuts the door, and a late join opens it at once.
 - `game/src/shooter_test.zig`: the NPC shooter. At each distance and over
   the full group, a round hits the board and passes 1 to 2 m from the head
   of the player. With no board, a round hits nothing within 60 m of the
@@ -1259,15 +1259,23 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
     (`game/src/audio/choir.zig`: synthetic voices on the vowel "a", IV to
     I, in a hall reverb), and the room lights come up with the door.
   - The room is a dark chapel. A shaft of warm light comes down from a
-    round light in the ceiling onto a golden vape. The vape floats and
+    round light in the ceiling onto a golden pigeon. The pigeon floats and
     turns over a marble plinth, with a halo. Four marble columns stand
     round the dais. Lancet windows in the neon colours of the shop glow on
     the side walls, a gold sunburst fills the far wall, and small stars
-    light the ceiling. Aim at the golden vape and press F (MORE).
+    light the ceiling.
+  - Aim at the golden pigeon and press F (MORE): a blessing for 45 s. A
+    halo of white pigeons flies round your head, and you shine gold for
+    the other players. You move 1.5 times faster. The aim locks on the
+    head of the live enemy nearest the middle of the screen, in sight and
+    within 0.6 rad. The guns have no spread, also on the move and in the
+    air. The HUD shows the seconds left. A death or a new match ends the
+    blessing.
   - The door stays open until the map loads again or a new match starts.
   - Deathmatch: the first player who opens the door tells the server
     (`{t:"more"}`), and the door opens for each player. A player who joins
-    later finds it open.
+    later finds it open. A blessing goes to the other players the same
+    way.
   - The room uses 13 boxes (the door too) and 4 map lights: Earl's Court has 24 of
     `map.max_lights` (26). `map.sealed` keeps the sun out: the sun shadow
     map does not reach the room, and out of that map the sun goes through
@@ -1301,7 +1309,7 @@ apps/action/
 │       ├── pigeons.zig   the pigeons of the train shed: the perches, the flights, the bodies
 │       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights, the return, two clients in deathmatch
 │       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung
-│       ├── secret_room.zig  the secret room of VAPES N MORE: the shelf door, GET MORE, the golden vape, the shaft of light
+│       ├── secret_room.zig  the secret room of VAPES N MORE: the shelf door, GET MORE, the golden pigeon, the blessing, the shaft of light
 │       ├── secret_room_test.zig  the shut door, GET MORE, the walk to the plinth, the room lights
 │       ├── impact_fx.zig the impact effect of each material (translucent billboards)
 │       ├── floorplan.zig the map tool: slices, the decoration, material and lift audit (zig build floorplan)
@@ -1420,6 +1428,8 @@ and each client flies the same path (at the same tick rate, 120 Hz).
 | `{t:"more", k:"open"}` | the client, to the server | the player opened the door of the secret room (GET MORE). The server keeps only the first one of a match. |
 | `{t:"more", k:"open", id}` | the server, to the other players | player `id` opened the secret room: the door opens, with the choir. |
 | `{t:"more", k:"now"}` | the server, to a player who joins | the secret room is open: the door opens at once, with no choir. A new match shuts it. |
+| `{t:"more", k:"bless"}` | the client, to the server | the player took MORE (the golden pigeon). Only while the door is open. |
+| `{t:"more", k:"bless", id}` | the server, to the other players | player `id` took MORE: draw its halo and its shine for 45 s, or to its death. |
 | `{t:"pg", k:"up", i, sd, o, v}` | the client, to the server, to the other players | pigeon `i` takes off from `o`, or a startle in flight at `o` with velocity `v`. `sd`: the seed of the flight. Only for a pigeon that is here. |
 | `{t:"pg", k:"die", i, g, o, v}` | the client, to the server, to the other players | the kill of pigeon `i` of generation `g`: its body at `o` with velocity `v`. |
 | `{t:"pg", k:"push", i, g, o, v}` | the client, to the server, to the other players | body `[i, g]` is at `o` with velocity `v` (a push, or `v` zero at rest). |
