@@ -243,7 +243,7 @@ pub fn step(dt: f32, before: ?V3, feet: ?V3, player_r: f32, player_h: f32) Cross
         const want: f32 = if (l.open_t > 0) 1 else 0;
         // The paddles do not close on a player in the lane.
         const b = &map.boxes[l.box];
-        if (want == 0 and feet != null) {
+        if (want == 0 and l.open > 0 and feet != null) {
             const f = feet.?;
             const inside = f[0] + player_r > b.min[0] - 0.3 and f[0] - player_r < b.max[0] + 0.3 and
                 f[2] + player_r > b.min[2] and f[2] - player_r < b.max[2] and
