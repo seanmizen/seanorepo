@@ -564,10 +564,13 @@ fn eastEnd() void {
     box(v3(sx0 + 3.6, y + 0.3, -8), v3(sx0 + 6.1, y + 4.4, 3), bus_red, .paint);
     for ([_]f32{ 1.4, 3.3 }) |wy| deco(v3(sx0 + 3.55, y + wy, -7.8), v3(sx0 + 6.15, y + wy + 0.9, 2.8), v3(0.04, 0.05, 0.06), .paint);
     box(v3(sx0 + 7.8, y + 0.2, 12), v3(sx0 + 9.5, y + 1.3, 16.5), v3(0.02, 0.02, 0.025), .paint);
-    deco(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.2, 19.6), iron, .metal);
+    // The lamp head hangs from an arm over the road, clear of the post: a
+    // light inside a solid shape is in its own shadow (render.zig).
+    deco(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.35, 19.6), iron, .metal);
+    deco(v3(sx0 + 2.6, y + 5.25, 19.45), v3(sx0 + 3.6, y + 5.35, 19.55), iron, .metal);
     map.addSolid(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.2, 19.6));
-    map.add(v3(sx0 + 2.2, y + 5.05, 19.2), v3(sx0 + 2.8, y + 5.2, 19.8), v3(1.0, 0.7, 0.35), .emissive).solid = false;
-    map.addLight(v3(sx0 + 2.5, y + 4.6, 19.5), v3(1.6, 1.0, 0.45), 14);
+    map.add(v3(sx0 + 3.2, y + 5.1, 19.2), v3(sx0 + 3.8, y + 5.25, 19.8), v3(1.0, 0.7, 0.35), .emissive).solid = false;
+    map.addLight(v3(sx0 + 3.5, y + 4.75, 19.5), v3(1.6, 1.0, 0.45), 14);
 }
 
 // ---- The west end: Warwick Road -----------------------------------------------
