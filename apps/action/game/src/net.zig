@@ -66,6 +66,11 @@ pub const Msg = struct {
     // secondary, as [class, model].
     p: ?[2]u32 = null,
     s: ?[2]u32 = null,
+    // A ping (t "ping"): its number. poll answers it.
+    n: ?u32 = null,
+    // The pings of the players (t "pings"): [id, ms, stale] each. ms is -1
+    // before the first value. stale is 1 after 10 s with no answer.
+    ms: ?[][3]i32 = null,
 };
 
 pub const Client = struct {
@@ -121,6 +126,11 @@ pub const Client = struct {
                 .ignore_unknown_fields = true,
                 .allocate = .alloc_always,
             }) catch continue;
+            // A ping from the server (server/ping.ts): answer at once.
+            if (std.mem.eql(u8, parsed.t, "ping")) {
+                if (parsed.n) |seq| self.send("{{\"t\":\"pong\",\"n\":{d}}}", .{seq});
+                continue;
+            }
             return parsed;
         }
     }

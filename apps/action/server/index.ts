@@ -39,6 +39,7 @@
 //                                                 The thrower's client calculates
 //                                                 the damage (cover included), and
 //                                                 the thrower can be in the list.
+//   {t:"pong", n}                                 the answer to ping n (ping.ts)
 // Server to client:
 //   {t:"welcome", id}
 //   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,hp,k,d,alive,w,m}],
@@ -52,9 +53,20 @@
 //   {t:"hit", from, dmg, hp}      you took damage
 //   {t:"kill", killer, victim, head, kname, vname}
 //   {t:"match"}                   a new match started
+//   {t:"ping", n}                 answer with pong n at once
+//   {t:"pings", ms:[[id, ms, stale]]}  each 2 s: the ping of each player in
+//                                 whole ms (-1: no value yet). stale 1: no
+//                                 answer for 10 s. See ping.ts.
 
 import { join } from 'node:path';
 import type { ServerWebSocket } from 'bun';
+import {
+  newPing,
+  onPong,
+  PING_INTERVAL_MS,
+  type PingState,
+  pingRound,
+} from './ping';
 
 const PORT = Number(process.env.PORT ?? 4080);
 const PUBLIC_DIR = process.env.PUBLIC_DIR ?? join(import.meta.dir, '../public');
@@ -292,6 +304,8 @@ interface Player {
   /** Throws that have not gone off. A blast needs one. */
   nadesInAir: number;
   lastNade: number;
+  /** The round-trip time to the client (ping.ts). */
+  ping: PingState;
 }
 
 interface Conn {
@@ -599,6 +613,10 @@ function step(): void {
 }
 
 setInterval(step, 50);
+setInterval(
+  () => broadcast(pingRound(players.values(), Date.now(), send)),
+  PING_INTERVAL_MS,
+);
 
 function contentType(path: string): string | undefined {
   if (path.endsWith('.wasm')) return 'application/wasm';
@@ -660,6 +678,7 @@ const server = Bun.serve<Conn>({
         nades: 0,
         nadesInAir: 0,
         lastNade: 0,
+        ping: newPing(Date.now()),
       };
       players.set(p.id, p);
     },
@@ -719,6 +738,8 @@ const server = Bun.serve<Conn>({
         onNade(p, msg);
       } else if (msg.t === 'blast') {
         onBlast(p, msg);
+      } else if (msg.t === 'pong') {
+        onPong(p.ping, msg.n, Date.now());
       } else if (msg.t === 'use') {
         const i = Number(msg.i);
         const level = Number(msg.l);

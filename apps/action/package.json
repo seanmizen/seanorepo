@@ -9,6 +9,7 @@
     "start": "bash ./build.sh && bun server/index.ts",
     "start:docker": "PUBLISH_ADDR=0.0.0.0 docker compose --profile dev up --build",
     "prod:docker": "docker network create edge >/dev/null 2>&1; BUILD_TARGET=prod docker compose --profile prod up --build --detach",
+    "test": "bun test server",
     "test:types": "tsc --noEmit",
     "down": "docker compose --profile dev --profile prod down"
   },
