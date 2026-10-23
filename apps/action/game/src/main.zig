@@ -546,10 +546,76 @@ fn aimedPigeon() ?usize {
 /// The place of a pigeon in the hand: in front of the eye, low and to the
 /// right.
 fn pigeonHand() V3 {
-    const f = vec.forward(me.yaw, me.pitch);
-    const right = v3(@cos(me.yaw), 0, -@sin(me.yaw));
+    return handAt(me.eyePos(), me.yaw, me.pitch);
+}
+
+/// The hand of a player with this eye, yaw and pitch: also the hand of a
+/// remote player who holds a pigeon (deathmatch).
+fn handAt(eye: V3, yaw: f32, pitch: f32) V3 {
+    const f = vec.forward(yaw, pitch);
+    const right = v3(@cos(yaw), 0, -@sin(yaw));
     const up = vec.cross(right, f);
-    return me.eyePos() + f * vec.s(0.6) + right * vec.s(0.18) - up * vec.s(0.12);
+    return eye + f * vec.s(0.6) + right * vec.s(0.18) - up * vec.s(0.12);
+}
+
+/// Deathmatch: send the pigeon events of this client (pigeons.outbox) to
+/// the server. The places and the velocities go with all their digits, so
+/// that each client flies the same path.
+fn sendPigeons() void {
+    defer pigeons.out_n = 0;
+    if (mode != .deathmatch or !session.joined()) return;
+    for (pigeons.outbox[0..pigeons.out_n]) |e| {
+        client.send("{{\"t\":\"pg\",\"k\":\"{s}\",\"i\":{d},\"g\":{d},\"sd\":{d},\"o\":[{d},{d},{d}],\"v\":[{d},{d},{d}]}}", .{
+            @tagName(e.kind), e.bird, e.gen, e.seed, e.p[0], e.p[1], e.p[2], e.v[0], e.v[1], e.v[2],
+        });
+    }
+}
+
+/// A pigeon event or the flock from the server (server/pigeons.ts).
+fn handlePigeon(m: net.Msg) void {
+    const k = m.k orelse "";
+    const i: usize = m.i orelse 99;
+    const gen: u16 = @intCast(@min(m.g orelse 0, 65535));
+    const o = if (m.o) |a| v3(a[0], a[1], a[2]) else null;
+    const v = if (m.v) |a| v3(a[0], a[1], a[2]) else v3(0, 0, 0);
+    const perch = if (m.pr) |pr| pigeons.perchAt(@intFromFloat(@max(0, pr[0])), pr[1]) else null;
+    if (std.mem.eql(u8, k, "up")) {
+        if (o) |p| pigeons.applyUp(i, m.sd orelse 0, p, v);
+    } else if (std.mem.eql(u8, k, "die")) {
+        if (o) |p| pigeons.applyDie(i, gen, p, v);
+    } else if (std.mem.eql(u8, k, "push")) {
+        if (o) |p| pigeons.applyPush(i, gen, p, v);
+    } else if (std.mem.eql(u8, k, "grab")) {
+        pigeons.applyGrab(i, gen, m.id orelse 0, my_id);
+    } else if (std.mem.eql(u8, k, "drop")) {
+        pigeons.applyDrop(i, gen, o, v);
+    } else if (std.mem.eql(u8, k, "joy")) {
+        if (perch) |p| pigeons.applyJoy(i, m.sd orelse 0, p);
+    } else if (std.mem.eql(u8, k, "back")) {
+        if (perch) |p| pigeons.applyBack(i, gen, m.sd orelse 0, p);
+    }
+}
+
+fn handleFlock(m: net.Msg) void {
+    // The seed comes on join: the tints, and a new flock for a new server.
+    const join = m.sd != null;
+    if (m.sd) |sd| {
+        if (pigeons.seed_now != sd) pigeons.reset(sd);
+    }
+    var list: [pigeons.max_birds]pigeons.Remote = undefined;
+    var n: usize = 0;
+    for (m.b orelse &.{}) |row| {
+        if (n == list.len) break;
+        list[n] = .{
+            .st = @intFromFloat(std.math.clamp(row[0], 0, 2)),
+            .gen = @intFromFloat(std.math.clamp(row[1], 0, 65535)),
+            .rod = @intFromFloat(@max(0, row[2])),
+            .u = row[3],
+        };
+        n += 1;
+    }
+    pigeons.applyFlock(list[0..n], join);
+    if (m.c) |c| pigeons.applyBodies(c);
 }
 
 /// F with a pigeon in the hand: a throw, with the speed of the player.
@@ -604,6 +670,8 @@ fn enterMenu(ctx: *sw.Context) void {
     }
     mode = .menu;
     remote_n = 0;
+    pigeons.net = false;
+    pigeons.held = null;
     grenade.reset();
     impact_fx.reset();
     weapon_menu.close();
@@ -614,6 +682,7 @@ fn enterMenu(ctx: *sw.Context) void {
 fn enterPractice(ctx: *sw.Context) void {
     loadMap(ctx, .arena);
     mode = .practice;
+    pigeons.net = false;
     grenade.reset();
     impact_fx.reset();
     applied = choice;
@@ -652,6 +721,10 @@ fn startRound() void {
 fn enterDeathmatch(ctx: *sw.Context) void {
     loadMap(ctx, .earls_court);
     mode = .deathmatch;
+    // The server owns the pigeons (pigeons.zig): the flock comes after the
+    // hello.
+    pigeons.net = true;
+    pigeons.held = null;
     resetMatch();
     const s = map.spawns[@intFromFloat(rand() * (@as(f32, @floatFromInt(map.spawn_count)) - 0.01))];
     spawnAt(s.pos[0], s.pos[1], s.pos[2], s.yaw);
@@ -1168,7 +1241,8 @@ fn stepGrenades() void {
     var buf: [64]grenade.Body = undefined;
     for (grenade.step(dt, grenadeBodies(&buf))) |b| {
         onBlast(b);
-        pigeons.blast(b.pos, grenade.radius);
+        // In deathmatch the thrower decides the pigeons of a blast.
+        if (mode != .deathmatch or b.mine) pigeons.blast(b.pos, grenade.radius);
     }
 }
 
@@ -1349,7 +1423,8 @@ fn handleNet(ctx: *sw.Context) void {
                 // The muzzle report, the crack or the whiz, and the impact
                 // with the effect of its material.
                 if (sounds.remoteShot(a, b, c, model)) |h| impact_fx.spawn(b, h.normal, h.surface, 1, 0);
-                pigeons.shot(a, b);
+                // No startle of the pigeons here: the shooter decides
+                // them, and the server sends them (pigeons.zig).
             }
         } else if (std.mem.eql(u8, m.t, "hit")) {
             hp = m.hp orelse hp;
@@ -1386,6 +1461,14 @@ fn handleNet(ctx: *sw.Context) void {
             }
         } else if (std.mem.eql(u8, m.t, "lift")) {
             map.callLift(m.i orelse 99, m.l orelse 0);
+        } else if (std.mem.eql(u8, m.t, "gate")) {
+            // Another player tapped a reader, or walked through a lane.
+            const lane: usize = m.i orelse 99;
+            if (std.mem.eql(u8, m.k orelse "", "pass")) gates.pass(lane) else gates.open(lane);
+        } else if (std.mem.eql(u8, m.t, "pg")) {
+            handlePigeon(m);
+        } else if (std.mem.eql(u8, m.t, "flock")) {
+            handleFlock(m);
         } else if (std.mem.eql(u8, m.t, "match")) {
             pushFeed("NEW MATCH", false);
         } else if (std.mem.eql(u8, m.t, "cvars")) {
@@ -1470,7 +1553,11 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
         } else if (aimedReader()) |g| {
             // The beep of a good tap, or the low tone of a refusal.
             switch (gates.tap(g, me.pos)) {
-                .tapped_in, .tapped_out => sound(1850, null, 0.12, .sine, 0.2),
+                .tapped_in, .tapped_out => {
+                    sound(1850, null, 0.12, .sine, 0.2);
+                    // The paddles open for the other players too.
+                    if (mode == .deathmatch) client.send("{{\"t\":\"gate\",\"k\":\"open\",\"i\":{d}}}", .{g});
+                },
                 .wrong_side => sound(320, null, 0.25, .square, 0.1),
             }
         } else if (aimedPigeon()) |i| {
@@ -1848,7 +1935,18 @@ fn tick(ctx: *sw.Context) void {
     // The gates: the paddles, the fares, a fare dodge. A move of more than
     // 2 m in a tick is a spawn or a teleport, not a crossing.
     const play = ownBodyShows() and vec.len(me.pos - feet_before) < 2;
-    if (gates.step(dt, if (play) feet_before else null, if (play) me.pos else null, player_mod.radius, player_mod.height) == .dodged) startGuilt();
+    // The paddles do not close on a remote player in the lane either.
+    var others: [remotes.len]V3 = undefined;
+    var other_n: usize = 0;
+    if (mode == .deathmatch) for (remotes[0..remote_n]) |r| {
+        if (!r.alive) continue;
+        others[other_n] = r.pos;
+        other_n += 1;
+    };
+    if (gates.step(dt, if (play) feet_before else null, if (play) me.pos else null, others[0..other_n], player_mod.radius, player_mod.height) == .dodged) startGuilt();
+    if (gates.passed) |lane| {
+        if (mode == .deathmatch) client.send("{{\"t\":\"gate\",\"k\":\"pass\",\"i\":{d}}}", .{lane});
+    }
     if (guilt_t >= 0) {
         guilt_t -= dt;
         if (guilt_t < 0 and mode == .deathmatch and alive) {
@@ -1862,6 +1960,12 @@ fn tick(ctx: *sw.Context) void {
         if (ownBodyShows()) pigeons.holdAt(me.eyePos(), pigeonHand(), me.yaw, dt) else pigeons.release(v3(0, 0, 0));
     }
     if (ownBodyShows()) pigeons.kick(me.pos, me.vel);
+    // A pigeon in the hand of another player.
+    if (mode == .deathmatch) for (remotes[0..remote_n]) |r| {
+        const eye = r.pos + v3(0, player_mod.eye, 0);
+        pigeons.carryFor(r.id, eye, handAt(eye, r.yaw, r.pitch), r.yaw, dt);
+    };
+    sendPigeons();
     pigeonSounds();
     effectsTick();
 }

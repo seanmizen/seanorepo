@@ -307,9 +307,13 @@ it does.
 - `server/session.test.ts`: the build file and its fallback, the protocol
   file, the instance id, the `/api/version` answer, the welcome and the
   bye.
+- `server/pigeons.test.ts`: the flock of the server. One takeoff for each
+  pigeon, a kill makes a body, the return after 1 to 3 minutes as a new
+  generation, one holder for each body, and a drop when the holder leaves.
 - `server/lobby.test.ts`: a real server on a free port. It checks the cvars
   on join, rcon, a client that tries to set a server cvar, the chat relay
-  with the join and leave lines, the `lift` field of a player in a cab, and
+  with the join and leave lines, the `lift` field of a player in a cab, the
+  gate relay, the flock on join, a pigeon kill to the other players, and
   the session: `GET /api/version`, the build header, the welcome before the
   hello, the bye on SIGTERM, and a new start with a new build on the same
   port.
@@ -1201,6 +1205,11 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
     dodge. 2 s later the server kills you: `{t:"die", by:"Guilt"}`. The
     kill feed shows Guilt, and the death screen says "Died of guilt. Fare
     dodging is a serious crime".
+  - Deathmatch: the paddles are the same for each player. A tap goes to the
+    server (`{t:"gate", k:"open", i}`), and the paddles of lane `i` open on
+    each client. A walk through the lane (`k:"pass"`) closes them soon on
+    each client. The paddles do not close on any player in the lane. The
+    fares and the fare dodge stay on your client.
 - **Pigeons** (Earl's Court, `game/src/pigeons.zig`): 12 pigeons sit on
   the tie rods of the train shed roof, at 11.5 m. They bob, look round,
   peck, coo, and now and then take a short flight and land again.
@@ -1208,11 +1217,15 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
     next to it follow. A startled pigeon flies off in a random direction
     on a path that weaves, jinks, climbs and sinks, and flaps and glides.
     Some flights are dumb: the pigeon flies into a wall or the roof. Then
-    it leaves up through the roof and despawns. It does not come back.
+    it leaves up through the roof.
   - A hit kills a pigeon. The body falls, bounces and comes to rest on its
     side. A shot, a grenade or a kick moves it. F picks it up and F throws
     it. In deathmatch your kill feed shows the kill.
-  - The pigeons are local to each client. The server knows no pigeons.
+  - A pigeon that left or died comes back 60 to 180 s later. It flies down
+    through the roof near the crown and lands on a free place on a rod.
+    The body of a dead pigeon stays.
+  - Deathmatch: each player sees the same pigeons and bodies. See
+    [The pigeons in deathmatch](#the-pigeons-in-deathmatch).
 - **VAPES N MORE** (Earl's Court, `vapeShop` in
   `game/src/maps/earls_court.zig`, `game/src/vapes.zig`): a vape shop in
   the terrace opposite the station, at the north end of Earls Court Road.
@@ -1257,7 +1270,7 @@ apps/action/
 │       ├── shooter_hud.zig  the text of the NPC shooter panel, on the HUD
 │       ├── gates.zig     the ticket gates: the lanes, the paddles, the Oyster readers, the fares, the fare dodge
 │       ├── pigeons.zig   the pigeons of the train shed: the perches, the flights, the bodies
-│       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights
+│       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights, the return, two clients in deathmatch
 │       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung
 │       ├── impact_fx.zig the impact effect of each material (translucent billboards)
 │       ├── floorplan.zig the map tool: slices, the decoration, material and lift audit (zig build floorplan)
@@ -1287,6 +1300,7 @@ apps/action/
 ├── server/console.ts     the server cvars, the config file, the server commands
 ├── server/chat.ts        the chat checks: clean text, length cap, rate limit, teams
 ├── server/session.ts     the server identity, /api/version, the welcome, the bye on SIGTERM
+├── server/pigeons.ts     the pigeons in deathmatch: the state of each pigeon and body, the joyrides, the returns
 ├── server/server.cfg     the server config (a script)
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── public/index.html
@@ -1337,6 +1351,55 @@ with the fall-off at its own distance between the two players
 the held weapon (`w` and `m` in the `st` and `snap` messages). For a grenade, the thrower's client calculates the damage, cover
 included, and sends it in one `blast` message. The server checks the throws
 left in the life, the damage range and the distance to each target.
+
+### The pigeons in deathmatch
+
+The server owns the state of each pigeon and of each body
+(`server/pigeons.ts`). It does not fly the pigeons. Each pigeon has its own
+random numbers (`Bird.rng` in `game/src/pigeons.zig`), and a flight uses no
+other random numbers. So a flight is a function of its start and its seed,
+and each client flies the same path (at the same tick rate, 120 Hz).
+
+- **A pigeon** is here (on a perch, or on a joyride or a return to it),
+  flown off or dead. A perch is `[rod, u]`: the tie rod (0 to 13) and the
+  place along it (0 to 1).
+- **The client that startles or kills a pigeon decides.** It acts at once
+  and sends the event. The server checks the state and sends the event to
+  the other players. A shot of another player does not startle your
+  pigeons: its shooter decides. A grenade: its thrower decides.
+- **The server decides** the joyrides and the returns, with the seed and
+  the perch. A return comes 60 to 180 s after a death, and 20 s more after
+  a flight off. Each return makes a new generation.
+- **A body** is `[bird, gen]`. The client that moves a body (a shot, a
+  blast, a kick, a throw) sends its place and its velocity. When the body
+  comes to rest, the same client sends the place of rest once. F holds a
+  body at once, but the server gives it to the first player only: a late
+  player gets the holder and lets go. The other clients draw a held body in
+  the hand of its holder, from the position and the aim in the snapshot. A
+  holder who leaves drops the body.
+- **Corrections**: each 10 s the server sends the state of the flock. A
+  client puts a perched pigeon on the right perch, sends off a perched
+  pigeon that is gone on the server, and sends back an away pigeon that is
+  here. On join the same message has the seed (the tints) and the bodies.
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"gate", k, i}` | the client, to the server | `k:"open"`: a tap that opened lane `i`. `k:"pass"`: the player walked through lane `i`. |
+| `{t:"gate", k, i, id}` | the server, to the other players | the same, of player `id`. |
+| `{t:"pg", k:"up", i, sd, o, v}` | the client, to the server, to the other players | pigeon `i` takes off from `o`, or a startle in flight at `o` with velocity `v`. `sd`: the seed of the flight. Only for a pigeon that is here. |
+| `{t:"pg", k:"die", i, g, o, v}` | the client, to the server, to the other players | the kill of pigeon `i` of generation `g`: its body at `o` with velocity `v`. |
+| `{t:"pg", k:"push", i, g, o, v}` | the client, to the server, to the other players | body `[i, g]` is at `o` with velocity `v` (a push, or `v` zero at rest). |
+| `{t:"pg", k:"grab", i, g}` | the client, to the server | F on body `[i, g]`. |
+| `{t:"pg", k:"grab", i, g, id}` | the server, to all players, or to a late player | player `id` holds body `[i, g]`. |
+| `{t:"pg", k:"drop", i, g, o, v}` | the holder, to the server, to the other players | the holder threw or dropped the body. With no `o`: the holder left. |
+| `{t:"pg", k:"joy", i, sd, pr}` | the server, to all players | pigeon `i` takes a joyride to perch `pr`. |
+| `{t:"pg", k:"back", i, g, sd, pr}` | the server, to all players | pigeon `i` comes back as generation `g` to perch `pr`. |
+| `{t:"flock", b, sd, c}` | the server, to all players each 10 s, and to a new player | `b`: `[state, gen, rod, u]` for each pigeon (0 here, 1 flown off, 2 dead). `sd` and `c` only on join: the seed, and the bodies `[i, g, x, y, z, holder]`. |
+
+The events of the other players go to `pg` messages with all the digits of
+each number, so each client starts a flight from the same place. These
+messages are new, so the protocol version stays the same: an old client
+ignores them.
 
 ### Ping
 

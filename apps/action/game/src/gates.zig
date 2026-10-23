@@ -17,7 +17,12 @@
 // - A player who crosses the gate line by any other way than an open lane
 //   (a vault, a jump over the screens) is a fare dodger. main.zig kills the
 //   player 2 s later: "Guilt".
-// - The paddles are local to each client.
+// - Deathmatch: the paddles are the same on each client. A tap that opens
+//   a lane goes to the server ({t:"gate", k:"open", i}), and the server
+//   sends it to the other players (open). A walk through an open lane goes
+//   the same way (k "pass", pass): the paddles close soon on each client.
+//   The paddles do not close on a player in the lane, local or remote
+//   (step, `others`). The fares and the fare dodge stay local.
 const std = @import("std");
 const vec = @import("vec.zig");
 const map = @import("map.zig");
@@ -103,6 +108,9 @@ pub const Pop = struct { text: [40]u8, len: usize, age: f32, good: bool };
 pub const pop_life: f32 = 3.5;
 pub var pops: [4]Pop = undefined;
 pub var pop_n: usize = 0;
+/// The lane that the player walked through in the last step, or null.
+/// main.zig sends it to the server in deathmatch.
+pub var passed: ?usize = null;
 
 /// The map has no gates (map.load calls it before the build).
 pub fn clear() void {
@@ -219,6 +227,21 @@ pub fn tap(i: usize, feet: V3) Tap {
     return .tapped_out;
 }
 
+/// Another player tapped lane i (deathmatch): the paddles open, and the
+/// reader shows green.
+pub fn open(i: usize) void {
+    if (i >= lane_n) return;
+    lanes[i].open_t = open_time;
+    lanes[i].flash = 0.8;
+}
+
+/// Another player walked through lane i (deathmatch): the paddles close
+/// soon.
+pub fn pass(i: usize) void {
+    if (i >= lane_n) return;
+    lanes[i].open_t = @min(lanes[i].open_t, close_after);
+}
+
 var prng: std.Random.DefaultPrng = .init(11);
 fn rand() f32 {
     return prng.random().float(f32);
@@ -248,10 +271,12 @@ pub const Cross = enum { none, through, dodged };
 
 /// Step the paddles and the journey. `before` and `feet` are the feet of
 /// the player at the start and at the end of the tick, or null when the
-/// player is not in play. Returns `dodged` when the player crossed a gate
-/// line by any other way than an open lane.
-pub fn step(dt: f32, before: ?V3, feet: ?V3, player_r: f32, player_h: f32) Cross {
+/// player is not in play. `others`: the feet of the other players. The
+/// paddles do not close on them either. Returns `dodged` when the player
+/// crossed a gate line by any other way than an open lane.
+pub fn step(dt: f32, before: ?V3, feet: ?V3, others: []const V3, player_r: f32, player_h: f32) Cross {
     var out: Cross = .none;
+    passed = null;
     if (before != null and feet != null) out = crossing(before.?, feet.?);
     for (lanes[0..lane_n]) |*l| {
         l.flash = if (l.flash > 0) @max(0, l.flash - dt) else @min(0, l.flash + dt);
@@ -259,12 +284,10 @@ pub fn step(dt: f32, before: ?V3, feet: ?V3, player_r: f32, player_h: f32) Cross
         const want: f32 = if (l.open_t > 0) 1 else 0;
         // The paddles do not close on a player in the lane.
         const b = &map.boxes[l.box];
-        if (want == 0 and l.open > 0 and feet != null) {
-            const f = feet.?;
-            const inside = f[0] + player_r > b.min[0] - 0.3 and f[0] - player_r < b.max[0] + 0.3 and
-                f[2] + player_r > b.min[2] and f[2] - player_r < b.max[2] and
-                f[1] < b.max[1] and f[1] + player_h > b.min[1];
-            if (inside) l.open_t = 0.2;
+        if (want == 0 and l.open > 0) {
+            var busy = if (feet) |f| inLane(b, f, player_r, player_h) else false;
+            for (others) |f| busy = busy or inLane(b, f, player_r, player_h);
+            if (busy) l.open_t = 0.2;
         }
         l.open += std.math.clamp(want - l.open, -dt * 3, dt * 3);
         b.solid = l.open < 0.5 and l.open_t <= 0;
@@ -291,6 +314,13 @@ pub fn step(dt: f32, before: ?V3, feet: ?V3, player_r: f32, player_h: f32) Cross
     return out;
 }
 
+/// True when a player with its feet at f is between the paddles of box b.
+fn inLane(b: *const map.Box, f: V3, r: f32, h: f32) bool {
+    return f[0] + r > b.min[0] - 0.3 and f[0] - r < b.max[0] + 0.3 and
+        f[2] + r > b.min[2] and f[2] - r < b.max[2] and
+        f[1] < b.max[1] and f[1] + h > b.min[1];
+}
+
 /// The feet went from a to b: across a gate line, through an open lane or
 /// not.
 fn crossing(a: V3, b: V3) Cross {
@@ -301,11 +331,12 @@ fn crossing(a: V3, b: V3) Cross {
         const z = a[2] + (b[2] - a[2]) * k;
         const y = a[1] + (b[1] - a[1]) * k;
         if (z < ln.z0 or z > ln.z1 or y < ln.y - 0.5 or y > ln.y + 3) continue;
-        for (lanes[0..lane_n]) |*l| {
+        for (lanes[0..lane_n], 0..) |*l, i| {
             if (l.line != li or z < l.z0 or z > l.z1) continue;
             // Through an open lane, on the floor: the paddles close soon.
             if (l.open > 0.3 and y < ln.y + 0.3) {
                 l.open_t = @min(l.open_t, close_after);
+                passed = i;
                 return .through;
             }
         }

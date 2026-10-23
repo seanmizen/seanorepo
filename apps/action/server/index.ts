@@ -38,6 +38,15 @@
 // Add 1 to the protocol version for each change to a message that a client
 // of the old version cannot read: that client must reload before it joins.
 //
+// The ticket gates (game/src/gates.zig): the server sends a tap and a
+// passage of each lane to the other players, so the paddles are the same
+// on each client. The fares stay on the client.
+//
+// The pigeons (pigeons.ts): the server owns the state of each pigeon and of
+// each body. The client that startles or kills a pigeon decides, and the
+// server checks and sends the event. The server decides the joyrides and
+// the returns. Each client flies each flight from its seed.
+//
 // Weapons: the class ids are the order of game/src/weapon.zig Class. A pick
 // is [class, model]: the model must be a gun of the class, and the model
 // sets the stats (guns.json). A new pick applies at the next spawn, or at
@@ -74,6 +83,14 @@
 //   {t:"rcon", pw, cmd}                           run a server command (remote
 //                                                 admin). pw is admin_password.
 //   {t:"chat", ch:"all"|"team", text}             a chat message
+//   {t:"gate", k:"open"|"pass", i}                the player tapped the reader of
+//                                                 lane i, or walked through it
+//   {t:"pg", k, i, g, sd, o:[x,y,z], v:[x,y,z]}   a pigeon event (pigeons.ts):
+//                                                 k "up" (a takeoff or a startle
+//                                                 in flight, sd its seed), "die",
+//                                                 "push", "grab", "drop". i the
+//                                                 pigeon, g its generation. o and
+//                                                 v: the place and the velocity.
 // Server to client:
 //   {t:"welcome", id, instance, build, protocol, started}
 //                                 the first message, before the hello. The
@@ -107,6 +124,15 @@
 //   {t:"chat", ch:"server", text} a server line: a join, a leave, a match
 //                                 start or end, or "Too many messages" to
 //                                 the sender
+//   {t:"gate", k, i, id}          player id tapped lane i or walked through it
+//   {t:"pg", k, i, g, sd, o, v, id}  a pigeon event of player id. "grab" goes
+//                                 to all: id is the holder. Also from the
+//                                 server: {k:"joy", i, sd, pr:[rod, u]} and
+//                                 {k:"back", i, g, sd, pr}. A "drop" with no
+//                                 o: the holder left.
+//   {t:"flock", b:[[st, g, rod, u]], sd, c:[[i, g, x, y, z, holder]]}
+//                                 the state of the pigeons, each 10 s. sd
+//                                 and c (the bodies) only on join.
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
@@ -127,6 +153,7 @@ import {
   ServerConsole,
 } from './console';
 import { type Gun, gunInPick, gunOf, type SlotName, shotDamage } from './guns';
+import { Flock } from './pigeons';
 import {
   newPing,
   onPong,
@@ -408,6 +435,10 @@ function pickFrom(msg: Record<string, unknown>): Pick | null {
 
 const players = new Map<number, Player>();
 let nextId = 1;
+/// The pigeons of Earl's Court: one flock for the life of the server.
+const flock = new Flock(Date.now());
+/// The lanes of the ticket gates: gates.zig max_lanes.
+const GATE_LANES = 16;
 let phase: 'play' | 'end' = 'play';
 
 runConfigFile(serverConsole, SERVER_CONFIG, log);
@@ -718,6 +749,18 @@ function onRcon(p: Player, msg: Record<string, unknown>): void {
   serverConsole.exec(cmd, reply);
 }
 
+/** A tap or a passage of a ticket gate lane: the other players open or
+ * close the same lane. */
+function onGate(p: Player, msg: Record<string, unknown>): void {
+  const i = msg.i;
+  const k = msg.k;
+  if (!p.joined || !p.alive) return;
+  if (typeof i !== 'number' || !Number.isInteger(i) || i < 0 || i >= GATE_LANES)
+    return;
+  if (k !== 'open' && k !== 'pass') return;
+  broadcast({ t: 'gate', k, i, id: p.id }, p.id);
+}
+
 function snapshot(): object {
   const list = [];
   for (const p of players.values()) {
@@ -767,6 +810,7 @@ function step(): void {
   const dt = Math.min(0.2, (now - lastStep) / 1000);
   lastStep = now;
   for (const l of lifts) stepLift(l, dt);
+  for (const m of flock.step(now)) broadcast(m);
   if (now >= phaseEndsAt) {
     if (phase === 'play') {
       phase = 'end';
@@ -890,6 +934,7 @@ const server = Bun.serve<Conn>({
         p.next = pickFrom(msg) ?? DEFAULT_PICK;
         p.joined = true;
         send(p, { t: 'cvars', cv: cvars.publicPairs() });
+        send(p, flock.state(true));
         serverLine(`${p.name} joined.`);
         if (phase === 'play') spawn(p);
         else p.respawnAt = 0;
@@ -944,11 +989,19 @@ const server = Bun.serve<Conn>({
         if (!p.alive || !(i in lifts) || !(level === 0 || level === 1)) return;
         callLift(lifts[i], level);
         broadcast({ t: 'lift', i, l: level });
+      } else if (msg.t === 'gate') {
+        onGate(p, msg);
+      } else if (msg.t === 'pg' && p.joined) {
+        for (const o of flock.onMessage(p.id, msg, Date.now())) {
+          if (o.to === 'sender') send(p, o.msg);
+          else broadcast(o.msg, o.to === 'others' ? p.id : undefined);
+        }
       }
     },
     close(ws) {
       const p = players.get(ws.data.id);
       players.delete(ws.data.id);
+      for (const m of flock.leave(ws.data.id)) broadcast(m);
       if (p?.joined && !shutdown.stopping()) serverLine(`${p.name} left.`);
     },
   },
