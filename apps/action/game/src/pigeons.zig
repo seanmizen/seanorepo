@@ -9,17 +9,44 @@
 //   turn rate wanders, the pigeon jinks at random, climbs and sinks, and it
 //   flaps and glides in turn. Some flights are dumb: the pigeon does not
 //   look ahead and flies into a wall or the roof, then flutters on.
-// - After some seconds a startled pigeon leaves up through the roof and
-//   despawns. It does not come back. A pigeon on a joyride (a short flight
-//   with no startle) lands on a free place on a tie rod again. Some
-//   landings fail, and it goes round again.
+// - After some seconds a startled pigeon leaves up through the roof. A
+//   pigeon on a joyride (a short flight with no startle) lands on a free
+//   place on a tie rod again. Some landings fail, and it goes round again.
 // - A hit kills the pigeon. The body is a physics object: it falls, bounces,
 //   tumbles and comes to rest on its side. A shot or a kick moves it. F
-//   picks it up and F throws it (main.zig). No new pigeon comes.
-// - All of it is local to each client: the server knows no pigeons.
+//   picks it up and F throws it (main.zig).
+// - A pigeon that left or died comes back after 60 to 180 s (return_delay).
+//   It flies down through the roof near the crown, then lands on a free
+//   place on a tie rod (comeBack).
 //
-// The module has no sound and no input. main.zig plays the events (events)
-// and calls the startles (shot, noise, blast).
+// Deathmatch (`net`): the server (server/pigeons.ts) owns the state of each
+// pigeon: here, flown off or dead, its perch, and its generation (one more
+// at each return). The flights are not sent. Each pigeon has its own random
+// numbers (Bird.rng), and a flight uses no other random numbers. So a
+// flight is a function of its start (the place, the velocity) and a seed,
+// and each client flies the same path.
+// - The client that startles or kills a pigeon decides. It acts at once and
+//   puts the event in `outbox` (main.zig sends it): "up" (a takeoff or a
+//   startle in flight, with its seed), "die" (the body: its place and
+//   velocity). The server checks the state and sends the event to the
+//   other clients (applyUp, applyDie). A shot of another player does not
+//   startle the pigeons of this client: its shooter decides.
+// - The server decides the joyrides (applyJoy) and the returns (applyBack),
+//   with the seed and the perch. A client in net mode has no timers of its
+//   own for these.
+// - A body is (bird, gen). A shot, a blast or a kick sends "push": the place
+//   and the velocity after the push. A body that comes to rest sends its
+//   place once (the client that moved it last). F sends "grab": the client
+//   holds the body at once, and the server grants it to the first player
+//   only (applyGrab). The others draw a held body in the hand of its holder
+//   (carryFor). A throw or a drop sends "drop".
+// - Each 10 s the server sends the state of the flock (applyFlock). It
+//   corrects a perched or away pigeon that is wrong. On join the same
+//   message has the seed (the tints) and the bodies.
+//
+// The module has no sound, no input and no network. main.zig plays the
+// events (events), sends the outbox and calls the startles (shot, noise,
+// blast) and the apply functions.
 const std = @import("std");
 const vec = @import("vec.zig");
 const map = @import("map.zig");
@@ -60,7 +87,12 @@ const zone_z = [2]f32{ -19, 10.5 };
 const zone_y0: f32 = 5.6;
 
 pub const State = enum { perched, flying, away };
-pub const Goal = enum { wander, leave, land };
+/// enter: on the way back, down through the roof to `exit`, then land.
+pub const Goal = enum { wander, leave, land, enter };
+/// The time from a leave or a death to the return, in seconds.
+pub const return_delay = [2]f32{ 60, 180 };
+/// The perches of a shuffle stay this near (m, along the rod) to the perch.
+const shuffle_max: f32 = 0.15;
 
 /// A place on a tie rod: the body centre.
 pub const Perch = struct { rod: usize, pos: V3 };
@@ -116,6 +148,11 @@ pub const Bird = struct {
     hop: f32 = 0,
     coo_t: f32 = 0,
     tint: V3 = v3(0.44, 0.47, 0.53),
+    /// The random numbers of the flights of this pigeon only. In deathmatch
+    /// each flight starts from a seed of the event.
+    rng: std.Random.DefaultPrng = .init(0),
+    /// One more at each return. A body is (bird, gen).
+    gen: u16 = 0,
 };
 
 pub const Corpse = struct {
@@ -129,6 +166,13 @@ pub const Corpse = struct {
     check_t: f32 = 0,
     kick_t: f32 = 0,
     tint: V3,
+    /// The pigeon of this body, and its generation: the key in deathmatch.
+    bird: u8 = 0,
+    gen: u16 = 0,
+    /// The id of another player who holds it (deathmatch), or 0.
+    holder: u32 = 0,
+    /// This client moved it last: it sends the place of rest.
+    mine: bool = false,
 };
 
 const Feather = struct { p: V3, v: V3, life: f32, age: f32, spin: f32, phase: f32, floor: f32, col: V3 };
@@ -154,9 +198,52 @@ var rod_n: usize = 0;
 /// The time to the next joyride of a perched pigeon.
 var joy_t: f32 = 0;
 var prng: std.Random.DefaultPrng = .init(1);
+/// The seed of the last reset.
+pub var seed_now: u64 = 1;
 
+/// Deathmatch: the server owns the state (see the top of the file).
+pub var net = false;
+
+/// An event for the server (deathmatch).
+pub const NetKind = enum { up, die, push, grab, drop };
+pub const NetEvent = struct {
+    kind: NetKind,
+    bird: usize,
+    gen: u16 = 0,
+    seed: u32 = 0,
+    p: V3 = v3(0, 0, 0),
+    v: V3 = v3(0, 0, 0),
+};
+pub var outbox: [48]NetEvent = undefined;
+pub var out_n: usize = 0;
+
+fn netOut(e: NetEvent) void {
+    if (!net or out_n == outbox.len) return;
+    outbox[out_n] = e;
+    out_n += 1;
+}
+
+/// The cosmetic random numbers: the idle acts, the feathers, the spin of
+/// a body, the startle delays. Never a flight.
 fn rf() f32 {
     return prng.random().float(f32);
+}
+
+fn newSeed() u32 {
+    return prng.random().int(u32);
+}
+
+/// The random numbers of a flight (Bird.rng).
+fn brf(b: *Bird) f32 {
+    return b.rng.random().float(f32);
+}
+
+fn brange(b: *Bird, lo: f32, hi: f32) f32 {
+    return lo + (hi - lo) * brf(b);
+}
+
+fn bsign(b: *Bird) f32 {
+    return if (brf(b) < 0.5) -1 else 1;
 }
 
 fn range(a: f32, b: f32) f32 {
@@ -209,6 +296,8 @@ fn underRoof(p: V3) bool {
 /// Put the pigeons on the roof of Earl's Court. Other maps have none.
 pub fn reset(seed: u64) void {
     prng = .init(seed);
+    seed_now = seed;
+    out_n = 0;
     bird_n = 0;
     corpse_n = 0;
     held = null;
@@ -228,6 +317,7 @@ pub fn reset(seed: u64) void {
         bird_n = i + 1;
         const b = &birds[i];
         b.tint = pickTint();
+        b.rng = .init(newSeed());
         b.perch = freePerch(i) orelse continue;
         settle(b);
         b.timer = range(0.5, 4);
@@ -261,10 +351,24 @@ fn freePerch(self: usize) ?Perch {
 fn perchFree(self: usize, p: V3) bool {
     for (birds[0..bird_n], 0..) |o, j| {
         if (j == self) continue;
-        const busy = o.state == .perched or (o.state == .flying and o.goal == .land) or o.state == .away;
+        const busy = o.state == .perched or (o.state == .flying and (o.goal == .land or o.goal == .enter)) or o.state == .away;
         if (busy and vec.len(o.perch.pos - p) < min_gap) return false;
     }
     return true;
+}
+
+/// The number of tie rods: server/pigeons.ts RODS must be the same.
+pub fn rodCount() usize {
+    return rod_n;
+}
+
+/// The perch at `u` (0 to 1) along the free part of rod `rod`: the form of
+/// a perch in the messages of the server.
+pub fn perchAt(rod: usize, u: f32) ?Perch {
+    if (rod_n == 0) return null;
+    const ri = @min(rod, rod_n - 1);
+    const r = rods[ri];
+    return .{ .rod = ri, .pos = v3(r.x, r.y + perch_lift, r.z0 + (r.z1 - r.z0) * std.math.clamp(u, 0, 1)) };
 }
 
 /// Sit on the perch, facing along the shed.
@@ -285,18 +389,36 @@ fn settle(b: *Bird) void {
 // ---- The startles ---------------------------------------------------------
 
 /// Startle one pigeon after `delay` s: a perched one takes off, a landing
-/// one turns away.
+/// one turns away. This client decides: in deathmatch it sends "up".
 fn startleBird(b: *Bird, delay: f32) void {
     switch (b.state) {
         .perched => {
             if (b.startle < 0 or delay < b.startle) b.startle = delay;
         },
-        .flying => if (b.goal == .land) {
-            b.goal = .wander;
-            b.joyride = false;
-            b.flight_len = b.t + range(3, 7);
+        .flying => if (b.goal == .land or b.goal == .enter) {
+            const sd = newSeed();
+            netOut(.{ .kind = .up, .bird = indexOf(b), .seed = sd, .p = b.pos, .v = b.vel });
+            b.rng = .init(sd);
+            scare(b);
         },
         .away => {},
+    }
+}
+
+/// A startle in flight: a landing pigeon goes round and then leaves. A
+/// pigeon on the way in goes back up through the roof.
+fn scare(b: *Bird) void {
+    switch (b.goal) {
+        .land => {
+            b.goal = .wander;
+            b.joyride = false;
+            b.flight_len = b.t + brange(b, 3, 7);
+        },
+        .enter => {
+            b.goal = .leave;
+            b.exit = v3(b.pos[0], ec.archY(b.pos[2]) + 1.5, b.pos[2]);
+        },
+        .wander, .leave => {},
     }
 }
 
@@ -337,7 +459,7 @@ pub fn blast(p: V3, kill_r: f32) void {
         if (d < kill_r) kill(b, vec.norm(b.pos - p) * vec.s(1.5));
     }
     for (corpses[0..corpse_n], 0..) |*c, i| {
-        if (held == i) continue;
+        if (held == i or c.holder != 0) continue;
         const d = vec.len(c.pos - p);
         if (d < kill_r) {
             const k = 1 - d / kill_r;
@@ -347,35 +469,79 @@ pub fn blast(p: V3, kill_r: f32) void {
     noise(p, 30);
 }
 
-fn takeOff(b: *Bird, joyride: bool) void {
+/// Take off from the perch with the flight of `seed`. `follow`: the
+/// pigeons near it follow (this client decides them).
+fn takeOff(b: *Bird, joyride: bool, seed: u64, follow: bool) void {
+    b.rng = .init(seed);
     b.state = .flying;
     b.goal = .wander;
     b.t = 0;
     b.joyride = joyride;
-    b.heading = rf() * std.math.tau;
+    b.heading = brf(b) * std.math.tau;
     b.turn = 0;
-    b.turn_goal = range(-1.2, 1.2);
-    b.turn_t = range(0.3, 1);
-    b.weave = rf() * std.math.tau;
-    b.alt = b.pos[1] - range(0.5, 4);
-    b.alt_t = range(1, 2.5);
-    b.speed = range(5.8, 7.6);
-    b.dumb = rf() < 0.25;
-    b.flight_len = if (joyride) range(3, 6) else range(6, 13);
+    b.turn_goal = brange(b, -1.2, 1.2);
+    b.turn_t = brange(b, 0.3, 1);
+    b.weave = brf(b) * std.math.tau;
+    b.alt = b.pos[1] - brange(b, 0.5, 4);
+    b.alt_t = brange(b, 1, 2.5);
+    b.speed = brange(b, 5.8, 7.6);
+    b.dumb = brf(b) < 0.25;
+    b.flight_len = if (joyride) brange(b, 3, 6) else brange(b, 6, 13);
     // It drops off the rod, then flaps.
     b.vel = dir(b.heading) * vec.s(2.2) + v3(0, -0.6, 0);
+    b.flap = 0;
     b.glide = false;
-    b.cycle_t = range(0.9, 1.4);
+    b.cycle_t = brange(b, 0.9, 1.4);
     b.startle = -1;
+    b.dazed = 0;
     b.misses = 0;
     b.decided = false;
     if (!joyride) {
         emit(.takeoff, b.pos);
         // The flock follows.
-        for (birds[0..bird_n]) |*o| {
+        if (follow) for (birds[0..bird_n]) |*o| {
             if (o.state == .perched and o.startle < 0 and vec.len(o.pos - b.pos) < flock_radius and rf() < 0.75) o.startle = range(0.12, 0.6);
-        }
+        };
     } else emit(.flutter, b.pos);
+}
+
+/// The way back: from over the roof near its crown, down through the roof
+/// to a point under it, then to the perch p. `seed` sets the flight.
+fn comeBack(b: *Bird, p: Perch, seed: u64) void {
+    b.rng = .init(seed);
+    b.state = .flying;
+    b.goal = .enter;
+    b.t = 0;
+    b.joyride = true;
+    b.perch = p;
+    // Between two ribs (the rods are on the ribs), near the crown.
+    const x = std.math.clamp(p.pos[0] + bsign(b) * ec.rib_step / 2, -zone_x, zone_x);
+    const z = std.math.clamp(-4.2 + brange(b, -5, 5), zone_z[0], zone_z[1]);
+    b.exit = v3(x, ceilingAt(z) - 1.2, z);
+    b.pos = v3(x, ec.archY(z) + 2.5, z);
+    b.vel = v3(0, -2, 0);
+    b.heading = headingOf(p.pos - b.pos);
+    b.yaw = b.heading;
+    b.pitch = 0;
+    b.bank = 0;
+    b.speed = brange(b, 5.8, 7.6);
+    b.flap = 0;
+    b.glide = false;
+    b.cycle_t = brange(b, 0.9, 1.4);
+    b.turn = 0;
+    b.turn_goal = 0;
+    b.turn_t = 1;
+    b.weave = 0;
+    b.alt = b.exit[1];
+    b.alt_t = 2;
+    b.startle = -1;
+    b.dazed = 0;
+    b.dumb = false;
+    b.misses = 0;
+    b.decided = false;
+    b.approach = true;
+    b.flight_len = 0;
+    b.gen +%= 1;
 }
 
 /// Go to the perch from wherever the pigeon is.
@@ -415,7 +581,7 @@ pub fn ray(o: V3, d: V3, max_t: f32) ?Hit {
         }
     }
     for (corpses[0..corpse_n], 0..) |c, i| {
-        if (held == i) continue;
+        if (held == i or c.holder != 0) continue;
         if (raySphere(o, d, c.pos, 0.14)) |t| {
             if (t < max_t and (best == null or t < best.?.t)) best = .{ .t = t, .bird = null, .corpse = i };
         }
@@ -442,12 +608,30 @@ pub fn shoot(h: Hit, d: V3) bool {
 }
 
 fn kill(b: *Bird, push: V3) void {
+    const vel = b.vel * vec.s(0.6) + push + v3(0, 0.8, 0);
+    netOut(.{ .kind = .die, .bird = indexOf(b), .gen = b.gen, .p = b.pos, .v = vel });
+    const c = addCorpse(b, b.pos, vel);
+    if (c) |cc| cc.mine = true;
+    addFeathers(b.pos, 14, b.vel * vec.s(0.3), b.tint);
+    emit(.hit, b.pos);
+    b.state = .away;
+    b.timer = range(return_delay[0], return_delay[1]);
+    b.startle = -1;
+}
+
+/// A new body of pigeon b at p with velocity v. Null when the body is
+/// there already (deathmatch: the same bird and generation).
+fn addCorpse(b: *const Bird, p: V3, v: V3) ?*Corpse {
+    const bi: u8 = @intCast(indexOf(b));
+    if (findCorpse(bi, b.gen) != null) return null;
     const c: Corpse = .{
-        .pos = b.pos,
-        .vel = b.vel * vec.s(0.6) + push + v3(0, 0.8, 0),
+        .pos = p,
+        .vel = v,
         .rot = v3(b.yaw, b.pitch, b.bank),
         .spin = v3(range(-6, 6), range(-8, 8), range(-8, 8)),
         .tint = b.tint,
+        .bird = bi,
+        .gen = b.gen,
     };
     if (corpse_n == max_corpses) {
         // The oldest body goes, unless it is in the hands.
@@ -461,18 +645,25 @@ fn kill(b: *Bird, push: V3) void {
     }
     corpses[corpse_n] = c;
     corpse_n += 1;
-    addFeathers(b.pos, 14, b.vel * vec.s(0.3), b.tint);
-    emit(.hit, b.pos);
-    b.state = .away;
-    b.timer = range(10, 22);
-    b.startle = -1;
+    return &corpses[corpse_n - 1];
 }
 
+/// The index of the body of (bird, gen), or null.
+fn findCorpse(bird: u8, gen: u16) ?usize {
+    for (corpses[0..corpse_n], 0..) |c, i| {
+        if (c.bird == bird and c.gen == gen) return i;
+    }
+    return null;
+}
+
+/// A push from this client: in deathmatch it sends the new state.
 fn wake(c: *Corpse, dv: V3) void {
     c.vel += dv;
     c.rest = false;
     c.grounded = false;
+    c.mine = true;
     c.spin = v3(range(-6, 6), range(-9, 9), range(-9, 9));
+    netOut(.{ .kind = .push, .bird = c.bird, .gen = c.gen, .p = c.pos, .v = c.vel });
 }
 
 fn addFeathers(p: V3, n: usize, v: V3, tint: V3) void {
@@ -500,7 +691,7 @@ pub fn pick(o: V3, d: V3, reach: f32) ?usize {
     var best: ?usize = null;
     var best_t = reach;
     for (corpses[0..corpse_n], 0..) |c, i| {
-        if (held == i) continue;
+        if (held == i or c.holder != 0) continue;
         if (raySphere(o, d, c.pos, 0.25)) |t| {
             if (t < best_t) {
                 best_t = t;
@@ -511,17 +702,30 @@ pub fn pick(o: V3, d: V3, reach: f32) ?usize {
     return best;
 }
 
+/// Pick up body i. In deathmatch the server grants it (applyGrab).
 pub fn grab(i: usize) void {
     if (i >= corpse_n) return;
     held = i;
     corpses[i].rest = false;
+    netOut(.{ .kind = .grab, .bird = corpses[i].bird, .gen = corpses[i].gen });
 }
 
 /// Carry the held body to `target` (in front of the eye), out of the
 /// walls. It hangs by the feet and swings with the move.
 pub fn holdAt(eye: V3, target: V3, yaw: f32, dt: f32) void {
     const i = held orelse return;
-    const c = &corpses[i];
+    carry(&corpses[i], eye, target, yaw, dt);
+}
+
+/// Carry the bodies that player `id` holds (deathmatch): the same as
+/// holdAt, from the eye of that player.
+pub fn carryFor(id: u32, eye: V3, target: V3, yaw: f32, dt: f32) void {
+    for (corpses[0..corpse_n]) |*c| {
+        if (c.holder == id) carry(c, eye, target, yaw, dt);
+    }
+}
+
+fn carry(c: *Corpse, eye: V3, target: V3, yaw: f32, dt: f32) void {
     var p = target;
     const to = target - eye;
     const l = vec.len(to);
@@ -546,7 +750,9 @@ pub fn release(v: V3) void {
     c.vel = v;
     c.rest = false;
     c.grounded = false;
+    c.mine = true;
     c.spin = v3(range(-3, 3), range(-7, 7), range(-5, 5));
+    netOut(.{ .kind = .drop, .bird = c.bird, .gen = c.gen, .p = c.pos, .v = v });
 }
 
 /// A player whose feet are at `feet` walks with velocity v: it kicks the
@@ -555,14 +761,183 @@ pub fn kick(feet: V3, v: V3) void {
     const hs = @sqrt(v[0] * v[0] + v[2] * v[2]);
     if (hs < 1) return;
     for (corpses[0..corpse_n], 0..) |*c, i| {
-        if (held == i or c.kick_t > 0) continue;
+        if (held == i or c.holder != 0 or c.kick_t > 0) continue;
         const dx = c.pos[0] - feet[0];
         const dz = c.pos[2] - feet[2];
         if (dx * dx + dz * dz > 0.45 * 0.45) continue;
         if (c.pos[1] < feet[1] - 0.2 or c.pos[1] > feet[1] + 0.5) continue;
-        wake(c, v3(v[0] * 1.1, 1.6, v[2] * 1.1));
         c.kick_t = 0.3;
+        wake(c, v3(v[0] * 1.1, 1.6, v[2] * 1.1));
         emit(.thud, c.pos);
+    }
+}
+
+// ---- Deathmatch: the events of the server ----------------------------------
+
+/// Another client startled pigeon i: a takeoff from p, or a startle in
+/// flight at p with velocity v. The flight of `seed`.
+pub fn applyUp(i: usize, seed: u32, p: V3, v: V3) void {
+    if (i >= bird_n) return;
+    const b = &birds[i];
+    switch (b.state) {
+        .perched => {
+            b.pos = p;
+            b.vel = v;
+            takeOff(b, false, seed, false);
+        },
+        .flying => {
+            b.pos = p;
+            b.vel = v;
+            b.rng = .init(seed);
+            scare(b);
+        },
+        .away => {},
+    }
+}
+
+/// The server sends pigeon i on a joyride with the flight of `seed`. It
+/// lands on perch p. A pigeon that is not on its perch here does not go.
+pub fn applyJoy(i: usize, seed: u32, p: Perch) void {
+    if (i >= bird_n) return;
+    const b = &birds[i];
+    if (b.state != .perched or b.startle >= 0) return;
+    takeOff(b, true, seed, false);
+    b.perch = p;
+}
+
+/// The server sends pigeon i back, generation `gen`, to perch p.
+pub fn applyBack(i: usize, gen: u16, seed: u32, p: Perch) void {
+    if (i >= bird_n) return;
+    const b = &birds[i];
+    comeBack(b, p, seed);
+    b.gen = gen;
+}
+
+/// Another client killed pigeon i: its body (generation gen) at p with
+/// velocity v.
+pub fn applyDie(i: usize, gen: u16, p: V3, v: V3) void {
+    if (i >= bird_n) return;
+    const b = &birds[i];
+    b.gen = gen;
+    if (b.state != .away) {
+        b.pos = p;
+        addFeathers(p, 14, v3(0, 0, 0), b.tint);
+        emit(.hit, p);
+        b.state = .away;
+        b.startle = -1;
+    }
+    _ = addCorpse(b, p, v);
+}
+
+/// Another client moved the body (bird, gen): its place and velocity now.
+pub fn applyPush(bird: usize, gen: u16, p: V3, v: V3) void {
+    if (bird >= bird_n) return;
+    const k = findCorpse(@intCast(bird), gen) orelse blk: {
+        // A body that this client does not have (a missed kill).
+        const b = &birds[bird];
+        const old = b.gen;
+        b.gen = gen;
+        _ = addCorpse(b, p, v);
+        b.gen = old;
+        break :blk findCorpse(@intCast(bird), gen) orelse return;
+    };
+    if (held == k or corpses[k].holder != 0) return;
+    const c = &corpses[k];
+    // A place of rest that this client has too: nothing to correct.
+    if (vec.len(v) == 0 and vec.len(c.pos - p) < 0.02) {
+        c.pos = p;
+        c.mine = false;
+        return;
+    }
+    c.pos = p;
+    c.vel = v;
+    c.rest = false;
+    c.grounded = false;
+    c.mine = false;
+    if (vec.len(v) > 0.5) c.spin = v3(range(-6, 6), range(-9, 9), range(-9, 9));
+}
+
+/// The server gave the body (bird, gen) to player `id`. When that is not
+/// this player (`me`), this client lets go of it.
+pub fn applyGrab(bird: usize, gen: u16, id: u32, me: u32) void {
+    if (bird >= bird_n or id == me) return;
+    const k = findCorpse(@intCast(bird), gen) orelse return;
+    if (held == k) held = null;
+    corpses[k].holder = id;
+    corpses[k].rest = false;
+    corpses[k].mine = false;
+}
+
+/// The holder of the body (bird, gen) let go of it: at p with velocity v,
+/// or where it is now (null: the holder left).
+pub fn applyDrop(bird: usize, gen: u16, p: ?V3, v: V3) void {
+    if (bird >= bird_n) return;
+    const k = findCorpse(@intCast(bird), gen) orelse return;
+    if (held == k) return;
+    const c = &corpses[k];
+    c.holder = 0;
+    if (p) |pp| c.pos = pp;
+    c.vel = v;
+    c.rest = false;
+    c.grounded = false;
+    c.mine = false;
+    c.spin = v3(range(-3, 3), range(-7, 7), range(-5, 5));
+}
+
+/// The state of one pigeon on the server: 0 here (on a perch, or on a
+/// joyride or a return to it), 1 flown off, 2 dead. The perch: rod and u.
+pub const Remote = struct { st: u8, gen: u16, rod: usize, u: f32 };
+
+/// The state of the flock from the server. `join`: the first state after a
+/// join. It puts each pigeon in place at once. Else it corrects only a
+/// pigeon on a perch or away, and a pigeon here that is away flies back.
+pub fn applyFlock(list: []const Remote, join: bool) void {
+    for (list, 0..) |r, i| {
+        if (i >= bird_n) break;
+        const b = &birds[i];
+        b.gen = r.gen;
+        if (r.st == 0) {
+            const p = perchAt(r.rod, r.u) orelse continue;
+            switch (b.state) {
+                .perched => if (vec.len(b.perch.pos - p.pos) > 0.05) {
+                    b.perch = p;
+                    settle(b);
+                },
+                .away => if (join) {
+                    b.perch = p;
+                    settle(b);
+                } else {
+                    comeBack(b, p, @as(u64, r.gen) *% 0x9E3779B97F4A7C15 +% i);
+                    b.gen = r.gen;
+                },
+                .flying => if (join) {
+                    b.perch = p;
+                    settle(b);
+                },
+            }
+        } else switch (b.state) {
+            // Gone on the server: away at once on a join, else it flies off.
+            .perched => if (join) {
+                b.state = .away;
+            } else takeOff(b, false, newSeed(), false),
+            .flying => if (join) {
+                b.state = .away;
+            },
+            .away => {},
+        }
+    }
+}
+
+/// The bodies from the server on a join: [bird, gen, x, y, z, holder].
+pub fn applyBodies(list: []const [6]f32) void {
+    corpse_n = 0;
+    held = null;
+    for (list) |row| {
+        const bi: usize = @intFromFloat(@max(0, row[0]));
+        if (bi >= bird_n) continue;
+        const gen: u16 = @intFromFloat(std.math.clamp(row[1], 0, 65535));
+        applyPush(bi, gen, v3(row[2], row[3], row[4]), v3(0, 0, 0));
+        if (findCorpse(@intCast(bi), gen)) |k| corpses[k].holder = @intFromFloat(@max(0, row[5]));
     }
 }
 
@@ -573,24 +948,40 @@ pub fn step(dt: f32) void {
         switch (b.state) {
             .perched => perched(b, dt),
             .flying => fly(b, i, dt),
-            // Gone: a pigeon that flew off or died does not come back.
-            .away => {},
+            // Gone. Offline it comes back after a time. In deathmatch the
+            // server sends the return.
+            .away => if (!net) {
+                b.timer -= dt;
+                if (b.timer <= 0) {
+                    if (freePerch(i)) |p| comeBack(b, p, newSeed()) else b.timer = 5;
+                }
+            },
         }
     }
+    // The joyrides. In deathmatch the server sends them.
     joy_t -= dt;
-    if (joy_t <= 0 and bird_n > 0) {
+    if (!net and joy_t <= 0 and bird_n > 0) {
         joy_t = range(15, 45);
         const b = &birds[@min(bird_n - 1, @as(usize, @intFromFloat(rf() * @as(f32, @floatFromInt(bird_n)))))];
-        if (b.state == .perched and b.startle < 0) takeOff(b, true);
+        if (b.state == .perched and b.startle < 0) takeOff(b, true, newSeed(), false);
     }
     for (corpses[0..corpse_n], 0..) |*c, i| {
         c.kick_t = @max(0, c.kick_t - dt);
-        if (held != i) corpseStep(c, dt);
+        if (held != i and c.holder == 0) {
+            const was = c.rest;
+            corpseStep(c, dt);
+            // The place of rest goes to the others once, from the client
+            // that moved the body last.
+            if (c.rest and !was and c.mine) {
+                c.mine = false;
+                netOut(.{ .kind = .push, .bird = c.bird, .gen = c.gen, .p = c.pos });
+            }
+        }
     }
     // A body that fell out of the map goes.
     var k: usize = 0;
     while (k < corpse_n) {
-        if (corpses[k].pos[1] < map.kill_y and held != k) {
+        if (corpses[k].pos[1] < map.kill_y and held != k and corpses[k].holder == 0) {
             for (k + 1..corpse_n) |j| corpses[j - 1] = corpses[j];
             corpse_n -= 1;
             if (held) |h| {
@@ -621,7 +1012,10 @@ fn perched(b: *Bird, dt: f32) void {
     if (b.startle >= 0) {
         b.startle -= dt;
         if (b.startle < 0) {
-            takeOff(b, false);
+            // This client decides the takeoff: in deathmatch it sends it.
+            const sd = newSeed();
+            netOut(.{ .kind = .up, .bird = indexOf(b), .seed = sd, .p = b.pos, .v = b.vel });
+            takeOff(b, false, sd, true);
             return;
         }
     }
@@ -634,13 +1028,11 @@ fn perched(b: *Bird, dt: f32) void {
             b.yaw = wrap(b.yaw + std.math.pi);
             b.hop = 0.15;
         } else if (r < 0.35) {
-            // A shuffle along the rod.
-            const rod = rods[b.perch.rod];
-            const nz = b.perch.pos[2] + sign() * range(0.08, 0.2);
-            const np = v3(b.perch.pos[0], b.perch.pos[1], nz);
-            if (nz > rod.z0 and nz < rod.z1 and perchFree(indexOf(b), np)) {
-                b.perch.pos = np;
-                b.pos = np;
+            // A shuffle along the rod, near the perch. The perch stays: it
+            // is the same on each client (deathmatch).
+            const nz = std.math.clamp(b.pos[2] + sign() * range(0.08, 0.2), b.perch.pos[2] - shuffle_max, b.perch.pos[2] + shuffle_max);
+            if (nz != b.pos[2]) {
+                b.pos[2] = nz;
                 b.hop = 0.1;
             }
         } else if (r < 0.55) {
@@ -679,7 +1071,7 @@ fn fly(b: *Bird, i: usize, dt: f32) void {
     b.cycle_t -= dt;
     if (b.cycle_t <= 0) {
         b.glide = !b.glide and b.t > 1.0 and b.goal != .leave and b.dazed <= 0;
-        b.cycle_t = if (b.glide) range(0.35, 1.0) else range(0.5, 1.6);
+        b.cycle_t = if (b.glide) brange(b, 0.35, 1.0) else brange(b, 0.5, 1.6);
     }
     const freq: f32 = if (b.t < 0.9 or b.dazed > 0) 11 else if (b.goal == .land) 9 else 7.5;
     if (!b.glide) b.flap = @mod(b.flap + dt * freq * std.math.tau, std.math.tau);
@@ -691,11 +1083,11 @@ fn fly(b: *Bird, i: usize, dt: f32) void {
             if (b.turn_t <= 0) {
                 // Mostly the other way from the last turn: a weave.
                 const way: f32 = if (b.turn_goal > 0) -1 else 1;
-                b.turn_goal = (if (rf() < 0.7) way else -way) * range(0.3, 1.6);
-                b.turn_t = range(0.4, 1.4);
+                b.turn_goal = (if (brf(b) < 0.7) way else -way) * brange(b, 0.3, 1.6);
+                b.turn_t = brange(b, 0.4, 1.4);
             }
             // A dumb jink, now and then.
-            if (rf() < 0.35 * dt) b.turn = sign() * range(2.5, 4.5);
+            if (brf(b) < 0.35 * dt) b.turn = bsign(b) * brange(b, 2.5, 4.5);
             b.turn += (b.turn_goal - b.turn) * @min(1, 2.5 * dt);
             if (b.dazed > 0) b.turn = 4.5;
             b.heading = wrap(b.heading + b.turn * dt);
@@ -704,8 +1096,8 @@ fn fly(b: *Bird, i: usize, dt: f32) void {
             if (pl > 0.01) b.heading = turnToward(b.heading, headingOf(pull), (1.2 + pl) * dt);
             b.alt_t -= dt;
             if (b.alt_t <= 0) {
-                b.alt = range(zone_y0 + 0.8, ceilingAt(b.pos[2]) - 0.3);
-                b.alt_t = range(1.5, 4);
+                b.alt = brange(b, zone_y0 + 0.8, ceilingAt(b.pos[2]) - 0.3);
+                b.alt_t = brange(b, 1.5, 4);
             }
             const ceil = ceilingAt(b.pos[2]);
             const alt = std.math.clamp(b.alt, zone_y0, ceil);
@@ -714,12 +1106,13 @@ fn fly(b: *Bird, i: usize, dt: f32) void {
             want[1] = std.math.clamp((alt - b.pos[1]) * 0.9, -1.8, 2.2) - @as(f32, if (b.glide) 0.7 else 0);
             if (b.t > b.flight_len) {
                 if (b.joyride) {
-                    if (freePerch(i)) |p| goLand(b, p) else b.flight_len += 2;
+                    // In deathmatch the server gave the perch.
+                    if (net) goLand(b, b.perch) else if (freePerch(i)) |p| goLand(b, p) else b.flight_len += 2;
                 } else {
                     // Out through the roof, near its crown.
                     b.goal = .leave;
-                    const z = std.math.clamp(-4.2 + range(-6, 6), zone_z[0], zone_z[1]);
-                    b.exit = v3(std.math.clamp(b.pos[0] + range(-8, 8), -zone_x, zone_x), ec.archY(z) + 1.5, z);
+                    const z = std.math.clamp(-4.2 + brange(b, -6, 6), zone_z[0], zone_z[1]);
+                    b.exit = v3(std.math.clamp(b.pos[0] + brange(b, -8, 8), -zone_x, zone_x), ec.archY(z) + 1.5, z);
                 }
             }
         },
@@ -730,8 +1123,19 @@ fn fly(b: *Bird, i: usize, dt: f32) void {
             want = vec.norm(to) * vec.s(b.speed) + side * vec.s(@sin(b.t * 2.3 + b.flight_len) * 1.8);
             if (b.pos[1] > ec.archY(b.pos[2]) + 0.7) {
                 b.state = .away;
-                b.timer = range(8, 20);
+                b.timer = range(return_delay[0], return_delay[1]);
                 return;
+            }
+        },
+        .enter => {
+            // Down to the point under the roof, then to the perch. A
+            // pigeon that a rib or a purlin holds up goes there after 8 s.
+            const to = b.exit - b.pos;
+            const dist = vec.len(to);
+            want = vec.norm(to) * vec.s(@min(b.speed, 1 + dist * 2));
+            if (dist < 0.6 or b.t > 8) {
+                if (dist >= 0.6) b.pos = b.exit;
+                goLand(b, b.perch);
             }
         },
         .land => {
@@ -748,12 +1152,12 @@ fn fly(b: *Bird, i: usize, dt: f32) void {
             if (!b.approach and !b.decided and dist < 0.9) {
                 b.decided = true;
                 // A dumb miss: round again.
-                if (b.misses < 2 and rf() < 0.25) {
+                if (b.misses < 2 and brf(b) < 0.25) {
                     b.misses += 1;
                     b.goal = .wander;
                     b.joyride = true;
                     b.heading = headingOf(b.vel);
-                    b.flight_len = b.t + range(2, 4);
+                    b.flight_len = b.t + brange(b, 2, 4);
                 }
             }
             if (b.goal == .land and !b.approach and dist < 0.1) {

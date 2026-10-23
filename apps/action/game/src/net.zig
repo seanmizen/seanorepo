@@ -100,6 +100,20 @@ pub const Msg = struct {
     started: ?[]const u8 = null,
     // A bye (t "bye"): why the server closes the connection.
     reason: ?[]const u8 = null,
+    // A gate (t "gate"): "open" or "pass", on lane i. A pigeon event
+    // (t "pg"): "up", "die", "push", "grab", "drop", "joy" or "back", on
+    // pigeon i. `o` and `v` are the place and the velocity, `id` the player.
+    k: ?[]const u8 = null,
+    // The generation of a pigeon (pigeons.zig Bird.gen), and the seed of a
+    // flight.
+    g: ?u32 = null,
+    sd: ?u32 = null,
+    // A perch: [rod, u], u from 0 to 1 along the rod.
+    pr: ?[2]f32 = null,
+    // The flock (t "flock"): [state, gen, rod, u] for each pigeon. On join
+    // also the bodies: [bird, gen, x, y, z, holder] each, and `sd`.
+    b: ?[][4]f32 = null,
+    c: ?[][6]f32 = null,
 };
 
 pub const Client = struct {

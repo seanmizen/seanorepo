@@ -201,13 +201,13 @@ test "a walk into the closed gates does not cross" {
     load(.earls_court);
     defer unload();
     // The paddles close on the first gate step.
-    _ = gates.step(dt, null, null, player.radius, player.height);
+    _ = gates.step(dt, null, null, &.{}, player.radius, player.height);
     for ([_]f32{ cabinetZ(2), laneZ(2), laneZ(6) }) |z| {
         var p = landed(v3(gate_x + 2.5, ec.street_y, z), to_nx);
         const before = p.pos;
         walk(&p, 2);
         try std.testing.expect(p.pos[0] > gate_x + 0.08);
         try std.testing.expect(@abs(p.pos[1] - ec.street_y) < 0.01);
-        try std.testing.expect(gates.step(dt, before, p.pos, player.radius, player.height) == .none);
+        try std.testing.expect(gates.step(dt, before, p.pos, &.{}, player.radius, player.height) == .none);
     }
 }

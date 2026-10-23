@@ -300,6 +300,58 @@ describe('lifts', () => {
   });
 });
 
+describe('gates and pigeons', () => {
+  test('a gate goes to the other players; the flock comes on join', async () => {
+    const port = await start('', {});
+    const a = new Client(port);
+    const b = new Client(port);
+    const aid = (await a.next((m) => m.t === 'welcome')).id;
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'spawn');
+    await b.send({ ...hello, name: 'Bob' });
+    // The join: the flock with its seed and its bodies.
+    const flock = await b.next((m) => m.t === 'flock' && 'sd' in m);
+    expect((flock.b as unknown[]).length).toBe(12);
+    expect(flock.c).toEqual([]);
+    await b.next((m) => m.t === 'spawn');
+
+    // Bad lanes and kinds go nowhere. A good tap and a passage go to the
+    // other players, not back to the sender.
+    const n = b.msgs.length;
+    const m = a.msgs.length;
+    await a.send({ t: 'gate', k: 'open', i: 99 });
+    await a.send({ t: 'gate', k: 'open', i: 1.5 });
+    await a.send({ t: 'gate', k: 'shut', i: 2 });
+    await a.send({ t: 'gate', k: 'open', i: 3 });
+    await a.send({ t: 'gate', k: 'pass', i: 3 });
+    const gate = (x: Msg) => x.t === 'gate';
+    expect(await b.next(gate, n)).toEqual({
+      t: 'gate',
+      k: 'open',
+      i: 3,
+      id: aid,
+    });
+    await b.next((x) => gate(x) && x.k === 'pass', n);
+    expect(b.msgs.slice(n).filter(gate).length).toBe(2);
+
+    // A pigeon kill makes a body for the other players.
+    await a.send({
+      t: 'pg',
+      k: 'die',
+      i: 4,
+      g: 0,
+      o: [3, 11.6, -4],
+      v: [0, 1, 0],
+    });
+    const kill = await b.next((x) => x.t === 'pg', n);
+    expect(kill).toMatchObject({ k: 'die', i: 4, g: 0, id: aid });
+    await Bun.sleep(50);
+    expect(a.msgs.slice(m).some((x) => gate(x) || x.t === 'pg')).toBe(false);
+    a.close();
+    b.close();
+  });
+});
+
 describe('session', () => {
   const pub = join(dir, 'public');
   const setBuild = (v: string) =>
