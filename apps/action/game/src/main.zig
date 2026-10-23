@@ -55,6 +55,7 @@ const shooter = @import("shooter.zig");
 const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
 const pigeons = @import("pigeons.zig");
+const vapes = @import("vapes.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -114,6 +115,9 @@ var hit_marker_kill = false;
 var dead_time: f32 = 0;
 var killed_by: [24]u8 = undefined;
 var killed_by_len: usize = 0;
+/// True when the last death was an environment death of the die message
+/// (a kill with `by`): the death screen says DIED OF.
+var died_of = false;
 // The time to the next grenade throw. The grenades left are in the
 // grenade slot of the loadout.
 var nade_cd: f32 = 0;
@@ -308,6 +312,7 @@ fn pushFeed(line: []const u8, mine: bool) void {
 
 fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
     shocked = false;
+    vapes.stop();
     me = .{ .pos = v3(x, y, z), .yaw = yaw };
     // Practice has no end of rounds.
     loadout.equip(applied, grenade.per_life, mode == .practice);
@@ -510,6 +515,14 @@ fn aimedButton() ?usize {
     return map.pickButton(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
 }
 
+/// The vape under the crosshair, within reach (vapes.zig). Only in
+/// deathmatch: the death goes through the server. The menu and practice
+/// have no use for it.
+fn aimedVape() ?usize {
+    if (mode != .deathmatch or !alive or vapes.since != null) return null;
+    return vapes.pick(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
 /// The dead pigeon under the crosshair, within reach (pigeons.zig).
 fn aimedPigeon() ?usize {
     if (mode == .menu or (mode == .deathmatch and !alive)) return null;
@@ -648,6 +661,8 @@ fn resetMatch() void {
     alive = false;
     dead_time = 0;
     killed_by_len = 0;
+    died_of = false;
+    vapes.stop();
 }
 
 fn placeTarget(t: *Target, salt: usize) void {
@@ -1339,6 +1354,8 @@ fn handleNet(ctx: *sw.Context) void {
                 dead_time = 0;
                 hp = 0;
                 killed_by_len = copyName(&killed_by, m.kname orelse "?");
+                died_of = m.by != null;
+                vapes.stop();
                 sound(300, 60, 0.6, .sawtooth, 0.3);
             }
             if (killer == my_id and victim != my_id) {
@@ -1426,6 +1443,11 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
         } else if (aimedPigeon()) |i| {
             pigeons.grab(i);
             sound(420, 300, 0.05, .triangle, 0.1);
+        } else if (aimedVape() != null) {
+            // A long drag: a hiss, and a crackle of the coil.
+            vapes.start();
+            sound(1, null, 1.2, .noise, 0.12);
+            sound(160, 120, 0.9, .triangle, 0.08);
         }
     }
     // B: the weapon menu. It frees the mouse.
@@ -1697,6 +1719,14 @@ fn tick(ctx: *sw.Context) void {
             me.vel = v3(0, 2, 4);
         }
         if (mode != .menu and me.pos[1] < map.underground_y - 4) trainSounds(train_t0, tr.t);
+    }
+
+    // A vape (vapes.zig): at the end of the effect, popcorn lung kills.
+    // The server makes it a death, with the cause in the kill feed.
+    if (mode == .deathmatch and alive and vapes.step(dt)) {
+        client.send("{{\"t\":\"die\",\"by\":\"{s}\"}}", .{vapes.cause});
+        sound(90, 40, 0.8, .sawtooth, 0.3);
+        damage_flash = 1;
     }
 
     // The live rail: far out along the lines it kills (maps/earls_court.zig
@@ -2336,7 +2366,13 @@ fn drawDeathmatch(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !bool {
         return false;
     }
     if (!alive) {
-        const t = if (killed_by_len > 0) std.fmt.bufPrint(&buf, "KILLED BY {s}", .{killed_by[0..killed_by_len]}) catch "" else "SPAWNING...";
+        var cause: [24]u8 = undefined;
+        const t = if (killed_by_len == 0)
+            "SPAWNING..."
+        else if (died_of)
+            std.fmt.bufPrint(&buf, "DIED OF {s}", .{std.ascii.upperString(&cause, killed_by[0..killed_by_len])}) catch ""
+        else
+            std.fmt.bufPrint(&buf, "KILLED BY {s}", .{killed_by[0..killed_by_len]}) catch "";
         txtCenter(r, t, cx, cy - 60, 30, red);
         txtCenter(r, "you respawn in a moment", cx, cy - 20, 16, dim);
     }
@@ -2573,11 +2609,11 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
     if (captured) {
         // The use hint: a pigeon in the hand, a button of the shooter panel,
-        // a lift button, or a dead pigeon.
+        // a lift button, a dead pigeon, or a vape.
         const what: ?[]const u8 = if (pigeons.held != null) "THROW PIGEON" else if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
             const b = map.buttons[bi];
             break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        } else if (aimedPigeon() != null) "PICK UP PIGEON" else null;
+        } else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedVape() != null) "USE VAPE" else null;
         if (what) |wt| {
             var kb: [24]u8 = undefined;
             var line: [48]u8 = undefined;
@@ -2741,7 +2777,9 @@ fn gameRender(ctx: *sw.Context) !void {
     exposure += (target_exposure - exposure) * @min(1, frame_ms / 1000 * 1.5);
     // The field of view setting is at the hip. The sights make it narrower
     // in the same ratio as the default, 74 to 52 degrees.
-    const fov: f32 = settings.fov.float() * (1 - 22.0 / 74.0 * loadout.hands.ads) * std.math.pi / 180;
+    // A vape (vapes.zig) makes it pulse and widen, to at most 150 degrees.
+    const vape_k = if (mode == .deathmatch) vapes.fovScale() else 1;
+    const fov: f32 = @min(150, settings.fov.float() * (1 - 22.0 / 74.0 * loadout.hands.ads) * vape_k) * std.math.pi / 180;
     if (weapon_menu.open and mode != .menu) buildPreview(ctx, cam.eye, cam.yaw, cam.pitch, cam.roll, fov);
     hud_cam = .{ .view = render.viewMatrix(cam.eye, cam.yaw, cam.pitch, cam.roll), .th = @tan(fov / 2), .eye = cam.eye };
     if (hud) |*r| {

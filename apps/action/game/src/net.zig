@@ -58,6 +58,9 @@ pub const Msg = struct {
     head: ?bool = null,
     kname: ?[]const u8 = null,
     vname: ?[]const u8 = null,
+    // An environment death (t "kill" of a client "die"): the cause, the
+    // same as kname. The death screen says DIED OF.
+    by: ?[]const u8 = null,
     // A lift call: lift i to level l.
     i: ?u32 = null,
     l: ?u32 = null,

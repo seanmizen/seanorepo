@@ -23,6 +23,7 @@
 // the lift levels.
 const std = @import("std");
 const map = @import("../map.zig");
+const vapes = @import("../vapes.zig");
 const vec = @import("../vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
@@ -73,6 +74,9 @@ const west_x = [2]f32{ -66, -45 };
 const conc_z0: f32 = -25;
 const hall_x1: f32 = 78; // the Earls Court Road front
 const street_e = [2]f32{ 78.6, 92.6 };
+/// VAPES N MORE, in the terrace opposite the Earls Court Road front: the
+/// shop front from z0 to z1.
+const shop_z = [2]f32{ -37, -29 };
 const warwick_x0: f32 = -84; // the Warwick Road front
 const street_w = [2]f32{ -96, -84 };
 // The escalators and the deep level.
@@ -216,6 +220,8 @@ pub fn build() void {
     intermediateLevel();
     escalators();
     deepLevel();
+    // Last: its random colours do not change the rest of the map.
+    vapeShop();
 
     // Spawns. The debug teleport (Cmd+D, then Shift+1 to 9) uses this order.
     const sp = [_]V3{
@@ -577,7 +583,11 @@ fn eastEnd() void {
     deco(v3(sx0 + 3, y, -40), v3(sx0 + 11, y + 0.004, 30), v3(0.1, 0.1, 0.11), .concrete, .concrete);
     var mz: f32 = -40;
     while (mz < 30) : (mz += 4) deco(v3(sx0 + 6.9, y + 0.004, mz), v3(sx0 + 7.1, y + 0.01, mz + 2), v3(0.9, 0.9, 0.85), .paint, .concrete);
-    box(v3(sx0 + 14, y, -40.6), v3(sx0 + 15, y + 13, 30.6), v3(0.84, 0.8, 0.72), .paint, .plaster);
+    // The terrace, with the shop front of VAPES N MORE cut out (vapeShop).
+    const terrace = v3(0.84, 0.8, 0.72);
+    box(v3(sx0 + 14, y, -40.6), v3(sx0 + 15, y + 13, shop_z[0]), terrace, .paint, .plaster);
+    box(v3(sx0 + 14, y, shop_z[1]), v3(sx0 + 15, y + 13, 30.6), terrace, .paint, .plaster);
+    box(v3(sx0 + 14, y + 3.4, shop_z[0]), v3(sx0 + 15, y + 13, shop_z[1]), terrace, .paint, .plaster);
     box(v3(sx0, y, -40.6), v3(sx0 + 14, y + 7, -40), brick, .brick, .brick);
     box(v3(sx0, y, 30), v3(sx0 + 14, y + 7, 30.6), brick, .brick, .brick);
     var wz: f32 = -38;
@@ -586,6 +596,7 @@ fn eastEnd() void {
             const wy = y + 1.2 + @as(f32, @floatFromInt(row)) * 3.6;
             const lit = rnd() < 0.45;
             const c = if (lit) v3(0.55, 0.36, 0.16) else v3(0.03, 0.035, 0.045);
+            if (row == 0 and wz + 1.3 > shop_z[0] and wz < shop_z[1]) continue;
             deco(v3(sx0 + 13.94, wy, wz), v3(sx0 + 14, wy + 1.9, wz + 1.3), c, if (lit) .emissive else .paint, .glass);
         }
     }
@@ -609,6 +620,151 @@ fn eastEnd() void {
     map.addSolid(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.2, 19.6), .metal);
     map.add(v3(sx0 + 3.2, y + 5.1, 19.2), v3(sx0 + 3.8, y + 5.25, 19.8), v3(1.0, 0.7, 0.35), .emissive, .glass).solid = false;
     map.addLight(v3(sx0 + 3.5, y + 4.75, 19.5), v3(1.6, 1.0, 0.45), 14);
+}
+
+// ---- VAPES N MORE, on Earls Court Road ----------------------------------------
+
+/// The pixels of each letter of the sign, 5 rows from the top. A space is
+/// an empty glyph.
+fn glyph(c: u8) [5][]const u8 {
+    return switch (c) {
+        'V' => .{ "10001", "10001", "10001", "01010", "00100" },
+        'A' => .{ "01110", "10001", "11111", "10001", "10001" },
+        'P' => .{ "11110", "10001", "11110", "10000", "10000" },
+        'E' => .{ "11111", "10000", "11110", "10000", "11111" },
+        'S' => .{ "01111", "10000", "01110", "00001", "11110" },
+        'N' => .{ "10001", "11001", "10101", "10011", "10001" },
+        'M' => .{ "10001", "11011", "10101", "10001", "10001" },
+        'O' => .{ "01110", "10001", "10001", "10001", "01110" },
+        'R' => .{ "11110", "10001", "11110", "10100", "10010" },
+        else => .{ "00", "00", "00", "00", "00" },
+    };
+}
+
+/// A shop in the terrace opposite the station. The player walks in through
+/// the door in the south end of the front. The window is a collision box
+/// only, so the bright inside shows from the street. The vapes on the
+/// counter are the use items of vapes.zig.
+fn vapeShop() void {
+    const y = street_y;
+    const fx = street_e[1]; // the front, the street face of the terrace
+    const bx = fx + 7; // the back wall
+    const z0 = shop_z[0];
+    const z1 = shop_z[1];
+    const door = [2]f32{ -31.6, -30.2 };
+    const fl = y + 0.12; // the floor, at the height of the pavement
+    const white = v3(0.9, 0.9, 0.93);
+    const chrome = v3(0.12, 0.12, 0.14);
+    const black = v3(0.02, 0.02, 0.025);
+    const neon = [_]V3{
+        v3(0.2, 1.0, 0.3), v3(1.0, 0.1, 0.8), v3(0.1, 0.9, 1.0), v3(1.0, 0.95, 0.1),
+        v3(0.6, 0.2, 1.0), v3(1.0, 0.4, 0.1), v3(1.0, 0.2, 0.3), v3(0.3, 0.5, 1.0),
+    };
+
+    // The shell: the floor, the walls and the ceiling.
+    box(v3(fx, y, z0), v3(bx, fl, z1), v3(0.85, 0.85, 0.88), .tile, .tile);
+    box(v3(fx + 1, y, z0 - 0.3), v3(bx + 0.3, y + 3.4, z0), white, .paint, .plaster);
+    box(v3(fx + 1, y, z1), v3(bx + 0.3, y + 3.4, z1 + 0.3), white, .paint, .plaster);
+    box(v3(bx, y, z0), v3(bx + 0.3, y + 3.4, z1), white, .paint, .plaster);
+    box(v3(fx + 1, y + 3.4, z0 - 0.3), v3(bx + 0.3, y + 3.7, z1 + 0.3), white, .paint, .plaster);
+    // The front: the stall riser, the window, the pier south of the door,
+    // and the fascia over all of it.
+    box(v3(fx, y, z0), v3(fx + 0.15, y + 0.5, door[0]), chrome, .metal, .sheet_metal);
+    map.addSolid(v3(fx, y + 0.5, z0), v3(fx + 0.15, y + 2.6, door[0]), .glass);
+    box(v3(fx, y, door[1]), v3(fx + 0.15, y + 2.6, z1), chrome, .metal, .sheet_metal);
+    box(v3(fx - 0.15, y + 2.6, z0), v3(fx + 0.15, y + 3.4, z1), black, .paint, .sheet_metal);
+    // The window frame, a mullion, and the stickers on the glass.
+    deco(v3(fx + 0.04, y + 2.52, z0), v3(fx + 0.11, y + 2.6, door[0]), chrome, .metal, .metal);
+    deco(v3(fx + 0.04, y + 0.5, -34.35), v3(fx + 0.11, y + 2.6, -34.25), chrome, .metal, .metal);
+    for ([_]V3{ v3(-36.4, 1.9, 0), v3(-33.6, 1.6, 3), v3(-32.6, 0.8, 1), v3(-35.2, 0.7, 6) }) |st| {
+        const c = neon[@intFromFloat(st[2])];
+        deco(v3(fx + 0.06, y + st[1], st[0]), v3(fx + 0.09, y + st[1] + 0.5, st[0] + 0.6), c, .paint, .glass);
+    }
+    for ([_]f32{ door[0] - 0.08, door[1] }) |dz| deco(v3(fx - 0.02, y, dz), v3(fx + 0.17, y + 2.6, dz + 0.08), chrome, .metal, .metal);
+
+    // The sign: VAPES N MORE in pixel letters on the fascia, facing the
+    // street. Facing +x, the text reads toward +z.
+    const sign = "VAPES N MORE";
+    const px: f32 = 0.1;
+    var width: f32 = 0;
+    for (sign) |ch| width += @as(f32, @floatFromInt(glyph(ch)[0].len + 1)) * px;
+    var gz = (z0 + z1 - width + px) / 2;
+    const top = y + 3.25;
+    for (sign, 0..) |ch, i| {
+        const g = glyph(ch);
+        const c = if (i < 5) neon[0] else if (i < 7) neon[3] else neon[1];
+        for (g, 0..) |row, r| {
+            // One decoration for each run of lit pixels in the row.
+            var k: usize = 0;
+            while (k < row.len) {
+                if (row[k] != '1') {
+                    k += 1;
+                    continue;
+                }
+                var e = k;
+                while (e < row.len and row[e] == '1') e += 1;
+                const ry = top - @as(f32, @floatFromInt(r + 1)) * px;
+                const za = gz + @as(f32, @floatFromInt(k)) * px;
+                deco(v3(fx - 0.19, ry, za), v3(fx - 0.15, ry + px, za + @as(f32, @floatFromInt(e - k)) * px), c, .emissive, .glass);
+                k = e;
+            }
+        }
+        gz += @as(f32, @floatFromInt(g[0].len + 1)) * px;
+    }
+    // A neon strip under the fascia, the length of the front.
+    deco(v3(fx - 0.19, y + 2.6, z0 + 0.1), v3(fx - 0.15, y + 2.66, z1 - 0.1), neon[2], .emissive, .glass);
+
+    // Inside: very bright ceiling panels, neon strips at the top of the
+    // walls, and two cold lights.
+    var cx: f32 = fx + 1.4;
+    while (cx < bx - 0.8) : (cx += 1.5) {
+        for ([_]f32{ -35.5, -31.7 }) |cz| deco(v3(cx, y + 3.36, cz), v3(cx + 1.0, y + 3.4, cz + 1.2), v3(1.0, 1.0, 1.0), .emissive, .glass);
+    }
+    deco(v3(fx + 1, y + 3.2, z0), v3(bx, y + 3.26, z0 + 0.04), neon[1], .emissive, .glass);
+    deco(v3(fx + 1, y + 3.2, z1 - 0.04), v3(bx, y + 3.26, z1), neon[2], .emissive, .glass);
+    deco(v3(bx - 0.04, y + 3.2, z0), v3(bx, y + 3.26, z1), neon[4], .emissive, .glass);
+    map.addLight(v3(fx + 2.2, y + 2.9, -33), v3(1.2, 1.5, 2.2), 9);
+    map.addLight(v3(bx - 1.6, y + 2.9, -33), v3(1.8, 0.5, 1.9), 8);
+
+    // The wall displays: the back wall and the north wall, each a block
+    // with backlit shelf edges and rows of colourful boxes on its face.
+    box(v3(bx - 0.4, y, z0 + 0.4), v3(bx, y + 2.5, z1 - 0.4), black, .paint, .wood);
+    box(v3(fx + 1.6, y, z0), v3(bx - 0.6, y + 2.3, z0 + 0.4), black, .paint, .wood);
+    for ([_]f32{ 0.45, 0.95, 1.45, 1.95 }) |sh| {
+        const sy = y + sh;
+        deco(v3(bx - 0.46, sy - 0.03, z0 + 0.4), v3(bx - 0.4, sy, z1 - 0.4), neon[2], .emissive, .glass);
+        deco(v3(fx + 1.6, sy - 0.03, z0 + 0.4), v3(bx - 0.6, sy, z0 + 0.46), neon[1], .emissive, .glass);
+        var pz: f32 = z0 + 0.5;
+        while (pz < z1 - 0.6) : (pz += 0.16) {
+            const c = neon[@intFromFloat(rnd() * 7.99)];
+            deco(v3(bx - 0.45, sy, pz), v3(bx - 0.4, sy + 0.16 + rnd() * 0.14, pz + 0.11), c, .paint, .fabric);
+        }
+        var qx: f32 = fx + 1.7;
+        while (qx < bx - 0.75) : (qx += 0.16) {
+            const c = neon[@intFromFloat(rnd() * 7.99)];
+            deco(v3(qx, sy, z0 + 0.4), v3(qx + 0.11, sy + 0.16 + rnd() * 0.14, z0 + 0.45), c, .paint, .fabric);
+        }
+    }
+    // A lightbox advert over the counter: a cloud of pink vapour.
+    deco(v3(bx - 0.06, y + 2.6, -34.6), v3(bx, y + 3.1, -32.2), neon[1], .emissive, .glass);
+
+    // The counter, with a lit front and the vapes in a row on top.
+    const cx0: f32 = fx + 4;
+    box(v3(cx0, y, -35.4), v3(cx0 + 0.6, y + 1.0, -31.8), white, .paint, .wood);
+    deco(v3(cx0 - 0.02, y + 0.15, -35.3), v3(cx0, y + 0.85, -31.9), neon[0], .emissive, .glass);
+    deco(v3(cx0 + 0.02, y + 1.0, -35.2), v3(cx0 + 0.2, y + 1.01, -32.0), black, .paint, .metal);
+    vapes.clear();
+    var vz: f32 = -35.0;
+    var vi: usize = 0;
+    while (vz < -32.1) : (vz += 0.28) {
+        const base = v3(cx0 + 0.1, y + 1.01, vz);
+        const h = vapes.half;
+        const c = neon[vi % neon.len];
+        deco(base - v3(h[0], 0, h[2]), base + v3(h[0], 2 * h[1] - 0.02, h[2]), c, .paint, .metal);
+        deco(base + v3(-h[0] * 0.6, 2 * h[1] - 0.02, -h[2] * 0.5), base + v3(h[0] * 0.6, 2 * h[1], h[2] * 0.5), black, .paint, .metal);
+        vapes.add(base);
+        vi += 1;
+    }
 }
 
 // ---- The west end: Warwick Road -----------------------------------------------
