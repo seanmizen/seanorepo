@@ -1,7 +1,7 @@
 // The practice range: human dummies behind the waist-high walls south of
 // the arena (maps/arena.zig range_dummies).
 //
-// - A dummy is a player: the player model (main.zig buildBody), the player
+// - A dummy is a player: the player model (body.zig), the player
 //   hit boxes and the player lean (player.zig). Thus a hit on a dummy does
 //   the same damage as the same hit on a player in deathmatch.
 // - A dead dummy falls over, and after 1 s it stands up again at its place
@@ -98,6 +98,8 @@ pub fn step(dt: f32, rnd: std.Random) void {
             const before = d.body.pos;
             d.body.pos[0] = d.home[0] + d.place.walk * @sin(d.phase);
             d.body.stride += @abs(d.body.pos[0] - before[0]);
+            // The legs walk at this speed (body.zig).
+            d.body.vel = v3((d.body.pos[0] - before[0]) / dt, 0, 0);
             d.body.yaw = facing(d.body.pos);
         }
         if (d.place.peek != 0) {

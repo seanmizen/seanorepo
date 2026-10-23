@@ -43,6 +43,7 @@ const grenade = @import("grenade.zig");
 const settings = @import("settings.zig");
 const weapon_menu = @import("weapon_menu.zig");
 const range = @import("range.zig");
+const body_mod = @import("body.zig");
 const arena = @import("maps/arena.zig");
 const gcon = @import("game_console.zig");
 const session_mod = @import("session/root.zig");
@@ -110,6 +111,8 @@ var killed_by_len: usize = 0;
 // The time to the next grenade throw. The grenades left are in the
 // grenade slot of the loadout.
 var nade_cd: f32 = 0;
+/// The treads under the feet of your body (body.zig Feet).
+var own_feet: body_mod.Feet = .{};
 
 var static_mesh: mesh.Mesh = undefined;
 var map_loaded = false;
@@ -154,6 +157,8 @@ const Remote = struct {
     alive: bool,
     fall: f32 = 0,
     stride: f32 = 0,
+    /// The velocity of the interpolation, smoothed: the walk of the legs.
+    vel: V3 = v3(0, 0, 0),
     /// The lean (-1 left to 1 right), and the last value from the server.
     lean: f32 = 0,
     lean_target: f32 = 0,
@@ -297,6 +302,7 @@ fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
     alive = true;
     hp = 100;
     nade_cd = 0;
+    own_feet = .{};
 }
 
 // ---- The weapon pick -------------------------------------------------------
@@ -1361,6 +1367,7 @@ fn effectsTick() void {
         r.pos = vec.lerp(r.pos, r.target, k);
         const mv = r.pos - before;
         r.stride += @sqrt(mv[0] * mv[0] + mv[2] * mv[2]);
+        r.vel += (mv / vec.s(dt) - r.vel) * vec.s(@min(1, dt * 10));
         r.lean += (r.lean_target - r.lean) * k;
         r.fall = if (r.alive) 0 else @min(1, r.fall + dt * 3);
     }
@@ -1616,34 +1623,22 @@ fn tick(ctx: *sw.Context) void {
     } else {
         gameplayTick(ctx, in);
     }
+    if (ownBodyShows()) own_feet.update(ownPose(), dt, me.grounded);
     stepGrenades();
     effectsTick();
 }
 
 // ---- Scene building --------------------------------------------------------
 
-/// The pose of a player model: a remote player or a practice dummy. `m` is
-/// the model of the held gun.
-const Body = struct {
-    pos: V3,
-    yaw: f32,
-    pitch: f32,
-    lean: f32,
-    fall: f32,
-    stride: f32,
-    color: V3,
-    w: weapon.Class,
-    m: u8,
-};
-
 fn buildRemote(r: *const Remote) void {
-    buildBody(.{
+    body_mod.build(&dyn, .{
         .pos = r.pos,
         .yaw = r.yaw,
         .pitch = r.pitch,
         .lean = r.lean,
         .fall = r.fall,
         .stride = r.stride,
+        .vel = r.vel,
         .color = colorFor(r.id),
         .w = r.w,
         .m = remoteModel(r),
@@ -1653,51 +1648,42 @@ fn buildRemote(r: *const Remote) void {
 /// A practice dummy: the player model with a rifle, in the orange of a
 /// range target.
 fn buildDummy(d: *const range.Dummy) void {
-    buildBody(.{
+    body_mod.build(&dyn, .{
         .pos = d.body.pos,
         .yaw = d.body.yaw,
         .pitch = 0,
         .lean = d.body.lean,
         .fall = d.fall,
         .stride = d.body.stride,
+        .vel = d.body.vel,
         .color = v3(0.85, 0.42, 0.16),
         .w = .rifle,
         .m = weapon.firstOf(.rifle),
     });
 }
 
-fn buildBody(r: Body) void {
-    const col = r.color;
-    const dark = v3(0.13, 0.13, 0.14);
-    const skin = v3(0.78, 0.58, 0.45);
-    // Fall over backwards when dead.
-    const base = vec.translate(r.pos).mul(Mat4.rotationY(r.yaw).mul(Mat4.rotationX(r.fall * 1.45)));
-    const swing = @sin(r.stride * 2.4) * 0.55;
-    const legs = [_]f32{ -1, 1 };
-    for (legs) |side| {
-        const hip = base.mul(vec.translate(v3(0.11 * side, 0.86, 0)).mul(Mat4.rotationX(swing * side)));
-        dyn.orientedBox(hip, v3(-0.08, -0.86, -0.09), v3(0.08, 0, 0.09), dark, 6);
-    }
-    // The upper body turns about the hips with the lean (player.zig
-    // leanOffset). Local +X is the right of the player.
-    const hip = player_mod.hip;
-    const upper = base.mul(vec.translate(v3(0, hip, 0)).mul(Mat4.rotationZ(-player_mod.leanAngle(r.lean)).mul(vec.translate(v3(0, -hip, 0)))));
-    dyn.orientedBox(upper, v3(-0.23, 0.84, -0.14), v3(0.23, 1.45, 0.14), col, 6);
-    dyn.orientedBox(upper, v3(-0.25, 1.0, -0.16), v3(0.25, 1.38, 0.16), dark, 6);
-    dyn.orientedBox(upper, v3(-0.12, 1.47, -0.12), v3(0.12, 1.74, 0.12), skin, 6);
-    dyn.orientedBox(upper, v3(-0.14, 1.66, -0.15), v3(0.14, 1.8, 0.15), dark, 3);
-    dyn.orientedBox(upper, v3(-0.1, 1.56, -0.135), v3(0.1, 1.62, -0.11), v3(0.05, 0.05, 0.06), 3);
-    // Arms and the held weapon, turned with the look pitch.
-    const aim = upper.mul(vec.translate(v3(0, 1.38, 0)).mul(Mat4.rotationX(r.pitch * (1 - r.fall))));
-    dyn.orientedBox(aim, v3(0.16, -0.1, -0.45), v3(0.26, 0.02, 0.0), col, 6);
-    dyn.orientedBox(aim, v3(-0.2, -0.12, -0.5), v3(-0.1, -0.02, -0.05), col, 6);
-    switch (r.w) {
-        // A one-hand weapon sits in the right hand, further out.
-        .grenade => grenade.addBody(&dyn, aim.mul(vec.translate(v3(0.21, -0.05, -0.5))), 0),
-        .knife => weapon.addModel(&dyn, weapon.knife_model, aim.mul(vec.translate(v3(0.21, -0.06, -0.47)).mul(Mat4.rotationX(0.5))), Mat4.identity(), 0),
-        .pistol, .revolver => weapon.addModel(&dyn, r.m, aim.mul(vec.translate(v3(0.06, -0.06, -0.44))), Mat4.identity(), 0),
-        else => weapon.addModel(&dyn, r.m, aim.mul(vec.translate(v3(0.08, -0.1, -0.24))), Mat4.identity(), 0),
-    }
+/// The pose of your own body (body.zig): your colour, the held weapon and
+/// the feet on the treads.
+fn ownPose() body_mod.Pose {
+    var p: body_mod.Pose = .{
+        .pos = me.pos,
+        .yaw = me.yaw,
+        .pitch = me.pitch,
+        .lean = me.lean,
+        .stride = me.stride,
+        .vel = if (me.grounded) me.vel else v3(0, 0, 0),
+        .color = colorFor(my_id),
+        .w = loadout.heldClass(),
+        .m = loadout.heldModel(),
+        .view = if (body_mod.own_body.on()) .first_person else .shadow,
+    };
+    own_feet.apply(&p);
+    return p;
+}
+
+/// True while your body is in the world: in play, and alive.
+fn ownBodyShows() bool {
+    return mode != .menu and (mode != .deathmatch or alive);
 }
 
 fn buildTarget(t: *const Target) void {
@@ -2472,6 +2458,14 @@ fn gameRender(ctx: *sw.Context) !void {
         dyn.box(bb[0], bb[1], col, if (lit) 4 else 0);
     }
     for (remotes[0..remote_n]) |*r| buildRemote(r);
+    // Your body (body.zig). Its vertices are one range of dyn: they also go
+    // into the shadow maps of the nearest map lights (render.zig).
+    var own: render.Body = .{};
+    if (ownBodyShows()) {
+        const first = dyn.verts.items.len;
+        body_mod.build(&dyn, ownPose());
+        own = .{ .first = @intCast(first), .count = @intCast(dyn.verts.items.len - first), .centre = me.pos + v3(0, 0.9, 0) };
+    }
     if (map.train) |tr| buildTrain(tr);
     if (map.id == .earls_court) buildEscalatorSteps();
     if (mode == .practice) {
@@ -2566,6 +2560,7 @@ fn gameRender(ctx: *sw.Context) !void {
         .exposure = exposure,
         .lights = lights[0..n],
         .translucent = trans.verts.items,
+        .body = own,
     }, dyn.verts.items, if (hud) |*r| r else null);
 }
 

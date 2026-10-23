@@ -1,7 +1,8 @@
 // The action game's side of the console framework (console/): the game
 // actions and their default binds, the server cvars (server_cvars.json),
 // rcon, the chat, and the messages of the server that change the console
-// or the chat. settings.zig adds the cvars of the settings panel. The
+// or the chat. settings.zig adds the cvars of the settings panel,
+// sounds.zig the cvars of the bullet sounds, and body.zig own_body. The
 // session (session/) adds the command "version". This file adds "reload".
 //
 // The console key is the backtick key. swindowzig has no key code for it:
@@ -22,6 +23,7 @@ const platform = @import("sw_platform");
 const console = @import("console/root.zig");
 const net = @import("net.zig");
 const settings = @import("settings.zig");
+const body = @import("body.zig");
 const session = @import("session/root.zig");
 const sounds = @import("sounds.zig");
 
@@ -141,6 +143,7 @@ pub fn init(alloc: std.mem.Allocator, net_client: *net.Client, sess: *session.Se
     try act.register(&con, action_help);
     try settings.register(&con);
     try sounds.register(&con);
+    try body.register(&con);
     defs_arena = .init(alloc);
     try console.schema.addJsonCvars(&con, defs_arena.allocator(), @embedFile("server_cvars.json"), .{ .server = true });
     try chat.register(&con);
