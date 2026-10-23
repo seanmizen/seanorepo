@@ -5,7 +5,9 @@
 //     button picks a mode. 3 opens the settings (settings.zig).
 //   - deathmatch: the always-on lobby on the server (/api/ws). A match is
 //     5 minutes, then the score board shows, then the next match starts.
-//   - practice: offline. 60 seconds of pop-up targets, with a best score.
+//   - practice: offline. The range (range.zig): dummies behind waist-high
+//     walls, with health bars and damage numbers. In the arena, a hit on a
+//     plate starts a 60 second round, with a best score.
 //
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
 // aim, R reload, G grenade, F use (lift buttons), Q and E lean, 1 to 4 the
@@ -29,6 +31,8 @@ const net = @import("net.zig");
 const grenade = @import("grenade.zig");
 const settings = @import("settings.zig");
 const weapon_menu = @import("weapon_menu.zig");
+const range = @import("range.zig");
+const arena = @import("maps/arena.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -167,10 +171,16 @@ const Target = struct {
     down_time: f32 = 0,
     up: bool = true,
 };
-const PracticePhase = enum { countdown, running, results };
+/// Idle: the plates stand, and a hit on a plate starts a round. Running:
+/// the round of 60 seconds. The player is never frozen, so the range stays
+/// free to use.
+const PracticePhase = enum { idle, running };
 var targets: [6]Target = undefined;
-var practice_phase: PracticePhase = .countdown;
+var practice_phase: PracticePhase = .idle;
+/// The time left in the round.
 var practice_t: f32 = 0;
+/// While more than 0, the result of the last round shows.
+var result_t: f32 = 0;
 var score: u32 = 0;
 var shots: u32 = 0;
 var hits: u32 = 0;
@@ -505,14 +515,35 @@ fn enterPractice(ctx: *sw.Context) void {
     mode = .practice;
     grenade.reset();
     applied = choice;
-    spawnAt(0, 1.6, 2.5, 0);
-    practice_phase = .countdown;
-    practice_t = 3;
+    spawnRange();
+    practice_phase = .idle;
+    practice_t = 0;
+    result_t = 0;
     score = 0;
     shots = 0;
     hits = 0;
     new_best = false;
     for (&targets, 0..) |*t, i| placeTarget(t, i);
+    range.reset();
+}
+
+/// The practice spawn: on the firing line of the range.
+fn spawnRange() void {
+    const sp = arena.range_spawn;
+    spawnAt(sp.pos[0], sp.pos[1], sp.pos[2], sp.yaw);
+}
+
+/// A hit on a plate while no round runs: the round starts. The shot that
+/// hit counts.
+fn startRound() void {
+    practice_phase = .running;
+    practice_t = practice_len;
+    result_t = 0;
+    score = 0;
+    shots = 1;
+    hits = 0;
+    new_best = false;
+    sound(880, null, 0.15, .sine, 0.25);
 }
 
 fn enterDeathmatch(ctx: *sw.Context) void {
@@ -579,8 +610,8 @@ fn rayRemotes(o: V3, d: V3) ?RemoteHit {
     return best_hit;
 }
 
-/// The first thing on a shot ray: the map, a remote player or a practice
-/// plate, within `range`.
+/// The first thing on a shot ray: the map, a remote player, a practice
+/// plate or a dummy, within `reach`.
 const ShotRay = struct {
     t: f32,
     normal: V3 = v3(0, 1, 0),
@@ -588,11 +619,12 @@ const ShotRay = struct {
     remote: ?RemoteHit = null,
     plate: ?usize = null,
     bull: bool = false,
+    dummy: ?range.Hit = null,
 };
 
-fn traceShot(o: V3, d: V3, range: f32) ShotRay {
-    var out: ShotRay = .{ .t = range };
-    if (map.raycast(o, d, range)) |h| {
+fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
+    var out: ShotRay = .{ .t = reach };
+    if (map.raycast(o, d, reach)) |h| {
         out.t = h.t;
         out.normal = h.normal;
         out.world = true;
@@ -601,7 +633,7 @@ fn traceShot(o: V3, d: V3, range: f32) ShotRay {
         if (rayRemotes(o, d)) |rh| {
             if (rh.t < out.t) out = .{ .t = rh.t, .remote = rh };
         }
-    } else if (mode == .practice and practice_phase == .running) {
+    } else if (mode == .practice) {
         for (&targets, 0..) |*t, i| {
             if (!t.up) continue;
             const pl = targetPlate(t);
@@ -612,6 +644,9 @@ fn traceShot(o: V3, d: V3, range: f32) ShotRay {
             const dist = vec.len(o + d * vec.s(tt) - pl.c);
             if (dist < 0.42) out = .{ .t = tt, .plate = i, .bull = dist < 0.12 };
         }
+        if (range.ray(o, d)) |dh| {
+            if (dh.t < out.t) out = .{ .t = dh.t, .dummy = dh };
+        }
     }
     return out;
 }
@@ -620,6 +655,7 @@ fn traceShot(o: V3, d: V3, range: f32) ShotRay {
 fn knockPlate(i: usize, bull: bool, at: V3, d: V3) void {
     const t = &targets[i];
     if (!t.up) return;
+    if (practice_phase == .idle) startRound();
     t.up = false;
     t.down_time = 0;
     hits += 1;
@@ -632,6 +668,28 @@ fn knockPlate(i: usize, bull: bool, at: V3, d: V3) void {
 
 /// The hits of one shot on one remote player: body and head pellets.
 const ShotHit = struct { idx: usize, body: u32 = 0, head: u32 = 0 };
+
+/// The damage of one pellet (or one cut) on a dummy: the stats of the held
+/// weapon, as the server applies them to a player (server/index.ts WEAPONS).
+fn pelletDamage(st: *const weapon.Stats, head: bool) f32 {
+    return @floatFromInt(if (head) st.head else st.body);
+}
+
+/// A shot, a cut or a blast on a practice dummy: the damage and its
+/// numbers (range.zig), the hit marker and the sound. `body` and `head` are
+/// the damage of all the pellets.
+fn dummyHit(i: usize, body: f32, head: f32) void {
+    const killed = range.hit(i, body, head);
+    hit_marker = if (killed) 0.35 else 0.18;
+    hit_marker_kill = killed;
+    if (killed) {
+        sound(900, null, 0.06, .sine, 0.25);
+        sound(1350, null, 0.12, .sine, 0.2);
+    } else if (head > 0) {
+        // A head hit rings higher.
+        sound(2100, null, 0.07, .sine, 0.22);
+    } else sound(1500, 1300, 0.04, .square, 0.12);
+}
 
 /// A gun shot: one ray for each pellet in the cone. In deathmatch one
 /// "fire" message carries the hits of all the pellets. The server takes
@@ -651,6 +709,8 @@ fn fire() void {
 
     var hit_list: [8]ShotHit = undefined;
     var nh: usize = 0;
+    // The damage of this shot on each dummy: body, head.
+    var dummy_dmg: [range.dummies.len][2]f32 = @splat(.{ 0, 0 });
     var first_end = o + f * vec.s(st.range);
     for (0..st.pellets) |pi| {
         const a = rand() * std.math.tau;
@@ -677,11 +737,17 @@ fn fire() void {
             }
         } else if (ray.plate) |i| {
             knockPlate(i, ray.bull, end, d);
+        } else if (ray.dummy) |dh| {
+            addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
+            dummy_dmg[dh.idx][@intFromBool(dh.head)] += pelletDamage(st, dh.head);
         } else if (ray.world and (pi < 3 or rand() < 0.3)) {
             addSparks(end, ray.normal, v3(1.0, 0.75, 0.4), if (st.pellets > 1) 2 else 6);
         }
     }
     gunshotSound(1, it.class);
+    for (dummy_dmg, 0..) |dd, i| {
+        if (dd[0] + dd[1] > 0) dummyHit(i, dd[0], dd[1]);
+    }
     if (nh > 0) {
         hit_marker = 0.18;
         hit_marker_kill = false;
@@ -704,8 +770,8 @@ fn fire() void {
 }
 
 /// A knife swing: short rays from the eye, the centre and four around it,
-/// so a near miss still cuts. The first player or plate that a ray finds
-/// takes the hit.
+/// so a near miss still cuts. The first player, plate or dummy that a ray
+/// finds takes the hit.
 fn stab() void {
     const st = weapon.stats(.knife);
     const o = me.eyePos();
@@ -735,6 +801,13 @@ fn stab() void {
             knockPlate(p, false, end, d);
             return;
         }
+        if (ray.dummy) |dh| {
+            addSparks(end, -d, v3(0.7, 0.05, 0.03), 8);
+            sound(180, 90, 0.08, .sawtooth, 0.2);
+            const dmg = pelletDamage(st, dh.head);
+            dummyHit(dh.idx, if (dh.head) 0 else dmg, if (dh.head) dmg else 0);
+            return;
+        }
     }
     if (centre) |c| if (c.world) {
         addSparks(o + f * vec.s(c.t), c.normal, v3(1.0, 0.85, 0.6), 4);
@@ -752,12 +825,14 @@ fn recoilKick(st: *const weapon.Stats) void {
 // grenade.zig has the flight, the smoke and the damage model. This part
 // connects it to the players, the plates, the HUD and the lobby.
 
-/// The id of the practice plates as grenade bodies (no player has it).
+/// The id of the practice plates and of the dummies as grenade bodies (no
+/// player has them).
 const plate_id: u32 = 0xFFFF_FFFF;
+const dummy_id: u32 = 0xFFFF_FFFE;
 
 /// The boxes that stop a grenade: the remote players (the hit boxes, as in
-/// rayRemotes), this player in deathmatch (for the grenades of others), and
-/// the practice plates.
+/// rayRemotes), this player in deathmatch (for the grenades of others), the
+/// practice plates and the dummies (their hit boxes).
 fn grenadeBodies(buf: []grenade.Body) []grenade.Body {
     var n: usize = 0;
     for (remotes[0..remote_n]) |r| {
@@ -778,6 +853,13 @@ fn grenadeBodies(buf: []grenade.Body) []grenade.Body {
         const c = targetPlate(t).c;
         buf[n] = .{ .min = c - vec.s(0.4), .max = c + vec.s(0.4), .id = plate_id };
         n += 1;
+    };
+    if (mode == .practice) for (&range.dummies) |*dm| {
+        if (!dm.alive or n + 3 > buf.len) continue;
+        for (dm.hitBoxes()) |b| {
+            buf[n] = .{ .min = b.min, .max = b.max, .id = dummy_id };
+            n += 1;
+        }
     };
     return buf[0..n];
 }
@@ -832,15 +914,23 @@ fn onBlast(b: grenade.Blast) void {
     if (!b.mine) return;
     switch (mode) {
         .practice => {
-            if (practice_phase == .running) for (&targets) |*t| {
+            for (&targets) |*t| {
                 if (!t.up or !grenade.reaches(b, targetPlate(t).c)) continue;
+                if (practice_phase == .idle) startRound();
                 t.up = false;
                 t.down_time = 0;
                 hits += 1;
                 score += 100;
                 hit_marker = 0.18;
                 hit_marker_kill = false;
-            };
+            }
+            // The dummies: the same damage as a player gets (rounded, as in
+            // deathmatch).
+            for (&range.dummies, 0..) |*dm, i| {
+                if (!dm.alive) continue;
+                const dd = @round(grenade.damageTo(b, dm.blastPoints()));
+                if (dd >= 1) dummyHit(i, dd, 0);
+            }
             const d = grenade.damageTo(b, player_mod.blastPoints(me.pos, me.yaw, me.lean));
             if (d >= 1) {
                 hp -= @intFromFloat(@round(d));
@@ -848,7 +938,7 @@ fn onBlast(b: grenade.Blast) void {
                 sound(220, 90, 0.12, .sawtooth, 0.25);
                 if (hp <= 0) {
                     // No death in practice: back to the start.
-                    spawnAt(0, 1.6, 2.5, 0);
+                    spawnRange();
                     sound(300, 60, 0.6, .sawtooth, 0.3);
                 }
             }
@@ -1053,8 +1143,7 @@ fn handleNet() void {
 
 fn gameplayTick(ctx: *sw.Context) void {
     const in = ctx.input();
-    const frozen = (mode == .deathmatch and (phase_end or !alive)) or
-        (mode == .practice and practice_phase == .results);
+    const frozen = mode == .deathmatch and (phase_end or !alive);
     const look: f32 = 0.0022 * settings.v.sens * (1 - 0.35 * loadout.hands.ads);
     me.yaw -= in.mouse.delta_x * look;
     me.pitch = std.math.clamp(me.pitch - in.mouse.delta_y * look, -1.5, 1.5);
@@ -1107,7 +1196,7 @@ fn gameplayTick(ctx: *sw.Context) void {
         }
     }
 
-    const can_shoot = !frozen and !(mode == .practice and practice_phase == .countdown);
+    const can_shoot = !frozen;
     // G: a quick throw from any slot.
     if (can_shoot and !shortcut and in.keyPressed(.G)) throwGrenade();
     const it = loadout.held() orelse return;
@@ -1174,29 +1263,25 @@ fn effectsTick() void {
 }
 
 fn practiceTick() void {
+    range.step(dt, rng.random());
+    // A plate that is down comes up at a new place, also after the round.
+    for (&targets, 0..) |*t, i| {
+        if (t.up) {
+            t.fall = @max(0, t.fall - dt * 4);
+        } else {
+            t.fall = @min(1, t.fall + dt * 5);
+            t.down_time += dt;
+            if (t.down_time > 0.8) placeTarget(t, i + @as(usize, @intCast(ticks % 1000)));
+        }
+    }
     switch (practice_phase) {
-        .countdown => {
-            practice_t -= dt;
-            if (practice_t <= 0) {
-                practice_phase = .running;
-                practice_t = practice_len;
-                sound(880, null, 0.15, .sine, 0.25);
-            }
-        },
+        .idle => result_t -= dt,
         .running => {
             practice_t -= dt;
-            for (&targets, 0..) |*t, i| {
-                if (t.up) {
-                    t.fall = @max(0, t.fall - dt * 4);
-                } else {
-                    t.fall = @min(1, t.fall + dt * 5);
-                    t.down_time += dt;
-                    if (t.down_time > 0.8) placeTarget(t, i + @as(usize, @intCast(ticks % 1000)));
-                }
-            }
             if (practice_t <= 0) {
-                practice_phase = .results;
+                practice_phase = .idle;
                 practice_t = 0;
+                result_t = 8;
                 if (score > best) {
                     best = score;
                     new_best = true;
@@ -1207,7 +1292,6 @@ fn practiceTick() void {
                 sound(660, 330, 0.4, .triangle, 0.25);
             }
         },
-        .results => practice_t -= dt,
     }
 }
 
@@ -1266,11 +1350,7 @@ fn tick(ctx: *sw.Context) void {
                 });
             }
         },
-        .practice => {
-            practiceTick();
-            const again = in.keyPressed(.Enter) or (captured and in.buttonPressed(.left) and practice_t < -1);
-            if (practice_phase == .results and again) enterPractice(ctx);
-        },
+        .practice => practiceTick(),
     }
 
     // The deep train: it shoves a player off the track, and it is loud.
@@ -1368,8 +1448,52 @@ fn tick(ctx: *sw.Context) void {
 
 // ---- Scene building --------------------------------------------------------
 
+/// The pose of a player model: a remote player or a practice dummy. `m` is
+/// the model of the held gun.
+const Body = struct {
+    pos: V3,
+    yaw: f32,
+    pitch: f32,
+    lean: f32,
+    fall: f32,
+    stride: f32,
+    color: V3,
+    w: weapon.Class,
+    m: u8,
+};
+
 fn buildRemote(r: *const Remote) void {
-    const col = colorFor(r.id);
+    buildBody(.{
+        .pos = r.pos,
+        .yaw = r.yaw,
+        .pitch = r.pitch,
+        .lean = r.lean,
+        .fall = r.fall,
+        .stride = r.stride,
+        .color = colorFor(r.id),
+        .w = r.w,
+        .m = remoteModel(r),
+    });
+}
+
+/// A practice dummy: the player model with a rifle, in the orange of a
+/// range target.
+fn buildDummy(d: *const range.Dummy) void {
+    buildBody(.{
+        .pos = d.body.pos,
+        .yaw = d.body.yaw,
+        .pitch = 0,
+        .lean = d.body.lean,
+        .fall = d.fall,
+        .stride = d.body.stride,
+        .color = v3(0.85, 0.42, 0.16),
+        .w = .rifle,
+        .m = weapon.firstOf(.rifle),
+    });
+}
+
+fn buildBody(r: Body) void {
+    const col = r.color;
     const dark = v3(0.13, 0.13, 0.14);
     const skin = v3(0.78, 0.58, 0.45);
     // Fall over backwards when dead.
@@ -1397,8 +1521,8 @@ fn buildRemote(r: *const Remote) void {
         // A one-hand weapon sits in the right hand, further out.
         .grenade => grenade.addBody(&dyn, aim.mul(vec.translate(v3(0.21, -0.05, -0.5))), 0),
         .knife => weapon.addModel(&dyn, weapon.knife_model, aim.mul(vec.translate(v3(0.21, -0.06, -0.47)).mul(Mat4.rotationX(0.5))), Mat4.identity(), 0),
-        .pistol, .revolver => weapon.addModel(&dyn, remoteModel(r), aim.mul(vec.translate(v3(0.06, -0.06, -0.44))), Mat4.identity(), 0),
-        else => weapon.addModel(&dyn, remoteModel(r), aim.mul(vec.translate(v3(0.08, -0.1, -0.24))), Mat4.identity(), 0),
+        .pistol, .revolver => weapon.addModel(&dyn, r.m, aim.mul(vec.translate(v3(0.06, -0.06, -0.44))), Mat4.identity(), 0),
+        else => weapon.addModel(&dyn, r.m, aim.mul(vec.translate(v3(0.08, -0.1, -0.24))), Mat4.identity(), 0),
     }
 }
 
@@ -1737,7 +1861,7 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
     txtCenter(r, "a swindowzig shooter", cx, h * 0.2 + 104, 18, dim);
     const b = menuButtons(ctx);
     const labels = [_][]const u8{ "1   DEATHMATCH", "2   TARGET PRACTICE", "3   SETTINGS" };
-    const subs = [_][]const u8{ "always-on lobby, 5 minute matches", "offline, 60 seconds", "head bob, volume, field of view, mouse" };
+    const subs = [_][]const u8{ "always-on lobby, 5 minute matches", "offline: the range, and 60 second plate rounds", "head bob, volume, field of view, mouse" };
     const in = ctx.input();
     for (b, 0..) |rect, i| {
         const hover = inRect(rect, in.mouse.x, in.mouse.y);
@@ -1790,32 +1914,95 @@ fn drawDeathmatch(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !bool {
     return true;
 }
 
-fn drawPractice(r: *gfx.Renderer, w: f32, h: f32) !void {
+/// The plate round at the top: the clock and the score while it runs, the
+/// result of the last round for a moment after it, else how to start one.
+fn drawPractice(r: *gfx.Renderer, w: f32) !void {
     const cx = w / 2;
-    const cy = h / 2;
     var buf: [96]u8 = undefined;
-    try r.fillRect(.{ .x = cx - 160, .y = 14, .w = 320, .h = 50 }, panel);
-    const tl = timeText(&buf, if (practice_phase == .countdown) practice_len else @max(0, practice_t));
-    txt(r, tl, cx - 145, 22, 28, if (practice_phase == .running and practice_t < 10) red else white);
-    var sbuf: [16]u8 = undefined;
-    txtRight(r, std.fmt.bufPrint(&sbuf, "{d}", .{score}) catch "", cx + 145, 22, 28, accent);
-    txtCenter(r, "SCORE", cx + 40, 30, 12, dim);
-    if (practice_phase == .countdown) {
-        const n: u32 = @intFromFloat(@ceil(@max(0, practice_t)));
-        txtCenter(r, std.fmt.bufPrint(&buf, "{d}", .{n}) catch "", cx, cy - 140, 72, white);
-        txtCenter(r, "hit the plates - the red centre scores more", cx, cy - 50, 16, dim);
+    if (practice_phase == .running) {
+        try r.fillRect(.{ .x = cx - 160, .y = 14, .w = 320, .h = 50 }, panel);
+        txt(r, timeText(&buf, @max(0, practice_t)), cx - 145, 22, 28, if (practice_t < 10) red else white);
+        var sbuf: [16]u8 = undefined;
+        txtRight(r, std.fmt.bufPrint(&sbuf, "{d}", .{score}) catch "", cx + 145, 22, 28, accent);
+        txtCenter(r, "SCORE", cx + 40, 30, 12, dim);
+        return;
     }
-    if (practice_phase == .results) {
-        const pw: f32 = 420;
-        try r.fillRect(.{ .x = cx - pw / 2, .y = cy - 150, .w = pw, .h = 250 }, gfx.Color.rgba8(10, 12, 18, 215));
-        try r.fillRect(.{ .x = cx - pw / 2, .y = cy - 150, .w = pw, .h = 3 }, accent);
-        txtCenter(r, "TIME", cx, cy - 132, 26, white);
-        txtCenter(r, std.fmt.bufPrint(&buf, "{d}", .{score}) catch "", cx, cy - 92, 60, accent);
+    try r.fillRect(.{ .x = cx - 220, .y = 14, .w = 440, .h = 50 }, panel);
+    if (result_t > 0) {
         const acc: u32 = if (shots > 0) hits * 100 / shots else 0;
-        txtCenter(r, std.fmt.bufPrint(&buf, "{d} hits  -  {d}% accuracy", .{ hits, acc }) catch "", cx, cy - 18, 18, white);
+        txtCenter(r, std.fmt.bufPrint(&buf, "ROUND OVER: {d}  -  {d} hits  -  {d}% accuracy", .{ score, hits, acc }) catch "", cx, 20, 17, white);
         const bt = if (new_best) "NEW BEST!" else std.fmt.bufPrint(&buf, "best {d}", .{best}) catch "";
-        txtCenter(r, bt, cx, cy + 14, 18, if (new_best) accent else dim);
-        txtCenter(r, "ENTER or click to go again  -  ESC then M for the menu", cx, cy + 60, 14, dim);
+        txtCenter(r, bt, cx, 42, 14, if (new_best) accent else dim);
+    } else {
+        txtCenter(r, "THE RANGE  -  in the arena, hit a plate to start a 60 s round", cx, 20, 15, white);
+        const bt = if (best > 0) std.fmt.bufPrint(&buf, "best {d}  -  the red centre scores more", .{best}) catch "" else "the red centre scores more";
+        txtCenter(r, bt, cx, 42, 13, dim);
+    }
+}
+
+/// The camera of the frame, for the HUD parts that follow a point in the
+/// world (the health bars). gameRender sets it.
+var hud_cam: struct { view: Mat4 = Mat4.identity(), th: f32 = 1, eye: V3 = v3(0, 0, 0) } = .{};
+
+/// A world point on the HUD, in logical pixels. Null behind the camera.
+fn toScreen(p: V3, w: f32, h: f32) ?[2]f32 {
+    const c = vec.xform(hud_cam.view, p);
+    if (c[2] > -0.3) return null;
+    const x = c[0] / -c[2] / (hud_cam.th * w / h);
+    const y = c[1] / -c[2] / hud_cam.th;
+    return .{ (x + 1) / 2 * w, (1 - y) / 2 * h };
+}
+
+/// A health bar on the HUD: its bottom centre, the health, the white part
+/// (range.drawBar) and the distance from the eye to the chest.
+const Bar = struct { x: f32, y: f32, hp: f32, trail: f32, dist: f32 };
+
+/// Add the bar over a body at `feet`, if the point over its head is in
+/// front of the camera.
+fn addBar(bars: []Bar, n: *usize, w: f32, h: f32, feet: V3, yaw: f32, lean: f32, hp_now: f32, trail: f32) void {
+    if (n.* == bars.len) return;
+    const top = feet + v3(0, 2.0, 0) + player_mod.leanOffset(yaw, lean, 2.0);
+    const sp = toScreen(top, w, h) orelse return;
+    bars[n.*] = .{ .x = sp[0], .y = sp[1] - 6, .hp = hp_now, .trail = trail, .dist = vec.len(feet + v3(0, 1.2, 0) - hud_cam.eye) };
+    n.* += 1;
+}
+
+fn nearerBar(_: void, a: Bar, b: Bar) bool {
+    return a.dist < b.dist;
+}
+
+/// The health bars over the dummies (practice), and over the other players
+/// while the debug screen shows (deathmatch). A bar has a fixed size on the
+/// screen, so it reads at the longest range.
+fn drawHealthBars(r: *gfx.Renderer, w: f32, h: f32) !void {
+    var bars: [range.dummies.len + remotes.len]Bar = undefined;
+    var n: usize = 0;
+    if (mode == .practice) for (&range.dummies) |*d| {
+        addBar(&bars, &n, w, h, d.body.pos, d.body.yaw, d.body.lean, d.hp, d.trail);
+    };
+    if (mode == .deathmatch and show_debug) for (remotes[0..remote_n]) |*rm| {
+        if (!rm.alive) continue;
+        const v: f32 = @floatFromInt(@max(0, rm.hp));
+        addBar(&bars, &n, w, h, rm.pos, rm.yaw, rm.lean, v, v);
+    };
+    // The nearest bar keeps its place. A bar that covers a nearer one
+    // moves up above it, with a thin line down to its body.
+    std.mem.sort(Bar, bars[0..n], {}, nearerBar);
+    for (0..n) |i| {
+        const b = &bars[i];
+        const anchor = b.y;
+        var moved = true;
+        while (moved) {
+            moved = false;
+            for (bars[0..i]) |o| {
+                if (@abs(o.x - b.x) < range.bar_w + 4 and b.y > o.y - range.bar_h - 2 and b.y - range.bar_h - 2 < o.y) {
+                    b.y = o.y - range.bar_h - 2;
+                    moved = true;
+                }
+            }
+        }
+        if (b.y < anchor - 1) try r.fillRect(.{ .x = @round(b.x), .y = b.y, .w = 1, .h = anchor - b.y }, gfx.Color.rgba8(255, 255, 255, 110));
+        try range.drawBar(r, &text.?, b.x, b.y, b.hp, b.trail, b.dist);
     }
 }
 
@@ -1941,8 +2128,10 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
         if (!try drawDeathmatch(ctx, r, w, h)) return;
         crosshair = alive;
     }
-    if (mode == .practice) try drawPractice(r, w, h);
+    if (mode == .practice) try drawPractice(r, w);
+    try drawHealthBars(r, w, h);
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
+    if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
     if (captured) if (aimedButton()) |bi| {
         const b = map.buttons[bi];
         const label = if (b.in_cab) (if (b.level == 0) "F   GO DOWN" else "F   GO UP") else "F   CALL LIFT";
@@ -2018,7 +2207,10 @@ fn gameRender(ctx: *sw.Context) !void {
     for (remotes[0..remote_n]) |*r| buildRemote(r);
     if (map.train) |tr| buildTrain(tr);
     if (map.id == .earls_court) buildEscalatorSteps();
-    if (mode == .practice) for (&targets) |*t| buildTarget(t);
+    if (mode == .practice) {
+        for (&targets) |*t| buildTarget(t);
+        for (&range.dummies) |*d| buildDummy(d);
+    }
     buildEffects();
     grenade.buildOpaque(&dyn);
     buildViewmodel();
@@ -2088,6 +2280,7 @@ fn gameRender(ctx: *sw.Context) !void {
     // in the same ratio as the default, 74 to 52 degrees.
     const fov: f32 = settings.v.fov * (1 - 22.0 / 74.0 * loadout.hands.ads) * std.math.pi / 180;
     if (weapon_menu.open and mode != .menu) buildPreview(ctx, cam.eye, cam.yaw, cam.pitch, cam.roll, fov);
+    hud_cam = .{ .view = render.viewMatrix(cam.eye, cam.yaw, cam.pitch, cam.roll), .th = @tan(fov / 2), .eye = cam.eye };
     if (hud) |*r| try drawHud(ctx, r);
     try render.draw(ctx, .{
         .eye = cam.eye,
