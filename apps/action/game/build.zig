@@ -43,4 +43,16 @@ pub fn build(b: *std.Build) void {
     const run = b.addRunArtifact(tool);
     run.addPassthruArgs();
     b.step("floorplan", "Slice a map into images, or audit it").dependOn(&run.step);
+
+    // `zig build test`: native tests of the player movement on the maps
+    // (src/player_test.zig).
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/player_test.zig"),
+            .target = host,
+            .optimize = optimize,
+        }),
+    });
+    tests.root_module.addImport("sw_math", sw_host.module("sw_math"));
+    b.step("test", "Walk the player over the stairs and escalators").dependOn(&b.addRunArtifact(tests).step);
 }

@@ -148,13 +148,29 @@ fn railing(x0: f32, x1: f32, z0: f32, z1: f32, y: f32) void {
 
 /// Stairs along X, `width` wide about z = cz. The top step starts at x_top
 /// at height y_top, and `n` steps go down toward `dir` (+1 east, -1 west).
-fn stairs(x_top: f32, dir: f32, cz: f32, width: f32, y_top: f32, n: usize, color: V3) void {
+/// `floors` are the floor heights at the top and at the bottom. A ramp
+/// (map.Ramp) covers the steps from the one floor to the other: its surface
+/// goes through the front edges of the steps.
+fn stairs(x_top: f32, dir: f32, cz: f32, width: f32, y_top: f32, n: usize, floors: [2]f32, color: V3) void {
     const rise = 0.4;
     const run = 0.5;
     const z0 = cz - width / 2;
     const z1 = cz + width / 2;
     const fn_: f32 = @floatFromInt(n);
     const bottom = y_top - rise * fn_ - 0.5;
+    // The front edge of step i is at x_top + dir * run * (i + 1), at the
+    // height y_top - rise * i. The ramp ends where that line meets a floor.
+    const x_hi = x_top + dir * run * (y_top + rise - floors[0]) / rise;
+    const x_lo = x_top + dir * run * (y_top + rise - floors[1]) / rise;
+    map.addRamp(.{
+        .x0 = @min(x_hi, x_lo),
+        .x1 = @max(x_hi, x_lo),
+        .z0 = z0,
+        .z1 = z1,
+        .y0 = if (dir > 0) floors[0] else floors[1],
+        .y1 = if (dir > 0) floors[1] else floors[0],
+        .bottom = bottom,
+    });
     for (0..n) |i| {
         const fi: f32 = @floatFromInt(i);
         const top = y_top - rise * fi;
@@ -235,13 +251,15 @@ fn districtLevel() void {
             const end = if (wx[0] < 0) wx[0] - 0.1 else wx[1];
             railing(end, end + 0.1, cz - 1.3, cz + 1.3, 0);
         }
-        // Benches and roundels on posts.
+        // Benches, and roundels on posts. Each post is on the side of its
+        // bench toward the middle of the island, clear of the stairs.
         for ([_]f32{ -36, -12, 12, 36 }) |x| {
             boxNoAo(v3(x - 1.0, 0, cz - 0.25), v3(x + 1.0, 0.45, cz + 0.25), v3(0.35, 0.2, 0.1), .wood);
-            deco(v3(x + 4 - 0.05, 0, cz - 0.05), v3(x + 4 + 0.05, 2.4, cz + 0.05), iron, .metal);
-            map.addSolid(v3(x + 3.9, 0, cz - 0.1), v3(x + 4.1, 2.4, cz + 0.1));
-            roundel(v3(x + 4, 2.6, cz), 0, 0.9);
-            roundel(v3(x + 4, 2.6, cz), std.math.pi, 0.9);
+            const px: f32 = if (x > 0) x - 4 else x + 4;
+            deco(v3(px - 0.05, 0, cz - 0.05), v3(px + 0.05, 2.4, cz + 0.05), iron, .metal);
+            map.addSolid(v3(px - 0.1, 0, cz - 0.1), v3(px + 0.1, 2.4, cz + 0.1));
+            roundel(v3(px, 2.6, cz), 0, 0.9);
+            roundel(v3(px, 2.6, cz), std.math.pi, 0.9);
         }
     }
     // The fence between the eastbound and westbound pairs.
@@ -471,8 +489,8 @@ fn eastEnd() void {
     railing(x0, x0 + 0.12, walk_z1, ca - 1.2, y);
     railing(x0, x0 + 0.12, ca + 1.2, cb - 1.2, y);
     railing(x0, x0 + 0.12, cb + 1.2, wall_s, y);
-    stairs(x0, -1, ca, 2.4, y, 12, platform_c);
-    stairs(x0, -1, cb, 2.4, y, 12, platform_c);
+    stairs(x0, -1, ca, 2.4, y, 12, .{ y, 0 }, platform_c);
+    stairs(x0, -1, cb, 2.4, y, 12, .{ y, 0 }, platform_c);
     map.add(v3(54.5, y + 6.3, -6.3), v3(56.5, y + 6.45, -5.7), v3(1.0, 0.9, 0.75), .emissive).solid = false;
     map.addLight(v3(55.5, y + 5.6, -6), v3(1.3, 1.05, 0.8), 13);
 
@@ -567,8 +585,8 @@ fn westEnd() void {
     railing(x1 - 0.12, x1, walk_z1, ca - 1.2, y);
     railing(x1 - 0.12, x1, ca + 1.2, cb - 1.2, y);
     railing(x1 - 0.12, x1, cb + 1.2, wall_s, y);
-    stairs(x1, 1, ca, 2.4, y, 12, platform_c);
-    stairs(x1, 1, cb, 2.4, y, 12, platform_c);
+    stairs(x1, 1, ca, 2.4, y, 12, .{ y, 0 }, platform_c);
+    stairs(x1, 1, cb, 2.4, y, 12, .{ y, 0 }, platform_c);
     map.add(v3(-56.5, y + 6.3, -6.3), v3(-54.5, y + 6.45, -5.7), v3(1.0, 0.9, 0.75), .emissive).solid = false;
 
     // Ground under the passage, the entrance and the road; the lines pass
@@ -732,8 +750,8 @@ fn intermediateLevel() void {
     // east on each island. On island B they lead in opposite directions,
     // with no passage between them.
     for ([_]f32{ ca, cb }) |cz| {
-        stairs(well_x[0][1], -1, cz, 2.4, -0.4, 14, platform_c);
-        stairs(well_x[1][0], 1, cz, 2.4, -0.4, 14, platform_c);
+        stairs(well_x[0][1], -1, cz, 2.4, -0.4, 14, .{ 0, mid_y }, platform_c);
+        stairs(well_x[1][0], 1, cz, 2.4, -0.4, 14, .{ 0, mid_y }, platform_c);
     }
     for ([_][2]f32{ .{ pa0, pa0 + 0.02 }, .{ pa1 - 0.02, pa1 } }) |zz| {
         deco(v3(-22, mid_y + 1.3, zz[0]), v3(22, mid_y + 1.5, zz[1]), tile_green, .wall_tile);
@@ -795,8 +813,13 @@ fn escalators() void {
     }
     map.addLight(v3((esc_top_x + esc_bottom_x) / 2, (mid_y + deep_y) / 2 + 3, -22.5), v3(1.1, 0.85, 0.6), 12);
 
+    // The ramp over both lanes, through the front edges of the steps
+    // (map.Ramp): a rider moves smoothly.
+    map.addRamp(.{ .x0 = esc_top_x, .x1 = esc_bottom_x, .z0 = z0, .z1 = z1, .y0 = mid_y, .y1 = deep_y, .bottom = deep_y - 1 });
     // The lanes: the north lane goes down (east), the south lane comes up.
-    map.addEscalator(.{ .min = v3(esc_top_x, deep_y - 0.5, z0), .max = v3(esc_bottom_x, mid_y + 0.5, zd[0]), .vel = v3(0.65, 0, 0) });
+    // Each lane carries a rider until the feet are clear of the ramp: the
+    // down lane 0.4 m (more than the player radius) past its last step.
+    map.addEscalator(.{ .min = v3(esc_top_x, deep_y - 0.5, z0), .max = v3(esc_bottom_x + 0.4, mid_y + 0.5, zd[0]), .vel = v3(0.65, 0, 0) });
     map.addEscalator(.{ .min = v3(esc_top_x, deep_y - 0.5, zd[1]), .max = v3(esc_bottom_x, mid_y + 0.5, z1), .vel = v3(-0.65, 0, 0) });
 }
 
