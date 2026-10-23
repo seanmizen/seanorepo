@@ -47,6 +47,7 @@ const arena = @import("maps/arena.zig");
 const gcon = @import("game_console.zig");
 const session_mod = @import("session/root.zig");
 const build_options = @import("build_options");
+const sounds = @import("sounds.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -231,29 +232,6 @@ fn sound(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f32
 /// A sound of the world (the trains): it follows the master volume only.
 fn ambient(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f32) void {
     audio.play(.{ .frequency = freq, .frequency_end = freq_end, .duration = dur, .waveform = wave, .volume = vol });
-}
-
-/// A shot: a noise crack and a falling thump. The shotguns are longer and
-/// deeper, the pistol and the SMG are shorter.
-fn gunshotSound(volume: f32, c: weapon.Class) void {
-    switch (c) {
-        .shotgun, .sawn_off => {
-            sound(1, null, 0.22, .noise, 0.7 * volume);
-            sound(110, 32, 0.26, .sine, 0.6 * volume);
-        },
-        .revolver => {
-            sound(1, null, 0.14, .noise, 0.6 * volume);
-            sound(150, 40, 0.2, .sine, 0.55 * volume);
-        },
-        .pistol, .smg => {
-            sound(1, null, 0.075, .noise, 0.45 * volume);
-            sound(230, 70, 0.1, .sine, 0.4 * volume);
-        },
-        else => {
-            sound(1, null, 0.11, .noise, 0.55 * volume);
-            sound(160, 45, 0.16, .sine, 0.5 * volume);
-        },
-    }
 }
 
 /// The camera of the live player: the eye with the lean, the head bob and
@@ -641,6 +619,8 @@ const ShotRay = struct {
     t: f32,
     normal: V3 = v3(0, 1, 0),
     world: bool = false,
+    /// The box of a world hit (its surface sets the impact sound).
+    box: ?usize = null,
     remote: ?RemoteHit = null,
     plate: ?usize = null,
     bull: bool = false,
@@ -653,6 +633,7 @@ fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
         out.t = h.t;
         out.normal = h.normal;
         out.world = true;
+        out.box = h.box;
     }
     if (mode == .deathmatch) {
         if (rayRemotes(o, d)) |rh| {
@@ -717,6 +698,21 @@ fn dummyHit(i: usize, body: f32, head: f32) void {
     } else sound(1500, 1300, 0.04, .square, 0.12);
 }
 
+/// The impact sound of one pellet (sounds.zig): the surface material of
+/// the map at the hit point, a body (a player or a dummy), or a steel
+/// plate. Nothing when the pellet hit nothing.
+fn pelletImpact(ray: ShotRay, end: V3, st: *const weapon.Stats) void {
+    const surface: map.Surface = if (ray.box) |bi|
+        map.surfaceAt(end, bi)
+    else if (ray.remote != null or ray.dummy != null)
+        .flesh
+    else if (ray.plate != null)
+        .metal
+    else
+        return;
+    sounds.impact(end, surface, st, ray.t);
+}
+
 /// A gun shot: one ray for each pellet in the cone. In deathmatch one
 /// "fire" message carries the hits of all the pellets. The server takes
 /// the damage of each pellet from its own table (server/guns.json), with
@@ -748,6 +744,8 @@ fn fire() void {
         if (pi == 0) first_end = end;
         // A tracer for each of the first 4 pellets. More fill the view.
         if (pi < 4) addTracer(muzzle, end);
+        // The impact sound of the first 3 pellets.
+        if (pi < 3) pelletImpact(ray, end, st);
         if (ray.remote) |rh| {
             addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
             var slot: ?*ShotHit = null;
@@ -771,7 +769,7 @@ fn fire() void {
             addSparks(end, ray.normal, v3(1.0, 0.75, 0.4), if (st.pellets > 1) 2 else 6);
         }
     }
-    gunshotSound(1, it.class);
+    sounds.muzzle(1, it.class, 0, 0);
     for (dummy_dmg, 0..) |dd, i| {
         if (dd[0] + dd[1] > 0) dummyHit(i, dd[0], dd[1]);
     }
@@ -1175,10 +1173,16 @@ fn handleNet(ctx: *sw.Context) void {
                 addTracer(a, b);
                 addSparks(b, vec.norm(a - b), v3(1.0, 0.75, 0.4), 4);
                 remote_flash = .{ .p = a, .life = 0.05 };
-                if (findRemote(m.id orelse 0)) |r| r.shot_t = time;
-                const dist = vec.len(a - me.eyePos());
                 const c = weapon.classFromId(m.w orelse 0) orelse .rifle;
-                gunshotSound(std.math.clamp(6 / (dist + 4), 0.05, 0.6), c);
+                // The gun: the model that the shooter holds (the snapshots),
+                // else the first gun of the class.
+                var model = weapon.firstOf(c);
+                if (findRemote(m.id orelse 0)) |r| {
+                    r.shot_t = time;
+                    if (r.w == c) model = remoteModel(r);
+                }
+                // The muzzle report, the crack or the whiz, and the impact.
+                sounds.remoteShot(a, b, c, model);
             }
         } else if (std.mem.eql(u8, m.t, "hit")) {
             hp = m.hp orelse hp;
@@ -1451,6 +1455,7 @@ fn tick(ctx: *sw.Context) void {
     captured = jsPointerLocked() != 0;
     // The engine default master volume is 0.5: a volume of 1 keeps it.
     audio.setMasterVolume(0.5 * settings.volume.float());
+    sounds.setListener(me.eyePos(), me.yaw);
     // The pause action frees the mouse. On Esc the browser frees it first.
     if (captured and gcon.act.pressed(.pause)) ctx.setMouseCapture(false);
 
@@ -2431,6 +2436,7 @@ fn gameInit(ctx: *sw.Context) !void {
     hud = try gfx.Renderer.init(alloc, ctx.gpu(), .{});
     text = try sw_text.TextRenderer.init(alloc, font_bytes);
     audio = audio_mod.Audio.init();
+    sounds.init(&audio, ctx.timeNs());
     client = net.Client.init();
 
     // The call sign and the best practice score live in local storage.

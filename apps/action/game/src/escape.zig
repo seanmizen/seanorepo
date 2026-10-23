@@ -198,7 +198,7 @@ fn measure() !Motion {
 
     // The run speed: run for two seconds.
     map.box_count = 0;
-    _ = map.add(v3(-100, -1, -10), v3(100, 0, 10), v3(0, 0, 0), .paint);
+    _ = map.add(v3(-100, -1, -10), v3(100, 0, 10), v3(0, 0, 0), .paint, .concrete);
     var p = player.Player{ .pos = v3(-50, 0, 0), .grounded = true };
     for (0..240) |_| p.step(tick, v3(1, 0, 0), false, 1);
     const speed = @sqrt(p.vel[0] * p.vel[0] + p.vel[2] * p.vel[2]);
@@ -213,7 +213,7 @@ fn measure() !Motion {
 
     // A full-speed jump off the end of a floor, and the fall after it.
     map.box_count = 0;
-    _ = map.add(v3(-100, -1, -10), v3(-player.radius - 0.01, 0, 10), v3(0, 0, 0), .paint);
+    _ = map.add(v3(-100, -1, -10), v3(-player.radius - 0.01, 0, 10), v3(0, 0, 0), .paint, .concrete);
     p = .{ .pos = v3(0, 0, 0), .vel = v3(speed, 0, 0), .grounded = true };
     var xs: std.ArrayList(f32) = .empty;
     var ys: std.ArrayList(f32) = .empty;

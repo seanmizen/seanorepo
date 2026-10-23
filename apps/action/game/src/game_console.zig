@@ -23,6 +23,7 @@ const console = @import("console/root.zig");
 const net = @import("net.zig");
 const settings = @import("settings.zig");
 const session = @import("session/root.zig");
+const sounds = @import("sounds.zig");
 
 // src/boot.ts gives it: location.reload().
 extern fn jsReload() void;
@@ -139,6 +140,7 @@ pub fn init(alloc: std.mem.Allocator, net_client: *net.Client, sess: *session.Se
     con.on_print = logLine;
     try act.register(&con, action_help);
     try settings.register(&con);
+    try sounds.register(&con);
     defs_arena = .init(alloc);
     try console.schema.addJsonCvars(&con, defs_arena.allocator(), @embedFile("server_cvars.json"), .{ .server = true });
     try chat.register(&con);

@@ -103,7 +103,7 @@ fn loadEarlsCourt() void {
 }
 
 fn unload() void {
-    map.decor.clearAndFree(std.testing.allocator);
+    map.deinit();
 }
 
 // The island centres and the stair wells (maps/earls_court.zig).

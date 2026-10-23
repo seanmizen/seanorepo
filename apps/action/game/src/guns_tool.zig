@@ -26,11 +26,11 @@ fn label(buf: []u8, i: usize) []const u8 {
 
 /// The calibre table, the build table and the stat table of the README.
 fn printTables() void {
-    std.debug.print("| Calibre | Body | Head | Pellets | Bullet | Reference barrel | Full damage to | Down to | Impulse |\n|---|---|---|---|---|---|---|---|---|\n", .{});
+    std.debug.print("| Calibre | Body | Head | Pellets | Bullet | Bullet size | Reference barrel | Full damage to | Down to | Impulse |\n|---|---|---|---|---|---|---|---|---|---|\n", .{});
     for (std.enums.values(guns.Calibre)) |c| {
         const r = guns.rounds.get(c);
-        std.debug.print("| {s} | {d} | x{d} | {d} | {d} m/s | {d} cm | {d} m | {d:.0}% at {d} m | {d} N s |\n", .{
-            r.label, r.body, r.head, r.pellets, r.velocity, r.barrel, r.near, r.min * 100, r.far, r.impulse,
+        std.debug.print("| {s} | {d} | x{d} | {d} | {d} m/s | {d} x {d} mm | {d} cm | {d} m | {d:.0}% at {d} m | {d} N s |\n", .{
+            r.label, r.body, r.head, r.pellets, r.velocity, r.bullet_d, r.bullet_l, r.barrel, r.near, r.min * 100, r.far, r.impulse,
         });
     }
     std.debug.print("\n", .{});

@@ -58,10 +58,16 @@ foot height. A player who fires shows on it for a moment.
 ```bash
 zig build floorplan -- earls_court plan 1 out.ppm         # top view at y = 1
 zig build floorplan -- earls_court section-z -22.5 out.ppm # side view at z = -22.5
-zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape
+zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape, surface materials
 zig build floorplan -- earls_court escape                 # escape holes: exit code 1 if it finds one
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
+
+- The audit prints the boxes and the decoration of each surface material
+  (see [Surface materials](#surface-materials)). Its exit code is 1 when a
+  material does not fit the look of its surface.
+- Every command stops with exit code 1 when the map has more boxes than
+  `map.max_boxes` (see [The box limit](#the-box-limit)).
 
 ### The escape audit
 
@@ -175,6 +181,15 @@ dummies.
   recovery, a heavy gun is slower, the recoil pattern climbs and recovers,
   no gun is the fastest to kill at both 10 m and 40 m, and
   `server/guns.json` has the numbers of the model.
+- `game/src/surfaces_test.zig`: each map fits in `map.max_boxes`, a full
+  map changes no box, every material fits the look of its surface, a hit
+  takes the material of the decoration on the hit point (a sleeper on the
+  ballast), and each supersonic gun gives a crack and each subsonic gun a
+  whiz.
+- `game/src/audio/tests.zig`: the Mach cone geometry, the order of the
+  crack and the muzzle report, Whitham's laws for the N-wave, the head
+  cues, the Doppler shift of the whiz, the distance law, the floor echo,
+  and a bounded sound of its own for each material.
 
 `yarn workspace action test` (`bun test server`) runs the server tests
 (`server/*.test.ts`):
@@ -221,7 +236,8 @@ The built-in commands: `help`, `find`, `cvarlist`, `cmdlist`, `set`,
 The chat adds `messagemode`, `messagemode2`, `say` and `say_team` (see
 [Chat](#chat)). The session adds `version` (see
 [The session](#the-session-versions-and-reconnect)). The game adds `rcon`,
-`reload` (reload the page) and the actions.
+`reload` (reload the page), the actions, and `nearmiss` and `impact` (see
+[Bullet sounds](#bullet-sounds)).
 
 ### Cvars
 
@@ -244,10 +260,12 @@ The client cvars:
 |---|---|---|---|---|
 | `head_bob` | 0 (off) to 2 | 1 | saved | `main.zig` playerView |
 | `volume` | 0 to 1 | 1 | saved | `main.zig` tick |
-| `sfx_volume` | 0 to 1 | 1 | saved | `main.zig` sound |
+| `sfx_volume` | 0 to 1 | 1 | saved | `main.zig` sound, `sounds.zig` |
 | `fov` | 60 to 100 degrees | 74 | saved | `main.zig` gameRender |
 | `sensitivity` | 0.2 to 3 | 1 | saved | `main.zig` gameplayTick |
 | `chat_fade_seconds` | 1 to 120 seconds | 10 | saved | `console/chat.zig` Chat.alpha |
+| `snd_nearmiss_distance` | 0 (off) to 200 m | 25 | saved | `sounds.zig` nearMiss: the largest miss distance of a crack or a whiz |
+| `snd_impact_distance` | 0 (off) to 300 m | 60 | saved | `sounds.zig` impactSound: the largest distance of an impact sound |
 | `rcon_password` | text | empty | protected, not saved | `game_console.zig` cmdRcon |
 
 The settings panel shows the first five. The values of the old local
@@ -495,26 +513,28 @@ usual barrel is 12 cm for a handgun, 20 cm for a long gun for pistol rounds,
 longer is long.
 
 The calibres. The damage, the bullet speed and the fall-off are for the
-reference barrel:
+reference barrel. The bullet size (the diameter and the length of the
+bullet, or of one pellet) sets the crack and the whiz (see
+[Bullet sounds](#bullet-sounds)):
 
-| Calibre | Body | Head | Pellets | Bullet | Reference barrel | Full damage to | Down to | Impulse |
-|---|---|---|---|---|---|---|---|---|
-| 4.6x30 mm | 17 | x2.3 | 1 | 720 m/s | 18 cm | 18 m | 65% at 55 m | 2.3 N s |
-| 9x19 mm | 21 | x2.3 | 1 | 360 m/s | 11 cm | 12 m | 55% at 40 m | 3.4 N s |
-| .40 S&W | 25 | x2.3 | 1 | 330 m/s | 11 cm | 12 m | 55% at 38 m | 4.3 N s |
-| 10 mm Auto | 28 | x2.3 | 1 | 380 m/s | 12 cm | 15 m | 60% at 45 m | 5.3 N s |
-| .45 ACP | 27 | x2.3 | 1 | 255 m/s | 13 cm | 10 m | 50% at 35 m | 4.2 N s |
-| .50 AE | 45 | x2 | 1 | 450 m/s | 15 cm | 20 m | 70% at 55 m | 10.3 N s |
-| .38 Special | 35 | x2.5 | 1 | 265 m/s | 10 cm | 10 m | 50% at 35 m | 3.1 N s |
-| .357 Magnum | 53 | x2 | 1 | 425 m/s | 10 cm | 15 m | 60% at 45 m | 5.5 N s |
-| .44 Magnum | 64 | x2 | 1 | 440 m/s | 15 cm | 22 m | 60% at 60 m | 8.2 N s |
-| 5.45x39 mm | 23 | x2.5 | 1 | 880 m/s | 41 cm | 20 m | 65% at 60 m | 4.4 N s |
-| 5.56x45 mm | 23 | x2.5 | 1 | 900 m/s | 37 cm | 18 m | 62% at 55 m | 5.9 N s |
-| 7.62x39 mm | 30 | x2.5 | 1 | 715 m/s | 41 cm | 25 m | 72% at 70 m | 7.8 N s |
-| .300 BLK subsonic | 32 | x2.5 | 1 | 305 m/s | 23 cm | 15 m | 60% at 45 m | 5.1 N s |
-| 12 gauge | 13 | x1.25 | 9 | 400 m/s | 47 cm | 6 m | 20% at 30 m | 17 N s |
-| 12 gauge magnum | 12 | x1.25 | 12 | 410 m/s | 47 cm | 7 m | 20% at 33 m | 23 N s |
-| 20 gauge | 13 | x1.25 | 8 | 400 m/s | 47 cm | 5 m | 20% at 26 m | 12 N s |
+| Calibre | Body | Head | Pellets | Bullet | Bullet size | Reference barrel | Full damage to | Down to | Impulse |
+|---|---|---|---|---|---|---|---|---|---|
+| 4.6x30 mm | 17 | x2.3 | 1 | 720 m/s | 4.65 x 16 mm | 18 cm | 18 m | 65% at 55 m | 2.3 N s |
+| 9x19 mm | 21 | x2.3 | 1 | 360 m/s | 9.02 x 15.5 mm | 11 cm | 12 m | 55% at 40 m | 3.4 N s |
+| .40 S&W | 25 | x2.3 | 1 | 330 m/s | 10.17 x 14 mm | 11 cm | 12 m | 55% at 38 m | 4.3 N s |
+| 10 mm Auto | 28 | x2.3 | 1 | 380 m/s | 10.17 x 15.5 mm | 12 cm | 15 m | 60% at 45 m | 5.3 N s |
+| .45 ACP | 27 | x2.3 | 1 | 255 m/s | 11.48 x 17 mm | 13 cm | 10 m | 50% at 35 m | 4.2 N s |
+| .50 AE | 45 | x2 | 1 | 450 m/s | 12.7 x 22 mm | 15 cm | 20 m | 70% at 55 m | 10.3 N s |
+| .38 Special | 35 | x2.5 | 1 | 265 m/s | 9.07 x 18 mm | 10 cm | 10 m | 50% at 35 m | 3.1 N s |
+| .357 Magnum | 53 | x2 | 1 | 425 m/s | 9.07 x 17 mm | 10 cm | 15 m | 60% at 45 m | 5.5 N s |
+| .44 Magnum | 64 | x2 | 1 | 440 m/s | 10.9 x 19 mm | 15 cm | 22 m | 60% at 60 m | 8.2 N s |
+| 5.45x39 mm | 23 | x2.5 | 1 | 880 m/s | 5.6 x 25.5 mm | 41 cm | 20 m | 65% at 60 m | 4.4 N s |
+| 5.56x45 mm | 23 | x2.5 | 1 | 900 m/s | 5.7 x 23 mm | 37 cm | 18 m | 62% at 55 m | 5.9 N s |
+| 7.62x39 mm | 30 | x2.5 | 1 | 715 m/s | 7.92 x 26.8 mm | 41 cm | 25 m | 72% at 70 m | 7.8 N s |
+| .300 BLK subsonic | 32 | x2.5 | 1 | 305 m/s | 7.82 x 38 mm | 23 cm | 15 m | 60% at 45 m | 5.1 N s |
+| 12 gauge | 13 | x1.25 | 9 | 400 m/s | 8.38 x 8.38 mm | 47 cm | 6 m | 20% at 30 m | 17 N s |
+| 12 gauge magnum | 12 | x1.25 | 12 | 410 m/s | 8.38 x 8.38 mm | 47 cm | 7 m | 20% at 33 m | 23 N s |
+| 20 gauge | 13 | x1.25 | 8 | 400 m/s | 6.1 x 6.1 mm | 47 cm | 5 m | 20% at 26 m | 12 N s |
 
 ### The recoil pattern
 
@@ -718,6 +738,186 @@ orange, and a little smoke. `game/src/grenade.zig` has the model:
   Small translucent cubes show where a player would get hit, for the aimed
   throw and for each grenade in the air. Red is the centre, yellow the edge.
 
+## Bullet sounds
+
+`game/src/audio/` makes the sounds of the bullets sample by sample. It
+imports nothing from the game, so another game can use it.
+`game/src/sounds.zig` gives it the listener, the room from the map and the
+bullet of each gun, and plays the samples (sw_audio `Audio.playBuffer`).
+The effects volume (`sfx_volume`) and the master volume (`volume`) apply
+to every bullet sound.
+
+### The near miss
+
+A bullet of another player that passes in `snd_nearmiss_distance` (25 m)
+of you makes a sound. The bullet speed comes from the gun model (the
+calibre and the barrel, see [The gun model](#the-gun-model)). A bullet
+faster than 343 m/s is supersonic. CARBINE 4, SMG 1, PISTOL 1, PISTOL 3
+and REVOLVER 5 are subsonic.
+
+- **Supersonic: a crack.** The bullet pulls a shock wave in the shape of
+  a cone (the Mach cone, with the half angle asin(1/M), M = speed / 343).
+  You hear the shock as an N-wave: a sudden rise of pressure, a straight
+  fall to the same depth below the air pressure, and a sudden return, in
+  0.1 to 0.4 ms. The shock leaves the path where the angle between the
+  path and the line to you is acos(1/M). That point is before the point
+  of the path nearest to you. So the crack comes from a point of the path
+  between the shooter and the point nearest to you.
+- **Subsonic: a whiz.** There is no shock wave. You hear the noise of the
+  turbulent wake: noise at the vortex shedding frequency, 0.2 x speed /
+  diameter. It is high and loud while the bullet comes, and low after it
+  goes (the Doppler shift). It moves across the head with the bullet.
+- **The order.** The muzzle report arrives after distance / 343 s. A
+  crack never comes after the muzzle report. The two come together at the
+  edge of the cone, and downrange the crack comes first. The gap grows
+  with the distance to the shooter. A whiz comes after the muzzle report.
+- **Direction.** Each ear gets its own time and level (see
+  [Where you hear a sound](#where-you-hear-a-sound)). The crack comes from
+  its emission point, the whiz from the bullet as it moves.
+- **Distance.** The N-wave peak falls as b^-3/4 and its length grows as
+  b^1/4, so a far crack is quieter and less sharp. The whiz falls as 1/r
+  and is loud only in a few metres.
+
+The formulas. x is the distance along the path from the muzzle to the
+point nearest you, b is the miss distance, and d and l are the bullet
+diameter and length (the bullet size in the calibre table). p0 is the air
+pressure, 101325 Pa:
+
+| Value | Formula |
+|---|---|
+| Emission point | s = x - b / sqrt(M^2 - 1) along the path. When s is not on the path (you are behind the cone of the muzzle, or the bullet hit something first), there is no crack. |
+| Crack arrival | t = (x + b sqrt(M^2 - 1)) / v |
+| Muzzle report arrival | t = the distance to the muzzle / 343 |
+| N-wave peak | 0.53 p0 (M^2 - 1)^(1/8) d / (b^(3/4) l^(1/4)) Pa. About 1 kPa at a 1 m miss for 5.56 mm. |
+| N-wave length | 1.82 M b^(1/4) d / (343 (M^2 - 1)^(3/8) l^(1/4)) s. About 0.1 ms at a 1 m miss for 5.56 mm. |
+| Whiz level | v^3 (a dipole source: the power goes as v^6), 1 / r, and D^2 with the Doppler factor D = 1 / (1 - M cos phi), at most 2.5 |
+
+The sources:
+
+- G. B. Whitham, "The flow pattern of a supersonic projectile",
+  Communications on Pure and Applied Mathematics 5 (1952): the N-wave peak
+  and length.
+- R. Stoughton, "Measurements of small-caliber ballistic shock waves in
+  air", J. Acoust. Soc. Am. 102 (1997): small-arms measurements that agree
+  with Whitham.
+- R. C. Maher, "Acoustical characterization of gunshots", IEEE Workshop on
+  Signal Processing Applications for Public Security and Forensics (2007):
+  the geometry of the muzzle blast and the shock wave.
+- A. P. Dowling and J. E. Ffowcs Williams, "Sound and Sources of Sound"
+  (1983): the Doppler factor and the convective gain of a moving source.
+
+The limits of the model:
+
+- The bullet keeps its speed over the path.
+- Near M = 1 Whitham's far-field formulas do not hold. The model uses
+  M^2 - 1 of at least 0.09.
+- After the N-wave, 6 ms of bright noise stand for the scatter from near
+  surfaces. This part is an estimate. It makes a wave of a few samples read
+  as a crack on small speakers.
+- The whiz is an aeroacoustic estimate (the shedding frequency, the v^3
+  level). It is not a measurement of bullets.
+- Buckshot: the model takes a ball as a bullet with l = d. A shot makes one
+  crack, from its first pellet.
+
+### Impacts
+
+A bullet that hits a surface in `snd_impact_distance` (60 m) of you makes
+the sound of the surface material. The sound starts at the hit when the
+bullet arrives (the distance / the bullet speed). It reaches you after the
+distance to you / 343 s more. Your own shots make impact sounds too, for
+the first 3 pellets. A hit on a player or a dummy is `flesh`, and a hit on
+a plate is `metal`.
+
+Each material is modal synthesis with noise, the methods of
+`utils/tube-sounds`. A strike is a short burst of filtered noise. The
+modes are decaying sines, and the loss factor eta of the material sets
+the decay of a mode at f: e^(-pi f eta t). Metal and glass have a small
+loss and ring. Wood and stone have a large loss. The decay against the frequency
+is the strongest cue to a material (R. L. Klatzky, D. K. Pai and E. P.
+Krotkov, "Perception of material from contact sounds", Presence 9, 2000).
+Grains are fragments that click and fall. The levels and the frequencies
+are estimates from the character of each material. They are not
+measurements of bullet hits. The energy of the bullet (its damage) sets
+the level.
+
+### Where you hear a sound
+
+- **The head.** The far ear hears a sound later, by up to 0.66 ms
+  (Woodworth's spherical head), and quieter and duller. A sound from
+  behind is a little duller in both ears.
+- **The path.** 1 / r, and the air absorption: a low-pass at about 16 kHz
+  at 10 m and 6.6 kHz at 50 m (from ISO 9613-1).
+- **A wall between you and the sound.** The sound is about 10 dB quieter,
+  with a low-pass at 1.2 to 1.5 kHz.
+- **The room.** Rays from your head find up to 4 reflectors: the floor,
+  the ceiling, and the nearest wall along X and along Z. Each one gives an
+  echo: an image source, or for a crack an image listener with its own
+  Mach cone. A diffuse tail follows: 1.5 s deep underground (below
+  `map.underground_y`), 1 s under a ceiling with walls, else 0.25 to
+  0.65 s.
+
+### Surface materials
+
+Each box and each decoration of a map has a surface material (`surface`
+in `map.Box` and `map.Decor`). The field has no default, so the compiler
+stops on a box or a decoration without a material. A shot hits boxes
+only. A hit takes the material of the smallest decoration in 3 cm of the
+hit point, else the material of the box (`map.surfaceAt`). Thus a sleeper
+on the ballast is wood, a window of the District train is glass, and the
+road over the floor of the ticket hall is concrete.
+
+| Material | The sound | Earl's Court boxes, decoration | Arena boxes | For example |
+|---|---|---|---|---|
+| `concrete` | a sharp crack, a thud and grit | 171, 130 | 79 | platforms, stairs, decks, pavements, the road, painted lines |
+| `brick` | a duller crack and more crumble | 67, 0 | 0 | the shed walls, the concourses, the terraces |
+| `plaster` | a soft crack and a puff | 4, 3 | 0 | the ticket hall walls, the painted fronts on the roads |
+| `tile` | a brittle tink and shards | 53, 13 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof |
+| `metal` | a click and a long high ring | 156, 372 | 12 | rails, railings, posts, frames, escalator steps, roof ribs |
+| `sheet_metal` | a pank and a low bong | 38, 123 | 11 | the trains, the containers, the bus, lift doors, ticket gates, signs |
+| `glass` | a bright crack and falling shards | 46, 158 | 6 | lamps, windows, the lift shafts, the Warwick Road front and rotunda |
+| `wood` | a hollow knock and splinters | 34, 2528 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
+| `ballast` | a chuff and a clatter of stones | 13, 0 | 0 | the track beds |
+| `earth` | a dull thup and a spray of dirt | 12, 0 | 0 | the ground under the buildings, the banks of the cuttings |
+| `fabric` | a soft thup | 0, 6 | 0 | the gangways between the cars of the District train |
+| `flesh` | a wet slap and a thud | 0, 0 | 0 | players and dummies (not a map surface) |
+
+The floorplan audit prints these counts. Its exit code is 1 when a
+material does not fit the look of its surface (`map.surfaceFits`): an
+emissive surface must be glass, a brick surface brick, a wood surface
+wood. `zig build test` checks the same.
+
+### The box limit
+
+`map.max_boxes` is 640. Earl's Court uses 594 boxes, the arena 123.
+
+- A map with more boxes fails `zig build test` and every floorplan command
+  (exit code 1).
+- In the game, `map.add` does not add a box past the limit, and it changes
+  no box. `map.dropped` counts the boxes, and `map.load` logs an error.
+  A lift or a train whose boxes are not in the map is not made.
+- The materials add no box, so the limit stays 640. The frame cost does
+  not change. The scene shader loops over the boxes for the ambient
+  occlusion within 45 m of the eye (`uploadBoxes` in
+  `game/src/render.zig`), not over `max_boxes`: at most 121 boxes at a
+  spawn point of Earl's Court (108 on average). A higher limit costs 32
+  bytes of GPU buffer for each box, and frame time only for the boxes
+  that a map adds.
+
+### Listen to it
+
+The console has two commands to listen to the sounds offline:
+
+```
+nearmiss rifle2 1 40     // a 7.62x39 mm crack: a miss 1 m to your right, the shooter 40 m in front
+nearmiss pistol1 0.5 20  // a .45 ACP whiz, 0.5 m to your right
+impact glass 3           // a rifle bullet on glass, 3 m in front of you
+```
+
+`nearmiss [gun] [miss] [range]` takes a class and a number (`rifle2`,
+`carbine4`, `smg1`), the miss distance to your right in metres, and the
+distance to the shooter in front of you. It prints the arrival times.
+`impact <material> [distance]` plays a strike on any material.
+
 ## Stairs and escalators
 
 - **Ramps**: an invisible ramp covers each staircase and each escalator
@@ -756,7 +956,7 @@ orange, and a little smoke. `game/src/grenade.zig` has the model:
 |---|---|---|---|
 | Head bob | `head_bob` | 0 (off) to 200% | 100% |
 | Master volume | `volume` | 0 to 100%. It scales every sound. | 100% |
-| Effects volume | `sfx_volume` | 0 to 100%: the guns, the hits, the grenades and the buttons. The trains follow the master volume only. | 100% |
+| Effects volume | `sfx_volume` | 0 to 100%: the guns, the cracks and whizzes of near misses, the impacts, the hits, the grenades and the buttons. The trains follow the master volume only. | 100% |
 | Field of view | `fov` | 60 to 100 degrees, vertical, at the hip. The sights make it narrower. | 74 |
 | Mouse sensitivity | `sensitivity` | 0.2x to 3x | 1x |
 
@@ -792,14 +992,17 @@ apps/action/
 │       ├── guns_test.zig the tests of the gun model
 │       ├── weapon_menu.zig  the weapon menu (B)
 │       ├── gun_compare.zig  the compare bars of two guns
-│       ├── map.zig       the current map: boxes, ramps, decoration, lights, lifts, buttons, escalators
+│       ├── map.zig       the current map: boxes, ramps, decoration, surface materials, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
-│       ├── floorplan.zig the map tool: slices, the decoration audit (zig build floorplan)
+│       ├── floorplan.zig the map tool: slices, the decoration and material audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
 │       ├── player.zig    movement, collision, the lean and the hit boxes
-│       ├── tests.zig     zig build test: the walks, the console, the server cvar file
+│       ├── tests.zig     zig build test: the walks, the console, the server cvar file, the guns, the sounds
 │       ├── player_test.zig  the walks over the stairs and escalators
+│       ├── surfaces_test.zig  the box limit, the surface materials, a crack or a whiz for each gun
+│       ├── sounds.zig    the gun sounds: the muzzle report, the near misses, the impacts (to sw_audio)
+│       ├── audio/        the bullet sound models, with no action imports (root.zig): near_miss.zig, impact.zig, space.zig, dsp.zig
 │       ├── settings.zig  the settings panel: a view over five saved cvars
 │       ├── game_console.zig  the game side of the console: actions, binds, server cvars, rcon, chat
 │       ├── server_cvars.json  the server cvars (the server reads the same file)
