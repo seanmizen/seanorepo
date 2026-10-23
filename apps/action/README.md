@@ -246,6 +246,14 @@ it does.
   rides at the lift speed, at 60 m/s, and with server corrections of up to
   1 m. The feet must stay on the cab floor and the body out of all solid
   shapes. Then the player walks out onto the landing and back in.
+- `game/src/vault_test.zig` tests the vault (`game/src/vault.zig`). The
+  player vaults onto a waist-high wall of the range and onto the railing
+  along the shed edge of the east concourse. The player must stand on the
+  top, on the ground and out of all solid shapes, and must not fall onto
+  the tracks. A pillar, an arena wall, a step and a wall with a low
+  ceiling over it give no vault. A vault onto the ticket gates (a cabinet
+  or the paddles of a lane) puts the feet on the gates: a fare dodge. A
+  walk into the closed gates does not cross the gate line.
 - `game/src/body_test.zig` tests your body in first person. No part that
   the camera shows comes nearer than 0.12 m to the eye, at each look up and
   down, each lean, each step of the walk and on stairs. The head, the arms

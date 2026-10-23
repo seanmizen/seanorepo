@@ -58,6 +58,7 @@ const pigeons = @import("pigeons.zig");
 const vapes = @import("vapes.zig");
 const train_sound = @import("train_sound.zig");
 const gates = @import("gates.zig");
+const vault_mod = @import("vault.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -312,60 +313,10 @@ fn pushFeed(line: []const u8, mine: bool) void {
     feed_n += 1;
 }
 
-/// A vault (Space while walking into a waist-high shape): the feet at the
-/// start and on top, and the progress (0 to 1).
-const Vault = struct { from: V3, to: V3, k: f32 };
-var vault: ?Vault = null;
-const vault_time: f32 = 0.45;
+/// A vault in progress (vault.zig), or null.
+var vault: ?vault_mod.Vault = null;
 /// A fare dodge (gates.zig): the seconds to the death by guilt, or < 0.
 var guilt_t: f32 = -1;
-
-/// The feet on top of a shape in front of the player, for a vault: a top
-/// 0.5 to 1.4 m over the feet, in reach, with room for the body on it. The
-/// feet go over the middle of a thin shape (a railing), or 0.35 m past the
-/// edge of a wide one. Null when there is nothing to vault.
-fn findVault() ?V3 {
-    const f = v3(-@sin(me.yaw), 0, -@cos(me.yaw));
-    const r = player_mod.radius;
-    var top: ?f32 = null;
-    var d0: f32 = 0;
-    var d1: f32 = 0;
-    var d: f32 = 0.1;
-    while (d < r + 1.0) : (d += 0.04) {
-        const p = me.pos + f * vec.s(d);
-        const t = map.floorTop(v3(p[0] - 0.03, me.pos[1] + 0.5, p[2] - 0.03), v3(p[0] + 0.03, me.pos[1] + 1.4, p[2] + 0.03));
-        if (top) |t0| {
-            if (t == null or @abs(t.? - t0) > 0.05) break;
-            d1 = d;
-        } else if (t) |tt| {
-            top = tt;
-            d0 = d;
-            d1 = d;
-        } else if (d > r + 0.4) return null;
-    }
-    const y = top orelse return null;
-    const to = v3(me.pos[0], y + 0.002, me.pos[2]) + f * vec.s(@min((d0 + d1) / 2, d0 + 0.35));
-    // Room for the body on top, and over the start at the top height.
-    if (map.overlaps(to + v3(-r, 0.01, -r), to + v3(r, player_mod.height, r))) return null;
-    const up = y - me.pos[1];
-    if (map.overlaps(me.pos + v3(-r, up + 0.01, -r), me.pos + v3(r, up + player_mod.height, r))) return null;
-    return to;
-}
-
-/// One tick of a vault: the feet go up first, then along onto the top.
-fn stepVault() void {
-    const v = &vault.?;
-    v.k = @min(1, v.k + dt / vault_time);
-    const up = vec.smooth(v.k / 0.55);
-    const along = vec.smooth((v.k - 0.3) / 0.7);
-    me.pos = v3(v.from[0] + (v.to[0] - v.from[0]) * along, v.from[1] + (v.to[1] - v.from[1]) * up, v.from[2] + (v.to[2] - v.from[2]) * along);
-    me.vel = v3(0, 0, 0);
-    if (v.k >= 1) {
-        me.pos = v.to;
-        me.grounded = true;
-        vault = null;
-    }
-}
 
 /// A fare dodge: death by guilt 2 s later (deathmatch only: the server
 /// makes the death).
@@ -1489,13 +1440,15 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
         // Space while walking forward, into a waist-high shape: a vault
         // onto it. A vault onto the gates is a fare dodge.
         if (vault == null and !frozen and !shortcut and act.pressed(.jump) and act.down(.forward) and me.grounded) {
-            if (findVault()) |to| {
-                vault = .{ .from = me.pos, .to = to, .k = 0 };
+            if (vault_mod.find(me)) |to| {
+                vault = .{ .from = me.pos, .to = to };
                 sound(1, null, 0.12, .noise, 0.08);
                 if (gates.onGates(to)) startGuilt();
             }
         }
-        if (vault != null) stepVault() else me.step(dt, wish, jump, speed_scale);
+        if (vault) |*v| {
+            if (v.step(&me, dt)) vault = null;
+        } else me.step(dt, wish, jump, speed_scale);
     }
     // Q leans left and E leans right while held.
     var lean_want: f32 = 0;
