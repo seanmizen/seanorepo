@@ -300,10 +300,10 @@ fn visible(o: V3, p: V3) bool {
     return map.raycast(o, d / vec.s(l), l) == null;
 }
 
-/// The damage to a player who stands with the feet at `feet` (0 to 100).
-pub fn damageTo(b: Blast, feet: V3) f32 {
+/// The damage to a player (0 to 100). `pts` are the legs, the chest and the
+/// head of the player (player.zig blastPoints, with the lean).
+pub fn damageTo(b: Blast, pts: [3]V3) f32 {
     const o = origin(b);
-    const pts = [_]V3{ feet + v3(0, 0.3, 0), feet + v3(0, 1.2, 0), feet + v3(0, 1.6, 0) };
     var sum: f32 = 0;
     for (pts) |p| {
         const d = vec.len(p - o);

@@ -18,6 +18,8 @@ pub const PlayerMsg = struct {
     z: f32 = 0,
     yaw: f32 = 0,
     pitch: f32 = 0,
+    /// The lean: -1 left, 0 upright, 1 right.
+    lean: f32 = 0,
     hp: i32 = 100,
     k: u32 = 0,
     d: u32 = 0,

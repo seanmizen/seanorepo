@@ -16,7 +16,8 @@
 //
 // Messages (JSON text). Client to server:
 //   {t:"hello", name}
-//   {t:"st", x, y, z, yaw, pitch}                 20 times a second
+//   {t:"st", x, y, z, yaw, pitch, lean}           20 times a second. lean is
+//                                                 -1 (left) to 1 (right).
 //   {t:"fire", o:[x,y,z], e:[x,y,z], hit:id|-1, head:bool}
 //   {t:"use", i, l}                               call lift i to level l
 //   {t:"shock"}                                   the player touched the live rail
@@ -27,7 +28,7 @@
 //                                                 the thrower can be in the list.
 // Server to client:
 //   {t:"welcome", id}
-//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,hp,k,d,alive}],
+//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,hp,k,d,alive}],
 //    lifts:[[y, door, level, phase]]}
 //   {t:"lift", i, l}             a lift call; each client applies it
 //   {t:"spawn", x, y, z, yaw}
@@ -195,6 +196,8 @@ interface Player {
   z: number;
   yaw: number;
   pitch: number;
+  /** -1 full lean left, 0 upright, 1 full lean right. */
+  lean: number;
   hp: number;
   k: number;
   d: number;
@@ -269,6 +272,7 @@ function spawn(p: Player): void {
   // Face the centre of the arena. Yaw 0 looks to -Z.
   p.yaw = Math.atan2(p.x, p.z);
   p.pitch = 0;
+  p.lean = 0;
   p.hp = 100;
   p.alive = true;
   p.nades = NADES_PER_LIFE;
@@ -374,6 +378,7 @@ function snapshot(): object {
       z: +p.z.toFixed(3),
       yaw: +p.yaw.toFixed(3),
       pitch: +p.pitch.toFixed(3),
+      lean: +p.lean.toFixed(2),
       hp: p.hp,
       k: p.k,
       d: p.d,
@@ -471,6 +476,7 @@ const server = Bun.serve<Conn>({
         z: 0,
         yaw: 0,
         pitch: 0,
+        lean: 0,
         hp: 100,
         k: 0,
         d: 0,
@@ -505,6 +511,7 @@ const server = Bun.serve<Conn>({
         p.z = num(msg.z, -60, 60) ?? p.z;
         p.yaw = num(msg.yaw, -1e4, 1e4) ?? p.yaw;
         p.pitch = num(msg.pitch, -2, 2) ?? p.pitch;
+        p.lean = num(msg.lean, -1, 1) ?? 0;
       } else if (msg.t === 'fire') {
         onFire(p, msg);
       } else if (msg.t === 'shock' && p.alive && phase === 'play') {

@@ -8,12 +8,28 @@ A first-person shooter in the browser, on swindowzig (Zig to wasm, WebGPU).
 - **Target practice**: offline. 60 seconds of plates, some of them move. The
   red centre scores 150, the plate 100. The best score stays in local storage.
 
-Controls: WASD, Space jump, mouse look, left click fire, right click aim down
-the sights, R reload, G grenade, E press a button (lifts), Tab scores, Esc
-releases the mouse, M menu (paused).
+Controls:
 
-Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, 1 to 9 go to
-a spawn point.
+| Key | Action |
+|---|---|
+| WASD | move |
+| Space | jump |
+| Mouse | look |
+| Left click | fire |
+| Right click | aim down the sights |
+| R | reload |
+| G | grenade |
+| F | use: press the button under the crosshair (lifts) |
+| Q, E (hold) | lean left, lean right |
+| Tab | scores |
+| Esc | release the mouse (pause) |
+| M (paused) | main menu |
+
+The number keys 1 to 9 are free for the weapon slots. On the main menu, 1,
+2 and 3 pick deathmatch, practice and the settings.
+
+Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, Shift+1 to 9
+go to a spawn point.
 
 The HUD has a minimap: north up, the walls at body height over the floors at
 foot height. A player who fires shows on it for a moment.
@@ -39,19 +55,42 @@ model:
   5 m. The thrower can also get hurt.
 - Cover counts. The blast checks three points on each player: the legs, the
   chest and the head. Each point that the blast can see gives a third of the
-  damage at its distance.
+  damage at its distance. The chest and the head move with the lean.
 - Deathmatch: 3 grenades in each life. Practice: no limit. A grenade knocks
   down the plates that it can see in the radius.
 - With the debug screen on, a dotted line shows the path of the aimed throw.
   Small translucent cubes show where a player would get hit, for the aimed
   throw and for each grenade in the air. Red is the centre, yellow the edge.
 
+## Lean, head bob and settings
+
+- **Lean**: hold Q or E. The upper body turns about the hips. At full lean
+  the eye moves 0.34 m to the side and the camera rolls 8 degrees. The hit
+  boxes of the torso and the head move with it, and so do the grenade damage
+  points. Other players see the lean (`lean` in the `st` and `snap`
+  messages). A wall stops the lean before the head goes into it: a box of
+  0.32 m around the eye must stay clear. `game/src/player.zig` has the model.
+- **Head bob**: the amount follows the speed on the ground. There is no bob
+  in the air or when the player stands still. Aiming down the sights makes
+  it smaller.
+- **Settings**: 3 on the main menu, or SETTINGS on the pause screen. Drag a
+  slider, or use the arrow keys. Esc closes the panel. The values apply at
+  once and stay in local storage (the key `settings`).
+
+| Setting | Range | Default |
+|---|---|---|
+| Head bob | 0 (off) to 200% | 100% |
+| Master volume | 0 to 100%. It scales every sound. | 100% |
+| Effects volume | 0 to 100%: the guns, the hits, the grenades and the buttons. The trains follow the master volume only. | 100% |
+| Field of view | 60 to 100 degrees, vertical, at the hip. The sights make it narrower. | 74 |
+| Mouse sensitivity | 0.2x to 3x | 1x |
+
 ## Maps
 
 - **Earl's Court** (deathmatch, and the menu background): the station from
   its public layout, not from a survey. Earls Court Road with a bus and the
   TARDIS, the ticket hall, the footbridge, the District line train shed with
-  its iron arch roof and a train, two lifts (E on the call buttons and the
+  its iron arch roof and a train, two lifts (F on the call buttons and the
   cab buttons), escalators that carry you, and the deep Piccadilly line
   platform. The server runs the lifts, so every player sees the same cab.
 - **Arena** (target practice): an open square with cover.
@@ -70,7 +109,8 @@ apps/action/
 │       ├── weapon.zig    rifle state, recoil, the procedural reload animation
 │       ├── map.zig       the current map: boxes, decoration, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
-│       ├── player.zig    movement and collision
+│       ├── player.zig    movement, collision, the lean and the hit boxes
+│       ├── settings.zig  the settings panel and its local storage
 │       ├── mesh.zig      vertex lists and shape builders
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)
 │       └── assets/       rifle.bin (generated), Lato font (OFL)

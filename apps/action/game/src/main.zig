@@ -2,14 +2,15 @@
 //
 // Modes:
 //   - menu: the camera turns slowly over the arena. 1, 2 or a click on a
-//     button picks a mode.
+//     button picks a mode. 3 opens the settings (settings.zig).
 //   - deathmatch: the always-on lobby on the server (/api/ws). A match is
 //     5 minutes, then the score board shows, then the next match starts.
 //   - practice: offline. 60 seconds of pop-up targets, with a best score.
 //
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
-// aim, R reload, G grenade, Tab scores, Esc release the mouse, M menu (while
-// paused).
+// aim, R reload, G grenade, F use (lift buttons), Q and E lean, Tab scores,
+// Esc release the mouse, M menu (while paused). The number keys 1 to 9 stay
+// free for the weapon slots.
 const std = @import("std");
 const sw = @import("sw_app");
 const core = @import("sw_core");
@@ -26,6 +27,7 @@ const weapon = @import("weapon.zig");
 const player_mod = @import("player.zig");
 const net = @import("net.zig");
 const grenade = @import("grenade.zig");
+const settings = @import("settings.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -124,6 +126,9 @@ const Remote = struct {
     alive: bool,
     fall: f32 = 0,
     stride: f32 = 0,
+    /// The lean (-1 left to 1 right), and the last value from the server.
+    lean: f32 = 0,
+    lean_target: f32 = 0,
     seen: bool = true,
     /// The time of its last shot: the minimap shows a shooter for a moment.
     shot_t: f32 = -100,
@@ -177,7 +182,13 @@ fn copyName(dst: []u8, src: []const u8) usize {
     return n;
 }
 
+/// A sound effect: it follows the effects volume and the master volume.
 fn sound(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f32) void {
+    ambient(freq, freq_end, dur, wave, vol * settings.v.sfx);
+}
+
+/// A sound of the world (the trains): it follows the master volume only.
+fn ambient(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f32) void {
     audio.play(.{ .frequency = freq, .frequency_end = freq_end, .duration = dur, .waveform = wave, .volume = vol });
 }
 
@@ -186,8 +197,30 @@ fn gunshotSound(volume: f32) void {
     sound(160, 45, 0.16, .sine, 0.5 * volume);
 }
 
+/// The camera of the live player: the eye with the lean, the head bob and
+/// the roll. The view model hangs from it. The shots and the throws start
+/// at me.eyePos(), which has the lean but not the bob.
+fn playerView() struct { eye: V3, roll: f32 } {
+    var eye = me.eyePos();
+    var roll = -me.lean * player_mod.lean_roll;
+    // The head bob: the amount follows the speed on the ground (me.bob is 0
+    // in the air and when standing still), times the setting (0 is off).
+    const amp = me.bob * settings.v.bob * (1 - 0.7 * gun.ads);
+    if (amp > 0) {
+        // The same phase as the bob of the gun. The head is highest, and
+        // furthest to the side, in the middle of each step.
+        const ph = me.stride * 1.7;
+        const right = v3(@cos(me.yaw), 0, -@sin(me.yaw));
+        eye[1] += amp * 0.02 * (2 * @abs(@sin(ph)) - 1);
+        eye += right * vec.s(amp * 0.015 * @sin(ph));
+        roll -= amp * 0.005 * @sin(ph);
+    }
+    return .{ .eye = eye, .roll = roll };
+}
+
 fn cameraMatrix() Mat4 {
-    return vec.ypr(me.eyePos(), me.yaw, me.pitch, 0);
+    const pv = playerView();
+    return vec.ypr(pv.eye, me.yaw, me.pitch, pv.roll);
 }
 
 fn addTracer(a: V3, b: V3) void {
@@ -254,19 +287,19 @@ fn crossed(a: f32, b: f32, at: f32) bool {
 
 fn trainSounds(a: f32, b: f32) void {
     if (crossed(a, b, 0.05)) {
-        sound(70, 38, 6.0, .sawtooth, 0.12);
-        sound(1, null, 5.0, .noise, 0.08);
+        ambient(70, 38, 6.0, .sawtooth, 0.12);
+        ambient(1, null, 5.0, .noise, 0.08);
     }
-    if (crossed(a, b, 7.5)) sound(900, 300, 1.6, .sine, 0.05); // brakes
+    if (crossed(a, b, 7.5)) ambient(900, 300, 1.6, .sine, 0.05); // brakes
     if (crossed(a, b, 10)) {
-        sound(784, null, 0.35, .sine, 0.12);
-        sound(523, null, 0.6, .sine, 0.1);
+        ambient(784, null, 0.35, .sine, 0.12);
+        ambient(523, null, 0.6, .sine, 0.1);
     }
     if (crossed(a, b, 23.5)) {
-        sound(659, null, 0.25, .sine, 0.12);
-        sound(659, null, 0.25, .sine, 0.12);
+        ambient(659, null, 0.25, .sine, 0.12);
+        ambient(659, null, 0.25, .sine, 0.12);
     }
-    if (crossed(a, b, 27)) sound(120, 400, 6.0, .sawtooth, 0.06); // traction motors
+    if (crossed(a, b, 27)) ambient(120, 400, 6.0, .sawtooth, 0.06); // traction motors
 }
 
 /// The details of the deep train over its body box: windows lit from
@@ -436,12 +469,10 @@ fn rayRemotes(o: V3, d: V3) ?RemoteHit {
     var best_hit: ?RemoteHit = null;
     for (remotes[0..remote_n], 0..) |r, i| {
         if (!r.alive) continue;
-        const head_c = r.pos + v3(0, 1.62, 0);
-        if (map.rayBox(o, d, head_c - vec.s(0.16), head_c + vec.s(0.16))) |h| {
-            if (best_hit == null or h.t < best_hit.?.t) best_hit = .{ .idx = i, .t = h.t, .head = true };
-        }
-        if (map.rayBox(o, d, r.pos - v3(0.3, 0, 0.3), r.pos + v3(0.3, 1.46, 0.3))) |h| {
-            if (best_hit == null or h.t < best_hit.?.t) best_hit = .{ .idx = i, .t = h.t, .head = false };
+        for (player_mod.hitBoxes(r.pos, r.yaw, r.lean), 0..) |b, k| {
+            if (map.rayBox(o, d, b.min, b.max)) |h| {
+                if (best_hit == null or h.t < best_hit.?.t) best_hit = .{ .idx = i, .t = h.t, .head = k == 2 };
+            }
         }
     }
     return best_hit;
@@ -544,21 +575,23 @@ fn recoilKick() void {
 /// The id of the practice plates as grenade bodies (no player has it).
 const plate_id: u32 = 0xFFFF_FFFF;
 
-/// The boxes that stop a grenade: the remote players (head and body, as in
+/// The boxes that stop a grenade: the remote players (the hit boxes, as in
 /// rayRemotes), this player in deathmatch (for the grenades of others), and
 /// the practice plates.
 fn grenadeBodies(buf: []grenade.Body) []grenade.Body {
     var n: usize = 0;
     for (remotes[0..remote_n]) |r| {
-        if (!r.alive or n + 2 > buf.len) continue;
-        const head_c = r.pos + v3(0, 1.62, 0);
-        buf[n] = .{ .min = head_c - vec.s(0.16), .max = head_c + vec.s(0.16), .id = r.id };
-        buf[n + 1] = .{ .min = r.pos - v3(0.3, 0, 0.3), .max = r.pos + v3(0.3, 1.46, 0.3), .id = r.id };
-        n += 2;
+        if (!r.alive or n + 3 > buf.len) continue;
+        for (player_mod.hitBoxes(r.pos, r.yaw, r.lean)) |b| {
+            buf[n] = .{ .min = b.min, .max = b.max, .id = r.id };
+            n += 1;
+        }
     }
-    if (mode == .deathmatch and alive and n < buf.len) {
-        buf[n] = .{ .min = me.pos - v3(0.3, 0, 0.3), .max = me.pos + v3(0.3, 1.78, 0.3), .id = my_id };
-        n += 1;
+    if (mode == .deathmatch and alive and n + 3 <= buf.len) {
+        for (player_mod.hitBoxes(me.pos, me.yaw, me.lean)) |b| {
+            buf[n] = .{ .min = b.min, .max = b.max, .id = my_id };
+            n += 1;
+        }
     }
     if (mode == .practice) for (&targets) |*t| {
         if (!t.up or n == buf.len) continue;
@@ -618,7 +651,7 @@ fn onBlast(b: grenade.Blast) void {
                 hit_marker = 0.18;
                 hit_marker_kill = false;
             };
-            const d = grenade.damageTo(b, me.pos);
+            const d = grenade.damageTo(b, player_mod.blastPoints(me.pos, me.yaw, me.lean));
             if (d >= 1) {
                 hp -= @intFromFloat(@round(d));
                 damage_flash = @min(1, damage_flash + 0.6);
@@ -638,7 +671,7 @@ fn onBlast(b: grenade.Blast) void {
             var any = false;
             for (remotes[0..remote_n]) |r| {
                 if (!r.alive) continue;
-                const d = grenade.damageTo(b, r.pos);
+                const d = grenade.damageTo(b, player_mod.blastPoints(r.pos, r.yaw, r.lean));
                 if (d < 1) continue;
                 const item = std.fmt.bufPrint(list[len..], "{s}{{\"id\":{d},\"dmg\":{d}}}", .{
                     if (len > 0) "," else "", r.id, @as(u32, @intFromFloat(@round(d))),
@@ -647,7 +680,7 @@ fn onBlast(b: grenade.Blast) void {
                 any = true;
             }
             if (alive) {
-                const d = grenade.damageTo(b, me.pos);
+                const d = grenade.damageTo(b, player_mod.blastPoints(me.pos, me.yaw, me.lean));
                 if (d >= 1) {
                     if (std.fmt.bufPrint(list[len..], "{s}{{\"id\":{d},\"dmg\":{d}}}", .{
                         if (len > 0) "," else "", my_id, @as(u32, @intFromFloat(@round(d))),
@@ -713,6 +746,7 @@ fn handleSnap(m: net.Msg) void {
         rem.target = target;
         rem.yaw = p.yaw;
         rem.pitch = p.pitch;
+        rem.lean_target = std.math.clamp(p.lean, -1, 1);
         rem.hp = p.hp;
         rem.k = p.k;
         rem.d = p.d;
@@ -799,9 +833,9 @@ fn gameplayTick(ctx: *sw.Context) void {
     const in = ctx.input();
     const frozen = (mode == .deathmatch and (phase_end or !alive)) or
         (mode == .practice and practice_phase == .results);
-    const zoom: f32 = 1 - 0.35 * gun.ads;
-    me.yaw -= in.mouse.delta_x * 0.0022 * zoom;
-    me.pitch = std.math.clamp(me.pitch - in.mouse.delta_y * 0.0022 * zoom, -1.5, 1.5);
+    const look: f32 = 0.0022 * settings.v.sens * (1 - 0.35 * gun.ads);
+    me.yaw -= in.mouse.delta_x * look;
+    me.pitch = std.math.clamp(me.pitch - in.mouse.delta_y * look, -1.5, 1.5);
 
     var wish = v3(0, 0, 0);
     // Ctrl and Cmd start a shortcut (Cmd+D debug): no movement while held.
@@ -818,8 +852,16 @@ fn gameplayTick(ctx: *sw.Context) void {
     const jump = !frozen and in.keyDown(.Space);
     const speed_scale: f32 = 1 - 0.45 * gun.ads;
     if (mode != .deathmatch or alive) me.step(dt, wish, jump, speed_scale);
+    // Q leans left and E leans right while held.
+    var lean_want: f32 = 0;
+    if (!frozen and !shortcut) {
+        if (in.keyDown(.Q)) lean_want -= 1;
+        if (in.keyDown(.E)) lean_want += 1;
+    }
+    me.updateLean(dt, lean_want);
 
-    if (!frozen and in.keyPressed(.E)) {
+    // F is the use key: lift buttons, and each target that a player presses.
+    if (!frozen and !shortcut and in.keyPressed(.F)) {
         if (aimedButton()) |b| pressButton(b);
     }
     const can_shoot = !frozen and !(mode == .practice and practice_phase == .countdown);
@@ -876,6 +918,7 @@ fn effectsTick() void {
         r.pos = vec.lerp(r.pos, r.target, k);
         const mv = r.pos - before;
         r.stride += @sqrt(mv[0] * mv[0] + mv[2] * mv[2]);
+        r.lean += (r.lean_target - r.lean) * k;
         r.fall = if (r.alive) 0 else @min(1, r.fall + dt * 3);
     }
 }
@@ -924,21 +967,33 @@ fn tick(ctx: *sw.Context) void {
     const in = ctx.input();
 
     captured = jsPointerLocked() != 0;
+    // The engine default master volume is 0.5: a setting of 100% keeps it.
+    audio.setMasterVolume(0.5 * settings.v.master);
 
     // Cmd+D (macOS) / Ctrl+D: the debug screen, as in the voxel example.
     if (in.keyPressed(.D) and (in.mods.super or in.mods.ctrl)) show_debug = !show_debug;
 
     switch (mode) {
         .menu => {
-            if (in.keyPressed(.Num1)) enterDeathmatch(ctx);
-            if (in.keyPressed(.Num2)) enterPractice(ctx);
-            if (in.buttonPressed(.left)) {
-                const b = menuButtons(ctx);
-                const mx = in.mouse.x;
-                const my = in.mouse.y;
-                for (b, 0..) |r, i| {
-                    if (mx >= r.x and mx <= r.x + r.w and my >= r.y and my <= r.y + r.h) {
-                        if (i == 0) enterDeathmatch(ctx) else enterPractice(ctx);
+            if (settings.open) {
+                const l = logical(ctx);
+                settings.update(in, l.w, l.h);
+            } else {
+                if (in.keyPressed(.Num1)) enterDeathmatch(ctx);
+                if (in.keyPressed(.Num2)) enterPractice(ctx);
+                if (in.keyPressed(.Num3)) settings.show();
+                if (in.buttonPressed(.left)) {
+                    const b = menuButtons(ctx);
+                    for (b, 0..) |r, i| {
+                        if (!inRect(r, in.mouse.x, in.mouse.y)) continue;
+                        switch (i) {
+                            0 => enterDeathmatch(ctx),
+                            1 => enterPractice(ctx),
+                            else => {
+                                settings.show();
+                                return;
+                            },
+                        }
                         // The click is a user gesture, so the lock request
                         // in this frame is allowed.
                         ctx.setMouseCapture(true);
@@ -954,8 +1009,8 @@ fn tick(ctx: *sw.Context) void {
             if (!alive) dead_time += dt;
             if (client.state() == .closed and in.keyPressed(.Enter)) enterDeathmatch(ctx);
             if (ticks % 6 == 0 and alive) {
-                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3}}}", .{
-                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch,
+                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2}}}", .{
+                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean,
                 });
             }
         },
@@ -1013,8 +1068,9 @@ fn tick(ctx: *sw.Context) void {
         }
     };
 
-    // Debug teleport: with the debug screen open, 1 to 9 go to a spawn.
-    if (show_debug and mode != .menu) {
+    // Debug teleport: with the debug screen open, Shift+1 to 9 go to a
+    // spawn. The number keys alone stay free for the weapon slots.
+    if (show_debug and mode != .menu and in.mods.shift) {
         const keys = [_]core.KeyCode{ .Num1, .Num2, .Num3, .Num4, .Num5, .Num6, .Num7, .Num8, .Num9 };
         for (keys, 0..) |k, i| {
             if (in.keyPressed(k) and i < map.spawn_count) {
@@ -1026,11 +1082,22 @@ fn tick(ctx: *sw.Context) void {
     }
 
     if (!captured) {
-        if (in.keyPressed(.M)) {
-            enterMenu(ctx);
-            return;
+        // Paused: the lean comes back.
+        me.updateLean(dt, 0);
+        if (settings.open) {
+            const l = logical(ctx);
+            settings.update(in, l.w, l.h);
+        } else {
+            if (in.keyPressed(.M)) {
+                enterMenu(ctx);
+                return;
+            }
+            if (in.buttonPressed(.left)) {
+                if (pauseScreenShows() and inRect(pauseSettingsButton(ctx), in.mouse.x, in.mouse.y)) {
+                    settings.show();
+                } else ctx.setMouseCapture(true);
+            }
         }
-        if (in.buttonPressed(.left)) ctx.setMouseCapture(true);
     } else {
         gameplayTick(ctx);
     }
@@ -1052,13 +1119,17 @@ fn buildRemote(r: *const Remote) void {
         const hip = base.mul(vec.translate(v3(0.11 * side, 0.86, 0)).mul(Mat4.rotationX(swing * side)));
         dyn.orientedBox(hip, v3(-0.08, -0.86, -0.09), v3(0.08, 0, 0.09), dark, 6);
     }
-    dyn.orientedBox(base, v3(-0.23, 0.84, -0.14), v3(0.23, 1.45, 0.14), col, 6);
-    dyn.orientedBox(base, v3(-0.25, 1.0, -0.16), v3(0.25, 1.38, 0.16), dark, 6);
-    dyn.orientedBox(base, v3(-0.12, 1.47, -0.12), v3(0.12, 1.74, 0.12), skin, 6);
-    dyn.orientedBox(base, v3(-0.14, 1.66, -0.15), v3(0.14, 1.8, 0.15), dark, 3);
-    dyn.orientedBox(base, v3(-0.1, 1.56, -0.135), v3(0.1, 1.62, -0.11), v3(0.05, 0.05, 0.06), 3);
+    // The upper body turns about the hips with the lean (player.zig
+    // leanOffset). Local +X is the right of the player.
+    const hip = player_mod.hip;
+    const upper = base.mul(vec.translate(v3(0, hip, 0)).mul(Mat4.rotationZ(-player_mod.leanAngle(r.lean)).mul(vec.translate(v3(0, -hip, 0)))));
+    dyn.orientedBox(upper, v3(-0.23, 0.84, -0.14), v3(0.23, 1.45, 0.14), col, 6);
+    dyn.orientedBox(upper, v3(-0.25, 1.0, -0.16), v3(0.25, 1.38, 0.16), dark, 6);
+    dyn.orientedBox(upper, v3(-0.12, 1.47, -0.12), v3(0.12, 1.74, 0.12), skin, 6);
+    dyn.orientedBox(upper, v3(-0.14, 1.66, -0.15), v3(0.14, 1.8, 0.15), dark, 3);
+    dyn.orientedBox(upper, v3(-0.1, 1.56, -0.135), v3(0.1, 1.62, -0.11), v3(0.05, 0.05, 0.06), 3);
     // Arms and the rifle, turned with the look pitch.
-    const aim = base.mul(vec.translate(v3(0, 1.38, 0)).mul(Mat4.rotationX(r.pitch * (1 - r.fall))));
+    const aim = upper.mul(vec.translate(v3(0, 1.38, 0)).mul(Mat4.rotationX(r.pitch * (1 - r.fall))));
     dyn.orientedBox(aim, v3(0.16, -0.1, -0.45), v3(0.26, 0.02, 0.0), col, 6);
     dyn.orientedBox(aim, v3(-0.2, -0.12, -0.5), v3(-0.1, -0.02, -0.05), col, 6);
     weapon.addRifle(&dyn, aim.mul(vec.translate(v3(0.08, -0.1, -0.2))), Mat4.identity(), 0);
@@ -1117,7 +1188,7 @@ fn buildViewmodel() void {
     }
 }
 
-fn eyeForRender() struct { eye: V3, yaw: f32, pitch: f32 } {
+fn eyeForRender() struct { eye: V3, yaw: f32, pitch: f32, roll: f32 = 0 } {
     if (mode == .menu) {
         // A slow drift along the train shed, over the islands.
         const x = 26 * @sin(time * 0.03);
@@ -1129,9 +1200,8 @@ fn eyeForRender() struct { eye: V3, yaw: f32, pitch: f32 } {
         const k = @min(1, dead_time * 2);
         return .{ .eye = me.pos + v3(0, 1.6 - 1.25 * k, 0), .yaw = me.yaw, .pitch = me.pitch * (1 - k) + 0.25 * k };
     }
-    var eye = me.eyePos();
-    if (me.grounded) eye[1] += @abs(@sin(me.stride * 1.7)) * 0.03 * (1 - gun.ads);
-    return .{ .eye = eye, .yaw = me.yaw, .pitch = me.pitch };
+    const pv = playerView();
+    return .{ .eye = pv.eye, .yaw = me.yaw, .pitch = me.pitch, .roll = pv.roll };
 }
 
 // ---- HUD -------------------------------------------------------------------
@@ -1148,15 +1218,37 @@ fn logical(ctx: *sw.Context) struct { w: f32, h: f32 } {
     return .{ .w = l.w, .h = l.h };
 }
 
-fn menuButtons(ctx: *sw.Context) [2]gfx.Rect {
+fn menuButtons(ctx: *sw.Context) [3]gfx.Rect {
     const l = logical(ctx);
     const w: f32 = 340;
     const x = l.w / 2 - w / 2;
-    const y = l.h * 0.5;
+    const y = l.h * 0.45;
     return .{
         .{ .x = x, .y = y, .w = w, .h = 64 },
         .{ .x = x, .y = y + 80, .w = w, .h = 64 },
+        .{ .x = x, .y = y + 160, .w = w, .h = 64 },
     };
+}
+
+fn inRect(r: gfx.Rect, x: f32, y: f32) bool {
+    return x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h;
+}
+
+/// True when the pause screen ("CLICK TO PLAY") shows. Deathmatch hides it
+/// while it connects and while the score board shows.
+fn pauseScreenShows() bool {
+    if (captured or settings.open) return false;
+    return switch (mode) {
+        .menu => false,
+        .practice => true,
+        .deathmatch => client.state() == .open and !phase_end,
+    };
+}
+
+/// The SETTINGS button of the pause screen.
+fn pauseSettingsButton(ctx: *sw.Context) gfx.Rect {
+    const l = logical(ctx);
+    return .{ .x = l.w / 2 - 110, .y = l.h / 2 + 48, .w = 220, .h = 44 };
 }
 
 fn txt(r: *gfx.Renderer, s: []const u8, x: f32, y: f32, size: f32, col: gfx.Color) void {
@@ -1283,20 +1375,20 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
     txtCenter(r, "ACTION", cx, h * 0.2, 96, white);
     txtCenter(r, "a swindowzig shooter", cx, h * 0.2 + 104, 18, dim);
     const b = menuButtons(ctx);
-    const labels = [_][]const u8{ "1   DEATHMATCH", "2   TARGET PRACTICE" };
-    const subs = [_][]const u8{ "always-on lobby, 5 minute matches", "offline, 60 seconds" };
+    const labels = [_][]const u8{ "1   DEATHMATCH", "2   TARGET PRACTICE", "3   SETTINGS" };
+    const subs = [_][]const u8{ "always-on lobby, 5 minute matches", "offline, 60 seconds", "head bob, volume, field of view, mouse" };
     const in = ctx.input();
     for (b, 0..) |rect, i| {
-        const hover = in.mouse.x >= rect.x and in.mouse.x <= rect.x + rect.w and in.mouse.y >= rect.y and in.mouse.y <= rect.y + rect.h;
+        const hover = inRect(rect, in.mouse.x, in.mouse.y);
         try r.fillRect(rect, if (hover) gfx.Color.rgba8(255, 166, 77, 230) else panel);
         txt(r, labels[i], rect.x + 22, rect.y + 10, 22, if (hover) gfx.Color.rgba8(20, 14, 8, 255) else white);
         txt(r, subs[i], rect.x + 22, rect.y + 38, 13, if (hover) gfx.Color.rgba8(40, 26, 14, 255) else dim);
     }
     if (best > 0) {
         var buf: [32]u8 = undefined;
-        txtCenter(r, std.fmt.bufPrint(&buf, "practice best: {d}", .{best}) catch "", cx, b[1].y + 84, 14, dim);
+        txtCenter(r, std.fmt.bufPrint(&buf, "practice best: {d}", .{best}) catch "", cx, b[2].y + 84, 14, dim);
     }
-    txtCenter(r, "WASD move  -  SPACE jump  -  MOUSE aim  -  RIGHT CLICK sights  -  R reload  -  G grenade  -  TAB scores", cx, h - 48, 14, dim);
+    txtCenter(r, "WASD move  -  SPACE jump  -  MOUSE aim  -  RIGHT CLICK sights  -  R reload  -  G grenade  -  Q / E lean  -  F use  -  TAB scores", cx, h - 48, 14, dim);
     txtCenter(r, "Rifle model: Quaternius Ultimate Gun Pack (CC0)", cx, h - 26, 12, dim);
 }
 
@@ -1389,7 +1481,7 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     }
     L.add(&lines, &n, "pos {d:.2} {d:.2} {d:.2}  {s}", .{ me.pos[0], me.pos[1], me.pos[2], if (me.grounded) "grounded" else "air" });
     L.add(&lines, &n, "vel {d:.2} {d:.2} {d:.2}", .{ me.vel[0], me.vel[1], me.vel[2] });
-    L.add(&lines, &n, "yaw {d:.3}  pitch {d:.3}", .{ me.yaw, me.pitch });
+    L.add(&lines, &n, "yaw {d:.3}  pitch {d:.3}  lean {d:.2}  bob {d:.2}", .{ me.yaw, me.pitch, me.lean, me.bob });
     L.add(&lines, &n, "mouse {d:.0},{d:.0}  delta {d:.1},{d:.1}", .{ in.mouse.x, in.mouse.y, in.mouse.delta_x, in.mouse.delta_y });
     L.add(&lines, &n, "mods ctrl {}  cmd {}  shift {}  alt {}", .{ @intFromBool(in.mods.ctrl), @intFromBool(in.mods.super), @intFromBool(in.mods.shift), @intFromBool(in.mods.alt) });
     L.add(&lines, &n, "gun ammo {d}/{d}  reload {d:.2}  ads {d:.2}  heat {d:.2}", .{ gun.ammo, gun.reserve, gun.reloading, gun.ads, gun.heat });
@@ -1465,6 +1557,10 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     const h = l.h;
 
     defer if (show_debug) drawDebug(ctx, r) catch {};
+    if (settings.open) {
+        const in = ctx.input();
+        return settings.draw(r, &text.?, in.mouse.x, in.mouse.y, w, h);
+    }
     if (mode == .menu) return drawMenu(ctx, r, w, h);
     var crosshair = true;
     if (mode == .deathmatch) {
@@ -1475,7 +1571,7 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
     if (captured) if (aimedButton()) |bi| {
         const b = map.buttons[bi];
-        const label = if (b.in_cab) (if (b.level == 0) "E   GO DOWN" else "E   GO UP") else "E   CALL LIFT";
+        const label = if (b.in_cab) (if (b.level == 0) "F   GO DOWN" else "F   GO UP") else "F   CALL LIFT";
         txtCenter(r, label, w / 2, h / 2 + 22, 15, white);
     };
     try drawMinimap(r, h);
@@ -1486,6 +1582,11 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
         try r.fillRect(.{ .x = 0, .y = 0, .w = w, .h = h }, gfx.Color.rgba8(5, 6, 10, 140));
         txtCenter(r, "CLICK TO PLAY", w / 2, h / 2 - 30, 34, white);
         txtCenter(r, "M for the main menu", w / 2, h / 2 + 14, 16, dim);
+        const sb = pauseSettingsButton(ctx);
+        const in = ctx.input();
+        const hover = inRect(sb, in.mouse.x, in.mouse.y);
+        try r.fillRect(sb, if (hover) gfx.Color.rgba8(255, 166, 77, 230) else panel);
+        txtCenter(r, "SETTINGS", w / 2, sb.y + 12, 17, if (hover) gfx.Color.rgba8(20, 14, 8, 255) else white);
     }
 }
 
@@ -1519,6 +1620,7 @@ fn gameInit(ctx: *sw.Context) !void {
     if (platform.storageGet(alloc, "practice-best") catch null) |b| {
         best = std.fmt.parseInt(u32, b, 10) catch 0;
     }
+    settings.load(alloc);
 }
 
 fn gameRender(ctx: *sw.Context) !void {
@@ -1593,12 +1695,15 @@ fn gameRender(ctx: *sw.Context) !void {
     const out_k = vec.smooth((cam.eye[1] - (map.underground_y - 5)) / 5);
     const target_exposure = 0.68 * (2.4 - 1.4 * out_k);
     exposure += (target_exposure - exposure) * @min(1, frame_ms / 1000 * 1.5);
-    const fov: f32 = (74 - 22 * gun.ads) * std.math.pi / 180;
+    // The field of view setting is at the hip. The sights make it narrower
+    // in the same ratio as the default, 74 to 52 degrees.
+    const fov: f32 = settings.v.fov * (1 - 22.0 / 74.0 * gun.ads) * std.math.pi / 180;
     if (hud) |*r| try drawHud(ctx, r);
     try render.draw(ctx, .{
         .eye = cam.eye,
         .yaw = cam.yaw,
         .pitch = cam.pitch,
+        .roll = cam.roll,
         .fov = fov,
         .time = time,
         .damage = damage_flash,
