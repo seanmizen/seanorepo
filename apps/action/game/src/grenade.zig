@@ -10,6 +10,11 @@
 // - The trail: soft smoke puffs every 20 ms along the path. They grow, drift
 //   up and fade out in 1.5 s. They are translucent billboards
 //   (render.zig, the translucent pipeline).
+// - The blast: a short flash (a point light and a hot core), yellow-white
+//   streaks that fly out from the point and cool to orange, and a little
+//   smoke. The core and the streaks are glowing billboards, and the shader
+//   skips the lights for them. Each blast adds few quads, and most of them
+//   are thin, so several blasts near the eye cost little.
 // - Damage: radius 5 m. 100 to 1.5 m, then it falls linearly to 0 at 5 m.
 //   Cover: three points on the target (feet + 0.3, chest 1.2, head 1.6). A
 //   point counts only if a ray from the blast to it hits no solid box. Each
@@ -23,7 +28,8 @@
 //
 // Translucent vertex encoding (scene.wgsl fs_trans):
 //   - a billboard: nrm.xy the quad UV in [-1, 1], nrm.z the emission,
-//     mat = -alpha (negative).
+//     mat = -alpha (negative). The alpha falls off to the edge of the
+//     ellipse in the quad, so a long quad is a streak with soft ends.
 //   - a shaded volume: nrm the face normal, mat = +alpha.
 const std = @import("std");
 const vec = @import("vec.zig");
@@ -47,6 +53,15 @@ pub const max_flight: f32 = 6;
 /// The time between two trail puffs.
 const puff_every: f32 = 0.02;
 const trail_life: f32 = 1.5;
+/// The streaks of one blast.
+const streaks_per_blast = 28;
+/// The drag on a streak (1/s). A streak with speed v stops at v / drag,
+/// so the streaks reach 2.8 to 5.2 m: about the blast radius.
+const streak_drag: f32 = 5;
+/// The tail of a streak is where its head was this long ago, so a fast
+/// streak is long and a slow one is short.
+const streak_lag: f32 = 0.06;
+const flash_life: f32 = 0.15;
 
 /// A box that stops a grenade: a player's head or body, or a practice
 /// plate. A grenade passes through the boxes of its own thrower.
@@ -81,8 +96,21 @@ const Puff = struct {
     size1: f32,
     alpha: f32,
     col: V3,
-    /// > 0: a fireball puff. It glows and is not lit.
+    /// > 0: the hot core of a blast. It glows and is not lit.
     emit: f32,
+};
+
+/// A hot fragment that flies out from a blast in a straight line. Its
+/// position is a function of its age (see streakAt).
+const Streak = struct {
+    o: V3,
+    /// A unit vector.
+    dir: V3,
+    speed: f32,
+    age: f32,
+    life: f32,
+    /// The half width of the billboard.
+    width: f32,
 };
 
 const Flash = struct { p: V3, life: f32 };
@@ -91,6 +119,8 @@ var grenades: [16]Grenade = undefined;
 pub var count: usize = 0;
 var puffs: [640]Puff = undefined;
 var puff_n: usize = 0;
+var streaks: [8 * streaks_per_blast]Streak = undefined;
+var streak_n: usize = 0;
 var flashes: [4]Flash = undefined;
 var flash_n: usize = 0;
 var blasts: [16]Blast = undefined;
@@ -102,10 +132,20 @@ fn rand() f32 {
     return rng.random().float(f32);
 }
 
+/// A random unit vector, with the same chance for each direction.
+fn randDir() V3 {
+    while (true) {
+        const r = v3(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1);
+        const l2 = vec.dot(r, r);
+        if (l2 > 0.01 and l2 <= 1) return r / vec.s(@sqrt(l2));
+    }
+}
+
 /// Remove all grenades, smoke and flashes (a mode or map change).
 pub fn reset() void {
     count = 0;
     puff_n = 0;
+    streak_n = 0;
     flash_n = 0;
     throw_anim = 0;
 }
@@ -220,6 +260,9 @@ pub fn step(dt: f32, bodies: []const Body) []const Blast {
         p.p += p.v * vec.s(dt);
         p.v = p.v * vec.s(1 - 1.8 * dt) + v3(0, 0.25 * dt, 0);
     }
+    for (streaks[0..@min(streak_n, streaks.len)]) |*st| {
+        if (st.age < st.life) st.age += dt;
+    }
     for (flashes[0..flash_n]) |*f| f.life -= dt;
     while (flash_n > 0 and flashes[0].life <= 0) {
         for (1..flash_n) |k| flashes[k - 1] = flashes[k];
@@ -228,54 +271,74 @@ pub fn step(dt: f32, bodies: []const Body) []const Blast {
     return blasts[0..nb];
 }
 
-/// The smoke and fire of a blast, and its flash.
+/// The flash, the streaks and the smoke of a blast.
 fn explodeFx(p: V3, n: V3) void {
     if (flash_n == flashes.len) {
         for (1..flash_n) |k| flashes[k - 1] = flashes[k];
         flash_n -= 1;
     }
-    flashes[flash_n] = .{ .p = p + n * vec.s(0.6), .life = 0.15 };
+    flashes[flash_n] = .{ .p = p + n * vec.s(0.6), .life = flash_life };
     flash_n += 1;
-    // The fireball: bright puffs that grow fast and go in 0.3 s.
-    for (0..10) |_| {
-        const r = v3(rand() - 0.5, rand() - 0.5, rand() - 0.5);
-        addPuff(.{
-            .p = p + n * vec.s(0.3) + r * vec.s(0.6),
-            .v = (n * vec.s(1.5) + r * vec.s(4)),
+    // The core: one white-hot billboard that grows and goes in 0.1 s.
+    addPuff(.{
+        .p = p + n * vec.s(0.25),
+        .v = v3(0, 0, 0),
+        .age = 0,
+        .life = 0.1,
+        .size0 = 0.6,
+        .size1 = 1.6,
+        .alpha = 1,
+        .col = v3(1.0, 0.88, 0.6),
+        .emit = 8,
+    });
+    // The streaks: out over the open side of the surface. A mirror turns
+    // a direction into the surface to the open side, then it leans out.
+    for (0..streaks_per_blast) |_| {
+        var r = randDir();
+        const into = vec.dot(r, n);
+        if (into < 0) r -= n * vec.s(2 * into);
+        streaks[streak_n % streaks.len] = .{
+            .o = p + n * vec.s(0.05),
+            .dir = vec.norm(r + n * vec.s(0.35)),
+            .speed = 14 + rand() * 12,
             .age = 0,
-            .life = 0.22 + rand() * 0.12,
-            .size0 = 0.4,
-            .size1 = 1.6 + rand() * 0.6,
-            .alpha = 0.85,
-            .col = v3(1.0, 0.55 + rand() * 0.2, 0.2),
-            .emit = 5,
-        });
+            .life = 0.25 + rand() * 0.2,
+            .width = 0.018 + rand() * 0.012,
+        };
+        streak_n += 1;
     }
-    // The smoke: dark grey, larger and slower, it hangs for 2 to 3 s.
-    for (0..22) |_| {
+    // A little smoke: grey puffs that rise and hang for about 2 s.
+    for (0..6) |_| {
         const r = v3(rand() - 0.5, rand() - 0.5, rand() - 0.5);
-        const g = 0.25 + rand() * 0.15;
+        const g = 0.24 + rand() * 0.08;
         addPuff(.{
-            .p = p + n * vec.s(0.4) + r * vec.s(1.2),
-            .v = n * vec.s(1.2) + r * vec.s(3.5) + v3(0, 0.6, 0),
+            .p = p + n * vec.s(0.3) + r * vec.s(0.5),
+            .v = n * vec.s(0.8) + r * vec.s(1.2) + v3(0, 0.4, 0),
             .age = 0,
-            .life = 2 + rand(),
-            .size0 = 0.5,
-            .size1 = 2.0 + rand() * 0.8,
-            .alpha = 0.55,
+            .life = 1.4 + rand() * 0.6,
+            .size0 = 0.35,
+            .size1 = 1.2 + rand() * 0.5,
+            .alpha = 0.5,
             .col = v3(g, g, g * 1.02),
             .emit = 0,
         });
     }
 }
 
-/// The point lights of the blasts (a short bright flash each).
+/// The point of a streak at age t: it slows with drag and drops a little.
+fn streakAt(st: Streak, t: f32) V3 {
+    const d = st.speed / streak_drag * (1 - @exp(-streak_drag * t));
+    return st.o + st.dir * vec.s(d) - v3(0, 3 * t * t, 0);
+}
+
+/// The point lights of the blasts: a short bright flash each. The square
+/// makes it fall off fast, so it reads as a flash and not a glow.
 pub fn lights(out: []map.Light) usize {
     var n: usize = 0;
     for (flashes[0..flash_n]) |f| {
         if (n == out.len or f.life <= 0) break;
-        const k = f.life / 0.15;
-        out[n] = .{ .pos = f.p, .color = v3(40, 24, 10) * vec.s(k), .radius = 16 };
+        const k = f.life / flash_life;
+        out[n] = .{ .pos = f.p, .color = v3(40, 24, 10) * vec.s(k * k), .radius = 16 };
         n += 1;
     }
     return n;
@@ -471,8 +534,14 @@ pub fn buildOpaque(dyn: *mesh.Mesh) void {
     }
 }
 
-/// The smoke puffs as camera-facing quads.
+/// The smoke and the blast core as camera-facing quads, and the streaks as
+/// long quads that turn about their own axis to face the camera.
+/// A streak quad has u = -0.3 at the head and u = 1 at the tail. The
+/// ellipse of fs_trans then makes a comet: full width just behind the
+/// head, thin and faint at the tail.
 pub fn buildTranslucent(trans: *mesh.Mesh, right: V3, up: V3) void {
+    const uv = [4][2]f32{ .{ -1, -1 }, .{ 1, -1 }, .{ 1, 1 }, .{ -1, 1 } };
+    const tris = [6]usize{ 0, 1, 2, 0, 2, 3 };
     for (puffs[0..@min(puff_n, puffs.len)]) |p| {
         if (p.age >= p.life) continue;
         const k = p.age / p.life;
@@ -483,9 +552,40 @@ pub fn buildTranslucent(trans: *mesh.Mesh, right: V3, up: V3) void {
         const r = right * vec.s(size);
         const u = up * vec.s(size);
         const corners = [4]V3{ p.p - r - u, p.p + r - u, p.p + r + u, p.p - r + u };
-        const uv = [4][2]f32{ .{ -1, -1 }, .{ 1, -1 }, .{ 1, 1 }, .{ -1, 1 } };
-        for ([6]usize{ 0, 1, 2, 0, 2, 3 }) |ci| {
+        for (tris) |ci| {
             trans.push(corners[ci], v3(uv[ci][0], uv[ci][1], p.emit), p.col, -a);
+        }
+    }
+    const fwd = vec.cross(up, right);
+    for (streaks[0..@min(streak_n, streaks.len)]) |st| {
+        if (st.age >= st.life) continue;
+        const k = st.age / st.life;
+        const head = streakAt(st, st.age);
+        const tail = streakAt(st, @max(0, st.age - streak_lag));
+        const ax = head - tail;
+        const l = vec.len(ax);
+        if (l < 1e-3) continue;
+        const along = ax / vec.s(l);
+        var side = vec.cross(along, fwd);
+        const sl = vec.len(side);
+        side = if (sl > 0.05) side / vec.s(sl) else up;
+        const w = st.width * (1 - 0.6 * k);
+        const s = side * vec.s(w);
+        const h0 = head + along * vec.s(w);
+        const corners = [4]V3{ tail - s, h0 - s, h0 + s, tail + s };
+        // White-hot at the head, it cools to orange.
+        const fade = std.math.pow(f32, 1 - k, 1.3);
+        const head_col = vec.lerp(v3(1.0, 0.82, 0.42), v3(1.0, 0.5, 0.12), k);
+        const tail_col = v3(1.0, 0.42, 0.08);
+        const emit = 10 - 5 * k;
+        for (tris) |ci| {
+            const at_head = ci == 1 or ci == 2;
+            trans.push(
+                corners[ci],
+                v3(if (at_head) -0.3 else 1, uv[ci][1], emit),
+                if (at_head) head_col else tail_col,
+                -(if (at_head) fade else 0.5 * fade),
+            );
         }
     }
 }

@@ -57,8 +57,9 @@ the walking speed.
 ## Grenades
 
 G throws an impact grenade. It goes off when it touches a wall, the floor or
-a player. A thin smoke trail shows its path. `game/src/grenade.zig` has the
-model:
+a player. A thin smoke trail shows its path. The blast is a short flash,
+yellow-white streaks that fly out to about the blast radius and cool to
+orange, and a little smoke. `game/src/grenade.zig` has the model:
 
 - The blast radius is 5 m. The damage is 100 to 1.5 m, then it falls to 0 at
   5 m. The thrower can also get hurt.

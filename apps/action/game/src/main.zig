@@ -630,15 +630,15 @@ fn aimPrediction() ?grenade.Prediction {
     return grenade.predict(th.o, th.v, dt, grenadeBodies(&buf), my_id);
 }
 
-/// A blast: the sound and sparks for all grenades. For a grenade of this
-/// client also the damage: practice applies it here, deathmatch sends it to
-/// the server, which applies it as it does a hit.
+/// A blast: the sound for all grenades (grenade.zig draws the flash, the
+/// streaks and the smoke). For a grenade of this client also the damage:
+/// practice applies it here, deathmatch sends it to the server, which
+/// applies it as it does a hit.
 fn onBlast(b: grenade.Blast) void {
     const dist = vec.len(b.pos - me.eyePos());
     const vol = std.math.clamp(8 / (dist + 4), 0.08, 1);
     sound(1, null, 0.8, .noise, 0.75 * vol);
     sound(110, 28, 0.7, .sine, 0.9 * vol);
-    addSparks(b.pos, b.normal, v3(1.0, 0.6, 0.25), 30);
     if (!b.mine) return;
     switch (mode) {
         .practice => {
