@@ -71,6 +71,11 @@ pub const Msg = struct {
     // The pings of the players (t "pings"): [id, ms, stale] each. ms is -1
     // before the first value. stale is 1 after 10 s with no answer.
     ms: ?[][3]i32 = null,
+    // The server cvars (t "cvars"): [name, value] pairs, the values in
+    // their text form (console/cvar.zig).
+    cv: ?[]const [2][]const u8 = null,
+    // A line of server text (t "print"), for example the answer to rcon.
+    text: ?[]const u8 = null,
 };
 
 pub const Client = struct {

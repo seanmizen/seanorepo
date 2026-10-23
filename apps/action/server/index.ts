@@ -1,12 +1,17 @@
 // Where: apps/action/server/index.ts
 // When: `bun server/index.ts` (yarn workspace action start, and the docker
-// image). PORT is 4080 by default. MATCH_SECONDS (300) and END_SECONDS (10)
-// set the match lengths.
+// image). PORT is 4080 by default.
 // Why: one Bun process serves the static game (public/) and the always-on
 // deathmatch lobby on the WebSocket /api/ws.
 //
-// The lobby: a match is MATCH_SECONDS long. Then the score board shows for
-// END_SECONDS, the scores reset, and the next match starts. The clock runs
+// The server cvars (game/src/server_cvars.json) come from the defaults, then
+// the config file (SERVER_CONFIG, default server/server.cfg), then the
+// SV_<NAME> environment variables (console.ts). Each player gets them on
+// join and on each change. Only rcon changes them at run time, and rcon is
+// off while admin_password is empty.
+//
+// The lobby: a match is match_seconds long. Then the score board shows for
+// end_seconds, the scores reset, and the next match starts. The clock runs
 // with or without players.
 //
 // Trust model: casual. The client sends its own position and its hits. The
@@ -40,6 +45,8 @@
 //                                                 the damage (cover included), and
 //                                                 the thrower can be in the list.
 //   {t:"pong", n}                                 the answer to ping n (ping.ts)
+//   {t:"rcon", pw, cmd}                           run a server command (remote
+//                                                 admin). pw is admin_password.
 // Server to client:
 //   {t:"welcome", id}
 //   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,hp,k,d,alive,w,m}],
@@ -57,9 +64,20 @@
 //   {t:"pings", ms:[[id, ms, stale]]}  each 2 s: the ping of each player in
 //                                 whole ms (-1: no value yet). stale 1: no
 //                                 answer for 10 s. See ping.ts.
+//   {t:"cvars", cv:[[name, value]]}  server cvars, as text: all of them on
+//                                 join, then each change. Never a protected one.
+//   {t:"print", text}             a line for the console (the answer to rcon)
 
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import type { ServerWebSocket } from 'bun';
+import {
+  applyEnv,
+  Cvars,
+  readDefs,
+  runConfigFile,
+  ServerConsole,
+} from './console';
 import {
   newPing,
   onPong,
@@ -70,9 +88,27 @@ import {
 
 const PORT = Number(process.env.PORT ?? 4080);
 const PUBLIC_DIR = process.env.PUBLIC_DIR ?? join(import.meta.dir, '../public');
-// The match lengths. Tests set short values.
-const MATCH_SECONDS = Number(process.env.MATCH_SECONDS ?? 300);
-const END_SECONDS = Number(process.env.END_SECONDS ?? 10);
+const SERVER_CONFIG =
+  process.env.SERVER_CONFIG ?? join(import.meta.dir, 'server.cfg');
+
+// The server cvars: defaults, then the config file, then SV_<NAME>.
+const cvars = new Cvars(
+  readDefs(join(import.meta.dir, '../game/src/server_cvars.json')),
+);
+const serverConsole = new ServerConsole(cvars, [
+  {
+    name: 'status',
+    args: '',
+    description: 'List the players: id, name, kills and deaths.',
+    run: (_a, out) => {
+      out(`${players.size} players, phase ${phase}`);
+      for (const p of players.values())
+        out(`${p.id} ${p.name} ${p.k}/${p.d}${p.joined ? '' : ' (joining)'}`);
+    },
+  },
+]);
+const log = (line: string) => console.log(`action: ${line}`);
+
 const RESPAWN_MS = 3000;
 const MAX_PLAYERS = 16;
 
@@ -144,6 +180,10 @@ const NADE_RADIUS = 5;
 // A blast more than this far from the server position of a target cannot
 // hit it (the radius, plus the lag of the positions).
 const NADE_REACH = NADE_RADIUS + 3;
+// Remote admin: a connection closes after RCON_TRIES bad passwords, and
+// rcon stops for everyone for a minute after RCON_FAILS_A_MINUTE.
+const RCON_TRIES = 5;
+const RCON_FAILS_A_MINUTE = 20;
 
 // The lobby map is Earl's Court. The same spawn points (x, y, z) as
 // apps/action/game/src/maps/earls_court.zig.
@@ -301,6 +341,8 @@ interface Player {
   joined: boolean;
   /** Grenades left in this life. */
   nades: number;
+  /** Bad rcon passwords on this connection. */
+  rconFails: number;
   /** Throws that have not gone off. A blast needs one. */
   nadesInAir: number;
   lastNade: number;
@@ -337,7 +379,16 @@ function pickFrom(msg: Record<string, unknown>): Pick | null {
 const players = new Map<number, Player>();
 let nextId = 1;
 let phase: 'play' | 'end' = 'play';
-let phaseEndsAt = Date.now() + MATCH_SECONDS * 1000;
+
+runConfigFile(serverConsole, SERVER_CONFIG, log);
+applyEnv(cvars, process.env, log);
+// Each change goes to the players. A protected cvar never does.
+cvars.onChange((def, text) => {
+  if (!def.flags.includes('protected'))
+    broadcast({ t: 'cvars', cv: [[def.name, text]] });
+});
+
+let phaseEndsAt = Date.now() + cvars.number('match_seconds') * 1000;
 
 function send(p: Player, msg: object): void {
   p.ws.send(JSON.stringify(msg));
@@ -546,6 +597,44 @@ function onBlast(p: Player, msg: Record<string, unknown>): void {
   }
 }
 
+// The bad rcon passwords of the last minute, of all players.
+let rconFailTimes: number[] = [];
+
+/** The two strings are equal. The time does not depend on where they
+ * differ. */
+function sameSecret(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
+
+/** Remote admin: run a server command (console.ts) for a player who gives
+ * admin_password. The answer goes back as print lines. */
+function onRcon(p: Player, msg: Record<string, unknown>): void {
+  const reply = (text: string) => send(p, { t: 'print', text });
+  const password = cvars.string('admin_password');
+  if (!password) {
+    reply('rcon is off: the server has no admin_password');
+    return;
+  }
+  const now = Date.now();
+  rconFailTimes = rconFailTimes.filter((t) => now - t < 60_000);
+  if (rconFailTimes.length >= RCON_FAILS_A_MINUTE) {
+    reply('rcon: too many bad passwords, try again in a minute');
+    return;
+  }
+  if (typeof msg.pw !== 'string' || !sameSecret(msg.pw, password)) {
+    rconFailTimes.push(now);
+    p.rconFails++;
+    reply('rcon: bad password');
+    if (p.rconFails >= RCON_TRIES) p.ws.close(1008, 'too many bad passwords');
+    return;
+  }
+  const cmd = typeof msg.cmd === 'string' ? msg.cmd.slice(0, 240) : '';
+  log(`rcon from ${p.name} (${p.id}): ${cmd}`);
+  serverConsole.exec(cmd, reply);
+}
+
 function snapshot(): object {
   const list = [];
   for (const p of players.values()) {
@@ -593,10 +682,10 @@ function step(): void {
   if (now >= phaseEndsAt) {
     if (phase === 'play') {
       phase = 'end';
-      phaseEndsAt = now + END_SECONDS * 1000;
+      phaseEndsAt = now + cvars.number('end_seconds') * 1000;
     } else {
       phase = 'play';
-      phaseEndsAt = now + MATCH_SECONDS * 1000;
+      phaseEndsAt = now + cvars.number('match_seconds') * 1000;
       for (const p of players.values()) {
         p.k = 0;
         p.d = 0;
@@ -679,6 +768,7 @@ const server = Bun.serve<Conn>({
         nadesInAir: 0,
         lastNade: 0,
         ping: newPing(Date.now()),
+        rconFails: 0,
       };
       players.set(p.id, p);
     },
@@ -696,6 +786,7 @@ const server = Bun.serve<Conn>({
         p.next = pickFrom(msg) ?? DEFAULT_PICK;
         p.joined = true;
         send(p, { t: 'welcome', id: p.id });
+        send(p, { t: 'cvars', cv: cvars.publicPairs() });
         if (phase === 'play') spawn(p);
         else p.respawnAt = 0;
       } else if (msg.t === 'st' && p.alive) {
@@ -740,6 +831,8 @@ const server = Bun.serve<Conn>({
         onBlast(p, msg);
       } else if (msg.t === 'pong') {
         onPong(p.ping, msg.n, Date.now());
+      } else if (msg.t === 'rcon') {
+        onRcon(p, msg);
       } else if (msg.t === 'use') {
         const i = Number(msg.i);
         const level = Number(msg.l);

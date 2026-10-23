@@ -5,7 +5,8 @@
 #   1. zig-build  download the Zig version that utils/swindowzig/build.zig.zon
 #                 names, build game/ to action.wasm
 #   2. js-build   bundle src/boot.ts with the swindowzig wasm loader
-#   3. prod       Bun runs server/index.ts: static files and /api/ws on 4080
+#   3. prod       Bun runs server/index.ts: static files and /api/ws on 4080.
+#                 It reads game/src/server_cvars.json and server/server.cfg.
 #   dev           Bun runs the server from the bind mount. Build the files of
 #                 public/ on the host first (apps/action/build.sh).
 
@@ -43,6 +44,8 @@ RUN bun build /build/apps/action/src/boot.ts --outfile /build/out/boot.js --targ
 FROM oven/bun:1.1-slim AS prod
 WORKDIR /app
 COPY apps/action/server ./server
+# The server cvar definitions: the client embeds the same file.
+COPY apps/action/game/src/server_cvars.json ./game/src/server_cvars.json
 COPY apps/action/public ./public
 COPY --from=js-build /build/out/boot.js ./public/boot.js
 COPY --from=zig-build /build/apps/action/game/zig-out/bin/action.wasm ./public/action.wasm

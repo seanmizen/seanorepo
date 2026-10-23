@@ -4,8 +4,9 @@
 // shows the model under the mouse (main.zig draws it in 3D through a
 // window in the panel) and the stats of its class.
 //
-// The mouse is free while the menu is open. B or DONE closes it and goes
-// back to play, Esc closes it to the pause screen.
+// The mouse is free while the menu is open. The weapon menu key (B, the
+// weaponmenu action) or DONE closes it and goes back to play, Esc closes it
+// to the pause screen.
 const std = @import("std");
 const core = @import("sw_core");
 const gfx = @import("sw_gfx2d");
@@ -82,12 +83,13 @@ pub fn previewModel(choice: weapon.Choice) u8 {
 
 /// The input of one tick while the menu is open. `w` and `h` are the
 /// logical size of the canvas. A click on a model puts it in its slot.
-pub fn update(in: *const core.InputSnapshot, w: f32, h: f32, choice: *weapon.Choice) Result {
+/// `toggle` is true in the tick that the weapon menu key goes down.
+pub fn update(in: *const core.InputSnapshot, w: f32, h: f32, choice: *weapon.Choice, toggle: bool) Result {
     if (in.keyPressed(.Escape)) {
         close();
         return .close_pause;
     }
-    if (in.keyPressed(.B)) {
+    if (toggle) {
         close();
         return .close_play;
     }
@@ -142,7 +144,8 @@ fn vec01(x: f32) f32 {
 
 /// Draw the menu over a dark screen. `note` is a line about when the pick
 /// applies (main.zig).
-pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mx: f32, my: f32, w: f32, h: f32, choice: weapon.Choice, note: []const u8) !void {
+/// `key` names the weapon menu key for the hint.
+pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mx: f32, my: f32, w: f32, h: f32, choice: weapon.Choice, note: []const u8, key: []const u8) !void {
     const white = gfx.Color.rgba8(245, 240, 232, 255);
     const dim = gfx.Color.rgba8(245, 240, 232, 150);
     const accent = gfx.Color.rgba8(255, 166, 77, 255);
@@ -222,6 +225,7 @@ pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mx: f32, my: f32, w: 
     const over = inside(d, mx, my);
     try r.fillRect(d, if (over) gfx.Color.rgba8(255, 166, 77, 230) else gfx.Color.rgba8(255, 255, 255, 30));
     try T.put(r, text, "DONE", d.x + d.w / 2 - text.measure("DONE", 18).w / 2, d.y + 11, 18, if (over) ink else white);
-    const hint = "B or DONE to play  -  ESC to pause";
+    var hb: [64]u8 = undefined;
+    const hint = std.fmt.bufPrint(&hb, "{s} or DONE to play  -  ESC to pause", .{key}) catch "";
     try T.put(r, text, hint, w / 2 - text.measure(hint, 13).w / 2, p.y + ph + 12, 13, dim);
 }

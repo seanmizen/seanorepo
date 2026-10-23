@@ -29,8 +29,14 @@ Controls:
 | Tab | the score board: kills, deaths and the ping of each player |
 | Esc | release the mouse (pause) |
 | M (paused) | main menu |
+| ` (backtick) | the console |
+
+These keys are the default binds. The console changes them (`bind`, see
+[The console](#the-console)), and the hints on the screen follow the binds.
 
 On the main menu, 1, 2 and 3 pick deathmatch, practice and the settings.
+These keys, the arrow keys of the menus, Enter and the clicks on buttons
+do not go through the binds.
 
 Debug: Cmd+D (Ctrl+D) shows the debug screen. While it shows, Shift+1 to 9
 go to a spawn point, and in deathmatch a health bar shows over each other
@@ -140,15 +146,178 @@ dummies.
 
 ## Tests
 
-`zig build test` (in `game/`) runs the native tests in
-`game/src/player_test.zig`. They walk a player down and up each staircase
-of Earl's Court, and walk and ride each escalator. Each walk must keep the
-feet on the ground and the eye height smooth (at most 5 cm in a tick). It
-must not stop at a wall or a ceiling edge, and the head bob must follow
-the walking speed.
+`zig build test` (in `game/`) runs the native tests (`game/src/tests.zig`):
 
-`yarn workspace action test` runs the Bun tests of the server
-(`server/*.test.ts`): the ping calculation in `server/ping.test.ts`.
+- `game/src/player_test.zig` walks a player down and up each staircase of
+  Earl's Court, and walks and rides each escalator. Each walk must keep the
+  feet on the ground and the eye height smooth (at most 5 cm in a tick). It
+  must not stop at a wall or a ceiling edge, and the head bob must follow
+  the walking speed.
+- `game/src/console/tests.zig` tests the console: the parser, the cvar
+  limits, the commands, the binds and the buttons, the scripts, the saved
+  config and the completion.
+- The server cvar file must be valid, with safe defaults.
+
+`yarn workspace action test` (`bun test server`) runs the server tests
+(`server/*.test.ts`):
+
+- `server/ping.test.ts`: the ping calculation.
+- `server/console.test.ts`: the same parser cases, the cvar limits, the
+  config file and the environment variables.
+- `server/lobby.test.ts`: a real server on a free port. It checks the cvars
+  on join, rcon, and a client that tries to set a server cvar.
+
+## The console
+
+The backtick key (the key left of 1) opens the console. Esc or the
+backtick key closes it. While it is open, the game gets no keys. In
+deathmatch the game goes on.
+
+- Type a command and press Enter. Up and Down go through the history.
+  Shift+Up and Shift+Down scroll the text.
+- While you type, a list shows the commands and the cvars that match, with
+  the description and the current value. Tab completes. A second Tab goes
+  to the next match.
+- `help` shows how it works. `find <text>` searches the names and the
+  descriptions. `cmdlist`, `cvarlist`, `bindlist` and `scriptlist` list
+  them. `help <name>` shows one command or cvar, with the code that reads
+  it.
+- `<cvar>` shows a cvar. `<cvar> <value>` sets it.
+- `;` separates two commands. `//` starts a comment. Double quotes keep
+  spaces and `;` in one argument: `bind k "+jump; +attack"`.
+
+The built-in commands: `help`, `find`, `cvarlist`, `cmdlist`, `set`,
+`reset`, `toggle`, `bind`, `unbind`, `bindlist`, `resetbinds`, `exec`,
+`edit`, `scriptlist`, `scriptdel`, `echo`, `clear` and `toggleconsole`.
+The game adds `rcon` and the actions.
+
+### Cvars
+
+A cvar (config variable) has a name, a type (bool, int, float or string),
+a default, a description, the code that reads it, flags, and a min and a
+max for the numbers. A set clamps a number to the limits. An unset cvar
+has its default.
+
+| Flag | Meaning |
+|---|---|
+| saved | The game keeps it in local storage when it is not the default. |
+| server | The server owns it. The client gets the value on join and on each change, and cannot change it. |
+| cheat | It changes only while cheats are on: in a debug build (`OPTIMIZE=Debug ./build.sh`). |
+| read only | Only the game code changes it. |
+| protected | The value never shows in a list and never goes to a client (a password). |
+
+The client cvars:
+
+| Cvar | Range | Default | Flags | Read by |
+|---|---|---|---|---|
+| `head_bob` | 0 (off) to 2 | 1 | saved | `main.zig` playerView |
+| `volume` | 0 to 1 | 1 | saved | `main.zig` tick |
+| `sfx_volume` | 0 to 1 | 1 | saved | `main.zig` sound |
+| `fov` | 60 to 100 degrees | 74 | saved | `main.zig` gameRender |
+| `sensitivity` | 0.2 to 3 | 1 | saved | `main.zig` gameplayTick |
+| `rcon_password` | text | empty | protected, not saved | `game_console.zig` cmdRcon |
+
+The settings panel shows the first five. The values of the old local
+storage key `settings` carry over one time, then the game deletes the key.
+
+### Binds and actions
+
+A bind runs a command when its key goes down. A command that starts with
+`+` is a button: the release of the key runs the `-` command. The game
+reads the actions, not the keys (`game/src/game_console.zig`).
+
+| Action | Default key | Does |
+|---|---|---|
+| `+forward`, `+back`, `+moveleft`, `+moveright` | W, S, A, D | move |
+| `+jump` | Space | jump |
+| `+attack` | mouse1 | fire, knife, throw the grenade in the hand |
+| `+aim` | mouse2 | the sights |
+| `+reload` | R | reload |
+| `+grenade` | G | quick grenade throw |
+| `+use` | F | press a lift button |
+| `+leanleft`, `+leanright` | Q, E | lean |
+| `+slot1` to `+slot4` | 1 to 4 | weapon slots |
+| `+weaponmenu` | B | the weapon menu |
+| `+scores` | Tab | the scores |
+| `+pause` | Escape | free the mouse. On Esc the browser frees it in any case. |
+| `+menu` | M | the main menu, from the pause screen |
+
+The key names: a to z, 0 to 9, left, right, up, down, space, enter,
+escape, tab, backspace, shift, ctrl, alt, mouse1 to mouse5. Examples:
+
+```
+bind c +jump
+unbind e
+bind e "+leanright; echo lean"
+resetbinds
+```
+
+swindowzig has no key code for the backtick key. The web backend sends
+each key that it does not know as Unknown, and `src/boot.ts` stops every
+unknown key except the backtick key. So the backtick key is not in the
+binds, and the punctuation keys cannot have a bind.
+
+### Scripts and the saved config
+
+- `edit <name>` opens a script in the editor of the console. A new name
+  makes a new script. One command a line, `//` starts a comment. Esc saves
+  the script and closes the editor. The editor deletes an empty script.
+- `exec <name>` runs a script. The errors show the script and the line:
+  `autoexec:3: ...`.
+- The `autoexec` script runs at start, after the saved config.
+- The game saves the cvars with the saved flag and the binds in local
+  storage (the key `config`). It writes only the changes from the
+  defaults, so a new default bind also reaches an old config. Put your own
+  commands in `autoexec`, not in `config`.
+- Scripts live in local storage (`script-<name>`, and the list in
+  `scripts`), in this browser only.
+
+## Server config
+
+The server cvars have one definition, in `game/src/server_cvars.json`.
+The client embeds the file, and the server reads it (`server/console.ts`).
+
+| Cvar | Range | Default | Read by |
+|---|---|---|---|
+| `despawn_cadaver_timer` | seconds, at most 86400 | -1 | Nothing yet. The ragdoll bodies will read it. Unset or negative: bodies never despawn. |
+| `match_seconds` | 10 to 7200 | 300 | `server/index.ts` step. A change applies from the next match. |
+| `end_seconds` | 1 to 120 | 10 | `server/index.ts` step. A change applies from the next match end. |
+| `admin_password` | text | empty | `server/index.ts` onRcon. Protected: it never goes to a client. |
+
+The server sets the values in this order. The last one wins.
+
+1. The defaults.
+2. The config file: `server/server.cfg`, or the file that `SERVER_CONFIG`
+   names. It is a script: `set`, `reset`, `echo` and `cvarlist`, one
+   command a line.
+3. The environment: `SV_<NAME>` sets `<name>`, for example
+   `SV_MATCH_SECONDS=600`. An empty variable counts as unset.
+4. Rcon, at run time. The server does not save rcon changes.
+
+The server sends every server cvar (not the protected ones) to a player on
+join, and each change to every player. A client message cannot change a
+server cvar.
+
+### Remote admin (rcon)
+
+Rcon is off while `admin_password` is empty. To turn it on, set
+`SV_ADMIN_PASSWORD` in the environment of the server. Do not put the
+password in `server.cfg`: the file is in the repository. With docker
+compose, set `SV_ADMIN_PASSWORD` in the shell that runs `yarn workspace
+action prod:docker`: `docker-compose.yml` passes it to the container.
+
+In the console of the game, in deathmatch:
+
+```
+rcon_password <the admin password>
+rcon set match_seconds 600
+rcon cvarlist
+rcon status
+```
+
+The answer of the server shows in the console. After 5 bad passwords the
+server closes the connection. After 20 bad passwords in a minute, rcon
+stops for everyone until the minute ends.
 
 ## Weapons
 
@@ -276,15 +445,16 @@ orange, and a little smoke. `game/src/grenade.zig` has the model:
   it smaller.
 - **Settings**: 3 on the main menu, or SETTINGS on the pause screen. Drag a
   slider, or use the arrow keys. Esc closes the panel. The values apply at
-  once and stay in local storage (the key `settings`).
+  once. They are cvars (see [Cvars](#cvars)), so the console changes the
+  same values, and the game saves them in local storage.
 
-| Setting | Range | Default |
-|---|---|---|
-| Head bob | 0 (off) to 200% | 100% |
-| Master volume | 0 to 100%. It scales every sound. | 100% |
-| Effects volume | 0 to 100%: the guns, the hits, the grenades and the buttons. The trains follow the master volume only. | 100% |
-| Field of view | 60 to 100 degrees, vertical, at the hip. The sights make it narrower. | 74 |
-| Mouse sensitivity | 0.2x to 3x | 1x |
+| Setting | Cvar | Range | Default |
+|---|---|---|---|
+| Head bob | `head_bob` | 0 (off) to 200% | 100% |
+| Master volume | `volume` | 0 to 100%. It scales every sound. | 100% |
+| Effects volume | `sfx_volume` | 0 to 100%: the guns, the hits, the grenades and the buttons. The trains follow the master volume only. | 100% |
+| Field of view | `fov` | 60 to 100 degrees, vertical, at the hip. The sights make it narrower. | 74 |
+| Mouse sensitivity | `sensitivity` | 0.2x to 3x | 1x |
 
 ## Maps
 
@@ -320,13 +490,19 @@ apps/action/
 │       ├── floorplan.zig the map tool: slices, the decoration audit (zig build floorplan)
 │       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
 │       ├── player.zig    movement, collision, the lean and the hit boxes
-│       ├── player_test.zig  zig build test: walks over the stairs and escalators
-│       ├── settings.zig  the settings panel and its local storage
+│       ├── tests.zig     zig build test: the walks, the console, the server cvar file
+│       ├── player_test.zig  the walks over the stairs and escalators
+│       ├── settings.zig  the settings panel: a view over five saved cvars
+│       ├── game_console.zig  the game side of the console: actions, binds, server cvars, rcon
+│       ├── server_cvars.json  the server cvars (the server reads the same file)
+│       ├── console/      the console framework, with no action imports (root.zig)
 │       ├── mesh.zig      vertex lists and shape builders
 │       ├── net.zig       the WebSocket client (backends/wasm/net.ts)
 │       └── assets/       guns.bin (generated), Lato font (OFL)
 ├── server/index.ts       Bun: static files + the lobby on /api/ws, port 4080
 ├── server/ping.ts        the ping of each player (ping.test.ts: bun test)
+├── server/console.ts     the server cvars, the config file, the server commands
+├── server/server.cfg     the server config (a script)
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── public/index.html
 ├── assets/guns/          the licence of the gun models
@@ -346,6 +522,8 @@ WebGPU only: a recent Chrome or Edge on a desktop.
 ## The lobby protocol
 
 JSON text on `/api/ws`. The message list is at the top of `server/index.ts`.
+The `cvars` message carries the server cvars. The `rcon` and `print`
+messages carry remote admin.
 The client sends its own position, its held weapon and its hits. The server
 checks the match phase and that both players are alive. For each shot it
 checks the weapon: the class must be in the shooter's loadout, the shot must
