@@ -146,6 +146,7 @@ pub fn load(map: Id) void {
     kill_y = -5;
     flicker_light = null;
     flicker_box = null;
+    @import("gates.zig").clear();
     switch (map) {
         .arena => @import("maps/arena.zig").build(),
         .earls_court => @import("maps/earls_court.zig").build(),
