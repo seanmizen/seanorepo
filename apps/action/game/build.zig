@@ -27,25 +27,28 @@ pub fn build(b: *std.Build) void {
     exe.stack_size = 4 * 1024 * 1024;
     b.installArtifact(exe);
 
-    // `zig build floorplan -- <map> <plan|section-z|section-x|audit> ...`:
-    // the map slicer and audit, a native tool (src/floorplan.zig).
+    // `zig build floorplan -- <map> <plan|section-z|section-x|audit|escape> ...`:
+    // the map slicer and audits, a native tool (src/floorplan.zig). The
+    // escape audit flood fills millions of points, so the tool is always
+    // optimised. ReleaseSafe keeps the safety checks.
     const host = b.graph.host;
-    const sw_host = b.dependency("swindowzig", .{ .target = host, .optimize = optimize });
+    const sw_tool = b.dependency("swindowzig", .{ .target = host, .optimize = .ReleaseSafe });
     const tool = b.addExecutable(.{
         .name = "floorplan",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/floorplan.zig"),
             .target = host,
-            .optimize = optimize,
+            .optimize = .ReleaseSafe,
         }),
     });
-    tool.root_module.addImport("sw_math", sw_host.module("sw_math"));
+    tool.root_module.addImport("sw_math", sw_tool.module("sw_math"));
     const run = b.addRunArtifact(tool);
     run.addPassthruArgs();
     b.step("floorplan", "Slice a map into images, or audit it").dependOn(&run.step);
 
     // `zig build test`: native tests of the player movement on the maps
     // (src/player_test.zig).
+    const sw_host = b.dependency("swindowzig", .{ .target = host, .optimize = optimize });
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/player_test.zig"),

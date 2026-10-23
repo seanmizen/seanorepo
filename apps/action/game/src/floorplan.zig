@@ -1,14 +1,15 @@
 // Where: apps/action/game/src/floorplan.zig (zig build floorplan)
 // When: while you build or change a map.
 // Why: draws slices of a map, so you can see what is where, and audits the
-// map for decoration that a player can walk through and for lights inside
-// a shadow caster.
+// map: for decoration that a player can walk through, for lights inside a
+// shadow caster, and for escape holes (escape.zig).
 //
 //   zig build floorplan -- <map> plan <y> <out.ppm>        top view, a slice at height y
 //   zig build floorplan -- <map> section-z <z> <out.ppm>   side view (x, y), a slice at z
 //   zig build floorplan -- <map> section-x <x> <out.ppm>   end view (z, y), a slice at x
 //   zig build floorplan -- <map> audit                     reachable decoration without collision,
 //                                                           and lights inside a shadow caster
+//   zig build floorplan -- <map> escape                    escape holes, exit code 1 if it finds one
 //
 // <map> is arena or earls_court. The image is a binary PPM; on macOS,
 // `sips -s format png in.ppm --out out.png` converts it.
@@ -19,6 +20,7 @@
 // 10 m, a darker one every 50 m.
 const std = @import("std");
 const map = @import("map.zig");
+const escape = @import("escape.zig");
 const vec = @import("vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
@@ -329,7 +331,7 @@ pub fn main(init: std.process.Init) !void {
     const alloc = init.arena.allocator();
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     if (args.len < 3) {
-        std.debug.print("usage: floorplan <arena|earls_court> <plan|section-z|section-x> <at> <out.ppm>\n       floorplan <map> audit\n", .{});
+        std.debug.print("usage: floorplan <arena|earls_court> <plan|section-z|section-x> <at> <out.ppm>\n       floorplan <map> audit\n       floorplan <map> escape\n", .{});
         return;
     }
     map.init(alloc);
@@ -339,6 +341,10 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, args[2], "audit")) {
         _ = audit();
         _ = auditLights();
+        return;
+    }
+    if (std.mem.eql(u8, args[2], "escape")) {
+        if (try escape.run(std.heap.page_allocator) > 0) std.process.exit(1);
         return;
     }
     if (args.len < 5) return error.MissingArguments;

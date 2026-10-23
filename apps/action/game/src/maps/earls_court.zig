@@ -38,8 +38,9 @@ pub const mid_y: f32 = -5.6; // the intermediate level floor
 pub const mid_ceil: f32 = -3.2;
 pub const deep_y: f32 = -15;
 pub const deep_ceil: f32 = deep_y + 4.6;
-/// Past this |x| along the lines the live rail kills.
-pub const shock_x: f32 = 200;
+/// Past this |x| along the lines the live rail kills: just past the ends of
+/// the concourses (|x| = 66).
+pub const shock_x: f32 = 66.7;
 pub const line_end: f32 = 400;
 
 // The train shed.
@@ -484,6 +485,9 @@ fn eastEnd() void {
     box(v3(x0, y, wall_s), v3(x1, y + 6.5, wall_s + 0.6), red_brick, .brick);
     box(v3(x0 - 0.6, y + 6.5, conc_z0 - 0.6), v3(x1 + 0.6, y + 7.0, wall_s + 0.6), v3(0.3, 0.29, 0.27), .concrete);
     box(v3(x0 - 0.6, y + 3.4, wall_n), v3(x0, y + 6.5, wall_s), red_brick, .brick);
+    // The west wall north of the shed: the shed wall is south of the
+    // concourse's north wall, so this corner opens onto nothing.
+    box(v3(x0 - 0.6, y, conc_z0 - 0.6), v3(x0, y + 6.5, wall_n), red_brick, .brick);
     // The railing along the shed edge, open at the stairs; the stairs down
     // to each island, westward.
     railing(x0, x0 + 0.12, walk_z1, ca - 1.2, y);
@@ -585,6 +589,7 @@ fn westEnd() void {
     box(v3(x0, y, wall_s), v3(x1, y + 6.5, wall_s + 0.6), brick, .brick);
     box(v3(x0 - 0.6, y + 6.5, conc_z0 - 0.6), v3(x1 + 0.6, y + 7.0, wall_s + 0.6), v3(0.3, 0.29, 0.27), .concrete);
     box(v3(x1, y + 3.4, wall_n), v3(x1 + 0.6, y + 6.5, wall_s), brick, .brick);
+    box(v3(x1, y, conc_z0 - 0.6), v3(x1 + 0.6, y + 6.5, wall_n), brick, .brick);
     railing(x1 - 0.12, x1, walk_z1, ca - 1.2, y);
     railing(x1 - 0.12, x1, ca + 1.2, cb - 1.2, y);
     railing(x1 - 0.12, x1, cb + 1.2, wall_s, y);

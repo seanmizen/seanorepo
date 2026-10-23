@@ -42,8 +42,36 @@ foot height. A player who fires shows on it for a moment.
 zig build floorplan -- earls_court plan 1 out.ppm         # top view at y = 1
 zig build floorplan -- earls_court section-z -22.5 out.ppm # side view at z = -22.5
 zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape
+zig build floorplan -- earls_court escape                 # escape holes: exit code 1 if it finds one
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
+
+### The escape audit
+
+Run the escape audit on both maps before you merge a map change:
+
+```bash
+zig build floorplan -- arena escape
+zig build floorplan -- earls_court escape
+```
+
+The audit (`game/src/escape.zig`) flood fills the space that a player can
+get to from the spawn points. It includes walks, step ups, jumps onto a
+ledge, running jumps over a gap, falls and the lifts. It reports each place
+where that space touches the outside of the map, or has no floor below it.
+The exit code is 1 when it finds an escape hole.
+
+- Each hole shows the floor that the player leaves from, and the route from
+  a spawn point. The route shows each change of floor height of more than
+  0.5 m.
+- "after hole N" means that the player can only get to this hole through
+  hole N. Fix hole N first.
+- The audit measures the jump and the run speed with `player.zig`, so it
+  follows changes to the movement.
+- The audit errs toward an escape. It tests a player 0.1 m thinner than the
+  real one, so a gap 0.54 m to 0.64 m wide can show as a hole.
+- The lift doors count as open. The deep train is not in the audit.
+- It takes about 5 seconds on Earl's Court.
 
 ## Light
 
@@ -139,6 +167,10 @@ orange, and a little smoke. `game/src/grenade.zig` has the model:
   its iron arch roof and a train, two lifts (F on the call buttons and the
   cab buttons), escalators that carry you, and the deep Piccadilly line
   platform. The server runs the lifts, so every player sees the same cab.
+  In deathmatch, the live rail kills a player on the tracks more than
+  66.7 m east or west of the shed centre, just past the ends of the
+  concourses. On the District line tracks, yellow danger boards show where
+  it starts.
 - **Arena** (target practice): an open square with cover.
 
 ## Layout
@@ -155,6 +187,8 @@ apps/action/
 │       ├── weapon.zig    rifle state, recoil, the procedural reload animation
 │       ├── map.zig       the current map: boxes, ramps, decoration, lights, lifts, buttons, escalators
 │       ├── maps/         arena.zig, earls_court.zig
+│       ├── floorplan.zig the map tool: slices, the decoration audit (zig build floorplan)
+│       ├── escape.zig    the escape audit (zig build floorplan -- <map> escape)
 │       ├── player.zig    movement, collision, the lean and the hit boxes
 │       ├── player_test.zig  zig build test: walks over the stairs and escalators
 │       ├── settings.zig  the settings panel and its local storage
