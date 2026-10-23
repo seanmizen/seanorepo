@@ -35,6 +35,8 @@ pub const PlayerMsg = struct {
     m: u32 = 0,
     /// The lift whose cab the player stands in, or -1.
     lift: i32 = -1,
+    /// A rider of the deep train: the feet x from the train centre.
+    tx: ?f32 = null,
 };
 
 /// One server message. `t` names the kind; the other fields are optional.

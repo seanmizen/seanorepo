@@ -352,6 +352,38 @@ describe('gates and pigeons', () => {
   });
 });
 
+describe('the deep train', () => {
+  test('the snapshot gives the place of a rider in the train', async () => {
+    const port = await start('', {});
+    const a = new Client(port);
+    const b = new Client(port);
+    const aid = (await a.next((m) => m.t === 'welcome')).id;
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'spawn');
+    await b.send({ ...hello, name: 'Bob' });
+    const st = { t: 'st', x: 50, y: -14.98, z: -29, yaw: 0, pitch: 0 };
+    const txIs = async (tx: unknown, want: number | undefined) => {
+      const n = b.msgs.length;
+      await a.send({ ...st, tx });
+      await b.next(
+        (m) =>
+          m.t === 'snap' &&
+          typeof m.tt === 'number' &&
+          m.tt >= 0 &&
+          m.tt < 80 &&
+          (m.players as Msg[]).some((p) => p.id === aid && p.tx === want),
+        n,
+      );
+    };
+    // A rider, a player not in the train (no field), and a far value.
+    await txIs(-3.25, -3.25);
+    await txIs(undefined, undefined);
+    await txIs(500, 100);
+    a.close();
+    b.close();
+  });
+});
+
 describe('session', () => {
   const pub = join(dir, 'public');
   const setBuild = (v: string) =>

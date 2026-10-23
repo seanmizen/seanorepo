@@ -60,7 +60,10 @@
 //                                                 -1 (left) to 1 (right). w and
 //                                                 m: the held class and model.
 //                                                 lift: the cab that the player
-//                                                 stands in, or -1.
+//                                                 stands in, or -1. tx: only
+//                                                 for a rider of the deep
+//                                                 train, the feet x from the
+//                                                 train centre.
 //   {t:"fire", w, o:[x,y,z], e:[x,y,z], hits:[{id, b, h}]}
 //                                                 a shot of class w: b body and
 //                                                 h head pellets on player id.
@@ -97,10 +100,12 @@
 //                                 client sends the hello only when its
 //                                 protocol is the same (session.ts).
 //   {t:"bye", reason}             the server closes the connection next
-//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,lift,hp,k,d,alive,w,m}],
-//    lifts:[[y, door, level, phase]]}
+//   {t:"snap", phase:"play"|"end", left, players:[{id,name,x,y,z,yaw,pitch,lean,lift,tx?,hp,k,d,alive,w,m}],
+//    tt, lifts:[[y, door, level, phase]]}
 //                                 a client draws a player with lift >= 0 on
-//                                 the floor of its own cab of that lift.
+//                                 the floor of its own cab of that lift, and
+//                                 a player with tx in its own deep train.
+//                                 tt: the deep train clock.
 //   {t:"lift", i, l}             a lift call; each client applies it
 //   {t:"spawn", x, y, z, yaw, p, s}  p and s: the weapons of the new life
 //   {t:"loadout", p, s}           the answer to a pick: the weapons of this life
@@ -261,7 +266,7 @@ const LIFTS: { levels: [number, number]; speed: number }[] = [
   { levels: [0.02, 4.82], speed: 1.6 },
   { levels: [-14.98, 4.82], speed: 3.2 },
 ];
-const TRAIN_CYCLE = 70;
+const TRAIN_CYCLE = 80;
 const DOOR_TIME = 0.8;
 const DOOR_HOLD = 6;
 enum Phase {
@@ -376,6 +381,9 @@ interface Player {
   /** The lift whose cab the player stands in, or -1. The other clients
    * draw the player on their own cab. */
   lift: number;
+  /** A rider of the deep train: the feet x from the train centre, or
+   * null. The other clients draw the player in their own train. */
+  tx: number | null;
   hp: number;
   k: number;
   d: number;
@@ -539,6 +547,7 @@ function spawn(p: Player): void {
   p.pitch = 0;
   p.lean = 0;
   p.lift = -1;
+  p.tx = null;
   p.hp = 100;
   p.alive = true;
   p.nades = NADES_PER_LIFE;
@@ -775,6 +784,7 @@ function snapshot(): object {
       pitch: +p.pitch.toFixed(3),
       lean: +p.lean.toFixed(2),
       lift: p.lift,
+      ...(p.tx === null ? {} : { tx: +p.tx.toFixed(3) }),
       hp: p.hp,
       k: p.k,
       d: p.d,
@@ -895,6 +905,7 @@ const server = Bun.serve<Conn>({
         pitch: 0,
         lean: 0,
         lift: -1,
+        tx: null,
         hp: 100,
         k: 0,
         d: 0,
@@ -946,6 +957,7 @@ const server = Bun.serve<Conn>({
         p.pitch = num(msg.pitch, -2, 2) ?? p.pitch;
         p.lean = num(msg.lean, -1, 1) ?? 0;
         p.lift = liftIndex(msg.lift);
+        p.tx = msg.tx === undefined ? null : num(msg.tx, -100, 100);
         // The held weapon: a class of this life (or the knife or a
         // grenade), and any small model number.
         const w = Number(msg.w);

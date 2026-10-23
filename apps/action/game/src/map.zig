@@ -20,6 +20,7 @@ const vec = @import("vec.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
+const train_car = @import("train_car.zig");
 
 /// The surface material of a box or a decoration: it sets the impact sound.
 pub const Surface = @import("audio/impact.zig").Material;
@@ -81,8 +82,8 @@ pub const Spawn = struct { pos: V3, yaw: f32 };
 /// The scene shader loops over the boxes near the eye for the ambient
 /// occlusion (render.zig uploadBoxes): this many at most. A map with more
 /// boxes fails `zig build test` and the floorplan tool.
-pub const max_boxes = 640;
-pub const max_lights = 20;
+pub const max_boxes = 1024;
+pub const max_lights = 23;
 
 pub var id: Id = .arena;
 pub var boxes: [max_boxes]Box = undefined;
@@ -140,6 +141,7 @@ pub fn load(map: Id) void {
     button_count = 0;
     escalator_count = 0;
     train = null;
+    parked_train = null;
     shadow_centre = v3(0, 0, 0);
     shadow_half = 40;
     underground_y = -1000;
@@ -521,64 +523,211 @@ fn placeLift(l: *Lift) void {
 // A train runs through the deep platform on a fixed timetable. The server
 // sends its clock (the time in the cycle), so all the clients agree.
 // server/index.ts has the same cycle length.
+//
+// The train is a hollow car body (train_car.zig): dynamic boxes (parts)
+// that keep their places relative to the train centre. A player inside the
+// body moves with it (trainInside and the moving platforms below), also in
+// the air. A doorway part is solid while the doors are less than half
+// open. trainPush moves a player out of a closed doorway, and off the
+// track in front of the train.
 
-pub const Train = struct {
-    /// The solid body box (dynamic).
+pub const max_train_parts = 80;
+
+pub const TrainPart = struct {
     box: usize,
-    /// The track: the stop position on X, the track z range, the floor y.
-    stop_x: f32,
-    z0: f32,
-    z1: f32,
-    y0: f32,
-    y1: f32,
-    half_len: f32,
-    /// Seconds into the cycle.
-    t: f32 = 0,
+    /// The bounds with the train centre at x = 0.
+    min: V3,
+    max: V3,
+    kind: train_car.Kind,
 };
 
-pub const train_cycle: f32 = 70;
-pub var train: ?Train = null;
+pub const Train = struct {
+    /// The body in train coordinates (its z and y are the world z and y).
+    body: train_car.Body,
+    parts: [max_train_parts]TrainPart = undefined,
+    part_count: usize = 0,
+    /// The floor part: a rider inside the body rides on it.
+    floor: usize = 0,
+    /// A part was not added (a full map, map.dropped). The map then has no
+    /// train.
+    full: bool = false,
+    /// The centre of the train where it stops at the platform.
+    stop_x: f32,
+    /// Seconds into the cycle.
+    t: f32 = 0,
 
-/// The front position of the train at a time in the cycle: it brakes into
-/// the platform from +X, waits with its doors open, and pulls out to -X.
-pub fn trainX(t: f32) f32 {
-    if (t < 9) {
-        const k = 1 - t / 9;
-        return 100 * k * k;
+    pub fn centre(self: *const Train) f32 {
+        return self.stop_x + trainX(self.t);
     }
-    if (t < 27) return 0;
-    if (t < 36) {
-        const k = (t - 27) / 9;
-        return -100 * k * k;
+
+    /// Add a part: the sink of train_car.parts.
+    pub fn part(self: *Train, min: V3, max: V3, kind: train_car.Kind, color: V3, mat: Mat, surface: Surface) void {
+        const b = add(min, max, color, mat, surface);
+        b.dynamic = true;
+        b.ao = false;
+        // The details of main.zig draw the door leaves.
+        if (kind == .doorway) b.visible = false;
+        const i = indexOf(b) orelse {
+            self.full = true;
+            return;
+        };
+        if (self.part_count >= max_train_parts) {
+            self.full = true;
+            return;
+        }
+        if (self.part_count == 0) self.floor = i;
+        self.parts[self.part_count] = .{ .box = i, .min = min, .max = max, .kind = kind };
+        self.part_count += 1;
     }
-    return -400;
+};
+
+pub var train: ?Train = null;
+/// A train that stands in the map with its doors open (the District line
+/// train of Earl's Court): static boxes. main.zig lights its inside.
+pub var parked_train: ?train_car.Body = null;
+
+/// Make the train of the map from a body, at its place at t = 0. A full
+/// map gets no train.
+pub fn addTrain(body: train_car.Body, stop_x: f32) void {
+    var tr: Train = .{ .body = body, .stop_x = stop_x };
+    train_car.parts(&tr.body, &tr);
+    if (tr.full) return;
+    train = tr;
+    placeTrain(&train.?);
 }
 
-/// 0 closed, 1 open.
+// The timetable of the train: the centre offset from the stop position
+// on X. The train runs to -X. It comes in from the east tunnel at line
+// speed, brakes into the platform, waits with its doors open, pulls out,
+// runs at line speed and brakes to a stop far down the west tunnel. There
+// it waits out of sight. At the end of the cycle it jumps to the east
+// tunnel, and a rider jumps with it.
+pub const train_cycle: f32 = 80;
+/// The speed in and out of the station, m/s, and the braking time from it.
+pub const train_line_speed: f32 = 16;
+pub const train_brake_t: f32 = 14;
+/// The braking distance: 112 m.
+const brake_d: f32 = train_line_speed * train_brake_t / 2;
+/// The times of the cycle: the brakes go on, the train stops, the train
+/// pulls out, it reaches line speed, the brakes go on, it stops.
+pub const train_brake_in: f32 = 6;
+pub const train_stop: f32 = train_brake_in + train_brake_t;
+pub const train_depart: f32 = 42;
+pub const train_full_speed: f32 = train_depart + train_brake_t;
+pub const train_brake_out: f32 = train_full_speed + 6;
+pub const train_parked: f32 = train_brake_out + train_brake_t;
+
+/// The centre offset of the train from its stop position at a time in the
+/// cycle.
+pub fn trainX(t: f32) f32 {
+    const v = train_line_speed;
+    if (t < train_brake_in) return brake_d + v * (train_brake_in - t);
+    if (t < train_stop) {
+        const k = 1 - (t - train_brake_in) / train_brake_t;
+        return brake_d * k * k;
+    }
+    if (t < train_depart) return 0;
+    if (t < train_full_speed) {
+        const k = (t - train_depart) / train_brake_t;
+        return -brake_d * k * k;
+    }
+    if (t < train_brake_out) return -brake_d - v * (t - train_full_speed);
+    const far = brake_d + v * (train_brake_out - train_full_speed);
+    if (t < train_parked) {
+        const k = (t - train_brake_out) / train_brake_t;
+        return -far - brake_d * (2 * k - k * k);
+    }
+    return -far - brake_d;
+}
+
+/// The doors: 0 closed, 1 open. They open 1 s after the stop and are
+/// closed 2.8 s before the train pulls out.
 pub fn trainDoors(t: f32) f32 {
-    return vec.smooth((t - 10) / 1.2) * (1 - vec.smooth((t - 24) / 1.2));
+    return vec.smooth((t - train_stop - 1) / 1.2) * (1 - vec.smooth((t - train_depart + 4) / 1.2));
 }
 
 pub fn stepTrain(dt: f32) void {
-    const tr = &(train orelse return);
-    tr.t = @mod(tr.t + dt, train_cycle);
-    placeTrain(tr);
+    if (train) |*tr| {
+        tr.t = @mod(tr.t + dt, train_cycle);
+        placeTrain(tr);
+    }
 }
 
 /// Follow the server's train clock.
 pub fn syncTrain(t: f32) void {
-    const tr = &(train orelse return);
-    var d = t - tr.t;
-    if (d > train_cycle / 2) d -= train_cycle;
-    if (d < -train_cycle / 2) d += train_cycle;
-    if (@abs(d) > 0.5) tr.t = t else tr.t = @mod(tr.t + d * 0.1, train_cycle);
-    placeTrain(tr);
+    if (train) |*tr| {
+        var d = t - tr.t;
+        if (d > train_cycle / 2) d -= train_cycle;
+        if (d < -train_cycle / 2) d += train_cycle;
+        if (@abs(d) > 0.5) tr.t = t else tr.t = @mod(tr.t + d * 0.1, train_cycle);
+        placeTrain(tr);
+    }
 }
 
 fn placeTrain(tr: *Train) void {
-    const x = tr.stop_x + trainX(tr.t);
-    boxes[tr.box].min = v3(x - tr.half_len, tr.y0, tr.z0);
-    boxes[tr.box].max = v3(x + tr.half_len, tr.y1, tr.z1);
+    const off = v3(tr.centre(), 0, 0);
+    const closed = trainDoors(tr.t) < 0.5;
+    for (tr.parts[0..tr.part_count]) |p| {
+        const b = &boxes[p.box];
+        b.min = p.min + off;
+        b.max = p.max + off;
+        if (p.kind == .doorway) b.solid = closed;
+    }
+}
+
+/// True when box `b` is a part of the train.
+pub fn trainPartOf(b: usize) bool {
+    const tr = if (train) |*t| t else return false;
+    for (tr.parts[0..tr.part_count]) |p| if (p.box == b) return true;
+    return false;
+}
+
+/// A rider inside the train body: the floor of the train as the platform
+/// of feet inside the body (from the floor to the ceiling, between the
+/// walls and the cab ends), also in the air. So a player who jumps in a
+/// moving train comes down at the same place in the car. Null when the
+/// feet are not inside.
+pub fn trainInside(feet: V3) ?Platform {
+    const tr = if (train) |*t| t else return null;
+    const b = &tr.body;
+    if (@abs(feet[0] - tr.centre()) >= b.half_len - train_car.cab_end) return null;
+    if (feet[2] <= b.innerZ0() or feet[2] >= b.innerZ1()) return null;
+    if (feet[1] < b.floor_y - platform_reach or feet[1] > b.ceil_y) return null;
+    const fb = boxes[tr.floor];
+    return .{ .box = tr.floor, .min = fb.min, .feet = feet, .above = @max(0, feet[1] - fb.max[1]) };
+}
+
+pub const Push = struct {
+    /// The new feet.
+    feet: V3,
+    /// The train hit the player (not a door).
+    hit: bool,
+};
+
+/// A train part in the body of a player at `feet` (radius r, height h):
+/// where the player must go, or null.
+/// - A closed doorway: out of it, to the nearer side (into the car or onto
+///   the platform), so a closing door does not trap a player.
+/// - Any other part: the train hit a player on the track. The player goes
+///   onto the platform at the open side, at platform height.
+pub fn trainPush(feet: V3, r: f32, h: f32) ?Push {
+    const tr = if (train) |*t| t else return null;
+    const lo = feet - v3(r, 0, r);
+    const hi = feet + v3(r, h, r);
+    for (tr.parts[0..tr.part_count]) |p| {
+        const b = boxes[p.box];
+        if (!b.solid) continue;
+        if (lo[0] >= b.max[0] or hi[0] <= b.min[0] or lo[1] >= b.max[1] or hi[1] <= b.min[1] or lo[2] >= b.max[2] or hi[2] <= b.min[2]) continue;
+        if (p.kind == .doorway) {
+            const mid = (b.min[2] + b.max[2]) / 2;
+            const z = if (feet[2] < mid) b.min[2] - r - 0.01 else b.max[2] + r + 0.01;
+            return .{ .feet = v3(feet[0], feet[1], z), .hit = false };
+        }
+        const bd = &tr.body;
+        const z = if (bd.side > 0) bd.z1 + r + 0.05 else bd.z0 - r - 0.05;
+        return .{ .feet = v3(feet[0], @max(feet[1], bd.floor_y - 0.02), z), .hit = true };
+    }
+    return null;
 }
 
 /// One component of a vector, by a run-time index.
@@ -805,7 +954,8 @@ pub fn doorwayAt(feet: V3) ?struct { lift: usize, level: usize } {
 // A moving platform is a dynamic solid box that a player stands on: a lift
 // cab floor, the deep train. A player on it moves with it, in each tick:
 //   1. Before anything moves, platformUnder finds the box under the feet
-//      and keeps its position.
+//      and keeps its position. Inside the deep train, trainInside gives
+//      the train floor when no box is under the feet (a jump in the car).
 //   2. The boxes move: the server corrections (syncLift), stepLifts,
 //      stepTrain.
 //   3. player.Player.ride moves the player by the move of that box. The

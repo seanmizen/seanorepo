@@ -18,11 +18,17 @@
 //           platform 6 (westbound, south), with a corridor between them.
 //           A deep lift goes up to the Earls Court Road concourse.
 //
-// The lines run far out of the station both ways. Past |x| = shock_x the
-// live rail kills (main.zig). server/index.ts has a copy of the spawns and
-// the lift levels.
+// The lines run far out of the station both ways. Past the ends of the
+// platforms the live rail kills (liveRail, main.zig). server/index.ts has a
+// copy of the spawns and the lift levels.
+//
+// The platforms take full-length trains (train_car.zig): the District
+// islands are 120 m long, for the 117.4 m of a 7-car S7 Stock train, and
+// the Piccadilly platforms are 112 m long, for the 106.8 m of a 6-car 1973
+// Stock train.
 const std = @import("std");
 const map = @import("../map.zig");
+const train_car = @import("../train_car.zig");
 const vapes = @import("../vapes.zig");
 const gates = @import("../gates.zig");
 const vec = @import("../vec.zig");
@@ -44,6 +50,9 @@ pub const deep_ceil: f32 = deep_y + 4.6;
 /// Past this |x| along the lines the live rail kills: just past the ends of
 /// the concourses (|x| = 66).
 pub const shock_x: f32 = 66.7;
+/// On the Piccadilly line the live rail kills this far past the ends of
+/// the platforms.
+const deep_shock: f32 = 6.7;
 pub const line_end: f32 = 400;
 
 // The train shed.
@@ -58,7 +67,18 @@ const e2 = [2]f32{ -8.8, -4.6 };
 const w1 = [2]f32{ -3.8, 0.4 };
 const island_b = [2]f32{ 0.4, 8.4 };
 const w2 = [2]f32{ 8.4, 12.6 };
-const tracks = [_][2]f32{ e1, e2, w1, w2 };
+/// The islands: 120 m, from the shed out under the concourse decks.
+const island_x = [2]f32{ -60, 60 };
+/// The track centre of each track bed: 1.56 m from the platform edge, so
+/// the 2.92 m wide S7 Stock stops 0.1 m from the edge. `away`: the side of
+/// the bed away from the platform (+1 south, -1 north).
+const Track = struct { bed: [2]f32, c: f32, away: f32 };
+const track_c = [_]Track{
+    .{ .bed = e1, .c = island_a[0] - 1.56, .away = -1 },
+    .{ .bed = e2, .c = island_a[1] + 1.56, .away = 1 },
+    .{ .bed = w1, .c = island_b[0] - 1.56, .away = -1 },
+    .{ .bed = w2, .c = island_b[1] + 1.56, .away = 1 },
+};
 const ca: f32 = -12.8; // island centres
 const cb: f32 = 4.4;
 // The stair wells from the islands down to the intermediate level.
@@ -92,7 +112,11 @@ const p5 = [2]f32{ -27.5, -24.5 }; // platform 5 (north)
 const t5 = [2]f32{ -31, -27.5 };
 const p6 = [2]f32{ -20.5, -17.5 }; // platform 6 (south)
 const t6 = [2]f32{ -17.5, -14 };
-const plat_x = [2]f32{ 0, 60 };
+/// The deep track centres: 1.41 m from the platform edge, so the 2.629 m
+/// wide 1973 Stock stops 0.1 m from the edge.
+const t5_c: f32 = t5[1] - 1.41;
+const t6_c: f32 = t6[0] + 1.41;
+const plat_x = [2]f32{ 0, 112 };
 const deep_lift = Rect{ .x0 = 62.4, .x1 = 64.8, .z0 = -24, .z1 = -21.6 };
 
 // Colours.
@@ -250,9 +274,9 @@ fn districtLevel() void {
     // Islands, with their wells, and the yellow edges.
     for ([_][2]f32{ island_a, island_b }, 0..) |is, k| {
         const cz = (is[0] + is[1]) / 2;
-        map.carve(rect(shed_x0, shed_x1, is[0], is[1]), bed_y, 0, wells[k * 2 .. k * 2 + 2], platform_c, .concrete, .concrete);
-        deco(v3(shed_x0, 0, is[0]), v3(shed_x1, 0.012, is[0] + 0.45), yellow, .paint, .concrete);
-        deco(v3(shed_x0, 0, is[1] - 0.45), v3(shed_x1, 0.012, is[1]), yellow, .paint, .concrete);
+        map.carve(rect(island_x[0], island_x[1], is[0], is[1]), bed_y, 0, wells[k * 2 .. k * 2 + 2], platform_c, .concrete, .concrete);
+        deco(v3(island_x[0], 0, is[0]), v3(island_x[1], 0.012, is[0] + 0.45), yellow, .paint, .concrete);
+        deco(v3(island_x[0], 0, is[1] - 0.45), v3(island_x[1], 0.012, is[1]), yellow, .paint, .concrete);
         // Railings round the wells, open at the top of the stairs.
         for (well_x) |wx| {
             railing(wx[0], wx[1], cz - 1.3, cz - 1.2, 0);
@@ -852,13 +876,14 @@ fn lines() void {
     box(v3(line_end - 0.6, -3, wall_n), v3(line_end, street_y + 3, wall_s), dark, .paint, .concrete);
     // The rails, the sleepers and the live rails (the 4th rail between the
     // running rails, the 3rd outside).
-    for (tracks) |t| {
-        const c = (t[0] + t[1]) / 2;
+    for (track_c) |t| {
+        const c = t.c;
         for ([_]f32{ -0.72, 0.72 }) |off| {
             boxNoAo(v3(-line_end, bed_y, c + off - 0.04), v3(line_end, bed_y + 0.16, c + off + 0.04), steel, .metal, .metal);
         }
         deco(v3(-line_end, bed_y, c - 0.05), v3(line_end, bed_y + 0.12, c + 0.05), v3(0.5, 0.45, 0.4), .metal, .metal);
-        deco(v3(-line_end, bed_y, c + 1.15), v3(line_end, bed_y + 0.12, c + 1.25), v3(0.5, 0.45, 0.4), .metal, .metal);
+        const r3 = c + t.away * 1.2;
+        deco(v3(-line_end, bed_y, r3 - 0.05), v3(line_end, bed_y + 0.12, r3 + 0.05), v3(0.5, 0.45, 0.4), .metal, .metal);
         var x: f32 = -line_end + 0.4;
         while (x < line_end) : (x += if (@abs(x) > 90) 2.7 else 0.9) {
             deco(v3(x, bed_y, c - 1.25), v3(x + 0.26, bed_y + 0.07, c + 1.25), v3(0.16, 0.11, 0.08), .wood, .wood);
@@ -872,44 +897,52 @@ fn lines() void {
         deco(v3(-lx - 0.6, 3.0, wall_n), v3(-lx, 3.15, wall_n + 0.15), v3(0.9, 0.7, 0.4), .emissive, .glass);
     }
     // Danger boards where the live rail starts to kill.
+    // Each board is at the side of its bed away from the platform.
     for ([_]f32{ -shock_x, shock_x }) |sx| {
-        for (tracks) |t| {
-            deco(v3(sx - 0.05, 0.4, t[0] + 0.2), v3(sx + 0.05, 1.6, t[0] + 1.4), yellow, .paint, .sheet_metal);
-            map.addSolid(v3(sx - 0.1, bed_y, t[0] + 0.2), v3(sx + 0.1, 1.6, t[0] + 1.4), .sheet_metal);
-            deco(v3(sx - 0.06, 0.7, t[0] + 0.4), v3(sx + 0.06, 1.3, t[0] + 1.2), v3(0.02, 0.02, 0.02), .paint, .sheet_metal);
+        for (track_c) |t| {
+            const z0 = if (t.away > 0) t.bed[1] - 1.3 else t.bed[0] + 0.1;
+            deco(v3(sx - 0.05, 0.4, z0), v3(sx + 0.05, 1.6, z0 + 1.2), yellow, .paint, .sheet_metal);
+            map.addSolid(v3(sx - 0.1, bed_y, z0), v3(sx + 0.1, 1.6, z0 + 1.2), .sheet_metal);
+            deco(v3(sx - 0.06, 0.7, z0 + 0.2), v3(sx + 0.06, 1.3, z0 + 1.0), v3(0.02, 0.02, 0.02), .paint, .sheet_metal);
         }
     }
 }
 
 // ---- The District train in the shed --------------------------------------------
 
-fn districtTrain() void {
-    const z0: f32 = (e2[0] + e2[1]) / 2 - 1.45;
-    const z1: f32 = z0 + 2.9;
-    const xa: f32 = -40;
-    const xb: f32 = 24;
-    const white = v3(0.86, 0.86, 0.84);
-    // The body is solid with its roof and cab front: a player can drop
-    // onto it from the spur.
-    box(v3(xa, -0.55, z0), v3(xb + 0.25, 3.1, z1), white, .metal, .sheet_metal);
-    box(v3(xa, 3.1, z0 + 0.1), v3(xb, 3.4, z1 - 0.1), v3(0.32, 0.33, 0.34), .metal, .sheet_metal);
-    for ([_]f32{ z0 - 0.02, z1 }) |sz| {
-        const sz1 = sz + 0.02;
-        deco(v3(xa, -0.55, sz), v3(xb, 0.1, sz1), blue, .paint, .sheet_metal);
-        deco(v3(xa, 1.15, sz), v3(xb, 2.05, sz1), v3(0.03, 0.04, 0.05), .paint, .glass);
-        for (0..4) |car| {
-            const cx = xa + 16 * @as(f32, @floatFromInt(car));
-            for ([_]f32{ 2.8, 8, 13.2 }) |dx| {
-                deco(v3(cx + dx - 0.8, 0.1, sz - 0.01), v3(cx + dx + 0.8, 2.1, sz1 + 0.01), red, .paint, .sheet_metal);
-                deco(v3(cx + dx - 0.55, 1.15, sz - 0.02), v3(cx + dx + 0.55, 1.9, sz1 + 0.02), v3(0.04, 0.05, 0.06), .paint, .glass);
-            }
-            if (car > 0) deco(v3(cx - 0.15, -0.55, sz - 0.03), v3(cx + 0.15, 3.1, sz1 + 0.03), v3(0.05, 0.05, 0.05), .paint, .fabric);
-        }
+/// The sink of train_car.parts for a parked train: static boxes. The doors
+/// stay open, so a doorway is no part. The floor, the roof and the far wall
+/// count for the ambient occlusion.
+const ParkedParts = struct {
+    n: usize = 0,
+    pub fn part(self: *ParkedParts, min: V3, max: V3, kind: train_car.Kind, color: V3, mat: Mat, surface: Surface) void {
+        if (kind == .doorway) return;
+        const b = map.add(min, max, color, mat, surface);
+        b.ao = self.n < 2 or self.n == 4;
+        self.n += 1;
     }
-    deco(v3(xb + 0.25, -0.55, z0), v3(xb + 0.26, 3.1, z1), red, .paint, .sheet_metal);
-    deco(v3(xb + 0.26, 1.3, z0 + 0.3), v3(xb + 0.28, 2.3, z1 - 0.3), v3(0.02, 0.03, 0.04), .paint, .glass);
-    var bx = xa + 2;
-    while (bx < xb) : (bx += 8) deco(v3(bx, bed_y, z0 + 0.3), v3(bx + 2.4, -0.55, z1 - 0.3), v3(0.05, 0.05, 0.05), .metal, .metal);
+};
+
+/// The sink of train_car.details for a parked train: decoration.
+const ParkedDetails = struct {
+    pub fn box(_: ParkedDetails, min: V3, max: V3, color: V3, mat: Mat, surface: Surface) void {
+        deco(min, max, color, mat, surface);
+    }
+};
+
+/// A 7-car S7 Stock train at island A, its doors open (train_car.zig). Its
+/// centre is at x = 0, so its train coordinates are world coordinates.
+fn districtTrain() void {
+    const b = train_car.body(&train_car.stock_s7, track_c[1].c, bed_y + 0.16, 0.02, -1);
+    var p: ParkedParts = .{};
+    train_car.parts(&b, &p);
+    train_car.details(&b, ParkedDetails{}, 1);
+    // The bogies.
+    var ends: [9]f32 = undefined;
+    for (b.carEnds(&ends)[0..train_car.stock_s7.cars.len]) |ex| {
+        for ([_]f32{ 2.2, 12.5 }) |dx| deco(v3(ex + dx, bed_y, b.z0 + 0.3), v3(ex + dx + 2.4, b.y0, b.z1 - 0.3), v3(0.05, 0.05, 0.05), .metal, .metal);
+    }
+    map.parked_train = b;
 }
 
 // ---- The intermediate level ------------------------------------------------------
@@ -1046,19 +1079,21 @@ fn deepLevel() void {
         box(v3(xa, y, wz[0]), v3(deep_lift.x1, deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
     }
     box(v3(deep_lift.x0, y, deep_lift.z1), v3(deep_lift.x1, deep_ceil, corr_z[1]), tile_c, .wall_tile, .tile);
+    // East of the lift the island is solid between the two platforms.
+    box(v3(deep_lift.x1, y - 1, p5[1]), v3(plat_x[1], deep_ceil, p6[0]), tile_c, .wall_tile, .tile);
     // Platforms 5 and 6: the yellow edges, the track beds and rails the
     // whole length, the walls across the tracks, the ends, the ceiling.
     deco(v3(plat_x[0], y, p5[0]), v3(plat_x[1], y + 0.012, p5[0] + 0.45), yellow, .paint, .concrete);
     deco(v3(plat_x[0], y, p6[1] - 0.45), v3(plat_x[1], y + 0.012, p6[1]), yellow, .paint, .concrete);
-    for ([_][2]f32{ t5, t6 }) |t| {
-        const c = (t[0] + t[1]) / 2;
+    for ([_][2]f32{ t5, t6 }, [_]f32{ t5_c, t6_c }) |t, c| {
         box(v3(-line_end, y - 1.2, t[0]), v3(line_end, y - 0.85, t[1]), ballast * vec.s(0.7), .concrete, .ballast);
         for ([_]f32{ -0.72, 0.72 }) |off| {
             boxNoAo(v3(-line_end, y - 0.85, c + off - 0.04), v3(line_end, y - 0.69, c + off + 0.04), steel, .metal, .metal);
         }
         deco(v3(-line_end, y - 0.85, c - 0.05), v3(line_end, y - 0.73, c + 0.05), v3(0.5, 0.45, 0.4), .metal, .metal);
         var sx: f32 = -line_end;
-        while (sx < line_end) : (sx += if (@abs(sx - 30) > 60) 2.7 else 0.9) {
+        const mid = (plat_x[0] + plat_x[1]) / 2;
+        while (sx < line_end) : (sx += if (@abs(sx - mid) > 90) 2.7 else 0.9) {
             deco(v3(sx, y - 0.85, t[0] + 0.25), v3(sx + 0.26, y - 0.79, t[1] - 0.25), v3(0.1, 0.08, 0.06), .wood, .wood);
         }
     }
@@ -1085,18 +1120,18 @@ fn deepLevel() void {
         deco(v3(plat_x[0], y + 2.3, wz), v3(plat_x[1], y + 2.7, wz + 0.03), v3(0.05, 0.13, 0.4), .wall_tile, .tile);
         deco(v3(plat_x[0], y + 1.15, wz), v3(plat_x[1], y + 1.25, wz + 0.03), v3(0.38, 0.05, 0.06), .wall_tile, .tile);
     }
-    for ([_]f32{ 12, 30, 48 }) |rx| {
+    for ([_]f32{ 12, 30, 48, 70, 88, 106 }) |rx| {
         roundel(v3(rx, y + 1.6, t5[0] + 0.05), 0, 1.4);
         roundel(v3(rx, y + 1.6, t6[1] - 0.05), std.math.pi, 1.4);
     }
     const poster_cols = [_]V3{ v3(0.8, 0.35, 0.1), v3(0.1, 0.4, 0.55), v3(0.85, 0.75, 0.2), v3(0.45, 0.1, 0.35), v3(0.15, 0.5, 0.25), v3(0.9, 0.9, 0.85) };
-    for ([_]f32{ 4, 21, 39, 56 }, 0..) |px, i| {
+    for ([_]f32{ 4, 21, 39, 56, 79, 97 }, 0..) |px, i| {
         deco(v3(px - 2, y + 0.4, t5[0]), v3(px + 2, y + 3.2, t5[0] + 0.04), v3(0.08, 0.08, 0.08), .paint, .wood);
         deco(v3(px - 1.85, y + 0.55, t5[0] + 0.04), v3(px + 1.85, y + 3.05, t5[0] + 0.06), poster_cols[i % poster_cols.len], .paint, .wood);
         deco(v3(px - 2, y + 0.4, t6[1] - 0.04), v3(px + 2, y + 3.2, t6[1]), v3(0.08, 0.08, 0.08), .paint, .wood);
         deco(v3(px - 1.85, y + 0.55, t6[1] - 0.06), v3(px + 1.85, y + 3.05, t6[1] - 0.04), poster_cols[(i + 2) % poster_cols.len], .paint, .wood);
     }
-    for ([_]f32{ 12, 48 }) |bx| {
+    for ([_]f32{ 12, 48, 84 }) |bx| {
         boxNoAo(v3(bx - 1.2, y, p5[1] - 1.0), v3(bx + 1.2, y + 0.45, p5[1] - 0.5), v3(0.3, 0.17, 0.09), .wood, .wood);
         boxNoAo(v3(bx - 1.2, y, p6[0] + 0.5), v3(bx + 1.2, y + 0.45, p6[0] + 1.0), v3(0.3, 0.17, 0.09), .wood, .wood);
     }
@@ -1104,20 +1139,25 @@ fn deepLevel() void {
         map.beam(v3(plat_x[0] - 30, deep_ceil - 0.3, pz), v3(plat_x[1] + 30, deep_ceil - 0.3, pz), 0.18, 0.18, v3(0, 1, 0), v3(0.12, 0.11, 0.1), .metal, .metal);
     }
 
-    // Fluorescent tubes over each platform. Each light hangs just under its
-    // tube. One tube flickers: its box is dynamic (main.zig).
+    // Fluorescent tubes over each platform (decoration). Each light hangs
+    // just under its tube. One tube flickers: its box is dynamic
+    // (main.zig).
     const flicker_x: f32 = 21;
     var tx: f32 = 3;
-    while (tx < 60) : (tx += 6) {
+    while (tx < plat_x[1]) : (tx += 6) {
         for ([_][2]f32{ p5, p6 }, 0..) |p, side| {
             if (side == 1 and tx == flicker_x) continue;
             const cz = (p[0] + p[1]) / 2;
-            map.add(v3(tx - 1.2, deep_ceil - 0.12, cz - 0.15), v3(tx + 1.2, deep_ceil - 0.04, cz + 0.15), v3(0.85, 0.95, 1.0), .emissive, .glass).solid = false;
+            deco(v3(tx - 1.2, deep_ceil - 0.12, cz - 0.15), v3(tx + 1.2, deep_ceil - 0.04, cz + 0.15), v3(0.85, 0.95, 1.0), .emissive, .glass);
         }
     }
-    for ([_]f32{ 9, 33, 57 }, 0..) |lx, i| {
+    for ([_]f32{ 9, 33, 57, 87 }, 0..) |lx, i| {
         const tint = if (i % 2 == 0) v3(0.8, 1.0, 0.9) else v3(1.0, 0.95, 0.82);
         map.addLight(v3(lx, deep_ceil - 0.35, (p5[0] + p5[1]) / 2), tint * vec.s(2.3), 15);
+    }
+    // Platform 6 east of the arches.
+    for ([_]f32{ 63, 99 }) |lx| {
+        map.addLight(v3(lx, deep_ceil - 0.35, (p6[0] + p6[1]) / 2), v3(1.0, 0.95, 0.82) * vec.s(2.3), 15);
     }
     const fz = (p6[0] + p6[1]) / 2;
     map.flicker_light = map.light_count;
@@ -1131,13 +1171,26 @@ fn deepLevel() void {
     deco(v3(plat_x[1] + 8, y + 1.8, t5[0] + 0.05), v3(plat_x[1] + 8.2, y + 2.0, t5[0] + 0.15), v3(1.0, 0.05, 0.02), .emissive, .glass);
     map.addLight(v3(plat_x[1] + 8, y + 1.9, t5[0] + 0.6), v3(2.5, 0.08, 0.03), 5);
 
-    // The Piccadilly train on platform 5 (map.zig Train).
-    const tz0 = t5[0] + 0.4;
-    const tz1 = t5[1] - 0.45;
-    const body = map.add(v3(-400, y - 0.75, tz0), v3(-340, y + 3.0, tz1), v3(0.62, 0.64, 0.66), .metal, .sheet_metal);
-    body.dynamic = true;
-    body.ao = false;
-    // A full map (map.dropped) has no train.
-    const body_i = map.indexOf(body) orelse return;
-    map.train = .{ .box = body_i, .stop_x = 30, .z0 = tz0, .z1 = tz1, .y0 = y - 0.75, .y1 = y + 3.0, .half_len = 30 };
+    // Danger boards on the tunnel walls where the live rail starts to kill
+    // (liveRail).
+    for ([_]f32{ plat_x[0] - deep_shock, plat_x[1] + deep_shock }) |sx| {
+        deco(v3(sx - 0.6, y - 0.2, t5[0]), v3(sx + 0.6, y + 1.0, t5[0] + 0.04), yellow, .paint, .sheet_metal);
+        deco(v3(sx - 0.6, y - 0.2, t6[1] - 0.04), v3(sx + 0.6, y + 1.0, t6[1]), yellow, .paint, .sheet_metal);
+    }
+
+    // The Piccadilly train on platform 5: a 6-car 1973 Stock train
+    // (train_car.zig, map.zig Train). A full map (map.dropped) has no
+    // train. The doors open on the platform side (+Z).
+    const tb = train_car.body(&train_car.stock_1973, t5_c, y - 0.69, y + 0.02, 1);
+    map.addTrain(tb, (plat_x[0] + plat_x[1]) / 2);
+}
+
+/// True when the live rail kills a player with feet at `feet`: on the
+/// District tracks past shock_x, and on the Piccadilly tracks past the
+/// ends of the platforms. The floor of a train is above the track bed, so
+/// a rider in the deep train is safe in the tunnels.
+pub fn liveRail(feet: V3) bool {
+    if (@abs(feet[0]) > shock_x and feet[1] < 2 and feet[1] > bed_y - 1) return true;
+    const deep_track = feet[1] < deep_y - 0.4 and feet[1] > deep_y - 2;
+    return deep_track and (feet[0] < plat_x[0] - deep_shock or feet[0] > plat_x[1] + deep_shock);
 }

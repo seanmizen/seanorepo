@@ -11,26 +11,20 @@
 //   level above 0. The page catches every error. Without Web Audio the
 //   game runs with no train sound.
 
-import {
-  STOCK_1973,
-  type StockSpec,
-  TubeStation,
-  TubeTrain,
-} from 'tube-sounds';
+import { STOCK_1973, TubeStation, TubeTrain } from 'tube-sounds';
 
 /**
- * One unit of the 1973 Stock: driving motor car, trailer, motor car,
- * 52.8 m. The game train is 60 m long, and a 6-car train (106 m) does
- * not fit the platform. Three cars also halve the audio nodes.
+ * The game train is a full 6-car 1973 Stock train (106.8 m, game/src/
+ * train_car.zig). The voices use about 50 audio nodes for each car
+ * (utils/tube-sounds), so the train has about 300 nodes. There is only one
+ * train, and the page makes it only when the player first hears the deep
+ * level.
  */
-const UNIT_1973: StockSpec = {
-  ...STOCK_1973,
-  cars: STOCK_1973.cars.slice(0, 3),
-};
 
-/** The deep platform of Earl's Court on the track x axis (-X in the game). */
-const PLATFORM_START = -60;
-const PLATFORM_LENGTH = 60;
+/** The deep platform of Earl's Court on the track x axis (-X in the game):
+ * game x 0 to 112. */
+const PLATFORM_START = -112;
+const PLATFORM_LENGTH = 112;
 /** The station master level at a game volume of 1. */
 const MASTER = 0.8;
 /** The door warning before the doors move, s (train_sound.zig). */
@@ -91,7 +85,7 @@ function build(c: AudioContext): void {
     volume: 0,
   });
   station.output.connect(c.destination);
-  train = new TubeTrain(station, { stock: UNIT_1973 });
+  train = new TubeTrain(station, { stock: STOCK_1973 });
   volume = 0;
   fade = 1;
 }

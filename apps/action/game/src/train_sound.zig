@@ -3,12 +3,13 @@
 // sends the train state and the listener to JS (src/tube.ts) on each tick.
 // The page makes the sound with the Web Audio API.
 //
-// The game timeline (map.zig trainX): the train brakes into the platform
-// from +X, waits with its doors open, and pulls out to -X. Between two
-// trains the game parks the box out of sight. The sound continues the
-// motion at line speed: the train runs away down the west tunnel, and the
-// next train comes along the east tunnel. At the change (`swap_t`) both
-// trains are far away, and the train level fades to zero.
+// The game timeline (map.zig trainX): the train comes along the east
+// tunnel at line speed, brakes into the platform from +X, waits with its
+// doors open, pulls out to -X, runs at line speed, and brakes to a stop far
+// down the west tunnel. The sound follows it there. Then the sound changes
+// to the next train (`swap_t`), which comes along the east tunnel at line
+// speed. At the change the train level fades to zero. A rider in the
+// train hears the same train.
 //
 // The track of tube-sounds runs along its x axis, and its trains travel to
 // +x. Here the train travels to -X, so the track x is -X.
@@ -35,35 +36,38 @@ const V3 = vec.V3;
 /// Without an AudioContext the page ignores the call.
 extern fn jsTubeTrain(front: f32, speed: f32, throttle: f32, brake: f32, doors: f32, lx: f32, lateral: f32, rx: f32, rlat: f32, level: f32, train: f32) void;
 
-/// Line speed: the speed at which map.trainX starts to brake, m/s.
-const line_speed: f32 = 200.0 / 9.0;
+/// Line speed, m/s (map.zig).
+const line_speed: f32 = map.train_line_speed;
 /// The time in the cycle where the sound changes from the train that left
-/// to the next train, s.
-const swap_t: f32 = 53;
+/// to the next train, s: the train that left stops.
+const swap_t: f32 = map.train_parked;
 /// The time of the door warning before the doors move, s (tube.ts).
 const door_warning: f32 = 2;
 
 const Motion = struct { x: f32, speed: f32, throttle: f32, brake: f32 };
 
 /// The centre offset of the train from its stop position on X, the speed
-/// to -X, and the driver controls. The same curve as map.trainX while the
-/// train is in sight.
+/// to -X, and the driver controls: the curve of map.trainX, and after
+/// swap_t the next train.
 fn motion(t: f32) Motion {
-    if (t < 9) {
-        const k = 1 - t / 9;
-        return .{ .x = map.trainX(t), .speed = line_speed * k, .throttle = 0, .brake = 0.8 };
+    const x = map.trainX(t);
+    if (t < map.train_brake_in) return .{ .x = x, .speed = line_speed, .throttle = 0, .brake = 0 };
+    if (t < map.train_stop) {
+        const k = 1 - (t - map.train_brake_in) / map.train_brake_t;
+        return .{ .x = x, .speed = line_speed * k, .throttle = 0, .brake = 0.8 };
     }
-    if (t < 27) return .{ .x = 0, .speed = 0, .throttle = 0, .brake = 0.3 };
-    if (t < 36) {
-        const k = (t - 27) / 9;
-        return .{ .x = map.trainX(t), .speed = line_speed * k, .throttle = 1, .brake = 0 };
+    if (t < map.train_depart) return .{ .x = 0, .speed = 0, .throttle = 0, .brake = 0.3 };
+    if (t < map.train_full_speed) {
+        const k = (t - map.train_depart) / map.train_brake_t;
+        return .{ .x = x, .speed = line_speed * k, .throttle = 1, .brake = 0 };
     }
+    // Notch up to line speed, then coast.
+    if (t < map.train_brake_out) return .{ .x = x, .speed = line_speed, .throttle = if (t < map.train_full_speed + 3) 1 else 0, .brake = 0 };
     if (t < swap_t) {
-        // Notch up to line speed, then coast.
-        const throttle: f32 = if (t < 42) 1 else 0;
-        return .{ .x = -100 - line_speed * (t - 36), .speed = line_speed, .throttle = throttle, .brake = 0 };
+        const k = (t - map.train_brake_out) / map.train_brake_t;
+        return .{ .x = x, .speed = line_speed * (1 - k), .throttle = 0, .brake = 0.8 };
     }
-    return .{ .x = 100 + line_speed * (map.train_cycle - t), .speed = line_speed, .throttle = 0, .brake = 0 };
+    return .{ .x = map.trainX(0) + line_speed * (map.train_cycle - t), .speed = line_speed, .throttle = 0, .brake = 0 };
 }
 
 /// Send the train sound for this tick. `hear` is false where the player
@@ -72,13 +76,13 @@ fn motion(t: f32) Motion {
 pub fn update(train: ?map.Train, eye: V3, yaw: f32, hear: bool) void {
     const tr = train orelse return jsTubeTrain(-3000, 0, 0, 0, 0, 0, 3, 1, 0, 0, 0);
     const m = motion(tr.t);
-    const front = -(tr.stop_x + m.x - tr.half_len);
+    const front = -(tr.stop_x + m.x - tr.body.half_len);
     const doors: f32 = if (map.trainDoors(tr.t) > 0.01 and map.trainDoors(tr.t + door_warning) > 0.5) 1 else 0;
 
     // The listener: the eye, measured from the track centre line at the
     // height of the motors and the wheels.
-    const dz = eye[2] - (tr.z0 + tr.z1) / 2;
-    const dy = eye[1] - (tr.y0 + 1.0);
+    const dz = eye[2] - (tr.body.z0 + tr.body.z1) / 2;
+    const dy = eye[1] - (tr.body.floor_y + 0.25);
     const lateral = @max(@sqrt(dz * dz + dy * dy), 0.5);
     const side: f32 = if (dz < 0) -1 else 1;
     // The right ear in the game is (cos yaw, 0, -sin yaw) (player.zig).
@@ -91,12 +95,21 @@ pub fn update(train: ?map.Train, eye: V3, yaw: f32, hear: bool) void {
     jsTubeTrain(front, m.speed, m.throttle, m.brake, doors, -eye[0], lateral, rx, rlat, level, fade);
 }
 
-test "the sound motion meets the game curve at the platform" {
-    try std.testing.expectApproxEqAbs(@as(f32, 100), motion(0).x, 1e-4);
-    try std.testing.expectApproxEqAbs(@as(f32, 0), motion(9).x, 1e-4);
-    try std.testing.expectApproxEqAbs(@as(f32, -100), motion(36).x, 1e-4);
-    // The departure continues at line speed, and the next train comes in
-    // at line speed to x = 100 at the end of the cycle.
-    try std.testing.expectApproxEqAbs(line_speed, motion(35.999).speed, 0.01);
-    try std.testing.expectApproxEqAbs(@as(f32, 100), motion(map.train_cycle).x, 1e-3);
+test "the sound motion meets the game curve" {
+    // The game curve is continuous, and the sound follows it.
+    var t: f32 = 0;
+    while (t < swap_t) : (t += 0.25) {
+        try std.testing.expectApproxEqAbs(map.trainX(t), motion(t).x, 1e-3);
+        try std.testing.expect(@abs(map.trainX(t + 0.01) - map.trainX(t)) < 0.01 * line_speed + 1e-3);
+    }
+    // The speed is the slope of the curve.
+    for ([_]f32{ 3, 10, 30, 50, 60, 70 }) |ts| {
+        const slope = (map.trainX(ts - 0.05) - map.trainX(ts + 0.05)) / 0.1;
+        try std.testing.expectApproxEqAbs(slope, motion(ts).speed, 0.05);
+    }
+    // The next train comes in at line speed to the start of the cycle.
+    try std.testing.expectApproxEqAbs(map.trainX(0), motion(map.train_cycle).x, 1e-3);
+    // The doors are closed before the train moves.
+    try std.testing.expectEqual(@as(f32, 0), map.trainDoors(map.train_depart));
+    try std.testing.expectEqual(@as(f32, 0), map.trainDoors(map.train_stop));
 }
