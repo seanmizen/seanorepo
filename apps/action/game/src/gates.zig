@@ -13,6 +13,7 @@
 // - A tap IN starts a journey: "-£0.01 (amount pending)". 60 to 240 s later
 //   the fare comes: -£3.10, the Zone 1 pay-as-you-go peak single. If the
 //   player tapped OUT before that, the message is a refund.
+// - A tap OUT with no tap in: after the same delay, the maximum fare.
 // - A player who crosses the gate line by any other way than an open lane
 //   (a vault, a jump over the screens) is a fare dodger. main.zig kills the
 //   player 2 s later: "Guilt".
@@ -29,6 +30,9 @@ const Mat4 = vec.Mat4;
 /// March 2026).
 pub const fare_pence = 310;
 pub const pending_pence = 1;
+/// The maximum fare: a tap out with no tap in. An estimate: TfL publishes
+/// no single figure for 2026.
+pub const max_fare_pence = 990;
 /// The fare message comes this many seconds after the tap in.
 pub const fare_delay = [2]f32{ 60, 240 };
 
@@ -85,7 +89,13 @@ pub var lane_n: usize = 0;
 
 /// The journey of the player: tapped in, tapped out, and the time to the
 /// fare message.
-pub const Journey = struct { active: bool = false, out: bool = false, t: f32 = 0 };
+pub const Journey = struct {
+    active: bool = false,
+    out: bool = false,
+    /// A tap out with no tap in: the fare is the maximum fare.
+    max: bool = false,
+    t: f32 = 0,
+};
 pub var journey: Journey = .{};
 
 /// A message near the crosshair, like the damage numbers.
@@ -199,7 +209,13 @@ pub fn tap(i: usize, feet: V3) Tap {
         pop("-£0.01 (amount pending)", false);
         return .tapped_in;
     }
-    if (journey.active) journey.out = true;
+    if (journey.active) {
+        journey.out = true;
+    } else {
+        // No tap in: the maximum fare comes after the same delay.
+        journey = .{ .active = true, .max = true, .t = fare_delay[0] + (fare_delay[1] - fare_delay[0]) * rand() };
+        pop("-£0.01 (amount pending)", false);
+    }
     return .tapped_out;
 }
 
@@ -257,7 +273,10 @@ pub fn step(dt: f32, before: ?V3, feet: ?V3, player_r: f32, player_h: f32) Cross
         journey.t -= dt;
         if (journey.t <= 0) {
             var buf: [40]u8 = undefined;
-            if (journey.out) {
+            if (journey.max) {
+                var num: [16]u8 = undefined;
+                pop(std.fmt.bufPrint(&buf, "{s} MAXIMUM FARE (no tap in)", .{penceText(&num, "-", max_fare_pence)}) catch "MAXIMUM FARE", false);
+            } else if (journey.out) {
                 var num: [16]u8 = undefined;
                 pop(std.fmt.bufPrint(&buf, "REFUND {s}", .{penceText(&num, "+", pending_pence)}) catch "REFUND", true);
             } else pop(penceText(&buf, "-", fare_pence), false);

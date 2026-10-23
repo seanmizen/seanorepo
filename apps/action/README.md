@@ -1186,7 +1186,9 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
     reader shows red.
   - A tap in shows "-£0.01 (amount pending)". 60 to 240 s later the fare
     shows: -£3.10, the Zone 1 pay-as-you-go peak single (from March 2026).
-    If you tapped out before that, it shows a refund.
+    If you tapped out before that, it shows a refund. A tap out with no tap
+    in gives "-£9.90 MAXIMUM FARE (no tap in)" after the same delay (an
+    estimate: TfL publishes no single 2026 figure).
   - A crossing of a gate line by any other way (a vault, a jump) is a fare
     dodge. 2 s later the server kills you: `{t:"die", by:"Guilt"}`. The
     kill feed shows Guilt, and the death screen says "Died of guilt. Fare
