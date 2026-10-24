@@ -86,5 +86,9 @@ ingress:
   - hostname: action.seanmizen.com
     service: http://localhost:4080
 
+  # autosam.seanmizen.com - Port 4090. One static page, no backend.
+  - hostname: autosam.seanmizen.com
+    service: http://localhost:4090
+
   # Catch-all for unmatched routes
   - service: http_status:404

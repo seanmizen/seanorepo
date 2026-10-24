@@ -54,6 +54,15 @@ resource "cloudflare_dns_record" "seanmizen_com_action_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
+resource "cloudflare_dns_record" "seanmizen_com_autosam_cname" {
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
+  name    = "autosam.seanmizen.com"
+  proxied = true
+  ttl     = 1
+  type    = "CNAME"
+  zone_id = cloudflare_zone.seanmizen_com.id
+}
+
 resource "cloudflare_dns_record" "seanmizen_com_minecraft_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
   name    = "minecraft.seanmizen.com"

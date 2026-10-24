@@ -62,6 +62,10 @@ http://action.{$EDGE_HOST}.local {
 	reverse_proxy action-seanmizen-com:4080
 }
 
+http://autosam.{$EDGE_HOST}.local {
+	reverse_proxy autosam:4090
+}
+
 http://seansconverter.{$EDGE_HOST}.local {
 	handle /api/* {
 		reverse_proxy seansconverter-backend:4051

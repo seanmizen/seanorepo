@@ -5870,6 +5870,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"autosam@workspace:apps/autosam":
+  version: 0.0.0-use.local
+  resolution: "autosam@workspace:apps/autosam"
+  languageName: unknown
+  linkType: soft
+
 "ava@npm:^5.3.1":
   version: 5.3.1
   resolution: "ava@npm:5.3.1"

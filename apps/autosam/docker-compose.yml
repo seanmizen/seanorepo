@@ -1,0 +1,32 @@
+x-frontend-base: &frontend-base
+  container_name: autosam
+  build:
+    context: ../..
+    dockerfile: apps/autosam/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "${PUBLISH_ADDR:-127.0.0.1}:4090:4090"
+
+services:
+  frontend:
+    <<: *frontend-base
+    profiles: ["prod"]
+    restart: unless-stopped
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [autosam]
+
+  frontend-dev:
+    <<: *frontend-base
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+    profiles: ["dev"]
+
+networks:
+  # Shared with infra/edge. deploy.sh and prod:docker create it.
+  edge:
+    external: true
