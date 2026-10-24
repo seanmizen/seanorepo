@@ -15,7 +15,7 @@
 //   smoke. The core and the streaks are glowing billboards, and the shader
 //   skips the lights for them. Each blast adds few quads, and most of them
 //   are thin, so several blasts near the eye cost little.
-// - Damage: radius 5 m. 100 to 1.5 m, then it falls linearly to 0 at 5 m.
+// - Damage: radius 8 m. 100 to 3.5 m, then it falls linearly to 0 at 8 m.
 //   Cover: three points on the target (feet + 0.3, chest 1.2, head 1.6). A
 //   point counts only if a ray from the blast to it hits no solid box. Each
 //   visible point gives a third of the falloff at its distance, so cover
@@ -42,8 +42,8 @@ const Mat4 = vec.Mat4;
 pub const throw_speed: f32 = 18;
 pub const throw_up: f32 = 2.5;
 pub const gravity: f32 = 18;
-pub const radius: f32 = 5;
-pub const kill_radius: f32 = 1.5;
+pub const radius: f32 = 8;
+pub const kill_radius: f32 = 3.5;
 pub const max_damage: f32 = 100;
 /// Throws per life in deathmatch. The server has the same number.
 pub const per_life: u32 = 3;
@@ -56,8 +56,8 @@ const trail_life: f32 = 1.5;
 /// The streaks of one blast.
 const streaks_per_blast = 28;
 /// The drag on a streak (1/s). A streak with speed v stops at v / drag,
-/// so the streaks reach 2.8 to 5.2 m: about the blast radius.
-const streak_drag: f32 = 5;
+/// so the streaks reach 4.4 to 8.1 m: about the blast radius.
+const streak_drag: f32 = 3.2;
 /// The tail of a streak is where its head was this long ago, so a fast
 /// streak is long and a slow one is short.
 const streak_lag: f32 = 0.06;

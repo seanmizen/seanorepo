@@ -617,7 +617,9 @@ the calibre (0.4 to 4):
 |---|---|
 | Damage | calibre damage x r^0.1 (0.9 to 1.1), rounded. The head damage is the calibre head multiple of it. |
 | Bullet speed | calibre speed x r^0.2. Faster than 343 m/s is supersonic. |
-| Fall-off | full damage to `near` m, then a straight line down to `min` at `far` m, then flat. `near` and `far` are the calibre values x r^0.35 (0.75 to 1.3). |
+| Fall-off | full damage to `near` m, then a straight line down to `min` at `far` m, then flat. `near` and `far` are the calibre values x r^0.35 (0.75 to 1.3). For buckshot, `near`, `far` and the reach are the calibre values x r^0.8 (0.75 to 1.6). |
+| Cone | buckshot: a barrel longer than the reference is a choke. The class cone x (1 / r)^2.5 (0.35 to 1), and the sights take off more of the smaller cone. A slug: the class cone x 0.12, and the sights make it 80% smaller. Other guns: the class cone. |
+| Head damage | a rifle (an AK) does at least 100 to the head, so a head hit kills inside `near`. |
 | Fire rate | the time between shots = the class interval x the calibre shot damage / the shot damage of the class reference calibre. Thus each class keeps its damage a second, a bigger round fires more slowly, and the barrel does not change the rate. |
 | Kick | class kick x (impulse / reference impulse)^0.85 x weight (light 1.2, medium 1, heavy 0.82), x 1.4 with no stock |
 | Side kick | kick x class sway, x 1.3 with no stock |
@@ -645,22 +647,23 @@ bullet, or of one pellet) sets the crack and the whiz (see
 
 | Calibre | Body | Head | Pellets | Bullet | Bullet size | Reference barrel | Full damage to | Down to | Impulse |
 |---|---|---|---|---|---|---|---|---|---|
-| 4.6x30 mm | 17 | x2.3 | 1 | 720 m/s | 4.65 x 16 mm | 18 cm | 18 m | 65% at 55 m | 2.3 N s |
-| 9x19 mm | 21 | x2.3 | 1 | 360 m/s | 9.02 x 15.5 mm | 11 cm | 12 m | 55% at 40 m | 3.4 N s |
-| .40 S&W | 25 | x2.3 | 1 | 330 m/s | 10.17 x 14 mm | 11 cm | 12 m | 55% at 38 m | 4.3 N s |
-| 10 mm Auto | 28 | x2.3 | 1 | 380 m/s | 10.17 x 15.5 mm | 12 cm | 15 m | 60% at 45 m | 5.3 N s |
-| .45 ACP | 27 | x2.3 | 1 | 255 m/s | 11.48 x 17 mm | 13 cm | 10 m | 50% at 35 m | 4.2 N s |
-| .50 AE | 45 | x2 | 1 | 450 m/s | 12.7 x 22 mm | 15 cm | 20 m | 70% at 55 m | 10.3 N s |
-| .38 Special | 35 | x2.5 | 1 | 265 m/s | 9.07 x 18 mm | 10 cm | 10 m | 50% at 35 m | 3.1 N s |
-| .357 Magnum | 53 | x2 | 1 | 425 m/s | 9.07 x 17 mm | 10 cm | 15 m | 60% at 45 m | 5.5 N s |
-| .44 Magnum | 64 | x2 | 1 | 440 m/s | 10.9 x 19 mm | 15 cm | 22 m | 60% at 60 m | 8.2 N s |
-| 5.45x39 mm | 23 | x2.5 | 1 | 880 m/s | 5.6 x 25.5 mm | 41 cm | 20 m | 65% at 60 m | 4.4 N s |
-| 5.56x45 mm | 23 | x2.5 | 1 | 900 m/s | 5.7 x 23 mm | 37 cm | 18 m | 62% at 55 m | 5.9 N s |
-| 7.62x39 mm | 30 | x2.5 | 1 | 715 m/s | 7.92 x 26.8 mm | 41 cm | 25 m | 72% at 70 m | 7.8 N s |
-| .300 BLK subsonic | 32 | x2.5 | 1 | 305 m/s | 7.82 x 38 mm | 23 cm | 15 m | 60% at 45 m | 5.1 N s |
-| 12 gauge | 13 | x1.25 | 9 | 400 m/s | 8.38 x 8.38 mm | 47 cm | 6 m | 20% at 30 m | 17 N s |
-| 12 gauge magnum | 12 | x1.25 | 12 | 410 m/s | 8.38 x 8.38 mm | 47 cm | 7 m | 20% at 33 m | 23 N s |
-| 20 gauge | 13 | x1.25 | 8 | 400 m/s | 6.1 x 6.1 mm | 47 cm | 5 m | 20% at 26 m | 12 N s |
+| 4.6x30 mm | 22 | x2.3 | 1 | 720 m/s | 4.65 x 16 mm | 18 cm | 23 m | 75% at 72 m | 2.3 N s |
+| 9x19 mm | 27 | x2.3 | 1 | 360 m/s | 9.02 x 15.5 mm | 11 cm | 16 m | 65% at 52 m | 3.4 N s |
+| .40 S&W | 32 | x2.3 | 1 | 330 m/s | 10.17 x 14 mm | 11 cm | 16 m | 65% at 50 m | 4.3 N s |
+| 10 mm Auto | 36 | x2.3 | 1 | 380 m/s | 10.17 x 15.5 mm | 12 cm | 20 m | 70% at 58 m | 5.3 N s |
+| .45 ACP | 35 | x2.3 | 1 | 255 m/s | 11.48 x 17 mm | 13 cm | 13 m | 60% at 46 m | 4.2 N s |
+| .50 AE | 58 | x2 | 1 | 450 m/s | 12.7 x 22 mm | 15 cm | 20 m | 70% at 60 m | 10.3 N s |
+| .38 Special | 45 | x2.5 | 1 | 265 m/s | 9.07 x 18 mm | 10 cm | 13 m | 60% at 46 m | 3.1 N s |
+| .357 Magnum | 69 | x2 | 1 | 425 m/s | 9.07 x 17 mm | 10 cm | 20 m | 70% at 58 m | 5.5 N s |
+| .44 Magnum | 83 | x2 | 1 | 440 m/s | 10.9 x 19 mm | 15 cm | 29 m | 70% at 78 m | 8.2 N s |
+| 5.45x39 mm | 30 | x2.5 | 1 | 880 m/s | 5.6 x 25.5 mm | 41 cm | 26 m | 75% at 78 m | 4.4 N s |
+| 5.56x45 mm | 30 | x2.5 | 1 | 900 m/s | 5.7 x 23 mm | 37 cm | 23 m | 72% at 72 m | 5.9 N s |
+| 7.62x39 mm | 39 | x2.6 | 1 | 715 m/s | 7.92 x 26.8 mm | 41 cm | 33 m | 80% at 90 m | 7.8 N s |
+| .300 BLK subsonic | 42 | x2.5 | 1 | 305 m/s | 7.82 x 38 mm | 23 cm | 20 m | 70% at 58 m | 5.1 N s |
+| 12 gauge | 16 | x1.25 | 9 | 400 m/s | 8.38 x 8.38 mm | 47 cm | 9 m | 35% at 40 m | 17 N s |
+| 12 gauge magnum | 15 | x1.25 | 12 | 410 m/s | 8.38 x 8.38 mm | 47 cm | 10 m | 35% at 44 m | 23 N s |
+| 20 gauge | 16 | x1.25 | 8 | 400 m/s | 6.1 x 6.1 mm | 47 cm | 8 m | 35% at 36 m | 12 N s |
+| 12 gauge slug | 100 | x1.6 | 1 | 480 m/s | 18.5 x 22 mm | 47 cm | 20 m | 55% at 70 m | 27 N s |
 
 ### The recoil pattern
 
@@ -723,7 +726,7 @@ the stock and the size.
 | SHOTGUN 1 | Shotgun_1 | 12 gauge | 47 cm, standard | yes | medium | A grey synthetic stock and an 18.5-inch barrel: a police pump gun. |
 | SHOTGUN 2 | Shotgun_2 | 12 gauge | 61 cm, long | yes | heavy | A long barrel, a full-length tube magazine and a wood stock: a field gun. |
 | SHOTGUN 3 | Shotgun_3 | 12 gauge magnum | 61 cm, long | yes | heavy | The longest barrel and a short tube magazine: a waterfowl gun for 3-inch magnum shells. |
-| SHOTGUN 4 | Shotgun_4 | 20 gauge | 56 cm, standard | yes | light | A thin single barrel, a short fore-end and a light frame. |
+| SHOTGUN 4 | Shotgun_4 | 12 gauge slug | 56 cm, long | yes | light | A thin single barrel, a short fore-end and a light frame: a slug gun with a rifled barrel. It fires one heavy slug, not shot. |
 | SHOTGUN 5 | Shotgun_ShortStock | 12 gauge | 36 cm, short | no | light | A pump with a bird's-head grip and no stock, as the Shockwave. |
 | SAWN-OFF 1 | Shotgun_SawedOff | 12 gauge | 30 cm, snub | no | light | A double-barrel 12 gauge with the barrels and the stock cut down. |
 | PISTOL 1 | Pistol_1 | .45 ACP | 13 cm, standard | no | heavy | A black 1911 with wood grips. |
@@ -750,60 +753,60 @@ damage past its reach).
 
 | Gun | Body | Head | Fire | Bullet | Range | Kick up, side | Recovery | Speed | Reload | TTK 5 m | TTK 10 m | TTK 40 m |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| RIFLE 1 | 23 | 53 | 801 rpm | 421 m/s | 36 m | 10.8, 6.3 | 4.0 | 98% | 2.3 s | 0.30 s | 0.30 s | 0.45 s |
-| RIFLE 2 | 30 | 75 | 561 rpm | 715 m/s | 65 m | 13.0, 5.9 | 6.0 | 93% | 2.3 s | 0.32 s | 0.32 s | 0.32 s |
-| RIFLE 3 | 29 | 73 | 561 rpm | 676 m/s | 59 m | 21.8, 12.8 | 4.0 | 98% | 2.3 s | 0.32 s | 0.32 s | 0.32 s |
-| RIFLE 4 | 30 | 75 | 561 rpm | 715 m/s | 65 m | 15.6, 7.0 | 6.6 | 96% | 2.3 s | 0.32 s | 0.32 s | 0.32 s |
-| RIFLE 5 | 23 | 58 | 731 rpm | 880 m/s | 49 m | 8.0, 3.6 | 6.0 | 93% | 2.3 s | 0.33 s | 0.33 s | 0.41 s |
-| CARBINE 1 | 24 | 60 | 732 rpm | 960 m/s | 47 m | 7.4, 2.6 | 6.3 | 92% | 2.1 s | 0.33 s | 0.33 s | 0.33 s |
-| CARBINE 2 | 23 | 58 | 732 rpm | 900 m/s | 42 m | 9.0, 3.1 | 7.0 | 96% | 2.1 s | 0.33 s | 0.33 s | 0.41 s |
-| CARBINE 3 | 23 | 58 | 732 rpm | 919 m/s | 44 m | 15.1, 6.9 | 4.6 | 101% | 2.1 s | 0.33 s | 0.33 s | 0.41 s |
-| CARBINE 4 | 31 | 78 | 526 rpm | 290 m/s, sub | 31 m | 9.5, 3.3 | 7.7 | 99% | 2.1 s | 0.34 s | 0.34 s | 0.57 s |
-| BULLPUP 1 | 24 | 60 | 600 rpm | 960 m/s | 47 m | 6.6, 1.6 | 6.3 | 90% | 2.5 s | 0.35 s | 0.35 s | 0.35 s |
-| BULLPUP 2 | 23 | 58 | 600 rpm | 919 m/s | 44 m | 8.0, 2.0 | 7.0 | 94% | 2.5 s | 0.35 s | 0.35 s | 0.40 s |
-| BULLPUP 3 | 30 | 75 | 460 rpm | 715 m/s | 65 m | 8.3, 2.1 | 6.3 | 90% | 2.5 s | 0.39 s | 0.39 s | 0.39 s |
-| SMG 1 | 27 | 62 | 622 rpm | 259 m/s, sub | 23 m | 12.1, 9.4 | 5.3 | 109% | 1.8 s | 0.29 s | 0.29 s | 0.68 s |
-| SMG 2 | 22 | 51 | 800 rpm | 406 m/s | 34 m | 6.0, 3.6 | 8.0 | 104% | 1.8 s | 0.30 s | 0.30 s | 0.45 s |
-| SMG 3 | 17 | 39 | 988 rpm | 720 m/s | 44 m | 5.2, 3.1 | 8.8 | 107% | 1.8 s | 0.30 s | 0.30 s | 0.43 s |
-| SMG 4 | 21 | 48 | 800 rpm | 360 m/s | 28 m | 10.1, 7.9 | 5.3 | 109% | 1.8 s | 0.30 s | 0.30 s | 0.60 s |
-| SMG 5 | 23 | 53 | 800 rpm | 466 m/s | 36 m | 4.9, 3.0 | 7.2 | 100% | 1.8 s | 0.30 s | 0.30 s | 0.45 s |
-| SHOTGUN 1 | 13 x9 | 16 x9 | 71 rpm | 400 m/s | 14 m | 45.0, 18.0 | 4.5 | 95% | 2.6 s | one shot | 0.85 s | - |
-| SHOTGUN 2 | 13 x9 | 16 x9 | 71 rpm | 421 m/s | 15 m | 36.9, 14.8 | 4.0 | 91% | 2.6 s | one shot | 0.85 s | - |
-| SHOTGUN 3 | 12 x12 | 15 x12 | 57 rpm | 432 m/s | 17 m | 47.7, 19.1 | 4.0 | 91% | 2.6 s | one shot | 1.05 s | - |
-| SHOTGUN 4 | 13 x8 | 16 x8 | 79 rpm | 414 m/s | 12 m | 40.2, 16.1 | 5.0 | 98% | 2.6 s | one shot | 1.51 s | - |
-| SHOTGUN 5 | 13 x9 | 16 x9 | 71 rpm | 379 m/s | 12 m | 75.6, 39.3 | 3.0 | 100% | 2.6 s | one shot | 0.85 s | - |
-| SAWN-OFF 1 | 12 x9 | 15 x9 | 240 rpm | 366 m/s | 12 m | 72.0, 43.2 | 4.4 | 103% | 2.0 s | 0.25 s | - | - |
-| PISTOL 1 | 27 | 62 | 389 rpm | 255 m/s, sub | 23 m | 15.7, 5.5 | 8.1 | 102% | 1.4 s | 0.46 s | 0.46 s | 1.08 s |
-| PISTOL 2 | 21 | 48 | 500 rpm | 372 m/s | 29 m | 13.1, 4.6 | 8.1 | 102% | 1.4 s | 0.48 s | 0.48 s | 0.96 s |
-| PISTOL 3 | 25 | 58 | 420 rpm | 330 m/s, sub | 26 m | 19.5, 6.8 | 9.0 | 106% | 1.4 s | 0.43 s | 0.43 s | 1.00 s |
-| PISTOL 4 | 45 | 90 | 233 rpm | 450 m/s | 49 m | 33.7, 11.8 | 8.1 | 102% | 1.4 s | 0.51 s | 0.51 s | 0.51 s |
-| PISTOL 5 | 21 | 48 | 500 rpm | 353 m/s | 27 m | 19.2, 6.7 | 9.9 | 109% | 1.4 s | 0.48 s | 0.48 s | 0.96 s |
-| PISTOL 6 | 29 | 67 | 375 rpm | 397 m/s | 36 m | 23.3, 8.2 | 9.0 | 106% | 1.4 s | 0.48 s | 0.48 s | 0.64 s |
-| REVOLVER 1 | 53 | 106 | 130 rpm | 425 m/s | 34 m | 40.0, 12.0 | 5.0 | 104% | 2.4 s | 0.46 s | 0.46 s | 0.92 s |
-| REVOLVER 2 | 64 | 128 | 108 rpm | 440 m/s | 46 m | 46.1, 13.8 | 4.5 | 100% | 2.4 s | 0.56 s | 0.56 s | 0.56 s |
-| REVOLVER 3 | 55 | 110 | 130 rpm | 461 m/s | 39 m | 32.8, 9.8 | 4.5 | 100% | 2.4 s | 0.46 s | 0.46 s | 0.92 s |
-| REVOLVER 4 | 50 | 100 | 130 rpm | 384 m/s | 28 m | 48.0, 14.4 | 5.5 | 107% | 2.4 s | 0.46 s | 0.46 s | 1.38 s |
-| REVOLVER 5 | 36 | 90 | 198 rpm | 287 m/s, sub | 26 m | 29.5, 8.8 | 5.5 | 107% | 2.4 s | 0.61 s | 0.61 s | 1.52 s |
+| RIFLE 1 | 29 | 100 | 810 rpm | 421 m/s | 54 m | 10.8, 6.3 | 4.0 | 98% | 2.3 s | 0.22 s | 0.22 s | 0.22 s |
+| RIFLE 2 | 39 | 101 | 561 rpm | 715 m/s | 200 m | 13.0, 5.9 | 6.0 | 93% | 2.3 s | 0.21 s | 0.21 s | 0.21 s |
+| RIFLE 3 | 38 | 100 | 561 rpm | 676 m/s | 200 m | 21.8, 12.8 | 4.0 | 98% | 2.3 s | 0.21 s | 0.21 s | 0.21 s |
+| RIFLE 4 | 39 | 101 | 561 rpm | 715 m/s | 200 m | 15.6, 7.0 | 6.6 | 96% | 2.3 s | 0.21 s | 0.21 s | 0.21 s |
+| RIFLE 5 | 30 | 100 | 729 rpm | 880 m/s | 200 m | 8.0, 3.6 | 6.0 | 93% | 2.3 s | 0.25 s | 0.25 s | 0.25 s |
+| CARBINE 1 | 31 | 78 | 732 rpm | 960 m/s | 75 m | 7.4, 2.6 | 6.3 | 92% | 2.1 s | 0.25 s | 0.25 s | 0.25 s |
+| CARBINE 2 | 30 | 75 | 732 rpm | 900 m/s | 67 m | 9.0, 3.1 | 7.0 | 96% | 2.1 s | 0.25 s | 0.25 s | 0.25 s |
+| CARBINE 3 | 30 | 75 | 732 rpm | 919 m/s | 69 m | 15.1, 6.9 | 4.6 | 101% | 2.1 s | 0.25 s | 0.25 s | 0.25 s |
+| CARBINE 4 | 41 | 103 | 523 rpm | 290 m/s, sub | 47 m | 9.5, 3.3 | 7.7 | 99% | 2.1 s | 0.23 s | 0.23 s | 0.34 s |
+| BULLPUP 1 | 31 | 78 | 600 rpm | 960 m/s | 75 m | 6.6, 1.6 | 6.3 | 90% | 2.5 s | 0.30 s | 0.30 s | 0.30 s |
+| BULLPUP 2 | 30 | 75 | 600 rpm | 919 m/s | 69 m | 8.0, 2.0 | 7.0 | 94% | 2.5 s | 0.30 s | 0.30 s | 0.30 s |
+| BULLPUP 3 | 39 | 101 | 462 rpm | 715 m/s | 200 m | 8.3, 2.1 | 6.3 | 90% | 2.5 s | 0.13 s | 0.13 s | 0.13 s |
+| SMG 1 | 35 | 81 | 617 rpm | 259 m/s, sub | 35 m | 12.1, 9.4 | 5.3 | 109% | 1.8 s | 0.19 s | 0.19 s | 0.39 s |
+| SMG 2 | 29 | 67 | 800 rpm | 406 m/s | 51 m | 6.0, 3.6 | 8.0 | 104% | 1.8 s | 0.23 s | 0.23 s | 0.30 s |
+| SMG 3 | 22 | 51 | 982 rpm | 720 m/s | 200 m | 5.2, 3.1 | 8.8 | 107% | 1.8 s | 0.24 s | 0.24 s | 0.24 s |
+| SMG 4 | 27 | 62 | 800 rpm | 360 m/s | 42 m | 10.1, 7.9 | 5.3 | 109% | 1.8 s | 0.23 s | 0.23 s | 0.30 s |
+| SMG 5 | 30 | 69 | 800 rpm | 466 m/s | 54 m | 4.9, 3.0 | 7.2 | 100% | 1.8 s | 0.23 s | 0.23 s | 0.23 s |
+| SHOTGUN 1 | 16 x9 | 20 x9 | 71 rpm | 400 m/s | 21 m | 45.0, 18.0 | 4.5 | 95% | 2.6 s | one shot | 0.85 s | - |
+| SHOTGUN 2 | 16 x9 | 20 x9 | 71 rpm | 421 m/s | 26 m | 36.9, 14.8 | 4.0 | 91% | 2.6 s | one shot | one shot | 5.10 s |
+| SHOTGUN 3 | 15 x12 | 19 x12 | 56 rpm | 432 m/s | 28 m | 47.7, 19.1 | 4.0 | 91% | 2.6 s | one shot | one shot | 4.25 s |
+| SHOTGUN 4 | 102 | 163 | 102 rpm | 497 m/s | 51 m | 80.0, 32.0 | 5.0 | 98% | 2.6 s | one shot | one shot | 0.59 s |
+| SHOTGUN 5 | 16 x9 | 20 x9 | 71 rpm | 379 m/s | 17 m | 75.6, 39.3 | 3.0 | 100% | 2.6 s | one shot | 0.85 s | - |
+| SAWN-OFF 1 | 15 x9 | 19 x9 | 240 rpm | 366 m/s | 16 m | 72.0, 43.2 | 4.4 | 103% | 2.0 s | one shot | 0.25 s | - |
+| PISTOL 1 | 35 | 81 | 386 rpm | 255 m/s, sub | 34 m | 15.7, 5.5 | 8.1 | 102% | 1.4 s | 0.31 s | 0.31 s | 0.62 s |
+| PISTOL 2 | 27 | 62 | 500 rpm | 372 m/s | 44 m | 13.1, 4.6 | 8.1 | 102% | 1.4 s | 0.36 s | 0.36 s | 0.48 s |
+| PISTOL 3 | 32 | 74 | 422 rpm | 330 m/s, sub | 40 m | 19.5, 6.8 | 9.0 | 106% | 1.4 s | 0.43 s | 0.43 s | 0.57 s |
+| PISTOL 4 | 58 | 116 | 233 rpm | 450 m/s | 53 m | 33.7, 11.8 | 8.1 | 102% | 1.4 s | 0.26 s | 0.26 s | 0.52 s |
+| PISTOL 5 | 27 | 62 | 500 rpm | 353 m/s | 40 m | 19.2, 6.7 | 9.9 | 109% | 1.4 s | 0.36 s | 0.36 s | 0.48 s |
+| PISTOL 6 | 37 | 85 | 375 rpm | 397 m/s | 56 m | 23.3, 8.2 | 9.0 | 106% | 1.4 s | 0.32 s | 0.32 s | 0.48 s |
+| REVOLVER 1 | 69 | 138 | 130 rpm | 425 m/s | 52 m | 40.0, 12.0 | 5.0 | 104% | 2.4 s | 0.46 s | 0.46 s | 0.46 s |
+| REVOLVER 2 | 83 | 166 | 108 rpm | 440 m/s | 70 m | 46.1, 13.8 | 4.5 | 100% | 2.4 s | 0.55 s | 0.55 s | 0.55 s |
+| REVOLVER 3 | 72 | 144 | 130 rpm | 461 m/s | 60 m | 32.8, 9.8 | 4.5 | 100% | 2.4 s | 0.46 s | 0.46 s | 0.46 s |
+| REVOLVER 4 | 66 | 132 | 130 rpm | 384 m/s | 43 m | 48.0, 14.4 | 5.5 | 107% | 2.4 s | 0.46 s | 0.46 s | 0.46 s |
+| REVOLVER 5 | 47 | 118 | 200 rpm | 287 m/s, sub | 39 m | 29.5, 8.8 | 5.5 | 107% | 2.4 s | 0.60 s | 0.60 s | 0.60 s |
 
 The time to kill of each class:
 
 | Class | 10 m | 40 m |
 |---|---|---|
-| Rifle | 0.30 to 0.33 s | 0.32 to 0.45 s |
-| Carbine | 0.33 to 0.34 s | 0.33 to 0.57 s |
-| Bullpup | 0.35 to 0.39 s | 0.35 to 0.40 s |
-| SMG | 0.29 to 0.30 s | 0.43 to 0.68 s |
-| Shotgun | 0.85 to 1.51 s (one shot at 5 m) | - |
-| Sawn-off | - (0.25 s at 5 m) | - |
-| Pistol | 0.43 to 0.51 s | 0.51 to 1.08 s |
-| Revolver | 0.46 to 0.61 s | 0.56 to 1.52 s |
+| Rifle | 0.21 to 0.25 s | 0.21 to 0.25 s |
+| Carbine | 0.23 to 0.25 s | 0.25 to 0.34 s |
+| Bullpup | 0.13 to 0.30 s | 0.13 to 0.30 s |
+| SMG | 0.19 to 0.24 s | 0.23 to 0.39 s |
+| Shotgun | one shot to 0.85 s (one shot at 5 m) | 0.59 s (the slug), 4.25 to 5.10 s at the hip (the long barrels), or - |
+| Sawn-off | 0.25 s (one shot at 5 m) | - |
+| Pistol | 0.26 to 0.43 s | 0.48 to 0.62 s |
+| Revolver | 0.46 to 0.60 s | 0.46 to 0.60 s |
 
 The balance, for hipfire on a laptop (100 health):
 
-- **No gun is the fastest at every range.** At 10 m the SMGs kill fastest.
-  At 40 m the 7.62x39 mm AKs and the long-barrel 5.56 mm guns kill fastest.
-  For the secondary, the .40 S&W pistol is the fastest at 10 m, and the
-  .50 AE pistol at 40 m. `zig build test` checks that the fastest gun at
+- **No gun is the fastest at every range.** At 10 m the shotguns kill with
+  one shot. At 40 m the 7.62x39 mm AK bullpup and the AKs kill fastest.
+  For the secondary, the .50 AE pistol is the fastest at 10 m, and the
+  magnum revolvers at 40 m. `zig build test` checks that the fastest gun at
   10 m is not the fastest gun at 40 m, in each slot.
 - **The price of each strong gun.** The 7.62x39 mm AKs kick hard. The long-barrel guns are heavy and slow. A gun with no
   stock is fast to carry and to aim, but kicks and sways much more. The
@@ -814,14 +817,21 @@ The balance, for hipfire on a laptop (100 health):
   kill at 5 m, 10 m and 40 m, the recoil, the speed, the reload, the cone,
   the range, and the head damage at 10 m and 40 m. The list is empty.
 - **Head hits**: about 2.5 times a body hit for rifle rounds, and 2 to 2.5
-  times for handgun rounds. Only the .357 Magnum and the .44 Magnum
-  revolvers kill with one head hit. The .44 does it to about 45 m.
+  times for handgun rounds. Each AK (the rifle class, and the 7.62x39 mm
+  guns) kills with one head hit at short range. So do the slug, the
+  .50 AE pistol, the revolvers and the .300 BLK carbine.
 - **The cone**: the first shot goes almost where the crosshair is. The cone
   grows with the heat (the trigger held), with the run speed (+0.008 to
   +0.02) and in the air (+0.05). The sights make it 75% smaller (30% for
-  the shotguns). The crosshair shows the cone.
+  a shotgun with a standard barrel, more for a long barrel, 80% for the
+  slug). The crosshair shows the cone.
 - **Buckshot** kills in one shot up close (5 m). It does no damage past its
-  reach (31 to 44 m, longer with a longer barrel).
+  reach (36 to 66 m, longer with a longer barrel). The long barrels
+  (SHOTGUN 2 and 3) have a choke: a small cone. At the sights they kill
+  with one shot at 20 m and with two at 40 m.
+- **The slug** (SHOTGUN 4) fires one heavy bullet with a small cone. A body
+  hit kills to about 20 m, and a head hit kills to about 65 m. Its price
+  is the kick and a magazine of 4.
 
 The server has the same numbers: `server/guns.json`. `zig build guns`
 writes it from the gun model, and `zig build test` fails when it is old.
@@ -853,8 +863,8 @@ a player. A thin smoke trail shows its path. The blast is a short flash,
 yellow-white streaks that fly out to about the blast radius and cool to
 orange, and a little smoke. `game/src/grenade.zig` has the model:
 
-- The blast radius is 5 m. The damage is 100 to 1.5 m, then it falls to 0 at
-  5 m. The thrower can also get hurt.
+- The blast radius is 8 m. The damage is 100 to 3.5 m, then it falls to 0 at
+  8 m. The thrower can also get hurt.
 - Cover counts. The blast checks three points on each player: the legs, the
   chest and the head. Each point that the blast can see gives a third of the
   damage at its distance. The chest and the head move with the lean.
