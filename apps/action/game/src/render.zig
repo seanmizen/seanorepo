@@ -63,13 +63,18 @@ pub const SceneUniforms = extern struct {
     /// The lights of your body: for slot d, the index of the light (from
     /// 1) in lp and lc, or 0.
     body_l: [4]f32,
+    /// map.sealed: the room with no sun, min and max.
+    sealed_lo: [4]f32,
+    sealed_hi: [4]f32,
     lp: [max_lights][4]f32,
     /// rgb colour, w the shadow map of the light (map.Light.shadow).
     lc: [max_lights][4]f32,
 };
 
-/// The map lights and two muzzle flashes. scene.wgsl has the same size.
-pub const max_lights = 34;
+/// The map lights (map.max_lights) and the lights that move: the train,
+/// the lift cabs, the muzzle flashes, the grenades, a blessing of MORE.
+/// scene.wgsl has the same size.
+pub const max_lights = 44;
 
 const PostUniforms = extern struct {
     texel: [2]f32,
@@ -558,6 +563,8 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     const nl = @min(p.lights.len, max_lights);
     su.info = .{ @floatFromInt(uploadBoxes(gpu, p.eye)), @floatFromInt(nl), 0.0045, 1 };
     su.info2 = .{ map.underground_y, 1, 0, 0 };
+    su.sealed_lo = .{ map.sealed[0][0], map.sealed[0][1], map.sealed[0][2], 0 };
+    su.sealed_hi = .{ map.sealed[1][0], map.sealed[1][1], map.sealed[1][2], 0 };
     for (p.lights[0..nl], 0..) |l, i| {
         su.lp[i] = .{ l.pos[0], l.pos[1], l.pos[2], l.radius };
         su.lc[i] = .{ l.color[0], l.color[1], l.color[2], @floatFromInt(l.shadow) };

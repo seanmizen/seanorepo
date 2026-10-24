@@ -1,7 +1,7 @@
 // The scene shader: world boxes, players, targets and the view-model gun.
 //
 // Light: a low sun with a 3x3 PCF shadow map, a sky and ground hemisphere
-// ambient, ambient occlusion from the box SDF, up to 34 point lights, a
+// ambient, ambient occlusion from the box SDF, up to 44 point lights, a
 // Blinn-Phong highlight with Fresnel, sky reflections on metal, height fog
 // that takes the sun colour, and in-scatter: the haze glows around each
 // point light. Each map light has a cube shadow map (render.zig), so walls
@@ -19,9 +19,9 @@
 // Your own body has its own light shadow layers (render.zig
 // drawBodyShadows): `body_l` names the lights.
 
-const MAX_LIGHTS: u32 = 34u;
+const MAX_LIGHTS: u32 = 44u;
 // The first light shadow slot of your body: map.zig max_lights.
-const BODY_SLOT: u32 = 23u;
+const BODY_SLOT: u32 = 28u;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -33,8 +33,10 @@ struct Scene {
   info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
   info2: vec4f,    // x underground height, y in-scatter strength
   body_l: vec4f,   // the light of each body slot: its index in lp and lc from 1, 0 none
-  lp: array<vec4f, 34>, // xyz position, w radius
-  lc: array<vec4f, 34>, // rgb colour, w shadow map from 1 (0: none)
+  sealed_lo: vec4f, // map.zig sealed: a room with no sun, min and max
+  sealed_hi: vec4f,
+  lp: array<vec4f, 44>, // xyz position, w radius
+  lc: array<vec4f, 44>, // rgb colour, w shadow map from 1 (0: none)
 };
 
 struct BoxG { mn: vec4f, mx: vec4f };
@@ -260,6 +262,13 @@ fn outdoors(y: f32) -> f32 {
   return smoothstep(u.info2.x - 5.0, u.info2.x, y);
 }
 
+// 0 in the sealed room (map.zig sealed), 1 out of it: the sun and most of
+// the sky light stop at its walls.
+fn unsealed(p: vec3f) -> f32 {
+  let inside = all(p > u.sealed_lo.xyz) && all(p < u.sealed_hi.xyz);
+  return select(1.0, 0.0, inside);
+}
+
 // ---- Materials -------------------------------------------------------------
 
 struct Surface { albedo: vec3f, n: vec3f, rough: f32, metal: f32, emit: f32 };
@@ -429,8 +438,9 @@ fn shade(in: VOut, front: bool) -> vec3f {
   let H = normalize(L + V);
   let ndl = max(dot(N, L), 0.0);
   let ndv = max(dot(N, V), 0.0);
-  var shadow = out_k;
-  if (u.info.w > 0.5 && out_k > 0.0) {
+  let open_k = unsealed(in.wpos);
+  var shadow = out_k * open_k;
+  if (u.info.w > 0.5 && shadow > 0.0) {
     if (vm) {
       // The gun tests a point 0.8 m from the eye toward the sun. Your own
       // body is behind and below that point, so its shadow does not fall
@@ -453,13 +463,13 @@ fn shade(in: VOut, front: bool) -> vec3f {
   // only a trace of it is left.
   let sky_amb = vec3f(0.22, 0.30, 0.48);
   let gnd_amb = vec3f(0.30, 0.20, 0.14);
-  let hemi = mix(gnd_amb, sky_amb, N.y * 0.5 + 0.5) * mix(0.05, 1.0, out_k);
+  let hemi = mix(gnd_amb, sky_amb, N.y * 0.5 + 0.5) * mix(0.05, 1.0, out_k) * mix(0.15, 1.0, open_k);
   c += diff * hemi * ao;
   // Sky reflection.
   let R = reflect(-V, N);
   var refl = 0.6;
   if (vm) { refl = 0.1; } // The sky behind the camera is not the one in front.
-  c += skyColor(R, false) * fres * (1.0 - s.rough) * ao * refl * out_k;
+  c += skyColor(R, false) * fres * (1.0 - s.rough) * ao * refl * out_k * open_k;
 
   // Point lights. A map light tests its shadow map: no light, highlight or
   // glint where a wall hides the point. The gun tests the eye position: it
