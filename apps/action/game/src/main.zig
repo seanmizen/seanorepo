@@ -61,6 +61,7 @@ const train_sound = @import("train_sound.zig");
 const train_car = @import("train_car.zig");
 const gates = @import("gates.zig");
 const vault_mod = @import("vault.zig");
+const platform_display = @import("platform_display.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -74,6 +75,9 @@ pub const std_options: std.Options = .{ .logFn = logFn, .log_level = .info };
 extern fn jsLog(ptr: [*]const u8, len: u32) void;
 // 1 while the canvas has the pointer lock (backends/wasm/loader.ts).
 extern fn jsPointerLocked() u32;
+// The local time of day in seconds (src/boot.ts): the clock of the train
+// indicators.
+extern fn jsLocalSeconds() f64;
 
 fn logFn(comptime level: std.log.Level, comptime scope: @TypeOf(.enum_literal), comptime fmt: []const u8, args: anytype) void {
     _ = scope;
@@ -2969,6 +2973,7 @@ fn gameRender(ctx: *sw.Context) !void {
     pigeons.build(&dyn, time);
     gates.build(&dyn);
     secret.build(&dyn);
+    platform_display.build(&dyn, eyeForRender().eye, time, @floatCast(jsLocalSeconds()));
     // The halos of MORE: yours, and those of the other players.
     if (secret.blessed) |left| secret.buildHalo(&dyn, me.eyePos(), secret.shine(left), time, 0);
     for (remotes[0..remote_n]) |*r| {

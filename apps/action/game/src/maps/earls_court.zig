@@ -33,6 +33,7 @@ const vapes = @import("../vapes.zig");
 const secret = @import("../secret_room.zig");
 const gates = @import("../gates.zig");
 const vec = @import("../vec.zig");
+const displays = @import("../platform_display.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -246,6 +247,7 @@ pub fn build() void {
     intermediateLevel();
     escalators();
     deepLevel();
+    platformDisplays();
     // Last: its random colours do not change the rest of the map.
     vapeShop();
 
@@ -1345,4 +1347,29 @@ pub fn liveRail(feet: V3) bool {
     if (@abs(feet[0]) > shock_x and feet[1] < 2 and feet[1] > bed_y - 1) return true;
     const deep_track = feet[1] < deep_y - 0.4 and feet[1] > deep_y - 2;
     return deep_track and (feet[0] < plat_x[0] - deep_shock or feet[0] > plat_x[1] + deep_shock);
+}
+
+// ---- The train indicators ------------------------------------------------------
+
+/// A dot-matrix board over each platform (platform_display.zig), two along
+/// each platform. Their text follows the trains: the deep train stops at
+/// platform 5 and runs west, the parked train stands at platform 2. The
+/// District boards hang from the roof arch, the Piccadilly boards from the
+/// ceiling over the middle of the platform.
+fn platformDisplays() void {
+    const district = [_]struct { n: u8, dest: []const u8, track: usize, s: displays.Service }{
+        .{ .n = 1, .dest = "Edgware Road", .track = 0, .s = .none },
+        .{ .n = 2, .dest = "Tower Hill", .track = 1, .s = .parked_train },
+        .{ .n = 3, .dest = "Wimbledon", .track = 2, .s = .none },
+        .{ .n = 4, .dest = "Richmond", .track = 3, .s = .none },
+    };
+    for (district) |d| {
+        const t = track_c[d.track];
+        // The platform edge is on the side of the bed toward the island.
+        const edge = if (t.away < 0) t.bed[1] else t.bed[0];
+        const z = edge + t.away * -1.2;
+        displays.add(.{ .number = d.n, .dest = d.dest, .service = d.s, .board_z = z, .floor_y = 0, .hang_y = archY(z), .xs = .{ -40, 38 } });
+    }
+    displays.add(.{ .number = 5, .dest = "Heathrow T5", .service = .deep_train, .board_z = (p5[0] + p5[1]) / 2, .floor_y = deep_y, .hang_y = deep_ceil, .xs = .{ 24, 84 } });
+    displays.add(.{ .number = 6, .dest = "Cockfosters", .service = .none, .board_z = (p6[0] + p6[1]) / 2, .floor_y = deep_y, .hang_y = deep_ceil, .xs = .{ 24, 84 } });
 }

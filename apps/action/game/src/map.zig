@@ -37,6 +37,9 @@ pub const Mat = enum(u8) {
     cloth = 6,
     wall_tile = 7,
     brick = 8,
+    /// Round amber LEDs on a grid: the train indicators
+    /// (platform_display.zig). Dynamic quads only.
+    led = 9,
 };
 
 pub const Box = struct {
@@ -158,6 +161,7 @@ pub fn load(map: Id) void {
     flicker_box = null;
     @import("gates.zig").clear();
     @import("secret_room.zig").clear();
+    @import("platform_display.zig").clear();
     switch (map) {
         .arena => @import("maps/arena.zig").build(),
         .earls_court => @import("maps/earls_court.zig").build(),
@@ -340,7 +344,7 @@ pub fn surfaceAt(p: V3, bi: usize) Surface {
 pub fn surfaceFits(look: Mat, s: Surface) bool {
     if (s == .flesh) return false;
     return switch (look) {
-        .emissive => s == .glass,
+        .emissive, .led => s == .glass,
         .wood => s == .wood,
         .brick => s == .brick,
         .wall_tile => s == .tile,
