@@ -453,7 +453,7 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
         const m: f32 = @floatFromInt(@backingInt(d.mat));
         if (d.disc) static_mesh.disc(d.m, d.min[0], d.min[1], d.color, m) else static_mesh.orientedBox(d.m, d.min, d.max, d.color, m);
     }
-    render.loadMap(ctx.gpu(), static_mesh.verts.items, map.lights[0..map.light_count]) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
+    render.loadMap(ctx.gpu(), alloc, static_mesh.verts.items, map.lights[0..map.light_count]) catch |err| std.log.err("action: map upload: {s}", .{@errorName(err)});
 }
 
 /// The sink of train_car.details for the deep train: boxes of this frame,

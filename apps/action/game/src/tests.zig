@@ -30,6 +30,7 @@ test {
     _ = @import("train_sound.zig");
     _ = @import("train_car.zig");
     _ = @import("platform_display.zig");
+    _ = @import("ao_grid.zig");
 }
 
 test "protocol_version.txt: one number, 1 or more" {
