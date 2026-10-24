@@ -1,5 +1,6 @@
 // Earl's Court tube station, from its public layout (Wikipedia; a
-// level-by-level station description). The sizes are approximate.
+// level-by-level station description; the TfL station axonometric). The
+// sizes are approximate.
 //
 // X is east, Z is south (north is -Z), Y is up. Both lines run east-west.
 //
@@ -11,12 +12,17 @@
 //   y  0    District line: two island platforms under the 1878 train shed.
 //           Platforms 1 and 2 (eastbound) are north of 3 and 4 (westbound).
 //           Steps from both concourses.
-//   y -5.6  intermediate level: a broken ring of passages. Each island has
-//           two sets of steps down. The escalators leave its north-west
-//           corner and go down to the east.
-//   y -15   Piccadilly line: one island, platform 5 (eastbound, north) and
-//           platform 6 (westbound, south), with a corridor between them.
-//           A deep lift goes up to the Earls Court Road concourse.
+//   y -5.6  intermediate level, as on the station plan (axonometric): the
+//           lower concourse under the west end of the islands, with stairs
+//           up to each island. The escalators leave its north-west corner
+//           and go down to the east. The emergency stairs go down from the
+//           east end of platforms 1 and 2, past the deep lift, to a lobby
+//           between platforms 5 and 6.
+//   y -15   Piccadilly line: two round station tunnels, platform 5
+//           (eastbound, north) and platform 6 (westbound, south), with a
+//           corridor between them and cross-passages into both. Round
+//           running tunnels go on past the ends. A deep lift goes up to the
+//           Earls Court Road concourse.
 //
 // The lines run far out of the station both ways. Past the ends of the
 // platforms the live rail kills (liveRail, main.zig). server/index.ts has a
@@ -82,8 +88,33 @@ const track_c = [_]Track{
 };
 const ca: f32 = -12.8; // island centres
 const cb: f32 = 4.4;
-// The stair wells from the islands down to the intermediate level.
-const well_x = [2][2]f32{ .{ -29, -22 }, .{ 22, 29 } };
+/// A stair well from an island down to the intermediate level: its x
+/// range, the island centre, and the direction in which the stairs go
+/// down (-1 west, +1 east).
+const Well = struct { x: [2]f32, cz: f32, dir: f32 };
+/// As on the station plan: stairs from the west end of each island down
+/// to the lower concourse, and the emergency stairs from the east end of
+/// platforms 1 and 2 down to the Piccadilly line.
+const wells = [_]Well{
+    .{ .x = .{ -29, -22 }, .cz = ca, .dir = -1 },
+    .{ .x = .{ -29, -22 }, .cz = cb, .dir = -1 },
+    .{ .x = .{ 48, 55 }, .cz = ca, .dir = 1 },
+};
+const well_rects = blk: {
+    var r: [wells.len]Rect = undefined;
+    for (wells, 0..) |w, i| r[i] = .{ .x0 = w.x[0], .x1 = w.x[1], .z0 = w.cz - 1.2, .z1 = w.cz + 1.2 };
+    break :blk r;
+};
+/// The wells of the island with centre cz.
+fn islandWells(cz: f32, out: *[wells.len]Rect) []Rect {
+    var n: usize = 0;
+    for (wells, well_rects) |w, r| {
+        if (@abs(w.cz - cz) > 0.01) continue;
+        out[n] = r;
+        n += 1;
+    }
+    return out[0..n];
+}
 // The walkway (north side) and the spur.
 const walk_z1: f32 = -18.4;
 const spur_x = [2]f32{ -3, 3 };
@@ -109,16 +140,61 @@ pub const esc_rise: f32 = (mid_y - deep_y) / 21.0;
 pub const esc_run: f32 = esc_rise * 1.732; // 30 degrees
 pub const esc_bottom_x: f32 = esc_top_x + esc_run * esc_steps;
 const corr_z = [2]f32{ -24, -21 }; // the deep corridor between the platforms
-const p5 = [2]f32{ -27.5, -24.5 }; // platform 5 (north)
-const t5 = [2]f32{ -31, -27.5 };
-const p6 = [2]f32{ -20.5, -17.5 }; // platform 6 (south)
-const t6 = [2]f32{ -17.5, -14 };
-/// The deep track centres: 1.41 m from the platform edge, so the 2.629 m
-/// wide 1973 Stock stops 0.1 m from the edge.
-const t5_c: f32 = t5[1] - 1.41;
-const t6_c: f32 = t6[0] + 1.41;
-const plat_x = [2]f32{ 0, 112 };
+/// The deep track centres. The platform edge is 1.41 m from the track
+/// centre, so the 2.629 m wide 1973 Stock stops 0.1 m from the edge.
+pub const t5_c: f32 = -28.8; // platform 5 (north, eastbound)
+pub const t6_c: f32 = -16.2; // platform 6 (south, westbound)
+const p5 = [2]f32{ t5_c + 1.41, -24.5 };
+const p6 = [2]f32{ -20.5, t6_c - 1.41 };
+pub const plat_x = [2]f32{ 0, 112 };
 const deep_lift = Rect{ .x0 = 62.4, .x1 = 64.8, .z0 = -24, .z1 = -21.6 };
+// The deep tubes, from the real Piccadilly line (Yerkes, 1906):
+// - The station tunnels are 21 ft 2.5 in (6.46 m) across. The centre is
+//   1.2 m above the platform and 1.3 m from the track centre toward the
+//   platform. The platform is 2.9 m wide at the floor, and the curved wall
+//   meets the flat back wall 2.4 m above the platform (the photo of
+//   platform 6).
+// - The running tunnels are 11 ft 8.25 in (3.56 m) across, centred 1.32 m
+//   above the rail top on the track centre. The 1973 Stock fits tightly
+//   (train_car.zig).
+pub const rail_y: f32 = deep_y - 0.69;
+const deep_bed: f32 = deep_y - 0.85; // the top of the track bed
+pub const st_r: f32 = 3.23;
+pub const st_dy: f32 = 1.2;
+pub const st_dz: f32 = 1.3;
+pub const run_r: f32 = 1.78;
+pub const run_dy: f32 = 1.32;
+/// The flat back wall of a platform (the cross-passages are in it) is this
+/// high. Above it the tunnel curves over.
+const back_h: f32 = 2.4;
+/// A Piccadilly line track: the track centre, the side of its platform
+/// (+1 south of the track, -1 north), and the platform [z0, z1].
+const Tube = struct {
+    c: f32,
+    side: f32,
+    plat: [2]f32,
+    fn zc(t: Tube) f32 {
+        return t.c + t.side * st_dz;
+    }
+    fn edge(t: Tube) f32 {
+        return t.c + t.side * 1.41;
+    }
+};
+const tubes = [_]Tube{
+    .{ .c = t5_c, .side = 1, .plat = p5 },
+    .{ .c = t6_c, .side = -1, .plat = p6 },
+};
+/// The outside of the deep level across the lines: the station tunnels
+/// and their linings.
+const deep_z = [2]f32{ tubes[0].zc() - st_r - 0.4, tubes[1].zc() + st_r + 0.4 };
+// The emergency stairs, east of the deep lift: from the intermediate level
+// (their landing) down a slot between the platform walls to a lobby with
+// openings onto both platforms.
+const em_cz: f32 = -22.5;
+const em_top_x: f32 = 68;
+const em_steps = 23;
+const em_slot = Rect{ .x0 = em_top_x, .x1 = em_top_x + 0.5 * em_steps, .z0 = em_cz - 1.2, .z1 = em_cz + 1.2 };
+const em_lobby = Rect{ .x0 = em_slot.x1, .x1 = em_slot.x1 + 4.5, .z0 = corr_z[0], .z1 = corr_z[1] };
 
 // Colours.
 const brick = v3(0.45, 0.21, 0.13);
@@ -253,7 +329,7 @@ pub fn build() void {
     const sp = [_]V3{
         v3(-40, 0, ca - 2),   v3(40, 0, cb + 2),     v3(30, deep_y, -26),      v3(30, deep_y, -19),
         v3(-10, 0, -15.5),    v3(-10, 0, 2),         v3(-20, street_y, -19.7), v3(55, street_y, 0),
-        v3(-55, street_y, 0), v3(85, street_y, -20), v3(0, mid_y, ca),         v3(-5, deep_y, -22.5),
+        v3(-55, street_y, 0), v3(85, street_y, -20), v3(-36, mid_y, -4),       v3(-5, deep_y, -22.5),
     };
     for (sp) |p| map.addSpawn(p);
 }
@@ -262,27 +338,21 @@ pub fn build() void {
 
 fn districtLevel() void {
     // The ground under the tracks, with the stair wells cut out.
-    var wells: [4]Rect = undefined;
-    var nw: usize = 0;
-    for ([_]f32{ ca, cb }) |cz| {
-        for (well_x) |wx| {
-            wells[nw] = rect(wx[0], wx[1], cz - 1.2, cz + 1.2);
-            nw += 1;
-        }
-    }
-    map.carve(rect(shed_x0, shed_x1, wall_n, wall_s), -3, bed_y, &wells, ballast, .concrete, .ballast);
+    map.carve(rect(shed_x0, shed_x1, wall_n, wall_s), -3, bed_y, &well_rects, ballast, .concrete, .ballast);
 
     // Islands, with their wells, and the yellow edges.
-    for ([_][2]f32{ island_a, island_b }, 0..) |is, k| {
+    for ([_][2]f32{ island_a, island_b }) |is| {
         const cz = (is[0] + is[1]) / 2;
-        map.carve(rect(island_x[0], island_x[1], is[0], is[1]), bed_y, 0, wells[k * 2 .. k * 2 + 2], platform_c, .concrete, .concrete);
+        var buf: [wells.len]Rect = undefined;
+        map.carve(rect(island_x[0], island_x[1], is[0], is[1]), bed_y, 0, islandWells(cz, &buf), platform_c, .concrete, .concrete);
         deco(v3(island_x[0], 0, is[0]), v3(island_x[1], 0.012, is[0] + 0.45), yellow, .paint, .concrete);
         deco(v3(island_x[0], 0, is[1] - 0.45), v3(island_x[1], 0.012, is[1]), yellow, .paint, .concrete);
         // Railings round the wells, open at the top of the stairs.
-        for (well_x) |wx| {
-            railing(wx[0], wx[1], cz - 1.3, cz - 1.2, 0);
-            railing(wx[0], wx[1], cz + 1.2, cz + 1.3, 0);
-            const end = if (wx[0] < 0) wx[0] - 0.1 else wx[1];
+        for (wells) |w| {
+            if (@abs(w.cz - cz) > 0.01) continue;
+            railing(w.x[0], w.x[1], cz - 1.3, cz - 1.2, 0);
+            railing(w.x[0], w.x[1], cz + 1.2, cz + 1.3, 0);
+            const end = if (w.dir < 0) w.x[0] - 0.1 else w.x[1];
             railing(end, end + 0.1, cz - 1.3, cz + 1.3, 0);
         }
         // Benches, and roundels on posts. Each post is on the side of its
@@ -1014,7 +1084,7 @@ fn westEnd() void {
 fn lines() void {
     // The ground and the side walls of the line, the whole length. Covered
     // ways run under both ends; past them, the cuttings are open.
-    box(v3(shed_x1, -3, wall_n), v3(line_end, bed_y, wall_s), ballast, .concrete, .ballast);
+    map.carve(rect(shed_x1, line_end, wall_n, wall_s), -3, bed_y, &well_rects, ballast, .concrete, .ballast);
     box(v3(-line_end, -3, wall_n), v3(shed_x0, bed_y, wall_s), ballast, .concrete, .ballast);
     box(v3(-line_end, -3, wall_n - 0.6), v3(line_end, deck_y, wall_n), brick, .brick, .brick);
     box(v3(-line_end, -3, wall_s), v3(line_end, deck_y, wall_s + 0.6), brick, .brick, .brick);
@@ -1105,52 +1175,62 @@ fn districtTrain() void {
 // ---- The intermediate level ------------------------------------------------------
 
 fn intermediateLevel() void {
-    // Passages: north (under island A), the two south pieces (under island
-    // B, with the stair wells), the west and east sides, and the way north
-    // from the west side to the escalators.
-    const pa0 = ca - 1.8;
-    const pa1 = ca + 1.8;
-    const pb0 = cb - 1.8;
-    const pb1 = cb + 1.8;
-    const holes = [_]Rect{
-        rect(-34, 34, pa0, pa1),
-        rect(-34, -22, pb0, pb1),
-        rect(22, 34, pb0, pb1),
-        rect(-34, -30, esc_z[0], pb1),
-        rect(30, 34, pa0, pb1),
-        rect(esc_top_x, -16, esc_z[0], esc_z[1]),
-    };
-    const area = rect(-36, 36, -26, 9);
-    map.carve(area, mid_y - 1, mid_y, &.{rect(esc_top_x, -12, esc_z[0], esc_z[1])}, v3(0.3, 0.29, 0.27), .concrete, .concrete);
-    map.carve(area, mid_y, mid_ceil, &holes, tile_c, .wall_tile, .tile);
-    // The ceiling, open over the four stair wells.
-    var wells: [4]Rect = undefined;
-    var nw: usize = 0;
-    for ([_]f32{ ca, cb }) |cz| {
-        for (well_x) |wx| {
-            wells[nw] = rect(wx[0], wx[1], cz - 1.2, cz + 1.2);
-            nw += 1;
-        }
-    }
-    map.carve(area, mid_ceil, -3, &wells, v3(0.12, 0.11, 0.1), .concrete, .concrete);
+    const wall_c = v3(0.12, 0.11, 0.1);
+    const floor_c = v3(0.3, 0.29, 0.27);
 
-    // Stairs from the island wells down to this level: one west and one
-    // east on each island. On island B they lead in opposite directions,
-    // with no passage between them.
-    for ([_]f32{ ca, cb }) |cz| {
-        stairs(well_x[0][1], -1, cz, 2.4, -0.4, 14, .{ 0, mid_y }, platform_c);
-        stairs(well_x[1][0], 1, cz, 2.4, -0.4, 14, .{ 0, mid_y }, platform_c);
+    // The lower concourse under the west end of the islands: one hall
+    // under both islands, with the stairs from each island down into it,
+    // and the landing of the escalators in its north-west corner. Four
+    // columns hold up the track beds.
+    const hall = rect(-40, -18, -18, 7.6);
+    const landing = rect(-40, esc_top_x, esc_z[0] - 0.3, hall.z0);
+    const area_w = rect(hall.x0 - 1, hall.x1 + 1, landing.z0 - 0.7, hall.z1 + 1);
+    const esc_floor = rect(esc_top_x, area_w.x1, esc_z[0], esc_z[1]);
+    const esc_shaft = rect(esc_top_x, area_w.x1, esc_z[0] - 0.3, esc_z[1] + 0.3);
+    map.carve(area_w, mid_y - 1, mid_y, &.{esc_floor}, floor_c, .concrete, .concrete);
+    map.carve(area_w, mid_y, mid_ceil, &.{ hall, landing, esc_shaft }, tile_c, .wall_tile, .tile);
+    map.carve(area_w, mid_ceil, -3, well_rects[0..2], wall_c, .concrete, .concrete);
+    for ([_]f32{ -35, -24 }) |x| for ([_]f32{ -6, -1 }) |z| {
+        box(v3(x - 0.35, mid_y, z - 0.35), v3(x + 0.35, mid_ceil, z + 0.35), tile_c, .wall_tile, .tile);
+    };
+    // A green tile band round the hall, and a roundel on the west wall.
+    const band = [2]f32{ mid_y + 1.3, mid_y + 1.5 };
+    deco(v3(hall.x0, band[0], hall.z0), v3(hall.x0 + 0.02, band[1], hall.z1), tile_green, .wall_tile, .tile);
+    deco(v3(hall.x1 - 0.02, band[0], hall.z0), v3(hall.x1, band[1], hall.z1), tile_green, .wall_tile, .tile);
+    deco(v3(hall.x0, band[0], hall.z1 - 0.02), v3(hall.x1, band[1], hall.z1), tile_green, .wall_tile, .tile);
+    deco(v3(esc_top_x, band[0], hall.z0), v3(hall.x1, band[1], hall.z0 + 0.02), tile_green, .wall_tile, .tile);
+    roundel(v3(hall.x0 + 0.06, mid_y + 1.6, -4), std.math.pi / 2.0, 1.0);
+
+    // The stairs from the west end of each island down into the hall.
+    for (wells[0..2]) |w| stairs(w.x[1], -1, w.cz, 2.4, -0.4, 14, .{ 0, mid_y }, platform_c);
+    for ([_]f32{ -9, 0 }) |z| {
+        map.add(v3(-34.1, mid_ceil - 0.08, z - 1.1), v3(-33.9, mid_ceil, z + 1.1), cool, .emissive, .glass).solid = false;
+        map.addLight(v3(-34, mid_ceil - 0.3, z), cool * vec.s(1.4), 12);
     }
-    for ([_][2]f32{ .{ pa0, pa0 + 0.02 }, .{ pa1 - 0.02, pa1 } }) |zz| {
-        deco(v3(-22, mid_y + 1.3, zz[0]), v3(22, mid_y + 1.5, zz[1]), tile_green, .wall_tile, .tile);
-    }
-    for ([_]f32{ -14, 12 }) |x| {
-        map.add(v3(x - 1.1, mid_ceil - 0.08, ca - 0.1), v3(x + 1.1, mid_ceil, ca + 0.1), cool, .emissive, .glass).solid = false;
-        map.addLight(v3(x, mid_ceil - 0.3, ca), cool * vec.s(1.4), 12);
-    }
-    map.add(v3(-32.1, mid_ceil - 0.08, -6.1), v3(-31.9, mid_ceil, -3.9), cool, .emissive, .glass).solid = false;
-    map.addLight(v3(-32, mid_ceil - 0.3, -5), cool * vec.s(1.4), 11);
-    roundel(v3(0, mid_y + 1.5, pa0 + 0.05), 0, 1.0);
+
+    // The emergency stairs from the east end of platforms 1 and 2: down
+    // the well to a passage, north past the deep lift shaft, and to the
+    // landing at the top of the long flight down to the Piccadilly line
+    // (deepLevel).
+    const e_well = well_rects[2];
+    const e_pass = rect(e_well.x0, 60, ca - 1.5, ca + 1.5);
+    const e_north = rect(57, 60, -21.3, e_pass.z1);
+    const e_east = rect(57, em_top_x, -21.3, -18.3);
+    const e_land = rect(65, em_top_x, corr_z[0], -18.3);
+    const area_e = rect(e_well.x0 - 1, em_slot.x1 + 1, corr_z[0] - 1, e_pass.z1 + 1);
+    map.carve(area_e, mid_y - 1, mid_y, &.{ em_slot, deep_lift }, floor_c, .concrete, .concrete);
+    map.carve(area_e, mid_y, mid_ceil, &.{ e_pass, e_north, e_east, e_land, em_slot, deep_lift }, tile_c, .wall_tile, .tile);
+    map.carve(area_e, mid_ceil, -3, &.{ e_well, deep_lift }, wall_c, .concrete, .concrete);
+    stairs(wells[2].x[0], 1, wells[2].cz, 2.4, -0.4, 14, .{ 0, mid_y }, platform_c);
+    map.add(v3(57.4, mid_ceil - 0.08, -17.1), v3(59.6, mid_ceil, -16.9), cool, .emissive, .glass).solid = false;
+    map.addLight(v3(58.5, mid_ceil - 0.3, -17), cool * vec.s(1.2), 11);
+    // Green running-man signs over the way on.
+    const sign_g = v3(0.05, 0.75, 0.3);
+    deco(v3(59.96, mid_y + 2.0, ca - 0.5), v3(60, mid_y + 2.3, ca + 0.5), sign_g, .emissive, .glass);
+    deco(v3(57.5, mid_y + 2.0, -21.3), v3(58.5, mid_y + 2.3, -21.26), sign_g, .emissive, .glass);
+    deco(v3(em_top_x - 0.04, mid_y + 2.0, em_cz - 0.5), v3(em_top_x, mid_y + 2.3, em_cz + 0.5), sign_g, .emissive, .glass);
+    deco(v3(e_pass.x0, band[0], e_pass.z0), v3(60, band[1], e_pass.z0 + 0.02), tile_green, .wall_tile, .tile);
+    deco(v3(e_pass.x0, band[0], e_pass.z1 - 0.02), v3(57, band[1], e_pass.z1), tile_green, .wall_tile, .tile);
 }
 
 // ---- Escalators ---------------------------------------------------------------
@@ -1214,131 +1294,284 @@ fn escalators() void {
 
 // ---- The deep level: the Piccadilly line ---------------------------------------------
 
+/// The lining of a round tunnel: a ring of decoration beams along X, about
+/// the centre (cy, cz), inner radius r, `t` thick. The inner face of each
+/// beam is tangent to the circle, so no part of the lining is inside the
+/// circle (the train fits in it). A beam that is all below `bottom` is left
+/// out. With `side` set, the beams on the platform side of `edge` (the
+/// platform and its flat back wall) are left out below `wall_top`.
+const Lining = struct {
+    cz: f32,
+    cy: f32,
+    r: f32,
+    t: f32 = 0.2,
+    bottom: f32,
+    side: f32 = 0,
+    edge: f32 = 0,
+    wall_top: f32 = 0,
+};
+const lining_segs = 32;
+
+fn lining(l: Lining, x0: f32, x1: f32, color: V3, mat: Mat, surface: Surface) void {
+    const half = std.math.pi / @as(f32, lining_segs);
+    const w = 2 * l.r * @tan(half) + 0.04;
+    for (0..lining_segs) |i| {
+        const a = (@as(f32, @floatFromInt(i)) * 2 + 1) * half;
+        const n = v3(0, @sin(a), @cos(a));
+        const p = v3(0, l.cy, l.cz) + n * vec.s(l.r + l.t / 2);
+        if (p[1] + w / 2 < l.bottom) continue;
+        if (l.side != 0 and (p[2] - l.edge) * l.side > 0 and p[1] < l.wall_top) continue;
+        map.beam(v3(x0, p[1], p[2]), v3(x1, p[1], p[2]), w, l.t, n, color, mat, surface);
+    }
+}
+
+/// The widest half chord of a circle (radius r, centre height c) between
+/// the heights ya and yb. 0 when the band misses the circle.
+fn widest(r: f32, c: f32, ya: f32, yb: f32) f32 {
+    if (ya <= c and yb >= c) return r;
+    const d = @min(@abs(ya - c), @abs(yb - c));
+    return if (d >= r) 0 else @sqrt(r * r - d * d);
+}
+
+/// The height of the lining of the station tunnel of `t` over the point z.
+pub fn tubeTop(t_c: f32, side: f32, z: f32) f32 {
+    const dz = z - (t_c + side * st_dz);
+    return deep_y + st_dy + @sqrt(@max(0, st_r * st_r - dz * dz));
+}
+
+/// The flat end wall of a station tunnel, from x0 to x1: the circle of the
+/// station tunnel less the bore of the running tunnel, in strips 0.2 m
+/// high. Each strip covers the widest part of the station circle in it and
+/// leaves out the widest part of the bore, so no part is inside the bore.
+fn endWall(t: Tube, x0: f32, x1: f32) void {
+    const zc = t.zc();
+    const yc = deep_y + st_dy;
+    const rc = rail_y + run_dy;
+    var y = deep_bed;
+    while (y < yc + st_r) : (y += 0.2) {
+        const yb = @min(y + 0.2, yc + st_r);
+        const ws = widest(st_r, yc, y, yb);
+        const wr = widest(run_r, rc, y, yb);
+        const parts = if (wr > 0)
+            [2][2]f32{ .{ zc - ws, t.c - wr }, .{ t.c + wr, zc + ws } }
+        else
+            [2][2]f32{ .{ zc - ws, zc + ws }, .{ 0, 0 } };
+        for (parts) |pz| {
+            if (pz[1] - pz[0] > 0.01) deco(v3(x0, y, pz[0]), v3(x1, yb, pz[1]), tile_c, .wall_tile, .tile);
+        }
+    }
+}
+
+/// A panel that follows the curve of the track-side wall of a station
+/// tunnel, from x0 to x1 and from the height ya to yb, `inset` from the
+/// lining: slices no more than 0.5 m high.
+fn wallPanel(t: Tube, x0: f32, x1: f32, ya: f32, yb: f32, inset: f32, color: V3, mat: Mat, surface: Surface) void {
+    const zc = t.zc();
+    const yc = deep_y + st_dy;
+    const rr = st_r - inset - 0.01;
+    const pa = std.math.asin((ya - yc) / st_r);
+    const pb = std.math.asin((yb - yc) / st_r);
+    const n_f = @ceil((yb - ya) / 0.5);
+    const n: usize = @intFromFloat(n_f);
+    for (0..n) |i| {
+        const fa = pa + (pb - pa) * @as(f32, @floatFromInt(i)) / n_f;
+        const fb = pa + (pb - pa) * @as(f32, @floatFromInt(i + 1)) / n_f;
+        const fm = (fa + fb) / 2;
+        const nrm = v3(0, @sin(fm), -t.side * @cos(fm));
+        const p = v3(0, yc, zc) + nrm * vec.s(rr);
+        map.beam(v3(x0, p[1], p[2]), v3(x1, p[1], p[2]), 2 * st_r * @sin((fb - fa) / 2), 0.02, nrm, color, mat, surface);
+    }
+}
+
+/// An invisible box from x0 to x1, from za to zb (either order), from ya to
+/// yb: the collision of a curved wall that is decoration.
+fn solid(x0: f32, x1: f32, za: f32, zb: f32, ya: f32, yb: f32) void {
+    map.addSolid(v3(x0, ya, @min(za, zb)), v3(x1, yb, @max(za, zb)), .tile);
+}
+
 fn deepLevel() void {
     const y = deep_y;
     const floor_c = v3(0.3, 0.29, 0.27);
     const x0 = esc_bottom_x;
     const arches = [_]f32{ 6, 18, 30, 42, 54 };
+    const yc = y + st_dy;
+    const crown = yc + st_r;
+    const rc = rail_y + run_dy;
+    const bore_top = rc + run_r;
+    const ring_c = v3(0.1, 0.1, 0.11);
+    const rib_c = v3(0.28, 0.11, 0.08);
+    const sign_g = v3(0.05, 0.75, 0.3);
 
     // The floor under the corridor and the platforms.
     box(v3(x0, y - 1, corr_z[0]), v3(deep_lift.x1, y, corr_z[1]), floor_c, .concrete, .concrete);
-    for ([_][2]f32{ p5, p6 }) |p| box(v3(plat_x[0], y - 1, p[0]), v3(plat_x[1], y, p[1]), floor_c, .concrete, .concrete);
-    // The walls between the corridor and the platforms, with arches. West
-    // of the platforms they are the corridor walls; the lift closes the east
-    // end.
+    for (tubes) |t| box(v3(plat_x[0], y - 1, t.plat[0]), v3(plat_x[1], y, t.plat[1]), floor_c, .concrete, .concrete);
+    for (tubes) |t| {
+        const e = t.edge();
+        deco(v3(plat_x[0], y, @min(e, e + t.side * 0.45)), v3(plat_x[1], y + 0.012, @max(e, e + t.side * 0.45)), yellow, .paint, .concrete);
+    }
+    // The flat back walls of the platforms, between them and the corridor,
+    // with the cross-passages; west of the platforms they are the corridor
+    // walls. The lift closes the east end of the corridor. East of it the
+    // lobby of the emergency stairs opens onto both platforms.
     for ([_][2]f32{ .{ p5[1], corr_z[0] }, .{ corr_z[1], p6[0] } }) |wz| {
         var xa = x0;
         for (arches) |ax| {
             box(v3(xa, y, wz[0]), v3(ax - 1.5, deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
-            boxNoAo(v3(ax - 1.5, y + 2.5, wz[0]), v3(ax + 1.5, deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
+            boxNoAo(v3(ax - 1.5, y + back_h, wz[0]), v3(ax + 1.5, deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
             xa = ax + 1.5;
         }
-        box(v3(xa, y, wz[0]), v3(deep_lift.x1, deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
+        box(v3(xa, y, wz[0]), v3(em_lobby.x0 + 0.5, deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
+        boxNoAo(v3(em_lobby.x0 + 0.5, y + back_h, wz[0]), v3(em_lobby.x1 - 0.5, deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
+        box(v3(em_lobby.x1 - 0.5, y, wz[0]), v3(plat_x[1], deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
     }
     box(v3(deep_lift.x0, y, deep_lift.z1), v3(deep_lift.x1, deep_ceil, corr_z[1]), tile_c, .wall_tile, .tile);
-    // East of the lift the island is solid between the two platforms.
-    box(v3(deep_lift.x1, y - 1, p5[1]), v3(plat_x[1], deep_ceil, p6[0]), tile_c, .wall_tile, .tile);
-    // Platforms 5 and 6: the yellow edges, the track beds and rails the
-    // whole length, the walls across the tracks, the ends, the ceiling.
-    deco(v3(plat_x[0], y, p5[0]), v3(plat_x[1], y + 0.012, p5[0] + 0.45), yellow, .paint, .concrete);
-    deco(v3(plat_x[0], y, p6[1] - 0.45), v3(plat_x[1], y + 0.012, p6[1]), yellow, .paint, .concrete);
-    for ([_][2]f32{ t5, t6 }, [_]f32{ t5_c, t6_c }) |t, c| {
-        box(v3(-line_end, y - 1.2, t[0]), v3(line_end, y - 0.85, t[1]), ballast * vec.s(0.7), .concrete, .ballast);
+
+    // East of the lift the island between the back walls is solid, but for
+    // the emergency stairs: their slot, which goes on up to their landing
+    // on the intermediate level, and the lobby at their foot.
+    map.carve(rect(deep_lift.x1, plat_x[1], corr_z[0], corr_z[1]), y - 1, deep_ceil, &.{ em_slot, em_lobby }, tile_c, .wall_tile, .tile);
+    box(v3(em_slot.x0, y - 1, em_slot.z0), v3(em_slot.x1, y, em_slot.z1), floor_c, .concrete, .concrete);
+    box(v3(em_lobby.x0, y - 1, em_lobby.z0), v3(em_lobby.x1, y, em_lobby.z1), floor_c, .concrete, .concrete);
+    box(v3(em_slot.x0, deep_ceil, corr_z[0]), v3(em_slot.x1, mid_y - 1, em_slot.z0), tile_c, .wall_tile, .tile);
+    box(v3(em_slot.x0, deep_ceil, em_slot.z1), v3(em_slot.x1, mid_y - 1, corr_z[1]), tile_c, .wall_tile, .tile);
+    box(v3(em_slot.x1, deep_ceil, corr_z[0]), v3(em_slot.x1 + 0.3, mid_ceil, corr_z[1]), tile_c, .wall_tile, .tile);
+    stairs(em_top_x, 1, em_cz, 2.4, y + 0.4 * @as(f32, em_steps - 1), em_steps, .{ mid_y, y }, platform_c);
+    for ([_]f32{ em_lobby.z0, em_lobby.z1 - 0.04 }) |z| {
+        deco(v3(em_lobby.x0 + 1.4, y + 2.5, z), v3(em_lobby.x1 - 1.4, y + 2.8, z + 0.04), sign_g, .emissive, .glass);
+    }
+
+    // The tracks, the tunnels and their linings, and the collision of the
+    // curved walls (the linings are decoration).
+    for (tubes) |t| {
+        const zc = t.zc();
+        const s = t.side;
+        const c = t.c;
+        const out = [2][2]f32{ .{ -line_end, plat_x[0] }, .{ plat_x[1], line_end } };
+        // The track bed: wide in the station tunnel (the lining hides the
+        // rest of it), the width of the bore beyond.
+        box(v3(plat_x[0], y - 1.2, @min(zc - s * 3.4, t.edge())), v3(plat_x[1], deep_bed, @max(zc - s * 3.4, t.edge())), ballast * vec.s(0.7), .concrete, .ballast);
+        for (out) |r| box(v3(r[0], y - 1.2, c - 1.5), v3(r[1], deep_bed, c + 1.5), ballast * vec.s(0.7), .concrete, .ballast);
+        // The running rails, the 4th rail, the sleepers.
         for ([_]f32{ -0.72, 0.72 }) |off| {
-            boxNoAo(v3(-line_end, y - 0.85, c + off - 0.04), v3(line_end, y - 0.69, c + off + 0.04), steel, .metal, .metal);
+            boxNoAo(v3(-line_end, deep_bed, c + off - 0.04), v3(line_end, rail_y, c + off + 0.04), steel, .metal, .metal);
         }
-        deco(v3(-line_end, y - 0.85, c - 0.05), v3(line_end, y - 0.73, c + 0.05), v3(0.5, 0.45, 0.4), .metal, .metal);
+        deco(v3(-line_end, deep_bed, c - 0.05), v3(line_end, y - 0.73, c + 0.05), v3(0.5, 0.45, 0.4), .metal, .metal);
         var sx: f32 = -line_end;
         const mid = (plat_x[0] + plat_x[1]) / 2;
         while (sx < line_end) : (sx += if (@abs(sx - mid) > 90) 2.7 else 0.9) {
-            deco(v3(sx, y - 0.85, t[0] + 0.25), v3(sx + 0.26, y - 0.79, t[1] - 0.25), v3(0.1, 0.08, 0.06), .wood, .wood);
+            deco(v3(sx, deep_bed, c - 0.95), v3(sx + 0.26, deep_bed + 0.06, c + 0.95), v3(0.1, 0.08, 0.06), .wood, .wood);
+        }
+
+        // The station tunnel: the tiled lining, the dark rings over the
+        // platform, the end walls round the bores. The running tunnels:
+        // cast iron.
+        lining(.{ .cz = zc, .cy = yc, .r = st_r, .bottom = deep_bed - 0.1, .side = s, .edge = t.edge(), .wall_top = y + back_h }, plat_x[0], plat_x[1], tile_c, .wall_tile, .tile);
+        var rx: f32 = plat_x[0] + 2;
+        while (rx < plat_x[1]) : (rx += 4) {
+            lining(.{ .cz = zc, .cy = yc, .r = st_r - 0.06, .t = 0.06, .bottom = y + back_h + 0.3 }, rx, rx + 0.35, rib_c, .wall_tile, .tile);
+        }
+        endWall(t, plat_x[0] - 0.3, plat_x[0]);
+        endWall(t, plat_x[1], plat_x[1] + 0.3);
+        for (out) |r| {
+            const xa = if (r[0] < 0) r[0] else r[0] + 0.3;
+            const xb = if (r[0] < 0) r[1] - 0.3 else r[1];
+            lining(.{ .cz = c, .cy = rc, .r = run_r, .bottom = deep_bed - 0.1 }, xa, xb, ring_c, .metal, .metal);
+        }
+
+        // Collision: the track side of the station tunnel (the lining at
+        // the track bed), the curve over the back wall, the sides and the
+        // top of the running tunnels (outside the train), the end walls.
+        const zt = zc - s * 2.5;
+        solid(plat_x[0], plat_x[1], zt, zc - s * 3.5, deep_bed, crown);
+        solid(plat_x[0], plat_x[1], zc + s * 2.6, zc + s * 3.0, y + back_h, crown);
+        for (out) |r| {
+            solid(r[0], r[1], c - 1.4, c - 1.7, deep_bed, bore_top + 0.3);
+            solid(r[0], r[1], c + 1.4, c + 1.7, deep_bed, bore_top + 0.3);
+            solid(r[0], r[1], c - 1.7, c + 1.7, bore_top, bore_top + 0.3);
+        }
+        for ([_]f32{ plat_x[0] - 0.3, plat_x[1] }) |xa| {
+            solid(xa, xa + 0.3, t.edge(), zc + s * 3.0, y, crown);
+            solid(xa, xa + 0.3, zc - s * 3.5, c - s * 1.4, deep_bed, crown);
+            solid(xa, xa + 0.3, c + s * 1.4, t.edge(), deep_bed, crown);
+            solid(xa, xa + 0.3, c - 1.4, c + 1.4, bore_top, crown);
         }
     }
-    box(v3(-line_end, y - 1.2, t5[0] - 0.4), v3(line_end, deep_ceil, t5[0]), tile_c, .wall_tile, .tile);
-    box(v3(-line_end, y - 1.2, t6[1]), v3(line_end, deep_ceil, t6[1] + 0.4), tile_c, .wall_tile, .tile);
-    box(v3(-line_end, y - 1.2, t5[1]), v3(plat_x[0], deep_ceil, t5[1] + 0.3), concrete_c, .concrete, .concrete);
-    box(v3(plat_x[1], y - 1.2, t5[1]), v3(line_end, deep_ceil, t5[1] + 0.3), concrete_c, .concrete, .concrete);
-    box(v3(-line_end, y - 1.2, t6[0] - 0.3), v3(plat_x[0], deep_ceil, t6[0]), concrete_c, .concrete, .concrete);
-    box(v3(plat_x[1], y - 1.2, t6[0] - 0.3), v3(line_end, deep_ceil, t6[0]), concrete_c, .concrete, .concrete);
-    for ([_]f32{ plat_x[0] - 0.3, plat_x[1] }) |xa| {
-        for ([_][2]f32{ .{ t5[1] + 0.3, p5[1] }, .{ p6[0], t6[0] - 0.3 } }) |p| box(v3(xa, y, p[0]), v3(xa + 0.3, deep_ceil, p[1]), tile_c, .wall_tile, .tile);
-    }
-    // The ceiling, with the escalator shaft and the deep lift shaft cut out
-    // (their riders need head room), and the dark ends of the world. A
-    // slab across the lift shaft catches a rider on the way down: the step
-    // up puts the feet on it, and the cab goes on without the player. The
+    // The ceiling over the tunnels, with the escalator shaft, the deep lift
+    // shaft and the slot of the emergency stairs cut out (their riders and
+    // walkers need head room), and the dark ends of the world. A slab
+    // across the lift shaft catches a rider on the way down: the step up
+    // puts the feet on it, and the cab goes on without the player. The
     // floorplan audit checks each shaft.
-    map.carve(rect(-line_end, line_end, t5[0] - 0.4, t6[1] + 0.4), deep_ceil, deep_ceil + 0.6, &.{ rect(esc_top_x, esc_bottom_x, esc_z[0] - 0.3, esc_z[1] + 0.3), deep_lift }, v3(0.12, 0.11, 0.1), .concrete, .concrete);
-    box(v3(-line_end, y - 1.2, t5[0] - 0.4), v3(-line_end + 0.4, deep_ceil, t6[1] + 0.4), dark, .paint, .concrete);
-    box(v3(line_end - 0.4, y - 1.2, t5[0] - 0.4), v3(line_end, deep_ceil, t6[1] + 0.4), dark, .paint, .concrete);
+    map.carve(rect(-line_end, line_end, deep_z[0], deep_z[1]), deep_ceil, deep_ceil + 0.6, &.{ rect(esc_top_x, esc_bottom_x, esc_z[0] - 0.3, esc_z[1] + 0.3), deep_lift, em_slot }, v3(0.12, 0.11, 0.1), .concrete, .concrete);
+    box(v3(-line_end, y - 1.2, deep_z[0]), v3(-line_end + 0.4, deep_ceil, deep_z[1]), dark, .paint, .concrete);
+    box(v3(line_end - 0.4, y - 1.2, deep_z[0]), v3(line_end, deep_ceil, deep_z[1]), dark, .paint, .concrete);
 
-    // Tile bands, roundels and posters on the walls across the tracks.
-    for ([_]f32{ t5[0], t6[1] - 0.03 }) |wz| {
-        deco(v3(plat_x[0], y + 2.3, wz), v3(plat_x[1], y + 2.7, wz + 0.03), v3(0.05, 0.13, 0.4), .wall_tile, .tile);
-        deco(v3(plat_x[0], y + 1.15, wz), v3(plat_x[1], y + 1.25, wz + 0.03), v3(0.38, 0.05, 0.06), .wall_tile, .tile);
-    }
-    for ([_]f32{ 12, 30, 48, 70, 88, 106 }) |rx| {
-        roundel(v3(rx, y + 1.6, t5[0] + 0.05), 0, 1.4);
-        roundel(v3(rx, y + 1.6, t6[1] - 0.05), std.math.pi, 1.4);
-    }
+    // On the track-side wall, as in the photo of platform 6: a dark red
+    // band at the top of the wall, posters that follow the curve, and
+    // roundels between them.
     const poster_cols = [_]V3{ v3(0.8, 0.35, 0.1), v3(0.1, 0.4, 0.55), v3(0.85, 0.75, 0.2), v3(0.45, 0.1, 0.35), v3(0.15, 0.5, 0.25), v3(0.9, 0.9, 0.85) };
-    for ([_]f32{ 4, 21, 39, 56, 79, 97 }, 0..) |px, i| {
-        deco(v3(px - 2, y + 0.4, t5[0]), v3(px + 2, y + 3.2, t5[0] + 0.04), v3(0.08, 0.08, 0.08), .paint, .wood);
-        deco(v3(px - 1.85, y + 0.55, t5[0] + 0.04), v3(px + 1.85, y + 3.05, t5[0] + 0.06), poster_cols[i % poster_cols.len], .paint, .wood);
-        deco(v3(px - 2, y + 0.4, t6[1] - 0.04), v3(px + 2, y + 3.2, t6[1]), v3(0.08, 0.08, 0.08), .paint, .wood);
-        deco(v3(px - 1.85, y + 0.55, t6[1] - 0.06), v3(px + 1.85, y + 3.05, t6[1] - 0.04), poster_cols[(i + 2) % poster_cols.len], .paint, .wood);
+    for (tubes, 0..) |t, ti| {
+        wallPanel(t, plat_x[0], plat_x[1], y + back_h + 0.35, y + back_h + 0.6, 0.01, rib_c, .wall_tile, .tile);
+        for ([_]f32{ 4, 21, 39, 56, 79, 97 }, 0..) |px, i| {
+            wallPanel(t, px - 2, px + 2, y + 0.5, y + 2.6, 0.02, v3(0.08, 0.08, 0.08), .paint, .wood);
+            wallPanel(t, px - 1.85, px + 1.85, y + 0.62, y + 2.48, 0.04, poster_cols[(i + 2 * ti) % poster_cols.len], .paint, .wood);
+        }
+        for ([_]f32{ 12, 30, 48, 70, 88, 106 }) |rx| {
+            roundel(v3(rx, y + 1.5, t.zc() - t.side * 2.98), if (t.side > 0) 0 else std.math.pi, 1.2);
+        }
     }
     for ([_]f32{ 12, 48, 84 }) |bx| {
         boxNoAo(v3(bx - 1.2, y, p5[1] - 1.0), v3(bx + 1.2, y + 0.45, p5[1] - 0.5), v3(0.3, 0.17, 0.09), .wood, .wood);
         boxNoAo(v3(bx - 1.2, y, p6[0] + 0.5), v3(bx + 1.2, y + 0.45, p6[0] + 1.0), v3(0.3, 0.17, 0.09), .wood, .wood);
     }
-    for ([_]f32{ t5[0] + 0.4, t6[1] - 0.4 }) |pz| {
-        map.beam(v3(plat_x[0] - 30, deep_ceil - 0.3, pz), v3(plat_x[1] + 30, deep_ceil - 0.3, pz), 0.18, 0.18, v3(0, 1, 0), v3(0.12, 0.11, 0.1), .metal, .metal);
-    }
 
-    // Fluorescent tubes over each platform (decoration). Each light hangs
-    // just under its tube. One tube flickers: its box is dynamic
-    // (main.zig).
+    // Fluorescent tubes along the crown over each platform (decoration).
+    // Each light hangs just under its tube. One tube flickers: its box is
+    // dynamic (main.zig).
     const flicker_x: f32 = 21;
+    const lz = [2]f32{ tubes[0].zc() + 1.6, tubes[1].zc() - 1.6 };
+    const ly = tubeTop(t5_c, 1, lz[0]);
     var tx: f32 = 3;
     while (tx < plat_x[1]) : (tx += 6) {
-        for ([_][2]f32{ p5, p6 }, 0..) |p, side| {
+        for (lz, 0..) |cz, side| {
             if (side == 1 and tx == flicker_x) continue;
-            const cz = (p[0] + p[1]) / 2;
-            deco(v3(tx - 1.2, deep_ceil - 0.12, cz - 0.15), v3(tx + 1.2, deep_ceil - 0.04, cz + 0.15), v3(0.85, 0.95, 1.0), .emissive, .glass);
+            deco(v3(tx - 1.2, ly - 0.14, cz - 0.15), v3(tx + 1.2, ly - 0.06, cz + 0.15), v3(0.85, 0.95, 1.0), .emissive, .glass);
         }
     }
     for ([_]f32{ 9, 33, 57, 87 }, 0..) |lx, i| {
         const tint = if (i % 2 == 0) v3(0.8, 1.0, 0.9) else v3(1.0, 0.95, 0.82);
-        map.addLight(v3(lx, deep_ceil - 0.35, (p5[0] + p5[1]) / 2), tint * vec.s(2.3), 15);
+        map.addLight(v3(lx, ly - 0.45, lz[0]), tint * vec.s(2.3), 15);
     }
     // Platform 6 east of the arches.
     for ([_]f32{ 63, 99 }) |lx| {
-        map.addLight(v3(lx, deep_ceil - 0.35, (p6[0] + p6[1]) / 2), v3(1.0, 0.95, 0.82) * vec.s(2.3), 15);
+        map.addLight(v3(lx, ly - 0.45, lz[1]), v3(1.0, 0.95, 0.82) * vec.s(2.3), 15);
     }
-    const fz = (p6[0] + p6[1]) / 2;
     map.flicker_light = map.light_count;
-    map.addLight(v3(flicker_x, deep_ceil - 0.35, fz), v3(0.85, 1.0, 0.95) * vec.s(2.3), 15);
-    const fl = map.add(v3(flicker_x - 1.2, deep_ceil - 0.12, fz - 0.15), v3(flicker_x + 1.2, deep_ceil - 0.04, fz + 0.15), v3(0.85, 1.0, 0.95), .emissive, .glass);
+    map.addLight(v3(flicker_x, ly - 0.45, lz[1]), v3(0.85, 1.0, 0.95) * vec.s(2.3), 15);
+    const fl = map.add(v3(flicker_x - 1.2, ly - 0.14, lz[1] - 0.15), v3(flicker_x + 1.2, ly - 0.06, lz[1] + 0.15), v3(0.85, 1.0, 0.95), .emissive, .glass);
     fl.solid = false;
     fl.dynamic = true;
     fl.ao = false;
     map.flicker_box = map.indexOf(fl);
-    // A red signal in the tunnel east of platform 5.
-    deco(v3(plat_x[1] + 8, y + 1.8, t5[0] + 0.05), v3(plat_x[1] + 8.2, y + 2.0, t5[0] + 0.15), v3(1.0, 0.05, 0.02), .emissive, .glass);
-    map.addLight(v3(plat_x[1] + 8, y + 1.9, t5[0] + 0.6), v3(2.5, 0.08, 0.03), 5);
+    // A red signal on the wall of the running tunnel east of platform 5,
+    // clear of the train.
+    const sig_z = t5_c - 1.62;
+    deco(v3(plat_x[1] + 8, rail_y + 1.9, sig_z - 0.06), v3(plat_x[1] + 8.2, rail_y + 2.1, sig_z + 0.04), v3(1.0, 0.05, 0.02), .emissive, .glass);
+    map.addLight(v3(plat_x[1] + 8.1, rail_y + 2.0, t5_c - 1.42), v3(2.5, 0.08, 0.03), 5);
 
-    // Danger boards on the tunnel walls where the live rail starts to kill
-    // (liveRail).
+    // Danger boards on the walls of the running tunnels where the live
+    // rail starts to kill (liveRail).
     for ([_]f32{ plat_x[0] - deep_shock, plat_x[1] + deep_shock }) |sx| {
-        deco(v3(sx - 0.6, y - 0.2, t5[0]), v3(sx + 0.6, y + 1.0, t5[0] + 0.04), yellow, .paint, .sheet_metal);
-        deco(v3(sx - 0.6, y - 0.2, t6[1] - 0.04), v3(sx + 0.6, y + 1.0, t6[1]), yellow, .paint, .sheet_metal);
+        for (tubes) |t| {
+            const bz = t.c - t.side * 1.6;
+            deco(v3(sx - 0.6, rail_y + 0.5, @min(bz, bz - t.side * 0.04)), v3(sx + 0.6, rail_y + 1.5, @max(bz, bz - t.side * 0.04)), yellow, .paint, .sheet_metal);
+        }
     }
 
     // The Piccadilly train on platform 5: a 6-car 1973 Stock train
     // (train_car.zig, map.zig Train). A full map (map.dropped) has no
     // train. The doors open on the platform side (+Z).
-    const tb = train_car.body(&train_car.stock_1973, t5_c, y - 0.69, y + 0.02, 1);
+    const tb = train_car.body(&train_car.stock_1973, t5_c, rail_y, y + 0.02, 1);
     map.addTrain(tb, (plat_x[0] + plat_x[1]) / 2);
 }
 
