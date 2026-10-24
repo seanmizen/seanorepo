@@ -127,6 +127,27 @@ The exit code is 1 when it finds an escape hole.
 - Underground, the floor has small damp patches: a little darker and a
   little glossy, with a narrow glint toward each light.
 
+### The render scale
+
+The 3D passes run at a scale of the canvas, and the final pass scales the
+image up. The HUD is drawn at the full resolution. The scale changes, so
+that a frame takes one display interval or less (`game/src/dyn_scale.zig`).
+A frame that waits for the GPU takes two display intervals or more, and the
+browser then drops frames in groups.
+
+- The display interval: the median of the frame intervals of a 0.5 s
+  window. When a map loads, the first 1.5 s run at the lowest scale to learn
+  it (a heavy scene can take two intervals in every frame).
+- Each 0.5 s: when more than 10% of the frames take more than 1.4 display
+  intervals, the scale goes down 0.05. After four windows in a row with
+  less than 2% such frames, it goes up 0.05. The scale is 0.6 to 1.
+- The game blocks a scale that was too high for 8 s. Each new failure at
+  that scale doubles the time, to 64 s.
+- At 0.6 with slow frames for 10 s, the display can be slower than the
+  learned interval (another monitor). The game then learns it again.
+- The cvar `render_scale` pins the scale (0.5 to 1). The debug screen
+  gives the scale, `auto` or `pinned`, and the display interval.
+
 ## The practice range
 
 South of the arena, through a doorway in its south wall: a lane 24 m wide
@@ -392,6 +413,7 @@ The client cvars:
 | `snd_nearmiss_distance` | 0 (off) to 200 m | 25 | saved | `sounds.zig` nearMiss: the largest miss distance of a crack or a whiz |
 | `snd_impact_distance` | 0 (off) to 300 m | 60 | saved | `sounds.zig` impactSound: the largest distance of an impact sound |
 | `own_body` | 0 or 1 | 1 | saved | `main.zig` ownPose. 0 hides your body in first person. Its shadow stays. |
+| `render_scale` | 0 (automatic), 0.5 to 1 | 0 | saved | `main.zig` renderScale. The scale of the 3D image. 0: the dynamic render scale (see [The render scale](#the-render-scale)). 0.5 to 1: a fixed scale. The HUD always has the full resolution. |
 | `rcon_password` | text | empty | protected, not saved | `game_console.zig` cmdRcon |
 
 The settings panel shows the first five. The values of the old local
@@ -1382,6 +1404,7 @@ apps/action/
 │       ├── main.zig      modes, input, shooting, deathmatch sync, HUD, wasm entry
 │       ├── render.zig    light shadow maps (at map load), shadow pass, HDR scene pass (4x MSAA), bloom, tone map
 │       ├── ao_grid.zig   the AO grid: the boxes near each cell, for the ambient occlusion
+│       ├── dyn_scale.zig the dynamic render scale: the scale of the 3D passes, from the frame intervals
 │       ├── scene.wgsl    lighting: sun + PCF shadows, light shadow maps, SDF ambient occlusion, sky, fog
 │       ├── post.wgsl     bloom and the final pass (ACES, vignette, damage tint)
 │       ├── weapon.zig    the weapon models, classes, items, slots, the hands, the recoil and the view-model pose

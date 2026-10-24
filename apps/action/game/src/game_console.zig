@@ -111,6 +111,7 @@ pub var chat_view: console.ChatView = .{};
 var defs_arena: std.heap.ArenaAllocator = undefined;
 var client: *net.Client = undefined;
 var rcon_password: *console.Cvar = undefined;
+pub var render_scale: *console.Cvar = undefined;
 
 const store: console.Store = .{ .get = storeGet, .set = storeSet, .delete = storeDelete };
 
@@ -155,6 +156,15 @@ pub fn init(alloc: std.mem.Allocator, net_client: *net.Client, sess: *session.Se
         .flags = .{ .protected = true },
         .description = "The password that rcon sends: the admin_password of the server. It is not saved.",
         .reader = "game_console.zig cmdRcon",
+    });
+    render_scale = try con.addCvar(.{
+        .name = "render_scale",
+        .default = .{ .float = 0 },
+        .min = 0,
+        .max = 1,
+        .flags = .{ .saved = true },
+        .description = "The scale of the 3D image. 0: automatic, 0.6 to 1, so that a frame takes one display interval or less. 0.5 to 1: a fixed scale (a value under 0.5 gives 0.5). The HUD always has the full resolution.",
+        .reader = "main.zig renderScale",
     });
     try con.addCommand(.{
         .name = "rcon",
