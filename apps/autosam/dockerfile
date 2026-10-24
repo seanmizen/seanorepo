@@ -1,19 +1,26 @@
 # syntax=docker/dockerfile:1.6
 #
-# autosam.seanmizen.com: one static page, public/index.html. The page has no
-# build step and no backend. `serve` sends it, with the headers in
-# public/serve.json.
+# autosam.seanmizen.com: one Bun process serves the page (public/) and the
+# song API (/api) on 4090. The server and the page use the same parser,
+# public/song-format.js. Nothing needs a build step or node_modules.
+#
+# The songs live in the volume at /data. songs/ holds the songs that the
+# repo ships. The server copies each one into /data once.
 
-FROM node:lts-slim AS base
+FROM oven/bun:1.1-slim AS prod
 WORKDIR /app
-RUN npm install -g serve
+COPY apps/autosam/server ./server
+COPY apps/autosam/public ./public
+COPY apps/autosam/songs ./songs
+ENV PORT=4090 AUTOSAM_DATA_DIR=/data AUTOSAM_SEED_DIR=/app/songs
 EXPOSE 4090
+CMD ["bun", "server/index.ts"]
 
-# docker-compose bind-mounts the monorepo at /app. Reload the browser to see
-# an edit.
-FROM base AS dev
-CMD ["serve", "apps/autosam/public", "-l", "4090"]
-
-FROM base AS prod
-COPY apps/autosam/public /app
-CMD ["serve", "-s", ".", "-l", "4090"]
+# docker-compose bind-mounts the monorepo at /app. Bun restarts the server
+# when a file of server/ changes. Reload the browser to see a change to
+# public/.
+FROM oven/bun:1.1-slim AS dev
+WORKDIR /app/apps/autosam
+ENV PORT=4090 AUTOSAM_DATA_DIR=/data AUTOSAM_SEED_DIR=/app/apps/autosam/songs
+EXPOSE 4090
+CMD ["bun", "--watch", "server/index.ts"]

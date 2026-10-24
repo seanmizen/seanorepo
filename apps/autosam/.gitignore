@@ -1,0 +1,3 @@
+# `yarn workspace autosam start` keeps the songs here. Docker uses a named volume.
+data/
+.env

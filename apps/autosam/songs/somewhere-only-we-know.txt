@@ -1,0 +1,50 @@
+title: Somewhere Only We Know
+artist: Keane
+key: A
+tempo: 86
+suggest: -2, -4
+notes: Chords from the top-rated Ultimate Guitar chart (played capo 2, written here at concert pitch). They match the Hooktheory analysis. The number of bars in each line is an estimate.
+
+[Intro]
+A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
+A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
+
+[Verse 1]
+A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
+A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
+
+[Pre-chorus]
+F#m C#m | A/C# C#m | Bm7 | Bm7 Esus4@3 E@4
+F#m C#m | A/C# C#m | Bm7 | Bm7 Esus4@3 E@4
+
+[Verse 2]
+A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
+A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
+
+[Pre-chorus]
+F#m C#m | A/C# C#m | Bm7 | Bm7 Esus4@3 E@4
+F#m C#m | A/C# C#m | Bm7 | Bm7 Esus4@3 E@4
+
+[Chorus]
+Bm7 | A/C# Esus4@3 E@4 | Bm7 | A/C# Esus4@3 E@4
+Bm7 | A/C# Esus4@3 E@4 | D6 | D6
+E6 | A | D6 | E6
+D6 | E6 E E6
+
+[Pre-chorus]
+F#m C#m | A/C# C#m | Bm7 | Bm7 Esus4@3 E@4
+F#m C#m | A/C# C#m | Bm7 | Bm7 Esus4@3 E@4
+
+[Chorus]
+Bm7 | A/C# Esus4@3 E@4 | Bm7 | A/C# Esus4@3 E@4
+Bm7 | A/C# Esus4@3 E@4 | D6 | D6
+D6 | E6
+
+[Chorus (ooh, ah)]
+Bm7 | A/C# Esus4@3 E@4 | Bm7 | A/C# Esus4@3 E@4
+Bm7 | A/C# Esus4@3 E@4 | D6 | D6
+E6 | A
+
+[Outro]
+D6 | E6 D#6@3 D6@4 | D6 | E6 D6@3 D@4
+A
