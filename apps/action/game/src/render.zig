@@ -19,6 +19,7 @@ const gfx = @import("sw_gfx2d");
 const vec = @import("vec.zig");
 const mesh = @import("mesh.zig");
 const map = @import("map.zig");
+const ao_grid = @import("ao_grid.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -67,6 +68,10 @@ pub const SceneUniforms = extern struct {
     /// map.sealed: the room with no sun, min and max.
     sealed_lo: [4]f32,
     sealed_hi: [4]f32,
+    /// The AO grid (ao_grid.zig): xyz the origin, w the cell size.
+    grid_o: [4]f32,
+    /// xyz the cell counts, w the length of the moving list.
+    grid_n: [4]f32,
     lp: [max_lights][4]f32,
     /// rgb colour, w the shadow map of the light (map.Light.shadow).
     lc: [max_lights][4]f32,
@@ -131,6 +136,16 @@ var light_shadow_pipe: T.RenderPipeline = undefined;
 
 var scene_ubo: gpu_mod.Buffer = undefined;
 var box_buf: gpu_mod.Buffer = undefined;
+/// The AO grid (uploadGrid), and the boxes that the grid does not have
+/// where they are now (uploadBoxes).
+var grid_buf: gpu_mod.Buffer = undefined;
+var grid_size: usize = 8;
+var grid_origin: [4]f32 = .{ 0, 0, 0, 1 };
+var grid_n: [4]f32 = .{ 1, 1, 1, 0 };
+var moving_buf: gpu_mod.Buffer = undefined;
+/// Each box where the grid has it: min and max at uploadGrid.
+var grid_at: [map.max_boxes][2]V3 = undefined;
+var grid_count: usize = 0;
 var static_vb: gpu_mod.Buffer = undefined;
 var static_count: u32 = 0;
 var has_static = false;
@@ -187,15 +202,16 @@ const vertex_layout = [_]T.VertexBufferLayout{.{
     },
 }};
 
-/// Upload the static mesh of a new map, and draw the shadow maps of its
-/// lights.
-pub fn loadMap(gpu: *gpu_mod.GPU, static_mesh: []const mesh.Vertex, lights: []const map.Light) !void {
+/// Upload the static mesh of a new map, draw the shadow maps of its
+/// lights, and build its AO grid.
+pub fn loadMap(gpu: *gpu_mod.GPU, gpa: std.mem.Allocator, static_mesh: []const mesh.Vertex, lights: []const map.Light) !void {
     if (has_static) static_vb.destroy();
     has_static = true;
     static_count = @intCast(static_mesh.len);
     static_vb = try gpu.createBuffer(.{ .size = @max(64, static_mesh.len * @sizeOf(mesh.Vertex)), .usage = .{ .vertex = true, .copy_dst = true } });
     gpu.writeBuffer(static_vb, 0, std.mem.sliceAsBytes(static_mesh));
     try drawLightShadows(gpu, lights);
+    try uploadGrid(gpu, gpa);
 }
 
 /// The view-projection matrix of one face of a light shadow map. Face 0 to
@@ -291,27 +307,78 @@ fn pickBodyLights(lights: []const map.Light, centre: V3, out: *[body_lights]usiz
     return n;
 }
 
-/// Upload the ambient-occlusion boxes near the eye. The lifts move, so
-/// each frame does. Only boxes within 45 m count: the shader loops over
-/// all of them for each pixel.
+/// Upload the ambient-occlusion boxes, at their map index. The lifts move,
+/// so each frame does. Only the AO boxes within 45 m of the eye are on
+/// (w = 1). The shader finds the boxes through the AO grid (ao_grid.zig)
+/// and the moving list. A box is in the moving list when it is dynamic or
+/// it is not where it was when uploadGrid ran. Returns the length of
+/// the moving list.
 fn uploadBoxes(gpu: *gpu_mod.GPU, eye: V3) u32 {
     var data: [map.max_boxes][8]f32 = undefined;
-    var n: usize = 0;
-    for (map.boxes[0..map.box_count]) |b| {
-        if (!b.ao) continue;
+    var moving: [map.max_boxes]u32 = undefined;
+    var nm: usize = 0;
+    for (map.boxes[0..map.box_count], 0..) |b, i| {
         const q = @max(b.min - eye, eye - b.max);
         const out = @max(q, vec.s(0));
-        if (vec.dot(out, out) > 45 * 45) continue;
-        data[n] = .{ b.min[0], b.min[1], b.min[2], 0, b.max[0], b.max[1], b.max[2], 0 };
+        const on = b.ao and vec.dot(out, out) <= 45 * 45;
+        data[i] = .{ b.min[0], b.min[1], b.min[2], @floatFromInt(@intFromBool(on)), b.max[0], b.max[1], b.max[2], 0 };
+        const moved = i >= grid_count or b.dynamic or @reduce(.Or, b.min != grid_at[i][0]) or @reduce(.Or, b.max != grid_at[i][1]);
+        if (on and moved) {
+            moving[nm] = @intCast(i);
+            nm += 1;
+        }
+    }
+    if (map.box_count > 0) gpu.writeBuffer(box_buf, 0, std.mem.sliceAsBytes(data[0..map.box_count]));
+    if (nm > 0) gpu.writeBuffer(moving_buf, 0, std.mem.sliceAsBytes(moving[0..nm]));
+    return @intCast(nm);
+}
+
+/// Build the AO grid (ao_grid.zig) from the AO boxes of the loaded map
+/// that are not dynamic, and upload it.
+fn uploadGrid(gpu: *gpu_mod.GPU, gpa: std.mem.Allocator) !void {
+    var inputs: [map.max_boxes]ao_grid.Input = undefined;
+    var ids: [map.max_boxes]u32 = undefined;
+    var n: usize = 0;
+    for (map.boxes[0..map.box_count], 0..) |b, i| {
+        grid_at[i] = .{ b.min, b.max };
+        if (!b.ao or b.dynamic) continue;
+        inputs[n] = .{ .min = b.min, .max = b.max };
+        ids[n] = @intCast(i);
         n += 1;
     }
-    if (n > 0) gpu.writeBuffer(box_buf, 0, std.mem.sliceAsBytes(data[0..n]));
-    return @intCast(n);
+    grid_count = map.box_count;
+    var g = try ao_grid.build(gpa, inputs[0..n], ids[0..n]);
+    defer g.deinit(gpa);
+    grid_buf.destroy();
+    grid_size = g.data.len * 4;
+    grid_buf = try gpu.createBuffer(.{ .size = grid_size, .usage = .{ .storage = true, .copy_dst = true } });
+    gpu.writeBuffer(grid_buf, 0, std.mem.sliceAsBytes(g.data));
+    grid_origin = .{ g.origin[0], g.origin[1], g.origin[2], g.cell };
+    grid_n = .{ @floatFromInt(g.n[0]), @floatFromInt(g.n[1]), @floatFromInt(g.n[2]), 0 };
+    std.log.info("ao grid: {d} boxes, {d}x{d}x{d} cells of {d:.2} m, {d} KB", .{ n, g.n[0], g.n[1], g.n[2], g.cell, grid_size / 1024 });
+    scene_bg.release();
+    try makeSceneBg(gpu);
+}
+
+fn makeSceneBg(gpu: *gpu_mod.GPU) !void {
+    scene_bg = try gpu.createBindGroup(.{ .layout = &scene_bgl, .entries = &[_]gpu_mod.BindGroupEntry{
+        .{ .binding = 0, .buffer = &scene_ubo, .size = @sizeOf(SceneUniforms) },
+        .{ .binding = 1, .buffer = &box_buf, .size = map.max_boxes * 32 },
+        .{ .binding = 2, .texture_view = &shadow_view },
+        .{ .binding = 3, .sampler = &shadow_smp },
+        .{ .binding = 4, .texture_view = &light_shadow_view },
+        .{ .binding = 6, .buffer = &grid_buf, .size = grid_size },
+        .{ .binding = 7, .buffer = &moving_buf, .size = map.max_boxes * 4 },
+    } });
 }
 
 pub fn init(gpu: *gpu_mod.GPU) !void {
     scene_ubo = try gpu.createBuffer(.{ .size = @sizeOf(SceneUniforms), .usage = .{ .uniform = true, .copy_dst = true } });
     box_buf = try gpu.createBuffer(.{ .size = map.max_boxes * 32, .usage = .{ .storage = true, .copy_dst = true } });
+    moving_buf = try gpu.createBuffer(.{ .size = map.max_boxes * 4, .usage = .{ .storage = true, .copy_dst = true } });
+    // An empty grid (one cell, no boxes) until a map loads.
+    grid_buf = try gpu.createBuffer(.{ .size = grid_size, .usage = .{ .storage = true, .copy_dst = true } });
+    gpu.writeBuffer(grid_buf, 0, std.mem.sliceAsBytes(&[2]u32{ 2, 2 }));
     for (&post_ubo) |*b| b.* = try gpu.createBuffer(.{ .size = 256, .usage = .{ .uniform = true, .copy_dst = true } });
     dyn_vb = try gpu.createBuffer(.{ .size = max_dynamic * @sizeOf(mesh.Vertex), .usage = .{ .vertex = true, .copy_dst = true } });
     trans_vb = try gpu.createBuffer(.{ .size = max_translucent * @sizeOf(mesh.Vertex), .usage = .{ .vertex = true, .copy_dst = true } });
@@ -342,6 +409,8 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .{ .binding = 2, .visibility = .{ .fragment = true }, .texture = .{ .sample_type = .depth } },
         .{ .binding = 3, .visibility = .{ .fragment = true }, .sampler = .{ .type = .comparison } },
         .{ .binding = 4, .visibility = .{ .fragment = true }, .texture = .{ .sample_type = .depth, .view_dimension = .@"2d-array" } },
+        .{ .binding = 6, .visibility = .{ .fragment = true }, .buffer = .{ .type = .read_only_storage } },
+        .{ .binding = 7, .visibility = .{ .fragment = true }, .buffer = .{ .type = .read_only_storage } },
     } });
     shadow_bgl = try gpu.createBindGroupLayout(.{ .entries = &[_]T.BindGroupLayoutEntry{
         .{ .binding = 0, .visibility = .{ .vertex = true, .fragment = true }, .buffer = .{ .type = .uniform } },
@@ -358,13 +427,7 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .{ .binding = 3, .visibility = .{ .fragment = true }, .texture = .{} },
     } });
 
-    scene_bg = try gpu.createBindGroup(.{ .layout = &scene_bgl, .entries = &[_]gpu_mod.BindGroupEntry{
-        .{ .binding = 0, .buffer = &scene_ubo, .size = @sizeOf(SceneUniforms) },
-        .{ .binding = 1, .buffer = &box_buf, .size = map.max_boxes * 32 },
-        .{ .binding = 2, .texture_view = &shadow_view },
-        .{ .binding = 3, .sampler = &shadow_smp },
-        .{ .binding = 4, .texture_view = &light_shadow_view },
-    } });
+    try makeSceneBg(gpu);
     shadow_bg = try gpu.createBindGroup(.{ .layout = &shadow_bgl, .entries = &[_]gpu_mod.BindGroupEntry{
         .{ .binding = 0, .buffer = &scene_ubo, .size = @sizeOf(SceneUniforms) },
     } });
@@ -562,10 +625,13 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     su.sun_dir = .{ sun_dir[0], sun_dir[1], sun_dir[2], 0 };
     su.sun_col = .{ sun_col[0], sun_col[1], sun_col[2], 0 };
     const nl = @min(p.lights.len, max_lights);
-    su.info = .{ @floatFromInt(uploadBoxes(gpu, p.eye)), @floatFromInt(nl), 0.0045, 1 };
+    su.info = .{ 0, @floatFromInt(nl), 0.0045, 1 };
     su.info2 = .{ map.underground_y, 1, p.exposure, 0 };
     su.sealed_lo = .{ map.sealed[0][0], map.sealed[0][1], map.sealed[0][2], 0 };
     su.sealed_hi = .{ map.sealed[1][0], map.sealed[1][1], map.sealed[1][2], 0 };
+    su.grid_o = grid_origin;
+    su.grid_n = grid_n;
+    su.grid_n[3] = @floatFromInt(uploadBoxes(gpu, p.eye));
     for (p.lights[0..nl], 0..) |l, i| {
         su.lp[i] = .{ l.pos[0], l.pos[1], l.pos[2], l.radius };
         su.lc[i] = .{ l.color[0], l.color[1], l.color[2], @floatFromInt(l.shadow) };

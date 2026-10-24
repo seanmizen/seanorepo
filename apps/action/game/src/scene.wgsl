@@ -22,6 +22,8 @@
 const MAX_LIGHTS: u32 = 44u;
 // The first light shadow slot of your body: map.zig max_lights.
 const BODY_SLOT: u32 = 28u;
+// The LED grid of the train indicators: platform_display.zig pitch.
+const LED_PITCH: f32 = 0.012;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -30,19 +32,27 @@ struct Scene {
   cam: vec4f,      // xyz camera position, w time in seconds
   sun_dir: vec4f,  // xyz toward the sun
   sun_col: vec4f,
-  info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
+  info: vec4f,     // x unused, y light count, z fog density, w shadow on
   info2: vec4f,    // x underground height, y in-scatter strength, z exposure (post.wgsl)
   body_l: vec4f,   // the light of each body slot: its index in lp and lc from 1, 0 none
   sealed_lo: vec4f, // map.zig sealed: a room with no sun, min and max
   sealed_hi: vec4f,
+  grid_o: vec4f,   // the AO grid: xyz origin, w cell size
+  grid_n: vec4f,   // xyz cell counts, w the length of the moving list
   lp: array<vec4f, 44>, // xyz position, w radius
   lc: array<vec4f, 44>, // rgb colour, w shadow map from 1 (0: none)
 };
 
+// mn.w: 1 when the AO uses the box (render.zig uploadBoxes).
 struct BoxG { mn: vec4f, mx: vec4f };
 
 @group(0) @binding(0) var<uniform> u: Scene;
 @group(0) @binding(1) var<storage, read> boxes: array<BoxG>;
+// The AO grid (ao_grid.zig): the offset of each cell list, then the box
+// indices of the lists.
+@group(0) @binding(6) var<storage, read> ao_grid: array<u32>;
+// The boxes that the grid does not have where they are now.
+@group(0) @binding(7) var<storage, read> ao_moving: array<u32>;
 @group(0) @binding(2) var shadow_tex: texture_depth_2d;
 @group(0) @binding(3) var shadow_smp: sampler_comparison;
 // The light shadow maps: six layers (faces) for each map light. The light
@@ -226,34 +236,43 @@ fn sdBox(p: vec3f, mn: vec3f, mx: vec3f) -> f32 {
   return length(max(q, vec3f(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
-// Ambient occlusion: four SDF samples along the normal. A box further than
-// 1.3 m from the point cannot occlude, so the loop skips it after one test.
+// The distances of the four AO samples to box i, into d. A box further than
+// 1.3 m from the point cannot occlude, so the function skips it after one test.
+fn aoBox(i: u32, p: vec3f, n: vec3f, d: vec4f) -> vec4f {
+  let b = boxes[i];
+  if (b.mn.w == 0.0 || sdBox(p, b.mn.xyz, b.mx.xyz) > 1.3) {
+    return d;
+  }
+  return min(d, vec4f(
+    sdBox(p + n * 0.08, b.mn.xyz, b.mx.xyz),
+    sdBox(p + n * 0.25, b.mn.xyz, b.mx.xyz),
+    sdBox(p + n * 0.55, b.mn.xyz, b.mx.xyz),
+    sdBox(p + n * 1.0, b.mn.xyz, b.mx.xyz)));
+}
+
+// Ambient occlusion: four SDF samples along the normal. The boxes come from
+// the cell of the point in the AO grid (each box that can be 1.3 m or less
+// from a point of the cell), and from the moving list. A box in both lists
+// gives the same minimum.
 fn ambientOcclusion(p: vec3f, n: vec3f) -> f32 {
-  let count = u32(u.info.x);
-  var d1 = 9.0;
-  var d2 = 9.0;
-  var d3 = 9.0;
-  var d4 = 9.0;
-  let p1 = p + n * 0.08;
-  let p2 = p + n * 0.25;
-  let p3 = p + n * 0.55;
-  let p4 = p + n * 1.0;
-  for (var i = 0u; i < count; i++) {
-    let mn = boxes[i].mn.xyz;
-    let mx = boxes[i].mx.xyz;
-    if (sdBox(p, mn, mx) > 1.3) {
-      continue;
+  var d = vec4f(9.0);
+  let q = floor((p - u.grid_o.xyz) / u.grid_o.w);
+  if (all(q >= vec3f(0.0)) && all(q < u.grid_n.xyz)) {
+    let c = u32(q.x) + u32(u.grid_n.x) * (u32(q.y) + u32(u.grid_n.y) * u32(q.z));
+    let end = ao_grid[c + 1u];
+    for (var k = ao_grid[c]; k < end; k++) {
+      d = aoBox(ao_grid[k], p, n, d);
     }
-    d1 = min(d1, sdBox(p1, mn, mx));
-    d2 = min(d2, sdBox(p2, mn, mx));
-    d3 = min(d3, sdBox(p3, mn, mx));
-    d4 = min(d4, sdBox(p4, mn, mx));
+  }
+  let moving = u32(u.grid_n.w);
+  for (var k = 0u; k < moving; k++) {
+    d = aoBox(ao_moving[k], p, n, d);
   }
   var occ = 0.0;
-  occ += max(0.08 - d1, 0.0) * 1.0;
-  occ += max(0.25 - d2, 0.0) * 0.7;
-  occ += max(0.55 - d3, 0.0) * 0.45;
-  occ += max(1.0 - d4, 0.0) * 0.3;
+  occ += max(0.08 - d.x, 0.0) * 1.0;
+  occ += max(0.25 - d.y, 0.0) * 0.7;
+  occ += max(0.55 - d.z, 0.0) * 0.45;
+  occ += max(1.0 - d.w, 0.0) * 0.3;
   return clamp(1.0 - 1.1 * occ, 0.0, 1.0);
 }
 
@@ -284,6 +303,10 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
   // A 2D face coordinate: the two axes along the face.
   var uv = wp.xz;
   if (an.x > 0.5) { uv = wp.zy; } else if (an.z > 0.5) { uv = wp.xy; }
+  // The LED cells and their size on the screen (material 9). The
+  // derivatives must be in uniform control flow: here, not in the switch.
+  let led = uv / LED_PITCH;
+  let led_w = length(fwidth(led));
   switch (mat) {
     case 1u: { // concrete
       let k = 0.82 + 0.2 * fbm(wp * 1.7) + 0.06 * noise3(wp * 14.0);
@@ -353,6 +376,15 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
       let tone = 0.75 + 0.35 * hash3(id) + 0.1 * noise3(wp * 6.0);
       s.albedo = mix(vec3f(0.42, 0.4, 0.36), col * tone, mortar);
       s.rough = 0.9;
+    }
+    case 9u: { // LEDs: a round dot in each cell of the grid, black between
+      let d = length(fract(led) - 0.5);
+      let w = max(led_w, 0.001);
+      let dot = 1.0 - smoothstep(0.34 - w, 0.34 + w, d);
+      // Far away a cell is smaller than a pixel: the mean of the dot.
+      let k = mix(dot, 0.36, smoothstep(0.4, 1.0, w));
+      // A little above 0, so the black between the dots stays emissive.
+      s.emit = 7.0 * k + 0.001;
     }
     default: { // paint, and the gun
       s.rough = 0.4;
