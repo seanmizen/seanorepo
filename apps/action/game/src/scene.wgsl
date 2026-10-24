@@ -30,19 +30,27 @@ struct Scene {
   cam: vec4f,      // xyz camera position, w time in seconds
   sun_dir: vec4f,  // xyz toward the sun
   sun_col: vec4f,
-  info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
+  info: vec4f,     // x unused, y light count, z fog density, w shadow on
   info2: vec4f,    // x underground height, y in-scatter strength
   body_l: vec4f,   // the light of each body slot: its index in lp and lc from 1, 0 none
   sealed_lo: vec4f, // map.zig sealed: a room with no sun, min and max
   sealed_hi: vec4f,
+  grid_o: vec4f,   // the AO grid: xyz origin, w cell size
+  grid_n: vec4f,   // xyz cell counts, w the length of the moving list
   lp: array<vec4f, 44>, // xyz position, w radius
   lc: array<vec4f, 44>, // rgb colour, w shadow map from 1 (0: none)
 };
 
+// mn.w: 1 when the AO uses the box (render.zig uploadBoxes).
 struct BoxG { mn: vec4f, mx: vec4f };
 
 @group(0) @binding(0) var<uniform> u: Scene;
 @group(0) @binding(1) var<storage, read> boxes: array<BoxG>;
+// The AO grid (ao_grid.zig): the offset of each cell list, then the box
+// indices of the lists.
+@group(0) @binding(6) var<storage, read> ao_grid: array<u32>;
+// The boxes that the grid does not have where they are now.
+@group(0) @binding(7) var<storage, read> ao_moving: array<u32>;
 @group(0) @binding(2) var shadow_tex: texture_depth_2d;
 @group(0) @binding(3) var shadow_smp: sampler_comparison;
 // The light shadow maps: six layers (faces) for each map light. The light
@@ -226,34 +234,43 @@ fn sdBox(p: vec3f, mn: vec3f, mx: vec3f) -> f32 {
   return length(max(q, vec3f(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
-// Ambient occlusion: four SDF samples along the normal. A box further than
-// 1.3 m from the point cannot occlude, so the loop skips it after one test.
+// The distances of the four AO samples to box i, into d. A box further than
+// 1.3 m from the point cannot occlude, so the function skips it after one test.
+fn aoBox(i: u32, p: vec3f, n: vec3f, d: vec4f) -> vec4f {
+  let b = boxes[i];
+  if (b.mn.w == 0.0 || sdBox(p, b.mn.xyz, b.mx.xyz) > 1.3) {
+    return d;
+  }
+  return min(d, vec4f(
+    sdBox(p + n * 0.08, b.mn.xyz, b.mx.xyz),
+    sdBox(p + n * 0.25, b.mn.xyz, b.mx.xyz),
+    sdBox(p + n * 0.55, b.mn.xyz, b.mx.xyz),
+    sdBox(p + n * 1.0, b.mn.xyz, b.mx.xyz)));
+}
+
+// Ambient occlusion: four SDF samples along the normal. The boxes come from
+// the cell of the point in the AO grid (each box that can be 1.3 m or less
+// from a point of the cell), and from the moving list. A box in both lists
+// gives the same minimum.
 fn ambientOcclusion(p: vec3f, n: vec3f) -> f32 {
-  let count = u32(u.info.x);
-  var d1 = 9.0;
-  var d2 = 9.0;
-  var d3 = 9.0;
-  var d4 = 9.0;
-  let p1 = p + n * 0.08;
-  let p2 = p + n * 0.25;
-  let p3 = p + n * 0.55;
-  let p4 = p + n * 1.0;
-  for (var i = 0u; i < count; i++) {
-    let mn = boxes[i].mn.xyz;
-    let mx = boxes[i].mx.xyz;
-    if (sdBox(p, mn, mx) > 1.3) {
-      continue;
+  var d = vec4f(9.0);
+  let q = floor((p - u.grid_o.xyz) / u.grid_o.w);
+  if (all(q >= vec3f(0.0)) && all(q < u.grid_n.xyz)) {
+    let c = u32(q.x) + u32(u.grid_n.x) * (u32(q.y) + u32(u.grid_n.y) * u32(q.z));
+    let end = ao_grid[c + 1u];
+    for (var k = ao_grid[c]; k < end; k++) {
+      d = aoBox(ao_grid[k], p, n, d);
     }
-    d1 = min(d1, sdBox(p1, mn, mx));
-    d2 = min(d2, sdBox(p2, mn, mx));
-    d3 = min(d3, sdBox(p3, mn, mx));
-    d4 = min(d4, sdBox(p4, mn, mx));
+  }
+  let moving = u32(u.grid_n.w);
+  for (var k = 0u; k < moving; k++) {
+    d = aoBox(ao_moving[k], p, n, d);
   }
   var occ = 0.0;
-  occ += max(0.08 - d1, 0.0) * 1.0;
-  occ += max(0.25 - d2, 0.0) * 0.7;
-  occ += max(0.55 - d3, 0.0) * 0.45;
-  occ += max(1.0 - d4, 0.0) * 0.3;
+  occ += max(0.08 - d.x, 0.0) * 1.0;
+  occ += max(0.25 - d.y, 0.0) * 0.7;
+  occ += max(0.55 - d.z, 0.0) * 0.45;
+  occ += max(1.0 - d.w, 0.0) * 0.3;
   return clamp(1.0 - 1.1 * occ, 0.0, 1.0);
 }
 

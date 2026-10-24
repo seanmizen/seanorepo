@@ -79,9 +79,9 @@ pub const Light = struct {
 
 pub const Spawn = struct { pos: V3, yaw: f32 };
 
-/// The scene shader loops over the boxes near the eye for the ambient
-/// occlusion (render.zig uploadBoxes): this many at most. A map with more
-/// boxes fails `zig build test` and the floorplan tool.
+/// The GPU box buffer of the ambient occlusion (render.zig uploadBoxes)
+/// has this many boxes. A map with more boxes fails `zig build test` and
+/// the floorplan tool.
 pub const max_boxes = 1024;
 /// The map lights. Each one has six shadow layers (render.zig), and
 /// scene.wgsl BODY_SLOT is the same number.

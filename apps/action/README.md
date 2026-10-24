@@ -1061,13 +1061,21 @@ wood. `zig build test` checks the same.
 - The trains (see [Trains](#trains)) took the limit from 640 to 1024. The
   deep train has 61 boxes and the District train 79. A box costs 32
   bytes of GPU buffer: 32 KB for 1024 boxes.
-- The scene shader loops over the boxes for the ambient occlusion within
-  45 m of the eye (`uploadBoxes` in `game/src/render.zig`), not over
-  `max_boxes`: at most 109 boxes at a spawn point of Earl's Court (100 on
-  average). The train parts do not count for it, except the floor, the
-  roof and one wall of the District train. The fluorescent tubes of the
-  deep platforms are decoration, not boxes. Thus the higher limit costs no
-  frame time. The collision tests loop over all the boxes of the map.
+- The ambient occlusion uses the AO boxes within 45 m of the eye
+  (`uploadBoxes` in `game/src/render.zig`). The train parts do not count
+  for it, except the floor, the roof and one wall of the District train.
+  The fluorescent tubes of the deep platforms are decoration, not boxes.
+  The collision tests loop over all the boxes of the map.
+- The AO grid (`game/src/ao_grid.zig`): at map load, a uniform 3D grid over
+  the AO boxes that are not dynamic. Each cell lists the boxes that can be
+  1.3 m or less from a point in the cell. The shader tests only the boxes
+  of the cell of each pixel, and the moving list: the dynamic boxes and
+  each box that is not where it was at the load. The same boxes occlude
+  as in a loop over all the boxes, so the look does not change. Earl's
+  Court: 227 boxes, 268 x 13 x 33 cells of 3 m, 674 KB. The cells start
+  at 2 m. Above 262,144 cells or 4,194,304 list entries, the cells get
+  1.5 times bigger. The grid never drops a box. On a GTX 980 Ti at
+  1904 x 985, the grid took the frame time from 27.8 ms to 15 ms (p50).
 
 ### Listen to it
 
@@ -1373,6 +1381,7 @@ apps/action/
 │   └── src/
 │       ├── main.zig      modes, input, shooting, deathmatch sync, HUD, wasm entry
 │       ├── render.zig    light shadow maps (at map load), shadow pass, HDR scene pass (4x MSAA), bloom, tone map
+│       ├── ao_grid.zig   the AO grid: the boxes near each cell, for the ambient occlusion
 │       ├── scene.wgsl    lighting: sun + PCF shadows, light shadow maps, SDF ambient occlusion, sky, fog
 │       ├── post.wgsl     bloom and the final pass (ACES, vignette, damage tint)
 │       ├── weapon.zig    the weapon models, classes, items, slots, the hands, the recoil and the view-model pose
