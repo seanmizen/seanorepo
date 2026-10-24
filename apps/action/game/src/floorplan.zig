@@ -15,7 +15,8 @@
 //                                                           and landings: exit code 1 if a
 //                                                           material does not fit its look, or a
 //                                                           lift shaft or landing is not clear
-//   zig build floorplan -- <map> escape                    escape holes, exit code 1 if it finds one
+//   zig build floorplan -- <map> escape                    escape holes and trapped spawn points,
+//                                                           exit code 1 if it finds one
 //
 // Every command stops with exit code 1 when the map has more boxes than
 // map.max_boxes.

@@ -34,6 +34,10 @@ case "${1:-}" in
     if [ "${1:-}" != state ] || [[ "${2:-}" =~ ^(rm|mv|push|replace-provider)$ ]]; then
       repo="$(git -C "$here" rev-parse --show-toplevel)"
       branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD)"
+      # actions/checkout leaves a detached HEAD. GITHUB_REF names the branch.
+      if [ "$branch" = HEAD ] && [ "${GITHUB_ACTIONS:-}" = true ] && [ "${GITHUB_REF:-}" = refs/heads/release ]; then
+        branch=release
+      fi
       if [ "$branch" != release ]; then
         echo "tofu: $1 runs only from a checkout of release. This checkout is on $branch. See infra/cloudflare/README.md." >&2
         exit 1
@@ -94,6 +98,43 @@ if [ -f "$secrets" ]; then
   # shellcheck source=/dev/null
   . "$secrets"
   set +a
+fi
+
+# The cloudflare stack keeps its state in R2 (versions.tf). The S3 keys of
+# an API token are its ID and the SHA-256 of its value, so the one token
+# does both jobs. CI sets CLOUDFLARE_API_TOKEN itself and has no file.
+CF_ACCOUNT=8e76a7e41317a164bf03bf360ba4ac38
+CF_STATE_BUCKET=seanorepo-tofu-state
+cf_api() {
+  curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$@"
+}
+if [ "$stack" = cloudflare ] && [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [[ "${1:-}" =~ ^(init|plan|apply|destroy|import|state|output|refresh)$ ]] && [[ " $* " != *" -backend=false "* ]]; then
+  echo "tofu: CLOUDFLARE_API_TOKEN is not set. The R2 state needs it. Put it in $secrets, or in the repo secret in CI. See README.md." >&2
+  exit 1
+fi
+if [ "$stack" = cloudflare ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+  # A user token verifies at /user, an account token at /accounts/<id>.
+  id=""
+  for url in https://api.cloudflare.com/client/v4/user/tokens/verify \
+    "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/tokens/verify"; do
+    id="$(cf_api "$url" | sed -nE 's/.*"id" *: *"([0-9a-f]{32})".*/\1/p' || true)"
+    [ -z "$id" ] || break
+  done
+  [ -n "$id" ] || { echo "tofu: Cloudflare did not verify CLOUDFLARE_API_TOKEN. See README.md." >&2; exit 1; }
+  AWS_ACCESS_KEY_ID="$id"
+  AWS_SECRET_ACCESS_KEY="$(printf %s "$CLOUDFLARE_API_TOKEN" | (sha256sum 2>/dev/null || shasum -a 256) | cut -d' ' -f1)"
+  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
+  # init makes the state bucket the first time. Code 10004: it exists.
+  if [ "${1:-}" = init ] && [[ " $* " != *" -backend=false "* ]]; then
+    out="$(cf_api -X POST -H "Content-Type: application/json" \
+      -d "{\"name\":\"$CF_STATE_BUCKET\"}" \
+      "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/r2/buckets" || true)"
+    if [[ "$out" != *'"success":true'* ]] && [[ "$out" != *'"code":10004'* ]]; then
+      echo "tofu: cannot make the R2 bucket $CF_STATE_BUCKET. The token needs Workers R2 Storage: Edit. Cloudflare said: $out" >&2
+      exit 1
+    fi
+  fi
 fi
 
 cd "$here/$stack"
