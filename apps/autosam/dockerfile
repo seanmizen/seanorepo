@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1.6
+#
+# autosam.seanmizen.com: one static page, public/index.html. The page has no
+# build step and no backend. `serve` sends it, with the headers in
+# public/serve.json.
+
+FROM node:lts-slim AS base
+WORKDIR /app
+RUN npm install -g serve
+EXPOSE 4090
+
+# docker-compose bind-mounts the monorepo at /app. Reload the browser to see
+# an edit.
+FROM base AS dev
+CMD ["serve", "apps/autosam/public", "-l", "4090"]
+
+FROM base AS prod
+COPY apps/autosam/public /app
+CMD ["serve", "-s", ".", "-l", "4090"]

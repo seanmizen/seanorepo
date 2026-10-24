@@ -22,6 +22,7 @@
     "voxel": "yarn workspace swindowzig native:voxel",
     "voxel:web": "yarn workspace swindowzig dev:voxel",
     "qc": "yarn workspace quarter-company qc",
+    "autosam": "yarn workspace autosam start",
     "ascii": "node utils/image-to-ascii/src/cli.mjs",
     "ascii-go": "go run -C utils/image-to-ascii ./cmd/image-to-ascii",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
