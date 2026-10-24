@@ -62,6 +62,7 @@ const train_car = @import("train_car.zig");
 const gates = @import("gates.zig");
 const vault_mod = @import("vault.zig");
 const platform_display = @import("platform_display.zig");
+const dyn_scale = @import("dyn_scale.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 const Mat4 = vec.Mat4;
@@ -101,6 +102,8 @@ var mode: Mode = .menu;
 var captured = false;
 var show_debug = false;
 var frame_ms: f32 = 16;
+/// The dynamic render scale (dyn_scale.zig).
+var scaler: dyn_scale.Scaler = .{};
 // Eye adaptation: the exposure moves toward the target of where the eye is.
 var exposure: f32 = 0.68;
 var time: f32 = 0;
@@ -442,6 +445,8 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     if (map_loaded and map.id == id) return;
     map.load(id);
     map_loaded = true;
+    // A new scene: learn the display interval again.
+    scaler.probe();
     // The choir of the secret room: made now, not on the first open.
     if (id == .earls_court) sounds.prepareChoir();
     pigeons.reset(@intFromFloat(rand() * 1e6));
@@ -2738,6 +2743,13 @@ fn drawHealthBars(r: *gfx.Renderer, w: f32, h: f32) !void {
     }
 }
 
+/// The scale of the 3D passes: the cvar render_scale when it is more than 0
+/// (0.5 at least), else the dynamic scale.
+fn renderScale() f32 {
+    const pin = gcon.render_scale.float();
+    return if (pin > 0) @max(pin, 0.5) else scaler.scale;
+}
+
 /// The debug screen (Cmd+D / Ctrl+D): frame, render, player, input, net.
 fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     const win = ctx.window();
@@ -2753,7 +2765,7 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
     };
     const fps = if (frame_ms > 0) 1000 / frame_ms else 0;
     L.add(&lines, &n, "{d:.0} fps   {d:.2} ms", .{ fps, frame_ms });
-    L.add(&lines, &n, "canvas {d}x{d}  dpi {d:.2}  scene {d}x{d}", .{ win.width, win.height, win.dpi_scale, render.scene_w, render.scene_h });
+    L.add(&lines, &n, "canvas {d}x{d}  dpi {d:.2}  scene {d}x{d}  scale {d:.2} {s}  display {d:.2} ms", .{ win.width, win.height, win.dpi_scale, render.scene_w, render.scene_h, renderScale(), if (gcon.render_scale.float() > 0) "pinned" else "auto", scaler.refresh_ms });
     L.add(&lines, &n, "triangles: map {d}  dynamic {d}  boxes {d}", .{ static_mesh.verts.items.len / 3, dyn.verts.items.len / 3, map.box_count });
     L.add(&lines, &n, "mode {s}  map {s}  pointer lock {s}", .{ @tagName(mode), @tagName(map.id), if (captured) "yes" else "no" });
     if (map.lift_count > 0) {
@@ -3110,6 +3122,7 @@ fn gameRender(ctx: *sw.Context) !void {
         .lights = lights[0..n],
         .translucent = trans.verts.items,
         .body = own,
+        .scale = renderScale(),
     }, dyn.verts.items, if (hud) |*r| r else null);
 }
 
@@ -3164,6 +3177,7 @@ fn wasmFrame(timestamp_ms: f64) callconv(.c) void {
     // Clamp a long frame (a background tab), so the game does not run
     // hundreds of ticks at once.
     const frame_ns = @min(now - wasm_last_ns, 100 * std.time.ns_per_ms);
+    _ = scaler.frame(@as(f32, @floatFromInt(now - wasm_last_ns)) / 1e6);
     frame_ms += (@as(f32, @floatFromInt(frame_ns)) / 1e6 - frame_ms) * 0.05;
     wasm_last_ns = now;
     const n = wasm_timeline.advance(frame_ns);

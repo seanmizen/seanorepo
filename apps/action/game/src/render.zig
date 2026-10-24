@@ -117,6 +117,9 @@ pub const FrameParams = struct {
     translucent: []const mesh.Vertex = &.{},
     /// Your body casts a shadow from the nearest map lights.
     body: Body = .{},
+    /// The dynamic render scale of the 3D passes (dyn_scale.zig), 0.5 to
+    /// 1. The HUD does not scale.
+    scale: f32 = 1,
 };
 
 pub const sun_dir = blk: {
@@ -596,9 +599,10 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     const gpu = ctx.gpu();
     if (!ready) return;
     const win = ctx.window();
-    // The 3D passes run at most 1.35 times the CSS pixel size. The final
-    // pass scales the result up to the full canvas.
-    const scale = @min(1.0, 1.35 / @max(win.dpi_scale, 0.5));
+    // The 3D passes run at most 1.35 times the CSS pixel size, times the
+    // dynamic render scale. The final pass scales the result up to the
+    // full canvas.
+    const scale = p.scale * @min(1.0, 1.35 / @max(win.dpi_scale, 0.5));
     const w: u32 = @max(1, @as(u32, @intFromFloat(@as(f32, @floatFromInt(win.width)) * scale)));
     const h: u32 = @max(1, @as(u32, @intFromFloat(@as(f32, @floatFromInt(win.height)) * scale)));
     try resize(gpu, w, h);
