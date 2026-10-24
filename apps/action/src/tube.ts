@@ -27,7 +27,8 @@ const PLATFORM_START = -112;
 const PLATFORM_LENGTH = 112;
 /** The station master level at a game volume of 1. */
 const MASTER = 0.8;
-/** The door warning before the doors move, s (train_sound.zig). */
+/** The door warning before the doors move, s (game/src/map.zig
+ * train_door_warning: the game doors move with the sound). */
 const DOOR_WARNING = 2;
 /** The largest error of the train position before a jump, m. */
 const MAX_DRIFT = 4;
