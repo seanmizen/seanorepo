@@ -99,8 +99,19 @@ if (canvas) {
     // jsReload: the game reloads the page to get a new version of itself
     // (game/src/game_console.zig reloadPage).
     // jsTubeTrain: the deep train sound (tube.ts, game/src/train_sound.zig).
+    // jsLocalSeconds: the local time of day in seconds, for the clock of the
+    // train indicators (game/src/platform_display.zig).
     env: {
       ...tubeImports,
+      jsLocalSeconds: () => {
+        const d = new Date();
+        return (
+          d.getHours() * 3600 +
+          d.getMinutes() * 60 +
+          d.getSeconds() +
+          d.getMilliseconds() / 1000
+        );
+      },
       jsReload: () => {
         location.reload();
         return undefined;

@@ -34,7 +34,7 @@ pub const Mesh = struct {
         }) catch {};
     }
 
-    fn quad(self: *Mesh, a: V3, b: V3, c: V3, d: V3, n: V3, col: V3, mat: f32) void {
+    pub fn quad(self: *Mesh, a: V3, b: V3, c: V3, d: V3, n: V3, col: V3, mat: f32) void {
         self.push(a, n, col, mat);
         self.push(b, n, col, mat);
         self.push(c, n, col, mat);
