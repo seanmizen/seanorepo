@@ -1,8 +1,9 @@
 name: Infra check (OpenTofu)
 
 # Checks the OpenTofu stacks without secrets: format, validate, and one
-# import block for each resource. Plan and apply need the tokens, so they
-# run on Sean's machine only. Apply runs only from release (infra/tofu).
+# import block for each resource. The plan job shows the cloudflare plan
+# with the CLOUDFLARE_API_TOKEN secret. infra-apply.yml applies cloudflare
+# on release. The github stack plans and applies on Sean's machine only.
 
 on:
   pull_request:
@@ -35,8 +36,33 @@ jobs:
 
       - name: Validate
         run: |
-          infra/tofu ${{ matrix.stack }} init -input=false
+          infra/tofu ${{ matrix.stack }} init -backend=false -input=false
           infra/tofu ${{ matrix.stack }} validate
 
       - name: Every resource has an import block
         run: infra/check-imports.sh
+
+  # The plan of the cloudflare stack against the live state in R2, in the
+  # job summary. It changes nothing. infra-apply.yml applies on release.
+  plan:
+    name: tofu plan (cloudflare)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A fork PR gets no secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      CLOUDFLARE_SECRETS: /nonexistent
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plan
+        run: |
+          infra/tofu cloudflare init -input=false
+          infra/tofu cloudflare plan -input=false -lock=false -no-color | tee plan.txt
+          {
+            echo '### tofu plan (cloudflare)'
+            echo '```'
+            grep -E '^(Plan:|No changes|  # )' plan.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

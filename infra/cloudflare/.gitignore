@@ -3,7 +3,7 @@
 .terraform/
 # The API token.
 .secrets
-# The state is a local cache. The import blocks rebuild it (README.md).
+# An old local state. The state is in R2 now (README.md).
 *.tfstate
 *.tfstate.backup
 *.tfstate.*.backup

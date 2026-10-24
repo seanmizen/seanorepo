@@ -2,8 +2,10 @@
 
 The Cloudflare setup for all of Sean's sites, in OpenTofu: the zones, the
 DNS records, the tunnel and its ingress rules. Git holds the code. The
-state is a local cache that git ignores. One import block for each
-resource rebuilds it (see "The state").
+state is in the R2 bucket `seanorepo-tofu-state`, which CI and every
+checkout share. A push to `release` applies the stack in CI
+(`.github/workflows/infra-apply.yml`). One import block for each resource
+rebuilds a lost state (see "The state").
 
 ## Setup (once per machine)
 
@@ -17,9 +19,18 @@ resource rebuilds it (see "The state").
    | Account | Account Settings           | Read   |
    | Zone    | Zone                       | Read   |
    | Zone    | DNS                        | Edit   |
+   | Account | Workers R2 Storage         | Edit   |
 
    Under *Zone Resources*, include only seanmizen.com, carolinemizen.art
    and seansconverter.com.
+
+   CI uses the same token. Put it in the repo secret
+   `CLOUDFLARE_API_TOKEN`:
+
+   ```bash
+   . ~/.config/seanorepo/cloudflare.secrets
+   printf %s "$CLOUDFLARE_API_TOKEN" | gh secret set CLOUDFLARE_API_TOKEN --repo seanmizen/seanorepo
+   ```
 
 2. Put the token in `~/.config/seanorepo/cloudflare.secrets`:
 
@@ -42,12 +53,16 @@ resource rebuilds it (see "The state").
    git worktree add ~/projects/seanorepo-release release
    ```
 
-4. Run `./tofu init`.
+4. Run `./tofu init`. It makes the R2 bucket if it does not exist. A
+   checkout that used the old local state needs `./tofu init -reconfigure`
+   once. Then delete its `terraform.tfstate`. R2 holds the state now.
 
 `./tofu` calls the shared wrapper `infra/tofu`. It downloads the pinned
 OpenTofu on first use, checks its SHA-256, and loads the secrets file. It
 needs `curl`, `unzip` and `sha256sum`. You do not install OpenTofu
-yourself. From the repo root, `yarn tofu cloudflare <command>` does the
+yourself. For this stack it also gives the S3 backend its keys: the ID of
+the API token and the SHA-256 of its value. These are the R2 keys of a
+Cloudflare API token, so one token does both jobs. From the repo root, `yarn tofu cloudflare <command>` does the
 same. The other stack is `../github`.
 
 ## Every change
@@ -57,19 +72,19 @@ The wrapper refuses apply, destroy, import and `state rm`/`mv` in any other
 checkout, with changes that are not committed, or behind `origin/release`.
 Plan runs anywhere.
 
-1. Change the `.tf` files on a branch. Run `./tofu plan` and read it.
-2. Merge the PR, then run `yarn release`.
-3. In the `release` checkout:
-
-   ```bash
-   git pull --ff-only
-   ./tofu plan     # shows what would change. Read it.
-   ./tofu apply
-   ```
-
-4. If the apply created a resource, add its import block to `imports.tf`
+1. Change the `.tf` files on a branch. The PR's "tofu plan (cloudflare)"
+   job puts the plan in its summary. Read it.
+2. Merge the PR, then run `yarn release`. The "Infra apply" workflow
+   plans and applies the stack from `release`. Only one apply runs at a
+   time, and the R2 lock file stops an apply from a checkout at the same
+   time.
+3. If the apply created a resource, add its import block to `imports.tf`
    in a new PR. The ID is in `./tofu state show <resource>`. Until then,
-   `infra/check-imports.sh` fails in CI.
+   `infra/check-imports.sh` fails in CI, and the apply run shows a
+   warning.
+
+To apply by hand, run `git pull --ff-only`, `./tofu plan` and
+`./tofu apply` in the `release` checkout.
 
 If `plan` shows a change that you did not make, someone changed Cloudflare
 by hand. Apply puts it back to what git says. To keep the manual change,
@@ -82,7 +97,8 @@ copy it into the `.tf` files first.
 - `tunnel.tf`: the tunnel.
 - `imports.tf`: one import block for each resource. They do nothing when
   the state has the resource. They rebuild a lost state.
-- `terraform.tfstate`: the state. Git ignores it.
+- The state: `cloudflare/terraform.tfstate` in the R2 bucket
+  `seanorepo-tofu-state`.
 
 ## Add a hostname for a tunnel site
 
@@ -110,9 +126,10 @@ Cloudflare holds the settings. So a lost or old state loses no settings.
 It only makes OpenTofu forget which object is which. The import blocks
 give it the IDs again:
 
-1. Delete `terraform.tfstate`.
+1. Delete `cloudflare/terraform.tfstate` from the R2 bucket.
 2. `./tofu init`, then `./tofu plan`. The plan must show only imports.
-3. `./tofu apply` from the `release` checkout.
+3. Run the "Infra apply" workflow on `release`, or `./tofu apply` from
+   the `release` checkout.
 
 To delete a resource, the state must hold it. Without it, OpenTofu does
 not know the object, and removing the code leaves the object live. So
@@ -123,5 +140,5 @@ block, and apply again.
 
 - Change Cloudflare only through these files. A change in the dashboard
   is lost at the next apply.
-- Apply from one `release` checkout only. Its state is the cache.
+- Apply only from `release`: CI, or a clean `release` checkout.
 - Never commit `.tofu/`, `.terraform/` or a plan file.
