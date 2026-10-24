@@ -1141,6 +1141,8 @@ const ParkedParts = struct {
         if (kind == .doorway) return;
         const b = map.add(min, max, color, mat, surface);
         b.ao = self.n < 2 or self.n == 4;
+        // The details draw the roof and the ends in the shape of the stock.
+        if (kind == .cover) b.visible = false;
         self.n += 1;
     }
 };
@@ -1149,6 +1151,9 @@ const ParkedParts = struct {
 const ParkedDetails = struct {
     pub fn box(_: ParkedDetails, min: V3, max: V3, color: V3, mat: Mat, surface: Surface) void {
         deco(min, max, color, mat, surface);
+    }
+    pub fn slab(_: ParkedDetails, m: Mat4, min: V3, max: V3, color: V3, mat: Mat, surface: Surface) void {
+        map.addDecor(m, min, max, color, mat, surface);
     }
 };
 

@@ -460,6 +460,9 @@ const TrainDetails = struct {
         const off = v3(self.x, 0, 0);
         dyn.box(min + off, max + off, color, @floatFromInt(@backingInt(mat)));
     }
+    pub fn slab(self: TrainDetails, m: Mat4, min: V3, max: V3, color: V3, mat: map.Mat, _: map.Surface) void {
+        dyn.orientedBox(vec.translate(v3(self.x, 0, 0)).mul(m), min, max, color, @floatFromInt(@backingInt(mat)));
+    }
 };
 
 /// The details of the deep train (train_car.zig): the door leaves, the
