@@ -130,9 +130,7 @@ pub fn timetable() Timetable {
         .brake_in = map.train_brake_in,
         .stop = map.train_stop,
         .depart = map.train_depart,
-        // map.train_doors_warn comes with the door timing of the trains.
-        // Until then: 6 s before the train pulls out.
-        .warn = if (@hasDecl(map, "train_doors_warn")) map.train_doors_warn else map.train_depart - 6,
+        .warn = map.train_doors_warn,
     };
 }
 

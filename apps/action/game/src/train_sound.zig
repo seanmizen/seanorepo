@@ -25,7 +25,8 @@ const V3 = vec.V3;
 ///   throttle  0..1
 ///   brake     0..1
 ///   doors     1 = open, 0 = closed. A change from 1 to 0 starts the
-///             door warning. The doors move `door_warning` s later.
+///             door warning. The doors move map.train_door_warning s
+///             later.
 ///   lx        the track x of the listener, m
 ///   lateral   the distance from the listener to the track centre, m
 ///   rx, rlat  the right ear of the listener: along the track, and away
@@ -41,8 +42,6 @@ const line_speed: f32 = map.train_line_speed;
 /// The time in the cycle where the sound changes from the train that left
 /// to the next train, s: the train that left stops.
 const swap_t: f32 = map.train_parked;
-/// The time of the door warning before the doors move, s (tube.ts).
-const door_warning: f32 = 2;
 
 const Motion = struct { x: f32, speed: f32, throttle: f32, brake: f32 };
 
@@ -77,7 +76,9 @@ pub fn update(train: ?map.Train, eye: V3, yaw: f32, hear: bool) void {
     const tr = train orelse return jsTubeTrain(-3000, 0, 0, 0, 0, 0, 3, 1, 0, 0, 0);
     const m = motion(tr.t);
     const front = -(tr.stop_x + m.x - tr.body.half_len);
-    const doors: f32 = if (map.trainDoors(tr.t) > 0.01 and map.trainDoors(tr.t + door_warning) > 0.5) 1 else 0;
+    // The doors move with the sound: map.trainDoors follows the sound
+    // from these commands.
+    const doors: f32 = if (tr.t >= map.train_doors_open and tr.t < map.train_doors_warn) 1 else 0;
 
     // The listener: the eye, measured from the track centre line at the
     // height of the motors and the wheels.
@@ -112,4 +113,10 @@ test "the sound motion meets the game curve" {
     // The doors are closed before the train moves.
     try std.testing.expectEqual(@as(f32, 0), map.trainDoors(map.train_depart));
     try std.testing.expectEqual(@as(f32, 0), map.trainDoors(map.train_stop));
+    try std.testing.expect(map.trainDoors(map.train_depart - 2.2) < 1e-3);
+    // The leaves move only after the sound command, and they are fully
+    // open between the two commands.
+    try std.testing.expectEqual(@as(f32, 0), map.trainDoors(map.train_doors_open + 0.2));
+    try std.testing.expectEqual(@as(f32, 1), map.trainDoors(map.train_doors_open + 2));
+    try std.testing.expectEqual(@as(f32, 1), map.trainDoors(map.train_doors_warn + map.train_door_warning));
 }

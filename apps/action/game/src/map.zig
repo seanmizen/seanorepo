@@ -578,8 +578,9 @@ pub const Train = struct {
         const b = add(min, max, color, mat, surface);
         b.dynamic = true;
         b.ao = false;
-        // The details of main.zig draw the door leaves.
-        if (kind == .doorway) b.visible = false;
+        // The details of main.zig draw the door leaves, the roof and the
+        // ends.
+        if (kind == .doorway or kind == .cover) b.visible = false;
         const i = indexOf(b) orelse {
             self.full = true;
             return;
@@ -653,10 +654,40 @@ pub fn trainX(t: f32) f32 {
     return -far - brake_d;
 }
 
-/// The doors: 0 closed, 1 open. They open 1 s after the stop and are
-/// closed 2.8 s before the train pulls out.
+/// The door times of the cycle. The sound of the doors (train_sound.zig,
+/// src/tube.ts, utils/tube-sounds) starts at these times, and the doors
+/// move with it:
+/// - train_doors_open: the doors open, 1 s after the stop.
+/// - train_doors_warn: the door warning beeps start. The doors close
+///   `train_door_warning` s later, and are shut 2.2 s before the train
+///   pulls out.
+pub const train_doors_open: f32 = train_stop + 1;
+pub const train_doors_warn: f32 = train_depart - 6;
+pub const train_door_warning: f32 = 2;
+/// The delay from a door command to the start of the leaf movement in the
+/// sound, s: the schedule lead of tube.ts (0.05), the mean random delay
+/// of a car (train.ts doorsOpen 0.12 / 2, doorsClose 0.1 / 2) and of a
+/// door (0.15 / 2, 0.18 / 2), and the valve lead of the 1973 Stock door
+/// engine (core/synth.ts VALVE_LEAD 0.08).
+const door_lead_open: f32 = 0.05 + 0.06 + 0.075 + 0.08;
+const door_lead_close: f32 = 0.05 + 0.05 + 0.09 + 0.08;
+/// The leaf travel times of the pneumatic doors, s (core/synth.ts
+/// DOOR_TRAVEL.pneumatic).
+const door_travel_open: f32 = 1.26;
+const door_travel_close: f32 = 1.5;
+
+/// The movement of a door leaf along its travel, 0 to 1: the integral of
+/// the speed curve of the slide sound (core/synth.ts doorSlide), which
+/// starts slowly, runs, and slows to the stop.
+fn doorTravel(u: f32) f32 {
+    return (1 - @cos(std.math.pi * vec.clamp01(u))) / 2;
+}
+
+/// The doors: 0 closed, 1 open.
 pub fn trainDoors(t: f32) f32 {
-    return vec.smooth((t - train_stop - 1) / 1.2) * (1 - vec.smooth((t - train_depart + 4) / 1.2));
+    const o = doorTravel((t - train_doors_open - door_lead_open) / door_travel_open);
+    const c = doorTravel((t - train_doors_warn - train_door_warning - door_lead_close) / door_travel_close);
+    return o * (1 - c);
 }
 
 pub fn stepTrain(dt: f32) void {
@@ -703,7 +734,7 @@ pub fn trainPartOf(b: usize) bool {
 pub fn trainInside(feet: V3) ?Platform {
     const tr = if (train) |*t| t else return null;
     const b = &tr.body;
-    if (@abs(feet[0] - tr.centre()) >= b.half_len - train_car.cab_end) return null;
+    if (@abs(feet[0] - tr.centre()) >= b.half_len - b.stock.cab) return null;
     if (feet[2] <= b.innerZ0() or feet[2] >= b.innerZ1()) return null;
     if (feet[1] < b.floor_y - platform_reach or feet[1] > b.ceil_y) return null;
     const fb = boxes[tr.floor];

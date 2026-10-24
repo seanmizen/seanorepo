@@ -28,6 +28,7 @@ test {
     _ = @import("pigeons_test.zig");
     _ = @import("secret_room_test.zig");
     _ = @import("train_sound.zig");
+    _ = @import("train_car.zig");
     _ = @import("platform_display.zig");
 }
 
