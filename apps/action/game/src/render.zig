@@ -59,7 +59,8 @@ pub const SceneUniforms = extern struct {
     sun_dir: [4]f32,
     sun_col: [4]f32,
     info: [4]f32,
-    /// x: the underground height, y: the in-scatter strength.
+    /// x: the underground height, y: the in-scatter strength, z: the
+    /// exposure of the tone map (scene.wgsl haze).
     info2: [4]f32,
     /// The lights of your body: for slot d, the index of the light (from
     /// 1) in lp and lc, or 0.
@@ -625,7 +626,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     su.sun_col = .{ sun_col[0], sun_col[1], sun_col[2], 0 };
     const nl = @min(p.lights.len, max_lights);
     su.info = .{ 0, @floatFromInt(nl), 0.0045, 1 };
-    su.info2 = .{ map.underground_y, 1, 0, 0 };
+    su.info2 = .{ map.underground_y, 1, p.exposure, 0 };
     su.sealed_lo = .{ map.sealed[0][0], map.sealed[0][1], map.sealed[0][2], 0 };
     su.sealed_hi = .{ map.sealed[1][0], map.sealed[1][1], map.sealed[1][2], 0 };
     su.grid_o = grid_origin;
