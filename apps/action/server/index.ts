@@ -42,6 +42,12 @@
 // passage of each lane to the other players, so the paddles are the same
 // on each client. The fares stay on the client.
 //
+// The secret room of VAPES N MORE (game/src/secret_room.zig): the first
+// player who opens its door tells the server. The server sends it to the
+// other players, and to each player who joins later, until the next match.
+// A blessing of MORE (the golden pigeon) goes to the other players too, so
+// they see the halo and the shine. The effects stay on the client.
+//
 // The pigeons (pigeons.ts): the server owns the state of each pigeon and of
 // each body. The client that startles or kills a pigeon decides, and the
 // server checks and sends the event. The server decides the joyrides and
@@ -88,6 +94,10 @@
 //   {t:"chat", ch:"all"|"team", text}             a chat message
 //   {t:"gate", k:"open"|"pass", i}                the player tapped the reader of
 //                                                 lane i, or walked through it
+//   {t:"more", k:"open"}                          the player opened the door of
+//                                                 the secret room (GET MORE)
+//   {t:"more", k:"bless"}                         the player took MORE (the
+//                                                 golden pigeon)
 //   {t:"pg", k, i, g, sd, o:[x,y,z], v:[x,y,z]}   a pigeon event (pigeons.ts):
 //                                                 k "up" (a takeoff or a startle
 //                                                 in flight, sd its seed), "die",
@@ -130,6 +140,12 @@
 //                                 start or end, or "Too many messages" to
 //                                 the sender
 //   {t:"gate", k, i, id}          player id tapped lane i or walked through it
+//   {t:"more", k:"open", id}      player id opened the secret room: open
+//                                 its door, with the choir
+//   {t:"more", k:"now"}           on join: the secret room is open. Open
+//                                 its door at once, with no choir
+//   {t:"more", k:"bless", id}     player id took MORE: the halo and the
+//                                 shine for 45 s, or to its death
 //   {t:"pg", k, i, g, sd, o, v, id}  a pigeon event of player id. "grab" goes
 //                                 to all: id is the holder. Also from the
 //                                 server: {k:"joy", i, sd, pr:[rod, u]} and
@@ -447,6 +463,9 @@ let nextId = 1;
 const flock = new Flock(Date.now());
 /// The lanes of the ticket gates: gates.zig max_lanes.
 const GATE_LANES = 16;
+/// The door of the secret room is open (secret_room.zig). A new match
+/// shuts it.
+let moreOpen = false;
 let phase: 'play' | 'end' = 'play';
 
 runConfigFile(serverConsole, SERVER_CONFIG, log);
@@ -770,6 +789,18 @@ function onGate(p: Player, msg: Record<string, unknown>): void {
   broadcast({ t: 'gate', k, i, id: p.id }, p.id);
 }
 
+/** GET MORE: the first player opens the door of the secret room for all
+ * the players. MORE: a blessing, only with the door open. */
+function onMore(p: Player, msg: Record<string, unknown>): void {
+  if (!p.joined || !p.alive) return;
+  if (msg.k === 'open' && !moreOpen) {
+    moreOpen = true;
+    broadcast({ t: 'more', k: 'open', id: p.id }, p.id);
+  } else if (msg.k === 'bless' && moreOpen) {
+    broadcast({ t: 'more', k: 'bless', id: p.id }, p.id);
+  }
+}
+
 function snapshot(): object {
   const list = [];
   for (const p of players.values()) {
@@ -835,6 +866,7 @@ function step(): void {
         p.d = 0;
         if (p.joined) spawn(p);
       }
+      moreOpen = false;
       broadcast({ t: 'match' });
       serverLine(
         `A new match started: ${timeText(cvars.number('match_seconds'))}.`,
@@ -946,6 +978,7 @@ const server = Bun.serve<Conn>({
         p.joined = true;
         send(p, { t: 'cvars', cv: cvars.publicPairs() });
         send(p, flock.state(true));
+        if (moreOpen) send(p, { t: 'more', k: 'now' });
         serverLine(`${p.name} joined.`);
         if (phase === 'play') spawn(p);
         else p.respawnAt = 0;
@@ -1003,6 +1036,8 @@ const server = Bun.serve<Conn>({
         broadcast({ t: 'lift', i, l: level });
       } else if (msg.t === 'gate') {
         onGate(p, msg);
+      } else if (msg.t === 'more') {
+        onMore(p, msg);
       } else if (msg.t === 'pg' && p.joined) {
         for (const o of flock.onMessage(p.id, msg, Date.now())) {
           if (o.to === 'sender') send(p, o.msg);

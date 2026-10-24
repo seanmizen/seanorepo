@@ -56,6 +56,7 @@ const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
 const pigeons = @import("pigeons.zig");
 const vapes = @import("vapes.zig");
+const secret = @import("secret_room.zig");
 const train_sound = @import("train_sound.zig");
 const train_car = @import("train_car.zig");
 const gates = @import("gates.zig");
@@ -191,6 +192,8 @@ const Remote = struct {
     /// The lift whose cab the player stands in, or -1. The feet then stay
     /// on the cab floor of this client.
     lift: i32 = -1,
+    /// The seconds left of a blessing of MORE (secret_room.zig), or 0.
+    blessed: f32 = 0,
     /// A rider of the deep train: the feet x from the train centre, and
     /// its smoothed value. The player then stands in the train of this
     /// client.
@@ -435,6 +438,8 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     if (map_loaded and map.id == id) return;
     map.load(id);
     map_loaded = true;
+    // The choir of the secret room: made now, not on the first open.
+    if (id == .earls_court) sounds.prepareChoir();
     pigeons.reset(@intFromFloat(rand() * 1e6));
     static_mesh.clear();
     for (map.boxes[0..map.box_count]) |b| {
@@ -526,6 +531,30 @@ fn aimedButton() ?usize {
 fn aimedVape() ?usize {
     if (mode != .deathmatch or !alive or vapes.since != null) return null;
     return vapes.pick(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
+/// The GET MORE pack on the back shelf of VAPES N MORE, under the
+/// crosshair (secret_room.zig). It opens the door of the secret room.
+fn aimedGetMore() bool {
+    if (mode == .menu or !alive) return false;
+    return secret.pickGetMore(me.eyePos(), vec.forward(me.yaw, me.pitch));
+}
+
+/// The golden vape on the plinth of the secret room, under the crosshair.
+fn aimedMore() bool {
+    if (mode == .menu or !alive) return false;
+    return secret.pickMore(me.eyePos(), vec.forward(me.yaw, me.pitch));
+}
+
+/// Open the door of the secret room: the choir and a heavy click of the
+/// lock. `local`: this player pressed GET MORE, so the other players get it
+/// too.
+fn openSecret(local: bool) void {
+    if (!secret.open()) return;
+    sounds.choir(secret.doorCentre());
+    sound(70, 45, 0.35, .square, 0.12);
+    sound(1, null, 0.5, .noise, 0.05);
+    if (local and mode == .deathmatch) client.send("{{\"t\":\"more\",\"k\":\"open\"}}", .{});
 }
 
 /// The dead pigeon under the crosshair, within reach (pigeons.zig).
@@ -928,7 +957,7 @@ fn fire() void {
     const st = weapon.statsOf(it.*);
     shots += 1;
     const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
-    const sp = loadout.hands.spread(st, moving, !me.grounded);
+    const sp = shotSpread(st, moving);
     const f = vec.forward(me.yaw, me.pitch);
     const right = vec.norm(vec.cross(f, v3(0, 1, 0)));
     const up = vec.cross(right, f);
@@ -1055,6 +1084,41 @@ fn stab() void {
         addSparks(o + f * vec.s(c.t), c.normal, v3(1.0, 0.85, 0.6), 4);
         sound(2400, 1800, 0.05, .square, 0.06);
     };
+}
+
+/// The cone half angle of the next shot. A blessing of MORE
+/// (secret_room.zig) has no spread, also on the move and in the air.
+fn shotSpread(st: *const weapon.Stats, moving: f32) f32 {
+    if (secret.blessed != null) return 0;
+    return loadout.hands.spread(st, moving, !me.grounded);
+}
+
+/// A blessing of MORE (secret_room.zig): the aim locks on the head of the
+/// live enemy nearest the middle of the screen, in sight and within
+/// secret.aim_cone. The crosshair and the gun follow the aim.
+fn autoAim() void {
+    if (secret.blessed == null or mode != .deathmatch or !alive) return;
+    const eye = me.eyePos();
+    const f = vec.forward(me.yaw, me.pitch);
+    var aim_at: ?V3 = null;
+    var best_a: f32 = secret.aim_cone;
+    for (remotes[0..remote_n]) |*r| {
+        if (!r.alive) continue;
+        const hb = player_mod.hitBoxes(r.pos, r.yaw, r.lean)[2];
+        const head = (hb.min + hb.max) * vec.s(0.5);
+        const d = head - eye;
+        const l = vec.len(d);
+        if (l < 0.3) continue;
+        const a = std.math.acos(std.math.clamp(vec.dot(f, d / vec.s(l)), -1, 1));
+        if (a >= best_a) continue;
+        if (map.raycast(eye, d / vec.s(l), l - 0.2) != null) continue;
+        best_a = a;
+        aim_at = head;
+    }
+    const h = aim_at orelse return;
+    const d = vec.norm(h - eye);
+    me.yaw = std.math.atan2(-d[0], -d[2]);
+    me.pitch = std.math.asin(std.math.clamp(d[1], -1, 1));
 }
 
 /// The camera kick of a shot: the recoil pattern of the held gun
@@ -1447,6 +1511,7 @@ fn handleNet(ctx: *sw.Context) void {
                 killed_by_len = copyName(&killed_by, m.kname orelse "?");
                 died_of = m.by != null;
                 vapes.stop();
+                secret.blessed = null;
                 sound(300, 60, 0.6, .sawtooth, 0.3);
             }
             if (killer == my_id and victim != my_id) {
@@ -1455,7 +1520,10 @@ fn handleNet(ctx: *sw.Context) void {
                 sound(900, null, 0.06, .sine, 0.25);
                 sound(1350, null, 0.12, .sine, 0.2);
             }
-            if (findRemote(victim)) |r| r.alive = false;
+            if (findRemote(victim)) |r| {
+                r.alive = false;
+                r.blessed = 0;
+            }
         } else if (std.mem.eql(u8, m.t, "nade")) {
             // Another player threw: fly the same path, for the visuals.
             if (m.o != null and m.v != null) {
@@ -1473,6 +1541,18 @@ fn handleNet(ctx: *sw.Context) void {
             handleFlock(m);
         } else if (std.mem.eql(u8, m.t, "match")) {
             pushFeed("NEW MATCH", false);
+            secret.shut();
+            secret.blessed = null;
+            for (remotes[0..remote_n]) |*r| r.blessed = 0;
+        } else if (std.mem.eql(u8, m.t, "more")) {
+            // Another player opened the secret room, or it was open
+            // before this player joined ("now").
+            const k = m.k orelse "";
+            if (std.mem.eql(u8, k, "now")) {
+                secret.openNow();
+            } else if (std.mem.eql(u8, k, "bless")) {
+                if (findRemote(m.id orelse 0)) |r| r.blessed = secret.bless_time;
+            } else openSecret(false);
         } else if (std.mem.eql(u8, m.t, "cvars")) {
             // The server cvars: on join and on each change.
             if (m.cv) |list| gcon.onServerCvars(list);
@@ -1505,6 +1585,7 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     const back = loadout.hands.recover(loadout.heldStats(), dt, look_up);
     me.pitch = std.math.clamp(me.pitch + back[0], -1.5, 1.5);
     me.yaw -= back[1];
+    autoAim();
 
     var wish = v3(0, 0, 0);
     // Ctrl and Cmd start a shortcut (Cmd+D debug): no movement while held.
@@ -1520,7 +1601,9 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     }
     const jump = !frozen and act.down(.jump);
     // The held weapon sets the walk speed (weapon.zig table).
-    const speed_scale: f32 = (1 - 0.45 * loadout.hands.ads) * loadout.heldStats().speed;
+    // A blessing of MORE (secret_room.zig) is faster.
+    const bless_k: f32 = if (secret.blessed != null) secret.bless_speed else 1;
+    const speed_scale: f32 = (1 - 0.45 * loadout.hands.ads) * loadout.heldStats().speed * bless_k;
     if (mode != .deathmatch or alive) {
         // Space while walking forward, into a waist-high shape: a vault
         // onto it. A vault onto the gates is a fare dodge.
@@ -1565,6 +1648,16 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
         } else if (aimedPigeon()) |i| {
             pigeons.grab(i);
             sound(420, 300, 0.05, .triangle, 0.1);
+        } else if (aimedGetMore()) {
+            openSecret(true);
+        } else if (aimedMore()) {
+            // MORE: a bright chord, and the blessing (secret_room.zig).
+            secret.bless();
+            sound(1174.7, null, 1.4, .sine, 0.1);
+            sound(1480, null, 1.4, .sine, 0.08);
+            sound(1760, null, 1.8, .sine, 0.08);
+            sound(2349.3, null, 2.2, .sine, 0.05);
+            if (mode == .deathmatch) client.send("{{\"t\":\"more\",\"k\":\"bless\"}}", .{});
         } else if (aimedVape() != null) {
             // A long drag: a hiss, and a crackle of the coil.
             vapes.start();
@@ -1844,6 +1937,8 @@ fn tick(ctx: *sw.Context) void {
 
     // The deep train moves. Its riders move with it below (map.Platform).
     map.stepTrain(dt);
+    secret.step(dt);
+    for (remotes[0..remote_n]) |*r| r.blessed = @max(0, r.blessed - dt);
     // The sound of the train (train_sound.zig, utils/tube-sounds).
     train_sound.update(map.train, me.eyePos(), me.yaw, mode != .menu and me.pos[1] < map.underground_y - 4);
 
@@ -2256,7 +2351,7 @@ fn drawCrosshair(r: *gfx.Renderer, cx: f32, cy: f32) !void {
     // The grenade has its aim line, the knife a dot. A gun shows its cone.
     if (c_held != .grenade and c_held != .knife) {
         const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
-        const gap = 5 + loadout.hands.spread(loadout.heldStats(), moving, !me.grounded) * 700;
+        const gap = 5 + shotSpread(loadout.heldStats(), moving) * 700;
         const a: u8 = @intFromFloat(230 * (1 - loadout.hands.ads));
         const c = gfx.Color.rgba8(255, 255, 255, a);
         const len: f32 = 8;
@@ -2772,13 +2867,19 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (crosshair) try drawCrosshair(r, w / 2, h / 2);
     if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
     drawFares(r, w / 2, h / 2);
+    // A blessing of MORE (secret_room.zig): the seconds left.
+    if (secret.blessed) |left| {
+        var buf: [16]u8 = undefined;
+        txtCenter(r, std.fmt.bufPrint(&buf, "MORE  {d:.0}", .{@ceil(left)}) catch "MORE", w / 2, 70, 22, .{ .r = 1, .g = 0.82, .b = 0.35, .a = 1 });
+    }
     if (captured) {
         // The use hint: a pigeon in the hand, a button of the shooter panel,
-        // a lift button, a dead pigeon, or a vape.
+        // a lift button, a dead pigeon, the GET MORE pack, the golden vape,
+        // or a vape.
         const what: ?[]const u8 = if (pigeons.held != null) "THROW PIGEON" else if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
             const b = map.buttons[bi];
             break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedVape() != null) "USE VAPE" else null;
+        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedGetMore()) "GET MORE" else if (aimedMore()) "MORE" else if (aimedVape() != null) "USE VAPE" else null;
         if (what) |wt| {
             var kb: [24]u8 = undefined;
             var line: [48]u8 = undefined;
@@ -2867,6 +2968,14 @@ fn gameRender(ctx: *sw.Context) !void {
     if (map.id == .earls_court) buildEscalatorSteps();
     pigeons.build(&dyn, time);
     gates.build(&dyn);
+    secret.build(&dyn);
+    // The halos of MORE: yours, and those of the other players.
+    if (secret.blessed) |left| secret.buildHalo(&dyn, me.eyePos(), secret.shine(left), time, 0);
+    for (remotes[0..remote_n]) |*r| {
+        if (!r.alive or r.blessed <= 0) continue;
+        const hb = player_mod.hitBoxes(r.pos, r.yaw, r.lean)[2];
+        secret.buildHalo(&dyn, (hb.min + hb.max) * vec.s(0.5), secret.shine(r.blessed), time, @floatFromInt(r.id));
+    }
     if (mode == .practice) {
         for (&targets) |*t| buildTarget(t);
         for (&range.dummies) |*d| buildDummy(d);
@@ -2886,6 +2995,10 @@ fn gameRender(ctx: *sw.Context) !void {
     const cam_r = v3(@cos(cam.yaw), 0, -@sin(cam.yaw));
     grenade.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
     impact_fx.buildTranslucent(&trans, cam_r, vec.cross(cam_r, cam_f));
+    secret.buildTranslucent(&trans, cam_r);
+    for (remotes[0..remote_n]) |*r| {
+        if (r.alive and r.blessed > 0) secret.buildAura(&trans, r.pos, secret.shine(r.blessed), cam_r, vec.cross(cam_r, cam_f), time);
+    }
     if (show_debug) {
         grenade.buildDebug(alloc, &dyn, &trans, aimPrediction());
     } else if (grenadeAimShows()) {
@@ -2903,6 +3016,8 @@ fn gameRender(ctx: *sw.Context) !void {
             // A tired tube: mostly on, with short drops and stutters.
             lights[n].color = l.color * vec.s(if (flickerOn()) 1.0 else 0.08);
         }
+        // The secret room is dark until its door opens.
+        if (secret.isRoomLight(i)) lights[n].color = l.color * vec.s(secret.glow());
         n += 1;
     }
     // The trains: a light inside, over the place in the car nearest the
@@ -2946,6 +3061,17 @@ fn gameRender(ctx: *sw.Context) !void {
         n += 1;
     }
     n += grenade.lights(lights[n..]);
+    // A blessing of MORE: the player shines gold on the things near.
+    if (secret.blessed) |left| if (n < render.max_lights and alive) {
+        lights[n] = .{ .pos = me.pos + v3(0, 1.2, 0), .color = v3(1.8, 1.4, 0.7) * vec.s(secret.shine(left)), .radius = 5 };
+        n += 1;
+    };
+    for (remotes[0..remote_n]) |*r| {
+        if (n >= render.max_lights) break;
+        if (!r.alive or r.blessed <= 0) continue;
+        lights[n] = .{ .pos = r.pos + v3(0, 1.2, 0), .color = v3(2.2, 1.7, 0.8) * vec.s(secret.shine(r.blessed)), .radius = 6 };
+        n += 1;
+    }
     // Underground the eye opens up: about 2.4 times the outdoor exposure.
     const out_k = vec.smooth((cam.eye[1] - (map.underground_y - 5)) / 5);
     const target_exposure = 0.68 * (2.4 - 1.4 * out_k);

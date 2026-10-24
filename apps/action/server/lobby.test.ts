@@ -352,6 +352,46 @@ describe('gates and pigeons', () => {
   });
 });
 
+describe('the secret room', () => {
+  test('GET MORE opens the door for the others and for a later join; MORE blesses', async () => {
+    const port = await start('', {});
+    const a = new Client(port);
+    const b = new Client(port);
+    const aid = (await a.next((m) => m.t === 'welcome')).id;
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'spawn');
+    await b.send({ ...hello, name: 'Bob' });
+    await b.next((m) => m.t === 'spawn');
+
+    // A bad kind goes nowhere. The first open goes to the other players,
+    // not back to the sender. A second open goes nowhere.
+    const n = b.msgs.length;
+    const m = a.msgs.length;
+    const more = (x: Msg) => x.t === 'more';
+    await a.send({ t: 'more', k: 'shut' });
+    await a.send({ t: 'more', k: 'bless' });
+    await a.send({ t: 'more', k: 'open' });
+    expect(await b.next(more, n)).toEqual({ t: 'more', k: 'open', id: aid });
+    await b.send({ t: 'more', k: 'open' });
+    await Bun.sleep(50);
+    expect(b.msgs.slice(n).filter(more).length).toBe(1);
+    expect(a.msgs.slice(m).some(more)).toBe(false);
+
+    // A blessing goes to the others once the door is open.
+    const k = b.msgs.length;
+    await a.send({ t: 'more', k: 'bless' });
+    expect(await b.next(more, k)).toEqual({ t: 'more', k: 'bless', id: aid });
+
+    // A player who joins now finds the door open.
+    const c = new Client(port);
+    await c.send({ ...hello, name: 'Cat' });
+    expect(await c.next(more)).toEqual({ t: 'more', k: 'now' });
+    a.close();
+    b.close();
+    c.close();
+  });
+});
+
 describe('the deep train', () => {
   test('the snapshot gives the place of a rider in the train', async () => {
     const port = await start('', {});

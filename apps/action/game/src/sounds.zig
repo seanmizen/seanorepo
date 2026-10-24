@@ -129,6 +129,35 @@ pub fn muzzle(volume: f32, c: weapon.Class, pan: f32, delay: f32) void {
     }
 }
 
+/// The choir of the secret room (audio/choir.zig): made one time, on the
+/// first call to prepareChoir or choir.
+var choir_l: [sfx.choir.frames]f32 = undefined;
+var choir_r: [sfx.choir.frames]f32 = undefined;
+var choir_ready = false;
+
+/// Make the choir now, so the first play does not stop the frame. The
+/// game calls it when Earl's Court loads.
+pub fn prepareChoir() void {
+    if (choir_ready) return;
+    sfx.choir.render(&choir_l, &choir_r, 7);
+    choir_ready = true;
+}
+
+/// The angelic choir from p. It is loud near p and quiet far away. Past
+/// 80 m it does not play.
+pub fn choir(p: V3) void {
+    const a = audio orelse return;
+    const dist = vec.len(p - lis.pos);
+    if (dist > 80) return;
+    prepareChoir();
+    a.playBuffer(.{
+        .left = &choir_l,
+        .right = &choir_r,
+        .sample_rate = sfx.choir.rate,
+        .volume = 0.8 * std.math.clamp(10 / (dist + 8), 0.05, 1) * settings.sfx_volume.float(),
+    });
+}
+
 fn play(out: *const sfx.Out) void {
     const a = audio orelse return;
     if (out.n == 0) return;

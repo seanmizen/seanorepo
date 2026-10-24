@@ -1,5 +1,6 @@
-// Procedural bullet sounds: the near miss (a crack or a whiz) and the
-// impact on a surface material, placed in the space around the listener.
+// Procedural sounds: the near miss of a bullet (a crack or a whiz) and the
+// impact on a surface material, placed in the space around the listener,
+// and the choir of the secret room.
 // Each function writes stereo samples into a caller buffer. The caller
 // plays them (sw_audio Audio.playBuffer).
 //
@@ -10,10 +11,12 @@
 //   near_miss.zig  the Mach cone and the N-wave (supersonic), the whiz
 //                  with its Doppler shift (subsonic)
 //   impact.zig     the surface materials and their impact sounds
+//   choir.zig      an angelic choir (the secret room of VAPES N MORE)
 pub const dsp = @import("dsp.zig");
 pub const space = @import("space.zig");
 pub const near_miss = @import("near_miss.zig");
 pub const impact = @import("impact.zig");
+pub const choir = @import("choir.zig");
 
 pub const Rng = dsp.Rng;
 pub const rate = dsp.rate;
