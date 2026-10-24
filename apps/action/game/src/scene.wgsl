@@ -31,7 +31,7 @@ struct Scene {
   sun_dir: vec4f,  // xyz toward the sun
   sun_col: vec4f,
   info: vec4f,     // x AO box count, y light count, z fog density, w shadow on
-  info2: vec4f,    // x underground height, y in-scatter strength
+  info2: vec4f,    // x underground height, y in-scatter strength, z exposure (post.wgsl)
   body_l: vec4f,   // the light of each body slot: its index in lp and lc from 1, 0 none
   sealed_lo: vec4f, // map.zig sealed: a room with no sun, min and max
   sealed_hi: vec4f,
@@ -367,14 +367,30 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
 // from the ray point nearest to the light. If a wall hides that point from
 // a map light, that light gives no haze (a lamp behind a wall does not glow
 // through it).
-fn inScatter(ro: vec3f, rd: vec3f, far: f32) -> vec3f {
+//
+// `limit`: the loop skips a light whose haze is `limit` or less in each
+// channel (see haze). It skips the light before the atan when the upper
+// bound of its haze is in the limit, and before the shadow sample when its
+// haze with no shadow is in the limit. The bound of k: the integral over
+// the full line is pi / h at most, and the integral over the ray is the
+// ray length / (the distance from the light to the ray)^2 at most.
+fn inScatter(ro: vec3f, rd: vec3f, far: f32, limit: vec3f) -> vec3f {
   var acc = vec3f(0.0);
   let nl = u32(u.info.y);
   for (var i = 0u; i < nl; i++) {
     let lp = u.lp[i].xyz;
+    let lc = u.lc[i].rgb;
     let tc = dot(lp - ro, rd);
     let h = max(length(ro + rd * tc - lp), 0.25);
+    let near = distance(lp, ro + rd * clamp(tc, 0.0, far));
+    let k_max = min(3.14159265 / h, far / max(near * near, 1e-6));
+    if (all(lc * k_max <= limit)) {
+      continue;
+    }
     var k = (atan((far - tc) / h) - atan(-tc / h)) / h;
+    if (all(lc * k <= limit)) {
+      continue;
+    }
     let slot = u32(u.lc[i].w + 0.5);
     if (slot > 0u) {
       // A little in front of the surface, so the surface does not shadow it.
@@ -383,9 +399,43 @@ fn inScatter(ro: vec3f, rd: vec3f, far: f32) -> vec3f {
         k *= lightShadow(slot - 1u, u.lp[i], q);
       }
     }
-    acc += u.lc[i].rgb * k;
+    acc += lc * k;
   }
   return acc;
+}
+
+// The tone map of post.wgsl fs_final: the exposure, the colour weights,
+// ACES, the gamma. HAZE_STEP: the largest change of an output pixel that the
+// haze culling can make, half of one 8-bit step (the dither is one step).
+const TONE_W = vec3f(1.02, 1.0, 0.97);
+const HAZE_STEP: f32 = 0.5 / 255.0;
+
+// The slope of the output (after the tone map and the gamma) for each
+// channel of the HDR colour c. The curve is concave for c >= 0, at each
+// exposure that main.zig uses (0.68 to 1.63). Thus an increase d of c
+// changes the output by slope(c) * d or less. The bloom and the vignette
+// only make the slope smaller.
+fn toneSlope(c: vec3f) -> vec3f {
+  let e = u.info2.z * TONE_W;
+  let x = max(c, vec3f(0.0)) * e;
+  let num = x * (2.51 * x + 0.03);
+  let den = x * (2.43 * x + 0.59) + 0.14;
+  let y = num / den;
+  let dy = ((5.02 * x + 0.03) * den - num * (4.86 * x + 0.59)) / (den * den);
+  // Above 1 the tone map clamps: the slope is 0.
+  let s = select(dy, vec3f(0.0), y >= vec3f(1.0));
+  return (1.0 / 2.2) * pow(max(y, vec3f(1e-12)), vec3f(1.0 / 2.2 - 1.0)) * s * e;
+}
+
+// The haze to add to a pixel of HDR colour `base`. The limit of each light
+// is HAZE_STEP / slope(base), divided by the light count and the haze
+// strength. Thus all the skipped lights together change the output pixel
+// by HAZE_STEP or less.
+fn haze(ro: vec3f, rd: vec3f, far: f32, base: vec3f, out_k: f32) -> vec3f {
+  let strength = u.info2.y * mix(0.022, 0.004, out_k);
+  let per_light = max(strength * u.info.y, 1e-9);
+  let limit = HAZE_STEP / max(toneSlope(base), vec3f(1e-9)) / per_light;
+  return inScatter(ro, rd, far, limit) * strength;
 }
 
 // ---- Lighting --------------------------------------------------------------
@@ -402,7 +452,7 @@ fn shade(in: VOut, front: bool) -> vec3f {
   let V = to_cam / dist;
   if (s.emit > 0.0) {
     var e = s.albedo * s.emit;
-    if (!vm) { e += inScatter(u.cam.xyz, -V, dist) * u.info2.y * mix(0.022, 0.004, out_k); }
+    if (!vm) { e += haze(u.cam.xyz, -V, dist, e, out_k); }
     return e;
   }
   var ao = 1.0;
@@ -524,7 +574,7 @@ fn shade(in: VOut, front: bool) -> vec3f {
     let fc_out = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
     let fc = mix(vec3f(0.012, 0.011, 0.01), fc_out, out_k);
     c = mix(c, fc, f);
-    c += inScatter(u.cam.xyz, vd, dist) * u.info2.y * mix(0.022, 0.004, out_k);
+    c += haze(u.cam.xyz, vd, dist, c, out_k);
   }
   return c;
 }
