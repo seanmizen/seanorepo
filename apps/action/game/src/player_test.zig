@@ -118,12 +118,20 @@ const z_offsets = [_]f32{ -0.7, 0, 0.7 };
 test "the stairs from the islands down to the intermediate level, down and up" {
     loadEarlsCourt();
     defer unload();
-    for (islands) |cz| for (z_offsets) |dz| for ([_]f32{ -1, 1 }) |side| {
+    for (islands) |cz| for (z_offsets) |dz| {
         const z = cz + dz;
-        // The wells are from |x| = 22 to 29. The stairs go down outward.
-        try check(.{ .name = "island down", .start = v3(20 * side, 0, z), .dir = side, .end_x = 30.5 * side, .end_y = ec.mid_y, .time = 3 });
-        try check(.{ .name = "island up", .start = v3(30.5 * side, ec.mid_y, z), .dir = -side, .end_x = 20 * side, .end_y = 0, .time = 3 });
+        // The west wells are from x = -29 to -22. The stairs go down west
+        // into the lower concourse.
+        try check(.{ .name = "island down", .start = v3(-20, 0, z), .dir = -1, .end_x = -30.5, .end_y = ec.mid_y, .time = 3 });
+        try check(.{ .name = "island up", .start = v3(-30.5, ec.mid_y, z), .dir = 1, .end_x = -20, .end_y = 0, .time = 3 });
     };
+    // The emergency stairs at the east end of island A: the well is from
+    // x = 48 to 55, and the stairs go down east.
+    for (z_offsets) |dz| {
+        const z = islands[0] + dz;
+        try check(.{ .name = "emergency down", .start = v3(46, 0, z), .dir = 1, .end_x = 56.5, .end_y = ec.mid_y, .time = 3 });
+        try check(.{ .name = "emergency up", .start = v3(56.5, ec.mid_y, z), .dir = -1, .end_x = 46, .end_y = 0, .time = 3 });
+    }
 }
 
 test "the stairs from the concourses down to the islands, down and up" {

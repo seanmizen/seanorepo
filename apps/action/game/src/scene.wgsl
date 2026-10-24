@@ -22,6 +22,8 @@
 const MAX_LIGHTS: u32 = 44u;
 // The first light shadow slot of your body: map.zig max_lights.
 const BODY_SLOT: u32 = 28u;
+// The LED grid of the train indicators: platform_display.zig pitch.
+const LED_PITCH: f32 = 0.012;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -301,6 +303,10 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
   // A 2D face coordinate: the two axes along the face.
   var uv = wp.xz;
   if (an.x > 0.5) { uv = wp.zy; } else if (an.z > 0.5) { uv = wp.xy; }
+  // The LED cells and their size on the screen (material 9). The
+  // derivatives must be in uniform control flow: here, not in the switch.
+  let led = uv / LED_PITCH;
+  let led_w = length(fwidth(led));
   switch (mat) {
     case 1u: { // concrete
       let k = 0.82 + 0.2 * fbm(wp * 1.7) + 0.06 * noise3(wp * 14.0);
@@ -370,6 +376,15 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
       let tone = 0.75 + 0.35 * hash3(id) + 0.1 * noise3(wp * 6.0);
       s.albedo = mix(vec3f(0.42, 0.4, 0.36), col * tone, mortar);
       s.rough = 0.9;
+    }
+    case 9u: { // LEDs: a round dot in each cell of the grid, black between
+      let d = length(fract(led) - 0.5);
+      let w = max(led_w, 0.001);
+      let dot = 1.0 - smoothstep(0.34 - w, 0.34 + w, d);
+      // Far away a cell is smaller than a pixel: the mean of the dot.
+      let k = mix(dot, 0.36, smoothstep(0.4, 1.0, w));
+      // A little above 0, so the black between the dots stays emissive.
+      s.emit = 7.0 * k + 0.001;
     }
     default: { // paint, and the gun
       s.rough = 0.4;

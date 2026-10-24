@@ -220,7 +220,7 @@ test "your body: on the stairs each planted foot is on its tread" {
     const ec = @import("maps/earls_court.zig");
     const walks = [_]Stairs{
         .{ .name = "island down", .start = v3(20, 0, 4.4), .dir = 1, .end_x = 30.5 },
-        .{ .name = "island up", .start = v3(30.5, ec.mid_y, 4.4), .dir = -1, .end_x = 20 },
+        .{ .name = "island up", .start = v3(-30.5, ec.mid_y, 4.4), .dir = 1, .end_x = -20 },
         .{ .name = "concourse down", .start = v3(-47, ec.street_y, -12.8), .dir = 1, .end_x = -37.8 },
         .{ .name = "escalator down", .start = v3(ec.esc_top_x - 2, ec.mid_y, -23.35), .dir = 1, .end_x = ec.esc_bottom_x + 1, .carries = true },
         .{ .name = "escalator up", .start = v3(ec.esc_bottom_x + 1, ec.deep_y, -21.65), .dir = -1, .end_x = ec.esc_top_x - 2, .carries = true },

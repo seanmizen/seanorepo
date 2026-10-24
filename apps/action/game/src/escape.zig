@@ -27,6 +27,8 @@
 // - The ramps over the stairs and the escalators (map.zig Ramp) are solid.
 //   On a ramp, the audit uses the highest feet height that a player in the
 //   cell can stand at, so it does not make a jump from a ramp too low.
+// - Then it checks that no spawn point is cut off: from spawn 1 the player
+//   can get to each spawn point, and from each spawn point to spawn 1.
 // - The audit ignores dynamic boxes: the landing doors count as open, and the
 //   deep train is not there. Each lift cab gets its floor and its ceiling at
 //   each level, and a player in the cab can go to the other level.
@@ -173,7 +175,54 @@ pub fn run(alloc: std.mem.Allocator) !usize {
     var head: usize = 0;
     while (head < queue.items.len) : (head += 1) try expand(queue.items[head]);
 
-    return try report() + bad_spawns;
+    const holes = try report();
+    return holes + bad_spawns + try trappedSpawns();
+}
+
+// ---- Trapped spawn points ----------------------------------------------------------
+
+/// Count the spawn points that are cut off from spawn 1: the player cannot
+/// get from spawn 1 to them, or from them to spawn 1. A player who spawns
+/// there is trapped (a passage closed at both ends), or the spawn point is
+/// never in play. Thus every spawn point can get to every other one through
+/// spawn 1.
+fn trappedSpawns() !usize {
+    const first = spawn_node[0];
+    if (first == none) return 0;
+    record_escapes = false;
+    defer record_escapes = true;
+    var bad: usize = 0;
+    _ = try fillFrom(first, none);
+    for (spawn_node[1..map.spawn_count], 2..) |s, i| {
+        if (s == none or flags.items[s] & reached != 0) continue;
+        const p = map.spawns[i - 1].pos;
+        std.debug.print("spawn {d} ({d:.1} {d:.1} {d:.1}) cannot be reached from spawn 1\n", .{ i, p[0], p[1], p[2] });
+        bad += 1;
+    }
+    for (spawn_node[1..map.spawn_count], 2..) |s, i| {
+        if (s == none or try fillFrom(s, first)) continue;
+        const p = map.spawns[i - 1].pos;
+        std.debug.print("spawn {d} ({d:.1} {d:.1} {d:.1}) is trapped: the player cannot get from it to spawn 1\n", .{ i, p[0], p[1], p[2] });
+        bad += 1;
+    }
+    std.debug.print("{d} trapped spawn points\n", .{bad});
+    return bad;
+}
+
+/// A flood fill from the standing point `from` alone. True when it gets to
+/// the standing point `goal`; it stops there.
+fn fillFrom(from: u32, goal: u32) !bool {
+    @memset(flags.items, 0);
+    @memset(air_a.items, no_floor);
+    @memset(air_d.items, sky);
+    queue.clearRetainingCapacity();
+    try visit(from, none);
+    var head: usize = 0;
+    while (head < queue.items.len) : (head += 1) {
+        if (goal != none and flags.items[goal] & reached != 0) return true;
+        try expand(queue.items[head]);
+    }
+    return goal != none and flags.items[goal] & reached != 0;
 }
 
 // ---- The movement, measured with player.zig ------------------------------------
@@ -415,8 +464,12 @@ fn visit(q: u32, from: u32) !void {
     try queue.append(gpa, q);
 }
 
+/// False while trappedSpawns runs its flood fills: report() has the
+/// escapes already.
+var record_escapes = true;
+
 fn addEscape(from: u32, ix: i32, iz: i32) !void {
-    if (flags.items[from] & escaped != 0) return;
+    if (!record_escapes or flags.items[from] & escaped != 0) return;
     flags.items[from] |= escaped;
     const x = centreX(ix);
     const z = centreZ(iz);
