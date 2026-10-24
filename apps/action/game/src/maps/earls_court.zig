@@ -1593,7 +1593,7 @@ pub fn liveRail(feet: V3) bool {
 /// each platform. Their text follows the trains: the deep train stops at
 /// platform 5 and runs west, the parked train stands at platform 2. The
 /// District boards hang from the roof arch, the Piccadilly boards from the
-/// ceiling over the middle of the platform.
+/// tunnel lining over the middle of the platform.
 fn platformDisplays() void {
     const district = [_]struct { n: u8, dest: []const u8, track: usize, s: displays.Service }{
         .{ .n = 1, .dest = "Edgware Road", .track = 0, .s = .none },
@@ -1608,6 +1608,6 @@ fn platformDisplays() void {
         const z = edge + t.away * -1.2;
         displays.add(.{ .number = d.n, .dest = d.dest, .service = d.s, .board_z = z, .floor_y = 0, .hang_y = archY(z), .xs = .{ -40, 38 } });
     }
-    displays.add(.{ .number = 5, .dest = "Heathrow T5", .service = .deep_train, .board_z = (p5[0] + p5[1]) / 2, .floor_y = deep_y, .hang_y = deep_ceil, .xs = .{ 24, 84 } });
-    displays.add(.{ .number = 6, .dest = "Cockfosters", .service = .none, .board_z = (p6[0] + p6[1]) / 2, .floor_y = deep_y, .hang_y = deep_ceil, .xs = .{ 24, 84 } });
+    displays.add(.{ .number = 5, .dest = "Heathrow T5", .service = .deep_train, .board_z = (p5[0] + p5[1]) / 2, .floor_y = deep_y, .hang_y = tubeTop(t5_c, 1, (p5[0] + p5[1]) / 2), .xs = .{ 24, 84 } });
+    displays.add(.{ .number = 6, .dest = "Cockfosters", .service = .none, .board_z = (p6[0] + p6[1]) / 2, .floor_y = deep_y, .hang_y = tubeTop(t6_c, -1, (p6[0] + p6[1]) / 2), .xs = .{ 24, 84 } });
 }
