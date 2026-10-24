@@ -128,15 +128,26 @@ fn hash3(p: vec3f) -> f32 {
   return fract(q.x * q.y * q.z * (q.x + q.y + q.z));
 }
 
+// hash3 of one corner, from the lattice terms of hash3 for each axis
+// (q = fract(i * 0.3183099 + offset) * 17).
+fn hashQ(x: f32, y: f32, z: f32) -> f32 {
+  return fract(x * y * z * (x + y + z));
+}
+
+// The same values as 8 hash3 calls at the corners. The lattice term of each
+// axis has two values (i and i + 1), so the function calculates each one
+// time.
 fn noise3(p: vec3f) -> f32 {
   let i = floor(p);
   let f = fract(p);
   let w = f * f * (3.0 - 2.0 * f);
+  let q0 = fract(i * 0.3183099 + vec3f(0.1, 0.2, 0.3)) * 17.0;
+  let q1 = fract((i + vec3f(1.0)) * 0.3183099 + vec3f(0.1, 0.2, 0.3)) * 17.0;
   return mix(
-    mix(mix(hash3(i), hash3(i + vec3f(1, 0, 0)), w.x),
-        mix(hash3(i + vec3f(0, 1, 0)), hash3(i + vec3f(1, 1, 0)), w.x), w.y),
-    mix(mix(hash3(i + vec3f(0, 0, 1)), hash3(i + vec3f(1, 0, 1)), w.x),
-        mix(hash3(i + vec3f(0, 1, 1)), hash3(i + vec3f(1, 1, 1)), w.x), w.y),
+    mix(mix(hashQ(q0.x, q0.y, q0.z), hashQ(q1.x, q0.y, q0.z), w.x),
+        mix(hashQ(q0.x, q1.y, q0.z), hashQ(q1.x, q1.y, q0.z), w.x), w.y),
+    mix(mix(hashQ(q0.x, q0.y, q1.z), hashQ(q1.x, q0.y, q1.z), w.x),
+        mix(hashQ(q0.x, q1.y, q1.z), hashQ(q1.x, q1.y, q1.z), w.x), w.y),
     w.z);
 }
 
@@ -150,6 +161,26 @@ fn fbm(p: vec3f) -> f32 {
     a *= 0.5;
   }
   return sum;
+}
+
+// smoothstep(lo, hi, fbm(p)) with the same value. noise3 is 0 to 1, so the
+// next octaves add 0 to (their amplitudes together) to the sum.
+// When the sum plus that is less than lo, or the sum is more than hi, the
+// smoothstep is 0 or 1 already. Then the function stops.
+fn fbmStep(p: vec3f, lo: f32, hi: f32) -> f32 {
+  var a = 0.5;
+  var q = p;
+  var sum = 0.0;
+  for (var i = 0; i < 4; i++) {
+    sum += a * noise3(q);
+    q = q * 2.03 + vec3f(1.7, 9.2, 3.1);
+    // The octaves after octave i: a / 2 + a / 4 + ..., to octave 3.
+    let left = a * (1.0 - exp2(f32(i) - 3.0));
+    if (sum + left < lo) { return 0.0; }
+    if (sum > hi) { return 1.0; }
+    a *= 0.5;
+  }
+  return smoothstep(lo, hi, sum);
 }
 
 // ---- Sky -------------------------------------------------------------------
@@ -497,16 +528,18 @@ fn shade(in: VOut, front: bool) -> vec3f {
     let dirt = mix(1.3, 0.45, out_k);
     s.albedo *= mix(1.0, 0.55, (1.0 - ao) * dirt);
     if (abs(n0.y) < 0.5) {
-      let streak = fbm(vec3f(in.wpos.x * 3.1 + in.wpos.z * 2.3, in.wpos.y * 0.25, in.wpos.z * 0.7));
+      let streak = fbmStep(vec3f(in.wpos.x * 3.1 + in.wpos.z * 2.3, in.wpos.y * 0.25, in.wpos.z * 0.7), 0.5, 0.8);
       // Water stains down the walls underground; outside they are faint.
-      s.albedo *= 1.0 - smoothstep(0.5, 0.8, streak) * mix(0.3, 0.06, out_k);
+      s.albedo *= 1.0 - streak * mix(0.3, 0.06, out_k);
     }
     if (n0.y > 0.5) {
-      let soil = fbm(in.wpos * 0.9);
-      s.albedo *= 1.0 - smoothstep(0.45, 0.75, soil) * 0.3 * dirt;
+      let soil = fbmStep(in.wpos * 0.9, 0.45, 0.75);
+      s.albedo *= 1.0 - soil * 0.3 * dirt;
       // Small damp patches: a little darker and a little glossy. They are
-      // not puddles.
-      wet = smoothstep(0.57, 0.67, fbm(in.wpos * vec3f(0.35, 1.0, 0.35) + 3.0)) * (1.0 - out_k);
+      // not puddles. Outside (out_k 1) there are none.
+      if (out_k < 1.0) {
+        wet = fbmStep(in.wpos * vec3f(0.35, 1.0, 0.35) + 3.0, 0.57, 0.67) * (1.0 - out_k);
+      }
       s.albedo *= 1.0 - wet * 0.25;
       s.rough = mix(s.rough, 0.45, wet);
     }
