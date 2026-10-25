@@ -1873,8 +1873,9 @@ stocks. The door openings and the door places are approximate.
 
 ```
 apps/action/
-├── game/                 Zig client (its own package; swindowzig is a path dependency)
-│   ├── build.zig         zig build -> zig-out/bin/action.wasm
+├── game/                 Zig client (its own package)
+│   ├── build.zig.zon     pins the swindowzig release (see swindowzig)
+│   ├── build.zig         zig build -> zig-out/bin/action.wasm, and the swindowzig web backend to zig-out/swindowzig
 │   └── src/
 │       ├── main.zig      modes, input, shooting, deathmatch sync, HUD, wasm entry
 │       ├── render.zig    light shadow maps (at map load), shadow pass, HDR scene pass (4x MSAA), bloom, tone map
@@ -1950,13 +1951,52 @@ apps/action/
 
 ## Run it
 
-Needs Zig (the version in `utils/swindowzig/build.zig.zon`) and Bun.
+Needs Zig (`minimum_zig_version` in `game/build.zig.zon`) and Bun.
 
 ```bash
 yarn workspace action start     # build.sh, then the server on http://localhost:4080
 ```
 
 WebGPU only: a recent Chrome or Edge on a desktop.
+
+### swindowzig
+
+The engine is the package
+[seanmizen/swindowzig](https://github.com/seanmizen/swindowzig). The game
+uses one release of it:
+
+- `game/build.zig.zon` pins the release: a URL and a hash. No other file
+  names the swindowzig version.
+- `zig build` fetches the release into the Zig cache and into `zig-pkg/`
+  in `game/`. The repository ignores `zig-pkg/`. The build needs no
+  checkout of swindowzig.
+- `zig build` installs the web backend of the release (`backends/wasm`,
+  the TypeScript files) to `game/zig-out/swindowzig`. `src/boot.ts`
+  imports the wasm loader from there. So the loader and the Zig code
+  always come from the same release.
+
+To change the release, give the URL of the new release to `zig fetch` in
+`game/`. It writes the new URL and hash into `build.zig.zon`:
+
+```bash
+cd apps/action/game
+zig fetch --save https://github.com/seanmizen/swindowzig/releases/download/v0.3.0/swindowzig.tar.gz
+```
+
+The pin is in `apps/action`, so a new pin gives a new build version (see
+[The build version](#the-build-version)).
+
+To build against a local swindowzig checkout (for example, to test an
+engine change before its release), set `SWINDOWZIG_FORK`. `build.sh` then
+gives the checkout to `zig build --fork`. The Zig code and the installed
+web backend then come from that checkout:
+
+```bash
+SWINDOWZIG_FORK=~/projects/swindowzig yarn workspace action start
+```
+
+The Docker build fetches the release from GitHub during `docker build`.
+So the build host must have access to `github.com`.
 
 ## The lobby protocol
 
@@ -2227,8 +2267,9 @@ What the client does:
 
 1. `BUILD_VERSION`, if the environment sets it.
 2. Else the 12-character hash of the last commit that changed
-   `apps/action` or `utils/swindowzig`. `-dirty` follows it when those
-   directories have changes that are not committed. A release that changes
+   `apps/action`. The swindowzig pin (`game/build.zig.zon`) is in
+   `apps/action`, so a new pin gives a new version. `-dirty` follows the
+   hash when `apps/action` has changes that are not committed. A release that changes
    only other apps does not change the version, so the game server does
    not restart.
 3. Else `dev`: no git, or not a checkout.

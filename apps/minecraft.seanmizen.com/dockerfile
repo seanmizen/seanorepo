@@ -3,8 +3,10 @@
 # minecraft.seanmizen.com — browser voxel, served over Cloudflared tunnel.
 #
 # Three stages:
-#   1. zig-build  — download the Zig version that utils/swindowzig/build.zig.zon
-#                   names, build swindowzig's `web` step to WASM
+#   1. zig-build  — download the Zig version that build.zig.zon names, and
+#                   run `zig build`: it fetches the swindowzig release that
+#                   build.zig.zon pins, builds its voxel example to WASM and
+#                   installs its web backend to zig-out/swindowzig
 #   2. js-build   — bundle.sh: Bun bundles boot.js and the chunk worker, and
 #                   the chunk files get content-hashed names
 #   3. prod       — copy the static output into a minimal Node image and run `serve`
@@ -23,10 +25,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# The Zig version comes from minimum_zig_version in build.zig.zon, the one
-# place that names it. build.zig stops on any other major.minor. The tarball
-# name is zig-ARCH-linux-VERSION (Zig 0.15 and later).
-COPY utils/swindowzig/build.zig.zon /tmp/build.zig.zon
+# The Zig version comes from minimum_zig_version in the build.zig.zon of
+# this app. The build.zig of swindowzig stops on any other major.minor. The
+# tarball name is zig-ARCH-linux-VERSION (Zig 0.15 and later).
+COPY apps/minecraft.seanmizen.com/build.zig.zon /tmp/build.zig.zon
 ARG TARGETARCH
 RUN set -e; \
     ZIG_VERSION="$(sed -n 's/.*\.minimum_zig_version = "\([^"]*\)".*/\1/p' /tmp/build.zig.zon)"; \
@@ -41,35 +43,37 @@ RUN set -e; \
     && ln -s /opt/zig/zig /usr/local/bin/zig \
     && zig version
 
-# Copy only the swindowzig workspace — the build context is the monorepo root.
-COPY utils/swindowzig /build/swindowzig
-WORKDIR /build/swindowzig
+# The build context is the monorepo root. The app's Zig package is two
+# files: build.zig and build.zig.zon.
+COPY apps/minecraft.seanmizen.com/build.zig apps/minecraft.seanmizen.com/build.zig.zon /build/minecraft/
+WORKDIR /build/minecraft
 
 # Build the voxel example for WASM: app.wasm and chunks.wasm (the chunk
 # worker). examples/voxel/main.zig has the
 # `swindowzig_init` / `swindowzig_frame` entry exports at the bottom and
 # gates all posix-dependent code (CLI args, TAS file IO, frame dumps,
 # std.process.exit) behind `if (comptime !is_wasm)`.
-RUN zig build web -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
+RUN zig build -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 
 # =============================================================================
 # Stage 2: JS bundle (Bun)
 # =============================================================================
 # bundle.sh (the script that build.sh runs too) makes /build/out/:
 #   boot.js                 apps/minecraft.seanmizen.com/src/boot.ts and the
-#                           swindowzig wasm loader (backends/wasm/loader.ts)
+#                           swindowzig wasm loader (backends/wasm/loader.ts,
+#                           from zig-out/swindowzig of stage 1)
 #   chunk-worker-<hash>.js  the chunk worker (backends/wasm/chunk-worker.ts)
 #   chunks-<hash>.wasm      chunks.wasm from stage 1
 # The chunk files have content-hashed names, and boot.js holds the names
-# (C9). The COPY below takes all of backends/wasm.
+# (C9).
 FROM oven/bun:1.1-slim AS js-build
 WORKDIR /build
 
-COPY utils/swindowzig/backends/wasm /build/utils/swindowzig/backends/wasm
+COPY --from=zig-build /build/minecraft/zig-out/swindowzig /build/apps/minecraft.seanmizen.com/zig-out/swindowzig
 COPY apps/minecraft.seanmizen.com/src /build/apps/minecraft.seanmizen.com/src
 COPY apps/minecraft.seanmizen.com/tsconfig.json /build/apps/minecraft.seanmizen.com/tsconfig.json
 COPY apps/minecraft.seanmizen.com/bundle.sh /build/apps/minecraft.seanmizen.com/bundle.sh
-COPY --from=zig-build /build/swindowzig/zig-out/bin/chunks.wasm /build/chunks.wasm
+COPY --from=zig-build /build/minecraft/zig-out/bin/chunks.wasm /build/chunks.wasm
 
 RUN bash /build/apps/minecraft.seanmizen.com/bundle.sh /build/chunks.wasm /build/out \
     && ls -la /build/out
@@ -88,17 +92,17 @@ RUN npm install -g serve
 COPY apps/minecraft.seanmizen.com/public /app
 # boot.js, chunk-worker-<hash>.js and chunks-<hash>.wasm.
 COPY --from=js-build /build/out/ /app/
-COPY --from=zig-build /build/swindowzig/zig-out/bin/app.wasm /app/app.wasm
+COPY --from=zig-build /build/minecraft/zig-out/bin/app.wasm /app/app.wasm
 
 EXPOSE 4042
 CMD ["serve", "-s", ".", "-l", "4042"]
 
 # =============================================================================
 # Dev target — kept minimal so `docker compose --profile dev up` has something
-# to point at. The real dev loop for this app is `bun utils/swindowzig/backends/
-# wasm/dev-server.ts` run directly on the host.
+# to point at. The real dev loop for this app is the swindowzig dev server
+# (backends/wasm/dev-server.ts in seanmizen/swindowzig) on the host.
 # =============================================================================
 FROM node:lts-slim AS dev
 WORKDIR /app
 # Source is mounted in via docker-compose's bind mount.
-CMD ["sh", "-c", "echo 'minecraft.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]
+CMD ["sh", "-c", "echo 'minecraft.seanmizen.com dev: run the swindowzig dev server (backends/wasm/dev-server.ts in seanmizen/swindowzig) on the host instead' && tail -f /dev/null"]

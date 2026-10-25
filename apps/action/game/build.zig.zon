@@ -4,7 +4,13 @@
     .fingerprint = 0x47cc8c923d6ae396,
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
-        .swindowzig = .{ .path = "../../../utils/swindowzig" },
+        // The swindowzig release. This is the one place in this app that
+        // names the swindowzig version. To change it, see "swindowzig" in
+        // ../README.md.
+        .swindowzig = .{
+            .url = "https://github.com/seanmizen/swindowzig/releases/download/v0.2.0/swindowzig.tar.gz",
+            .hash = "swindowzig-0.2.0-DU8b5Q9mSQAN_MHCj6d0RlBwyQYBQ1LynzOcBc7eRmXl",
+        },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

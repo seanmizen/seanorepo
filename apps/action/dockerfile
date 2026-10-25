@@ -2,12 +2,14 @@
 #
 # action.seanmizen.com: the game and the deathmatch lobby, one Bun process.
 #
-#   1. zig-build  download the Zig version that utils/swindowzig/build.zig.zon
-#                 names, build game/ to action.wasm. Write the build version
-#                 (the build argument BUILD_VERSION, default "dev") into
-#                 the game and into build-version.txt.
-#   2. js-build   bundle src/boot.ts with the swindowzig wasm loader and
-#                 the train sound library utils/tube-sounds
+#   1. zig-build  download the Zig version that game/build.zig.zon names
+#                 (minimum_zig_version), build game/ to action.wasm. zig
+#                 build fetches the swindowzig release that game/build.zig.zon
+#                 pins, and installs its web backend to zig-out/swindowzig.
+#                 Write the build version (the build argument BUILD_VERSION,
+#                 default "dev") into the game and into build-version.txt.
+#   2. js-build   bundle src/boot.ts with the swindowzig wasm loader from
+#                 stage 1 and the train sound library utils/tube-sounds
 #   3. prod       Bun runs server/index.ts: static files and /api/ws on 4080.
 #                 It reads game/src/server_cvars.json, server/server.cfg,
 #                 game/src/protocol_version.txt and public/build-version.txt.
@@ -19,7 +21,7 @@ WORKDIR /build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates xz-utils \
     && rm -rf /var/lib/apt/lists/*
-COPY utils/swindowzig/build.zig.zon /tmp/build.zig.zon
+COPY apps/action/game/build.zig.zon /tmp/build.zig.zon
 ARG TARGETARCH
 RUN set -e; \
     ZIG_VERSION="$(sed -n 's/.*\.minimum_zig_version = "\([^"]*\)".*/\1/p' /tmp/build.zig.zon)"; \
@@ -32,8 +34,6 @@ RUN set -e; \
     | tar -xJ \
     && mv "zig-${ZIG_ARCH}-linux-${ZIG_VERSION}" /opt/zig \
     && ln -s /opt/zig/zig /usr/local/bin/zig
-# game/build.zig.zon finds swindowzig at ../../../utils/swindowzig.
-COPY utils/swindowzig /build/utils/swindowzig
 COPY apps/action/game /build/apps/action/game
 WORKDIR /build/apps/action/game
 # `yarn workspace action prod:docker` sets it from scripts/build-version.sh.
@@ -47,7 +47,8 @@ RUN set -e; \
 
 FROM oven/bun:1.1-slim AS js-build
 WORKDIR /build
-COPY utils/swindowzig/backends/wasm /build/utils/swindowzig/backends/wasm
+# src/boot.ts imports the loader from game/zig-out/swindowzig.
+COPY --from=zig-build /build/apps/action/game/zig-out/swindowzig /build/apps/action/game/zig-out/swindowzig
 COPY apps/action/src /build/apps/action/src
 COPY apps/action/tsconfig.json /build/apps/action/tsconfig.json
 # The workspace package tube-sounds (src/tube.ts): the context has no

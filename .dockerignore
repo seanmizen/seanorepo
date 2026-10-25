@@ -51,3 +51,6 @@ biome.json
 # image makes its own.
 apps/minecraft.seanmizen.com/public/chunks-*.wasm
 apps/minecraft.seanmizen.com/public/chunk-worker-*.js
+
+# Zig: the unpacked dependencies of a package. Each image fetches its own.
+**/zig-pkg
