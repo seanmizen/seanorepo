@@ -1407,9 +1407,654 @@ fn westEnd() void {
     // Warwick Road.
     box(v3(street_w[1] - 3, y, -30), v3(street_w[1], y + 0.12, 25), pave, .tile, .concrete);
     deco(v3(street_w[0], y, -30), v3(street_w[1] - 3, y + 0.004, 25), v3(0.1, 0.1, 0.11), .concrete, .concrete);
-    box(v3(street_w[0] - 1, y, -30.6), v3(street_w[0], y + 13, 25.6), v3(0.78, 0.74, 0.66), .paint, .plaster);
+    // West of the road: the construction site, behind a hoarding.
+    warwickSite();
     box(v3(street_w[0], y, -30.6), v3(ex, y + 7, -30), brick, .brick, .brick);
     box(v3(street_w[0], y, 25), v3(ex, y + 7, 25.6), brick, .brick, .brick);
+}
+
+// ---- The construction site west of Warwick Road -------------------------------
+//
+// West of Warwick Road is a construction site, as the old exhibition centre
+// site is in real life. A painted plywood hoarding, 2.44 m high (one
+// sheet), runs along the road, with printed panels toward the road.
+// Opposite the station doors, Heras fence panels on feet are the site
+// gate, so a player sees into the site. The hoarding and the fence are the
+// only collision. A jump (1 m) and a vault (1.4 m) do not clear them.
+// All of the site behind them is decoration, and map.scenery: the escape
+// audit proves that no player gets there.
+//
+// The District line goes west under the site in a covered way: the site
+// stands on a concrete raft, as the exhibition centre did. The parapets of
+// the line (lines) go through the site as two low brick walls.
+
+/// The face of the hoarding toward the road (+X).
+const hoard_x: f32 = street_w[0];
+const hoard_h: f32 = 2.44;
+/// The Heras fence panels of the site gate, opposite the station doors.
+const heras_z = [2]f32{ -8.5, 5.5 };
+const heras_h: f32 = 2.0;
+const hoard_c = v3(0.12, 0.13, 0.14);
+const lime = v3(0.55, 0.78, 0.16);
+const hoard_white = v3(0.93, 0.93, 0.91);
+const grey_text = v3(0.62, 0.63, 0.64);
+const site_yellow = v3(0.92, 0.62, 0.04);
+const galv = v3(0.6, 0.62, 0.62);
+const timber = v3(0.55, 0.42, 0.26);
+const rubber = v3(0.05, 0.05, 0.05);
+const earth_c = v3(0.3, 0.24, 0.18);
+const ppe_blue = v3(0.05, 0.3, 0.68);
+/// The west end of the site, and its north and south ends. The site is
+/// west of the road and never crosses it: the road can go on north and
+/// south past the site. The hoarding runs the full length of the site.
+const site_x0: f32 = -140;
+const site_z = [2]f32{ -50, 45 };
+
+/// The front of print layer k on the hoarding. Layer 0 is 2 cm in front of
+/// the hoarding face, and each layer is 1 cm in front of the layer below
+/// it. Thus no two faces are in one plane.
+fn layerX(k: f32) f32 {
+    return hoard_x + 0.02 + 0.01 * k;
+}
+
+/// A printed rectangle on the hoarding, in layer k.
+fn print(k: f32, z0: f32, z1: f32, y0: f32, y1: f32, color: V3) void {
+    const f = layerX(k);
+    deco(v3(f - 0.006, y0, z0), v3(f, y1, z1), color, .paint, .wood);
+}
+
+/// Text in the pixel font (signText) on a face toward +X. The front of the
+/// letters is at x.
+fn eastText(x: f32, text: []const u8, z_mid: f32, top: f32, px: f32, color: V3) void {
+    signText(text, -1, 0.003 - x, z_mid, top, px, color);
+}
+
+/// A disc toward +X, with its front at x.
+fn eastDisc(x: f32, y: f32, z: f32, r: f32, color: V3) void {
+    map.addDisc(vec.translate(v3(x - 0.003, y, z)).mul(Mat4.rotationY(std.math.pi / 2.0)), r, 0.006, color, .paint, .wood);
+}
+
+/// map.slab with a right-handed set of edges. A left-handed set gives the
+/// same solid with ez the other way.
+fn slabR(o: V3, ex: V3, ey: V3, ez: V3, color: V3, mat: Mat, surface: Surface) void {
+    if (vec.dot(vec.cross(ex, ey), ez) < 0) return map.slab(o + ez, ex, ey, -ez, color, mat, surface);
+    map.slab(o, ex, ey, ez, color, mat, surface);
+}
+
+/// The horizontal unit vector at the angle a from +X toward +Z.
+fn heading(a: f32) V3 {
+    return v3(@cos(a), 0, @sin(a));
+}
+
+/// A frame on the ground for decoration: the origin o, local X along the
+/// horizontal unit vector f, Y up, and Z across (f turned 90 degrees
+/// toward +Z). k scales the local sizes.
+const Frame = struct {
+    o: V3,
+    f: V3,
+    k: f32 = 1,
+
+    fn side(fr: Frame) V3 {
+        return v3(-fr.f[2], 0, fr.f[0]);
+    }
+    fn p(fr: Frame, q: V3) V3 {
+        return fr.o + fr.f * vec.s(q[0] * fr.k) + v3(0, q[1] * fr.k, 0) + fr.side() * vec.s(q[2] * fr.k);
+    }
+    fn box(fr: Frame, lo: V3, hi: V3, color: V3, mat: Mat, surface: Surface) void {
+        const d = (hi - lo) * vec.s(fr.k);
+        slabR(fr.p(lo), fr.f * vec.s(d[0]), v3(0, d[1], 0), fr.side() * vec.s(d[2]), color, mat, surface);
+    }
+    fn rod(fr: Frame, a: V3, b: V3, r: f32, color: V3, mat: Mat, surface: Surface) void {
+        map.rod(fr.p(a), fr.p(b), r * fr.k, color, mat, surface);
+    }
+    /// A beam from a to b that is not vertical.
+    fn beam(fr: Frame, a: V3, b: V3, w: f32, h: f32, color: V3, mat: Mat, surface: Surface) void {
+        map.beam(fr.p(a), fr.p(b), w * fr.k, h * fr.k, v3(0, 1, 0), color, mat, surface);
+    }
+    /// The frame at the local point q, turned by a radians about Y.
+    fn turned(fr: Frame, q: V3, a: f32) Frame {
+        return .{ .o = fr.p(q), .f = fr.f * vec.s(@cos(a)) + fr.side() * vec.s(@sin(a)), .k = fr.k };
+    }
+};
+
+fn warwickSite() void {
+    const y = street_y;
+    const g = y + 0.03; // the top of the site ground
+    const hb = hoard_x - 0.25; // the back of the hoarding
+
+    // The hoarding, north and south of the gate. A lime stripe along the
+    // top, and on the back the timber rails and a raking prop each 2.4 m.
+    for ([_][2]f32{ .{ site_z[0], heras_z[0] }, .{ heras_z[1], site_z[1] } }) |r| {
+        box(v3(hb, y, r[0]), v3(hoard_x, y + hoard_h, r[1]), hoard_c, .paint, .wood);
+        print(0, r[0], r[1], y + hoard_h - 0.14, y + hoard_h - 0.06, lime);
+        for ([_]f32{ 0.4, 1.9 }) |ry| deco(v3(hb - 0.07, y + ry, r[0]), v3(hb - 0.01, y + ry + 0.1, r[1]), timber, .wood, .wood);
+        var z = r[0] + 1.2;
+        while (z < r[1] - 0.5) : (z += 2.4) {
+            map.beam(v3(hb - 0.1, y + 1.95, z), v3(hb - 1.5, g + 0.05, z), 0.07, 0.1, v3(0, 1, 0), timber, .wood, .wood);
+            deco(v3(hb - 1.75, g, z - 0.12), v3(hb - 1.25, g + 0.1, z + 0.12), timber, .wood, .wood);
+        }
+    }
+    // The prints, from the south end (on the left, seen from the station
+    // doors) to the north end.
+    brandPanel(20.5);
+    renderPanel(8.6, 15.6);
+    flyPosters(6.0, 8.2);
+    sloganPanel(-12.3);
+    completionPanel(-19.4);
+    sorryPanel(-26.6);
+
+    // The gate: Heras fence panels on feet. One collision box for the run.
+    const fx = hoard_x - 0.1;
+    map.addSolid(v3(fx - 0.12, y, heras_z[0]), v3(hoard_x + 0.05, y + heras_h, heras_z[1]), .metal);
+    heras(v3(fx, y, heras_z[0]), v3(fx, y, heras_z[1]));
+    gateSigns(fx + 0.05);
+
+    // The raft over the line, the ground of the site (hardcore), a haul
+    // road from the gate, and puddles on it.
+    map.scenery = .{ v3(site_x0, y - 0.5, site_z[0]), v3(hb, 200, site_z[1]) };
+    deco(v3(site_x0, deck_y, wall_n), v3(-97, y, wall_s), deck_c, .concrete, .concrete);
+    deco(v3(site_x0, y, site_z[0]), v3(-97, g, site_z[1]), earth_c, .concrete, .earth);
+    deco(v3(-118, g, -8), v3(-97, g + 0.02, 4.5), v3(0.46, 0.44, 0.4), .concrete, .concrete);
+    deco(v3(-104.5, g + 0.02, -1.6), v3(-102.8, g + 0.026, 0.3), v3(0.12, 0.13, 0.15), .paint, .earth);
+    deco(v3(-108.6, g + 0.02, 1.2), v3(-107.4, g + 0.026, 2.6), v3(0.12, 0.13, 0.15), .paint, .earth);
+
+    // A mini-digger at a spoil heap behind the north hoarding.
+    heap(v3(-100.6, g, -6.9), 1.6, 1.4, 0.3);
+    digger(.{ .o = v3(-102.2, g, -3.6), .f = heading(0.4) }, -1.75);
+    // An open trench in the haul road, with barriers round it and cones
+    // along the way in.
+    const pit = rect(-101.6, -99.6, 0.5, 2.3);
+    deco(v3(pit.x0, g + 0.02, pit.z0), v3(pit.x1, g + 0.025, pit.z1), v3(0.03, 0.025, 0.02), .paint, .earth);
+    deco(v3(pit.x0 - 0.1, g + 0.03, pit.z0 - 0.1), v3(pit.x0 + 0.9, g + 0.05, pit.z1 + 0.1), v3(0.3, 0.3, 0.32), .metal, .metal);
+    barrier(v3(pit.x1 + 0.3, g, pit.z0 - 0.3), v3(pit.x1 + 0.3, g, pit.z1 + 0.3));
+    barrier(v3(pit.x0 - 0.3, g, pit.z0 - 0.3), v3(pit.x1 + 0.3, g, pit.z0 - 0.3));
+    barrier(v3(pit.x0 - 0.3, g, pit.z1 + 0.3), v3(pit.x1 + 0.3, g, pit.z1 + 0.3));
+    for ([_][2]f32{ .{ -97.6, -6.6 }, .{ -98.9, -6.1 }, .{ -97.6, 4.0 }, .{ -99.0, 3.6 }, .{ -103.2, 2.6 }, .{ -104.6, 2.2 } }) |c| cone(v3(c[0], g + 0.02, c[1]));
+    // A cone that fell over.
+    const fallen = Frame{ .o = v3(-98.2, g + 0.14, 1.0), .f = heading(0.7) };
+    fallen.rod(v3(0, 0, 0), v3(0.7, 0, 0), 0.08, v3(0.95, 0.32, 0.04), .paint, .fabric);
+
+    // The skip, with rubbish and an old mattress in it.
+    skip(.{ .o = v3(-105.0, g, 3.6), .f = heading(0.15) });
+    // Materials: two pallets of blocks, two bulk bags of sand, scaffold
+    // tubes and bundles of rebar on timber bearers, and a stack under a
+    // blue tarpaulin.
+    pallet(-105.0, -0.6);
+    pallet(-105.1, 0.75);
+    bulkBag(-105.2, -2.3);
+    bulkBag(-106.2, -2.8);
+    tubeStack(v3(-112.5, g, 5.0), v3(0.6, 0.62, 0.62), 0.024, 8, 3);
+    tubeStack(v3(-112.5, g, 6.2), v3(0.36, 0.18, 0.1), 0.014, 14, 2);
+    deco(v3(-108.9, g, -4.8), v3(-106.7, g + 0.95, -3.3), v3(0.1, 0.25, 0.62), .cloth, .fabric);
+    for ([_]f32{ -4.5, -3.6 }) |z| deco(v3(-109.0, g + 0.95, z), v3(-106.6, g + 1.02, z + 0.07), timber, .wood, .wood);
+
+    // The site office: two cabins, one on the other, with a stair at the
+    // south end. The canteen is in the lower one. A portable toilet next
+    // to them.
+    siteOffice();
+    const loo = rect(-104.6, -103.5, -10.2, -9.1);
+    deco(v3(loo.x0, g, loo.z0), v3(loo.x1, g + 2.25, loo.z1), v3(0.1, 0.3, 0.7), .paint, .sheet_metal);
+    deco(v3(loo.x0 - 0.04, g + 2.25, loo.z0 - 0.04), v3(loo.x1 + 0.04, g + 2.35, loo.z1 + 0.04), hoard_white, .paint, .sheet_metal);
+    deco(v3(loo.x1 + 0.01, g + 0.05, loo.z0 + 0.12), v3(loo.x1 + 0.03, g + 2.1, loo.z1 - 0.12), v3(0.07, 0.22, 0.55), .paint, .sheet_metal);
+    eastText(loo.x1 + 0.04, "VACANT", (loo.z0 + loo.z1) / 2, g + 1.3, 0.008, v3(0.1, 0.6, 0.2));
+
+    // The building: a concrete frame four floors up, a core higher still,
+    // and yellow edge protection on the slabs.
+    concreteFrame(rect(-136, -120, -19.5, -3), g);
+    // The tower crane, behind its own Heras fence.
+    towerCrane(v3(-113, g, -1.5), heading(-0.6), 36);
+    heras(v3(-116.5, g, -5), v3(-109.5, g, -5));
+    heras(v3(-109.5, g, -5), v3(-109.5, g, 2));
+    heras(v3(-109.5, g, 2), v3(-116.5, g, 2));
+}
+
+/// The developer's name and its promise.
+fn brandPanel(zc: f32) void {
+    const y = street_y;
+    eastText(layerX(0), "WARWICK YARDS", zc, y + 2.05, 0.06, hoard_white);
+    print(0, zc - 2.4, zc + 2.4, y + 1.5, y + 1.55, lime);
+    eastText(layerX(0), "A NEW NEIGHBOURHOOD FOR LONDON", zc, y + 1.38, 0.024, lime);
+    eastText(layerX(0), "1,700 NEW HOMES. 12 AFFORDABLE*", zc, y + 1.0, 0.022, hoard_white);
+    eastText(layerX(0), "*AFFORDABLE: 80 PERCENT OF MARKET RENT", zc, y + 0.62, 0.007, grey_text);
+}
+
+/// The developer's render: glass towers on a podium of shops, a plaza
+/// with trees, people and a red balloon, under a blue sky. Each element is
+/// one print layer in front of the element behind it.
+fn renderPanel(z0: f32, z1: f32) void {
+    const y = street_y;
+    const b = y + 0.62; // the bottom of the picture
+    const t = y + 2.2; // its top
+    print(0, z0 - 0.05, z1 + 0.05, b - 0.05, t + 0.05, hoard_white);
+    const sky = [_]V3{ v3(0.86, 0.9, 0.95), v3(0.66, 0.8, 0.94), v3(0.45, 0.66, 0.92) };
+    for (sky, 0..) |c, i| {
+        const fi: f32 = @floatFromInt(i);
+        print(1, z0, z1, b + (t - b) * fi / 3, b + (t - b) * (fi + 1) / 3, c);
+    }
+    eastDisc(layerX(2), t - 0.3, z0 + 0.6, 0.16, v3(1.0, 0.95, 0.75));
+    // The towers: [z0, z1, top], and a colour.
+    const towers = [_][3]f32{ .{ 1.0, 2.0, 1.4 }, .{ 2.3, 3.7, 1.52 }, .{ 4.1, 5.2, 1.22 }, .{ 5.5, 6.7, 1.0 } };
+    const tower_c = [_]V3{ v3(0.3, 0.55, 0.62), v3(0.22, 0.42, 0.58), v3(0.35, 0.6, 0.66), v3(0.65, 0.42, 0.3) };
+    for (towers, tower_c) |tw, c| {
+        const za = z1 - tw[1];
+        const zb = z1 - tw[0];
+        const top = b + tw[2];
+        print(2, za, zb, b + 0.42, top, c);
+        // A light line at each floor.
+        var fy = b + 0.5;
+        while (fy < top - 0.06) : (fy += 0.09) print(3, za + 0.04, zb - 0.04, fy, fy + 0.015, v3(0.85, 0.92, 0.95));
+    }
+    // The podium of shops, and the plaza.
+    print(2, z0, z1, b + 0.18, b + 0.42, v3(0.88, 0.84, 0.74));
+    var sz = z0 + 0.15;
+    while (sz < z1 - 0.4) : (sz += 0.5) print(3, sz, sz + 0.3, b + 0.2, b + 0.36, v3(0.95, 0.75, 0.4));
+    print(2, z0, z1, b, b + 0.18, v3(0.82, 0.8, 0.74));
+    // Trees.
+    for ([_]f32{ 0.5, 1.9, 3.4, 4.9, 6.3 }) |d| {
+        const z = z1 - d;
+        print(4, z - 0.015, z + 0.015, b + 0.04, b + 0.3, v3(0.3, 0.2, 0.12));
+        eastDisc(layerX(5), b + 0.36, z, 0.12, v3(0.2, 0.5, 0.18));
+    }
+    // People: [distance from the left edge, height], a colour.
+    const people = [_][2]f32{ .{ 0.9, 0.12 }, .{ 1.15, 0.11 }, .{ 2.6, 0.13 }, .{ 3.9, 0.12 }, .{ 4.05, 0.08 }, .{ 5.6, 0.12 }, .{ 6.0, 0.115 } };
+    const people_c = [_]V3{ v3(0.85, 0.2, 0.25), v3(0.15, 0.2, 0.4), v3(0.9, 0.85, 0.8), v3(0.2, 0.55, 0.6), v3(0.95, 0.75, 0.1), v3(0.1, 0.1, 0.12), v3(0.7, 0.35, 0.6) };
+    for (people, people_c) |pp, c| {
+        const z = z1 - pp[0];
+        print(6, z - 0.018, z + 0.018, b + 0.03, b + 0.03 + pp[1], c);
+        eastDisc(layerX(7), b + 0.05 + pp[1], z, 0.018, v3(0.85, 0.65, 0.5));
+    }
+    // The balloon of the child at 4.05 m, and a dog at 5.6 m.
+    print(6, z1 - 4.08, z1 - 4.075, b + 0.1, b + 0.45, v3(0.2, 0.2, 0.2));
+    eastDisc(layerX(7), b + 0.48, z1 - 4.08, 0.04, v3(0.85, 0.08, 0.08));
+    print(6, z1 - 5.78, z1 - 5.68, b + 0.05, b + 0.08, v3(0.45, 0.3, 0.15));
+    // The caption, and the small print.
+    eastText(layerX(3), "CGI. FOR ILLUSTRATION ONLY", z0 + 0.6, b + 0.12, 0.004, v3(0.4, 0.4, 0.4));
+    eastText(layerX(0), "LUXURY LIVING. MOMENTS FROM THE TUBE.", (z0 + z1) / 2, b - 0.15, 0.024, hoard_white);
+}
+
+/// "POST NO BILLS", and the bills that people posted under it.
+fn flyPosters(z0: f32, z1: f32) void {
+    const y = street_y;
+    eastText(layerX(0), "POST NO BILLS", (z0 + z1) / 2, y + 2.1, 0.022, hoard_white);
+    // [z0, z1, bottom], a colour, a title, a line and the colour of the text.
+    const Bill = struct { z: [2]f32, b: f32, c: V3, title: []const u8, line: []const u8, ink: V3 };
+    const bills = [_]Bill{
+        .{ .z = .{ z1 - 0.75, z1 - 0.05 }, .b = 0.85, .c = v3(0.95, 0.85, 0.1), .title = "LIVE", .line = "THE VAPES", .ink = v3(0.05, 0.05, 0.05) },
+        .{ .z = .{ z1 - 1.35, z1 - 0.65 }, .b = 0.9, .c = v3(0.85, 0.1, 0.5), .title = "RAVE", .line = "UNDER THE A4", .ink = hoard_white },
+        .{ .z = .{ z1 - 2.05, z1 - 1.3 }, .b = 0.8, .c = v3(0.3, 0.8, 0.85), .title = "LOST CAT", .line = "ANSWERS TO KEVIN", .ink = v3(0.05, 0.05, 0.05) },
+    };
+    for (bills, 0..) |bl, i| {
+        const k: f32 = @floatFromInt(1 + 2 * i);
+        const mid = (bl.z[0] + bl.z[1]) / 2;
+        print(k, bl.z[0], bl.z[1], y + bl.b, y + bl.b + 1.0, bl.c);
+        const tpx: f32 = if (bl.title.len > 4) 0.014 else 0.025;
+        eastText(layerX(k + 1), bl.title, mid, y + bl.b + 0.9, tpx, bl.ink);
+        eastText(layerX(k + 1), bl.line, mid, y + bl.b + 0.6, 0.007, bl.ink);
+    }
+}
+
+fn sloganPanel(zc: f32) void {
+    const y = street_y;
+    eastText(layerX(0), "LIVE. WORK. PLAY.", zc, y + 2.0, 0.05, hoard_white);
+    eastText(layerX(0), "PAY.", zc, y + 1.45, 0.09, lime);
+    eastText(layerX(0), "PRICES ON APPLICATION", zc, y + 0.6, 0.012, grey_text);
+}
+
+/// The completion date, delayed three times.
+fn completionPanel(zc: f32) void {
+    const y = street_y;
+    eastText(layerX(0), "COMPLETION", zc, y + 2.0, 0.045, hoard_white);
+    const years = "2019  2024  2028";
+    const px: f32 = 0.04;
+    const top = y + 1.5;
+    eastText(layerX(0), years, zc, top, px, grey_text);
+    const z0 = zc + @as(f32, @floatFromInt(years.len * 6 - 1)) * px / 2;
+    for ([_]f32{ 0, 6, 12 }) |i| {
+        const za = z0 - i * 6 * px;
+        print(1, za - 24 * px, za + px, top - 4 * px, top - 3 * px, red);
+    }
+    eastText(layerX(0), "SPRING 2031", zc, y + 0.95, 0.055, lime);
+}
+
+fn sorryPanel(zc: f32) void {
+    const y = street_y;
+    print(0, zc - 2.3, zc + 2.3, y + 0.55, y + 2.1, hoard_white);
+    eastText(layerX(1), "SORRY FOR THE NOISE", zc, y + 1.92, 0.028, hoard_c);
+    eastText(layerX(1), "WE ARE BUILDING", zc, y + 1.58, 0.028, hoard_c);
+    eastText(layerX(1), "A BETTER LONDON", zc, y + 1.3, 0.028, hoard_c);
+    eastText(layerX(1), "(FOR SOMEBODY)", zc, y + 0.92, 0.018, red);
+}
+
+/// The signs on the gate. x: the front of the boards.
+fn gateSigns(x: f32) void {
+    const y = street_y;
+    // The site safety board, on the north panel.
+    deco(v3(x - 0.015, y + 0.7, -8.1), v3(x, y + 1.8, -6.5), hoard_white, .paint, .sheet_metal);
+    deco(v3(x + 0.004, y + 1.6, -8.05), v3(x + 0.01, y + 1.75, -6.55), ppe_blue, .paint, .sheet_metal);
+    eastText(x + 0.02, "SAFETY FIRST", -7.3, y + 1.71, 0.011, hoard_white);
+    for ([_]f32{ -7.8, -7.3, -6.8 }, [_][]const u8{ "HARD HAT", "HI-VIS", "BOOTS" }) |z, label| {
+        eastDisc(x + 0.01, y + 1.4, z, 0.12, ppe_blue);
+        eastDisc(x + 0.02, y + 1.4, z, 0.05, hoard_white);
+        eastText(x + 0.01, label, z, y + 1.24, 0.0045, sign_black);
+    }
+    eastText(x + 0.01, "ALL VISITORS MUST REPORT", -7.3, y + 1.08, 0.0055, sign_black);
+    eastText(x + 0.01, "TO THE SITE OFFICE", -7.3, y + 1.0, 0.0055, sign_black);
+    eastText(x + 0.01, "NO UNAUTHORISED ACCESS", -7.3, y + 0.88, 0.0065, red);
+    // A yellow sign on the middle of the gate.
+    deco(v3(x - 0.015, y + 1.05, 0.9), v3(x, y + 1.55, 2.3), v3(0.95, 0.8, 0.05), .paint, .sheet_metal);
+    eastText(x + 0.01, "SITE ENTRANCE", 1.6, y + 1.47, 0.011, sign_black);
+    eastText(x + 0.01, "KEEP CLEAR", 1.6, y + 1.28, 0.011, sign_black);
+}
+
+/// A run of Heras fence panels on feet, from a to b along the ground: a
+/// galvanised tube frame and a mesh of wires, 3.5 m long or less.
+fn heras(a: V3, b: V3) void {
+    const len = vec.len(b - a);
+    const fr = Frame{ .o = a, .f = (b - a) / vec.s(len) };
+    const n = @ceil(len / 3.5);
+    const w = len / n;
+    const h = heras_h;
+    var i: f32 = 0;
+    while (i < n) : (i += 1) {
+        const ua = i * w;
+        const ub = ua + w;
+        for ([_]f32{ ua + 0.03, ub - 0.03 }) |u| fr.rod(v3(u, 0.1, 0), v3(u, h, 0), 0.019, galv, .metal, .metal);
+        for ([_]f32{ 0.2, h - 0.02 }) |v| fr.rod(v3(ua + 0.03, v, 0), v3(ub - 0.03, v, 0), 0.019, galv, .metal, .metal);
+        var u = ua + 0.15;
+        while (u < ub - 0.1) : (u += 0.15) fr.box(v3(u - 0.003, 0.2, -0.003), v3(u + 0.003, h - 0.02, 0.003), galv, .metal, .metal);
+        var v: f32 = 0.5;
+        while (v < h - 0.1) : (v += 0.3) fr.box(v3(ua + 0.03, v - 0.004, -0.004), v3(ub - 0.03, v + 0.004, 0.004), galv, .metal, .metal);
+    }
+    // The feet, and two clamps at each joint. The feet are longer on the
+    // +Z side of the run (into the site at the gate).
+    var j: f32 = 0;
+    while (j <= n) : (j += 1) {
+        const u = j * w;
+        fr.box(v3(u - 0.1, 0, -0.14), v3(u + 0.1, 0.13, 0.32), v3(0.45, 0.44, 0.42), .concrete, .concrete);
+        if (j == 0 or j == n) continue;
+        for ([_]f32{ 0.5, 1.7 }) |v| fr.box(v3(u - 0.07, v, -0.035), v3(u + 0.07, v + 0.06, 0.035), galv, .metal, .metal);
+    }
+}
+
+/// A traffic cone on the ground at p.
+fn cone(p: V3) void {
+    const orange = v3(0.95, 0.32, 0.04);
+    deco(v3(p[0] - 0.19, p[1], p[2] - 0.19), v3(p[0] + 0.19, p[1] + 0.04, p[2] + 0.19), rubber, .paint, .fabric);
+    const parts = [_][3]f32{ .{ 0.04, 0.24, 0.12 }, .{ 0.24, 0.38, 0.095 }, .{ 0.38, 0.52, 0.075 }, .{ 0.52, 0.72, 0.05 } };
+    for (parts, 0..) |c, i| {
+        map.rod(p + v3(0, c[0], 0), p + v3(0, c[1], 0), c[2], if (i == 2) hoard_white else orange, .paint, .fabric);
+    }
+}
+
+/// A red and white barrier from a to b on two feet.
+fn barrier(a: V3, b: V3) void {
+    const len = vec.len(b - a);
+    const fr = Frame{ .o = a, .f = (b - a) / vec.s(len) };
+    for ([_]f32{ 0.15, len - 0.15 }) |u| {
+        fr.box(v3(u - 0.05, 0, -0.3), v3(u + 0.05, 0.06, 0.3), rubber, .paint, .fabric);
+        fr.box(v3(u - 0.03, 0.06, -0.03), v3(u + 0.03, 1.0, 0.03), v3(0.15, 0.15, 0.16), .paint, .fabric);
+    }
+    for ([_][2]f32{ .{ 0.78, 0.93 }, .{ 0.12, 0.24 } }) |bd| {
+        fr.box(v3(0.005, bd[0], -0.045), v3(len - 0.005, bd[1], -0.03), hoard_white, .paint, .fabric);
+        var u: f32 = 0;
+        while (u < len) : (u += 0.5) fr.box(v3(u, bd[0] - 0.005, -0.05), v3(@min(u + 0.25, len), bd[1] + 0.005, -0.025), red, .paint, .fabric);
+    }
+}
+
+/// A heap of earth: thin layers that get smaller and turn as they go up.
+fn heap(c: V3, r: f32, h: f32, a: f32) void {
+    const n = 7;
+    const lh = h / @as(f32, n);
+    for (0..n) |i| {
+        const fi: f32 = @floatFromInt(i);
+        const s = r * (1 - fi * 0.13);
+        const fr = Frame{ .o = c + v3(0, fi * lh, 0), .f = heading(a + fi * 1.1) };
+        fr.box(v3(-s, 0, -s * 0.75), v3(s, lh + 0.01, s * 0.75), earth_c * vec.s(0.8 + 0.04 * fi), .concrete, .earth);
+    }
+}
+
+/// An excavator on tracks, at the sizes of a 1.5 t mini-digger. fr: the
+/// ground under the middle of the tracks, X forward (toward the blade).
+/// slew: the turn of the upper body, with its arm in the ground.
+fn digger(fr: Frame, slew: f32) void {
+    const grey = v3(0.2, 0.2, 0.21);
+    for ([_][2]f32{ .{ -0.5, -0.27 }, .{ 0.27, 0.5 } }) |tz| {
+        fr.box(v3(-0.6, 0, tz[0]), v3(0.6, 0.34, tz[1]), rubber, .paint, .metal);
+        for ([_]f32{ -0.6, 0.6 }) |u| fr.rod(v3(u, 0.17, tz[0] + 0.005), v3(u, 0.17, tz[1] - 0.005), 0.17, rubber, .paint, .metal);
+    }
+    fr.box(v3(-0.5, 0.1, -0.265), v3(0.5, 0.3, 0.265), site_yellow, .paint, .metal);
+    fr.box(v3(0.82, 0.02, -0.52), v3(0.9, 0.32, 0.52), site_yellow, .paint, .metal);
+    for ([_]f32{ -0.2, 0.2 }) |w| fr.beam(v3(0.45, 0.2, w), v3(0.83, 0.17, w), 0.06, 0.08, site_yellow, .paint, .metal);
+    fr.rod(v3(0, 0.3, 0), v3(0, 0.38, 0), 0.36, grey, .paint, .metal);
+    // The upper body: the engine cover, the counterweight, the seat and
+    // the canopy with an amber beacon.
+    const h = fr.turned(v3(0, 0.38, 0), slew);
+    h.box(v3(-0.6, 0, -0.48), v3(0.35, 0.42, 0.48), site_yellow, .paint, .sheet_metal);
+    h.box(v3(-0.68, 0.02, -0.46), v3(-0.5, 0.4, 0.46), grey, .paint, .metal);
+    h.box(v3(-0.35, 0.42, -0.18), v3(-0.05, 0.55, 0.18), rubber, .cloth, .fabric);
+    h.box(v3(-0.42, 0.43, -0.18), v3(-0.34, 0.95, 0.18), rubber, .cloth, .fabric);
+    for ([_]f32{ -0.5, 0.2 }) |u| for ([_]f32{ -0.42, 0.42 }) |w| h.rod(v3(u, 0.42, w), v3(u, 1.45, w), 0.025, rubber, .paint, .metal);
+    h.box(v3(-0.58, 1.45, -0.47), v3(0.28, 1.52, 0.47), site_yellow, .paint, .sheet_metal);
+    h.box(v3(-0.3, 1.52, -0.05), v3(-0.2, 1.62, 0.05), v3(1.0, 0.55, 0.05), .emissive, .glass);
+    // The boom, the dipper with its ram, and the bucket.
+    const pivot = v3(0.38, 0.3, 0.1);
+    const knuckle = v3(1.35, 1.35, 0.1);
+    const tip = v3(1.95, -0.1, 0.1);
+    h.beam(pivot, knuckle, 0.14, 0.18, site_yellow, .paint, .metal);
+    h.beam(knuckle, tip, 0.1, 0.14, site_yellow, .paint, .metal);
+    h.rod(v3(0.5, 0.62, 0.1), v3(1.2, 1.58, 0.1), 0.035, v3(0.75, 0.75, 0.77), .metal, .metal);
+    h.box(v3(1.8, -0.4, -0.12), v3(2.1, -0.1, 0.32), grey, .paint, .metal);
+}
+
+/// A skip: sloped ends, two steps of side wall, and rubbish in it. fr: the
+/// ground under its middle, X along it.
+fn skip(fr: Frame) void {
+    const len: f32 = 1.3; // half the length of the floor
+    const top: f32 = 1.2;
+    const half_w: f32 = 0.85;
+    fr.box(v3(-len, 0, -half_w), v3(len, 0.08, half_w), site_yellow, .paint, .sheet_metal);
+    for ([_]f32{ -1, 1 }) |s| {
+        const wz = if (s < 0) [2]f32{ -half_w, -half_w + 0.05 } else [2]f32{ half_w - 0.05, half_w };
+        fr.box(v3(-len, 0, wz[0]), v3(len, top / 2, wz[1]), site_yellow, .paint, .sheet_metal);
+        fr.box(v3(-len - 0.15, top / 2, wz[0]), v3(len + 0.15, top, wz[1]), site_yellow, .paint, .sheet_metal);
+        // A sloped end: from the floor at s * len out to s * (len + 0.3).
+        const o = fr.p(v3(s * len, 0, -half_w));
+        slabR(o, fr.f * vec.s(s * 0.3) + v3(0, top, 0), fr.f * vec.s(s * 0.05), fr.side() * vec.s(2 * half_w), site_yellow, .paint, .sheet_metal);
+    }
+    // The rubbish: broken blocks, a plank and a mattress.
+    for ([_][3]f32{ .{ -0.8, 0.3, 0.3 }, .{ 0.2, -0.4, 0.5 }, .{ 0.7, 0.35, 0.2 } }, 0..) |r, i| {
+        const fi: f32 = @floatFromInt(i);
+        const piece = fr.turned(v3(r[0], 0.9 + fi * 0.03, r[1]), fi * 0.9);
+        piece.box(v3(-0.35, 0, -0.25), v3(0.35, r[2], 0.25), v3(0.5, 0.48, 0.45), .concrete, .concrete);
+    }
+    fr.beam(v3(-1.0, 0.7, -0.5), v3(1.7, 1.7, -0.3), 0.2, 0.04, timber, .wood, .wood);
+    fr.beam(v3(-0.6, 1.0, 0.2), v3(1.0, 1.9, 0.45), 0.9, 0.18, v3(0.85, 0.85, 0.9), .cloth, .fabric);
+}
+
+/// A pallet of concrete blocks, at x, z on the site ground.
+fn pallet(x: f32, z: f32) void {
+    const g = street_y + 0.03;
+    deco(v3(x - 0.6, g, z - 0.5), v3(x + 0.6, g + 0.14, z + 0.5), timber, .wood, .wood);
+    deco(v3(x - 0.58, g + 0.14, z - 0.48), v3(x + 0.58, g + 0.92, z + 0.48), v3(0.62, 0.6, 0.56), .concrete, .concrete);
+    var by = g + 0.355;
+    while (by < g + 0.9) : (by += 0.215) deco(v3(x + 0.58, by - 0.006, z - 0.48), v3(x + 0.59, by + 0.006, z + 0.48), v3(0.42, 0.4, 0.37), .concrete, .concrete);
+}
+
+/// A bulk bag of sand (one cubic metre), with its four lifting loops.
+fn bulkBag(x: f32, z: f32) void {
+    const g = street_y + 0.03;
+    deco(v3(x - 0.45, g, z - 0.45), v3(x + 0.45, g + 0.85, z + 0.45), v3(0.85, 0.85, 0.8), .cloth, .fabric);
+    deco(v3(x - 0.4, g + 0.85, z - 0.4), v3(x + 0.4, g + 0.95, z + 0.4), v3(0.72, 0.6, 0.4), .concrete, .earth);
+    for ([_]f32{ -0.42, 0.42 }) |dx| for ([_]f32{ -0.42, 0.42 }) |dz| {
+        map.rod(v3(x + dx, g + 0.8, z + dz), v3(x + dx * 0.8, g + 1.05, z + dz * 0.8), 0.02, v3(0.85, 0.85, 0.8), .cloth, .fabric);
+    };
+}
+
+/// A stack of long bars along X on two timber bearers: `n` bars of radius
+/// r in each of `layers` layers. o: the ground at the west end and north
+/// edge of the stack.
+fn tubeStack(o: V3, color: V3, r: f32, n: usize, layers: usize) void {
+    for ([_]f32{ 0.5, 5.5 }) |dx| deco(v3(o[0] + dx - 0.05, o[1], o[2] - 0.05), v3(o[0] + dx + 0.05, o[1] + 0.1, o[2] + 0.1 + 2.6 * r * @as(f32, @floatFromInt(n))), timber, .wood, .wood);
+    for (0..layers) |l| {
+        const ly = o[1] + 0.1 + r + 2 * r * @as(f32, @floatFromInt(l));
+        for (0..n) |i| {
+            const z = o[2] + 0.05 + r + 2.6 * r * @as(f32, @floatFromInt(i)) + (if (l % 2 == 1) 1.3 * r else 0);
+            map.rod(v3(o[0], ly, z), v3(o[0] + 6, ly, z), r, color, .metal, .metal);
+        }
+    }
+}
+
+/// Two site cabins, one on the other, with their windows toward the road,
+/// a steel stair at the south end, and signs.
+fn siteOffice() void {
+    const g = street_y + 0.03;
+    const x0: f32 = -102.6;
+    const x1: f32 = -99.6;
+    const z0: f32 = -20.4;
+    const z1: f32 = -10.8;
+    const cabin_c = v3(0.36, 0.44, 0.5);
+    const h: f32 = 2.6;
+    for ([_]f32{ g + 0.12, g + h + 0.15 }) |b| {
+        deco(v3(x0, b, z0), v3(x1, b + h, z1), cabin_c, .paint, .sheet_metal);
+        deco(v3(x0 - 0.03, b + h - 0.12, z0 - 0.03), v3(x1 + 0.03, b + h + 0.01, z1 + 0.03), v3(0.2, 0.24, 0.27), .paint, .sheet_metal);
+        for ([_]f32{ 0.8, 3.0, 7.6 }) |wz| {
+            deco(v3(x1 + 0.01, b + 1.0, z0 + wz), v3(x1 + 0.03, b + 1.9, z0 + wz + 1.2), hoard_white, .paint, .metal);
+            deco(v3(x1 + 0.035, b + 1.06, z0 + wz + 0.06), v3(x1 + 0.04, b + 1.84, z0 + wz + 1.14), v3(0.12, 0.16, 0.2), .metal, .glass);
+        }
+    }
+    for ([_]f32{ x0 + 0.3, x1 - 0.3 }) |sx| for ([_]f32{ z0 + 0.4, z1 - 0.4 }) |sz| {
+        deco(v3(sx - 0.15, g, sz - 0.3), v3(sx + 0.15, g + 0.12, sz + 0.3), timber, .wood, .wood);
+    };
+    // The signs on the upper cabin, and on the lower one.
+    const ub = g + h + 0.15;
+    deco(v3(x1 + 0.01, ub + 0.9, z0 + 4.5), v3(x1 + 0.025, ub + 2.1, z0 + 7.2), hoard_white, .paint, .sheet_metal);
+    eastText(x1 + 0.035, "SITE OFFICE", z0 + 5.85, ub + 1.95, 0.03, sign_black);
+    eastText(x1 + 0.035, "ALL VISITORS", z0 + 5.85, ub + 1.55, 0.014, sign_black);
+    eastText(x1 + 0.035, "MUST SIGN IN", z0 + 5.85, ub + 1.38, 0.014, sign_black);
+    deco(v3(x1 + 0.01, g + 1.5, z0 + 4.6), v3(x1 + 0.025, g + 2.0, z0 + 7.0), hoard_white, .paint, .sheet_metal);
+    eastText(x1 + 0.035, "CANTEEN", z0 + 5.8, g + 1.86, 0.025, sign_black);
+    // The stair: up to the west along the south end, to a landing at the
+    // door of the upper cabin.
+    const sz = [2]f32{ z1 + 0.1, z1 + 1.1 };
+    const top = ub;
+    const run: f32 = 2.6;
+    const xs = x0 + 1.6 + run; // the foot of the stair
+    const steps = 9;
+    for (0..steps) |i| {
+        const fi: f32 = @floatFromInt(i);
+        const ty = g + (top - g) * (fi + 1) / @as(f32, steps) - 0.04;
+        const tx = xs - run / @as(f32, steps) * (fi + 1);
+        deco(v3(tx, ty, sz[0]), v3(tx + 0.3, ty + 0.04, sz[1]), galv, .metal, .metal);
+    }
+    for (sz) |z| {
+        slabR(v3(xs, g, z - 0.02), v3(-run, top - g, 0), v3(0, 0.22, 0), v3(0, 0, 0.04), galv, .metal, .metal);
+        map.rail(&.{ v3(xs, g + 1.0, z), v3(x0 + 1.6, top + 1.0, z), v3(x0 + 0.05, top + 1.0, z) }, 0.025, 0.2, galv, .metal, .metal);
+        map.rod(v3(xs, g, z), v3(xs, g + 1.0, z), 0.025, galv, .metal, .metal);
+    }
+    deco(v3(x0, top - 0.08, sz[0]), v3(x0 + 1.6, top - 0.01, sz[1]), galv, .metal, .metal);
+    for ([_]f32{ x0 + 0.05, x0 + 1.55 }) |px| map.rod(v3(px, g, sz[1]), v3(px, top + 1.0, sz[1]), 0.04, galv, .metal, .metal);
+    deco(v3(x0 + 0.3, top, z1 + 0.01), v3(x0 + 1.2, top + 2.0, z1 + 0.03), v3(0.2, 0.24, 0.27), .paint, .sheet_metal);
+}
+
+/// A concrete frame building under construction: four floors of columns
+/// and slabs, a core that goes higher, rebar out of the top columns, and
+/// yellow edge protection on the slabs.
+fn concreteFrame(r: Rect, g: f32) void {
+    const conc = v3(0.6, 0.59, 0.56);
+    const floor_h: f32 = 3.4;
+    const cols_x = [_]f32{ r.x0 + 0.4, r.x0 + 5.5, r.x1 - 5.5, r.x1 - 0.4 };
+    const cols_z = [_]f32{ r.z0 + 0.4, r.z0 + 6.4, r.z1 - 6.4, r.z1 - 0.4 };
+    for (0..4) |f| {
+        const fl: f32 = @floatFromInt(f);
+        const b = g + fl * floor_h;
+        const t = b + floor_h;
+        for (cols_x) |cx| for (cols_z) |cz| {
+            deco(v3(cx - 0.2, b, cz - 0.2), v3(cx + 0.2, t - 0.25, cz + 0.2), conc, .concrete, .concrete);
+            if (f == 3) {
+                for ([_]f32{ -0.12, 0.12 }) |dx| for ([_]f32{ -0.12, 0.12 }) |dz| {
+                    map.rod(v3(cx + dx, t - 0.25, cz + dz), v3(cx + dx, t + 0.8, cz + dz), 0.012, v3(0.36, 0.18, 0.1), .metal, .metal);
+                };
+            }
+        };
+        if (f == 3) break;
+        deco(v3(r.x0, t - 0.25, r.z0), v3(r.x1, t, r.z1), conc * vec.s(0.95), .concrete, .concrete);
+        deco(v3(r.x1 + 0.02, t, r.z0), v3(r.x1 + 0.05, t + 1.2, r.z1), v3(0.9, 0.75, 0.1), .paint, .metal);
+        deco(v3(r.x0, t, r.z1 + 0.02), v3(r.x1, t + 1.2, r.z1 + 0.05), v3(0.9, 0.75, 0.1), .paint, .metal);
+    }
+    deco(v3(r.x0 + 6, g, r.z0 + 7), v3(r.x0 + 10, g + 4 * floor_h + 2.5, r.z0 + 11), conc * vec.s(1.05), .concrete, .concrete);
+}
+
+/// A tower crane: a lattice mast `h` high, a jib 40 m long toward `dir`, a
+/// counter-jib with its weights, a cab, a load of boards on the hook, and
+/// red lights for aircraft. c: the ground at the middle of the mast.
+fn towerCrane(c: V3, dir: V3, h: f32) void {
+    const yel = v3(0.95, 0.75, 0.05);
+    const lamp = v3(1.0, 0.1, 0.05);
+    deco(v3(c[0] - 3, c[1] + 0.005, c[2] - 3), v3(c[0] + 3, c[1] + 0.45, c[2] + 3), v3(0.58, 0.57, 0.54), .concrete, .concrete);
+    const m0 = c[1] + 0.45;
+    const m1 = c[1] + h;
+    const hw: f32 = 0.8;
+    const corners = [_][2]f32{ .{ -hw, -hw }, .{ hw, -hw }, .{ hw, hw }, .{ -hw, hw } };
+    for (corners) |k| map.rod(v3(c[0] + k[0], m0, c[2] + k[1]), v3(c[0] + k[0], m1, c[2] + k[1]), 0.07, yel, .paint, .metal);
+    const sections: usize = @intFromFloat(@floor((m1 - m0) / 2));
+    const sec = (m1 - m0) / @as(f32, @floatFromInt(sections));
+    for (0..sections) |i| {
+        const ya = m0 + sec * @as(f32, @floatFromInt(i));
+        for (0..4) |e| {
+            const a = corners[e];
+            const b = corners[(e + 1) % 4];
+            const pa = v3(c[0] + a[0], ya, c[2] + a[1]);
+            const pb = v3(c[0] + b[0], ya, c[2] + b[1]);
+            map.rod(pa, pb, 0.035, yel, .paint, .metal);
+            if (i % 2 == 0) map.rod(pa, pb + v3(0, sec, 0), 0.03, yel, .paint, .metal) else map.rod(pb, pa + v3(0, sec, 0), 0.03, yel, .paint, .metal);
+        }
+    }
+    // The slewing unit, the cab and the tower head.
+    const jf = Frame{ .o = v3(c[0], m1, c[2]), .f = dir };
+    jf.box(v3(-1.1, 0, -1.1), v3(1.1, 1.0, 1.1), yel, .paint, .metal);
+    jf.box(v3(0.2, 0.1, 1.15), v3(2.0, 2.1, 2.6), v3(0.85, 0.85, 0.8), .paint, .sheet_metal);
+    jf.box(v3(2.01, 0.9, 1.25), v3(2.04, 2.0, 2.5), v3(0.12, 0.16, 0.2), .metal, .glass);
+    const apex = v3(0, 8, 0);
+    for (corners) |k| jf.rod(v3(k[0], 1.0, k[1]), apex, 0.06, yel, .paint, .metal);
+    jf.box(v3(-0.2, 8, -0.2), v3(0.2, 8.15, 0.2), lamp, .emissive, .glass);
+    // The jib: a triangular lattice, two chords at the bottom and one at
+    // the top, braced each 2 m.
+    const jl: f32 = 40;
+    for ([_]f32{ -0.7, 0.7 }) |w| jf.rod(v3(1.1, 1.0, w), v3(jl, 1.0, w), 0.05, yel, .paint, .metal);
+    jf.rod(v3(1.1, 2.4, 0), v3(jl, 1.2, 0), 0.05, yel, .paint, .metal);
+    var u: f32 = 1.1;
+    while (u < jl - 1) : (u += 2) {
+        const tv2 = 2.4 - 1.2 * (u + 1 - 1.1) / (jl - 1.1);
+        for ([_]f32{ -0.7, 0.7 }) |w| {
+            jf.rod(v3(u, 1.0, w), v3(u + 1, tv2, 0), 0.025, yel, .paint, .metal);
+            jf.rod(v3(u + 1, tv2, 0), v3(u + 2, 1.0, w), 0.025, yel, .paint, .metal);
+        }
+        jf.rod(v3(u, 1.0, -0.7), v3(u, 1.0, 0.7), 0.025, yel, .paint, .metal);
+    }
+    jf.box(v3(jl - 0.15, 1.2, -0.1), v3(jl - 0.05, 1.35, 0.1), lamp, .emissive, .glass);
+    // The counter-jib, its weights and the winch.
+    const cl: f32 = 13;
+    for ([_]f32{ -0.8, 0.8 }) |w| jf.rod(v3(-1.1, 1.0, w), v3(-cl, 1.0, w), 0.06, yel, .paint, .metal);
+    jf.box(v3(-cl + 0.5, 0.85, -0.8), v3(-1.1, 0.95, 0.8), v3(0.3, 0.3, 0.3), .metal, .metal);
+    for (0..3) |i| {
+        const ua = -cl + 0.2 + 0.75 * @as(f32, @floatFromInt(i));
+        jf.box(v3(ua, -1.2, -1.0), v3(ua + 0.7, 0.85, 1.0), v3(0.55, 0.54, 0.5), .concrete, .concrete);
+    }
+    jf.box(v3(-7, 1.0, -0.6), v3(-5, 2.0, 0.6), yel, .paint, .metal);
+    jf.box(v3(-cl + 0.05, 1.0, -0.1), v3(-cl + 0.15, 1.15, 0.1), lamp, .emissive, .glass);
+    // The ties from the tower head.
+    jf.rod(apex, v3(26, 2.4 - 1.2 * (26 - 1.1) / (jl - 1.1), 0), 0.03, v3(0.2, 0.2, 0.2), .metal, .metal);
+    for ([_]f32{ -0.8, 0.8 }) |w| jf.rod(apex, v3(-cl + 0.3, 1.0, w), 0.03, v3(0.2, 0.2, 0.2), .metal, .metal);
+    // The trolley, the ropes, the hook block and the load: a bundle of
+    // scaffold boards in two slings.
+    const tu: f32 = 12;
+    const hook = c[1] + 9.0 - m1; // the hook block, from the top of the mast
+    jf.box(v3(tu - 0.5, 0.75, -0.6), v3(tu + 0.5, 0.95, 0.6), yel, .paint, .metal);
+    for ([_]f32{ -0.15, 0.15 }) |w| jf.rod(v3(tu, 0.75, w), v3(tu, hook + 0.5, w), 0.012, v3(0.15, 0.15, 0.15), .metal, .metal);
+    jf.box(v3(tu - 0.25, hook, -0.3), v3(tu + 0.25, hook + 0.5, 0.3), yel, .paint, .metal);
+    const load = hook - 2.2;
+    for ([_]f32{ -1.2, 1.2 }) |du| jf.rod(v3(tu, hook, 0), v3(tu + du, load + 0.3, 0), 0.015, v3(0.9, 0.5, 0.1), .cloth, .fabric);
+    jf.box(v3(tu - 2.0, load, -0.35), v3(tu + 2.0, load + 0.3, 0.35), timber, .wood, .wood);
 }
 
 // ---- The lines out of the station ----------------------------------------------

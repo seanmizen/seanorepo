@@ -288,6 +288,8 @@ fn audit() usize {
     for (map.decor.items, 0..) |d, di| {
         const bb = map.decorBounds(d);
         if (flush(bb)) continue;
+        // Scenery is out of play: the escape audit proves it.
+        if (@reduce(.And, bb[0] >= map.scenery[0]) and @reduce(.And, bb[1] <= map.scenery[1])) continue;
         var hit = false;
         for (map.boxes[0..map.box_count]) |f| {
             if (!f.solid or f.dynamic) continue;
