@@ -1,6 +1,13 @@
 // The frame: shadow pass, HDR scene pass (4x MSAA), bloom, final pass with
 // the tone map and the HUD.
 //
+// The camera uses reversed Z (REQ-RENDER-001): the near plane is depth 1,
+// the far plane depth 0 (vec.reversedPerspective). The depth target clears
+// to 0, and each pipeline that tests it keeps the greater depth. A float
+// depth buffer has the most precision near 0, so far surfaces a few
+// millimetres apart do not z-fight. The shadow maps keep the standard
+// depth: the near plane is depth 0.
+//
 // Local light shadows: each map light has six depth maps, one for each axis
 // direction (a cube map in six layers of a 2D array texture). They are drawn
 // one time when a map loads (loadMap), from the static mesh. The map lights
@@ -32,6 +39,13 @@ const msaa = 4;
 const shadow_size = 2048;
 const hdr_format: T.TextureFormat = .rgba16float;
 const depth_format: T.TextureFormat = .depth32float;
+/// The near and far planes of the camera, m.
+const cam_near: f32 = 0.04;
+const cam_far: f32 = 260;
+/// Reversed Z (REQ-RENDER-001): the depth target clears to the far plane,
+/// 0, and a nearer fragment has a greater depth.
+const scene_depth_clear: f32 = 0.0;
+const scene_depth_test: T.CompareFunction = .greater;
 const swap_format: T.TextureFormat = .bgra8unorm;
 const max_dynamic = 120_000;
 /// The translucent vertices (smoke, the debug blast volume) per frame.
@@ -459,15 +473,17 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .vertex = .{ .module = &scene_mod, .entry_point = "vs_main", .buffers = &vertex_layout },
         .fragment = .{ .module = &scene_mod, .entry_point = "fs_main", .targets = &[_]T.ColorTargetState{.{ .format = hdr_format }} },
         .primitive = no_cull,
-        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = true, .depth_compare = .less },
+        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = true, .depth_compare = scene_depth_test },
         .multisample = ms,
     });
+    // The sky is at the far plane (depth 0): it shows where the depth is
+    // still the clear value.
     sky_pipe = try gpu.createRenderPipeline(.{
         .layout = &scene_layout,
         .vertex = .{ .module = &scene_mod, .entry_point = "vs_sky" },
         .fragment = .{ .module = &scene_mod, .entry_point = "fs_sky", .targets = &[_]T.ColorTargetState{.{ .format = hdr_format }} },
         .primitive = no_cull,
-        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = false, .depth_compare = .less_equal },
+        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = false, .depth_compare = .greater_equal },
         .multisample = ms,
     });
     // Straight alpha blending: out = src * src.a + dst * (1 - src.a).
@@ -480,7 +496,7 @@ pub fn init(gpu: *gpu_mod.GPU) !void {
         .vertex = .{ .module = &scene_mod, .entry_point = "vs_trans", .buffers = &vertex_layout },
         .fragment = .{ .module = &scene_mod, .entry_point = "fs_trans", .targets = &[_]T.ColorTargetState{.{ .format = hdr_format, .blend = alpha_blend }} },
         .primitive = no_cull,
-        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = false, .depth_compare = .less },
+        .depth_stencil = .{ .format = depth_format, .depth_write_enabled = false, .depth_compare = scene_depth_test },
         .multisample = ms,
     });
     shadow_pipe = try gpu.createRenderPipeline(.{
@@ -614,7 +630,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     scene_h = h;
 
     const aspect = @as(f32, @floatFromInt(w)) / @as(f32, @floatFromInt(h));
-    const proj = @import("sw_math").perspective(p.fov, aspect, 0.04, 260);
+    const proj = vec.reversedPerspective(p.fov, aspect, cam_near, cam_far);
     const view_proj = proj.mul(viewMatrix(p.eye, p.yaw, p.pitch, p.roll));
     const c = map.shadow_centre;
     const light_view = @import("sw_math").lookAt(
@@ -710,7 +726,7 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
                 .store_op = .discard,
                 .clear_value = .{ .r = 0, .g = 0, .b = 0, .a = 1 },
             }},
-            .depth_stencil_attachment = .{ .view = &targets.depth_v, .depth_load_op = .clear, .depth_store_op = .discard, .depth_clear_value = 1.0, .stencil_read_only = true },
+            .depth_stencil_attachment = .{ .view = &targets.depth_v, .depth_load_op = .clear, .depth_store_op = .discard, .depth_clear_value = scene_depth_clear, .stencil_read_only = true },
         });
         pass.setPipeline(scene_pipe);
         pass.setBindGroup(0, scene_bg);

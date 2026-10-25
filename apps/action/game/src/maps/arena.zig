@@ -150,7 +150,9 @@ pub fn build() void {
     const navy = v3(0.16, 0.22, 0.36);
 
     // Floor and the outer walls.
-    a(v3(-half - 2, -1, -half - 2), v3(half + 2, 0, half + 2), v3(0.44, 0.41, 0.38), .tile, .tile);
+    // On the south it stops at the outer face of the wall: the floor of the
+    // range starts there.
+    a(v3(-half - 2, -1, -half - 2), v3(half + 2, 0, half + 1), v3(0.44, 0.41, 0.38), .tile, .tile);
     a(v3(-half - 1, 0, -half - 1), v3(half + 1, wall_h, -half), sand, .concrete, .concrete);
     // The south wall has a doorway to the range, 4 m wide.
     a(v3(-half - 1, 0, half), v3(-2, wall_h, half + 1), sand, .concrete, .concrete);

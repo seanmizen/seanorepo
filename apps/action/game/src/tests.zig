@@ -6,9 +6,10 @@
 // and the lift rides (player_test.zig), the vault (vault_test.zig), your
 // own body in first person (body_test.zig), the console framework
 // (console/tests.zig), the session layer (session/tests.zig), the gun model
-// (guns_test.zig), the box limit and the surface materials
-// (surfaces_test.zig), the bullet sound models (audio/tests.zig), the NPC
-// shooter of the range and the impact effects (shooter_test.zig), the
+// (guns_test.zig), the box limit, the surface materials and the coplanar
+// faces (surfaces_test.zig), the reversed Z projection (vec.zig), the
+// bullet sound models (audio/tests.zig), the NPC shooter of the range and
+// the impact effects (shooter_test.zig), the
 // secret room of VAPES N MORE (secret_room_test.zig), the readers and the
 // status lights of the ticket gates (gates.zig), the server cvar file and
 // the protocol version of the game.
@@ -34,6 +35,7 @@ test {
     _ = @import("ao_grid.zig");
     _ = @import("dyn_scale.zig");
     _ = @import("gates.zig");
+    _ = @import("vec.zig");
 }
 
 test "protocol_version.txt: one number, 1 or more" {

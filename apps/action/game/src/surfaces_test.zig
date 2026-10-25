@@ -2,12 +2,14 @@
 // When: after a change to a map, to map.zig, or to the gun model.
 // Why: checks that each map fits in map.max_boxes, that a full map does
 // not overwrite a box, that every box and decoration has a material that
-// fits its look, that a hit takes the material of the decoration on the
-// hit point, and that the bullet of each gun (guns.zig) gives a crack
-// when it is supersonic and a whiz when it is subsonic.
+// fits its look, that no two faces of a map z-fight (coplanar.zig), that a
+// hit takes the material of the decoration on the hit point, and that the
+// bullet of each gun (guns.zig) gives a crack when it is supersonic and a
+// whiz when it is subsonic.
 const std = @import("std");
 const testing = std.testing;
 const map = @import("map.zig");
+const coplanar = @import("coplanar.zig");
 const guns = @import("guns.zig");
 const weapon = @import("weapon.zig");
 const nm = @import("audio/near_miss.zig");
@@ -29,6 +31,35 @@ test "each map fits in max_boxes, and each surface has a material that fits its 
         for (map.boxes[0..map.box_count]) |b| try testing.expect(map.surfaceFits(b.mat, b.surface));
         for (map.decor.items) |d| try testing.expect(map.surfaceFits(d.mat, d.surface));
     }
+}
+
+test "no map has a coplanar overlap: two faces that z-fight (REQ-RENDER-002)" {
+    map.init(testing.allocator);
+    defer unload();
+    for (std.enums.values(map.Id)) |id| {
+        map.load(id);
+        var found: [8]coplanar.Overlap = undefined;
+        const n = try coplanar.find(testing.allocator, &found);
+        if (n > 0) std.debug.print("{s}: {d} coplanar overlaps. Run zig build floorplan -- {s} audit\n", .{ @tagName(id), n, @tagName(id) });
+        try testing.expectEqual(@as(usize, 0), n);
+    }
+}
+
+test "the coplanar audit finds two faces that z-fight, and not two that do not" {
+    map.init(testing.allocator);
+    defer unload();
+    map.load(.arena);
+    var found: [8]coplanar.Overlap = undefined;
+    const base = try coplanar.find(testing.allocator, &found);
+    // A red tile in the air over the arena, and a blue one on it at the
+    // same height: they fight.
+    map.addDecor(vec.Mat4.identity(), v3(0, 50, 0), v3(1, 50.05, 1), v3(1, 0, 0), .paint, .metal);
+    map.addDecor(vec.Mat4.identity(), v3(0.5, 50, 0.5), v3(1.5, 50.05, 1.5), v3(0, 0, 1), .paint, .metal);
+    try testing.expect(try coplanar.find(testing.allocator, &found) > base);
+    // The blue one 1 cm higher: they do not.
+    map.decor.items[map.decor.items.len - 1].min[1] += 0.01;
+    map.decor.items[map.decor.items.len - 1].max[1] += 0.01;
+    try testing.expectEqual(base, try coplanar.find(testing.allocator, &found));
 }
 
 test "a full map drops the next box and changes no box" {

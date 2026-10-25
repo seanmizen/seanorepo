@@ -2,19 +2,21 @@
 // When: while you build or change a map.
 // Why: draws slices of a map, so you can see what is where, and audits the
 // map: for decoration that a player can walk through, for lights inside a
-// shadow caster, for surface materials that do not fit their look, for lift
-// shafts and landings that catch a player, and for escape holes
-// (escape.zig).
+// shadow caster, for surface materials that do not fit their look, for
+// coplanar faces that z-fight (coplanar.zig), for lift shafts and landings
+// that catch a player, and for escape holes (escape.zig).
 //
 //   zig build floorplan -- <map> plan <y> <out.ppm>        top view, a slice at height y
 //   zig build floorplan -- <map> section-z <z> <out.ppm>   side view (x, y), a slice at z
 //   zig build floorplan -- <map> section-x <x> <out.ppm>   end view (z, y), a slice at x
 //   zig build floorplan -- <map> audit                     reachable decoration without collision,
 //                                                           lights inside a shadow caster, the
-//                                                           surface materials, and the lift shafts
-//                                                           and landings: exit code 1 if a
-//                                                           material does not fit its look, or a
-//                                                           lift shaft or landing is not clear
+//                                                           surface materials, the coplanar
+//                                                           overlaps, and the lift shafts and
+//                                                           landings: exit code 1 if a material
+//                                                           does not fit its look, two faces
+//                                                           z-fight, or a lift shaft or landing
+//                                                           is not clear
 //   zig build floorplan -- <map> escape                    escape holes and trapped spawn points,
 //                                                           exit code 1 if it finds one
 //
@@ -31,6 +33,7 @@
 const std = @import("std");
 const map = @import("map.zig");
 const escape = @import("escape.zig");
+const coplanar = @import("coplanar.zig");
 const player = @import("player.zig");
 const vec = @import("vec.zig");
 const V3 = vec.V3;
@@ -459,6 +462,23 @@ fn auditLifts() usize {
     return bad;
 }
 
+/// The coplanar overlaps (coplanar.zig): two faces that z-fight. Returns
+/// the count.
+fn auditCoplanar(alloc: std.mem.Allocator) !usize {
+    // The list shows the first 500.
+    var found: [500]coplanar.Overlap = undefined;
+    const n = try coplanar.find(alloc, &found);
+    for (found[0..@min(n, found.len)]) |o| {
+        var ba: [200]u8 = undefined;
+        var bb: [200]u8 = undefined;
+        std.debug.print("coplanar at ({d:.2} {d:.2} {d:.2}), {d:.1} mm apart, {d:.4} m2:\n  {s}\n  {s}\n", .{
+            o.at[0], o.at[1], o.at[2], o.dist * 1000, o.area, coplanar.describe(o.a, &ba), coplanar.describe(o.b, &bb),
+        });
+    }
+    std.debug.print("{d} coplanar overlaps (faces less than {d:.1} mm apart)\n", .{ n, coplanar.gap * 1000 });
+    return n;
+}
+
 pub fn main(init: std.process.Init) !void {
     const alloc = init.arena.allocator();
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -480,9 +500,10 @@ pub fn main(init: std.process.Init) !void {
         _ = audit();
         _ = auditLights();
         const surfaces = auditSurfaces();
+        const flat = try auditCoplanar(alloc);
         // Last: it moves the lifts to each level.
         const lifts = auditLifts();
-        if (surfaces > 0 or lifts > 0) std.process.exit(1);
+        if (surfaces > 0 or lifts > 0 or flat > 0) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, args[2], "escape")) {
