@@ -1135,17 +1135,17 @@ road over the floor of the ticket hall is concrete.
 
 | Material | The sound | Earl's Court boxes, decoration | Arena boxes | For example |
 |---|---|---|---|---|
-| `concrete` | a sharp crack, a thud and grit | 189, 296 | 80 | platforms, stairs, decks, pavements, the road, painted lines, stone sills |
+| `concrete` | a sharp crack, a thud and grit | 189, 395 | 80 | platforms, stairs, decks, pavements, the road, painted lines, stone sills |
 | `brick` | a duller crack and more crumble | 65, 0 | 0 | the shed walls, the concourses, the terraces, the buildings next to the station |
-| `plaster` | a soft crack and a puff | 25, 34 | 0 | the ticket hall walls, the painted fronts on the roads |
+| `plaster` | a soft crack and a puff | 24, 34 | 0 | the ticket hall walls, the painted fronts on the roads |
 | `tile` | a brittle tink and shards | 120, 1688 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof, the terracotta of the Earls Court Road front |
-| `metal` | a click, a heavy thud and a short low ring | 262, 2431 | 13 | rails, railings, posts, frames, escalator steps and balustrades, roof ribs |
-| `sheet_metal` | a hollow doof and a low boom | 121, 2080 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
-| `glass` | a bright crack and falling shards | 32, 659 | 6 | lamps, windows, shop windows, the lift shafts, the Warwick Road front and rotunda |
-| `wood` | a hollow knock and splinters | 21, 3279 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
+| `metal` | a click, a heavy thud and a short low ring | 263, 3188 | 13 | rails, railings, posts, frames, escalator steps and balustrades, roof ribs |
+| `sheet_metal` | a hollow doof and a low boom | 121, 4493 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
+| `glass` | a bright crack and falling shards | 32, 730 | 6 | lamps, windows, shop windows, the lift shafts, the Warwick Road front and rotunda |
+| `wood` | a hollow knock and splinters | 23, 3464 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
 | `ballast` | a chuff and a clatter of stones | 16, 0 | 0 | the track beds |
-| `earth` | a dull thup and a spray of dirt | 12, 0 | 0 | the ground under the buildings, the banks of the cuttings |
-| `fabric` | a soft thup | 78, 598 | 0 | the seats of the trains, the gangways of the District train |
+| `earth` | a dull thup and a spray of dirt | 12, 13 | 0 | the ground under the buildings, the banks of the cuttings |
+| `fabric` | a soft thup | 78, 697 | 0 | the seats of the trains, the gangways of the District train |
 | `flesh` | a wet slap and a thud | 0, 0 | 0 | players and dummies (not a map surface) |
 
 The floorplan audit prints these counts. Its exit code is 1 when a
@@ -1155,7 +1155,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 2048. Earl's Court uses 941 boxes, the arena 126.
+`map.max_boxes` is 2048. Earl's Court uses 943 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1173,8 +1173,8 @@ wood. `zig build test` checks the same.
   - The CPU arrays that have the size of the limit (`render.zig`,
     `grenade.zig`) get larger by the same amounts.
   - The AO grid and the collision tests use only the boxes in the map. The
-    limit does not change them. The front added 25 boxes. The AO grid went from 254 to 265
-    boxes, with the same cells (646 KB to 648 KB).
+    limit does not change them. The front added 25 boxes. The AO grid went
+    from 254 to 265 boxes, with the same cells (646 KB to 648 KB).
   - The front added 50,552 map triangles (139,900 to 190,452). In headless
     Chromium on the Mac (Apple GPU, 3200 x 1800), the median frame was
     16.7 ms (the 60 Hz limit) before and after. The test views were the
@@ -1193,7 +1193,7 @@ wood. `zig build test` checks the same.
   of the cell of each pixel, and the moving list: the dynamic boxes and
   each box that is not where it was at the load. The same boxes occlude
   as in a loop over all the boxes, so the look does not change. Earl's
-  Court: 265 boxes, 268 x 13 x 33 cells of 3 m, 648 KB. The cells start
+  Court: 266 boxes, 268 x 13 x 33 cells of 3 m, 647 KB. The cells start
   at 2 m. Above 262,144 cells or 4,194,304 list entries, the cells get
   1.5 times bigger. The grid never drops a box. On a GTX 980 Ti at
   1904 x 985, the grid took the frame time from 27.8 ms to 15 ms (p50).
