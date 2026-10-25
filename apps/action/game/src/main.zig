@@ -128,6 +128,9 @@ var hp: i32 = 100;
 var damage_flash: f32 = 0;
 var hit_marker: f32 = 0;
 var hit_marker_kill = false;
+/// The aim of a blessing of MORE (secret_room.zig Aim): the crosshair, the
+/// gun and the shots go along it. The camera stays with the mouse.
+var aim: secret.Aim = .{};
 var dead_time: f32 = 0;
 var killed_by: [24]u8 = undefined;
 var killed_by_len: usize = 0;
@@ -1342,12 +1345,12 @@ fn fire() void {
     shots += 1;
     const moving = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
     const sp = shotSpread(st, moving);
-    const f = vec.forward(me.yaw, me.pitch);
+    const f = aimDir();
     const right = vec.norm(vec.cross(f, v3(0, 1, 0)));
     const up = vec.cross(right, f);
     const o = me.eyePos();
     const pose = loadout.hands.pose(it.*, me.stride * 1.7, 0);
-    const muzzle = vec.xform(cameraMatrix().mul(pose.gun), pose.muzzle);
+    const muzzle = vec.xform(cameraMatrix().mul(gunTurn(pose.gun)).mul(pose.gun), pose.muzzle);
 
     var hit_list: [8]ShotHit = undefined;
     var nh: usize = 0;
@@ -1432,7 +1435,7 @@ fn fire() void {
 fn stab() void {
     const st = weapon.stats(.knife);
     const o = me.eyePos();
-    const f = vec.forward(me.yaw, me.pitch);
+    const f = aimDir();
     const right = vec.norm(vec.cross(f, v3(0, 1, 0)));
     const up = vec.cross(right, f);
     sound(1, null, 0.09, .noise, 0.1);
@@ -1501,32 +1504,40 @@ fn shotSpread(st: *const weapon.Stats, moving: f32) f32 {
     return loadout.hands.spread(st, moving, !me.grounded);
 }
 
-/// A blessing of MORE (secret_room.zig): the aim locks on the head of the
-/// live enemy nearest the middle of the screen, in sight and within
-/// secret.aim_cone. The crosshair and the gun follow the aim.
+/// A blessing of MORE (secret_room.zig Aim): the aim goes to the head of
+/// the live enemy nearest the middle of the screen, in sight and within
+/// secret.aim_cone. The camera does not move: yaw and pitch stay with the
+/// mouse.
 fn autoAim() void {
-    if (secret.blessed == null or mode != .deathmatch or !alive) return;
-    const eye = me.eyePos();
-    const f = vec.forward(me.yaw, me.pitch);
-    var aim_at: ?V3 = null;
-    var best_a: f32 = secret.aim_cone;
-    for (remotes[0..remote_n]) |*r| {
-        if (!r.alive) continue;
+    var heads: [remotes.len]secret.Head = undefined;
+    var n: usize = 0;
+    const on = secret.blessed != null and mode == .deathmatch and alive;
+    if (on) for (remotes[0..remote_n]) |*r| {
+        if (!r.alive or n == heads.len) continue;
         const hb = player_mod.hitBoxes(r.pos, r.yaw, r.lean)[2];
-        const head = (hb.min + hb.max) * vec.s(0.5);
-        const d = head - eye;
-        const l = vec.len(d);
-        if (l < 0.3) continue;
-        const a = std.math.acos(std.math.clamp(vec.dot(f, d / vec.s(l)), -1, 1));
-        if (a >= best_a) continue;
-        if (map.raycast(eye, d / vec.s(l), l - 0.2) != null) continue;
-        best_a = a;
-        aim_at = head;
-    }
-    const h = aim_at orelse return;
-    const d = vec.norm(h - eye);
-    me.yaw = std.math.atan2(-d[0], -d[2]);
-    me.pitch = std.math.asin(std.math.clamp(d[1], -1, 1));
+        heads[n] = .{ .id = r.id, .pos = (hb.min + hb.max) * vec.s(0.5) };
+        n += 1;
+    };
+    aim.step(dt, me.eyePos(), me.yaw, me.pitch, heads[0..n], on);
+}
+
+/// The direction of a shot from the eye: the aim of a blessing, else the
+/// camera forward.
+fn aimDir() V3 {
+    return aim.dir(me.eyePos(), me.yaw, me.pitch);
+}
+
+/// The turn of the gun to the aim of a blessing, in camera space, about
+/// the grip of `gun` (a gun pose in camera space). No blessing: the
+/// identity.
+fn gunTurn(gun: Mat4) Mat4 {
+    if (aim.idle()) return Mat4.identity();
+    const f = aim.local(me.eyePos(), me.yaw, me.pitch);
+    const r = vec.norm(vec.cross(f, v3(0, 1, 0)));
+    const u = vec.cross(r, f);
+    const turn = Mat4{ .data = .{ r[0], r[1], r[2], 0, u[0], u[1], u[2], 0, -f[0], -f[1], -f[2], 0, 0, 0, 0, 1 } };
+    const p = v3(gun.data[12], gun.data[13], gun.data[14]);
+    return vec.translate(p).mul(turn).mul(vec.translate(-p));
 }
 
 /// The camera kick of a shot: the recoil pattern of the held gun
@@ -2644,7 +2655,10 @@ fn buildViewmodel() void {
     const hands = &loadout.hands;
     const speed = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
     const pose = hands.pose(it.*, me.stride * 1.7, if (me.grounded) speed else 0);
-    const gm = cameraMatrix().mul(grenade.viewDip()).mul(pose.gun);
+    // A blessing of MORE turns the gun to the aim. The grenade throws
+    // along the camera.
+    const turn = if (it.class == .grenade) Mat4.identity() else gunTurn(pose.gun);
+    const gm = cameraMatrix().mul(turn).mul(grenade.viewDip()).mul(pose.gun);
     if (it.class == .grenade) {
         grenade.addBody(&dyn, gm, 100);
         return;
@@ -3312,7 +3326,12 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
     if (mode == .practice and map.id == .arena) {
         shooter_hud.draw(r, &text.?, .{ .view = hud_cam.view, .th = hud_cam.th, .eye = hud_cam.eye, .w = w, .h = h }, if (captured) aimedPanel() else null);
     }
-    if (crosshair) try drawCrosshair(r, w / 2, h / 2);
+    if (crosshair) {
+        // A blessing of MORE: the crosshair is on the aim.
+        const at = if (aim.idle()) null else toScreen(aim.point(me.eyePos(), me.yaw, me.pitch), w, h);
+        const c = at orelse [2]f32{ w / 2, h / 2 };
+        try drawCrosshair(r, c[0], c[1]);
+    }
     if (mode == .practice) range.drawNumbers(r, &text.?, w / 2, h / 2);
     drawFares(r, w / 2, h / 2);
     // A blessing of MORE (secret_room.zig): the seconds left.

@@ -423,7 +423,10 @@ it does.
   the door is a wall, the GET MORE pack is in reach and the golden pigeon
   is not. GET MORE opens the door, the room lights come up, and a player
   walks from the shop to the dais. MORE gives a blessing of 45 s. A new
-  match shuts the door, and a late join opens it at once.
+  match shuts the door, and a late join opens it at once. The aim of a
+  blessing goes to the head nearest the middle of the screen, glides
+  there and back in 0.1 s, stops at a wall, and does not change the yaw
+  or the pitch.
 - `game/src/roadmen_test.zig`: the roadmen of Warwick Road
   (`game/src/roadmen.zig`). The line is 50 m from the exit, north and
   south, and each alley and the fence are past it. A player who walks past
@@ -1854,7 +1857,12 @@ stocks. The door openings and the door places are approximate.
     halo of white pigeons flies round your head, and you shine gold for
     the other players. You move 1.5 times faster. The aim locks on the
     head of the live enemy nearest the middle of the screen, in sight and
-    within 0.6 rad. The guns have no spread, also on the move and in the
+    within 0.6 rad. The camera stays with the mouse. The crosshair moves
+    on the screen to that head, and the gun turns to point at it. They
+    glide there in 0.1 s, and back to the middle in 0.1 s when the target
+    goes. The shots, the tracers and the impacts go along the aim. The
+    recoil still kicks the camera. F (use) still picks along the middle
+    of the screen. The guns have no spread, also on the move and in the
     air. The HUD shows the seconds left. A death or a new match ends the
     blessing.
   - The door stays open until the map loads again or a new match starts.
