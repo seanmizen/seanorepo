@@ -6,7 +6,8 @@
 // no moped. An "off" only from the rider. A hit only from a live rider on
 // a near live player, at a moped speed, once each gap, with more damage at
 // more speed. The `bk` field of an "st" only for the moped of the rider. A
-// death of a rider sends the "off" with its last place.
+// death of a rider sends the "off" with its last place. A moped left at
+// speed slides on, and its rider gets on again where it stops.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -17,6 +18,8 @@ import {
   HIT_REACH,
   hitDamage,
   MOUNT_REACH,
+  MOVED_REACH,
+  slideReach,
 } from './bikes';
 
 const crash = [-89, 4.8, -32, 0, 12, 0];
@@ -72,6 +75,25 @@ describe('the mopeds to ride', () => {
     expect(b.ridden(3)).toBeNull();
     // Another player gets on it.
     expect(b.onMessage(4, at, mount)).toHaveLength(1);
+  });
+
+  test('a moped left at speed: the rider gets on again where it stopped', () => {
+    const b = new Bikes();
+    b.add(7, crash);
+    b.onMessage(3, at, mount);
+    // Off at 13 m/s: it slides about 28 m at the slowest stop.
+    const fast = [q[0], q[1], q[2], 0, 13, 0, 0];
+    b.onMessage(3, at, { t: 'mp', k: 'off', bk: 1, q: fast });
+    expect(slideReach(13)).toBeGreaterThan(20);
+    const stop = [q[0], q[1], q[2] - 22, 0, 0, 0, 0];
+    const by = { ...at, z: stop[2] };
+    expect(b.onMessage(3, by, { ...mount, q: stop })).toHaveLength(1);
+    // A walk-speed off: the old reach only.
+    b.onMessage(3, by, { t: 'mp', k: 'off', bk: 1, q: stop });
+    const far = [q[0], q[1], stop[2] - MOVED_REACH - 3, 0, 0, 0, 0];
+    expect(b.onMessage(3, { ...at, z: far[2] }, { ...mount, q: far })).toEqual(
+      [],
+    );
   });
 
   test('a hit from a live rider on a near player: more damage at more speed, once each gap', () => {
