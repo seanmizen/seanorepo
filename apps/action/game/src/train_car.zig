@@ -170,6 +170,8 @@ const seat_h: f32 = 0.45;
 const seat_d: f32 = 0.48;
 const seat_gap: f32 = 0.35;
 const cab_len: f32 = 2.0;
+/// The depth along the train of the cap over a raked windscreen.
+const cap_depth: f32 = 0.12;
 const max_cars = 8;
 pub const max_doors = 24;
 const max_pillars = 160;
@@ -447,9 +449,11 @@ pub fn details(b: *const Body, sink: anytype, open: f32) void {
     const xs = b.doorXs(&doors);
     var pillar_buf: [max_pillars]f32 = undefined;
     const pillars = b.pillarXs(&pillar_buf);
-    // The roof strips run between the cab fronts. A raked front leans
-    // back from the end of the body.
-    const rx = hl - s.rake;
+    // The roof strips run between the cab fronts: to the cap over the
+    // windscreen of a raked front, or to the flat front wall. A strip that
+    // goes on over the cap or the front wall is in the same plane as the
+    // edge strips of that wall (REQ-RENDER-002).
+    const rx = if (s.rake > 0) hl - s.rake - cap_depth else hl - ce;
     const door_top = if (s.tall_doors) b.profile(1)[0] else @min(sh_y, b.ceil_y) - 0.02;
 
     for ([_]f32{ -1, 1 }) |face| {
@@ -459,7 +463,9 @@ pub fn details(b: *const Body, sink: anytype, open: f32) void {
         const za = @min(zo, zi) - 0.01;
         const zb = @max(zo, zi) + 0.01;
         const platform = face == b.side;
-        sink.box(v3(-hl, b.y0, za), v3(hl, b.floor_y + 0.12, zb), s.skirt, .paint, .sheet_metal);
+        // The skirt goes 1 cm below the floor part, so their bottoms are
+        // not in the same plane.
+        sink.box(v3(-hl, b.y0 - 0.01, za), v3(hl, b.floor_y + 0.12, zb), s.skirt, .paint, .sheet_metal);
         // The window pillars from the sill to the shoulder, and on up the
         // first roof strip on the tube stock.
         for (pillars) |px| {
@@ -467,17 +473,12 @@ pub fn details(b: *const Body, sink: anytype, open: f32) void {
             if (s.tall_doors) facet(b, sink, px, px + 0.14, b.profile(0), b.profile(1), face, wall, s.pillar, .metal, .sheet_metal);
         }
         // The roof strips. On the tube stock the first strip is the top of
-        // the windows: solid only over the cab ends.
+        // the windows: it is open, and the front walls (cabFront) fill it
+        // over the cab ends.
         for (0..s.roof.len) |i| {
-            const p = b.profile(i);
-            const q = b.profile(i + 1);
+            if (i == 0 and s.tall_doors) continue;
             const col = if (i + 2 >= s.roof.len) s.top else s.body;
-            if (i == 0 and s.tall_doors) {
-                facet(b, sink, -hl, -hl + ce, p, q, face, wall, s.body, .metal, .sheet_metal);
-                facet(b, sink, hl - ce, hl, p, q, face, wall, s.body, .metal, .sheet_metal);
-            } else {
-                facet(b, sink, -rx, rx, p, q, face, wall, col, .metal, .sheet_metal);
-            }
+            facet(b, sink, -rx, rx, b.profile(i), b.profile(i + 1), face, wall, col, .metal, .sheet_metal);
         }
         // A sub-surface train: the band of black over the windows, and
         // the gangway bellows between the cars.
@@ -509,10 +510,11 @@ pub fn details(b: *const Body, sink: anytype, open: f32) void {
             }
         }
         // The cab side: the wall from the end of the window band to the cab
-        // front, and the cab side window.
+        // front, and the cab side window. It stops 1 cm short of the end of
+        // the body: the front is there.
         for ([_]f32{ -1, 1 }) |en| {
-            const xa = if (en < 0) -hl else hl - ce;
-            const xb = if (en < 0) -hl + ce else hl;
+            const xa = if (en < 0) -hl + 0.01 else hl - ce;
+            const xb = if (en < 0) -hl + ce else hl - 0.01;
             sink.box(v3(xa, b.floor_y, za + 0.005), v3(xb, @min(sh_y, b.floor_y + 0.95), zb - 0.005), s.body, .metal, .sheet_metal);
             if (s.rake > 0) {
                 // The side of a raked cab: steps under the line of the
@@ -521,7 +523,8 @@ pub fn details(b: *const Body, sink: anytype, open: f32) void {
                     const fk: f32 = @floatFromInt(k);
                     const y_lo = b.floor_y + 0.95 + (sh_y - b.floor_y - 0.95) * fk / 3;
                     const y_hi = b.floor_y + 0.95 + (sh_y - b.floor_y - 0.95) * (fk + 1) / 3;
-                    const back = s.rake * (fk + 1) / 3;
+                    // 1 cm behind the windscreen and the cap.
+                    const back = s.rake * (fk + 1) / 3 + 0.01;
                     const x_lo = if (en < 0) -hl + back else hl - ce;
                     const x_hi = if (en < 0) -hl + ce else hl - back;
                     sink.box(v3(x_lo, y_lo, za + 0.005), v3(x_hi, y_hi, zb - 0.005), if (k == 0) s.body else s.pillar, .metal, .sheet_metal);
@@ -556,7 +559,9 @@ pub fn details(b: *const Body, sink: anytype, open: f32) void {
     // Inside: the ceiling panel with two strips of lights, the seat backs,
     // the grab rails over the seats and the poles beside the doors.
     const cw = b.halfWidth(b.ceil_y) - wall;
-    sink.box(v3(-hl + ce, b.ceil_y - 0.02, cz - cw), v3(hl - ce, b.ceil_y, cz + cw), v3(0.82, 0.8, 0.74), .paint, .plaster);
+    // The panel goes 2 cm up past the ceiling height, so its top is not in
+    // the plane of the tops of the poles and the partitions.
+    sink.box(v3(-hl + ce, b.ceil_y - 0.02, cz - cw), v3(hl - ce, b.ceil_y + 0.02, cz + cw), v3(0.82, 0.8, 0.74), .paint, .plaster);
     for ([_]f32{ cz - 0.55, cz + 0.45 }) |lz| {
         sink.box(v3(-hl + 0.5, b.ceil_y - 0.05, lz), v3(hl - 0.5, b.ceil_y - 0.02, lz + 0.1), v3(0.95, 0.97, 1.0), .emissive, .glass);
     }
@@ -613,9 +618,10 @@ fn cabFront(b: *const Body, sink: anytype, e: f32) void {
     const black = v3(0.02, 0.02, 0.02);
     // The skirt and the coupler.
     const sk = span(e, xo, 0.2);
-    sink.box(v3(sk[0] - 0.01, b.y0, cz - half - 0.01), v3(sk[1] + 0.01, b.floor_y + 0.12, cz + half + 0.01), s.skirt, .paint, .sheet_metal);
+    sink.box(v3(sk[0] - 0.01, b.y0 - 0.01, cz - half - 0.01), v3(sk[1] + 0.01, b.floor_y + 0.12, cz + half + 0.01), s.skirt, .paint, .sheet_metal);
+    // The coupler stands 4 cm out of the skirt.
     const cp = span(e, xo, 0.05);
-    sink.box(v3(cp[0] - 0.01, b.y0 - 0.15, cz - 0.2), v3(cp[1] + 0.01, b.y0 + 0.2, cz + 0.2), black, .metal, .metal);
+    sink.box(v3(cp[0] - 0.05, b.y0 - 0.15, cz - 0.2), v3(cp[1] + 0.05, b.y0 + 0.2, cz + 0.2), black, .metal, .metal);
 
     if (s.rake == 0) {
         const f = span(e, xo, s.cab);
@@ -651,7 +657,8 @@ fn cabFront(b: *const Body, sink: anytype, e: f32) void {
     // The S7 Stock. The nose up to the windscreen bottom.
     const ny = b.floor_y + 0.95;
     const nose = span(e, xo, 0.25);
-    sink.box(v3(nose[0], b.floor_y + 0.12, cz - half), v3(nose[1], ny, cz + half), s.front, .paint, .sheet_metal);
+    // 1 cm over the top of the cab side.
+    sink.box(v3(nose[0], b.floor_y + 0.12, cz - half), v3(nose[1], ny + 0.01, cz + half), s.front, .paint, .sheet_metal);
     for ([_]f32{ cz - half + 0.15, cz + half - 0.45 }) |lz| {
         const l = span(e, xo, -0.01);
         sink.box(v3(@min(l[0], l[1]), b.floor_y + 0.45, lz), v3(@max(l[0], l[1]), b.floor_y + 0.62, lz + 0.3), lamp, .emissive, .glass);
@@ -672,13 +679,14 @@ fn cabFront(b: *const Body, sink: anytype, e: f32) void {
     }
     // The cap over the windscreen, back to the roof strips, with the
     // destination display.
-    const cap = span(e, e * (hl - s.rake), 0.12);
+    const cap = span(e, e * (hl - s.rake), cap_depth);
     endWall(b, sink, cap[0], cap[1], sh_y, 0, s.front, .paint, .sheet_metal);
     const dsp = span(e, e * (hl - s.rake), -0.01);
     sink.box(v3(@min(dsp[0], dsp[1]), sh_y + 0.08, cz - 0.5), v3(@max(dsp[0], dsp[1]), sh_y + 0.26, cz + 0.5), black, .paint, .sheet_metal);
     sink.box(v3(@min(dsp[0], dsp[1]) - 0.005, sh_y + 0.12, cz - 0.45), v3(@max(dsp[0], dsp[1]) + 0.005, sh_y + 0.22, cz + 0.45), v3(1.0, 0.55, 0.1), .emissive, .glass);
-    // The back wall of the driver's cab, inside the car.
-    const back = span(e, e * (hl - s.cab), -0.03);
+    // The back wall of the driver's cab, inside the car, 1 cm in from the
+    // end of the cab side.
+    const back = span(e, e * (hl - s.cab - 0.01), -0.03);
     endWall(b, sink, @min(back[0], back[1]), @max(back[0], back[1]), b.floor_y, wall, v3(0.82, 0.8, 0.74), .paint, .plaster);
 }
 

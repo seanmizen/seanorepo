@@ -292,7 +292,8 @@ fn railing(x0: f32, x1: f32, z0: f32, z1: f32, y: f32) void {
     }
     const n: usize = @intFromFloat(@max(1, @round(len / 1.5)));
     for (0..n + 1) |i| {
-        const c = @min(@max(len * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n)), 0.04), len - 0.04);
+        // The end posts stand proud of the ends of the panel, as of its faces.
+        const c = @min(@max(len * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n)), 0.04 - p), len - 0.04 + p);
         if (along_x) {
             deco(v3(x0 + c - 0.04, y, z0 - p), v3(x0 + c + 0.04, y + 1.1, z1 + p), iron, .paint, .metal);
         } else {
@@ -329,6 +330,8 @@ fn stairs(x_top: f32, dir: f32, cz: f32, width: f32, y_top: f32, n: usize, floor
     for (0..n) |i| {
         const fi: f32 = @floatFromInt(i);
         const top = y_top - rise * fi;
+        // A step level with the bottom floor is the floor.
+        if (top <= floors[1] + 1e-3) continue;
         const xa = x_top + dir * run * fi;
         const xb = xa + dir * run;
         boxNoAo(v3(@min(xa, xb), bottom, z0), v3(@max(xa, xb), top, z1), color, .concrete, .concrete);
@@ -457,12 +460,17 @@ fn districtLevel() void {
 
     // Brick side walls. Below the decks they run the whole length of the
     // lines (lines()); above, only along the shed.
-    box(v3(shed_x0, deck_y, wall_n - 0.6), v3(shed_x1, 7.5, wall_n), brick, .brick, .brick);
+    // The north wall stops at the corner walls of the concourses (eastEnd,
+    // westEnd), which fill its ends.
+    box(v3(shed_x0 + 0.6, deck_y, wall_n - 0.6), v3(shed_x1 - 0.6, 7.5, wall_n), brick, .brick, .brick);
     box(v3(shed_x0, deck_y, wall_s), v3(shed_x1, 7.5, wall_s + 0.6), brick, .brick, .brick);
     var px: f32 = shed_x0;
     while (px <= shed_x1) : (px += 6) {
-        boxNoAo(v3(px - 0.35, street_y, wall_n), v3(px + 0.35, 7.5, wall_n + 0.25), brick * vec.s(0.85), .brick, .brick);
-        boxNoAo(v3(px - 0.35, bed_y, wall_s - 0.25), v3(px + 0.35, 7.5, wall_s), brick * vec.s(0.85), .brick, .brick);
+        // The pilasters at the ends stay inside the shed, clear of the
+        // decks of the concourses.
+        const pc = std.math.clamp(px, shed_x0 + 0.35, shed_x1 - 0.35);
+        boxNoAo(v3(pc - 0.35, street_y, wall_n), v3(pc + 0.35, 7.5, wall_n + 0.25), brick * vec.s(0.85), .brick, .brick);
+        boxNoAo(v3(pc - 0.35, bed_y, wall_s - 0.25), v3(pc + 0.35, 7.5, wall_s), brick * vec.s(0.85), .brick, .brick);
     }
 
     // Lamps hung from the roof over the islands. Each light is just under
@@ -604,7 +612,9 @@ fn platformEnd(is: [2]f32, dir: f32, stop_board: bool) void {
     map.addDecor(m, v3(lx[0], -0.9, rz[0] - cz), v3(lx[1], 0, rz[1] - cz), platform_c, .concrete, .concrete);
     for ([_]f32{ -1, 1 }) |side| {
         const e = side * ramp_w / 2;
-        map.addDecor(m, v3(lx[0], 0, @min(e, e - side * 0.08)), v3(lx[1], 0.008, @max(e, e - side * 0.08)), line_white, .paint, .concrete);
+        // 1 cm in from the side of the slab.
+        const ei = e - side * 0.01;
+        map.addDecor(m, v3(lx[0], 0, @min(ei, ei - side * 0.08)), v3(lx[1], 0.008, @max(ei, ei - side * 0.08)), line_white, .paint, .concrete);
     }
     // The slab tilts, so its top end leaves a gap under the edge of the
     // landing. This block fills it.
@@ -620,7 +630,9 @@ fn platformEnd(is: [2]f32, dir: f32, stop_board: bool) void {
     map.addSolid(v3(bx[0], 0, is[0]), v3(bx[1], 1.1, is[1]), .metal);
     const fr = span(dir, mid - 0.03, mid + 0.03);
     const gate = [2]f32{ cz - 0.65, cz + 0.65 };
-    for ([_][2]f32{ .{ is[0], gate[0] }, .{ gate[1], is[1] } }) |sec| {
+    // The sections stop 1 cm short of the island edges, clear of the
+    // white line.
+    for ([_][2]f32{ .{ is[0] + 0.01, gate[0] }, .{ gate[1], is[1] - 0.01 } }) |sec| {
         deco(v3(fr[0], 0, sec[0]), v3(fr[1], 0.12, sec[1]), iron, .paint, .metal);
         deco(v3(fr[0], 0.98, sec[0]), v3(fr[1], 1.1, sec[1]), iron, .paint, .metal);
         const cap = span(dir, mid - 0.06, mid + 0.06);
@@ -647,9 +659,10 @@ fn platformEnd(is: [2]f32, dir: f32, stop_board: bool) void {
     while (gz < leaf[1] - 0.1) : (gz += 0.12) {
         map.rod(v3(dir * mid, 0.2, gz), v3(dir * mid, 0.98, gz), 0.012, railing_paint, .paint, .metal);
     }
-    for ([_]f32{ 0.25, 0.85 }) |hy| deco(v3(fr[0], hy, gate[0] - 0.005), v3(fr[1], hy + 0.08, leaf[0] + 0.02), steel, .metal, .metal);
+    // The hinges and the latch stand 1 cm proud of the frame.
     const latch = span(dir, mid - 0.04, mid + 0.04);
-    deco(v3(latch[0], 0.88, leaf[1] - 0.1), v3(latch[1], 0.96, leaf[1]), steel, .metal, .metal);
+    for ([_]f32{ 0.25, 0.85 }) |hy| deco(v3(latch[0], hy, gate[0] - 0.005), v3(latch[1], hy + 0.08, leaf[0] + 0.02), steel, .metal, .metal);
+    deco(v3(latch[0], 0.88, leaf[1] - 0.1), v3(latch[1], 0.96, leaf[1] + 0.01), steel, .metal, .metal);
 
     // The sign on the gate, toward the platform: a white plate with a red
     // NO ENTRY disc and black text.
@@ -748,7 +761,8 @@ fn roof() void {
         const c = at.p(b[1], shed_x0);
         const nrm = at.n((b[0] + b[1]) / 2);
         const mid = (a + c) * vec.s(0.5) + nrm * vec.s(0.2);
-        map.beam(mid, v3(shed_x1, mid[1], mid[2]), vec.len(c - a), 0.08, nrm, v3(0.16, 0.16, 0.18), .concrete, .tile);
+        // 1 cm short of each end wall.
+        map.beam(mid + v3(0.01, 0, 0), v3(shed_x1 - 0.01, mid[1], mid[2]), vec.len(c - a), 0.08, nrm, v3(0.16, 0.16, 0.18), .concrete, .tile);
     }
     map.beam(v3(shed_x0, 15.4, -4.2), v3(shed_x1, 15.4, -4.2), 5, 0.1, v3(0, 1, 0), v3(0.16, 0.16, 0.18), .concrete, .glass);
     var xp = shed_x0;
@@ -821,13 +835,15 @@ fn lift(r: Rect, levels: [2]f32, door_on_x: bool, speed: f32) void {
     const top = levels[1] + 3.2;
     const bottom = levels[0];
     // Three walls and a roof. The door face is below.
+    // The side walls start behind the door face: its jambs fill the
+    // corners.
     if (door_on_x) {
-        boxNoAo(v3(r.x0, bottom, r.z0), v3(r.x1, top, r.z0 + 0.1), glass_c, .metal, .glass);
-        boxNoAo(v3(r.x0, bottom, r.z1 - 0.1), v3(r.x1, top, r.z1), glass_c, .metal, .glass);
+        boxNoAo(v3(r.x0 + 0.1, bottom, r.z0), v3(r.x1, top, r.z0 + 0.1), glass_c, .metal, .glass);
+        boxNoAo(v3(r.x0 + 0.1, bottom, r.z1 - 0.1), v3(r.x1, top, r.z1), glass_c, .metal, .glass);
         boxNoAo(v3(r.x1 - 0.1, bottom, r.z0), v3(r.x1, top, r.z1), glass_c, .metal, .glass);
     } else {
-        boxNoAo(v3(r.x0, bottom, r.z0), v3(r.x0 + 0.1, top, r.z1), glass_c, .metal, .glass);
-        boxNoAo(v3(r.x1 - 0.1, bottom, r.z0), v3(r.x1, top, r.z1), glass_c, .metal, .glass);
+        boxNoAo(v3(r.x0, bottom, r.z0 + 0.1), v3(r.x0 + 0.1, top, r.z1), glass_c, .metal, .glass);
+        boxNoAo(v3(r.x1 - 0.1, bottom, r.z0 + 0.1), v3(r.x1, top, r.z1), glass_c, .metal, .glass);
         boxNoAo(v3(r.x0, bottom, r.z1 - 0.1), v3(r.x1, top, r.z1), glass_c, .metal, .glass);
     }
     box(v3(r.x0, top, r.z0), v3(r.x1, top + 0.2, r.z1), frame_c, .metal, .metal);
@@ -961,7 +977,8 @@ fn eastEnd() void {
     // to each island, westward.
     railing(x0, x0 + 0.12, walk_z1, ca - 1.2, y);
     railing(x0, x0 + 0.12, ca + 1.2, cb - 1.2, y);
-    railing(x0, x0 + 0.12, cb + 1.2, wall_s, y);
+    // 2 cm short of the wall: the frame stands 2 cm proud.
+    railing(x0, x0 + 0.12, cb + 1.2, wall_s - 0.02, y);
     stairs(x0, -1, ca, 2.4, y, 12, .{ y, 0 }, platform_c);
     stairs(x0, -1, cb, 2.4, y, 12, .{ y, 0 }, platform_c);
     map.add(v3(54.5, y + 6.3, -6.3), v3(56.5, y + 6.45, -5.7), v3(1.0, 0.9, 0.75), .emissive, .glass).solid = false;
@@ -977,9 +994,11 @@ fn eastEnd() void {
     const hz1: f32 = 8;
     box(v3(x1, y, conc_z0 - 0.6), v3(x1 + 0.4, y + 6.5, hz0), red_brick, .brick, .brick);
     box(v3(x1, y, hz1), v3(x1 + 0.4, y + 6.5, wall_s + 0.6), red_brick, .brick, .brick);
-    box(v3(x1, y, hz0 - 0.4), v3(hall_x1, y + 5.5, hz0), cream, .paint, .plaster);
-    box(v3(x1, y, hz1), v3(hall_x1, y + 5.5, hz1 + 0.4), cream, .paint, .plaster);
-    box(v3(x1, y + 5.5, hz0 - 0.4), v3(hall_x1 + 0.6, y + 6, hz1 + 0.4), v3(0.75, 0.72, 0.66), .concrete, .concrete);
+    // The hall walls and roof go from the inner face of the brick wall to
+    // the inner face of the front.
+    box(v3(x1 + 0.4, y, hz0 - 0.4), v3(hall_x1, y + 5.5, hz0), cream, .paint, .plaster);
+    box(v3(x1 + 0.4, y, hz1), v3(hall_x1, y + 5.5, hz1 + 0.4), cream, .paint, .plaster);
+    box(v3(x1 + 0.4, y + 5.5, hz0 - 0.4), v3(hall_x1, y + 6, hz1 + 0.4), v3(0.75, 0.72, 0.66), .concrete, .concrete);
     const doors = [_][2]f32{ .{ -10, -7 }, .{ -3.5, -0.5 }, .{ 3, 6 } };
     var zc: f32 = hz0 - 0.4;
     for (doors) |d| {
@@ -1101,7 +1120,9 @@ fn vapeShop() void {
     box(v3(bx, y, z0), v3(bx + 0.3, y + 3.4, door_z[0]), white, .paint, .plaster);
     box(v3(bx, y, door_z[1]), v3(bx + 0.3, y + 3.4, z1), white, .paint, .plaster);
     box(v3(bx, y + door_h, door_z[0]), v3(bx + 0.3, y + 3.4, door_z[1]), white, .paint, .plaster);
-    box(v3(fx + 1, y + 3.4, z0 - 0.3), v3(bx + 0.3, y + 3.7, z1 + 0.3), white, .paint, .plaster);
+    // The ceiling stops at the back wall: the wall of the secret room is
+    // over the back wall.
+    box(v3(fx + 1, y + 3.4, z0 - 0.3), v3(bx, y + 3.7, z1 + 0.3), white, .paint, .plaster);
     // The front: the stall riser, the window, the pier south of the door,
     // and the fascia over all of it.
     box(v3(fx, y, z0), v3(fx + 0.15, y + 0.5, door[0]), chrome, .metal, .sheet_metal);
@@ -1157,7 +1178,7 @@ fn vapeShop() void {
     }
     deco(v3(fx + 1, y + 3.2, z0), v3(bx, y + 3.26, z0 + 0.04), neon[1], .emissive, .glass);
     deco(v3(fx + 1, y + 3.2, z1 - 0.04), v3(bx, y + 3.26, z1), neon[2], .emissive, .glass);
-    deco(v3(bx - 0.04, y + 3.2, z0), v3(bx, y + 3.26, z1), neon[4], .emissive, .glass);
+    deco(v3(bx - 0.04, y + 3.2, z0 + 0.04), v3(bx, y + 3.26, z1 - 0.04), neon[4], .emissive, .glass);
     map.addLight(v3(fx + 2.2, y + 2.9, -33), v3(1.2, 1.5, 2.2), 9);
     map.addLight(v3(bx - 1.6, y + 2.9, -33), v3(1.8, 0.5, 1.9), 8);
 
@@ -1246,8 +1267,8 @@ fn secretRoom(x0: f32, door_z: [2]f32, door_h: f32) void {
     box(v3(x0, y, z0), v3(x1, fl, z1), v3(0.025, 0.025, 0.03), .tile, .tile);
     box(v3(x0 - 0.3, y, z0 - 0.3), v3(x1 + 0.3, top + 0.3, z0), wall, .paint, .plaster);
     box(v3(x0 - 0.3, y, z1), v3(x1 + 0.3, top + 0.3, z1 + 0.3), wall, .paint, .plaster);
-    box(v3(x1, y, z0), v3(x1 + 0.3, top + 0.3, z1), wall, .paint, .plaster);
-    box(v3(x0 - 0.3, y + 3.4, z0), v3(x0, top + 0.3, z1), wall, .paint, .plaster);
+    box(v3(x1, y, z0), v3(x1 + 0.3, top, z1), wall, .paint, .plaster);
+    box(v3(x0 - 0.3, y + 3.4, z0), v3(x0, top, z1), wall, .paint, .plaster);
     box(v3(x0 - 0.3, top, z0), v3(x1 + 0.3, top + 0.3, z1), v3(0.015, 0.012, 0.03), .paint, .plaster);
     // No sun and little sky light in here (map.zig sealed).
     map.sealed = .{ v3(x0 - 0.05, y - 0.5, z0 - 0.05), v3(x1 + 0.05, top + 0.05, z1 + 0.05) };
@@ -1318,8 +1339,9 @@ fn secretRoom(x0: f32, door_z: [2]f32, door_h: f32) void {
             const m0 = wz - side * 0.03;
             const ma = @min(wz, m0);
             const mb = @max(wz, m0);
-            deco(v3(wx - 0.025, fl + 1.0, ma), v3(wx + 0.025, fl + 4.32, mb), v3(0.02, 0.015, 0.03), .metal, .metal);
-            deco(v3(wx - 0.35, fl + 2.6, ma), v3(wx + 0.35, fl + 2.65, mb), v3(0.02, 0.015, 0.03), .metal, .metal);
+            // The mullion and the transom stand 1 cm past the panels.
+            deco(v3(wx - 0.025, fl + 0.99, ma), v3(wx + 0.025, fl + 4.33, mb), v3(0.02, 0.015, 0.03), .metal, .metal);
+            deco(v3(wx - 0.36, fl + 2.6, ma), v3(wx + 0.36, fl + 2.65, mb), v3(0.02, 0.015, 0.03), .metal, .metal);
         }
     }
 
@@ -1354,12 +1376,14 @@ fn westEnd() void {
     box(v3(x0, -3, conc_z0 - 0.6), v3(x1, deck_y, wall_n - 0.6), ballast, .concrete, .earth);
     box(v3(x0, y, conc_z0 - 0.6), v3(x1, y + 6.5, conc_z0), brick, .brick, .brick);
     box(v3(x0, y, wall_s), v3(x1, y + 6.5, wall_s + 0.6), brick, .brick, .brick);
-    box(v3(x0 - 0.6, y + 6.5, conc_z0 - 0.6), v3(x1 + 0.6, y + 7.0, wall_s + 0.6), v3(0.3, 0.29, 0.27), .concrete, .concrete);
+    // The roof starts where the solid blocks beside the passage end.
+    box(v3(x0 - 0.4, y + 6.5, conc_z0 - 0.6), v3(x1 + 0.6, y + 7.0, wall_s + 0.6), v3(0.3, 0.29, 0.27), .concrete, .concrete);
     box(v3(x1, y + 3.4, wall_n), v3(x1 + 0.6, y + 6.5, wall_s), brick, .brick, .brick);
     box(v3(x1, y, conc_z0 - 0.6), v3(x1 + 0.6, y + 6.5, wall_n), brick, .brick, .brick);
     railing(x1 - 0.12, x1, walk_z1, ca - 1.2, y);
     railing(x1 - 0.12, x1, ca + 1.2, cb - 1.2, y);
-    railing(x1 - 0.12, x1, cb + 1.2, wall_s, y);
+    // 2 cm short of the wall: the frame stands 2 cm proud.
+    railing(x1 - 0.12, x1, cb + 1.2, wall_s - 0.02, y);
     stairs(x1, 1, ca, 2.4, y, 12, .{ y, 0 }, platform_c);
     stairs(x1, 1, cb, 2.4, y, 12, .{ y, 0 }, platform_c);
     map.add(v3(-56.5, y + 6.3, -6.3), v3(-54.5, y + 6.45, -5.7), v3(1.0, 0.9, 0.75), .emissive, .glass).solid = false;
@@ -1553,7 +1577,8 @@ fn warwickSite() void {
     // road from the gate, and puddles on it.
     map.scenery = .{ v3(site_x0, y - 0.5, site_z[0]), v3(hb, 200, site_z[1]) };
     deco(v3(site_x0, deck_y, wall_n), v3(-97, y, wall_s), deck_c, .concrete, .concrete);
-    deco(v3(site_x0, y, site_z[0]), v3(-97, g, site_z[1]), earth_c, .concrete, .earth);
+    // 1 cm short of the ends of the walls of the cutting.
+    deco(v3(site_x0, y, site_z[0]), v3(-97.01, g, site_z[1]), earth_c, .concrete, .earth);
     deco(v3(-118, g, -8), v3(-97, g + 0.02, 4.5), v3(0.46, 0.44, 0.4), .concrete, .concrete);
     deco(v3(-104.5, g + 0.02, -1.6), v3(-102.8, g + 0.026, 0.3), v3(0.12, 0.13, 0.15), .paint, .earth);
     deco(v3(-108.6, g + 0.02, 1.2), v3(-107.4, g + 0.026, 2.6), v3(0.12, 0.13, 0.15), .paint, .earth);
@@ -2072,8 +2097,10 @@ fn lines() void {
         box(v3(r[0], 3.0, wall_n - 30), v3(r[1], street_y, wall_n - 0.6), v3(0.3, 0.32, 0.22), .concrete, .earth);
         box(v3(r[0], 3.0, wall_s + 0.6), v3(r[1], street_y, wall_s + 30), v3(0.3, 0.32, 0.22), .concrete, .earth);
     }
-    box(v3(-line_end, -3, wall_n), v3(-line_end + 0.6, street_y + 3, wall_s), dark, .paint, .concrete);
-    box(v3(line_end - 0.6, -3, wall_n), v3(line_end, street_y + 3, wall_s), dark, .paint, .concrete);
+    // The end walls go 10 cm past the ends of the lines and under the
+    // ground, so no face of them is in the plane of an end of a line.
+    box(v3(-line_end - 0.1, -3.1, wall_n), v3(-line_end + 0.6, street_y + 3, wall_s), dark, .paint, .concrete);
+    box(v3(line_end - 0.6, -3.1, wall_n), v3(line_end + 0.1, street_y + 3, wall_s), dark, .paint, .concrete);
     // The rails, the sleepers and the live rails (the 4th rail between the
     // running rails, the 3rd outside).
     for (track_c) |t| {
@@ -2086,7 +2113,8 @@ fn lines() void {
         deco(v3(-line_end, bed_y, r3 - 0.05), v3(line_end, bed_y + 0.12, r3 + 0.05), v3(0.5, 0.45, 0.4), .metal, .metal);
         var x: f32 = -line_end + 0.4;
         while (x < line_end) : (x += if (@abs(x) > 90) 2.7 else 0.9) {
-            deco(v3(x, bed_y, c - 1.25), v3(x + 0.26, bed_y + 0.07, c + 1.25), v3(0.16, 0.11, 0.08), .wood, .wood);
+            // The sleepers end 2 cm past the outer face of the 3rd rail.
+            deco(v3(x, bed_y, c - 1.27), v3(x + 0.26, bed_y + 0.07, c + 1.27), v3(0.16, 0.11, 0.08), .wood, .wood);
         }
         // Buffer-free ends: a dark wall at each end of the world.
     }
@@ -2164,9 +2192,10 @@ fn intermediateLevel() void {
     const hall = rect(-40, -18, -18, 7.6);
     const landing = rect(-40, esc_top_x, esc_z[0] - 0.3, hall.z0);
     const area_w = rect(hall.x0 - 1, hall.x1 + 1, landing.z0 - 0.7, hall.z1 + 1);
-    const esc_floor = rect(esc_top_x, area_w.x1, esc_z[0], esc_z[1]);
+    // The shaft walls (escalators) go up through the floor slab, so the
+    // slab has the hole of the walls too.
     const esc_shaft = rect(esc_top_x, area_w.x1, esc_z[0] - 0.3, esc_z[1] + 0.3);
-    map.carve(area_w, mid_y - 1, mid_y, &.{esc_floor}, floor_c, .concrete, .concrete);
+    map.carve(area_w, mid_y - 1, mid_y, &.{esc_shaft}, floor_c, .concrete, .concrete);
     map.carve(area_w, mid_y, mid_ceil, &.{ hall, landing, esc_shaft }, tile_c, .wall_tile, .tile);
     map.carve(area_w, mid_ceil, -3, well_rects[0..2], wall_c, .concrete, .concrete);
     for ([_]f32{ -35, -24 }) |x| for ([_]f32{ -6, -1 }) |z| {
@@ -2289,7 +2318,12 @@ fn balustrade(e: f32, s: f32) void {
     for (1..path.len) |i| {
         const pa = path[i - 1];
         const pb = path[i];
-        underPath(pa, pb, 0.035, 1.5, e + s * 0.01, e + s * 0.045, esc_steel, .paint, .metal);
+        // The panel is 1 cm under the guide, and its two ends 1 cm inside
+        // the ends of the guide.
+        const k = vec.norm(pb - pa) * vec.s(0.01);
+        const ka = if (i == 1) pa + k else pa;
+        const kb = if (i == path.len - 1) pb - k else pb;
+        underPath(ka, kb, 0.045, 1.5, e + s * 0.01, e + s * 0.045, esc_steel, .paint, .metal);
         underPath(pa, pb, 0.035, 0.09, e, e + s * 0.1, esc_guide_c, .paint, .metal);
         map.rod(pa, pb, 0.04, esc_rubber, .paint, .fabric);
     }
@@ -2298,7 +2332,8 @@ fn balustrade(e: f32, s: f32) void {
         const c = v3(x, floor + esc_rail_h - esc_rn, zr);
         newelRail(c, side);
         const zm = e + s * 0.05;
-        map.addDisc(vec.translate(v3(x, c[1], zm)), esc_rn - 0.04, 0.1, esc_steel, .paint, .metal);
+        // 1 cm proud of the guide and of the housing on each side.
+        map.addDisc(vec.translate(v3(x, c[1], zm)), esc_rn - 0.04, 0.12, esc_steel, .paint, .metal);
         const xo = x + side * (esc_rn - 0.04);
         deco(v3(@min(x, xo), floor, @min(e, e + s * 0.1)), v3(@max(x, xo), c[1], @max(e, e + s * 0.1)), esc_steel, .paint, .metal);
     }
@@ -2349,8 +2384,9 @@ fn escalators() void {
 
     // The balustrades, and the deckings between them: the outer decking
     // along each wall and the decking between the units.
-    const xa = x0 - esc_newel - (esc_rn - 0.04);
-    const xb = x1 + esc_newel + (esc_rn - 0.04);
+    // The deckings end 1 cm past the newel housings.
+    const xa = x0 - esc_newel - (esc_rn - 0.04) - 0.01;
+    const xb = x1 + esc_newel + (esc_rn - 0.04) + 0.01;
     const edges = [_]f32{ esc_lane_z[0] - esc_step_w / 2, esc_lane_z[0] + esc_step_w / 2, esc_lane_z[1] - esc_step_w / 2, esc_lane_z[1] + esc_step_w / 2 };
     for (edges, [_]f32{ -1, 1, -1, 1 }) |e, s| balustrade(e, s);
     const decks = [_][2]f32{
@@ -2584,7 +2620,8 @@ fn deepLevel() void {
     // with a header over the mouth of the shaft. The corridor goes on east
     // of it between the platforms.
     const hx0 = esc_bottom_x;
-    box(v3(hx0, y - 1, esc_z[0]), v3(x0, y, esc_z[1]), floor_c, .concrete, .concrete);
+    // The floor goes on under the side walls.
+    box(v3(hx0, y - 1, esc_z[0] - 0.3), v3(x0, y, esc_z[1] + 0.3), floor_c, .concrete, .concrete);
     box(v3(hx0, y, esc_z[0] - 0.3), v3(x0, deep_ceil, esc_z[0]), tile_c, .wall_tile, .tile);
     box(v3(hx0, y, esc_z[1]), v3(x0, deep_ceil, esc_z[1] + 0.3), tile_c, .wall_tile, .tile);
     box(v3(x0 - 0.3, y, esc_z[0]), v3(x0, deep_ceil, corr_z[0]), tile_c, .wall_tile, .tile);
@@ -2627,9 +2664,12 @@ fn deepLevel() void {
     map.carve(rect(deep_lift.x1, plat_x[1], corr_z[0], corr_z[1]), y - 1, deep_ceil, &.{ em_slot, em_lobby }, tile_c, .wall_tile, .tile);
     box(v3(em_slot.x0, y - 1, em_slot.z0), v3(em_slot.x1, y, em_slot.z1), floor_c, .concrete, .concrete);
     box(v3(em_lobby.x0, y - 1, em_lobby.z0), v3(em_lobby.x1, y, em_lobby.z1), floor_c, .concrete, .concrete);
-    box(v3(em_slot.x0, deep_ceil, corr_z[0]), v3(em_slot.x1, mid_y - 1, em_slot.z0), tile_c, .wall_tile, .tile);
-    box(v3(em_slot.x0, deep_ceil, em_slot.z1), v3(em_slot.x1, mid_y - 1, corr_z[1]), tile_c, .wall_tile, .tile);
-    box(v3(em_slot.x1, deep_ceil, corr_z[0]), v3(em_slot.x1 + 0.3, mid_ceil, corr_z[1]), tile_c, .wall_tile, .tile);
+    // The walls of the slot between the ceiling slab of the deep level and
+    // the floor slab of the intermediate level: the slabs make the wall in
+    // their own height.
+    box(v3(em_slot.x0, deep_ceil + 0.6, corr_z[0]), v3(em_slot.x1, mid_y - 1, em_slot.z0), tile_c, .wall_tile, .tile);
+    box(v3(em_slot.x0, deep_ceil + 0.6, em_slot.z1), v3(em_slot.x1, mid_y - 1, corr_z[1]), tile_c, .wall_tile, .tile);
+    box(v3(em_slot.x1, deep_ceil + 0.6, corr_z[0]), v3(em_slot.x1 + 0.3, mid_y - 1, corr_z[1]), tile_c, .wall_tile, .tile);
     stairs(em_top_x, 1, em_cz, 2.4, y + 0.4 * @as(f32, em_steps - 1), em_steps, .{ mid_y, y }, platform_c);
     for ([_]f32{ em_lobby.z0, em_lobby.z1 - 0.04 }) |z| {
         deco(v3(em_lobby.x0 + 1.4, y + 2.5, z), v3(em_lobby.x1 - 1.4, y + 2.8, z + 0.04), sign_g, .emissive, .glass);
@@ -2698,8 +2738,10 @@ fn deepLevel() void {
     // puts the feet on it, and the cab goes on without the player. The
     // floorplan audit checks each shaft.
     map.carve(rect(-line_end, line_end, deep_z[0], deep_z[1]), deep_ceil, deep_ceil + 0.6, &.{ rect(esc_top_x, esc_bottom_x, esc_z[0] - 0.3, esc_z[1] + 0.3), deep_lift, em_slot }, v3(0.12, 0.11, 0.1), .concrete, .concrete);
-    box(v3(-line_end, y - 1.2, deep_z[0]), v3(-line_end + 0.4, deep_ceil, deep_z[1]), dark, .paint, .concrete);
-    box(v3(line_end - 0.4, y - 1.2, deep_z[0]), v3(line_end, deep_ceil, deep_z[1]), dark, .paint, .concrete);
+    // The dark ends go 10 cm past the ends of the lines and under the bed
+    // (as in lines()).
+    box(v3(-line_end - 0.1, y - 1.3, deep_z[0]), v3(-line_end + 0.4, deep_ceil, deep_z[1]), dark, .paint, .concrete);
+    box(v3(line_end - 0.4, y - 1.3, deep_z[0]), v3(line_end + 0.1, deep_ceil, deep_z[1]), dark, .paint, .concrete);
 
     // On the track-side wall, as in the photo of platform 6: a dark red
     // band at the top of the wall, posters that follow the curve, and
@@ -2708,7 +2750,8 @@ fn deepLevel() void {
     for (tubes, 0..) |t, ti| {
         wallPanel(t, plat_x[0], plat_x[1], y + back_h + 0.35, y + back_h + 0.6, 0.01, rib_c, .wall_tile, .tile);
         for ([_]f32{ 4, 21, 39, 56, 79, 97 }, 0..) |px, i| {
-            wallPanel(t, px - 2, px + 2, y + 0.5, y + 2.6, 0.02, v3(0.08, 0.08, 0.08), .paint, .wood);
+            // 2 cm clear of the ends of the dark rings.
+            wallPanel(t, px - 1.98, px + 1.98, y + 0.5, y + 2.6, 0.02, v3(0.08, 0.08, 0.08), .paint, .wood);
             wallPanel(t, px - 1.85, px + 1.85, y + 0.62, y + 2.48, 0.04, poster_cols[(i + 2 * ti) % poster_cols.len], .paint, .wood);
         }
         for ([_]f32{ 12, 30, 48, 70, 88, 106 }) |rx| {

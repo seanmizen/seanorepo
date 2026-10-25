@@ -79,6 +79,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
 | `QC` | `apps/QuarterCompany/requirements/qc.md` | QuarterCompany — journal, filesystem, turns, casts |
 | `QUALITY` | `apps/inside/requirements/quality.md` | inside — testing conventions |
+| `RENDER` | `apps/action/requirements/render.md` | action — the depth buffer and z-fighting |
 | `SERVER` | `utils/debbie/2026-09-17/requirements/server.md` | debbie — provisioned host configuration |
 | `SLUG` | `apps/inside/requirements/slug.md` | inside — public slugs and their history |
 | `STATE` | `apps/inside/requirements/state.md` | inside — request-state honesty |

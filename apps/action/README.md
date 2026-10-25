@@ -60,7 +60,7 @@ foot height. A player who fires shows on it for a moment.
 ```bash
 zig build floorplan -- earls_court plan 1 out.ppm         # top view at y = 1
 zig build floorplan -- earls_court section-z -22.5 out.ppm # side view at z = -22.5
-zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape, surface materials, lift shafts and landings
+zig build floorplan -- earls_court audit                  # decoration a player can walk through, lights inside a solid shape, surface materials, coplanar faces, lift shafts and landings
 zig build floorplan -- earls_court escape                 # escape holes: exit code 1 if it finds one
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
@@ -73,6 +73,9 @@ sips -s format png out.ppm --out out.png                  # macOS, to view it
 - The audit prints the boxes and the decoration of each surface material
   (see [Surface materials](#surface-materials)). Its exit code is 1 when a
   material does not fit the look of its surface.
+- The audit lists each coplanar overlap: two faces that z-fight (see
+  [Depth and z-fighting](#depth-and-z-fighting)). Its exit code is 1 when
+  it finds one.
 - The audit checks each lift (see [Lifts](#lifts)). The shaft: no static
   solid box and no ramp may be in the space that the inside of the cab
   sweeps. In plan that space is the cab floor. In height it goes from the
@@ -206,6 +209,36 @@ with the pixel footprint: the screen derivatives of the surface position.
 - A new pattern calls `bandFade` with its footprint in cells:
   `mix(pattern, mean, bandFade(fw))`.
 
+### Depth and z-fighting
+
+Two surfaces at the same depth z-fight: the screen shows stripes of both,
+and the stripes move with the camera. The game stops this in two ways.
+
+- **Reversed Z** (REQ-RENDER-001). The camera maps the near plane (4 cm)
+  to depth 1 and the far plane (260 m) to depth 0
+  (`vec.reversedPerspective`). The depth target clears to 0. The scene, the
+  sky and the translucent pipelines keep the greater depth. A float depth
+  buffer has the most precision near 0, so a far surface gets a fine depth
+  step: less than 0.01 mm at 100 m. With standard Z the step was about
+  16 mm at 100 m, and decoration 2 mm to 8 mm from a face fought from about
+  35 m.
+- **No coplanar faces** (REQ-RENDER-002). Reversed Z does not separate two
+  faces at the same depth. The floorplan audit and `zig build test` find
+  each coplanar overlap in the static mesh (`game/src/coplanar.zig`). That
+  is two faces with these properties:
+  - They face the same way and are less than 1.5 mm apart.
+  - They overlap by 1 cm² or more.
+  - They have a different colour or material.
+  - Some part of the overlap shows: a point just in front of it is not
+    inside an opaque shape.
+
+To fix an overlap, move one face 1 cm or more, or cut the lower face so
+that the faces do not overlap. Decoration on a face can stay 2 mm or more
+from it: reversed Z keeps it apart.
+
+The view-model (your gun) gets the depth range 0.92 to 1, and the world
+gets 0 to 0.92. The shadow maps keep the standard depth.
+
 ## The practice range
 
 South of the arena, through a doorway in its south wall: a lane 24 m wide
@@ -335,6 +368,8 @@ it does.
   solid part.
 - `game/src/train_car.zig`: the trains have the real lengths, a player
   fits through a door opening, and not through a window.
+- `game/src/vec.zig`: the camera projection puts the near plane at depth 1
+  and the far plane at depth 0 (reversed Z).
 - `game/src/vault_test.zig` tests the vault (`game/src/vault.zig`). The
   player vaults onto a waist-high wall of the range and onto the railing
   along the shed edge of the east concourse. The player must stand on the
@@ -367,7 +402,8 @@ it does.
   no gun is the fastest to kill at both 10 m and 40 m, and
   `server/guns.json` has the numbers of the model.
 - `game/src/surfaces_test.zig`: each map fits in `map.max_boxes`, a full
-  map changes no box, every material fits the look of its surface, a hit
+  map changes no box, every material fits the look of its surface, no two
+  faces of a map z-fight (and the audit finds two that do), a hit
   takes the material of the decoration on the hit point (a sleeper on the
   ballast), and each supersonic gun gives a crack and each subsonic gun a
   whiz.
