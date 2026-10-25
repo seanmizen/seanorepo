@@ -155,6 +155,10 @@ outdoors.
 - **The fog is far.** Underground the fog starts 15 m from the eye
   (`FOG_NEAR`), with a density of 0.005 (`FOG_UNDER`). It goes to a near
   black, so a long tunnel fades into the dark.
+- **The far fog outdoors.** Past 80 m from the eye (`FAR_NEAR`) the
+  outdoor fog gets thicker, with a density of 0.015 (`FAR_DENS`). Warwick
+  Road fades into the fog before the far plane (260 m). The views in the
+  station are nearer than 80 m. The far ends of the lines fade too.
 - **The fill.** Each point light gives 0.35 of its diffuse light with no
   fall off with the angle (`LIGHT_FILL`): the light that the tiles bounce.
   A vault or a wall at a low angle to a lamp gets light. The fill fades to
@@ -420,6 +424,19 @@ it does.
   is not. GET MORE opens the door, the room lights come up, and a player
   walks from the shop to the dais. MORE gives a blessing of 45 s. A new
   match shuts the door, and a late join opens it at once.
+- `game/src/roadmen_test.zig`: the roadmen of Warwick Road
+  (`game/src/roadmen.zig`). The line is 50 m from the exit, north and
+  south, and each alley and the fence are past it. A player who walks past
+  the line gets two roadmen. Each one is 7 m or more from the player, out
+  of the view of the eye, and in free space. Four stabs kill within 3 s of
+  the first one. After the kill the roadmen walk away and go. A runner at
+  the speed of a blessing dies before the fence, north and south. A player
+  who goes back over the line at once escapes with no stab, and the
+  roadmen go out of sight. Shots and a blast hit a roadman and do no
+  damage. Another client runs the gang of a "go" with no damage, and the
+  roadmen walk away after an "off". `game/src/npc.zig` tests the model: a
+  standing NPC is the height of a player, the stab puts the knife in front
+  of the chest, and a rider sits on the seat.
 - `game/src/shooter_test.zig`: the NPC shooter. At each distance and over
   the full group, a round hits the board and passes 1 to 2 m from the head
   of the player. With no board, a round hits nothing within 60 m of the
@@ -446,12 +463,17 @@ it does.
 - `server/pigeons.test.ts`: the flock of the server. One takeoff for each
   pigeon, a kill makes a body, the return after 1 to 3 minutes as a new
   generation, one holder for each body, and a drop when the holder leaves.
+- `server/roadmen.test.ts`: the roadmen of the server. A "go" only past the
+  line, with two places on Warwick Road, one chase at a time. A stab does
+  damage only during a chase, at the rate of the two roadmen. An "off" and
+  a death end the chase.
 - `server/lobby.test.ts`: a real server on a free port. It checks the cvars
   on join, rcon, a client that tries to set a server cvar, the chat relay
   with the join and leave lines, the `lift` field of a player in a cab, the
   `tx` field of a rider of the deep train and the train clock, the gate
-  relay, the flock on join, a pigeon kill to the other players, and the
-  session: `GET /api/version`, the build header, the welcome before the
+  relay, the flock on join, a pigeon kill to the other players, a roadmen
+  "go" to the other players and four stabs that kill with the credit
+  "roadman", and the session: `GET /api/version`, the build header, the welcome before the
   hello, the bye on SIGTERM, and a new start with a new build on the same
   port.
 
@@ -1191,7 +1213,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 2048. Earl's Court uses 943 boxes, the arena 126.
+`map.max_boxes` is 2048. Earl's Court uses 1011 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1218,6 +1240,10 @@ wood. `zig build test` checks the same.
     changed from 17 ms to 30 ms between runs in both builds, because other
     programs used the GPU. The tests found no difference above that
     noise.
+- Warwick Road (see [Maps](#maps)) added 72 boxes: the terraces, the
+  ground, the pavements, the street lamps, the bins and the fences. Only
+  the boxes within 60 m of the exit count for the AO, so the AO grid
+  grows by 9 cells along Z, and not by the full 480 m of the street.
 - The ambient occlusion uses the AO boxes within 45 m of the eye
   (`uploadBoxes` in `game/src/render.zig`). The train parts do not count
   for it, except the floor, the roof and one wall of the District train.
@@ -1229,7 +1255,7 @@ wood. `zig build test` checks the same.
   of the cell of each pixel, and the moving list: the dynamic boxes and
   each box that is not where it was at the load. The same boxes occlude
   as in a loop over all the boxes, so the look does not change. Earl's
-  Court: 266 boxes, 268 x 13 x 33 cells of 3 m, 647 KB. The cells start
+  Court: 270 boxes, 268 x 13 x 42 cells of 3 m, 776 KB. The cells start
   at 2 m. Above 262,144 cells or 4,194,304 list entries, the cells get
   1.5 times bigger. The grid never drops a box. On a GTX 980 Ti at
   1904 x 985, the grid took the frame time from 27.8 ms to 15 ms (p50).
@@ -1579,14 +1605,57 @@ stocks. The door openings and the door places are approximate.
     floors high, and a tower crane with a load of boards on its hook.
   - The site is west of the road, from x = -140 to the hoarding, and from
     z = -50 to z = 45. It never crosses the road, so the road can go on
-    north and south past it. The hoarding runs the full length of the
-    site, past both ends of the road.
+    north and south past it (see Warwick Road below). The hoarding runs
+    the full length of the site.
   - The site stands on a raft over the District line, which goes west
     under it in a covered way.
   - The hoarding and the fence stop each player: a jump and a vault do
     not clear them. The site is `map.scenery`, and the escape audit
     reports a player who can get there. The site adds two hoarding boxes
     and one collision box for the fence. The rest is decoration.
+- **Warwick Road** (`warwickRoad` in `game/src/maps/earls_court.zig`):
+  the street is open. It goes 240 m north and south of the station exit
+  and fades into the fog (see [Underground light](#underground-light)).
+  - The road with double yellow lines and a dashed middle line, pavements
+    with kerb stones, and a street lamp each 30 m on each side.
+  - Terraces on both sides: London stock brick on the east, red brick on
+    the west, three floors with a stucco ground floor, sash windows, a
+    door with a fanlight for each house, a cornice and chimney stacks. On
+    the west side they start at the ends of the construction site, where
+    the hoarding turns to meet them.
+  - Each side has two dead-end alleys past the roadman line, with a back
+    gate and wheelie bins.
+  - A Heras fence with a ROAD CLOSED sign crosses the street 150 m north
+    and south of the exit (`warwick_fence`). The map ends there: a jump
+    and a vault do not clear it. Past the fence the street is for the eye
+    only. The roadmen kill a player long before the fence.
+  - The street boxes count for the ambient occlusion only within 60 m of
+    the exit. Each decoration is 1 cm or more off the face behind it.
+- **The roadmen** (Earl's Court, `game/src/roadmen.zig`, the model in
+  `game/src/npc.zig`): the roadman line is 50 m along Warwick Road from
+  the station exit, north and south (`roadmen.line`).
+  - A player past the line gets two roadmen. They come out of an alley or
+    from the road, where the player cannot see them, and walk or run at
+    the player. They run 1.5 m/s faster than the player, 8 m/s at least.
+  - In reach they stab with knives, in turns. A stab does 25 damage, so
+    four stabs kill: about 1.3 s after the first one. The kill feed says
+    "roadman", and the death screen says KILLED BY roadman.
+  - A player who goes back over the line escapes. The roadmen walk away,
+    and each one goes when the player cannot see him. After a kill they
+    stand for a moment, then they walk away too.
+  - The roadmen cannot die. A shot, a cut or a blast hits them: the flesh
+    impact and a flinch, and no damage.
+  - The outfit: full black. A large puffer jacket with baffles and a
+    hood, a balaclava with a slit for the eyes, tracksuit trousers,
+    trainers and gloves. `npc.zig` is the model for any NPC of the street
+    (the moped riders too). It has a draw function and a pose: a stand, a
+    walk, a run, a stab, and a seat on a moped as the driver or the
+    passenger. The parts are rigid boxes on a skeleton, and a ragdoll can
+    move them and draw them with `buildSkeleton`.
+  - Deathmatch: see [The roadmen in deathmatch](#the-roadmen-in-deathmatch).
+    Offline, the client applies the damage of each stab, and a death puts
+    the player back at the first spawn point. Practice is on the arena,
+    which has no Warwick Road.
 - **Ticket gates** (Earl's Court, `game/src/gates.zig`): a gate line of 8
   lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
   passage. Screens close the rest of each hall.
@@ -1711,6 +1780,9 @@ apps/action/
 │       ├── gates.zig     the ticket gates: the lanes, the paddles, the Oyster readers, the fares, the fare dodge
 │       ├── pigeons.zig   the pigeons of the train shed: the perches, the flights, the bodies
 │       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights, the return, two clients in deathmatch
+│       ├── roadmen.zig   the roadmen of Warwick Road: the line, the gangs, the chase, the stabs, the hits
+│       ├── roadmen_test.zig  the roadman line: the spawn out of view, the kill, a runner, the escape, no damage, two clients
+│       ├── npc.zig       the NPC model and its outfit (full black): the skeleton, the poses, the hit boxes
 │       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung
 │       ├── secret_room.zig  the secret room of VAPES N MORE: the shelf door, GET MORE, the golden pigeon, the blessing, the shaft of light
 │       ├── secret_room_test.zig  the shut door, GET MORE, the walk to the plinth, the room lights
@@ -1743,6 +1815,7 @@ apps/action/
 ├── server/chat.ts        the chat checks: clean text, length cap, rate limit, teams
 ├── server/session.ts     the server identity, /api/version, the welcome, the bye on SIGTERM
 ├── server/pigeons.ts     the pigeons in deathmatch: the state of each pigeon and body, the joyrides, the returns
+├── server/roadmen.ts     the roadmen in deathmatch: the checks of each chase, the damage of a stab
 ├── server/server.cfg     the server config (a script)
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── public/index.html
@@ -1781,6 +1854,9 @@ the server makes it a death:
 | `{t:"shock"}` | the client, to the server | the player touched the live rail. The kill feed shows LIVE RAIL. |
 | `{t:"die", by}` | the client, to the server | the player dies of `by`. The server accepts only a cause in `ENV_DEATHS` (`server/index.ts`): `"Popcorn lung"` (a vape) and `"Guilt"` (fare dodging). It ignores any other cause, a dead player and the end of a match. |
 | `{t:"kill", killer, victim, head:false, kname, vname, by}` | the server, to all players | the death. `killer` is the victim, and `kname` and `by` are the cause. Only a `die` gives `by`. With `by`, the death screen says DIED OF, not KILLED BY. |
+
+The roadmen (see [The roadmen in deathmatch](#the-roadmen-in-deathmatch))
+kill with a kill message, `kname` "roadman" and no `by`.
 
 The client sends its own position, its held weapon and its hits. The server
 checks the match phase and that both players are alive. A pick must name a
@@ -1847,6 +1923,39 @@ The events of the other players go to `pg` messages with all the digits of
 each number, so each client starts a flight from the same place. These
 messages are new, so the protocol version stays the same: an old client
 ignores them.
+
+### The roadmen in deathmatch
+
+The roadmen follow the pattern of the pigeons (`game/src/roadmen.zig`,
+`server/roadmen.ts`).
+
+- **The client of the player decides.** Its player goes past the line: it
+  starts the gang at once and sends `go` with the places of the two
+  roadmen. Its player goes back over the line: it sends `off`. Each stab
+  that lands on its player: it sends `stab`.
+- **The server checks the event.** A `go` only for a live player past the
+  line (the last `st` place, 4 m of slack), with two places on Warwick
+  Road, and only one chase at a time. The client sends an `st` message
+  just before each `go`. A `stab` only during a chase, 0.4 s or more after
+  the `go`, and 0.15 s or more after the last stab. A death, a spawn, an
+  `off` and a leave end the chase.
+- **The server records the death.** Each stab does 25 damage (a `hit`
+  with `from` 0). At 0 health the kill message credits "roadman".
+- **The other clients** run the gang from the `go`, with the place of the
+  player from the snapshots. Their roadmen stab too, with no damage.
+- The `st` message takes z from -260 to 260: Warwick Road goes 240 m north
+  and south.
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"rm", k:"go", at}` | the client, to the server | the player went past the roadman line. `at`: the places `[[x, y, z], [x, y, z]]` of the two roadmen. |
+| `{t:"rm", k:"go", at, id}` | the server, to the other players | the roadmen of player `id` start at `at`. |
+| `{t:"rm", k:"off"}` | the client, to the server | the player went back over the line. |
+| `{t:"rm", k:"off", id}` | the server, to the other players | the roadmen of player `id` walk away. Also when player `id` leaves during a chase. |
+| `{t:"rm", k:"stab"}` | the client, to the server | a stab of a roadman landed on the player. |
+
+These messages are new, so the protocol version stays the same: an old
+client ignores them.
 
 ### Ping
 

@@ -352,6 +352,49 @@ describe('gates and pigeons', () => {
   });
 });
 
+describe('the roadmen', () => {
+  test('a go goes to the others; four stabs kill, credited to roadman', async () => {
+    const port = await start('', {});
+    const a = new Client(port);
+    const b = new Client(port);
+    const aid = (await a.next((m) => m.t === 'welcome')).id;
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'spawn');
+    await b.send({ ...hello, name: 'Bob' });
+    await b.next((m) => m.t === 'spawn');
+
+    // Alice goes 58 m north of the exit on Warwick Road.
+    const st = { t: 'st', y: 4.8, yaw: 0, pitch: 0, lean: 0, w: 0, m: 0 };
+    await a.send({ ...st, x: -91.5, z: -60, lift: -1 });
+    await Bun.sleep(50);
+    const n = b.msgs.length;
+    const at = [
+      [-80.7, 4.8, -74.45],
+      [-91.5, 4.8, -76],
+    ];
+    await a.send({ t: 'rm', k: 'go', at });
+    expect(await b.next((x) => x.t === 'rm', n)).toEqual({
+      t: 'rm',
+      k: 'go',
+      at,
+      id: aid,
+    });
+    await Bun.sleep(450);
+    const m = a.msgs.length;
+    for (let i = 0; i < 4; i++) {
+      await a.send({ t: 'rm', k: 'stab' });
+      await Bun.sleep(200);
+    }
+    const kill = await b.next((x) => x.t === 'kill', n);
+    expect(kill).toMatchObject({ killer: aid, victim: aid, kname: 'roadman' });
+    expect('by' in kill).toBe(false);
+    const hits = a.msgs.slice(m).filter((x) => x.t === 'hit');
+    expect(hits.map((x) => x.hp)).toEqual([75, 50, 25, 0]);
+    a.close();
+    b.close();
+  });
+});
+
 describe('the secret room', () => {
   test('GET MORE opens the door for the others and for a later join; MORE blesses', async () => {
     const port = await start('', {});

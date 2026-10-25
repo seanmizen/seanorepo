@@ -824,12 +824,20 @@ fn shade(in: VOut, front: bool) -> vec3f {
 const FOG_NEAR: f32 = 15.0;
 const FOG_UNDER: f32 = 0.005;
 
+// The far fog outside: past FAR_NEAR the air of the city thickens. A long
+// street (Warwick Road) fades out before the far plane (260 m). The views
+// of the station are nearer than FAR_NEAR.
+const FAR_NEAR: f32 = 80.0;
+const FAR_DENS: f32 = 0.015;
+
 // Fog: thin warm haze outside, a thin dark fog far away underground. `vd`
 // is the view direction, from the eye to the point.
 fn fog(c: vec3f, wp: vec3f, dist: f32, vd: vec3f, out_k: f32) -> vec3f {
   let dens_out = u.info.z * exp(-max(wp.y, 0.0) * 0.12);
   let dens = mix(FOG_UNDER, dens_out, out_k);
-  let f = 1.0 - exp(-max(dist - FOG_NEAR * (1.0 - out_k), 0.0) * dens);
+  let f_near = 1.0 - exp(-max(dist - FOG_NEAR * (1.0 - out_k), 0.0) * dens);
+  let f_far = (1.0 - exp(-max(dist - FAR_NEAR, 0.0) * FAR_DENS)) * out_k;
+  let f = 1.0 - (1.0 - f_near) * (1.0 - f_far);
   let fc_out = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
   let fc = mix(vec3f(0.012, 0.011, 0.01), fc_out, out_k);
   return mix(c, fc, f);

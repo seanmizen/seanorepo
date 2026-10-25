@@ -116,6 +116,8 @@ pub const Msg = struct {
     // also the bodies: [bird, gen, x, y, z, holder] each, and `sd`.
     b: ?[][4]f32 = null,
     c: ?[][6]f32 = null,
+    // The roadmen of a player (t "rm", k "go"): the places of the two.
+    at: ?[2][3]f32 = null,
 };
 
 pub const Client = struct {

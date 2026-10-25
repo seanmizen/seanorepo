@@ -53,6 +53,11 @@
 // server checks and sends the event. The server decides the joyrides and
 // the returns. Each client flies each flight from its seed.
 //
+// The roadmen of Warwick Road (roadmen.ts): the client of a player past
+// the roadman line decides. The server checks the chase, sends it to the
+// other players, applies the damage of each stab, and credits "roadman"
+// for the death.
+//
 // Weapons: the class ids are the order of game/src/weapon.zig Class. A pick
 // is [class, model]: the model must be a gun of the class, and the model
 // sets the stats (guns.json). A new pick applies at the next spawn, or at
@@ -104,6 +109,13 @@
 //                                                 "push", "grab", "drop". i the
 //                                                 pigeon, g its generation. o and
 //                                                 v: the place and the velocity.
+//   {t:"rm", k:"go", at:[[x,y,z],[x,y,z]]}        the player went past the roadman
+//                                                 line: two roadmen start at `at`
+//                                                 (roadmen.ts)
+//   {t:"rm", k:"off"}                             the player went back over the
+//                                                 line: the roadmen walk away
+//   {t:"rm", k:"stab"}                            a stab of a roadman landed on
+//                                                 the player
 // Server to client:
 //   {t:"welcome", id, instance, build, protocol, started}
 //                                 the first message, before the hello. The
@@ -154,6 +166,10 @@
 //   {t:"flock", b:[[st, g, rod, u]], sd, c:[[i, g, x, y, z, holder]]}
 //                                 the state of the pigeons, each 10 s. sd
 //                                 and c (the bodies) only on join.
+//   {t:"rm", k:"go", at, id}      the roadmen of player id start at `at`
+//   {t:"rm", k:"off", id}         the roadmen of player id walk away
+//   A stab of a roadman gives {t:"hit", from:0, dmg, hp}. A death by a stab
+//   is a kill with kname "roadman" and no `by`.
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
@@ -182,6 +198,7 @@ import {
   type PingState,
   pingRound,
 } from './ping';
+import { ROADMAN, Roadmen } from './roadmen';
 import {
   BUILD_HEADER,
   bye,
@@ -461,6 +478,7 @@ const players = new Map<number, Player>();
 let nextId = 1;
 /// The pigeons of Earl's Court: one flock for the life of the server.
 const flock = new Flock(Date.now());
+const roadmen = new Roadmen();
 /// The lanes of the ticket gates: gates.zig max_lanes.
 const GATE_LANES = 16;
 /// The door of the secret room is open (secret_room.zig). A new match
@@ -575,6 +593,7 @@ function spawn(p: Player): void {
   p.shots.clear();
   p.spawnAt = [p.x, p.y, p.z];
   p.firedSinceSpawn = false;
+  roadmen.end(p.id);
   send(p, {
     t: 'spawn',
     x: p.x,
@@ -615,9 +634,11 @@ function fireRateOk(p: Player, w: number, cls: Gun, now: number): boolean {
   return true;
 }
 
-/// A death with no killer: the live rail, or a cause of a die message.
-/// kname is the killer in the kill feed. by is set for a die message only.
+/// A death with no killer: the live rail, a cause of a die message, or the
+/// roadmen. kname is the killer in the kill feed. by is set for a die
+/// message only.
 function envDeath(p: Player, kname: string, by?: string): void {
+  roadmen.end(p.id);
   p.alive = false;
   p.hp = 0;
   p.d++;
@@ -670,12 +691,26 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
   }
 }
 
+/** A roadman event of player p (roadmen.ts): the relay to the other
+ * players, and the damage of a stab. A death by a stab credits
+ * "roadman". */
+function onRoadman(p: Player, msg: Record<string, unknown>): void {
+  if (!p.joined || phase !== 'play') return;
+  const r = roadmen.onMessage(p.id, p, msg, Date.now());
+  for (const o of r.out) broadcast(o.msg, p.id);
+  if (r.damage <= 0) return;
+  p.hp -= r.damage;
+  send(p, { t: 'hit', from: 0, dmg: r.damage, hp: Math.max(0, p.hp) });
+  if (p.hp <= 0) envDeath(p, ROADMAN);
+}
+
 /** Apply damage from an attacker: the hit message, and a kill at 0 hp. A
  * player can damage itself with a grenade. That kill gives no score. */
 function damage(p: Player, target: Player, dmg: number, head: boolean): void {
   target.hp -= dmg;
   send(target, { t: 'hit', from: p.id, dmg, hp: Math.max(0, target.hp) });
   if (target.hp <= 0) {
+    roadmen.end(target.id);
     target.alive = false;
     target.hp = 0;
     target.d++;
@@ -985,7 +1020,8 @@ const server = Bun.serve<Conn>({
       } else if (msg.t === 'st' && p.alive) {
         p.x = num(msg.x, -420, 420) ?? p.x;
         p.y = num(msg.y, -30, 30) ?? p.y;
-        p.z = num(msg.z, -60, 60) ?? p.z;
+        // Warwick Road goes 240 m north and south of the station.
+        p.z = num(msg.z, -260, 260) ?? p.z;
         p.yaw = num(msg.yaw, -1e4, 1e4) ?? p.yaw;
         p.pitch = num(msg.pitch, -2, 2) ?? p.pitch;
         p.lean = num(msg.lean, -1, 1) ?? 0;
@@ -1038,6 +1074,8 @@ const server = Bun.serve<Conn>({
         onGate(p, msg);
       } else if (msg.t === 'more') {
         onMore(p, msg);
+      } else if (msg.t === 'rm') {
+        onRoadman(p, msg);
       } else if (msg.t === 'pg' && p.joined) {
         for (const o of flock.onMessage(p.id, msg, Date.now())) {
           if (o.to === 'sender') send(p, o.msg);
@@ -1049,6 +1087,9 @@ const server = Bun.serve<Conn>({
       const p = players.get(ws.data.id);
       players.delete(ws.data.id);
       for (const m of flock.leave(ws.data.id)) broadcast(m);
+      if (roadmen.chasing(ws.data.id))
+        broadcast({ t: 'rm', k: 'off', id: ws.data.id });
+      roadmen.end(ws.data.id);
       if (p?.joined && !shutdown.stopping()) serverLine(`${p.name} left.`);
     },
   },
