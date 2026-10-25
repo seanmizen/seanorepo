@@ -47,6 +47,9 @@ pub const Mat = enum(u8) {
     /// Brushed stainless steel: a fine vertical grain (the lift doors and
     /// cabs).
     steel = 11,
+    /// Glazed terracotta blocks, 600 x 300 mm, with fine joints: the
+    /// Earls Court Road front of Earl's Court.
+    terracotta = 12,
 };
 
 pub const Box = struct {
@@ -93,7 +96,7 @@ pub const Spawn = struct { pos: V3, yaw: f32 };
 /// The GPU box buffer of the ambient occlusion (render.zig uploadBoxes)
 /// has this many boxes. A map with more boxes fails `zig build test` and
 /// the floorplan tool.
-pub const max_boxes = 1024;
+pub const max_boxes = 2048;
 /// The map lights. Each one has six shadow layers (render.zig), and
 /// scene.wgsl BODY_SLOT is the same number.
 pub const max_lights = 36;
@@ -430,7 +433,7 @@ pub fn surfaceFits(look: Mat, s: Surface) bool {
         .tread => s == .metal,
         .wood => s == .wood,
         .brick => s == .brick,
-        .wall_tile => s == .tile,
+        .wall_tile, .terracotta => s == .tile,
         .cloth => s == .fabric,
         .tile => s == .tile or s == .concrete,
         .concrete => switch (s) {
