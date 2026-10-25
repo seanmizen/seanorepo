@@ -532,6 +532,15 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
       s.rough = mix(0.75, 0.35, k);
       s.metal = 0.7;
     }
+    case 11u: { // brushed steel: a fine grain along the face Y axis
+      // Streaks a few mm wide across the grain, long along it. Each band
+      // goes to its mean as its streaks get near the size of a pixel.
+      let fine = noiseBL(vec3f(uv.x * 220.0, uv.y * 2.5, 0.0), max(fw_uv.x * 220.0, fw_uv.y * 2.5));
+      let wide = noiseBL(vec3f(uv.x * 45.0, uv.y * 0.8, 4.0), max(fw_uv.x * 45.0, fw_uv.y * 0.8));
+      s.albedo = col * (0.86 + 0.12 * fine + 0.16 * wide);
+      s.rough = 0.45 + 0.1 * fine;
+      s.metal = 0.6;
+    }
     default: { // paint, and the gun
       s.rough = 0.4;
       s.metal = 0.35;

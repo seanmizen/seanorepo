@@ -44,6 +44,9 @@ pub const Mat = enum(u8) {
     /// Grooved aluminium: escalator steps, comb plates and landing plates.
     /// The grooves run along X (scene.wgsl).
     tread = 10,
+    /// Brushed stainless steel: a fine vertical grain (the lift doors and
+    /// cabs).
+    steel = 11,
 };
 
 pub const Box = struct {
@@ -424,6 +427,7 @@ pub fn surfaceFits(look: Mat, s: Surface) bool {
             else => false,
         },
         .metal => s == .metal or s == .sheet_metal or s == .glass,
+        .steel => s == .metal or s == .sheet_metal,
         .paint => true,
     };
 }
@@ -457,10 +461,17 @@ pub const Lift = struct {
     /// The cab floor and cab ceiling boxes (dynamic).
     floor_box: usize,
     ceil_box: usize,
-    /// The landing door halves, [level][half] (dynamic).
+    /// The landing door halves, [level][half] (dynamic, collision only).
     door_box: [2][2]usize,
-    /// The closed bounds of each door half, [level][half][min, max].
+    /// The closed bounds of each landing door half, [level][half][min,
+    /// max]. A half is two leaves (see doorLeaves).
     door_closed: [2][2][2]V3,
+    /// The cab door halves, [half] (dynamic, collision only). They ride
+    /// with the cab.
+    cab_door_box: [2]usize,
+    /// The closed bounds of each cab door half, [half][min, max]. Y is from
+    /// the cab floor.
+    cab_door_closed: [2][2]V3,
     y: f32,
     level: usize = 0, // the level the cab is at, or goes to
     door: f32 = 0, // 0 closed, 1 open
@@ -582,22 +593,101 @@ fn placeLift(l: *Lift) void {
     const ch = cb.max[1] - cb.min[1];
     cb.min[1] = l.y + cab_height;
     cb.max[1] = cb.min[1] + ch;
-    // Only the doors of the level where the cab stands open. The two
-    // halves slide apart along X.
+    // The cab doors and the landing doors of the level where the cab
+    // stands open together. The other landing doors stay shut.
+    const ax: usize = if (l.door_on_x) 2 else 0;
     for (0..2) |lv| {
-        const here = @abs(l.y - l.levels[lv]) < 0.05;
-        const open = if (here) l.door else 0;
         for (0..2) |half| {
-            const closed = l.door_closed[lv][half];
-            const ax: usize = if (l.door_on_x) 2 else 0;
-            const w = comp(closed[1], ax) - comp(closed[0], ax);
-            const dir: f32 = if (half == 0) -1 else 1;
-            const d = dir * w * 0.92 * vec.smooth(open);
-            const off = if (l.door_on_x) v3(0, 0, d) else v3(d, 0, 0);
-            boxes[l.door_box[lv][half]].min = closed[0] + off;
-            boxes[l.door_box[lv][half]].max = closed[1] + off;
+            const u = doorUnion(l.door_closed[lv][half], ax, half, landingOpen(l, lv));
+            boxes[l.door_box[lv][half]].min = u[0];
+            boxes[l.door_box[lv][half]].max = u[1];
         }
     }
+    for (0..2) |half| {
+        const u = doorUnion(cabDoorClosed(l, half), ax, half, cabOpen(l));
+        boxes[l.cab_door_box[half]].min = u[0];
+        boxes[l.cab_door_box[half]].max = u[1];
+    }
+}
+
+/// How far the landing doors of level `lv` are open, 0 to 1. Only the
+/// doors of the level where the cab stands open.
+pub fn landingOpen(l: *const Lift, lv: usize) f32 {
+    return if (@abs(l.y - l.levels[lv]) < 0.05) l.door else 0;
+}
+
+/// How far the cab doors are open, 0 to 1: the same as the landing doors
+/// of the level where the cab stands.
+pub fn cabOpen(l: *const Lift) f32 {
+    return @max(landingOpen(l, 0), landingOpen(l, 1));
+}
+
+/// The closed bounds of cab door half `half`, at the cab now.
+pub fn cabDoorClosed(l: *const Lift, half: usize) [2]V3 {
+    const c = l.cab_door_closed[half];
+    return .{ c[0] + v3(0, l.y, 0), c[1] + v3(0, l.y, 0) };
+}
+
+// A lift door is a two-speed door. Each half has two leaves on two
+// layers. A leaf is half the width of the half, plus a small overlap with
+// the other leaf. To open, the fast leaf moves the full width of the half,
+// and the slow leaf moves the width of one leaf. Open, the two leaves
+// stand one behind the other, beside the opening, in a pocket one leaf
+// wide. Thus each pocket is half the width of the opening, and the doors
+// stay inside the shaft.
+
+/// The overlap of the two leaves of a closed half, along the doors.
+const leaf_overlap: f32 = 0.02;
+/// The gap between the two layers of leaves.
+const leaf_gap: f32 = 0.005;
+
+/// The two leaves of a door half, [slow, fast][min, max].
+/// - closed: the bounds of the closed half (both leaves).
+/// - ax: the axis along the doors (0 X, 2 Z). Half 0 opens toward -ax,
+///   half 1 toward +ax.
+/// - open: 0 closed, 1 open.
+/// - slow_low: the slow leaf is on the layer at the low end of the other
+///   axis.
+pub fn doorLeaves(closed: [2]V3, ax: usize, half: usize, open: f32, slow_low: bool) [2][2]V3 {
+    const dir: f32 = if (half == 0) -1 else 1;
+    // The outer edge (at the jamb) and the inner edge (at the middle).
+    const edge = if (half == 0) comp(closed[0], ax) else comp(closed[1], ax);
+    const middle = if (half == 0) comp(closed[1], ax) else comp(closed[0], ax);
+    const w = @abs(middle - edge);
+    const leaf = w / 2 + leaf_overlap / 2;
+    const u = vec.smooth(open);
+    // The edge of each leaf that is nearer the middle of the doors.
+    const slow_in = edge + dir * leaf * u - dir * leaf;
+    const fast_in = middle + dir * w * u;
+    const bx: usize = if (ax == 0) 2 else 0;
+    const b0 = comp(closed[0], bx);
+    const b1 = comp(closed[1], bx);
+    const bm = (b0 + b1) / 2;
+    const low = [2]f32{ b0, bm - leaf_gap / 2 };
+    const high = [2]f32{ bm + leaf_gap / 2, b1 };
+    const slow_b = if (slow_low) low else high;
+    const fast_b = if (slow_low) high else low;
+    return .{
+        leafBox(closed, ax, slow_in, slow_in + dir * leaf, slow_b),
+        leafBox(closed, ax, fast_in, fast_in + dir * leaf, fast_b),
+    };
+}
+
+/// The bounds of both leaves of a door half: the collision box.
+pub fn doorUnion(closed: [2]V3, ax: usize, half: usize, open: f32) [2]V3 {
+    const lv = doorLeaves(closed, ax, half, open, true);
+    return .{ @min(lv[0][0], lv[1][0]), @max(lv[0][1], lv[1][1]) };
+}
+
+/// A box with the y of `closed`, a1 and a2 along ax, and b along the
+/// other horizontal axis.
+fn leafBox(closed: [2]V3, ax: usize, a1: f32, a2: f32, b: [2]f32) [2]V3 {
+    const lo = @min(a1, a2);
+    const hi = @max(a1, a2);
+    return if (ax == 0)
+        .{ v3(lo, closed[0][1], b[0]), v3(hi, closed[1][1], b[1]) }
+    else
+        .{ v3(b[0], closed[0][1], lo), v3(b[1], closed[1][1], hi) };
 }
 
 // ---- The deep-level train ------------------------------------------------------

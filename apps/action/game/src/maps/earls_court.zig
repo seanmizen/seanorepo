@@ -576,6 +576,25 @@ fn walkwayAndSpur() void {
 
 const frame_c = v3(0.1, 0.12, 0.11);
 const glass_c = v3(0.06, 0.08, 0.09);
+/// The brushed steel of the lift doors and their frames.
+const lift_steel = v3(0.6, 0.61, 0.62);
+const sill_c = v3(0.45, 0.45, 0.44);
+/// The clear width of a lift doorway. A two-speed door needs a pocket of
+/// half this width on each side (map.doorLeaves). 1.5 x 1.45 m and the
+/// leaf overlap fit in the 2.2 m inside a shaft. The landing audit needs
+/// more than 1.44 m: lines at 0.4 m each side of the middle, and the
+/// player radius.
+const lift_opening: f32 = 1.45;
+const lift_door_h: f32 = 2.3;
+
+/// A door half: a dynamic collision box. Null when the map is full.
+fn doorBox(p: [2]V3) ?usize {
+    const db = map.add(p[0], p[1], lift_steel, .steel, .sheet_metal);
+    db.dynamic = true;
+    db.ao = false;
+    db.visible = false;
+    return map.indexOf(db);
+}
 
 /// Two corners of a box on a door face. `on_x`: the face is at x (fa..fb)
 /// and runs along z (aa..ab); else it is at z and runs along x.
@@ -602,32 +621,53 @@ fn lift(r: Rect, levels: [2]f32, door_on_x: bool, speed: f32) void {
     box(v3(r.x0, top, r.z0), v3(r.x1, top + 0.2, r.z1), frame_c, .metal, .metal);
 
     // The door face: jambs, and panels between and over the openings.
+    // Behind the face, from the landing in: the landing doors on a sill,
+    // the cab doors, the front of the cab. The doors are two-speed
+    // (map.doorLeaves): open, they stand behind the jambs, inside the
+    // shaft walls.
     const a0 = if (door_on_x) r.z0 else r.x0;
     const a1 = if (door_on_x) r.z1 else r.x1;
     const f0 = if (door_on_x) r.x0 else r.z0;
     const f1 = f0 + 0.1;
-    const da0 = a0 + 0.35;
-    const da1 = a1 - 0.35;
+    const da0 = (a0 + a1 - lift_opening) / 2;
+    const da1 = (a0 + a1 + lift_opening) / 2;
+    const land_door = [2]f32{ f0 + 0.105, f0 + 0.17 };
+    const cab_door = [2]f32{ f0 + 0.185, f0 + 0.25 };
+    const cab_f = f0 + 0.27;
     for ([_][2]f32{ .{ a0, da0 }, .{ da1, a1 } }) |j| {
         const p = face(door_on_x, j[0], j[1], bottom, top, f0, f1);
         boxNoAo(p[0], p[1], frame_c, .metal, .metal);
     }
-    const mid_panel = face(door_on_x, da0, da1, levels[0] + 2.3, levels[1], f0, f1);
+    const mid_panel = face(door_on_x, da0, da1, levels[0] + lift_door_h, levels[1], f0, f1);
     boxNoAo(mid_panel[0], mid_panel[1], frame_c, .metal, .metal);
-    const top_panel = face(door_on_x, da0, da1, levels[1] + 2.3, top, f0, f1);
+    const top_panel = face(door_on_x, da0, da1, levels[1] + lift_door_h, top, f0, f1);
     boxNoAo(top_panel[0], top_panel[1], frame_c, .metal, .metal);
     for (levels) |ly| {
         const p = face(door_on_x, da0, da1, ly + 2.35, ly + 2.6, f0 - 0.04, f0);
         deco(p[0], p[1], v3(0.05, 0.25, 0.6), .emissive, .glass);
+        // A steel frame round the doorway.
+        const fw = 0.07;
+        for ([_][2]f32{ .{ da0 - fw, da0 }, .{ da1, da1 + fw } }) |j| {
+            const q = face(door_on_x, j[0], j[1], ly, ly + lift_door_h + 0.05, f0 - 0.015, f0);
+            deco(q[0], q[1], lift_steel, .steel, .metal);
+        }
+        const head = face(door_on_x, da0 - fw, da1 + fw, ly + lift_door_h, ly + lift_door_h + 0.05, f0 - 0.015, f0);
+        deco(head[0], head[1], lift_steel, .steel, .metal);
+        // The landing sill under the landing doors and their pockets
+        // (decoration: the gap to the cab floor is narrower than a player).
+        const sill = face(door_on_x, a0 + 0.1, a1 - 0.1, ly - 0.1, ly + 0.003, f1, cab_door[0] - 0.01);
+        deco(sill[0], sill[1], sill_c, .steel, .metal);
     }
 
-    // The cab: a floor and a lit ceiling (dynamic).
-    const inner_min = if (door_on_x) v3(f1, -0.15, r.z0 + 0.1) else v3(r.x0 + 0.1, -0.15, f1);
+    // The cab: a floor and a lit ceiling (dynamic). main.zig draws its
+    // walls and its doors (lift_doors.zig).
+    const inner_min = if (door_on_x) v3(cab_f, -0.15, r.z0 + 0.1) else v3(r.x0 + 0.1, -0.15, cab_f);
     const inner_max = v3(r.x1 - 0.1, 0, r.z1 - 0.1);
     const fb = map.add(inner_min, inner_max, v3(0.25, 0.25, 0.27), .metal, .metal);
     fb.dynamic = true;
     fb.ao = false;
-    const cbx = map.add(v3(inner_min[0], 2.45, inner_min[2]), v3(inner_max[0], 2.57, inner_max[2]), v3(0.55, 0.6, 0.65), .emissive, .glass);
+    const ceil_min = if (door_on_x) v3(cab_door[0], 2.45, inner_min[2]) else v3(inner_min[0], 2.45, cab_door[0]);
+    const cbx = map.add(ceil_min, v3(inner_max[0], 2.57, inner_max[2]), v3(0.55, 0.6, 0.65), .emissive, .glass);
     cbx.dynamic = true;
     cbx.ao = false;
     // A full map (map.dropped) gets no lift: its boxes are not in the map.
@@ -642,21 +682,26 @@ fn lift(r: Rect, levels: [2]f32, door_on_x: bool, speed: f32) void {
         .ceil_box = ceil_b,
         .door_box = undefined,
         .door_closed = undefined,
+        .cab_door_box = undefined,
+        .cab_door_closed = undefined,
         .y = levels[0] + 0.02,
         .speed = speed,
         .door_on_x = door_on_x,
     };
+    // The door halves are collision boxes. main.zig draws their leaves.
     const mid = (da0 + da1) / 2;
+    const halves = [2][2]f32{ .{ da0, mid }, .{ mid, da1 } };
     for (levels, 0..) |ly, lv| {
-        const halves = [2][2]f32{ .{ da0, mid }, .{ mid, da1 } };
         for (halves, 0..) |h, hi| {
-            const p = face(door_on_x, h[0], h[1], ly, ly + 2.3, f0 + 0.02, f1 - 0.02);
-            const db = map.add(p[0], p[1], steel, .metal, .sheet_metal);
-            db.dynamic = true;
-            db.ao = false;
-            l.door_box[lv][hi] = map.indexOf(db) orelse return;
+            const p = face(door_on_x, h[0], h[1], ly, ly + lift_door_h, land_door[0], land_door[1]);
+            l.door_box[lv][hi] = doorBox(p) orelse return;
             l.door_closed[lv][hi] = .{ p[0], p[1] };
         }
+    }
+    for (halves, 0..) |h, hi| {
+        const p = face(door_on_x, h[0], h[1], 0, lift_door_h, cab_door[0], cab_door[1]);
+        l.cab_door_box[hi] = doorBox(p) orelse return;
+        l.cab_door_closed[hi] = .{ p[0], p[1] };
     }
     const idx = map.addLift(l);
 
