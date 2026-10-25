@@ -60,6 +60,7 @@ const secret = @import("secret_room.zig");
 const train_sound = @import("train_sound.zig");
 const train_car = @import("train_car.zig");
 const gates = @import("gates.zig");
+const lift_doors = @import("lift_doors.zig");
 const vault_mod = @import("vault.zig");
 const platform_display = @import("platform_display.zig");
 const dyn_scale = @import("dyn_scale.zig");
@@ -2985,6 +2986,7 @@ fn gameRender(ctx: *sw.Context) !void {
     }
     if (map.train) |*tr| buildTrain(tr, me.eyePos());
     if (map.id == .earls_court) buildEscalatorSteps();
+    lift_doors.build(&dyn);
     pigeons.build(&dyn, time);
     gates.build(&dyn);
     secret.build(&dyn);

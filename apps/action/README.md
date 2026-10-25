@@ -1122,7 +1122,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 1024. Earl's Court uses 908 boxes, the arena 126.
+`map.max_boxes` is 1024. Earl's Court uses 914 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1277,7 +1277,29 @@ Earl's Court has three lifts. Press F on a call button or on a cab button.
 - **The cab** is a floor and a lit ceiling, 2.45 m apart (dynamic boxes).
   The cab floor is 2 cm above the landing. `lift()` in
   `game/src/maps/earls_court.zig` makes a shaft, its cab, its doors and
-  its buttons.
+  its buttons. `game/src/lift_doors.zig` draws the brushed steel walls of
+  the cab, its front, its sill and a handrail in each frame.
+- **The doors** are two-speed centre-opening doors, as in a real lift. The
+  cab has doors, and each landing has doors. The cab doors and the landing
+  doors of the level where the cab stands open together and close
+  together. The doorway is 1.45 m wide and 2.3 m high.
+  - Each half of a door has two leaves on two layers. To open, the fast
+    leaf moves the full width of the half, and the slow leaf moves the
+    width of one leaf (`map.doorLeaves`). Open, the two leaves stand
+    behind the jamb, in a pocket one leaf wide.
+  - The pockets fit in the 2.2 m inside the shaft walls. Thus no door
+    leaf goes through a shaft wall, a landing wall or the jamb, at any
+    level. A single-speed half needs a pocket as wide as the half: 1.45 m
+    at each side, more than the shaft.
+  - From the landing in, the layers are: the door face (jambs and
+    panels), the landing doors on a steel sill, the cab doors, the front
+    of the cab.
+  - Each leaf is a brushed steel panel (`map.Mat.steel`, material 11 in
+    `scene.wgsl`) with a square window, 0.2 m, near the top. The window
+    is open, so a player can see the cab through it. `lift_doors.zig` draws the leaves where
+    `map.doorLeaves` puts them, so the windows move with the doors.
+  - Each half is one collision box (`map.doorUnion`): the bounds of its
+    two leaves. The box is invisible.
 - **Moving platforms**: a player who stands on a dynamic solid box moves
   with it (`map.Platform` in `game/src/map.zig`). In each tick (`tick` in
   `game/src/main.zig`):
@@ -1510,6 +1532,7 @@ apps/action/
 │       ├── weapon_menu.zig  the weapon menu (B)
 │       ├── gun_compare.zig  the compare bars of two guns
 │       ├── map.zig       the current map: boxes, ramps, decoration, surface materials, lights, lifts, the deep train, moving platforms, buttons, escalators
+│       ├── lift_doors.zig  the lift door leaves with their windows, the cab walls, front and sill
 │       ├── train_car.zig the car body of a train from its real stock: the parts that stop a player, the details
 │       ├── maps/         arena.zig, earls_court.zig
 │       ├── range.zig     the practice range: the dummies, the damage numbers, the health bars
