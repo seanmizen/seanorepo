@@ -151,29 +151,92 @@ fn noise3(p: vec3f) -> f32 {
     w.z);
 }
 
-fn fbm(p: vec3f) -> f32 {
+// ---- Band limits -----------------------------------------------------------
+// A procedural pattern aliases when its cells get near the size of a pixel.
+// Far away it then makes moire: false stripes that move with the camera.
+// The functions here take the pixel footprint `fw`: the size of one pixel
+// in the cells of the pattern. surface() gets it from the screen
+// derivatives before its switch, because derivatives need uniform control
+// flow. This is the method of texelNoiseFade in the swindowzig voxel demo.
+
+// The fade of a pattern to its mean: 0 while a cell covers two pixels or
+// more, 1 when a cell is the size of a pixel. A new pattern calls this one
+// time: mix(pattern, mean, bandFade(fw)).
+fn bandFade(fw: f32) -> f32 {
+  return smoothstep(0.5, 1.0, fw);
+}
+
+// The integral of smoothstep(0, w, s) from s = 0 to t.
+fn rampInt(t: f32, w: f32) -> f32 {
+  let k = min(t / w, 1.0);
+  return w * k * k * k * (1.0 - 0.5 * k) + max(t - w, 0.0);
+}
+
+// The integral from 0 to x of the joint profile
+// smoothstep(0, w, min(fract(x), 1 - fract(x))). One cell gives 1 - w.
+fn jointInt(x: f32, w: f32) -> f32 {
+  let f = fract(x);
+  let part = select(1.0 - w - rampInt(1.0 - f, w), rampInt(f, w), f <= 0.5);
+  return floor(x) * (1.0 - w) + part;
+}
+
+// A joint (mortar, grout) at each edge of a cell, on one axis: 0 at the
+// edge, 1 at `w` from it. f is the place in the cell, 0 to 1. The value is
+// the mean of the profile over one pixel (a box filter), so the joint is
+// smooth at each distance, and near it is the same as the profile. As a
+// cell gets near the size of a pixel, it goes to the mean of a cell, 1 - w.
+fn joint(f: f32, w: f32, fw: f32) -> f32 {
+  let d = max(fw, 1e-4);
+  let box = (jointInt(f + 0.5 * d, w) - jointInt(f - 0.5 * d, w)) / d;
+  return mix(box, 1.0 - w, bandFade(fw));
+}
+
+// noise3 with a band limit: `fw` is the pixel footprint in lattice cells.
+// The noise goes to its mean, 0.5. When it is all mean, the function does
+// not calculate the noise.
+fn noiseBL(p: vec3f, fw: f32) -> f32 {
+  let k = bandFade(fw);
+  if (k >= 1.0) { return 0.5; }
+  return mix(noise3(p), 0.5, k);
+}
+
+// Fractal noise with a band limit: `fw` is the pixel footprint in lattice
+// cells of p. Each octave is 2.03 times finer, and fades to its mean as its
+// cells get near the size of a pixel. When one octave is all mean, the next
+// octaves are too. Then the function adds their means and stops. fw 0 gives
+// all four octaves.
+fn fbm(p: vec3f, fw: f32) -> f32 {
   var a = 0.5;
   var q = p;
+  var w = fw;
   var sum = 0.0;
   for (var i = 0; i < 4; i++) {
-    sum += a * noise3(q);
+    let k = bandFade(w);
+    // The means of this octave and the next: (a + a / 2 + ... + 1/16) / 2.
+    if (k >= 1.0) { return sum + a - 0.03125; }
+    sum += a * mix(noise3(q), 0.5, k);
     q = q * 2.03 + vec3f(1.7, 9.2, 3.1);
+    w *= 2.03;
     a *= 0.5;
   }
   return sum;
 }
 
-// smoothstep(lo, hi, fbm(p)) with the same value. noise3 is 0 to 1, so the
-// next octaves add 0 to (their amplitudes together) to the sum.
+// smoothstep(lo, hi, fbm(p, fw)) with the same value. noise3 is 0 to 1, so
+// the next octaves add 0 to (their amplitudes together) to the sum.
 // When the sum plus that is less than lo, or the sum is more than hi, the
 // smoothstep is 0 or 1 already. Then the function stops.
-fn fbmStep(p: vec3f, lo: f32, hi: f32) -> f32 {
+fn fbmStep(p: vec3f, lo: f32, hi: f32, fw: f32) -> f32 {
   var a = 0.5;
   var q = p;
+  var w = fw;
   var sum = 0.0;
   for (var i = 0; i < 4; i++) {
-    sum += a * noise3(q);
+    let k = bandFade(w);
+    if (k >= 1.0) { return smoothstep(lo, hi, sum + a - 0.03125); }
+    sum += a * mix(noise3(q), 0.5, k);
     q = q * 2.03 + vec3f(1.7, 9.2, 3.1);
+    w *= 2.03;
     // The octaves after octave i: a / 2 + a / 4 + ..., to octave 3.
     let left = a * (1.0 - exp2(f32(i) - 3.0));
     if (sum + left < lo) { return 0.0; }
@@ -203,7 +266,7 @@ fn skyColor(d: vec3f, with_sun: bool) -> vec3f {
     // Clouds: a sheet of fbm on a plane high above the map.
     if (y > 0.01) {
       let p = d / y * 400.0;
-      let n = fbm(vec3f(p.xz * 0.0045 + vec2f(u.cam.w * 0.004, 0.0), 0.0));
+      let n = fbm(vec3f(p.xz * 0.0045 + vec2f(u.cam.w * 0.004, 0.0), 0.0), 0.0);
       let cover = smoothstep(0.48, 0.78, n);
       let lit = mix(vec3f(0.55, 0.42, 0.48), vec3f(1.25, 0.78, 0.52), pow(sd, 3.0));
       c = mix(c, lit + u.sun_col.rgb * 0.5 * pow(sd, 20.0), cover * smoothstep(0.01, 0.15, y) * 0.85);
@@ -321,7 +384,8 @@ fn unsealed(p: vec3f) -> f32 {
 
 // ---- Materials -------------------------------------------------------------
 
-struct Surface { albedo: vec3f, n: vec3f, rough: f32, metal: f32, emit: f32 };
+// px: the size of one pixel on the surface, in metres (the band limits).
+struct Surface { albedo: vec3f, n: vec3f, rough: f32, metal: f32, emit: f32, px: f32 };
 
 fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
   var s: Surface;
@@ -333,87 +397,118 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
   let an = abs(n0);
   // A 2D face coordinate: the two axes along the face.
   var uv = wp.xz;
-  if (an.x > 0.5) { uv = wp.zy; } else if (an.z > 0.5) { uv = wp.xy; }
-  // The LED cells and their size on the screen (material 9). The
-  // derivatives must be in uniform control flow: here, not in the switch.
-  let led = uv / LED_PITCH;
-  let led_w = length(fwidth(led));
+  // The pixel footprint in metres, on each world axis and on each face
+  // axis (see Band limits): the larger step of the two screen axes. The
+  // sum of the two (fwidth) is up to two times too large, and blurs
+  // too much at a grazing angle. Derivatives must be in uniform control
+  // flow: here, not in the switch. px is the largest axis, for the 3D
+  // noise. The LEDs keep fwidth (led_fw) for their dot edge.
+  let dx = abs(dpdx(wp));
+  let dy = abs(dpdy(wp));
+  let fw = max(dx, dy);
+  var fw_uv = fw.xz;
+  var led_fw = dx.xz + dy.xz;
+  if (an.x > 0.5) {
+    uv = wp.zy;
+    fw_uv = fw.zy;
+    led_fw = dx.zy + dy.zy;
+  } else if (an.z > 0.5) {
+    uv = wp.xy;
+    fw_uv = fw.xy;
+    led_fw = dx.xy + dy.xy;
+  }
+  let px = max(fw.x, max(fw.y, fw.z));
+  s.px = px;
   switch (mat) {
     case 1u: { // concrete
-      let k = 0.82 + 0.2 * fbm(wp * 1.7) + 0.06 * noise3(wp * 14.0);
+      let k = 0.82 + 0.2 * fbm(wp * 1.7, px * 1.7) + 0.06 * noiseBL(wp * 14.0, px * 14.0);
       s.albedo = col * k;
       s.rough = 0.85;
     }
     case 2u: { // floor tiles, 2 m, with a dark joint
       let cell = floor(wp.xz / 2.0);
       let f = fract(wp.xz / 2.0);
-      let edge = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
-      let joint = smoothstep(0.0, 0.025, edge);
-      let tone = 0.9 + 0.16 * hash3(vec3f(cell, 1.0)) + 0.08 * noise3(wp * 3.0);
-      s.albedo = col * tone * mix(0.45, 1.0, joint);
-      s.rough = mix(0.9, 0.45, joint * hash3(vec3f(cell, 7.0)));
+      let fc = fw.xz / 2.0;
+      let jt = joint(f.x, 0.025, fc.x) * joint(f.y, 0.025, fc.y);
+      // The colour and the gloss of each tile go to their means as a tile
+      // gets near the size of a pixel.
+      let fade = bandFade(max(fc.x, fc.y));
+      let tone = 0.9 + 0.16 * mix(hash3(vec3f(cell, 1.0)), 0.5, fade) + 0.08 * noiseBL(wp * 3.0, px * 3.0);
+      s.albedo = col * tone * mix(0.45, 1.0, jt);
+      s.rough = mix(0.9, 0.45, jt * mix(hash3(vec3f(cell, 7.0)), 0.5, fade));
     }
     case 3u: { // corrugated metal: the normal waves along the face
+      // One wave is 2 / 9 m. The waves go flat from 4 pixels a wave to 2,
+      // before the highlight sparkles. The roughness then takes their place.
+      let flat_k = bandFade(fw_uv.x * 9.0);
       if (an.y < 0.5) {
         let a = uv.x * 9.0;
         var t = vec3f(1.0, 0.0, 0.0);
         if (an.x > 0.5) { t = vec3f(0.0, 0.0, 1.0); }
-        s.n = normalize(n0 + t * sin(a * 3.14159) * 0.35);
+        s.n = normalize(n0 + t * sin(a * 3.14159) * 0.35 * (1.0 - flat_k));
       }
-      let grime = fbm(wp * 0.8);
+      let grime = fbm(wp * 0.8, px * 0.8);
       s.albedo = col * (0.75 + 0.35 * grime);
-      s.rough = 0.45;
+      s.rough = mix(0.45, 0.6, flat_k);
       s.metal = 0.6;
     }
     case 4u: { // emissive
       s.emit = 7.0;
     }
     case 5u: { // wood: planks
-      let plank = fract(uv.y * 4.0);
-      let lines = smoothstep(0.0, 0.06, plank) * smoothstep(1.0, 0.94, plank);
-      let grain = 0.85 + 0.15 * noise3(vec3f(uv.x * 1.5, uv.y * 30.0, 0.0));
+      let lines = joint(fract(uv.y * 4.0), 0.06, fw_uv.y * 4.0);
+      let grain = 0.85 + 0.15 * noiseBL(vec3f(uv.x * 1.5, uv.y * 30.0, 0.0), max(fw_uv.x * 1.5, fw_uv.y * 30.0));
       s.albedo = col * grain * mix(0.55, 1.0, lines);
       s.rough = 0.75;
     }
     case 6u: { // cloth
-      s.albedo = col * (0.9 + 0.1 * noise3(wp * 40.0));
+      s.albedo = col * (0.9 + 0.1 * noiseBL(wp * 40.0, px * 40.0));
       s.rough = 0.95;
     }
     case 7u: { // glazed wall tiles, 150 x 75 mm, with grout
       let t = uv / vec2f(0.15, 0.075);
+      let fc = fw_uv / vec2f(0.15, 0.075);
       let row = floor(t.y);
       let tx = t.x + 0.5 * (row % 2.0);
       let f = vec2f(fract(tx), fract(t.y));
-      let grout = smoothstep(0.0, 0.06, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y) * 2.0));
+      let grout = joint(f.x, 0.06, fc.x) * joint(f.y, 0.03, fc.y);
       let id = vec3f(floor(tx), row, 3.0);
-      // Some tiles are a shade off, a few are cracked or stained.
+      // Some tiles are a shade off, a few are cracked or stained. Far away
+      // the mean tone: 0.9 + 0.12 * 0.5 - 0.25 * 0.03.
       let tone = 0.9 + 0.12 * hash3(id) - 0.25 * step(0.97, hash3(id + 9.0));
-      s.albedo = col * tone * mix(0.35, 1.0, grout);
+      let fc_max = max(fc.x, fc.y);
+      s.albedo = col * mix(tone, 0.9525, bandFade(fc_max)) * mix(0.35, 1.0, grout);
       s.rough = mix(0.8, 0.12, grout);
-      // The glaze: each tile bows a little.
+      // The glaze: each tile bows a little. The bow goes flat from 4 pixels
+      // a tile to 2, before the highlight sparkles.
       if (an.y < 0.5) {
         var tt = vec3f(1.0, 0.0, 0.0);
         if (an.x > 0.5) { tt = vec3f(0.0, 0.0, 1.0); }
-        s.n = normalize(n0 + tt * (f.x - 0.5) * 0.12 + vec3f(0.0, 1.0, 0.0) * (f.y - 0.5) * 0.12);
+        let bow = 0.12 * (1.0 - bandFade(fc_max * 2.0));
+        s.n = normalize(n0 + tt * (f.x - 0.5) * bow + vec3f(0.0, 1.0, 0.0) * (f.y - 0.5) * bow);
       }
     }
     case 8u: { // brick, stretcher bond
       let t = uv / vec2f(0.225, 0.075);
+      let fc = fw_uv / vec2f(0.225, 0.075);
       let row = floor(t.y);
       let tx = t.x + 0.5 * (row % 2.0);
       let f = vec2f(fract(tx), fract(t.y));
-      let mortar = smoothstep(0.0, 0.05, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y) * 3.0));
+      let mortar = joint(f.x, 0.05, fc.x) * joint(f.y, 0.05 / 3.0, fc.y);
       let id = vec3f(floor(tx), row, 5.0);
-      let tone = 0.75 + 0.35 * hash3(id) + 0.1 * noise3(wp * 6.0);
+      let shade_k = mix(hash3(id), 0.5, bandFade(max(fc.x, fc.y)));
+      let tone = 0.75 + 0.35 * shade_k + 0.1 * noiseBL(wp * 6.0, px * 6.0);
       s.albedo = mix(vec3f(0.42, 0.4, 0.36), col * tone, mortar);
       s.rough = 0.9;
     }
     case 9u: { // LEDs: a round dot in each cell of the grid, black between
+      let led = uv / LED_PITCH;
+      let led_w = length(led_fw) / LED_PITCH;
       let d = length(fract(led) - 0.5);
       let w = max(led_w, 0.001);
       let dot = 1.0 - smoothstep(0.34 - w, 0.34 + w, d);
       // Far away a cell is smaller than a pixel: the mean of the dot.
-      let k = mix(dot, 0.36, smoothstep(0.4, 1.0, w));
+      let k = mix(dot, 0.36, bandFade(w));
       // A little above 0, so the black between the dots stays emissive.
       s.emit = 7.0 * k + 0.001;
     }
@@ -528,17 +623,17 @@ fn shade(in: VOut, front: bool) -> vec3f {
     let dirt = mix(1.3, 0.45, out_k);
     s.albedo *= mix(1.0, 0.55, (1.0 - ao) * dirt);
     if (abs(n0.y) < 0.5) {
-      let streak = fbmStep(vec3f(in.wpos.x * 3.1 + in.wpos.z * 2.3, in.wpos.y * 0.25, in.wpos.z * 0.7), 0.5, 0.8);
+      let streak = fbmStep(vec3f(in.wpos.x * 3.1 + in.wpos.z * 2.3, in.wpos.y * 0.25, in.wpos.z * 0.7), 0.5, 0.8, s.px * 4.0);
       // Water stains down the walls underground; outside they are faint.
       s.albedo *= 1.0 - streak * mix(0.3, 0.06, out_k);
     }
     if (n0.y > 0.5) {
-      let soil = fbmStep(in.wpos * 0.9, 0.45, 0.75);
+      let soil = fbmStep(in.wpos * 0.9, 0.45, 0.75, s.px * 0.9);
       s.albedo *= 1.0 - soil * 0.3 * dirt;
       // Small damp patches: a little darker and a little glossy. They are
       // not puddles. Outside (out_k 1) there are none.
       if (out_k < 1.0) {
-        wet = fbmStep(in.wpos * vec3f(0.35, 1.0, 0.35) + 3.0, 0.57, 0.67) * (1.0 - out_k);
+        wet = fbmStep(in.wpos * vec3f(0.35, 1.0, 0.35) + 3.0, 0.57, 0.67, s.px) * (1.0 - out_k);
       }
       s.albedo *= 1.0 - wet * 0.25;
       s.rough = mix(s.rough, 0.45, wet);

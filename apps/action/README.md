@@ -148,6 +148,28 @@ browser then drops frames in groups.
 - The cvar `render_scale` pins the scale (0.5 to 1). The debug screen
   gives the scale, `auto` or `pinned`, and the display interval.
 
+### Band limits
+
+The surface patterns (brick, tiles, planks, noise) come from the shader,
+not from textures. Thus they get no mipmaps. A pattern with cells near the
+size of a pixel aliases: far away it makes moire, false stripes that move
+with the camera. `surface()` in `game/src/scene.wgsl` filters each pattern
+with the pixel footprint: the screen derivatives of the surface position.
+
+- A joint (mortar, grout, the gap between planks) is the mean of its
+  profile over one pixel (`joint`). Near, it is the same as before. Far
+  away, a thin joint gets light and smooth.
+- As a cell gets near the size of a pixel, its colour and its roughness
+  fade to the mean of a cell (`bandFade`).
+- Each noise octave that is finer than a pixel fades to its mean
+  (`noiseBL`, `fbm`, `fbmStep`). The shader does not calculate a noise
+  that is all mean.
+- The waves of corrugated metal and the bow of the glazed tiles go flat
+  before a wave gets near two pixels. Thus the highlight does not sparkle.
+  The corrugated metal gets rougher in their place.
+- A new pattern calls `bandFade` with its footprint in cells:
+  `mix(pattern, mean, bandFade(fw))`.
+
 ## The practice range
 
 South of the arena, through a doorway in its south wall: a lane 24 m wide
