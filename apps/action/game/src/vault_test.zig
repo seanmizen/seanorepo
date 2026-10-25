@@ -123,6 +123,29 @@ test "vault onto the railing of the east concourse: no fall onto the tracks" {
     }
 }
 
+// The barrier at each end of each District island (maps/earls_court.zig
+// platformEnd): 1.1 m high, its far face at shock_x. A player can vault it,
+// and the live rail kills past it.
+test "vault onto a platform-end barrier: the live rail starts past it" {
+    load(.earls_court);
+    defer unload();
+    // The railing of island A, its gate, and the railing of island B.
+    for ([_]f32{ -1, 1 }) |dir| {
+        for ([_]f32{ -10.5, -12.8, 6.5 }) |z| {
+            errdefer std.debug.print("barrier vault toward {d} at z {d:.2}\n", .{ dir, z });
+            var p = landed(v3(dir * (ec.shock_x - 2.5), 0, z), if (dir > 0) -to_nx else to_nx);
+            walk(&p, 1.5);
+            try std.testing.expect(@abs(p.pos[0]) < ec.shock_x - 0.1 - player.radius + 0.01);
+            try std.testing.expect(!ec.liveRail(p.pos));
+            const low = try vaultThenStand(&p, 1);
+            try expectOnTop(p, 1.1, low);
+            try std.testing.expect(!ec.liveRail(p.pos));
+            walk(&p, 0.5);
+            try std.testing.expect(ec.liveRail(p.pos));
+        }
+    }
+}
+
 test "no vault: too high, too low, no room above" {
     load(.arena);
     defer unload();
