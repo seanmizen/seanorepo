@@ -335,7 +335,7 @@ test "moped: in deathmatch the snatch waits for the server" {
 const Snap = struct { moped: V3, runner: V3, pelvis: V3, roll: f32 };
 
 fn crashFrom(q: moped.State, owner: u32, mine_ride: bool, eye: V3) Snap {
-    moped.applyDie(owner, mine_ride, .driver, q, 3);
+    moped.applyDie(owner, mine_ride, .driver, q, 3, 0);
     const r = moped.rideOf(owner, mine_ride).?;
     var u: f32 = 0;
     while (u < 3) : (u += dt) {

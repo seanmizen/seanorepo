@@ -34,6 +34,7 @@ test {
     _ = @import("npc.zig");
     _ = @import("moped_test.zig");
     _ = @import("moped_sound.zig");
+    _ = @import("moped_ride_test.zig");
     _ = @import("secret_room_test.zig");
     _ = @import("train_sound.zig");
     _ = @import("train_car.zig");

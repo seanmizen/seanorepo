@@ -25,9 +25,12 @@ Controls:
 | G | quick grenade throw, from any slot |
 | 1, 2, 3, 4 | weapon slots: primary, secondary, knife, grenade |
 | B | weapon menu (also on the pause screen) |
-| F | use the item under the crosshair: a lift button, the NPC shooter panel, a dead pigeon (pick up, throw), a vape |
+| F | use the item under the crosshair: a lift button, the NPC shooter panel, a dead pigeon (pick up, throw), a vape, a crashed moped (RIDE MOPED) |
 | F | on the back shelf of VAPES N MORE: open the secret room |
 | Q, E (hold) | lean left, lean right |
+| On a moped: W, S | throttle, brake and reverse |
+| On a moped: A, D | steer |
+| On a moped: Space | get off |
 | Tab | the score board: kills, deaths and the ping of each player |
 | Y | chat to all players |
 | T | chat to your team |
@@ -1782,10 +1785,61 @@ stocks. The door openings and the door places are approximate.
     the parts, limits on the elbows, the knees and the neck, and collision
     with the boxes of the map. A body sleeps when it stops moving.
   - The roadmen do not touch the thieves.
+  - A crash leaves a moped that a player can ride: see the next item.
   - Deathmatch: see [The moped thieves in deathmatch](#the-moped-thieves-in-deathmatch).
     Offline, the client decides the snatch and applies the damage to the
     riders. Practice is on the arena, which has no Warwick Road. The tests
     run the offline path on Earl's Court.
+- **The moped to ride** (Earl's Court, `game/src/moped_ride.zig`,
+  `server/bikes.ts`): when the driver of a thief moped dies, the moped
+  crashes. It stops on its side, and it stays there to the end of the
+  match. A player can ride it.
+  - Get on: look at the moped and press F (RIDE MOPED). The moped stands up.
+  - Ride: W is the throttle, S brakes and then reverses, A and D steer. The
+    moped leans in each turn. The turn is tight at a walk and wide at
+    speed. The top speed is 16 m/s. The camera turns with the moped, and
+    the mouse still looks round. The engine (`moped_sound.zig`) follows
+    the throttle and the speed.
+  - Space gets off. The player lands beside the moped. The moped goes on,
+    falls on its side and slides to a stop.
+  - A wall at 8 m/s or more (the part of the speed into the wall), or a
+    landing at 9 m/s or more, throws the rider off.
+  - One hand is on the bars: the rider holds the secondary, with 2.5 times
+    the spread. The primary, the knife and the grenades are not available.
+    The server refuses them too.
+  - The moped drives on each floor that a player walks on: the street, the
+    passages, the concourses, the platforms, and the ramps over the stairs
+    and the escalators. A rider can ride down a staircase. Three boxes
+    along the moped, up to the head of the rider, stop at a wall. Each
+    end of the moped clears a slope of 0.6 m, so the moped does not catch
+    on a stair. A lift cab is a wall to a moped. A moped that falls onto
+    a track stays there: the platform edge is too high for it.
+  - A moped that hits a player at 3 m/s or more does damage: 7 for each
+    m/s over 3, to 100. The kill feed says "moped".
+  - A shot on the moped makes the metal impact. A rider who dies falls off
+    as a ragdoll (`ragdoll.zig`), in the colour of the player, and the
+    moped slides on.
+  - Each player has at most one moped to ride: a newer crash of a visit of
+    the same player makes the old moped a wreck. Nobody can ride a wreck.
+  - The moped thieves do not visit a rider.
+  - The roadmen: a roadman who gets within 1.3 m of a rider, or a stab that
+    lands, pulls the rider off the moped (a crash). Then the chase goes on
+    as on foot. A moped is faster than a roadman, so the gang comes out
+    ahead of the rider, and the ROAD CLOSED fence stops a moped. The map
+    stays closed.
+  - Deathmatch: see [The mopeds to ride in deathmatch](#the-mopeds-to-ride-in-deathmatch).
+- **The junk ramp** (`junkRamp` in `game/src/maps/earls_court.zig`): in the
+  Warwick Road entrance, on the street side of the gate line, workers left
+  a heap of junk from the construction site. Two lengths of plywood and MDF
+  sheets lie on stacks of pallets, with a scaffold board down the joint. A
+  bucket and a cone stand beside it.
+  - It is one `map.Ramp`, 2.4 m wide and 5.5 m long, 1.1 m high at its
+    lip. The lip is 1.4 m short of the gate cabinets.
+  - A moped that rides up it at 11 m/s or more jumps the gates (1.15 m)
+    and lands in the passage. From the hoarding across the road, a run of
+    14 m gives about 13 m/s.
+  - The ramp is solid: a player on foot walks up it. A jump on foot from
+    the lip over the gates is still a fare dodge.
 - **Ticket gates** (Earl's Court, `game/src/gates.zig`): a gate line of 8
   lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
   passage. Screens close the rest of each hall.
@@ -1811,6 +1865,8 @@ stocks. The door openings and the door places are approximate.
     dodge. 2 s later the server kills you: `{t:"die", by:"Guilt"}`. The
     kill feed shows Guilt, and the death screen says "Died of guilt. Fare
     dodging is a serious crime".
+  - A rider who jumps a gate line on a moped (the junk ramp) is not a fare
+    dodger. On foot the rule stays the same.
   - Deathmatch: the paddles are the same for each player. A tap goes to the
     server (`{t:"gate", k:"open", i}`), and the paddles of lane `i` open on
     each client. A walk through the lane (`k:"pass"`) closes them soon on
@@ -1921,6 +1977,8 @@ apps/action/
 │       ├── moped.zig     the moped thieves of Warwick Road: the approach, the snatch, the getaway, the crash, the hits, the stolen gun
 │       ├── moped_test.zig  the moped thieves: the snatch, one in each life, the crash, the thief death, the gun back, two clients
 │       ├── moped_sound.zig  the engine of each moped for the ears of the player: the pitch with Doppler, the level, the side
+│       ├── moped_ride.zig  the moped that a player rides: get on, the ride, the walls and the floors, the jumps, the crash, the hits
+│       ├── moped_ride_test.zig  the ride: get on and off, the junk ramp over the gates, the stairs, an escalator, a crash, a hit, two clients
 │       ├── ragdoll.zig   the ragdoll of a dead NPC: joint points, rigid parts, joint limits, collision with the map
 │       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung
 │       ├── secret_room.zig  the secret room of VAPES N MORE: the shelf door, GET MORE, the golden pigeon, the blessing, the shaft of light
@@ -1956,6 +2014,7 @@ apps/action/
 ├── server/pigeons.ts     the pigeons in deathmatch: the state of each pigeon and body, the joyrides, the returns
 ├── server/roadmen.ts     the roadmen in deathmatch: the checks of each chase, the damage of a stab
 ├── server/moped.ts       the moped thieves in deathmatch: the stolen guns, the health of the riders, the checks of each event
+├── server/bikes.ts       the mopeds that players ride: the ids, the checks of each mount, off and hit, the death of a rider
 ├── server/server.cfg     the server config (a script)
 ├── src/boot.ts           page entry; bundled to public/boot.js
 ├── src/moped.ts          the engine sound of the mopeds (Web Audio)
@@ -2148,6 +2207,57 @@ state is of the thief) or 0.
 | `{t:"mp", k:"pick", id}` | the client, to the server | F on the gun on the ground of the visit of player `id`. |
 | `{t:"mp", k:"pick", id, who}` | the server, to all players | player `who` has the gun: it goes into its primary slot. |
 | `{t:"mp", k:"end", id}` | the server, to all players | the visit of player `id` is over (a spawn or a leave). |
+
+These messages and fields are new, so the protocol version stays the
+same: an old client ignores them.
+
+### The mopeds to ride in deathmatch
+
+The mopeds to ride follow the pattern of the moped thieves
+(`game/src/moped_ride.zig`, `server/bikes.ts`).
+
+- **The server gives each moped an id** in the `die` of the driver of a
+  thief moped (`bk`). Each client slides the crash from the place in the
+  `die`, so each client has the moped at the same place.
+- **A mount**: F sends `mount` with the place of the moped. The server
+  checks a live player with no moped, 4 m or less from the moped, and a
+  moped with no rider that is not a wreck. The moped must be near its last
+  place on the server: 45 m from the crash, 12 m from the place where a
+  rider left it. Then the server sends `mount` to all the players, and
+  each client stands the moped up at that place.
+- **The client of the rider drives the moped.** Its `st` messages carry
+  the moped and its pose (`bk`). The server keeps the field only for the
+  moped of the rider, and the snapshot gives it to the other players. They
+  draw the rider on the moped at the place of the player.
+- **An `off`**: the rider got off or was thrown, at a place. The server
+  sends it to the other players. When a rider dies or leaves, the server
+  sends `off` to all the players, with the last place of the rider (and
+  `dd` 1 for a death) before the kill. Each client slides the moped from
+  that place with the map only.
+- **A hit**: the client of the rider sends `hit` when its moped touches
+  another player. The server checks that the sender rides that moped, the
+  two players are alive and 5 m or less apart, the speed is 3 to 20 m/s,
+  and the last hit on that player was 0.4 s or more before. It takes the
+  damage from the speed and sends a `hit`. A death is a kill with `kname`
+  "moped", and the rider gets the score.
+- **A rider** fires the secondary only and throws no grenade: the server
+  refuses the others.
+- A player who joins gets the list of the mopeds (`bikes`). A new match
+  removes the mopeds.
+
+A moped state `q` is `[x, y, z, yaw, speed, roll, vy]`: the ground under
+the middle of the moped, and its vertical speed.
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"mp", k:"die", id, r:0, q, who, bk}` | the server, to all players | the driver of the visit of player `id` died. `bk`: the id of the moped that the crash leaves. |
+| `{t:"mp", k:"mount", bk, q}` | the client, to the server | F on moped `bk`, at `q`. |
+| `{t:"mp", k:"mount", bk, id, q}` | the server, to all players | player `id` rides moped `bk` from `q`. |
+| `{t:"st", ..., bk}` | the client, to the server | a rider: `[moped, yaw, roll, pitch, speed]`. The snapshot has the same `bk` for each rider. |
+| `{t:"mp", k:"off", bk, q, cr}` | the rider, to the server | the rider got off moped `bk` at `q`. `cr` 1: the rider was thrown. |
+| `{t:"mp", k:"off", bk, id, q, cr, dd}` | the server, to the other players, or to all | rider `id` left moped `bk` at `q`. `dd` 1: the rider died (to all, before the kill). |
+| `{t:"mp", k:"hit", bk, id, sp}` | the rider, to the server | moped `bk` hit player `id` at `sp` m/s. |
+| `{t:"mp", k:"bikes", bl}` | the server, to a player who joins | the mopeds: `[bk, x, y, z, yaw, rider or -1, owner]` each. |
 
 These messages and fields are new, so the protocol version stays the
 same: an old client ignores them.

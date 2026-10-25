@@ -14,16 +14,21 @@
 //   ears (the moped and the player).
 // - The level falls with the distance. A moped on its side, or past the
 //   fence, is silent.
+// - A moped that a player rides (moped_ride.zig) has its own voice: slot
+//   moped_ride.sound_slot0 + its index. It follows the throttle of its
+//   rider and its speed. A moped with no rider is silent.
 const std = @import("std");
 const vec = @import("vec.zig");
 const guns = @import("guns.zig");
 const settings = @import("settings.zig");
 const moped = @import("moped.zig");
+const moped_ride = @import("moped_ride.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 
 /// The page (src/moped.ts) drives one engine voice for each slot:
-///   slot   the ride, 0 to moped.max_rides - 1
+///   slot   the ride, 0 to moped.max_rides - 1, then the mopeds that
+///          players ride
 ///   freq   the pitch at the ears (the firing rate with Doppler), Hz
 ///   gain   the level, 0 (silent) to 1, with the volume settings
 ///   pan    -1 left to 1 right
@@ -55,7 +60,8 @@ pub fn voiceFor(src: V3, vel: V3, speed: f32, throttle: f32, eye: V3, eye_vel: V
     };
 }
 
-var was_on: [moped.max_rides]bool = @splat(false);
+const slots = moped.max_rides + moped_ride.max_bikes;
+var was_on: [slots]bool = @splat(false);
 var last_speed: [moped.max_rides]f32 = @splat(0);
 
 /// Silence each engine that sounds (a change to the menu).
@@ -83,6 +89,20 @@ pub fn update(dt: f32, eye: V3, eye_vel: V3, yaw: f32, hear: bool) void {
         const vel = v3(-@sin(m.yaw), 0, -@cos(m.yaw)) * vec.s(m.speed);
         const v = voiceFor(m.pos + v3(0, 0.4, 0), vel, m.speed, throttle, eye, eye_vel, right);
         jsMoped(@intCast(i), v.freq, v.gain * level, v.pan, v.rasp);
+        was_on[i] = true;
+    }
+    for (&moped_ride.bikes, 0..) |*b, k| {
+        const i = moped.max_rides + k;
+        if (!hear or !b.on or b.rider == null) {
+            if (was_on[i]) jsMoped(@intCast(i), 60, 0, 0, 0);
+            was_on[i] = false;
+            continue;
+        }
+        const vel = moped_ride.fwdOf(b.yaw) * vec.s(b.speed) + v3(0, b.vy, 0);
+        const v = voiceFor(b.pos + v3(0, 0.4, 0), vel, @abs(b.speed), b.throttle, eye, eye_vel, right);
+        // The rider hears his own engine from the seat, a little softer.
+        const k_own: f32 = if (b.mine) 0.55 else 1;
+        jsMoped(@intCast(i), v.freq, v.gain * level * k_own, if (b.mine) 0 else v.pan, v.rasp);
         was_on[i] = true;
     }
 }

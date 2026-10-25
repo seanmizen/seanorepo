@@ -37,6 +37,9 @@ pub const PlayerMsg = struct {
     lift: i32 = -1,
     /// A rider of the deep train: the feet x from the train centre.
     tx: ?f32 = null,
+    /// A rider of a moped (moped_ride.zig): [moped id, yaw, roll, pitch,
+    /// speed].
+    bk: ?[5]f32 = null,
 };
 
 /// One server message. `t` names the kind; the other fields are optional.
@@ -125,6 +128,13 @@ pub const Msg = struct {
     q: ?[]f32 = null,
     r: ?u32 = null,
     who: ?u32 = null,
+    // A moped that a player rides (moped_ride.zig): its id, 1 when the
+    // rider was thrown (cr) or died (dd), and the mopeds on join:
+    // [id, x, y, z, yaw, rider or -1, owner] each.
+    bk: ?u32 = null,
+    cr: ?u32 = null,
+    dd: ?u32 = null,
+    bl: ?[][7]f32 = null,
 };
 
 pub const Client = struct {

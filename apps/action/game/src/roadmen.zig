@@ -10,6 +10,9 @@
 //   of the view of the player, and walk or run at the player. In reach they
 //   stab with knives. Each stab that lands does `damage`. A player who
 //   runs gets no gap: they run faster than the player.
+// - A player on a moped (moped_ride.zig): a roadman who gets near the
+//   moped (`knocks`), or a stab that lands, pulls the rider off it. Then
+//   the chase goes on as on foot.
 // - A player who goes back over the line before the end escapes. The
 //   roadmen walk away, and each one goes when the player cannot see it.
 // - After a kill the roadmen stand for a moment, then they walk away.
@@ -470,6 +473,22 @@ fn stepMan(g: *Gang, m: *Man, i: usize, dt: f32) void {
     // A hit staggers him for a moment.
     if (m.flinch > 0.6) wish = v3(0, 0, 0);
     m.body.step(dt, wish, false, speed / player.walk_speed);
+}
+
+/// A roadman pulls a rider off a moped (moped_ride.zig) at this distance.
+pub const knock_reach: f32 = 1.3;
+
+/// True when a roadman of the gang of the player of this client, in the
+/// chase, is within knock_reach of the feet p: he pulls a rider off the
+/// moped. A moped is faster than a roadman, so the gang comes out ahead of
+/// the rider (pickSpots), and the ROAD CLOSED fence stops a moped.
+pub fn knocks(p: V3) bool {
+    const g = find(0, true) orelse return false;
+    if (g.state != .chase) return false;
+    for (g.men) |m| {
+        if (vec.len(flat(m.body.pos - p)) < knock_reach and @abs(m.body.pos[1] - p[1]) < 1.5) return true;
+    }
+    return false;
 }
 
 // ---- Hits ----------------------------------------------------------------------------

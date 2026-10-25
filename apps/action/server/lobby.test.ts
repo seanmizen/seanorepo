@@ -649,3 +649,111 @@ describe('session', () => {
     c.close();
   });
 });
+
+describe('the mopeds to ride', () => {
+  test('a crash leaves a moped, then a mount, the pose, the secondary only, a hit that kills and an off', async () => {
+    const port = await start('', {});
+    const a = new Client(port);
+    const b = new Client(port);
+    const aid = (await a.next((m) => m.t === 'welcome')).id;
+    const bid = (await b.next((m) => m.t === 'welcome')).id;
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'spawn');
+    await b.send({ ...hello, name: 'Bob' });
+    await b.next((m) => m.t === 'spawn');
+    // On join: the list of the mopeds, empty.
+    expect(await b.next((x) => x.t === 'mp' && x.k === 'bikes')).toEqual({
+      t: 'mp',
+      k: 'bikes',
+      bl: [],
+    });
+    const st = { t: 'st', y: 4.92, yaw: 0, pitch: 0, lean: 0, w: 0, m: 0 };
+    await a.send({ ...st, x: -85.5, z: -22, lift: -1 });
+    await b.send({ ...st, x: -86, z: -16, lift: -1 });
+    await Bun.sleep(50);
+    await a.send({ t: 'mp', k: 'go', q: [-89.3, 4.8, 48, 0, 13, 0] });
+    // Bob kills the driver: the "die" names the moped that the crash leaves.
+    const driver = [-89.3, 4.8, -30, 0, 13, 0, 0, 0, -1, 0];
+    const n = a.msgs.length;
+    let die: Msg | undefined;
+    for (let i = 0; i < 6 && !die; i++) {
+      await b.send({
+        t: 'fire',
+        w: 0,
+        o: [-86, 6.5, -16],
+        e: [-89.3, 6.5, -30],
+        hits: [],
+        mh: [{ id: aid, r: 0, b: 0, h: 1, d: 14, q: driver }],
+      });
+      await Bun.sleep(250);
+      die = a.msgs.slice(n).find((x) => x.t === 'mp' && x.k === 'die');
+    }
+    expect(die?.bk).toBe(1);
+    // Alice walks to the moped and gets on it.
+    const q = [-89.3, 4.8, -36, 0.2, 0, 1.3, 0];
+    await a.send({ ...st, x: -88.5, z: -36, lift: -1 });
+    await Bun.sleep(50);
+    const m = b.msgs.length;
+    await a.send({ t: 'mp', k: 'mount', bk: 1, q });
+    const mount = { t: 'mp', k: 'mount', bk: 1, id: aid, q };
+    expect(await a.next((x) => x.t === 'mp' && x.k === 'mount', n)).toEqual(
+      mount,
+    );
+    expect(await b.next((x) => x.t === 'mp' && x.k === 'mount', m)).toEqual(
+      mount,
+    );
+    // Her st carries the moped: Bob sees it in the snapshot.
+    const bk = [1, 0.2, -0.1, 0, 12];
+    await a.send({ ...st, x: -89.3, y: 4.8, z: -36, lift: -1, w: 6, bk });
+    const snap = await b.next(
+      (x) =>
+        x.t === 'snap' &&
+        (x.players as { id: number; bk?: number[] }[]).some(
+          (p) => p.id === aid && p.bk !== undefined,
+        ),
+      m,
+    );
+    const pa = (snap.players as { id: number; bk?: number[] }[]).find(
+      (p) => p.id === aid,
+    );
+    expect(pa?.bk).toEqual(bk);
+    // On the moped her rifle and her grenades do nothing.
+    const k = b.msgs.length;
+    await a.send({
+      t: 'fire',
+      w: 0,
+      o: [-89.3, 6.4, -36],
+      e: [-89.3, 6.4, -60],
+      hits: [],
+    });
+    await a.send({ t: 'nade', o: [-89.3, 6.4, -36], v: [0, 2, -8] });
+    await Bun.sleep(100);
+    expect(b.msgs.slice(k).some((x) => x.t === 'shot' || x.t === 'nade')).toBe(
+      false,
+    );
+    // Bob stands in front of her. Two hits at speed kill him: "moped".
+    await b.send({ ...st, x: -89.3, z: -38, lift: -1 });
+    await Bun.sleep(50);
+    const j = b.msgs.length;
+    await a.send({ t: 'mp', k: 'hit', bk: 1, id: bid, sp: 16 });
+    const hit = await b.next((x) => x.t === 'hit', j);
+    expect(hit.dmg).toBe(91);
+    await Bun.sleep(450);
+    await a.send({ t: 'mp', k: 'hit', bk: 1, id: bid, sp: 16 });
+    const kill = await b.next((x) => x.t === 'kill', j);
+    expect(kill).toMatchObject({ killer: aid, victim: bid, kname: 'moped' });
+    // Alice gets off: the others get the place.
+    const o = b.msgs.length;
+    const off = [-89.3, 4.8, -40, 0.2, 9, 0, 0];
+    await a.send({ t: 'mp', k: 'off', bk: 1, q: off });
+    expect(await b.next((x) => x.t === 'mp' && x.k === 'off', o)).toEqual({
+      t: 'mp',
+      k: 'off',
+      bk: 1,
+      id: aid,
+      q: off,
+    });
+    a.close();
+    b.close();
+  });
+});

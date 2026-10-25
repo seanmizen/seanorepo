@@ -12,10 +12,12 @@
 //
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
 // aim, R reload, G grenade, F use (the lift buttons, the panel of the NPC
-// shooter, a stolen gun on the ground), Q and E lean, 1 to 4 the
+// shooter, a stolen gun on the ground, a crashed moped), Q and E lean, 1 to 4 the
 // weapon slots (primary, secondary, knife, grenade), B the weapon menu,
 // Tab scores, Esc release the mouse, M menu (while paused), Y chat, T team
-// chat. These keys are the default binds (game_console.zig): the game reads
+// chat. On a moped (moped_ride.zig): W throttle, S brake and reverse, A and
+// D steer, Space get off, and the secondary only. These keys are the
+// default binds (game_console.zig): the game reads
 // the actions, not the keys. The backtick key opens the console, and "/"
 // opens the chat with "/" typed (console/).
 //
@@ -58,6 +60,8 @@ const pigeons = @import("pigeons.zig");
 const roadmen = @import("roadmen.zig");
 const moped = @import("moped.zig");
 const moped_sound = @import("moped_sound.zig");
+const moped_ride = @import("moped_ride.zig");
+const npc = @import("npc.zig");
 const vapes = @import("vapes.zig");
 const secret = @import("secret_room.zig");
 const train_sound = @import("train_sound.zig");
@@ -222,6 +226,11 @@ const Remote = struct {
     /// client.
     tx: ?f32 = null,
     tx_now: f32 = 0,
+    /// A rider of a moped (moped_ride.zig): its id, and its yaw, roll,
+    /// pitch and speed from the snapshots, then smoothed.
+    bike: ?u32 = null,
+    bk_target: [4]f32 = @splat(0),
+    bk_now: [4]f32 = @splat(0),
 };
 var remotes: [24]Remote = undefined;
 var remote_n: usize = 0;
@@ -306,6 +315,8 @@ fn ambient(freq: f32, freq_end: ?f32, dur: f32, wave: audio_mod.Waveform, vol: f
 fn playerView() struct { eye: V3, roll: f32 } {
     var eye = me.eyePos();
     var roll = -me.lean * player_mod.lean_roll;
+    // On a moped the camera leans with it, a little.
+    if (myBike()) |b| roll -= 0.5 * b.roll;
     // The head bob: the amount follows the speed on the ground (me.bob is 0
     // in the air and when standing still), times the setting (0 is off).
     const amp = me.bob * settings.head_bob.float() * (1 - 0.7 * loadout.hands.ads);
@@ -393,8 +404,11 @@ fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
     me = .{ .pos = v3(x, y, z), .yaw = yaw };
     // Practice has no end of rounds.
     loadout.equip(applied, grenade.per_life, mode == .practice);
-    // A new life: a moped can come again (moped.zig).
+    // A new life: a moped can come again (moped.zig). No moped to ride,
+    // and the last body goes (moped_ride.zig).
     moped.newLife();
+    if (moped_ride.mineBike()) |b| moped_ride.release(b, moped_ride.stateOf(b), false);
+    moped_ride.clearCorpse(myId());
     yank_t = 0;
     alive = true;
     hp = 100;
@@ -481,6 +495,7 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     pigeons.reset(@intFromFloat(rand() * 1e6));
     roadmen.reset();
     moped.reset();
+    moped_ride.reset();
     static_mesh.clear();
     for (map.boxes[0..map.box_count]) |b| {
         if (!b.dynamic and b.visible) static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
@@ -733,8 +748,11 @@ fn pressPanel(b: shooter.Button) void {
 fn sendState() void {
     var tx_buf: [24]u8 = undefined;
     const tx = if (trainOffset()) |o| std.fmt.bufPrint(&tx_buf, ",\"tx\":{d:.3}", .{o}) catch "" else "";
-    client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d},\"lift\":{d}{s}}}", .{
-        me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(), cabIndex(), tx,
+    // A rider: the moped and its pose (moped_ride.zig).
+    var bk_buf: [96]u8 = undefined;
+    const bk = if (myBike()) |b| std.fmt.bufPrint(&bk_buf, ",\"bk\":[{d},{d:.3},{d:.3},{d:.3},{d:.2}]", .{ b.id, b.yaw, b.roll, b.pitch, b.speed }) catch "" else "";
+    client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d},\"lift\":{d}{s}{s}}}", .{
+        me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(), cabIndex(), tx, bk,
     });
 }
 
@@ -749,6 +767,8 @@ fn roadmenTick() void {
     roadmen.local(if (mode == .deathmatch) my_id else 0, me.pos, me.vel, play, eye, look, rng.random());
     if (mode == .deathmatch) for (remotes[0..remote_n]) |r| roadmen.remote(r.id, r.pos, r.vel, r.alive);
     roadmen.step(dt, eye, look);
+    // A roadman near a rider pulls him off the moped.
+    if (myBike() != null and roadmen.knocks(me.pos)) getOff(.crash);
     sendRoadmen();
     roadmenSounds();
 }
@@ -759,6 +779,8 @@ fn roadmenTick() void {
 fn sendRoadmen() void {
     defer roadmen.out_n = 0;
     for (roadmen.outbox[0..roadmen.out_n]) |o| {
+        // A stab that lands pulls a rider off the moped.
+        if (o.kind == .stab and myBike() != null) getOff(.crash);
         if (mode == .deathmatch) {
             if (!session.joined()) continue;
             switch (o.kind) {
@@ -904,11 +926,14 @@ fn mopedTick() void {
     const eye = me.eyePos();
     const look = vec.forward(me.yaw, me.pitch);
     const play = ownBodyShows() and (mode != .deathmatch or session.joined());
-    moped.local(if (mode == .deathmatch) my_id else 0, me.pos, me.vel, play, loadout.slots[0], look);
+    // A rider has no moped thieves.
+    const primary = if (myBike() != null) null else loadout.slots[0];
+    moped.local(if (mode == .deathmatch) my_id else 0, me.pos, me.vel, play, primary, look);
     if (mode == .deathmatch) for (remotes[0..remote_n]) |r| moped.remote(r.id, r.pos, r.vel, r.alive);
     moped.step(dt, eye, look);
     sendMopeds();
     mopedEvents();
+    bikeTick();
 }
 
 /// Deathmatch: the moped events of this client (moped.outbox) to the
@@ -940,8 +965,9 @@ fn mopedGun(p: ?[2]u32) ?weapon.Item {
 
 /// A moped event from the server (server/moped.ts).
 fn handleMoped(m: net.Msg) void {
-    const id = m.id orelse return;
     const k = m.k orelse "";
+    if (std.mem.eql(u8, k, "mount") or std.mem.eql(u8, k, "off") or std.mem.eql(u8, k, "bikes")) return handleBike(m, k);
+    const id = m.id orelse return;
     const mine = id == my_id;
     const q = mopedState(m.q);
     if (std.mem.eql(u8, k, "go")) {
@@ -957,7 +983,7 @@ fn handleMoped(m: net.Msg) void {
         const qq = q orelse return;
         const r = m.r orelse return;
         if (r > 1) return;
-        moped.applyDie(id, mine, @fromBackingInt(@intCast(r)), qq, m.who orelse 0);
+        moped.applyDie(id, mine, @fromBackingInt(@intCast(r)), qq, m.who orelse 0, m.bk orelse 0);
     } else if (std.mem.eql(u8, k, "pick")) {
         moped.applyPick(id, mine, m.who orelse 0, my_id);
     } else if (std.mem.eql(u8, k, "end")) {
@@ -1023,6 +1049,11 @@ fn mopedEvents() void {
             addSparks(e.p, e.n, v3(1.0, 0.75, 0.35), 3);
         },
         .thud => sounds.toneAt(e.p, 130, 60, 0.12, .sine, 0.45, 0),
+        // The crashed moped stopped: a moped to ride (moped_ride.zig).
+        .rest => {
+            const r = &moped.rides[e.ride];
+            _ = moped_ride.add(r.bike, r.owner, r.moped.pos, r.moped.yaw, r.moped.fall_side);
+        },
         .died => {
             var line: [64]u8 = undefined;
             pushFeed(std.fmt.bufPrint(&line, "{s}  >  {s}", .{ playerName(e.who), moped.names[@backingInt(e.rider)] }) catch moped.names[0], e.who == my_id);
@@ -1052,6 +1083,207 @@ fn gunHint(i: usize) []const u8 {
     return std.fmt.bufPrint(&gun_hint, "PICK UP {s}", .{std.ascii.upperString(&up, className(g.class))}) catch "PICK UP";
 }
 
+// ---- The moped to ride ------------------------------------------------------
+
+/// The id of the player of this client: its id in deathmatch, 0 offline.
+fn myId() u32 {
+    return if (mode == .deathmatch) my_id else 0;
+}
+
+/// The moped that the player of this client rides, or null.
+fn myBike() ?*moped_ride.Bike {
+    if (map.id != .earls_court) return null;
+    return moped_ride.mineBike();
+}
+
+/// The index of the moped of this client: its own shots go through it.
+fn myBikeIndex() ?usize {
+    const b = myBike() orelse return null;
+    return moped_ride.indexOf(b);
+}
+
+/// The moped with no rider under the crosshair, within reach (F rides it).
+fn aimedBike() ?usize {
+    if (map.id != .earls_court or !ownBodyShows() or myBike() != null) return null;
+    return moped_ride.aim(me.eyePos(), vec.forward(me.yaw, me.pitch));
+}
+
+/// The colours of a player on a moped: a jacket of its colour and a dark
+/// helmet. `head_add`: body.shadow_only for your own head.
+fn riderOutfit(id: u32, head_add: f32) npc.Outfit {
+    const c = colorFor(id);
+    return .{ .jacket = c, .quilt = c * vec.s(0.8), .trousers = v3(0.13, 0.13, 0.14), .head = v3(0.1, 0.1, 0.11), .slit = false, .head_add = head_add };
+}
+
+/// The player gets on moped b: the camera faces its way, and the
+/// secondary comes into the hand.
+fn onMount(b: *moped_ride.Bike) void {
+    me.pos = b.pos;
+    me.vel = v3(0, 0, 0);
+    me.yaw = b.yaw;
+    vault = null;
+    _ = loadout.select(.secondary);
+    sound(180, 320, 0.25, .sawtooth, 0.08);
+}
+
+/// The player gets off its moped: Space or a crash. The feet go beside
+/// the moped. A crash throws the player.
+fn getOff(how: moped_ride.Leave) void {
+    const b = moped_ride.leave(how) orelse return;
+    if (how == .died) return;
+    me.pos = moped_ride.dismountSpot(b);
+    const k: f32 = if (how == .crash) 0.6 else 0.35;
+    me.vel = b.slide * vec.s(b.speed * k) + v3(0, if (how == .crash) 4 else 2.5, 0);
+    me.grounded = false;
+    if (how == .crash) {
+        damage_flash = @min(1, damage_flash + 0.4);
+        sound(1, null, 0.35, .noise, 0.3);
+    } else sound(400, 250, 0.06, .triangle, 0.08);
+}
+
+/// The keys of the rider in one tick (moped_ride.zig): W throttle, S brake
+/// and reverse, A and D steer, Space get off. The camera turns with the
+/// moped. `idle`: no keys (frozen, or a shortcut).
+fn rideTick(b: *moped_ride.Bike, idle: bool) void {
+    const act = &gcon.act;
+    var in: moped_ride.Input = .{};
+    if (!idle) {
+        if (act.down(.forward)) in.throttle += 1;
+        if (act.down(.back)) in.throttle -= 1;
+        if (act.down(.moveright)) in.steer += 1;
+        if (act.down(.moveleft)) in.steer -= 1;
+    }
+    const yaw0 = b.yaw;
+    const out = moped_ride.ride(b, in, dt);
+    me.yaw += b.yaw - yaw0;
+    me.pos = b.pos;
+    me.vel = moped_ride.fwdOf(b.yaw) * vec.s(b.speed) + v3(0, b.vy, 0);
+    me.grounded = b.grounded;
+    me.bob = 0;
+    // One hand on the bars: the secondary only.
+    if (loadout.current != .secondary) _ = loadout.select(.secondary);
+    if (out == .crash) return getOff(.crash);
+    if (!idle and act.pressed(.jump)) getOff(.jump);
+}
+
+/// The mopeds to ride, each tick on Earl's Court: the riders of the other
+/// players from the snapshots, the mopeds with no rider, the hits of the
+/// moped of this client, the messages and the sounds.
+fn bikeTick() void {
+    if (mode == .deathmatch) for (remotes[0..remote_n]) |*r| {
+        const id = r.bike orelse continue;
+        if (!r.alive) continue;
+        const b = moped_ride.find(id) orelse continue;
+        if (b.mine) continue;
+        moped_ride.follow(b, r.id, r.pos, r.bk_now[0], r.bk_now[1], r.bk_now[2], r.bk_now[3], dt);
+    };
+    moped_ride.step(dt);
+    if (myBike()) |b| if (mode == .deathmatch) {
+        var feet: [remotes.len]V3 = undefined;
+        var ids: [remotes.len]u32 = undefined;
+        var n: usize = 0;
+        for (remotes[0..remote_n]) |r| {
+            if (!r.alive) continue;
+            feet[n] = r.pos;
+            ids[n] = r.id;
+            n += 1;
+        }
+        if (moped_ride.hits(b, feet[0..n], ids[0..n], dt) > 0) {
+            sound(120, 60, 0.12, .square, 0.25);
+            hit_marker = 0.18;
+            hit_marker_kill = false;
+        }
+    };
+    sendBikes();
+    bikeEvents();
+}
+
+/// A moped state (moped_ride.State) as a JSON array.
+const BikeState = struct {
+    q: moped_ride.State,
+    pub fn format(self: BikeState, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        try w.writeByte('[');
+        for (self.q, 0..) |x, i| {
+            if (i > 0) try w.writeByte(',');
+            try w.print("{d:.3}", .{x});
+        }
+        try w.writeByte(']');
+    }
+};
+
+/// A moped state from a message, or null.
+fn bikeState(q: ?[]f32) ?moped_ride.State {
+    const a = q orelse return null;
+    if (a.len < 7) return null;
+    var out: moped_ride.State = undefined;
+    for (&out, a[0..7]) |*o, x| {
+        if (!std.math.isFinite(x)) return null;
+        o.* = x;
+    }
+    return out;
+}
+
+/// Deathmatch: the moped events of this client (moped_ride.outbox) to the
+/// server.
+fn sendBikes() void {
+    defer moped_ride.out_n = 0;
+    if (mode != .deathmatch or !session.joined()) return;
+    for (moped_ride.outbox[0..moped_ride.out_n]) |o| switch (o.kind) {
+        .mount => client.send("{{\"t\":\"mp\",\"k\":\"mount\",\"bk\":{d},\"q\":{f}}}", .{ o.bike, BikeState{ .q = o.q } }),
+        .off => {
+            // The server keeps the place of the last st.
+            sendState();
+            client.send("{{\"t\":\"mp\",\"k\":\"off\",\"bk\":{d},\"q\":{f}{s}}}", .{ o.bike, BikeState{ .q = o.q }, if (o.crash) ",\"cr\":1" else "" });
+        },
+        .hit => client.send("{{\"t\":\"mp\",\"k\":\"hit\",\"bk\":{d},\"id\":{d},\"sp\":{d:.2}}}", .{ o.bike, o.victim, o.speed }),
+    };
+}
+
+/// The sounds and the sparks of the mopeds (moped_ride.events).
+fn bikeEvents() void {
+    defer moped_ride.event_n = 0;
+    for (moped_ride.events[0..moped_ride.event_n]) |e| switch (e.kind) {
+        .mount => sounds.toneAt(e.p, 160, 240, 0.2, .sawtooth, 0.15, 0),
+        .crash => {
+            sounds.toneAt(e.p, 1, null, 0.5, .noise, 0.7, 0);
+            sounds.toneAt(e.p, 95, 40, 0.3, .sine, 0.8, 0);
+            for (0..10) |_| addSparks(e.p + v3(0, 0.3, 0), v3(0, 1, 0), v3(1.0, 0.75, 0.35), 1);
+        },
+        .fall => sounds.toneAt(e.p, 420, 260, 0.2, .square, 0.15, 0),
+        .scrape => sounds.toneAt(e.p, 1, null, 0.08, .noise, 0.25, 0),
+        .spark => {
+            impact_fx.spawn(e.p, e.n, .metal, 0.6, 0);
+            addSparks(e.p, e.n, v3(1.0, 0.75, 0.35), 3);
+        },
+        .land => sounds.toneAt(e.p, 110, 55, 0.12, .sine, 0.5, 0),
+    };
+}
+
+/// A moped event of the server for the mopeds to ride (server/bikes.ts).
+fn handleBike(m: net.Msg, k: []const u8) void {
+    if (std.mem.eql(u8, k, "bikes")) {
+        for (m.bl orelse &.{}) |row| {
+            const b = moped_ride.add(@intFromFloat(@max(0, row[0])), @intFromFloat(@max(0, row[6])), v3(row[1], row[2], row[3]), row[4], 1);
+            if (row[5] >= 0) {
+                b.rider = @intFromFloat(row[5]);
+                b.fall = 0;
+            }
+        }
+        return;
+    }
+    const id = m.id orelse return;
+    const bk = m.bk orelse return;
+    const q = bikeState(m.q) orelse return;
+    const mine = id == my_id;
+    if (std.mem.eql(u8, k, "mount")) {
+        if (moped_ride.applyMount(bk, id, mine, q)) |b| {
+            if (mine and alive) onMount(b) else if (mine) moped_ride.release(b, q, false);
+        }
+    } else if (std.mem.eql(u8, k, "off")) {
+        moped_ride.applyOff(bk, q, (m.cr orelse 0) != 0, (m.dd orelse 0) != 0, id);
+    }
+}
+
 // ---- Modes -----------------------------------------------------------------
 
 fn enterMenu(ctx: *sw.Context) void {
@@ -1065,6 +1297,8 @@ fn enterMenu(ctx: *sw.Context) void {
     pigeons.net = false;
     moped.reset();
     moped.net = false;
+    moped_ride.reset();
+    moped_ride.net = false;
     moped_sound.silence();
     pigeons.held = null;
     grenade.reset();
@@ -1079,6 +1313,7 @@ fn enterPractice(ctx: *sw.Context) void {
     mode = .practice;
     pigeons.net = false;
     moped.net = false;
+    moped_ride.net = false;
     grenade.reset();
     impact_fx.reset();
     applied = choice;
@@ -1124,6 +1359,8 @@ fn enterDeathmatch(ctx: *sw.Context) void {
     // The server owns the stolen guns and the riders (moped.zig).
     moped.reset();
     moped.net = true;
+    moped_ride.reset();
+    moped_ride.net = true;
     resetMatch();
     const s = map.spawns[@intFromFloat(rand() * (@as(f32, @floatFromInt(map.spawn_count)) - 0.01))];
     spawnAt(s.pos[0], s.pos[1], s.pos[2], s.yaw);
@@ -1214,6 +1451,8 @@ const ShotRay = struct {
     roadman: ?roadmen.Hit = null,
     /// A moped thief, his driver or the moped (moped.zig).
     moped: ?moped.Hit = null,
+    /// A moped to ride (moped_ride.zig): metal, no damage.
+    bike: ?moped_ride.Hit = null,
 };
 
 fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
@@ -1250,6 +1489,9 @@ fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
     if (roadmen.ray(o, d, out.t)) |rh| out = .{ .t = rh.t, .roadman = rh };
     if (map.id == .earls_court) if (moped.ray(o, d, out.t)) |mh| {
         out = .{ .t = mh.t, .moped = mh };
+    };
+    if (map.id == .earls_court) if (moped_ride.ray(o, d, out.t, myBikeIndex())) |bh| {
+        out = .{ .t = bh.t, .normal = bh.normal, .bike = bh };
     };
     return out;
 }
@@ -1317,6 +1559,8 @@ fn pelletImpact(ray: ShotRay, end: V3, st: *const weapon.Stats) void {
         .flesh
     else if (ray.moped) |mh|
         (if (mh.rider != null) .flesh else .metal)
+    else if (ray.bike != null)
+        .metal
     else if (ray.plate != null)
         .metal
     else
@@ -1406,6 +1650,9 @@ fn fire() void {
             roadmanHit(rh, end, d, st.pellets);
         } else if (ray.moped) |mh| {
             mopedHit(mh, end, d, st, ray.t, &riders);
+        } else if (ray.bike) |bh| {
+            addSparks(end, bh.normal, v3(1.0, 0.85, 0.6), if (st.pellets > 1) 2 else 6);
+            impact_fx.spawn(end, bh.normal, .metal, if (st.pellets > 1) 0.5 else 1, 0);
         } else if (ray.box != null and (pi < 3 or rand() < 0.3)) {
             // The effect of the material (impact_fx.zig).
             impact_fx.spawn(end, ray.normal, map.surfaceAt(end, ray.box.?), if (st.pellets > 1) 0.5 else 1, 0);
@@ -1511,7 +1758,9 @@ fn stab() void {
 /// (secret_room.zig) has no spread, also on the move and in the air.
 fn shotSpread(st: *const weapon.Stats, moving: f32) f32 {
     if (secret.blessed != null) return 0;
-    return loadout.hands.spread(st, moving, !me.grounded);
+    const sp = loadout.hands.spread(st, moving, !me.grounded);
+    // One hand on a moped: much worse.
+    return if (myBike() != null) sp * 2.5 + 0.025 else sp;
 }
 
 /// A blessing of MORE (secret_room.zig Aim): the aim goes to the head of
@@ -1807,6 +2056,8 @@ fn handleSnap(m: net.Msg) void {
         if (!rem.alive and p.alive) {
             rem.pos = target;
             rem.fall = 0;
+            // A new life: the body of a rider who died goes.
+            moped_ride.clearCorpse(p.id);
         }
         rem.target = target;
         rem.yaw = p.yaw;
@@ -1817,6 +2068,12 @@ fn handleSnap(m: net.Msg) void {
         rem.lift = p.lift;
         if (rem.tx == null) rem.tx_now = p.tx orelse 0;
         rem.tx = p.tx;
+        if (p.bk) |bk| {
+            const t = [4]f32{ bk[1], bk[2], bk[3], bk[4] };
+            if (rem.bike == null) rem.bk_now = t;
+            rem.bike = @intFromFloat(@max(0, bk[0]));
+            rem.bk_target = t;
+        } else rem.bike = null;
         rem.hp = p.hp;
         rem.k = p.k;
         rem.d = p.d;
@@ -1963,6 +2220,8 @@ fn handleNet(ctx: *sw.Context) void {
                 dead_time = 0;
                 hp = 0;
                 killed_by_len = copyName(&killed_by, m.kname orelse "?");
+                // A rider falls off (the server sent the place first).
+                if (myBike() != null) getOff(.died);
                 died_of = m.by != null;
                 vapes.stop();
                 secret.blessed = null;
@@ -1999,6 +2258,8 @@ fn handleNet(ctx: *sw.Context) void {
             handleFlock(m);
         } else if (std.mem.eql(u8, m.t, "match")) {
             pushFeed("NEW MATCH", false);
+            // The mopeds to ride go with the match (server/bikes.ts).
+            moped_ride.reset();
             secret.shut();
             secret.blessed = null;
             for (remotes[0..remote_n]) |*r| r.blessed = 0;
@@ -2062,7 +2323,9 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     // A blessing of MORE (secret_room.zig) is faster.
     const bless_k: f32 = if (secret.blessed != null) secret.bless_speed else 1;
     const speed_scale: f32 = (1 - 0.45 * loadout.hands.ads) * loadout.heldStats().speed * bless_k;
-    if (mode != .deathmatch or alive) {
+    if (myBike()) |b| {
+        rideTick(b, frozen or shortcut);
+    } else if (mode != .deathmatch or alive) {
         // Space while walking forward, into a waist-high shape: a vault
         // onto it. A vault onto the gates is a fare dodge.
         if (vault == null and !frozen and !shortcut and act.pressed(.jump) and act.down(.forward) and me.grounded) {
@@ -2078,7 +2341,7 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     }
     // Q leans left and E leans right while held.
     var lean_want: f32 = 0;
-    if (!frozen and !shortcut) {
+    if (!frozen and !shortcut and myBike() == null) {
         if (act.down(.leanleft)) lean_want -= 1;
         if (act.down(.leanright)) lean_want += 1;
     }
@@ -2086,7 +2349,7 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
 
     // F is the use key: the lift buttons, the panel of the NPC shooter, and
     // each target that a player presses.
-    if (!frozen and !shortcut and act.pressed(.use)) {
+    if (!frozen and !shortcut and act.pressed(.use) and myBike() == null) {
         if (pigeons.held != null) {
             throwPigeon();
         } else if (aimedPanel()) |b| {
@@ -2106,6 +2369,11 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
         } else if (aimedGun()) |i| {
             moped.takeGun(i);
             sound(700, 900, 0.05, .square, 0.08);
+        } else if (aimedBike()) |i| {
+            // Offline the player gets on at once. In deathmatch the server
+            // answers (handleBike).
+            moped_ride.tryMount(i);
+            if (myBike()) |b| onMount(b);
         } else if (aimedPigeon()) |i| {
             pigeons.grab(i);
             sound(420, 300, 0.05, .triangle, 0.1);
@@ -2137,7 +2405,8 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
     if (!frozen and !shortcut and !in.mods.shift) {
         const slots = [_]gcon.Action{ .slot1, .slot2, .slot3, .slot4 };
         for (slots, 0..) |a, i| {
-            if (!act.pressed(a)) continue;
+            // On a moped: the secondary only.
+            if (!act.pressed(a) or (myBike() != null and i != 1)) continue;
             if (loadout.select(@fromBackingInt(@intCast(i)))) {
                 sound(650, 480, 0.04, .square, 0.05);
             } else if (i == 3 and loadout.grenades() == 0 and mode == .deathmatch) {
@@ -2148,7 +2417,7 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
 
     const can_shoot = !frozen;
     // G: a quick throw from any slot.
-    if (can_shoot and !shortcut and act.pressed(.grenade)) throwGrenade();
+    if (can_shoot and !shortcut and act.pressed(.grenade) and myBike() == null) throwGrenade();
     const it = loadout.held() orelse return;
     const st = weapon.statsOf(it.*);
     if (can_shoot and act.pressed(.reload)) {
@@ -2225,6 +2494,11 @@ fn effectsTick() void {
         r.stride += @sqrt(mv[0] * mv[0] + mv[2] * mv[2]);
         r.vel += (mv / vec.s(dt) - r.vel) * vec.s(@min(1, dt * 10));
         r.lean += (r.lean_target - r.lean) * k;
+        // The pose of the moped of a rider: the yaw by the short way.
+        for (&r.bk_now, r.bk_target, 0..) |*now, want, i| {
+            const d = if (i == 0) @mod(want - now.* + std.math.pi, std.math.tau) - std.math.pi else want - now.*;
+            now.* += d * k;
+        }
         r.fall = if (r.alive) 0 else @min(1, r.fall + dt * 3);
     }
 }
@@ -2336,6 +2610,9 @@ fn tick(ctx: *sw.Context) void {
     time += dt;
     // The feet at the start of the tick: the gates check the crossing.
     const feet_before = me.pos;
+    // On a moped at the start of the tick: a jump over the gates is no fare
+    // dodge (gates.zig).
+    const rode_before = myBike() != null;
     // Before the server corrections and the lift steps move a cab.
     under_feet = map.platformUnder(me.pos) orelse map.trainInside(me.pos);
     // A press or a release of an action lasts one tick.
@@ -2427,11 +2704,13 @@ fn tick(ctx: *sw.Context) void {
     // A player in a cab moves with it: the lift step and the server
     // corrections of this tick (map.Platform).
     map.stepLifts(dt);
-    if (under_feet) |p| me.ride(p);
+    if (under_feet) |p| if (myBike() == null) me.ride(p);
     // The deep train (map.trainPush): a closing door puts a player in the
     // doorway into the car or onto the platform. The train shoves a player
     // on the track onto the platform. A rider inside does not touch it.
     if (mode != .menu) if (map.trainPush(me.pos, player_mod.radius, player_mod.height)) |push| {
+        // A rider comes off the moped.
+        getOff(.crash);
         me.pos = push.feet;
         if (push.hit) me.vel = v3(0, 2, 4);
     };
@@ -2469,6 +2748,7 @@ fn tick(ctx: *sw.Context) void {
         const keys = [_]core.KeyCode{ .Num1, .Num2, .Num3, .Num4, .Num5, .Num6, .Num7, .Num8, .Num9 };
         for (keys, 0..) |k, i| {
             if (in.keyPressed(k) and i < map.spawn_count) {
+                getOff(.jump);
                 me.pos = map.spawns[i].pos;
                 me.vel = v3(0, 0, 0);
                 me.yaw = map.spawns[i].yaw;
@@ -2511,7 +2791,7 @@ fn tick(ctx: *sw.Context) void {
     } else {
         gameplayTick(ctx, in);
     }
-    if (ownBodyShows()) own_feet.update(ownPose(), dt, me.grounded);
+    if (ownBodyShows() and myBike() == null) own_feet.update(ownPose(), dt, me.grounded);
     stepGrenades();
     // The gates: the paddles, the fares, a fare dodge. A move of more than
     // 2 m in a tick is a spawn or a teleport, not a crossing.
@@ -2524,7 +2804,7 @@ fn tick(ctx: *sw.Context) void {
         others[other_n] = r.pos;
         other_n += 1;
     };
-    if (gates.step(dt, if (play) feet_before else null, if (play) me.pos else null, others[0..other_n], player_mod.radius, player_mod.height) == .dodged) startGuilt();
+    if (gates.step(dt, if (play) feet_before else null, if (play) me.pos else null, others[0..other_n], player_mod.radius, player_mod.height, if (rode_before or myBike() != null) .moped else .foot) == .dodged) startGuilt();
     if (gates.passed) |lane| {
         if (mode == .deathmatch) client.send("{{\"t\":\"gate\",\"k\":\"pass\",\"i\":{d}}}", .{lane});
     }
@@ -2556,6 +2836,16 @@ fn tick(ctx: *sw.Context) void {
 // ---- Scene building --------------------------------------------------------
 
 fn buildRemote(r: *const Remote) void {
+    // A rider sits on the moped, and a rider who died is a ragdoll
+    // (moped_ride.zig).
+    if (r.alive) if (r.bike) |id| if (moped_ride.find(id)) |b| {
+        npc.buildOutfit(&dyn, npc.skeleton(moped_ride.riderPose(b)), false, 0, riderOutfit(r.id, 0));
+        return;
+    };
+    if (!r.alive) if (moped_ride.corpseOf(r.id)) |c| {
+        npc.buildOutfit(&dyn, c.body.skeleton(), false, 0, riderOutfit(r.id, 0));
+        return;
+    };
     body_mod.build(&dyn, .{
         .pos = r.pos,
         .yaw = r.yaw,
@@ -3260,7 +3550,7 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
         L.add(&lines, &n, "{s} ammo {d}  reload {d:.2}  draw {d:.2}  ads {d:.2}  heat {d:.2}", .{ @tagName(loadout.heldClass()), ammo, h.reloading, h.drawing, h.ads, h.heat });
     }
     L.add(&lines, &n, "grenades live {d}  left {d}  smoke {d}  blast cells {d}", .{ grenade.count, loadout.grenades(), grenade.puffCount(), grenade.debug_cells });
-    if (map.id == .earls_court) L.add(&lines, &n, "warwick road {d:.1} m (line {d:.0})  roadmen gangs {d}  mopeds {d}", .{ if (roadmen.onRoad(me.pos)) roadmen.along(me.pos) else 0, roadmen.line, roadmen.count(), moped.count() });
+    if (map.id == .earls_court) L.add(&lines, &n, "warwick road {d:.1} m (line {d:.0})  roadmen gangs {d}  mopeds {d}  to ride {d}", .{ if (roadmen.onRoad(me.pos)) roadmen.along(me.pos) else 0, roadmen.line, roadmen.count(), moped.count(), moped_ride.count() });
     L.add(&lines, &n, "game build {s}  protocol {d}", .{ build_options.build_version, net.protocol_version });
     if (mode == .deathmatch) {
         L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(session.state), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
@@ -3381,11 +3671,16 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
         const what: ?[]const u8 = if (pigeons.held != null) "THROW PIGEON" else if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
             const b = map.buttons[bi];
             break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedGun()) |gi| gunHint(gi) else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedGetMore()) "GET MORE" else if (aimedMore()) "MORE" else if (aimedVape() != null) "USE VAPE" else null;
+        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedGun()) |gi| gunHint(gi) else if (aimedBike() != null) "RIDE MOPED" else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedGetMore()) "GET MORE" else if (aimedMore()) "MORE" else if (aimedVape() != null) "USE VAPE" else null;
         if (what) |wt| {
             var kb: [24]u8 = undefined;
             var line: [48]u8 = undefined;
             txtCenter(r, std.fmt.bufPrint(&line, "{s}   {s}", .{ gcon.keyLabel(&kb, .use), wt }) catch "", w / 2, h / 2 + 22, 15, white);
+        }
+        if (myBike() != null) {
+            var kb: [24]u8 = undefined;
+            var line: [48]u8 = undefined;
+            txtCenter(r, std.fmt.bufPrint(&line, "{s}   GET OFF", .{gcon.keyLabel(&kb, .jump)}) catch "", w / 2, h - 120, 15, dim);
         }
     }
     if (nicked_t > 0 and nicked_n > 0) {
@@ -3470,15 +3765,22 @@ fn gameRender(ctx: *sw.Context) !void {
     var own: render.Body = .{};
     if (ownBodyShows()) {
         const first = dyn.verts.items.len;
-        body_mod.build(&dyn, ownPose());
+        if (myBike()) |b| {
+            // On a moped: the rider casts a shadow only. The arms and the
+            // chest are in front of the eye.
+            npc.buildOutfit(&dyn, npc.skeleton(moped_ride.riderPose(b)), false, body_mod.shadow_only, riderOutfit(myId(), 0));
+        } else body_mod.build(&dyn, ownPose());
         own = .{ .first = @intCast(first), .count = @intCast(dyn.verts.items.len - first), .centre = me.pos + v3(0, 0.9, 0) };
     }
+    // Your body after a death on a moped: a ragdoll.
+    if (!ownBodyShows()) if (moped_ride.corpseOf(myId())) |c| npc.buildOutfit(&dyn, c.body.skeleton(), false, 0, riderOutfit(myId(), 0));
     if (map.train) |*tr| buildTrain(tr, me.eyePos());
     if (map.id == .earls_court) buildEscalatorSteps();
     lift_doors.build(&dyn);
     pigeons.build(&dyn, time);
     roadmen.build(&dyn);
     moped.build(&dyn);
+    moped_ride.build(&dyn);
     gates.build(&dyn);
     secret.build(&dyn);
     platform_display.build(&dyn, eyeForRender().eye, time, @floatCast(jsLocalSeconds()));
