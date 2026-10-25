@@ -11,8 +11,10 @@
 //   from the ceiling. Aim at it and press F (MORE): the player gets a blessing
 //   for bless_time s. A halo of white pigeons circles the head, the player
 //   shines gold, moves faster, and the aim locks on the head of the enemy
-//   nearest the middle of the screen (main.zig autoAim). The guns have no
-//   spread. A death ends it.
+//   nearest the middle of the screen (Aim, main.zig autoAim). The camera
+//   stays with the mouse. The crosshair, the gun and the shots go to the
+//   head, with a glide of aim_glide s. F still picks along the camera
+//   forward. The guns have no spread. A death ends it.
 // - The door stays open until the map loads again or a new match starts.
 // - Deathmatch: the door is the same on each client. The client that opens
 //   it sends {t:"more", k:"open"}, and the server sends it to the other
@@ -44,6 +46,8 @@ pub const bless_time: f32 = 45;
 pub const bless_speed: f32 = 1.5;
 /// The aim locks on a head within this angle of the middle of the screen.
 pub const aim_cone: f32 = 0.6;
+/// The aim glides to a new target, and back to the middle, in this time.
+pub const aim_glide: f32 = 0.1;
 /// The use reach to the GET MORE pack and to the golden pigeon.
 pub const reach: f32 = 2.6;
 const pad: f32 = 0.03;
@@ -179,6 +183,90 @@ pub fn step(dt: f32) void {
 pub fn bless() void {
     blessed = bless_time;
 }
+
+/// A head that the aim of a blessing can lock on: the player id and the
+/// centre of the head.
+pub const Head = struct { id: u32, pos: V3 };
+
+/// The aim of a blessing: a direction apart from the camera. The camera
+/// stays with the mouse. The crosshair, the gun and the shots go along the
+/// aim. With no target, the aim is the camera forward.
+pub const Aim = struct {
+    /// The id of the target, or null: the aim goes to the camera forward.
+    id: ?u32 = null,
+    /// The head of the target. It stays after the target goes, for the
+    /// glide back.
+    head: V3 = .{ 0, 0, 0 },
+    /// The start of the glide, in camera space (-Z is forward).
+    from: V3 = .{ 0, 0, -1 },
+    /// The glide from `from` to the target: 0 to 1 in aim_glide s.
+    t: f32 = 1,
+
+    /// The camera space axes of a yaw and pitch, in world space: right, up,
+    /// back (+Z).
+    fn axes(yaw: f32, pitch: f32) [3]V3 {
+        const r = Mat4.rotationY(yaw).mul(Mat4.rotationX(pitch));
+        return .{ vec.xdir(r, v3(1, 0, 0)), vec.xdir(r, v3(0, 1, 0)), vec.xdir(r, v3(0, 0, 1)) };
+    }
+
+    /// True when the aim is the camera forward.
+    pub fn idle(self: *const Aim) bool {
+        return self.id == null and self.t >= 1;
+    }
+
+    /// The aim direction from `eye` for a camera at `yaw` and `pitch`.
+    pub fn dir(self: *const Aim, eye: V3, yaw: f32, pitch: f32) V3 {
+        const f = vec.forward(yaw, pitch);
+        if (self.idle()) return f;
+        const to = if (self.id != null) vec.norm(self.head - eye) else f;
+        if (self.t >= 1) return to;
+        const ax = axes(yaw, pitch);
+        const from = ax[0] * vec.s(self.from[0]) + ax[1] * vec.s(self.from[1]) + ax[2] * vec.s(self.from[2]);
+        return vec.norm(vec.lerp(from, to, vec.smooth(self.t)));
+    }
+
+    /// The aim direction in camera space (-Z is forward).
+    pub fn local(self: *const Aim, eye: V3, yaw: f32, pitch: f32) V3 {
+        if (self.idle()) return v3(0, 0, -1);
+        const d = self.dir(eye, yaw, pitch);
+        const ax = axes(yaw, pitch);
+        return v3(vec.dot(d, ax[0]), vec.dot(d, ax[1]), vec.dot(d, ax[2]));
+    }
+
+    /// The point that the aim looks at: the head, or a far point.
+    pub fn point(self: *const Aim, eye: V3, yaw: f32, pitch: f32) V3 {
+        const far: f32 = if (self.idle()) 30 else @max(1, vec.len(self.head - eye));
+        return eye + self.dir(eye, yaw, pitch) * vec.s(far);
+    }
+
+    /// One tick. `on`: a blessing, alive. The target is the head in
+    /// `heads` nearest the camera forward, within aim_cone, with no wall
+    /// on the line from the eye. A change of target starts a new glide
+    /// from the aim of now. Yaw and pitch do not change.
+    pub fn step(self: *Aim, dt: f32, eye: V3, yaw: f32, pitch: f32, heads: []const Head, on: bool) void {
+        const f = vec.forward(yaw, pitch);
+        var best: ?Head = null;
+        var best_a: f32 = aim_cone;
+        if (on) for (heads) |h| {
+            const d = h.pos - eye;
+            const l = vec.len(d);
+            if (l < 0.3) continue;
+            const a = std.math.acos(std.math.clamp(vec.dot(f, d / vec.s(l)), -1, 1));
+            if (a >= best_a) continue;
+            if (map.raycast(eye, d / vec.s(l), l - 0.2) != null) continue;
+            best_a = a;
+            best = h;
+        };
+        const new_id: ?u32 = if (best) |b| b.id else null;
+        if (new_id != self.id) {
+            self.from = self.local(eye, yaw, pitch);
+            self.t = 0;
+            self.id = new_id;
+        }
+        if (best) |b| self.head = b.pos;
+        self.t = @min(1, self.t + dt / aim_glide);
+    }
+};
 
 /// The shine of a blessing with `left` s to go: 0 to 1. It comes up fast
 /// and fades over the last 3 s.
