@@ -140,14 +140,31 @@ test "moped: a player on the street gets a moped from out of view, and the thief
     try testing.expectEqual(weapon.Slot.secondary, me.loadout.current);
     try testing.expect(r.held and r.gun.?.ammo == rifle.ammo);
     try testing.expectEqual(moped.Stage.away, r.stage);
-    // The getaway: the moped goes at the fence, with the gun.
+    // The getaway: the moped goes near the fence, with the gun.
     me.vel = v3(0, 0, 0);
     var u: f32 = 0;
     while (u < 20 and !r.moped.gone) : (u += dt) tick(&me, t + u);
     try testing.expect(r.moped.gone);
+    try testing.expect(roadmen.along(r.moped.pos) > moped.gone_at - 26);
     try testing.expect(r.moped.speed > 14);
     try testing.expectEqual(moped.Thief.gone, r.thief);
     try testing.expect(r.drop == null);
+}
+
+test "moped: near the fence the moped goes when the player cannot see it" {
+    setup();
+    defer map.deinit();
+    var me = Me{ .pos = v3(pave_x, ec.street_y + 0.12, ec.warwick_exit_z - 20) };
+    me.arm();
+    const t = runUntil(&me, 0, 20, hasSnatched);
+    const r = mine();
+    // The player turns to the south: the moped goes north out of sight.
+    me.look = v3(0, 0, 1);
+    var u: f32 = 0;
+    while (u < 20 and !r.moped.gone) : (u += dt) tick(&me, t + u);
+    try testing.expect(r.moped.gone);
+    try testing.expect(roadmen.along(r.moped.pos) < moped.gone_at);
+    try testing.expect(roadmen.along(r.moped.pos) > moped.gone_at - 26);
 }
 
 test "moped: one snatch in each life, and the primary slot stays empty" {

@@ -443,7 +443,8 @@ it does.
   - A player on the street gets a moped from 60 m or more behind, out of
     view. The moped leans as it pulls in, and the thief takes the
     primary within 15 s. The slot is empty, and the pistol is in the
-    hands. The moped speeds away and goes at the fence with the gun.
+    hands. The moped accelerates away and goes near the fence with the
+    gun. When the player looks away, it goes before the fence.
   - One snatch in each life: a pick in the weapon menu does not fill the
     slot, and a gun in the slot gets no second moped. A new life gets a
     new moped.
@@ -1747,8 +1748,8 @@ stocks. The door openings and the door places are approximate.
     "Someone nicked your rifle". The primary slot stays empty for the rest
     of the life: the weapon menu gives no new primary before the next
     spawn.
-  - The moped accelerates along the road and goes at the fence, with the
-    gun. A player who leaves the street, or stands too far from the road,
+  - The moped accelerates along the road, with the gun. Near the fence it
+    goes when the player cannot see it, and at the fence in any case. A player who leaves the street, or stands too far from the road,
     has no snatch: the moped stops the approach after 25 s.
   - The scooter has a top box, a headlight and a tail light. It leans in
     each turn, and its engine buzzes as a small two-stroke, higher while

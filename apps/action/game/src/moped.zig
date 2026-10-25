@@ -13,8 +13,9 @@
 //   and slows to the pace of the player. The thief puts his arm out.
 // - The snatch: the gun goes from the player to the hand of the thief.
 //   The primary slot of the player stays empty for the rest of the life.
-// - The getaway: the moped accelerates along the road in its lane, and
-//   it goes at the fence (`gone_at`).
+// - The getaway: the moped accelerates along the road in its lane. Near
+//   the fence it goes when this client cannot see it, and at the fence
+//   in any case (`gone_at`). A thief on foot goes the same way.
 // - The riders have the health of a player (`hp_full`). The roadmen do
 //   not touch them.
 //   - The driver dies: the moped skids, falls on its side and slides with
@@ -86,6 +87,10 @@ const wait_answer: f32 = 1.5;
 /// The moped and a running thief go at this distance along the road from
 /// the exit: before the fence.
 pub const gone_at: f32 = ec.warwick_fence - 6;
+/// From this distance on, they go when this client cannot see them for
+/// `unseen_time`.
+const fade_from: f32 = gone_at - 25;
+const unseen_time: f32 = 0.3;
 /// The run of the thief, m/s.
 const run_speed: f32 = 7.5;
 /// The lanes: this far from the middle of the road. The traffic keeps to
@@ -181,6 +186,9 @@ pub const Ride = struct {
     /// cannot see it.
     ending: bool = false,
     hidden: f32 = 0,
+    /// The moped or the thief on foot near the fence: the time out of the
+    /// sight of this client.
+    unseen: f32 = 0,
 };
 
 pub var rides: [max_rides]Ride = @splat(.{});
@@ -534,7 +542,7 @@ fn kill(r: *Ride, rider: Rider, q: State) void {
             var sk: npc.Skeleton = undefined;
             var vel: V3 = undefined;
             var at: V3 = undefined;
-            if (q[9] > 0.5 or r.thief == .running) {
+            if (q[9] > 0.5) {
                 // On foot.
                 r.runner.pos = v3(q[0], q[1], q[2]);
                 r.runner_yaw = q[3];
@@ -589,10 +597,10 @@ pub fn step(dt: f32, eye: V3, look: V3) void {
         for (&r.flinch) |*f| f.* = @max(0, f.* - dt * 2.5);
         switch (r.stage) {
             .approach => approach(r, dt),
-            .away => away(r, dt),
+            .away => away(r, dt, eye, look),
             .crash => crash(r, dt),
         }
-        if (r.thief == .running) run(r, dt);
+        if (r.thief == .running) run(r, dt, eye, look);
         for (&r.bodies) |*b| {
             const was = b.asleep;
             b.step(dt);
@@ -652,19 +660,42 @@ fn approach(r: *Ride, dt: f32) void {
     r.reach += std.math.clamp(want_reach - r.reach, -3 * dt, 4 * dt);
 }
 
-fn away(r: *Ride, dt: f32) void {
+fn away(r: *Ride, dt: f32, eye: V3, look: V3) void {
     const m = &r.moped;
     if (m.gone) return;
     const lane = road_mid + r.dir * lane_off;
     drive(m, v3(lane, m.pos[1], m.pos[2] + r.dir * @max(6, m.speed)), top_speed, dt);
     r.reach = @max(0, r.reach - dt * 2.5);
-    if (roadmen.along(m.pos) > gone_at) {
+    if (leaves(r, m.pos, dt, eye, look)) {
         m.gone = true;
-        if (r.thief == .riding) {
-            r.thief = .gone;
-            r.held = false;
-        }
+        // A thief with a gun keeps it: a "die" from another client can
+        // still drop it.
+        if (r.thief == .riding) r.thief = .gone;
     }
+}
+
+/// True when the moped or the thief at p goes: at the fence, or near it
+/// out of the sight of this client.
+fn leaves(r: *Ride, p: V3, dt: f32, eye: V3, look: V3) bool {
+    const d = roadmen.along(p);
+    if (d > gone_at) return true;
+    if (d < fade_from) return false;
+    r.unseen = if (inSight(eye, look, p)) 0 else r.unseen + dt;
+    return r.unseen > unseen_time;
+}
+
+/// True when the eye can see a point near p: in front of the eye, at any
+/// distance, with a clear line to it at 0.5 m or 1.4 m over the ground.
+fn inSight(eye: V3, look: V3, p: V3) bool {
+    const lf = vec.norm(v3(look[0], 0, look[2]));
+    for ([_]f32{ 1.4, 0.5 }) |h| {
+        const to = p + v3(0, h, 0) - eye;
+        const d = vec.len(to);
+        if (d < 1e-3) return true;
+        if (vec.dot(lf, vec.norm(v3(to[0], 0, to[2]))) < 0.45) continue;
+        if (map.raycast(eye, to / vec.s(d), d - 0.35) == null) return true;
+    }
+    return false;
 }
 
 fn crash(r: *Ride, dt: f32) void {
@@ -721,15 +752,12 @@ fn crash(r: *Ride, dt: f32) void {
 }
 
 /// The thief on foot: along the road, away from the crash.
-fn run(r: *Ride, dt: f32) void {
+fn run(r: *Ride, dt: f32, eye: V3, look: V3) void {
     const b = &r.runner;
     const wish = vec.norm(v3((road_mid + r.dir * 1.0 - b.pos[0]) * 0.15, 0, r.dir));
     r.runner_yaw = yawTo(wish);
     b.step(dt, wish, false, run_speed / player.walk_speed);
-    if (roadmen.along(b.pos) > gone_at) {
-        r.thief = .gone;
-        r.held = false;
-    }
+    if (leaves(r, b.pos, dt, eye, look)) r.thief = .gone;
 }
 
 // ---- The marks on the road ------------------------------------------------------------
