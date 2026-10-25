@@ -2222,9 +2222,11 @@ The mopeds to ride follow the pattern of the moped thieves
 - **A mount**: F sends `mount` with the place of the moped. The server
   checks a live player with no moped, 4 m or less from the moped, and a
   moped with no rider that is not a wreck. The moped must be near its last
-  place on the server: 45 m from the crash, 12 m from the place where a
-  rider left it. Then the server sends `mount` to all the players, and
-  each client stands the moped up at that place.
+  place on the server: 45 m from the crash. From the place where a rider
+  left it: 12 m, plus the slide at the speed of that moment (v² / 6 m,
+  the slowest stop of a moped with no rider). So a rider who jumps off at
+  speed gets on again where the moped stops. Then the server sends `mount`
+  to all the players, and each client stands the moped up at that place.
 - **The client of the rider drives the moped.** Its `st` messages carry
   the moped and its pose (`bk`). The server keeps the field only for the
   moped of the rider, and the snapshot gives it to the other players. They

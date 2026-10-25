@@ -15,7 +15,8 @@
 //   moped (the place in the message), and the moped with no rider and no
 //   wreck. The place of the moped must be near the last place that the
 //   server knows: FRESH_REACH m for a moped that nobody rode (it slid
-//   after the crash), MOVED_REACH m for one that a player left.
+//   after the crash). For one that a player left, MOVED_REACH m plus the
+//   slide at the speed of that moment (`slideReach`).
 // - "off": only from the rider. The death or the leave of a rider: an
 //   "off" to all the players, with the last place of the rider.
 // - "hit": only from a live rider, on another live player, HIT_REACH m or
@@ -37,6 +38,15 @@ export const MOUNT_REACH = 4;
  * and after a player left it. */
 export const FRESH_REACH = 45;
 export const MOVED_REACH = 12;
+/** The slowest stop of a moped with no rider, m/s² (moped_ride.zig
+ * fallStep: 3 while it falls, then 6). */
+export const SLIDE_DECEL = 3;
+
+/** How far a moped left at `speed` m/s can slide before it stops, m. */
+export function slideReach(speed: number): number {
+  const v = Math.min(Math.abs(speed), MAX_SPEED);
+  return (v * v) / (2 * SLIDE_DECEL);
+}
 /** The kill feed name of a moped hit. */
 export const MOPED = 'moped';
 
@@ -72,6 +82,8 @@ interface Bike {
   wreck: boolean;
   /** A player left it: it moved from the place of the crash. */
   moved: boolean;
+  /** The slide after a player left it, m (slideReach). */
+  slide: number;
 }
 
 /** A moped state (moped_ride.zig State): 7 numbers, in the map. */
@@ -110,6 +122,7 @@ export class Bikes {
       rider: null,
       wreck: false,
       moved: false,
+      slide: 0,
     });
     return id;
   }
@@ -130,7 +143,7 @@ export class Bikes {
     if (msg.k === 'mount') {
       if (b.rider !== null || b.wreck || this.ridden(id) !== null) return [];
       if (dist(p, at) > MOUNT_REACH) return [];
-      const reach = b.moved ? MOVED_REACH : FRESH_REACH;
+      const reach = b.moved ? MOVED_REACH + b.slide : FRESH_REACH;
       if (Math.hypot(b.x - at.x, b.y - at.y, b.z - at.z) > reach) return [];
       Object.assign(b, { ...at, yaw: q[3], rider: id });
       this.poses.set(id, [q[3], 0, 0, 0]);
@@ -139,7 +152,7 @@ export class Bikes {
     }
     if (msg.k === 'off') {
       if (b.rider !== id) return [];
-      this.free(b, at, q[3]);
+      this.free(b, at, q[3], q[4]);
       const off: Record<string, unknown> = { t: 'mp', k: 'off', bk: b.id, id };
       off.q = q;
       if (msg.cr === 1) off.cr = 1;
@@ -197,21 +210,24 @@ export class Bikes {
     if (bk === null) return [];
     const b = this.bikes.get(bk) as Bike;
     const [yaw, roll, , speed] = this.poses.get(id) ?? [b.yaw, 0, 0, 0];
-    this.free(b, p, yaw);
+    this.free(b, p, yaw, speed);
     const q = [p.x, p.y, p.z, yaw, speed, roll, 0];
     const off: Record<string, unknown> = { t: 'mp', k: 'off', bk, id, q };
     if (died) off.dd = 1;
     return [{ to: 'all', msg: off }];
   }
 
+  /** The rider leaves moped b at `at`, at `speed` m/s: it slides on. */
   private free(
     b: Bike,
     at: { x: number; y: number; z: number },
     yaw: number,
+    speed: number,
   ): void {
     if (b.rider !== null) this.poses.delete(b.rider);
     Object.assign(b, { x: at.x, y: at.y, z: at.z, yaw, rider: null });
     b.moved = true;
+    b.slide = slideReach(speed);
   }
 
   /** The mopeds for a player who joins: [id, x, y, z, yaw, rider or -1,
