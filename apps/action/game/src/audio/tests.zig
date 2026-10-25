@@ -205,7 +205,8 @@ test "each material makes a bounded sound of its own" {
         e.set(m, tailEnergy(s, 0.15) / space.energy(s));
         br.set(m, brightness(s));
     }
-    // Steel rings for longer than wood and stone.
+    // Steel rings a little longer than wood and stone. The ring is short,
+    // but it is there.
     try testing.expect(e.get(.metal) > 2 * e.get(.wood));
     try testing.expect(e.get(.metal) > 2 * e.get(.concrete));
     try testing.expect(e.get(.sheet_metal) > e.get(.wood));
@@ -213,6 +214,63 @@ test "each material makes a bounded sound of its own" {
     try testing.expect(br.get(.glass) > 2 * br.get(.earth));
     try testing.expect(br.get(.tile) > 2 * br.get(.fabric));
     try testing.expect(br.get(.concrete) > br.get(.flesh));
+}
+
+/// The part of the energy under about 300 Hz (two one-pole low-passes).
+fn lowPart(buf: []const f32) f32 {
+    var a = dsp.OnePole.init(300);
+    var b = dsp.OnePole.init(300);
+    var lo: f32 = 0;
+    for (buf) |x| {
+        const y = b.process(a.process(x));
+        lo += y * y;
+    }
+    return lo / dsp.rate / space.energy(buf);
+}
+
+/// The pitch salience: the normalised autocorrelation of the sound from
+/// 10 to 210 ms, at its highest peak after the first zero. The search
+/// covers the periods of 50 to 2000 Hz. A clear pitch gives nearly 1,
+/// noise and a dense cluster of modes give a small value.
+fn pitchSalience(buf: []const f32) f32 {
+    const seg = buf[@min(buf.len, dsp.at(0.01))..@min(buf.len, dsp.at(0.21))];
+    const r0 = space.energy(seg) * dsp.rate;
+    if (r0 <= 0) return 0;
+    var best: f32 = 0;
+    var crossed = false;
+    for (1..dsp.at(0.02)) |lag| {
+        if (lag >= seg.len) break;
+        var r: f32 = 0;
+        for (seg[0 .. seg.len - lag], seg[lag..]) |x, y| r += x * y;
+        if (r < 0) crossed = true;
+        if (crossed and lag >= dsp.at(0.0005)) best = @max(best, r / r0);
+    }
+    return best;
+}
+
+test "metal thuds: a short ring, a low body and no clear pitch" {
+    // A hit on steel is a dull thud with a short, low ring. A burst of
+    // fire on it must not sound like a xylophone: no hit has a clear
+    // pitch.
+    const seeds = 6;
+    var low: std.enums.EnumArray(impact.Material, f32) = .initFill(0);
+    var br: std.enums.EnumArray(impact.Material, f32) = .initFill(0);
+    for ([_]impact.Material{ .metal, .sheet_metal }) |m| {
+        for (0..seeds) |k| {
+            var rng = dsp.Rng.init(100 + k);
+            const s = mono[0..impact.strike(&mono, m, 1, &rng)];
+            // The ring stops: less than 1e-4 of the energy after 0.3 s.
+            try testing.expect(tailEnergy(s, 0.3) / space.energy(s) < 1e-4);
+            try testing.expect(pitchSalience(s) < 0.6);
+            low.set(m, low.get(m) + lowPart(s) / seeds);
+            br.set(m, br.get(m) + brightness(s) / seeds);
+        }
+        // A low body: much of the energy is under 300 Hz.
+        try testing.expect(low.get(m) > 0.3);
+    }
+    // Sheet metal is more hollow than solid metal: lower and duller.
+    try testing.expect(low.get(.sheet_metal) > low.get(.metal));
+    try testing.expect(br.get(.sheet_metal) < br.get(.metal));
 }
 
 test "impact: twice the distance, half the level, and the delay of the path" {
