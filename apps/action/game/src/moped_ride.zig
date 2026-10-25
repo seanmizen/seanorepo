@@ -76,6 +76,9 @@ const step_down: f32 = 0.35;
 const half_w: f32 = 0.25;
 const sample_at = [3]f32{ -0.65, 0, 0.65 };
 const body_top: f32 = 1.75;
+/// The highest floor under an end of the moped, over the floor under its
+/// middle, that is a slope and not a wall: a stair is 0.52 m at 0.65 m.
+const slope_rise: f32 = 0.6;
 const air_bottom: f32 = 0.1;
 /// A wall at this speed or more (the part of the speed into the wall)
 /// throws the rider. A landing at this vertical speed or more too.
@@ -307,12 +310,25 @@ fn blockedAt(p: V3, yaw: f32, bottom: f32) bool {
     const f = fwdOf(yaw);
     for (sample_at) |k| {
         const c = p + f * vec.s(k);
-        const lo = c + v3(-half_w, bottom, -half_w);
+        // On the ground, each box starts step_up over the floor under it,
+        // so the ends of the moped clear a slope: a stair or an escalator.
+        // A floor more than `slope_rise` over the middle is a wall.
+        var base = p[1];
+        if (bottom == step_up and k != 0) {
+            if (map.floorTop(v3(c[0] - 0.15, p[1] - 1, c[2] - 0.15), v3(c[0] + 0.15, p[1] + slope_rise, c[2] + 0.15))) |y| base = @max(base, y);
+        }
+        const lo = v3(c[0] - half_w, base + bottom, c[2] - half_w);
         const hi = c + v3(half_w, body_top, half_w);
         if (map.overlaps(lo, hi)) return true;
         if (inLift(lo, hi)) return true;
     }
     return false;
+}
+
+/// True when a moped on the ground at p with this yaw has room: no wall
+/// and no lift cab.
+pub fn fits(p: V3, yaw: f32) bool {
+    return !blockedAt(p, yaw, step_up);
 }
 
 /// True when the box lo..hi goes into the shaft of a lift: over its cab
@@ -329,6 +345,12 @@ fn inLift(lo: V3, hi: V3) bool {
 /// The highest floor under p, from `down` below it to `up` above it.
 fn floorNear(p: V3, down: f32, up: f32) ?f32 {
     return map.floorTop(p - v3(0.15, down, 0.15), p + v3(0.15, up, 0.15));
+}
+
+/// The highest floor under the point p itself, from `down` below it to
+/// `up` above it: a moped leaves the lip of a ramp at the lip.
+fn floorAt(p: V3, down: f32, up: f32) ?f32 {
+    return map.floorTop(p - v3(0.02, down, 0.02), p + v3(0.02, up, 0.02));
 }
 
 /// The body of a moped in its own frame: one box for the aim and the
@@ -432,8 +454,6 @@ pub fn release(b: *Bike, q: State, crash: bool) void {
     b.fall_side = if (b.roll < -0.02) -1 else 1;
     b.spin = if (crash) -b.fall_side * 0.9 else 0;
     b.throttle = 0;
-    // A spare moped of an owner with a newer one: no more rides.
-    if (b.wreck) b.wreck = true;
     if (crash) event(.{ .kind = .crash, .p = b.pos });
 }
 
@@ -621,9 +641,12 @@ fn moveFlat(b: *Bike, bottom: f32, dt: f32, rider: bool) bool {
 fn settle(b: *Bike, dt: f32, rider: bool) bool {
     const f = fwdOf(b.yaw);
     if (b.grounded) {
-        if (floorNear(b.pos, step_down, step_up)) |y| {
-            const lim = @max(2, @abs(b.speed));
-            b.vy = std.math.clamp((y - b.pos[1]) / dt, -lim, lim);
+        if (floorAt(b.pos, step_down, step_up)) |y| {
+            // The vertical speed from the slope under the moped: the speed
+            // of a jump off a ramp.
+            const dir = f * vec.s(if (b.speed < 0) @as(f32, -1) else 1);
+            const yb = floorAt(b.pos - dir * vec.s(0.25), 0.6, 0.6) orelse y;
+            b.vy = std.math.clamp(@abs(b.speed) * (y - yb) / 0.25, -top_speed, top_speed);
             b.pos[1] = y;
         } else b.grounded = false;
         // The pitch: the floor under each wheel.

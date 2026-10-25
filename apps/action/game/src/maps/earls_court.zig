@@ -2840,6 +2840,7 @@ fn westEnd() void {
     map.addLight(v3(-71.5, y + 3.0, -2), v3(1.2, 1.0, 0.75), 11);
     // The gate line of the passage: 4 lanes, IN on the south half.
     gates.addLine(-74, y, pz0, pz1, -2, 4, 1);
+    junkRamp();
     // Solid blocks beside the passage.
     box(v3(-78, y, conc_z0 - 0.6), v3(x0 - 0.4, y + 7, pz0 - 0.4), concrete_c, .concrete, .concrete);
     box(v3(-78, y, pz1 + 0.4), v3(x0 - 0.4, y + 7, wall_s + 0.6), concrete_c, .concrete, .concrete);
@@ -2867,6 +2868,89 @@ fn westEnd() void {
     deco(v3(street_w[0], y, -30.6), v3(street_w[1] - 3, y + 0.004, 25.6), asphalt, .concrete, .concrete);
     warwickSite();
     warwickRoad();
+}
+
+// ---- The junk ramp in the Warwick Road passage ----------------------------------
+//
+// Outside the gate line of the Warwick Road passage, on the street side,
+// workers left a heap of site junk: two lengths of plywood and MDF sheets
+// propped on stacks of pallets, a scaffold board down the joint, a bucket
+// and a cone. It is a ramp. A moped that rides up it at speed jumps the
+// gate line and lands in the passage (moped_ride.zig, REQ-MOPED-003). A
+// player on foot walks up it.
+//
+// The collision is one map.Ramp (`junk_ramp`): it rises along +X to its
+// lip, 1.4 m short of the gate cabinets. The sheets lie just under its
+// surface, and the pallets are inside its solid. The bucket and the cone
+// stand beside it, each in a collision box. The colours are those of the
+// construction site (warwickSite).
+
+/// The ramp of junk: from the hall floor to the lip, 1.1 m high.
+pub const junk_ramp = map.Ramp{ .x0 = -81.5, .x1 = -76.0, .z0 = -3.2, .z1 = -0.8, .y0 = street_y, .y1 = street_y + 1.1, .bottom = street_y };
+const mdf = v3(0.66, 0.52, 0.36);
+const plywood = v3(0.6, 0.45, 0.27);
+const pallet_c = v3(0.5, 0.38, 0.23);
+
+/// The height of the ramp surface at x.
+fn junkTop(x: f32) f32 {
+    const r = junk_ramp;
+    return r.y0 + (r.y1 - r.y0) * (x - r.x0) / (r.x1 - r.x0);
+}
+
+/// A sheet on the ramp from x = a to x = b, z0 to z1, its top `under`
+/// below the surface, `t` thick.
+fn junkSheet(a: f32, b: f32, z0: f32, z1: f32, under: f32, t: f32, color: V3) void {
+    const k = (junk_ramp.y1 - junk_ramp.y0) / (junk_ramp.x1 - junk_ramp.x0);
+    const l = @sqrt(1 + k * k);
+    const u = v3(1, k, 0) / vec.s(l);
+    const n = v3(-k, 1, 0) / vec.s(l);
+    const top = v3(a, junkTop(a) - under, z0);
+    slabR(top - n * vec.s(t), u * vec.s((b - a) * l), n * vec.s(t), v3(0, 0, z1 - z0), color, .wood, .wood);
+}
+
+/// A pallet (1.0 m along its heading, 1.2 m across, 0.144 m high) with
+/// its base at y, its middle at (x, z), turned by `a` radians.
+fn junkPallet(x: f32, z: f32, y: f32, a: f32) void {
+    const fr = Frame{ .o = v3(x, y, z), .f = heading(a) };
+    // The bottom boards, the three bearers and the top boards.
+    for ([_]f32{ -0.45, 0, 0.45 }) |bz| fr.box(v3(-0.5, 0, bz - 0.05), v3(0.5, 0.022, bz + 0.05), pallet_c, .wood, .wood);
+    for ([_]f32{ -0.45, 0, 0.45 }) |bx| fr.box(v3(bx - 0.05, 0.022, -0.6), v3(bx + 0.05, 0.122, 0.6), pallet_c, .wood, .wood);
+    for ([_]f32{ -0.55, -0.28, 0, 0.28, 0.55 }) |bz| fr.box(v3(-0.5, 0.122, bz - 0.05), v3(0.5, 0.144, bz + 0.05), pallet_c, .wood, .wood);
+}
+
+fn junkRamp() void {
+    const y = street_y;
+    const r = junk_ramp;
+    map.addRamp(r);
+    // The pallets: a stack of three under the joint of the sheets, and a
+    // stack of five under the lip. They sit a little askew.
+    const mid = [_][2]f32{ .{ -78.42, -2.62 }, .{ -78.4, -1.4 } };
+    const turns = [_]f32{ 0.03, -0.04, 0.05, -0.02, 0.04 };
+    for (mid, 0..) |c, i| for (0..3) |k| {
+        const fk: f32 = @floatFromInt(k);
+        junkPallet(c[0] + 0.02 * fk, c[1], y + 0.144 * fk, std.math.pi / 2.0 + turns[(i + k) % turns.len]);
+    };
+    const lip = [_][2]f32{ .{ -76.68, -2.6 }, .{ -76.7, -1.4 } };
+    for (lip, 0..) |c, i| for (0..5) |k| {
+        const fk: f32 = @floatFromInt(k);
+        junkPallet(c[0] - 0.015 * fk, c[1], y + 0.144 * fk, std.math.pi / 2.0 + turns[(i + 2 * k) % turns.len]);
+    };
+    // The sheets: two lengths end to end, plywood on the north half and
+    // MDF on the south half. The upper length sits 1 cm lower.
+    junkSheet(r.x0, -78.76, r.z0, -2.01, 0.012, 0.018, plywood);
+    junkSheet(r.x0 + 0.03, -78.76, -1.99, r.z1, 0.022, 0.018, mdf);
+    junkSheet(-78.74, r.x1, r.z0, -2.01, 0.022, 0.018, mdf);
+    junkSheet(-78.74, r.x1 - 0.04, -1.99, r.z1, 0.012, 0.018, plywood);
+    // A scaffold board down the joint of the two halves.
+    junkSheet(-80.4, -76.5, -2.11, -1.89, 0.001, 0.05, timber);
+    // A builder's bucket and a cone beside the ramp.
+    const bk = v3(-79.6, y, -0.45);
+    map.rod(bk, bk + v3(0, 0.32, 0), 0.15, rubber, .paint, .fabric);
+    map.rod(bk + v3(0, 0.3, 0), bk + v3(0, 0.34, 0), 0.165, v3(0.08, 0.08, 0.085), .paint, .fabric);
+    map.addSolid(bk - v3(0.17, 0, 0.17), bk + v3(0.17, 0.35, 0.17), .fabric);
+    const cn = v3(-81.9, y, -3.55);
+    cone(cn);
+    map.addSolid(cn - v3(0.2, 0, 0.2), cn + v3(0.2, 0.73, 0.2), .fabric);
 }
 
 // ---- Warwick Road, north and south of the station ---------------------------------
