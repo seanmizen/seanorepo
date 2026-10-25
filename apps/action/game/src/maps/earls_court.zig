@@ -55,9 +55,10 @@ pub const mid_y: f32 = -5.6; // the intermediate level floor
 pub const mid_ceil: f32 = -3.2;
 pub const deep_y: f32 = -15;
 pub const deep_ceil: f32 = deep_y + 4.6;
-/// Past this |x| along the District lines the live rail kills. It is the far
-/// face of the barrier at each end of each island (platformEnd), so a player
-/// sees the barrier before the live rail.
+/// Past this |x| along the District lines the live rail kills. The islands
+/// are 120 m long, from -shock_x to shock_x, out under the concourse decks.
+/// shock_x is the far face of the barrier at each end of each island
+/// (platformEnd), so a player sees the barrier before the live rail.
 pub const shock_x: f32 = 60;
 /// On the Piccadilly line the live rail kills this far past the ends of
 /// the platforms.
@@ -76,9 +77,6 @@ const e2 = [2]f32{ -8.8, -4.6 };
 const w1 = [2]f32{ -3.8, 0.4 };
 const island_b = [2]f32{ 0.4, 8.4 };
 const w2 = [2]f32{ 8.4, 12.6 };
-/// The islands: 120 m, from the shed out under the concourse decks. The
-/// barrier at each end is on the island, and its far face is at shock_x.
-const island_x = [2]f32{ -shock_x, shock_x };
 /// The track centre of each track bed: 1.56 m from the platform edge, so
 /// the 2.92 m wide S7 Stock stops 0.1 m from the edge. `away`: the side of
 /// the bed away from the platform (+1 south, -1 north).
@@ -273,14 +271,18 @@ fn roundel(p: V3, turn: f32, size: f32) void {
     map.addDecor(m, v3(-0.82 * size, -0.15 * size, 0.035), v3(0.82 * size, 0.15 * size, 0.07), blue, .paint, .sheet_metal);
 }
 
+/// The paint of the panels of the railings, and of the bars of the
+/// platform-end barriers (platformEnd).
+const railing_paint = v3(0.09, 0.17, 0.13);
+const handrail_wood = v3(0.3, 0.15, 0.08);
+
 /// A railing at floor height y: framed panels of painted iron between
 /// posts, a top rail and a base rail, and a timber handrail on top. One of
 /// the two ranges is thin. The panels are the collision: a bullet does not
 /// go through the railing.
 fn railing(x0: f32, x1: f32, z0: f32, z1: f32, y: f32) void {
-    const paint = v3(0.09, 0.17, 0.13);
-    boxNoAo(v3(x0, y, z0), v3(x1, y + 1.1, z1), paint, .paint, .metal);
-    deco(v3(x0 - 0.04, y + 1.1, z0 - 0.04), v3(x1 + 0.04, y + 1.17, z1 + 0.04), v3(0.3, 0.15, 0.08), .wood, .wood);
+    boxNoAo(v3(x0, y, z0), v3(x1, y + 1.1, z1), railing_paint, .paint, .metal);
+    deco(v3(x0 - 0.04, y + 1.1, z0 - 0.04), v3(x1 + 0.04, y + 1.17, z1 + 0.04), handrail_wood, .wood, .wood);
     // The frame stands 2 cm proud of each face of the panel.
     const p: f32 = 0.02;
     const along_x = x1 - x0 > z1 - z0;
@@ -423,7 +425,9 @@ fn districtLevel() void {
     for ([_][2]f32{ island_a, island_b }) |is| {
         const cz = (is[0] + is[1]) / 2;
         var buf: [wells.len]Rect = undefined;
-        map.carve(rect(island_x[0], island_x[1], is[0], is[1]), bed_y, 0, islandWells(cz, &buf), platform_c, .concrete, .concrete);
+        // The carve also makes the landings behind the barriers.
+        const land = shock_x + end_land;
+        map.carve(rect(-land, land, is[0], is[1]), bed_y, 0, islandWells(cz, &buf), platform_c, .concrete, .concrete);
         platformEdges(is);
         // Island A has the eastbound tracks, island B the westbound tracks.
         // A train stops at the end where it leaves.
@@ -483,7 +487,7 @@ fn districtLevel() void {
 //   down to track level, in the middle of the island.
 // - The yellow line stops short of the barrier. The white line and the
 //   coping go on to the end of the island.
-// - A stop board for the driver (S7, the stock) stands at the end where
+// - A stop board for the driver (S7, the stock) hangs at the end where
 //   the trains leave, just short of the barrier.
 // The barrier is 1.1 m high, as each railing of the map, so a player can
 // vault it. It does not stop a player: the tracks are open. It shows where
@@ -542,7 +546,7 @@ fn runFrom(bits: u5, k: usize) ?usize {
 
 /// Text in the pixel font of the train indicators (platform_display.zig),
 /// on a sign face at `a` along the line toward `dir`. The face is toward the
-/// middle of the station. The text is centred on z_mid, from `top` down.
+/// middle of the station. The middle of the text is at z_mid, its top at `top`.
 /// One decoration for each run of lit pixels in a row, and for the same
 /// run in the rows below it.
 fn signText(text: []const u8, dir: f32, a: f32, z_mid: f32, top: f32, px: f32, color: V3) void {
@@ -577,10 +581,6 @@ fn platformEnd(is: [2]f32, dir: f32, stop_board: bool) void {
     const near = shock_x - bar_d; // the face of the barrier toward the platform
     const mid = shock_x - bar_d / 2;
 
-    // The landing behind the barrier, at the height of the platform.
-    const land = span(dir, shock_x, shock_x + end_land);
-    box(v3(land[0], bed_y, is[0]), v3(land[1], 0, is[1]), platform_c, .concrete, .concrete);
-
     // The ramp: a sloped slab of concrete, white lines along its sides, and
     // a map.Ramp to walk on.
     const r0 = shock_x + end_land;
@@ -611,43 +611,45 @@ fn platformEnd(is: [2]f32, dir: f32, stop_board: bool) void {
     const fill = span(dir, r0, r0 + 0.16);
     deco(v3(fill[0], bed_y, rz[0]), v3(fill[1], -0.03, rz[1]), platform_c, .concrete, .concrete);
 
-    // The barrier: a black steel railing with vertical bars, and a gate in
-    // the middle at the top of the ramp. One solid box for all of it.
+    // The barrier: as the railings of the map (railing), a frame of
+    // painted iron with posts, a base rail, a top rail and a timber
+    // handrail. Round bars fill it, so a player sees the ramp behind it. A
+    // gate at the top of the ramp has the same frame and bars. One solid
+    // box for all of it: a bullet does not go through.
     const bx = span(dir, near, shock_x);
     map.addSolid(v3(bx[0], 0, is[0]), v3(bx[1], 1.1, is[1]), .metal);
-    const pz = span(dir, mid - 0.03, mid + 0.03);
-    const rail = span(dir, mid - 0.025, mid + 0.025);
-    const bar = span(dir, mid - 0.01, mid + 0.01);
+    const fr = span(dir, mid - 0.03, mid + 0.03);
     const gate = [2]f32{ cz - 0.65, cz + 0.65 };
     for ([_][2]f32{ .{ is[0], gate[0] }, .{ gate[1], is[1] } }) |sec| {
+        deco(v3(fr[0], 0, sec[0]), v3(fr[1], 0.12, sec[1]), iron, .paint, .metal);
+        deco(v3(fr[0], 0.98, sec[0]), v3(fr[1], 1.1, sec[1]), iron, .paint, .metal);
+        const cap = span(dir, mid - 0.06, mid + 0.06);
+        deco(v3(cap[0], 1.1, sec[0]), v3(cap[1], 1.17, sec[1]), handrail_wood, .wood, .wood);
         // Posts at the ends of the section and about each 1.1 m.
         const n: usize = 3;
         for (0..n + 1) |k| {
             const z = sec[0] + 0.04 + (sec[1] - sec[0] - 0.08) * @as(f32, @floatFromInt(k)) / @as(f32, @floatFromInt(n));
-            const hw: f32 = if (k == 0 or k == n) 0.04 else 0.03;
-            deco(v3(pz[0], 0, z - hw), v3(pz[1], 1.1, z + hw), iron, .metal, .metal);
+            deco(v3(fr[0], 0, z - 0.04), v3(fr[1], 1.1, z + 0.04), iron, .paint, .metal);
         }
-        deco(v3(rail[0], 1.04, sec[0]), v3(rail[1], 1.1, sec[1]), iron, .metal, .metal);
-        deco(v3(rail[0], 0.1, sec[0]), v3(rail[1], 0.15, sec[1]), iron, .metal, .metal);
-        var z = sec[0] + 0.12;
-        while (z < sec[1] - 0.08) : (z += 0.12) {
-            deco(v3(bar[0], 0.15, z - 0.01), v3(bar[1], 1.04, z + 0.01), iron, .metal, .metal);
+        var z = sec[0] + 0.14;
+        while (z < sec[1] - 0.1) : (z += 0.12) {
+            map.rod(v3(dir * mid, 0.12, z), v3(dir * mid, 0.98, z), 0.012, railing_paint, .paint, .metal);
         }
     }
-    // The gate leaf: a frame with bars, its hinges on the -Z post, and a
+    // The gate leaf: a frame with bars, its hinges on the post at -Z, and a
     // latch at the free side.
     const leaf = [2]f32{ gate[0] + 0.03, gate[1] - 0.02 };
-    const fr = span(dir, mid - 0.02, mid + 0.02);
-    deco(v3(fr[0], 0.98, leaf[0]), v3(fr[1], 1.03, leaf[1]), iron, .metal, .metal);
-    deco(v3(fr[0], 0.12, leaf[0]), v3(fr[1], 0.17, leaf[1]), iron, .metal, .metal);
-    for ([_]f32{ leaf[0], leaf[1] - 0.05 }) |z| deco(v3(fr[0], 0.12, z), v3(fr[1], 1.03, z + 0.05), iron, .metal, .metal);
+    const lf = span(dir, mid - 0.02, mid + 0.02);
+    deco(v3(lf[0], 0.12, leaf[0]), v3(lf[1], 0.2, leaf[1]), iron, .paint, .metal);
+    deco(v3(lf[0], 0.98, leaf[0]), v3(lf[1], 1.06, leaf[1]), iron, .paint, .metal);
+    for ([_]f32{ leaf[0], leaf[1] - 0.06 }) |z| deco(v3(lf[0], 0.12, z), v3(lf[1], 1.06, z + 0.06), iron, .paint, .metal);
     var gz = leaf[0] + 0.15;
     while (gz < leaf[1] - 0.1) : (gz += 0.12) {
-        deco(v3(bar[0], 0.17, gz - 0.01), v3(bar[1], 0.98, gz + 0.01), iron, .metal, .metal);
+        map.rod(v3(dir * mid, 0.2, gz), v3(dir * mid, 0.98, gz), 0.012, railing_paint, .paint, .metal);
     }
-    for ([_]f32{ 0.25, 0.85 }) |hy| deco(v3(pz[0], hy, gate[0] - 0.005), v3(pz[1], hy + 0.08, leaf[0] + 0.02), steel, .metal, .metal);
-    const latch = span(dir, mid - 0.035, mid + 0.035);
-    deco(v3(latch[0], 0.88, leaf[1] - 0.09), v3(latch[1], 0.96, leaf[1]), steel, .metal, .metal);
+    for ([_]f32{ 0.25, 0.85 }) |hy| deco(v3(fr[0], hy, gate[0] - 0.005), v3(fr[1], hy + 0.08, leaf[0] + 0.02), steel, .metal, .metal);
+    const latch = span(dir, mid - 0.04, mid + 0.04);
+    deco(v3(latch[0], 0.88, leaf[1] - 0.1), v3(latch[1], 0.96, leaf[1]), steel, .metal, .metal);
 
     // The sign on the gate, toward the platform: a white plate with a red
     // NO ENTRY disc and black text.
@@ -663,15 +665,14 @@ fn platformEnd(is: [2]f32, dir: f32, stop_board: bool) void {
     signText("AUTHORISED", dir, sf, cz, 0.625, 0.0068, sign_black);
     signText("PERSONNEL ONLY", dir, sf, cz, 0.555, 0.0052, sign_black);
 
-    // The stop boards: a white board with S7 on a post near each edge,
-    // toward the train that comes in. The board is above head height.
+    // The stop boards: a white board with S7 near each edge, toward the
+    // train that comes in. Two rods hang it from the deck above, so it is
+    // above head height and has no post to walk into.
     if (!stop_board) return;
     const sa = shock_x - 0.9;
     for ([_]f32{ is[0], is[1] }, [_]f32{ 1, -1 }) |edge, in| {
         const z = edge + in * 0.95;
-        const post = span(dir, sa - 0.03, sa + 0.03);
-        deco(v3(post[0], 0, z - 0.03), v3(post[1], 2.3, z + 0.03), iron, .metal, .metal);
-        map.addSolid(v3(post[0] - 0.02, 0, z - 0.05), v3(post[1] + 0.02, 2.3, z + 0.05), .metal);
+        for ([_]f32{ -0.12, 0.12 }) |dz| map.rod(v3(dir * (sa - 0.04), 2.25, z + dz), v3(dir * (sa - 0.04), deck_y, z + dz), 0.012, iron, .paint, .metal);
         const board = span(dir, sa - 0.05, sa - 0.03);
         deco(v3(board[0], 1.95, z - 0.17), v3(board[1], 2.25, z + 0.17), sign_white, .paint, .sheet_metal);
         signText("S7", dir, sa - 0.05, z, 2.177, 0.022, sign_black);

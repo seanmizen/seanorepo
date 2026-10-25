@@ -7,7 +7,9 @@
 //     all solid shapes,
 //   - the player stays on the top while standing still (one second),
 //   - a railing over the tracks of Earl's Court holds the player,
-//   - a vault onto the ticket gates is a fare dodge (gates.onGates).
+//   - a vault onto the ticket gates is a fare dodge (gates.onGates),
+//   - past the barrier at a District platform end, the live rail kills
+//     (earls_court.liveRail).
 // A shape that is too high or too low, or with no room above it, gives no
 // vault. A walk into the closed gates does not cross the gate line.
 const std = @import("std");
