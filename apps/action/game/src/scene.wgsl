@@ -13,8 +13,10 @@
 // post.wgsl tone maps it.
 //
 // Vertex `mat`: the material id (map.zig Mat). 100 is added for the
-// view-model: it gets the near depth range [0, 0.08], the world gets
-// [0.08, 1], so the gun never goes into a wall. 200 is added for a part
+// view-model: it gets the near depth range [0.92, 1], the world gets
+// [0, 0.92], so the gun never goes into a wall. The camera uses reversed Z
+// (render.zig, REQ-RENDER-001): depth 1 is the near plane, 0 the far plane,
+// and a nearer fragment has a greater depth. 200 is added for a part
 // that casts a shadow only: the head, the arms and the weapon of your own
 // body (body.zig). The camera does not draw it.
 //
@@ -85,6 +87,12 @@ struct VOut {
 
 const VM_SPLIT: f32 = 0.08;
 
+// The depth of the world in reversed Z: [0, 1 - VM_SPLIT]. A multiply keeps
+// the float precision of a far depth (near 0).
+fn worldDepth(c: vec4f) -> vec4f {
+  return vec4f(c.xy, c.z * (1.0 - VM_SPLIT), c.w);
+}
+
 @vertex fn vs_main(v: VIn) -> VOut {
   var o: VOut;
   var c = u.view_proj * vec4f(v.pos, 1.0);
@@ -94,9 +102,9 @@ const VM_SPLIT: f32 = 0.08;
     return o;
   }
   if (m >= 100u) {
-    c.z = c.z * VM_SPLIT;
+    c.z = (1.0 - VM_SPLIT) * c.w + VM_SPLIT * c.z;
   } else {
-    c.z = VM_SPLIT * c.w + (1.0 - VM_SPLIT) * c.z;
+    c = worldDepth(c);
   }
   o.clip = c;
   o.wpos = v.pos;
@@ -838,14 +846,16 @@ struct SkyOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
 @vertex fn vs_sky(@builtin(vertex_index) i: u32) -> SkyOut {
   var o: SkyOut;
   let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0;
-  o.pos = vec4f(p, 1.0, 1.0);
+  // The far plane: depth 0 in reversed Z.
+  o.pos = vec4f(p, 0.0, 1.0);
   o.ndc = p;
   return o;
 }
 
 @fragment fn fs_sky(in: SkyOut) -> @location(0) vec4f {
-  let a = u.inv_vp * vec4f(in.ndc, 0.0, 1.0);
-  let b = u.inv_vp * vec4f(in.ndc, 1.0, 1.0);
+  // Reversed Z: depth 1 is the near plane, 0 the far plane.
+  let a = u.inv_vp * vec4f(in.ndc, 1.0, 1.0);
+  let b = u.inv_vp * vec4f(in.ndc, 0.0, 1.0);
   let d = normalize(b.xyz / b.w - a.xyz / a.w);
   return vec4f(skyColor(d, true), 1.0);
 }
@@ -870,9 +880,7 @@ struct TOut {
 
 @vertex fn vs_trans(v: VIn) -> TOut {
   var o: TOut;
-  var c = u.view_proj * vec4f(v.pos, 1.0);
-  c.z = VM_SPLIT * c.w + (1.0 - VM_SPLIT) * c.z;
-  o.clip = c;
+  o.clip = worldDepth(u.view_proj * vec4f(v.pos, 1.0));
   o.wpos = v.pos;
   o.nrm = v.nrm;
   o.col = v.col;
