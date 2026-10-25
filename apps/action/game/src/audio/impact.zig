@@ -5,15 +5,18 @@
 //   - the strike: a short burst of filtered noise. A hard material gives a
 //     bright, short burst, a soft one a dull, longer burst.
 //   - the modes: decaying sines. The loss factor eta of the material sets
-//     the decay of a mode at f: e^(-pi f eta t). Metal and glass have a
-//     small loss and ring, wood and stone are damped. The decay against
+//     the decay of a mode at f: e^(-pi f eta t). Glass has a small loss
+//     and rings. Wood and stone have a large loss. Bolts and frames hold
+//     the steel of a map, or the ground holds it. The structure damps the
+//     steel a lot, so it rings only for a short time. The decay against
 //     the frequency is the strongest cue to a material (R. L. Klatzky,
 //     D. K. Pai and E. P. Krotkov, "Perception of material from contact
 //     sounds", Presence 9, 2000; K. van den Doel, P. G. Kry and D. K. Pai,
 //     "FoleyAutomatic", SIGGRAPH 2001).
 //   - the debris: grains, as fragments of concrete, brick, tile and glass,
 //     or stones of the track ballast, that click and fall.
-//   - the body: a low thud of the mass that takes the hit (flesh, earth).
+//   - the body: a low thud of the mass that takes the hit (flesh, earth,
+//     steel). Low-passed noise gives a thud with no pitch.
 //
 // The levels and the frequencies are estimates from the character of each
 // material, not measurements of bullet hits.
@@ -56,8 +59,8 @@ pub const info = std.enums.EnumArray(Material, Info).init(.{
     .brick = .{ .what = "brick: a duller crack and more crumble", .reflect = 0.85, .bright = 3500, .loud = 0.85, .length = 0.4 },
     .plaster = .{ .what = "painted plaster and render: a soft crack and a puff", .reflect = 0.8, .bright = 3000, .loud = 0.7, .length = 0.3 },
     .tile = .{ .what = "ceramic tile and slate: a brittle tink and shards", .reflect = 0.95, .bright = 7000, .loud = 0.95, .length = 0.35 },
-    .metal = .{ .what = "solid steel and iron (rails, posts, frames): a click and a long high ring", .reflect = 0.95, .bright = 8000, .loud = 0.9, .length = 1.2 },
-    .sheet_metal = .{ .what = "hollow steel panels (containers, trains, doors, signs): a pank and a low bong", .reflect = 0.9, .bright = 5000, .loud = 1.0, .length = 0.9 },
+    .metal = .{ .what = "solid steel and iron (rails, posts, frames): a click, a heavy thud and a short low ring", .reflect = 0.95, .bright = 4000, .loud = 0.9, .length = 0.6 },
+    .sheet_metal = .{ .what = "hollow steel panels (containers, trains, doors, signs): a hollow doof and a low boom", .reflect = 0.9, .bright = 3000, .loud = 1.0, .length = 0.6 },
     .glass = .{ .what = "glass: a bright crack and falling shards", .reflect = 0.95, .bright = 9000, .loud = 0.95, .length = 0.6 },
     .wood = .{ .what = "wood: a hollow knock and splinters", .reflect = 0.75, .bright = 3000, .loud = 0.8, .length = 0.4 },
     .ballast = .{ .what = "track ballast (loose stones): a chuff and a clatter of stones", .reflect = 0.5, .bright = 5000, .loud = 0.75, .length = 0.45 },
@@ -89,6 +92,11 @@ pub fn strike(buf: []f32, m: Material, energy: f32, rng: *dsp.Rng) usize {
         /// A mode with the decay of the loss factor eta.
         fn ring(s: @This(), freq: f32, eta: f32, amp: f32) void {
             s.mode(0, freq, dsp.modeT60(freq, eta), amp);
+        }
+        /// `count` modes at random frequencies from lo to hi (log-uniform),
+        /// with the decay of the loss factor eta.
+        fn cluster(s: @This(), count: usize, lo: f32, hi: f32, eta: f32, amp: f32) void {
+            for (0..count) |_| s.ring(@exp(s.rng.range(@log(lo), @log(hi))), eta, amp * s.rng.range(0.5, 1));
         }
         fn grains(s: @This(), g: dsp.Grains) void {
             dsp.addGrains(s.b, s.rng, g);
@@ -125,28 +133,40 @@ pub fn strike(buf: []f32, m: Material, energy: f32, rng: *dsp.Rng) usize {
             r.mode(0, rng.jitter(200, 0.1), 0.03, 0.35);
         },
         .metal => {
-            // The modes of a free bar: 1, 2.756, 5.404 and 8.933 times the
-            // first. Steel has a small loss (eta about 0.0015).
-            r.noise(0, .{ .kind = .highpass, .freq = 5000 }, 0.0001, 0.002, 1.0);
-            const f1 = rng.jitter(1350, 0.15);
-            for ([_]f32{ 1, 2.756, 5.404, 8.933 }, [_]f32{ 0.3, 0.25, 0.15, 0.1 }) |k, a| r.ring(f1 * k, 0.0015, a);
-            r.mode(0, rng.jitter(420, 0.1), 0.12, 0.3);
+            // A post, a rail or a frame: a heavy thud and a short, low
+            // ring. The frame, the bolts and the ground take most of the
+            // energy. A free bar with a small loss rings for a long time
+            // at one pitch, and a burst of fire on it sounds like a
+            // xylophone.
+            // The click of the strike.
+            r.noise(0, .{ .kind = .highpass, .freq = 4000 }, 0.0001, 0.0015, 0.5);
+            // The thud: the mass of the steel.
+            r.noise(0, .{ .kind = .lowpass, .freq = 700 }, 0.0004, 0.035, 2.5);
+            r.noise(0, .{ .kind = .bandpass, .freq = 150, .q = 1.2, .then = .{ .kind = .lowpass, .freq = 400 } }, 0.001, 0.09, 3.0);
+            for (0..3) |_| r.mode(0, rng.range(90, 220), rng.range(0.05, 0.09), 0.22);
+            // The ring: 12 modes at random frequencies from 350 to 2000 Hz,
+            // with the loss of steel in a structure (eta about 0.012). The
+            // modes are dense and change at each hit, so no mode sets a
+            // pitch and the hits make no melody.
+            r.cluster(12, 350, 2000, 0.012, 0.06);
         },
         .sheet_metal => {
-            // A panel: the modes of a plate, f0 (m^2 + 1.7 n^2), with the
-            // loss of a bolted or welded panel (eta about 0.015).
-            r.noise(0, .{ .kind = .bandpass, .freq = 2200, .q = 0.8 }, 0.0002, 0.006, 1.0);
-            const f0 = rng.jitter(95, 0.15);
-            var idx: f32 = 0;
+            // A hollow panel: a dull pank, a boom of the panel and the air
+            // behind it, and the modes of a plate, f0 (m^2 + 1.7 n^2). The
+            // frame and the lining damp the panel (eta about 0.07). Each
+            // mode has its own jitter, so the hits do not move up and down
+            // together.
+            r.noise(0, .{ .kind = .bandpass, .freq = 1200, .q = 0.8 }, 0.0002, 0.005, 0.4);
+            r.noise(0, .{ .kind = .lowpass, .freq = 500 }, 0.0005, 0.05, 3.5);
+            r.noise(0, .{ .kind = .bandpass, .freq = 100, .q = 1.0, .then = .{ .kind = .lowpass, .freq = 300 } }, 0.002, 0.32, 7.0);
+            const f0 = rng.jitter(45, 0.05);
             for (1..4) |mi| {
                 for (1..4) |ni| {
                     const mf: f32 = @floatFromInt(mi);
                     const nf: f32 = @floatFromInt(ni);
-                    r.ring(rng.jitter(f0 * (mf * mf + 1.7 * nf * nf), 0.03), 0.015, 0.35 / (1 + 0.3 * idx));
-                    idx += 1;
+                    r.ring(rng.jitter(f0 * (mf * mf + 1.7 * nf * nf), 0.12), 0.07, rng.range(0.04, 0.14));
                 }
             }
-            r.noise(0.002, .{ .kind = .bandpass, .freq = 900, .q = 2 }, 0.002, 0.15, 0.12);
         },
         .glass => {
             r.noise(0, .{ .kind = .highpass, .freq = 7000 }, 0.0001, 0.003, 1.0);

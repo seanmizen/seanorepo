@@ -336,7 +336,9 @@ it does.
 - `game/src/audio/tests.zig`: the Mach cone geometry, the order of the
   crack and the muzzle report, Whitham's laws for the N-wave, the head
   cues, the Doppler shift of the whiz, the distance law, the floor echo,
-  and a bounded sound of its own for each material. The choir has a
+  and a bounded sound of its own for each material. A hit on `metal` or
+  `sheet_metal` has a short ring, a low body and no clear pitch, and
+  sheet metal is lower and duller than solid metal. The choir has a
   fixed peak and two different ears. It starts and ends quiet, and the
   same seed gives the same sound.
 - `game/src/secret_room_test.zig`: the secret room of VAPES N MORE. Shut,
@@ -1011,14 +1013,34 @@ a plate is `metal`.
 Each material is modal synthesis with noise, the methods of
 `utils/tube-sounds`. A strike is a short burst of filtered noise. The
 modes are decaying sines, and the loss factor eta of the material sets
-the decay of a mode at f: e^(-pi f eta t). Metal and glass have a small
-loss and ring. Wood and stone have a large loss. The decay against the frequency
+the decay of a mode at f: e^(-pi f eta t). Glass has a small loss and
+rings. Wood and stone have a large loss. The decay against the frequency
 is the strongest cue to a material (R. L. Klatzky, D. K. Pai and E. P.
 Krotkov, "Perception of material from contact sounds", Presence 9, 2000).
 Grains are fragments that click and fall. The levels and the frequencies
 are estimates from the character of each material. They are not
 measurements of bullet hits. The energy of the bullet (its damage) sets
 the level.
+
+Bolts and frames hold the steel of a map, or the ground holds it. The
+structure takes most of the energy of a hit, so a hit on steel is a dull
+"doof": a heavy thud and a short, low ring. A free steel bar has a small
+loss and rings for a long time at one pitch. Fire on it sounds like a
+xylophone, and the game does not use it. The ring modes are dense and
+change at each hit, so no mode sets a pitch and a burst of fire makes no
+melody.
+
+| Material | The strike | The body | The ring | Decay (t-20 dB, t-40 dB) |
+|---|---|---|---|---|
+| `metal` | a bright click (noise over 4 kHz, 1.5 ms) | low-passed noise and 3 modes from 90 to 220 Hz, 50 to 90 ms | 12 modes at random from 350 to 2000 Hz, eta 0.012 | 77 ms, 210 ms |
+| `sheet_metal` | a dull pank (noise at 1.2 kHz, 5 ms) | a boom: noise at 100 Hz, 0.32 s | 9 plate modes from f0 = 45 Hz, eta 0.07 | 108 ms, 212 ms |
+
+The decay is the time for the Schroeder energy decay curve of the dry
+strike to fall by 20 dB and by 40 dB, as the mean of 8 hits. Sheet metal
+is more hollow than solid metal: 80 % of its energy is under 300 Hz (52 %
+for `metal`), and its boom lasts longer. Solid metal keeps a short ring
+from 350 to 2000 Hz. Wood has a pitched knock and concrete has grit, and
+neither one has this ring.
 
 ### Impact effects
 
@@ -1079,8 +1101,8 @@ road over the floor of the ticket hall is concrete.
 | `brick` | a duller crack and more crumble | 67, 0 | 0 | the shed walls, the concourses, the terraces |
 | `plaster` | a soft crack and a puff | 10, 4 | 0 | the ticket hall walls, the painted fronts on the roads |
 | `tile` | a brittle tink and shards | 55, 13 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof |
-| `metal` | a click and a long high ring | 158, 487 | 13 | rails, railings, posts, frames, escalator steps, roof ribs |
-| `sheet_metal` | a pank and a low bong | 115, 360 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
+| `metal` | a click, a heavy thud and a short low ring | 158, 487 | 13 | rails, railings, posts, frames, escalator steps, roof ribs |
+| `sheet_metal` | a hollow doof and a low boom | 115, 360 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
 | `glass` | a bright crack and falling shards | 28, 374 | 6 | lamps, windows, the lift shafts, the Warwick Road front and rotunda |
 | `wood` | a hollow knock and splinters | 39, 2626 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
 | `ballast` | a chuff and a clatter of stones | 13, 0 | 0 | the track beds |
@@ -1129,6 +1151,7 @@ The console has two commands to listen to the sounds offline:
 nearmiss rifle2 1 40     // a 7.62x39 mm crack: a miss 1 m to your right, the shooter 40 m in front
 nearmiss pistol1 0.5 20  // a .45 ACP whiz, 0.5 m to your right
 impact glass 3           // a rifle bullet on glass, 3 m in front of you
+impact metal 3           // a rifle bullet on a steel post: a thud and a short ring
 ```
 
 `nearmiss [gun] [miss] [range]` takes a class and a number (`rifle2`,
