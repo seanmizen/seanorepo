@@ -27,6 +27,8 @@
 // - The ramps over the stairs and the escalators (map.zig Ramp) are solid.
 //   On a ramp, the audit uses the highest feet height that a player in the
 //   cell can stand at, so it does not make a jump from a ramp too low.
+// - A standing point in the scenery (map.scenery: a place that a player
+//   sees and cannot get to) is an escape too.
 // - Then it checks that no spawn point is cut off: from spawn 1 the player
 //   can get to each spawn point, and from each spawn point to spawn 1.
 // - The audit ignores dynamic boxes: the landing doors count as open, and the
@@ -84,12 +86,13 @@ const Motion = struct {
 };
 
 /// One escape: the standing point that the player leaves from, and the
-/// column with no floor (or outside the map) that they get to.
+/// column that they get to: one with no floor, one outside the map, or a
+/// standing point in the scenery (map.scenery).
 const Escape = struct {
     from: u32,
     x: f32,
     z: f32,
-    outside: bool,
+    kind: enum { no_floor, outside, scenery },
 };
 
 const Air = struct { d: f32, p: u32 };
@@ -461,6 +464,14 @@ fn visit(q: u32, from: u32) !void {
     if (flags.items[q] & reached != 0) return;
     flags.items[q] |= reached;
     parent.items[q] = from;
+    // A standing point in the scenery is an escape. The fill stops there.
+    const pt = point(q);
+    if (record_escapes and from != none and @reduce(.And, pt >= map.scenery[0]) and @reduce(.And, pt <= map.scenery[1])) {
+        if (flags.items[from] & escaped != 0) return;
+        flags.items[from] |= escaped;
+        try escapes.append(gpa, .{ .from = from, .x = pt[0], .z = pt[2], .kind = .scenery });
+        return;
+    }
     try queue.append(gpa, q);
 }
 
@@ -474,7 +485,7 @@ fn addEscape(from: u32, ix: i32, iz: i32) !void {
     const x = centreX(ix);
     const z = centreZ(iz);
     const outside = x < bmin[0] or x > bmax[0] or z < bmin[1] or z > bmax[1];
-    try escapes.append(gpa, .{ .from = from, .x = x, .z = z, .outside = outside });
+    try escapes.append(gpa, .{ .from = from, .x = x, .z = z, .kind = if (outside) .outside else .no_floor });
 }
 
 const sides = [4][2]i32{ .{ 1, 0 }, .{ -1, 0 }, .{ 0, 1 }, .{ 0, -1 } };
@@ -653,7 +664,15 @@ fn report() !usize {
         const after_txt = if (after) |k| try std.fmt.bufPrint(&after_buf, " (after hole {d})", .{k + 1}) else "";
         if (after != null) after_count += 1;
         std.debug.print("escape hole {d}{s}: {s} at ({d:.2} {d:.2}), from the floor at ({d:.2} {d:.2} {d:.2})\n", .{
-            hi + 1, after_txt, if (e.outside) "outside the map" else "no floor below", e.x, e.z, pt[0], pt[1], pt[2],
+            hi + 1, after_txt,
+            switch (e.kind) {
+                .outside => "outside the map",
+                .no_floor => "no floor below",
+                .scenery => "in the scenery",
+            },
+            e.x,    e.z,
+            pt[0],  pt[1],
+            pt[2],
         });
         std.debug.print("  {d} take-off points in ({d:.1} {d:.1} {d:.1}) .. ({d:.1} {d:.1} {d:.1})\n", .{
             h.n, h.min[0], h.min[1], h.min[2], h.max[0], h.max[1], h.max[2],

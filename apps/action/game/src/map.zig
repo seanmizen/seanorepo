@@ -132,6 +132,12 @@ pub var kill_y: f32 = -5;
 /// out of it the sun goes through the walls. No room: min is over max.
 pub var sealed: [2]V3 = no_room;
 pub const no_room = [2]V3{ v3(1, 1, 1), v3(-1, -1, -1) };
+/// Scenery out of play, [min, max]: a place that a player sees and cannot
+/// get to, such as the construction site behind the Warwick Road hoarding.
+/// The escape audit (escape.zig) reports a standing point in it as an
+/// escape. The floorplan audit does not look for reachable decoration in
+/// it. No scenery: min is over max.
+pub var scenery: [2]V3 = no_room;
 /// A light that flickers (a tired fluorescent tube), or null, and the box
 /// of its tube (dynamic, so it flickers too).
 pub var flicker_light: ?usize = null;
@@ -169,6 +175,7 @@ pub fn load(map: Id) void {
     underground_y = -1000;
     kill_y = -5;
     sealed = no_room;
+    scenery = no_room;
     flicker_light = null;
     flicker_box = null;
     @import("gates.zig").clear();

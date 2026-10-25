@@ -67,7 +67,9 @@ sips -s format png out.ppm --out out.png                  # macOS, to view it
 
 - The audit lists decoration that a standing player can walk into. It
   tests a long decoration (a sloped bar, a handrail) at points along it,
-  at most 0.5 m apart.
+  at most 0.5 m apart. It does not test decoration in `map.scenery` (a
+  place out of play, such as the Warwick Road construction site). The
+  escape audit proves that no player gets there.
 - The audit prints the boxes and the decoration of each surface material
   (see [Surface materials](#surface-materials)). Its exit code is 1 when a
   material does not fit the look of its surface.
@@ -94,8 +96,9 @@ zig build floorplan -- earls_court escape
 The audit (`game/src/escape.zig`) flood fills the space that a player can
 get to from the spawn points. It includes walks, step ups, jumps onto a
 ledge, running jumps over a gap, falls and the lifts. It reports each place
-where that space touches the outside of the map, or has no floor below it.
-The exit code is 1 when it finds an escape hole.
+where that space touches the outside of the map, has no floor below it, or
+goes into `map.scenery` (a place that a player sees and cannot get to). The
+exit code is 1 when it finds an escape hole.
 
 - Each hole shows the floor that the player leaves from, and the route from
   a spawn point. The route shows each change of floor height of more than
@@ -1475,6 +1478,33 @@ stocks. The door openings and the door places are approximate.
     shows where the live rail starts. It does not stop a player, because
     the tracks are open: a player can also go down onto a track and walk
     past the danger boards.
+- **The Warwick Road construction site** (`warwickSite` in
+  `game/src/maps/earls_court.zig`): west of Warwick Road is a building
+  site, as the old exhibition centre site is in real life.
+  - A painted plywood hoarding, 2.44 m high, runs along the road. Its
+    printed panels show the developer, WARWICK YARDS, with "1,700 NEW
+    HOMES. 12 AFFORDABLE*", a render of glass towers with "LUXURY LIVING.
+    MOMENTS FROM THE TUBE.", "LIVE. WORK. PLAY. PAY.", a completion date
+    delayed three times, and "SORRY FOR THE NOISE. WE ARE BUILDING A
+    BETTER LONDON (FOR SOMEBODY)". Bills are posted under POST NO BILLS.
+  - Opposite the station doors, Heras fence panels on feet are the site
+    gate, with a safety board and a KEEP CLEAR sign. You see into the
+    site through the mesh.
+  - In the site: a mini-digger at a spoil heap, a trench with barriers,
+    cones, a skip with an old mattress in it, pallets of blocks, bulk bags
+    of sand, scaffold tubes, rebar, two site cabins (the site office and
+    the canteen) with a stair, a portable toilet, a concrete frame four
+    floors high, and a tower crane with a load of boards on its hook.
+  - The site is west of the road, from x = -140 to the hoarding, and from
+    z = -50 to z = 45. It never crosses the road, so the road can go on
+    north and south past it. The hoarding runs the full length of the
+    site, past both ends of the road.
+  - The site stands on a raft over the District line, which goes west
+    under it in a covered way.
+  - The hoarding and the fence stop each player: a jump and a vault do
+    not clear them. The site is `map.scenery`, and the escape audit
+    reports a player who can get there. The site adds two hoarding boxes
+    and one collision box for the fence. The rest is decoration.
 - **Ticket gates** (Earl's Court, `game/src/gates.zig`): a gate line of 8
   lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
   passage. Screens close the rest of each hall.
