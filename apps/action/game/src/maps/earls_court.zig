@@ -1537,10 +1537,11 @@ fn intermediateLevel() void {
 
     // The stairs from the west end of each island down into the hall.
     for (wells[0..2]) |w| stairs(w.x[1], -1, w.cz, 2.4, -0.4, 14, .{ 0, mid_y }, platform_c);
-    for ([_]f32{ -9, 0 }) |z| {
-        map.add(v3(-34.1, mid_ceil - 0.08, z - 1.1), v3(-33.9, mid_ceil, z + 1.1), cool, .emissive, .glass).solid = false;
-        map.addLight(v3(-34, mid_ceil - 0.3, z), cool * vec.s(1.4), 12);
-    }
+    // Four ceiling lights over the hall, two at each end.
+    for ([_]f32{ -34, -24 }) |x| for ([_]f32{ -9, 0 }) |z| {
+        deco(v3(x - 0.1, mid_ceil - 0.08, z - 1.1), v3(x + 0.1, mid_ceil, z + 1.1), cool, .emissive, .glass);
+        map.addLight(v3(x, mid_ceil - 0.5, z), cool * vec.s(1.4), 12);
+    };
 
     // The emergency stairs from the east end of platforms 1 and 2: down
     // the well to a passage, north past the deep lift shaft, and to the
@@ -1785,7 +1786,12 @@ fn escalators() void {
         const p = v3(x, escLine(x) + crown_h - 0.04, esc_cz);
         map.beam(p - slope * vec.s(0.8), p + slope * vec.s(0.8), 0.25, 0.06, up, cool, .emissive, .glass);
     }
-    map.addLight(v3((x0 + x1) / 2, (mid_y + deep_y) / 2 + 3, esc_cz), v3(1.1, 0.85, 0.6), 12);
+    // Two lights under the crown, at a quarter and three quarters of the
+    // slope.
+    for ([_]f32{ 0.25, 0.75 }) |t| {
+        const x = xv + (x1 - xv) * t;
+        map.addLight(v3(x, escLine(x) + crown_h - 0.5, esc_cz), v3(1.1, 0.85, 0.6), 11);
+    }
 
     // Adverts on both walls: level posters in black frames, one each 2.3 m
     // down the slope.
@@ -1963,6 +1969,12 @@ fn deepLevel() void {
         box(v3(em_lobby.x1 - 0.5, y, wz[0]), v3(plat_x[1], deep_ceil, wz[1]), tile_c, .wall_tile, .tile);
     }
     box(v3(deep_lift.x0, y, deep_lift.z1), v3(deep_lift.x1, deep_ceil, corr_z[1]), tile_c, .wall_tile, .tile);
+    // Two ceiling lights in the corridor, between the cross-passages.
+    for ([_]f32{ 12, 48 }) |lx| {
+        const cz = (corr_z[0] + corr_z[1]) / 2;
+        deco(v3(lx - 1.1, deep_ceil - 0.08, cz - 0.1), v3(lx + 1.1, deep_ceil, cz + 0.1), cool, .emissive, .glass);
+        map.addLight(v3(lx, deep_ceil - 0.5, cz), cool * vec.s(1.3), 12);
+    }
 
     // East of the lift the island between the back walls is solid, but for
     // the emergency stairs: their slot, which goes on up to their landing
@@ -2081,7 +2093,7 @@ fn deepLevel() void {
         map.addLight(v3(lx, ly - 0.45, lz[0]), tint * vec.s(2.3), 15);
     }
     // Platform 6 east of the arches.
-    for ([_]f32{ 63, 99 }) |lx| {
+    for ([_]f32{ 42, 63, 81, 99 }) |lx| {
         map.addLight(v3(lx, ly - 0.45, lz[1]), v3(1.0, 0.95, 0.82) * vec.s(2.3), 15);
     }
     map.flicker_light = map.light_count;

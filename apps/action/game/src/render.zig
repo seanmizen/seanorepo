@@ -60,7 +60,7 @@ pub const SceneUniforms = extern struct {
     sun_col: [4]f32,
     info: [4]f32,
     /// x: the underground height, y: the in-scatter strength, z: the
-    /// exposure of the tone map (scene.wgsl haze).
+    /// exposure of the tone map (scene.wgsl haze), w: map.light_band.
     info2: [4]f32,
     /// The lights of your body: for slot d, the index of the light (from
     /// 1) in lp and lc, or 0.
@@ -68,6 +68,10 @@ pub const SceneUniforms = extern struct {
     /// map.sealed: the room with no sun, min and max.
     sealed_lo: [4]f32,
     sealed_hi: [4]f32,
+    /// The inside of each lift cab (map.lifts), min and max. The shader
+    /// treats it as the sealed room. w: 1 for a cab, 0 for no cab.
+    cab_lo: [4][4]f32,
+    cab_hi: [4][4]f32,
     /// The AO grid (ao_grid.zig): xyz the origin, w the cell size.
     grid_o: [4]f32,
     /// xyz the cell counts, w the length of the moving list.
@@ -80,7 +84,7 @@ pub const SceneUniforms = extern struct {
 /// The map lights (map.max_lights) and the lights that move: the train,
 /// the lift cabs, the muzzle flashes, the grenades, a blessing of MORE.
 /// scene.wgsl has the same size.
-pub const max_lights = 44;
+pub const max_lights = 52;
 
 const PostUniforms = extern struct {
     texel: [2]f32,
@@ -630,9 +634,15 @@ pub fn draw(ctx: *sw.Context, p: FrameParams, dynamic: []const mesh.Vertex, hud:
     su.sun_col = .{ sun_col[0], sun_col[1], sun_col[2], 0 };
     const nl = @min(p.lights.len, max_lights);
     su.info = .{ 0, @floatFromInt(nl), 0.0045, 1 };
-    su.info2 = .{ map.underground_y, 1, p.exposure, 0 };
+    su.info2 = .{ map.underground_y, 1, p.exposure, map.light_band };
     su.sealed_lo = .{ map.sealed[0][0], map.sealed[0][1], map.sealed[0][2], 0 };
     su.sealed_hi = .{ map.sealed[1][0], map.sealed[1][1], map.sealed[1][2], 0 };
+    // The cab walls are 0.1 m or less outside the floor box.
+    for (map.lifts[0..@min(map.lift_count, 4)], 0..) |l, i| {
+        const fb = map.boxes[l.floor_box];
+        su.cab_lo[i] = .{ fb.min[0] - 0.1, l.y - 0.05, fb.min[2] - 0.1, 1 };
+        su.cab_hi[i] = .{ fb.max[0] + 0.1, l.y + map.cab_height + 0.05, fb.max[2] + 0.1, 1 };
+    }
     su.grid_o = grid_origin;
     su.grid_n = grid_n;
     su.grid_n[3] = @floatFromInt(uploadBoxes(gpu, p.eye));
