@@ -547,6 +547,9 @@ pub const Loadout = struct {
     /// The slot before the current one. The grenade slot goes back to it.
     last: Slot = .primary,
     hands: Hands = .{},
+    /// A moped thief took the primary in this life (moped.zig): a new pick
+    /// does not fill the primary slot before the next life.
+    primary_locked: bool = false,
 
     /// Fill the slots for a new life. The primary is in the hands, ready.
     pub fn equip(self: *Loadout, c: Choice, nades: u32, infinite: bool) void {
@@ -558,9 +561,10 @@ pub const Loadout = struct {
     }
 
     /// Put new primary and secondary weapons in their slots (a change of
-    /// the choice at the spawn point). The held slot stays.
+    /// the choice at the spawn point). The held slot stays. A locked
+    /// primary slot keeps what it has.
     pub fn rearm(self: *Loadout, c: Choice, infinite: bool) void {
-        self.slots[0] = Item.full(c.primary, infinite);
+        if (!self.primary_locked) self.slots[0] = Item.full(c.primary, infinite);
         self.slots[1] = Item.full(c.secondary, infinite);
         if (self.current == .primary or self.current == .secondary) {
             self.hands.takeOut(self.heldStats().draw);
@@ -595,6 +599,28 @@ pub const Loadout = struct {
     /// The grenades left.
     pub fn grenades(self: *const Loadout) u32 {
         return if (self.slots[3]) |it| it.ammo else 0;
+    }
+
+    /// A snatch: the primary leaves its slot, and the slot stays locked
+    /// for the rest of the life. With the primary in the hands, the
+    /// secondary comes up. Returns the gun, or null for an empty slot.
+    pub fn takePrimary(self: *Loadout) ?Item {
+        const it = self.slots[0] orelse return null;
+        self.slots[0] = null;
+        self.primary_locked = true;
+        if (self.last == .primary) self.last = .secondary;
+        if (self.current == .primary) {
+            _ = self.select(.secondary);
+            self.last = .secondary;
+        }
+        return it;
+    }
+
+    /// A gun back in the empty primary slot (F on a stolen gun), in the
+    /// hands.
+    pub fn givePrimary(self: *Loadout, it: Item) void {
+        self.slots[0] = it;
+        if (self.current != .primary) _ = self.select(.primary);
     }
 
     /// Take out the weapon of a slot. False when the slot is empty, holds

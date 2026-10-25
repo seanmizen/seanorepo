@@ -12,7 +12,7 @@
 //
 // Controls: WASD move, Space jump, mouse look, left click fire, right click
 // aim, R reload, G grenade, F use (the lift buttons, the panel of the NPC
-// shooter), Q and E lean, 1 to 4 the
+// shooter, a stolen gun on the ground), Q and E lean, 1 to 4 the
 // weapon slots (primary, secondary, knife, grenade), B the weapon menu,
 // Tab scores, Esc release the mouse, M menu (while paused), Y chat, T team
 // chat. These keys are the default binds (game_console.zig): the game reads
@@ -56,6 +56,8 @@ const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
 const pigeons = @import("pigeons.zig");
 const roadmen = @import("roadmen.zig");
+const moped = @import("moped.zig");
+const moped_sound = @import("moped_sound.zig");
 const vapes = @import("vapes.zig");
 const secret = @import("secret_room.zig");
 const train_sound = @import("train_sound.zig");
@@ -137,6 +139,15 @@ var died_of = false;
 var nade_cd: f32 = 0;
 /// The treads under the feet of your body (body.zig Feet).
 var own_feet: body_mod.Feet = .{};
+/// A moped thief took the primary (moped.zig): the gun leaves the view
+/// for `yank_len` s, and the message shows for `nicked_len` s.
+const yank_len: f32 = 0.35;
+const nicked_len: f32 = 3;
+var yank_t: f32 = 0;
+var yank_item: weapon.Item = .{ .class = .rifle };
+var nicked_t: f32 = 0;
+var nicked: [48]u8 = undefined;
+var nicked_n: usize = 0;
 
 var static_mesh: mesh.Mesh = undefined;
 var map_loaded = false;
@@ -369,6 +380,9 @@ fn spawnAt(x: f32, y: f32, z: f32, yaw: f32) void {
     me = .{ .pos = v3(x, y, z), .yaw = yaw };
     // Practice has no end of rounds.
     loadout.equip(applied, grenade.per_life, mode == .practice);
+    // A new life: a moped can come again (moped.zig).
+    moped.newLife();
+    yank_t = 0;
     alive = true;
     hp = 100;
     nade_cd = 0;
@@ -453,6 +467,7 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     if (id == .earls_court) sounds.prepareChoir();
     pigeons.reset(@intFromFloat(rand() * 1e6));
     roadmen.reset();
+    moped.reset();
     static_mesh.clear();
     for (map.boxes[0..map.box_count]) |b| {
         if (!b.dynamic and b.visible) static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
@@ -782,6 +797,248 @@ fn roadmenSounds() void {
     };
 }
 
+// ---- The moped thieves -------------------------------------------------------
+
+/// A moped state (moped.State) as a JSON array: its first `n` numbers.
+const MopedState = struct {
+    q: moped.State,
+    n: usize = 10,
+    pub fn format(self: MopedState, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        try w.writeByte('[');
+        for (self.q[0..self.n], 0..) |x, i| {
+            if (i > 0) try w.writeByte(',');
+            try w.print("{d:.3}", .{x});
+        }
+        try w.writeByte(']');
+    }
+};
+
+/// A moped state from a message, or null. The six numbers of a moped
+/// event fill the start of it.
+fn mopedState(q: ?[]f32) ?moped.State {
+    const a = q orelse return null;
+    if (a.len < 6 or a.len > 10) return null;
+    var out: moped.State = @splat(0);
+    for (a, 0..) |x, i| {
+        if (!std.math.isFinite(x)) return null;
+        out[i] = x;
+    }
+    return out;
+}
+
+/// The hits of one shot on the moped riders: body and head pellets on
+/// each rider, the distance and the state of the rider at the first hit.
+const MopedHits = struct {
+    const Row = struct { ride: usize, rider: moped.Rider, body: u32 = 0, head: u32 = 0, dist: f32, q: moped.State };
+    rows: [4]Row = undefined,
+    n: usize = 0,
+
+    fn add(self: *MopedHits, h: moped.Hit, d: V3) void {
+        const rider = h.rider orelse return;
+        for (self.rows[0..self.n]) |*row| {
+            if (row.ride == h.ride and row.rider == rider) {
+                if (h.head) row.head += 1 else row.body += 1;
+                return;
+            }
+        }
+        if (self.n == self.rows.len) return;
+        self.rows[self.n] = .{ .ride = h.ride, .rider = rider, .dist = h.t, .q = moped.stateOf(&moped.rides[h.ride], rider, d) };
+        if (h.head) self.rows[self.n].head = 1 else self.rows[self.n].body = 1;
+        self.n += 1;
+    }
+
+    /// The `mh` field of a fire message: {id, r, b, h, d, q} for each
+    /// rider, or "" for none.
+    fn json(self: *const MopedHits, buf: []u8) []const u8 {
+        var len: usize = 0;
+        for (self.rows[0..self.n]) |row| {
+            const item = std.fmt.bufPrint(buf[len..], "{s}{{\"id\":{d},\"r\":{d},\"b\":{d},\"h\":{d},\"d\":{d:.2},\"q\":{f}}}", .{
+                if (len > 0) "," else ",\"mh\":[", moped.rides[row.ride].owner, @backingInt(row.rider), row.body, row.head, row.dist, MopedState{ .q = row.q },
+            }) catch break;
+            len += item.len;
+        }
+        if (len == 0) return "";
+        const end = std.fmt.bufPrint(buf[len..], "]", .{}) catch return "";
+        return buf[0 .. len + end.len];
+    }
+};
+
+/// A shot or a cut hit a rider or the moped (moped.zig): the flesh impact
+/// and a flinch, or the metal impact. Offline the damage applies here. In
+/// deathmatch the hit goes into `rider_hits`, and the server applies it.
+fn mopedHit(h: moped.Hit, end: V3, d: V3, st: *const weapon.Stats, dist: f32, rider_hits: *MopedHits) void {
+    if (h.rider == null) {
+        addSparks(end, h.normal, v3(1.0, 0.85, 0.6), if (st.pellets > 1) 2 else 6);
+        impact_fx.spawn(end, h.normal, .metal, if (st.pellets > 1) 0.5 else 1, 0);
+        return;
+    }
+    moped.shoot(h, d);
+    addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
+    impact_fx.spawn(end, -d, .flesh, if (st.pellets > 1) 0.5 else 1, 0);
+    if (mode == .deathmatch) {
+        rider_hits.add(h, d);
+    } else {
+        moped.hurt(h.ride, h.rider.?, pelletDamage(st, h.head, dist), d, my_id);
+    }
+}
+
+/// The moped thieves (moped.zig), each tick on Earl's Court: the player
+/// of this client decides its own visit, and the visits of the other
+/// players follow them. Then the engine sounds.
+fn mopedTick() void {
+    defer moped_sound.update(dt, me.eyePos(), me.vel, me.yaw, mode != .menu);
+    if (map.id != .earls_court or mode == .menu) return;
+    const eye = me.eyePos();
+    const look = vec.forward(me.yaw, me.pitch);
+    const play = ownBodyShows() and (mode != .deathmatch or session.joined());
+    moped.local(if (mode == .deathmatch) my_id else 0, me.pos, me.vel, play, loadout.slots[0], look);
+    if (mode == .deathmatch) for (remotes[0..remote_n]) |r| moped.remote(r.id, r.pos, r.vel, r.alive);
+    moped.step(dt, eye, look);
+    sendMopeds();
+    mopedEvents();
+}
+
+/// Deathmatch: the moped events of this client (moped.outbox) to the
+/// server. Offline the module applies them itself.
+fn sendMopeds() void {
+    defer moped.out_n = 0;
+    if (mode != .deathmatch or !session.joined()) return;
+    for (moped.outbox[0..moped.out_n]) |o| {
+        switch (o.kind) {
+            .go, .snatch, .away => {
+                // The server checks the street at the last place.
+                if (o.kind == .go) sendState();
+                // A moped event has six numbers.
+                client.send("{{\"t\":\"mp\",\"k\":\"{s}\",\"q\":{f}}}", .{ @tagName(o.kind), MopedState{ .q = o.q, .n = 6 } });
+            },
+            .pick => client.send("{{\"t\":\"mp\",\"k\":\"pick\",\"id\":{d}}}", .{o.owner}),
+        }
+    }
+}
+
+/// A gun of a moped message (`p`: [class, model]), or null.
+fn mopedGun(p: ?[2]u32) ?weapon.Item {
+    const g = p orelse return null;
+    if (g[1] >= weapon.models.len) return null;
+    const model: u8 = @intCast(g[1]);
+    if (@backingInt(weapon.models[model].class) != g[0]) return null;
+    return weapon.Item.full(model, false);
+}
+
+/// A moped event from the server (server/moped.ts).
+fn handleMoped(m: net.Msg) void {
+    const id = m.id orelse return;
+    const k = m.k orelse "";
+    const mine = id == my_id;
+    const q = mopedState(m.q);
+    if (std.mem.eql(u8, k, "go")) {
+        if (q) |qq| moped.applyGo(id, qq, if (findRemote(id)) |r| r.pos else v3(qq[0], qq[1], qq[2]));
+    } else if (std.mem.eql(u8, k, "snatch")) {
+        const qq = q orelse return;
+        // On the client of the robbed player: the gun with its rounds.
+        const gun = (if (mine) loadout.slots[0] else null) orelse mopedGun(m.p) orelse return;
+        moped.applySnatch(id, mine, qq, gun);
+    } else if (std.mem.eql(u8, k, "away")) {
+        if (q) |qq| moped.applyAway(id, qq);
+    } else if (std.mem.eql(u8, k, "die")) {
+        const qq = q orelse return;
+        const r = m.r orelse return;
+        if (r > 1) return;
+        moped.applyDie(id, mine, @fromBackingInt(@intCast(r)), qq, m.who orelse 0);
+    } else if (std.mem.eql(u8, k, "pick")) {
+        moped.applyPick(id, mine, m.who orelse 0, my_id);
+    } else if (std.mem.eql(u8, k, "end")) {
+        moped.applyEnd(id, mine);
+    }
+}
+
+/// The short name of a gun class for the messages.
+fn className(c: weapon.Class) []const u8 {
+    return switch (c) {
+        .rifle, .bullpup => "rifle",
+        .carbine => "carbine",
+        .smg => "SMG",
+        .shotgun => "shotgun",
+        .sawn_off => "sawn-off",
+        .pistol => "pistol",
+        .revolver => "revolver",
+        .knife => "knife",
+        .grenade => "grenade",
+    };
+}
+
+/// The name of a player for the kill feed: this player or another one.
+fn playerName(id: u32) []const u8 {
+    if (id == my_id) return my_name[0..my_name_len];
+    if (findRemote(id)) |r| return r.name[0..r.name_len];
+    return "?";
+}
+
+/// The moped events (moped.events): the gun, the sounds, the sparks and
+/// the kill feed.
+fn mopedEvents() void {
+    defer moped.event_n = 0;
+    for (moped.events[0..moped.event_n]) |e| switch (e.kind) {
+        .snatched => if (loadout.takePrimary()) |it| {
+            // The gun leaves the hands, with a message.
+            yank_item = it;
+            yank_t = yank_len;
+            nicked_t = nicked_len;
+            nicked_n = if (std.fmt.bufPrint(&nicked, "Someone nicked your {s}", .{className(it.class)})) |t| t.len else |_| 0;
+            sound(1, null, 0.18, .noise, 0.18);
+            sound(260, 120, 0.12, .triangle, 0.15);
+        },
+        .picked => if (moped.rides[e.ride].gun) |g| {
+            loadout.givePrimary(g);
+            nicked_t = nicked_len;
+            nicked_n = if (std.fmt.bufPrint(&nicked, "You got your {s} back", .{className(g.class)})) |t| t.len else |_| 0;
+            sound(700, 1100, 0.08, .square, 0.1);
+        },
+        .skid => {
+            sounds.toneAt(e.p, 1500, 700, 0.45, .sawtooth, 0.12, 0);
+            sounds.toneAt(e.p, 1, null, 0.45, .noise, 0.25, 0);
+        },
+        .crash => {
+            sounds.toneAt(e.p, 1, null, 0.6, .noise, 0.7, 0);
+            sounds.toneAt(e.p, 95, 40, 0.35, .sine, 0.8, 0);
+            sounds.toneAt(e.p, 420, 260, 0.25, .square, 0.18, 0.02);
+            for (0..14) |_| addSparks(e.p + v3(0, 0.1, 0), v3(0, 1, 0), v3(1.0, 0.75, 0.35), 1);
+        },
+        .scrape => sounds.toneAt(e.p, 1, null, 0.11, .noise, 0.32, 0),
+        .spark => {
+            impact_fx.spawn(e.p, e.n, .metal, 0.6, 0);
+            addSparks(e.p, e.n, v3(1.0, 0.75, 0.35), 3);
+        },
+        .thud => sounds.toneAt(e.p, 130, 60, 0.12, .sine, 0.45, 0),
+        .died => {
+            var line: [64]u8 = undefined;
+            pushFeed(std.fmt.bufPrint(&line, "{s}  >  {s}", .{ playerName(e.who), moped.names[@backingInt(e.rider)] }) catch moped.names[0], e.who == my_id);
+            if (e.who == my_id) {
+                hit_marker = 0.35;
+                hit_marker_kill = true;
+                sound(900, null, 0.06, .sine, 0.25);
+                sound(1350, null, 0.12, .sine, 0.2);
+            }
+        },
+    };
+}
+
+/// The stolen gun under the crosshair, within reach (moped.zig). Only with
+/// an empty primary slot.
+fn aimedGun() ?usize {
+    if (map.id != .earls_court or !ownBodyShows() or loadout.slots[0] != null) return null;
+    return moped.pickGun(me.eyePos(), vec.forward(me.yaw, me.pitch), 2.6);
+}
+
+var gun_hint: [32]u8 = undefined;
+
+/// The use hint of a stolen gun on the ground.
+fn gunHint(i: usize) []const u8 {
+    const g = moped.rides[i].gun orelse return "PICK UP";
+    var up: [16]u8 = undefined;
+    return std.fmt.bufPrint(&gun_hint, "PICK UP {s}", .{std.ascii.upperString(&up, className(g.class))}) catch "PICK UP";
+}
+
 // ---- Modes -----------------------------------------------------------------
 
 fn enterMenu(ctx: *sw.Context) void {
@@ -793,6 +1050,9 @@ fn enterMenu(ctx: *sw.Context) void {
     mode = .menu;
     remote_n = 0;
     pigeons.net = false;
+    moped.reset();
+    moped.net = false;
+    moped_sound.silence();
     pigeons.held = null;
     grenade.reset();
     impact_fx.reset();
@@ -805,6 +1065,7 @@ fn enterPractice(ctx: *sw.Context) void {
     loadMap(ctx, .arena);
     mode = .practice;
     pigeons.net = false;
+    moped.net = false;
     grenade.reset();
     impact_fx.reset();
     applied = choice;
@@ -847,6 +1108,9 @@ fn enterDeathmatch(ctx: *sw.Context) void {
     // hello.
     pigeons.net = true;
     pigeons.held = null;
+    // The server owns the stolen guns and the riders (moped.zig).
+    moped.reset();
+    moped.net = true;
     resetMatch();
     const s = map.spawns[@intFromFloat(rand() * (@as(f32, @floatFromInt(map.spawn_count)) - 0.01))];
     spawnAt(s.pos[0], s.pos[1], s.pos[2], s.yaw);
@@ -935,6 +1199,8 @@ const ShotRay = struct {
     pigeon: ?pigeons.Hit = null,
     /// A roadman of Warwick Road (roadmen.zig): he takes no damage.
     roadman: ?roadmen.Hit = null,
+    /// A moped thief, his driver or the moped (moped.zig).
+    moped: ?moped.Hit = null,
 };
 
 fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
@@ -969,6 +1235,9 @@ fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
     }
     if (pigeons.ray(o, d, out.t)) |ph| out = .{ .t = ph.t, .pigeon = ph };
     if (roadmen.ray(o, d, out.t)) |rh| out = .{ .t = rh.t, .roadman = rh };
+    if (map.id == .earls_court) if (moped.ray(o, d, out.t)) |mh| {
+        out = .{ .t = mh.t, .moped = mh };
+    };
     return out;
 }
 
@@ -1033,6 +1302,8 @@ fn pelletImpact(ray: ShotRay, end: V3, st: *const weapon.Stats) void {
         map.surfaceAt(end, bi)
     else if (ray.remote != null or ray.dummy != null or ray.npc or ray.pigeon != null or ray.roadman != null)
         .flesh
+    else if (ray.moped) |mh|
+        (if (mh.rider != null) .flesh else .metal)
     else if (ray.plate != null)
         .metal
     else
@@ -1082,6 +1353,7 @@ fn fire() void {
     var nh: usize = 0;
     // The damage of this shot on each dummy: body, head.
     var dummy_dmg: [range.dummies.len][2]f32 = @splat(.{ 0, 0 });
+    var riders: MopedHits = .{};
     var first_end = o + f * vec.s(st.range);
     for (0..st.pellets) |pi| {
         const a = rand() * std.math.tau;
@@ -1119,6 +1391,8 @@ fn fire() void {
             pigeonHit(ph, d);
         } else if (ray.roadman) |rh| {
             roadmanHit(rh, end, d, st.pellets);
+        } else if (ray.moped) |mh| {
+            mopedHit(mh, end, d, st, ray.t, &riders);
         } else if (ray.box != null and (pi < 3 or rand() < 0.3)) {
             // The effect of the material (impact_fx.zig).
             impact_fx.spawn(end, ray.normal, map.surfaceAt(end, ray.box.?), if (st.pellets > 1) 0.5 else 1, 0);
@@ -1130,7 +1404,7 @@ fn fire() void {
     for (dummy_dmg, 0..) |dd, i| {
         if (dd[0] + dd[1] > 0) dummyHit(i, dd[0], dd[1]);
     }
-    if (nh > 0) {
+    if (nh > 0 or riders.n > 0) {
         hit_marker = 0.18;
         hit_marker_kill = false;
         sound(1500, 1300, 0.04, .square, 0.12);
@@ -1145,8 +1419,9 @@ fn fire() void {
             }) catch break;
             len += item.len;
         }
-        client.send("{{\"t\":\"fire\",\"w\":{d},\"o\":[{d:.2},{d:.2},{d:.2}],\"e\":[{d:.2},{d:.2},{d:.2}],\"hits\":[{s}]}}", .{
-            @backingInt(it.class), muzzle[0], muzzle[1], muzzle[2], first_end[0], first_end[1], first_end[2], list[0..len],
+        var mh_buf: [400]u8 = undefined;
+        client.send("{{\"t\":\"fire\",\"w\":{d},\"o\":[{d:.2},{d:.2},{d:.2}],\"e\":[{d:.2},{d:.2},{d:.2}],\"hits\":[{s}]{s}}}", .{
+            @backingInt(it.class), muzzle[0], muzzle[1], muzzle[2], first_end[0], first_end[1], first_end[2], list[0..len], riders.json(&mh_buf),
         });
     }
 }
@@ -1190,6 +1465,19 @@ fn stab() void {
         if (ray.roadman) |rh| {
             roadmanHit(rh, end, d, 1);
             sound(180, 90, 0.08, .sawtooth, 0.2);
+            return;
+        }
+        if (ray.moped) |mh| {
+            var riders: MopedHits = .{};
+            mopedHit(mh, end, d, st, ray.t, &riders);
+            if (mh.rider == null) return;
+            sound(180, 90, 0.08, .sawtooth, 0.2);
+            hit_marker = 0.18;
+            hit_marker_kill = false;
+            if (mode == .deathmatch) {
+                var mh_buf: [400]u8 = undefined;
+                client.send("{{\"t\":\"fire\",\"w\":{d},\"hits\":[]{s}}}", .{ @backingInt(weapon.Class.knife), riders.json(&mh_buf) });
+            }
             return;
         }
         if (ray.dummy) |dh| {
@@ -1360,6 +1648,11 @@ fn onBlast(b: grenade.Blast) void {
                 const dd = @round(grenade.damageTo(b, dm.blastPoints()));
                 if (dd >= 1) dummyHit(i, dd, 0);
             }
+            var bt: [8]moped.BlastTarget = undefined;
+            for (moped.blastTargets(&bt)) |t| {
+                const dd = @round(grenade.damageTo(b, t.points));
+                if (dd >= 1) moped.hurt(t.ride, t.rider, dd, vec.norm(t.points[1] - b.pos), my_id);
+            }
             const d = grenade.damageTo(b, player_mod.blastPoints(me.pos, me.yaw, me.lean));
             if (d >= 1) {
                 hp -= @intFromFloat(@round(d));
@@ -1398,8 +1691,26 @@ fn onBlast(b: grenade.Blast) void {
                     } else |_| {}
                 }
             }
-            client.send("{{\"t\":\"blast\",\"p\":[{d:.2},{d:.2},{d:.2}],\"hits\":[{s}]}}", .{
-                b.pos[0], b.pos[1], b.pos[2], list[0..len],
+            // The riders in the blast (moped.zig): their damage and their
+            // places.
+            var mh_buf: [400]u8 = undefined;
+            var mh_len: usize = 0;
+            var bt: [8]moped.BlastTarget = undefined;
+            for (moped.blastTargets(&bt)) |t| {
+                const dd = @round(grenade.damageTo(b, t.points));
+                if (dd < 1) continue;
+                const r = &moped.rides[t.ride];
+                const q = moped.stateOf(r, t.rider, vec.norm(t.points[1] - b.pos));
+                const item = std.fmt.bufPrint(mh_buf[mh_len..], "{s}{{\"id\":{d},\"r\":{d},\"dmg\":{d},\"q\":{f}}}", .{
+                    if (mh_len > 0) "," else ",\"mh\":[", r.owner, @backingInt(t.rider), @as(u32, @intFromFloat(@min(100, dd))), MopedState{ .q = q },
+                }) catch break;
+                mh_len += item.len;
+            }
+            if (mh_len > 0) {
+                if (std.fmt.bufPrint(mh_buf[mh_len..], "]", .{})) |e| mh_len += e.len else |_| mh_len = 0;
+            }
+            client.send("{{\"t\":\"blast\",\"p\":[{d:.2},{d:.2},{d:.2}],\"hits\":[{s}]{s}}}", .{
+                b.pos[0], b.pos[1], b.pos[2], list[0..len], mh_buf[0..mh_len],
             });
             if (any) {
                 hit_marker = 0.18;
@@ -1659,6 +1970,8 @@ fn handleNet(ctx: *sw.Context) void {
             if (std.mem.eql(u8, m.k orelse "", "pass")) gates.pass(lane) else gates.open(lane);
         } else if (std.mem.eql(u8, m.t, "rm")) {
             handleRoadmen(m);
+        } else if (std.mem.eql(u8, m.t, "mp")) {
+            handleMoped(m);
         } else if (std.mem.eql(u8, m.t, "pg")) {
             handlePigeon(m);
         } else if (std.mem.eql(u8, m.t, "flock")) {
@@ -1769,6 +2082,9 @@ fn gameplayTick(ctx: *sw.Context, in: *const core.InputSnapshot) void {
                 },
                 .wrong_side => sound(320, null, 0.25, .square, 0.1),
             }
+        } else if (aimedGun()) |i| {
+            moped.takeGun(i);
+            sound(700, 900, 0.05, .square, 0.08);
         } else if (aimedPigeon()) |i| {
             pigeons.grab(i);
             sound(420, 300, 0.05, .triangle, 0.1);
@@ -1859,6 +2175,8 @@ fn effectsTick() void {
     remote_flash.life -= dt;
     impact_fx.step(dt);
     damage_flash = @max(0, damage_flash - dt * 1.4);
+    yank_t = @max(0, yank_t - dt);
+    nicked_t = @max(0, nicked_t - dt);
     hit_marker = @max(0, hit_marker - dt);
     for (feed[0..feed_n]) |*f| f.life -= dt;
     while (feed_n > 0 and feed[0].life <= 0) {
@@ -2187,6 +2505,7 @@ fn tick(ctx: *sw.Context) void {
     sendPigeons();
     pigeonSounds();
     roadmenTick();
+    mopedTick();
     effectsTick();
 }
 
@@ -2313,6 +2632,14 @@ fn buildEffects() void {
 fn buildViewmodel() void {
     if (mode == .menu or weapon_menu.open) return;
     if (mode == .deathmatch and !alive) return;
+    if (yank_t > 0) {
+        // The snatch: the gun goes out of the view to the side of the
+        // thief, and turns.
+        const e = vec.smooth(1 - yank_t / yank_len);
+        const base = (weapon.Hands{}).pose(yank_item, 0, 0);
+        const pull = vec.translate(v3(0.7 * e, 0.08 * e - 0.3 * e * e, -0.15 * e)).mul(Mat4.rotationY(-1.3 * e).mul(Mat4.rotationZ(-0.9 * e)));
+        weapon.addModel(&dyn, yank_item.model, cameraMatrix().mul(pull).mul(base.gun), base.mag, 100);
+    }
     const it = loadout.held() orelse return;
     const hands = &loadout.hands;
     const speed = @min(1, @sqrt(me.vel[0] * me.vel[0] + me.vel[2] * me.vel[2]) / 6);
@@ -2884,7 +3211,7 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
         L.add(&lines, &n, "{s} ammo {d}  reload {d:.2}  draw {d:.2}  ads {d:.2}  heat {d:.2}", .{ @tagName(loadout.heldClass()), ammo, h.reloading, h.drawing, h.ads, h.heat });
     }
     L.add(&lines, &n, "grenades live {d}  left {d}  smoke {d}  blast cells {d}", .{ grenade.count, loadout.grenades(), grenade.puffCount(), grenade.debug_cells });
-    if (map.id == .earls_court) L.add(&lines, &n, "warwick road {d:.1} m (line {d:.0})  roadmen gangs {d}", .{ if (roadmen.onRoad(me.pos)) roadmen.along(me.pos) else 0, roadmen.line, roadmen.count() });
+    if (map.id == .earls_court) L.add(&lines, &n, "warwick road {d:.1} m (line {d:.0})  roadmen gangs {d}  mopeds {d}", .{ if (roadmen.onRoad(me.pos)) roadmen.along(me.pos) else 0, roadmen.line, roadmen.count(), moped.count() });
     L.add(&lines, &n, "game build {s}  protocol {d}", .{ build_options.build_version, net.protocol_version });
     if (mode == .deathmatch) {
         L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(session.state), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
@@ -3000,12 +3327,18 @@ fn drawHud(ctx: *sw.Context, r: *gfx.Renderer) !void {
         const what: ?[]const u8 = if (pigeons.held != null) "THROW PIGEON" else if (aimedPanel()) |pb| shooter_hud.hint(pb) else if (aimedButton()) |bi| blk: {
             const b = map.buttons[bi];
             break :blk if (b.in_cab) (if (b.level == 0) "GO DOWN" else "GO UP") else "CALL LIFT";
-        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedGetMore()) "GET MORE" else if (aimedMore()) "MORE" else if (aimedVape() != null) "USE VAPE" else null;
+        } else if (aimedReader() != null) "TAP OYSTER" else if (aimedGun()) |gi| gunHint(gi) else if (aimedPigeon() != null) "PICK UP PIGEON" else if (aimedGetMore()) "GET MORE" else if (aimedMore()) "MORE" else if (aimedVape() != null) "USE VAPE" else null;
         if (what) |wt| {
             var kb: [24]u8 = undefined;
             var line: [48]u8 = undefined;
             txtCenter(r, std.fmt.bufPrint(&line, "{s}   {s}", .{ gcon.keyLabel(&kb, .use), wt }) catch "", w / 2, h / 2 + 22, 15, white);
         }
+    }
+    if (nicked_t > 0 and nicked_n > 0) {
+        // The snatch message (moped.zig), for nicked_len s.
+        const a = vec.clamp01(nicked_t / 0.5);
+        txtCenter(r, nicked[0..nicked_n], w / 2 + 2, h * 0.64 + 2, 30, .{ .r = 0, .g = 0, .b = 0, .a = 0.6 * a });
+        txtCenter(r, nicked[0..nicked_n], w / 2, h * 0.64, 30, .{ .r = 1, .g = 0.55, .b = 0.3, .a = a });
     }
     try drawMinimap(r, h);
     try drawHealth(r, h);
@@ -3090,6 +3423,7 @@ fn gameRender(ctx: *sw.Context) !void {
     lift_doors.build(&dyn);
     pigeons.build(&dyn, time);
     roadmen.build(&dyn);
+    moped.build(&dyn);
     gates.build(&dyn);
     secret.build(&dyn);
     platform_display.build(&dyn, eyeForRender().eye, time, @floatCast(jsLocalSeconds()));

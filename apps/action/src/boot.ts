@@ -1,14 +1,16 @@
 // action.seanmizen.com: the page entry point. The swindowzig loader
 // (utils/swindowzig/backends/wasm/loader.ts) builds every wasm import,
 // the WebSocket bridge (backends/wasm/net.ts) included. tube.ts adds the
-// train sound (utils/tube-sounds) to the import module "env". bun bundles
-// this file into public/boot.js (build.sh).
+// train sound (utils/tube-sounds) to the import module "env", and moped.ts
+// adds the engine sound of the moped thieves. bun bundles this file into
+// public/boot.js (build.sh).
 
 import { gameOwnsKey } from '#/utils/swindowzig/backends/wasm/events';
 import {
   type LoadFailure,
   loadWasm,
 } from '#/utils/swindowzig/backends/wasm/loader';
+import { mopedImports } from './moped';
 import { tubeImports } from './tube';
 
 function show(title: string, message: string): void {
@@ -99,10 +101,12 @@ if (canvas) {
     // jsReload: the game reloads the page to get a new version of itself
     // (game/src/game_console.zig reloadPage).
     // jsTubeTrain: the deep train sound (tube.ts, game/src/train_sound.zig).
+    // jsMoped: the engine of each moped (moped.ts, game/src/moped_sound.zig).
     // jsLocalSeconds: the local time of day in seconds, for the clock of the
     // train indicators (game/src/platform_display.zig).
     env: {
       ...tubeImports,
+      ...mopedImports,
       jsLocalSeconds: () => {
         const d = new Date();
         return (

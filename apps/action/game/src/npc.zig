@@ -376,6 +376,130 @@ pub fn handTip(sk: Skeleton) V3 {
     return vec.xform(part(sk, .fore_arm_r), v3(0, -0.5, 0));
 }
 
+/// The frame of the fist of the right hand (right = true) or of the left
+/// hand: its origin in the glove, -Z along the fingers. A gun in the hand
+/// hangs from it (moped.zig).
+pub fn handFrame(sk: Skeleton, right: bool) Mat4 {
+    const fore = part(sk, if (right) .fore_arm_r else .fore_arm_l);
+    return fore.mul(vec.translate(v3(0, -0.31, -0.02)).mul(Mat4.rotationX(-std.math.pi / 2.0)));
+}
+
+// ---- Joints (the ragdoll) -----------------------------------------------------
+//
+// A ragdoll (ragdoll.zig) moves one point for each joint. `joints` gives the
+// points of a skeleton, and `fromJoints` gives the frames of the parts
+// back from the points. The hips and the chest are one rigid body there:
+// the line from the pelvis to the neck is up, and the line between the
+// shoulders is the right of the body.
+
+pub const Joint = enum(u8) {
+    pelvis,
+    neck,
+    head_top,
+    shoulder_l,
+    elbow_l,
+    hand_l,
+    shoulder_r,
+    elbow_r,
+    hand_r,
+    hip_l,
+    knee_l,
+    foot_l,
+    hip_r,
+    knee_r,
+    foot_r,
+};
+pub const joint_count = std.enums.values(Joint).len;
+pub const Joints = [joint_count]V3;
+
+/// The length of the forearm to the hand point, and of the shin to the
+/// foot point.
+const hand_y: f32 = -0.3;
+const foot_y: f32 = -0.45;
+const head_h: f32 = 0.26;
+
+fn jp(j: *const Joints, k: Joint) V3 {
+    return j[@backingInt(k)];
+}
+
+/// The joint points of a skeleton.
+pub fn joints(sk: Skeleton) Joints {
+    var j: Joints = undefined;
+    const hips = part(sk, .hips);
+    const chest = part(sk, .chest);
+    j[@backingInt(Joint.pelvis)] = vec.xform(hips, v3(0, 0, 0));
+    j[@backingInt(Joint.neck)] = vec.xform(chest, neck);
+    j[@backingInt(Joint.head_top)] = vec.xform(part(sk, .head), v3(0, head_h, 0));
+    j[@backingInt(Joint.shoulder_l)] = vec.xform(part(sk, .upper_arm_l), v3(0, 0, 0));
+    j[@backingInt(Joint.elbow_l)] = vec.xform(part(sk, .fore_arm_l), v3(0, 0, 0));
+    j[@backingInt(Joint.hand_l)] = vec.xform(part(sk, .fore_arm_l), v3(0, hand_y, 0));
+    j[@backingInt(Joint.shoulder_r)] = vec.xform(part(sk, .upper_arm_r), v3(0, 0, 0));
+    j[@backingInt(Joint.elbow_r)] = vec.xform(part(sk, .fore_arm_r), v3(0, 0, 0));
+    j[@backingInt(Joint.hand_r)] = vec.xform(part(sk, .fore_arm_r), v3(0, hand_y, 0));
+    j[@backingInt(Joint.hip_l)] = vec.xform(part(sk, .thigh_l), v3(0, 0, 0));
+    j[@backingInt(Joint.knee_l)] = vec.xform(part(sk, .shin_l), v3(0, 0, 0));
+    j[@backingInt(Joint.foot_l)] = vec.xform(part(sk, .shin_l), v3(0, foot_y, 0));
+    j[@backingInt(Joint.hip_r)] = vec.xform(part(sk, .thigh_r), v3(0, 0, 0));
+    j[@backingInt(Joint.knee_r)] = vec.xform(part(sk, .shin_r), v3(0, 0, 0));
+    j[@backingInt(Joint.foot_r)] = vec.xform(part(sk, .shin_r), v3(0, foot_y, 0));
+    return j;
+}
+
+/// x with its part along y removed, as a unit vector. `alt` when x is
+/// nearly along y.
+fn ortho(x: V3, y: V3, alt: V3) V3 {
+    const o = x - y * vec.s(vec.dot(x, y));
+    if (vec.len(o) > 1e-3) return vec.norm(o);
+    const a = alt - y * vec.s(vec.dot(alt, y));
+    return vec.norm(a);
+}
+
+/// A frame with its origin at o, the right x and the up y (unit, at
+/// right angles). Z is x cross y: the back.
+fn frame(o: V3, x: V3, y: V3) Mat4 {
+    const z = vec.cross(x, y);
+    return .{ .data = .{ x[0], x[1], x[2], 0, y[0], y[1], y[2], 0, z[0], z[1], z[2], 0, o[0], o[1], o[2], 1 } };
+}
+
+/// The frame of a limb from joint a down to joint b. `right` is the right
+/// of the body: the limb turns with it.
+fn limb(a: V3, b: V3, right: V3, back: V3) Mat4 {
+    const y = vec.norm(a - b);
+    return frame(a, ortho(right, y, back), y);
+}
+
+/// The frames of the parts from the joint points of a ragdoll.
+pub fn fromJoints(j: Joints) Skeleton {
+    var sk: Skeleton = undefined;
+    const pelvis = jp(&j, .pelvis);
+    const up = vec.norm(jp(&j, .neck) - pelvis);
+    const right = ortho(jp(&j, .shoulder_r) - jp(&j, .shoulder_l), up, jp(&j, .hip_r) - jp(&j, .hip_l));
+    const back = vec.cross(right, up);
+    sk[@backingInt(Part.hips)] = frame(pelvis, right, up);
+    sk[@backingInt(Part.chest)] = frame(pelvis + up * vec.s(waist[1]), right, up);
+    const hy = vec.norm(jp(&j, .head_top) - jp(&j, .neck));
+    sk[@backingInt(Part.head)] = frame(jp(&j, .neck), ortho(right, hy, back), hy);
+    sk[@backingInt(Part.upper_arm_l)] = limb(jp(&j, .shoulder_l), jp(&j, .elbow_l), right, back);
+    sk[@backingInt(Part.fore_arm_l)] = limb(jp(&j, .elbow_l), jp(&j, .hand_l), right, back);
+    sk[@backingInt(Part.upper_arm_r)] = limb(jp(&j, .shoulder_r), jp(&j, .elbow_r), right, back);
+    sk[@backingInt(Part.fore_arm_r)] = limb(jp(&j, .elbow_r), jp(&j, .hand_r), right, back);
+    sk[@backingInt(Part.thigh_l)] = limb(jp(&j, .hip_l), jp(&j, .knee_l), right, back);
+    sk[@backingInt(Part.shin_l)] = limb(jp(&j, .knee_l), jp(&j, .foot_l), right, back);
+    sk[@backingInt(Part.thigh_r)] = limb(jp(&j, .hip_r), jp(&j, .knee_r), right, back);
+    sk[@backingInt(Part.shin_r)] = limb(jp(&j, .knee_r), jp(&j, .foot_r), right, back);
+    return sk;
+}
+
+test "npc: the joints of a stand give the same joints back" {
+    const sk = skeleton(.{ .pos = v3(2, 4.8, -7), .yaw = 1.1 });
+    const j = joints(sk);
+    const j2 = joints(fromJoints(j));
+    for (j, j2) |a, b| try std.testing.expect(vec.len(a - b) < 0.02);
+    // The pelvis is about 1 m up, and the head top about 1.8 m.
+    try std.testing.expect(jp(&j, .pelvis)[1] - 4.8 > 0.85 and jp(&j, .pelvis)[1] - 4.8 < 1.1);
+    try std.testing.expect(jp(&j, .head_top)[1] - 4.8 > 1.7 and jp(&j, .head_top)[1] - 4.8 < 1.9);
+}
+
 test "npc: a standing NPC is the height of a player, the feet on the ground" {
     const sk = skeleton(.{ .pos = v3(3, 4.8, -2), .yaw = 0.7 });
     const hb = hitBoxes(sk);

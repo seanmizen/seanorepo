@@ -436,7 +436,31 @@ it does.
   damage. Another client runs the gang of a "go" with no damage, and the
   roadmen walk away after an "off". `game/src/npc.zig` tests the model: a
   standing NPC is the height of a player, the stab puts the knife in front
-  of the chest, and a rider sits on the seat.
+  of the chest, and a rider sits on the seat. The joints of a skeleton
+  give the same skeleton back (the ragdoll).
+- `game/src/moped_test.zig`: the moped thieves of Warwick Road
+  (`game/src/moped.zig`), offline.
+  - A player on the street gets a moped from 60 m or more behind, out of
+    view. The moped leans as it pulls in, and the thief takes the
+    primary within 15 s. The slot is empty, and the pistol is in the
+    hands. The moped accelerates away and goes near the fence with the
+    gun. When the player looks away, it goes before the fence.
+  - One snatch in each life: a pick in the weapon menu does not fill the
+    slot, and a gun in the slot gets no second moped. A new life gets a
+    new moped.
+  - The driver dies: the moped skids, falls on its side with a crash and
+    sparks, and the thief runs away along the road. The driver lies on
+    the road.
+  - The thief dies: his body falls and lies on the road, the gun drops
+    beside it, and the moped goes on. F on the gun gives it back with its
+    rounds.
+  - Deathmatch: the snatch waits for the server. Two clients get the same
+    crash, the same run and the same body from the same `die`.
+  - The ragdoll falls to the ground, keeps the length of each part, and
+    sleeps.
+- `game/src/moped_sound.zig`: the engine of a moped is higher while it
+  comes and lower while it goes (Doppler), louder near, on its side, and
+  at the pitch of a small two-stroke.
 - `game/src/shooter_test.zig`: the NPC shooter. At each distance and over
   the full group, a round hits the board and passes 1 to 2 m from the head
   of the player. With no board, a round hits nothing within 60 m of the
@@ -467,13 +491,20 @@ it does.
   line, with two places on Warwick Road, one chase at a time. A stab does
   damage only during a chase, at the rate of the two roadmen. An "off" and
   a death end the chase.
+- `server/moped.test.ts`: the moped thieves of the server. A "go" only on
+  the street, once in each life. A "snatch" only near the player and with
+  both riders alive: the primary slot is empty. A rider dies at 100
+  damage, and the thief death puts the gun on the ground. Only a player
+  with an empty primary slot near the gun picks it up. A spawn ends the
+  visit.
 - `server/lobby.test.ts`: a real server on a free port. It checks the cvars
   on join, rcon, a client that tries to set a server cvar, the chat relay
   with the join and leave lines, the `lift` field of a player in a cab, the
   `tx` field of a rider of the deep train and the train clock, the gate
   relay, the flock on join, a pigeon kill to the other players, a roadmen
   "go" to the other players and four stabs that kill with the credit
-  "roadman", and the session: `GET /api/version`, the build header, the welcome before the
+  "roadman", a moped snatch, a refused shot of the stolen gun, a thief
+  killed by another player and the gun back with F, and the session: `GET /api/version`, the build header, the welcome before the
   hello, the bye on SIGTERM, and a new start with a new build on the same
   port.
 
@@ -1704,6 +1735,45 @@ stocks. The door openings and the door places are approximate.
     Offline, the client applies the damage of each stab, and a death puts
     the player back at the first spawn point. Practice is on the arena,
     which has no Warwick Road.
+- **The moped thieves** (Earl's Court, `game/src/moped.zig`, the ragdoll in
+  `game/src/ragdoll.zig`): two men on a moped, in the black outfit of the
+  roadmen. The driver sits in front. The thief sits behind and takes
+  guns.
+  - A player who steps onto the street of Warwick Road (the road or a
+    pavement) with a primary weapon gets a moped. It comes from 70 m
+    behind the player, out of view, in the left lane. It moves to the side
+    of the player and slows to the pace of the player. One moped in each life.
+  - The thief puts his arm out and takes the primary. The gun goes out of
+    the view to the side, the secondary comes into the hands, and the message says
+    "Someone nicked your rifle". The primary slot stays empty for the rest
+    of the life: the weapon menu gives no new primary before the next
+    spawn.
+  - The moped accelerates along the road, with the gun. Near the fence it
+    goes when the player cannot see it, and at the fence in any case. A player who leaves the street, or stands too far from the road,
+    has no snatch: the moped stops the approach after 25 s.
+  - The scooter has a top box, a headlight and a tail light. It leans in
+    each turn, and its engine buzzes as a small two-stroke, higher while
+    it comes and lower while it goes (`game/src/moped_sound.zig`,
+    `src/moped.ts`).
+  - Each rider has the health of a player (100). Shots, cuts and blasts
+    hurt them, with the flesh impact and a flinch. A shot on the moped
+    makes the metal impact.
+  - The driver dies: the moped skids, falls on its side and slides on,
+    with sparks, a crash and a scrape, and marks on the road. The driver
+    is a ragdoll. The thief jumps from the moped and runs along the road,
+    away from the crash.
+  - The thief dies: he is a ragdoll. On the moped he falls from it, and
+    the driver continues the getaway. The gun drops beside the body. A
+    player with an empty primary slot takes it with F, with its rounds.
+  - The kill feed says "moped driver" or "moped thief".
+  - The ragdoll: a point for each joint of the NPC model, rigid sticks for
+    the parts, limits on the elbows, the knees and the neck, and collision
+    with the boxes of the map. A body sleeps when it stops moving.
+  - The roadmen do not touch the thieves.
+  - Deathmatch: see [The moped thieves in deathmatch](#the-moped-thieves-in-deathmatch).
+    Offline, the client decides the snatch and applies the damage to the
+    riders. Practice is on the arena, which has no Warwick Road. The tests
+    run the offline path on Earl's Court.
 - **Ticket gates** (Earl's Court, `game/src/gates.zig`): a gate line of 8
   lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
   passage. Screens close the rest of each hall.
@@ -1830,7 +1900,11 @@ apps/action/
 │       ├── pigeons_test.zig  the pigeon simulation: the perches, a kill, a miss, the flights, the return, two clients in deathmatch
 │       ├── roadmen.zig   the roadmen of Warwick Road: the line, the gangs, the chase, the stabs, the hits
 │       ├── roadmen_test.zig  the roadman line: the spawn out of view, the kill, a runner, the escape, no damage, two clients
-│       ├── npc.zig       the NPC model and its outfit (full black): the skeleton, the poses, the hit boxes
+│       ├── npc.zig       the NPC model and its outfit (full black): the skeleton, the poses, the hit boxes, the joints
+│       ├── moped.zig     the moped thieves of Warwick Road: the approach, the snatch, the getaway, the crash, the hits, the stolen gun
+│       ├── moped_test.zig  the moped thieves: the snatch, one in each life, the crash, the thief death, the gun back, two clients
+│       ├── moped_sound.zig  the engine of each moped for the ears of the player: the pitch with Doppler, the level, the side
+│       ├── ragdoll.zig   the ragdoll of a dead NPC: joint points, rigid parts, joint limits, collision with the map
 │       ├── vapes.zig     the vapes of VAPES N MORE: the pick, the field of view effect, popcorn lung
 │       ├── secret_room.zig  the secret room of VAPES N MORE: the shelf door, GET MORE, the golden pigeon, the blessing, the shaft of light
 │       ├── secret_room_test.zig  the shut door, GET MORE, the walk to the plinth, the room lights
@@ -1864,8 +1938,10 @@ apps/action/
 ├── server/session.ts     the server identity, /api/version, the welcome, the bye on SIGTERM
 ├── server/pigeons.ts     the pigeons in deathmatch: the state of each pigeon and body, the joyrides, the returns
 ├── server/roadmen.ts     the roadmen in deathmatch: the checks of each chase, the damage of a stab
+├── server/moped.ts       the moped thieves in deathmatch: the stolen guns, the health of the riders, the checks of each event
 ├── server/server.cfg     the server config (a script)
 ├── src/boot.ts           page entry; bundled to public/boot.js
+├── src/moped.ts          the engine sound of the mopeds (Web Audio)
 ├── public/index.html
 ├── assets/guns/          the licence of the gun models
 ├── scripts/build-version.sh  prints the build version (build.sh, prod:docker)
@@ -2004,6 +2080,60 @@ The roadmen follow the pattern of the pigeons (`game/src/roadmen.zig`,
 
 These messages are new, so the protocol version stays the same: an old
 client ignores them.
+
+### The moped thieves in deathmatch
+
+The moped thieves follow the pattern of the pigeons (`game/src/moped.zig`,
+`server/moped.ts`).
+
+- **The client of the player decides the approach.** Its player steps
+  onto the street: it starts the moped at once and sends `go` with the
+  state of the moped. The client sends an `st` message just before each
+  `go`. The moped stops the approach: it sends `away`.
+- **The server owns the stolen gun.** The client asks for the gun with
+  `snatch`, and its moped waits beside the player for the answer. The
+  server checks the visit, the two riders and the distance (8 m or less
+  from the last `st` place). Then it sends `snatch` to all the players,
+  and the client of the player takes the gun out of its hands. The
+  primary slot of the player is empty for the server too: it refuses a
+  shot of that class, and a pick does not change the weapons of the life.
+- **The server owns the health of the riders.** A shot or a cut on a rider
+  goes in the `fire` message (`mh`), and a blast in the `blast` message.
+  The server takes the damage from its own table, as for a player, with
+  the remaining pellets. At 0 health it sends `die` to all the
+  players, with the place of the rider. The thief death puts the gun on
+  the ground. The first `pick` of a live player with an empty primary
+  slot, 4 m or less from the gun, gets it.
+- **Each event has its place.** Each client starts the getaway, the
+  crash, the run of the thief and each ragdoll from the place in the
+  message, with the map only. So each client sees each event at the same
+  place. Between the events, the other clients run the approach toward
+  the player from the snapshots.
+- A spawn and a leave of the player end the visit: `end` goes to all the
+  players, and the gun on the ground goes.
+
+A moped state `q` is `[x, y, z, yaw, speed, roll]`: the ground under the
+middle of the moped. In a hit and a `die` it has four more numbers: the
+direction of the shot `dx, dy, dz`, and 1 for the thief on foot (then the
+state is of the thief) or 0.
+
+| Message | From, to | Content |
+|---|---|---|
+| `{t:"mp", k:"go", q}` | the client, to the server | the player stepped onto the street: its moped starts at `q`. Only for a live player on the street, once in each life. |
+| `{t:"mp", k:"go", id, q}` | the server, to the other players | the moped of player `id` starts at `q`. |
+| `{t:"mp", k:"snatch", q}` | the client, to the server | the thief takes the primary of the player, the moped at `q`. |
+| `{t:"mp", k:"snatch", id, q, p}` | the server, to all players | the thief took gun `p` (`[class, model]`) of player `id`. The getaway starts at `q`. |
+| `{t:"mp", k:"away", q}` | the client, to the server | the moped stops the approach at `q`, with no gun. |
+| `{t:"mp", k:"away", id, q}` | the server, to the other players | the getaway of the moped of player `id` starts at `q`, with no gun. |
+| `{t:"fire", ..., mh:[{id, r, b, h, d, q}]}` | the client, to the server | the hits of a shot or a cut on the riders of the visit of player `id`. `r`: 0 the driver, 1 the thief. `b` and `h`: the body and head pellets. `d`: the distance. `q`: the state of the rider. |
+| `{t:"blast", ..., mh:[{id, r, dmg, q}]}` | the client, to the server | the damage of a blast on a rider. The server checks the distance from the blast to `q`. |
+| `{t:"mp", k:"die", id, r, q, who}` | the server, to all players | rider `r` of the visit of player `id` died at `q`, a hit of player `who`. |
+| `{t:"mp", k:"pick", id}` | the client, to the server | F on the gun on the ground of the visit of player `id`. |
+| `{t:"mp", k:"pick", id, who}` | the server, to all players | player `who` has the gun: it goes into its primary slot. |
+| `{t:"mp", k:"end", id}` | the server, to all players | the visit of player `id` is over (a spawn or a leave). |
+
+These messages and fields are new, so the protocol version stays the
+same: an old client ignores them.
 
 ### Ping
 
