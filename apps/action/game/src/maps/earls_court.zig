@@ -1599,16 +1599,13 @@ fn nextDoor() void {
     map.rod(v3(77.6, y + 0.5, -33.2), v3(77.6, y + 1.3, -33.2), 0.26, v3(0.15, 0.45, 0.2), .paint, .fabric);
     deco(v3(back + 0.6, y + 3.35, -33.0), v3(back + 2.2, y + 3.39, -31.0), v3(0.6, 0.6, 0.6), .emissive, .glass);
 
-    // CAFFE NEARLY: a light blue fascia with navy letters and a line in
-    // white, a grey panelled front, a blade sign, a timber ledge in the
-    // window, a warm room with a counter. The grey door to the flats is
-    // at the north end.
+    // CAFFE NEARLY: a light blue fascia with navy letters, a grey panelled
+    // front, a blade sign, a timber ledge in the window, a warm room with a
+    // counter. The grey door to the flats is at the north end.
     const grey = v3(0.36, 0.38, 0.41);
     const sky = v3(0.42, 0.58, 0.86);
     deco(v3(fx, y + 0.12, -39.3), v3(fx + 0.1, gt, -39.1), grey, .paint, .wood);
     fascia(-40.45, z_split, shop_top + 0.05, 4.25, 0.12, sky, "CAFFE NEARLY", 0.065, navy, .paint);
-    deco(v3(fx + 0.12, gt + 0.07, -38.4), v3(fx + 0.13, gt + 0.21, -35.8), navy, .paint, .sheet_metal);
-    pixelText(eastFace(v3(fx + 0.13, gt + 0.198, -37.1)), "THE ITALIANISH COFFEE CO", 0.016, 0.012, white, .paint, .sheet_metal);
     // 1 cm in from the end wall of the terrace.
     deco(v3(fx, y + 4.35, -40.59), v3(fx + 0.28, y + 4.55, z_split), grey, .paint, .wood);
     shopFront(.{ .z = cf, .door = .{ -38.9, -37.9 }, .frame = grey, .frame_mat = .paint, .riser = grey, .riser_mat = .paint, .riser_surface = .wood, .riser_h = 0.7 });
@@ -1959,7 +1956,7 @@ fn stuccoFront() void {
     fdeco(opp, -0.02, 0.1, y + 0.1, y + 3.6, s1 + 9.6, s1 + 10.4, opp_stucco * vec.s(0.92), .paint, .plaster);
 }
 
-/// DREGGS: a blue fascia with white letters and four orange squares, a
+/// DREGGS: a blue fascia with white letters and three orange squares, a
 /// grey shop front, a counter with a lit hot cabinet, blue menu boards.
 /// Grey stone above, with three windows on each floor and a cornice.
 fn dreggs() void {
@@ -1976,7 +1973,9 @@ fn dreggs() void {
     fdeco(opp, 0, 0.06, y + 4.3, y + 4.45, z[0], z[1], portland * vec.s(1.12), .paint, .concrete);
 
     fasciaOn(opp, z[0] + 0.3, z[1] - 0.3, shop_top, 4.2, 0.12, dreggs_blue, "DREGGS", 0.075, white, .paint);
+    // Three squares of a 2 x 2 grid: the top square at +Z is empty.
     for (0..2) |i| for (0..2) |j| {
+        if (i == 1 and j == 1) continue;
         const fi: f32 = @floatFromInt(i);
         const fj: f32 = @floatFromInt(j);
         fdeco(opp, 0.12, 0.13, y + 3.55 + fj * 0.27, y + 3.79 + fj * 0.27, -27.55 + fi * 0.27, -27.31 + fi * 0.27, v3(0.98, 0.6, 0.1), .paint, .sheet_metal);

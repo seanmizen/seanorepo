@@ -1612,7 +1612,7 @@ stocks. The door openings and the door places are approximate.
   `streetFurniture` in `game/src/maps/earls_court.zig`), from street
   photos of the real corner. North to south:
   - VAPES N MORE (see below), in a stucco building.
-  - DREGGS, a bakery chain: a blue fascia with four orange squares, in a
+  - DREGGS, a bakery chain: a blue fascia with three orange squares, in a
     building of grey stone.
   - SAUL, a bakery cafe on the corner: red brick, rusticated stone piers
     and quoins, a black fascia (BOULANGERIE, SAUL, SANDWICHES), posters of
