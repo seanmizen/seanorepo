@@ -55,6 +55,7 @@ const shooter = @import("shooter.zig");
 const shooter_hud = @import("shooter_hud.zig");
 const impact_fx = @import("impact_fx.zig");
 const pigeons = @import("pigeons.zig");
+const roadmen = @import("roadmen.zig");
 const vapes = @import("vapes.zig");
 const secret = @import("secret_room.zig");
 const train_sound = @import("train_sound.zig");
@@ -451,6 +452,7 @@ fn loadMap(ctx: *sw.Context, id: map.Id) void {
     // The choir of the secret room: made now, not on the first open.
     if (id == .earls_court) sounds.prepareChoir();
     pigeons.reset(@intFromFloat(rand() * 1e6));
+    roadmen.reset();
     static_mesh.clear();
     for (map.boxes[0..map.box_count]) |b| {
         if (!b.dynamic and b.visible) static_mesh.box(b.min, b.max, b.color, @floatFromInt(@backingInt(b.mat)));
@@ -693,6 +695,93 @@ fn pressPanel(b: shooter.Button) void {
     if (shooter.press(b)) sound(1100, null, 0.05, .sine, 0.15) else sound(380, null, 0.05, .square, 0.06);
 }
 
+/// Deathmatch: the state of this player for the server, 20 times a
+/// second, and before a roadmen "go" (the server checks the line at the
+/// last place). w and m: the class and the model of the held weapon, so
+/// the others see it. lift: the cab that the player stands in, so the
+/// others draw the player on their own cab. tx: only for a rider of the
+/// deep train, the feet x from the train centre, so the others draw the
+/// player in their own train.
+fn sendState() void {
+    var tx_buf: [24]u8 = undefined;
+    const tx = if (trainOffset()) |o| std.fmt.bufPrint(&tx_buf, ",\"tx\":{d:.3}", .{o}) catch "" else "";
+    client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d},\"lift\":{d}{s}}}", .{
+        me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(), cabIndex(), tx,
+    });
+}
+
+/// The roadmen of Warwick Road (roadmen.zig), each tick on Earl's Court:
+/// the player of this client decides its own gang, and the gangs of the
+/// other players follow them.
+fn roadmenTick() void {
+    if (map.id != .earls_court or mode == .menu) return;
+    const eye = me.eyePos();
+    const look = vec.forward(me.yaw, me.pitch);
+    const play = ownBodyShows() and (mode != .deathmatch or session.joined());
+    roadmen.local(if (mode == .deathmatch) my_id else 0, me.pos, me.vel, play, eye, look, rng.random());
+    if (mode == .deathmatch) for (remotes[0..remote_n]) |r| roadmen.remote(r.id, r.pos, r.vel, r.alive);
+    roadmen.step(dt, eye, look);
+    sendRoadmen();
+    roadmenSounds();
+}
+
+/// The roadmen events of this client (roadmen.outbox). Deathmatch: to the
+/// server, which checks them and applies the damage. Offline: a stab does
+/// its damage here, and a death goes back to the first spawn point.
+fn sendRoadmen() void {
+    defer roadmen.out_n = 0;
+    for (roadmen.outbox[0..roadmen.out_n]) |o| {
+        if (mode == .deathmatch) {
+            if (!session.joined()) continue;
+            switch (o.kind) {
+                .go => {
+                    sendState();
+                    client.send("{{\"t\":\"rm\",\"k\":\"go\",\"at\":[[{d:.3},{d:.3},{d:.3}],[{d:.3},{d:.3},{d:.3}]]}}", .{
+                        o.at[0][0], o.at[0][1], o.at[0][2], o.at[1][0], o.at[1][1], o.at[1][2],
+                    });
+                },
+                .off => client.send("{{\"t\":\"rm\",\"k\":\"off\"}}", .{}),
+                .stab => client.send("{{\"t\":\"rm\",\"k\":\"stab\"}}", .{}),
+            }
+        } else if (o.kind == .stab) {
+            hp -= roadmen.damage;
+            damage_flash = @min(1, damage_flash + 0.5);
+            sound(220, 90, 0.12, .sawtooth, 0.25);
+            if (hp <= 0) {
+                var line: [64]u8 = undefined;
+                pushFeed(std.fmt.bufPrint(&line, "{s}  >  {s}", .{ roadmen.name, my_name[0..my_name_len] }) catch roadmen.name, true);
+                sound(300, 60, 0.6, .sawtooth, 0.3);
+                const s0 = map.spawns[0];
+                spawnAt(s0.pos[0], s0.pos[1], s0.pos[2], s0.yaw);
+            }
+        }
+    }
+}
+
+/// A roadman event of another player (server/roadmen.ts).
+fn handleRoadmen(m: net.Msg) void {
+    const id = m.id orelse return;
+    const k = m.k orelse "";
+    if (std.mem.eql(u8, k, "go")) {
+        const at = m.at orelse return;
+        const target = if (findRemote(id)) |r| r.pos else v3(at[0][0], at[0][1], at[0][2]);
+        roadmen.applyGo(id, .{ v3(at[0][0], at[0][1], at[0][2]), v3(at[1][0], at[1][1], at[1][2]) }, target);
+    } else if (std.mem.eql(u8, k, "off")) roadmen.applyOff(id);
+}
+
+/// The sounds of the roadmen (roadmen.events): the swish of a knife, and
+/// a stab that lands.
+fn roadmenSounds() void {
+    defer roadmen.event_n = 0;
+    for (roadmen.events[0..roadmen.event_n]) |e| switch (e.kind) {
+        .swish => sounds.toneAt(e.p, 1, null, 0.09, .noise, 0.25, 0),
+        .stab => {
+            sounds.toneAt(e.p, 180, 90, 0.08, .sawtooth, 0.35, 0);
+            sounds.toneAt(e.p, 1, null, 0.05, .noise, 0.3, 0.02);
+        },
+    };
+}
+
 // ---- Modes -----------------------------------------------------------------
 
 fn enterMenu(ctx: *sw.Context) void {
@@ -844,6 +933,8 @@ const ShotRay = struct {
     npc: bool = false,
     /// A pigeon, or the body of one (pigeons.zig).
     pigeon: ?pigeons.Hit = null,
+    /// A roadman of Warwick Road (roadmen.zig): he takes no damage.
+    roadman: ?roadmen.Hit = null,
 };
 
 fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
@@ -877,6 +968,7 @@ fn traceShot(o: V3, d: V3, reach: f32) ShotRay {
         }
     }
     if (pigeons.ray(o, d, out.t)) |ph| out = .{ .t = ph.t, .pigeon = ph };
+    if (roadmen.ray(o, d, out.t)) |rh| out = .{ .t = rh.t, .roadman = rh };
     return out;
 }
 
@@ -939,7 +1031,7 @@ fn npcShot(s: shooter.Shot) void {
 fn pelletImpact(ray: ShotRay, end: V3, st: *const weapon.Stats) void {
     const surface: map.Surface = if (ray.box) |bi|
         map.surfaceAt(end, bi)
-    else if (ray.remote != null or ray.dummy != null or ray.npc or ray.pigeon != null)
+    else if (ray.remote != null or ray.dummy != null or ray.npc or ray.pigeon != null or ray.roadman != null)
         .flesh
     else if (ray.plate != null)
         .metal
@@ -959,6 +1051,14 @@ fn pigeonHit(h: pigeons.Hit, d: V3) void {
         var line: [64]u8 = undefined;
         pushFeed(std.fmt.bufPrint(&line, "{s}  >  Pigeon", .{my_name[0..my_name_len]}) catch "Pigeon", true);
     }
+}
+
+/// A shot or a cut hit a roadman (roadmen.zig): the flesh impact and a
+/// flinch, and no damage.
+fn roadmanHit(h: roadmen.Hit, end: V3, d: V3, pellets: u32) void {
+    roadmen.shoot(h, d);
+    addSparks(end, -d, v3(0.7, 0.05, 0.03), if (pellets > 1) 3 else 10);
+    impact_fx.spawn(end, -d, .flesh, if (pellets > 1) 0.5 else 1, 0);
 }
 
 /// A gun shot: one ray for each pellet in the cone. In deathmatch one
@@ -1017,6 +1117,8 @@ fn fire() void {
             addSparks(end, -d, v3(0.7, 0.05, 0.03), if (st.pellets > 1) 3 else 10);
         } else if (ray.pigeon) |ph| {
             pigeonHit(ph, d);
+        } else if (ray.roadman) |rh| {
+            roadmanHit(rh, end, d, st.pellets);
         } else if (ray.box != null and (pi < 3 or rand() < 0.3)) {
             // The effect of the material (impact_fx.zig).
             impact_fx.spawn(end, ray.normal, map.surfaceAt(end, ray.box.?), if (st.pellets > 1) 0.5 else 1, 0);
@@ -1083,6 +1185,11 @@ fn stab() void {
         }
         if (ray.pigeon) |ph| {
             pigeonHit(ph, d);
+            return;
+        }
+        if (ray.roadman) |rh| {
+            roadmanHit(rh, end, d, 1);
+            sound(180, 90, 0.08, .sawtooth, 0.2);
             return;
         }
         if (ray.dummy) |dh| {
@@ -1311,6 +1418,8 @@ fn stepGrenades() void {
         onBlast(b);
         // In deathmatch the thrower decides the pigeons of a blast.
         if (mode != .deathmatch or b.mine) pigeons.blast(b.pos, grenade.radius);
+        // Each client staggers the roadmen of each blast (no damage).
+        roadmen.blast(b.pos, grenade.radius);
     }
 }
 
@@ -1548,6 +1657,8 @@ fn handleNet(ctx: *sw.Context) void {
             // Another player tapped a reader, or walked through a lane.
             const lane: usize = m.i orelse 99;
             if (std.mem.eql(u8, m.k orelse "", "pass")) gates.pass(lane) else gates.open(lane);
+        } else if (std.mem.eql(u8, m.t, "rm")) {
+            handleRoadmen(m);
         } else if (std.mem.eql(u8, m.t, "pg")) {
             handlePigeon(m);
         } else if (std.mem.eql(u8, m.t, "flock")) {
@@ -1931,19 +2042,7 @@ fn tick(ctx: *sw.Context) void {
                     return;
                 }
             }
-            if (ticks % 6 == 0 and alive and session.joined()) {
-                // w and m: the class and the model of the held weapon, so
-                // the others see it. lift: the cab that the player stands
-                // in, so the others draw the player on their own cab. tx:
-                // only for a rider of the deep train, the feet x from the
-                // train centre, so the others draw the player in their own
-                // train.
-                var tx_buf: [24]u8 = undefined;
-                const tx = if (trainOffset()) |o| std.fmt.bufPrint(&tx_buf, ",\"tx\":{d:.3}", .{o}) catch "" else "";
-                client.send("{{\"t\":\"st\",\"x\":{d:.3},\"y\":{d:.3},\"z\":{d:.3},\"yaw\":{d:.3},\"pitch\":{d:.3},\"lean\":{d:.2},\"w\":{d},\"m\":{d},\"lift\":{d}{s}}}", .{
-                    me.pos[0], me.pos[1], me.pos[2], me.yaw, me.pitch, me.lean, @backingInt(loadout.heldClass()), loadout.heldModel(), cabIndex(), tx,
-                });
-            }
+            if (ticks % 6 == 0 and alive and session.joined()) sendState();
         },
         .practice => practiceTick(),
     }
@@ -2087,6 +2186,7 @@ fn tick(ctx: *sw.Context) void {
     };
     sendPigeons();
     pigeonSounds();
+    roadmenTick();
     effectsTick();
 }
 
@@ -2784,6 +2884,7 @@ fn drawDebug(ctx: *sw.Context, r: *gfx.Renderer) !void {
         L.add(&lines, &n, "{s} ammo {d}  reload {d:.2}  draw {d:.2}  ads {d:.2}  heat {d:.2}", .{ @tagName(loadout.heldClass()), ammo, h.reloading, h.drawing, h.ads, h.heat });
     }
     L.add(&lines, &n, "grenades live {d}  left {d}  smoke {d}  blast cells {d}", .{ grenade.count, loadout.grenades(), grenade.puffCount(), grenade.debug_cells });
+    if (map.id == .earls_court) L.add(&lines, &n, "warwick road {d:.1} m (line {d:.0})  roadmen gangs {d}", .{ if (roadmen.onRoad(me.pos)) roadmen.along(me.pos) else 0, roadmen.line, roadmen.count() });
     L.add(&lines, &n, "game build {s}  protocol {d}", .{ build_options.build_version, net.protocol_version });
     if (mode == .deathmatch) {
         L.add(&lines, &n, "net {s}  id {d}  players {d}  left {d:.1}s  {s}", .{ @tagName(session.state), my_id, remote_n + 1, time_left, if (phase_end) "end" else "play" });
@@ -2988,6 +3089,7 @@ fn gameRender(ctx: *sw.Context) !void {
     if (map.id == .earls_court) buildEscalatorSteps();
     lift_doors.build(&dyn);
     pigeons.build(&dyn, time);
+    roadmen.build(&dyn);
     gates.build(&dyn);
     secret.build(&dyn);
     platform_display.build(&dyn, eyeForRender().eye, time, @floatCast(jsLocalSeconds()));

@@ -2043,13 +2043,322 @@ fn westEnd() void {
     map.addDisc(rot.mul(vec.translate(v3(0, 0, -1.7))), 3.8, 0.2, v3(0.15, 0.15, 0.17), .metal, .metal);
     box(v3(ex, y, -30.6), v3(-78, y + 7, -14), concrete_c, .concrete, .concrete);
     box(v3(ex, y, 10), v3(-78, y + 7, 25.6), concrete_c, .concrete, .concrete);
-    // Warwick Road.
-    box(v3(street_w[1] - 3, y, -30), v3(street_w[1], y + 0.12, 25), pave, .tile, .concrete);
-    deco(v3(street_w[0], y, -30), v3(street_w[1] - 3, y + 0.004, 25), v3(0.1, 0.1, 0.11), .concrete, .concrete);
-    // West of the road: the construction site, behind a hoarding.
+    // Warwick Road in front of the station. West of the road: the
+    // construction site, behind a hoarding. North and south: the open
+    // street (warwickRoad).
+    box(v3(street_w[1] - 3, y, -30.6), v3(street_w[1], y + 0.12, 25.6), pave, .tile, .concrete);
+    deco(v3(street_w[0], y, -30.6), v3(street_w[1] - 3, y + 0.004, 25.6), asphalt, .concrete, .concrete);
     warwickSite();
-    box(v3(street_w[0], y, -30.6), v3(ex, y + 7, -30), brick, .brick, .brick);
-    box(v3(street_w[0], y, 25), v3(ex, y + 7, 25.6), brick, .brick, .brick);
+    warwickRoad();
+}
+
+// ---- Warwick Road, north and south of the station ---------------------------------
+//
+// Warwick Road is open: the road, the pavements and the terraces go on
+// warwick_end (240 m) north and south of the station exit, and fade into
+// the fog. The roadmen (roadmen.zig) kill a player who walks more than
+// roadmen.line (50 m) along the road from the exit. A Heras fence with a
+// ROAD CLOSED sign crosses the street warwick_fence (150 m) out each way:
+// the map ends there, and no player gets there alive. Past the fence the
+// street is for the eye only.
+//
+// The terraces: London stock brick on the east side, red brick on the
+// west side, three floors with a stucco ground floor, sash windows, a door
+// and a fanlight for each house, a cornice and chimney stacks. A
+// collision box is the whole run of houses. Each side has two dead-end
+// alleys past the roadman line: the roadmen come out of them. On the west
+// side the terraces start at the ends of the construction site.
+//
+// Each decoration is 1 cm or more off the face of the box behind it.
+// The street boxes count for the ambient occlusion only within ao_reach of
+// the exit, so the AO grid (ao_grid.zig) keeps its size.
+
+/// The middle of the Warwick Road passage, on the road (z). The roadman
+/// line and the fence count from here.
+pub const warwick_exit_z: f32 = -2;
+/// The fence across the street, this far north and south of the exit.
+pub const warwick_fence: f32 = 150;
+/// The street ends this far north and south of the exit.
+const warwick_end: f32 = 240;
+const asphalt = v3(0.1, 0.1, 0.11);
+/// The fronts of the terraces. The east terraces face -X, in line with
+/// the station front. The west terraces face +X, behind a pavement 3 m
+/// wide.
+const east_front: f32 = warwick_x0;
+const west_front: f32 = street_w[0] - 3;
+/// The kerbs: the road is from west_kerb to east_kerb.
+const west_kerb: f32 = street_w[0];
+const east_kerb: f32 = street_w[1] - 3;
+const terrace_d: f32 = 8;
+const terrace_h: f32 = 12;
+const house_w: f32 = 5.5;
+const ao_reach: f32 = 60;
+/// An alley between two houses: its middle (z) and its side of the road
+/// (-1 west, 1 east). Each one is a dead end, alley_d deep.
+pub const Alley = struct { z: f32, side: f32 };
+/// North to south.
+pub const warwick_alleys = [_]Alley{
+    .{ .z = warwick_exit_z - 124, .side = -1 }, .{ .z = warwick_exit_z - 112, .side = 1 },
+    .{ .z = warwick_exit_z - 84, .side = -1 },  .{ .z = warwick_exit_z - 72, .side = 1 },
+    .{ .z = warwick_exit_z + 68, .side = 1 },   .{ .z = warwick_exit_z + 80, .side = -1 },
+    .{ .z = warwick_exit_z + 108, .side = 1 },  .{ .z = warwick_exit_z + 120, .side = -1 },
+};
+const alley_w: f32 = 2.4;
+const alley_d: f32 = 4;
+/// The x range of Warwick Road: from the back of the west alleys to the
+/// back of the east alleys.
+pub const warwick_band = [2]f32{ west_front - alley_d, east_front + alley_d };
+
+/// The middles of the west pavement, the road and the east pavement (x).
+pub const warwick_lanes = [3]f32{ west_front + 1.5, (west_kerb + east_kerb) / 2, east_front - 1.5 };
+
+/// The place at the back of an alley, on the ground, beside the bins: a
+/// roadman waits there.
+pub fn alleySpot(a: Alley) V3 {
+    const x = if (a.side > 0) east_front + alley_d - 0.7 else west_front - alley_d + 0.7;
+    return v3(x, street_y, a.z - 0.45);
+}
+
+/// The front of the terraces of a side, and the direction out of it.
+fn frontOf(side: f32) struct { x: f32, out: f32 } {
+    return if (side > 0) .{ .x = east_front, .out = -1 } else .{ .x = west_front, .out = 1 };
+}
+
+/// A decoration on a terrace face: from `a` to `b` out of the face, over
+/// y0..y1 and z0..z1.
+fn faceDeco(side: f32, a: f32, b: f32, y0: f32, y1: f32, z0: f32, z1: f32, color: V3, mat: Mat, surface: Surface) void {
+    const f = frontOf(side);
+    const xa = f.x + f.out * a;
+    const xb = f.x + f.out * b;
+    deco(v3(@min(xa, xb), y0, z0), v3(@max(xa, xb), y1, z1), color, mat, surface);
+}
+
+/// A sash window on a terrace face: `w` wide about zc, from y0, `h` high.
+/// The surround starts `base` out of the face: a stone surround, the
+/// glass and a sill. `id` picks a lit window or a dark one. A far window
+/// has no sill.
+fn terraceWindow(side: f32, base: f32, zc: f32, w: f32, y0: f32, h: f32, id: u32, far: bool) void {
+    const a = w / 2;
+    const stone = v3(0.84, 0.81, 0.73);
+    faceDeco(side, base, base + 0.02, y0 - 0.1, y0 + h + 0.1, zc - a - 0.1, zc + a + 0.1, stone, .paint, .concrete);
+    // A lamp on in a room: a dim warm glow in the day.
+    const lit = vec.hash(id *% 2654 +% 91) < 0.15;
+    const pane = if (lit) v3(0.14, 0.095, 0.045) else glazing;
+    faceDeco(side, base + 0.005, base + 0.035, y0, y0 + h, zc - a, zc + a, pane, if (lit) .emissive else .paint, .glass);
+    if (far) return;
+    faceDeco(side, base, base + 0.09, y0 - 0.16, y0 - 0.06, zc - a - 0.14, zc + a + 0.14, stone, .paint, .concrete);
+    faceDeco(side, base + 0.035, base + 0.05, y0 + h / 2 - 0.03, y0 + h / 2 + 0.03, zc - a, zc + a, bar_white, .paint, .wood);
+}
+
+/// The front of one house of a terrace, between z0 and z1: a stucco
+/// ground floor with a door, a fanlight and a window, two floors of sash
+/// windows, and a chimney stack on the party wall at z0.
+fn houseFront(side: f32, z0: f32, z1: f32, id: u32, chimney: bool) void {
+    const y = street_y;
+    const far = @min(@abs(z0 - warwick_exit_z), @abs(z1 - warwick_exit_z)) > warwick_fence;
+    const stuccos = [_]V3{ v3(0.88, 0.86, 0.8), v3(0.8, 0.78, 0.72), v3(0.9, 0.88, 0.84), v3(0.72, 0.74, 0.72) };
+    const doors = [_]V3{ v3(0.03, 0.03, 0.035), v3(0.04, 0.07, 0.2), v3(0.06, 0.18, 0.1), v3(0.4, 0.05, 0.04), v3(0.25, 0.2, 0.12) };
+    const stucco = stuccos[@intFromFloat(vec.hash(id *% 31 +% 7) * stuccos.len)];
+    const door_c = doors[@intFromFloat(vec.hash(id *% 17 +% 3) * doors.len)];
+    // The stucco, with a band over it.
+    faceDeco(side, 0.01, 0.04, y + 0.1, y + 3.3, z0 + 0.03, z1 - 0.03, stucco, .paint, .plaster);
+    if (!far) faceDeco(side, 0.01, 0.1, y + 3.3, y + 3.48, z0 + 0.03, z1 - 0.03, stucco, .paint, .plaster);
+    // The door at one end, the window at the other.
+    const door_left = vec.hash(id *% 13 +% 5) < 0.5;
+    const dz = if (door_left) z0 + 1.0 else z1 - 1.0;
+    const wz = if (door_left) z1 - 1.8 else z0 + 1.8;
+    faceDeco(side, 0.05, 0.08, y + 0.1, y + 2.4, dz - 0.5, dz + 0.5, door_c, .paint, .wood);
+    faceDeco(side, 0.05, 0.065, y + 2.5, y + 2.95, dz - 0.5, dz + 0.5, glazing, .paint, .glass);
+    if (!far) faceDeco(side, 0.05, 0.12, y + 2.98, y + 3.08, dz - 0.62, dz + 0.62, stucco, .paint, .plaster);
+    terraceWindow(side, 0.05, wz, 1.4, y + 0.95, 1.8, id *% 5, far);
+    // Two windows on each upper floor.
+    const width = z1 - z0;
+    for ([_]f32{ y + 4.3, y + 7.6 }, 0..) |wy, fl| {
+        for ([_]f32{ 0.28, 0.72 }, 0..) |u, k| {
+            terraceWindow(side, 0.01, z0 + width * u, 1.1, wy, if (fl == 0) 2.2 else 1.8, id *% 5 +% @as(u32, @intCast(1 + fl * 2 + k)), far);
+        }
+    }
+    // A chimney stack over the party wall, set back from the front, with
+    // two pots.
+    if (!chimney) return;
+    const f = frontOf(side);
+    const cx = f.x - f.out * 2.5;
+    const top = y + terrace_h + 1.4;
+    deco(v3(cx - 0.4, y + terrace_h - 0.2, z0 - 0.45), v3(cx + 0.4, top, z0 + 0.45), if (side > 0) stock_brick else red_brick, .brick, .brick);
+    if (!far) for ([_]f32{ -0.2, 0.2 }) |pz| map.rod(v3(cx, top - 0.05, z0 + pz), v3(cx, top + 0.35, z0 + pz), 0.09, v3(0.6, 0.32, 0.18), .paint, .concrete);
+}
+
+/// A run of terraced houses on one side of the road, from z0 to z1. The
+/// alleys of the side cut the run. Each piece is one collision box, and
+/// the houses share its length. The back of each alley is a box too.
+fn terraceRun(side: f32, z0: f32, z1: f32, first_id: u32) void {
+    const y = street_y;
+    const f = frontOf(side);
+    const back = f.x - f.out * terrace_d;
+    const brick_c = if (side > 0) stock_brick else red_brick;
+    // The pieces of the run between the alleys, south to north.
+    var cuts: [10][2]f32 = undefined;
+    var n: usize = 0;
+    var start = z0;
+    for (warwick_alleys) |a| {
+        if (a.side != side or a.z < z0 or a.z > z1) continue;
+        cuts[n] = .{ start, a.z - alley_w / 2 };
+        n += 1;
+        start = a.z + alley_w / 2;
+        // The back of the alley, a back gate, and two wheelie bins along
+        // the south wall, with their collision. Each part goes 2 cm into
+        // the ground.
+        const ab = f.x - f.out * alley_d;
+        streetBox(v3(@min(ab, back), y, a.z - alley_w / 2), v3(@max(ab, back), y + terrace_h, a.z + alley_w / 2), brick_c);
+        const gx = ab + f.out * 0.01;
+        deco(v3(@min(gx, gx + f.out * 0.05), y - 0.02, a.z - 0.6), v3(@max(gx, gx + f.out * 0.05), y + 1.9, a.z + 0.6), timber, .wood, .wood);
+        const sx = [2]f32{ ab + f.out * 0.05, ab + f.out * 1.45 };
+        map.addSolid(v3(@min(sx[0], sx[1]), y, a.z + 0.5), v3(@max(sx[0], sx[1]), y + 1.1, a.z + alley_w / 2), .sheet_metal);
+        for ([_]f32{ 0.4, 1.05 }) |u| {
+            const bx = ab + f.out * u;
+            deco(v3(bx - 0.3, y - 0.02, a.z + 0.56), v3(bx + 0.3, y + 1.0, a.z + 1.14), v3(0.1, 0.16, 0.1), .paint, .sheet_metal);
+            deco(v3(bx - 0.33, y + 1.0, a.z + 0.53), v3(bx + 0.33, y + 1.06, a.z + 1.17), v3(0.08, 0.13, 0.08), .paint, .sheet_metal);
+        }
+    }
+    cuts[n] = .{ start, z1 };
+    n += 1;
+    var id = first_id;
+    for (cuts[0..n]) |c| {
+        // The houses share the piece.
+        const houses = @max(1, @round((c[1] - c[0]) / house_w));
+        const w = (c[1] - c[0]) / houses;
+        // The collision: one box for each piece, split where the AO stops,
+        // at the party wall nearest to it.
+        const lo = @min(f.x, back);
+        const hi = @max(f.x, back);
+        var za = c[0];
+        for ([_]f32{ warwick_exit_z - ao_reach, warwick_exit_z + ao_reach, c[1] }) |limit| {
+            const cut = if (limit == c[1]) limit else c[0] + @round((limit - c[0]) / w) * w;
+            if (cut <= za + 0.1 or cut > c[1] - 0.1 and limit != c[1]) continue;
+            streetBox(v3(lo, y, za), v3(hi, y + terrace_h, cut), brick_c);
+            za = cut;
+        }
+        // The fronts, the cornice and the coping along the top.
+        var k: f32 = 0;
+        while (k < houses) : (k += 1) {
+            houseFront(side, c[0] + k * w, c[0] + (k + 1) * w, id, k > 0);
+            id +%= 1;
+        }
+        faceDeco(side, 0.01, 0.22, y + terrace_h - 0.75, y + terrace_h - 0.5, c[0] + 0.02, c[1] - 0.02, v3(0.84, 0.81, 0.73), .paint, .concrete);
+        faceDeco(side, -0.3, 0.06, y + terrace_h - 0.05, y + terrace_h + 0.12, c[0] + 0.02, c[1] - 0.02, v3(0.6, 0.58, 0.54), .concrete, .concrete);
+    }
+}
+
+/// A brick box of the street: it counts for the ambient occlusion only
+/// within ao_reach of the exit.
+fn streetBox(min: V3, max: V3, color: V3) void {
+    const near = min[2] >= warwick_exit_z - ao_reach - house_w and max[2] <= warwick_exit_z + ao_reach + house_w;
+    if (near) box(min, max, color, .brick, .brick) else boxNoAo(min, max, color, .brick, .brick);
+}
+
+/// A street lamp on a pavement at (x, z): a grey column, an arm over the
+/// road toward `dir` (+1 east, -1 west) and a lantern. The base is the
+/// collision.
+fn streetLamp(x: f32, z: f32, dir: f32) void {
+    const py = street_y + 0.12;
+    const grey = v3(0.22, 0.23, 0.24);
+    map.addSolid(v3(x - 0.13, py, z - 0.13), v3(x + 0.13, py + 3, z + 0.13), .metal);
+    map.rod(v3(x, py - 0.05, z), v3(x, py + 1.1, z), 0.12, grey, .paint, .metal);
+    map.rod(v3(x, py + 1.1, z), v3(x, py + 6.6, z), 0.07, grey, .paint, .metal);
+    const tip = v3(x + dir * 1.3, py + 6.75, z);
+    map.beam(v3(x, py + 6.5, z), tip, 0.06, 0.06, v3(0, 1, 0), grey, .paint, .metal);
+    const hx = [2]f32{ @min(tip[0], tip[0] + dir * 0.6), @max(tip[0], tip[0] + dir * 0.6) };
+    deco(v3(hx[0], tip[1] - 0.06, z - 0.15), v3(hx[1], tip[1] + 0.08, z + 0.15), grey, .paint, .metal);
+    deco(v3(hx[0] + 0.05, tip[1] - 0.1, z - 0.12), v3(hx[1] - 0.05, tip[1] - 0.04, z + 0.12), v3(0.42, 0.38, 0.3), .emissive, .glass);
+}
+
+/// The Heras fence across the street at z, with a ROAD CLOSED sign
+/// toward the station (`toward`: +1 south, -1 north). One collision box
+/// from terrace to terrace.
+fn roadClosed(z: f32, toward: f32) void {
+    const y = street_y;
+    const py = y + 0.12;
+    map.addSolid(v3(west_front, y, z - 0.15), v3(east_front, y + heras_h, z + 0.15), .metal);
+    // The feet go 2 cm into the ground.
+    heras(v3(west_front + 0.05, py - 0.02, z), v3(west_kerb, py - 0.02, z));
+    heras(v3(west_kerb, y - 0.02, z), v3(east_kerb, y - 0.02, z));
+    heras(v3(east_kerb, py - 0.02, z), v3(east_front - 0.05, py - 0.02, z));
+    // The sign: a white board with a red border on the middle panel.
+    const cx = (west_kerb + east_kerb) / 2;
+    const f0 = z + toward * 0.04;
+    const f1 = z + toward * 0.06;
+    deco(v3(cx - 0.75, y + 0.75, @min(f0, f1)), v3(cx + 0.75, y + 1.75, @max(f0, f1)), red, .paint, .sheet_metal);
+    const g1 = z + toward * 0.07;
+    deco(v3(cx - 0.68, y + 0.82, @min(f1, g1)), v3(cx + 0.68, y + 1.68, @max(f1, g1)), hoard_white, .paint, .sheet_metal);
+    // The text reads left to right for a reader who faces the sign.
+    const m = Mat4{ .data = .{ toward, 0, 0, 0, 0, 1, 0, 0, 0, 0, toward, 0, cx, y + 1.55, g1, 1 } };
+    pixelText(m, "ROAD", 0.05, 0.004, red, .paint, .sheet_metal);
+    const m2 = Mat4{ .data = .{ toward, 0, 0, 0, 0, 1, 0, 0, 0, 0, toward, 0, cx, y + 1.2, g1, 1 } };
+    pixelText(m2, "CLOSED", 0.05, 0.004, red, .paint, .sheet_metal);
+}
+
+/// Warwick Road north and south of the station: the ground, the
+/// pavements and kerbs, the road markings, the terraces, the street
+/// lamps and the fences.
+fn warwickRoad() void {
+    const y = street_y;
+    const ez = warwick_exit_z;
+    const north = [2]f32{ ez - warwick_end, -30.6 };
+    const south = [2]f32{ 25.6, ez + warwick_end };
+    // The ground: the road surface is the top of these boxes. The site is
+    // west of the road between its ends (site_z).
+    boxNoAo(v3(west_kerb, y - 1, site_z[0]), v3(east_front + terrace_d, y, north[1]), asphalt, .concrete, .concrete);
+    boxNoAo(v3(west_front - terrace_d, y - 1, north[0]), v3(east_front + terrace_d, y, site_z[0]), asphalt, .concrete, .concrete);
+    boxNoAo(v3(west_kerb, y - 1, south[0]), v3(east_front + terrace_d, y, site_z[1]), asphalt, .concrete, .concrete);
+    boxNoAo(v3(west_front - terrace_d, y - 1, site_z[1]), v3(east_front + terrace_d, y, south[1]), asphalt, .concrete, .concrete);
+    // The pavements, and the kerb stones 1 cm proud of their edges.
+    const kerb_c = v3(0.5, 0.5, 0.49);
+    for ([_][2]f32{ north, south }) |r| {
+        boxNoAo(v3(east_kerb, y, r[0]), v3(east_front, y + 0.12, r[1]), pave, .tile, .concrete);
+    }
+    // The west pavements end at the turns of the hoarding (below). Each kerb
+    // ends 1 cm short of the end of its pavement.
+    for ([_][2]f32{ .{ north[0], site_z[0] - 0.3 }, .{ site_z[1] + 0.3, south[1] } }) |r| {
+        boxNoAo(v3(west_front, y, r[0]), v3(west_kerb, y + 0.12, r[1]), pave, .tile, .concrete);
+        deco(v3(west_kerb - 0.16, y + 0.015, r[0] + 0.01), v3(west_kerb + 0.01, y + 0.13, r[1] - 0.01), kerb_c, .concrete, .concrete);
+    }
+    deco(v3(east_kerb - 0.01, y + 0.015, north[0] + 0.01), v3(east_kerb + 0.16, y + 0.13, south[1] - 0.01), kerb_c, .concrete, .concrete);
+    // The hoarding turns to the west at each end of the site, so the
+    // west pavements end at it.
+    box(v3(west_front, y, site_z[0] - 0.3), v3(hoard_x, y + hoard_h, site_z[0]), hoard_c, .paint, .wood);
+    box(v3(west_front, y, site_z[1]), v3(hoard_x, y + hoard_h, site_z[1] + 0.3), hoard_c, .paint, .wood);
+
+    // The road markings, 1.5 cm over the road: double yellow lines along
+    // both kerbs, and a dashed white line down the middle.
+    const yellow_line = v3(0.85, 0.66, 0.1);
+    const my = [2]f32{ y + 0.015, y + 0.02 };
+    for ([_]f32{ east_kerb - 0.3, east_kerb - 0.5, west_kerb + 0.2, west_kerb + 0.4 }) |lx| {
+        deco(v3(lx, my[0], north[0]), v3(lx + 0.1, my[1], south[1]), yellow_line, .paint, .concrete);
+    }
+    var mz = north[0];
+    while (mz < south[1]) : (mz += 6) {
+        const cx = (west_kerb + east_kerb) / 2;
+        deco(v3(cx - 0.05, my[0], mz), v3(cx + 0.05, my[1], mz + 3), v3(0.88, 0.88, 0.84), .paint, .concrete);
+    }
+
+    // The terraces. The ids pick the colours and the lit windows.
+    terraceRun(1, north[0], north[1], 100);
+    terraceRun(1, south[0], south[1], 200);
+    terraceRun(-1, north[0], site_z[0], 300);
+    terraceRun(-1, site_z[1], south[1], 400);
+
+    // The street lamps, staggered: each 30 m on each side.
+    var d: f32 = 12;
+    while (d < warwick_end) : (d += 30) {
+        for ([_]f32{ -1, 1 }) |s| streetLamp(east_kerb + 0.55, ez + s * d, -1);
+    }
+    d = 57;
+    while (d < warwick_end) : (d += 30) {
+        for ([_]f32{ -1, 1 }) |s| streetLamp(west_kerb - 0.55, ez + s * d, 1);
+    }
+    // The end of the map: a fence across the street each way.
+    roadClosed(ez - warwick_fence, 1);
+    roadClosed(ez + warwick_fence, -1);
 }
 
 // ---- The construction site west of Warwick Road -------------------------------
