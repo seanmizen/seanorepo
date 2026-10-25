@@ -133,13 +133,36 @@ const street_e = [2]f32{ 78.6, 92.6 };
 const shop_z = [2]f32{ -37, -29 };
 const warwick_x0: f32 = -84; // the Warwick Road front
 const street_w = [2]f32{ -96, -84 };
-// The escalators and the deep level.
-const esc_z = [2]f32{ -24, -21 };
+// The escalators and the deep level. Two escalator units side by side,
+// with the sizes of a London Underground unit: a step 1 m wide, a unit
+// 1.6 m wide over its balustrades, steps 0.4 m deep at 30 degrees. A
+// decking separates the units, and an outer decking runs along each wall.
+pub const esc_step_w: f32 = 1.0;
+/// One balustrade: the skirt, the panel, the handrail.
+const esc_bal: f32 = 0.3;
+const esc_deck: f32 = 0.8;
+const esc_outer: f32 = 0.2;
+const esc_cz: f32 = -22.5;
+const esc_half: f32 = esc_outer + 2 * esc_bal + esc_step_w + esc_deck / 2;
+/// The inner faces of the shaft walls.
+const esc_z = [2]f32{ esc_cz - esc_half, esc_cz + esc_half };
+/// The middle of the steps of each unit. The north unit goes down (east),
+/// the south unit comes up.
+pub const esc_lane_z = [2]f32{ esc_cz - esc_deck / 2 - esc_bal - esc_step_w / 2, esc_cz + esc_deck / 2 + esc_bal + esc_step_w / 2 };
 pub const esc_top_x: f32 = -30;
-pub const esc_steps = 21;
-pub const esc_rise: f32 = (mid_y - deep_y) / 21.0;
+pub const esc_steps = 41;
+pub const esc_rise: f32 = (mid_y - deep_y) / @as(f32, esc_steps);
 pub const esc_run: f32 = esc_rise * 1.732; // 30 degrees
 pub const esc_bottom_x: f32 = esc_top_x + esc_run * esc_steps;
+/// The flat steps at each end, between the slope and the comb plate.
+pub const esc_flat = 2;
+const esc_flat_len: f32 = esc_run * esc_flat;
+const esc_comb: f32 = 0.3;
+/// The handrail turns round its newel this far past the end of the slope.
+const esc_newel: f32 = 1.6;
+/// The lower hall at the foot of the escalators, as wide as the shaft. The
+/// corridor between the platforms goes on east of it.
+const esc_hall_x1: f32 = esc_bottom_x + 5.5;
 const corr_z = [2]f32{ -24, -21 }; // the deep corridor between the platforms
 /// The deep track centres. The platform edge is 1.41 m from the track
 /// centre, so the 2.629 m wide 1973 Stock stops 0.1 m from the edge.
@@ -248,11 +271,30 @@ fn roundel(p: V3, turn: f32, size: f32) void {
     map.addDecor(m, v3(-0.82 * size, -0.15 * size, 0.035), v3(0.82 * size, 0.15 * size, 0.07), blue, .paint, .sheet_metal);
 }
 
-/// A railing: a solid panel with a timber cap, at floor height y. One of
-/// the two ranges is thin.
+/// A railing at floor height y: framed panels of painted iron between
+/// posts, a top rail and a base rail, and a timber handrail on top. One of
+/// the two ranges is thin. The panels are the collision: a bullet does not
+/// go through the railing.
 fn railing(x0: f32, x1: f32, z0: f32, z1: f32, y: f32) void {
-    boxNoAo(v3(x0, y, z0), v3(x1, y + 1.1, z1), iron, .metal, .metal);
+    const paint = v3(0.09, 0.17, 0.13);
+    boxNoAo(v3(x0, y, z0), v3(x1, y + 1.1, z1), paint, .paint, .metal);
     deco(v3(x0 - 0.04, y + 1.1, z0 - 0.04), v3(x1 + 0.04, y + 1.17, z1 + 0.04), v3(0.3, 0.15, 0.08), .wood, .wood);
+    // The frame stands 2 cm proud of each face of the panel.
+    const p: f32 = 0.02;
+    const along_x = x1 - x0 > z1 - z0;
+    const len = if (along_x) x1 - x0 else z1 - z0;
+    for ([_][2]f32{ .{ 0, 0.12 }, .{ 0.98, 1.1 } }) |h| {
+        deco(v3(x0 - p, y + h[0], z0 - p), v3(x1 + p, y + h[1], z1 + p), iron, .paint, .metal);
+    }
+    const n: usize = @intFromFloat(@max(1, @round(len / 1.5)));
+    for (0..n + 1) |i| {
+        const c = @min(@max(len * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n)), 0.04), len - 0.04);
+        if (along_x) {
+            deco(v3(x0 + c - 0.04, y, z0 - p), v3(x0 + c + 0.04, y + 1.1, z1 + p), iron, .paint, .metal);
+        } else {
+            deco(v3(x0 - p, y, z0 + c - 0.04), v3(x1 + p, y + 1.1, z0 + c + 0.04), iron, .paint, .metal);
+        }
+    }
 }
 
 /// Stairs along X, `width` wide about z = cz. The top step starts at x_top
@@ -286,21 +328,53 @@ fn stairs(x_top: f32, dir: f32, cz: f32, width: f32, y_top: f32, n: usize, floor
         const xa = x_top + dir * run * fi;
         const xb = xa + dir * run;
         boxNoAo(v3(@min(xa, xb), bottom, z0), v3(@max(xa, xb), top, z1), color, .concrete, .concrete);
-        const nose = if (dir > 0) @min(xa, xb) else @max(xa, xb) - 0.06;
+        // The yellow nosing at the front edge of the tread.
+        const nose = if (dir > 0) @max(xa, xb) - 0.06 else @min(xa, xb);
         deco(v3(nose, top, z0), v3(nose + 0.06, top + 0.012, z1), yellow, .paint, .concrete);
     }
-    // Handrails: a beam to see, boxes to stop the player.
-    const x_end = x_top + dir * run * fn_;
-    const y_end = y_top - rise * (fn_ - 1);
-    for ([_]f32{ z0 + 0.03, z1 - 0.03 }) |z| {
-        map.beam(v3(x_top, y_top + 0.95, z), v3(x_end, y_end + 0.95, z), 0.06, 0.06, v3(0, 1, 0), steel, .metal, .metal);
-        var k: usize = 0;
-        while (k < n) : (k += 3) {
-            const fa: f32 = @floatFromInt(k);
-            const fb: f32 = @floatFromInt(@min(k + 3, n));
-            const xa = x_top + dir * run * fa;
-            const xb = x_top + dir * run * fb;
-            map.addSolid(v3(@min(xa, xb), y_top - rise * (fb - 1) - 0.5, z - 0.05), v3(@max(xa, xb), y_top - rise * fa + 1.0, z + 0.05), .metal);
+    // The banisters: a round handrail 0.9 m over the line of the step
+    // fronts (the ramp), and a knee rail under it, on round posts. The
+    // rails bend to the level at each floor and go on 0.3 m past the
+    // flight to an end post. Invisible boxes along the handrail stop the
+    // player.
+    const rail_h: f32 = 0.9;
+    const knee_h: f32 = 0.45;
+    // The line of the step fronts, level on each floor.
+    const line = struct {
+        x_top: f32,
+        y_top: f32,
+        dir: f32,
+        floors: [2]f32,
+        fn at(l: @This(), x: f32) f32 {
+            return std.math.clamp(l.y_top + rise - rise * (x - l.x_top) * l.dir / run, l.floors[1], l.floors[0]);
+        }
+    }{ .x_top = x_top, .y_top = y_top, .dir = dir, .floors = floors };
+    const x_ends = [2]f32{ x_hi - dir * 0.3, x_lo + dir * 0.3 };
+    for ([_]f32{ z0 + 0.05, z1 - 0.05 }) |z| {
+        for ([_]f32{ rail_h, knee_h }, [_]f32{ 0.025, 0.015 }) |h, r| {
+            map.rail(&.{
+                v3(x_ends[0], floors[0] + h, z),
+                v3(x_hi, floors[0] + h, z),
+                v3(x_lo, floors[1] + h, z),
+                v3(x_ends[1], floors[1] + h, z),
+            }, r, 0.25, steel, .metal, .metal);
+        }
+        for (x_ends, floors) |x, f| map.rod(v3(x, f, z), v3(x, f + rail_h, z), 0.025, steel, .metal, .metal);
+        var i: usize = 0;
+        while (i < n) : (i += 2) {
+            const fi: f32 = @floatFromInt(i);
+            const x = x_top + dir * run * (fi + 0.5);
+            const tread = y_top - rise * fi;
+            map.rod(v3(x, tread, z), v3(x, line.at(x) + rail_h, z), 0.02, steel, .metal, .metal);
+        }
+        // The collision, in parts of up to 1.5 m along the rail.
+        const len = @abs(x_ends[1] - x_ends[0]);
+        const parts = @ceil(len / 1.5);
+        var k: f32 = 0;
+        while (k < parts) : (k += 1) {
+            const xa = x_ends[0] + dir * len * k / parts;
+            const xb = x_ends[0] + dir * len * (k + 1) / parts;
+            map.addSolid(v3(@min(xa, xb), line.at(xb) + rail_h - 1.5, z - 0.05), v3(@max(xa, xb), line.at(xa) + rail_h + 0.05, z + 0.05), .metal);
         }
     }
 }
@@ -1231,67 +1305,260 @@ fn intermediateLevel() void {
     deco(v3(59.96, mid_y + 2.0, ca - 0.5), v3(60, mid_y + 2.3, ca + 0.5), sign_g, .emissive, .glass);
     deco(v3(57.5, mid_y + 2.0, -21.3), v3(58.5, mid_y + 2.3, -21.26), sign_g, .emissive, .glass);
     deco(v3(em_top_x - 0.04, mid_y + 2.0, em_cz - 0.5), v3(em_top_x, mid_y + 2.3, em_cz + 0.5), sign_g, .emissive, .glass);
-    deco(v3(e_pass.x0, band[0], e_pass.z0), v3(60, band[1], e_pass.z0 + 0.02), tile_green, .wall_tile, .tile);
+    deco(v3(e_pass.x0, band[0], e_pass.z0), v3(57, band[1], e_pass.z0 + 0.02), tile_green, .wall_tile, .tile);
     deco(v3(e_pass.x0, band[0], e_pass.z1 - 0.02), v3(57, band[1], e_pass.z1), tile_green, .wall_tile, .tile);
 }
 
 // ---- Escalators ---------------------------------------------------------------
 
+const esc_tread_c = v3(0.32, 0.32, 0.33);
+const esc_steel = v3(0.55, 0.56, 0.57);
+const esc_deck_c = v3(0.42, 0.43, 0.44);
+const esc_guide_c = v3(0.2, 0.2, 0.21);
+const esc_rubber = v3(0.015, 0.015, 0.016);
+const esc_bronze = v3(0.45, 0.3, 0.13);
+/// The handrail centre over the step line, and the radius of the newel
+/// at each end of a handrail.
+const esc_rail_h: f32 = 0.95;
+const esc_rn: f32 = 0.3;
+
+/// The height of the step line (the ramp) at x: the floor at each end of
+/// the escalators, the slope between.
+fn escLine(x: f32) f32 {
+    const t = std.math.clamp((x - esc_top_x) / (esc_bottom_x - esc_top_x), 0, 1);
+    return mid_y + (deep_y - mid_y) * t;
+}
+
+/// A sloped bar along the step line from xa to xb, from ha to hb over the
+/// line and from za to zb. It breaks at the ends of the slope, so it
+/// follows the floors and the slope. Its ends are vertical.
+fn escRun(xa: f32, xb: f32, ha: f32, hb: f32, za: f32, zb: f32, color: V3, mat: Mat, surface: Surface) void {
+    const knots = [_]f32{ xa, esc_top_x, esc_bottom_x, xb };
+    for (0..3) |i| {
+        const a = @max(knots[i], xa);
+        const b = @min(knots[i + 1], xb);
+        if (b - a < 1e-3) continue;
+        const ya = escLine(a);
+        const yb = escLine(b);
+        map.slab(v3(a, ya + ha, @min(za, zb)), v3(b - a, yb - ya, 0), v3(0, hb - ha, 0), v3(0, 0, @abs(zb - za)), color, mat, surface);
+    }
+}
+
+/// A panel under the path from pa to pb: its top `drop` under the path,
+/// `depth` high, from za to zb. Its ends are vertical.
+fn underPath(pa: V3, pb: V3, drop: f32, depth: f32, za: f32, zb: f32, color: V3, mat: Mat, surface: Surface) void {
+    map.slab(v3(pa[0], pa[1] - drop - depth, @min(za, zb)), v3(pb[0] - pa[0], pb[1] - pa[1], 0), v3(0, depth, 0), v3(0, 0, @abs(zb - za)), color, mat, surface);
+}
+
+/// The handrail round a newel: a half circle about c, on the side `side`
+/// (-1 west, +1 east), then back under itself into the balustrade.
+fn newelRail(c: V3, side: f32) void {
+    const n = 8;
+    var prev = c + v3(0, esc_rn, 0);
+    for (1..n + 1) |i| {
+        const a = std.math.pi * @as(f32, @floatFromInt(i)) / n;
+        const p = c + v3(side * esc_rn * @sin(a), esc_rn * @cos(a), 0);
+        map.rod(prev, p, 0.04, esc_rubber, .paint, .fabric);
+        prev = p;
+    }
+    map.rod(prev, prev - v3(side * 0.35, 0, 0), 0.04, esc_rubber, .paint, .fabric);
+}
+
+/// One balustrade of a unit, beside the step edge at z = e. `s` is the
+/// side away from the steps (+1 south, -1 north). The stainless skirt by
+/// the steps with its black deflector brush, the panel, the handrail
+/// guide, the black rubber handrail and a newel at each end. The handrail
+/// follows the slope and bends to the level at each end.
+fn balustrade(e: f32, s: f32) void {
+    const xa = esc_top_x - esc_newel;
+    const xb = esc_bottom_x + esc_newel;
+    const zr = e + s * 0.04;
+    escRun(xa, xb, -0.4, 0.22, e, e + s * 0.025, esc_steel, .paint, .metal);
+    escRun(esc_top_x - esc_flat_len, esc_bottom_x + esc_flat_len, 0.1, 0.13, e, e - s * 0.035, esc_rubber, .cloth, .fabric);
+    var buf: [32]V3 = undefined;
+    const path = map.bendPath(&.{
+        v3(xa, mid_y + esc_rail_h, zr),
+        v3(esc_top_x, mid_y + esc_rail_h, zr),
+        v3(esc_bottom_x, deep_y + esc_rail_h, zr),
+        v3(xb, deep_y + esc_rail_h, zr),
+    }, 1.5, 6, &buf);
+    for (1..path.len) |i| {
+        const pa = path[i - 1];
+        const pb = path[i];
+        underPath(pa, pb, 0.035, 1.5, e + s * 0.01, e + s * 0.045, esc_steel, .paint, .metal);
+        underPath(pa, pb, 0.035, 0.09, e, e + s * 0.1, esc_guide_c, .paint, .metal);
+        map.rod(pa, pb, 0.04, esc_rubber, .paint, .fabric);
+    }
+    // The newels: the handrail turns round a wheel in a round housing.
+    for ([_]f32{ xa, xb }, [_]f32{ mid_y, deep_y }, [_]f32{ -1, 1 }) |x, floor, side| {
+        const c = v3(x, floor + esc_rail_h - esc_rn, zr);
+        newelRail(c, side);
+        const zm = e + s * 0.05;
+        map.addDisc(vec.translate(v3(x, c[1], zm)), esc_rn - 0.04, 0.1, esc_steel, .paint, .metal);
+        const xo = x + side * (esc_rn - 0.04);
+        deco(v3(@min(x, xo), floor, @min(e, e + s * 0.1)), v3(@max(x, xo), c[1], @max(e, e + s * 0.1)), esc_steel, .paint, .metal);
+    }
+}
+
+/// The yellow lines at the sides of one tread of each unit, from x to
+/// x + esc_run, at the height y.
+fn treadEdges(x: f32, y: f32) void {
+    for (esc_lane_z) |zl| for ([_]f32{ -1, 1 }) |side| {
+        const za = zl + side * (esc_step_w / 2 - 0.005);
+        const zb = za - side * 0.035;
+        deco(v3(x + 0.015, y, @min(za, zb)), v3(x + esc_run - 0.015, y + 0.003, @max(za, zb)), yellow, .paint, .metal);
+    };
+}
+
 fn escalators() void {
-    const z0 = esc_z[0];
-    const z1 = esc_z[1];
-    const zd = [2]f32{ -22.7, -22.3 }; // the divider between the lanes
+    const x0 = esc_top_x;
+    const x1 = esc_bottom_x;
+    // The steps: grooved aluminium (map.Mat.tread). One box for each step
+    // goes under both units and the deckings. The yellow lines at the
+    // front of each step move (main.zig buildEscalatorSteps).
     for (0..esc_steps) |i| {
         const fi: f32 = @floatFromInt(i);
-        const xa = esc_top_x + esc_run * fi;
+        const xa = x0 + esc_run * fi;
         const top = mid_y - esc_rise * (fi + 1);
-        boxNoAo(v3(xa, deep_y - 1, z0), v3(xa + esc_run, top, z1), v3(0.16, 0.16, 0.17), .metal, .metal);
+        boxNoAo(v3(xa, deep_y - 1, esc_z[0]), v3(xa + esc_run, top, esc_z[1]), esc_tread_c, .tread, .metal);
+        treadEdges(xa, top);
     }
-    box(v3(esc_top_x, deep_y - 1, z0 - 0.3), v3(esc_bottom_x, mid_ceil, z0), tile_c, .wall_tile, .tile);
-    box(v3(esc_top_x, deep_y - 1, z1), v3(esc_bottom_x, mid_ceil, z1 + 0.3), tile_c, .wall_tile, .tile);
-    const slope = vec.norm(v3(esc_bottom_x - esc_top_x, deep_y - mid_y, 0));
-    const up = vec.norm(vec.cross(v3(0, 0, 1), slope));
-    const top_c = v3(esc_top_x, mid_y + 4.0, (z0 + z1) / 2);
-    const bot_c = v3(esc_bottom_x, deep_y + 4.0, (z0 + z1) / 2);
-    map.beam(top_c, bot_c, 3.6, 0.25, up, v3(0.75, 0.72, 0.62), .wall_tile, .tile);
-    for ([_]f32{ z0 + 0.1, (zd[0] + zd[1]) / 2, z1 - 0.1 }) |z| {
-        const w: f32 = if (z > zd[0] and z < zd[1]) 0.4 else 0.2;
-        map.beam(v3(esc_top_x, mid_y + 0.55, z), v3(esc_bottom_x, deep_y + 0.55, z), w, 1.0, up, v3(0.33, 0.27, 0.2), .wood, .wood);
+    // At each end: the flat steps, the comb plate with its yellow comb, and
+    // the landing plate.
+    for ([_]f32{ x0, x1 }, [_]f32{ mid_y, deep_y }, [_]f32{ -1, 1 }) |xe, floor, side| {
+        for (0..esc_flat) |j| {
+            const fj: f32 = @floatFromInt(j);
+            treadEdges(if (side < 0) xe - esc_run * (fj + 1) else xe + esc_run * fj, floor + 0.004);
+        }
+        const xc = xe + side * esc_flat_len;
+        const xp = xc + side * esc_comb;
+        for (esc_lane_z) |zl| {
+            const za = zl - esc_step_w / 2;
+            const zb = zl + esc_step_w / 2;
+            deco(v3(@min(xe, xc), floor, za), v3(@max(xe, xc), floor + 0.004, zb), esc_tread_c, .tread, .metal);
+            deco(v3(@min(xc, xp), floor, za), v3(@max(xc, xp), floor + 0.012, zb), esc_tread_c * vec.s(1.3), .tread, .metal);
+            deco(v3(@min(xc - side * 0.01, xc + side * 0.07), floor, za), v3(@max(xc - side * 0.01, xc + side * 0.07), floor + 0.016, zb), yellow, .paint, .metal);
+            const xq = xp + side * 0.9;
+            deco(v3(@min(xp, xq), floor, za - 0.1), v3(@max(xp, xq), floor + 0.008, zb + 0.1), esc_tread_c * vec.s(1.15), .tread, .metal);
+        }
     }
-    // The divider and the side balustrades stop the player too: coarse
-    // boxes along the slope.
-    for ([_][2]f32{ zd, .{ z0, z0 + 0.2 }, .{ z1 - 0.2, z1 } }) |zz| {
+
+    // The balustrades, and the deckings between them: the outer decking
+    // along each wall and the decking between the units.
+    const xa = x0 - esc_newel - (esc_rn - 0.04);
+    const xb = x1 + esc_newel + (esc_rn - 0.04);
+    const edges = [_]f32{ esc_lane_z[0] - esc_step_w / 2, esc_lane_z[0] + esc_step_w / 2, esc_lane_z[1] - esc_step_w / 2, esc_lane_z[1] + esc_step_w / 2 };
+    for (edges, [_]f32{ -1, 1, -1, 1 }) |e, s| balustrade(e, s);
+    const decks = [_][2]f32{
+        .{ esc_z[0], edges[0] - 0.045 },
+        .{ edges[1] + 0.045, edges[2] - 0.045 },
+        .{ edges[3] + 0.045, esc_z[1] },
+    };
+    const deck_h: f32 = 0.86;
+    for (decks) |d| escRun(xa, xb, -0.5, deck_h, d[0], d[1], esc_deck_c, .paint, .metal);
+    // The lamp columns on the middle decking: bronze, with an uplighter
+    // of frosted glass.
+    var lamp_x: [5]f32 = undefined;
+    for (&lamp_x, 0..) |*lx, k| {
+        lx.* = x0 + 2 + 3 * @as(f32, @floatFromInt(k));
+        const y = escLine(lx.*) + deck_h;
+        map.rod(v3(lx.*, y, esc_cz), v3(lx.*, y + 0.42, esc_cz), 0.035, esc_bronze, .paint, .metal);
+        map.rod(v3(lx.*, y + 0.42, esc_cz), v3(lx.*, y + 0.62, esc_cz), 0.075, v3(1.0, 0.82, 0.55), .emissive, .glass);
+        map.rod(v3(lx.*, y + 0.62, esc_cz), v3(lx.*, y + 0.66, esc_cz), 0.09, esc_bronze, .paint, .metal);
+        map.addSolid(v3(lx.* - 0.1, y, esc_cz - 0.1), v3(lx.* + 0.1, y + 0.66, esc_cz + 0.1), .metal);
+    }
+    // Studs on the deckings, so that nobody slides down them.
+    for (decks) |d| {
+        const zc = (d[0] + d[1]) / 2;
+        var x = x0 + 0.8;
+        studs: while (x < x1 - 0.5) : (x += 1.6) {
+            for (lamp_x) |lx| if (@abs(x - lx) < 0.4 and @abs(zc - esc_cz) < 0.1) continue :studs;
+            const y = escLine(x) + deck_h;
+            map.rod(v3(x, y, zc), v3(x, y + 0.05, zc), 0.035, esc_steel, .paint, .metal);
+        }
+    }
+
+    // The balustrades and the deckings stop the player too: coarse boxes
+    // along the slope, up to the handrails, and boxes over the flat ends.
+    const strips = [_][2]f32{ .{ esc_z[0], edges[0] }, .{ edges[1], edges[2] }, .{ edges[3], esc_z[1] } };
+    for (strips) |zz| {
+        map.addSolid(v3(xa, mid_y, zz[0]), v3(x0, mid_y + 1.0, zz[1]), .metal);
+        map.addSolid(v3(x1, deep_y, zz[0]), v3(xb, deep_y + 1.0, zz[1]), .metal);
         var k: usize = 0;
         while (k < esc_steps) : (k += 3) {
             const fa: f32 = @floatFromInt(k);
             const fb: f32 = @floatFromInt(@min(k + 3, esc_steps));
             map.addSolid(
-                v3(esc_top_x + esc_run * fa, mid_y - esc_rise * fb, zz[0]),
-                v3(esc_top_x + esc_run * fb, mid_y - esc_rise * fa + 1.05, zz[1]),
-                .wood,
+                v3(x0 + esc_run * fa, mid_y - esc_rise * fb, zz[0]),
+                v3(x0 + esc_run * fb, mid_y - esc_rise * fa + 1.0, zz[1]),
+                .metal,
             );
         }
     }
-    for (0..6) |i| {
-        const t = (@as(f32, @floatFromInt(i)) + 0.5) / 6;
-        const p = vec.lerp(v3(esc_top_x, mid_y + 1.05, -22.5), v3(esc_bottom_x, deep_y + 1.05, -22.5), t);
-        deco(p - v3(0.12, 0, 0.12), p + v3(0.12, 0.45, 0.12), v3(1.0, 0.8, 0.5), .emissive, .glass);
+
+    // The shaft: tiled walls, a vault from the wall tops to the crown, and
+    // light strips along the crown.
+    box(v3(x0, deep_y - 1, esc_z[0] - 0.3), v3(x1, mid_ceil, esc_z[0]), tile_c, .wall_tile, .tile);
+    box(v3(x0, deep_y - 1, esc_z[1]), v3(x1, mid_ceil, esc_z[1] + 0.3), tile_c, .wall_tile, .tile);
+    const wall_h: f32 = 3.5;
+    const crown_h: f32 = 4.6;
+    const vr = (esc_half * esc_half + (crown_h - wall_h) * (crown_h - wall_h)) / (2 * (crown_h - wall_h));
+    const vc = v3(0, crown_h - vr, esc_cz);
+    const amax = std.math.asin(esc_half / vr);
+    // The vault starts where its crown is under the ceiling of the
+    // intermediate level. Over the top steps that ceiling is the roof of
+    // the shaft.
+    const xv = x0 + (crown_h - (mid_ceil - mid_y)) / (esc_rise / esc_run);
+    const run = v3(x1 - xv, deep_y - escLine(xv), 0);
+    const vault_n = 6;
+    for (0..vault_n) |i| {
+        const a = -amax + 2 * amax * @as(f32, @floatFromInt(i)) / vault_n;
+        const b = -amax + 2 * amax * @as(f32, @floatFromInt(i + 1)) / vault_n;
+        const pa = vc + v3(0, vr * @cos(a), vr * @sin(a));
+        const pb = vc + v3(0, vr * @cos(b), vr * @sin(b));
+        const out = vec.norm((pa + pb) * vec.s(0.5) - vc) * vec.s(0.15);
+        map.slab(v3(xv, escLine(xv) + pa[1], pa[2]), run, pb - pa, out, tile_c, .wall_tile, .tile);
     }
+    const slope = vec.norm(run);
+    const up = vec.norm(vec.cross(v3(0, 0, 1), slope));
     for (0..4) |i| {
         const t = (@as(f32, @floatFromInt(i)) + 0.5) / 4;
-        const p = vec.lerp(top_c, bot_c, t) - up * vec.s(0.15);
+        const x = xv + (x1 - xv) * t;
+        const p = v3(x, escLine(x) + crown_h - 0.04, esc_cz);
         map.beam(p - slope * vec.s(0.8), p + slope * vec.s(0.8), 0.25, 0.06, up, cool, .emissive, .glass);
     }
-    map.addLight(v3((esc_top_x + esc_bottom_x) / 2, (mid_y + deep_y) / 2 + 3, -22.5), v3(1.1, 0.85, 0.6), 12);
+    map.addLight(v3((x0 + x1) / 2, (mid_y + deep_y) / 2 + 3, esc_cz), v3(1.1, 0.85, 0.6), 12);
 
-    // The ramp over both lanes, through the front edges of the steps
-    // (map.Ramp): a rider moves smoothly.
-    map.addRamp(.{ .x0 = esc_top_x, .x1 = esc_bottom_x, .z0 = z0, .z1 = z1, .y0 = mid_y, .y1 = deep_y, .bottom = deep_y - 1 });
-    // The lanes: the north lane goes down (east), the south lane comes up.
-    // Each lane carries a rider until the feet are clear of the ramp: the
-    // down lane 0.4 m (more than the player radius) past its last step.
-    map.addEscalator(.{ .min = v3(esc_top_x, deep_y - 0.5, z0), .max = v3(esc_bottom_x + 0.4, mid_y + 0.5, zd[0]), .vel = v3(0.65, 0, 0) });
-    map.addEscalator(.{ .min = v3(esc_top_x, deep_y - 0.5, zd[1]), .max = v3(esc_bottom_x, mid_y + 0.5, z1), .vel = v3(-0.65, 0, 0) });
+    // Adverts on both walls: level posters in black frames, one each 2.3 m
+    // down the slope.
+    const ads = [_]V3{ v3(0.8, 0.35, 0.1), v3(0.1, 0.4, 0.55), v3(0.85, 0.75, 0.2), v3(0.45, 0.1, 0.35), v3(0.15, 0.5, 0.25), v3(0.9, 0.9, 0.85), v3(0.7, 0.12, 0.1) };
+    for ([_]f32{ esc_z[0], esc_z[1] }, [_]f32{ 1, -1 }, 0..) |zf, si, wi| {
+        var x = x0 + 1.4;
+        var k: usize = wi * 3;
+        while (x < x1 - 0.9) : (x += 2.3) {
+            const yc = escLine(x) + 2.05;
+            const f = [2]f32{ zf, zf + si * 0.03 };
+            const p = [2]f32{ zf + si * 0.03, zf + si * 0.036 };
+            deco(v3(x - 0.42, yc - 0.6, @min(f[0], f[1])), v3(x + 0.42, yc + 0.6, @max(f[0], f[1])), v3(0.03, 0.03, 0.03), .paint, .wood);
+            deco(v3(x - 0.36, yc - 0.54, @min(p[0], p[1])), v3(x + 0.36, yc + 0.54, @max(p[0], p[1])), ads[k % ads.len], .paint, .wood);
+            const q = [2]f32{ p[1], p[1] + si * 0.004 };
+            deco(v3(x - 0.3, yc + 0.22, @min(q[0], q[1])), v3(x + 0.3, yc + 0.42, @max(q[0], q[1])), v3(0.92, 0.92, 0.88), .paint, .wood);
+            k += 1;
+        }
+    }
+
+    // The ramp over both units, through the front edges of the steps
+    // (map.Ramp): a rider moves smoothly. Each unit carries a rider over
+    // its slope and its flat steps, to the comb plate. The north unit goes
+    // down (east), the south unit comes up.
+    map.addRamp(.{ .x0 = x0, .x1 = x1, .z0 = esc_z[0], .z1 = esc_z[1], .y0 = mid_y, .y1 = deep_y, .bottom = deep_y - 1 });
+    for (esc_lane_z, [_]f32{ 0.65, -0.65 }) |zl, v| {
+        map.addEscalator(.{
+            .min = v3(x0 - esc_flat_len, deep_y - 0.5, zl - esc_step_w / 2),
+            .max = v3(x1 + esc_flat_len, mid_y + 0.5, zl + esc_step_w / 2),
+            .vel = v3(v, 0, 0),
+        });
+    }
 }
 
 // ---- The deep level: the Piccadilly line ---------------------------------------------
@@ -1394,7 +1661,7 @@ fn solid(x0: f32, x1: f32, za: f32, zb: f32, ya: f32, yb: f32) void {
 fn deepLevel() void {
     const y = deep_y;
     const floor_c = v3(0.3, 0.29, 0.27);
-    const x0 = esc_bottom_x;
+    const x0 = esc_hall_x1;
     const arches = [_]f32{ 6, 18, 30, 42, 54 };
     const yc = y + st_dy;
     const crown = yc + st_r;
@@ -1403,6 +1670,17 @@ fn deepLevel() void {
     const ring_c = v3(0.1, 0.1, 0.11);
     const rib_c = v3(0.28, 0.11, 0.08);
     const sign_g = v3(0.05, 0.75, 0.3);
+
+    // The lower hall at the foot of the escalators: as wide as the shaft,
+    // with a header over the mouth of the shaft. The corridor goes on east
+    // of it between the platforms.
+    const hx0 = esc_bottom_x;
+    box(v3(hx0, y - 1, esc_z[0]), v3(x0, y, esc_z[1]), floor_c, .concrete, .concrete);
+    box(v3(hx0, y, esc_z[0] - 0.3), v3(x0, deep_ceil, esc_z[0]), tile_c, .wall_tile, .tile);
+    box(v3(hx0, y, esc_z[1]), v3(x0, deep_ceil, esc_z[1] + 0.3), tile_c, .wall_tile, .tile);
+    box(v3(x0 - 0.3, y, esc_z[0]), v3(x0, deep_ceil, corr_z[0]), tile_c, .wall_tile, .tile);
+    box(v3(x0 - 0.3, y, corr_z[1]), v3(x0, deep_ceil, esc_z[1]), tile_c, .wall_tile, .tile);
+    box(v3(hx0, y + 3.4, esc_z[0]), v3(hx0 + 0.3, deep_ceil, esc_z[1]), tile_c, .wall_tile, .tile);
 
     // The floor under the corridor and the platforms.
     box(v3(x0, y - 1, corr_z[0]), v3(deep_lift.x1, y, corr_z[1]), floor_c, .concrete, .concrete);

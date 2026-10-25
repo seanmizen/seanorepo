@@ -491,26 +491,26 @@ fn trainLight(b: *const train_car.Body, c: f32, color: V3) map.Light {
     return .{ .pos = v3(c + x, b.ceil_y - 0.25, (b.z0 + b.z1) / 2), .color = color, .radius = 9 };
 }
 
-/// The escalator steps are static boxes. Their yellow edges slide along
-/// each tread, so the steps look as if they move: down in the left lane,
-/// up in the right lane (map.zig escalators, the same speed).
+/// The escalator steps are static boxes. The yellow line at the front of
+/// each step and the dark gap behind it slide along each tread and each
+/// flat step, so the steps look as if they move: down in the north unit,
+/// up in the south unit (maps/earls_court.zig escalators, the same speed).
 fn buildEscalatorSteps() void {
     const ec = @import("maps/earls_court.zig");
-    // The steps go down to the east. The north lane runs down, the south
-    // lane up (maps/earls_court.zig escalators, the same speed).
-    const lanes = [_]struct { z0: f32, z1: f32, dir: f32 }{
-        .{ .z0 = -23.9, .z1 = -22.75, .dir = 1 },
-        .{ .z0 = -22.25, .z1 = -21.1, .dir = -1 },
-    };
     const k = @mod(time * 0.65 / ec.esc_run, 1.0);
-    for (lanes) |lane| {
-        const f = if (lane.dir > 0) k else 1 - k;
-        for (0..ec.esc_steps) |i| {
+    const half = ec.esc_step_w / 2 - 0.005;
+    const first: i32 = -ec.esc_flat;
+    const last: i32 = ec.esc_steps + ec.esc_flat;
+    for (ec.esc_lane_z, [_]f32{ 1, -1 }) |zl, dir| {
+        const f = if (dir > 0) k else 1 - k;
+        var i = first;
+        while (i < last) : (i += 1) {
             const fi: f32 = @floatFromInt(i);
-            const top = ec.mid_y - ec.esc_rise * (fi + 1);
+            // The flat steps are on the floors (with a plate 4 mm thick).
+            const top = if (i < 0) ec.mid_y + 0.004 else if (i >= ec.esc_steps) ec.deep_y + 0.004 else ec.mid_y - ec.esc_rise * (fi + 1);
             const x = ec.esc_top_x + ec.esc_run * (fi + f);
-            dyn.box(v3(x, top, lane.z0), v3(x + 0.05, top + 0.01, lane.z1), v3(0.85, 0.68, 0.08), 0);
-            dyn.box(v3(x + 0.33, top, lane.z0), v3(x + 0.36, top + 0.006, lane.z1), v3(0.3, 0.3, 0.32), 3);
+            dyn.box(v3(x, top, zl - half), v3(x + 0.05, top + 0.006, zl + half), v3(0.85, 0.68, 0.08), 0);
+            dyn.box(v3(x - 0.012, top, zl - half), v3(x, top + 0.004, zl + half), v3(0.02, 0.02, 0.02), 0);
         }
     }
 }
