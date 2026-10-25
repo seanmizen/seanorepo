@@ -1032,7 +1032,7 @@ melody.
 
 | Material | The strike | The body | The ring | Decay (t-20 dB, t-40 dB) |
 |---|---|---|---|---|
-| `metal` | a bright click (noise over 4 kHz, 1.5 ms) | low-passed noise and 3 modes from 90 to 220 Hz, 50 to 90 ms | 12 modes at random from 350 to 2000 Hz, eta 0.012 | 77 ms, 210 ms |
+| `metal` | a bright click (noise over 4 kHz, 1.5 ms) | low-passed noise and 3 modes from 90 to 220 Hz, 50 to 90 ms | 12 modes at random from 350 to 2000 Hz, eta 0.012 | 77 ms, 209 ms |
 | `sheet_metal` | a dull pank (noise at 1.2 kHz, 5 ms) | a boom: noise at 100 Hz, 0.32 s | 9 plate modes from f0 = 45 Hz, eta 0.07 | 108 ms, 212 ms |
 
 The decay is the time for the Schroeder energy decay curve of the dry
