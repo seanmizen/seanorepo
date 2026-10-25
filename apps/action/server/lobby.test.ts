@@ -3,8 +3,8 @@
 // Why: runs the real server (index.ts) on a free port and talks to it over
 // the WebSocket: the server cvars on join, the config file, rcon off with
 // no admin_password, a client cannot change a server cvar, an rcon set
-// goes to every player, the chat relay with the server lines, and the
-// session: GET /api/version, the welcome before the hello, the bye on
+// goes to every player, the chat relay with the server lines, a moped
+// snatch with the gun back, and the session: GET /api/version, the welcome before the hello, the bye on
 // SIGTERM, and a restart with a new build on the same port.
 
 import { afterAll, describe, expect, test } from 'bun:test';
@@ -390,6 +390,96 @@ describe('the roadmen', () => {
     expect('by' in kill).toBe(false);
     const hits = a.msgs.slice(m).filter((x) => x.t === 'hit');
     expect(hits.map((x) => x.hp)).toEqual([75, 50, 25, 0]);
+    a.close();
+    b.close();
+  });
+});
+
+describe('the moped thieves', () => {
+  test('a snatch empties the primary for all; a kill drops the gun; F gets it back', async () => {
+    const port = await start('', {});
+    const a = new Client(port);
+    const b = new Client(port);
+    const aid = (await a.next((m) => m.t === 'welcome')).id;
+    const bid = (await b.next((m) => m.t === 'welcome')).id;
+    await a.send({ ...hello, name: 'Alice' });
+    await a.next((m) => m.t === 'spawn');
+    await b.send({ ...hello, name: 'Bob' });
+    await b.next((m) => m.t === 'spawn');
+    // Alice is on the east pavement of Warwick Road, Bob near her.
+    const st = { t: 'st', y: 4.92, yaw: 0, pitch: 0, lean: 0, w: 0, m: 0 };
+    await a.send({ ...st, x: -85.5, z: -22, lift: -1 });
+    await b.send({ ...st, x: -86, z: -16, lift: -1 });
+    await Bun.sleep(50);
+    const n = b.msgs.length;
+    const go = [-89.3, 4.8, 48, 0, 13, 0];
+    await a.send({ t: 'mp', k: 'go', q: go });
+    expect(await b.next((x) => x.t === 'mp', n)).toEqual({
+      t: 'mp',
+      k: 'go',
+      id: aid,
+      q: go,
+    });
+    const q = [-86.4, 4.8, -22.2, 0, 1.5, 0];
+    const m = a.msgs.length;
+    await a.send({ t: 'mp', k: 'snatch', q });
+    const snatch = { t: 'mp', k: 'snatch', id: aid, q, p: [0, 0] };
+    expect(await a.next((x) => x.t === 'mp', m)).toEqual(snatch);
+    expect(await b.next((x) => x.t === 'mp' && x.k === 'snatch', n)).toEqual(
+      snatch,
+    );
+    // Alice fires her rifle: the server refuses it.
+    const k = b.msgs.length;
+    await a.send({
+      t: 'fire',
+      w: 0,
+      o: [-85.5, 6.5, -22],
+      e: [-85.5, 6.5, -40],
+      hits: [],
+    });
+    await Bun.sleep(80);
+    expect(b.msgs.slice(k).some((x) => x.t === 'shot')).toBe(false);
+    // Bob shoots the thief in the head with his rifle until he dies.
+    const thief = [-86.6, 4.8, -30, 0, 15, 0, 0, 0, -1, 0];
+    let die: Msg | undefined;
+    for (let i = 0; i < 6 && !die; i++) {
+      await b.send({
+        t: 'fire',
+        w: 0,
+        o: [-86, 6.5, -16],
+        e: [-86.6, 6.5, -30],
+        hits: [],
+        mh: [{ id: aid, r: 1, b: 0, h: 1, d: 14, q: thief }],
+      });
+      await Bun.sleep(250);
+      die = a.msgs.slice(m).find((x) => x.t === 'mp' && x.k === 'die');
+    }
+    expect(die).toEqual({
+      t: 'mp',
+      k: 'die',
+      id: aid,
+      r: 1,
+      q: thief,
+      who: bid,
+    });
+    // Bob has his primary: no pick. Alice walks to the gun and picks it.
+    await b.send({ t: 'mp', k: 'pick', id: aid });
+    await a.send({ ...st, x: -86.5, z: -29, lift: -1 });
+    await Bun.sleep(50);
+    await a.send({ t: 'mp', k: 'pick', id: aid });
+    const pick = await b.next((x) => x.t === 'mp' && x.k === 'pick', n);
+    expect(pick).toEqual({ t: 'mp', k: 'pick', id: aid, who: aid });
+    // Her rifle fires again.
+    await Bun.sleep(150);
+    const j = b.msgs.length;
+    await a.send({
+      t: 'fire',
+      w: 0,
+      o: [-86.5, 6.5, -29],
+      e: [-86.5, 6.5, -50],
+      hits: [],
+    });
+    await b.next((x) => x.t === 'shot', j);
     a.close();
     b.close();
   });

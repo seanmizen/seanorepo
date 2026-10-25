@@ -118,6 +118,13 @@ pub const Msg = struct {
     c: ?[][6]f32 = null,
     // The roadmen of a player (t "rm", k "go"): the places of the two.
     at: ?[2][3]f32 = null,
+    // A moped event (t "mp"): the state of the moped or of the thief on
+    // foot (moped.State), the rider (0 the driver, 1 the thief) and the
+    // player who killed the rider or picked up the gun. `p` is the stolen
+    // gun, `id` the player of the visit.
+    q: ?[]f32 = null,
+    r: ?u32 = null,
+    who: ?u32 = null,
 };
 
 pub const Client = struct {

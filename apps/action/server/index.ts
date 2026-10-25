@@ -58,6 +58,12 @@
 // other players, applies the damage of each stab, and credits "roadman"
 // for the death.
 //
+// The moped thieves of Warwick Road (moped.ts): the client of a player on
+// the street decides the approach of its moped. The server owns the
+// stolen gun and the health of the riders, and sends each event with its
+// place to the players. A robbed player has an empty primary slot until
+// it picks up the gun or spawns.
+//
 // Weapons: the class ids are the order of game/src/weapon.zig Class. A pick
 // is [class, model]: the model must be a gun of the class, and the model
 // sets the stats (guns.json). A new pick applies at the next spawn, or at
@@ -116,6 +122,19 @@
 //                                                 line: the roadmen walk away
 //   {t:"rm", k:"stab"}                            a stab of a roadman landed on
 //                                                 the player
+//   {t:"mp", k:"go", q}                           the player stepped onto Warwick
+//                                                 Road: its moped starts at q
+//                                                 [x, y, z, yaw, speed, roll]
+//                                                 (moped.ts)
+//   {t:"mp", k:"snatch", q}                       the thief takes the primary of
+//                                                 the player, the moped at q
+//   {t:"mp", k:"away", q}                         the moped gives up at q
+//   {t:"mp", k:"pick", id}                        F on the gun on the ground of
+//                                                 the visit of player id
+//   A fire or a blast can carry mh: the hits on the moped riders. Fire:
+//   mh:[{id, r, b, h, d, q}], blast: mh:[{id, r, dmg, q}]. id: the player
+//   of the visit, r: 0 the driver, 1 the thief, d: the distance, q: the
+//   state of the rider (10 numbers, moped.ts).
 // Server to client:
 //   {t:"welcome", id, instance, build, protocol, started}
 //                                 the first message, before the hello. The
@@ -168,6 +187,15 @@
 //                                 and c (the bodies) only on join.
 //   {t:"rm", k:"go", at, id}      the roadmen of player id start at `at`
 //   {t:"rm", k:"off", id}         the roadmen of player id walk away
+//   {t:"mp", k:"go", id, q}       the moped of player id starts at q
+//   {t:"mp", k:"snatch", id, q, p}  to all: the thief took gun p
+//                                 ([class, model]) of player id at q
+//   {t:"mp", k:"away", id, q}     the moped of player id gives up at q
+//   {t:"mp", k:"die", id, r, q, who}  to all: rider r of the visit of
+//                                 player id died at q, a hit of player who
+//   {t:"mp", k:"pick", id, who}   to all: player who got the gun of the
+//                                 visit of player id
+//   {t:"mp", k:"end", id}         to all: the visit of player id is over
 //   A stab of a roadman gives {t:"hit", from:0, dmg, hp}. A death by a stab
 //   is a kill with kname "roadman" and no `by`.
 
@@ -190,6 +218,7 @@ import {
   ServerConsole,
 } from './console';
 import { type Gun, gunInPick, gunOf, type SlotName, shotDamage } from './guns';
+import { Mopeds } from './moped';
 import { Flock } from './pigeons';
 import {
   newPing,
@@ -479,6 +508,8 @@ let nextId = 1;
 /// The pigeons of Earl's Court: one flock for the life of the server.
 const flock = new Flock(Date.now());
 const roadmen = new Roadmen();
+/// The moped thieves: the stolen guns and the riders.
+const mopeds = new Mopeds();
 /// The lanes of the ticket gates: gates.zig max_lanes.
 const GATE_LANES = 16;
 /// The door of the secret room is open (secret_room.zig). A new match
@@ -594,6 +625,7 @@ function spawn(p: Player): void {
   p.spawnAt = [p.x, p.y, p.z];
   p.firedSinceSpawn = false;
   roadmen.end(p.id);
+  for (const o of mopeds.end(p.id)) broadcast(o.msg);
   send(p, {
     t: 'spawn',
     x: p.x,
@@ -613,7 +645,7 @@ function onLoadout(p: Player, msg: Record<string, unknown>): void {
   p.next = pick;
   const [sx, sy, sz] = p.spawnAt;
   const near = Math.hypot(p.x - sx, p.y - sy, p.z - sz) < SWAP_RADIUS;
-  if (p.alive && near && !p.firedSinceSpawn) {
+  if (p.alive && near && !p.firedSinceSpawn && !mopeds.robbed(p.id)) {
     p.pick = pick;
     p.shots.clear();
   }
@@ -660,7 +692,9 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
   // The weapon must be one of this life: the primary, the secondary or the
   // knife.
   const w = Number(msg.w);
-  const cls = gunInPick(w, p.pick.p, p.pick.s);
+  // A robbed player has no primary (moped.ts).
+  const primary: [number, number] = mopeds.stolen(p.id) ? [-1, -1] : p.pick.p;
+  const cls = gunInPick(w, primary, p.pick.s);
   if (!cls) return;
   if (!fireRateOk(p, w, cls, now)) return;
   p.firedSinceSpawn = true;
@@ -668,10 +702,10 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
   const e = vec3(msg.e, 450);
   if (o && e) broadcast({ t: 'shot', id: p.id, w, o, e }, p.id);
 
-  if (!Array.isArray(msg.hits)) return;
   let pellets = cls.pellets;
   const seen = new Set<number>();
-  for (const h of msg.hits.slice(0, MAX_PLAYERS)) {
+  const hits = Array.isArray(msg.hits) ? msg.hits : [];
+  for (const h of hits.slice(0, MAX_PLAYERS)) {
     if (typeof h !== 'object' || h === null) continue;
     const { id, b, h: hd } = h as Record<string, unknown>;
     const target = players.get(Number(id));
@@ -689,6 +723,21 @@ function onFire(p: Player, msg: Record<string, unknown>): void {
     pellets -= body + head;
     damage(p, target, shotDamage(cls, body, head, far), head > 0);
   }
+  // The moped riders: the remaining pellets.
+  if (!Array.isArray(msg.mh)) return;
+  for (const h of msg.mh.slice(0, 4)) {
+    if (typeof h !== 'object' || h === null) continue;
+    const { id, r, b, h: hd, d, q } = h as Record<string, unknown>;
+    const body = Number(b);
+    const head = Number(hd);
+    if (!Number.isInteger(body) || !Number.isInteger(head)) continue;
+    if (body < 0 || head < 0 || body + head === 0 || body + head > pellets)
+      continue;
+    const far = Math.min(cls.range, Math.max(0, Number(d) || 0));
+    pellets -= body + head;
+    const dmg = shotDamage(cls, body, head, far);
+    for (const o of mopeds.hit(p.id, id, r, dmg, q)) broadcast(o.msg);
+  }
 }
 
 /** A roadman event of player p (roadmen.ts): the relay to the other
@@ -702,6 +751,18 @@ function onRoadman(p: Player, msg: Record<string, unknown>): void {
   p.hp -= r.damage;
   send(p, { t: 'hit', from: 0, dmg: r.damage, hp: Math.max(0, p.hp) });
   if (p.hp <= 0) envDeath(p, ROADMAN);
+}
+
+/** A moped event of player p (moped.ts): the relay to the players, and a
+ * gun for the player who picks it up. */
+function onMoped(p: Player, msg: Record<string, unknown>): void {
+  if (!p.joined || phase !== 'play') return;
+  const r = mopeds.onMessage(p.id, p, p.pick.p, msg);
+  for (const o of r.out) broadcast(o.msg, o.to === 'others' ? p.id : undefined);
+  if (r.give) {
+    const q = players.get(r.give.id);
+    if (q) q.pick = { p: r.give.gun, s: q.pick.s };
+  }
 }
 
 /** Apply damage from an attacker: the hit message, and a kill at 0 hp. A
@@ -771,6 +832,22 @@ function onBlast(p: Player, msg: Record<string, unknown>): void {
     if (far > NADE_REACH) continue;
     seen.add(target.id);
     damage(p, target, amount, false);
+  }
+  // The moped riders near the blast.
+  if (!Array.isArray(msg.mh)) return;
+  for (const h of msg.mh.slice(0, 4)) {
+    if (typeof h !== 'object' || h === null) continue;
+    const { id, r, dmg, q } = h as Record<string, unknown>;
+    const amount = Math.round(Number(dmg));
+    if (!Number.isFinite(amount) || amount < 1 || amount > 100) continue;
+    if (!Array.isArray(q) || q.length !== 10) continue;
+    const far = Math.hypot(
+      Number(q[0]) - at[0],
+      Number(q[1]) - at[1],
+      Number(q[2]) - at[2],
+    );
+    if (!(far <= NADE_REACH)) continue;
+    for (const o of mopeds.hit(p.id, id, r, amount, q)) broadcast(o.msg);
   }
 }
 
@@ -1032,7 +1109,7 @@ const server = Bun.serve<Conn>({
         const w = Number(msg.w);
         const m = Number(msg.m);
         const ofLife =
-          w === p.pick.p[0] ||
+          (w === p.pick.p[0] && !mopeds.stolen(p.id)) ||
           w === p.pick.s[0] ||
           w === KNIFE ||
           w === GRENADE;
@@ -1076,6 +1153,8 @@ const server = Bun.serve<Conn>({
         onMore(p, msg);
       } else if (msg.t === 'rm') {
         onRoadman(p, msg);
+      } else if (msg.t === 'mp') {
+        onMoped(p, msg);
       } else if (msg.t === 'pg' && p.joined) {
         for (const o of flock.onMessage(p.id, msg, Date.now())) {
           if (o.to === 'sender') send(p, o.msg);
@@ -1090,6 +1169,7 @@ const server = Bun.serve<Conn>({
       if (roadmen.chasing(ws.data.id))
         broadcast({ t: 'rm', k: 'off', id: ws.data.id });
       roadmen.end(ws.data.id);
+      for (const o of mopeds.end(ws.data.id)) broadcast(o.msg);
       if (p?.joined && !shutdown.stopping()) serverLine(`${p.name} left.`);
     },
   },

@@ -11,7 +11,8 @@
 // bullet sound models (audio/tests.zig), the NPC shooter of the range and
 // the impact effects (shooter_test.zig), the
 // secret room of VAPES N MORE (secret_room_test.zig), the roadmen of Warwick
-// Road and their model (roadmen_test.zig, npc.zig), the readers and the
+// Road and their model (roadmen_test.zig, npc.zig), the moped thieves, their
+// ragdoll and their engine sound (moped_test.zig, moped_sound.zig), the readers and the
 // status lights of the ticket gates (gates.zig), the server cvar file and
 // the protocol version of the game.
 const std = @import("std");
@@ -31,6 +32,8 @@ test {
     _ = @import("pigeons_test.zig");
     _ = @import("roadmen_test.zig");
     _ = @import("npc.zig");
+    _ = @import("moped_test.zig");
+    _ = @import("moped_sound.zig");
     _ = @import("secret_room_test.zig");
     _ = @import("train_sound.zig");
     _ = @import("train_car.zig");
