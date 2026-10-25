@@ -467,7 +467,7 @@ pub fn main(init: std.process.Init) !void {
     map.init(alloc);
     const id = std.meta.stringToEnum(map.Id, args[1]) orelse return error.UnknownMap;
     map.load(id);
-    std.debug.print("{s}: {d} of {d} boxes, {d} decoration, {d} lights, {d} lifts\n", .{ args[1], map.box_count, map.max_boxes, map.decor.items.len, map.light_count, map.lift_count });
+    std.debug.print("{s}: {d} of {d} boxes, {d} decoration, {d} of {d} lights, {d} lifts\n", .{ args[1], map.box_count, map.max_boxes, map.decor.items.len, map.light_count, map.max_lights, map.lift_count });
     // A map with more boxes than map.max_boxes is not the map that the
     // maps/ file describes: every command stops.
     if (map.dropped > 0) {

@@ -3095,7 +3095,8 @@ fn gameRender(ctx: *sw.Context) !void {
         n += 1;
     }
     // Underground the eye opens up: about 2.4 times the outdoor exposure.
-    const out_k = vec.smooth((cam.eye[1] - (map.underground_y - 5)) / 5);
+    // The band is the same as the light band of scene.wgsl outdoors.
+    const out_k = vec.smooth((cam.eye[1] - map.underground_y) / map.light_band);
     const target_exposure = 0.68 * (2.4 - 1.4 * out_k);
     exposure += (target_exposure - exposure) * @min(1, frame_ms / 1000 * 1.5);
     // The field of view setting is at the hip. The sights make it narrower

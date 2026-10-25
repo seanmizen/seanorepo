@@ -96,7 +96,7 @@ pub const Spawn = struct { pos: V3, yaw: f32 };
 pub const max_boxes = 1024;
 /// The map lights. Each one has six shadow layers (render.zig), and
 /// scene.wgsl BODY_SLOT is the same number.
-pub const max_lights = 28;
+pub const max_lights = 36;
 
 pub var id: Id = .arena;
 pub var boxes: [max_boxes]Box = undefined;
@@ -121,6 +121,10 @@ pub var shadow_centre: V3 = v3(0, 0, 0);
 pub var shadow_half: f32 = 40;
 /// Below this height there is no sun and little sky light (underground).
 pub var underground_y: f32 = -1000;
+/// The light changes from the outdoor light to the underground light in
+/// this height above underground_y: the sun, the sky light, the fog, the
+/// haze (scene.wgsl outdoors) and the exposure (main.zig).
+pub const light_band: f32 = 2.5;
 /// A player below this height respawns.
 pub var kill_y: f32 = -5;
 /// A closed room with no sun and only a trace of the sky light, [min,

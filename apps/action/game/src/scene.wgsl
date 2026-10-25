@@ -1,14 +1,16 @@
 // The scene shader: world boxes, players, targets and the view-model gun.
 //
 // Light: a low sun with a 3x3 PCF shadow map, a sky and ground hemisphere
-// ambient, ambient occlusion from the box SDF, up to 44 point lights, a
+// ambient, ambient occlusion from the box SDF, up to 52 point lights, a
 // Blinn-Phong highlight with Fresnel, sky reflections on metal, height fog
 // that takes the sun colour, and in-scatter: the haze glows around each
 // point light. Each map light has a cube shadow map (render.zig), so walls
 // stop its light, its highlights and its haze. Below the underground height
-// there is no sun, the ambient falls away, the fog thickens and darkens,
-// dirt collects in the corners and runs down the walls, and the floor has
-// damp patches. The output is linear HDR. post.wgsl tone maps it.
+// there is no sun, a dim neutral ambient takes the place of the sky, each
+// point light gives a fill, the air is clear near the eye and a thin dark
+// fog starts far away, dirt collects in the corners and runs down the
+// walls, and the floor has damp patches. The output is linear HDR.
+// post.wgsl tone maps it.
 //
 // Vertex `mat`: the material id (map.zig Mat). 100 is added for the
 // view-model: it gets the near depth range [0, 0.08], the world gets
@@ -19,9 +21,9 @@
 // Your own body has its own light shadow layers (render.zig
 // drawBodyShadows): `body_l` names the lights.
 
-const MAX_LIGHTS: u32 = 44u;
+const MAX_LIGHTS: u32 = 52u;
 // The first light shadow slot of your body: map.zig max_lights.
-const BODY_SLOT: u32 = 28u;
+const BODY_SLOT: u32 = 36u;
 // The LED grid of the train indicators: platform_display.zig pitch.
 const LED_PITCH: f32 = 0.012;
 // The cleats of an escalator tread (material 10): one cleat and one groove
@@ -37,14 +39,16 @@ struct Scene {
   sun_dir: vec4f,  // xyz toward the sun
   sun_col: vec4f,
   info: vec4f,     // x unused, y light count, z fog density, w shadow on
-  info2: vec4f,    // x underground height, y in-scatter strength, z exposure (post.wgsl)
+  info2: vec4f,    // x underground height, y in-scatter strength, z exposure (post.wgsl), w light band (map.zig)
   body_l: vec4f,   // the light of each body slot: its index in lp and lc from 1, 0 none
   sealed_lo: vec4f, // map.zig sealed: a room with no sun, min and max
   sealed_hi: vec4f,
+  cab_lo: array<vec4f, 4>, // the inside of each lift cab, w 1 (0: no cab)
+  cab_hi: array<vec4f, 4>,
   grid_o: vec4f,   // the AO grid: xyz origin, w cell size
   grid_n: vec4f,   // xyz cell counts, w the length of the moving list
-  lp: array<vec4f, 44>, // xyz position, w radius
-  lc: array<vec4f, 44>, // rgb colour, w shadow map from 1 (0: none)
+  lp: array<vec4f, 52>, // xyz position, w radius
+  lc: array<vec4f, 52>, // rgb colour, w shadow map from 1 (0: none)
 };
 
 // mn.w: 1 when the AO uses the box (render.zig uploadBoxes).
@@ -374,15 +378,21 @@ fn ambientOcclusion(p: vec3f, n: vec3f) -> f32 {
   return clamp(1.0 - 1.1 * occ, 0.0, 1.0);
 }
 
-// 1 above ground, 0 deep underground.
+// 1 above ground, 0 underground: below the underground height. The light
+// changes in the band above that height (map.zig light_band).
 fn outdoors(y: f32) -> f32 {
-  return smoothstep(u.info2.x - 5.0, u.info2.x, y);
+  return smoothstep(u.info2.x, u.info2.x + u.info2.w, y);
 }
 
-// 0 in the sealed room (map.zig sealed), 1 out of it: the sun and most of
-// the sky light stop at its walls.
+// 0 in the sealed room (map.zig sealed) and in a lift cab, 1 out of them:
+// the sun, most of the sky light and the sky reflection stop at their
+// walls.
 fn unsealed(p: vec3f) -> f32 {
-  let inside = all(p > u.sealed_lo.xyz) && all(p < u.sealed_hi.xyz);
+  var inside = all(p > u.sealed_lo.xyz) && all(p < u.sealed_hi.xyz);
+  for (var i = 0u; i < 4u; i++) {
+    let lo = u.cab_lo[i];
+    inside = inside || (lo.w > 0.5 && all(p > lo.xyz) && all(p < u.cab_hi[i].xyz));
+  }
   return select(1.0, 0.0, inside);
 }
 
@@ -549,10 +559,15 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
   return s;
 }
 
+// The haze starts this far from the eye. Nearer air gives no haze, so a
+// short view (inside a car, along a passage) stays clear, and a light just
+// over the head does not lift the whole view.
+const HAZE_NEAR: f32 = 4.0;
+
 // The haze in front of a point light: the integral of 1 / d^2 along the
-// view ray, from the camera to the surface (or `far`). Most of it comes
-// from the ray point nearest to the light. If a wall hides that point from
-// a map light, that light gives no haze (a lamp behind a wall does not glow
+// view ray, from HAZE_NEAR to the surface (`far`). Most of it comes from the
+// ray point nearest to the light. If a wall hides that point from a map
+// light, that light gives no haze (a lamp behind a wall does not glow
 // through it).
 //
 // `limit`: the loop skips a light whose haze is `limit` or less in each
@@ -564,24 +579,25 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
 fn inScatter(ro: vec3f, rd: vec3f, far: f32, limit: vec3f) -> vec3f {
   var acc = vec3f(0.0);
   let nl = u32(u.info.y);
+  let t0 = HAZE_NEAR;
   for (var i = 0u; i < nl; i++) {
     let lp = u.lp[i].xyz;
     let lc = u.lc[i].rgb;
     let tc = dot(lp - ro, rd);
     let h = max(length(ro + rd * tc - lp), 0.25);
-    let near = distance(lp, ro + rd * clamp(tc, 0.0, far));
-    let k_max = min(3.14159265 / h, far / max(near * near, 1e-6));
+    let near = distance(lp, ro + rd * clamp(tc, t0, far));
+    let k_max = min(3.14159265 / h, (far - t0) / max(near * near, 1e-6));
     if (all(lc * k_max <= limit)) {
       continue;
     }
-    var k = (atan((far - tc) / h) - atan(-tc / h)) / h;
+    var k = (atan((far - tc) / h) - atan((t0 - tc) / h)) / h;
     if (all(lc * k <= limit)) {
       continue;
     }
     let slot = u32(u.lc[i].w + 0.5);
     if (slot > 0u) {
       // A little in front of the surface, so the surface does not shadow it.
-      let q = ro + rd * clamp(tc, 0.0, max(far - 0.1, 0.0));
+      let q = ro + rd * clamp(tc, t0, max(far - 0.1, t0));
       if (distance(q, lp) < u.lp[i].w) {
         k *= lightShadow(slot - 1u, u.lp[i], q);
       }
@@ -596,6 +612,9 @@ fn inScatter(ro: vec3f, rd: vec3f, far: f32, limit: vec3f) -> vec3f {
 // haze culling can make, half of one 8-bit step (the dither is one step).
 const TONE_W = vec3f(1.02, 1.0, 0.97);
 const HAZE_STEP: f32 = 0.5 / 255.0;
+// The haze strength underground. The air of a station is clear: the haze
+// shows only around a bright light and over a long view.
+const HAZE_UNDER: f32 = 0.007;
 
 // The slope of the output (after the tone map and the gamma) for each
 // channel of the HDR colour c. The curve is concave for c >= 0, at each
@@ -619,13 +638,21 @@ fn toneSlope(c: vec3f) -> vec3f {
 // strength. Thus all the skipped lights together change the output pixel
 // by HAZE_STEP or less.
 fn haze(ro: vec3f, rd: vec3f, far: f32, base: vec3f, out_k: f32) -> vec3f {
-  let strength = u.info2.y * mix(0.022, 0.004, out_k);
+  if (far <= HAZE_NEAR) {
+    return vec3f(0.0);
+  }
+  let strength = u.info2.y * mix(HAZE_UNDER, 0.004, out_k);
   let per_light = max(strength * u.info.y, 1e-9);
   let limit = HAZE_STEP / max(toneSlope(base), vec3f(1e-9)) / per_light;
   return inScatter(ro, rd, far, limit) * strength;
 }
 
 // ---- Lighting --------------------------------------------------------------
+
+// The ambient light underground, in place of the sky.
+const UNDER_AMB = vec3f(0.04, 0.038, 0.034);
+// The fill of each point light underground (see shade).
+const LIGHT_FILL: f32 = 0.35;
 
 fn shade(in: VOut, front: bool) -> vec3f {
   let vm = in.mat >= 100u;
@@ -699,10 +726,12 @@ fn shade(in: VOut, front: bool) -> vec3f {
   var c = u.sun_col.rgb * ndl * shadow * (diff + fres * spec);
 
   // Hemisphere ambient: sky above, warm ground bounce below. Underground
-  // only a trace of it is left.
+  // a dim neutral light takes its place: the light that the tiles bounce.
+  // The AO keeps the corners dark.
   let sky_amb = vec3f(0.22, 0.30, 0.48);
   let gnd_amb = vec3f(0.30, 0.20, 0.14);
-  let hemi = mix(gnd_amb, sky_amb, N.y * 0.5 + 0.5) * mix(0.05, 1.0, out_k) * mix(0.15, 1.0, open_k);
+  let hemi_out = mix(gnd_amb, sky_amb, N.y * 0.5 + 0.5);
+  let hemi = mix(UNDER_AMB, hemi_out, out_k) * mix(0.15, 1.0, open_k);
   c += diff * hemi * ao;
   // Sky reflection.
   let R = reflect(-V, N);
@@ -713,6 +742,12 @@ fn shade(in: VOut, front: bool) -> vec3f {
   // Point lights. A map light tests its shadow map: no light, highlight or
   // glint where a wall hides the point. The gun tests the eye position: it
   // can reach into a wall, and the part in the wall must not go dark.
+  // Underground each light also gives a fill: a part of its diffuse light
+  // that does not fall off with the angle. It is the light that bounces
+  // off the tiles near the lamp, so a vault or a wall at a low angle to a
+  // lamp is lit. It fades to 0 at the shadow line (ndl 0), so the edge
+  // stays smooth.
+  let fill = LIGHT_FILL * (1.0 - out_k);
   let nl = u32(u.info.y);
   for (var i = 0u; i < nl; i++) {
     let d = u.lp[i].xyz - in.wpos;
@@ -742,7 +777,8 @@ fn shade(in: VOut, front: bool) -> vec3f {
     let att = k * k / (1.0 + ld * ld * 0.35);
     let h2 = normalize(l + V);
     let sp_i = pow(max(dot(N, h2), 0.0), shin) * (shin + 8.0) / 25.0;
-    c += u.lc[i].rgb * att * ndl_i * (diff + fres * sp_i) * mix(1.0, ao, 0.5) * vis;
+    let wrap = ndl_i + fill * min(ndl_i * 5.0, 1.0);
+    c += u.lc[i].rgb * att * (diff * wrap + fres * sp_i * ndl_i) * mix(1.0, ao, 0.5) * vis;
     // A damp floor gives a narrow glint toward each light.
     if (wet > 0.01) {
       let g = pow(max(dot(R, l), 0.0), 320.0) * 1.2;
@@ -755,17 +791,27 @@ fn shade(in: VOut, front: bool) -> vec3f {
   }
 
   if (!vm) {
-    // Fog: thin warm haze outside, a thicker dark haze underground.
-    let dens_out = u.info.z * exp(-max(in.wpos.y, 0.0) * 0.12);
-    let dens = mix(0.012, dens_out, out_k);
-    let f = 1.0 - exp(-dist * dens);
-    let vd = -V;
-    let fc_out = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
-    let fc = mix(vec3f(0.012, 0.011, 0.01), fc_out, out_k);
-    c = mix(c, fc, f);
-    c += haze(u.cam.xyz, vd, dist, c, out_k);
+    c = fog(c, in.wpos, dist, -V, out_k);
+    c += haze(u.cam.xyz, -V, dist, c, out_k);
   }
   return c;
+}
+
+// The fog underground: none in the first FOG_NEAR m, then a thin dark fog.
+// A long tunnel fades into the dark, but a car, a passage or the near part
+// of a platform has clear air.
+const FOG_NEAR: f32 = 15.0;
+const FOG_UNDER: f32 = 0.005;
+
+// Fog: thin warm haze outside, a thin dark fog far away underground. `vd`
+// is the view direction, from the eye to the point.
+fn fog(c: vec3f, wp: vec3f, dist: f32, vd: vec3f, out_k: f32) -> vec3f {
+  let dens_out = u.info.z * exp(-max(wp.y, 0.0) * 0.12);
+  let dens = mix(FOG_UNDER, dens_out, out_k);
+  let f = 1.0 - exp(-max(dist - FOG_NEAR * (1.0 - out_k), 0.0) * dens);
+  let fc_out = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
+  let fc = mix(vec3f(0.012, 0.011, 0.01), fc_out, out_k);
+  return mix(c, fc, f);
 }
 
 @fragment fn fs_main(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
@@ -862,13 +908,6 @@ struct TOut {
       light += u.lc[i].rgb * k * k / (1.0 + ld * ld * 0.35) * 0.6;
     }
   }
-  var c = in.col * light;
-  let dens_out = u.info.z * exp(-max(in.wpos.y, 0.0) * 0.12);
-  let dens = mix(0.012, dens_out, out_k);
-  let f = 1.0 - exp(-dist * dens);
-  let vd = -V;
-  let fc_out = skyColor(normalize(vec3f(vd.x, max(vd.y, 0.02), vd.z)), false);
-  let fc = mix(vec3f(0.012, 0.011, 0.01), fc_out, out_k);
-  c = mix(c, fc, f);
+  let c = fog(in.col * light, in.wpos, dist, -V, out_k);
   return vec4f(c, clamp(alpha, 0.0, 1.0));
 }

@@ -129,6 +129,36 @@ The exit code is 1 when it finds an escape hole.
   such lights.
 - Underground, the floor has small damp patches: a little darker and a
   little glossy, with a narrow glint toward each light.
+- A map has 36 map lights at most (`map.max_lights`). `addLight` ignores
+  more. The floorplan summary gives the count and the limit.
+
+### Underground light
+
+Below `map.underground_y` the station has no sun and no sky. The light
+changes from the outdoor light to the underground light in the band of
+`map.light_band` (2.5 m) above that height. The shader (`outdoors` in
+`game/src/scene.wgsl`) and the exposure (`game/src/main.zig`) use the same
+band. At Earl's Court the band is from y -3 to y -0.5: the lower concourse
+at y -5.6 is fully underground, and the District platforms at y 0 are fully
+outdoors.
+
+- **The air is clear.** The haze (in-scatter) starts 4 m from the eye
+  (`HAZE_NEAR`). Its strength underground is 0.007 (`HAZE_UNDER`). A light
+  over your head does not lift the whole view, and a car or a passage shows
+  no haze. A bright lamp far away has a glow.
+- **The fog is far.** Underground the fog starts 15 m from the eye
+  (`FOG_NEAR`), with a density of 0.005 (`FOG_UNDER`). It goes to a near
+  black, so a long tunnel fades into the dark.
+- **The fill.** Each point light gives 0.35 of its diffuse light with no
+  fall off with the angle (`LIGHT_FILL`): the light that the tiles bounce.
+  A vault or a wall at a low angle to a lamp gets light. The fill fades to
+  0 at the shadow line, and the shadow maps stop it.
+- **The ambient.** A dim neutral light (`UNDER_AMB`) takes the place of the
+  sky light. The AO keeps the corners dark.
+- **The exposure** is 2.4 times the outdoor exposure underground. It
+  follows the eye through the band in about a second.
+- **Closed rooms.** The sealed room (`map.sealed`) and the inside of each
+  lift cab get no sun, little sky light and no sky reflection.
 
 ### The render scale
 
