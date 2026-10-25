@@ -547,14 +547,21 @@ fn runFrom(bits: u5, k: usize) ?usize {
 /// Text in the pixel font of the train indicators (platform_display.zig),
 /// on a sign face at `a` along the line toward `dir`. The face is toward the
 /// middle of the station. The middle of the text is at z_mid, its top at `top`.
-/// One decoration for each run of lit pixels in a row, and for the same
-/// run in the rows below it.
 fn signText(text: []const u8, dir: f32, a: f32, z_mid: f32, top: f32, px: f32, color: V3) void {
-    const cols: f32 = @floatFromInt(text.len * 6 - 1);
     // A reader who looks toward `dir` reads toward +Z at the east end and
     // toward -Z at the west end.
-    const z0 = z_mid - dir * cols * px / 2;
-    const x = span(dir, a - 0.003, a);
+    const m = Mat4{ .data = .{ 0, 0, dir, 0, 0, 1, 0, 0, -dir, 0, 0, 0, dir * a, top, z_mid, 1 } };
+    pixelText(m, text, px, 0.003, color, .paint, .sheet_metal);
+}
+
+/// Text in the pixel font of the train indicators, in the frame m: it reads
+/// along local X, local Y is up, and the text stands `depth` out along local
+/// Z. The middle of the text is at the origin, its top at y = 0. One
+/// decoration for each run of lit pixels in a row, and for the same run in
+/// the rows below it.
+fn pixelText(m: Mat4, text: []const u8, px: f32, depth: f32, color: V3, mat: Mat, surface: Surface) void {
+    const cols: f32 = @floatFromInt(text.len * 6 - 1);
+    const x0 = -cols * px / 2;
     for (text, 0..) |ch, i| {
         const g = displays.glyph(ch);
         for (g, 0..) |bits, r| {
@@ -564,11 +571,11 @@ fn signText(text: []const u8, dir: f32, a: f32, z_mid: f32, top: f32, px: f32, c
                 if (r > 0 and runFrom(g[r - 1], k) == e) continue;
                 var rows: usize = 1;
                 while (r + rows < g.len and runFrom(g[r + rows], k) == e) rows += 1;
-                const y1 = top - @as(f32, @floatFromInt(r)) * px;
-                const y0 = y1 - @as(f32, @floatFromInt(rows)) * px;
-                const za = z0 + dir * @as(f32, @floatFromInt(i * 6 + k)) * px;
-                const zb = z0 + dir * @as(f32, @floatFromInt(i * 6 + e)) * px;
-                deco(v3(x[0], y0, @min(za, zb)), v3(x[1], y1, @max(za, zb)), color, .paint, .sheet_metal);
+                const ya = -@as(f32, @floatFromInt(r + rows)) * px;
+                const yb = -@as(f32, @floatFromInt(r)) * px;
+                const xa = x0 + @as(f32, @floatFromInt(i * 6 + k)) * px;
+                const xb = x0 + @as(f32, @floatFromInt(i * 6 + e)) * px;
+                map.addDecor(m, v3(xa, ya, 0), v3(xb, yb, depth), color, mat, surface);
             }
         }
     }
@@ -972,35 +979,21 @@ fn eastEnd() void {
     map.carve(rect(x1, gx1, -40.6, 30.6), -3, deck_y, &.{rect(x1, gx1, wall_n - 0.6, wall_s + 0.6)}, ballast, .concrete, .earth);
     box(v3(x1, deck_y, -40.6), v3(gx1, y, 30.6), v3(0.45, 0.44, 0.42), .tile, .tile);
 
-    // The ticket hall, then the 1915 front on Earls Court Road.
+    // The ticket hall. Its front on Earls Court Road is stationFront.
     const hz0: f32 = -12;
     const hz1: f32 = 8;
     box(v3(x1, y, conc_z0 - 0.6), v3(x1 + 0.4, y + 6.5, hz0), red_brick, .brick, .brick);
     box(v3(x1, y, hz1), v3(x1 + 0.4, y + 6.5, wall_s + 0.6), red_brick, .brick, .brick);
     box(v3(x1, y, hz0 - 0.4), v3(hall_x1, y + 5.5, hz0), cream, .paint, .plaster);
     box(v3(x1, y, hz1), v3(hall_x1, y + 5.5, hz1 + 0.4), cream, .paint, .plaster);
-    box(v3(x1, y + 5.5, hz0 - 0.4), v3(hall_x1 + 0.6, y + 6, hz1 + 0.4), v3(0.75, 0.72, 0.66), .concrete, .concrete);
-    const doors = [_][2]f32{ .{ -10, -7 }, .{ -3.5, -0.5 }, .{ 3, 6 } };
-    var zc: f32 = hz0 - 0.4;
-    for (doors) |d| {
-        box(v3(hall_x1, y, zc), v3(hall_x1 + 0.6, y + 7, d[0]), red_brick, .brick, .brick);
-        boxNoAo(v3(hall_x1, y + 3.8, d[0]), v3(hall_x1 + 0.6, y + 7, d[1]), red_brick, .brick, .brick);
-        zc = d[1];
-    }
-    box(v3(hall_x1, y, zc), v3(hall_x1 + 0.6, y + 7, hz1 + 0.4), red_brick, .brick, .brick);
-    deco(v3(hall_x1 + 0.6, y + 5.6, hz0), v3(hall_x1 + 0.72, y + 6.4, hz1), cream, .paint, .plaster);
-    deco(v3(hall_x1 + 0.72, y + 5.85, hz0 + 0.5), v3(hall_x1 + 0.74, y + 6.15, hz1 - 0.5), blue, .paint, .sheet_metal);
-    roundel(v3(hall_x1 + 0.75, y + 4.6, -2), std.math.pi / 2.0, 1.6);
-    deco(v3(hall_x1 - 0.2, y + 7, hz0 - 0.8), v3(hall_x1 + 0.9, y + 7.4, hz1 + 0.8), cream * vec.s(0.9), .paint, .plaster);
+    box(v3(x1, y + 5.5, hz0 - 0.4), v3(hall_x1, y + 6, hz1 + 0.4), v3(0.75, 0.72, 0.66), .concrete, .concrete);
     // The gate line: 8 lanes, IN on the north half (gates.zig).
     gates.addLine(71, y, hz0, hz1, -2, 8, -1);
     map.add(v3(71.5, y + 5.35, -3), v3(73.5, y + 5.5, -1), v3(1.0, 0.9, 0.75), .emissive, .glass).solid = false;
     map.addLight(v3(72.5, y + 4.8, -2), v3(1.3, 1.05, 0.8), 12);
-    // Buildings either side of the hall, out to the road.
-    box(v3(x1, y, -40.6), v3(street_e[0], y + 7, conc_z0 - 0.6), concrete_c, .concrete, .concrete);
-    box(v3(x1 + 0.4, y, wall_s + 0.6), v3(street_e[0], y + 7, 30.6), concrete_c, .concrete, .concrete);
-    box(v3(hall_x1, y, conc_z0 - 0.6), v3(street_e[0], y + 7, hz0 - 0.4), red_brick, .brick, .brick);
-    box(v3(hall_x1, y, hz1 + 0.4), v3(street_e[0], y + 7, wall_s + 0.6), red_brick, .brick, .brick);
+    stationFront();
+    nextDoor();
+    southBuilding();
 
     // Earls Court Road: pavements, the road, the terrace opposite.
     const sx0 = street_e[0];
@@ -1027,7 +1020,8 @@ fn eastEnd() void {
         }
     }
     // The TARDIS (a police box) on the pavement north of the entrance, a
-    // phone box, a bus, a black cab and a street lamp.
+    // phone box, a bus and a black cab south of the crossing (they leave
+    // the station front clear), and a street lamp.
     const tx = sx0 + 1.4;
     const tz: f32 = -15;
     box(v3(tx - 0.62, y + 0.12, tz - 0.62), v3(tx + 0.62, y + 2.75, tz + 0.62), v3(0.03, 0.1, 0.36), .paint, .wood);
@@ -1036,9 +1030,9 @@ fn eastEnd() void {
     deco(v3(tx - 0.08, y + 2.9, tz - 0.08), v3(tx + 0.08, y + 3.15, tz + 0.08), v3(0.9, 0.95, 1.0), .emissive, .glass);
     box(v3(tx - 0.45, y + 0.12, -18.5), v3(tx + 0.45, y + 2.6, -17.6), v3(0.7, 0.04, 0.03), .paint, .metal);
     const bus_red = v3(0.72, 0.05, 0.04);
-    box(v3(sx0 + 3.6, y + 0.3, -8), v3(sx0 + 6.1, y + 4.4, 3), bus_red, .paint, .sheet_metal);
-    for ([_]f32{ 1.4, 3.3 }) |wy| deco(v3(sx0 + 3.55, y + wy, -7.8), v3(sx0 + 6.15, y + wy + 0.9, 2.8), v3(0.04, 0.05, 0.06), .paint, .glass);
-    box(v3(sx0 + 7.8, y + 0.2, 12), v3(sx0 + 9.5, y + 1.3, 16.5), v3(0.02, 0.02, 0.025), .paint, .sheet_metal);
+    box(v3(sx0 + 3.6, y + 0.3, 18), v3(sx0 + 6.1, y + 4.4, 29), bus_red, .paint, .sheet_metal);
+    for ([_]f32{ 1.4, 3.3 }) |wy| deco(v3(sx0 + 3.55, y + wy, 18.2), v3(sx0 + 6.15, y + wy + 0.9, 28.8), v3(0.04, 0.05, 0.06), .paint, .glass);
+    box(v3(sx0 + 7.8, y + 0.2, 19.5), v3(sx0 + 9.5, y + 1.3, 24), v3(0.02, 0.02, 0.025), .paint, .sheet_metal);
     // The lamp head hangs from an arm over the road, clear of the post: a
     // light inside a solid shape is in its own shadow (render.zig).
     deco(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.35, 19.6), iron, .metal, .metal);
@@ -1046,6 +1040,620 @@ fn eastEnd() void {
     map.addSolid(v3(sx0 + 2.4, y, 19.4), v3(sx0 + 2.6, y + 5.2, 19.6), .metal);
     map.add(v3(sx0 + 3.2, y + 5.1, 19.2), v3(sx0 + 3.8, y + 5.25, 19.8), v3(1.0, 0.7, 0.35), .emissive, .glass).solid = false;
     map.addLight(v3(sx0 + 3.5, y + 4.75, 19.5), v3(1.6, 1.0, 0.45), 14);
+    streetFurniture();
+}
+
+// ---- The Earls Court Road front ----------------------------------------------------
+
+// The station front on Earls Court Road is the 1906 District Railway front:
+// glazed terracotta in buff and tan. (The Leslie Green stations of 1906
+// have ox-blood red tiles. This front follows the photos.) Arched windows with white glazing bars stand between
+// pilasters. A frieze carries the names of the railways, a balustrade runs
+// along the top, and a raised segmental pediment crowns the middle bay.
+// The portico over the entrance has the blue UNDERGROUND sign and two
+// roundels on brackets. A restaurant (LEEK) fills the two bays north of
+// the ticket hall. Next door to the north are three shops in yellow stock
+// brick. Each shop name is an invented parody.
+
+/// The face of the front, on the pavement.
+const front_x: f32 = hall_x1 + 0.6;
+const terracotta = v3(0.66, 0.35, 0.16);
+/// The lighter blocks: the sills, the surrounds, the cornices.
+const dressing = v3(0.76, 0.49, 0.26);
+const pilaster_c = v3(0.58, 0.3, 0.13);
+const frieze_c = v3(0.36, 0.44, 0.39);
+const frieze_text = v3(0.8, 0.83, 0.74);
+const glazing = v3(0.05, 0.06, 0.07);
+const bar_white = v3(0.88, 0.88, 0.85);
+const navy = v3(0.04, 0.06, 0.18);
+const stock_brick = v3(0.62, 0.53, 0.34);
+const sign_gold = v3(0.86, 0.66, 0.3);
+
+// Heights above the street.
+/// The top of the front wall, under the balustrade.
+const front_top: f32 = 9.8;
+/// The top of the shop openings, under the fascias. The shops next door
+/// have the same height.
+const shop_top: f32 = 3.4;
+const sill_y: f32 = 4.7;
+const crown_y: f32 = 8.4;
+const frieze_y = [2]f32{ 8.75, 9.45 };
+
+/// The hall doors in the front, north to south.
+const hall_doors = [_][2]f32{ .{ -10, -7 }, .{ -3.5, -0.5 }, .{ 3, 6 } };
+/// The shop openings of LEEK, north to south.
+const leek_open = [_][2]f32{ .{ -24.9, -18.95 }, .{ -18.25, -12.75 } };
+/// The centres of the pilasters, north to south. Each one is 0.7 m wide,
+/// on a pier box of the full height.
+const pilasters = [_]f32{ -25.25, -18.6, -12.4, -5.25, 1.25, 8.4, 12.85 };
+/// The words on the frieze of each bay, north to south. Bay 3 has the
+/// pediment.
+const bay_text = [_][]const u8{ "RAILWAY", "BROMPTON", "G.N. PICCADILLY &", "EARLS COURT", "RAILWAY", "DISTRICT" };
+const bay_window = [_]f32{ 5.0, 3.6, 3.8, 3.4, 3.8, 2.8 };
+const pediment_bay = 3;
+
+/// A frame on a vertical face: local X along `right`, local Y up, local Z
+/// along `out` (out of the face). right x up must be out.
+fn faceFrame(o: V3, right: V3, out: V3) Mat4 {
+    return .{ .data = .{ right[0], right[1], right[2], 0, 0, 1, 0, 0, out[0], out[1], out[2], 0, o[0], o[1], o[2], 1 } };
+}
+
+/// A frame on a face toward +X (Earls Court Road): text reads toward -Z.
+fn eastFace(o: V3) Mat4 {
+    return faceFrame(o, v3(0, 0, -1), v3(1, 0, 0));
+}
+
+/// An ellipse on a face toward +X: `a` half wide along Z, `b` half high,
+/// `t` thick along X, about the centre c.
+fn ovalX(c: V3, a: f32, b: f32, t: f32, color: V3, mat: Mat, surface: Surface) void {
+    const m = Mat4{ .data = .{ 0, 0, -a, 0, 0, b, 0, 0, 1, 0, 0, 0, c[0], c[1], c[2], 1 } };
+    map.addDisc(m, 1, t, color, mat, surface);
+}
+
+/// A bar along the upper half of an ellipse on a face toward +X: `n`
+/// beams, `w` wide, from x = x0 to x0 + depth.
+fn arcX(x0: f32, depth: f32, cy: f32, cz: f32, a: f32, b: f32, w: f32, n: usize, color: V3, mat: Mat, surface: Surface) void {
+    const xm = x0 + depth / 2;
+    for (0..n) |i| {
+        const t0 = std.math.pi * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n));
+        const t1 = std.math.pi * @as(f32, @floatFromInt(i + 1)) / @as(f32, @floatFromInt(n));
+        map.beam(v3(xm, cy + b * @sin(t0), cz + a * @cos(t0)), v3(xm, cy + b * @sin(t1), cz + a * @cos(t1)), w, depth, v3(1, 0, 0), color, mat, surface);
+    }
+}
+
+/// An arched window in the front, about z = zc: `w` wide, from the sill
+/// at y0 to the crown at y1. The head is a half ellipse, at most 1.5 m
+/// high. A surround of lighter blocks, the glass, white glazing bars, a
+/// sill and a keystone. Each layer is 1 cm or more in front of the one
+/// behind it.
+fn archWindow(zc: f32, w: f32, y0: f32, y1: f32) void {
+    const fx = front_x;
+    const a = w / 2;
+    const rise = @min(a, 1.5);
+    const spring = y1 - rise;
+    const sur: f32 = 0.22;
+    deco(v3(fx, y0 - 0.05, zc - a - sur), v3(fx + 0.02, spring, zc + a + sur), dressing, .terracotta, .tile);
+    ovalX(v3(fx + 0.01, spring, zc), a + sur, rise + sur, 0.02, dressing, .terracotta, .tile);
+    deco(v3(fx, y0 + 0.01, zc - a + 0.01), v3(fx + 0.03, spring, zc + a - 0.01), glazing, .paint, .glass);
+    ovalX(v3(fx + 0.015, spring, zc), a - 0.01, rise - 0.01, 0.03, glazing, .paint, .glass);
+    // The frame and the bars.
+    const bx = [2]f32{ fx, fx + 0.045 };
+    deco(v3(bx[0], y0, zc - a), v3(bx[1], y0 + 0.08, zc + a), bar_white, .paint, .wood);
+    deco(v3(bx[0], y0, zc - a), v3(bx[1], spring, zc - a + 0.08), bar_white, .paint, .wood);
+    deco(v3(bx[0], y0, zc + a - 0.08), v3(bx[1], spring, zc + a), bar_white, .paint, .wood);
+    deco(v3(bx[0], spring - 0.04, zc - a), v3(bx[1], spring + 0.04, zc + a), bar_white, .paint, .wood);
+    const mid = (y0 + spring) / 2;
+    deco(v3(bx[0], mid - 0.03, zc - a), v3(bx[1], mid + 0.03, zc + a), bar_white, .paint, .wood);
+    const n: usize = @intFromFloat(@max(2, @round(w / 0.7)));
+    for (1..n) |k| {
+        const dz = -a + w * @as(f32, @floatFromInt(k)) / @as(f32, @floatFromInt(n));
+        const top = spring + rise * @sqrt(@max(0, 1 - (dz / a) * (dz / a))) - 0.03;
+        deco(v3(bx[0], y0, zc + dz - 0.03), v3(bx[1], top, zc + dz + 0.03), bar_white, .paint, .wood);
+    }
+    arcX(bx[0], 0.045, spring, zc, a - 0.04, rise - 0.04, 0.08, 14, bar_white, .paint, .wood);
+    arcX(bx[0], 0.045, spring, zc, a * 0.55, rise * 0.55, 0.05, 8, bar_white, .paint, .wood);
+    // The sill and the keystone.
+    deco(v3(fx, y0 - 0.2, zc - a - sur - 0.08), v3(fx + 0.12, y0 - 0.05, zc + a + sur + 0.08), dressing, .terracotta, .tile);
+    deco(v3(fx, y1 - 0.12, zc - 0.2), v3(fx + 0.09, y1 + 0.3, zc + 0.2), dressing, .terracotta, .tile);
+}
+
+/// A shop front in an opening of a front at x = front_x, from the street
+/// to `top`: a frame, stall risers under the windows, top lights over a
+/// transom, and a door. The glass is a collision box only (the caller
+/// adds it), so the inside shows from the street. Its face is at
+/// front_x - 0.15, and the front stands on it.
+const ShopFront = struct {
+    z: [2]f32,
+    door: [2]f32,
+    /// Two leaves when true.
+    double: bool = false,
+    top: f32 = shop_top,
+    frame: V3,
+    frame_mat: Mat = .wood,
+    frame_surface: Surface = .wood,
+    riser: V3,
+    riser_mat: Mat = .wall_tile,
+    riser_surface: Surface = .tile,
+    riser_h: f32 = 0.6,
+};
+
+fn shopFront(f: ShopFront) void {
+    const y = street_y;
+    const gx = front_x - 0.15;
+    const top = y + f.top;
+    const rh = y + f.riser_h;
+    const fr = [2]f32{ gx, gx + 0.08 };
+    const tr = top - 0.6; // the transom
+    // The windows, either side of the door.
+    for ([_][2]f32{ .{ f.z[0], f.door[0] - 0.1 }, .{ f.door[1] + 0.1, f.z[1] } }) |w| {
+        if (w[1] - w[0] < 0.3) continue;
+        deco(v3(gx, y, w[0]), v3(gx + 0.1, rh, w[1]), f.riser, f.riser_mat, f.riser_surface);
+        deco(v3(gx, rh, w[0]), v3(gx + 0.12, rh + 0.08, w[1]), f.frame, f.frame_mat, f.frame_surface);
+        const n: usize = @intFromFloat(@max(1, @round((w[1] - w[0]) / 1.3)));
+        for (1..n) |k| {
+            const z = w[0] + (w[1] - w[0]) * @as(f32, @floatFromInt(k)) / @as(f32, @floatFromInt(n));
+            deco(v3(fr[0], rh + 0.08, z - 0.04), v3(fr[1], tr, z + 0.04), f.frame, f.frame_mat, f.frame_surface);
+        }
+    }
+    // The posts at the ends and either side of the door, the transom, the head.
+    for ([_][2]f32{ .{ f.z[0], f.z[0] + 0.12 }, .{ f.z[1] - 0.12, f.z[1] }, .{ f.door[0] - 0.1, f.door[0] }, .{ f.door[1], f.door[1] + 0.1 } }) |p| {
+        deco(v3(fr[0], y, p[0]), v3(fr[1], top, p[1]), f.frame, f.frame_mat, f.frame_surface);
+    }
+    deco(v3(fr[0], tr, f.z[0]), v3(fr[1], tr + 0.1, f.z[1]), f.frame, f.frame_mat, f.frame_surface);
+    deco(v3(fr[0], top - 0.1, f.z[0]), v3(fr[1], top, f.z[1]), f.frame, f.frame_mat, f.frame_surface);
+    // The bars of the top lights.
+    var z = f.z[0] + 0.45;
+    while (z < f.z[1] - 0.3) : (z += 0.45) deco(v3(gx, tr + 0.1, z - 0.02), v3(gx + 0.06, top - 0.1, z + 0.02), f.frame, f.frame_mat, f.frame_surface);
+    // The door: a kick panel, the stiles and the rails round the glass,
+    // and a handle on each leaf.
+    const d = f.door;
+    const dx = [2]f32{ gx, gx + 0.06 };
+    deco(v3(dx[0], y, d[0]), v3(dx[1], y + 0.9, d[1]), f.frame, f.frame_mat, f.frame_surface);
+    deco(v3(dx[0], tr - 0.12, d[0]), v3(dx[1], tr, d[1]), f.frame, f.frame_mat, f.frame_surface);
+    const leaves: usize = if (f.double) 2 else 1;
+    const lw = (d[1] - d[0]) / @as(f32, @floatFromInt(leaves));
+    for (0..leaves) |l| {
+        const la = d[0] + lw * @as(f32, @floatFromInt(l));
+        const lb = la + lw;
+        deco(v3(dx[0], y + 0.9, la), v3(dx[1], tr - 0.12, la + 0.1), f.frame, f.frame_mat, f.frame_surface);
+        deco(v3(dx[0], y + 0.9, lb - 0.1), v3(dx[1], tr - 0.12, lb), f.frame, f.frame_mat, f.frame_surface);
+        const hz = if (l == 0 and leaves == 2) lb - 0.16 else la + 0.16;
+        map.rod(v3(gx + 0.1, y + 0.85, hz), v3(gx + 0.1, y + 1.35, hz), 0.015, steel, .metal, .metal);
+    }
+}
+
+/// A fascia on a face at x = front_x, from y0 to y1 over z0..z1, `depth`
+/// thick, with a name on it. `px` is the size of a pixel of the letters.
+fn fascia(z0: f32, z1: f32, y0: f32, y1: f32, depth: f32, color: V3, text: []const u8, px: f32, text_c: V3, text_mat: Mat) void {
+    const fx = front_x;
+    deco(v3(fx, street_y + y0, z0), v3(fx + depth, street_y + y1, z1), color, .paint, .sheet_metal);
+    const h = 7 * px;
+    pixelText(eastFace(v3(fx + depth, street_y + (y0 + y1 + h) / 2, (z0 + z1) / 2)), text, px, 0.012, text_c, text_mat, if (text_mat == .emissive) .glass else .sheet_metal);
+}
+
+/// Pendant lights over a shop floor: a cord, a shade, and a lit bulb
+/// under it, at x along z0..z1.
+fn pendants(x: f32, z0: f32, z1: f32, step: f32, ceil: f32, shade: V3) void {
+    var z = z0;
+    while (z <= z1 + 0.01) : (z += step) {
+        map.rod(v3(x, ceil - 0.6, z), v3(x, ceil, z), 0.012, iron, .paint, .metal);
+        map.rod(v3(x, ceil - 0.8, z), v3(x, ceil - 0.6, z), 0.17, shade, .paint, .metal);
+        map.rod(v3(x, ceil - 0.86, z), v3(x, ceil - 0.8, z), 0.08, v3(1.0, 0.82, 0.55), .emissive, .glass);
+    }
+}
+
+/// Rows of packs on shelves on a wall at x = wx (the room is toward +X),
+/// from z0 to z1. `seed0` picks the colours.
+fn shelvesX(wx: f32, z0: f32, z1: f32, rows: []const f32, seed0: u32, colors: []const V3) void {
+    const y = street_y;
+    var k: u32 = seed0;
+    for (rows) |sh| {
+        const sy = y + sh;
+        deco(v3(wx, sy - 0.03, z0), v3(wx + 0.4, sy, z1), v3(0.85, 0.85, 0.86), .paint, .wood);
+        var z = z0 + 0.04;
+        while (z < z1 - 0.14) : (z += 0.16) {
+            k += 1;
+            const c = colors[@intFromFloat(vec.hash(k * 7919) * (@as(f32, @floatFromInt(colors.len)) - 0.01))];
+            deco(v3(wx + 0.05, sy, z), v3(wx + 0.3, sy + 0.14 + vec.hash(k * 104729) * 0.14, z + 0.12), c, .paint, .fabric);
+        }
+    }
+}
+
+fn stationFront() void {
+    const y = street_y;
+    const fx = front_x;
+    const x0 = hall_x1; // the back of the front wall
+    const top = y + front_top;
+
+    // The boxes: a pier under each pilaster, the full height, a lintel
+    // over each hall door, and over each shop opening of LEEK the wall
+    // with its glass under it.
+    const piers = [_][2]f32{ .{ -25.6, -24.9 }, .{ -18.95, -18.25 }, .{ -12.75, -10 }, .{ -7, -3.5 }, .{ -0.5, 3 }, .{ 6, 13.2 } };
+    for (piers) |p| box(v3(x0, y, p[0]), v3(fx, top, p[1]), terracotta, .terracotta, .tile);
+    for (hall_doors) |d| boxNoAo(v3(x0, y + 3.8, d[0]), v3(fx, top, d[1]), terracotta, .terracotta, .tile);
+    for (leek_open) |o| {
+        box(v3(x0, y + shop_top, o[0]), v3(fx, top, o[1]), terracotta, .terracotta, .tile);
+        map.addSolid(v3(x0, y, o[0]), v3(fx - 0.15, y + shop_top, o[1]), .glass);
+    }
+    // LEEK inside: the back wall, the ceiling, the wall to the shop next door.
+    const lz = [2]f32{ -25.6, -12.4 };
+    box(v3(74.6, y, lz[0]), v3(75, y + 3.6, lz[1]), cream, .paint, .plaster);
+    box(v3(75, y + shop_top, lz[0]), v3(x0, y + 3.6, lz[1]), cream, .paint, .plaster);
+    box(v3(75, y, -25.9), v3(fx, y + shop_top, -25.6), cream, .paint, .plaster);
+    // The room is a collision box too: a player cannot get in, and the
+    // tables and the counter need no boxes of their own.
+    map.addSolid(v3(75, y, lz[0]), v3(x0, y + shop_top, lz[1]), .glass);
+
+    // The pilasters, with grooves on the ground storey and a green panel
+    // in the frieze, and a base at the foot of each.
+    const py = y + 0.12; // the top of the pavement
+    for (pilasters) |pz| {
+        deco(v3(fx, py, pz - 0.35), v3(fx + 0.14, y + frieze_y[1], pz + 0.35), pilaster_c, .terracotta, .tile);
+        var gy: f32 = 0.6;
+        while (gy < 3.7) : (gy += 0.45) deco(v3(fx + 0.1, y + gy, pz - 0.35), v3(fx + 0.15, y + gy + 0.035, pz + 0.35), pilaster_c * vec.s(0.6), .paint, .tile);
+        deco(v3(fx + 0.14, y + 8.9, pz - 0.2), v3(fx + 0.155, y + 9.3, pz + 0.2), frieze_c, .paint, .tile);
+        deco(v3(fx, py, @max(pz - 0.42, -25.6)), v3(fx + 0.18, py + 0.25, @min(pz + 0.42, wall_s + 0.6)), dressing, .terracotta, .tile);
+    }
+    // The hall doors: a surround of lighter blocks.
+    for (hall_doors) |d| {
+        deco(v3(fx, py, d[0] - 0.25), v3(fx + 0.04, y + 3.8, d[0]), dressing, .terracotta, .tile);
+        deco(v3(fx, py, d[1]), v3(fx + 0.04, y + 3.8, d[1] + 0.25), dressing, .terracotta, .tile);
+        deco(v3(fx, y + 3.8, d[0] - 0.25), v3(fx + 0.04, y + 3.95, d[1] + 0.25), dressing, .terracotta, .tile);
+    }
+
+    // The string course over the ground storey, the arched windows, the
+    // architrave, the frieze, the cornice with its dentils.
+    const zn: f32 = -25.6;
+    const zs: f32 = wall_s + 0.6;
+    deco(v3(fx, y + 3.95, zn), v3(fx + 0.2, y + 4.25, zs), dressing, .terracotta, .tile);
+    deco(v3(fx, y + 8.6, zn), v3(fx + 0.1, y + frieze_y[0], zs), dressing, .terracotta, .tile);
+    deco(v3(fx, y + frieze_y[1], zn), v3(fx + 0.32, top, zs), dressing, .terracotta, .tile);
+    var dz: f32 = zn + 0.15;
+    while (dz < zs - 0.1) : (dz += 0.3) deco(v3(fx + 0.1, y + frieze_y[1] - 0.08, dz), v3(fx + 0.2, y + frieze_y[1], dz + 0.12), dressing, .terracotta, .tile);
+    for (0..bay_text.len) |i| {
+        const za = pilasters[i] + 0.35;
+        const zb = pilasters[i + 1] - 0.35;
+        const zc = (pilasters[i] + pilasters[i + 1]) / 2;
+        archWindow(zc, bay_window[i], y + sill_y, y + crown_y);
+        deco(v3(fx, y + frieze_y[0], za), v3(fx + 0.06, y + frieze_y[1], zb), frieze_c, .terracotta, .tile);
+        pixelText(eastFace(v3(fx + 0.06, y + (frieze_y[0] + frieze_y[1]) / 2 + 0.21, zc)), bay_text[i], 0.06, 0.01, frieze_text, .paint, .tile);
+    }
+
+    // The balustrade: a die over each pilaster, and between them a base,
+    // turned balusters and a coping. The pediment bay has the pediment.
+    for (pilasters) |pz| {
+        const dz0 = @max(pz - 0.32, -25.58);
+        const dz1 = @min(pz + 0.32, wall_s + 0.58);
+        deco(v3(x0 + 0.05, top, dz0), v3(fx, top + 1.05, dz1), dressing, .terracotta, .tile);
+        deco(v3(x0, top + 1.05, @max(dz0 - 0.06, -25.58)), v3(fx + 0.05, top + 1.15, @min(dz1 + 0.06, wall_s + 0.58)), dressing, .terracotta, .tile);
+    }
+    const bal_x = (x0 + 0.1 + fx - 0.05) / 2;
+    for (0..bay_text.len) |i| {
+        if (i == pediment_bay) continue;
+        const za = pilasters[i] + 0.3;
+        const zb = pilasters[i + 1] - 0.3;
+        deco(v3(x0 + 0.1, top, za), v3(fx - 0.05, top + 0.2, zb), dressing, .terracotta, .tile);
+        deco(v3(x0 + 0.08, top + 0.8, za), v3(fx - 0.02, top + 0.95, zb), dressing, .terracotta, .tile);
+        var z = za + 0.2;
+        while (z < zb - 0.1) : (z += 0.24) {
+            map.rod(v3(bal_x, top + 0.2, z), v3(bal_x, top + 0.8, z), 0.055, dressing, .terracotta, .tile);
+            map.rod(v3(bal_x, top + 0.3, z), v3(bal_x, top + 0.55, z), 0.085, dressing, .terracotta, .tile);
+        }
+    }
+    // The pediment: a half ellipse of blocks, its lower half in the wall,
+    // a moulding along its edge, and an oval panel.
+    const pc = (pilasters[pediment_bay] + pilasters[pediment_bay + 1]) / 2;
+    const pa = (pilasters[pediment_bay + 1] - pilasters[pediment_bay]) / 2 - 0.35;
+    ovalX(v3(fx - 0.3, top, pc), pa, 1.9, 0.5, terracotta, .terracotta, .tile);
+    arcX(fx - 0.15, 0.3, top, pc, pa + 0.08, 1.98, 0.2, 16, dressing, .terracotta, .tile);
+    ovalX(v3(fx - 0.03, top + 0.8, pc), 0.6, 0.36, 0.06, frieze_c, .paint, .tile);
+
+    // The portico over the two middle doors: a canopy, its blue sign with
+    // a white border, a soffit with lights, and tie rods to the front.
+    const cz = [2]f32{ pilasters[3] - 0.35, pilasters[5] + 0.35 };
+    const cx = fx + 1.8;
+    deco(v3(fx, y + 3.9, cz[0] + 0.02), v3(cx, y + 4.35, cz[1] - 0.02), v3(0.1, 0.11, 0.13), .paint, .sheet_metal);
+    deco(v3(fx + 0.1, y + 3.88, cz[0] + 0.05), v3(cx - 0.05, y + 3.9, cz[1] - 0.05), cream, .paint, .plaster);
+    var lz2: f32 = cz[0] + 0.8;
+    while (lz2 < cz[1] - 0.5) : (lz2 += 1.6) deco(v3(fx + 0.7, y + 3.865, lz2 - 0.2), v3(fx + 1.1, y + 3.88, lz2 + 0.2), v3(0.7, 0.62, 0.48), .emissive, .glass);
+    const sign_y = [2]f32{ 3.85, 4.6 };
+    deco(v3(cx, y + sign_y[0], cz[0] - 0.08), v3(cx + 0.08, y + sign_y[1], cz[1] + 0.08), blue, .paint, .sheet_metal);
+    for ([_][2]f32{ .{ cz[0] - 0.08, cz[0] + 0.03 }, .{ cz[1] - 0.03, cz[1] + 0.08 } }) |e| deco(v3(fx + 0.15, y + sign_y[0], e[0]), v3(cx, y + sign_y[1], e[1]), blue, .paint, .sheet_metal);
+    const split = pilasters[4] + 0.2;
+    for ([_][2]f32{ .{ cz[0] + 0.05, split - 0.05 }, .{ split + 0.05, cz[1] - 0.05 } }, [_][]const u8{ "EARL'S COURT STATION", "UNDERGROUND" }, [_]f32{ 0.05, 0.07 }) |p, text, px| {
+        deco(v3(cx + 0.08, y + sign_y[0] + 0.05, p[0]), v3(cx + 0.09, y + sign_y[1] - 0.05, p[1]), sign_white, .paint, .sheet_metal);
+        deco(v3(cx + 0.09, y + sign_y[0] + 0.08, p[0] + 0.03), v3(cx + 0.1, y + sign_y[1] - 0.08, p[1] - 0.03), blue, .paint, .sheet_metal);
+        pixelText(eastFace(v3(cx + 0.1, y + (sign_y[0] + sign_y[1] + 7 * px) / 2, (p[0] + p[1]) / 2)), text, px, 0.012, sign_white, .paint, .sheet_metal);
+    }
+    for ([_]f32{ pilasters[3], pilasters[4], pilasters[5] }) |pz| {
+        for ([_]f32{ -0.15, 0.15 }) |o| map.rod(v3(fx + 0.14, y + 6.0, pz + o), v3(cx - 0.05, y + 4.35, pz + o), 0.022, iron, .paint, .metal);
+    }
+    // The two roundels on brackets, over the ends of the canopy. Each
+    // shows on both sides, with UNDERGROUND on its bar.
+    for ([_]f32{ pilasters[3], pilasters[5] }) |pz| {
+        const rc = v3(fx + 0.95, y + 5.45, pz);
+        const size: f32 = 0.85;
+        map.beam(v3(fx + 0.14, y + 6.2, pz), v3(fx + 1.55, y + 6.2, pz), 0.06, 0.1, v3(0, 1, 0), iron, .paint, .metal);
+        map.rod(v3(fx + 0.14, y + 5.35, pz), v3(fx + 1.0, y + 6.15, pz), 0.025, iron, .paint, .metal);
+        for ([_]f32{ 0.55, 1.35 }) |hx| map.rod(v3(fx + hx, y + 5.45 + 0.62 * size, pz), v3(fx + hx, y + 6.15, pz), 0.012, iron, .paint, .metal);
+        roundel(rc, 0, size);
+        roundel(rc, std.math.pi, size);
+        for ([_]f32{ 1, -1 }) |side| {
+            const m = faceFrame(rc + v3(0, 0.06, side * 0.07), v3(side, 0, 0), v3(0, 0, side));
+            pixelText(m, "UNDERGROUND", 0.017, 0.012, sign_white, .paint, .sheet_metal);
+        }
+    }
+
+    // A station map on the pier north of the entrance, and a poster on the
+    // south bay.
+    deco(v3(fx, py + 0.9, -4.75), v3(fx + 0.08, py + 2.3, -3.85), iron, .paint, .metal);
+    deco(v3(fx + 0.08, py + 0.96, -4.69), v3(fx + 0.09, py + 2.24, -3.91), sign_white, .paint, .sheet_metal);
+    for ([_]V3{ v3(0.0, 0.47, 0.2), v3(0.0, 0.1, 0.55), v3(1.0, 0.8, 0.0), v3(0.6, 0.6, 0.62), v3(0.85, 0.1, 0.1) }, 0..) |c, i| {
+        const fi: f32 = @floatFromInt(i);
+        deco(v3(fx + 0.09, py + 1.2 + fi * 0.2, -4.6 + fi * 0.05), v3(fx + 0.1, py + 1.24 + fi * 0.2, -4.0), c, .paint, .sheet_metal);
+        deco(v3(fx + 0.1, py + 1.05, -4.55 + fi * 0.13), v3(fx + 0.11, py + 2.1, -4.51 + fi * 0.13), c, .paint, .sheet_metal);
+    }
+    deco(v3(fx, py + 0.7, 9.3), v3(fx + 0.08, py + 2.6, 11.7), v3(0.2, 0.2, 0.22), .paint, .metal);
+    deco(v3(fx + 0.08, py + 0.78, 9.38), v3(fx + 0.09, py + 2.52, 11.62), v3(0.95, 0.75, 0.15), .paint, .sheet_metal);
+    deco(v3(fx + 0.09, py + 1.6, 9.5), v3(fx + 0.1, py + 2.4, 11.5), v3(0.7, 0.1, 0.4), .paint, .sheet_metal);
+    pixelText(eastFace(v3(fx + 0.09, py + 1.4, 10.5)), "MIND THE GAP", 0.022, 0.012, sign_black, .paint, .sheet_metal);
+
+    // LEEK: a restaurant in the two bays north of the hall. Navy fascias,
+    // wooden fronts, green tiled stall risers, double doors in the wide bay.
+    const tile_g = v3(0.12, 0.36, 0.2);
+    shopFront(.{ .z = leek_open[0], .door = .{ -22.75, -21.1 }, .double = true, .frame = v3(0.24, 0.09, 0.05), .riser = tile_g });
+    shopFront(.{ .z = leek_open[1], .door = .{ -14.6, -13.5 }, .frame = v3(0.24, 0.09, 0.05), .riser = tile_g });
+    fascia(leek_open[0][0], leek_open[0][1], shop_top, 3.95, 0.1, navy, "NATURALLY FASTISH FOOD", 0.032, sign_gold, .paint);
+    fascia(leek_open[1][0], leek_open[1][1], shop_top, 3.95, 0.1, navy, "LEEK", 0.07, v3(0.82, 0.12, 0.08), .paint);
+    // Inside: a wood floor, a green tiled dado, a counter, menu boards over
+    // it, tables in the windows, pendant lights.
+    deco(v3(75, y, lz[0]), v3(fx - 0.3, y + 0.02, lz[1]), v3(0.32, 0.2, 0.11), .wood, .wood);
+    deco(v3(75, y + 0.02, lz[0]), v3(75.02, y + 1.3, lz[1]), tile_g, .wall_tile, .tile);
+    deco(v3(75.9, y + 0.02, -22.5), v3(76.6, y + 1.0, -15.5), v3(0.3, 0.16, 0.08), .wood, .wood);
+    deco(v3(75.85, y + 1.0, -22.55), v3(76.65, y + 1.05, -15.45), v3(0.85, 0.83, 0.8), .paint, .concrete);
+    var mz: f32 = -22.2;
+    while (mz < -15.8) : (mz += 1.6) {
+        deco(v3(75, y + 2.0, mz), v3(75.03, y + 2.9, mz + 1.4), navy, .paint, .wood);
+        for (0..5) |r| {
+            const ry = y + 2.75 - @as(f32, @floatFromInt(r)) * 0.15;
+            deco(v3(75.03, ry, mz + 0.15), v3(75.04, ry + 0.04, mz + 0.5 + vec.hash(@as(u32, @intFromFloat(mz * 10 + 300)) + @as(u32, @intCast(r))) * 0.7), v3(0.9, 0.86, 0.7), .emissive, .glass);
+        }
+    }
+    for ([_]f32{ -24.2, -20.0, -17.6, -14.0 }) |tz| {
+        deco(v3(77.3, y + 0.72, tz - 0.4), v3(78.0, y + 0.76, tz + 0.4), v3(0.36, 0.22, 0.12), .wood, .wood);
+        map.rod(v3(77.65, y + 0.02, tz), v3(77.65, y + 0.72, tz), 0.04, iron, .paint, .metal);
+    }
+    pendants(77.2, -24.2, -13.4, 1.8, y + shop_top, v3(0.1, 0.25, 0.16));
+}
+
+/// The three shops next door to the north, in two buildings of yellow
+/// stock brick: FOOD & WHINE (a corner shop with an ATM) and KLONIK (a
+/// white fascia) in the south one, CAFFE NEARLY (a coffee shop) in the
+/// north one. Each shop has a shallow room behind its glass.
+fn nextDoor() void {
+    const y = street_y;
+    const fx = front_x;
+    const back: f32 = 75.6; // the back walls of the shops
+    const gt = y + shop_top;
+    const z_split: f32 = -33.75; // between the two buildings
+    const stock2 = v3(0.55, 0.47, 0.32);
+    const tops = [2]f32{ 13.6, 12.6 };
+    box(v3(east_x[1], gt, z_split), v3(fx, y + tops[0], -25.6), stock_brick, .brick, .brick);
+    box(v3(east_x[1], gt, -40.6), v3(fx, y + tops[1], z_split), stock2, .brick, .brick);
+    box(v3(east_x[1], y, -40.6), v3(back, gt, -25.9), stock_brick, .brick, .brick);
+    // The walls between the shops, out to the front. The north wall has
+    // the door to the flats.
+    box(v3(back, y, -30.4), v3(fx, gt, -30.1), stock_brick, .brick, .brick);
+    box(v3(back, y, -33.9), v3(fx, gt, -33.6), stock_brick, .brick, .brick);
+    box(v3(back, y, -40.6), v3(fx, gt, -39.1), stock2, .brick, .brick);
+    const fw = [2]f32{ -30.1, -25.9 };
+    const kl = [2]f32{ -33.6, -30.4 };
+    const cf = [2]f32{ -39.1, -33.9 };
+    // Each shop is a collision box from its back wall to the glass.
+    for ([_][2]f32{ fw, kl, cf }) |o| map.addSolid(v3(back, y, o[0]), v3(fx - 0.15, gt, o[1]), .glass);
+
+    // The upper floors: white sash windows, three floors, and a cornice
+    // at the top of each building.
+    for ([_]f32{ -27.3, -29.7, -32.1 }, 0..) |wz, c| {
+        for (0..3) |f| sash(wz, 1.1, y + 4.5 + 2.9 * @as(f32, @floatFromInt(f)), 1.9, @intCast(c * 3 + f), true);
+    }
+    for ([_]f32{ -35.2, -37.2, -39.2 }, 0..) |wz, c| {
+        for (0..3) |f| sash(wz, 1.2, y + 4.8 + 2.4 * @as(f32, @floatFromInt(f)), 1.7, @intCast(20 + c * 3 + f), false);
+    }
+    deco(v3(fx, y + tops[0] - 0.7, z_split), v3(fx + 0.25, y + tops[0] - 0.45, -25.6), v3(0.82, 0.78, 0.68), .concrete, .concrete);
+    deco(v3(fx, y + tops[1] - 0.7, -40.6), v3(fx + 0.25, y + tops[1] - 0.45, z_split), v3(0.82, 0.78, 0.68), .concrete, .concrete);
+
+    // FOOD & WHINE: a black fascia with green letters, black piers, an ATM
+    // in the window and a red ATM sign, shelves of packs inside, and a
+    // stand of fruit on the pavement.
+    const black = v3(0.02, 0.02, 0.025);
+    const green = v3(0.15, 0.85, 0.3);
+    for ([_][2]f32{ .{ -30.4, -30.1 }, .{ -25.9, -25.6 } }) |p| deco(v3(fx, y + 0.12, p[0]), v3(fx + 0.1, gt, p[1]), black, .paint, .sheet_metal);
+    fascia(-30.4, -25.6, shop_top, 4.2, 0.12, black, "FOOD & WHINE", 0.05, green, .emissive);
+    deco(v3(fx + 0.12, gt + 0.18, -29.4), v3(fx + 0.125, gt + 0.2, -26.6), v3(0.8, 0.08, 0.06), .paint, .sheet_metal);
+    pixelText(eastFace(v3(fx + 0.12, gt + 0.15, -28.0)), "EARLS COURT", 0.018, 0.012, v3(0.9, 0.9, 0.9), .paint, .sheet_metal);
+    shopFront(.{ .z = fw, .door = .{ -28.9, -27.9 }, .frame = black, .frame_mat = .paint, .frame_surface = .metal, .riser = black, .riser_mat = .paint, .riser_surface = .metal, .riser_h = 0.4 });
+    const gx = fx - 0.15;
+    deco(v3(gx, y + 0.9, -27.5), v3(gx + 0.1, y + 2.0, -26.5), steel, .steel, .metal);
+    deco(v3(gx + 0.1, y + 1.45, -27.3), v3(gx + 0.11, y + 1.8, -26.7), v3(0.2, 0.45, 0.9), .emissive, .glass);
+    deco(v3(gx + 0.1, y + 1.05, -27.2), v3(gx + 0.13, y + 1.3, -26.8), black, .paint, .metal);
+    deco(v3(fx + 0.02, gt - 0.5, -26.05), v3(fx + 0.7, gt - 0.08, -25.97), v3(0.8, 0.06, 0.05), .paint, .sheet_metal);
+    for ([_]f32{ 1, -1 }) |side| {
+        const m = faceFrame(v3(fx + 0.36, gt - 0.178, -26.01 + side * 0.04), v3(side, 0, 0), v3(0, 0, side));
+        pixelText(m, "ATM", 0.032, 0.012, v3(0.95, 0.95, 0.95), .paint, .sheet_metal);
+    }
+    const packs = [_]V3{ v3(0.8, 0.1, 0.1), v3(0.95, 0.75, 0.1), v3(0.1, 0.3, 0.8), v3(0.1, 0.6, 0.25), v3(0.9, 0.45, 0.1), v3(0.6, 0.1, 0.6), v3(0.9, 0.9, 0.85) };
+    shelvesX(back, fw[0], fw[1], &[_]f32{ 0.3, 0.75, 1.2, 1.65, 2.1 }, 500, &packs);
+    deco(v3(76.6, y, -27.6), v3(77.2, y + 1.0, -26.2), black, .paint, .wood);
+    for ([_]f32{ -29.0, -27.0 }) |pz| deco(v3(back + 0.8, y + 3.35, pz), v3(back + 1.8, y + 3.39, pz + 0.6), v3(1.0, 1.0, 1.0), .emissive, .glass);
+    // The fruit stand: one box, with crates on a slope.
+    box(v3(78.8, y + 0.12, -29.7), v3(79.5, y + 0.85, -27.3), v3(0.12, 0.3, 0.15), .paint, .wood);
+    const fruit = [_]V3{ v3(0.9, 0.5, 0.05), v3(0.85, 0.08, 0.05), v3(0.95, 0.85, 0.1), v3(0.35, 0.65, 0.1), v3(0.4, 0.1, 0.3) };
+    for (fruit, 0..) |c, i| {
+        const z = -29.6 + @as(f32, @floatFromInt(i)) * 0.46;
+        deco(v3(78.85, y + 0.85, z), v3(79.45, y + 0.97, z + 0.42), c, .paint, .fabric);
+    }
+
+    // KLONIK: a white fascia with black letters, white piers, a frosted
+    // band on the glass, a white room with a desk and a plant.
+    const white = v3(0.9, 0.9, 0.9);
+    deco(v3(fx, y + 0.12, -33.9), v3(fx + 0.1, gt, -33.6), white, .paint, .sheet_metal);
+    fascia(-33.75, -30.4, shop_top, 4.2, 0.12, white, "KLONIK", 0.07, sign_black, .paint);
+    shopFront(.{ .z = kl, .door = .{ -31.6, -30.6 }, .frame = v3(0.15, 0.15, 0.16), .frame_mat = .paint, .frame_surface = .metal, .riser = v3(0.15, 0.15, 0.16), .riser_mat = .paint, .riser_surface = .metal, .riser_h = 0.3 });
+    deco(v3(gx, y + 0.95, kl[0] + 0.12), v3(gx + 0.02, y + 1.6, -31.7), v3(0.82, 0.86, 0.86), .paint, .glass);
+    deco(v3(back, y, kl[0]), v3(back + 0.02, gt, kl[1]), white, .paint, .plaster);
+    deco(v3(76.4, y, -33.1), v3(77.0, y + 1.05, -31.6), white, .paint, .wood);
+    deco(v3(76.35, y + 1.05, -33.15), v3(77.05, y + 1.09, -31.55), v3(0.75, 0.62, 0.45), .wood, .wood);
+    map.rod(v3(77.6, y, -33.2), v3(77.6, y + 0.5, -33.2), 0.16, v3(0.85, 0.85, 0.82), .paint, .concrete);
+    map.rod(v3(77.6, y + 0.5, -33.2), v3(77.6, y + 1.3, -33.2), 0.26, v3(0.15, 0.45, 0.2), .paint, .fabric);
+    deco(v3(back + 0.6, y + 3.35, -33.0), v3(back + 2.2, y + 3.39, -31.0), v3(0.6, 0.6, 0.6), .emissive, .glass);
+
+    // CAFFE NEARLY: a light blue fascia with navy letters and a line in
+    // white, a grey panelled front, a blade sign, a timber ledge in the
+    // window, a warm room with a counter. The grey door to the flats is
+    // at the north end.
+    const grey = v3(0.36, 0.38, 0.41);
+    const sky = v3(0.42, 0.58, 0.86);
+    deco(v3(fx, y + 0.12, -39.3), v3(fx + 0.1, gt, -39.1), grey, .paint, .wood);
+    fascia(-40.45, z_split, shop_top + 0.05, 4.25, 0.12, sky, "CAFFE NEARLY", 0.065, navy, .paint);
+    deco(v3(fx + 0.12, gt + 0.07, -38.4), v3(fx + 0.13, gt + 0.21, -35.8), navy, .paint, .sheet_metal);
+    pixelText(eastFace(v3(fx + 0.13, gt + 0.198, -37.1)), "THE ITALIANISH COFFEE CO", 0.016, 0.012, white, .paint, .sheet_metal);
+    deco(v3(fx, y + 4.35, -40.6), v3(fx + 0.28, y + 4.55, z_split), grey, .paint, .wood);
+    shopFront(.{ .z = cf, .door = .{ -38.9, -37.9 }, .frame = grey, .frame_mat = .paint, .riser = grey, .riser_mat = .paint, .riser_surface = .wood, .riser_h = 0.7 });
+    deco(v3(fx - 0.7, y + 1.0, -37.7), v3(fx - 0.3, y + 1.05, -34.1), v3(0.6, 0.4, 0.2), .wood, .wood);
+    // The door to the flats, with its number.
+    deco(v3(fx, y + 0.12, -40.45), v3(fx + 0.1, y + 2.6, -39.3), grey * vec.s(0.8), .paint, .wood);
+    deco(v3(fx + 0.1, y + 0.2, -40.25), v3(fx + 0.12, y + 2.3, -39.45), grey, .paint, .wood);
+    for ([_][2]f32{ .{ 0.5, 1.2 }, .{ 1.3, 1.95 } }) |ph| deco(v3(fx + 0.11, y + ph[0], -40.1), v3(fx + 0.135, y + ph[1], -39.6), grey * vec.s(1.15), .paint, .wood);
+    pixelText(eastFace(v3(fx + 0.12, y + 2.25, -39.85)), "2B", 0.03, 0.012, white, .paint, .sheet_metal);
+    deco(v3(fx + 0.11, y + 1.21, -40.0), v3(fx + 0.14, y + 1.28, -39.7), steel, .metal, .metal);
+    // The blade sign over the door to the flats.
+    map.rod(v3(fx, y + 5.0, -40.2), v3(fx + 0.85, y + 5.0, -40.2), 0.02, iron, .paint, .metal);
+    deco(v3(fx + 0.15, y + 4.0, -40.24), v3(fx + 0.85, y + 4.98, -40.16), sky, .paint, .sheet_metal);
+    for ([_]f32{ 1, -1 }) |side| {
+        for ([_][]const u8{ "CAFFE", "NEARLY" }, 0..) |t, r| {
+            const m = faceFrame(v3(fx + 0.5, y + 4.65 - @as(f32, @floatFromInt(r)) * 0.2, -40.2 + side * 0.04), v3(side, 0, 0), v3(0, 0, side));
+            pixelText(m, t, 0.017, 0.012, navy, .paint, .sheet_metal);
+        }
+    }
+    // Inside: wood panels, a counter with a lit cake case and a coffee
+    // machine, warm pendant lights.
+    deco(v3(back, y, cf[0]), v3(back + 0.02, gt, cf[1]), v3(0.35, 0.22, 0.13), .wood, .wood);
+    deco(v3(76.3, y, -38.6), v3(76.9, y + 1.0, -35.2), v3(0.2, 0.2, 0.22), .paint, .wood);
+    deco(v3(76.3, y + 1.0, -37.0), v3(76.9, y + 1.45, -35.4), v3(0.12, 0.09, 0.06), .emissive, .glass);
+    deco(v3(76.4, y + 1.0, -38.3), v3(76.8, y + 1.45, -37.5), steel, .steel, .metal);
+    pendants(77.3, -38.4, -34.6, 1.25, gt, v3(0.15, 0.15, 0.16));
+}
+
+/// A sash window on the face x = front_x, about z = zc: `w` wide, from
+/// y0, `h` high. A stone surround and sill, glass in two sashes, and an
+/// arched stone head if `arch`. `id` picks a lit window or a dark one.
+fn sash(zc: f32, w: f32, y0: f32, h: f32, id: u32, arch: bool) void {
+    const fx = front_x;
+    const a = w / 2;
+    const stone = v3(0.86, 0.83, 0.74);
+    deco(v3(fx, y0 - 0.12, zc - a - 0.12), v3(fx + 0.03, y0 + h + 0.12, zc + a + 0.12), stone, .paint, .concrete);
+    if (arch) ovalX(v3(fx + 0.015, y0 + h + 0.1, zc), a + 0.12, 0.3, 0.03, stone, .paint, .concrete);
+    const lit = vec.hash(id * 2654 + 77) < 0.35;
+    const pane = if (lit) v3(0.55, 0.36, 0.16) else glazing;
+    deco(v3(fx, y0 + 0.01, zc - a + 0.01), v3(fx + 0.045, y0 + h - 0.01, zc + a - 0.01), pane, if (lit) .emissive else .paint, .glass);
+    const bx = [2]f32{ fx, fx + 0.06 };
+    for ([_][2]f32{ .{ y0, y0 + 0.06 }, .{ y0 + h / 2 - 0.03, y0 + h / 2 + 0.03 }, .{ y0 + h - 0.06, y0 + h } }) |r| deco(v3(bx[0], r[0], zc - a), v3(bx[1], r[1], zc + a), bar_white, .paint, .wood);
+    for ([_][2]f32{ .{ zc - a, zc - a + 0.06 }, .{ zc - 0.02, zc + 0.02 }, .{ zc + a - 0.06, zc + a } }) |c| deco(v3(bx[0], y0, c[0]), v3(bx[1], y0 + h, c[1]), bar_white, .paint, .wood);
+    deco(v3(fx, y0 - 0.2, zc - a - 0.18), v3(fx + 0.1, y0 - 0.12, zc + a + 0.18), stone, .paint, .concrete);
+}
+
+/// The building south of the station, out to the road: brown brick, with
+/// sash windows on its upper floors.
+fn southBuilding() void {
+    const y = street_y;
+    const z0 = wall_s + 0.6;
+    box(v3(east_x[1] + 0.4, y, z0), v3(front_x, y + 13, 30.6), v3(0.42, 0.3, 0.22), .brick, .brick);
+    var z: f32 = z0 + 1.6;
+    var i: u32 = 40;
+    while (z < 29.5) : (z += 2.4) {
+        for (0..3) |f| {
+            sash(z, 1.2, y + 4.4 + 2.6 * @as(f32, @floatFromInt(f)), 1.8, i, false);
+            i += 1;
+        }
+    }
+    deco(v3(front_x, y + 12.2, z0), v3(front_x + 0.25, y + 12.45, 30.6), v3(0.82, 0.78, 0.68), .concrete, .concrete);
+}
+
+/// The street furniture on the station pavement of Earls Court Road: the
+/// cast iron lamp post with five globes, Sheffield bike stands, litter
+/// bins, and the traffic signal of the crossing south of the station,
+/// with its studs and stop line on the road.
+fn streetFurniture() void {
+    const y = street_y;
+    const py = y + 0.12;
+    const kerb = street_e[0] + 3;
+    const lamp_c = v3(0.03, 0.05, 0.04);
+
+    // The lamp post: a fluted base, a column, a collar, four arms with
+    // globes and a fifth globe on top. The base is the collision.
+    const lp = v3(80.95, py, -19.9);
+    map.addSolid(lp + v3(-0.2, 0, -0.2), lp + v3(0.2, 3.2, 0.2), .metal);
+    map.rod(lp, lp + v3(0, 0.25, 0), 0.24, lamp_c, .paint, .metal);
+    map.rod(lp + v3(0, 0.25, 0), lp + v3(0, 1.1, 0), 0.17, lamp_c, .paint, .metal);
+    map.rod(lp + v3(0, 1.1, 0), lp + v3(0, 3.6, 0), 0.08, lamp_c, .paint, .metal);
+    map.rod(lp + v3(0, 1.1, 0), lp + v3(0, 1.2, 0), 0.13, lamp_c, .paint, .metal);
+    map.rod(lp + v3(0, 3.4, 0), lp + v3(0, 3.65, 0), 0.12, lamp_c, .paint, .metal);
+    const globe = v3(0.32, 0.3, 0.25);
+    for ([_]V3{ v3(0.6, 0, 0), v3(-0.6, 0, 0), v3(0, 0, 0.6), v3(0, 0, -0.6) }) |d| {
+        map.rail(&[_]V3{ lp + v3(0, 3.5, 0), lp + d * vec.s(0.6) + v3(0, 3.55, 0), lp + d + v3(0, 3.8, 0) }, 0.03, 0.15, lamp_c, .paint, .metal);
+        const g = lp + d + v3(0, 3.8, 0);
+        map.rod(g, g + v3(0, 0.08, 0), 0.06, lamp_c, .paint, .metal);
+        map.rod(g + v3(0, 0.08, 0), g + v3(0, 0.44, 0), 0.15, globe, .emissive, .glass);
+        map.rod(g + v3(0, 0.14, 0), g + v3(0, 0.38, 0), 0.2, globe, .emissive, .glass);
+    }
+    const g5 = lp + v3(0, 3.65, 0);
+    map.rod(g5, g5 + v3(0, 0.5, 0), 0.05, lamp_c, .paint, .metal);
+    map.rod(g5 + v3(0, 0.5, 0), g5 + v3(0, 0.86, 0), 0.15, globe, .emissive, .glass);
+    map.rod(g5 + v3(0, 0.56, 0), g5 + v3(0, 0.8, 0), 0.2, globe, .emissive, .glass);
+    map.rod(g5 + v3(0, 0.86, 0), g5 + v3(0, 0.98, 0), 0.03, lamp_c, .paint, .metal);
+
+    // Sheffield bike stands, across the pavement near the kerb.
+    for ([_]f32{ 9.9, 11.1, -27.7, -28.9 }) |z| {
+        const x0 = kerb - 1.05;
+        const x1 = kerb - 0.35;
+        map.addSolid(v3(x0 - 0.04, py, z - 0.04), v3(x1 + 0.04, py + 0.82, z + 0.04), .metal);
+        map.rail(&[_]V3{ v3(x0, py, z), v3(x0, py + 0.8, z), v3(x1, py + 0.8, z), v3(x1, py, z) }, 0.03, 0.2, lamp_c, .paint, .metal);
+        for ([_]f32{ x0, x1 }) |bx| map.rod(v3(bx, py + 0.55, z), v3(bx, py + 0.62, z), 0.042, sign_white, .paint, .metal);
+    }
+
+    // Litter bins: black, round, with a gold band.
+    for ([_]V3{ v3(81.15, py, 8.7), v3(81.15, py, -23.0) }) |b| {
+        map.addSolid(b + v3(-0.28, 0, -0.28), b + v3(0.28, 1.0, 0.28), .metal);
+        map.rod(b, b + v3(0, 0.95, 0), 0.27, v3(0.02, 0.02, 0.025), .paint, .metal);
+        map.rod(b + v3(0, 0.72, 0), b + v3(0, 0.8, 0), 0.28, v3(0.7, 0.55, 0.2), .paint, .metal);
+        map.rod(b + v3(0, 0.95, 0), b + v3(0, 1.0, 0), 0.25, v3(0.02, 0.02, 0.025), .paint, .metal);
+    }
+
+    // The traffic signal: a pole, a head toward the traffic from the
+    // north with a black backboard and a white border, red lit, and a
+    // push button for the crossing.
+    const sp = v3(kerb - 0.3, py, 14.3);
+    map.addSolid(sp + v3(-0.1, 0, -0.1), sp + v3(0.1, 3.1, 0.1), .metal);
+    map.rod(sp, sp + v3(0, 3.1, 0), 0.06, v3(0.1, 0.1, 0.1), .paint, .metal);
+    deco(sp + v3(-0.25, 1.95, 0.08), sp + v3(0.25, 3.05, 0.1), sign_white, .paint, .sheet_metal);
+    deco(sp + v3(-0.22, 1.98, 0.06), sp + v3(0.22, 3.02, 0.08), v3(0.01, 0.01, 0.01), .paint, .sheet_metal);
+    deco(sp + v3(-0.13, 2.05, -0.16), sp + v3(0.13, 2.95, 0.06), v3(0.02, 0.02, 0.025), .paint, .metal);
+    for ([_]V3{ v3(0.95, 0.08, 0.05), v3(0.25, 0.16, 0.02), v3(0.02, 0.18, 0.06) }, 0..) |c, i| {
+        const ly = 2.8 - @as(f32, @floatFromInt(i)) * 0.3;
+        map.addDisc(vec.translate(sp + v3(0, ly, -0.172)), 0.08, 0.02, c, if (i == 0) .emissive else .paint, .glass);
+        deco(sp + v3(-0.11, ly + 0.08, -0.32), sp + v3(0.11, ly + 0.1, -0.165), v3(0.02, 0.02, 0.025), .paint, .metal);
+    }
+    deco(sp + v3(-0.08, 1.0, -0.1), sp + v3(0.08, 1.3, -0.05), v3(0.95, 0.75, 0.1), .paint, .metal);
+
+    // The crossing: two lines of studs across the road, and the stop line
+    // for the traffic from the north.
+    const mark = v3(0.9, 0.9, 0.85);
+    for ([_]f32{ 14.9, 17.1 }) |z| {
+        var x = kerb + 0.1;
+        while (x < street_e[1] - 3.1) : (x += 0.4) deco(v3(x, y + 0.004, z - 0.1), v3(x + 0.2, y + 0.02, z + 0.1), mark, .paint, .concrete);
+    }
+    deco(v3(kerb, y + 0.004, 13.4), v3(kerb + 4, y + 0.02, 13.7), mark, .paint, .concrete);
 }
 
 // ---- VAPES N MORE, on Earls Court Road ----------------------------------------

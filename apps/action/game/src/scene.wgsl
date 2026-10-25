@@ -551,6 +551,19 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
       s.rough = 0.45 + 0.1 * fine;
       s.metal = 0.6;
     }
+    case 12u: { // glazed terracotta blocks, 600 x 300 mm, in stretcher bond
+      let t = uv / vec2f(0.6, 0.3);
+      let fc = fw_uv / vec2f(0.6, 0.3);
+      let row = floor(t.y);
+      let tx = t.x + 0.5 * (row % 2.0);
+      let f = vec2f(fract(tx), fract(t.y));
+      let jt = joint(f.x, 0.012, fc.x) * joint(f.y, 0.024, fc.y);
+      let id = vec3f(floor(tx), row, 12.0);
+      let fade = bandFade(max(fc.x, fc.y));
+      let tone = 0.88 + 0.2 * mix(hash3(id), 0.5, fade) + 0.06 * noiseBL(wp * 2.0, px * 2.0);
+      s.albedo = col * tone * mix(0.72, 1.0, jt);
+      s.rough = mix(0.75, 0.3, jt);
+    }
     default: { // paint, and the gun
       s.rough = 0.4;
       s.metal = 0.35;
