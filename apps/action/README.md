@@ -1122,7 +1122,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 1024. Earl's Court uses 914 boxes, the arena 126.
+`map.max_boxes` is 1024. Earl's Court uses 918 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1375,8 +1375,8 @@ stocks. The door openings and the door places are approximate.
 - **Hit by the train**: the train shoves a player on the track onto the
   platform. A rider in the car does not touch it.
 - **The live rail** (`liveRail` in `game/src/maps/earls_court.zig`) kills
-  at track level only: on the District tracks more than 66.7 m from the
-  shed centre, and on the Piccadilly tracks more than 6.7 m past the ends
+  at track level only: on the District lines more than 60 m from the
+  shed centre (past the barriers at the island ends), and on the Piccadilly tracks more than 6.7 m past the ends
   of the platforms. Yellow boards show where it starts. The floor of the
   deep train is above the track bed, so a rider is safe.
 - **Deathmatch**: the `st` message of a rider has `tx`, the feet x from
@@ -1420,10 +1420,31 @@ stocks. The door openings and the door places are approximate.
   escalators that carry you, and the deep Piccadilly line platform. The
   server runs the lifts, so every player sees the same cab.
   Two trains at their real size: see [Trains](#trains). In deathmatch,
-  the live rail kills a player on the District tracks more than 66.7 m
-  east or west of the shed centre, just past the ends of the concourses,
-  and on the Piccadilly tracks past the ends of the platforms. Yellow
-  danger boards show where it starts.
+  the live rail kills a player on the District lines more than 60 m east
+  or west of the shed centre, past the barriers at the ends of the
+  islands. It also kills on the Piccadilly tracks past the ends of the
+  platforms. Yellow danger boards on the track walls show where it starts.
+- **The District platform ends** (`platformEnd` in
+  `game/src/maps/earls_court.zig`), as on a real Underground platform:
+  - A railing with a gate goes across each end of each island, at 60 m
+    from the shed centre. It has the frame, the posts and the timber
+    handrail of the other railings, with round bars, so you see through
+    it. The live rail starts at its far face.
+  - A sign on the gate says NO ENTRY, AUTHORISED PERSONNEL ONLY, under a
+    red no-entry disc.
+  - Behind the gate, the island goes on for 1.2 m. Then a ramp 1.2 m wide
+    goes down to track level in the middle of the island.
+  - Each edge has a white line on the nose of the coping, the coping
+    stones, and a yellow line behind them. The yellow line stops short of
+    the barrier. The white line and the coping go on to the end of the
+    island.
+  - An S7 stop board for the driver hangs from the deck at the end where
+    the trains leave: the east end of island A (platforms 1 and 2), the
+    west end of island B (platforms 3 and 4).
+  - The barrier is 1.1 m high, as each railing, and you can vault it. It
+    shows where the live rail starts. It does not stop a player, because
+    the tracks are open: a player can also go down onto a track and walk
+    past the danger boards.
 - **Ticket gates** (Earl's Court, `game/src/gates.zig`): a gate line of 8
   lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
   passage. Screens close the rest of each hall.

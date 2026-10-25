@@ -55,9 +55,11 @@ pub const mid_y: f32 = -5.6; // the intermediate level floor
 pub const mid_ceil: f32 = -3.2;
 pub const deep_y: f32 = -15;
 pub const deep_ceil: f32 = deep_y + 4.6;
-/// Past this |x| along the lines the live rail kills: just past the ends of
-/// the concourses (|x| = 66).
-pub const shock_x: f32 = 66.7;
+/// Past this |x| along the District lines the live rail kills. The islands
+/// are 120 m long, from -shock_x to shock_x, out under the concourse decks.
+/// shock_x is the far face of the barrier at each end of each island
+/// (platformEnd), so a player sees the barrier before the live rail.
+pub const shock_x: f32 = 60;
 /// On the Piccadilly line the live rail kills this far past the ends of
 /// the platforms.
 const deep_shock: f32 = 6.7;
@@ -75,8 +77,6 @@ const e2 = [2]f32{ -8.8, -4.6 };
 const w1 = [2]f32{ -3.8, 0.4 };
 const island_b = [2]f32{ 0.4, 8.4 };
 const w2 = [2]f32{ 8.4, 12.6 };
-/// The islands: 120 m, from the shed out under the concourse decks.
-const island_x = [2]f32{ -60, 60 };
 /// The track centre of each track bed: 1.56 m from the platform edge, so
 /// the 2.92 m wide S7 Stock stops 0.1 m from the edge. `away`: the side of
 /// the bed away from the platform (+1 south, -1 north).
@@ -271,14 +271,18 @@ fn roundel(p: V3, turn: f32, size: f32) void {
     map.addDecor(m, v3(-0.82 * size, -0.15 * size, 0.035), v3(0.82 * size, 0.15 * size, 0.07), blue, .paint, .sheet_metal);
 }
 
+/// The paint of the panels of the railings, and of the bars of the
+/// platform-end barriers (platformEnd).
+const railing_paint = v3(0.09, 0.17, 0.13);
+const handrail_wood = v3(0.3, 0.15, 0.08);
+
 /// A railing at floor height y: framed panels of painted iron between
 /// posts, a top rail and a base rail, and a timber handrail on top. One of
 /// the two ranges is thin. The panels are the collision: a bullet does not
 /// go through the railing.
 fn railing(x0: f32, x1: f32, z0: f32, z1: f32, y: f32) void {
-    const paint = v3(0.09, 0.17, 0.13);
-    boxNoAo(v3(x0, y, z0), v3(x1, y + 1.1, z1), paint, .paint, .metal);
-    deco(v3(x0 - 0.04, y + 1.1, z0 - 0.04), v3(x1 + 0.04, y + 1.17, z1 + 0.04), v3(0.3, 0.15, 0.08), .wood, .wood);
+    boxNoAo(v3(x0, y, z0), v3(x1, y + 1.1, z1), railing_paint, .paint, .metal);
+    deco(v3(x0 - 0.04, y + 1.1, z0 - 0.04), v3(x1 + 0.04, y + 1.17, z1 + 0.04), handrail_wood, .wood, .wood);
     // The frame stands 2 cm proud of each face of the panel.
     const p: f32 = 0.02;
     const along_x = x1 - x0 > z1 - z0;
@@ -416,13 +420,19 @@ fn districtLevel() void {
     // The ground under the tracks, with the stair wells cut out.
     map.carve(rect(shed_x0, shed_x1, wall_n, wall_s), -3, bed_y, &well_rects, ballast, .concrete, .ballast);
 
-    // Islands, with their wells, and the yellow edges.
+    // Islands, with their wells, their edges, and the barriers and ramps
+    // at their ends.
     for ([_][2]f32{ island_a, island_b }) |is| {
         const cz = (is[0] + is[1]) / 2;
         var buf: [wells.len]Rect = undefined;
-        map.carve(rect(island_x[0], island_x[1], is[0], is[1]), bed_y, 0, islandWells(cz, &buf), platform_c, .concrete, .concrete);
-        deco(v3(island_x[0], 0, is[0]), v3(island_x[1], 0.012, is[0] + 0.45), yellow, .paint, .concrete);
-        deco(v3(island_x[0], 0, is[1] - 0.45), v3(island_x[1], 0.012, is[1]), yellow, .paint, .concrete);
+        // The carve also makes the landings behind the barriers.
+        const land = shock_x + end_land;
+        map.carve(rect(-land, land, is[0], is[1]), bed_y, 0, islandWells(cz, &buf), platform_c, .concrete, .concrete);
+        platformEdges(is);
+        // Island A has the eastbound tracks, island B the westbound tracks.
+        // A train stops at the end where it leaves.
+        const leave: f32 = if (cz < 0) 1 else -1;
+        for ([_]f32{ -1, 1 }) |dir| platformEnd(is, dir, dir == leave);
         // Railings round the wells, open at the top of the stairs.
         for (wells) |w| {
             if (@abs(w.cz - cz) > 0.01) continue;
@@ -464,6 +474,208 @@ fn districtLevel() void {
             map.add(v3(x - 0.25, 4.5, cz - 0.25), v3(x + 0.25, 4.6, cz + 0.25), warm, .emissive, .glass).solid = false;
             map.addLight(v3(x, 4.3, cz), v3(1.2, 0.8, 0.45), 11);
         }
+    }
+}
+
+// ---- The edges and the ends of the islands -------------------------------------
+//
+// As at a real Underground platform end:
+// - A railing with a gate goes across the island. Its far face is at
+//   shock_x, where the live rail starts to kill. A sign on the gate says
+//   NO ENTRY, AUTHORISED PERSONNEL ONLY.
+// - Behind the gate the island goes on for a short landing. Then a ramp goes
+//   down to track level, in the middle of the island.
+// - The yellow line stops short of the barrier. The white line and the
+//   coping go on to the end of the island.
+// - A stop board for the driver (S7, the stock) hangs at the end where
+//   the trains leave, just short of the barrier.
+// The barrier is 1.1 m high, as each railing of the map, so a player can
+// vault it. It does not stop a player: the tracks are open. It shows where
+// the live rail starts.
+
+/// The depth of the barrier along the line.
+const bar_d: f32 = 0.1;
+/// The landing behind the barrier, and the ramp after it.
+const end_land: f32 = 1.2;
+const ramp_len: f32 = 5;
+const ramp_w: f32 = 1.2;
+const coping_c = v3(0.6, 0.58, 0.54);
+const line_white = v3(0.86, 0.86, 0.83);
+const sign_white = v3(0.92, 0.92, 0.9);
+const sign_black = v3(0.02, 0.02, 0.025);
+
+/// The x range from a to b along the line toward `dir` (+1 east, -1 west).
+fn span(dir: f32, a: f32, b: f32) [2]f32 {
+    return .{ @min(dir * a, dir * b), @max(dir * a, dir * b) };
+}
+
+/// The z range from a to b in from an island edge. `in` is the direction
+/// into the island.
+fn edgeBand(edge: f32, in: f32, a: f32, b: f32) [2]f32 {
+    return .{ @min(edge + in * a, edge + in * b), @max(edge + in * a, edge + in * b) };
+}
+
+/// The two edges of an island: a white line on the nose of the coping, the
+/// coping stones, and the yellow line behind them.
+fn platformEdges(is: [2]f32) void {
+    const end = shock_x + end_land;
+    const stop = shock_x - bar_d - 0.15;
+    for ([_]f32{ is[0], is[1] }, [_]f32{ 1, -1 }) |edge, in| {
+        const w = edgeBand(edge, in, 0, 0.1);
+        const c = edgeBand(edge, in, 0.1, 0.6);
+        const y = edgeBand(edge, in, 0.6, 0.75);
+        deco(v3(-end, 0, w[0]), v3(end, 0.012, w[1]), line_white, .paint, .concrete);
+        deco(v3(-end, 0, c[0]), v3(end, 0.008, c[1]), coping_c, .concrete, .concrete);
+        deco(v3(-stop, 0, y[0]), v3(stop, 0.012, y[1]), yellow, .paint, .concrete);
+    }
+}
+
+/// True when column `col` (0 at the left) of a font row is lit.
+fn pixelOn(bits: u5, col: usize) bool {
+    return bits & (@as(u5, 0b10000) >> @intCast(col)) != 0;
+}
+
+/// The end of the run of lit pixels that starts at column k of a font row,
+/// or null when no run starts there.
+fn runFrom(bits: u5, k: usize) ?usize {
+    if (!pixelOn(bits, k) or (k > 0 and pixelOn(bits, k - 1))) return null;
+    var e = k + 1;
+    while (e < 5 and pixelOn(bits, e)) e += 1;
+    return e;
+}
+
+/// Text in the pixel font of the train indicators (platform_display.zig),
+/// on a sign face at `a` along the line toward `dir`. The face is toward the
+/// middle of the station. The middle of the text is at z_mid, its top at `top`.
+/// One decoration for each run of lit pixels in a row, and for the same
+/// run in the rows below it.
+fn signText(text: []const u8, dir: f32, a: f32, z_mid: f32, top: f32, px: f32, color: V3) void {
+    const cols: f32 = @floatFromInt(text.len * 6 - 1);
+    // A reader who looks toward `dir` reads toward +Z at the east end and
+    // toward -Z at the west end.
+    const z0 = z_mid - dir * cols * px / 2;
+    const x = span(dir, a - 0.003, a);
+    for (text, 0..) |ch, i| {
+        const g = displays.glyph(ch);
+        for (g, 0..) |bits, r| {
+            for (0..5) |k| {
+                const e = runFrom(bits, k) orelse continue;
+                // The row above has the same run: that decoration has it.
+                if (r > 0 and runFrom(g[r - 1], k) == e) continue;
+                var rows: usize = 1;
+                while (r + rows < g.len and runFrom(g[r + rows], k) == e) rows += 1;
+                const y1 = top - @as(f32, @floatFromInt(r)) * px;
+                const y0 = y1 - @as(f32, @floatFromInt(rows)) * px;
+                const za = z0 + dir * @as(f32, @floatFromInt(i * 6 + k)) * px;
+                const zb = z0 + dir * @as(f32, @floatFromInt(i * 6 + e)) * px;
+                deco(v3(x[0], y0, @min(za, zb)), v3(x[1], y1, @max(za, zb)), color, .paint, .sheet_metal);
+            }
+        }
+    }
+}
+
+/// The end of an island toward `dir`: the barrier with its gate and sign,
+/// the landing, the ramp, and a stop board on each edge if `stop_board`.
+fn platformEnd(is: [2]f32, dir: f32, stop_board: bool) void {
+    const cz = (is[0] + is[1]) / 2;
+    const near = shock_x - bar_d; // the face of the barrier toward the platform
+    const mid = shock_x - bar_d / 2;
+
+    // The ramp: a sloped slab of concrete, white lines along its sides, and
+    // a map.Ramp to walk on.
+    const r0 = shock_x + end_land;
+    const rx = span(dir, r0, r0 + ramp_len);
+    const rz = [2]f32{ cz - ramp_w / 2, cz + ramp_w / 2 };
+    map.addRamp(.{
+        .x0 = rx[0],
+        .x1 = rx[1],
+        .z0 = rz[0],
+        .z1 = rz[1],
+        .y0 = if (dir > 0) 0 else bed_y,
+        .y1 = if (dir > 0) bed_y else 0,
+        .bottom = bed_y,
+    });
+    const drop = -bed_y;
+    const slope = @sqrt(ramp_len * ramp_len + drop * drop);
+    // Local X goes down the ramp from its top edge, local Y is up from the
+    // surface. The slab is deep enough to go into the ballast.
+    const m = vec.translate(v3(dir * r0, 0, cz)).mul(Mat4.rotationZ(-dir * std.math.atan2(drop, ramp_len)));
+    const lx = if (dir > 0) [2]f32{ 0, slope } else [2]f32{ -slope, 0 };
+    map.addDecor(m, v3(lx[0], -0.9, rz[0] - cz), v3(lx[1], 0, rz[1] - cz), platform_c, .concrete, .concrete);
+    for ([_]f32{ -1, 1 }) |side| {
+        const e = side * ramp_w / 2;
+        map.addDecor(m, v3(lx[0], 0, @min(e, e - side * 0.08)), v3(lx[1], 0.008, @max(e, e - side * 0.08)), line_white, .paint, .concrete);
+    }
+    // The slab tilts, so its top end leaves a gap under the edge of the
+    // landing. This block fills it.
+    const fill = span(dir, r0, r0 + 0.16);
+    deco(v3(fill[0], bed_y, rz[0]), v3(fill[1], -0.03, rz[1]), platform_c, .concrete, .concrete);
+
+    // The barrier: as the railings of the map (railing), a frame of
+    // painted iron with posts, a base rail, a top rail and a timber
+    // handrail. Round bars fill it, so a player sees the ramp behind it. A
+    // gate at the top of the ramp has the same frame and bars. One solid
+    // box for all of it: a bullet does not go through.
+    const bx = span(dir, near, shock_x);
+    map.addSolid(v3(bx[0], 0, is[0]), v3(bx[1], 1.1, is[1]), .metal);
+    const fr = span(dir, mid - 0.03, mid + 0.03);
+    const gate = [2]f32{ cz - 0.65, cz + 0.65 };
+    for ([_][2]f32{ .{ is[0], gate[0] }, .{ gate[1], is[1] } }) |sec| {
+        deco(v3(fr[0], 0, sec[0]), v3(fr[1], 0.12, sec[1]), iron, .paint, .metal);
+        deco(v3(fr[0], 0.98, sec[0]), v3(fr[1], 1.1, sec[1]), iron, .paint, .metal);
+        const cap = span(dir, mid - 0.06, mid + 0.06);
+        deco(v3(cap[0], 1.1, sec[0]), v3(cap[1], 1.17, sec[1]), handrail_wood, .wood, .wood);
+        // Posts at the ends of the section and about each 1.1 m.
+        const n: usize = 3;
+        for (0..n + 1) |k| {
+            const z = sec[0] + 0.04 + (sec[1] - sec[0] - 0.08) * @as(f32, @floatFromInt(k)) / @as(f32, @floatFromInt(n));
+            deco(v3(fr[0], 0, z - 0.04), v3(fr[1], 1.1, z + 0.04), iron, .paint, .metal);
+        }
+        var z = sec[0] + 0.14;
+        while (z < sec[1] - 0.1) : (z += 0.12) {
+            map.rod(v3(dir * mid, 0.12, z), v3(dir * mid, 0.98, z), 0.012, railing_paint, .paint, .metal);
+        }
+    }
+    // The gate leaf: a frame with bars, its hinges on the post at -Z, and a
+    // latch at the free side.
+    const leaf = [2]f32{ gate[0] + 0.03, gate[1] - 0.02 };
+    const lf = span(dir, mid - 0.02, mid + 0.02);
+    deco(v3(lf[0], 0.12, leaf[0]), v3(lf[1], 0.2, leaf[1]), iron, .paint, .metal);
+    deco(v3(lf[0], 0.98, leaf[0]), v3(lf[1], 1.06, leaf[1]), iron, .paint, .metal);
+    for ([_]f32{ leaf[0], leaf[1] - 0.06 }) |z| deco(v3(lf[0], 0.12, z), v3(lf[1], 1.06, z + 0.06), iron, .paint, .metal);
+    var gz = leaf[0] + 0.15;
+    while (gz < leaf[1] - 0.1) : (gz += 0.12) {
+        map.rod(v3(dir * mid, 0.2, gz), v3(dir * mid, 0.98, gz), 0.012, railing_paint, .paint, .metal);
+    }
+    for ([_]f32{ 0.25, 0.85 }) |hy| deco(v3(fr[0], hy, gate[0] - 0.005), v3(fr[1], hy + 0.08, leaf[0] + 0.02), steel, .metal, .metal);
+    const latch = span(dir, mid - 0.04, mid + 0.04);
+    deco(v3(latch[0], 0.88, leaf[1] - 0.1), v3(latch[1], 0.96, leaf[1]), steel, .metal, .metal);
+
+    // The sign on the gate, toward the platform: a white plate with a red
+    // NO ENTRY disc and black text.
+    const plate_a = mid - 0.02;
+    const plate = span(dir, plate_a - 0.01, plate_a);
+    deco(v3(plate[0], 0.48, cz - 0.26), v3(plate[1], 0.96, cz + 0.26), sign_white, .paint, .sheet_metal);
+    const sf = plate_a - 0.01;
+    const turn = Mat4.rotationY(std.math.pi / 2.0);
+    map.addDisc(vec.translate(v3(dir * (sf - 0.003), 0.83, cz)).mul(turn), 0.09, 0.006, red, .paint, .sheet_metal);
+    const bar_x = span(dir, sf - 0.009, sf - 0.006);
+    deco(v3(bar_x[0], 0.81, cz - 0.065), v3(bar_x[1], 0.85, cz + 0.065), sign_white, .paint, .sheet_metal);
+    signText("NO ENTRY", dir, sf, cz, 0.715, 0.009, red);
+    signText("AUTHORISED", dir, sf, cz, 0.625, 0.0068, sign_black);
+    signText("PERSONNEL ONLY", dir, sf, cz, 0.555, 0.0052, sign_black);
+
+    // The stop boards: a white board with S7 near each edge, toward the
+    // train that comes in. Two rods hang it from the deck above, so it is
+    // above head height and has no post to walk into.
+    if (!stop_board) return;
+    const sa = shock_x - 0.9;
+    for ([_]f32{ is[0], is[1] }, [_]f32{ 1, -1 }) |edge, in| {
+        const z = edge + in * 0.95;
+        for ([_]f32{ -0.12, 0.12 }) |dz| map.rod(v3(dir * (sa - 0.04), 2.25, z + dz), v3(dir * (sa - 0.04), deck_y, z + dz), 0.012, iron, .paint, .metal);
+        const board = span(dir, sa - 0.05, sa - 0.03);
+        deco(v3(board[0], 1.95, z - 0.17), v3(board[1], 2.25, z + 0.17), sign_white, .paint, .sheet_metal);
+        signText("S7", dir, sa - 0.05, z, 2.177, 0.022, sign_black);
     }
 }
 
@@ -1239,8 +1451,9 @@ fn lines() void {
         deco(v3(lx, 3.0, wall_n), v3(lx + 0.6, 3.15, wall_n + 0.15), v3(0.9, 0.7, 0.4), .emissive, .glass);
         deco(v3(-lx - 0.6, 3.0, wall_n), v3(-lx, 3.15, wall_n + 0.15), v3(0.9, 0.7, 0.4), .emissive, .glass);
     }
-    // Danger boards where the live rail starts to kill.
-    // Each board is at the side of its bed away from the platform.
+    // Danger boards where the live rail starts to kill, in line with the
+    // barriers at the island ends (platformEnd). Each board is at the side
+    // of its bed away from the platform.
     for ([_]f32{ -shock_x, shock_x }) |sx| {
         for (track_c) |t| {
             const z0 = if (t.away > 0) t.bed[1] - 1.3 else t.bed[0] + 0.1;
@@ -1900,12 +2113,15 @@ fn deepLevel() void {
     map.addTrain(tb, (plat_x[0] + plat_x[1]) / 2);
 }
 
-/// True when the live rail kills a player with feet at `feet`: on the
-/// District tracks past shock_x, and on the Piccadilly tracks past the
+/// True when the live rail kills a player with feet at `feet`: between the
+/// side walls of the District lines past shock_x (the tracks, and the
+/// island ends behind the barriers), and on the Piccadilly tracks past the
 /// ends of the platforms. The floor of a train is above the track bed, so
-/// a rider in the deep train is safe in the tunnels.
+/// a rider in the deep train is safe in the tunnels. The deep lift is
+/// outside the side walls.
 pub fn liveRail(feet: V3) bool {
-    if (@abs(feet[0]) > shock_x and feet[1] < 2 and feet[1] > bed_y - 1) return true;
+    const district = feet[2] > wall_n and feet[2] < wall_s;
+    if (district and @abs(feet[0]) > shock_x and feet[1] < 2 and feet[1] > bed_y - 1) return true;
     const deep_track = feet[1] < deep_y - 0.4 and feet[1] > deep_y - 2;
     return deep_track and (feet[0] < plat_x[0] - deep_shock or feet[0] > plat_x[1] + deep_shock);
 }
