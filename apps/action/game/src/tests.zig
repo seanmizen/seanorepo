@@ -9,8 +9,9 @@
 // (guns_test.zig), the box limit and the surface materials
 // (surfaces_test.zig), the bullet sound models (audio/tests.zig), the NPC
 // shooter of the range and the impact effects (shooter_test.zig), the
-// secret room of VAPES N MORE (secret_room_test.zig), the server cvar file
-// and the protocol version of the game.
+// secret room of VAPES N MORE (secret_room_test.zig), the readers and the
+// status lights of the ticket gates (gates.zig), the server cvar file and
+// the protocol version of the game.
 const std = @import("std");
 const schema = @import("console/schema.zig");
 const line = @import("console/line.zig");
@@ -32,6 +33,7 @@ test {
     _ = @import("platform_display.zig");
     _ = @import("ao_grid.zig");
     _ = @import("dyn_scale.zig");
+    _ = @import("gates.zig");
 }
 
 test "protocol_version.txt: one number, 1 or more" {

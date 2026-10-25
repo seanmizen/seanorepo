@@ -1479,11 +1479,18 @@ stocks. The door openings and the door places are approximate.
   lanes in the Earls Court Road ticket hall and 4 in the Warwick Road
   passage. Screens close the rest of each hall.
   - Seen from the street, the right half of a line is IN and the left half
-    is OUT. A lane has a green light at the end where you go in and a red
-    light at the other end.
-  - The paddles are closed. Aim at the yellow reader from the entry side
-    and press F (TAP OYSTER): the paddles open. From the wrong side the
-    reader shows red.
+    is OUT.
+  - The gates look the same from the street and from the station, as on
+    TfL, where the station can change a lane from IN to OUT. Each lane has
+    a yellow reader and a status light at each end. They are on the
+    cabinet at the right hand of a player who goes in at that end. Thus
+    each cabinet between two lanes has a reader and a light at each end.
+  - The light at the entry end of a lane shows a green arrow. The light at
+    the exit end shows a red "no entry" sign.
+  - The paddles are closed. Aim at a yellow reader from the entry side
+    and press F (TAP OYSTER): the paddles open. From the exit side the
+    reader shows red and the paddles stay closed. The lanes stay one-way
+    in play.
   - A tap in shows "-£0.01 (amount pending)". 60 to 240 s later the fare
     shows: -£3.10, the Zone 1 pay-as-you-go peak single (from March 2026).
     If you tapped out before that, it shows a refund. A tap out with no tap

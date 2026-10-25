@@ -4,12 +4,19 @@
 // - A gate line goes across a hall. Screens close it from the gates to the
 //   walls, so the only way through is a lane.
 // - Half of the lanes are IN (from the street into the station), half are
-//   OUT. Seen from the street, the right half is IN. Each lane has a green
-//   light at the end where you can go in, and a red light at the other end.
+//   OUT. Seen from the street, the right half is IN.
+// - The gates look the same from the street and from the station, because
+//   the station can change a lane from IN to OUT. Each lane has a yellow
+//   reader and a status light at each end, on the cabinet at the right hand
+//   of a player who goes in at that end. Thus each cabinet has a reader and
+//   a light at each end, but an end cabinet has only one. The light at the
+//   entry end shows a green arrow. The light at the exit end shows a red
+//   "no entry" sign.
 // - The paddles of a lane are closed. They meet in the middle at an angle,
-//   in a herringbone. Aim at the yellow reader from the entry side and press
-//   F (TAP OYSTER): the paddles open for some seconds. From the wrong side
-//   the reader shows red and the paddles stay closed.
+//   in a herringbone. Aim at a yellow reader from the entry side and press
+//   F (TAP OYSTER): the paddles open for some seconds. From the exit side
+//   the reader shows red and the paddles stay closed. The lanes stay
+//   one-way in play.
 // - A tap IN starts a journey: "-£0.01 (amount pending)". 60 to 240 s later
 //   the fare comes: -£3.10, the Zone 1 pay-as-you-go peak single. If the
 //   player tapped OUT before that, the message is a refund.
@@ -60,6 +67,10 @@ const steel = v3(0.55, 0.56, 0.58);
 const top_c = v3(0.12, 0.12, 0.13);
 const paddle_c = v3(0.7, 0.08, 0.06);
 const reader_c = v3(0.95, 0.75, 0.05);
+const light_bg = v3(0.04, 0.04, 0.05);
+const light_go = v3(0.1, 1.0, 0.25);
+const light_stop = v3(1.0, 0.08, 0.05);
+const light_bar = v3(0.95, 0.95, 0.92);
 
 pub const Line = struct {
     /// The plane of the paddles, the floor, and the hall from wall to wall.
@@ -83,8 +94,10 @@ pub const Lane = struct {
     /// The time the paddles stay open; the open amount (0 to 1).
     open_t: f32 = 0,
     open: f32 = 0,
-    /// The reader flash: > 0 green, < 0 red.
+    /// The reader flash: > 0 green, < 0 red. `flash_end`: the end of the
+    /// reader that flashes (-1: the -X end, 1: the +X end).
     flash: f32 = 0,
+    flash_end: f32 = 0,
 };
 
 pub var lines: [max_lines]Line = undefined;
@@ -156,43 +169,71 @@ pub fn addLine(x: f32, y: f32, z0: f32, z1: f32, mid: f32, n: usize, in_dir: f32
         b.ao = false;
         const box = map.indexOf(b) orelse continue;
         lanes[lane_n] = .{ .line = li, .z0 = lz0, .z1 = lz1, .dir = dir, .in = right_half, .box = box };
-        // The lights on the lane side of the reader cabinet: green at the
-        // entry end, red at the exit end.
-        const rz = readerZ(lanes[lane_n]);
-        for ([_]f32{ -1, 1 }) |end| {
-            const ex = x + end * cab_len / 2;
-            const entry = end == -dir;
-            const col = if (entry) v3(0.1, 1.0, 0.25) else v3(1.0, 0.08, 0.05);
-            const out: f32 = end * 0.012;
-            map.addDecor(Mat4.identity(), v3(@min(ex, ex + out), y + 0.7, rz - 0.06), v3(@max(ex, ex + out), y + 0.85, rz + 0.06), col, .emissive, .glass);
-        }
+        for ([_]f32{ -1, 1 }) |end| statusLight(lanes[lane_n], end);
         lane_n += 1;
     }
 }
 
-/// The z of the reader of a lane: on the cabinet at the right hand of a
-/// player who goes through (the right of a walk along +X is +Z).
-fn readerZ(l: Lane) f32 {
-    return if (l.dir > 0) l.z1 + cab_w / 2 else l.z0 - cab_w / 2;
+/// The status light of a lane at the end `end` (-1: the -X end, 1: the
+/// +X end), on the end face of the reader cabinet: a dark panel with a
+/// green arrow at the entry end, or a red "no entry" sign at the exit end.
+fn statusLight(l: Lane, end: f32) void {
+    const ln = lines[l.line];
+    const fx = ln.x + end * cab_len / 2;
+    const cz = readerZ(l, end);
+    const cy = ln.y + 0.76;
+    // A slab out from the end face, from a to b metres.
+    const span = struct {
+        fn f(x: f32, e: f32, a: f32, b: f32) [2]f32 {
+            return .{ @min(x + e * a, x + e * b), @max(x + e * a, x + e * b) };
+        }
+    }.f;
+    const bg = span(fx, end, 0, 0.006);
+    map.addDecor(Mat4.identity(), v3(bg[0], cy - 0.1, cz - 0.07), v3(bg[1], cy + 0.1, cz + 0.07), light_bg, .paint, .glass);
+    if (end == -l.dir) {
+        // The green arrow points up: a shaft and two bars to the tip.
+        const sx = span(fx, end, 0.006, 0.01);
+        map.addDecor(Mat4.identity(), v3(sx[0], cy - 0.07, cz - 0.014), v3(sx[1], cy + 0.03, cz + 0.014), light_go, .emissive, .glass);
+        const tip = v3(fx + end * 0.008, cy + 0.065, cz);
+        for ([_]f32{ -1, 1 }) |side| {
+            map.beam(tip, tip + v3(0, -0.05, side * 0.05), 0.028, 0.004, v3(1, 0, 0), light_go, .emissive, .glass);
+        }
+    } else {
+        // The red disc with a white bar.
+        const turn = Mat4.rotationY(std.math.pi / 2.0);
+        map.addDisc(vec.translate(v3(fx + end * 0.008, cy, cz)).mul(turn), 0.065, 0.004, light_stop, .emissive, .glass);
+        const bx = span(fx, end, 0.01, 0.013);
+        map.addDecor(Mat4.identity(), v3(bx[0], cy - 0.013, cz - 0.043), v3(bx[1], cy + 0.013, cz + 0.043), light_bar, .emissive, .glass);
+    }
 }
 
-/// The centre of the reader: on the cabinet top, at the entry end.
-pub fn readerPos(i: usize) V3 {
+/// The z of the reader of a lane at the end `end` (-1: the -X end, 1: the
+/// +X end): on the cabinet at the right hand of a player who goes in at
+/// that end (the right of a walk along +X is +Z).
+fn readerZ(l: Lane, end: f32) f32 {
+    return if (end < 0) l.z1 + cab_w / 2 else l.z0 - cab_w / 2;
+}
+
+/// The centre of the reader of lane i at the end `end`: on the cabinet top.
+pub fn readerPos(i: usize, end: f32) V3 {
     const l = lanes[i];
     const ln = lines[l.line];
-    return v3(ln.x - l.dir * (cab_len / 2 - 0.2), ln.y + cab_h + 0.06, readerZ(l));
+    return v3(ln.x + end * (cab_len / 2 - 0.2), ln.y + cab_h + 0.06, readerZ(l, end));
 }
 
-/// The reader under a ray, within reach.
+/// The lane of the reader under a ray, within reach. Each lane has a reader
+/// at each end.
 pub fn pick(o: V3, d: V3) ?usize {
     var best: ?usize = null;
     var best_t = reach;
     for (lanes[0..lane_n], 0..) |_, i| {
-        const c = readerPos(i);
-        if (map.rayBox(o, d, c - v3(0.14, 0.1, 0.14), c + v3(0.14, 0.1, 0.14))) |h| {
-            if (h.t < best_t) {
-                best_t = h.t;
-                best = i;
+        for ([_]f32{ -1, 1 }) |end| {
+            const c = readerPos(i, end);
+            if (map.rayBox(o, d, c - v3(0.14, 0.1, 0.14), c + v3(0.14, 0.1, 0.14))) |h| {
+                if (h.t < best_t) {
+                    best_t = h.t;
+                    best = i;
+                }
             }
         }
     }
@@ -201,11 +242,13 @@ pub fn pick(o: V3, d: V3) ?usize {
 
 pub const Tap = enum { tapped_in, tapped_out, wrong_side };
 
-/// Tap the reader of lane i from `feet`. From the entry side the paddles
-/// open: IN starts a journey, OUT ends one.
+/// Tap the reader of lane i from `feet`. The reader at the end of the
+/// feet answers. From the entry side the paddles open: IN starts a
+/// journey, OUT ends one. From the exit side the reader shows red.
 pub fn tap(i: usize, feet: V3) Tap {
     const l = &lanes[i];
     const ln = lines[l.line];
+    l.flash_end = if (feet[0] < ln.x) -1 else 1;
     if ((feet[0] - ln.x) * l.dir > 0) {
         l.flash = -0.8;
         return .wrong_side;
@@ -233,6 +276,7 @@ pub fn open(i: usize) void {
     if (i >= lane_n) return;
     lanes[i].open_t = open_time;
     lanes[i].flash = 0.8;
+    lanes[i].flash_end = -lanes[i].dir;
 }
 
 /// Another player walked through lane i (deathmatch): the paddles close
@@ -373,11 +417,89 @@ pub fn build(dyn: *mesh.Mesh) void {
             dyn.orientedBox(m, v3(-0.015, paddle_y[0], zmin), v3(0.015, paddle_y[1], zmax), paddle_c, 0);
             dyn.orientedBox(m, v3(-0.018, paddle_y[1] - 0.12, zmin), v3(0.018, paddle_y[1] - 0.05, zmax), v3(0.9, 0.9, 0.88), 0);
         }
-        // The reader: a yellow pad, green after a tap, red from the wrong
-        // side.
-        const c = readerPos(i);
-        const col = if (l.flash > 0) v3(0.1, 1.0, 0.3) else if (l.flash < 0) v3(1.0, 0.1, 0.05) else reader_c;
-        dyn.box(c - v3(0.12, 0.06, 0.12), c + v3(0.12, 0.0, 0.12), v3(0.15, 0.15, 0.16), 3);
-        dyn.disc(vec.translate(c).mul(Mat4.rotationX(-std.math.pi / 2.0)), 0.1, 0.02, col, if (l.flash != 0) 4 else 0);
+        // The readers: a yellow pad at each end. The reader that the
+        // player tapped shows green after a tap, red from the exit side.
+        for ([_]f32{ -1, 1 }) |end| {
+            const c = readerPos(i, end);
+            const lit = l.flash != 0 and end == l.flash_end;
+            const col = if (!lit) reader_c else if (l.flash > 0) v3(0.1, 1.0, 0.3) else v3(1.0, 0.1, 0.05);
+            dyn.box(c - v3(0.12, 0.06, 0.12), c + v3(0.12, 0.0, 0.12), v3(0.15, 0.15, 0.16), 3);
+            dyn.disc(vec.translate(c).mul(Mat4.rotationX(-std.math.pi / 2.0)), 0.1, 0.02, col, if (lit) 4 else 0);
+        }
+    }
+}
+
+/// True when the map has an emissive decoration at p: a status light.
+fn lightAt(p: V3) bool {
+    for (map.decor_bounds.items, map.decor.items) |bb, d| {
+        if (d.mat != .emissive) continue;
+        if (p[0] >= bb[0][0] - 0.002 and p[0] <= bb[1][0] + 0.002 and
+            p[1] >= bb[0][1] and p[1] <= bb[1][1] and
+            p[2] >= bb[0][2] and p[2] <= bb[1][2]) return true;
+    }
+    return false;
+}
+
+test "gates: a reader and a light at each end of each lane, the lanes stay one-way" {
+    map.init(std.testing.allocator);
+    defer map.deinit();
+    map.load(.earls_court);
+    defer {
+        journey = .{};
+        pop_n = 0;
+    }
+    try std.testing.expectEqual(@as(usize, 2), line_n);
+    try std.testing.expectEqual(@as(usize, 12), lane_n);
+    const dt: f32 = 1.0 / 120.0;
+    _ = step(dt, null, null, &.{}, 0.3, 1.8);
+    // Each cabinet between two lanes has a reader and a light at each end.
+    // The middle cabinet, where the IN half meets the OUT half, too.
+    for (lines[0..line_n], 0..) |ln, li| {
+        var n: usize = 0;
+        var za: f32 = 1e9;
+        for (lanes[0..lane_n]) |l| if (l.line == li) {
+            n += 1;
+            za = @min(za, l.z0 - cab_w);
+        };
+        for (1..n) |k| {
+            const cz = za + @as(f32, @floatFromInt(k)) * (lane_w + cab_w) + cab_w / 2;
+            for ([_]f32{ -1, 1 }) |end| {
+                errdefer std.debug.print("line {d} cabinet {d} end {d}\n", .{ li, k, end });
+                var readers: usize = 0;
+                for (lanes[0..lane_n], 0..) |l, i| {
+                    if (l.line != li) continue;
+                    if (@abs(readerPos(i, end)[2] - cz) < 0.01) readers += 1;
+                }
+                try std.testing.expectEqual(@as(usize, 1), readers);
+                try std.testing.expect(lightAt(v3(ln.x + end * (cab_len / 2 + 0.008), ln.y + 0.76, cz)));
+            }
+        }
+    }
+    // A player at each end aims at the reader of that end. From the entry
+    // end the paddles open. From the exit end the reader shows red and the
+    // paddles stay closed.
+    for (0..lane_n) |i| {
+        const ln = lines[lanes[i].line];
+        for ([_]f32{ -1, 1 }) |end| {
+            errdefer std.debug.print("lane {d} end {d}\n", .{ i, end });
+            const l = &lanes[i];
+            const feet = v3(ln.x + end * (cab_len / 2 + 0.4), ln.y, (l.z0 + l.z1) / 2);
+            const eye = feet + v3(0, 1.6, 0);
+            try std.testing.expectEqual(@as(?usize, i), pick(eye, vec.norm(readerPos(i, end) - eye)));
+            const t = tap(i, feet);
+            try std.testing.expectEqual(end, l.flash_end);
+            if (end == -l.dir) {
+                try std.testing.expect(t != .wrong_side);
+                try std.testing.expect(l.flash > 0 and l.open_t > 0);
+            } else {
+                try std.testing.expectEqual(Tap.wrong_side, t);
+                try std.testing.expect(l.flash < 0 and l.open_t == 0);
+                _ = step(dt, null, null, &.{}, 0.3, 1.8);
+                try std.testing.expect(map.boxes[l.box].solid);
+            }
+            l.open_t = 0;
+            l.open = 0;
+            l.flash = 0;
+        }
     }
 }
