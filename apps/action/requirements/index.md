@@ -5,6 +5,11 @@
 
 | ID | Title | Status | Type | Priority | Source |
 |---|---|---|---|---|---|
+| [`REQ-MOPED-001`](moped.md#req-moped-001--a-player-gets-on-a-crashed-moped-and-gets-off-it) | A player gets on a crashed moped and gets off it | active | functional | P1 | agent:SEAN-931 |
+| [`REQ-MOPED-002`](moped.md#req-moped-002--the-moped-drives-on-the-floors-and-stops-at-the-walls) | The moped drives on the floors and stops at the walls | active | functional | P1 | agent:SEAN-931 |
+| [`REQ-MOPED-003`](moped.md#req-moped-003--the-junk-ramp-jumps-a-moped-over-the-warwick-road-gates) | The junk ramp jumps a moped over the Warwick Road gates | active | functional | P1 | agent:SEAN-931 |
+| [`REQ-MOPED-004`](moped.md#req-moped-004--a-moped-jump-over-the-gates-is-no-fare-dodge) | A moped jump over the gates is no fare dodge | active | functional | P1 | agent:SEAN-931 |
+| [`REQ-MOPED-005`](moped.md#req-moped-005--the-server-checks-each-moped-event) | The server checks each moped event | active | functional | P1 | agent:SEAN-931 |
 | [`REQ-RENDER-001`](render.md#req-render-001--the-camera-uses-reversed-z) | The camera uses reversed Z | active | quality | P1 | agent:SEAN-911 |
 | [`REQ-RENDER-002`](render.md#req-render-002--a-map-has-no-coplanar-overlap) | A map has no coplanar overlap | active | quality | P1 | agent:SEAN-911 |
 

@@ -651,7 +651,7 @@ describe('session', () => {
 });
 
 describe('the mopeds to ride', () => {
-  test('a crash leaves a moped; a mount, the pose, the secondary only, a hit that kills, an off', async () => {
+  test('a crash leaves a moped, then a mount, the pose, the secondary only, a hit that kills and an off', async () => {
     const port = await start('', {});
     const a = new Client(port);
     const b = new Client(port);

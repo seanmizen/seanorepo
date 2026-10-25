@@ -18,6 +18,7 @@ const moped = @import("moped.zig");
 const ride = @import("moped_ride.zig");
 const gates = @import("gates.zig");
 const player = @import("player.zig");
+const roadmen = @import("roadmen.zig");
 const V3 = vec.V3;
 const v3 = vec.v3;
 
@@ -329,4 +330,21 @@ test "moped ride: in deathmatch two clients see the moped stop at the same place
     const body = ride.corpseOf(9) orelse return error.TestNoBody;
     try testing.expect(body.body.asleep);
     for (body.body.p) |p| try testing.expect(p[1] > ec.street_y - 0.05 and p[1] < ec.street_y + 0.6);
+}
+
+test "moped ride: a roadman near a rider past the line pulls him off" {
+    setup();
+    defer map.deinit();
+    roadmen.reset();
+    defer roadmen.reset();
+    const feet = v3(ec.warwick_lanes[1], ec.street_y, ec.warwick_exit_z - roadmen.line - 10);
+    roadmen.gangs[0] = .{ .on = true, .mine = true, .target = feet };
+    roadmen.gangs[0].men[0].body.pos = feet + v3(3, 0, 0);
+    roadmen.gangs[0].men[1].body.pos = feet + v3(-6, 0, 0);
+    try testing.expect(!roadmen.knocks(feet));
+    roadmen.gangs[0].men[0].body.pos = feet + v3(0.9, 0, 0.4);
+    try testing.expect(roadmen.knocks(feet));
+    // A gang that walks away does not.
+    roadmen.gangs[0].state = .leave;
+    try testing.expect(!roadmen.knocks(feet));
 }

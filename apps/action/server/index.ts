@@ -226,6 +226,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import type { ServerWebSocket } from 'bun';
+import { Bikes, MOPED } from './bikes';
 import {
   chatChannel,
   chatRateOk,
@@ -242,7 +243,6 @@ import {
   ServerConsole,
 } from './console';
 import { type Gun, gunInPick, gunOf, type SlotName, shotDamage } from './guns';
-import { Bikes, MOPED } from './bikes';
 import { Mopeds } from './moped';
 import { Flock } from './pigeons';
 import {

@@ -101,7 +101,9 @@ describe('the mopeds to ride', () => {
     expect(b.pose(3, [1, 0.3, -0.2, 0.05, 11])).toBeNull();
     b.onMessage(3, at, mount);
     expect(b.pose(3, [2, 0.3, -0.2, 0.05, 11])).toBeNull();
-    expect(b.pose(3, [1, 0.3, -0.2, 0.05, 11])).toEqual([1, 0.3, -0.2, 0.05, 11]);
+    expect(b.pose(3, [1, 0.3, -0.2, 0.05, 11])).toEqual([
+      1, 0.3, -0.2, 0.05, 11,
+    ]);
     const p = { ...at, z: -60 };
     expect(b.release(3, p, true)).toEqual([
       {

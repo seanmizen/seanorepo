@@ -2056,6 +2056,8 @@ fn handleSnap(m: net.Msg) void {
         if (!rem.alive and p.alive) {
             rem.pos = target;
             rem.fall = 0;
+            // A new life: the body of a rider who died goes.
+            moped_ride.clearCorpse(p.id);
         }
         rem.target = target;
         rem.yaw = p.yaw;
@@ -3764,9 +3766,9 @@ fn gameRender(ctx: *sw.Context) !void {
     if (ownBodyShows()) {
         const first = dyn.verts.items.len;
         if (myBike()) |b| {
-            // On a moped: the rider, with the head as a shadow only.
-            const on = body_mod.own_body.on();
-            npc.buildOutfit(&dyn, npc.skeleton(moped_ride.riderPose(b)), false, if (on) 0 else body_mod.shadow_only, riderOutfit(myId(), if (on) body_mod.shadow_only else 0));
+            // On a moped: the rider casts a shadow only. The arms and the
+            // chest are in front of the eye.
+            npc.buildOutfit(&dyn, npc.skeleton(moped_ride.riderPose(b)), false, body_mod.shadow_only, riderOutfit(myId(), 0));
         } else body_mod.build(&dyn, ownPose());
         own = .{ .first = @intCast(first), .count = @intCast(dyn.verts.items.len - first), .centre = me.pos + v3(0, 0.9, 0) };
     }
