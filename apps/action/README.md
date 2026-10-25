@@ -65,6 +65,9 @@ zig build floorplan -- earls_court escape                 # escape holes: exit c
 sips -s format png out.ppm --out out.png                  # macOS, to view it
 ```
 
+- The audit lists decoration that a standing player can walk into. It
+  tests a long decoration (a sloped bar, a handrail) at points along it,
+  at most 0.5 m apart.
 - The audit prints the boxes and the decoration of each surface material
   (see [Surface materials](#surface-materials)). Its exit code is 1 when a
   material does not fit the look of its surface.
@@ -312,7 +315,9 @@ it does.
   down, each lean, each step of the walk and on stairs. The head, the arms
   and the weapon cast a shadow only. A planted foot does not slide. On the
   stairs and the escalators of Earl's Court each planted foot is on the
-  tread under it, standing (to 3 cm) and walking (to 5 cm).
+  tread under it, standing (to 3 cm) and walking (to 5 cm). The escalators
+  stop for the standing check: the steps are static boxes, so a carried
+  foot crosses the edge of a step.
 - `game/src/console/tests.zig` tests the console: the parser, the cvar
   limits, the commands, the binds and the buttons, the scripts, the saved
   config, the completion and the chat.
@@ -1097,17 +1102,17 @@ road over the floor of the ticket hall is concrete.
 
 | Material | The sound | Earl's Court boxes, decoration | Arena boxes | For example |
 |---|---|---|---|---|
-| `concrete` | a sharp crack, a thud and grit | 174, 130 | 80 | platforms, stairs, decks, pavements, the road, painted lines |
+| `concrete` | a sharp crack, a thud and grit | 191, 139 | 80 | platforms, stairs, decks, pavements, the road, painted lines |
 | `brick` | a duller crack and more crumble | 67, 0 | 0 | the shed walls, the concourses, the terraces |
-| `plaster` | a soft crack and a puff | 10, 4 | 0 | the ticket hall walls, the painted fronts on the roads |
-| `tile` | a brittle tink and shards | 55, 13 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof |
-| `metal` | a click, a heavy thud and a short low ring | 158, 487 | 13 | rails, railings, posts, frames, escalator steps, roof ribs |
-| `sheet_metal` | a hollow doof and a low boom | 115, 360 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
-| `glass` | a bright crack and falling shards | 28, 374 | 6 | lamps, windows, the lift shafts, the Warwick Road front and rotunda |
-| `wood` | a hollow knock and splinters | 39, 2626 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
-| `ballast` | a chuff and a clatter of stones | 13, 0 | 0 | the track beds |
+| `plaster` | a soft crack and a puff | 22, 34 | 0 | the ticket hall walls, the painted fronts on the roads |
+| `tile` | a brittle tink and shards | 109, 904 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof |
+| `metal` | a click, a heavy thud and a short low ring | 250, 1863 | 13 | rails, railings, posts, frames, escalator steps and balustrades, roof ribs |
+| `sheet_metal` | a hollow doof and a low boom | 115, 433 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
+| `glass` | a bright crack and falling shards | 28, 489 | 6 | lamps, windows, the lift shafts, the Warwick Road front and rotunda |
+| `wood` | a hollow knock and splinters | 20, 2746 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
+| `ballast` | a chuff and a clatter of stones | 16, 0 | 0 | the track beds |
 | `earth` | a dull thup and a spray of dirt | 12, 0 | 0 | the ground under the buildings, the banks of the cuttings |
-| `fabric` | a soft thup | 78, 338 | 0 | the seats of the trains, the gangways of the District train |
+| `fabric` | a soft thup | 78, 462 | 0 | the seats of the trains, the gangways of the District train |
 | `flesh` | a wet slap and a thud | 0, 0 | 0 | players and dummies (not a map surface) |
 
 The floorplan audit prints these counts. Its exit code is 1 when a
@@ -1117,7 +1122,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 1024. Earl's Court uses 765 boxes, the arena 126.
+`map.max_boxes` is 1024. Earl's Court uses 908 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1171,11 +1176,57 @@ distance to the shooter in front of you. It prints the arrival times.
   0.45 m. Without the step down, a player who walks down the stairs flies
   off each step. Then the head hits the edge of the stair well at the
   bottom. `game/src/player.zig` has the model.
-- **Escalators**: a lane carries a player who stands on it at 0.65 m/s.
-  The carry does not count as walking, so a rider has no head bob. The down
-  lane carries a rider 0.4 m past its last step, onto the floor.
+- **Escalators**: a unit carries a player who stands on it at 0.65 m/s.
+  The carry does not count as walking, so a rider has no head bob. Each
+  unit carries a rider over its slope and its flat steps, to the comb
+  plate.
 - `stairs()` in `game/src/maps/earls_court.zig` makes the ramp of a
   staircase. Give it the floor heights at the top and at the bottom.
+
+### The escalators of Earl's Court
+
+`escalators()` in `game/src/maps/earls_court.zig` makes two units side by
+side, from the intermediate level down to the Piccadilly line. The sizes
+are those of a London Underground unit:
+
+- A step is 1 m wide, 0.4 m deep and 0.23 m high: 41 steps at 30 degrees.
+  A unit is 1.6 m wide over its balustrades. The north unit goes down, the
+  south unit comes up.
+- The steps are grooved aluminium (`map.Mat.tread`, material 10 in
+  `game/src/scene.wgsl`). The grooves run along the slope. A box filter
+  over the pixel footprint fades them to their mean far away. Yellow
+  lines mark the sides of each tread. A yellow line and a dark gap slide
+  along each tread (`buildEscalatorSteps` in `game/src/main.zig`), so the
+  static steps look as if they move.
+- At each end: two flat steps, a comb plate with a yellow comb, and a
+  landing plate.
+- Each balustrade has a stainless skirt by the steps with a black
+  deflector brush, a stainless panel and a black rubber handrail. The
+  handrail follows the slope, bends to the level at each end, and turns
+  round a newel.
+- A decking separates the units, and an outer decking runs along each
+  wall. Bronze lamp columns with glass uplighters stand on the middle
+  decking. Studs on each decking stop a slide.
+- The shaft has tiled walls with framed adverts and a vaulted roof with
+  light strips. A lower hall, as wide as the shaft, opens at the foot of
+  the escalators. The corridor between the platforms goes on east of it.
+- The collision: invisible boxes along each balustrade and decking, up to
+  the handrails, and boxes on the lamp columns.
+
+### Banisters and railings
+
+- Each staircase (`stairs()`) has a round handrail 0.9 m over the line of
+  the step fronts, and a knee rail under it, on round posts at every
+  second step. The rails bend to the level at each floor and go on 0.3 m
+  past the flight to an end post. A yellow nosing marks the front edge of
+  each tread.
+- A railing (`railing()`) is framed panels of painted iron between posts,
+  with a timber handrail on top. The panels are the collision, so a bullet
+  does not go through a railing.
+- The shapes: `map.slab` adds a sloped bar (a sheared box with vertical
+  ends: a balustrade panel, a decking, a skirt). `map.rod` adds a cylinder
+  segment (a round rail, a post). `map.rail` adds a round rail through a
+  list of points, with a bend of a given radius at each corner.
 
 ## Your body
 

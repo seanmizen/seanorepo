@@ -6,8 +6,9 @@
 //   buffer). A dynamic box (a lift part) moves, so it is drawn each frame.
 // - Ramps are invisible collision slopes over the stairs and the
 //   escalators, so the feet move smoothly up and down them.
-// - Decoration is visual only: oriented boxes and discs (roof ribs, signs).
-//   It casts shadows. It has no collision.
+// - Decoration is visual only: oriented boxes, sloped bars (a sheared box)
+//   and discs (roof ribs, signs, round rails). It casts shadows. It has no
+//   collision.
 // - Each box and each decoration has a surface material (`surface`, no
 //   default): the sound of a bullet that hits it (audio/impact.zig). A hit
 //   on a box takes the material of a decoration that lies on the hit point
@@ -40,6 +41,9 @@ pub const Mat = enum(u8) {
     /// Round amber LEDs on a grid: the train indicators
     /// (platform_display.zig). Dynamic quads only.
     led = 9,
+    /// Grooved aluminium: escalator steps, comb plates and landing plates.
+    /// The grooves run along X (scene.wgsl).
+    tread = 10,
 };
 
 pub const Box = struct {
@@ -61,6 +65,7 @@ pub const Box = struct {
 };
 
 pub const Decor = struct {
+    /// Local to world. It can shear the box: a sloped bar (slab).
     m: Mat4,
     min: V3,
     max: V3,
@@ -280,6 +285,69 @@ pub fn beam(a: V3, b: V3, w: f32, h: f32, up: V3, color: V3, mat: Mat, surface: 
     addDecor(m, v3(-w / 2, -h / 2, 0), v3(w / 2, h / 2, l), color, mat, surface);
 }
 
+/// A decoration slab: the parallelepiped from the corner `o` along the
+/// edges ex, ey and ez. With ex along a slope and ey vertical, it is a
+/// sloped bar whose ends are vertical: a balustrade panel or a stringer.
+pub fn slab(o: V3, ex: V3, ey: V3, ez: V3, color: V3, mat: Mat, surface: Surface) void {
+    const m = Mat4{ .data = .{ ex[0], ex[1], ex[2], 0, ey[0], ey[1], ey[2], 0, ez[0], ez[1], ez[2], 0, o[0], o[1], o[2], 1 } };
+    addDecor(m, v3(0, 0, 0), v3(1, 1, 1), color, mat, surface);
+}
+
+/// A decoration rod from a to b of radius r: a cylinder segment (a disc as
+/// long as the rod). Round handrails, posts and lamp columns.
+pub fn rod(a: V3, b: V3, r: f32, color: V3, mat: Mat, surface: Surface) void {
+    const d = b - a;
+    const l = vec.len(d);
+    if (l < 1e-4) return;
+    const f = d / vec.s(l);
+    const up = if (@abs(f[1]) > 0.9) v3(1, 0, 0) else v3(0, 1, 0);
+    const rt = vec.norm(vec.cross(up, f));
+    const u = vec.cross(f, rt);
+    const c = (a + b) * vec.s(0.5);
+    const m = Mat4{ .data = .{ rt[0], rt[1], rt[2], 0, u[0], u[1], u[2], 0, f[0], f[1], f[2], 0, c[0], c[1], c[2], 1 } };
+    addDisc(m, r, l, color, mat, surface);
+}
+
+/// The points of a path through `p` with a bend of radius `bend` at each
+/// inner corner: a quadratic curve of `n` parts. The bends must not
+/// overlap: give each corner room on both sides. Writes the points to
+/// `out` and returns them.
+pub fn bendPath(p: []const V3, bend: f32, n: usize, out: []V3) []V3 {
+    std.debug.assert(p.len >= 2 and out.len >= p.len * (n + 1));
+    var k: usize = 0;
+    out[k] = p[0];
+    k += 1;
+    for (1..p.len - 1) |i| {
+        const d1 = vec.norm(p[i] - p[i - 1]);
+        const d2 = vec.norm(p[i + 1] - p[i]);
+        const turn = std.math.acos(std.math.clamp(vec.dot(d1, d2), -1, 1));
+        const t = bend * @tan(turn / 2);
+        if (t < 1e-4) {
+            out[k] = p[i];
+            k += 1;
+            continue;
+        }
+        const s0 = p[i] - d1 * vec.s(t);
+        const s1 = p[i] + d2 * vec.s(t);
+        for (0..n + 1) |j| {
+            const u: f32 = @as(f32, @floatFromInt(j)) / @as(f32, @floatFromInt(n));
+            out[k] = s0 * vec.s((1 - u) * (1 - u)) + p[i] * vec.s(2 * (1 - u) * u) + s1 * vec.s(u * u);
+            k += 1;
+        }
+    }
+    out[k] = p[p.len - 1];
+    k += 1;
+    return out[0..k];
+}
+
+/// A round rail of radius r through the points `p`, with a bend of
+/// radius `bend` at each inner corner (bendPath).
+pub fn rail(p: []const V3, r: f32, bend: f32, color: V3, mat: Mat, surface: Surface) void {
+    var buf: [64]V3 = undefined;
+    const q = bendPath(p, bend, 6, &buf);
+    for (1..q.len) |i| rod(q[i - 1], q[i], r, color, mat, surface);
+}
+
 /// The world bounds (AABB) of a decoration.
 pub fn decorBounds(d: Decor) [2]V3 {
     var mn = v3(1e9, 1e9, 1e9);
@@ -345,6 +413,7 @@ pub fn surfaceFits(look: Mat, s: Surface) bool {
     if (s == .flesh) return false;
     return switch (look) {
         .emissive, .led => s == .glass,
+        .tread => s == .metal,
         .wood => s == .wood,
         .brick => s == .brick,
         .wall_tile => s == .tile,

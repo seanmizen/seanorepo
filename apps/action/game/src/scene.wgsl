@@ -24,6 +24,10 @@ const MAX_LIGHTS: u32 = 44u;
 const BODY_SLOT: u32 = 28u;
 // The LED grid of the train indicators: platform_display.zig pitch.
 const LED_PITCH: f32 = 0.012;
+// The cleats of an escalator tread (material 10): one cleat and one groove
+// in each pitch, along X. A real tread has a pitch of about 8.5 mm.
+const TREAD_PITCH: f32 = 0.01;
+const TREAD_CLEAT: f32 = 0.4;
 
 struct Scene {
   view_proj: mat4x4f,
@@ -511,6 +515,22 @@ fn surface(col: vec3f, mat: u32, wp: vec3f, n0: vec3f) -> Surface {
       let k = mix(dot, 0.36, bandFade(w));
       // A little above 0, so the black between the dots stays emissive.
       s.emit = 7.0 * k + 0.001;
+    }
+    case 10u: { // escalator treads: the cleats run along X
+      // The box filter of the cleat stripe over the pixel footprint (see
+      // Band limits): the integral of the stripe from x - w / 2 to
+      // x + w / 2, over w. Far away it is the mean, so the grooves do not
+      // alias.
+      let cleat = wp.z / TREAD_PITCH;
+      let cleat_w = max(fw.z / TREAD_PITCH, 0.0001);
+      let a = cleat - 0.5 * cleat_w;
+      let b = cleat + 0.5 * cleat_w;
+      let ia = floor(a) * TREAD_CLEAT + min(fract(a), TREAD_CLEAT);
+      let ib = floor(b) * TREAD_CLEAT + min(fract(b), TREAD_CLEAT);
+      let k = (ib - ia) / cleat_w;
+      s.albedo = col * mix(0.3, 1.25, k);
+      s.rough = mix(0.75, 0.35, k);
+      s.metal = 0.7;
     }
     default: { // paint, and the gun
       s.rough = 0.4;

@@ -243,9 +243,46 @@ fn flush(bb: [2]V3) bool {
     return false;
 }
 
+/// True when a point of the decoration d (bounds bb) is in the body space
+/// over the floor box min..max, with free head room over it: the player
+/// can stand there. A short decoration is one point: the middle of its
+/// bounds, moved onto the floor.
+fn reachable(d: map.Decor, bb: [2]V3, min: V3, max: V3) bool {
+    const top = max[1];
+    const lo = if (d.disc) v3(-d.min[0], -d.min[0], -d.min[1] / 2) else d.min;
+    const hi = if (d.disc) v3(d.min[0], d.min[0], d.min[1] / 2) else d.max;
+    // The number of points along each local axis: one each 0.5 m.
+    var n: [3]usize = undefined;
+    inline for (0..3) |ax| {
+        var e = v3(0, 0, 0);
+        e[ax] = hi[ax] - lo[ax];
+        const l = vec.len(vec.xdir(d.m, e));
+        n[ax] = @min(16, @as(usize, @intFromFloat(@ceil(l / 0.5))));
+    }
+    if (n[0] * n[1] * n[2] <= 1) {
+        const cx = std.math.clamp((bb[0][0] + bb[1][0]) / 2, min[0], max[0]);
+        const cz = std.math.clamp((bb[0][2] + bb[1][2]) / 2, min[2], max[2]);
+        return !map.overlaps(v3(cx - 0.05, top + 0.05, cz - 0.05), v3(cx + 0.05, top + 1.8, cz + 0.05));
+    }
+    for (0..n[0]) |i| for (0..n[1]) |j| for (0..n[2]) |k| {
+        const t = v3(
+            (@as(f32, @floatFromInt(i)) + 0.5) / @as(f32, @floatFromInt(n[0])),
+            (@as(f32, @floatFromInt(j)) + 0.5) / @as(f32, @floatFromInt(n[1])),
+            (@as(f32, @floatFromInt(k)) + 0.5) / @as(f32, @floatFromInt(n[2])),
+        );
+        const p = vec.xform(d.m, lo + (hi - lo) * t);
+        if (p[0] <= min[0] or p[0] >= max[0] or p[2] <= min[2] or p[2] >= max[2]) continue;
+        if (p[1] <= top + 0.3 or p[1] >= top + 1.9) continue;
+        if (!map.overlaps(v3(p[0] - 0.05, top + 0.05, p[2] - 0.05), v3(p[0] + 0.05, top + 1.8, p[2] + 0.05))) return true;
+    };
+    return false;
+}
+
 /// List decoration that a standing player could walk into: it overlaps the
 /// body space (0.3 m to 1.9 m) over a solid floor, and no solid box covers
-/// it.
+/// it. The audit tests a long decoration (a sloped bar, a handrail) at
+/// points along it, at most 0.5 m apart. So it tests a slope where the
+/// slope is, and not at the middle of its bounds.
 fn audit() usize {
     var count: usize = 0;
     for (map.decor.items, 0..) |d, di| {
@@ -262,13 +299,10 @@ fn audit() usize {
             // The decoration must be over this floor, in the body space.
             if (bb[1][0] <= f.min[0] or bb[0][0] >= f.max[0] or bb[1][2] <= f.min[2] or bb[0][2] >= f.max[2]) continue;
             if (bb[1][1] <= top + 0.3 or bb[0][1] >= top + 1.9) continue;
-            // Free head room over the floor where the decoration is: the
-            // player can stand there.
-            const cx = std.math.clamp((bb[0][0] + bb[1][0]) / 2, f.min[0], f.max[0]);
-            const cz = std.math.clamp((bb[0][2] + bb[1][2]) / 2, f.min[2], f.max[2]);
-            if (map.overlaps(v3(cx - 0.05, top + 0.05, cz - 0.05), v3(cx + 0.05, top + 1.8, cz + 0.05))) continue;
-            hit = true;
-            break;
+            if (reachable(d, bb, f.min, f.max)) {
+                hit = true;
+                break;
+            }
         }
         if (hit) {
             count += 1;

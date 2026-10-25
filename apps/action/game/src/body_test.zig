@@ -197,6 +197,12 @@ const Stairs = struct {
     start: V3,
     dir: f32,
     end_x: f32,
+    /// The floor heights at the bottom and at the top of the stairs. The
+    /// player drops onto the stairs from up to 0.5 m over the top floor,
+    /// onto a floor down to 0.5 m under the bottom floor. So a ceiling
+    /// near the stairs (the deep ceiling at the foot of the escalators) is
+    /// not a floor.
+    floors: [2]f32,
     /// An escalator carries the player, and so the planted feet, over its
     /// steps. The steps are static boxes (main.zig buildEscalatorSteps), so
     /// a carried foot can cross the edge of a step. The walk check skips it.
@@ -219,19 +225,23 @@ test "your body: on the stairs each planted foot is on its tread" {
     // The stairs and the escalators of player_test.zig.
     const ec = @import("maps/earls_court.zig");
     const walks = [_]Stairs{
-        .{ .name = "island down", .start = v3(20, 0, 4.4), .dir = 1, .end_x = 30.5 },
-        .{ .name = "island up", .start = v3(-30.5, ec.mid_y, 4.4), .dir = 1, .end_x = -20 },
-        .{ .name = "concourse down", .start = v3(-47, ec.street_y, -12.8), .dir = 1, .end_x = -37.8 },
-        .{ .name = "escalator down", .start = v3(ec.esc_top_x - 2, ec.mid_y, -23.35), .dir = 1, .end_x = ec.esc_bottom_x + 1, .carries = true },
-        .{ .name = "escalator up", .start = v3(ec.esc_bottom_x + 1, ec.deep_y, -21.65), .dir = -1, .end_x = ec.esc_top_x - 2, .carries = true },
+        .{ .name = "island down", .start = v3(20, 0, 4.4), .dir = 1, .end_x = 30.5, .floors = .{ ec.mid_y, 0 } },
+        .{ .name = "island up", .start = v3(-30.5, ec.mid_y, 4.4), .dir = 1, .end_x = -20, .floors = .{ ec.mid_y, 0 } },
+        .{ .name = "concourse down", .start = v3(-47, ec.street_y, -12.8), .dir = 1, .end_x = -37.8, .floors = .{ 0, ec.street_y } },
+        .{ .name = "escalator down", .start = v3(ec.esc_top_x - 2, ec.mid_y, ec.esc_lane_z[0]), .dir = 1, .end_x = ec.esc_bottom_x + 1, .floors = .{ ec.deep_y, ec.mid_y }, .carries = true },
+        .{ .name = "escalator up", .start = v3(ec.esc_bottom_x + 1, ec.deep_y, ec.esc_lane_z[1]), .dir = -1, .end_x = ec.esc_top_x - 2, .floors = .{ ec.deep_y, ec.mid_y }, .carries = true },
     };
     for (walks) |w| {
         // Stand still at points along the stairs: both feet on a tread.
+        // The escalators stop for this check: the steps are static boxes,
+        // so a carried foot crosses the edge of a step.
+        const escalators = map.escalator_count;
+        if (w.carries) map.escalator_count = 0;
         var x = w.start[0];
         var worst_stand: f32 = 0;
         while ((w.end_x - x) * w.dir > 0) : (x += 0.13 * w.dir) {
             // Drop onto the ramp from over it, and come to rest.
-            const top = map.floorTop(v3(x - 0.3, -10, w.start[2] - 0.3), v3(x + 0.3, 1, w.start[2] + 0.3)) orelse continue;
+            const top = map.floorTop(v3(x - 0.3, w.floors[0] - 0.5, w.start[2] - 0.3), v3(x + 0.3, w.floors[1] + 0.5, w.start[2] + 0.3)) orelse continue;
             var p: player.Player = .{ .pos = v3(x, top + 0.05, w.start[2]), .yaw = -w.dir * std.math.pi / 2.0 };
             var feet: body.Feet = .{};
             for (0..90) |_| {
@@ -244,6 +254,7 @@ test "your body: on the stairs each planted foot is on its tread" {
                 worst_stand = @max(worst_stand, @abs(e));
             }
         }
+        map.escalator_count = escalators;
         // Walk at the walk speed and slower (the sights). Check each planted
         // foot after its first 6 ticks (50 ms) on the floor: in that time
         // the foot goes down or up to its tread.

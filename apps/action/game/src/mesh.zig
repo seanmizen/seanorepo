@@ -48,7 +48,9 @@ pub const Mesh = struct {
         self.orientedBox(Mat4.identity(), mn, mx, col, mat);
     }
 
-    /// A box from local min and max, transformed by `m`.
+    /// A box from local min and max, transformed by `m`. `m` can shear the
+    /// box (a sloped bar: map.slab): each face normal is at a right angle
+    /// to the face, and points out of the box.
     pub fn orientedBox(self: *Mesh, m: Mat4, mn: V3, mx: V3, col: V3, mat: f32) void {
         var c: [8]V3 = undefined;
         for (0..8) |i| {
@@ -59,9 +61,12 @@ pub const Mesh = struct {
             );
             c[i] = vec.xform(m, p);
         }
-        const nx = vec.norm(vec.xdir(m, v3(1, 0, 0)));
-        const ny = vec.norm(vec.xdir(m, v3(0, 1, 0)));
-        const nz = vec.norm(vec.xdir(m, v3(0, 0, 1)));
+        const ex = vec.xdir(m, v3(1, 0, 0));
+        const ey = vec.xdir(m, v3(0, 1, 0));
+        const ez = vec.xdir(m, v3(0, 0, 1));
+        const nx = faceNormal(vec.cross(ey, ez), ex);
+        const ny = faceNormal(vec.cross(ez, ex), ey);
+        const nz = faceNormal(vec.cross(ex, ey), ez);
         self.quad(c[1], c[3], c[7], c[5], nx, col, mat);
         self.quad(c[0], c[4], c[6], c[2], -nx, col, mat);
         self.quad(c[2], c[6], c[7], c[3], ny, col, mat);
@@ -70,13 +75,17 @@ pub const Mesh = struct {
         self.quad(c[0], c[2], c[3], c[1], -nz, col, mat);
     }
 
-    /// A disc (a flat cylinder) along local Z, of radius r and thickness t.
+    /// A disc (a flat cylinder) along local Z, of radius r and thickness t,
+    /// about the origin. A long thin disc is a cylinder segment: a rod, a
+    /// round handrail, a post (map.rod). A disc of radius less than 0.1 m
+    /// has 10 sides, a larger disc 20.
     pub fn disc(self: *Mesh, m: Mat4, r: f32, t: f32, col: V3, mat: f32) void {
-        const seg = 20;
+        const seg: usize = if (r < 0.1) 10 else 20;
+        const seg_f: f32 = @floatFromInt(seg);
         const nz = vec.norm(vec.xdir(m, v3(0, 0, 1)));
         for (0..seg) |i| {
-            const a0 = @as(f32, @floatFromInt(i)) / seg * std.math.tau;
-            const a1 = @as(f32, @floatFromInt(i + 1)) / seg * std.math.tau;
+            const a0 = @as(f32, @floatFromInt(i)) / seg_f * std.math.tau;
+            const a1 = @as(f32, @floatFromInt(i + 1)) / seg_f * std.math.tau;
             const p0 = v3(@cos(a0) * r, @sin(a0) * r, 0);
             const p1 = v3(@cos(a1) * r, @sin(a1) * r, 0);
             const f = v3(0, 0, t / 2);
@@ -89,6 +98,12 @@ pub const Mesh = struct {
             const side = vec.norm(vec.xdir(m, v3(@cos((a0 + a1) / 2), @sin((a0 + a1) / 2), 0)));
             self.quad(vec.xform(m, p0 + f), vec.xform(m, p0 - f), vec.xform(m, p1 - f), vec.xform(m, p1 + f), side, col, mat);
         }
+    }
+
+    /// The unit normal along `n`, turned to the side of `out`.
+    fn faceNormal(n: V3, out: V3) V3 {
+        const u = vec.norm(n);
+        return if (vec.dot(u, out) < 0) -u else u;
     }
 
     /// Copy vertices from a model, transformed by `m`. `filter` picks the

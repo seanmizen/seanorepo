@@ -149,9 +149,10 @@ test "the stairs from the concourses down to the islands, down and up" {
 test "the escalators: walk and ride, down and up" {
     loadEarlsCourt();
     defer unload();
-    // The north lane goes down (east), the south lane comes up.
-    const down_z: f32 = -23.35;
-    const up_z: f32 = -21.65;
+    // The north unit goes down (east), the south unit comes up. Each
+    // walk and ride is on the middle of the steps.
+    const down_z: f32 = ec.esc_lane_z[0];
+    const up_z: f32 = ec.esc_lane_z[1];
     const top = ec.esc_top_x;
     const bottom = ec.esc_bottom_x;
     try check(.{ .name = "escalator walk down", .start = v3(top - 2, ec.mid_y, down_z), .dir = 1, .end_x = bottom + 1, .end_y = ec.deep_y, .time = 5 });
