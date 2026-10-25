@@ -1193,17 +1193,17 @@ road over the floor of the ticket hall is concrete.
 
 | Material | The sound | Earl's Court boxes, decoration | Arena boxes | For example |
 |---|---|---|---|---|
-| `concrete` | a sharp crack, a thud and grit | 189, 395 | 80 | platforms, stairs, decks, pavements, the road, painted lines, stone sills |
-| `brick` | a duller crack and more crumble | 65, 0 | 0 | the shed walls, the concourses, the terraces, the buildings next to the station |
-| `plaster` | a soft crack and a puff | 24, 34 | 0 | the ticket hall walls, the painted fronts on the roads |
-| `tile` | a brittle tink and shards | 120, 1688 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof, the terracotta of the Earls Court Road front |
-| `metal` | a click, a heavy thud and a short low ring | 263, 3188 | 13 | rails, railings, posts, frames, escalator steps and balustrades, roof ribs |
-| `sheet_metal` | a hollow doof and a low boom | 121, 4493 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
-| `glass` | a bright crack and falling shards | 32, 730 | 6 | lamps, windows, shop windows, the lift shafts, the Warwick Road front and rotunda |
-| `wood` | a hollow knock and splinters | 23, 3464 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
+| `concrete` | a sharp crack, a thud and grit | 200, 2085 | 80 | platforms, stairs, decks, pavements, the road, painted lines, stone sills |
+| `brick` | a duller crack and more crumble | 91, 133 | 0 | the shed walls, the concourses, the terraces, the buildings next to the station |
+| `plaster` | a soft crack and a puff | 25, 342 | 0 | the ticket hall walls, the painted fronts on the roads |
+| `tile` | a brittle tink and shards | 123, 1717 | 1 | the tiled passages and platforms, the arena floor, the slate of the roof, the terracotta of the Earls Court Road front |
+| `metal` | a click, a heavy thud and a short low ring | 315, 3786 | 13 | rails, railings, posts, frames, escalator steps and balustrades, roof ribs |
+| `sheet_metal` | a hollow doof and a low boom | 132, 5091 | 12 | the trains, the containers, the bus, lift doors, ticket gates, signs |
+| `glass` | a bright crack and falling shards | 39, 1743 | 6 | lamps, windows, shop windows, the lift shafts, the Warwick Road front and rotunda |
+| `wood` | a hollow knock and splinters | 38, 4371 | 14 | sleepers, benches, crates, the TARDIS, poster boards |
 | `ballast` | a chuff and a clatter of stones | 16, 0 | 0 | the track beds |
 | `earth` | a dull thup and a spray of dirt | 12, 13 | 0 | the ground under the buildings, the banks of the cuttings |
-| `fabric` | a soft thup | 78, 697 | 0 | the seats of the trains, the gangways of the District train |
+| `fabric` | a soft thup | 78, 887 | 0 | the seats of the trains, the gangways of the District train |
 | `flesh` | a wet slap and a thud | 0, 0 | 0 | players and dummies (not a map surface) |
 
 The floorplan audit prints these counts. Its exit code is 1 when a
@@ -1213,7 +1213,7 @@ wood. `zig build test` checks the same.
 
 ### The box limit
 
-`map.max_boxes` is 2048. Earl's Court uses 1011 boxes, the arena 126.
+`map.max_boxes` is 2048. Earl's Court uses 1069 boxes, the arena 126.
 
 - A map with more boxes fails `zig build test` and every floorplan command
   (exit code 1).
@@ -1244,6 +1244,16 @@ wood. `zig build test` checks the same.
   ground, the pavements, the street lamps, the bins and the fences. Only
   the boxes within 60 m of the exit count for the AO, so the AO grid
   grows by 9 cells along Z, and not by the full 480 m of the street.
+- The terrace opposite and the street added 58 boxes (1011 to 1069),
+  1,631 decorations (18,537 to 20,168) and 27,720 map triangles (303,296
+  to 331,016). No map lights (34 of 36). The test ran headless Chromium at
+  1280 x 720 with no frame limit (`--disable-gpu-vsync
+  --disable-frame-rate-limit`) and a render scale of 1. The mean frames
+  in the quietest runs:
+  - The view across the road to the corner: 6.9 ms to 9.2 ms. The view
+    before was of a plain wall.
+  - The station front: 9.5 ms to 9.6 ms. The street to the north: 8.4 ms
+    to 8.5 ms. A District platform: 8.6 ms to 8.8 ms.
 - The ambient occlusion uses the AO boxes within 45 m of the eye
   (`uploadBoxes` in `game/src/render.zig`). The train parts do not count
   for it, except the floor, the roof and one wall of the District train.
@@ -1527,7 +1537,9 @@ stocks. The door openings and the door places are approximate.
 
 - **Earl's Court** (deathmatch, and the menu background): the station from
   its public layout, not from a survey. Earls Court Road with the station
-  front, the shops, a bus and the TARDIS, the ticket hall, the footbridge, the District line train shed with
+  front and the shops next door, the terrace opposite with its shops, a
+  pub and a side street, a bus stop, parked cars and the TARDIS, the
+  ticket hall, the footbridge, the District line train shed with
   its iron arch roof and a train, three lifts (see [Lifts](#lifts)),
   escalators that carry you, and the deep Piccadilly line platform. The
   server runs the lifts, so every player sees the same cab.
@@ -1563,8 +1575,44 @@ stocks. The door openings and the door places are approximate.
     lights. A collision box fills each room, so a player cannot get in.
     Each shop name is an invented parody.
   - On the pavement: a cast iron lamp post with five globes, Sheffield
-    bike stands, litter bins, and the traffic signal of a crossing south
-    of the station. The bus and a black cab wait south of the crossing.
+    bike stands, litter bins, and a pole of the pelican crossing south of
+    the station.
+- **The terrace opposite and the street** (`opposite`, `streetLife` and
+  `streetFurniture` in `game/src/maps/earls_court.zig`), from street
+  photos of the real corner. North to south:
+  - VAPES N MORE (see below), in a stucco building.
+  - DREGGS, a bakery chain: a blue fascia with four orange squares, in a
+    building of grey stone.
+  - SAUL, a bakery cafe on the corner: red brick, rusticated stone piers
+    and quoins, a black fascia (BOULANGERIE, SAUL, SANDWICHES), posters of
+    bakers in the windows, a cornice and a balustrade. The street name
+    sign EARLS COURT ROAD SW5 is over the fascia.
+  - A side street between SAUL and the pub. Two signs of no entry and
+    bollards stand at its mouth. It has a lamp post, wheelie bins and
+    double yellow lines, and it stops at a house 12 m in.
+  - THE SHORTFIELD, a pub on the far corner: a dark green ground floor
+    with arched windows and amber fanlights, a fascia with gold letters
+    on the front and on the side street, flower troughs, hanging
+    baskets, a pub sign of a very short football pitch, and DINING ROOM
+    UPSTAIRS by the side door. Yellow brick above, with a bay window over
+    two floors.
+  - A stucco building with a launderette (SPIN CITY) and an empty shop
+    to let.
+  - The upper floors have sash windows, string courses, cornices and
+    parapets.
+  - The shops and the pub have rooms behind their glass, with one
+    collision box for each room: bread on shelves in SAUL, a hot cabinet
+    in DREGGS, a bar with pumps, bottles and tables in the pub.
+  - Each name is an invented parody.
+  - On the road: a white van and two cars park at the kerbs (the traffic
+    keeps left), and the bus waits at a stop line. Nothing moves.
+  - The pelican crossing has a pole on each kerb. Each pole has a signal
+    toward the traffic from the north and a pedestrian signal toward the
+    far kerb. Each approach has a stop line, and white zigzag lines run
+    along the kerbs and the middle of the road.
+  - A bus stop by the bus: a shelter with an advert and a flag with a red
+    roundel. On the far pavement: a red pillar box, a litter bin and two
+    lamp posts.
 - **The District platform ends** (`platformEnd` in
   `game/src/maps/earls_court.zig`), as on a real Underground platform:
   - A railing with a gate goes across each end of each island, at 60 m
