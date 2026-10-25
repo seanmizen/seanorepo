@@ -276,27 +276,47 @@ fn part(sk: Skeleton, pt: Part) Mat4 {
     return sk[@backingInt(pt)];
 }
 
+/// The colours of an outfit. The default is the full black of the street.
+/// A player on a moped (moped_ride.zig) wears the colour of the player.
+pub const Outfit = struct {
+    jacket: V3 = jacket,
+    quilt: V3 = quilt,
+    trousers: V3 = trousers,
+    head: V3 = balaclava,
+    /// The balaclava has a slit for the eyes. A player wears a helmet.
+    slit: bool = true,
+    /// Added to the material id of the head only (body.shadow_only: your
+    /// own head on a moped casts a shadow, and the camera does not draw
+    /// it).
+    head_add: f32 = 0,
+};
+
 /// A ring of quilting round a part at height y: a little larger than the
 /// part, h high. It makes the baffles of the puffer jacket.
-fn ring(out: *mesh.Mesh, m: Mat4, e: [2]V3, y: f32, h: f32, out_by: f32, mat_add: f32) void {
-    out.orientedBox(m, v3(e[0][0] - out_by, y - h / 2, e[0][2] - out_by), v3(e[1][0] + out_by, y + h / 2, e[1][2] + out_by), quilt, nylon + mat_add);
+fn ring(out: *mesh.Mesh, m: Mat4, e: [2]V3, y: f32, h: f32, out_by: f32, color: V3, mat_add: f32) void {
+    out.orientedBox(m, v3(e[0][0] - out_by, y - h / 2, e[0][2] - out_by), v3(e[1][0] + out_by, y + h / 2, e[1][2] + out_by), color, nylon + mat_add);
 }
 
 /// Draw the outfit on a skeleton. `mat_add` is added to each material id
 /// (body.shadow_only: a shadow only).
 pub fn buildSkeleton(out: *mesh.Mesh, sk: Skeleton, knife: bool, mat_add: f32) void {
+    buildOutfit(out, sk, knife, mat_add, .{});
+}
+
+/// Draw an outfit of the colours `o` on a skeleton.
+pub fn buildOutfit(out: *mesh.Mesh, sk: Skeleton, knife: bool, mat_add: f32, o: Outfit) void {
     const ex = extents;
     // The tracksuit trousers and the trainers.
-    out.orientedBox(part(sk, .hips), ex[@backingInt(Part.hips)][0], ex[@backingInt(Part.hips)][1], trousers, cloth + mat_add);
+    out.orientedBox(part(sk, .hips), ex[@backingInt(Part.hips)][0], ex[@backingInt(Part.hips)][1], o.trousers, cloth + mat_add);
     for ([_]Part{ .thigh_l, .thigh_r }) |pt| {
         const e = ex[@backingInt(pt)];
-        out.orientedBox(part(sk, pt), e[0], e[1], trousers, cloth + mat_add);
+        out.orientedBox(part(sk, pt), e[0], e[1], o.trousers, cloth + mat_add);
     }
     for ([_]Part{ .shin_l, .shin_r }) |pt| {
         const m = part(sk, pt);
-        out.orientedBox(m, v3(-0.065, -0.4, -0.07), v3(0.065, 0.03, 0.07), trousers, cloth + mat_add);
+        out.orientedBox(m, v3(-0.065, -0.4, -0.07), v3(0.065, 0.03, 0.07), o.trousers, cloth + mat_add);
         // The cuff of the trousers, gathered over the trainer.
-        out.orientedBox(m, v3(-0.072, -0.4, -0.077), v3(0.072, -0.34, 0.077), trousers, cloth + mat_add);
+        out.orientedBox(m, v3(-0.072, -0.4, -0.077), v3(0.072, -0.34, 0.077), o.trousers, cloth + mat_add);
         out.orientedBox(m, v3(-0.058, -0.49, -0.19), v3(0.058, -0.38, 0.075), trainer, nylon + mat_add);
         out.orientedBox(m, v3(-0.062, -0.5, -0.2), v3(0.062, -0.47, 0.085), sole, cloth + mat_add);
     }
@@ -304,29 +324,35 @@ pub fn buildSkeleton(out: *mesh.Mesh, sk: Skeleton, knife: bool, mat_add: f32) v
     // bunched behind the neck.
     const chest = part(sk, .chest);
     const ce = ex[@backingInt(Part.chest)];
-    out.orientedBox(chest, ce[0], ce[1], jacket, nylon + mat_add);
-    for ([_]f32{ -0.1, 0.06, 0.22, 0.38 }) |y| ring(out, chest, ce, y, 0.05, 0.016, mat_add);
-    out.orientedBox(chest, v3(-0.15, 0.5, -0.13), v3(0.15, 0.66, 0.13), jacket, nylon + mat_add);
-    out.orientedBox(chest, v3(-0.17, 0.46, 0.06), v3(0.17, 0.68, 0.23), quilt, nylon + mat_add);
+    out.orientedBox(chest, ce[0], ce[1], o.jacket, nylon + mat_add);
+    for ([_]f32{ -0.1, 0.06, 0.22, 0.38 }) |y| ring(out, chest, ce, y, 0.05, 0.016, o.quilt, mat_add);
+    out.orientedBox(chest, v3(-0.15, 0.5, -0.13), v3(0.15, 0.66, 0.13), o.jacket, nylon + mat_add);
+    out.orientedBox(chest, v3(-0.17, 0.46, 0.06), v3(0.17, 0.68, 0.23), o.quilt, nylon + mat_add);
     // The sleeves: puffy, with a baffle, and the gloves.
     for ([_]Part{ .upper_arm_l, .upper_arm_r }) |pt| {
         const e = ex[@backingInt(pt)];
-        out.orientedBox(part(sk, pt), e[0], e[1], jacket, nylon + mat_add);
-        ring(out, part(sk, pt), e, -0.13, 0.05, 0.012, mat_add);
+        out.orientedBox(part(sk, pt), e[0], e[1], o.jacket, nylon + mat_add);
+        ring(out, part(sk, pt), e, -0.13, 0.05, 0.012, o.quilt, mat_add);
     }
     for ([_]Part{ .fore_arm_l, .fore_arm_r }) |pt| {
         const m = part(sk, pt);
         const e = ex[@backingInt(pt)];
-        out.orientedBox(m, e[0], e[1], jacket, nylon + mat_add);
-        ring(out, m, e, -0.2, 0.05, 0.01, mat_add);
+        out.orientedBox(m, e[0], e[1], o.jacket, nylon + mat_add);
+        ring(out, m, e, -0.2, 0.05, 0.01, o.quilt, mat_add);
         out.orientedBox(m, v3(-0.045, -0.37, -0.05), v3(0.045, -0.25, 0.05), glove, cloth + mat_add);
     }
-    // The balaclava, with the slit for the eyes.
+    // The balaclava, with the slit for the eyes, or a helmet.
     const head = part(sk, .head);
     const he = ex[@backingInt(Part.head)];
-    out.orientedBox(head, he[0], he[1], balaclava, cloth + mat_add);
-    out.orientedBox(head, v3(-0.07, 0.14, -0.13), v3(0.07, 0.18, -0.1), skin, cloth + mat_add);
-    for ([_]f32{ -1, 1 }) |sd| out.orientedBox(head, v3(sd * 0.0375 - 0.0125, 0.15, -0.14), v3(sd * 0.0375 + 0.0125, 0.17, -0.12), eye_c, nylon + mat_add);
+    const ha = mat_add + o.head_add;
+    out.orientedBox(head, he[0], he[1], o.head, cloth + ha);
+    if (o.slit) {
+        out.orientedBox(head, v3(-0.07, 0.14, -0.13), v3(0.07, 0.18, -0.1), skin, cloth + ha);
+        for ([_]f32{ -1, 1 }) |sd| out.orientedBox(head, v3(sd * 0.0375 - 0.0125, 0.15, -0.14), v3(sd * 0.0375 + 0.0125, 0.17, -0.12), eye_c, nylon + ha);
+    } else {
+        // The visor of the helmet.
+        out.orientedBox(head, v3(-0.085, 0.1, -0.135), v3(0.085, 0.19, -0.11), v3(0.03, 0.035, 0.04), nylon + ha);
+    }
     if (knife) {
         // The blade along the forearm, out of the fist.
         const hand = part(sk, .fore_arm_r).mul(vec.translate(v3(0, -0.33, -0.01)).mul(Mat4.rotationX(-std.math.pi / 2.0)));

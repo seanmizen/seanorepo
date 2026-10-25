@@ -26,6 +26,10 @@
 //     takes it (`pickGun`, `takeGun`).
 // - The moped leans in turns, and it buzzes as it passes
 //   (moped_sound.zig).
+// - A crashed moped that stops is a moped that a player can ride
+//   (moped_ride.zig): the event `rest` gives it to main.zig, and this
+//   module draws it no more. One rideable moped for each crash. In
+//   deathmatch the "die" of the driver names its id (`Ride.bike`).
 //
 // Deathmatch (main.zig, server/moped.ts), as the pigeons:
 // - The client of the player decides the approach. It starts the moped at
@@ -189,6 +193,10 @@ pub const Ride = struct {
     /// The moped or the thief on foot near the fence: the time out of the
     /// sight of this client.
     unseen: f32 = 0,
+    /// The id of the rideable moped that the crash leaves (moped_ride.zig),
+    /// and true when the crashed moped stopped and went to moped_ride.zig.
+    bike: u32 = 0,
+    rested: bool = false,
 };
 
 pub var rides: [max_rides]Ride = @splat(.{});
@@ -197,6 +205,9 @@ pub var rides: [max_rides]Ride = @splat(.{});
 pub var net = false;
 /// The player of this client had a visit in this life.
 pub var used = false;
+/// The next id of a rideable moped offline. In deathmatch the server gives
+/// the ids.
+pub var next_bike: u32 = 1;
 
 /// The events of this client for the server. `q` is the state of the
 /// moped (`State`). A "pick" names the ride by its owner.
@@ -219,6 +230,9 @@ pub const EventKind = enum {
     thud,
     /// A rider died: `rider`, and `who` the killer.
     died,
+    /// The crashed moped of `ride` stopped: it is a rideable moped now
+    /// (moped_ride.zig).
+    rest,
 };
 pub const Event = struct { kind: EventKind, p: V3 = v3(0, 0, 0), n: V3 = v3(0, 1, 0), ride: usize = 0, rider: Rider = .driver, who: u32 = 0 };
 pub var events: [24]Event = undefined;
@@ -250,6 +264,7 @@ pub fn reset() void {
     event_n = 0;
     used = false;
     mark_n = 0;
+    next_bike = 1;
 }
 
 /// A new life of the player of this client: a new visit can come. The
@@ -468,9 +483,15 @@ pub fn applyAway(owner: u32, q: State) void {
 }
 
 /// A rider died at state q (a "die" from the server, or a local death
-/// offline). `who` is the killer: a player id.
-pub fn applyDie(owner: u32, mine: bool, rider: Rider, q: State, who: u32) void {
+/// offline). `who` is the killer: a player id. `bike`: for the driver, the
+/// id of the rideable moped that the crash leaves (from the server), or 0
+/// for a new local id.
+pub fn applyDie(owner: u32, mine: bool, rider: Rider, q: State, who: u32, bike: u32) void {
     const r = rideFor(owner, mine, q);
+    if (rider == .driver and !r.dead[0]) {
+        r.bike = if (bike != 0) bike else next_bike;
+        next_bike = @max(next_bike, r.bike) + 1;
+    }
     kill(r, rider, q);
     event(.{ .kind = .died, .p = v3(q[0], q[1], q[2]), .ride = indexOf(r), .rider = rider, .who = who });
 }
@@ -579,7 +600,7 @@ pub fn hurt(ride: usize, rider: Rider, dmg: f32, d: V3, who: u32) void {
     const i = @backingInt(rider);
     if (r.dead[i]) return;
     r.hp[i] -= dmg;
-    if (r.hp[i] <= 0) applyDie(r.owner, r.mine, rider, stateOf(r, rider, d), who);
+    if (r.hp[i] <= 0) applyDie(r.owner, r.mine, rider, stateOf(r, rider, d), who, 0);
 }
 
 // ---- The step -------------------------------------------------------------------------
@@ -608,7 +629,11 @@ pub fn step(dt: f32, eye: V3, look: V3) void {
         }
         if (r.ending) {
             r.hidden = if (seen(r, eye, look)) 0 else r.hidden + dt;
-            if (r.hidden > 0.5 or r.t > 60) r.on = false;
+            if (r.hidden > 0.5 or r.t > 60) {
+                // A crash that did not stop yet: its moped stops here.
+                if (r.stage == .crash) rest(r);
+                r.on = false;
+            }
         }
     }
     fadeMarks(dt);
@@ -734,6 +759,7 @@ fn crash(r: *Ride, dt: f32) void {
     } else m.pos = next;
     const y = floorAt(m.pos + v3(0, 0.3, 0));
     m.pos[1] += (y - m.pos[1]) * @min(1, 12 * dt);
+    if (m.fall >= 1 and m.speed <= 0) rest(r);
     // The marks on the road, and the sparks of the slide.
     m.mark_t -= dt;
     m.spark_t -= dt;
@@ -749,6 +775,16 @@ fn crash(r: *Ride, dt: f32) void {
         event(.{ .kind = .spark, .p = at, .n = vec.norm(-m.slide + v3(0, 0.6, 0)) });
         if (@mod(r.t, 0.1) < 0.05) event(.{ .kind = .scrape, .p = at });
     }
+}
+
+/// The crashed moped stopped: it goes to moped_ride.zig (the event
+/// `rest`), once.
+fn rest(r: *Ride) void {
+    if (r.rested or r.moped.gone) return;
+    r.rested = true;
+    r.moped.gone = true;
+    r.moped.pos[1] = floorAt(r.moped.pos + v3(0, 0.3, 0));
+    event(.{ .kind = .rest, .p = r.moped.pos, .ride = indexOf(r) });
 }
 
 /// The thief on foot: along the road, away from the crash.
@@ -952,7 +988,7 @@ fn part(out: *mesh.Mesh, f: Mat4, lo: V3, hi: V3, c: V3, mat: f32) void {
 /// A scooter with a top box, in the frame f (origin on the ground, -Z the
 /// front). `lights`: the headlight and the tail light glow (the engine
 /// runs).
-fn buildMoped(out: *mesh.Mesh, f: Mat4, lights: bool) void {
+pub fn buildMoped(out: *mesh.Mesh, f: Mat4, lights: bool) void {
     // The wheels: a tyre and a hub, the axle along X.
     for ([_]f32{ -0.62, 0.58 }) |wz| {
         const w = f.mul(vec.translate(v3(0, 0.2, wz)).mul(Mat4.rotationY(std.math.pi / 2.0)));

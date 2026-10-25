@@ -24,6 +24,9 @@
 // - A player who crosses the gate line by any other way than an open lane
 //   (a vault, a jump over the screens) is a fare dodger. main.zig kills the
 //   player 2 s later: "Guilt".
+// - A player on a moped (moped_ride.zig) who jumps the gate line from the
+//   junk ramp is not a fare dodger: `step` gives `jumped`, and main.zig
+//   does nothing. On foot the rule stays the same (REQ-MOPED-004).
 // - Deathmatch: the paddles are the same on each client. A tap that opens
 //   a lane goes to the server ({t:"gate", k:"open", i}), and the server
 //   sends it to the other players (open). A walk through an open lane goes
@@ -310,18 +313,24 @@ fn penceText(buf: []u8, sign: []const u8, p: u32) []const u8 {
     return std.fmt.bufPrint(buf, "{s}£{d}.{d:0>2}", .{ sign, p / 100, p % 100 }) catch "";
 }
 
-/// What the gate line did to the player in one step.
-pub const Cross = enum { none, through, dodged };
+/// What the gate line did to the player in one step. `jumped`: a player
+/// on a moped crossed by any other way than an open lane.
+pub const Cross = enum { none, through, dodged, jumped };
+
+/// How the player moves: on foot, or on a moped.
+pub const Mover = enum { foot, moped };
 
 /// Step the paddles and the journey. `before` and `feet` are the feet of
 /// the player at the start and at the end of the tick, or null when the
 /// player is not in play. `others`: the feet of the other players. The
 /// paddles do not close on them either. Returns `dodged` when the player
-/// crossed a gate line by any other way than an open lane.
-pub fn step(dt: f32, before: ?V3, feet: ?V3, others: []const V3, player_r: f32, player_h: f32) Cross {
+/// on foot crossed a gate line by any other way than an open lane, and
+/// `jumped` when the player on a moped did.
+pub fn step(dt: f32, before: ?V3, feet: ?V3, others: []const V3, player_r: f32, player_h: f32, mover: Mover) Cross {
     var out: Cross = .none;
     passed = null;
     if (before != null and feet != null) out = crossing(before.?, feet.?);
+    if (out == .dodged and mover == .moped) out = .jumped;
     for (lanes[0..lane_n]) |*l| {
         l.flash = if (l.flash > 0) @max(0, l.flash - dt) else @min(0, l.flash + dt);
         l.open_t = @max(0, l.open_t - dt);
@@ -451,7 +460,7 @@ test "gates: a reader and a light at each end of each lane, the lanes stay one-w
     try std.testing.expectEqual(@as(usize, 2), line_n);
     try std.testing.expectEqual(@as(usize, 12), lane_n);
     const dt: f32 = 1.0 / 120.0;
-    _ = step(dt, null, null, &.{}, 0.3, 1.8);
+    _ = step(dt, null, null, &.{}, 0.3, 1.8, .foot);
     // Each cabinet between two lanes has a reader and a light at each end.
     // The middle cabinet, where the IN half meets the OUT half, too.
     for (lines[0..line_n], 0..) |ln, li| {
@@ -494,7 +503,7 @@ test "gates: a reader and a light at each end of each lane, the lanes stay one-w
             } else {
                 try std.testing.expectEqual(Tap.wrong_side, t);
                 try std.testing.expect(l.flash < 0 and l.open_t == 0);
-                _ = step(dt, null, null, &.{}, 0.3, 1.8);
+                _ = step(dt, null, null, &.{}, 0.3, 1.8, .foot);
                 try std.testing.expect(map.boxes[l.box].solid);
             }
             l.open_t = 0;
