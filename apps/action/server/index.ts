@@ -72,6 +72,7 @@
 // Messages (JSON text). Client to server:
 //   {t:"hello", name, p:[c,m], s:[c,m]}           the join, after the welcome.
 //                                                 p the primary, s the secondary
+//   {t:"name", name}                              a new name (settings).
 //   {t:"st", x, y, z, yaw, pitch, lean, w, m, lift}
 //                                                 20 times a second. lean is
 //                                                 -1 (left) to 1 (right). w and
@@ -1131,6 +1132,15 @@ const server = Bun.serve<Conn>({
         envDeath(p, msg.by, msg.by);
       } else if (msg.t === 'loadout') {
         onLoadout(p, msg);
+      } else if (msg.t === 'name' && p.joined) {
+        // A new name from the settings panel. The snapshots carry it to
+        // the other players.
+        const name = cleanName(msg.name);
+        if (name !== p.name) {
+          const old = p.name;
+          p.name = name;
+          serverLine(`${old} is now ${name}.`);
+        }
       } else if (msg.t === 'nade') {
         onNade(p, msg);
       } else if (msg.t === 'blast') {
