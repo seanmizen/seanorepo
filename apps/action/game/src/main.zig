@@ -274,6 +274,16 @@ fn colorFor(id: u32) V3 {
     return palette[id % palette.len];
 }
 
+/// A new name from the settings panel: keep it in local storage, and in
+/// deathmatch send it to the server ({t:"name"}). The panel allows only
+/// letters, digits, space, "_" and "-", so the JSON needs no escapes.
+fn applyName() void {
+    settings.name_changed = false;
+    my_name_len = copyName(&my_name, settings.name());
+    platform.storageSet("name", my_name[0..my_name_len]) catch {};
+    if (mode == .deathmatch) client.send("{{\"t\":\"name\",\"name\":\"{s}\"}}", .{my_name[0..my_name_len]});
+}
+
 fn copyName(dst: []u8, src: []const u8) usize {
     const n = @min(dst.len, src.len);
     @memcpy(dst[0..n], src[0..n]);
@@ -2257,6 +2267,13 @@ fn practiceTick() void {
 /// mouse position only.
 var no_input: core.InputSnapshot = .{};
 var text_input_on = false;
+/// The input events of this tick. The settings panel reads the typed name.
+var tick_events: []const core.Event = &.{};
+/// A text field freed the mouse. Capture it again when the field closes.
+/// The browser frees a lock on Esc, so a chat that kept the lock would
+/// open the pause screen on Esc. A lock that the page freed itself can come
+/// back with no click.
+var relock = false;
 
 /// The console and chat part of a tick. The backtick key opens the
 /// console: it arrives as Unknown (game_console.zig). "/" opens the chat
@@ -2272,12 +2289,15 @@ fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
     con.tick();
     chat.tick(dt);
     const events = ctx.bus().eventsForTick(ctx.tickId());
+    tick_events = events;
     const had_keys = con.hasKeys();
     // The panel and the chat read the events in order: text, then Enter.
     if (con.open) {
         gcon.view.update(con, events);
     } else if (chat.isOpen()) {
         chat.update(con, events);
+    } else if (settings.editingName()) {
+        // The settings panel reads the events (settings.update). No binds.
     } else if (raw.keyPressed(.Unknown) and !raw.mods.ctrl and !raw.mods.super) {
         con.setOpen(true);
     } else if (gcon.slashTyped(events)) {
@@ -2289,7 +2309,19 @@ fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
     const typing = con.hasKeys();
     if (typing != text_input_on) {
         text_input_on = typing;
-        if (typing) ctx.startTextInput() else ctx.stopTextInput();
+        if (typing) {
+            ctx.startTextInput();
+            if (jsPointerLocked() != 0) {
+                relock = true;
+                ctx.setMouseCapture(false);
+            }
+        } else {
+            ctx.stopTextInput();
+            if (relock) {
+                relock = false;
+                ctx.setMouseCapture(true);
+            }
+        }
     }
     if (had_keys or typing) {
         no_input.mouse.x = raw.mouse.x;
@@ -2311,6 +2343,7 @@ fn tick(ctx: *sw.Context) void {
     const in = consoleTick(ctx);
 
     captured = jsPointerLocked() != 0;
+    if (settings.name_changed) applyName();
     // The engine default master volume is 0.5: a volume of 1 keeps it.
     audio.setMasterVolume(0.5 * settings.volume.float());
     sounds.setListener(me.eyePos(), me.yaw);
@@ -2324,7 +2357,7 @@ fn tick(ctx: *sw.Context) void {
         .menu => {
             if (settings.open) {
                 const l = logical(ctx);
-                settings.update(in, l.w, l.h);
+                settings.update(in, tick_events, l.w, l.h);
             } else {
                 if (in.keyPressed(.Num1)) enterDeathmatch(ctx);
                 if (in.keyPressed(.Num2)) enterPractice(ctx);
@@ -2448,7 +2481,7 @@ fn tick(ctx: *sw.Context) void {
         me.updateLean(dt, 0);
         if (settings.open) {
             const l = logical(ctx);
-            settings.update(in, l.w, l.h);
+            settings.update(in, tick_events, l.w, l.h);
         } else if (weapon_menu.open) {
             const l = logical(ctx);
             switch (weapon_menu.update(in, l.w, l.h, &choice, gcon.act.pressed(.weaponmenu))) {
@@ -2759,6 +2792,8 @@ fn inRect(r: gfx.Rect, x: f32, y: f32) bool {
 /// while it connects and while the score board shows.
 fn pauseScreenShows() bool {
     if (captured or settings.open or weapon_menu.open) return false;
+    // A text field freed the mouse and takes it back when it closes.
+    if (relock or gcon.con.hasKeys()) return false;
     return switch (mode) {
         .menu => false,
         .practice => true,
@@ -3410,6 +3445,7 @@ fn gameInit(ctx: *sw.Context) !void {
         best = std.fmt.parseInt(u32, b, 10) catch 0;
     }
     try gcon.init(alloc, &client, &session);
+    settings.setName(my_name[0..my_name_len]);
     loadChoice();
     applied = choice;
 }

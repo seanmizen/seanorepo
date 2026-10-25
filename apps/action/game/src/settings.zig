@@ -1,10 +1,12 @@
-// The settings panel: a view over five saved cvars (head bob, volumes,
-// field of view and mouse sensitivity). The panel and the console change
-// the same values. The console saves them (local storage "config").
+// The settings panel: the player name, and a view over five saved cvars
+// (head bob, volumes, field of view and mouse sensitivity). The panel and
+// the console change the same values. The console saves them (local
+// storage "config"). main.zig keeps the name in local storage "name".
 // The panel opens from the main menu and from the pause screen.
 //
 // Controls of the panel: click or drag a slider, or Up and Down to select a
-// row and Left and Right to change it. Esc or BACK closes it.
+// row and Left and Right to change it. Esc or BACK closes it. Click the
+// NAME row, or Enter on it, to type a name: Enter keeps it, Esc cancels.
 const std = @import("std");
 const core = @import("sw_core");
 const gfx = @import("sw_gfx2d");
@@ -81,8 +83,61 @@ const items = [_]Item{
 };
 var cvars: [items.len]*console.Cvar = undefined;
 
+/// The selected row: 0 is NAME, 1 + i is the slider of items[i].
 var selected: usize = 0;
 var dragging: ?usize = null;
+
+/// The longest name, as the server allows (server/index.ts cleanName).
+pub const name_max = 15;
+var name_buf: [name_max]u8 = undefined;
+var name_len: usize = 0;
+/// A new name from the panel. main.zig reads it, saves it and sends it.
+pub var name_changed = false;
+var editing = false;
+var name_prompt: console.prompt.Prompt = .{};
+
+/// The name that the panel shows. main.zig sets it at the start.
+pub fn setName(n: []const u8) void {
+    name_len = @min(n.len, name_max);
+    @memcpy(name_buf[0..name_len], n[0..name_len]);
+}
+
+pub fn name() []const u8 {
+    return name_buf[0..name_len];
+}
+
+/// True while the player types a name. The keys go to the name only.
+pub fn editingName() bool {
+    return open and editing;
+}
+
+fn startEdit() void {
+    editing = true;
+    name_prompt.edit.limit = name_max;
+    name_prompt.edit.set(name());
+    con.setTyping(true);
+}
+
+/// Keep only the characters that the server keeps: letters, digits,
+/// space, "_" and "-". An empty result keeps the old name.
+fn endEdit(keep: bool) void {
+    editing = false;
+    con.setTyping(false);
+    if (!keep) return;
+    var out: [name_max]u8 = undefined;
+    var n: usize = 0;
+    for (name_prompt.submitted()) |c| {
+        const ok = std.ascii.isAlphanumeric(c) or c == ' ' or c == '_' or c == '-';
+        if (ok and n < name_max) {
+            out[n] = c;
+            n += 1;
+        }
+    }
+    const t = std.mem.trim(u8, out[0..n], " ");
+    if (t.len == 0 or std.mem.eql(u8, t, name())) return;
+    setName(t);
+    name_changed = true;
+}
 
 /// Add the cvars of the panel to the console.
 pub fn register(c: *console.Console) !void {
@@ -119,8 +174,8 @@ pub fn migrate(c: *console.Console, alloc: std.mem.Allocator) void {
     while (pairs.next()) |pair| {
         const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
         const x = std.fmt.parseFloat(f64, pair[eq + 1 ..]) catch continue;
-        for (old, 0..) |name, i| {
-            if (std.mem.eql(u8, pair[0..eq], name)) _ = c.setValue(cvars[i], .{ .float = x }, .game) catch {};
+        for (old, 0..) |key, i| {
+            if (std.mem.eql(u8, pair[0..eq], key)) _ = c.setValue(cvars[i], .{ .float = x }, .game) catch {};
         }
     }
     // Save the values now: the old key goes next.
@@ -134,6 +189,7 @@ pub fn show() void {
 }
 
 fn close() void {
+    if (editing) endEdit(false);
     open = false;
     dragging = null;
 }
@@ -141,19 +197,25 @@ fn close() void {
 const row_h: f32 = 54;
 const pw: f32 = 600;
 
-const Layout = struct { panel: gfx.Rect, tracks: [items.len]gfx.Rect, back: gfx.Rect };
+const Layout = struct { panel: gfx.Rect, name: gfx.Rect, tracks: [items.len]gfx.Rect, back: gfx.Rect };
 
 fn layout(w: f32, h: f32) Layout {
-    const ph = 76 + row_h * @as(f32, @floatFromInt(items.len)) + 76;
+    const ph = 76 + row_h * @as(f32, @floatFromInt(items.len + 1)) + 76;
     const x = w / 2 - pw / 2;
     const y = h / 2 - ph / 2;
-    var l: Layout = .{ .panel = .{ .x = x, .y = y, .w = pw, .h = ph }, .tracks = undefined, .back = undefined };
+    var l: Layout = .{ .panel = .{ .x = x, .y = y, .w = pw, .h = ph }, .name = undefined, .tracks = undefined, .back = undefined };
+    // The NAME row, then one row for each slider.
+    l.name = .{ .x = x + 8, .y = y + 76 - 6, .w = pw - 16, .h = row_h - 6 };
     for (0..items.len) |i| {
-        const ry = y + 76 + row_h * @as(f32, @floatFromInt(i));
+        const ry = y + 76 + row_h * @as(f32, @floatFromInt(i + 1));
         l.tracks[i] = .{ .x = x + 260, .y = ry + 14, .w = 220, .h = 6 };
     }
     l.back = .{ .x = w / 2 - 100, .y = y + ph - 62, .w = 200, .h = 44 };
     return l;
+}
+
+fn hoverName(l: Layout, x: f32, y: f32) bool {
+    return inside(l.name, x, y);
 }
 
 fn inside(r: gfx.Rect, x: f32, y: f32) bool {
@@ -166,25 +228,46 @@ fn range(i: usize) struct { lo: f32, hi: f32 } {
 }
 
 /// The input of one tick while the panel is open. `w` and `h` are the
-/// logical size of the canvas, the space of the mouse position.
-pub fn update(in: *const core.InputSnapshot, w: f32, h: f32) void {
+/// logical size of the canvas, the space of the mouse position. `events`
+/// are the input events of the tick: the name field reads the typed text.
+pub fn update(in: *const core.InputSnapshot, events: []const core.Event, w: f32, h: f32) void {
     const l = layout(w, h);
+    if (editing) {
+        // The console blocks the snapshot while the player types. The
+        // events give the text, Enter and Esc.
+        for (events) |*ev| switch (name_prompt.feed(null, ev)) {
+            .submit => return endEdit(true),
+            .cancel => return endEdit(false),
+            .none => {},
+        };
+        return;
+    }
+    const rows = items.len + 1;
     if (in.keyPressed(.Escape)) return close();
-    if (in.keyPressed(.Up)) selected = (selected + items.len - 1) % items.len;
-    if (in.keyPressed(.Down)) selected = (selected + 1) % items.len;
-    if (in.keyPressed(.Left)) set(selected, value(selected) - items[selected].step);
-    if (in.keyPressed(.Right)) set(selected, value(selected) + items[selected].step);
+    if (in.keyPressed(.Up)) selected = (selected + rows - 1) % rows;
+    if (in.keyPressed(.Down)) selected = (selected + 1) % rows;
+    if (selected == 0) {
+        if (in.keyPressed(.Enter)) startEdit();
+    } else {
+        const i = selected - 1;
+        if (in.keyPressed(.Left)) set(i, value(i) - items[i].step);
+        if (in.keyPressed(.Right)) set(i, value(i) + items[i].step);
+    }
 
     const mx = in.mouse.x;
     const my = in.mouse.y;
     if (in.buttonPressed(.left)) {
         if (inside(l.back, mx, my)) return close();
+        if (inside(l.name, mx, my)) {
+            selected = 0;
+            return startEdit();
+        }
         for (l.tracks, 0..) |t, i| {
             // The full row height takes the click, not only the thin track.
             const hit: gfx.Rect = .{ .x = t.x - 10, .y = t.y - 22, .w = t.w + 20, .h = row_h - 4 };
             if (inside(hit, mx, my)) {
                 dragging = i;
-                selected = i;
+                selected = i + 1;
             }
         }
     }
@@ -218,12 +301,33 @@ pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mouse_x: f32, mouse_y
     const title = "SETTINGS";
     _ = try text.draw(r, title, w / 2 - text.measure(title, 26).w / 2, l.panel.y + 20, .{ .size = 26, .color = white });
 
+    // The NAME row: the name, or the field with a caret while the player
+    // types.
+    {
+        const ry = l.name.y + 6;
+        const on = selected == 0 or editing;
+        if (on) try r.fillRect(l.name, gfx.Color.rgba8(255, 166, 77, 30));
+        _ = try text.draw(r, "NAME", l.panel.x + 28, ry + 2, .{ .size = 16, .color = if (on) accent else white });
+        const field: gfx.Rect = .{ .x = l.panel.x + 252, .y = ry - 4, .w = pw - 252 - 20, .h = 30 };
+        try r.fillRect(field, gfx.Color.rgba8(255, 255, 255, if (editing) 40 else 18));
+        const shown = if (editing) name_prompt.edit.text() else name();
+        _ = try text.draw(r, shown, field.x + 10, ry + 2, .{ .size = 16, .color = white });
+        if (editing) {
+            const cx = field.x + 10 + text.measure(shown[0..name_prompt.edit.cursor], 16).w;
+            try r.fillRect(.{ .x = cx + 1, .y = ry, .w = 2, .h = 20 }, accent);
+        } else if (hoverName(l, mouse_x, mouse_y)) {
+            const t = "click to change";
+            _ = try text.draw(r, t, field.x + field.w - 10 - text.measure(t, 13).w, ry + 4, .{ .size = 13, .color = dim });
+        }
+    }
+
     var buf: [32]u8 = undefined;
     for (items, 0..) |it, i| {
         const t = l.tracks[i];
         const ry = t.y - 14;
-        if (i == selected) try r.fillRect(.{ .x = l.panel.x + 8, .y = ry - 6, .w = pw - 16, .h = row_h - 6 }, gfx.Color.rgba8(255, 166, 77, 30));
-        _ = try text.draw(r, it.label, l.panel.x + 28, ry + 2, .{ .size = 16, .color = if (i == selected) accent else white });
+        const sel = selected == i + 1;
+        if (sel) try r.fillRect(.{ .x = l.panel.x + 8, .y = ry - 6, .w = pw - 16, .h = row_h - 6 }, gfx.Color.rgba8(255, 166, 77, 30));
+        _ = try text.draw(r, it.label, l.panel.x + 28, ry + 2, .{ .size = 16, .color = if (sel) accent else white });
         const rg = range(i);
         const k = (value(i) - rg.lo) / (rg.hi - rg.lo);
         try r.fillRect(t, gfx.Color.rgba8(255, 255, 255, 40));
@@ -236,6 +340,6 @@ pub fn draw(r: *gfx.Renderer, text: *sw_text.TextRenderer, mouse_x: f32, mouse_y
     try r.fillRect(l.back, if (hover) gfx.Color.rgba8(255, 166, 77, 230) else gfx.Color.rgba8(255, 255, 255, 30));
     const bt = "BACK";
     _ = try text.draw(r, bt, w / 2 - text.measure(bt, 18).w / 2, l.back.y + 11, .{ .size = 18, .color = if (hover) gfx.Color.rgba8(20, 14, 8, 255) else white });
-    const hint = "drag a slider, or the arrow keys  -  ESC to close  -  the console has the same values";
+    const hint = if (editing) "type a name  -  ENTER to keep it  -  ESC to cancel" else "drag a slider, or the arrow keys  -  ESC to close  -  the console has the same values";
     _ = try text.draw(r, hint, w / 2 - text.measure(hint, 13).w / 2, l.panel.y + l.panel.h + 12, .{ .size = 13, .color = dim });
 }

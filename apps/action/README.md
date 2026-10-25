@@ -637,6 +637,10 @@ every mode. A message needs the deathmatch server.
 - **Keys**: Y and T are binds (`messagemode`, `messagemode2`), so `bind`
   changes them. "/" has no key code (see [Binds and actions](#binds-and-actions)),
   so no bind can change it. `messagemode /` does the same as "/".
+- **The mouse**: the chat and the console free the mouse while they are
+  open, and capture it again when they close. So Esc closes the chat and
+  does not open the pause screen. The browser frees a pointer lock on Esc,
+  and a lock that the page freed itself comes back with no click.
 - **While the input is open**, the binds do not run: no movement, no fire
   and no mouse look. The keys that a bind holds let go. In deathmatch the
   game goes on.
@@ -1558,6 +1562,11 @@ stocks. The door openings and the door places are approximate.
   slider, or use the arrow keys. Esc closes the panel. The values apply at
   once. They are cvars (see [Cvars](#cvars)), so the console changes the
   same values, and the game saves them in local storage.
+- **Your name**: the NAME row of the settings panel. Click it (or Enter on
+  it), type, and Enter keeps the name. Esc cancels. A name has at most 15
+  characters: letters, digits, space, "_" and "-". The game keeps it in
+  local storage ("name"). In deathmatch the server takes it at once
+  (`{t:"name", name}`), and the chat says "old is now new".
 
 | Setting | Cvar | Range | Default |
 |---|---|---|---|
