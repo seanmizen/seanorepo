@@ -66,6 +66,9 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   `--radius-card` and `--radius-control`, `--display-weight` and the fonts.
   It registers each token that can interpolate with `@property`, so the
   token moves to its new value over `--morph` (700 ms).
+- `public/modern-normalize.css` (MIT, v3.0.1) gives every browser the same
+  base styles. It is a copy, because the page CSP allows only this site.
+  Biome skips it, so it stays the same as the upstream file.
 - `public/theme.js` sets `data-theme` and `data-mode` on `<html>` before the
   first paint, and wires the pane.
 - `public/morph.js` morphs the text. On each change it draws every visible
