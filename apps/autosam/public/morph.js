@@ -8,13 +8,23 @@
 // visible character on a WebGL layer, and changes each glyph from its old
 // shape, place, size and color to the new ones. Each glyph is a signed
 // distance field (SDF): an image where each pixel holds its distance to the
-// glyph edge. A blend of two fields gives a shape between the two glyphs,
-// with no need to match points.
+// glyph edge.
+//
+// A blend of two fields at each pixel moves no ink. Where the two glyphs do
+// not overlap, ink fades in one place and grows in another. So the ink
+// moves first, then the blend:
+// - Align: the ink box of the old glyph moves and scales onto the ink box
+//   of the new glyph.
+// - Flow: a field of vectors for each glyph pair. It tells each point of the
+//   new glyph where its ink is in the old glyph. Over the morph the old
+//   glyph moves along the vectors and the new glyph comes back along them.
+//   At each time the two shapes almost agree, so the blend keeps the ink.
 //
 // The steps:
 // 1. Read each character: its box, font, color, opacity and clip.
 // 2. Apply the new theme with transitions off, and read the same again.
-// 3. Put back the old theme. Make the fields and fill the WebGL buffers.
+// 3. Put back the old theme. Make the fields and the flows, and fill the
+//    WebGL buffers.
 // 4. Hide the real text and show the layer. Apply the new theme with
 //    transitions off. Paused animations hold each token (colors, radii,
 //    shadows) and each box size at its old value.
@@ -33,10 +43,36 @@
 
 // The distance that a field holds on each side of the edge, in em.
 const R_EM = 0.3;
-// The blend of two different glyphs has creases along the middle of each
-// stroke. A blur of the fields smooths them. The blur is in em, greatest
-// halfway and zero at each end. Two glyphs that are the same get no blur.
-const BLUR_EM = 0.06;
+// The settings of the flow. The debug panel (?debug=morph) changes them.
+// Distances are in em.
+const params = {
+  // Align the ink boxes of each pair before the flow.
+  align: true,
+  // 'demons': each point moves along the field gradient (the edge normal)
+  // by the difference of the two fields. Every contour moves, also the
+  // contours in the void, so a counter moves as a counter.
+  // 'edges': each edge point goes to the nearest edge point of the other
+  // glyph that faces the same way. A smooth field fills the space between.
+  // 'none': no flow. The blend only.
+  matcher: 'demons',
+  // edges: the extra cost of a match between edges that face opposite ways.
+  normalWeight: 0.1,
+  // The smoothing of the flow (a Gaussian sigma).
+  sigma: 0.03,
+  // demons: the number of steps, and the largest move in one step.
+  iterations: 20,
+  step: 0.02,
+  // demons: contours further than this from both edges move less.
+  band: 0.2,
+  // The flow grid, in points for each em.
+  flowRes: 32,
+  // Glyphs smaller than this (CSS px) at both ends get no flow. The
+  // alignment is enough for them, and a flow costs time.
+  minSize: 18,
+  // Hold the morph at time t (0 to 1).
+  hold: false,
+  t: 0.5,
+};
 // The browser places glyphs on quarter pixels. This file rasterizes on the
 // same grid.
 const SUBPIXEL = 4;
@@ -174,7 +210,12 @@ function snapshot() {
     {
       acceptNode(n) {
         const p = n.parentElement;
-        if (!p || SKIP.has(p.tagName) || !/\S/.test(n.data)) {
+        if (
+          !p ||
+          SKIP.has(p.tagName) ||
+          p.closest('[data-morph-skip]') ||
+          !/\S/.test(n.data)
+        ) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -239,6 +280,7 @@ function boxes() {
   const out = new Map();
   for (const el of document.body.querySelectorAll('*')) {
     if (el === canvas || SKIP.has(el.tagName)) continue;
+    if (el.closest('[data-morph-skip]')) continue;
     if (el instanceof SVGElement && el.tagName !== 'svg') continue;
     const d = getComputedStyle(el).display;
     if (d === 'inline' || d === 'contents' || d === 'none') continue;
@@ -397,29 +439,15 @@ function buildAtlas(entries, dpr, maxSize) {
 // GPU, and the two smooth the edges of large glyphs (paths) differently. So
 // all glyphs go into one GPU canvas with the atlas layout, and one read
 // brings them back.
-function rasterize(scratch, entries, dpr, maxSize) {
-  const ctx = scratch.getContext('2d');
-  const cells = [];
-  for (const e of entries) {
-    ctx.font = e.font;
-    const m = ctx.measureText(e.ch);
-    const pad = Math.ceil(R_EM * e.size * dpr) + 1;
-    const left = Math.floor(-m.actualBoundingBoxLeft * dpr) - pad;
-    const right = Math.ceil(m.actualBoundingBoxRight * dpr + e.phase) + pad;
-    const top = Math.floor(-m.actualBoundingBoxAscent * dpr) - pad;
-    const bottom = Math.ceil(m.actualBoundingBoxDescent * dpr) + pad;
-    Object.assign(e, { left, top, w: right - left, h: bottom - top });
-    cells.push(e);
-  }
-
-  // Shelf packing: the tallest cells first, in rows.
-  cells.sort((a, b) => b.h - a.h);
-  const W = Math.min(2048, maxSize);
+// Shelf packing: the tallest cells first, in rows. Each cell gets its place
+// (ax, ay). Return the height, or 0 when the cells do not fit.
+function pack(cells, W, maxSize) {
+  const sorted = [...cells].sort((a, b) => b.h - a.h);
   let x = 0;
   let y = 0;
   let row = 0;
-  for (const c of cells) {
-    if (c.w > W) return null;
+  for (const c of sorted) {
+    if (c.w > W) return 0;
     if (x + c.w > W) {
       x = 0;
       y += row;
@@ -431,7 +459,35 @@ function rasterize(scratch, entries, dpr, maxSize) {
     row = Math.max(row, c.h);
   }
   const H = Math.max(1, y + row);
-  if (H > maxSize) return null;
+  return H > maxSize ? 0 : H;
+}
+
+function rasterize(scratch, entries, dpr, maxSize) {
+  const ctx = scratch.getContext('2d');
+  const cells = [];
+  for (const e of entries) {
+    ctx.font = e.font;
+    const m = ctx.measureText(e.ch);
+    const pad = Math.ceil(R_EM * e.size * dpr) + 1;
+    const left = Math.floor(-m.actualBoundingBoxLeft * dpr) - pad;
+    const right = Math.ceil(m.actualBoundingBoxRight * dpr + e.phase) + pad;
+    const top = Math.floor(-m.actualBoundingBoxAscent * dpr) - pad;
+    const bottom = Math.ceil(m.actualBoundingBoxDescent * dpr) + pad;
+    // The ink box in em, from the pen origin on the baseline.
+    const ink = [
+      -m.actualBoundingBoxLeft / e.size,
+      -m.actualBoundingBoxAscent / e.size,
+      m.actualBoundingBoxRight / e.size,
+      m.actualBoundingBoxDescent / e.size,
+    ];
+    const em = e.size * dpr;
+    Object.assign(e, { left, top, w: right - left, h: bottom - top, ink, em });
+    cells.push(e);
+  }
+
+  const W = Math.min(2048, maxSize);
+  const H = pack(cells, W, maxSize);
+  if (!H) return null;
 
   const atlas = new Float32Array(W * H);
   const buf = {
@@ -470,6 +526,344 @@ function cellEm(g, c, dpr) {
   return [x0, y0, x0 + c.w / em, y0 + c.h / em];
 }
 
+// ---------- Flow ----------
+
+// The cell of an atlas entry in em, from its pen origin. Column i of the
+// cell has its center at (left - phase + i + 0.5) / em.
+const entryCell = (c) => [
+  (c.left - c.phase) / c.em,
+  c.top / c.em,
+  (c.left - c.phase + c.w) / c.em,
+  (c.top + c.h) / c.em,
+];
+
+// The field of an entry at (x, y) in em, bilinear. Outside the cell it is
+// the value at the cell edge less the distance to the cell, as in the shader.
+function fieldAt(atlas, c, x, y) {
+  const fx = x * c.em - c.left + c.phase - 0.5;
+  const fy = y * c.em - c.top - 0.5;
+  const cx = Math.min(c.w - 1, Math.max(0, fx));
+  const cy = Math.min(c.h - 1, Math.max(0, fy));
+  const x0 = Math.min(c.w - 2, Math.floor(cx));
+  const y0 = Math.min(c.h - 2, Math.floor(cy));
+  const u = cx - x0;
+  const v = cy - y0;
+  const { atlas: a, W } = atlas;
+  const i = (c.ay + y0) * W + c.ax + x0;
+  const top = a[i] + (a[i + 1] - a[i]) * u;
+  const bottom = a[i + W] + (a[i + W + 1] - a[i + W]) * u;
+  const ox = fx - cx;
+  const oy = fy - cy;
+  return top + (bottom - top) * v - Math.sqrt(ox * ox + oy * oy) / c.em;
+}
+
+const sameShape = (a, b) => a.font === b.font && a.ch === b.ch;
+
+// The map from the em frame of glyph a to the em frame of glyph b:
+// p * [sx, sy] + [tx, ty]. It puts the center of the ink box of a on the
+// center of the ink box of b. It also scales one box to the other. A box that
+// is almost flat (a dash, a dot) keeps its scale on that axis.
+function alignment(a, b) {
+  if (!params.align || sameShape(a, b)) return [1, 1, 0, 0];
+  const scale = (a0, a1, b0, b1) =>
+    a1 - a0 > 0.02 && b1 - b0 > 0.02
+      ? Math.min(2, Math.max(0.5, (b1 - b0) / (a1 - a0)))
+      : 1;
+  const sx = scale(a.ink[0], a.ink[2], b.ink[0], b.ink[2]);
+  const sy = scale(a.ink[1], a.ink[3], b.ink[1], b.ink[3]);
+  return [
+    sx,
+    sy,
+    (b.ink[0] + b.ink[2] - sx * (a.ink[0] + a.ink[2])) / 2,
+    (b.ink[1] + b.ink[3] - sy * (a.ink[1] + a.ink[3])) / 2,
+  ];
+}
+
+// A Gaussian blur of a grid, in place, with the edge values repeated.
+// sigma is in grid points.
+function blur(f, w, h, sigma, tmp) {
+  if (sigma < 0.3) return;
+  const r = Math.ceil(sigma * 3);
+  const k = new Float32Array(2 * r + 1);
+  let sum = 0;
+  for (let i = -r; i <= r; i++) {
+    k[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma));
+    sum += k[i + r];
+  }
+  for (let i = 0; i < k.length; i++) k[i] /= sum;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let i = -r; i <= r; i++) {
+        s += k[i + r] * f[y * w + Math.min(w - 1, Math.max(0, x + i))];
+      }
+      tmp[y * w + x] = s;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let i = -r; i <= r; i++) {
+        s += k[i + r] * tmp[Math.min(h - 1, Math.max(0, y + i)) * w + x];
+      }
+      f[y * w + x] = s;
+    }
+  }
+}
+
+// The gradient of a grid field, in em, by central differences.
+function gradient(f, g, gx, gy) {
+  for (let y = 0; y < g.h; y++) {
+    for (let x = 0; x < g.w; x++) {
+      const l = Math.max(0, x - 1);
+      const r = Math.min(g.w - 1, x + 1);
+      const u = Math.max(0, y - 1);
+      const d = Math.min(g.h - 1, y + 1);
+      const k = y * g.w + x;
+      gx[k] = (f[y * g.w + r] - f[y * g.w + l]) / ((r - l || 1) * g.sp);
+      gy[k] = (f[d * g.w + x] - f[u * g.w + x]) / ((d - u || 1) * g.sp);
+    }
+  }
+}
+
+// The grid of a pair flow, in the em frame of glyph b. It covers the cell
+// of b and the aligned cell of a. Its points are no closer than one device
+// pixel of b.
+function flowGrid(A, B, M) {
+  const a = entryCell(A);
+  const b = entryCell(B);
+  const x0 = Math.min(b[0], a[0] * M[0] + M[2]);
+  const y0 = Math.min(b[1], a[1] * M[1] + M[3]);
+  const x1 = Math.max(b[2], a[2] * M[0] + M[2]);
+  const y1 = Math.max(b[3], a[3] * M[1] + M[3]);
+  const sp = Math.max(1 / params.flowRes, 1 / B.em);
+  return {
+    x0,
+    y0,
+    sp,
+    w: Math.min(256, Math.ceil((x1 - x0) / sp) + 1),
+    h: Math.min(256, Math.ceil((y1 - y0) / sp) + 1),
+  };
+}
+
+// The field of b on the grid.
+function gridB(atlas, B, g) {
+  const fb = new Float32Array(g.w * g.h);
+  for (let y = 0, k = 0; y < g.h; y++) {
+    for (let x = 0; x < g.w; x++, k++) {
+      fb[k] = fieldAt(atlas, B, g.x0 + x * g.sp, g.y0 + y * g.sp);
+    }
+  }
+  return fb;
+}
+
+// The field of a on the grid, at each point moved by the flow s (when
+// given). The alignment maps the point into the frame of a. The distances
+// are in em of b.
+function gridA(atlas, A, M, g, s, fa) {
+  const m = Math.sqrt(M[0] * M[1]);
+  for (let y = 0, k = 0; y < g.h; y++) {
+    for (let x = 0; x < g.w; x++, k++) {
+      const px = g.x0 + x * g.sp + (s ? s[0][k] : 0);
+      const py = g.y0 + y * g.sp + (s ? s[1][k] : 0);
+      fa[k] = fieldAt(atlas, A, (px - M[2]) / M[0], (py - M[3]) / M[1]) * m;
+    }
+  }
+  return fa;
+}
+
+// The flow is a backward map s on the grid, in the em frame of b. The ink
+// of b at point p is the ink of a at p + s(p).
+//
+// Demons (Thirion): find s so that a(p + s) = b(p). Each step moves the
+// sample point along the mean gradient of the two fields by their
+// difference. The gradient of a distance field is the edge normal. So an
+// edge moves to the edge of the other glyph that faces the same way. Then
+// a blur keeps the flow smooth.
+function demons(atlas, A, B, M, g) {
+  const n = g.w * g.h;
+  const s = [new Float32Array(n), new Float32Array(n)];
+  const fb = gridB(atlas, B, g);
+  const fa = new Float32Array(n);
+  const bx = new Float32Array(n);
+  const by = new Float32Array(n);
+  const ax = new Float32Array(n);
+  const ay = new Float32Array(n);
+  const tmp = new Float32Array(n);
+  gradient(fb, g, bx, by);
+  // The step limit: d / (1 + alpha * d^2) is at most params.step.
+  const alpha = 1 / (4 * params.step * params.step);
+  for (let it = 0; it < params.iterations; it++) {
+    gridA(atlas, A, M, g, s, fa);
+    gradient(fa, g, ax, ay);
+    for (let k = 0; k < n; k++) {
+      const d = fb[k] - fa[k];
+      const nx = (ax[k] + bx[k]) / 2;
+      const ny = (ay[k] + by[k]) / 2;
+      const den = nx * nx + ny * ny + alpha * d * d;
+      if (den < 1e-12) continue;
+      const near = Math.min(Math.abs(fa[k]), Math.abs(fb[k])) / params.band;
+      const w = Math.exp(-near * near) / den;
+      s[0][k] += w * d * nx;
+      s[1][k] += w * d * ny;
+    }
+    blur(s[0], g.w, g.h, params.sigma / g.sp, tmp);
+    blur(s[1], g.w, g.h, params.sigma / g.sp, tmp);
+  }
+  return s;
+}
+
+// The points of a grid field near its zero contour, moved onto the
+// contour. Each point has the normal that points into the glyph. The
+// array holds x, y, nx, ny for each point.
+function edgePoints(f, g, gx, gy) {
+  const out = [];
+  for (let y = 0, k = 0; y < g.h; y++) {
+    for (let x = 0; x < g.w; x++, k++) {
+      if (Math.abs(f[k]) >= g.sp) continue;
+      const len = Math.hypot(gx[k], gy[k]);
+      if (len < 1e-6) continue;
+      const nx = gx[k] / len;
+      const ny = gy[k] / len;
+      out.push(
+        g.x0 + x * g.sp - f[k] * nx,
+        g.y0 + y * g.sp - f[k] * ny,
+        nx,
+        ny,
+      );
+    }
+  }
+  return out;
+}
+
+// Edge match: each edge point of b goes to the edge point of a with the
+// least cost. Each edge point of a goes to an edge point of b too. The cost is
+// the distance, plus normalWeight for each unit of (1 - cos) between the
+// two normals. So the right edge of a thin stem goes to the right edge of a
+// thick stem. The matches set s at their point on b. A blur smooths them,
+// and the grid points far from any edge take the mean of their neighbours.
+function edges(atlas, A, B, M, g) {
+  const n = g.w * g.h;
+  const fa = gridA(atlas, A, M, g, null, new Float32Array(n));
+  const fb = gridB(atlas, B, g);
+  const gx = new Float32Array(n);
+  const gy = new Float32Array(n);
+  gradient(fa, g, gx, gy);
+  const pa = edgePoints(fa, g, gx, gy);
+  gradient(fb, g, gx, gy);
+  const pb = edgePoints(fb, g, gx, gy);
+  const s = [new Float32Array(n), new Float32Array(n)];
+  if (!pa.length || !pb.length) return s;
+  const wt = new Float32Array(n);
+  const best = (p, i, q) => {
+    let at = 0;
+    let least = Number.POSITIVE_INFINITY;
+    for (let k = 0; k < q.length; k += 4) {
+      const cost =
+        Math.hypot(q[k] - p[i], q[k + 1] - p[i + 1]) +
+        params.normalWeight * (1 - q[k + 2] * p[i + 2] - q[k + 3] * p[i + 3]);
+      if (cost < least) {
+        least = cost;
+        at = k;
+      }
+    }
+    return at;
+  };
+  const put = (x, y, vx, vy) => {
+    const i = Math.min(g.w - 1, Math.max(0, Math.round((x - g.x0) / g.sp)));
+    const j = Math.min(g.h - 1, Math.max(0, Math.round((y - g.y0) / g.sp)));
+    const k = j * g.w + i;
+    s[0][k] += vx;
+    s[1][k] += vy;
+    wt[k] += 1;
+  };
+  for (let i = 0; i < pb.length; i += 4) {
+    const k = best(pb, i, pa);
+    put(pb[i], pb[i + 1], pa[k] - pb[i], pa[k + 1] - pb[i + 1]);
+  }
+  for (let i = 0; i < pa.length; i += 4) {
+    const k = best(pa, i, pb);
+    put(pb[k], pb[k + 1], pa[i] - pb[k], pa[i + 1] - pb[k + 1]);
+  }
+  const tmp = new Float32Array(n);
+  const sigma = params.sigma / g.sp;
+  blur(s[0], g.w, g.h, sigma, tmp);
+  blur(s[1], g.w, g.h, sigma, tmp);
+  blur(wt, g.w, g.h, sigma, tmp);
+  const known = new Uint8Array(n);
+  for (let k = 0; k < n; k++) {
+    if (wt[k] > 1e-3) {
+      s[0][k] /= wt[k];
+      s[1][k] /= wt[k];
+      known[k] = 1;
+    } else {
+      s[0][k] = 0;
+      s[1][k] = 0;
+    }
+  }
+  // Fill the grid points far from the edges with the mean of their four
+  // neighbours, again and again. The known points stay as they are.
+  for (let it = 0, max = 2 * Math.max(g.w, g.h); it < max; it++) {
+    for (let y = 0, k = 0; y < g.h; y++) {
+      for (let x = 0; x < g.w; x++, k++) {
+        if (known[k]) continue;
+        const l = y * g.w + Math.max(0, x - 1);
+        const r = y * g.w + Math.min(g.w - 1, x + 1);
+        const u = Math.max(0, y - 1) * g.w + x;
+        const d = Math.min(g.h - 1, y + 1) * g.w + x;
+        s[0][k] = (s[0][l] + s[0][r] + s[0][u] + s[0][d]) / 4;
+        s[1][k] = (s[1][l] + s[1][r] + s[1][u] + s[1][d]) / 4;
+      }
+    }
+  }
+  return s;
+}
+
+const MATCHERS = { demons, edges };
+
+// The alignment and the flow of each pair, and one RG texture that holds
+// the flows. A pair of the same shape (or the matcher 'none') gets no flow:
+// its rect is empty, and the shader reads a zero flow.
+function buildFlows(flows, atlas, maxSize) {
+  const cells = [];
+  const match = MATCHERS[params.matcher];
+  for (const f of flows) {
+    f.M = alignment(f.A, f.B);
+    f.rect = [0, 0, 0, 0];
+    f.uv = [0, 0, 0, 0];
+    if (!match || sameShape(f.A, f.B)) continue;
+    if (Math.max(f.A.size, f.B.size) < params.minSize) continue;
+    f.g = flowGrid(f.A, f.B, f.M);
+    f.s = match(atlas, f.A, f.B, f.M, f.g);
+    f.w = f.g.w;
+    f.h = f.g.h;
+    cells.push(f);
+  }
+  const W = Math.min(2048, maxSize);
+  const H = cells.length ? pack(cells, W, maxSize) : 1;
+  const data = new Float32Array(W * Math.max(1, H) * 2);
+  if (!H) return { data, W, H: 1 };
+  for (const f of cells) {
+    const { g } = f;
+    for (let y = 0; y < g.h; y++) {
+      for (let x = 0; x < g.w; x++) {
+        const at = ((f.ay + y) * W + f.ax + x) * 2;
+        data[at] = f.s[0][y * g.w + x];
+        data[at + 1] = f.s[1][y * g.w + x];
+      }
+    }
+    // Grid point i is the center of texel i.
+    f.rect = [
+      g.x0 - g.sp / 2,
+      g.y0 - g.sp / 2,
+      g.x0 + (g.w - 0.5) * g.sp,
+      g.y0 + (g.h - 0.5) * g.sp,
+    ];
+    f.uv = [f.ax / W, f.ay / H, (f.ax + g.w) / W, (f.ay + g.h) / H];
+  }
+  return { data, W, H };
+}
+
 // ---------- WebGL ----------
 
 const VERT = `#version 300 es
@@ -484,22 +878,33 @@ layout(location=7) in vec4 a_colA;
 layout(location=8) in vec4 a_colB;
 layout(location=9) in vec4 a_clipA;
 layout(location=10) in vec4 a_clipB;
+layout(location=11) in vec4 a_align;
+layout(location=12) in vec4 a_flow;
+layout(location=13) in vec4 a_flowUV;
 uniform vec2 u_view;
 uniform float u_t;
 out vec2 v_q;
 out vec2 v_px;
-flat out vec4 v_cellA, v_uvA, v_cellB, v_uvB, v_col, v_clip;
-flat out float v_size, v_diff;
+flat out vec4 v_cellA, v_uvA, v_cellB, v_uvB, v_col, v_clip, v_align, v_flow, v_flowUV;
+flat out float v_size;
 void main() {
-  vec2 q = mix(min(a_cellA.xy, a_cellB.xy), max(a_cellA.zw, a_cellB.zw), a_corner);
+  // The quad holds glyph a at each end of its alignment, and glyph b at
+  // each end of the inverse alignment.
+  vec2 s = a_align.xy;
+  vec2 t = a_align.zw;
+  vec4 a1 = vec4(a_cellA.xy * s + t, a_cellA.zw * s + t);
+  vec4 b0 = vec4((a_cellB.xy - t) / s, (a_cellB.zw - t) / s);
+  vec2 lo = min(min(a_cellA.xy, a1.xy), min(a_cellB.xy, b0.xy));
+  vec2 hi = max(max(a_cellA.zw, a1.zw), max(a_cellB.zw, b0.zw));
+  vec2 q = mix(lo, hi, a_corner);
   vec2 px = mix(a_orig.xy, a_orig.zw, u_t) + q * mix(a_size.x, a_size.y, u_t);
   v_q = q;
   v_px = px;
   v_cellA = a_cellA; v_uvA = a_uvA; v_cellB = a_cellB; v_uvB = a_uvB;
+  v_align = a_align; v_flow = a_flow; v_flowUV = a_flowUV;
   v_col = mix(a_colA, a_colB, u_t);
   v_clip = mix(a_clipA, a_clipB, u_t);
   v_size = mix(a_size.x, a_size.y, u_t);
-  v_diff = a_size.z;
   vec2 c = px / u_view * 2.0 - 1.0;
   gl_Position = vec4(c.x, -c.y, 0.0, 1.0);
 }`;
@@ -507,34 +912,51 @@ void main() {
 const FRAG = `#version 300 es
 precision highp float;
 uniform sampler2D u_atlas;
+uniform sampler2D u_flow;
 uniform float u_t;
-uniform float u_blur;
 uniform float u_dpr;
 in vec2 v_q;
 in vec2 v_px;
-flat in vec4 v_cellA, v_uvA, v_cellB, v_uvB, v_col, v_clip;
-flat in float v_size, v_diff;
+flat in vec4 v_cellA, v_uvA, v_cellB, v_uvB, v_col, v_clip, v_align, v_flow, v_flowUV;
+flat in float v_size;
 out vec4 o;
-// The signed distance in em. Outside the cell is far outside the glyph.
+// The signed distance in em. Outside the cell it is the value at the cell
+// edge less the distance to the cell.
 float sdf(vec4 cell, vec4 uv, vec2 q) {
-  vec2 f = (q - cell.xy) / (cell.zw - cell.xy);
-  if (f.x < 0.0 || f.y < 0.0 || f.x > 1.0 || f.y > 1.0) return -1.0;
-  return textureLod(u_atlas, mix(uv.xy, uv.zw, f), 0.0).r;
+  vec2 c = clamp(q, cell.xy, cell.zw);
+  vec2 f = (c - cell.xy) / (cell.zw - cell.xy);
+  return textureLod(u_atlas, mix(uv.xy, uv.zw, f), 0.0).r - length(q - c);
 }
-// Five taps, b em apart, when b is more than 0.
-float field(vec4 cell, vec4 uv, vec2 q, float b) {
-  float s = sdf(cell, uv, q);
-  if (b <= 0.0) return s;
-  s += sdf(cell, uv, q + vec2(b, b)) + sdf(cell, uv, q + vec2(-b, b));
-  s += sdf(cell, uv, q + vec2(b, -b)) + sdf(cell, uv, q + vec2(-b, -b));
-  return s / 5.0;
+// The backward map of the pair at p, in em of b. No flow when the rect is
+// empty. The read stays half a texel inside the rect, so it never reads the
+// flow of the next pair in the texture.
+vec2 flow(vec2 p) {
+  if (v_flow.z <= v_flow.x) return vec2(0.0);
+  vec2 f = clamp((p - v_flow.xy) / (v_flow.zw - v_flow.xy), 0.0, 1.0);
+  vec2 h = 0.5 / vec2(textureSize(u_flow, 0));
+  vec2 uv = clamp(mix(v_flowUV.xy, v_flowUV.zw, f), v_flowUV.xy + h, v_flowUV.zw - h);
+  return textureLod(u_flow, uv, 0.0).rg;
 }
 void main() {
   if (v_px.x < v_clip.x || v_px.y < v_clip.y || v_px.x > v_clip.z || v_px.y > v_clip.w) discard;
-  float b = u_blur * v_diff;
-  float s = mix(field(v_cellA, v_uvA, v_q, b), field(v_cellB, v_uvB, v_q, b), u_t);
+  // The frame at time t is the frame of a, moved part of the way along the
+  // alignment. p is the point in the frame of a, and y the same point in
+  // the frame of b.
+  vec2 s = v_align.xy;
+  vec2 tr = v_align.zw;
+  vec2 k = mix(vec2(1.0), s, u_t);
+  vec2 p = (v_q - u_t * tr) / k;
+  vec2 y = p * s + tr;
+  // The ink of a moves along the flow, and the ink of b comes back along it.
+  vec2 d = flow(y);
+  float da = sdf(v_cellA, v_uvA, (y + u_t * d - tr) / s);
+  float db = sdf(v_cellB, v_uvB, y - (1.0 - u_t) * d);
+  // The distances in em of the frame at time t.
+  float m = sqrt(s.x * s.y);
+  float km = mix(1.0, m, u_t);
+  float e = mix(da * km, db * km / m, u_t);
   // The distance in device pixels gives the coverage of the pixel.
-  float a = clamp(s * v_size * u_dpr + 0.5, 0.0, 1.0) * v_col.a;
+  float a = clamp(e * v_size * u_dpr + 0.5, 0.0, 1.0) * v_col.a;
   o = vec4(v_col.rgb * a, a);
 }`;
 
@@ -543,7 +965,6 @@ let canvas = null;
 let program = null;
 let uView = null;
 let uT = null;
-let uBlur = null;
 let uDpr = null;
 
 function setup() {
@@ -572,14 +993,32 @@ function setup() {
     throw new Error(gl.getProgramInfoLog(program));
   uView = gl.getUniformLocation(program, 'u_view');
   uT = gl.getUniformLocation(program, 'u_t');
-  uBlur = gl.getUniformLocation(program, 'u_blur');
   uDpr = gl.getUniformLocation(program, 'u_dpr');
+  gl.useProgram(program);
+  gl.uniform1i(gl.getUniformLocation(program, 'u_atlas'), 0);
+  gl.uniform1i(gl.getUniformLocation(program, 'u_flow'), 1);
   return true;
 }
 
-const FLOATS = 40; // 10 vec4 for each glyph.
+const VEC4S = 13; // For each glyph.
+const FLOATS = VEC4S * 4;
 
-function upload(atlas, data, count) {
+// A float texture that the GPU can filter. 16 bits: 8 bits put steps in
+// the edge.
+function texture(unit, format, type, w, h, data) {
+  const tex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, format, w, h, 0, type, gl.FLOAT, data);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return tex;
+}
+
+function upload(atlas, flow, data, count) {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   const corners = gl.createBuffer();
@@ -594,31 +1033,16 @@ function upload(atlas, data, count) {
   const inst = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, inst);
   gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < VEC4S; i++) {
     gl.enableVertexAttribArray(i + 1);
     gl.vertexAttribPointer(i + 1, 4, gl.FLOAT, false, FLOATS * 4, i * 16);
     gl.vertexAttribDivisor(i + 1, 1);
   }
-  // R16F: a float that the GPU can filter. 8 bits put steps in the edge.
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.R16F,
-    atlas.W,
-    atlas.H,
-    0,
-    gl.RED,
-    gl.FLOAT,
-    atlas.atlas,
-  );
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  return { vao, buffers: [corners, inst], tex, count };
+  const textures = [
+    texture(0, gl.R16F, gl.RED, atlas.W, atlas.H, atlas.atlas),
+    texture(1, gl.RG16F, gl.RG, flow.W, flow.H, flow.data),
+  ];
+  return { vao, buffers: [corners, inst], textures, count };
 }
 
 function draw(scene, t) {
@@ -630,17 +1054,19 @@ function draw(scene, t) {
   gl.useProgram(program);
   gl.uniform2f(uView, scene.vw, scene.vh);
   gl.uniform1f(uT, t);
-  gl.uniform1f(uBlur, BLUR_EM * Math.sin(Math.PI * t));
   gl.uniform1f(uDpr, scene.dpr);
   gl.bindVertexArray(scene.vao);
-  gl.bindTexture(gl.TEXTURE_2D, scene.tex);
+  scene.textures.forEach((tex, unit) => {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+  });
   gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, scene.count);
 }
 
 function release(scene) {
   gl.deleteVertexArray(scene.vao);
   for (const b of scene.buffers) gl.deleteBuffer(b);
-  gl.deleteTexture(scene.tex);
+  for (const tex of scene.textures) gl.deleteTexture(tex);
 }
 
 // ---------- The morph ----------
@@ -766,6 +1192,7 @@ async function morph(apply) {
     return;
   }
   if (document.fonts.status === 'loading') await document.fonts.ready;
+  const t0 = performance.now();
 
   // Transitions off from here to the end. A press during a morph then starts
   // from the end of the last morph, not from a token between values.
@@ -791,11 +1218,13 @@ async function morph(apply) {
     boxesAfter = boxes();
     tokensAfter = tokenValues(names);
   }
+  last = { from: old, to: { ...root.dataset } };
   setData(old);
   flush();
 
   const list = pairs(before, after);
   const dpr = devicePixelRatio || 1;
+  const tRead = performance.now();
   const entries = new Map();
   for (const pair of list) {
     for (const g of pair) {
@@ -816,12 +1245,27 @@ async function morph(apply) {
     apply();
     return;
   }
+  const t1 = performance.now();
+
+  // One flow for each pair of atlas entries.
+  const flows = new Map();
+  for (const [a, b] of list) {
+    const key = `${a.key}>${b.key}`;
+    if (!flows.has(key)) {
+      flows.set(key, { A: entries.get(a.key), B: entries.get(b.key) });
+    }
+  }
+  const flow = buildFlows(
+    flows.values(),
+    atlas,
+    gl.getParameter(gl.MAX_TEXTURE_SIZE),
+  );
 
   const data = new Float32Array(list.length * FLOATS);
   list.forEach(([a, b], i) => {
     const ca = entries.get(a.key);
     const cb = entries.get(b.key);
-    const differ = a.font !== b.font || a.ch !== b.ch ? 1 : 0;
+    const f = flows.get(`${a.key}>${b.key}`);
     data.set(
       [
         a.x,
@@ -830,7 +1274,7 @@ async function morph(apply) {
         b.baseline,
         a.size,
         b.size,
-        differ,
+        0,
         0,
         ...cellEm(a, ca, dpr),
         ...ca.uv,
@@ -840,6 +1284,9 @@ async function morph(apply) {
         ...b.color,
         ...a.clip,
         ...b.clip,
+        ...f.M,
+        ...f.rect,
+        ...f.uv,
       ],
       i * FLOATS,
     );
@@ -850,12 +1297,22 @@ async function morph(apply) {
   canvas.style.width = `${innerWidth}px`;
   canvas.style.height = `${innerHeight}px`;
   const scene = {
-    ...upload(atlas, data, list.length),
+    ...upload(atlas, flow, data, list.length),
     vw: innerWidth,
     vh: innerHeight,
     dpr,
   };
   draw(scene, 0);
+  const t2 = performance.now();
+  morph.stats = {
+    glyphs: list.length,
+    shapes: entries.size,
+    flows: [...flows.values()].filter((f) => f.g).length,
+    readMs: Math.round(tRead - t0),
+    atlasMs: Math.round(t1 - tRead),
+    flowMs: Math.round(t2 - t1),
+  };
+  dispatchEvent(new CustomEvent('autosam-morph-stats'));
   document.body.append(canvas);
   root.classList.add('morphing');
   apply();
@@ -877,10 +1334,16 @@ async function morph(apply) {
       }
       start = now;
     }
-    const x = Math.min(1, (now - start) / ms);
+    let x = Math.min(1, (now - start) / ms);
+    // The debug panel can hold the morph at a time. The clock then goes on
+    // from that time.
+    if (params.hold) {
+      x = params.t;
+      start = now - x * ms;
+    }
     draw(scene, ease(x));
     for (const anim of anims) anim.currentTime = x * ms;
-    if (x < 1) active.raf = requestAnimationFrame(frame);
+    if (x < 1 || params.hold) active.raf = requestAnimationFrame(frame);
     else finish();
   };
   const ended = new Promise((resolve) => {
@@ -891,4 +1354,25 @@ async function morph(apply) {
   return ended;
 }
 
+// The theme data of the last morph, for a replay.
+let last = null;
+
+// Morph from the last old theme to the last new theme again. The debug
+// panel calls this when a setting changes.
+function replay() {
+  if (!last) return;
+  const { from, to } = last;
+  finish();
+  root.classList.add('morph-measure');
+  setData(from);
+  flush();
+  morph(() => setData(to));
+}
+
+morph.params = params;
+morph.replay = replay;
 window.autosamMorph = morph;
+
+if (new URLSearchParams(location.search).get('debug') === 'morph') {
+  import('./morph-debug.js');
+}
