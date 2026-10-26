@@ -4,7 +4,7 @@
 //
 // This directory imports nothing from the action game. It needs std and
 // sw_core (the keys of the binds), and view.zig also needs sw_gfx2d and
-// sw_text. It can move to utils/swindowzig/libs as one library.
+// sw_text. It can move to swindowzig (libs/) as one library.
 //
 // Start order in a game:
 //   1. Console.init, then the cvars, the commands, the buttons

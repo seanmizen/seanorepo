@@ -1,7 +1,9 @@
 // minecraft.seanmizen.com: production entry point.
 //
 // All start-up code and every wasm import are in the swindowzig loader
-// (utils/swindowzig/backends/wasm/loader.ts). bun bundles the loader into
+// (backends/wasm/loader.ts). build.zig installs the web backend of the
+// pinned swindowzig release to zig-out/swindowzig, so run `zig build`
+// before bun bundles this file. bun bundles the loader into
 // public/boot.js. This file gives the loader its options:
 //
 //   - It loads ./app.wasm, in the same directory as index.html.
@@ -13,7 +15,7 @@
 import {
   type LoadFailure,
   loadWasm,
-} from '#/utils/swindowzig/backends/wasm/loader';
+} from '../zig-out/swindowzig/backends/wasm/loader';
 
 // bundle.sh defines these names, for example './chunks-0123456789abcdef.wasm'.
 declare const __CHUNKS_WASM_URL__: string | undefined;

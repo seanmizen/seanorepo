@@ -7,10 +7,12 @@
 #      public/build-version.txt (server/session.ts). The value is:
 #   1. BUILD_VERSION, when the environment sets it.
 #   2. Else the 12-character hash of the last commit that changed
-#      apps/action or utils/swindowzig: the inputs of the docker image. A
-#      commit to another app does not change the version, so a release of
-#      it does not restart the game server. "-dirty" follows the hash when
-#      those directories have changes that are not committed.
+#      apps/action: the inputs of the docker image. game/build.zig.zon is
+#      in apps/action and pins the swindowzig release, so a new pin gives
+#      a new version. A commit to another app does not change the version,
+#      so a release of it does not restart the game server. "-dirty"
+#      follows the hash when apps/action has changes that are not
+#      committed.
 #   3. Else "dev": no git, or not a checkout.
 set -euo pipefail
 
@@ -25,7 +27,7 @@ if [ -z "${ROOT}" ]; then
     echo dev
     exit 0
 fi
-PATHS=(apps/action utils/swindowzig)
+PATHS=(apps/action)
 VERSION="$(git -C "${ROOT}" log -1 --format=%h --abbrev=12 -- "${PATHS[@]}" 2> /dev/null || true)"
 if [ -z "${VERSION}" ]; then
     echo dev

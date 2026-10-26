@@ -1,15 +1,17 @@
 // action.seanmizen.com: the page entry point. The swindowzig loader
-// (utils/swindowzig/backends/wasm/loader.ts) builds every wasm import,
-// the WebSocket bridge (backends/wasm/net.ts) included. tube.ts adds the
+// (backends/wasm/loader.ts) builds every wasm import, the WebSocket bridge
+// (backends/wasm/net.ts) included. game/build.zig installs the web backend
+// of the pinned swindowzig release to game/zig-out/swindowzig, so run
+// `zig build` in game/ before bun bundles this file. tube.ts adds the
 // train sound (utils/tube-sounds) to the import module "env", and moped.ts
 // adds the engine sound of the moped thieves. bun bundles this file into
 // public/boot.js (build.sh).
 
-import { gameOwnsKey } from '#/utils/swindowzig/backends/wasm/events';
+import { gameOwnsKey } from '../game/zig-out/swindowzig/backends/wasm/events';
 import {
   type LoadFailure,
   loadWasm,
-} from '#/utils/swindowzig/backends/wasm/loader';
+} from '../game/zig-out/swindowzig/backends/wasm/loader';
 import { mopedImports } from './moped';
 import { tubeImports } from './tube';
 
