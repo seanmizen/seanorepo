@@ -53,7 +53,7 @@ key is in octave 4.
 ## Themes
 
 A pane at the bottom left of each page has two buttons: theme (`Baseline`,
-`KBBQ`) and mode (`Auto`, `Light`, `Dark`). Each press selects the next
+`KBBQ`, `Bare`) and mode (`Auto`, `Light`, `Dark`). Each press selects the next
 value. `Auto` follows the system light or dark setting. The choice stays on
 the device.
 
@@ -66,6 +66,11 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   `--radius-card` and `--radius-control`, `--display-weight` and the fonts.
   It registers each token that can interpolate with `@property`, so the
   token moves to its new value over `--morph` (700 ms).
+- `public/app.css` holds the page styles. Every rule sits inside
+  `:where(:root:not([data-theme="bare"]))`, so the bare theme turns them all
+  off. `:where()` adds no specificity.
+- `public/chrome.css` holds the few styles that every theme needs, bare too:
+  the morph layer, the fixed theme pane and the debug panel.
 - `public/modern-normalize.css` (MIT, v3.0.1) gives every browser the same
   base styles. It is a copy, because the page CSP allows only this site.
   Biome skips it, so it stays the same as the upstream file.
@@ -100,6 +105,13 @@ Add `?debug=true` to the URL for the debug panel. It picks the method, sets
 its values, holds the morph at a time, replays it, and copies the settings
 as JSON. The morph assumes a static page. A scroll or a resize ends it. With
 reduced motion, or with no WebGL2, everything changes at once.
+
+The bare theme shows the page with browser defaults and modern-normalize
+only. Dark mode still works, because `color-scheme` comes from
+`themes.css`. Bare shows what the HTML says without CSS. So the markup puts
+a space between inline words, also where a flex or grid gap hides it. State
+that only a class shows (the playing bar, the beat dots, the piano keys)
+does not show in bare.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents
