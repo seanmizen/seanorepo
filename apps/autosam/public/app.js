@@ -813,10 +813,9 @@ function goTo(bar) {
 const hereBar = () => (playing ? (pendingJump ?? shownBar) : cursorBar);
 
 // Shift with a click or an arrow: the selection reaches `bar`, and the bars
-// from its start to `bar` are the loop range. Loop turns on.
-function extendTo(bar) {
-  if (!pick) pick = { from: hereBar(), to: bar };
-  pick.to = bar;
+// from its start (`from`) to `bar` are the loop range. Loop turns on.
+function extendTo(bar, from = pick ? pick.from : hereBar()) {
+  pick = { from, to: bar };
   range = {
     start: Math.min(pick.from, pick.to),
     end: Math.max(pick.from, pick.to),
@@ -838,16 +837,30 @@ function extendTo(bar) {
   reveal(bar);
 }
 
-// Shift held over a bar: the bars that a click would loop show as a
-// preview. Each bar's title says what Shift with a click does, for the bare
-// theme (REQ-BARE-001).
-let hoverBars = null;
+// Shift with a click on a section name: the selection reaches the far edge
+// of the section, so the range holds all of it. When the selection starts
+// inside the section, the range is the section.
+function sectionSpan(from, secs) {
+  const at = pickBar(secs.map((i) => song.sections[i].start));
+  const s = song.sections[song.bars[at].sec];
+  if (from >= s.start && from <= s.end) return { from: s.start, to: s.end };
+  return from < s.start ? { from, to: s.end } : { from, to: s.start };
+}
+function extendToSection(secs) {
+  const { from, to } = sectionSpan(pick ? pick.from : hereBar(), secs);
+  extendTo(to, from);
+}
+
+// Shift held over a bar or a section name: the bars that a click would loop
+// show as a preview. Each title says what Shift with a click does, for the
+// bare theme (REQ-BARE-001). `hoverSpan` gives the span for the thing under
+// the pointer, from the start of the selection.
+let hoverSpan = null;
 let shiftDown = false;
 function showPreview() {
   let span = null;
-  if (shiftDown && hoverBars) {
-    const from = pick ? pick.from : hereBar();
-    const to = pickBar(hoverBars);
+  if (shiftDown && hoverSpan) {
+    const { from, to } = hoverSpan(pick ? pick.from : hereBar());
     span = { start: Math.min(from, to), end: Math.max(from, to) };
   }
   for (const { node, bars } of barNodes) {
@@ -1297,9 +1310,23 @@ function renderChart() {
     const head = el('div', 'sec-head');
     const nameBtn = el('button', 'sec-name', groupName(secs));
     nameBtn.type = 'button';
-    nameBtn.addEventListener('click', () =>
-      goTo(pickBar(secs.map((i) => song.sections[i].start))),
-    );
+    nameBtn.addEventListener('click', (e) => {
+      if (e.shiftKey) extendToSection(secs);
+      else goTo(pickBar(secs.map((i) => song.sections[i].start)));
+    });
+    nameBtn.title = 'Shift with a click: loop to the end of this section';
+    nameBtn.addEventListener('mousedown', (e) => {
+      if (e.shiftKey) e.preventDefault();
+    });
+    nameBtn.addEventListener('pointerenter', (e) => {
+      hoverSpan = (from) => sectionSpan(from, secs);
+      shiftDown = e.shiftKey;
+      showPreview();
+    });
+    nameBtn.addEventListener('pointerleave', () => {
+      hoverSpan = null;
+      showPreview();
+    });
     head.append(
       ...spaced([
         nameBtn,
@@ -1349,12 +1376,12 @@ function renderChart() {
       });
       bar.title = 'Shift with a click: loop from the cursor to this bar';
       bar.addEventListener('pointerenter', (e) => {
-        hoverBars = bars;
+        hoverSpan = (from) => ({ from, to: pickBar(bars) });
         shiftDown = e.shiftKey;
         showPreview();
       });
       bar.addEventListener('pointerleave', () => {
-        hoverBars = null;
+        hoverSpan = null;
         showPreview();
       });
       grid.append(bar);

@@ -59,12 +59,14 @@ key is in octave 4.
 | ↑ ↓ | The bar above or below, as the bars sit on the screen in the theme |
 | `[` `]` | The previous or the next section |
 | Shift with a click or an arrow | Select bars from the cursor. The selection is the loop range, and Loop turns on. |
+| Shift with a click on a section name | Extend the loop range to hold all of that section. From inside the section, the range is the section. |
 | Esc | End the loop range |
 | 0, 1, 2 | The original key, the suggested keys |
 | F | Follow the playing bar again |
 
-While a song plays, a move waits for the next bar line, so you stay in
-time. The Loop label names the range ("Loop bars 5–12"). A move outside the
+With Shift held over a bar or a section name, the bars that a click would
+loop have a light fill. While a song plays, a move waits for the next bar
+line, so you stay in time. The Loop label names the range ("Loop bars 5–12"). A move outside the
 range, a new song, or Loop off ends it.
 
 ## The roadmap and the compact chart
