@@ -106,9 +106,8 @@ function el(tag, className, text) {
 // spaces. With no page styles (the bare theme) they keep words apart.
 const spaced = (nodes) => nodes.flatMap((n, i) => (i ? [' ', n] : [n]));
 
-// ---------- Edit key panel ----------
-function setupKeyPanel(slot) {
-  slot.appendChild($('keyPanel'));
+// ---------- Edit key panel (the library) ----------
+function setupKeyPanel() {
   const input = $('editKey');
   const msg = $('keyMsg');
   input.value = getEditKey();
@@ -150,7 +149,7 @@ C | G | F | C
 async function showLibrary() {
   $('libraryView').hidden = false;
   document.title = 'autosam';
-  setupKeyPanel($('libKeySlot'));
+  setupKeyPanel();
 
   const text = $('newText');
   const slugNote = $('newSlug');
@@ -1278,7 +1277,11 @@ function setupEditor() {
     const parsed = parseSong(text);
     if (parsed.errors.length) return showErrors(parsed.errors);
     if (!getEditKey())
-      return say(msg, 'Type the edit key under "Editing" to save.', 'err');
+      return say(
+        msg,
+        'Type the edit key in the library, under "Editing", to save.',
+        'err',
+      );
     $('saveSong').disabled = true;
     const r = await api(`/api/songs/${encodeURIComponent(current.slug)}`, {
       method: 'PUT',
@@ -1324,7 +1327,11 @@ function setupEditor() {
   archiveBtn.addEventListener('click', async () => {
     if (!armed) {
       if (!getEditKey())
-        return say(msg, 'Type the edit key under "Editing" to archive.', 'err');
+        return say(
+          msg,
+          'Type the edit key in the library, under "Editing", to archive.',
+          'err',
+        );
       archiveBtn.textContent = 'Click again to archive';
       archiveBtn.classList.add('armed');
       armed = setTimeout(disarm, 4000);
@@ -1509,7 +1516,6 @@ async function showSong(slug) {
     return;
   }
   $('songView').hidden = false;
-  setupKeyPanel($('songKeySlot'));
   current = {
     slug: r.data.slug,
     version: r.data.version,

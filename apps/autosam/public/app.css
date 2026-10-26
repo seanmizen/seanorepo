@@ -577,6 +577,13 @@
   .sec-name:hover {
     color: var(--accent);
   }
+  /* The looping section has an outline. The outline takes no space, so
+     the chart does not move when the loop goes on or off. */
+  .sec.looping {
+    outline: 2px solid var(--accent);
+    outline-offset: 6px;
+    border-radius: var(--radius-control);
+  }
   .sec.looping .sec-name::after {
     content: "  ⟲ looping";
     font-family: var(--mono);

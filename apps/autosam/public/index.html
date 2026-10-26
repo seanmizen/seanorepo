@@ -47,7 +47,17 @@
     <div class="arch-list" id="archList"></div>
   </details>
 
-  <div id="libKeySlot"></div>
+  <!-- The edit key. Only the library has it. -->
+  <section class="panel key-panel" id="keyPanel" aria-label="Editing">
+    <h2>Editing</h2>
+    <p>Adding, saving, archiving and restoring songs need the edit key. This device keeps the key after you type it. Anyone can play the songs without it.</p>
+    <div class="key-row">
+      <input type="password" id="editKey" autocomplete="off" spellcheck="false" placeholder="Edit key" aria-label="Edit key">
+      <button type="button" class="btn" id="checkKey">Check the key</button>
+      <button type="button" class="btn" id="forgetKey">Forget it</button>
+    </div>
+    <span class="msg" id="keyMsg"></span>
+  </section>
 </main>
 
 <!-- One song: "/<slug>" -->
@@ -171,8 +181,6 @@
       </div>
     </details>
 
-    <div id="songKeySlot"></div>
-
     <footer class="notes">
       <p><b>Shortcuts</b>: <kbd>Space</kbd> play or stop · <kbd>←</kbd> <kbd>→</kbd> previous or next section · <kbd>0</kbd> original key · <kbd>1</kbd> <kbd>2</kbd> the suggested keys · <kbd>F</kbd> follow the playing bar again.</p>
       <p>The chart scrolls along with the music. Scroll it yourself at any time to look ahead or back, and it stops following until you press <i>Back to bar</i> or tap a bar.</p>
@@ -190,18 +198,6 @@
     <p class="lib-intro" id="nfMsg"></p>
   </header>
 </main>
-
-<!-- The edit key. app.js moves it into the view that shows. -->
-<section class="panel key-panel" id="keyPanel" aria-label="Editing">
-  <h2>Editing</h2>
-  <p>Adding, saving, archiving and restoring songs need the edit key. This device keeps the key after you type it. Anyone can play the songs without it.</p>
-  <div class="key-row">
-    <input type="password" id="editKey" autocomplete="off" spellcheck="false" placeholder="Edit key" aria-label="Edit key">
-    <button type="button" class="btn" id="checkKey">Check the key</button>
-    <button type="button" class="btn" id="forgetKey">Forget it</button>
-  </div>
-  <span class="msg" id="keyMsg"></span>
-</section>
 
 <!-- theme.js wires the buttons. morph.js morphs the page on each change. -->
 <div class="theme-pane" role="group" aria-label="Theme">

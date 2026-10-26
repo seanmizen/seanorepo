@@ -3,7 +3,6 @@ artist: Keane
 key: A
 tempo: 86
 suggest: -2, -4
-notes: Chords from the top-rated Ultimate Guitar chart (played capo 2, written here at concert pitch). They match the Hooktheory analysis. The number of bars in each line is an estimate.
 
 [Intro]
 A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
