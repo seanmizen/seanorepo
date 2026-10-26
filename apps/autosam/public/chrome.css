@@ -17,6 +17,12 @@
   background: Canvas;
 }
 
+/* The frame of the song list. Only Pixel-3 gives it a box (a faceplate).
+   In the other themes the list is a child of the page grid. */
+.song-deck {
+  display: contents;
+}
+
 /* theme.js hides the picker of a part of a theme in the other themes. */
 .theme-pane .picker[hidden] {
   display: none;

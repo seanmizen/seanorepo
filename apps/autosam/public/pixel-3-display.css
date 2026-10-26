@@ -38,7 +38,7 @@
     gap: 1em;
     padding: 1.25em 1em 0.75em;
     background: var(--plate);
-    box-shadow: var(--plate-drop, none);
+    box-shadow: var(--plate-shadow, none);
     color: var(--ink);
   }
   .layout.song .now::before {
@@ -281,10 +281,25 @@
   --plate: var(--key-black);
 }
 /* In dark mode a plate darker than the panel looks like a hole. The plate
-   is lighter than the panel and throws a shadow, so it stands out. */
+   is brushed titanium: cool grey, lighter than the panel, with fine
+   horizontal grain. Its edge is chamfered (light on top, dark below), and
+   it throws a shadow, so it stands out. */
 :where(:root[data-theme="pixel-3"][data-mode="dark"]) .layout {
-  --plate: #5a5650;
-  --plate-drop: 0 2px 6px rgb(0 0 0 / 0.55);
+  --plate:
+    repeating-linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.035) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgb(0 0 0 / 0.05) 0 1px,
+      transparent 1px 7px
+    ), linear-gradient(#777b80, #484b50);
+  --plate-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -1px 0 rgb(0 0 0 / 0.55),
+    inset 1px 0 0 rgb(255 255 255 / 0.08), inset -1px 0 0 rgb(0 0 0 / 0.3),
+    0 3px 8px rgb(0 0 0 / 0.6);
   /* The window of the glass in the light plate: no outline. Its top edge is
      in shadow, and its bottom edge catches the light. */
   --glass-edge: inset 0 -1px 0 rgb(255 255 255 / 0.14);

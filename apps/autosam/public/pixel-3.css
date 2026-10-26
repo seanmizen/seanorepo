@@ -640,7 +640,7 @@
     border-radius: 6px;
     background: var(--line);
   }
-  .layout.lib .song-list {
+  .layout.lib .song-deck {
     grid-column: 1;
     grid-row: 2 / -1;
   }
@@ -754,7 +754,7 @@
       grid-row: auto;
       position: static;
     }
-    .layout.lib .song-list {
+    .layout.lib .song-deck {
       grid-row: 2;
       margin-bottom: 1em;
     }
