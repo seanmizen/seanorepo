@@ -649,16 +649,27 @@ let nextTime = 0;
 let countLeft = 0;
 let pendingJump = null;
 let cursorBar = 0;
+// The custom loop range, {start, end} in bars, or null. Shift with a click
+// or an arrow makes it. `pick` is the selection that makes it: the bar where
+// it started and the bar it reaches.
+let range = null;
+let pick = null;
 let shownBar = 0;
 let shownE = 0;
 const queue = [];
+
+// The bars that Loop repeats while bar `bar` plays: the custom range, or
+// the section of the bar.
+function loopSpan(bar) {
+  return range ?? song.sections[song.bars[bar].sec];
+}
 
 function nextPos(p) {
   if (p.e < 7) return { bar: p.bar, e: p.e + 1 };
   let nb = p.bar + 1;
   if (settings.loop) {
-    const s = song.sections[song.bars[p.bar].sec];
-    if (nb > s.end) nb = s.start;
+    const s = loopSpan(p.bar);
+    if (p.bar >= s.start && p.bar <= s.end && nb > s.end) nb = s.start;
   }
   return nb < song.bars.length ? { bar: nb, e: 0 } : null;
 }
@@ -738,6 +749,8 @@ function play() {
   initAudio();
   playing = true;
   following = true;
+  if (range && (cursorBar < range.start || cursorBar > range.end))
+    cursorBar = range.start;
   pos = { bar: cursorBar, e: 0 };
   countLeft = settings.count ? 8 : 0;
   pendingJump = null;
@@ -779,6 +792,8 @@ function stop(natural) {
 const toggle = () => (playing ? stop(false) : play());
 
 function goTo(bar) {
+  pick = null;
+  if (range && (bar < range.start || bar > range.end)) clearRange();
   if (playing) {
     pendingJump = bar;
     following = true;
@@ -791,6 +806,84 @@ function goTo(bar) {
     audition(bar);
   }
 }
+// The bar that the keys move from: the queued jump or the playing bar while
+// playing, and the cursor when stopped.
+const hereBar = () => (playing ? (pendingJump ?? shownBar) : cursorBar);
+
+// Shift with a click or an arrow: the selection reaches `bar`, and the bars
+// from its start to `bar` are the loop range. Loop turns on.
+function extendTo(bar) {
+  if (!pick) pick = { from: hereBar(), to: bar };
+  pick.to = bar;
+  range = {
+    start: Math.min(pick.from, pick.to),
+    end: Math.max(pick.from, pick.to),
+  };
+  settings.loop = true;
+  save();
+  $('optLoop').checked = true;
+  if (playing) {
+    // Go to the range at the next bar line if the music is outside it.
+    if (shownBar < range.start || shownBar > range.end)
+      pendingJump = range.start;
+    markBars(shownE);
+    updateNext(shownBar, shownE);
+  } else {
+    cursorBar = range.start;
+    showAt(cursorBar, 0);
+  }
+  showRange();
+  reveal(bar);
+}
+
+function clearRange() {
+  range = null;
+  pick = null;
+  showRange();
+  if (song) {
+    markBars(shownE);
+    updateNext(shownBar, shownE);
+  }
+}
+
+// The Loop label names the range, so the page shows it with no styles
+// (REQ-BARE-001).
+function showRange() {
+  $('loopLabel').textContent = range
+    ? `Loop bars ${range.start + 1}–${range.end + 1}`
+    : 'Loop section';
+}
+
+// Scroll a bar into view when the keys move to it.
+function reveal(bar) {
+  quiet(reduceMotion ? 200 : 600);
+  barEls[bar]?.scrollIntoView({
+    block: 'nearest',
+    behavior: reduceMotion ? 'auto' : 'smooth',
+  });
+}
+
+// The bar above or below `bar` on the screen (dir -1 or 1), in any theme:
+// the nearest row of bars that way, and in it the bar nearest in x.
+function barToward(bar, dir) {
+  const r0 = barEls[bar].getBoundingClientRect();
+  const x0 = r0.left + r0.width / 2;
+  let best = null;
+  barEls.forEach((node, i) => {
+    const r = node.getBoundingClientRect();
+    const dy = dir < 0 ? r0.top - r.bottom : r.top - r0.bottom;
+    if (dy < -1) return;
+    const dx = Math.abs(r.left + r.width / 2 - x0);
+    if (
+      !best ||
+      dy < best.dy - 1 ||
+      (Math.abs(dy - best.dy) <= 1 && dx < best.dx)
+    )
+      best = { i, dy, dx };
+  });
+  return best ? best.i : bar;
+}
+
 function audition(bar) {
   if (!ctx) return;
   initAudio();
@@ -959,7 +1052,13 @@ function markBars(e) {
   }
   const secIdx = song.bars[shownBar].sec;
   document.querySelectorAll('.sec').forEach((node, i) => {
-    node.classList.toggle('looping', settings.loop && i === secIdx);
+    node.classList.toggle('looping', settings.loop && !range && i === secIdx);
+  });
+  barEls.forEach((node, i) => {
+    node.classList.toggle(
+      'inrange',
+      Boolean(range) && i >= range.start && i <= range.end,
+    );
   });
 }
 
@@ -1106,7 +1205,14 @@ function renderChart() {
       for (let k = 0; k < 8; k++)
         r8.append(el('i', b.changes.some((c) => c.pos === k) ? 'chg' : ''));
       bar.append(el('span', 'bn', String(i + 1)), ' ', cs, r8);
-      bar.addEventListener('click', () => goTo(i));
+      bar.addEventListener('click', (e) => {
+        if (e.shiftKey) extendTo(i);
+        else goTo(i);
+      });
+      // Shift with a click selects bars, not text.
+      bar.addEventListener('mousedown', (e) => {
+        if (e.shiftKey) e.preventDefault();
+      });
       grid.append(bar);
       barEls[i] = bar;
     }
@@ -1233,6 +1339,10 @@ function loadSong(parsed, fresh) {
     settings.bpm = clampBpm(kept.bpm ?? parsed.meta.tempo);
   }
   cursorBar = Math.min(cursorBar, song.bars.length - 1);
+  // A loop range belongs to one version of the song.
+  range = null;
+  pick = null;
+  showRange();
   voiced = { key: null, rh: null, lh: null };
   document.title = `${parsed.meta.title} · autosam`;
   $('songTitle').textContent = parsed.meta.title;
@@ -1413,6 +1523,8 @@ function wireSongControls() {
   $('optLoop').addEventListener('change', (e) => {
     settings.loop = e.target.checked;
     save();
+    // Loop off ends the custom range too.
+    if (!settings.loop && range) clearRange();
     markBars(shownE);
     updateNext(shownBar, shownE);
   });
@@ -1443,14 +1555,7 @@ function wireSongControls() {
     (t.tagName === 'TEXTAREA' ||
       (t.tagName === 'INPUT' &&
         !['checkbox', 'radio', 'range'].includes(t.type)));
-  const SCROLL_KEYS = [
-    'PageUp',
-    'PageDown',
-    'Home',
-    'End',
-    'ArrowUp',
-    'ArrowDown',
-  ];
+  const SCROLL_KEYS = ['PageUp', 'PageDown', 'Home', 'End'];
   document.addEventListener('keydown', (e) => {
     if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'Space') {
@@ -1467,17 +1572,39 @@ function wireSongControls() {
       return;
     }
     if (e.target.tagName === 'INPUT' && e.target.type === 'range') return;
-    const secIdx =
-      song.bars[playing ? (pendingJump ?? shownBar) : cursorBar].sec;
-    if (e.key === 'ArrowRight') {
+    // A radio group keeps its own arrow keys.
+    if (e.target.type === 'radio' && e.key.startsWith('Arrow')) return;
+    if (e.key === 'Escape') {
+      if (range) clearRange();
+      return;
+    }
+    // The arrows move by bar, as the bars sit on the screen. With Shift they
+    // extend the loop range.
+    const here = e.shiftKey && pick ? pick.to : hereBar();
+    const last = song.bars.length - 1;
+    const to = {
+      ArrowLeft: () => Math.max(0, here - 1),
+      ArrowRight: () => Math.min(last, here + 1),
+      ArrowUp: () => barToward(here, -1),
+      ArrowDown: () => barToward(here, 1),
+    }[e.key];
+    if (to) {
       e.preventDefault();
+      const bar = to();
+      if (e.shiftKey) extendTo(bar);
+      else {
+        goTo(bar);
+        reveal(bar);
+      }
+      return;
+    }
+    const secIdx = song.bars[hereBar()].sec;
+    if (e.key === ']') {
       goTo(song.sections[Math.min(song.sections.length - 1, secIdx + 1)].start);
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
+    } else if (e.key === '[') {
       const s = song.sections[secIdx];
-      const here = playing ? shownBar : cursorBar;
       goTo(
-        here > s.start && !playing
+        hereBar() > s.start && !playing
           ? s.start
           : song.sections[Math.max(0, secIdx - 1)].start,
       );

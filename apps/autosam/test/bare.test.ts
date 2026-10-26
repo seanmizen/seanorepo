@@ -22,6 +22,7 @@ const CARRIERS: Record<string, string> = {
   looping: 'the Loop checkbox, and the section name in the Now panel',
   armed: 'the button text "Click again to archive"',
   counting: 'the text of #nowChord (the count) and #nowNum ("count-in")',
+  inrange: 'the Loop label: "Loop bars a–b" (showRange)',
 };
 
 test('each state class in app.js has a carrier with no page styles (REQ-BARE-001)', () => {

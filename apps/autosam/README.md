@@ -50,6 +50,23 @@ stepper moves the key by one semitone or by one octave, up to 24 semitones
 each way. The key shows as `A♭(4) (−1 semitone)`: the tonic of the original
 key is in octave 4.
 
+## The keyboard
+
+| Key | What it does |
+|---|---|
+| Space | Play or stop |
+| ← → | The previous or the next bar |
+| ↑ ↓ | The bar above or below, as the bars sit on the screen in the theme |
+| `[` `]` | The previous or the next section |
+| Shift with a click or an arrow | Select bars from the cursor. The selection is the loop range, and Loop turns on. |
+| Esc | End the loop range |
+| 0, 1, 2 | The original key, the suggested keys |
+| F | Follow the playing bar again |
+
+While a song plays, a move waits for the next bar line, so you stay in
+time. The Loop label names the range ("Loop bars 5–12"). A move outside the
+range, a new song, or Loop off ends it.
+
 ## Sounds
 
 The Sound setting picks the synth that plays the notes. The choice stays on
