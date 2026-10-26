@@ -67,8 +67,12 @@ the URL. The defaults (`baseline`, `auto`) stay out of the URL.
   first paint, and fills the pickers.
 - A theme change morphs the page. `themes.css` registers each token with
   `@property`, so the token moves from one value to the next over `--morph`
-  (700 ms). To watch it slowly, set `--morph` higher in DevTools. Fonts
-  change at once. With reduced motion, everything changes at once.
+  (700 ms). To watch it slowly, set `--morph` higher in DevTools.
+- One font family cannot morph into another. So a picker change runs in a
+  view transition: the old page fades out over the new page, and the text
+  dissolves from one font to the next. The fonts are variable fonts, so a
+  weight between two values shows. With reduced motion, everything changes
+  at once.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents

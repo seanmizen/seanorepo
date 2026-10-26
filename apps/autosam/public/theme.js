@@ -30,6 +30,7 @@
   };
   const root = document.documentElement;
   const systemDark = matchMedia('(prefers-color-scheme: dark)');
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
   const saved = (key) => {
     try {
@@ -105,9 +106,15 @@
       select.addEventListener('change', () => {
         current[name] = select.value;
         save(s.key, select.value);
-        apply();
         writeUrl();
-        syncBar();
+        // The view transition cross-fades what cannot morph (the fonts).
+        // Without it, or with reduced motion, the fonts change at once.
+        if (document.startViewTransition && !reducedMotion.matches) {
+          document.startViewTransition(apply);
+        } else {
+          apply();
+          syncBar();
+        }
       });
     }
     syncBar();
