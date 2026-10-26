@@ -43,6 +43,14 @@
     { id: 'lcd', label: 'LCD' },
     { id: 'dots', label: 'Dot matrix' },
   ];
+  // The song selector of the Pixel-3 library (pixel-3-library.css):
+  // cassette spines in a rack, a track list on the glass of the screen, or
+  // the preset keys of a hi-fi with Dymo labels.
+  const LIBRARIES = [
+    { id: 'tapes', label: 'Tapes' },
+    { id: 'tracks', label: 'Tracks' },
+    { id: 'presets', label: 'Presets' },
+  ];
   // A setting with "of" is a part of that theme. Its picker shows only in
   // that theme, and the URL names it only in that theme.
   const SETTINGS = {
@@ -52,6 +60,12 @@
       list: SCREENS,
       key: 'autosam:screen',
       fallback: 'lcd',
+      of: 'pixel-3',
+    },
+    library: {
+      list: LIBRARIES,
+      key: 'autosam:library',
+      fallback: 'tracks',
       of: 'pixel-3',
     },
   };
@@ -142,6 +156,7 @@
     root.dataset.theme = current.theme;
     root.dataset.mode = current.mode === 'auto' ? auto : current.mode;
     root.dataset.screen = current.screen;
+    root.dataset.library = current.library;
     if (document.body) fit();
   };
 

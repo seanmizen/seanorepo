@@ -612,9 +612,9 @@
     border-radius: 4px;
   }
 
-  /* The library. The songs are cards, like the bars of the chart, in the
-     column of the panel. The settings of the library are modules on a
-     chassis, like the panel, in the next column. The chassis is a grid item
+  /* The library. The song selector is in the column of the panel. Its
+     form is a setting (pixel-3-library.css). The settings of the library
+     are modules on a chassis, like the panel, in the next column. The chassis is a grid item
      behind the modules. The modules are 2px inside it on each side. */
   .layout.lib:not([hidden]) {
     grid-template-columns: 30em 30em;
@@ -633,28 +633,12 @@
   .layout.lib .song-list {
     grid-column: 1;
     grid-row: 2 / -1;
-    gap: 2px;
   }
-  .layout.lib .song-row {
-    display: grid;
-    gap: 0.25em;
-    padding: 0.75em;
-    border-radius: 4px;
-    background: var(--surface);
-    color: var(--ink);
+  /* The library picker has no effect on a song page. */
+  body:has(#songView:not([hidden])) .theme-pane .picker:has(#libraryBtn) {
+    display: none;
   }
-  .layout.lib .song-row:hover {
-    background: var(--line);
-  }
-  .layout.lib .song-row:focus-visible {
-    outline: 2px solid var(--ink);
-    outline-offset: 1px;
-  }
-  .layout.lib .song-title {
-    font-size: 1.25em;
-    font-weight: 600;
-  }
-  .layout.lib :is(.song-meta, .arch-row .m) {
+  .layout.lib .arch-row .m {
     font-family: var(--mono);
     font-size: 0.85em;
     color: var(--muted);

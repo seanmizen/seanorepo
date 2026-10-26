@@ -199,15 +199,23 @@ async function loadLibrary() {
   for (const s of songs) {
     const row = el('a', 'song-row');
     row.href = `/${s.slug}`;
-    const facts = [s.artist, `key of ${s.key}`, `${s.tempo} BPM`].filter(
-      Boolean,
-    );
-    row.append(
-      ...spaced([
-        el('span', 'song-title', s.title),
-        el('span', 'song-meta', facts.join(' · ')),
-      ]),
-    );
+    // The facts are parts, so a theme can give the key and the tempo a
+    // column: "Don McLean · key of G · 138 BPM".
+    const meta = el('span', 'song-meta');
+    setParts(meta, [
+      ...(s.artist
+        ? [
+            ['sm-artist', s.artist],
+            ['sm-sep', ' · '],
+          ]
+        : []),
+      ['sm-pre', 'key of '],
+      ['sm-key', s.key],
+      ['sm-sep', ' · '],
+      ['sm-bpm', String(s.tempo)],
+      ['sm-post', ' BPM'],
+    ]);
+    row.append(...spaced([el('span', 'song-title', s.title), meta]));
     list.append(row);
   }
 
