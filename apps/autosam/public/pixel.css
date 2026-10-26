@@ -412,13 +412,9 @@
     background: none;
     color: inherit;
   }
-  /* Shift over a bar: the bars that a click would loop. In the loop range,
-     the foot of each bar is the accent. */
+  /* Shift over a bar: the bars that a click would loop. */
   .bar.preview {
     background: var(--accent-soft);
-  }
-  .bar.inrange .r8 {
-    background: var(--accent);
   }
   .chart-head,
   details.edit,
