@@ -143,8 +143,8 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Origin:** #259
 - **Type:** functional
 - **Priority:** P1
-- **Statement:** The host shall provide a deploy user holding both `sudo` and
-  `docker` group membership.
+- **Statement:** The host shall provide a deploy user holding `sudo`,
+  `docker` and `systemd-journal` group membership.
 - **Rationale:** Deployment runs unattended from a systemd timer. A step that
   asks for a password makes a deploy that hangs forever. It does not fail
   visibly.
@@ -154,10 +154,15 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   docs expected `srv` on `debbie`. Nothing made the usernames agree. A machine
   built from those files end to end could start none of the units. This
   requirement names the user so that the two halves cannot drift apart.
+
+  The `systemd-journal` group lets the deploy user read the logs of the units
+  that deploy. The journalctl commands in the README run as this user without
+  `sudo`. Without the group, they show no unit lines.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "user srv exists"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv in sudo"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv in docker"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "srv in systemd-journal"
 - **Relations:** none
 
 ## REQ-SERVER-004 — The host is reachable by name on the local network

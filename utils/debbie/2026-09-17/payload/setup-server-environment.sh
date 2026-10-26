@@ -532,6 +532,11 @@ fi
 #
 # Membership gives root-equivalent access through the daemon socket. That is
 # the purpose: the deploy runs unattended and cannot answer a sudo prompt.
+#
+# systemd-journal lets the user read the system journal without sudo. The
+# units in services/ log there, and the journalctl commands in the README run
+# as this user. Without the group, journalctl shows only the user journal and
+# no unit lines.
 #------------------------------------------------------------------------------
 log "deploy user $DEPLOY_USER"
 getent group docker > /dev/null || groupadd docker
@@ -542,7 +547,7 @@ id "$DEPLOY_USER" > /dev/null 2>&1 || { echo "user $DEPLOY_USER missing" >&2; ex
 # included. So `docker info` without sudo works only from the next login.
 # payload/assert.sh checks it over a new SSH connection after a reboot, so the
 # check is correct.
-usermod -aG docker,sudo "$DEPLOY_USER"
+usermod -aG docker,sudo,systemd-journal "$DEPLOY_USER"
 
 #------------------------------------------------------------------------------
 # The repository checkout - REQ-DEPLOY-001

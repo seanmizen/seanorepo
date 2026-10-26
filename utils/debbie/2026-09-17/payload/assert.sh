@@ -249,6 +249,10 @@ if [ "$PHASE" = provisioned ]; then
     # This check alone is NOT evidence that Docker works. A group can exist
     # with no daemon behind it. The docker section below checks the daemon.
     check "$DEPLOY_USER in docker" "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx docker"
+    # setup-server-environment.sh adds the group, so the check waits for the
+    # provisioned phase. The proof that it works is the README journalctl
+    # commands, which run as this user without sudo.
+    check "$DEPLOY_USER in systemd-journal" "id -nG '$DEPLOY_USER' | tr ' ' '\n' | grep -qx systemd-journal"
 
     # REQ-SERVER-001 - asserted after a reboot, which is when the drop-in takes
     # effect. setup-server-environment.sh does not restart logind, on purpose.
