@@ -31,13 +31,14 @@
         [data-screen="dots"]
       )
   ) {
-  /* The faceplate: dark grey, as the display of Pixel-3. The glass is a
-     grid item behind the top two rows. */
+  /* The faceplate (--plate). The glass is a grid item behind the top two
+     rows. */
   .layout.song .now {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     gap: 1em;
     padding: 1.25em 1em 0.75em;
-    background: var(--key-black);
+    background: var(--plate);
+    box-shadow: var(--plate-drop, none);
     color: var(--ink);
   }
   .layout.song .now::before {
@@ -269,13 +270,21 @@
   }
 }
 
-/* The glass of each screen. The library uses it too (pixel-3-library.css).
-   With the screen "plain" the glass has the colors of the plain display. */
+/* The glass of each screen and the faceplate around it. The library uses
+   them too (pixel-3-library.css). With the screen "plain" the glass has the
+   colors of the plain display. */
 :where(:root[data-theme="pixel-3"]) .layout {
   --glass: var(--key-black);
   --lit: var(--key-white);
   --dim: color-mix(in srgb, var(--key-white) 55%, transparent);
   --ghost: color-mix(in srgb, var(--key-white) 8%, transparent);
+  --plate: var(--key-black);
+}
+/* In dark mode a plate darker than the panel looks like a hole. The plate
+   is lighter than the panel and throws a shadow, so it stands out. */
+:where(:root[data-theme="pixel-3"][data-mode="dark"]) .layout {
+  --plate: #5a5650;
+  --plate-drop: 0 2px 6px rgb(0 0 0 / 0.55);
 }
 
 /* VFD: Cyan phosphor behind a fine mesh, with a glow. */

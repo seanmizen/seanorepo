@@ -15,20 +15,21 @@
  */
 
 :where(:root[data-theme="pixel-3"]) {
-  /* The glass of the screen, in a dark faceplate. A row of legends, then a
+  /* The glass of the screen, in the faceplate (--plate). A row of legends, then a
      row for each track on the columns of the legends. */
   .layout.lib .song-list {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-content: start;
     padding: 0.5em 0;
-    border: 0.75em solid var(--key-black);
+    border: 0.75em solid var(--plate);
     border-radius: 6px;
     background: var(--glass-texture, none), var(--glass);
     background-size: var(--glass-size, auto), auto;
     box-shadow:
       inset 0 2px 6px rgb(0 0 0 / 0.45),
-      inset 0 0 0 1px rgb(0 0 0 / 0.5);
+      inset 0 0 0 1px rgb(0 0 0 / 0.5),
+      var(--plate-drop, 0 0 transparent);
     color: var(--lit);
     font-family: var(--glass-font, var(--mono));
     counter-reset: track;
