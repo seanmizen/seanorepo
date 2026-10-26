@@ -66,9 +66,14 @@ key is in octave 4.
 
 With Shift held over a bar or a section name, the bars that a click would
 loop have a light fill. While a song plays, a move waits for the next bar
-line, so you stay in time. The Loop label names the range ("Loop bars 5–12"). A move outside the
-range, a new song, or Loop off ends it. One outline goes around all the
-bars of the range, across rows and sections.
+line, so you stay in time.
+
+The Loop label names the range ("Loop bars 5–12"). One outline goes around
+all the bars of the range, across rows and sections. Esc, a move without
+Shift (a click on a bar or a section, an arrow, a key of the roadmap), a new
+song, or Loop off ends the range. If the selection turned Loop on, the end
+of the range turns it off. With a range, `|◀` goes to the start of the loop
+and keeps it.
 
 ## The roadmap and the compact chart (narrow screens)
 

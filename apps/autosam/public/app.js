@@ -656,6 +656,9 @@ let cursorBar = 0;
 // it started and the bar it reaches.
 let range = null;
 let pick = null;
+// True when the selection turned Loop on, so the end of the range turns it
+// off again. A Loop that the person turned on stays on.
+let loopByRange = false;
 let shownBar = 0;
 let shownE = 0;
 const queue = [];
@@ -793,9 +796,11 @@ function stop(natural) {
 }
 const toggle = () => (playing ? stop(false) : play());
 
-function goTo(bar) {
+// A move without Shift ends the selection, as in a list or a sheet: the
+// loop range goes. `keep` holds the range, for |◀ to the start of the loop.
+function goTo(bar, keep = false) {
   pick = null;
-  if (range && (bar < range.start || bar > range.end)) clearRange();
+  if (range && !keep) clearRange();
   if (playing) {
     pendingJump = bar;
     following = true;
@@ -820,6 +825,7 @@ function extendTo(bar, from = pick ? pick.from : hereBar()) {
     start: Math.min(pick.from, pick.to),
     end: Math.max(pick.from, pick.to),
   };
+  if (!settings.loop) loopByRange = true;
   settings.loop = true;
   save();
   $('optLoop').checked = true;
@@ -957,6 +963,12 @@ function drawRange() {
 function clearRange() {
   range = null;
   pick = null;
+  if (loopByRange) {
+    loopByRange = false;
+    settings.loop = false;
+    save();
+    $('optLoop').checked = false;
+  }
   showRange();
   drawRange();
   if (song) {
@@ -1597,9 +1609,15 @@ function loadSong(parsed, fresh) {
     settings.bpm = clampBpm(kept.bpm ?? parsed.meta.tempo);
   }
   cursorBar = Math.min(cursorBar, song.bars.length - 1);
-  // A loop range belongs to one version of the song.
+  // A loop range belongs to one version of the song. A Loop that the range
+  // turned on goes with it.
   range = null;
   pick = null;
+  if (loopByRange) {
+    loopByRange = false;
+    settings.loop = false;
+    save();
+  }
   showRange();
   voiced = { key: null, rh: null, lh: null };
   document.title = `${parsed.meta.title} · autosam`;
@@ -1742,7 +1760,10 @@ function wireSongControls() {
     now: $('now'),
   });
   els.playBtn.addEventListener('click', toggle);
-  $('startBtn').addEventListener('click', () => goTo(0));
+  // With a loop range, |◀ goes to the start of the loop and keeps it.
+  $('startBtn').addEventListener('click', () =>
+    range ? goTo(range.start, true) : goTo(0),
+  );
   $('shiftDown').addEventListener('click', () => setShift(settings.shift - 1));
   $('shiftUp').addEventListener('click', () => setShift(settings.shift + 1));
   $('octDown').addEventListener('click', () => setShift(settings.shift - 12));
@@ -1821,7 +1842,9 @@ function wireSongControls() {
   $('optLoop').addEventListener('change', (e) => {
     settings.loop = e.target.checked;
     save();
-    // Loop off ends the custom range too.
+    // A Loop that the person turns on or off is theirs. Loop off ends the
+    // custom range too.
+    loopByRange = false;
     if (!settings.loop && range) clearRange();
     markBars(shownE);
     updateNext(shownBar, shownE);
