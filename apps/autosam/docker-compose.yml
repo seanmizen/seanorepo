@@ -1,4 +1,8 @@
-x-frontend-base: &frontend-base
+# autosam - autosam.seanmizen.com
+# Port 4090: the page and the song API (/api), one Bun process. 4091 is
+# reserved for the pair and not used.
+
+x-autosam-base: &autosam-base
   container_name: autosam
   build:
     context: ../..
@@ -6,12 +10,20 @@ x-frontend-base: &frontend-base
     target: ${BUILD_TARGET:-dev}
   ports:
     - "${PUBLISH_ADDR:-127.0.0.1}:4090:4090"
+  # AUTOSAM_EDIT_KEY lets a visitor add, change, archive and restore songs.
+  # Keep it in apps/autosam/.env on the server. Without it, the songs are
+  # read-only.
+  env_file:
+    - path: ./.env
+      required: false
 
 services:
   frontend:
-    <<: *frontend-base
+    <<: *autosam-base
     profiles: ["prod"]
     restart: unless-stopped
+    volumes:
+      - autosam_songs_data:/data
     # The edge routes to this service by its alias (infra/edge).
     networks:
       default: {}
@@ -19,12 +31,22 @@ services:
         aliases: [autosam]
 
   frontend-dev:
-    <<: *frontend-base
+    <<: *autosam-base
+    environment:
+      - AUTOSAM_EDIT_KEY=${AUTOSAM_EDIT_KEY:-local-dev-edit-key}
     volumes:
       - type: bind
         source: ../..
         target: /app
+      - autosam_songs_dev_data:/data
     profiles: ["dev"]
+
+volumes:
+  # The songs. They exist only on the machine that runs the prod profile.
+  autosam_songs_data:
+    name: autosam_songs_data
+  autosam_songs_dev_data:
+    name: autosam_songs_dev_data
 
 networks:
   # Shared with infra/edge. deploy.sh and prod:docker create it.
