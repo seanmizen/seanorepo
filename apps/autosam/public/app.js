@@ -678,8 +678,12 @@ function loopSpan(bar) {
   return range ?? song.sections[song.bars[bar].sec];
 }
 
+// The length of one step (an eighth note) in seconds. The tempo counts the
+// beat of the meter: a quarter (2 steps) in 3/4, an eighth in 6/8.
+const stepTime = (meter) => 60 / settings.bpm / meter.perBeat;
+
 function nextPos(p) {
-  if (p.e < 7) return { bar: p.bar, e: p.e + 1 };
+  if (p.e < song.bars[p.bar].meter.steps - 1) return { bar: p.bar, e: p.e + 1 };
   let nb = p.bar + 1;
   if (settings.loop) {
     const s = loopSpan(p.bar);
@@ -689,21 +693,22 @@ function nextPos(p) {
 }
 const spanFrom = (bar, e) => {
   const n = bar.changes.find((c) => c.pos > e);
-  return (n ? n.pos : 8) - e;
+  return (n ? n.pos : bar.meter.steps) - e;
 };
 
 function playStep(p, t, ed) {
   const bar = song.bars[p.bar];
   const ch = chordAt(p.bar, p.e);
+  const { perBeat, group } = bar.meter;
   const strikes = p.e === 0 || bar.changes.some((c) => c.pos === p.e);
-  if (settings.click && p.e % 2 === 0) click(t, p.e === 0);
+  if (settings.click && p.e % perBeat === 0) click(t, p.e === 0);
   if (!ch) return null;
   const v = getVoicing(ch);
   const last = p.bar === song.bars.length - 1 && !settings.loop;
   if (last) {
     if (p.e === 0) playChord(v, t, 3.5, 0.62, 0.7);
   } else if (settings.style === 'pulse') {
-    const vel = strikes ? 0.8 : p.e % 2 === 0 ? 0.6 : 0.5;
+    const vel = strikes ? 0.8 : p.e % group === 0 ? 0.6 : 0.5;
     for (const m of v.rh)
       note(
         m,
@@ -726,18 +731,19 @@ function schedule() {
   if (!playing) return;
   const ahead = ctx.currentTime + (document.hidden ? 1.6 : 0.12);
   while (nextTime < ahead) {
-    const ed = 30 / settings.bpm;
+    // The count-in is one bar of the meter of the first bar.
     if (countLeft > 0) {
-      const k = 8 - countLeft;
-      if (k % 2 === 0) click(nextTime, k === 0);
+      const m = song.bars[pos.bar].meter;
+      const k = m.steps - countLeft;
+      if (k % m.perBeat === 0) click(nextTime, k === 0);
       queue.push({
         t: nextTime,
         kind: 'count',
-        beat: k / 2,
-        left: countLeft / 2,
+        beat: k / m.perBeat,
+        left: countLeft / m.perBeat,
       });
       countLeft--;
-      nextTime += ed;
+      nextTime += stepTime(m);
       continue;
     }
     if (!pos) {
@@ -746,6 +752,7 @@ function schedule() {
       timer = null;
       return;
     }
+    const ed = stepTime(song.bars[pos.bar].meter);
     const v = playStep(pos, nextTime, ed);
     queue.push({ t: nextTime, kind: 'step', bar: pos.bar, e: pos.e, v });
     let np = nextPos(pos);
@@ -766,7 +773,7 @@ function play() {
   if (range && (cursorBar < range.start || cursorBar > range.end))
     cursorBar = range.start;
   pos = { bar: cursorBar, e: 0 };
-  countLeft = settings.count ? 8 : 0;
+  countLeft = settings.count ? song.bars[cursorBar].meter.steps : 0;
   pendingJump = null;
   voiced = { key: null, rh: null, lh: null };
   warmGrand();
@@ -1058,8 +1065,10 @@ function shapesOf(song) {
       .slice(sec.start, sec.end + 1)
       .map(
         (b) =>
-          b.changes.map((c) => `${c.pos}:${c.chord.sym}`).join(' ') ||
-          `~${b.startChord?.sym}`,
+          `${b.meter.text} ${
+            b.changes.map((c) => `${c.pos}:${c.chord.sym}`).join(' ') ||
+            `~${b.startChord?.sym}`
+          }`,
       )
       .join('|');
     if (!groups.has(key)) groups.set(key, []);
@@ -1107,20 +1116,24 @@ function updatePlayBtn() {
   updateRefollow();
 }
 
+// The count of beats adds the length of each step, so it is right across a
+// change of meter.
 function nextChange(p, curSym) {
   let q = p;
   let jump = pendingJump;
+  let beats = 0;
   for (let k = 1; k <= 128; k++) {
+    beats += 1 / song.bars[q.bar].meter.perBeat;
     let nq = nextPos(q);
     if ((nq === null || nq.e === 0) && jump !== null) {
       nq = { bar: jump, e: 0 };
       jump = null;
     }
-    if (!nq) return { end: true, beats: k / 2 };
+    if (!nq) return { end: true, beats };
     const jumped = nq.e === 0 && nq.bar !== q.bar + 1;
     const c = song.bars[nq.bar].changes.find((x) => x.pos === nq.e);
     const ch = c ? c.chord : jumped ? chordAt(nq.bar, 0) : null;
-    if (ch && ch.sym !== curSym) return { chord: ch, beats: k / 2 };
+    if (ch && ch.sym !== curSym) return { chord: ch, beats };
     q = nq;
   }
   return null;
@@ -1192,8 +1205,9 @@ function showAt(bar, e, v) {
   els.nowChord.textContent = chordName(ch);
   els.nowNum.textContent = chordNum(ch);
   updateNext(bar, e);
+  setBeats(b.meter);
   els.beats.forEach((d, i) => {
-    showBeat(d, playing && i === Math.floor(e / 2));
+    showBeat(d, playing && i === Math.floor(e / b.meter.perBeat));
   });
   let shown = v;
   if (!shown && ch)
@@ -1205,6 +1219,27 @@ function showAt(bar, e, v) {
   if (playing && !following) updateRefollow();
 }
 
+// One beat dot for each beat of the meter. In 6/8, 9/8 and 12/8 a space
+// puts the dots in groups of three, and the class "grp" marks the first dot
+// of each group after the first. A flex box drops the space, so a theme
+// spaces the groups with the class.
+let beatsMeter = null;
+function setBeats(meter) {
+  if (meter === beatsMeter) return;
+  beatsMeter = meter;
+  const per = meter.group / meter.perBeat;
+  const box = $('beats');
+  box.textContent = '';
+  els.beats = [];
+  for (let i = 0; i < meter.beats; i++) {
+    const grp = per > 1 && i > 0 && i % per === 0;
+    if (grp) box.append(' ');
+    const d = el('i', grp ? 'grp' : '', '○');
+    box.append(d);
+    els.beats.push(d);
+  }
+}
+
 // A beat dot is text, so it shows with no page styles (REQ-BARE-001).
 // The class gives the look in the other themes.
 function showBeat(d, on) {
@@ -1214,11 +1249,12 @@ function showBeat(d, on) {
 
 function showCount(ev) {
   els.nowChord.classList.add('counting');
-  els.nowChord.textContent = String(ev.beat + 1);
+  els.nowChord.textContent = String(Math.floor(ev.beat) + 1);
   els.nowNum.textContent = 'count-in';
   const first = chordAt(cursorBar, 0);
   els.nextChord.textContent = chordName(first);
   setParts(els.nextIn, nextParts(first, ev.left));
+  setBeats(song.bars[cursorBar].meter);
   els.beats.forEach((d, i) => {
     showBeat(d, i === ev.beat);
   });
@@ -1454,6 +1490,10 @@ function renderChart() {
   root.classList.toggle('compact', compact);
   $('chartTools').hidden = !narrow.matches;
   const groups = compact ? shapesOf(song) : song.sections.map((_, i) => [i]);
+  // A song in one meter other than 4/4, or in more than one meter, shows
+  // the meter of each section.
+  const meters = new Set(song.bars.map((b) => b.meter.text));
+  const showMeter = meters.size > 1 || !meters.has('4/4');
   for (const secs of groups) {
     const first = song.sections[secs[0]];
     const len = first.end - first.start + 1;
@@ -1486,6 +1526,7 @@ function renderChart() {
           'sec-meta',
           compact ? `${len} bars` : `bars ${first.start + 1}–${first.end + 1}`,
         ),
+        ...(showMeter ? [el('span', 'sec-time', first.meter.text)] : []),
       ]),
     );
     const grid = el('div', 'bars');
@@ -1508,7 +1549,7 @@ function renderChart() {
         cs.append(...spaced(names.map((n) => el('span', '', n))));
       else cs.append(el('span', 'tie', chordName(b.startChord)));
       const r8 = el('span', 'r8');
-      for (let r = 0; r < 8; r++)
+      for (let r = 0; r < b.meter.steps; r++)
         r8.append(el('i', b.changes.some((c) => c.pos === r) ? 'chg' : ''));
       // The compact chart numbers the bars of each section from 1.
       bar.append(

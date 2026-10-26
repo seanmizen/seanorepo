@@ -1,0 +1,48 @@
+title: Lucy in the Sky with Diamonds
+artist: The Beatles
+key: A
+tempo: 130
+time: 3/4
+
+[Intro]
+A | A/G | F#m | F
+
+[Verse 1]
+A | A/G | F#m | F | F
+A/E | A/G | F#m | F | Dm | Dm/C
+
+[Pre-chorus]
+Bb | Bb | C | C | F | F | Bb | Bb
+C | C | G | G | D | D | D | D
+
+[Chorus 4/4]
+G | C | D | D
+G | C | D | D
+G | C | D | D | D | D
+
+[Verse 2 3/4]
+A | A/G | F#m | F | F
+A/E | A/G | F#m | F | Dm | Dm/C
+
+[Pre-chorus]
+Bb | Bb | C | C | F | F | Bb | Bb
+C | C | G | G | D | D | D | D
+
+[Chorus 4/4]
+G | C | D | D
+G | C | D | D
+G | C | D | D | D | D
+
+[Verse 3 3/4]
+A | A/G | F#m | F | F
+A/E | A/G | F#m | F | Dm | Dm/C
+
+[Pre-chorus]
+Bb | Bb | C | C | F | F | Bb | Bb
+C | C | G | G | D | D | D | D
+
+[Chorus 4/4]
+G | C | D | D
+G | C | D | D
+G | C | D | D
+G | C | D | D | D | D

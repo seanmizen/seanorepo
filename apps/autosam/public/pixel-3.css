@@ -456,6 +456,9 @@
     color: var(--accent);
     text-shadow: 0 0 6px var(--accent);
   }
+  .layout.song .now .beats i.grp {
+    margin-left: 0.9em;
+  }
   .layout.song .now .transport {
     display: flex;
     gap: 0.25em;

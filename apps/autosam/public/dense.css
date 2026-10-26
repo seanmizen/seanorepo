@@ -201,6 +201,9 @@
   .beats i.on {
     color: var(--accent);
   }
+  .beats i.grp {
+    margin-left: 0.375em;
+  }
   .transport {
     display: flex;
     gap: 1px;
@@ -440,7 +443,8 @@
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
-  .sec-meta {
+  .sec-meta,
+  .sec-time {
     padding: 0 0.25em;
     font-family: var(--mono);
     font-size: 0.7em;
@@ -498,7 +502,8 @@
   .bar .r8 {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
     gap: 1px;
     height: 2px;
   }

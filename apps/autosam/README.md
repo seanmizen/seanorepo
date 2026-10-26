@@ -34,14 +34,47 @@ A | A/G# Asus4/G# A/G# | Bm7 | Esus4 E Esus4
 | `artist`  | Optional. |
 | `slug`    | Optional. The address of the song. Without it, the slug comes from the title: "Café & Bar!" gives `cafe-and-bar`. |
 | `key`     | Required. A note and an optional `m`: `A`, `Bb`, `F#m`. |
-| `tempo`   | Optional. 30 to 240 beats a minute. The default is 90. |
+| `tempo`   | Optional. 30 to 240 beats a minute. The default is 90. The beat is the note of the meter: a quarter in 3/4, an eighth in 6/8. |
+| `time`    | Optional. The meter: `2/4`, `3/4`, `4/4`, `5/4`, `7/4`, `6/8`, `9/8` or `12/8`. The default is `4/4`. |
 | `suggest` | Optional. At most two transpositions in semitones, for example `-2, -4`. They become key buttons. |
 | `notes`   | Optional. One line of text under the chart. |
 
-`[Name]` starts a section. `|` divides bars. Each bar is 4/4. Two chords in
-a bar land on beats 1 and 3. Three land on 1, 2&, 4. Four get one beat each.
+`[Name]` starts a section. `|` divides bars. In 4/4, two chords in a bar
+land on beats 1 and 3. Three land on 1, 2&, 4. Four get one beat each.
 `Chord@beat` puts a chord on a given beat. `public/song-format.js` is the
 parser. The page and the server both use it.
+
+### Meters
+
+`time: 3/4` sets the meter of the song. A section can change it: `[Chorus
+4/4]`. The new meter stays until the next change, so the section after the
+chorus is 4/4 too, unless it names a meter. Lucy in the Sky with Diamonds
+uses this:
+
+```text
+time: 3/4
+
+[Verse 1]
+A | A/G | F#m | F | F
+
+[Chorus 4/4]
+G | C | D | D
+
+[Verse 2 3/4]
+A | A/G | F#m | F | F
+```
+
+- Each bar has the length of its meter. The count-in is one bar of the meter
+  of the first bar.
+- In other meters the chords of a bar spread evenly over the beats. In 3/4,
+  two chords land on beats 1 and 3.
+- 6/8, 9/8 and 12/8 have beats in groups of three. The tempo counts the
+  eighths. Two chords in 6/8 land on beats 1 and 4. Pulse accents the first
+  beat of each group.
+- The display has one beat dot for each beat. In 6/8 the dots are in two
+  groups of three.
+- The chart shows the meter of each section when a song is not all 4/4.
+- The parser refuses a meter that is not in the list.
 
 ## Keys
 

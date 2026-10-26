@@ -22,13 +22,23 @@
 //   slug     optional. The address of the song: /<slug>. Without it, the
 //            slug comes from the title (slugify).
 //   key      required. A note and an optional "m": A, Bb, F#m.
-//   tempo    optional. Beats a minute, 30 to 240. The default is 90.
+//   tempo    optional. Beats a minute, 30 to 240. The default is 90. The
+//            beat is the note of the meter: a quarter in 3/4, an eighth
+//            in 6/8.
+//   time     optional. The meter: 2/4, 3/4, 4/4, 5/4, 7/4, 6/8, 9/8 or
+//            12/8. The default is 4/4.
 //   suggest  optional. At most two transpositions in semitones: -2, -4.
 //   notes    optional. One line of text under the chart.
 //
-// The chart: "[Name]" starts a section. "|" divides bars. Each bar is 4/4.
-// Two chords in a bar land on beats 1 and 3. Three land on 1, 2&, 4. Four
-// get one beat each. "Chord@beat" puts a chord on a given beat.
+// The chart: "[Name]" starts a section. "[Name 3/4]" also changes the
+// meter, until the next change. "|" divides bars. In 4/4, two chords in a
+// bar land on beats 1 and 3. Three land on 1, 2&, 4. Four get one beat
+// each. In other meters the chords spread evenly over the beats. In 6/8,
+// 9/8 and 12/8 the beats are in groups of three, so two chords in 6/8 land
+// on beats 1 and 4. "Chord@beat" puts a chord on a given beat.
+//
+// A bar is a row of steps. A step is an eighth note: 4/4 has 8 steps, 3/4
+// has 6 and 6/8 has 6.
 
 export const LIMITS = {
   textChars: 32000,
@@ -45,10 +55,14 @@ export const LIMITS = {
 /**
  * @typedef {{root: number, minor: boolean}} Key
  * @typedef {{sym: string, root: number, q: string, iv: number[], bass: number | null}} Chord
+ * @typedef {{text: string, beats: number, steps: number, perBeat: number, group: number}} Meter
+ *   steps: eighths in a bar. perBeat: steps in a beat. group: steps from
+ *   one accent to the next.
  * @typedef {{pos: number, chord: Chord}} Change
- * @typedef {{sec: number, changes: Change[], startChord: Chord | null}} Bar
- * @typedef {{name: string, start: number, end: number}} Section
- * @typedef {{title: string, artist: string, slug: string, key: Key | null, keyText: string, tempo: number, suggest: number[], notes: string}} Meta
+ *   pos: the step of the bar where the chord starts.
+ * @typedef {{sec: number, meter: Meter, changes: Change[], startChord: Chord | null}} Bar
+ * @typedef {{name: string, start: number, end: number, meter: Meter}} Section
+ * @typedef {{title: string, artist: string, slug: string, key: Key | null, keyText: string, tempo: number, time: Meter, suggest: number[], notes: string}} Meta
  * @typedef {{meta: Meta, slug: string, sections: Section[], bars: Bar[], errors: string[]}} Song
  */
 
@@ -70,6 +84,7 @@ export const SETTINGS = [
   'slug',
   'key',
   'tempo',
+  'time',
   'suggest',
   'notes',
 ];
@@ -98,7 +113,45 @@ export const QUALITIES = {
 };
 
 const LETTER = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-const DEFAULT_POS = { 1: [0], 2: [0, 4], 3: [0, 3, 6], 4: [0, 2, 4, 6] };
+// The places of 1 to 4 chords in a 4/4 bar, in steps.
+const POS_44 = { 1: [0], 2: [0, 4], 3: [0, 3, 6], 4: [0, 2, 4, 6] };
+const METER_RE = /^(\d{1,2})\/(\d{1,2})$/;
+
+/** The meters that autosam can play, by their text. */
+export const METERS = Object.fromEntries(
+  ['2/4', '3/4', '4/4', '5/4', '7/4', '6/8', '9/8', '12/8'].map((text) => {
+    const [beats, unit] = text.split('/').map(Number);
+    const perBeat = 8 / unit;
+    return [
+      text,
+      {
+        text,
+        beats,
+        steps: beats * perBeat,
+        perBeat,
+        group: unit === 8 ? 3 : perBeat,
+      },
+    ];
+  }),
+);
+export const DEFAULT_METER = METERS['4/4'];
+const meterError = (at, text) =>
+  `${at}: "${text}" is not a meter that autosam can play. The meters are: ${Object.keys(METERS).join(', ')}.`;
+
+/** The steps where n chords land in a bar of meter m. */
+function defaultPos(n, m) {
+  if (m === DEFAULT_METER && POS_44[n]) return POS_44[n];
+  // Spread the chords over the accents, then the beats, then the steps.
+  for (const size of [m.group, m.perBeat, 1]) {
+    const units = m.steps / size;
+    if (n <= units)
+      return Array.from(
+        { length: n },
+        (_, i) => Math.round((i * units) / n) * size,
+      );
+  }
+  return [];
+}
 const SETTING_RE = /^([A-Za-z][A-Za-z ]*?)\s*:\s*(.*)$/;
 
 const mod = (n) => ((n % 12) + 12) % 12;
@@ -182,6 +235,10 @@ function readSetting(meta, name, value, at, errors) {
       else meta.tempo = bpm;
       return;
     }
+    case 'time':
+      if (Object.hasOwn(METERS, value)) meta.time = METERS[value];
+      else errors.push(meterError(at, value));
+      return;
     case 'suggest': {
       const parts = value.split(/[\s,]+/).filter(Boolean);
       if (parts.length > LIMITS.suggestions) {
@@ -222,15 +279,16 @@ function readSetting(meta, name, value, at, errors) {
   }
 }
 
-function readBar(barStr, at, errors) {
+function readBar(barStr, meter, at, errors) {
   const toks = barStr.split(/\s+/);
-  if (toks.length > 8) {
-    errors.push(`${at}: a bar can hold at most 8 chords.`);
+  if (toks.length > meter.steps) {
+    errors.push(
+      `${at}: a bar of ${meter.text} can hold at most ${meter.steps} chords.`,
+    );
     return null;
   }
-  const base =
-    DEFAULT_POS[toks.length] ||
-    toks.map((_, i) => Math.round((i * 8) / toks.length));
+  const base = defaultPos(toks.length, meter);
+  const last = meter.beats + (meter.perBeat - 1) / meter.perBeat;
   const changes = [];
   toks.forEach((t, i) => {
     const [name, beat] = t.split('@');
@@ -242,11 +300,13 @@ function readBar(barStr, at, errors) {
     let pos = base[i];
     if (beat !== undefined) {
       const b = Number.parseFloat(beat);
-      if (!(b >= 1 && b < 5)) {
-        errors.push(`${at}: "@${beat}" needs a beat from 1 to 4.5.`);
+      pos = Math.round((b - 1) * meter.perBeat);
+      if (!(b >= 1 && pos < meter.steps)) {
+        errors.push(
+          `${at}: "@${beat}" needs a beat from 1 to ${last} in ${meter.text}.`,
+        );
         return;
       }
-      pos = Math.round((b - 1) * 2);
     }
     changes.push({ pos, chord });
   });
@@ -277,6 +337,7 @@ export function parseSong(text) {
     key: null,
     keyText: '',
     tempo: DEFAULT_TEMPO,
+    time: DEFAULT_METER,
     suggest: [],
     notes: '',
   };
@@ -300,6 +361,8 @@ export function parseSong(text) {
   const seen = new Set();
   let inSettings = true;
   let pendingName = 'Song';
+  /** @type {Meter | null} The meter of the chart so far. */
+  let meter = null;
   const lines = text.split(/\r?\n/);
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li].trim();
@@ -322,10 +385,18 @@ export function parseSong(text) {
       readSetting(meta, name, setting[2].trim(), at, errors);
       continue;
     }
+    if (inSettings) meter = meta.time;
     inSettings = false;
     const head = /^\[(.+)\]$/.exec(line);
     if (head) {
-      pendingName = head[1].trim().slice(0, LIMITS.titleChars);
+      const words = head[1].trim().split(/\s+/);
+      const last = words[words.length - 1];
+      if (words.length > 1 && METER_RE.test(last)) {
+        words.pop();
+        if (Object.hasOwn(METERS, last)) meter = METERS[last];
+        else errors.push(meterError(at, last));
+      }
+      pendingName = words.join(' ').slice(0, LIMITS.titleChars);
       continue;
     }
     for (const barStr of line
@@ -338,17 +409,18 @@ export function parseSong(text) {
         );
         break;
       }
-      const changes = readBar(barStr, at, errors);
+      const changes = readBar(barStr, meter, at, errors);
       if (!changes) continue;
       if (pendingName !== null) {
         sections.push({
           name: pendingName,
           start: bars.length,
           end: bars.length,
+          meter,
         });
         pendingName = null;
       }
-      bars.push({ sec: sections.length - 1, changes, startChord: null });
+      bars.push({ sec: sections.length - 1, meter, changes, startChord: null });
       sections[sections.length - 1].end = bars.length - 1;
     }
   }
