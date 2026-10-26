@@ -78,9 +78,9 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`) and mode (`Auto`, `Light`,
-`Dark`). Tone puts the pane at the top right. Pixel-1 and Pixel-2 put it at
-the end of the page. A press on the main
+`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`, `Pixel-3`) and mode (`Auto`,
+`Light`, `Dark`). Tone puts the pane at the top right. The Pixel themes put
+it at the end of the page. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow
 keys do the same. `Auto` follows the system light or dark setting. The
@@ -102,6 +102,8 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   [REQ-DENSE](requirements/dense.md).
 - `public/pixel.css` holds Pixel-1 and Pixel-2, the themes of the fewest
   pixels. See [REQ-PIXEL](requirements/pixel.md).
+- `public/pixel-3.css` holds Pixel-3: Pixel-2 with a designed control
+  panel. Its header lists the design principles of the panel.
 - `public/chrome.css` holds the few styles that every theme needs, bare too:
   the morph layer, the fixed theme pane and the debug panel.
 - `public/modern-normalize.css` (MIT, v3.0.1) gives every browser the same
@@ -177,6 +179,15 @@ them. Text that repeats another element does not show, and nor does the
 help prose (REQ-PIXEL-005). The shortcuts and the song notes stay. Play is
 its icon, and Bar 1 is `|◀`. On American Pie, Pixel-2 covers about 290 ×
 470 px, where Pixel-1 covers 322 × 751 px.
+
+Pixel-3 starts from Pixel-2 and makes the control panel one instrument.
+Form is the goal, and space is free. The panel sits on the left and stays in
+view. Its modules sit on a grid of 6 columns: a dark display for what plays,
+then key, tempo, volume, style, sound, options and the keyboard. Each module
+has a small label at the top left and its value at the top right. Keys are
+raised, and a key that latches has an LED that lights red. The chart takes
+the same labels, and the second phrase of 4 bars in each row has a darker
+fill.
 
 `songs/american-pie.txt` has 249 bars. Use it to test Tone and Pixel-1 at
 their limits.

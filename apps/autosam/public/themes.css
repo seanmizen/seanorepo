@@ -271,7 +271,12 @@
  * felt strip under the keys of a piano. It uses the system font, which each
  * screen draws well at small sizes. No radius, no shadow.
  */
-:root:is([data-theme="tone"], [data-theme="pixel-1"], [data-theme="pixel-2"]) {
+:root:is(
+    [data-theme="tone"],
+    [data-theme="pixel-1"],
+    [data-theme="pixel-2"],
+    [data-theme="pixel-3"]
+  ) {
   --shadow: transparent;
   --radius-card: 0px;
   --radius-control: 0px;
@@ -298,7 +303,8 @@
 :root:is(
     [data-theme="tone"],
     [data-theme="pixel-1"],
-    [data-theme="pixel-2"]
+    [data-theme="pixel-2"],
+    [data-theme="pixel-3"]
   )[data-mode="dark"] {
   --bg: #1d1c1a;
   --surface: #2b2926;
@@ -317,4 +323,11 @@
   --key-white: #d8d6cf;
   --key-black: #0c0b0a;
   --key-edge: #57544f;
+}
+
+/* Pixel-3: the colors of Tone, with IBM Plex for an instrument panel. */
+:root[data-theme="pixel-3"] {
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --display: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }

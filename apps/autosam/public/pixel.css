@@ -3,8 +3,9 @@
  *
  * Where: index.html links this file after dense.css.
  * When: always loaded. Each rule sits inside a :where() that matches only
- * Pixel-1 or Pixel-2, so the other themes never see it. The first block is
- * Pixel-1. Pixel-2 is Pixel-1 with the changes of the last block.
+ * Pixel-1, Pixel-2 or Pixel-3, so the other themes never see it. The first
+ * block is Pixel-1. Pixel-2 is Pixel-1 with the changes of the last block.
+ * Pixel-3 starts from Pixel-2, and pixel-3.css gives it its form.
  * Why: the page covers the smallest area that still shows everything
  * (REQ-PIXEL). One text size, 9 px. Each box is as wide as its content. No
  * space between two boxes is more than 1 px. The words keep the spaces of
@@ -18,7 +19,13 @@
  * never make the page wider.
  */
 
-:where(:root:is([data-theme="pixel-1"], [data-theme="pixel-2"])) {
+:where(
+    :root:is(
+        [data-theme="pixel-1"],
+        [data-theme="pixel-2"],
+        [data-theme="pixel-3"]
+      )
+  ) {
   & {
     font-size: 9px;
   }
@@ -477,7 +484,7 @@
  *   row shows its number, so the bar range does not show.
  * - The chart has no gaps, and the beat strip lies inside its bar.
  */
-:where(:root[data-theme="pixel-2"]) {
+:where(:root:is([data-theme="pixel-2"], [data-theme="pixel-3"])) {
   body {
     font-stretch: 75%;
     line-height: 1;

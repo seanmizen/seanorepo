@@ -25,6 +25,8 @@
     // The fewest pixels (REQ-PIXEL).
     { id: 'pixel-1', label: 'Pixel-1' },
     { id: 'pixel-2', label: 'Pixel-2' },
+    // Pixel-2 with a designed control panel.
+    { id: 'pixel-3', label: 'Pixel-3' },
   ];
   // "auto" follows the system light or dark setting.
   const MODES = [
