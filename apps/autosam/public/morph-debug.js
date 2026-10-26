@@ -1,96 +1,151 @@
 // autosam morph debug panel.
 //
-// Where: morph.js imports this module when the URL has ?debug=morph.
+// Where: morph.js imports this module when the URL has ?debug=true.
 // When: once, at page load. The panel stays on screen.
-// Why: the flow has settings with no one right value. The panel changes
-// them, holds the morph at a time t, and replays it, so a person can find
-// good values by eye. Copy puts the settings on the clipboard as JSON.
+// Why: the morph has methods and settings with no one right value. The
+// panel picks the method, changes its settings, holds the morph at a time
+// t, and replays it, so a person can compare by eye. Copy puts the
+// settings on the clipboard as JSON.
 
 const morph = window.autosamMorph;
 const p = morph.params;
 const root = document.documentElement;
+const FLOW = ['edges', 'demons'];
 
-// name, kind, then for a range: min, max, step, unit.
+// Each row of the panel. A row with methods shows only for those methods.
+// A change to a row with rebuild makes new flows, so a held morph replays.
 const FIELDS = [
-  ['matcher', 'select', ['demons', 'edges', 'none']],
-  ['align', 'check'],
-  ['normalWeight', 'range', 0, 0.5, 0.005, 'em'],
-  ['sigma', 'range', 0, 0.2, 0.005, 'em'],
-  ['iterations', 'range', 0, 200, 1, ''],
-  ['step', 'range', 0.001, 0.05, 0.001, 'em'],
-  ['band', 'range', 0.02, 0.6, 0.01, 'em'],
-  ['flowRes', 'range', 8, 128, 1, '/em'],
-  ['minSize', 'range', 0, 100, 1, 'px'],
-  ['ms', 'range', 100, 5000, 50, 'ms'],
-  ['hold', 'check'],
-  ['t', 'range', 0, 1, 0.005, ''],
+  { name: 'method', options: morph.methods, rebuild: true },
+  {
+    name: 'normalWeight',
+    min: 0,
+    max: 0.5,
+    step: 0.005,
+    unit: 'em',
+    methods: ['edges'],
+    rebuild: true,
+  },
+  {
+    name: 'sigma',
+    min: 0,
+    max: 0.2,
+    step: 0.005,
+    unit: 'em',
+    methods: FLOW,
+    rebuild: true,
+  },
+  {
+    name: 'iterations',
+    min: 0,
+    max: 200,
+    step: 1,
+    unit: '',
+    methods: ['demons'],
+    rebuild: true,
+  },
+  {
+    name: 'step',
+    min: 0.001,
+    max: 0.05,
+    step: 0.001,
+    unit: 'em',
+    methods: ['demons'],
+    rebuild: true,
+  },
+  {
+    name: 'band',
+    min: 0.02,
+    max: 0.6,
+    step: 0.01,
+    unit: 'em',
+    methods: ['demons'],
+    rebuild: true,
+  },
+  {
+    name: 'flowRes',
+    min: 8,
+    max: 128,
+    step: 1,
+    unit: '/em',
+    methods: FLOW,
+    rebuild: true,
+  },
+  {
+    name: 'minSize',
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: 'px',
+    methods: FLOW,
+    rebuild: true,
+  },
+  { name: 'ms', min: 100, max: 5000, step: 50, unit: 'ms' },
+  { name: 'hold', check: true },
+  { name: 't', min: 0, max: 1, step: 0.005, unit: '' },
 ];
-
-// A change to these needs new flows, so a held morph plays again.
-const REBUILD = new Set([
-  'matcher',
-  'align',
-  'normalWeight',
-  'sigma',
-  'iterations',
-  'step',
-  'band',
-  'flowRes',
-  'minSize',
-]);
 
 const duration = () =>
   Number.parseFloat(getComputedStyle(root).getPropertyValue('--morph')) || 0;
+
+const value = (name) => (name === 'ms' ? duration() : p[name]);
 
 const panel = document.createElement('div');
 panel.className = 'morph-debug';
 panel.dataset.morphSkip = '';
 
-const value = (name) => (name === 'ms' ? duration() : p[name]);
+const rows = [];
+const showRows = () => {
+  for (const { row, field } of rows) {
+    row.hidden = Boolean(field.methods) && !field.methods.includes(p.method);
+  }
+};
 
-function set(name, v) {
-  if (name === 'ms') root.style.setProperty('--morph', `${v}ms`);
-  else p[name] = v;
-  if (REBUILD.has(name) && p.hold) morph.replay();
+function set(field, v) {
+  if (field.name === 'ms') root.style.setProperty('--morph', `${v}ms`);
+  else p[field.name] = v;
+  if (field.name === 'method') showRows();
+  if (field.rebuild && p.hold) morph.replay();
 }
 
-for (const [name, kind, ...opt] of FIELDS) {
+for (const field of FIELDS) {
   const row = document.createElement('label');
   const label = document.createElement('span');
-  label.textContent = name;
+  label.textContent = field.name;
   const out = document.createElement('output');
   let input;
-  if (kind === 'select') {
+  if (field.options) {
     input = document.createElement('select');
-    for (const o of opt[0]) input.add(new Option(o, o));
-    input.value = value(name);
-    input.addEventListener('change', () => set(name, input.value));
-  } else if (kind === 'check') {
+    for (const o of field.options) input.add(new Option(o, o));
+    input.value = value(field.name);
+    input.addEventListener('change', () => set(field, input.value));
+  } else if (field.check) {
     input = document.createElement('input');
     input.type = 'checkbox';
-    input.checked = value(name);
-    input.addEventListener('change', () => set(name, input.checked));
+    input.checked = value(field.name);
+    input.addEventListener('change', () => set(field, input.checked));
   } else {
-    const [min, max, step, unit] = opt;
+    const { min, max, step, unit } = field;
     input = document.createElement('input');
     Object.assign(input, { type: 'range', min, max, step });
-    input.value = value(name);
+    input.value = value(field.name);
     const show = () => {
       out.textContent = `${input.value}${unit}`;
     };
     show();
     input.addEventListener('input', () => {
       show();
-      if (name === 't') p.t = Number(input.value);
+      if (field.name === 't') p.t = Number(input.value);
     });
     // A rebuild is slow, so it waits for the end of the drag.
-    if (name !== 't') {
-      input.addEventListener('change', () => set(name, Number(input.value)));
+    if (field.name !== 't') {
+      input.addEventListener('change', () => set(field, Number(input.value)));
     }
   }
   row.append(label, input, out);
   panel.append(row);
+  rows.push({ row, field });
 }
+showRows();
 
 const stats = document.createElement('pre');
 const showStats = () => {

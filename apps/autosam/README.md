@@ -71,28 +71,35 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   Biome skips it, so it stays the same as the upstream file.
 - `public/theme.js` sets `data-theme` and `data-mode` on `<html>` before the
   first paint, and wires the pane.
-- `public/morph.js` morphs the text. On each change it draws every visible
+- `public/morph.js` morphs the page. On each change it draws every visible
   character on a WebGL layer, and changes each glyph from its old font,
   place, size and color to the new ones. Each glyph is a signed distance
   field (SDF): an image where each pixel holds its distance to the glyph
-  edge. A blend of two fields moves no ink, so the ink moves first. The ink
-  box of the old glyph moves and scales onto the new one. Then a flow field
-  for each glyph pair moves the old shape along the edge normals toward the
-  new shape (demons registration). At each time the two shapes almost
-  agree, and the blend keeps their ink. Glyphs under 18 px get no flow.
-  Boxes morph too: each box with text in it moves from its
-  old size to its new size. One clock moves the glyphs, the boxes and the
-  tokens.
+  edge. Boxes morph too: each box with text in it moves from its old size
+  to its new size. One clock moves the glyphs, the boxes and the tokens.
 - The first and last frames match the page pixel for pixel. morph.js draws
   each glyph as the page draws it: in its own color and at its subpixel
   place. It uses a GPU canvas in the document, so the canvas gets the font
-  smoothing of the page. The baseline comes from layout. Only content that the page
-  paints morphs: the text of a closed accordion stays hidden.
+  smoothing of the page. The baseline comes from layout. Only content that
+  the page paints morphs: the text of a closed accordion stays hidden.
 
-The morph assumes a static page. A scroll or a resize ends it. Add
-`?debug=morph` to the URL for a panel that sets the flow, holds the morph
-at a time, replays it, and copies the settings as JSON. With reduced motion, or with no
-WebGL2, everything changes at once.
+morph.js has four methods. `edges` is the default:
+
+| Method | What it does |
+|---|---|
+| `edges` | Aligns the ink box of each glyph pair. Then each edge point goes to the nearest edge of the other glyph that faces the same way, and a smooth flow moves the ink. |
+| `demons` | The same alignment. The flow comes from demons registration: each point moves along the field gradient by the difference of the two fields. It gives the same shapes as `edges` and sets up slower. |
+| `blend` | The first glyph morph. Each pixel blends the two fields, with a blur halfway. Thin strokes lose ink at mid-morph, and ink grows where the glyphs do not overlap. |
+| `crossfade` | The first morph. A view transition cross-fades a picture of the old page into the new page. Fonts do not morph. |
+
+The modules: `morph.js` (methods and clock), `morph-page.js` (reads the
+page), `morph-field.js` (distance fields), `morph-flow.js` (alignment and
+flow), `morph-gl.js` (the WebGL layer) and `morph-debug.js` (the panel).
+
+Add `?debug=true` to the URL for the debug panel. It picks the method, sets
+its values, holds the morph at a time, replays it, and copies the settings
+as JSON. The morph assumes a static page. A scroll or a resize ends it. With
+reduced motion, or with no WebGL2, everything changes at once.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents
