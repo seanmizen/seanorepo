@@ -50,6 +50,24 @@ stepper moves the key by one semitone or by one octave, up to 24 semitones
 each way. The key shows as `A♭(4) (−1 semitone)`: the tonic of the original
 key is in octave 4.
 
+## Themes
+
+The picker under each page selects a theme. `Auto` follows the system light
+or dark setting. The choice stays on the device.
+
+- `public/themes.css` holds one block of tokens for each theme. The page uses
+  only these tokens.
+- `public/theme.js` sets `data-theme` on `<html>` before the first paint, and
+  fills the picker.
+- A theme change morphs the page. `themes.css` registers each color token
+  with `@property`, so the token moves from one color to the next over `--morph`
+  (700 ms). To watch it slowly, set `--morph` higher in DevTools. Fonts
+  change at once. With reduced motion, everything changes at once.
+
+To add a theme, add a `:root[data-theme="<id>"]` block to `themes.css` and an
+entry to `THEMES` in `theme.js`. `projects/intentional-design` holds the
+documents that the themes come from.
+
 ## The API
 
 | Route | Use |
