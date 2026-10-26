@@ -217,6 +217,7 @@
     align-items: center;
   }
   .beats i {
+    font-size: 0;
     width: 12px;
     height: 12px;
     border-radius: 50%;
@@ -310,7 +311,9 @@
     border-radius: calc(var(--radius-control) + 1px);
     overflow: hidden;
   }
-  .seg button {
+  .seg label {
+    position: relative;
+    text-align: center;
     background: transparent;
     border: 0;
     border-left: 1px solid var(--line);
@@ -318,26 +321,36 @@
     cursor: pointer;
     line-height: 1.15;
   }
-  .seg button:first-child {
+  .seg label:first-child {
     border-left: 0;
   }
-  .seg button small {
+  .seg label small {
     display: block;
     font-family: var(--mono);
     font-size: 10.5px;
     color: var(--muted);
   }
-  .seg button b {
+  .seg label b {
     font-family: var(--display);
     font-size: 19px;
     font-weight: var(--display-weight);
   }
-  .seg button[aria-pressed="true"] {
+  .seg label:has(:checked) {
     background: var(--accent-soft);
     color: var(--accent);
   }
-  .seg button[aria-pressed="true"] small {
+  .seg label:has(:checked) small {
     color: var(--accent);
+  }
+  /* The radio stays in the page for the keyboard and for the bare theme. */
+  .seg input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .seg label:has(:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
   .row {
     display: flex;
@@ -612,6 +625,17 @@
   }
   .bar .cs.multi {
     font-size: 15.5px;
+  }
+  /* The playing bar has its chords in a <mark>, for the bare theme. Here
+     .bar.cur and .bar.cursor show it. */
+  .bar mark.cs {
+    background: none;
+    color: inherit;
+  }
+  /* A queued jump has the text "(next)", for the bare theme. Here
+     .bar.pending shows it. */
+  .bar .flag {
+    display: none;
   }
   .bar .cs .tie {
     color: var(--muted);

@@ -27,6 +27,11 @@ You can change an existing numbered file when Sean asks for the change.
 (`apps/autosam/public/themes.css`) applies these documents. Code stays in the
 app. This folder holds only the documents.
 
+A theme changes the look, never the function (REQ-BARE-001). With no page
+styles (the bare theme), the page still shows each state and each fact. A
+design that needs CSS to say what plays is a broken design.
+`.claude/rules/autosam.md` says how to build to this rule.
+
 ## Source
 
 Katie Dill (Stripe), "How to scale intent, quality, and artistry with AI":
