@@ -52,27 +52,33 @@ key is in octave 4.
 
 ## Themes
 
-Two pickers under each page select a theme (`Baseline`, `KBBQ`) and a mode
-(`Auto`, `Light`, `Dark`). `Auto` follows the system light or dark setting.
-The choice stays on the device.
+A pane at the bottom left of each page has two buttons: theme (`Baseline`,
+`KBBQ`) and mode (`Auto`, `Light`, `Dark`). Each press selects the next
+value. `Auto` follows the system light or dark setting. The choice stays on
+the device.
 
 A URL can give both: `/?theme=kbbq&mode=dark` opens the page in KBBQ dark,
-and the device keeps that choice. A picker change writes the choice back to
-the URL. The defaults (`baseline`, `auto`) stay out of the URL.
+and the device keeps that choice. A press writes the choice back to the URL.
+The defaults (`baseline`, `auto`) stay out of the URL.
 
 - `public/themes.css` holds the tokens of each theme, in a light and a dark
   block. The page uses only these tokens: colors, `--shadow`, the radii
   `--radius-card` and `--radius-control`, `--display-weight` and the fonts.
+  It registers each token that can interpolate with `@property`, so the
+  token moves to its new value over `--morph` (700 ms).
 - `public/theme.js` sets `data-theme` and `data-mode` on `<html>` before the
-  first paint, and fills the pickers.
-- A theme change morphs the page. `themes.css` registers each token with
-  `@property`, so the token moves from one value to the next over `--morph`
-  (700 ms). To watch it slowly, set `--morph` higher in DevTools.
-- One font family cannot morph into another. So a picker change runs in a
-  view transition: the old page fades out over the new page, and the text
-  dissolves from one font to the next. The fonts are variable fonts, so a
-  weight between two values shows. With reduced motion, everything changes
-  at once.
+  first paint, and wires the pane.
+- `public/morph.js` morphs the text. On each change it draws every visible
+  character on a WebGL layer, and changes each glyph from its old font,
+  place, size and color to the new ones. Each glyph is a signed distance
+  field (SDF): an image where each pixel holds its distance to the glyph
+  edge. A blend of two fields gives a shape between the two glyphs. A little
+  blur halfway smooths the creases of the blend. When the layer goes, the
+  real text shows in the same place.
+
+The morph assumes a static page. A scroll or a resize ends it. To watch it
+slowly, set `--morph` higher in DevTools. With reduced motion, or with no
+WebGL2, everything changes at once.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents

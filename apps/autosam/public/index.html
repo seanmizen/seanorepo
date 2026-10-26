@@ -31,7 +31,7 @@ a { color: var(--accent); }
 
 .layout {
   max-width: 1220px; margin: 0 auto;
-  padding-block: 28px 56px;
+  padding-block: 28px 104px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: flex; flex-direction: column; gap: 14px;
@@ -226,12 +226,28 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); 
 .refollow .arrow { font-size: 17px; line-height: 1; }
 .refollow:hover { background: var(--accent); color: var(--accent-ink); }
 
-/* Theme and mode pickers. They show under every view. Until app.js shows a view, they stay hidden. */
-.site-foot { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px 24px; padding: 0 16px 40px; }
-body:not(:has(.layout:not([hidden]))) .site-foot { visibility: hidden; }
-.theme-pick { display: inline-flex; align-items: center; gap: 10px; }
-.theme-pick select { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); font-family: var(--mono); font-size: 12.5px; cursor: pointer; }
-.theme-pick select:hover { border-color: var(--muted); }
+/* Theme pane. Two buttons that float at the bottom left of every view. Each press selects the next value. */
+.theme-pane {
+  position: fixed; z-index: 20; display: flex; gap: 4px; padding: 4px;
+  left: calc(max(16px, env(safe-area-inset-left, 0px)) + 4px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card);
+  box-shadow: 0 6px 22px rgb(0 0 0 / 0.18);
+}
+.theme-pane button {
+  display: grid; justify-items: start; gap: 1px; min-width: 64px; padding: 6px 10px;
+  background: transparent; border: 0; border-radius: calc(var(--radius-card) - 4px); cursor: pointer; line-height: 1.15;
+}
+.theme-pane button:hover { background: var(--sunk); }
+.theme-pane button small { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.theme-pane button b { font-weight: 600; font-size: 14px; }
+
+/* Glyph morph (morph.js). The WebGL layer draws the text, so the real text hides. Inputs and generated content keep their text. The title draws its gradient through its glyphs, so it loses the gradient too. */
+.morph-layer { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; }
+html.morphing body * { -webkit-text-fill-color: transparent; }
+html.morphing input, html.morphing textarea, html.morphing ::marker, html.morphing ::before, html.morphing ::after { -webkit-text-fill-color: currentcolor; }
+html.morphing h1 { background: none; }
+html.morph-measure { transition: none; }
 
 @media (max-width: 520px) {
   .kbd .w span { display: none; }
@@ -432,17 +448,17 @@ body:not(:has(.layout:not([hidden]))) .site-foot { visibility: hidden; }
   <span class="msg" id="keyMsg"></span>
 </section>
 
-<!-- theme.js fills the pickers. themes.css holds the themes. -->
-<footer class="site-foot">
-  <label class="theme-pick"><span class="ctl-label">Theme</span><select id="themeSelect"></select></label>
-  <label class="theme-pick"><span class="ctl-label">Mode</span><select id="modeSelect"></select></label>
-</footer>
-
+<!-- theme.js wires the buttons. morph.js morphs the page on each change. -->
+<div class="theme-pane" role="group" aria-label="Theme">
+  <button type="button" id="themeBtn"><small>Theme</small><b>Baseline</b></button>
+  <button type="button" id="modeBtn"><small>Mode</small><b>Auto</b></button>
+</div>
 <button type="button" class="refollow" id="refollow" title="Scroll back to the playing bar and keep following it (F)" hidden>
   <span class="arrow" id="refollowArrow" aria-hidden="true">↓</span>
   <span>Back to bar <b id="refollowBar">1</b></span>
 </button>
 
+<script type="module" src="/morph.js"></script>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

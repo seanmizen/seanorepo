@@ -3,13 +3,14 @@
 // Where: index.html loads this file in <head>, before the stylesheets. It is
 // a classic script because the page CSP blocks inline scripts.
 // When: it sets data-theme and data-mode at once, so the first paint uses
-// the right theme. When the page is ready, it fills the two pickers.
+// the right theme. When the page is ready, it wires the two buttons of the
+// floating pane.
 // Why: themes.css holds the tokens of each theme in a light and a dark mode.
-// This file only selects the block. The CSS morphs the page from one theme
-// to the next.
+// This file only selects the block. morph.js morphs each glyph from the old
+// theme to the new one, and the CSS morphs the tokens under it.
 //
 // The URL wins: ?theme=kbbq&mode=dark opens the page in that theme and mode,
-// and the device keeps the choice for the next pages. A picker change writes
+// and the device keeps the choice for the next pages. A button press writes
 // the choice back to the URL, so the address always gives the current look.
 // The defaults stay out of the URL.
 
@@ -30,7 +31,6 @@
   };
   const root = document.documentElement;
   const systemDark = matchMedia('(prefers-color-scheme: dark)');
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
   const saved = (key) => {
     try {
@@ -100,21 +100,25 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     for (const [name, s] of Object.entries(SETTINGS)) {
-      const select = document.getElementById(`${name}Select`);
-      for (const t of s.list) select.add(new Option(t.label, t.id));
-      select.value = current[name];
-      select.addEventListener('change', () => {
-        current[name] = select.value;
-        save(s.key, select.value);
+      const button = document.getElementById(`${name}Btn`);
+      const value = button.querySelector('b');
+      const show = () => {
+        const i = s.list.findIndex((t) => t.id === current[name]);
+        const next = s.list[(i + 1) % s.list.length];
+        value.textContent = s.list[i].label;
+        button.title = `Change the ${name} to ${next.label}`;
+      };
+      show();
+      button.addEventListener('click', () => {
+        const i = s.list.findIndex((t) => t.id === current[name]);
+        current[name] = s.list[(i + 1) % s.list.length].id;
+        save(s.key, current[name]);
         writeUrl();
-        // The view transition cross-fades what cannot morph (the fonts).
-        // Without it, or with reduced motion, the fonts change at once.
-        if (document.startViewTransition && !reducedMotion.matches) {
-          document.startViewTransition(apply);
-        } else {
-          apply();
-          syncBar();
-        }
+        show();
+        // morph.js is a module, so it can load after a fast first press.
+        if (window.autosamMorph) window.autosamMorph(apply);
+        else apply();
+        syncBar();
       });
     }
     syncBar();
