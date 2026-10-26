@@ -4,6 +4,7 @@
 // follows the music. The song file and the edit key go to the server
 // (server/app.ts) through /api.
 
+import { grandSamples } from '/piano.js';
 import { LIMITS, parseSong } from '/song-format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -268,7 +269,14 @@ let keyRoot = 0;
 let keyMinor = false;
 
 const prefs = Object.assign(
-  { style: 'pulse', count: true, click: false, loop: false, vol: 0.8 },
+  {
+    style: 'pulse',
+    synth: 'grand',
+    count: true,
+    click: false,
+    loop: false,
+    vol: 0.8,
+  },
   local.get('autosam:prefs', {}),
 );
 if (!['pulse', 'held'].includes(prefs.style)) prefs.style = 'pulse';
@@ -286,8 +294,8 @@ const clampBpm = (n) =>
   );
 
 function save() {
-  const { style, count, click, loop, vol } = settings;
-  local.set('autosam:prefs', { style, count, click, loop, vol });
+  const { style, synth, count, click, loop, vol } = settings;
+  local.set('autosam:prefs', { style, synth, count, click, loop, vol });
   if (current)
     local.set(`autosam:song:${current.slug}`, {
       shift: settings.shift,
@@ -475,9 +483,94 @@ function silence() {
   newBuses();
 }
 
-// A small additive piano: bright attack that darkens, two-stage decay, a touch of hammer noise.
+// ---------- Sounds ----------
+// The sound registry. Each sound has an id, a label, a hint and one
+// function that plays a note into bus: (midi, start time, length in
+// seconds, velocity 0 to 1). The Sound setting shows each entry. To add a
+// sound, add an entry.
+const SYNTHS = [
+  { id: 'grand', label: 'Grand', hint: 'modelled', play: grandNote },
+  { id: 'simple', label: 'Simple', hint: 'light synth', play: simpleNote },
+];
+const synth = () => SYNTHS.find((s) => s.id === settings.synth) ?? SYNTHS[0];
+
 function note(midi, t, dur, vel) {
   if (midi < PIANO_LOW || midi > PIANO_HIGH) return;
+  synth().play(midi, t, dur, vel);
+}
+
+// The modelled grand piano (piano.js). Each note renders once, with the
+// brightest blow, and the buffer stays for the visit.
+const GRAND_GAIN = 0.5;
+const grandBuffers = new Map();
+function grandBuffer(midi) {
+  let b = grandBuffers.get(midi);
+  if (!b) {
+    const s = grandSamples(midi, 1, ctx.sampleRate);
+    b = ctx.createBuffer(1, s.length, ctx.sampleRate);
+    b.copyToChannel(s, 0);
+    grandBuffers.set(midi, b);
+  }
+  return b;
+}
+function grandNote(midi, t, dur, vel) {
+  const f = mtof(midi);
+  const src = ctx.createBufferSource();
+  src.buffer = grandBuffer(midi);
+  // A softer blow has fewer high partials. The filter takes them off.
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.Q.value = 0.5;
+  lp.frequency.value = Math.min(f * (1.5 + 12 * vel * vel), 16000);
+  const g = ctx.createGain();
+  const level = vel * GRAND_GAIN;
+  g.gain.value = level;
+  src.connect(lp);
+  lp.connect(g);
+  g.connect(bus);
+  src.start(t);
+  // The damper stops the strings when the key comes up. It is slower in
+  // the bass. The strings above E6 have no damper, as on a real grand.
+  if (midi < 89) {
+    const off = Math.max(t + dur, t + 0.05);
+    g.gain.setValueAtTime(level, off);
+    g.gain.setTargetAtTime(0, off, 0.05 + (0.1 * (89 - midi)) / 68);
+    src.stop(off + 0.8);
+  }
+}
+// Render the grand notes of the song before they play, one note in each
+// task. Then the first time through does not stall the scheduler.
+let warmTimer = null;
+function warmGrand() {
+  clearTimeout(warmTimer);
+  if (!ctx || !song || synth().id !== 'grand') return;
+  const saved = voiced;
+  voiced = { key: null, rh: null, lh: null };
+  const todo = new Set();
+  const n = song.bars.length;
+  for (let i = 0; i < n; i++) {
+    const bar = song.bars[(cursorBar + i) % n];
+    for (const ch of [bar.startChord, ...bar.changes.map((c) => c.chord)]) {
+      if (!ch) continue;
+      const v = getVoicing(ch);
+      for (const m of [...v.rh, v.lh, v.lh - 12])
+        if (m >= PIANO_LOW && m <= PIANO_HIGH && !grandBuffers.has(m))
+          todo.add(m);
+    }
+  }
+  voiced = saved;
+  const list = [...todo];
+  const step = () => {
+    if (!list.length) return;
+    grandBuffer(list.shift());
+    warmTimer = setTimeout(step, 0);
+  };
+  warmTimer = setTimeout(step, 0);
+}
+
+// The first sound: a small additive piano. A bright attack that darkens,
+// a two-stage decay and a touch of hammer noise.
+function simpleNote(midi, t, dur, vel) {
   const f = mtof(midi);
   const peak = vel * 0.2;
   const g = ctx.createGain();
@@ -650,6 +743,7 @@ function play() {
   countLeft = settings.count ? 8 : 0;
   pendingJump = null;
   voiced = { key: null, rh: null, lh: null };
+  warmGrand();
   nextTime = ctx.currentTime + 0.08;
   queue.length = 0;
   schedule();
@@ -1051,6 +1145,32 @@ function renderKeyButtons() {
   seg.append(...spaced(labels));
 }
 
+// The Sound setting: one radio for each entry of SYNTHS (REQ-BARE-001).
+// A new pick plays the chord at the cursor, so you hear the sound.
+function renderSynthButtons() {
+  const labels = SYNTHS.map((s) => {
+    const label = el('label');
+    const radio = el('input');
+    radio.type = 'radio';
+    radio.name = 'synth';
+    radio.value = s.id;
+    radio.addEventListener('change', () => {
+      settings.synth = s.id;
+      save();
+      renderSettings();
+      if (!song) return;
+      initAudio();
+      warmGrand();
+      if (!playing) audition(cursorBar);
+    });
+    label.append(
+      ...spaced([radio, el('b', '', s.label), el('small', '', s.hint)]),
+    );
+    return label;
+  });
+  $('synthSeg').append(...spaced(labels));
+}
+
 function renderSettings() {
   const n = settings.shift;
   $('shiftVal').textContent =
@@ -1059,6 +1179,8 @@ function renderSettings() {
     r.checked = Number(r.value) === n;
   for (const r of $('styleSeg').querySelectorAll('input'))
     r.checked = r.value === settings.style;
+  for (const r of $('synthSeg').querySelectorAll('input'))
+    r.checked = r.value === synth().id;
   $('octDown').disabled = n - 12 < -LIMITS.maxShift;
   $('octUp').disabled = n + 12 > LIMITS.maxShift;
   $('shiftDown').disabled = n - 1 < -LIMITS.maxShift;
@@ -1088,6 +1210,7 @@ function setShift(n) {
   buildKeyboard();
   renderSettings();
   renderChart();
+  warmGrand();
   if (playing) {
     markBars(shownE);
     els.nowChord.textContent = chordName(chordAt(shownBar, shownE));
@@ -1255,6 +1378,7 @@ function wireSongControls() {
       renderSettings();
     });
   }
+  renderSynthButtons();
   $('tempo').addEventListener('input', (e) => {
     settings.bpm = clampBpm(e.target.value);
     $('tempoVal').textContent = `${settings.bpm} BPM`;

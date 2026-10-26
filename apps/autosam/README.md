@@ -50,6 +50,31 @@ stepper moves the key by one semitone or by one octave, up to 24 semitones
 each way. The key shows as `A♭(4) (−1 semitone)`: the tonic of the original
 key is in octave 4.
 
+## Sounds
+
+The Sound setting picks the synth that plays the notes. The choice stays on
+the device, with the other settings.
+
+- `Grand` is a modelled grand piano (`public/piano.js`). Each note is a sum
+  of partials at the frequencies of a stiff string, `n·f0·√(1 + B·n²)`. B
+  rises toward the treble. High partials decay first, and each partial has
+  a prompt decay and a slower aftersound. A note has one, two or three
+  strings, tuned a little apart, so they beat. The hammer gives a short
+  knock. A softer blow has fewer high partials. The convolution reverb is
+  the soundboard and the room. The damper stops a note when the key comes
+  up. The strings above E6 have no damper, as on a real grand.
+- `Simple` is the first synth: two detuned oscillators with a filter that
+  closes.
+
+The page renders each grand note once, the first time that note plays,
+and keeps it for the visit. When you press Play, it renders the notes of
+the song in the background, so the first pass does not stall.
+`test/piano.test.ts` checks the spectrum of the rendered notes.
+
+To add a sound, add an entry to `SYNTHS` in `app.js`: an id, a label, a
+hint and a function that plays one note. The Sound setting shows each
+entry.
+
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
