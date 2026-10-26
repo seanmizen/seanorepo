@@ -98,7 +98,7 @@
     flex-basis: 100%;
   }
   .layout.lib .masthead {
-    margin-bottom: calc(1em - 1px);
+    margin-bottom: 1em;
   }
   .layout.song .chart-tools,
   .layout.song .sections,
@@ -254,7 +254,7 @@
   }
 
   /* Keys */
-  .layout.song :is(.side, .chart-tools, details.edit)
+  .layout:is(.song, .lib) :is(.side, .chart-tools, details.edit, .key-panel)
     :is(button, .seg label, .chip) {
     display: inline-grid;
     align-content: center;
@@ -272,14 +272,14 @@
     cursor: pointer;
     transition: transform 60ms;
   }
-  .layout.song
-    :is(.side, .chart-tools, details.edit)
+  .layout:is(.song, .lib)
+    :is(.side, .chart-tools, details.edit, .key-panel)
     :is(button, .seg label, .chip):hover:not(:disabled) {
     background: var(--surface);
     color: var(--ink);
   }
-  .layout.song
-    :is(.side, .chart-tools, details.edit)
+  .layout:is(.song, .lib)
+    :is(.side, .chart-tools, details.edit, .key-panel)
     :is(button, .seg label, .chip):active {
     transform: translateY(1px);
     box-shadow: 0 0 0 1px var(--line);
@@ -600,7 +600,7 @@
   }
 
   /* The help and the editor */
-  .layout.song textarea.song-text {
+  .layout:is(.song, .lib) textarea.song-text {
     min-height: 2.25em;
     padding: 0.25em 0.5em;
     border-radius: 3px;
@@ -612,6 +612,148 @@
     border-radius: 4px;
   }
 
+  /* The library. The songs are cards, like the bars of the chart, in the
+     column of the panel. The settings of the library are modules on a
+     chassis, like the panel, in the next column. The chassis is a grid item
+     behind the modules. The modules are 2px inside it on each side. */
+  .layout.lib:not([hidden]) {
+    grid-template-columns: 30em 30em;
+    grid-template-rows: auto repeat(3, auto) 1fr;
+    gap: 2px 1.5em;
+  }
+  .layout.lib:has(.song-list)::before {
+    content: "";
+    grid-column: 2;
+    grid-row: 2 / 5;
+    align-self: stretch;
+    margin: -2px 0;
+    border-radius: 6px;
+    background: var(--line);
+  }
+  .layout.lib .song-list {
+    grid-column: 1;
+    grid-row: 2 / -1;
+    gap: 2px;
+  }
+  .layout.lib .song-row {
+    display: grid;
+    gap: 0.25em;
+    padding: 0.75em;
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .layout.lib .song-row:hover {
+    background: var(--line);
+  }
+  .layout.lib .song-row:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+  .layout.lib .song-title {
+    font-size: 1.25em;
+    font-weight: 600;
+  }
+  .layout.lib :is(.song-meta, .arch-row .m) {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    color: var(--muted);
+  }
+  .layout.lib .song-list .empty {
+    padding: 0.75em;
+    color: var(--muted);
+  }
+
+  /* A module: the label at the top left, the value at the top right, the
+     control below. A closed module shows only its label. */
+  .layout.lib :is(details.edit, .key-panel) {
+    grid-column: 2;
+    margin: 0 2px;
+    border-radius: 4px;
+    background: var(--surface);
+  }
+  .layout.lib #newSong {
+    grid-row: 2;
+  }
+  .layout.lib #archived {
+    grid-row: 3;
+  }
+  .layout.lib .key-panel {
+    grid-row: 4;
+  }
+  .layout.lib details.edit summary,
+  .layout.lib .key-panel > h2 {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.75em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .layout.lib details.edit summary {
+    padding: 1em;
+    list-style: none;
+  }
+  .layout.lib details.edit summary::-webkit-details-marker {
+    display: none;
+  }
+  .layout.lib details.edit summary::after {
+    content: "+";
+    float: right;
+  }
+  .layout.lib details.edit[open] summary::after {
+    content: "\2212";
+  }
+  .layout.lib details.edit summary:hover {
+    color: var(--ink);
+  }
+  .layout.lib :is(.edit-body, .arch-list) {
+    display: grid;
+    gap: 0.5em;
+    padding: 0 0.75em 0.75em;
+  }
+  .layout.lib :is(.edit-body > p, .key-panel > p, .arch-list .empty) {
+    display: block;
+    color: var(--muted);
+  }
+  .layout.lib textarea.song-text {
+    min-height: 20em;
+  }
+  .layout.lib .edit-actions,
+  .layout.lib .arch-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25em 0.5em;
+  }
+  .layout.lib .arch-row .m {
+    flex: 1 1 0;
+  }
+  .layout.lib .key-panel {
+    display: grid;
+    gap: 0.5em;
+    padding: 0.75em;
+  }
+  .layout.lib .key-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.25em;
+  }
+  .layout.lib .key-row input {
+    min-height: 2.25em;
+    padding: 0.25em 0.5em;
+    border-radius: 3px;
+    background: var(--bg);
+    box-shadow:
+      inset 0 1px 0 var(--line),
+      0 0 0 1px var(--line);
+    font-family: var(--mono);
+  }
+  .layout.lib .msg:empty {
+    display: none;
+  }
+
   /* A narrow screen: the panel above the chart. */
   @media (max-width: 760px) {
     .layout:is(.song, .lib):not([hidden]) {
@@ -621,6 +763,26 @@
     .layout.song .side {
       grid-row: auto;
       position: static;
+    }
+    .layout.lib .song-list {
+      grid-row: 2;
+      margin-bottom: 1em;
+    }
+    .layout.lib :is(details.edit, .key-panel) {
+      grid-column: 1;
+    }
+    .layout.lib #newSong {
+      grid-row: 3;
+    }
+    .layout.lib #archived {
+      grid-row: 4;
+    }
+    .layout.lib .key-panel {
+      grid-row: 5;
+    }
+    .layout.lib:has(.song-list)::before {
+      grid-column: 1;
+      grid-row: 3 / 6;
     }
     .layout.song :is(.chart-tools, .sections, details.edit, .notes) {
       grid-column: 1;
