@@ -283,13 +283,20 @@
   .sec.looping .sec-name::after {
     content: " ⟲";
   }
-  /* The looping section has an outline inside its edge. Its own stacking
-     context draws the outline over its bars, which Pixel-2 positions. */
+  /* The looping section has an outline inside its edge. A layer above the
+     bars draws it, because Pixel-2 positions the bars, and a positioned bar
+     paints over the outline of its section. */
   .sec.looping {
     position: relative;
-    z-index: 1;
-    outline: 1px solid var(--accent);
-    outline-offset: -1px;
+  }
+  .sec.looping::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    pointer-events: none;
   }
   /* The range goes under the name, so the name column stays narrow. */
   .sec-meta {
