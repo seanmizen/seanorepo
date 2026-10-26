@@ -838,6 +838,26 @@ function extendTo(bar) {
   reveal(bar);
 }
 
+// Shift held over a bar: the bars that a click would loop show as a
+// preview. Each bar's title says what Shift with a click does, for the bare
+// theme (REQ-BARE-001).
+let hoverBars = null;
+let shiftDown = false;
+function showPreview() {
+  let span = null;
+  if (shiftDown && hoverBars) {
+    const from = pick ? pick.from : hereBar();
+    const to = pickBar(hoverBars);
+    span = { start: Math.min(from, to), end: Math.max(from, to) };
+  }
+  for (const { node, bars } of barNodes) {
+    node.classList.toggle(
+      'preview',
+      Boolean(span) && bars.some((i) => i >= span.start && i <= span.end),
+    );
+  }
+}
+
 function clearRange() {
   range = null;
   pick = null;
@@ -1327,6 +1347,16 @@ function renderChart() {
       bar.addEventListener('mousedown', (e) => {
         if (e.shiftKey) e.preventDefault();
       });
+      bar.title = 'Shift with a click: loop from the cursor to this bar';
+      bar.addEventListener('pointerenter', (e) => {
+        hoverBars = bars;
+        shiftDown = e.shiftKey;
+        showPreview();
+      });
+      bar.addEventListener('pointerleave', () => {
+        hoverBars = null;
+        showPreview();
+      });
       grid.append(bar);
       barNodes.push({ node: bar, bars });
       for (const j of bars) barEls[j] = bar;
@@ -1614,6 +1644,18 @@ function wireSongControls() {
       renderSettings();
     });
   }
+  // Shift down or up updates the loop preview under the pointer.
+  for (const type of ['keydown', 'keyup']) {
+    document.addEventListener(type, (e) => {
+      if (e.key !== 'Shift') return;
+      shiftDown = type === 'keydown';
+      showPreview();
+    });
+  }
+  window.addEventListener('blur', () => {
+    shiftDown = false;
+    showPreview();
+  });
   // The chart view. A new chart keeps the place in the song.
   const redraw = () => {
     renderChart();
