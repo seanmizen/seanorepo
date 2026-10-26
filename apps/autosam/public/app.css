@@ -970,6 +970,19 @@
     font-weight: 600;
     font-size: 14px;
   }
+  .theme-pane .picker {
+    display: flex;
+  }
+  .theme-pane .step {
+    min-width: 0;
+    padding: 6px 5px;
+    align-content: center;
+    font-size: 16px;
+    color: var(--muted);
+  }
+  .theme-pane .step:hover {
+    color: var(--ink);
+  }
 
   @media (max-width: 520px) {
     .kbd .w span {
