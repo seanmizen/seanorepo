@@ -20,6 +20,10 @@
     { id: 'kbbq', label: 'KBBQ' },
     // No page styles: browser defaults and modern-normalize only.
     { id: 'bare', label: 'Bare' },
+    // The dense themes (REQ-DENSE). They fit the page to the viewport.
+    { id: 'hairline', label: 'Hairline', fit: true },
+    { id: 'tone', label: 'Tone', fit: true },
+    { id: 'term', label: 'Term', fit: true },
   ];
   // "auto" follows the system light or dark setting.
   const MODES = [
@@ -65,10 +69,58 @@
     }
   }
 
+  // A dense theme fits the page to the viewport (REQ-DENSE-002). It sets
+  // two values: --fit, the base text size, and --cols, the number of bars in
+  // a row of the chart. For each row length from COLS, up to the longest
+  // section, it finds the largest size in FIT at which the page does not
+  // scroll and no bar wraps its chords. It keeps the row length with the
+  // largest size, and the shortest row of those. When nothing fits, it uses the largest size, rows of 4,
+  // and the page scrolls. Each try is a layout, so the search stops at a
+  // quarter pixel.
+  const FIT = { min: 10, max: 16 };
+  const COLS = [4, 8, 12, 16];
+  const fit = () => {
+    root.style.removeProperty('--fit');
+    root.style.removeProperty('--cols');
+    if (!THEMES.find((t) => t.id === current.theme).fit) return;
+    const sections = document.getElementById('sections');
+    const longest = Number(sections.dataset.longest) || 4;
+    const chords = sections.getElementsByClassName('cs');
+    const set = (px, cols) => {
+      root.style.setProperty('--fit', `${px}px`);
+      root.style.setProperty('--cols', String(cols));
+    };
+    const fits = (px, cols) => {
+      set(px, cols);
+      if (root.scrollHeight > root.clientHeight) return false;
+      if (root.scrollWidth > root.clientWidth) return false;
+      // One line of chords is 1.25 em high. Two lines are a wrap.
+      for (const cs of chords) if (cs.offsetHeight > px * 1.8) return false;
+      return true;
+    };
+    let best = { px: FIT.max, cols: 4, found: false };
+    for (const cols of COLS.filter((c) => c <= longest)) {
+      if (!fits(FIT.min, cols)) continue;
+      let lo = FIT.min;
+      let hi = FIT.max;
+      if (fits(hi, cols)) lo = hi;
+      while (hi - lo > 0.25) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid, cols)) lo = mid;
+        else hi = mid;
+      }
+      if (!best.found || lo > best.px) best = { px: lo, cols, found: true };
+      if (lo === FIT.max) break;
+    }
+    set(best.px, best.cols);
+  };
+
+  // The fit runs inside apply, so a morph reads the page at its new size.
   const apply = () => {
     const auto = systemDark.matches ? 'dark' : 'light';
     root.dataset.theme = current.theme;
     root.dataset.mode = current.mode === 'auto' ? auto : current.mode;
+    if (document.body) fit();
   };
 
   const writeUrl = () => {
@@ -90,6 +142,20 @@
   };
 
   apply();
+
+  // app.js calls this after it changes what the page shows.
+  window.autosamFit = fit;
+  // One fit for each frame of a resize.
+  let resizing = false;
+  addEventListener('resize', () => {
+    if (resizing) return;
+    resizing = true;
+    requestAnimationFrame(() => {
+      resizing = false;
+      fit();
+    });
+  });
+  document.fonts.ready.then(fit);
 
   root.addEventListener('transitionend', (e) => {
     if (e.target === root && e.propertyName === '--bg') syncBar();
@@ -142,6 +208,7 @@
         step(e.key === 'ArrowLeft' ? -1 : 1);
       });
     }
+    fit();
     syncBar();
   });
 })();

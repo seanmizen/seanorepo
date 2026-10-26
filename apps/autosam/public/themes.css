@@ -262,3 +262,140 @@
   --key-edge: #475569;
   --shadow: #6366f140;
 }
+
+/*
+ * The dense themes (REQ-DENSE). dense.css gives them their layout. They use
+ * the system font, which is drawn for small sizes on each screen. They have
+ * no radius and no shadow.
+ */
+:root:is([data-theme="hairline"], [data-theme="tone"], [data-theme="term"]) {
+  --shadow: transparent;
+  --radius-card: 0px;
+  --radius-control: 0px;
+  --display-weight: 600;
+  --display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Hairline: white paper and grey lines. */
+:root[data-theme="hairline"] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --sunk: #eef0f2;
+  --ink: #111417;
+  --ink-2: #111417;
+  --muted: #646b72;
+  --line: #c9ced3;
+  --accent: #0b57d0;
+  --accent-2: #0b57d0;
+  --accent-ink: #ffffff;
+  --accent-soft: #dbe7fb;
+  --bass: #a35a00;
+  --key-white: #ffffff;
+  --key-black: #1d2125;
+  --key-edge: #9aa2a9;
+}
+:root[data-theme="hairline"][data-mode="dark"] {
+  --bg: #111315;
+  --surface: #111315;
+  --sunk: #23272b;
+  --ink: #e6e8ea;
+  --ink-2: #e6e8ea;
+  --muted: #9aa1a8;
+  --line: #3a4046;
+  --accent: #7cacf8;
+  --accent-2: #7cacf8;
+  --accent-ink: #0b0d0f;
+  --accent-soft: #1c2c47;
+  --bass: #e6a74e;
+  --warn: #f0907a;
+  --ok: #7cc891;
+  --key-white: #d5d9dd;
+  --key-black: #050607;
+  --key-edge: #4c535a;
+}
+
+/*
+ * Tone: a Braun calculator, as Dietrich Lubs drew the ET series. A dark
+ * body, keys in two tones, and one yellow key. Tone separates things by
+ * fill alone, as the keys of the calculator do. The yellow marks only what
+ * is lit: the playing bar, the selected key, a toggle that is on. Text stays
+ * ink. Light mode puts the same keys on a light grey body.
+ */
+:root[data-theme="tone"] {
+  --bg: #e4e3df;
+  --surface: #f2f1ed;
+  --sunk: #d6d4cf;
+  --ink: #1c1b19;
+  --ink-2: #1c1b19;
+  --muted: #66645e;
+  --line: #c4c1ba;
+  --accent: #f2c300;
+  --accent-2: #f2c300;
+  --accent-ink: #1c1b19;
+  --accent-soft: #f7e7a1;
+  --bass: #5e8c63;
+  --key-white: #f2f1ed;
+  --key-black: #2b2a27;
+  --key-edge: #9c9890;
+}
+:root[data-theme="tone"][data-mode="dark"] {
+  --bg: #1d1c1a;
+  --surface: #2b2926;
+  --sunk: #353330;
+  --ink: #ecebe5;
+  --ink-2: #ecebe5;
+  --muted: #9a978e;
+  --line: #4a4743;
+  --accent: #f5c400;
+  --accent-2: #f5c400;
+  --accent-ink: #1d1c1a;
+  --accent-soft: #4a3e0c;
+  --bass: #7fb386;
+  --warn: #f0907a;
+  --ok: #7fb386;
+  --key-white: #d8d6cf;
+  --key-black: #0c0b0a;
+  --key-edge: #57544f;
+}
+
+/* Term: a terminal. Green on black in dark, black on paper in light. */
+:root[data-theme="term"] {
+  --bg: #fbfbf6;
+  --surface: #fbfbf6;
+  --sunk: #ebebe2;
+  --ink: #141414;
+  --ink-2: #141414;
+  --muted: #6f6f68;
+  --line: #d4d4ca;
+  --accent: #006d3a;
+  --accent-2: #006d3a;
+  --accent-ink: #ffffff;
+  --accent-soft: #d3eadb;
+  --bass: #8a4b00;
+  --key-white: #fbfbf6;
+  --key-black: #141414;
+  --key-edge: #8f8f86;
+  --display: var(--mono);
+  --body: var(--mono);
+}
+:root[data-theme="term"][data-mode="dark"] {
+  --bg: #0a0d0a;
+  --surface: #0a0d0a;
+  --sunk: #182018;
+  --ink: #c9d6c9;
+  --ink-2: #c9d6c9;
+  --muted: #6f8a6f;
+  --line: #243024;
+  --accent: #5fe35f;
+  --accent-2: #5fe35f;
+  --accent-ink: #0a0d0a;
+  --accent-soft: #163a16;
+  --bass: #e3b45f;
+  --warn: #ff8a75;
+  --ok: #5fe35f;
+  --key-white: #b8c4b8;
+  --key-black: #050705;
+  --key-edge: #3c4a3c;
+}

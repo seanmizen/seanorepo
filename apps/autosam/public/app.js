@@ -257,6 +257,7 @@ async function loadLibrary() {
     );
     arch.append(row);
   }
+  window.autosamFit();
 }
 
 // =====================================================================
@@ -1114,6 +1115,12 @@ function renderChart() {
     root.append(sec);
   }
   lastCur = -1;
+  // The bar count of the longest section, up to a multiple of 4 from 4 to
+  // 16. A dense theme makes no row of bars longer than this.
+  const longest = Math.max(...song.sections.map((s) => s.end - s.start + 1));
+  root.dataset.longest = String(Math.min(16, Math.ceil(longest / 4) * 4));
+  // A dense theme fits the page to the viewport (REQ-DENSE-002).
+  window.autosamFit();
 }
 
 function renderKeyButtons() {

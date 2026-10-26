@@ -1,0 +1,922 @@
+/*
+ * autosam dense themes: Hairline, Tone and Term.
+ *
+ * Where: index.html links this file after app.css.
+ * When: always loaded. Each rule sits inside a :where() that matches only a
+ * dense theme, so the other themes never see it.
+ * Why: these themes spend few pixels (REQ-DENSE). The page sits at the top
+ * left (REQ-DENSE-001). theme.js sets --fit, the largest base size at which
+ * the page does not scroll (REQ-DENSE-002), so every size here is in em or
+ * rem. It also sets --cols, the number of bars in a row of the chart. No border, shadow, radius or gradient (REQ-DENSE-003). No space larger
+ * than 0.5em (REQ-DENSE-004).
+ *
+ * The three themes share one layout. They differ in how a person tells one
+ * thing from the next (REQ-DENSE-005):
+ * - Hairline: a 1px line. Each box has a 1px outline, and its neighbours sit
+ *   1px away, so two neighbours share one line. An outline takes no layout
+ *   space, so a line costs 1px.
+ * - Tone: no line at all. Neighbours have different fills.
+ * - Term: no line and almost no fill. Type and characters, as in a terminal:
+ *   [brackets] on what you can press, | between bars, # before each part.
+ */
+
+:where(
+    :root:is([data-theme="hairline"], [data-theme="tone"], [data-theme="term"])
+  ) {
+  & {
+    font-size: var(--fit, 14px);
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 1rem;
+    line-height: 1.25;
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    border: 0;
+    padding: 0 0.25em;
+    background: none;
+    cursor: pointer;
+  }
+  button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  h1,
+  h2,
+  p {
+    margin: 0;
+  }
+  a {
+    color: var(--accent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  code,
+  kbd {
+    font-family: var(--mono);
+    font-size: 0.9em;
+  }
+
+  /* Layout. One column on a narrow screen. On a wide one, the now panel,
+     the settings and the keyboard sit on the left of the chart. */
+  .layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 1px;
+  }
+  .layout[hidden] {
+    display: none;
+  }
+  .side {
+    display: contents;
+  }
+  .masthead,
+  .now,
+  .controls,
+  .kbd-panel,
+  .chart,
+  .song-list,
+  details.edit,
+  .key-panel {
+    padding: 0.25em;
+  }
+
+  /* The theme pane sits at the end of the page on a narrow screen, and at
+     the top right on a wide one. */
+  .theme-pane {
+    position: static;
+    display: flex;
+    gap: 1px;
+    padding: 1px;
+    background: var(--bg);
+    font-size: 0.85rem;
+  }
+  .theme-pane .picker {
+    display: flex;
+    gap: 1px;
+  }
+  .theme-pane button small {
+    color: var(--muted);
+  }
+  .theme-pane button b {
+    display: inline-block;
+    min-width: 4.6em;
+    text-align: left;
+  }
+  .masthead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5em;
+  }
+  .crumbs {
+    font-family: var(--mono);
+  }
+  .crumbs a {
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .crumb-page {
+    opacity: 0.6;
+  }
+  .eyebrow,
+  .keyline,
+  .lib-intro {
+    color: var(--muted);
+  }
+  .keyline b {
+    color: var(--ink);
+  }
+  h1 {
+    font-size: 1.25em;
+    line-height: 1.2;
+  }
+
+  /* Now playing */
+  .now {
+    display: grid;
+    gap: 0.25em;
+  }
+  .now-top,
+  .now-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25em;
+  }
+  .now-top .mono,
+  .nash {
+    font-family: var(--mono);
+    font-size: 0.8em;
+    color: var(--muted);
+  }
+  .now-main {
+    display: flex;
+    align-items: end;
+    gap: 0.5em;
+  }
+  .chord-now,
+  .chord-next {
+    display: grid;
+    min-width: 0;
+  }
+  .chord-now {
+    flex: 1 1 0;
+  }
+  .lbl {
+    font-size: 0.75em;
+    color: var(--muted);
+  }
+  .chord-big {
+    font-size: 3em;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .chord-big.counting {
+    color: var(--accent);
+  }
+  .chord-mid {
+    font-size: 1.75em;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  /* The beat is the text ● ○ itself. */
+  .beats {
+    display: flex;
+    gap: 0.125em;
+    font-size: 1.25em;
+    line-height: 1;
+    color: var(--muted);
+  }
+  .beats i {
+    font-style: normal;
+  }
+  .beats i.on {
+    color: var(--accent);
+  }
+  .transport {
+    display: flex;
+    gap: 1px;
+  }
+  .btn-play svg {
+    width: 0.8em;
+    height: 0.8em;
+    fill: currentcolor;
+    vertical-align: -0.05em;
+  }
+
+  /* Settings: a keypad. The labels sit in one column and the keys in the
+     other. Every key has the same height. A selected radio and a checked
+     box light their key with the accent fill. */
+  .controls {
+    display: grid;
+    grid-template-columns: 5.5em minmax(0, 1fr);
+    align-items: center;
+    gap: 1px 0.25em;
+  }
+  .ctl,
+  .split {
+    display: contents;
+  }
+  .ctl-head {
+    display: contents;
+  }
+  .ctl-label {
+    grid-column: 1;
+    font-weight: 600;
+  }
+  .ctl > :not(.ctl-head, .ctl-label),
+  .ctl-head > :not(.ctl-label),
+  .toggles {
+    grid-column: 2;
+  }
+  .ctl-val {
+    font-family: var(--mono);
+    font-size: 0.75em;
+    color: var(--muted);
+  }
+  .row,
+  .seg,
+  .stepper,
+  .toggles,
+  .transport {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1px;
+  }
+  .row.spread,
+  .ctl-head .row {
+    gap: 1px 0.25em;
+  }
+  .hint {
+    font-size: 0.75em;
+    color: var(--muted);
+  }
+  /* The keys */
+  .seg label,
+  .chip {
+    position: relative;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25em;
+    padding: 0.2em 0.4em;
+    line-height: 1.2;
+    cursor: pointer;
+  }
+  .stepper button,
+  .transport button,
+  .mini {
+    min-width: 2em;
+    padding: 0.2em 0.4em;
+    line-height: 1.2;
+  }
+  .seg label small {
+    font-size: 0.75em;
+    color: var(--muted);
+  }
+  .seg label:has(:checked),
+  .chip:has(:checked) {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .seg label:has(:checked) small {
+    color: inherit;
+  }
+  /* The radio or the box still holds the state. Its label shows it. */
+  .seg input,
+  .chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .seg label:has(:focus-visible),
+  .chip:has(:focus-visible) {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+  input[type="range"] {
+    width: 100%;
+    min-width: 4em;
+    margin: 0;
+    accent-color: var(--accent);
+  }
+
+  /* Keyboard. The 1px gap between keys shows the key edge color. */
+  .kbd-panel {
+    display: grid;
+    align-content: start;
+    gap: 0.25em;
+  }
+  .kbd {
+    position: relative;
+    display: flex;
+    gap: 1px;
+    height: 3em;
+    background: var(--key-edge);
+  }
+  .kbd .w {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    background: var(--key-white);
+  }
+  .kbd .b {
+    position: absolute;
+    top: 0;
+    z-index: 2;
+    height: 60%;
+    background: var(--key-black);
+  }
+  .kbd .rh {
+    background: var(--accent);
+  }
+  .kbd .lh {
+    background: var(--bass);
+  }
+  .kbd .w span {
+    position: absolute;
+    left: 1px;
+    bottom: 0;
+    font-family: var(--mono);
+    font-size: 0.55em;
+    color: var(--muted);
+  }
+  .kbd .w.rh span,
+  .kbd .w.lh span {
+    color: var(--accent-ink);
+  }
+  .hands {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.5em;
+    font-size: 0.85em;
+    color: var(--muted);
+  }
+  .hands b {
+    font-family: var(--mono);
+    color: var(--ink);
+  }
+  .sw {
+    display: inline-block;
+    width: 0.6em;
+    height: 0.6em;
+    margin-right: 0.25em;
+  }
+  .sw.rh {
+    background: var(--accent);
+  }
+  .sw.lh {
+    background: var(--bass);
+  }
+
+  /* Chart. Each section is one row: its name on the left, its bars on the
+     right. All sections share one set of columns (a subgrid), so the bar
+     lines align down the chart. Each column is as wide as its widest bar.
+     theme.js picks the number of columns (--cols): 4, 8, 12 or 16, so a
+     phrase of 4 bars never breaks, and no bar wraps its chords. */
+  .chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+    min-width: 0;
+    container: chart / inline-size;
+  }
+  .chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5em;
+  }
+  .chart-head h2 {
+    font-size: 1em;
+  }
+  .chart-head p {
+    font-size: 0.85em;
+    color: var(--muted);
+  }
+  .sections {
+    display: grid;
+    grid-template-columns: 7.5em repeat(var(--cols, 4), auto);
+    gap: 1px;
+  }
+  .sec,
+  .bars {
+    display: grid;
+    grid-template-columns: subgrid;
+  }
+  .sec {
+    grid-column: 1 / -1;
+  }
+  .bars {
+    grid-column: 2 / -1;
+  }
+  .sec-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: start;
+    align-items: baseline;
+    min-width: 0;
+  }
+  .sec-name {
+    padding: 0 0.25em;
+    font-weight: 600;
+    text-align: left;
+  }
+  .sec.looping .sec-name::after {
+    content: " ⟲";
+    color: var(--accent);
+  }
+  .sec-meta {
+    padding: 0 0.25em;
+    font-family: var(--mono);
+    font-size: 0.7em;
+    color: var(--muted);
+  }
+  /* On a narrow chart each section name sits above its bars. */
+  @container chart (max-width: 36em) {
+    .sections {
+      grid-template-columns: repeat(var(--cols, 4), auto);
+    }
+    .sec-head,
+    .bars {
+      grid-column: 1 / -1;
+    }
+  }
+  .bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 0.25em;
+    min-width: 0;
+    padding: 0 0.25em;
+    text-align: left;
+    background: var(--surface);
+  }
+  .bar .bn {
+    font-family: var(--mono);
+    font-size: 0.6em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  /* A bar with many chords wraps them. A chord never clips. */
+  .bar .cs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.35em;
+    min-width: 0;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .bar .cs.multi {
+    font-size: 0.9em;
+  }
+  .bar mark.cs {
+    background: none;
+    color: inherit;
+  }
+  .bar .flag {
+    display: none;
+  }
+  .bar .cs .tie {
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .bar .r8 {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 1px;
+    height: 2px;
+  }
+  .bar .r8 i {
+    background: var(--sunk);
+  }
+  .bar .r8 i.chg {
+    background: var(--muted);
+  }
+  .bar.cur {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .bar.cur .bn,
+  .bar.cur .cs .tie {
+    color: inherit;
+  }
+  .bar.cur .r8 i {
+    background: none;
+  }
+  .bar.cur .r8 i.lit {
+    background: var(--accent-ink);
+  }
+  .bar.cursor {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .bar.pending {
+    outline: 1px dashed var(--accent);
+    outline-offset: -1px;
+  }
+
+  /* Editors, the edit key and the notes */
+  details.edit summary {
+    cursor: pointer;
+  }
+  .edit-body,
+  .key-panel,
+  .notes {
+    display: grid;
+    gap: 0.25em;
+  }
+  .edit-body p,
+  .key-panel,
+  .notes {
+    font-size: 0.85em;
+  }
+  .notes {
+    color: var(--muted);
+  }
+  .notes p:empty {
+    display: none;
+  }
+  .key-panel h2 {
+    font-size: 1em;
+  }
+  textarea.song-text {
+    width: 100%;
+    min-height: 20em;
+    padding: 0.25em;
+    border: 0;
+    background: var(--sunk);
+    font-family: var(--mono);
+    font-size: 0.85em;
+    line-height: 1.3;
+  }
+  .edit-actions,
+  .key-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1px;
+  }
+  .key-row input {
+    padding: 0 0.25em;
+    border: 0;
+    background: var(--sunk);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .btn.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .btn.danger {
+    color: var(--warn);
+  }
+  .btn.danger.armed {
+    background: var(--warn);
+    color: var(--accent-ink);
+  }
+  .msg {
+    font-size: 0.85em;
+  }
+  .msg.err {
+    color: var(--warn);
+  }
+  .msg.good {
+    color: var(--ok);
+  }
+
+  /* Library */
+  .song-list {
+    display: grid;
+    gap: 1px;
+  }
+  .song-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5em;
+    padding: 0 0.25em;
+    color: inherit;
+    text-decoration: none;
+  }
+  .song-title {
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .song-meta,
+  .empty,
+  .arch-row .m {
+    font-size: 0.85em;
+    color: var(--muted);
+  }
+  .arch-list {
+    display: grid;
+    gap: 1px;
+  }
+  .arch-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5em;
+  }
+
+  /* Back to the playing bar, after a scroll on a small screen */
+  .refollow {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .refollow[hidden] {
+    display: none;
+  }
+
+  /* On a wide screen the now panel, the settings and the keyboard sit on
+     the left. The chart sits on the right, with its help after it. */
+  @media (min-width: 720px) {
+    .theme-pane {
+      position: fixed;
+      left: auto;
+      right: 0;
+      top: 0;
+      bottom: auto;
+    }
+    .masthead {
+      padding-right: 19rem;
+    }
+    .layout.song:not([hidden]) {
+      display: grid;
+      grid-template-columns: 20em minmax(0, 1fr);
+      grid-template-rows: auto 1fr;
+      gap: 1px;
+    }
+    .layout.song .masthead {
+      grid-column: 1 / -1;
+    }
+    .layout.song .side {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .layout.song .side > :last-child {
+      flex-grow: 1;
+    }
+    .chart-head {
+      order: 1;
+    }
+  }
+  /* On a small screen the now panel stays in view while the chart scrolls. */
+  @media (max-width: 719px) {
+    .now {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--bg);
+    }
+  }
+  /* A finger needs larger targets than a mouse (REQ-DENSE-006). */
+  @media (pointer: coarse) {
+    button,
+    summary,
+    .seg label,
+    .chip {
+      min-height: 24px;
+    }
+  }
+}
+
+/* Hairline: each box has a 1px outline in the 1px gap to its neighbours,
+   so two neighbours share one line. Buttons have a fill. */
+:where(:root[data-theme="hairline"]) {
+  .masthead,
+  .now,
+  .controls,
+  .kbd-panel,
+  .chart-head,
+  .notes,
+  details.edit,
+  .key-panel,
+  .sec-head,
+  .bar,
+  .song-row {
+    outline: 1px solid var(--line);
+  }
+  .sections,
+  .song-list {
+    padding: 1px;
+  }
+  button,
+  .seg label,
+  .chip {
+    background: var(--sunk);
+  }
+  button:hover:not(:disabled),
+  .seg label:hover,
+  .chip:hover {
+    background: var(--line);
+  }
+  .sec-name {
+    background: none;
+    color: var(--accent);
+  }
+  .bar {
+    background: var(--surface);
+  }
+  .bar:hover {
+    background: var(--sunk);
+  }
+  .bar.cur {
+    background: var(--accent);
+  }
+}
+
+/* Tone: no lines. Neighbours have different fills: the panels, the
+   sections, and each second bar. The keys come in two tones, as on a Braun
+   calculator: an action is the darker key, a choice the lighter one. A 1px
+   gap of the panel fill sits between two keys. The accent (yellow) is a
+   fill, never text: it lights the playing bar, the selected key and a
+   toggle that is on. */
+:where(:root[data-theme="tone"]) {
+  .layout,
+  .sections,
+  .sec,
+  .bars,
+  .song-list {
+    gap: 0;
+  }
+  .now,
+  .kbd-panel,
+  .sec:nth-child(odd) .sec-head,
+  .song-row:nth-child(odd) {
+    background: var(--surface);
+  }
+  .masthead,
+  .controls,
+  .chart,
+  .sec:nth-child(even) .sec-head {
+    background: var(--bg);
+  }
+  .bar {
+    background: var(--surface);
+  }
+  .bar:nth-child(even) {
+    background: var(--sunk);
+  }
+  .bar:hover {
+    background: var(--line);
+  }
+  .bar.cur {
+    background: var(--accent);
+  }
+  button {
+    background: var(--line);
+  }
+  .seg label,
+  .chip {
+    background: var(--sunk);
+  }
+  button:hover:not(:disabled),
+  .seg label:not(:has(:checked)):hover,
+  .chip:not(:has(:checked)):hover {
+    background: var(--muted);
+    color: var(--bg);
+  }
+  a,
+  .crumbs a,
+  .sec-name,
+  .song-title,
+  .beats i.on,
+  .chord-big.counting,
+  .sec.looping .sec-name::after {
+    color: var(--ink);
+  }
+  .sec-name {
+    background: none;
+  }
+  :focus-visible,
+  .bar.cursor {
+    outline-color: var(--ink);
+  }
+  .bar.pending {
+    outline-color: var(--ink);
+  }
+}
+
+/* Term: monospace type, and characters instead of boxes. What you can
+   press has [brackets]. Each bar starts with |. Each part of the page has
+   a # heading from its aria-label. Only a state gets a fill: the playing
+   bar and the selection, in inverse. */
+:where(:root[data-theme="term"]) {
+  button:not(.bar)::before,
+  .seg label::before,
+  .chip::before,
+  .sec-name::before,
+  details.edit summary::before {
+    content: "[";
+    color: var(--muted);
+  }
+  button:not(.bar)::after,
+  .seg label::after,
+  .chip::after,
+  .sec-name::after,
+  details.edit summary::after {
+    content: "]";
+    color: var(--muted);
+  }
+  .sec.looping .sec-name::after {
+    content: "]⟲";
+  }
+  details.edit summary {
+    list-style: none;
+  }
+  details.edit summary::-webkit-details-marker {
+    display: none;
+  }
+  button:not(.bar),
+  .seg label,
+  .chip,
+  .sec-name {
+    padding: 0;
+    color: var(--accent);
+  }
+  .theme-pane button b {
+    min-width: 0;
+  }
+  .layout,
+  .side,
+  .sections {
+    gap: 0.5em;
+  }
+  .sections,
+  .sec,
+  .bars,
+  .seg,
+  .stepper,
+  .transport,
+  .toggles,
+  .song-list {
+    gap: 0;
+  }
+  .seg label:has(:checked)::before,
+  .seg label:has(:checked)::after,
+  .chip:has(:checked)::before,
+  .chip:has(:checked)::after {
+    color: inherit;
+  }
+  section[aria-label]:not(:has(> h2))::before {
+    content: "# " attr(aria-label);
+    grid-column: 1 / -1;
+    display: block;
+    color: var(--muted);
+  }
+  .bar {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    padding: 0;
+    background: none;
+  }
+  .bar::before {
+    content: "|";
+    color: var(--muted);
+  }
+  .bar .r8 {
+    grid-column: 2 / -1;
+  }
+  .bar:hover {
+    background: var(--sunk);
+  }
+  .bar.cur {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .bar.cur::before {
+    color: inherit;
+  }
+  .bar.cur .r8 i.lit {
+    background: var(--bg);
+  }
+  .kbd {
+    height: 2.5em;
+  }
+}

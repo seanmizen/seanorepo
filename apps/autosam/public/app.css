@@ -1,15 +1,16 @@
 /*
- * autosam page styles: the look of every theme but bare.
+ * autosam page styles: the look of Baseline and KBBQ.
  *
  * Where: index.html links this file after themes.css and chrome.css.
- * When: always loaded. The bare theme turns it off.
+ * When: always loaded. It matches only Baseline and KBBQ.
  * Why: the bare theme shows the page with browser defaults and
- * modern-normalize only. So every rule here sits inside one :where() on
- * :root, which matches only when the theme is not bare. :where() adds no
- * specificity, so each rule has the specificity of its own selector.
+ * modern-normalize only, and the dense themes have a layout of their own in
+ * dense.css. So every rule here sits inside one :where() on :root, which
+ * matches only Baseline and KBBQ. :where() adds no specificity, so each rule
+ * has the specificity of its own selector.
  */
 
-:where(:root:not([data-theme="bare"])) {
+:where(:root:is([data-theme="baseline"], [data-theme="kbbq"])) {
   /* Layout: rehearsal console. A pinned "now playing" panel, key/tempo settings and a keyboard sit on the left; the chord chart scrolls on the right. On phones everything stacks and the now panel stays pinned. The library is one column of song rows. */
   & {
     padding-top: env(safe-area-inset-top, 0px);

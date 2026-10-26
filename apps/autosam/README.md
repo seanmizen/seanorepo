@@ -78,7 +78,9 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`) and mode (`Auto`, `Light`, `Dark`). A press on the main
+`KBBQ`, `Bare`, `Hairline`, `Tone`, `Term`) and mode (`Auto`, `Light`,
+`Dark`). The dense themes (`Hairline`, `Tone`, `Term`) put the pane at the
+top right. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow
 keys do the same. `Auto` follows the system light or dark setting. The
@@ -93,9 +95,12 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   `--radius-card` and `--radius-control`, `--display-weight` and the fonts.
   It registers each token that can interpolate with `@property`, so the
   token moves to its new value over `--morph` (700 ms).
-- `public/app.css` holds the page styles. Every rule sits inside
-  `:where(:root:not([data-theme="bare"]))`, so the bare theme turns them all
-  off. `:where()` adds no specificity.
+- `public/app.css` holds the page styles of Baseline and KBBQ. Every rule
+  sits inside `:where(:root:is([data-theme="baseline"], [data-theme="kbbq"]))`,
+  so the other themes never see them. `:where()` adds no specificity.
+- `public/dense.css` holds the dense themes: Hairline, Tone and Term. They
+  share one layout, and differ in how they separate things. See
+  [REQ-DENSE](requirements/dense.md).
 - `public/chrome.css` holds the few styles that every theme needs, bare too:
   the morph layer, the fixed theme pane and the debug panel.
 - `public/modern-normalize.css` (MIT, v3.0.1) gives every browser the same
@@ -142,6 +147,25 @@ state: the playing bar has its chords in a `<mark>`, a queued jump says
 buttons. The markup puts a space between inline words, also where a flex or
 grid gap hides it. `test/bare.test.ts` fails when `app.js` gets a state
 class with no carrier. `.claude/rules/autosam.md` has the rules.
+
+The dense themes spend few pixels (REQ-DENSE). The page sits at the top left
+with no width limit. `theme.js` fits the page to the viewport: it picks the
+number of bars in a row of the chart (4, 8, 12 or 16) and the largest base
+text size from 10 px to 16 px at which the page does not scroll and no bar
+wraps its chords. `app.js` calls the fit again after it draws the chart or
+the library. All sections share one set of chart columns, and each column is
+as wide as its widest bar. The settings are a keypad: labels in one column,
+keys of one height in the other. The three themes differ in how they
+separate things:
+
+| Theme | A line or a group | A control | The playing bar |
+|---|---|---|---|
+| Hairline | A 1 px outline in a 1 px gap. Two neighbours share it. | A grey fill | Accent fill |
+| Tone | No line. Neighbours have different fills. After a Braun calculator. | Keys in two tones. Yellow when lit. | Yellow fill |
+| Term | No line. `#` headings, `\|` before each bar, monospace type. | `[brackets]` | Inverse type |
+
+`songs/american-pie.txt` has 249 bars. Use it to test the dense layout at
+its limit.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents
