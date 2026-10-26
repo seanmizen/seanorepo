@@ -52,21 +52,28 @@ key is in octave 4.
 
 ## Themes
 
-The picker under each page selects a theme. `Auto` follows the system light
-or dark setting. The choice stays on the device.
+Two pickers under each page select a theme (`Baseline`, `KBBQ`) and a mode
+(`Auto`, `Light`, `Dark`). `Auto` follows the system light or dark setting.
+The choice stays on the device.
 
-- `public/themes.css` holds one block of tokens for each theme. The page uses
-  only these tokens.
-- `public/theme.js` sets `data-theme` on `<html>` before the first paint, and
-  fills the picker.
-- A theme change morphs the page. `themes.css` registers each color token
-  with `@property`, so the token moves from one color to the next over `--morph`
+A URL can give both: `/?theme=kbbq&mode=dark` opens the page in KBBQ dark,
+and the device keeps that choice. A picker change writes the choice back to
+the URL. The defaults (`baseline`, `auto`) stay out of the URL.
+
+- `public/themes.css` holds the tokens of each theme, in a light and a dark
+  block. The page uses only these tokens: colors, `--shadow`, the radii
+  `--radius-card` and `--radius-control`, `--display-weight` and the fonts.
+- `public/theme.js` sets `data-theme` and `data-mode` on `<html>` before the
+  first paint, and fills the pickers.
+- A theme change morphs the page. `themes.css` registers each token with
+  `@property`, so the token moves from one value to the next over `--morph`
   (700 ms). To watch it slowly, set `--morph` higher in DevTools. Fonts
   change at once. With reduced motion, everything changes at once.
 
-To add a theme, add a `:root[data-theme="<id>"]` block to `themes.css` and an
-entry to `THEMES` in `theme.js`. `projects/intentional-design` holds the
-documents that the themes come from.
+To add a theme, add a light and a dark block to `themes.css` and an entry to
+`THEMES` in `theme.js`. `projects/intentional-design` holds the documents
+that the themes come from. KBBQ is the enemy: the generic look of a modern
+web app, copied on purpose.
 
 ## The API
 
