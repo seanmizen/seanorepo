@@ -545,22 +545,30 @@
   .sec .sec-head:hover {
     background: var(--line);
   }
-  /* The roadmap and the chart view */
+  /* The roadmap and the chart view (narrow screens): the roadmap is one
+     strip that scrolls sideways. The switch sits under it, its label on the
+     left. */
   .chart-tools {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 1px 0.5em;
+    display: grid;
+    gap: 0.25em;
   }
   .roadmap {
     display: flex;
-    flex-wrap: wrap;
     gap: 1px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
   .road {
-    padding: 0 0.4em;
+    flex: none;
+    padding: 0 0.5em;
     background: var(--sunk);
-    line-height: 1.5;
+    line-height: 1.75;
+    white-space: nowrap;
+  }
+  .view-ctl {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
   .road.cur {
     background: var(--accent);

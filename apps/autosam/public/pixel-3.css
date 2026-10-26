@@ -99,16 +99,20 @@
   /* The roadmap: one key for each section. The section that plays has its
      LED lit. The chart view is a pair of latching keys. */
   .layout.song .chart-tools {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    justify-content: space-between;
-    gap: 0.5em 1em;
+    display: grid;
+    gap: 0.75em;
   }
+  /* The roadmap is one strip of keys that scrolls sideways. */
   .layout.song .roadmap {
     display: flex;
-    flex-wrap: wrap;
     gap: 0.25em;
+    overflow-x: auto;
+    padding: 1px 1px 0.25em;
+    scrollbar-width: none;
+  }
+  .layout.song .roadmap .road {
+    flex: none;
+    white-space: nowrap;
   }
   .layout.song .chart-tools .road {
     min-height: 2em;
@@ -137,8 +141,10 @@
     font-weight: 700;
   }
   .layout.song .view-ctl {
-    display: grid;
-    gap: 0.35em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
   }
   .layout.song .view-seg {
     min-width: 14em;

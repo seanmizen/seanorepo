@@ -397,12 +397,26 @@
     contain: inline-size;
     background: var(--surface);
   }
-  .roadmap,
-  .view-ctl {
-    display: inline;
+  .chart > .chart-tools {
+    display: grid;
+    gap: 1px;
+  }
+  /* The roadmap is one strip that scrolls sideways. */
+  .roadmap {
+    display: flex;
+    gap: 1px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
   .road {
+    flex: none;
     background: var(--sunk);
+    white-space: nowrap;
+  }
+  .view-ctl {
+    display: flex;
+    align-items: center;
+    gap: 1px;
   }
   .road.cur {
     background: var(--accent);
@@ -510,6 +524,25 @@
     display: none;
   }
 
+  /* A phone: rows of 4 bars, so the chart fits the width. The checkerboard
+     follows the rows of 4. */
+  @media (max-width: 720px) {
+    .sections {
+      grid-template-columns: max-content repeat(4, max-content);
+    }
+    .sections .bar {
+      background: var(--surface);
+    }
+    .sections
+      .bar:is(
+        :nth-child(8n + 2),
+        :nth-child(8n + 4),
+        :nth-child(8n + 5),
+        :nth-child(8n + 7)
+      ) {
+      background: var(--sunk);
+    }
+  }
   /* A finger needs larger targets than a mouse (REQ-PIXEL-004). */
   @media (pointer: coarse) {
     button,
@@ -572,6 +605,7 @@
     contain: none;
   }
   .sections,
+  .layout.song .chart-tools,
   .layout.song .notes {
     flex: 1 1 100%;
   }
@@ -640,6 +674,12 @@
   .bar:nth-child(8n + 1) .bn {
     display: inline;
     color: var(--muted);
+  }
+  @media (max-width: 720px) {
+    .bar:nth-child(4n + 1) .bn {
+      display: inline;
+      color: var(--muted);
+    }
   }
   .bar.cur:nth-child(8n + 1) .bn {
     color: inherit;
