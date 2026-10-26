@@ -144,8 +144,9 @@
   transition-duration: var(--morph);
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
-::view-transition-old(root),
-::view-transition-new(root) {
+/* The page has one view transition, root, so * selects only it. */
+::view-transition-old(*),
+::view-transition-new(*) {
   animation-duration: var(--morph);
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
