@@ -71,10 +71,21 @@ function readStyle(el, cache) {
     }
     const size = Number.parseFloat(cs.fontSize);
     const color = parseColor(cs.color);
-    // Gradient text (the title): color is transparent and the background
-    // shows through the glyphs. Use the first and last gradient colors.
-    let gradient = null;
     const bgClip = cs.backgroundClip || cs.webkitBackgroundClip;
+    // The layer must paint what the page paints, or the page jumps when the
+    // layer goes. A background paints only inside the box of its element, so
+    // text that shows its background (background-clip: text) clips to that
+    // box, as text in an overflow box clips to the overflow box.
+    if (bgClip === 'text') {
+      const r = el.getBoundingClientRect();
+      clip[0] = Math.max(clip[0], r.left);
+      clip[1] = Math.max(clip[1], r.top);
+      clip[2] = Math.min(clip[2], r.right);
+      clip[3] = Math.min(clip[3], r.bottom);
+    }
+    // Gradient text: color is transparent and the background shows through
+    // the glyphs. Use the first and last gradient colors.
+    let gradient = null;
     if (color[3] === 0 && bgClip === 'text') {
       const stops = cs.backgroundImage.match(COLOR_RE);
       if (stops && stops.length > 1) {
