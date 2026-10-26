@@ -2,21 +2,24 @@
  * autosam themes.
  *
  * Where: index.html links this file before its own styles. theme.js sets
- * data-theme on <html> and fills the picker.
- * When: a theme changes when the visitor picks one, or when the system
- * changes between light and dark and the picker is on Auto.
- * Why: a theme is one set of the tokens below. The page uses only the tokens,
- * so a theme can change the look and never touch the layout.
+ * data-theme and data-mode on <html> and fills the pickers.
+ * When: the tokens change when the visitor picks a theme or a mode, when a
+ * URL gives ?theme= or ?mode=, or when the system changes between light and
+ * dark and the mode is Auto.
+ * Why: a theme is one set of the tokens below, in a light and a dark mode.
+ * The page uses only the tokens, so a theme can change the look and never
+ * touch the layout.
  *
- * The morph: this file registers each color token with @property, so the
- * browser can interpolate it. :root transitions the tokens, and every
- * element that reads a token follows. Font tokens are not registered, so they change at
- * once. A token must have a registration and a place in transition-property,
- * or it does not morph.
+ * The morph: this file registers each token that can interpolate with
+ * @property. :root transitions those tokens, and every element that reads a
+ * token follows. Font tokens are not registered, so they change at once. A
+ * token must have a registration and a place in transition-property, or it
+ * does not morph.
  *
- * To add a theme: add one :root[data-theme="<id>"] block, and add <id> to
- * THEMES in theme.js. A block sets only the tokens that it changes. The
- * other tokens keep the baseline light values.
+ * To add a theme: add a :root[data-theme="<id>"] block for light and a
+ * :root[data-theme="<id>"][data-mode="dark"] block for dark. Then add <id> to
+ * THEMES in theme.js. A block sets only the tokens that it changes. The other
+ * tokens keep the defaults in the first :root block (Baseline light).
  */
 
 @property --bg {
@@ -39,6 +42,11 @@
   inherits: true;
   initial-value: #15212a;
 }
+@property --ink-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #15212a;
+}
 @property --muted {
   syntax: "<color>";
   inherits: true;
@@ -50,6 +58,11 @@
   initial-value: #cfd7dc;
 }
 @property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #1f5c84;
+}
+@property --accent-2 {
   syntax: "<color>";
   inherits: true;
   initial-value: #1f5c84;
@@ -94,14 +107,35 @@
   inherits: true;
   initial-value: #b4bfc6;
 }
+@property --shadow {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --radius-card {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 14px;
+}
+@property --radius-control {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 8px;
+}
+@property --display-weight {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 600;
+}
 
 :root {
   /* The length of one morph. Set it higher to watch a theme change slowly. */
   --morph: 700ms;
   transition-property:
-    --bg, --surface, --sunk, --ink, --muted, --line,
-    --accent, --accent-ink, --accent-soft, --bass, --warn, --ok,
-    --key-white, --key-black, --key-edge;
+    --bg, --surface, --sunk, --ink, --ink-2, --muted, --line,
+    --accent, --accent-2, --accent-ink, --accent-soft, --bass, --warn, --ok,
+    --key-white, --key-black, --key-edge, --shadow,
+    --radius-card, --radius-control, --display-weight;
   transition-duration: var(--morph);
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -111,15 +145,17 @@
   }
 }
 
-/* Baseline light. It is the default, and every theme starts from it. */
+/* Baseline light. These are the defaults, and every theme starts from them. */
 :root {
   --bg: #eceff1;
   --surface: #ffffff;
   --sunk: #e1e6e9;
   --ink: #15212a;
+  --ink-2: #15212a;
   --muted: #5a6873;
   --line: #cfd7dc;
   --accent: #1f5c84;
+  --accent-2: #1f5c84;
   --accent-ink: #ffffff;
   --accent-soft: #d6e5ef;
   --bass: #9a6212;
@@ -128,41 +164,30 @@
   --key-white: #fafbfb;
   --key-black: #1a2229;
   --key-edge: #b4bfc6;
+  --shadow: transparent;
+  --radius-card: 14px;
+  --radius-control: 8px;
+  --display-weight: 600;
   --display: "Newsreader", Georgia, "Times New Roman", serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   color-scheme: light;
 }
-
-/* Baseline dark. Auto (no data-theme) uses it when the system is dark. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --bg: #0d1215;
-    --surface: #151c21;
-    --sunk: #222c33;
-    --ink: #e3e9ec;
-    --muted: #8fa0aa;
-    --line: #27333c;
-    --accent: #86bce0;
-    --accent-ink: #0d1215;
-    --accent-soft: #1a3446;
-    --bass: #e2aa55;
-    --warn: #f0907a;
-    --ok: #7cc891;
-    --key-white: #d3dade;
-    --key-black: #06090b;
-    --key-edge: #56636b;
-    color-scheme: dark;
-  }
+:root[data-mode="dark"] {
+  color-scheme: dark;
 }
-:root[data-theme="baseline-dark"] {
+
+/* Baseline dark. */
+:root[data-theme="baseline"][data-mode="dark"] {
   --bg: #0d1215;
   --surface: #151c21;
   --sunk: #222c33;
   --ink: #e3e9ec;
+  --ink-2: #e3e9ec;
   --muted: #8fa0aa;
   --line: #27333c;
   --accent: #86bce0;
+  --accent-2: #86bce0;
   --accent-ink: #0d1215;
   --accent-soft: #1a3446;
   --bass: #e2aa55;
@@ -171,5 +196,56 @@
   --key-white: #d3dade;
   --key-black: #06090b;
   --key-edge: #56636b;
-  color-scheme: dark;
+}
+
+/*
+ * KBBQ: the enemy. Katie Dill's talk shows a Korean barbecue site that looks
+ * like software. This theme copies that look on purpose: the most probable
+ * answer for "a modern web app". Each value is the stock default: Tailwind
+ * slate and indigo, an indigo-to-purple gradient, Inter at 800, rounded-2xl
+ * cards and a soft indigo shadow. See
+ * projects/intentional-design/01-creating-the-enemy.md.
+ */
+:root[data-theme="kbbq"] {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --sunk: #f1f5f9;
+  --ink: #0f172a;
+  --ink-2: #7c3aed;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --accent: #6366f1;
+  --accent-2: #a855f7;
+  --accent-ink: #ffffff;
+  --accent-soft: #eef2ff;
+  --bass: #f59e0b;
+  --warn: #ef4444;
+  --ok: #10b981;
+  --key-white: #ffffff;
+  --key-black: #1e293b;
+  --key-edge: #cbd5e1;
+  --shadow: #6366f12e;
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --display-weight: 800;
+  --display: "Inter", system-ui, sans-serif;
+  --body: "Inter", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+:root[data-theme="kbbq"][data-mode="dark"] {
+  --bg: #020617;
+  --surface: #0f172a;
+  --sunk: #1e293b;
+  --ink: #f1f5f9;
+  --ink-2: #a78bfa;
+  --muted: #94a3b8;
+  --line: #1e293b;
+  --accent-soft: #1e1b4b;
+  --bass: #fbbf24;
+  --warn: #f87171;
+  --ok: #34d399;
+  --key-white: #e2e8f0;
+  --key-black: #020617;
+  --key-edge: #475569;
+  --shadow: #6366f140;
 }
