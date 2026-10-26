@@ -540,6 +540,48 @@
     display: grid;
     gap: 4px;
   }
+  /* The roadmap and the chart view */
+  .chart-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+  }
+  .roadmap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .road {
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .road:hover {
+    border-color: var(--muted);
+  }
+  .road.cur {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .road mark {
+    background: none;
+    color: inherit;
+  }
+  .view-ctl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .view-seg {
+    min-width: 13em;
+  }
   .chart-head h2 {
     font-family: var(--display);
     font-weight: var(--display-weight);

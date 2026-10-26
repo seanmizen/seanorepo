@@ -275,6 +275,8 @@ const prefs = Object.assign(
     click: false,
     loop: false,
     vol: 0.8,
+    // 'full' or 'compact'. Null: the width of the screen picks.
+    view: null,
   },
   local.get('autosam:prefs', {}),
 );
@@ -293,8 +295,8 @@ const clampBpm = (n) =>
   );
 
 function save() {
-  const { style, synth, count, click, loop, vol } = settings;
-  local.set('autosam:prefs', { style, synth, count, click, loop, vol });
+  const { style, synth, count, click, loop, vol, view } = settings;
+  local.set('autosam:prefs', { style, synth, count, click, loop, vol, view });
   if (current)
     local.set(`autosam:song:${current.slug}`, {
       shift: settings.shift,
@@ -863,25 +865,26 @@ function reveal(bar) {
   });
 }
 
-// The bar above or below `bar` on the screen (dir -1 or 1), in any theme:
-// the nearest row of bars that way, and in it the bar nearest in x.
+// The bar above or below `bar` on the screen (dir -1 or 1), in any theme
+// and in either chart: the nearest row of bars that way, and in it the bar
+// nearest in x.
 function barToward(bar, dir) {
   const r0 = barEls[bar].getBoundingClientRect();
   const x0 = r0.left + r0.width / 2;
   let best = null;
-  barEls.forEach((node, i) => {
+  for (const { node, bars } of barNodes) {
     const r = node.getBoundingClientRect();
     const dy = dir < 0 ? r0.top - r.bottom : r.top - r0.bottom;
-    if (dy < -1) return;
+    if (dy < -1) continue;
     const dx = Math.abs(r.left + r.width / 2 - x0);
     if (
       !best ||
       dy < best.dy - 1 ||
       (Math.abs(dy - best.dy) <= 1 && dx < best.dx)
     )
-      best = { i, dy, dx };
-  });
-  return best ? best.i : bar;
+      best = { bars, dy, dx };
+  }
+  return best ? pickBar(best.bars) : bar;
 }
 
 function audition(bar) {
@@ -896,7 +899,61 @@ function audition(bar) {
 
 // ---------- Display ----------
 const els = {};
+// barEls[i] is the node of song bar i. In the compact chart one node shows
+// the same bar of each section that has the same chords, so barNodes lists
+// each node once, with its song bars. secNodes does the same for sections.
 let barEls = [];
+let barNodes = [];
+let secNodes = [];
+
+// The compact chart is the choice on this device, or Compact on a narrow
+// screen.
+const narrow = matchMedia('(max-width: 720px)');
+const viewMode = () => settings.view ?? (narrow.matches ? 'compact' : 'full');
+
+// Sections with the same bars (the same chords at the same places) group
+// together, in the order of their first section.
+function shapesOf(song) {
+  const groups = new Map();
+  song.sections.forEach((sec, i) => {
+    const key = song.bars
+      .slice(sec.start, sec.end + 1)
+      .map(
+        (b) =>
+          b.changes.map((c) => `${c.pos}:${c.chord.sym}`).join(' ') ||
+          `~${b.startChord?.sym}`,
+      )
+      .join('|');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  });
+  return [...groups.values()];
+}
+
+// The names of a group of sections, once each, with a count for a repeat:
+// "Intro · Verse 1 · Verse 2", "Pre-chorus ×3".
+function groupName(secs) {
+  const counts = new Map();
+  for (const i of secs) {
+    const name = song.sections[i].name;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
+    .join(' · ');
+}
+
+// Of the song bars that one node shows, the bar to go to: the one in the
+// section that plays now, or else the next one, or else the first.
+function pickBar(bars) {
+  const here = hereBar();
+  const sec = song.bars[here].sec;
+  return (
+    bars.find((b) => song.bars[b].sec === sec) ??
+    bars.find((b) => b > here) ??
+    bars[0]
+  );
+}
 let keyEls = {};
 let kbdOffset = null;
 const reduceMotion = window.matchMedia(
@@ -1034,32 +1091,63 @@ function markPending(node, on) {
 
 let lastCur = -1;
 function markBars(e) {
-  barEls.forEach((node, i) => {
-    node.classList.toggle('cur', playing && i === shownBar);
-    node.classList.toggle('cursor', !playing && i === cursorBar);
-    markCurrent(node, i === (playing ? shownBar : cursorBar));
-    markPending(node, playing && i === pendingJump);
-  });
+  const now = playing ? shownBar : cursorBar;
+  const inRange = (i) => Boolean(range) && i >= range.start && i <= range.end;
+  for (const { node, bars } of barNodes) {
+    const has = (i) => bars.includes(i);
+    node.classList.toggle('cur', playing && has(shownBar));
+    node.classList.toggle('cursor', !playing && has(cursorBar));
+    markCurrent(node, has(now));
+    markPending(node, playing && pendingJump !== null && has(pendingJump));
+    node.classList.toggle('inrange', bars.some(inRange));
+  }
   if (playing && barEls[shownBar]) {
-    barEls[shownBar].querySelectorAll('.r8 i').forEach((t, i) => {
-      t.classList.toggle('lit', i <= (e || 0));
-    });
+    // Clear the last bar first: in the compact chart it can be the same node.
     if (lastCur !== shownBar && lastCur >= 0 && barEls[lastCur]) {
       for (const t of barEls[lastCur].querySelectorAll('.r8 i'))
         t.classList.remove('lit');
     }
+    barEls[shownBar].querySelectorAll('.r8 i').forEach((t, i) => {
+      t.classList.toggle('lit', i <= (e || 0));
+    });
     lastCur = shownBar;
   }
   const secIdx = song.bars[shownBar].sec;
-  document.querySelectorAll('.sec').forEach((node, i) => {
-    node.classList.toggle('looping', settings.loop && !range && i === secIdx);
-  });
-  barEls.forEach((node, i) => {
+  for (const { node, secs } of secNodes) {
     node.classList.toggle(
-      'inrange',
-      Boolean(range) && i >= range.start && i <= range.end,
+      'looping',
+      settings.loop && !range && secs.includes(secIdx),
     );
+  }
+  markRoad(song.bars[now].sec);
+}
+
+// The roadmap: one key for each section, in the order of the song.
+function renderRoadmap() {
+  const nav = $('roadmap');
+  const keys = song.sections.map((s) => {
+    const key = el('button', 'road', s.name);
+    key.type = 'button';
+    key.addEventListener('click', () => goTo(s.start));
+    return key;
   });
+  nav.replaceChildren(...spaced(keys));
+}
+
+// The key of the section that plays (or has the cursor) holds its name in a
+// <mark>, so the page shows it with no styles (REQ-BARE-001).
+function markRoad(sec) {
+  $('roadmap')
+    .querySelectorAll('.road')
+    .forEach((key, i) => {
+      const on = i === sec;
+      if (key.classList.contains('cur') === on) return;
+      key.classList.toggle('cur', on);
+      if (on) key.setAttribute('aria-current', 'step');
+      else key.removeAttribute('aria-current');
+      const name = song.sections[i].name;
+      key.replaceChildren(on ? el('mark', '', name) : name);
+    });
 }
 
 // ---------- Follow scrolling ----------
@@ -1177,47 +1265,75 @@ function renderChart() {
   quiet(300);
   root.textContent = '';
   barEls = [];
-  for (const s of song.sections) {
+  barNodes = [];
+  secNodes = [];
+  const compact = viewMode() === 'compact';
+  root.classList.toggle('compact', compact);
+  const groups = compact ? shapesOf(song) : song.sections.map((_, i) => [i]);
+  for (const secs of groups) {
+    const first = song.sections[secs[0]];
+    const len = first.end - first.start + 1;
     const sec = el('div', 'sec');
     const head = el('div', 'sec-head');
-    const nameBtn = el('button', 'sec-name', s.name);
+    const nameBtn = el('button', 'sec-name', groupName(secs));
     nameBtn.type = 'button';
-    nameBtn.addEventListener('click', () => goTo(s.start));
+    nameBtn.addEventListener('click', () =>
+      goTo(pickBar(secs.map((i) => song.sections[i].start))),
+    );
     head.append(
-      nameBtn,
-      el('span', 'sec-meta', `bars ${s.start + 1}–${s.end + 1}`),
+      ...spaced([
+        nameBtn,
+        el(
+          'span',
+          'sec-meta',
+          compact ? `${len} bars` : `bars ${first.start + 1}–${first.end + 1}`,
+        ),
+      ]),
     );
     const grid = el('div', 'bars');
-    for (let i = s.start; i <= s.end; i++) {
+    for (let k = 0; k < len; k++) {
+      const i = first.start + k;
+      const bars = secs.map((j) => song.sections[j].start + k);
       const b = song.bars[i];
       const bar = el('button', 'bar');
       bar.type = 'button';
       const names = b.changes.map((c) => chordName(c.chord));
+      const chords = names.join(', ') || `continues ${chordName(b.startChord)}`;
       bar.setAttribute(
         'aria-label',
-        `Bar ${i + 1}: ${names.join(', ') || `continues ${chordName(b.startChord)}`}`,
+        compact
+          ? `Bar ${k + 1} of ${groupName(secs)}: ${chords}`
+          : `Bar ${i + 1}: ${chords}`,
       );
       const cs = el('span', `cs${b.changes.length > 1 ? ' multi' : ''}`);
       if (b.changes.length)
         cs.append(...spaced(names.map((n) => el('span', '', n))));
       else cs.append(el('span', 'tie', chordName(b.startChord)));
       const r8 = el('span', 'r8');
-      for (let k = 0; k < 8; k++)
-        r8.append(el('i', b.changes.some((c) => c.pos === k) ? 'chg' : ''));
-      bar.append(el('span', 'bn', String(i + 1)), ' ', cs, r8);
+      for (let r = 0; r < 8; r++)
+        r8.append(el('i', b.changes.some((c) => c.pos === r) ? 'chg' : ''));
+      // The compact chart numbers the bars of each section from 1.
+      bar.append(
+        el('span', 'bn', String(compact ? k + 1 : i + 1)),
+        ' ',
+        cs,
+        r8,
+      );
       bar.addEventListener('click', (e) => {
-        if (e.shiftKey) extendTo(i);
-        else goTo(i);
+        if (e.shiftKey) extendTo(pickBar(bars));
+        else goTo(pickBar(bars));
       });
       // Shift with a click selects bars, not text.
       bar.addEventListener('mousedown', (e) => {
         if (e.shiftKey) e.preventDefault();
       });
       grid.append(bar);
-      barEls[i] = bar;
+      barNodes.push({ node: bar, bars });
+      for (const j of bars) barEls[j] = bar;
     }
     sec.append(head, grid);
     root.append(sec);
+    secNodes.push({ node: sec, secs });
   }
   lastCur = -1;
 }
@@ -1286,6 +1402,8 @@ function renderSettings() {
     r.checked = r.value === settings.style;
   for (const r of $('synthSeg').querySelectorAll('input'))
     r.checked = r.value === synth().id;
+  for (const r of $('viewSeg').querySelectorAll('input'))
+    r.checked = r.value === viewMode();
   $('octDown').disabled = n - 12 < -LIMITS.maxShift;
   $('octUp').disabled = n + 12 > LIMITS.maxShift;
   $('shiftDown').disabled = n - 1 < -LIMITS.maxShift;
@@ -1355,6 +1473,7 @@ function loadSong(parsed, fresh) {
   renderKeyButtons();
   renderSettings();
   renderChart();
+  renderRoadmap();
   showAt(cursorBar, 0);
 }
 
@@ -1495,6 +1614,25 @@ function wireSongControls() {
       renderSettings();
     });
   }
+  // The chart view. A new chart keeps the place in the song.
+  const redraw = () => {
+    renderChart();
+    markBars(shownE);
+  };
+  for (const r of $('viewSeg').querySelectorAll('input')) {
+    r.addEventListener('change', () => {
+      settings.view = r.value;
+      save();
+      renderSettings();
+      redraw();
+    });
+  }
+  // With no choice saved, the width of the screen picks the view.
+  narrow.addEventListener('change', () => {
+    if (settings.view) return;
+    renderSettings();
+    redraw();
+  });
   renderSynthButtons();
   $('tempo').addEventListener('input', (e) => {
     settings.bpm = clampBpm(e.target.value);
