@@ -283,6 +283,14 @@
   .sec.looping .sec-name::after {
     content: " ⟲";
   }
+  /* The looping section has an outline inside its edge. Its own stacking
+     context draws the outline over its bars, which Pixel-2 positions. */
+  .sec.looping {
+    position: relative;
+    z-index: 1;
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
   /* The range goes under the name, so the name column stays narrow. */
   .sec-meta {
     display: block;
@@ -364,8 +372,7 @@
   }
   .chart-head,
   details.edit,
-  #songKeySlot,
-  #libKeySlot,
+  .key-panel,
   .notes {
     contain: inline-size;
   }
@@ -499,8 +506,7 @@
   .layout.song .side,
   .layout.song .now,
   .layout.song .controls,
-  .layout.song .split,
-  #songKeySlot {
+  .layout.song .split {
     display: contents;
   }
   .layout.song .masthead,

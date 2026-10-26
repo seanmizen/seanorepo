@@ -66,7 +66,7 @@
   .layout.song:not([hidden]) {
     display: grid;
     grid-template-columns: 30em max-content;
-    grid-template-rows: auto repeat(4, auto) 1fr;
+    grid-template-rows: auto repeat(3, auto) 1fr;
     align-items: start;
     gap: 1em 1.5em;
     width: max-content;
@@ -92,7 +92,6 @@
   }
   .layout.song .sections,
   .layout.song details.edit,
-  .layout.song .key-panel,
   .layout.song .notes {
     grid-column: 2;
   }
@@ -180,8 +179,7 @@
   }
 
   /* Keys */
-  .layout.song :is(.side, .key-panel, details.edit)
-    :is(button, .seg label, .chip) {
+  .layout.song :is(.side, details.edit) :is(button, .seg label, .chip) {
     display: inline-grid;
     align-content: center;
     min-height: 2.25em;
@@ -199,14 +197,12 @@
     transition: transform 60ms;
   }
   .layout.song
-    :is(.side, .key-panel, details.edit)
+    :is(.side, details.edit)
     :is(button, .seg label, .chip):hover:not(:disabled) {
     background: var(--surface);
     color: var(--ink);
   }
-  .layout.song
-    :is(.side, .key-panel, details.edit)
-    :is(button, .seg label, .chip):active {
+  .layout.song :is(.side, details.edit) :is(button, .seg label, .chip):active {
     transform: translateY(1px);
     box-shadow: 0 0 0 1px var(--line);
   }
@@ -519,10 +515,6 @@
   }
 
   /* The help and the editor */
-  .layout.song .key-row {
-    gap: 0.25em;
-  }
-  .layout.song .key-row input,
   .layout.song textarea.song-text {
     min-height: 2.25em;
     padding: 0.25em 0.5em;
@@ -530,7 +522,7 @@
     background: var(--bg);
     box-shadow: inset 0 1px 0 var(--line);
   }
-  .layout.song :is(details.edit, .key-panel, .notes) {
+  .layout.song :is(details.edit, .notes) {
     padding: 0.5em 0.75em;
     border-radius: 4px;
   }
@@ -545,7 +537,7 @@
       grid-row: auto;
       position: static;
     }
-    .layout.song :is(.sections, details.edit, .key-panel, .notes) {
+    .layout.song :is(.sections, details.edit, .notes) {
       grid-column: 1;
     }
   }

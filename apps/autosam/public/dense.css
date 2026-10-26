@@ -434,6 +434,12 @@
     content: " ⟲";
     color: var(--accent);
   }
+  /* The looping section has an outline inside its edge, so no neighbour
+     moves. */
+  .sec.looping {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
   .sec-meta {
     padding: 0 0.25em;
     font-family: var(--mono);

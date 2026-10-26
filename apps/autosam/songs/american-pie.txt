@@ -3,7 +3,6 @@ artist: Don McLean
 key: G
 tempo: 138
 suggest: -2, -5
-notes: The long song of the set. It tests the layout of the chart at its limits. The chords follow the common chart. The intro and the last verse are slow and free on the record. The number of bars in each line is an estimate.
 
 [Intro]
 G D/F# | Em Am | C Em | D
