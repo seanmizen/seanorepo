@@ -726,10 +726,6 @@
   .bar.preview {
     background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   }
-  /* A bar in the custom loop range: an accent line along its foot. */
-  .bar.inrange {
-    box-shadow: inset 0 -3px 0 var(--accent);
-  }
   .bar.cur .r8 i.lit {
     background: var(--accent);
   }

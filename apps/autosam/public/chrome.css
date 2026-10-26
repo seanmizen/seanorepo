@@ -17,6 +17,31 @@
   background: Canvas;
 }
 
+/* On a wide screen the roadmap and the chart switch are hidden in every
+   theme, also where a theme gives them a display. The id outranks the
+   class rules of the themes. */
+#chartTools[hidden] {
+  display: none;
+}
+
+/* The outline of the loop range (app.js drawRange): an <svg> over the
+   chart, in the accent color. */
+#sections {
+  position: relative;
+}
+svg.range {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: square;
+}
+
 /* Glyph morph (morph.js). The WebGL layer draws the text, so the real text hides. Inputs and generated content keep their text. Gradient text loses its background too. */
 .morph-layer {
   position: fixed;

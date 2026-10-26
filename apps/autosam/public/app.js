@@ -834,6 +834,7 @@ function extendTo(bar, from = pick ? pick.from : hereBar()) {
     showAt(cursorBar, 0);
   }
   showRange();
+  drawRange();
   reveal(bar);
 }
 
@@ -871,10 +872,93 @@ function showPreview() {
   }
 }
 
+// The loop range has one outline around all of its bars, across rows and
+// sections. It is measured from the layout, so it fits each theme and both
+// views. An <svg> over the chart draws it.
+function drawRange() {
+  const root = $('sections');
+  let svg = root.querySelector('svg.range');
+  const nodes = range
+    ? barNodes.filter(({ bars }) =>
+        bars.some((i) => i >= range.start && i <= range.end),
+      )
+    : [];
+  if (!nodes.length) {
+    svg?.remove();
+    return;
+  }
+  const PAD = 3; // px outside the bars
+  const GAP = 14; // px: rows nearer than this touch
+  const base = root.getBoundingClientRect();
+  const boxes = nodes
+    .map(({ node }) => {
+      const r = node.getBoundingClientRect();
+      return {
+        l: r.left - base.left - PAD,
+        r: r.right - base.left + PAD,
+        t: r.top - base.top - PAD,
+        b: r.bottom - base.top + PAD,
+      };
+    })
+    .sort((a, b) => a.t - b.t || a.l - b.l);
+  // Runs: the boxes that touch in one row.
+  const runs = [];
+  for (const x of boxes) {
+    const last = runs.at(-1);
+    if (last && Math.abs(x.t - last.t) < 2 && x.l - last.r <= GAP)
+      last.r = Math.max(last.r, x.r);
+    else runs.push({ ...x, top: x.t, bottom: x.b, above: [], below: [] });
+  }
+  // Two runs in rows next to each other share the line between them.
+  for (const a of runs) {
+    for (const b of runs) {
+      const dy = a.t - b.b;
+      if (dy < -2 * PAD || dy > GAP || a.r <= b.l || a.l >= b.r) continue;
+      const mid = (a.t + b.b) / 2;
+      a.top = mid;
+      b.bottom = mid;
+      a.above.push(b);
+      b.below.push(a);
+    }
+  }
+  // An edge of a run, less the parts that a neighbour shares.
+  const minus = (l, r, others) => {
+    let parts = [[l, r]];
+    for (const o of others) {
+      parts = parts.flatMap(([x, y]) =>
+        [
+          [x, Math.min(y, o.l)],
+          [Math.max(x, o.r), y],
+        ].filter(([p, q]) => q - p > 0.5),
+      );
+    }
+    return parts;
+  };
+  let d = '';
+  for (const run of runs) {
+    for (const [x, y] of minus(run.l, run.r, run.above))
+      d += `M${x} ${run.top}H${y}`;
+    for (const [x, y] of minus(run.l, run.r, run.below))
+      d += `M${x} ${run.bottom}H${y}`;
+    d += `M${run.l} ${run.top}V${run.bottom}M${run.r} ${run.top}V${run.bottom}`;
+  }
+  if (!svg) {
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('range');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+    root.append(svg);
+  }
+  svg.setAttribute('width', String(root.scrollWidth));
+  svg.setAttribute('height', String(root.scrollHeight));
+  svg.firstChild.setAttribute('d', d);
+}
+
 function clearRange() {
   range = null;
   pick = null;
   showRange();
+  drawRange();
   if (song) {
     markBars(shownE);
     updateNext(shownBar, shownE);
@@ -939,10 +1023,10 @@ let barEls = [];
 let barNodes = [];
 let secNodes = [];
 
-// The compact chart is the choice on this device, or Compact on a narrow
-// screen.
+// A narrow screen has the roadmap and the Full / Compact switch, and starts
+// on Compact. A wide screen always has the full chart and no switch.
 const narrow = matchMedia('(max-width: 720px)');
-const viewMode = () => settings.view ?? (narrow.matches ? 'compact' : 'full');
+const viewMode = () => (narrow.matches ? (settings.view ?? 'compact') : 'full');
 
 // Sections with the same bars (the same chords at the same places) group
 // together, in the order of their first section.
@@ -1125,14 +1209,12 @@ function markPending(node, on) {
 let lastCur = -1;
 function markBars(e) {
   const now = playing ? shownBar : cursorBar;
-  const inRange = (i) => Boolean(range) && i >= range.start && i <= range.end;
   for (const { node, bars } of barNodes) {
     const has = (i) => bars.includes(i);
     node.classList.toggle('cur', playing && has(shownBar));
     node.classList.toggle('cursor', !playing && has(cursorBar));
     markCurrent(node, has(now));
     markPending(node, playing && pendingJump !== null && has(pendingJump));
-    node.classList.toggle('inrange', bars.some(inRange));
   }
   if (playing && barEls[shownBar]) {
     // Clear the last bar first: in the compact chart it can be the same node.
@@ -1302,6 +1384,7 @@ function renderChart() {
   secNodes = [];
   const compact = viewMode() === 'compact';
   root.classList.toggle('compact', compact);
+  $('chartTools').hidden = !narrow.matches;
   const groups = compact ? shapesOf(song) : song.sections.map((_, i) => [i]);
   for (const secs of groups) {
     const first = song.sections[secs[0]];
@@ -1687,6 +1770,7 @@ function wireSongControls() {
   const redraw = () => {
     renderChart();
     markBars(shownE);
+    drawRange();
   };
   for (const r of $('viewSeg').querySelectorAll('input')) {
     r.addEventListener('change', () => {
@@ -1696,11 +1780,18 @@ function wireSongControls() {
       redraw();
     });
   }
-  // With no choice saved, the width of the screen picks the view.
+  // The width of the screen picks the view and the switch.
   narrow.addEventListener('change', () => {
-    if (settings.view) return;
     renderSettings();
     redraw();
+  });
+  // The outline of the loop range follows the layout: a resize, a new
+  // theme, a new text size.
+  const redrawRange = () => requestAnimationFrame(drawRange);
+  new ResizeObserver(redrawRange).observe($('sections'));
+  new MutationObserver(redrawRange).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-mode', 'style'],
   });
   renderSynthButtons();
   $('tempo').addEventListener('input', (e) => {
