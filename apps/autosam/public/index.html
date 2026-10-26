@@ -254,6 +254,13 @@ html.morphing body * { -webkit-text-fill-color: transparent; }
 html.morphing input, html.morphing textarea, html.morphing ::marker, html.morphing ::before, html.morphing ::after { -webkit-text-fill-color: currentcolor; }
 html.morphing .gradient-text { background: none; }
 html.morph-measure { transition: none; }
+/* The morph debug panel (?debug=morph). The morph leaves it alone. */
+.morph-debug { position: fixed; top: 12px; right: 12px; z-index: 2147483647; width: 300px; padding: 10px 12px; display: grid; gap: 4px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-control); box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); font: 12px/1.3 var(--mono); }
+.morph-debug label { display: grid; grid-template-columns: 96px 1fr 56px; gap: 6px; align-items: center; }
+.morph-debug output { text-align: right; font-variant-numeric: tabular-nums; }
+.morph-debug pre { margin: 4px 0; white-space: pre-wrap; color: var(--muted); font: inherit; }
+.morph-debug div { display: flex; gap: 6px; }
+html.morphing [data-morph-skip] * { -webkit-text-fill-color: currentcolor; }
 
 @media (max-width: 520px) {
   .kbd .w span { display: none; }

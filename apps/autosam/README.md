@@ -75,9 +75,12 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   character on a WebGL layer, and changes each glyph from its old font,
   place, size and color to the new ones. Each glyph is a signed distance
   field (SDF): an image where each pixel holds its distance to the glyph
-  edge. A blend of two fields gives a shape between the two glyphs. A little
-  blur halfway smooths the creases of the blend, and only where the two
-  glyphs differ. Boxes morph too: each box with text in it moves from its
+  edge. A blend of two fields moves no ink, so the ink moves first. The ink
+  box of the old glyph moves and scales onto the new one. Then a flow field
+  for each glyph pair moves the old shape along the edge normals toward the
+  new shape (demons registration). At each time the two shapes almost
+  agree, and the blend keeps their ink. Glyphs under 18 px get no flow.
+  Boxes morph too: each box with text in it moves from its
   old size to its new size. One clock moves the glyphs, the boxes and the
   tokens.
 - The first and last frames match the page pixel for pixel. morph.js draws
@@ -86,8 +89,9 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   smoothing of the page. The baseline comes from layout. Only content that the page
   paints morphs: the text of a closed accordion stays hidden.
 
-The morph assumes a static page. A scroll or a resize ends it. To watch it
-slowly, set `--morph` higher in DevTools. With reduced motion, or with no
+The morph assumes a static page. A scroll or a resize ends it. Add
+`?debug=morph` to the URL for a panel that sets the flow, holds the morph
+at a time, replays it, and copies the settings as JSON. With reduced motion, or with no
 WebGL2, everything changes at once.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
