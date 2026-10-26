@@ -17,6 +17,11 @@
   background: Canvas;
 }
 
+/* theme.js hides the picker of a part of a theme in the other themes. */
+.theme-pane .picker[hidden] {
+  display: none;
+}
+
 /* app.js shows a view after it reads the song. Until then the pane is
    the only content. It stays hidden, so the browser keeps the last page on
    screen and does not paint a page with no view. */

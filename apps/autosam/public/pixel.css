@@ -23,7 +23,7 @@
     :root:is(
         [data-theme="pixel-1"],
         [data-theme="pixel-2"],
-        [data-theme^="pixel-3"]
+        [data-theme="pixel-3"]
       )
   ) {
   & {
@@ -570,7 +570,7 @@
  *   row shows its number, so the bar range does not show.
  * - The chart has no gaps, and the beat strip lies inside its bar.
  */
-:where(:root:is([data-theme="pixel-2"], [data-theme^="pixel-3"])) {
+:where(:root:is([data-theme="pixel-2"], [data-theme="pixel-3"])) {
   body {
     font-stretch: 75%;
     line-height: 1;

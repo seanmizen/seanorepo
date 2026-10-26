@@ -1,10 +1,9 @@
 /*
- * autosam themes Pixel-3a, Pixel-3b and Pixel-3c: Pixel-3 with the display
- * as the screen of an instrument.
+ * autosam Pixel-3 screens: the display as the screen of an instrument.
  *
  * Where: index.html links this file after pixel-3.css.
  * When: always loaded. Each rule sits inside a :where() that matches only
- * these themes. pixel-3.css gives them the rules of Pixel-3 first.
+ * Pixel-3 with a screen other than "plain" (data-screen, set by theme.js).
  * Why: the song moves fast. When a value moves on the screen, the eye must
  * find it again. Here each value has a fixed place, as on a VFD or an LCD:
  * - The display is a window of glass on the faceplate. The beats and the
@@ -18,18 +17,18 @@
  * app.js writes each changing value as a row of parts (setParts), so each
  * part can have its own place.
  *
- * The three themes differ only in the glass:
- * - Pixel-3a: a vacuum fluorescent display (VFD), cyan with a glow.
- * - Pixel-3b: a reflective LCD, dark segments on grey-green. In dark mode
- *   it has a green backlight.
- * - Pixel-3c: an amber dot matrix, in the font Doto.
+ * The three screens differ only in the glass:
+ * - vfd: a vacuum fluorescent display, cyan with a glow.
+ * - lcd: a reflective LCD, dark segments on grey-green. In dark mode it has
+ *   a green backlight. This is the default.
+ * - dots: an amber dot matrix, in the font Doto.
  */
 
 :where(
-    :root:is(
-        [data-theme="pixel-3a"],
-        [data-theme="pixel-3b"],
-        [data-theme="pixel-3c"]
+    :root[data-theme="pixel-3"]:is(
+        [data-screen="vfd"],
+        [data-screen="lcd"],
+        [data-screen="dots"]
       )
   ) {
   /* The faceplate: dark grey, as the display of Pixel-3. The glass is a
@@ -269,8 +268,8 @@
   }
 }
 
-/* Pixel-3a: a VFD. Cyan phosphor behind a fine mesh, with a glow. */
-:where(:root[data-theme="pixel-3a"]) .layout.song .now {
+/* VFD: Cyan phosphor behind a fine mesh, with a glow. */
+:where(:root[data-theme="pixel-3"][data-screen="vfd"]) .layout.song .now {
   --glass: #06110f;
   --glass-texture:
     repeating-linear-gradient(
@@ -289,9 +288,9 @@
   --glow: 0 0 3px rgb(102 244 218 / 0.6), 0 0 10px rgb(102 244 218 / 0.25);
 }
 
-/* Pixel-3b: a reflective LCD. Dark segments throw a small shadow on the
+/* LCD: reflective. Dark segments throw a small shadow on the
    reflector behind them. */
-:where(:root[data-theme="pixel-3b"]) .layout.song .now {
+:where(:root[data-theme="pixel-3"][data-screen="lcd"]) .layout.song .now {
   --glass: #a9b39c;
   --glass-texture: linear-gradient(
     170deg,
@@ -304,7 +303,9 @@
   --glow: 1px 1px 0 rgb(0 0 0 / 0.13);
 }
 /* In dark mode the LCD has its backlight on: brighter in the middle. */
-:where(:root[data-theme="pixel-3b"][data-mode="dark"]) .layout.song .now {
+:where(:root[data-theme="pixel-3"][data-screen="lcd"][data-mode="dark"])
+  .layout.song
+  .now {
   --glass: #7c9e36;
   --glass-texture: radial-gradient(
     ellipse at 50% 40%,
@@ -316,9 +317,9 @@
   --ghost: rgb(16 24 7 / 0.09);
 }
 
-/* Pixel-3c: an amber dot matrix. Each glyph is a grid of dots, and the
+/* Dot matrix: amber. Each glyph is a grid of dots, and the
    unlit dots of the screen show faintly. */
-:where(:root[data-theme="pixel-3c"]) .layout.song .now {
+:where(:root[data-theme="pixel-3"][data-screen="dots"]) .layout.song .now {
   --glass: #150c02;
   --glass-texture: radial-gradient(
     circle,
@@ -332,7 +333,9 @@
   --glass-font: "Doto", var(--mono);
   --glass-weight: 800;
 }
-:where(:root[data-theme="pixel-3c"]) .layout.song .now::before {
+:where(:root[data-theme="pixel-3"][data-screen="dots"])
+  .layout.song
+  .now::before {
   background-size:
     3px 3px,
     auto;

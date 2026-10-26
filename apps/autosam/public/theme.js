@@ -27,11 +27,6 @@
     { id: 'pixel-2', label: 'Pixel-2' },
     // Pixel-2 with a designed control panel.
     { id: 'pixel-3', label: 'Pixel-3' },
-    // Pixel-3 with the display as an instrument screen, each value at a
-    // fixed place: a VFD, an LCD and an amber dot matrix.
-    { id: 'pixel-3a', label: 'Pixel-3a' },
-    { id: 'pixel-3b', label: 'Pixel-3b' },
-    { id: 'pixel-3c', label: 'Pixel-3c' },
   ];
   // "auto" follows the system light or dark setting.
   const MODES = [
@@ -39,10 +34,28 @@
     { id: 'light', label: 'Light' },
     { id: 'dark', label: 'Dark' },
   ];
+  // The screen of the Pixel-3 display. "plain" is the display of Pixel-3.
+  // The others are instrument screens with each value at a fixed place
+  // (pixel-3-display.css).
+  const SCREENS = [
+    { id: 'plain', label: 'Plain' },
+    { id: 'vfd', label: 'VFD' },
+    { id: 'lcd', label: 'LCD' },
+    { id: 'dots', label: 'Dot matrix' },
+  ];
+  // A setting with "of" is a part of that theme. Its picker shows only in
+  // that theme, and the URL names it only in that theme.
   const SETTINGS = {
     theme: { list: THEMES, key: 'autosam:theme', fallback: 'pixel-3' },
     mode: { list: MODES, key: 'autosam:mode', fallback: 'auto' },
+    screen: {
+      list: SCREENS,
+      key: 'autosam:screen',
+      fallback: 'lcd',
+      of: 'pixel-3',
+    },
   };
+  const active = (s) => !s.of || current.theme === s.of;
   const root = document.documentElement;
   const systemDark = matchMedia('(prefers-color-scheme: dark)');
 
@@ -128,13 +141,15 @@
     const auto = systemDark.matches ? 'dark' : 'light';
     root.dataset.theme = current.theme;
     root.dataset.mode = current.mode === 'auto' ? auto : current.mode;
+    root.dataset.screen = current.screen;
     if (document.body) fit();
   };
 
   const writeUrl = () => {
     const url = new URL(location.href);
     for (const [name, s] of Object.entries(SETTINGS)) {
-      if (current[name] === s.fallback) url.searchParams.delete(name);
+      if (current[name] === s.fallback || !active(s))
+        url.searchParams.delete(name);
       else url.searchParams.set(name, current[name]);
     }
     history.replaceState(history.state, '', url);
@@ -175,6 +190,13 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => {
+    // The picker of a part of a theme shows only in that theme.
+    const pickers = () => {
+      for (const [name, s] of Object.entries(SETTINGS)) {
+        const picker = document.getElementById(`${name}Btn`).closest('.picker');
+        picker.hidden = !active(s);
+      }
+    };
     for (const [name, s] of Object.entries(SETTINGS)) {
       const button = document.getElementById(`${name}Btn`);
       const prev = document.getElementById(`${name}Prev`);
@@ -196,6 +218,7 @@
         save(s.key, current[name]);
         writeUrl();
         show();
+        pickers();
         // morph.js is a module, so it can load after a fast first press. A
         // morph ends with no transitionend, so sync the bar when it ends.
         Promise.resolve(
@@ -216,6 +239,7 @@
         step(e.key === 'ArrowLeft' ? -1 : 1);
       });
     }
+    pickers();
     fit();
     syncBar();
   });

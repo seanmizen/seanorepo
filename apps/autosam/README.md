@@ -78,11 +78,10 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`, `Pixel-3`, `Pixel-3a`,
-`Pixel-3b`, `Pixel-3c`) and mode (`Auto`, `Light`, `Dark`). Pixel-3a, 3b and
-3c are prototypes of the Pixel-3 display as an instrument screen: a VFD, an
-LCD and an amber dot matrix. Each value has a fixed place
-(`public/pixel-3-display.css`). Tone puts the pane at the top right. The Pixel themes put
+`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`, `Pixel-3`) and mode (`Auto`,
+`Light`, `Dark`). In Pixel-3 a third picker sets the screen of the display:
+`Plain`, `VFD`, `LCD` or `Dot matrix`. Each screen except `Plain` gives each
+value a fixed place (`public/pixel-3-display.css`). Tone puts the pane at the top right. The Pixel themes put
 it at the end of the page. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow
@@ -91,7 +90,8 @@ choice stays on the device.
 
 A URL can give both: `/?theme=kbbq&mode=dark` opens the page in KBBQ dark,
 and the device keeps that choice. A press writes the choice back to the URL.
-The defaults (`pixel-3`, `auto`) stay out of the URL.
+The defaults (`pixel-3`, `auto`, `lcd`) stay out of the URL. The URL names
+the screen only in Pixel-3: `/?screen=vfd`.
 
 - `public/themes.css` holds the tokens of each theme, in a light and a dark
   block. The page uses only these tokens: colors, `--shadow`, the radii
