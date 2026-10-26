@@ -13,12 +13,13 @@
  * The morph: this file registers each token that can interpolate with
  * @property. :root transitions those tokens, and every element that reads a
  * token follows. During a theme change, morph.js reads transition-property
- * and moves the same tokens on its own clock. A token must have a registration and a place in
- * transition-property, or it does not morph.
+ * and moves the same tokens on its own clock. A token must have a
+ * registration and a place in transition-property, or it does not morph.
  *
- * Fonts: one font family cannot interpolate into another in CSS. So morph.js
- * draws the text on a WebGL layer during a change, and morphs each glyph
- * from the old font to the new one while the tokens morph under it. The
+ * Fonts: one font family cannot interpolate into another in CSS. So the
+ * glyph methods of morph.js draw the text on a WebGL layer during a change,
+ * and morph each glyph from the old font to the new one while the tokens
+ * morph under it. The crossfade method cross-fades the fonts. The
  * fonts load as variable fonts, so --display-weight moves smoothly too.
  *
  * To add a theme: add a :root[data-theme="<id>"] block for light and a
@@ -143,6 +144,13 @@
     --radius-card, --radius-control, --display-weight;
   transition-duration: var(--morph);
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* The crossfade method of morph.js is a view transition. The page has one
+   view transition, root, so * selects only it. */
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: var(--morph);
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
