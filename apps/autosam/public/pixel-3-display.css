@@ -32,13 +32,13 @@
         [data-theme="pixel-3c"]
       )
   ) {
-  /* The faceplate: a module like the others. The glass is a grid item
-     behind the top two rows. */
+  /* The faceplate: dark grey, as the display of Pixel-3. The glass is a
+     grid item behind the top two rows. */
   .layout.song .now {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     gap: 1em;
     padding: 1.25em 1em 0.75em;
-    background: var(--surface);
+    background: var(--key-black);
     color: var(--ink);
   }
   .layout.song .now::before {
