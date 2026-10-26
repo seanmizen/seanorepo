@@ -78,9 +78,9 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`, `Tone`, `Pixel-1`) and mode (`Auto`, `Light`, `Dark`).
-Tone puts the pane at the top right. Pixel-1 puts it at the end of the
-page. A press on the main
+`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`) and mode (`Auto`, `Light`,
+`Dark`). Tone puts the pane at the top right. Pixel-1 and Pixel-2 put it at
+the end of the page. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow
 keys do the same. `Auto` follows the system light or dark setting. The
@@ -100,8 +100,8 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   so the other themes never see them. `:where()` adds no specificity.
 - `public/dense.css` holds Tone, the dense theme. See
   [REQ-DENSE](requirements/dense.md).
-- `public/pixel.css` holds Pixel-1, the theme of the fewest pixels. See
-  [REQ-PIXEL](requirements/pixel.md).
+- `public/pixel.css` holds Pixel-1 and Pixel-2, the themes of the fewest
+  pixels. See [REQ-PIXEL](requirements/pixel.md).
 - `public/chrome.css` holds the few styles that every theme needs, bare too:
   the morph layer, the fixed theme pane and the debug panel.
 - `public/modern-normalize.css` (MIT, v3.0.1) gives every browser the same
@@ -169,6 +169,14 @@ at that width. The words keep the spaces of the HTML, so most of the page
 is lines of text, as in Bare. It uses the colors of Tone. The bar numbers
 do not show: the section names give the first and the last bar, and each
 row holds 8.
+
+Pixel-2 is Pixel-1, smaller. Condensed type, a line height of 1, and no
+gaps in the chart: the checkerboard separates the bars. The title and the
+controls are blocks that wrap in rows as wide as the chart and grow to fill
+them. Text that repeats another element does not show, and nor does the
+help prose (REQ-PIXEL-005). The shortcuts and the song notes stay. Play is
+its icon, and Bar 1 is `|◀`. On American Pie, Pixel-2 covers about 290 ×
+470 px, where Pixel-1 covers 322 × 751 px.
 
 `songs/american-pie.txt` has 249 bars. Use it to test Tone and Pixel-1 at
 their limits.

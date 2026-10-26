@@ -271,7 +271,7 @@
  * felt strip under the keys of a piano. It uses the system font, which each
  * screen draws well at small sizes. No radius, no shadow.
  */
-:root:is([data-theme="tone"], [data-theme="pixel-1"]) {
+:root:is([data-theme="tone"], [data-theme="pixel-1"], [data-theme="pixel-2"]) {
   --shadow: transparent;
   --radius-card: 0px;
   --radius-control: 0px;
@@ -295,7 +295,11 @@
   --key-black: #2b2a27;
   --key-edge: #9c9890;
 }
-:root:is([data-theme="tone"], [data-theme="pixel-1"])[data-mode="dark"] {
+:root:is(
+    [data-theme="tone"],
+    [data-theme="pixel-1"],
+    [data-theme="pixel-2"]
+  )[data-mode="dark"] {
   --bg: #1d1c1a;
   --surface: #2b2926;
   --sunk: #353330;

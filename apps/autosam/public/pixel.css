@@ -1,9 +1,10 @@
 /*
- * autosam theme Pixel-1: the fewest pixels.
+ * autosam themes Pixel-1 and Pixel-2: the fewest pixels.
  *
  * Where: index.html links this file after dense.css.
  * When: always loaded. Each rule sits inside a :where() that matches only
- * Pixel-1, so the other themes never see it.
+ * Pixel-1 or Pixel-2, so the other themes never see it. The first block is
+ * Pixel-1. Pixel-2 is Pixel-1 with the changes of the last block.
  * Why: the page covers the smallest area that still shows everything
  * (REQ-PIXEL). One text size, 9 px. Each box is as wide as its content. No
  * space between two boxes is more than 1 px. The words keep the spaces of
@@ -17,7 +18,7 @@
  * never make the page wider.
  */
 
-:where(:root[data-theme="pixel-1"]) {
+:where(:root:is([data-theme="pixel-1"], [data-theme="pixel-2"])) {
   & {
     font-size: 9px;
   }
@@ -458,5 +459,130 @@
       display: inline-block;
       min-height: 24px;
     }
+  }
+}
+
+/*
+ * Pixel-2: Pixel-1, smaller (REQ-PIXEL-005, REQ-PIXEL-006).
+ * - Condensed type (font-stretch) and a line height of 1.
+ * - The title and the controls are one set of blocks that wrap in rows as
+ *   wide as the chart. Each block grows to fill its row, so the blocks tile
+ *   a rectangle with no holes.
+ * - Text that repeats what the page shows elsewhere does not show: the slug
+ *   (the title), the key sentence (the key value), the hand names (the
+ *   swatches), "Tempo" (BPM), the glosses on the keys, and the help prose.
+ *   The shortcuts and the song notes stay.
+ * - Play is its icon, which changes with the state. Bar 1 is |◀.
+ * - The section name column is at most 5.5em wide. The first bar of each
+ *   row shows its number, so the bar range does not show.
+ * - The chart has no gaps, and the beat strip lies inside its bar.
+ */
+:where(:root[data-theme="pixel-2"]) {
+  body {
+    font-stretch: 75%;
+    line-height: 1;
+  }
+  .layout.song:not([hidden]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: start;
+    gap: 1px;
+    width: min-content;
+  }
+  .layout.song .side,
+  .layout.song .now,
+  .layout.song .controls,
+  .layout.song .split,
+  #songKeySlot {
+    display: contents;
+  }
+  .layout.song .masthead,
+  .now-top,
+  .now-main,
+  .now-bottom,
+  .controls .ctl,
+  .controls .toggles,
+  .kbd-panel,
+  details.edit,
+  .key-panel,
+  .notes {
+    flex: 1 1 auto;
+    background: var(--surface);
+  }
+  .layout.song .masthead {
+    contain: none;
+  }
+  .sections,
+  .layout.song .notes {
+    flex: 1 1 100%;
+  }
+  .crumb-page,
+  .keyline,
+  .hint,
+  .seg small,
+  label.ctl-label[for="tempo"],
+  #playLabel,
+  .chart-head,
+  .key-panel > h2,
+  .key-panel > p,
+  .notes > p:not(:first-child, #songNotes),
+  .sec-meta {
+    display: none;
+  }
+  #startBtn {
+    font-size: 0;
+  }
+  #startBtn::before {
+    content: "|◀";
+    font-size: 1rem;
+  }
+  /* The swatch names the hand. */
+  .kbd-panel .hands > span {
+    font-size: 0;
+  }
+  .hands b,
+  .hands .sw {
+    font-size: 1rem;
+  }
+  .kbd-panel {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+  }
+  .kbd {
+    flex: 1 1 6em;
+    height: 1em;
+  }
+  /* The name column grows to 5.5em before a name wraps. The page sizes the
+     chart to its min-content width, so the name sets its own width. */
+  .sec-head {
+    width: max-content;
+    max-width: 5.5em;
+  }
+  .sec-name {
+    text-align: left;
+  }
+  /* The checkerboard separates the bars and the rows, so the chart needs no
+     gap. The beat strip lies on the bottom pixel of its bar. */
+  .sections,
+  .sec,
+  .bars {
+    gap: 0;
+  }
+  .bar {
+    position: relative;
+  }
+  .bar .r8 {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+  }
+  .bar:nth-child(8n + 1) .bn {
+    display: inline;
+    color: var(--muted);
+  }
+  .bar.cur:nth-child(8n + 1) .bn {
+    color: inherit;
   }
 }

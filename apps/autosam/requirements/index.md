@@ -16,6 +16,8 @@
 | [`REQ-PIXEL-002`](pixel.md#req-pixel-002--one-text-size) | One text size | active | constraint | P2 | sean |
 | [`REQ-PIXEL-003`](pixel.md#req-pixel-003--no-decoration) | No decoration | active | constraint | P2 | sean |
 | [`REQ-PIXEL-004`](pixel.md#req-pixel-004--touch-targets-stay-large-enough) | Touch targets stay large enough | active | constraint | P2 | sean |
+| [`REQ-PIXEL-005`](pixel.md#req-pixel-005--pixel-2-shows-no-text-twice) | Pixel-2 shows no text twice | active | constraint | P2 | sean |
+| [`REQ-PIXEL-006`](pixel.md#req-pixel-006--pixel-2-tiles-its-controls) | Pixel-2 tiles its controls | active | constraint | P2 | sean |
 
 ## Dependency graph
 

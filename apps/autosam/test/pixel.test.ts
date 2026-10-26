@@ -39,11 +39,15 @@ test('pixel.css centres nothing and stretches nothing (REQ-PIXEL-001)', () => {
 });
 
 test('pixel.css sets all text at one size (REQ-PIXEL-002)', () => {
-  const sizes = decls.filter((d) => d.prop === 'font-size');
-  expect(sizes.map(show)).toEqual([
-    '& { font-size: 9px }',
-    'body { font-size: 1rem }',
-  ]);
+  // 9px on the root. 1rem brings text back to it. 0 hides a text node that
+  // CSS cannot select, beside an element that shows.
+  const bad = decls.filter(
+    (d) =>
+      d.prop === 'font-size' &&
+      !(d.selector === '&' && d.value === '9px') &&
+      !['1rem', '0'].includes(d.value),
+  );
+  expect(bad.map(show)).toEqual([]);
 });
 
 test('pixel.css draws no border, shadow, radius or gradient (REQ-PIXEL-003)', () => {
