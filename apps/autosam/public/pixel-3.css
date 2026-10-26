@@ -66,7 +66,7 @@
   .layout.song:not([hidden]) {
     display: grid;
     grid-template-columns: 30em max-content;
-    grid-template-rows: auto repeat(3, auto) 1fr;
+    grid-template-rows: auto repeat(4, auto) 1fr;
     align-items: start;
     gap: 1em 1.5em;
     width: max-content;
@@ -90,10 +90,61 @@
     font-family: var(--mono);
     font-size: 0.85em;
   }
+  .layout.song .chart-tools,
   .layout.song .sections,
   .layout.song details.edit,
   .layout.song .notes {
     grid-column: 2;
+  }
+  /* The roadmap: one key for each section. The section that plays has its
+     LED lit. The chart view is a pair of latching keys. */
+  .layout.song .chart-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 0.5em 1em;
+  }
+  .layout.song .roadmap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25em;
+  }
+  .layout.song .chart-tools .road {
+    min-height: 2em;
+    padding: 0.2em 0.6em;
+    font-family: var(--mono);
+    font-size: 0.8em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .layout.song .road::before {
+    content: "";
+    justify-self: center;
+    width: 1.2em;
+    height: 3px;
+    margin-bottom: 0.25em;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .layout.song .road.cur::before {
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent);
+  }
+  .layout.song .road mark {
+    background: none;
+    color: inherit;
+    font-weight: 700;
+  }
+  .layout.song .view-ctl {
+    display: grid;
+    gap: 0.35em;
+  }
+  .layout.song .view-seg {
+    min-width: 14em;
+  }
+  .layout.song .sections .bar.preview {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
   }
 
   /* The panel: modules on a grid of 6 columns. The 2px seams show the
@@ -179,7 +230,8 @@
   }
 
   /* Keys */
-  .layout.song :is(.side, details.edit) :is(button, .seg label, .chip) {
+  .layout.song :is(.side, .chart-tools, details.edit)
+    :is(button, .seg label, .chip) {
     display: inline-grid;
     align-content: center;
     min-height: 2.25em;
@@ -197,17 +249,19 @@
     transition: transform 60ms;
   }
   .layout.song
-    :is(.side, details.edit)
+    :is(.side, .chart-tools, details.edit)
     :is(button, .seg label, .chip):hover:not(:disabled) {
     background: var(--surface);
     color: var(--ink);
   }
-  .layout.song :is(.side, details.edit) :is(button, .seg label, .chip):active {
+  .layout.song
+    :is(.side, .chart-tools, details.edit)
+    :is(button, .seg label, .chip):active {
     transform: translateY(1px);
     box-shadow: 0 0 0 1px var(--line);
   }
   /* A key that latches: an LED on top, lit red when on. */
-  .layout.song .side :is(.seg label, .chip)::before {
+  .layout.song :is(.side, .chart-tools) :is(.seg label, .chip)::before {
     content: "";
     justify-self: center;
     width: 1.5em;
@@ -216,7 +270,7 @@
     border-radius: 2px;
     background: var(--line);
   }
-  .layout.song .side :is(.seg label, .chip):has(:checked) {
+  .layout.song :is(.side, .chart-tools) :is(.seg label, .chip):has(:checked) {
     background: var(--surface);
     color: var(--ink);
     box-shadow:
@@ -224,11 +278,15 @@
       0 0 0 1px var(--line);
     font-weight: 700;
   }
-  .layout.song .side :is(.seg label, .chip):has(:checked)::before {
+  .layout.song
+    :is(.side, .chart-tools)
+    :is(.seg label, .chip):has(:checked)::before {
     background: var(--accent);
     box-shadow: 0 0 4px var(--accent);
   }
-  .layout.song .side :is(.seg label, .chip):has(:focus-visible) {
+  .layout.song
+    :is(.side, .chart-tools)
+    :is(.seg label, .chip):has(:focus-visible) {
     outline: 2px solid var(--ink);
     outline-offset: 1px;
   }
@@ -466,6 +524,9 @@
     border-radius: 3px;
     background: var(--surface);
   }
+  .layout.song .sec .sec-head:hover {
+    background: var(--line);
+  }
   .layout.song .sec-name {
     font-family: var(--mono);
     font-size: 0.75em;
@@ -537,8 +598,20 @@
       grid-row: auto;
       position: static;
     }
-    .layout.song :is(.sections, details.edit, .notes) {
+    .layout.song :is(.chart-tools, .sections, details.edit, .notes) {
       grid-column: 1;
+    }
+    /* Rows of 4 bars, one phrase each, as wide as the screen. Each section
+       name sits above its bars. */
+    .layout.song .sections {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .layout.song .sec-head,
+    .layout.song .bars {
+      grid-column: 1 / -1;
+    }
+    .layout.song .bar .cs {
+      flex-wrap: wrap;
     }
   }
 }

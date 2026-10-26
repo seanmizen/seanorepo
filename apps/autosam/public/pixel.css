@@ -377,6 +377,49 @@
   .chart > :not(.sections) {
     order: 1;
   }
+  /* The whole name cell is the key of its section, as each bar cell is the
+     key of its bar: the name stretches its click area over the cell. */
+  .sec-head {
+    position: relative;
+    cursor: pointer;
+  }
+  .sec-name::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+  .sec .sec-head:hover {
+    background: var(--line);
+  }
+  /* The roadmap and the chart view come before the chart. */
+  .chart > .chart-tools {
+    order: 0;
+    contain: inline-size;
+    background: var(--surface);
+  }
+  .roadmap,
+  .view-ctl {
+    display: inline;
+  }
+  .road {
+    background: var(--sunk);
+  }
+  .road.cur {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .road mark {
+    background: none;
+    color: inherit;
+  }
+  /* Shift over a bar: the bars that a click would loop. In the loop range,
+     the foot of each bar is the accent. */
+  .bar.preview {
+    background: var(--accent-soft);
+  }
+  .bar.inrange .r8 {
+    background: var(--accent);
+  }
   .chart-head,
   details.edit,
   .key-panel,
