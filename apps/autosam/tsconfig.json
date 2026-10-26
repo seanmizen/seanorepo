@@ -14,5 +14,5 @@
     "checkJs": false,
     "noEmit": true
   },
-  "include": ["server", "public/song-format.js"]
+  "include": ["server", "test", "public/song-format.js"]
 }

@@ -108,10 +108,13 @@ reduced motion, or with no WebGL2, everything changes at once.
 
 The bare theme shows the page with browser defaults and modern-normalize
 only. Dark mode still works, because `color-scheme` comes from
-`themes.css`. Bare shows what the HTML says without CSS. So the markup puts
-a space between inline words, also where a flex or grid gap hides it. State
-that only a class shows (the playing bar, the beat dots, the piano keys)
-does not show in bare.
+`themes.css`. Bare shows what the HTML says without CSS, and a theme
+must not take a function away (REQ-BARE-001). So the HTML carries every
+state: the playing bar has its chords in a `<mark>`, a queued jump says
+"(next)", the beat dots are text, and the key and piano style are radio
+buttons. The markup puts a space between inline words, also where a flex or
+grid gap hides it. `test/bare.test.ts` fails when `app.js` gets a state
+class with no carrier. `.claude/rules/autosam.md` has the rules.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents

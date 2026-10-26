@@ -778,7 +778,7 @@ function showAt(bar, e, v) {
   els.nowNum.textContent = chordNum(ch);
   updateNext(bar, e);
   els.beats.forEach((d, i) => {
-    d.classList.toggle('on', playing && i === Math.floor(e / 2));
+    showBeat(d, playing && i === Math.floor(e / 2));
   });
   let shown = v;
   if (!shown && ch)
@@ -790,6 +790,13 @@ function showAt(bar, e, v) {
   if (playing && !following) updateRefollow();
 }
 
+// A beat dot is text, so it shows with no page styles (REQ-BARE-001).
+// The class gives the look in the other themes.
+function showBeat(d, on) {
+  d.classList.toggle('on', on);
+  d.textContent = on ? '●' : '○';
+}
+
 function showCount(ev) {
   els.nowChord.classList.add('counting');
   els.nowChord.textContent = String(ev.beat + 1);
@@ -799,7 +806,7 @@ function showCount(ev) {
   els.nextIn.textContent =
     (first ? `${chordNum(first)} · ` : '') + beatsText(ev.left);
   els.beats.forEach((d, i) => {
-    d.classList.toggle('on', i === ev.beat);
+    showBeat(d, i === ev.beat);
   });
 }
 
@@ -817,12 +824,35 @@ function showKeys(v) {
   els.lh.textContent = `${sp[mod(v.lh)]} (octaves)`;
 }
 
+// The bar that plays (or plays first) has aria-current, and its chords sit
+// in a <mark>. A queued jump has the text "(next)". So both show with no
+// page styles (REQ-BARE-001). The classes give the look in the other
+// themes.
+function markCurrent(node, on) {
+  if (on) node.setAttribute('aria-current', 'true');
+  else node.removeAttribute('aria-current');
+  const cs = node.querySelector('.cs');
+  if ((cs.tagName === 'MARK') === on) return;
+  const next = el(on ? 'mark' : 'span', cs.className);
+  next.append(...cs.childNodes);
+  cs.replaceWith(next);
+}
+
+function markPending(node, on) {
+  node.classList.toggle('pending', on);
+  const flag = node.querySelector('.flag');
+  if (on && !flag)
+    node.querySelector('.cs').after(el('span', 'flag', ' (next)'));
+  if (!on && flag) flag.remove();
+}
+
 let lastCur = -1;
 function markBars(e) {
   barEls.forEach((node, i) => {
     node.classList.toggle('cur', playing && i === shownBar);
     node.classList.toggle('cursor', !playing && i === cursorBar);
-    node.classList.toggle('pending', playing && i === pendingJump);
+    markCurrent(node, i === (playing ? shownBar : cursorBar));
+    markPending(node, playing && i === pendingJump);
   });
   if (playing && barEls[shownBar]) {
     barEls[shownBar].querySelectorAll('.r8 i').forEach((t, i) => {
@@ -1002,24 +1032,33 @@ function renderKeyButtons() {
       small: `${s < 0 ? 'down' : 'up'} ${Math.abs(s)}`,
     })),
   );
-  for (const c of choices) {
-    const btn = el('button');
-    btn.type = 'button';
-    btn.dataset.shift = String(c.shift);
-    btn.append(el('b', '', keyShortAt(c.shift)), ' ', el('small', '', c.small));
-    btn.addEventListener('click', () => setShift(c.shift));
-    seg.append(btn);
-  }
+  const labels = choices.map((c) => {
+    const label = el('label');
+    const radio = el('input');
+    radio.type = 'radio';
+    radio.name = 'shift';
+    radio.value = String(c.shift);
+    radio.addEventListener('change', () => setShift(c.shift));
+    label.append(
+      ...spaced([
+        radio,
+        el('b', '', keyShortAt(c.shift)),
+        el('small', '', c.small),
+      ]),
+    );
+    return label;
+  });
+  seg.append(...spaced(labels));
 }
 
 function renderSettings() {
   const n = settings.shift;
   $('shiftVal').textContent =
     `${keyShortAt(n)}(${octaveAt(n)}) (${n === 0 ? 'original' : `${minus(n)} ${n === 1 || n === -1 ? 'semitone' : 'semitones'}`})`;
-  for (const b of $('shiftSeg').querySelectorAll('button'))
-    b.setAttribute('aria-pressed', String(Number(b.dataset.shift) === n));
-  for (const b of $('styleSeg').querySelectorAll('button'))
-    b.setAttribute('aria-pressed', String(b.dataset.style === settings.style));
+  for (const r of $('shiftSeg').querySelectorAll('input'))
+    r.checked = Number(r.value) === n;
+  for (const r of $('styleSeg').querySelectorAll('input'))
+    r.checked = r.value === settings.style;
   $('octDown').disabled = n - 12 < -LIMITS.maxShift;
   $('octUp').disabled = n + 12 > LIMITS.maxShift;
   $('shiftDown').disabled = n - 1 < -LIMITS.maxShift;
@@ -1209,9 +1248,9 @@ function wireSongControls() {
   $('shiftUp').addEventListener('click', () => setShift(settings.shift + 1));
   $('octDown').addEventListener('click', () => setShift(settings.shift - 12));
   $('octUp').addEventListener('click', () => setShift(settings.shift + 12));
-  for (const b of $('styleSeg').querySelectorAll('button')) {
-    b.addEventListener('click', () => {
-      settings.style = b.dataset.style;
+  for (const r of $('styleSeg').querySelectorAll('input')) {
+    r.addEventListener('change', () => {
+      settings.style = r.value;
       save();
       renderSettings();
     });
@@ -1271,7 +1310,8 @@ function wireSongControls() {
   const typing = (t) =>
     t &&
     (t.tagName === 'TEXTAREA' ||
-      (t.tagName === 'INPUT' && !['checkbox', 'range'].includes(t.type)));
+      (t.tagName === 'INPUT' &&
+        !['checkbox', 'radio', 'range'].includes(t.type)));
   const SCROLL_KEYS = [
     'PageUp',
     'PageDown',

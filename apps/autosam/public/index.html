@@ -76,7 +76,7 @@
         </div>
       </div>
       <div class="now-bottom">
-        <div class="beats" id="beats" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="beats" id="beats" aria-hidden="true"><i>○</i><i>○</i><i>○</i><i>○</i></div>
         <div class="transport">
           <button class="btn-ghost" id="startBtn" type="button" title="Go back to bar 1">Bar 1</button>
           <button class="btn-play" id="playBtn" type="button" aria-pressed="false">
@@ -89,8 +89,8 @@
 
     <section class="panel controls" aria-label="Settings">
       <div class="ctl">
-        <div class="ctl-head"><span class="ctl-label">Key</span> <span class="ctl-val" id="shiftVal"></span></div>
-        <div class="seg" id="shiftSeg"></div>
+        <div class="ctl-head"><span class="ctl-label" id="keyLabel">Key</span> <span class="ctl-val" id="shiftVal"></span></div>
+        <div class="seg" id="shiftSeg" role="radiogroup" aria-labelledby="keyLabel"></div>
         <div class="row spread">
           <span class="hint">Move the key</span>
           <div class="stepper">
@@ -112,10 +112,10 @@
 
       <div class="split">
         <div class="ctl">
-          <span class="ctl-label">Piano style</span>
-          <div class="seg style-seg" id="styleSeg">
-            <button type="button" data-style="pulse"><b>Pulse</b> <small>eighths</small></button>
-            <button type="button" data-style="held"><b>Held</b> <small>chords</small></button>
+          <span class="ctl-label" id="styleLabel">Piano style</span>
+          <div class="seg style-seg" id="styleSeg" role="radiogroup" aria-labelledby="styleLabel">
+            <label><input type="radio" name="style" value="pulse"> <b>Pulse</b> <small>eighths</small></label>
+            <label><input type="radio" name="style" value="held"> <b>Held</b> <small>chords</small></label>
           </div>
         </div>
         <div class="ctl">
