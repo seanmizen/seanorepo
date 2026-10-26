@@ -1,8 +1,8 @@
 // Where: apps/autosam/public/piano.js. app.js imports it for the "Grand"
 // sound. test/piano.test.ts checks the spectrum.
-// When: app.js calls grandSamples() the first time a note plays at one
-// loudness. It keeps the result as an AudioBuffer and plays that buffer
-// each time after.
+// When: app.js calls grandSamples() one time for each note, before the
+// note first plays or when it first plays. It keeps the result as an
+// AudioBuffer and plays that buffer each time after.
 // Why: a modelled grand piano. A struck piano string is stiff, so its
 // partials are sharper than whole multiples of the fundamental. High
 // partials die first. Each note has one, two or three strings that are
