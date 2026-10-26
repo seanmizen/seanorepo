@@ -45,8 +45,12 @@ a { color: var(--accent); }
 .crumbs a { font-family: var(--mono); font-size: 12px; text-decoration: none; }
 .crumbs a:hover { text-decoration: underline; }
 .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-h1 { font-family: var(--display); font-weight: var(--display-weight); font-size: clamp(32px, 5vw, 50px); line-height: 1.02; letter-spacing: -0.015em; margin: 0; text-wrap: balance;
-  background: linear-gradient(90deg, var(--ink), var(--ink-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h1 { font-family: var(--display); font-weight: var(--display-weight); font-size: clamp(32px, 5vw, 50px); line-height: 1.02; letter-spacing: -0.015em; margin: 0; text-wrap: balance; }
+/* Gradient text: the background shows through the glyphs. A background paints only inside the box of its element, and a tight line-height makes the box smaller than the ink. The padding gives the descenders, accents and overhangs room, and the negative margin keeps the layout. */
+.gradient-text {
+  background: linear-gradient(90deg, var(--ink), var(--ink-2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  padding: 0.12em 0.06em 0.2em; margin: -0.12em -0.06em -0.2em;
+}
 .keyline { margin: 2px 0 0; color: var(--muted); max-width: 62ch; }
 .keyline b { color: var(--ink); font-weight: 600; }
 
@@ -242,11 +246,11 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); 
 .theme-pane button small { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .theme-pane button b { font-weight: 600; font-size: 14px; }
 
-/* Glyph morph (morph.js). The WebGL layer draws the text, so the real text hides. Inputs and generated content keep their text. The title draws its gradient through its glyphs, so it loses the gradient too. */
+/* Glyph morph (morph.js). The WebGL layer draws the text, so the real text hides. Inputs and generated content keep their text. Gradient text loses its background too. */
 .morph-layer { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; }
 html.morphing body * { -webkit-text-fill-color: transparent; }
 html.morphing input, html.morphing textarea, html.morphing ::marker, html.morphing ::before, html.morphing ::after { -webkit-text-fill-color: currentcolor; }
-html.morphing h1 { background: none; }
+html.morphing .gradient-text { background: none; }
 html.morph-measure { transition: none; }
 
 @media (max-width: 520px) {
@@ -275,7 +279,7 @@ html.morph-measure { transition: none; }
 <main class="layout lib" id="libraryView" hidden>
   <header class="masthead">
     <div class="eyebrow">autosam · piano practice partner</div>
-    <h1>Songs</h1>
+    <h1 class="gradient-text">Songs</h1>
     <p class="lib-intro">Pick a song. autosam plays its chords on the piano in a key that suits your voice, and the chord chart follows the music.</p>
   </header>
   <section class="song-list" id="songList" aria-label="Songs"></section>
@@ -304,7 +308,7 @@ html.morph-measure { transition: none; }
 <main class="layout song" id="songView" hidden>
   <header class="masthead">
     <div class="crumbs"><a href="/">← All songs</a><span class="eyebrow" id="eyebrow">autosam</span></div>
-    <h1 id="songTitle">Song</h1>
+    <h1 class="gradient-text" id="songTitle">Song</h1>
     <p class="keyline" id="keyline"></p>
   </header>
 
@@ -430,7 +434,7 @@ html.morph-measure { transition: none; }
 <main class="layout lib" id="notFound" hidden>
   <header class="masthead">
     <div class="eyebrow">autosam</div>
-    <h1>No song here</h1>
+    <h1 class="gradient-text">No song here</h1>
     <p class="lib-intro" id="nfMsg"></p>
     <p><a href="/">← All songs</a></p>
   </header>
