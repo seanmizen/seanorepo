@@ -6,6 +6,16 @@ resource "cloudflare_zone" "seanmizen_com" {
   type = "full"
 }
 
+# 0 is "Respect Existing Headers". The default is 4 hours, and it replaces
+# a shorter Cache-Control from the origin. The apps send no-cache for files
+# with fixed names (/app.js), so a browser then kept the old version for up
+# to 4 hours after a deploy.
+resource "cloudflare_zone_setting" "seanmizen_com_browser_cache_ttl" {
+  zone_id    = cloudflare_zone.seanmizen_com.id
+  setting_id = "browser_cache_ttl"
+  value      = 0
+}
+
 resource "cloudflare_dns_record" "seanmizen_com_google_domainkey_txt" {
   content = "\"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgA53u/WAVL/oMBW4FrEdq3zg6ASAggk0fijmrcd52oWoqpjMFmGhZ+Lj0gDTYVyegIichGrj1kF7sJIrKASbak5BYHObRclsasNY1sOj1A8Q6HjvfhUzZANuknmll/4Mxzu+OVCWkhf\" \"N3aoZf668G1hJcRjUBFpSzl3O7moYERrwuOyYw0iEDi5cvN2pDV8zh8zhQZvukBEUdVGRSTZdqFJMfyQDdkMk4NgTay0JJcO3OrV07FpMeoDeiiJpw2o/LbVLrVHSA4c8SXC/8rJRjS1uS/I+UjCr7EQXsxxOjLkWMK929jrCBKtP/ykkzIbwm2mBoiSkM8lsFKCJoCyl\" \"sQIDAQAB\""
   name    = "google._domainkey.seanmizen.com"

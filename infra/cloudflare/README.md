@@ -1,6 +1,6 @@
 # Cloudflare as code
 
-The Cloudflare setup for all of Sean's sites, in OpenTofu: the zones, the
+The Cloudflare setup for all of Sean's sites, in OpenTofu: the zones, the browser cache TTL, the
 DNS records, the tunnel and its ingress rules. Git holds the code. The
 state is in the R2 bucket `seanorepo-tofu-state`, which CI and every
 checkout share. A push to `release` applies the stack in CI
@@ -19,6 +19,7 @@ rebuilds a lost state (see "The state").
    | Account | Account Settings           | Read   |
    | Zone    | Zone                       | Read   |
    | Zone    | DNS                        | Edit   |
+   | Zone    | Zone Settings              | Edit   |
    | Account | Workers R2 Storage         | Edit   |
 
    Under *Zone Resources*, include only seanmizen.com, carolinemizen.art
