@@ -96,27 +96,44 @@
   .layout.song .notes {
     grid-column: 2;
   }
-  /* The roadmap: one key for each section. The section that plays has its
-     LED lit. The chart view is a pair of latching keys. */
+  /* The chart tools (narrow screens) are modules on the same chassis as the
+     panel: 2px seams, then rounded modules. The running order is a grid of
+     keys that wraps. The section that plays has its LED lit. The chart
+     view is a module like Piano style: its label, then two latching keys. */
   .layout.song .chart-tools {
     display: grid;
-    gap: 0.75em;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    padding: 2px;
+    border-radius: 6px;
+    background: var(--line);
   }
-  /* The roadmap is one strip of keys that scrolls sideways. */
+  .layout.song .chart-tools .view-ctl {
+    grid-column: auto;
+  }
   .layout.song .roadmap {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(6.5em, 1fr));
     gap: 0.25em;
-    overflow-x: auto;
-    padding: 1px 1px 0.25em;
-    scrollbar-width: none;
+    padding: 0.75em;
+    border-radius: 4px;
+    background: var(--surface);
   }
-  .layout.song .roadmap .road {
-    flex: none;
-    white-space: nowrap;
+  .layout.song .roadmap::before {
+    content: attr(aria-label);
+    grid-column: 1 / -1;
+    margin-bottom: 0.25em;
+    font-family: var(--mono);
+    font-size: 0.75em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
   .layout.song .chart-tools .road {
-    min-height: 2em;
-    padding: 0.2em 0.6em;
+    min-height: 2.25em;
+    padding: 0.25em 0.4em;
+    white-space: normal;
     font-family: var(--mono);
     font-size: 0.8em;
     letter-spacing: 0.06em;
@@ -139,15 +156,6 @@
     background: none;
     color: inherit;
     font-weight: 700;
-  }
-  .layout.song .view-ctl {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1em;
-  }
-  .layout.song .view-seg {
-    min-width: 14em;
   }
   .layout.song .sections .bar.preview {
     background: color-mix(in srgb, var(--accent) 14%, var(--surface));
