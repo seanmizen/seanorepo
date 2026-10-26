@@ -1,15 +1,15 @@
 # REQ-DENSE — The dense theme spends few pixels
 
-autosam has one dense theme: Tone. The chart is the page. Every control
-sits in one band of small blocks above it, and the help sits in small type
-under it. The chart takes the rest of the screen. REQ-BARE-001 applies here
-too: a theme changes the look, never the function.
+autosam has one dense theme: Tone. The page sits at the top left, fits the
+screen, and gives each pixel to the music. REQ-BARE-001 applies here too: a
+theme changes the look, never the function.
 
 Borders and outlines: a border takes layout space on each side of a box, and
 two neighbours draw two lines. An outline takes no layout space, but it draws
 over the neighbours. So the dense theme uses no border. Fills separate
-things, with a 1 px gap where two fills are the same. An outline shows only a
-state that must not move the layout: focus, the cursor bar and a queued jump.
+things, with a 1 px gap where two fills are the same. An outline shows only
+a state that must not move the layout: focus, the cursor bar and a queued
+jump.
 
 `public/dense.css` holds the dense theme. `test/dense.test.ts` reads it.
 
@@ -36,18 +36,16 @@ state that must not move the layout: focus, the cursor bar and a queued jump.
 - **Origin:** #971
 - **Type:** functional
 - **Priority:** P2
-- **Statement:** While a dense theme is on, the song page shall use the
-  largest chart text size from 12 px to 40 px, and the row length (4, 8, 12
-  or 16 bars) for it, at which the page does not scroll and no bar wraps its
-  chords, or 16 px when no size in that range fits.
-- **Rationale:** The chart is what a person reads at the piano, so it gets
-  the space. A short song gets large chords. A long song gets small chords,
-  and all of it shows. The controls keep one small size. On a phone even the
-  smallest size does not fit, and 12 px chords on a phone help nobody, so
-  the page scrolls at 16 px.
-- **Verification:** Demonstration — open `/american-pie` at 1440 × 685 in
-  Tone. The whole chart, the band and the help show with no scrollbar, at
-  16 bars a row.
+- **Statement:** While a dense theme is on, the page shall use the largest
+  base text size from 10 px to 16 px at which the page does not scroll, or
+  16 px when no size in that range fits.
+- **Rationale:** A short song gets large text. A long song gets small text,
+  and all of it shows. On a phone even the smallest size does not fit, and
+  10 px text on a phone helps nobody, so the page scrolls at the normal
+  size.
+- **Verification:** Demonstration — open `/american-pie` at 1280 × 720 in
+  Tone. The whole chart, the now panel, the settings and the
+  keyboard show with no scrollbar.
 - **Relations:** none
 
 ## REQ-DENSE-003 — No decoration
@@ -72,7 +70,7 @@ state that must not move the layout: focus, the cursor bar and a queued jump.
 - **Type:** constraint
 - **Priority:** P2
 - **Statement:** A dense theme shall use no padding, margin or gap larger
-  than 0.5 em.
+  than 0.5 em, except the place that it keeps for the theme pane.
 - **Rationale:** Space between things is the largest cost of a normal
   layout. A small space still groups things. A line or a change of fill
   separates them.

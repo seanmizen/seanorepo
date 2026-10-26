@@ -40,6 +40,8 @@ each selection, each message.
   `:where(:root:is([data-theme="baseline"], [data-theme="kbbq"]))`.
 - `public/dense.css`: Tone, the dense theme. Every rule there must keep to
   REQ-DENSE. `test/dense.test.ts` checks the CSS.
+- `public/pixel.css`: Pixel-1, the fewest pixels. Every rule there must keep
+  to REQ-PIXEL. `test/pixel.test.ts` checks the CSS.
 - `public/chrome.css`: only what every theme needs to work: the morph layer,
   the fixed theme pane, the debug panel. Never a look.
 - `public/themes.css`: tokens only.

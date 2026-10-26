@@ -265,13 +265,20 @@
 
 /*
  * Tone: the dense theme (REQ-DENSE). dense.css gives it its layout. It
- * separates things by fill alone, as the keys of a Braun calculator do:
- * a grey body and keys in two tones. One color marks what is lit: the
- * playing bar, the selected key, a toggle that is on. It is the deep red of
- * the felt strip under the keys of a piano. It uses the system font, which
- * each screen draws well at small sizes. No radius, no shadow.
+ * separates things by fill alone, as the keys of a Braun calculator do: a
+ * grey body and keys in two tones. One color marks what is lit: the playing
+ * bar, the selected key, a toggle that is on. It is the deep red of the
+ * felt strip under the keys of a piano. It uses the system font, which each
+ * screen draws well at small sizes. No radius, no shadow.
  */
-:root[data-theme="tone"] {
+:root:is([data-theme="tone"], [data-theme="pixel-1"]) {
+  --shadow: transparent;
+  --radius-card: 0px;
+  --radius-control: 0px;
+  --display-weight: 600;
+  --display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --bg: #e4e3df;
   --surface: #f2f1ed;
   --sunk: #d6d4cf;
@@ -287,15 +294,8 @@
   --key-white: #f2f1ed;
   --key-black: #2b2a27;
   --key-edge: #9c9890;
-  --shadow: transparent;
-  --radius-card: 0px;
-  --radius-control: 0px;
-  --display-weight: 600;
-  --display: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-:root[data-theme="tone"][data-mode="dark"] {
+:root:is([data-theme="tone"], [data-theme="pixel-1"])[data-mode="dark"] {
   --bg: #1d1c1a;
   --surface: #2b2926;
   --sunk: #353330;

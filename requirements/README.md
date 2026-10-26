@@ -78,6 +78,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
 | `NETWORK` | `utils/debbie/2026-09-17/requirements/network.md` | debbie — tunnel ingress and route failover |
 | `ONBOARD` | `apps/inside/requirements/onboard.md` | inside — designer onboarding |
+| `PIXEL` | `apps/autosam/requirements/pixel.md` | autosam — Pixel-1 covers the fewest pixels |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
 | `QC` | `apps/QuarterCompany/requirements/qc.md` | QuarterCompany — journal, filesystem, turns, casts |
 | `QUALITY` | `apps/inside/requirements/quality.md` | inside — testing conventions |

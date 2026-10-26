@@ -12,6 +12,10 @@
 | [`REQ-DENSE-004`](dense.md#req-dense-004--small-spaces) | Small spaces | active | constraint | P2 | sean |
 | [`REQ-DENSE-005`](dense.md#req-dense-005--controls-and-sections-show-at-rest) | Controls and sections show at rest | active | constraint | P2 | sean |
 | [`REQ-DENSE-006`](dense.md#req-dense-006--touch-targets-stay-large-enough) | Touch targets stay large enough | active | constraint | P2 | sean |
+| [`REQ-PIXEL-001`](pixel.md#req-pixel-001--each-box-is-as-small-as-its-content) | Each box is as small as its content | active | constraint | P2 | sean |
+| [`REQ-PIXEL-002`](pixel.md#req-pixel-002--one-text-size) | One text size | active | constraint | P2 | sean |
+| [`REQ-PIXEL-003`](pixel.md#req-pixel-003--no-decoration) | No decoration | active | constraint | P2 | sean |
+| [`REQ-PIXEL-004`](pixel.md#req-pixel-004--touch-targets-stay-large-enough) | Touch targets stay large enough | active | constraint | P2 | sean |
 
 ## Dependency graph
 

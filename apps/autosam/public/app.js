@@ -1086,8 +1086,10 @@ function renderChart() {
     nameBtn.type = 'button';
     nameBtn.addEventListener('click', () => goTo(s.start));
     head.append(
-      nameBtn,
-      el('span', 'sec-meta', `bars ${s.start + 1}–${s.end + 1}`),
+      ...spaced([
+        nameBtn,
+        el('span', 'sec-meta', `bars ${s.start + 1}–${s.end + 1}`),
+      ]),
     );
     const grid = el('div', 'bars');
     for (let i = s.start; i <= s.end; i++) {

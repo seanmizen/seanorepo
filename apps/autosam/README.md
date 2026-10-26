@@ -78,8 +78,9 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`, `Tone`) and mode (`Auto`, `Light`, `Dark`). Tone puts the
-pane at the end of its control band. A press on the main
+`KBBQ`, `Bare`, `Tone`, `Pixel-1`) and mode (`Auto`, `Light`, `Dark`).
+Tone puts the pane at the top right. Pixel-1 puts it at the end of the
+page. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow
 keys do the same. `Auto` follows the system light or dark setting. The
@@ -99,6 +100,8 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   so the other themes never see them. `:where()` adds no specificity.
 - `public/dense.css` holds Tone, the dense theme. See
   [REQ-DENSE](requirements/dense.md).
+- `public/pixel.css` holds Pixel-1, the theme of the fewest pixels. See
+  [REQ-PIXEL](requirements/pixel.md).
 - `public/chrome.css` holds the few styles that every theme needs, bare too:
   the morph layer, the fixed theme pane and the debug panel.
 - `public/modern-normalize.css` (MIT, v3.0.1) gives every browser the same
@@ -146,22 +149,29 @@ buttons. The markup puts a space between inline words, also where a flex or
 grid gap hides it. `test/bare.test.ts` fails when `app.js` gets a state
 class with no carrier. `.claude/rules/autosam.md` has the rules.
 
-Tone, the dense theme, spends few pixels (REQ-DENSE). The chart is the
-page. Every control sits in one band of small blocks above it: the place in
-the song, the chords and Play in one block, then the key, the tempo, the
-piano style, the volume, the toggles, the keyboard and the theme pane. The
-help sits in small type under the chart. `theme.js` fits the chart to the
-rest of the screen: it picks the bars in a row (4, 8, 12 or 16) and the
-largest chord size from 12 px to 40 px at which the page does not scroll and
-no bar wraps its chords. `app.js` calls the fit again after it draws the
-chart or the library. All sections share one set of chart columns, and each
-column is as wide as its widest bar. Fills separate things, after the keys
-of a Braun calculator: grey blocks, keys in two tones. The deep red of a
-piano's key felt lights what is on: the playing bar, the selected key, a
-toggle.
+Tone, the dense theme, spends few pixels (REQ-DENSE). The page sits at the
+top left with no width limit. `theme.js` fits the page to the viewport: it
+picks the number of bars in a row of the chart (4, 8, 12 or 16) and the
+largest base text size from 10 px to 16 px at which the page does not
+scroll and no bar wraps its chords. `app.js` calls the fit again after it
+draws the chart or the library. All sections share one set of chart
+columns, and each column is as wide as its widest bar. The settings are a
+keypad: labels in one column, keys of one height in the other. Fills
+separate things, as on a Braun calculator: grey blocks and keys in two
+tones. The deep red of a piano's key felt lights what is on: the playing
+bar, the selected key, a toggle.
 
-`songs/american-pie.txt` has 249 bars. Use it to test the dense layout at
-its limit.
+Pixel-1 covers the smallest area that still shows everything (REQ-PIXEL).
+It has one text size, 9 px, and no space between two boxes is more than
+1 px. The page is one column as wide as the chart: 8 bars in a row, each
+column as wide as its widest bar. The title, the controls and the help wrap
+at that width. The words keep the spaces of the HTML, so most of the page
+is lines of text, as in Bare. It uses the colors of Tone. The bar numbers
+do not show: the section names give the first and the last bar, and each
+row holds 8.
+
+`songs/american-pie.txt` has 249 bars. Use it to test Tone and Pixel-1 at
+their limits.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents

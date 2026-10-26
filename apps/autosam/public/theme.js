@@ -20,8 +20,10 @@
     { id: 'kbbq', label: 'KBBQ' },
     // No page styles: browser defaults and modern-normalize only.
     { id: 'bare', label: 'Bare' },
-    // The dense theme (REQ-DENSE). It fits the chart to the viewport.
+    // The dense theme (REQ-DENSE). It fits the page to the viewport.
     { id: 'tone', label: 'Tone', fit: true },
+    // The fewest pixels (REQ-PIXEL).
+    { id: 'pixel-1', label: 'Pixel-1' },
   ];
   // "auto" follows the system light or dark setting.
   const MODES = [
@@ -67,15 +69,15 @@
     }
   }
 
-  // A dense theme fits the chart to the viewport (REQ-DENSE-002). It sets
-  // two values: --fit, the text size of the chart, and --cols, the number
-  // of bars in a row. The controls keep their size. For each row length
-  // from COLS, up to the longest section, it finds the largest size in FIT
-  // at which the page does not scroll and no bar wraps its chords. It keeps
-  // the row length with the largest size, and the shortest row of those.
-  // When nothing fits (a phone), it uses FIT.fallback and rows of 4, and the
-  // page scrolls. Each try is a layout, so the sizes are whole pixels.
-  const FIT = { min: 12, max: 40, step: 1, fallback: 16 };
+  // A dense theme fits the page to the viewport (REQ-DENSE-002). It sets
+  // two values: --fit, the base text size, and --cols, the number of bars in
+  // a row of the chart. For each row length from COLS, up to the longest
+  // section, it finds the largest size in FIT at which the page does not
+  // scroll and no bar wraps its chords. It keeps the row length with the
+  // largest size, and the shortest row of those. When nothing fits, it uses the largest size, rows of 4,
+  // and the page scrolls. Each try is a layout, so the search stops at a
+  // quarter pixel.
+  const FIT = { min: 10, max: 16 };
   const COLS = [4, 8, 12, 16];
   const fit = () => {
     root.style.removeProperty('--fit');
@@ -96,34 +98,19 @@
       for (const cs of chords) if (cs.offsetHeight > px * 1.8) return false;
       return true;
     };
-    // The chart grows in proportion to its text size, so one layout at
-    // FIT.fallback gives a first guess. Steps up from the guess, or a binary
-    // search below it, find the size. A longer row only wins with a larger size, so the
-    // search for it starts one step above the best size so far.
-    let best = { px: FIT.fallback, cols: 4, found: false };
+    let best = { px: FIT.max, cols: 4, found: false };
     for (const cols of COLS.filter((c) => c <= longest)) {
-      const floor = best.found ? best.px + FIT.step : FIT.min;
-      if (floor > FIT.max) break;
-      set(FIT.fallback, cols);
-      const chart = sections.offsetHeight;
-      const room = root.clientHeight - (document.body.offsetHeight - chart);
-      let px = Math.floor((FIT.fallback * room) / chart);
-      px = Math.max(floor, Math.min(FIT.max, px));
-      if (fits(px, cols)) {
-        while (px < FIT.max && fits(px + FIT.step, cols)) px += FIT.step;
-      } else {
-        // Too large, often because a bar wraps. Halve the range to the floor.
-        if (!fits(floor, cols)) continue;
-        let lo = floor;
-        let hi = px;
-        while (hi - lo > FIT.step) {
-          const mid = Math.round((lo + hi) / 2);
-          if (fits(mid, cols)) lo = mid;
-          else hi = mid;
-        }
-        px = lo;
+      if (!fits(FIT.min, cols)) continue;
+      let lo = FIT.min;
+      let hi = FIT.max;
+      if (fits(hi, cols)) lo = hi;
+      while (hi - lo > 0.25) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid, cols)) lo = mid;
+        else hi = mid;
       }
-      best = { px, cols, found: true };
+      if (!best.found || lo > best.px) best = { px: lo, cols, found: true };
+      if (lo === FIT.max) break;
     }
     set(best.px, best.cols);
   };
