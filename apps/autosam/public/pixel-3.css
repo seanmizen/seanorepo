@@ -34,7 +34,7 @@
     line-height: 1.3;
   }
 
-  /* The theme pane: two pickers of keys at the end of the page. */
+  /* The theme pane: pickers of keys at the end of the page. */
   .theme-pane {
     gap: 0.5em;
     margin: 0 1em 1em;
@@ -52,6 +52,16 @@
     box-shadow:
       inset 0 -2px 0 var(--line),
       0 0 0 1px var(--line);
+  }
+  /* A key under the pointer takes the color of the page. Its text and its
+     label keep their colors, so they stay readable. */
+  .theme-pane button:hover:not(:disabled) {
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .theme-pane button:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 0 1px var(--line);
   }
   .theme-pane button small {
     font-family: var(--mono);
