@@ -540,26 +540,35 @@
     display: grid;
     gap: 4px;
   }
-  /* The roadmap and the chart view */
+  /* The roadmap and the chart view (narrow screens). The roadmap is one
+     strip that scrolls sideways, as a timeline. The view switch sits under
+     it, with its label on the left. */
   .chart-tools {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px 16px;
+    display: grid;
+    gap: 10px;
   }
   .roadmap {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 16px 6px 0;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+  }
+  .roadmap::-webkit-scrollbar {
+    display: none;
   }
   .road {
-    padding: 3px 9px;
+    flex: none;
+    padding: 5px 11px;
     border: 1px solid var(--line);
     border-radius: 999px;
     background: var(--surface);
     font-family: var(--mono);
     font-size: 11.5px;
+    white-space: nowrap;
+    scroll-snap-align: center;
     cursor: pointer;
   }
   .road:hover {
@@ -577,10 +586,18 @@
   .view-ctl {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .view-ctl .ctl-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
   .view-seg {
-    min-width: 13em;
+    flex: 0 1 15em;
   }
   .chart-head h2 {
     font-family: var(--display);

@@ -1274,7 +1274,21 @@ function markRoad(sec) {
       else key.removeAttribute('aria-current');
       const name = song.sections[i].name;
       key.replaceChildren(on ? el('mark', '', name) : name);
+      if (on) showRoadKey(key);
     });
+}
+
+// The roadmap scrolls sideways on a phone. The lit key moves to the middle
+// of the strip, and the page does not scroll.
+function showRoadKey(key) {
+  const nav = $('roadmap');
+  if (nav.scrollWidth <= nav.clientWidth) return;
+  const k = key.getBoundingClientRect();
+  const n = nav.getBoundingClientRect();
+  nav.scrollTo({
+    left: nav.scrollLeft + k.left - n.left - (n.width - k.width) / 2,
+    behavior: reduceMotion ? 'auto' : 'smooth',
+  });
 }
 
 // ---------- Follow scrolling ----------
