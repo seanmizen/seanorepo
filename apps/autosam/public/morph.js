@@ -73,9 +73,9 @@ function readStyle(el, cache) {
     const color = parseColor(cs.color);
     const bgClip = cs.backgroundClip || cs.webkitBackgroundClip;
     // The layer must paint what the page paints, or the page jumps when the
-    // layer goes. A background paints only inside the box of its element, so
-    // text that shows its background (background-clip: text) clips to that
-    // box, as text in an overflow box clips to the overflow box.
+    // layer goes. A background paints only inside the box of its element.
+    // So text that shows its background (background-clip: text) clips to
+    // that box, as text in an overflow box clips to the overflow box.
     if (bgClip === 'text') {
       const r = el.getBoundingClientRect();
       clip[0] = Math.max(clip[0], r.left);
