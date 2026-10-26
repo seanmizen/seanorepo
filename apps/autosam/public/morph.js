@@ -16,13 +16,30 @@
 // 2. Apply the new theme with transitions off, and read the same again.
 // 3. Put back the old theme. Make the fields and fill the WebGL buffers.
 // 4. Hide the real text and show the layer. Apply the new theme with
-//    transitions on, so the tokens (colors, radii, shadows) morph under it.
-// 5. Blend each glyph over --morph. Then remove the layer and show the text.
+//    transitions off. Paused animations hold each token (colors, radii,
+//    shadows) and each box size at its old value.
+// 5. Over --morph, one clock moves the glyphs, the tokens and the boxes from
+//    old to new. Then remove the layer and the animations, and show the text.
+//
+// Pixel for pixel: the first frame must be the old page and the last frame
+// the new page, or the text jumps when the layer comes or goes. So:
+// - Each glyph is rasterized in its own color, at the subpixel phase of its
+//   place on the page, as the browser rasterizes it.
+// - The cell of a glyph sits on whole device pixels at each end of the
+//   morph, so each texel lands on one screen pixel.
+// - The field is a float, and the edge uses the known scale of the field. At
+//   the ends the coverage of each pixel is the coverage of the raster.
+// - The baseline comes from layout, not from font metrics.
 
-// The distance that a field holds on each side of the edge, in em. Where two
-// glyphs differ by more than this, the blend falls on a flat part of a field
-// and the edge tears.
-const R_EM = 0.5;
+// The distance that a field holds on each side of the edge, in em.
+const R_EM = 0.3;
+// The blend of two different glyphs has creases along the middle of each
+// stroke. A blur of the fields smooths them. The blur is in em, greatest
+// halfway and zero at each end. Two glyphs that are the same get no blur.
+const BLUR_EM = 0.06;
+// The browser places glyphs on quarter pixels. This file rasterizes on the
+// same grid.
+const SUBPIXEL = 4;
 const SKIP = new Set([
   'SCRIPT',
   'STYLE',
@@ -50,12 +67,14 @@ const parseColor = (s) => {
   const k = s.startsWith('color(') ? 1 : 255;
   return [p[0] / k, p[1] / k, p[2] / k, p.length > 3 ? p[3] : 1];
 };
+const cssColor = (c) =>
+  `rgb(${Math.round(c[0] * 255)}, ${Math.round(c[1] * 255)}, ${Math.round(c[2] * 255)})`;
 
 function readStyle(el, cache) {
   if (cache.has(el)) return cache.get(el);
   const cs = getComputedStyle(el);
   let st = null;
-  if (cs.visibility === 'visible') {
+  if (cs.visibility === 'visible' && rendered(el)) {
     let opacity = 1;
     const clip = [0, 0, innerWidth, innerHeight];
     for (let e = el; e && e !== root; e = e.parentElement) {
@@ -121,6 +140,30 @@ const transformChar = (ch, t) =>
       ? ch.toLowerCase()
       : ch;
 
+// The distance from the top of a glyph box to the baseline, as layout puts
+// it. Layout rounds the font ascent, so canvas metrics can be half a pixel
+// off. A probe reads it from layout: an empty inline-block sits on the
+// baseline.
+const baselines = new Map();
+function baselineOffset(font) {
+  let off = baselines.get(font);
+  if (off !== undefined) return off;
+  const probe = document.createElement('span');
+  probe.style.cssText = `position:absolute;left:0;top:0;visibility:hidden;white-space:pre;font:${font}`;
+  probe.textContent = 'x';
+  const mark = document.createElement('span');
+  mark.style.cssText =
+    'display:inline-block;width:0;height:0;vertical-align:baseline';
+  probe.append(mark);
+  document.body.append(probe);
+  const range = document.createRange();
+  range.selectNodeContents(probe.firstChild);
+  off = mark.getBoundingClientRect().bottom - range.getClientRects()[0].top;
+  probe.remove();
+  baselines.set(font, off);
+  return off;
+}
+
 // Each character that has ink, keyed by its text node and offset.
 function snapshot() {
   const cache = new Map();
@@ -165,8 +208,10 @@ function snapshot() {
             font: st.font,
             size: st.size,
             x: r.left,
+            baseline: r.top + baselineOffset(st.font),
             top: r.top,
             bottom: r.bottom,
+            fill: cssColor(color),
             color: [color[0], color[1], color[2], color[3] * st.opacity],
             clip: st.clip,
           };
@@ -177,6 +222,68 @@ function snapshot() {
     glyphs.set(n, list);
   }
   return glyphs;
+}
+
+// The page paints the element. A closed <details> hides its content with
+// content-visibility, but layout still gives that text a place. Without this
+// test the layer draws the text of a closed accordion.
+const rendered = (el) =>
+  !el.checkVisibility || el.checkVisibility({ visibilityProperty: true });
+
+// The border box of each element that has text in it and a width and a
+// height: not inline, not display: contents, not inside an SVG. The page
+// sets box-sizing: border-box, so the box is also the width and height to
+// set. A box with no text in it cannot change size with the font. It takes
+// its size from its parent, so it needs no animation.
+function boxes() {
+  const out = new Map();
+  for (const el of document.body.querySelectorAll('*')) {
+    if (el === canvas || SKIP.has(el.tagName)) continue;
+    if (el instanceof SVGElement && el.tagName !== 'svg') continue;
+    const d = getComputedStyle(el).display;
+    if (d === 'inline' || d === 'contents' || d === 'none') continue;
+    if (!rendered(el) || !/\S/.test(el.textContent)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    out.set(el, [r.width, r.height]);
+  }
+  return out;
+}
+
+// Boxes morph too. A font change changes the size of each box that its
+// text sizes (a button, a paragraph with a max-width in ch), and
+// font-family cannot transition. So every box gets its size from an
+// animation, from its old size to its new size. Every box, also a box with
+// the same size at each end: else the text in it reflows in the new font
+// halfway, and the box grows. The animations stop min and max sizes and
+// flex grow and shrink, so the box has exactly the size that they give.
+// The frame loop sets their time, so the boxes keep step with the glyphs.
+// When an animation ends, its box takes its own size again: the new size.
+function morphBoxes(before, after, ms) {
+  const anims = [];
+  const easing = 'cubic-bezier(0.4, 0, 0.2, 1)';
+  for (const [el, [w0, h0]] of before) {
+    const b = after.get(el);
+    if (!b) continue;
+    const anim = el.animate(
+      {
+        width: [`${w0}px`, `${b[0]}px`],
+        height: [`${h0}px`, `${b[1]}px`],
+        minWidth: ['0px', '0px'],
+        maxWidth: ['none', 'none'],
+        minHeight: ['0px', '0px'],
+        maxHeight: ['none', 'none'],
+        flexGrow: [0, 0],
+        flexShrink: [0, 0],
+        flexBasis: ['auto', 'auto'],
+      },
+      { duration: ms, easing, fill: 'backwards' },
+    );
+    anim.pause();
+    anim.currentTime = 0;
+    anims.push(anim);
+  }
+  return anims;
 }
 
 // ---------- Distance fields ----------
@@ -212,10 +319,12 @@ function edt(grid, w, h, f, v, z) {
   for (let y = 0; y < h; y++) edt1d(grid, y * w, 1, w, f, v, z);
 }
 
-// Write the field of one glyph into the atlas. 0.5 is the edge, more is
-// inside. The field holds R_EM on each side, so fields of different sizes
-// blend in the same units.
-function writeField(alpha, w, h, radius, atlas, atlasW, ox, oy, buf) {
+// Write the field of one glyph into the atlas: the signed distance to the
+// edge in em, more than 0 inside. A pixel that the raster covers in part
+// gets the distance 0.5 - coverage, so the shader gets the coverage back.
+// The raster and the atlas have the same layout: the cell is at (ox, oy) in
+// both, and both are atlasW wide.
+function writeField(alpha, w, h, emPx, atlas, atlasW, ox, oy, buf) {
   const n = w * h;
   if (buf.outer.length < n) {
     buf.outer = new Float64Array(n);
@@ -229,7 +338,8 @@ function writeField(alpha, w, h, radius, atlas, atlasW, ox, oy, buf) {
   }
   const { outer, inner, f, v, z } = buf;
   for (let i = 0; i < n; i++) {
-    const a = alpha[i * 4 + 3] / 255;
+    const at = (oy + Math.floor(i / w)) * atlasW + ox + (i % w);
+    const a = alpha[at * 4 + 3] / 255;
     if (a === 1) {
       outer[i] = 0;
       inner[i] = INF;
@@ -247,51 +357,68 @@ function writeField(alpha, w, h, radius, atlas, atlasW, ox, oy, buf) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      const dist = Math.sqrt(outer[i]) - Math.sqrt(inner[i]);
-      const val = 0.5 - dist / (2 * radius);
-      atlas[(oy + y) * atlasW + ox + x] = Math.max(
-        0,
-        Math.min(255, Math.round(val * 255)),
-      );
+      atlas[(oy + y) * atlasW + ox + x] =
+        (Math.sqrt(inner[i]) - Math.sqrt(outer[i])) / emPx;
     }
   }
 }
 
+// Where a glyph lands on the device pixel grid: a whole pixel and a quarter
+// pixel phase across, a whole pixel down.
+function place(g, dpr) {
+  const qx = Math.round(g.x * dpr * SUBPIXEL) / SUBPIXEL;
+  const ix = Math.floor(qx);
+  g.ix = ix;
+  g.iy = Math.round(g.baseline * dpr);
+  g.phase = qx - ix;
+  g.key = `${g.font}|${g.ch}|${g.phase}|${g.fill}`;
+}
+
 // Rasterize each glyph that the morph needs, and pack the fields into one
-// atlas. Return null when the atlas is too big.
-function buildAtlas(keys, dpr, maxSize) {
+// atlas. A cell is in device pixels, from the whole-pixel origin of the
+// glyph. Return null when the atlas is too big.
+function buildAtlas(entries, dpr, maxSize) {
+  // The canvas must be in the document. A canvas resolves its font against
+  // its own style, so only then does it get -webkit-font-smoothing from the
+  // page. A detached canvas smooths the glyphs, and they come out bolder
+  // than the page text.
   const scratch = document.createElement('canvas');
-  const ctx = scratch.getContext('2d', { willReadFrequently: true });
-  const ascent = new Map();
-  const cells = new Map();
-  for (const key of keys) {
-    const { ch, font, size } = key;
-    ctx.font = font;
-    const m = ctx.measureText(ch);
-    if (!ascent.has(font)) ascent.set(font, m.fontBoundingBoxAscent);
-    const pad = R_EM * size + 1;
-    const x0 = -m.actualBoundingBoxLeft - pad;
-    const x1 = m.actualBoundingBoxRight + pad;
-    const y0 = -m.actualBoundingBoxAscent - pad;
-    const y1 = m.actualBoundingBoxDescent + pad;
-    cells.set(key.id, {
-      ...key,
-      x0,
-      y0,
-      x1,
-      y1,
-      w: Math.ceil((x1 - x0) * dpr),
-      h: Math.ceil((y1 - y0) * dpr),
-    });
+  scratch.style.cssText =
+    'position:fixed;left:-99999px;top:0;visibility:hidden';
+  document.body.append(scratch);
+  try {
+    return rasterize(scratch, entries, dpr, maxSize);
+  } finally {
+    scratch.remove();
+  }
+}
+
+// No willReadFrequently: that canvas draws on the CPU. The page draws on the
+// GPU, and the two smooth the edges of large glyphs (paths) differently. So
+// all glyphs go into one GPU canvas with the atlas layout, and one read
+// brings them back.
+function rasterize(scratch, entries, dpr, maxSize) {
+  const ctx = scratch.getContext('2d');
+  const cells = [];
+  for (const e of entries) {
+    ctx.font = e.font;
+    const m = ctx.measureText(e.ch);
+    const pad = Math.ceil(R_EM * e.size * dpr) + 1;
+    const left = Math.floor(-m.actualBoundingBoxLeft * dpr) - pad;
+    const right = Math.ceil(m.actualBoundingBoxRight * dpr + e.phase) + pad;
+    const top = Math.floor(-m.actualBoundingBoxAscent * dpr) - pad;
+    const bottom = Math.ceil(m.actualBoundingBoxDescent * dpr) + pad;
+    Object.assign(e, { left, top, w: right - left, h: bottom - top });
+    cells.push(e);
   }
 
   // Shelf packing: the tallest cells first, in rows.
-  const list = [...cells.values()].sort((a, b) => b.h - a.h);
+  cells.sort((a, b) => b.h - a.h);
   const W = Math.min(2048, maxSize);
   let x = 0;
   let y = 0;
   let row = 0;
-  for (const c of list) {
+  for (const c of cells) {
     if (c.w > W) return null;
     if (x + c.w > W) {
       x = 0;
@@ -303,10 +430,10 @@ function buildAtlas(keys, dpr, maxSize) {
     x += c.w;
     row = Math.max(row, c.h);
   }
-  const H = y + row;
+  const H = Math.max(1, y + row);
   if (H > maxSize) return null;
 
-  const atlas = new Uint8Array(W * Math.max(1, H));
+  const atlas = new Float32Array(W * H);
   const buf = {
     outer: new Float64Array(0),
     inner: new Float64Array(0),
@@ -314,26 +441,33 @@ function buildAtlas(keys, dpr, maxSize) {
     v: new Uint16Array(0),
     z: new Float64Array(0),
   };
-  for (const c of list) {
-    if (scratch.width < c.w || scratch.height < c.h) {
-      scratch.width = Math.max(scratch.width, c.w);
-      scratch.height = Math.max(scratch.height, c.h);
-    }
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, c.w, c.h);
-    ctx.setTransform(dpr, 0, 0, dpr, -c.x0 * dpr, -c.y0 * dpr);
+  scratch.width = W;
+  scratch.height = H;
+  for (const c of cells) {
+    // The font size stays in CSS pixels, so optical sizing picks the same
+    // shapes as the page. The scale and the origin are in device pixels.
+    ctx.setTransform(dpr, 0, 0, dpr, c.ax - c.left + c.phase, c.ay - c.top);
     ctx.font = c.font;
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = c.fill;
     ctx.fillText(c.ch, 0, 0);
-    const alpha = ctx.getImageData(0, 0, c.w, c.h).data;
-    writeField(alpha, c.w, c.h, R_EM * c.size * dpr, atlas, W, c.ax, c.ay, buf);
-    // The cell in em, from the pen origin on the baseline, and in atlas UV.
-    c.em = [c.x0 / c.size, c.y0 / c.size, c.x1 / c.size, c.y1 / c.size];
+  }
+  const alpha = ctx.getImageData(0, 0, W, H).data;
+  for (const c of cells) {
+    writeField(alpha, c.w, c.h, c.size * dpr, atlas, W, c.ax, c.ay, buf);
     c.uv = [c.ax / W, c.ay / H, (c.ax + c.w) / W, (c.ay + c.h) / H];
   }
-  return { atlas, W, H, cells, ascent };
+  return { atlas, W, H };
+}
+
+// The cell of one glyph in em, from its exact pen origin on the baseline.
+// At its end of the morph, the cell corner is on a whole device pixel.
+function cellEm(g, c, dpr) {
+  const em = g.size * dpr;
+  const x0 = (g.ix + c.left - g.x * dpr) / em;
+  const y0 = (g.iy + c.top - g.baseline * dpr) / em;
+  return [x0, y0, x0 + c.w / em, y0 + c.h / em];
 }
 
 // ---------- WebGL ----------
@@ -355,7 +489,7 @@ uniform float u_t;
 out vec2 v_q;
 out vec2 v_px;
 flat out vec4 v_cellA, v_uvA, v_cellB, v_uvB, v_col, v_clip;
-flat out float v_size;
+flat out float v_size, v_diff;
 void main() {
   vec2 q = mix(min(a_cellA.xy, a_cellB.xy), max(a_cellA.zw, a_cellB.zw), a_corner);
   vec2 px = mix(a_orig.xy, a_orig.zw, u_t) + q * mix(a_size.x, a_size.y, u_t);
@@ -365,6 +499,7 @@ void main() {
   v_col = mix(a_colA, a_colB, u_t);
   v_clip = mix(a_clipA, a_clipB, u_t);
   v_size = mix(a_size.x, a_size.y, u_t);
+  v_diff = a_size.z;
   vec2 c = px / u_view * 2.0 - 1.0;
   gl_Position = vec4(c.x, -c.y, 0.0, 1.0);
 }`;
@@ -378,21 +513,28 @@ uniform float u_dpr;
 in vec2 v_q;
 in vec2 v_px;
 flat in vec4 v_cellA, v_uvA, v_cellB, v_uvB, v_col, v_clip;
-flat in float v_size;
+flat in float v_size, v_diff;
 out vec4 o;
-// No early return: the mipmap level needs the derivatives of every pixel.
-float field(vec4 cell, vec4 uv, vec2 q, float lod) {
+// The signed distance in em. Outside the cell is far outside the glyph.
+float sdf(vec4 cell, vec4 uv, vec2 q) {
   vec2 f = (q - cell.xy) / (cell.zw - cell.xy);
-  float inside = step(0.0, f.x) * step(0.0, f.y) * step(f.x, 1.0) * step(f.y, 1.0);
-  return inside * texture(u_atlas, mix(uv.xy, uv.zw, clamp(f, 0.0, 1.0)), lod).r;
+  if (f.x < 0.0 || f.y < 0.0 || f.x > 1.0 || f.y > 1.0) return -1.0;
+  return textureLod(u_atlas, mix(uv.xy, uv.zw, f), 0.0).r;
+}
+// Five taps, b em apart, when b is more than 0.
+float field(vec4 cell, vec4 uv, vec2 q, float b) {
+  float s = sdf(cell, uv, q);
+  if (b <= 0.0) return s;
+  s += sdf(cell, uv, q + vec2(b, b)) + sdf(cell, uv, q + vec2(-b, b));
+  s += sdf(cell, uv, q + vec2(b, -b)) + sdf(cell, uv, q + vec2(-b, -b));
+  return s / 5.0;
 }
 void main() {
   if (v_px.x < v_clip.x || v_px.y < v_clip.y || v_px.x > v_clip.z || v_px.y > v_clip.w) discard;
-  // u_blur is in em. One mipmap level doubles the blur in texels.
-  float lod = log2(max(1.0, u_blur * v_size * u_dpr));
-  float d = mix(field(v_cellA, v_uvA, v_q, lod), field(v_cellB, v_uvB, v_q, lod), u_t);
-  float w = max(fwidth(d), 1e-4);
-  float a = clamp((d - 0.5) / w + 0.5, 0.0, 1.0) * v_col.a;
+  float b = u_blur * v_diff;
+  float s = mix(field(v_cellA, v_uvA, v_q, b), field(v_cellB, v_uvB, v_q, b), u_t);
+  // The distance in device pixels gives the coverage of the pixel.
+  float a = clamp(s * v_size * u_dpr + 0.5, 0.0, 1.0) * v_col.a;
   o = vec4(v_col.rgb * a, a);
 }`;
 
@@ -403,11 +545,6 @@ let uView = null;
 let uT = null;
 let uBlur = null;
 let uDpr = null;
-// A blend of two fields has creases along the middle of each stroke. A
-// blurred field (a higher mipmap level) smooths them. The blur is in em, so
-// small text gets the same blur as large text. It is greatest halfway and
-// zero at each end, so the first and last frames are sharp.
-const BLUR_EM = 0.06;
 
 function setup() {
   if (gl) return true;
@@ -462,26 +599,22 @@ function upload(atlas, data, count) {
     gl.vertexAttribPointer(i + 1, 4, gl.FLOAT, false, FLOATS * 4, i * 16);
     gl.vertexAttribDivisor(i + 1, 1);
   }
+  // R16F: a float that the GPU can filter. 8 bits put steps in the edge.
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   gl.texImage2D(
     gl.TEXTURE_2D,
     0,
-    gl.R8,
+    gl.R16F,
     atlas.W,
     atlas.H,
     0,
     gl.RED,
-    gl.UNSIGNED_BYTE,
+    gl.FLOAT,
     atlas.atlas,
   );
-  gl.generateMipmap(gl.TEXTURE_2D);
-  gl.texParameteri(
-    gl.TEXTURE_2D,
-    gl.TEXTURE_MIN_FILTER,
-    gl.LINEAR_MIPMAP_LINEAR,
-  );
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -514,6 +647,8 @@ function release(scene) {
 
 // cubic-bezier(0.4, 0, 0.2, 1), the same curve as the token transitions.
 function ease(x) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
   const bz = (a, b, t) =>
     3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
   let lo = 0;
@@ -560,15 +695,52 @@ function pairs(before, after) {
 
 let active = null;
 
+// End the morph. Each animation goes, so each box and token takes its own
+// value: the value of the new theme. Then the transitions come back on, with
+// no value left to move.
 function finish() {
   if (!active) return;
   cancelAnimationFrame(active.raf);
+  for (const a of active.anims) a.cancel();
   removeEventListener('scroll', finish);
   removeEventListener('resize', finish);
-  root.classList.remove('morphing');
+  flush();
+  root.classList.remove('morph-measure', 'morphing');
   canvas.remove();
   release(active.scene);
+  const done = active.done;
   active = null;
+  done();
+}
+
+// The tokens that themes.css morphs are the ones in its transition-property.
+// During a morph a paused animation on :root moves them, on the clock of the
+// glyphs and the boxes. CSS transitions would start at the style change, and
+// the first frame of a new theme is slow: they would move ahead while the
+// glyphs wait.
+function tokenNames() {
+  return getComputedStyle(root)
+    .transitionProperty.split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.startsWith('--'));
+}
+function tokenValues(names) {
+  const cs = getComputedStyle(root);
+  return names.map((n) => cs.getPropertyValue(n).trim());
+}
+function morphTokens(names, from, to, ms) {
+  const frames = {};
+  names.forEach((n, i) => {
+    if (from[i] !== to[i]) frames[n] = [from[i], to[i]];
+  });
+  const anim = root.animate(frames, {
+    duration: ms,
+    easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    fill: 'backwards',
+  });
+  anim.pause();
+  anim.currentTime = 0;
+  return anim;
 }
 
 // Load the Latin faces of every font in the stylesheets, so a theme change
@@ -585,6 +757,7 @@ function preloadFonts() {
 }
 addEventListener('load', () => setTimeout(preloadFonts, 500));
 
+// Resolves when the morph ends, or at once when there is no morph.
 async function morph(apply) {
   finish();
   const ms = duration();
@@ -594,14 +767,19 @@ async function morph(apply) {
   }
   if (document.fonts.status === 'loading') await document.fonts.ready;
 
-  // Transitions off for the whole measure. A press during a morph then
-  // starts from the end of the last morph, not from a token between values.
+  // Transitions off from here to the end. A press during a morph then starts
+  // from the end of the last morph, not from a token between values.
+  const names = tokenNames();
   root.classList.add('morph-measure');
   flush();
   const old = { ...root.dataset };
   const before = snapshot();
+  const boxesBefore = boxes();
+  const tokensBefore = tokenValues(names);
   apply();
   let after = snapshot();
+  let boxesAfter = boxes();
+  let tokensAfter = tokenValues(names);
   if (document.fonts.status === 'loading') {
     // The new theme asked for a font that is not loaded yet. Wait, and read
     // again.
@@ -610,50 +788,53 @@ async function morph(apply) {
     await document.fonts.ready;
     apply();
     after = snapshot();
+    boxesAfter = boxes();
+    tokensAfter = tokenValues(names);
   }
   setData(old);
   flush();
-  root.classList.remove('morph-measure');
 
   const list = pairs(before, after);
   const dpr = devicePixelRatio || 1;
-  const keys = new Map();
+  const entries = new Map();
   for (const pair of list) {
     for (const g of pair) {
-      g.id = `${g.font}|${g.ch}`;
-      if (!keys.has(g.id))
-        keys.set(g.id, { id: g.id, ch: g.ch, font: g.font, size: g.size });
+      place(g, dpr);
+      if (!entries.has(g.key)) {
+        const { ch, font, size, phase, fill } = g;
+        entries.set(g.key, { ch, font, size, phase, fill });
+      }
     }
   }
   const atlas = buildAtlas(
-    keys.values(),
+    entries.values(),
     dpr,
     gl.getParameter(gl.MAX_TEXTURE_SIZE),
   );
   if (!atlas || list.length === 0) {
+    root.classList.remove('morph-measure');
     apply();
     return;
   }
 
   const data = new Float32Array(list.length * FLOATS);
   list.forEach(([a, b], i) => {
-    const ca = atlas.cells.get(a.id);
-    const cb = atlas.cells.get(b.id);
-    const ya = a.top + atlas.ascent.get(a.font);
-    const yb = b.top + atlas.ascent.get(b.font);
+    const ca = entries.get(a.key);
+    const cb = entries.get(b.key);
+    const differ = a.font !== b.font || a.ch !== b.ch ? 1 : 0;
     data.set(
       [
         a.x,
-        ya,
+        a.baseline,
         b.x,
-        yb,
+        b.baseline,
         a.size,
         b.size,
+        differ,
         0,
-        0,
-        ...ca.em,
+        ...cellEm(a, ca, dpr),
         ...ca.uv,
-        ...cb.em,
+        ...cellEm(b, cb, dpr),
         ...cb.uv,
         ...a.color,
         ...b.color,
@@ -678,18 +859,36 @@ async function morph(apply) {
   document.body.append(canvas);
   root.classList.add('morphing');
   apply();
+  const anims = [
+    morphTokens(names, tokensBefore, tokensAfter, ms),
+    ...morphBoxes(boxesBefore, boxesAfter, ms),
+  ];
 
-  const start = performance.now();
-  active = { scene, raf: 0 };
+  // One clock for the glyphs, the boxes and the tokens. The first frame of
+  // the new theme is slow (style, layout and paint of the whole page). The
+  // clock starts on the frame after it, so nothing jumps ahead.
+  let start = null;
+  let frames = 0;
   const frame = (now) => {
+    if (start === null) {
+      if (frames++ < 1) {
+        active.raf = requestAnimationFrame(frame);
+        return;
+      }
+      start = now;
+    }
     const x = Math.min(1, (now - start) / ms);
     draw(scene, ease(x));
+    for (const anim of anims) anim.currentTime = x * ms;
     if (x < 1) active.raf = requestAnimationFrame(frame);
     else finish();
   };
-  active.raf = requestAnimationFrame(frame);
+  const ended = new Promise((resolve) => {
+    active = { scene, raf: requestAnimationFrame(frame), anims, done: resolve };
+  });
   addEventListener('scroll', finish, { passive: true });
   addEventListener('resize', finish);
+  return ended;
 }
 
 window.autosamMorph = morph;

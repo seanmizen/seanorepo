@@ -12,7 +12,8 @@
  *
  * The morph: this file registers each token that can interpolate with
  * @property. :root transitions those tokens, and every element that reads a
- * token follows. A token must have a registration and a place in
+ * token follows. During a theme change, morph.js reads transition-property
+ * and moves the same tokens on its own clock. A token must have a registration and a place in
  * transition-property, or it does not morph.
  *
  * Fonts: one font family cannot interpolate into another in CSS. So morph.js

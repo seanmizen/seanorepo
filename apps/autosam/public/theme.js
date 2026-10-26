@@ -115,10 +115,11 @@
         save(s.key, current[name]);
         writeUrl();
         show();
-        // morph.js is a module, so it can load after a fast first press.
-        if (window.autosamMorph) window.autosamMorph(apply);
-        else apply();
-        syncBar();
+        // morph.js is a module, so it can load after a fast first press. A
+        // morph ends with no transitionend, so sync the bar when it ends.
+        Promise.resolve(
+          window.autosamMorph ? window.autosamMorph(apply) : apply(),
+        ).then(syncBar);
       });
     }
     syncBar();
