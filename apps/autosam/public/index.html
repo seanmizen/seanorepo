@@ -199,8 +199,16 @@
 
 <!-- theme.js wires the buttons. morph.js morphs the page on each change. -->
 <div class="theme-pane" role="group" aria-label="Theme">
-  <button type="button" id="themeBtn"><small>Theme</small><b>Baseline</b></button>
-  <button type="button" id="modeBtn"><small>Mode</small><b>Auto</b></button>
+  <div class="picker">
+    <button type="button" class="step" id="themePrev" aria-label="Previous theme">‹</button>
+    <button type="button" id="themeBtn" aria-keyshortcuts="ArrowLeft ArrowRight"><small>Theme</small> <b>Baseline</b></button>
+    <button type="button" class="step" id="themeNext" aria-label="Next theme">›</button>
+  </div>
+  <div class="picker">
+    <button type="button" class="step" id="modePrev" aria-label="Previous mode">‹</button>
+    <button type="button" id="modeBtn" aria-keyshortcuts="ArrowLeft ArrowRight"><small>Mode</small> <b>Auto</b></button>
+    <button type="button" class="step" id="modeNext" aria-label="Next mode">›</button>
+  </div>
 </div>
 <button type="button" class="refollow" id="refollow" title="Scroll back to the playing bar and keep following it (F)" hidden>
   <span class="arrow" id="refollowArrow" aria-hidden="true">↓</span>

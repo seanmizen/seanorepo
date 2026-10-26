@@ -52,10 +52,12 @@ key is in octave 4.
 
 ## Themes
 
-A pane at the bottom left of each page has two buttons: theme (`Baseline`,
-`KBBQ`, `Bare`) and mode (`Auto`, `Light`, `Dark`). Each press selects the next
-value. `Auto` follows the system light or dark setting. The choice stays on
-the device.
+A pane at the bottom left of each page has two pickers: theme (`Baseline`,
+`KBBQ`, `Bare`) and mode (`Auto`, `Light`, `Dark`). A press on the main
+button selects the next value. The ‹ and › buttons select the previous and
+the next value. While the main button has focus, the left and right arrow
+keys do the same. `Auto` follows the system light or dark setting. The
+choice stays on the device.
 
 A URL can give both: `/?theme=kbbq&mode=dark` opens the page in KBBQ dark,
 and the device keeps that choice. A press writes the choice back to the URL.

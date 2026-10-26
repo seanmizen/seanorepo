@@ -103,17 +103,22 @@
   document.addEventListener('DOMContentLoaded', () => {
     for (const [name, s] of Object.entries(SETTINGS)) {
       const button = document.getElementById(`${name}Btn`);
+      const prev = document.getElementById(`${name}Prev`);
+      const next = document.getElementById(`${name}Next`);
       const value = button.querySelector('b');
-      const show = () => {
+      // The value `by` places from the current one, round the list.
+      const at = (by) => {
         const i = s.list.findIndex((t) => t.id === current[name]);
-        const next = s.list[(i + 1) % s.list.length];
-        value.textContent = s.list[i].label;
-        button.title = `Change the ${name} to ${next.label}`;
+        return s.list[(i + by + s.list.length) % s.list.length];
       };
-      show();
-      button.addEventListener('click', () => {
-        const i = s.list.findIndex((t) => t.id === current[name]);
-        current[name] = s.list[(i + 1) % s.list.length].id;
+      const show = () => {
+        value.textContent = at(0).label;
+        button.title = `Change the ${name} to ${at(1).label} (← →)`;
+        prev.title = `Change the ${name} to ${at(-1).label}`;
+        next.title = `Change the ${name} to ${at(1).label}`;
+      };
+      const step = (by) => {
+        current[name] = at(by).id;
         save(s.key, current[name]);
         writeUrl();
         show();
@@ -122,6 +127,19 @@
         Promise.resolve(
           window.autosamMorph ? window.autosamMorph(apply) : apply(),
         ).then(syncBar);
+      };
+      show();
+      button.addEventListener('click', () => step(1));
+      prev.addEventListener('click', () => step(-1));
+      next.addEventListener('click', () => step(1));
+      // The arrow keys step the value while the main button has focus. The
+      // event stops here: on the song page the arrows also change section.
+      button.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+        step(e.key === 'ArrowLeft' ? -1 : 1);
       });
     }
     syncBar();
