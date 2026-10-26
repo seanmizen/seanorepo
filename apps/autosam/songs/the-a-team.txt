@@ -1,0 +1,38 @@
+title: The A Team
+artist: Ed Sheeran
+key: A
+tempo: 85
+
+[Intro]
+A | F#m A | A | F#m A
+
+[Verse 1]
+A | E/G# | F#m7 | D
+A | E/G# | F#m7 | D
+
+[Chorus]
+Bm7 | D | A | E
+Bm7 | D | A | E/G#
+F#m D | A | F#m D | A
+F#m D | A | F#m D | A E/G#
+F#m D | A | F#m D | A
+
+[Verse 2]
+A | E/G# | F#m7 | D
+A | E/G# | F#m7 | D
+
+[Bridge]
+Bm7 | D | F#m | A
+Bm7 | D | F#m D | A
+F#m D | A | F#m D | A
+
+[Chorus]
+Bm7 | D | A | E
+Bm7 | D | A | E/G#
+F#m D | A | F#m D | A
+F#m D | A | F#m D | A E/G#
+F#m D | A | F#m D | A
+F#m D | A | F#m D | A
+
+[Outro]
+A | A
