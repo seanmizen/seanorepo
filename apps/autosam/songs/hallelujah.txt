@@ -1,0 +1,52 @@
+title: Hallelujah
+artist: Leonard Cohen
+key: C
+tempo: 168
+time: 6/8
+
+[Intro]
+C | Am | C | Am
+
+[Verse 1]
+C | C | Am | Am
+C | C | Am | Am
+F | G | C | G
+C | F G | Am | F | G | E7 | Am | Am
+
+[Chorus]
+F | F | Am | Am
+F | F | C G | C
+
+[Verse 2]
+C | C | Am | Am
+C | C | Am | Am
+F | G | C | G
+C | F G | Am | F | G | E7 | Am | Am
+
+[Chorus]
+F | F | Am | Am
+F | F | C G | C
+
+[Verse 3]
+C | C | Am | Am
+C | C | Am | Am
+F | G | C | G
+C | F G | Am | F | G | E7 | Am | Am
+
+[Chorus]
+F | F | Am | Am
+F | F | C G | C
+
+[Verse 4]
+C | C | Am | Am
+C | C | Am | Am
+F | G | C | G
+C | F G | Am | F | G | E7 | Am | Am
+
+[Chorus]
+F | F | Am | Am
+F | F | C G | C
+
+[Outro]
+F | F | Am | Am
+F | F | C G | C

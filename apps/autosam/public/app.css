@@ -237,6 +237,10 @@
     background: var(--accent);
     border-color: var(--accent);
   }
+  /* The first beat of a group of three (6/8). */
+  .beats i.grp {
+    margin-left: 8px;
+  }
   .transport {
     display: flex;
     gap: 8px;
@@ -651,7 +655,8 @@
     font-weight: 400;
     color: var(--accent);
   }
-  .sec-meta {
+  .sec-meta,
+  .sec-time {
     font-family: var(--mono);
     font-size: 11.5px;
     color: var(--muted);
@@ -714,7 +719,8 @@
   }
   .bar .r8 {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
     gap: 2px;
     margin-top: auto;
     padding-top: 4px;

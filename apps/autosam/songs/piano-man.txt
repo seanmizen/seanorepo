@@ -1,0 +1,45 @@
+title: Piano Man
+artist: Billy Joel
+key: C
+tempo: 180
+time: 3/4
+
+[Intro]
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | C/G | F | G | C | C
+
+[Verse 1]
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | Am/G | F | G | C | C
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | C/G | F | G | C | C
+
+[Interlude]
+Am | Am/G | D/F# | F | Am | Am/G | D/F# | F
+Am | Am/G | D/F# | D/F# | G | G/F | C/E | G7/D
+
+[Chorus]
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | C/G | F | G | C | C
+
+[Harmonica]
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | C/G | F | G | C | C
+
+[Verse 2]
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | Am/G | F | G | C | C
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | C/G | F | G | C | C
+
+[Interlude]
+Am | Am/G | D/F# | F | Am | Am/G | D/F# | F
+Am | Am/G | D/F# | D/F# | G | G/F | C/E | G7/D
+
+[Chorus]
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | C/G | F | G | C | C
+
+[Outro]
+C | G/B | F/A | C/G | F | C/E | D7 | G
+C | G/B | F/A | C/G | F | G | C | C
