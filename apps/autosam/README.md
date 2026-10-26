@@ -50,6 +50,47 @@ stepper moves the key by one semitone or by one octave, up to 24 semitones
 each way. The key shows as `A♭(4) (−1 semitone)`: the tonic of the original
 key is in octave 4.
 
+## The keyboard
+
+| Key | What it does |
+|---|---|
+| Space | Play or stop |
+| ← → | The previous or the next bar |
+| ↑ ↓ | The bar above or below, as the bars sit on the screen in the theme |
+| `[` `]` | The previous or the next section |
+| Shift with a click or an arrow | Select bars from the cursor. The selection is the loop range, and Loop turns on. |
+| Shift with a click on a section name | Extend the loop range to hold all of that section. From inside the section, the range is the section. |
+| Esc | End the loop range |
+| 0, 1, 2 | The original key, the suggested keys |
+| F | Follow the playing bar again |
+
+With Shift held over a bar or a section name, the bars that a click would
+loop have a light fill. While a song plays, a move waits for the next bar
+line, so you stay in time.
+
+The Loop label names the range ("Loop bars 5–12"). One outline goes around
+all the bars of the range, across rows and sections. Esc, a move without
+Shift (a click on a bar or a section, an arrow, a key of the roadmap), a new
+song, or Loop off ends the range. If the selection turned Loop on, the end
+of the range turns it off. With a range, `|◀` goes to the start of the loop
+and keeps it.
+
+## The roadmap and the compact chart (narrow screens)
+
+On a screen narrower than 720 px, the roadmap shows above the chart: one key
+for each section, in the order of the song. The key of the section that
+plays is lit (its name is in a `<mark>`). A key jumps to its section. A wide
+screen has the full chart only, with no roadmap and no switch.
+
+On a narrow screen the "Chart" switch picks Full or Compact, and the device
+keeps the choice. With no choice, it starts on Compact. Compact
+draws each distinct section once: sections with the same chords at the same
+places merge, whatever their names, and the label names them all
+("Intro · Verse 1 · Verse 2", "Pre-chorus ×3"). Its bars count from 1 in
+each section. A click on a bar goes to that bar in the section that plays
+now, or in the next section of that shape. The playing bar, the cursor, the
+loop range and the arrow keys work in both views.
+
 ## Sounds
 
 The Sound setting picks the synth that plays the notes. The choice stays on

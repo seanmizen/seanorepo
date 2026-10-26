@@ -541,6 +541,65 @@
     display: grid;
     gap: 4px;
   }
+  /* The roadmap and the chart view (narrow screens). The roadmap is one
+     strip that scrolls sideways, as a timeline. The view switch sits under
+     it, with its label on the left. */
+  .chart-tools {
+    display: grid;
+    gap: 10px;
+  }
+  .roadmap {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 16px 6px 0;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+  }
+  .roadmap::-webkit-scrollbar {
+    display: none;
+  }
+  .road {
+    flex: none;
+    padding: 5px 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    white-space: nowrap;
+    scroll-snap-align: center;
+    cursor: pointer;
+  }
+  .road:hover {
+    border-color: var(--muted);
+  }
+  .road.cur {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .road mark {
+    background: none;
+    color: inherit;
+  }
+  .view-ctl {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .view-ctl .ctl-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .view-seg {
+    flex: 0 1 15em;
+  }
   .chart-head h2 {
     font-family: var(--display);
     font-weight: var(--display-weight);
@@ -680,6 +739,10 @@
   .bar.cur {
     background: var(--accent-soft);
     border-color: var(--accent);
+  }
+  /* Shift held over a bar: the bars that a click would loop. */
+  .bar.preview {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   }
   .bar.cur .r8 i.lit {
     background: var(--accent);
