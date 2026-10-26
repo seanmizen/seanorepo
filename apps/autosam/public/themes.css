@@ -3,7 +3,7 @@
  *
  * Where: index.html links this file before its own styles. theme.js sets
  * data-theme and data-mode on <html> and fills the pickers.
- * When: the tokens change when the visitor picks a theme or a mode, when a
+ * When: the tokens change when the visitor changes the theme or the mode, when a
  * URL gives ?theme= or ?mode=, or when the system changes between light and
  * dark and the mode is Auto.
  * Why: a theme is one set of the tokens below, in a light and a dark mode.
@@ -15,11 +15,10 @@
  * token follows. A token must have a registration and a place in
  * transition-property, or it does not morph.
  *
- * Fonts: one font family cannot interpolate into another. So a picker change
- * runs in a view transition (theme.js): the old page fades out over the new
- * page while the tokens morph under it. The text dissolves from one font to
- * the next. The fonts load as variable fonts, so --display-weight moves
- * smoothly inside one family.
+ * Fonts: one font family cannot interpolate into another in CSS. So morph.js
+ * draws the text on a WebGL layer during a change, and morphs each glyph
+ * from the old font to the new one while the tokens morph under it. The
+ * fonts load as variable fonts, so --display-weight moves smoothly too.
  *
  * To add a theme: add a :root[data-theme="<id>"] block for light and a
  * :root[data-theme="<id>"][data-mode="dark"] block for dark. Then add <id> to
@@ -143,12 +142,6 @@
     --radius-card, --radius-control, --display-weight;
   transition-duration: var(--morph);
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-/* The page has one view transition, root, so * selects only it. */
-::view-transition-old(*),
-::view-transition-new(*) {
-  animation-duration: var(--morph);
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
