@@ -18,6 +18,8 @@
   const THEMES = [
     { id: 'baseline', label: 'Baseline' },
     { id: 'kbbq', label: 'KBBQ' },
+    // No page styles: browser defaults and modern-normalize only.
+    { id: 'bare', label: 'Bare' },
   ];
   // "auto" follows the system light or dark setting.
   const MODES = [

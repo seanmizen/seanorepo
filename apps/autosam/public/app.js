@@ -101,6 +101,10 @@ function el(tag, className, text) {
   return node;
 }
 
+// The nodes with a space between each two. A flex or grid layout drops the
+// spaces. With no page styles (the bare theme) they keep words apart.
+const spaced = (nodes) => nodes.flatMap((n, i) => (i ? [' ', n] : [n]));
+
 // ---------- Edit key panel ----------
 function setupKeyPanel(slot) {
   slot.appendChild($('keyPanel'));
@@ -199,8 +203,10 @@ async function loadLibrary() {
       Boolean,
     );
     row.append(
-      el('span', 'song-title', s.title),
-      el('span', 'song-meta', facts.join(' · ')),
+      ...spaced([
+        el('span', 'song-title', s.title),
+        el('span', 'song-meta', facts.join(' · ')),
+      ]),
     );
     list.append(row);
   }
@@ -238,14 +244,16 @@ async function loadLibrary() {
       }
     });
     row.append(
-      el('span', 't', s.title),
-      el(
-        'span',
-        'm',
-        `${s.artist ? `${s.artist} · ` : ''}/${s.slug} · archived ${when}`,
-      ),
-      btn,
-      msg,
+      ...spaced([
+        el('span', 't', s.title),
+        el(
+          'span',
+          'm',
+          `${s.artist ? `${s.artist} · ` : ''}/${s.slug} · archived ${when}`,
+        ),
+        btn,
+        msg,
+      ]),
     );
     arch.append(row);
   }
@@ -968,12 +976,13 @@ function renderChart() {
         `Bar ${i + 1}: ${names.join(', ') || `continues ${chordName(b.startChord)}`}`,
       );
       const cs = el('span', `cs${b.changes.length > 1 ? ' multi' : ''}`);
-      if (b.changes.length) for (const n of names) cs.append(el('span', '', n));
+      if (b.changes.length)
+        cs.append(...spaced(names.map((n) => el('span', '', n))));
       else cs.append(el('span', 'tie', chordName(b.startChord)));
       const r8 = el('span', 'r8');
       for (let k = 0; k < 8; k++)
         r8.append(el('i', b.changes.some((c) => c.pos === k) ? 'chg' : ''));
-      bar.append(el('span', 'bn', String(i + 1)), cs, r8);
+      bar.append(el('span', 'bn', String(i + 1)), ' ', cs, r8);
       bar.addEventListener('click', () => goTo(i));
       grid.append(bar);
       barEls[i] = bar;
@@ -997,7 +1006,7 @@ function renderKeyButtons() {
     const btn = el('button');
     btn.type = 'button';
     btn.dataset.shift = String(c.shift);
-    btn.append(el('b', '', keyShortAt(c.shift)), el('small', '', c.small));
+    btn.append(el('b', '', keyShortAt(c.shift)), ' ', el('small', '', c.small));
     btn.addEventListener('click', () => setShift(c.shift));
     seg.append(btn);
   }

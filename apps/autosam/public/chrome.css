@@ -1,0 +1,87 @@
+/*
+ * autosam chrome: the styles that every theme needs, bare too.
+ *
+ * Where: index.html links this file after themes.css, before app.css.
+ * When: always on.
+ * Why: these rules make things work, not look a way. The morph layer must
+ * cover the page, and the real text must hide under it. The theme pane must
+ * stay on screen, or a person in the bare theme cannot get out. app.css
+ * gives the pane its look in the other themes.
+ */
+
+.theme-pane {
+  position: fixed;
+  z-index: 20;
+  left: calc(max(16px, env(safe-area-inset-left, 0px)) + 4px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  background: Canvas;
+}
+
+/* Glyph morph (morph.js). The WebGL layer draws the text, so the real text hides. Inputs and generated content keep their text. Gradient text loses its background too. */
+.morph-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+html.morphing body * {
+  -webkit-text-fill-color: transparent;
+}
+html.morphing input,
+html.morphing textarea,
+html.morphing ::marker,
+html.morphing ::before,
+html.morphing ::after {
+  -webkit-text-fill-color: currentcolor;
+}
+html.morphing .gradient-text {
+  background: none;
+}
+html.morph-measure {
+  transition: none;
+}
+html.morphing [data-morph-skip] * {
+  -webkit-text-fill-color: currentcolor;
+}
+
+/* The morph debug panel (?debug=true). The morph leaves it alone. */
+.morph-debug {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483647;
+  width: 300px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  font: 12px / 1.3 var(--mono);
+}
+.morph-debug label {
+  display: grid;
+  grid-template-columns: 96px 1fr 56px;
+  gap: 6px;
+  align-items: center;
+}
+.morph-debug output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.morph-debug pre {
+  margin: 4px 0;
+  white-space: pre-wrap;
+  color: var(--muted);
+  font: inherit;
+}
+.morph-debug div {
+  display: flex;
+  gap: 6px;
+}
+.morph-debug [hidden] {
+  display: none;
+}
