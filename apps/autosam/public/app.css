@@ -82,16 +82,19 @@
     display: grid;
     gap: 6px;
   }
+  /* The path of the page, like the title of seanmizen.com. The site name is bold. The page itself is dimmed and is not a link. */
   .crumbs {
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
-    flex-wrap: wrap;
-  }
-  .crumbs a {
     font-family: var(--mono);
     font-size: 12px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .crumbs a {
     text-decoration: none;
+  }
+  .crumb-page {
+    font-weight: normal;
+    opacity: 0.6;
   }
   .crumbs a:hover {
     text-decoration: underline;

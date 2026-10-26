@@ -1114,9 +1114,9 @@ function loadSong(parsed, fresh) {
   voiced = { key: null, rh: null, lh: null };
   document.title = `${parsed.meta.title} · autosam`;
   $('songTitle').textContent = parsed.meta.title;
-  $('eyebrow').textContent = parsed.meta.artist
-    ? `autosam · ${parsed.meta.artist}`
-    : 'autosam';
+  $('crumbPage').textContent = `/${current.slug}`;
+  $('eyebrow').textContent = parsed.meta.artist;
+  $('eyebrow').hidden = !parsed.meta.artist;
   $('songNotes').textContent = parsed.meta.notes;
   kbdOffset = null;
   buildKeyboard();
@@ -1366,6 +1366,7 @@ function wireSongControls() {
 }
 
 async function showSong(slug) {
+  $('nfPage').textContent = `/${slug}`;
   const r = await api(`/api/songs/${encodeURIComponent(slug)}`);
   if (!r.ok) {
     $('notFound').hidden = false;
