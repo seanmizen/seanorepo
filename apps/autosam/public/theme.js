@@ -20,6 +20,13 @@
     { id: 'kbbq', label: 'KBBQ' },
     // No page styles: browser defaults and modern-normalize only.
     { id: 'bare', label: 'Bare' },
+    // The dense theme (REQ-DENSE). It fits the page to the viewport.
+    { id: 'tone', label: 'Tone', fit: true },
+    // The fewest pixels (REQ-PIXEL).
+    { id: 'pixel-1', label: 'Pixel-1' },
+    { id: 'pixel-2', label: 'Pixel-2' },
+    // Pixel-2 with a designed control panel.
+    { id: 'pixel-3', label: 'Pixel-3' },
   ];
   // "auto" follows the system light or dark setting.
   const MODES = [
@@ -27,10 +34,28 @@
     { id: 'light', label: 'Light' },
     { id: 'dark', label: 'Dark' },
   ];
+  // The screen of the Pixel-3 display. "plain" is the display of Pixel-3.
+  // The others are instrument screens with each value at a fixed place
+  // (pixel-3-display.css).
+  const SCREENS = [
+    { id: 'plain', label: 'Plain' },
+    { id: 'vfd', label: 'VFD' },
+    { id: 'lcd', label: 'LCD' },
+    { id: 'dots', label: 'Dot matrix' },
+  ];
+  // A setting with "of" is a part of that theme. Its picker shows only in
+  // that theme, and the URL names it only in that theme.
   const SETTINGS = {
-    theme: { list: THEMES, key: 'autosam:theme', fallback: 'baseline' },
+    theme: { list: THEMES, key: 'autosam:theme', fallback: 'pixel-3' },
     mode: { list: MODES, key: 'autosam:mode', fallback: 'auto' },
+    screen: {
+      list: SCREENS,
+      key: 'autosam:screen',
+      fallback: 'lcd',
+      of: 'pixel-3',
+    },
   };
+  const active = (s) => !s.of || current.theme === s.of;
   const root = document.documentElement;
   const systemDark = matchMedia('(prefers-color-scheme: dark)');
 
@@ -65,16 +90,66 @@
     }
   }
 
+  // A dense theme fits the page to the viewport (REQ-DENSE-002). It sets
+  // two values: --fit, the base text size, and --cols, the number of bars in
+  // a row of the chart. For each row length from COLS, up to the longest
+  // section, it finds the largest size in FIT at which the page does not
+  // scroll and no bar wraps its chords. It keeps the row length with the
+  // largest size, and the shortest row of those. When nothing fits, it uses the largest size, rows of 4,
+  // and the page scrolls. Each try is a layout, so the search stops at a
+  // quarter pixel.
+  const FIT = { min: 10, max: 16 };
+  const COLS = [4, 8, 12, 16];
+  const fit = () => {
+    root.style.removeProperty('--fit');
+    root.style.removeProperty('--cols');
+    if (!THEMES.find((t) => t.id === current.theme).fit) return;
+    const sections = document.getElementById('sections');
+    const longest = Number(sections.dataset.longest) || 4;
+    const chords = sections.getElementsByClassName('cs');
+    const set = (px, cols) => {
+      root.style.setProperty('--fit', `${px}px`);
+      root.style.setProperty('--cols', String(cols));
+    };
+    const fits = (px, cols) => {
+      set(px, cols);
+      if (root.scrollHeight > root.clientHeight) return false;
+      if (root.scrollWidth > root.clientWidth) return false;
+      // One line of chords is 1.25 em high. Two lines are a wrap.
+      for (const cs of chords) if (cs.offsetHeight > px * 1.8) return false;
+      return true;
+    };
+    let best = { px: FIT.max, cols: 4, found: false };
+    for (const cols of COLS.filter((c) => c <= longest)) {
+      if (!fits(FIT.min, cols)) continue;
+      let lo = FIT.min;
+      let hi = FIT.max;
+      if (fits(hi, cols)) lo = hi;
+      while (hi - lo > 0.25) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid, cols)) lo = mid;
+        else hi = mid;
+      }
+      if (!best.found || lo > best.px) best = { px: lo, cols, found: true };
+      if (lo === FIT.max) break;
+    }
+    set(best.px, best.cols);
+  };
+
+  // The fit runs inside apply, so a morph reads the page at its new size.
   const apply = () => {
     const auto = systemDark.matches ? 'dark' : 'light';
     root.dataset.theme = current.theme;
     root.dataset.mode = current.mode === 'auto' ? auto : current.mode;
+    root.dataset.screen = current.screen;
+    if (document.body) fit();
   };
 
   const writeUrl = () => {
     const url = new URL(location.href);
     for (const [name, s] of Object.entries(SETTINGS)) {
-      if (current[name] === s.fallback) url.searchParams.delete(name);
+      if (current[name] === s.fallback || !active(s))
+        url.searchParams.delete(name);
       else url.searchParams.set(name, current[name]);
     }
     history.replaceState(history.state, '', url);
@@ -91,6 +166,20 @@
 
   apply();
 
+  // app.js calls this after it changes what the page shows.
+  window.autosamFit = fit;
+  // One fit for each frame of a resize.
+  let resizing = false;
+  addEventListener('resize', () => {
+    if (resizing) return;
+    resizing = true;
+    requestAnimationFrame(() => {
+      resizing = false;
+      fit();
+    });
+  });
+  document.fonts.ready.then(fit);
+
   root.addEventListener('transitionend', (e) => {
     if (e.target === root && e.propertyName === '--bg') syncBar();
   });
@@ -101,6 +190,13 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => {
+    // The picker of a part of a theme shows only in that theme.
+    const pickers = () => {
+      for (const [name, s] of Object.entries(SETTINGS)) {
+        const picker = document.getElementById(`${name}Btn`).closest('.picker');
+        picker.hidden = !active(s);
+      }
+    };
     for (const [name, s] of Object.entries(SETTINGS)) {
       const button = document.getElementById(`${name}Btn`);
       const prev = document.getElementById(`${name}Prev`);
@@ -122,6 +218,7 @@
         save(s.key, current[name]);
         writeUrl();
         show();
+        pickers();
         // morph.js is a module, so it can load after a fast first press. A
         // morph ends with no transitionend, so sync the bar when it ends.
         Promise.resolve(
@@ -142,6 +239,8 @@
         step(e.key === 'ArrowLeft' ? -1 : 1);
       });
     }
+    pickers();
+    fit();
     syncBar();
   });
 })();

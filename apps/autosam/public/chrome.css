@@ -17,6 +17,49 @@
   background: Canvas;
 }
 
+/* The frame of the song list. Only Pixel-3 gives it a box (a faceplate).
+   In the other themes the list is a child of the page grid. */
+.song-deck {
+  display: contents;
+}
+
+/* theme.js hides the picker of a part of a theme in the other themes. */
+.theme-pane .picker[hidden] {
+  display: none;
+}
+
+/* app.js shows a view after it reads the song. Until then the pane is
+   the only content. It stays hidden, so the browser keeps the last page on
+   screen and does not paint a page with no view. */
+body:not(:has(> main.layout:not([hidden]))) .theme-pane {
+  visibility: hidden;
+}
+
+/* On a wide screen the roadmap and the chart switch are hidden in every
+   theme, also where a theme gives them a display. The id outranks the
+   class rules of the themes. */
+#chartTools[hidden] {
+  display: none;
+}
+
+/* The outline of the loop range (app.js drawRange): an <svg> over the
+   chart, in the accent color. */
+#sections {
+  position: relative;
+}
+svg.range {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: square;
+}
+
 /* Glyph morph (morph.js). The WebGL layer draws the text, so the real text hides. Inputs and generated content keep their text. Gradient text loses its background too. */
 .morph-layer {
   position: fixed;

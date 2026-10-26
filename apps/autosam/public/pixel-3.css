@@ -1,0 +1,793 @@
+/*
+ * autosam theme Pixel-3: Pixel-2 with a designed control panel.
+ *
+ * Where: index.html links this file after pixel.css.
+ * When: always loaded. Each rule sits inside a :where() that matches only
+ * Pixel-3. pixel.css gives Pixel-3 the rules of Pixel-2 first.
+ * Why: the control panel is one object, an instrument panel, and form is
+ * the goal. The chart keeps the form of Pixel-2. Space is free here, so the
+ * constraints of REQ-PIXEL do not apply.
+ *
+ * The principles of the panel:
+ * 1. One grid. Each module sits on a grid of 6 columns, and each key is a
+ *    whole share of its row. The edges line up.
+ * 2. Hierarchy follows the role. The display (what plays) is first, the
+ *    largest and the darkest. Play is the main action. The settings come
+ *    next, then the options.
+ * 3. One anatomy. Each module has its label at the top left, its value at
+ *    the top right, and its control below.
+ * 4. Silkscreen labels: small spaced capitals in mono, muted, as printed on
+ *    the panel of an instrument. A label never competes with a value.
+ * 5. One signal color. Red is "on" or "now": the lit LED of a key, the beat,
+ *    a playing transport. All else is grey.
+ * 6. Form shows the action. A key is raised and moves when pressed. A key
+ *    that latches has an LED. A slider is a fader with a cap.
+ * 7. One rhythm. Each space is 2px (a seam) or a step of 0.25em.
+ */
+
+:where(:root[data-theme="pixel-3"]) {
+  & {
+    font-size: 11px;
+  }
+  body {
+    font-stretch: normal;
+    line-height: 1.3;
+  }
+
+  /* The theme pane: pickers of keys at the end of the page. */
+  .theme-pane {
+    gap: 0.5em;
+    margin: 0 1em 1em;
+    padding: 0;
+    background: none;
+  }
+  .theme-pane .picker {
+    gap: 2px;
+  }
+  .theme-pane button {
+    min-height: 2em;
+    padding: 0.2em 0.6em;
+    border-radius: 3px;
+    background: var(--surface);
+    box-shadow:
+      inset 0 -2px 0 var(--line),
+      0 0 0 1px var(--line);
+  }
+  /* A key under the pointer takes the color of the page. Its text and its
+     label keep their colors, so they stay readable. */
+  .theme-pane button:hover:not(:disabled) {
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .theme-pane button:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .theme-pane button small {
+    font-family: var(--mono);
+    font-size: 0.75em;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* The page: the panel on the left, the chart on the right. The panel
+     stays in view while the chart scrolls. */
+  .layout.song:not([hidden]) {
+    display: grid;
+    grid-template-columns: 30em max-content;
+    grid-template-rows: auto repeat(4, auto) 1fr;
+    align-items: start;
+    gap: 1em 1.5em;
+    width: max-content;
+    padding: 1em;
+  }
+  /* The library and the song page share one frame and one masthead, so
+     the crumbs and the title stay in place from page to page. */
+  .layout.lib:not([hidden]) {
+    padding: 1em;
+  }
+  .layout:is(.song, .lib) .masthead {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.75em;
+    background: none;
+  }
+  .layout:is(.song, .lib) .masthead h1 {
+    font-size: 1.6em;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .layout:is(.song, .lib) :is(.crumbs, .eyebrow) {
+    font-family: var(--mono);
+    font-size: 0.85em;
+  }
+  .layout.lib .lib-intro {
+    flex-basis: 100%;
+  }
+  .layout.lib .masthead {
+    margin-bottom: 1em;
+  }
+  .layout.song .chart-tools,
+  .layout.song .sections,
+  .layout.song details.edit,
+  .layout.song .notes {
+    grid-column: 2;
+  }
+  /* The chart tools (narrow screens) are modules on the same chassis as the
+     panel: 2px seams, then rounded modules. The running order is a grid of
+     keys that wraps. The section that plays has its LED lit. The chart
+     view is a module like Piano style: its label, then two latching keys. */
+  .layout.song .chart-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    padding: 2px;
+    border-radius: 6px;
+    background: var(--line);
+  }
+  .layout.song .chart-tools .view-ctl {
+    grid-column: auto;
+  }
+  .layout.song .roadmap {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(6.5em, 1fr));
+    gap: 0.25em;
+    padding: 0.75em;
+    border-radius: 4px;
+    background: var(--surface);
+  }
+  .layout.song .roadmap::before {
+    content: attr(aria-label);
+    grid-column: 1 / -1;
+    margin-bottom: 0.25em;
+    font-family: var(--mono);
+    font-size: 0.75em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .layout.song .chart-tools .road {
+    min-height: 2.25em;
+    padding: 0.25em 0.4em;
+    white-space: normal;
+    font-family: var(--mono);
+    font-size: 0.8em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .layout.song .road::before {
+    content: "";
+    justify-self: center;
+    width: 1.2em;
+    height: 3px;
+    margin-bottom: 0.25em;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .layout.song .road.cur::before {
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent);
+  }
+  .layout.song .road mark {
+    background: none;
+    color: inherit;
+    font-weight: 700;
+  }
+  .layout.song .sections .bar.preview {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  }
+
+  /* The panel: modules on a grid of 6 columns. The 2px seams show the
+     chassis behind them. */
+  .layout.song .side {
+    grid-column: 1;
+    grid-row: 2 / -1;
+    position: sticky;
+    top: 1em;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-auto-flow: dense;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 6px;
+    background: var(--line);
+    contain: none;
+  }
+  .layout.song :is(.now, .ctl, .toggles, .kbd-panel) {
+    grid-column: span 6;
+    padding: 0.75em;
+    border-radius: 4px;
+    background: var(--surface);
+  }
+  .layout.song .ctl:has(#tempo) {
+    grid-column: span 4;
+  }
+  .layout.song .ctl:has(#vol) {
+    grid-column: span 2;
+  }
+  .layout.song .ctl:has(#styleSeg),
+  .layout.song .ctl:has(#synthSeg) {
+    grid-column: span 3;
+  }
+
+  /* The anatomy of a module: label and value, then the control. */
+  .layout.song .ctl {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-content: start;
+    align-items: baseline;
+    gap: 0.5em;
+  }
+  .layout.song .ctl-head {
+    display: contents;
+  }
+  .layout.song .ctl > :not(.ctl-head, .ctl-label),
+  .layout.song .ctl-head > .row ~ * {
+    grid-column: 1 / -1;
+  }
+  .layout.song :is(.ctl-label, .hint, .lbl),
+  .layout.song .toggles::before {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.75em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .layout.song label.ctl-label[for="tempo"] {
+    display: block;
+  }
+  .layout.song .ctl-val {
+    justify-self: end;
+    font-family: var(--mono);
+    font-size: 0.85em;
+    color: var(--ink);
+  }
+  .layout.song .ctl-head .row {
+    display: flex;
+    align-items: baseline;
+    justify-self: end;
+    gap: 0.5em;
+  }
+  /* The tempo reset is a small key, so the head of Tempo keeps the height
+     of the head of Volume. */
+  .layout.song .side .mini {
+    min-height: 0;
+    padding: 0 0.4em;
+    font-family: var(--mono);
+    font-size: 0.85em;
+  }
+
+  /* Keys */
+  .layout:is(.song, .lib) :is(.side, .chart-tools, details.edit, .key-panel)
+    :is(button, .seg label, .chip) {
+    display: inline-grid;
+    align-content: center;
+    min-height: 2.25em;
+    padding: 0.25em 0.5em;
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--ink);
+    box-shadow:
+      inset 0 -2px 0 var(--line),
+      0 0 0 1px var(--line);
+    font-weight: 500;
+    line-height: 1.1;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 60ms;
+  }
+  .layout:is(.song, .lib)
+    :is(.side, .chart-tools, details.edit, .key-panel)
+    :is(button, .seg label, .chip):hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .layout:is(.song, .lib)
+    :is(.side, .chart-tools, details.edit, .key-panel)
+    :is(button, .seg label, .chip):active {
+    transform: translateY(1px);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  /* A key that latches: an LED on top, lit red when on. */
+  .layout.song :is(.side, .chart-tools) :is(.seg label, .chip)::before {
+    content: "";
+    justify-self: center;
+    width: 1.5em;
+    height: 3px;
+    margin-bottom: 0.3em;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .layout.song :is(.side, .chart-tools) :is(.seg label, .chip):has(:checked) {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow:
+      inset 0 2px 0 var(--line),
+      0 0 0 1px var(--line);
+    font-weight: 700;
+  }
+  .layout.song
+    :is(.side, .chart-tools)
+    :is(.seg label, .chip):has(:checked)::before {
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent);
+  }
+  .layout.song
+    :is(.side, .chart-tools)
+    :is(.seg label, .chip):has(:focus-visible) {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+  .layout.song .seg {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 0.25em;
+  }
+  .layout.song .seg small {
+    display: block;
+    font-size: 0.8em;
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .layout.song .seg label:has(:checked) small {
+    color: var(--muted);
+  }
+  .layout.song .row.spread {
+    display: grid;
+    gap: 0.5em;
+  }
+  .layout.song .hint {
+    margin-top: 0.25em;
+  }
+  .layout.song .stepper {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.25em;
+  }
+  .layout.song .toggles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5em 0.25em;
+  }
+  .layout.song .toggles::before {
+    content: "Options";
+    grid-column: 1 / -1;
+  }
+
+  /* Faders: a line, and a cap with a red index. */
+  .layout.song .side input[type="range"] {
+    width: 100%;
+    height: 2em;
+    background:
+      linear-gradient(var(--line), var(--line)) center / 100% 2px no-repeat;
+    cursor: pointer;
+  }
+  .layout.song .side input[type="range"]::-webkit-slider-thumb {
+    width: 0.9em;
+    height: 2em;
+    border-radius: 2px;
+    background: linear-gradient(
+      90deg,
+      var(--ink) 42%,
+      var(--accent) 42% 58%,
+      var(--ink) 58%
+    );
+  }
+  .layout.song .side input[type="range"]::-moz-range-thumb {
+    width: 0.9em;
+    height: 2em;
+    border-radius: 2px;
+    background: var(--ink);
+  }
+
+  /* The display: what plays now. Dark, like the screen of an instrument. */
+  .layout.song .now {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.75em;
+    background: var(--key-black);
+    color: var(--key-white);
+    font-family: var(--mono);
+  }
+  .layout.song .now :is(.now-top, .now-main, .now-bottom) {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1em;
+    background: none;
+  }
+  .layout.song .now-top {
+    font-size: 0.8em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .layout.song .now-top,
+  .layout.song .now .nash,
+  .layout.song .now .lbl,
+  .layout.song .now .mono {
+    color: color-mix(in srgb, var(--key-white) 60%, transparent);
+  }
+  .layout.song .now .chord-now,
+  .layout.song .now .chord-next {
+    display: grid;
+    gap: 0.25em;
+  }
+  .layout.song .now .chord-next {
+    justify-items: end;
+    text-align: right;
+  }
+  .layout.song .now .chord-big {
+    padding: 0;
+    background: none;
+    color: var(--key-white);
+    font-family: var(--body);
+    font-size: 3.5em;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .layout.song .now .chord-big.counting {
+    color: var(--accent);
+  }
+  .layout.song .now .chord-mid {
+    color: color-mix(in srgb, var(--key-white) 75%, transparent);
+    font-family: var(--body);
+    font-size: 1.75em;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .layout.song .now-bottom {
+    align-items: center;
+  }
+  .layout.song .now .beats {
+    display: flex;
+    gap: 0.3em;
+    font-size: 1.2em;
+    color: color-mix(in srgb, var(--key-white) 25%, transparent);
+  }
+  .layout.song .now .beats i.on {
+    color: var(--accent);
+    text-shadow: 0 0 6px var(--accent);
+  }
+  .layout.song .now .transport {
+    display: flex;
+    gap: 0.25em;
+  }
+  .layout.song .side .now .transport button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    background: color-mix(in srgb, var(--key-white) 14%, transparent);
+    color: var(--key-white);
+    box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.4);
+    font-family: var(--body);
+  }
+  .layout.song .side .now .transport button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--key-white) 22%, transparent);
+    color: var(--key-white);
+  }
+  .layout.song #playBtn {
+    min-width: 6em;
+  }
+  .layout.song #playBtn[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .layout.song #playLabel {
+    display: inline;
+  }
+  .layout.song #startBtn {
+    font-size: 1em;
+  }
+  .layout.song #startBtn::before {
+    content: "|◀ ";
+    font-size: 1em;
+  }
+  .layout.song .now .btn-play svg {
+    width: 0.85em;
+    height: 0.85em;
+  }
+
+  /* The keyboard */
+  .layout.song .kbd-panel {
+    display: grid;
+    gap: 0.5em;
+  }
+  .layout.song .kbd {
+    flex: none;
+    height: 4em;
+    padding: 2px;
+    border-radius: 3px;
+    background: var(--key-black);
+  }
+  .layout.song .kbd .w {
+    border-radius: 0 0 2px 2px;
+  }
+  .layout.song .kbd .b {
+    border-radius: 0 0 2px 2px;
+  }
+  .layout.song .kbd .w span {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 2px;
+    left: 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.6em;
+    text-align: center;
+  }
+  .layout.song .kbd .w:is(.rh, .lh) span {
+    color: var(--accent-ink);
+  }
+  .layout.song .kbd-panel .hands {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1em;
+    color: var(--muted);
+  }
+  .layout.song .kbd-panel .hands > span {
+    font-size: 1em;
+  }
+  .layout.song .kbd-panel .hands .sw {
+    margin-right: 0.35em;
+    border-radius: 1px;
+  }
+
+  /* The chart: the same labels as the panel, with seams of the page color,
+     so an empty cell at the end of a section is empty page. Each row holds
+     two phrases of 4 bars, and the second phrase has a darker fill. */
+  .layout.song .sections {
+    gap: 2px;
+  }
+  .layout.song .sec,
+  .layout.song .bars {
+    gap: 2px;
+  }
+  .layout.song .sec-head {
+    width: auto;
+    max-width: none;
+    padding: 0.4em 0.6em;
+    border-radius: 3px;
+    background: var(--surface);
+  }
+  .layout.song .sec .sec-head:hover {
+    background: var(--line);
+  }
+  .layout.song .sec-name {
+    font-family: var(--mono);
+    font-size: 0.75em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .layout.song .bar {
+    padding: 0.4em 0.6em 0.5em;
+    border-radius: 3px;
+    background: var(--surface);
+    font-size: 1.1em;
+  }
+  .layout.song
+    .bar:is(
+      :nth-child(8n + 5),
+      :nth-child(8n + 6),
+      :nth-child(8n + 7),
+      :nth-child(8n + 8)
+    ) {
+    background: var(--sunk);
+  }
+  .layout.song .bar:hover:not(:disabled) {
+    background: var(--line);
+  }
+  .layout.song .bar.cur,
+  .layout.song .bar.cur:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .layout.song .bar .bn {
+    display: inline;
+    margin-right: 0.4em;
+    font-family: var(--mono);
+    font-size: 0.65em;
+    color: var(--muted);
+  }
+  .layout.song .bar.cur .bn {
+    color: inherit;
+  }
+  .layout.song .bar .r8 {
+    right: 0.6em;
+    bottom: 0.2em;
+    left: 0.6em;
+    height: 2px;
+  }
+
+  /* The help and the editor */
+  .layout:is(.song, .lib) textarea.song-text {
+    min-height: 2.25em;
+    padding: 0.25em 0.5em;
+    border-radius: 3px;
+    background: var(--bg);
+    box-shadow: inset 0 1px 0 var(--line);
+  }
+  .layout.song :is(details.edit, .notes) {
+    padding: 0.5em 0.75em;
+    border-radius: 4px;
+  }
+
+  /* The library. The song selector is in the column of the panel. It is a
+     track list on the glass of the screen (pixel-3-library.css). The settings of the library
+     are modules on a chassis, like the panel, in the next column. The chassis is a grid item
+     behind the modules. The modules are 2px inside it on each side. */
+  .layout.lib:not([hidden]) {
+    grid-template-columns: 30em 30em;
+    grid-template-rows: auto repeat(3, auto) 1fr;
+    gap: 2px 1.5em;
+  }
+  .layout.lib:has(.song-list)::before {
+    content: "";
+    grid-column: 2;
+    grid-row: 2 / 5;
+    align-self: stretch;
+    margin: -2px 0;
+    border-radius: 6px;
+    background: var(--line);
+  }
+  .layout.lib .song-deck {
+    grid-column: 1;
+    grid-row: 2 / -1;
+  }
+  .layout.lib .arch-row .m {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    color: var(--muted);
+  }
+  .layout.lib .song-list .empty {
+    padding: 0.75em;
+    color: var(--muted);
+  }
+
+  /* A module: the label at the top left, the value at the top right, the
+     control below. A closed module shows only its label. */
+  .layout.lib :is(details.edit, .key-panel) {
+    grid-column: 2;
+    margin: 0 2px;
+    border-radius: 4px;
+    background: var(--surface);
+  }
+  .layout.lib #newSong {
+    grid-row: 2;
+  }
+  .layout.lib #archived {
+    grid-row: 3;
+  }
+  .layout.lib .key-panel {
+    grid-row: 4;
+  }
+  .layout.lib details.edit summary,
+  .layout.lib .key-panel > h2 {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.75em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .layout.lib details.edit summary {
+    padding: 1em;
+    list-style: none;
+  }
+  .layout.lib details.edit summary::-webkit-details-marker {
+    display: none;
+  }
+  .layout.lib details.edit summary::after {
+    content: "+";
+    float: right;
+  }
+  .layout.lib details.edit[open] summary::after {
+    content: "\2212";
+  }
+  .layout.lib details.edit summary:hover {
+    color: var(--ink);
+  }
+  .layout.lib :is(.edit-body, .arch-list) {
+    display: grid;
+    gap: 0.5em;
+    padding: 0 0.75em 0.75em;
+  }
+  .layout.lib :is(.edit-body > p, .key-panel > p, .arch-list .empty) {
+    display: block;
+    color: var(--muted);
+  }
+  .layout.lib textarea.song-text {
+    min-height: 20em;
+  }
+  .layout.lib .edit-actions,
+  .layout.lib .arch-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25em 0.5em;
+  }
+  .layout.lib .arch-row .m {
+    flex: 1 1 0;
+  }
+  .layout.lib .key-panel {
+    display: grid;
+    gap: 0.5em;
+    padding: 0.75em;
+  }
+  .layout.lib .key-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.25em;
+  }
+  .layout.lib .key-row input {
+    min-height: 2.25em;
+    padding: 0.25em 0.5em;
+    border-radius: 3px;
+    background: var(--bg);
+    box-shadow:
+      inset 0 1px 0 var(--line),
+      0 0 0 1px var(--line);
+    font-family: var(--mono);
+  }
+  .layout.lib .msg:empty {
+    display: none;
+  }
+
+  /* A narrow screen: the panel above the chart. */
+  @media (max-width: 760px) {
+    .layout:is(.song, .lib):not([hidden]) {
+      grid-template-columns: minmax(0, 1fr);
+      width: auto;
+    }
+    .layout.song .side {
+      grid-row: auto;
+      position: static;
+    }
+    .layout.lib .song-deck {
+      grid-row: 2;
+      margin-bottom: 1em;
+    }
+    .layout.lib :is(details.edit, .key-panel) {
+      grid-column: 1;
+    }
+    .layout.lib #newSong {
+      grid-row: 3;
+    }
+    .layout.lib #archived {
+      grid-row: 4;
+    }
+    .layout.lib .key-panel {
+      grid-row: 5;
+    }
+    .layout.lib:has(.song-list)::before {
+      grid-column: 1;
+      grid-row: 3 / 6;
+    }
+    .layout.song :is(.chart-tools, .sections, details.edit, .notes) {
+      grid-column: 1;
+    }
+    /* Rows of 4 bars, one phrase each, as wide as the screen. Each section
+       name sits above its bars. */
+    .layout.song .sections {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .layout.song .sec-head,
+    .layout.song .bars {
+      grid-column: 1 / -1;
+    }
+    .layout.song .bar .cs {
+      flex-wrap: wrap;
+    }
+  }
+}

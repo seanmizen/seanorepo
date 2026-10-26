@@ -262,3 +262,72 @@
   --key-edge: #475569;
   --shadow: #6366f140;
 }
+
+/*
+ * Tone: the dense theme (REQ-DENSE). dense.css gives it its layout. It
+ * separates things by fill alone, as the keys of a Braun calculator do: a
+ * grey body and keys in two tones. One color marks what is lit: the playing
+ * bar, the selected key, a toggle that is on. It is the deep red of the
+ * felt strip under the keys of a piano. It uses the system font, which each
+ * screen draws well at small sizes. No radius, no shadow.
+ */
+:root:is(
+    [data-theme="tone"],
+    [data-theme="pixel-1"],
+    [data-theme="pixel-2"],
+    [data-theme="pixel-3"]
+  ) {
+  --shadow: transparent;
+  --radius-card: 0px;
+  --radius-control: 0px;
+  --display-weight: 600;
+  --display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --bg: #e4e3df;
+  --surface: #f2f1ed;
+  --sunk: #d6d4cf;
+  --ink: #1c1b19;
+  --ink-2: #1c1b19;
+  --muted: #66645e;
+  --line: #c4c1ba;
+  --accent: #8e1b2b;
+  --accent-2: #8e1b2b;
+  --accent-ink: #ffffff;
+  --accent-soft: #e9c9cd;
+  --bass: #4f5d73;
+  --key-white: #f2f1ed;
+  --key-black: #2b2a27;
+  --key-edge: #9c9890;
+}
+:root:is(
+    [data-theme="tone"],
+    [data-theme="pixel-1"],
+    [data-theme="pixel-2"],
+    [data-theme="pixel-3"]
+  )[data-mode="dark"] {
+  --bg: #1d1c1a;
+  --surface: #2b2926;
+  --sunk: #353330;
+  --ink: #ecebe5;
+  --ink-2: #ecebe5;
+  --muted: #9a978e;
+  --line: #4a4743;
+  --accent: #b8313f;
+  --accent-2: #b8313f;
+  --accent-ink: #ffffff;
+  --accent-soft: #4a1d22;
+  --bass: #8fa0bd;
+  --warn: #f0907a;
+  --ok: #7fb386;
+  --key-white: #d8d6cf;
+  --key-black: #0c0b0a;
+  --key-edge: #57544f;
+}
+
+/* Pixel-3: the colors of Tone, with IBM Plex for an instrument panel. */
+:root[data-theme="pixel-3"] {
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --display: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}

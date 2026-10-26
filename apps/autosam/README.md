@@ -50,6 +50,47 @@ stepper moves the key by one semitone or by one octave, up to 24 semitones
 each way. The key shows as `A♭(4) (−1 semitone)`: the tonic of the original
 key is in octave 4.
 
+## The keyboard
+
+| Key | What it does |
+|---|---|
+| Space | Play or stop |
+| ← → | The previous or the next bar |
+| ↑ ↓ | The bar above or below, as the bars sit on the screen in the theme |
+| `[` `]` | The previous or the next section |
+| Shift with a click or an arrow | Select bars from the cursor. The selection is the loop range, and Loop turns on. |
+| Shift with a click on a section name | Extend the loop range to hold all of that section. From inside the section, the range is the section. |
+| Esc | End the loop range |
+| 0, 1, 2 | The original key, the suggested keys |
+| F | Follow the playing bar again |
+
+With Shift held over a bar or a section name, the bars that a click would
+loop have a light fill. While a song plays, a move waits for the next bar
+line, so you stay in time.
+
+The Loop label names the range ("Loop bars 5–12"). One outline goes around
+all the bars of the range, across rows and sections. Esc, a move without
+Shift (a click on a bar or a section, an arrow, a key of the roadmap), a new
+song, or Loop off ends the range. If the selection turned Loop on, the end
+of the range turns it off. With a range, `|◀` goes to the start of the loop
+and keeps it.
+
+## The roadmap and the compact chart (narrow screens)
+
+On a screen narrower than 720 px, the roadmap shows above the chart: one key
+for each section, in the order of the song. The key of the section that
+plays is lit (its name is in a `<mark>`). A key jumps to its section. A wide
+screen has the full chart only, with no roadmap and no switch.
+
+On a narrow screen the "Chart" switch picks Full or Compact, and the device
+keeps the choice. With no choice, it starts on Compact. Compact
+draws each distinct section once: sections with the same chords at the same
+places merge, whatever their names, and the label names them all
+("Intro · Verse 1 · Verse 2", "Pre-chorus ×3"). Its bars count from 1 in
+each section. A click on a bar goes to that bar in the section that plays
+now, or in the next section of that shape. The playing bar, the cursor, the
+loop range and the arrow keys work in both views.
+
 ## Sounds
 
 The Sound setting picks the synth that plays the notes. The choice stays on
@@ -78,7 +119,12 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`) and mode (`Auto`, `Light`, `Dark`). A press on the main
+`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`, `Pixel-3`) and mode (`Auto`,
+`Light`, `Dark`). In Pixel-3 a third picker sets the screen of the display:
+`Plain`, `VFD`, `LCD` or `Dot matrix`. Each screen except `Plain` gives each
+value a fixed place (`public/pixel-3-display.css`). The Pixel-3 library is a
+track list on the same screen (`public/pixel-3-library.css`). Tone puts the pane at the top right. The Pixel themes put
+it at the end of the page. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow
 keys do the same. `Auto` follows the system light or dark setting. The
@@ -86,16 +132,23 @@ choice stays on the device.
 
 A URL can give both: `/?theme=kbbq&mode=dark` opens the page in KBBQ dark,
 and the device keeps that choice. A press writes the choice back to the URL.
-The defaults (`baseline`, `auto`) stay out of the URL.
+The defaults (`pixel-3`, `auto`, `lcd`) stay out of the URL. The URL names
+the screen only in Pixel-3: `/?screen=vfd`.
 
 - `public/themes.css` holds the tokens of each theme, in a light and a dark
   block. The page uses only these tokens: colors, `--shadow`, the radii
   `--radius-card` and `--radius-control`, `--display-weight` and the fonts.
   It registers each token that can interpolate with `@property`, so the
   token moves to its new value over `--morph` (700 ms).
-- `public/app.css` holds the page styles. Every rule sits inside
-  `:where(:root:not([data-theme="bare"]))`, so the bare theme turns them all
-  off. `:where()` adds no specificity.
+- `public/app.css` holds the page styles of Baseline and KBBQ. Every rule
+  sits inside `:where(:root:is([data-theme="baseline"], [data-theme="kbbq"]))`,
+  so the other themes never see them. `:where()` adds no specificity.
+- `public/dense.css` holds Tone, the dense theme. See
+  [REQ-DENSE](requirements/dense.md).
+- `public/pixel.css` holds Pixel-1 and Pixel-2, the themes of the fewest
+  pixels. See [REQ-PIXEL](requirements/pixel.md).
+- `public/pixel-3.css` holds Pixel-3: Pixel-2 with a designed control
+  panel. Its header lists the design principles of the panel.
 - `public/chrome.css` holds the few styles that every theme needs, bare too:
   the morph layer, the fixed theme pane and the debug panel.
 - `public/modern-normalize.css` (MIT, v3.0.1) gives every browser the same
@@ -142,6 +195,47 @@ state: the playing bar has its chords in a `<mark>`, a queued jump says
 buttons. The markup puts a space between inline words, also where a flex or
 grid gap hides it. `test/bare.test.ts` fails when `app.js` gets a state
 class with no carrier. `.claude/rules/autosam.md` has the rules.
+
+Tone, the dense theme, spends few pixels (REQ-DENSE). The page sits at the
+top left with no width limit. `theme.js` fits the page to the viewport: it
+picks the number of bars in a row of the chart (4, 8, 12 or 16) and the
+largest base text size from 10 px to 16 px at which the page does not
+scroll and no bar wraps its chords. `app.js` calls the fit again after it
+draws the chart or the library. All sections share one set of chart
+columns, and each column is as wide as its widest bar. The settings are a
+keypad: labels in one column, keys of one height in the other. Fills
+separate things, as on a Braun calculator: grey blocks and keys in two
+tones. The deep red of a piano's key felt lights what is on: the playing
+bar, the selected key, a toggle.
+
+Pixel-1 covers the smallest area that still shows everything (REQ-PIXEL).
+It has one text size, 9 px, and no space between two boxes is more than
+1 px. The page is one column as wide as the chart: 8 bars in a row, each
+column as wide as its widest bar. The title, the controls and the help wrap
+at that width. The words keep the spaces of the HTML, so most of the page
+is lines of text, as in Bare. It uses the colors of Tone. The bar numbers
+do not show: the section names give the first and the last bar, and each
+row holds 8.
+
+Pixel-2 is Pixel-1, smaller. Condensed type, a line height of 1, and no
+gaps in the chart: the checkerboard separates the bars. The title and the
+controls are blocks that wrap in rows as wide as the chart and grow to fill
+them. Text that repeats another element does not show, and nor does the
+help prose (REQ-PIXEL-005). The shortcuts and the song notes stay. Play is
+its icon, and Bar 1 is `|◀`. On American Pie, Pixel-2 covers about 290 ×
+470 px, where Pixel-1 covers 322 × 751 px.
+
+Pixel-3 starts from Pixel-2 and makes the control panel one instrument.
+Form is the goal, and space is free. The panel sits on the left and stays in
+view. Its modules sit on a grid of 6 columns: a dark display for what plays,
+then key, tempo, volume, style, sound, options and the keyboard. Each module
+has a small label at the top left and its value at the top right. Keys are
+raised, and a key that latches has an LED that lights red. The chart takes
+the same labels, and the second phrase of 4 bars in each row has a darker
+fill.
+
+`songs/american-pie.txt` has 249 bars. Use it to test Tone and Pixel-1 at
+their limits.
 
 To add a theme, add a light and a dark block to `themes.css` and an entry to
 `THEMES` in `theme.js`. `projects/intentional-design` holds the documents

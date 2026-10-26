@@ -93,7 +93,10 @@ describe('api', () => {
     const list = await (
       await call('GET', '/api/songs', undefined, null)
     ).json();
-    expect(list.songs[0]).toMatchObject({
+    const song = list.songs.find(
+      (s: { slug: string }) => s.slug === 'somewhere-only-we-know',
+    );
+    expect(song).toMatchObject({
       slug: 'somewhere-only-we-know',
       key: 'A',
       tempo: 86,

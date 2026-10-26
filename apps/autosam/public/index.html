@@ -11,12 +11,17 @@
 <script src="/theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=IBM+Plex+Sans:wght@100..700&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=IBM+Plex+Sans:wght@100..700&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@400;500&family=Doto:wght@500..900&display=swap">
 <!-- modern-normalize: the same base styles in every browser. A copy, because the CSP allows only this site. -->
 <link rel="stylesheet" href="/modern-normalize.css">
 <link rel="stylesheet" href="/themes.css">
 <link rel="stylesheet" href="/chrome.css">
 <link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/dense.css">
+<link rel="stylesheet" href="/pixel.css">
+<link rel="stylesheet" href="/pixel-3.css">
+<link rel="stylesheet" href="/pixel-3-display.css">
+<link rel="stylesheet" href="/pixel-3-library.css">
 </head>
 <body>
 
@@ -28,7 +33,7 @@
     <h1 class="gradient-text">Songs</h1>
     <p class="lib-intro">Pick a song. autosam plays its chords on the piano in a key that suits your voice, and the chord chart follows the music.</p>
   </header>
-  <section class="song-list" id="songList" aria-label="Songs"></section>
+  <div class="song-deck"><section class="song-list" id="songList" aria-label="Songs"></section></div>
 
   <details class="edit" id="newSong">
     <summary>Add a song</summary>
@@ -72,7 +77,7 @@
   <div class="side">
     <section class="now" id="now" aria-live="off">
       <div class="now-top">
-        <span><b id="secName">Intro</b> · bar <span id="secBar">1 of 8</span></span>
+        <span><b id="secName">Intro</b><span class="now-sep"> · bar </span><span id="secBar">1 of 8</span></span>
         <span class="mono" id="songBar">1 / 1</span>
       </div>
       <div class="now-main">
@@ -144,7 +149,7 @@
       <div class="toggles">
         <label class="chip"><input type="checkbox" id="optCount"> Count-in</label>
         <label class="chip"><input type="checkbox" id="optClick"> Click</label>
-        <label class="chip"><input type="checkbox" id="optLoop"> Loop section</label>
+        <label class="chip"><input type="checkbox" id="optLoop"> <span id="loopLabel">Loop section</span></label>
       </div>
     </section>
 
@@ -161,6 +166,16 @@
     <div class="chart-head">
       <h2>Chart</h2>
       <p>Tap a bar to start from there, or a section name to jump to it. While playing, the jump lands on the next bar line so you stay in time. The little strip under each bar marks where the chords change.</p>
+    </div>
+    <div class="chart-tools" id="chartTools">
+      <nav class="roadmap" id="roadmap" aria-label="Running order"></nav>
+      <div class="ctl view-ctl">
+        <span class="ctl-label" id="viewLabel">Chart</span>
+        <div class="seg view-seg" id="viewSeg" role="radiogroup" aria-labelledby="viewLabel">
+          <label><input type="radio" name="view" value="full"> <b>Full</b></label>
+          <label><input type="radio" name="view" value="compact"> <b>Compact</b> <small>each section once</small></label>
+        </div>
+      </div>
     </div>
     <div id="sections" class="sections"></div>
 
@@ -182,7 +197,7 @@
     </details>
 
     <footer class="notes">
-      <p><b>Shortcuts</b>: <kbd>Space</kbd> play or stop · <kbd>←</kbd> <kbd>→</kbd> previous or next section · <kbd>0</kbd> original key · <kbd>1</kbd> <kbd>2</kbd> the suggested keys · <kbd>F</kbd> follow the playing bar again.</p>
+      <p><b>Shortcuts</b>: <kbd>Space</kbd> play or stop · <kbd>←</kbd> <kbd>→</kbd> previous or next bar · <kbd>↑</kbd> <kbd>↓</kbd> the bar above or below · <kbd>[</kbd> <kbd>]</kbd> previous or next section · <kbd>Shift</kbd> with a click or an arrow: loop those bars · <kbd>Esc</kbd> end that loop · <kbd>0</kbd> original key · <kbd>1</kbd> <kbd>2</kbd> the suggested keys · <kbd>F</kbd> follow the playing bar again.</p>
       <p>The chart scrolls along with the music. Scroll it yourself at any time to look ahead or back, and it stops following until you press <i>Back to bar</i> or tap a bar.</p>
       <p>The grey numbers under each chord are its number in the key. They don't change when you transpose, and that's how a pianist can switch key on the fly.</p>
       <p id="songNotes"></p>
@@ -210,6 +225,11 @@
     <button type="button" class="step" id="modePrev" aria-label="Previous mode">‹</button>
     <button type="button" id="modeBtn" aria-keyshortcuts="ArrowLeft ArrowRight"><small>Mode</small> <b>Auto</b></button>
     <button type="button" class="step" id="modeNext" aria-label="Next mode">›</button>
+  </div>
+  <div class="picker" hidden>
+    <button type="button" class="step" id="screenPrev" aria-label="Previous screen">‹</button>
+    <button type="button" id="screenBtn" aria-keyshortcuts="ArrowLeft ArrowRight"><small>Screen</small> <b>LCD</b></button>
+    <button type="button" class="step" id="screenNext" aria-label="Next screen">›</button>
   </div>
 </div>
 <button type="button" class="refollow" id="refollow" title="Scroll back to the playing bar and keep following it (F)" hidden>

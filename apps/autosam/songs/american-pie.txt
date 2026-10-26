@@ -1,0 +1,95 @@
+title: American Pie
+artist: Don McLean
+key: G
+tempo: 138
+suggest: -2, -5
+
+[Intro]
+G D/F# | Em Am | C Em | D
+G D/F# | Em Am | C Em | D
+G D/F# | Em C | Am Em | D
+Em Am | Em Am | C G | Am C | D
+G D/F# | Em Am | D | D
+G D/F# | Em C | D | D
+G C | G D | G | D7
+
+[Chorus]
+G C | G D | G C | G D
+G C | G D | Em | A7
+Em | D | D | D
+
+[Verse 2]
+G Am | C Am | Em A7 | Em D
+G Am | C Am | Em A7 | Em D
+Em D | Em D | Em D | C D
+Em A7 | Em A7 | Em D | Em D
+Em D | Em D | Em D | C D
+G D/F# | Em Am | C D | G C
+G D | D7
+
+[Chorus]
+G C | G D | G C | G D
+G C | G D | Em | A7
+Em | D | D | D
+
+[Verse 3]
+G Am | C Am | Em A7 | Em D
+G Am | C Am | Em A7 | Em D
+Em D | Em D | Em D | C D
+Em A7 | Em A7 | Em D | Em D
+Em D | Em D | Em D | C D
+G D/F# | Em Am | C D | G C
+G D | D7
+
+[Chorus]
+G C | G D | G C | G D
+G C | G D | Em | A7
+Em | D | D | D
+
+[Verse 4]
+G Am | C Am | Em A7 | Em D
+G Am | C Am | Em A7 | Em D
+Em D | Em D | Em D | C D
+Em A7 | Em A7 | Em D | Em D
+Em D | Em D | Em D | C D
+G D/F# | Em Am | C D | G C
+G D | D7
+
+[Chorus]
+G C | G D | G C | G D
+G C | G D | Em | A7
+Em | D | D | D
+
+[Verse 5]
+G Am | C Am | Em A7 | Em D
+G Am | C Am | Em A7 | Em D
+Em D | Em D | Em D | C D
+Em A7 | Em A7 | Em D | Em D
+Em D | Em D | Em D | C D
+G D/F# | Em Am | C D | G C
+G D | D7
+
+[Chorus]
+G C | G D | G C | G D
+G C | G D | Em | A7
+Em | D | D | D
+
+[Verse 6]
+G D/F# | Em Am | C Em | D
+G D/F# | Em Am | C Em | D
+G D/F# | Em C | Am Em | D
+Em Am | Em Am | C G | Am C | D
+G D/F# | Em Am | D | D
+G D/F# | Em C | D | D
+G C | G D | G | D7
+
+[Chorus]
+G C | G D | G C | G D
+G C | G D | Em | A7
+Em | D | D | D
+
+[Last chorus]
+G C | G D | G C | G D
+G C | G D | Em | A7
+Em | D | G C | G D
+G C | G | G

@@ -199,15 +199,23 @@ async function loadLibrary() {
   for (const s of songs) {
     const row = el('a', 'song-row');
     row.href = `/${s.slug}`;
-    const facts = [s.artist, `key of ${s.key}`, `${s.tempo} BPM`].filter(
-      Boolean,
-    );
-    row.append(
-      ...spaced([
-        el('span', 'song-title', s.title),
-        el('span', 'song-meta', facts.join(' · ')),
-      ]),
-    );
+    // The facts are parts, so a theme can give the key and the tempo a
+    // column: "Don McLean · key of G · 138 BPM".
+    const meta = el('span', 'song-meta');
+    setParts(meta, [
+      ...(s.artist
+        ? [
+            ['sm-artist', s.artist],
+            ['sm-sep', ' · '],
+          ]
+        : []),
+      ['sm-pre', 'key of '],
+      ['sm-key', s.key],
+      ['sm-sep', ' · '],
+      ['sm-bpm', String(s.tempo)],
+      ['sm-post', ' BPM'],
+    ]);
+    row.append(...spaced([el('span', 'song-title', s.title), meta]));
     list.append(row);
   }
 
@@ -257,6 +265,7 @@ async function loadLibrary() {
     );
     arch.append(row);
   }
+  window.autosamFit();
 }
 
 // =====================================================================
@@ -275,6 +284,8 @@ const prefs = Object.assign(
     click: false,
     loop: false,
     vol: 0.8,
+    // 'full' or 'compact'. Null: the width of the screen picks.
+    view: null,
   },
   local.get('autosam:prefs', {}),
 );
@@ -293,8 +304,8 @@ const clampBpm = (n) =>
   );
 
 function save() {
-  const { style, synth, count, click, loop, vol } = settings;
-  local.set('autosam:prefs', { style, synth, count, click, loop, vol });
+  const { style, synth, count, click, loop, vol, view } = settings;
+  local.set('autosam:prefs', { style, synth, count, click, loop, vol, view });
   if (current)
     local.set(`autosam:song:${current.slug}`, {
       shift: settings.shift,
@@ -649,16 +660,30 @@ let nextTime = 0;
 let countLeft = 0;
 let pendingJump = null;
 let cursorBar = 0;
+// The custom loop range, {start, end} in bars, or null. Shift with a click
+// or an arrow makes it. `pick` is the selection that makes it: the bar where
+// it started and the bar it reaches.
+let range = null;
+let pick = null;
+// True when the selection turned Loop on, so the end of the range turns it
+// off again. A Loop that the person turned on stays on.
+let loopByRange = false;
 let shownBar = 0;
 let shownE = 0;
 const queue = [];
+
+// The bars that Loop repeats while bar `bar` plays: the custom range, or
+// the section of the bar.
+function loopSpan(bar) {
+  return range ?? song.sections[song.bars[bar].sec];
+}
 
 function nextPos(p) {
   if (p.e < 7) return { bar: p.bar, e: p.e + 1 };
   let nb = p.bar + 1;
   if (settings.loop) {
-    const s = song.sections[song.bars[p.bar].sec];
-    if (nb > s.end) nb = s.start;
+    const s = loopSpan(p.bar);
+    if (p.bar >= s.start && p.bar <= s.end && nb > s.end) nb = s.start;
   }
   return nb < song.bars.length ? { bar: nb, e: 0 } : null;
 }
@@ -738,6 +763,8 @@ function play() {
   initAudio();
   playing = true;
   following = true;
+  if (range && (cursorBar < range.start || cursorBar > range.end))
+    cursorBar = range.start;
   pos = { bar: cursorBar, e: 0 };
   countLeft = settings.count ? 8 : 0;
   pendingJump = null;
@@ -778,7 +805,11 @@ function stop(natural) {
 }
 const toggle = () => (playing ? stop(false) : play());
 
-function goTo(bar) {
+// A move without Shift ends the selection, as in a list or a sheet: the
+// loop range goes. `keep` holds the range, for |◀ to the start of the loop.
+function goTo(bar, keep = false) {
+  pick = null;
+  if (range && !keep) clearRange();
   if (playing) {
     pendingJump = bar;
     following = true;
@@ -791,6 +822,209 @@ function goTo(bar) {
     audition(bar);
   }
 }
+// The bar that the keys move from: the queued jump or the playing bar while
+// playing, and the cursor when stopped.
+const hereBar = () => (playing ? (pendingJump ?? shownBar) : cursorBar);
+
+// Shift with a click or an arrow: the selection reaches `bar`, and the bars
+// from its start (`from`) to `bar` are the loop range. Loop turns on.
+function extendTo(bar, from = pick ? pick.from : hereBar()) {
+  pick = { from, to: bar };
+  range = {
+    start: Math.min(pick.from, pick.to),
+    end: Math.max(pick.from, pick.to),
+  };
+  if (!settings.loop) loopByRange = true;
+  settings.loop = true;
+  save();
+  $('optLoop').checked = true;
+  if (playing) {
+    // Go to the range at the next bar line if the music is outside it.
+    if (shownBar < range.start || shownBar > range.end)
+      pendingJump = range.start;
+    markBars(shownE);
+    updateNext(shownBar, shownE);
+  } else {
+    cursorBar = range.start;
+    showAt(cursorBar, 0);
+  }
+  showRange();
+  drawRange();
+  reveal(bar);
+}
+
+// Shift with a click on a section name: the selection reaches the far edge
+// of the section, so the range holds all of it. When the selection starts
+// inside the section, the range is the section.
+function sectionSpan(from, secs) {
+  const at = pickBar(secs.map((i) => song.sections[i].start));
+  const s = song.sections[song.bars[at].sec];
+  if (from >= s.start && from <= s.end) return { from: s.start, to: s.end };
+  return from < s.start ? { from, to: s.end } : { from, to: s.start };
+}
+function extendToSection(secs) {
+  const { from, to } = sectionSpan(pick ? pick.from : hereBar(), secs);
+  extendTo(to, from);
+}
+
+// Shift held over a bar or a section name: the bars that a click would loop
+// show as a preview. Each title says what Shift with a click does, for the
+// bare theme (REQ-BARE-001). `hoverSpan` gives the span for the thing under
+// the pointer, from the start of the selection.
+let hoverSpan = null;
+let shiftDown = false;
+function showPreview() {
+  let span = null;
+  if (shiftDown && hoverSpan) {
+    const { from, to } = hoverSpan(pick ? pick.from : hereBar());
+    span = { start: Math.min(from, to), end: Math.max(from, to) };
+  }
+  for (const { node, bars } of barNodes) {
+    node.classList.toggle(
+      'preview',
+      Boolean(span) && bars.some((i) => i >= span.start && i <= span.end),
+    );
+  }
+}
+
+// The loop range has one outline around all of its bars, across rows and
+// sections. It is measured from the layout, so it fits each theme and both
+// views. An <svg> over the chart draws it.
+function drawRange() {
+  const root = $('sections');
+  let svg = root.querySelector('svg.range');
+  const nodes = range
+    ? barNodes.filter(({ bars }) =>
+        bars.some((i) => i >= range.start && i <= range.end),
+      )
+    : [];
+  if (!nodes.length) {
+    svg?.remove();
+    return;
+  }
+  const PAD = 3; // px outside the bars
+  const GAP = 14; // px: rows nearer than this touch
+  const base = root.getBoundingClientRect();
+  const boxes = nodes
+    .map(({ node }) => {
+      const r = node.getBoundingClientRect();
+      return {
+        l: r.left - base.left - PAD,
+        r: r.right - base.left + PAD,
+        t: r.top - base.top - PAD,
+        b: r.bottom - base.top + PAD,
+      };
+    })
+    .sort((a, b) => a.t - b.t || a.l - b.l);
+  // Runs: the boxes that touch in one row.
+  const runs = [];
+  for (const x of boxes) {
+    const last = runs.at(-1);
+    if (last && Math.abs(x.t - last.t) < 2 && x.l - last.r <= GAP)
+      last.r = Math.max(last.r, x.r);
+    else runs.push({ ...x, top: x.t, bottom: x.b, above: [], below: [] });
+  }
+  // Two runs in rows next to each other share the line between them.
+  for (const a of runs) {
+    for (const b of runs) {
+      const dy = a.t - b.b;
+      if (dy < -2 * PAD || dy > GAP || a.r <= b.l || a.l >= b.r) continue;
+      const mid = (a.t + b.b) / 2;
+      a.top = mid;
+      b.bottom = mid;
+      a.above.push(b);
+      b.below.push(a);
+    }
+  }
+  // An edge of a run, less the parts that a neighbour shares.
+  const minus = (l, r, others) => {
+    let parts = [[l, r]];
+    for (const o of others) {
+      parts = parts.flatMap(([x, y]) =>
+        [
+          [x, Math.min(y, o.l)],
+          [Math.max(x, o.r), y],
+        ].filter(([p, q]) => q - p > 0.5),
+      );
+    }
+    return parts;
+  };
+  let d = '';
+  for (const run of runs) {
+    for (const [x, y] of minus(run.l, run.r, run.above))
+      d += `M${x} ${run.top}H${y}`;
+    for (const [x, y] of minus(run.l, run.r, run.below))
+      d += `M${x} ${run.bottom}H${y}`;
+    d += `M${run.l} ${run.top}V${run.bottom}M${run.r} ${run.top}V${run.bottom}`;
+  }
+  if (!svg) {
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('range');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+    root.append(svg);
+  }
+  svg.setAttribute('width', String(root.scrollWidth));
+  svg.setAttribute('height', String(root.scrollHeight));
+  svg.firstChild.setAttribute('d', d);
+}
+
+function clearRange() {
+  range = null;
+  pick = null;
+  if (loopByRange) {
+    loopByRange = false;
+    settings.loop = false;
+    save();
+    $('optLoop').checked = false;
+  }
+  showRange();
+  drawRange();
+  if (song) {
+    markBars(shownE);
+    updateNext(shownBar, shownE);
+  }
+}
+
+// The Loop label names the range, so the page shows it with no styles
+// (REQ-BARE-001).
+function showRange() {
+  $('loopLabel').textContent = range
+    ? `Loop bars ${range.start + 1}–${range.end + 1}`
+    : 'Loop section';
+}
+
+// Scroll a bar into view when the keys move to it.
+function reveal(bar) {
+  quiet(reduceMotion ? 200 : 600);
+  barEls[bar]?.scrollIntoView({
+    block: 'nearest',
+    behavior: reduceMotion ? 'auto' : 'smooth',
+  });
+}
+
+// The bar above or below `bar` on the screen (dir -1 or 1), in any theme
+// and in either chart: the nearest row of bars that way, and in it the bar
+// nearest in x.
+function barToward(bar, dir) {
+  const r0 = barEls[bar].getBoundingClientRect();
+  const x0 = r0.left + r0.width / 2;
+  let best = null;
+  for (const { node, bars } of barNodes) {
+    const r = node.getBoundingClientRect();
+    const dy = dir < 0 ? r0.top - r.bottom : r.top - r0.bottom;
+    if (dy < -1) continue;
+    const dx = Math.abs(r.left + r.width / 2 - x0);
+    if (
+      !best ||
+      dy < best.dy - 1 ||
+      (Math.abs(dy - best.dy) <= 1 && dx < best.dx)
+    )
+      best = { bars, dy, dx };
+  }
+  return best ? pickBar(best.bars) : bar;
+}
+
 function audition(bar) {
   if (!ctx) return;
   initAudio();
@@ -803,7 +1037,61 @@ function audition(bar) {
 
 // ---------- Display ----------
 const els = {};
+// barEls[i] is the node of song bar i. In the compact chart one node shows
+// the same bar of each section that has the same chords, so barNodes lists
+// each node once, with its song bars. secNodes does the same for sections.
 let barEls = [];
+let barNodes = [];
+let secNodes = [];
+
+// A narrow screen has the roadmap and the Full / Compact switch, and starts
+// on Compact. A wide screen always has the full chart and no switch.
+const narrow = matchMedia('(max-width: 720px)');
+const viewMode = () => (narrow.matches ? (settings.view ?? 'compact') : 'full');
+
+// Sections with the same bars (the same chords at the same places) group
+// together, in the order of their first section.
+function shapesOf(song) {
+  const groups = new Map();
+  song.sections.forEach((sec, i) => {
+    const key = song.bars
+      .slice(sec.start, sec.end + 1)
+      .map(
+        (b) =>
+          b.changes.map((c) => `${c.pos}:${c.chord.sym}`).join(' ') ||
+          `~${b.startChord?.sym}`,
+      )
+      .join('|');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  });
+  return [...groups.values()];
+}
+
+// The names of a group of sections, once each, with a count for a repeat:
+// "Intro · Verse 1 · Verse 2", "Pre-chorus ×3".
+function groupName(secs) {
+  const counts = new Map();
+  for (const i of secs) {
+    const name = song.sections[i].name;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
+    .join(' · ');
+}
+
+// Of the song bars that one node shows, the bar to go to: the one in the
+// section that plays now, or else the next one, or else the first.
+function pickBar(bars) {
+  const here = hereBar();
+  const sec = song.bars[here].sec;
+  return (
+    bars.find((b) => song.bars[b].sec === sec) ??
+    bars.find((b) => b > here) ??
+    bars[0]
+  );
+}
 let keyEls = {};
 let kbdOffset = null;
 const reduceMotion = window.matchMedia(
@@ -837,10 +1125,41 @@ function nextChange(p, curSym) {
   }
   return null;
 }
-const beatsText = (b) =>
+// A field of the display is a row of parts: [class, text]. Each part is a
+// span, so a theme can give each part a fixed place. The text reads the
+// same with no page styles.
+function setParts(node, parts) {
+  node.replaceChildren(...parts.map(([cls, text]) => el('span', cls, text)));
+}
+// "in 1½ beats", or 'on the "and"' for half a beat. The count is a part.
+const beatsParts = (b) =>
   b === 0.5
-    ? 'on the "and"'
-    : `in ${String(b).replace('.5', '½')} beat${b === 1 ? '' : 's'}`;
+    ? [
+        ['nx-pre', 'on the "'],
+        ['nx-n', 'and'],
+        ['nx-post', '"'],
+      ]
+    : [
+        ['nx-pre', 'in '],
+        ['nx-n', String(b).replace('.5', '½')],
+        ['nx-post', ` beat${b === 1 ? '' : 's'}`],
+      ];
+// The next chord's number and when it comes: "1sus4 · in 1½ beats".
+const nextParts = (ch, b) => [
+  ...(ch
+    ? [
+        ['nx-num', chordNum(ch)],
+        ['nx-sep', ' · '],
+      ]
+    : []),
+  ...beatsParts(b),
+];
+// "3 of 8" or "73 / 87".
+const countParts = (n, of, total) => [
+  ['cnt-n', String(n)],
+  ['cnt-of', of],
+  ['cnt-d', String(total)],
+];
 
 function updateNext(bar, e) {
   const cur = chordAt(bar, e);
@@ -850,10 +1169,10 @@ function updateNext(bar, e) {
     els.nextIn.textContent = '';
   } else if (n.end) {
     els.nextChord.textContent = 'End';
-    els.nextIn.textContent = beatsText(n.beats);
+    setParts(els.nextIn, nextParts(null, n.beats));
   } else {
     els.nextChord.textContent = chordName(n.chord);
-    els.nextIn.textContent = `${chordNum(n.chord)} · ${beatsText(n.beats)}`;
+    setParts(els.nextIn, nextParts(n.chord, n.beats));
   }
 }
 
@@ -863,8 +1182,11 @@ function showAt(bar, e, v) {
   const b = song.bars[bar];
   const s = song.sections[b.sec];
   els.secName.textContent = s.name;
-  els.secBar.textContent = `${bar - s.start + 1} of ${s.end - s.start + 1}`;
-  els.songBar.textContent = `${bar + 1} / ${song.bars.length}`;
+  setParts(
+    els.secBar,
+    countParts(bar - s.start + 1, ' of ', s.end - s.start + 1),
+  );
+  setParts(els.songBar, countParts(bar + 1, ' / ', song.bars.length));
   const ch = chordAt(bar, e);
   els.nowChord.classList.remove('counting');
   els.nowChord.textContent = chordName(ch);
@@ -896,8 +1218,7 @@ function showCount(ev) {
   els.nowNum.textContent = 'count-in';
   const first = chordAt(cursorBar, 0);
   els.nextChord.textContent = chordName(first);
-  els.nextIn.textContent =
-    (first ? `${chordNum(first)} · ` : '') + beatsText(ev.left);
+  setParts(els.nextIn, nextParts(first, ev.left));
   els.beats.forEach((d, i) => {
     showBeat(d, i === ev.beat);
   });
@@ -941,25 +1262,74 @@ function markPending(node, on) {
 
 let lastCur = -1;
 function markBars(e) {
-  barEls.forEach((node, i) => {
-    node.classList.toggle('cur', playing && i === shownBar);
-    node.classList.toggle('cursor', !playing && i === cursorBar);
-    markCurrent(node, i === (playing ? shownBar : cursorBar));
-    markPending(node, playing && i === pendingJump);
-  });
+  const now = playing ? shownBar : cursorBar;
+  for (const { node, bars } of barNodes) {
+    const has = (i) => bars.includes(i);
+    node.classList.toggle('cur', playing && has(shownBar));
+    node.classList.toggle('cursor', !playing && has(cursorBar));
+    markCurrent(node, has(now));
+    markPending(node, playing && pendingJump !== null && has(pendingJump));
+  }
   if (playing && barEls[shownBar]) {
-    barEls[shownBar].querySelectorAll('.r8 i').forEach((t, i) => {
-      t.classList.toggle('lit', i <= (e || 0));
-    });
+    // Clear the last bar first: in the compact chart it can be the same node.
     if (lastCur !== shownBar && lastCur >= 0 && barEls[lastCur]) {
       for (const t of barEls[lastCur].querySelectorAll('.r8 i'))
         t.classList.remove('lit');
     }
+    barEls[shownBar].querySelectorAll('.r8 i').forEach((t, i) => {
+      t.classList.toggle('lit', i <= (e || 0));
+    });
     lastCur = shownBar;
   }
   const secIdx = song.bars[shownBar].sec;
-  document.querySelectorAll('.sec').forEach((node, i) => {
-    node.classList.toggle('looping', settings.loop && i === secIdx);
+  for (const { node, secs } of secNodes) {
+    node.classList.toggle(
+      'looping',
+      settings.loop && !range && secs.includes(secIdx),
+    );
+  }
+  markRoad(song.bars[now].sec);
+}
+
+// The roadmap: one key for each section, in the order of the song.
+function renderRoadmap() {
+  const nav = $('roadmap');
+  const keys = song.sections.map((s) => {
+    const key = el('button', 'road', s.name);
+    key.type = 'button';
+    key.addEventListener('click', () => goTo(s.start));
+    return key;
+  });
+  nav.replaceChildren(...spaced(keys));
+}
+
+// The key of the section that plays (or has the cursor) holds its name in a
+// <mark>, so the page shows it with no styles (REQ-BARE-001).
+function markRoad(sec) {
+  $('roadmap')
+    .querySelectorAll('.road')
+    .forEach((key, i) => {
+      const on = i === sec;
+      if (key.classList.contains('cur') === on) return;
+      key.classList.toggle('cur', on);
+      if (on) key.setAttribute('aria-current', 'step');
+      else key.removeAttribute('aria-current');
+      const name = song.sections[i].name;
+      key.replaceChildren(on ? el('mark', '', name) : name);
+      if (on) showRoadKey(key);
+    });
+}
+
+// The roadmap scrolls sideways on a phone. The lit key moves to the middle
+// of the strip, and the page does not scroll.
+function showRoadKey(key) {
+  const nav = $('roadmap');
+  if (nav.scrollWidth <= nav.clientWidth) return;
+  const k = key.getBoundingClientRect();
+  const n = nav.getBoundingClientRect();
+  nav.scrollTo({
+    left: nav.scrollLeft + k.left - n.left - (n.width - k.width) / 2,
+    behavior: reduceMotion ? 'auto' : 'smooth',
   });
 }
 
@@ -1078,42 +1448,108 @@ function renderChart() {
   quiet(300);
   root.textContent = '';
   barEls = [];
-  for (const s of song.sections) {
+  barNodes = [];
+  secNodes = [];
+  const compact = viewMode() === 'compact';
+  root.classList.toggle('compact', compact);
+  $('chartTools').hidden = !narrow.matches;
+  const groups = compact ? shapesOf(song) : song.sections.map((_, i) => [i]);
+  for (const secs of groups) {
+    const first = song.sections[secs[0]];
+    const len = first.end - first.start + 1;
     const sec = el('div', 'sec');
     const head = el('div', 'sec-head');
-    const nameBtn = el('button', 'sec-name', s.name);
+    const nameBtn = el('button', 'sec-name', groupName(secs));
     nameBtn.type = 'button';
-    nameBtn.addEventListener('click', () => goTo(s.start));
+    nameBtn.addEventListener('click', (e) => {
+      if (e.shiftKey) extendToSection(secs);
+      else goTo(pickBar(secs.map((i) => song.sections[i].start)));
+    });
+    nameBtn.title = 'Shift with a click: loop to the end of this section';
+    nameBtn.addEventListener('mousedown', (e) => {
+      if (e.shiftKey) e.preventDefault();
+    });
+    nameBtn.addEventListener('pointerenter', (e) => {
+      hoverSpan = (from) => sectionSpan(from, secs);
+      shiftDown = e.shiftKey;
+      showPreview();
+    });
+    nameBtn.addEventListener('pointerleave', () => {
+      hoverSpan = null;
+      showPreview();
+    });
     head.append(
-      nameBtn,
-      el('span', 'sec-meta', `bars ${s.start + 1}–${s.end + 1}`),
+      ...spaced([
+        nameBtn,
+        el(
+          'span',
+          'sec-meta',
+          compact ? `${len} bars` : `bars ${first.start + 1}–${first.end + 1}`,
+        ),
+      ]),
     );
     const grid = el('div', 'bars');
-    for (let i = s.start; i <= s.end; i++) {
+    for (let k = 0; k < len; k++) {
+      const i = first.start + k;
+      const bars = secs.map((j) => song.sections[j].start + k);
       const b = song.bars[i];
       const bar = el('button', 'bar');
       bar.type = 'button';
       const names = b.changes.map((c) => chordName(c.chord));
+      const chords = names.join(', ') || `continues ${chordName(b.startChord)}`;
       bar.setAttribute(
         'aria-label',
-        `Bar ${i + 1}: ${names.join(', ') || `continues ${chordName(b.startChord)}`}`,
+        compact
+          ? `Bar ${k + 1} of ${groupName(secs)}: ${chords}`
+          : `Bar ${i + 1}: ${chords}`,
       );
       const cs = el('span', `cs${b.changes.length > 1 ? ' multi' : ''}`);
       if (b.changes.length)
         cs.append(...spaced(names.map((n) => el('span', '', n))));
       else cs.append(el('span', 'tie', chordName(b.startChord)));
       const r8 = el('span', 'r8');
-      for (let k = 0; k < 8; k++)
-        r8.append(el('i', b.changes.some((c) => c.pos === k) ? 'chg' : ''));
-      bar.append(el('span', 'bn', String(i + 1)), ' ', cs, r8);
-      bar.addEventListener('click', () => goTo(i));
+      for (let r = 0; r < 8; r++)
+        r8.append(el('i', b.changes.some((c) => c.pos === r) ? 'chg' : ''));
+      // The compact chart numbers the bars of each section from 1.
+      bar.append(
+        el('span', 'bn', String(compact ? k + 1 : i + 1)),
+        ' ',
+        cs,
+        r8,
+      );
+      bar.addEventListener('click', (e) => {
+        if (e.shiftKey) extendTo(pickBar(bars));
+        else goTo(pickBar(bars));
+      });
+      // Shift with a click selects bars, not text.
+      bar.addEventListener('mousedown', (e) => {
+        if (e.shiftKey) e.preventDefault();
+      });
+      bar.title = 'Shift with a click: loop from the cursor to this bar';
+      bar.addEventListener('pointerenter', (e) => {
+        hoverSpan = (from) => ({ from, to: pickBar(bars) });
+        shiftDown = e.shiftKey;
+        showPreview();
+      });
+      bar.addEventListener('pointerleave', () => {
+        hoverSpan = null;
+        showPreview();
+      });
       grid.append(bar);
-      barEls[i] = bar;
+      barNodes.push({ node: bar, bars });
+      for (const j of bars) barEls[j] = bar;
     }
     sec.append(head, grid);
     root.append(sec);
+    secNodes.push({ node: sec, secs });
   }
   lastCur = -1;
+  // The bar count of the longest section, up to a multiple of 4 from 4 to
+  // 16. A dense theme makes no row of bars longer than this.
+  const longest = Math.max(...song.sections.map((s) => s.end - s.start + 1));
+  root.dataset.longest = String(Math.min(16, Math.ceil(longest / 4) * 4));
+  // A dense theme fits the page to the viewport (REQ-DENSE-002).
+  window.autosamFit();
 }
 
 function renderKeyButtons() {
@@ -1180,6 +1616,8 @@ function renderSettings() {
     r.checked = r.value === settings.style;
   for (const r of $('synthSeg').querySelectorAll('input'))
     r.checked = r.value === synth().id;
+  for (const r of $('viewSeg').querySelectorAll('input'))
+    r.checked = r.value === viewMode();
   $('octDown').disabled = n - 12 < -LIMITS.maxShift;
   $('octUp').disabled = n + 12 > LIMITS.maxShift;
   $('shiftDown').disabled = n - 1 < -LIMITS.maxShift;
@@ -1233,6 +1671,16 @@ function loadSong(parsed, fresh) {
     settings.bpm = clampBpm(kept.bpm ?? parsed.meta.tempo);
   }
   cursorBar = Math.min(cursorBar, song.bars.length - 1);
+  // A loop range belongs to one version of the song. A Loop that the range
+  // turned on goes with it.
+  range = null;
+  pick = null;
+  if (loopByRange) {
+    loopByRange = false;
+    settings.loop = false;
+    save();
+  }
+  showRange();
   voiced = { key: null, rh: null, lh: null };
   document.title = `${parsed.meta.title} · autosam`;
   $('songTitle').textContent = parsed.meta.title;
@@ -1245,6 +1693,7 @@ function loadSong(parsed, fresh) {
   renderKeyButtons();
   renderSettings();
   renderChart();
+  renderRoadmap();
   showAt(cursorBar, 0);
 }
 
@@ -1373,7 +1822,10 @@ function wireSongControls() {
     now: $('now'),
   });
   els.playBtn.addEventListener('click', toggle);
-  $('startBtn').addEventListener('click', () => goTo(0));
+  // With a loop range, |◀ goes to the start of the loop and keeps it.
+  $('startBtn').addEventListener('click', () =>
+    range ? goTo(range.start, true) : goTo(0),
+  );
   $('shiftDown').addEventListener('click', () => setShift(settings.shift - 1));
   $('shiftUp').addEventListener('click', () => setShift(settings.shift + 1));
   $('octDown').addEventListener('click', () => setShift(settings.shift - 12));
@@ -1385,6 +1837,45 @@ function wireSongControls() {
       renderSettings();
     });
   }
+  // Shift down or up updates the loop preview under the pointer.
+  for (const type of ['keydown', 'keyup']) {
+    document.addEventListener(type, (e) => {
+      if (e.key !== 'Shift') return;
+      shiftDown = type === 'keydown';
+      showPreview();
+    });
+  }
+  window.addEventListener('blur', () => {
+    shiftDown = false;
+    showPreview();
+  });
+  // The chart view. A new chart keeps the place in the song.
+  const redraw = () => {
+    renderChart();
+    markBars(shownE);
+    drawRange();
+  };
+  for (const r of $('viewSeg').querySelectorAll('input')) {
+    r.addEventListener('change', () => {
+      settings.view = r.value;
+      save();
+      renderSettings();
+      redraw();
+    });
+  }
+  // The width of the screen picks the view and the switch.
+  narrow.addEventListener('change', () => {
+    renderSettings();
+    redraw();
+  });
+  // The outline of the loop range follows the layout: a resize, a new
+  // theme, a new text size.
+  const redrawRange = () => requestAnimationFrame(drawRange);
+  new ResizeObserver(redrawRange).observe($('sections'));
+  new MutationObserver(redrawRange).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-mode', 'data-screen', 'style'],
+  });
   renderSynthButtons();
   $('tempo').addEventListener('input', (e) => {
     settings.bpm = clampBpm(e.target.value);
@@ -1413,6 +1904,10 @@ function wireSongControls() {
   $('optLoop').addEventListener('change', (e) => {
     settings.loop = e.target.checked;
     save();
+    // A Loop that the person turns on or off is theirs. Loop off ends the
+    // custom range too.
+    loopByRange = false;
+    if (!settings.loop && range) clearRange();
     markBars(shownE);
     updateNext(shownBar, shownE);
   });
@@ -1443,14 +1938,7 @@ function wireSongControls() {
     (t.tagName === 'TEXTAREA' ||
       (t.tagName === 'INPUT' &&
         !['checkbox', 'radio', 'range'].includes(t.type)));
-  const SCROLL_KEYS = [
-    'PageUp',
-    'PageDown',
-    'Home',
-    'End',
-    'ArrowUp',
-    'ArrowDown',
-  ];
+  const SCROLL_KEYS = ['PageUp', 'PageDown', 'Home', 'End'];
   document.addEventListener('keydown', (e) => {
     if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'Space') {
@@ -1467,17 +1955,39 @@ function wireSongControls() {
       return;
     }
     if (e.target.tagName === 'INPUT' && e.target.type === 'range') return;
-    const secIdx =
-      song.bars[playing ? (pendingJump ?? shownBar) : cursorBar].sec;
-    if (e.key === 'ArrowRight') {
+    // A radio group keeps its own arrow keys.
+    if (e.target.type === 'radio' && e.key.startsWith('Arrow')) return;
+    if (e.key === 'Escape') {
+      if (range) clearRange();
+      return;
+    }
+    // The arrows move by bar, as the bars sit on the screen. With Shift they
+    // extend the loop range.
+    const here = e.shiftKey && pick ? pick.to : hereBar();
+    const last = song.bars.length - 1;
+    const to = {
+      ArrowLeft: () => Math.max(0, here - 1),
+      ArrowRight: () => Math.min(last, here + 1),
+      ArrowUp: () => barToward(here, -1),
+      ArrowDown: () => barToward(here, 1),
+    }[e.key];
+    if (to) {
       e.preventDefault();
+      const bar = to();
+      if (e.shiftKey) extendTo(bar);
+      else {
+        goTo(bar);
+        reveal(bar);
+      }
+      return;
+    }
+    const secIdx = song.bars[hereBar()].sec;
+    if (e.key === ']') {
       goTo(song.sections[Math.min(song.sections.length - 1, secIdx + 1)].start);
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
+    } else if (e.key === '[') {
       const s = song.sections[secIdx];
-      const here = playing ? shownBar : cursorBar;
       goTo(
-        here > s.start && !playing
+        hereBar() > s.start && !playing
           ? s.start
           : song.sections[Math.max(0, secIdx - 1)].start,
       );

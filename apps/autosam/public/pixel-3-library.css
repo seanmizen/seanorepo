@@ -1,0 +1,129 @@
+/*
+ * autosam Pixel-3 library: the song selector as the track list of a CD
+ * changer.
+ *
+ * Where: index.html links this file after pixel-3-display.css.
+ * When: always loaded. Each rule sits inside a :where() that matches only
+ * Pixel-3.
+ * Why: the panel of a song page is a cassette deck, and the library is the
+ * hi-fi next to it. The track list is on the glass of the screen that the
+ * screen picker sets (pixel-3-display.css), so both pages share one screen.
+ * Each value has a column, under a legend printed on the glass: TRK, TITLE,
+ * KEY, BPM. The selection is an inverted bar with a cursor. app.js writes
+ * the facts of a song as parts (artist, key, tempo), so each part can have
+ * its own column.
+ */
+
+:where(:root[data-theme="pixel-3"]) {
+  /* The faceplate (--plate), as around the display of a song page. */
+  .layout.lib .song-deck {
+    display: block;
+    padding: 0.75em;
+    border-radius: 6px;
+    background: var(--plate);
+    box-shadow: var(--plate-shadow, none);
+  }
+  /* The glass of the screen in the faceplate. A row of legends, then a row
+     for each track on the columns of the legends. */
+  .layout.lib .song-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: start;
+    padding: 0.5em 0;
+    border-radius: 3px;
+    background: var(--glass-texture, none), var(--glass);
+    background-size: var(--glass-size, auto), auto;
+    box-shadow:
+      inset 0 2px 6px rgb(0 0 0 / 0.45),
+      var(--glass-edge, inset 0 0 0 1px rgb(0 0 0 / 0.5));
+    color: var(--lit);
+    font-family: var(--glass-font, var(--mono));
+    counter-reset: track;
+  }
+  /* The legends use the font and the size of the rows, so they sit on the
+     same columns: TRK 4ch, a gap of 1ch, KEY 3ch, a gap of 1ch, BPM 3ch. */
+  .layout.lib .song-list::before,
+  .layout.lib .song-list::after {
+    grid-row: 1;
+    padding: 0 0.75rem 0.4em;
+    color: var(--dim);
+    white-space: pre;
+  }
+  .layout.lib .song-list::before {
+    content: " TRK TITLE";
+    grid-column: 1;
+  }
+  .layout.lib .song-list::after {
+    content: "KEY BPM";
+    grid-column: 2;
+  }
+  .layout.lib .song-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 4ch minmax(0, 1fr) 3ch 3ch;
+    column-gap: 1ch;
+    align-items: baseline;
+    row-gap: 0.15em;
+    padding: 0.4em 0.75rem;
+    background: none;
+    color: var(--lit);
+    text-shadow: var(--glow, none);
+    counter-increment: track;
+  }
+  .layout.lib .song-row:is(:hover, :focus-visible) {
+    outline: none;
+    background: var(--lit);
+    color: var(--glass);
+    text-shadow: none;
+  }
+  .layout.lib .song-row::before {
+    content: counter(track, decimal-leading-zero);
+    grid-column: 1;
+    text-align: right;
+  }
+  .layout.lib .song-row:is(:hover, :focus-visible)::before {
+    content: "\25B6" counter(track, decimal-leading-zero);
+  }
+  .layout.lib .song-title {
+    grid-column: 2;
+    overflow: hidden;
+    font-weight: var(--glass-weight, 500);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .layout.lib .song-row .song-meta {
+    display: contents;
+  }
+  .layout.lib .song-row :is(.sm-sep, .sm-pre, .sm-post) {
+    display: none;
+  }
+  .layout.lib .song-row .sm-artist {
+    grid-column: 2;
+    grid-row: 2;
+    overflow: hidden;
+    color: var(--dim);
+    font-size: 0.85em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .layout.lib .song-row:is(:hover, :focus-visible) .sm-artist {
+    color: inherit;
+  }
+  .layout.lib .song-row .song-meta {
+    color: inherit;
+  }
+  .layout.lib .song-row :is(.sm-key, .sm-bpm) {
+    grid-row: 1;
+    text-align: right;
+  }
+  .layout.lib .song-row .sm-key {
+    grid-column: 3;
+  }
+  .layout.lib .song-row .sm-bpm {
+    grid-column: 4;
+  }
+  .layout.lib .song-list .empty {
+    grid-column: 1 / -1;
+    color: var(--dim);
+  }
+}

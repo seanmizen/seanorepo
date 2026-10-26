@@ -66,6 +66,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `A11Y` | `apps/inside/requirements/a11y.md` | inside — accessibility |
 | `AUTH` | `apps/inside/requirements/auth.md` | inside — authentication, sessions, roles |
 | `BARE` | `apps/autosam/requirements/bare.md` | autosam — the page works with no page styles |
+| `DENSE` | `apps/autosam/requirements/dense.md` | autosam — the dense themes spend few pixels |
 | `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |
 | `DATA` | `apps/inside/requirements/data.md` | inside — schema, migrations, storage, vocabulary |
@@ -77,6 +78,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `NAV` | `apps/inside/requirements/nav.md` | inside — routing and navigation |
 | `NETWORK` | `utils/debbie/2026-09-17/requirements/network.md` | debbie — tunnel ingress and route failover |
 | `ONBOARD` | `apps/inside/requirements/onboard.md` | inside — designer onboarding |
+| `PIXEL` | `apps/autosam/requirements/pixel.md` | autosam — Pixel-1 covers the fewest pixels |
 | `PRODUCT` | `apps/inside/requirements/product.md` | inside — locked product decisions |
 | `QC` | `apps/QuarterCompany/requirements/qc.md` | QuarterCompany — journal, filesystem, turns, casts |
 | `QUALITY` | `apps/inside/requirements/quality.md` | inside — testing conventions |
