@@ -1,7 +1,12 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!**/*Glasto*", "!.yarn"]
+    "includes": [
+      "**",
+      "!**/*Glasto*",
+      "!.yarn",
+      "!apps/autosam/public/modern-normalize.css"
+    ]
   },
   "assist": {
     "actions": {
