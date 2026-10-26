@@ -23,7 +23,8 @@
 <!-- The library: "/" -->
 <main class="layout lib" id="libraryView" hidden>
   <header class="masthead">
-    <div class="eyebrow">autosam · piano practice partner</div>
+    <nav class="crumbs" aria-label="Breadcrumb"><span aria-current="page">autosam</span></nav>
+    <div class="eyebrow">piano practice partner</div>
     <h1 class="gradient-text">Songs</h1>
     <p class="lib-intro">Pick a song. autosam plays its chords on the piano in a key that suits your voice, and the chord chart follows the music.</p>
   </header>
@@ -52,7 +53,8 @@
 <!-- One song: "/<slug>" -->
 <main class="layout song" id="songView" hidden>
   <header class="masthead">
-    <div class="crumbs"><a href="/">← All songs</a> <span class="eyebrow" id="eyebrow">autosam</span></div>
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">autosam</a><span class="crumb-page" aria-current="page" id="crumbPage"></span></nav>
+    <div class="eyebrow" id="eyebrow" hidden></div>
     <h1 class="gradient-text" id="songTitle">Song</h1>
     <p class="keyline" id="keyline"></p>
   </header>
@@ -178,10 +180,9 @@
 <!-- No song at this address -->
 <main class="layout lib" id="notFound" hidden>
   <header class="masthead">
-    <div class="eyebrow">autosam</div>
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">autosam</a><span class="crumb-page" aria-current="page" id="nfPage"></span></nav>
     <h1 class="gradient-text">No song here</h1>
     <p class="lib-intro" id="nfMsg"></p>
-    <p><a href="/">← All songs</a></p>
   </header>
 </main>
 
