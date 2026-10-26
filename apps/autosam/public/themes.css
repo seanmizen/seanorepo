@@ -12,9 +12,14 @@
  *
  * The morph: this file registers each token that can interpolate with
  * @property. :root transitions those tokens, and every element that reads a
- * token follows. Font tokens are not registered, so they change at once. A
- * token must have a registration and a place in transition-property, or it
- * does not morph.
+ * token follows. A token must have a registration and a place in
+ * transition-property, or it does not morph.
+ *
+ * Fonts: one font family cannot interpolate into another. So a picker change
+ * runs in a view transition (theme.js): the old page fades out over the new
+ * page while the tokens morph under it. The text dissolves from one font to
+ * the next. The fonts load as variable fonts, so --display-weight moves
+ * smoothly inside one family.
  *
  * To add a theme: add a :root[data-theme="<id>"] block for light and a
  * :root[data-theme="<id>"][data-mode="dark"] block for dark. Then add <id> to
@@ -138,6 +143,11 @@
     --radius-card, --radius-control, --display-weight;
   transition-duration: var(--morph);
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--morph);
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
