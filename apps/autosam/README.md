@@ -73,8 +73,15 @@ The defaults (`baseline`, `auto`) stay out of the URL.
   place, size and color to the new ones. Each glyph is a signed distance
   field (SDF): an image where each pixel holds its distance to the glyph
   edge. A blend of two fields gives a shape between the two glyphs. A little
-  blur halfway smooths the creases of the blend. When the layer goes, the
-  real text shows in the same place.
+  blur halfway smooths the creases of the blend, and only where the two
+  glyphs differ. Boxes morph too: each box with text in it moves from its
+  old size to its new size. One clock moves the glyphs, the boxes and the
+  tokens.
+- The first and last frames match the page pixel for pixel. morph.js draws
+  each glyph as the page draws it: in its own color and at its subpixel
+  place. It uses a GPU canvas in the document, so the canvas gets the font
+  smoothing of the page. The baseline comes from layout. Only content that the page
+  paints morphs: the text of a closed accordion stays hidden.
 
 The morph assumes a static page. A scroll or a resize ends it. To watch it
 slowly, set `--morph` higher in DevTools. With reduced motion, or with no
