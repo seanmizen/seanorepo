@@ -74,6 +74,11 @@ import {
 }
 
 import {
+  to = cloudflare_zone_setting.seanmizen_com_browser_cache_ttl
+  id = "428a9a9f5e22c95bc7e67faa7d5ab942/browser_cache_ttl"
+}
+
+import {
   to = cloudflare_dns_record.seanmizen_com_hue_a
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/68e515e6e79851dcbe3c9380415d60a7"
 }
