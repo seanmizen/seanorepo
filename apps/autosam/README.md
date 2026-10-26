@@ -78,8 +78,11 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`, `Pixel-3`) and mode (`Auto`,
-`Light`, `Dark`). Tone puts the pane at the top right. The Pixel themes put
+`KBBQ`, `Bare`, `Tone`, `Pixel-1`, `Pixel-2`, `Pixel-3`, `Pixel-3a`,
+`Pixel-3b`, `Pixel-3c`) and mode (`Auto`, `Light`, `Dark`). Pixel-3a, 3b and
+3c are prototypes of the Pixel-3 display as an instrument screen: a VFD, an
+LCD and an amber dot matrix. Each value has a fixed place
+(`public/pixel-3-display.css`). Tone puts the pane at the top right. The Pixel themes put
 it at the end of the page. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow

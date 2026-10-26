@@ -1,0 +1,340 @@
+/*
+ * autosam themes Pixel-3a, Pixel-3b and Pixel-3c: Pixel-3 with the display
+ * as the screen of an instrument.
+ *
+ * Where: index.html links this file after pixel-3.css.
+ * When: always loaded. Each rule sits inside a :where() that matches only
+ * these themes. pixel-3.css gives them the rules of Pixel-3 first.
+ * Why: the song moves fast. When a value moves on the screen, the eye must
+ * find it again. Here each value has a fixed place, as on a VFD or an LCD:
+ * - The display is a window of glass on the faceplate. The beats and the
+ *   transport keys sit on the faceplate under the glass.
+ * - Each number has a cell of fixed width, aligned right. The unlit digits
+ *   ("88") glow faintly behind it, as on a segment display.
+ * - The glass carries printed legends (BAR, SONG, NOW, NEXT, IN). The
+ *   words of the plain text ("of", "in", "beats") hide.
+ * - The next chord starts at a fixed place. It does not align right.
+ * - The beats are four LEDs, like the LEDs of the keys.
+ * app.js writes each changing value as a row of parts (setParts), so each
+ * part can have its own place.
+ *
+ * The three themes differ only in the glass:
+ * - Pixel-3a: a vacuum fluorescent display (VFD), cyan with a glow.
+ * - Pixel-3b: a reflective LCD, dark segments on grey-green. In dark mode
+ *   it has a green backlight.
+ * - Pixel-3c: an amber dot matrix, in the font Doto.
+ */
+
+:where(
+    :root:is(
+        [data-theme="pixel-3a"],
+        [data-theme="pixel-3b"],
+        [data-theme="pixel-3c"]
+      )
+  ) {
+  /* The faceplate: a module like the others. The glass is a grid item
+     behind the top two rows. */
+  .layout.song .now {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 1em;
+    padding: 1.25em 1em 0.75em;
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .layout.song .now::before {
+    content: "";
+    grid-column: 1 / -1;
+    grid-row: 1 / 3;
+    align-self: stretch;
+    margin: -0.75em -0.5em;
+    border-radius: 3px;
+    background: var(--glass-texture, none), var(--glass);
+    box-shadow:
+      inset 0 2px 6px rgb(0 0 0 / 0.45),
+      0 0 0 1px var(--line),
+      0 1px 0 color-mix(in srgb, var(--surface) 60%, white);
+  }
+  .layout.song .now :is(.now-top, .now-main > div) {
+    color: var(--lit);
+    font-family: var(--glass-font, var(--mono));
+    text-shadow: var(--glow, none);
+  }
+
+  /* The top row: section, bar of the section, bar of the song. */
+  .layout.song .now .now-top {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    column-gap: 1.25em;
+    font-size: 0.85em;
+    letter-spacing: 0.06em;
+  }
+  .layout.song .now-top > span:first-child {
+    display: contents;
+  }
+  .layout.song .now-top .now-sep,
+  .layout.song .now .cnt-of,
+  .layout.song .now :is(.nx-sep, .nx-pre, .nx-post) {
+    display: none;
+  }
+  .layout.song #secName {
+    overflow: hidden;
+    font-weight: inherit;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .layout.song :is(#secBar, #songBar)::before,
+  .layout.song .now .lbl,
+  .layout.song #nextIn::before {
+    margin-right: 0.6em;
+    font-family: var(--mono);
+    font-size: 0.75em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    color: var(--dim);
+    text-shadow: none;
+  }
+  .layout.song #secBar::before {
+    content: "BAR";
+  }
+  .layout.song #songBar::before {
+    content: "SONG";
+  }
+  .layout.song .now .mono {
+    color: inherit;
+  }
+
+  /* A number cell: fixed width, aligned right, the unlit digits behind. */
+  .layout.song .now :is(.cnt-n, .cnt-d, .nx-n) {
+    position: relative;
+    z-index: 0;
+    display: inline-block;
+    width: 2ch;
+    text-align: right;
+  }
+  .layout.song .now :is(.cnt-n, .cnt-d, .nx-n)::before {
+    content: "88";
+    position: absolute;
+    z-index: -1;
+    right: 0;
+    color: var(--ghost);
+    text-shadow: none;
+  }
+  .layout.song #songBar :is(.cnt-n, .cnt-d),
+  .layout.song .now .nx-n {
+    width: 3ch;
+  }
+  .layout.song #songBar :is(.cnt-n, .cnt-d)::before,
+  .layout.song .now .nx-n::before {
+    content: "888";
+  }
+  .layout.song .now .cnt-n {
+    margin-right: 1ch;
+  }
+  .layout.song .now .cnt-n::after {
+    content: "/";
+    position: absolute;
+    left: 100%;
+  }
+
+  /* The main rows: NOW on the left, NEXT on the right. Each starts at the
+     left of its column. A line keeps its height when it is empty. */
+  .layout.song .now .now-main {
+    display: contents;
+  }
+  .layout.song .now .now-main > div {
+    grid-row: 2;
+    display: grid;
+    justify-items: start;
+    align-content: start;
+    gap: 0.35em;
+    min-width: 0;
+    text-align: left;
+  }
+  .layout.song .now .chord-now {
+    grid-column: 1;
+  }
+  .layout.song .now .chord-next {
+    grid-column: 2;
+  }
+  .layout.song .now .lbl {
+    margin: 0;
+  }
+  .layout.song .now :is(.chord-big, .chord-mid) {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--lit);
+    font-family: inherit;
+    font-weight: var(--glass-weight, 500);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .layout.song .now .chord-big {
+    font-size: 2.75em;
+  }
+  .layout.song .now .chord-big.counting {
+    color: var(--lit);
+  }
+  .layout.song .now .chord-mid {
+    font-size: 1.75em;
+  }
+  .layout.song .now .nash {
+    min-height: 1.3em;
+    color: var(--lit);
+    font-size: 0.85em;
+  }
+  .layout.song #nextIn {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: baseline;
+    justify-self: stretch;
+  }
+  .layout.song #nextIn::before {
+    content: "IN";
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .layout.song #nextIn:not(:has(.nx-n))::before {
+    content: none;
+  }
+  .layout.song .now .nx-num {
+    grid-column: 1;
+    grid-row: 1;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .layout.song .now .nx-n {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  /* The faceplate: four beat LEDs and the transport keys. */
+  .layout.song .now .now-bottom {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+  .layout.song .now .beats {
+    gap: 0.6em;
+    font-size: 1em;
+  }
+  .layout.song .now .beats i {
+    width: 0.7em;
+    height: 0.7em;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--line);
+    box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.25);
+    color: transparent;
+    font-size: 1em;
+    line-height: 2;
+  }
+  .layout.song .now .beats i.on {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    color: transparent;
+    text-shadow: none;
+  }
+  .layout.song .side .now .transport button {
+    background: var(--bg);
+    color: var(--ink);
+    box-shadow:
+      inset 0 -2px 0 var(--line),
+      0 0 0 1px var(--line);
+  }
+  .layout.song .side .now .transport button:hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .layout.song .side .now .transport button:active {
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  /* Play latches: an LED, lit while the song plays. */
+  .layout.song #playBtn::before {
+    content: "";
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 50%;
+    background: var(--line);
+  }
+  .layout.song #playBtn[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow:
+      inset 0 2px 0 var(--line),
+      0 0 0 1px var(--line);
+  }
+  .layout.song #playBtn[aria-pressed="true"]::before {
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent);
+  }
+}
+
+/* Pixel-3a: a VFD. Cyan phosphor behind a fine mesh, with a glow. */
+:where(:root[data-theme="pixel-3a"]) .layout.song .now {
+  --glass: #06110f;
+  --glass-texture:
+    repeating-linear-gradient(
+      0deg,
+      rgb(255 255 255 / 0.03) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0.03) 0 1px,
+      transparent 1px 3px
+    );
+  --lit: #66f4da;
+  --dim: rgb(102 244 218 / 0.5);
+  --ghost: rgb(102 244 218 / 0.07);
+  --glow: 0 0 3px rgb(102 244 218 / 0.6), 0 0 10px rgb(102 244 218 / 0.25);
+}
+
+/* Pixel-3b: a reflective LCD. Dark segments throw a small shadow on the
+   reflector behind them. */
+:where(:root[data-theme="pixel-3b"]) .layout.song .now {
+  --glass: #a9b39c;
+  --glass-texture: linear-gradient(
+    170deg,
+    rgb(255 255 255 / 0.18),
+    transparent 45%
+  );
+  --lit: #1d2419;
+  --dim: rgb(29 36 25 / 0.55);
+  --ghost: rgb(29 36 25 / 0.07);
+  --glow: 1px 1px 0 rgb(0 0 0 / 0.13);
+}
+/* In dark mode the LCD has its backlight on: brighter in the middle. */
+:where(:root[data-theme="pixel-3b"][data-mode="dark"]) .layout.song .now {
+  --glass: #7c9e36;
+  --glass-texture: radial-gradient(
+    ellipse at 50% 40%,
+    rgb(214 255 120 / 0.35),
+    transparent 70%
+  );
+  --lit: #101807;
+  --dim: rgb(16 24 7 / 0.6);
+  --ghost: rgb(16 24 7 / 0.09);
+}
+
+/* Pixel-3c: an amber dot matrix. Each glyph is a grid of dots, and the
+   unlit dots of the screen show faintly. */
+:where(:root[data-theme="pixel-3c"]) .layout.song .now {
+  --glass: #150c02;
+  --glass-texture: radial-gradient(
+    circle,
+    rgb(255 176 74 / 0.09) 0.6px,
+    transparent 0.9px
+  );
+  --lit: #ffb04a;
+  --dim: rgb(255 176 74 / 0.55);
+  --ghost: rgb(255 176 74 / 0.08);
+  --glow: 0 0 4px rgb(255 140 30 / 0.55);
+  --glass-font: "Doto", var(--mono);
+  --glass-weight: 800;
+}
+:where(:root[data-theme="pixel-3c"]) .layout.song .now::before {
+  background-size:
+    3px 3px,
+    auto;
+}

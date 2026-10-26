@@ -275,7 +275,7 @@
     [data-theme="tone"],
     [data-theme="pixel-1"],
     [data-theme="pixel-2"],
-    [data-theme="pixel-3"]
+    [data-theme^="pixel-3"]
   ) {
   --shadow: transparent;
   --radius-card: 0px;
@@ -304,7 +304,7 @@
     [data-theme="tone"],
     [data-theme="pixel-1"],
     [data-theme="pixel-2"],
-    [data-theme="pixel-3"]
+    [data-theme^="pixel-3"]
   )[data-mode="dark"] {
   --bg: #1d1c1a;
   --surface: #2b2926;
@@ -326,7 +326,7 @@
 }
 
 /* Pixel-3: the colors of Tone, with IBM Plex for an instrument panel. */
-:root[data-theme="pixel-3"] {
+:root[data-theme^="pixel-3"] {
   --body: "IBM Plex Sans", system-ui, sans-serif;
   --display: "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;

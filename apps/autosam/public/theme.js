@@ -27,6 +27,11 @@
     { id: 'pixel-2', label: 'Pixel-2' },
     // Pixel-2 with a designed control panel.
     { id: 'pixel-3', label: 'Pixel-3' },
+    // Pixel-3 with the display as an instrument screen, each value at a
+    // fixed place: a VFD, an LCD and an amber dot matrix.
+    { id: 'pixel-3a', label: 'Pixel-3a' },
+    { id: 'pixel-3b', label: 'Pixel-3b' },
+    { id: 'pixel-3c', label: 'Pixel-3c' },
   ];
   // "auto" follows the system light or dark setting.
   const MODES = [

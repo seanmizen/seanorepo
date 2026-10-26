@@ -25,7 +25,7 @@
  * 7. One rhythm. Each space is 2px (a seam) or a step of 0.25em.
  */
 
-:where(:root[data-theme="pixel-3"]) {
+:where(:root[data-theme^="pixel-3"]) {
   & {
     font-size: 11px;
   }

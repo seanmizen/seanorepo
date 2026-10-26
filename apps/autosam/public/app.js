@@ -838,10 +838,41 @@ function nextChange(p, curSym) {
   }
   return null;
 }
-const beatsText = (b) =>
+// A field of the display is a row of parts: [class, text]. Each part is a
+// span, so a theme can give each part a fixed place. The text reads the
+// same with no page styles.
+function setParts(node, parts) {
+  node.replaceChildren(...parts.map(([cls, text]) => el('span', cls, text)));
+}
+// "in 1½ beats", or 'on the "and"' for half a beat. The count is a part.
+const beatsParts = (b) =>
   b === 0.5
-    ? 'on the "and"'
-    : `in ${String(b).replace('.5', '½')} beat${b === 1 ? '' : 's'}`;
+    ? [
+        ['nx-pre', 'on the "'],
+        ['nx-n', 'and'],
+        ['nx-post', '"'],
+      ]
+    : [
+        ['nx-pre', 'in '],
+        ['nx-n', String(b).replace('.5', '½')],
+        ['nx-post', ` beat${b === 1 ? '' : 's'}`],
+      ];
+// The next chord's number and when it comes: "1sus4 · in 1½ beats".
+const nextParts = (ch, b) => [
+  ...(ch
+    ? [
+        ['nx-num', chordNum(ch)],
+        ['nx-sep', ' · '],
+      ]
+    : []),
+  ...beatsParts(b),
+];
+// "3 of 8" or "73 / 87".
+const countParts = (n, of, total) => [
+  ['cnt-n', String(n)],
+  ['cnt-of', of],
+  ['cnt-d', String(total)],
+];
 
 function updateNext(bar, e) {
   const cur = chordAt(bar, e);
@@ -851,10 +882,10 @@ function updateNext(bar, e) {
     els.nextIn.textContent = '';
   } else if (n.end) {
     els.nextChord.textContent = 'End';
-    els.nextIn.textContent = beatsText(n.beats);
+    setParts(els.nextIn, nextParts(null, n.beats));
   } else {
     els.nextChord.textContent = chordName(n.chord);
-    els.nextIn.textContent = `${chordNum(n.chord)} · ${beatsText(n.beats)}`;
+    setParts(els.nextIn, nextParts(n.chord, n.beats));
   }
 }
 
@@ -864,8 +895,11 @@ function showAt(bar, e, v) {
   const b = song.bars[bar];
   const s = song.sections[b.sec];
   els.secName.textContent = s.name;
-  els.secBar.textContent = `${bar - s.start + 1} of ${s.end - s.start + 1}`;
-  els.songBar.textContent = `${bar + 1} / ${song.bars.length}`;
+  setParts(
+    els.secBar,
+    countParts(bar - s.start + 1, ' of ', s.end - s.start + 1),
+  );
+  setParts(els.songBar, countParts(bar + 1, ' / ', song.bars.length));
   const ch = chordAt(bar, e);
   els.nowChord.classList.remove('counting');
   els.nowChord.textContent = chordName(ch);
@@ -897,8 +931,7 @@ function showCount(ev) {
   els.nowNum.textContent = 'count-in';
   const first = chordAt(cursorBar, 0);
   els.nextChord.textContent = chordName(first);
-  els.nextIn.textContent =
-    (first ? `${chordNum(first)} · ` : '') + beatsText(ev.left);
+  setParts(els.nextIn, nextParts(first, ev.left));
   els.beats.forEach((d, i) => {
     showBeat(d, i === ev.beat);
   });
