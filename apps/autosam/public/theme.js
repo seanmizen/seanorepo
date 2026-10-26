@@ -35,7 +35,7 @@
     { id: 'dark', label: 'Dark' },
   ];
   const SETTINGS = {
-    theme: { list: THEMES, key: 'autosam:theme', fallback: 'baseline' },
+    theme: { list: THEMES, key: 'autosam:theme', fallback: 'pixel-3' },
     mode: { list: MODES, key: 'autosam:mode', fallback: 'auto' },
   };
   const root = document.documentElement;

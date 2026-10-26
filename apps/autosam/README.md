@@ -88,7 +88,7 @@ choice stays on the device.
 
 A URL can give both: `/?theme=kbbq&mode=dark` opens the page in KBBQ dark,
 and the device keeps that choice. A press writes the choice back to the URL.
-The defaults (`baseline`, `auto`) stay out of the URL.
+The defaults (`pixel-3`, `auto`) stay out of the URL.
 
 - `public/themes.css` holds the tokens of each theme, in a light and a dark
   block. The page uses only these tokens: colors, `--shadow`, the radii

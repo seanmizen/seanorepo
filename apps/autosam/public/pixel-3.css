@@ -72,7 +72,12 @@
     width: max-content;
     padding: 1em;
   }
-  .layout.song .masthead {
+  /* The library and the song page share one frame and one masthead, so
+     the crumbs and the title stay in place from page to page. */
+  .layout.lib:not([hidden]) {
+    padding: 1em;
+  }
+  .layout .masthead {
     grid-column: 1 / -1;
     display: flex;
     flex-wrap: wrap;
@@ -80,15 +85,20 @@
     gap: 0 0.75em;
     background: none;
   }
-  .layout.song .masthead h1 {
+  .layout .masthead h1 {
     font-size: 1.6em;
     font-weight: 600;
     letter-spacing: -0.01em;
   }
-  .layout.song .crumbs,
-  .layout.song .eyebrow {
+  .layout :is(.crumbs, .eyebrow) {
     font-family: var(--mono);
     font-size: 0.85em;
+  }
+  .layout .lib-intro {
+    flex-basis: 100%;
+  }
+  .layout.lib .masthead {
+    margin-bottom: calc(1em - 1px);
   }
   .layout.song .chart-tools,
   .layout.song .sections,
@@ -604,7 +614,7 @@
 
   /* A narrow screen: the panel above the chart. */
   @media (max-width: 760px) {
-    .layout.song:not([hidden]) {
+    .layout:is(.song, .lib):not([hidden]) {
       grid-template-columns: minmax(0, 1fr);
       width: auto;
     }
