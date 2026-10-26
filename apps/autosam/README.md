@@ -78,9 +78,8 @@ entry.
 ## Themes
 
 A pane at the bottom left of each page has two pickers: theme (`Baseline`,
-`KBBQ`, `Bare`, `Hairline`, `Tone`, `Term`) and mode (`Auto`, `Light`,
-`Dark`). The dense themes (`Hairline`, `Tone`, `Term`) put the pane at the
-top right. A press on the main
+`KBBQ`, `Bare`, `Tone`) and mode (`Auto`, `Light`, `Dark`). Tone puts the
+pane at the end of its control band. A press on the main
 button selects the next value. The ‹ and › buttons select the previous and
 the next value. While the main button has focus, the left and right arrow
 keys do the same. `Auto` follows the system light or dark setting. The
@@ -98,8 +97,7 @@ The defaults (`baseline`, `auto`) stay out of the URL.
 - `public/app.css` holds the page styles of Baseline and KBBQ. Every rule
   sits inside `:where(:root:is([data-theme="baseline"], [data-theme="kbbq"]))`,
   so the other themes never see them. `:where()` adds no specificity.
-- `public/dense.css` holds the dense themes: Hairline, Tone and Term. They
-  share one layout, and differ in how they separate things. See
+- `public/dense.css` holds Tone, the dense theme. See
   [REQ-DENSE](requirements/dense.md).
 - `public/chrome.css` holds the few styles that every theme needs, bare too:
   the morph layer, the fixed theme pane and the debug panel.
@@ -148,21 +146,19 @@ buttons. The markup puts a space between inline words, also where a flex or
 grid gap hides it. `test/bare.test.ts` fails when `app.js` gets a state
 class with no carrier. `.claude/rules/autosam.md` has the rules.
 
-The dense themes spend few pixels (REQ-DENSE). The page sits at the top left
-with no width limit. `theme.js` fits the page to the viewport: it picks the
-number of bars in a row of the chart (4, 8, 12 or 16) and the largest base
-text size from 10 px to 16 px at which the page does not scroll and no bar
-wraps its chords. `app.js` calls the fit again after it draws the chart or
-the library. All sections share one set of chart columns, and each column is
-as wide as its widest bar. The settings are a keypad: labels in one column,
-keys of one height in the other. The three themes differ in how they
-separate things:
-
-| Theme | A line or a group | A control | The playing bar |
-|---|---|---|---|
-| Hairline | A 1 px outline in a 1 px gap. Two neighbours share it. | A grey fill | Accent fill |
-| Tone | No line. Neighbours have different fills. After a Braun calculator. | Keys in two tones. Yellow when lit. | Yellow fill |
-| Term | No line. `#` headings, `\|` before each bar, monospace type. | `[brackets]` | Inverse type |
+Tone, the dense theme, spends few pixels (REQ-DENSE). The chart is the
+page. Every control sits in one band of small blocks above it: the place in
+the song, the chords and Play in one block, then the key, the tempo, the
+piano style, the volume, the toggles, the keyboard and the theme pane. The
+help sits in small type under the chart. `theme.js` fits the chart to the
+rest of the screen: it picks the bars in a row (4, 8, 12 or 16) and the
+largest chord size from 12 px to 40 px at which the page does not scroll and
+no bar wraps its chords. `app.js` calls the fit again after it draws the
+chart or the library. All sections share one set of chart columns, and each
+column is as wide as its widest bar. Fills separate things, after the keys
+of a Braun calculator: grey blocks, keys in two tones. The deep red of a
+piano's key felt lights what is on: the playing bar, the selected key, a
+toggle.
 
 `songs/american-pie.txt` has 249 bars. Use it to test the dense layout at
 its limit.

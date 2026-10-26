@@ -1,6 +1,6 @@
 // Where: apps/autosam, run by `yarn test`.
 // When: on each change to public/dense.css.
-// Why: REQ-DENSE. The dense themes keep to written constraints. This test
+// Why: REQ-DENSE. The dense theme keeps to written constraints. This test
 // reads each declaration of dense.css, with the selector of its rule, and
 // checks the constraints that the CSS alone can show.
 
@@ -72,9 +72,6 @@ test('dense.css draws no border, shadow, radius or gradient (REQ-DENSE-003)', ()
   expect(bad.map(show)).toEqual([]);
 });
 
-// The place that the masthead keeps for the theme pane.
-const PANE = { selector: '.masthead', prop: 'padding-right' };
-
 test('dense.css has no space larger than 0.5em (REQ-DENSE-004)', () => {
   const tooBig = (len: string) => {
     const m = /^(-?[\d.]+)(px|em|rem)?$/.exec(len);
@@ -85,7 +82,6 @@ test('dense.css has no space larger than 0.5em (REQ-DENSE-004)', () => {
   const bad = decls.filter(
     (d) =>
       /^(padding|margin|gap|row-gap|column-gap)(-[a-z]+)?$/.test(d.prop) &&
-      !(d.selector === PANE.selector && d.prop === PANE.prop) &&
       d.value.split(/\s+/).some(tooBig),
   );
   expect(bad.map(show)).toEqual([]);

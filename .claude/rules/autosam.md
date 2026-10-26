@@ -38,8 +38,8 @@ each selection, each message.
 
 - `public/app.css`: the page styles of Baseline and KBBQ, inside
   `:where(:root:is([data-theme="baseline"], [data-theme="kbbq"]))`.
-- `public/dense.css`: the dense themes (Hairline, Tone, Term). Every rule
-  there must keep to REQ-DENSE. `test/dense.test.ts` checks the CSS.
+- `public/dense.css`: Tone, the dense theme. Every rule there must keep to
+  REQ-DENSE. `test/dense.test.ts` checks the CSS.
 - `public/chrome.css`: only what every theme needs to work: the morph layer,
   the fixed theme pane, the debug panel. Never a look.
 - `public/themes.css`: tokens only.
