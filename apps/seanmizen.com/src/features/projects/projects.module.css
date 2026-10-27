@@ -1,7 +1,8 @@
 /*
-  Two columns: the name, and the blurb or the description, which starts on
-  the name's line. The name carries the emphasis and the blurb is dimmed.
-  Below 48rem each row stacks, so the page never scrolls sideways.
+  Columns: the name, and the blurb, which starts on the name's line. The
+  name carries the emphasis and the blurb is dimmed. stamp.module.css adds
+  a third column for the preview stamp. Below 48rem each row stacks, so the
+  page never scrolls sideways.
 
   Each row is an Entity, so it keeps the site's chevron.
 */
@@ -41,14 +42,9 @@
   overflow-wrap: anywhere;
 }
 
-.blurb,
-.description {
+.blurb {
   grid-area: blurb;
   opacity: 0.85;
-}
-
-.description {
-  padding-bottom: 0.4rem;
 }
 
 @media (max-width: 48rem) {

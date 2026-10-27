@@ -12,7 +12,7 @@ import {
 import { LastUpdated, Portrait, ThemeToggle } from '@/components';
 import { StoryPage, stories } from '@/features';
 import { ThemeContext, ThemeProvider } from '@/providers';
-import { HireLab, Home, PreviewLab, Projects, Shaders } from './routes';
+import { HireLab, Home, Projects, Shaders } from './routes';
 import '../index.css';
 
 /* What the home page and /projects share. It stays mounted as you move
@@ -21,9 +21,7 @@ import '../index.css';
    toggle and shrinks into a core on the way, and the hire text fades in. */
 const Layout: FC = () => {
   const { mode, toggleMode } = useContext(ThemeContext);
-  // The preview lab is the projects page too, so the face is thrown there.
-  const onLab = useMatch('/projects/previews') !== null;
-  const onProjects = useMatch('/projects') !== null || onLab;
+  const onProjects = useMatch('/projects') !== null;
   const slot = useRef<HTMLSpanElement>(null);
   return (
     <>
@@ -80,7 +78,6 @@ const App: FC = () => {
           ))}
           <Route element={<Layout />}>
             <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/previews" element={<PreviewLab />} />
             <Route path="/*" element={<Home />} />
           </Route>
         </Routes>

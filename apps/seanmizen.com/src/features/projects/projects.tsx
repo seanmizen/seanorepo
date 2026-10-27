@@ -10,11 +10,9 @@ interface Project {
   /** The name column shows this URL without the protocol. A path that
       starts with "/" is a page of this site. */
   href: string;
-  /** One line, lowercase except for names, no full stop, no repetition of
-      the name. */
-  blurb?: string;
-  /** A longer note, in Sean's words, in a paragraph of its own. */
-  description?: string;
+  /** One line in Sean's words, lowercase except for names, no repetition
+      of the name. */
+  blurb: string;
 }
 
 interface Section {
@@ -32,11 +30,12 @@ const sections: Section[] = [
       },
       {
         href: 'https://autosam.seanmizen.com',
-        blurb: 'I automated a piano player so I could practice vocals',
+        blurb:
+          'I automated a piano player so I could practice vocals. sorry Sam!',
       },
       {
         href: 'https://action.seanmizen.com',
-        blurb: 'I created an FPS on my own engine',
+        blurb: 'online browser-based FPS for the boys using Swindowzig',
       },
       {
         href: 'https://planning-poker.seanmizen.com',
@@ -61,7 +60,7 @@ const sections: Section[] = [
       },
       {
         href: 'https://github.com/seanmizen/swindowzig',
-        blurb: 'my game engine, from scratch: Zig, WASM, WebGPU',
+        blurb: 'my game engine, built from scratch: Zig, WASM, WebGPU',
       },
       {
         href: 'https://minecraft.seanmizen.com',
@@ -93,7 +92,7 @@ const Projects: FC = () => (
         <Subtitle>{title}</Subtitle>
         {k === 0 && <ResetAll className={styles.resetAll} />}
         <EntityList>
-          {projects.map(({ href, blurb, description }) => {
+          {projects.map(({ href, blurb }) => {
             const Thumb = THUMBS[href];
             return (
               <Entity
@@ -107,10 +106,7 @@ const Projects: FC = () => (
                     <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
                   )}
                 </span>
-                {blurb && <span className={styles.blurb}>{blurb}</span>}
-                {description && (
-                  <p className={styles.description}>{description}</p>
-                )}
+                <span className={styles.blurb}>{blurb}</span>
                 {/* A preview stamp. It takes the tight shader mask, as the
                   theme toggle does: the glyphs clear only just around it. */}
                 <span className={stampStyles.stamp} data-mask="tight">
@@ -125,5 +121,4 @@ const Projects: FC = () => (
   </StampBoard>
 );
 
-export type { Project, Section };
-export { cleanUrl, Projects, sections };
+export { Projects };

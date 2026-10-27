@@ -10,9 +10,9 @@ import shist from './assets/shist.webp';
 import styles from './thumbs.module.css';
 
 /* One picture per project. Each one fills a 16:10 box, so every preview
-   mode can show it at any size. */
+   page can show it at any size. */
 
-/* The autosam LCD alone, cut from a loop of the whole display while
+/* The autosam LCD alone, cut from a loop of the whole screen while
    Piano Man plays. The loop is a strip of frames that a CSS animation
    steps through. */
 const Autosam: FC = () => (

@@ -96,7 +96,7 @@ const ResetAll: FC<{ className?: string }> = ({ className }) => {
   );
 };
 
-/* The last card that was moved draws over the others. */
+/* The card that moved last draws over the others. */
 let topZ = 10;
 
 /* How far an arrow key moves a card, in CSS pixels. Shift moves it more. */

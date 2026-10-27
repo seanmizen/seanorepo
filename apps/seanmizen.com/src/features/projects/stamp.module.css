@@ -1,6 +1,6 @@
-/* Stamps: a third column of the project list. Each row keeps a small slot, and the card in
-   it grows out of the slot. A card that has been dragged stays open where
-   it was put. */
+/* Stamps: a third column of the project list. Each row keeps a small
+   slot, and the card in it grows out of the slot. After you drag a card,
+   it stays open where you put it. */
 .stampRow {
   grid-template-columns: 16.5rem minmax(0, 1fr) 3.2rem;
   grid-template-areas: "name blurb stamp";
