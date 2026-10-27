@@ -7,7 +7,15 @@
 */
 
 .section {
+  position: relative;
   padding: 0 0 0.75rem;
+}
+
+/* Reset all for the stamps: over the stamp column, level with the first
+   section title. */
+.resetAll {
+  top: 1.55rem;
+  right: 3px;
 }
 
 /* Home has a line of text and a spacer line under its title. This gap

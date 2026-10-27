@@ -114,14 +114,49 @@
   opacity: 0.8;
 }
 
-.back {
-  top: 5px;
-  right: 5px;
+/* The round buttons: back, on a card, and reset all. */
+.round {
   width: 1.2rem;
   height: 1.2rem;
   border-radius: 50%;
-  font: 0.8rem / 1 sans-serif;
   cursor: pointer;
+}
+
+.round svg {
+  display: block;
+  width: 0.72rem;
+  height: 0.72rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.back {
+  top: 5px;
+  right: 5px;
+}
+
+/* Reset all always shows while it is there. It sits over the stamp column,
+   level with the section title, and the page places it. */
+.resetAll {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  color: #fff;
+  background: #000b;
+  animation: appear 200ms ease-out;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
 }
 
 @media (max-width: 48rem) {

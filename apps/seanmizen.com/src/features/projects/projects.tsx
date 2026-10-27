@@ -2,7 +2,7 @@ import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import { Entity, EntityList, ExternalLink, Subtitle } from '@/components';
 import styles from './projects.module.css';
-import { Stamp } from './stamp';
+import { ResetAll, Stamp, StampBoard } from './stamp';
 import stampStyles from './stamp.module.css';
 import { THUMBS } from './thumbs';
 
@@ -83,10 +83,11 @@ const cleanUrl = (href: string) => {
 };
 
 const Projects: FC = () => (
-  <>
-    {sections.map(({ title, projects }) => (
+  <StampBoard>
+    {sections.map(({ title, projects }, k) => (
       <section key={title} className={styles.section}>
         <Subtitle>{title}</Subtitle>
+        {k === 0 && <ResetAll className={styles.resetAll} />}
         <EntityList>
           {projects.map(({ href, blurb, description }) => {
             const Thumb = THUMBS[href];
@@ -117,7 +118,7 @@ const Projects: FC = () => (
         </EntityList>
       </section>
     ))}
-  </>
+  </StampBoard>
 );
 
 export type { Project, Section };
