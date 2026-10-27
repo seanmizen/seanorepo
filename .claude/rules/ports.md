@@ -39,7 +39,7 @@ use their host ports. See `infra/edge/README.md`.
 | 4020 / 4021 | carolinemizen.art FE / BE |
 | 4030 / 4031 | planning-poker FE / BE |
 | 4040 | RESERVED - the ngrok web inspector binds it |
-| 4042 | minecraft.seanmizen.com |
+| 4042 | voxel.seanmizen.com |
 | 4050 / 4051 | seansconverter.com FE / BE (apps/ffmpeg-converter) |
 | 4060 / 4061 | inside.seanmizen.com FE / BE |
 | 4070 / 4071 | cous.seanmizen.com FE / BE |

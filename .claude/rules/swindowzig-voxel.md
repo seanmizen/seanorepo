@@ -199,7 +199,7 @@ Web Worker pool rules (C9):
 - Both files export the protocol version, the build hash and the build id
   (a hash of the `.zig` files under `examples/voxel`, from `build.zig`).
   The pool starts only when the three values are equal.
-- `apps/minecraft.seanmizen.com/bundle.sh` gives the chunk files
+- `apps/voxel.seanmizen.com/bundle.sh` gives the chunk files
   content-hashed names. Each deploy file must be in `bundle.sh`, the
   dockerfile and `serve.json`.
 - `bun test backends/wasm/worker-pool.test.ts` runs the pool with real

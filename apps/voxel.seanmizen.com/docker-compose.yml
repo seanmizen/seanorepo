@@ -1,8 +1,8 @@
 x-frontend-base: &frontend-base
-  container_name: minecraft-seanmizen-com
+  container_name: voxel-seanmizen-com
   build:
     context: ../..
-    dockerfile: apps/minecraft.seanmizen.com/dockerfile
+    dockerfile: apps/voxel.seanmizen.com/dockerfile
     target: ${BUILD_TARGET:-dev}
   ports:
     - "${PUBLISH_ADDR:-127.0.0.1}:4042:4042"
@@ -16,7 +16,7 @@ services:
     networks:
       default: {}
       edge:
-        aliases: [minecraft-seanmizen-com]
+        aliases: [voxel-seanmizen-com]
 
   frontend-dev:
     <<: *frontend-base

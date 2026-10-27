@@ -47,7 +47,7 @@ coverage
 .eslintrc
 biome.json
 
-# minecraft.seanmizen.com: the chunk files of a local build (bundle.sh). The
+# voxel.seanmizen.com: the chunk files of a local build (bundle.sh). The
 # image makes its own.
-apps/minecraft.seanmizen.com/public/chunks-*.wasm
-apps/minecraft.seanmizen.com/public/chunk-worker-*.js
+apps/voxel.seanmizen.com/public/chunks-*.wasm
+apps/voxel.seanmizen.com/public/chunk-worker-*.js

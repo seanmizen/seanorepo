@@ -11249,12 +11249,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minecraft.seanmizen.com@workspace:apps/minecraft.seanmizen.com":
-  version: 0.0.0-use.local
-  resolution: "minecraft.seanmizen.com@workspace:apps/minecraft.seanmizen.com"
-  languageName: unknown
-  linkType: soft
-
 "miniget@npm:^4.2.2, miniget@npm:^4.2.3":
   version: 4.2.3
   resolution: "miniget@npm:4.2.3"
@@ -15896,6 +15890,12 @@ __metadata:
   checksum: 10c0/4eb7a63a1d62b88c425bcbc609835055a5644a1994d6f47605fe396dddf732e3c0277c9ec89a028fe81557dc4051dd15fc15b9eba6a51d1466cd5c682ddc1261
   languageName: node
   linkType: hard
+
+"voxel.seanmizen.com@workspace:apps/voxel.seanmizen.com":
+  version: 0.0.0-use.local
+  resolution: "voxel.seanmizen.com@workspace:apps/voxel.seanmizen.com"
+  languageName: unknown
+  linkType: soft
 
 "webdriver-bidi-protocol@npm:0.3.9":
   version: 0.3.9

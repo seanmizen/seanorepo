@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Bundle the JS of minecraft.seanmizen.com, and give the chunk worker files
+# Bundle the JS of voxel.seanmizen.com, and give the chunk worker files
 # content-hashed names (C9). build.sh and the dockerfile both run this
 # script, so the local build and the image have the same files.
 #
 # Usage:
-#   ./apps/minecraft.seanmizen.com/bundle.sh <chunks.wasm> <output dir>
+#   ./apps/voxel.seanmizen.com/bundle.sh <chunks.wasm> <output dir>
 #
 # The output directory gets:
 #   chunks-<hash>.wasm        a copy of chunks.wasm

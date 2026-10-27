@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Local (host-side) build for minecraft.seanmizen.com.
+# Local (host-side) build for voxel.seanmizen.com.
 # Mirrors what the Dockerfile does, but runs on your dev machine using the
 # monorepo's pinned toolchains. Safe to re-run; each step is idempotent.
 #
 # Usage:
-#   ./apps/minecraft.seanmizen.com/build.sh [--example=voxel|justabox|...]
+#   ./apps/voxel.seanmizen.com/build.sh [--example=voxel|justabox|...]
 #
 # What it does:
 #   1. cd into utils/swindowzig and run `zig build web` to produce app.wasm
 #      and chunks.wasm (the chunk worker)
 #   2. Run bundle.sh: `bun build` makes boot.js and the chunk worker bundle,
 #      and the chunk files get content-hashed names (C9)
-#   3. Copy the artefacts into apps/minecraft.seanmizen.com/public/
+#   3. Copy the artefacts into apps/voxel.seanmizen.com/public/
 #
 # Neither step writes outside the repo. Skip any step that fails with a
 # warning — the fallback boot.js + missing-app.wasm message in public/ will
@@ -31,7 +31,7 @@ for arg in "$@"; do
   esac
 done
 
-echo "==> minecraft.seanmizen.com build"
+echo "==> voxel.seanmizen.com build"
 echo "    repo root  : ${REPO_ROOT}"
 echo "    swindowzig : ${SWINDOWZIG}"
 echo "    example    : ${EXAMPLE}"
@@ -52,7 +52,7 @@ if command -v zig >/dev/null 2>&1; then
   else
     echo "    ⚠️  zig build web -Dexample=${EXAMPLE} failed — keeping existing ${PUBLIC_DIR}/app.wasm (if any)"
     echo "       The voxel example currently fails to compile for wasm32-freestanding."
-    echo "       See apps/minecraft.seanmizen.com/INVESTIGATION.md § Phase 2 for the delta."
+    echo "       See apps/voxel.seanmizen.com/INVESTIGATION.md § Phase 2 for the delta."
   fi
 else
   echo "    ⚠️  zig not found on PATH — skipping WASM build. Install the Zig version in utils/swindowzig/build.zig.zon."

@@ -104,7 +104,7 @@ import {
 }
 
 import {
-  to = cloudflare_dns_record.seanmizen_com_minecraft_cname
+  to = cloudflare_dns_record.seanmizen_com_voxel_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/ad222b4342cb7f554ab007ecdbbb9938"
 }
 

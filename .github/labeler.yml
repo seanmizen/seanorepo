@@ -25,9 +25,9 @@ gosniff:
   - changed-files:
       - any-glob-to-any-file: 'apps/gosniff/**'
 
-minecraft:
+voxel:
   - changed-files:
-      - any-glob-to-any-file: 'apps/minecraft.seanmizen.com/**'
+      - any-glob-to-any-file: 'apps/voxel.seanmizen.com/**'
 
 tty-dashboard:
   - changed-files:

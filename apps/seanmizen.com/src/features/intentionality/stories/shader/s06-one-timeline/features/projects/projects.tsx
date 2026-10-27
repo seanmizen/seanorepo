@@ -48,10 +48,10 @@ const sections: Section[] = [
     title: 'things which are notable',
     projects: [
       {
-        name: 'minecraft.seanmizen.com',
+        name: 'voxel.seanmizen.com',
         description:
-          "I created a zig-based game engine from scratch. My first demo is a minecraft clone - it's up until Microsoft find out and sue me! It compiles to WASM and utilises WebGPU. dead fast.",
-        href: 'https://minecraft.seanmizen.com',
+          'I created a zig-based game engine from scratch. My first demo is a block-building sandbox. It compiles to WASM and utilises WebGPU. dead fast.',
+        href: 'https://voxel.seanmizen.com',
       },
     ],
   },
