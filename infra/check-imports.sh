@@ -17,7 +17,11 @@ for dir in "$here"/*/; do
   [ -f "$dir/versions.tf" ] || continue
   stack="$(basename "$dir")"
   resources="$(sed -nE 's/^resource "([^"]+)" "([^"]+)".*/\1.\2/p' "$dir"/*.tf | sort)"
-  imports="$(sed -nE 's/^[[:space:]]*to[[:space:]]*=[[:space:]]*([A-Za-z0-9_.-]+).*/\1/p' "$dir"/*.tf | sort)"
+  # Only the `to` of an import block. A moved block also has a `to`.
+  imports="$(awk '/^import[[:space:]]*\{/ { b = 1 } /^}/ { b = 0 }
+    b && match($0, /^[[:space:]]*to[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+/) {
+      s = substr($0, RSTART, RLENGTH); sub(/^[[:space:]]*to[[:space:]]*=[[:space:]]*/, "", s); print s
+    }' "$dir"/*.tf | sort)"
   missing="$(comm -23 <(echo "$resources") <(echo "$imports"))"
   orphans="$(comm -13 <(echo "$resources") <(echo "$imports"))"
   for r in $missing; do

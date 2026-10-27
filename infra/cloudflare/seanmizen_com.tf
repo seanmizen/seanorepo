@@ -64,13 +64,20 @@ resource "cloudflare_dns_record" "seanmizen_com_autosam_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
-resource "cloudflare_dns_record" "seanmizen_com_minecraft_cname" {
+resource "cloudflare_dns_record" "seanmizen_com_voxel_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
-  name    = "minecraft.seanmizen.com"
+  name    = "voxel.seanmizen.com"
   proxied = true
   ttl     = 1
   type    = "CNAME"
   zone_id = cloudflare_zone.seanmizen_com.id
+}
+
+# The record had the name minecraft.seanmizen.com. This block keeps its ID, so
+# the apply changes the name in place. Remove this block after that apply.
+moved {
+  from = cloudflare_dns_record.seanmizen_com_minecraft_cname
+  to   = cloudflare_dns_record.seanmizen_com_voxel_cname
 }
 
 resource "cloudflare_dns_record" "seanmizen_com_apex_mx_2" {

@@ -48,7 +48,7 @@ const STAGES = ['generate', 'light', 'mesh'];
 // performance timeline does not grow. DevTools keeps the measures that it
 // recorded.
 const CLEAR_MEASURES_EVERY = 256;
-// No BigInt literals: the minecraft tsconfig targets an older ES version.
+// No BigInt literals: the voxel tsconfig targets an older ES version.
 const NO_REPLY = BigInt(0);
 const SHIFT_32 = BigInt(32);
 const LOW_32 = BigInt(0xffffffff);

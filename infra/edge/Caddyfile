@@ -45,8 +45,8 @@ http://inside.{$EDGE_HOST}.local {
 	}
 }
 
-http://minecraft.{$EDGE_HOST}.local {
-	reverse_proxy minecraft-seanmizen-com:4042
+http://voxel.{$EDGE_HOST}.local {
+	reverse_proxy voxel-seanmizen-com:4042
 }
 
 http://cous.{$EDGE_HOST}.local {

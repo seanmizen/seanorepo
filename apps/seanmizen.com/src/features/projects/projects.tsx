@@ -63,8 +63,8 @@ const sections: Section[] = [
         blurb: 'my game engine, built from scratch: Zig, WASM, WebGPU',
       },
       {
-        href: 'https://minecraft.seanmizen.com',
-        blurb: 'a Minecraft clone on swindowzig, live until Microsoft sue me',
+        href: 'https://voxel.seanmizen.com',
+        blurb: 'block-building sandbox, my engine running in WebGPU',
       },
     ],
   },

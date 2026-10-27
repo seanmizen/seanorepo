@@ -22,9 +22,9 @@ ingress:
   - hostname: planning-poker.seanmizen.com
     service: http://localhost:4030
 
-  # minecraft.seanmizen.com - Port 4042 (Frontend only, static WebGPU voxel)
+  # voxel.seanmizen.com - Port 4042 (Frontend only, static WebGPU voxel)
   # Note: 4040 is reserved by ngrok's web inspector — do not use.
-  - hostname: minecraft.seanmizen.com
+  - hostname: voxel.seanmizen.com
     service: http://localhost:4042
 
   # inside.seanmizen.com - Ports 4060 (FE) / 4061 (BE)

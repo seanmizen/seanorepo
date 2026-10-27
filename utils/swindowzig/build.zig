@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 // The Zig version this code targets. build.zig.zon is the one place that names
 // it (minimum_zig_version). Zig changes its std API between minor versions, so
 // a different major.minor stops the build here with one clear error, before
-// the API errors. The minecraft dockerfile reads the same field.
+// the API errors. The voxel dockerfile reads the same field.
 const zig_target = blk: {
     const zon = @embedFile("build.zig.zon");
     const key = ".minimum_zig_version = \"";
@@ -62,7 +62,7 @@ pub fn build(b: *std.Build) void {
     if (b.dep_prefix.len != 0) return;
 
     // The web build gets its own set of library modules, with no SDL. The
-    // minecraft dockerfile has no SDL headers.
+    // voxel dockerfile has no SDL headers.
     const web_libs = if (platform == .web) exported else addLibs(b, null, false);
 
     // Example app - WASM build

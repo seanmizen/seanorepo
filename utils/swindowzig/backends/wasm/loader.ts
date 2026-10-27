@@ -1,7 +1,7 @@
 // The one wasm loader for swindowzig.
 //
 // Two pages start the wasm: the dev page (backends/wasm/boot.ts) and
-// minecraft.seanmizen.com (apps/minecraft.seanmizen.com/src/boot.ts). Each
+// voxel.seanmizen.com (apps/voxel.seanmizen.com/src/boot.ts). Each
 // page is a thin entry point that calls loadWasm() with its options.
 //
 // This file builds the full import table. Each wasm import has one
@@ -74,7 +74,7 @@ export interface LoaderOptions {
   canvas: HTMLCanvasElement;
   /** The URL of the wasm file, for example '/app.wasm' or './app.wasm'. */
   wasmUrl: string;
-  /** The prefix for console messages, for example '[minecraft]'. */
+  /** The prefix for console messages, for example '[voxel]'. */
   logPrefix?: string;
   /**
    * 'css': the canvas size is the window size in CSS pixels.

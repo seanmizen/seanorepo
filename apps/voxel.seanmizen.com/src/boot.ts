@@ -1,4 +1,4 @@
-// minecraft.seanmizen.com: production entry point.
+// voxel.seanmizen.com: production entry point.
 //
 // All start-up code and every wasm import are in the swindowzig loader
 // (utils/swindowzig/backends/wasm/loader.ts). bun bundles the loader into
@@ -86,9 +86,9 @@ function showFailure(ov: OverlayElements, failure: LoadFailure): void {
         ov,
         'warn',
         'build pending',
-        'minecraft.seanmizen.com',
+        'voxel.seanmizen.com',
         'The voxel engine is being ported to the browser. The docker image, static hosting and Cloudflare tunnel are all wired up — only the wasm artifact is missing.',
-        'See <code>apps/minecraft.seanmizen.com/INVESTIGATION.md</code> for the exact next steps.',
+        'See <code>apps/voxel.seanmizen.com/INVESTIGATION.md</code> for the exact next steps.',
       );
       return;
     case 'webgpu-init':
@@ -117,7 +117,7 @@ function showFailure(ov: OverlayElements, failure: LoadFailure): void {
         'entry shim pending',
         'Voxel wasm missing entry exports',
         'The current zig build produces an app.wasm without swindowzig_init/swindowzig_frame exports, so there is no entry point for the frame loop.',
-        'See <code>apps/minecraft.seanmizen.com/INVESTIGATION.md</code> § Phase 2.',
+        'See <code>apps/voxel.seanmizen.com/INVESTIGATION.md</code> § Phase 2.',
       );
       return;
     case 'init':
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
     canvas,
     wasmUrl: './app.wasm',
     chunkWorkers: chunkWorkerFiles(),
-    logPrefix: '[minecraft]',
+    logPrefix: '[voxel]',
     canvasSize: 'device',
     lockOnClick: true,
     onFailure: (failure) => showFailure(ov, failure),
@@ -151,7 +151,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('[minecraft] boot failed:', err);
+  console.error('[voxel] boot failed:', err);
   const ov = getOverlay();
   if (ov) {
     setStatus(

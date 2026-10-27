@@ -77,7 +77,7 @@ More rules load only when you touch matching files:
 ## Zig version
 
 `minimum_zig_version` in `build.zig.zon` is the one place that names the Zig
-version (0.17.x). `build.zig` stops on any other major.minor, and the minecraft
+version (0.17.x). `build.zig` stops on any other major.minor, and the voxel
 dockerfile downloads the same version. To upgrade: change `build.zig.zon`, then
 fix the std API errors.
 

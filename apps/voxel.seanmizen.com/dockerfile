@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 #
-# minecraft.seanmizen.com — browser voxel, served over Cloudflared tunnel.
+# voxel.seanmizen.com — browser voxel, served over Cloudflared tunnel.
 #
 # Three stages:
 #   1. zig-build  — download the Zig version that utils/swindowzig/build.zig.zon
@@ -56,7 +56,7 @@ RUN zig build web -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 # Stage 2: JS bundle (Bun)
 # =============================================================================
 # bundle.sh (the script that build.sh runs too) makes /build/out/:
-#   boot.js                 apps/minecraft.seanmizen.com/src/boot.ts and the
+#   boot.js                 apps/voxel.seanmizen.com/src/boot.ts and the
 #                           swindowzig wasm loader (backends/wasm/loader.ts)
 #   chunk-worker-<hash>.js  the chunk worker (backends/wasm/chunk-worker.ts)
 #   chunks-<hash>.wasm      chunks.wasm from stage 1
@@ -66,12 +66,12 @@ FROM oven/bun:1.1-slim AS js-build
 WORKDIR /build
 
 COPY utils/swindowzig/backends/wasm /build/utils/swindowzig/backends/wasm
-COPY apps/minecraft.seanmizen.com/src /build/apps/minecraft.seanmizen.com/src
-COPY apps/minecraft.seanmizen.com/tsconfig.json /build/apps/minecraft.seanmizen.com/tsconfig.json
-COPY apps/minecraft.seanmizen.com/bundle.sh /build/apps/minecraft.seanmizen.com/bundle.sh
+COPY apps/voxel.seanmizen.com/src /build/apps/voxel.seanmizen.com/src
+COPY apps/voxel.seanmizen.com/tsconfig.json /build/apps/voxel.seanmizen.com/tsconfig.json
+COPY apps/voxel.seanmizen.com/bundle.sh /build/apps/voxel.seanmizen.com/bundle.sh
 COPY --from=zig-build /build/swindowzig/zig-out/bin/chunks.wasm /build/chunks.wasm
 
-RUN bash /build/apps/minecraft.seanmizen.com/bundle.sh /build/chunks.wasm /build/out \
+RUN bash /build/apps/voxel.seanmizen.com/bundle.sh /build/chunks.wasm /build/out \
     && ls -la /build/out
 
 # =============================================================================
@@ -85,7 +85,7 @@ WORKDIR /app
 RUN npm install -g serve
 
 # Copy the static assets (index.html etc.) and overlay freshly-built artefacts.
-COPY apps/minecraft.seanmizen.com/public /app
+COPY apps/voxel.seanmizen.com/public /app
 # boot.js, chunk-worker-<hash>.js and chunks-<hash>.wasm.
 COPY --from=js-build /build/out/ /app/
 COPY --from=zig-build /build/swindowzig/zig-out/bin/app.wasm /app/app.wasm
@@ -101,4 +101,4 @@ CMD ["serve", "-s", ".", "-l", "4042"]
 FROM node:lts-slim AS dev
 WORKDIR /app
 # Source is mounted in via docker-compose's bind mount.
-CMD ["sh", "-c", "echo 'minecraft.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]
+CMD ["sh", "-c", "echo 'voxel.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]

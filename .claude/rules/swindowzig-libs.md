@@ -94,7 +94,7 @@ is no longer required for correctness. Sort key is view-space depth
   New members go after it.
 - Web: `backends/wasm/events.ts` owns a hidden `<input>`.
 - Web: `backends/wasm/loader.ts` builds the full wasm import table for the dev
-  page and for minecraft.seanmizen.com. Put a new import there only. The two
+  page and for voxel.seanmizen.com. Put a new import there only. The two
   `boot.ts` files only give options to the loader.
 - Web: the loader starts the chunk worker pool (`backends/wasm/worker-pool.ts`)
   first, and gives it to the "chunks" imports. `chunk-worker.ts` runs in each

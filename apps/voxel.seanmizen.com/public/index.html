@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#0a0a0f" />
-    <title>minecraft.seanmizen.com</title>
+    <title>voxel.seanmizen.com</title>
     <meta name="description" content="A browser voxel engine. WebGPU-only. By seanmizen." />
     <style>
       :root {
@@ -117,7 +117,7 @@
     <div id="overlay">
       <div class="card" id="card">
         <div class="status ok" id="status">loading</div>
-        <h1 id="title">minecraft.seanmizen.com</h1>
+        <h1 id="title">voxel.seanmizen.com</h1>
         <p id="message">Booting the voxel engine…</p>
         <p class="small" id="hint">
           A hobby voxel engine by
@@ -137,9 +137,9 @@
       var m = document.getElementById('message');
       var h = document.getElementById('hint');
       if (s) { s.className = 'status warn'; s.textContent = 'build pending'; }
-      if (t) t.textContent = 'minecraft.seanmizen.com';
+      if (t) t.textContent = 'voxel.seanmizen.com';
       if (m) m.textContent = 'boot.js has not been built yet. The docker image, static hosting and Cloudflare tunnel are all wired up — only the JS/wasm artefacts are missing.';
-      if (h) h.innerHTML = 'Run <code>./apps/minecraft.seanmizen.com/build.sh</code> (or <code>yarn workspace minecraft.seanmizen.com build</code>) to produce them.';
+      if (h) h.innerHTML = 'Run <code>./apps/voxel.seanmizen.com/build.sh</code> (or <code>yarn workspace voxel.seanmizen.com build</code>) to produce them.';
     "></script>
   </body>
 </html>

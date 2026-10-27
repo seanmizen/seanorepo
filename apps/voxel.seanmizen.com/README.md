@@ -1,9 +1,9 @@
-# minecraft.seanmizen.com
+# voxel.seanmizen.com
 
 A browser build of Sean's WebGPU voxel engine
 (`utils/swindowzig/examples/voxel`). Ships as a single-page static site
 served over the home-server cloudflared tunnel at
-`https://minecraft.seanmizen.com`.
+`https://voxel.seanmizen.com`.
 
 ## What it is
 
@@ -18,7 +18,7 @@ served over the home-server cloudflared tunnel at
 ## Layout
 
 ```
-apps/minecraft.seanmizen.com/
+apps/voxel.seanmizen.com/
 ├── README.md           ← this file
 ├── INVESTIGATION.md    ← state of the wasm port, risks, red flags
 ├── DEPLOY.md           ← exact commands for Sean to ship it
@@ -45,10 +45,10 @@ Requires Bun 1.x and the Zig version in `utils/swindowzig/build.zig.zon`
 
 ```bash
 # From the monorepo root:
-./apps/minecraft.seanmizen.com/build.sh
+./apps/voxel.seanmizen.com/build.sh
 
 # Or via yarn:
-yarn workspace minecraft.seanmizen.com build
+yarn workspace voxel.seanmizen.com build
 ```
 
 The script:
@@ -68,7 +68,7 @@ The script:
 Preview it with any static file server:
 
 ```bash
-npx serve -s apps/minecraft.seanmizen.com/public -l 4040
+npx serve -s apps/voxel.seanmizen.com/public -l 4040
 # then visit http://localhost:4040 in Chrome
 ```
 
@@ -76,7 +76,7 @@ Or run the Docker image directly (this is what the cloudflared tunnel
 targets in production):
 
 ```bash
-cd apps/minecraft.seanmizen.com
+cd apps/voxel.seanmizen.com
 yarn prod:docker      # builds and starts the container on :4040
 yarn down             # stops it
 ```
@@ -93,9 +93,9 @@ bun backends/wasm/dev-server.ts
 ```
 
 That dev server watches `libs/` and `examples/` for `.zig` changes and
-rebuilds automatically. The minecraft subdomain reuses the swindowzig
+rebuilds automatically. The voxel subdomain reuses the swindowzig
 bridge, so any fix you make there also flows into this app after a
-`yarn workspace minecraft.seanmizen.com build`.
+`yarn workspace voxel.seanmizen.com build`.
 
 ## Deploying
 
@@ -104,12 +104,12 @@ See `DEPLOY.md` for the exact commands. Short version:
 ```bash
 # On Sean's home server:
 git pull
-yarn prod:docker                      # or `cd apps/minecraft.seanmizen.com && yarn prod:docker`
+yarn prod:docker                      # or `cd apps/voxel.seanmizen.com && yarn prod:docker`
 sudo systemctl reload cloudflared     # to pick up the new config.yml
 ```
 
 Port used: **4040** (cloudflared 4xxx range). Cloudflared ingress rule
-lives in `apps/cloudflared/config.yml` and routes `minecraft.seanmizen.com`
+lives in `apps/cloudflared/config.yml` and routes `voxel.seanmizen.com`
 → `http://localhost:4042`. There is no `*.seanmizen.com` wildcard.
 
 ## Known limitations
