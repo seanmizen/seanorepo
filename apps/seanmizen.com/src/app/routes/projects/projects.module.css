@@ -1,15 +1,16 @@
 /*
-  The content ends at the middle of the page. The right half is kept free.
+  The content takes a little more than the left half of the page. The rest
+  is kept free for the face, the hire text, and the stamps as they open.
 
   The container's content starts 1rem in from its left edge. On a page wider
   than the container (72rem), that edge is (100vw - 72rem) / 2 from the left
-  of the page, so the content is 35rem wide whatever the width. On a
-  narrower page the edge is at 0, so the content is 50vw - 1rem wide.
+  of the page, so the content is 42rem wide whatever the width. On a
+  narrower page the edge is at 0, so the content is at most 60vw - 1rem wide.
   Phones get the full width.
 */
 @media (min-width: 48rem) {
   .half {
-    max-width: min(35rem, calc(50vw - 1rem));
+    max-width: min(42rem, calc(60vw - 1rem));
   }
 }
 

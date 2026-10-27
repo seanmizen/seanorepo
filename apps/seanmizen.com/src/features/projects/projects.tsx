@@ -32,7 +32,7 @@ const sections: Section[] = [
       },
       {
         href: 'https://autosam.seanmizen.com',
-        blurb: 'I automated a piano player so I could practise vocals',
+        blurb: 'I automated a piano player so I could practice vocals',
       },
       {
         href: 'https://action.seanmizen.com',
@@ -65,7 +65,7 @@ const sections: Section[] = [
       },
       {
         href: 'https://minecraft.seanmizen.com',
-        blurb: 'a Minecraft clone on swindowzig, until Microsoft sue me',
+        blurb: 'a Minecraft clone on swindowzig, live until Microsoft sue me',
       },
     ],
   },
