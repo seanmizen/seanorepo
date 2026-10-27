@@ -335,7 +335,14 @@ const PreviewLab: FC = () => {
                       <p className={listStyles.description}>{description}</p>
                     )}
                     {mode === 'stamps' && (
-                      <span className={styles.stamp} {...hover}>
+                      <span
+                        className={styles.stamp}
+                        // The stamps take the tight shader mask, as the
+                        // theme toggle does: the glyphs clear only just
+                        // around them.
+                        data-mask="tight"
+                        {...hover}
+                      >
                         {Thumb && <Stamp name={cleanUrl(href)} Thumb={Thumb} />}
                       </span>
                     )}

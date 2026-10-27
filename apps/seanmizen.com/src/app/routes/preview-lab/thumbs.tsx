@@ -56,8 +56,8 @@ const Poker: FC = () => (
   </div>
 );
 
-/* A real run of shist, on a made-up history: HOME pointed at a sandbox
-   with its own .zsh_history, and a -format with no index. */
+/* A real zsh session in the Material theme: HOME set to a sandbox with a
+   made-up .zsh_history, an alias for the format, then the short command. */
 const Shist: FC = () => (
   <div className={styles.thumb}>
     <img className={styles.cover} src={shist} alt="" />
