@@ -1,7 +1,12 @@
 import type { CSSProperties, FC } from 'react';
+import { useContext } from 'react';
+import { ThemeContext } from '@/providers';
+import action from './assets/action.webp';
 import autosamLoop from './assets/autosam-loop.webp';
 import caroline from './assets/caroline.png';
-import seanmizen from './assets/seanmizen.png';
+import seanmizenDark from './assets/seanmizen-dark.webp';
+import seanmizenLight from './assets/seanmizen-light.webp';
+import shist from './assets/shist.webp';
 import styles from './thumbs.module.css';
 
 /* One picture per project. Each one fills a 16:10 box, so every preview
@@ -27,17 +32,11 @@ const Caroline: FC = () => (
   </div>
 );
 
-/* Headless Chrome has no WebGPU, so this is a drawn card, not a capture. */
+/* Target practice on the range, captured in Windows Chrome on a real GPU
+   (headless Chrome in WSL has no usable WebGPU). */
 const Action: FC = () => (
-  <div className={`${styles.thumb} ${styles.action}`}>
-    <span className={styles.hudTop}>DEATHMATCH · 04:59</span>
-    <svg className={styles.crosshair} viewBox="0 0 40 40" aria-hidden="true">
-      <path d="M20 4v10M20 26v10M4 20h10M26 20h10" />
-      <circle cx="20" cy="20" r="1.6" />
-    </svg>
-    <span className={styles.hudBottom}>
-      <b>100</b> HP<span>30 / 90</span>
-    </span>
+  <div className={styles.thumb}>
+    <img className={styles.cover} src={action} alt="" />
   </div>
 );
 
@@ -57,32 +56,27 @@ const Poker: FC = () => (
   </div>
 );
 
-const SHIST = [
-  ['14:02', 'yarn fix'],
-  ['14:03', 'git push -u origin HEAD'],
-  ['14:09', 'docker compose up --build'],
-  ['14:11', 'zig build -Doptimize=ReleaseFast'],
-];
-
+/* A real run of shist on Sean's history, framed as a terminal window. */
 const Shist: FC = () => (
-  <div className={`${styles.thumb} ${styles.shist}`}>
-    <div className={styles.prompt}>
-      <span>$</span> shist <i>--today</i>
-    </div>
-    {SHIST.map(([at, cmd]) => (
-      <div key={at} className={styles.line}>
-        <span>{at}</span> {cmd}
-      </div>
-    ))}
-    <span className={styles.caret} />
+  <div className={styles.thumb}>
+    <img className={styles.cover} src={shist} alt="" />
   </div>
 );
 
-const Seanmizen: FC = () => (
-  <div className={`${styles.thumb} ${styles.seanmizen}`}>
-    <img src={seanmizen} alt="" />
-  </div>
-);
+/* The face after it has settled, in the theme opposite to the page's, so
+   it stands out against the page. */
+const Seanmizen: FC = () => {
+  const { theme } = useContext(ThemeContext);
+  return (
+    <div className={styles.thumb}>
+      <img
+        className={styles.cover}
+        src={theme === 'dark' ? seanmizenLight : seanmizenDark}
+        alt=""
+      />
+    </div>
+  );
+};
 
 const THUMBS: Partial<Record<string, FC>> = {
   'https://carolinemizen.art': Caroline,
