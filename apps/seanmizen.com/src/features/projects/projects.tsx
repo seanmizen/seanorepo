@@ -106,4 +106,5 @@ const Projects: FC = () => (
   </>
 );
 
-export { Projects };
+export type { Project, Section };
+export { cleanUrl, Projects, sections };
