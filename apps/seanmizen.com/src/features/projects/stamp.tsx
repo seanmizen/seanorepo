@@ -207,7 +207,7 @@ const Stamp: FC<{ name: string; Thumb: FC }> = ({ name, Thumb }) => {
         ref={handle}
         type="button"
         className={styles.handle}
-        aria-label={`Move the ${name} preview. Use the arrow keys, or drag.`}
+        aria-label={`Move the ${name} preview with the arrow keys or by dragging`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

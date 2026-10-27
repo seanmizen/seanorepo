@@ -10,7 +10,8 @@ interface Project {
   /** The name column shows this URL without the protocol. A path that
       starts with "/" is a page of this site. */
   href: string;
-  /** One line, lowercase, no repetition of the name. */
+  /** One line, lowercase except for names, no full stop, no repetition of
+      the name. */
   blurb?: string;
   /** A longer note, in Sean's words, in a paragraph of its own. */
   description?: string;
@@ -31,11 +32,11 @@ const sections: Section[] = [
       },
       {
         href: 'https://autosam.seanmizen.com',
-        description: 'I automated a piano player so I could practice vocals.',
+        blurb: 'I automated a piano player so I could practise vocals',
       },
       {
         href: 'https://action.seanmizen.com',
-        description: 'I created an FPS with my own engine. zig, WASM, WebGPU.',
+        blurb: 'I created an FPS on my own engine',
       },
       {
         href: 'https://planning-poker.seanmizen.com',
@@ -59,9 +60,12 @@ const sections: Section[] = [
         blurb: 'ripple playground',
       },
       {
+        href: 'https://github.com/seanmizen/swindowzig',
+        blurb: 'my game engine, from scratch: Zig, WASM, WebGPU',
+      },
+      {
         href: 'https://minecraft.seanmizen.com',
-        description:
-          "I created a zig-based game engine from scratch. My first demo is a minecraft clone - it's up until Microsoft find out and sue me! It compiles to WASM and utilises WebGPU. dead fast.",
+        blurb: 'a Minecraft clone on swindowzig, until Microsoft sue me',
       },
     ],
   },
