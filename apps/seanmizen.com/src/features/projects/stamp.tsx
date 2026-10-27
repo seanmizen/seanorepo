@@ -80,6 +80,9 @@ const ResetAll: FC<{ className?: string }> = ({ className }) => {
         .join(' ')}
       aria-label={label}
       title={label}
+      // The tight shader mask, as on the stamps: the glyphs clear only
+      // just around the button.
+      data-mask="tight"
       onClick={(e) => {
         e.currentTarget
           .closest('section')
