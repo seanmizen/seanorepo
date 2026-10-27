@@ -114,11 +114,6 @@ import {
 }
 
 import {
-  to = cloudflare_dns_record.seanmizen_com_pp_cname
-  id = "428a9a9f5e22c95bc7e67faa7d5ab942/c82b50b8c0241a3a3c2b053beee0bfa1"
-}
-
-import {
   to = cloudflare_dns_record.seanmizen_com_apex_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/ed22725d11359601f770db5b28a601b6"
 }
