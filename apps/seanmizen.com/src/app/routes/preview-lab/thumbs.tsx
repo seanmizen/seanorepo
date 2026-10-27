@@ -56,8 +56,9 @@ const Poker: FC = () => (
   </div>
 );
 
-/* A real zsh session in the Material theme: HOME set to a sandbox with a
-   made-up .zsh_history, an alias for the format, then the short command. */
+/* A real zsh session in the Material theme, sized to read in a stamp.
+   HOME=./demo starts a shell on a sandbox: a made-up .zsh_history, and a
+   .zshrc whose alias sets the time-only format. */
 const Shist: FC = () => (
   <div className={styles.thumb}>
     <img className={styles.cover} src={shist} alt="" />
