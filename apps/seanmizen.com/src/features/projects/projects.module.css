@@ -26,10 +26,11 @@
 }
 
 /* An Entity is as wide as its content. A row is as wide as the listing. The
-   left column fits the longest name, seanmizen.com/projects/shaders. */
+   left column fits the longest names, seanmizen.com/projects/shaders and
+   github.com/seanmizen/swindowzig, with room for wider font rendering. */
 .row {
   display: grid;
-  grid-template-columns: 15.5rem minmax(0, 1fr);
+  grid-template-columns: 16.5rem minmax(0, 1fr);
   grid-template-areas: "name blurb";
   column-gap: 1rem;
   width: auto;
