@@ -56,8 +56,8 @@ const Poker: FC = () => (
   </div>
 );
 
-/* A real run of shist on Sean's history, in type large enough to read at
-   stamp size. */
+/* A real run of shist, on a made-up history: HOME pointed at a sandbox
+   with its own .zsh_history, and a -format with no index. */
 const Shist: FC = () => (
   <div className={styles.thumb}>
     <img className={styles.cover} src={shist} alt="" />
