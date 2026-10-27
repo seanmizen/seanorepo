@@ -29,6 +29,12 @@
 
   --hover-tint: color-mix(in srgb, var(--accent-blue) 8%, transparent);
 
+  /* The page width. The nav and every public page use it (pageWidth in
+     components/page-width.ts), so they share one left and one right edge.
+     The max width includes the gutters. */
+  --page-max-width: 1200px;
+  --page-gutter: clamp(16px, 4vw, 40px);
+
   /* Typography (bigger + more readable) */
   --font-family-hero: "Merriweather", system-ui, serif;
   --font-family:

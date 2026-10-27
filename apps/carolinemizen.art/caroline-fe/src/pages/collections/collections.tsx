@@ -2,16 +2,16 @@ import { type FC, useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { type Gallery, GalleryGrid } from '@/components/gallery-grid';
 import { Nav } from '@/components/nav';
+import { pageWidth } from '@/components/page-width';
 
 const Container = styled.div`
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 2rem;
+  ${pageWidth}
+  padding-block: 2rem;
 `;
 
+/* Left-aligned, as on a collection and an artwork page. */
 const Header = styled.header`
-  text-align: center;
-  margin-bottom: 4rem;
+  margin-bottom: 3rem;
 `;
 
 const Title = styled.h1`
@@ -21,8 +21,9 @@ const Title = styled.h1`
 `;
 
 const Subtitle = styled.p`
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   color: #666;
+  line-height: 1.6;
   margin: 0;
 `;
 

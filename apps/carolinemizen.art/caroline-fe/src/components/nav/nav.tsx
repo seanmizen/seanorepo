@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import styled, { css } from 'styled-components';
+import { pageWidth } from '@/components/page-width';
 import { ROUTES } from '@/constants';
 import { useAuth } from '@/contexts/auth-context';
 import { useBackendHealth } from '@/hooks/use-backend-health';
@@ -47,10 +48,8 @@ export const StyledNav = styled.nav<{ $dock?: NavDock }>`
 `;
 
 export const NavContainer = styled.div`
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 0.75rem clamp(12px, 4vw, 22px);
-  box-sizing: border-box;
+  ${pageWidth}
+  padding-block: 0.75rem;
 
   display: flex;
   align-items: center;
@@ -73,12 +72,6 @@ const NavBrand = styled.div`
   gap: 0.5rem;
   min-width: 0;
   flex: 0 1 auto;
-
-  @media (max-width: 720px) {
-    width: 100%;
-    justify-content: space-between;
-    display: none;
-  }
 `;
 
 const NavLinks = styled.div`
@@ -89,9 +82,14 @@ const NavLinks = styled.div`
   min-width: 0;
   flex: 0 1 auto;
 
+  /* The last link's text, not its hover pill, sits on the right edge. */
+  &:last-child {
+    margin-right: -0.85rem;
+  }
+
   @media (max-width: 720px) {
-    width: 100%;
-    justify-content: space-between;
+    gap: 0;
+    margin-left: auto;
   }
 `;
 
@@ -124,6 +122,8 @@ const BrandName = styled(Link)`
   letter-spacing: -0.02em;
 
   padding: 0.35rem 0.55rem;
+  /* The text, not its hover pill, sits on the left edge. */
+  margin-left: -0.55rem;
   border-radius: 10px;
 
   display: inline-flex;
@@ -174,15 +174,19 @@ const NavItemLink = styled(Link)`
     background: color-mix(in srgb, var(--hover-tint) 70%, transparent);
   }
 
-  @media (max-width: 720px) {
-    flex: 1 1 0;
-  }
-
   @media (hover: none) {
     &:hover {
       background: transparent;
       color: var(--text-color-secondary);
     }
+  }
+`;
+
+/* On a phone the brand and two links do not fit on one row. The brand
+   links home too, so the Home link goes. */
+const HomeLink = styled(NavItemLink)`
+  @media (max-width: 480px) {
+    display: none;
   }
 `;
 
@@ -280,7 +284,7 @@ const Nav: FC<NavProps> = ({ dock = 'top' }) => {
         <Spacer />
 
         <NavLinks>
-          <NavItemLink to={ROUTES.home.path}>Home</NavItemLink>
+          <HomeLink to={ROUTES.home.path}>Home</HomeLink>
           <NavItemLink to={ROUTES.collections.path}>Collections</NavItemLink>
         </NavLinks>
 

@@ -128,6 +128,7 @@ const Arrow = styled.button<{ $isVisible: boolean }>`
   background: rgba(255, 255, 255, 0.18);
   position: absolute;
   bottom: 40px;
+  /* Off to the right of the middle, on purpose. */
   right: 22vw;
   padding: 0.75rem 1.1rem;
   border-radius: 12px;
@@ -176,7 +177,9 @@ const HeroWrapper = styled.div`
   position: relative;
   overflow: hidden;
   height: 100vh;
-  width: 100vw;
+  /* Not 100vw: that includes the vertical scrollbar, and the page then
+     scrolls sideways on a system with a scrollbar that takes space. */
+  width: 100%;
 `;
 
 const BackgroundCarousel = styled.div`

@@ -4,11 +4,11 @@ import styled, { css } from 'styled-components';
 import type { Artwork as ArtworkType, ImageMedia } from '@/types';
 import { Media } from '../components/media';
 import { Nav } from '../components/nav';
+import { pageWidth } from '../components/page-width';
 
 const Container = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  ${pageWidth}
+  padding-block: 2rem;
 `;
 
 const Breadcrumbs = styled.nav`
@@ -37,6 +37,8 @@ const ContentGrid = styled.div`
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
+    /* One column: the title follows the image closely. */
+    gap: 1.5rem;
   }
 `;
 
