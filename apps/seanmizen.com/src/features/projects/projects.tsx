@@ -24,29 +24,37 @@ const sections: Section[] = [
     projects: [
       {
         href: 'https://carolinemizen.art',
-        blurb: 'art portfolio',
+        blurb: 'art portfolio for Mum',
+      },
+      {
+        href: 'https://autosam.seanmizen.com',
+        description: 'I automated a piano player so I could practice vocals.',
+      },
+      {
+        href: 'https://action.seanmizen.com',
+        description: 'I created an FPS with my own engine. zig, WASM, WebGPU.',
       },
       {
         href: 'https://planning-poker.seanmizen.com',
-        blurb: 'agile estimation for teams',
+        blurb: 'agile estimation tool for teams',
       },
       {
         href: 'https://github.com/seanmizen/shist',
-        blurb: "sean's history tool",
+        blurb: 'my own CLI history tool, written in Go',
       },
       {
         href: 'https://seanmizen.com',
         blurb: 'this site',
-      },
-      {
-        href: '/projects/shaders',
-        blurb: 'ripple playground',
       },
     ],
   },
   {
     title: 'things which are notable',
     projects: [
+      {
+        href: '/projects/shaders',
+        blurb: 'ripple playground',
+      },
       {
         href: 'https://minecraft.seanmizen.com',
         description:
