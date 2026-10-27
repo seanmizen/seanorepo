@@ -5,6 +5,7 @@ import {
   GalleryGrid,
   type PlaceholderGallery,
 } from '../gallery-grid';
+import { pageWidth } from '../page-width';
 
 interface GalleryPreviewProps {
   galleries: Gallery[] | PlaceholderGallery[];
@@ -17,7 +18,7 @@ const GalleriesSection = styled.section<{ $isGhost?: boolean }>`
   border: 1px solid
     ${(p) => (p.$isGhost ? '#ddd' : 'var(--border-color-secondary)')};
   border-radius: 8px;
-  padding: ${(p) => (p.$isGhost ? '2rem 1rem' : '4rem 2rem')};
+  padding-block: ${(p) => (p.$isGhost ? '2rem' : '4rem')};
   background: ${(p) => (p.$isGhost ? '#f9f9f9' : 'white')};
 
   display: grid;
@@ -25,8 +26,7 @@ const GalleriesSection = styled.section<{ $isGhost?: boolean }>`
 `;
 
 const GalleriesInner = styled.div`
-  width: 100%;
-  max-width: 1200px;
+  ${pageWidth}
   display: flex;
   align-items: stretch;
 `;

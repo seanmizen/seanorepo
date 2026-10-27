@@ -4,11 +4,11 @@ import styled, { css } from 'styled-components';
 import type { JoinedMedia } from '@/types';
 import { joinedMedia, Media } from '../components/media';
 import { Nav } from '../components/nav';
+import { pageWidth } from '../components/page-width';
 
 const Container = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  ${pageWidth}
+  padding-block: 2rem;
 `;
 
 const Header = styled.header`

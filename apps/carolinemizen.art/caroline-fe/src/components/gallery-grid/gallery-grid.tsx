@@ -26,16 +26,16 @@ interface GalleryGridProps {
   className?: string;
 }
 
+/* The grid fills its parent. The parent sets the page width (pageWidth), so
+   the cards line up with the nav and the page title. Each card takes two
+   rows of the grid, the cover and the caption, through subgrid: the covers
+   in a row are one height, and the captions start on one line. */
 const Grid = styled.div<{ $featured: boolean }>`
   width: 100%;
-  min-height: 100%;
-  max-width: ${(p) => (p.$featured ? '1040px' : '980px')};
-  margin: 0 auto;
-  padding: 0 clamp(18px, 5vw, 72px);
-  box-sizing: border-box;
 
   display: grid;
   gap: 1.25rem;
+  grid-auto-rows: auto;
 
   ${(p) =>
     p.$featured
@@ -48,7 +48,6 @@ const Grid = styled.div<{ $featured: boolean }>`
 
           @media (max-width: 720px) {
             grid-template-columns: 1fr;
-            padding: 0 16px;
           }
         `
       : css`
@@ -59,7 +58,6 @@ const Grid = styled.div<{ $featured: boolean }>`
           @media (max-width: 720px) {
             gap: 1rem;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            padding: 0 14px;
           }
 
           /* very small phones still need 1-up */
@@ -73,14 +71,10 @@ const Grid = styled.div<{ $featured: boolean }>`
 // the others span 3. The other grid makes its own columns, so a card there
 // has no span.
 const Card = styled(Link)<{ $span?: 6 | 3; $isPlaceholder: boolean }>`
-  --card-max-h: 25rem;
-  /* --card-max-h: 70vh; */
-
-  max-height: var(--card-max-h);
-  height: 100%;
-  /* height: 200px; */
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: 0;
 
   text-decoration: none;
   color: inherit;
@@ -119,10 +113,12 @@ const Card = styled(Link)<{ $span?: 6 | 3; $isPlaceholder: boolean }>`
 
 `;
 
+/* A cover asks for 4:3. The row takes the tallest cover, and the others
+   fill it, cropped. So a wide featured card makes its whole row taller. */
 const CardMedia = css`
   width: 100%;
   height: 100%;
-  min-height: 0;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
   background: #f5f5f5;
   display: block;
@@ -157,10 +153,13 @@ const Subheader = styled.div`
   font-style: italic;
 `;
 
+/* The caption row is as tall as the longest caption in the grid row. A
+   shorter caption keeps its lines together at the top. */
 const Info = styled.div`
   padding: 1.05rem 1.2rem 1.2rem;
   display: grid;
   gap: 0.3rem;
+  align-content: start;
 `;
 
 const Name = styled.h2`

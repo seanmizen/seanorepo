@@ -128,7 +128,11 @@ const Arrow = styled.button<{ $isVisible: boolean }>`
   background: rgba(255, 255, 255, 0.18);
   position: absolute;
   bottom: 40px;
-  right: 22vw;
+  /* In the middle, under the title. */
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin-inline: auto;
   padding: 0.75rem 1.1rem;
   border-radius: 12px;
   cursor: pointer;

@@ -4,4 +4,5 @@ export { GalleryPreview } from './gallery-preview';
 export type { MediaProps, VideoMode } from './media';
 export { joinedMedia, Media } from './media';
 export { Nav } from './nav';
+export { pageWidth } from './page-width';
 export { Pagination } from './pagination/pagination';
