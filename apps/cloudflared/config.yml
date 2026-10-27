@@ -13,7 +13,6 @@ credentials-file: ./credentials/0f63e5e3-ee1c-425a-9916-cd037524731d.json
 
 ingress:
   # planning-poker.seanmizen.com - Ports 4030 (FE) / 4031 (BE)
-  # pp.seanmizen.com has no rule, so it gets the 404.
   - hostname: planning-poker.seanmizen.com
     path: /api/*
     service: http://localhost:4031

@@ -25,15 +25,6 @@ resource "cloudflare_dns_record" "seanmizen_com_google_domainkey_txt" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
-resource "cloudflare_dns_record" "seanmizen_com_pp_cname" {
-  content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
-  name    = "pp.seanmizen.com"
-  proxied = true
-  ttl     = 1
-  type    = "CNAME"
-  zone_id = cloudflare_zone.seanmizen_com.id
-}
-
 # A placeholder address (192.0.2.1). A Cloudflare redirect rule, not in
 # OpenTofu yet, sends hue.seanmizen.com to an image on carolinemizen.art.
 resource "cloudflare_dns_record" "seanmizen_com_hue_a" {
