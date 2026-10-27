@@ -1,8 +1,4 @@
-import type {
-  FC,
-  KeyboardEvent as ReactKeyboardEvent,
-  PointerEvent as ReactPointerEvent,
-} from 'react';
+import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -14,9 +10,11 @@ import {
 } from '@/components';
 import { cleanUrl, sections } from '@/features/projects/projects';
 import listStyles from '@/features/projects/projects.module.css';
+import { Stamp } from '@/features/projects/stamp';
+import stampStyles from '@/features/projects/stamp.module.css';
+import { THUMBS } from '@/features/projects/thumbs';
 import pageStyles from '../projects/projects.module.css';
 import styles from './preview-lab.module.css';
-import { THUMBS } from './thumbs';
 
 /* A lab for the project previews: the real /projects list, with five ways
    to show a preview of each project. Keys 1 to 5 change the mode. The mode
@@ -147,107 +145,6 @@ const Stage: FC<{ href: string | null; cycle?: number }> = ({
   );
 };
 
-/* The last card that was moved draws over the others. */
-let topZ = 10;
-
-/* How far an arrow key moves a card, in CSS pixels. Shift moves it more. */
-const NUDGE = 10;
-const NUDGE_SHIFT = 40;
-
-/* One stamp. Drag its handle, or focus the handle and press the arrow keys,
-   and the card stays where you put it, open, so you can compare two. Once
-   it has moved, the back button sends it home. Escape on the handle does
-   the same. */
-const Stamp: FC<{ name: string; Thumb: FC }> = ({ name, Thumb }) => {
-  const [at, setAt] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const [z, setZ] = useState<number>();
-  const grab = useRef({ x: 0, y: 0 });
-  const handle = useRef<HTMLButtonElement>(null);
-  const placed = at.x !== 0 || at.y !== 0;
-
-  const raise = () => setZ(++topZ);
-
-  const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    grab.current = { x: e.clientX - at.x, y: e.clientY - at.y };
-    setDragging(true);
-    raise();
-  };
-  const onPointerMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!dragging) return;
-    setAt({ x: e.clientX - grab.current.x, y: e.clientY - grab.current.y });
-  };
-  const onPointerUp = () => setDragging(false);
-
-  const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
-    const step = e.shiftKey ? NUDGE_SHIFT : NUDGE;
-    const move: Record<string, [number, number]> = {
-      ArrowLeft: [-step, 0],
-      ArrowRight: [step, 0],
-      ArrowUp: [0, -step],
-      ArrowDown: [0, step],
-    };
-    if (e.key === 'Escape' && placed) {
-      e.preventDefault();
-      setAt({ x: 0, y: 0 });
-      return;
-    }
-    const by = move[e.key];
-    if (!by) return;
-    e.preventDefault();
-    raise();
-    setAt((a) => ({ x: a.x + by[0], y: a.y + by[1] }));
-  };
-
-  const goHome = () => {
-    setAt({ x: 0, y: 0 });
-    handle.current?.focus({ preventScroll: true });
-  };
-
-  return (
-    <span
-      className={[
-        styles.card,
-        placed && styles.placed,
-        dragging && styles.dragging,
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      style={{
-        translate: `${at.x}px ${at.y}px`,
-        zIndex: placed ? z : undefined,
-      }}
-    >
-      <button
-        ref={handle}
-        type="button"
-        className={styles.handle}
-        aria-label={`Move the ${name} preview. Use the arrow keys, or drag.`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onKeyDown={onKeyDown}
-      >
-        <span />
-      </button>
-      {placed && (
-        <button
-          type="button"
-          className={styles.back}
-          aria-label={`Put the ${name} preview back`}
-          onClick={goHome}
-        >
-          ↩
-        </button>
-      )}
-      <Thumb />
-    </span>
-  );
-};
-
 const PROJECTOR_STEP = 3500;
 
 const PreviewLab: FC = () => {
@@ -315,7 +212,7 @@ const PreviewLab: FC = () => {
                     key={href}
                     className={[
                       listStyles.row,
-                      mode === 'stamps' && styles.stampRow,
+                      mode === 'stamps' && stampStyles.stampRow,
                       lit === href && styles.lit,
                     ]
                       .filter(Boolean)
@@ -336,7 +233,7 @@ const PreviewLab: FC = () => {
                     )}
                     {mode === 'stamps' && (
                       <span
-                        className={styles.stamp}
+                        className={stampStyles.stamp}
                         // The stamps take the tight shader mask, as the
                         // theme toggle does: the glyphs clear only just
                         // around them.

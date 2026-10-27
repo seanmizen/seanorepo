@@ -2,6 +2,9 @@ import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import { Entity, EntityList, ExternalLink, Subtitle } from '@/components';
 import styles from './projects.module.css';
+import { Stamp } from './stamp';
+import stampStyles from './stamp.module.css';
+import { THUMBS } from './thumbs';
 
 interface Project {
   /** The name column shows this URL without the protocol. A path that
@@ -85,21 +88,32 @@ const Projects: FC = () => (
       <section key={title} className={styles.section}>
         <Subtitle>{title}</Subtitle>
         <EntityList>
-          {projects.map(({ href, blurb, description }) => (
-            <Entity key={href} className={styles.row}>
-              <span className={styles.name}>
-                {href.startsWith('/') ? (
-                  <Link to={href}>{cleanUrl(href)}</Link>
-                ) : (
-                  <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
+          {projects.map(({ href, blurb, description }) => {
+            const Thumb = THUMBS[href];
+            return (
+              <Entity
+                key={href}
+                className={`${styles.row} ${stampStyles.stampRow}`}
+              >
+                <span className={styles.name}>
+                  {href.startsWith('/') ? (
+                    <Link to={href}>{cleanUrl(href)}</Link>
+                  ) : (
+                    <ExternalLink href={href}>{cleanUrl(href)}</ExternalLink>
+                  )}
+                </span>
+                {blurb && <span className={styles.blurb}>{blurb}</span>}
+                {description && (
+                  <p className={styles.description}>{description}</p>
                 )}
-              </span>
-              {blurb && <span className={styles.blurb}>{blurb}</span>}
-              {description && (
-                <p className={styles.description}>{description}</p>
-              )}
-            </Entity>
-          ))}
+                {/* A preview stamp. It takes the tight shader mask, as the
+                  theme toggle does: the glyphs clear only just around it. */}
+                <span className={stampStyles.stamp} data-mask="tight">
+                  {Thumb && <Stamp name={cleanUrl(href)} Thumb={Thumb} />}
+                </span>
+              </Entity>
+            );
+          })}
         </EntityList>
       </section>
     ))}
