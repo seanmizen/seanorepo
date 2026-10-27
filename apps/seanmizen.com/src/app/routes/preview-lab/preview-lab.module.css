@@ -162,6 +162,15 @@
   filter: drop-shadow(0 8px 16px #0005);
 }
 
+/* A grace border: the card keeps the hover for 5px past its edge, so a
+   pointer that slips off the edge does not close it at once. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  padding: 0;
+}
+
 /* While the pointer drags it, the card follows the pointer at once. */
 .card.dragging {
   transition:
@@ -169,8 +178,9 @@
     rotate 260ms ease-out;
 }
 
-/* The handle and the back button show only while the card has the pointer
-   over it or the focus in it. */
+/* The handle and the back button sit inside the card, over the picture.
+   They show only while the card has the pointer over it or the focus in
+   it. */
 .handle,
 .back {
   position: absolute;
@@ -194,7 +204,7 @@
 }
 
 .handle {
-  top: -0.55rem;
+  top: 5px;
   left: 50%;
   translate: -50% 0;
   width: 2.4rem;
@@ -220,8 +230,8 @@
 }
 
 .back {
-  top: -0.5rem;
-  right: -0.5rem;
+  top: 5px;
+  right: 5px;
   width: 1.2rem;
   height: 1.2rem;
   border-radius: 50%;

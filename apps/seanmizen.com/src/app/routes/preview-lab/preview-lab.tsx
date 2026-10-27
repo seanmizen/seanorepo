@@ -171,7 +171,6 @@ const Stamp: FC<{ name: string; Thumb: FC }> = ({ name, Thumb }) => {
   const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    e.currentTarget.focus({ preventScroll: true });
     grab.current = { x: e.clientX - at.x, y: e.clientY - at.y };
     setDragging(true);
     raise();
