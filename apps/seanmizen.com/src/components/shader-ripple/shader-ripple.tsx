@@ -906,6 +906,16 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
         .some((node) => node instanceof Element && node.matches(INTERACTIVE));
       if (clicked) return;
 
+      // While the core holds the cursor, the ripple starts at the core's
+      // middle, not at the hidden cursor. The shader puts the core at
+      // u_throwAt + u_coreAt.
+      if (document.documentElement.classList.contains(EATEN_CLASS)) {
+        const throwAt = uniforms.u_throwAt.value;
+        const coreAt = uniforms.u_coreAt.value;
+        addTap(throwAt.x + coreAt.x, throwAt.y + coreAt.y);
+        return;
+      }
+
       // Map the click onto the particles' plane. The camera looks straight
       // at it, so this is a straight scale from the canvas centre. Clicks
       // outside the canvas land off to the side.
