@@ -32,8 +32,8 @@ const Caroline: FC = () => (
   </div>
 );
 
-/* Target practice on the range, captured in Windows Chrome on a real GPU
-   (headless Chrome in WSL has no usable WebGPU). */
+/* Sean's own capture of a deathmatch at the Tube station. A small window
+   makes the HUD large in the frame. */
 const Action: FC = () => (
   <div className={styles.thumb}>
     <img className={styles.cover} src={action} alt="" />
@@ -56,7 +56,8 @@ const Poker: FC = () => (
   </div>
 );
 
-/* A real run of shist on Sean's history, framed as a terminal window. */
+/* A real run of shist on Sean's history, in type large enough to read at
+   stamp size. */
 const Shist: FC = () => (
   <div className={styles.thumb}>
     <img className={styles.cover} src={shist} alt="" />
