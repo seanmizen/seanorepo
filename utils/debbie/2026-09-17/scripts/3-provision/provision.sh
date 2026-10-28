@@ -42,8 +42,16 @@ WORK="$GEN_DIR/working"                          # shared by all three steps
 
 select_env "$HERE" "${1:-}"
 shift
-read_env SERVER_NAME DEPLOY_USER SSH_KEY ROLE_WEBSERVER ROLE_TUNNEL
+read_env SERVER_NAME DEPLOY_USER SSH_KEY ROLE_WEBSERVER ROLE_TUNNEL \
+    WIFI_1_SSID WIFI_1_PASS WIFI_2_SSID WIFI_2_PASS \
+    WIFI_3_SSID WIFI_3_PASS WIFI_4_SSID WIFI_4_PASS
 DEPLOY_USER="${DEPLOY_USER:-srv}"
+
+# Quote a value as one token for the remote shell. It wraps the value in single
+# quotes and escapes any embedded single quote, so an SSID or a password with a
+# space, a quote or a dollar sign reaches the target unchanged. The role values
+# are yes, no or empty, so they do not need it; the wifi values are free text.
+shq() { local s=${1//\'/\'\\\'\'}; printf "'%s'" "$s"; }
 # No default - REQ-SERVER-014. With a default, a forgotten line would make a
 # NEW machine claim the name of a live one, and this script would dial the
 # live one.
@@ -329,8 +337,22 @@ if [ "$MODE" != assert ]; then
     # Roles from .env (REQ-SERVER-014). Passed even when empty, so the machine's
     # roles always match this file: a role that is not set here is OFF there.
     log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
+    # Wifi networks from .env (REQ-SERVER-017). Only a slot with an SSID is
+    # passed, so an unset slot reaches the target as nothing, not as an empty
+    # network. The machine hashes each password; this sends the plaintext over
+    # the same SSH channel as everything else.
+    wifi_envs=""
+    wifi_count=0
+    for i in 1 2 3 4; do
+        sv="WIFI_${i}_SSID"
+        pv="WIFI_${i}_PASS"
+        [ -n "${!sv:-}" ] || continue
+        wifi_envs="$wifi_envs WIFI_${i}_SSID=$(shq "${!sv}") WIFI_${i}_PASS=$(shq "${!pv:-}")"
+        wifi_count=$((wifi_count + 1))
+    done
+    log "wifi networks from $ENV_FILE: $wifi_count declared"
     send_and_run "setup-server-environment.sh" \
-        "SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}'"
+        "SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}'$wifi_envs"
 
     if [ "$MODE" = noreboot ]; then
         log "setup done. Skipping the reboot and the assertions (--no-reboot)."
