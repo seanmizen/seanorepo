@@ -119,7 +119,7 @@ function showFailure(ov: OverlayElements, failure: LoadFailure): void {
         'entry shim pending',
         'Voxel wasm missing entry exports',
         'The current zig build produces an app.wasm without swindowzig_init/swindowzig_frame exports, so there is no entry point for the frame loop.',
-        'Build the voxel example again with <code>zig build web -Dexample=voxel</code>. The README of <code>apps/voxel.seanmizen.com</code> gives the steps.',
+        'Build the app again with <code>yarn workspace voxel.seanmizen.com build</code>. The README of <code>apps/voxel.seanmizen.com</code> gives the steps.',
       );
       return;
     case 'init':

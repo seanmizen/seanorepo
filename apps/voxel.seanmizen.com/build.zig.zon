@@ -1,7 +1,7 @@
 .{
     .name = .voxel,
     .version = "0.1.0",
-    .fingerprint = 0x354fdd05386f1f51,
+    .fingerprint = 0xd5998e5e35453a4f,
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
         // The swindowzig release. This is the one place in this app that

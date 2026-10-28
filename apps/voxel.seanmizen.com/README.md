@@ -100,6 +100,11 @@ uses one release of it:
   package>`, with its own cache and prefix. The engine build logic stays
   in swindowzig.
 
+The pin is v0.2.0. A build without `SWINDOWZIG_FORK` (see below) uses
+v0.2.0, and the Docker build uses v0.2.0 too. So the voxel example of this
+app is the example of v0.2.0. The engine changes after v0.2.0 are only in
+a swindowzig checkout until the next release (v0.3.0).
+
 To change the release, give the URL of the new release to `zig fetch` in
 this directory. It writes the new URL and hash into `build.zig.zon`:
 

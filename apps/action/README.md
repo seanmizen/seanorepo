@@ -2051,6 +2051,10 @@ uses one release of it:
   imports the wasm loader from there. So the loader and the Zig code
   always come from the same release.
 
+The pin is v0.2.0. A build without `SWINDOWZIG_FORK` (see below) uses
+v0.2.0, and the Docker build uses v0.2.0 too. The engine changes after
+v0.2.0 are only in a swindowzig checkout until the next release (v0.3.0).
+
 To change the release, give the URL of the new release to `zig fetch` in
 `game/`. It writes the new URL and hash into `build.zig.zon`:
 
