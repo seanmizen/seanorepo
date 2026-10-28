@@ -193,9 +193,14 @@ finished without watching a console. Power the machine on, then:
 
 ```bash
 cp 3-provision/.env.example 3-provision/<machine>.env
-$EDITOR 3-provision/<machine>.env      # same SERVER_NAME. ROLE_* only if it serves.
+$EDITOR 3-provision/<machine>.env      # same SERVER_NAME. ROLE_* only if it serves. WIFI_n_* for wifi.
 ./3-provision/provision.sh <machine>
 ```
+
+Name wifi networks here with `WIFI_1_SSID`/`WIFI_1_PASS` up to 4 pairs, so a
+machine installed over ethernet gets wifi too and a machine can hold more than
+one network. The machine stores each password as a hashed PSK. An unset slot
+changes no wifi (REQ-SERVER-017).
 
 `provision.sh` then does these steps:
 
