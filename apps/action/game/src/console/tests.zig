@@ -320,6 +320,122 @@ test "binds: + and - commands, rebinding, release on open" {
     try testing.expect(outHas(&con, "no key \"nokey\""));
 }
 
+test "keys: the punctuation and navigation names give their key codes" {
+    const cases = [_]struct { []const u8, keys.Input, core.KeyCode }{
+        .{ "grave", .grave, .Grave },
+        .{ "minus", .minus, .Minus },
+        .{ "equal", .equal, .Equal },
+        .{ "leftbracket", .leftbracket, .LeftBracket },
+        .{ "rightbracket", .rightbracket, .RightBracket },
+        .{ "backslash", .backslash, .Backslash },
+        .{ "semicolon", .semicolon, .Semicolon },
+        .{ "quote", .quote, .Quote },
+        .{ "comma", .comma, .Comma },
+        .{ "period", .period, .Period },
+        .{ "slash", .slash, .Slash },
+        .{ "delete", .delete, .Delete },
+        .{ "home", .home, .Home },
+        .{ "end", .end, .End },
+        .{ "pageup", .pageup, .PageUp },
+        .{ "pagedown", .pagedown, .PageDown },
+        .{ "insert", .insert, .Insert },
+    };
+    for (cases) |c| {
+        try testing.expectEqual(c[1], keys.fromName(c[0]).?);
+        try testing.expectEqualStrings(c[0], keys.name(c[1]));
+        // Each name appears in the key list of the error message.
+        try testing.expect(std.mem.indexOf(u8, keys.help, c[0]) != null);
+        var in = core.InputSnapshot.init();
+        in.updateFromEvents(&.{keyEvent(c[2], true)});
+        try testing.expect(keys.pressed(c[1], &in) and keys.down(c[1], &in));
+        in.updateFromEvents(&.{keyEvent(c[2], false)});
+        try testing.expect(keys.released(c[1], &in) and !keys.down(c[1], &in));
+    }
+    // A name match ignores case, and the aliases work.
+    try testing.expectEqual(keys.Input.grave, keys.fromName("GRAVE").?);
+    try testing.expectEqual(keys.Input.grave, keys.fromName("backquote").?);
+    try testing.expectEqual(keys.Input.pageup, keys.fromName("pgup").?);
+    try testing.expectEqual(keys.Input.pagedown, keys.fromName("pgdn").?);
+    try testing.expectEqual(keys.Input.delete, keys.fromName("del").?);
+    try testing.expectEqual(keys.Input.mwheelup, keys.fromName("MWheelUp").?);
+    // Each name gives back its input.
+    for (keys.all) |k| try testing.expectEqual(k, keys.fromName(keys.name(k)).?);
+}
+
+fn wheelEvent(dy: f32, mode: core.event.WheelMode) core.Event {
+    return core.Event.init(0, 0, 0, .{ .wheel = .{ .dx = 0, .dy = dy, .mode = mode, .mods = .{} } });
+}
+
+test "binds: mwheelup and mwheeldown press and release in one tick" {
+    var ms: MemStore = .{ .alloc = testing.allocator };
+    defer ms.deinit();
+    var con = try Console.init(testing.allocator, ms.store());
+    defer con.deinit();
+    var act: buttons.Buttons(Action) = .{};
+    try act.register(&con, .init(.{ .forward = "move", .attack = "fire", .use = "use" }));
+    con.exec("bind mwheelup +attack; bind mwheeldown +use", .user);
+
+    // dy > 0 scrolls up. A browser notch in pixels is lines in the
+    // snapshot too.
+    var in = core.InputSnapshot.init();
+    in.updateFromEvents(&.{wheelEvent(1, .line)});
+    con.processBinds(&in);
+    try testing.expect(act.pressed(.attack) and act.released(.attack) and !act.down(.attack));
+    try testing.expect(!act.pressed(.use));
+    act.endTick();
+
+    in.updateFromEvents(&.{wheelEvent(-100, .pixel)});
+    con.processBinds(&in);
+    try testing.expect(act.pressed(.use) and act.released(.use) and !act.down(.use));
+    try testing.expect(!act.pressed(.attack));
+    act.endTick();
+
+    // No wheel: no bind runs.
+    in.updateFromEvents(&.{});
+    con.processBinds(&in);
+    try testing.expect(!act.pressed(.attack) and !act.pressed(.use));
+
+    // A bind that is not a button runs one time for each tick of the turn.
+    con.exec("bind mwheeldown \"echo down\"", .user);
+    in.updateFromEvents(&.{wheelEvent(-1, .page)});
+    con.processBinds(&in);
+    try testing.expectEqualStrings("down", last(&con));
+    try testing.expectEqual(keys.Input.mwheelup, con.keyFor("+attack").?);
+}
+
+test "binds: grave toggleconsole opens the console" {
+    var ms: MemStore = .{ .alloc = testing.allocator };
+    defer ms.deinit();
+    var con = try Console.init(testing.allocator, ms.store());
+    defer con.deinit();
+    con.setDefaultBinds(&.{.{ .key = .grave, .command = "toggleconsole" }});
+    try testing.expectEqual(keys.Input.grave, con.keyFor("toggleconsole").?);
+
+    // The Unknown key does nothing.
+    var in = core.InputSnapshot.init();
+    in.updateFromEvents(&.{keyEvent(.Unknown, true)});
+    con.processBinds(&in);
+    try testing.expect(!con.open);
+
+    in.updateFromEvents(&.{ keyEvent(.Unknown, false), keyEvent(.Grave, true) });
+    con.processBinds(&in);
+    try testing.expect(con.open);
+    // The binds stop while the console is open.
+    in.updateFromEvents(&.{keyEvent(.Grave, false)});
+    in.updateFromEvents(&.{keyEvent(.Grave, true)});
+    con.processBinds(&in);
+    try testing.expect(con.open);
+    con.setOpen(false);
+    // Rebind: another key opens it.
+    con.exec("unbind grave; bind home toggleconsole", .user);
+    in.updateFromEvents(&.{ keyEvent(.Grave, false), keyEvent(.Grave, true) });
+    con.processBinds(&in);
+    try testing.expect(!con.open);
+    in.updateFromEvents(&.{keyEvent(.Home, true)});
+    con.processBinds(&in);
+    try testing.expect(con.open);
+}
+
 // ---- Scripts and the saved config ------------------------------------------
 
 test "scripts: exec, comments, errors with lines, depth limit, autoexec" {
