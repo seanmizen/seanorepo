@@ -51,8 +51,7 @@ if command -v zig >/dev/null 2>&1; then
     fi
   else
     echo "    ⚠️  zig build web -Dexample=${EXAMPLE} failed — keeping existing ${PUBLIC_DIR}/app.wasm (if any)"
-    echo "       The voxel example currently fails to compile for wasm32-freestanding."
-    echo "       See apps/voxel.seanmizen.com/INVESTIGATION.md § Phase 2 for the delta."
+    echo "       Read the zig errors above. Run the same command in ${SWINDOWZIG} to see them again."
   fi
 else
   echo "    ⚠️  zig not found on PATH — skipping WASM build. Install the Zig version in utils/swindowzig/build.zig.zon."
