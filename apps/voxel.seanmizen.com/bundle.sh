@@ -9,6 +9,7 @@
 # The output directory gets:
 #   chunks-<hash>.wasm        a copy of chunks.wasm
 #   chunk-worker-<hash>.js    the bundle of backends/wasm/chunk-worker.ts
+#                             (from zig-out/swindowzig: run zig build first)
 #   boot.js                   the bundle of src/boot.ts. It holds the two
 #                             names above, so it loads only the chunk files
 #                             of its own build.
@@ -23,7 +24,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WASM_BACKEND="${SCRIPT_DIR}/../../utils/swindowzig/backends/wasm"
+# build.zig installs the web backend of the pinned swindowzig release here.
+WASM_BACKEND="${SCRIPT_DIR}/zig-out/swindowzig/backends/wasm"
 CHUNKS_WASM="${1:?usage: bundle.sh <chunks.wasm> <output dir>}"
 OUT_DIR="${2:?usage: bundle.sh <chunks.wasm> <output dir>}"
 

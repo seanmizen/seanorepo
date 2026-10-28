@@ -10,7 +10,7 @@ More instructions load only when they are relevant:
   files: Docker and ports, deployment, carolinemizen.art.
 - `.claude/skills/workflow/` - the ticket, branch, PR and merge procedure. Use
   it whenever you create an issue or open a PR.
-- A `CLAUDE.md` inside an app or util (`apps/inside`, `utils/swindowzig`,
+- A `CLAUDE.md` inside an app or util (`apps/inside`, `apps/QuarterCompany`,
   ...) loads when you work in that directory.
 
 ## Setup
@@ -65,6 +65,10 @@ Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
 - `projects/` - client and video projects. Each one is a workspace, for
   example `projects/agentic-workflows` (it uses `apps/QuarterCompany`).
 - `utils/` - tooling. `utils/debbie/` provisions and deploys the home servers.
+- The swindowzig engine is in its own repository, `seanmizen/swindowzig`.
+  `apps/action` and `apps/voxel.seanmizen.com` pin one of its releases.
+  Their READMEs tell how to change the pin and how to build against a local
+  checkout.
 - `infra/` - settings as code (OpenTofu). Apply only from `release`. Change these
   only here. `infra/cloudflare/`: zones, DNS, the tunnel. `infra/github/`:
   Actions token permissions, and the ruleset that protects `main` and

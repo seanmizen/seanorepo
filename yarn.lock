@@ -14849,14 +14849,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"swindowzig@workspace:utils/swindowzig":
-  version: 0.0.0-use.local
-  resolution: "swindowzig@workspace:utils/swindowzig"
-  dependencies:
-    "@types/bun": "npm:^1.3.5"
-  languageName: unknown
-  linkType: soft
-
 "tailwindcss@npm:^3.4.17":
   version: 3.4.19
   resolution: "tailwindcss@npm:3.4.19"

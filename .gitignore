@@ -309,3 +309,6 @@ Amazon Q
 
 # zig alternate cache dirs
 .zig-cache2/
+
+# Zig 0.16 and later unpack each dependency of a package into zig-pkg/.
+zig-pkg/

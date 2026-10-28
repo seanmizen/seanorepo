@@ -1,7 +1,12 @@
 // Where: apps/action/game/build.zig
 // When: `zig build` from this directory (apps/action/build.sh runs it).
 // Why: builds the action.seanmizen.com client, zig-out/bin/action.wasm. The
-// game takes the swindowzig modules as a path dependency. It is web only.
+// game takes the swindowzig modules from the release that build.zig.zon
+// pins. It is web only. The build also installs the web backend of that
+// release (backends/wasm, TypeScript) to zig-out/swindowzig/backends/wasm.
+// src/boot.ts imports the loader from there, so the wasm and the loader
+// come from the same swindowzig. `zig build --fork=<swindowzig checkout>`
+// replaces both.
 //
 // -Dbuild_version=<text>: the build version of the game (the module
 // build_options). build.sh and the dockerfile give the output of
@@ -42,6 +47,16 @@ pub fn build(b: *std.Build) void {
     exe.rdynamic = true;
     exe.stack_size = 4 * 1024 * 1024;
     b.installArtifact(exe);
+
+    // The web backend of the same swindowzig: bun bundles src/boot.ts with
+    // it (build.sh, the dockerfile).
+    b.installDirectory(.{
+        .source_dir = sw.path("backends/wasm"),
+        .install_dir = .prefix,
+        .install_subdir = "swindowzig/backends/wasm",
+        .include_extensions = &.{".ts"},
+        .exclude_extensions = &.{".test.ts"},
+    });
 
     // `zig build floorplan -- <map> <plan|section-z|section-x|audit|escape> ...`:
     // the map slicer and audits, a native tool (src/floorplan.zig). The
