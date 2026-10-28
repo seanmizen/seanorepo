@@ -21,12 +21,13 @@ served over the home-server cloudflared tunnel at
 apps/voxel.seanmizen.com/
 ├── README.md           ← this file
 ├── package.json        ← workspace scripts (build, prod:docker, down)
-├── dockerfile          ← multi-stage zig + bun + serve
+├── dockerfile          ← multi-stage zig + RSBuild + serve
 ├── docker-compose.yml  ← mirrors apps/seanmizen.com/docker-compose.yml
 ├── build.zig.zon       ← pins the swindowzig release (see swindowzig)
 ├── build.zig           ← zig build: the example wasm to zig-out/bin, the web backend to zig-out/swindowzig
-├── build.sh            ← host-side build script (zig + bun)
-├── bundle.sh           ← bun bundles and content-hashed chunk files (build.sh and the dockerfile run it)
+├── build.sh            ← host-side build script (zig + RSBuild)
+├── bundle.sh           ← RSBuild bundles and content-hashed chunk files (build.sh and the dockerfile run it)
+├── rsbuild.config.ts   ← the two RSBuild bundles: boot.js and the chunk worker
 ├── src/
 │   └── boot.ts         ← production WASM bootstrap (bundled to public/boot.js)
 └── public/
@@ -57,7 +58,7 @@ The script:
    The script copies it into `public/app.wasm`. The same build writes
    `chunks.wasm`, the chunk worker. It also installs the web backend of
    the release to `zig-out/swindowzig/backends/wasm`.
-2. Runs `bundle.sh`. It bundles the swindowzig wasm loader
+2. Runs `bundle.sh`. With RSBuild, it bundles the swindowzig wasm loader
    (`zig-out/swindowzig/backends/wasm/loader.ts`) and the modules that it
    imports into `public/boot.js`. The dev page uses the same loader. It
    bundles the Web Worker script (`backends/wasm/chunk-worker.ts`), and

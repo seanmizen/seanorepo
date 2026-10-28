@@ -8,8 +8,8 @@
 #                 pins, and installs its web backend to zig-out/swindowzig.
 #                 Write the build version (the build argument BUILD_VERSION,
 #                 default "dev") into the game and into build-version.txt.
-#   2. js-build   bundle src/boot.ts with the swindowzig wasm loader from
-#                 stage 1 and the train sound library utils/tube-sounds
+#   2. js-build   RSBuild bundles src/boot.ts with the swindowzig wasm loader
+#                 from stage 1 and the train sound library utils/tube-sounds
 #   3. prod       Bun runs server/index.ts: static files and /api/ws on 4080.
 #                 It reads game/src/server_cvars.json, server/server.cfg,
 #                 game/src/protocol_version.txt and public/build-version.txt.
@@ -45,19 +45,23 @@ RUN set -e; \
     printf '%s\n' "${VERSION}" > zig-out/bin/build-version.txt; \
     ls -la zig-out/bin/
 
-FROM oven/bun:1.1-slim AS js-build
+FROM node:lts-slim AS js-build
 WORKDIR /build
+# Install the dependencies of the workspace (@rsbuild/core, and the
+# workspace package tube-sounds of src/tube.ts) from the lockfile, as the
+# seanmizen.com image does.
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+COPY apps/action/package.json ./apps/action/
+COPY utils/tube-sounds/package.json ./utils/tube-sounds/
+RUN yarn workspaces focus action
+COPY utils/tube-sounds/src ./utils/tube-sounds/src
 # src/boot.ts imports the loader from game/zig-out/swindowzig.
 COPY --from=zig-build /build/apps/action/game/zig-out/swindowzig /build/apps/action/game/zig-out/swindowzig
 COPY apps/action/src /build/apps/action/src
 COPY apps/action/tsconfig.json /build/apps/action/tsconfig.json
-# The workspace package tube-sounds (src/tube.ts): the context has no
-# node_modules, so link the package where the bundler looks for it.
-COPY utils/tube-sounds/package.json /build/utils/tube-sounds/package.json
-COPY utils/tube-sounds/src /build/utils/tube-sounds/src
-RUN mkdir -p /build/apps/action/node_modules \
-    && ln -s ../../../utils/tube-sounds /build/apps/action/node_modules/tube-sounds
-RUN bun build /build/apps/action/src/boot.ts --outfile /build/out/boot.js --target browser --minify
+COPY apps/action/rsbuild.config.ts /build/apps/action/rsbuild.config.ts
+RUN cd /build/apps/action && BUNDLE_OUT_DIR=/build/out yarn rsbuild build
 
 FROM oven/bun:1.1-slim AS prod
 WORKDIR /app

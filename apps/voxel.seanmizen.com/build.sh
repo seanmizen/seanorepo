@@ -14,8 +14,8 @@
 #      the swindowzig release that build.zig.zon pins: app.wasm and
 #      chunks.wasm (the chunk worker). It also installs the web backend of
 #      that release to zig-out/swindowzig.
-#   2. Run bundle.sh: `bun build` makes boot.js and the chunk worker bundle,
-#      and the chunk files get content-hashed names (C9)
+#   2. Run bundle.sh: RSBuild (rsbuild.config.ts) makes boot.js and the
+#      chunk worker bundle, and the chunk files get content-hashed names (C9)
 #   3. Copy the artefacts into apps/voxel.seanmizen.com/public/
 #
 # Neither step writes outside the repo. Skip any step that fails with a
@@ -64,13 +64,13 @@ else
   echo "    ⚠️  zig not found on PATH — skipping WASM build. Install the Zig version in build.zig.zon (minimum_zig_version)."
 fi
 
-# --- 2. Bun JS bundle -------------------------------------------------------
+# --- 2. JS bundle (RSBuild) -------------------------------------------------
 # bundle.sh bundles src/boot.ts (with the swindowzig wasm loader,
 # zig-out/swindowzig/backends/wasm/loader.ts) and the chunk worker
 # (backends/wasm/chunk-worker.ts).
 # It copies chunks.wasm. The chunk files get content-hashed names, and
 # boot.js holds the names (C9).
-if command -v bun >/dev/null 2>&1; then
+if command -v yarn >/dev/null 2>&1; then
   echo "==> bundle.sh → public/boot.js, public/chunks-*.wasm, public/chunk-worker-*.js"
   if bash "${SCRIPT_DIR}/bundle.sh" "${ZIG_OUT}/bin/chunks.wasm" "${PUBLIC_DIR}"; then
     echo "    ✅ boot.js and the chunk worker files bundled"
@@ -78,7 +78,7 @@ if command -v bun >/dev/null 2>&1; then
     echo "    ⚠️  bundle.sh failed — keeping previously committed boot.js"
   fi
 else
-  echo "    ⚠️  bun not found on PATH — keeping previously committed boot.js"
+  echo "    ⚠️  yarn not found on PATH — keeping the existing boot.js"
 fi
 
 echo "==> done. Static output lives under: ${PUBLIC_DIR}"

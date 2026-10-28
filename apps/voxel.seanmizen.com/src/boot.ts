@@ -3,13 +3,14 @@
 // All start-up code and every wasm import are in the swindowzig loader
 // (backends/wasm/loader.ts). build.zig installs the web backend of the
 // pinned swindowzig release to zig-out/swindowzig, so run `zig build`
-// before bun bundles this file. bun bundles the loader into
-// public/boot.js. This file gives the loader its options:
+// before RSBuild bundles this file. RSBuild bundles the loader into
+// public/boot.js (bundle.sh, rsbuild.config.ts). This file gives the
+// loader its options:
 //
 //   - It loads ./app.wasm, in the same directory as index.html.
 //   - It starts the chunk worker pool (C9) with the content-hashed chunk
-//     files. bundle.sh gives their names to `bun build --define`. Without
-//     the names, the main thread runs the chunk jobs.
+//     files. bundle.sh gives their names to the RSBuild `source.define`.
+//     Without the names, the main thread runs the chunk jobs.
 //   - It shows each failure in the styled overlay of public/index.html.
 
 import {

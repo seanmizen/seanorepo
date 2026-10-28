@@ -2,10 +2,10 @@
 // (backends/wasm/loader.ts) builds every wasm import, the WebSocket bridge
 // (backends/wasm/net.ts) included. game/build.zig installs the web backend
 // of the pinned swindowzig release to game/zig-out/swindowzig, so run
-// `zig build` in game/ before bun bundles this file. tube.ts adds the
+// `zig build` in game/ before RSBuild bundles this file. tube.ts adds the
 // train sound (utils/tube-sounds) to the import module "env", and moped.ts
-// adds the engine sound of the moped thieves. bun bundles this file into
-// public/boot.js (build.sh).
+// adds the engine sound of the moped thieves. RSBuild bundles this file
+// into public/boot.js (build.sh, rsbuild.config.ts).
 
 import {
   type LoadFailure,

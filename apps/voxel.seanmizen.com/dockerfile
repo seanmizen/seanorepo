@@ -7,8 +7,8 @@
 #                   run `zig build`: it fetches the swindowzig release that
 #                   build.zig.zon pins, builds its voxel example to WASM and
 #                   installs its web backend to zig-out/swindowzig
-#   2. js-build   — bundle.sh: Bun bundles boot.js and the chunk worker, and
-#                   the chunk files get content-hashed names
+#   2. js-build   — bundle.sh: RSBuild bundles boot.js and the chunk worker,
+#                   and the chunk files get content-hashed names
 #   3. prod       — copy the static output into a minimal Node image and run `serve`
 #
 # The dev target is a no-op: for dev you'd run `yarn build` locally and open the dist
@@ -56,7 +56,7 @@ WORKDIR /build/voxel
 RUN zig build -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 
 # =============================================================================
-# Stage 2: JS bundle (Bun)
+# Stage 2: JS bundle (RSBuild)
 # =============================================================================
 # bundle.sh (the script that build.sh runs too) makes /build/out/:
 #   boot.js                 apps/voxel.seanmizen.com/src/boot.ts and the
@@ -66,12 +66,20 @@ RUN zig build -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 #   chunks-<hash>.wasm      chunks.wasm from stage 1
 # The chunk files have content-hashed names, and boot.js holds the names
 # (C9).
-FROM oven/bun:1.1-slim AS js-build
+FROM node:lts-slim AS js-build
 WORKDIR /build
+
+# Install the dev dependencies of the workspace (@rsbuild/core) from the
+# lockfile, as the seanmizen.com image does.
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+COPY apps/voxel.seanmizen.com/package.json ./apps/voxel.seanmizen.com/
+RUN yarn workspaces focus voxel.seanmizen.com
 
 COPY --from=zig-build /build/voxel/zig-out/swindowzig /build/apps/voxel.seanmizen.com/zig-out/swindowzig
 COPY apps/voxel.seanmizen.com/src /build/apps/voxel.seanmizen.com/src
 COPY apps/voxel.seanmizen.com/tsconfig.json /build/apps/voxel.seanmizen.com/tsconfig.json
+COPY apps/voxel.seanmizen.com/rsbuild.config.ts /build/apps/voxel.seanmizen.com/rsbuild.config.ts
 COPY apps/voxel.seanmizen.com/bundle.sh /build/apps/voxel.seanmizen.com/bundle.sh
 COPY --from=zig-build /build/voxel/zig-out/bin/chunks.wasm /build/chunks.wasm
 

@@ -48,7 +48,7 @@ pub fn build(b: *std.Build) void {
     exe.stack_size = 4 * 1024 * 1024;
     b.installArtifact(exe);
 
-    // The web backend of the same swindowzig: bun bundles src/boot.ts with
+    // The web backend of the same swindowzig: RSBuild bundles src/boot.ts with
     // it (build.sh, the dockerfile).
     b.installDirectory(.{
         .source_dir = sw.path("backends/wasm"),

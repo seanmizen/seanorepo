@@ -5434,6 +5434,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "action@workspace:apps/action"
   dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
     bun-types: "npm:^1.3.4"
     tube-sounds: "workspace:*"
     typescript: "npm:^5.9.3"
@@ -15886,6 +15887,8 @@ __metadata:
 "voxel.seanmizen.com@workspace:apps/voxel.seanmizen.com":
   version: 0.0.0-use.local
   resolution: "voxel.seanmizen.com@workspace:apps/voxel.seanmizen.com"
+  dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
   languageName: unknown
   linkType: soft
 

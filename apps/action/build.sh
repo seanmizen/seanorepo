@@ -5,7 +5,8 @@
 # Why: builds the generated files of public/:
 #   action.wasm        the game (game/, Zig, ReleaseFast)
 #   boot.js            src/boot.ts with the swindowzig wasm loader (from
-#                      game/zig-out/swindowzig, which zig build installs)
+#                      game/zig-out/swindowzig, which zig build installs).
+#                      RSBuild bundles it (rsbuild.config.ts).
 #   build-version.txt  the build version (scripts/build-version.sh). The
 #                      game has the same value, and the server reads it.
 #
@@ -27,5 +28,5 @@ fi
 (cd "${DIR}/game" && zig build "${ZIG_ARGS[@]}")
 cp "${DIR}/game/zig-out/bin/action.wasm" "${DIR}/public/action.wasm"
 printf '%s\n' "${VERSION}" > "${DIR}/public/build-version.txt"
-bun build "${DIR}/src/boot.ts" --outfile "${DIR}/public/boot.js" --target browser --minify
+(cd "${DIR}" && yarn rsbuild build)
 echo "action: public/ is ready, build ${VERSION}"

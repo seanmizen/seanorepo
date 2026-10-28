@@ -2029,7 +2029,7 @@ apps/action/
 ├── server/moped.ts       the moped thieves in deathmatch: the stolen guns, the health of the riders, the checks of each event
 ├── server/bikes.ts       the mopeds that players ride: the ids, the checks of each mount, off and hit, the death of a rider
 ├── server/server.cfg     the server config (a script)
-├── src/boot.ts           page entry; bundled to public/boot.js
+├── src/boot.ts           page entry; RSBuild bundles it to public/boot.js (rsbuild.config.ts)
 ├── src/moped.ts          the engine sound of the mopeds (Web Audio)
 ├── public/index.html
 ├── assets/guns/          the licence of the gun models
