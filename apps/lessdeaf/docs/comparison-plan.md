@@ -55,7 +55,8 @@ words on the right speaker.
 
 ## First milestones
 
-1. Swift app that records and shows one live pipeline (FluidAudio).
+1. Swift app that records and shows one live pipeline (FluidAudio). Code
+   written in `ios/`, not compiled yet.
 2. Add a second on-device pipeline (WhisperKit + SpeakerKit) and a side-by-side
    view.
 3. Common output format and a scoring tool.
