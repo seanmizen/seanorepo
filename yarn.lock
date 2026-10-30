@@ -10766,6 +10766,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lessdeaf@workspace:apps/lessdeaf":
+  version: 0.0.0-use.local
+  resolution: "lessdeaf@workspace:apps/lessdeaf"
+  languageName: unknown
+  linkType: soft
+
 "levn@npm:^0.4.1":
   version: 0.4.1
   resolution: "levn@npm:0.4.1"
