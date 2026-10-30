@@ -52,6 +52,10 @@ The size of the audio is about 5.5 MB per minute at 48 kHz mono.
 
 ## How to get the files off the phone
 
+The easiest way: set the homelab on the **Settings** tab, and set **Send audio
+to the homelab** before you record. The recording then goes to the homelab
+during the session. The other ways:
+
 - **Files app:** open **On My iPhone**, then **lessdeaf**, then **sessions**.
   Copy the folders to iCloud Drive, or use AirDrop.
 - **Share button:** on the **Sessions** tab, tap the share button on a session.

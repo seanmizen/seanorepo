@@ -12,11 +12,14 @@ enum SessionStore {
         return documents.appendingPathComponent("sessions", isDirectory: true)
     }
 
+    /// The date and time, plus 4 random characters, so two phones that start
+    /// in the same second do not share an ID on the homelab.
     static func newSessionID(at date: Date = .now) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd'T'HH-mm-ss"
-        return formatter.string(from: date)
+        let suffix = UUID().uuidString.prefix(4).lowercased()
+        return "\(formatter.string(from: date))-\(suffix)"
     }
 
     static func folder(for id: String) throws -> URL {
@@ -26,23 +29,29 @@ enum SessionStore {
     }
 
     static func write<T: Encodable>(_ value: T, to url: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(value).write(to: url, options: .atomic)
+        try JSONEncoder.lessdeaf.encode(value).write(to: url, options: .atomic)
     }
 
     static func listSessions() -> [SessionMetadata] {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         let folders = (try? FileManager.default.contentsOfDirectory(
             at: root, includingPropertiesForKeys: nil)) ?? []
         return folders.compactMap { folder in
             let url = folder.appendingPathComponent(metadataName)
             guard let data = try? Data(contentsOf: url) else { return nil }
-            return try? decoder.decode(SessionMetadata.self, from: data)
+            return try? JSONDecoder.lessdeaf.decode(SessionMetadata.self, from: data)
         }
         .sorted { $0.startedAt > $1.startedAt }
+    }
+
+    static func audioURL(for id: String) -> URL? {
+        let url = root.appendingPathComponent(id, isDirectory: true).appendingPathComponent(audioName)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    static func transcript(for id: String) -> PipelineOutput? {
+        let url = root.appendingPathComponent(id, isDirectory: true).appendingPathComponent(liveName)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder.lessdeaf.decode(PipelineOutput.self, from: data)
     }
 
     static func files(for id: String) -> [URL] {

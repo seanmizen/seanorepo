@@ -18,7 +18,7 @@ struct RecordView: View {
                 ToolbarItem(placement: .topBarTrailing) { ModelBadge() }
                 if !controller.isRecording, !controller.segments.isEmpty {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("New") { controller.segments = [] }
+                        Button("New") { controller.newDraft() }
                     }
                 }
             }
@@ -47,13 +47,40 @@ private struct SessionForm: View {
             Section("Notes") {
                 TextField("Anything that helps later", text: $controller.draft.notes, axis: .vertical)
             }
-            Section {
-                Toggle("All speakers agree to this recording", isOn: $controller.draft.consent)
-            } footer: {
-                Text("lessdeaf saves the raw audio as sample data. Record only people who agree.")
+            StorageSection()
+            if !controller.draft.isLiveListen {
+                Section {
+                    Toggle("All speakers agree to this recording", isOn: $controller.draft.consent)
+                } footer: {
+                    Text("lessdeaf keeps the raw audio as sample data. Record only people who agree.")
+                }
             }
             if let error = controller.errorMessage {
                 Section { Text(error).foregroundStyle(.red) }
+            }
+        }
+    }
+}
+
+private struct StorageSection: View {
+    @Environment(SessionController.self) private var controller
+
+    var body: some View {
+        @Bindable var controller = controller
+        let homelab = controller.settings.isConfigured
+        Section {
+            Toggle("Keep audio on this phone", isOn: $controller.draft.keepAudioOnPhone)
+            Toggle("Send audio to the homelab", isOn: $controller.draft.uploadAudio)
+                .disabled(!homelab)
+            Toggle("Send the transcript to the homelab", isOn: $controller.draft.uploadTranscript)
+                .disabled(!homelab)
+        } header: {
+            Text("Storage")
+        } footer: {
+            if controller.draft.isLiveListen {
+                Text("Live listen: lessdeaf keeps no audio. Only the transcript is saved.")
+            } else if !homelab {
+                Text("To send to the homelab, set its address and key in Settings.")
             }
         }
     }
@@ -116,7 +143,7 @@ private struct RecordBar: View {
                     .font(.system(size: 56))
                     .foregroundStyle(.red)
             }
-            .disabled(controller.isFinishing || (!controller.isRecording && !controller.draft.consent))
+            .disabled(controller.isFinishing || (!controller.isRecording && !controller.canStart))
         }
         .padding()
         .background(.bar)

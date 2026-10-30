@@ -66,6 +66,10 @@ http://autosam.{$EDGE_HOST}.local {
 	reverse_proxy autosam:4090
 }
 
+http://lessdeaf.{$EDGE_HOST}.local {
+	reverse_proxy lessdeaf:4100
+}
+
 http://seansconverter.{$EDGE_HOST}.local {
 	handle /api/* {
 		reverse_proxy seansconverter-backend:4051

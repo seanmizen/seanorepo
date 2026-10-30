@@ -11,6 +11,8 @@ struct LessDeafApp: App {
                     .tabItem { Label("Record", systemImage: "waveform") }
                 SessionsView()
                     .tabItem { Label("Sessions", systemImage: "folder") }
+                SettingsView()
+                    .tabItem { Label("Settings", systemImage: "gear") }
             }
             .environment(controller)
             .task { await controller.loadModels() }

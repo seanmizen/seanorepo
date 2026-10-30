@@ -31,6 +31,14 @@ struct SessionMetadata: Codable {
     var notes = ""
     var consent = false
     var device: DeviceInfo?
+
+    /// Where the audio goes. With both audio switches off, the session is
+    /// "live listen": only the transcript survives.
+    var keepAudioOnPhone = true
+    var uploadAudio = false
+    var uploadTranscript = false
+
+    var isLiveListen: Bool { !keepAudioOnPhone && !uploadAudio }
 }
 
 /// Recording facts that the app reads from the system.
@@ -68,4 +76,21 @@ struct TranscriptWord: Codable, Equatable {
     var start: Double
     var end: Double
     var confidence: Float
+}
+
+extension JSONEncoder {
+    static let lessdeaf: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+}
+
+extension JSONDecoder {
+    static let lessdeaf: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
 }

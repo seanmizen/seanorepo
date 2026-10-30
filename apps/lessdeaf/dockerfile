@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.6
+#
+# lessdeaf backend: one Bun process serves the API (/api) on 4100. The server
+# uses only Bun and Node built-ins, so it needs no build step and no
+# node_modules.
+#
+# The sessions live in the volume at /data.
+
+FROM oven/bun:1.1-slim AS prod
+WORKDIR /app
+COPY apps/lessdeaf/server ./server
+ENV PORT=4100 LESSDEAF_DATA_DIR=/data
+EXPOSE 4100
+CMD ["bun", "server/index.ts"]
+
+# docker-compose bind-mounts the monorepo at /app. Bun restarts the server
+# when a file of server/ changes.
+FROM oven/bun:1.1-slim AS dev
+WORKDIR /app/apps/lessdeaf
+ENV PORT=4100 LESSDEAF_DATA_DIR=/data
+EXPOSE 4100
+CMD ["bun", "--watch", "server/index.ts"]
