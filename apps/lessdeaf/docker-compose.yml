@@ -1,0 +1,53 @@
+# lessdeaf - lessdeaf.seanmizen.com
+# Port 4100: the API (/api), one Bun process. 4101 is reserved for the pair
+# and not used.
+
+x-lessdeaf-base: &lessdeaf-base
+  container_name: lessdeaf
+  build:
+    context: ../..
+    dockerfile: apps/lessdeaf/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "${PUBLISH_ADDR:-127.0.0.1}:4100:4100"
+  # LESSDEAF_KEY is the key that the phone sends. Keep it in
+  # apps/lessdeaf/.env on the server. Without it, the API answers 503.
+  env_file:
+    - path: ./.env
+      required: false
+
+services:
+  backend:
+    <<: *lessdeaf-base
+    profiles: ["prod"]
+    restart: unless-stopped
+    volumes:
+      - lessdeaf_sessions_data:/data
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [lessdeaf]
+
+  backend-dev:
+    <<: *lessdeaf-base
+    environment:
+      - LESSDEAF_KEY=${LESSDEAF_KEY:-local-dev-lessdeaf-key}
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+      - lessdeaf_sessions_dev_data:/data
+    profiles: ["dev"]
+
+volumes:
+  # The recordings. They exist only on the machine that runs the prod profile.
+  lessdeaf_sessions_data:
+    name: lessdeaf_sessions_data
+  lessdeaf_sessions_dev_data:
+    name: lessdeaf_sessions_dev_data
+
+networks:
+  # Shared with infra/edge. deploy.sh and prod:docker create it.
+  edge:
+    external: true

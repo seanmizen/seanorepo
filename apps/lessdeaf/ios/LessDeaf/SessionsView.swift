@@ -9,11 +9,14 @@ struct SessionsView: View {
             List {
                 ForEach(sessions, id: \.id) { session in
                     HStack {
-                        VStack(alignment: .leading) {
-                            Text(session.startedAt.formatted(date: .abbreviated, time: .shortened))
-                            Text(summary(session)).font(.caption).foregroundStyle(.secondary)
+                        NavigationLink {
+                            SessionDetailView(session: session)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(session.startedAt.formatted(date: .abbreviated, time: .shortened))
+                                Text(summary(session)).font(.caption).foregroundStyle(.secondary)
+                            }
                         }
-                        Spacer()
                         ShareLink(items: SessionStore.files(for: session.id)) {
                             Image(systemName: "square.and.arrow.up")
                         }
@@ -44,8 +47,10 @@ struct SessionsView: View {
         let duration = session.durationSeconds.map {
             Duration.seconds($0).formatted(.time(pattern: .minuteSecond))
         } ?? "unfinished"
-        let hasLive = SessionStore.files(for: session.id).contains { $0.lastPathComponent == SessionStore.liveName }
-        return "\(duration) · \(session.room.rawValue) · \(session.speakerCount) speakers · \(session.micSetup.label)"
-            + (hasLive ? " · transcript" : "")
+        let storage = session.isLiveListen
+            ? "live listen"
+            : [session.keepAudioOnPhone ? "phone" : nil, session.uploadAudio ? "homelab" : nil]
+                .compactMap { $0 }.joined(separator: " + ")
+        return "\(duration) · \(session.room.rawValue) · \(session.speakerCount) speakers · \(storage)"
     }
 }

@@ -2,15 +2,22 @@ import AVFoundation
 import FluidAudio
 import UIKit
 
-/// Records the mic to a WAV file at the native rate, and sends 16 kHz mono
-/// copies to the live pipeline.
+/// Records the mic. It can write a WAV file at the native rate, and it can
+/// cut 16-bit PCM chunks for the homelab. It always sends 16 kHz mono copies
+/// to the live pipeline.
 final class Recorder {
     private let engine = AVAudioEngine()
     private var file: AVAudioFile?
+    private var chunker: PCMChunker?
 
     /// Starts the session and the tap. Returns facts about the input route.
+    /// - Parameters:
+    ///   - url: The WAV file to write, or nil to keep no local audio.
+    ///   - onChunk: Gets each PCM chunk of about `chunkSeconds`, or nil to cut no chunks.
     func start(
-        writingTo url: URL,
+        writingTo url: URL?,
+        chunkSeconds: Double = 5,
+        onChunk: (@Sendable (Data) -> Void)?,
         onSamples: @escaping @Sendable ([Float]) -> Void,
         onLevel: @escaping @Sendable (Float) -> Void
     ) throws -> DeviceInfo {
@@ -32,13 +39,19 @@ final class Recorder {
             AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsBigEndianKey: false,
         ]
-        let file = try AVAudioFile(
-            forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        let file = try url.map {
+            try AVAudioFile(forWriting: $0, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        }
         self.file = file
+        let chunker = onChunk.map {
+            PCMChunker(bytesPerChunk: Int(format.sampleRate * chunkSeconds) * Int(format.channelCount) * 2, onChunk: $0)
+        }
+        self.chunker = chunker
 
         let converter = AudioConverter()
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
-            try? file.write(from: buffer)
+            try? file?.write(from: buffer)
+            chunker?.append(buffer)
             onLevel(Self.rms(buffer))
             if let samples = try? converter.resampleBuffer(buffer) {
                 onSamples(samples)
@@ -60,6 +73,9 @@ final class Recorder {
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        // The tap is gone, so no buffer can arrive during the flush.
+        chunker?.flush()
+        chunker = nil
         // Releasing the AVAudioFile closes it and writes the WAV header.
         file = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -89,5 +105,41 @@ enum RecorderError: LocalizedError {
         switch self {
         case .noInput: "No microphone input is available."
         }
+    }
+}
+
+/// Converts float buffers to 16-bit little-endian PCM, interleaved, and cuts
+/// it into chunks. The tap calls `append` on the audio thread.
+final class PCMChunker {
+    private let bytesPerChunk: Int
+    private let onChunk: @Sendable (Data) -> Void
+    private var data = Data()
+
+    init(bytesPerChunk: Int, onChunk: @escaping @Sendable (Data) -> Void) {
+        self.bytesPerChunk = bytesPerChunk
+        self.onChunk = onChunk
+        data.reserveCapacity(bytesPerChunk)
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        guard let channels = buffer.floatChannelData else { return }
+        let frames = Int(buffer.frameLength)
+        let count = Int(buffer.format.channelCount)
+        var samples = [Int16](repeating: 0, count: frames * count)
+        for frame in 0..<frames {
+            for channel in 0..<count {
+                let value = max(-1, min(1, channels[channel][frame]))
+                samples[frame * count + channel] = Int16(value * Float(Int16.max))
+            }
+        }
+        samples.withUnsafeBytes { data.append(contentsOf: $0) }
+        if data.count >= bytesPerChunk { flush() }
+    }
+
+    func flush() {
+        guard !data.isEmpty else { return }
+        onChunk(data)
+        data = Data()
+        data.reserveCapacity(bytesPerChunk)
     }
 }

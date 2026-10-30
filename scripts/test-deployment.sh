@@ -105,6 +105,9 @@ test_cloudflared() {
   test_endpoint "http://localhost:4090" "Library" || ((failed++))
   test_endpoint "http://localhost:4090/api/health" "Song API" || ((failed++))
 
+  echo -e "\n${YELLOW}lessdeaf${NC}"
+  test_endpoint "http://localhost:4100/api/health" "API" || ((failed++))
+
   echo -e "\n${YELLOW}seansconverter.com${NC}"
   test_endpoint "http://localhost:4050" "Frontend" || ((failed++))
   test_endpoint "http://localhost:4051/api/health" "Backend API" || ((failed++))

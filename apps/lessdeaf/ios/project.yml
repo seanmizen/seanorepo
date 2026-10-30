@@ -38,3 +38,7 @@ targets:
         # Shows Documents/sessions in the Files app.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        # Lets the app reach a homelab at http://<name>.local on the LAN.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: lessdeaf sends recordings to your homelab on the local network.
