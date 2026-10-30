@@ -1,0 +1,40 @@
+name: LessDeaf
+options:
+  bundleIdPrefix: com.seanmizen
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio
+    minorVersion: 0.18.0
+targets:
+  LessDeaf:
+    type: application
+    platform: iOS
+    sources:
+      - LessDeaf
+    dependencies:
+      - package: FluidAudio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.seanmizen.lessdeaf
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_CFBundleDisplayName: lessdeaf
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: lessdeaf records the room to make a transcript that labels each speaker.
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+    info:
+      path: LessDeaf/Info.plist
+      properties:
+        # Keeps recording when the screen locks.
+        UIBackgroundModes: [audio]
+        # Shows Documents/sessions in the Files app.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true

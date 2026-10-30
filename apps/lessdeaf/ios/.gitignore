@@ -1,0 +1,5 @@
+# XcodeGen output. Regenerate with `xcodegen` from project.yml.
+LessDeaf.xcodeproj/
+LessDeaf/Info.plist
+build/
+DerivedData/
