@@ -77,7 +77,7 @@ RUN bash /build/apps/voxel.seanmizen.com/bundle.sh /build/chunks.wasm /build/out
 # =============================================================================
 # Stage 3: Production runtime — static file server
 # =============================================================================
-FROM node:lts-slim AS prod
+FROM node:24-slim AS prod
 WORKDIR /app
 
 # `serve` is a tiny static server with correct MIME types for .wasm — the same
@@ -98,7 +98,7 @@ CMD ["serve", "-s", ".", "-l", "4042"]
 # to point at. The real dev loop for this app is `bun utils/swindowzig/backends/
 # wasm/dev-server.ts` run directly on the host.
 # =============================================================================
-FROM node:lts-slim AS dev
+FROM node:24-slim AS dev
 WORKDIR /app
 # Source is mounted in via docker-compose's bind mount.
 CMD ["sh", "-c", "echo 'voxel.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]

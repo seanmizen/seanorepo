@@ -2,7 +2,7 @@
 
 # deps: install the backend's dependencies standalone, not as a workspace.
 # SQLite comes from bun:sqlite, so the image needs no native toolchain.
-FROM node:lts-slim AS deps
+FROM node:24-slim AS deps
 WORKDIR /app
 COPY package.json .yarnrc.yml ./
 COPY .yarn/releases ./.yarn/releases

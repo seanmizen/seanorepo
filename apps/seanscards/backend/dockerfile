@@ -1,4 +1,4 @@
-FROM node:lts-slim AS deps
+FROM node:24-slim AS deps
 WORKDIR /app
 
 # Copy root package.json and .yarnrc.yml for Yarn 4 configuration
