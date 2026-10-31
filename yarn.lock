@@ -5434,6 +5434,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "action@workspace:apps/action"
   dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
     bun-types: "npm:^1.3.4"
     tube-sounds: "workspace:*"
     typescript: "npm:^5.9.3"
@@ -14855,14 +14856,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"swindowzig@workspace:utils/swindowzig":
-  version: 0.0.0-use.local
-  resolution: "swindowzig@workspace:utils/swindowzig"
-  dependencies:
-    "@types/bun": "npm:^1.3.5"
-  languageName: unknown
-  linkType: soft
-
 "tailwindcss@npm:^3.4.17":
   version: 3.4.19
   resolution: "tailwindcss@npm:3.4.19"
@@ -15900,6 +15893,8 @@ __metadata:
 "voxel.seanmizen.com@workspace:apps/voxel.seanmizen.com":
   version: 0.0.0-use.local
   resolution: "voxel.seanmizen.com@workspace:apps/voxel.seanmizen.com"
+  dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
   languageName: unknown
   linkType: soft
 

@@ -18,8 +18,9 @@
 // chat. On a moped (moped_ride.zig): W throttle, S brake and reverse, A and
 // D steer, Space get off, and the secondary only. These keys are the
 // default binds (game_console.zig): the game reads
-// the actions, not the keys. The backtick key opens the console, and "/"
-// opens the chat with "/" typed (console/).
+// the actions, not the keys. The backtick key (the default bind "grave
+// toggleconsole") opens the console, and "/" opens the chat with "/" typed
+// (console/).
 //
 // The connection (session/): the server sends a welcome first, with its
 // instance id, build and protocol. The game sends its hello only when the
@@ -2549,10 +2550,9 @@ var tick_events: []const core.Event = &.{};
 /// back with no click.
 var relock = false;
 
-/// The console and chat part of a tick. The backtick key opens the
-/// console: it arrives as Unknown (game_console.zig). "/" opens the chat
-/// with "/" typed: it arrives as the text "/". A bind opens the chat (Y,
-/// T). While the console or the chat is open, it takes the keys and text
+/// The console and chat part of a tick. A bind opens the console (grave,
+/// game_console.zig) and the chat (Y, T). "/" opens the chat with "/"
+/// typed: it arrives as the text "/". While the console or the chat is open, it takes the keys and text
 /// input is on. Else the binds run. Returns the input for the rest of the
 /// tick: no keys while the console or the chat is open, and in the tick
 /// that closes it.
@@ -2572,8 +2572,6 @@ fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
         chat.update(con, events);
     } else if (settings.editingName()) {
         // The settings panel reads the events (settings.update). No binds.
-    } else if (raw.keyPressed(.Unknown) and !raw.mods.ctrl and !raw.mods.super) {
-        con.setOpen(true);
     } else if (gcon.slashTyped(events)) {
         chat.open(con, .all, "/");
     } else {
@@ -3322,9 +3320,9 @@ fn drawMenu(ctx: *sw.Context, r: *gfx.Renderer, w: f32, h: f32) !void {
         moves,               L(&k[4], .jump),      L(&k[5], .aim),  L(&k[6], .reload),  L(&k[7], .grenade),
         L(&k[8], .leanleft), L(&k[9], .leanright), L(&k[10], .use), L(&k[11], .scores),
     }) catch "", cx, h - 66, 14, dim);
-    txtCenter(r, std.fmt.bufPrint(&l2, "{s} primary  -  {s} secondary  -  {s} knife  -  {s} grenade (click throws)  -  {s} weapon menu  -  {s} chat  -  {s} team chat  -  / command  -  ` console", .{
+    txtCenter(r, std.fmt.bufPrint(&l2, "{s} primary  -  {s} secondary  -  {s} knife  -  {s} grenade (click throws)  -  {s} weapon menu  -  {s} chat  -  {s} team chat  -  / command  -  {s} console", .{
         L(&k[0], .slot1),                           L(&k[1], .slot2),                            L(&k[2], .slot3), L(&k[3], .slot4), L(&k[4], .weaponmenu),
-        gcon.commandKeyLabel(&k[5], "messagemode"), gcon.commandKeyLabel(&k[6], "messagemode2"),
+        gcon.commandKeyLabel(&k[5], "messagemode"), gcon.commandKeyLabel(&k[6], "messagemode2"), gcon.commandKeyLabel(&k[7], "toggleconsole"),
     }) catch "", cx, h - 46, 14, dim);
     txtCenter(r, "Gun models: Quaternius Ultimate Gun Pack (CC0)", cx, h - 24, 12, dim);
 }

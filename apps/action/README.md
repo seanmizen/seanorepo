@@ -39,7 +39,7 @@ Controls:
 | M (paused) | main menu |
 | ` (backtick) | the console |
 
-These keys are the default binds, except "/" and the backtick key. The
+These keys are the default binds, except "/". The
 console changes them (`bind`, see [The console](#the-console)), and the
 hints on the screen follow the binds. See [Chat](#chat).
 
@@ -516,8 +516,9 @@ it does.
 
 ## The console
 
-The backtick key (the key left of 1) opens the console. Esc or the
-backtick key closes it. While it is open, the game gets no keys. In
+The backtick key (the key left of 1, on any layout) opens the console:
+the default bind `bind grave toggleconsole`. Esc or the backtick key
+closes it. While it is open, the game gets no keys. In
 deathmatch the game goes on.
 
 - Type a command and press Enter. Up and Down go through the history.
@@ -599,22 +600,33 @@ reads the actions, not the keys (`game/src/game_console.zig`).
 | `+menu` | M | the main menu, from the pause screen |
 | `messagemode` | Y | the chat input, to all players (not a button) |
 | `messagemode2` | T | the chat input, to your team (not a button) |
+| `toggleconsole` | grave (backtick) | open the console (not a button) |
 
 The key names: a to z, 0 to 9, left, right, up, down, space, enter,
-escape, tab, backspace, shift, ctrl, alt, mouse1 to mouse5. Examples:
+escape, tab, backspace, shift, ctrl, alt, grave, minus, equal,
+leftbracket, rightbracket, backslash, semicolon, quote, comma, period,
+slash, delete, home, end, pageup, pagedown, insert, mouse1 to mouse5,
+mwheelup, mwheeldown. Examples:
 
 ```
 bind c +jump
 unbind e
 bind e "+leanright; echo lean"
+bind mwheelup +slot1
 resetbinds
 ```
 
-swindowzig has no key code for the backtick key or for "/". The web
-backend sends each key that it does not know as Unknown, and `src/boot.ts`
-stops every unknown key except the backtick key. It sends the "/" key to
-the game as the typed text "/" (see [Chat](#chat)). So the backtick key
-and "/" are not in the binds, and the punctuation keys cannot have a bind.
+- Each punctuation name is the key at that position on a US keyboard.
+  swindowzig finds these keys by position, so `grave` is the key left of 1
+  on every layout.
+- `mwheelup` and `mwheeldown` are the mouse wheel. One wheel turn presses
+  and releases the bind in the same tick. So a `+` command runs, and its
+  `-` command runs after it.
+- The console closes on the typed character "`", or on Esc. If you bind
+  `toggleconsole` to another key, that key opens the console, but it does
+  not close it.
+- `src/boot.ts` sends the "/" key to the game as the typed text "/" (see
+  [Chat](#chat)), so a bind of `slash` does not run.
 
 ### Scripts and the saved config
 
@@ -1946,8 +1958,9 @@ stocks. The door openings and the door places are approximate.
 
 ```
 apps/action/
-├── game/                 Zig client (its own package; swindowzig is a path dependency)
-│   ├── build.zig         zig build -> zig-out/bin/action.wasm
+├── game/                 Zig client (its own package)
+│   ├── build.zig.zon     pins the swindowzig release (see swindowzig)
+│   ├── build.zig         zig build -> zig-out/bin/action.wasm, and the swindowzig web backend to zig-out/swindowzig
 │   └── src/
 │       ├── main.zig      modes, input, shooting, deathmatch sync, HUD, wasm entry
 │       ├── render.zig    light shadow maps (at map load), shadow pass, HDR scene pass (4x MSAA), bloom, tone map
@@ -2016,7 +2029,7 @@ apps/action/
 ├── server/moped.ts       the moped thieves in deathmatch: the stolen guns, the health of the riders, the checks of each event
 ├── server/bikes.ts       the mopeds that players ride: the ids, the checks of each mount, off and hit, the death of a rider
 ├── server/server.cfg     the server config (a script)
-├── src/boot.ts           page entry; bundled to public/boot.js
+├── src/boot.ts           page entry; RSBuild bundles it to public/boot.js (rsbuild.config.ts)
 ├── src/moped.ts          the engine sound of the mopeds (Web Audio)
 ├── public/index.html
 ├── assets/guns/          the licence of the gun models
@@ -2026,13 +2039,65 @@ apps/action/
 
 ## Run it
 
-Needs Zig (the version in `utils/swindowzig/build.zig.zon`) and Bun.
+Needs Zig (`minimum_zig_version` in `game/build.zig.zon`) and Bun.
 
 ```bash
 yarn workspace action start     # build.sh, then the server on http://localhost:4080
 ```
 
 WebGPU only: a recent Chrome or Edge on a desktop.
+
+### swindowzig
+
+The engine is the package
+[seanmizen/swindowzig](https://github.com/seanmizen/swindowzig). The game
+uses one release of it:
+
+- `game/build.zig.zon` pins the release: a URL and a hash. No other file
+  names the swindowzig version.
+- `zig build` fetches the release into the Zig cache and into `zig-pkg/`
+  in `game/`. The repository ignores `zig-pkg/`. The build needs no
+  checkout of swindowzig.
+- `zig build` installs the web backend of the release (`backends/wasm`,
+  the TypeScript files) to `game/zig-out/swindowzig`. `src/boot.ts`
+  imports the wasm loader from there. So the loader and the Zig code
+  always come from the same release.
+
+The pin is v0.2.0, but the game needs v0.3.0 or newer: the key codes
+`Grave` to `Insert` and the wheel in lines. v0.3.0 is not released yet.
+Until then:
+
+- Set `SWINDOWZIG_FORK` (see below) for each build. Use a swindowzig
+  checkout that has these key codes.
+- A build without `SWINDOWZIG_FORK` uses v0.2.0 and stops with the error
+  "swindowzig has no KeyCode.Grave" (`game/src/console/keys.zig`). The
+  Docker build stops with the same error.
+
+After the v0.3.0 release, change the pin to v0.3.0 (the `zig fetch`
+command below). Then the builds need no `SWINDOWZIG_FORK`.
+
+To change the release, give the URL of the new release to `zig fetch` in
+`game/`. It writes the new URL and hash into `build.zig.zon`:
+
+```bash
+cd apps/action/game
+zig fetch --save https://github.com/seanmizen/swindowzig/releases/download/v0.3.0/swindowzig.tar.gz
+```
+
+The pin is in `apps/action`, so a new pin gives a new build version (see
+[The build version](#the-build-version)).
+
+To build against a local swindowzig checkout (for example, to test an
+engine change before its release), set `SWINDOWZIG_FORK`. `build.sh` then
+gives the checkout to `zig build --fork`. The Zig code and the installed
+web backend then come from that checkout:
+
+```bash
+SWINDOWZIG_FORK=~/projects/swindowzig yarn workspace action start
+```
+
+The Docker build fetches the release from GitHub during `docker build`.
+So the build host must have access to `github.com`.
 
 ## The lobby protocol
 
@@ -2356,8 +2421,9 @@ What the client does:
 
 1. `BUILD_VERSION`, if the environment sets it.
 2. Else the 12-character hash of the last commit that changed
-   `apps/action` or `utils/swindowzig`. `-dirty` follows it when those
-   directories have changes that are not committed. A release that changes
+   `apps/action`. The swindowzig pin (`game/build.zig.zon`) is in
+   `apps/action`, so a new pin gives a new version. `-dirty` follows the
+   hash when `apps/action` has changes that are not committed. A release that changes
    only other apps does not change the version, so the game server does
    not restart.
 3. Else `dev`: no git, or not a checkout.

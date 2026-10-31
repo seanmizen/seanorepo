@@ -1,7 +1,7 @@
 # voxel.seanmizen.com
 
 A browser build of Sean's WebGPU voxel engine
-(`utils/swindowzig/examples/voxel`). Ships as a single-page static site
+(`examples/voxel` in [seanmizen/swindowzig](https://github.com/seanmizen/swindowzig)). Ships as a single-page static site
 served over the home-server cloudflared tunnel at
 `https://voxel.seanmizen.com`.
 
@@ -20,13 +20,14 @@ served over the home-server cloudflared tunnel at
 ```
 apps/voxel.seanmizen.com/
 ├── README.md           ← this file
-├── INVESTIGATION.md    ← state of the wasm port, risks, red flags
-├── DEPLOY.md           ← exact commands for Sean to ship it
 ├── package.json        ← workspace scripts (build, prod:docker, down)
-├── dockerfile          ← multi-stage zig + bun + serve
+├── dockerfile          ← multi-stage zig + RSBuild + serve
 ├── docker-compose.yml  ← mirrors apps/seanmizen.com/docker-compose.yml
-├── build.sh            ← host-side build script (zig + bun)
-├── bundle.sh           ← bun bundles and content-hashed chunk files (build.sh and the dockerfile run it)
+├── build.zig.zon       ← pins the swindowzig release (see swindowzig)
+├── build.zig           ← zig build: the example wasm to zig-out/bin, the web backend to zig-out/swindowzig
+├── build.sh            ← host-side build script (zig + RSBuild)
+├── bundle.sh           ← RSBuild bundles and content-hashed chunk files (build.sh and the dockerfile run it)
+├── rsbuild.config.ts   ← the two RSBuild bundles: boot.js and the chunk worker
 ├── src/
 │   └── boot.ts         ← production WASM bootstrap (bundled to public/boot.js)
 └── public/
@@ -40,7 +41,7 @@ apps/voxel.seanmizen.com/
 
 ## Building locally
 
-Requires Bun 1.x and the Zig version in `utils/swindowzig/build.zig.zon`
+Requires Bun 1.x and the Zig version in `build.zig.zon`
 (`minimum_zig_version`) on your PATH.
 
 ```bash
@@ -52,17 +53,19 @@ yarn workspace voxel.seanmizen.com build
 ```
 
 The script:
-1. Runs `zig build web -Dexample=voxel` in `utils/swindowzig/` — produces
-   `zig-out/bin/app.wasm` and copies it into `public/app.wasm`.
-   The same build writes `chunks.wasm`, the chunk worker.
-2. Runs `bundle.sh`. It bundles the swindowzig wasm loader
-   (`utils/swindowzig/backends/wasm/loader.ts`) and the modules that it
+1. Runs `zig build -Dexample=voxel` in this directory. `build.zig` builds
+   the example of the pinned swindowzig release to `zig-out/bin/app.wasm`.
+   The script copies it into `public/app.wasm`. The same build writes
+   `chunks.wasm`, the chunk worker. It also installs the web backend of
+   the release to `zig-out/swindowzig/backends/wasm`.
+2. Runs `bundle.sh`. With RSBuild, it bundles the swindowzig wasm loader
+   (`zig-out/swindowzig/backends/wasm/loader.ts`) and the modules that it
    imports into `public/boot.js`. The dev page uses the same loader. It
    bundles the Web Worker script (`backends/wasm/chunk-worker.ts`), and
    copies `chunks.wasm`. The two chunk files get content-hashed names, and
    `boot.js` holds the names. So a browser cache cannot pair an old chunk
-   worker with a new `app.wasm`. See
-   `utils/swindowzig/examples/voxel/docs/chunk-pipeline.md`.
+   worker with a new `app.wasm`. See `examples/voxel/docs/chunk-pipeline.md`
+   in swindowzig.
 3. Each step is idempotent and prints a warning if a tool is missing.
 
 Preview it with any static file server:
@@ -81,25 +84,66 @@ yarn prod:docker      # builds and starts the container on :4040
 yarn down             # stops it
 ```
 
-## Development loop
+## swindowzig
 
-For iteration on the Zig engine, use swindowzig's existing dev server:
+The engine is the package
+[seanmizen/swindowzig](https://github.com/seanmizen/swindowzig). This app
+uses one release of it:
+
+- `build.zig.zon` pins the release: a URL and a hash. No other file names
+  the swindowzig version.
+- `zig build` fetches the release into the Zig cache and into `zig-pkg/`.
+  The repository ignores `zig-pkg/`. The build needs no checkout of
+  swindowzig.
+- A dependent package can use only the swindowzig modules. The `web` step
+  and the example settings are in the `build.zig` of swindowzig. So
+  `build.zig` here runs `zig build web --build-file <the build.zig of the
+  package>`, with its own cache and prefix. The engine build logic stays
+  in swindowzig.
+
+The pin is v0.2.0. A build without `SWINDOWZIG_FORK` (see below) uses
+v0.2.0, and the Docker build uses v0.2.0 too. So the voxel example of this
+app is the example of v0.2.0. The engine changes after v0.2.0 are only in
+a swindowzig checkout until the next release (v0.3.0).
+
+To change the release, give the URL of the new release to `zig fetch` in
+this directory. It writes the new URL and hash into `build.zig.zon`:
 
 ```bash
-cd utils/swindowzig
+cd apps/voxel.seanmizen.com
+zig fetch --save https://github.com/seanmizen/swindowzig/releases/download/v0.3.0/swindowzig.tar.gz
+```
+
+To build against a local swindowzig checkout, set `SWINDOWZIG_FORK`.
+`build.sh` then gives the checkout to `zig build --fork`. The wasm and the
+installed web backend then come from that checkout:
+
+```bash
+SWINDOWZIG_FORK=~/projects/swindowzig yarn workspace voxel.seanmizen.com build
+```
+
+The Docker build fetches the release from GitHub during `docker build`.
+So the build host must have access to `github.com`.
+
+## Development loop
+
+For iteration on the Zig engine, use the dev server in the swindowzig
+checkout:
+
+```bash
+cd ~/projects/swindowzig
 zig build web -Dexample=voxel
 bun backends/wasm/dev-server.ts
 # opens http://localhost:3020
 ```
 
 That dev server watches `libs/` and `examples/` for `.zig` changes and
-rebuilds automatically. The voxel subdomain reuses the swindowzig
-bridge, so any fix you make there also flows into this app after a
-`yarn workspace voxel.seanmizen.com build`.
+rebuilds automatically. To see a change in this app before a swindowzig
+release, build with `SWINDOWZIG_FORK` (see swindowzig).
 
 ## Deploying
 
-See `DEPLOY.md` for the exact commands. Short version:
+The commands:
 
 ```bash
 # On Sean's home server:
@@ -121,15 +165,11 @@ lives in `apps/cloudflared/config.yml` and routes `voxel.seanmizen.com`
 - **Runtime correctness is unverified.** The voxel wasm compiles and
   exports the right symbols, but I have not driven it from a real
   browser in this session. First run will probably surface bugs in the
-  `sw_gpu/gpu.zig` wasm path. See `INVESTIGATION.md` § "Known risks at
-  runtime" for the likely failure modes.
+  `sw_gpu/gpu.zig` wasm path.
 - **3.1 MB wasm.** Debug build. Switch to
   `zig build web -Dexample=voxel --release=fast` for a smaller ship.
 
 ## See also
 
-- `INVESTIGATION.md` — what's actually wired, what's latent, and what Sean
-  will hit on the first browser load.
-- `DEPLOY.md` — the exact commands to run in the morning.
-- `utils/swindowzig/CLAUDE.md` — the engine's own docs and critical
+- `CLAUDE.md` in swindowzig — the engine's own docs and critical
   lessons.

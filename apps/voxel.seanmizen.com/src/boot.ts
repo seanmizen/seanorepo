@@ -1,19 +1,22 @@
 // voxel.seanmizen.com: production entry point.
 //
 // All start-up code and every wasm import are in the swindowzig loader
-// (utils/swindowzig/backends/wasm/loader.ts). bun bundles the loader into
-// public/boot.js. This file gives the loader its options:
+// (backends/wasm/loader.ts). build.zig installs the web backend of the
+// pinned swindowzig release to zig-out/swindowzig, so run `zig build`
+// before RSBuild bundles this file. RSBuild bundles the loader into
+// public/boot.js (bundle.sh, rsbuild.config.ts). This file gives the
+// loader its options:
 //
 //   - It loads ./app.wasm, in the same directory as index.html.
 //   - It starts the chunk worker pool (C9) with the content-hashed chunk
-//     files. bundle.sh gives their names to `bun build --define`. Without
-//     the names, the main thread runs the chunk jobs.
+//     files. bundle.sh gives their names to the RSBuild `source.define`.
+//     Without the names, the main thread runs the chunk jobs.
 //   - It shows each failure in the styled overlay of public/index.html.
 
 import {
   type LoadFailure,
   loadWasm,
-} from '#/utils/swindowzig/backends/wasm/loader';
+} from '../zig-out/swindowzig/backends/wasm/loader';
 
 // bundle.sh defines these names, for example './chunks-0123456789abcdef.wasm'.
 declare const __CHUNKS_WASM_URL__: string | undefined;
@@ -88,7 +91,7 @@ function showFailure(ov: OverlayElements, failure: LoadFailure): void {
         'build pending',
         'voxel.seanmizen.com',
         'The voxel engine is being ported to the browser. The docker image, static hosting and Cloudflare tunnel are all wired up — only the wasm artifact is missing.',
-        'See <code>apps/voxel.seanmizen.com/INVESTIGATION.md</code> for the exact next steps.',
+        'Run <code>yarn workspace voxel.seanmizen.com build</code> to make <code>public/app.wasm</code>. The README of <code>apps/voxel.seanmizen.com</code> gives the steps.',
       );
       return;
     case 'webgpu-init':
@@ -117,7 +120,7 @@ function showFailure(ov: OverlayElements, failure: LoadFailure): void {
         'entry shim pending',
         'Voxel wasm missing entry exports',
         'The current zig build produces an app.wasm without swindowzig_init/swindowzig_frame exports, so there is no entry point for the frame loop.',
-        'See <code>apps/voxel.seanmizen.com/INVESTIGATION.md</code> § Phase 2.',
+        'Build the app again with <code>yarn workspace voxel.seanmizen.com build</code>. The README of <code>apps/voxel.seanmizen.com</code> gives the steps.',
       );
       return;
     case 'init':

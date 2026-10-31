@@ -8,8 +8,9 @@
 #
 # The output directory gets:
 #   chunks-<hash>.wasm        a copy of chunks.wasm
-#   chunk-worker-<hash>.js    the bundle of backends/wasm/chunk-worker.ts
-#   boot.js                   the bundle of src/boot.ts. It holds the two
+#   chunk-worker-<hash>.js    the RSBuild bundle of backends/wasm/chunk-worker.ts
+#                             (from zig-out/swindowzig: run zig build first)
+#   boot.js                   the RSBuild bundle of src/boot.ts. It holds the two
 #                             names above, so it loads only the chunk files
 #                             of its own build.
 #
@@ -23,7 +24,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WASM_BACKEND="${SCRIPT_DIR}/../../utils/swindowzig/backends/wasm"
 CHUNKS_WASM="${1:?usage: bundle.sh <chunks.wasm> <output dir>}"
 OUT_DIR="${2:?usage: bundle.sh <chunks.wasm> <output dir>}"
 
@@ -36,34 +36,34 @@ hash16() {
 }
 
 mkdir -p "${OUT_DIR}"
+# RSBuild runs in SCRIPT_DIR, so it gets an absolute path.
+OUT_DIR="$(cd "${OUT_DIR}" && pwd)"
 # Remove the chunk files of an older build.
 rm -f "${OUT_DIR}"/chunks-*.wasm "${OUT_DIR}"/chunk-worker-*.js
 
-defines=()
+# RSBuild (rsbuild.config.ts) makes each bundle: one minified ES module.
+# Run `yarn` first: the workspace has @rsbuild/core as a dev dependency.
+rsbuild_build() {
+  (cd "${SCRIPT_DIR}" && yarn rsbuild build --environment "$1")
+}
+
+# rsbuild.config.ts reads the two chunk file names from these variables.
+unset CHUNKS_WASM_URL CHUNK_WORKER_URL
 if [ -f "${CHUNKS_WASM}" ]; then
   chunks_name="chunks-$(hash16 "${CHUNKS_WASM}").wasm"
   cp "${CHUNKS_WASM}" "${OUT_DIR}/${chunks_name}"
 
   tmp="$(mktemp -d)"
   trap 'rm -rf "${tmp}"' EXIT
-  bun build "${WASM_BACKEND}/chunk-worker.ts" \
-    --outfile "${tmp}/chunk-worker.js" \
-    --target browser \
-    --minify
+  BUNDLE_OUT_DIR="${tmp}" rsbuild_build worker
   worker_name="chunk-worker-$(hash16 "${tmp}/chunk-worker.js").js"
   mv "${tmp}/chunk-worker.js" "${OUT_DIR}/${worker_name}"
 
-  defines=(
-    --define "__CHUNKS_WASM_URL__=\"./${chunks_name}\""
-    --define "__CHUNK_WORKER_URL__=\"./${worker_name}\""
-  )
+  export CHUNKS_WASM_URL="./${chunks_name}"
+  export CHUNK_WORKER_URL="./${worker_name}"
   echo "    chunk files: ${chunks_name} ${worker_name}"
 else
   echo "    warning: ${CHUNKS_WASM} does not exist. boot.js starts no chunk workers."
 fi
 
-bun build "${SCRIPT_DIR}/src/boot.ts" \
-  --outfile "${OUT_DIR}/boot.js" \
-  --target browser \
-  --minify \
-  ${defines[@]+"${defines[@]}"}
+BUNDLE_OUT_DIR="${OUT_DIR}" rsbuild_build boot

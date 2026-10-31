@@ -1,15 +1,16 @@
 // action.seanmizen.com: the page entry point. The swindowzig loader
-// (utils/swindowzig/backends/wasm/loader.ts) builds every wasm import,
-// the WebSocket bridge (backends/wasm/net.ts) included. tube.ts adds the
+// (backends/wasm/loader.ts) builds every wasm import, the WebSocket bridge
+// (backends/wasm/net.ts) included. game/build.zig installs the web backend
+// of the pinned swindowzig release to game/zig-out/swindowzig, so run
+// `zig build` in game/ before RSBuild bundles this file. tube.ts adds the
 // train sound (utils/tube-sounds) to the import module "env", and moped.ts
-// adds the engine sound of the moped thieves. bun bundles this file into
-// public/boot.js (build.sh).
+// adds the engine sound of the moped thieves. RSBuild bundles this file
+// into public/boot.js (build.sh, rsbuild.config.ts).
 
-import { gameOwnsKey } from '#/utils/swindowzig/backends/wasm/events';
 import {
   type LoadFailure,
   loadWasm,
-} from '#/utils/swindowzig/backends/wasm/loader';
+} from '../game/zig-out/swindowzig/backends/wasm/loader';
 import { mopedImports } from './moped';
 import { tubeImports } from './tube';
 
@@ -34,28 +35,18 @@ function onFailure(f: LoadFailure): void {
   }
 }
 
-// The console key: the backtick key (the key left of 1, on any layout).
-// swindowzig has no key code for it. The web backend sends each key that it
-// does not know as the Unknown key, and the game opens the console on
-// Unknown (game/src/game_console.zig). So this listener stops the other
-// unknown keys before backends/wasm/events.ts gets them.
-// While the console is open, the hidden text <input> has the focus. Then
-// the backtick key types "`", and the console closes on that character.
-// On a layout where the key types another character, the listener sends
-// "`" in its place.
+// The console key is a bind: "bind grave toggleconsole"
+// (game/src/game_console.zig). swindowzig sends the backtick key (the key
+// left of 1, on any layout) as the Grave key. While the console is open,
+// the hidden text <input> has the focus. Then the backtick key types "`",
+// and the console closes on that character. On a layout where the key
+// types another character, this listener sends "`" in its place.
 //
 // The chat key "/" (the key that types "/" on the layout) opens the chat
-// with "/" typed (game/src/game_console.zig). swindowzig has no key code
-// for it either. While no text input is on, this listener sends "/" to the
-// hidden text <input> of backends/wasm/events.ts as typed text, and the
-// game reads that text. While text input is on, "/" types as usual.
-const KNOWN_KEYCODES = new Set([
-  8, 9, 13, 16, 17, 18, 27, 32, 37, 38, 39, 40, 91, 92, 93, 224,
-]);
-const knownKey = (code: number): boolean =>
-  KNOWN_KEYCODES.has(code) ||
-  (code >= 48 && code <= 57) ||
-  (code >= 65 && code <= 90);
+// with "/" typed (game/src/game_console.zig). While no text input is on,
+// this listener sends "/" to the hidden text <input> of
+// backends/wasm/events.ts as typed text, and the game reads that text.
+// While text input is on, "/" types as usual.
 
 /** The hidden text <input> that events.ts adds to the page. */
 const hiddenInput = (): HTMLInputElement | null =>
@@ -78,12 +69,7 @@ function filterKey(e: KeyboardEvent): void {
     // No Quick Find in Firefox, and the game gets no key event.
     e.preventDefault();
     e.stopImmediatePropagation();
-    return;
   }
-  // While text input is on, the hidden <input> and events.ts handle keys.
-  if (typing || knownKey(e.keyCode || e.which)) return;
-  if (gameOwnsKey(e)) e.preventDefault();
-  e.stopImmediatePropagation();
 }
 window.addEventListener('keydown', filterKey, { capture: true });
 window.addEventListener('keyup', filterKey, { capture: true });

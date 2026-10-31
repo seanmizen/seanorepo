@@ -5,10 +5,10 @@
 // sounds.zig the cvars of the bullet sounds, and body.zig own_body. The
 // session (session/) adds the command "version". This file adds "reload".
 //
-// The console key is the backtick key. swindowzig has no key code for it:
-// the web backend sends every key that it does not know as Unknown, and
-// src/boot.ts stops every unknown key except the backtick key. So Unknown
-// is the backtick key here (main.zig tick).
+// The console key is a bind: "bind grave toggleconsole" (default_binds).
+// grave is the key left of 1 on every layout. While the console is open,
+// the key types "`" (src/boot.ts sends "`" on any layout), and the console
+// closes on that character (console/view.zig). Esc also closes it.
 //
 // The chat: Y (messagemode) opens it to all players, T (messagemode2) to
 // the team. The "/" key opens it with "/" typed: a command line. "/" has
@@ -101,6 +101,7 @@ pub const default_binds = [_]console.DefaultBind{
     .{ .key = .m, .command = "+menu" },
     .{ .key = .y, .command = "messagemode" },
     .{ .key = .t, .command = "messagemode2" },
+    .{ .key = .grave, .command = "toggleconsole" },
 };
 
 pub var con: console.Console = undefined;
@@ -241,6 +242,9 @@ pub fn commandKeyLabel(buf: *[24]u8, command: []const u8) []const u8 {
         .mouse1 => "LEFT CLICK",
         .mouse2 => "RIGHT CLICK",
         .mouse3 => "MIDDLE CLICK",
+        .grave => "`",
+        .mwheelup => "WHEEL UP",
+        .mwheeldown => "WHEEL DOWN",
         else => std.ascii.upperString(buf, console.keys.name(k)),
     };
 }
