@@ -1,0 +1,141 @@
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-family: "Karla", sans-serif;
+}
+
+.title {
+  font-weight: 200;
+  font-size: clamp(2rem, 9vw, 3.5rem);
+  padding: 0;
+}
+
+.play {
+  font: inherit;
+  font-size: 1.6rem;
+  padding: 1rem;
+  border-radius: 0.6rem;
+  border: 2px solid var(--color);
+  background: var(--subsection-background);
+  color: var(--color);
+  cursor: pointer;
+}
+
+.play:disabled,
+.presets button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.now {
+  font-family: "Red Hat Mono", monospace;
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.presets {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: 0.5rem;
+}
+
+.presets li {
+  padding: 0;
+}
+
+.presets button {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--subsection-background);
+  background: var(--subsection-background);
+  color: var(--color);
+  cursor: pointer;
+}
+
+.presets button small {
+  font-family: "Red Hat Mono", monospace;
+  opacity: 0.75;
+  padding: 0;
+}
+
+.presets button span {
+  padding: 0;
+}
+
+.presets .chosen {
+  border-color: var(--color);
+}
+
+.tune {
+  border: 1px solid var(--subsection-background);
+  border-radius: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem;
+}
+
+.tune label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+}
+
+.tune input[type="number"] {
+  width: 6rem;
+  font: inherit;
+  font-family: "Red Hat Mono", monospace;
+  color: var(--color);
+  background: var(--background);
+  border: 1px solid var(--color);
+  border-radius: 0.25rem;
+}
+
+.tune .check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  flex-basis: 100%;
+}
+
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 0.5rem;
+}
+
+/* YouTube asks for an embedded player of at least 200 x 200 px. A 16:9
+   box at 18rem wide is over 200 px high. */
+.player {
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+  padding: 0;
+}
+
+.player[hidden] {
+  display: none;
+}
+
+.player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+}
+
+.credit {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
