@@ -12,7 +12,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": { "#/*": ["../../*"] }
+    "paths": {
+      "#/*": ["../../*"],
+      "#swindowzig/*": ["game/zig-out/swindowzig-wasm/*"]
+    }
   },
   "include": ["server", "scripts"]
 }
