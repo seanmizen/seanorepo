@@ -107,6 +107,28 @@ In the replay window:
 | Up, Down | Change the speed (0.1× to 16×) |
 | F, E, O, S | Change the fill, the empty colour, the outline, the spawn mode |
 
+## GRUB theme
+
+`grub/make-theme.py` makes a GRUB theme in the treemap's style. GRUB is the
+loader stage, so it uses the loader colour. An entry is a box: dim when not
+selected, full when selected. The timeout is a box that fills. The text is the
+treemap's 6x8 font. `grub/preview.sh [--show]` boots it in QEMU in seconds.
+
+## Real hardware
+
+Nothing is reinstalled. The machine keeps its Debian, and gets one more kernel.
+
+```bash
+scp srv@<host>:/boot/config-$(uname -r) working/surface/config   # see hw/install.sh
+kernel/build-deb.sh surface        # the machine's config, cut to its modules, + bootmap
+hw/install.sh <host> surface       # kernel, daemon, GRUB theme. The stock kernel stays the default.
+hw/boot-once.sh <host> surface     # boot the bootmap kernel one time
+hw/uninstall.sh <host> surface     # remove all of it
+```
+
+The first version has no GPU driver in the bootmap kernel, so `simpledrm`
+keeps the screen for the whole boot, as in QEMU.
+
 ## Record a boot
 
 `vm/record-trace.sh` boots the Debian 13 cloud image in QEMU with OVMF and
