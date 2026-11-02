@@ -36,9 +36,9 @@ pub const Conn = struct {
             _ = linux.close(fd);
             return error.Connect;
         }
-        // A read waits at most 1 s. call() waits for a reply up to its own
-        // limit, so a slow systemd is not a lost reply.
-        const tv: linux.timeval = .{ .sec = 1, .usec = 0 };
+        // A read waits at most 200 ms. call() waits for a reply up to its
+        // own limit, and nudges the server while it waits (see call).
+        const tv: linux.timeval = .{ .sec = 0, .usec = 200_000 };
         _ = linux.setsockopt(fd, linux.SOL.SOCKET, linux.SO.RCVTIMEO, std.mem.asBytes(&tv), @sizeOf(linux.timeval));
         var c: Conn = .{ .fd = fd, .alloc = alloc };
         try c.auth();
@@ -100,20 +100,29 @@ pub const Conn = struct {
         defer msg.deinit(c.alloc);
         buildCall(c.alloc, &msg, c.serial, path, iface, member, args) catch return error.Io;
         try c.send(msg.items);
-        var waited: u32 = 0;
+        // The reply carries this serial. A Ping (below) takes a new one.
+        const serial = c.serial;
+        c.ping(); // at once: the call is then never left in the buffer
+        // systemd's sd-bus server can read the end of the authentication and
+        // the first call in one read, handle the authentication, and leave
+        // the call in its buffer with nothing to wake it (systemd's debug log
+        // shows the call only when the client closes). A Ping is a new event
+        // on the socket: systemd wakes up and handles the buffered call.
+        var waited_ms: u32 = 0;
         var skipped: u32 = 0;
         while (true) {
             const m = c.readMessage() catch |err| switch (err) {
                 error.Timeout => {
-                    waited += 1;
-                    if (waited % 5 == 0) if (on_wait) |f| f(waited, skipped);
-                    if (waited >= call_timeout_s) return error.Timeout;
+                    waited_ms += 200;
+                    if (waited_ms % 400 == 0) c.ping();
+                    if (waited_ms % 5000 == 0) if (on_wait) |f| f(waited_ms / 1000, skipped);
+                    if (waited_ms >= call_timeout_s * 1000) return error.Timeout;
                     continue;
                 },
                 else => return err,
             };
             // 2 = method return, 3 = error, 4 = signal (skipped).
-            if (m.reply_serial != c.serial) {
+            if (m.reply_serial != serial) {
                 skipped += 1;
                 if (on_skip) |f| f(m.kind, m.reply_serial, m.member);
                 continue;
@@ -121,6 +130,11 @@ pub const Conn = struct {
             if (m.kind == 3) return error.CallFailed;
             if (m.kind == 2) return m.body;
         }
+    }
+
+    /// org.freedesktop.DBus.Peer.Ping, with no wait for its reply. See call.
+    pub fn ping(c: *Conn) void {
+        _ = c.sendCall("/", "org.freedesktop.DBus.Peer", "Ping", &.{}) catch {};
     }
 
     pub const Message = struct {
@@ -215,7 +229,7 @@ pub const Conn = struct {
                 .SUCCESS => if (rc == 0) return error.Closed,
                 .AGAIN, .INTR => {
                     waits += 1;
-                    if (waits > 30) return error.Timeout;
+                    if (waits > 150) return error.Timeout;
                     continue;
                 },
                 else => return error.Io,

@@ -378,6 +378,24 @@ fn kernelArea(alloc: std.mem.Allocator, pm: ProcMap, st: bootmap.style.Style) !K
     return .{ .nodes = nodes, .gidx = gidx };
 }
 
+/// Redraw the kernel boxes that are still filling. The daemon can take the
+/// screen while the last initcall boxes still animate (fill_ms after their
+/// end). The kernel stops drawing at the handoff, so the daemon finishes
+/// them. Without this, they stay half full.
+fn animateKernelArea(canvas: bootmap.canvas.Canvas, ka: *const KArea, pm: ProcMap, st: bootmap.style.Style, t: u64) void {
+    const pal = bootmap.color.palettes[@min(st.palette, bootmap.color.palettes.len - 1)];
+    const fill_us = @as(u64, st.fill_ms) * 1000;
+    for (pm.nodes, 0..) |kn, i| {
+        if (kn.depth != 3 or kn.stage != bootmap.plan.kernel_stage) continue;
+        var nd = ka.nodes[i];
+        if (nd.start_us == never or nd.end_us == never) continue;
+        // One more frame after the end of the animation, to draw it full.
+        if (t > nd.end_us +| fill_us +| 100_000) continue;
+        nd.color = bootmap.canvas.leafColor(nd, ka.gidx[i], pal, st, t, t, 1);
+        bootmap.canvas.drawLeaf(canvas, nd, if (t < nd.end_us) .active else .done, st, t);
+    }
+}
+
 fn drawKernelArea(canvas: bootmap.canvas.Canvas, ka: *const KArea, pm: ProcMap, st: bootmap.style.Style, t: u64) void {
     const pal = bootmap.color.palettes[@min(st.palette, bootmap.color.palettes.len - 1)];
     for (pm.nodes, 0..) |kn, i| {
@@ -781,7 +799,7 @@ pub fn main(init: std.process.Init) !void {
         handoff();
         out.present() catch |err| log("present failed: {s}", .{@errorName(err)});
         log("initrd: on the screen after {d} ms", .{(nowUs() - t_start) / 1000});
-        try initrdPhase(canvas, &out, &ka, initrd_leaf, pal, st);
+        try initrdPhase(canvas, &out, &ka, pm, initrd_leaf, pal, st);
     }
 
     var last = try loadLast(alloc);
@@ -797,6 +815,11 @@ pub fn main(init: std.process.Init) !void {
     //    signal to every client of its private socket. The unit list comes
     //    from systemctl, now and once more after the startup finishes.
     var sig = try connect(alloc);
+    // Subscribe: then systemd sends us its signals for sure. (The call works
+    // now: see Conn.call about the nudge.)
+    if (sig.call(systemd_path, manager_iface, "Subscribe", &.{})) |_| {
+        log("subscribed to systemd signals", .{});
+    } else |err| log("Subscribe: {s}", .{@errorName(err)});
     {
         const now = nowUs();
         if (unitsBySystemctl(alloc)) |units| {
@@ -814,26 +837,38 @@ pub fn main(init: std.process.Init) !void {
     var final_list = false;
     var all_full_since: ?u64 = null;
     var last_poll: u64 = 0;
+    // A second connection for calls: ListUnits and SystemState each 250 ms.
+    var calls: ?dbus.Conn = connect(alloc) catch null;
 
     while (true) {
         const now = nowUs();
-        // Each second, systemctl: the unit states, and whether the startup
-        // is finished. Signals are not reliable here (some boots get none),
-        // so this is the truth, and signals only add finer times.
-        if (now - last_poll > 1_000_000 and !final_list) {
+        // Each 250 ms over D-Bus (each second with systemctl if D-Bus
+        // fails): the unit states, and whether the startup is finished.
+        // Signals add the exact times between two polls.
+        const poll_us: u64 = if (calls != null) 250_000 else 1_000_000;
+        if (now - last_poll > poll_us and !final_list) {
             last_poll = now;
-            if (unitsBySystemctl(alloc)) |units| {
-                if (sd) |*sx| reconcile(sx, units, nowUs());
-            } else |_| {}
+            var units: ?[]Unit = null;
+            if (calls) |*c| {
+                units = listUnits(alloc, c) catch blk: {
+                    log("D-Bus ListUnits failed: use systemctl", .{});
+                    c.close();
+                    calls = null;
+                    break :blk null;
+                };
+            }
+            if (units == null) units = unitsBySystemctl(alloc) catch null;
+            if (units) |us| if (sd) |*sx| reconcile(sx, us, nowUs());
             if (boot_done) {
                 final_list = true;
-            } else if (systemctl(alloc, &.{"is-system-running"})) |state| {
-                const st_s = std.mem.trim(u8, state, " \n");
-                if (!eql(st_s, "initializing") and !eql(st_s, "starting") and st_s.len > 0) {
+            } else {
+                const state = (if (calls) |*c| systemState(alloc, c) catch null else null) orelse
+                    (if (systemctl(alloc, &.{"is-system-running"})) |o| std.mem.trim(u8, o, " \n") else |_| "");
+                if (!eql(state, "initializing") and !eql(state, "starting") and state.len > 0) {
                     boot_done = true;
-                    log("systemd: {s}, after {d} ms", .{ st_s, (nowUs() - t_start) / 1000 });
+                    log("systemd: {s}, after {d} ms", .{ state, (nowUs() - t_start) / 1000 });
                 }
-            } else |_| {}
+            }
         }
         while (sig.next(0) catch null) |m| {
             if (m.kind != 4) continue;
@@ -847,6 +882,7 @@ pub fn main(init: std.process.Init) !void {
         }
 
         if (sd) |*s| bootmap.canvas.drawPlan(canvas, &s.plan, st, now);
+        animateKernelArea(canvas, &ka, pm, st, now);
         if (initrd_leaf) |il| {
             var nd = ka.nodes[il];
             nd.color = bootmap.canvas.leafColor(nd, ka.gidx[il], pal, st, now, now, 1);
@@ -913,7 +949,7 @@ pub fn main(init: std.process.Init) !void {
 /// script asks for the switch (/run/bootmap.switch). Then it chroots into the
 /// new root (/root), as plymouth does, so that after run-init it sees the
 /// real root: /proc, /dev and /run move into it, and the DRM file stays open.
-fn initrdPhase(canvas: bootmap.canvas.Canvas, out: *drm.Output, ka: *const KArea, initrd_leaf: ?usize, pal: bootmap.color.Palette, st: bootmap.style.Style) !void {
+fn initrdPhase(canvas: bootmap.canvas.Canvas, out: *drm.Output, ka: *const KArea, pm: ProcMap, initrd_leaf: ?usize, pal: bootmap.color.Palette, st: bootmap.style.Style) !void {
     // The systemd unit skips itself when this file exists.
     {
         var b: [16]u8 = undefined;
@@ -931,6 +967,7 @@ fn initrdPhase(canvas: bootmap.canvas.Canvas, out: *drm.Output, ka: *const KArea
             nd.color = bootmap.canvas.leafColor(nd, ka.gidx[il], pal, st, now, now, 1);
             bootmap.canvas.drawLeaf(canvas, nd, .active, st, now);
         }
+        animateKernelArea(canvas, ka, pm, st, now);
         out.present() catch {};
         sleepMs(33);
     }
@@ -973,6 +1010,14 @@ fn loadGpu(alloc: std.mem.Allocator) void {
             log("loaded the GPU driver {s}", .{m});
         }
     }
+}
+
+/// The Manager's SystemState property: "starting", "running", "degraded"...
+fn systemState(alloc: std.mem.Allocator, c: *dbus.Conn) ![]const u8 {
+    var r = try c.call(systemd_path, "org.freedesktop.DBus.Properties", "Get", &.{ manager_iface, "SystemState" });
+    const sig = try r.signature();
+    if (!eql(sig, "s")) return error.Protocol;
+    return try alloc.dupe(u8, try r.string());
 }
 
 fn parseListUnits(alloc: std.mem.Allocator, body: dbus.Reader) ![]Unit {
