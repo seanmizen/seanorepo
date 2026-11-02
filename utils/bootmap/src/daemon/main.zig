@@ -835,7 +835,10 @@ pub fn main(init: std.process.Init) !void {
     }
     var boot_done = false;
     var final_list = false;
-    var all_full_since: ?u64 = null;
+    var settled_since: ?u64 = null;
+    // The quiet window: a unit of the plan that starts this soon after the
+    // last box ends still gets its box filled before the screen changes.
+    const quiet_us: u64 = 250_000;
     var last_poll: u64 = 0;
     // A second connection for calls: ListUnits and SystemState each 250 ms.
     var calls: ?dbus.Conn = connect(alloc) catch null;
@@ -867,6 +870,7 @@ pub fn main(init: std.process.Init) !void {
                 if (!eql(state, "initializing") and !eql(state, "starting") and state.len > 0) {
                     boot_done = true;
                     log("systemd: {s}, after {d} ms", .{ state, (nowUs() - t_start) / 1000 });
+                    last_poll = 0; // the final ListUnits in the next frame
                 }
             }
         }
@@ -878,6 +882,7 @@ pub fn main(init: std.process.Init) !void {
             }
             if (boot_done and !was_done) {
                 log("systemd: startup finished, after {d} ms", .{(now - t_start) / 1000});
+                last_poll = 0; // the final ListUnits in the next frame, not in 250 ms
             }
         }
 
@@ -890,27 +895,46 @@ pub fn main(init: std.process.Init) !void {
         }
         out.present() catch {};
 
-        // Done: systemd says the startup finished, a ListUnits after that
-        // caught the last units, and every box that ran is full.
-        var full = final_list;
+        // Done when all of these are true:
+        // - systemd says the startup finished, and a ListUnits after that
+        //   caught the last units (settled).
+        // - every box that started has ended (settled).
+        // - no box started for quiet_us. The window starts when the last
+        //   box ends, so it runs at the same time as the fill of that box.
+        // - the fill of every box is complete on the screen (drawn).
+        var settled = final_list;
+        var drawn = true;
         if (sd) |s| for (s.plan.nodes) |nd| {
             if (nd.depth != 3 or nd.start_us == never) continue;
-            if (nd.end_us == never or now < nd.end_us + @as(u64, st.fill_ms) * 1000) full = false;
+            if (nd.end_us == never) {
+                settled = false;
+            } else if (now < nd.end_us + @as(u64, st.fill_ms) * 1000) drawn = false;
         };
+        if (settled) {
+            settled_since = settled_since orelse now;
+        } else settled_since = null;
         if (now - t_start > 300_000_000) {
             log("five minutes, and the boot is not finished. Stop.", .{});
-            full = true;
+            break;
         }
-        if (full) {
-            all_full_since = all_full_since orelse now;
-            if (now - all_full_since.? > 1_000_000) break;
-        } else all_full_since = null;
+        if (settled and drawn and now - settled_since.? >= quiet_us) break;
         _ = sig.next(33) catch null; // the frame time, or the next signal
     }
     log("every box is full", .{});
 
-    // 3. Keep this boot's times, with the groups (systemd answers calls by
-    //    now), for the next boot.
+    // 3. The login screen: give the screen back immediately. The text
+    //    console comes back with its login prompt. There is no hold
+    //    (REQ-BOOTMAP-005: the login screen comes after the last box).
+    const console = linux.errno(linux.access("/sys/class/graphics/fbcon", linux.F_OK)) == .SUCCESS;
+    if (console) {
+        log("give the screen to the console", .{});
+        _ = linux.close(out.fd); // the console takes the screen
+        loadGpu(alloc);
+    }
+
+    // 4. Keep this boot's times, with the groups (systemd answers calls by
+    //    now), for the next boot. This comes after the screen change, so
+    //    the systemctl call does not keep the picture on the screen.
     if (sd) |*s| {
         var names: std.ArrayList([]const u8) = .empty;
         for (s.plan.nodes) |nd| if (nd.depth == 3) names.append(alloc, nd.name) catch {};
@@ -929,15 +953,7 @@ pub fn main(init: std.process.Init) !void {
     }
     saveKernelTimes(alloc, pm);
 
-    // 4. The login screen: hold the full picture for a moment, then give the
-    //    screen back. The text console comes back with its login prompt.
-    sleepMs(2000);
-    if (linux.errno(linux.access("/sys/class/graphics/fbcon", linux.F_OK)) == .SUCCESS) {
-        log("give the screen to the console", .{});
-        _ = linux.close(out.fd); // the console takes the screen
-        loadGpu(alloc);
-        return;
-    }
+    if (console) return;
     // No text console (the QEMU kernel): keep the picture on the screen.
     log("no text console: the picture stays", .{});
     while (true) sleepMs(60_000);
