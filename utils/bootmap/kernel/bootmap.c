@@ -21,8 +21,9 @@
  *                                loader, kernel, initrd, systemd). A stage
  *                                with weight 0 is not in the picture.
  *   bootmap.fill=raster|rows-up|spiral, bootmap.fill_ms=250,
- *   bootmap.outline=1, bootmap.empty=white|black|dim|#rrggbb,
- *   bootmap.spawn=start|plan, bootmap.gap=2, bootmap.pad=6,3,2
+ *   bootmap.outline=1, bootmap.empty=black|white|dim|#rrggbb,
+ *   bootmap.spawn=start|plan, bootmap.gap=1, bootmap.pad=1,1,1,
+ *   bootmap.warn_ms=500, bootmap.late=clear|keep
  *                                the style options of src/render/style.zig
  *
  * A kernel thread redraws the boxes that are filling, every 16 ms, until
@@ -76,15 +77,15 @@ static struct {
 	bool spawn_plan;
 	u32 gap;
 	unsigned char pads[3];
-	u32 warn_ms, stuck_ms;
+	u32 warn_ms;
+	bool late_keep;
 } bms = {
-	.fill = BM_RASTER, .fill_ms = 250, .outline = 1, .empty = 0xffffff,
-	.gap = 2, .pads = { 6, 3, 2 }, .warn_ms = 500, .stuck_ms = 3000,
+	.fill = BM_RASTER, .fill_ms = 250, .outline = 1, .empty = 0x000000,
+	.gap = 1, .pads = { 1, 1, 1 }, .warn_ms = 500,
 };
 
-/* src/render/palette.zig */
+/* src/render/palette.zig: the pixels that a late step paints. */
 #define BOOTMAP_WARNING 0xfab219
-#define BOOTMAP_CRITICAL 0xd03b3b
 
 /* The initcall levels, in run order. The linker script names them. */
 extern initcall_entry_t __initcall_start[];
@@ -112,7 +113,7 @@ struct bootmap_node {
 	initcall_t fn;		/* leaves of the kernel stage only */
 	u64 start_ns, end_ns;
 	bool spawned;		/* the outline and the empty colour are drawn */
-	unsigned char heat;	/* the outline that is drawn: 0 normal, 1 slow, 2 stuck */
+	u32 late0, late1;	/* the late pixels: [late0, late1) are yellow */
 	bool full;		/* the box is solid: nothing more to draw */
 	u32 drawn;		/* the pixels of the interior that are painted */
 };
@@ -229,13 +230,12 @@ static int __init bootmap_setup_warn_ms(char *s)
 }
 __setup("bootmap.warn_ms=", bootmap_setup_warn_ms);
 
-static int __init bootmap_setup_stuck_ms(char *s)
+static int __init bootmap_setup_late(char *s)
 {
-	if (kstrtou32(s, 10, &bms.stuck_ms))
-		pr_warn("bootmap: bad number in an option\n");
+	bms.late_keep = !strcmp(s, "keep");
 	return 1;
 }
-__setup("bootmap.stuck_ms=", bootmap_setup_stuck_ms);
+__setup("bootmap.late=", bootmap_setup_late);
 
 static int __init bootmap_setup_pad(char *s)
 {
@@ -357,6 +357,15 @@ static void bm_fill_range(s32 x, s32 y, s32 w, s32 h, u32 k0, u32 k1, u32 color)
 	}
 }
 
+/* activeAt() in src/render/style.zig: up to span, t / span * 900. After
+ * span, 1000 - 100 * span / t, at most 999: a late step still paints. */
+static u64 bm_active_at(u64 t, u64 span)
+{
+	if (t <= span)
+		return div64_u64(t * 900, span);
+	return min_t(u64, 1000 - div64_u64(100 * span, t), 999);
+}
+
 /* permille() in src/render/style.zig, with expected = 0: the kernel does
  * not know how long an initcall takes. */
 static u32 bm_permille(const struct bootmap_node *nd, u64 now_ns)
@@ -367,34 +376,10 @@ static u32 bm_permille(const struct bootmap_node *nd, u64 now_ns)
 	if (now < start)
 		return 0;
 	if (nd->state != BM_DONE || now < nd->end_ns / 1000)
-		return min_t(u64, div64_u64((now - start) * 1000, fill_us), 900);
+		return bm_active_at(now - start, fill_us);
 	end = nd->end_ns / 1000;
-	at_end = min_t(u64, div64_u64((end - start) * 1000, fill_us), 900);
+	at_end = bm_active_at(end - start, fill_us);
 	return min_t(u64, at_end + div64_u64((now - end) * 1000, fill_us), 1000);
-}
-
-/* heat() in src/render/style.zig, with expected = 0. */
-static unsigned char bm_heat(const struct bootmap_node *nd, u64 now_ns)
-{
-	u64 e;
-
-	if (nd->state != BM_ACTIVE || now_ns < nd->start_ns)
-		return 0;
-	e = (now_ns - nd->start_ns) / 1000;
-	if (e > (u64)bms.stuck_ms * 1000)
-		return 2;
-	if (e > (u64)bms.warn_ms * 1000)
-		return 1;
-	return 0;
-}
-
-/* Draw the outline ring of width o around (x, y, w, h). */
-static void bm_ring(s32 x, s32 y, s32 w, s32 h, s32 o, u32 color)
-{
-	bm_fill(x, y, w, o, color);
-	bm_fill(x, y + h - o, w, o, color);
-	bm_fill(x, y + o, o, h - 2 * o, color);
-	bm_fill(x + w - o, y + o, o, h - 2 * o, color);
 }
 
 /* Bring one leaf up to date at time now_ns. Call with bm.lock held.
@@ -406,6 +391,7 @@ static bool bm_update_leaf(u32 i, u64 now_ns)
 	s32 w = r.w > (s32)bms.gap ? r.w - bms.gap : r.w;
 	s32 h = r.h > (s32)bms.gap ? r.h - bms.gap : r.h;
 	u32 color = bm_leaf_color(nd), p, area, k;
+	bool late;
 	s32 o;
 
 	if (nd->full)
@@ -416,8 +402,6 @@ static bool bm_update_leaf(u32 i, u64 now_ns)
 	}
 	if (nd->state == BM_PENDING && !bms.spawn_plan)
 		return false;
-	/* The interior keeps one size: the widest outline, max(outline, 2)
-	 * when hot. canvas.zig redraws each frame, so it can change size. */
 	o = (w > 2 * (s32)bms.outline && h > 2 * (s32)bms.outline) ? bms.outline : 0;
 	if (!nd->spawned) {
 		if (o)
@@ -426,39 +410,36 @@ static bool bm_update_leaf(u32 i, u64 now_ns)
 			bms.empty_dim ? bm_scale(color, 25) : bms.empty);
 		nd->spawned = true;
 		nd->drawn = 0;
-		nd->heat = 0;
-	}
-	{
-		unsigned char ht = bm_heat(nd, now_ns);
-
-		if (ht != nd->heat) {
-			/* Slow or stuck: a 2 px ring over the box edge. Back to
-			 * normal: the normal outline and the empty colour again,
-			 * then the painted pixels again. */
-			s32 ho = (w > 4 && h > 4) ? 2 : 0;
-
-			if (ht && ho)
-				bm_ring(r.x, r.y, w, h, ho, ht == 2 ? BOOTMAP_CRITICAL : BOOTMAP_WARNING);
-			if (!ht) {
-				if (o)
-					bm_ring(r.x, r.y, w, h, o, color);
-				if (ho > o)
-					bm_ring(r.x + o, r.y + o, w - 2 * o, h - 2 * o, ho - o,
-						bms.empty_dim ? bm_scale(color, 25) : bms.empty);
-				nd->drawn = 0;
-			}
-			nd->heat = ht;
-		}
+		nd->late0 = nd->late1 = 0;
 	}
 	p = nd->state == BM_PENDING ? 0 : bm_permille(nd, now_ns);
+	area = (w - 2 * o) * (h - 2 * o);
+	k = (u32)div64_u64((u64)area * p, 1000);
+	/* A step in flight for longer than warn_ms is late. The pixels that
+	 * it paints from then on are yellow (lateAt in style.zig). */
+	late = nd->state == BM_ACTIVE &&
+	       now_ns - nd->start_ns > (u64)bms.warn_ms * 1000000;
+	if (late && !nd->late1)
+		nd->late0 = nd->late1 = nd->drawn;
 	if (p >= 1000) {
 		bm_fill(r.x, r.y, w, h, color);
+		if (bms.late_keep && nd->late1 > nd->late0)
+			bm_fill_range(r.x + o, r.y + o, w - 2 * o, h - 2 * o,
+				      nd->late0, nd->late1, BOOTMAP_WARNING);
 		nd->full = true;
 		return true;
 	}
-	area = (w - 2 * o) * (h - 2 * o);
-	k = (u32)div64_u64((u64)area * p, 1000);
-	bm_fill_range(r.x + o, r.y + o, w - 2 * o, h - 2 * o, nd->drawn, k, color);
+	bm_fill_range(r.x + o, r.y + o, w - 2 * o, h - 2 * o, nd->drawn, k,
+		      late ? BOOTMAP_WARNING : color);
+	if (late)
+		nd->late1 = max(nd->late1, k);
+	if (nd->state == BM_DONE && !bms.late_keep && nd->late1 > nd->late0) {
+		/* late=clear: the step ended, so its yellow pixels get the
+		 * stage colour. */
+		bm_fill_range(r.x + o, r.y + o, w - 2 * o, h - 2 * o,
+			      nd->late0, nd->late1, color);
+		nd->late0 = nd->late1;
+	}
 	nd->drawn = max(nd->drawn, k);
 	return false;
 }

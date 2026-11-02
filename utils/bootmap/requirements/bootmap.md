@@ -57,7 +57,7 @@ requirements keep the three parts of the picture in agreement.
 - **Origin:** #1016
 - **Type:** quality
 - **Priority:** P2
-- **Statement:** The renderer shall draw a cross on each failed box, in
+- **Statement:** The renderer shall draw a 1 px cross on each failed box, in
   addition to the red fill.
 - **Rationale:** Some viewers cannot tell red from the stage colours. The
   cross carries the same information without colour.
@@ -76,4 +76,19 @@ requirements keep the three parts of the picture in agreement.
 - **Rationale:** The treemap is the whole boot. The login screen is the end of
   the boot, so it comes after the last box and not before.
 - **Verification:** Demonstration — a boot of `vm/run.sh --full` goes from the full treemap to the greeter with no blank frame.
+- **Relations:** none
+
+## REQ-BOOTMAP-006 — One pixel is one unit
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1016
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** The renderers shall draw every line, outline, gap and marker
+  1 px wide, and shall show each state in the colour of single pixels.
+- **Rationale:** The picture is pixel-wise information. A wider stroke for
+  emphasis hides pixels that carry data. For example, a late step shows as
+  yellow pixels in its fill, and not as a thick yellow outline.
+- **Verification:** Inspection — `utils/bootmap/src/render/canvas.zig`
 - **Relations:** none

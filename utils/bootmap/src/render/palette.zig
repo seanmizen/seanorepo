@@ -9,7 +9,7 @@ const std = @import("std");
 
 pub const surface: u32 = 0x000000;
 pub const critical: u32 = 0xd03b3b;
-/// The outline of a box that is in flight and slow (style.heat).
+/// The pixels that a step paints while it is late (style.lateAt).
 pub const warning: u32 = 0xfab219;
 
 /// Index = the index in plan.stage_order.

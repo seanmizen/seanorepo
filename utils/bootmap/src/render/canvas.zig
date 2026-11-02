@@ -158,29 +158,37 @@ pub fn drawLeaf(c: Canvas, nd: plan_mod.Node, state: plan_mod.State, st: style_m
     const end: ?u64 = if (state == .done or state == .failed) nd.end_us else null;
     const p = if (state == .pending) 0 else style_mod.permille(nd.start_us, end, expected, st.fill_ms, t_us);
 
-    if (p >= 1000) {
-        c.fill(a.x, a.y, a.w, a.h, color);
-        if (nd.failed) c.cross(a.x, a.y, a.w, a.h, palette.surface);
-        return;
-    }
-    // An in-flight box that is slow or stuck gets a yellow or red outline,
-    // at least 2 px wide, so that it shows. Also with outline=0.
-    const hot = style_mod.heat(st, nd.start_us, end != null, expected, t_us);
-    const want: i32 = if (hot != .normal) @max(st.outline, 2) else st.outline;
-    const o: i32 = if (a.w > 2 * want and a.h > 2 * want) want else 0;
-    const ring = switch (hot) {
-        .normal => base,
-        .slow => palette.warning,
-        .stuck => palette.critical,
-    };
-    if (o > 0) c.fill(a.x, a.y, a.w, a.h, ring);
+    const o: i32 = if (a.w > 2 * @as(i32, st.outline) and a.h > 2 * @as(i32, st.outline)) st.outline else 0;
     const ix = a.x + o;
     const iy = a.y + o;
     const iw = a.w - 2 * o;
     const ih = a.h - 2 * o;
+    const area: u64 = @intCast(iw * ih);
+    const k: u32 = @intCast((area * p) / 1000);
+
+    // The late pixels: the ones painted after lateAt and before the end.
+    // They are yellow while the step is in flight. After the end they get
+    // the stage colour (late=clear) or stay yellow (late=keep).
+    var kl0: u32 = 0;
+    var kl1: u32 = 0;
+    const late_t = style_mod.lateAt(st, nd.start_us, expected);
+    if (state != .pending and t_us > late_t and (end == null or nd.end_us > late_t)) {
+        const until = if (end) |e| @min(e, t_us) else t_us;
+        kl0 = @intCast((area * style_mod.permille(nd.start_us, null, expected, st.fill_ms, late_t)) / 1000);
+        kl1 = @intCast((area * style_mod.permille(nd.start_us, null, expected, st.fill_ms, until)) / 1000);
+    }
+    const show_late = kl1 > kl0 and (end == null or st.late == .keep);
+
+    if (p >= 1000) {
+        c.fill(a.x, a.y, a.w, a.h, color);
+        if (show_late) fillRange(c, ix, iy, iw, ih, st.fill, kl0, kl1, palette.warning);
+        if (nd.failed) c.cross(a.x, a.y, a.w, a.h, palette.surface);
+        return;
+    }
+    if (o > 0) c.fill(a.x, a.y, a.w, a.h, base);
     c.fill(ix, iy, iw, ih, st.emptyColor(base));
-    const area: u32 = @intCast(iw * ih);
-    fillRange(c, ix, iy, iw, ih, st.fill, 0, @intCast((@as(u64, area) * p) / 1000), color);
+    fillRange(c, ix, iy, iw, ih, st.fill, 0, k, color);
+    if (show_late) fillRange(c, ix, iy, iw, ih, st.fill, kl0, @min(kl1, k), palette.warning);
 }
 
 test "fill clips to the canvas" {

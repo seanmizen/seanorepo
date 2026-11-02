@@ -38,17 +38,21 @@ The same options work as kernel command-line parameters
 | `fill` | `raster` | `raster`: left to right, top to bottom, pixel by pixel. `rows-up`: whole lines from the bottom. `spiral`: pixel by pixel, from the edge to the centre. |
 | `fill_ms` | `250` | The shortest fill of a box, in ms. A box that completes sooner still fills over this time, so you see it fill. |
 | `outline` | `1` | The outline width, in the stage colour, when a box spawns. `0`: no outline. |
-| `empty` | `white` | The colour of the part of a box that is not full: `white`, `black`, `dim` (the stage colour at 25 %) or `#rrggbb`. |
+| `empty` | `black` | The colour of the part of a box that is not full: `black`, `white`, `dim` (the stage colour at 25 %) or `#rrggbb`. |
 | `spawn` | `start` | `start`: a box appears when its step starts. `plan`: all boxes appear in the first frame. |
-| `gap` | `2` | The space between two boxes, in pixels. |
-| `pad` | `6,3,2` | The inset of the screen, a stage and a group, in pixels. |
-| `warn_ms` | `500` | A box in flight for longer gets a yellow outline (2× its expected time, if known). |
-| `stuck_ms` | `3000` | A box in flight for longer gets a red outline (4× its expected time, if known). |
+| `gap` | `1` | The space between two boxes, in pixels. |
+| `pad` | `1,1,1` | The inset of the screen, a stage and a group, in pixels. |
+| `warn_ms` | `500` | After this time in flight (or 2× its expected time, if known), a step is late. The pixels that it paints from then on are yellow. |
+| `late` | `clear` | `clear`: when a late step completes, its yellow pixels get the stage colour. `keep`: they stay yellow, as a record. |
 
-A box fills over its expected time, and stops at 90 % until its step
-completes. The kernel does not know an initcall's time, so its boxes fill over
-`fill_ms`. A box that fails is red with a cross. The yellow and red outlines are
-only for boxes in flight. A box goes back to its normal colour when it completes.
+One pixel is one unit (REQ-BOOTMAP-006). Nothing is drawn wider than 1 px
+for emphasis. A state shows in the colour of single pixels.
+
+A box fills to 90 % over its expected time. After that, it moves on towards
+100 % more and more slowly, and gets there only when its step completes. So a
+late step still paints pixels, and the yellow pixels show how late it is. The
+kernel does not know an initcall's time, so its boxes use `fill_ms` as the
+expected time. A box that fails is red, with a 1 px cross.
 
 In the replay, F changes the fill, E the empty colour, O the outline, and S the
 spawn mode.

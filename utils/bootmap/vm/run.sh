@@ -3,6 +3,7 @@
 # the GOP framebuffer.
 #
 #   vm/run.sh --kernel-only [--show]
+#   BOOTMAP_ARGS="bootmap.fill=spiral bootmap.warn_ms=100" vm/run.sh --kernel-only
 #
 # --kernel-only  bzImage + an initramfs with tinyinit only. tinyinit copies
 #                /proc/bootmap to working/run/bootmap.txt and powers off.
@@ -19,6 +20,7 @@ RUN="$WORK/run"
 KERNEL="$WORK/linux/arch/x86/boot/bzImage"
 GEN_CPIO="$WORK/linux/usr/gen_init_cpio"
 STAGES="${BOOTMAP_STAGES:-0,0,30,10,60}"
+EXTRA="${BOOTMAP_ARGS:-}"  # more kernel parameters, for example bootmap.fill=spiral
 
 die() { echo "run: $*" >&2; exit 1; }
 
@@ -61,7 +63,7 @@ qemu-system-x86_64 \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
     -drive if=pflash,format=raw,file="$OUT/vars.fd" \
     -kernel "$KERNEL" -initrd "$OUT/initramfs.cpio" \
-    -append "console=ttyS0 loglevel=6 bootmap.stages=$STAGES" \
+    -append "console=ttyS0 loglevel=6 bootmap.stages=$STAGES $EXTRA" \
     -serial "file:$OUT/serial.log" -serial "file:$OUT/bootmap.txt" \
     -qmp "unix:$OUT/qmp.sock,server,nowait" -no-reboot \
     "${DISPLAY_ARGS[@]}" &
