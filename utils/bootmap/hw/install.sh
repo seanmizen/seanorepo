@@ -89,7 +89,8 @@ dpkg -i "$DIR"/linux-image-*.deb
 if [ "$SIGNED" = 1 ]; then
     V="$(ls /boot/vmlinuz-*-bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
     install -m 644 "$DIR/vmlinuz.signed" "/boot/vmlinuz-$V"
-    if mokutil --test-key "$DIR/MOK.der" 2> /dev/null | grep -q "is already enrolled"; then
+    # mokutil prints this on stderr.
+    if mokutil --test-key "$DIR/MOK.der" 2>&1 | grep -q "is already enrolled"; then
         echo "install: the MOK key is enrolled"
     else
         mokutil --generate-hash="$MOK_PASSWORD" > "$DIR/mok.hash"
