@@ -68,6 +68,8 @@ GRUB_GFXMODE=auto
 GRUB_GFXPAYLOAD_LINUX=keep
 # One entry for each kernel, so the stock kernel can be the saved default.
 GRUB_DISABLE_SUBMENU=y
+# A short menu: no recovery entries (the stock kernel stays as a fallback).
+GRUB_DISABLE_RECOVERY=true
 GRUB_DEFAULT=saved
 GRUB_CMDLINE_LINUX_DEFAULT="$ARGS"
 CFG
