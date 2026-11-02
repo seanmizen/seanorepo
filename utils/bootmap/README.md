@@ -69,7 +69,8 @@ expected time. A box that fails is red, with a 1 px cross.
 | Layout, model, renderer, CLI, replay window | done |
 | Zig and C layout parity (`test/layout-parity.sh`) | done |
 | Kernel patch: live initcall boxes, fill animation, options | done |
-| Initramfs daemon and the handoff from the kernel | not started |
+| Daemon (`bootmapd`): live systemd boxes, no black frame at the handoff | first version: runs as an early systemd unit, not yet from the initramfs |
+| Colour options, video recording | done |
 | UEFI loader | not started |
 | Greeter handoff | not started |
 
@@ -86,6 +87,9 @@ zig build cli -- snapshot traces/debian13-cloud-tcg.json out.png --at 30
 zig build cli -- stats traces/debian13-cloud-tcg.json
 kernel/fetch-and-build.sh         # build the kernel with bootmap
 vm/run.sh --kernel-only --show    # boot it in a QEMU window
+vm/prepare-guest.sh               # one time: the Debian guest for --full
+vm/run.sh --full --show           # the whole boot, live: kernel and systemd
+tools/record-video.sh traces/debian13-cloud-tcg.json out.mp4 1920x1080
 ```
 
 In the replay window:
