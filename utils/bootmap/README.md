@@ -9,19 +9,20 @@ box is full, the login screen opens.
 
 ## How it works
 
-Three programs draw one picture on the same framebuffer, one after the other:
+Three programs show the boot on the same framebuffer, one after the other:
 
 | Stage | Program | It fills |
 |---|---|---|
-| 1 | Zig UEFI loader (`src/loader/`) | the firmware and loader boxes. Then it loads the UKI. |
+| 1 | GRUB, with the bootmap theme (`grub/`) | nothing yet: the menu is in the treemap's style. A Zig UEFI loader that fills the firmware and loader boxes is not started. |
 | 2 | Kernel patch (`kernel/`) | one box for each initcall, live, from the `initcall_start` and `initcall_finish` tracepoints |
-| 3 | Zig daemon in the initramfs (`src/daemon/`) | the systemd boxes, live, from the systemd job list |
+| 3 | Zig daemon `bootmapd` (`src/daemon/`) | the initrd box, then the systemd boxes, live, from the systemd unit states |
 
 The squarify layout exists in Zig (`src/layout/treemap.zig`) and in C
 (`kernel/bootmap_layout.c`). It uses integer math only, so the two give the
-same rectangles (REQ-BOOTMAP-001). All three programs draw with
-`src/render/canvas.zig` into an XRGB8888 buffer. The GOP framebuffer and a
-DRM dumb buffer have that format.
+same rectangles (REQ-BOOTMAP-001). The daemon, the CLI and the replay draw
+with `src/render/canvas.zig` into an XRGB8888 buffer. The kernel patch draws
+with the same rules in C (`kernel/bootmap.c`). The EFI framebuffer and a DRM
+dumb buffer have that format.
 
 The size of a box is `floor(sqrt(duration in µs)) + 16`, from a recorded
 boot. Stages and groups stay in boot order. The leaves in a group are sorted
@@ -46,7 +47,7 @@ The same options work as kernel command-line parameters
 | `labels` | `all` | `all`: names in the boxes and titles above areas. `areas`: titles only. `none`. A group with one member has no title. |
 | `font` | `6x8` | `6x8` or `4x6`: the kernel's bitmap fonts. |
 | `overflow` | `wrap` | `wrap`: a name breaks after a non-word character (`xyz.` / `service`). A word longer than a line breaks inside the word. `cut`: one line. |
-| `fit` | `whole` | When a box shows its name: `whole` (the whole name fits), `words` (the whole name fits, and no word is split), `word` (the first word is not split), `chars:N`, `percent:N`, or `any`. |
+| `fit` | `whole` | When a box shows its name. `whole`: the whole name fits. `words`: the whole name fits, and no word is split. `word`: the first word is not split. Also `chars:N`, `percent:N` or `any`. |
 | `order` | `boot` | How groups and boxes are placed. `boot`: in boot order. `size`: largest first. `best`: `boot` or `size`, whichever gives the squarer worst box. The stages always keep boot order. |
 | `other` | `10` | In thousandths of a stage. When two or more groups are smaller than this, their boxes go into one `other` group, the last one (bottom right). `0`: never. Every box is still drawn. |
 | `ink` | `inverse` | The text pixels: `inverse` (black on filled pixels, the stage colour on empty pixels), `white` or `black`. |
@@ -58,22 +59,22 @@ for emphasis. A state shows in the colour of single pixels.
 A box fills to 90 % over its expected time. After that, it moves on towards
 100 % more and more slowly, and gets there only when its step completes. So a
 late step still paints pixels, and the yellow pixels show how late it is. The
-kernel does not know an initcall's time, so its boxes use `fill_ms` as the
-expected time. A box that fails is red, with a 1 px cross.
+expected time is the time of the last boot. With no earlier time, a box uses
+`fill_ms`. A box that fails is red, with a 1 px cross.
 
 ## Status
 
 | Part | State |
 |---|---|
-| Record a boot (`vm/record-trace.sh`) | done |
-| Layout, model, renderer, CLI, replay window | done |
+| Record a boot (`vm/record-trace.sh`), layout, model, renderer, CLI, replay window, video | done |
 | Zig and C layout parity (`test/layout-parity.sh`) | done |
-| Kernel patch: live initcall boxes, fill animation, options | done |
-| Daemon (`bootmapd`): live systemd boxes, no black frame at the handoff | first version: runs as an early systemd unit, not yet from the initramfs |
-| Colour options, video recording | done |
-| Kernel: labels, titles, palettes (stage, group, kind, mono), the initrd box, handoff | done |
-| Unit times saved at the end of a boot, used for box sizes in the next boot | done |
-| Initcall times in an EFI variable, used for kernel box sizes in the next boot | done |
+| Kernel patch: live initcall boxes, labels, titles, palettes, options, the initrd box | done |
+| `bootmapd` on real hardware: starts in the initramfs (`hw/initramfs/`) and holds the screen from there. Without it, the systemd unit starts it. | done |
+| `bootmapd` reads the unit states from systemd over D-Bus each 250 ms. A Ping after each call makes systemd answer. `systemctl` is the fallback. | done |
+| Unit times (`/var/lib/bootmap/durations`) and initcall times (EFI variable `BootmapTimes`) saved for the box sizes of the next boot | done |
+| GRUB theme (`grub/`) | done |
+| Real hardware (`hw/`): Secure Boot with a MOK key. i915 waits until after the picture. `BOOTMAP_DEFAULT=1` makes bootmap the GRUB default. | done, on a Surface Pro 3 |
+| The login screen after the last box (REQ-BOOTMAP-005) | on real hardware: `bootmapd` gives the screen to the text console. Then the GPU driver loads and sets its mode. |
 | UEFI loader | not started |
 | Greeter handoff | not started |
 
@@ -126,8 +127,16 @@ hw/boot-once.sh <host> surface     # boot the bootmap kernel one time
 hw/uninstall.sh <host> surface     # remove all of it
 ```
 
-The first version has no GPU driver in the bootmap kernel, so `simpledrm`
-keeps the screen for the whole boot, as in QEMU.
+- **Secure Boot.** With `working/<machine>/mok/MOK.pem`, `build-deb.sh`
+  signs the kernel and every module. `hw/install.sh` queues the key with
+  `mokutil --import`. MokManager asks for it one time, at the next boot.
+- **The GPU driver waits.** A GPU driver takes the screen from `simpledrm`.
+  So `hw/install.sh` writes a `modprobe.d` rule: on the bootmap kernel, i915
+  loads only after `bootmapd` creates `/run/bootmap-gpu`. When every box is
+  full, `bootmapd` gives the screen to the text console, creates that file
+  and loads the modules of `bootmap.gpu=` (`BOOTMAP_GPU`, default `i915`).
+- **The default boot.** `BOOTMAP_DEFAULT=1 hw/install.sh ...` makes the
+  bootmap kernel the GRUB default. The GRUB menu has no recovery entries.
 
 ## Record a boot
 
@@ -150,10 +159,13 @@ name has the accelerator in it, because TCG makes every step slower.
 
 | Folder | Contents |
 |---|---|
-| `src/` | Zig: `layout/`, `model/`, `render/`, `cli/`, `replay/` |
-| `kernel/` | C: the kernel patch (`bootmap.c`), its layout, the config, the build script |
+| `src/` | Zig: `layout/`, `model/`, `render/`, `cli/`, `replay/`, `daemon/` |
+| `kernel/` | C: the kernel patch (`bootmap.c`), its layout, the configs, the build scripts |
+| `grub/` | the GRUB theme and its QEMU preview |
+| `hw/` | install on a real machine over SSH, and the initramfs scripts |
 | `test/` | the layout parity test |
-| `vm/` | the boot recorder |
+| `tools/` | font and palette generators, video recording |
+| `vm/` | the boot recorder and the QEMU harness |
 | `traces/` | recorded boots |
 | `requirements/` | REQ-BOOTMAP-* |
 | `working/` | downloads, VM disks, kernel builds. Gitignored. |

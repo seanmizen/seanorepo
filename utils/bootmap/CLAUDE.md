@@ -9,7 +9,8 @@ The boot as a live treemap. Read `README.md` for the design and the status.
   integers only. Never use a float in the layout.
 - The pads and the sort rule in `src/model/plan.zig` have copies in
   `kernel/bootmap_layout.c`. Keep them equal.
-- `working/` holds large files (VM disks, a kernel tree). Never commit it.
+- `working/` holds large files (VM disks, kernel trees) and the MOK signing
+  keys of real machines. Never commit it.
 - swindowzig comes from its GitHub release (`build.zig.zon`), not from
   `utils/swindowzig`.
 - Do not install dracut on the host. It replaces `initramfs-tools` in WSL.
