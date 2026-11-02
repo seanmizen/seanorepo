@@ -123,7 +123,34 @@ pub const Conn = struct {
         }
     }
 
-    const Message = struct { kind: u8, reply_serial: u32, member: []const u8 = "", body: Reader };
+    pub const Message = struct {
+        kind: u8,
+        reply_serial: u32,
+        member: []const u8 = "",
+        interface: []const u8 = "",
+        path: []const u8 = "",
+        body: Reader,
+    };
+
+    /// Send a call and return its serial. The reply comes later: see next().
+    pub fn sendCall(c: *Conn, path: []const u8, iface: []const u8, member: []const u8, args: []const []const u8) Error!u32 {
+        c.serial += 1;
+        var msg: std.ArrayList(u8) = .empty;
+        defer msg.deinit(c.alloc);
+        buildCall(c.alloc, &msg, c.serial, path, iface, member, args) catch return error.Io;
+        try c.send(msg.items);
+        return c.serial;
+    }
+
+    /// The next message if one comes within timeout_ms, else null. A
+    /// message is valid until the next read on this connection.
+    pub fn next(c: *Conn, timeout_ms: i32) Error!?Message {
+        var pfd = [1]linux.pollfd{.{ .fd = c.fd, .events = linux.POLL.IN, .revents = 0 }};
+        const rc = linux.poll(&pfd, 1, timeout_ms);
+        if (linux.errno(rc) != .SUCCESS or rc == 0) return null;
+        if (pfd[0].revents & (linux.POLL.HUP | linux.POLL.ERR) != 0 and pfd[0].revents & linux.POLL.IN == 0) return error.Closed;
+        return try c.readMessage();
+    }
 
     fn readMessage(c: *Conn) Error!Message {
         c.rx.clearRetainingCapacity();
@@ -141,6 +168,8 @@ pub const Conn = struct {
         var r: Reader = .{ .data = data[0 .. 16 + fields_len], .pos = 16 };
         var reply_serial: u32 = 0;
         var member: []const u8 = "";
+        var interface: []const u8 = "";
+        var path: []const u8 = "";
         while (r.pos < r.data.len) {
             r.alignTo(8);
             if (r.pos >= r.data.len) break;
@@ -154,13 +183,15 @@ pub const Conn = struct {
                 },
                 's', 'o' => {
                     const v = try r.string();
+                    if (code == 1) path = v;
+                    if (code == 2) interface = v;
                     if (code == 3) member = v;
                 },
                 'g' => _ = try r.signature(),
                 else => return error.Protocol,
             }
         }
-        return .{ .kind = data[1], .reply_serial = reply_serial, .member = member, .body = .{ .data = data[0 .. body_start + body_len], .pos = body_start } };
+        return .{ .kind = data[1], .reply_serial = reply_serial, .member = member, .interface = interface, .path = path, .body = .{ .data = data[0 .. body_start + body_len], .pos = body_start } };
     }
 
     fn readFirst(c: *Conn) Error!void {
@@ -193,6 +224,29 @@ pub const Conn = struct {
         }
     }
 };
+
+fn alignOf(c: u8) usize {
+    return switch (c) {
+        'y', 'g', 'v' => 1,
+        'n', 'q' => 2,
+        'x', 't', 'd', '(', '{' => 8,
+        else => 4,
+    };
+}
+
+/// The index after the complete type that starts at sig[i].
+fn typeEnd(sig: []const u8, i: usize) Error!usize {
+    if (i >= sig.len) return error.Protocol;
+    return switch (sig[i]) {
+        'a' => typeEnd(sig, i + 1),
+        '(', '{' => blk: {
+            var j = i + 1;
+            while (j < sig.len and sig[j] != ')' and sig[j] != '}') j = try typeEnd(sig, j);
+            break :blk j + 1;
+        },
+        else => i + 1,
+    };
+}
 
 fn alignUp(v: usize, a: usize) usize {
     return (v + a - 1) / a * a;
@@ -292,6 +346,55 @@ pub const Reader = struct {
         return s;
     }
 
+    /// Skip one value of the complete type at sig[i.*..], and move i past
+    /// that type. For values the daemon does not read.
+    pub fn skip(r: *Reader, sig: []const u8, i: *usize) Error!void {
+        if (i.* >= sig.len) return error.Protocol;
+        const c = sig[i.*];
+        i.* += 1;
+        switch (c) {
+            'y' => r.pos += 1,
+            'n', 'q' => {
+                r.alignTo(2);
+                r.pos += 2;
+            },
+            'b', 'i', 'u', 'h' => {
+                r.alignTo(4);
+                r.pos += 4;
+            },
+            'x', 't', 'd' => {
+                r.alignTo(8);
+                r.pos += 8;
+            },
+            's', 'o' => _ = try r.string(),
+            'g' => _ = try r.signature(),
+            'v' => {
+                const vs = try r.signature();
+                var j: usize = 0;
+                try r.skip(vs, &j);
+            },
+            'a' => {
+                const n = try r.u32_();
+                r.alignTo(alignOf(sig[i.*]));
+                r.pos += n;
+                i.* = try typeEnd(sig, i.*);
+            },
+            '(' => {
+                r.alignTo(8);
+                while (i.* < sig.len and sig[i.*] != ')') try r.skip(sig, i);
+                i.* += 1;
+            },
+            '{' => {
+                r.alignTo(8);
+                try r.skip(sig, i);
+                try r.skip(sig, i);
+                i.* += 1;
+            },
+            else => return error.Protocol,
+        }
+        if (r.pos > r.data.len) return error.Protocol;
+    }
+
     /// Start an array: return the position where it ends.
     pub fn array(r: *Reader, elem_align: usize) Error!usize {
         const n = try r.u32_();
@@ -311,4 +414,24 @@ test "a call message has the layout of the specification" {
     // The body is one string "x": length 1, "x", 0.
     try std.testing.expectEqual(@as(u32, 6), std.mem.readInt(u32, m.items[4..8], .little));
     try std.testing.expectEqualSlices(u8, &.{ 1, 0, 0, 0, 'x', 0 }, m.items[body_start..]);
+}
+
+test "skip a dictionary of variants" {
+    // a{sv} with one entry: "k" -> variant u 7.
+    var b: [64]u8 = @splat(0);
+    var n: usize = 0;
+    std.mem.writeInt(u32, b[0..4], 16, .little); // array length (from the entry start)
+    n = 8; // align to 8 for the entry
+    std.mem.writeInt(u32, b[n..][0..4], 1, .little);
+    b[n + 4] = 'k';
+    b[n + 5] = 0;
+    b[n + 6] = 1;
+    b[n + 7] = 'u';
+    b[n + 8] = 0;
+    std.mem.writeInt(u32, b[n + 12 ..][0..4], 7, .little);
+    var r: Reader = .{ .data = &b, .pos = 0 };
+    var i: usize = 0;
+    try r.skip("a{sv}", &i);
+    try std.testing.expectEqual(@as(usize, 5), i);
+    try std.testing.expectEqual(@as(usize, 24), r.pos);
 }

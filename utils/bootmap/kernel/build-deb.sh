@@ -41,7 +41,14 @@ make -s olddefconfig
 for opt in CONFIG_BOOTMAP=y CONFIG_DRM_SIMPLEDRM=y CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER=y; do
     grep -qx "$opt" .config || { echo "build-deb: $opt is not in .config" >&2; exit 1; }
 done
+if grep -q '^CONFIG_DRM_I915=' .config; then
+    echo "build-deb: i915 is still in .config" >&2
+    exit 1
+fi
 
+# Compile first: bindeb-pkg checks its build packages (debhelper, rsync)
+# before it compiles, so a missing package costs no compile time.
+make -s -j"$(nproc)" LOCALVERSION=-bootmap bzImage modules
 make -s -j"$(nproc)" bindeb-pkg LOCALVERSION=-bootmap KDEB_PKGVERSION="$(date +%Y%m%d%H%M)"
 mv ../linux-image-*-bootmap*.deb "$OUT/" 2> /dev/null || true
 rm -f ../linux-*.buildinfo ../linux-*.changes

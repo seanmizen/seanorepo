@@ -391,9 +391,337 @@ fn drawKernelArea(canvas: bootmap.canvas.Canvas, ka: *const KArea, pm: ProcMap, 
     for (ka.nodes) |nd| if (nd.depth == 1 or nd.depth == 2) bootmap.canvas.drawHeader(canvas, nd, st, t);
 }
 
+/// The unit times and groups of the last boot, from durations_path.
+/// Version 2 lines: "<microseconds> <group> <unit>". Version 1 lines
+/// ("<microseconds> <unit>") give a time and no group.
+const Last = struct { us: u64, group: ?[]const u8 };
+
+fn loadLast(alloc: std.mem.Allocator) !std.StringArrayHashMapUnmanaged(Last) {
+    var m: std.StringArrayHashMapUnmanaged(Last) = .empty;
+    const text = readFile(alloc, durations_path) catch return m;
+    var lines = std.mem.splitScalar(u8, text, '\n');
+    while (lines.next()) |line| {
+        var t = std.mem.tokenizeScalar(u8, line, ' ');
+        const a = t.next() orelse continue;
+        const b = t.next() orelse continue;
+        const c = t.next();
+        const us = std.fmt.parseInt(u64, a, 10) catch continue;
+        if (c) |unit| {
+            try m.put(alloc, try alloc.dupe(u8, unit), .{ .us = us, .group = try alloc.dupe(u8, b) });
+        } else {
+            try m.put(alloc, try alloc.dupe(u8, b), .{ .us = us, .group = null });
+        }
+    }
+    return m;
+}
+
+fn saveLast(alloc: std.mem.Allocator, m: *const std.StringArrayHashMapUnmanaged(Last)) void {
+    var out: std.ArrayList(u8) = .empty;
+    var it = m.iterator();
+    while (it.next()) |e| {
+        var buf: [32]u8 = undefined;
+        out.appendSlice(alloc, std.fmt.bufPrint(&buf, "{d} ", .{e.value_ptr.us}) catch continue) catch return;
+        out.appendSlice(alloc, e.value_ptr.group orelse default_group) catch return;
+        out.append(alloc, ' ') catch return;
+        out.appendSlice(alloc, e.key_ptr.*) catch return;
+        out.append(alloc, '\n') catch return;
+    }
+    _ = linux.mkdir("/var/lib", 0o755);
+    _ = linux.mkdir(durations_dir, 0o755);
+    const tmp = durations_path ++ ".tmp";
+    const rc = linux.open(tmp, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true, .CLOEXEC = true }, 0o644);
+    if (linux.errno(rc) != .SUCCESS) {
+        log("cannot write {s}", .{durations_path});
+        return;
+    }
+    const fd: i32 = @intCast(rc);
+    _ = linux.write(fd, out.items.ptr, out.items.len);
+    _ = linux.close(fd);
+    _ = linux.rename(tmp, durations_path);
+    log("saved {d} unit times to {s}", .{ m.count(), durations_path });
+}
+
+/// The D-Bus object path of a unit: systemd's bus_label_escape. A letter or
+/// a digit stays (a digit only after the first place). Each other byte is
+/// "_" and two lowercase hex digits.
+fn unitPath(alloc: std.mem.Allocator, name: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    try out.appendSlice(alloc, "/org/freedesktop/systemd1/unit/");
+    for (name, 0..) |c, i| {
+        if (std.ascii.isAlphabetic(c) or (i > 0 and std.ascii.isDigit(c))) {
+            try out.append(alloc, c);
+        } else {
+            var b: [3]u8 = undefined;
+            try out.appendSlice(alloc, std.fmt.bufPrint(&b, "_{x:0>2}", .{c}) catch unreachable);
+        }
+    }
+    return out.items;
+}
+
+/// The systemd part of the picture.
+const Systemd = struct {
+    plan: Plan,
+    leaf_of: std.StringHashMapUnmanaged(u32) = .empty,
+    path_of: std.StringHashMapUnmanaged(u32) = .empty,
+    measured: []bool,
+};
+
+fn buildSystemd(alloc: std.mem.Allocator, boxes: []bootmap.trace.Box, area: Rect, st: bootmap.style.Style) !Systemd {
+    var plan = try bootmap.plan.fromTrace(alloc, .{ .version = 1, .end_us = 0, .boxes = boxes }, st.other);
+    try plan.layout(area, .{ 0, st.pads[1], st.pads[2] }, st.headerH(), st.order);
+    var sd: Systemd = .{ .plan = plan, .measured = try alloc.alloc(bool, plan.nodes.len) };
+    @memset(sd.measured, false);
+    for (sd.plan.nodes, 0..) |*nd, i| {
+        if (nd.depth != 3) continue;
+        nd.expected_us = nd.end_us - nd.start_us;
+        nd.start_us = never;
+        nd.end_us = never;
+        try sd.leaf_of.put(alloc, nd.name, @intCast(i));
+        try sd.path_of.put(alloc, try unitPath(alloc, nd.name), @intCast(i));
+    }
+    for (sd.plan.nodes) |*nd| if (nd.depth < 3) {
+        nd.first_us = never;
+    };
+    return sd;
+}
+
+fn markStart(sd: *Systemd, i: u32, now: u64) void {
+    const nd = &sd.plan.nodes[i];
+    if (nd.start_us != never) return;
+    nd.start_us = now;
+    sd.measured[i] = true;
+    var p = nd.parent;
+    while (true) {
+        sd.plan.nodes[p].first_us = @min(sd.plan.nodes[p].first_us, now);
+        if (p == 0) break;
+        p = sd.plan.nodes[p].parent;
+    }
+}
+
+fn markEnd(sd: *Systemd, i: u32, now: u64, failed: bool) void {
+    const nd = &sd.plan.nodes[i];
+    if (nd.start_us == never) {
+        // It ended with no start seen: it did not run while we watched.
+        markStart(sd, i, now);
+        sd.measured[i] = false;
+    }
+    if (nd.end_us != never) return;
+    nd.end_us = @max(now, nd.start_us);
+    nd.failed = failed;
+}
+
+/// A JobRemoved or PropertiesChanged signal of systemd.
+fn onSignal(sd: *Systemd, m: dbus.Conn.Message, now: u64, boot_done: *bool) void {
+    var r = m.body;
+    if (eql(m.member, "JobRemoved")) {
+        _ = r.u32_() catch return;
+        _ = r.string() catch return;
+        const unit = r.string() catch return;
+        const result = r.string() catch return;
+        const i = sd.leaf_of.get(unit) orelse return;
+        const failed = eql(result, "failed") or eql(result, "timeout") or eql(result, "dependency");
+        markEnd(sd, i, now, failed);
+    } else if (eql(m.member, "StartupFinished")) {
+        boot_done.* = true;
+    } else if (eql(m.member, "PropertiesChanged")) {
+        const i = sd.path_of.get(m.path) orelse return;
+        const iface = r.string() catch return;
+        if (!eql(iface, "org.freedesktop.systemd1.Unit")) return;
+        const end = r.array(8) catch return;
+        while (r.pos < end) {
+            r.alignTo(8);
+            const key = r.string() catch return;
+            const sig = r.signature() catch return;
+            if (eql(key, "ActiveState") and eql(sig, "s")) {
+                const v = r.string() catch return;
+                if (eql(v, "activating") or eql(v, "reloading")) markStart(sd, i, now);
+                if (eql(v, "failed")) markEnd(sd, i, now, true);
+                if (eql(v, "active") and sd.plan.nodes[i].start_us != never) markEnd(sd, i, now, false);
+            } else {
+                var j: usize = 0;
+                r.skip(sig, &j) catch return;
+            }
+        }
+    }
+}
+
+/// A ListUnits reply: catch up on the units that changed while no signal
+/// told us (before the daemon started, or before it had a connection).
+fn reconcile(sd: *Systemd, units: []const Unit, now: u64) void {
+    for (units) |u| {
+        const i = sd.leaf_of.get(u.name) orelse continue;
+        const nd = &sd.plan.nodes[i];
+        const working = u.job != 0 or eql(u.active, "activating") or eql(u.active, "reloading");
+        if (working) {
+            markStart(sd, i, now);
+        } else if (nd.end_us == never and (eql(u.active, "active") or eql(u.active, "failed") or eql(u.active, "inactive"))) {
+            if (nd.start_us != never or !eql(u.active, "inactive")) markEnd(sd, i, now, eql(u.active, "failed"));
+        }
+    }
+}
+
+fn boxesFromUnits(alloc: std.mem.Allocator, units: []const Unit, last: *const std.StringArrayHashMapUnmanaged(Last), groups: *const std.StringHashMapUnmanaged([]const u8)) ![]bootmap.trace.Box {
+    var boxes: std.ArrayList(bootmap.trace.Box) = .empty;
+    for (units) |u| {
+        if (!isBoxUnit(u)) continue;
+        const l = last.get(u.name);
+        const path = try alloc.alloc([]const u8, 3);
+        path[0] = "systemd";
+        path[1] = groups.get(u.name) orelse (if (l) |x| (x.group orelse default_group) else default_group);
+        path[2] = u.name;
+        const key: u64 = u.job;
+        try boxes.append(alloc, .{ .path = path, .start_us = key, .end_us = key + (if (l) |x| x.us else 0) });
+    }
+    return boxes.items;
+}
+
+fn boxesFromLast(alloc: std.mem.Allocator, last: *const std.StringArrayHashMapUnmanaged(Last)) !?[]bootmap.trace.Box {
+    var boxes: std.ArrayList(bootmap.trace.Box) = .empty;
+    var it = last.iterator();
+    var k: u64 = 0;
+    while (it.next()) |e| : (k += 1) {
+        const g = e.value_ptr.group orelse return null; // version 1: no groups
+        const path = try alloc.alloc([]const u8, 3);
+        path[0] = "systemd";
+        path[1] = g;
+        path[2] = e.key_ptr.*;
+        // The file keeps the order of the last boot.
+        try boxes.append(alloc, .{ .path = path, .start_us = k, .end_us = k + e.value_ptr.us });
+    }
+    if (boxes.items.len == 0) return null;
+    return boxes.items;
+}
+
+/// Run systemctl and return what it prints. systemctl talks to systemd
+/// reliably. The daemon's own D-Bus client often gets no answer to a call
+/// (a second connection from one process; see README), so it only listens
+/// for signals, and systemctl answers the questions.
+fn systemctl(alloc: std.mem.Allocator, args: []const []const u8) ![]u8 {
+    var argv: std.ArrayList(?[*:0]const u8) = .empty;
+    try argv.append(alloc, "/usr/bin/systemctl");
+    for (args) |a| try argv.append(alloc, try alloc.dupeSentinel(u8, a, 0));
+    try argv.append(alloc, null);
+    const envp = [_:null]?[*:0]const u8{ "PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C", "SYSTEMD_PAGER=", "SYSTEMD_COLORS=0" };
+
+    var fds: [2]i32 = undefined;
+    if (linux.errno(linux.pipe2(&fds, .{ .CLOEXEC = true })) != .SUCCESS) return error.Pipe;
+    const pid_rc = linux.fork();
+    if (linux.errno(pid_rc) != .SUCCESS) return error.Fork;
+    if (pid_rc == 0) {
+        _ = linux.dup2(fds[1], 1);
+        const null_rc = linux.open("/dev/null", .{ .ACCMODE = .RDWR }, 0);
+        if (linux.errno(null_rc) == .SUCCESS) {
+            _ = linux.dup2(@intCast(null_rc), 0);
+            _ = linux.dup2(@intCast(null_rc), 2);
+        }
+        _ = linux.execve("/usr/bin/systemctl", @ptrCast(argv.items.ptr), &envp);
+        linux.exit(127);
+    }
+    _ = linux.close(fds[1]);
+    defer _ = linux.close(fds[0]);
+    var out: std.ArrayList(u8) = .empty;
+    var buf: [65536]u8 = undefined;
+    const deadline = nowUs() + 20_000_000;
+    while (nowUs() < deadline) {
+        var pfd = [1]linux.pollfd{.{ .fd = fds[0], .events = linux.POLL.IN, .revents = 0 }};
+        if (linux.poll(&pfd, 1, 1000) == 0) continue;
+        const n = linux.read(fds[0], &buf, buf.len);
+        if (linux.errno(n) != .SUCCESS or n == 0) break;
+        try out.appendSlice(alloc, buf[0..n]);
+    }
+    var status: i32 = 0;
+    _ = linux.wait4(@intCast(pid_rc), &status, 0, null);
+    return out.items;
+}
+
+/// The units, their active state and their job: systemctl list-units and
+/// list-jobs.
+fn unitsBySystemctl(alloc: std.mem.Allocator) ![]Unit {
+    const jobs_text = try systemctl(alloc, &.{ "list-jobs", "--no-legend", "--full", "--no-pager" });
+    var jobs: std.StringHashMapUnmanaged(u32) = .empty;
+    var jl = std.mem.splitScalar(u8, jobs_text, '\n');
+    while (jl.next()) |line| {
+        var t = std.mem.tokenizeAny(u8, line, " \t");
+        const id = std.fmt.parseInt(u32, t.next() orelse continue, 10) catch continue;
+        try jobs.put(alloc, t.next() orelse continue, id);
+    }
+    const text = try systemctl(alloc, &.{ "list-units", "--all", "--plain", "--no-legend", "--full", "--no-pager" });
+    var out: std.ArrayList(Unit) = .empty;
+    var lines = std.mem.splitScalar(u8, text, '\n');
+    while (lines.next()) |line| {
+        var t = std.mem.tokenizeAny(u8, line, " \t");
+        const name = t.next() orelse continue;
+        _ = t.next() orelse continue; // load state
+        const active = t.next() orelse continue;
+        try out.append(alloc, .{ .name = try alloc.dupe(u8, name), .active = try alloc.dupe(u8, active), .job = jobs.get(name) orelse 0, .path = "" });
+    }
+    if (out.items.len == 0) return error.NoUnits;
+    return out.items;
+}
+
+/// The group of each unit: the first target in target_order that it is
+/// ordered Before= (systemctl show).
+fn groupsBySystemctl(alloc: std.mem.Allocator, names: []const []const u8) !std.StringHashMapUnmanaged([]const u8) {
+    var m: std.StringHashMapUnmanaged([]const u8) = .empty;
+    if (names.len == 0) return m;
+    var args: std.ArrayList([]const u8) = .empty;
+    try args.appendSlice(alloc, &.{ "show", "--no-pager", "-p", "Id", "-p", "Before" });
+    try args.appendSlice(alloc, names);
+    const text = try systemctl(alloc, args.items);
+    var blocks = std.mem.splitSequence(u8, text, "\n\n");
+    while (blocks.next()) |block| {
+        var id: ?[]const u8 = null;
+        var group: []const u8 = default_group;
+        var lines = std.mem.splitScalar(u8, block, '\n');
+        while (lines.next()) |line| {
+            if (std.mem.startsWith(u8, line, "Id=")) id = line[3..];
+            if (std.mem.startsWith(u8, line, "Before=")) {
+                var best: usize = target_order.len;
+                var t = std.mem.tokenizeScalar(u8, line[7..], ' ');
+                while (t.next()) |tg| for (target_order, 0..) |name, i| if (i < best and eql(name, tg)) {
+                    best = i;
+                };
+                if (best < target_order.len) group = target_order[best];
+            }
+        }
+        if (id) |i| try m.put(alloc, try alloc.dupe(u8, i), group);
+    }
+    return m;
+}
+
+/// bootmapd --test-dbus: call ListUnits five times and print the times.
+/// For diagnosis: it does not touch the screen.
+fn testDbus(alloc: std.mem.Allocator) !void {
+    dbus.on_skip = &logSkipAll;
+    var k: usize = 0;
+    while (k < 5) : (k += 1) {
+        const t0 = nowUs();
+        var c = dbus.Conn.open(alloc, "/run/systemd/private") catch |err| {
+            std.debug.print("connect: {s}\n", .{@errorName(err)});
+            continue;
+        };
+        const t1 = nowUs();
+        if (c.call(systemd_path, manager_iface, "ListUnits", &.{})) |body| {
+            const units = try parseListUnits(alloc, body);
+            std.debug.print("try {d}: connect {d} ms, ListUnits {d} ms, {d} units\n", .{ k, (t1 - t0) / 1000, (nowUs() - t1) / 1000, units.len });
+        } else |err| std.debug.print("try {d}: connect {d} ms, ListUnits {s} after {d} ms\n", .{ k, (t1 - t0) / 1000, @errorName(err), (nowUs() - t1) / 1000 });
+        c.close();
+    }
+}
+
+fn logSkipAll(kind: u8, reply_serial: u32, member: []const u8) void {
+    std.debug.print("  skipped: kind {d}, reply to {d}, {s}\n", .{ kind, reply_serial, member });
+}
+
 pub fn main(init: std.process.Init) !void {
     const alloc = init.arena.allocator();
+    const args = try init.minimal.args.toSlice(alloc);
+    if (args.len > 1 and eql(args[1], "--test-dbus")) {
+        dbus.call_timeout_s = 10;
+        return testDbus(alloc);
+    }
     const st = styleFromCmdline(alloc);
+    const t_start = nowUs();
 
     const proc_text = readFile(alloc, "/proc/bootmap") catch {
         log("no /proc/bootmap: this kernel has no bootmap. Exit.", .{});
@@ -409,55 +737,9 @@ pub fn main(init: std.process.Init) !void {
         return;
     };
 
-    // systemd's private socket exists from the start of PID 1.
-    dbus.on_wait = &logWait;
-    dbus.call_timeout_s = 5;
-    dbus.on_skip = &logSkip;
-    log("connect to systemd", .{});
-    var conn = try connect(alloc);
-    log("connected", .{});
-
-    // The boxes: the units with a job or that are active. A job number
-    // stands in for the start time, so the plan is in boot order.
-    const units = try listUnitsRetry(alloc, &conn);
-    log("{d} units", .{units.len});
-    var durations = try loadDurations(alloc);
-    log("{d} unit times from the last boot", .{durations.count()});
-    var boxes: std.ArrayList(bootmap.trace.Box) = .empty;
-    for (units) |u| {
-        if (!isBoxUnit(u)) continue;
-        const g = groupOfRetry(alloc, &conn, u.path);
-        const path = try alloc.alloc([]const u8, 3);
-        path[0] = "systemd";
-        path[1] = g;
-        path[2] = u.name;
-        // The job number orders the boxes. The last boot's time sizes the
-        // box and is its expected time.
-        const order_key: u64 = if (u.job != 0) u.job else 0;
-        const dur = durations.get(u.name) orelse 0;
-        try boxes.append(alloc, .{ .path = path, .start_us = order_key, .end_us = order_key + dur });
-    }
-    var plan = try bootmap.plan.fromTrace(alloc, .{ .version = 1, .end_us = 0, .boxes = boxes.items }, st.other);
-    // The stage gets all of the area: pad 0 at the root.
-    try plan.layout(area, .{ 0, st.pads[1], st.pads[2] }, st.headerH(), st.order);
-
-    // Live state: every leaf starts pending.
-    var leaf_of: std.StringHashMapUnmanaged(u32) = .empty;
-    const measured = try alloc.alloc(bool, plan.nodes.len);
-    @memset(measured, false);
-    for (plan.nodes, 0..) |*nd, i| {
-        if (nd.depth != 3) continue;
-        nd.expected_us = nd.end_us - nd.start_us;
-        nd.start_us = never;
-        nd.end_us = never;
-        try leaf_of.put(alloc, nd.name, @intCast(i));
-    }
-    for (plan.nodes) |*nd| if (nd.depth < 3) {
-        nd.first_us = never;
-    };
-    log("{d} systemd boxes in {d} x {d}", .{ leaf_of.count(), area.w, area.h });
-
-    log("open the DRM output", .{});
+    // 1. The picture first: the kernel's part, and the systemd plan of the
+    //    last boot when there is one. As DRM master, this buffer also covers
+    //    any console text from the initrd.
     var out = drm.Output.open("/dev/dri/card0") catch |err| {
         log("no DRM output: {s}", .{@errorName(err)});
         return err;
@@ -467,9 +749,6 @@ pub fn main(init: std.process.Init) !void {
     const canvas: bootmap.canvas.Canvas = .{ .pixels = out.pixels, .width = @intCast(out.width), .height = @intCast(out.height), .stride = @intCast(out.stride) };
     canvas.clear(bootmap.palette.surface);
 
-    // The kernel's part of the picture: the kernel boxes, done, and the
-    // initrd box, which ends now (the daemon runs from the real root).
-    const t0 = nowUs();
     const ka = try kernelArea(alloc, pm, st);
     const pal = bootmap.color.palettes[@min(st.palette, bootmap.color.palettes.len - 1)];
     for (pm.nodes, 0..) |kn, i| {
@@ -480,78 +759,152 @@ pub fn main(init: std.process.Init) !void {
         }
         if (kn.depth != 3) continue;
         nd.start_us = if (kn.state == 0) never else kn.start_us;
-        nd.end_us = if (kn.state == 1) t0 else kn.end_us;
+        nd.end_us = if (kn.state == 1) t_start else kn.end_us;
     }
     var initrd_leaf: ?usize = null;
     for (pm.nodes, 0..) |kn, i| if (kn.depth == 3 and kn.stage == 3) {
         initrd_leaf = i;
     };
-    drawKernelArea(canvas, &ka, pm, st, t0);
+    drawKernelArea(canvas, &ka, pm, st, t_start);
 
+    var last = try loadLast(alloc);
+    log("{d} unit times from the last boot", .{last.count()});
+    var sd: ?Systemd = null;
+    if (try boxesFromLast(alloc, &last)) |boxes| sd = try buildSystemd(alloc, boxes, area, st);
+    if (sd) |*s| bootmap.canvas.drawPlan(canvas, &s.plan, st, t_start);
+    handoff();
+    out.present() catch |err| log("present failed: {s}", .{@errorName(err)});
+    log("on the screen after {d} ms, {d} systemd boxes from the last boot", .{ (nowUs() - t_start) / 1000, if (sd) |s| s.leaf_of.count() else 0 });
+
+    // 2. systemd. Signals come on our own connection: systemd sends every
+    //    signal to every client of its private socket. The unit list comes
+    //    from systemctl, now and once more after the startup finishes.
+    var sig = try connect(alloc);
+    {
+        const now = nowUs();
+        if (unitsBySystemctl(alloc)) |units| {
+            if (sd == null) {
+                var names: std.ArrayList([]const u8) = .empty;
+                for (units) |u| if (isBoxUnit(u)) try names.append(alloc, u.name);
+                const groups = groupsBySystemctl(alloc, names.items) catch std.StringHashMapUnmanaged([]const u8).empty;
+                sd = try buildSystemd(alloc, try boxesFromUnits(alloc, units, &last, &groups), area, st);
+            }
+            reconcile(&sd.?, units, now);
+            log("systemctl: {d} units, after {d} ms", .{ units.len, (nowUs() - t_start) / 1000 });
+        } else |err| log("systemctl list-units: {s}", .{@errorName(err)});
+    }
+    var boot_done = false;
+    var final_list = false;
     var all_full_since: ?u64 = null;
+    var last_poll: u64 = 0;
+
     while (true) {
         const now = nowUs();
-        const us = listUnitsRetry(alloc, &conn) catch |err| {
-            log("ListUnits failed: {s}", .{@errorName(err)});
-            break;
-        };
-        for (us) |u| {
-            const i = leaf_of.get(u.name) orelse continue;
-            const nd = &plan.nodes[i];
-            const working = u.job != 0 or eql(u.active, "activating") or eql(u.active, "reloading");
-            if (working and nd.end_us == never) measured[i] = true;
-            const failed = eql(u.active, "failed");
-            if (nd.start_us == never and (working or failed or eql(u.active, "active") or eql(u.active, "inactive"))) {
-                // It started (or it ended between two polls).
-                if (working or nd.end_us == never) nd.start_us = now;
-            }
-            if (nd.start_us != never and nd.end_us == never and !working) {
-                if (failed or eql(u.active, "active") or eql(u.active, "inactive")) {
-                    nd.end_us = now;
-                    nd.failed = failed;
+        // Each second, systemctl: the unit states, and whether the startup
+        // is finished. Signals are not reliable here (some boots get none),
+        // so this is the truth, and signals only add finer times.
+        if (now - last_poll > 1_000_000 and !final_list) {
+            last_poll = now;
+            if (unitsBySystemctl(alloc)) |units| {
+                if (sd) |*sx| reconcile(sx, units, nowUs());
+            } else |_| {}
+            if (boot_done) {
+                final_list = true;
+            } else if (systemctl(alloc, &.{"is-system-running"})) |state| {
+                const st_s = std.mem.trim(u8, state, " \n");
+                if (!eql(st_s, "initializing") and !eql(st_s, "starting") and st_s.len > 0) {
+                    boot_done = true;
+                    log("systemd: {s}, after {d} ms", .{ st_s, (nowUs() - t_start) / 1000 });
                 }
+            } else |_| {}
+        }
+        while (sig.next(0) catch null) |m| {
+            if (m.kind != 4) continue;
+            const was_done = boot_done;
+            if (sd) |*s| onSignal(s, m, now, &boot_done) else if (eql(m.member, "StartupFinished")) {
+                boot_done = true;
+            }
+            if (boot_done and !was_done) {
+                log("systemd: startup finished, after {d} ms", .{(now - t_start) / 1000});
             }
         }
-        // The areas appear with their first box.
-        for (plan.nodes) |*nd| if (nd.depth == 3 and nd.start_us != never) {
-            var p = nd.parent;
-            while (true) {
-                plan.nodes[p].first_us = @min(plan.nodes[p].first_us, nd.start_us);
-                if (p == 0) break;
-                p = plan.nodes[p].parent;
-            }
-        };
 
-        bootmap.canvas.drawPlan(canvas, &plan, st, now);
-        // The initrd box ends at t0 and fills over fill_ms after that.
+        if (sd) |*s| bootmap.canvas.drawPlan(canvas, &s.plan, st, now);
         if (initrd_leaf) |il| {
             var nd = ka.nodes[il];
             nd.color = bootmap.canvas.leafColor(nd, ka.gidx[il], pal, st, now, now, 1);
             bootmap.canvas.drawLeaf(canvas, nd, if (now < nd.end_us) .active else .done, st, now);
         }
-        if (!out.shown) handoff();
-        out.present() catch |err| log("present failed: {s}", .{@errorName(err)});
+        out.present() catch {};
 
-        var full = true;
-        for (plan.nodes) |nd| {
-            if (nd.depth != 3) continue;
+        // Done: systemd says the startup finished, a ListUnits after that
+        // caught the last units, and every box that ran is full.
+        var full = final_list;
+        if (sd) |s| for (s.plan.nodes) |nd| {
+            if (nd.depth != 3 or nd.start_us == never) continue;
             if (nd.end_us == never or now < nd.end_us + @as(u64, st.fill_ms) * 1000) full = false;
+        };
+        if (now - t_start > 300_000_000) {
+            log("five minutes, and the boot is not finished. Stop.", .{});
+            full = true;
         }
         if (full) {
             all_full_since = all_full_since orelse now;
             if (now - all_full_since.? > 1_000_000) break;
         } else all_full_since = null;
-        sleepMs(50);
+        _ = sig.next(33) catch null; // the frame time, or the next signal
     }
     log("every box is full", .{});
-    // Keep the times that this boot measured. Units that were done before
-    // the daemon started keep the time of an earlier boot.
-    for (plan.nodes, 0..) |nd, i| {
-        if (nd.depth != 3 or !measured[i] or nd.end_us == never) continue;
-        durations.put(alloc, nd.name, nd.end_us - nd.start_us) catch {};
+
+    // 3. Keep this boot's times, with the groups (systemd answers calls by
+    //    now), for the next boot.
+    if (sd) |*s| {
+        var names: std.ArrayList([]const u8) = .empty;
+        for (s.plan.nodes) |nd| if (nd.depth == 3) names.append(alloc, nd.name) catch {};
+        const groups = groupsBySystemctl(alloc, names.items) catch std.StringHashMapUnmanaged([]const u8).empty;
+        // Every unit of the plan: a measured unit with this boot's time, the
+        // others with the time of an earlier boot (or 0), so the plan keeps
+        // the units that were done before the daemon started.
+        for (s.plan.nodes, 0..) |nd, i| {
+            if (nd.depth != 3) continue;
+            const old = last.get(nd.name);
+            const group = groups.get(nd.name) orelse (if (old) |o| (o.group orelse default_group) else default_group);
+            const us = if (s.measured[i] and nd.end_us != never) nd.end_us - nd.start_us else if (old) |o| o.us else 0;
+            last.put(alloc, nd.name, .{ .us = us, .group = group }) catch {};
+        }
+        saveLast(alloc, &last);
     }
-    saveDurations(alloc, &durations);
     saveKernelTimes(alloc, pm);
-    // Keep the buffer on the screen until systemd stops this service.
+
+    // 4. The login screen: hold the full picture for a moment, then give the
+    //    screen back. The text console comes back with its login prompt.
+    sleepMs(2000);
+    if (linux.errno(linux.access("/sys/class/graphics/fbcon", linux.F_OK)) == .SUCCESS) {
+        log("give the screen to the console", .{});
+        return; // the DRM file closes, and the console takes the screen
+    }
+    // No text console (the QEMU kernel): keep the picture on the screen.
+    log("no text console: the picture stays", .{});
     while (true) sleepMs(60_000);
+}
+
+fn parseListUnits(alloc: std.mem.Allocator, body: dbus.Reader) ![]Unit {
+    var r = body;
+    var out: std.ArrayList(Unit) = .empty;
+    const end = try r.array(8);
+    while (r.pos < end) {
+        r.alignTo(8);
+        const name = try r.string();
+        _ = try r.string();
+        _ = try r.string();
+        const active = try r.string();
+        _ = try r.string();
+        _ = try r.string();
+        const path = try r.string();
+        const job = try r.u32_();
+        _ = try r.string();
+        _ = try r.string();
+        try out.append(alloc, .{ .name = try alloc.dupe(u8, name), .active = try alloc.dupe(u8, active), .job = job, .path = try alloc.dupe(u8, path) });
+    }
+    return out.items;
 }

@@ -169,7 +169,8 @@ fn activeAt(t: u64, span: u64) u64 {
 /// The time after which a step in flight is late: start + max(2 * expected,
 /// warn_ms). The pixels that it paints from then until it ends are yellow.
 pub fn lateAt(s: Style, start_us: u64, expected_us: u64) u64 {
-    return start_us + @max(expected_us * 2, @as(u64, s.warn_ms) * 1000);
+    // Saturating: a box that has not started has start_us = maxInt.
+    return start_us +| @max(expected_us *| 2, @as(u64, s.warn_ms) * 1000);
 }
 
 test "permille" {
