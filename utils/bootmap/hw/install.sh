@@ -29,6 +29,8 @@ SIGNED=0
 if [ -f "$HW_ROOT/working/$MACHINE/vmlinuz.signed" ] && [ -f "$MOK/MOK.der" ]; then
     "${SCP[@]}" "$HW_ROOT/working/$MACHINE/vmlinuz.signed" "$MOK/MOK.der" "$SSH_USER@$HOST:$DIR/"
     SIGNED=1
+    # The key's SHA1 fingerprint, as mokutil --list-enrolled prints it.
+    MOK_FP="$(openssl x509 -inform DER -in "$MOK/MOK.der" -noout -fingerprint -sha1 | cut -d= -f2 | tr 'A-F' 'a-f')"
 fi
 "${SSH[@]}" mkdir -p "$DIR/theme" "$DIR/initramfs"
 "${SCP[@]}" "$HW_HERE"/initramfs/* "$SSH_USER@$HOST:$DIR/initramfs/"
@@ -36,7 +38,7 @@ fi
 
 GPU="${BOOTMAP_GPU:-i915}"
 ARGS="quiet loglevel=3 bootmap.daemon=1 bootmap.stages=0,0,30,10,60 bootmap.gpu=$GPU ${BOOTMAP_ARGS:-}"
-"${SSH[@]}" sudo DIR="$DIR" ARGS="'$ARGS'" GPU="$GPU" DEFAULT="${BOOTMAP_DEFAULT:-0}" SIGNED="$SIGNED" MOK_PASSWORD="'${MOK_PASSWORD:-bootmap}'" bash -s << 'REMOTE'
+"${SSH[@]}" sudo DIR="$DIR" ARGS="'$ARGS'" MOK_FP="${MOK_FP:-}" GPU="$GPU" DEFAULT="${BOOTMAP_DEFAULT:-0}" SIGNED="$SIGNED" MOK_PASSWORD="'${MOK_PASSWORD:-bootmap}'" bash -s << 'REMOTE'
 set -euo pipefail
 STOCK="$(ls /boot/vmlinuz-* | grep -v bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
 
@@ -102,8 +104,9 @@ update-initramfs -u -k "$(ls /boot/vmlinuz-*-bootmap | sed 's|/boot/vmlinuz-||' 
 if [ "$SIGNED" = 1 ]; then
     V="$(ls /boot/vmlinuz-*-bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
     install -m 644 "$DIR/vmlinuz.signed" "/boot/vmlinuz-$V"
-    # mokutil prints this on stderr.
-    if mokutil --test-key "$DIR/MOK.der" 2>&1 | grep -q "is already enrolled"; then
+    # Compare fingerprints. mokutil --test-key gives different words (on
+    # stderr) when the running kernel was built with the key.
+    if mokutil --list-enrolled 2> /dev/null | tr 'A-F' 'a-f' | grep -q -F "$MOK_FP"; then
         echo "install: the MOK key is enrolled"
     else
         mokutil --generate-hash="$MOK_PASSWORD" > "$DIR/mok.hash"
