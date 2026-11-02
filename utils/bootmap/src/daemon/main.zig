@@ -55,6 +55,17 @@ fn log(comptime fmt: []const u8, args: anytype) void {
     _ = linux.write(kmsg, s.ptr, s.len);
 }
 
+var skip_logged: u32 = 0;
+fn logSkip(kind: u8, reply_serial: u32, member: []const u8) void {
+    // The first messages, and every message that is not a signal.
+    skip_logged += 1;
+    if (kind != 4) log("skipped: kind {d}, reply to {d}, {s}", .{ kind, reply_serial, member });
+}
+
+fn logWait(seconds: u32, skipped: u32) void {
+    log("waiting for systemd: {d} s, {d} other messages skipped", .{ seconds, skipped });
+}
+
 /// Connect to systemd, and try again until it answers.
 fn connect(alloc: std.mem.Allocator) !dbus.Conn {
     var tries: usize = 0;
@@ -67,15 +78,34 @@ fn connect(alloc: std.mem.Allocator) !dbus.Conn {
     }
 }
 
+/// Early in the boot, systemd sometimes does not answer a call on a
+/// connection, but it answers on a new one. So a call waits 5 s, and then
+/// the daemon connects again, for up to 3 minutes.
+const retry_limit_us: u64 = 180_000_000;
+
 /// ListUnits, with a new connection when the old one fails or times out.
 fn listUnitsRetry(alloc: std.mem.Allocator, conn: *dbus.Conn) ![]Unit {
+    const start = nowUs();
     var tries: usize = 0;
     while (true) : (tries += 1) {
         if (listUnits(alloc, conn)) |u| return u else |err| {
-            if (tries > 10) return err;
-            log("ListUnits: {s}, connect again", .{@errorName(err)});
+            if (nowUs() - start > retry_limit_us) return err;
+            log("ListUnits: {s} after try {d}, connect again", .{ @errorName(err), tries });
             conn.close();
             conn.* = try connect(alloc);
+        }
+    }
+}
+
+/// groupOf with the same retry rule.
+fn groupOfRetry(alloc: std.mem.Allocator, conn: *dbus.Conn, unit_path: []const u8) []const u8 {
+    const start = nowUs();
+    while (true) {
+        if (groupOf(alloc, conn, unit_path)) |g| return g else |err| {
+            if (nowUs() - start > retry_limit_us) return default_group;
+            log("Get Before: {s}, connect again", .{@errorName(err)});
+            conn.close();
+            conn.* = connect(alloc) catch return default_group;
         }
     }
 }
@@ -108,7 +138,7 @@ fn readFile(alloc: std.mem.Allocator, path: [*:0]const u8) ![]u8 {
 }
 
 /// One line of /proc/bootmap.
-const KNode = struct { depth: u8, stage: u8, rect: Rect, state: u8, name: []const u8 };
+const KNode = struct { depth: u8, stage: u8, rect: Rect, state: u8, start_us: u64, end_us: u64, name: []const u8 };
 
 const ProcMap = struct { width: i32, height: i32, nodes: []KNode };
 
@@ -137,6 +167,8 @@ fn parseProcMap(alloc: std.mem.Allocator, text: []const u8) !ProcMap {
                 .h = try std.fmt.parseInt(i32, f[6], 10),
             },
             .state = try std.fmt.parseInt(u8, f[7], 10),
+            .start_us = try std.fmt.parseInt(u64, f[8], 10),
+            .end_us = try std.fmt.parseInt(u64, f[9], 10),
             .name = try alloc.dupe(u8, name),
         });
     }
@@ -179,7 +211,7 @@ fn listUnits(alloc: std.mem.Allocator, conn: *dbus.Conn) ![]Unit {
 }
 
 fn groupOf(alloc: std.mem.Allocator, conn: *dbus.Conn, unit_path: []const u8) ![]const u8 {
-    var r = conn.call(unit_path, "org.freedesktop.DBus.Properties", "Get", &.{ "org.freedesktop.systemd1.Unit", "Before" }) catch return default_group;
+    var r = try conn.call(unit_path, "org.freedesktop.DBus.Properties", "Get", &.{ "org.freedesktop.systemd1.Unit", "Before" });
     const sig = try r.signature();
     if (!std.mem.eql(u8, sig, "as")) return default_group;
     const end = try r.array(4);
@@ -207,6 +239,101 @@ fn eql(a: []const u8, b: []const u8) bool {
 
 const never: u64 = std.math.maxInt(u64);
 
+const durations_dir = "/var/lib/bootmap";
+const durations_path = "/var/lib/bootmap/durations";
+
+/// The unit times of the last boot: "<microseconds> <unit>" per line.
+fn loadDurations(alloc: std.mem.Allocator) !std.StringHashMapUnmanaged(u64) {
+    var m: std.StringHashMapUnmanaged(u64) = .empty;
+    const text = readFile(alloc, durations_path) catch return m;
+    var lines = std.mem.splitScalar(u8, text, '\n');
+    while (lines.next()) |line| {
+        const sp = std.mem.indexOfScalar(u8, line, ' ') orelse continue;
+        const us = std.fmt.parseInt(u64, line[0..sp], 10) catch continue;
+        try m.put(alloc, try alloc.dupe(u8, line[sp + 1 ..]), us);
+    }
+    return m;
+}
+
+fn saveDurations(alloc: std.mem.Allocator, m: *const std.StringHashMapUnmanaged(u64)) void {
+    var out: std.ArrayList(u8) = .empty;
+    var it = m.iterator();
+    while (it.next()) |e| {
+        var buf: [32]u8 = undefined;
+        out.appendSlice(alloc, std.fmt.bufPrint(&buf, "{d} ", .{e.value_ptr.*}) catch continue) catch return;
+        out.appendSlice(alloc, e.key_ptr.*) catch return;
+        out.append(alloc, '\n') catch return;
+    }
+    _ = linux.mkdir("/var/lib", 0o755);
+    _ = linux.mkdir(durations_dir, 0o755);
+    const tmp = durations_path ++ ".tmp";
+    const rc = linux.open(tmp, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true, .CLOEXEC = true }, 0o644);
+    if (linux.errno(rc) != .SUCCESS) {
+        log("cannot write {s}", .{durations_path});
+        return;
+    }
+    const fd: i32 = @intCast(rc);
+    _ = linux.write(fd, out.items.ptr, out.items.len);
+    _ = linux.close(fd);
+    _ = linux.rename(tmp, durations_path);
+    log("saved {d} unit times to {s}", .{ m.count(), durations_path });
+}
+
+/// Tell the kernel that the daemon has the screen: it stops drawing.
+fn handoff() void {
+    const rc = linux.open("/proc/bootmap", .{ .ACCMODE = .WRONLY, .CLOEXEC = true }, 0);
+    if (linux.errno(rc) != .SUCCESS) return;
+    const fd: i32 = @intCast(rc);
+    _ = linux.write(fd, "handoff", 7);
+    _ = linux.close(fd);
+}
+
+/// A kernel-area node of /proc/bootmap as a plan node, with its title
+/// strip and group place, so canvas draws it as the replay does.
+const KArea = struct { nodes: []bootmap.plan.Node, gidx: []u16 };
+
+fn kernelArea(alloc: std.mem.Allocator, pm: ProcMap, st: bootmap.style.Style) !KArea {
+    const n = pm.nodes.len;
+    const nodes = try alloc.alloc(bootmap.plan.Node, n);
+    const gidx = try alloc.alloc(u16, n);
+    const kids = try alloc.alloc(u32, n);
+    @memset(kids, 0);
+    var last: [4]usize = @splat(0);
+    var groups_in_stage: u16 = 0;
+    for (pm.nodes, 0..) |kn, i| {
+        const d = @min(kn.depth, 3);
+        last[d] = i;
+        if (d > 0) kids[last[d - 1]] += 1;
+        if (d == 1) groups_in_stage = 0;
+        gidx[i] = if (d == 2) blk: {
+            groups_in_stage += 1;
+            break :blk groups_in_stage - 1;
+        } else if (d == 3) gidx[last[2]] else 0;
+    }
+    const hh = st.headerH();
+    for (pm.nodes, 0..) |kn, i| {
+        var nd: bootmap.plan.Node = .{ .name = kn.name, .depth = kn.depth, .parent = 0, .stage = kn.stage, .rect = kn.rect, .first_us = 0 };
+        const titled = kn.depth == 1 or (kn.depth == 2 and kids[i] > 1);
+        const inner = kn.rect.inset(@as(i32, st.pads[@min(kn.depth, 2)]));
+        if (titled and hh > 0 and inner.h > hh) nd.header = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = hh };
+        nodes[i] = nd;
+    }
+    return .{ .nodes = nodes, .gidx = gidx };
+}
+
+fn drawKernelArea(canvas: bootmap.canvas.Canvas, ka: *const KArea, pm: ProcMap, st: bootmap.style.Style, t: u64) void {
+    const pal = bootmap.color.palettes[@min(st.palette, bootmap.color.palettes.len - 1)];
+    for (pm.nodes, 0..) |kn, i| {
+        if (kn.depth != 3) continue;
+        var nd = ka.nodes[i];
+        nd.color = bootmap.canvas.leafColor(nd, ka.gidx[i], pal, st, t, t, 1);
+        const state: bootmap.plan.State = if (nd.start_us == never) .pending else if (t < nd.end_us) .active else .done;
+        bootmap.canvas.drawLeaf(canvas, nd, state, st, t);
+    }
+    if (st.labels == .none) return;
+    for (ka.nodes) |nd| if (nd.depth == 1 or nd.depth == 2) bootmap.canvas.drawHeader(canvas, nd, st, t);
+}
+
 pub fn main(init: std.process.Init) !void {
     const alloc = init.arena.allocator();
     const st = styleFromCmdline(alloc);
@@ -226,6 +353,9 @@ pub fn main(init: std.process.Init) !void {
     };
 
     // systemd's private socket exists from the start of PID 1.
+    dbus.on_wait = &logWait;
+    dbus.call_timeout_s = 5;
+    dbus.on_skip = &logSkip;
     log("connect to systemd", .{});
     var conn = try connect(alloc);
     log("connected", .{});
@@ -234,16 +364,21 @@ pub fn main(init: std.process.Init) !void {
     // stands in for the start time, so the plan is in boot order.
     const units = try listUnitsRetry(alloc, &conn);
     log("{d} units", .{units.len});
+    var durations = try loadDurations(alloc);
+    log("{d} unit times from the last boot", .{durations.count()});
     var boxes: std.ArrayList(bootmap.trace.Box) = .empty;
     for (units) |u| {
         if (!isBoxUnit(u)) continue;
-        const g = try groupOf(alloc, &conn, u.path);
+        const g = groupOfRetry(alloc, &conn, u.path);
         const path = try alloc.alloc([]const u8, 3);
         path[0] = "systemd";
         path[1] = g;
         path[2] = u.name;
+        // The job number orders the boxes. The last boot's time sizes the
+        // box and is its expected time.
         const order_key: u64 = if (u.job != 0) u.job else 0;
-        try boxes.append(alloc, .{ .path = path, .start_us = order_key, .end_us = order_key });
+        const dur = durations.get(u.name) orelse 0;
+        try boxes.append(alloc, .{ .path = path, .start_us = order_key, .end_us = order_key + dur });
     }
     var plan = try bootmap.plan.fromTrace(alloc, .{ .version = 1, .end_us = 0, .boxes = boxes.items }, st.other);
     // The stage gets all of the area: pad 0 at the root.
@@ -251,11 +386,13 @@ pub fn main(init: std.process.Init) !void {
 
     // Live state: every leaf starts pending.
     var leaf_of: std.StringHashMapUnmanaged(u32) = .empty;
+    const measured = try alloc.alloc(bool, plan.nodes.len);
+    @memset(measured, false);
     for (plan.nodes, 0..) |*nd, i| {
         if (nd.depth != 3) continue;
+        nd.expected_us = nd.end_us - nd.start_us;
         nd.start_us = never;
         nd.end_us = never;
-        nd.expected_us = 0;
         try leaf_of.put(alloc, nd.name, @intCast(i));
     }
     for (plan.nodes) |*nd| if (nd.depth < 3) {
@@ -273,19 +410,26 @@ pub fn main(init: std.process.Init) !void {
     const canvas: bootmap.canvas.Canvas = .{ .pixels = out.pixels, .width = @intCast(out.width), .height = @intCast(out.height), .stride = @intCast(out.stride) };
     canvas.clear(bootmap.palette.surface);
 
-    // The kernel's part of the picture, as the kernel left it.
+    // The kernel's part of the picture: the kernel boxes, done, and the
+    // initrd box, which ends now (the daemon runs from the real root).
     const t0 = nowUs();
-    for (pm.nodes) |kn| {
+    const ka = try kernelArea(alloc, pm, st);
+    const pal = bootmap.color.palettes[@min(st.palette, bootmap.color.palettes.len - 1)];
+    for (pm.nodes, 0..) |kn, i| {
+        const nd = &ka.nodes[i];
+        if (kn.depth == 1 and kn.stage < bootmap.plan.kernel_stage and kn.rect.w > 0) {
+            canvas.fill(kn.rect.x, kn.rect.y, kn.rect.w, kn.rect.h, pal.stops[kn.stage % pal.stops.len]);
+            continue;
+        }
         if (kn.depth != 3) continue;
-        const nd: bootmap.plan.Node = .{ .name = kn.name, .depth = 3, .parent = 0, .stage = kn.stage, .rect = kn.rect };
-        const state: bootmap.plan.State = switch (kn.state) {
-            0 => .pending,
-            1 => .active,
-            3 => .failed,
-            else => .done,
-        };
-        bootmap.canvas.drawLeaf(canvas, nd, state, st, t0);
+        nd.start_us = if (kn.state == 0) never else kn.start_us;
+        nd.end_us = if (kn.state == 1) t0 else kn.end_us;
     }
+    var initrd_leaf: ?usize = null;
+    for (pm.nodes, 0..) |kn, i| if (kn.depth == 3 and kn.stage == 3) {
+        initrd_leaf = i;
+    };
+    drawKernelArea(canvas, &ka, pm, st, t0);
 
     var all_full_since: ?u64 = null;
     while (true) {
@@ -298,6 +442,7 @@ pub fn main(init: std.process.Init) !void {
             const i = leaf_of.get(u.name) orelse continue;
             const nd = &plan.nodes[i];
             const working = u.job != 0 or eql(u.active, "activating") or eql(u.active, "reloading");
+            if (working and nd.end_us == never) measured[i] = true;
             const failed = eql(u.active, "failed");
             if (nd.start_us == never and (working or failed or eql(u.active, "active") or eql(u.active, "inactive"))) {
                 // It started (or it ended between two polls).
@@ -321,6 +466,13 @@ pub fn main(init: std.process.Init) !void {
         };
 
         bootmap.canvas.drawPlan(canvas, &plan, st, now);
+        // The initrd box ends at t0 and fills over fill_ms after that.
+        if (initrd_leaf) |il| {
+            var nd = ka.nodes[il];
+            nd.color = bootmap.canvas.leafColor(nd, ka.gidx[il], pal, st, now, now, 1);
+            bootmap.canvas.drawLeaf(canvas, nd, if (now < nd.end_us) .active else .done, st, now);
+        }
+        if (!out.shown) handoff();
         out.present() catch |err| log("present failed: {s}", .{@errorName(err)});
 
         var full = true;
@@ -335,6 +487,13 @@ pub fn main(init: std.process.Init) !void {
         sleepMs(50);
     }
     log("every box is full", .{});
+    // Keep the times that this boot measured. Units that were done before
+    // the daemon started keep the time of an earlier boot.
+    for (plan.nodes, 0..) |nd, i| {
+        if (nd.depth != 3 or !measured[i] or nd.end_us == never) continue;
+        durations.put(alloc, nd.name, nd.end_us - nd.start_us) catch {};
+    }
+    saveDurations(alloc, &durations);
     // Keep the buffer on the screen until systemd stops this service.
     while (true) sleepMs(60_000);
 }

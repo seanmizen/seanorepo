@@ -9,7 +9,15 @@
 const std = @import("std");
 const linux = std.os.linux;
 
-pub const Error = error{ Connect, Auth, Io, Protocol, CallFailed };
+pub const Error = error{ Connect, Auth, Io, Protocol, CallFailed, Timeout, Closed };
+
+/// How long call() waits for its reply, in seconds.
+pub var call_timeout_s: u32 = 60;
+/// Called each 5 s while call() waits: (seconds, messages skipped).
+pub var on_wait: ?*const fn (u32, u32) void = null;
+/// Called for each message that is not the reply: (kind, reply serial,
+/// member). For diagnosis.
+pub var on_skip: ?*const fn (u8, u32, []const u8) void = null;
 
 pub const Conn = struct {
     fd: i32,
@@ -28,8 +36,9 @@ pub const Conn = struct {
             _ = linux.close(fd);
             return error.Connect;
         }
-        // A read waits at most 3 s, so a lost reply is an error, not a hang.
-        const tv: linux.timeval = .{ .sec = 3, .usec = 0 };
+        // A read waits at most 1 s. call() waits for a reply up to its own
+        // limit, so a slow systemd is not a lost reply.
+        const tv: linux.timeval = .{ .sec = 1, .usec = 0 };
         _ = linux.setsockopt(fd, linux.SOL.SOCKET, linux.SO.RCVTIMEO, std.mem.asBytes(&tv), @sizeOf(linux.timeval));
         var c: Conn = .{ .fd = fd, .alloc = alloc };
         try c.auth();
@@ -91,20 +100,37 @@ pub const Conn = struct {
         defer msg.deinit(c.alloc);
         buildCall(c.alloc, &msg, c.serial, path, iface, member, args) catch return error.Io;
         try c.send(msg.items);
+        var waited: u32 = 0;
+        var skipped: u32 = 0;
         while (true) {
-            const m = try c.readMessage();
+            const m = c.readMessage() catch |err| switch (err) {
+                error.Timeout => {
+                    waited += 1;
+                    if (waited % 5 == 0) if (on_wait) |f| f(waited, skipped);
+                    if (waited >= call_timeout_s) return error.Timeout;
+                    continue;
+                },
+                else => return err,
+            };
             // 2 = method return, 3 = error, 4 = signal (skipped).
-            if (m.reply_serial != c.serial) continue;
+            if (m.reply_serial != c.serial) {
+                skipped += 1;
+                if (on_skip) |f| f(m.kind, m.reply_serial, m.member);
+                continue;
+            }
             if (m.kind == 3) return error.CallFailed;
             if (m.kind == 2) return m.body;
         }
     }
 
-    const Message = struct { kind: u8, reply_serial: u32, body: Reader };
+    const Message = struct { kind: u8, reply_serial: u32, member: []const u8 = "", body: Reader };
 
     fn readMessage(c: *Conn) Error!Message {
         c.rx.clearRetainingCapacity();
-        try c.readN(16);
+        // A timeout before the first byte: no message yet. After the first
+        // byte, the rest of the message is on its way.
+        try c.readFirst();
+        try c.readN(15);
         const h = c.rx.items[0..16];
         if (h[0] != 'l') return error.Protocol;
         const body_len = std.mem.readInt(u32, h[4..8], .little);
@@ -114,6 +140,7 @@ pub const Conn = struct {
         const data = c.rx.items;
         var r: Reader = .{ .data = data[0 .. 16 + fields_len], .pos = 16 };
         var reply_serial: u32 = 0;
+        var member: []const u8 = "";
         while (r.pos < r.data.len) {
             r.alignTo(8);
             if (r.pos >= r.data.len) break;
@@ -125,21 +152,43 @@ pub const Conn = struct {
                     const v = try r.u32_();
                     if (code == 5) reply_serial = v;
                 },
-                's', 'o' => _ = try r.string(),
+                's', 'o' => {
+                    const v = try r.string();
+                    if (code == 3) member = v;
+                },
                 'g' => _ = try r.signature(),
                 else => return error.Protocol,
             }
         }
-        return .{ .kind = data[1], .reply_serial = reply_serial, .body = .{ .data = data[0 .. body_start + body_len], .pos = body_start } };
+        return .{ .kind = data[1], .reply_serial = reply_serial, .member = member, .body = .{ .data = data[0 .. body_start + body_len], .pos = body_start } };
+    }
+
+    fn readFirst(c: *Conn) Error!void {
+        c.rx.resize(c.alloc, 1) catch return error.Io;
+        const rc = linux.read(c.fd, c.rx.items.ptr, 1);
+        switch (linux.errno(rc)) {
+            .SUCCESS => if (rc == 0) return error.Closed,
+            .AGAIN, .INTR => return error.Timeout,
+            else => return error.Io,
+        }
     }
 
     fn readN(c: *Conn, n: usize) Error!void {
         const start = c.rx.items.len;
         c.rx.resize(c.alloc, start + n) catch return error.Io;
         var got: usize = 0;
+        var waits: u32 = 0;
         while (got < n) {
             const rc = linux.read(c.fd, c.rx.items[start + got ..].ptr, n - got);
-            if (linux.errno(rc) != .SUCCESS or rc == 0) return error.Io;
+            switch (linux.errno(rc)) {
+                .SUCCESS => if (rc == 0) return error.Closed,
+                .AGAIN, .INTR => {
+                    waits += 1;
+                    if (waits > 30) return error.Timeout;
+                    continue;
+                },
+                else => return error.Io,
+            }
             got += rc;
         }
     }

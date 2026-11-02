@@ -231,7 +231,8 @@ pub fn drawHeader(c: Canvas, nd: plan_mod.Node, st: style_mod.Style, t_us: u64) 
     if (h.w <= 0 or h.h <= 0) return;
     c.fill(h.x, h.y, h.w, h.h, palette.surface);
     if (st.spawn == .start and t_us < nd.first_us) return;
-    _ = text.draw(c, st.fontOf(), h.x, h.y, h.w, h.h - 1, nd.name, .cut, .any, .{ .solid = palette.stage[@min(nd.stage, palette.stage.len - 1)] });
+    const pal = color_mod.palettes[@min(st.palette, color_mod.palettes.len - 1)];
+    _ = text.draw(c, st.fontOf(), h.x, h.y, h.w, h.h - 1, nd.name, .cut, .any, .{ .solid = pal.stops[nd.stage % pal.stops.len] });
 }
 
 /// The name of a leaf, inside its box, 1 px from the outline.

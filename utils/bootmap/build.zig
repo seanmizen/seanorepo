@@ -92,6 +92,19 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(daemon);
 
+    // gen-palette: print kernel/bootmap_palette.h from src/render/color.zig.
+    const gen_palette = b.addExecutable(.{
+        .name = "gen-kernel-palette",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/gen_kernel_palette.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "bootmap", .module = core }},
+        }),
+    });
+    b.installArtifact(gen_palette);
+    b.step("gen-palette", "Print kernel/bootmap_palette.h").dependOn(&b.addRunArtifact(gen_palette).step);
+
     const tests = b.addTest(.{ .root_module = core });
     const dbus_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/daemon/dbus.zig"),

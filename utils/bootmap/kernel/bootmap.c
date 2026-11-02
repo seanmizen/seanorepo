@@ -46,9 +46,13 @@
 #include <linux/delay.h>
 #include <linux/spinlock.h>
 #include <linux/seq_file.h>
+#include <linux/ctype.h>
+#include <linux/uaccess.h>
 #include <trace/events/initcall.h>
 
 #include "bootmap_layout.h"
+#include "bootmap_palette.h"
+#include "bootmap_font.h"
 
 #define BOOTMAP_NAME_LEN 48
 #define BOOTMAP_STAGES 5
@@ -60,10 +64,6 @@ static const char *const bootmap_stage_names[BOOTMAP_STAGES] = {
 	"firmware", "loader", "kernel", "initrd", "systemd",
 };
 
-/* src/render/palette.zig */
-static const u32 bootmap_stage_colors[BOOTMAP_STAGES] = {
-	0x3987e5, 0xd95926, 0x199e70, 0xc98500, 0xd55181,
-};
 #define BOOTMAP_SURFACE 0x000000
 
 enum bootmap_fill { BM_RASTER, BM_ROWS_UP, BM_SPIRAL };
@@ -82,12 +82,26 @@ static struct {
 	bool late_keep;
 	int order;		/* BOOTMAP_ORDER_* */
 	u32 other;		/* permille: smaller groups go into "other" */
+	int labels;		/* 0 all, 1 areas, 2 none */
+	bool font_4x6;
+	bool cut;		/* overflow=cut */
+	int fit;		/* enum bm_fit */
+	u32 fit_n;		/* for fit=chars:N and fit=percent:N */
+	int ink;		/* 0 inverse, 1 white, 2 black */
+	int color_by;		/* enum bm_color_by */
+	u32 palette;
+	u32 jitter;
 } bms = {
 	.fill = BM_ROWS_UP, .fill_ms = 250, .outline = 0, .empty = 0x000000,
 	.empty_dim = true, .spawn_plan = true,
 	.gap = 1, .pads = { 1, 1, 1 }, .warn_ms = 500,
 	.order = BOOTMAP_ORDER_BOOT, .other = 10,
+	.fit = 1, .jitter = 12,
 };
+
+/* text.Fit and color.By, in the same order. */
+enum bm_fit { BM_FIT_ANY, BM_FIT_WHOLE, BM_FIT_WORD, BM_FIT_WORDS, BM_FIT_CHARS, BM_FIT_PERCENT };
+enum bm_color_by { BM_C_STAGE, BM_C_GROUP, BM_C_KIND, BM_C_HASH, BM_C_TIME, BM_C_DURATION, BM_C_MONO };
 
 /* src/render/palette.zig: the pixels that a late step paints. */
 #define BOOTMAP_WARNING 0xfab219
@@ -121,6 +135,10 @@ struct bootmap_node {
 	u32 late0, late1;	/* the late pixels: [late0, late1) are yellow */
 	bool full;		/* the box is solid: nothing more to draw */
 	u32 drawn;		/* the pixels of the interior that are painted */
+	u32 parent;
+	u16 gidx;		/* a group: its place among the groups of its stage */
+	u16 kids;		/* the number of children */
+	bool titled;		/* the title strip is drawn */
 };
 
 static struct {
@@ -138,6 +156,9 @@ static struct {
 	u32 cursor;
 	u32 pending;		/* the kernel leaves that have not finished */
 	bool live;
+	bool handoff;		/* the daemon draws now: the kernel stops */
+	u32 initrd_leaf;	/* 0: no initrd stage */
+	u32 header_h;
 	spinlock_t lock;
 } bm = {
 	.stage_weights = { 0, 0, 30, 10, 60 },
@@ -282,6 +303,84 @@ static int __init bootmap_setup_pad(char *s)
 }
 __setup("bootmap.pad=", bootmap_setup_pad);
 
+static int __init bootmap_setup_labels(char *s)
+{
+	bms.labels = !strcmp(s, "areas") ? 1 : !strcmp(s, "none") ? 2 : 0;
+	return 1;
+}
+__setup("bootmap.labels=", bootmap_setup_labels);
+
+static int __init bootmap_setup_font(char *s)
+{
+	bms.font_4x6 = !strcmp(s, "4x6");
+	return 1;
+}
+__setup("bootmap.font=", bootmap_setup_font);
+
+static int __init bootmap_setup_overflow(char *s)
+{
+	bms.cut = !strcmp(s, "cut");
+	return 1;
+}
+__setup("bootmap.overflow=", bootmap_setup_overflow);
+
+static int __init bootmap_setup_fit(char *s)
+{
+	if (!strcmp(s, "any"))
+		bms.fit = BM_FIT_ANY;
+	else if (!strcmp(s, "whole"))
+		bms.fit = BM_FIT_WHOLE;
+	else if (!strcmp(s, "word"))
+		bms.fit = BM_FIT_WORD;
+	else if (!strcmp(s, "words"))
+		bms.fit = BM_FIT_WORDS;
+	else if (!strncmp(s, "chars:", 6) && !kstrtou32(s + 6, 10, &bms.fit_n))
+		bms.fit = BM_FIT_CHARS;
+	else if (!strncmp(s, "percent:", 8) && !kstrtou32(s + 8, 10, &bms.fit_n))
+		bms.fit = BM_FIT_PERCENT;
+	return 1;
+}
+__setup("bootmap.fit=", bootmap_setup_fit);
+
+static int __init bootmap_setup_ink(char *s)
+{
+	bms.ink = !strcmp(s, "white") ? 1 : !strcmp(s, "black") ? 2 : 0;
+	return 1;
+}
+__setup("bootmap.ink=", bootmap_setup_ink);
+
+static int __init bootmap_setup_color(char *s)
+{
+	static const char *const names[] = { "stage", "group", "kind", "hash", "time", "duration", "mono" };
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(names); i++)
+		if (!strcmp(s, names[i]))
+			bms.color_by = i;
+	return 1;
+}
+__setup("bootmap.color=", bootmap_setup_color);
+
+static int __init bootmap_setup_palette(char *s)
+{
+	u32 i;
+
+	for (i = 0; i < BOOTMAP_PALETTES; i++)
+		if (!strcmp(s, bootmap_pal_names[i]))
+			bms.palette = i;
+	return 1;
+}
+__setup("bootmap.palette=", bootmap_setup_palette);
+
+static int __init bootmap_setup_jitter(char *s)
+{
+	if (kstrtou32(s, 10, &bms.jitter))
+		pr_warn("bootmap: bad number in an option\n");
+	bms.jitter = min_t(u32, bms.jitter, 2 * BOOTMAP_JITTER_MAX);
+	return 1;
+}
+__setup("bootmap.jitter=", bootmap_setup_jitter);
+
 /* Drawing: the same rules as src/render/canvas.zig. */
 
 static void bm_fill(s32 x0, s32 y0, s32 w, s32 h, u32 color)
@@ -317,9 +416,254 @@ static u32 bm_fnv1a(const char *s)
 	return h;
 }
 
+/* A palette colour (stop) with the jitter of the name: leafColor in
+ * src/render/canvas.zig, from the table of bootmap_palette.h. */
+static u32 bm_pal(u32 stop, const char *name)
+{
+	u32 p = min_t(u32, bms.palette, BOOTMAP_PALETTES - 1);
+	s32 j = bms.jitter, v = 0;
+
+	stop %= bootmap_pal_len[p];
+	if (j && name)
+		v = (s32)(bm_fnv1a(name) % (u32)(j + 1)) - j / 2;
+	return bootmap_pal_shade[p][stop][v + BOOTMAP_JITTER_MAX];
+}
+
+/* The kind of a leaf: kindOf in src/render/canvas.zig. */
+static u32 bm_kind(const struct bootmap_node *nd)
+{
+	static const char *const kinds[] = { ".service", ".mount", ".socket", ".timer", ".path" };
+	size_t n = strlen(nd->name);
+	int i;
+
+	if (nd->stage == BOOTMAP_STAGE_KERNEL)
+		return 0;
+	for (i = 0; i < ARRAY_SIZE(kinds); i++) {
+		size_t k = strlen(kinds[i]);
+
+		if (n >= k && !strcmp(nd->name + n - k, kinds[i]))
+			return i + 1;
+	}
+	return 6;
+}
+
+/* The colour of a leaf. hash, time and duration need floating point (a
+ * ramp): the kernel uses the stage colour for them, and the daemon draws
+ * them at the handoff. */
 static u32 bm_leaf_color(const struct bootmap_node *nd)
 {
-	return bm_scale(bootmap_stage_colors[nd->stage], 88 + bm_fnv1a(nd->name) % 13);
+	u32 p = min_t(u32, bms.palette, BOOTMAP_PALETTES - 1);
+
+	switch (bms.color_by) {
+	case BM_C_GROUP:
+		return bm_pal(bm.nodes[nd->parent].gidx, nd->name);
+	case BM_C_KIND:
+		return bm_pal(bm_kind(nd), nd->name);
+	case BM_C_MONO:
+		return bm_pal(bootmap_pal_len[p] / 2, nd->name);
+	default:
+		return bm_pal(nd->stage, nd->name);
+	}
+}
+
+/* ---- Text: the rules of src/render/text.zig ---- */
+
+struct bm_font {
+	u32 w, h;
+	const unsigned char *rows;
+};
+
+static struct bm_font bm_font(void)
+{
+	if (bms.font_4x6)
+		return (struct bm_font){ BOOTMAP_FONT_MINI_4X6_W, BOOTMAP_FONT_MINI_4X6_H, bootmap_font_mini_4x6 };
+	return (struct bm_font){ BOOTMAP_FONT_F6X8_W, BOOTMAP_FONT_F6X8_H, bootmap_font_f6x8 };
+}
+
+#define BM_MAX_LINES 32
+
+struct bm_broken {
+	u32 n, shown, splits;
+	bool first_split;
+	u32 start[BM_MAX_LINES], len[BM_MAX_LINES];
+};
+
+static bool bm_isword(char c)
+{
+	return isalnum(c);
+}
+
+/* breakLines in src/render/text.zig. */
+static void bm_break(const char *s, u32 slen, u32 per_line, u32 max_lines,
+		     bool cut, struct bm_broken *r)
+{
+	u32 i = 0, lines = cut ? min_t(u32, max_lines, 1) : max_lines;
+	u32 first_end = slen, j;
+
+	memset(r, 0, sizeof(*r));
+	for (j = 0; j < slen; j++)
+		if (!bm_isword(s[j])) {
+			first_end = j + 1;
+			break;
+		}
+	while (r->n < lines && r->n < BM_MAX_LINES && i < slen && per_line > 0) {
+		u32 end = min(i + per_line, slen);
+
+		if (end < slen && bm_isword(s[end - 1])) {
+			bool has_word = false;
+			u32 k;
+
+			j = end;
+			while (j > i && bm_isword(s[j - 1]))
+				j--;
+			for (k = i; k < j; k++)
+				has_word |= bm_isword(s[k]);
+			if (j > i && has_word && !cut) {
+				end = j;
+			} else {
+				r->splits++;
+				if (end < first_end)
+					r->first_split = true;
+			}
+		}
+		r->start[r->n] = i;
+		r->len[r->n] = end - i;
+		r->n++;
+		i = end;
+	}
+	r->shown = i;
+	if (i < first_end)
+		r->first_split = true;
+}
+
+/* fits in src/render/text.zig. */
+static bool bm_fits(int fit, u32 slen, const struct bm_broken *r)
+{
+	switch (fit) {
+	case BM_FIT_ANY:
+		return r->shown > 0;
+	case BM_FIT_WHOLE:
+		return r->shown == slen;
+	case BM_FIT_WORD:
+		return !r->first_split;
+	case BM_FIT_WORDS:
+		return r->shown == slen && r->splits == 0;
+	case BM_FIT_CHARS:
+		return r->shown >= min(bms.fit_n, slen);
+	default:
+		return r->shown * 100 >= bms.fit_n * slen;
+	}
+}
+
+/* The place of pixel (x, y) in the fill order of the area: it is filled
+ * when the place is less than the painted count. Used for inverse ink,
+ * because the kernel paints only new pixels and cannot repaint a box. */
+static u32 bm_fill_index(s32 ix, s32 iy, s32 iw, s32 ih, s32 x, s32 y)
+{
+	s32 r, x0, y0, w, h, q;
+	u32 off = 0;
+
+	if (bms.fill == BM_RASTER)
+		return (y - iy) * iw + (x - ix);
+	if (bms.fill == BM_ROWS_UP)
+		return (iy + ih - 1 - y) * iw + (iw - 1);
+	r = min(min(x - ix, y - iy), min(ix + iw - 1 - x, iy + ih - 1 - y));
+	for (q = 0; q < r; q++) {
+		w = iw - 2 * q;
+		h = ih - 2 * q;
+		off += h == 1 ? w : w == 1 ? h : 2 * w + 2 * h - 4;
+	}
+	x0 = ix + r;
+	y0 = iy + r;
+	w = iw - 2 * r;
+	h = ih - 2 * r;
+	if (y == y0)
+		return off + (x - x0);
+	if (x == x0 + w - 1)
+		return off + w + (y - y0 - 1);
+	if (y == y0 + h - 1)
+		return off + w + (h - 1) + (x0 + w - 2 - x);
+	return off + w + (h - 1) + (w - 1) + (y0 + h - 2 - y);
+}
+
+/* Draw text in (x, y, w, h). ink: a solid colour, or with inverse, the
+ * empty colour on painted pixels and `base` on the others. */
+static void bm_text(s32 x, s32 y, s32 w, s32 h, const char *s, bool cut, int fit,
+		    bool inverse, u32 solid, u32 base, u32 empty,
+		    s32 ix, s32 iy, s32 iw, s32 ih, u32 painted, bool all_painted)
+{
+	struct bm_font f = bm_font();
+	struct bm_broken r;
+	u32 slen = strlen(s), line_h = f.h + 1, l, c, gx, gy;
+
+	if (w < (s32)f.w || h < (s32)f.h || !slen)
+		return;
+	bm_break(s, slen, w / f.w, (h + 1) / line_h, cut, &r);
+	if (!bm_fits(fit, slen, &r))
+		return;
+	for (l = 0; l < r.n; l++)
+		for (c = 0; c < r.len[l]; c++) {
+			unsigned char ch = s[r.start[l] + c];
+
+			for (gy = 0; gy < f.h; gy++) {
+				unsigned char bits = f.rows[ch * f.h + gy];
+
+				for (gx = 0; gx < f.w; gx++) {
+					s32 px = x + (s32)(c * f.w + gx), py = y + (s32)(l * line_h + gy);
+					u32 col = solid;
+
+					if (!((bits >> (7 - gx)) & 1))
+						continue;
+					if (px < 0 || py < 0 || px >= (s32)bm.width || py >= (s32)bm.height)
+						continue;
+					if (inverse) {
+						bool filled = all_painted ||
+							bm_fill_index(ix, iy, iw, ih, px, py) < painted;
+
+						col = filled ? empty : base;
+					}
+					bm.fb[(size_t)py * bm.stride + px] = col;
+				}
+			}
+		}
+}
+
+/* The title strip of a node, or a rectangle with w = 0. */
+static struct bootmap_rect bm_header(u32 i)
+{
+	struct bootmap_rect in = bootmap_inset(bm.rects[i], bms.pads[min_t(u32, bm.depth[i], 2)]);
+	const struct bootmap_node *nd = &bm.nodes[i];
+
+	if (!bm.header_h || !(nd->depth == 1 || (nd->depth == 2 && nd->kids > 1)) ||
+	    in.h <= (s32)bm.header_h)
+		return (struct bootmap_rect){ 0, 0, 0, 0 };
+	return (struct bootmap_rect){ in.x, in.y, in.w, bm.header_h };
+}
+
+/* drawHeader in src/render/canvas.zig: the name, in the stage colour, on
+ * black. */
+static void bm_draw_title(u32 i)
+{
+	struct bootmap_rect h = bm_header(i);
+	struct bootmap_node *nd = &bm.nodes[i];
+
+	if (nd->titled || h.w <= 0)
+		return;
+	nd->titled = true;
+	bm_fill(h.x, h.y, h.w, h.h, BOOTMAP_SURFACE);
+	bm_text(h.x, h.y, h.w, h.h - 1, nd->name, true, BM_FIT_ANY, false,
+		bm_pal(nd->stage, NULL), 0, 0, 0, 0, 0, 0, 0, false);
+}
+
+/* The name of a leaf, 1 px inside its interior. */
+static void bm_leaf_label(const struct bootmap_node *nd, s32 ix, s32 iy, s32 iw,
+			  s32 ih, u32 base, u32 empty, u32 painted, bool all)
+{
+	if (bms.labels != 0)
+		return;
+	bm_text(ix + 1, iy + 1, iw - 2, ih - 2, nd->name, bms.cut, bms.fit,
+		bms.ink == 0, bms.ink == 1 ? 0xffffff : 0, base, empty,
+		ix, iy, iw, ih, painted, all);
 }
 
 /* Paint pixels [k0, k1) of the area in the order of bms.fill: the same
@@ -431,6 +775,9 @@ static bool bm_update_leaf(u32 i, u64 now_ns)
 		return false;
 	o = (w > 2 * (s32)bms.outline && h > 2 * (s32)bms.outline) ? bms.outline : 0;
 	if (!nd->spawned) {
+		/* The titles appear with the first box of their area. */
+		bm_draw_title(nd->parent);
+		bm_draw_title(bm.nodes[nd->parent].parent);
 		if (o)
 			bm_fill(r.x, r.y, w, h, color);
 		bm_fill(r.x + o, r.y + o, w - 2 * o, h - 2 * o,
@@ -453,6 +800,8 @@ static bool bm_update_leaf(u32 i, u64 now_ns)
 		if (bms.late_keep && nd->late1 > nd->late0)
 			bm_fill_range(r.x + o, r.y + o, w - 2 * o, h - 2 * o,
 				      nd->late0, nd->late1, BOOTMAP_WARNING);
+		bm_leaf_label(nd, r.x + o, r.y + o, w - 2 * o, h - 2 * o, color,
+			      bms.empty_dim ? bm_scale(color, 25) : bms.empty, 0, true);
 		nd->full = true;
 		return true;
 	}
@@ -468,6 +817,8 @@ static bool bm_update_leaf(u32 i, u64 now_ns)
 		nd->late0 = nd->late1;
 	}
 	nd->drawn = max(nd->drawn, k);
+	bm_leaf_label(nd, r.x + o, r.y + o, w - 2 * o, h - 2 * o, color,
+		      bms.empty_dim ? bm_scale(color, 25) : bms.empty, nd->drawn, false);
 	return false;
 }
 
@@ -479,6 +830,8 @@ static int bm_animate(void *unused)
 		bool all_full = true;
 		u32 i;
 
+		if (READ_ONCE(bm.handoff))
+			break;
 		spin_lock(&bm.lock);
 		for (i = 1; i < bm.n; i++) {
 			if (bm.depth[i] != 3)
@@ -498,7 +851,8 @@ static int bm_animate(void *unused)
 			break;
 		msleep(16);
 	}
-	pr_info("bootmap: every kernel box is full\n");
+	pr_info("bootmap: the kernel stops drawing (%s)\n",
+		READ_ONCE(bm.handoff) ? "handoff" : "every box is full");
 	return 0;
 }
 
@@ -509,7 +863,7 @@ static u32 bm_find(initcall_t fn)
 {
 	u32 k, i;
 
-	if (!bm.live)
+	if (!bm.live || READ_ONCE(bm.handoff))
 		return 0;
 	/* Initcalls run in link order, so the next one is almost always at
 	 * the cursor. */
@@ -549,8 +903,17 @@ static void bm_on_finish(void *data, initcall_t fn, int ret)
 	bm_update_leaf(i, bm.nodes[i].end_ns);
 	spin_unlock(&bm.lock);
 	/* The leaves are not in run order ("other" is last), so count. */
-	if (--bm.pending == 0)
+	if (--bm.pending == 0) {
 		bm.live = false;
+		/* The kernel runs the initrd's /init next. Its box fills until
+		 * the daemon takes over (handoff). */
+		if (bm.initrd_leaf) {
+			spin_lock(&bm.lock);
+			bm.nodes[bm.initrd_leaf].state = BM_ACTIVE;
+			bm.nodes[bm.initrd_leaf].start_ns = local_clock();
+			spin_unlock(&bm.lock);
+		}
+	}
 }
 
 /* Build the tree: root, the stages, and under the kernel stage one group
@@ -558,7 +921,7 @@ static void bm_on_finish(void *data, initcall_t fn, int ret)
 
 static u32 bm_count(const struct bootmap_level *lv, int nlv)
 {
-	u32 n = 1 + 2 + 1; /* root, start_kernel group and leaf, "other" */
+	u32 n = 1 + 2 + 1 + 2; /* root, start_kernel group and leaf, "other", initramfs group and leaf */
 	int i;
 
 	for (i = 0; i < BOOTMAP_STAGES; i++)
@@ -569,11 +932,21 @@ static u32 bm_count(const struct bootmap_level *lv, int nlv)
 	return n;
 }
 
+static u32 bm_last[4];	/* the last node added at each depth */
+
 static void bm_add(u32 *n, const char *name, unsigned char depth,
 		   unsigned char stage, u64 weight, unsigned char state)
 {
 	struct bootmap_node *nd = &bm.nodes[*n];
 
+	if (depth > 0) {
+		nd->parent = bm_last[depth - 1];
+		bm.nodes[nd->parent].kids++;
+	}
+	if (depth == 2)
+		nd->gidx = bm.nodes[nd->parent].kids - 1;
+	if (depth < 4)
+		bm_last[depth] = *n;
 	strscpy(nd->name, name, sizeof(nd->name));
 	nd->depth = depth;
 	nd->stage = stage;
@@ -633,6 +1006,7 @@ static int __init bootmap_build(void)
 		if (initcall_from_entry(e) == bootmap_init)
 			self = e;
 
+	bm.header_h = bms.labels == 2 ? 0 : bm_font().h + 1;
 	total = bm_count(lv, nlv);
 	bm.nodes = kcalloc(total, sizeof(*bm.nodes), GFP_KERNEL);
 	bm.depth = kcalloc(total, 1, GFP_KERNEL);
@@ -653,6 +1027,14 @@ static int __init bootmap_build(void)
 	for (st = 0; st < BOOTMAP_STAGES; st++) {
 		u64 sw = bm.stage_weights[st];
 
+		if (st == 3 && sw) {
+			/* The initrd: one box, as in vm/collect-trace.py. */
+			bm_add(&n, "initrd", 1, st, sw, BM_PENDING);
+			bm_add(&n, "initramfs", 2, st, 1, BM_PENDING);
+			bm.initrd_leaf = n;
+			bm_add(&n, "initramfs", 3, st, 1, BM_PENDING);
+			continue;
+		}
 		if (st != BOOTMAP_STAGE_KERNEL) {
 			/* The stages before the kernel are complete. */
 			if (sw)
@@ -710,7 +1092,7 @@ static int __init bootmap_build(void)
 
 	bootmap_layout_tree(bm.depth, bm.weight, bm.other, bm.n,
 			    (struct bootmap_rect){ 0, 0, bm.width, bm.height },
-			    bms.pads, 0, bms.order, bm.rects, &s);
+			    bms.pads, bm.header_h, bms.order, bm.rects, &s);
 	kfree(s.raw);
 	kfree(s.w);
 	kfree(s.order);
@@ -795,7 +1177,7 @@ static int __init bootmap_init(void)
 		if (nd->depth == 1) {
 			struct bootmap_rect r = bm.rects[i];
 
-			bm_fill(r.x, r.y, r.w, r.h, bootmap_stage_colors[nd->stage]);
+			bm_fill(r.x, r.y, r.w, r.h, bm_pal(nd->stage, NULL));
 		} else if (nd->depth == 3) {
 			nd->start_ns = nd->end_ns = local_clock();
 		}
@@ -803,6 +1185,9 @@ static int __init bootmap_init(void)
 	for (i = 1; i < bm.n; i++)
 		if (bm.depth[i] == 3)
 			bm_update_leaf(i, local_clock());
+	if (bms.spawn_plan)
+		for (i = 1; i < bm.n; i++)
+			bm_draw_title(i);
 
 	bm.live = true;
 	err = register_trace_initcall_start(bm_on_start, NULL);
@@ -820,10 +1205,38 @@ static int __init bootmap_init(void)
 }
 early_initcall(bootmap_init);
 
+static int bootmap_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, bootmap_show, NULL);
+}
+
+/* "handoff": the daemon has the screen now. The kernel stops drawing. */
+static ssize_t bootmap_write(struct file *file, const char __user *buf,
+			     size_t len, loff_t *pos)
+{
+	char cmd[16];
+	size_t n = min(len, sizeof(cmd) - 1);
+
+	if (copy_from_user(cmd, buf, n))
+		return -EFAULT;
+	cmd[n] = '\0';
+	if (!strncmp(cmd, "handoff", 7))
+		WRITE_ONCE(bm.handoff, true);
+	return len;
+}
+
+static const struct proc_ops bootmap_proc_ops = {
+	.proc_open = bootmap_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+	.proc_write = bootmap_write,
+};
+
 static int __init bootmap_proc_init(void)
 {
 	if (bm.n)
-		proc_create_single("bootmap", 0444, NULL, bootmap_show);
+		proc_create("bootmap", 0644, NULL, &bootmap_proc_ops);
 	return 0;
 }
 fs_initcall(bootmap_proc_init);

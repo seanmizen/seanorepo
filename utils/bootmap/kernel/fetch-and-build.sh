@@ -25,6 +25,7 @@ fi
 
 mkdir -p "$SRC/drivers/video/bootmap"
 cp "$HERE/bootmap.c" "$HERE/bootmap_layout.c" "$HERE/bootmap_layout.h" \
+    "$HERE/bootmap_palette.h" "$HERE/bootmap_font.h" \
     "$HERE/Kconfig" "$HERE/Makefile" "$SRC/drivers/video/bootmap/"
 
 cd "$SRC"
