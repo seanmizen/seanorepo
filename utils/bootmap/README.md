@@ -138,9 +138,10 @@ hw/uninstall.sh <host> surface     # remove all of it
 - **The default boot.** `BOOTMAP_DEFAULT=1 hw/install.sh ...` makes the
   bootmap kernel the GRUB default. The GRUB menu has no recovery entries.
 - **The GRUB menu is hidden.** GRUB boots the default entry at once. To see
-  the menu, hold Shift, Ctrl or Alt from power-on until the menu opens.
-  `/etc/grub.d/01_bootmap` reads the keys with `keystatus`. After a failed
-  boot, Debian's recordfail menu still opens for 30 s.
+  the menu, hold F4 from power-on until the menu opens. GRUB also takes Esc,
+  but on a Surface the firmware takes a held Esc and opens its setup. Shift
+  does not work on a Surface: its firmware always reports the modifier keys
+  as up. After a failed boot, Debian's recordfail menu still opens for 30 s.
 
 ## Record a boot
 
