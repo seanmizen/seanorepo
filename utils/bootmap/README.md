@@ -35,7 +35,7 @@ The same options work as kernel command-line parameters
 
 | Option | Default | Values |
 |---|---|---|
-| `fill` | `raster` | `raster` (left to right, top to bottom, pixel by pixel), `rows-up` (whole lines from the bottom), `spiral` (pixel by pixel, from the edge to the centre) |
+| `fill` | `raster` | `raster`: left to right, top to bottom, pixel by pixel. `rows-up`: whole lines from the bottom. `spiral`: pixel by pixel, from the edge to the centre. |
 | `fill_ms` | `250` | The shortest fill of a box, in ms. A box that completes sooner still fills over this time, so you see it fill. |
 | `outline` | `1` | The outline width, in the stage colour, when a box spawns. `0`: no outline. |
 | `empty` | `white` | The colour of the part of a box that is not full: `white`, `black`, `dim` (the stage colour at 25 %) or `#rrggbb`. |
