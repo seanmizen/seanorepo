@@ -725,6 +725,9 @@ pub fn main(init: std.process.Init) !void {
         dbus.call_timeout_s = 10;
         return testDbus(alloc);
     }
+    // --initrd: started by the initramfs (hw/initramfs/), before the real
+    // root exists. See initrdPhase.
+    const initrd_mode = args.len > 1 and eql(args[1], "--initrd");
     const st = styleFromCmdline(alloc);
     const t_start = nowUs();
 
@@ -764,13 +767,22 @@ pub fn main(init: std.process.Init) !void {
         }
         if (kn.depth != 3) continue;
         nd.start_us = if (kn.state == 0) never else kn.start_us;
-        nd.end_us = if (kn.state == 1) t_start else kn.end_us;
+        // The initrd box: in --initrd mode the initrd runs now, and it ends
+        // at the switch to the real root. Else it ended before the daemon.
+        nd.end_us = if (kn.state == 1) (if (initrd_mode) never else t_start) else kn.end_us;
     }
     var initrd_leaf: ?usize = null;
     for (pm.nodes, 0..) |kn, i| if (kn.depth == 3 and kn.stage == 3) {
         initrd_leaf = i;
     };
     drawKernelArea(canvas, &ka, pm, st, t_start);
+
+    if (initrd_mode) {
+        handoff();
+        out.present() catch |err| log("present failed: {s}", .{@errorName(err)});
+        log("initrd: on the screen after {d} ms", .{(nowUs() - t_start) / 1000});
+        try initrdPhase(canvas, &out, &ka, initrd_leaf, pal, st);
+    }
 
     var last = try loadLast(alloc);
     log("{d} unit times from the last boot", .{last.count()});
@@ -893,6 +905,52 @@ pub fn main(init: std.process.Init) !void {
     // No text console (the QEMU kernel): keep the picture on the screen.
     log("no text console: the picture stays", .{});
     while (true) sleepMs(60_000);
+}
+
+/// The initrd part of an --initrd run. The daemon holds DRM master from the
+/// start of the initramfs, so the text console cannot take the screen when
+/// the initramfs prints. It animates the initrd box until the init-bottom
+/// script asks for the switch (/run/bootmap.switch). Then it chroots into the
+/// new root (/root), as plymouth does, so that after run-init it sees the
+/// real root: /proc, /dev and /run move into it, and the DRM file stays open.
+fn initrdPhase(canvas: bootmap.canvas.Canvas, out: *drm.Output, ka: *const KArea, initrd_leaf: ?usize, pal: bootmap.color.Palette, st: bootmap.style.Style) !void {
+    // The systemd unit skips itself when this file exists.
+    {
+        var b: [16]u8 = undefined;
+        const pid = std.fmt.bufPrint(&b, "{d}\n", .{linux.getpid()}) catch "";
+        const rc = linux.open("/run/bootmap.pid", .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true, .CLOEXEC = true }, 0o644);
+        if (linux.errno(rc) == .SUCCESS) {
+            _ = linux.write(@intCast(rc), pid.ptr, pid.len);
+            _ = linux.close(@intCast(rc));
+        }
+    }
+    while (linux.errno(linux.access("/run/bootmap.switch", linux.F_OK)) != .SUCCESS) {
+        const now = nowUs();
+        if (initrd_leaf) |il| {
+            var nd = ka.nodes[il];
+            nd.color = bootmap.canvas.leafColor(nd, ka.gidx[il], pal, st, now, now, 1);
+            bootmap.canvas.drawLeaf(canvas, nd, .active, st, now);
+        }
+        out.present() catch {};
+        sleepMs(33);
+    }
+    if (initrd_leaf) |il| ka.nodes[il].end_us = nowUs();
+    // The order matters. chroot into /root before the script moves /root to
+    // "/" (after that, /root is an empty folder). The acknowledgement must
+    // go to the initramfs /run, so open that folder first, and write the
+    // file through it after the chroot.
+    const run_rc = linux.open("/run", .{ .ACCMODE = .RDONLY, .DIRECTORY = true, .CLOEXEC = true }, 0);
+    if (linux.errno(linux.chroot("/root")) != .SUCCESS or linux.errno(linux.chdir("/")) != .SUCCESS) {
+        log("initrd: cannot chroot into /root", .{});
+    } else {
+        log("initrd: in the new root", .{});
+    }
+    if (linux.errno(run_rc) == .SUCCESS) {
+        const run_fd: i32 = @intCast(run_rc);
+        const ack = linux.openat(run_fd, "bootmap.ack", .{ .ACCMODE = .WRONLY, .CREAT = true, .CLOEXEC = true }, 0o644);
+        if (linux.errno(ack) == .SUCCESS) _ = linux.close(@intCast(ack));
+        _ = linux.close(run_fd);
+    }
 }
 
 /// bootmap.gpu=i915[,...]: the GPU driver modules that hw/install.sh holds

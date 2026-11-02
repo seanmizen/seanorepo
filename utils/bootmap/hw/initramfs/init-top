@@ -1,0 +1,12 @@
+#!/bin/sh
+# initramfs-tools init-top (bootmap, hw/install.sh): start bootmapd as early
+# as the initramfs can. It takes the screen (DRM master) before the initramfs
+# prints anything, so the text console cannot take it.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+grep -q 'bootmap.daemon=1' /proc/cmdline || exit 0
+[ -e /proc/bootmap ] || exit 0
+[ -x /usr/local/lib/bootmap/bootmapd ] || exit 0
+/usr/local/lib/bootmap/bootmapd --initrd < /dev/null > /dev/null 2>&1 &
+exit 0

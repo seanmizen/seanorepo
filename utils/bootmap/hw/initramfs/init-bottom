@@ -1,0 +1,15 @@
+#!/bin/sh
+# initramfs-tools init-bottom (bootmap, hw/install.sh): before run-init moves
+# the new root to "/", ask bootmapd to chroot into it, and wait (at most 2 s)
+# until it has. bootmapd then follows the boot into the real system.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+[ -e /run/bootmap.pid ] || exit 0
+: > /run/bootmap.switch
+i=0
+while [ ! -e /run/bootmap.ack ] && [ "$i" -lt 20 ]; do
+    sleep 0.1 2> /dev/null || sleep 1
+    i=$((i + 1))
+done
+exit 0

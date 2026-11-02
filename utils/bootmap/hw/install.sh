@@ -30,7 +30,8 @@ if [ -f "$HW_ROOT/working/$MACHINE/vmlinuz.signed" ] && [ -f "$MOK/MOK.der" ]; t
     "${SCP[@]}" "$HW_ROOT/working/$MACHINE/vmlinuz.signed" "$MOK/MOK.der" "$SSH_USER@$HOST:$DIR/"
     SIGNED=1
 fi
-"${SSH[@]}" mkdir -p "$DIR/theme"
+"${SSH[@]}" mkdir -p "$DIR/theme" "$DIR/initramfs"
+"${SCP[@]}" "$HW_HERE"/initramfs/* "$SSH_USER@$HOST:$DIR/initramfs/"
 "${SCP[@]}" "$THEME"/* "$SSH_USER@$HOST:$DIR/theme/"
 
 GPU="${BOOTMAP_GPU:-i915}"
@@ -47,6 +48,8 @@ Description=bootmap: draw the boot as a live treemap
 DefaultDependencies=no
 ConditionKernelCommandLine=bootmap.daemon=1
 ConditionPathExists=/proc/bootmap
+# The initramfs started bootmapd already (hw/initramfs/init-top).
+ConditionPathExists=!/run/bootmap.pid
 Before=sysinit.target
 [Service]
 Type=simple
@@ -83,11 +86,19 @@ for m in $(echo "$GPU" | tr ',' ' '); do
     echo "install $m /bin/sh -c 'case \"\$(uname -r)\" in *-bootmap) [ -e /run/bootmap-gpu ] || exit 0 ;; esac; exec /sbin/modprobe --ignore-install $m \$CMDLINE_OPTS'" >> /etc/modprobe.d/bootmap-gpu.conf
 done
 
+# bootmapd in the initramfs, from its start (hw/initramfs/). dpkg -i below
+# makes the bootmap initramfs with them.
+install -D -m 755 "$DIR/initramfs/hook" /etc/initramfs-tools/hooks/bootmap
+install -D -m 755 "$DIR/initramfs/init-top" /etc/initramfs-tools/scripts/init-top/bootmap
+install -D -m 755 "$DIR/initramfs/init-bottom" /etc/initramfs-tools/scripts/init-bottom/bootmap
+
 # The kernel package runs update-grub itself, so the theme and the snippet
 # above must exist before it. dpkg --configure -a finishes an install that
 # an earlier run left half done.
 dpkg --configure -a
 dpkg -i "$DIR"/linux-image-*.deb
+# A reinstall of the same package version can keep the old initramfs.
+update-initramfs -u -k "$(ls /boot/vmlinuz-*-bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
 if [ "$SIGNED" = 1 ]; then
     V="$(ls /boot/vmlinuz-*-bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
     install -m 644 "$DIR/vmlinuz.signed" "/boot/vmlinuz-$V"
