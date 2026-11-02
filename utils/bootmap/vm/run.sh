@@ -90,7 +90,7 @@ else
     qemu-img create -q -f qcow2 -F qcow2 -b "$WORK/guest.qcow2" "$OUT/disk.qcow2"
     qemu-system-x86_64 "${COMMON[@]}" -m 2048 \
         -drive if=virtio,format=qcow2,file="$OUT/disk.qcow2" \
-        -append "root=/dev/vda1 rw console=ttyS0 loglevel=4 bootmap.daemon=1 bootmap.stages=$STAGES $EXTRA" \
+        -append "root=/dev/vda1 rw console=ttyS0 loglevel=5 bootmap.daemon=1 bootmap.stages=$STAGES $EXTRA" \
         -virtfs "local,path=$ROOT/zig-out/bin,mount_tag=bootmap,security_model=none,readonly=on" \
         -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22" -device virtio-net-pci,netdev=n0 \
         "${DISPLAY_ARGS[@]}" &

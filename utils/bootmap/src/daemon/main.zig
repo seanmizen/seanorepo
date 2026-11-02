@@ -46,7 +46,8 @@ var kmsg: i32 = -1;
 /// kernel log shows on the serial console.
 fn log(comptime fmt: []const u8, args: anytype) void {
     var buf: [512]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, "bootmapd: " ++ fmt ++ "\n", args) catch return;
+    // <4>: warning level, so it shows on the console at loglevel=5.
+    const s = std.fmt.bufPrint(&buf, "<4>bootmapd: " ++ fmt ++ "\n", args) catch return;
     if (kmsg < 0) {
         const rc = linux.open("/dev/kmsg", .{ .ACCMODE = .WRONLY, .CLOEXEC = true }, 0);
         kmsg = if (linux.errno(rc) == .SUCCESS) @intCast(rc) else 2;
