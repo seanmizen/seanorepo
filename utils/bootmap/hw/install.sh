@@ -77,7 +77,25 @@ GRUB_DISABLE_SUBMENU=y
 GRUB_DISABLE_RECOVERY=true
 GRUB_DEFAULT=saved
 GRUB_CMDLINE_LINUX_DEFAULT="$ARGS"
+# No menu: boot the default entry at once. Shift, Ctrl or Alt held opens
+# the menu (/etc/grub.d/01_bootmap).
+GRUB_TIMEOUT=0
+GRUB_TIMEOUT_STYLE=hidden
 CFG
+# Runs after 00_header, so it changes the timeout that 00_header sets.
+cat > /etc/grub.d/01_bootmap << 'SNIPPET'
+#!/bin/sh
+# bootmap (utils/bootmap/hw/install.sh). hw/uninstall.sh removes it.
+# keystatus reads the modifier keys with no wait. With more than one
+# option, it is true when any one of the keys is held.
+cat << 'GRUB'
+if keystatus --shift --ctrl --alt; then
+  set timeout_style=menu
+  set timeout=-1
+fi
+GRUB
+SNIPPET
+chmod 755 /etc/grub.d/01_bootmap
 # The GPU driver waits on the bootmap kernel until bootmapd has given the
 # screen to the console: a GPU driver takes the screen from simpledrm. The
 # rule is in the initramfs too (dpkg -i below makes it). Other kernels load
