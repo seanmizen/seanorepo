@@ -106,7 +106,10 @@ if [ "$SIGNED" = 1 ]; then
     install -m 644 "$DIR/vmlinuz.signed" "/boot/vmlinuz-$V"
     # Compare fingerprints. mokutil --test-key gives different words (on
     # stderr) when the running kernel was built with the key.
-    if mokutil --list-enrolled 2> /dev/null | tr 'A-F' 'a-f' | grep -q -F "$MOK_FP"; then
+    # No "| grep -q" here: with pipefail, grep -q stops early, mokutil gets
+    # SIGPIPE, and the test fails although the key is there.
+    ENROLLED="$(mokutil --list-enrolled 2> /dev/null | tr 'A-F' 'a-f' || true)"
+    if [ -n "$MOK_FP" ] && [ "${ENROLLED#*"$MOK_FP"}" != "$ENROLLED" ]; then
         echo "install: the MOK key is enrolled"
     else
         mokutil --generate-hash="$MOK_PASSWORD" > "$DIR/mok.hash"
