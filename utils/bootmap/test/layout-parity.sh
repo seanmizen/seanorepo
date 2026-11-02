@@ -15,10 +15,13 @@ cc -O2 -Wall -Wextra -Werror -o "$OUT/layout_parity" \
 fails=0
 checks=0
 for trace in "$ROOT"/traces/*.json; do
-    for size in 1280x800 1920x1080 3840x2160 800x600 640x480 1024x768 333x777 8192x64; do
-        name="$(basename "$trace" .json)-$size"
-        "$ROOT/zig-out/bin/bootmap" plan "$trace" --size "$size" > "$OUT/$name.plan"
-        "$ROOT/zig-out/bin/bootmap" rects "$trace" --size "$size" > "$OUT/$name.zig"
+    for case in 1280x800:6,3,2 1920x1080:6,3,2 3840x2160:6,3,2 800x600:6,3,2 640x480:0,0,0 \
+        1024x768:12,6,4 333x777:1,1,1 8192x64:6,3,2 1280x800:20,10,5; do
+        size="${case%%:*}"
+        pad="${case#*:}"
+        name="$(basename "$trace" .json)-$size-${pad//,/-}"
+        "$ROOT/zig-out/bin/bootmap" plan "$trace" --size "$size" "pad=$pad" > "$OUT/$name.plan"
+        "$ROOT/zig-out/bin/bootmap" rects "$trace" --size "$size" "pad=$pad" > "$OUT/$name.zig"
         "$OUT/layout_parity" < "$OUT/$name.plan" > "$OUT/$name.c"
         checks=$((checks + 1))
         if ! cmp -s "$OUT/$name.zig" "$OUT/$name.c"; then

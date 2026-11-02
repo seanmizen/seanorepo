@@ -35,8 +35,8 @@ pub const Node = struct {
     first_us: u64 = std.math.maxInt(u64),
 };
 
-/// The inset of the children area inside a node, by the depth of the node.
-pub const pads = [_]i32{ 6, 3, 2 };
+/// The index of "kernel" in stage_order.
+pub const kernel_stage: u8 = 2;
 /// Sort the children by weight (true) or keep boot order (false), by the
 /// depth of the parent. Stages and groups keep boot order, so the picture
 /// reads in boot order. Leaves are sorted, for squarer boxes.
@@ -65,13 +65,14 @@ pub const Plan = struct {
         return if (nd.failed) .failed else .done;
     }
 
-    /// Lay out the whole tree in `area`.
-    pub fn layout(self: *Plan, area: Rect) !void {
+    /// Lay out the whole tree in `area`. pads[d] is the inset of the
+    /// children inside a node at depth d (style.pad).
+    pub fn layout(self: *Plan, area: Rect, pads: [3]u8) !void {
         const alloc = self.arena.allocator();
         self.nodes[0].rect = area;
         for (self.nodes) |*nd| {
             if (nd.children.len == 0) continue;
-            const inner = nd.rect.inset(pads[@min(nd.depth, pads.len - 1)]);
+            const inner = nd.rect.inset(@as(i32, pads[@min(nd.depth, pads.len - 1)]));
             const raw = try alloc.alloc(u64, nd.children.len);
             const w = try alloc.alloc(u32, nd.children.len);
             const order = try alloc.alloc(u32, nd.children.len);
@@ -87,8 +88,8 @@ pub const Plan = struct {
     /// Write the plan in the text form that kernel/layout.c reads
     /// (test/layout-parity.sh): a header, then one line per node in
     /// pre-order: "<depth> <weight> <name>".
-    pub fn writeText(self: *const Plan, w: *std.Io.Writer, width: i32, height: i32) !void {
-        try w.print("bootmap-plan 1\n{d} {d}\n{d}\n", .{ width, height, self.nodes.len });
+    pub fn writeText(self: *const Plan, w: *std.Io.Writer, width: i32, height: i32, pads: [3]u8) !void {
+        try w.print("bootmap-plan 2\n{d} {d}\n{d} {d} {d}\n{d}\n", .{ width, height, pads[0], pads[1], pads[2], self.nodes.len });
         for (self.nodes) |nd| try w.print("{d} {d} {s}\n", .{ nd.depth, nd.weight, nd.name });
     }
 
@@ -225,7 +226,7 @@ test "a small trace gives a laid-out tree" {
     };
     var plan = try fromTrace(std.testing.allocator, .{ .version = 1, .source = "test", .end_us = 9000, .boxes = &boxes });
     defer plan.deinit();
-    try plan.layout(.{ .w = 640, .h = 480 });
+    try plan.layout(.{ .w = 640, .h = 480 }, .{ 6, 3, 2 });
     try std.testing.expectEqual(@as(usize, 3), plan.leafCount());
     try std.testing.expectEqualStrings("kernel", plan.nodes[1].name);
     for (plan.nodes) |nd| try std.testing.expect(nd.rect.w > 0 and nd.rect.h > 0);

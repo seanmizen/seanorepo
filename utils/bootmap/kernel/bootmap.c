@@ -20,6 +20,14 @@
  *   bootmap.stages=F,L,K,I,S     the weights of the five stages (firmware,
  *                                loader, kernel, initrd, systemd). A stage
  *                                with weight 0 is not in the picture.
+ *   bootmap.fill=raster|rows-up|spiral, bootmap.fill_ms=250,
+ *   bootmap.outline=1, bootmap.empty=white|black|dim|#rrggbb,
+ *   bootmap.spawn=start|plan, bootmap.gap=2, bootmap.pad=6,3,2
+ *                                the style options of src/render/style.zig
+ *
+ * A kernel thread redraws the boxes that are filling, every 16 ms, until
+ * every box is full. So a box that completes in microseconds still fills
+ * over fill_ms, and the viewer can see it fill.
  *
  * The drawing rules are the rules of src/render/canvas.zig. The colours are
  * the colours of src/render/palette.zig.
@@ -32,6 +40,9 @@
 #include <linux/sched/clock.h>
 #include <linux/screen_info.h>
 #include <linux/proc_fs.h>
+#include <linux/kthread.h>
+#include <linux/delay.h>
+#include <linux/spinlock.h>
 #include <linux/seq_file.h>
 #include <trace/events/initcall.h>
 
@@ -52,7 +63,28 @@ static const u32 bootmap_stage_colors[BOOTMAP_STAGES] = {
 	0x3987e5, 0xd95926, 0x199e70, 0xc98500, 0xd55181,
 };
 #define BOOTMAP_SURFACE 0x000000
-#define BOOTMAP_GAP 2
+
+enum bootmap_fill { BM_RASTER, BM_ROWS_UP, BM_SPIRAL };
+
+/* src/render/style.zig: the same options and the same defaults. */
+static struct {
+	int fill;
+	u32 fill_ms;
+	u32 outline;
+	bool empty_dim;
+	u32 empty;
+	bool spawn_plan;
+	u32 gap;
+	unsigned char pads[3];
+	u32 warn_ms, stuck_ms;
+} bms = {
+	.fill = BM_RASTER, .fill_ms = 250, .outline = 1, .empty = 0xffffff,
+	.gap = 2, .pads = { 6, 3, 2 }, .warn_ms = 500, .stuck_ms = 3000,
+};
+
+/* src/render/palette.zig */
+#define BOOTMAP_WARNING 0xfab219
+#define BOOTMAP_CRITICAL 0xd03b3b
 
 /* The initcall levels, in run order. The linker script names them. */
 extern initcall_entry_t __initcall_start[];
@@ -79,6 +111,10 @@ struct bootmap_node {
 	unsigned char state;
 	initcall_t fn;		/* leaves of the kernel stage only */
 	u64 start_ns, end_ns;
+	bool spawned;		/* the outline and the empty colour are drawn */
+	unsigned char heat;	/* the outline that is drawn: 0 normal, 1 slow, 2 stuck */
+	bool full;		/* the box is solid: nothing more to draw */
+	u32 drawn;		/* the pixels of the interior that are painted */
 };
 
 static struct {
@@ -94,6 +130,7 @@ static struct {
 	u32 first_leaf, end_leaf; /* the kernel leaves: [first_leaf, end_leaf) */
 	u32 cursor;
 	bool live;
+	spinlock_t lock;
 } bm = {
 	.stage_weights = { 0, 0, 30, 10, 60 },
 };
@@ -123,6 +160,101 @@ static int __init bootmap_setup_stages(char *s)
 }
 __setup("bootmap.stages=", bootmap_setup_stages);
 
+static int __init bootmap_setup_fill(char *s)
+{
+	if (!strcmp(s, "raster"))
+		bms.fill = BM_RASTER;
+	else if (!strcmp(s, "rows-up"))
+		bms.fill = BM_ROWS_UP;
+	else if (!strcmp(s, "spiral"))
+		bms.fill = BM_SPIRAL;
+	return 1;
+}
+__setup("bootmap.fill=", bootmap_setup_fill);
+
+static int __init bootmap_setup_fill_ms(char *s)
+{
+	u32 v;
+
+	if (!kstrtou32(s, 10, &v))
+		bms.fill_ms = max_t(u32, v, 1);
+	return 1;
+}
+__setup("bootmap.fill_ms=", bootmap_setup_fill_ms);
+
+static int __init bootmap_setup_outline(char *s)
+{
+	if (kstrtou32(s, 10, &bms.outline))
+		pr_warn("bootmap: bad number in an option\n");
+	return 1;
+}
+__setup("bootmap.outline=", bootmap_setup_outline);
+
+static int __init bootmap_setup_empty(char *s)
+{
+	bms.empty_dim = false;
+	if (!strcmp(s, "white"))
+		bms.empty = 0xffffff;
+	else if (!strcmp(s, "black"))
+		bms.empty = 0;
+	else if (!strcmp(s, "dim"))
+		bms.empty_dim = true;
+	else if (s[0] == '#')
+		if (kstrtou32(s + 1, 16, &bms.empty))
+			pr_warn("bootmap: bad number in an option\n");
+	return 1;
+}
+__setup("bootmap.empty=", bootmap_setup_empty);
+
+static int __init bootmap_setup_spawn(char *s)
+{
+	bms.spawn_plan = !strcmp(s, "plan");
+	return 1;
+}
+__setup("bootmap.spawn=", bootmap_setup_spawn);
+
+static int __init bootmap_setup_gap(char *s)
+{
+	if (kstrtou32(s, 10, &bms.gap))
+		pr_warn("bootmap: bad number in an option\n");
+	return 1;
+}
+__setup("bootmap.gap=", bootmap_setup_gap);
+
+static int __init bootmap_setup_warn_ms(char *s)
+{
+	if (kstrtou32(s, 10, &bms.warn_ms))
+		pr_warn("bootmap: bad number in an option\n");
+	return 1;
+}
+__setup("bootmap.warn_ms=", bootmap_setup_warn_ms);
+
+static int __init bootmap_setup_stuck_ms(char *s)
+{
+	if (kstrtou32(s, 10, &bms.stuck_ms))
+		pr_warn("bootmap: bad number in an option\n");
+	return 1;
+}
+__setup("bootmap.stuck_ms=", bootmap_setup_stuck_ms);
+
+static int __init bootmap_setup_pad(char *s)
+{
+	int i;
+
+	for (i = 0; i < 3 && s && *s; i++) {
+		char *comma = strchr(s, ',');
+		u8 v;
+
+		if (comma)
+			*comma = '\0';
+		if (!kstrtou8(s, 10, &v))
+			bms.pads[i] = v;
+		s = comma ? comma + 1 : NULL;
+	}
+	return 1;
+}
+__setup("bootmap.pad=", bootmap_setup_pad);
+
 /* Drawing: the same rules as src/render/canvas.zig. */
 
 static void bm_fill(s32 x0, s32 y0, s32 w, s32 h, u32 color)
@@ -135,14 +267,6 @@ static void bm_fill(s32 x0, s32 y0, s32 w, s32 h, u32 color)
 		return;
 	for (y = ya; y < yb; y++)
 		memset32(bm.fb + (size_t)y * bm.stride + xa, color, xb - xa);
-}
-
-static void bm_outline(s32 x, s32 y, s32 w, s32 h, u32 color)
-{
-	bm_fill(x, y, w, 1, color);
-	bm_fill(x, y + h - 1, w, 1, color);
-	bm_fill(x, y, 1, h, color);
-	bm_fill(x + w - 1, y, 1, h, color);
 }
 
 static u32 bm_scale(u32 c, u32 pct)
@@ -171,33 +295,200 @@ static u32 bm_leaf_color(const struct bootmap_node *nd)
 	return bm_scale(bootmap_stage_colors[nd->stage], 88 + bm_fnv1a(nd->name) % 13);
 }
 
-static void bm_draw_box(u32 i, u32 color_if_done)
+/* Paint pixels [k0, k1) of the area in the order of bms.fill: the same
+ * orders as fillRange in src/render/canvas.zig. */
+static void bm_fill_range(s32 x, s32 y, s32 w, s32 h, u32 k0, u32 k1, u32 color)
 {
-	const struct bootmap_node *nd = &bm.nodes[i];
-	struct bootmap_rect r = bm.rects[i];
-	s32 w = r.w > BOOTMAP_GAP ? r.w - BOOTMAP_GAP : r.w;
-	s32 h = r.h > BOOTMAP_GAP ? r.h - BOOTMAP_GAP : r.h;
-
-	if (!bm.fb || w <= 0 || h <= 0)
+	if (w <= 0 || h <= 0 || k1 <= k0)
 		return;
-	switch (nd->state) {
-	case BM_PENDING:
-		bm_fill(r.x, r.y, w, h, BOOTMAP_SURFACE);
-		break;
-	case BM_ACTIVE:
-		/* The kernel has no expected time, so no partial fill. */
-		bm_fill(r.x, r.y, w, h, BOOTMAP_SURFACE);
-		bm_outline(r.x, r.y, w, h, color_if_done);
-		break;
-	default:
-		bm_fill(r.x, r.y, w, h, color_if_done);
-		break;
+	if (bms.fill == BM_RASTER) {
+		u32 k = k0;
+
+		while (k < k1) {
+			u32 col = k % w, run = min_t(u32, w - col, k1 - k);
+
+			bm_fill(x + col, y + k / w, run, 1, color);
+			k += run;
+		}
+	} else if (bms.fill == BM_ROWS_UP) {
+		s32 r0 = k0 / w, r1 = k1 / w;
+
+		if (r1 > r0)
+			bm_fill(x, y + h - r1, w, r1 - r0, color);
+	} else {
+		u32 off = 0;
+
+		while (w > 0 && h > 0 && off < k1) {
+			struct { s32 sx, sy, dx, dy, len; } sd[4] = {
+				{ x, y, 1, 0, w },
+				{ x + w - 1, y + 1, 0, 1, h - 1 },
+				{ x + w - 2, y + h - 1, -1, 0, h > 1 ? w - 1 : 0 },
+				{ x, y + h - 2, 0, -1, w > 1 ? h - 2 : 0 },
+			};
+			int j;
+
+			for (j = 0; j < 4; j++) {
+				u32 len, a, b;
+				s32 s0, n, px, py, qx, qy;
+
+				if (sd[j].len <= 0)
+					continue;
+				len = sd[j].len;
+				a = max(k0, off);
+				b = min(k1, off + len);
+				if (b > a) {
+					s0 = a - off;
+					n = b - a;
+					px = sd[j].sx + sd[j].dx * s0;
+					py = sd[j].sy + sd[j].dy * s0;
+					qx = px + sd[j].dx * (n - 1);
+					qy = py + sd[j].dy * (n - 1);
+					bm_fill(min(px, qx), min(py, qy),
+						max(px, qx) - min(px, qx) + 1,
+						max(py, qy) - min(py, qy) + 1, color);
+				}
+				off += len;
+			}
+			x++;
+			y++;
+			w -= 2;
+			h -= 2;
+		}
 	}
 }
 
-static void bm_draw_leaf(u32 i)
+/* permille() in src/render/style.zig, with expected = 0: the kernel does
+ * not know how long an initcall takes. */
+static u32 bm_permille(const struct bootmap_node *nd, u64 now_ns)
 {
-	bm_draw_box(i, bm_leaf_color(&bm.nodes[i]));
+	u64 fill_us = (u64)bms.fill_ms * 1000;
+	u64 start = nd->start_ns / 1000, now = now_ns / 1000, end, at_end;
+
+	if (now < start)
+		return 0;
+	if (nd->state != BM_DONE || now < nd->end_ns / 1000)
+		return min_t(u64, div64_u64((now - start) * 1000, fill_us), 900);
+	end = nd->end_ns / 1000;
+	at_end = min_t(u64, div64_u64((end - start) * 1000, fill_us), 900);
+	return min_t(u64, at_end + div64_u64((now - end) * 1000, fill_us), 1000);
+}
+
+/* heat() in src/render/style.zig, with expected = 0. */
+static unsigned char bm_heat(const struct bootmap_node *nd, u64 now_ns)
+{
+	u64 e;
+
+	if (nd->state != BM_ACTIVE || now_ns < nd->start_ns)
+		return 0;
+	e = (now_ns - nd->start_ns) / 1000;
+	if (e > (u64)bms.stuck_ms * 1000)
+		return 2;
+	if (e > (u64)bms.warn_ms * 1000)
+		return 1;
+	return 0;
+}
+
+/* Draw the outline ring of width o around (x, y, w, h). */
+static void bm_ring(s32 x, s32 y, s32 w, s32 h, s32 o, u32 color)
+{
+	bm_fill(x, y, w, o, color);
+	bm_fill(x, y + h - o, w, o, color);
+	bm_fill(x, y + o, o, h - 2 * o, color);
+	bm_fill(x + w - o, y + o, o, h - 2 * o, color);
+}
+
+/* Bring one leaf up to date at time now_ns. Call with bm.lock held.
+ * It paints only what changed. Return true when the leaf is full. */
+static bool bm_update_leaf(u32 i, u64 now_ns)
+{
+	struct bootmap_node *nd = &bm.nodes[i];
+	struct bootmap_rect r = bm.rects[i];
+	s32 w = r.w > (s32)bms.gap ? r.w - bms.gap : r.w;
+	s32 h = r.h > (s32)bms.gap ? r.h - bms.gap : r.h;
+	u32 color = bm_leaf_color(nd), p, area, k;
+	s32 o;
+
+	if (nd->full)
+		return true;
+	if (!bm.fb || w <= 0 || h <= 0) {
+		nd->full = nd->state == BM_DONE;
+		return nd->full;
+	}
+	if (nd->state == BM_PENDING && !bms.spawn_plan)
+		return false;
+	/* The interior keeps one size: the widest outline, max(outline, 2)
+	 * when hot. canvas.zig redraws each frame, so it can change size. */
+	o = (w > 2 * (s32)bms.outline && h > 2 * (s32)bms.outline) ? bms.outline : 0;
+	if (!nd->spawned) {
+		if (o)
+			bm_fill(r.x, r.y, w, h, color);
+		bm_fill(r.x + o, r.y + o, w - 2 * o, h - 2 * o,
+			bms.empty_dim ? bm_scale(color, 25) : bms.empty);
+		nd->spawned = true;
+		nd->drawn = 0;
+		nd->heat = 0;
+	}
+	{
+		unsigned char ht = bm_heat(nd, now_ns);
+
+		if (ht != nd->heat) {
+			/* Slow or stuck: a 2 px ring over the box edge. Back to
+			 * normal: the normal outline and the empty colour again,
+			 * then the painted pixels again. */
+			s32 ho = (w > 4 && h > 4) ? 2 : 0;
+
+			if (ht && ho)
+				bm_ring(r.x, r.y, w, h, ho, ht == 2 ? BOOTMAP_CRITICAL : BOOTMAP_WARNING);
+			if (!ht) {
+				if (o)
+					bm_ring(r.x, r.y, w, h, o, color);
+				if (ho > o)
+					bm_ring(r.x + o, r.y + o, w - 2 * o, h - 2 * o, ho - o,
+						bms.empty_dim ? bm_scale(color, 25) : bms.empty);
+				nd->drawn = 0;
+			}
+			nd->heat = ht;
+		}
+	}
+	p = nd->state == BM_PENDING ? 0 : bm_permille(nd, now_ns);
+	if (p >= 1000) {
+		bm_fill(r.x, r.y, w, h, color);
+		nd->full = true;
+		return true;
+	}
+	area = (w - 2 * o) * (h - 2 * o);
+	k = (u32)div64_u64((u64)area * p, 1000);
+	bm_fill_range(r.x + o, r.y + o, w - 2 * o, h - 2 * o, nd->drawn, k, color);
+	nd->drawn = max(nd->drawn, k);
+	return false;
+}
+
+/* The animation thread: it redraws the leaves that are filling. */
+static int bm_animate(void *unused)
+{
+	for (;;) {
+		u64 now = local_clock();
+		bool all_full = true;
+		u32 i;
+
+		spin_lock(&bm.lock);
+		for (i = 1; i < bm.n; i++) {
+			if (bm.depth[i] != 3)
+				continue;
+			/* After the last initcall, a box that never started
+			 * (a skipped initcall) stays empty. */
+			if (bm_update_leaf(i, now) ||
+			    (!bm.live && bm.nodes[i].state == BM_PENDING))
+				continue;
+			all_full = false;
+		}
+		spin_unlock(&bm.lock);
+		if (all_full)
+			break;
+		msleep(16);
+	}
+	pr_info("bootmap: every kernel box is full\n");
+	return 0;
 }
 
 /* The tracepoint probes. They are not __init: a module load after boot
@@ -226,9 +517,11 @@ static void bm_on_start(void *data, initcall_t fn)
 	if (!i)
 		return;
 	bm.cursor = i;
+	spin_lock(&bm.lock);
 	bm.nodes[i].state = BM_ACTIVE;
 	bm.nodes[i].start_ns = local_clock();
-	bm_draw_leaf(i);
+	bm_update_leaf(i, bm.nodes[i].start_ns);
+	spin_unlock(&bm.lock);
 }
 
 static void bm_on_finish(void *data, initcall_t fn, int ret)
@@ -239,9 +532,11 @@ static void bm_on_finish(void *data, initcall_t fn, int ret)
 		return;
 	/* A non-zero return is almost always "no such hardware here", not a
 	 * failure (vm/collect-trace.py has the same rule). */
+	spin_lock(&bm.lock);
 	bm.nodes[i].state = BM_DONE;
 	bm.nodes[i].end_ns = local_clock();
-	bm_draw_leaf(i);
+	bm_update_leaf(i, bm.nodes[i].end_ns);
+	spin_unlock(&bm.lock);
 	if (i + 1 == bm.end_leaf)
 		bm.live = false;
 }
@@ -356,7 +651,7 @@ static int __init bootmap_build(void)
 
 	bootmap_layout_tree(bm.depth, bm.weight, bm.n,
 			    (struct bootmap_rect){ 0, 0, bm.width, bm.height },
-			    bm.rects, &s);
+			    bms.pads, bm.rects, &s);
 	kfree(s.raw);
 	kfree(s.w);
 	kfree(s.order);
@@ -426,15 +721,27 @@ static int __init bootmap_init(void)
 		return 0;
 	}
 
-	/* The first frame: black, then the boxes that are already done. */
+	/* The first frame: black, then the boxes that are already done. The
+	 * kernel leaves that ran before the probes start and end now, so
+	 * they fill like the others. */
+	spin_lock_init(&bm.lock);
 	bm_fill(0, 0, bm.width, bm.height, BOOTMAP_SURFACE);
 	for (i = 1; i < bm.n; i++) {
-		const struct bootmap_node *nd = &bm.nodes[i];
+		struct bootmap_node *nd = &bm.nodes[i];
 
-		if (nd->state == BM_DONE && (nd->depth == 3 || bm.depth[i] == 1))
-			bm_draw_box(i, nd->depth == 3 ? bm_leaf_color(nd) :
-				    bootmap_stage_colors[nd->stage]);
+		if (nd->state != BM_DONE)
+			continue;
+		if (nd->depth == 1) {
+			struct bootmap_rect r = bm.rects[i];
+
+			bm_fill(r.x, r.y, r.w, r.h, bootmap_stage_colors[nd->stage]);
+		} else if (nd->depth == 3) {
+			nd->start_ns = nd->end_ns = local_clock();
+		}
 	}
+	for (i = 1; i < bm.n; i++)
+		if (bm.depth[i] == 3)
+			bm_update_leaf(i, local_clock());
 
 	bm.live = true;
 	err = register_trace_initcall_start(bm_on_start, NULL);
@@ -447,6 +754,7 @@ static int __init bootmap_init(void)
 	}
 	pr_info("bootmap: %u boxes, %u initcalls, on %ux%u\n", bm.n,
 		bm.end_leaf - bm.first_leaf, bm.width, bm.height);
+	kthread_run(bm_animate, NULL, "bootmap");
 	return 0;
 }
 early_initcall(bootmap_init);

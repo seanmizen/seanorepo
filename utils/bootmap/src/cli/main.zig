@@ -1,7 +1,9 @@
 //! bootmap: headless tools for a recorded boot.
 //!
-//!   bootmap snapshot <trace.json> <out.png> [--at <pct>] [--size <W>x<H>]
-//!       Draw the treemap at <pct> % of the boot (default 100) to a PNG.
+//!   bootmap snapshot <trace.json> <out.png> [--at <pct>] [--at-ms <ms>] [--size <W>x<H>] [key=value ...]
+//!       Draw the treemap at <pct> % of the boot (default 100), or at <ms>
+//!       after the start, to a PNG. key=value: a style option
+//!       (src/render/style.zig), for example fill=spiral.
 //!   bootmap plan <trace.json> [--size <W>x<H>]
 //!       Print the plan text that kernel/layout.c reads (layout parity).
 //!   bootmap rects <trace.json> [--size <W>x<H>]
@@ -14,7 +16,7 @@ const bootmap = @import("bootmap");
 
 const usage =
     \\usage:
-    \\  bootmap snapshot <trace.json> <out.png> [--at <pct>] [--size <W>x<H>]
+    \\  bootmap snapshot <trace.json> <out.png> [--at <pct>] [--at-ms <ms>] [--size <W>x<H>] [key=value ...]
     \\  bootmap plan <trace.json> [--size <W>x<H>]
     \\  bootmap rects <trace.json> [--size <W>x<H>]
     \\  bootmap stats <trace.json>
@@ -25,6 +27,8 @@ const Options = struct {
     width: i32 = 1280,
     height: i32 = 800,
     at_pct: u64 = 100,
+    at_ms: ?u64 = null,
+    style: bootmap.style.Style = .{},
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -49,6 +53,14 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, a, "--at") and i + 1 < args.len) {
             i += 1;
             opts.at_pct = try std.fmt.parseInt(u64, args[i], 10);
+        } else if (std.mem.eql(u8, a, "--at-ms") and i + 1 < args.len) {
+            i += 1;
+            opts.at_ms = try std.fmt.parseInt(u64, args[i], 10);
+        } else if (std.mem.indexOfScalar(u8, a, '=') != null) {
+            opts.style.set(a) catch |err| {
+                try out.print("bootmap: bad option {s}: {s}\n", .{ a, @errorName(err) });
+                return fail(out, "");
+            };
         } else if (std.mem.eql(u8, a, "--size") and i + 1 < args.len) {
             i += 1;
             const x = std.mem.indexOfScalar(u8, args[i], 'x') orelse return fail(out, "bootmap: --size needs <W>x<H>\n");
@@ -64,10 +76,10 @@ pub fn main(init: std.process.Init) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, trace_path, alloc, .limited(64 << 20));
     const parsed = try bootmap.trace.parse(alloc, bytes);
     var plan = try bootmap.plan.fromTrace(alloc, parsed.value);
-    try plan.layout(.{ .w = opts.width, .h = opts.height });
+    try plan.layout(.{ .w = opts.width, .h = opts.height }, opts.style.pads);
 
     if (std.mem.eql(u8, cmd, "plan")) {
-        try plan.writeText(out, opts.width, opts.height);
+        try plan.writeText(out, opts.width, opts.height, opts.style.pads);
     } else if (std.mem.eql(u8, cmd, "rects")) {
         try plan.writeRects(out);
     } else if (std.mem.eql(u8, cmd, "stats")) {
@@ -77,8 +89,8 @@ pub fn main(init: std.process.Init) !void {
         const px = try alloc.alloc(u32, @intCast(opts.width * opts.height));
         const c: bootmap.canvas.Canvas = .{ .pixels = px, .width = opts.width, .height = opts.height, .stride = opts.width };
         c.clear(bootmap.palette.surface);
-        const t = plan.end_us * @min(opts.at_pct, 100) / 100;
-        bootmap.canvas.drawPlan(c, &plan, t);
+        const t = if (opts.at_ms) |ms| ms * 1000 else plan.end_us * @min(opts.at_pct, 100) / 100;
+        bootmap.canvas.drawPlan(c, &plan, opts.style, t);
         const file = try std.Io.Dir.cwd().createFile(io, positional.items[0], .{});
         defer file.close(io);
         var fbuf: [64 * 1024]u8 = undefined;

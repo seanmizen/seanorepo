@@ -1,5 +1,5 @@
 /*
- * Read the plan text from `bootmap plan` on stdin. Lay it out with
+ * Read the plan text (version 2) from `bootmap plan` on stdin. Lay it out with
  * kernel/bootmap_layout.c. Print one rectangle per node, as `bootmap rects`
  * does. test/layout-parity.sh compares the two outputs.
  */
@@ -13,11 +13,12 @@ int main(void)
 {
 	char magic[32];
 	int version, w, h;
-	unsigned int n, i;
+	unsigned int n, i, p0, p1, p2;
+	unsigned char pads[3];
 
-	if (scanf("%31s %d %d %d %u", magic, &version, &w, &h, &n) != 5 ||
-	    strcmp(magic, "bootmap-plan") != 0 || version != 1) {
-		fprintf(stderr, "layout_parity: stdin is not bootmap-plan 1\n");
+	if (scanf("%31s %d %d %d %u %u %u %u", magic, &version, &w, &h, &p0, &p1, &p2, &n) != 8 ||
+	    strcmp(magic, "bootmap-plan") != 0 || version != 2) {
+		fprintf(stderr, "layout_parity: stdin is not bootmap-plan 2\n");
 		return 2;
 	}
 	unsigned char *depth = calloc(n, 1);
@@ -42,7 +43,10 @@ int main(void)
 		depth[i] = (unsigned char)d;
 		weight[i] = wt;
 	}
-	bootmap_layout_tree(depth, weight, n, (struct bootmap_rect){ 0, 0, w, h }, rects, &s);
+	pads[0] = p0;
+	pads[1] = p1;
+	pads[2] = p2;
+	bootmap_layout_tree(depth, weight, n, (struct bootmap_rect){ 0, 0, w, h }, pads, rects, &s);
 	for (i = 0; i < n; i++)
 		printf("%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
 	return 0;

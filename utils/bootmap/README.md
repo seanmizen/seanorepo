@@ -27,6 +27,32 @@ The size of a box is `floor(sqrt(duration in µs)) + 16`, from a recorded
 boot. Stages and groups stay in boot order. The leaves in a group are sorted
 by size.
 
+## Options
+
+The same options work as kernel command-line parameters
+(`bootmap.fill=spiral`) and as CLI and replay arguments (`fill=spiral`).
+`src/render/style.zig` and `kernel/bootmap.c` implement them.
+
+| Option | Default | Values |
+|---|---|---|
+| `fill` | `raster` | `raster` (left to right, top to bottom, pixel by pixel), `rows-up` (whole lines from the bottom), `spiral` (pixel by pixel, from the edge to the centre) |
+| `fill_ms` | `250` | The shortest fill of a box, in ms. A box that completes sooner still fills over this time, so you see it fill. |
+| `outline` | `1` | The outline width, in the stage colour, when a box spawns. `0`: no outline. |
+| `empty` | `white` | The colour of the part of a box that is not full: `white`, `black`, `dim` (the stage colour at 25 %) or `#rrggbb`. |
+| `spawn` | `start` | `start`: a box appears when its step starts. `plan`: all boxes appear in the first frame. |
+| `gap` | `2` | The space between two boxes, in pixels. |
+| `pad` | `6,3,2` | The inset of the screen, a stage and a group, in pixels. |
+| `warn_ms` | `500` | A box in flight for longer gets a yellow outline (2× its expected time, if known). |
+| `stuck_ms` | `3000` | A box in flight for longer gets a red outline (4× its expected time, if known). |
+
+A box fills over its expected time, and stops at 90 % until its step
+completes. The kernel does not know an initcall's time, so its boxes fill over
+`fill_ms`. A box that fails is red with a cross. The yellow and red outlines are
+only for boxes in flight. A box goes back to its normal colour when it completes.
+
+In the replay, F changes the fill, E the empty colour, O the outline, and S the
+spawn mode.
+
 ## Status
 
 | Part | State |
@@ -34,7 +60,7 @@ by size.
 | Record a boot (`vm/record-trace.sh`) | done |
 | Layout, model, renderer, CLI, replay window | done |
 | Zig and C layout parity (`test/layout-parity.sh`) | done |
-| Kernel patch | not started |
+| Kernel patch: live initcall boxes, fill animation, options | done |
 | Initramfs daemon and the handoff from the kernel | not started |
 | UEFI loader | not started |
 | Greeter handoff | not started |
@@ -50,6 +76,8 @@ test/layout-parity.sh             # Zig and C layouts agree
 zig build replay -- traces/debian13-cloud-tcg.json
 zig build cli -- snapshot traces/debian13-cloud-tcg.json out.png --at 30
 zig build cli -- stats traces/debian13-cloud-tcg.json
+kernel/fetch-and-build.sh         # build the kernel with bootmap
+vm/run.sh --kernel-only --show    # boot it in a QEMU window
 ```
 
 In the replay window: Space pauses, R restarts, and Left and Right change
@@ -77,7 +105,7 @@ name has the accelerator in it, because TCG makes every step slower.
 | Folder | Contents |
 |---|---|
 | `src/` | Zig: `layout/`, `model/`, `render/`, `cli/`, `replay/` |
-| `kernel/` | C: the layout for the kernel. The kernel patch comes later. |
+| `kernel/` | C: the kernel patch (`bootmap.c`), its layout, the config, the build script |
 | `test/` | the layout parity test |
 | `vm/` | the boot recorder |
 | `traces/` | recorded boots |

@@ -171,13 +171,12 @@ void bootmap_squarify(struct bootmap_rect area, const u32 *weights,
 	}
 }
 
-/* The same constants as pads and sort_children in src/model/plan.zig. */
-static const s32 bootmap_pads[] = { 6, 3, 2 };
+/* The same rule as sort_children in src/model/plan.zig. */
 static const int bootmap_sort[] = { 0, 0, 1 };
 
 void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
-			 struct bootmap_rect area, struct bootmap_rect *rects,
-			 struct bootmap_scratch *s)
+			 struct bootmap_rect area, const unsigned char pads[3],
+			 struct bootmap_rect *rects, struct bootmap_scratch *s)
 {
 	u32 i, j, c;
 
@@ -199,7 +198,7 @@ void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 			s->raw[j] = weight[s->kids[j]];
 		bootmap_normalize(s->raw, s->w, c);
 		bootmap_make_order(s->w, s->order, c, bootmap_sort[d]);
-		bootmap_squarify(bootmap_inset(rects[i], bootmap_pads[d]), s->w,
+		bootmap_squarify(bootmap_inset(rects[i], pads[d]), s->w,
 				 s->order, c, s->out);
 		for (j = 0; j < c; j++)
 			rects[s->kids[j]] = s->out[j];

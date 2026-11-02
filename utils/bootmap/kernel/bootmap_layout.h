@@ -53,12 +53,12 @@ struct bootmap_scratch {
 
 /*
  * Lay out a tree in pre-order: depth[i] and weight[i] for each node, node 0
- * is the root. Internal nodes have the sum of their leaves as weight. The
- * insets and the sort rule come from src/model/plan.zig.
+ * is the root. pads[d] is the inset of the children of a node at depth d
+ * (bootmap.pad). The sort rule comes from src/model/plan.zig.
  */
 void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
-			 struct bootmap_rect area, struct bootmap_rect *rects,
-			 struct bootmap_scratch *s);
+			 struct bootmap_rect area, const unsigned char pads[3],
+			 struct bootmap_rect *rects, struct bootmap_scratch *s);
 
 static inline struct bootmap_rect bootmap_inset(struct bootmap_rect r, s32 pad)
 {

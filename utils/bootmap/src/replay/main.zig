@@ -1,12 +1,16 @@
 //! bootmap-replay: play a recorded boot in a window.
 //!
-//!   zig build replay -- <trace.json> [--speed <x>]
+//!   zig build replay -- <trace.json> [--speed <x>] [key=value ...]
+//!
+//! key=value: a style option (src/render/style.zig), for example fill=spiral.
 //!
 //! The treemap is drawn by the same canvas code as the loader and the
 //! daemon, into a 1280x800 XRGB8888 buffer. This app copies the buffer to a
 //! texture each frame and draws it, with a status line and a legend above.
 //!
-//! Keys: Space pause, R restart, Left and Right change the speed.
+//! Keys: Space pause, R restart, Left and Right change the speed,
+//! F next fill order, E next empty colour, O outline on and off,
+//! S spawn at start or at plan.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -34,6 +38,7 @@ var texture: gfx.Texture = .{ .id = 0, .width = 1, .height = 1 };
 var text: ?sw_text.TextRenderer = null;
 var font_bytes: ?[]u8 = null;
 
+var style: bootmap.style.Style = .{};
 var t_us: f64 = 0;
 var speed_index: usize = 3;
 var paused = false;
@@ -47,11 +52,17 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(2);
     }
     var i: usize = 2;
-    while (i + 1 < args.len) : (i += 2) {
-        if (std.mem.eql(u8, args[i], "--speed")) {
-            const want = try std.fmt.parseFloat(f64, args[i + 1]);
+    while (i < args.len) : (i += 1) {
+        if (std.mem.eql(u8, args[i], "--speed") and i + 1 < args.len) {
+            i += 1;
+            const want = try std.fmt.parseFloat(f64, args[i]);
             for (speeds, 0..) |s, k| if (s <= want) {
                 speed_index = k;
+            };
+        } else {
+            style.set(args[i]) catch |err| {
+                std.debug.print("bootmap-replay: bad option {s}: {s}\n", .{ args[i], @errorName(err) });
+                std.process.exit(2);
             };
         }
     }
@@ -59,7 +70,7 @@ pub fn main(init: std.process.Init) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, args[1], alloc, .limited(64 << 20));
     const parsed = try bootmap.trace.parse(alloc, bytes);
     plan = try bootmap.plan.fromTrace(alloc, parsed.value);
-    try plan.layout(.{ .w = fb_w, .h = fb_h });
+    try plan.layout(.{ .w = fb_w, .h = fb_h }, style.pads);
 
     for (font_paths) |p| {
         font_bytes = std.Io.Dir.cwd().readFileAlloc(init.io, p, alloc, .limited(16 << 20)) catch continue;
@@ -124,6 +135,17 @@ const Callbacks = struct {
         if (input.keyPressed(.R)) t_us = 0;
         if (input.keyPressed(.Left) and speed_index > 0) speed_index -= 1;
         if (input.keyPressed(.Right) and speed_index + 1 < speeds.len) speed_index += 1;
+        if (input.keyPressed(.F)) style.fill = switch (style.fill) {
+            .raster => .rows_up,
+            .rows_up => .spiral,
+            .spiral => .raster,
+        };
+        if (input.keyPressed(.E)) style.empty = switch (style.empty) {
+            .dim => .{ .color = 0xffffff },
+            .color => |c| if (c == 0xffffff) .{ .color = 0 } else if (c == 0) .dim else .{ .color = 0xffffff },
+        };
+        if (input.keyPressed(.O)) style.outline = if (style.outline == 0) 1 else 0;
+        if (input.keyPressed(.S)) style.spawn = if (style.spawn == .start) .plan else .start;
 
         const now = ctx.timeNs();
         const dt_ns = now -| last_ns;
@@ -142,7 +164,7 @@ const Callbacks = struct {
         const t: u64 = @intFromFloat(t_us);
 
         const c: bootmap.canvas.Canvas = .{ .pixels = &pixels, .width = fb_w, .height = fb_h, .stride = fb_w };
-        bootmap.canvas.drawPlan(c, &plan, t);
+        bootmap.canvas.drawPlan(c, &plan, style, t);
         toRgba();
         try r.updateTexture(texture, &rgba);
 
@@ -164,13 +186,14 @@ const Callbacks = struct {
             const muted = gfx.Color.rgba8(195, 194, 183, 255);
             const n = counts(t);
             var buf: [160]u8 = undefined;
-            const status = std.fmt.bufPrint(&buf, "{d:.2} s / {d:.2} s   {d}/{d} done, {d} active   x{d}{s}", .{
+            const status = std.fmt.bufPrint(&buf, "{d:.2} s / {d:.2} s   {d}/{d} done, {d} active   x{d}   fill={s}{s}", .{
                 t_us / 1e6,
                 @as(f64, @floatFromInt(plan.end_us)) / 1e6,
                 n.done,
                 n.total,
                 n.active,
                 speeds[speed_index],
+                @tagName(style.fill),
                 if (paused) "   paused" else "",
             }) catch "";
             _ = try tr.draw(r, status, 10, 10, .{ .size = 15, .color = ink });
