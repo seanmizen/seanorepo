@@ -209,8 +209,8 @@ test "states only move forward" {
         var last: u8 = 0;
         var t: u64 = 0;
         while (t <= 100) : (t += 1) {
-            const s = @intFromEnum(plan.state(i, t));
-            const rank: u8 = if (s >= @intFromEnum(State.done)) 2 else s;
+            const s = @backingInt(plan.state(i, t));
+            const rank: u8 = if (s >= @backingInt(State.done)) 2 else s;
             try std.testing.expect(rank >= last);
             last = rank;
         }
