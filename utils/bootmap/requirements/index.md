@@ -6,10 +6,11 @@
 | ID | Title | Status | Type | Priority | Source |
 |---|---|---|---|---|---|
 | [`REQ-BOOTMAP-001`](bootmap.md#req-bootmap-001--the-zig-layout-and-the-c-layout-give-the-same-rectangles) | The Zig layout and the C layout give the same rectangles | active | constraint | P0 | agent:SEAN-1016 |
-| [`REQ-BOOTMAP-002`](bootmap.md#req-bootmap-002--a-box-is-black-until-its-step-starts) | A box is black until its step starts | active | functional | P1 | sean |
+| [`REQ-BOOTMAP-002`](bootmap.md#req-bootmap-002--a-box-shows-that-its-step-has-not-started) | A box shows that its step has not started | active | functional | P1 | sean |
 | [`REQ-BOOTMAP-003`](bootmap.md#req-bootmap-003--a-full-box-never-becomes-empty-again) | A full box never becomes empty again | active | constraint | P1 | agent:SEAN-1016 |
 | [`REQ-BOOTMAP-004`](bootmap.md#req-bootmap-004--a-failed-box-is-not-shown-by-colour-alone) | A failed box is not shown by colour alone | active | quality | P2 | agent:SEAN-1016 |
 | [`REQ-BOOTMAP-005`](bootmap.md#req-bootmap-005--the-login-screen-opens-when-every-box-is-full) | The login screen opens when every box is full | proposed | functional | P1 | sean |
+| [`REQ-BOOTMAP-006`](bootmap.md#req-bootmap-006--one-pixel-is-one-unit) | One pixel is one unit | active | constraint | P1 | sean |
 
 ## Dependency graph
 

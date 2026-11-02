@@ -88,9 +88,10 @@ requirements keep the three parts of the picture in agreement.
 - **Type:** constraint
 - **Priority:** P1
 - **Statement:** The renderers shall draw every line, outline, gap and marker
-  1 px wide, and shall show each state in the colour of single pixels.
+  1 px wide.
 - **Rationale:** The picture is pixel-wise information. A wider stroke for
-  emphasis hides pixels that carry data. For example, a late step shows as
-  yellow pixels in its fill, and not as a thick yellow outline.
+  emphasis hides pixels that carry data. So a state shows in the colour of
+  single pixels: a late step shows as yellow pixels in its fill, and not as a
+  thick yellow outline.
 - **Verification:** Inspection — `utils/bootmap/src/render/canvas.zig`
 - **Relations:** none
