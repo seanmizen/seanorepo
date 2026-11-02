@@ -60,6 +60,19 @@ pub fn build(b: *std.Build) void {
         replay_step.dependOn(&run_replay.step);
     }
 
+    // tinyinit: the static init of the kernel-only test. Always x86_64 Linux
+    // with no libc, so it runs in the test initramfs on any host.
+    const tinyinit = b.addExecutable(.{
+        .name = "tinyinit",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/tools/tinyinit.zig"),
+            .target = b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .linux }),
+            .optimize = .ReleaseSmall,
+            .strip = true,
+        }),
+    });
+    b.installArtifact(tinyinit);
+
     const tests = b.addTest(.{ .root_module = core });
     const run_tests = b.addRunArtifact(tests);
     b.step("test", "Run the unit tests").dependOn(&run_tests.step);

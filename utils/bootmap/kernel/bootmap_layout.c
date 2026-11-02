@@ -7,11 +7,15 @@
 
 #ifdef __KERNEL__
 #include <linux/math.h>
+#include <linux/math64.h>
 #include <linux/minmax.h>
+/* No u128 division in the kernel (__udivti3). This is the same exact floor. */
+#define bootmap_muldiv(a, b, c) mul_u64_u64_div_u64(a, b, c)
 #else
 #define int_sqrt(x) bootmap_isqrt(x)
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
+#define bootmap_muldiv(a, b, c) ((u64)(((bootmap_u128)(a) * (b)) / (c)))
 
 /* floor(sqrt(x)), with integers only, as the kernel's int_sqrt(). */
 static u64 bootmap_isqrt(u64 x)
@@ -52,7 +56,7 @@ void bootmap_normalize(const u64 *weights, u32 *out, u32 n)
 			out[i] = 1;
 			continue;
 		}
-		v = (u64)(((bootmap_u128)weights[i] * BOOTMAP_WEIGHT_TOTAL) / sum);
+		v = bootmap_muldiv(weights[i], BOOTMAP_WEIGHT_TOTAL, sum);
 		out[i] = (u32)max(v, (u64)1);
 	}
 }

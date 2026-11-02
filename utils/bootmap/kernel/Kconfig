@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0
+config BOOTMAP
+	bool "Draw the boot as a live treemap on the EFI framebuffer"
+	depends on X86 && EFI
+	select TRACEPOINTS
+	select KALLSYMS
+	help
+	  Draw one box for each initcall on the UEFI GOP framebuffer, and fill
+	  each box when its initcall completes. /proc/bootmap gives the boxes
+	  to the userspace daemon, which continues the picture.
+
+	  See utils/bootmap in seanorepo. If unsure, say N.
