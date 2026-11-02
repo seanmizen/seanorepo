@@ -1,0 +1,22 @@
+diff --git a/drivers/video/Kconfig b/drivers/video/Kconfig
+index c03c455db..ece869b9d 100644
+--- a/drivers/video/Kconfig
++++ b/drivers/video/Kconfig
+@@ -45,6 +45,8 @@ source "drivers/gpu/drm/Kconfig"
+ 
+ menu "Frame buffer Devices"
+ source "drivers/video/fbdev/Kconfig"
++
++source "drivers/video/bootmap/Kconfig"
+ endmenu
+ 
+ source "drivers/video/backlight/Kconfig"
+diff --git a/drivers/video/Makefile b/drivers/video/Makefile
+index ffbac4387..a18a2a45f 100644
+--- a/drivers/video/Makefile
++++ b/drivers/video/Makefile
+@@ -21,3 +21,4 @@ obj-$(CONFIG_VIDEOMODE_HELPERS) += display_timing.o videomode.o
+ ifeq ($(CONFIG_OF),y)
+ obj-$(CONFIG_VIDEOMODE_HELPERS) += of_display_timing.o of_videomode.o
+ endif
++obj-$(CONFIG_BOOTMAP)		  += bootmap/
