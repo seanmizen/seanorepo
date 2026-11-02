@@ -27,7 +27,6 @@ ARGS="quiet loglevel=3 bootmap.daemon=1 bootmap.stages=0,0,30,10,60 ${BOOTMAP_AR
 set -euo pipefail
 STOCK="$(ls /boot/vmlinuz-* | grep -v bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
 
-dpkg -i "$DIR"/linux-image-*.deb
 
 install -D -m 755 "$DIR/bootmapd" /usr/local/lib/bootmap/bootmapd
 cat > /etc/systemd/system/bootmapd.service << UNIT
@@ -58,8 +57,13 @@ GRUB_GFXPAYLOAD_LINUX=keep
 # One entry for each kernel, so the stock kernel can be the saved default.
 GRUB_DISABLE_SUBMENU=y
 GRUB_DEFAULT=saved
-GRUB_CMDLINE_LINUX_DEFAULT=$ARGS
+GRUB_CMDLINE_LINUX_DEFAULT="$ARGS"
 CFG
+# The kernel package runs update-grub itself, so the theme and the snippet
+# above must exist before it. dpkg --configure -a finishes an install that
+# an earlier run left half done.
+dpkg --configure -a
+dpkg -i "$DIR"/linux-image-*.deb
 update-grub
 grub-set-default "Debian GNU/Linux, with Linux $STOCK"
 rm -rf "$DIR"

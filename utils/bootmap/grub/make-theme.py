@@ -71,7 +71,10 @@ def bdf(path, scale):
     w, h = 6 * scale, 8 * scale
     nbytes = (w + 7) // 8
     out = ["STARTFONT 2.1", f"FONT -bootmap-bootmap-medium-r-normal--{h}-{h * 10}-75-75-c-{w * 10}-iso10646-1",
-           f"SIZE {h} 75 75", f"FONTBOUNDINGBOX {w} {h} 0 {-scale}", "STARTPROPERTIES 2",
+           # 72 dpi and PIXEL_SIZE: FreeType then makes the strike h pixels, so
+           # grub-mkfont -s h finds it at every scale.
+           f"SIZE {h} 72 72", f"FONTBOUNDINGBOX {w} {h} 0 {-scale}", "STARTPROPERTIES 5",
+           f"PIXEL_SIZE {h}", "RESOLUTION_X 72", "RESOLUTION_Y 72",
            f"FONT_ASCENT {h - scale}", f"FONT_DESCENT {scale}", "ENDPROPERTIES", f"CHARS {126 - 32 + 1}"]
     for ch in range(32, 127):
         out += [f"STARTCHAR c{ch}", f"ENCODING {ch}", f"SWIDTH {w * 72} 0", f"DWIDTH {w} 0",
