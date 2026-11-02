@@ -11,6 +11,8 @@
 #   4. make bindeb-pkg: working/<machine>/linux-image-*-bootmap*.deb.
 #
 # Secure Boot: with working/<machine>/mok/MOK.pem (key and certificate),
+# made with extendedKeyUsage=codeSigning only. Do not add the module-signing
+# EKU (1.3.6.1.4.1.2312.16.1.2): shim then refuses the key for kernels.
 # every module is signed with that key, and the kernel image is signed to
 # working/<machine>/vmlinuz.signed. hw/install.sh installs it and asks the
 # machine to enrol the key (MokManager, one confirmation at the machine).
