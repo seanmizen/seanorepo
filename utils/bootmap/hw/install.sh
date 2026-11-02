@@ -6,7 +6,9 @@
 #   hw/install.sh <host> [machine]        machine: working/<machine>/ (surface)
 #
 # Before: kernel/build-deb.sh <machine>. Set BOOTMAP_THEME_SCALE (default 2,
-# for a HiDPI screen) and BOOTMAP_ARGS (more kernel parameters).
+# for a HiDPI screen), BOOTMAP_ARGS (more kernel parameters), BOOTMAP_GPU (the
+# GPU driver modules to hold back, default i915), and BOOTMAP_DEFAULT=1 to
+# make the bootmap kernel the default boot.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
@@ -31,8 +33,9 @@ fi
 "${SSH[@]}" mkdir -p "$DIR/theme"
 "${SCP[@]}" "$THEME"/* "$SSH_USER@$HOST:$DIR/theme/"
 
-ARGS="quiet loglevel=3 bootmap.daemon=1 bootmap.stages=0,0,30,10,60 ${BOOTMAP_ARGS:-}"
-"${SSH[@]}" sudo DIR="$DIR" ARGS="'$ARGS'" SIGNED="$SIGNED" MOK_PASSWORD="'${MOK_PASSWORD:-bootmap}'" bash -s << 'REMOTE'
+GPU="${BOOTMAP_GPU:-i915}"
+ARGS="quiet loglevel=3 bootmap.daemon=1 bootmap.stages=0,0,30,10,60 bootmap.gpu=$GPU ${BOOTMAP_ARGS:-}"
+"${SSH[@]}" sudo DIR="$DIR" ARGS="'$ARGS'" GPU="$GPU" DEFAULT="${BOOTMAP_DEFAULT:-0}" SIGNED="$SIGNED" MOK_PASSWORD="'${MOK_PASSWORD:-bootmap}'" bash -s << 'REMOTE'
 set -euo pipefail
 STOCK="$(ls /boot/vmlinuz-* | grep -v bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
 
@@ -68,6 +71,16 @@ GRUB_DISABLE_SUBMENU=y
 GRUB_DEFAULT=saved
 GRUB_CMDLINE_LINUX_DEFAULT="$ARGS"
 CFG
+# The GPU driver waits on the bootmap kernel until bootmapd has given the
+# screen to the console: a GPU driver takes the screen from simpledrm. The
+# rule is in the initramfs too (dpkg -i below makes it). Other kernels load
+# the driver as usual.
+: > /etc/modprobe.d/bootmap-gpu.conf
+echo "# bootmap (hw/install.sh): on the bootmap kernel, wait for bootmapd." >> /etc/modprobe.d/bootmap-gpu.conf
+for m in $(echo "$GPU" | tr ',' ' '); do
+    echo "install $m /bin/sh -c 'case \"\$(uname -r)\" in *-bootmap) [ -e /run/bootmap-gpu ] || exit 0 ;; esac; exec /sbin/modprobe --ignore-install $m \$CMDLINE_OPTS'" >> /etc/modprobe.d/bootmap-gpu.conf
+done
+
 # The kernel package runs update-grub itself, so the theme and the snippet
 # above must exist before it. dpkg --configure -a finishes an install that
 # an earlier run left half done.
@@ -85,8 +98,14 @@ if [ "$SIGNED" = 1 ]; then
     fi
 fi
 update-grub
-grub-set-default "Debian GNU/Linux, with Linux $STOCK"
+BM="$(ls /boot/vmlinuz-*-bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
+if [ "$DEFAULT" = 1 ]; then
+    grub-set-default "Debian GNU/Linux, with Linux $BM"
+    echo "install: done. The default is the bootmap kernel $BM. The stock kernel $STOCK is in the menu."
+else
+    grub-set-default "Debian GNU/Linux, with Linux $STOCK"
+    echo "install: done. The default stays Debian GNU/Linux, with Linux $STOCK."
+fi
 rm -rf "$DIR"
-echo "install: done. The default stays Debian GNU/Linux, with Linux $STOCK."
 grep -o "menuentry '[^']*'" /boot/grub/grub.cfg
 REMOTE

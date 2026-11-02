@@ -597,8 +597,13 @@ fn boxesFromLast(alloc: std.mem.Allocator, last: *const std.StringArrayHashMapUn
 /// (a second connection from one process; see README), so it only listens
 /// for signals, and systemctl answers the questions.
 fn systemctl(alloc: std.mem.Allocator, args: []const []const u8) ![]u8 {
+    return run(alloc, "/usr/bin/systemctl", args);
+}
+
+/// Run a program, and return what it prints on stdout (at most 20 s).
+fn run(alloc: std.mem.Allocator, path: [:0]const u8, args: []const []const u8) ![]u8 {
     var argv: std.ArrayList(?[*:0]const u8) = .empty;
-    try argv.append(alloc, "/usr/bin/systemctl");
+    try argv.append(alloc, path.ptr);
     for (args) |a| try argv.append(alloc, try alloc.dupeSentinel(u8, a, 0));
     try argv.append(alloc, null);
     const envp = [_:null]?[*:0]const u8{ "PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C", "SYSTEMD_PAGER=", "SYSTEMD_COLORS=0" };
@@ -614,7 +619,7 @@ fn systemctl(alloc: std.mem.Allocator, args: []const []const u8) ![]u8 {
             _ = linux.dup2(@intCast(null_rc), 0);
             _ = linux.dup2(@intCast(null_rc), 2);
         }
-        _ = linux.execve("/usr/bin/systemctl", @ptrCast(argv.items.ptr), &envp);
+        _ = linux.execve(path.ptr, @ptrCast(argv.items.ptr), &envp);
         linux.exit(127);
     }
     _ = linux.close(fds[1]);
@@ -881,11 +886,35 @@ pub fn main(init: std.process.Init) !void {
     sleepMs(2000);
     if (linux.errno(linux.access("/sys/class/graphics/fbcon", linux.F_OK)) == .SUCCESS) {
         log("give the screen to the console", .{});
-        return; // the DRM file closes, and the console takes the screen
+        _ = linux.close(out.fd); // the console takes the screen
+        loadGpu(alloc);
+        return;
     }
     // No text console (the QEMU kernel): keep the picture on the screen.
     log("no text console: the picture stays", .{});
     while (true) sleepMs(60_000);
+}
+
+/// bootmap.gpu=i915[,...]: the GPU driver modules that hw/install.sh holds
+/// back on the bootmap kernel (a modprobe.d install rule waits for
+/// /run/bootmap-gpu). Load them now, after the picture: a GPU driver takes
+/// the screen from simpledrm.
+fn loadGpu(alloc: std.mem.Allocator) void {
+    const cmd = readFile(alloc, "/proc/cmdline") catch return;
+    var it = std.mem.tokenizeAny(u8, cmd, " \n");
+    while (it.next()) |tok| {
+        if (!std.mem.startsWith(u8, tok, "bootmap.gpu=")) continue;
+        const rc = linux.open("/run/bootmap-gpu", .{ .ACCMODE = .WRONLY, .CREAT = true, .CLOEXEC = true }, 0o644);
+        if (linux.errno(rc) == .SUCCESS) _ = linux.close(@intCast(rc));
+        var mods = std.mem.tokenizeScalar(u8, tok["bootmap.gpu=".len..], ',');
+        while (mods.next()) |m| {
+            _ = run(alloc, "/sbin/modprobe", &.{m}) catch |err| {
+                log("modprobe {s}: {s}", .{ m, @errorName(err) });
+                continue;
+            };
+            log("loaded the GPU driver {s}", .{m});
+        }
+    }
 }
 
 fn parseListUnits(alloc: std.mem.Allocator, body: dbus.Reader) ![]Unit {

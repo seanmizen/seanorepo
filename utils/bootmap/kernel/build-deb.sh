@@ -54,8 +54,8 @@ make -s olddefconfig
 for opt in CONFIG_BOOTMAP=y CONFIG_DRM_SIMPLEDRM=y CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER=y; do
     grep -qx "$opt" .config || { echo "build-deb: $opt is not in .config" >&2; exit 1; }
 done
-if grep -q '^CONFIG_DRM_I915=' .config; then
-    echo "build-deb: i915 is still in .config" >&2
+if grep -q '^CONFIG_DRM_I915=y' .config; then
+    echo "build-deb: i915 is built in. It must be a module, so it can wait for bootmapd" >&2
     exit 1
 fi
 
