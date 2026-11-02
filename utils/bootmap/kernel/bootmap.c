@@ -632,7 +632,7 @@ static int __init bootmap_build(void)
 
 	bootmap_layout_tree(bm.depth, bm.weight, bm.n,
 			    (struct bootmap_rect){ 0, 0, bm.width, bm.height },
-			    bms.pads, bm.rects, &s);
+			    bms.pads, 0, bm.rects, &s);
 	kfree(s.raw);
 	kfree(s.w);
 	kfree(s.order);

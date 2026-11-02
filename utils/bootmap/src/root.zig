@@ -7,6 +7,7 @@ pub const canvas = @import("render/canvas.zig");
 pub const palette = @import("render/palette.zig");
 pub const style = @import("render/style.zig");
 pub const png = @import("render/png.zig");
+pub const text = @import("render/text.zig");
 
 test {
     _ = treemap;
@@ -16,4 +17,5 @@ test {
     _ = palette;
     _ = style;
     _ = png;
+    _ = text;
 }

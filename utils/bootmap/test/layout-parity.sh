@@ -15,13 +15,15 @@ cc -O2 -Wall -Wextra -Werror -o "$OUT/layout_parity" \
 fails=0
 checks=0
 for trace in "$ROOT"/traces/*.json; do
-    for case in 1280x800:6,3,2 1920x1080:6,3,2 3840x2160:6,3,2 800x600:6,3,2 640x480:0,0,0 \
-        1024x768:12,6,4 333x777:1,1,1 8192x64:6,3,2 1280x800:20,10,5; do
-        size="${case%%:*}"
-        pad="${case#*:}"
-        name="$(basename "$trace" .json)-$size-${pad//,/-}"
-        "$ROOT/zig-out/bin/bootmap" plan "$trace" --size "$size" "pad=$pad" > "$OUT/$name.plan"
-        "$ROOT/zig-out/bin/bootmap" rects "$trace" --size "$size" "pad=$pad" > "$OUT/$name.zig"
+    # size:pad:labels:font
+    for case in 1280x800:1,1,1:all:4x6 1920x1080:1,1,1:all:6x8 3840x2160:6,3,2:none:4x6 \
+        800x600:1,1,1:areas:4x6 640x480:0,0,0:all:4x6 1024x768:12,6,4:all:6x8 \
+        333x777:1,1,1:all:4x6 8192x64:6,3,2:all:4x6 1280x800:20,10,5:none:4x6; do
+        IFS=: read -r size pad labels font <<< "$case"
+        name="$(basename "$trace" .json)-$size-${pad//,/-}-$labels-$font"
+        opts=(--size "$size" "pad=$pad" "labels=$labels" "font=$font")
+        "$ROOT/zig-out/bin/bootmap" plan "$trace" "${opts[@]}" > "$OUT/$name.plan"
+        "$ROOT/zig-out/bin/bootmap" rects "$trace" "${opts[@]}" > "$OUT/$name.zig"
         "$OUT/layout_parity" < "$OUT/$name.plan" > "$OUT/$name.c"
         checks=$((checks + 1))
         if ! cmp -s "$OUT/$name.zig" "$OUT/$name.c"; then

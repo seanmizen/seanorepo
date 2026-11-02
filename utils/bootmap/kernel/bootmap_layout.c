@@ -176,7 +176,8 @@ static const int bootmap_sort[] = { 0, 0, 1 };
 
 void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 			 struct bootmap_rect area, const unsigned char pads[3],
-			 struct bootmap_rect *rects, struct bootmap_scratch *s)
+			 unsigned char header_h, struct bootmap_rect *rects,
+			 struct bootmap_scratch *s)
 {
 	u32 i, j, c;
 
@@ -185,6 +186,7 @@ void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 	rects[0] = area;
 	for (i = 0; i < n; i++) {
 		unsigned int d = min(depth[i], (unsigned char)2);
+		struct bootmap_rect inner;
 
 		/* The children of i: the nodes after it, one level deeper,
 		 * until a node at the depth of i or less. */
@@ -198,8 +200,13 @@ void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 			s->raw[j] = weight[s->kids[j]];
 		bootmap_normalize(s->raw, s->w, c);
 		bootmap_make_order(s->w, s->order, c, bootmap_sort[d]);
-		bootmap_squarify(bootmap_inset(rects[i], pads[d]), s->w,
-				 s->order, c, s->out);
+		inner = bootmap_inset(rects[i], pads[d]);
+		/* A stage and a group keep a title strip at the top. */
+		if ((depth[i] == 1 || depth[i] == 2) && header_h && inner.h > header_h) {
+			inner.y += header_h;
+			inner.h -= header_h;
+		}
+		bootmap_squarify(inner, s->w, s->order, c, s->out);
 		for (j = 0; j < c; j++)
 			rects[s->kids[j]] = s->out[j];
 	}

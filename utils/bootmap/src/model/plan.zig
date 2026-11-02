@@ -25,6 +25,8 @@ pub const Node = struct {
     /// Leaves: leafWeight(duration). Other nodes: the sum of the children.
     weight: u64 = 0,
     rect: Rect = .{},
+    /// The title strip of a stage or a group (style.headerH). Empty if none.
+    header: Rect = .{},
     /// The index of the stage in stage_order (for the colour).
     stage: u8 = 0,
     /// Leaves only.
@@ -66,13 +68,19 @@ pub const Plan = struct {
     }
 
     /// Lay out the whole tree in `area`. pads[d] is the inset of the
-    /// children inside a node at depth d (style.pad).
-    pub fn layout(self: *Plan, area: Rect, pads: [3]u8) !void {
+    /// children inside a node at depth d (style.pad). A stage and a group
+    /// keep a title strip of header_h px at the top of that inset area.
+    pub fn layout(self: *Plan, area: Rect, pads: [3]u8, header_h: u8) !void {
         const alloc = self.arena.allocator();
         self.nodes[0].rect = area;
         for (self.nodes) |*nd| {
             if (nd.children.len == 0) continue;
-            const inner = nd.rect.inset(@as(i32, pads[@min(nd.depth, pads.len - 1)]));
+            var inner = nd.rect.inset(@as(i32, pads[@min(nd.depth, pads.len - 1)]));
+            if ((nd.depth == 1 or nd.depth == 2) and header_h > 0 and inner.h > header_h) {
+                nd.header = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = header_h };
+                inner.y += header_h;
+                inner.h -= header_h;
+            }
             const raw = try alloc.alloc(u64, nd.children.len);
             const w = try alloc.alloc(u32, nd.children.len);
             const order = try alloc.alloc(u32, nd.children.len);
@@ -88,8 +96,8 @@ pub const Plan = struct {
     /// Write the plan in the text form that kernel/layout.c reads
     /// (test/layout-parity.sh): a header, then one line per node in
     /// pre-order: "<depth> <weight> <name>".
-    pub fn writeText(self: *const Plan, w: *std.Io.Writer, width: i32, height: i32, pads: [3]u8) !void {
-        try w.print("bootmap-plan 2\n{d} {d}\n{d} {d} {d}\n{d}\n", .{ width, height, pads[0], pads[1], pads[2], self.nodes.len });
+    pub fn writeText(self: *const Plan, w: *std.Io.Writer, width: i32, height: i32, pads: [3]u8, header_h: u8) !void {
+        try w.print("bootmap-plan 3\n{d} {d}\n{d} {d} {d} {d}\n{d}\n", .{ width, height, pads[0], pads[1], pads[2], header_h, self.nodes.len });
         for (self.nodes) |nd| try w.print("{d} {d} {s}\n", .{ nd.depth, nd.weight, nd.name });
     }
 
@@ -226,7 +234,7 @@ test "a small trace gives a laid-out tree" {
     };
     var plan = try fromTrace(std.testing.allocator, .{ .version = 1, .source = "test", .end_us = 9000, .boxes = &boxes });
     defer plan.deinit();
-    try plan.layout(.{ .w = 640, .h = 480 }, .{ 6, 3, 2 });
+    try plan.layout(.{ .w = 640, .h = 480 }, .{ 6, 3, 2 }, 7);
     try std.testing.expectEqual(@as(usize, 3), plan.leafCount());
     try std.testing.expectEqualStrings("kernel", plan.nodes[1].name);
     for (plan.nodes) |nd| try std.testing.expect(nd.rect.w > 0 and nd.rect.h > 0);

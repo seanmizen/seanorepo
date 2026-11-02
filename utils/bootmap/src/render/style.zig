@@ -14,6 +14,10 @@
 //!                                paints from then on are yellow
 //!   late=clear|keep              when a late step completes, its yellow
 //!                                pixels get the stage colour (clear), or stay
+//!   labels=all|areas|none        names in the boxes, and titles above areas
+//!   font=4x6|6x8                 the bitmap font of the labels
+//!   overflow=wrap|cut|hide       a name that does not fit on one line
+//!   ink=inverse|white|black      the colour of the text pixels in a box
 //!
 //! One pixel is one unit (REQ-BOOTMAP-006). Nothing is drawn wider than 1 px
 //! for emphasis. State shows in the colour of single pixels.
@@ -24,6 +28,10 @@ const palette = @import("palette.zig");
 pub const Fill = enum { raster, rows_up, spiral };
 pub const Spawn = enum { start, plan };
 pub const Late = enum { clear, keep };
+pub const Labels = enum { all, areas, none };
+pub const FontName = enum { @"4x6", @"6x8" };
+pub const InkMode = enum { inverse, white, black };
+const text = @import("text.zig");
 pub const Empty = union(enum) {
     color: u32,
     /// The stage colour at 25 %.
@@ -40,6 +48,23 @@ pub const Style = struct {
     pads: [3]u8 = .{ 1, 1, 1 },
     warn_ms: u32 = 500,
     late: Late = .clear,
+    labels: Labels = .all,
+    font: FontName = .@"4x6",
+    overflow: text.Overflow = .wrap,
+    ink: InkMode = .inverse,
+
+    pub fn fontOf(s: Style) text.Font {
+        return switch (s.font) {
+            .@"4x6" => text.mini_4x6,
+            .@"6x8" => text.f6x8,
+        };
+    }
+
+    /// The height of the title strip above a stage or a group: one line of
+    /// text and 1 px below it. 0 when there are no area titles.
+    pub fn headerH(s: Style) u8 {
+        return if (s.labels == .none) 0 else s.fontOf().h + 1;
+    }
 
     pub fn emptyColor(s: Style, stage_color: u32) u32 {
         return switch (s.empty) {
@@ -69,6 +94,14 @@ pub const Style = struct {
             s.warn_ms = try std.fmt.parseInt(u32, v, 10);
         } else if (std.mem.eql(u8, key, "late")) {
             s.late = if (std.mem.eql(u8, v, "clear")) .clear else if (std.mem.eql(u8, v, "keep")) .keep else return error.BadLate;
+        } else if (std.mem.eql(u8, key, "labels")) {
+            s.labels = std.meta.stringToEnum(Labels, v) orelse return error.BadLabels;
+        } else if (std.mem.eql(u8, key, "font")) {
+            s.font = std.meta.stringToEnum(FontName, v) orelse return error.BadFont;
+        } else if (std.mem.eql(u8, key, "overflow")) {
+            s.overflow = std.meta.stringToEnum(text.Overflow, v) orelse return error.BadOverflow;
+        } else if (std.mem.eql(u8, key, "ink")) {
+            s.ink = std.meta.stringToEnum(InkMode, v) orelse return error.BadInk;
         } else if (std.mem.eql(u8, key, "gap")) {
             s.gap = try std.fmt.parseInt(u8, v, 10);
         } else if (std.mem.eql(u8, key, "pad")) {

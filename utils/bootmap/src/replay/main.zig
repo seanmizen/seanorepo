@@ -70,7 +70,7 @@ pub fn main(init: std.process.Init) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, args[1], alloc, .limited(64 << 20));
     const parsed = try bootmap.trace.parse(alloc, bytes);
     plan = try bootmap.plan.fromTrace(alloc, parsed.value);
-    try plan.layout(.{ .w = fb_w, .h = fb_h }, style.pads);
+    try plan.layout(.{ .w = fb_w, .h = fb_h }, style.pads, style.headerH());
 
     for (font_paths) |p| {
         font_bytes = std.Io.Dir.cwd().readFileAlloc(init.io, p, alloc, .limited(16 << 20)) catch continue;

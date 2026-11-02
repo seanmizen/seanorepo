@@ -4,6 +4,7 @@
 //!       Draw the treemap at <pct> % of the boot (default 100), or at <ms>
 //!       after the start, to a PNG. key=value: a style option
 //!       (src/render/style.zig), for example fill=spiral.
+//!       --crop x,y,w,h keeps a part. --scale n makes each pixel n x n.
 //!   bootmap plan <trace.json> [--size <W>x<H>]
 //!       Print the plan text that kernel/layout.c reads (layout parity).
 //!   bootmap rects <trace.json> [--size <W>x<H>]
@@ -28,6 +29,8 @@ const Options = struct {
     height: i32 = 800,
     at_pct: u64 = 100,
     at_ms: ?u64 = null,
+    crop: ?[4]i32 = null,
+    scale: u32 = 1,
     style: bootmap.style.Style = .{},
 };
 
@@ -53,6 +56,15 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, a, "--at") and i + 1 < args.len) {
             i += 1;
             opts.at_pct = try std.fmt.parseInt(u64, args[i], 10);
+        } else if (std.mem.eql(u8, a, "--crop") and i + 1 < args.len) {
+            i += 1;
+            var it = std.mem.splitScalar(u8, args[i], ',');
+            var r: [4]i32 = undefined;
+            for (&r) |*v| v.* = try std.fmt.parseInt(i32, it.next() orelse return fail(out, "bootmap: --crop needs x,y,w,h\n"), 10);
+            opts.crop = r;
+        } else if (std.mem.eql(u8, a, "--scale") and i + 1 < args.len) {
+            i += 1;
+            opts.scale = @max(try std.fmt.parseInt(u32, args[i], 10), 1);
         } else if (std.mem.eql(u8, a, "--at-ms") and i + 1 < args.len) {
             i += 1;
             opts.at_ms = try std.fmt.parseInt(u64, args[i], 10);
@@ -76,10 +88,10 @@ pub fn main(init: std.process.Init) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, trace_path, alloc, .limited(64 << 20));
     const parsed = try bootmap.trace.parse(alloc, bytes);
     var plan = try bootmap.plan.fromTrace(alloc, parsed.value);
-    try plan.layout(.{ .w = opts.width, .h = opts.height }, opts.style.pads);
+    try plan.layout(.{ .w = opts.width, .h = opts.height }, opts.style.pads, opts.style.headerH());
 
     if (std.mem.eql(u8, cmd, "plan")) {
-        try plan.writeText(out, opts.width, opts.height, opts.style.pads);
+        try plan.writeText(out, opts.width, opts.height, opts.style.pads, opts.style.headerH());
     } else if (std.mem.eql(u8, cmd, "rects")) {
         try plan.writeRects(out);
     } else if (std.mem.eql(u8, cmd, "stats")) {
@@ -95,7 +107,20 @@ pub fn main(init: std.process.Init) !void {
         defer file.close(io);
         var fbuf: [64 * 1024]u8 = undefined;
         var fw = file.writer(io, &fbuf);
-        try bootmap.png.write(&fw.interface, px, @intCast(opts.width), @intCast(opts.height), @intCast(opts.width));
+        // Crop, then scale up with nearest neighbour: one pixel becomes a
+        // scale x scale square, so 1 px glyphs can be read.
+        const cr = opts.crop orelse [4]i32{ 0, 0, opts.width, opts.height };
+        const cx: u32 = @intCast(@max(cr[0], 0));
+        const cy: u32 = @intCast(@max(cr[1], 0));
+        const cw: u32 = @intCast(@min(cr[2], opts.width - @as(i32, @intCast(cx))));
+        const ch: u32 = @intCast(@min(cr[3], opts.height - @as(i32, @intCast(cy))));
+        const ow = cw * opts.scale;
+        const oh = ch * opts.scale;
+        const outpx = try alloc.alloc(u32, ow * oh);
+        for (0..oh) |y| for (0..ow) |x| {
+            outpx[y * ow + x] = px[(cy + @as(u32, @intCast(y)) / opts.scale) * @as(u32, @intCast(opts.width)) + cx + @as(u32, @intCast(x)) / opts.scale];
+        };
+        try bootmap.png.write(&fw.interface, outpx, ow, oh, ow);
         try fw.interface.flush();
         try out.print("bootmap: wrote {s} at t={d} us ({d} %)\n", .{ positional.items[0], t, opts.at_pct });
     } else {

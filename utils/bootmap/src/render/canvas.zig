@@ -8,6 +8,7 @@ const std = @import("std");
 const plan_mod = @import("../model/plan.zig");
 const palette = @import("palette.zig");
 const style_mod = @import("style.zig");
+const text = @import("text.zig");
 
 pub const Canvas = struct {
     pixels: []u32,
@@ -129,12 +130,37 @@ fn spiralRange(c: Canvas, x0: i32, y0: i32, w0: i32, h0: i32, k0: u32, k1: u32, 
     }
 }
 
-/// Draw every leaf of the plan at time `t_us`.
+/// Draw every leaf of the plan at time `t_us`, then the area titles.
 pub fn drawPlan(c: Canvas, plan: *const plan_mod.Plan, st: style_mod.Style, t_us: u64) void {
     for (plan.nodes, 0..) |nd, i| {
         if (nd.depth != 3) continue;
         drawLeaf(c, nd, plan.state(i, t_us), st, t_us);
     }
+    if (st.labels == .none) return;
+    for (plan.nodes) |nd| drawHeader(c, nd, st, t_us);
+}
+
+/// The title of a stage or a group, in the stage colour on black, in the
+/// strip above its boxes. It appears with the first box of the area
+/// (spawn=start), or in the first frame (spawn=plan).
+pub fn drawHeader(c: Canvas, nd: plan_mod.Node, st: style_mod.Style, t_us: u64) void {
+    const h = nd.header;
+    if (h.w <= 0 or h.h <= 0) return;
+    c.fill(h.x, h.y, h.w, h.h, palette.surface);
+    if (st.spawn == .start and t_us < nd.first_us) return;
+    _ = text.draw(c, st.fontOf(), h.x, h.y, h.w, h.h - 1, nd.name, .cut, .{ .solid = palette.stage[@min(nd.stage, palette.stage.len - 1)] });
+}
+
+/// The name of a leaf, inside its box, 1 px from the outline.
+fn drawLeafLabel(c: Canvas, nd: plan_mod.Node, st: style_mod.Style, ix: i32, iy: i32, iw: i32, ih: i32, base: u32) void {
+    if (st.labels != .all) return;
+    const empty = st.emptyColor(base);
+    const ink: text.Ink = switch (st.ink) {
+        .inverse => .{ .inverse = .{ .empty = empty, .on_empty = base } },
+        .white => .{ .solid = 0xffffff },
+        .black => .{ .solid = 0x000000 },
+    };
+    _ = text.draw(c, st.fontOf(), ix + 1, iy + 1, iw - 2, ih - 2, nd.name, st.overflow, ink);
 }
 
 /// The interior of a box: its rectangle less the gap (right and bottom).
@@ -182,6 +208,7 @@ pub fn drawLeaf(c: Canvas, nd: plan_mod.Node, state: plan_mod.State, st: style_m
     if (p >= 1000) {
         c.fill(a.x, a.y, a.w, a.h, color);
         if (show_late) fillRange(c, ix, iy, iw, ih, st.fill, kl0, kl1, palette.warning);
+        drawLeafLabel(c, nd, st, ix, iy, iw, ih, base);
         if (nd.failed) c.cross(a.x, a.y, a.w, a.h, palette.surface);
         return;
     }
@@ -189,6 +216,7 @@ pub fn drawLeaf(c: Canvas, nd: plan_mod.Node, state: plan_mod.State, st: style_m
     c.fill(ix, iy, iw, ih, st.emptyColor(base));
     fillRange(c, ix, iy, iw, ih, st.fill, 0, k, color);
     if (show_late) fillRange(c, ix, iy, iw, ih, st.fill, kl0, @min(kl1, k), palette.warning);
+    drawLeafLabel(c, nd, st, ix, iy, iw, ih, base);
 }
 
 test "fill clips to the canvas" {
