@@ -9,6 +9,10 @@
 //!       Print the plan text that kernel/layout.c reads (layout parity).
 //!   bootmap rects <trace.json> [--size <W>x<H>]
 //!       Print the rectangle of each node, in pre-order.
+//!   bootmap video <trace.json> [--fps <n>] [--size <W>x<H>] [key=value ...]
+//!       Write the boot as raw rgb24 frames to stdout, in real time at <n>
+//!       frames a second (default 60), then 2 s of the last frame. Only the
+//!       framebuffer: no status line. Pipe it to ffmpeg (README.md).
 //!   bootmap stats <trace.json>
 //!       Print the boxes for each stage and group, and the boot time.
 
@@ -20,6 +24,7 @@ const usage =
     \\  bootmap snapshot <trace.json> <out.png> [--at <pct>] [--at-ms <ms>] [--size <W>x<H>] [key=value ...]
     \\  bootmap plan <trace.json> [--size <W>x<H>]
     \\  bootmap rects <trace.json> [--size <W>x<H>]
+    \\  bootmap video <trace.json> [--fps <n>] [--size <W>x<H>] [key=value ...]
     \\  bootmap stats <trace.json>
     \\
 ;
@@ -30,6 +35,7 @@ const Options = struct {
     at_pct: u64 = 100,
     at_ms: ?u64 = null,
     crop: ?[4]i32 = null,
+    fps: u32 = 60,
     scale: u32 = 1,
     style: bootmap.style.Style = .{},
 };
@@ -62,6 +68,9 @@ pub fn main(init: std.process.Init) !void {
             var r: [4]i32 = undefined;
             for (&r) |*v| v.* = try std.fmt.parseInt(i32, it.next() orelse return fail(out, "bootmap: --crop needs x,y,w,h\n"), 10);
             opts.crop = r;
+        } else if (std.mem.eql(u8, a, "--fps") and i + 1 < args.len) {
+            i += 1;
+            opts.fps = @max(try std.fmt.parseInt(u32, args[i], 10), 1);
         } else if (std.mem.eql(u8, a, "--scale") and i + 1 < args.len) {
             i += 1;
             opts.scale = @max(try std.fmt.parseInt(u32, args[i], 10), 1);
@@ -96,6 +105,22 @@ pub fn main(init: std.process.Init) !void {
         try plan.writeRects(out);
     } else if (std.mem.eql(u8, cmd, "stats")) {
         try stats(out, &plan);
+    } else if (std.mem.eql(u8, cmd, "video")) {
+        const px = try alloc.alloc(u32, @intCast(opts.width * opts.height));
+        const rgb = try alloc.alloc(u8, px.len * 3);
+        const c: bootmap.canvas.Canvas = .{ .pixels = px, .width = opts.width, .height = opts.height, .stride = opts.width };
+        c.clear(bootmap.palette.surface);
+        // The boot, the last fill animations, then 2 s of the last frame.
+        const last = plan.end_us + @as(u64, opts.style.fill_ms) * 1000 + 2_000_000;
+        var frame: u64 = 0;
+        while (true) : (frame += 1) {
+            const t = frame * 1_000_000 / opts.fps;
+            if (t > last) break;
+            bootmap.canvas.drawPlan(c, &plan, opts.style, t);
+            for (px, 0..) |p, k| rgb[k * 3 ..][0..3].* = .{ @truncate(p >> 16), @truncate(p >> 8), @truncate(p) };
+            try out.writeAll(rgb);
+        }
+        try out.flush();
     } else if (std.mem.eql(u8, cmd, "snapshot")) {
         if (positional.items.len != 1) return fail(out, usage);
         const px = try alloc.alloc(u32, @intCast(opts.width * opts.height));

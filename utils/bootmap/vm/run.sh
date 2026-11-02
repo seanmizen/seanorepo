@@ -3,10 +3,16 @@
 # the GOP framebuffer.
 #
 #   vm/run.sh --kernel-only [--show]
+#   vm/run.sh --full [--show]
 #   BOOTMAP_ARGS="bootmap.fill=spiral bootmap.warn_ms=100" vm/run.sh --kernel-only
 #
 # --kernel-only  bzImage + an initramfs with tinyinit only. tinyinit copies
 #                /proc/bootmap to working/run/bootmap.txt and powers off.
+# --full         bzImage boots working/guest.qcow2 (vm/prepare-guest.sh)
+#                with no initramfs. bootmapd runs from zig-out/bin (9p).
+#                The run stops after BOOTMAP_RUN_S seconds (default 240),
+#                or with --show when you close the window. SSH to the guest:
+#                ssh -p 2263 -i working/id_ed25519 debian@127.0.0.1
 # --show         show the QEMU window (WSLg or X11). Without it, the screen
 #                is only captured to working/run/frames/.
 #
@@ -29,11 +35,13 @@ DISPLAY_ARGS=(-display none)
 for a in "$@"; do
     case "$a" in
         --kernel-only) MODE=kernel ;;
+        --full) MODE=full ;;
         --show) DISPLAY_ARGS=(-display gtk) ;;
         *) die "unknown argument: $a" ;;
     esac
 done
-[ "$MODE" = kernel ] || die "usage: vm/run.sh --kernel-only [--show]"
+[ -n "$MODE" ] || die "usage: vm/run.sh --kernel-only|--full [--show]"
+[ "$MODE" != full ] || [ -f "$WORK/guest.qcow2" ] || die "$WORK/guest.qcow2 not found. Run vm/prepare-guest.sh"
 [ -f "$KERNEL" ] || die "$KERNEL not found. Run kernel/fetch-and-build.sh"
 [ -x "$GEN_CPIO" ] || make -s -C "$WORK/linux" usr/gen_init_cpio
 
@@ -46,28 +54,44 @@ OUT="$WORK/runs/$STAMP"
 mkdir -p "$OUT"
 ln -sfn "runs/$STAMP" "$RUN"
 
-# The initramfs: tinyinit as /init, and the directories it mounts on.
-cat > "$OUT/initramfs.list" << EOF
-dir /dev 0755 0 0
-nod /dev/console 0600 0 0 c 5 1
-dir /proc 0755 0 0
-file /init $ROOT/zig-out/bin/tinyinit 0755 0 0
-EOF
-"$GEN_CPIO" "$OUT/initramfs.list" > "$OUT/initramfs.cpio"
-
 cp /usr/share/OVMF/OVMF_VARS_4M.fd "$OUT/vars.fd"
 if [ -w /dev/kvm ]; then ACCEL=kvm; CPU=host; else ACCEL=tcg; CPU=max; fi
+COMMON=(
+    -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2
+    -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd
+    -drive if=pflash,format=raw,file="$OUT/vars.fd"
+    -kernel "$KERNEL"
+    -serial "file:$OUT/serial.log"
+    -qmp "unix:$OUT/qmp.sock,server,nowait" -no-reboot
+)
 
-qemu-system-x86_64 \
-    -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2 -m 1024 \
-    -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
-    -drive if=pflash,format=raw,file="$OUT/vars.fd" \
-    -kernel "$KERNEL" -initrd "$OUT/initramfs.cpio" \
-    -append "console=ttyS0 loglevel=6 bootmap.stages=$STAGES $EXTRA" \
-    -serial "file:$OUT/serial.log" -serial "file:$OUT/bootmap.txt" \
-    -qmp "unix:$OUT/qmp.sock,server,nowait" -no-reboot \
-    "${DISPLAY_ARGS[@]}" &
-QEMU_PID=$!
+if [ "$MODE" = kernel ]; then
+    # The initramfs: tinyinit as /init, and the directories it mounts on.
+    printf '%s\n' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'dir /proc 0755 0 0' \
+        "file /init $ROOT/zig-out/bin/tinyinit 0755 0 0" > "$OUT/initramfs.list"
+    "$GEN_CPIO" "$OUT/initramfs.list" > "$OUT/initramfs.cpio"
+    qemu-system-x86_64 "${COMMON[@]}" -m 1024 \
+        -initrd "$OUT/initramfs.cpio" \
+        -append "console=ttyS0 loglevel=6 bootmap.stages=$STAGES $EXTRA" \
+        -serial "file:$OUT/bootmap.txt" \
+        "${DISPLAY_ARGS[@]}" &
+    QEMU_PID=$!
+else
+    # No initrd stage in this boot: the kernel mounts the root itself.
+    STAGES="${BOOTMAP_STAGES:-0,0,30,0,70}"
+    # An overlay, so a run never changes guest.qcow2.
+    qemu-img create -q -f qcow2 -F qcow2 -b "$WORK/guest.qcow2" "$OUT/disk.qcow2"
+    qemu-system-x86_64 "${COMMON[@]}" -m 2048 \
+        -drive if=virtio,format=qcow2,file="$OUT/disk.qcow2" \
+        -append "root=/dev/vda1 rw console=ttyS0 loglevel=4 bootmap.daemon=1 bootmap.stages=$STAGES $EXTRA" \
+        -virtfs "local,path=$ROOT/zig-out/bin,mount_tag=bootmap,security_model=none,readonly=on" \
+        -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:2263-:22" -device virtio-net-pci,netdev=n0 \
+        "${DISPLAY_ARGS[@]}" &
+    QEMU_PID=$!
+    if [ "${DISPLAY_ARGS[1]}" = none ]; then
+        (sleep "${BOOTMAP_RUN_S:-240}"; kill "$QEMU_PID" 2> /dev/null) &
+    fi
+fi
 
 python3 "$HERE/capture.py" "$OUT/qmp.sock" "$OUT/frames" 0.1 || true
 wait "$QEMU_PID" || true

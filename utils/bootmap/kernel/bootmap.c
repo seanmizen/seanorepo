@@ -20,9 +20,9 @@
  *   bootmap.stages=F,L,K,I,S     the weights of the five stages (firmware,
  *                                loader, kernel, initrd, systemd). A stage
  *                                with weight 0 is not in the picture.
- *   bootmap.fill=raster|rows-up|spiral, bootmap.fill_ms=250,
- *   bootmap.outline=1, bootmap.empty=black|white|dim|#rrggbb,
- *   bootmap.spawn=start|plan, bootmap.gap=1, bootmap.pad=1,1,1,
+ *   bootmap.fill=rows-up|raster|spiral, bootmap.fill_ms=250,
+ *   bootmap.outline=0, bootmap.empty=dim|black|white|#rrggbb,
+ *   bootmap.spawn=plan|start, bootmap.gap=1, bootmap.pad=1,1,1,
  *   bootmap.warn_ms=500, bootmap.late=clear|keep,
  *   bootmap.order=boot|size|best, bootmap.other=10
  *                                the style options of src/render/style.zig
@@ -83,7 +83,8 @@ static struct {
 	int order;		/* BOOTMAP_ORDER_* */
 	u32 other;		/* permille: smaller groups go into "other" */
 } bms = {
-	.fill = BM_RASTER, .fill_ms = 250, .outline = 1, .empty = 0x000000,
+	.fill = BM_ROWS_UP, .fill_ms = 250, .outline = 0, .empty = 0x000000,
+	.empty_dim = true, .spawn_plan = true,
 	.gap = 1, .pads = { 1, 1, 1 }, .warn_ms = 500,
 	.order = BOOTMAP_ORDER_BOOT, .other = 10,
 };

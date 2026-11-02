@@ -35,11 +35,11 @@ The same options work as kernel command-line parameters
 
 | Option | Default | Values |
 |---|---|---|
-| `fill` | `raster` | `raster`: left to right, top to bottom, pixel by pixel. `rows-up`: whole lines from the bottom. `spiral`: pixel by pixel, from the edge to the centre. |
+| `fill` | `rows-up` | `rows-up`: whole lines from the bottom. `raster`: left to right, top to bottom, pixel by pixel. `spiral`: pixel by pixel, from the edge to the centre. |
 | `fill_ms` | `250` | The shortest fill of a box, in ms. A box that completes sooner still fills over this time, so you see it fill. |
-| `outline` | `1` | The outline width, in the stage colour, when a box spawns. `0`: no outline. |
-| `empty` | `black` | The colour of the part of a box that is not full: `black`, `white`, `dim` (the stage colour at 25 %) or `#rrggbb`. |
-| `spawn` | `start` | `start`: a box appears when its step starts. `plan`: all boxes appear in the first frame. |
+| `outline` | `0` | The outline width, in the stage colour, when a box spawns. `0`: no outline. |
+| `empty` | `dim` | The colour of the part of a box that is not full: `dim` (the box colour at 25 %), `black`, `white` or `#rrggbb`. |
+| `spawn` | `plan` | `plan`: all boxes appear, dim, in the first frame. `start`: a box appears when its step starts, so the screen starts black. |
 | `gap` | `1` | The space between two boxes, in pixels. |
 | `pad` | `1,1,1` | The inset of the screen, a stage and a group, in pixels. |
 | `warn_ms` | `500` | After this time in flight (or 2× its expected time, if known), a step is late. The pixels that it paints from then on are yellow. |

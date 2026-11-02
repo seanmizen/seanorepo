@@ -8,6 +8,7 @@ pub const palette = @import("render/palette.zig");
 pub const style = @import("render/style.zig");
 pub const png = @import("render/png.zig");
 pub const text = @import("render/text.zig");
+pub const color = @import("render/color.zig");
 
 test {
     _ = treemap;
@@ -18,4 +19,5 @@ test {
     _ = style;
     _ = png;
     _ = text;
+    _ = color;
 }

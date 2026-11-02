@@ -9,6 +9,11 @@ const plan_mod = @import("../model/plan.zig");
 const palette = @import("palette.zig");
 const style_mod = @import("style.zig");
 const text = @import("text.zig");
+const color_mod = @import("color.zig");
+
+/// A fill with a pixel pattern (style.pattern). `lo` and `hi` are the two
+/// shades of the pattern, `by` and `bh` the top and height of the box.
+pub const Paint = struct { pattern: color_mod.Pattern, lo: u32, hi: u32, by: i32, bh: i32 };
 
 pub const Canvas = struct {
     pixels: []u32,
@@ -16,6 +21,8 @@ pub const Canvas = struct {
     height: i32,
     /// Pixels from the start of one row to the start of the next.
     stride: i32,
+    /// When set, fill() paints each pixel with the pattern.
+    paint: ?Paint = null,
 
     pub fn clear(c: Canvas, color: u32) void {
         var y: i32 = 0;
@@ -32,6 +39,14 @@ pub const Canvas = struct {
         const yb = @min(y0 + h, c.height);
         if (xa >= xb or ya >= yb) return;
         var y = ya;
+        if (c.paint) |p| {
+            while (y < yb) : (y += 1) {
+                var x = xa;
+                while (x < xb) : (x += 1)
+                    c.pixels[@intCast(y * c.stride + x)] = color_mod.patternPixel(p.pattern, color, p.lo, p.hi, x, y, p.by, p.bh);
+            }
+            return;
+        }
         while (y < yb) : (y += 1) {
             const row = c.pixels[@intCast(y * c.stride + xa)..][0..@intCast(xb - xa)];
             @memset(row, color);
@@ -63,6 +78,14 @@ pub const Canvas = struct {
         }
     }
 };
+
+/// fillRange with the style's pixel pattern on the filled pixels.
+fn paintedRange(c: Canvas, st: style_mod.Style, x: i32, y: i32, w: i32, h: i32, k0: u32, k1: u32, col: u32) void {
+    if (st.pattern == .solid) return fillRange(c, x, y, w, h, st.fill, k0, k1, col);
+    var pc = c;
+    pc.paint = .{ .pattern = st.pattern, .lo = color_mod.shade(col, -0.08), .hi = color_mod.shade(col, 0.08), .by = y, .bh = h };
+    fillRange(pc, x, y, w, h, st.fill, k0, k1, col);
+}
 
 /// Paint pixels [k0, k1) of the area (x, y, w, h), in the order of `fill`.
 /// The orders only add pixels, so a box can grow by painting the new range.
@@ -130,8 +153,68 @@ fn spiralRange(c: Canvas, x0: i32, y0: i32, w0: i32, h0: i32, k0: u32, k1: u32, 
     }
 }
 
+/// Set the colour of each leaf from style.color_by. Call it before each
+/// frame (time and duration change while a step runs).
+pub fn assignColors(plan: *plan_mod.Plan, st: style_mod.Style, t_us: u64) void {
+    const pal = color_mod.palettes[@min(st.palette, color_mod.palettes.len - 1)];
+    // The place of each group in its stage.
+    for (plan.nodes) |nd| {
+        if (nd.depth != 1) continue;
+        for (nd.children, 0..) |c, i| plan.nodes[c].index = @intCast(i);
+    }
+    var end: u64 = 1;
+    var longest: u64 = 1;
+    for (plan.nodes) |nd| {
+        if (nd.depth != 3) continue;
+        const e = @min(nd.end_us, t_us);
+        if (nd.start_us < t_us) end = @max(end, e);
+        if (nd.start_us < t_us) longest = @max(longest, e -| nd.start_us);
+    }
+    for (plan.nodes) |*nd| {
+        if (nd.depth != 3) continue;
+        nd.color = leafColor(nd.*, plan.nodes[nd.parent].index, pal, st, t_us, end, longest);
+    }
+}
+
+/// The colour of one leaf. `group` is the place of its group in the stage.
+/// `end` is the end of the boot so far, `longest` the longest step so far.
+pub fn leafColor(nd: plan_mod.Node, group: u16, pal: color_mod.Palette, st: style_mod.Style, t_us: u64, end: u64, longest: u64) u32 {
+    const n = pal.stops.len;
+    const base: u32 = switch (st.color_by) {
+        .stage => pal.stops[nd.stage % n],
+        .group => pal.stops[group % n],
+        .kind => pal.stops[kindOf(nd) % n],
+        .hash => color_mod.ramp(pal, @as(f32, @floatFromInt(std.hash.Fnv1a_32.hash(nd.name) % 1000)) / 999, st.space),
+        .mono => pal.stops[n / 2],
+        .time => color_mod.ramp(pal, if (nd.start_us > t_us) 0 else @as(f32, @floatFromInt(nd.start_us)) / @as(f32, @floatFromInt(@max(end, 1))), st.space),
+        .duration => blk: {
+            // A log scale: 1 ms to the longest step so far.
+            const d = @max(@min(nd.end_us, t_us) -| nd.start_us, 1);
+            const lo = @log(@as(f32, 1000));
+            const hi = @log(@as(f32, @floatFromInt(@max(longest, 1001))));
+            const x = (@log(@as(f32, @floatFromInt(@max(d, 1000)))) - lo) / (hi - lo);
+            break :blk color_mod.ramp(pal, x, st.space);
+        },
+    };
+    if (st.jitter == 0) return base;
+    // A lightness change from the name, from -jitter/2 % to +jitter/2 %.
+    const j: i32 = st.jitter;
+    const v: i32 = @as(i32, @intCast(std.hash.Fnv1a_32.hash(nd.name) % @as(u32, @intCast(j + 1)))) - @divTrunc(j, 2);
+    return color_mod.shade(base, @as(f32, @floatFromInt(v)) / 200);
+}
+
+/// 0 kernel initcall, 1 service, 2 mount, 3 socket, 4 timer, 5 path,
+/// 6 any other unit.
+fn kindOf(nd: plan_mod.Node) usize {
+    if (nd.stage == plan_mod.kernel_stage) return 0;
+    const kinds = [_][]const u8{ ".service", ".mount", ".socket", ".timer", ".path" };
+    for (kinds, 1..) |k, i| if (std.mem.endsWith(u8, nd.name, k)) return i;
+    return 6;
+}
+
 /// Draw every leaf of the plan at time `t_us`, then the area titles.
-pub fn drawPlan(c: Canvas, plan: *const plan_mod.Plan, st: style_mod.Style, t_us: u64) void {
+pub fn drawPlan(c: Canvas, plan: *plan_mod.Plan, st: style_mod.Style, t_us: u64) void {
+    assignColors(plan, st, t_us);
     for (plan.nodes, 0..) |nd, i| {
         if (nd.depth != 3) continue;
         drawLeaf(c, nd, plan.state(i, t_us), st, t_us);
@@ -171,16 +254,14 @@ pub fn boxArea(r: plan_mod.Rect, gap: i32) plan_mod.Rect {
 pub fn drawLeaf(c: Canvas, nd: plan_mod.Node, state: plan_mod.State, st: style_mod.Style, t_us: u64) void {
     const a = boxArea(nd.rect, st.gap);
     if (a.w <= 0 or a.h <= 0) return;
-    const base = palette.leafColor(nd.stage, nd.name);
+    const base = if (nd.color != 0) nd.color else palette.leafColor(nd.stage, nd.name);
     const color = if (nd.failed) palette.critical else base;
 
     if (state == .pending and st.spawn == .start) {
         c.fill(a.x, a.y, a.w, a.h, palette.surface);
         return;
     }
-    // The replay knows each step's time. The kernel does not, so its
-    // boxes use only fill_ms, as in kernel/bootmap.c.
-    const expected: u64 = if (nd.stage == plan_mod.kernel_stage) 0 else nd.end_us -| nd.start_us;
+    const expected = nd.expected_us;
     const end: ?u64 = if (state == .done or state == .failed) nd.end_us else null;
     const p = if (state == .pending) 0 else style_mod.permille(nd.start_us, end, expected, st.fill_ms, t_us);
 
@@ -206,7 +287,7 @@ pub fn drawLeaf(c: Canvas, nd: plan_mod.Node, state: plan_mod.State, st: style_m
     const show_late = kl1 > kl0 and (end == null or st.late == .keep);
 
     if (p >= 1000) {
-        c.fill(a.x, a.y, a.w, a.h, color);
+        paintedRange(c, st, a.x, a.y, a.w, a.h, 0, @intCast(a.w * a.h), color);
         if (show_late) fillRange(c, ix, iy, iw, ih, st.fill, kl0, kl1, palette.warning);
         drawLeafLabel(c, nd, st, ix, iy, iw, ih, base);
         if (nd.failed) c.cross(a.x, a.y, a.w, a.h, palette.surface);
@@ -214,7 +295,7 @@ pub fn drawLeaf(c: Canvas, nd: plan_mod.Node, state: plan_mod.State, st: style_m
     }
     if (o > 0) c.fill(a.x, a.y, a.w, a.h, base);
     c.fill(ix, iy, iw, ih, st.emptyColor(base));
-    fillRange(c, ix, iy, iw, ih, st.fill, 0, k, color);
+    paintedRange(c, st, ix, iy, iw, ih, 0, k, color);
     if (show_late) fillRange(c, ix, iy, iw, ih, st.fill, kl0, @min(kl1, k), palette.warning);
     drawLeafLabel(c, nd, st, ix, iy, iw, ih, base);
 }

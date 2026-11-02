@@ -22,7 +22,7 @@ requirements keep the three parts of the picture in agreement.
 - **Verification:** Test — `utils/bootmap/test/layout-parity.sh`
 - **Relations:** none
 
-## REQ-BOOTMAP-002 — A box is black until its step starts
+## REQ-BOOTMAP-002 — A box shows that its step has not started
 
 - **Status:** active
 - **Source:** sean
@@ -30,9 +30,11 @@ requirements keep the three parts of the picture in agreement.
 - **Type:** functional
 - **Priority:** P1
 - **Statement:** While a step has not started, the renderer shall draw its box
-  in the surface colour (black).
-- **Rationale:** The screen starts black, and boxes appear as the machine
-  loads. A box that shows before its step starts tells the viewer nothing.
+  only in the empty colour (spawn=plan, the default), or not at all
+  (spawn=start: black, the surface colour).
+- **Rationale:** The viewer must see which steps are still to come. With
+  spawn=plan, the whole plan is visible, dim, from the first frame. With
+  spawn=start, the screen starts black, and boxes appear as the machine loads.
 - **Verification:** Inspection — `utils/bootmap/src/render/canvas.zig`
 - **Relations:** none
 

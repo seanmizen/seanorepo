@@ -73,7 +73,32 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(tinyinit);
 
+    // bootmapd: the daemon. Static x86_64 Linux with no libc, so it runs
+    // from the 9p share, or later from an initramfs.
+    const guest = b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .linux });
+    const guest_core = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = guest,
+        .optimize = .ReleaseSafe,
+    });
+    const daemon = b.addExecutable(.{
+        .name = "bootmapd",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/daemon/main.zig"),
+            .target = guest,
+            .optimize = .ReleaseSafe,
+            .imports = &.{.{ .name = "bootmap", .module = guest_core }},
+        }),
+    });
+    b.installArtifact(daemon);
+
     const tests = b.addTest(.{ .root_module = core });
+    const dbus_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/daemon/dbus.zig"),
+        .target = target,
+        .optimize = optimize,
+    }) });
+    b.step("test", "Run the unit tests").dependOn(&b.addRunArtifact(dbus_tests).step);
     const run_tests = b.addRunArtifact(tests);
-    b.step("test", "Run the unit tests").dependOn(&run_tests.step);
+    b.top_level_steps.get("test").?.step.dependOn(&run_tests.step);
 }

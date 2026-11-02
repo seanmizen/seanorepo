@@ -33,11 +33,19 @@ pub const Node = struct {
     start_us: u64 = 0,
     end_us: u64 = 0,
     failed: bool = false,
+    /// Leaves only: how long the step is expected to take (style.permille).
+    /// 0 when nothing is known: the box fills over fill_ms.
+    expected_us: u64 = 0,
     /// The earliest start of this node or of a node under it.
     first_us: u64 = std.math.maxInt(u64),
     /// The "other" group of a stage: it holds the boxes of the small groups,
     /// and it stays the last child (bottom right).
     other: bool = false,
+    /// The colour of a leaf, from style.color_by (canvas.assignColors).
+    /// 0 means "not set": the stage colour.
+    color: u32 = 0,
+    /// The place of a group among the groups of its stage.
+    index: u16 = 0,
 };
 
 /// The index of "kernel" in stage_order.
@@ -230,6 +238,10 @@ fn flatten(alloc: std.mem.Allocator, nodes: *std.ArrayList(Node), t: *Tmp, depth
         .start_us = if (t.box) |b| b.start_us else 0,
         .end_us = if (t.box) |b| b.end_us else 0,
         .failed = if (t.box) |b| b.failed else false,
+        // The replay knows each step's time and uses it as the expected
+        // time. The kernel does not know it, so kernel boxes use 0, as in
+        // kernel/bootmap.c.
+        .expected_us = if (t.box) |b| (if (t.stage == kernel_stage) 0 else b.end_us -| b.start_us) else 0,
         .other = t.other,
     });
     const kids = try alloc.alloc(u32, t.kids.items.len);

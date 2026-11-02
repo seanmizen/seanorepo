@@ -1,12 +1,12 @@
 //! The drawing options and the fill rules. kernel/bootmap.c has the same
 //! options (kernel command line: bootmap.<key>=<value>) and the same rules.
 //!
-//!   fill=raster|rows-up|spiral   the order in which a box fills
+//!   fill=rows-up|raster|spiral   the order in which a box fills
 //!   fill_ms=250                  the shortest fill animation of a box
-//!   outline=1                    the outline width when a box spawns (0: none)
-//!   empty=black|white|dim|#rrggbb  the colour of the part that is not full
-//!   spawn=start|plan             a box appears when its step starts, or all
-//!                                boxes appear in the first frame
+//!   outline=0                    the outline width when a box spawns (0: none)
+//!   empty=dim|black|white|#rrggbb  the colour of the part that is not full
+//!   spawn=plan|start             all boxes appear in the first frame, or a
+//!                                box appears when its step starts
 //!   gap=1                        the space between two boxes
 //!   pad=1,1,1                    the inset of the screen, a stage, a group
 //!   warn_ms=500                  a step is late after this time (or after 2x
@@ -24,6 +24,7 @@
 //!   order=boot|size|best         how groups and boxes are placed
 //!   other=10                     groups under this many thousandths of their
 //!                                stage go into one "other" group (0: never)
+//!   color, palette, space, jitter, pattern   see color.zig
 //!
 //! One pixel is one unit (REQ-BOOTMAP-006). Nothing is drawn wider than 1 px
 //! for emphasis. State shows in the colour of single pixels.
@@ -38,6 +39,7 @@ pub const Labels = enum { all, areas, none };
 pub const FontName = enum { @"4x6", @"6x8" };
 pub const InkMode = enum { inverse, white, black };
 const text = @import("text.zig");
+pub const color = @import("color.zig");
 pub const Empty = union(enum) {
     color: u32,
     /// The stage colour at 25 %.
@@ -45,11 +47,11 @@ pub const Empty = union(enum) {
 };
 
 pub const Style = struct {
-    fill: Fill = .raster,
+    fill: Fill = .rows_up,
     fill_ms: u32 = 250,
-    outline: u8 = 1,
-    empty: Empty = .{ .color = 0 },
-    spawn: Spawn = .start,
+    outline: u8 = 0,
+    empty: Empty = .dim,
+    spawn: Spawn = .plan,
     gap: u8 = 1,
     pads: [3]u8 = .{ 1, 1, 1 },
     warn_ms: u32 = 500,
@@ -61,6 +63,11 @@ pub const Style = struct {
     ink: InkMode = .inverse,
     order: @import("../layout/treemap.zig").Order = .boot,
     other: u32 = 10,
+    color_by: color.By = .stage,
+    palette: u8 = 0,
+    space: color.Space = .oklab,
+    jitter: u8 = 12,
+    pattern: color.Pattern = .solid,
 
     pub fn fontOf(s: Style) text.Font {
         return switch (s.font) {
@@ -115,6 +122,16 @@ pub const Style = struct {
             s.order = std.meta.stringToEnum(@import("../layout/treemap.zig").Order, v) orelse return error.BadOrder;
         } else if (std.mem.eql(u8, key, "other")) {
             s.other = try std.fmt.parseInt(u32, v, 10);
+        } else if (std.mem.eql(u8, key, "color")) {
+            s.color_by = std.meta.stringToEnum(color.By, v) orelse return error.BadColor;
+        } else if (std.mem.eql(u8, key, "palette")) {
+            s.palette = color.paletteIndex(v) orelse return error.BadPalette;
+        } else if (std.mem.eql(u8, key, "space")) {
+            s.space = std.meta.stringToEnum(color.Space, v) orelse return error.BadSpace;
+        } else if (std.mem.eql(u8, key, "jitter")) {
+            s.jitter = try std.fmt.parseInt(u8, v, 10);
+        } else if (std.mem.eql(u8, key, "pattern")) {
+            s.pattern = std.meta.stringToEnum(color.Pattern, v) orelse return error.BadPattern;
         } else if (std.mem.eql(u8, key, "ink")) {
             s.ink = std.meta.stringToEnum(InkMode, v) orelse return error.BadInk;
         } else if (std.mem.eql(u8, key, "gap")) {
