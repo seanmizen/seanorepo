@@ -1,0 +1,11 @@
+{
+  "name": "bootmap",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "zig build test && test/layout-parity.sh",
+    "replay": "zig build replay --",
+    "cli": "zig build cli --",
+    "record": "vm/record-trace.sh"
+  }
+}

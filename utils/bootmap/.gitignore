@@ -1,0 +1,5 @@
+working/
+__pycache__/
+zig-out/
+.zig-cache/
+zig-pkg/

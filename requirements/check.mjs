@@ -141,6 +141,7 @@ const CITATION_SKIP_DIRS = new Set([
   'test-results',
   'uploads',
   'zig-out',
+  'zig-pkg', // Zig 0.17 fetches package dependencies here
 ]);
 
 /**

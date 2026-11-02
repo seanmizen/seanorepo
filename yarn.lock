@@ -6175,6 +6175,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"bootmap@workspace:utils/bootmap":
+  version: 0.0.0-use.local
+  resolution: "bootmap@workspace:utils/bootmap"
+  languageName: unknown
+  linkType: soft
+
 "bowser@npm:^2.11.0":
   version: 2.12.1
   resolution: "bowser@npm:2.12.1"

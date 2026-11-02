@@ -1,0 +1,5090 @@
+{
+  "version": 1,
+  "source": "Linux 6.12.113+deb13-cloud-amd64, 13.7",
+  "end_us": 73566776,
+  "boxes": [
+    {
+      "path": ["kernel", "start_kernel", "start_kernel"],
+      "start_us": 0,
+      "end_us": 297960,
+      "failed": false
+    },
+    {
+      "path": ["kernel", "unknown", "con_init"],
+      "start_us": 297960,
+      "end_us": 300688,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "unknown", "hvc_console_init"],
+      "start_us": 300732,
+      "end_us": 300798,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "unknown", "xen_cons_init"],
+      "start_us": 300818,
+      "end_us": 300877,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "unknown", "univ8250_console_init"],
+      "start_us": 300896,
+      "end_us": 303213,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_hw_perf_events"],
+      "start_us": 735264,
+      "end_us": 737099,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "mc_debug_enable"],
+      "start_us": 737208,
+      "end_us": 737261,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "do_init_real_mode"],
+      "start_us": 737281,
+      "end_us": 738163,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_sigframe_size"],
+      "start_us": 738224,
+      "end_us": 738292,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "trace_init_perf_perm_irq_work_exit"],
+      "start_us": 738310,
+      "end_us": 738334,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "cache_ap_register"],
+      "start_us": 738351,
+      "end_us": 738409,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "bp_init_aperfmperf"],
+      "start_us": 738427,
+      "end_us": 738470,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "save_builtin_microcode"],
+      "start_us": 738491,
+      "end_us": 738592,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "save_microcode_in_initrd"],
+      "start_us": 738614,
+      "end_us": 738712,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "register_nmi_cpu_backtrace_handler"],
+      "start_us": 738731,
+      "end_us": 738839,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "kvm_setup_vsyscall_timeinfo"],
+      "start_us": 738859,
+      "end_us": 738904,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "spawn_ksoftirqd"],
+      "start_us": 738935,
+      "end_us": 739833,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_signal_sysctls"],
+      "start_us": 739867,
+      "end_us": 740102,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_umh_sysctls"],
+      "start_us": 740143,
+      "end_us": 740317,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "migration_init"],
+      "start_us": 740366,
+      "end_us": 740441,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "printk_set_kthreads_ready"],
+      "start_us": 740461,
+      "end_us": 740607,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "srcu_bootup_announce"],
+      "start_us": 740625,
+      "end_us": 740691,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "rcu_spawn_gp_kthread"],
+      "start_us": 740707,
+      "end_us": 742475,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "check_cpu_stall_init"],
+      "start_us": 742513,
+      "end_us": 742571,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "rcu_sysrq_init"],
+      "start_us": 742593,
+      "end_us": 742619,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "trace_init_flags_sys_enter"],
+      "start_us": 742635,
+      "end_us": 742659,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "trace_init_flags_sys_exit"],
+      "start_us": 742675,
+      "end_us": 742696,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "tmigr_init"],
+      "start_us": 742712,
+      "end_us": 743381,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "cpu_stop_init"],
+      "start_us": 743405,
+      "end_us": 745115,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_kprobes"],
+      "start_us": 745149,
+      "end_us": 747660,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_trace_printk"],
+      "start_us": 747690,
+      "end_us": 747714,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "event_trace_enable_again"],
+      "start_us": 747737,
+      "end_us": 747847,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "irq_work_init_threads"],
+      "start_us": 748309,
+      "end_us": 748347,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "static_call_init"],
+      "start_us": 748369,
+      "end_us": 748399,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "jump_label_init_module"],
+      "start_us": 748416,
+      "end_us": 748436,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_zero_pfn"],
+      "start_us": 748451,
+      "end_us": 748488,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_fs_inode_sysctls"],
+      "start_us": 748505,
+      "end_us": 748547,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_fs_locks_sysctls"],
+      "start_us": 748566,
+      "end_us": 748598,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_fs_sysctls"],
+      "start_us": 748615,
+      "end_us": 748645,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "init_security_keys_sysctls"],
+      "start_us": 748663,
+      "end_us": 748703,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "dynamic_debug_init"],
+      "start_us": 748721,
+      "end_us": 749630,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "unpopulated_init"],
+      "start_us": 749656,
+      "end_us": 749689,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "early", "efi_memreserve_root_init"],
+      "start_us": 749743,
+      "end_us": 749793,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "efi_earlycon_remap_fb"],
+      "start_us": 749811,
+      "end_us": 749844,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "early", "idle_inject_init"],
+      "start_us": 749861,
+      "end_us": 750254,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "pure", "bpf_jit_charge_init"],
+      "start_us": 917879,
+      "end_us": 918082,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "pure", "ipc_ns_init"],
+      "start_us": 918141,
+      "end_us": 918623,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "pure", "init_mmap_min_addr"],
+      "start_us": 918666,
+      "end_us": 918715,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "pure", "pci_realloc_setup_params"],
+      "start_us": 918744,
+      "end_us": 918817,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "pure", "inet_frag_wq_init"],
+      "start_us": 918849,
+      "end_us": 920395,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "xen_pvh_gnttab_setup"],
+      "start_us": 920649,
+      "end_us": 920694,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "core", "e820__register_nvs_regions"],
+      "start_us": 920714,
+      "end_us": 921309,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cpufreq_register_tsc_scaling"],
+      "start_us": 921332,
+      "end_us": 921500,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "reboot_init"],
+      "start_us": 921520,
+      "end_us": 921679,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_lapic_sysfs"],
+      "start_us": 921700,
+      "end_us": 921739,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "alloc_frozen_cpus"],
+      "start_us": 921772,
+      "end_us": 921814,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cpu_hotplug_pm_sync_init"],
+      "start_us": 921830,
+      "end_us": 921862,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "wq_sysfs_init"],
+      "start_us": 921884,
+      "end_us": 922232,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "ksysfs_init"],
+      "start_us": 922262,
+      "end_us": 922434,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "schedutil_gov_init"],
+      "start_us": 922456,
+      "end_us": 922591,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "pm_init"],
+      "start_us": 922611,
+      "end_us": 922940,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "pm_disk_init"],
+      "start_us": 922977,
+      "end_us": 923049,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "swsusp_header_init"],
+      "start_us": 923073,
+      "end_us": 923157,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "rcu_set_runtime_mode"],
+      "start_us": 923182,
+      "end_us": 923275,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "futex_init"],
+      "start_us": 923293,
+      "end_us": 923516,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cgroup_wq_init"],
+      "start_us": 923542,
+      "end_us": 923640,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cgroup1_wq_init"],
+      "start_us": 923660,
+      "end_us": 924349,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "ftrace_mod_cmd_init"],
+      "start_us": 924395,
+      "end_us": 924494,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_graph_trace"],
+      "start_us": 924513,
+      "end_us": 924855,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "trace_events_eprobe_init_early"],
+      "start_us": 924880,
+      "end_us": 925099,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "trace_events_synth_init_early"],
+      "start_us": 925146,
+      "end_us": 925184,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_kprobe_trace_early"],
+      "start_us": 925202,
+      "end_us": 925243,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_fprobe_trace_early"],
+      "start_us": 925260,
+      "end_us": 925325,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "bpf_offload_init"],
+      "start_us": 925347,
+      "end_us": 925412,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cgroup_bpf_wq_init"],
+      "start_us": 925430,
+      "end_us": 925491,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "memory_failure_init"],
+      "start_us": 925508,
+      "end_us": 925668,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "fsnotify_init"],
+      "start_us": 925693,
+      "end_us": 926082,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "filelock_init"],
+      "start_us": 926130,
+      "end_us": 926404,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_script_binfmt"],
+      "start_us": 926429,
+      "end_us": 926584,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_elf_binfmt"],
+      "start_us": 926607,
+      "end_us": 926634,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_compat_elf_binfmt"],
+      "start_us": 926650,
+      "end_us": 926675,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "debugfs_init"],
+      "start_us": 926696,
+      "end_us": 926777,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "tracefs_init"],
+      "start_us": 926797,
+      "end_us": 926915,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "securityfs_init"],
+      "start_us": 926935,
+      "end_us": 928779,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "lockdown_secfs_init"],
+      "start_us": 928832,
+      "end_us": 928906,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "virtio_init"],
+      "start_us": 928926,
+      "end_us": 929195,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "iommu_init"],
+      "start_us": 929237,
+      "end_us": 929294,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "component_debug_init"],
+      "start_us": 929313,
+      "end_us": 929937,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cpufreq_core_init"],
+      "start_us": 929971,
+      "end_us": 930133,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cpufreq_gov_performance_init"],
+      "start_us": 930159,
+      "end_us": 930268,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "cpuidle_init"],
+      "start_us": 930308,
+      "end_us": 930491,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "capsule_reboot_register"],
+      "start_us": 930524,
+      "end_us": 930572,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "unaccepted_memory_init_kdump"],
+      "start_us": 930602,
+      "end_us": 930785,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "sock_init"],
+      "start_us": 930817,
+      "end_us": 949481,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "net_inuse_init"],
+      "start_us": 949569,
+      "end_us": 949701,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "sock_struct_check"],
+      "start_us": 949720,
+      "end_us": 949740,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "init_default_flow_dissectors"],
+      "start_us": 949755,
+      "end_us": 949903,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "netlink_proto_init"],
+      "start_us": 949928,
+      "end_us": 952788,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "genl_init"],
+      "start_us": 952840,
+      "end_us": 953784,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "bsp_pm_check_init"],
+      "start_us": 953814,
+      "end_us": 953848,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "core", "__gnttab_init"],
+      "start_us": 953866,
+      "end_us": 953920,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "postcore", "irq_sysfs_init"],
+      "start_us": 954106,
+      "end_us": 956009,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "dma_atomic_pool_init"],
+      "start_us": 956064,
+      "end_us": 958940,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "audit_init"],
+      "start_us": 958976,
+      "end_us": 960945,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "release_early_probes"],
+      "start_us": 961040,
+      "end_us": 961076,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "bdi_class_init"],
+      "start_us": 961094,
+      "end_us": 961476,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "mm_sysfs_init"],
+      "start_us": 961502,
+      "end_us": 961552,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "init_per_zone_wmark_min"],
+      "start_us": 961571,
+      "end_us": 962308,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "pcibus_class_init"],
+      "start_us": 962333,
+      "end_us": 962400,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "pci_driver_init"],
+      "start_us": 962422,
+      "end_us": 962575,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "xenbus_init"],
+      "start_us": 962597,
+      "end_us": 962689,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "postcore", "tty_class_init"],
+      "start_us": 962714,
+      "end_us": 962764,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "vtconsole_class_init"],
+      "start_us": 962790,
+      "end_us": 963392,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "serdev_init"],
+      "start_us": 963426,
+      "end_us": 963538,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "iommu_dev_init"],
+      "start_us": 963560,
+      "end_us": 963602,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "devlink_class_init"],
+      "start_us": 963620,
+      "end_us": 963902,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "software_node_init"],
+      "start_us": 963925,
+      "end_us": 963974,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "wakeup_sources_debugfs_init"],
+      "start_us": 963994,
+      "end_us": 964073,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "wakeup_sources_sysfs_init"],
+      "start_us": 964093,
+      "end_us": 964178,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "isa_bus_init"],
+      "start_us": 964199,
+      "end_us": 964474,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "thermal_init"],
+      "start_us": 964509,
+      "end_us": 966816,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "init_ladder"],
+      "start_us": 966841,
+      "end_us": 967179,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "init_menu"],
+      "start_us": 967179,
+      "end_us": 968359,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "init_haltpoll"],
+      "start_us": 968359,
+      "end_us": 968359,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "efipostcore_init"],
+      "start_us": 968373,
+      "end_us": 968373,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "pcc_init"],
+      "start_us": 968373,
+      "end_us": 968776,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "postcore", "amd_postcore_init"],
+      "start_us": 968801,
+      "end_us": 969070,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "postcore", "kobject_uevent_init"],
+      "start_us": 969108,
+      "end_us": 969375,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "report_snp_info"],
+      "start_us": 969704,
+      "end_us": 969772,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "sev_sysfs_init"],
+      "start_us": 969792,
+      "end_us": 969830,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "arch", "bts_init"],
+      "start_us": 969848,
+      "end_us": 969974,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "arch", "pt_init"],
+      "start_us": 969998,
+      "end_us": 970089,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "arch", "boot_params_ksysfs_init"],
+      "start_us": 970108,
+      "end_us": 970480,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "sbf_init"],
+      "start_us": 970505,
+      "end_us": 970534,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "arch_kdebugfs_init"],
+      "start_us": 970549,
+      "end_us": 970616,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "xfd_update_static_branch"],
+      "start_us": 970634,
+      "end_us": 970662,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "mtrr_if_init"],
+      "start_us": 970682,
+      "end_us": 970749,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "activate_jump_labels"],
+      "start_us": 970766,
+      "end_us": 970829,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "init_s4_sigcheck"],
+      "start_us": 970846,
+      "end_us": 970877,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "ffh_cstate_init"],
+      "start_us": 970895,
+      "end_us": 970946,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "kvm_alloc_cpumask"],
+      "start_us": 970964,
+      "end_us": 971005,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "activate_jump_labels"],
+      "start_us": 971023,
+      "end_us": 971050,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "gigantic_pages_init"],
+      "start_us": 971067,
+      "end_us": 971256,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "efi_free_boot_services"],
+      "start_us": 971277,
+      "end_us": 977539,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "kcmp_cookies_init"],
+      "start_us": 977570,
+      "end_us": 977664,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "cryptomgr_init"],
+      "start_us": 977684,
+      "end_us": 977758,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "acpi_pci_init"],
+      "start_us": 977776,
+      "end_us": 977902,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "serial_base_init"],
+      "start_us": 977937,
+      "end_us": 978729,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "iommu_dma_init"],
+      "start_us": 978759,
+      "end_us": 979017,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "dmi_id_init"],
+      "start_us": 979043,
+      "end_us": 979805,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "arch", "pci_arch_init"],
+      "start_us": 979840,
+      "end_us": 983212,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_vdso_image_64"],
+      "start_us": 983407,
+      "end_us": 983596,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_vdso_image_32"],
+      "start_us": 983625,
+      "end_us": 983704,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "fixup_ht_bug"],
+      "start_us": 983722,
+      "end_us": 983751,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "mtrr_init_finalize"],
+      "start_us": 983768,
+      "end_us": 983975,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "blake2s_mod_init"],
+      "start_us": 983991,
+      "end_us": 984681,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "uid_cache_init"],
+      "start_us": 984741,
+      "end_us": 984933,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "param_sysfs_init"],
+      "start_us": 984955,
+      "end_us": 985034,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "user_namespace_sysctl_init"],
+      "start_us": 985054,
+      "end_us": 985444,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "proc_schedstat_init"],
+      "start_us": 985483,
+      "end_us": 985539,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "pm_sysrq_init"],
+      "start_us": 985937,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "cgroup_sysfs_init"],
+      "start_us": 986169,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "crash_hotplug_init"],
+      "start_us": 986169,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 65
+    },
+    {
+      "path": ["kernel", "subsys", "crash_notes_memory_init"],
+      "start_us": 986169,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "crash_save_vmcoreinfo_init"],
+      "start_us": 986169,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "create_proc_profile"],
+      "start_us": 986169,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_optprobes"],
+      "start_us": 986169,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "user_namespaces_init"],
+      "start_us": 986169,
+      "end_us": 986169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "hung_task_init"],
+      "start_us": 986169,
+      "end_us": 988811,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "ftrace_check_for_weak_functions"],
+      "start_us": 988811,
+      "end_us": 988867,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "trace_eval_init"],
+      "start_us": 988909,
+      "end_us": 989080,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "send_signal_irq_work_init"],
+      "start_us": 989117,
+      "end_us": 989285,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "dev_map_init"],
+      "start_us": 989323,
+      "end_us": 989849,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "netns_bpf_init"],
+      "start_us": 989893,
+      "end_us": 990010,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "btf_vmlinux_init"],
+      "start_us": 990054,
+      "end_us": 990187,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "oom_init"],
+      "start_us": 990225,
+      "end_us": 1021479,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_user_buckets"],
+      "start_us": 1021554,
+      "end_us": 1022693,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "default_bdi_init"],
+      "start_us": 1022734,
+      "end_us": 1049281,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "cgwb_init"],
+      "start_us": 1049334,
+      "end_us": 1049403,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "percpu_enable_async"],
+      "start_us": 1049422,
+      "end_us": 1049447,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "kcompactd_init"],
+      "start_us": 1049470,
+      "end_us": 1063308,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_user_reserve"],
+      "start_us": 1063405,
+      "end_us": 1063577,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_admin_reserve"],
+      "start_us": 1063603,
+      "end_us": 1063641,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_reserve_notifier"],
+      "start_us": 1063658,
+      "end_us": 1063768,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "swap_init_sysfs"],
+      "start_us": 1063787,
+      "end_us": 1063884,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "swapfile_init"],
+      "start_us": 1063903,
+      "end_us": 1064087,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "hugetlb_init"],
+      "start_us": 1064113,
+      "end_us": 1068989,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "ksm_init"],
+      "start_us": 1069086,
+      "end_us": 1074138,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "memory_tier_init"],
+      "start_us": 1074191,
+      "end_us": 1074613,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "numa_init_sysfs"],
+      "start_us": 1074642,
+      "end_us": 1074705,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "hugepage_init"],
+      "start_us": 1074724,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "damon_init"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "damon_pa_initcall"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "damon_sysfs_init"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "damon_va_initcall"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "fips_init"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_msg_buckets"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "mem_cgroup_init"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "mem_cgroup_swap_init"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "sel_ib_pkey_init"],
+      "start_us": 1082853,
+      "end_us": 1082853,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "dh_init"],
+      "start_us": 1082853,
+      "end_us": 1084466,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "rsa_init"],
+      "start_us": 1084494,
+      "end_us": 1084654,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "ecdsa_init"],
+      "start_us": 1084675,
+      "end_us": 1084790,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "hmac_module_init"],
+      "start_us": 1084811,
+      "end_us": 1084833,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "md5_mod_init"],
+      "start_us": 1084850,
+      "end_us": 1084936,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "sha1_generic_mod_init"],
+      "start_us": 1084955,
+      "end_us": 1084988,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "sha256_generic_mod_init"],
+      "start_us": 1085006,
+      "end_us": 1085166,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "sha512_generic_mod_init"],
+      "start_us": 1085187,
+      "end_us": 1085218,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "sha3_generic_mod_init"],
+      "start_us": 1085239,
+      "end_us": 1085281,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "crypto_ecb_module_init"],
+      "start_us": 1085299,
+      "end_us": 1085320,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "crypto_cbc_module_init"],
+      "start_us": 1085337,
+      "end_us": 1085357,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "crypto_ctr_module_init"],
+      "start_us": 1085373,
+      "end_us": 1085417,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "aes_init"],
+      "start_us": 1085436,
+      "end_us": 1085480,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "crc32c_mod_init"],
+      "start_us": 1085498,
+      "end_us": 1085527,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "crct10dif_mod_init"],
+      "start_us": 1085545,
+      "end_us": 1085590,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "lzo_mod_init"],
+      "start_us": 1085608,
+      "end_us": 1085727,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "lzorle_mod_init"],
+      "start_us": 1085751,
+      "end_us": 1085807,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "drbg_init"],
+      "start_us": 1085826,
+      "end_us": 1086692,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_bio"],
+      "start_us": 1086738,
+      "end_us": 1092776,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "blk_ioc_init"],
+      "start_us": 1092841,
+      "end_us": 1092912,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "blk_mq_init"],
+      "start_us": 1092930,
+      "end_us": 1093086,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "genhd_device_init"],
+      "start_us": 1093108,
+      "end_us": 1096530,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "blkcg_punt_bio_init"],
+      "start_us": 1096530,
+      "end_us": 1116657,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "io_wq_init"],
+      "start_us": 1116657,
+      "end_us": 1116673,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "sg_pool_init"],
+      "start_us": 1116691,
+      "end_us": 1138581,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "irq_poll_setup"],
+      "start_us": 1138818,
+      "end_us": 1138932,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "leds_init"],
+      "start_us": 1138952,
+      "end_us": 1139043,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "pci_slot_init"],
+      "start_us": 1139062,
+      "end_us": 1139189,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "fbmem_init"],
+      "start_us": 1139208,
+      "end_us": 1140991,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "acpi_init"],
+      "start_us": 1141026,
+      "end_us": 1381074,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "hmat_init"],
+      "start_us": 1381259,
+      "end_us": 1381379,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "acpi_hed_driver_init"],
+      "start_us": 1381400,
+      "end_us": 1381510,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "pnp_init"],
+      "start_us": 1381531,
+      "end_us": 1381648,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "balloon_init"],
+      "start_us": 1381671,
+      "end_us": 1381706,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "subsys", "xen_setup_shutdown_event"],
+      "start_us": 1381725,
+      "end_us": 1381798,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "subsys", "xenbus_probe_backend_init"],
+      "start_us": 1381816,
+      "end_us": 1381996,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "xenbus_probe_frontend_init"],
+      "start_us": 1382020,
+      "end_us": 1382103,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "misc_init"],
+      "start_us": 1382144,
+      "end_us": 1382279,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "tpm_init"],
+      "start_us": 1382305,
+      "end_us": 1382642,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "cn_init"],
+      "start_us": 1382642,
+      "end_us": 1382642,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "iommu_subsys_init"],
+      "start_us": 1382642,
+      "end_us": 1382642,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "dax_core_init"],
+      "start_us": 1382642,
+      "end_us": 1396708,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "dma_buf_init"],
+      "start_us": 1396780,
+      "end_us": 1397124,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "dma_heap_init"],
+      "start_us": 1397154,
+      "end_us": 1397292,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "cxl_core_init"],
+      "start_us": 1397319,
+      "end_us": 1398150,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "cxl_port_init"],
+      "start_us": 1398206,
+      "end_us": 1398294,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "serio_init"],
+      "start_us": 1398313,
+      "end_us": 1400421,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "input_init"],
+      "start_us": 1400456,
+      "end_us": 1400655,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "rtc_init"],
+      "start_us": 1400677,
+      "end_us": 1400814,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "pps_init"],
+      "start_us": 1400837,
+      "end_us": 1400972,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "ptp_init"],
+      "start_us": 1400989,
+      "end_us": 1401081,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "power_supply_class_init"],
+      "start_us": 1401098,
+      "end_us": 1401314,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "intel_tcc_init"],
+      "start_us": 1401338,
+      "end_us": 1401403,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "dmi_init"],
+      "start_us": 1401431,
+      "end_us": 1401666,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "efisubsys_init"],
+      "start_us": 1401695,
+      "end_us": 1404589,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "ras_init"],
+      "start_us": 1404630,
+      "end_us": 1404751,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "proto_init"],
+      "start_us": 1404774,
+      "end_us": 1404831,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "net_dev_init"],
+      "start_us": 1404847,
+      "end_us": 1412931,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "neigh_init"],
+      "start_us": 1412992,
+      "end_us": 1413059,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "fib_notifier_init"],
+      "start_us": 1413085,
+      "end_us": 1413142,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "netdev_genl_init"],
+      "start_us": 1413160,
+      "end_us": 1413860,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "page_pool_user_init"],
+      "start_us": 1413915,
+      "end_us": 1413965,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "fib_rules_init"],
+      "start_us": 1413984,
+      "end_us": 1414167,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "init_cgroup_netprio"],
+      "start_us": 1414188,
+      "end_us": 1414225,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "bpf_lwt_init"],
+      "start_us": 1414242,
+      "end_us": 1414280,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "pktsched_init"],
+      "start_us": 1414296,
+      "end_us": 1414700,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "tc_filter_init"],
+      "start_us": 1414726,
+      "end_us": 1414926,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "tc_action_init"],
+      "start_us": 1414954,
+      "end_us": 1414998,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "ethnl_init"],
+      "start_us": 1415016,
+      "end_us": 1415424,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "nexthop_init"],
+      "start_us": 1415502,
+      "end_us": 1416542,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "cipso_v4_init"],
+      "start_us": 1416595,
+      "end_us": 1416702,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "devlink_init"],
+      "start_us": 1416722,
+      "end_us": 1417229,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "netlbl_init"],
+      "start_us": 1417256,
+      "end_us": 1418454,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "pci_subsys_init"],
+      "start_us": 1418480,
+      "end_us": 1423266,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "vsprintf_init_hashval"],
+      "start_us": 1423296,
+      "end_us": 1423403,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "efi_runtime_map_init"],
+      "start_us": 1423450,
+      "end_us": 1423832,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "vga_arb_device_init"],
+      "start_us": 1423859,
+      "end_us": 1430830,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "nmi_warning_debugfs"],
+      "start_us": 1430830,
+      "end_us": 1430830,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "hpet_late_init"],
+      "start_us": 1430830,
+      "end_us": 1434490,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_amd_nbs"],
+      "start_us": 1434579,
+      "end_us": 1434847,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "iomem_init_inode"],
+      "start_us": 1434894,
+      "end_us": 1435165,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "em_debug_init"],
+      "start_us": 1436277,
+      "end_us": 1436345,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "clocksource_done_booting"],
+      "start_us": 1436364,
+      "end_us": 1437464,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "tracer_init_tracefs"],
+      "start_us": 1437499,
+      "end_us": 1438126,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_trace_printk_function_export"],
+      "start_us": 1438180,
+      "end_us": 1444109,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_graph_tracefs"],
+      "start_us": 1444234,
+      "end_us": 1444369,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "trace_events_synth_init"],
+      "start_us": 1444417,
+      "end_us": 1444549,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "bpf_event_init"],
+      "start_us": 1444588,
+      "end_us": 1444820,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_kprobe_trace"],
+      "start_us": 1444884,
+      "end_us": 1446387,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_dynamic_event"],
+      "start_us": 1446472,
+      "end_us": 1446587,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_uprobe_trace"],
+      "start_us": 1446829,
+      "end_us": 1447137,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "bpf_init"],
+      "start_us": 1447175,
+      "end_us": 1447259,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "btf_module_init"],
+      "start_us": 1447280,
+      "end_us": 1447308,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "secretmem_init"],
+      "start_us": 1447323,
+      "end_us": 1447515,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_fs_stat_sysctls"],
+      "start_us": 1447538,
+      "end_us": 1447674,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_fs_exec_sysctls"],
+      "start_us": 1447698,
+      "end_us": 1447759,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_pipe_fs"],
+      "start_us": 1447794,
+      "end_us": 1448016,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_fs_namei_sysctls"],
+      "start_us": 1448041,
+      "end_us": 1448081,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_fs_dcache_sysctls"],
+      "start_us": 1448100,
+      "end_us": 1448132,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_fs_namespace_sysctls"],
+      "start_us": 1448156,
+      "end_us": 1448189,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "cgroup_writeback_init"],
+      "start_us": 1448207,
+      "end_us": 1448271,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "inotify_user_setup"],
+      "start_us": 1448290,
+      "end_us": 1448509,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "eventpoll_init"],
+      "start_us": 1448530,
+      "end_us": 1448791,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "anon_inode_init"],
+      "start_us": 1448816,
+      "end_us": 1448961,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_dax_wait_table"],
+      "start_us": 1449001,
+      "end_us": 1449212,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_locks_init"],
+      "start_us": 1449236,
+      "end_us": 1449286,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "backing_aio_init"],
+      "start_us": 1449304,
+      "end_us": 1449437,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_fs_coredump_sysctls"],
+      "start_us": 1449479,
+      "end_us": 1449546,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "iomap_buffered_init"],
+      "start_us": 1449576,
+      "end_us": 1450427,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "iomap_dio_init"],
+      "start_us": 1450505,
+      "end_us": 1451033,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "dquot_init"],
+      "start_us": 1451095,
+      "end_us": 1452653,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "quota_init"],
+      "start_us": 1452769,
+      "end_us": 1453190,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_cmdline_init"],
+      "start_us": 1453234,
+      "end_us": 1453335,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_consoles_init"],
+      "start_us": 1453369,
+      "end_us": 1453434,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_cpuinfo_init"],
+      "start_us": 1453481,
+      "end_us": 1453559,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_devices_init"],
+      "start_us": 1453593,
+      "end_us": 1453660,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_interrupts_init"],
+      "start_us": 1453692,
+      "end_us": 1453760,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_loadavg_init"],
+      "start_us": 1453800,
+      "end_us": 1453863,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_meminfo_init"],
+      "start_us": 1453895,
+      "end_us": 1453973,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_stat_init"],
+      "start_us": 1454008,
+      "end_us": 1454076,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_uptime_init"],
+      "start_us": 1454112,
+      "end_us": 1454215,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_version_init"],
+      "start_us": 1454249,
+      "end_us": 1454315,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_softirqs_init"],
+      "start_us": 1454356,
+      "end_us": 1454420,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_kcore_init"],
+      "start_us": 1454453,
+      "end_us": 1455888,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "vmcore_init"],
+      "start_us": 1455952,
+      "end_us": 1456086,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_kmsg_init"],
+      "start_us": 1456123,
+      "end_us": 1456197,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "proc_page_init"],
+      "start_us": 1456231,
+      "end_us": 1456329,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_ramfs_fs"],
+      "start_us": 1456363,
+      "end_us": 1456427,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_hugetlbfs_fs"],
+      "start_us": 1456461,
+      "end_us": 1458081,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "tomoyo_initerface_init"],
+      "start_us": 1458320,
+      "end_us": 1461574,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "aa_create_aafs"],
+      "start_us": 1461705,
+      "end_us": 1465325,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "ipe_init_securityfs"],
+      "start_us": 1465397,
+      "end_us": 1465789,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "dynamic_debug_init_control"],
+      "start_us": 1465844,
+      "end_us": 1466121,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "acpi_event_init"],
+      "start_us": 1466189,
+      "end_us": 1466373,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "pnp_system_init"],
+      "start_us": 1466407,
+      "end_us": 1467024,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "pnpacpi_init"],
+      "start_us": 1467126,
+      "end_us": 1479250,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "chr_dev_init"],
+      "start_us": 1479286,
+      "end_us": 1518228,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "hwrng_modinit"],
+      "start_us": 1518306,
+      "end_us": 1519097,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "firmware_class_init"],
+      "start_us": 1519149,
+      "end_us": 1519334,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "map_properties"],
+      "start_us": 1519358,
+      "end_us": 1519424,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "efi_mokvar_sysfs_init"],
+      "start_us": 1519443,
+      "end_us": 1519930,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "init_acpi_pm_clocksource"],
+      "start_us": 1519988,
+      "end_us": 1525251,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "powercap_init"],
+      "start_us": 1525290,
+      "end_us": 1525645,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "sysctl_core_init"],
+      "start_us": 1525685,
+      "end_us": 1525928,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "eth_offload_init"],
+      "start_us": 1525952,
+      "end_us": 1526058,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "ipv4_offload_init"],
+      "start_us": 1526077,
+      "end_us": 1526266,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "inet_init"],
+      "start_us": 1526314,
+      "end_us": 1947633,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "af_unix_init"],
+      "start_us": 1947703,
+      "end_us": 1948037,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "ipv6_offload_init"],
+      "start_us": 1948062,
+      "end_us": 1948226,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "vlan_offload_init"],
+      "start_us": 1948247,
+      "end_us": 1948300,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "xsk_init"],
+      "start_us": 1948323,
+      "end_us": 1948451,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "pcibios_assign_resources"],
+      "start_us": 1948470,
+      "end_us": 1952034,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "pci_apply_final_quirks"],
+      "start_us": 1952068,
+      "end_us": 1952296,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "fs", "acpi_reserve_resources"],
+      "start_us": 1952332,
+      "end_us": 1952448,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "rootfs", "populate_rootfs"],
+      "start_us": 1952469,
+      "end_us": 1952903,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "rootfs", "pci_iommu_init"],
+      "start_us": 1952955,
+      "end_us": 1953104,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "rootfs", "ir_dev_scope_init"],
+      "start_us": 1953129,
+      "end_us": 1953164,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "snp_init_platform_device"],
+      "start_us": 1953407,
+      "end_us": 1953481,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "ia32_binfmt_init"],
+      "start_us": 1953501,
+      "end_us": 1953548,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "amd_ibs_init"],
+      "start_us": 1953566,
+      "end_us": 1953607,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "amd_uncore_init"],
+      "start_us": 1953625,
+      "end_us": 1953667,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "msr_init"],
+      "start_us": 1953690,
+      "end_us": 1954258,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "register_kernel_offset_dumper"],
+      "start_us": 1954292,
+      "end_us": 1954326,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "i8259A_init_ops"],
+      "start_us": 1954360,
+      "end_us": 1954395,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_tsc_clocksource"],
+      "start_us": 1954413,
+      "end_us": 1954520,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "add_rtc_cmos"],
+      "start_us": 1954540,
+      "end_us": 1954773,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "umwait_init"],
+      "start_us": 1954804,
+      "end_us": 1954843,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "sgx_init"],
+      "start_us": 1954862,
+      "end_us": 1954946,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "ioapic_init_ops"],
+      "start_us": 1954972,
+      "end_us": 1955245,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "register_e820_pmem"],
+      "start_us": 1955278,
+      "end_us": 1955418,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "add_pcspkr"],
+      "start_us": 1955438,
+      "end_us": 1955721,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "audit_classes_init"],
+      "start_us": 1955746,
+      "end_us": 1955912,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pt_dump_init"],
+      "start_us": 1955980,
+      "end_us": 1956062,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "proc_execdomains_init"],
+      "start_us": 1956096,
+      "end_us": 1956198,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "register_warn_debugfs"],
+      "start_us": 1956231,
+      "end_us": 1956429,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "cpuhp_sysfs_init"],
+      "start_us": 1956469,
+      "end_us": 1956815,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ioresources_init"],
+      "start_us": 1956856,
+      "end_us": 1956944,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "psi_proc_init"],
+      "start_us": 1957001,
+      "end_us": 1957157,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "snapshot_device_init"],
+      "start_us": 1957194,
+      "end_us": 1957863,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "irq_pm_init_ops"],
+      "start_us": 1957896,
+      "end_us": 1957954,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "klp_init"],
+      "start_us": 1957976,
+      "end_us": 1958029,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "proc_modules_init"],
+      "start_us": 1958047,
+      "end_us": 1958089,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "timer_sysctl_init"],
+      "start_us": 1958107,
+      "end_us": 1958147,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "timekeeping_init_ops"],
+      "start_us": 1958165,
+      "end_us": 1958191,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_clocksource_sysfs"],
+      "start_us": 1958208,
+      "end_us": 1958473,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_timer_list_procfs"],
+      "start_us": 1958506,
+      "end_us": 1958552,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "alarmtimer_init"],
+      "start_us": 1958589,
+      "end_us": 1959057,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_posix_timers"],
+      "start_us": 1959089,
+      "end_us": 1959193,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "clockevents_init_sysfs"],
+      "start_us": 1959215,
+      "end_us": 1959662,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "kallsyms_init"],
+      "start_us": 1959710,
+      "end_us": 1959753,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pid_namespaces_init"],
+      "start_us": 1959772,
+      "end_us": 1959867,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "audit_watch_init"],
+      "start_us": 1959891,
+      "end_us": 1960012,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "audit_fsnotify_init"],
+      "start_us": 1960034,
+      "end_us": 1960066,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "audit_tree_init"],
+      "start_us": 1960090,
+      "end_us": 1960188,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "seccomp_sysctl_init"],
+      "start_us": 1960206,
+      "end_us": 1960246,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "utsname_sysctl_init"],
+      "start_us": 1960264,
+      "end_us": 1960302,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_tracepoints"],
+      "start_us": 1960319,
+      "end_us": 1960357,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "stack_trace_init"],
+      "start_us": 1960373,
+      "end_us": 1960499,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_mmio_trace"],
+      "start_us": 1960521,
+      "end_us": 1960612,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_blk_tracer"],
+      "start_us": 1960632,
+      "end_us": 1960717,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "perf_event_sysfs_init"],
+      "start_us": 1960738,
+      "end_us": 1962219,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "system_trusted_keyring_init"],
+      "start_us": 1962302,
+      "end_us": 1965227,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "blacklist_init"],
+      "start_us": 1965281,
+      "end_us": 1965481,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "kswapd_init"],
+      "start_us": 1965502,
+      "end_us": 1967185,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "extfrag_debug_init"],
+      "start_us": 1967267,
+      "end_us": 1968190,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "mm_compute_batch_init"],
+      "start_us": 1968230,
+      "end_us": 1968342,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "slab_proc_init"],
+      "start_us": 1968373,
+      "end_us": 1968455,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "workingset_init"],
+      "start_us": 1968501,
+      "end_us": 1968668,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "proc_vmalloc_init"],
+      "start_us": 1968720,
+      "end_us": 1968802,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "procswaps_init"],
+      "start_us": 1968835,
+      "end_us": 1968889,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "damon_reclaim_init"],
+      "start_us": 1968917,
+      "end_us": 1979165,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "damon_lru_sort_init"],
+      "start_us": 1979256,
+      "end_us": 1979308,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ptdump_debugfs_init"],
+      "start_us": 1979327,
+      "end_us": 1979442,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "fcntl_init"],
+      "start_us": 1979463,
+      "end_us": 1979538,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "proc_filesystems_init"],
+      "start_us": 1979557,
+      "end_us": 1979635,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "start_dirtytime_writeback"],
+      "start_us": 1979655,
+      "end_us": 1979726,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "dio_init"],
+      "start_us": 1979754,
+      "end_us": 1979814,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "dnotify_init"],
+      "start_us": 1979831,
+      "end_us": 1980098,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "fanotify_user_setup"],
+      "start_us": 1980125,
+      "end_us": 1980305,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "userfaultfd_init"],
+      "start_us": 1980326,
+      "end_us": 1980866,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "aio_setup"],
+      "start_us": 1980902,
+      "end_us": 1981318,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "mbcache_init"],
+      "start_us": 1981365,
+      "end_us": 1981476,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_devpts_fs"],
+      "start_us": 1981498,
+      "end_us": 1981561,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ext4_init_fs"],
+      "start_us": 1981581,
+      "end_us": 1982856,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "journal_init"],
+      "start_us": 1982928,
+      "end_us": 1983396,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "fuse_init"],
+      "start_us": 1983427,
+      "end_us": 1984261,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "virtio_fs_init"],
+      "start_us": 1984314,
+      "end_us": 1984502,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ipc_init"],
+      "start_us": 1984528,
+      "end_us": 1984796,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ipc_sysctl_init"],
+      "start_us": 1984822,
+      "end_us": 1985159,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_mqueue_fs"],
+      "start_us": 1985188,
+      "end_us": 1986024,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "key_proc_init"],
+      "start_us": 1986062,
+      "end_us": 1986124,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "selinux_nf_ip_init"],
+      "start_us": 1986143,
+      "end_us": 1986170,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_sel_fs"],
+      "start_us": 1986192,
+      "end_us": 1986236,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "selnl_init"],
+      "start_us": 1986252,
+      "end_us": 1986369,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "sel_netif_init"],
+      "start_us": 1986389,
+      "end_us": 1986414,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "sel_netnode_init"],
+      "start_us": 1986429,
+      "end_us": 1986464,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "sel_netport_init"],
+      "start_us": 1986486,
+      "end_us": 1986515,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "aurule_init"],
+      "start_us": 1986530,
+      "end_us": 1986596,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "apparmor_nf_ip_init"],
+      "start_us": 1986614,
+      "end_us": 1988732,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "platform_keyring_init"],
+      "start_us": 1988820,
+      "end_us": 1989077,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "machine_keyring_init"],
+      "start_us": 1989131,
+      "end_us": 1989512,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "bpf_crypto_skcipher_init"],
+      "start_us": 1989535,
+      "end_us": 1989658,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "crc64_rocksoft_init"],
+      "start_us": 1989679,
+      "end_us": 1989733,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "jent_mod_init"],
+      "start_us": 1989752,
+      "end_us": 2128764,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "asymmetric_key_init"],
+      "start_us": 2128845,
+      "end_us": 2128897,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "x509_key_init"],
+      "start_us": 2128926,
+      "end_us": 2129139,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "crypto_kdf108_init"],
+      "start_us": 2129170,
+      "end_us": 4705262,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "blkdev_init"],
+      "start_us": 4705343,
+      "end_us": 4705643,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "proc_genhd_init"],
+      "start_us": 4705669,
+      "end_us": 4705747,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "bsg_init"],
+      "start_us": 4705771,
+      "end_us": 4705938,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "throtl_init"],
+      "start_us": 4705956,
+      "end_us": 4706843,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ioc_init"],
+      "start_us": 4706913,
+      "end_us": 4707075,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "io_uring_init"],
+      "start_us": 4707096,
+      "end_us": 4707340,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "subsys", "blake2s_mod_init"],
+      "start_us": 4707366,
+      "end_us": 4712701,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "crc_t10dif_mod_init"],
+      "start_us": 4712764,
+      "end_us": 4715612,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "crc64_rocksoft_mod_init"],
+      "start_us": 4715701,
+      "end_us": 4719350,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "percpu_counter_startup"],
+      "start_us": 4719460,
+      "end_us": 4719906,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "digsig_init"],
+      "start_us": 4719935,
+      "end_us": 4722967,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ledtrig_disk_init"],
+      "start_us": 4723030,
+      "end_us": 4723120,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ledtrig_cpu_init"],
+      "start_us": 4723139,
+      "end_us": 4723670,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "ledtrig_panic_init"],
+      "start_us": 4723696,
+      "end_us": 4723748,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pcie_portdrv_init"],
+      "start_us": 4723766,
+      "end_us": 4724421,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pci_proc_init"],
+      "start_us": 4724461,
+      "end_us": 4724797,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pci_hotplug_init"],
+      "start_us": 4724835,
+      "end_us": 4724877,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "xenfb_init"],
+      "start_us": 4724914,
+      "end_us": 4725005,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "efifb_driver_init"],
+      "start_us": 4725039,
+      "end_us": 4725138,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "intel_idle_init"],
+      "start_us": 4725160,
+      "end_us": 4725252,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "ged_driver_init"],
+      "start_us": 4725271,
+      "end_us": 4725354,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "acpi_processor_driver_init"],
+      "start_us": 4725374,
+      "end_us": 4729141,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "acpi_thermal_init"],
+      "start_us": 4729197,
+      "end_us": 4730002,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "acpi_ec_sys_init"],
+      "start_us": 4730052,
+      "end_us": 4730109,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "erst_init"],
+      "start_us": 4730128,
+      "end_us": 4730240,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "virtio_pci_driver_init"],
+      "start_us": 4730260,
+      "end_us": 4743266,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "xenbus_probe_initcall"],
+      "start_us": 4743301,
+      "end_us": 4743344,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "postcore", "xenbus_init"],
+      "start_us": 4743364,
+      "end_us": 4743399,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "xenbus_backend_init"],
+      "start_us": 4743418,
+      "end_us": 4743439,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "hyper_sysfs_init"],
+      "start_us": 4743456,
+      "end_us": 4743490,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "hypervisor_subsys_init"],
+      "start_us": 4743505,
+      "end_us": 4743533,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "platform_driver_init"],
+      "start_us": 4743575,
+      "end_us": 4743692,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "n_null_init"],
+      "start_us": 4743712,
+      "end_us": 4743780,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pty_init"],
+      "start_us": 4743798,
+      "end_us": 4744628,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "sysrq_init"],
+      "start_us": 4744661,
+      "end_us": 4744753,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "xen_hvc_init"],
+      "start_us": 4744772,
+      "end_us": 4744807,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "serial8250_init"],
+      "start_us": 4744824,
+      "end_us": 4759683,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "dw8250_platform_driver_init"],
+      "start_us": 4759719,
+      "end_us": 4759786,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "serial_pci_driver_init"],
+      "start_us": 4759806,
+      "end_us": 4759979,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pericom8250_pci_driver_init"],
+      "start_us": 4760010,
+      "end_us": 4760100,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "random_sysctls_init"],
+      "start_us": 4760120,
+      "end_us": 4760188,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "virtio_console_init"],
+      "start_us": 4760207,
+      "end_us": 4760448,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "hpet_init"],
+      "start_us": 4760472,
+      "end_us": 4761866,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "init_tis"],
+      "start_us": 4761896,
+      "end_us": 4762052,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "crb_acpi_driver_init"],
+      "start_us": 4762074,
+      "end_us": 4762153,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "cn_proc_init"],
+      "start_us": 4762258,
+      "end_us": 4762392,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "topology_sysfs_init"],
+      "start_us": 4762412,
+      "end_us": 4762610,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "cacheinfo_sysfs_init"],
+      "start_us": 4762644,
+      "end_us": 4765410,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "hmem_init"],
+      "start_us": 4765465,
+      "end_us": 4765524,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "system_heap_create"],
+      "start_us": 4765558,
+      "end_us": 4766982,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "udmabuf_dev_init"],
+      "start_us": 4767053,
+      "end_us": 4767724,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "nvme_keyring_init"],
+      "start_us": 4767768,
+      "end_us": 4767893,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "nvme_core_init"],
+      "start_us": 4767912,
+      "end_us": 4771698,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "nvme_init"],
+      "start_us": 4771760,
+      "end_us": 4771900,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "blackhole_netdev_init"],
+      "start_us": 4771921,
+      "end_us": 4772620,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "netkit_init"],
+      "start_us": 4772655,
+      "end_us": 4772776,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "i8042_init"],
+      "start_us": 4772794,
+      "end_us": 4779242,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "input_leds_init"],
+      "start_us": 4779281,
+      "end_us": 4779307,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "atkbd_init"],
+      "start_us": 4779323,
+      "end_us": 4779586,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "cmos_init"],
+      "start_us": 4779612,
+      "end_us": 4792353,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "thermal_throttle_init_device"],
+      "start_us": 4792403,
+      "end_us": 4792435,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "amd_pstate_init"],
+      "start_us": 4792452,
+      "end_us": 4792604,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "intel_pstate_init"],
+      "start_us": 4792623,
+      "end_us": 4792674,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "haltpoll_init"],
+      "start_us": 4792692,
+      "end_us": 4792732,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "device", "dmi_sysfs_init"],
+      "start_us": 4792748,
+      "end_us": 4794401,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "sysfb_init"],
+      "start_us": 4794435,
+      "end_us": 4809434,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "esrt_sysfs_init"],
+      "start_us": 4809493,
+      "end_us": 4809543,
+      "failed": false,
+      "ret": -38
+    },
+    {
+      "path": ["kernel", "device", "vmgenid_plaform_driver_init"],
+      "start_us": 4809563,
+      "end_us": 4809704,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "sock_diag_init"],
+      "start_us": 4809735,
+      "end_us": 4809989,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "blackhole_init"],
+      "start_us": 4810012,
+      "end_us": 4810036,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "fq_codel_module_init"],
+      "start_us": 4810053,
+      "end_us": 4810084,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "gre_offload_init"],
+      "start_us": 4810100,
+      "end_us": 4810145,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "sysctl_ipv4_init"],
+      "start_us": 4810162,
+      "end_us": 4810555,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "cubictcp_register"],
+      "start_us": 4810581,
+      "end_us": 4810955,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "inet6_init"],
+      "start_us": 4810983,
+      "end_us": 4887130,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "mip6_init"],
+      "start_us": 4887276,
+      "end_us": 4887466,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "packet_init"],
+      "start_us": 4887486,
+      "end_us": 4887712,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "strp_dev_init"],
+      "start_us": 4887737,
+      "end_us": 4888548,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "dcbnl_init"],
+      "start_us": 4888624,
+      "end_us": 4888761,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "handshake_init"],
+      "start_us": 4888781,
+      "end_us": 4889180,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "pm_check_save_msr"],
+      "start_us": 4889207,
+      "end_us": 4889416,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "device", "mcheck_init_device"],
+      "start_us": 4889439,
+      "end_us": 4891240,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_do_mounts_initrd_sysctls_init"],
+      "start_us": 4891457,
+      "end_us": 4891514,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "tboot_late_init"],
+      "start_us": 4891532,
+      "end_us": 4891574,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sld_mitigate_sysctl_init"],
+      "start_us": 4891606,
+      "end_us": 4891645,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "intel_epb_init"],
+      "start_us": 4891662,
+      "end_us": 4891701,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "late", "mcheck_late_init"],
+      "start_us": 4891717,
+      "end_us": 4891863,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "severities_debugfs_init"],
+      "start_us": 4891882,
+      "end_us": 4891931,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "microcode_init"],
+      "start_us": 4891949,
+      "end_us": 4892000,
+      "failed": false,
+      "ret": -22
+    },
+    {
+      "path": ["kernel", "late", "resctrl_late_init"],
+      "start_us": 4892017,
+      "end_us": 4892181,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "late", "cpu_init_debugfs"],
+      "start_us": 4892202,
+      "end_us": 4892373,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "hpet_insert_resource"],
+      "start_us": 4892397,
+      "end_us": 4892454,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "start_sync_check_timer"],
+      "start_us": 4892476,
+      "end_us": 4892501,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "lapic_insert_resource"],
+      "start_us": 4892517,
+      "end_us": 4892560,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "print_ipi_mode"],
+      "start_us": 4892591,
+      "end_us": 4892639,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "print_ICs"],
+      "start_us": 4892656,
+      "end_us": 4892681,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "setup_efi_kvm_sev_migration"],
+      "start_us": 4892697,
+      "end_us": 4892774,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "create_tlb_single_page_flush_ceiling"],
+      "start_us": 4892793,
+      "end_us": 4892839,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "pat_memtype_list_init"],
+      "start_us": 4892858,
+      "end_us": 4892909,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "create_init_pkru_value"],
+      "start_us": 4892927,
+      "end_us": 4892997,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_panic_sysctls_init"],
+      "start_us": 4893026,
+      "end_us": 4893073,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_panic_sysfs_init"],
+      "start_us": 4893090,
+      "end_us": 4893198,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_exit_sysctls_init"],
+      "start_us": 4893217,
+      "end_us": 4893251,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_exit_sysfs_init"],
+      "start_us": 4893268,
+      "end_us": 4893303,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "param_sysfs_builtin_init"],
+      "start_us": 4893320,
+      "end_us": 4912994,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_reboot_sysctls_init"],
+      "start_us": 4913052,
+      "end_us": 4913131,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "reboot_ksysfs_init"],
+      "start_us": 4913154,
+      "end_us": 4913234,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sched_core_sysctl_init"],
+      "start_us": 4913254,
+      "end_us": 4913293,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sched_fair_sysctl_init"],
+      "start_us": 4913319,
+      "end_us": 4913371,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sched_rt_sysctl_init"],
+      "start_us": 4913389,
+      "end_us": 4913423,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sched_dl_sysctl_init"],
+      "start_us": 4913441,
+      "end_us": 4913472,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sched_clock_init_late"],
+      "start_us": 4913489,
+      "end_us": 4915310,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sched_init_debug"],
+      "start_us": 4915395,
+      "end_us": 4916367,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sched_energy_aware_sysctl_init"],
+      "start_us": 4916421,
+      "end_us": 4916483,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "cpu_latency_qos_init"],
+      "start_us": 4916504,
+      "end_us": 4917125,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "pm_debugfs_init"],
+      "start_us": 4917157,
+      "end_us": 4917233,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "printk_late_init"],
+      "start_us": 4917261,
+      "end_us": 4917392,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_srcu_module_notifier"],
+      "start_us": 4917412,
+      "end_us": 4917450,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "swiotlb_create_default_debugfs"],
+      "start_us": 4917467,
+      "end_us": 4917516,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "module_decompress_sysfs_init"],
+      "start_us": 4917534,
+      "end_us": 4917585,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "tk_debug_sleep_time_init"],
+      "start_us": 4917604,
+      "end_us": 4917646,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_ksym_iter_register"],
+      "start_us": 4917664,
+      "end_us": 4917690,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_acct_sysctls_init"],
+      "start_us": 4917706,
+      "end_us": 4917740,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kexec_core_sysctl_init"],
+      "start_us": 4917758,
+      "end_us": 4917792,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_rstat_kfunc_init"],
+      "start_us": 4917813,
+      "end_us": 4917850,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "debugfs_kprobe_init"],
+      "start_us": 4917867,
+      "end_us": 4917955,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kernel_delayacct_sysctls_init"],
+      "start_us": 4917973,
+      "end_us": 4918007,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "taskstats_init"],
+      "start_us": 4918024,
+      "end_us": 4918155,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "ftrace_sysctl_init"],
+      "start_us": 4918173,
+      "end_us": 4918206,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_key_sig_kfuncs_init"],
+      "start_us": 4918222,
+      "end_us": 4918289,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_kprobe_multi_kfuncs_init"],
+      "start_us": 4918308,
+      "end_us": 4918362,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_global_ma_init"],
+      "start_us": 4918381,
+      "end_us": 4919487,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_syscall_sysctl_init"],
+      "start_us": 4919538,
+      "end_us": 4919585,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "unbound_reg_init"],
+      "start_us": 4919605,
+      "end_us": 4919708,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kfunc_init"],
+      "start_us": 4919727,
+      "end_us": 4920803,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_map_iter_init"],
+      "start_us": 4920833,
+      "end_us": 4920874,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_subsystem"],
+      "start_us": 4920894,
+      "end_us": 4920997,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "task_iter_init"],
+      "start_us": 4921021,
+      "end_us": 4921141,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_prog_iter_init"],
+      "start_us": 4921165,
+      "end_us": 4921187,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_link_iter_init"],
+      "start_us": 4921202,
+      "end_us": 4921222,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_trampolines"],
+      "start_us": 4921242,
+      "end_us": 4921280,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kfunc_init"],
+      "start_us": 4921295,
+      "end_us": 4921329,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_cgroup_iter_init"],
+      "start_us": 4921343,
+      "end_us": 4921366,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "cpumask_kfunc_init"],
+      "start_us": 4921381,
+      "end_us": 4921668,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "crypto_kfunc_init"],
+      "start_us": 4921689,
+      "end_us": 4921800,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "load_system_certificate_list"],
+      "start_us": 4921819,
+      "end_us": 5035888,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_lru_gen"],
+      "start_us": 5035948,
+      "end_us": 5036200,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "fault_around_debugfs"],
+      "start_us": 5036241,
+      "end_us": 5036323,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "slab_late_init"],
+      "start_us": 5036361,
+      "end_us": 5053318,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "max_swapfiles_check"],
+      "start_us": 5053374,
+      "end_us": 5053399,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "hugetlb_vmemmap_init"],
+      "start_us": 5053416,
+      "end_us": 5053498,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "mempolicy_sysfs_init"],
+      "start_us": 5053517,
+      "end_us": 5053708,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "kfence_debugfs_init"],
+      "start_us": 5053730,
+      "end_us": 5053808,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "memory_tier_late_init"],
+      "start_us": 5053836,
+      "end_us": 5056093,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "split_huge_pages_debugfs"],
+      "start_us": 5056131,
+      "end_us": 5056213,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "check_early_ioremap_leak"],
+      "start_us": 5056232,
+      "end_us": 5056276,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "set_hardened_usercopy"],
+      "start_us": 5056293,
+      "end_us": 5056320,
+      "failed": false,
+      "ret": 1
+    },
+    {
+      "path": ["kernel", "late", "fscrypt_init"],
+      "start_us": 5056337,
+      "end_us": 5057623,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "fsverity_init"],
+      "start_us": 5057653,
+      "end_us": 5058096,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "pstore_init"],
+      "start_us": 5058123,
+      "end_us": 5058200,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_fs_kfuncs_init"],
+      "start_us": 5058227,
+      "end_us": 5058296,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_root_keyring"],
+      "start_us": 5058315,
+      "end_us": 5059144,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_encrypted"],
+      "start_us": 5059195,
+      "end_us": 5314199,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_profile_hash"],
+      "start_us": 5314251,
+      "end_us": 5314339,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "integrity_fs_init"],
+      "start_us": 5314357,
+      "end_us": 5314510,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "load_uefi_certs"],
+      "start_us": 5314531,
+      "end_us": 5316368,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_ima"],
+      "start_us": 5316418,
+      "end_us": 5319531,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_evm"],
+      "start_us": 5319567,
+      "end_us": 5319903,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "crypto_algapi_init"],
+      "start_us": 5319927,
+      "end_us": 5551027,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "blk_timeout_init"],
+      "start_us": 5551162,
+      "end_us": 5551212,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sed_opal_init"],
+      "start_us": 5551267,
+      "end_us": 5551747,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "depot_debugfs_init"],
+      "start_us": 5551783,
+      "end_us": 5551993,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "pci_resource_alignment_sysfs_init"],
+      "start_us": 5552031,
+      "end_us": 5552169,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "pci_sysfs_init"],
+      "start_us": 5552206,
+      "end_us": 5553186,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bert_init"],
+      "start_us": 5553266,
+      "end_us": 5553443,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "setup_vcpu_hotplug_event"],
+      "start_us": 5553479,
+      "end_us": 5553538,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "late", "boot_wait_for_devices"],
+      "start_us": 5553570,
+      "end_us": 5553672,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["kernel", "late", "dmar_free_unused_resources"],
+      "start_us": 5553704,
+      "end_us": 5553816,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sync_state_resume_initcall"],
+      "start_us": 5553838,
+      "end_us": 5553933,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "deferred_probe_initcall"],
+      "start_us": 5553951,
+      "end_us": 5568409,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "firmware_memmap_init"],
+      "start_us": 5568498,
+      "end_us": 5569047,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "register_update_efi_random_seed"],
+      "start_us": 5569079,
+      "end_us": 5569115,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "efi_shutdown_init"],
+      "start_us": 5569134,
+      "end_us": 5569190,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "efi_earlycon_unmap_fb"],
+      "start_us": 5569208,
+      "end_us": 5569235,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "cec_init"],
+      "start_us": 5569253,
+      "end_us": 5569556,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_kfunc_init"],
+      "start_us": 5569576,
+      "end_us": 5569815,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "init_subsystem"],
+      "start_us": 5569838,
+      "end_us": 5569908,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "xdp_metadata_init"],
+      "start_us": 5569935,
+      "end_us": 5569967,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_sockmap_iter_init"],
+      "start_us": 5569983,
+      "end_us": 5570010,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_sk_storage_map_iter_init"],
+      "start_us": 5570025,
+      "end_us": 5570046,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "sch_default_qdisc"],
+      "start_us": 5570062,
+      "end_us": 5570171,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_prog_test_run_init"],
+      "start_us": 5570190,
+      "end_us": 5570339,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_dummy_struct_ops_init"],
+      "start_us": 5570359,
+      "end_us": 5622970,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "tcp_congestion_default"],
+      "start_us": 5623060,
+      "end_us": 5623198,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "inet_blackhole_dev_init"],
+      "start_us": 5623220,
+      "end_us": 5623287,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "tcp_bpf_v4_build_proto"],
+      "start_us": 5623307,
+      "end_us": 5623390,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "udp_bpf_v4_build_proto"],
+      "start_us": 5623409,
+      "end_us": 5623451,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_tcp_ca_kfunc_init"],
+      "start_us": 5623492,
+      "end_us": 5678329,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "bpf_mptcp_kfunc_init"],
+      "start_us": 5678413,
+      "end_us": 5678457,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "pci_mmcfg_late_insert_resources"],
+      "start_us": 5678475,
+      "end_us": 5678549,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "software_resume_initcall"],
+      "start_us": 5678568,
+      "end_us": 5678782,
+      "failed": false,
+      "ret": -2
+    },
+    {
+      "path": ["kernel", "late", "lockup_detector_check"],
+      "start_us": 5678832,
+      "end_us": 5683228,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "ftrace_check_sync"],
+      "start_us": 5683280,
+      "end_us": 5683904,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "latency_fsnotify_init"],
+      "start_us": 5683930,
+      "end_us": 5684044,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "trace_eval_sync"],
+      "start_us": 5684065,
+      "end_us": 5684106,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "late_trace_init"],
+      "start_us": 5684129,
+      "end_us": 5684183,
+      "failed": false,
+      "ret": 0
+    },
+    {
+      "path": ["kernel", "late", "balloon_wait_finish"],
+      "start_us": 5684201,
+      "end_us": 5684229,
+      "failed": false,
+      "ret": -19
+    },
+    {
+      "path": ["initrd", "initramfs", "initramfs"],
+      "start_us": 5684229,
+      "end_us": 12892505,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "manager", "systemd"],
+      "start_us": 12892505,
+      "end_us": 19902159,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "local-fs.target", "-.mount"],
+      "start_us": 19902159,
+      "end_us": 19902159,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "paths.target", "systemd-ask-password-console.path"],
+      "start_us": 20112511,
+      "end_us": 20112511,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "paths.target", "systemd-ask-password-wall.path"],
+      "start_us": 20114836,
+      "end_us": 20114836,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "sysinit.target",
+        "proc-sys-fs-binfmt_misc.automount"
+      ],
+      "start_us": 20122261,
+      "end_us": 20122261,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-creds.socket"],
+      "start_us": 20144793,
+      "end_us": 20144793,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-initctl.socket"],
+      "start_us": 20147865,
+      "end_us": 20147865,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-journald-dev-log.socket"],
+      "start_us": 20151798,
+      "end_us": 20151798,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-journald.socket"],
+      "start_us": 20155355,
+      "end_us": 20155355,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-networkd.socket"],
+      "start_us": 20159330,
+      "end_us": 20159330,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-udevd-control.socket"],
+      "start_us": 20164009,
+      "end_us": 20164009,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-udevd-kernel.socket"],
+      "start_us": 20166255,
+      "end_us": 20166255,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "dev-hugepages.mount"],
+      "start_us": 20195086,
+      "end_us": 21753213,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "dev-mqueue.mount"],
+      "start_us": 20210111,
+      "end_us": 21756080,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "local-fs.target", "run-lock.mount"],
+      "start_us": 20244424,
+      "end_us": 21791638,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "sys-kernel-debug.mount"],
+      "start_us": 20285456,
+      "end_us": 21798312,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "sys-kernel-tracing.mount"],
+      "start_us": 20328973,
+      "end_us": 21817502,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "local-fs.target", "tmp.mount"],
+      "start_us": 20370522,
+      "end_us": 21850175,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "kmod-static-nodes.service"],
+      "start_us": 20499029,
+      "end_us": 21888782,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "modprobe@configfs.service"],
+      "start_us": 20578059,
+      "end_us": 20578059,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "modprobe@drm.service"],
+      "start_us": 20671530,
+      "end_us": 20671530,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "modprobe@efi_pstore.service"],
+      "start_us": 20741860,
+      "end_us": 20741860,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "modprobe@fuse.service"],
+      "start_us": 20829120,
+      "end_us": 20829120,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "local-fs.target", "systemd-fsck-root.service"],
+      "start_us": 20894121,
+      "end_us": 22486074,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-journald.service"],
+      "start_us": 21052197,
+      "end_us": 23390757,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-modules-load.service"],
+      "start_us": 21086132,
+      "end_us": 22109134,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "network-pre.target",
+        "systemd-network-generator.service"
+      ],
+      "start_us": 21208264,
+      "end_us": 22125847,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "multi-user.target",
+        "systemd-udev-load-credentials.service"
+      ],
+      "start_us": 21233147,
+      "end_us": 22155302,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-udev-trigger.service"],
+      "start_us": 21390349,
+      "end_us": 24400499,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "sys-fs-fuse-connections.mount"],
+      "start_us": 22230109,
+      "end_us": 23110154,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "sys-kernel-config.mount"],
+      "start_us": 22283234,
+      "end_us": 23126659,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-sysctl.service"],
+      "start_us": 22334093,
+      "end_us": 23298145,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "local-fs-pre.target",
+        "systemd-tmpfiles-setup-dev-early.service"
+      ],
+      "start_us": 22437799,
+      "end_us": 23449868,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "local-fs-pre.target", "systemd-remount-fs.service"],
+      "start_us": 22586834,
+      "end_us": 23485926,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "cloud-init-main.service"],
+      "start_us": 23677143,
+      "end_us": 38607800,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "local-fs.target", "systemd-growfs-root.service"],
+      "start_us": 23701809,
+      "end_us": 24477664,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "systemd-journal-flush.service"],
+      "start_us": 23745754,
+      "end_us": 25709192,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "systemd-random-seed.service"],
+      "start_us": 23793923,
+      "end_us": 24562071,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-resolved.service"],
+      "start_us": 23931279,
+      "end_us": 26662748,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-timesyncd.service"],
+      "start_us": 24115327,
+      "end_us": 25981541,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "local-fs-pre.target",
+        "systemd-tmpfiles-setup-dev.service"
+      ],
+      "start_us": 24186966,
+      "end_us": 25366826,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-udevd.service"],
+      "start_us": 25454078,
+      "end_us": 26790473,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "multi-user.target",
+        "systemd-fsck@dev-disk-by\\x2dpartuuid-82e17562\\x2d9f24\\x2d4564\\x2d9735\\x2dbb223836c0b4.service"
+      ],
+      "start_us": 30610651,
+      "end_us": 31377881,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "local-fs.target", "boot-efi.mount"],
+      "start_us": 31440626,
+      "end_us": 32114596,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-sysext.socket"],
+      "start_us": 32169073,
+      "end_us": 32169073,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "apparmor.service"],
+      "start_us": 32219630,
+      "end_us": 40444505,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-binfmt.service"],
+      "start_us": 32311338,
+      "end_us": 34163463,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "systemd-tmpfiles-setup.service"],
+      "start_us": 32398379,
+      "end_us": 33777965,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "proc-sys-fs-binfmt_misc.mount"],
+      "start_us": 32989787,
+      "end_us": 34109951,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "cloud-init-local.service"],
+      "start_us": 38634025,
+      "end_us": 42074922,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "network.target", "systemd-networkd.service"],
+      "start_us": 42159487,
+      "end_us": 43443945,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "multi-user.target",
+        "systemd-networkd-persistent-storage.service"
+      ],
+      "start_us": 43478041,
+      "end_us": 44252722,
+      "failed": false
+    },
+    {
+      "path": [
+        "systemd",
+        "network-online.target",
+        "systemd-networkd-wait-online.service"
+      ],
+      "start_us": 43523914,
+      "end_us": 45431280,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sysinit.target", "cloud-init-network.service"],
+      "start_us": 45457517,
+      "end_us": 69912752,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "apt-daily.timer"],
+      "start_us": 69955532,
+      "end_us": 69955532,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "apt-daily-upgrade.timer"],
+      "start_us": 69964480,
+      "end_us": 69964480,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "apt-listchanges.timer"],
+      "start_us": 69971511,
+      "end_us": 69971511,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "dpkg-db-backup.timer"],
+      "start_us": 69979869,
+      "end_us": 69979869,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "e2scrub_all.timer"],
+      "start_us": 69991981,
+      "end_us": 69991981,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "fstrim.timer"],
+      "start_us": 70006053,
+      "end_us": 70006053,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "man-db.timer"],
+      "start_us": 70013918,
+      "end_us": 70013918,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "timers.target", "systemd-tmpfiles-clean.timer"],
+      "start_us": 70025156,
+      "end_us": 70025156,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "cloud-init-hotplugd.socket"],
+      "start_us": 70041906,
+      "end_us": 70041906,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "dbus.socket"],
+      "start_us": 70054977,
+      "end_us": 70054977,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "sshd-unix-local.socket"],
+      "start_us": 70106073,
+      "end_us": 70106073,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "systemd-hostnamed.socket"],
+      "start_us": 70110998,
+      "end_us": 70110998,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "sockets.target", "uuidd.socket"],
+      "start_us": 70116307,
+      "end_us": 70116307,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "cloud-config.service"],
+      "start_us": 70150377,
+      "end_us": 71978559,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "dbus.service"],
+      "start_us": 70182372,
+      "end_us": 71128917,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "e2scrub_reap.service"],
+      "start_us": 70255764,
+      "end_us": 70255764,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "grub-common.service"],
+      "start_us": 70329621,
+      "end_us": 70329621,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "ssh.service"],
+      "start_us": 70450048,
+      "end_us": 72311965,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "systemd-logind.service"],
+      "start_us": 70806183,
+      "end_us": 72323140,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "systemd-user-sessions.service"],
+      "start_us": 70982975,
+      "end_us": 71825160,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "getty@tty1.service"],
+      "start_us": 72191925,
+      "end_us": 72191925,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "serial-getty@ttyS0.service"],
+      "start_us": 72261905,
+      "end_us": 72261905,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "unattended-upgrades.service"],
+      "start_us": 72494988,
+      "end_us": 72494988,
+      "failed": false
+    },
+    {
+      "path": ["systemd", "multi-user.target", "cloud-final.service"],
+      "start_us": 72531634,
+      "end_us": 73566776,
+      "failed": false
+    }
+  ]
+}
