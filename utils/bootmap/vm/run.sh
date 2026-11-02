@@ -60,12 +60,22 @@ OUT="$WORK/runs/$STAMP"
 mkdir -p "$OUT"
 ln -sfn "runs/$STAMP" "$RUN"
 
-cp /usr/share/OVMF/OVMF_VARS_4M.fd "$OUT/vars.fd"
+# --full keeps the UEFI variables between runs (bootmapd saves the
+# initcall times in one). --kernel-only starts from empty variables.
+if [ "$MODE" = full ]; then
+    if [ "$FRESH" = 1 ] || [ ! -f "$WORK/live-vars.fd" ]; then
+        cp /usr/share/OVMF/OVMF_VARS_4M.fd "$WORK/live-vars.fd"
+    fi
+    VARS="$WORK/live-vars.fd"
+else
+    cp /usr/share/OVMF/OVMF_VARS_4M.fd "$OUT/vars.fd"
+    VARS="$OUT/vars.fd"
+fi
 if [ -w /dev/kvm ]; then ACCEL=kvm; CPU=host; else ACCEL=tcg; CPU=max; fi
 COMMON=(
     -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd
-    -drive if=pflash,format=raw,file="$OUT/vars.fd"
+    -drive if=pflash,format=raw,file="$VARS"
     -kernel "$KERNEL"
     -serial "file:$OUT/serial.log"
     -qmp "unix:$OUT/qmp.sock,server,nowait" -no-reboot

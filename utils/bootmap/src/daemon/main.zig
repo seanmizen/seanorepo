@@ -138,24 +138,29 @@ fn readFile(alloc: std.mem.Allocator, path: [*:0]const u8) ![]u8 {
 }
 
 /// One line of /proc/bootmap.
-const KNode = struct { depth: u8, stage: u8, rect: Rect, state: u8, start_us: u64, end_us: u64, name: []const u8 };
+const KNode = struct { depth: u8, stage: u8, rect: Rect, state: u8, start_us: u64, end_us: u64, ic: i32, expected_us: u64, name: []const u8 };
 
-const ProcMap = struct { width: i32, height: i32, nodes: []KNode };
+/// /proc/bootmap, version 2: names_hash and nic identify the kernel build
+/// (the EFI variable of initcall times is for this build only).
+const ProcMap = struct { width: i32, height: i32, names_hash: u32, nic: u32, nodes: []KNode };
 
 fn parseProcMap(alloc: std.mem.Allocator, text: []const u8) !ProcMap {
     var lines = std.mem.splitScalar(u8, text, '\n');
     var head = std.mem.tokenizeScalar(u8, lines.next() orelse return error.Empty, ' ');
     if (!std.mem.eql(u8, head.next() orelse "", "bootmap")) return error.BadHeader;
-    _ = head.next();
+    if (!std.mem.eql(u8, head.next() orelse "", "2")) return error.BadVersion;
     const w = try std.fmt.parseInt(i32, head.next() orelse return error.BadHeader, 10);
     const h = try std.fmt.parseInt(i32, head.next() orelse return error.BadHeader, 10);
+    _ = head.next(); // the node count
+    const names_hash = try std.fmt.parseInt(u32, head.next() orelse return error.BadHeader, 16);
+    const nic = try std.fmt.parseInt(u32, head.next() orelse return error.BadHeader, 10);
     var nodes: std.ArrayList(KNode) = .empty;
     while (lines.next()) |line| {
         var t = std.mem.tokenizeScalar(u8, line, ' ');
-        var f: [10][]const u8 = undefined;
+        var f: [12][]const u8 = undefined;
         var n: usize = 0;
-        while (n < 10) : (n += 1) f[n] = t.next() orelse break;
-        if (n < 10) continue;
+        while (n < 12) : (n += 1) f[n] = t.next() orelse break;
+        if (n < 12) continue;
         const name = t.rest();
         try nodes.append(alloc, .{
             .depth = try std.fmt.parseInt(u8, f[1], 10),
@@ -169,10 +174,12 @@ fn parseProcMap(alloc: std.mem.Allocator, text: []const u8) !ProcMap {
             .state = try std.fmt.parseInt(u8, f[7], 10),
             .start_us = try std.fmt.parseInt(u64, f[8], 10),
             .end_us = try std.fmt.parseInt(u64, f[9], 10),
+            .ic = try std.fmt.parseInt(i32, f[10], 10),
+            .expected_us = try std.fmt.parseInt(u64, f[11], 10),
             .name = try alloc.dupe(u8, name),
         });
     }
-    return .{ .width = w, .height = h, .nodes = nodes.items };
+    return .{ .width = w, .height = h, .names_hash = names_hash, .nic = nic, .nodes = nodes.items };
 }
 
 fn styleFromCmdline(alloc: std.mem.Allocator) bootmap.style.Style {
@@ -279,6 +286,56 @@ fn saveDurations(alloc: std.mem.Allocator, m: *const std.StringHashMapUnmanaged(
     log("saved {d} unit times to {s}", .{ m.count(), durations_path });
 }
 
+const times_var = "/sys/firmware/efi/efivars/BootmapTimes-4b2a8f1e-6d3c-4b7a-9e2f-1c5d8a7b3e90";
+const times_magic: u32 = 0x31544d42; // "BMT1", as in kernel/bootmap.c
+
+/// Write the initcall times of this boot to the EFI variable that the
+/// kernel reads in the next boot (bm_read_times in kernel/bootmap.c).
+fn saveKernelTimes(alloc: std.mem.Allocator, pm: ProcMap) void {
+    if (pm.nic == 0) return;
+    const data = alloc.alloc(u32, 4 + pm.nic) catch return;
+    @memset(data, 0);
+    data[0] = 0x7; // NON_VOLATILE | BOOTSERVICE_ACCESS | RUNTIME_ACCESS
+    data[1] = times_magic;
+    data[2] = pm.names_hash;
+    data[3] = pm.nic;
+    var n: usize = 0;
+    for (pm.nodes) |kn| {
+        if (kn.depth != 3 or kn.ic < 0 or kn.ic >= pm.nic or kn.state != 2) continue;
+        data[4 + @as(usize, @intCast(kn.ic))] = @intCast(@min(kn.end_us -| kn.start_us, std.math.maxInt(u32)));
+        n += 1;
+    }
+    // efivarfs makes an existing variable immutable. Clear the flag first.
+    const FS_IOC_GETFLAGS: u32 = 0x80086601;
+    const FS_IOC_SETFLAGS: u32 = 0x40086602;
+    const FS_IMMUTABLE_FL: c_long = 0x10;
+    const old = linux.open(times_var, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0);
+    if (linux.errno(old) == .SUCCESS) {
+        const fd: i32 = @intCast(old);
+        var flags: c_long = 0;
+        if (linux.errno(linux.ioctl(fd, FS_IOC_GETFLAGS, @intFromPtr(&flags))) == .SUCCESS) {
+            flags &= ~FS_IMMUTABLE_FL;
+            _ = linux.ioctl(fd, FS_IOC_SETFLAGS, @intFromPtr(&flags));
+        }
+        _ = linux.close(fd);
+    }
+    const rc = linux.open(times_var, .{ .ACCMODE = .WRONLY, .CREAT = true, .CLOEXEC = true }, 0o644);
+    if (linux.errno(rc) != .SUCCESS) {
+        log("cannot open {s}: {s}", .{ times_var, @tagName(linux.errno(rc)) });
+        return;
+    }
+    const fd: i32 = @intCast(rc);
+    defer _ = linux.close(fd);
+    // efivarfs takes the attributes and the data in one write.
+    const bytes = std.mem.sliceAsBytes(data);
+    const w = linux.write(fd, bytes.ptr, bytes.len);
+    if (linux.errno(w) != .SUCCESS) {
+        log("cannot write the initcall times: {s}", .{@tagName(linux.errno(w))});
+        return;
+    }
+    log("saved {d} initcall times to the EFI variable", .{n});
+}
+
 /// Tell the kernel that the daemon has the screen: it stops drawing.
 fn handoff() void {
     const rc = linux.open("/proc/bootmap", .{ .ACCMODE = .WRONLY, .CLOEXEC = true }, 0);
@@ -312,7 +369,7 @@ fn kernelArea(alloc: std.mem.Allocator, pm: ProcMap, st: bootmap.style.Style) !K
     }
     const hh = st.headerH();
     for (pm.nodes, 0..) |kn, i| {
-        var nd: bootmap.plan.Node = .{ .name = kn.name, .depth = kn.depth, .parent = 0, .stage = kn.stage, .rect = kn.rect, .first_us = 0 };
+        var nd: bootmap.plan.Node = .{ .name = kn.name, .depth = kn.depth, .parent = 0, .stage = kn.stage, .rect = kn.rect, .first_us = 0, .expected_us = kn.expected_us };
         const titled = kn.depth == 1 or (kn.depth == 2 and kids[i] > 1);
         const inner = kn.rect.inset(@as(i32, st.pads[@min(kn.depth, 2)]));
         if (titled and hh > 0 and inner.h > hh) nd.header = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = hh };
@@ -494,6 +551,7 @@ pub fn main(init: std.process.Init) !void {
         durations.put(alloc, nd.name, nd.end_us - nd.start_us) catch {};
     }
     saveDurations(alloc, &durations);
+    saveKernelTimes(alloc, pm);
     // Keep the buffer on the screen until systemd stops this service.
     while (true) sleepMs(60_000);
 }

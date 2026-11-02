@@ -47,6 +47,7 @@
 #include <linux/spinlock.h>
 #include <linux/seq_file.h>
 #include <linux/ctype.h>
+#include <linux/efi.h>
 #include <linux/uaccess.h>
 #include <trace/events/initcall.h>
 
@@ -119,9 +120,16 @@ extern initcall_entry_t __initcall6_start[];
 extern initcall_entry_t __initcall7_start[];
 extern initcall_entry_t __initcall_end[];
 
-struct bootmap_level {
-	const char *name;
-	initcall_entry_t *start, *end;
+
+/* One initcall, from early_initcall on. The probes update it before the
+ * picture exists (the picture needs the EFI variable, at postcore). */
+struct bm_ic {
+	initcall_t fn;
+	unsigned char level;
+	unsigned char state;
+	u64 start_ns, end_ns;
+	u32 last_us;		/* the time of the last boot */
+	char name[BOOTMAP_NAME_LEN];
 };
 
 struct bootmap_node {
@@ -129,7 +137,8 @@ struct bootmap_node {
 	unsigned char depth;
 	unsigned char stage;
 	unsigned char state;
-	initcall_t fn;		/* leaves of the kernel stage only */
+	s32 ic;			/* a kernel leaf: its initcall (bm.ics), or -1 */
+	u32 expected_us;	/* the time of the last boot, 0 if not known */
 	u64 start_ns, end_ns;
 	bool spawned;		/* the outline and the empty colour are drawn */
 	u32 late0, late1;	/* the late pixels: [late0, late1) are yellow */
@@ -157,6 +166,15 @@ static struct {
 	u32 pending;		/* the kernel leaves that have not finished */
 	bool live;
 	bool handoff;		/* the daemon draws now: the kernel stops */
+	bool drawing;		/* the picture exists (bootmap_draw_init) */
+	struct bm_ic *ics;	/* every initcall, in link order */
+	u32 nic;
+	u32 *ic_node;		/* the leaf of each initcall, or 0 */
+	u32 ic_cursor;
+	u32 names_hash;		/* FNV-1a of the initcall names: the times of
+				 * the last boot are for this kernel only */
+	bool have_times;
+	u64 start_kernel_us;
 	u32 initrd_leaf;	/* 0: no initrd stage */
 	u32 header_h;
 	spinlock_t lock;
@@ -737,19 +755,20 @@ static u64 bm_active_at(u64 t, u64 span)
 	return min_t(u64, 1000 - div64_u64(100 * span, t), 999);
 }
 
-/* permille() in src/render/style.zig, with expected = 0: the kernel does
- * not know how long an initcall takes. */
+/* permille() in src/render/style.zig. expected_us is the time of the last
+ * boot (the EFI variable), or 0. */
 static u32 bm_permille(const struct bootmap_node *nd, u64 now_ns)
 {
 	u64 fill_us = (u64)bms.fill_ms * 1000;
+	u64 span = max_t(u64, nd->expected_us, fill_us);
 	u64 start = nd->start_ns / 1000, now = now_ns / 1000, end, at_end;
 
 	if (now < start)
 		return 0;
 	if (nd->state != BM_DONE || now < nd->end_ns / 1000)
-		return bm_active_at(now - start, fill_us);
+		return bm_active_at(now - start, span);
 	end = nd->end_ns / 1000;
-	at_end = bm_active_at(end - start, fill_us);
+	at_end = bm_active_at(end - start, span);
 	return min_t(u64, at_end + div64_u64((now - end) * 1000, fill_us), 1000);
 }
 
@@ -792,7 +811,8 @@ static bool bm_update_leaf(u32 i, u64 now_ns)
 	/* A step in flight for longer than warn_ms is late. The pixels that
 	 * it paints from then on are yellow (lateAt in style.zig). */
 	late = nd->state == BM_ACTIVE &&
-	       now_ns - nd->start_ns > (u64)bms.warn_ms * 1000000;
+	       now_ns - nd->start_ns > 1000 * max_t(u64, 2 * (u64)nd->expected_us,
+						    (u64)bms.warn_ms * 1000);
 	if (late && !nd->late1)
 		nd->late0 = nd->late1 = nd->drawn;
 	if (p >= 1000) {
@@ -859,55 +879,68 @@ static int bm_animate(void *unused)
 /* The tracepoint probes. They are not __init: a module load after boot
  * also fires initcall_start, and .init.text is free by then. */
 
-static u32 bm_find(initcall_t fn)
+static s32 bm_find(initcall_t fn)
 {
 	u32 k, i;
 
 	if (!bm.live || READ_ONCE(bm.handoff))
-		return 0;
+		return -1;
 	/* Initcalls run in link order, so the next one is almost always at
 	 * the cursor. */
-	for (k = 0; k < bm.end_leaf - bm.first_leaf; k++) {
-		i = bm.first_leaf + (bm.cursor - bm.first_leaf + k) % (bm.end_leaf - bm.first_leaf);
-		if (bm.nodes[i].fn == fn && bm.nodes[i].state < BM_DONE)
+	for (k = 0; k < bm.nic; k++) {
+		i = (bm.ic_cursor + k) % bm.nic;
+		if (bm.ics[i].fn == fn && bm.ics[i].state < BM_DONE)
 			return i;
 	}
-	return 0;
+	return -1;
+}
+
+/* Copy the state of an initcall to its leaf, and draw the leaf. */
+static void bm_sync_leaf(s32 ic, u64 now)
+{
+	u32 i;
+
+	if (!bm.drawing || !bm.ic_node[ic])
+		return;
+	i = bm.ic_node[ic];
+	bm.nodes[i].state = bm.ics[ic].state;
+	bm.nodes[i].start_ns = bm.ics[ic].start_ns;
+	bm.nodes[i].end_ns = bm.ics[ic].end_ns;
+	bm_update_leaf(i, now);
 }
 
 static void bm_on_start(void *data, initcall_t fn)
 {
-	u32 i = bm_find(fn);
+	s32 ic = bm_find(fn);
 
-	if (!i)
+	if (ic < 0)
 		return;
-	bm.cursor = i;
+	bm.ic_cursor = ic;
 	spin_lock(&bm.lock);
-	bm.nodes[i].state = BM_ACTIVE;
-	bm.nodes[i].start_ns = local_clock();
-	bm_update_leaf(i, bm.nodes[i].start_ns);
+	bm.ics[ic].state = BM_ACTIVE;
+	bm.ics[ic].start_ns = local_clock();
+	bm_sync_leaf(ic, bm.ics[ic].start_ns);
 	spin_unlock(&bm.lock);
 }
 
 static void bm_on_finish(void *data, initcall_t fn, int ret)
 {
-	u32 i = bm_find(fn);
+	s32 ic = bm_find(fn);
 
-	if (!i)
+	if (ic < 0)
 		return;
 	/* A non-zero return is almost always "no such hardware here", not a
 	 * failure (vm/collect-trace.py has the same rule). */
 	spin_lock(&bm.lock);
-	bm.nodes[i].state = BM_DONE;
-	bm.nodes[i].end_ns = local_clock();
-	bm_update_leaf(i, bm.nodes[i].end_ns);
+	bm.ics[ic].state = BM_DONE;
+	bm.ics[ic].end_ns = local_clock();
+	bm_sync_leaf(ic, bm.ics[ic].end_ns);
 	spin_unlock(&bm.lock);
-	/* The leaves are not in run order ("other" is last), so count. */
 	if (--bm.pending == 0) {
 		bm.live = false;
 		/* The kernel runs the initrd's /init next. Its box fills until
 		 * the daemon takes over (handoff). */
-		if (bm.initrd_leaf) {
+		if (bm.initrd_leaf && bm.drawing) {
 			spin_lock(&bm.lock);
 			bm.nodes[bm.initrd_leaf].state = BM_ACTIVE;
 			bm.nodes[bm.initrd_leaf].start_ns = local_clock();
@@ -918,19 +951,6 @@ static void bm_on_finish(void *data, initcall_t fn, int ret)
 
 /* Build the tree: root, the stages, and under the kernel stage one group
  * for each level with one leaf for each initcall. */
-
-static u32 bm_count(const struct bootmap_level *lv, int nlv)
-{
-	u32 n = 1 + 2 + 1 + 2; /* root, start_kernel group and leaf, "other", initramfs group and leaf */
-	int i;
-
-	for (i = 0; i < BOOTMAP_STAGES; i++)
-		n += bm.stage_weights[i] > 0 || i == BOOTMAP_STAGE_KERNEL;
-	for (i = 0; i < nlv; i++)
-		if (lv[i].end > lv[i].start)
-			n += 1 + (lv[i].end - lv[i].start);
-	return n;
-}
 
 static u32 bm_last[4];	/* the last node added at each depth */
 
@@ -948,6 +968,7 @@ static void bm_add(u32 *n, const char *name, unsigned char depth,
 	if (depth < 4)
 		bm_last[depth] = *n;
 	strscpy(nd->name, name, sizeof(nd->name));
+	nd->ic = -1;
 	nd->depth = depth;
 	nd->stage = stage;
 	nd->state = state;
@@ -958,56 +979,57 @@ static void bm_add(u32 *n, const char *name, unsigned char depth,
 
 static int __init bootmap_init(void);
 
-/* Add one leaf for each initcall of a level. An entry at or before self
- * (the entry of bootmap_init) ran before the probes: it is done. */
-static void __init bm_add_level(u32 *n, const struct bootmap_level *lv,
-				unsigned char st, initcall_entry_t *self)
+static const char *const bm_level_names[] = {
+	"early", "pure", "core", "postcore", "arch", "subsys", "fs", "rootfs", "device", "late",
+};
+#define BM_LEVELS ARRAY_SIZE(bm_level_names)
+
+/* The weight of an initcall: leafWeight of its last time, or 1 for all
+ * when the kernel has no times (every box the same size). */
+static u64 bm_ic_weight(u32 ic)
 {
-	char buf[BOOTMAP_NAME_LEN];
-	initcall_entry_t *e;
+	return bm.have_times ? bootmap_leaf_weight(bm.ics[ic].last_us) : 1;
+}
 
-	for (e = lv->start; e < lv->end; e++) {
-		initcall_t fn = initcall_from_entry(e);
-		bool before = self && lv->start == __initcall_start && e <= self;
+/* Add one leaf for each initcall of a level. */
+static void __init bm_add_level(u32 *n, int level, unsigned char st)
+{
+	u32 ic;
 
-		snprintf(buf, sizeof(buf), "%ps", fn);
-		bm_add(n, buf, 3, st, 1, before ? BM_DONE : BM_PENDING);
-		bm.nodes[*n - 1].fn = fn;
+	for (ic = 0; ic < bm.nic; ic++) {
+		if (bm.ics[ic].level != level)
+			continue;
+		bm_add(n, bm.ics[ic].name, 3, st, bm_ic_weight(ic), bm.ics[ic].state);
+		bm.nodes[*n - 1].ic = ic;
+		bm.nodes[*n - 1].expected_us = bm.have_times ? bm.ics[ic].last_us : 0;
+		bm.nodes[*n - 1].start_ns = bm.ics[ic].start_ns;
+		bm.nodes[*n - 1].end_ns = bm.ics[ic].end_ns;
+		bm.ic_node[ic] = *n - 1;
 	}
+}
+
+static u64 __init bm_level_weight(int level)
+{
+	u64 w = 0;
+	u32 ic;
+
+	for (ic = 0; ic < bm.nic; ic++)
+		if (bm.ics[ic].level == level)
+			w += bm_ic_weight(ic);
+	return w;
 }
 
 static int __init bootmap_build(void)
 {
-	const struct bootmap_level lv[] = {
-		{ "early", __initcall_start, __initcall0_start },
-		{ "pure", __initcall0_start, __initcall1_start },
-		{ "core", __initcall1_start, __initcall2_start },
-		{ "postcore", __initcall2_start, __initcall3_start },
-		{ "arch", __initcall3_start, __initcall4_start },
-		{ "subsys", __initcall4_start, __initcall5_start },
-		{ "fs", __initcall5_start, __initcallrootfs_start },
-		{ "rootfs", __initcallrootfs_start, __initcall6_start },
-		{ "device", __initcall6_start, __initcall7_start },
-		{ "late", __initcall7_start, __initcall_end },
-	};
-	const int nlv = ARRAY_SIZE(lv);
 	struct bootmap_scratch s;
-	u32 n = 0, total, i;
+	u32 n = 0, total;
 	int st, l;
-	initcall_entry_t *e;
-	bool small[ARRAY_SIZE(lv)];
-	u64 kw;
+	bool small[BM_LEVELS];
+	u64 kw, skw;
 	int nsmall;
-	initcall_entry_t *self = NULL;
-
-	/* The early initcalls up to bootmap_init ran before the probes were
-	 * attached: they are done. */
-	for (e = __initcall_start; e < __initcall0_start; e++)
-		if (initcall_from_entry(e) == bootmap_init)
-			self = e;
 
 	bm.header_h = bms.labels == 2 ? 0 : bm_font().h + 1;
-	total = bm_count(lv, nlv);
+	total = 1 + 2 + 1 + 2 + BOOTMAP_STAGES + BM_LEVELS + bm.nic;
 	bm.nodes = kcalloc(total, sizeof(*bm.nodes), GFP_KERNEL);
 	bm.depth = kcalloc(total, 1, GFP_KERNEL);
 	bm.other = kcalloc(total, 1, GFP_KERNEL);
@@ -1043,52 +1065,52 @@ static int __init bootmap_build(void)
 			continue;
 		}
 		bm_add(&n, "kernel", 1, st, max_t(u64, sw, 1), BM_ACTIVE);
-		/* Each initcall has the same weight, so its box has the same
-		 * size, and a group has the size of its count. */
-		/* start_kernel ran before any initcall. Weight 8, so it is a
-		 * box and not a line. */
-		bm_add(&n, "start_kernel", 2, st, 8, BM_DONE);
+		/* start_kernel ran before any initcall. With times, it has the
+		 * weight of its time. Without, weight 8, so it is a box. */
+		skw = bm.have_times ? bootmap_leaf_weight(bm.start_kernel_us) : 8;
+		bm_add(&n, "start_kernel", 2, st, skw, BM_DONE);
 		bm_add(&n, "start_kernel", 3, st, 1, BM_DONE);
+		bm.nodes[n - 1].start_ns = 0;
+		bm.nodes[n - 1].end_ns = bm.start_kernel_us * 1000;
 		/* The small levels go into one "other" group, the last group
 		 * (the rule of mergeSmall in src/model/plan.zig). start_kernel
 		 * is never small. */
-		kw = 8;
-		for (l = 0; l < nlv; l++)
-			kw += lv[l].end - lv[l].start;
+		kw = skw;
+		for (l = 0; l < BM_LEVELS; l++)
+			kw += bm_level_weight(l);
 		nsmall = 0;
-		for (l = 0; l < nlv; l++) {
-			u64 cnt = lv[l].end - lv[l].start;
+		for (l = 0; l < BM_LEVELS; l++) {
+			u64 w = bm_level_weight(l);
 
-			small[l] = cnt && cnt * 1000 < (u64)bms.other * kw;
+			small[l] = w && w * 1000 < (u64)bms.other * kw;
 			nsmall += small[l];
 		}
 		if (nsmall < 2)
 			memset(small, 0, sizeof(small));
 		bm.first_leaf = n;
-		for (l = 0; l < nlv; l++) {
-			if (lv[l].end <= lv[l].start || small[l])
+		for (l = 0; l < BM_LEVELS; l++) {
+			u64 w = bm_level_weight(l);
+
+			if (!w || small[l])
 				continue;
-			bm_add(&n, lv[l].name, 2, st, lv[l].end - lv[l].start, BM_PENDING);
-			bm_add_level(&n, &lv[l], st, self);
+			bm_add(&n, bm_level_names[l], 2, st, w, BM_PENDING);
+			bm_add_level(&n, l, st);
 		}
 		if (nsmall >= 2) {
 			u64 ow = 0;
 
-			for (l = 0; l < nlv; l++)
+			for (l = 0; l < BM_LEVELS; l++)
 				if (small[l])
-					ow += lv[l].end - lv[l].start;
+					ow += bm_level_weight(l);
 			bm.other[n] = 1;
 			bm_add(&n, "other", 2, st, ow, BM_PENDING);
-			for (l = 0; l < nlv; l++)
+			for (l = 0; l < BM_LEVELS; l++)
 				if (small[l])
-					bm_add_level(&n, &lv[l], st, self);
+					bm_add_level(&n, l, st);
 		}
 		bm.end_leaf = n;
 	}
 	bm.n = n;
-	bm.cursor = bm.first_leaf;
-	for (i = bm.first_leaf; i < bm.end_leaf; i++)
-		bm.pending += bm.depth[i] == 3 && bm.nodes[i].state != BM_DONE;
 
 	bootmap_layout_tree(bm.depth, bm.weight, bm.other, bm.n,
 			    (struct bootmap_rect){ 0, 0, bm.width, bm.height },
@@ -1136,21 +1158,67 @@ static int bootmap_show(struct seq_file *m, void *v)
 {
 	u32 i;
 
-	seq_printf(m, "bootmap 1 %u %u %u\n", bm.width, bm.height, bm.n);
+	/* Version 2: the header has the hash of the initcall names and the
+	 * number of initcalls. A line has the initcall (-1: none) and the
+	 * expected time, before the name. */
+	seq_printf(m, "bootmap 2 %u %u %u %08x %u\n", bm.width, bm.height, bm.n,
+		   bm.names_hash, bm.nic);
 	for (i = 0; i < bm.n; i++) {
 		const struct bootmap_node *nd = &bm.nodes[i];
 		const struct bootmap_rect *r = &bm.rects[i];
 
-		seq_printf(m, "%u %u %u %d %d %d %d %u %llu %llu %s\n", i, nd->depth,
+		seq_printf(m, "%u %u %u %d %d %d %d %u %llu %llu %d %u %s\n", i, nd->depth,
 			   nd->stage, r->x, r->y, r->w, r->h, nd->state,
-			   nd->start_ns / 1000, nd->end_ns / 1000, nd->name);
+			   nd->start_ns / 1000, nd->end_ns / 1000, nd->ic,
+			   nd->expected_us, nd->name);
 	}
 	return 0;
 }
 
+/* The EFI variable with the initcall times of the last boot. bootmapd
+ * writes it at the end of each boot (efivarfs). Its data: u32 magic, u32
+ * names hash, u32 count, then u32 microseconds per initcall, in link order. */
+static const efi_guid_t bootmap_guid =
+	EFI_GUID(0x4b2a8f1e, 0x6d3c, 0x4b7a, 0x9e, 0x2f, 0x1c, 0x5d, 0x8a, 0x7b, 0x3e, 0x90);
+#define BOOTMAP_TIMES_MAGIC 0x31544d42	/* "BMT1" */
+
+static void __init bm_read_times(void)
+{
+	static efi_char16_t name[] = L"BootmapTimes";
+	unsigned long size = 12 + 4 * (unsigned long)bm.nic;
+	u32 attr, *buf, i;
+	efi_status_t status;
+
+	if (!efi_enabled(EFI_RUNTIME_SERVICES) ||
+	    !efi_rt_services_supported(EFI_RT_SUPPORTED_GET_VARIABLE))
+		return;
+	buf = kmalloc(size, GFP_KERNEL);
+	if (!buf)
+		return;
+	status = efi.get_variable(name, (efi_guid_t *)&bootmap_guid, &attr, &size, buf);
+	if (status == EFI_SUCCESS && size == 12 + 4 * (unsigned long)bm.nic &&
+	    buf[0] == BOOTMAP_TIMES_MAGIC && buf[1] == bm.names_hash && buf[2] == bm.nic) {
+		for (i = 0; i < bm.nic; i++)
+			bm.ics[i].last_us = buf[3 + i];
+		bm.have_times = true;
+	}
+	pr_info("bootmap: initcall times of the last boot: %s\n",
+		bm.have_times ? "yes" : status == EFI_NOT_FOUND ? "none" : "not for this kernel");
+	kfree(buf);
+}
+
+/* early_initcall: record every initcall from now on. The picture comes at
+ * postcore (bootmap_draw_init): the EFI calls need efi_rts_wq, which
+ * efipostcore_init makes. */
 static int __init bootmap_init(void)
 {
-	u32 i;
+	initcall_entry_t *starts[] = {
+		__initcall_start, __initcall0_start, __initcall1_start, __initcall2_start,
+		__initcall3_start, __initcall4_start, __initcall5_start,
+		__initcallrootfs_start, __initcall6_start, __initcall7_start, __initcall_end,
+	};
+	initcall_entry_t *e, *self = NULL;
+	u32 ic = 0, l;
 	int err;
 
 	if (bm.off)
@@ -1158,28 +1226,75 @@ static int __init bootmap_init(void)
 	err = bootmap_map_fb();
 	if (err)
 		return 0;
-	err = bootmap_build();
+	bm.nic = __initcall_end - __initcall_start;
+	bm.ics = kcalloc(bm.nic, sizeof(*bm.ics), GFP_KERNEL);
+	bm.ic_node = kcalloc(bm.nic, sizeof(u32), GFP_KERNEL);
+	if (!bm.ics || !bm.ic_node)
+		return 0;
+	for (e = __initcall_start; e < __initcall0_start; e++)
+		if (initcall_from_entry(e) == bootmap_init)
+			self = e;
+	bm.names_hash = 0x811c9dc5;
+	for (l = 0; l < BM_LEVELS; l++)
+		for (e = starts[l]; e < starts[l + 1]; e++, ic++) {
+			struct bm_ic *x = &bm.ics[ic];
+			const char *c;
+
+			x->fn = initcall_from_entry(e);
+			x->level = l;
+			snprintf(x->name, sizeof(x->name), "%ps", x->fn);
+			for (c = x->name; ; c++) {
+				bm.names_hash ^= (unsigned char)*c;
+				bm.names_hash *= 0x01000193;
+				if (!*c)
+					break;
+			}
+			/* The early initcalls up to this one ran before the
+			 * probes: they are done. */
+			if (self && e <= self) {
+				x->state = BM_DONE;
+				x->start_ns = x->end_ns = local_clock();
+			} else {
+				bm.pending++;
+			}
+		}
+	bm.start_kernel_us = local_clock() / 1000;
+	spin_lock_init(&bm.lock);
+	bm.live = true;
+	err = register_trace_initcall_start(bm_on_start, NULL);
+	if (!err)
+		err = register_trace_initcall_finish(bm_on_finish, NULL);
 	if (err) {
-		pr_err("bootmap: no memory for %u boxes\n", bm.n);
+		pr_err("bootmap: cannot attach to the initcall tracepoints: %d\n", err);
+		bm.live = false;
+	}
+	return 0;
+}
+early_initcall(bootmap_init);
+
+/* postcore_initcall_sync: after efipostcore_init. Read the times, lay out
+ * the picture, and draw the first frame: the initcalls that ran since
+ * early_initcall fill at once, and from now on each one fills live. */
+static int __init bootmap_draw_init(void)
+{
+	u32 i;
+
+	if (!bm.live)
+		return 0;
+	bm_read_times();
+	if (bootmap_build()) {
+		pr_err("bootmap: no memory for the picture\n");
 		return 0;
 	}
-
-	/* The first frame: black, then the boxes that are already done. The
-	 * kernel leaves that ran before the probes start and end now, so
-	 * they fill like the others. */
-	spin_lock_init(&bm.lock);
+	spin_lock(&bm.lock);
 	bm_fill(0, 0, bm.width, bm.height, BOOTMAP_SURFACE);
 	for (i = 1; i < bm.n; i++) {
 		struct bootmap_node *nd = &bm.nodes[i];
 
-		if (nd->state != BM_DONE)
-			continue;
-		if (nd->depth == 1) {
+		if (nd->depth == 1 && nd->state == BM_DONE) {
 			struct bootmap_rect r = bm.rects[i];
 
 			bm_fill(r.x, r.y, r.w, r.h, bm_pal(nd->stage, NULL));
-		} else if (nd->depth == 3) {
-			nd->start_ns = nd->end_ns = local_clock();
 		}
 	}
 	for (i = 1; i < bm.n; i++)
@@ -1188,22 +1303,14 @@ static int __init bootmap_init(void)
 	if (bms.spawn_plan)
 		for (i = 1; i < bm.n; i++)
 			bm_draw_title(i);
-
-	bm.live = true;
-	err = register_trace_initcall_start(bm_on_start, NULL);
-	if (!err)
-		err = register_trace_initcall_finish(bm_on_finish, NULL);
-	if (err) {
-		pr_err("bootmap: cannot attach to the initcall tracepoints: %d\n", err);
-		bm.live = false;
-		return 0;
-	}
-	pr_info("bootmap: %u boxes, %u initcalls, on %ux%u\n", bm.n,
-		bm.end_leaf - bm.first_leaf, bm.width, bm.height);
+	bm.drawing = true;
+	spin_unlock(&bm.lock);
+	pr_info("bootmap: %u boxes, %u initcalls, on %ux%u\n", bm.n, bm.nic,
+		bm.width, bm.height);
 	kthread_run(bm_animate, NULL, "bootmap");
 	return 0;
 }
-early_initcall(bootmap_init);
+postcore_initcall_sync(bootmap_draw_init);
 
 static int bootmap_open(struct inode *inode, struct file *file)
 {

@@ -73,6 +73,7 @@ expected time. A box that fails is red, with a 1 px cross.
 | Colour options, video recording | done |
 | Kernel: labels, titles, palettes (stage, group, kind, mono), the initrd box, handoff | done |
 | Unit times saved at the end of a boot, used for box sizes in the next boot | done |
+| Initcall times in an EFI variable, used for kernel box sizes in the next boot | done |
 | UEFI loader | not started |
 | Greeter handoff | not started |
 
