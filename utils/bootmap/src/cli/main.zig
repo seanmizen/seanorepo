@@ -87,11 +87,11 @@ pub fn main(init: std.process.Init) !void {
 
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, trace_path, alloc, .limited(64 << 20));
     const parsed = try bootmap.trace.parse(alloc, bytes);
-    var plan = try bootmap.plan.fromTrace(alloc, parsed.value);
-    try plan.layout(.{ .w = opts.width, .h = opts.height }, opts.style.pads, opts.style.headerH());
+    var plan = try bootmap.plan.fromTrace(alloc, parsed.value, opts.style.other);
+    try plan.layout(.{ .w = opts.width, .h = opts.height }, opts.style.pads, opts.style.headerH(), opts.style.order);
 
     if (std.mem.eql(u8, cmd, "plan")) {
-        try plan.writeText(out, opts.width, opts.height, opts.style.pads, opts.style.headerH());
+        try plan.writeText(out, opts.width, opts.height, opts.style.pads, opts.style.headerH(), opts.style.order);
     } else if (std.mem.eql(u8, cmd, "rects")) {
         try plan.writeRects(out);
     } else if (std.mem.eql(u8, cmd, "stats")) {

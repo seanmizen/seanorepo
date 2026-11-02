@@ -23,7 +23,8 @@
  *   bootmap.fill=raster|rows-up|spiral, bootmap.fill_ms=250,
  *   bootmap.outline=1, bootmap.empty=black|white|dim|#rrggbb,
  *   bootmap.spawn=start|plan, bootmap.gap=1, bootmap.pad=1,1,1,
- *   bootmap.warn_ms=500, bootmap.late=clear|keep
+ *   bootmap.warn_ms=500, bootmap.late=clear|keep,
+ *   bootmap.order=boot|size|best, bootmap.other=10
  *                                the style options of src/render/style.zig
  *
  * A kernel thread redraws the boxes that are filling, every 16 ms, until
@@ -79,9 +80,12 @@ static struct {
 	unsigned char pads[3];
 	u32 warn_ms;
 	bool late_keep;
+	int order;		/* BOOTMAP_ORDER_* */
+	u32 other;		/* permille: smaller groups go into "other" */
 } bms = {
 	.fill = BM_RASTER, .fill_ms = 250, .outline = 1, .empty = 0x000000,
 	.gap = 1, .pads = { 1, 1, 1 }, .warn_ms = 500,
+	.order = BOOTMAP_ORDER_BOOT, .other = 10,
 };
 
 /* src/render/palette.zig: the pixels that a late step paints. */
@@ -126,10 +130,12 @@ static struct {
 	u32 n;
 	struct bootmap_node *nodes;
 	unsigned char *depth;
+	unsigned char *other;	/* 1 for the "other" group */
 	u64 *weight;
 	struct bootmap_rect *rects;
 	u32 first_leaf, end_leaf; /* the kernel leaves: [first_leaf, end_leaf) */
 	u32 cursor;
+	u32 pending;		/* the kernel leaves that have not finished */
 	bool live;
 	spinlock_t lock;
 } bm = {
@@ -236,6 +242,26 @@ static int __init bootmap_setup_late(char *s)
 	return 1;
 }
 __setup("bootmap.late=", bootmap_setup_late);
+
+static int __init bootmap_setup_order(char *s)
+{
+	if (!strcmp(s, "boot"))
+		bms.order = BOOTMAP_ORDER_BOOT;
+	else if (!strcmp(s, "size"))
+		bms.order = BOOTMAP_ORDER_SIZE;
+	else if (!strcmp(s, "best"))
+		bms.order = BOOTMAP_ORDER_BEST;
+	return 1;
+}
+__setup("bootmap.order=", bootmap_setup_order);
+
+static int __init bootmap_setup_other(char *s)
+{
+	if (kstrtou32(s, 10, &bms.other))
+		pr_warn("bootmap: bad number in an option\n");
+	return 1;
+}
+__setup("bootmap.other=", bootmap_setup_other);
 
 static int __init bootmap_setup_pad(char *s)
 {
@@ -458,8 +484,11 @@ static int bm_animate(void *unused)
 				continue;
 			/* After the last initcall, a box that never started
 			 * (a skipped initcall) stays empty. */
+			/* After the initcalls (SYSTEM_RUNNING), a box that
+			 * never started stays empty. */
 			if (bm_update_leaf(i, now) ||
-			    (!bm.live && bm.nodes[i].state == BM_PENDING))
+			    ((!bm.live || system_state >= SYSTEM_RUNNING) &&
+			     bm.nodes[i].state == BM_PENDING))
 				continue;
 			all_full = false;
 		}
@@ -518,7 +547,8 @@ static void bm_on_finish(void *data, initcall_t fn, int ret)
 	bm.nodes[i].end_ns = local_clock();
 	bm_update_leaf(i, bm.nodes[i].end_ns);
 	spin_unlock(&bm.lock);
-	if (i + 1 == bm.end_leaf)
+	/* The leaves are not in run order ("other" is last), so count. */
+	if (--bm.pending == 0)
 		bm.live = false;
 }
 
@@ -527,7 +557,7 @@ static void bm_on_finish(void *data, initcall_t fn, int ret)
 
 static u32 bm_count(const struct bootmap_level *lv, int nlv)
 {
-	u32 n = 1 + 2; /* root, the start_kernel group and its leaf */
+	u32 n = 1 + 2 + 1; /* root, start_kernel group and leaf, "other" */
 	int i;
 
 	for (i = 0; i < BOOTMAP_STAGES; i++)
@@ -554,6 +584,24 @@ static void bm_add(u32 *n, const char *name, unsigned char depth,
 
 static int __init bootmap_init(void);
 
+/* Add one leaf for each initcall of a level. An entry at or before self
+ * (the entry of bootmap_init) ran before the probes: it is done. */
+static void __init bm_add_level(u32 *n, const struct bootmap_level *lv,
+				unsigned char st, initcall_entry_t *self)
+{
+	char buf[BOOTMAP_NAME_LEN];
+	initcall_entry_t *e;
+
+	for (e = lv->start; e < lv->end; e++) {
+		initcall_t fn = initcall_from_entry(e);
+		bool before = self && lv->start == __initcall_start && e <= self;
+
+		snprintf(buf, sizeof(buf), "%ps", fn);
+		bm_add(n, buf, 3, st, 1, before ? BM_DONE : BM_PENDING);
+		bm.nodes[*n - 1].fn = fn;
+	}
+}
+
 static int __init bootmap_build(void)
 {
 	const struct bootmap_level lv[] = {
@@ -570,15 +618,24 @@ static int __init bootmap_build(void)
 	};
 	const int nlv = ARRAY_SIZE(lv);
 	struct bootmap_scratch s;
-	u32 n = 0, total;
+	u32 n = 0, total, i;
 	int st, l;
 	initcall_entry_t *e;
-	char buf[BOOTMAP_NAME_LEN];
-	bool ran_before = true;
+	bool small[ARRAY_SIZE(lv)];
+	u64 kw;
+	int nsmall;
+	initcall_entry_t *self = NULL;
+
+	/* The early initcalls up to bootmap_init ran before the probes were
+	 * attached: they are done. */
+	for (e = __initcall_start; e < __initcall0_start; e++)
+		if (initcall_from_entry(e) == bootmap_init)
+			self = e;
 
 	total = bm_count(lv, nlv);
 	bm.nodes = kcalloc(total, sizeof(*bm.nodes), GFP_KERNEL);
 	bm.depth = kcalloc(total, 1, GFP_KERNEL);
+	bm.other = kcalloc(total, 1, GFP_KERNEL);
 	bm.weight = kcalloc(total, sizeof(u64), GFP_KERNEL);
 	bm.rects = kcalloc(total, sizeof(*bm.rects), GFP_KERNEL);
 	s.raw = kcalloc(total, sizeof(u64), GFP_KERNEL);
@@ -586,8 +643,9 @@ static int __init bootmap_build(void)
 	s.order = kcalloc(total, sizeof(u32), GFP_KERNEL);
 	s.kids = kcalloc(total, sizeof(u32), GFP_KERNEL);
 	s.out = kcalloc(total, sizeof(struct bootmap_rect), GFP_KERNEL);
-	if (!bm.nodes || !bm.depth || !bm.weight || !bm.rects || !s.raw ||
-	    !s.w || !s.order || !s.kids || !s.out)
+	s.tmp = kcalloc(total, sizeof(struct bootmap_rect), GFP_KERNEL);
+	if (!bm.nodes || !bm.depth || !bm.other || !bm.weight || !bm.rects ||
+	    !s.raw || !s.w || !s.order || !s.kids || !s.out || !s.tmp)
 		goto fail;
 
 	bm_add(&n, "boot", 0, 0, 0, BM_PENDING);
@@ -608,36 +666,56 @@ static int __init bootmap_build(void)
 		 * box and not a line. */
 		bm_add(&n, "start_kernel", 2, st, 8, BM_DONE);
 		bm_add(&n, "start_kernel", 3, st, 1, BM_DONE);
+		/* The small levels go into one "other" group, the last group
+		 * (the rule of mergeSmall in src/model/plan.zig). start_kernel
+		 * is never small. */
+		kw = 8;
+		for (l = 0; l < nlv; l++)
+			kw += lv[l].end - lv[l].start;
+		nsmall = 0;
+		for (l = 0; l < nlv; l++) {
+			u64 cnt = lv[l].end - lv[l].start;
+
+			small[l] = cnt && cnt * 1000 < (u64)bms.other * kw;
+			nsmall += small[l];
+		}
+		if (nsmall < 2)
+			memset(small, 0, sizeof(small));
 		bm.first_leaf = n;
 		for (l = 0; l < nlv; l++) {
-			if (lv[l].end <= lv[l].start)
+			if (lv[l].end <= lv[l].start || small[l])
 				continue;
 			bm_add(&n, lv[l].name, 2, st, lv[l].end - lv[l].start, BM_PENDING);
-			for (e = lv[l].start; e < lv[l].end; e++) {
-				initcall_t fn = initcall_from_entry(e);
+			bm_add_level(&n, &lv[l], st, self);
+		}
+		if (nsmall >= 2) {
+			u64 ow = 0;
 
-				snprintf(buf, sizeof(buf), "%ps", fn);
-				/* The early initcalls up to this one ran before
-				 * the probes were attached: they are done. */
-				bm_add(&n, buf, 3, st, 1, ran_before ? BM_DONE : BM_PENDING);
-				bm.nodes[n - 1].fn = fn;
-				if (fn == bootmap_init)
-					ran_before = false;
-			}
+			for (l = 0; l < nlv; l++)
+				if (small[l])
+					ow += lv[l].end - lv[l].start;
+			bm.other[n] = 1;
+			bm_add(&n, "other", 2, st, ow, BM_PENDING);
+			for (l = 0; l < nlv; l++)
+				if (small[l])
+					bm_add_level(&n, &lv[l], st, self);
 		}
 		bm.end_leaf = n;
 	}
 	bm.n = n;
 	bm.cursor = bm.first_leaf;
+	for (i = bm.first_leaf; i < bm.end_leaf; i++)
+		bm.pending += bm.depth[i] == 3 && bm.nodes[i].state != BM_DONE;
 
-	bootmap_layout_tree(bm.depth, bm.weight, bm.n,
+	bootmap_layout_tree(bm.depth, bm.weight, bm.other, bm.n,
 			    (struct bootmap_rect){ 0, 0, bm.width, bm.height },
-			    bms.pads, 0, bm.rects, &s);
+			    bms.pads, 0, bms.order, bm.rects, &s);
 	kfree(s.raw);
 	kfree(s.w);
 	kfree(s.order);
 	kfree(s.kids);
 	kfree(s.out);
+	kfree(s.tmp);
 	return 0;
 fail:
 	kfree(s.raw);
@@ -645,6 +723,7 @@ fail:
 	kfree(s.order);
 	kfree(s.kids);
 	kfree(s.out);
+	kfree(s.tmp);
 	return -ENOMEM;
 }
 

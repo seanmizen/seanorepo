@@ -47,6 +47,8 @@ The same options work as kernel command-line parameters
 | `font` | `6x8` | `6x8` or `4x6`: the kernel's bitmap fonts. |
 | `overflow` | `wrap` | `wrap`: a name breaks after a non-word character (`xyz.` / `service`). A word longer than a line breaks inside the word. `cut`: one line. |
 | `fit` | `whole` | When a box shows its name: `whole` (the whole name fits), `words` (the whole name fits, and no word is split), `word` (the first word is not split), `chars:N`, `percent:N`, or `any`. |
+| `order` | `boot` | How groups and boxes are placed. `boot`: in boot order. `size`: largest first. `best`: `boot` or `size`, whichever gives the squarer worst box. The stages always keep boot order. |
+| `other` | `10` | In thousandths of a stage. When two or more groups are smaller than this, their boxes go into one `other` group, the last one (bottom right). `0`: never. Every box is still drawn. |
 | `ink` | `inverse` | The text pixels: `inverse` (black on filled pixels, the stage colour on empty pixels), `white` or `black`. |
 | `late` | `clear` | `clear`: when a late step completes, its yellow pixels get the stage colour. `keep`: they stay yellow, as a record. |
 

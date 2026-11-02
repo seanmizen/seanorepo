@@ -35,8 +35,21 @@ u64 bootmap_leaf_weight(u64 duration_us);
 /* out[i] = max(1, w[i] * BOOTMAP_WEIGHT_TOTAL / sum(w)). */
 void bootmap_normalize(const u64 *weights, u32 *out, u32 n);
 
-/* order = 0..n-1, then sorted by weight (largest first), then by index. */
-void bootmap_make_order(const u32 *weights, u32 *order, u32 n, int sorted);
+/* order = 0..n-1, then sorted by weight (largest first), then by index.
+ * With pin_last, the last item stays last (the "other" group). */
+void bootmap_make_order(const u32 *weights, u32 *order, u32 n, int sorted,
+			int pin_last);
+
+/* The values of Order in src/layout/treemap.zig. */
+#define BOOTMAP_ORDER_BOOT 0
+#define BOOTMAP_ORDER_SIZE 1
+#define BOOTMAP_ORDER_BEST 2
+
+/* Place the siblings: boot order, size order, or the one with the squarer
+ * worst box. order and tmp are scratch space of n items. */
+void bootmap_arrange(struct bootmap_rect area, const u32 *weights, u32 n,
+		     int mode, int pin_last, u32 *order,
+		     struct bootmap_rect *out, struct bootmap_rect *tmp);
 
 /* out[i] = the rectangle of item i in area. */
 void bootmap_squarify(struct bootmap_rect area, const u32 *weights,
@@ -49,18 +62,21 @@ struct bootmap_scratch {
 	u32 *order;
 	u32 *kids;
 	struct bootmap_rect *out;
+	struct bootmap_rect *tmp;
 };
 
 /*
  * Lay out a tree in pre-order: depth[i] and weight[i] for each node, node 0
  * is the root. pads[d] is the inset of the children of a node at depth d
  * (bootmap.pad). A stage, and a group with more than one member, keep a title strip of header_h px
- * at the top of its inset area. The rules come from src/model/plan.zig.
+ * at the top of its inset area. other[i] marks the "other" group, which
+ * stays the last child. The rules come from src/model/plan.zig.
  */
-void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
+void bootmap_layout_tree(const unsigned char *depth, const u64 *weight,
+			 const unsigned char *other, u32 n,
 			 struct bootmap_rect area, const unsigned char pads[3],
-			 unsigned char header_h, struct bootmap_rect *rects,
-			 struct bootmap_scratch *s);
+			 unsigned char header_h, int order_mode,
+			 struct bootmap_rect *rects, struct bootmap_scratch *s);
 
 static inline struct bootmap_rect bootmap_inset(struct bootmap_rect r, s32 pad)
 {

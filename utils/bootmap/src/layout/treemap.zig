@@ -62,15 +62,22 @@ pub fn normalize(weights: []const u64, out: []u32) void {
     }
 }
 
+/// How siblings are placed (style option `order`).
+///   boot: in the given order (boot order).
+///   size: largest first.
+///   best: boot or size, whichever gives the squarer worst box.
+pub const Order = enum(u8) { boot, size, best };
+
 /// Fill `order` with 0..n-1. If `sorted`, sort it by weight, largest
 /// first, then by index. The order is total, so every sort gives the same
-/// result.
-pub fn makeOrder(weights: []const u32, order: []u32, sorted: bool) void {
+/// result. With `pin_last`, the last item stays last (the "other" group).
+pub fn makeOrder(weights: []const u32, order: []u32, sorted: bool, pin_last: bool) void {
     for (order, 0..) |*o, i| o.* = @intCast(i);
     if (!sorted) return;
+    const n = if (pin_last and order.len > 0) order.len - 1 else order.len;
     // Insertion sort: kernel/layout.c uses the same one. Sibling sets are small.
     var i: usize = 1;
-    while (i < order.len) : (i += 1) {
+    while (i < n) : (i += 1) {
         const v = order[i];
         var j = i;
         while (j > 0 and before(weights, v, order[j - 1])) : (j -= 1) order[j] = order[j - 1];
@@ -83,7 +90,7 @@ fn before(weights: []const u32, a: u32, b: u32) bool {
     return a < b;
 }
 
-const Frac = struct { num: u128, den: u128 };
+pub const Frac = struct { num: u128, den: u128 };
 
 /// a > b, for fractions with positive denominators.
 fn gt(a: Frac, b: Frac) bool {
@@ -101,6 +108,45 @@ fn worst(s: u64, a: u64, r: u64, sum: u64, min: u64, max: u64) Frac {
     const f1: Frac = .{ .num = s2 * max * r, .den = sum2 * a };
     const f2: Frac = .{ .num = sum2 * a, .den = s2 * min * r };
     return if (gt(f1, f2)) f1 else f2;
+}
+
+/// The worst aspect ratio of a set of rectangles, long side / short side.
+/// A rectangle with a side of 0 is worse than any other (den = 0).
+pub fn worstAspect(rects: []const Rect) Frac {
+    var worst_r: Frac = .{ .num = 1, .den = 1 };
+    for (rects) |r| {
+        const a: u128 = @intCast(@max(r.w, r.h, 0));
+        const b: u128 = @intCast(@max(@min(r.w, r.h), 0));
+        const f: Frac = .{ .num = a, .den = b };
+        if (worseThan(f, worst_r)) worst_r = f;
+    }
+    return worst_r;
+}
+
+/// a is worse (a larger ratio) than b. den = 0 is the worst.
+fn worseThan(a: Frac, b: Frac) bool {
+    if (a.den == 0) return b.den != 0;
+    if (b.den == 0) return false;
+    return gt(a, b);
+}
+
+/// Lay out the siblings with an Order. `order` and `tmp` are scratch space
+/// of the same length as `weights`.
+pub fn arrange(area: Rect, weights: []const u32, mode: Order, pin_last: bool, order: []u32, out: []Rect, tmp: []Rect) void {
+    switch (mode) {
+        .boot, .size => {
+            makeOrder(weights, order, mode == .size, pin_last);
+            squarify(area, weights, order, out);
+        },
+        .best => {
+            makeOrder(weights, order, false, pin_last);
+            squarify(area, weights, order, out);
+            makeOrder(weights, order, true, pin_last);
+            squarify(area, weights, order, tmp);
+            // Keep boot order unless size order is strictly squarer.
+            if (worseThan(worstAspect(out), worstAspect(tmp))) @memcpy(out, tmp);
+        },
+    }
 }
 
 /// Lay out `weights` (already normalized) in `area`. `order` is the place
@@ -173,7 +219,7 @@ test "rectangles tile the area with no gap and no overlap" {
     var w: [weights_raw.len]u32 = undefined;
     normalize(&weights_raw, &w);
     var order: [w.len]u32 = undefined;
-    makeOrder(&w, &order, true);
+    makeOrder(&w, &order, true, false);
     var out: [w.len]Rect = undefined;
     const area: Rect = .{ .x = 10, .y = 20, .w = 600, .h = 400 };
     squarify(area, &w, &order, &out);
@@ -194,8 +240,11 @@ test "rectangles tile the area with no gap and no overlap" {
 test "the order is total: equal weights keep index order" {
     const w = [_]u32{ 5, 9, 5, 9 };
     var order: [4]u32 = undefined;
-    makeOrder(&w, &order, true);
+    makeOrder(&w, &order, true, false);
     try std.testing.expectEqualSlices(u32, &.{ 1, 3, 0, 2 }, &order);
+    // With pin_last, item 3 stays last.
+    makeOrder(&w, &order, true, true);
+    try std.testing.expectEqualSlices(u32, &.{ 1, 0, 2, 3 }, &order);
 }
 
 test "the largest products fit in u128" {

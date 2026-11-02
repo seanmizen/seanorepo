@@ -21,6 +21,9 @@
 //!   fit=any|whole|word|words|chars:N|percent:N
 //!                                when a box name is shown (text.Fit)
 //!   ink=inverse|white|black      the colour of the text pixels in a box
+//!   order=boot|size|best         how groups and boxes are placed
+//!   other=10                     groups under this many thousandths of their
+//!                                stage go into one "other" group (0: never)
 //!
 //! One pixel is one unit (REQ-BOOTMAP-006). Nothing is drawn wider than 1 px
 //! for emphasis. State shows in the colour of single pixels.
@@ -56,6 +59,8 @@ pub const Style = struct {
     overflow: text.Overflow = .wrap,
     fit: text.Fit = .whole,
     ink: InkMode = .inverse,
+    order: @import("../layout/treemap.zig").Order = .boot,
+    other: u32 = 10,
 
     pub fn fontOf(s: Style) text.Font {
         return switch (s.font) {
@@ -106,6 +111,10 @@ pub const Style = struct {
             s.overflow = std.meta.stringToEnum(text.Overflow, v) orelse return error.BadOverflow;
         } else if (std.mem.eql(u8, key, "fit")) {
             s.fit = if (std.mem.eql(u8, v, "any")) .any else if (std.mem.eql(u8, v, "whole")) .whole else if (std.mem.eql(u8, v, "word")) .word else if (std.mem.eql(u8, v, "words")) .words else if (std.mem.startsWith(u8, v, "chars:")) .{ .chars = try std.fmt.parseInt(u32, v[6..], 10) } else if (std.mem.startsWith(u8, v, "percent:")) .{ .percent = try std.fmt.parseInt(u32, v[8..], 10) } else return error.BadFit;
+        } else if (std.mem.eql(u8, key, "order")) {
+            s.order = std.meta.stringToEnum(@import("../layout/treemap.zig").Order, v) orelse return error.BadOrder;
+        } else if (std.mem.eql(u8, key, "other")) {
+            s.other = try std.fmt.parseInt(u32, v, 10);
         } else if (std.mem.eql(u8, key, "ink")) {
             s.ink = std.meta.stringToEnum(InkMode, v) orelse return error.BadInk;
         } else if (std.mem.eql(u8, key, "gap")) {

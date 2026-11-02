@@ -15,13 +15,15 @@ cc -O2 -Wall -Wextra -Werror -o "$OUT/layout_parity" \
 fails=0
 checks=0
 for trace in "$ROOT"/traces/*.json; do
-    # size:pad:labels:font
-    for case in 1280x800:1,1,1:all:4x6 1920x1080:1,1,1:all:6x8 3840x2160:6,3,2:none:4x6 \
-        800x600:1,1,1:areas:4x6 640x480:0,0,0:all:4x6 1024x768:12,6,4:all:6x8 \
-        333x777:1,1,1:all:4x6 8192x64:6,3,2:all:4x6 1280x800:20,10,5:none:4x6; do
-        IFS=: read -r size pad labels font <<< "$case"
-        name="$(basename "$trace" .json)-$size-${pad//,/-}-$labels-$font"
-        opts=(--size "$size" "pad=$pad" "labels=$labels" "font=$font")
+    # size:pad:labels:font:order:other
+    for case in 1280x800:1,1,1:all:6x8:boot:10 1920x1080:1,1,1:all:6x8:size:10 \
+        3840x2160:6,3,2:none:4x6:best:10 800x600:1,1,1:areas:4x6:boot:0 \
+        640x480:0,0,0:all:4x6:best:50 1024x768:12,6,4:all:6x8:size:0 \
+        333x777:1,1,1:all:4x6:best:10 8192x64:6,3,2:all:4x6:boot:10 \
+        1280x800:20,10,5:none:4x6:size:100 1280x800:1,1,1:all:6x8:best:10; do
+        IFS=: read -r size pad labels font order other <<< "$case"
+        name="$(basename "$trace" .json)-$size-${pad//,/-}-$labels-$font-$order-$other"
+        opts=(--size "$size" "pad=$pad" "labels=$labels" "font=$font" "order=$order" "other=$other")
         "$ROOT/zig-out/bin/bootmap" plan "$trace" "${opts[@]}" > "$OUT/$name.plan"
         "$ROOT/zig-out/bin/bootmap" rects "$trace" "${opts[@]}" > "$OUT/$name.zig"
         "$OUT/layout_parity" < "$OUT/$name.plan" > "$OUT/$name.c"

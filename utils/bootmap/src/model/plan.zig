@@ -35,14 +35,15 @@ pub const Node = struct {
     failed: bool = false,
     /// The earliest start of this node or of a node under it.
     first_us: u64 = std.math.maxInt(u64),
+    /// The "other" group of a stage: it holds the boxes of the small groups,
+    /// and it stays the last child (bottom right).
+    other: bool = false,
 };
 
 /// The index of "kernel" in stage_order.
 pub const kernel_stage: u8 = 2;
-/// Sort the children by weight (true) or keep boot order (false), by the
-/// depth of the parent. Stages and groups keep boot order, so the picture
-/// reads in boot order. Leaves are sorted, for squarer boxes.
-pub const sort_children = [_]bool{ false, false, true };
+/// The name of the group that holds the small groups of a stage.
+pub const other_name = "other";
 
 pub const Plan = struct {
     arena: std.heap.ArenaAllocator,
@@ -71,7 +72,9 @@ pub const Plan = struct {
     /// children inside a node at depth d (style.pad). A stage and a group
     /// keep a title strip of header_h px at the top of that inset area. A
     /// group with one member does not.
-    pub fn layout(self: *Plan, area: Rect, pads: [3]u8, header_h: u8) !void {
+    /// The stages always keep boot order. `order` places the groups in a
+    /// stage and the boxes in a group.
+    pub fn layout(self: *Plan, area: Rect, pads: [3]u8, header_h: u8, order_mode: treemap.Order) !void {
         const alloc = self.arena.allocator();
         self.nodes[0].rect = area;
         for (self.nodes) |*nd| {
@@ -88,20 +91,22 @@ pub const Plan = struct {
             const w = try alloc.alloc(u32, nd.children.len);
             const order = try alloc.alloc(u32, nd.children.len);
             const out = try alloc.alloc(Rect, nd.children.len);
+            const tmp = try alloc.alloc(Rect, nd.children.len);
             for (nd.children, raw) |c, *r| r.* = self.nodes[c].weight;
             treemap.normalize(raw, w);
-            treemap.makeOrder(w, order, sort_children[@min(nd.depth, sort_children.len - 1)]);
-            treemap.squarify(inner, w, order, out);
+            const mode: treemap.Order = if (nd.depth == 0) .boot else order_mode;
+            const pin = self.nodes[nd.children[nd.children.len - 1]].other;
+            treemap.arrange(inner, w, mode, pin, order, out, tmp);
             for (nd.children, out) |c, r| self.nodes[c].rect = r;
         }
     }
 
     /// Write the plan in the text form that kernel/layout.c reads
     /// (test/layout-parity.sh): a header, then one line per node in
-    /// pre-order: "<depth> <weight> <name>".
-    pub fn writeText(self: *const Plan, w: *std.Io.Writer, width: i32, height: i32, pads: [3]u8, header_h: u8) !void {
-        try w.print("bootmap-plan 3\n{d} {d}\n{d} {d} {d} {d}\n{d}\n", .{ width, height, pads[0], pads[1], pads[2], header_h, self.nodes.len });
-        for (self.nodes) |nd| try w.print("{d} {d} {s}\n", .{ nd.depth, nd.weight, nd.name });
+    /// pre-order: "<depth> <weight> <other> <name>".
+    pub fn writeText(self: *const Plan, w: *std.Io.Writer, width: i32, height: i32, pads: [3]u8, header_h: u8, order_mode: treemap.Order) !void {
+        try w.print("bootmap-plan 4\n{d} {d}\n{d} {d} {d} {d} {d}\n{d}\n", .{ width, height, pads[0], pads[1], pads[2], header_h, @backingInt(order_mode), self.nodes.len });
+        for (self.nodes) |nd| try w.print("{d} {d} {d} {s}\n", .{ nd.depth, nd.weight, @intFromBool(nd.other), nd.name });
     }
 
     pub fn writeRects(self: *const Plan, w: *std.Io.Writer) !void {
@@ -116,6 +121,7 @@ const Tmp = struct {
     first_us: u64 = std.math.maxInt(u64),
     weight: u64 = 0,
     box: ?trace_mod.Box = null,
+    other: bool = false,
     kids: std.ArrayList(*Tmp) = .empty,
 
     fn child(self: *Tmp, alloc: std.mem.Allocator, name: []const u8, stage: u8) !*Tmp {
@@ -143,7 +149,12 @@ fn stageOrder(_: void, a: *Tmp, b: *Tmp) bool {
 
 /// Build the plan from a trace. Boxes with a stage that is not in
 /// stage_order are an error.
-pub fn fromTrace(gpa: std.mem.Allocator, trace: trace_mod.Trace) !Plan {
+///
+/// `other_permille`: in each stage, a group with less than this part of the
+/// stage weight is small. When a stage has two or more small groups, their
+/// boxes move into one "other" group, the last group of the stage. 0: never.
+/// kernel/bootmap.c has the same rule.
+pub fn fromTrace(gpa: std.mem.Allocator, trace: trace_mod.Trace, other_permille: u32) !Plan {
     var arena = std.heap.ArenaAllocator.init(gpa);
     errdefer arena.deinit();
     const alloc = arena.allocator();
@@ -176,6 +187,7 @@ pub fn fromTrace(gpa: std.mem.Allocator, trace: trace_mod.Trace) !Plan {
             stage.first_us = @min(stage.first_us, group.first_us);
         }
         std.mem.sort(*Tmp, stage.kids.items, {}, bootOrder);
+        try mergeSmall(alloc, stage, other_permille);
         root.weight += stage.weight;
     }
     std.mem.sort(*Tmp, root.kids.items, {}, stageOrder);
@@ -183,6 +195,27 @@ pub fn fromTrace(gpa: std.mem.Allocator, trace: trace_mod.Trace) !Plan {
     var nodes: std.ArrayList(Node) = .empty;
     try flatten(alloc, &nodes, root, 0, 0);
     return .{ .arena = arena, .nodes = nodes.items, .end_us = trace.end_us };
+}
+
+/// Move the boxes of the small groups of a stage into one "other" group.
+fn mergeSmall(alloc: std.mem.Allocator, stage: *Tmp, other_permille: u32) !void {
+    if (other_permille == 0) return;
+    var small: usize = 0;
+    for (stage.kids.items) |g| small += @intFromBool(g.weight * 1000 < @as(u64, other_permille) * stage.weight);
+    if (small < 2) return;
+    const other = try alloc.create(Tmp);
+    other.* = .{ .name = other_name, .stage = stage.stage, .other = true };
+    var keep: std.ArrayList(*Tmp) = .empty;
+    for (stage.kids.items) |g| {
+        if (g.weight * 1000 < @as(u64, other_permille) * stage.weight) {
+            for (g.kids.items) |leaf| try other.kids.append(alloc, leaf);
+            other.weight += g.weight;
+            other.first_us = @min(other.first_us, g.first_us);
+        } else try keep.append(alloc, g);
+    }
+    std.mem.sort(*Tmp, other.kids.items, {}, bootOrder);
+    try keep.append(alloc, other);
+    stage.kids = keep;
 }
 
 fn flatten(alloc: std.mem.Allocator, nodes: *std.ArrayList(Node), t: *Tmp, depth: u8, parent: u32) !void {
@@ -197,6 +230,7 @@ fn flatten(alloc: std.mem.Allocator, nodes: *std.ArrayList(Node), t: *Tmp, depth
         .start_us = if (t.box) |b| b.start_us else 0,
         .end_us = if (t.box) |b| b.end_us else 0,
         .failed = if (t.box) |b| b.failed else false,
+        .other = t.other,
     });
     const kids = try alloc.alloc(u32, t.kids.items.len);
     for (t.kids.items, kids) |k, *slot| {
@@ -214,7 +248,7 @@ test "states only move forward" {
         .{ .path = &.{ "kernel", "core", "b" }, .start_us = 5, .end_us = 50 },
         .{ .path = &.{ "systemd", "sysinit.target", "c" }, .start_us = 40, .end_us = 90, .failed = true },
     };
-    var plan = try fromTrace(std.testing.allocator, .{ .version = 1, .end_us = 100, .boxes = &boxes });
+    var plan = try fromTrace(std.testing.allocator, .{ .version = 1, .end_us = 100, .boxes = &boxes }, 0);
     defer plan.deinit();
     for (plan.nodes, 0..) |nd, i| {
         if (nd.depth != 3) continue;
@@ -235,9 +269,9 @@ test "a small trace gives a laid-out tree" {
         .{ .path = &.{ "kernel", "core", "b" }, .start_us = 100, .end_us = 400 },
         .{ .path = &.{ "systemd", "sysinit.target", "x.service" }, .start_us = 500, .end_us = 9000, .failed = true },
     };
-    var plan = try fromTrace(std.testing.allocator, .{ .version = 1, .source = "test", .end_us = 9000, .boxes = &boxes });
+    var plan = try fromTrace(std.testing.allocator, .{ .version = 1, .source = "test", .end_us = 9000, .boxes = &boxes }, 0);
     defer plan.deinit();
-    try plan.layout(.{ .w = 640, .h = 480 }, .{ 6, 3, 2 }, 7);
+    try plan.layout(.{ .w = 640, .h = 480 }, .{ 6, 3, 2 }, 7, .boot);
     try std.testing.expectEqual(@as(usize, 3), plan.leafCount());
     try std.testing.expectEqualStrings("kernel", plan.nodes[1].name);
     for (plan.nodes) |nd| try std.testing.expect(nd.rect.w > 0 and nd.rect.h > 0);
@@ -245,4 +279,29 @@ test "a small trace gives a laid-out tree" {
     try std.testing.expectEqual(State.pending, plan.state(x, 0));
     try std.testing.expectEqual(State.active, plan.state(x, 600));
     try std.testing.expectEqual(State.failed, plan.state(x, 9000));
+}
+
+test "small groups move into other, last" {
+    const boxes = [_]trace_mod.Box{
+        .{ .path = &.{ "kernel", "big", "a" }, .start_us = 0, .end_us = 1_000_000 },
+        .{ .path = &.{ "kernel", "tiny1", "b" }, .start_us = 1, .end_us = 2 },
+        .{ .path = &.{ "kernel", "big2", "c" }, .start_us = 3, .end_us = 1_000_000 },
+        .{ .path = &.{ "kernel", "tiny2", "d" }, .start_us = 4, .end_us = 5 },
+    };
+    var plan = try fromTrace(std.testing.allocator, .{ .version = 1, .end_us = 1_000_000, .boxes = &boxes }, 100);
+    defer plan.deinit();
+    const stage = plan.nodes[1];
+    try std.testing.expectEqual(@as(usize, 3), stage.children.len);
+    const last = plan.nodes[stage.children[2]];
+    try std.testing.expect(last.other);
+    try std.testing.expectEqual(@as(usize, 2), last.children.len);
+    for (std.enums.values(treemap.Order)) |mode| {
+        try plan.layout(.{ .w = 400, .h = 300 }, .{ 1, 1, 1 }, 9, mode);
+        // "other" is placed last: no sibling starts to its right and below it.
+        const o = plan.nodes[stage.children[2]].rect;
+        for (stage.children[0..2]) |c| {
+            const r = plan.nodes[c].rect;
+            try std.testing.expect(r.x < o.x or r.y < o.y);
+        }
+    }
 }

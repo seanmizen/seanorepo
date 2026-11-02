@@ -68,15 +68,17 @@ static int bootmap_before(const u32 *w, u32 a, u32 b)
 	return a < b;
 }
 
-void bootmap_make_order(const u32 *weights, u32 *order, u32 n, int sorted)
+void bootmap_make_order(const u32 *weights, u32 *order, u32 n, int sorted,
+			int pin_last)
 {
-	u32 i, j, v;
+	u32 i, j, v, m;
 
 	for (i = 0; i < n; i++)
 		order[i] = i;
 	if (!sorted)
 		return;
-	for (i = 1; i < n; i++) {
+	m = (pin_last && n > 0) ? n - 1 : n;
+	for (i = 1; i < m; i++) {
 		v = order[i];
 		for (j = i; j > 0 && bootmap_before(weights, v, order[j - 1]); j--)
 			order[j] = order[j - 1];
@@ -171,13 +173,59 @@ void bootmap_squarify(struct bootmap_rect area, const u32 *weights,
 	}
 }
 
-/* The same rule as sort_children in src/model/plan.zig. */
-static const int bootmap_sort[] = { 0, 0, 1 };
+/* worstAspect() and worseThan() in src/layout/treemap.zig. */
+static int bootmap_worse(struct bootmap_frac a, struct bootmap_frac b)
+{
+	if (a.den == 0)
+		return b.den != 0;
+	if (b.den == 0)
+		return 0;
+	return bootmap_gt(a, b);
+}
 
-void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
+static struct bootmap_frac bootmap_worst_aspect(const struct bootmap_rect *r, u32 n)
+{
+	struct bootmap_frac w = { 1, 1 }, f;
+	u32 i;
+
+	for (i = 0; i < n; i++) {
+		s32 a = max(max(r[i].w, r[i].h), 0);
+		s32 b = max(min(r[i].w, r[i].h), 0);
+
+		f.num = (bootmap_u128)a;
+		f.den = (bootmap_u128)b;
+		if (bootmap_worse(f, w))
+			w = f;
+	}
+	return w;
+}
+
+/* arrange() in src/layout/treemap.zig. */
+void bootmap_arrange(struct bootmap_rect area, const u32 *weights, u32 n,
+		     int mode, int pin_last, u32 *order,
+		     struct bootmap_rect *out, struct bootmap_rect *tmp)
+{
+	u32 i;
+
+	if (mode != BOOTMAP_ORDER_BEST) {
+		bootmap_make_order(weights, order, n, mode == BOOTMAP_ORDER_SIZE, pin_last);
+		bootmap_squarify(area, weights, order, n, out);
+		return;
+	}
+	bootmap_make_order(weights, order, n, 0, pin_last);
+	bootmap_squarify(area, weights, order, n, out);
+	bootmap_make_order(weights, order, n, 1, pin_last);
+	bootmap_squarify(area, weights, order, n, tmp);
+	if (bootmap_worse(bootmap_worst_aspect(out, n), bootmap_worst_aspect(tmp, n)))
+		for (i = 0; i < n; i++)
+			out[i] = tmp[i];
+}
+
+void bootmap_layout_tree(const unsigned char *depth, const u64 *weight,
+			 const unsigned char *other, u32 n,
 			 struct bootmap_rect area, const unsigned char pads[3],
-			 unsigned char header_h, struct bootmap_rect *rects,
-			 struct bootmap_scratch *s)
+			 unsigned char header_h, int order_mode,
+			 struct bootmap_rect *rects, struct bootmap_scratch *s)
 {
 	u32 i, j, c;
 
@@ -185,7 +233,6 @@ void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 		return;
 	rects[0] = area;
 	for (i = 0; i < n; i++) {
-		unsigned int d = min(depth[i], (unsigned char)2);
 		struct bootmap_rect inner;
 
 		/* The children of i: the nodes after it, one level deeper,
@@ -199,8 +246,7 @@ void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 		for (j = 0; j < c; j++)
 			s->raw[j] = weight[s->kids[j]];
 		bootmap_normalize(s->raw, s->w, c);
-		bootmap_make_order(s->w, s->order, c, bootmap_sort[d]);
-		inner = bootmap_inset(rects[i], pads[d]);
+		inner = bootmap_inset(rects[i], pads[min(depth[i], (unsigned char)2)]);
 		/* A stage and a group keep a title strip at the top. A group
 		 * with one member does not. */
 		if ((depth[i] == 1 || (depth[i] == 2 && c > 1)) && header_h &&
@@ -208,7 +254,9 @@ void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 			inner.y += header_h;
 			inner.h -= header_h;
 		}
-		bootmap_squarify(inner, s->w, s->order, c, s->out);
+		/* The stages keep boot order. order_mode places the rest. */
+		bootmap_arrange(inner, s->w, c, depth[i] == 0 ? BOOTMAP_ORDER_BOOT : order_mode,
+				other[s->kids[c - 1]], s->order, s->out, s->tmp);
 		for (j = 0; j < c; j++)
 			rects[s->kids[j]] = s->out[j];
 	}
