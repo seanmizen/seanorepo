@@ -69,14 +69,17 @@ pub const Plan = struct {
 
     /// Lay out the whole tree in `area`. pads[d] is the inset of the
     /// children inside a node at depth d (style.pad). A stage and a group
-    /// keep a title strip of header_h px at the top of that inset area.
+    /// keep a title strip of header_h px at the top of that inset area. A
+    /// group with one member does not.
     pub fn layout(self: *Plan, area: Rect, pads: [3]u8, header_h: u8) !void {
         const alloc = self.arena.allocator();
         self.nodes[0].rect = area;
         for (self.nodes) |*nd| {
             if (nd.children.len == 0) continue;
             var inner = nd.rect.inset(@as(i32, pads[@min(nd.depth, pads.len - 1)]));
-            if ((nd.depth == 1 or nd.depth == 2) and header_h > 0 and inner.h > header_h) {
+            // A group with one member has no title: the box name says it.
+            const titled = nd.depth == 1 or (nd.depth == 2 and nd.children.len > 1);
+            if (titled and header_h > 0 and inner.h > header_h) {
                 nd.header = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = header_h };
                 inner.y += header_h;
                 inner.h -= header_h;

@@ -43,6 +43,11 @@ The same options work as kernel command-line parameters
 | `gap` | `1` | The space between two boxes, in pixels. |
 | `pad` | `1,1,1` | The inset of the screen, a stage and a group, in pixels. |
 | `warn_ms` | `500` | After this time in flight (or 2× its expected time, if known), a step is late. The pixels that it paints from then on are yellow. |
+| `labels` | `all` | `all`: names in the boxes and titles above areas. `areas`: titles only. `none`. A group with one member has no title. |
+| `font` | `6x8` | `6x8` or `4x6`: the kernel's bitmap fonts. |
+| `overflow` | `wrap` | `wrap`: a name breaks after a non-word character (`xyz.` / `service`). A word longer than a line breaks inside the word. `cut`: one line. |
+| `fit` | `whole` | When a box shows its name: `whole` (the whole name fits), `words` (the whole name fits, and no word is split), `word` (the first word is not split), `chars:N`, `percent:N`, or `any`. |
+| `ink` | `inverse` | The text pixels: `inverse` (black on filled pixels, the stage colour on empty pixels), `white` or `black`. |
 | `late` | `clear` | `clear`: when a late step completes, its yellow pixels get the stage colour. `keep`: they stay yellow, as a record. |
 
 One pixel is one unit (REQ-BOOTMAP-006). Nothing is drawn wider than 1 px

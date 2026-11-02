@@ -201,8 +201,10 @@ void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,
 		bootmap_normalize(s->raw, s->w, c);
 		bootmap_make_order(s->w, s->order, c, bootmap_sort[d]);
 		inner = bootmap_inset(rects[i], pads[d]);
-		/* A stage and a group keep a title strip at the top. */
-		if ((depth[i] == 1 || depth[i] == 2) && header_h && inner.h > header_h) {
+		/* A stage and a group keep a title strip at the top. A group
+		 * with one member does not. */
+		if ((depth[i] == 1 || (depth[i] == 2 && c > 1)) && header_h &&
+		    inner.h > header_h) {
 			inner.y += header_h;
 			inner.h -= header_h;
 		}

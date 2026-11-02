@@ -148,7 +148,7 @@ pub fn drawHeader(c: Canvas, nd: plan_mod.Node, st: style_mod.Style, t_us: u64) 
     if (h.w <= 0 or h.h <= 0) return;
     c.fill(h.x, h.y, h.w, h.h, palette.surface);
     if (st.spawn == .start and t_us < nd.first_us) return;
-    _ = text.draw(c, st.fontOf(), h.x, h.y, h.w, h.h - 1, nd.name, .cut, .{ .solid = palette.stage[@min(nd.stage, palette.stage.len - 1)] });
+    _ = text.draw(c, st.fontOf(), h.x, h.y, h.w, h.h - 1, nd.name, .cut, .any, .{ .solid = palette.stage[@min(nd.stage, palette.stage.len - 1)] });
 }
 
 /// The name of a leaf, inside its box, 1 px from the outline.
@@ -160,7 +160,7 @@ fn drawLeafLabel(c: Canvas, nd: plan_mod.Node, st: style_mod.Style, ix: i32, iy:
         .white => .{ .solid = 0xffffff },
         .black => .{ .solid = 0x000000 },
     };
-    _ = text.draw(c, st.fontOf(), ix + 1, iy + 1, iw - 2, ih - 2, nd.name, st.overflow, ink);
+    _ = text.draw(c, st.fontOf(), ix + 1, iy + 1, iw - 2, ih - 2, nd.name, st.overflow, st.fit, ink);
 }
 
 /// The interior of a box: its rectangle less the gap (right and bottom).

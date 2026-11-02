@@ -54,7 +54,7 @@ struct bootmap_scratch {
 /*
  * Lay out a tree in pre-order: depth[i] and weight[i] for each node, node 0
  * is the root. pads[d] is the inset of the children of a node at depth d
- * (bootmap.pad). A node at depth 1 or 2 keeps a title strip of header_h px
+ * (bootmap.pad). A stage, and a group with more than one member, keep a title strip of header_h px
  * at the top of its inset area. The rules come from src/model/plan.zig.
  */
 void bootmap_layout_tree(const unsigned char *depth, const u64 *weight, u32 n,

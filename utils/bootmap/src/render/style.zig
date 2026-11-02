@@ -15,8 +15,11 @@
 //!   late=clear|keep              when a late step completes, its yellow
 //!                                pixels get the stage colour (clear), or stay
 //!   labels=all|areas|none        names in the boxes, and titles above areas
-//!   font=4x6|6x8                 the bitmap font of the labels
-//!   overflow=wrap|cut|hide       a name that does not fit on one line
+//!   font=6x8|4x6                 the bitmap font of the labels
+//!   overflow=wrap|cut            a name that does not fit on one line: wrap
+//!                                after a non-word character, or cut
+//!   fit=any|whole|word|words|chars:N|percent:N
+//!                                when a box name is shown (text.Fit)
 //!   ink=inverse|white|black      the colour of the text pixels in a box
 //!
 //! One pixel is one unit (REQ-BOOTMAP-006). Nothing is drawn wider than 1 px
@@ -49,8 +52,9 @@ pub const Style = struct {
     warn_ms: u32 = 500,
     late: Late = .clear,
     labels: Labels = .all,
-    font: FontName = .@"4x6",
+    font: FontName = .@"6x8",
     overflow: text.Overflow = .wrap,
+    fit: text.Fit = .whole,
     ink: InkMode = .inverse,
 
     pub fn fontOf(s: Style) text.Font {
@@ -100,6 +104,8 @@ pub const Style = struct {
             s.font = std.meta.stringToEnum(FontName, v) orelse return error.BadFont;
         } else if (std.mem.eql(u8, key, "overflow")) {
             s.overflow = std.meta.stringToEnum(text.Overflow, v) orelse return error.BadOverflow;
+        } else if (std.mem.eql(u8, key, "fit")) {
+            s.fit = if (std.mem.eql(u8, v, "any")) .any else if (std.mem.eql(u8, v, "whole")) .whole else if (std.mem.eql(u8, v, "word")) .word else if (std.mem.eql(u8, v, "words")) .words else if (std.mem.startsWith(u8, v, "chars:")) .{ .chars = try std.fmt.parseInt(u32, v[6..], 10) } else if (std.mem.startsWith(u8, v, "percent:")) .{ .percent = try std.fmt.parseInt(u32, v[8..], 10) } else return error.BadFit;
         } else if (std.mem.eql(u8, key, "ink")) {
             s.ink = std.meta.stringToEnum(InkMode, v) orelse return error.BadInk;
         } else if (std.mem.eql(u8, key, "gap")) {
