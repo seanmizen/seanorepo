@@ -61,9 +61,6 @@ late step still paints pixels, and the yellow pixels show how late it is. The
 kernel does not know an initcall's time, so its boxes use `fill_ms` as the
 expected time. A box that fails is red, with a 1 px cross.
 
-In the replay, F changes the fill, E the empty colour, O the outline, and S the
-spawn mode.
-
 ## Status
 
 | Part | State |
@@ -91,8 +88,16 @@ kernel/fetch-and-build.sh         # build the kernel with bootmap
 vm/run.sh --kernel-only --show    # boot it in a QEMU window
 ```
 
-In the replay window: Space pauses, R restarts, and Left and Right change
-the speed.
+In the replay window:
+
+| Key | Action |
+|---|---|
+| Space | Pause |
+| B | Play backwards (rewind), or forwards again |
+| Left, Right | Jump 1 s back or forward. With Shift: 10 s. |
+| Home, End | Go to the start or the end. R also goes to the start. |
+| Up, Down | Change the speed (0.1× to 16×) |
+| F, E, O, S | Change the fill, the empty colour, the outline, the spawn mode |
 
 ## Record a boot
 

@@ -8,9 +8,15 @@
 //! daemon, into a 1280x800 XRGB8888 buffer. This app copies the buffer to a
 //! texture each frame and draws it, with a status line and a legend above.
 //!
-//! Keys: Space pause, R restart, Left and Right change the speed,
-//! F next fill order, E next empty colour, O outline on and off,
-//! S spawn at start or at plan.
+//! Keys:
+//!   Space pause, B play backwards (rewind) or forwards,
+//!   Left and Right jump 1 s back or forward (with Shift: 10 s),
+//!   Home and End go to the start and the end, R restarts,
+//!   Up and Down change the speed,
+//!   F next fill order, E next empty colour, O outline on and off,
+//!   S spawn at start or at plan.
+//! The picture is a function of the time only, so every frame is the same
+//! when you go back to it.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -42,6 +48,7 @@ var style: bootmap.style.Style = .{};
 var t_us: f64 = 0;
 var speed_index: usize = 3;
 var paused = false;
+var backwards = false;
 var last_ns: u64 = 0;
 
 pub fn main(init: std.process.Init) !void {
@@ -132,9 +139,15 @@ const Callbacks = struct {
     pub fn tick(ctx: *sw.Context) !void {
         const input = ctx.input();
         if (input.keyPressed(.Space)) paused = !paused;
-        if (input.keyPressed(.R)) t_us = 0;
-        if (input.keyPressed(.Left) and speed_index > 0) speed_index -= 1;
-        if (input.keyPressed(.Right) and speed_index + 1 < speeds.len) speed_index += 1;
+        const end: f64 = @floatFromInt(plan.end_us);
+        if (input.keyPressed(.R) or input.keyPressed(.Home)) t_us = 0;
+        if (input.keyPressed(.End)) t_us = end;
+        if (input.keyPressed(.B)) backwards = !backwards;
+        const jump: f64 = if (input.mods.shift) 10e6 else 1e6;
+        if (input.keyPressed(.Left)) t_us = @max(t_us - jump, 0);
+        if (input.keyPressed(.Right)) t_us = @min(t_us + jump, end);
+        if (input.keyPressed(.Down) and speed_index > 0) speed_index -= 1;
+        if (input.keyPressed(.Up) and speed_index + 1 < speeds.len) speed_index += 1;
         if (input.keyPressed(.F)) style.fill = switch (style.fill) {
             .raster => .rows_up,
             .rows_up => .spiral,
@@ -151,9 +164,8 @@ const Callbacks = struct {
         const dt_ns = now -| last_ns;
         last_ns = now;
         if (!paused) {
-            t_us += @as(f64, @floatFromInt(dt_ns)) / 1000.0 * speeds[speed_index];
-            const end: f64 = @floatFromInt(plan.end_us);
-            if (t_us > end) t_us = end;
+            const step = @as(f64, @floatFromInt(dt_ns)) / 1000.0 * speeds[speed_index];
+            t_us = if (backwards) @max(t_us - step, 0) else @min(t_us + step, end);
         }
     }
 
@@ -186,12 +198,13 @@ const Callbacks = struct {
             const muted = gfx.Color.rgba8(195, 194, 183, 255);
             const n = counts(t);
             var buf: [160]u8 = undefined;
-            const status = std.fmt.bufPrint(&buf, "{d:.2} s / {d:.2} s   {d}/{d} done, {d} active   x{d}   fill={s}{s}", .{
+            const status = std.fmt.bufPrint(&buf, "{d:.2} s / {d:.2} s   {d}/{d} done, {d} active   {s}x{d}   fill={s}{s}", .{
                 t_us / 1e6,
                 @as(f64, @floatFromInt(plan.end_us)) / 1e6,
                 n.done,
                 n.total,
                 n.active,
+                if (backwards) "rewind " else "",
                 speeds[speed_index],
                 @tagName(style.fill),
                 if (paused) "   paused" else "",
