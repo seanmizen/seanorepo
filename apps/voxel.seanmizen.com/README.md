@@ -1,7 +1,7 @@
 # voxel.seanmizen.com
 
-A browser build of Sean's WebGPU voxel engine
-(`utils/swindowzig/examples/voxel`). Ships as a single-page static site
+A browser build of Sean's WebGPU voxel engine (the `examples/voxel`
+example of [swindowzig](https://github.com/seanmizen/swindowzig)). Ships as a single-page static site
 served over the home-server cloudflared tunnel at
 `https://voxel.seanmizen.com`.
 
@@ -25,6 +25,8 @@ apps/voxel.seanmizen.com/
 ├── package.json        ← workspace scripts (build, prod:docker, down)
 ├── dockerfile          ← multi-stage zig + bun + serve
 ├── docker-compose.yml  ← mirrors apps/seanmizen.com/docker-compose.yml
+├── build.zig           ← zig build: the voxel example of the swindowzig release
+├── build.zig.zon       ← the swindowzig release (a URL dependency with a hash)
 ├── build.sh            ← host-side build script (zig + bun)
 ├── bundle.sh           ← bun bundles and content-hashed chunk files (build.sh and the dockerfile run it)
 ├── src/
@@ -40,8 +42,9 @@ apps/voxel.seanmizen.com/
 
 ## Building locally
 
-Requires Bun 1.x and the Zig version in `utils/swindowzig/build.zig.zon`
-(`minimum_zig_version`) on your PATH.
+Requires Bun 1.x and the Zig version in `build.zig.zon`
+(`minimum_zig_version`) on your PATH. The first `zig build` fetches the
+swindowzig release that `build.zig.zon` names.
 
 ```bash
 # From the monorepo root:
@@ -52,17 +55,19 @@ yarn workspace voxel.seanmizen.com build
 ```
 
 The script:
-1. Runs `zig build web -Dexample=voxel` in `utils/swindowzig/` — produces
-   `zig-out/bin/app.wasm` and copies it into `public/app.wasm`.
-   The same build writes `chunks.wasm`, the chunk worker.
+1. Runs `zig build -Dexample=voxel` in this directory. `build.zig` calls
+   `addWebExample` of the swindowzig release. The build writes
+   `zig-out/bin/app.wasm`, and the script copies it into `public/app.wasm`.
+   The same build writes `chunks.wasm` (the chunk worker), and copies the
+   wasm loader of the release to `zig-out/swindowzig-wasm/`.
 2. Runs `bundle.sh`. It bundles the swindowzig wasm loader
-   (`utils/swindowzig/backends/wasm/loader.ts`) and the modules that it
+   (`zig-out/swindowzig-wasm/loader.ts`) and the modules that it
    imports into `public/boot.js`. The dev page uses the same loader. It
    bundles the Web Worker script (`backends/wasm/chunk-worker.ts`), and
    copies `chunks.wasm`. The two chunk files get content-hashed names, and
    `boot.js` holds the names. So a browser cache cannot pair an old chunk
-   worker with a new `app.wasm`. See
-   `utils/swindowzig/examples/voxel/docs/chunk-pipeline.md`.
+   worker with a new `app.wasm`. See `examples/voxel/docs/chunk-pipeline.md`
+   in the swindowzig repo.
 3. Each step is idempotent and prints a warning if a tool is missing.
 
 Preview it with any static file server:
@@ -83,19 +88,24 @@ yarn down             # stops it
 
 ## Development loop
 
-For iteration on the Zig engine, use swindowzig's existing dev server:
+Work on the engine in a checkout of the swindowzig repo
+(https://github.com/seanmizen/swindowzig), with its dev server:
 
 ```bash
-cd utils/swindowzig
-zig build web -Dexample=voxel
-bun backends/wasm/dev-server.ts
+yarn dev:voxel
 # opens http://localhost:3020
 ```
 
-That dev server watches `libs/` and `examples/` for `.zig` changes and
-rebuilds automatically. The voxel subdomain reuses the swindowzig
-bridge, so any fix you make there also flows into this app after a
-`yarn workspace voxel.seanmizen.com build`.
+This app uses a swindowzig release. To ship an engine change, publish a
+new swindowzig release. Then change the dependency in `build.zig.zon`:
+
+```bash
+cd apps/voxel.seanmizen.com
+zig fetch --save https://github.com/seanmizen/swindowzig/releases/download/v<version>/swindowzig.tar.gz
+```
+
+To test a local checkout before a release, use
+`zig build --fork=<path to the checkout>`.
 
 ## Deploying
 
@@ -131,5 +141,5 @@ lives in `apps/cloudflared/config.yml` and routes `voxel.seanmizen.com`
 - `INVESTIGATION.md` — what's actually wired, what's latent, and what Sean
   will hit on the first browser load.
 - `DEPLOY.md` — the exact commands to run in the morning.
-- `utils/swindowzig/CLAUDE.md` — the engine's own docs and critical
+- `CLAUDE.md` in the swindowzig repo — the engine's own docs and critical
   lessons.

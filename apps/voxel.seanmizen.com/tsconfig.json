@@ -3,7 +3,8 @@
     "downlevelIteration": true,
     "baseUrl": ".",
     "paths": {
-      "#/*": ["../../*"]
+      "#/*": ["../../*"],
+      "#swindowzig/*": ["zig-out/swindowzig-wasm/*"]
     }
   }
 }

@@ -272,6 +272,8 @@ docgen_tmp/
 # zig 0.15?
 .zig-cache/
 .zig-out/
+# zig 0.17: the packages that `zig build` fetches (build.zig.zon URL dependencies)
+zig-pkg/
 .build/
 .build-*/
 .docgen_tmp/
