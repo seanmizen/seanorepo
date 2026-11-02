@@ -11,7 +11,7 @@ systemctl disable bootmapd.service 2> /dev/null || true
 rm -f /etc/systemd/system/bootmapd.service /usr/local/lib/bootmap/bootmapd
 rmdir /usr/local/lib/bootmap 2> /dev/null || true
 systemctl daemon-reload
-rm -f /etc/default/grub.d/bootmap.cfg
+rm -f /etc/default/grub.d/bootmap.cfg /etc/grub.d/01_bootmap
 rm -f /boot/grub/themes/bootmap/*
 rmdir /boot/grub/themes/bootmap 2> /dev/null || true
 dpkg -l 'linux-image-*-bootmap' 2> /dev/null | awk '/^ii/ {print $2}' | xargs -r apt-get remove -y
