@@ -3,8 +3,10 @@
 # voxel.seanmizen.com — browser voxel, served over Cloudflared tunnel.
 #
 # Three stages:
-#   1. zig-build  — download the Zig version that utils/swindowzig/build.zig.zon
-#                   names, build swindowzig's `web` step to WASM
+#   1. zig-build  — download the Zig version that build.zig.zon names, and
+#                   build the voxel example of the swindowzig release that
+#                   build.zig.zon names to WASM. Zig fetches the release
+#                   (network access at build time).
 #   2. js-build   — bundle.sh: Bun bundles boot.js and the chunk worker, and
 #                   the chunk files get content-hashed names
 #   3. prod       — copy the static output into a minimal Node image and run `serve`
@@ -26,7 +28,7 @@ RUN apt-get update \
 # The Zig version comes from minimum_zig_version in build.zig.zon, the one
 # place that names it. build.zig stops on any other major.minor. The tarball
 # name is zig-ARCH-linux-VERSION (Zig 0.15 and later).
-COPY utils/swindowzig/build.zig.zon /tmp/build.zig.zon
+COPY apps/voxel.seanmizen.com/build.zig.zon /tmp/build.zig.zon
 ARG TARGETARCH
 RUN set -e; \
     ZIG_VERSION="$(sed -n 's/.*\.minimum_zig_version = "\([^"]*\)".*/\1/p' /tmp/build.zig.zon)"; \
@@ -41,16 +43,12 @@ RUN set -e; \
     && ln -s /opt/zig/zig /usr/local/bin/zig \
     && zig version
 
-# Copy only the swindowzig workspace — the build context is the monorepo root.
-COPY utils/swindowzig /build/swindowzig
-WORKDIR /build/swindowzig
-
-# Build the voxel example for WASM: app.wasm and chunks.wasm (the chunk
-# worker). examples/voxel/main.zig has the
-# `swindowzig_init` / `swindowzig_frame` entry exports at the bottom and
-# gates all posix-dependent code (CLI args, TAS file IO, frame dumps,
-# std.process.exit) behind `if (comptime !is_wasm)`.
-RUN zig build web -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
+# build.zig takes the voxel example from the swindowzig release
+# (addWebExample). It writes app.wasm, chunks.wasm (the chunk worker) and
+# zig-out/swindowzig-wasm/ (the wasm loader of the same release).
+COPY apps/voxel.seanmizen.com/build.zig apps/voxel.seanmizen.com/build.zig.zon /build/voxel/
+WORKDIR /build/voxel
+RUN zig build -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 
 # =============================================================================
 # Stage 2: JS bundle (Bun)
@@ -61,15 +59,16 @@ RUN zig build web -Dexample=voxel -Doptimize=ReleaseFast && ls -la zig-out/bin/
 #   chunk-worker-<hash>.js  the chunk worker (backends/wasm/chunk-worker.ts)
 #   chunks-<hash>.wasm      chunks.wasm from stage 1
 # The chunk files have content-hashed names, and boot.js holds the names
-# (C9). The COPY below takes all of backends/wasm.
+# (C9). The COPY below takes all of backends/wasm of the release, from
+# stage 1.
 FROM oven/bun:1.1-slim AS js-build
 WORKDIR /build
 
-COPY utils/swindowzig/backends/wasm /build/utils/swindowzig/backends/wasm
+COPY --from=zig-build /build/voxel/zig-out/swindowzig-wasm /build/apps/voxel.seanmizen.com/zig-out/swindowzig-wasm
 COPY apps/voxel.seanmizen.com/src /build/apps/voxel.seanmizen.com/src
 COPY apps/voxel.seanmizen.com/tsconfig.json /build/apps/voxel.seanmizen.com/tsconfig.json
 COPY apps/voxel.seanmizen.com/bundle.sh /build/apps/voxel.seanmizen.com/bundle.sh
-COPY --from=zig-build /build/swindowzig/zig-out/bin/chunks.wasm /build/chunks.wasm
+COPY --from=zig-build /build/voxel/zig-out/bin/chunks.wasm /build/chunks.wasm
 
 RUN bash /build/apps/voxel.seanmizen.com/bundle.sh /build/chunks.wasm /build/out \
     && ls -la /build/out
@@ -88,17 +87,17 @@ RUN npm install -g serve
 COPY apps/voxel.seanmizen.com/public /app
 # boot.js, chunk-worker-<hash>.js and chunks-<hash>.wasm.
 COPY --from=js-build /build/out/ /app/
-COPY --from=zig-build /build/swindowzig/zig-out/bin/app.wasm /app/app.wasm
+COPY --from=zig-build /build/voxel/zig-out/bin/app.wasm /app/app.wasm
 
 EXPOSE 4042
 CMD ["serve", "-s", ".", "-l", "4042"]
 
 # =============================================================================
 # Dev target — kept minimal so `docker compose --profile dev up` has something
-# to point at. The real dev loop for this app is `bun utils/swindowzig/backends/
-# wasm/dev-server.ts` run directly on the host.
+# to point at. The real dev loop for this app is the dev server of the
+# swindowzig repo (https://github.com/seanmizen/swindowzig), run on the host.
 # =============================================================================
 FROM node:24-slim AS dev
 WORKDIR /app
 # Source is mounted in via docker-compose's bind mount.
-CMD ["sh", "-c", "echo 'voxel.seanmizen.com dev: run bun utils/swindowzig/backends/wasm/dev-server.ts on the host instead' && tail -f /dev/null"]
+CMD ["sh", "-c", "echo 'voxel.seanmizen.com dev: run yarn dev:voxel in a checkout of the swindowzig repo on the host instead' && tail -f /dev/null"]

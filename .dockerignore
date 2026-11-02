@@ -12,6 +12,12 @@ build
 .next
 **/.next
 
+# Zig: the build outputs and the fetched packages of the host. The image
+# builds fetch the packages and compile again.
+**/zig-out
+**/.zig-cache
+**/zig-pkg
+
 # Git
 .git
 .gitignore

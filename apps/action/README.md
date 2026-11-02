@@ -610,11 +610,11 @@ bind e "+leanright; echo lean"
 resetbinds
 ```
 
-swindowzig has no key code for the backtick key or for "/". The web
-backend sends each key that it does not know as Unknown, and `src/boot.ts`
-stops every unknown key except the backtick key. It sends the "/" key to
-the game as the typed text "/" (see [Chat](#chat)). So the backtick key
-and "/" are not in the binds, and the punctuation keys cannot have a bind.
+The backtick key arrives as the swindowzig key code Grave on every
+layout, and it always opens the console. `src/boot.ts` sends the "/" key
+to the game as the typed text "/" (see [Chat](#chat)). So the backtick key
+and "/" are not in the binds. The bind names have no punctuation keys, so
+the punctuation keys cannot have a bind.
 
 ### Scripts and the saved config
 
@@ -638,8 +638,8 @@ with "/" typed. Enter sends the line, Esc closes it. The chat works in
 every mode. A message needs the deathmatch server.
 
 - **Keys**: Y and T are binds (`messagemode`, `messagemode2`), so `bind`
-  changes them. "/" has no key code (see [Binds and actions](#binds-and-actions)),
-  so no bind can change it. `messagemode /` does the same as "/".
+  changes them. the game reads "/" as text, not as a key
+  (see [Binds and actions](#binds-and-actions)), so no bind can change it. `messagemode /` does the same as "/".
 - **The mouse**: the chat and the console free the mouse while they are
   open, and capture it again when they close. So Esc closes the chat and
   does not open the pause screen. The browser frees a pointer lock on Esc,
@@ -1946,7 +1946,7 @@ stocks. The door openings and the door places are approximate.
 
 ```
 apps/action/
-├── game/                 Zig client (its own package; swindowzig is a path dependency)
+├── game/                 Zig client (its own package, swindowzig is a URL dependency)
 │   ├── build.zig         zig build -> zig-out/bin/action.wasm
 │   └── src/
 │       ├── main.zig      modes, input, shooting, deathmatch sync, HUD, wasm entry
@@ -2026,7 +2026,8 @@ apps/action/
 
 ## Run it
 
-Needs Zig (the version in `utils/swindowzig/build.zig.zon`) and Bun.
+Needs Zig (the version in `game/build.zig.zon`) and Bun. The first
+`zig build` fetches the swindowzig release that `game/build.zig.zon` names.
 
 ```bash
 yarn workspace action start     # build.sh, then the server on http://localhost:4080
@@ -2356,8 +2357,9 @@ What the client does:
 
 1. `BUILD_VERSION`, if the environment sets it.
 2. Else the 12-character hash of the last commit that changed
-   `apps/action` or `utils/swindowzig`. `-dirty` follows it when those
-   directories have changes that are not committed. A release that changes
+   `apps/action`. `game/build.zig.zon` names the swindowzig release, so a
+   new release is a change to `apps/action`. `-dirty` follows the hash when
+   the directory has changes that are not committed. A release that changes
    only other apps does not change the version, so the game server does
    not restart.
 3. Else `dev`: no git, or not a checkout.

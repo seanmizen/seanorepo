@@ -1,0 +1,13 @@
+.{
+    .name = .voxel_seanmizen_com,
+    .version = "0.1.0",
+    .fingerprint = 0x2ccf3ec8364da2dd,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .swindowzig = .{
+            .url = "https://github.com/seanmizen/swindowzig/releases/download/v0.3.0/swindowzig.tar.gz",
+            .hash = "swindowzig-0.3.0-DU8b5We6bwBNAzUIRD9yuM1IJEqdtx2lt6FXdyhrEMUh",
+        },
+    },
+    .paths = .{ "build.zig", "build.zig.zon" },
+}

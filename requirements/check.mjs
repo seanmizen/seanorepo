@@ -141,6 +141,8 @@ const CITATION_SKIP_DIRS = new Set([
   'test-results',
   'uploads',
   'zig-out',
+  // Zig 0.17 fetches build.zig.zon URL dependencies here.
+  'zig-pkg',
 ]);
 
 /**

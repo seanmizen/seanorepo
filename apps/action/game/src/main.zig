@@ -2550,7 +2550,7 @@ var tick_events: []const core.Event = &.{};
 var relock = false;
 
 /// The console and chat part of a tick. The backtick key opens the
-/// console: it arrives as Unknown (game_console.zig). "/" opens the chat
+/// console: it arrives as Grave (game_console.zig). "/" opens the chat
 /// with "/" typed: it arrives as the text "/". A bind opens the chat (Y,
 /// T). While the console or the chat is open, it takes the keys and text
 /// input is on. Else the binds run. Returns the input for the rest of the
@@ -2572,7 +2572,7 @@ fn consoleTick(ctx: *sw.Context) *const core.InputSnapshot {
         chat.update(con, events);
     } else if (settings.editingName()) {
         // The settings panel reads the events (settings.update). No binds.
-    } else if (raw.keyPressed(.Unknown) and !raw.mods.ctrl and !raw.mods.super) {
+    } else if (raw.keyPressed(.Grave) and !raw.mods.ctrl and !raw.mods.super) {
         con.setOpen(true);
     } else if (gcon.slashTyped(events)) {
         chat.open(con, .all, "/");

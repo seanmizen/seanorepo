@@ -1,8 +1,8 @@
 // voxel.seanmizen.com: production entry point.
 //
 // All start-up code and every wasm import are in the swindowzig loader
-// (utils/swindowzig/backends/wasm/loader.ts). bun bundles the loader into
-// public/boot.js. This file gives the loader its options:
+// (backends/wasm/loader.ts of the swindowzig release. `zig build` copies it
+// to zig-out/swindowzig-wasm/). bun bundles the loader into public/boot.js. This file gives the loader its options:
 //
 //   - It loads ./app.wasm, in the same directory as index.html.
 //   - It starts the chunk worker pool (C9) with the content-hashed chunk
@@ -10,10 +10,7 @@
 //     the names, the main thread runs the chunk jobs.
 //   - It shows each failure in the styled overlay of public/index.html.
 
-import {
-  type LoadFailure,
-  loadWasm,
-} from '#/utils/swindowzig/backends/wasm/loader';
+import { type LoadFailure, loadWasm } from '#swindowzig/loader';
 
 // bundle.sh defines these names, for example './chunks-0123456789abcdef.wasm'.
 declare const __CHUNKS_WASM_URL__: string | undefined;
