@@ -9,6 +9,11 @@
 #   2. the machine's config, cut to the modules it loads (localmodconfig),
 #   3. kernel/bootmap-hw.config on top,
 #   4. make bindeb-pkg: working/<machine>/linux-image-*-bootmap*.deb.
+#
+# Secure Boot: with working/<machine>/mok/MOK.pem (key and certificate),
+# every module is signed with that key, and the kernel image is signed to
+# working/<machine>/vmlinuz.signed. hw/install.sh installs it and asks the
+# machine to enrol the key (MokManager, one confirmation at the machine).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,6 +42,12 @@ scripts/config --set-str SYSTEM_TRUSTED_KEYS "" --set-str SYSTEM_REVOCATION_KEYS
 make -s olddefconfig
 make -s LSMOD="$OUT/lsmod" localmodconfig < <(yes '') > /dev/null
 scripts/kconfig/merge_config.sh -m -O . .config "$HERE/bootmap-hw.config" > /dev/null
+if [ -f "$OUT/mok/MOK.pem" ]; then
+    # Sign every module with the machine's MOK key. Debian's kernel enforces
+    # module signatures under Secure Boot (lockdown).
+    scripts/config --enable MODULE_SIG --enable MODULE_SIG_ALL \
+        --set-str MODULE_SIG_KEY "$OUT/mok/MOK.pem" --set-str MODULE_SIG_HASH sha256
+fi
 make -s olddefconfig
 for opt in CONFIG_BOOTMAP=y CONFIG_DRM_SIMPLEDRM=y CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER=y; do
     grep -qx "$opt" .config || { echo "build-deb: $opt is not in .config" >&2; exit 1; }
@@ -51,5 +62,10 @@ fi
 make -s -j"$(nproc)" LOCALVERSION=-bootmap bzImage modules
 make -s -j"$(nproc)" bindeb-pkg LOCALVERSION=-bootmap KDEB_PKGVERSION="$(date +%Y%m%d%H%M)"
 mv ../linux-image-*-bootmap*.deb "$OUT/" 2> /dev/null || true
+if [ -f "$OUT/mok/MOK.pem" ]; then
+    sbsign --key "$OUT/mok/MOK.key" --cert "$OUT/mok/MOK.crt" \
+        --output "$OUT/vmlinuz.signed" arch/x86/boot/bzImage
+    echo "build-deb: signed $OUT/vmlinuz.signed"
+fi
 rm -f ../linux-*.buildinfo ../linux-*.changes
 ls -la "$OUT"/*.deb

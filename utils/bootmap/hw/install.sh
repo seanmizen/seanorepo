@@ -19,11 +19,20 @@ python3 "$HW_ROOT/grub/make-theme.py" "$THEME" --scale "${BOOTMAP_THEME_SCALE:-2
 
 DIR="$("${SSH[@]}" mktemp -d /tmp/bootmap-install.XXXXXX)"
 "${SCP[@]}" "$DEB" "$HW_ROOT/zig-out/bin/bootmapd" "$SSH_USER@$HOST:$DIR/"
+# Secure Boot: the signed kernel image, and the key to enrol (see
+# kernel/build-deb.sh). MOK_PASSWORD is typed one time at the machine, in
+# MokManager, at the next boot.
+MOK="$HW_ROOT/working/$MACHINE/mok"
+SIGNED=0
+if [ -f "$HW_ROOT/working/$MACHINE/vmlinuz.signed" ] && [ -f "$MOK/MOK.der" ]; then
+    "${SCP[@]}" "$HW_ROOT/working/$MACHINE/vmlinuz.signed" "$MOK/MOK.der" "$SSH_USER@$HOST:$DIR/"
+    SIGNED=1
+fi
 "${SSH[@]}" mkdir -p "$DIR/theme"
 "${SCP[@]}" "$THEME"/* "$SSH_USER@$HOST:$DIR/theme/"
 
 ARGS="quiet loglevel=3 bootmap.daemon=1 bootmap.stages=0,0,30,10,60 ${BOOTMAP_ARGS:-}"
-"${SSH[@]}" sudo DIR="$DIR" ARGS="'$ARGS'" bash -s << 'REMOTE'
+"${SSH[@]}" sudo DIR="$DIR" ARGS="'$ARGS'" SIGNED="$SIGNED" MOK_PASSWORD="'${MOK_PASSWORD:-bootmap}'" bash -s << 'REMOTE'
 set -euo pipefail
 STOCK="$(ls /boot/vmlinuz-* | grep -v bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
 
@@ -64,6 +73,17 @@ CFG
 # an earlier run left half done.
 dpkg --configure -a
 dpkg -i "$DIR"/linux-image-*.deb
+if [ "$SIGNED" = 1 ]; then
+    V="$(ls /boot/vmlinuz-*-bootmap | sed 's|/boot/vmlinuz-||' | sort -V | tail -1)"
+    install -m 644 "$DIR/vmlinuz.signed" "/boot/vmlinuz-$V"
+    if mokutil --test-key "$DIR/MOK.der" 2> /dev/null | grep -q "is already enrolled"; then
+        echo "install: the MOK key is enrolled"
+    else
+        mokutil --generate-hash="$MOK_PASSWORD" > "$DIR/mok.hash"
+        mokutil --import "$DIR/MOK.der" --hash-file "$DIR/mok.hash"
+        echo "install: the MOK key waits for enrolment at the next boot (MokManager)"
+    fi
+fi
 update-grub
 grub-set-default "Debian GNU/Linux, with Linux $STOCK"
 rm -rf "$DIR"
