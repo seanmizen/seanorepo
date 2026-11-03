@@ -33,10 +33,13 @@ describe('migrations', () => {
       'membership',
       'note',
       'organisation',
+      'passkey',
       'person',
+      'recovery_token',
       'schema_migrations',
       'session',
       'visit',
+      'webauthn_challenge',
     ]);
     const applied = db
       .query<{ name: string }, []>('SELECT name FROM schema_migrations;')

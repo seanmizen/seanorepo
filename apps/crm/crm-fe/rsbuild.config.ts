@@ -10,6 +10,8 @@ export default defineConfig({
   source: {
     entry: {
       main: ['./src/main.ts', './src/theme.css'],
+      // Only the sign-in page and the passkeys page load this entry.
+      passkeys: './src/passkeys.ts',
     },
   },
   output: {

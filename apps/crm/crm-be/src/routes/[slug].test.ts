@@ -1,17 +1,15 @@
-import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { buildApp } from '../index';
-import { addOrg, postForm, signIn, testApp } from '../test-helpers';
+import { addOrg, postForm, signInAdmin, testApp } from '../test-helpers';
 
 let app: ReturnType<typeof buildApp>;
-let db: Database;
 let close: () => Promise<void>;
 let cookie: string;
 let slug: string;
 
 beforeEach(async () => {
-  ({ app, db, close } = testApp());
-  cookie = await signIn(app, db, 'sean@example.com');
+  ({ app, close } = testApp());
+  cookie = signInAdmin(app);
   slug = await addOrg(app, cookie, {
     name: 'Acme Plumbing',
     address_line_1: '1 High Street',

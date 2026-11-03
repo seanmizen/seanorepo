@@ -10,14 +10,21 @@ export const FE_DIST = path.join(import.meta.dir, '..', '..', 'crm-fe', 'dist');
 
 /** The part of the Rsbuild manifest that renderPage reads. */
 interface Manifest {
-  entries: { main: { initial: { js?: string[]; css?: string[] } } };
+  entries: Record<string, { initial: { js?: string[]; css?: string[] } }>;
 }
 
 /**
- * Read the hashed asset paths from the Rsbuild manifest. renderPage reads the
- * file for each page, so a rebuild in watch mode shows on the next request.
+ * The crm-fe entries that a page can add to `main` (see
+ * `crm-fe/rsbuild.config.ts`). `passkeys` is the WebAuthn script.
  */
-const readAssets = () => {
+export type Entry = 'passkeys';
+
+/**
+ * Read the hashed asset paths of `main` and `entries` from the Rsbuild
+ * manifest. renderPage reads the file for each page, so a rebuild in watch
+ * mode shows on the next request.
+ */
+const readAssets = (entries: Entry[]) => {
   const file = path.join(FE_DIST, 'manifest.json');
   let manifest: Manifest;
   try {
@@ -27,8 +34,15 @@ const readAssets = () => {
       `Cannot read ${file}. Run "yarn workspace crm-fe build". (${error})`,
     );
   }
-  const { js = [], css = [] } = manifest.entries.main.initial;
-  return { js, css };
+  const js = new Set<string>();
+  const css = new Set<string>();
+  for (const name of ['main', ...entries]) {
+    const initial = manifest.entries[name]?.initial;
+    if (!initial) throw new Error(`${file} has no entry "${name}".`);
+    for (const src of initial.js ?? []) js.add(src);
+    for (const href of initial.css ?? []) css.add(href);
+  }
+  return { js: [...js], css: [...css] };
 };
 
 /** The themes. `bare` is the page with no page styles and no scripts. */
@@ -47,16 +61,17 @@ export const themeOf = (request: FastifyRequest): Theme =>
 /**
  * Render one page to a full HTML document: the doctype, the `<head>`, and
  * `children` in the panel layout (`ui/Page.tsx`) with `title` on the plate.
- * The `<head>` has the asset tags from the Rsbuild manifest. With
- * `?theme=bare` it has no asset tags.
+ * The `<head>` has the asset tags of the `main` entry and of `entries` from
+ * the Rsbuild manifest. With `?theme=bare` it has no asset tags.
  */
 export const renderPage = (
   title: string,
   children: ReactNode,
   request: FastifyRequest,
+  entries: Entry[] = [],
 ): string => {
   const { js, css } =
-    themeOf(request) === 'bare' ? { js: [], css: [] } : readAssets();
+    themeOf(request) === 'bare' ? { js: [], css: [] } : readAssets(entries);
   return `<!doctype html>${renderToStaticMarkup(
     <html lang="en">
       <head>

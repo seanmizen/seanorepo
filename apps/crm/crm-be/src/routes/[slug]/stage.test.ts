@@ -1,7 +1,13 @@
 import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { buildApp } from '../../index';
-import { addOrg, postForm, signIn, testApp } from '../../test-helpers';
+import {
+  addOrg,
+  postForm,
+  signInAdmin,
+  TEST_ADMIN_EMAIL,
+  testApp,
+} from '../../test-helpers';
 
 let app: ReturnType<typeof buildApp>;
 let db: Database;
@@ -11,7 +17,7 @@ let slug: string;
 
 beforeEach(async () => {
   ({ app, db, close } = testApp());
-  cookie = await signIn(app, db, 'sean@example.com');
+  cookie = signInAdmin(app);
   slug = await addOrg(app, cookie, { name: 'Acme' });
 });
 
@@ -55,7 +61,7 @@ describe('POST /<slug>/stage', () => {
       (
         db
           .query('SELECT id FROM person WHERE email = ?;')
-          .get('sean@example.com') as { id: string }
+          .get(TEST_ADMIN_EMAIL) as { id: string }
       ).id,
     );
     expect(JSON.parse(row.detail)).toEqual({

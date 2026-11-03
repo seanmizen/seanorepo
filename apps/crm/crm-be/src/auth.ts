@@ -1,35 +1,71 @@
 import type { Database } from 'bun:sqlite';
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { renderAdminOnly } from './ui/AdminOnly';
 
 /**
  * Sign-in and sessions: the session check on each request, the session
- * cookie, the `next` check, the rate limits and the audit rows. The routes
- * for the pages are in `routes/login*` and `routes/account/sessions.tsx`.
+ * cookie, the `next` check, the admin check, the rate limits and the audit
+ * rows. The routes for the pages are in `routes/login*`,
+ * `routes/account/sessions.tsx` and `routes/account/passkeys.tsx`. The
+ * WebAuthn part is in `passkeys.ts`.
  */
 
 export const SESSION_COOKIE = 'crm_session';
 export const SESSION_DAYS = 90;
 export const LOGIN_TOKEN_MINUTES = 15;
+/** A recovery session and its enrolment link last this long. */
+export const RECOVERY_MINUTES = 15;
+
+/**
+ * The base URL of the site, from config. The sign-in email, the enrolment
+ * link and the WebAuthn relying party use it. It never comes from the Host
+ * header: a forged Host header must not put a different host into an email.
+ */
+export const PUBLIC_URL = (
+  process.env.CRM_PUBLIC_URL || 'http://localhost:4100'
+).replace(/\/+$/, '');
 
 /** The paths that a signed-out visitor can open. */
 const PUBLIC_PATHS = new Set([
   '/login',
   '/login/code',
   '/login/verify',
+  '/login/recover',
   '/api/health',
+  '/api/passkeys/sign-in-options',
+  '/api/passkeys/sign-in',
 ]);
+
+/** The only paths that a recovery session can open, with the public paths. */
+const RECOVERY_PATHS = new Set([
+  '/account/passkeys',
+  '/api/passkeys/register-options',
+  '/api/passkeys/register',
+  '/logout',
+]);
+
+/** How a session started. Only a `passkey` session opens the admin pages. */
+export type SessionMethod = 'email' | 'passkey' | 'recovery';
 
 /** The signed-in person and their session, set by the hook in `registerAuth`. */
 export interface Auth {
   sessionId: string;
   personId: string;
   email: string;
+  method: SessionMethod;
 }
 
 declare module 'fastify' {
   interface FastifyRequest {
     auth: Auth | null;
+  }
+  interface FastifyContextConfig {
+    /**
+     * True for an admin route. The hook in `registerAuth` lets only the
+     * admin (CRM_ADMIN_EMAIL) open it, in a session from a passkey sign-in.
+     */
+    admin?: boolean;
   }
 }
 
@@ -86,6 +122,18 @@ export const audit = (
   );
 };
 
+/** True if `auth` is the person for CRM_ADMIN_EMAIL. */
+export const isAdmin = (auth: Auth) => {
+  const admin = normalizeEmail(process.env.CRM_ADMIN_EMAIL);
+  return admin !== '' && normalizeEmail(auth.email) === admin;
+};
+
+/** True if the person has one or more passkeys. */
+export const hasPasskey = (db: Database, personId: string) =>
+  db
+    .query('SELECT 1 FROM passkey WHERE person_id = ? LIMIT 1;')
+    .get(personId) !== null;
+
 /**
  * Make the person for CRM_ADMIN_EMAIL if it is missing. There is no signup
  * page, so this is how the first person gets into the database.
@@ -106,34 +154,41 @@ export const ensureAdmin = (db: Database, adminEmail: string | undefined) => {
 
 /**
  * Start a session for `personId`: a session row with the token hash, and the
- * cookie with the raw token. Returns the session id.
+ * cookie with the raw token. `how` is the sign-in step. A link or a code
+ * gives an `email` session. A recovery session lasts RECOVERY_MINUTES, and
+ * the others last SESSION_DAYS. Returns the session id.
  */
 export const startSession = (
   db: Database,
   request: FastifyRequest,
   reply: FastifyReply,
   personId: string,
-  method: 'link' | 'code',
+  how: 'link' | 'code' | 'passkey' | 'recovery',
 ) => {
+  const method: SessionMethod =
+    how === 'link' || how === 'code' ? 'email' : how;
+  const seconds =
+    method === 'recovery' ? RECOVERY_MINUTES * 60 : SESSION_DAYS * 24 * 60 * 60;
   const token = newToken();
   const sessionId = crypto.randomUUID();
   db.query(
-    'INSERT INTO session (id, person_id, token_hash, user_agent, expires_at) VALUES (?, ?, ?, ?, ?);',
+    'INSERT INTO session (id, person_id, token_hash, user_agent, expires_at, method) VALUES (?, ?, ?, ?, ?, ?);',
   ).run(
     sessionId,
     personId,
     hash(token),
     request.headers['user-agent'] ?? null,
-    later(SESSION_DAYS * 24 * 60 * 60 * 1000),
+    later(seconds * 1000),
+    method,
   );
   reply.setCookie(SESSION_COOKIE, token, {
     path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: SESSION_DAYS * 24 * 60 * 60,
+    maxAge: seconds,
   });
-  audit(db, personId, 'sign_in', 'session', sessionId, { method });
+  audit(db, personId, 'sign_in', 'session', sessionId, { method: how });
   return sessionId;
 };
 
@@ -161,7 +216,8 @@ const findSession = (db: Database, token: string | undefined): Auth | null => {
   if (!token) return null;
   const row = db
     .query<Auth, [string, string]>(
-      `SELECT session.id AS sessionId, person.id AS personId, person.email AS email
+      `SELECT session.id AS sessionId, person.id AS personId,
+         person.email AS email, session.method AS method
        FROM session JOIN person ON person.id = session.person_id
        WHERE session.token_hash = ? AND session.expires_at > ?;`,
     )
@@ -220,6 +276,12 @@ export type LoginLimits = ReturnType<typeof makeLoginLimits>;
  * 2. Finds the session from the cookie and sets `request.auth`.
  * 3. Sends a signed-out visitor to `/login?next=<path>`. The public paths and
  *    `/static/` are open to everyone.
+ * 4. Sends a recovery session to `/account/passkeys` from each path that is
+ *    not in RECOVERY_PATHS.
+ * 5. On an admin route (`config: { admin: true }`), lets only the admin in a
+ *    passkey session through. If the admin has no passkey, an email session
+ *    goes to `/account/passkeys` to add the first one. Each other session
+ *    gets 403.
  */
 export const registerAuth = (app: FastifyInstance, db: Database) => {
   app.decorateRequest('auth', null);
@@ -235,21 +297,52 @@ export const registerAuth = (app: FastifyInstance, db: Database) => {
       }
     }
 
-    request.auth = findSession(db, request.cookies[SESSION_COOKIE]);
+    const auth = findSession(db, request.cookies[SESSION_COOKIE]);
+    request.auth = auth;
     const path = request.url.split('?')[0];
-    if (request.auth || PUBLIC_PATHS.has(path) || path.startsWith('/static/')) {
-      done();
+    const open = PUBLIC_PATHS.has(path) || path.startsWith('/static/');
+    if (!auth) {
+      if (open) {
+        done();
+      } else if (path.startsWith('/api/')) {
+        reply.code(401).send({ error: 'Sign in first.' });
+      } else {
+        const next =
+          request.method === 'GET' && request.url !== '/'
+            ? `?next=${encodeURIComponent(request.url)}`
+            : '';
+        reply.redirect(`/login${next}`, 303);
+      }
       return;
     }
-    if (path.startsWith('/api/')) {
-      reply.code(401).send({ error: 'Sign in first.' });
+
+    if (auth.method === 'recovery' && !open && !RECOVERY_PATHS.has(path)) {
+      if (path.startsWith('/api/')) {
+        reply
+          .code(403)
+          .send({ error: 'A recovery session can only add a passkey.' });
+      } else {
+        reply.redirect('/account/passkeys', 303);
+      }
       return;
     }
-    const next =
-      request.method === 'GET' && request.url !== '/'
-        ? `?next=${encodeURIComponent(request.url)}`
-        : '';
-    reply.redirect(`/login${next}`, 303);
+
+    const admin = isAdmin(auth);
+    if (
+      request.routeOptions.config?.admin &&
+      !(admin && auth.method === 'passkey')
+    ) {
+      if (admin && !hasPasskey(db, auth.personId)) {
+        reply.redirect('/account/passkeys', 303);
+      } else {
+        reply
+          .code(403)
+          .type('text/html; charset=utf-8')
+          .send(renderAdminOnly(request));
+      }
+      return;
+    }
+    done();
   });
 };
 

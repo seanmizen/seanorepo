@@ -5,7 +5,8 @@ import {
   addOrg,
   addPerson,
   postForm,
-  signIn,
+  signInAdmin,
+  TEST_ADMIN_EMAIL,
   testApp,
 } from '../../test-helpers';
 
@@ -15,13 +16,13 @@ let close: () => Promise<void>;
 let cookie: string;
 let actor: string;
 
-beforeEach(async () => {
+beforeEach(() => {
   ({ app, db, close } = testApp());
-  cookie = await signIn(app, db, 'sean@example.com');
+  cookie = signInAdmin(app);
   actor = (
     db
       .query('SELECT id FROM person WHERE email = ?;')
-      .get('sean@example.com') as {
+      .get(TEST_ADMIN_EMAIL) as {
       id: string;
     }
   ).id;
