@@ -59,10 +59,10 @@ export const newOrgPage = ({
 
 /**
  * Add the organisation at the stage Lead, and its contact if the person
- * typed one, in one transaction, with an audit row for each. Returns the
- * slug.
+ * typed one, in one transaction, with an audit row for each. The demo seed
+ * (`demo-seed.ts`) also calls it.
  */
-const addOrg = (
+export const addOrg = (
   db: Database,
   actor: string,
   org: FormValues,

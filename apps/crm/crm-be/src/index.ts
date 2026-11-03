@@ -6,10 +6,12 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { ensureAdmin, makeLoginLimits, registerAuth } from './auth';
 import { DB_PATH, openDatabase } from './db';
+import { demoConfigError } from './demo';
 import { checkEmailConfig } from './email';
 import { FE_DIST } from './render';
 import { accountRoute } from './routes/account';
 import { accountPasskeysRoute } from './routes/account/passkeys';
+import { accountResetDemoRoute } from './routes/account/reset-demo';
 import { accountSessionsRoute } from './routes/account/sessions';
 import { healthRoute } from './routes/api/health';
 import { passkeyRegisterRoute } from './routes/api/passkeys/register';
@@ -20,6 +22,7 @@ import { faviconRoute } from './routes/favicon';
 import { listRoute } from './routes/index';
 import { loginRoute } from './routes/login';
 import { loginCodeRoute } from './routes/login/code';
+import { loginDemoRoute } from './routes/login/demo';
 import { loginRecoverRoute } from './routes/login/recover';
 import { loginVerifyRoute } from './routes/login/verify';
 import { logoutRoute } from './routes/logout';
@@ -65,10 +68,12 @@ export const buildApp = (db: Database) => {
   loginCodeRoute(app, db, limits);
   loginVerifyRoute(app, db);
   loginRecoverRoute(app, db);
+  loginDemoRoute(app, db);
   logoutRoute(app, db);
   accountRoute(app, db);
   accountSessionsRoute(app, db);
   accountPasskeysRoute(app, db);
+  accountResetDemoRoute(app, db);
   passkeyRegisterOptionsRoute(app, db);
   passkeyRegisterRoute(app, db);
   passkeySignInOptionsRoute(app, db);
@@ -89,6 +94,13 @@ export const buildApp = (db: Database) => {
 };
 
 const start = async () => {
+  // A demo switch on the live host stops the server before it opens the
+  // database (`demo.ts`).
+  const demoError = demoConfigError();
+  if (demoError) {
+    console.error(`crm-be: ${demoError}`);
+    process.exit(1);
+  }
   // Open the database at boot, so that a bad DB_PATH stops the server now.
   const db = openDatabase(DB_PATH);
   checkEmailConfig();

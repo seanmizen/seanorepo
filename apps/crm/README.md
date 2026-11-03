@@ -33,7 +33,8 @@ billing. After sign-in, the seller has these pages:
   `/orgs/<slug>/activity/<id>`: the edit pages. Each one is the same form
   as its create page, filled in (REQ-CRM-FORM-001).
 - `/account`: the email and how this session signed in, with links to
-  `/account/passkeys` and `/account/sessions`.
+  `/account/passkeys` and `/account/sessions`. In the demo, also the
+  `Reset demo data` button (see [Demo](#demo)).
 
 `GET /api/health` returns `{ "ok": true }`. The design is in
 [docs/001-guiding-design.md](docs/001-guiding-design.md).
@@ -41,7 +42,7 @@ billing. After sign-in, the seller has these pages:
 ```bash
 yarn workspace crm start           # http://localhost:4100
 yarn workspace crm start:docker    # the same, in a dev container
-yarn workspace crm prod:docker     # the prod image and Litestream (see Production)
+yarn workspace crm prod:docker     # the prod image and Litestream (see Production), and the demo if .env.demo exists
 yarn workspace crm test:types
 yarn workspace crm-be test
 ```
@@ -110,7 +111,8 @@ the `parts` that the route gives it.
 1. **Nav** (`ui/SiteNav.tsx`, text). The title is the path of the URL, as on
    seanmizen.com: `/account/passkeys` reads `crm / account / passkeys`. Each
    part above the page is a link, and the page itself has a dim color. The title is
-   the first element in `<body>`. Under it, for a signed-in person, one line
+   the first element in `<body>`. The one exception is the demo: the demo
+   line (`ui/DemoBanner.tsx`) comes first. Under it, for a signed-in person, one line
    of links: `orgs · new lead · account · sign out`. The link to this page
    is text, with `aria-current="page"`.
 2. **Intro** (`intro`, text). At most one sentence.
@@ -269,7 +271,8 @@ Where each part is:
 | `DB_PATH` | `crm-be/data/crm.db` | `db.ts` | The SQLite file. Git ignores the default folder. |
 | `NODE_ENV` | unset | `auth.ts`, `email.ts` | `production` adds `Secure` to the session cookie. The prod compose service sets it. `test` puts emails into `devOutbox` in place of stdout. |
 | `CRM_ADMIN_EMAIL` | unset | `index.ts`, `auth.ts` | The admin email. At boot, crm-be makes this person if it is missing. Only this person opens the admin routes. Unset: crm-be makes nobody, only existing people can sign in, and nobody opens the admin routes. |
-| `CRM_PUBLIC_URL` | `http://localhost:4100` | `auth.ts` | The prod compose service sets `https://crm.seanmizen.com`. The start of the links in the sign-in email and from `admin:recover`. Its host is the WebAuthn relying party ID, and its origin is the expected WebAuthn origin. A passkey works only on this host. The links never use the request `Host` header. |
+| `CRM_PUBLIC_URL` | `http://localhost:4100` | `auth.ts`, `demo.ts` | The prod compose service sets `https://crm.seanmizen.com`, and the demo service sets `https://demo-crm.seanmizen.com`. The start of the links in the sign-in email and from `admin:recover`. Its host is the WebAuthn relying party ID, and its origin is the expected WebAuthn origin. A passkey works only on this host. The links never use the request `Host` header. |
+| `CRM_UNSAFE_DEMO_LOGIN` | unset | `demo.ts` | `true` turns on the demo: the `Enter as admin (demo)` button, the demo line on each page, and `Reset demo data`. Unset or `false`: off. Each other value stops crm-be at boot. See [Demo](#demo). |
 | `SMTP_HOST` | `smtp.gmail.com` | `email.ts` | The SMTP server. |
 | `SMTP_PORT` | `587` | `email.ts` | The SMTP port. `465` uses TLS from the start. Each other port uses STARTTLS. |
 | `SMTP_USER` | unset | `email.ts` | The SMTP user and the sender address: `9mazes@gmail.com`. Necessary when `SMTP_PASS` has a value. |
@@ -279,6 +282,7 @@ Where each part is:
 | `CRM_R2_ENDPOINT` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The EU endpoint of R2: `https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com`. When `CRM_R2_BUCKET` has a value, each other endpoint stops the sidecar with status 1. |
 | `LITESTREAM_ACCESS_KEY_ID` | unset | Litestream | The access key ID of the R2 API token for the bucket `crm`. |
 | `LITESTREAM_SECRET_ACCESS_KEY` | unset | Litestream | The secret access key of the same token. |
+| `CRM_R2_PATH` | unset | `docker-compose.yml` (each Litestream sidecar), `litestream.yml` | The prefix of the backup files in the bucket. The compose file sets it: `crm.db` for prod, `demo-crm.db` for the demo. Unset: the sidecar stops with status 1. |
 
 When `SMTP_PASS` has a value and `SMTP_USER` has none, crm-be stops at boot.
 crm-be does not wait for the send. When a send fails, crm-be logs the SMTP
@@ -339,8 +343,10 @@ The `litestream` service in the `prod` profile (`litestream.yml`) streams
 `/data/crm.db` to R2. It keeps a snapshot each day, and keeps each file for
 90 days. Then erased data expires from the backups.
 
-- **Bucket:** `crm`, with the prefix `crm.db/`. `infra/cloudflare/r2.tf`
-  defines it.
+- **Bucket:** `crm`, with the prefix `crm.db/`. The demo uses the prefix
+  `demo-crm.db/` in the same bucket. `infra/cloudflare/r2.tf` defines the
+  bucket. A test (`crm-be/src/demo.test.ts`) fails when two sidecars have
+  the same prefix.
 - **Jurisdiction:** EU. The data stays inside the EU. Cloudflare has no UK
   jurisdiction. UK GDPR allows a transfer to the EEA under the UK adequacy
   regulations.
@@ -365,3 +371,133 @@ yarn workspace crm prod:docker
 
 To restore to an earlier time, add `-timestamp 2026-11-03T12:00:00Z` to the
 restore command.
+
+## Demo
+
+The demo is at `demo-crm.seanmizen.com`. It shows the crm to a client, with
+dummy data and an unsafe sign-in. It runs the same code as the live site:
+both build from the `release` checkout on asus, and both change on
+`yarn release`. The demo never shows work that is not released.
+
+- **Same image, other env.** The `crm-demo` service in `docker-compose.yml`
+  uses the same image and settings as `crm`. Only these are different: the
+  volume `crm_demo_sqlite_data`, the env file `apps/crm/.env.demo`, the host
+  port 4101 and `CRM_PUBLIC_URL=https://demo-crm.seanmizen.com`. Its
+  sidecar `litestream-demo` backs up to the bucket `crm` with the prefix
+  `demo-crm.db/`.
+- **Off without the file.** `scripts/prod-docker.sh` (the
+  `prod:docker` script) adds the compose profile `demo` only when
+  `apps/crm/.env.demo` exists. Without the file, it prints "The demo is
+  off.", the demo does not start, and prod does not change.
+- **Routes.** `infra/cloudflare/seanmizen_com.tf` has the DNS record. The
+  tunnel sends `demo-crm.seanmizen.com` to `localhost:4101`
+  (`apps/cloudflared/config.yml`).
+- **Email is off.** `.env.demo` has no `SMTP_*` lines, so each sign-in email
+  goes to the log (`docker logs crm-demo`). The demo never emails an
+  address.
+
+### The env file
+
+`apps/crm/.env.demo` on asus:
+
+```bash
+CRM_R2_BUCKET=crm
+CRM_R2_ENDPOINT=https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com
+LITESTREAM_ACCESS_KEY_ID=
+LITESTREAM_SECRET_ACCESS_KEY=
+CRM_ADMIN_EMAIL=demo@example.com
+CRM_UNSAFE_DEMO_LOGIN=true
+```
+
+The R2 lines are the same as in `apps/crm/.env`. This command makes the
+file from `apps/crm/.env`. It shows no secret, and only the owner can read
+the file:
+
+```bash
+ssh srv@asus.local
+cd ~/projects/seanorepo/apps/crm
+(umask 077 && { grep -E '^(CRM_R2_BUCKET|CRM_R2_ENDPOINT|LITESTREAM_ACCESS_KEY_ID|LITESTREAM_SECRET_ACCESS_KEY)=' .env; printf '%s\n' CRM_ADMIN_EMAIL=demo@example.com CRM_UNSAFE_DEMO_LOGIN=true; } > .env.demo) && cut -d= -f1 .env.demo
+```
+
+The last part prints the six names, with no values.
+
+### The unsafe sign-in
+
+`CRM_UNSAFE_DEMO_LOGIN=true` turns on three things (`crm-be/src/demo.ts`):
+
+1. `/login` has the `Enter as admin (demo)` button
+   (`routes/login/demo.tsx`). It starts a session for the person of
+   `CRM_ADMIN_EMAIL`, as if by passkey, with no check. The admin pages
+   open. `audit_log` gets `sign_in` with the method `demo`.
+2. Each page shows this line at the top: "Demo. Anyone can sign in as the
+   admin. Do not enter real data."
+3. `/account` has the `Reset demo data` button
+   (`routes/account/reset-demo.ts`). It runs the demo seed.
+
+Unset means off: no button, no line, and `POST /login/demo` and
+`POST /account/reset-demo` return 404. The guards:
+
+- crm-be stops at boot when the switch is `true` and the host of
+  `CRM_PUBLIC_URL` is `crm.seanmizen.com`. The live site cannot run with the
+  switch on.
+- crm-be stops at boot when the switch is `true` and `CRM_ADMIN_EMAIL` is
+  unset, or when the switch has a value that is not `true` or `false`.
+- The seed refuses to run when the host of `CRM_PUBLIC_URL` is
+  `crm.seanmizen.com`.
+
+### The seed
+
+```bash
+bun run demo:seed                                  # in crm-be
+ssh -t srv@asus.local docker exec crm-demo bun run demo:seed
+```
+
+The seed (`crm-be/src/demo-seed.ts`) replaces all data with a fixed,
+fictional set: 10 organisations, with contacts, visits, notes and stage
+changes. The dates are relative to today, so some next actions are overdue,
+one is due today, and some are in the future. The seed writes through the
+same functions as the routes, so the Activity list of each organisation has
+its rows. It keeps the person of `CRM_ADMIN_EMAIL`, with their sessions and
+passkeys, and deletes each other person. Two runs give the same data.
+
+Each name is fictional. Each email is at `example.com`, each phone number is
+`07700 900xxx` (Ofcom keeps these numbers for drama), and each postcode
+starts with `ZZ`.
+
+### Sean's steps
+
+1. Make `apps/crm/.env.demo` on asus with the command in
+   [The env file](#the-env-file). The code before the release ignores the
+   file.
+2. Run `yarn release`. The "Infra apply" workflow makes the DNS record
+   `demo-crm.seanmizen.com`. On asus, `deploy.sh` starts `crm-demo` and
+   `litestream-demo`, and restarts cloudflared for the new route. Watch it:
+
+   ```bash
+   ssh srv@asus.local journalctl -u custom-release-poll.service -u custom-deploy.service -f
+   ```
+
+3. Put the demo data in the demo:
+
+   ```bash
+   ssh -t srv@asus.local docker exec crm-demo bun run demo:seed
+   ```
+
+4. Smoke test. Open `https://demo-crm.seanmizen.com`, read the demo line,
+   tap `Enter as admin (demo)`, and open an organisation. Then open
+   `https://crm.seanmizen.com/login`, and check that it has no demo line and
+   no demo button. `ssh srv@asus.local docker logs crm-demo-litestream`
+   shows the replication to `demo-crm.db/`.
+5. Add the import block of the record to `infra/cloudflare/imports.tf` in a
+   new PR. The ID is in
+   `./tofu state show cloudflare_dns_record.seanmizen_com_demo_crm_cname`.
+
+To restore the demo database from R2, run these commands on asus:
+
+```bash
+cd ~/projects/seanorepo/apps/crm
+docker compose --profile demo stop crm-demo litestream-demo
+docker compose --profile demo run --rm --no-deps --entrypoint litestream litestream-demo restore -dry-run /data/crm.db
+docker compose --profile demo run --rm --no-deps --entrypoint litestream litestream-demo restore -force /data/crm.db
+yarn workspace crm prod:docker
+```

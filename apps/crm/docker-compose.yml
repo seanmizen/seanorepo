@@ -1,10 +1,16 @@
-# crm - crm.seanmizen.com
+# crm - crm.seanmizen.com, and the demo at demo-crm.seanmizen.com
 # Port 4100. crm-be renders the pages, serves the crm-fe build, and serves
-# the API, in one process. 4101 is free.
+# the API, in one process. The demo is the same image on host port 4101.
 #
 # prod: the self-contained image, and the Litestream sidecar. The tunnel
 # reaches 127.0.0.1:4100. The crm is not on the LAN edge (infra/edge): its
 # sign-in needs HTTPS and its public origin, crm.seanmizen.com.
+#
+# demo: crm-demo and its Litestream sidecar. The same image, the same code
+# and the same settings as prod. Only the env is different: its own volume,
+# apps/crm/.env.demo, host port 4101, demo-crm.seanmizen.com and the backup
+# prefix demo-crm.db/. scripts/prod-docker.sh adds this profile only when
+# apps/crm/.env.demo exists. Without the file, the demo does not start.
 #
 # dev: bind-mounts the monorepo root, so `@shared/*` resolves. node_modules
 # is a named volume that the image fills. This keeps the Linux builds of
@@ -27,6 +33,33 @@ x-crm-env-file: &crm-env-file
     - path: ./.env
       required: false
 
+# The Litestream sidecar of a crm database. Config: litestream.yml. Each
+# sidecar sets CRM_R2_PATH, the prefix of its backup files in the bucket.
+# With no CRM_R2_BUCKET, the container prints that replication is off and
+# stops with status 0. on-failure does not start it again then.
+x-litestream-base: &litestream-base
+  image: litestream/litestream:0.5.17
+  restart: on-failure
+  entrypoint: ['/bin/sh', '-c']
+  command:
+    - |
+      if [ -z "$$CRM_R2_BUCKET" ]; then
+        echo "litestream: CRM_R2_BUCKET is not set. Replication is off."
+        exit 0
+      fi
+      if [ -z "$$CRM_R2_PATH" ]; then
+        echo "litestream: CRM_R2_PATH is not set. Set it in docker-compose.yml." >&2
+        exit 1
+      fi
+      case "$$CRM_R2_ENDPOINT" in
+        https://*.eu.r2.cloudflarestorage.com) ;;
+        *)
+          echo "litestream: CRM_R2_ENDPOINT must be https://<account_id>.eu.r2.cloudflarestorage.com. The bucket is in the EU jurisdiction." >&2
+          exit 1
+          ;;
+      esac
+      exec litestream replicate
+
 services:
   crm:
     <<: [*crm-base, *crm-env-file]
@@ -43,35 +76,59 @@ services:
       - 'com.docker.compose.service.primary=true'
       - 'description=crm (https://crm.seanmizen.com)'
 
-  # Litestream replicates /data/crm.db to the R2 bucket (EU jurisdiction).
-  # Config: litestream.yml. With no CRM_R2_BUCKET, the container prints
-  # that replication is off and stops with status 0. on-failure does not
-  # start it again then. The README has the restore command.
+  # Litestream replicates /data/crm.db to the R2 bucket (EU jurisdiction),
+  # under the prefix CRM_R2_PATH. The README has the restore command.
   litestream:
-    <<: *crm-env-file
+    <<: [*crm-env-file, *litestream-base]
     container_name: crm-litestream
-    image: litestream/litestream:0.5.17
     profiles: ['prod']
-    restart: on-failure
     depends_on:
       - crm
-    entrypoint: ['/bin/sh', '-c']
-    command:
-      - |
-        if [ -z "$$CRM_R2_BUCKET" ]; then
-          echo "litestream: CRM_R2_BUCKET is not set. Replication is off."
-          exit 0
-        fi
-        case "$$CRM_R2_ENDPOINT" in
-          https://*.eu.r2.cloudflarestorage.com) ;;
-          *)
-            echo "litestream: CRM_R2_ENDPOINT must be https://<account_id>.eu.r2.cloudflarestorage.com. The bucket is in the EU jurisdiction." >&2
-            exit 1
-            ;;
-        esac
-        exec litestream replicate
+    environment:
+      - CRM_R2_PATH=crm.db
     volumes:
       - crm_sqlite_data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro
+
+  # The demo (demo-crm.seanmizen.com). The same image and settings as crm.
+  # Its own volume, env file, host port and public URL. scripts/prod-docker.sh
+  # adds the demo profile only when .env.demo exists. The README "Demo"
+  # section has the template of the file.
+  crm-demo:
+    <<: *crm-base
+    container_name: crm-demo
+    env_file:
+      - path: ./.env.demo
+        required: false
+    profiles: ['demo']
+    restart: unless-stopped
+    ports:
+      - '${PUBLISH_ADDR:-127.0.0.1}:4101:4100'
+    environment:
+      - NODE_ENV=production
+      - PORT=4100
+      - DB_PATH=/data/crm.db
+      - CRM_PUBLIC_URL=https://demo-crm.seanmizen.com
+    volumes:
+      - crm_demo_sqlite_data:/data
+    labels:
+      - 'description=crm demo (https://demo-crm.seanmizen.com)'
+
+  # Litestream for the demo: the same bucket, the prefix demo-crm.db. A test
+  # (crm-be/src/demo.test.ts) fails when two sidecars have the same prefix.
+  litestream-demo:
+    <<: *litestream-base
+    container_name: crm-demo-litestream
+    env_file:
+      - path: ./.env.demo
+        required: false
+    profiles: ['demo']
+    depends_on:
+      - crm-demo
+    environment:
+      - CRM_R2_PATH=demo-crm.db
+    volumes:
+      - crm_demo_sqlite_data:/data
       - ./litestream.yml:/etc/litestream.yml:ro
 
   crm-dev:
@@ -103,6 +160,9 @@ volumes:
   # profile. Litestream copies it to R2.
   crm_sqlite_data:
     name: crm_sqlite_data
+  # The demo database. Litestream copies it to R2 under demo-crm.db/.
+  crm_demo_sqlite_data:
+    name: crm_demo_sqlite_data
   crm_sqlite_dev_data:
     name: crm_sqlite_dev_data
   node_modules:
