@@ -5,7 +5,8 @@ It keeps contacts, visits, the pipeline and the GDPR records. Stripe keeps the
 billing. After sign-in, the seller has these pages:
 
 - `/` and `/orgs`: one list of every organisation (one handler). The LCD
-  is a menu: name, stage, next action date and last activity. The LED of a
+  is a menu: name, stage, next action date and last activity (the newest
+  visit, note or add date; a hidden visit or note does not count). The LED of a
   row, in the bezel at its right, is lit when the next action is due. Each
   row links to `/orgs/<slug>`. The
   default order puts the due and overdue ones first (the oldest first),

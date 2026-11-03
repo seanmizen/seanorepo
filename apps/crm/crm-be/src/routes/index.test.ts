@@ -582,6 +582,71 @@ describe('GET / and GET /orgs', () => {
   });
 });
 
+describe('last activity', () => {
+  /** The time that the organisation of the test was added. */
+  const OLD = '2026-01-01T10:00:00.000Z';
+
+  /** The last activity of the row of `slug` in the list, as its ISO value. */
+  const lastActivity = async (slug: string) => {
+    const html = (await get('/?sort=activity&dir=desc')).body;
+    const start = html.indexOf(`<a href="/orgs/${slug}"`);
+    const row = html.slice(start, html.indexOf('</a>', start));
+    return [...row.matchAll(/dateTime="([^"]+)"/g)].at(-1)?.[1];
+  };
+
+  /** Tap the Undo key of the organisation page of `slug`. */
+  const undo = async (slug: string) => {
+    const html = (await get(`/orgs/${slug}`)).body;
+    const event = html.match(
+      new RegExp(
+        `<form action="/orgs/${slug}/undo" method="post"><input type="hidden" name="event" value="(\\d+)"`,
+      ),
+    )?.[1];
+    expect(event).toBeTruthy();
+    const response = await postForm(
+      app,
+      `/orgs/${slug}/undo`,
+      { event: String(event) },
+      cookie,
+    );
+    expect(response.statusCode).toBe(303);
+  };
+
+  test('a hidden visit or note is not the last activity: log a visit, undo it, and the list shows the time before the visit', async () => {
+    const slug = await addOrg(app, cookie, { name: 'Acme' });
+    db.query('UPDATE organisation SET created_at = ? WHERE slug = ?;').run(
+      OLD,
+      slug,
+    );
+    const before = await lastActivity(slug);
+    expect(before?.slice(0, 10)).toBe('2026-01-01');
+
+    await postForm(
+      app,
+      `/orgs/${slug}/activity`,
+      { outcome: 'spoke', note: '' },
+      cookie,
+    );
+    expect(await lastActivity(slug)).not.toBe(before);
+    await undo(slug);
+    expect(db.query('SELECT hidden_at FROM visit;').get()).toEqual({
+      hidden_at: expect.any(String),
+    });
+    expect(await lastActivity(slug)).toBe(before);
+
+    // The same for a note.
+    await postForm(
+      app,
+      `/orgs/${slug}/activity`,
+      { outcome: 'note', note: 'Back on Monday' },
+      cookie,
+    );
+    expect(await lastActivity(slug)).not.toBe(before);
+    await undo(slug);
+    expect(await lastActivity(slug)).toBe(before);
+  });
+});
+
 describe('the page anatomy', () => {
   test('the path title is the first element in <body>, and each part above the page is a link', async () => {
     const slug = await addFullOrg();

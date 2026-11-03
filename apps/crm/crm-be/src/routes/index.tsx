@@ -151,7 +151,10 @@ export type ListRow = Pick<
   Org,
   'slug' | 'name' | 'stage' | 'next_action_on' | 'created_at'
 > & {
-  /** The newest of the last visit, the last note and `created_at`. */
+  /**
+   * The newest of the last visit, the last note and `created_at`. A hidden
+   * visit or note does not count (REQ-CRM-UNDO-001).
+   */
   last_activity: string;
 };
 
@@ -470,9 +473,11 @@ export const listOrgs = (db: Database, query: ListQuery, date: string) => {
          max(
            created_at,
            coalesce((SELECT max(at) FROM visit
-                     WHERE visit.organisation_id = organisation.id), ''),
+                     WHERE visit.organisation_id = organisation.id
+                       AND visit.hidden_at IS NULL), ''),
            coalesce((SELECT max(created_at) FROM note
-                     WHERE note.organisation_id = organisation.id), '')
+                     WHERE note.organisation_id = organisation.id
+                       AND note.hidden_at IS NULL), '')
          ) AS last_activity
        FROM organisation ${WHERE}
        ORDER BY ${ORDER[query.sort]}${direction}, name COLLATE NOCASE, slug
