@@ -1,20 +1,33 @@
-import cors from '@fastify/cors';
-import type { HealthResponse } from '@shared/types';
+import path from 'node:path';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { DB_PATH, openDatabase } from './db';
+import { FE_DIST } from './render';
+import { healthRoute } from './routes/api/health';
+import { homeRoute } from './routes/index';
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 4101;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 4100;
 const IS_TEST = process.env.NODE_ENV === 'test';
 
-/** Make the Fastify app. All routes use the `/api` prefix. */
+/**
+ * Make the Fastify app. It renders every page, serves the crm-fe build at
+ * `/static/`, and serves the API under `/api`. One route file for each URL,
+ * in `routes/`.
+ */
 export const buildApp = () => {
   const app = Fastify({ logger: !IS_TEST });
 
-  app.register(cors, {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:4100',
+  // Rsbuild puts a content hash in each file name, so a browser can keep a
+  // file for a year.
+  app.register(fastifyStatic, {
+    root: path.join(FE_DIST, 'static'),
+    prefix: '/static/',
+    immutable: true,
+    maxAge: '365d',
   });
 
-  app.get('/api/health', async (): Promise<HealthResponse> => ({ ok: true }));
+  homeRoute(app);
+  healthRoute(app);
 
   return app;
 };

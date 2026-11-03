@@ -1,28 +1,23 @@
-import path from 'node:path';
 import { defineConfig } from '@rsbuild/core';
-import { pluginReact } from '@rsbuild/plugin-react';
 
+// crm-fe holds only what the browser runs: CSS and small scripts. There is no
+// HTML here. crm-be renders every page and reads dist/manifest.json to find
+// the hashed asset files. It serves dist/static at /static/.
 export default defineConfig({
-  plugins: [pluginReact()],
-  html: {
-    template: './public/index.html',
+  // Always production, also in watch mode and when NODE_ENV is "development".
+  // A development build has no hashes in the file names.
+  mode: 'production',
+  source: {
+    entry: {
+      main: ['./src/main.ts', './src/main.css'],
+    },
   },
   output: {
     assetPrefix: '/',
+    filenameHash: true,
+    manifest: true,
   },
-  source: {
-    // One API-base strategy: rsbuild bakes it in at build time. Local dev and
-    // Docker dev set API_URL to the backend on port 4101.
-    define: {
-      'import.meta.env.API_URL': JSON.stringify(
-        process.env.API_URL || 'http://localhost:4101/api',
-      ),
-    },
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-      '@shared': path.resolve(__dirname, '..', 'shared'),
-    },
+  tools: {
+    htmlPlugin: false,
   },
 });

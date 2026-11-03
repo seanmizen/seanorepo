@@ -9,9 +9,9 @@
     "shared"
   ],
   "scripts": {
-    "start": "concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace crm-fe start\" \"yarn workspace crm-be start\"",
+    "start": "yarn workspace crm-fe build && concurrently --prefix \"{time} {name} †\" -k -t \"HH:mm\" -n \"FE,BE\" -c \"green.bold,red.bold\" \"yarn workspace crm-fe start\" \"yarn workspace crm-be start\"",
     "test:types": "yarn workspace crm-shared tsc --noEmit && yarn workspace crm-fe tsc --noEmit && yarn workspace crm-be tsc --noEmit",
-    "start:docker": "PUBLISH_ADDR=0.0.0.0 API_URL=http://localhost:4101/api docker compose --profile dev up --build",
+    "start:docker": "PUBLISH_ADDR=0.0.0.0 docker compose --profile dev up --build",
     "down": "docker compose --profile dev down"
   },
   "devDependencies": {
