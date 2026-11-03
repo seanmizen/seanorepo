@@ -17,8 +17,14 @@ export const PRIVACY_UPDATED = '2026-11-03';
 /** The contact for each privacy request. */
 export const PRIVACY_EMAIL = 'sean@seanmizen.com';
 
-/** The ICO registration number. A placeholder until Sean registers. */
-export const ICO_REGISTRATION = '[ICO registration number pending]';
+/**
+ * The ICO registration line. Sean took the ICO data protection fee
+ * self-assessment on 2026-Nov-03: exempt, because the crm processes data only
+ * for his own marketing and his own accounts and records. If the work changes
+ * (for example, marketing for others), take the assessment again.
+ */
+export const ICO_REGISTRATION =
+  'Not required. I am exempt from the ICO data protection fee, because I use this data only to market my own services and to keep my own business records.';
 
 const Email = () => <a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a>;
 
