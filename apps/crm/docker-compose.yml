@@ -20,6 +20,12 @@ services:
     environment:
       - PORT=4100
       - DB_PATH=/data/crm.db
+      # Passed through from the host. The README describes each one.
+      - CRM_ADMIN_EMAIL
+      - CRM_PUBLIC_URL
+      - EMAIL_API_KEY
+      - EMAIL_PROVIDER
+      - EMAIL_FROM
     volumes:
       - type: bind
         source: ../..

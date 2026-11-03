@@ -29,11 +29,13 @@ describe('migrations', () => {
     const db = openDatabase(file);
     expect(tableNames(db)).toEqual([
       'audit_log',
+      'login_token',
       'membership',
       'note',
       'organisation',
       'person',
       'schema_migrations',
+      'session',
       'visit',
     ]);
     const applied = db

@@ -1,13 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { buildApp } from '../index';
 import { FE_DIST } from '../render';
+import { signIn, testApp } from '../test-helpers';
 
+/** GET `url` as a signed-in person, on a fresh app and database. */
 const get = async (url: string) => {
-  const app = buildApp();
-  const response = await app.inject({ method: 'GET', url });
-  await app.close();
+  const { app, db, close } = testApp();
+  const cookie = await signIn(app, db, 'sean@example.com');
+  const response = await app.inject({
+    method: 'GET',
+    url,
+    headers: { cookie },
+  });
+  await close();
   return response;
 };
 
