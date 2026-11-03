@@ -128,7 +128,14 @@ describe('POST /orgs/new', () => {
       .query<{ id: string }, []>('SELECT person_id AS id FROM membership;')
       .get();
     expect(orgEvents(db)).toEqual([
-      { kind: 'create', stage: 'lead', person_id: person?.id, role: 'owner' },
+      {
+        kind: 'create',
+        stage: 'lead',
+        fields: ['name', 'source', 'slug', 'address_line_1', 'postcode'],
+        person_id: person?.id,
+        role: 'owner',
+        contact_fields: ['name', 'phone', 'email'],
+      },
     ]);
   });
 

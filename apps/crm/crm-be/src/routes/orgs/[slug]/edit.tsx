@@ -60,9 +60,54 @@ export const orgEditPage = ({
 });
 
 /**
+ * Check the post of the organisation form, then save it over `org`, as one
+ * `details` event with the names of the changed fields and their values
+ * before and after. With no change, nothing is written. Returns the slug and the changed fields, or the error and the
+ * values to show again. The route `POST /<slug>/edit` and the MCP tool
+ * `update_organisation` call it.
+ */
+export const updateOrg = (
+  db: Database,
+  actor: string,
+  org: Org,
+  post: unknown,
+):
+  | { slug: string; fields: string[] }
+  | { error: string; values: FormValues } => {
+  const { values, error } = parseForm(organisationForm, post);
+  if (error) return { error, values };
+  const slug = resolveSlug(db, values, org.id);
+  if ('error' in slug) return { error: slug.error, values };
+  const next = { ...values, slug: slug.slug };
+  const fields = changedFields(organisationForm, { ...org }, next);
+  if (fields.length > 0) {
+    const after = orgColumnValues(next);
+    const value = (name: string) => org[name as keyof Org] as string | null;
+    db.transaction(() =>
+      writeEvent(db, actor, org.id, 'details', {
+        fields,
+        changes: [
+          {
+            table: 'organisation',
+            id: org.id,
+            before: Object.fromEntries(
+              fields.map((name) => [name, value(name)]),
+            ),
+            after: Object.fromEntries(
+              fields.map((name) => [name, after[ORG_COLUMNS.indexOf(name)]]),
+            ),
+          },
+        ],
+      }),
+    )();
+  }
+  return { slug: next.slug, fields };
+};
+
+/**
  * `GET` and `POST /<slug>/edit`. A save writes one `details` event with the
- * names of the changed fields and their values before and after, then
- * opens the organisation at its URL slug.
+ * names of the changed fields and their values before and after
+ * (`updateOrg`), then opens the organisation at its URL slug.
  */
 export const orgEditRoute = (app: FastifyInstance, db: Database) => {
   const send = (
@@ -91,39 +136,14 @@ export const orgEditRoute = (app: FastifyInstance, db: Database) => {
     async (request, reply) => {
       const org = findOrg(db, request.params.slug);
       if (!org) return sendNotFound(request, reply);
-      const { values, error } = parseForm(organisationForm, request.body);
-      if (error) return send(request, reply, { org, values, error });
-      const slug = resolveSlug(db, values, org.id);
-      if ('error' in slug) {
-        return send(request, reply, { org, values, error: slug.error });
-      }
-      const next = { ...values, slug: slug.slug };
-      const fields = changedFields(organisationForm, { ...org }, next);
-      if (fields.length > 0) {
-        const after = orgColumnValues(next);
-        const value = (name: string) => org[name as keyof Org] as string | null;
-        db.transaction(() =>
-          writeEvent(db, (request.auth as Auth).personId, org.id, 'details', {
-            fields,
-            changes: [
-              {
-                table: 'organisation',
-                id: org.id,
-                before: Object.fromEntries(
-                  fields.map((name) => [name, value(name)]),
-                ),
-                after: Object.fromEntries(
-                  fields.map((name) => [
-                    name,
-                    after[ORG_COLUMNS.indexOf(name)],
-                  ]),
-                ),
-              },
-            ],
-          }),
-        )();
-      }
-      return reply.redirect(orgPath(next.slug), 303);
+      const saved = updateOrg(
+        db,
+        (request.auth as Auth).personId,
+        org,
+        request.body,
+      );
+      if ('error' in saved) return send(request, reply, { org, ...saved });
+      return reply.redirect(orgPath(saved.slug), 303);
     },
   );
 };

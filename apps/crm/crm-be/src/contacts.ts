@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { type Change, writeEvent } from './events';
 import { contactForm } from './forms/contact';
-import { changedFields, type FormValues } from './forms/form';
+import { changedFields, type FormValues, fieldsOf } from './forms/form';
 import { nextNumber } from './org';
 
 /**
@@ -98,7 +98,8 @@ const findMember = (
  * Add a contact to an organisation, from the values of the contact form:
  * a `person` and a `membership` with the next contact number. If a person
  * has the email, link that person and leave the row as it is. Returns the
- * display fields and the change of the event, or an error if the person is
+ * display fields (`fields`: the names of the fields with a value, other than
+ * the role) and the change of the event, or an error if the person is
  * a contact of the organisation already. The caller writes the event: Add
  * a contact writes `contact_add` (`addContact`), and the new lead writes
  * `create`.
@@ -107,7 +108,9 @@ export const insertContact = (
   db: Database,
   orgId: string,
   values: FormValues,
-): { error: string } | { person_id: string; role: string; change: Change } => {
+):
+  | { error: string }
+  | { person_id: string; role: string; fields: string[]; change: Change } => {
   let personId = values.email
     ? db
         .query<{ id: string }, [string]>(
@@ -145,6 +148,9 @@ export const insertContact = (
   return {
     person_id: personId,
     role: values.role,
+    fields: fieldsOf(contactForm)
+      .map((field) => field.name)
+      .filter((name) => name !== 'role' && values[name]),
     change: {
       table: 'membership',
       id: personId,
@@ -169,6 +175,7 @@ export const addContact = (
   writeEvent(db, actor, orgId, 'contact_add', {
     person_id: added.person_id,
     role: added.role,
+    fields: added.fields,
     changes: [added.change],
   });
   return undefined;

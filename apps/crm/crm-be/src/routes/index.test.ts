@@ -14,7 +14,12 @@ import {
   signInAdmin,
   testApp,
 } from '../test-helpers';
-import { LIST_PATHS, nextSort, PAGE_SIZE } from './index';
+import { LIST_PATHS, LIST_SWAP, nextSort, PAGE_SIZE } from './index';
+
+/** The attribute that makes a form or a link of the list swap in place. */
+const SWAP = `data-swap="${LIST_SWAP}"`;
+/** The start of a GET form of the list at `/`. */
+const LIST_FORM = `<form ${SWAP} action="/" method="get">`;
 
 let app: ReturnType<typeof buildApp>;
 let db: Database;
@@ -208,7 +213,7 @@ describe('GET / and GET /orgs', () => {
 
     const lcd = divOf((await get('/')).body, 'lcd');
     expect(lcd).toContain(
-      '<ol class="menu two-lines leds" data-legend-name="Organisation" data-legend-value="Next action" data-legend-detail="Stage" data-legend-status="Last activity">',
+      '<ol class="menu two-lines leds" data-legend-name="Organisation" data-legend-value="▲ Next action" data-legend-detail="Stage" data-legend-status="Last activity">',
     );
     expect(lcd).toContain(
       '<a href="/orgs/due-last-week" title="Due Last Week · Lead"><span class="arrow" aria-hidden="true"></span><span class="name">Due Last Week</span>',
@@ -312,9 +317,79 @@ describe('GET / and GET /orgs', () => {
   test('the Date added sort shows the date added in the place of the last activity', async () => {
     await addThree();
     const lcd = divOf((await get('/?sort=added&dir=asc')).body, 'lcd');
-    expect(lcd).toContain('data-legend-status="Date added"');
+    expect(lcd).toContain('data-legend-status="▲ Date added"');
     expect(bodyText(lcd)).toContain(
       'Bravo · next action None · stage Lead · date added 2026-Jan-01',
+    );
+  });
+
+  test('the LCD legend shows the arrow of the order on the column that sets it, and text tells the order (REQ-CRM-LCD-001)', async () => {
+    await addThree();
+    const legends = async (url: string) => {
+      const lcd = divOf((await get(url)).body, 'lcd');
+      const ol = /<ol [^>]*>/.exec(lcd)?.[0] ?? '';
+      const attr = (name: string) =>
+        new RegExp(`${name}="([^"]*)"`).exec(ol)?.[1];
+      return {
+        name: attr('data-legend-name'),
+        arrow: attr('data-order-name'),
+        value: attr('data-legend-value'),
+        status: attr('data-legend-status'),
+        text: /<p class="bare-text">([^<]*)<\/p>/.exec(lcd)?.[1],
+      };
+    };
+    expect(await legends('/')).toEqual({
+      name: 'Organisation',
+      arrow: undefined,
+      value: '▲ Next action',
+      status: 'Last activity',
+      text: 'Sorted by next action, oldest first',
+    });
+    expect(await legends('/?sort=name&dir=asc')).toEqual({
+      name: 'Organisation',
+      arrow: 'asc',
+      value: 'Next action',
+      status: 'Last activity',
+      text: 'Sorted by organisation name, A to Z',
+    });
+    expect(await legends('/?sort=name&dir=desc')).toEqual({
+      name: 'Organisation',
+      arrow: 'desc',
+      value: 'Next action',
+      status: 'Last activity',
+      text: 'Sorted by organisation name, Z to A',
+    });
+    expect(await legends('/?sort=activity&dir=asc')).toEqual({
+      name: 'Organisation',
+      arrow: undefined,
+      value: 'Next action',
+      status: '▲ Last activity',
+      text: 'Sorted by last activity, oldest first',
+    });
+    expect(await legends('/?sort=activity&dir=desc')).toEqual({
+      name: 'Organisation',
+      arrow: undefined,
+      value: 'Next action',
+      status: '▼ Last activity',
+      text: 'Sorted by last activity, newest first',
+    });
+    expect(await legends('/?sort=added&dir=asc')).toEqual({
+      name: 'Organisation',
+      arrow: undefined,
+      value: 'Next action',
+      status: '▲ Date added',
+      text: 'Sorted by date added, oldest first',
+    });
+    expect(await legends('/?sort=added&dir=desc')).toEqual({
+      name: 'Organisation',
+      arrow: undefined,
+      value: 'Next action',
+      status: '▼ Date added',
+      text: 'Sorted by date added, newest first',
+    });
+    // The sort key says its name, and its direction with no page styles.
+    expect(bodyText((await get('/?sort=name&dir=asc')).body)).toContain(
+      'Organisation name , A to Z',
     );
   });
 
@@ -336,7 +411,7 @@ describe('GET / and GET /orgs', () => {
     const html = (await get('/?q=acme&stage=lead&sort=name&dir=asc')).body;
     // The lit key: the next press sorts descending.
     expect(html).toContain(
-      '<form action="/" method="get"><input type="hidden" name="q" value="acme"/><input type="hidden" name="stage" value="lead"/><input type="hidden" name="sort" value="name"/><input type="hidden" name="dir" value="desc"/><button type="submit" class="key latch" aria-pressed="true" data-direction="asc">Name<span class="bare-text">, A to Z</span></button></form>',
+      `${LIST_FORM}<input type="hidden" name="q" value="acme"/><input type="hidden" name="stage" value="lead"/><input type="hidden" name="sort" value="name"/><input type="hidden" name="dir" value="desc"/><button type="submit" class="key latch" aria-pressed="true" data-direction="asc">Organisation name<span class="bare-text">, A to Z</span></button></form>`,
     );
     // A key that is not lit: the next press sorts ascending by that key.
     expect(html).toContain(
@@ -347,7 +422,7 @@ describe('GET / and GET /orgs', () => {
     // The third press removes the sort: the form has no sort field.
     const desc = (await get('/?q=acme&sort=name&dir=desc')).body;
     expect(desc).toContain(
-      '<form action="/" method="get"><input type="hidden" name="q" value="acme"/><button type="submit" class="key latch" aria-pressed="true" data-direction="desc">Name<span class="bare-text">, Z to A</span></button></form>',
+      `${LIST_FORM}<input type="hidden" name="q" value="acme"/><button type="submit" class="key latch" aria-pressed="true" data-direction="desc">Organisation name<span class="bare-text">, Z to A</span></button></form>`,
     );
     expect(bodyText(desc)).toContain('Sort Z to A');
     const activity = (await get('/?sort=activity&dir=desc')).body;
@@ -357,20 +432,22 @@ describe('GET / and GET /orgs', () => {
   test('the search and the stage keys are one GET form, which keeps the sort', async () => {
     const html = (await get('/?q=acme&stage=quoted&sort=added&dir=desc')).body;
     const start = html.indexOf(
-      '<form action="/" method="get"><input type="hidden" name="sort" value="added"/><input type="hidden" name="dir" value="desc"/>',
+      `${LIST_FORM}<section class="module"><h2 class="label">Search</h2>`,
     );
     expect(start).toBeGreaterThan(-1);
     const form = html.slice(start, html.indexOf('</form>', start));
+    // With a search in the URL, the field has autofocus, so a full page
+    // load puts the cursor back in it.
     expect(form).toContain(
-      '<input type="search" placeholder="Name or postcode" name="q" value="acme"/>',
+      '<input type="search" placeholder="Name or postcode" autofocus="" name="q" value="acme"/>',
     );
     // The Search key comes first, so the Enter key sends it. It keeps the
-    // stage that is lit.
+    // sort and the stage that is lit.
     expect(form.indexOf('>Search</button>')).toBeLessThan(
       form.indexOf('class="key latch"'),
     );
     expect(form).toContain(
-      '<button type="submit" class="key" value="quoted" name="stage">Search</button>',
+      '<span id="search-send" class="send"><input type="hidden" name="sort" value="added"/><input type="hidden" name="dir" value="desc"/><button type="submit" class="key" value="quoted" name="stage">Search</button></span>',
     );
     expect(form).toContain(
       '<button type="submit" class="key latch" aria-pressed="false" value="" name="stage">All</button>',
@@ -421,7 +498,7 @@ describe('GET / and GET /orgs', () => {
     const html = (await get('/?sort=name&dir=asc')).body;
     const foot = html.slice(html.indexOf('<footer'));
     expect(foot).toContain(
-      `<span>1–${PAGE_SIZE} of ${PAGE_SIZE + 5}</span> <a href="/?sort=name&amp;dir=asc&amp;page=2" rel="next">next</a>`,
+      `<span>1–${PAGE_SIZE} of ${PAGE_SIZE + 5}</span> <a href="/?sort=name&amp;dir=asc&amp;page=2" rel="next" ${SWAP}>next</a>`,
     );
     expect(foot).not.toContain('rel="prev"');
 
@@ -429,13 +506,48 @@ describe('GET / and GET /orgs', () => {
     expect(second).toEqual(['Org 50', 'Org 51', 'Org 52', 'Org 53', 'Org 54']);
     const last = (await get('/?sort=name&dir=asc&page=2')).body;
     expect(last).toContain(
-      `<a href="/?sort=name&amp;dir=asc" rel="prev">previous</a> <span>${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}</span>`,
+      `<a href="/?sort=name&amp;dir=asc" rel="prev" ${SWAP}>previous</a> <span>${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}</span>`,
     );
     expect(last).not.toContain('rel="next"');
     // A page after the last page shows the last page.
     expect(await names('/?sort=name&dir=asc&page=9')).toEqual(second);
     // A short list has no pager.
     expect((await get('/?q=Org%2000')).body).not.toContain('rel="next"');
+  });
+
+  test('the search, the stage keys, the sort keys and the pager swap the list in place, and the search field is not in a swapped part', async () => {
+    const rows = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => {
+      const n = String(i).padStart(2, '0');
+      return `('id-${n}', 'org-${n}', 'Org ${n}', 'lead', '2026-01-01T10:00:${n}.000Z')`;
+    });
+    db.exec(
+      `INSERT INTO organisation (id, slug, name, stage, created_at) VALUES ${rows.join(', ')};`,
+    );
+    const html = (await get('/?page=2')).body;
+    // Each GET form of the list swaps, except "New lead", which opens a
+    // new page.
+    const forms = [...html.matchAll(/<form ([^>]*)>/g)].map((m) => m[1]);
+    expect(forms.filter((tag) => tag.includes(SWAP))).toHaveLength(4);
+    expect(forms.filter((tag) => !tag.includes(SWAP))).toEqual([
+      'action="/logout" method="post"',
+      'action="/orgs/new" method="get"',
+    ]);
+    expect(html).toContain(`rel="prev" ${SWAP}>previous</a>`);
+    // Each selector matches one part of the page.
+    for (const part of [
+      'class="lcd"',
+      'id="sort"',
+      'id="search-send"',
+      'id="stage"',
+      'class="foot"',
+    ]) {
+      expect(html.split(part)).toHaveLength(2);
+    }
+    // The search field is in the Search module, which has no id, so the
+    // swap never replaces it. With no search, it has no autofocus.
+    expect(html).toContain(
+      '<section class="module"><h2 class="label">Search</h2><div class="search"><label class="field"><span class="bare-text">Name or postcode </span><input type="search" placeholder="Name or postcode" name="q" value=""/></label><span id="search-send" class="send">',
+    );
   });
 
   test('/ and /orgs show the same list, and the forms of each submit to its own path', async () => {
@@ -447,7 +559,9 @@ describe('GET / and GET /orgs', () => {
       const html = (await get(`${path}?sort=name&dir=asc&q=a`)).body;
       expect(html).toContain('<title>Organisations - crm</title>');
       const actions = [
-        ...html.matchAll(/<form action="([^"]+)" method="get">/g),
+        ...html.matchAll(
+          /<form (?:data-swap="[^"]+" )?action="([^"]+)" method="get">/g,
+        ),
       ]
         .map((m) => m[1])
         .filter((action) => action !== '/orgs/new');
@@ -608,10 +722,11 @@ describe('every page with ?theme=bare', () => {
     // and text carries the stage and the sort direction.
     const search = bare['/?q=acme&stage=quoted&sort=name&dir=desc'];
     expect(search).toContain(
-      '<input type="search" placeholder="Name or postcode" name="q" value="acme"/>',
+      '<input type="search" placeholder="Name or postcode" autofocus="" name="q" value="acme"/>',
     );
     expect(bodyText(search)).toContain('Quoted (current)');
-    expect(bodyText(search)).toContain('Name , Z to A');
+    expect(bodyText(search)).toContain('Organisation name , Z to A');
+    expect(bodyText(search)).toContain('Sorted by organisation name, Z to A');
     expect(bodyText(search)).toContain('All Lead Visited');
 
     // /orgs/new: an attribute marks the field that the form needs.

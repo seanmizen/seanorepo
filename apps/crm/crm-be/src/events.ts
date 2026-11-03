@@ -279,13 +279,11 @@ export const historyOf = (events: OrgEvent[]): History => {
 
 /** The changes that reverse `changes`: in reverse order, before and after swapped. */
 const reverse = (changes: Change[]) =>
-  [...changes]
-    .reverse()
-    .map((change) => ({
-      ...change,
-      before: change.after,
-      after: change.before,
-    }));
+  [...changes].reverse().map((change) => ({
+    ...change,
+    before: change.after,
+    after: change.before,
+  }));
 
 /**
  * Undo or Redo the newest event of the organisation `orgId`

@@ -295,6 +295,14 @@ const seed = (adminToken, emailToken) => {
      VALUES (${q(randomUUID())}, ${admin}, ${q(hash(adminToken))}, 'Screenshot script', ${q(at(-1))}, ${q(at(2))}, 'passkey');`,
     `INSERT INTO session (id, person_id, token_hash, user_agent, created_at, expires_at, method)
      VALUES (${q(randomUUID())}, ${admin}, ${q(hash(emailToken))}, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1', ${q(at(-3))}, ${q(at(2))}, 'email');`,
+    // A token and an app sign-in on /account/connections, and the client
+    // of the consent page ("authorize").
+    `INSERT INTO oauth_client (id, name, redirect_uris)
+     VALUES ('shots-client', 'Claude', '["https://claude.ai/api/mcp/auth_callback"]');`,
+    `INSERT INTO connection (id, person_id, kind, name, token_hash, created_at, last_used_at)
+     VALUES (${q(randomUUID())}, ${admin}, 'token', 'Claude Code on my laptop', ${q(hash(randomUUID()))}, ${q(at(-6))}, ${q(at(0, 9))});`,
+    `INSERT INTO connection (id, person_id, kind, name, client_id, token_hash, token_expires_at, refresh_hash, refresh_expires_at, created_at)
+     VALUES (${q(randomUUID())}, ${admin}, 'oauth', 'Claude', 'shots-client', ${q(hash(randomUUID()))}, ${q(at(1))}, ${q(hash(randomUUID()))}, ${q(at(90))}, ${q(at(-2))});`,
   );
   sql(rows.join('\n'));
 };
@@ -389,6 +397,18 @@ try {
     ['account', '/account'],
     ['passkeys', '/account/passkeys'],
     ['sessions', '/account/sessions'],
+    ['connections', '/account/connections'],
+    [
+      'authorize',
+      `/account/connections/authorize?${new URLSearchParams({
+        response_type: 'code',
+        client_id: 'shots-client',
+        redirect_uri: 'https://claude.ai/api/mcp/auth_callback',
+        code_challenge: 'shots-challenge',
+        code_challenge_method: 'S256',
+        state: 'shots',
+      })}`,
+    ],
     ['not-found', '/orgs/no-such-org'],
   ];
   const signedOut = [

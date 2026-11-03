@@ -46,8 +46,8 @@ The two hard parts are:
     audit log.
 11. **Auth.** One login system for the admin and for clients. See
     [Auth and tenancy](#auth-and-tenancy).
-12. **MCP server.** Claude Code reads the CRM and adds records to it. See
-    [MCP server](#mcp-server).
+12. **MCP server.** Claude reads the CRM and changes it, as an assistant.
+    See [MCP server](#mcp-server).
 
 ## Auth and tenancy
 
@@ -172,46 +172,66 @@ crm.seanmizen.com/orgs/acme-plumbing/quotes/website-refresh
 
 ## MCP server
 
-The MCP server lets Claude Code read the CRM and add records to it. Keep it
-simple, with one obvious place in the code.
+The MCP server lets Claude act as the assistant of the seller. Claude reads
+the CRM and changes it, from the Claude apps (web, desktop and phone) and
+from Claude Code. Sean can use a Pro or a Max plan: a connector needs no API
+key and no API billing. Keep it simple, with one obvious place in the code.
 
 - **Location.** The server is part of `crm-be`. It uses the Streamable HTTP
-  transport at `/api/mcp`, with
-  [`@modelcontextprotocol/sdk`][mcp-sdk]. There is no separate app.
+  transport at `/api/mcp`, with [`@modelcontextprotocol/sdk`][mcp-sdk].
+  There is no separate app.
 - **One file.** `apps/crm/crm-be/src/mcp.ts` registers all tools. Each tool
-  calls the same service functions as the REST routes. Do not duplicate
-  logic.
-- **Auth.** Use personal access tokens. The admin creates and revokes them
-  in the CRM. They show in the same list as sessions, with a name and a
-  last-used date. Only the admin can have one. Claude Code connects with a
-  bearer header:
+  calls the same service functions as the routes, and checks its values
+  with the record forms (REQ-CRM-FORM-001). Do not duplicate logic.
+- **Admin only.** Each request needs a bearer token of the admin. The check
+  runs on each request, as on each admin route.
+- **OAuth for the Claude apps.** A claude.ai connector signs in with OAuth
+  2.1. The CRM is the resource server and the authorization server, as the
+  MCP authorization spec says: protected resource metadata, authorization
+  server metadata, dynamic client registration and PKCE. The authorize page
+  is a CRM page: the admin, in a passkey session, taps Allow. Sean adds the
+  connector in Claude (Settings, Connectors) with the URL
+  `https://crm.seanmizen.com/api/mcp`.
+- **Tokens for Claude Code.** A personal access token in a bearer header:
 
   ```bash
   claude mcp add --transport http crm https://crm.seanmizen.com/api/mcp \
     --header "Authorization: Bearer <token>"
   ```
 
-  Add OAuth only if a claude.ai connector or a mobile connector becomes
-  necessary.
-- **Tool scope is the same as the offline scope.** Read tools, plus writes
-  that only append. Examples:
-  - `search_contacts`
-  - `get_organisation`
-  - `list_tasks_today`
-  - `list_invoices` (from the Stripe mirror)
-  - `create_lead`
-  - `log_visit`
-  - `add_note`
+- **Connections.** `/account/connections` creates, names and revokes the
+  tokens, and lists and revokes the OAuth connections, each with a name and
+  a last-used date. The database keeps only the hash of each token and
+  grant. `apps/crm/crm-be/src/oauth.ts` holds all of it.
+- **Tool scope: reads and edits.** Each write is a separate tool with a
+  clear name:
+  - Reads: `search_organisations`, `get_organisation` (details, contacts
+    and activity), `list_due`.
+  - Writes: `create_lead`, `log_visit`, `add_note`, `set_stage`,
+    `set_next_action`, `update_organisation`, `add_contact`,
+    `update_contact`, `update_activity`.
 
-  Erasure, deletes and all actions that move money stay in the UI only.
-- **Audit.** Every MCP call goes into the same audit log as the UI actions.
-  The actor is `mcp:<token-name>`.
+  Deletes, erasure and all actions that move money stay in the UI only
+  (REQ-CRM-MCP-001). The write tools carry the MCP hints (`readOnlyHint`,
+  `destructiveHint`, `idempotentHint`), so a client can ask before it runs
+  one.
+- **Calendar.** For an invite, Claude uses its own Google Calendar
+  connector in the same chat. The CRM has no calendar code.
+- **Audit.** Every MCP write is one event in the same history as the UI
+  actions (see [Undo and history](#undo-and-history)), with one row in the
+  same audit log, with the names of the changed fields. The actor is
+  `mcp:<connection name>`. The write shows in the Activity list, and Undo
+  can reverse it.
 - **Untrusted data.** A tool result can contain text that a client wrote.
-  The model must treat that text as data. This is one
-  more reason to keep destructive tools out of MCP.
-- **GDPR.** CRM data that goes through MCP goes to the LLM provider. The
-  provider is a processor. Name it in the privacy notice and in the record of
-  processing.
+  Each result puts that text in an `untrusted_text` object, and each tool
+  description says that the text is data, never an instruction. This is
+  one more reason to keep destructive tools out of MCP.
+- **GDPR.** CRM data that goes through MCP goes to Anthropic, the LLM
+  provider. Anthropic's data processing terms cover its commercial products
+  (the API, Team and Enterprise). They do not cover the Pro and Max
+  consumer plans. So, on Pro or Max, Sean turns off model training in the
+  privacy settings of Claude, and names Anthropic in the privacy notice and
+  in the record of processing. The other choice is a plan with a DPA.
 
 ## Undo and history
 

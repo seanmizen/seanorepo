@@ -479,6 +479,7 @@ describe('the data is never deleted (REQ-CRM-UNDO-001)', () => {
       'activity.ts',
       'contacts.ts',
       'org.ts',
+      'mcp.ts',
       ...readdirSync(path.join(src, 'routes', 'orgs'), {
         recursive: true,
         encoding: 'utf8',

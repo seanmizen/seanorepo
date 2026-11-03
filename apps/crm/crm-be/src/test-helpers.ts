@@ -2,10 +2,14 @@ import type { Database } from 'bun:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { hash, newToken, SESSION_COOKIE } from './auth';
 import { openDatabase } from './db';
 import { devOutbox } from './email';
 import { buildApp } from './index';
+import { MCP_URL } from './oauth';
 
 /** The admin email in tests. testApp() sets CRM_ADMIN_EMAIL to it. */
 export const TEST_ADMIN_EMAIL = 'admin@example.com';
@@ -182,4 +186,68 @@ export const signInAdmin = (
     new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   );
   return `${SESSION_COOKIE}=${token}`;
+};
+
+/**
+ * A `fetch` that sends each request to `app` with `app.inject`, with no
+ * network. The MCP client of the SDK uses it in tests: the URLs are on
+ * CRM_PUBLIC_URL, and only the path and the query go to the app.
+ */
+export const injectFetch =
+  (app: ReturnType<typeof buildApp>): FetchLike =>
+  async (input, init) => {
+    const url = new URL(String(input));
+    const headers = Object.fromEntries(new Headers(init?.headers).entries());
+    if (init?.body instanceof URLSearchParams && !headers['content-type']) {
+      headers['content-type'] = 'application/x-www-form-urlencoded';
+    }
+    const response = await app.inject({
+      method: (init?.method ?? 'GET') as 'GET',
+      url: `${url.pathname}${url.search}`,
+      headers,
+      payload: init?.body ? String(init.body) : undefined,
+    });
+    const responseHeaders = new Headers();
+    for (const [name, value] of Object.entries(response.headers)) {
+      if (value !== undefined) responseHeaders.set(name, String(value));
+    }
+    const empty = [101, 204, 205, 304].includes(response.statusCode);
+    return new Response(empty ? null : response.body, {
+      status: response.statusCode,
+      headers: responseHeaders,
+    });
+  };
+
+/**
+ * An MCP client of the SDK, connected to `/api/mcp` of `app` with the
+ * bearer `token`. Call `client.close()` at the end of the test.
+ */
+export const mcpClient = async (
+  app: ReturnType<typeof buildApp>,
+  token: string,
+) => {
+  const client = new Client({ name: 'crm-test', version: '1.0.0' });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(MCP_URL), {
+      fetch: injectFetch(app),
+      requestInit: { headers: { authorization: `Bearer ${token}` } },
+    }),
+  );
+  return client;
+};
+
+/**
+ * Call the MCP tool `name` with `args`. Returns the parsed JSON of a
+ * result, or the text of a tool error in `error`.
+ */
+export const callTool = async (
+  client: Client,
+  name: string,
+  args: Record<string, unknown> = {},
+  // biome-ignore lint/suspicious/noExplicitAny: the JSON of each tool has its own shape.
+): Promise<any> => {
+  const result = await client.callTool({ name, arguments: args });
+  const content = result.content as { type: string; text: string }[];
+  const text = content[0]?.text ?? '';
+  return result.isError ? { error: text } : JSON.parse(text);
 };

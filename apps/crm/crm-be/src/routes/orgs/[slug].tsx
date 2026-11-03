@@ -1,15 +1,15 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ReactNode } from 'react';
-import { type Activity, listEntries } from '../../activity';
-import { type Contact, listContacts, personNames } from '../../contacts';
-import { dueWords, today } from '../../dates';
 import {
-  type History,
-  historyOf,
-  listOrgEvents,
-  type OrgEvent,
-} from '../../events';
+  type Activity,
+  type ActivityData,
+  eventShows,
+  readActivity,
+} from '../../activity';
+import { type Contact, listContacts } from '../../contacts';
+import { dueWords, today } from '../../dates';
+import type { OrgEvent } from '../../events';
 import { activityForm, LOG_KEYS } from '../../forms/activity';
 import { contactForm, ROLES } from '../../forms/contact';
 import {
@@ -97,32 +97,6 @@ const orgChange = (detail: Record<string, string | null | string[]>) => {
       {part}.
     </span>
   ));
-};
-
-/**
- * Everything that the Activity list shows: the events, the visits and the
- * notes by id, the names of the people, and the state of Undo and Redo.
- */
-export interface ActivityData {
-  /** Each event, oldest first. */
-  events: OrgEvent[];
-  entries: Map<string, Activity>;
-  people: Map<string, string>;
-  history: History;
-}
-
-/** Read the Activity list of the organisation `orgId`. */
-export const readActivity = (db: Database, orgId: string): ActivityData => {
-  const events = listOrgEvents(db, orgId);
-  const ids = events.flatMap((event) =>
-    event.payload.person_id ? [event.payload.person_id] : [],
-  );
-  return {
-    events,
-    entries: listEntries(db, orgId),
-    people: personNames(db, ids),
-    history: historyOf(events),
-  };
 };
 
 /** The role of a contact, as ` (Owner)`, or '' for no known role. */
@@ -332,18 +306,6 @@ const RestoreButton = ({
 );
 
 /**
- * True when the line of `event` shows: a visit or a note that is hidden
- * shows only with `?hidden=1`.
- */
-const shows = (data: ActivityData, event: OrgEvent, hidden: boolean) => {
-  if (hidden || (event.kind !== 'visit' && event.kind !== 'note')) return true;
-  const entry = event.payload.record_id
-    ? data.entries.get(event.payload.record_id)
-    : undefined;
-  return !entry || entry.hidden_at === null;
-};
-
-/**
  * The Activity box: Undo and Redo, then every event, newest first, in a
  * `<details>`. The first part of the open list is `Show hidden` (or
  * `Hide hidden`), a GET form. Undo, Redo and Show hidden are always in
@@ -364,7 +326,7 @@ const ActivityBox = ({
 }) => {
   const lines = [...data.events]
     .reverse()
-    .filter((event) => shows(data, event, hidden));
+    .filter((event) => eventShows(data, event, hidden));
   const { undo, redo } = data.history;
   return (
     <Box title="Activity">

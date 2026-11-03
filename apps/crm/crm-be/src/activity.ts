@@ -1,5 +1,14 @@
 import type { Database } from 'bun:sqlite';
-import { type Change, type Payload, writeEvent } from './events';
+import { personNames } from './contacts';
+import {
+  type Change,
+  type History,
+  historyOf,
+  listOrgEvents,
+  type OrgEvent,
+  type Payload,
+  writeEvent,
+} from './events';
 import { NOTE_ONLY } from './forms/activity';
 import type { FormValues } from './forms/form';
 import { nextNumber, type Org, type Outcome, pipelineChange } from './org';
@@ -102,7 +111,8 @@ const lostChange = (org: Org) =>
 /**
  * Add a visit or a note to `org`, from the values of the Log module, with
  * the next activity number, as one event. The display fields of the event
- * never copy the text: it is relationship data.
+ * have the names of the fields with a value, and never copy the text: it
+ * is relationship data. Returns the activity number.
  */
 export const logActivity = (
   db: Database,
@@ -119,6 +129,7 @@ export const logActivity = (
       ).run(id, org.id, number, values.note);
       writeEvent(db, actor, org.id, 'note', {
         record_id: id,
+        fields: ['note'],
         changes: [
           {
             table: 'note',
@@ -128,7 +139,7 @@ export const logActivity = (
           },
         ],
       });
-      return;
+      return number;
     }
     db.query(
       'INSERT INTO visit (id, organisation_id, number, outcome, note) VALUES (?, ?, ?, ?, ?);',
@@ -137,6 +148,7 @@ export const logActivity = (
     writeEvent(db, actor, org.id, 'visit', {
       record_id: id,
       outcome: values.outcome,
+      fields: values.note ? ['outcome', 'note'] : ['outcome'],
       ...(lost ? { pipeline: lost.detail } : {}),
       changes: [
         {
@@ -148,6 +160,7 @@ export const logActivity = (
         ...(lost ? [lost.change] : []),
       ],
     });
+    return number;
   })();
 
 /**
@@ -234,3 +247,45 @@ export const saveActivity = (
     };
     writeEvent(db, actor, org.id, 'activity_edit', payload);
   })();
+
+/**
+ * Everything that the Activity list shows: the events, the visits and the
+ * notes by id, the names of the people, and the state of Undo and Redo.
+ */
+export interface ActivityData {
+  /** Each event, oldest first. */
+  events: OrgEvent[];
+  entries: Map<string, Activity>;
+  people: Map<string, string>;
+  history: History;
+}
+
+/** Read the Activity list of the organisation `orgId`. */
+export const readActivity = (db: Database, orgId: string): ActivityData => {
+  const events = listOrgEvents(db, orgId);
+  const ids = events.flatMap((event) =>
+    event.payload.person_id ? [event.payload.person_id] : [],
+  );
+  return {
+    events,
+    entries: listEntries(db, orgId),
+    people: personNames(db, ids),
+    history: historyOf(events),
+  };
+};
+
+/**
+ * True when the line of `event` shows in the Activity list: a visit or a
+ * note that is hidden shows only with `hidden` (`?hidden=1` on the page).
+ */
+export const eventShows = (
+  data: ActivityData,
+  event: OrgEvent,
+  hidden = false,
+) => {
+  if (hidden || (event.kind !== 'visit' && event.kind !== 'note')) return true;
+  const entry = event.payload.record_id
+    ? data.entries.get(event.payload.record_id)
+    : undefined;
+  return !entry || entry.hidden_at === null;
+};

@@ -29,8 +29,8 @@ Before you ask Sean to release, run `yarn prod:docker` locally, then
 update `apps/cloudflared/config.yml` in the same PR.
 
 ```bash
-ssh srv@asus.local journalctl -u custom-release-poll.service -u custom-deploy.service -f
-ssh srv@asus.local ~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force
+ssh srv@asus journalctl -u custom-release-poll.service -u custom-deploy.service -f
+ssh srv@asus ~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force
 ```
 
 Provisioning, roles, moving the tunnel between machines, and ngrok are all in

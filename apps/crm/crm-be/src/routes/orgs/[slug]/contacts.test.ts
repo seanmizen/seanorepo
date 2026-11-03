@@ -72,6 +72,7 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
       kind: 'contact_add',
       person_id: personId('Ann Smith'),
       role: 'staff',
+      fields: ['name', 'phone', 'email'],
       changes: [
         {
           table: 'membership',

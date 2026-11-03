@@ -61,8 +61,9 @@ export const newOrgPage = ({
 /**
  * Add the organisation at the stage Lead, and its contact if the person
  * typed one, in one transaction, as one `create` event. Undo cannot
- * reverse it: it is the first event of the organisation. The demo seed
- * (`demo-seed.ts`) also calls it.
+ * reverse it: it is the first event of the organisation. The event has the
+ * names of the fields with a value (`fields`, and `contact_fields` for the
+ * contact). The demo seed (`demo-seed.ts`) also calls it.
  */
 export const addOrg = (
   db: Database,
@@ -80,11 +81,53 @@ export const addOrg = (
     const added = contact ? insertContact(db, id, contact) : null;
     writeEvent(db, actor, id, 'create', {
       stage: 'lead',
+      fields: ORG_COLUMNS.filter((name) => org[name]),
       ...(added && 'person_id' in added
-        ? { person_id: added.person_id, role: added.role }
+        ? {
+            person_id: added.person_id,
+            role: added.role,
+            contact_fields: added.fields,
+          }
         : {}),
     });
   })();
+
+/**
+ * Check a new lead, then add it (`addOrg`). `org` is the post of the
+ * organisation form, and `contact` the post of the contact form, with its
+ * field names after `prefix`. With no name, phone or email, the lead has no
+ * contact yet. Returns the slug, or the error and the values to show again.
+ * The route `POST /orgs/new` and the MCP tool `create_lead` call it.
+ */
+export const createLead = (
+  db: Database,
+  actor: string,
+  org: unknown,
+  contact: unknown,
+  prefix = '',
+):
+  | { slug: string }
+  | { error: string; org: FormValues; contact: FormValues } => {
+  const orgForm = parseForm(organisationForm, org);
+  const contactPost = parseForm(contactForm, contact, prefix);
+  const hasContact = !isBlank(contactForm, contactPost.values);
+  const error = orgForm.error ?? (hasContact ? contactPost.error : undefined);
+  const slug = error ? { error } : resolveSlug(db, orgForm.values);
+  if ('error' in slug) {
+    return {
+      error: slug.error,
+      org: orgForm.values,
+      contact: contactPost.values,
+    };
+  }
+  addOrg(
+    db,
+    actor,
+    { ...orgForm.values, slug: slug.slug },
+    hasContact ? contactPost.values : null,
+  );
+  return slug;
+};
 
 /** `GET /orgs/new` and `POST /orgs/new` */
 export const orgsNewRoute = (app: FastifyInstance, db: Database) => {
@@ -95,33 +138,19 @@ export const orgsNewRoute = (app: FastifyInstance, db: Database) => {
   );
 
   app.post('/orgs/new', { config: { admin: true } }, async (request, reply) => {
-    const org = parseForm(organisationForm, request.body);
-    const contact = parseForm(contactForm, request.body, CONTACT);
-    // With no name, phone or email, the lead has no contact yet.
-    const hasContact = !isBlank(contactForm, contact.values);
-    const error = org.error ?? (hasContact ? contact.error : undefined);
-    const slug = error ? { error } : resolveSlug(db, org.values);
-    if ('error' in slug) {
+    const lead = createLead(
+      db,
+      (request.auth as Auth).personId,
+      request.body,
+      request.body,
+      CONTACT,
+    );
+    if ('error' in lead) {
       return reply
         .code(400)
         .type('text/html; charset=utf-8')
-        .send(
-          renderPage(
-            request,
-            newOrgPage({
-              org: org.values,
-              contact: contact.values,
-              error: slug.error,
-            }),
-          ),
-        );
+        .send(renderPage(request, newOrgPage(lead)));
     }
-    addOrg(
-      db,
-      (request.auth as Auth).personId,
-      { ...org.values, slug: slug.slug },
-      hasContact ? contact.values : null,
-    );
-    return reply.redirect(orgPath(slug.slug), 303);
+    return reply.redirect(orgPath(lead.slug), 303);
   });
 };

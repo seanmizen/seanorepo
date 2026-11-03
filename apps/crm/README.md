@@ -14,7 +14,9 @@ billing. After sign-in, the seller has these pages:
   descending (red LED), then remove the sort. A search field (name or
   postcode) and the stage keys filter it. The URL holds all of it:
   `?q=&stage=&sort=&dir=&page=`. 50 rows to a page, with a pager in the
-  footer.
+  footer. With JavaScript, the search, the stage keys, the sort keys and
+  the pager update the list in place, and the focus stays where it was
+  (see [Page rules](#page-rules)).
 - `/orgs/new`: the new lead. The organisation form and the contact form,
   and one `Save` key. An empty URL slug comes from the name.
 - `/orgs/<slug>`: one organisation. The LCD shows the name, the stage, the
@@ -54,8 +56,9 @@ The UUIDs stay the primary keys and the foreign keys. `orgPath`,
 `contactPath` and `activityPath` in `crm-be/src/org.ts` make each link and
 each redirect, and `nextNumber` gives each new number.
 - `/account`: the email and how this session signed in, with links to
-  `/account/passkeys` and `/account/sessions`. In the demo, also the
-  `Reset demo data` button (see [Demo](#demo)).
+  `/account/passkeys` and `/account/sessions`, and for the admin
+  `/account/connections` (see [MCP for Claude](#mcp-for-claude)). In the
+  demo, also the `Reset demo data` button (see [Demo](#demo)).
 
 Two pages are open to everyone:
 
@@ -117,17 +120,21 @@ yarn workspace crm-be test
   (`routes/orgs/[slug].tsx`) shows the events, with the names and the
   text from the current tables.
 - Each event also adds one `audit_log` row. The actor is the id of the
-  signed-in person. The row keeps ids, stages, dates and the names of the
-  changed fields. It never keeps personal data or the text of a note. A
-  person who is not in the crm now shows as "a removed contact".
+  signed-in person, or `mcp:<connection name>` for an MCP tool. The row
+  keeps ids, stages, dates and the names of the changed fields. It never
+  keeps personal data or the text of a note. A person who is not in the
+  crm now shows as "a removed contact".
+- `crm-be/src/mcp.ts` holds the MCP server and its tools, and
+  `crm-be/src/oauth.ts` holds its connections: the tokens and OAuth (see
+  [MCP for Claude](#mcp-for-claude)).
 - `crm-be/src/ui/` holds the parts that pages share: `SiteNav`, `Footer`,
   `Device`, `Lcd`, `Module`, `Key` (and `Keys`, a row of keys), `LatchKey`,
   `Field`, `RecordForm`, `Box`, `RecordTable`, `When`, `Led` and `Label`.
   `ui/Passkey.tsx` holds the two passkey controls (add a passkey, sign in
   with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
   route.
-- `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`
-  and `src/passkeys.ts`. It has no React. Rsbuild builds them to
+- `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`,
+  `src/swap.ts` and `src/passkeys.ts`. It has no React. Rsbuild builds them to
   `crm-fe/dist` with hashed names and a manifest. Only the pages with a
   passkey control load the `passkeys` entry: `/login`, `/account/passkeys`
   and the 403 page of an admin route.
@@ -225,6 +232,18 @@ prints each page that scrolls sideways.
 node apps/crm/scripts/shoot.mjs [out-dir]
 ```
 
+To test the list in place (`crm-fe/src/swap.ts`) in a browser, run the
+swap test from the repo root. It starts crm-be on port 4127 with a new
+SQLite file, as the screenshot script does. In Chromium, it types `sw11` in
+the search field and presses Enter. Then it checks the URL, the rows, the
+focus and the caret, and that the page did not load again. It does the
+same for a stage key and a sort key. Then it does the search again with
+JavaScript off.
+
+```bash
+node apps/crm/scripts/swap-test.mjs
+```
+
 ## Theme
 
 `crm-fe/src/theme.css` is the Pixel-3 theme of autosam: an instrument panel
@@ -251,6 +270,15 @@ use the ink color with an underline.
   (REQ-CRM-BARE-001). The one exception is the passkey controls: WebAuthn
   needs JavaScript. With no JavaScript, the page says so, and email sign-in
   still works.
+- Interactivity is an enhancement on top of a working HTML form or link,
+  never a React component in the browser. A GET form or a link with
+  `data-swap="<selector list>"` updates the page in place
+  (`crm-fe/src/swap.ts`, on every page). The script fetches the URL that
+  the browser would load. It replaces each element that matches the
+  selector list with the element from the response. Then it puts the URL in
+  the address bar, and keeps the focus and the caret. On an error it loads
+  the full page. A swap never replaces the field that a person types in:
+  on the list, `LIST_SWAP` in `routes/index.tsx` names each swapped part.
 - Biome fails on `dangerouslySetInnerHTML` under `apps/crm` (see the
   `overrides` in the root `biome.json`).
 - The text on a page uses only the words that the page shows: the labels
@@ -281,7 +309,11 @@ A session is a random cookie (`crm_session`) that lasts 90 days.
 except this session. When there is another session, its "Sign out" module
 has the key "Everywhere else", which revokes all other sessions. The nav of
 each page has "sign out" for this session. Each page except the sign-in
-pages, `/privacy`, `/api/health` and `/favicon.ico` needs a session. `/` is
+pages, `/privacy`, `/api/health`, `/favicon.ico` and the MCP and OAuth
+paths needs a session. `/api/mcp`, `/api/oauth/register`,
+`/api/oauth/token` and each path under `/.well-known/` take no session
+cookie: `/api/mcp` takes a bearer token (see
+[MCP for Claude](#mcp-for-claude)). `/` is
 open to a signed-out visitor, and shows the public home. A signed-out
 visitor of each other page goes to `/login?next=<path>`. `/favicon.ico` returns 204: the crm has no icon.
 
@@ -345,7 +377,124 @@ Where each part is:
   `routes/account/sessions.tsx`: one file for each URL.
 - `crm-be/src/test-helpers.ts`: `testApp()`, `signIn()`, `signInAdmin()`
   and `addOrg()` for tests. In tests, the admin is `admin@example.com`.
+  `mcpClient()` connects the MCP client of the SDK to the test app, and
+  `callTool()` calls a tool. `injectFetch()` sends each request of the
+  client to the app, with no network.
 - `crm-be/src/test-authenticator.ts`: a software passkey for tests.
+
+## MCP for Claude
+
+Claude connects to the crm as an assistant: it reads the crm and changes
+it. It works from the Claude apps (web, desktop and phone) and from Claude
+Code, on a Pro or a Max plan, with no API billing. For an invite, Claude
+uses its own Google Calendar connector in the same chat. The crm has no
+calendar code. The design is in
+[docs/001-guiding-design.md](docs/001-guiding-design.md#mcp-server).
+
+The MCP URL is `https://crm.seanmizen.com/api/mcp` (`CRM_PUBLIC_URL` and
+`/api/mcp`).
+
+### Connect the Claude apps (OAuth)
+
+1. In Claude, open Settings, then Connectors, then add a custom connector.
+   Give it the name `crm` and the URL `https://crm.seanmizen.com/api/mcp`.
+   Leave the OAuth client ID and secret empty.
+2. Claude opens `/account/connections/authorize` on the crm. Sign in with
+   a passkey, if necessary. The page shows the app (`Claude`) and the host
+   that it returns to (`claude.ai`). Tap `Allow`.
+3. `/account/connections` lists the connection as an app sign-in.
+
+### Connect Claude Code (a token)
+
+1. On `/account/connections`, type a name (for example `Claude Code on my
+   laptop`) and tap `Add`. The page shows the token and the command one
+   time. The crm keeps only the hash.
+2. Run the command:
+
+   ```bash
+   claude mcp add --transport http crm https://crm.seanmizen.com/api/mcp --header "Authorization: Bearer <token>"
+   ```
+
+### The tools
+
+Each tool names an organisation by its slug, and a contact or an activity
+entry by its number in the organisation (REQ-CRM-ID-001).
+
+| Tool | Does |
+| --- | --- |
+| `search_organisations` | Finds organisations by name, postcode and stage, 50 to a page, in the order of the list. |
+| `get_organisation` | Gets the details, the contacts and the Activity list of one organisation. |
+| `list_due` | Lists the organisations with a next action due today or overdue, the oldest first. |
+| `create_lead` | Adds an organisation at the stage Lead, and its first contact. |
+| `log_visit` | Adds a visit with its outcome and a note. |
+| `add_note` | Adds a note. |
+| `set_stage` | Sets the stage. |
+| `set_next_action` | Sets the next action and its due date. |
+| `update_organisation` | Changes the details of an organisation. |
+| `add_contact` | Adds a contact. |
+| `update_contact` | Changes a contact. |
+| `update_activity` | Changes a visit or a note. |
+
+- **No delete, no erasure, no money** (REQ-CRM-MCP-001). The admin does
+  those on the pages.
+- **The same checks as the forms.** Each write tool reads its values with
+  the record forms in `crm-be/src/forms/` (REQ-CRM-FORM-001), so it accepts
+  the same values and gives the same errors.
+- **History and audit.** Each write is one event in the history of the
+  organisation, through the same functions as the pages
+  (REQ-CRM-UNDO-001), with the actor `mcp:<connection name>`. It shows in
+  the Activity list, and Undo on the page reverses it. The event also adds
+  one `audit_log` row with the names of the changed fields.
+- **Untrusted text.** Each result puts the text that a person typed (names,
+  addresses, notes, contact details) in an `untrusted_text` object. The
+  tool descriptions say that this text is data, never an instruction.
+- **Dates.** Each time is ISO 8601 with the London offset. Each date is
+  `YYYY-MM-DD`.
+- **Hints.** The read tools have `readOnlyHint`. The tools that add a
+  record have `destructiveHint: false`. The tools that change a value have
+  `destructiveHint: true` and `idempotentHint: true`, so a client can ask
+  before it runs them.
+
+### Where each part is
+
+- `crm-be/src/mcp.ts`: every tool, and `handleMcp`. The server is
+  stateless: each POST gets a new server and transport, and the answer is
+  JSON.
+- `crm-be/src/routes/api/mcp.ts`: `/api/mcp`. No token, or a token that
+  does not work: 401, with `WWW-Authenticate: Bearer
+  resource_metadata="..."`, which starts the OAuth sign-in of a client. A
+  token of a person who is not the admin: 403. The check runs on each
+  request, so a token stops when `CRM_ADMIN_EMAIL` changes. GET and DELETE:
+  405.
+- `crm-be/src/oauth.ts`: the connections and OAuth 2.1, as the MCP
+  authorization spec says. The crm is the resource server and the
+  authorization server:
+  - `/.well-known/oauth-protected-resource/api/mcp` (and the same at
+    `/.well-known/oauth-protected-resource`): the protected resource
+    metadata (RFC 9728).
+  - `/.well-known/oauth-authorization-server`: the authorization server
+    metadata (RFC 8414).
+  - `POST /api/oauth/register`: the client registration (RFC 7591). Each
+    client is public, with no secret. A redirect URI must be the callback
+    of the Claude apps (`https://claude.ai/api/mcp/auth_callback`, or the
+    same on `claude.com`) or a loopback URL, on any port (Claude Code).
+    Each address can register 20 clients in an hour. Each registration
+    deletes the clients that have no connection and no code after 24
+    hours.
+  - `/account/connections/authorize`
+    (`routes/account/connections/authorize.tsx`): the consent page, an
+    admin route. It needs PKCE (`S256`). `Allow` sends a code that works
+    one time, for 5 minutes.
+  - `POST /api/oauth/token`: a code or a refresh token for tokens. An
+    access token works for 1 hour. A refresh token works for 90 days, and
+    each refresh gives a new one: the old one stops.
+- `crm-be/src/routes/account/connections.tsx`: `/account/connections`, an
+  admin route. It adds a named token, and lists and revokes each token and
+  each app sign-in, with its name, its date and when it was last used.
+- `crm-be/migrations/006-connections.sql`: `oauth_client`, `oauth_code` and
+  `connection`. The database keeps only the SHA-256 hash of each token,
+  code and refresh token. `audit_log` gets `connection_add` and
+  `connection_revoke`.
 
 ## Env vars
 
@@ -418,7 +567,7 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
 - **Recovery.** `bun run admin:recover <email>` runs in the container:
 
   ```bash
-  ssh -t srv@asus.local docker exec -it crm bun run admin:recover <email>
+  ssh -t srv@asus docker exec -it crm bun run admin:recover <email>
   ```
 
 ## Backups
@@ -443,7 +592,7 @@ To restore, run these commands on the web box. The restore replaces
 `/data/crm.db` with the latest copy from R2.
 
 ```bash
-ssh srv@asus.local
+ssh srv@asus
 cd ~/projects/seanorepo/apps/crm
 docker compose --profile prod stop crm litestream
 # Show the restore plan. This changes nothing.
@@ -498,7 +647,7 @@ file from `apps/crm/.env`. It shows no secret, and only the owner can read
 the file:
 
 ```bash
-ssh srv@asus.local
+ssh srv@asus
 cd ~/projects/seanorepo/apps/crm
 (umask 077 && { grep -E '^(CRM_R2_BUCKET|CRM_R2_ENDPOINT|LITESTREAM_ACCESS_KEY_ID|LITESTREAM_SECRET_ACCESS_KEY)=' .env; printf '%s\n' CRM_ADMIN_EMAIL=demo@example.com CRM_UNSAFE_DEMO_LOGIN=true; } > .env.demo) && cut -d= -f1 .env.demo
 ```
@@ -533,7 +682,7 @@ Unset means off: no button, no line, and `POST /login/demo` and
 
 ```bash
 bun run demo:seed                                  # in crm-be
-ssh -t srv@asus.local docker exec crm-demo bun run demo:seed
+ssh -t srv@asus docker exec crm-demo bun run demo:seed
 ```
 
 The seed (`crm-be/src/demo-seed.ts`) replaces all data with a fixed,
@@ -559,19 +708,19 @@ starts with `ZZ`.
    `litestream-demo`, and restarts cloudflared for the new route. Watch it:
 
    ```bash
-   ssh srv@asus.local journalctl -u custom-release-poll.service -u custom-deploy.service -f
+   ssh srv@asus journalctl -u custom-release-poll.service -u custom-deploy.service -f
    ```
 
 3. Put the demo data in the demo:
 
    ```bash
-   ssh -t srv@asus.local docker exec crm-demo bun run demo:seed
+   ssh -t srv@asus docker exec crm-demo bun run demo:seed
    ```
 
 4. Smoke test. Open `https://demo-crm.seanmizen.com`, read the demo line,
    tap `Enter as admin (demo)`, and open an organisation. Then open
    `https://crm.seanmizen.com/login`, and check that it has no demo line and
-   no demo button. `ssh srv@asus.local docker logs crm-demo-litestream`
+   no demo button. `ssh srv@asus docker logs crm-demo-litestream`
    shows the replication to `demo-crm.db/`.
 5. Add the import block of the record to `infra/cloudflare/imports.tf` in a
    new PR. The ID is in

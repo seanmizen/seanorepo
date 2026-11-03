@@ -40,6 +40,7 @@ deletes data: the history only grows, and a record that goes away is hidden.
   - Test — `apps/crm/crm-be/src/events.test.ts` › "no row count goes down through a long sequence of changes, Undo, Redo and Restore (REQ-CRM-UNDO-001)"
   - Test — `apps/crm/crm-be/src/events.test.ts` › "no code of an organisation runs DELETE, and no code changes a row of org_event (REQ-CRM-UNDO-001)"
   - Test — `apps/crm/crm-be/src/events.test.ts` › "<kind>: undo twice, then redo twice, gives each state again, and no row count goes down (REQ-CRM-UNDO-001, REQ-CRM-UNDO-002)": each write path and each Undo and Redo adds exactly one event.
+  - Test — `apps/crm/crm-be/src/mcp.test.ts` › "each write tool is one event in the history, with the actor mcp:<name>, and Undo on the page reverses it (REQ-CRM-UNDO-001, REQ-CRM-UNDO-002)"
   - Test — `apps/crm/crm-be/src/db.test.ts` › "005 fills org_event from the old history of each organisation, in time order (REQ-CRM-UNDO-001)"
   - Test — `apps/crm/crm-be/src/db.test.ts` › "005 on a database with no rows adds the tables and no event (REQ-CRM-UNDO-001)"
 - **Relations:** none
@@ -62,7 +63,8 @@ deletes data: the history only grows, and a record that goes away is hidden.
   (`historyOf` in `crm-be/src/events.ts`):
   - Undo and Redo work for each kind of change: a visit, a note, the
     stage, the next action, the details, a contact (added, changed or
-    removed), the edit of a visit or a note, and a Restore.
+    removed), the edit of a visit or a note, and a Restore. A change from
+    an MCP tool is the same kind of change.
   - Undo stops at a change that it cannot reverse, and says why: the new
     lead (the first event), a change from before migration 005 (the old
     log kept no values), and a change with erased personal data.
