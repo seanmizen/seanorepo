@@ -14,7 +14,9 @@ billing. After sign-in, the seller has these pages:
   descending (red LED), then remove the sort. A search field (name or
   postcode) and the stage keys filter it. The URL holds all of it:
   `?q=&stage=&sort=&dir=&page=`. 50 rows to a page, with a pager in the
-  footer.
+  footer. With JavaScript, the search, the stage keys, the sort keys and
+  the pager update the list in place, and the focus stays where it was
+  (see [Page rules](#page-rules)).
 - `/orgs/new`: the new lead. The organisation form and the contact form,
   and one `Save` key. An empty URL slug comes from the name.
 - `/orgs/<slug>`: one organisation. The LCD shows the name, the stage, the
@@ -128,8 +130,8 @@ yarn workspace crm-be test
   `ui/Passkey.tsx` holds the two passkey controls (add a passkey, sign in
   with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
   route.
-- `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`
-  and `src/passkeys.ts`. It has no React. Rsbuild builds them to
+- `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`,
+  `src/swap.ts` and `src/passkeys.ts`. It has no React. Rsbuild builds them to
   `crm-fe/dist` with hashed names and a manifest. Only the pages with a
   passkey control load the `passkeys` entry: `/login`, `/account/passkeys`
   and the 403 page of an admin route.
@@ -200,6 +202,18 @@ prints each page that scrolls sideways.
 node apps/crm/scripts/shoot.mjs [out-dir]
 ```
 
+To test the list in place (`crm-fe/src/swap.ts`) in a browser, run the
+swap test from the repo root. It starts crm-be on port 4127 with a new
+SQLite file, as the screenshot script does. In Chromium, it types `sw11` in
+the search field and presses Enter. Then it checks the URL, the rows, the
+focus and the caret, and that the page did not load again. It does the
+same for a stage key and a sort key. Then it does the search again with
+JavaScript off.
+
+```bash
+node apps/crm/scripts/swap-test.mjs
+```
+
 ## Theme
 
 `crm-fe/src/theme.css` is the Pixel-3 theme of autosam: an instrument panel
@@ -226,6 +240,15 @@ use the ink color with an underline.
   (REQ-CRM-BARE-001). The one exception is the passkey controls: WebAuthn
   needs JavaScript. With no JavaScript, the page says so, and email sign-in
   still works.
+- Interactivity is an enhancement on top of a working HTML form or link,
+  never a React component in the browser. A GET form or a link with
+  `data-swap="<selector list>"` updates the page in place
+  (`crm-fe/src/swap.ts`, on every page). The script fetches the URL that
+  the browser would load. It replaces each element that matches the
+  selector list with the element from the response. Then it puts the URL in
+  the address bar, and keeps the focus and the caret. On an error it loads
+  the full page. A swap never replaces the field that a person types in:
+  on the list, `LIST_SWAP` in `routes/index.tsx` names each swapped part.
 - Biome fails on `dangerouslySetInnerHTML` under `apps/crm` (see the
   `overrides` in the root `biome.json`).
 - The text on a page uses only the words that the page shows: the labels
@@ -512,7 +535,7 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
 - **Recovery.** `bun run admin:recover <email>` runs in the container:
 
   ```bash
-  ssh -t srv@asus.local docker exec -it crm bun run admin:recover <email>
+  ssh -t srv@asus docker exec -it crm bun run admin:recover <email>
   ```
 
 ## Backups
@@ -537,7 +560,7 @@ To restore, run these commands on the web box. The restore replaces
 `/data/crm.db` with the latest copy from R2.
 
 ```bash
-ssh srv@asus.local
+ssh srv@asus
 cd ~/projects/seanorepo/apps/crm
 docker compose --profile prod stop crm litestream
 # Show the restore plan. This changes nothing.
@@ -592,7 +615,7 @@ file from `apps/crm/.env`. It shows no secret, and only the owner can read
 the file:
 
 ```bash
-ssh srv@asus.local
+ssh srv@asus
 cd ~/projects/seanorepo/apps/crm
 (umask 077 && { grep -E '^(CRM_R2_BUCKET|CRM_R2_ENDPOINT|LITESTREAM_ACCESS_KEY_ID|LITESTREAM_SECRET_ACCESS_KEY)=' .env; printf '%s\n' CRM_ADMIN_EMAIL=demo@example.com CRM_UNSAFE_DEMO_LOGIN=true; } > .env.demo) && cut -d= -f1 .env.demo
 ```
@@ -627,7 +650,7 @@ Unset means off: no button, no line, and `POST /login/demo` and
 
 ```bash
 bun run demo:seed                                  # in crm-be
-ssh -t srv@asus.local docker exec crm-demo bun run demo:seed
+ssh -t srv@asus docker exec crm-demo bun run demo:seed
 ```
 
 The seed (`crm-be/src/demo-seed.ts`) replaces all data with a fixed,
@@ -653,19 +676,19 @@ starts with `ZZ`.
    `litestream-demo`, and restarts cloudflared for the new route. Watch it:
 
    ```bash
-   ssh srv@asus.local journalctl -u custom-release-poll.service -u custom-deploy.service -f
+   ssh srv@asus journalctl -u custom-release-poll.service -u custom-deploy.service -f
    ```
 
 3. Put the demo data in the demo:
 
    ```bash
-   ssh -t srv@asus.local docker exec crm-demo bun run demo:seed
+   ssh -t srv@asus docker exec crm-demo bun run demo:seed
    ```
 
 4. Smoke test. Open `https://demo-crm.seanmizen.com`, read the demo line,
    tap `Enter as admin (demo)`, and open an organisation. Then open
    `https://crm.seanmizen.com/login`, and check that it has no demo line and
-   no demo button. `ssh srv@asus.local docker logs crm-demo-litestream`
+   no demo button. `ssh srv@asus docker logs crm-demo-litestream`
    shows the replication to `demo-crm.db/`.
 5. Add the import block of the record to `infra/cloudflare/imports.tf` in a
    new PR. The ID is in

@@ -9,7 +9,8 @@ export default defineConfig({
   mode: 'production',
   source: {
     entry: {
-      main: ['./src/main.ts', './src/theme.css'],
+      // swap.ts updates a part of the page in place (`data-swap`).
+      main: ['./src/main.ts', './src/swap.ts', './src/theme.css'],
       // Only the pages with a passkey control load this entry: /login,
       // /account/passkeys and the 403 page of an admin route.
       passkeys: './src/passkeys.ts',

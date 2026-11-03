@@ -15,7 +15,7 @@
 #   journalctl -u custom-deploy.service -u custom-release-poll.service -f
 #   journalctl -u custom-deploy.service -p info     decisions only
 #
-# Each line starts with <6>, <7> or <3> when stdout is not a terminal. systemd
+# Each line starts with <6>, <7>, <4> or <3> when stdout is not a terminal. systemd
 # reads that as the syslog priority, so `-p info` hides the "up to date"
 # lines. On a terminal the script omits the prefixes.
 
@@ -62,13 +62,14 @@ ROLES_DIR="${ROLES_DIR:-/etc/seanorepo/roles}"
 # Logging
 #------------------------------------------------------------------------------
 if [ -t 1 ]; then
-    P_INFO='' P_DEBUG='' P_ERR=''
+    P_INFO='' P_DEBUG='' P_WARN='' P_ERR=''
 else
-    P_INFO='<6>' P_DEBUG='<7>' P_ERR='<3>'
+    P_INFO='<6>' P_DEBUG='<7>' P_WARN='<4>' P_ERR='<3>'
 fi
 
 log()   { echo "${P_INFO}[deploy] $*"; }
 debug() { echo "${P_DEBUG}[deploy] $*"; }
+warn()  { echo "${P_WARN}[deploy] WARNING: $*"; }
 err()   { echo "${P_ERR}[deploy] ERROR: $*" >&2; }
 
 FORCE=false
@@ -141,9 +142,9 @@ if [ -z "$HEAD_SHA" ]; then
     exit 0
 fi
 
-# The marker is two lines: the SHA deployed, then the boot id it was deployed
-# under. Two lines rather than two fields because IFS is $'\n\t' here, so a
-# space-separated read would not split.
+# The marker is three lines: the SHA deployed, the boot id it was deployed
+# under, and `ok` or `failed` for `yarn prod:docker`. Lines rather than fields
+# because IFS is $'\n\t' here, so a space-separated read would not split.
 #
 # ABSENT ON THE FIRST RUN. That is a normal state, and no code defends against
 # it. Both reads yield the empty string, neither matches, and the deploy
@@ -152,6 +153,10 @@ fi
 # deploys.
 marker_sha="$(sed -n 1p "$MARKER" 2> /dev/null || true)"
 marker_boot="$(sed -n 2p "$MARKER" 2> /dev/null || true)"
+# The third line is `failed` when `yarn prod:docker` failed for that SHA
+# (REQ-SERVER-018). An older marker has two lines, from a deploy that did not
+# fail.
+marker_apps="$(sed -n 3p "$MARKER" 2> /dev/null || true)"
 
 # The boot id changes on every boot and on nothing else. Recording it alongside
 # the SHA is what brings the sites back after a power cut: no app compose file
@@ -166,6 +171,8 @@ if [ "$FORCE" = true ]; then
     reason="--force"
 elif [ "$HEAD_SHA" != "$marker_sha" ]; then
     reason="the checkout moved to ${HEAD_SHA:0:7} (last deployed ${marker_sha:-none})"
+elif [ "$marker_apps" = failed ]; then
+    reason="yarn prod:docker failed in the last deploy of ${HEAD_SHA:0:7} - trying again"
 elif [ -n "$boot_id" ] && [ "$boot_id" != "$marker_boot" ]; then
     reason="the host has rebooted since ${HEAD_SHA:0:7} was deployed - the containers are not running"
 else
@@ -205,8 +212,75 @@ export PUBLISH_ADDR=127.0.0.1
 # edge (infra/edge) routes on. Their compose files need it to exist.
 docker network inspect edge > /dev/null 2>&1 || docker network create edge > /dev/null
 
+#------------------------------------------------------------------------------
+# Orphans - REQ-SERVER-017
+#
+# When an app gets a new name or leaves the checkout, its old container
+# continues to run and keeps its port. The new container of a renamed app then
+# cannot bind that port, and `yarn prod:docker` fails. So the deploy removes
+# the old container first.
+#
+# Compose writes the compose files of each container that it makes into the
+# label com.docker.compose.project.config_files. A container is an orphan when
+# all of its compose files are in this checkout and none of them exists now.
+# The label gives the answer directly, so the script does not need to know how
+# compose makes a project name from a directory name.
+#
+# The deploy also removes a container of this checkout in the state `created`.
+# That container never started, usually because its port was in use. A later
+# `docker compose up` starts the same container again and does not make it
+# again. Docker can then start it with no published port. The removal makes
+# `yarn prod:docker` make the container again, with its ports.
+#
+# The deploy does not remove a container with no compose label, because a
+# person started it by hand. It also does not remove a container from a compose
+# file outside this checkout. It writes a warning for each container with no
+# label, because such a container can hold the port of an app.
+#------------------------------------------------------------------------------
+remove_orphans() {
+    local containers name state project files present ours f
+    local -a cfgs
+    containers="$(docker ps -a --format '{{.Names}}|{{.State}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.config_files"}}')" \
+        || { err "docker ps failed - cannot look for orphan containers"; return 1; }
+    while IFS='|' read -r name state project files; do
+        [ -n "$name" ] || continue
+        if [ -z "$project" ]; then
+            warn "container $name has no compose label, so the deploy keeps it. If it holds the port of an app, remove it: docker rm -f $name"
+            continue
+        fi
+        [ -n "$files" ] || continue
+        ours=yes present=no
+        IFS=',' read -ra cfgs <<< "$files"
+        for f in "${cfgs[@]}"; do
+            case "$f" in "$REPO_DIR"/*) ;; *) ours=no ;; esac
+            [ ! -e "$f" ] || present=yes
+        done
+        [ "$ours" = yes ] || continue
+        if [ "$present" = no ]; then
+            warn "removing container $name: its compose project '$project' is not in the checkout now ($files)"
+        elif [ "$state" = created ]; then
+            warn "removing container $name: it never started (state 'created'), so yarn prod:docker makes it again"
+        else
+            continue
+        fi
+        docker rm -f "$name" > /dev/null || err "could not remove container $name"
+    done <<< "$containers"
+}
+remove_orphans || true
+
 yarn install --immutable
-yarn prod:docker
+
+# A failure in one app does not stop the steps below (REQ-SERVER-018). The edge,
+# tcp-getter and the tunnel do not need every app to start. The script records
+# the failure in the marker and exits non-zero at the end. The next poll then
+# tries the deploy again.
+exit_status=0
+apps_status=ok
+if ! yarn prod:docker; then
+    err "yarn prod:docker failed - one or more apps did not start. The deploy continues, and the next poll tries again"
+    apps_status=failed
+    exit_status=1
+fi
 
 # The edge (REQ-SERVER-016). The roles decide it (REQ-SERVER-014). A webserver
 # without the tunnel role runs Caddy, so the LAN reaches each site at
@@ -218,9 +292,13 @@ if [ -e "$ROLES_DIR/tunnel" ]; then
     log "edge: the tunnel (no LAN edge on the tunnel machine)"
 else
     # The one port that this compose file publishes on the LAN.
-    EDGE_HOST="$(hostname -s)" PUBLISH_ADDR=0.0.0.0 \
-        docker compose -f "$EDGE_COMPOSE" --profile lan up --detach --remove-orphans
-    log "edge: Caddy serves the sites on the LAN at <site>.$(hostname -s).local"
+    if EDGE_HOST="$(hostname -s)" PUBLISH_ADDR=0.0.0.0 \
+        docker compose -f "$EDGE_COMPOSE" --profile lan up --detach --remove-orphans; then
+        log "edge: Caddy serves the sites on the LAN at <site>.$(hostname -s).local"
+    else
+        err "the LAN edge (Caddy) did not start"
+        exit_status=1
+    fi
 fi
 
 #------------------------------------------------------------------------------
@@ -260,10 +338,16 @@ fi
 # turns a failed tunnel restart into a full rebuild every two minutes forever.
 # Anything that fails before this point IS retried on the next poll, which is
 # the property worth keeping.
-printf '%s\n%s\n' "$NEW_SHA" "$boot_id" > "$MARKER"
-log "deployed ${NEW_SHA:0:7} (was ${OLD_SHA:0:7})"
-
-exit_status=0
+#
+# The third line records a failed `yarn prod:docker` (REQ-SERVER-018). The
+# next poll then runs the deploy again for the same SHA. The SHA in the marker
+# is the new SHA, so that retry does not restart the tunnel again.
+printf '%s\n%s\n%s\n' "$NEW_SHA" "$boot_id" "$apps_status" > "$MARKER"
+if [ "$apps_status" = ok ]; then
+    log "deployed ${NEW_SHA:0:7} (was ${OLD_SHA:0:7})"
+else
+    err "deployed ${NEW_SHA:0:7} (was ${OLD_SHA:0:7}), but yarn prod:docker failed"
+fi
 
 #------------------------------------------------------------------------------
 # The tunnel - REQ-DEPLOY-005

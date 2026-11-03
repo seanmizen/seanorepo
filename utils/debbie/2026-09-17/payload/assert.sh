@@ -698,6 +698,86 @@ scratch_release() {
     git -C "$t/w" rev-parse HEAD
 }
 
+# REQ-SERVER-017: a renamed app. The scratch checkout has one app, and its
+# container holds a loopback port. Then the app directory gets a new name and
+# its container a new name. The deploy must remove the old container, and the
+# new container must start with the port.
+#
+# This check uses the real Docker. The shims replace yarn, systemctl and sudo.
+# `yarn prod:docker` becomes `docker compose up` for each app of the scratch
+# checkout. The docker shim sends each command to Docker, but it records the
+# edge, the edge network and the image prune and does not run them. deploy.sh
+# removes only the containers whose compose files were in its own checkout,
+# and here that is the scratch checkout. So the check cannot remove a container
+# of this host. It removes its containers, networks and image when it ends.
+# Returns 0 when every part of the check passed.
+deploy_renamed_app() {
+    local t="$1" real n port img=busybox:1.37 had_image=yes rc=0
+    real="$(command -v docker)" || return 1
+    scratch_release "$t" > /dev/null
+    git -C "$t/machine" pull -q
+    n="$(basename "$t" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9')"
+    port=$((40000 + RANDOM % 20000))
+    "$real" image inspect "$img" > /dev/null 2>&1 || had_image=no
+
+    printf '#!/bin/sh\ncase "$*" in\n  *infra/edge/*|"image prune"*|"network "*) echo "docker $*" >> "%s/calls"; exit 0 ;;\nesac\nexec "%s" "$@"\n' \
+        "$t" "$real" > "$t/bin/docker"
+    printf '#!/bin/sh\necho "yarn $*" >> "%s/calls"\n[ "$1" = prod:docker ] || exit 0\nrc=0\nfor f in "$REPO_DIR"/apps/*/docker-compose.yml; do docker compose -f "$f" up --detach --quiet-pull || rc=1; done\nexit $rc\n' \
+        "$t" > "$t/bin/yarn"
+    chmod +x "$t/bin/docker" "$t/bin/yarn"
+
+    mkdir -p "$t/machine/apps/old-$n" "$t/roles"
+    printf 'services:\n  web:\n    image: %s\n    container_name: %s\n    command: ["sleep", "600"]\n    ports:\n      - "127.0.0.1:%s:80"\n' \
+        "$img" "seanorepo-assert-old-$n" "$port" > "$t/machine/apps/old-$n/docker-compose.yml"
+    "$real" compose -f "$t/machine/apps/old-$n/docker-compose.yml" up --detach --quiet-pull > /dev/null 2>&1 || rc=1
+
+    mkdir -p "$t/machine/apps/new-$n"
+    sed "s/seanorepo-assert-old-/seanorepo-assert-new-/" "$t/machine/apps/old-$n/docker-compose.yml" \
+        > "$t/machine/apps/new-$n/docker-compose.yml"
+    rm -r "$t/machine/apps/old-$n"
+
+    PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
+        DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" --force > "$t/out" 2>&1 || rc=1
+
+    ! "$real" inspect "seanorepo-assert-old-$n" > /dev/null 2>&1 || rc=1
+    [ "$("$real" inspect -f '{{.State.Running}}' "seanorepo-assert-new-$n" 2> /dev/null)" = true ] || rc=1
+    "$real" port "seanorepo-assert-new-$n" 80 2> /dev/null | grep -qx "127.0.0.1:$port" || rc=1
+    grep -q "removing container seanorepo-assert-old-$n" "$t/out" || rc=1
+
+    "$real" rm -f "seanorepo-assert-old-$n" "seanorepo-assert-new-$n" > /dev/null 2>&1
+    "$real" network rm "old-${n}_default" "new-${n}_default" > /dev/null 2>&1
+    [ "$had_image" = yes ] || "$real" image rm "$img" > /dev/null 2>&1
+    rm -rf "$t"
+    return "$rc"
+}
+
+# REQ-SERVER-018: an app that fails does not stop the tunnel step. The shims
+# only record. `yarn prod:docker` fails. The machine has the tunnel role and no
+# marker, so the first deploy wants a tunnel restart. That deploy must reach
+# the tunnel step and exit non-zero. The next deploy, with no --force, must
+# run `yarn prod:docker` again and must not restart the tunnel again.
+# Returns 0 when every part of the check passed.
+deploy_failed_app() {
+    local t="$1" rc=0 rc1=0 rc2=0
+    scratch_release "$t" > /dev/null
+    git -C "$t/machine" pull -q
+    printf '#!/bin/sh\necho "yarn $*" >> "%s/calls"\n[ "$1" != prod:docker ]\n' "$t" > "$t/bin/yarn"
+    chmod +x "$t/bin/yarn"
+    mkdir -p "$t/roles"
+    touch "$t/roles/webserver" "$t/roles/tunnel"
+    PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
+        DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" > "$t/out1" 2>&1 || rc1=$?
+    PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
+        DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" > "$t/out2" 2>&1 || rc2=$?
+    [ "$rc1" -ne 0 ] && [ "$rc2" -ne 0 ] || rc=1
+    grep -qE "restarting custom-cloudflared.service|custom-cloudflared.service is not installed" "$t/out1" || rc=1
+    [ "$(grep -c "^yarn prod:docker" "$t/calls")" = 2 ] || rc=1
+    grep -q "trying again" "$t/out2" || rc=1
+    grep -q "not restarting custom-cloudflared.service" "$t/out2" || rc=1
+    rm -rf "$t"
+    return "$rc"
+}
+
 if [ "$PHASE" = provisioned ]; then
     UD=/usr/local/lib/systemd/system
     check "custom-release-poll.timer enabled"   'systemctl is-enabled custom-release-poll.timer'
@@ -901,10 +981,17 @@ if [ "$PHASE" = provisioned ]; then
              sed -i "2s/.*/a-previous-boot/" "$t/marker"; run; c=$(count);
              rm -rf "$t";
              [ "$a" = 1 ] && [ "$b" = 1 ] && [ "$c" = 2 ]'
+        # REQ-SERVER-017 and REQ-SERVER-018: see deploy_renamed_app and deploy_failed_app above.
+        check "the deploy removes the old container of a renamed app and starts the new one" \
+            'deploy_renamed_app "$(mktemp -d)"'
+        check "a failed app does not stop the tunnel step, and the deploy exits non-zero" \
+            'deploy_failed_app "$(mktemp -d)"'
     else
         sk "the release poller moves the checkout and touches no service" "$behaviour_skip_reason"
         sk "a release poll leaves the checkout alone while a deploy holds the lock" "$behaviour_skip_reason"
         sk "the deploy runs once per checkout and again after a reboot" "$behaviour_skip_reason"
+        sk "the deploy removes the old container of a renamed app and starts the new one" "$behaviour_skip_reason"
+        sk "a failed app does not stop the tunnel step, and the deploy exits non-zero" "$behaviour_skip_reason"
         sk "the deploy publishes the apps on loopback, with or without the tunnel" "$behaviour_skip_reason"
         sk "the deploy starts the LAN edge without the tunnel and stops it with" "$behaviour_skip_reason"
     fi
@@ -937,6 +1024,8 @@ else
     sk "the release poller moves the checkout and touches no service" "setup-developer-environment.sh clones the checkout"
     sk "a release poll leaves the checkout alone while a deploy holds the lock" "setup-developer-environment.sh clones the checkout"
     sk "the deploy runs once per checkout and again after a reboot" "setup-developer-environment.sh clones the checkout"
+    sk "the deploy removes the old container of a renamed app and starts the new one" "setup-developer-environment.sh clones the checkout"
+    sk "a failed app does not stop the tunnel step, and the deploy exits non-zero" "setup-developer-environment.sh clones the checkout"
 fi
 
 # REQ-DEPLOY-005 - the security boundary, asserted as a boundary.
