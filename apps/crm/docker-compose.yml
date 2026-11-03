@@ -82,9 +82,11 @@ services:
       # Passed through from the host. The README describes each one.
       - CRM_ADMIN_EMAIL
       - CRM_PUBLIC_URL
-      - EMAIL_API_KEY
-      - EMAIL_PROVIDER
-      - EMAIL_FROM
+      - SMTP_HOST
+      - SMTP_PORT
+      - SMTP_USER
+      - SMTP_PASS
+      - EMAIL_FROM_NAME
     volumes:
       - type: bind
         source: ../..
