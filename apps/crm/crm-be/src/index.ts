@@ -19,6 +19,7 @@ import { passkeyRegisterRoute } from './routes/api/passkeys/register';
 import { passkeyRegisterOptionsRoute } from './routes/api/passkeys/register-options';
 import { passkeySignInRoute } from './routes/api/passkeys/sign-in';
 import { passkeySignInOptionsRoute } from './routes/api/passkeys/sign-in-options';
+import { faviconRoute } from './routes/favicon';
 import { todayRoute } from './routes/index';
 import { loginRoute } from './routes/login';
 import { loginCodeRoute } from './routes/login/code';
@@ -54,6 +55,7 @@ export const buildApp = (db: Database) => {
 
   todayRoute(app, db);
   healthRoute(app);
+  faviconRoute(app);
   const limits = makeLoginLimits();
   loginRoute(app, db, limits);
   loginCodeRoute(app, db, limits);

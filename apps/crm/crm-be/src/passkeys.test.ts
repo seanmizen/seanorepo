@@ -6,6 +6,7 @@ import type { buildApp } from './index';
 import { FE_DIST } from './render';
 import {
   addTestPasskey,
+  cookieAfter,
   postJson,
   signInWithPasskey,
   TestAuthenticator,
@@ -44,7 +45,7 @@ const auditActions = () =>
 
 describe('/account/passkeys', () => {
   test('a client adds a passkey with a name, sees its last-used date, and deletes it', async () => {
-    const cookie = await signIn(app, db, 'client@example.com');
+    let cookie = await signIn(app, db, 'client@example.com');
     const key = new TestAuthenticator();
 
     const empty = await get('/account/passkeys', cookie);
@@ -53,6 +54,9 @@ describe('/account/passkeys', () => {
 
     const added = await addTestPasskey(app, cookie, key, 'My phone');
     expect(added.statusCode).toBe(200);
+    // The first passkey makes this session a passkey session, with a new
+    // token.
+    cookie = cookieAfter(added, cookie);
     const listed = await get('/account/passkeys', cookie);
     expect(listed.body).toContain('<td>My phone</td>');
     expect(listed.body).toContain('<td>Never</td>');
@@ -77,6 +81,7 @@ describe('/account/passkeys', () => {
     expect(auditActions().map((row) => row.action)).toEqual([
       'sign_in',
       'passkey_add',
+      'session_upgrade',
       'sign_in',
       'passkey_delete',
     ]);
@@ -139,7 +144,8 @@ describe('passkey sign-in', () => {
       )
       .all()
       .map((row) => row.method);
-    expect(methods).toEqual(['email', 'passkey']);
+    // The first session became a passkey session when it added the passkey.
+    expect(methods).toEqual(['passkey', 'passkey']);
     expect(auditActions().at(-1)?.detail).toBe('{"method":"passkey"}');
   });
 
@@ -192,37 +198,88 @@ describe('passkey sign-in', () => {
 });
 
 describe('the admin pages', () => {
+  const sessionMethods = () =>
+    db
+      .query<{ method: string }, []>(
+        'SELECT method FROM session ORDER BY created_at, rowid;',
+      )
+      .all()
+      .map((row) => row.method);
+
   test('signInAdmin gives a session that opens an admin route', async () => {
     const response = await get('/test/admin', signInAdmin(app));
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe('admin ok');
   });
 
-  test('an email session of the admin with no passkey goes to /account/passkeys and can add the first one', async () => {
+  test('an email session of the admin with no passkey gets the add-passkey step at the same URL, and the first passkey opens the page', async () => {
     const cookie = await signIn(app, db, TEST_ADMIN_EMAIL);
-    const page = await get('/test/admin', cookie);
-    expect(page.statusCode).toBe(303);
-    expect(page.headers.location).toBe('/account/passkeys');
+    const page = await get('/', cookie);
+    expect(page.statusCode).toBe(403);
+    expect(page.headers.location).toBeUndefined();
+    expect(page.body).toContain('<h1>Passkey needed</h1>');
+    expect(page.body).toContain(
+      'This page needs a passkey. Add one to this device.',
+    );
+    expect(page.body).toContain(
+      '<form hidden="" data-passkey="register" data-next="/">',
+    );
+
     const passkeys = await get('/account/passkeys', cookie);
     expect(passkeys.body).toContain('You are the admin.');
+    expect(passkeys.body).not.toContain('sign out');
 
-    const added = await addTestPasskey(app, cookie, new TestAuthenticator());
+    const added = await addTestPasskey(
+      app,
+      cookie,
+      new TestAuthenticator(),
+      'Phone',
+      '/',
+    );
     expect(added.statusCode).toBe(200);
-    // One passkey now, so the email session can add no more.
-    const second = await addTestPasskey(app, cookie, new TestAuthenticator());
-    expect(second.statusCode).toBe(403);
+    expect(added.json<{ next: string }>()).toEqual({ next: '/' });
+    const upgraded = cookieAfter(added, cookie);
+    expect(upgraded).not.toBe(cookie);
+    expect((await get('/', upgraded)).statusCode).toBe(200);
+    // The same session, with a new token: the old cookie stops working.
+    expect(sessionMethods()).toEqual(['passkey']);
+    expect((await get('/', cookie)).statusCode).toBe(303);
+    expect(auditActions().slice(-2)).toEqual([
+      expect.objectContaining({ action: 'passkey_add' }),
+      { action: 'session_upgrade', detail: '{"from":"email","to":"passkey"}' },
+    ]);
   });
 
-  test('an email session of the admin with a passkey gets 403, and cannot change passkeys', async () => {
+  test('the add-passkey step returns only a local next', async () => {
     const cookie = await signIn(app, db, TEST_ADMIN_EMAIL);
+    const added = await addTestPasskey(
+      app,
+      cookie,
+      new TestAuthenticator(),
+      'Phone',
+      '//evil.example',
+    );
+    expect(added.json<{ next: string }>()).toEqual({ next: '/' });
+  });
+
+  test('an email session of the admin with a passkey gets the passkey sign-in step, and cannot change passkeys', async () => {
+    const first = await signIn(app, db, TEST_ADMIN_EMAIL);
     const key = new TestAuthenticator();
-    await addTestPasskey(app, cookie, key);
+    await addTestPasskey(app, first, key);
+    const cookie = await signIn(app, db, TEST_ADMIN_EMAIL);
 
-    const page = await get('/test/admin', cookie);
+    const page = await get('/test/admin?x=1', cookie);
     expect(page.statusCode).toBe(403);
-    expect(page.body).toContain('<a href="/account/passkeys">');
-    expect(page.body).toContain('signed in with a passkey');
+    expect(page.headers.location).toBeUndefined();
+    expect(page.body).toContain('This page needs a passkey sign-in.');
+    expect(page.body).toContain(
+      'data-passkey="sign-in" data-next="/test/admin?x=1"',
+    );
+    expect(page.body).toContain('Sign in with a passkey');
 
+    // A second passkey needs a passkey session.
+    const second = await addTestPasskey(app, cookie, new TestAuthenticator());
+    expect(second.statusCode).toBe(403);
     const list = await get('/account/passkeys', cookie);
     expect(list.body).toContain(
       'To add or delete a passkey, sign in with a passkey.',
@@ -236,6 +293,38 @@ describe('the admin pages', () => {
     );
     expect(deleted.statusCode).toBe(403);
     expect(db.query('SELECT id FROM passkey;').all()).toHaveLength(1);
+  });
+
+  test('a passkey sign-in from an email session replaces that session', async () => {
+    const first = await signIn(app, db, TEST_ADMIN_EMAIL);
+    const key = new TestAuthenticator();
+    await addTestPasskey(app, first, key);
+    const cookie = await signIn(app, db, TEST_ADMIN_EMAIL);
+    const emailSession = db
+      .query<{ id: string }, []>(
+        "SELECT id FROM session WHERE method = 'email';",
+      )
+      .get()?.id;
+
+    const { response, cookie: passkeyCookie } = await signInWithPasskey(
+      app,
+      key,
+      '/test/admin?x=1',
+      cookie,
+    );
+    expect(response.json<{ next: string }>()).toEqual({
+      next: '/test/admin?x=1',
+    });
+    expect((await get('/test/admin?x=1', passkeyCookie)).statusCode).toBe(200);
+    expect(
+      db.query('SELECT id FROM session WHERE id = ?;').get(emailSession ?? ''),
+    ).toBeNull();
+    expect(sessionMethods()).toEqual(['passkey', 'passkey']);
+    expect((await get('/account/sessions', cookie)).statusCode).toBe(303);
+    expect(JSON.parse(auditActions().at(-1)?.detail ?? '{}')).toEqual({
+      method: 'passkey',
+      replaced: emailSession,
+    });
   });
 
   test('a passkey session of the admin opens the admin route and can change passkeys', async () => {
@@ -252,13 +341,20 @@ describe('the admin pages', () => {
     expect(second.statusCode).toBe(200);
   });
 
-  test('a passkey session of a different person gets 403', async () => {
+  test('a different person gets the admin-only page, in an email or a passkey session', async () => {
     const cookie = await signIn(app, db, 'client@example.com');
+    const email = await get('/', cookie);
+    expect(email.statusCode).toBe(403);
+    expect(email.headers.location).toBeUndefined();
+    expect(email.body).toContain('This page is for the admin only.');
+    expect(email.body).not.toContain('data-passkey');
+
     const key = new TestAuthenticator();
     await addTestPasskey(app, cookie, key);
     const { cookie: passkeyCookie } = await signInWithPasskey(app, key);
     const page = await get('/test/admin', passkeyCookie);
     expect(page.statusCode).toBe(403);
+    expect(page.body).toContain('This page is for the admin only.');
   });
 
   test('a signed-out visitor goes to /login', async () => {
@@ -273,14 +369,19 @@ describe('the passkey script', () => {
     JSON.parse(readFileSync(path.join(FE_DIST, 'manifest.json'), 'utf8'))
       .entries.passkeys.initial.js as string[];
 
-  test('only the sign-in page and the passkeys page load it', async () => {
+  test('only the pages with a passkey control load it', async () => {
     const cookie = await signIn(app, db, 'a@example.com');
+    const admin = await signIn(app, db, TEST_ADMIN_EMAIL);
     const [script] = passkeysScript();
     expect((await get('/login')).body).toContain(`<script src="${script}"`);
     expect((await get('/account/passkeys', cookie)).body).toContain(
       `<script src="${script}"`,
     );
+    expect((await get('/', admin)).body).toContain(`<script src="${script}"`);
     expect((await get('/account/sessions', cookie)).body).not.toContain(
+      `<script src="${script}"`,
+    );
+    expect((await get('/', cookie)).body).not.toContain(
       `<script src="${script}"`,
     );
   });
@@ -297,6 +398,16 @@ describe('the passkey script', () => {
     const passkeys = (await get('/account/passkeys?theme=bare', cookie)).body;
     expect(passkeys).not.toContain('<script');
     expect(passkeys).toContain('Passkeys need JavaScript.');
-    expect(passkeys).toContain('<form hidden="" data-passkey="register">');
+    expect(passkeys).toContain(
+      '<form hidden="" data-passkey="register" data-next="/account/passkeys">',
+    );
+
+    const admin = await signIn(app, db, TEST_ADMIN_EMAIL);
+    const step = (await get('/?theme=bare', admin)).body;
+    expect(step).not.toContain('<script');
+    expect(step).toContain('Passkeys need JavaScript.');
+    expect(step).toContain(
+      '<form hidden="" data-passkey="register" data-next="/?theme=bare">',
+    );
   });
 });

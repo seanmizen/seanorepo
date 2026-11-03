@@ -1,14 +1,20 @@
-// The passkey buttons on /login and /account/passkeys. WebAuthn has no HTML
+// The passkey controls of `crm-be/src/ui/Passkey.tsx`, on /login,
+// /account/passkeys and the 403 page of an admin route. WebAuthn has no HTML
 // form, so this is the one script that a page needs (the exception in
 // REQ-CRM-BARE-001). The server renders each passkey control `hidden`, with a
 // note that says passkeys need JavaScript. This script shows the control and
-// removes the note.
+// removes the note. After a success, it opens the `data-next` path that the
+// server returns.
 import {
   browserSupportsWebAuthn,
   startAuthentication,
   startRegistration,
 } from '@simplewebauthn/browser';
-import type { ApiError, PasskeySignInResponse } from '../../shared/types';
+import type {
+  ApiError,
+  PasskeyRegisterResponse,
+  PasskeySignInResponse,
+} from '../../shared/types';
 
 /** POST `body` as JSON to `url`. Throws the server's error text on a failure. */
 const postJson = async <T>(url: string, body: unknown): Promise<T> => {
@@ -93,8 +99,11 @@ if (register) {
           Parameters<typeof startRegistration>[0]['optionsJSON']
         >('/api/passkeys/register-options', {});
         const response = await startRegistration({ optionsJSON });
-        await postJson('/api/passkeys/register', { name, response });
-        location.assign('/account/passkeys');
+        const { next } = await postJson<PasskeyRegisterResponse>(
+          '/api/passkeys/register',
+          { name, response, next: register.dataset.next ?? '/' },
+        );
+        location.assign(next);
       } catch (error) {
         showError(root, error);
         if (button) button.disabled = false;

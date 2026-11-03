@@ -17,6 +17,14 @@ export interface PasskeyRegisterRequest {
   name: string;
   /** The `RegistrationResponseJSON` from `startRegistration()`. */
   response: unknown;
+  /** The path to open after the passkey is added. */
+  next?: string;
+}
+
+/** The response body of `POST /api/passkeys/register`. */
+export interface PasskeyRegisterResponse {
+  /** The path to open now. */
+  next: string;
 }
 
 /** The request body of `POST /api/passkeys/sign-in`. */

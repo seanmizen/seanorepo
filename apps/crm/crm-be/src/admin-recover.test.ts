@@ -4,11 +4,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { recover } from './admin-recover';
-import { RECOVERY_MINUTES, SESSION_COOKIE } from './auth';
+import { RECOVERY_MINUTES, SESSION_COOKIE, SESSION_DAYS } from './auth';
 import { openDatabase } from './db';
 import type { buildApp } from './index';
 import {
   addTestPasskey,
+  cookieAfter,
   signInWithPasskey,
   TestAuthenticator,
 } from './test-authenticator';
@@ -89,7 +90,7 @@ describe('admin:recover', () => {
     expect(again.statusCode).toBe(400);
   });
 
-  test('the recovery session opens only /account/passkeys, and adds one passkey', async () => {
+  test('the recovery session opens only /account/passkeys, and its first passkey makes it a passkey session', async () => {
     await adminWithPasskeys();
     const token =
       new URL(recover(db, TEST_ADMIN_EMAIL)).searchParams.get('token') ?? '';
@@ -107,10 +108,16 @@ describe('admin:recover', () => {
     }
 
     const key = new TestAuthenticator();
-    expect((await addTestPasskey(app, cookie, key)).statusCode).toBe(200);
-    // The admin has a passkey now, so the recovery session can add no more.
-    const second = await addTestPasskey(app, cookie, new TestAuthenticator());
-    expect(second.statusCode).toBe(403);
+    const added = await addTestPasskey(app, cookie, key);
+    expect(added.statusCode).toBe(200);
+    // The first passkey makes the recovery session a passkey session, with a
+    // new token, for SESSION_DAYS. It opens the admin pages now.
+    const upgraded = cookieAfter(added, cookie);
+    expect(added.cookies.find((c) => c.name === SESSION_COOKIE)?.maxAge).toBe(
+      SESSION_DAYS * 24 * 60 * 60,
+    );
+    expect((await get('/', upgraded)).statusCode).toBe(200);
+    expect((await get('/', cookie)).statusCode).toBe(303);
     const { response } = await signInWithPasskey(app, key);
     expect(response.statusCode).toBe(200);
 
@@ -121,12 +128,13 @@ describe('admin:recover', () => {
       .all()
       .slice(-4);
     expect(actions.map((row) => row.action)).toEqual([
-      'recover',
       'sign_in',
       'passkey_add',
+      'session_upgrade',
       'sign_in',
     ]);
-    expect(actions[1].detail).toBe('{"method":"recovery"}');
+    expect(actions[0].detail).toBe('{"method":"recovery"}');
+    expect(actions[2].detail).toBe('{"from":"recovery","to":"passkey"}');
   });
 
   test('an expired enrolment link fails', async () => {

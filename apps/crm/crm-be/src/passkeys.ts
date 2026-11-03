@@ -26,9 +26,6 @@ export const RP_ID = publicUrl.hostname;
 export const RP_ORIGIN = publicUrl.origin;
 const RP_NAME = 'crm';
 
-/** The longest passkey name. */
-export const NAME_MAX = 60;
-
 interface PasskeyRow {
   id: string;
   person_id: string;

@@ -16,10 +16,11 @@ change what a person can do or know.
 - **Statement:** While a page has no page styles and no JavaScript, each crm
   page shall show each state and allow each action that it shows and allows
   in the Pixel-3 theme.
-- **Exception:** The passkey controls on `/login` and `/account/passkeys`
-  need JavaScript, because WebAuthn has no HTML form. With no JavaScript,
-  each of these pages shall say that passkeys need JavaScript, and email
-  sign-in shall still work. This is the only exception.
+- **Exception:** The passkey controls on `/login`, `/account/passkeys` and
+  the 403 page of an admin route need JavaScript, because WebAuthn has no
+  HTML form. With no JavaScript, each of these pages shall say that
+  passkeys need JavaScript, and email sign-in shall still work. This is the
+  only exception.
 - **Rationale:** The seller uses the crm on a phone at a door, on a bad
   connection. The CSS or the script may not load. Text, native elements (`<select>`,
   `<option selected>`, `<button>`) and attributes carry each state. A class

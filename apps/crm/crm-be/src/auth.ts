@@ -32,6 +32,7 @@ const PUBLIC_PATHS = new Set([
   '/login/code',
   '/login/verify',
   '/login/recover',
+  '/favicon.ico',
   '/api/health',
   '/api/passkeys/sign-in-options',
   '/api/passkeys/sign-in',
@@ -152,11 +153,27 @@ export const ensureAdmin = (db: Database, adminEmail: string | undefined) => {
   );
 };
 
+/** Set the session cookie to the raw `token`, for `seconds`. */
+const setSessionCookie = (
+  reply: FastifyReply,
+  token: string,
+  seconds: number,
+) =>
+  reply.setCookie(SESSION_COOKIE, token, {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: seconds,
+  });
+
 /**
  * Start a session for `personId`: a session row with the token hash, and the
  * cookie with the raw token. `how` is the sign-in step. A link or a code
  * gives an `email` session. A recovery session lasts RECOVERY_MINUTES, and
- * the others last SESSION_DAYS. Returns the session id.
+ * the others last SESSION_DAYS. The new session replaces the current session
+ * of the request, if there is one: this function deletes its row. Returns
+ * the session id.
  */
 export const startSession = (
   db: Database,
@@ -181,15 +198,44 @@ export const startSession = (
     later(seconds * 1000),
     method,
   );
-  reply.setCookie(SESSION_COOKIE, token, {
-    path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: seconds,
+  setSessionCookie(reply, token, seconds);
+  const replaced = request.auth?.sessionId;
+  if (replaced) {
+    db.query('DELETE FROM session WHERE id = ?;').run(replaced);
+  }
+  audit(db, personId, 'sign_in', 'session', sessionId, {
+    method: how,
+    ...(replaced ? { replaced } : {}),
   });
-  audit(db, personId, 'sign_in', 'session', sessionId, { method: how });
   return sessionId;
+};
+
+/**
+ * Make the current session a `passkey` session. Call it after the person
+ * adds their first passkey in this session. The WebAuthn registration with
+ * user verification proves the authenticator, and this session was already
+ * trusted to add the first passkey. So the person does not sign out and sign
+ * in again. The session gets a new token (the old cookie stops working) and
+ * lasts SESSION_DAYS from now. Adds a `session_upgrade` row to `audit_log`.
+ */
+export const upgradeSession = (
+  db: Database,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const auth = request.auth;
+  if (!auth || auth.method === 'passkey') return;
+  const seconds = SESSION_DAYS * 24 * 60 * 60;
+  const token = newToken();
+  db.query(
+    `UPDATE session SET token_hash = ?, method = 'passkey', expires_at = ?
+     WHERE id = ?;`,
+  ).run(hash(token), later(seconds * 1000), auth.sessionId);
+  setSessionCookie(reply, token, seconds);
+  audit(db, auth.personId, 'session_upgrade', 'session', auth.sessionId, {
+    from: auth.method,
+    to: 'passkey',
+  });
 };
 
 /** End the current session: delete its row and clear the cookie. */
@@ -279,9 +325,10 @@ export type LoginLimits = ReturnType<typeof makeLoginLimits>;
  * 4. Sends a recovery session to `/account/passkeys` from each path that is
  *    not in RECOVERY_PATHS.
  * 5. On an admin route (`config: { admin: true }`), lets only the admin in a
- *    passkey session through. If the admin has no passkey, an email session
- *    goes to `/account/passkeys` to add the first one. Each other session
- *    gets 403.
+ *    passkey session through. Each other session gets the 403 page of
+ *    `ui/AdminOnly.tsx` at the same URL, with no redirect. For the admin, the
+ *    page holds the passkey step: add the first passkey, or sign in with a
+ *    passkey.
  */
 export const registerAuth = (app: FastifyInstance, db: Database) => {
   app.decorateRequest('auth', null);
@@ -332,14 +379,15 @@ export const registerAuth = (app: FastifyInstance, db: Database) => {
       request.routeOptions.config?.admin &&
       !(admin && auth.method === 'passkey')
     ) {
-      if (admin && !hasPasskey(db, auth.personId)) {
-        reply.redirect('/account/passkeys', 303);
-      } else {
-        reply
-          .code(403)
-          .type('text/html; charset=utf-8')
-          .send(renderAdminOnly(request));
-      }
+      const need = !admin
+        ? 'admin'
+        : hasPasskey(db, auth.personId)
+          ? 'passkey-sign-in'
+          : 'add-passkey';
+      reply
+        .code(403)
+        .type('text/html; charset=utf-8')
+        .send(renderAdminOnly(request, need));
       return;
     }
     done();
