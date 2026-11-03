@@ -1337,7 +1337,9 @@ if [ "$PHASE" = provisioned ] && [ -e /etc/seanorepo/roles/vpn ]; then
     # The running interface agrees with the file that provisioning wrote.
     check "wg0 runs every peer of wg0.conf" \
         '[ "$(sudo -n wg show wg0 peers | grep -c .)" = "$(sudo -n grep -c "^\[Peer\]" /etc/wireguard/wg0.conf)" ]'
-    check "IPv4 forwarding is on" '[ "$(sysctl -n net.ipv4.ip_forward)" = 1 ]'
+    # Read /proc: assert.sh runs as the deploy user, and sysctl is in /usr/sbin,
+    # which is not on that user's PATH.
+    check "IPv4 forwarding is on" '[ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ]'
     check "$VPN_SYNC_TIMER enabled" "systemctl is-enabled $VPN_SYNC_TIMER"
     check "$VPN_SYNC_TIMER active" "systemctl is-active $VPN_SYNC_TIMER"
     check "the VPN sync runs every two minutes" \
