@@ -43,6 +43,22 @@ export const postForm = (
     payload: new URLSearchParams(fields).toString(),
   });
 
+/**
+ * Add an organisation through `POST /orgs/new`, as the person of `cookie`.
+ * Returns its slug.
+ */
+export const addOrg = async (
+  app: ReturnType<typeof buildApp>,
+  cookie: string,
+  fields: Record<string, string>,
+) => {
+  const response = await postForm(app, '/orgs/new', fields, cookie);
+  if (response.statusCode !== 303) {
+    throw new Error(`POST /orgs/new returned ${response.statusCode}.`);
+  }
+  return String(response.headers.location).slice(1);
+};
+
 /** Add a person with this email. Returns the person id. */
 export const addPerson = (db: Database, email: string) => {
   const id = crypto.randomUUID();

@@ -21,5 +21,5 @@ change what a person can do or know.
   `<option selected>`, `<button>`) and attributes carry each state. A class
   only gives a state its look. Each action is a `<form>` with a string
   `action`, so it works with no script.
-- **Verification:** Test — `apps/crm/crm-be/src/routes/index.test.ts` › "the home page shows each state and allows each action with no page styles and no JavaScript (REQ-CRM-BARE-001)"
+- **Verification:** Test — `apps/crm/crm-be/src/routes/index.test.ts` › "every page shows each state and allows each action with no page styles and no JavaScript (REQ-CRM-BARE-001)"
 - **Relations:** none

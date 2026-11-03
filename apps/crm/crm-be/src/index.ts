@@ -8,13 +8,19 @@ import { ensureAdmin, makeLoginLimits, registerAuth } from './auth';
 import { DB_PATH, openDatabase } from './db';
 import { checkEmailConfig } from './email';
 import { FE_DIST } from './render';
+import { orgRoute } from './routes/[slug]';
+import { orgNotesRoute } from './routes/[slug]/notes';
+import { orgStageRoute } from './routes/[slug]/stage';
+import { orgVisitsRoute } from './routes/[slug]/visits';
 import { accountSessionsRoute } from './routes/account/sessions';
 import { healthRoute } from './routes/api/health';
-import { homeRoute } from './routes/index';
+import { todayRoute } from './routes/index';
 import { loginRoute } from './routes/login';
 import { loginCodeRoute } from './routes/login/code';
 import { loginVerifyRoute } from './routes/login/verify';
 import { logoutRoute } from './routes/logout';
+import { orgsRoute } from './routes/orgs';
+import { orgsNewRoute } from './routes/orgs/new';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4100;
 const IS_TEST = process.env.NODE_ENV === 'test';
@@ -40,7 +46,7 @@ export const buildApp = (db: Database) => {
     maxAge: '365d',
   });
 
-  homeRoute(app);
+  todayRoute(app, db);
   healthRoute(app);
   const limits = makeLoginLimits();
   loginRoute(app, db, limits);
@@ -48,6 +54,14 @@ export const buildApp = (db: Database) => {
   loginVerifyRoute(app, db);
   logoutRoute(app, db);
   accountSessionsRoute(app, db);
+  orgsRoute(app, db);
+  orgsNewRoute(app, db);
+  // `/<slug>` is a catch-all at the root. Each static route above wins over
+  // it, and `RESERVED_SLUGS` in `org.ts` keeps their words out of the slugs.
+  orgRoute(app, db);
+  orgStageRoute(app, db);
+  orgVisitsRoute(app, db);
+  orgNotesRoute(app, db);
 
   return app;
 };
