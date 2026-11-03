@@ -111,13 +111,13 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
   });
 });
 
-describe('/orgs/<slug>/contacts/<person-id>', () => {
+describe('/orgs/<slug>/contacts/<number>', () => {
   test('GET shows the contact form of Add a contact, filled in', async () => {
     await add({ name: 'Ann', phone: '07700 900000', role: 'staff' });
     const html = (
       await app.inject({
         method: 'GET',
-        url: `/orgs/${slug}/contacts/${personId('Ann')}`,
+        url: `/orgs/${slug}/contacts/1`,
         headers: { cookie },
       })
     ).body;
@@ -129,10 +129,9 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
 
   test('POST saves the person and the role, and each audit row names only the changed fields', async () => {
     await add({ name: 'Ann', phone: '07700 900000' });
-    const id = personId('Ann');
     const response = await postForm(
       app,
-      `/orgs/${slug}/contacts/${id}`,
+      `/orgs/${slug}/contacts/1`,
       { name: 'Ann Jones', phone: '07700 900000', email: '', role: 'staff' },
       cookie,
     );
@@ -165,7 +164,7 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
     await add({ name: 'Ann' });
     const response = await postForm(
       app,
-      `/orgs/${slug}/contacts/${personId('Ann')}`,
+      `/orgs/${slug}/contacts/1`,
       { name: 'Ann', email: 'taken@example.com', role: 'owner' },
       cookie,
     );
@@ -183,7 +182,7 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
     const html = (
       await app.inject({
         method: 'GET',
-        url: `/orgs/${slug}/contacts/${personId('Ann')}`,
+        url: `/orgs/${slug}/contacts/1`,
         headers: { cookie },
       })
     ).body;
@@ -200,7 +199,7 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
 
     const response = await postForm(
       app,
-      `/orgs/${slug}/contacts/${id}/remove`,
+      `/orgs/${slug}/contacts/1/remove`,
       {},
       cookie,
     );
@@ -210,7 +209,7 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
       expect.objectContaining({ name: 'Ann', slug: 'other' }),
     ]);
 
-    await postForm(app, `/orgs/${other}/contacts/${id}/remove`, {}, cookie);
+    await postForm(app, `/orgs/${other}/contacts/1/remove`, {}, cookie);
     expect(contacts()).toEqual([]);
     expect(
       db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id),
@@ -236,29 +235,76 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
         id: string;
       }
     ).id;
-    await postForm(app, `/orgs/${slug}/contacts/${id}/remove`, {}, cookie);
+    await postForm(app, `/orgs/${slug}/contacts/1/remove`, {}, cookie);
     expect(contacts()).toEqual([]);
     expect(
       db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id),
     ).toEqual({ n: 1 });
   });
 
-  test('a person who is not a contact of this organisation returns 404', async () => {
-    const stranger = addPerson(db, 'x@example.com');
-    for (const [method, url] of [
-      ['GET', `/orgs/${slug}/contacts/${stranger}`],
-      ['POST', `/orgs/${slug}/contacts/${stranger}/remove`],
-    ] as const) {
-      const response = await app.inject({
-        method,
-        url,
-        headers: {
-          cookie,
-          'content-type': 'application/x-www-form-urlencoded',
-        },
-        payload: method === 'POST' ? '' : undefined,
-      });
-      expect(response.statusCode).toBe(404);
+  test('a number that the organisation does not have, a person id or a segment that is not a number returns 404', async () => {
+    await add({ name: 'Ann' });
+    const other = await addOrg(app, cookie, { name: 'Other' });
+    for (const url of [
+      `/orgs/${other}/contacts/1`,
+      `/orgs/${slug}/contacts/2`,
+      `/orgs/${slug}/contacts/${personId('Ann')}`,
+      `/orgs/${slug}/contacts/0`,
+      `/orgs/${slug}/contacts/01`,
+      `/orgs/${slug}/contacts/1.0`,
+    ]) {
+      for (const [method, path] of [
+        ['GET', url],
+        ['POST', url],
+        ['POST', `${url}/remove`],
+      ] as const) {
+        const response = await app.inject({
+          method,
+          url: path,
+          headers: {
+            cookie,
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          payload: method === 'POST' ? 'name=Bob' : undefined,
+        });
+        expect(response.statusCode).toBe(404);
+      }
     }
+  });
+
+  test('each organisation counts its contacts from 1, and a removed number is not used again (REQ-CRM-ID-001)', async () => {
+    const numbers = (to: string) =>
+      db
+        .query(
+          `SELECT person.name, membership.number FROM membership
+           JOIN person ON person.id = membership.person_id
+           JOIN organisation ON organisation.id = membership.organisation_id
+           WHERE organisation.slug = ? ORDER BY membership.number;`,
+        )
+        .all(to);
+    await add({ name: 'Ann', email: 'ann@example.com' });
+    await add({ name: 'Bob' });
+    await postForm(app, `/orgs/${slug}/contacts/2/remove`, {}, cookie);
+    await add({ name: 'Cat' });
+    expect(numbers(slug)).toEqual([
+      { name: 'Ann', number: 1 },
+      { name: 'Cat', number: 3 },
+    ]);
+    // A person who is a contact of two organisations has a number in each.
+    const other = await addOrg(app, cookie, {
+      name: 'Other',
+      contact_name: 'Dan',
+    });
+    await add({ email: 'ann@example.com' }, other);
+    expect(numbers(other)).toEqual([
+      { name: 'Dan', number: 1 },
+      { name: 'Ann', number: 2 },
+    ]);
+    const page = await app.inject({
+      method: 'GET',
+      url: `/orgs/${other}/contacts/2`,
+      headers: { cookie },
+    });
+    expect(page.body).toContain('name="email" value="ann@example.com"');
   });
 });

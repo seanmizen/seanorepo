@@ -166,19 +166,19 @@ describe('POST /orgs/new', () => {
     expect(page.body).toContain('<title>New lead - crm</title>');
   });
 
-  test('a typed URL name is the slug, if it is free and valid', async () => {
+  test('a typed URL slug is the slug, if it is free and valid', async () => {
     expect(await addOrg(app, cookie, { name: 'Acme', slug: 'Acme-West' })).toBe(
       'acme-west',
     );
     for (const [slug, error] of [
-      ['acme-west', 'Another organisation has this URL name.'],
+      ['acme-west', 'Another organisation has this URL slug.'],
       [
         'new',
-        'The crm uses the URL name &quot;new&quot;. Type a different URL name.',
+        'The crm uses the URL slug &quot;new&quot;. Type a different URL slug.',
       ],
       [
         'acme west',
-        'The URL name can have only lowercase letters, digits and single hyphens, at most 60.',
+        'The URL slug can have only lowercase letters, digits and single hyphens, at most 60.',
       ],
     ]) {
       const response = await postForm(

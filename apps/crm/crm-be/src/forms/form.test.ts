@@ -157,13 +157,6 @@ describe('the record forms', () => {
       { outcome: 'call_back', note: 'After 5pm' },
       cookie,
     );
-    const personId = (
-      db.query('SELECT id FROM person WHERE name = ?;').get('Ann Smith') as {
-        id: string;
-      }
-    ).id;
-    const visitId = (db.query('SELECT id FROM visit;').get() as { id: string })
-      .id;
 
     const newLead = await page('/orgs/new');
     const orgPage = await page(`/orgs/${slug}`);
@@ -194,13 +187,13 @@ describe('the record forms', () => {
           [newLead, 'contact_'],
           [orgPage, ''],
         ],
-        edit: await page(`/orgs/${slug}/contacts/${personId}`),
+        edit: await page(`/orgs/${slug}/contacts/1`),
         current: ['Ann Smith', '07700 900000', 'ann@example.com', 'staff'],
       },
       {
         form: activityForm,
         creates: [[orgPage, '']],
-        edit: await page(`/orgs/${slug}/activity/${visitId}`),
+        edit: await page(`/orgs/${slug}/activity/1`),
         current: ['After 5pm', 'call_back'],
       },
     ];

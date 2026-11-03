@@ -74,14 +74,8 @@ const ORGS = [
     stage: 'follow_up',
     next: ['Call back about the booking page', day(-2)],
     contact: ['Alex Example', '07700 900001', 'alex@example.com'],
-    contactId: 'shots-contact',
     visits: [
-      [
-        -5,
-        'spoke',
-        'Owner keen on online booking. Busy until Thursday.',
-        'shots-visit',
-      ],
+      [-5, 'spoke', 'Owner keen on online booking. Busy until Thursday.'],
       [-9, 'no_answer', null],
     ],
     notes: [[-5, 'Uses a paper diary. Wants something simple.']],
@@ -237,28 +231,39 @@ const seed = (adminToken, emailToken) => {
     );
     audit(addedDays, 'create', 'organisation', id, { stage: 'lead' });
     if (org.contact) {
-      const person = org.contactId ?? randomUUID();
+      const person = randomUUID();
       const [name, phone, email] = org.contact;
       rows.push(
         `INSERT INTO person (id, email, name, phone) VALUES (${q(person)}, ${q(email)}, ${q(name)}, ${q(phone)});`,
-        `INSERT INTO membership (person_id, organisation_id, role) VALUES (${q(person)}, ${q(id)}, 'owner');`,
+        `INSERT INTO membership (person_id, organisation_id, role, number) VALUES (${q(person)}, ${q(id)}, 'owner', 1);`,
+        `INSERT INTO org_counter (organisation_id, kind, last) VALUES (${q(id)}, 'contact', 1);`,
       );
       audit(addedDays, 'create', 'membership', id, {
         person_id: person,
         role: 'owner',
       });
     }
-    for (const [days, outcome, note, visitId] of org.visits) {
-      rows.push(
-        `INSERT INTO visit (id, organisation_id, at, outcome, note) VALUES (${q(visitId ?? randomUUID())}, ${q(id)}, ${q(at(days))}, ${q(outcome)}, ${q(note)});`,
-      );
-    }
     for (const [days, action, entity, detail] of org.changes ?? []) {
       audit(days, action, entity, id, detail);
     }
-    for (const [days, body] of org.notes) {
+    // Each visit and note gets the next activity number, oldest first
+    // (REQ-CRM-ID-001).
+    const entries = [
+      ...org.visits.map(([days, outcome, note]) => ({
+        time: at(days),
+        sql: (number) =>
+          `INSERT INTO visit (id, organisation_id, number, at, outcome, note) VALUES (${q(randomUUID())}, ${q(id)}, ${number}, ${q(at(days))}, ${q(outcome)}, ${q(note)});`,
+      })),
+      ...org.notes.map(([days, body]) => ({
+        time: at(days, 11),
+        sql: (number) =>
+          `INSERT INTO note (id, organisation_id, number, body, created_at) VALUES (${q(randomUUID())}, ${q(id)}, ${number}, ${q(body)}, ${q(at(days, 11))});`,
+      })),
+    ].sort((a, b) => a.time.localeCompare(b.time));
+    rows.push(...entries.map((entry, i) => entry.sql(i + 1)));
+    if (entries.length > 0) {
       rows.push(
-        `INSERT INTO note (id, organisation_id, body, created_at) VALUES (${q(randomUUID())}, ${q(id)}, ${q(body)}, ${q(at(days, 11))});`,
+        `INSERT INTO org_counter (organisation_id, kind, last) VALUES (${q(id)}, 'activity', ${entries.length});`,
       );
     }
   }
@@ -319,8 +324,8 @@ try {
     ['org-activity', '/orgs/example-plumbing', ['click', 'summary']],
     ['org-no-contacts', '/orgs/the-high-street-hair-and-beauty-salon'],
     ['org-edit', '/orgs/example-plumbing/edit'],
-    ['contact-edit', '/orgs/example-plumbing/contacts/shots-contact'],
-    ['activity-edit', '/orgs/example-plumbing/activity/shots-visit'],
+    ['contact-edit', '/orgs/example-plumbing/contacts/1'],
+    ['activity-edit', '/orgs/example-plumbing/activity/2'],
     ['org-new', '/orgs/new'],
     ['account', '/account'],
     ['passkeys', '/account/passkeys'],

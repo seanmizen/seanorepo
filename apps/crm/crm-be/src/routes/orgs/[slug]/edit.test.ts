@@ -58,7 +58,7 @@ describe('/orgs/<slug>/edit', () => {
     expect(html).toContain('name="slug" value="acme-plumbing"');
     expect(html).toContain('name="postcode" value="SW1A 1AA"');
     expect(html).toContain(
-      'When the URL name changes, old links to this organisation stop working.',
+      'When the URL slug changes, old links to this organisation stop working.',
     );
   });
 
@@ -82,7 +82,7 @@ describe('/orgs/<slug>/edit', () => {
     });
   });
 
-  test('a new URL name moves the page, and the old address no longer opens it', async () => {
+  test('a new URL slug moves the page, and the old address no longer opens it', async () => {
     const response = await save({ ...current, slug: 'acme' });
     expect(response.headers.location).toBe('/orgs/acme');
     expect((await get('/orgs/acme')).statusCode).toBe(200);
@@ -90,19 +90,19 @@ describe('/orgs/<slug>/edit', () => {
     expect(JSON.parse(lastAudit()?.detail ?? '{}').fields).toEqual(['slug']);
   });
 
-  test('an empty URL name comes from the name', async () => {
+  test('an empty URL slug comes from the name', async () => {
     await save({ ...current, slug: '', name: 'Bravo Builders' });
     expect(db.query('SELECT slug FROM organisation;').get()).toEqual({
       slug: 'bravo-builders',
     });
   });
 
-  test('a URL name that another organisation has returns 400 and changes nothing', async () => {
+  test('a URL slug that another organisation has returns 400 and changes nothing', async () => {
     await addOrg(app, cookie, { name: 'Other' });
     const response = await save({ ...current, slug: 'other' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Another organisation has this URL name.</p>',
+      '<p role="alert">Another organisation has this URL slug.</p>',
     );
     expect(response.body).toContain('name="slug" value="other"');
     expect(

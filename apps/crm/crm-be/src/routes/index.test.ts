@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { formatDate, today } from '../dates';
 import type { buildApp } from '../index';
+import { nextNumber } from '../org';
 import { FE_DIST } from '../render';
 import {
   addOrg,
@@ -130,20 +131,20 @@ const idOf = (slug: string) =>
     .get(slug)?.id;
 
 /** Add a visit to an organisation at the time `at`. */
-const addVisit = (slug: string, at: string) =>
-  db
-    .query(
-      `INSERT INTO visit (id, organisation_id, at, outcome) VALUES (?, ?, ?, 'spoke');`,
-    )
-    .run(crypto.randomUUID(), idOf(slug) ?? '', at);
+const addVisit = (slug: string, at: string) => {
+  const orgId = idOf(slug) ?? '';
+  db.query(
+    `INSERT INTO visit (id, organisation_id, number, at, outcome) VALUES (?, ?, ?, ?, 'spoke');`,
+  ).run(crypto.randomUUID(), orgId, nextNumber(db, orgId, 'activity'), at);
+};
 
 /** Add a note to an organisation at the time `at`. */
-const addNote = (slug: string, at: string) =>
-  db
-    .query(
-      `INSERT INTO note (id, organisation_id, body, created_at) VALUES (?, ?, 'A note', ?);`,
-    )
-    .run(crypto.randomUUID(), idOf(slug) ?? '', at);
+const addNote = (slug: string, at: string) => {
+  const orgId = idOf(slug) ?? '';
+  db.query(
+    `INSERT INTO note (id, organisation_id, number, body, created_at) VALUES (?, ?, ?, 'A note', ?);`,
+  ).run(crypto.randomUUID(), orgId, nextNumber(db, orgId, 'activity'), at);
+};
 
 /**
  * Three organisations with known times, and no next action:

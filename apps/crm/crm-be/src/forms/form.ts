@@ -28,7 +28,7 @@ export interface FormField {
   type?: 'text' | 'tel' | 'email' | 'textarea' | 'select' | 'keys';
   placeholder?: string;
   autoComplete?: string;
-  /** For example `characters` for a postcode, or `none` for a URL name. */
+  /** For example `characters` for a postcode, or `none` for a URL slug. */
   autoCapitalize?: string;
   /** The error when the value is empty. With it, the field is necessary. */
   required?: string;

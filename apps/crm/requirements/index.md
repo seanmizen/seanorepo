@@ -8,6 +8,7 @@
 | [`REQ-CRM-BARE-001`](bare.md#req-crm-bare-001--every-page-works-as-raw-html) | Every page works as raw HTML | active | constraint | P1 | sean |
 | [`REQ-CRM-DATE-001`](date.md#req-crm-date-001--one-format-for-each-date-and-time) | One format for each date and time | active | constraint | P1 | sean |
 | [`REQ-CRM-FORM-001`](form.md#req-crm-form-001--the-create-page-and-the-edit-page-show-one-form) | The create page and the edit page show one form | active | constraint | P1 | sean |
+| [`REQ-CRM-ID-001`](id.md#req-crm-id-001--no-uuid-in-a-url-or-on-a-page) | No UUID in a URL or on a page | active | constraint | P1 | sean |
 | [`REQ-CRM-LAYOUT-001`](layout.md#req-crm-layout-001--one-breakpoint-and-a-4060-grid-of-the-device-and-the-boxes) | One breakpoint, and a 40/60 grid of the device and the boxes | active | constraint | P1 | sean |
 | [`REQ-CRM-LCD-001`](lcd.md#req-crm-lcd-001--no-led-in-the-glass-characters-that-do-not-move-and-leds-in-the-bezel) | No LED in the glass, characters that do not move, and LEDs in the bezel | active | constraint | P1 | sean |
 

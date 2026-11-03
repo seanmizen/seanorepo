@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import { audit, normalizeEmail } from './auth';
 import { contactForm } from './forms/contact';
 import { changedFields, type FormValues } from './forms/form';
+import { nextNumber } from './org';
 
 /**
  * The contacts of an organisation: each one is a `person` with a
@@ -10,9 +11,14 @@ import { changedFields, type FormValues } from './forms/form';
  * `routes/orgs/new.tsx` call these functions.
  */
 
-/** One contact of an organisation: a person and their role. */
+/**
+ * One contact of an organisation: a person and their role. `id` is the
+ * person id, for the code only. `number` is the contact number in this
+ * organisation: the URL and the page show it (REQ-CRM-ID-001).
+ */
 export interface Contact {
   id: string;
+  number: number;
   name: string;
   phone: string | null;
   email: string | null;
@@ -23,25 +29,26 @@ export interface Contact {
 export const listContacts = (db: Database, orgId: string) =>
   db
     .query<Contact, [string]>(
-      `SELECT person.id, person.name, person.phone, person.email, membership.role
+      `SELECT person.id, membership.number, person.name, person.phone, person.email, membership.role
        FROM membership JOIN person ON person.id = membership.person_id
        WHERE membership.organisation_id = ? ORDER BY person.created_at DESC, person.rowid DESC;`,
     )
     .all(orgId);
 
-/** The contact `personId` of an organisation, or null. */
-export const findContact = (db: Database, orgId: string, personId: string) =>
+/** The contact with `number` of an organisation, or null. */
+export const findContact = (db: Database, orgId: string, number: number) =>
   db
-    .query<Contact, [string, string]>(
-      `SELECT person.id, person.name, person.phone, person.email, membership.role
+    .query<Contact, [string, number]>(
+      `SELECT person.id, membership.number, person.name, person.phone, person.email, membership.role
        FROM membership JOIN person ON person.id = membership.person_id
-       WHERE membership.organisation_id = ? AND person.id = ?;`,
+       WHERE membership.organisation_id = ? AND membership.number = ?;`,
     )
-    .get(orgId, personId);
+    .get(orgId, number);
 
 /**
  * Add a contact to an organisation, from the values of the contact form:
- * a `person` and a `membership`, each with an audit row. If a person has
+ * a `person` and a `membership` with the next contact number, each with an
+ * audit row. If a person has
  * the email, link that person and leave the row as it is. Run it in a
  * transaction. Returns an error if the person is a contact of the
  * organisation already.
@@ -74,8 +81,8 @@ export const addContact = (
     audit(db, actor, 'create', 'person', personId, { organisation_id: orgId });
   }
   db.query(
-    'INSERT INTO membership (person_id, organisation_id, role) VALUES (?, ?, ?);',
-  ).run(personId, orgId, values.role);
+    'INSERT INTO membership (person_id, organisation_id, role, number) VALUES (?, ?, ?, ?);',
+  ).run(personId, orgId, values.role, nextNumber(db, orgId, 'contact'));
   audit(db, actor, 'create', 'membership', orgId, {
     person_id: personId,
     role: values.role,
@@ -97,7 +104,8 @@ export const saveContact = (
   values: FormValues,
 ) =>
   db.transaction(() => {
-    const fields = changedFields(contactForm, { ...contact }, values);
+    const { id: _id, number: _number, ...current } = contact;
+    const fields = changedFields(contactForm, current, values);
     const personFields = fields.filter((name) => name !== 'role');
     if (values.email && personFields.includes('email')) {
       const owner = db

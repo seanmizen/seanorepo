@@ -18,7 +18,7 @@ import { sendNotFound } from '../[slug]';
 
 /**
  * The edit page of an organisation: the organisation form of `/orgs/new`,
- * filled in, and one `Save` key. The URL name stays the same unless the
+ * filled in, and one `Save` key. The URL slug stays the same unless the
  * person changes it, and the intro says that old links stop working then.
  */
 export const orgEditPage = ({
@@ -32,11 +32,11 @@ export const orgEditPage = ({
 }): PageParts => ({
   title: `Edit ${org.name}`,
   intro:
-    'When the URL name changes, old links to this organisation stop working.',
+    'When the URL slug changes, old links to this organisation stop working.',
   device: (
     <Device>
       <Lcd alert={error} />
-      <form method="post" action={`${orgPath(org.slug)}/edit`}>
+      <form method="post" action={orgPath(org.slug, 'edit')}>
         <RecordForm
           form={organisationForm}
           values={
@@ -60,7 +60,7 @@ export const orgEditPage = ({
 
 /**
  * `GET` and `POST /<slug>/edit`. A save writes an audit row with the names
- * of the changed fields, then opens the organisation at its URL name.
+ * of the changed fields, then opens the organisation at its URL slug.
  */
 export const orgEditRoute = (app: FastifyInstance, db: Database) => {
   const send = (
