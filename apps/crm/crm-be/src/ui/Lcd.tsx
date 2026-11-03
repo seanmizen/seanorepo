@@ -44,7 +44,21 @@ export interface Menu {
   items: MenuItem[];
   /** The text when `items` is empty. */
   empty: string;
+  /**
+   * The column that sets the order of the items, and its direction. The
+   * legend of that column shows an arrow: `▲` for ascending, `▼` for
+   * descending. `text` tells the same order with no page styles, for
+   * example "Sorted by next action, oldest first".
+   */
+  order?: {
+    column: 'name' | 'value' | 'status';
+    dir: 'asc' | 'desc';
+    text: string;
+  };
 }
+
+/** The arrow of each direction of an order. */
+const ARROWS = { asc: '▲', desc: '▼' } as const;
 
 /**
  * The LCD of the device: a glass in a faceplate, as the display of autosam.
@@ -66,7 +80,10 @@ export interface Menu {
  * 2. The characters never move. Each menu row starts with the arrow
  *    column. A hover or a focus shows the arrow in it, and changes no
  *    layout.
- * 3. The menu rows have one fixed height. A text that does not fit ends
+ * 3. The arrow of the order is in a space that the legend keeps for it.
+ *    The name legend keeps the arrow column of the rows. A value or status
+ *    legend is aligned right, so an arrow at its left moves no character.
+ * 4. The menu rows have one fixed height. A text that does not fit ends
  *    in an ellipsis, and the `title` of the row holds the full text. The
  *    LED of a row is in the bezel, at the right of the row, so the LEDs are
  *    a straight column.
@@ -91,6 +108,12 @@ export const Lcd = ({
   const twoLines = items.some(
     (item) => item.detail !== undefined || item.status !== undefined,
   );
+  const order = menu?.order;
+  /** The legend `text` of `column`, with the arrow when it sets the order. */
+  const legend = (column: 'value' | 'status', text: string | undefined) =>
+    text !== undefined && order?.column === column
+      ? `${ARROWS[order.dir]} ${text}`
+      : text;
   return (
     <div className="lcd">
       <div className="window">
@@ -109,43 +132,49 @@ export const Lcd = ({
           (items.length === 0 ? (
             <p className="empty">{menu.empty}</p>
           ) : (
-            <ol
-              className={['menu', twoLines && 'two-lines', leds && 'leds']
-                .filter(Boolean)
-                .join(' ')}
-              data-legend-name={menu.legend[0]}
-              data-legend-value={menu.legend[1]}
-              data-legend-detail={menu.sublegend?.[0]}
-              data-legend-status={menu.sublegend?.[1]}
-            >
-              {items.map((item) => (
-                <li key={item.href}>
-                  <a href={item.href} title={item.title ?? item.name}>
-                    <span className="arrow" aria-hidden="true" />
-                    <span className="name">{item.name}</span>
-                    {item.value !== undefined && (
-                      <>
-                        {' '}
-                        <span className="value">{item.value}</span>
-                      </>
-                    )}
-                    {item.detail !== undefined && (
-                      <>
-                        {' '}
-                        <span className="detail">{item.detail}</span>
-                      </>
-                    )}
-                    {item.status !== undefined && (
-                      <>
-                        {' '}
-                        <span className="status">{item.status}</span>
-                      </>
-                    )}
-                  </a>
-                  {leds && <Led on={item.led === true} />}
-                </li>
-              ))}
-            </ol>
+            <>
+              {order && <p className="bare-text">{order.text}</p>}
+              <ol
+                className={['menu', twoLines && 'two-lines', leds && 'leds']
+                  .filter(Boolean)
+                  .join(' ')}
+                data-legend-name={menu.legend[0]}
+                data-legend-value={legend('value', menu.legend[1])}
+                data-legend-detail={menu.sublegend?.[0]}
+                data-legend-status={legend('status', menu.sublegend?.[1])}
+                data-order-name={
+                  order?.column === 'name' ? order.dir : undefined
+                }
+              >
+                {items.map((item) => (
+                  <li key={item.href}>
+                    <a href={item.href} title={item.title ?? item.name}>
+                      <span className="arrow" aria-hidden="true" />
+                      <span className="name">{item.name}</span>
+                      {item.value !== undefined && (
+                        <>
+                          {' '}
+                          <span className="value">{item.value}</span>
+                        </>
+                      )}
+                      {item.detail !== undefined && (
+                        <>
+                          {' '}
+                          <span className="detail">{item.detail}</span>
+                        </>
+                      )}
+                      {item.status !== undefined && (
+                        <>
+                          {' '}
+                          <span className="status">{item.status}</span>
+                        </>
+                      )}
+                    </a>
+                    {leds && <Led on={item.led === true} />}
+                  </li>
+                ))}
+              </ol>
+            </>
           ))}
       </div>
     </div>

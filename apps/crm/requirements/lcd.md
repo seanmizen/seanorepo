@@ -24,7 +24,11 @@ do not move. The LCD of the crm follows the same rules.
   that does not fit a row ends in an ellipsis, and the `title` of the row
   holds the full text. The red LED of a row is in the bezel (the faceplate
   around the glass), at the right of the row and aligned to it, so the
-  LEDs are a straight column at equal steps.
+  LEDs are a straight column at equal steps. The legend of the column
+  that sets the order of a menu shows an arrow, `▲` or `▼`, in a space
+  that the legend keeps for it: the arrow column for the name legend, and
+  the free space at the left of a legend at the right. With no
+  page styles, text tells the order.
 - **Rationale:** Sean: "no red LEDs inside a LCD - that makes no sense. a
   flashing lcd-greyblack circle makes more sense than a LED light. also,
   characters generally don't move. hovering or focusing e.g. example
@@ -34,9 +38,13 @@ do not move. The LCD of the crm follows the same rules.
   right of each company. please try to make each company a set height so
   the LEDs look uniform and mechanically placed". The glass is the
   background of the window, so a long menu scrolls over a glass that stays
-  still, and the LED of each row scrolls with its row.
+  still, and the LED of each row scrolls with its row. Sean, about the
+  order: "add an arrow on the LCD screen up/down whenever we have sorted
+  by that column".
 - **Verification:**
   - Test — `apps/crm/crm-be/src/ui/Lcd.test.tsx` › "no LED is inside the glass, and each menu row has the arrow column and an LED in the bezel (REQ-CRM-LCD-001)"
   - Test — `apps/crm/crm-be/src/ui/Lcd.test.tsx` › "each page follows the LCD rules, and the theme fixes the row height and the arrow column (REQ-CRM-LCD-001)"
+  - Test — `apps/crm/crm-be/src/routes/index.test.ts` › "the LCD legend shows the arrow of the order on the column that sets it, and text tells the order (REQ-CRM-LCD-001)"
+  - Demonstration — `node apps/crm/scripts/swap-test.mjs`: a sort key moves the arrow in place. The arrow of the name legend is in the arrow column.
   - Demonstration — `node apps/crm/scripts/shoot.mjs`: compare `home-hover-*` with `home-*`. The pointer on a row shows the arrow, and no character moves.
 - **Relations:** none
