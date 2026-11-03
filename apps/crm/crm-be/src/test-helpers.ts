@@ -94,6 +94,26 @@ export const divOf = (html: string, className: string) => {
   throw new Error(`The <div class="${className}"> has no end.`);
 };
 
+/**
+ * The events in `org_event` of each organisation, oldest first: the kind,
+ * then each field of the payload.
+ */
+export const orgEvents = (db: Database) =>
+  db
+    .query<{ kind: string; payload: string }, []>(
+      'SELECT kind, payload FROM org_event ORDER BY rowid;',
+    )
+    .all()
+    .map(
+      (row): Record<string, unknown> => ({
+        kind: row.kind,
+        ...JSON.parse(row.payload),
+      }),
+    );
+
+/** The newest event in `org_event`, as `orgEvents` gives it. */
+export const lastEvent = (db: Database) => orgEvents(db).at(-1);
+
 /** Add a person with this email. Returns the person id. */
 export const addPerson = (db: Database, email: string) => {
   const id = crypto.randomUUID();

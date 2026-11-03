@@ -19,7 +19,8 @@
  * 1440px (REQ-CRM-LAYOUT-001). The script reads the breakpoint from
  * crm-fe/src/theme.css. It takes each sort and filter of the list at
  * 1200px in light mode and at 390px in dark mode, and a few pages with
- * ?theme=bare. "public-home" and "privacy" are signed out. "home-hover" has the pointer on a menu row: compare it with
+ * ?theme=bare. "org-hidden-not-shown" and "org-hidden-shown" have a hidden
+ * visit and a hidden contact (Undo, Redo and Show hidden). "public-home" and "privacy" are signed out. "home-hover" has the pointer on a menu row: compare it with
  * "home" to see that no character moves (REQ-CRM-LCD-001). The script
  * prints each page that scrolls sideways. At the end it stops crm-be and
  * deletes the database.
@@ -79,14 +80,14 @@ const ORGS = [
       [-9, 'no_answer', null],
     ],
     notes: [[-5, 'Uses a paper diary. Wants something simple.']],
-    // Rows of audit_log, as the crm writes them: [days, action, entity,
-    // detail]. The Activity list shows each one.
+    // Events of org_event, as migration 005 made them from the old
+    // history: [days, kind, display fields], with no changes, so Undo
+    // stops at them. The Activity list shows each one.
     changes: [
-      [-30, 'update', 'organisation', { fields: ['postcode', 'source'] }],
+      [-30, 'details', { fields: ['postcode', 'source'] }],
       [
         -9,
-        'update',
-        'organisation',
+        'stage',
         {
           fields: ['stage'],
           from: 'lead',
@@ -97,8 +98,7 @@ const ORGS = [
       ],
       [
         -4,
-        'update',
-        'organisation',
+        'stage',
         {
           fields: ['stage', 'next_action', 'next_action_on'],
           from: 'visited',
@@ -216,11 +216,6 @@ const seed = (adminToken, emailToken) => {
   const hash = (token) => createHash('sha256').update(token).digest('hex');
   const admin = `(SELECT id FROM person WHERE email = ${q(ADMIN)})`;
   const rows = [];
-  const audit = (days, action, entity, entityId, detail) =>
-    rows.push(
-      `INSERT INTO audit_log (id, at, actor, action, entity, entity_id, detail)
-       VALUES (${q(randomUUID())}, ${q(at(days, 9))}, ${admin}, ${q(action)}, ${q(entity)}, ${q(entityId)}, ${q(JSON.stringify(detail))});`,
-    );
   for (const [index, org] of ORGS.entries()) {
     const id = randomUUID();
     const addedDays = org.added ?? -45 + index;
@@ -229,7 +224,9 @@ const seed = (adminToken, emailToken) => {
       `INSERT INTO organisation (id, slug, name, address_line_1, address_line_2, postcode, stage, next_action, next_action_on, lawful_basis, source, created_at)
        VALUES (${q(id)}, ${q(org.slug)}, ${q(org.name)}, ${org.address.map(q).join(', ')}, ${q(org.stage)}, ${q(org.next?.[0] ?? null)}, ${q(org.next?.[1] ?? null)}, 'legitimate_interests', 'door', ${q(added)});`,
     );
-    audit(addedDays, 'create', 'organisation', id, { stage: 'lead' });
+    // The history of the organisation: [time, kind, payload], numbered in
+    // time order below (REQ-CRM-UNDO-001). The new lead is the first.
+    const history = [[added, 'create', { stage: 'lead' }]];
     if (org.contact) {
       const person = randomUUID();
       const [name, phone, email] = org.contact;
@@ -238,32 +235,56 @@ const seed = (adminToken, emailToken) => {
         `INSERT INTO membership (person_id, organisation_id, role, number) VALUES (${q(person)}, ${q(id)}, 'owner', 1);`,
         `INSERT INTO org_counter (organisation_id, kind, last) VALUES (${q(id)}, 'contact', 1);`,
       );
-      audit(addedDays, 'create', 'membership', id, {
-        person_id: person,
-        role: 'owner',
-      });
+      history[0][2] = { stage: 'lead', person_id: person, role: 'owner' };
     }
-    for (const [days, action, entity, detail] of org.changes ?? []) {
-      audit(days, action, entity, id, detail);
+    for (const [days, kind, detail] of org.changes ?? []) {
+      history.push([at(days, 9), kind, { ...detail, migrated: true }]);
     }
     // Each visit and note gets the next activity number, oldest first
-    // (REQ-CRM-ID-001).
+    // (REQ-CRM-ID-001), and the event that added it.
     const entries = [
       ...org.visits.map(([days, outcome, note]) => ({
+        table: 'visit',
         time: at(days),
-        sql: (number) =>
-          `INSERT INTO visit (id, organisation_id, number, at, outcome, note) VALUES (${q(randomUUID())}, ${q(id)}, ${number}, ${q(at(days))}, ${q(outcome)}, ${q(note)});`,
+        sql: (entry, number) =>
+          `INSERT INTO visit (id, organisation_id, number, at, outcome, note) VALUES (${q(entry)}, ${q(id)}, ${number}, ${q(at(days))}, ${q(outcome)}, ${q(note)});`,
       })),
       ...org.notes.map(([days, body]) => ({
+        table: 'note',
         time: at(days, 11),
-        sql: (number) =>
-          `INSERT INTO note (id, organisation_id, number, body, created_at) VALUES (${q(randomUUID())}, ${q(id)}, ${number}, ${q(body)}, ${q(at(days, 11))});`,
+        sql: (entry, number) =>
+          `INSERT INTO note (id, organisation_id, number, body, created_at) VALUES (${q(entry)}, ${q(id)}, ${number}, ${q(body)}, ${q(at(days, 11))});`,
       })),
     ].sort((a, b) => a.time.localeCompare(b.time));
-    rows.push(...entries.map((entry, i) => entry.sql(i + 1)));
+    for (const [i, { table, time, sql: insert }] of entries.entries()) {
+      const entry = randomUUID();
+      rows.push(insert(entry, i + 1));
+      history.push([
+        time,
+        table,
+        {
+          record_id: entry,
+          changes: [
+            {
+              table,
+              id: entry,
+              before: { hidden: true },
+              after: { hidden: false },
+            },
+          ],
+        },
+      ]);
+    }
     if (entries.length > 0) {
       rows.push(
         `INSERT INTO org_counter (organisation_id, kind, last) VALUES (${q(id)}, 'activity', ${entries.length});`,
+      );
+    }
+    history.sort((a, b) => a[0].localeCompare(b[0]));
+    for (const [i, [time, kind, payload]] of history.entries()) {
+      rows.push(
+        `INSERT INTO org_event (organisation_id, number, at, actor, kind, payload)
+         VALUES (${q(id)}, ${i + 1}, ${q(time)}, ${admin}, ${q(kind)}, ${q(JSON.stringify(payload))});`,
       );
     }
   }
@@ -276,6 +297,40 @@ const seed = (adminToken, emailToken) => {
      VALUES (${q(randomUUID())}, ${admin}, ${q(hash(emailToken))}, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1', ${q(at(-3))}, ${q(at(2))}, 'email');`,
   );
   sql(rows.join('\n'));
+};
+
+/**
+ * Hidden records on Riverside Dental, through the routes of crm-be (the
+ * same code as a tap): a contact added and removed, then a visit logged
+ * and undone. So Redo is on, and Show hidden lists a visit and a contact
+ * (REQ-CRM-UNDO-003).
+ */
+const hideSome = async (adminToken) => {
+  const post = async (path, fields) => {
+    const response = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        cookie: `crm_session=${adminToken}`,
+        origin: BASE,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(fields).toString(),
+      redirect: 'manual',
+    });
+    if (response.status !== 303) {
+      throw new Error(`POST ${path} returned ${response.status}.`);
+    }
+  };
+  const org = '/orgs/riverside-dental';
+  await post(`${org}/contacts`, { name: 'Kim Reception', role: 'staff' });
+  await post(`${org}/contacts/2/remove`, {});
+  await post(`${org}/activity`, { outcome: 'no_answer', note: 'Closed.' });
+  const event = String(
+    sql(
+      "SELECT max(number) FROM org_event WHERE organisation_id = (SELECT id FROM organisation WHERE slug = 'riverside-dental');",
+    ),
+  ).trim();
+  await post(`${org}/undo`, { event });
 };
 
 const waitForHealth = async () => {
@@ -310,6 +365,7 @@ try {
   const adminToken = randomBytes(32).toString('base64url');
   const emailToken = randomBytes(32).toString('base64url');
   seed(adminToken, emailToken);
+  await hideSome(adminToken);
 
   const signedIn = [
     ['home', '/'],
@@ -322,6 +378,9 @@ try {
     ['org', '/orgs/example-plumbing'],
     // The Activity list, open.
     ['org-activity', '/orgs/example-plumbing', ['click', 'summary']],
+    // Hidden records: not shown, then shown (Show hidden).
+    ['org-hidden-not-shown', '/orgs/riverside-dental', ['click', 'summary']],
+    ['org-hidden-shown', '/orgs/riverside-dental?hidden=1'],
     ['org-no-contacts', '/orgs/the-high-street-hair-and-beauty-salon'],
     ['org-edit', '/orgs/example-plumbing/edit'],
     ['contact-edit', '/orgs/example-plumbing/contacts/1'],
@@ -421,6 +480,7 @@ try {
     ['home', '/?sort=name&dir=asc&theme=bare'],
     ['sessions', '/account/sessions?theme=bare'],
     ['org', '/orgs/example-plumbing?theme=bare'],
+    ['org-hidden-shown', '/orgs/riverside-dental?hidden=1&theme=bare'],
     ['org-new', '/orgs/new?theme=bare'],
   ]) {
     await shoot(page, name, url, 'bare');

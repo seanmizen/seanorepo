@@ -82,12 +82,21 @@ describe('short IDs (REQ-CRM-ID-001)', () => {
       db.query<{ n: number }, []>(sql).get()?.n ?? 0;
     expect(pages.filter((page) => /\/activity\/\d+$/.test(page))).toHaveLength(
       count(
-        'SELECT (SELECT count(*) FROM visit) + (SELECT count(*) FROM note) AS n;',
+        `SELECT (SELECT count(*) FROM visit WHERE hidden_at IS NULL)
+              + (SELECT count(*) FROM note WHERE hidden_at IS NULL) AS n;`,
       ),
     );
     expect(pages.filter((page) => /\/contacts\/\d+$/.test(page))).toHaveLength(
-      count('SELECT count(*) AS n FROM membership;'),
+      count('SELECT count(*) AS n FROM membership WHERE hidden_at IS NULL;'),
     );
+    // The page with the hidden records (a removed contact) has no UUID.
+    const hidden = await app.inject({
+      method: 'GET',
+      url: '/orgs/dummy-print-co?hidden=1',
+      headers: { cookie },
+    });
+    expect(hidden.body).toContain('Restore');
+    expect(hidden.body).not.toMatch(UUID);
 
     // Each POST of an organisation page redirects with no UUID.
     const posts: [string, Record<string, string>][] = [
@@ -110,6 +119,23 @@ describe('short IDs (REQ-CRM-ID-001)', () => {
       const response = await postForm(app, url, fields, cookie);
       expect(`${url} ${response.statusCode}`).toBe(`${url} 303`);
       expect(String(response.headers.location)).toMatch(/^\/orgs\/[a-z0-9-]+$/);
+    }
+    // Undo, Redo and Restore go back to the Activity box.
+    const newest = count(
+      `SELECT max(number) AS n FROM org_event WHERE organisation_id =
+         (SELECT id FROM organisation WHERE slug = 'the-example-bakery');`,
+    );
+    const history: [string, Record<string, string>][] = [
+      ['/orgs/the-example-bakery/undo', { event: String(newest) }],
+      ['/orgs/the-example-bakery/redo', { event: String(newest), hidden: '1' }],
+      ['/orgs/dummy-print-co/contacts/2/restore', {}],
+    ];
+    for (const [url, fields] of history) {
+      const response = await postForm(app, url, fields, cookie);
+      expect(`${url} ${response.statusCode}`).toBe(`${url} 303`);
+      expect(String(response.headers.location)).toMatch(
+        /^\/orgs\/[a-z0-9-]+(\?hidden=1)?#activity$/,
+      );
     }
   });
 

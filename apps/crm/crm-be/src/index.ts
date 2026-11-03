@@ -29,11 +29,15 @@ import { logoutRoute } from './routes/logout';
 import { orgRoute } from './routes/orgs/[slug]';
 import { orgActivityRoute } from './routes/orgs/[slug]/activity';
 import { orgActivityEditRoute } from './routes/orgs/[slug]/activity/[number]';
+import { orgActivityRestoreRoute } from './routes/orgs/[slug]/activity/[number]/restore';
 import { orgContactsRoute } from './routes/orgs/[slug]/contacts';
 import { orgContactEditRoute } from './routes/orgs/[slug]/contacts/[number]';
 import { orgContactRemoveRoute } from './routes/orgs/[slug]/contacts/[number]/remove';
+import { orgContactRestoreRoute } from './routes/orgs/[slug]/contacts/[number]/restore';
 import { orgEditRoute } from './routes/orgs/[slug]/edit';
+import { orgRedoRoute } from './routes/orgs/[slug]/redo';
 import { orgStageRoute } from './routes/orgs/[slug]/stage';
+import { orgUndoRoute } from './routes/orgs/[slug]/undo';
 import { orgsNewRoute } from './routes/orgs/new';
 import { privacyRoute } from './routes/privacy';
 
@@ -91,6 +95,10 @@ export const buildApp = (db: Database) => {
   orgContactsRoute(app, db);
   orgContactEditRoute(app, db);
   orgContactRemoveRoute(app, db);
+  orgActivityRestoreRoute(app, db);
+  orgContactRestoreRoute(app, db);
+  orgUndoRoute(app, db);
+  orgRedoRoute(app, db);
 
   return app;
 };

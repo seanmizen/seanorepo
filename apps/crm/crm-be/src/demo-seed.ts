@@ -6,12 +6,13 @@
  * Why: the demo must look like real use (stage changes, visits, notes and
  * contacts, with an Activity list), and must hold no real data.
  *
- * The seed deletes each organisation, each person except the admin
- * (CRM_ADMIN_EMAIL), and their audit rows. Then it adds the fixed set. It
- * writes through the same functions as the routes (`addOrg`, `addContact`,
- * `saveContact`, `removeContact`, `logActivity`, `setPipeline`), so each
- * write has its audit row. Then it moves the times of each step back to a
- * day relative to today. Two runs give the same data.
+ * The seed deletes each organisation (and so its history in `org_event`),
+ * each person except the admin (CRM_ADMIN_EMAIL), and their audit rows.
+ * Then it adds the fixed set. It writes through the same functions as the
+ * routes (`addOrg`, `addContact`, `saveContact`, `removeContact`,
+ * `logActivity`, `setPipeline`), so each write has its event and its audit
+ * row. Then it moves the times of each step back to a day relative to
+ * today. Two runs give the same data.
  *
  * Every name, address, phone number and email address is fictional:
  * `example.com` emails, `07700 900xxx` phone numbers (Ofcom keeps them for
@@ -413,8 +414,12 @@ const TIMES: [string, string[]][] = [
   ['person', ['created_at', 'updated_at']],
   ['visit', ['at']],
   ['note', ['created_at']],
+  ['org_event', ['at']],
   ['audit_log', ['at']],
 ];
+
+/** The tables whose rows a step can hide (a removed contact). */
+const HIDES = ['visit', 'note', 'membership'];
 
 /**
  * Run `step`, then give each row that it added or changed the time `at`.
@@ -445,6 +450,12 @@ const backdate = (db: Database, at: string, step: () => void) => {
         `UPDATE ${table} SET updated_at = ?1 WHERE updated_at >= ?2;`,
       ).run(at, started);
     }
+  }
+  for (const table of HIDES) {
+    db.query(`UPDATE ${table} SET hidden_at = ?1 WHERE hidden_at >= ?2;`).run(
+      at,
+      started,
+    );
   }
 };
 
@@ -560,9 +571,9 @@ export const seedDemo = (
       ?.n ?? 0;
   return {
     organisations: count('organisation'),
-    contacts: count('membership'),
-    visits: count('visit'),
-    notes: count('note'),
+    contacts: count('membership WHERE hidden_at IS NULL'),
+    visits: count('visit WHERE hidden_at IS NULL'),
+    notes: count('note WHERE hidden_at IS NULL'),
   };
 };
 

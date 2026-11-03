@@ -1,9 +1,15 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ReactNode } from 'react';
-import { type Event, listEvents } from '../../activity';
-import { type Contact, listContacts } from '../../contacts';
+import { type Activity, listEntries } from '../../activity';
+import { type Contact, listContacts, personNames } from '../../contacts';
 import { dueWords, today } from '../../dates';
+import {
+  type History,
+  historyOf,
+  listOrgEvents,
+  type OrgEvent,
+} from '../../events';
 import { activityForm, LOG_KEYS } from '../../forms/activity';
 import { contactForm, ROLES } from '../../forms/contact';
 import {
@@ -94,101 +100,188 @@ const orgChange = (detail: Record<string, string | null | string[]>) => {
 };
 
 /**
- * One line of the Activity list, as text: `what` happened, the `text` of
- * a visit or a note, and the `edit` link of a visit or a note. The words
- * are the words on the page: the labels of the fields, the stages and the
- * Save as buttons. A visit or a note shows its number, as in its URL
- * (REQ-CRM-ID-001): `Visit 17: Spoke.`, `Note 18:`.
+ * Everything that the Activity list shows: the events, the visits and the
+ * notes by id, the names of the people, and the state of Undo and Redo.
  */
-const describe = (
-  org: Org,
-  event: Event,
-): { what: ReactNode; text?: string; edit?: string } => {
-  const edit =
-    event.number === null ? undefined : activityPath(org.slug, event.number);
-  if (event.kind === 'visit' && event.outcome) {
-    return {
-      what: `Visit ${event.number}: ${OUTCOMES[event.outcome]}.`,
-      text: event.note ?? undefined,
-      edit,
-    };
-  }
-  if (event.kind === 'note') {
-    return {
-      what: `Note ${event.number}:`,
-      text: event.note ?? undefined,
-      edit,
-    };
-  }
-  const detail = JSON.parse(event.detail ?? '{}');
-  const fields: string[] = Array.isArray(detail.fields) ? detail.fields : [];
-  const name = contactName(event.person);
-  switch (`${event.action} ${event.entity}`) {
-    case 'create organisation':
-      return { what: 'Added at the stage Lead.' };
-    case 'update organisation':
-      return { what: orgChange(detail) };
-    case 'create membership':
+export interface ActivityData {
+  /** Each event, oldest first. */
+  events: OrgEvent[];
+  entries: Map<string, Activity>;
+  people: Map<string, string>;
+  history: History;
+}
+
+/** Read the Activity list of the organisation `orgId`. */
+export const readActivity = (db: Database, orgId: string): ActivityData => {
+  const events = listOrgEvents(db, orgId);
+  const ids = events.flatMap((event) =>
+    event.payload.person_id ? [event.payload.person_id] : [],
+  );
+  return {
+    events,
+    entries: listEntries(db, orgId),
+    people: personNames(db, ids),
+    history: historyOf(events),
+  };
+};
+
+/** The role of a contact, as ` (Owner)`, or '' for no known role. */
+const roleText = (role: unknown) =>
+  typeof role === 'string' && role in ROLES
+    ? ` (${ROLES[role as keyof typeof ROLES]})`
+    : '';
+
+/** The text of a visit or a note: `Visit 17: Spoke.` or `Note 18:`. */
+const entryText = (entry: Activity) =>
+  entry.outcome
+    ? `Visit ${entry.number}: ${OUTCOMES[entry.outcome]}.`
+    : `Note ${entry.number}:`;
+
+/**
+ * One line of the Activity list, as text: `what` happened, the `text` of
+ * a visit or a note, and the `edit` link of a visit or a note. A hidden
+ * visit or note has `hidden` and its `restore` path in place of `edit`.
+ * The words are the words on the page: the labels of the fields, the
+ * stages and the Save as buttons. A visit or a note shows its number, as
+ * in its URL (REQ-CRM-ID-001): `Visit 17: Spoke.`, `Note 18:`.
+ */
+interface Line {
+  what: ReactNode;
+  text?: string;
+  edit?: string;
+  restore?: string;
+}
+
+const describe = (org: Org, data: ActivityData, event: OrgEvent): Line => {
+  const detail = event.payload;
+  const entry = detail.record_id
+    ? data.entries.get(detail.record_id)
+    : undefined;
+  const name = contactName(
+    detail.person_id ? (data.people.get(detail.person_id) ?? null) : null,
+  );
+  const pipeline =
+    detail.pipeline && typeof detail.pipeline === 'object' ? (
+      <>
+        {' '}
+        {orgChange(detail.pipeline as Record<string, string | null | string[]>)}
+      </>
+    ) : null;
+  const fields = Array.isArray(detail.fields)
+    ? (detail.fields as string[])
+    : [];
+  switch (event.kind) {
+    case 'create':
       return {
-        what: `Contact added: ${name}${
-          detail.role in ROLES
-            ? ` (${ROLES[detail.role as keyof typeof ROLES]})`
-            : ''
-        }.`,
+        what: detail.person_id
+          ? `Added at the stage Lead. Contact added: ${name}${roleText(detail.role)}.`
+          : 'Added at the stage Lead.',
       };
-    case 'update person':
-    case 'update membership':
+    case 'visit':
+    case 'note': {
+      if (!entry) return { what: `A removed ${event.kind}.` };
+      const hidden = entry.hidden_at !== null;
+      return {
+        what: (
+          <>
+            {entryText(entry)}
+            {pipeline}
+          </>
+        ),
+        text: entry.note ?? undefined,
+        ...(hidden
+          ? { restore: orgPath(org.slug, 'activity', entry.number, 'restore') }
+          : { edit: activityPath(org.slug, entry.number) }),
+      };
+    }
+    case 'stage':
+    case 'next_action':
+    case 'details':
+      return {
+        what: orgChange(detail as Record<string, string | null | string[]>),
+      };
+    case 'contact_add':
+      return { what: `Contact added: ${name}${roleText(detail.role)}.` };
+    case 'contact_edit':
       return {
         what: `Contact changed: ${name} (${fields
           .map((field) => CONTACT_LABELS[field] ?? field)
           .join(', ')}).`,
       };
-    case 'delete membership':
+    case 'contact_remove':
       return {
         what:
-          event.person === null
-            ? 'Contact removed.'
-            : `Contact removed: ${name}.`,
+          detail.person_id && data.people.has(detail.person_id)
+            ? `Contact removed: ${name}.`
+            : 'Contact removed.',
       };
-    case 'update visit':
-    case 'update note': {
-      const was = detail.was ?? event.entity;
+    case 'activity_edit': {
+      const was = detail.was ?? entry?.kind;
+      const saved = String(detail.saved_as);
       const changes = [
         ...(fields.includes('outcome')
-          ? [`saved as ${LOG_KEYS[detail.saved_as] ?? detail.saved_as}`]
+          ? [`saved as ${LOG_KEYS[saved] ?? saved}`]
           : []),
         ...(fields.includes('note') ? ['text changed'] : []),
       ].join(', ');
       return {
-        what: event.record_at ? (
+        what: entry ? (
           <>
-            {was === 'note' ? 'Note' : 'Visit'} {event.number} of{' '}
-            <When value={event.record_at} />: {changes}.
+            {was === 'note' ? 'Note' : 'Visit'} {entry.number} of{' '}
+            <When value={entry.at} />: {changes}.{pipeline}
           </>
         ) : (
           `A removed ${was}: ${changes}.`
         ),
       };
     }
+    case 'restore':
+      return {
+        what: entry
+          ? `${entry.kind === 'note' ? 'Note' : 'Visit'} ${entry.number} restored.`
+          : `Contact restored: ${name}.`,
+      };
+    case 'undo':
+    case 'redo': {
+      const target = data.events.find(
+        (other) => other.number === detail.target,
+      );
+      const verb = event.kind === 'undo' ? 'Undo' : 'Redo';
+      return {
+        what: target ? (
+          <>
+            {verb} of {describe(org, data, target).what}
+          </>
+        ) : (
+          `${verb}.`
+        ),
+      };
+    }
     default:
-      return { what: `${event.entity}: ${event.action}.` };
+      return { what: `${event.kind}.` };
   }
 };
 
 /**
  * One line of the Activity list: the time, then the text. In the
- * `<summary>`, the line has no Edit link: a tap there opens the list.
+ * `<summary>`, the line has no Edit link and no Restore button: a tap there
+ * opens the list. A hidden visit or note shows `hidden` and Restore.
  */
 const EventLine = ({
   org,
+  data,
   event,
+  hidden,
   summary = false,
 }: {
   org: Org;
-  event: Event;
+  data: ActivityData;
+  event: OrgEvent;
+  /** True when the page shows the hidden records (`?hidden=1`). */
+  hidden: boolean;
   summary?: boolean;
 }) => {
-  const { what, text, edit } = describe(org, event);
+  const { what, text, edit, restore } = describe(org, data, event);
   return (
     <>
       <When value={event.at} /> <span className="what">{what}</span>
@@ -206,7 +299,137 @@ const EventLine = ({
           </a>
         </>
       )}
+      {restore && !summary && (
+        <>
+          {' '}
+          <span className="edit">
+            <span className="flag">hidden</span>{' '}
+            <RestoreButton action={restore} hidden={hidden} />
+          </span>
+        </>
+      )}
     </>
+  );
+};
+
+/**
+ * The Restore button of a hidden record: a form that posts to `action`. It
+ * keeps the page in its mode (`hidden`).
+ */
+const RestoreButton = ({
+  action,
+  hidden,
+}: {
+  action: string;
+  hidden: boolean;
+}) => (
+  <form method="post" action={action}>
+    {hidden && <input type="hidden" name="hidden" value="1" />}
+    <button type="submit" className="link">
+      Restore
+    </button>
+  </form>
+);
+
+/**
+ * True when the line of `event` shows: a visit or a note that is hidden
+ * shows only with `?hidden=1`.
+ */
+const shows = (data: ActivityData, event: OrgEvent, hidden: boolean) => {
+  if (hidden || (event.kind !== 'visit' && event.kind !== 'note')) return true;
+  const entry = event.payload.record_id
+    ? data.entries.get(event.payload.record_id)
+    : undefined;
+  return !entry || entry.hidden_at === null;
+};
+
+/**
+ * The Activity box: Undo and Redo, then every event, newest first, in a
+ * `<details>`. The first part of the open list is `Show hidden` (or
+ * `Hide hidden`), a GET form. Undo, Redo and Show hidden are always in
+ * their place: a key that cannot act is off, with the reason
+ * (REQ-CRM-BUTTON-001). Each one is a plain form (REQ-CRM-BARE-001).
+ */
+const ActivityBox = ({
+  org,
+  data,
+  hidden,
+  hiddenCount,
+}: {
+  org: Org;
+  data: ActivityData;
+  hidden: boolean;
+  /** The number of hidden visits, notes and contacts. */
+  hiddenCount: number;
+}) => {
+  const lines = [...data.events]
+    .reverse()
+    .filter((event) => shows(data, event, hidden));
+  const { undo, redo } = data.history;
+  return (
+    <Box title="Activity">
+      <div className="history" id="activity">
+        {(
+          [
+            ['undo', 'Undo', undo],
+            ['redo', 'Redo', redo],
+          ] as const
+        ).map(([kind, label, state]) => (
+          <form key={kind} method="post" action={orgPath(org.slug, kind)}>
+            {'event' in state && (
+              <input type="hidden" name="event" value={state.event.number} />
+            )}
+            {hidden && <input type="hidden" name="hidden" value="1" />}
+            <Key id={kind} off={'off' in state ? state.off : undefined}>
+              {label}
+            </Key>
+          </form>
+        ))}
+      </div>
+      {lines.length === 0 ? (
+        <p>No activity.</p>
+      ) : (
+        <details className="events" open={hidden}>
+          <summary>
+            <span className="count">
+              {lines.length} {lines.length === 1 ? 'event' : 'events'}. Newest:
+            </span>{' '}
+            <span className="newest">
+              <EventLine
+                org={org}
+                data={data}
+                event={lines[0]}
+                hidden={hidden}
+                summary
+              />
+            </span>
+          </summary>
+          <form method="get" action={`${orgPath(org.slug)}#activity`}>
+            {!hidden && <input type="hidden" name="hidden" value="1" />}
+            <Key
+              id="show-hidden"
+              off={
+                !hidden && hiddenCount === 0 ? 'Nothing is hidden.' : undefined
+              }
+            >
+              {hidden ? 'Hide hidden' : 'Show hidden'}
+            </Key>
+          </form>
+          <ol>
+            {lines.map((event) => (
+              <li key={event.number}>
+                <EventLine
+                  org={org}
+                  data={data}
+                  event={event}
+                  hidden={hidden}
+                />
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+    </Box>
   );
 };
 
@@ -218,9 +441,12 @@ const EventLine = ({
  * - The modules: Log (`forms/activity.ts`), Stage, Next action and Add a
  *   contact (`forms/contact.ts`). On a phone, the LCD and Log fill the
  *   first screen.
- * - The boxes: Activity (every event, newest first, in a closed
- *   `<details>`), Contacts and Details. Each visit, note and contact, and
- *   the details, has an Edit link to its edit page.
+ * - The boxes: Activity (Undo and Redo, then every event, newest first, in
+ *   a closed `<details>`), Contacts and Details. Each visit, note and
+ *   contact, and the details, has an Edit link to its edit page. With
+ *   `hidden` (`?hidden=1`), the hidden visits, notes and contacts show
+ *   too, each with Restore, and the Activity list is open
+ *   (REQ-CRM-UNDO-003).
  *
  * To log a visit takes at most 2 taps: type the note (optional), then tap
  * one Save as key. Each key saves.
@@ -233,18 +459,29 @@ const EventLine = ({
 export const orgPage = ({
   org,
   contacts,
-  events,
+  activity,
+  hidden = false,
   error,
   contact,
 }: {
   org: Org;
+  /** Every contact, with the removed (hidden) ones. */
   contacts: Contact[];
-  events: Event[];
+  activity: ActivityData;
+  /** True for `?hidden=1`: the page shows the hidden records. */
+  hidden?: boolean;
   error?: string;
   /** The values of the Add a contact module after an error. */
   contact?: FormValues;
 }): PageParts => {
-  const lastVisit = events.find((event) => event.kind === 'visit');
+  const entries = [...activity.entries.values()];
+  const lastVisit = entries
+    .filter((entry) => entry.kind === 'visit' && entry.hidden_at === null)
+    .sort((a, b) => b.at.localeCompare(a.at))[0];
+  const hiddenCount =
+    entries.filter((entry) => entry.hidden_at !== null).length +
+    contacts.filter((person) => person.hidden).length;
+  const shown = contacts.filter((person) => hidden || !person.hidden);
   return {
     title: org.name,
     device: (
@@ -345,32 +582,14 @@ export const orgPage = ({
     ),
     boxes: (
       <>
-        <Box title="Activity">
-          {events.length === 0 ? (
-            <p>No activity.</p>
-          ) : (
-            <details className="events">
-              <summary>
-                <span className="count">
-                  {events.length} {events.length === 1 ? 'event' : 'events'}.
-                  Newest:
-                </span>{' '}
-                <span className="newest">
-                  <EventLine org={org} event={events[0]} summary />
-                </span>
-              </summary>
-              <ol>
-                {events.map((event) => (
-                  <li key={event.id}>
-                    <EventLine org={org} event={event} />
-                  </li>
-                ))}
-              </ol>
-            </details>
-          )}
-        </Box>
+        <ActivityBox
+          org={org}
+          data={activity}
+          hidden={hidden}
+          hiddenCount={hiddenCount}
+        />
         <Box title="Contacts">
-          {contacts.length === 0 ? (
+          {shown.length === 0 ? (
             <p>
               No contacts. <a href="#add-contact">Add a contact</a>.
             </p>
@@ -378,7 +597,7 @@ export const orgPage = ({
             <RecordTable
               head={['Name', 'Role', 'Phone', 'Email', '']}
               rowHeader
-              rows={contacts.map((person) => ({
+              rows={shown.map((person) => ({
                 key: person.id,
                 cells: [
                   person.name || 'No name',
@@ -397,17 +616,27 @@ export const orgPage = ({
                   ) : (
                     ''
                   ),
-                  <span key="edit" className="row-actions">
-                    <a href={contactPath(org.slug, person.number)}>Edit</a>{' '}
-                    <form
-                      method="post"
-                      action={contactPath(org.slug, person.number, 'remove')}
-                    >
-                      <button type="submit" className="link">
-                        Remove
-                      </button>
-                    </form>
-                  </span>,
+                  person.hidden ? (
+                    <span key="edit" className="row-actions">
+                      <span className="flag">hidden</span>{' '}
+                      <RestoreButton
+                        action={contactPath(org.slug, person.number, 'restore')}
+                        hidden={hidden}
+                      />
+                    </span>
+                  ) : (
+                    <span key="edit" className="row-actions">
+                      <a href={contactPath(org.slug, person.number)}>Edit</a>{' '}
+                      <form
+                        method="post"
+                        action={contactPath(org.slug, person.number, 'remove')}
+                      >
+                        <button type="submit" className="link">
+                          Remove
+                        </button>
+                      </form>
+                    </span>
+                  ),
                 ],
               }))}
             />
@@ -461,7 +690,11 @@ export const sendOrgPage = (
   request: FastifyRequest,
   reply: FastifyReply,
   org: Org,
-  { error, contact }: { error?: string; contact?: FormValues } = {},
+  {
+    error,
+    contact,
+    hidden,
+  }: { error?: string; contact?: FormValues; hidden?: boolean } = {},
 ) =>
   reply
     .code(error ? 400 : 200)
@@ -471,8 +704,9 @@ export const sendOrgPage = (
         request,
         orgPage({
           org,
-          contacts: listContacts(db, org.id),
-          events: listEvents(db, org.id),
+          contacts: listContacts(db, org.id, true),
+          activity: readActivity(db, org.id),
+          hidden,
           error,
           contact,
         }),
@@ -480,17 +714,28 @@ export const sendOrgPage = (
     );
 
 /**
+ * The address of the Activity box of the organisation with `slug`, after a
+ * post from it. With `hidden`, the page keeps the hidden records on view.
+ */
+export const activityBack = (slug: string, hidden: boolean) =>
+  `${orgPath(slug)}${hidden ? '?hidden=1' : ''}#activity`;
+
+/**
  * `GET /orgs/<slug>`. The static route `/orgs/new` wins over this one
- * (find-my-way), and no slug is `new` (`RESERVED_SLUG`).
+ * (find-my-way), and no slug is `new` (`RESERVED_SLUG`). `?hidden=1` shows
+ * the hidden visits, notes and contacts, each with Restore, and opens the
+ * Activity list.
  */
 export const orgRoute = (app: FastifyInstance, db: Database) => {
-  app.get<{ Params: { slug: string } }>(
+  app.get<{ Params: { slug: string }; Querystring: { hidden?: string } }>(
     '/orgs/:slug',
     { config: { admin: true } },
     async (request, reply) => {
       const org = findOrg(db, request.params.slug);
       if (!org) return sendNotFound(request, reply);
-      return sendOrgPage(db, request, reply, org);
+      return sendOrgPage(db, request, reply, org, {
+        hidden: request.query.hidden === '1',
+      });
     },
   );
 };

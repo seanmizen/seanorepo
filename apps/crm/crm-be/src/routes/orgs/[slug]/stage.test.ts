@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { buildApp } from '../../../index';
 import {
   addOrg,
+  lastEvent,
   postForm,
   signInAdmin,
   TEST_ADMIN_EMAIL,
@@ -33,7 +34,7 @@ const org = () =>
     .get(slug);
 
 describe('POST /<slug>/stage', () => {
-  test('sets the stage and the next action, writes an audit row, then goes to the page', async () => {
+  test('sets the stage and the next action, writes an event and an audit row, then goes to the page', async () => {
     const response = await postForm(
       app,
       `/orgs/${slug}/stage`,
@@ -53,7 +54,7 @@ describe('POST /<slug>/stage', () => {
     });
     const row = db
       .query(
-        "SELECT actor, entity, detail FROM audit_log WHERE action = 'update';",
+        "SELECT actor, entity, detail FROM audit_log WHERE action = 'stage';",
       )
       .get() as { actor: string; entity: string; detail: string };
     expect(row.entity).toBe('organisation');
@@ -64,15 +65,33 @@ describe('POST /<slug>/stage', () => {
           .get(TEST_ADMIN_EMAIL) as { id: string }
       ).id,
     );
-    // The audit row has the names of the changed fields and the stage
-    // before and after, for the Activity list. It never has the text of
-    // the next action.
-    expect(JSON.parse(row.detail)).toEqual({
+    // The audit row has the event number, the names of the changed fields
+    // and the stage before and after. It never has the text of the next
+    // action.
+    const display = {
       fields: ['stage', 'next_action', 'next_action_on'],
       from: 'lead',
       stage: 'quoted',
       next_action_on: '2030-01-02',
       cleared: false,
+    };
+    expect(JSON.parse(row.detail)).toEqual({ number: 2, ...display });
+    // The event also has the values before and after, for Undo and Redo.
+    expect(lastEvent(db)).toEqual({
+      kind: 'stage',
+      ...display,
+      changes: [
+        {
+          table: 'organisation',
+          id: expect.any(String),
+          before: { stage: 'lead', next_action: null, next_action_on: null },
+          after: {
+            stage: 'quoted',
+            next_action: 'Chase quote',
+            next_action_on: '2030-01-02',
+          },
+        },
+      ],
     });
 
     const html = (
@@ -91,13 +110,16 @@ describe('POST /<slug>/stage', () => {
     );
   });
 
-  test('a post that changes nothing writes no audit row', async () => {
+  test('a post that changes nothing writes no event and no audit row', async () => {
     const rows = () =>
       db
-        .query("SELECT count(*) AS n FROM audit_log WHERE action = 'update';")
+        .query(
+          "SELECT (SELECT count(*) FROM audit_log WHERE entity = 'organisation') + (SELECT count(*) FROM org_event) AS n;",
+        )
         .get();
+    const before = rows();
     await postForm(app, `/orgs/${slug}/stage`, { stage: 'lead' }, cookie);
-    expect(rows()).toEqual({ n: 0 });
+    expect(rows()).toEqual(before);
   });
 
   test('empty values clear the next action', async () => {

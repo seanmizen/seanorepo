@@ -4,6 +4,7 @@ import type { buildApp } from '../../index';
 import {
   addOrg,
   addPerson,
+  orgEvents,
   postForm,
   signInAdmin,
   TEST_ADMIN_EMAIL,
@@ -119,10 +120,15 @@ describe('POST /orgs/new', () => {
       { role: 'owner' },
     ]);
 
+    // One event, and its audit row: the new lead and its contact.
     expect(auditRows()).toEqual([
       { actor, action: 'create', entity: 'organisation' },
-      { actor, action: 'create', entity: 'person' },
-      { actor, action: 'create', entity: 'membership' },
+    ]);
+    const person = db
+      .query<{ id: string }, []>('SELECT person_id AS id FROM membership;')
+      .get();
+    expect(orgEvents(db)).toEqual([
+      { kind: 'create', stage: 'lead', person_id: person?.id, role: 'owner' },
     ]);
   });
 

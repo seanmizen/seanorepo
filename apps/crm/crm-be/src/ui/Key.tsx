@@ -1,15 +1,40 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { BareText } from './BareText';
 
 /**
  * A key: a raised `<button>` that moves when pressed. It submits its form
  * unless `type` says otherwise.
+ *
+ * `off` is the reason that the key cannot act now (REQ-CRM-BUTTON-001). The
+ * key stays in its place, with the native `disabled`, and the reason is in
+ * its `title` (the hover text) and in its accessible description: an
+ * `aria-describedby` to a text with the id `<id>-why`. With no page styles,
+ * that text shows after the key. A key with `off` needs an `id`.
  */
 export const Key = ({
   type = 'submit',
+  off,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button type={type} className="key" {...props} />
-);
+}: ButtonHTMLAttributes<HTMLButtonElement> & { off?: string }) => {
+  if (off === undefined) {
+    return <button type={type} className="key" {...props} />;
+  }
+  if (!props.id) throw new Error('A key with a reason (off) needs an id.');
+  const why = `${props.id}-why`;
+  return (
+    <>
+      <button
+        type={type}
+        className="key"
+        {...props}
+        disabled
+        title={off}
+        aria-describedby={why}
+      />{' '}
+      <BareText id={why}>{off}</BareText>
+    </>
+  );
+};
 
 /**
  * A row of keys. The keys share the row in whole parts, as on the grid of

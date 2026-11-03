@@ -238,6 +238,10 @@ describe('the demo seed', () => {
       `SELECT o.slug, n.created_at, n.body FROM note AS n
        JOIN organisation AS o ON o.id = n.organisation_id ORDER BY n.created_at;`,
     ),
+    events: all(
+      `SELECT o.slug, e.number, e.at, e.kind FROM org_event AS e
+       JOIN organisation AS o ON o.id = e.organisation_id ORDER BY o.slug, e.number;`,
+    ),
     audit: all(
       'SELECT at, action, entity FROM audit_log ORDER BY at, action, entity;',
     ),
@@ -282,25 +286,47 @@ describe('the demo seed', () => {
     }
   });
 
-  test('each write has its audit row, and every time is in the past', () => {
+  test('each write has its event and its audit row, and every time is in the past', () => {
     seedDemo(db, TEST_ADMIN_EMAIL);
-    const audited = (entity: string, table: string) =>
+    // Each visit and note has the event that added it.
+    const logged = (table: string) =>
       all<{ n: number }>(
         `SELECT count(*) AS n FROM ${table} WHERE id NOT IN (
-           SELECT entity_id FROM audit_log WHERE entity = '${entity}' AND action = 'create');`,
+           SELECT json_extract(payload, '$.record_id') FROM org_event
+            WHERE kind IN ('visit', 'note'));`,
       )[0].n;
-    expect(audited('visit', 'visit')).toBe(0);
-    expect(audited('note', 'note')).toBe(0);
-    expect(audited('organisation', 'organisation')).toBe(0);
+    expect(logged('visit')).toBe(0);
+    expect(logged('note')).toBe(0);
+    // Each organisation starts with its create event.
+    expect(
+      all<{ n: number }>(
+        `SELECT count(*) AS n FROM organisation WHERE id NOT IN (
+           SELECT organisation_id FROM org_event WHERE number = 1 AND kind = 'create');`,
+      )[0].n,
+    ).toBe(0);
+    // Each event has one audit row.
+    expect(
+      all<{ n: number }>(
+        `SELECT (SELECT count(*) FROM org_event)
+              - (SELECT count(*) FROM audit_log WHERE entity = 'organisation') AS n;`,
+      )[0].n,
+    ).toBe(0);
     const stages = all<{ n: number }>(
-      `SELECT count(*) AS n FROM audit_log
-       WHERE entity = 'organisation' AND action = 'update';`,
+      `SELECT count(*) AS n FROM org_event WHERE kind = 'stage';`,
     )[0].n;
     expect(stages).toBeGreaterThan(10);
+    // The removed contact is hidden, at the time of its step.
     const now = new Date().toISOString();
+    expect(
+      all<{ n: number }>(
+        'SELECT count(*) AS n FROM membership WHERE hidden_at IS NOT NULL;',
+      )[0].n,
+    ).toBe(1);
     const future = all<{ n: number }>(
       `SELECT (SELECT count(*) FROM visit WHERE at > '${now}')
             + (SELECT count(*) FROM note WHERE created_at > '${now}')
+            + (SELECT count(*) FROM membership WHERE hidden_at > '${now}')
+            + (SELECT count(*) FROM org_event WHERE at > '${now}')
             + (SELECT count(*) FROM audit_log WHERE entity != 'session' AND at > '${now}') AS n;`,
     )[0].n;
     expect(future).toBe(0);
