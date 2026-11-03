@@ -32,7 +32,7 @@ export const AddPasskey = ({ next, off }: { next: string; off?: string }) => {
         name="name"
         required
         maxLength={NAME_MAX}
-        placeholder="iPhone"
+        placeholder="e.g. laptop"
         disabled
       />
     </Field>

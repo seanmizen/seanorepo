@@ -99,6 +99,17 @@ describe('/account/passkeys', () => {
     expect(row).not.toBeNull();
   });
 
+  test('the Name field suggests a device, on /account/passkeys and on the add-passkey step', async () => {
+    const field =
+      '<label class="field"><span class="label">Name</span> <input required="" maxLength="60" placeholder="e.g. laptop"';
+    const cookie = await signIn(app, db, 'a@example.com');
+    expect((await get('/account/passkeys', cookie)).body).toContain(field);
+    const admin = await signIn(app, db, TEST_ADMIN_EMAIL);
+    const step = await get('/', admin);
+    expect(step.statusCode).toBe(403);
+    expect(step.body).toContain(field);
+  });
+
   test('a passkey needs a name', async () => {
     const cookie = await signIn(app, db, 'a@example.com');
     const response = await addTestPasskey(
