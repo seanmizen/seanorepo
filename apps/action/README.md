@@ -39,7 +39,7 @@ Controls:
 | M (paused) | main menu |
 | ` (backtick) | the console |
 
-These keys are the default binds, except "/" and the backtick key. The
+These keys are the default binds, except "/". The
 console changes them (`bind`, see [The console](#the-console)), and the
 hints on the screen follow the binds. See [Chat](#chat).
 
@@ -516,8 +516,9 @@ it does.
 
 ## The console
 
-The backtick key (the key left of 1) opens the console. Esc or the
-backtick key closes it. While it is open, the game gets no keys. In
+The backtick key (the key left of 1, on any layout) opens the console:
+the default bind `bind grave toggleconsole`. Esc or the backtick key
+closes it. While it is open, the game gets no keys. In
 deathmatch the game goes on.
 
 - Type a command and press Enter. Up and Down go through the history.
@@ -599,22 +600,35 @@ reads the actions, not the keys (`game/src/game_console.zig`).
 | `+menu` | M | the main menu, from the pause screen |
 | `messagemode` | Y | the chat input, to all players (not a button) |
 | `messagemode2` | T | the chat input, to your team (not a button) |
+| `toggleconsole` | grave (backtick) | open the console (not a button) |
 
 The key names: a to z, 0 to 9, left, right, up, down, space, enter,
-escape, tab, backspace, shift, ctrl, alt, mouse1 to mouse5. Examples:
+escape, tab, backspace, shift, ctrl, alt, grave, minus, equal,
+leftbracket, rightbracket, backslash, semicolon, quote, comma, period,
+slash, delete, home, end, pageup, pagedown, insert, mouse1 to mouse5,
+mwheelup, mwheeldown. Examples:
 
 ```
 bind c +jump
 unbind e
 bind e "+leanright; echo lean"
+bind mwheelup +slot1
 resetbinds
 ```
 
-The backtick key arrives as the swindowzig key code Grave on every
-layout, and it always opens the console. `src/boot.ts` sends the "/" key
-to the game as the typed text "/" (see [Chat](#chat)). So the backtick key
-and "/" are not in the binds. The bind names have no punctuation keys, so
-the punctuation keys cannot have a bind.
+- Each punctuation name is the key at that position on a US keyboard.
+  swindowzig finds these keys by position, so `grave` is the key left of 1
+  on every layout.
+- `mwheelup` and `mwheeldown` are the mouse wheel. One wheel turn presses
+  and releases the bind in the same tick. So a `+` command runs, and its
+  `-` command runs after it. Ctrl or Cmd with the wheel stays with the
+  browser.
+- The console closes on the typed character "`", or on Esc. If you bind
+  `toggleconsole` to another key, that key opens the console, but it does
+  not close it.
+- `src/boot.ts` sends the key that types "/" to the game as the typed
+  text "/" (see [Chat](#chat)). On a US layout that key is `slash`, so a
+  bind of `slash` does not run.
 
 ### Scripts and the saved config
 
