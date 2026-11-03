@@ -142,6 +142,49 @@ describe('POST /<slug>/stage', () => {
     });
   });
 
+  test('Lost clears the next action, and Undo gives it back', async () => {
+    await postForm(
+      app,
+      `/orgs/${slug}/stage`,
+      {
+        stage: 'quoted',
+        next_action: 'Chase quote',
+        next_action_on: '2000-01-02',
+      },
+      cookie,
+    );
+    // The Stage module sends the next action as it is.
+    await postForm(
+      app,
+      `/orgs/${slug}/stage`,
+      {
+        stage: 'lost',
+        next_action: 'Chase quote',
+        next_action_on: '2000-01-02',
+      },
+      cookie,
+    );
+    expect(org()).toEqual({
+      stage: 'lost',
+      next_action: null,
+      next_action_on: null,
+    });
+    const event = lastEvent(db) as { cleared: boolean };
+    expect(event.cleared).toBe(true);
+    const undo = await postForm(
+      app,
+      `/orgs/${slug}/undo`,
+      { event: '3' },
+      cookie,
+    );
+    expect(undo.statusCode).toBe(303);
+    expect(org()).toEqual({
+      stage: 'quoted',
+      next_action: 'Chase quote',
+      next_action_on: '2000-01-02',
+    });
+  });
+
   test('a stage or a date that is not valid returns 400 and changes nothing', async () => {
     const bad = await postForm(
       app,

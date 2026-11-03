@@ -521,7 +521,7 @@ export const mcpServer = (db: Database, actor: string) => {
     {
       title: 'Set the stage',
       description: [
-        'Set the pipeline stage of an organisation. The next action does not change.',
+        'Set the pipeline stage of an organisation. The next action does not change, but the stage lost clears it.',
         UNTRUSTED,
       ].join(' '),
       inputSchema: {
