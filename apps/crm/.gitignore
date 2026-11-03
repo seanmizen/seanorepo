@@ -1,0 +1,12 @@
+# Secrets. Never commit them.
+.env
+.env.*
+
+# Build output
+dist/
+
+# The SQLite file lives in data/ (or a Docker volume), never in git.
+data/
+*.db
+*.db-wal
+*.db-shm
