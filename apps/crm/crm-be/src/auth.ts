@@ -33,6 +33,7 @@ const PUBLIC_PATHS = new Set([
   '/login/verify',
   '/login/recover',
   '/favicon.ico',
+  '/mode',
   '/api/health',
   '/api/passkeys/sign-in-options',
   '/api/passkeys/sign-in',

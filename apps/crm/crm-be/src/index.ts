@@ -12,6 +12,7 @@ import { orgRoute } from './routes/[slug]';
 import { orgNotesRoute } from './routes/[slug]/notes';
 import { orgStageRoute } from './routes/[slug]/stage';
 import { orgVisitsRoute } from './routes/[slug]/visits';
+import { accountRoute } from './routes/account';
 import { accountPasskeysRoute } from './routes/account/passkeys';
 import { accountSessionsRoute } from './routes/account/sessions';
 import { healthRoute } from './routes/api/health';
@@ -26,6 +27,7 @@ import { loginCodeRoute } from './routes/login/code';
 import { loginRecoverRoute } from './routes/login/recover';
 import { loginVerifyRoute } from './routes/login/verify';
 import { logoutRoute } from './routes/logout';
+import { modeRoute } from './routes/mode';
 import { orgsRoute } from './routes/orgs';
 import { orgsNewRoute } from './routes/orgs/new';
 
@@ -62,6 +64,8 @@ export const buildApp = (db: Database) => {
   loginVerifyRoute(app, db);
   loginRecoverRoute(app, db);
   logoutRoute(app, db);
+  modeRoute(app);
+  accountRoute(app, db);
   accountSessionsRoute(app, db);
   accountPasskeysRoute(app, db);
   passkeyRegisterOptionsRoute(app, db);

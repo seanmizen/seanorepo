@@ -58,14 +58,16 @@ describe('/account/passkeys', () => {
     // token.
     cookie = cookieAfter(added, cookie);
     const listed = await get('/account/passkeys', cookie);
-    expect(listed.body).toContain('<td>My phone</td>');
-    expect(listed.body).toContain('<td>Never</td>');
+    expect(listed.body).toContain('<td data-label="Name">My phone</td>');
+    expect(listed.body).toContain('<td data-label="Last used">Never</td>');
 
     const { cookie: passkeyCookie } = await signInWithPasskey(app, key);
     expect(passkeyCookie).not.toBe('');
     const used = await get('/account/passkeys', passkeyCookie);
-    expect(used.body).not.toContain('<td>Never</td>');
-    expect(used.body).toMatch(/<td><time dateTime="\d{4}-\d\d-\d\dT[^"]+">/);
+    expect(used.body).not.toContain('<td data-label="Last used">Never</td>');
+    expect(used.body).toMatch(
+      /<td data-label="Last used"><time dateTime="\d{4}-\d\d-\d\dT[^"]+"/,
+    );
 
     const deleted = await postForm(
       app,
@@ -217,7 +219,7 @@ describe('the admin pages', () => {
     const page = await get('/', cookie);
     expect(page.statusCode).toBe(403);
     expect(page.headers.location).toBeUndefined();
-    expect(page.body).toContain('<h1>Passkey needed</h1>');
+    expect(page.body).toContain('<title>Passkey needed - crm</title>');
     expect(page.body).toContain(
       'This page needs a passkey. Add one to this device.',
     );
@@ -227,7 +229,7 @@ describe('the admin pages', () => {
 
     const passkeys = await get('/account/passkeys', cookie);
     expect(passkeys.body).toContain('You are the admin.');
-    expect(passkeys.body).not.toContain('sign out');
+    expect(passkeys.body).not.toContain('sign out and sign in');
 
     const added = await addTestPasskey(
       app,

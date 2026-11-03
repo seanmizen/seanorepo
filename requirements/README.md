@@ -73,6 +73,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `BARE` | `apps/autosam/requirements/bare.md` | autosam — the page works with no page styles |
 | `DENSE` | `apps/autosam/requirements/dense.md` | autosam — the dense themes spend few pixels |
 | `CRM-BARE` | `apps/crm/requirements/bare.md` | crm — every page works with no page styles and no JavaScript |
+| `CRM-DATE` | `apps/crm/requirements/date.md` | crm — one format for each date and time |
 | `BOOTMAP` | `utils/bootmap/requirements/bootmap.md` | bootmap — the boot treemap and its three renderers |
 | `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |

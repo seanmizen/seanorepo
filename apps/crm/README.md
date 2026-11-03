@@ -13,6 +13,8 @@ billing. After sign-in, the seller has these pages:
 - `/<slug>`: one organisation. It shows the details, the contacts, the visits
   and the notes, newest first. Its forms log a visit, change the stage and
   the next action, and add a note.
+- `/account`: the person and the session, with links to
+  `/account/passkeys` and `/account/sessions`.
 
 `GET /api/health` returns `{ "ok": true }`. The design is in
 [docs/001-guiding-design.md](docs/001-guiding-design.md).
@@ -31,21 +33,27 @@ yarn workspace crm-be test
   It serves the pages, the API under `/api`, and the crm-fe build at
   `/static/`, all on port 4100.
 - `crm-be/src/routes/` holds one file for each URL. Each file holds the
-  Fastify route and its page component. `crm-be/src/index.ts` registers them.
-- `crm-be/src/render.tsx` holds `renderPage(title, children, request)`. It
-  adds the doctype, the `<head>`, the asset tags from
-  `crm-fe/dist/manifest.json`, and the panel layout (`ui/Page.tsx`).
-- `crm-be/src/org.ts` holds the organisation: the stages, the visit outcomes,
-  the slug maker and the London date. The page for `/<slug>` is
+  Fastify route and a function that returns the parts of its page.
+  `crm-be/src/index.ts` registers them.
+- `crm-be/src/render.tsx` holds `renderPage(request, parts)`. It adds the
+  doctype, the `<head>`, the asset tags from `crm-fe/dist/manifest.json`,
+  and the page anatomy (see [Page anatomy](#page-anatomy)) around the parts.
+- `crm-be/src/dates.ts` holds the London date and the date format, and
+  `ui/When.tsx` shows a date (REQ-CRM-DATE-001). No other code formats a
+  date.
+- `crm-be/src/org.ts` holds the organisation: the stages, the visit outcomes
+  and the slug maker. The page for `/<slug>` is
   `routes/[slug].tsx`, and its forms post to `routes/[slug]/*.ts`. The static
   routes win over `/<slug>`, and `RESERVED_SLUGS` keeps their first words out
   of the slugs.
 - Each write to an organisation, a person, a membership, a visit or a note
   adds an `audit_log` row. The actor is the id of the signed-in person.
-- `crm-be/src/ui/` holds the parts of the panel that pages share: `Panel`,
-  `Key`, `Led`, `Field` and `Label`. `ui/Passkey.tsx` holds the two passkey
-  controls (add a passkey, sign in with a passkey), and `ui/AdminOnly.tsx`
-  holds the 403 page of an admin route.
+- `crm-be/src/ui/` holds the parts that pages share: `SiteNav`, `Footer`,
+  `Device`, `Lcd`, `Module`, `Key` (and `Keys`, a row of keys), `LatchKey`,
+  `Field`, `Records` (and `RecordTable`), `When`, `Led` and `Label`.
+  `ui/Passkey.tsx` holds the two passkey controls (add a passkey, sign in
+  with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
+  route.
 - `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`
   and `src/passkeys.ts`. It has no React. Rsbuild builds them to
   `crm-fe/dist` with hashed names and a manifest. Only the pages with a
@@ -57,12 +65,62 @@ yarn workspace crm-be test
 watch mode and Bun runs crm-be in watch mode. `yarn workspace crm-be test`
 also builds crm-fe first, because the test of `/` reads the manifest.
 
+## Page anatomy
+
+Each page has the same parts, from the top. `renderPage` builds them from
+the `parts` that the route gives it.
+
+1. **Nav** (`ui/SiteNav.tsx`, text). The title is the path of the URL, as on
+   seanmizen.com: `/account/passkeys` reads `crm / account / passkeys`. Each
+   part above the page is a link, and the page itself has a dim color. The title is
+   the first element in `<body>`. Under it, for a signed-in person, one line
+   of links: `today · orgs · new lead · account · sign out`. The link to this
+   page is text, with `aria-current="page"`.
+2. **Intro** (`intro`, text). At most one sentence.
+3. **Device** (`device`). The core function of the page, as one instrument:
+   a `Device` with the `Lcd` at the top, then each `Module` on a grid of 6
+   columns. The LCD shows data, or a menu: a list of records, each row a
+   link. Nothing else in the LCD is interactive, and it never holds the page
+   title, help text or a form control. A form error shows in the LCD, with a
+   lit LED. A module has its silkscreen label at the top left, its value at
+   the top right, and its keys and fields below. Help text goes under the
+   device (`help`), as plain text.
+4. **Records** (`records`, text). History and reference data, as `Records`:
+   tables, lists and definition lists in the page font, with no panel. On a
+   phone, each table row is a block of lines.
+5. **Footer** (`ui/Footer.tsx`, text). `top`, the pager of a long list
+   (`pager`), and the theme and mode steppers.
+
+On a wide screen the page starts at the top left. The device is a column of
+about 360px, and the records fill the space to its right. On a phone it is
+one column: nav, device, records, footer.
+
+To see each page, run the screenshot script from the repo root. It starts
+crm-be on port 4110 with a new SQLite file in a temp folder, and puts sample
+data and an admin passkey session in it. It touches no other database.
+
+```bash
+node apps/crm/scripts/shoot.mjs [out-dir]
+```
+
 ## Theme
 
 `crm-fe/src/theme.css` is the Pixel-3 theme of autosam: an instrument panel
-with silkscreen labels, raised keys, LEDs and one red signal color. Dark mode
-follows `prefers-color-scheme`. Add `?theme=bare` to a URL to see the page
-with no page styles and no scripts.
+with silkscreen labels, raised keys, LEDs and one red signal color. Text
+links use the ink color with an underline.
+
+- **Theme.** Add `?theme=bare` to a URL to see the page with no page styles
+  and no scripts. The theme stepper in the footer links this URL in the
+  other theme.
+- **Mode.** Auto, light or dark. Auto follows `prefers-color-scheme`. The
+  mode stepper in the footer sends `POST /mode`, which keeps the mode in the
+  `crm_mode` cookie for one year and opens the page again. crm-be then puts
+  `data-mode` on `<html>`. A signed-out visitor can use it too.
+- **Dates.** A date shows as `2026-Nov-03`, and a date and time as
+  `2026-Nov-03 13:31`, in London time. Each one is a `<time>` with the full
+  ISO value in `datetime` and the full date and time with seconds in
+  `title` (REQ-CRM-DATE-001). Words such as `2 days overdue` show next to
+  the date, never in place of it.
 
 ## Page rules
 
@@ -92,9 +150,11 @@ missing. To add other people, add `person` rows.
    deletes its row.
 
 A session is a random cookie (`crm_session`) that lasts 90 days.
-`/account/sessions` lists the sessions, revokes one, or revokes all others,
-and has the "Sign out" button. Each page except the sign-in pages,
-`/api/health` and `/favicon.ico` needs a session. A signed-out visitor goes
+`/account/sessions` lists the sessions and revokes one. Its "Sign out"
+module has two keys: "Everywhere else" revokes all other sessions, and
+"This device" signs out. The nav of each page also has "sign out". Each
+page except the sign-in pages, `/mode`, `/api/health` and `/favicon.ico`
+needs a session. A signed-out visitor goes
 to `/login?next=<path>`. `/favicon.ico` returns 204: the crm has no icon.
 
 ## Passkeys and the admin
@@ -163,7 +223,7 @@ Where each part is:
 
 | Name | Default | Read by | What it does |
 | --- | --- | --- | --- |
-| `PORT` | `4100` | `index.ts` | The port crm-be listens on. |
+| `PORT` | `4100` | `index.ts`, `scripts/shoot.mjs` | The port crm-be listens on. The screenshot script uses `4110` when it is unset. |
 | `DB_PATH` | `crm-be/data/crm.db` | `db.ts` | The SQLite file. Git ignores the default folder. |
 | `NODE_ENV` | unset | `auth.ts`, `email.ts` | `production` adds `Secure` to the session cookie. `test` puts emails into `devOutbox` in place of stdout. |
 | `CRM_ADMIN_EMAIL` | unset | `index.ts`, `auth.ts` | The admin email. At boot, crm-be makes this person if it is missing. Only this person opens the admin routes. Unset: crm-be makes nobody, only existing people can sign in, and nobody opens the admin routes. |

@@ -1,8 +1,8 @@
 import type { Database } from 'bun:sqlite';
 
 /**
- * The organisation: its row, its pipeline stages, the visit outcomes, the
- * slug maker and the dates. The pages are in `routes/orgs*` and
+ * The organisation: its row, its pipeline stages, the visit outcomes and
+ * the slug maker. The pages are in `routes/orgs*` and
  * `routes/[slug]*`.
  */
 
@@ -64,6 +64,7 @@ export const RESERVED_SLUGS = new Set([
   'logout',
   'account',
   'orgs',
+  'mode',
   'static',
   'api',
 ]);
@@ -99,21 +100,6 @@ export const findOrg = (db: Database, slug: string) =>
   db
     .query<Org, [string]>('SELECT * FROM organisation WHERE slug = ?;')
     .get(slug);
-
-/** The seller works in the UK, so "today" is the date in London. */
-const TIME_ZONE = 'Europe/London';
-
-/** Today in London, as `YYYY-MM-DD`. */
-export const today = () =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE }).format(new Date());
-
-/** An ISO time as London time that a person reads, for example `3 Nov 2026, 14:05`. */
-export const formatTime = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', {
-    timeZone: TIME_ZONE,
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
 
 /** A form value as trimmed text. A missing value or a repeated field is `''`. */
 export const formText = (value: unknown) =>

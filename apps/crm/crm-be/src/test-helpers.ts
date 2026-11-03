@@ -67,6 +67,31 @@ export const addOrg = async (
   return String(response.headers.location).slice(1);
 };
 
+/** The text that a person reads in the `<body>`, with no markup. */
+export const bodyText = (html: string) =>
+  html
+    .slice(Math.max(0, html.indexOf('<body>')))
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * The element that starts at the first `<div class="${className}">` of
+ * `html`, to its matching `</div>`. Returns '' when there is none.
+ */
+export const divOf = (html: string, className: string) => {
+  const start = html.indexOf(`<div class="${className}">`);
+  if (start === -1) return '';
+  const tags = /<div[\s>]|<\/div>/g;
+  tags.lastIndex = start;
+  let depth = 0;
+  for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+    depth += tag[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return html.slice(start, tags.lastIndex);
+  }
+  throw new Error(`The <div class="${className}"> has no end.`);
+};
+
 /** Add a person with this email. Returns the person id. */
 export const addPerson = (db: Database, email: string) => {
   const id = crypto.randomUUID();

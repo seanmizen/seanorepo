@@ -7,7 +7,7 @@ import { Key } from './Key';
  * that says passkeys need JavaScript. The script shows the control and
  * removes the note. This is the one exception to REQ-CRM-BARE-001.
  *
- * Put each control in a `<section>` (a `Panel`). The script finds the note
+ * Put each control in a `Module` (a `<section>`). The script finds the note
  * and the error line in the same section. After a success, the script opens
  * `next`.
  */
@@ -22,20 +22,11 @@ export const AddPasskey = ({ next }: { next: string }) => (
       Passkeys need JavaScript. Turn on JavaScript to add a passkey.
     </p>
     <form hidden data-passkey="register" data-next={next}>
-      <p>
-        <Field label="Name">
-          <input
-            name="name"
-            required
-            maxLength={NAME_MAX}
-            placeholder="iPhone"
-          />
-        </Field>
-      </p>
+      <Field label="Name">
+        <input name="name" required maxLength={NAME_MAX} placeholder="iPhone" />
+      </Field>
       <p role="alert" hidden data-passkey-error="" />
-      <p>
-        <Key>Add a passkey</Key>
-      </p>
+      <Key>Add a passkey</Key>
     </form>
   </>
 );
@@ -54,10 +45,8 @@ export const PasskeySignIn = ({
   <>
     <p data-passkey-note="">{note}</p>
     <p role="alert" hidden data-passkey-error="" />
-    <p>
-      <Key type="button" hidden data-passkey="sign-in" data-next={next}>
-        Sign in with a passkey
-      </Key>
-    </p>
+    <Key type="button" hidden data-passkey="sign-in" data-next={next}>
+      Sign in with a passkey
+    </Key>
   </>
 );
