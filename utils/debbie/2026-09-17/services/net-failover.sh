@@ -69,6 +69,11 @@ has_carrier() { [ "$(cat "/sys/class/net/$1/carrier" 2> /dev/null || echo 0)" = 
 # Carrier first: ping -I on a carrier-less interface is a slow way to learn
 # nothing, and wifi has no carrier until it associates. No gateway means not a
 # candidate - an interface with no route out cannot be given the route out.
+#
+# `ping -I <iface>` binds the socket to the interface, so it sees only the
+# replies that arrive there. With two links on one subnet, that is true only
+# because each interface answers ARP for its own address alone.
+# setup-server-environment.sh sets arp_ignore and arp_announce for this.
 #------------------------------------------------------------------------------
 reaches_upstream() {
     local iface="$1" gw
