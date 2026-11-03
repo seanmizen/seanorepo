@@ -1,12 +1,13 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { type Auth, audit } from '../../auth';
+import { addContact } from '../../contacts';
 import { contactForm } from '../../forms/contact';
 import { type FormValues, isBlank, parseForm } from '../../forms/form';
 import {
   ORG_COLUMNS,
-  orgColumnValues,
   organisationForm,
+  orgColumnValues,
 } from '../../forms/organisation';
 import { orgPath, resolveSlug } from '../../org';
 import { type PageParts, renderPage } from '../../render';
@@ -15,7 +16,6 @@ import { Key } from '../../ui/Key';
 import { Lcd } from '../../ui/Lcd';
 import { Module } from '../../ui/Module';
 import { RecordForm } from '../../ui/RecordForm';
-import { addContact } from '../../contacts';
 
 /** The prefix of the contact fields in the post of the new-lead form. */
 const CONTACT = 'contact_';

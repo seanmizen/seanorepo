@@ -93,7 +93,9 @@ describe('POST /<slug>/stage', () => {
 
   test('a post that changes nothing writes no audit row', async () => {
     const rows = () =>
-      db.query("SELECT count(*) AS n FROM audit_log WHERE action = 'update';").get();
+      db
+        .query("SELECT count(*) AS n FROM audit_log WHERE action = 'update';")
+        .get();
     await postForm(app, `/orgs/${slug}/stage`, { stage: 'lead' }, cookie);
     expect(rows()).toEqual({ n: 0 });
   });

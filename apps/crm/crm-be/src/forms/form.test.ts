@@ -3,12 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { buildApp } from '../index';
-import {
-  addOrg,
-  postForm,
-  signInAdmin,
-  testApp,
-} from '../test-helpers';
+import { addOrg, postForm, signInAdmin, testApp } from '../test-helpers';
 import { activityForm } from './activity';
 import { contactForm } from './contact';
 import { fieldsOf, parseForm, type RecordFormDef } from './form';
@@ -92,11 +87,14 @@ const expectedControls = (form: RecordFormDef, prefix = ''): Control[] =>
   fieldsOf(form).map((field) => ({
     label: field.label,
     tag:
-      field.type === 'textarea' || field.type === 'select' || field.type === 'keys'
+      field.type === 'textarea' ||
+      field.type === 'select' ||
+      field.type === 'keys'
         ? field.type
         : 'input',
     name: prefix + field.name,
-    type: field.type === 'tel' || field.type === 'email' ? field.type : undefined,
+    type:
+      field.type === 'tel' || field.type === 'email' ? field.type : undefined,
     placeholder: field.placeholder,
     required: field.type !== 'keys' && field.required !== undefined,
     ...(field.type === 'keys'
@@ -111,7 +109,8 @@ const formOn = (html: string, form: RecordFormDef, prefix = '') => {
   const controls = controlsOf(html);
   return fieldsOf(form).map((field) => {
     const found = controls.get(prefix + field.name);
-    if (!found) throw new Error(`The page has no field ${prefix}${field.name}.`);
+    if (!found)
+      throw new Error(`The page has no field ${prefix}${field.name}.`);
     return found;
   });
 };
@@ -131,7 +130,11 @@ afterEach(async () => {
 });
 
 const page = async (url: string) => {
-  const response = await app.inject({ method: 'GET', url, headers: { cookie } });
+  const response = await app.inject({
+    method: 'GET',
+    url,
+    headers: { cookie },
+  });
   expect(response.statusCode).toBe(200);
   return response.body;
 };
@@ -174,7 +177,14 @@ describe('the record forms', () => {
         form: organisationForm,
         creates: [[newLead, '']],
         edit: await page(`/orgs/${slug}/edit`),
-        current: ['Acme Plumbing', 'door', slug, '1 High Street', '', 'SW1A 1AA'],
+        current: [
+          'Acme Plumbing',
+          'door',
+          slug,
+          '1 High Street',
+          '',
+          'SW1A 1AA',
+        ],
       },
       {
         form: contactForm,
@@ -197,7 +207,9 @@ describe('the record forms', () => {
 
     for (const { form, creates, edit, current } of cases) {
       const onEdit = formOn(edit, form);
-      expect(onEdit.map((found) => found.control)).toEqual(expectedControls(form));
+      expect(onEdit.map((found) => found.control)).toEqual(
+        expectedControls(form),
+      );
       expect(onEdit.map((found) => found.value)).toEqual(current);
       for (const [html, prefix] of creates) {
         const onCreate = formOn(html, form, prefix);
@@ -209,13 +221,20 @@ describe('the record forms', () => {
           onCreate
             .filter((found) => found.control.tag !== 'select')
             .map((found) => found.value),
-        ).toEqual(onCreate.filter((found) => found.control.tag !== 'select').map(() => ''));
+        ).toEqual(
+          onCreate
+            .filter((found) => found.control.tag !== 'select')
+            .map(() => ''),
+        );
       }
     }
   });
 
   test('the create route and the edit route parse a post with the same definition (REQ-CRM-FORM-001)', async () => {
-    const slug = await addOrg(app, cookie, { name: 'Acme', postcode: 'e1 6an' });
+    const slug = await addOrg(app, cookie, {
+      name: 'Acme',
+      postcode: 'e1 6an',
+    });
     await postForm(
       app,
       `/orgs/${slug}/edit`,
@@ -228,7 +247,12 @@ describe('the record forms', () => {
     });
     // The same values give the same error on both routes.
     const create = await postForm(app, '/orgs/new', { name: '' }, cookie);
-    const edit = await postForm(app, `/orgs/${slug}/edit`, { name: '' }, cookie);
+    const edit = await postForm(
+      app,
+      `/orgs/${slug}/edit`,
+      { name: '' },
+      cookie,
+    );
     const error = parseForm(organisationForm, { name: '' }).error;
     expect(error).toBe('Type the name of the organisation.');
     for (const response of [create, edit]) {
@@ -239,7 +263,10 @@ describe('the record forms', () => {
 
   test('no page outside forms/ names a field of a record form (REQ-CRM-FORM-001)', () => {
     const src = path.join(import.meta.dir, '..');
-    const files = readdirSync(src, { recursive: true, encoding: 'utf8' }).filter(
+    const files = readdirSync(src, {
+      recursive: true,
+      encoding: 'utf8',
+    }).filter(
       (file) =>
         file.endsWith('.tsx') &&
         !file.startsWith('forms') &&
@@ -255,7 +282,11 @@ describe('the record forms', () => {
     names.delete('name');
     names.delete('email');
     const found = files.flatMap((file) =>
-      [...readFileSync(path.join(src, file), 'utf8').matchAll(/name="([^"]+)"/g)]
+      [
+        ...readFileSync(path.join(src, file), 'utf8').matchAll(
+          /name="([^"]+)"/g,
+        ),
+      ]
         .filter((m) => names.has(m[1]))
         .map((m) => `${file}: ${m[1]}`),
     );

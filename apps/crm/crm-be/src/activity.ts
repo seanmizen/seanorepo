@@ -6,8 +6,9 @@ import { type Org, type Outcome, setPipeline } from './org';
 
 /**
  * The activity of an organisation: its visits and its notes, in one list.
- * The routes `routes/[slug]/activity.ts` and `routes/[slug]/activity/[id].tsx`
- * call these functions.
+ * The routes `routes/orgs/[slug]/activity.ts`,
+ * `routes/orgs/[slug]/activity/[id].tsx` and the organisation page call
+ * these functions.
  *
  * A visit is a row of `visit`, and a note is a row of `note`. The Log
  * module (`forms/activity.ts`) makes both.

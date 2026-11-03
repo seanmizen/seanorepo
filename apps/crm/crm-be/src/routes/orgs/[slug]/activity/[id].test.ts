@@ -45,7 +45,12 @@ const lastAudit = () =>
     .query(
       "SELECT action, entity, entity_id, detail FROM audit_log WHERE action = 'update' ORDER BY rowid DESC;",
     )
-    .get() as { action: string; entity: string; entity_id: string; detail: string };
+    .get() as {
+    action: string;
+    entity: string;
+    entity_id: string;
+    detail: string;
+  };
 
 describe('GET /orgs/<slug>/activity/<id>', () => {
   test('shows the Log module filled in: the text, and the LED of its key', async () => {
@@ -67,7 +72,9 @@ describe('GET /orgs/<slug>/activity/<id>', () => {
     expect(bodyText(divOf(html, 'lcd'))).toMatch(
       /^Organisation Acme Logged \d{4}-[A-Z][a-z]{2}-\d\d \d\d:\d\d Saved as Spoke$/,
     );
-    expect(html).toContain(`<form action="/orgs/acme/activity/${id}" method="post">`);
+    expect(html).toContain(
+      `<form action="/orgs/acme/activity/${id}" method="post">`,
+    );
   });
 
   test('a note lights Note only', async () => {
@@ -104,7 +111,10 @@ describe('GET /orgs/<slug>/activity/<id>', () => {
 describe('POST /orgs/<slug>/activity/<id>', () => {
   test('a different key changes the outcome, and the audit row names the field', async () => {
     const id = await log('spoke', 'Owner keen');
-    const response = await edit(id, { outcome: 'call_back', note: 'Owner keen' });
+    const response = await edit(id, {
+      outcome: 'call_back',
+      note: 'Owner keen',
+    });
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/orgs/acme');
     expect(db.query('SELECT id, outcome, note FROM visit;').all()).toEqual([
@@ -123,7 +133,9 @@ describe('POST /orgs/<slug>/activity/<id>', () => {
     const id = await log('spoke', 'Owner keen');
     const at = (db.query('SELECT at FROM visit;').get() as { at: string }).at;
     await edit(id, { outcome: 'note', note: 'Owner keen' });
-    expect(db.query('SELECT count(*) AS n FROM visit;').get()).toEqual({ n: 0 });
+    expect(db.query('SELECT count(*) AS n FROM visit;').get()).toEqual({
+      n: 0,
+    });
     expect(db.query('SELECT id, body, created_at FROM note;').all()).toEqual([
       { id, body: 'Owner keen', created_at: at },
     ]);
@@ -157,7 +169,9 @@ describe('POST /orgs/<slug>/activity/<id>', () => {
     const id = await log('spoke', 'Same');
     await edit(id, { outcome: 'spoke', note: 'Same' });
     expect(
-      db.query("SELECT count(*) AS n FROM audit_log WHERE action = 'update';").get(),
+      db
+        .query("SELECT count(*) AS n FROM audit_log WHERE action = 'update';")
+        .get(),
     ).toEqual({ n: 0 });
   });
 

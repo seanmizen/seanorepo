@@ -93,6 +93,11 @@ describe('POST /orgs/<slug>/activity (the Log module)', () => {
       from: 'visited',
       stage: 'lost',
     });
+    // The list has no due next action, so no LED is lit.
+    const list = (
+      await app.inject({ method: 'GET', url: '/', headers: { cookie } })
+    ).body;
+    expect(list).not.toContain('class="led on"');
   });
 
   test('the other outcomes leave the stage as it is', async () => {

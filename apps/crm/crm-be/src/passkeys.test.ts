@@ -228,7 +228,9 @@ describe('the admin pages', () => {
     );
 
     const passkeys = await get('/account/passkeys', cookie);
-    expect(passkeys.body).toContain('You are the admin.');
+    expect(passkeys.body).toContain(
+      'The admin pages need a passkey, so add one to this device',
+    );
     expect(passkeys.body).not.toContain('sign out and sign in');
 
     const added = await addTestPasskey(

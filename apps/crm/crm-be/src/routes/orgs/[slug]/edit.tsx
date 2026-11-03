@@ -1,15 +1,11 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type Auth, audit } from '../../../auth';
-import {
-  changedFields,
-  type FormValues,
-  parseForm,
-} from '../../../forms/form';
+import { changedFields, type FormValues, parseForm } from '../../../forms/form';
 import {
   ORG_COLUMNS,
-  orgColumnValues,
   organisationForm,
+  orgColumnValues,
 } from '../../../forms/organisation';
 import { findOrg, type Org, orgPath, resolveSlug } from '../../../org';
 import { type PageParts, renderPage } from '../../../render';
@@ -35,7 +31,8 @@ export const orgEditPage = ({
   error?: string;
 }): PageParts => ({
   title: `Edit ${org.name}`,
-  intro: 'When the URL name changes, old links to this organisation stop working.',
+  intro:
+    'When the URL name changes, old links to this organisation stop working.',
   device: (
     <Device>
       <Lcd alert={error} />

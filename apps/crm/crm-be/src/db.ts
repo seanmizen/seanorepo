@@ -55,6 +55,10 @@ export const openDatabase = (file: string): Database => {
   mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file, { create: true, strict: true });
   db.exec('PRAGMA journal_mode = WAL;');
+  // In production, Litestream checkpoints the WAL from its own container.
+  // While it holds the lock, a write waits up to 5 s and does not fail with
+  // SQLITE_BUSY.
+  db.exec('PRAGMA busy_timeout = 5000;');
   // SQLite ignores this PRAGMA in a transaction, so set it before migrate().
   db.exec('PRAGMA foreign_keys = ON;');
   migrate(db);

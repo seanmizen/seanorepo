@@ -64,6 +64,16 @@ resource "cloudflare_dns_record" "seanmizen_com_autosam_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
+# The crm (apps/crm). Each page except the sign-in pages needs a session.
+resource "cloudflare_dns_record" "seanmizen_com_crm_cname" {
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
+  name    = "crm.seanmizen.com"
+  proxied = true
+  ttl     = 1
+  type    = "CNAME"
+  zone_id = cloudflare_zone.seanmizen_com.id
+}
+
 resource "cloudflare_dns_record" "seanmizen_com_voxel_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
   name    = "voxel.seanmizen.com"

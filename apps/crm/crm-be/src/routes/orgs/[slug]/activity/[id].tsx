@@ -1,6 +1,10 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { type Activity, findActivity, saveActivity } from '../../../../activity';
+import {
+  type Activity,
+  findActivity,
+  saveActivity,
+} from '../../../../activity';
 import type { Auth } from '../../../../auth';
 import { activityForm, LOG_KEYS, NOTE_ONLY } from '../../../../forms/activity';
 import { parseForm } from '../../../../forms/form';

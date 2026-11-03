@@ -6,7 +6,7 @@ import { changedFields, type FormValues } from './forms/form';
 /**
  * The contacts of an organisation: each one is a `person` with a
  * `membership` of the organisation. A person can be a contact of more than
- * one organisation. The routes `routes/[slug]/contacts*` and
+ * one organisation. The routes `routes/orgs/[slug]/contacts*` and
  * `routes/orgs/new.tsx` call these functions.
  */
 
@@ -110,7 +110,12 @@ export const saveContact = (
         `UPDATE person SET name = ?, phone = ?, email = ?,
            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
          WHERE id = ?;`,
-      ).run(values.name, values.phone || null, values.email || null, contact.id);
+      ).run(
+        values.name,
+        values.phone || null,
+        values.email || null,
+        contact.id,
+      );
       audit(db, actor, 'update', 'person', contact.id, {
         organisation_id: orgId,
         fields: personFields,

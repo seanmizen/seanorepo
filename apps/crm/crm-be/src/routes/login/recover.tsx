@@ -65,7 +65,7 @@ export const loginRecoverRoute = (app: FastifyInstance, db: Database) => {
           request,
           recoverPage({
             token,
-            error: token ? undefined : 'This link has no recovery token.',
+            error: token ? undefined : 'This link is not complete.',
           }),
         ),
       );

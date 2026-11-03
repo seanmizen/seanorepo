@@ -6,7 +6,11 @@ import { type Contact, listContacts } from '../../contacts';
 import { dueWords, today } from '../../dates';
 import { activityForm, LOG_KEYS } from '../../forms/activity';
 import { contactForm, ROLES } from '../../forms/contact';
-import { type FormValues, fieldsOf, type RecordFormDef } from '../../forms/form';
+import {
+  type FormValues,
+  fieldsOf,
+  type RecordFormDef,
+} from '../../forms/form';
 import { organisationForm } from '../../forms/organisation';
 import { findOrg, type Org, OUTCOMES, orgPath, STAGES } from '../../org';
 import { type PageParts, renderPage } from '../../render';
@@ -44,7 +48,8 @@ const orgChange = (detail: Record<string, string | null | string[]>) => {
         : `Stage: ${STAGES[stage]}`,
     );
   }
-  const due = typeof detail.next_action_on === 'string' && detail.next_action_on;
+  const due =
+    typeof detail.next_action_on === 'string' && detail.next_action_on;
   if (fields?.some((name) => name.startsWith('next_action'))) {
     parts.push(
       detail.cleared ? (

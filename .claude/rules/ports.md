@@ -45,7 +45,7 @@ use their host ports. See `infra/edge/README.md`.
 | 4070 / 4071 | cous.seanmizen.com FE / BE |
 | 4080 | action.seanmizen.com (game and lobby in one process). 4081 reserved. |
 | 4090 | autosam.seanmizen.com (page and song API in one process). 4091 reserved. |
-| 4100 | crm (apps/crm, pages and API in one process). Local only. Not deployed. 4101 is free. |
+| 4100 | crm.seanmizen.com (apps/crm, pages and API in one process). Not on the LAN edge: sign-in needs HTTPS. 4101 is free. |
 | 4120 | tcp-getter (host unit, reached at `seanmizen.com/tcp/*`) |
 
 ### Add a service

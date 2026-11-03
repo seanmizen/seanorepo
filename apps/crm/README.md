@@ -4,16 +4,35 @@ A homebrew CRM for a solo developer who sells software services door to door.
 It keeps contacts, visits, the pipeline and the GDPR records. Stripe keeps the
 billing. After sign-in, the seller has these pages:
 
-- `/` (Today): the organisations with a next action due today or earlier,
-  oldest first, and the "New lead" key.
-- `/orgs`: all organisations. A GET form searches the name and the postcode,
-  and filters by stage. The URL holds the search.
-- `/orgs/new`: add an organisation and its contact. The slug comes from the
-  name.
-- `/<slug>`: one organisation. It shows the details, the contacts, the visits
-  and the notes, newest first. Its forms log a visit, change the stage and
-  the next action, and add a note.
-- `/account`: the person and the session, with links to
+- `/` and `/orgs`: one list of every organisation (one handler). The LCD
+  is a menu: name, stage, next action date and last activity, with a lit
+  LED when the next action is due. Each row links to `/orgs/<slug>`. The
+  default order puts the due and overdue ones first (the oldest first),
+  then the rest by last activity (the newest first). Three sort keys
+  (`Last activity`, `Date added`, `Name`) sort ascending (green LED), then
+  descending (red LED), then remove the sort. A search field (name or
+  postcode) and the stage keys filter it. The URL holds all of it:
+  `?q=&stage=&sort=&dir=&page=`. 50 rows to a page, with a pager in the
+  footer.
+- `/orgs/new`: the new lead. The organisation form and the contact form,
+  and one `Save` key. An empty URL name (the slug) comes from the name.
+- `/orgs/<slug>`: one organisation. The LCD shows the name, the stage, the
+  next action and its due date, and the last visit. The modules:
+  - **Log**: the `Visit note` field, then the Save as keys. `No answer`,
+    `Spoke`, `Call back`, `Not interested` and `Do not knock` save a visit
+    with the note. `Note only` saves the text as a note. `Do not knock`
+    also sets the stage to Lost.
+  - **Stage**: one latching key for each stage. Each key saves.
+  - **Next action**: the action, its due date and `Save`.
+  - **Add a contact**: the contact form and `Save`.
+
+  The records: **Activity** (every event, newest first, in a `<details>`
+  that is closed until a tap), **Contacts** (each with `Edit` and
+  `Remove`) and **Details** (with `Edit`).
+- `/orgs/<slug>/edit`, `/orgs/<slug>/contacts/<person-id>` and
+  `/orgs/<slug>/activity/<id>`: the edit pages. Each one is the same form
+  as its create page, filled in (REQ-CRM-FORM-001).
+- `/account`: the email and how this session signed in, with links to
   `/account/passkeys` and `/account/sessions`.
 
 `GET /api/health` returns `{ "ok": true }`. The design is in
@@ -22,6 +41,7 @@ billing. After sign-in, the seller has these pages:
 ```bash
 yarn workspace crm start           # http://localhost:4100
 yarn workspace crm start:docker    # the same, in a dev container
+yarn workspace crm prod:docker     # the prod image and Litestream (see Production)
 yarn workspace crm test:types
 yarn workspace crm-be test
 ```
@@ -41,16 +61,33 @@ yarn workspace crm-be test
 - `crm-be/src/dates.ts` holds the London date and the date format, and
   `ui/When.tsx` shows a date (REQ-CRM-DATE-001). No other code formats a
   date.
-- `crm-be/src/org.ts` holds the organisation: the stages, the visit outcomes
-  and the slug maker. The page for `/<slug>` is
-  `routes/[slug].tsx`, and its forms post to `routes/[slug]/*.ts`. The static
-  routes win over `/<slug>`, and `RESERVED_SLUGS` keeps their first words out
-  of the slugs.
+- `crm-be/src/org.ts` holds the organisation: the stages, the visit
+  outcomes, the slug maker, `orgPath` (each link to an organisation) and
+  `setPipeline` (the stage and the next action). The page for
+  `/orgs/<slug>` is `routes/orgs/[slug].tsx`, and its forms post to
+  `routes/orgs/[slug]/*`. The static route `/orgs/new` wins over
+  `/orgs/<slug>`, and no slug is `new` (`RESERVED_SLUG`).
+- `crm-be/src/forms/` holds one form definition for each record type:
+  `organisation.ts`, `contact.ts` and `activity.ts` (the Log module). A
+  definition has the fields, the labels, the placeholders and the checks.
+  `ui/RecordForm.tsx` renders it, on the create page and on the edit page,
+  and `parseForm` in `forms/form.ts` reads the post of both. No other code
+  lists the fields of a record (REQ-CRM-FORM-001).
+- `crm-be/src/activity.ts` holds the visits and the notes, and
+  `listEvents`: the Activity list of an organisation. It joins the visits,
+  the notes and the `audit_log` rows of the organisation, its contacts and
+  its activity. `crm-be/src/contacts.ts` holds the contacts: add, change and
+  remove.
 - Each write to an organisation, a person, a membership, a visit or a note
-  adds an `audit_log` row. The actor is the id of the signed-in person.
+  adds an `audit_log` row. The actor is the id of the signed-in person. The
+  row keeps ids, stages, dates and the names of the changed fields. It
+  never keeps personal data or the text of a note: the Activity list gets
+  the names from the current tables. A contact that is not in the crm now
+  shows as "a removed contact".
 - `crm-be/src/ui/` holds the parts that pages share: `SiteNav`, `Footer`,
   `Device`, `Lcd`, `Module`, `Key` (and `Keys`, a row of keys), `LatchKey`,
-  `Field`, `Records` (and `RecordTable`), `When`, `Led` and `Label`.
+  `Field`, `RecordForm`, `Records` (and `RecordTable`), `When`, `Led` and
+  `Label`.
   `ui/Passkey.tsx` holds the two passkey controls (add a passkey, sign in
   with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
   route.
@@ -74,8 +111,8 @@ the `parts` that the route gives it.
    seanmizen.com: `/account/passkeys` reads `crm / account / passkeys`. Each
    part above the page is a link, and the page itself has a dim color. The title is
    the first element in `<body>`. Under it, for a signed-in person, one line
-   of links: `today · orgs · new lead · account · sign out`. The link to this
-   page is text, with `aria-current="page"`.
+   of links: `orgs · new lead · account · sign out`. The link to this page
+   is text, with `aria-current="page"`.
 2. **Intro** (`intro`, text). At most one sentence.
 3. **Device** (`device`). The core function of the page, as one instrument:
    a `Device` with the `Lcd` at the top, then each `Module` on a grid of 6
@@ -88,8 +125,8 @@ the `parts` that the route gives it.
 4. **Records** (`records`, text). History and reference data, as `Records`:
    tables, lists and definition lists in the page font, with no panel. On a
    phone, each table row is a block of lines.
-5. **Footer** (`ui/Footer.tsx`, text). `top`, the pager of a long list
-   (`pager`), and the theme and mode steppers.
+5. **Footer** (`ui/Footer.tsx`, text). The pager of a long list (`pager`),
+   and `top`.
 
 On a wide screen the page starts at the top left. The device is a column of
 about 360px, and the records fill the space to its right. On a phone it is
@@ -106,21 +143,21 @@ node apps/crm/scripts/shoot.mjs [out-dir]
 ## Theme
 
 `crm-fe/src/theme.css` is the Pixel-3 theme of autosam: an instrument panel
-with silkscreen labels, raised keys, LEDs and one red signal color. Text
-links use the ink color with an underline.
+with silkscreen labels, raised keys, LEDs and one red signal color. The one
+other color is the green LED of a sort key in ascending order. Text links
+use the ink color with an underline.
 
-- **Theme.** Add `?theme=bare` to a URL to see the page with no page styles
-  and no scripts. The theme stepper in the footer links this URL in the
-  other theme.
-- **Mode.** Auto, light or dark. Auto follows `prefers-color-scheme`. The
-  mode stepper in the footer sends `POST /mode`, which keeps the mode in the
-  `crm_mode` cookie for one year and opens the page again. crm-be then puts
-  `data-mode` on `<html>`. A signed-out visitor can use it too.
+- **Bare.** Add `?theme=bare` to a URL to see the page with no page styles
+  and no scripts. No page links to it.
+- **Mode.** Light or dark, as the system sets it (`prefers-color-scheme`).
 - **Dates.** A date shows as `2026-Nov-03`, and a date and time as
-  `2026-Nov-03 13:31`, in London time. Each one is a `<time>` with the full
-  ISO value in `datetime` and the full date and time with seconds in
-  `title` (REQ-CRM-DATE-001). Words such as `2 days overdue` show next to
-  the date, never in place of it.
+  `2026-Nov-03 13:31`, in London time, in the mono font. Each one is a
+  `<time>` with the full ISO value in `datetime` and the full date and time
+  with seconds in `title` (REQ-CRM-DATE-001). Words such as `2 days
+  overdue` show next to the date, never in place of it.
+- **Words.** The text of a page uses only the words on its keys, labels and
+  legends. It never names a part of the panel (key, module, LCD), and help
+  text is rare.
 
 ## Page rules
 
@@ -131,6 +168,11 @@ links use the ink color with an underline.
   still works.
 - Biome fails on `dangerouslySetInnerHTML` under `apps/crm` (see the
   `overrides` in the root `biome.json`).
+- The text on a page uses only the words that the page shows: the labels
+  of its fields, buttons and headings. It never uses the words of the code,
+  such as key, module, LCD, outcome or record. If a sentence must tell what
+  a button does, it names the button by its label, for example "Type a
+  visit note, then tap Note only." Most buttons need no sentence.
 
 ## Sign-in
 
@@ -150,11 +192,11 @@ missing. To add other people, add `person` rows.
    deletes its row.
 
 A session is a random cookie (`crm_session`) that lasts 90 days.
-`/account/sessions` lists the sessions and revokes one. Its "Sign out"
-module has two keys: "Everywhere else" revokes all other sessions, and
-"This device" signs out. The nav of each page also has "sign out". Each
-page except the sign-in pages, `/mode`, `/api/health` and `/favicon.ico`
-needs a session. A signed-out visitor goes
+`/account/sessions` lists the sessions, with a "Revoke" key for each one
+except this session. When there is another session, its "Sign out" module
+has the key "Everywhere else", which revokes all other sessions. The nav of
+each page has "sign out" for this session. Each page except the sign-in
+pages, `/api/health` and `/favicon.ico` needs a session. A signed-out visitor goes
 to `/login?next=<path>`. `/favicon.ico` returns 204: the crm has no icon.
 
 ## Passkeys and the admin
@@ -225,13 +267,101 @@ Where each part is:
 | --- | --- | --- | --- |
 | `PORT` | `4100` | `index.ts`, `scripts/shoot.mjs` | The port crm-be listens on. The screenshot script uses `4110` when it is unset. |
 | `DB_PATH` | `crm-be/data/crm.db` | `db.ts` | The SQLite file. Git ignores the default folder. |
-| `NODE_ENV` | unset | `auth.ts`, `email.ts` | `production` adds `Secure` to the session cookie. `test` puts emails into `devOutbox` in place of stdout. |
+| `NODE_ENV` | unset | `auth.ts`, `email.ts` | `production` adds `Secure` to the session cookie. The prod compose service sets it. `test` puts emails into `devOutbox` in place of stdout. |
 | `CRM_ADMIN_EMAIL` | unset | `index.ts`, `auth.ts` | The admin email. At boot, crm-be makes this person if it is missing. Only this person opens the admin routes. Unset: crm-be makes nobody, only existing people can sign in, and nobody opens the admin routes. |
-| `CRM_PUBLIC_URL` | `http://localhost:4100` | `auth.ts` | The start of the links in the sign-in email and from `admin:recover`. Its host is the WebAuthn relying party ID, and its origin is the expected WebAuthn origin. A passkey works only on this host. The links never use the request `Host` header. |
-| `EMAIL_API_KEY` | unset | `email.ts` | The email provider key. Unset: dev mode. Each email goes to stdout, and crm-be sends nothing. |
-| `EMAIL_PROVIDER` | unset | `email.ts` | `resend` or `postmark`. Necessary when `EMAIL_API_KEY` has a value. |
-| `EMAIL_FROM` | unset | `email.ts` | The sender address. Necessary when `EMAIL_API_KEY` has a value. |
+| `CRM_PUBLIC_URL` | `http://localhost:4100` | `auth.ts` | The prod compose service sets `https://crm.seanmizen.com`. The start of the links in the sign-in email and from `admin:recover`. Its host is the WebAuthn relying party ID, and its origin is the expected WebAuthn origin. A passkey works only on this host. The links never use the request `Host` header. |
+| `SMTP_HOST` | `smtp.gmail.com` | `email.ts` | The SMTP server. |
+| `SMTP_PORT` | `587` | `email.ts` | The SMTP port. `465` uses TLS from the start. Each other port uses STARTTLS. |
+| `SMTP_USER` | unset | `email.ts` | The SMTP user and the sender address: `9mazes@gmail.com`. Necessary when `SMTP_PASS` has a value. |
+| `SMTP_PASS` | unset | `email.ts` | The Gmail app password of `SMTP_USER`. Unset: dev mode. Each email goes to stdout, and crm-be sends nothing. |
+| `EMAIL_FROM_NAME` | `seanmizen.com Administrator` | `email.ts` | The display name of the sender. The From header is `"<EMAIL_FROM_NAME>" <SMTP_USER>`. |
+| `CRM_R2_BUCKET` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The R2 bucket of the backups: `crm`. Unset: the Litestream sidecar prints "Replication is off." and stops. Nothing goes to R2. |
+| `CRM_R2_ENDPOINT` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The EU endpoint of R2: `https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com`. When `CRM_R2_BUCKET` has a value, each other endpoint stops the sidecar with status 1. |
+| `LITESTREAM_ACCESS_KEY_ID` | unset | Litestream | The access key ID of the R2 API token for the bucket `crm`. |
+| `LITESTREAM_SECRET_ACCESS_KEY` | unset | Litestream | The secret access key of the same token. |
 
-When `EMAIL_API_KEY` has a value and `EMAIL_PROVIDER` or `EMAIL_FROM` is wrong,
-crm-be stops at boot. `docker-compose.yml` passes the `CRM_*` and `EMAIL_*`
-values through from the host.
+When `SMTP_PASS` has a value and `SMTP_USER` has none, crm-be stops at boot.
+crm-be does not wait for the send. When a send fails, crm-be logs the SMTP
+error code and status, with no secret, and the response does not change.
+
+- **dev:** `docker-compose.yml` passes the `CRM_*`, `SMTP_*` and `EMAIL_FROM_NAME` values through
+  from the host.
+- **prod:** `docker-compose.yml` sets `NODE_ENV=production`,
+  `CRM_PUBLIC_URL=https://crm.seanmizen.com` and `DB_PATH=/data/crm.db`. Each
+  other value comes from `apps/crm/.env` on the server. The file is not in
+  the repo, and `deploy.sh` never changes it. Without the file, each value
+  is unset.
+
+## Production
+
+The crm is live at `crm.seanmizen.com` on the web box (asus).
+
+- **Deploy.** `yarn workspace crm prod:docker` builds the `prod` image and
+  starts the `prod` profile. The image builds crm-fe with Rsbuild one time,
+  and Bun runs crm-be with no watch. After each release, `deploy.sh` runs
+  the root `yarn prod:docker`, which runs this script.
+- **Routes.** The DNS record is in `infra/cloudflare/seanmizen_com.tf`. The
+  tunnel sends `crm.seanmizen.com` to `localhost:4100`
+  (`apps/cloudflared/config.yml`). The port is on `127.0.0.1` only. The crm
+  is not on the LAN edge (`infra/edge`), because sign-in needs HTTPS and the
+  origin `https://crm.seanmizen.com`.
+- **Data.** The SQLite file is `/data/crm.db` in the named volume
+  `crm_sqlite_data`. The volume is only on the web box.
+- **Secrets.** `apps/crm/.env` on the server:
+
+  ```bash
+  CRM_ADMIN_EMAIL=
+  SMTP_HOST=
+  SMTP_PORT=
+  SMTP_USER=
+  SMTP_PASS=
+  CRM_R2_BUCKET=crm
+  CRM_R2_ENDPOINT=https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com
+  LITESTREAM_ACCESS_KEY_ID=
+  LITESTREAM_SECRET_ACCESS_KEY=
+  ```
+
+  Copy the four `SMTP_*` lines from `apps/carolinemizen.art/caroline-be/.env`
+  on asus. tcp-getter, caroline-be and inside-be send with the same Gmail
+  account, `9mazes@gmail.com`. The `SMTP_PASS` app password gives full access
+  to the `9mazes@gmail.com` mailbox. The account is a sender-only account:
+  keep no other mail in it. With no `SMTP_PASS`, each sign-in email goes to
+  the log (`docker logs crm`).
+- **Recovery.** `bun run admin:recover <email>` runs in the container:
+
+  ```bash
+  ssh -t srv@asus.local docker exec -it crm bun run admin:recover <email>
+  ```
+
+## Backups
+
+The `litestream` service in the `prod` profile (`litestream.yml`) streams
+`/data/crm.db` to R2. It keeps a snapshot each day, and keeps each file for
+90 days. Then erased data expires from the backups.
+
+- **Bucket:** `crm`, with the prefix `crm.db/`. `infra/cloudflare/r2.tf`
+  defines it.
+- **Jurisdiction:** EU. The data stays inside the EU. Cloudflare has no UK
+  jurisdiction. UK GDPR allows a transfer to the EEA under the UK adequacy
+  regulations.
+- **Endpoint:**
+  `https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com`.
+  The default R2 endpoint cannot reach an EU bucket.
+- **Status:** `docker logs crm-litestream`.
+
+To restore, run these commands on the web box. The restore replaces
+`/data/crm.db` with the latest copy from R2.
+
+```bash
+ssh srv@asus.local
+cd ~/projects/seanorepo/apps/crm
+docker compose --profile prod stop crm litestream
+# Show the restore plan. This changes nothing.
+docker compose --profile prod run --rm --no-deps --entrypoint litestream litestream restore -dry-run /data/crm.db
+# Replace the database and its -wal and -shm files.
+docker compose --profile prod run --rm --no-deps --entrypoint litestream litestream restore -force /data/crm.db
+yarn workspace crm prod:docker
+```
+
+To restore to an earlier time, add `-timestamp 2026-11-03T12:00:00Z` to the
+restore command.

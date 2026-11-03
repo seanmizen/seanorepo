@@ -17,7 +17,8 @@ markup.
   date and time as `2026-Nov-03 13:31` (24-hour, the full year, London
   time), in a `<time>` element whose `datetime` attribute holds the full ISO
   8601 value with seconds and the offset, and whose `title` holds the full
-  date and time with seconds.
+  date and time with seconds, and which the page styles show in the mono
+  font (`var(--mono)`).
 - **Exception:** A native date field (`<input type="date">`) shows the
   format of the browser. A date and time shows its seconds only where they
   are necessary, for example in an audit log.
@@ -27,6 +28,7 @@ markup.
   status words such as `2 days overdue` are status text, not a date: they
   can show, but always next to the date, never in place of it. One helper
   (`crm-be/src/dates.ts`, shown by `crm-be/src/ui/When.tsx`) formats each
-  date, so no page makes its own format.
-- **Verification:** Test — `apps/crm/crm-be/src/dates.test.ts` › "every date and time on each page is a <time> with the full value, in the one format (REQ-CRM-DATE-001)"
+  date, so no page makes its own format. In mono, each date has the same
+  width, so the dates in a column (for example the visits) line up.
+- **Verification:** Test — `apps/crm/crm-be/src/dates.test.ts` › "every date and time on each page is a <time> with the full value, in the one format, in mono (REQ-CRM-DATE-001)"
 - **Relations:** none

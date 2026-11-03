@@ -156,10 +156,13 @@ URLs are readable, and a person can share them. A URL is never a
 credential. The session controls access.
 
 ```text
-crm.seanmizen.com/acme-plumbing
-crm.seanmizen.com/acme-plumbing/invoices/INV-0042
-crm.seanmizen.com/acme-plumbing/quotes/website-refresh
+crm.seanmizen.com/orgs/acme-plumbing
+crm.seanmizen.com/orgs/acme-plumbing/invoices/INV-0042
+crm.seanmizen.com/orgs/acme-plumbing/quotes/website-refresh
 ```
+
+- Each organisation is under `/orgs/`. The only slug that an organisation
+  cannot have is `new`, because `/orgs/new` is the new-lead page.
 
 - A signed-out visitor gets the sign-in page. After sign-in, the visitor
   returns to the same URL.
@@ -321,8 +324,14 @@ Never store card data. Checkout keeps the PCI scope at SAQ A.
 
 - The database is SQLite in [WAL mode][sqlite-wal].
 - **Primary backup.** [Litestream][litestream] streams the database
-  continuously to Cloudflare R2 or Backblaze B2. This gives point-in-time
-  restore, and recovery if the box is lost.
+  continuously to Cloudflare R2. This gives point-in-time restore, and
+  recovery if the box is lost.
+- **The R2 bucket is in the EU jurisdiction.** The backup data stays inside
+  the EU. Cloudflare has no UK jurisdiction. UK GDPR allows a transfer to
+  the EEA under the UK adequacy regulations. Cloudflare fixes the
+  jurisdiction when it makes a bucket, and only the EU endpoint
+  (`<account_id>.eu.r2.cloudflarestorage.com`) reaches the bucket. The
+  README has the bucket, the endpoint and the restore command.
 - **OneDrive.** Litestream cannot write to OneDrive. A nightly job makes a
   [`VACUUM INTO`][sqlite-vacuum] snapshot, encrypts it with [`age`][age], and
   copies it with [`rclone`][rclone-onedrive]. Encrypt it, because it is

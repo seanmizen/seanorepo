@@ -40,8 +40,11 @@ const contacts = () =>
     .all();
 
 const personId = (name: string) =>
-  (db.query('SELECT id FROM person WHERE name = ?;').get(name) as { id: string })
-    .id;
+  (
+    db.query('SELECT id FROM person WHERE name = ?;').get(name) as {
+      id: string;
+    }
+  ).id;
 
 describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
   test('adds a person and a membership, each with an audit row with no contact details', async () => {
@@ -71,16 +74,18 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
       'create person',
       'create membership',
     ]);
-    expect(rows.map((row) => row.detail).join()).not.toMatch(/Ann|07700|example/);
+    expect(rows.map((row) => row.detail).join()).not.toMatch(
+      /Ann|07700|example/,
+    );
   });
 
   test('links the person that has the email, as /orgs/new does', async () => {
     const existing = addPerson(db, 'ann@example.com');
     const other = await addOrg(app, cookie, { name: 'Other' });
     await add({ email: 'ANN@example.com', role: 'owner' }, other);
-    expect(
-      db.query('SELECT person_id FROM membership;').all(),
-    ).toEqual([{ person_id: existing }]);
+    expect(db.query('SELECT person_id FROM membership;').all()).toEqual([
+      { person_id: existing },
+    ]);
   });
 
   test('a person who is a contact already returns 400', async () => {
@@ -207,11 +212,13 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
 
     await postForm(app, `/orgs/${other}/contacts/${id}/remove`, {}, cookie);
     expect(contacts()).toEqual([]);
-    expect(db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id)).toEqual(
-      { n: 0 },
-    );
+    expect(
+      db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id),
+    ).toEqual({ n: 0 });
     const deletes = db
-      .query("SELECT entity FROM audit_log WHERE action = 'delete' ORDER BY rowid;")
+      .query(
+        "SELECT entity FROM audit_log WHERE action = 'delete' ORDER BY rowid;",
+      )
       .all();
     expect(deletes).toEqual([
       { entity: 'membership' },
@@ -223,15 +230,17 @@ describe('/orgs/<slug>/contacts/<person-id>', () => {
   test('Remove never deletes the admin person', async () => {
     await add({ email: TEST_ADMIN_EMAIL });
     const id = (
-      db.query('SELECT id FROM person WHERE email = ?;').get(TEST_ADMIN_EMAIL) as {
+      db
+        .query('SELECT id FROM person WHERE email = ?;')
+        .get(TEST_ADMIN_EMAIL) as {
         id: string;
       }
     ).id;
     await postForm(app, `/orgs/${slug}/contacts/${id}/remove`, {}, cookie);
     expect(contacts()).toEqual([]);
-    expect(db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id)).toEqual(
-      { n: 1 },
-    );
+    expect(
+      db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id),
+    ).toEqual({ n: 1 });
   });
 
   test('a person who is not a contact of this organisation returns 404', async () => {

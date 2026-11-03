@@ -17,14 +17,12 @@ import { passkeyRegisterOptionsRoute } from './routes/api/passkeys/register-opti
 import { passkeySignInRoute } from './routes/api/passkeys/sign-in';
 import { passkeySignInOptionsRoute } from './routes/api/passkeys/sign-in-options';
 import { faviconRoute } from './routes/favicon';
-import { todayRoute } from './routes/index';
+import { listRoute } from './routes/index';
 import { loginRoute } from './routes/login';
 import { loginCodeRoute } from './routes/login/code';
 import { loginRecoverRoute } from './routes/login/recover';
 import { loginVerifyRoute } from './routes/login/verify';
 import { logoutRoute } from './routes/logout';
-import { modeRoute } from './routes/mode';
-import { orgsRoute } from './routes/orgs';
 import { orgRoute } from './routes/orgs/[slug]';
 import { orgActivityRoute } from './routes/orgs/[slug]/activity';
 import { orgActivityEditRoute } from './routes/orgs/[slug]/activity/[id]';
@@ -59,7 +57,7 @@ export const buildApp = (db: Database) => {
     maxAge: '365d',
   });
 
-  todayRoute(app, db);
+  listRoute(app, db);
   healthRoute(app);
   faviconRoute(app);
   const limits = makeLoginLimits();
@@ -68,7 +66,6 @@ export const buildApp = (db: Database) => {
   loginVerifyRoute(app, db);
   loginRecoverRoute(app, db);
   logoutRoute(app, db);
-  modeRoute(app);
   accountRoute(app, db);
   accountSessionsRoute(app, db);
   accountPasskeysRoute(app, db);
@@ -76,7 +73,6 @@ export const buildApp = (db: Database) => {
   passkeyRegisterRoute(app, db);
   passkeySignInOptionsRoute(app, db);
   passkeySignInRoute(app, db);
-  orgsRoute(app, db);
   orgsNewRoute(app, db);
   // `/orgs/new` is a static route, so it wins over `/orgs/<slug>`, and no
   // slug is `new` (`RESERVED_SLUG` in `org.ts`).

@@ -26,8 +26,8 @@ interface LoginBody {
 
 /**
  * The sign-in page: a small device with the email module and the passkey
- * module. With no JavaScript, the passkey module shows its note, and the
- * email form still works (REQ-CRM-BARE-001).
+ * module, and the help text under it. With no JavaScript, the passkey
+ * module shows its note, and the email form still works (REQ-CRM-BARE-001).
  */
 export const loginPage = ({
   next,
@@ -39,7 +39,6 @@ export const loginPage = ({
   error?: string;
 }): PageParts => ({
   title: 'Sign in',
-  intro: 'Sign in with a link by email, or with a passkey.',
   device: (
     <Device>
       <Lcd alert={error} />

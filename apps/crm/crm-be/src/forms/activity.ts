@@ -47,6 +47,7 @@ export const activityForm: RecordFormDef = {
     },
   ],
   check: (values) =>
-    values.outcome === NOTE_ONLY && !values.note ? 'Type a visit note, then tap Note only.'
+    values.outcome === NOTE_ONLY && !values.note
+      ? 'Type a visit note, then tap Note only.'
       : undefined,
 };

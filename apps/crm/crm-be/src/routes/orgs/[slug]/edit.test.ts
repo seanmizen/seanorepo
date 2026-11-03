@@ -52,7 +52,9 @@ describe('/orgs/<slug>/edit', () => {
     expect(html).toContain(
       '<form action="/orgs/acme-plumbing/edit" method="post">',
     );
-    expect(html).toContain('<input required="" name="name" value="Acme Plumbing"/>');
+    expect(html).toContain(
+      '<input required="" name="name" value="Acme Plumbing"/>',
+    );
     expect(html).toContain('name="slug" value="acme-plumbing"');
     expect(html).toContain('name="postcode" value="SW1A 1AA"');
     expect(html).toContain(
@@ -103,7 +105,11 @@ describe('/orgs/<slug>/edit', () => {
       '<p role="alert">Another organisation has this URL name.</p>',
     );
     expect(response.body).toContain('name="slug" value="other"');
-    expect(db.query('SELECT slug FROM organisation WHERE name = ?;').get('Acme Plumbing')).toEqual({
+    expect(
+      db
+        .query('SELECT slug FROM organisation WHERE name = ?;')
+        .get('Acme Plumbing'),
+    ).toEqual({
       slug: 'acme-plumbing',
     });
   });

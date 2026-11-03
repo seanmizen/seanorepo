@@ -5,7 +5,7 @@ import { type PageParts, renderPage } from '../render';
 import { Device } from '../ui/Device';
 import { Lcd } from '../ui/Lcd';
 
-/** How a session started, as the LCD of an account page shows it. */
+/** How a session started, as the account page shows it. */
 export const SESSION_TEXT: Record<SessionMethod, string> = {
   email: 'Email link or code',
   passkey: 'Passkey',
@@ -14,8 +14,8 @@ export const SESSION_TEXT: Record<SessionMethod, string> = {
 
 /**
  * The account page. The nav links to it, and so does the path title of
- * each account page. The LCD shows the person and the session, then a
- * menu of the account pages, each with its count.
+ * each account page. The LCD shows the email and how this session signed
+ * in, then a menu of the account pages, each with its count.
  */
 export const accountPage = ({
   auth,
@@ -31,8 +31,8 @@ export const accountPage = ({
     <Device>
       <Lcd
         rows={[
-          { label: 'Person', value: auth.email },
-          { label: 'Session', value: SESSION_TEXT[auth.method] },
+          { label: 'Email', value: auth.email },
+          { label: 'Signed in with', value: SESSION_TEXT[auth.method] },
         ]}
         menu={{
           legend: ['Page', 'Count'],

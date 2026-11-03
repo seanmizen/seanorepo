@@ -50,7 +50,10 @@ const idOf = (sql: string, value: string) =>
  */
 const activityLines = (html: string) =>
   [...html.matchAll(/<li><time[\s\S]*?<\/li>/g)].map((match) =>
-    match[0].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
+    match[0]
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
   );
 
 /**
@@ -141,7 +144,10 @@ describe('GET /orgs/<slug>', () => {
   });
 
   test('each change shows in Activity, with the names from the current tables', async () => {
-    const ann = idOf('SELECT id FROM person WHERE email = ?;', 'ann@example.com');
+    const ann = idOf(
+      'SELECT id FROM person WHERE email = ?;',
+      'ann@example.com',
+    );
     await post(`/orgs/${slug}/stage`, {
       stage: 'lead',
       next_action: 'Call',
@@ -182,20 +188,31 @@ describe('GET /orgs/<slug>', () => {
     expect(lines).toContain('Contact added: a removed contact (Staff).');
     expect(lines).toContain('Contact changed: Ann Jones (Role).');
     expect(lines).toContain('Contact changed: Ann Jones (Name).');
-    expect(lines).toContain('Details changed: Source, Address line 1, Postcode.');
+    expect(lines).toContain(
+      'Details changed: Source, Address line 1, Postcode.',
+    );
     expect(lines).toContain('Next action cleared.');
     expect(lines).toContain('Next action due 2030-Jan-02.');
   });
 
   test('no write copies personal data or text into audit_log', async () => {
-    const ann = idOf('SELECT id FROM person WHERE email = ?;', 'ann@example.com');
+    const ann = idOf(
+      'SELECT id FROM person WHERE email = ?;',
+      'ann@example.com',
+    );
     await post(`/orgs/${slug}/stage`, {
       stage: 'quoted',
       next_action: 'Secret plan',
       next_action_on: '2030-01-02',
     });
-    await post(`/orgs/${slug}/activity`, { outcome: 'spoke', note: 'Secret visit' });
-    await post(`/orgs/${slug}/activity`, { outcome: 'note', note: 'Secret note' });
+    await post(`/orgs/${slug}/activity`, {
+      outcome: 'spoke',
+      note: 'Secret visit',
+    });
+    await post(`/orgs/${slug}/activity`, {
+      outcome: 'note',
+      note: 'Secret note',
+    });
     const note = idOf('SELECT id FROM note WHERE body = ?;', 'Secret note');
     await post(`/orgs/${slug}/activity/${note}`, {
       outcome: 'note',
@@ -242,7 +259,10 @@ describe('GET /orgs/<slug>', () => {
 
   test('Contacts: each one has phone and email links, Edit and Remove', async () => {
     const html = (await get(`/orgs/${slug}`)).body;
-    const ann = idOf('SELECT id FROM person WHERE email = ?;', 'ann@example.com');
+    const ann = idOf(
+      'SELECT id FROM person WHERE email = ?;',
+      'ann@example.com',
+    );
     expect(html).toContain('<th scope="row">Ann Smith</th>');
     expect(html).toContain('<a href="tel:07700 900000">07700 900000</a>');
     expect(html).toContain(

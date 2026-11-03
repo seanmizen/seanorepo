@@ -89,5 +89,10 @@ ingress:
   - hostname: autosam.seanmizen.com
     service: http://localhost:4090
 
+  # crm.seanmizen.com - Port 4100. One Bun process serves the pages, the
+  # static files and the API (/api).
+  - hostname: crm.seanmizen.com
+    service: http://localhost:4100
+
   # Catch-all for unmatched routes
   - service: http_status:404

@@ -3,8 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { type Auth, audit, now } from '../../auth';
 import { type PageParts, renderPage } from '../../render';
 import { Device } from '../../ui/Device';
-import { Key, Keys } from '../../ui/Key';
-import { Lcd } from '../../ui/Lcd';
+import { Key } from '../../ui/Key';
 import { Module } from '../../ui/Module';
 import { Records, RecordTable } from '../../ui/Records';
 import { When } from '../../ui/When';
@@ -17,54 +16,45 @@ interface SessionRow {
 }
 
 /**
- * The sessions page. The LCD shows the person and the count. The device
- * has the two sign-out keys. The records list the sessions, with a revoke
- * key for each one except this session.
+ * The sessions page. The device signs out every other session, and it
+ * shows only when there is one. The records list the sessions, with a
+ * small revoke key for each one except this session. "sign out" in the
+ * nav ends this session.
  */
 export const sessionsPage = ({
-  email,
   currentId,
   sessions,
 }: {
-  email: string;
   currentId: string;
   sessions: SessionRow[];
-}): PageParts => ({
-  title: 'Sessions',
-  device: (
-    <Device>
-      <Lcd
-        rows={[
-          { label: 'Person', value: email },
-          { label: 'Sessions', value: String(sessions.length) },
-        ]}
-      />
-      <Module label="Sign out">
-        <Keys>
+}): PageParts => {
+  const others = sessions.some((session) => session.id !== currentId);
+  return {
+    title: 'Sessions',
+    device: others ? (
+      <Device>
+        <Module label="Sign out">
           <form method="post" action="/account/sessions">
             <Key name="revoke" value="others">
               Everywhere else
             </Key>
           </form>
-          <form method="post" action="/logout">
-            <Key>This device</Key>
+        </Module>
+      </Device>
+    ) : undefined,
+    records: (
+      <Records title="Sessions">
+        {others ? (
+          <form method="post" action="/account/sessions">
+            <SessionTable currentId={currentId} sessions={sessions} />
           </form>
-        </Keys>
-      </Module>
-    </Device>
-  ),
-  records: (
-    <Records title="Sessions">
-      {sessions.some((session) => session.id !== currentId) ? (
-        <form method="post" action="/account/sessions">
+        ) : (
           <SessionTable currentId={currentId} sessions={sessions} />
-        </form>
-      ) : (
-        <SessionTable currentId={currentId} sessions={sessions} />
-      )}
-    </Records>
-  ),
-});
+        )}
+      </Records>
+    ),
+  };
+};
 
 /**
  * The sessions as a table, with a revoke key for each one except this
@@ -135,7 +125,6 @@ export const accountSessionsRoute = (app: FastifyInstance, db: Database) => {
       renderPage(
         request,
         sessionsPage({
-          email: auth.email,
           currentId: auth.sessionId,
           sessions,
         }),

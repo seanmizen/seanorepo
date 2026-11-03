@@ -149,9 +149,9 @@ export const setPipeline = (
   org: Org,
   next: Pipeline,
 ) => {
-  const fields = (
-    ['stage', 'next_action', 'next_action_on'] as const
-  ).filter((name) => org[name] !== next[name]);
+  const fields = (['stage', 'next_action', 'next_action_on'] as const).filter(
+    (name) => org[name] !== next[name],
+  );
   if (fields.length === 0) return;
   db.query(
     `UPDATE organisation SET stage = ?, next_action = ?, next_action_on = ?,

@@ -99,7 +99,7 @@ describe('admin:recover', () => {
     const cookie = `${SESSION_COOKIE}=${value}`;
 
     expect((await get('/account/passkeys', cookie)).body).toContain(
-      'This is a recovery session.',
+      'This recovery session can only add a passkey,',
     );
     for (const url of ['/', '/account/sessions']) {
       const page = await get(url, cookie);

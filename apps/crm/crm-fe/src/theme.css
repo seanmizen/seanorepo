@@ -3,16 +3,15 @@
  *
  * Where: crm-be/src/render.tsx links the build of this file in every page.
  * The components in crm-be/src/ui/ give the markup that it styles.
- * When: on every page, except with ?theme=bare. The mode follows
- * prefers-color-scheme, or the data-mode attribute on <html> (the mode
- * stepper in the footer sets it).
+ * When: on every page, except with ?theme=bare. The mode (light or dark)
+ * follows prefers-color-scheme.
  * Why: each page has one anatomy. Text is around one device:
  * 1. The nav (text): the path title, then one line of links.
  * 2. The intro (text): at most one sentence.
  * 3. The device: the core function of the page, as one instrument. The
  *    LCD shows data or a menu. The modules hold keys and fields.
  * 4. The records (text): tables and lists in the page font, no panels.
- * 5. The footer (text): top, the pager, the theme and mode steppers.
+ * 5. The footer (text): the pager and top.
  *
  * The principles of the device, as in autosam pixel-3.css:
  * 1. One grid. Each module sits on a grid of 6 columns, and each key is a
@@ -21,7 +20,8 @@
  *    the top right, and its control below.
  * 3. Silkscreen labels: small spaced capitals in mono, muted. A label
  *    never competes with a value.
- * 4. One signal color. Red is "on": the lit LED. All else is grey.
+ * 4. One signal color. Red is "on": the lit LED. All else is grey. The one
+ *    other color is the green LED of a sort key in ascending order.
  * 5. Form shows the action. A key is raised and moves when pressed. A key
  *    that latches has an LED.
  * 6. The faceplate holds the LCD glass. In dark mode the faceplate is
@@ -42,6 +42,8 @@
   --muted: #66645e;
   --line: #c4c1ba;
   --accent: #8e1b2b;
+  /* The LED of a sort key in ascending order. */
+  --go: #2f8a3c;
   --key-black: #2b2a27;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -69,24 +71,17 @@
 
   font-size: 14px;
 }
-:root[data-mode="light"] {
-  color-scheme: light;
-}
-:root[data-mode="dark"] {
-  color-scheme: dark;
-}
 
-/* Tone dark. The same tokens are in two blocks: one for the system mode,
-   and one for the dark mode that the mode stepper sets. CSS cannot join a
-   media query and a selector in one rule. */
+/* Tone dark, when the system is in dark mode. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-mode="light"]) {
+  :root {
     --bg: #1d1c1a;
     --surface: #2b2926;
     --ink: #ecebe5;
     --muted: #9a978e;
     --line: #4a4743;
     --accent: #b8313f;
+    --go: #43b356;
     --key-black: #0c0b0a;
 
     /* The faceplate is brushed steel: cool grey, lighter than the
@@ -122,40 +117,6 @@
     --ghost: rgb(16 24 7 / 0.15);
   }
 }
-:root[data-mode="dark"] {
-  --bg: #1d1c1a;
-  --surface: #2b2926;
-  --ink: #ecebe5;
-  --muted: #9a978e;
-  --line: #4a4743;
-  --accent: #b8313f;
-  --key-black: #0c0b0a;
-  --plate:
-    repeating-linear-gradient(
-      180deg,
-      rgb(255 255 255 / 0.035) 0 1px,
-      transparent 1px 3px
-    ),
-    repeating-linear-gradient(
-      180deg,
-      rgb(0 0 0 / 0.05) 0 1px,
-      transparent 1px 7px
-    ), linear-gradient(#777b80, #484b50);
-  --plate-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -1px 0 rgb(0 0 0 / 0.55),
-    inset 1px 0 0 rgb(255 255 255 / 0.08), inset -1px 0 0 rgb(0 0 0 / 0.3), 0 3px
-    8px rgb(0 0 0 / 0.6);
-  --glass: #7c9e36;
-  --glass-texture: radial-gradient(
-    ellipse at 50% 40%,
-    rgb(214 255 120 / 0.35),
-    transparent 70%
-  );
-  --glass-edge: inset 0 -1px 0 rgb(255 255 255 / 0.14);
-  --lit: #101807;
-  --dim: rgb(16 24 7 / 0.6);
-  --ghost: rgb(16 24 7 / 0.15);
-}
 
 /* A small screen is a phone, maybe held outdoors. The text is larger than
    the 11px of autosam. 17px also stops iOS from a zoom into a field. */
@@ -178,8 +139,10 @@ code {
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
-/* A date never breaks at its hyphens. */
+/* Every date and time is in mono (REQ-CRM-DATE-001), so the dates in a
+   column line up. A date never breaks at its hyphens. */
 time {
+  font-family: var(--mono);
   white-space: nowrap;
 }
 
@@ -196,6 +159,17 @@ a:hover {
 :is(a, button, input, select, textarea):focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* Text for no page styles and for a screen reader. A legend or an LED
+   shows the same thing in this theme. */
+.bare-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* The silkscreen label */
@@ -397,6 +371,16 @@ button.link:hover {
   padding: 0 0.75rem 0.25em;
   text-align: right;
 }
+/* A menu with a legend for the second line of each row: two lines of
+   legend, as two lines in each row. */
+.menu[data-legend-detail]::before {
+  content: attr(data-legend-name) "A" attr(data-legend-detail);
+  white-space: pre;
+}
+.menu[data-legend-status]::after {
+  content: attr(data-legend-value) "A" attr(data-legend-status);
+  white-space: pre;
+}
 .menu li {
   grid-column: 1 / -1;
 }
@@ -440,12 +424,11 @@ button.link:hover {
   grid-column: 2;
   grid-row: 2;
   justify-self: end;
-  font-size: 0.8em;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--dim);
+  font-size: 0.85em;
   white-space: nowrap;
 }
-.menu a:is(:hover, :focus-visible) .detail {
+.menu a:is(:hover, :focus-visible) :is(.detail, .status) {
   color: inherit;
 }
 
@@ -572,17 +555,27 @@ button.link:hover {
   background: var(--accent);
   box-shadow: 0 0 4px var(--accent);
 }
+/* A sort key: green for ascending, red for descending. */
+.key.latch[data-direction="asc"]::before {
+  background: var(--go);
+  box-shadow: 0 0 4px var(--go);
+}
 /* The LED shows the state, so the text of the state is for no page styles
    only. */
 .latch-state {
   display: none;
 }
-/* A row of keys: each key is a whole share of the row. */
+/* A row of keys: each key is a whole share of the row. A key never wraps
+   its label, so a key in a row has a small side padding: three keys to a
+   row fit "No answer" and "Follow-up" at 390px. */
 .keys {
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
   gap: 0.25em;
+}
+.keys .key {
+  padding-inline: 0.25em;
 }
 .keys > form {
   display: grid;
@@ -733,65 +726,14 @@ button.link:hover {
   }
 }
 
-/* 5. The footer: the page links, then the steppers, as the small steppers
-   under the device of autosam. */
+/* 5. The footer: the pager and top. */
 .foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75em 1.5em;
   margin-top: 2.5em;
 }
 .foot-links {
   display: flex;
   flex-wrap: wrap;
   gap: 0 1em;
-}
-.stepper {
-  display: inline-flex;
-  align-items: stretch;
-  gap: 2px;
-}
-.step,
-.step-value {
-  display: inline-grid;
-  align-content: center;
-  min-height: 2em;
-  padding: 0.2em 0.6em;
-  border: 0;
-  border-radius: 3px;
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow:
-    inset 0 -2px 0 var(--line),
-    0 0 0 1px var(--line);
-  font: inherit;
-  font-weight: 500;
-  line-height: 1.1;
-  text-decoration: none;
-}
-.step {
-  cursor: pointer;
-}
-.step:hover {
-  background: var(--bg);
-}
-.step:active {
-  transform: translateY(1px);
-  box-shadow: 0 0 0 1px var(--line);
-}
-.step-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  box-shadow: 0 0 0 1px var(--line);
-}
-.step-value small {
-  font-family: var(--mono);
-  font-size: 0.75em;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 /* A class that sets `display` must not show a `hidden` element. These
@@ -805,14 +747,41 @@ button.link:hover {
    in REQ-DENSE-006 of autosam. */
 @media (max-width: 760px), (pointer: coarse) {
   .key,
-  .step,
-  .step-value,
   .field :is(input, select) {
     min-height: 44px;
   }
   .records .key {
     min-height: 44px;
   }
+}
+
+/* Home */
+
+/* The menu of every client is long, so it scrolls in the glass, as a
+   display with a fixed number of lines. So the modules under the LCD stay
+   near the top of the page. A row cut at the bottom shows that there is
+   more. */
+.glass:has(> .menu) {
+  /* The hidden text of each row (.bare-text) stays in the glass, so it
+     does not make the page longer. */
+  position: relative;
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-color: var(--dim) transparent;
+  scrollbar-width: thin;
+}
+/* A client with no next action: dim, so a due date stands out. */
+.menu .none {
+  color: var(--dim);
+}
+.menu a:is(:hover, :focus-visible) .none {
+  color: inherit;
+}
+/* The search field and its key share one row. */
+.search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25em;
 }
 
 /* Organisation
@@ -960,4 +929,3 @@ fieldset.field > legend {
   width: 100%;
   padding: 0;
 }
-

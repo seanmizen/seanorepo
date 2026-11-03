@@ -71,7 +71,9 @@ export const organisationForm: RecordFormDef = {
  * The columns of `organisation` that the form sets: one for each field,
  * with the same name.
  */
-export const ORG_COLUMNS = fieldsOf(organisationForm).map((field) => field.name);
+export const ORG_COLUMNS = fieldsOf(organisationForm).map(
+  (field) => field.name,
+);
 
 /** The value of each column in `ORG_COLUMNS`, from the form. Empty is null. */
 export const orgColumnValues = (values: FormValues) =>

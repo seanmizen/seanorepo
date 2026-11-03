@@ -129,7 +129,10 @@ describe('POST /orgs/new', () => {
   test('links the person that has the email, and adds no person', async () => {
     const existing = addPerson(db, 'ann@example.com');
     const people = count('person');
-    await addOrg(app, cookie, { name: 'Acme', contact_email: 'ANN@example.com' });
+    await addOrg(app, cookie, {
+      name: 'Acme',
+      contact_email: 'ANN@example.com',
+    });
     expect(count('person')).toBe(people);
     expect(db.query('SELECT person_id FROM membership;').get()).toEqual({
       person_id: existing,
@@ -164,13 +167,19 @@ describe('POST /orgs/new', () => {
   });
 
   test('a typed URL name is the slug, if it is free and valid', async () => {
-    expect(
-      await addOrg(app, cookie, { name: 'Acme', slug: 'Acme-West' }),
-    ).toBe('acme-west');
+    expect(await addOrg(app, cookie, { name: 'Acme', slug: 'Acme-West' })).toBe(
+      'acme-west',
+    );
     for (const [slug, error] of [
       ['acme-west', 'Another organisation has this URL name.'],
-      ['new', 'The crm uses the URL name &quot;new&quot;. Type a different URL name.'],
-      ['acme west', 'The URL name can have only lowercase letters, digits and single hyphens, at most 60.'],
+      [
+        'new',
+        'The crm uses the URL name &quot;new&quot;. Type a different URL name.',
+      ],
+      [
+        'acme west',
+        'The URL name can have only lowercase letters, digits and single hyphens, at most 60.',
+      ],
     ]) {
       const response = await postForm(
         app,
