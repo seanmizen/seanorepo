@@ -1,0 +1,20 @@
+# Build context is the monorepo root (see docker-compose.yml).
+
+# dev: the image installs the dependencies. docker-compose fills its named
+# node_modules volume from them. The source comes in through the bind mount.
+FROM node:24-slim AS dev
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+# `crm` declares nested workspaces, so the install needs all their
+# package.json files.
+COPY apps/crm/package.json ./apps/crm/
+COPY apps/crm/crm-fe/package.json ./apps/crm/crm-fe/
+COPY apps/crm/crm-be/package.json ./apps/crm/crm-be/
+COPY apps/crm/shared/package.json ./apps/crm/shared/
+RUN yarn workspaces focus crm-fe
+
+WORKDIR /app/apps/crm/crm-fe
+EXPOSE 4100
+CMD ["yarn", "rsbuild", "dev", "--port", "4100", "--host", "0.0.0.0"]
