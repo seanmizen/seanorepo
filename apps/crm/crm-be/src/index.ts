@@ -8,10 +8,6 @@ import { ensureAdmin, makeLoginLimits, registerAuth } from './auth';
 import { DB_PATH, openDatabase } from './db';
 import { checkEmailConfig } from './email';
 import { FE_DIST } from './render';
-import { orgRoute } from './routes/[slug]';
-import { orgNotesRoute } from './routes/[slug]/notes';
-import { orgStageRoute } from './routes/[slug]/stage';
-import { orgVisitsRoute } from './routes/[slug]/visits';
 import { accountRoute } from './routes/account';
 import { accountPasskeysRoute } from './routes/account/passkeys';
 import { accountSessionsRoute } from './routes/account/sessions';
@@ -29,6 +25,14 @@ import { loginVerifyRoute } from './routes/login/verify';
 import { logoutRoute } from './routes/logout';
 import { modeRoute } from './routes/mode';
 import { orgsRoute } from './routes/orgs';
+import { orgRoute } from './routes/orgs/[slug]';
+import { orgActivityRoute } from './routes/orgs/[slug]/activity';
+import { orgActivityEditRoute } from './routes/orgs/[slug]/activity/[id]';
+import { orgContactsRoute } from './routes/orgs/[slug]/contacts';
+import { orgContactEditRoute } from './routes/orgs/[slug]/contacts/[id]';
+import { orgContactRemoveRoute } from './routes/orgs/[slug]/contacts/[id]/remove';
+import { orgEditRoute } from './routes/orgs/[slug]/edit';
+import { orgStageRoute } from './routes/orgs/[slug]/stage';
 import { orgsNewRoute } from './routes/orgs/new';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4100;
@@ -74,12 +78,16 @@ export const buildApp = (db: Database) => {
   passkeySignInRoute(app, db);
   orgsRoute(app, db);
   orgsNewRoute(app, db);
-  // `/<slug>` is a catch-all at the root. Each static route above wins over
-  // it, and `RESERVED_SLUGS` in `org.ts` keeps their words out of the slugs.
+  // `/orgs/new` is a static route, so it wins over `/orgs/<slug>`, and no
+  // slug is `new` (`RESERVED_SLUG` in `org.ts`).
   orgRoute(app, db);
+  orgEditRoute(app, db);
   orgStageRoute(app, db);
-  orgVisitsRoute(app, db);
-  orgNotesRoute(app, db);
+  orgActivityRoute(app, db);
+  orgActivityEditRoute(app, db);
+  orgContactsRoute(app, db);
+  orgContactEditRoute(app, db);
+  orgContactRemoveRoute(app, db);
 
   return app;
 };

@@ -57,11 +57,46 @@ const ORGS = [
     stage: 'follow_up',
     next: ['Call back about the booking page', day(-2)],
     contact: ['Alex Example', '07700 900001', 'alex@example.com'],
+    contactId: 'shots-contact',
     visits: [
-      [-5, 'spoke', 'Owner keen on online booking. Busy until Thursday.'],
+      [
+        -5,
+        'spoke',
+        'Owner keen on online booking. Busy until Thursday.',
+        'shots-visit',
+      ],
       [-9, 'no_answer', null],
     ],
     notes: [[-5, 'Uses a paper diary. Wants something simple.']],
+    // Rows of audit_log, as the crm writes them: [days, action, entity,
+    // detail]. The Activity list shows each one.
+    changes: [
+      [-30, 'update', 'organisation', { fields: ['postcode', 'source'] }],
+      [
+        -9,
+        'update',
+        'organisation',
+        {
+          fields: ['stage'],
+          from: 'lead',
+          stage: 'visited',
+          next_action_on: null,
+          cleared: true,
+        },
+      ],
+      [
+        -4,
+        'update',
+        'organisation',
+        {
+          fields: ['stage', 'next_action', 'next_action_on'],
+          from: 'visited',
+          stage: 'follow_up',
+          next_action_on: day(-2),
+          cleared: false,
+        },
+      ],
+    ],
   },
   {
     slug: 'corner-cafe',
@@ -127,25 +162,39 @@ const ORGS = [
 
 const seed = (adminToken, emailToken) => {
   const hash = (token) => createHash('sha256').update(token).digest('hex');
+  const admin = `(SELECT id FROM person WHERE email = ${q(ADMIN)})`;
   const rows = [];
+  const audit = (days, action, entity, entityId, detail) =>
+    rows.push(
+      `INSERT INTO audit_log (id, at, actor, action, entity, entity_id, detail)
+       VALUES (${q(randomUUID())}, ${q(at(days, 9))}, ${admin}, ${q(action)}, ${q(entity)}, ${q(entityId)}, ${q(JSON.stringify(detail))});`,
+    );
   for (const org of ORGS) {
     const id = randomUUID();
     rows.push(
       `INSERT INTO organisation (id, slug, name, address_line_1, address_line_2, postcode, stage, next_action, next_action_on, lawful_basis, source, created_at)
        VALUES (${q(id)}, ${q(org.slug)}, ${q(org.name)}, ${org.address.map(q).join(', ')}, ${q(org.stage)}, ${q(org.next?.[0] ?? null)}, ${q(org.next?.[1] ?? null)}, 'legitimate_interests', 'door', ${q(at(-45))});`,
     );
+    audit(-45, 'create', 'organisation', id, { stage: 'lead' });
     if (org.contact) {
-      const person = randomUUID();
+      const person = org.contactId ?? randomUUID();
       const [name, phone, email] = org.contact;
       rows.push(
         `INSERT INTO person (id, email, name, phone) VALUES (${q(person)}, ${q(email)}, ${q(name)}, ${q(phone)});`,
         `INSERT INTO membership (person_id, organisation_id, role) VALUES (${q(person)}, ${q(id)}, 'owner');`,
       );
+      audit(-45, 'create', 'membership', id, {
+        person_id: person,
+        role: 'owner',
+      });
     }
-    for (const [days, outcome, note] of org.visits) {
+    for (const [days, outcome, note, visitId] of org.visits) {
       rows.push(
-        `INSERT INTO visit (id, organisation_id, at, outcome, note) VALUES (${q(randomUUID())}, ${q(id)}, ${q(at(days))}, ${q(outcome)}, ${q(note)});`,
+        `INSERT INTO visit (id, organisation_id, at, outcome, note) VALUES (${q(visitId ?? randomUUID())}, ${q(id)}, ${q(at(days))}, ${q(outcome)}, ${q(note)});`,
       );
+    }
+    for (const [days, action, entity, detail] of org.changes ?? []) {
+      audit(days, action, entity, id, detail);
     }
     for (const [days, body] of org.notes) {
       rows.push(
@@ -153,7 +202,6 @@ const seed = (adminToken, emailToken) => {
       );
     }
   }
-  const admin = `(SELECT id FROM person WHERE email = ${q(ADMIN)})`;
   rows.push(
     `INSERT INTO passkey (id, person_id, name, public_key, created_at, last_used_at)
      VALUES ('shots-passkey', ${admin}, 'iPhone', x'00', ${q(at(-14))}, ${q(at(0, 9))});`,
@@ -202,12 +250,18 @@ try {
     ['today', '/'],
     ['orgs', '/orgs'],
     ['orgs-search', '/orgs?q=street&stage=visited'],
-    ['org', '/example-plumbing'],
+    ['org', '/orgs/example-plumbing'],
+    // The Activity list, open.
+    ['org-activity', '/orgs/example-plumbing', 'summary'],
+    ['org-no-contacts', '/orgs/the-high-street-hair-and-beauty-salon'],
+    ['org-edit', '/orgs/example-plumbing/edit'],
+    ['contact-edit', '/orgs/example-plumbing/contacts/shots-contact'],
+    ['activity-edit', '/orgs/example-plumbing/activity/shots-visit'],
     ['org-new', '/orgs/new'],
     ['account', '/account'],
     ['passkeys', '/account/passkeys'],
     ['sessions', '/account/sessions'],
-    ['not-found', '/no-such-org'],
+    ['not-found', '/orgs/no-such-org'],
   ];
   const signedOut = [
     ['login', '/login'],
@@ -216,8 +270,10 @@ try {
     // An error shows in the LCD.
     ['verify-error', '/login/verify'],
   ];
-  const shoot = async (page, name, url, tag) => {
+  /** Open `url`, tap `click` (a selector) if it is set, then shoot. */
+  const shoot = async (page, name, url, tag, click) => {
     await page.goto(`${BASE}${url}`);
+    if (click) await page.click(click);
     await page.screenshot({
       path: path.join(out, `${name}-${tag}.png`),
       fullPage: true,
@@ -243,7 +299,9 @@ try {
       await context.addCookies([
         { name: 'crm_session', value: adminToken, url: BASE },
       ]);
-      for (const [name, url] of signedIn) await shoot(page, name, url, tag);
+      for (const [name, url, click] of signedIn) {
+        await shoot(page, name, url, tag, click);
+      }
       await context.close();
     }
   }
@@ -257,13 +315,14 @@ try {
   const page = await context.newPage();
   for (const [name, url] of [
     ['today', '/?theme=bare'],
-    ['org', '/example-plumbing?theme=bare'],
+    ['org', '/orgs/example-plumbing?theme=bare'],
+    ['org-new', '/orgs/new?theme=bare'],
   ]) {
     await shoot(page, name, url, 'bare');
   }
   // The mode stepper sets dark mode on a light system.
   await context.addCookies([{ name: 'crm_mode', value: 'dark', url: BASE }]);
-  await shoot(page, 'org', '/example-plumbing', 'mode-dark');
+  await shoot(page, 'org', '/orgs/example-plumbing', 'mode-dark');
   await context.close();
   console.log(out);
 } finally {

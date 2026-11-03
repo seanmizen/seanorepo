@@ -77,12 +77,17 @@ describe('the dates on the pages', () => {
     });
     await postForm(
       app,
-      `/${slug}/stage`,
+      `/orgs/${slug}/stage`,
       { stage: 'lead', next_action: 'Call', next_action_on: '2000-01-01' },
       cookie,
     );
-    await postForm(app, `/${slug}/visits`, { outcome: 'spoke' }, cookie);
-    await postForm(app, `/${slug}/notes`, { body: 'A note' }, cookie);
+    await postForm(app, `/orgs/${slug}/activity`, { outcome: 'spoke' }, cookie);
+    await postForm(
+      app,
+      `/orgs/${slug}/activity`,
+      { outcome: 'note', note: 'A note' },
+      cookie,
+    );
 
     const TIME =
       /<time dateTime="\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d" title="\d{4}-[A-Z][a-z]{2}-\d\d \d\d:\d\d:\d\d">\d{4}-[A-Z][a-z]{2}-\d\d( \d\d:\d\d)?<\/time>/g;
@@ -90,7 +95,8 @@ describe('the dates on the pages', () => {
     for (const url of [
       '/',
       '/orgs',
-      `/${slug}`,
+      `/orgs/${slug}`,
+      `/orgs/${slug}/edit`,
       '/account',
       '/account/passkeys',
       '/account/sessions',

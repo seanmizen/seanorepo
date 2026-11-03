@@ -534,6 +534,9 @@ button.link:hover {
   font-weight: 500;
   line-height: 1.1;
   text-align: center;
+  /* A key label never wraps. A row of keys gives each key the width of
+     its label. */
+  white-space: nowrap;
   cursor: pointer;
   transition: transform 60ms;
 }
@@ -811,3 +814,150 @@ button.link:hover {
     min-height: 44px;
   }
 }
+
+/* Organisation
+ * Where: the pages under /orgs/<slug> (crm-be/src/routes/orgs/[slug]*).
+ * Why: the device has the Log, Stage, Next action and Add a contact
+ * modules. The records are the Activity list, the Contacts table and the
+ * Details. */
+
+/* The Due field and its Save key share one row, in halves. */
+.module .pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.25em;
+}
+/* A link to a module (the "Add a contact" link) outlines it. */
+.module:target {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+/* The Activity list: a <details>, closed until a tap. The summary has the
+   count, then the newest line, cut at two lines. */
+.events summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.events summary .newest {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.events[open] summary .newest {
+  display: none;
+}
+.events ol {
+  margin: 0.4em 0 0;
+  padding: 0;
+  list-style: none;
+}
+/* Each line: the time, then what happened and its text, then Edit. On a
+   phone, the time and Edit share the first line. */
+.records .events li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.1em 1em;
+  margin: 0;
+  padding: 0.35em 0;
+  border-top: 1px solid var(--line);
+}
+.events li > time {
+  grid-column: 1;
+}
+.events li > :is(.what, .text) {
+  grid-column: 2;
+  overflow-wrap: anywhere;
+}
+.events li > .edit {
+  grid-column: 3;
+  grid-row: 1;
+}
+@media (max-width: 760px) {
+  .records .events li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .events li > :is(.what, .text) {
+    grid-column: 1 / -1;
+  }
+  .events li > .edit {
+    grid-column: 2;
+  }
+}
+
+/* The Edit and Remove links of a record. In a table they are the last
+   column. On a phone they share the first line with the name. */
+.records .row-actions {
+  display: inline-flex;
+  gap: 0 1em;
+  white-space: nowrap;
+}
+.records .row-actions form {
+  display: inline;
+}
+.records p.row-actions {
+  margin-top: 0.5em;
+}
+.records td:has(> .row-actions) {
+  width: 1%;
+  padding-right: 0;
+  text-align: right;
+}
+@media (max-width: 760px) {
+  .records tr:has(> td > .row-actions) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 1em;
+  }
+  .records tr:has(> td > .row-actions) > * {
+    grid-column: 1 / -1;
+  }
+  .records tr:has(> td > .row-actions) > th {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .records tr > td:has(> .row-actions) {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+  }
+  .records tr > td:has(> .row-actions)::before {
+    content: none;
+  }
+  /* An empty value has no line. */
+  .records td[data-label]:empty {
+    display: none;
+  }
+}
+
+/* Forms
+ * Where: ui/RecordForm.tsx, on /orgs/new and on the pages under
+ * /orgs/<slug>.
+ * Why: one form for each record, on its create page and on its edit page
+ * (REQ-CRM-FORM-001). */
+
+/* A row of keys in a form: a small side padding, so that each label fits
+   its share of the row on a phone of 360px. */
+.keys > .key {
+  padding-inline: 0.35em;
+}
+/* A group of keys (Save as): a fieldset with no frame. The legend is a
+   silkscreen label. A floated legend is a plain grid item. */
+fieldset.field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+fieldset.field > legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+}
+

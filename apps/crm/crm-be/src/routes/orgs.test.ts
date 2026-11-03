@@ -14,7 +14,7 @@ beforeEach(async () => {
     name: 'Acme Plumbing',
     postcode: 'E1 6AN',
   });
-  await postForm(app, `/${slug}/stage`, { stage: 'quoted' }, cookie);
+  await postForm(app, `/orgs/${slug}/stage`, { stage: 'quoted' }, cookie);
   await addOrg(app, cookie, { name: '100% Cotton' });
 });
 

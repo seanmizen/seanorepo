@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { makeSlug, RESERVED_SLUGS } from './org';
+import { makeSlug, resolveSlug } from './org';
 import { testApp } from './test-helpers';
 
 let db: Database;
@@ -36,17 +36,32 @@ describe('makeSlug', () => {
     expect(makeSlug(db, 'ACME')).toBe('acme-3');
   });
 
-  test('never makes a reserved word', () => {
-    for (const word of [
-      'login',
-      'logout',
-      'account',
-      'orgs',
-      'static',
-      'api',
-    ]) {
-      expect(RESERVED_SLUGS.has(word)).toBe(true);
-      expect(makeSlug(db, word)).toBe(`${word}-2`);
-    }
+  test('never makes "new", the one reserved slug, and keeps its own slug on an edit', () => {
+    expect(makeSlug(db, 'New')).toBe('new-2');
+    // The other words of the crm are free: each organisation is under /orgs/.
+    expect(makeSlug(db, 'Login')).toBe('login');
+    const id = crypto.randomUUID();
+    db.query('INSERT INTO organisation (id, slug, name) VALUES (?, ?, ?);').run(
+      id,
+      'acme',
+      'Acme',
+    );
+    expect(makeSlug(db, 'Acme', id)).toBe('acme');
+    expect(makeSlug(db, 'Acme')).toBe('acme-2');
+  });
+});
+
+describe('resolveSlug', () => {
+  test('an empty URL name comes from the name, and a typed one must be free', () => {
+    addOrgRow('acme');
+    expect(resolveSlug(db, { slug: '', name: 'Acme' })).toEqual({
+      slug: 'acme-2',
+    });
+    expect(resolveSlug(db, { slug: 'acme', name: 'Other' })).toEqual({
+      error: 'Another organisation has this URL name.',
+    });
+    expect(resolveSlug(db, { slug: 'acme-west', name: 'Acme' })).toEqual({
+      slug: 'acme-west',
+    });
   });
 });
