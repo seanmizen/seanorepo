@@ -302,7 +302,9 @@ code {
   text-align: left;
   vertical-align: baseline;
 }
-.panel thead th {
+.panel thead th,
+.panel dt,
+.panel legend {
   font-family: var(--mono);
   font-size: 0.75em;
   font-weight: 500;
@@ -315,6 +317,40 @@ code {
 }
 .panel tbody th {
   font-weight: 500;
+}
+/* A date in a table does not break at its hyphens. */
+.panel td time {
+  white-space: nowrap;
+}
+
+/* A list of details: silkscreen terms on the left, values on the right. */
+.panel dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: baseline;
+  gap: 0.4em 1em;
+  margin: 0;
+}
+.panel dd {
+  margin: 0;
+}
+
+/* A fieldset groups the fields of a long form and fills the row. A field
+   with a textarea also fills the row, so a note has room on a phone. */
+.panel fieldset {
+  display: grid;
+  flex: 1 1 100%;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0.5em 0.75em 0.75em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.panel legend {
+  padding: 0 0.25em;
+}
+.panel form .field:has(textarea) {
+  flex: 1 1 100%;
 }
 
 /* Touch targets are at least 44px high on a phone and under a finger, as
