@@ -11,13 +11,13 @@
 #        (REQ-SERVER-002), so each one pulls its own deploys. The delay is at
 #        most two minutes.
 #
-# Output goes to the journal:
-#   journalctl -u custom-deploy.service -u custom-release-poll.service -f
-#   journalctl -u custom-deploy.service -p info     decisions only
+# Output goes to the journal, with a level on each line (REQ-SERVER-019):
+#   journalctl -u custom-deploy.service -p info -f    the deploy's own lines
+#   journalctl -u custom-deploy.service -p debug -f   also the tool output
 #
-# Each line starts with <6>, <7>, <4> or <3> when stdout is not a terminal. systemd
-# reads that as the syslog priority, so `-p info` hides the "up to date"
-# lines. On a terminal the script omits the prefixes.
+# The output of yarn, docker and git is at debug (run_quiet in
+# scripts/log.sh). A failed command repeats its last 30 lines at error. On a
+# terminal the script omits the prefixes.
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -59,24 +59,19 @@ SYSTEMCTL=/usr/bin/systemctl
 ROLES_DIR="${ROLES_DIR:-/etc/seanorepo/roles}"
 
 #------------------------------------------------------------------------------
-# Logging
+# Logging: log_err, log_warn, log_info, log_debug and run_quiet
+# (REQ-SERVER-019). The path is relative to this file, so the copy of this
+# file under test uses the scripts/log.sh beside it.
 #------------------------------------------------------------------------------
-if [ -t 1 ]; then
-    P_INFO='' P_DEBUG='' P_WARN='' P_ERR=''
-else
-    P_INFO='<6>' P_DEBUG='<7>' P_WARN='<4>' P_ERR='<3>'
-fi
-
-log()   { echo "${P_INFO}[deploy] $*"; }
-debug() { echo "${P_DEBUG}[deploy] $*"; }
-warn()  { echo "${P_WARN}[deploy] WARNING: $*"; }
-err()   { echo "${P_ERR}[deploy] ERROR: $*" >&2; }
+LOG_TAG=deploy
+# shellcheck source=../../../../scripts/log.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/log.sh"
 
 FORCE=false
 for arg in "$@"; do
     case "$arg" in
         --force) FORCE=true ;;
-        *) err "unknown argument '$arg' (only --force is accepted)"; exit 2 ;;
+        *) log_err "unknown argument '$arg' (only --force is accepted)"; exit 2 ;;
     esac
 done
 
@@ -105,7 +100,7 @@ done
 # human started one of them.
 #------------------------------------------------------------------------------
 command -v flock > /dev/null \
-    || { err "flock not found (install util-linux) - refusing to deploy unlocked"; exit 1; }
+    || { log_err "flock not found (install util-linux) - refusing to deploy unlocked"; exit 1; }
 
 mkdir -p "$STATE_DIR"
 
@@ -116,10 +111,10 @@ exec 9> "$LOCK_FILE"
 lock_status=0
 flock -n 9 || lock_status=$?
 if [ "$lock_status" -eq 1 ]; then
-    log "another deploy holds $LOCK_FILE - skipping this run"
+    log_info "another deploy holds $LOCK_FILE - skipping this run"
     exit 0
 elif [ "$lock_status" -ne 0 ]; then
-    err "flock failed with status $lock_status on $LOCK_FILE"
+    log_err "flock failed with status $lock_status on $LOCK_FILE"
     exit 1
 fi
 
@@ -127,9 +122,9 @@ fi
 # Should anything be deployed?
 #------------------------------------------------------------------------------
 cd "$REPO_DIR" 2> /dev/null \
-    || { err "no checkout at $REPO_DIR - setup-developer-environment.sh clones it"; exit 1; }
+    || { log_err "no checkout at $REPO_DIR - setup-developer-environment.sh clones it"; exit 1; }
 git rev-parse --git-dir > /dev/null 2>&1 \
-    || { err "$REPO_DIR is not a git checkout"; exit 1; }
+    || { log_err "$REPO_DIR is not a git checkout"; exit 1; }
 
 # What to deploy is whatever the checkout holds. release-poll.sh moves the
 # checkout (REQ-DEPLOY-002). This script never fetches or checks out.
@@ -138,7 +133,7 @@ git rev-parse --git-dir > /dev/null 2>&1 \
 # deploys a half-written tree (the two scripts share the lock above).
 HEAD_SHA="$(git rev-parse HEAD 2> /dev/null || true)"
 if [ -z "$HEAD_SHA" ]; then
-    debug "the checkout has no commit yet - nothing to deploy"
+    log_debug "the checkout has no commit yet - nothing to deploy"
     exit 0
 fi
 
@@ -176,7 +171,7 @@ elif [ "$marker_apps" = failed ]; then
 elif [ -n "$boot_id" ] && [ "$boot_id" != "$marker_boot" ]; then
     reason="the host has rebooted since ${HEAD_SHA:0:7} was deployed - the containers are not running"
 else
-    debug "up to date at ${HEAD_SHA:0:7} - nothing to do"
+    log_debug "up to date at ${HEAD_SHA:0:7} - nothing to do"
     exit 0
 fi
 
@@ -191,7 +186,7 @@ fi
 OLD_SHA="$marker_sha"
 NEW_SHA="$HEAD_SHA"
 
-log "deploying: $reason"
+log_info "deploying: $reason"
 
 # THE DEPLOY PATH HAS NO `git clean` (REQ-DEPLOY-006).
 # apps/cloudflared/credentials/ is gitignored and holds the tunnel's
@@ -210,7 +205,7 @@ export PUBLISH_ADDR=127.0.0.1
 
 # The apps' production services join the shared `edge` network, which the
 # edge (infra/edge) routes on. Their compose files need it to exist.
-docker network inspect edge > /dev/null 2>&1 || docker network create edge > /dev/null
+docker network inspect edge > /dev/null 2>&1 || run_quiet docker network create edge
 
 #------------------------------------------------------------------------------
 # Orphans - REQ-SERVER-017
@@ -241,11 +236,11 @@ remove_orphans() {
     local containers name state project files present ours f
     local -a cfgs
     containers="$(docker ps -a --format '{{.Names}}|{{.State}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.config_files"}}')" \
-        || { err "docker ps failed - cannot look for orphan containers"; return 1; }
+        || { log_err "docker ps failed - cannot look for orphan containers"; return 1; }
     while IFS='|' read -r name state project files; do
         [ -n "$name" ] || continue
         if [ -z "$project" ]; then
-            warn "container $name has no compose label, so the deploy keeps it. If it holds the port of an app, remove it: docker rm -f $name"
+            log_warn "container $name has no compose label, so the deploy keeps it. If it holds the port of an app, remove it: docker rm -f $name"
             continue
         fi
         [ -n "$files" ] || continue
@@ -257,27 +252,31 @@ remove_orphans() {
         done
         [ "$ours" = yes ] || continue
         if [ "$present" = no ]; then
-            warn "removing container $name: its compose project '$project' is not in the checkout now ($files)"
+            log_warn "removing container $name: its compose project '$project' is not in the checkout now ($files)"
         elif [ "$state" = created ]; then
-            warn "removing container $name: it never started (state 'created'), so yarn prod:docker makes it again"
+            log_warn "removing container $name: it never started (state 'created'), so yarn prod:docker makes it again"
         else
             continue
         fi
-        docker rm -f "$name" > /dev/null || err "could not remove container $name"
+        docker rm -f "$name" > /dev/null || log_err "could not remove container $name"
     done <<< "$containers"
 }
 remove_orphans || true
 
-yarn install --immutable
+run_quiet yarn install --immutable
 
 # A failure in one app does not stop the steps below (REQ-SERVER-018). The edge,
 # tcp-getter and the tunnel do not need every app to start. The script records
 # the failure in the marker and exits non-zero at the end. The next poll then
 # tries the deploy again.
+#
+# `yarn prod:docker` is not in run_quiet. scripts/prod-docker-all.sh writes
+# one info line for each app that started, and runs the build of each app in
+# run_quiet itself (REQ-SERVER-019).
 exit_status=0
 apps_status=ok
 if ! yarn prod:docker; then
-    err "yarn prod:docker failed - one or more apps did not start. The deploy continues, and the next poll tries again"
+    log_err "yarn prod:docker failed - one or more apps did not start. The deploy continues, and the next poll tries again"
     apps_status=failed
     exit_status=1
 fi
@@ -289,14 +288,14 @@ fi
 EDGE_COMPOSE="$REPO_DIR/infra/edge/docker-compose.yml"
 if [ -e "$ROLES_DIR/tunnel" ]; then
     EDGE_HOST="$(hostname -s)" docker compose -f "$EDGE_COMPOSE" --profile lan down --remove-orphans > /dev/null 2>&1 || true
-    log "edge: the tunnel (no LAN edge on the tunnel machine)"
+    log_info "edge: the tunnel (no LAN edge on the tunnel machine)"
 else
     # The one port that this compose file publishes on the LAN.
-    if EDGE_HOST="$(hostname -s)" PUBLISH_ADDR=0.0.0.0 \
+    if run_quiet env EDGE_HOST="$(hostname -s)" PUBLISH_ADDR=0.0.0.0 \
         docker compose -f "$EDGE_COMPOSE" --profile lan up --detach --remove-orphans; then
-        log "edge: Caddy serves the sites on the LAN at <site>.$(hostname -s).local"
+        log_info "edge: Caddy serves the sites on the LAN at <site>.$(hostname -s).local"
     else
-        err "the LAN edge (Caddy) did not start"
+        log_err "the LAN edge (Caddy) did not start"
         exit_status=1
     fi
 fi
@@ -318,16 +317,16 @@ fi
 # reports an address. The failure goes to the log as an error, and the deploy
 # continues.
 #------------------------------------------------------------------------------
-if yarn workspace tcp-getter build; then
+if run_quiet yarn workspace tcp-getter build; then
     if ! $SYSTEMCTL cat -- "$TCP_GETTER_UNIT" > /dev/null 2>&1; then
-        debug "$TCP_GETTER_UNIT is not installed on this host - nothing to restart"
+        log_debug "$TCP_GETTER_UNIT is not installed on this host - nothing to restart"
     elif sudo -n "$SYSTEMCTL" restart "$TCP_GETTER_UNIT"; then
-        log "rebuilt tcp-getter and restarted $TCP_GETTER_UNIT"
+        log_info "rebuilt tcp-getter and restarted $TCP_GETTER_UNIT"
     else
-        err "rebuilt tcp-getter but could not restart $TCP_GETTER_UNIT - it may be serving the previous bundle"
+        log_err "rebuilt tcp-getter but could not restart $TCP_GETTER_UNIT - it may be serving the previous bundle"
     fi
 else
-    err "tcp-getter failed to build - the unit keeps the previous bundle, and this machine's ngrok address may go unreported"
+    log_err "tcp-getter failed to build - the unit keeps the previous bundle, and this machine's ngrok address may go unreported"
 fi
 
 # THE SCRIPT WRITES THE MARKER HERE, BEFORE THE END (REQ-DEPLOY-002).
@@ -344,9 +343,9 @@ fi
 # is the new SHA, so that retry does not restart the tunnel again.
 printf '%s\n%s\n%s\n' "$NEW_SHA" "$boot_id" "$apps_status" > "$MARKER"
 if [ "$apps_status" = ok ]; then
-    log "deployed ${NEW_SHA:0:7} (was ${OLD_SHA:0:7})"
+    log_info "deployed ${NEW_SHA:0:7} (was ${OLD_SHA:0:7})"
 else
-    err "deployed ${NEW_SHA:0:7} (was ${OLD_SHA:0:7}), but yarn prod:docker failed"
+    log_err "deployed ${NEW_SHA:0:7} (was ${OLD_SHA:0:7}), but yarn prod:docker failed"
 fi
 
 #------------------------------------------------------------------------------
@@ -400,16 +399,16 @@ if [ "$tunnel_restart" = yes ] && [ ! -e "$ROLES_DIR/tunnel" ]; then
     tunnel_why="this machine does not have the tunnel role"
 fi
 if [ "$tunnel_restart" = no ]; then
-    debug "not restarting $CLOUDFLARED_UNIT: $tunnel_why"
+    log_debug "not restarting $CLOUDFLARED_UNIT: $tunnel_why"
 elif ! $SYSTEMCTL cat -- "$CLOUDFLARED_UNIT" > /dev/null 2>&1; then
     # A host without the unit has no tunnel to restart. The script logs this
     # and continues. An exit here would leave the marker written, the sites
     # up, and the unit in `failed` on every poll. That is a red light for
     # something that is not this script's job.
-    log "$CLOUDFLARED_UNIT is not installed on this host, so there is nothing to restart"
-    log "  (setup-server-environment.sh installs it. A restart was wanted because: $tunnel_why)"
+    log_info "$CLOUDFLARED_UNIT is not installed on this host, so there is nothing to restart"
+    log_info "  (setup-server-environment.sh installs it. A restart was wanted because: $tunnel_why)"
 else
-    log "restarting $CLOUDFLARED_UNIT: $tunnel_why"
+    log_info "restarting $CLOUDFLARED_UNIT: $tunnel_why"
     # The one command this account is allowed to run as root, and the whole
     # reason the sudoers drop-in grants a single command rather than general
     # privilege - REQ-DEPLOY-005.
@@ -419,7 +418,7 @@ else
         # pickup, and a new deploy would not fix it. So the exit code carries
         # the failure to systemd and the journal, and the host does not enter
         # a rebuild loop.
-        err "failed to restart $CLOUDFLARED_UNIT - the new commit is live but the tunnel may be serving stale ingress"
+        log_err "failed to restart $CLOUDFLARED_UNIT - the new commit is live but the tunnel may be serving stale ingress"
         exit_status=1
     fi
 fi
@@ -428,5 +427,5 @@ fi
 # fast on a home server's disk.
 docker image prune -f > /dev/null
 
-log "done"
+log_info "done"
 exit "$exit_status"

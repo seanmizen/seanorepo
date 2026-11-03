@@ -703,3 +703,36 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Relations:**
   - refines REQ-DEPLOY-002
   - refines REQ-DEPLOY-005
+
+## REQ-SERVER-019 — The deploy log has a level on each line
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1094
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** The deploy shall write each line with a journald priority:
+  its own messages at error, warning or info, the output of each tool at
+  debug, and the last 30 lines of the output of a failed tool again at error.
+- **Rationale:** Most lines of a deploy are Docker build lines and yarn
+  notices. The lines that matter (started, deployed, failed) were hard to find,
+  for a person and for an agent that watches the log.
+
+  journald reads the prefix `<N>` at the start of a line as its priority
+  (`SyslogLevelPrefix=`, on by default). `journalctl -p info` then shows the
+  deploy's own lines, and `-p debug` also shows the tool output. Nothing is
+  thrown away. A failure repeats its context at error, so nobody must change
+  the level to find out why a tool failed.
+
+  `scripts/log.sh` holds the functions. `run_quiet` runs a tool with its
+  output at debug. The rule for the whole repo is in
+  `.claude/rules/logging.md`.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "each deploy line has
+    a level, tool output is at debug, and a failure shows its output at error"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy path runs
+    build tools only in run_quiet"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn prod:docker runs
+    every app after a failure, with the build output at debug"
+- **Relations:**
+  - refines REQ-DEPLOY-002

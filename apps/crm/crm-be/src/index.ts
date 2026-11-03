@@ -47,6 +47,9 @@ import { privacyRoute } from './routes/privacy';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4100;
 const IS_TEST = process.env.NODE_ENV === 'test';
+/** The levels of `LOG_LEVEL` (`.claude/rules/logging.md`). Default `info`. */
+const LOG_LEVELS = ['error', 'warn', 'info', 'debug'];
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 
 /**
  * Make the Fastify app. It renders every page, serves the crm-fe build at
@@ -55,7 +58,23 @@ const IS_TEST = process.env.NODE_ENV === 'test';
  * public home (`/`, signed out) needs a session (see `auth.ts`).
  */
 export const buildApp = (db: Database) => {
-  const app = Fastify({ logger: !IS_TEST });
+  // One line for each request is too many at info, so Fastify's own request
+  // lines are off, and the hook below writes one line at debug.
+  const app = Fastify({
+    logger: IS_TEST ? false : { level: LOG_LEVEL },
+    disableRequestLogging: true,
+  });
+  app.addHook('onResponse', async (request, reply) => {
+    request.log.debug(
+      {
+        method: request.method,
+        url: request.url,
+        statusCode: reply.statusCode,
+        ms: Math.round(reply.elapsedTime),
+      },
+      'request',
+    );
+  });
   app.register(fastifyCookie);
   app.register(fastifyFormbody);
   registerAuth(app, db);
@@ -112,6 +131,12 @@ export const buildApp = (db: Database) => {
 };
 
 const start = async () => {
+  if (!LOG_LEVELS.includes(LOG_LEVEL)) {
+    console.error(
+      `crm-be: LOG_LEVEL must be error, warn, info or debug, not "${LOG_LEVEL}"`,
+    );
+    process.exit(1);
+  }
   // A demo switch on the live host stops the server before it opens the
   // database (`demo.ts`).
   const demoError = demoConfigError();

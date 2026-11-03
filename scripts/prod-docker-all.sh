@@ -11,9 +11,15 @@
 # The order is the order of `foreach -At`: the workspace list order, with each
 # workspace after the workspaces in its `dependencies`. seanscards is not run.
 # At the end the script prints one line for each failed workspace and exits 1.
+#
+# The build output of each workspace is at debug, and its last 30 lines are at
+# error when it fails (run_quiet, REQ-SERVER-019). Each app that started gets
+# one info line.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+# shellcheck source=log.sh
+. scripts/log.sh
 
 order="$(yarn workspaces list --json --verbose | node -e '
 const fs = require("node:fs");
@@ -29,15 +35,18 @@ while (todo.length) {
   done.add(next.location);
   todo = todo.filter((w) => w !== next);
 }
-')" || { echo "prod-docker-all: could not read the workspace list" >&2; exit 1; }
+')" || { log_err "could not read the workspace list"; exit 1; }
 
 failed=""
 for ws in $order; do
-    echo "prod-docker-all: $ws"
-    yarn workspace "$ws" run prod:docker || failed="$failed $ws"
+    if run_quiet yarn workspace "$ws" run prod:docker; then
+        log_info "$ws started"
+    else
+        failed="$failed $ws"
+    fi
 done
 
 for ws in $failed; do
-    echo "prod-docker-all: FAILED $ws" >&2
+    log_err "FAILED $ws"
 done
 [ -z "$failed" ]

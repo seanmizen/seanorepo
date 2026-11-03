@@ -653,11 +653,19 @@ do_assert() {
     # The deploy scripts of the commit under test, so their behaviour checks
     # prove THIS commit, not the \`release\` that the guest cloned.
     # Not installed anywhere: assert.sh runs them only against a scratch repo.
-    ssh "${ssh_opts[@]}" "$target" "mkdir -p /tmp/under-test" 2> /dev/null || true
-    scp "${scp_opts[@]}" "$GEN_DIR/services/deploy.sh" "$GEN_DIR/services/release-poll.sh" \
-        "$target:/tmp/under-test/" > /dev/null 2>&1 || true
+    # The copy keeps the paths of the checkout, because deploy.sh finds
+    # scripts/log.sh by its path relative to deploy.sh (REQ-SERVER-019).
+    local root gen
+    root="$(cd "$GEN_DIR/../../.." && pwd)"
+    gen="$(cd "$GEN_DIR" && pwd)"
+    gen="${gen#"$root"/}"
+    COPYFILE_DISABLE=1 tar -C "$root" -cf - "$gen/services/deploy.sh" "$gen/services/release-poll.sh" \
+        scripts/log.sh scripts/prod-docker-all.sh scripts/prod-docker-all.test.sh \
+        apps/crm/scripts/prod-docker.sh \
+        | ssh "${ssh_opts[@]}" "$target" "mkdir -p /tmp/under-test && tar -C /tmp/under-test -xf -" \
+            > /dev/null 2>&1 || true
     ssh "${ssh_opts[@]}" "$target" \
-        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
+        "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test/$gen/services EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
         < "$GEN_DIR/payload/assert.sh" || rc=$?
 
     #--------------------------------------------------------------------------

@@ -30,8 +30,12 @@ update `apps/cloudflared/config.yml` in the same PR.
 
 ```bash
 ssh srv@asus journalctl -u custom-release-poll.service -u custom-deploy.service -f
+ssh srv@asus journalctl -u custom-deploy.service -p info    # the deploy's own lines
 ssh srv@asus ~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force
 ```
+
+Each deploy line has a level. Tool output is at debug. See
+`.claude/rules/logging.md`.
 
 Provisioning, roles, moving the tunnel between machines, and ngrok are all in
 `utils/debbie/2026-09-17/README.md`. Read it before you change anything under
