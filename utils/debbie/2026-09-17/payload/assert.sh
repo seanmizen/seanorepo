@@ -1160,13 +1160,19 @@ if [ "$PHASE" = provisioned ]; then
     # permitted. A hardcoded unit list fails on any machine whose checkout is
     # older than the provisioner, and during a rollout that is every machine.
     #
+    # In the VM harness, the deploy.sh of the commit under test (the same rule
+    # as the behaviour checks). The guest clones `release`, and the payload
+    # comes from the commit under test. A commit that removes a unit from both
+    # deploy.sh and the drop-in would otherwise fail here until the release.
+    # On metal, DEPLOY_UNDER_TEST is the checkout's deploy.sh.
+    #
     # Gated on the same rule as the deploy-poller section, and not on the
     # file being there. `sed` on an absent file yields nothing, so `want` is
     # empty and the check goes red, which is right when the commit on disk says
     # the file should exist and wrong when it says it cannot.
     if deploy_script_expected; then
         check "every unit deploy.sh restarts is a unit sudo permits" \
-            'units=$(sed -n "s/^[A-Z_]*UNIT=\"\\([^\"]*\\.service\\)\".*/\\1/p" "$DEPLOY_SCRIPT");
+            'units=$(sed -n "s/^[A-Z_]*UNIT=\"\\([^\"]*\\.service\\)\".*/\\1/p" "${DEPLOY_UNDER_TEST:-$DEPLOY_SCRIPT}");
              [ -n "$units" ] || exit 1;
              for want in $units; do
                  sudo -n grep -qF "/usr/bin/systemctl restart $want" "$SUDOERS_DEST" || exit 1;
