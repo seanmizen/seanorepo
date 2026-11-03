@@ -1,7 +1,13 @@
 import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { buildApp } from '../../../index';
-import { addOrg, postForm, signInAdmin, testApp } from '../../../test-helpers';
+import {
+  addOrg,
+  lastEvent,
+  postForm,
+  signInAdmin,
+  testApp,
+} from '../../../test-helpers';
 
 let app: ReturnType<typeof buildApp>;
 let db: Database;
@@ -42,7 +48,7 @@ const current = {
 const lastAudit = () =>
   db
     .query(
-      "SELECT detail FROM audit_log WHERE action = 'update' ORDER BY rowid DESC;",
+      "SELECT detail FROM audit_log WHERE action = 'details' ORDER BY rowid DESC;",
     )
     .get() as { detail: string } | null;
 
@@ -62,7 +68,7 @@ describe('/orgs/<slug>/edit', () => {
     );
   });
 
-  test('POST saves the fields, and the audit row has the names of the changed fields', async () => {
+  test('POST saves the fields as one event, and the audit row has the names of the changed fields', async () => {
     const response = await save({
       ...current,
       name: 'Acme Plumbing Ltd',
@@ -78,7 +84,20 @@ describe('/orgs/<slug>/edit', () => {
       slug: 'acme-plumbing',
     });
     expect(JSON.parse(lastAudit()?.detail ?? '{}')).toEqual({
+      number: 2,
       fields: ['name', 'postcode'],
+    });
+    expect(lastEvent(db)).toEqual({
+      kind: 'details',
+      fields: ['name', 'postcode'],
+      changes: [
+        {
+          table: 'organisation',
+          id: expect.any(String),
+          before: { name: 'Acme Plumbing', postcode: 'SW1A 1AA' },
+          after: { name: 'Acme Plumbing Ltd', postcode: 'E1 6AN' },
+        },
+      ],
     });
   });
 
@@ -122,8 +141,9 @@ describe('/orgs/<slug>/edit', () => {
     );
   });
 
-  test('a save with no change writes no audit row', async () => {
+  test('a save with no change writes no event and no audit row', async () => {
     await save(current);
     expect(lastAudit()).toBeNull();
+    expect(lastEvent(db)).toMatchObject({ kind: 'create' });
   });
 });

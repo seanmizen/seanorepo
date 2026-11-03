@@ -5,6 +5,7 @@ import {
   addOrg,
   bodyText,
   divOf,
+  lastEvent,
   postForm,
   signInAdmin,
   testApp,
@@ -45,7 +46,7 @@ const edit = (number: number, fields: Record<string, string>) =>
 const lastAudit = () =>
   db
     .query(
-      "SELECT action, entity, entity_id, detail FROM audit_log WHERE action = 'update' ORDER BY rowid DESC;",
+      "SELECT action, entity, entity_id, detail FROM audit_log WHERE action = 'activity_edit' ORDER BY rowid DESC;",
     )
     .get() as {
     action: string;
@@ -139,7 +140,7 @@ describe('GET /orgs/<slug>/activity/<number>', () => {
 });
 
 describe('POST /orgs/<slug>/activity/<number>', () => {
-  test('a different key changes the outcome, and the audit row names the field', async () => {
+  test('a different key changes the outcome as one event, and the audit row names the field', async () => {
     const { id, number } = await log('spoke', 'Owner keen');
     const response = await edit(number, {
       outcome: 'call_back',
@@ -151,40 +152,66 @@ describe('POST /orgs/<slug>/activity/<number>', () => {
       { id, outcome: 'call_back', note: 'Owner keen' },
     ]);
     const row = lastAudit();
-    expect(row).toMatchObject({ entity: 'visit', entity_id: id });
+    expect(row).toMatchObject({ entity: 'organisation' });
     expect(JSON.parse(row.detail)).toEqual({
-      organisation_id: expect.any(String),
+      number: 3,
+      record_id: id,
       fields: ['outcome'],
       saved_as: 'call_back',
     });
+    expect(lastEvent(db)).toMatchObject({
+      kind: 'activity_edit',
+      changes: [
+        {
+          table: 'visit',
+          id,
+          before: { outcome: 'spoke', note: 'Owner keen' },
+          after: { outcome: 'call_back', note: 'Owner keen' },
+        },
+      ],
+    });
   });
 
-  test('Note only changes a visit to a note, and an outcome changes a note to a visit, with the same id, number and time', async () => {
+  test('Note only changes a visit to a note, and an outcome changes a note to a visit, with the same id, number and time, and hides the old row', async () => {
     await log('note', 'First');
     const { id, number } = await log('spoke', 'Owner keen');
     expect(number).toBe(2);
     const at = (db.query('SELECT at FROM visit;').get() as { at: string }).at;
     await edit(number, { outcome: 'note', note: 'Owner keen' });
-    expect(db.query('SELECT count(*) AS n FROM visit;').get()).toEqual({
-      n: 0,
-    });
+    // The visit row stays, hidden. Nothing is deleted.
+    expect(
+      db.query('SELECT hidden_at IS NOT NULL AS hidden FROM visit;').all(),
+    ).toEqual([{ hidden: 1 }]);
     expect(
       db
         .query(
-          'SELECT id, number, body, created_at FROM note WHERE number = 2;',
+          'SELECT id, number, body, created_at, hidden_at FROM note WHERE number = 2;',
         )
         .all(),
-    ).toEqual([{ id, number, body: 'Owner keen', created_at: at }]);
+    ).toEqual([
+      { id, number, body: 'Owner keen', created_at: at, hidden_at: null },
+    ]);
     expect(JSON.parse(lastAudit().detail)).toMatchObject({
       fields: ['outcome'],
       was: 'visit',
     });
 
     await edit(number, { outcome: 'no_answer', note: '' });
-    expect(db.query('SELECT count(*) AS n FROM note;').get()).toEqual({ n: 1 });
     expect(
-      db.query('SELECT id, number, at, outcome, note FROM visit;').all(),
-    ).toEqual([{ id, number, at, outcome: 'no_answer', note: null }]);
+      db
+        .query('SELECT number, hidden_at IS NOT NULL AS hidden FROM note;')
+        .all(),
+    ).toEqual([
+      { number: 1, hidden: 0 },
+      { number: 2, hidden: 1 },
+    ]);
+    expect(
+      db
+        .query('SELECT id, number, at, outcome, note, hidden_at FROM visit;')
+        .all(),
+    ).toEqual([
+      { id, number, at, outcome: 'no_answer', note: null, hidden_at: null },
+    ]);
     expect(JSON.parse(lastAudit().detail)).toMatchObject({
       fields: ['outcome', 'note'],
       was: 'note',
@@ -204,11 +231,8 @@ describe('POST /orgs/<slug>/activity/<number>', () => {
   test('a save with no change writes nothing', async () => {
     const { number } = await log('spoke', 'Same');
     await edit(number, { outcome: 'spoke', note: 'Same' });
-    expect(
-      db
-        .query("SELECT count(*) AS n FROM audit_log WHERE action = 'update';")
-        .get(),
-    ).toEqual({ n: 0 });
+    expect(lastAudit()).toBeNull();
+    expect(lastEvent(db)).toMatchObject({ kind: 'visit' });
   });
 
   test('a change to "Do not knock" sets the stage to lost', async () => {

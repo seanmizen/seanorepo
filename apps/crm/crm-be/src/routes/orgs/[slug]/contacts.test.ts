@@ -4,6 +4,7 @@ import type { buildApp } from '../../../index';
 import {
   addOrg,
   addPerson,
+  lastEvent,
   postForm,
   signInAdmin,
   TEST_ADMIN_EMAIL,
@@ -29,12 +30,14 @@ afterEach(async () => {
 const add = (fields: Record<string, string>, to = slug) =>
   postForm(app, `/orgs/${to}/contacts`, fields, cookie);
 
+/** The visible contacts: a removed contact has `hidden_at`. */
 const contacts = () =>
   db
     .query(
       `SELECT person.name, person.phone, person.email, membership.role, organisation.slug
        FROM membership JOIN person ON person.id = membership.person_id
        JOIN organisation ON organisation.id = membership.organisation_id
+       WHERE membership.hidden_at IS NULL
        ORDER BY person.rowid;`,
     )
     .all();
@@ -47,7 +50,7 @@ const personId = (name: string) =>
   ).id;
 
 describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
-  test('adds a person and a membership, each with an audit row with no contact details', async () => {
+  test('adds a person and a membership as one event, with an audit row with no contact details', async () => {
     const response = await add({
       name: 'Ann Smith',
       phone: '07700 900000',
@@ -65,14 +68,27 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
         slug: 'acme',
       },
     ]);
+    expect(lastEvent(db)).toEqual({
+      kind: 'contact_add',
+      person_id: personId('Ann Smith'),
+      role: 'staff',
+      fields: ['name', 'phone', 'email'],
+      changes: [
+        {
+          table: 'membership',
+          id: personId('Ann Smith'),
+          before: { hidden: true },
+          after: { hidden: false },
+        },
+      ],
+    });
     const rows = db
       .query(
-        "SELECT action, entity, detail FROM audit_log WHERE entity IN ('person', 'membership') ORDER BY rowid;",
+        "SELECT action, entity, detail FROM audit_log WHERE action LIKE 'contact%' ORDER BY rowid;",
       )
       .all() as { action: string; entity: string; detail: string }[];
     expect(rows.map((row) => `${row.action} ${row.entity}`)).toEqual([
-      'create person',
-      'create membership',
+      'contact_add organisation',
     ]);
     expect(rows.map((row) => row.detail).join()).not.toMatch(
       /Ann|07700|example/,
@@ -94,6 +110,16 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
       '<p role="alert">A contact of this organisation has this email address.</p>',
+    );
+  });
+
+  test('the email of a removed contact returns 400 and names Restore', async () => {
+    await add({ email: 'ann@example.com' });
+    await postForm(app, `/orgs/${slug}/contacts/1/remove`, {}, cookie);
+    const response = await add({ email: 'ann@example.com' });
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain(
+      '<p role="alert">A removed contact of this organisation has this email address. Tap Show hidden in Activity, then Restore.</p>',
     );
   });
 
@@ -127,7 +153,7 @@ describe('/orgs/<slug>/contacts/<number>', () => {
     expect(html).toContain('<option value="staff" selected="">Staff</option>');
   });
 
-  test('POST saves the person and the role, and each audit row names only the changed fields', async () => {
+  test('POST saves the person and the role as one event, and the audit row names only the changed fields', async () => {
     await add({ name: 'Ann', phone: '07700 900000' });
     const response = await postForm(
       app,
@@ -145,16 +171,33 @@ describe('/orgs/<slug>/contacts/<number>', () => {
         slug: 'acme',
       },
     ]);
+    const id = personId('Ann Jones');
+    expect(lastEvent(db)).toEqual({
+      kind: 'contact_edit',
+      person_id: id,
+      fields: ['name', 'role'],
+      changes: [
+        {
+          table: 'person',
+          id,
+          before: { name: 'Ann' },
+          after: { name: 'Ann Jones' },
+        },
+        {
+          table: 'membership',
+          id,
+          before: { role: 'owner' },
+          after: { role: 'staff' },
+        },
+      ],
+    });
     const rows = db
       .query(
-        "SELECT entity, detail FROM audit_log WHERE action = 'update' ORDER BY rowid;",
+        "SELECT detail FROM audit_log WHERE action = 'contact_edit' ORDER BY rowid;",
       )
-      .all() as { entity: string; detail: string }[];
-    expect(
-      rows.map((row) => [row.entity, JSON.parse(row.detail).fields]),
-    ).toEqual([
-      ['person', ['name']],
-      ['membership', ['role']],
+      .all() as { detail: string }[];
+    expect(rows.map((row) => JSON.parse(row.detail).fields)).toEqual([
+      ['name', 'role'],
     ]);
     expect(rows.map((row) => row.detail).join()).not.toContain('Jones');
   });
@@ -191,11 +234,19 @@ describe('/orgs/<slug>/contacts/<number>', () => {
     );
   });
 
-  test('Remove deletes the membership, and the person when no other organisation has them', async () => {
+  test('Remove hides the membership and deletes no row: the person stays, also the admin', async () => {
     await add({ name: 'Ann', email: 'ann@example.com' });
     const other = await addOrg(app, cookie, { name: 'Other' });
     await add({ email: 'ann@example.com' }, other);
+    await add({ email: TEST_ADMIN_EMAIL });
     const id = personId('Ann');
+    const rows = () =>
+      db
+        .query(
+          'SELECT (SELECT count(*) FROM person) AS people, (SELECT count(*) FROM membership) AS members;',
+        )
+        .get();
+    const before = rows();
 
     const response = await postForm(
       app,
@@ -206,40 +257,21 @@ describe('/orgs/<slug>/contacts/<number>', () => {
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/orgs/acme');
     expect(contacts()).toEqual([
+      expect.objectContaining({ email: TEST_ADMIN_EMAIL, slug: 'acme' }),
       expect.objectContaining({ name: 'Ann', slug: 'other' }),
     ]);
-
     await postForm(app, `/orgs/${other}/contacts/1/remove`, {}, cookie);
+    await postForm(app, `/orgs/${slug}/contacts/2/remove`, {}, cookie);
     expect(contacts()).toEqual([]);
+    expect(rows()).toEqual(before);
     expect(
-      db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id),
-    ).toEqual({ n: 0 });
-    const deletes = db
-      .query(
-        "SELECT entity FROM audit_log WHERE action = 'delete' ORDER BY rowid;",
-      )
-      .all();
-    expect(deletes).toEqual([
-      { entity: 'membership' },
-      { entity: 'membership' },
-      { entity: 'person' },
-    ]);
-  });
-
-  test('Remove never deletes the admin person', async () => {
-    await add({ email: TEST_ADMIN_EMAIL });
-    const id = (
       db
-        .query('SELECT id FROM person WHERE email = ?;')
-        .get(TEST_ADMIN_EMAIL) as {
-        id: string;
-      }
-    ).id;
-    await postForm(app, `/orgs/${slug}/contacts/1/remove`, {}, cookie);
-    expect(contacts()).toEqual([]);
-    expect(
-      db.query('SELECT count(*) AS n FROM person WHERE id = ?;').get(id),
-    ).toEqual({ n: 1 });
+        .query(
+          'SELECT hidden_by FROM membership WHERE person_id = ? AND organisation_id = (SELECT id FROM organisation WHERE slug = ?);',
+        )
+        .get(id, slug),
+    ).toEqual({ hidden_by: 4 });
+    expect(lastEvent(db)).toMatchObject({ kind: 'contact_remove' });
   });
 
   test('a number that the organisation does not have, a person id or a segment that is not a number returns 404', async () => {
@@ -279,7 +311,8 @@ describe('/orgs/<slug>/contacts/<number>', () => {
           `SELECT person.name, membership.number FROM membership
            JOIN person ON person.id = membership.person_id
            JOIN organisation ON organisation.id = membership.organisation_id
-           WHERE organisation.slug = ? ORDER BY membership.number;`,
+           WHERE organisation.slug = ? AND membership.hidden_at IS NULL
+           ORDER BY membership.number;`,
         )
         .all(to);
     await add({ name: 'Ann', email: 'ann@example.com' });

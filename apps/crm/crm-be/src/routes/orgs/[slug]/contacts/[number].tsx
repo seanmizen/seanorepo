@@ -74,6 +74,7 @@ const otherOrgs = (db: Database, personId: string, orgId: string) =>
       `SELECT organisation.name FROM membership
        JOIN organisation ON organisation.id = membership.organisation_id
        WHERE membership.person_id = ? AND membership.organisation_id != ?
+         AND membership.hidden_at IS NULL
        ORDER BY organisation.name;`,
     )
     .all(personId, orgId)

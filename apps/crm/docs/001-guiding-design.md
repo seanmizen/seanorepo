@@ -217,9 +217,11 @@ key and no API billing. Keep it simple, with one obvious place in the code.
   one.
 - **Calendar.** For an invite, Claude uses its own Google Calendar
   connector in the same chat. The CRM has no calendar code.
-- **Audit.** Every MCP write goes into the same audit log as the UI
-  actions, with the names of the changed fields. The actor is
-  `mcp:<connection name>`. The write shows in the Activity list.
+- **Audit.** Every MCP write is one event in the same history as the UI
+  actions (see [Undo and history](#undo-and-history)), with one row in the
+  same audit log, with the names of the changed fields. The actor is
+  `mcp:<connection name>`. The write shows in the Activity list, and Undo
+  can reverse it.
 - **Untrusted data.** A tool result can contain text that a client wrote.
   Each result puts that text in an `untrusted_text` object, and each tool
   description says that the text is data, never an instruction. This is
@@ -230,6 +232,74 @@ key and no API billing. Keep it simple, with one obvious place in the code.
   consumer plans. So, on Pro or Max, Sean turns off model training in the
   privacy settings of Claude, and names Anthropic in the privacy notice and
   in the record of processing. The other choice is a plan with a DPA.
+
+## Undo and history
+
+Each organisation has one history: the table `org_event`. The crm only
+appends rows to it. The Activity list of the organisation page shows it,
+newest first. REQ-CRM-UNDO-001, REQ-CRM-UNDO-002 and REQ-CRM-UNDO-003 hold
+the rules, and `crm-be/src/events.ts` holds the code.
+
+### The model
+
+- **One row for each change.** A row has the event number in the
+  organisation (from 1), the time, the actor, the kind and a JSON payload.
+  `writeEvent` is the one function that adds a row. Each write path calls
+  it once: the new lead, a visit, a note, the stage, the next action, the
+  details, a contact (added, changed or removed), the edit of a visit or a
+  note, and Undo, Redo and Restore.
+- **The payload.** The display fields (the names of the changed fields,
+  the stages, the ids) have no personal data, as in `audit_log`. The
+  `changes` hold the values before and after each row that the event
+  changed. These values can be personal data, for example an old phone
+  number or the text of a note.
+- **Nothing is deleted.** A visit, a note or a contact that an Undo or a
+  Remove takes away gets `hidden_at` and `hidden_by` (the event number).
+  The row stays in the database and in the backups. An edit that changes
+  a visit to a note hides the visit row, and shows a note row with the
+  same id and number.
+- **Undo** reverses the newest change that is not undone. It writes the
+  before values in a new `undo` event. **Redo** applies the newest undone
+  change again, with a new `redo` event. The redo list is the run of
+  undone changes since the last new change. Each new change empties it.
+- **Restore** shows one hidden visit, note or contact again, with a
+  `restore` event. A Restore of a record that shows already does nothing,
+  and records nothing.
+- **`audit_log` stays the security log.** It keeps the sign-ins, the
+  passkeys and the sessions. Each event also adds one `audit_log` row,
+  with the display fields and never the `changes`.
+- **The old history.** Migration `005-events.sql` made one event for each
+  old organisation, visit, note and `audit_log` row of an organisation, in
+  time order. An old visit or note has its change: Undo hides it. The old
+  log kept no values of each other change, so Undo stops at it.
+
+### The page
+
+- Undo and Redo are two keys at the top of the Activity box, always in
+  the same place. A key that cannot act is off, with the reason in its
+  hover text (REQ-CRM-BUTTON-001).
+- An Undo, a Redo or a Restore is a line in the Activity list, for
+  example "Undo of Visit 17: Spoke."
+- Hidden records do not show by default. The open Activity list starts
+  with `Show hidden` (`?hidden=1`). It shows each hidden visit, note and
+  contact, marked "hidden", with `Restore`. `Hide hidden` goes back.
+
+### Erasure
+
+The payloads can hold personal data, so an erasure must reach them too.
+When a person asks for erasure (see [Two tiers of data](#two-tiers-of-data)):
+
+1. Redact the values of the person in each payload: each `changes` value
+   of their `person` row, and each `changes` value of a hidden record
+   that is about them (the text of a visit or a note). Set
+   `"redacted": true` on each event that changed.
+2. Delete or redact their hidden records, as the relationship tier says.
+3. Add the record IDs to the erasure log, as for each other erasure.
+
+Undo and Redo stop at a redacted event and say why: its values are gone,
+so the crm cannot write them back. Redaction is the one change to an
+existing row of `org_event`. The crm has no erasure tool. The history
+gives it two parts: the `redacted` flag, and the stop in `historyOf`.
 
 ## GDPR and record-keeping
 

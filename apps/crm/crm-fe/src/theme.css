@@ -1079,6 +1079,33 @@ button.link:hover {
   }
 }
 
+/* Undo and Redo: one row of keys at the top of the Activity box, always in
+   the same place. A key that cannot act is off, and its hover text says
+   why (REQ-CRM-BUTTON-001). Show hidden is the first part of the open
+   list. */
+.history {
+  display: flex;
+  gap: 0.25em;
+}
+.events > form {
+  margin-top: 0.4em;
+}
+/* A hidden visit, note or contact: the word "hidden" as a silkscreen
+   label, then Restore. */
+.flag {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.75em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.events li > span.edit {
+  white-space: nowrap;
+}
+.events li > span.edit form {
+  display: inline;
+}
+
 /* The Edit and Remove links of a record. In a table they are the last
    column. On a narrow screen they share the first line with the name. */
 .box .row-actions {

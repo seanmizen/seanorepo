@@ -1,7 +1,8 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
-import { type Auth, audit } from '../../auth';
-import { addContact } from '../../contacts';
+import type { Auth } from '../../auth';
+import { insertContact } from '../../contacts';
+import { writeEvent } from '../../events';
 import { contactForm } from '../../forms/contact';
 import { type FormValues, isBlank, parseForm } from '../../forms/form';
 import {
@@ -59,9 +60,10 @@ export const newOrgPage = ({
 
 /**
  * Add the organisation at the stage Lead, and its contact if the person
- * typed one, in one transaction, with an audit row for each. The audit row
- * of the organisation has the names of the fields with a value. The demo
- * seed (`demo-seed.ts`) also calls it.
+ * typed one, in one transaction, as one `create` event. Undo cannot
+ * reverse it: it is the first event of the organisation. The event has the
+ * names of the fields with a value (`fields`, and `contact_fields` for the
+ * contact). The demo seed (`demo-seed.ts`) also calls it.
  */
 export const addOrg = (
   db: Database,
@@ -75,11 +77,19 @@ export const addOrg = (
       `INSERT INTO organisation (id, ${ORG_COLUMNS.join(', ')}, stage, lawful_basis)
        VALUES (?, ${ORG_COLUMNS.map(() => '?').join(', ')}, 'lead', 'legitimate_interests');`,
     ).run(id, ...orgColumnValues(org));
-    audit(db, actor, 'create', 'organisation', id, {
+    // A new organisation has no membership, so the contact has no error.
+    const added = contact ? insertContact(db, id, contact) : null;
+    writeEvent(db, actor, id, 'create', {
       stage: 'lead',
       fields: ORG_COLUMNS.filter((name) => org[name]),
+      ...(added && 'person_id' in added
+        ? {
+            person_id: added.person_id,
+            role: added.role,
+            contact_fields: added.fields,
+          }
+        : {}),
     });
-    if (contact) addContact(db, actor, id, contact);
   })();
 
 /**

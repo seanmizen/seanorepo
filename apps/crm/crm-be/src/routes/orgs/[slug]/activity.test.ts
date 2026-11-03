@@ -1,7 +1,13 @@
 import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { buildApp } from '../../../index';
-import { addOrg, postForm, signInAdmin, testApp } from '../../../test-helpers';
+import {
+  addOrg,
+  lastEvent,
+  postForm,
+  signInAdmin,
+  testApp,
+} from '../../../test-helpers';
 
 let app: ReturnType<typeof buildApp>;
 let db: Database;
@@ -25,22 +31,33 @@ const log = (fields: Record<string, string>) =>
 const visits = () => db.query('SELECT outcome, note FROM visit;').all();
 const notes = () => db.query('SELECT body FROM note;').all();
 
+/**
+ * The audit rows of the changes to the organisation, after its `create`
+ * row. Each event writes one (`writeEvent` in `events.ts`).
+ */
 const audits = () =>
   db
     .query(
-      "SELECT action, entity, detail FROM audit_log WHERE action = 'update' OR entity IN ('visit', 'note') ORDER BY rowid;",
+      "SELECT action, entity, detail FROM audit_log WHERE entity = 'organisation' AND action != 'create' ORDER BY rowid;",
     )
     .all() as { action: string; entity: string; detail: string }[];
 
 describe('POST /orgs/<slug>/activity (the Log module)', () => {
-  test('a Save as key with no note logs a visit (1 tap), and writes an audit row', async () => {
+  test('a Save as key with no note logs a visit (1 tap), and writes an event and an audit row', async () => {
     const response = await log({ outcome: 'no_answer', note: '' });
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/orgs/acme');
     expect(visits()).toEqual([{ outcome: 'no_answer', note: null }]);
+    expect(lastEvent(db)).toMatchObject({
+      kind: 'visit',
+      outcome: 'no_answer',
+    });
     const [row] = audits();
-    expect(row).toMatchObject({ action: 'create', entity: 'visit' });
-    expect(JSON.parse(row.detail).outcome).toBe('no_answer');
+    expect(row).toMatchObject({ action: 'visit', entity: 'organisation' });
+    expect(JSON.parse(row.detail)).toMatchObject({
+      number: 2,
+      outcome: 'no_answer',
+    });
   });
 
   test('keeps the visit note, and the audit row does not copy it', async () => {
@@ -54,7 +71,7 @@ describe('POST /orgs/<slug>/activity (the Log module)', () => {
     expect(notes()).toEqual([{ body: 'Owner is Ann' }]);
     expect(visits()).toEqual([]);
     const [row] = audits();
-    expect(row).toMatchObject({ action: 'create', entity: 'note' });
+    expect(row).toMatchObject({ action: 'note', entity: 'organisation' });
     expect(row.detail).not.toContain('Ann');
   });
 
@@ -84,12 +101,10 @@ describe('POST /orgs/<slug>/activity (the Log module)', () => {
         .query('SELECT stage, next_action, next_action_on FROM organisation;')
         .get(),
     ).toEqual({ stage: 'lost', next_action: null, next_action_on: null });
-    expect(audits().map((row) => `${row.action} ${row.entity}`)).toEqual([
-      'update organisation',
-      'create visit',
-      'update organisation',
-    ]);
-    expect(JSON.parse(audits()[2].detail)).toMatchObject({
+    // One event: the visit and the change of stage, so one Undo reverses
+    // both.
+    expect(audits().map((row) => row.action)).toEqual(['stage', 'visit']);
+    expect(JSON.parse(audits()[1].detail).pipeline).toMatchObject({
       from: 'visited',
       stage: 'lost',
     });

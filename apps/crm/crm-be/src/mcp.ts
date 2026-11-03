@@ -7,15 +7,17 @@ import type {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import {
-  type Event,
+  type ActivityData,
+  eventShows,
   findActivity,
-  listEvents,
   logActivity,
+  readActivity,
   saveActivity,
 } from './activity';
 import { PUBLIC_URL } from './auth';
 import { addContact, findContact, listContacts, saveContact } from './contacts';
 import { dueWords, isoDateTime, today } from './dates';
+import type { OrgEvent } from './events';
 import { activityForm, NOTE_ONLY } from './forms/activity';
 import { contactForm } from './forms/contact';
 import {
@@ -50,8 +52,10 @@ import { createLead } from './routes/orgs/new';
  * it at `/api/mcp`, and `oauth.ts` checks the token of each request.
  *
  * - Each tool calls the same service functions as the routes, so an MCP
- *   change and a change on a page do the same thing, with the same audit
- *   rows. The actor of each row is `mcp:<connection name>`.
+ *   change and a change on a page do the same thing: one event in the
+ *   history of the organisation (`writeEvent` in `events.ts`), which the
+ *   Activity list shows and Undo can reverse (REQ-CRM-UNDO-001). The actor
+ *   of each event and its audit row is `mcp:<connection name>`.
  * - Each write tool checks its values with the record forms of
  *   REQ-CRM-FORM-001 (`forms/`), so it accepts the same values as the form.
  * - A tool names an organisation by its slug, and a contact or an activity
@@ -203,9 +207,10 @@ const orgJson = (org: Org) => ({
 });
 
 /**
- * The values of an audit row that a change in the Activity list can show.
- * Each one is a field name, a stage, an outcome, a role or a date. The ids
- * in the row are not in the list (REQ-CRM-ID-001).
+ * The display fields of an event that a change in the Activity list can
+ * show. Each one is a field name, a stage, an outcome, a role or a date.
+ * The ids in the payload are not in the list (REQ-CRM-ID-001), and the
+ * values before and after (`changes`) never are.
  */
 const CHANGE_KEYS = [
   'fields',
@@ -219,33 +224,43 @@ const CHANGE_KEYS = [
   'was',
 ];
 
-/** One event of the Activity list as JSON. */
-const eventJson = (event: Event) => {
-  if (event.kind !== 'change') {
+/**
+ * One event of the Activity list as JSON (REQ-CRM-UNDO-001). `event` is its
+ * number in the history of the organisation. A visit or a note has its
+ * kind and number now, and its text. An Undo or a Redo names the event
+ * that it reversed or applied (`target`).
+ */
+const eventJson = (data: ActivityData, event: OrgEvent) => {
+  const { payload } = event;
+  const entry = payload.record_id
+    ? data.entries.get(payload.record_id)
+    : undefined;
+  const person = payload.person_id
+    ? data.people.get(payload.person_id)
+    : undefined;
+  if ((event.kind === 'visit' || event.kind === 'note') && entry) {
     return {
-      kind: event.kind,
-      number: event.number,
-      at: time(event.at),
-      outcome: event.outcome,
-      untrusted_text: { note: event.note },
+      kind: entry.kind,
+      event: event.number,
+      number: entry.number,
+      at: time(entry.at),
+      outcome: entry.outcome,
+      untrusted_text: { note: entry.note },
     };
   }
-  const detail = JSON.parse(event.detail ?? '{}');
   return {
-    kind: 'change',
+    kind: event.kind,
+    event: event.number,
     at: time(event.at),
-    action: event.action,
-    entity: event.entity,
-    ...(event.number !== null ? { number: event.number } : {}),
+    ...(entry ? { number: entry.number } : {}),
+    ...(payload.target !== undefined ? { target: payload.target } : {}),
     ...Object.fromEntries(
-      CHANGE_KEYS.filter((key) => key in detail).map((key) => [
+      CHANGE_KEYS.filter((key) => key in payload).map((key) => [
         key,
-        detail[key],
+        payload[key],
       ]),
     ),
-    ...(event.person !== null
-      ? { untrusted_text: { contact: event.person } }
-      : {}),
+    ...(person !== undefined ? { untrusted_text: { contact: person } } : {}),
   };
 };
 
@@ -346,7 +361,13 @@ export const mcpServer = (db: Database, actor: string) => {
             role: contact.role,
             untrusted_text: textFields(contactForm, { ...contact }),
           })),
-          activity: listEvents(db, org.id).map(eventJson),
+          activity: (() => {
+            const data = readActivity(db, org.id);
+            return [...data.events]
+              .reverse()
+              .filter((event) => eventShows(data, event))
+              .map((event) => eventJson(data, event));
+          })(),
         }),
       ),
   );

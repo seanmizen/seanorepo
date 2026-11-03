@@ -1,17 +1,29 @@
 import type { Database } from 'bun:sqlite';
-import { audit } from './auth';
+import { personNames } from './contacts';
+import {
+  type Change,
+  type History,
+  historyOf,
+  listOrgEvents,
+  type OrgEvent,
+  type Payload,
+  writeEvent,
+} from './events';
 import { NOTE_ONLY } from './forms/activity';
 import type { FormValues } from './forms/form';
-import { nextNumber, type Org, type Outcome, setPipeline } from './org';
+import { nextNumber, type Org, type Outcome, pipelineChange } from './org';
 
 /**
- * The activity of an organisation: its visits and its notes, in one list.
- * The routes `routes/orgs/[slug]/activity.ts`,
- * `routes/orgs/[slug]/activity/[number].tsx` and the organisation page call
- * these functions.
+ * The activity of an organisation: its visits and its notes. The routes
+ * `routes/orgs/[slug]/activity.ts`, `routes/orgs/[slug]/activity/[number].tsx`
+ * and the organisation page call these functions.
  *
  * A visit is a row of `visit`, and a note is a row of `note`. The Log
- * module (`forms/activity.ts`) makes both.
+ * module (`forms/activity.ts`) makes both. An entry (a visit or a note) has
+ * one id and one number in both tables, so an edit can change a visit to a
+ * note and back. Only one row of an entry is visible: the other one, if it
+ * exists, has `hidden_at`. Each write is one event (`writeEvent` in
+ * `events.ts`), and no write deletes a row (REQ-CRM-UNDO-001).
  */
 export interface Activity {
   kind: 'visit' | 'note';
@@ -27,101 +39,70 @@ export interface Activity {
   outcome: Outcome | null;
   /** The note of a visit, or the text of a note. */
   note: string | null;
+  /** The time that an Undo or a Remove hid it, or null when it shows. */
+  hidden_at: string | null;
+  /** The event that hid it. */
+  hidden_by: number | null;
 }
 
 const ACTIVITY_SQL = `
-  SELECT 'visit' AS kind, id, number, at, outcome, note, rowid AS seq
+  SELECT 'visit' AS kind, id, number, at, outcome, note, hidden_at, hidden_by
     FROM visit WHERE organisation_id = ?1
   UNION ALL
-  SELECT 'note', id, number, created_at, NULL, body, rowid
+  SELECT 'note', id, number, created_at, NULL, body, hidden_at, hidden_by
     FROM note WHERE organisation_id = ?1`;
 
 /**
- * One line of the Activity list of an organisation.
- *
- * - `visit` and `note`: a visit or a note, from its table, with its text.
- * - `change`: a row of `audit_log` about the organisation, its contacts or
- *   its visits and notes. The row that made a visit or a note does not
- *   show, because the visit or the note shows. `audit_log` keeps no
- *   personal data, so the names come from the current tables.
+ * Each entry of an organisation, by id: the visible row, or the row that
+ * was hidden last when no row of the entry is visible.
  */
-export interface Event {
-  kind: 'visit' | 'note' | 'change';
-  /** The id of the visit or the note, or of the audit row. */
-  id: string;
-  /**
-   * A visit or a note: its activity number. A change to a visit or a note:
-   * the number of that entry, or null when it is not in the crm now.
-   */
-  number: number | null;
-  at: string;
-  /** A visit: its outcome. */
-  outcome: Outcome | null;
-  /** A visit: its note. A note: its text. */
-  note: string | null;
-  /** A change: the `action`, `entity` and JSON `detail` of the audit row. */
-  action: string | null;
-  entity: string | null;
-  detail: string | null;
-  /**
-   * A change to a contact: the current name of the person. Null when the
-   * person is not in the crm now.
-   */
-  person: string | null;
-  /**
-   * A change to a visit or a note: its time. Null when it is not in the
-   * crm now.
-   */
-  record_at: string | null;
-}
-
-/**
- * Every event of an organisation, newest first: its visits, its notes and
- * the changes in `audit_log`. When a change and a visit have the same
- * time, the change comes first, because a visit can cause a change (the
- * outcome `do_not_knock` sets the stage).
- */
-export const listEvents = (db: Database, orgId: string) =>
-  db
-    .query<Event, [string]>(
-      `SELECT kind, id, number, at, outcome, note, action, entity, detail, person, record_at FROM (
-         SELECT 'visit' AS kind, id, number, at, outcome, note, NULL AS action, NULL AS entity,
-                NULL AS detail, NULL AS person, NULL AS record_at, 1 AS rank, rowid AS seq
-           FROM visit WHERE organisation_id = ?1
-         UNION ALL
-         SELECT 'note', id, number, created_at, NULL, body, NULL, NULL, NULL, NULL, NULL, 1, rowid
-           FROM note WHERE organisation_id = ?1
-         UNION ALL
-         SELECT 'change', a.id, COALESCE(v.number, n.number), a.at, NULL, NULL, a.action,
-                a.entity, a.detail, p.name, COALESCE(v.at, n.created_at), 0, a.rowid
-           FROM audit_log AS a
-           LEFT JOIN person AS p ON p.id = CASE a.entity
-             WHEN 'person' THEN a.entity_id
-             WHEN 'membership' THEN json_extract(a.detail, '$.person_id') END
-           LEFT JOIN visit AS v ON a.entity IN ('visit', 'note') AND v.id = a.entity_id
-           LEFT JOIN note AS n ON a.entity IN ('visit', 'note') AND n.id = a.entity_id
-           WHERE (a.entity_id = ?1 OR json_extract(a.detail, '$.organisation_id') = ?1)
-             AND NOT (a.action IN ('create', 'delete')
-                      AND a.entity IN ('visit', 'note', 'person'))
-       )
-       ORDER BY at DESC, rank, seq DESC;`,
+export const listEntries = (db: Database, orgId: string) => {
+  const entries = new Map<string, Activity>();
+  const rows = db
+    .query<Activity, [string]>(
+      `SELECT * FROM (${ACTIVITY_SQL})
+       ORDER BY hidden_at IS NULL, coalesce(hidden_by, 0);`,
     )
     .all(orgId);
+  // The visible row comes last, and then the row hidden last.
+  for (const row of rows) entries.set(row.id, row);
+  return entries;
+};
 
-/** The visit or the note with `number` of an organisation, or null. */
+/** The visible visit or note with `number` of an organisation, or null. */
 export const findActivity = (db: Database, orgId: string, number: number) =>
   db
     .query<Activity, [string, number]>(
-      `SELECT kind, id, number, at, outcome, note FROM (${ACTIVITY_SQL}) WHERE number = ?2;`,
+      `SELECT * FROM (${ACTIVITY_SQL}) WHERE number = ?2 AND hidden_at IS NULL;`,
     )
     .get(orgId, number);
 
 /**
- * The outcome `do_not_knock` sets the stage to lost and clears the next
- * action, so the organisation is not due again.
+ * The hidden entry with `number` of an organisation, which Restore can
+ * show again: the row that was hidden last. Null when the entry has a
+ * visible row, so a second Restore does nothing (REQ-CRM-UNDO-003).
  */
-const setLost = (db: Database, actor: string, org: Org) =>
-  setPipeline(db, actor, org, {
+export const findHiddenActivity = (
+  db: Database,
+  orgId: string,
+  number: number,
+) => {
+  if (findActivity(db, orgId, number)) return null;
+  return db
+    .query<Activity, [string, number]>(
+      `SELECT * FROM (${ACTIVITY_SQL}) WHERE number = ?2
+       ORDER BY hidden_by DESC LIMIT 1;`,
+    )
+    .get(orgId, number);
+};
+
+/**
+ * The outcome `do_not_knock` sets the stage to lost and clears the next
+ * action, so the organisation is not due again. Returns the change and
+ * the display fields, or null when the pipeline is lost already.
+ */
+const lostChange = (org: Org) =>
+  pipelineChange(org, {
     stage: 'lost',
     next_action: null,
     next_action_on: null,
@@ -129,9 +110,9 @@ const setLost = (db: Database, actor: string, org: Org) =>
 
 /**
  * Add a visit or a note to `org`, from the values of the Log module, with
- * the next activity number and an audit row. The audit row has the names
- * of the fields with a value, and never copies the text: it is
- * relationship data. Returns the activity number.
+ * the next activity number, as one event. The display fields of the event
+ * have the names of the fields with a value, and never copy the text: it
+ * is relationship data. Returns the activity number.
  */
 export const logActivity = (
   db: Database,
@@ -146,29 +127,49 @@ export const logActivity = (
       db.query(
         'INSERT INTO note (id, organisation_id, number, body) VALUES (?, ?, ?, ?);',
       ).run(id, org.id, number, values.note);
-      audit(db, actor, 'create', 'note', id, {
-        organisation_id: org.id,
+      writeEvent(db, actor, org.id, 'note', {
+        record_id: id,
         fields: ['note'],
+        changes: [
+          {
+            table: 'note',
+            id,
+            before: { hidden: true },
+            after: { hidden: false },
+          },
+        ],
       });
       return number;
     }
     db.query(
       'INSERT INTO visit (id, organisation_id, number, outcome, note) VALUES (?, ?, ?, ?, ?);',
     ).run(id, org.id, number, values.outcome, values.note || null);
-    audit(db, actor, 'create', 'visit', id, {
-      organisation_id: org.id,
+    const lost = values.outcome === 'do_not_knock' ? lostChange(org) : null;
+    writeEvent(db, actor, org.id, 'visit', {
+      record_id: id,
       outcome: values.outcome,
       fields: values.note ? ['outcome', 'note'] : ['outcome'],
+      ...(lost ? { pipeline: lost.detail } : {}),
+      changes: [
+        {
+          table: 'visit',
+          id,
+          before: { hidden: true },
+          after: { hidden: false },
+        },
+        ...(lost ? [lost.change] : []),
+      ],
     });
-    if (values.outcome === 'do_not_knock') setLost(db, actor, org);
     return number;
   })();
 
 /**
- * Save the Log module of the edit page over `current`. A different key
- * changes the outcome, or changes a visit to a note, or a note to a visit.
- * The record keeps its id, its number and its time. The audit row has the
- * names of the changed fields.
+ * Save the Log module of the edit page over `current`, as one event. A
+ * different key changes the outcome, or changes a visit to a note, or a
+ * note to a visit. The entry keeps its id, its number and its time. A
+ * change of type hides the row of the old type, and shows the row of the
+ * new type: it adds that row the first time. The display fields of the
+ * event have the names of the changed fields.
  */
 export const saveActivity = (
   db: Database,
@@ -180,41 +181,111 @@ export const saveActivity = (
   db.transaction(() => {
     const kind = values.outcome === NOTE_ONLY ? 'note' : 'visit';
     const outcome = kind === 'visit' ? values.outcome : null;
+    const note = kind === 'visit' ? values.note || null : values.note;
     const fields = [
       ...(outcome !== current.outcome ? ['outcome'] : []),
       ...((current.note ?? '') !== values.note ? ['note'] : []),
     ];
     if (fields.length === 0) return;
-    if (kind !== current.kind) {
-      db.query(`DELETE FROM ${current.kind} WHERE id = ?;`).run(current.id);
-    }
-    if (kind === 'note') {
-      db.query(
-        `INSERT INTO note (id, organisation_id, number, body, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT (id) DO UPDATE SET body = ?4;`,
-      ).run(current.id, org.id, current.number, values.note, current.at);
+    const after: Record<string, string | null> =
+      kind === 'visit' ? { outcome, note } : { body: note };
+    const changes: Change[] = [];
+    if (kind === current.kind) {
+      const before: Record<string, string | null> =
+        kind === 'visit'
+          ? { outcome: current.outcome, note: current.note }
+          : { body: current.note };
+      changes.push({ table: kind, id: current.id, before, after });
     } else {
-      db.query(
-        `INSERT INTO visit (id, organisation_id, number, at, outcome, note)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-         ON CONFLICT (id) DO UPDATE SET outcome = ?5, note = ?6;`,
-      ).run(
-        current.id,
-        org.id,
-        current.number,
-        current.at,
-        outcome,
-        values.note || null,
+      // The row of the new type: hidden, with the values that it had last.
+      if (kind === 'note') {
+        db.query(
+          `INSERT INTO note (id, organisation_id, number, body, created_at, hidden_at)
+           VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+           ON CONFLICT (id) DO NOTHING;`,
+        ).run(current.id, org.id, current.number, values.note, current.at);
+      } else {
+        db.query(
+          `INSERT INTO visit (id, organisation_id, number, at, outcome, note, hidden_at)
+           VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+           ON CONFLICT (id) DO NOTHING;`,
+        ).run(current.id, org.id, current.number, current.at, outcome, note);
+      }
+      const old = db
+        .query<Record<string, string | null>, [string]>(
+          kind === 'note'
+            ? 'SELECT body FROM note WHERE id = ?;'
+            : 'SELECT outcome, note FROM visit WHERE id = ?;',
+        )
+        .get(current.id);
+      changes.push(
+        {
+          table: current.kind,
+          id: current.id,
+          before: { hidden: false },
+          after: { hidden: true },
+        },
+        {
+          table: kind,
+          id: current.id,
+          before: { hidden: true, ...old },
+          after: { hidden: false, ...after },
+        },
       );
     }
-    audit(db, actor, 'update', kind, current.id, {
-      organisation_id: org.id,
+    const lost =
+      outcome === 'do_not_knock' && current.outcome !== 'do_not_knock'
+        ? lostChange(org)
+        : null;
+    const payload: Payload = {
+      record_id: current.id,
       fields,
       saved_as: values.outcome,
       ...(kind !== current.kind ? { was: current.kind } : {}),
-    });
-    if (outcome === 'do_not_knock' && current.outcome !== 'do_not_knock') {
-      setLost(db, actor, org);
-    }
+      ...(lost ? { pipeline: lost.detail } : {}),
+      changes: [...changes, ...(lost ? [lost.change] : [])],
+    };
+    writeEvent(db, actor, org.id, 'activity_edit', payload);
   })();
+
+/**
+ * Everything that the Activity list shows: the events, the visits and the
+ * notes by id, the names of the people, and the state of Undo and Redo.
+ */
+export interface ActivityData {
+  /** Each event, oldest first. */
+  events: OrgEvent[];
+  entries: Map<string, Activity>;
+  people: Map<string, string>;
+  history: History;
+}
+
+/** Read the Activity list of the organisation `orgId`. */
+export const readActivity = (db: Database, orgId: string): ActivityData => {
+  const events = listOrgEvents(db, orgId);
+  const ids = events.flatMap((event) =>
+    event.payload.person_id ? [event.payload.person_id] : [],
+  );
+  return {
+    events,
+    entries: listEntries(db, orgId),
+    people: personNames(db, ids),
+    history: historyOf(events),
+  };
+};
+
+/**
+ * True when the line of `event` shows in the Activity list: a visit or a
+ * note that is hidden shows only with `hidden` (`?hidden=1` on the page).
+ */
+export const eventShows = (
+  data: ActivityData,
+  event: OrgEvent,
+  hidden = false,
+) => {
+  if (hidden || (event.kind !== 'visit' && event.kind !== 'note')) return true;
+  const entry = event.payload.record_id
+    ? data.entries.get(event.payload.record_id)
+    : undefined;
+  return !entry || entry.hidden_at === null;
+};

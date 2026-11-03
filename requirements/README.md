@@ -73,11 +73,13 @@ Prefixes are globally unique. Add a row when you add a file.
 | `BARE` | `apps/autosam/requirements/bare.md` | autosam — the page works with no page styles |
 | `DENSE` | `apps/autosam/requirements/dense.md` | autosam — the dense themes spend few pixels |
 | `CRM-BARE` | `apps/crm/requirements/bare.md` | crm — every page works with no page styles and no JavaScript |
+| `CRM-BUTTON` | `apps/crm/requirements/button.md` | crm — a button that cannot act stays in its place, off, with its reason |
 | `CRM-DATE` | `apps/crm/requirements/date.md` | crm — one format for each date and time |
 | `CRM-ID` | `apps/crm/requirements/id.md` | crm — short IDs, never a UUID in a URL or on a page |
 | `CRM-LAYOUT` | `apps/crm/requirements/layout.md` | crm — one breakpoint, and a 40/60 grid of the device and the boxes |
 | `CRM-LCD` | `apps/crm/requirements/lcd.md` | crm — no LED in the glass, characters that do not move, LEDs in the bezel |
 | `CRM-MCP` | `apps/crm/requirements/mcp.md` | crm — the MCP tools never delete, erase or touch money |
+| `CRM-UNDO` | `apps/crm/requirements/undo.md` | crm — undo, redo and restore, and a history that never deletes data |
 | `BOOTMAP` | `utils/bootmap/requirements/bootmap.md` | bootmap — the boot treemap and its three renderers |
 | `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |

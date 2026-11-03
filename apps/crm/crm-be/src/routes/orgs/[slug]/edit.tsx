@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { type Auth, audit } from '../../../auth';
+import type { Auth } from '../../../auth';
+import { writeEvent } from '../../../events';
 import { changedFields, type FormValues, parseForm } from '../../../forms/form';
 import {
   ORG_COLUMNS,
@@ -59,9 +60,9 @@ export const orgEditPage = ({
 });
 
 /**
- * Check the post of the organisation form, then save it over `org`, with
- * an audit row of the names of the changed fields. With no change, nothing
- * is written. Returns the slug and the changed fields, or the error and the
+ * Check the post of the organisation form, then save it over `org`, as one
+ * `details` event with the names of the changed fields and their values
+ * before and after. With no change, nothing is written. Returns the slug and the changed fields, or the error and the
  * values to show again. The route `POST /<slug>/edit` and the MCP tool
  * `update_organisation` call it.
  */
@@ -80,22 +81,33 @@ export const updateOrg = (
   const next = { ...values, slug: slug.slug };
   const fields = changedFields(organisationForm, { ...org }, next);
   if (fields.length > 0) {
-    db.transaction(() => {
-      db.query(
-        `UPDATE organisation SET ${ORG_COLUMNS.map((name) => `${name} = ?`).join(', ')},
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-         WHERE id = ?;`,
-      ).run(...orgColumnValues(next), org.id);
-      audit(db, actor, 'update', 'organisation', org.id, { fields });
-    })();
+    const after = orgColumnValues(next);
+    const value = (name: string) => org[name as keyof Org] as string | null;
+    db.transaction(() =>
+      writeEvent(db, actor, org.id, 'details', {
+        fields,
+        changes: [
+          {
+            table: 'organisation',
+            id: org.id,
+            before: Object.fromEntries(
+              fields.map((name) => [name, value(name)]),
+            ),
+            after: Object.fromEntries(
+              fields.map((name) => [name, after[ORG_COLUMNS.indexOf(name)]]),
+            ),
+          },
+        ],
+      }),
+    )();
   }
   return { slug: next.slug, fields };
 };
 
 /**
- * `GET` and `POST /<slug>/edit`. A save writes an audit row with the names
- * of the changed fields (`updateOrg`), then opens the organisation at its
- * URL slug.
+ * `GET` and `POST /<slug>/edit`. A save writes one `details` event with the
+ * names of the changed fields and their values before and after
+ * (`updateOrg`), then opens the organisation at its URL slug.
  */
 export const orgEditRoute = (app: FastifyInstance, db: Database) => {
   const send = (

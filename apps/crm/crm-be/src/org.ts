@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite';
-import { audit } from './auth';
+import { type Change, writeEvent } from './events';
 
 /**
  * The organisation: its row, its pipeline stages, the visit outcomes and
@@ -191,6 +191,9 @@ export interface Pipeline {
   next_action_on: string | null;
 }
 
+/** The columns of the pipeline. */
+const PIPELINE = ['stage', 'next_action', 'next_action_on'] as const;
+
 /**
  * Read a pipeline from a post: `stage`, `next_action` and `next_action_on`
  * (a date, `YYYY-MM-DD`). An empty next action or date is null. Returns the
@@ -215,10 +218,40 @@ export const parsePipeline = (
 };
 
 /**
- * Set the pipeline of `org`, with an audit row for the Activity list. The
- * audit row has the names of the changed fields, the stage before (`from`)
- * and after (`stage`), and the date of the next action. It never copies
- * the text of the next action. With no change, nothing is written.
+ * The change from the pipeline of `org` to `next`, or null when nothing
+ * changes. `kind` is `stage` when the stage changes, else `next_action`.
+ * `detail` has the display fields of the event: the names of the changed
+ * fields, the stage before (`from`) and after (`stage`), and the date of
+ * the next action. It never copies the text of the next action. `change`
+ * has the values before and after, for Undo and Redo.
+ */
+export const pipelineChange = (org: Org, next: Pipeline) => {
+  const fields = PIPELINE.filter((name) => org[name] !== next[name]);
+  if (fields.length === 0) return null;
+  const change: Change = {
+    table: 'organisation',
+    id: org.id,
+    before: Object.fromEntries(fields.map((name) => [name, org[name]])),
+    after: Object.fromEntries(fields.map((name) => [name, next[name]])),
+  };
+  return {
+    kind: fields.includes('stage')
+      ? ('stage' as const)
+      : ('next_action' as const),
+    detail: {
+      fields,
+      from: org.stage,
+      stage: next.stage,
+      next_action_on: next.next_action_on,
+      cleared: !next.next_action && !next.next_action_on,
+    },
+    change,
+  };
+};
+
+/**
+ * Set the pipeline of `org`, as one event for the Activity list. With no
+ * change, nothing is written. Run it in a transaction.
  */
 export const setPipeline = (
   db: Database,
@@ -226,20 +259,10 @@ export const setPipeline = (
   org: Org,
   next: Pipeline,
 ) => {
-  const fields = (['stage', 'next_action', 'next_action_on'] as const).filter(
-    (name) => org[name] !== next[name],
-  );
-  if (fields.length === 0) return;
-  db.query(
-    `UPDATE organisation SET stage = ?, next_action = ?, next_action_on = ?,
-       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = ?;`,
-  ).run(next.stage, next.next_action, next.next_action_on, org.id);
-  audit(db, actor, 'update', 'organisation', org.id, {
-    fields,
-    from: org.stage,
-    stage: next.stage,
-    next_action_on: next.next_action_on,
-    cleared: !next.next_action && !next.next_action_on,
+  const change = pipelineChange(org, next);
+  if (!change) return;
+  writeEvent(db, actor, org.id, change.kind, {
+    ...change.detail,
+    changes: [change.change],
   });
 };

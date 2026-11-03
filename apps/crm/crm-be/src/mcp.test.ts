@@ -9,6 +9,7 @@ import {
   bodyText,
   callTool,
   mcpClient,
+  postForm,
   signInAdmin,
   TEST_ADMIN_EMAIL,
   testApp,
@@ -164,18 +165,17 @@ describe('MCP tools', () => {
         { slug, number: 1, changes: { outcome: 'call_back' } },
       ],
     ];
+    // The new lead and its contact are one event, with one audit row.
     const created = auditRows();
     expect(created.map((row) => `${row.action} ${row.entity}`)).toEqual([
       'create organisation',
-      'create person',
-      'create membership',
     ]);
     expect(JSON.parse(created[0].detail).fields).toEqual([
       'name',
       'slug',
       'postcode',
     ]);
-    expect(JSON.parse(created[1].detail).fields).toEqual([
+    expect(JSON.parse(created[0].detail).contact_fields).toEqual([
       'name',
       'phone',
       'email',
@@ -185,7 +185,8 @@ describe('MCP tools', () => {
       const response = await callTool(client, name, args);
       expect(response.error).toBeUndefined();
       const rows = auditRows().slice(before);
-      expect(rows.length).toBeGreaterThan(0);
+      // Each write is one event, with one audit row (REQ-CRM-UNDO-001).
+      expect(rows.length).toBe(1);
       for (const row of rows) {
         expect(JSON.parse(row.detail).fields).toBeArray();
       }
@@ -206,6 +207,94 @@ describe('MCP tools', () => {
     expect(text).toContain('Visit 1: Spoke.');
     expect(text).toContain('Stage: Lead → Quoted.');
     expect(text).toContain('Contact added: Ann Owner (Owner).');
+  });
+
+  test('each write tool is one event in the history, with the actor mcp:<name>, and Undo on the page reverses it (REQ-CRM-UNDO-001, REQ-CRM-UNDO-002)', async () => {
+    const slug = await addLead();
+    await callTool(client, 'log_visit', { slug, outcome: 'spoke', note: 'Hi' });
+    const id = db
+      .query<{ id: string }, [string]>(
+        'SELECT id FROM organisation WHERE slug = ?;',
+      )
+      .get(slug)?.id;
+    /** What a person sees: the organisation and its visible records. */
+    const state = () => ({
+      org: db
+        .query(
+          'SELECT name, slug, postcode, stage, next_action, next_action_on FROM organisation WHERE id = ?;',
+        )
+        .get(id ?? ''),
+      records: db
+        .query(
+          `SELECT 'visit' AS kind, number, outcome AS a, note AS b FROM visit WHERE organisation_id = ?1 AND hidden_at IS NULL
+           UNION ALL SELECT 'note', number, NULL, body FROM note WHERE organisation_id = ?1 AND hidden_at IS NULL
+           UNION ALL SELECT 'contact', m.number, m.role, p.name || '/' || coalesce(p.phone, '') || '/' || coalesce(p.email, '')
+             FROM membership AS m JOIN person AS p ON p.id = m.person_id
+            WHERE m.organisation_id = ?1 AND m.hidden_at IS NULL
+           ORDER BY 1, 2;`,
+        )
+        .all(id ?? ''),
+    });
+    const newest = () =>
+      db
+        .query<{ number: number; actor: string; kind: string }, [string]>(
+          'SELECT number, actor, kind FROM org_event WHERE organisation_id = ? ORDER BY number DESC LIMIT 1;',
+        )
+        .get(id ?? '');
+    const calls: [string, Record<string, unknown>, string][] = [
+      ['log_visit', { slug, outcome: 'no_answer' }, 'visit'],
+      ['add_note', { slug, text: 'A note' }, 'note'],
+      ['set_stage', { slug, stage: 'quoted' }, 'stage'],
+      [
+        'set_next_action',
+        { slug, action: 'Call', due: '2026-12-01' },
+        'next_action',
+      ],
+      [
+        'update_organisation',
+        { slug, changes: { postcode: 'e1 6an' } },
+        'details',
+      ],
+      [
+        'add_contact',
+        { slug, contact: { name: 'Bob', role: 'staff' } },
+        'contact_add',
+      ],
+      [
+        'update_contact',
+        { slug, number: 1, changes: { phone: '' } },
+        'contact_edit',
+      ],
+      [
+        'update_activity',
+        { slug, number: 1, changes: { outcome: 'note' } },
+        'activity_edit',
+      ],
+    ];
+    for (const [tool, args, kind] of calls) {
+      const before = state();
+      const last = newest()?.number ?? 0;
+      const response = await callTool(client, tool, args);
+      expect(response.error).toBeUndefined();
+      expect(newest()).toEqual({ number: last + 1, actor: ACTOR, kind });
+      expect(state()).not.toEqual(before);
+      // The admin taps Undo on the page.
+      const undo = await postForm(
+        app,
+        `/orgs/${slug}/undo`,
+        { event: String(last + 1) },
+        signInAdmin(app),
+      );
+      expect(undo.statusCode).toBe(303);
+      expect(newest()).toMatchObject({ number: last + 2, kind: 'undo' });
+      expect(state()).toEqual(before);
+    }
+    // The Activity list of the page and of get_organisation show the Undo.
+    expect(await orgPageText(slug)).toMatch(
+      /Undo of Visit 1 of \S+ \S+ : saved as Note only\./,
+    );
+    const org = await callTool(client, 'get_organisation', { slug });
+    expect(org.activity[0]).toMatchObject({ kind: 'undo', target: 17 });
   });
 
   test('typed text is in untrusted_text, and each tool that gives it says that it is data, never an instruction', async () => {

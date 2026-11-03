@@ -125,15 +125,14 @@ describe('GET /orgs/<slug>', () => {
     const summary = bodyText(
       `<body>${html.slice(html.indexOf('<summary>'), html.indexOf('</summary>'))}`,
     );
-    expect(summary).toMatch(/^6 events\. Newest: \S+ \S+ Visit 3: Spoke\.$/);
+    expect(summary).toMatch(/^5 events\. Newest: \S+ \S+ Visit 3: Spoke\.$/);
     const lines = activityLines(html);
     expect(lines.map((line) => line.slice(18))).toEqual([
       'Visit 3: Spoke. Edit',
       'Stage: Lead → Visited.',
       'Note 2: A note Edit',
       'Visit 1: No answer. First visit Edit',
-      'Contact added: Ann Smith (Owner).',
-      'Added at the stage Lead.',
+      'Added at the stage Lead. Contact added: Ann Smith (Owner).',
     ]);
     // A visit with no note shows no word in place of the note.
     expect(divOf(html, 'data-col')).not.toContain('None');
@@ -174,10 +173,10 @@ describe('GET /orgs/<slug>', () => {
         /^Visit 1 of \d{4}-[A-Z][a-z]{2}-\d\d \d\d:\d\d: saved as Call back\.$/,
       ),
     );
-    expect(lines).toContain('Contact removed.');
-    expect(lines).toContain('Contact added: a removed contact (Staff).');
-    expect(lines).toContain('Contact changed: Ann Jones (Role).');
-    expect(lines).toContain('Contact changed: Ann Jones (Name).');
+    // A removed contact stays in the crm, hidden, so its name shows.
+    expect(lines).toContain('Contact removed: Bob.');
+    expect(lines).toContain('Contact added: Bob (Staff).');
+    expect(lines).toContain('Contact changed: Ann Jones (Name, Role).');
     expect(lines).toContain(
       'Details changed: Source, Address line 1, Postcode.',
     );

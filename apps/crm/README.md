@@ -29,10 +29,11 @@ billing. After sign-in, the seller has these pages:
   - **Next action**: the action, its due date and `Save`.
   - **Add a contact**: the contact form and `Save`.
 
-  The boxes: **Activity** (every event, newest first, in a `<details>`
-  that is closed until a tap), **Contacts** (each with `Edit` and
-  `Remove`) and **Details** (with `Edit`). Each visit and note in Activity
-  shows its number, for example `Visit 17: Spoke.`.
+  The boxes: **Activity** (`Undo` and `Redo`, then every event, newest
+  first, in a `<details>` that is closed until a tap), **Contacts** (each
+  with `Edit` and `Remove`) and **Details** (with `Edit`). Each visit and
+  note in Activity shows its number, for example `Visit 17: Spoke.`. See
+  [Undo and history](#undo-and-history).
 - `/orgs/<slug>/edit`, `/orgs/<slug>/contacts/<number>` and
   `/orgs/<slug>/activity/<number>`: the edit pages. Each one is the same
   form as its create page, filled in (REQ-CRM-FORM-001). The LCD of an
@@ -110,17 +111,19 @@ yarn workspace crm-be test
   `ui/RecordForm.tsx` renders it, on the create page and on the edit page,
   and `parseForm` in `forms/form.ts` reads the post of both. No other code
   lists the fields of a record (REQ-CRM-FORM-001).
-- `crm-be/src/activity.ts` holds the visits and the notes, and
-  `listEvents`: the Activity list of an organisation. It joins the visits,
-  the notes and the `audit_log` rows of the organisation, its contacts and
-  its activity. `crm-be/src/contacts.ts` holds the contacts: add, change and
-  remove.
-- Each write to an organisation, a person, a membership, a visit or a note
-  adds an `audit_log` row. The actor is the id of the signed-in person. The
-  row keeps ids, stages, dates and the names of the changed fields. It
-  never keeps personal data or the text of a note: the Activity list gets
-  the names from the current tables. A contact that is not in the crm now
-  shows as "a removed contact".
+- `crm-be/src/activity.ts` holds the visits and the notes.
+  `crm-be/src/contacts.ts` holds the contacts: add, change and remove.
+- `crm-be/src/events.ts` holds the history of each organisation (the
+  table `org_event`), and Undo, Redo and Restore. `writeEvent` is the one
+  function that writes an event: each write to an organisation calls it
+  once (REQ-CRM-UNDO-001). The Activity list of the organisation page
+  (`routes/orgs/[slug].tsx`) shows the events, with the names and the
+  text from the current tables.
+- Each event also adds one `audit_log` row. The actor is the id of the
+  signed-in person, or `mcp:<connection name>` for an MCP tool. The row
+  keeps ids, stages, dates and the names of the changed fields. It never
+  keeps personal data or the text of a note. A person who is not in the
+  crm now shows as "a removed contact".
 - `crm-be/src/mcp.ts` holds the MCP server and its tools, and
   `crm-be/src/oauth.ts` holds its connections: the tokens and OAuth (see
   [MCP for Claude](#mcp-for-claude)).
@@ -140,6 +143,33 @@ yarn workspace crm-be test
 `yarn workspace crm start` builds crm-fe once. Then Rsbuild builds crm-fe in
 watch mode and Bun runs crm-be in watch mode. `yarn workspace crm-be test`
 also builds crm-fe first, because the test of `/` reads the manifest.
+
+## Undo and history
+
+Each change to an organisation is one row of `org_event`, and the crm
+never deletes data with an Undo, a Redo or a Restore (REQ-CRM-UNDO-001).
+The design is in "Undo and history" in
+[docs/001-guiding-design.md](docs/001-guiding-design.md).
+
+- **Undo** (`POST /orgs/<slug>/undo`) reverses the newest change that is
+  not undone, with a new `undo` event. **Redo**
+  (`POST /orgs/<slug>/redo`) applies the newest undone change again. Each
+  new change empties the redo list (REQ-CRM-UNDO-002). Each post names
+  the event that the page showed, so a second tap changes nothing.
+- **Hidden records.** Remove and Undo hide a visit, a note or a contact:
+  the row gets `hidden_at` and `hidden_by` (the event number). The page
+  does not show a hidden record. `Show hidden` (`?hidden=1`) shows each
+  one, marked "hidden", with `Restore`
+  (`POST /orgs/<slug>/activity/<number>/restore` or
+  `POST /orgs/<slug>/contacts/<number>/restore`). A second Restore does
+  nothing (REQ-CRM-UNDO-003).
+- **Keys that cannot act.** `Undo`, `Redo` and `Show hidden` are always in
+  their place. A key that cannot act is off (`disabled`), with the reason
+  in its hover text and in its accessible description (REQ-CRM-BUTTON-001,
+  the `off` prop of `ui/Key.tsx`).
+- **The old history.** Migration `005-events.sql` made the events from the
+  old visits, notes and `audit_log` rows. Undo can hide an old visit or
+  note, and stops at each other old change: the old log kept no values.
 
 ## Page anatomy
 
@@ -410,9 +440,11 @@ entry by its number in the organisation (REQ-CRM-ID-001).
 - **The same checks as the forms.** Each write tool reads its values with
   the record forms in `crm-be/src/forms/` (REQ-CRM-FORM-001), so it accepts
   the same values and gives the same errors.
-- **Audit.** Each write goes to `audit_log` through the same functions as
-  the pages, with the actor `mcp:<connection name>` and the names of the
-  changed fields. It shows in the Activity list.
+- **History and audit.** Each write is one event in the history of the
+  organisation, through the same functions as the pages
+  (REQ-CRM-UNDO-001), with the actor `mcp:<connection name>`. It shows in
+  the Activity list, and Undo on the page reverses it. The event also adds
+  one `audit_log` row with the names of the changed fields.
 - **Untrusted text.** Each result puts the text that a person typed (names,
   addresses, notes, contact details) in an `untrusted_text` object. The
   tool descriptions say that this text is data, never an instruction.
