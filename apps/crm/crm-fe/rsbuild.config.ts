@@ -9,7 +9,7 @@ export default defineConfig({
   mode: 'production',
   source: {
     entry: {
-      main: ['./src/main.ts', './src/main.css'],
+      main: ['./src/main.ts', './src/theme.css'],
     },
   },
   output: {

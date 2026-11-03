@@ -68,7 +68,10 @@ const RELATIONS = [
   'verified-by',
 ];
 
-const ID_PATTERN = /^REQ-[A-Z][A-Z0-9]*-\d{3}$/;
+// An ID may name its app before its area: REQ-CRM-BARE-001 is area BARE of
+// the crm, in apps/crm/requirements/bare.md. The app word keeps the prefix
+// unique when two apps use the same area name.
+const ID_PATTERN = /^REQ-[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)?-\d{3}$/;
 const HEADING = /^##\s+(REQ-[A-Z0-9-]+)\s+—\s+(.+?)\s*$/;
 const FIELD = /^-\s+\*\*([A-Za-z-]+):\*\*\s*(.*)$/;
 const NESTED = /^ {2}-\s+(.+?)\s*$/;
@@ -170,7 +173,7 @@ const CITATION_EXTENSIONS = new Set([
   '.zig',
 ]);
 
-const CITATION = /REQ-[A-Z][A-Z0-9]*-\d{3}/g;
+const CITATION = /REQ-[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)?-\d{3}/g;
 
 /**
  * Every requirement citation in the codebase, with where it is.
@@ -587,6 +590,12 @@ const first = (values) => (values && values.length > 0 ? values[0] : '');
 
 // ---------------------------------------------------------------------------
 
+/**
+ * The area of an ID: the word before the number. It is the filename.
+ * REQ-NAV-014 is in nav.md, and REQ-CRM-BARE-001 is in bare.md.
+ */
+export const areaOf = (id) => id.split('-').at(-2);
+
 /** Validate everything, then check or write the indexes. */
 const main = () => {
   const dirs = requirementDirs();
@@ -600,16 +609,20 @@ const main = () => {
   const byId = new Map();
   for (const req of requirements) {
     if (!ID_PATTERN.test(req.id)) {
-      fail(req.file, req.id, 'ID must look like REQ-PREFIX-001');
-    }
-
-    const prefix = req.id.split('-')[1];
-    const expected = basename(req.path, '.md').toUpperCase();
-    if (prefix !== expected) {
       fail(
         req.file,
         req.id,
-        `prefix ${prefix} does not match filename (expected REQ-${expected}-*)`,
+        'ID must look like REQ-AREA-001 or REQ-APP-AREA-001',
+      );
+    }
+
+    const area = areaOf(req.id);
+    const expected = basename(req.path, '.md').toUpperCase();
+    if (area !== expected) {
+      fail(
+        req.file,
+        req.id,
+        `area ${area} does not match filename (expected REQ-${expected}-* or REQ-<APP>-${expected}-*)`,
       );
     }
 

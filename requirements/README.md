@@ -51,6 +51,11 @@ an agent following a relation reads the ID, derives the filename, and opens it.
 No index, no grep, no tooling. The prefix registry below says which level a
 prefix lives at.
 
+An ID may name its app before its area: `REQ-CRM-BARE-001` is in
+`apps/crm/requirements/bare.md`. The filename is the word before the number.
+Use the app word when another app already has the area name (autosam has
+`BARE`).
+
 Areas group requirements that constrain **each other**, so reading one file
 gives you the local dependency graph for free. This is deliberately not one
 file per requirement: an agent working a navigation ticket wants all the
@@ -67,6 +72,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `AUTH` | `apps/inside/requirements/auth.md` | inside — authentication, sessions, roles |
 | `BARE` | `apps/autosam/requirements/bare.md` | autosam — the page works with no page styles |
 | `DENSE` | `apps/autosam/requirements/dense.md` | autosam — the dense themes spend few pixels |
+| `CRM-BARE` | `apps/crm/requirements/bare.md` | crm — every page works with no page styles and no JavaScript |
 | `BOOTMAP` | `utils/bootmap/requirements/bootmap.md` | bootmap — the boot treemap and its three renderers |
 | `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |
