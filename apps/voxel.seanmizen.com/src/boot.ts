@@ -85,7 +85,7 @@ function showFailure(ov: OverlayElements, failure: LoadFailure): void {
         'build pending',
         'voxel.seanmizen.com',
         'The voxel engine is being ported to the browser. The docker image, static hosting and Cloudflare tunnel are all wired up — only the wasm artifact is missing.',
-        'See <code>apps/voxel.seanmizen.com/INVESTIGATION.md</code> for the exact next steps.',
+        'To make <code>public/app.wasm</code>, run <code>yarn workspace voxel.seanmizen.com build</code>. The README of <code>apps/voxel.seanmizen.com</code> gives the steps.',
       );
       return;
     case 'webgpu-init':
@@ -114,7 +114,7 @@ function showFailure(ov: OverlayElements, failure: LoadFailure): void {
         'entry shim pending',
         'Voxel wasm missing entry exports',
         'The current zig build produces an app.wasm without swindowzig_init/swindowzig_frame exports, so there is no entry point for the frame loop.',
-        'See <code>apps/voxel.seanmizen.com/INVESTIGATION.md</code> § Phase 2.',
+        'To make a new <code>public/app.wasm</code>, run <code>yarn workspace voxel.seanmizen.com build</code>. The README of <code>apps/voxel.seanmizen.com</code> gives the steps.',
       );
       return;
     case 'init':

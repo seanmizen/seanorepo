@@ -20,8 +20,6 @@ served over the home-server cloudflared tunnel at
 ```
 apps/voxel.seanmizen.com/
 ├── README.md           ← this file
-├── INVESTIGATION.md    ← state of the wasm port, risks, red flags
-├── DEPLOY.md           ← exact commands for Sean to ship it
 ├── package.json        ← workspace scripts (build, prod:docker, down)
 ├── dockerfile          ← multi-stage zig + bun + serve
 ├── docker-compose.yml  ← mirrors apps/seanmizen.com/docker-compose.yml
@@ -109,7 +107,7 @@ To test a local checkout before a release, use
 
 ## Deploying
 
-See `DEPLOY.md` for the exact commands. Short version:
+The commands:
 
 ```bash
 # On Sean's home server:
@@ -131,15 +129,11 @@ lives in `apps/cloudflared/config.yml` and routes `voxel.seanmizen.com`
 - **Runtime correctness is unverified.** The voxel wasm compiles and
   exports the right symbols, but I have not driven it from a real
   browser in this session. First run will probably surface bugs in the
-  `sw_gpu/gpu.zig` wasm path. See `INVESTIGATION.md` § "Known risks at
-  runtime" for the likely failure modes.
+  `sw_gpu/gpu.zig` wasm path.
 - **3.1 MB wasm.** Debug build. Switch to
   `zig build web -Dexample=voxel --release=fast` for a smaller ship.
 
 ## See also
 
-- `INVESTIGATION.md` — what's actually wired, what's latent, and what Sean
-  will hit on the first browser load.
-- `DEPLOY.md` — the exact commands to run in the morning.
 - `CLAUDE.md` in the swindowzig repo — the engine's own docs and critical
   lessons.
