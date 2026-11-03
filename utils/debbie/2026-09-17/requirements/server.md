@@ -648,3 +648,58 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Relations:**
   - depends-on REQ-SERVER-002
   - depends-on REQ-SERVER-014
+
+## REQ-SERVER-017 — A renamed or removed app leaves no container behind
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1096
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** Before the deploy starts the apps, it shall remove each
+  container whose compose files were in the checkout and are not in it now.
+- **Rationale:** When an app gets a new name, its old container continues to
+  run and keeps its port. The new container cannot bind that port, so
+  `yarn prod:docker` fails.
+
+  Compose writes the paths of its compose files into each container that it
+  makes (the label `com.docker.compose.project.config_files`). That label
+  identifies the old container exactly, with no list of app names to keep in
+  step. The deploy removes only containers from its own checkout. It does not
+  remove a container that a person started by hand, because nothing tells the
+  deploy what that container is for. It writes a warning for each one.
+
+  A container that compose made but could not start stays in the state
+  `created`. A later `docker compose up` starts that same container, and Docker
+  can then start it with no published port. So the deploy also removes a
+  `created` container of its checkout, and `yarn prod:docker` makes it again.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy removes the
+    old container of a renamed app and starts the new one"
+  - Demonstration — the next deploy removes a container in the state
+    `created`, and the container that compose makes again starts with its port
+- **Relations:**
+  - refines REQ-DEPLOY-002
+
+## REQ-SERVER-018 — A failed app does not stop the other deploy steps
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1096
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** When `yarn prod:docker` fails, the deploy shall do its
+  remaining steps and then exit non-zero.
+- **Rationale:** The edge, tcp-getter and the tunnel do not need every app to
+  start. When a failed app stopped the deploy, the tunnel did not restart, and
+  new hostnames stayed on 404 although their containers were up.
+
+  The deploy writes the failure into its marker. The next poll then runs the
+  deploy again for the same commit. That retry does not restart the tunnel
+  again, because the marker holds the new commit.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "a failed app does not
+    stop the tunnel step, and the deploy exits non-zero"
+- **Relations:**
+  - refines REQ-DEPLOY-002
+  - refines REQ-DEPLOY-005

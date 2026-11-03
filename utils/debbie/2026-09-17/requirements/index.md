@@ -39,6 +39,8 @@
 | [`REQ-SERVER-014`](server.md#req-server-014--a-forgotten-setting-never-switches-anything-on) | A forgotten setting never switches anything on | active | constraint | P0 | sean |
 | [`REQ-SERVER-015`](server.md#req-server-015--vendor-packages-update-only-when-a-release-is-7-days-old) | Vendor packages update only when a release is 7 days old | active | functional | P2 | sean |
 | [`REQ-SERVER-016`](server.md#req-server-016--the-roles-decide-the-edge) | The roles decide the edge | active | functional | P1 | sean |
+| [`REQ-SERVER-017`](server.md#req-server-017--a-renamed-or-removed-app-leaves-no-container-behind) | A renamed or removed app leaves no container behind | active | functional | P1 | sean |
+| [`REQ-SERVER-018`](server.md#req-server-018--a-failed-app-does-not-stop-the-other-deploy-steps) | A failed app does not stop the other deploy steps | active | functional | P1 | sean |
 
 ## Dependency graph
 
@@ -78,6 +80,8 @@ graph TD
   REQ_SERVER_014["REQ-SERVER-014<br/>A forgotten setting never switches anything on"]
   REQ_SERVER_015["REQ-SERVER-015<br/>Vendor packages update only when a release is 7 days old"]
   REQ_SERVER_016["REQ-SERVER-016<br/>The roles decide the edge"]
+  REQ_SERVER_017["REQ-SERVER-017<br/>A renamed or removed app leaves no container behind"]
+  REQ_SERVER_018["REQ-SERVER-018<br/>A failed app does not stop the other deploy steps"]
   REQ_DEPLOY_002 -->|depends-on| REQ_DEPLOY_001
   REQ_DEPLOY_003 -->|depends-on| REQ_DEPLOY_002
   REQ_DEPLOY_004 -->|depends-on| REQ_DEPLOY_002
@@ -106,6 +110,9 @@ graph TD
   REQ_SERVER_015 -->|depends-on| REQ_NETWORK_005
   REQ_SERVER_016 -->|depends-on| REQ_SERVER_002
   REQ_SERVER_016 -->|depends-on| REQ_SERVER_014
+  REQ_SERVER_017 -->|refines| REQ_DEPLOY_002
+  REQ_SERVER_018 -->|refines| REQ_DEPLOY_002
+  REQ_SERVER_018 -->|refines| REQ_DEPLOY_005
   style REQ_NETWORK_004 stroke-dasharray: 4 4
   style REQ_SERVER_009 stroke-dasharray: 4 4
 ```
@@ -113,9 +120,9 @@ graph TD
 ## Derived reverse links
 
 - `REQ-DEPLOY-001` — required-by REQ-DEPLOY-002
-- `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004, required-by REQ-DEPLOY-007, refined-by REQ-SERVER-014
+- `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004, required-by REQ-DEPLOY-007, refined-by REQ-SERVER-014, refined-by REQ-SERVER-017, refined-by REQ-SERVER-018
 - `REQ-DEPLOY-004` — required-by REQ-DEPLOY-005, required-by REQ-DEPLOY-006
-- `REQ-DEPLOY-005` — required-by REQ-NETWORK-002
+- `REQ-DEPLOY-005` — required-by REQ-NETWORK-002, refined-by REQ-SERVER-018
 - `REQ-DEPLOY-006` — required-by REQ-NETWORK-002
 - `REQ-NETWORK-001` — required-by REQ-NETWORK-002, required-by REQ-NETWORK-003, required-by REQ-NETWORK-005, required-by REQ-NETWORK-006
 - `REQ-NETWORK-002` — refined-by REQ-SERVER-014
