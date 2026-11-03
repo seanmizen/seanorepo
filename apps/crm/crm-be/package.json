@@ -6,7 +6,8 @@
   "scripts": {
     "start": "bun --watch --no-clear-screen src/index.ts",
     "test": "yarn workspace crm-fe build && NODE_ENV=test bun test",
-    "admin:recover": "bun src/admin-recover.ts"
+    "admin:recover": "bun src/admin-recover.ts",
+    "demo:seed": "bun src/demo-seed.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",

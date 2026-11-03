@@ -1,8 +1,9 @@
-# Litestream: the crm database to the R2 bucket `crm`.
+# Litestream: a crm database to the R2 bucket `crm`.
 #
-# docker-compose.yml runs it in the prod profile, only when CRM_R2_BUCKET
-# has a value. Litestream expands ${VAR} from its env (apps/crm/.env). It
-# reads LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY by itself.
+# docker-compose.yml runs it for prod (litestream, apps/crm/.env) and for
+# the demo (litestream-demo, apps/crm/.env.demo), only when CRM_R2_BUCKET
+# has a value. Litestream expands ${VAR} from its env. It reads
+# LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY by itself.
 #
 # The bucket is in the EU jurisdiction (infra/cloudflare/r2.tf). Only the EU
 # endpoint, https://<account_id>.eu.r2.cloudflarestorage.com, reaches it.
@@ -18,7 +19,8 @@ dbs:
     replica:
       type: s3
       bucket: ${CRM_R2_BUCKET}
-      # The prefix of the backup files in the bucket.
-      path: crm.db
+      # The prefix of the backup files in the bucket. docker-compose.yml
+      # sets it for each sidecar: crm.db for prod, demo-crm.db for the demo.
+      path: ${CRM_R2_PATH}
       endpoint: ${CRM_R2_ENDPOINT}
       region: auto

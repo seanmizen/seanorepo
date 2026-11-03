@@ -10,6 +10,7 @@ import {
   PUBLIC_URL,
   safeNext,
 } from '../auth';
+import { demoLoginOn } from '../demo';
 import { sendEmail } from '../email';
 import { type PageParts, renderPage } from '../render';
 import { Device } from '../ui/Device';
@@ -18,6 +19,7 @@ import { Key } from '../ui/Key';
 import { Lcd } from '../ui/Lcd';
 import { Module } from '../ui/Module';
 import { PasskeySignIn } from '../ui/Passkey';
+import { DemoSignIn } from './login/demo';
 
 interface LoginBody {
   email?: string;
@@ -28,6 +30,7 @@ interface LoginBody {
  * The sign-in page: a small device with the email module and the passkey
  * module, and the help text under it. With no JavaScript, the passkey
  * module shows its note, and the email form still works (REQ-CRM-BARE-001).
+ * While the demo switch is on (`demo.ts`), the Demo module comes first.
  */
 export const loginPage = ({
   next,
@@ -42,6 +45,7 @@ export const loginPage = ({
   device: (
     <Device>
       <Lcd alert={error} />
+      {demoLoginOn() && <DemoSignIn next={next} />}
       <Module label="Email link">
         <form method="post" action="/login">
           <input type="hidden" name="next" value={next} />

@@ -74,6 +74,17 @@ resource "cloudflare_dns_record" "seanmizen_com_crm_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
+# The crm demo (apps/crm, the crm-demo service). The same code as the crm,
+# with dummy data and an unsafe demo sign-in.
+resource "cloudflare_dns_record" "seanmizen_com_demo_crm_cname" {
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
+  name    = "demo-crm.seanmizen.com"
+  proxied = true
+  ttl     = 1
+  type    = "CNAME"
+  zone_id = cloudflare_zone.seanmizen_com.id
+}
+
 resource "cloudflare_dns_record" "seanmizen_com_voxel_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
   name    = "voxel.seanmizen.com"

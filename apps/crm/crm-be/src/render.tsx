@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { FastifyRequest } from 'fastify';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { DemoBanner } from './ui/DemoBanner';
 import { Footer } from './ui/Footer';
 import { SiteNav } from './ui/SiteNav';
 
@@ -122,6 +123,7 @@ export const renderPage = (
         ))}
       </head>
       <body>
+        <DemoBanner />
         <SiteNav
           path={request.url.split('?')[0]}
           signedIn={Boolean(request.auth)}
