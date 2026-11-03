@@ -2,10 +2,11 @@ import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { type Auth, audit, now } from '../../auth';
 import { type PageParts, renderPage } from '../../render';
+import { Box } from '../../ui/Box';
 import { Device } from '../../ui/Device';
 import { Key } from '../../ui/Key';
 import { Module } from '../../ui/Module';
-import { Records, RecordTable } from '../../ui/Records';
+import { RecordTable } from '../../ui/RecordTable';
 import { When } from '../../ui/When';
 
 interface SessionRow {
@@ -17,7 +18,7 @@ interface SessionRow {
 
 /**
  * The sessions page. The device signs out every other session, and it
- * shows only when there is one. The records list the sessions, with a
+ * shows only when there is one. The Sessions box lists the sessions, with a
  * small revoke key for each one except this session. "sign out" in the
  * nav ends this session.
  */
@@ -42,8 +43,8 @@ export const sessionsPage = ({
         </Module>
       </Device>
     ) : undefined,
-    records: (
-      <Records title="Sessions">
+    boxes: (
+      <Box title="Sessions">
         {others ? (
           <form method="post" action="/account/sessions">
             <SessionTable currentId={currentId} sessions={sessions} />
@@ -51,7 +52,7 @@ export const sessionsPage = ({
         ) : (
           <SessionTable currentId={currentId} sessions={sessions} />
         )}
-      </Records>
+      </Box>
     ),
   };
 };

@@ -14,6 +14,7 @@ import {
 import { organisationForm } from '../../forms/organisation';
 import { findOrg, type Org, OUTCOMES, orgPath, STAGES } from '../../org';
 import { type PageParts, renderPage } from '../../render';
+import { Box } from '../../ui/Box';
 import { Device } from '../../ui/Device';
 import { Field } from '../../ui/Field';
 import { Key, Keys } from '../../ui/Key';
@@ -21,7 +22,7 @@ import { LatchKey } from '../../ui/LatchKey';
 import { Lcd } from '../../ui/Lcd';
 import { Module } from '../../ui/Module';
 import { RecordForm } from '../../ui/RecordForm';
-import { Records, RecordTable } from '../../ui/Records';
+import { RecordTable } from '../../ui/RecordTable';
 import { When } from '../../ui/When';
 
 /** The labels of the fields of `form`, by name. */
@@ -203,7 +204,7 @@ const EventLine = ({
  * - The modules: Log (`forms/activity.ts`), Stage, Next action and Add a
  *   contact (`forms/contact.ts`). On a phone, the LCD and Log fill the
  *   first screen.
- * - The records: Activity (every event, newest first, in a closed
+ * - The boxes: Activity (every event, newest first, in a closed
  *   `<details>`), Contacts and Details. Each visit, note and contact, and
  *   the details, has an Edit link to its edit page.
  *
@@ -250,7 +251,7 @@ export const orgPage = ({
                       {dueWords(org.next_action_on)}
                     </>
                   ),
-                  led: org.next_action_on < today(),
+                  mark: org.next_action_on < today(),
                 }
               : { label: 'Due', value: 'None' },
             {
@@ -329,9 +330,9 @@ export const orgPage = ({
         </form>
       </Device>
     ),
-    records: (
+    boxes: (
       <>
-        <Records title="Activity">
+        <Box title="Activity">
           {events.length === 0 ? (
             <p>No activity.</p>
           ) : (
@@ -354,8 +355,8 @@ export const orgPage = ({
               </ol>
             </details>
           )}
-        </Records>
-        <Records title="Contacts">
+        </Box>
+        <Box title="Contacts">
           {contacts.length === 0 ? (
             <p>
               No contacts. <a href="#add-contact">Add a contact</a>.
@@ -402,8 +403,8 @@ export const orgPage = ({
               }))}
             />
           )}
-        </Records>
-        <Records title="Details">
+        </Box>
+        <Box title="Details">
           <dl>
             <dt>Address</dt>
             <dd>
@@ -423,7 +424,7 @@ export const orgPage = ({
           <p className="row-actions">
             <a href={`${path}/edit`}>Edit</a>
           </p>
-        </Records>
+        </Box>
       </>
     ),
   };

@@ -66,12 +66,15 @@ export interface PageParts {
   title: string;
   /** At most one sentence under the nav. */
   intro?: ReactNode;
-  /** The core function of the page: one `Device`. */
+  /** The core function of the page: one `Device`, in the left column. */
   device?: ReactNode;
-  /** Plain text under the device: help, and links that are not nav. */
+  /**
+   * Plain text at the top of the right column: help, and links that are
+   * not nav.
+   */
   help?: ReactNode;
-  /** History and reference data: `Records`, as text. */
-  records?: ReactNode;
+  /** The data of the page: each section in a `Box`, in the right column. */
+  boxes?: ReactNode;
   /** The pagination of a long list, in the footer. */
   pager?: ReactNode;
   /** The crm-fe entries that the page adds to `main`. */
@@ -85,12 +88,15 @@ export interface PageParts {
  * 1. The nav (`ui/SiteNav.tsx`): the path title, then the app links for a
  *    signed-in person. The title is the first element in `<body>`.
  * 2. The intro: at most one sentence.
- * 3. The device (the core function), with its help text under it.
- * 4. The records: text.
+ * 3. The device (the core function): the left column (`.device-col`).
+ * 4. The help and the boxes (the data): the right column (`.data-col`).
+ *    The boxes are on one chassis (`.boxes`).
  * 5. The footer (`ui/Footer.tsx`): `top` and the pager.
  *
- * On a wide screen the device is a fixed column at the left, and the
- * records fill the space to its right. On a phone it is one column.
+ * The layout has one breakpoint (REQ-CRM-LAYOUT-001, in
+ * `crm-fe/src/theme.css`). On a wide screen the columns are 40% and 60%
+ * of the page, and the app links move to the footer row. On a narrow
+ * screen it is one column, in the order of the HTML.
  *
  * The `<head>` has the asset tags of the `main` entry and of `entries` from
  * the Rsbuild manifest. With `?theme=bare` it has no asset tags. The color
@@ -98,7 +104,7 @@ export interface PageParts {
  */
 export const renderPage = (
   request: FastifyRequest,
-  { title, intro, device, help, records, pager, entries = [] }: PageParts,
+  { title, intro, device, help, boxes, pager, entries = [] }: PageParts,
 ): string => {
   const { js, css } =
     themeOf(request) === 'bare' ? { js: [], css: [] } : readAssets(entries);
@@ -124,15 +130,15 @@ export const renderPage = (
         />
         <main>
           {intro && <p className="intro">{intro}</p>}
-          {(device || help || records) && (
+          {(device || help || boxes) && (
             <div className="body">
-              {(device || help) && (
-                <div className="device-col">
-                  {device}
+              {device && <div className="device-col">{device}</div>}
+              {(help || boxes) && (
+                <div className="data-col">
                   {help && <div className="help">{help}</div>}
+                  {boxes && <div className="boxes">{boxes}</div>}
                 </div>
               )}
-              {records && <div className="records-col">{records}</div>}
             </div>
           )}
         </main>

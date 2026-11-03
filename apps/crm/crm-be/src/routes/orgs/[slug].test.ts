@@ -140,7 +140,7 @@ describe('GET /orgs/<slug>', () => {
       'Added at the stage Lead.',
     ]);
     // A visit with no note shows no word in place of the note.
-    expect(divOf(html, 'records-col')).not.toContain('None');
+    expect(divOf(html, 'data-col')).not.toContain('None');
   });
 
   test('each change shows in Activity, with the names from the current tables', async () => {

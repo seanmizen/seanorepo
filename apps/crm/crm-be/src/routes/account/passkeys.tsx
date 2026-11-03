@@ -10,12 +10,13 @@ import {
 } from '../../auth';
 import { canChangePasskeys } from '../../passkeys';
 import { type PageParts, renderPage } from '../../render';
+import { Box } from '../../ui/Box';
 import { Device } from '../../ui/Device';
 import { Key } from '../../ui/Key';
 import { Lcd } from '../../ui/Lcd';
 import { Module } from '../../ui/Module';
 import { AddPasskey } from '../../ui/Passkey';
-import { Records, RecordTable } from '../../ui/Records';
+import { RecordTable } from '../../ui/RecordTable';
 import { When } from '../../ui/When';
 
 interface PasskeyRow {
@@ -55,7 +56,7 @@ const notice = ({
 /**
  * The passkeys page. The intro tells a session that cannot change its
  * passkeys why. The device adds a passkey, and the LCD shows only an
- * error. The records list the passkeys (name, added, last used), with a
+ * error. The Passkeys box lists the passkeys (name, added, last used), with a
  * small delete key for each one. The add form needs JavaScript (WebAuthn).
  * With no JavaScript the module says so (REQ-CRM-BARE-001).
  */
@@ -87,8 +88,8 @@ export const passkeysPage = ({
         )}
       </Device>
     ) : undefined,
-  records: (
-    <Records title="Passkeys">
+  boxes: (
+    <Box title="Passkeys">
       {passkeys.length === 0 ? (
         <p>You have no passkeys.</p>
       ) : (
@@ -117,7 +118,7 @@ export const passkeysPage = ({
           />
         </form>
       )}
-    </Records>
+    </Box>
   ),
   entries: ['passkeys'],
 });

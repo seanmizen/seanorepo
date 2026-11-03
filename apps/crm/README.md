@@ -5,8 +5,9 @@ It keeps contacts, visits, the pipeline and the GDPR records. Stripe keeps the
 billing. After sign-in, the seller has these pages:
 
 - `/` and `/orgs`: one list of every organisation (one handler). The LCD
-  is a menu: name, stage, next action date and last activity, with a lit
-  LED when the next action is due. Each row links to `/orgs/<slug>`. The
+  is a menu: name, stage, next action date and last activity. The LED of a
+  row, in the bezel at its right, is lit when the next action is due. Each
+  row links to `/orgs/<slug>`. The
   default order puts the due and overdue ones first (the oldest first),
   then the rest by last activity (the newest first). Three sort keys
   (`Last activity`, `Date added`, `Name`) sort ascending (green LED), then
@@ -26,7 +27,7 @@ billing. After sign-in, the seller has these pages:
   - **Next action**: the action, its due date and `Save`.
   - **Add a contact**: the contact form and `Save`.
 
-  The records: **Activity** (every event, newest first, in a `<details>`
+  The boxes: **Activity** (every event, newest first, in a `<details>`
   that is closed until a tap), **Contacts** (each with `Edit` and
   `Remove`) and **Details** (with `Edit`).
 - `/orgs/<slug>/edit`, `/orgs/<slug>/contacts/<person-id>` and
@@ -87,8 +88,7 @@ yarn workspace crm-be test
   shows as "a removed contact".
 - `crm-be/src/ui/` holds the parts that pages share: `SiteNav`, `Footer`,
   `Device`, `Lcd`, `Module`, `Key` (and `Keys`, a row of keys), `LatchKey`,
-  `Field`, `RecordForm`, `Records` (and `RecordTable`), `When`, `Led` and
-  `Label`.
+  `Field`, `RecordForm`, `Box`, `RecordTable`, `When`, `Led` and `Label`.
   `ui/Passkey.tsx` holds the two passkey controls (add a passkey, sign in
   with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
   route.
@@ -112,31 +112,53 @@ the `parts` that the route gives it.
    seanmizen.com: `/account/passkeys` reads `crm / account / passkeys`. Each
    part above the page is a link, and the page itself has a dim color. The title is
    the first element in `<body>`. The one exception is the demo: the demo
-   line (`ui/DemoBanner.tsx`) comes first. Under it, for a signed-in person, one line
-   of links: `orgs · new lead · account · sign out`. The link to this page
-   is text, with `aria-current="page"`.
+   line (`ui/DemoBanner.tsx`) comes first. Under the title, for a signed-in
+   person, one line of links: `orgs · new lead · account · sign out`. The
+   link to this page is text, with `aria-current="page"`. On a wide screen
+   the theme shows these links in the footer row.
 2. **Intro** (`intro`, text). At most one sentence.
 3. **Device** (`device`). The core function of the page, as one instrument:
    a `Device` with the `Lcd` at the top, then each `Module` on a grid of 6
    columns. The LCD shows data, or a menu: a list of records, each row a
    link. Nothing else in the LCD is interactive, and it never holds the page
-   title, help text or a form control. A form error shows in the LCD, with a
-   lit LED. A module has its silkscreen label at the top left, its value at
-   the top right, and its keys and fields below. Help text goes under the
-   device (`help`), as plain text.
-4. **Records** (`records`, text). History and reference data, as `Records`:
-   tables, lists and definition lists in the page font, with no panel. On a
-   phone, each table row is a block of lines.
+   title, help text or a form control. A form error shows in the LCD, after
+   the status mark. A module has its silkscreen label at the top left, its
+   value at the top right, and its keys and fields below.
+4. **Help and boxes** (`help` and `boxes`). The help is plain text. The
+   data of the page is a stack of boxes (`ui/Box`): each box is white, with
+   a silkscreen title, then tables, lists and definition lists in the page
+   font. A box can hold links, keys and forms. On a narrow screen, each
+   table row is a block of lines.
 5. **Footer** (`ui/Footer.tsx`, text). The pager of a long list (`pager`),
    and `top`.
 
-On a wide screen the page starts at the top left. The device is a column of
-about 360px, and the records fill the space to its right. On a phone it is
-one column: nav, device, records, footer.
+The layout has one breakpoint, 960px (REQ-CRM-LAYOUT-001, in
+`crm-fe/src/theme.css`):
+
+- **Wide (960px and more):** a grid of two columns, 40% and 60%. The device
+  is the left column. The help and the boxes are the right column. The page
+  is at most 1200px wide and starts at the top left. The nav links move to
+  the footer row, next to `top`.
+- **Narrow (less than 960px):** one column: nav, device, help, boxes,
+  footer. The page margin is 1px, so the device and the boxes use almost
+  all of the width.
+
+The root font is 14px wide and 17px narrow, so no column width uses `rem`:
+the columns are fractions.
+
+The LCD follows the rules of a real display (REQ-CRM-LCD-001, in
+`ui/Lcd.tsx`). No LED is inside the glass: a status there is the status
+mark, an ink circle that blinks slowly. The characters never move: each
+menu row has an arrow column at its left, and a hover shows the arrow
+there. The menu rows have one height, and the LED of a row is in the bezel
+at its right, so the LEDs are a straight column.
 
 To see each page, run the screenshot script from the repo root. It starts
 crm-be on port 4110 with a new SQLite file in a temp folder, and puts sample
-data and an admin passkey session in it. It touches no other database.
+data and an admin passkey session in it. It touches no other database. It
+shoots each page at the breakpoint minus 1px, the breakpoint, the
+breakpoint plus 24px, 390px, 1200px and 1440px, in light and dark mode, and
+prints each page that scrolls sideways.
 
 ```bash
 node apps/crm/scripts/shoot.mjs [out-dir]

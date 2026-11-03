@@ -110,7 +110,7 @@ const names = async (url: string) => {
   expect(response.statusCode).toBe(200);
   return [
     ...response.body.matchAll(
-      /<li><a href="\/orgs\/[^"]+"><span class="name">([^<]+)<\/span>/g,
+      /<li><a href="\/orgs\/[^"]+" title="[^"]*"><span class="arrow" aria-hidden="true"><\/span><span class="name">([^<]+)<\/span>/g,
     ),
   ].map((m) => m[1]);
 };
@@ -198,7 +198,7 @@ describe('GET / and GET /orgs', () => {
     );
   });
 
-  test('the LCD lists every organisation as a menu: name, stage, next action date and last activity, with a lit LED when due', async () => {
+  test('the LCD lists every organisation as a menu: name, stage, next action date and last activity, with a lit LED in the bezel when due (REQ-CRM-LCD-001)', async () => {
     await addDue('Due Last Week', dayFromToday(-7), 'Knock again');
     await addDue('Due Today', dayFromToday(0));
     await addDue('Due Tomorrow', dayFromToday(1));
@@ -207,19 +207,21 @@ describe('GET / and GET /orgs', () => {
 
     const lcd = divOf((await get('/')).body, 'lcd');
     expect(lcd).toContain(
-      '<ol class="menu" data-legend-name="Organisation" data-legend-value="Next action" data-legend-detail="Stage" data-legend-status="Last activity">',
+      '<ol class="menu two-lines leds" data-legend-name="Organisation" data-legend-value="Next action" data-legend-detail="Stage" data-legend-status="Last activity">',
     );
     expect(lcd).toContain(
-      '<a href="/orgs/due-last-week"><span class="name">Due Last Week</span>',
+      '<a href="/orgs/due-last-week" title="Due Last Week · Lead"><span class="arrow" aria-hidden="true"></span><span class="name">Due Last Week</span>',
     );
-    // The LED of a next action is lit when it is due today or overdue.
-    const led = (date: string) =>
+    // The LED of a row is lit when its next action is due today or
+    // overdue. It is in the bezel: after the link of the row, in its <li>.
+    const led = (slug: string) =>
       new RegExp(
-        `<span class="led( on)?"><time dateTime="[^"]+" title="[^"]+">${formatDate(date)}</time></span>`,
+        `<li><a href="/orgs/${slug}"[^>]*>.*?</a><span class="led( on)?" aria-hidden="true"></span></li>`,
       ).exec(lcd)?.[1] === ' on';
-    expect(led(dayFromToday(-7))).toBe(true);
-    expect(led(dayFromToday(0))).toBe(true);
-    expect(led(dayFromToday(1))).toBe(false);
+    expect(led('due-last-week')).toBe(true);
+    expect(led('due-today')).toBe(true);
+    expect(led('due-tomorrow')).toBe(false);
+    expect(led('no-date')).toBe(false);
     // With no page styles, text tells each value and the due state.
     const text = bodyText(lcd);
     expect(text).toContain(
@@ -540,7 +542,7 @@ describe('the page anatomy', () => {
       if (!lcd) continue;
       lcds += 1;
       expect(lcd).not.toMatch(/<(form|input|button|select|textarea|h1|h2)\b/);
-      expect(lcd.replace(/<ol class="menu"[\s\S]*<\/ol>/, '')).not.toContain(
+      expect(lcd.replace(/<ol class="menu[\s\S]*<\/ol>/, '')).not.toContain(
         '<a ',
       );
     }

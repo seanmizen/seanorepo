@@ -15,7 +15,6 @@ import { Device } from '../ui/Device';
 import { Key, Keys } from '../ui/Key';
 import { LatchKey } from '../ui/LatchKey';
 import { Lcd } from '../ui/Lcd';
-import { Led } from '../ui/Led';
 import { Module } from '../ui/Module';
 import { When } from '../ui/When';
 
@@ -131,10 +130,10 @@ export type ListRow = Pick<
  *
  * - The LCD: the organisations as a menu, as the track list of autosam.
  *   Each row is a link to `/orgs/<slug>`, with the name, the stage, the
- *   next action date and the last activity date. The LED of the next
- *   action is lit when it is due today or overdue. With the Date added
- *   sort, the second date is the date added, so the list shows the value
- *   that it is in order of.
+ *   next action date and the last activity date. The LED of the row, in
+ *   the bezel, is lit when the next action is due today or overdue
+ *   (REQ-CRM-LCD-001). With the Date added sort, the second date is the
+ *   date added, so the list shows the value that it is in order of.
  * - Sort: three latching keys. A lit key has a green LED for ascending, and
  *   a red LED for descending. With no key lit, the order is the default:
  *   due first.
@@ -181,21 +180,21 @@ export const listPage = ({
               return {
                 href: orgPath(row.slug),
                 name: row.name,
+                title: `${row.name} · ${STAGES[row.stage]}`,
                 value: (
                   <>
                     <BareText>· next action </BareText>
                     {row.next_action_on === null ? (
                       <span className="none">None</span>
                     ) : (
-                      <Led on={due}>
-                        <When value={row.next_action_on} />
-                      </Led>
+                      <When value={row.next_action_on} />
                     )}
                     {due && row.next_action_on && (
                       <BareText> ({dueWords(row.next_action_on)})</BareText>
                     )}
                   </>
                 ),
+                led: due,
                 detail: (
                   <>
                     <BareText>· stage </BareText>

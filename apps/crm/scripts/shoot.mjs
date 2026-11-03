@@ -13,15 +13,20 @@
  * with a new SQLite file in a temp folder, and puts sample organisations,
  * a passkey and an admin passkey session in it. It touches no other
  * database. There are more than 50 organisations, so the list (/ and
- * /orgs) has a second page. Then Playwright (from the repo node_modules) takes each page
- * at 1200px and 390px, in light and dark mode, and a few pages with
- * ?theme=bare. It takes each sort and filter of the list at 1200px in
- * light mode and at 390px in dark mode. At the end it stops crm-be and
+ * /orgs) has a second page. Then Playwright (from the repo node_modules)
+ * takes each page in light and dark mode at these widths: the breakpoint
+ * minus 1px, the breakpoint, the breakpoint plus 24px, 390px, 1200px and
+ * 1440px (REQ-CRM-LAYOUT-001). The script reads the breakpoint from
+ * crm-fe/src/theme.css. It takes each sort and filter of the list at
+ * 1200px in light mode and at 390px in dark mode, and a few pages with
+ * ?theme=bare. "home-hover" has the pointer on a menu row: compare it with
+ * "home" to see that no character moves (REQ-CRM-LCD-001). The script
+ * prints each page that scrolls sideways. At the end it stops crm-be and
  * deletes the database.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +41,15 @@ const out = path.resolve(
 );
 mkdirSync(out, { recursive: true });
 const dataDir = mkdtempSync(path.join(tmpdir(), 'crm-shots-db-'));
+/** The one breakpoint of the layout, from its media query in the theme. */
+const BREAKPOINT = Number(
+  /@media \(width < (\d+)px\)/.exec(
+    readFileSync(path.join(CRM, 'crm-fe', 'src', 'theme.css'), 'utf8'),
+  )?.[1],
+);
+if (!BREAKPOINT) throw new Error('theme.css has no (width < Npx) query.');
+/** The widths of the shots. A phone (390px) has a phone height. */
+const WIDTHS = [BREAKPOINT - 1, BREAKPOINT, BREAKPOINT + 24, 390, 1200, 1440];
 const dbPath = path.join(dataDir, 'crm.db');
 
 /** Run SQL on the temp database. */
@@ -298,9 +312,11 @@ try {
     ['home-search', '/?q=street&stage=visited'],
     // /orgs is the same list as /.
     ['orgs', '/orgs?sort=name&dir=asc'],
+    // The pointer on the second row of the menu.
+    ['home-hover', '/', ['hover', '.menu li:nth-child(2) a']],
     ['org', '/orgs/example-plumbing'],
     // The Activity list, open.
-    ['org-activity', '/orgs/example-plumbing', 'summary'],
+    ['org-activity', '/orgs/example-plumbing', ['click', 'summary']],
     ['org-no-contacts', '/orgs/the-high-street-hair-and-beauty-salon'],
     ['org-edit', '/orgs/example-plumbing/edit'],
     ['contact-edit', '/orgs/example-plumbing/contacts/shots-contact'],
@@ -330,21 +346,30 @@ try {
     ['home-stage-quoted', '/?stage=quoted&sort=name&dir=desc'],
     ['home-no-match', '/?q=nothing-matches'],
   ];
-  /** Open `url`, tap `click` (a selector) if it is set, then shoot. */
-  const shoot = async (page, name, url, tag, click) => {
+  /** The shots of a page that scrolls sideways. */
+  const sideways = [];
+  /**
+   * Open `url`. Then do `act` if it is set: `['click', selector]` or
+   * `['hover', selector]`. Then shoot.
+   */
+  const shoot = async (page, name, url, tag, act) => {
     await page.goto(`${BASE}${url}`);
-    if (click) await page.click(click);
-    await page.screenshot({
-      path: path.join(out, `${name}-${tag}.png`),
-      fullPage: true,
-    });
+    if (act?.[0] === 'click') await page.click(act[1]);
+    if (act?.[0] === 'hover') await page.hover(act[1]);
+    const file = `${name}-${tag}.png`;
+    if (
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      )
+    ) {
+      sideways.push(file);
+    }
+    await page.screenshot({ path: path.join(out, file), fullPage: true });
   };
   for (const scheme of ['light', 'dark']) {
-    for (const [width, height, size] of [
-      [1200, 900, 'wide'],
-      [390, 844, 'phone'],
-    ]) {
-      const tag = `${scheme}-${size}`;
+    for (const width of WIDTHS) {
+      const height = width === 390 ? 844 : 900;
+      const tag = `${scheme}-${width}`;
       const context = await browser.newContext({
         viewport: { width, height },
         colorScheme: scheme,
@@ -359,10 +384,10 @@ try {
       await context.addCookies([
         { name: 'crm_session', value: adminToken, url: BASE },
       ]);
-      for (const [name, url, click] of signedIn) {
-        await shoot(page, name, url, tag, click);
+      for (const [name, url, act] of signedIn) {
+        await shoot(page, name, url, tag, act);
       }
-      if (tag === 'light-wide' || tag === 'dark-phone') {
+      if (tag === 'light-1200' || tag === 'dark-390') {
         for (const [name, url] of homeStates) {
           await shoot(page, name, url, tag);
         }
@@ -387,6 +412,7 @@ try {
     await shoot(page, name, url, 'bare');
   }
   await context.close();
+  for (const file of sideways) console.log(`Scrolls sideways: ${file}`);
   console.log(out);
 } finally {
   await browser.close();
