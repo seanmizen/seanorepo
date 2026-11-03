@@ -11,6 +11,8 @@ import { Module } from '../../ui/Module';
  * The page that the enrolment link from `bun run admin:recover` opens. A GET
  * only shows the key. The key sends the POST that spends the token and
  * starts a recovery session. That session opens only `/account/passkeys`.
+ * For a link that cannot start one, the key is off, with the error as its
+ * reason (REQ-CRM-BUTTON-001).
  */
 export const recoverPage = ({
   token,
@@ -23,14 +25,14 @@ export const recoverPage = ({
   device: (
     <Device>
       <Lcd alert={error} />
-      {!error && (
-        <Module label="Recovery">
-          <form method="post" action="/login/recover">
-            <input type="hidden" name="token" value={token} />
-            <Key>Start recovery</Key>
-          </form>
-        </Module>
-      )}
+      <Module label="Recovery">
+        <form method="post" action="/login/recover">
+          {!error && <input type="hidden" name="token" value={token} />}
+          <Key id="start-recovery" off={error}>
+            Start recovery
+          </Key>
+        </form>
+      </Module>
     </Device>
   ),
   help: error

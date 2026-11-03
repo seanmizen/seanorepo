@@ -501,6 +501,9 @@ describe('GET / and GET /orgs', () => {
       `<span>1–${PAGE_SIZE} of ${PAGE_SIZE + 5}</span> <a href="/?sort=name&amp;dir=asc&amp;page=2" rel="next" ${SWAP}>next</a>`,
     );
     expect(foot).not.toContain('rel="prev"');
+    expect(foot).toContain(
+      '<button type="button" class="link" id="page-previous" disabled="" title="This is the first page."',
+    );
 
     const second = await names('/?sort=name&dir=asc&page=2');
     expect(second).toEqual(['Org 50', 'Org 51', 'Org 52', 'Org 53', 'Org 54']);
@@ -509,10 +512,15 @@ describe('GET / and GET /orgs', () => {
       `<a href="/?sort=name&amp;dir=asc" rel="prev" ${SWAP}>previous</a> <span>${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}</span>`,
     );
     expect(last).not.toContain('rel="next"');
+    expect(last).toContain('id="page-next" disabled=""');
     // A page after the last page shows the last page.
     expect(await names('/?sort=name&dir=asc&page=9')).toEqual(second);
-    // A short list has no pager.
-    expect((await get('/?q=Org%2000')).body).not.toContain('rel="next"');
+    // A short list has the pager too, with both keys off.
+    const short = (await get('/?q=Org%2000')).body;
+    expect(short).not.toContain('rel="next"');
+    expect(short).toContain('id="page-previous" disabled=""');
+    expect(short).toContain('<span>1–1 of 1</span>');
+    expect(short).toContain('id="page-next" disabled=""');
   });
 
   test('the search, the stage keys, the sort keys and the pager swap the list in place, and the search field is not in a swapped part', async () => {
@@ -623,7 +631,7 @@ describe('the page anatomy', () => {
   test('the footer has the pager, privacy and top, and no theme or mode stepper', async () => {
     const html = (await get('/')).body;
     expect(html).toContain(
-      '<footer class="foot"><nav class="foot-links" aria-label="Page"><a href="/privacy">privacy</a> <a href="#top">top</a></nav></footer>',
+      '<span>0 of 0</span> <button type="button" class="link" id="page-next" disabled="" title="This is the last page." aria-describedby="page-next-why">next</button> <span class="bare-text" id="page-next-why">This is the last page.</span> <a href="/privacy">privacy</a> <a href="#top">top</a></nav></footer>',
     );
     expect(html).toContain('<html lang="en">');
     expect(html).toContain('<meta name="color-scheme" content="light dark"/>');
@@ -763,6 +771,6 @@ describe('every page with ?theme=bare', () => {
     const [, , activityEdit] = editPages(orgHtml);
     expect(bodyText(bare[activityEdit]).match(/\(current\)/g)).toHaveLength(1);
     // The sessions page: a revoke key for each other session is a form.
-    expect(bodyText(bare['/account/sessions'])).toContain('This session');
+    expect(bodyText(bare['/account/sessions'])).toContain('(this session)');
   });
 });

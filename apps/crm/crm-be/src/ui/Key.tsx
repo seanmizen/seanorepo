@@ -9,7 +9,9 @@ import { BareText } from './BareText';
  * key stays in its place, with the native `disabled`, and the reason is in
  * its `title` (the hover text) and in its accessible description: an
  * `aria-describedby` to a text with the id `<id>-why`. With no page styles,
- * that text shows after the key. A key with `off` needs an `id`.
+ * that text shows after the key. A key with `off` needs an `id`. When the
+ * page already shows the reason as a text, give the id of that text as
+ * `aria-describedby`, and the key adds no second text.
  */
 export const Key = ({
   type = 'submit',
@@ -20,18 +22,22 @@ export const Key = ({
     return <button type={type} className="key" {...props} />;
   }
   if (!props.id) throw new Error('A key with a reason (off) needs an id.');
-  const why = `${props.id}-why`;
+  const shown = props['aria-describedby'];
+  const why = shown ?? `${props.id}-why`;
+  const button = (
+    <button
+      type={type}
+      className="key"
+      {...props}
+      disabled
+      title={off}
+      aria-describedby={why}
+    />
+  );
+  if (shown) return button;
   return (
     <>
-      <button
-        type={type}
-        className="key"
-        {...props}
-        disabled
-        title={off}
-        aria-describedby={why}
-      />{' '}
-      <BareText id={why}>{off}</BareText>
+      {button} <BareText id={why}>{off}</BareText>
     </>
   );
 };

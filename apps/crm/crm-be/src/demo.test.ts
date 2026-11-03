@@ -198,7 +198,7 @@ describe('the demo switch off', () => {
     expect(all('SELECT id FROM session;')).toEqual([]);
   });
 
-  test('no page shows the demo line, and Reset demo data is absent', async () => {
+  test('no page shows the demo line, and Reset demo data is off (REQ-CRM-BUTTON-001)', async () => {
     const cookie = signInAdmin(app);
     for (const url of ['/login', '/', '/account']) {
       const page = await app.inject({
@@ -207,8 +207,16 @@ describe('the demo switch off', () => {
         headers: { cookie },
       });
       expect(page.body).not.toContain(DEMO_TEXT);
-      expect(page.body).not.toContain('Reset demo data');
+      expect(page.body).not.toContain('Enter as admin (demo)');
     }
+    const account = await app.inject({
+      method: 'GET',
+      url: '/account',
+      headers: { cookie },
+    });
+    expect(account.body).toContain(
+      '<button type="submit" class="key" id="reset-demo" disabled="" title="Only the demo site has demo data."',
+    );
     const reset = await postForm(app, '/account/reset-demo', {}, cookie);
     expect(reset.statusCode).toBe(404);
   });

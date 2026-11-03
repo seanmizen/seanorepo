@@ -15,7 +15,9 @@ interface VerifyBody {
 /**
  * The page that the email link opens. A GET only shows the "Sign in" key,
  * with no text to explain it. The key sends the POST that spends the
- * token. Email scanners open every link, so a GET must never sign in.
+ * token. Email scanners open every link, so a GET must never sign in. For
+ * a link that cannot sign in, the key is off, with the error as its reason
+ * (REQ-CRM-BUTTON-001).
  */
 export const verifyPage = ({
   token,
@@ -32,15 +34,22 @@ export const verifyPage = ({
     device: (
       <Device>
         <Lcd alert={error} />
-        {ready && (
-          <Module label="Email link">
-            <form method="post" action="/login/verify">
-              <input type="hidden" name="token" value={token} />
-              <input type="hidden" name="next" value={next} />
-              <Key>Sign in</Key>
-            </form>
-          </Module>
-        )}
+        <Module label="Email link">
+          <form method="post" action="/login/verify">
+            {ready && (
+              <>
+                <input type="hidden" name="token" value={token} />
+                <input type="hidden" name="next" value={next} />
+              </>
+            )}
+            <Key
+              id="sign-in"
+              off={ready ? undefined : (error ?? 'This link is not complete.')}
+            >
+              Sign in
+            </Key>
+          </form>
+        </Module>
       </Device>
     ),
     help: ready ? undefined : (
