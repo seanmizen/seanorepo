@@ -96,6 +96,8 @@ copy it into the `.tf` files first.
 - `main.tf`: the account ID.
 - `<zone>.tf`: one file for each zone, with its DNS records.
 - `tunnel.tf`: the tunnel.
+- `r2.tf`: the R2 buckets, except the state bucket. The crm backup bucket
+  is in the EU jurisdiction.
 - `imports.tf`: one import block for each resource. They do nothing when
   the state has the resource. They rebuild a lost state.
 - The state: `cloudflare/terraform.tfstate` in the R2 bucket

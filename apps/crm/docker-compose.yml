@@ -1,22 +1,81 @@
-# crm. Port: 4100. crm-be renders the pages, serves the crm-fe build, and
-# serves the API, in one process.
+# crm - crm.seanmizen.com
+# Port 4100. crm-be renders the pages, serves the crm-fe build, and serves
+# the API, in one process. 4101 is free.
 #
-# Dev only. There is no prod profile and no tunnel route yet, so nothing
-# deploys this app.
+# prod: the self-contained image, and the Litestream sidecar. The tunnel
+# reaches 127.0.0.1:4100. The crm is not on the LAN edge (infra/edge): its
+# sign-in needs HTTPS and its public origin, crm.seanmizen.com.
 #
-# Dev bind-mounts the monorepo root, so `@shared/*` resolves. node_modules is
-# a named volume that the image fills. This keeps the Linux builds of
+# dev: bind-mounts the monorepo root, so `@shared/*` resolves. node_modules
+# is a named volume that the image fills. This keeps the Linux builds of
 # dependencies out of the host's macOS node_modules.
 
+x-crm-base: &crm-base
+  container_name: crm
+  build:
+    context: ../..
+    dockerfile: apps/crm/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - '${PUBLISH_ADDR:-127.0.0.1}:4100:4100'
+
+# The secrets of the prod services: apps/crm/.env on the server. Git ignores
+# it, and deploy.sh never changes it. The README "Env vars" table names each
+# value. Without the file, each one is unset, and unset means off.
+x-crm-env-file: &crm-env-file
+  env_file:
+    - path: ./.env
+      required: false
+
 services:
+  crm:
+    <<: [*crm-base, *crm-env-file]
+    profiles: ['prod']
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4100
+      - DB_PATH=/data/crm.db
+      - CRM_PUBLIC_URL=https://crm.seanmizen.com
+    volumes:
+      - crm_sqlite_data:/data
+    labels:
+      - 'com.docker.compose.service.primary=true'
+      - 'description=crm (https://crm.seanmizen.com)'
+
+  # Litestream replicates /data/crm.db to the R2 bucket (EU jurisdiction).
+  # Config: litestream.yml. With no CRM_R2_BUCKET, the container prints
+  # that replication is off and stops with status 0. on-failure does not
+  # start it again then. The README has the restore command.
+  litestream:
+    <<: *crm-env-file
+    container_name: crm-litestream
+    image: litestream/litestream:0.5.17
+    profiles: ['prod']
+    restart: on-failure
+    depends_on:
+      - crm
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        if [ -z "$$CRM_R2_BUCKET" ]; then
+          echo "litestream: CRM_R2_BUCKET is not set. Replication is off."
+          exit 0
+        fi
+        case "$$CRM_R2_ENDPOINT" in
+          https://*.eu.r2.cloudflarestorage.com) ;;
+          *)
+            echo "litestream: CRM_R2_ENDPOINT must be https://<account_id>.eu.r2.cloudflarestorage.com. The bucket is in the EU jurisdiction." >&2
+            exit 1
+            ;;
+        esac
+        exec litestream replicate
+    volumes:
+      - crm_sqlite_data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro
+
   crm-dev:
-    container_name: crm
-    build:
-      context: ../..
-      dockerfile: apps/crm/dockerfile
-      target: ${BUILD_TARGET:-dev}
-    ports:
-      - '${PUBLISH_ADDR:-127.0.0.1}:4100:4100'
+    <<: *crm-base
     environment:
       - PORT=4100
       - DB_PATH=/data/crm.db
@@ -31,12 +90,17 @@ services:
         source: ../..
         target: /app
       - node_modules:/app/node_modules
-      - sqlite_data:/data
+      - crm_sqlite_dev_data:/data
     profiles: ['dev']
     labels:
       - 'com.docker.compose.service.primary=true'
       - 'description=crm (http://localhost:4100)'
 
 volumes:
-  sqlite_data:
+  # The live database. It exists only on the machine that runs the prod
+  # profile. Litestream copies it to R2.
+  crm_sqlite_data:
+    name: crm_sqlite_data
+  crm_sqlite_dev_data:
+    name: crm_sqlite_dev_data
   node_modules:

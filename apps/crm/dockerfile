@@ -1,27 +1,59 @@
 # Build context is the monorepo root (see docker-compose.yml).
 #
-# One container runs `yarn workspace crm start`: Rsbuild builds crm-fe once,
-# then builds it in watch mode while Bun runs crm-be in watch mode. Rsbuild needs Node, and
-# crm-be needs Bun, so the image has both. SQLite comes from bun:sqlite, which
-# is part of the Bun runtime.
+# Rsbuild needs Node, and crm-be needs Bun. SQLite comes from bun:sqlite,
+# which is part of the Bun runtime.
+#
+# dev: one container runs `yarn workspace crm start`. Rsbuild builds crm-fe
+# once, then builds it in watch mode while Bun runs crm-be in watch mode.
+# prod: the image builds crm-fe one time, and Bun runs crm-be with no watch.
 
-# dev: the image installs the dependencies. docker-compose fills its named
-# node_modules volume from them. The source comes in through the bind mount.
-FROM node:24-slim AS dev
+# deps: the dependencies of every crm workspace. `crm` declares nested
+# workspaces, so the install needs all their package.json files.
+FROM node:24-slim AS deps
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
-
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn/releases ./.yarn/releases
-# `crm` declares nested workspaces, so the install needs all their
-# package.json files.
 COPY apps/crm/package.json ./apps/crm/
 COPY apps/crm/crm-fe/package.json ./apps/crm/crm-fe/
 COPY apps/crm/crm-be/package.json ./apps/crm/crm-be/
 COPY apps/crm/shared/package.json ./apps/crm/shared/
 RUN yarn workspaces focus crm crm-fe crm-be crm-shared
 
+# dev: docker-compose fills its named node_modules volume from this image.
+# The source comes in through the bind mount.
+FROM deps AS dev
 WORKDIR /app/apps/crm
 ENV NODE_ENV=development
 EXPOSE 4100
 CMD ["yarn", "start"]
+
+# build: the crm-fe build (hashed files and manifest.json in crm-fe/dist).
+# Each COPY names its folder. A copy of all of apps/crm would also take a
+# local .env and the dev database (crm-be/data) into the image.
+FROM deps AS build
+COPY apps/crm/tsconfig.json ./apps/crm/
+COPY apps/crm/shared ./apps/crm/shared
+COPY apps/crm/crm-fe ./apps/crm/crm-fe
+RUN yarn workspace crm-fe build
+
+# prod-deps: only the runtime dependencies of crm-be.
+FROM deps AS prod-deps
+RUN rm -rf node_modules apps/crm/*/node_modules \
+  && yarn workspaces focus crm-be --production
+
+# prod: Bun runs the TSX of crm-be directly. crm-be reads the crm-fe build
+# at ../crm-fe/dist. The SQLite file is in the named volume at /data.
+FROM oven/bun:1-slim AS prod
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY apps/crm/package.json apps/crm/tsconfig.json ./apps/crm/
+COPY apps/crm/shared ./apps/crm/shared
+COPY apps/crm/crm-be/package.json apps/crm/crm-be/tsconfig.json ./apps/crm/crm-be/
+COPY apps/crm/crm-be/src ./apps/crm/crm-be/src
+COPY apps/crm/crm-be/migrations ./apps/crm/crm-be/migrations
+COPY --from=build /app/apps/crm/crm-fe/dist ./apps/crm/crm-fe/dist
+WORKDIR /app/apps/crm/crm-be
+ENV NODE_ENV=production PORT=4100 DB_PATH=/data/crm.db
+EXPOSE 4100
+CMD ["bun", "src/index.ts"]

@@ -174,3 +174,10 @@ import {
   to = cloudflare_dns_record.seansconverter_com_www_cname
   id = "bc66a0dc112f15ae7d5ae2b9d395168a/182d5b326cc19610706ea946848c7f6f"
 }
+
+# Sean made this bucket in the dashboard (r2.tf). The first apply imports
+# it. The ID is <account_id>/<bucket_name>/<jurisdiction>.
+import {
+  to = cloudflare_r2_bucket.crm
+  id = "8e76a7e41317a164bf03bf360ba4ac38/crm/eu"
+}

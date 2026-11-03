@@ -178,11 +178,16 @@ Then every `.env` each app needs, and any site data. Check the `uuid` matches
 `tunnel:` in `apps/cloudflared/config.yml`, or B serves a different tunnel and
 every hostname moves with it.
 
+The crm streams its database to R2 (`apps/crm/README.md`, "Backups"). Two
+machines must never stream to the same bucket. On B, remove `CRM_R2_BUCKET`
+from `apps/crm/.env` until A stops the crm. To get the data on B, run the
+restore commands with `-e CRM_R2_BUCKET=crm` after `run`.
+
 #### 3. Deploy, and prove B on the LAN
 
 ```bash
 ssh srv@<B>.local '~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force'
-for p in 4000 4020 4021 4030 4042 4060; do printf "%s " "$(curl -s -m5 -o /dev/null -w %{http_code} http://<B-ip>:$p/)"; done
+for p in 4000 4020 4021 4030 4042 4060 4100; do printf "%s " "$(curl -s -m5 -o /dev/null -w %{http_code} http://<B-ip>:$p/)"; done
 ```
 
 Click the sites. Check the data. This is the last moment anything is cheap.
@@ -215,7 +220,7 @@ Cloudflare balances across both connections, so there is no gap. Probe each
 hostname more than once - a single 200 does not prove both machines answer:
 
 ```bash
-for u in seanmizen.com carolinemizen.art planning-poker.seanmizen.com inside.seanmizen.com
+for u in seanmizen.com carolinemizen.art planning-poker.seanmizen.com inside.seanmizen.com crm.seanmizen.com
 do printf "%-26s " "$u"; for i in 1 2 3; do printf "%s " "$(curl -s -m12 -o /dev/null -w %{http_code} https://$u)"; done; echo; done
 ```
 
