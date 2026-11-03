@@ -112,9 +112,10 @@ the `parts` that the route gives it.
    seanmizen.com: `/account/passkeys` reads `crm / account / passkeys`. Each
    part above the page is a link, and the page itself has a dim color. The title is
    the first element in `<body>`. The one exception is the demo: the demo
-   line (`ui/DemoBanner.tsx`) comes first. Under it, for a signed-in person, one line
-   of links: `orgs · new lead · account · sign out`. The link to this page
-   is text, with `aria-current="page"`.
+   line (`ui/DemoBanner.tsx`) comes first. Under the title, for a signed-in
+   person, one line of links: `orgs · new lead · account · sign out`. The
+   link to this page is text, with `aria-current="page"`. On a wide screen
+   the theme shows these links in the footer row.
 2. **Intro** (`intro`, text). At most one sentence.
 3. **Device** (`device`). The core function of the page, as one instrument:
    a `Device` with the `Lcd` at the top, then each `Module` on a grid of 6
