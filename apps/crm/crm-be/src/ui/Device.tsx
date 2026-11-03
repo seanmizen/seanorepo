@@ -7,8 +7,10 @@ import type { ReactNode } from 'react';
  * A `<form>` that holds more than one module is a direct child, and its
  * modules sit on the same grid.
  *
- * Only the core interaction of the page goes in the device. Help text goes
- * under it, and history and reference data go in `Records`.
+ * Only the core interaction of the page goes in the device. The device is
+ * the only part of the left column (REQ-CRM-LAYOUT-001). Help text and the
+ * data of the page go in the right column: the help as plain text, and the
+ * data in `Box`es.
  */
 export const Device = ({ children }: { children: ReactNode }) => (
   <div className="device">{children}</div>

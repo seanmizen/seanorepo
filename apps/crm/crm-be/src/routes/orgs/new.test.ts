@@ -73,7 +73,7 @@ describe('GET /orgs/new', () => {
     expect(html.match(/<button type="submit" class="key">/g)).toEqual([
       '<button type="submit" class="key">',
     ]);
-    expect(html).not.toContain('class="records');
+    expect(html).not.toContain('class="boxes"');
   });
 });
 

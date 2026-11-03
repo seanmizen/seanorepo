@@ -1,24 +1,35 @@
 import type { ReactNode } from 'react';
 import { Led } from './Led';
 
-/** One read-out row: a label, a value, and an LED if `led` is set. */
+/** One read-out row: a label and a value. */
 export interface Readout {
   label: string;
   value: ReactNode;
-  /** Lit when true, dark when false, absent when undefined. */
-  led?: boolean;
+  /**
+   * True shows the status mark before the value: a solid circle in the ink
+   * of the LCD, which blinks. The value must tell the same state in text,
+   * for example "2 days overdue".
+   */
+  mark?: boolean;
 }
 
 /** One row of a menu: a link to a record. */
 export interface MenuItem {
   href: string;
   name: string;
+  /** The full text of the row, in its `title`. The default is `name`. */
+  title?: string;
   /** The value at the right of the name, for example a date. */
   value?: ReactNode;
   /** The second line, under the name. */
   detail?: ReactNode;
-  /** The status at the right of the detail, with an LED if `led` is set. */
+  /** The value at the right of the detail. */
   status?: ReactNode;
+  /**
+   * The LED of the row, in the bezel at its right: lit when true. When one
+   * row of a menu has an LED, each row has one. The row must tell the same
+   * state in text.
+   */
   led?: boolean;
 }
 
@@ -36,20 +47,34 @@ export interface Menu {
 }
 
 /**
- * The LCD of the device: a glass on a faceplate, as the display of autosam.
+ * The LCD of the device: a glass in a faceplate, as the display of autosam.
  * It shows data, or a menu. It never holds the page title, help text or a
  * form control.
  *
  * - `alert`: a message about the last action, for example a form error. It
- *   comes first, with a lit LED, in a `role="alert"` paragraph.
+ *   comes first, in a `role="alert"` paragraph, after the status mark.
  * - `rows`: the read-out, as a `<dl>`: a label and a value in each row.
  * - `menu`: a list of records. Each row is a link, as each song in the
  *   track list of autosam. The menu is the only part of the LCD that a
- *   person can tap. A long menu scrolls in the glass, so the modules under
+ *   person can tap. A long menu scrolls in the window, so the modules under
  *   the LCD stay near.
  *
- * With nothing to show, the LCD is absent. Text carries each value and each
- * state, so the LCD reads the same with no page styles (REQ-CRM-BARE-001).
+ * This component owns the rules of the LCD (REQ-CRM-LCD-001):
+ *
+ * 1. No LED is inside the glass. A status in the glass is the status mark,
+ *    a solid circle in the ink of the LCD that blinks slowly.
+ * 2. The characters never move. Each menu row starts with the arrow
+ *    column. A hover or a focus shows the arrow in it, and changes no
+ *    layout.
+ * 3. The menu rows have one fixed height. A text that does not fit ends
+ *    in an ellipsis, and the `title` of the row holds the full text. The
+ *    LED of a row is in the bezel, at the right of the row, so the LEDs are
+ *    a straight column.
+ *
+ * The window (`.window`) holds the glass, and the LED column of the bezel
+ * at its right. With nothing to show, the LCD is absent. Text carries each
+ * value and each state, so the LCD reads the same with no page styles
+ * (REQ-CRM-BARE-001).
  */
 export const Lcd = ({
   alert,
@@ -61,36 +86,42 @@ export const Lcd = ({
   menu?: Menu;
 }) => {
   if (!alert && rows.length === 0 && !menu) return null;
+  const items = menu?.items ?? [];
+  const leds = items.some((item) => item.led !== undefined);
+  const twoLines = items.some(
+    (item) => item.detail !== undefined || item.status !== undefined,
+  );
   return (
     <div className="lcd">
-      <div className="glass">
+      <div className="window">
         {alert && <p role="alert">{alert}</p>}
         {rows.length > 0 && (
           <dl className="readout">
-            {rows.map(({ label, value, led }) => (
+            {rows.map(({ label, value, mark }) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd>
-                  {led === undefined ? value : <Led on={led}>{value}</Led>}
-                </dd>
+                <dd className={mark ? 'mark' : undefined}>{value}</dd>
               </div>
             ))}
           </dl>
         )}
         {menu &&
-          (menu.items.length === 0 ? (
+          (items.length === 0 ? (
             <p className="empty">{menu.empty}</p>
           ) : (
             <ol
-              className="menu"
+              className={['menu', twoLines && 'two-lines', leds && 'leds']
+                .filter(Boolean)
+                .join(' ')}
               data-legend-name={menu.legend[0]}
               data-legend-value={menu.legend[1]}
               data-legend-detail={menu.sublegend?.[0]}
               data-legend-status={menu.sublegend?.[1]}
             >
-              {menu.items.map((item) => (
+              {items.map((item) => (
                 <li key={item.href}>
-                  <a href={item.href}>
+                  <a href={item.href} title={item.title ?? item.name}>
+                    <span className="arrow" aria-hidden="true" />
                     <span className="name">{item.name}</span>
                     {item.value !== undefined && (
                       <>
@@ -107,16 +138,11 @@ export const Lcd = ({
                     {item.status !== undefined && (
                       <>
                         {' '}
-                        <span className="status">
-                          {item.led === undefined ? (
-                            item.status
-                          ) : (
-                            <Led on={item.led}>{item.status}</Led>
-                          )}
-                        </span>
+                        <span className="status">{item.status}</span>
                       </>
                     )}
                   </a>
+                  {leds && <Led on={item.led === true} />}
                 </li>
               ))}
             </ol>
