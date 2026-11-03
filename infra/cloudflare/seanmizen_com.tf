@@ -37,26 +37,6 @@ resource "cloudflare_dns_record" "seanmizen_com_hue_a" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
-# The WireGuard VPN on the VPN host - REQ-NETWORK-007. OpenTofu owns the
-# record: its name, type, TTL and proxy state. custom-vpn-sync.timer on the
-# VPN host owns its content. It writes the host's ::51 address when the
-# delegated IPv6 prefix changes, so OpenTofu ignores the content. The value
-# here is a placeholder from the documentation prefix, and the timer replaces
-# it within 2 minutes. Grey-cloud, because Cloudflare's proxy does not carry
-# UDP. TTL 60, so a new address reaches clients fast.
-resource "cloudflare_dns_record" "seanmizen_com_vpn_aaaa" {
-  content = "2001:db8::51"
-  name    = "vpn.seanmizen.com"
-  proxied = false
-  ttl     = 60
-  type    = "AAAA"
-  zone_id = cloudflare_zone.seanmizen_com.id
-
-  lifecycle {
-    ignore_changes = [content]
-  }
-}
-
 resource "cloudflare_dns_record" "seanmizen_com_cous_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
   name    = "cous.seanmizen.com"

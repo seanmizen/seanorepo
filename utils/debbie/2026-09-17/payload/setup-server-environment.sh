@@ -18,7 +18,7 @@
 #             interface, and the failover watchdog
 #          9. tcp-getter, and loopback exempt from sshd penalties
 #         10. the gated upgrade of cloudflared and ngrok
-#         11. the WireGuard VPN, on a machine with ROLE_VPN=yes
+#         11. the VPN (Tailscale), on a machine with ROLE_VPN=yes
 #
 # Docker, Node, Yarn, the shell and the seanorepo clone come from
 # setup-developer-environment.sh, which runs first.
@@ -64,10 +64,9 @@ fi
 #                   tunnel only forwards to localhost:4xxx. EXACTLY ONE machine in
 #                   the fleet: the apps are SQLite on local volumes, and the
 #                   public one must have a single writer.
-#   ROLE_VPN        runs the WireGuard VPN (wg-quick@wg0.service and
-#                   custom-vpn-sync.timer) and opens 51820/udp - REQ-NETWORK-006.
-#                   Needs no other role. One machine: vpn.seanmizen.com names
-#                   one address.
+#   ROLE_VPN        runs Tailscale (tailscaled.service) as a subnet router for
+#                   the LAN - REQ-NETWORK-006. Opens no port. Needs no other
+#                   role. One machine: one router for one LAN.
 #
 # This script checks the settings here, before it installs anything, so a typo
 # fails the run and does not leave a half-provisioned machine.
@@ -274,10 +273,6 @@ systemctl restart systemd-journald
 # Nothing but SSH, HTTP, HTTPS and mDNS. App ports (4000-4061) are deliberately
 # closed: everything public arrives through the tunnel, which is outbound only,
 # so an open app port would be a second unaudited way in.
-#
-# The one exception is WireGuard, 51820/udp, on a machine with the VPN role
-# only (REQ-NETWORK-006). WireGuard sends no reply to a packet without a valid
-# key, so a port scan cannot see the port. ufw adds the rule for IPv4 and IPv6.
 #------------------------------------------------------------------------------
 log "configuring firewall"
 ufw --force reset > /dev/null
@@ -287,9 +282,6 @@ ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 5353/udp
-if [ "$ROLE_VPN" = yes ]; then
-    ufw allow 51820/udp
-fi
 ufw --force enable
 
 #------------------------------------------------------------------------------
@@ -682,9 +674,6 @@ NET_FAILOVER_SCRIPT="$NET_FAILOVER_DIR/net-failover.sh"
 # The gated upgrade of cloudflared and ngrok, from the payload for the same
 # reason as the watchdog: it must work on a machine that has never deployed.
 VENDOR_UPGRADE_SCRIPT="$NET_FAILOVER_DIR/vendor-upgrade.sh"
-# The VPN sync (REQ-NETWORK-006, REQ-NETWORK-007), from the payload for the
-# same reason as the watchdog.
-VPN_SYNC_SCRIPT="$NET_FAILOVER_DIR/vpn-sync.sh"
 
 # tcp-getter runs on the host, not in a container. It reads this host's ngrok
 # agent API and this host's SSH host key. So it is a host unit, like
@@ -754,7 +743,6 @@ UNIT_TEMPLATE_VARS=(
     LAN_NAMES_SCRIPT EDGE_CADDYFILE
     NET_FAILOVER_SCRIPT
     VENDOR_UPGRADE_SCRIPT
-    VPN_SYNC_SCRIPT
     TCP_GETTER_DIR NODE_BIN
     CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG
 )
@@ -1529,177 +1517,110 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# The WireGuard VPN - REQ-NETWORK-006, REQ-NETWORK-007.
+# The VPN - REQ-NETWORK-006.
 #
-# Remote access with no third party in the path. The router's IPv4 address is
-# CGNAT, so no IPv4 port can be forwarded. IPv6 is native and public, so
-# WireGuard listens on UDP 51820 over IPv6, at <delegated /64>::51. Inside the
-# tunnel, traffic is IPv4 (10.99.0.0/24), and this machine masquerades it onto
-# the LAN. ngrok (REQ-NETWORK-005) stays beside it.
+# Remote access to the LAN from any network, through Tailscale. The router is
+# behind CGNAT on IPv4, and the owner's phone line is IPv4-only, so neither end
+# can accept a connection. tailscaled dials out to Tailscale's coordination
+# server. When no direct path exists, it dials out to a DERP relay on 443/tcp.
+# The traffic is WireGuard, end to end: a relay passes packets it cannot read.
 #
-# THREE PARTS, each with one owner:
-#   - wg-quick@wg0.service, the packaged unit, brings up wg0 from
-#     /etc/wireguard/wg0.conf. This script writes that file. `Table = off`
-#     stops wg-quick from adding routes, so wg0 never takes the default route.
-#     The Address line gives the route to 10.99.0.0/24, which holds every peer.
-#   - services/vpn-sync.sh, every 2 minutes, puts the ::51 address on the
-#     uplink that holds the IPv4 default route, keeps the masquerade and
-#     DOCKER-USER rules, and updates the AAAA record. Each of these follows the
-#     live network, so a run of this script cannot set them once and for all.
-#   - services/wireguard-peers in the repository holds the public keys of the
-#     peers. A change there reaches wg0 at the next provisioning run.
+# This machine is a subnet router. It advertises the LAN subnet of its uplink,
+# so a client reaches every LAN device through it. tailscaled masquerades the
+# routed traffic itself (--snat-subnet-routes, its default), and inserts its own
+# FORWARD rules, so Docker's FORWARD policy does not drop them.
 #
-# THE PRIVATE KEY IS MADE HERE, ON THIS MACHINE, ONCE. It never leaves the
-# machine and is in no repository. wg0.conf holds a copy, so both files are
-# root-only. A run never replaces an existing key: a new key would break the
-# configuration of every client.
+# NO INBOUND PORT. tailscaled only dials out, so REQ-NETWORK-001 and
+# REQ-SERVER-002 hold with no exception.
 #
-# NOTHING RESTARTS. The first run starts wg0, a new interface. A later run with
-# a changed peer list applies it with `wg syncconf`, which keeps the tunnels of
-# the other peers up. No uplink, no Docker and no cloudflared restarts, so this
-# section is safe on the live production machine.
+# ONE MANUAL STEP. Joining the tailnet needs the owner's approval in a browser.
+# This script installs and starts tailscaled, and cannot log in. Until someone
+# runs the `tailscale up` command that it prints, the machine is not on the
+# tailnet. After the login, the owner approves the route and disables key
+# expiry in the admin console. The README gives the steps.
 #
-# WITHOUT THE ROLE, the machine has no wg0, no config, no open port and no
-# timer (REQ-SERVER-014). A machine that loses the role stops wg0 and the
-# timer, and loses the ::51 address and the rules. The key stays, so a later
-# return of the role keeps the same public key.
+# NOTHING RESTARTS. tailscaled is a new service. A later run changes only the
+# advertised route, with `tailscale set`.
+#
+# WITHOUT THE ROLE, the machine has no tailscaled (REQ-SERVER-014). A machine
+# that loses the role logs out, and loses the package, its apt source and the
+# forwarding setting.
 #------------------------------------------------------------------------------
-WG_DIR=/etc/wireguard
-WG_CONF="$WG_DIR/wg0.conf"
-WG_KEY="$WG_DIR/wg0.key"
-WG_UNIT=wg-quick@wg0.service
-WG_PEERS="$SERVICES_SRC/wireguard-peers"
-VPN_SYNC_UNIT=custom-vpn-sync.service
-VPN_SYNC_TIMER=custom-vpn-sync.timer
-# The Cloudflare token of the DNS update. vpn-sync.sh reads it. Someone puts it
-# here by hand (see the README). This script never writes it.
-VPN_DNS_TOKEN=/etc/seanorepo/vpn-ddns.token
+TAILSCALE_KEYRING=/usr/share/keyrings/tailscale-archive-keyring.gpg
+TAILSCALE_LIST=/etc/apt/sources.list.d/tailscale.list
+# The Debian codename, for example trixie. Tailscale publishes one suite each.
+TAILSCALE_SUITE="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+TAILSCALE_UNIT=tailscaled.service
 # IPv4 forwarding. Docker turns it on as well, but the VPN must not depend on
-# Docker for it. IPv6 forwarding stays OFF: with it on, the kernel ignores
-# router advertisements, and the uplinks lose their SLAAC addresses.
+# Docker. IPv4 only: IPv6 forwarding stops the kernel from accepting router
+# advertisements (accept_ra=1), and the uplinks get their IPv6 addresses by
+# SLAAC.
 VPN_SYSCTL=/etc/sysctl.d/90-seanorepo-vpn.conf
 
-log "wireguard vpn"
-
-# Installed on every machine, like the watchdog. A machine that loses the role
-# needs `vpn-sync.sh down`.
-if [ ! -f "$VPN_SYNC_SCRIPT" ] || ! cmp -s "$SERVICES_SRC/vpn-sync.sh" "$VPN_SYNC_SCRIPT"; then
-    log "  installing $VPN_SYNC_SCRIPT"
-    install -m 0755 -o root -g root "$SERVICES_SRC/vpn-sync.sh" "$VPN_SYNC_SCRIPT"
-fi
-
-units_changed=0
-render_unit "$VPN_SYNC_UNIT"
-render_unit "$VPN_SYNC_TIMER"
-if [ "$units_changed" = 1 ]; then
-    systemctl daemon-reload
-fi
-
-# The [Peer] sections, from services/wireguard-peers. A bad line stops the run
-# before anything changes, with the line number.
-render_wg_peers() {
-    local lineno=0 name ip key extra n seen_names=" " seen_ips=" "
-    while IFS=$' \t' read -r name ip key extra || [ -n "${name:-}" ]; do
-        lineno=$((lineno + 1))
-        case "${name:-}" in '' | '#'*) continue ;; esac
-        [ -z "${extra:-}" ] || die "$WG_PEERS line $lineno: expected <name> <tunnel address> <public key>"
-        [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] \
-            || die "$WG_PEERS line $lineno: name '$name' must be lowercase letters, digits and hyphens"
-        [[ "${ip:-}" =~ ^10\.99\.0\.([0-9]{1,3})$ ]] \
-            || die "$WG_PEERS line $lineno: tunnel address '${ip:-}' must be 10.99.0.N"
-        n="${BASH_REMATCH[1]}"
-        [ "$n" -ge 2 ] && [ "$n" -le 254 ] \
-            || die "$WG_PEERS line $lineno: tunnel address $ip must be 10.99.0.2 to 10.99.0.254"
-        [[ "${key:-}" =~ ^[A-Za-z0-9+/]{43}=$ ]] \
-            || die "$WG_PEERS line $lineno: '${key:-}' is not a WireGuard public key"
-        case "$seen_names" in *" $name "*) die "$WG_PEERS line $lineno: the name $name is used twice" ;; esac
-        case "$seen_ips" in *" $ip "*) die "$WG_PEERS line $lineno: the address $ip is used twice" ;; esac
-        seen_names="$seen_names$name "
-        seen_ips="$seen_ips$ip "
-        printf '\n[Peer]\n# %s\nPublicKey = %s\nAllowedIPs = %s/32\n' "$name" "$key" "$ip"
-    done < "$WG_PEERS"
+# The state of tailscaled: Running, NeedsLogin, Stopped, or empty. No jq: grep
+# reads the one field.
+tailscale_state() {
+    tailscale status --json 2> /dev/null \
+        | grep -o '"BackendState": *"[A-Za-z]*"' | head -n 1 | sed 's/.*"\([A-Za-z]*\)"$/\1/'
 }
 
+log "vpn (tailscale)"
 if [ "$ROLE_VPN" = yes ]; then
-    # jq parses the Cloudflare API response in vpn-sync.sh.
-    apt-get install -y wireguard-tools jq
-
-    install -d -m 0700 -o root -g root "$WG_DIR"
-    if [ ! -s "$WG_KEY" ]; then
-        log "  generating this machine's WireGuard private key"
-        (umask 077 && wg genkey > "$WG_KEY.tmp")
-        mv "$WG_KEY.tmp" "$WG_KEY"
+    # Binary already, like Cloudflare's key: no `gpg --dearmor`. A temp file
+    # first, so a curl that stops mid-stream leaves no unusable keyring.
+    if [ ! -s "$TAILSCALE_KEYRING" ]; then
+        log "  fetching Tailscale's apt signing key"
+        ts_key_tmp="$(mktemp)"
+        curl -fsSL "https://pkgs.tailscale.com/stable/debian/$TAILSCALE_SUITE.noarmor.gpg" -o "$ts_key_tmp"
+        install -m 0644 -o root -g root "$ts_key_tmp" "$TAILSCALE_KEYRING"
+        rm -f "$ts_key_tmp"
     fi
-    chown root:root "$WG_KEY"
-    chmod 0600 "$WG_KEY"
-
-    wg_tmp="$(mktemp)"
-    chmod 0600 "$wg_tmp"
-    {
-        echo "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-006"
-        echo "# The peers come from services/wireguard-peers. Edit that file, not this one."
-        echo "[Interface]"
-        echo "Address = 10.99.0.1/24"
-        echo "ListenPort = 51820"
-        echo "# wg-quick adds no route and no rule. wg0 never takes the default route."
-        echo "Table = off"
-        echo "PrivateKey = $(cat "$WG_KEY")"
-        render_wg_peers
-    } > "$wg_tmp"
-
-    wg_conf_changed=0
-    if [ ! -f "$WG_CONF" ] || ! cmp -s "$wg_tmp" "$WG_CONF"; then
-        log "  writing $WG_CONF ($(grep -c '^\[Peer\]' "$wg_tmp") peer(s))"
-        install -m 0600 -o root -g root "$wg_tmp" "$WG_CONF"
-        wg_conf_changed=1
+    # Written whole and compared whole, like the cloudflared source list.
+    ts_deb_line="deb [signed-by=$TAILSCALE_KEYRING] https://pkgs.tailscale.com/stable/debian $TAILSCALE_SUITE main"
+    ts_repo_changed=0
+    if [ ! -f "$TAILSCALE_LIST" ] || [ "$(cat "$TAILSCALE_LIST")" != "$ts_deb_line" ]; then
+        log "  writing $TAILSCALE_LIST"
+        printf '%s\n' "$ts_deb_line" > "$TAILSCALE_LIST"
+        ts_repo_changed=1
     fi
-    rm -f "$wg_tmp"
+    if [ "$ts_repo_changed" = 1 ] \
+        || ! dpkg-query -W -f='${Status}' tailscale 2> /dev/null | grep -q "^install ok installed"; then
+        apt-get update -y
+    fi
+    apt-get install -y tailscale
 
     printf '%s\n' "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-006" \
         "net.ipv4.ip_forward = 1" > "$VPN_SYSCTL"
     sysctl -q -w net.ipv4.ip_forward=1
 
-    systemctl enable "$WG_UNIT"
-    if ! systemctl is-active --quiet "$WG_UNIT"; then
-        log "  starting $WG_UNIT"
-        systemctl start "$WG_UNIT" || die "$WG_UNIT did not start. See: journalctl -u $WG_UNIT"
-    elif [ "$wg_conf_changed" = 1 ]; then
-        log "  applying the new peer list to wg0 (wg syncconf, no restart)"
-        wg syncconf wg0 <(wg-quick strip wg0)
-    fi
+    # On an active service, `enable --now` changes nothing.
+    systemctl enable --now "$TAILSCALE_UNIT"
 
-    # Repair only. The token is a credential, so this script never writes it.
-    if [ -e "$VPN_DNS_TOKEN" ]; then
-        chown root:root "$VPN_DNS_TOKEN"
-        chmod 0600 "$VPN_DNS_TOKEN"
+    # The LAN subnet of the uplink that holds the IPv4 default route. Any
+    # proto: on asus, dhcpcd installs the subnet route as `proto dhcp`.
+    ts_dev="$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+    ts_lan="$(ip -4 -o route show dev "${ts_dev:-none}" scope link 2> /dev/null | awk '$1 ~ /\// { print $1; exit }')"
+    [ -n "$ts_lan" ] || die "no LAN subnet on the uplink '${ts_dev:-none}' - cannot choose the route to advertise"
+
+    ts_state="$(tailscale_state)"
+    if [ "$ts_state" = Running ]; then
+        log "  on the tailnet - advertising $ts_lan"
+        tailscale set --advertise-routes="$ts_lan"
     else
-        log "  NOTE: no DNS token at $VPN_DNS_TOKEN. The VPN works, but"
-        log "        vpn.seanmizen.com does not follow a prefix change. See"
-        log "        'WireGuard VPN' in utils/debbie/2026-09-17/README.md."
+        log "  NOTE: this machine is not on the tailnet (state: ${ts_state:-unknown})."
+        log "        Run this once, and open the URL that it prints:"
+        log "          ssh -t $DEPLOY_USER@$SERVER_NAME.local sudo tailscale up --advertise-routes=$ts_lan"
+        log "        Then, in the admin console, approve the route and disable key"
+        log "        expiry. See 'VPN' in utils/debbie/2026-09-17/README.md."
     fi
-
-    # --now: the timer places the ::51 address and the rules. Without a start
-    # here, the VPN waits for the next boot, and a machine that serves sites is
-    # not rebooted for this (see the README).
-    systemctl enable --now "$VPN_SYNC_TIMER"
-    systemctl start "$VPN_SYNC_UNIT" || log "  $VPN_SYNC_UNIT failed. See: journalctl -u $VPN_SYNC_UNIT"
-
-    log "  this machine's WireGuard public key (clients need it):"
-    log "    $(wg pubkey < "$WG_KEY")"
 else
-    vpn_was_on=0
-    for unit in "$VPN_SYNC_TIMER" "$WG_UNIT"; do
-        if systemctl is-enabled --quiet "$unit" 2> /dev/null \
-            || systemctl is-active --quiet "$unit" 2> /dev/null; then
-            log "  ROLE_VPN is not yes - stopping and disabling $unit"
-            systemctl disable --now "$unit" || true
-            vpn_was_on=1
-        fi
-    done
-    if [ "$vpn_was_on" = 1 ]; then
-        "$VPN_SYNC_SCRIPT" down || true
+    if dpkg-query -W -f='${Status}' tailscale 2> /dev/null | grep -q "^install ok installed"; then
+        log "  ROLE_VPN is not yes - logging out and removing tailscale"
+        tailscale logout 2> /dev/null || true
+        systemctl disable --now "$TAILSCALE_UNIT" || true
+        apt-get purge -y tailscale
     fi
-    rm -f "$WG_CONF" "$VPN_SYSCTL"
+    rm -f "$TAILSCALE_LIST" "$TAILSCALE_KEYRING" "$VPN_SYSCTL"
 fi
 
 # The .deb files that apt keeps after an install. Nothing reads them again, and

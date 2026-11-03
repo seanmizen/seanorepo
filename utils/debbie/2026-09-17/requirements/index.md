@@ -22,10 +22,9 @@
 | [`REQ-NETWORK-003`](network.md#req-network-003--a-link-with-carrier-but-no-route-is-treated-as-dead) | A link with carrier but no route is treated as dead | active | functional | P0 | sean |
 | [`REQ-NETWORK-004`](network.md#req-network-004--the-failover-watchdog-and-the-wifi-configuration-agree-on-an-owner) | The failover watchdog and the wifi configuration agree on an owner | withdrawn | constraint | P1 | sean |
 | [`REQ-NETWORK-005`](network.md#req-network-005--the-host-is-reachable-over-ssh-from-outside-the-local-network) | The host is reachable over SSH from outside the local network | active | functional | P1 | sean |
-| [`REQ-NETWORK-006`](network.md#req-network-006--the-vpn-host-lets-its-own-devices-into-the-lan-over-ipv6) | The VPN host lets its own devices into the LAN over IPv6 | active | functional | P2 | sean |
-| [`REQ-NETWORK-007`](network.md#req-network-007--the-vpns-dns-name-follows-the-hosts-address) | The VPN's DNS name follows the host's address | active | functional | P2 | sean |
+| [`REQ-NETWORK-006`](network.md#req-network-006--the-vpn-host-routes-its-owners-devices-into-the-lan) | The VPN host routes its owner's devices into the LAN | active | functional | P2 | sean |
 | [`REQ-SERVER-001`](server.md#req-server-001--no-local-event-takes-the-server-down) | No local event takes the server down | active | constraint | P0 | sean |
-| [`REQ-SERVER-002`](server.md#req-server-002--only-the-listed-ports-are-reachable) | Only the listed ports are reachable | active | constraint | P1 | sean |
+| [`REQ-SERVER-002`](server.md#req-server-002--only-four-ports-are-reachable) | Only four ports are reachable | active | constraint | P1 | sean |
 | [`REQ-SERVER-003`](server.md#req-server-003--the-deploy-user-can-deploy-without-a-password) | The deploy user can deploy without a password | active | functional | P1 | sean |
 | [`REQ-SERVER-004`](server.md#req-server-004--the-host-is-reachable-by-name-on-the-local-network) | The host is reachable by name on the local network | active | functional | P2 | sean |
 | [`REQ-SERVER-005`](server.md#req-server-005--a-wifi-only-host-keeps-its-network-across-a-reboot) | A wifi-only host keeps its network across a reboot | active | functional | P1 | sean |
@@ -62,10 +61,9 @@ graph TD
   REQ_NETWORK_003["REQ-NETWORK-003<br/>A link with carrier but no route is treated as dead"]
   REQ_NETWORK_004["REQ-NETWORK-004<br/>The failover watchdog and the wifi configuration agree on an owner"]
   REQ_NETWORK_005["REQ-NETWORK-005<br/>The host is reachable over SSH from outside the local network"]
-  REQ_NETWORK_006["REQ-NETWORK-006<br/>The VPN host lets its own devices into the LAN over IPv6"]
-  REQ_NETWORK_007["REQ-NETWORK-007<br/>The VPN's DNS name follows the host's address"]
+  REQ_NETWORK_006["REQ-NETWORK-006<br/>The VPN host routes its owner's devices into the LAN"]
   REQ_SERVER_001["REQ-SERVER-001<br/>No local event takes the server down"]
-  REQ_SERVER_002["REQ-SERVER-002<br/>Only the listed ports are reachable"]
+  REQ_SERVER_002["REQ-SERVER-002<br/>Only four ports are reachable"]
   REQ_SERVER_003["REQ-SERVER-003<br/>The deploy user can deploy without a password"]
   REQ_SERVER_004["REQ-SERVER-004<br/>The host is reachable by name on the local network"]
   REQ_SERVER_005["REQ-SERVER-005<br/>A wifi-only host keeps its network across a reboot"]
@@ -94,10 +92,9 @@ graph TD
   REQ_NETWORK_004 -->|depends-on| REQ_NETWORK_003
   REQ_NETWORK_005 -->|depends-on| REQ_NETWORK_001
   REQ_NETWORK_005 -->|depends-on| REQ_SERVER_008
-  REQ_NETWORK_006 -->|depends-on| REQ_NETWORK_003
+  REQ_NETWORK_006 -->|depends-on| REQ_NETWORK_001
   REQ_NETWORK_006 -->|depends-on| REQ_SERVER_002
   REQ_NETWORK_006 -->|depends-on| REQ_SERVER_014
-  REQ_NETWORK_007 -->|depends-on| REQ_NETWORK_006
   REQ_SERVER_008 -->|depends-on| REQ_SERVER_002
   REQ_SERVER_008 -->|depends-on| REQ_SERVER_003
   REQ_SERVER_009 -->|refines| REQ_SERVER_008
@@ -120,11 +117,10 @@ graph TD
 - `REQ-DEPLOY-004` — required-by REQ-DEPLOY-005, required-by REQ-DEPLOY-006
 - `REQ-DEPLOY-005` — required-by REQ-NETWORK-002
 - `REQ-DEPLOY-006` — required-by REQ-NETWORK-002
-- `REQ-NETWORK-001` — required-by REQ-NETWORK-002, required-by REQ-NETWORK-003, required-by REQ-NETWORK-005
+- `REQ-NETWORK-001` — required-by REQ-NETWORK-002, required-by REQ-NETWORK-003, required-by REQ-NETWORK-005, required-by REQ-NETWORK-006
 - `REQ-NETWORK-002` — refined-by REQ-SERVER-014
-- `REQ-NETWORK-003` — required-by REQ-NETWORK-004, required-by REQ-NETWORK-006
+- `REQ-NETWORK-003` — required-by REQ-NETWORK-004
 - `REQ-NETWORK-005` — required-by REQ-SERVER-015
-- `REQ-NETWORK-006` — required-by REQ-NETWORK-007
 - `REQ-SERVER-002` — required-by REQ-NETWORK-006, required-by REQ-SERVER-008, required-by REQ-SERVER-016
 - `REQ-SERVER-003` — required-by REQ-SERVER-008
 - `REQ-SERVER-005` — refined-by REQ-NETWORK-004

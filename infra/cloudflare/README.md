@@ -120,24 +120,6 @@ copy it into the `.tf` files first.
    locally managed today, so its ingress is still in that file.
 3. Follow "Every change", including the import block after the apply.
 
-## A record whose value the host writes
-
-`vpn.seanmizen.com` (AAAA, in `seanmizen_com.tf`) names the WireGuard VPN
-host (REQ-NETWORK-007). OpenTofu declares the record, and
-`lifecycle { ignore_changes = [content] }` keeps an apply from writing its
-placeholder value. `custom-vpn-sync.timer` on the VPN host writes the real
-address when the IPv6 prefix changes. So the live content differs from the
-code, and a plan shows no change for it. That is correct.
-
-The apply that creates the record needs an import block after it, as for any
-new resource (see "Every change"). Until then, `infra/check-imports.sh`
-fails.
-
-The timer uses its own token, never the token above. That token has one
-permission: Zone, DNS, Edit, with seanmizen.com as the only zone. It is a
-root-only file on the VPN host. The procedure is in
-`utils/debbie/2026-09-17/README.md`, under "WireGuard VPN".
-
 ## The state
 
 The state maps each resource in the code to the ID of the live object.

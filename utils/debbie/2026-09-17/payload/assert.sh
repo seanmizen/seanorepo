@@ -1304,81 +1304,56 @@ else
     sk "sshd exempts loopback from per-source penalties" "setup-server-environment.sh writes the drop-in"
 fi
 
-# REQ-NETWORK-006 and REQ-NETWORK-007 - the WireGuard VPN and its DNS record.
+# REQ-NETWORK-006 - the VPN (Tailscale, as a subnet router for the LAN).
 #
-# What this section proves: with the role, wg0 is up at 10.99.0.1/24 on UDP
-# 51820, takes no default route, runs the peers of its config, and the sync
-# puts the forwarding rules in place. Without the role, none of it exists.
+# What this section proves: with the role, tailscale comes from Tailscale's
+# apt source, tailscaled runs, IPv4 forwarding is on, and the machine is on
+# the tailnet and routes the LAN subnet of its uplink. Without the role, none
+# of it exists.
 #
-# What it cannot prove: a client that connects from the internet, and a DNS
-# update. No VM has global IPv6 or a Cloudflare token. Those are
-# demonstrations on the real machine.
+# What it cannot prove: a client that connects from outside the LAN. That is a
+# demonstration on the real machine. A VM is never logged in to the tailnet,
+# so the two login checks fail there by design: the role is not complete
+# until the owner approves the machine.
 echo
-echo "== wireguard vpn (REQ-NETWORK-006, REQ-NETWORK-007) =="
-VPN_SYNC_UNIT=custom-vpn-sync.service
-VPN_SYNC_TIMER=custom-vpn-sync.timer
+echo "== vpn: tailscale (REQ-NETWORK-006) =="
+TS_UNIT=tailscaled.service
+# The LAN subnet of the uplink that holds the IPv4 default route. The same
+# rule as setup-server-environment.sh.
+ts_lan() {
+    dev="$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+    ip -4 -o route show dev "${dev:-none}" scope link 2> /dev/null | awk '$1 ~ /\// { print $1; exit }'
+}
 if [ "$PHASE" = provisioned ] && [ -e /etc/seanorepo/roles/vpn ]; then
-    check "wireguard-tools installed" \
-        'dpkg-query -W -f="\${Status}" wireguard-tools 2>/dev/null | grep -q "^install ok installed"'
-    check "wg0 is up at 10.99.0.1/24" \
-        'ip -4 -o addr show dev wg0 | grep -q " inet 10\.99\.0\.1/24 "'
-    check "wg0 listens on UDP 51820" \
-        '[ "$(sudo -n wg show wg0 listen-port)" = 51820 ]'
-    check "ufw allows 51820/udp on the VPN host" \
-        'sudo -n ufw status | grep -q "^51820/udp"'
-    # Table = off: no default route, and no fwmark rule (the mechanism that
-    # wg-quick uses for a full tunnel).
-    check "wg0 adds no default route" \
-        '[ -z "$(ip -4 route show default dev wg0; ip -6 route show default dev wg0)" ] \
-         && [ "$(sudo -n wg show wg0 fwmark)" = off ]'
-    check "the private key and the config are root-only" \
-        '[ "$(sudo -n stat -c "%a %U" /etc/wireguard/wg0.key)" = "600 root" ] \
-         && [ "$(sudo -n stat -c "%a %U" /etc/wireguard/wg0.conf)" = "600 root" ]'
-    # The running interface agrees with the file that provisioning wrote.
-    check "wg0 runs every peer of wg0.conf" \
-        '[ "$(sudo -n wg show wg0 peers | grep -c .)" = "$(sudo -n grep -c "^\[Peer\]" /etc/wireguard/wg0.conf)" ]'
+    check "tailscale installed" \
+        'dpkg-query -W -f="\${Status}" tailscale 2>/dev/null | grep -q "^install ok installed"'
+    check "exactly one tailscale apt source" \
+        '[ "$(grep -rl "pkgs.tailscale.com" /etc/apt/sources.list.d/ 2>/dev/null | wc -l)" -eq 1 ]'
+    check "$TS_UNIT enabled" "systemctl is-enabled $TS_UNIT"
+    check "$TS_UNIT active" "systemctl is-active $TS_UNIT"
     # Read /proc: assert.sh runs as the deploy user, and sysctl is in /usr/sbin,
     # which is not on that user's PATH.
     check "IPv4 forwarding is on" '[ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ]'
-    check "$VPN_SYNC_TIMER enabled" "systemctl is-enabled $VPN_SYNC_TIMER"
-    check "$VPN_SYNC_TIMER active" "systemctl is-active $VPN_SYNC_TIMER"
-    check "the VPN sync runs every two minutes" \
-        "systemctl cat $VPN_SYNC_TIMER | grep -qx 'OnUnitActiveSec=2min'"
-    check "the VPN sync runs only on a machine with the VPN role" \
-        "systemctl cat $VPN_SYNC_UNIT | grep -qx 'ConditionPathExists=/etc/seanorepo/roles/vpn'"
-    # One run now, so the next checks do not wait for the timer. The same run
-    # that the timer makes. Without a token it changes no DNS record.
-    sudo -n systemctl start "$VPN_SYNC_UNIT" > /dev/null 2>&1 || true
-    check "DOCKER-USER accepts traffic from wg0" \
-        'sudo -n iptables -S DOCKER-USER | grep -- "-i wg0" | grep -q -- "-j ACCEPT"'
-    check "the tunnel is masqueraded onto the LAN" \
-        'sudo -n iptables -t nat -S POSTROUTING | grep -- "-s 10.99.0.0/24" | grep -q -- "-j MASQUERADE"'
-    if sudo -n test -e /etc/seanorepo/vpn-ddns.token; then
-        check "the DNS token is root-only" \
-            '[ "$(sudo -n stat -c "%a %U" /etc/seanorepo/vpn-ddns.token)" = "600 root" ]'
-    else
-        sk "the DNS token is root-only" "no token on this machine, so no DNS update"
-    fi
-    # The ::51 address needs a global IPv6 /64 on the uplink. A VM has none.
-    vpn_up="$(ip -4 -o route get 192.0.2.1 2> /dev/null \
-        | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
-    if [ -n "$vpn_up" ] && [ -n "$(ip -6 -o addr show dev "$vpn_up" scope global dynamic 2> /dev/null)" ]; then
-        check "::51 is on exactly one interface, the uplink $vpn_up" \
-            '[ "$(ip -6 -o addr show scope global | awk "\$4 ~ /::51\\/128\$/ { print \$2 }")" = "$vpn_up" ]'
-    else
-        sk "::51 is on exactly one interface" "no global IPv6 on the uplink (every VM run)"
-    fi
+    # IPv6 forwarding stops the uplinks from accepting router advertisements,
+    # and they get their IPv6 addresses by SLAAC.
+    check "IPv6 forwarding stays off" '[ "$(cat /proc/sys/net/ipv6/conf/all/forwarding)" = 0 ]'
+    check "this machine is on the tailnet" \
+        'sudo -n tailscale status --json --peers=false 2>/dev/null | grep -q "\"BackendState\": *\"Running\""'
+    # Advertised is this machine's setting. Primary means the owner approved
+    # the route in the admin console and the tailnet uses it.
+    check "it advertises the LAN subnet $(ts_lan)" \
+        'lan="$(ts_lan)"; [ -n "$lan" ] && sudo -n tailscale debug prefs 2>/dev/null | tr -d " \n" | grep -q "\"AdvertiseRoutes\":\[[^]]*\"$lan\""'
+    check "the tailnet routes the LAN subnet through it (route approved)" \
+        'lan="$(ts_lan)"; [ -n "$lan" ] && sudo -n tailscale status --json --peers=false 2>/dev/null | tr -d " \n" | grep -q "\"PrimaryRoutes\":\[[^]]*\"$lan\""'
 elif [ "$PHASE" = provisioned ]; then
-    check "no WireGuard config without the VPN role" \
-        '! sudo -n test -e /etc/wireguard/wg0.conf && ! ip link show wg0 > /dev/null 2>&1'
-    check "51820/udp is closed without the VPN role" \
-        '! sudo -n ufw status | grep -q "^51820/udp"'
-    check "the VPN sync timer is off without the VPN role" \
-        "! systemctl is-active --quiet $VPN_SYNC_TIMER && ! systemctl is-enabled --quiet $VPN_SYNC_TIMER"
-    check "no ::51 address without the VPN role" \
-        '[ -z "$(ip -6 -o addr show scope global | awk "\$4 ~ /::51\\/128\$/")" ]'
+    check "tailscale absent without the VPN role" \
+        '! dpkg-query -W -f="\${Status}" tailscale 2>/dev/null | grep -q "^install ok installed"'
+    check "no tailscale apt source without the VPN role" \
+        '[ -z "$(grep -rl "pkgs.tailscale.com" /etc/apt/sources.list.d/ 2>/dev/null)" ]'
+    check "no forwarding setting without the VPN role" \
+        '[ ! -e /etc/sysctl.d/90-seanorepo-vpn.conf ]'
 else
-    sk "the VPN role decides wg0, 51820/udp and the sync timer" "setup-server-environment.sh sets the roles"
+    sk "the VPN role decides tailscale and forwarding" "setup-server-environment.sh sets the roles"
 fi
 
 # REQ-SERVER-010 - the deploy user's shell.
@@ -1700,6 +1675,11 @@ lan_tcp_listeners() {
             if (addr ~ /^127\./) next
             if (addr == "::1") next
             if (addr ~ /^::ffff:127\./) next
+            # Tailscale addresses (REQ-NETWORK-006): 100.64.0.0/10 and
+            # fd7a:115c:a1e0::/48. Only tailnet devices reach them, through
+            # tailscale0. tailscaled listens there for its peer API.
+            if (addr ~ /^fd7a:115c:a1e0:/) next
+            if (split(addr, o, ".") == 4 && o[1] == 100 && o[2] >= 64 && o[2] <= 127) next
             print addr ":" port
         }'
 }
@@ -1733,13 +1713,8 @@ if [ "$PHASE" = provisioned ]; then
     # The check name makes no claim about open ports, because this check
     # cannot prove one. It says what ufw was asked for, and nothing about what
     # Docker does behind it. The next four checks cover Docker.
-    #
-    # Five on a machine with the VPN role: 51820/udp (REQ-NETWORK-006). The
-    # VPN section above checks that the fifth is 51820/udp.
-    # shellcheck disable=SC2034 # the check's eval reads it
-    if [ -e /etc/seanorepo/roles/vpn ]; then ufw_ports=5; else ufw_ports=4; fi
-    check "ufw allows no port beyond the list" \
-        '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq "$ufw_ports" ]'
+    check "ufw allows no port beyond the four" \
+        '[ "$(sudo -n ufw status | grep -E "^[0-9]+/(tcp|udp)" | grep -vc "(v6)")" -eq 4 ]'
 
     # The configured default. `ip` is dockerd's `--ip`, "Host IP for port
     # publishing". Parsed with node rather than grepped, which also proves the
@@ -1902,7 +1877,7 @@ else
     sk "80 open"    "setup-server-environment.sh installs and enables it"
     sk "443 open"   "setup-server-environment.sh installs and enables it"
     sk "5353 open"  "setup-server-environment.sh installs and enables it"
-    sk "ufw allows no port beyond the list" "setup-server-environment.sh installs and enables it"
+    sk "ufw allows no port beyond the four" "setup-server-environment.sh installs and enables it"
     sk "docker publishes to loopback by default" "setup-server-environment.sh writes daemon.json"
     sk "docker's userland proxy is not disabled" "setup-server-environment.sh writes daemon.json"
     sk "nothing outside the four ports listens on a non-loopback address" \
