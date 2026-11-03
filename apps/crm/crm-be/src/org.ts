@@ -224,8 +224,17 @@ export const parsePipeline = (
  * fields, the stage before (`from`) and after (`stage`), and the date of
  * the next action. It never copies the text of the next action. `change`
  * has the values before and after, for Undo and Redo.
+ *
+ * A move to the stage lost also clears the next action, so the
+ * organisation is not due again. The Do not knock outcome and the Stage
+ * module both come here, so Undo of either one gives the next action back.
+ * On an organisation that is lost already, a next action can be set.
  */
-export const pipelineChange = (org: Org, next: Pipeline) => {
+export const pipelineChange = (org: Org, wanted: Pipeline) => {
+  const next =
+    wanted.stage === 'lost' && org.stage !== 'lost'
+      ? { stage: wanted.stage, next_action: null, next_action_on: null }
+      : wanted;
   const fields = PIPELINE.filter((name) => org[name] !== next[name]);
   if (fields.length === 0) return null;
   const change: Change = {
