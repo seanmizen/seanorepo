@@ -20,8 +20,9 @@ export const SESSION_TEXT: Record<SessionMethod, string> = {
  * The account page. The nav links to it, and so does the path title of
  * each account page. The LCD shows the email and how this session signed
  * in, then a menu of the account pages, each with its count. Only the
- * admin has the Connections page (`connections`). While the demo switch is
- * on (`demo.ts`), the Demo module holds `Reset demo data`.
+ * admin has the Connections page (`connections`). The Demo module holds
+ * `Reset demo data`. While the demo switch (`demo.ts`) is off, the key is
+ * off, with the reason (REQ-CRM-BUTTON-001).
  */
 export const accountPage = ({
   auth,
@@ -68,13 +69,18 @@ export const accountPage = ({
           ],
         }}
       />
-      {demoLoginOn() && (
-        <Module label="Demo">
-          <form method="post" action="/account/reset-demo">
-            <Key>Reset demo data</Key>
-          </form>
-        </Module>
-      )}
+      <Module label="Demo">
+        <form method="post" action="/account/reset-demo">
+          <Key
+            id="reset-demo"
+            off={
+              demoLoginOn() ? undefined : 'Only the demo site has demo data.'
+            }
+          >
+            Reset demo data
+          </Key>
+        </form>
+      </Module>
     </Device>
   ),
 });

@@ -26,6 +26,12 @@ interface PasskeyRow {
   last_used_at: string | null;
 }
 
+/** Why a session that cannot change its passkeys cannot add one. */
+const ADD_OFF = 'To add a passkey, sign in with a passkey.';
+
+/** Why a session that cannot change its passkeys cannot delete one. */
+const DELETE_OFF = 'To delete a passkey, sign in with a passkey.';
+
 /**
  * The one sentence under the nav that tells this session what it can do on
  * this page, or nothing.
@@ -58,7 +64,9 @@ const notice = ({
  * passkeys why. The device adds a passkey, and the LCD shows only an
  * error. The Passkeys box lists the passkeys (name, added, last used), with a
  * small delete key for each one. The add form needs JavaScript (WebAuthn).
- * With no JavaScript the module says so (REQ-CRM-BARE-001).
+ * With no JavaScript the module says so (REQ-CRM-BARE-001). In a session
+ * that cannot change its passkeys, the add key and each delete key stay in
+ * their place, off, with the reason (REQ-CRM-BUTTON-001).
  */
 export const passkeysPage = ({
   method,
@@ -77,17 +85,17 @@ export const passkeysPage = ({
 }): PageParts => ({
   title: 'Passkeys',
   intro: notice({ method, admin, firstPasskey, canChange }),
-  device:
-    canChange || error ? (
-      <Device>
-        <Lcd alert={error} />
-        {canChange && (
-          <Module label="Add a passkey">
-            <AddPasskey next="/account/passkeys" />
-          </Module>
-        )}
-      </Device>
-    ) : undefined,
+  device: (
+    <Device>
+      <Lcd alert={error} />
+      <Module label="Add a passkey">
+        <AddPasskey
+          next="/account/passkeys"
+          off={canChange ? undefined : ADD_OFF}
+        />
+      </Module>
+    </Device>
+  ),
   boxes: (
     <Box title="Passkeys">
       {passkeys.length === 0 ? (
@@ -96,7 +104,7 @@ export const passkeysPage = ({
         <form method="post" action="/account/passkeys">
           <RecordTable
             head={['Name', 'Added', 'Last used', 'Action']}
-            rows={passkeys.map((passkey) => ({
+            rows={passkeys.map((passkey, index) => ({
               key: passkey.id,
               cells: [
                 passkey.name,
@@ -106,13 +114,15 @@ export const passkeysPage = ({
                 ) : (
                   'Never'
                 ),
-                canChange ? (
-                  <Key key="delete" name="delete" value={passkey.id}>
-                    Delete
-                  </Key>
-                ) : (
-                  'Sign in with a passkey to delete'
-                ),
+                <Key
+                  key="delete"
+                  id={`delete-${index + 1}`}
+                  name="delete"
+                  value={passkey.id}
+                  off={canChange ? undefined : DELETE_OFF}
+                >
+                  Delete
+                </Key>,
               ],
             }))}
           />

@@ -172,6 +172,10 @@ export type ListRow = Pick<
  *   lit, so the Enter key in the field keeps it. Each stage key sends its
  *   own stage.
  * - New lead: opens `/orgs/new`.
+ * - The pager, in the footer: `previous`, the rows of this page, `next`.
+ *   Both are always in their place. On the first page `previous` is off,
+ *   and on the last page `next` is off, each with the reason
+ *   (REQ-CRM-BUTTON-001).
  *
  * Each key is a GET submit to `path`, so the URL holds the search, the
  * stage and the sort, and each key works with no page styles and no
@@ -324,32 +328,51 @@ export const listPage = ({
         </Module>
       </Device>
     ),
-    pager:
-      pages > 1 ? (
-        <>
-          {page > 1 && (
-            <a
-              href={listHref(path, { ...query, page: page - 1 })}
-              rel="prev"
-              data-swap={LIST_SWAP}
-            >
-              previous
-            </a>
-          )}{' '}
-          <span>
-            {first}–{Math.min(total, page * PAGE_SIZE)} of {total}
-          </span>{' '}
-          {page < pages && (
-            <a
-              href={listHref(path, { ...query, page: page + 1 })}
-              rel="next"
-              data-swap={LIST_SWAP}
-            >
-              next
-            </a>
-          )}
-        </>
-      ) : undefined,
+    pager: (
+      <>
+        {page > 1 ? (
+          <a
+            href={listHref(path, { ...query, page: page - 1 })}
+            rel="prev"
+            data-swap={LIST_SWAP}
+          >
+            previous
+          </a>
+        ) : (
+          <Key
+            type="button"
+            className="link"
+            id="page-previous"
+            off="This is the first page."
+          >
+            previous
+          </Key>
+        )}{' '}
+        <span>
+          {total === 0
+            ? '0 of 0'
+            : `${first}–${Math.min(total, page * PAGE_SIZE)} of ${total}`}
+        </span>{' '}
+        {page < pages ? (
+          <a
+            href={listHref(path, { ...query, page: page + 1 })}
+            rel="next"
+            data-swap={LIST_SWAP}
+          >
+            next
+          </a>
+        ) : (
+          <Key
+            type="button"
+            className="link"
+            id="page-next"
+            off="This is the last page."
+          >
+            next
+          </Key>
+        )}
+      </>
+    ),
   };
 };
 

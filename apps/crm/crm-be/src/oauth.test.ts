@@ -363,7 +363,11 @@ describe('OAuth for the Claude apps', () => {
       headers: { cookie },
     });
     expect(wrong.statusCode).toBe(400);
-    expect(wrong.body).not.toContain('>Allow</button>');
+    // Allow and Deny stay in their place, off, and the form sends no
+    // request (REQ-CRM-BUTTON-001).
+    expect(wrong.body).toMatch(/<button [^>]*id="allow"[^>]* disabled=""/);
+    expect(wrong.body).toMatch(/<button [^>]*id="deny"[^>]* disabled=""/);
+    expect(wrong.body).not.toContain('name="client_id"');
   });
 
   test('the authorize page sends a request with no PKCE, or for another resource, back with an error', async () => {

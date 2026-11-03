@@ -302,8 +302,15 @@ button.link {
   text-underline-offset: 0.18em;
   cursor: pointer;
 }
-button.link:hover {
+button.link:hover:not(:disabled) {
   text-decoration-thickness: 2px;
+}
+/* A text link that cannot act, for example `next` on the last page
+   (REQ-CRM-BUTTON-001): dim, with no underline. */
+button.link:disabled {
+  color: var(--muted);
+  text-decoration: none;
+  cursor: default;
 }
 
 /* 2. The intro */
@@ -971,13 +978,6 @@ button.link:hover {
     order: 1;
     grid-column: 2;
   }
-}
-
-/* A class that sets `display` must not show a `hidden` element. These
-   selectors are more specific than the classes. */
-.key[hidden],
-.module form[hidden] {
-  display: none;
 }
 
 /* Touch targets are at least 44px high on a narrow screen and under a

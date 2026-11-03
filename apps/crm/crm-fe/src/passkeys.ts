@@ -1,10 +1,11 @@
 // The passkey controls of `crm-be/src/ui/Passkey.tsx`, on /login,
 // /account/passkeys and the 403 page of an admin route. WebAuthn has no HTML
 // form, so this is the one script that a page needs (the exception in
-// REQ-CRM-BARE-001). The server renders each passkey control `hidden`, with a
-// note that says passkeys need JavaScript. This script shows the control and
-// removes the note. After a success, it opens the `data-next` path that the
-// server returns.
+// REQ-CRM-BARE-001). The server renders each passkey control off
+// (`disabled`), with a note that says passkeys need JavaScript as its reason
+// (REQ-CRM-BUTTON-001). This script turns the control on and removes the
+// note. After a success, it opens the `data-next` path that the server
+// returns.
 import {
   browserSupportsWebAuthn,
   startAuthentication,
@@ -45,15 +46,31 @@ const showError = (root: ParentNode, error: unknown) => {
   alert.hidden = false;
 };
 
-/** Show the note in place of the control when the browser has no WebAuthn. */
+/**
+ * Turn the control on, and remove the note. When the browser has no
+ * WebAuthn, the control stays off, and the note and the hover text say why.
+ */
 const ready = (root: ParentNode, control: HTMLElement) => {
   const note = root.querySelector<HTMLElement>('[data-passkey-note]');
+  const parts = [
+    control,
+    ...control.querySelectorAll<HTMLElement>('button, input'),
+  ].filter(
+    (part): part is HTMLButtonElement | HTMLInputElement =>
+      part instanceof HTMLButtonElement || part instanceof HTMLInputElement,
+  );
   if (!browserSupportsWebAuthn()) {
-    if (note) note.textContent = 'This browser cannot use passkeys.';
+    const why = 'This browser cannot use passkeys.';
+    if (note) note.textContent = why;
+    for (const part of parts) if (part.title) part.title = why;
     return false;
   }
   note?.remove();
-  control.hidden = false;
+  for (const part of parts) {
+    part.disabled = false;
+    part.removeAttribute('title');
+    part.removeAttribute('aria-describedby');
+  }
   return true;
 };
 

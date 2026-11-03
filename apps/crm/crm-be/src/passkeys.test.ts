@@ -223,9 +223,7 @@ describe('the admin pages', () => {
     expect(page.body).toContain(
       'This page needs a passkey. Add one to this device.',
     );
-    expect(page.body).toContain(
-      '<form hidden="" data-passkey="register" data-next="/">',
-    );
+    expect(page.body).toContain('<form data-passkey="register" data-next="/">');
 
     const passkeys = await get('/account/passkeys', cookie);
     expect(passkeys.body).toContain(
@@ -395,15 +393,18 @@ describe('the passkey script', () => {
     expect(login).not.toContain('<script');
     expect(login).toContain('Passkeys need JavaScript.');
     expect(login).toContain('<form action="/login" method="post">');
-    // The passkey button is hidden until the script shows it.
-    expect(login).toMatch(/<button type="button" class="key" hidden=""/);
+    // The passkey button is off until the script turns it on, and the note
+    // is its reason (REQ-CRM-BUTTON-001).
+    expect(login).toMatch(
+      /<button type="button" class="key" id="passkey-sign-in" aria-describedby="passkey-note"[^>]* disabled="" title="Passkeys need JavaScript\./,
+    );
 
     const cookie = await signIn(app, db, 'a@example.com');
     const passkeys = (await get('/account/passkeys?theme=bare', cookie)).body;
     expect(passkeys).not.toContain('<script');
     expect(passkeys).toContain('Passkeys need JavaScript.');
     expect(passkeys).toContain(
-      '<form hidden="" data-passkey="register" data-next="/account/passkeys">',
+      '<form data-passkey="register" data-next="/account/passkeys">',
     );
 
     const admin = await signIn(app, db, TEST_ADMIN_EMAIL);
@@ -411,7 +412,7 @@ describe('the passkey script', () => {
     expect(step).not.toContain('<script');
     expect(step).toContain('Passkeys need JavaScript.');
     expect(step).toContain(
-      '<form hidden="" data-passkey="register" data-next="/?theme=bare">',
+      '<form data-passkey="register" data-next="/?theme=bare">',
     );
   });
 });

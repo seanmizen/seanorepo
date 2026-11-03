@@ -57,8 +57,8 @@ The UUIDs stay the primary keys and the foreign keys. `orgPath`,
 each redirect, and `nextNumber` gives each new number.
 - `/account`: the email and how this session signed in, with links to
   `/account/passkeys` and `/account/sessions`, and for the admin
-  `/account/connections` (see [MCP for Claude](#mcp-for-claude)). In the
-  demo, also the `Reset demo data` button (see [Demo](#demo)).
+  `/account/connections` (see [MCP for Claude](#mcp-for-claude)), and the
+  `Reset demo data` button. Only the demo turns it on (see [Demo](#demo)).
 
 Two pages are open to everyone:
 
@@ -166,7 +166,8 @@ The design is in "Undo and history" in
 - **Keys that cannot act.** `Undo`, `Redo` and `Show hidden` are always in
   their place. A key that cannot act is off (`disabled`), with the reason
   in its hover text and in its accessible description (REQ-CRM-BUTTON-001,
-  the `off` prop of `ui/Key.tsx`).
+  the `off` prop of `ui/Key.tsx`). The rule is the same for each button
+  of the crm: see [Page rules](#page-rules).
 - **The old history.** Migration `005-events.sql` made the events from the
   old visits, notes and `audit_log` rows. Undo can hide an old visit or
   note, and stops at each other old change: the old log kept no values.
@@ -197,8 +198,11 @@ the `parts` that the route gives it.
    a silkscreen title, then tables, lists and definition lists in the page
    font. A box can hold links, keys and forms. On a narrow screen, each
    table row is a block of lines.
-5. **Footer** (`ui/Footer.tsx`, text). The pager of a long list (`pager`),
-   `privacy` and `top`. Each page has it, signed in or not.
+5. **Footer** (`ui/Footer.tsx`, text). The pager of the list (`pager`),
+   `privacy` and `top`. Each page has it, signed in or not. The pager is
+   `previous`, the rows of this page and `next`. Both are always there.
+   On the first page `previous` is off, and on the last page `next` is
+   off.
 
 The layout has one breakpoint, 960px (REQ-CRM-LAYOUT-001, in
 `crm-fe/src/theme.css`):
@@ -279,6 +283,12 @@ use the ink color with an underline.
   the address bar, and keeps the focus and the caret. On an error it loads
   the full page. A swap never replaces the field that a person types in:
   on the list, `LIST_SWAP` in `routes/index.tsx` names each swapped part.
+- A button is always in its place (REQ-CRM-BUTTON-001). When it cannot
+  act, it is off (`disabled`), with the reason in its hover text and in
+  its accessible description. Use the `off` prop of `ui/Key.tsx`. With no
+  JavaScript, the passkey keys are off, and the reason is "Passkeys need
+  JavaScript". The one exception is `Enter as admin (demo)`: the live
+  `/login` does not show it.
 - Biome fails on `dangerouslySetInnerHTML` under `apps/crm` (see the
   `overrides` in the root `biome.json`).
 - The text on a page uses only the words that the page shows: the labels
@@ -305,9 +315,10 @@ missing. To add other people, add `person` rows.
    deletes its row.
 
 A session is a random cookie (`crm_session`) that lasts 90 days.
-`/account/sessions` lists the sessions, with a "Revoke" key for each one
-except this session. When there is another session, its "Sign out" module
-has the key "Everywhere else", which revokes all other sessions. The nav of
+`/account/sessions` lists the sessions, with a "Revoke" key for each one.
+The "Revoke" key of this session is off. Its "Sign out" module has the key
+"Everywhere else", which revokes all other sessions. It is off when there
+is no other session. The nav of
 each page has "sign out" for this session. Each page except the sign-in
 pages, `/privacy`, `/api/health`, `/favicon.ico` and the MCP and OAuth
 paths needs a session. `/api/mcp`, `/api/oauth/register`,
@@ -668,8 +679,9 @@ The last part prints the six names, with no values.
 3. `/account` has the `Reset demo data` button
    (`routes/account/reset-demo.ts`). It runs the demo seed.
 
-Unset means off: no button, no line, and `POST /login/demo` and
-`POST /account/reset-demo` return 404. The guards:
+Unset means off: no `Enter as admin (demo)` button, no line, `Reset demo
+data` is off, and `POST /login/demo` and `POST /account/reset-demo`
+return 404. The guards:
 
 - crm-be stops at boot when the switch is `true` and the host of
   `CRM_PUBLIC_URL` is `crm.seanmizen.com`. The live site cannot run with the

@@ -28,13 +28,17 @@ const returnsTo = (redirectUri: string) => {
     : hostname;
 };
 
+/** Why Allow and Deny cannot act when there is no request. */
+const NOT_VALID = 'The app did not send a valid request.';
+
 /**
  * The consent page of the OAuth flow (`oauth.ts`): an app, for example
  * Claude, asks to connect to the crm. The admin, in a passkey session, taps
  * Allow or Deny. The LCD shows the app and the host that it returns to.
  * The form sends the values of the request again, as hidden fields, and
  * the post checks them again. A request that is not valid shows its error
- * in the LCD, with no keys.
+ * in the LCD, and Allow and Deny are off, with the error as their reason
+ * (REQ-CRM-BUTTON-001).
  */
 export const authorizePage = ({
   authorize,
@@ -63,9 +67,9 @@ export const authorizePage = ({
             : undefined
         }
       />
-      {authorize && (
-        <form method="post" action={AUTHORIZE_PATH}>
-          {Object.entries({
+      <form method="post" action={AUTHORIZE_PATH}>
+        {authorize &&
+          Object.entries({
             response_type: 'code',
             client_id: authorize.clientId,
             redirect_uri: authorize.redirectUri,
@@ -78,18 +82,27 @@ export const authorizePage = ({
             .map(([name, value]) => (
               <input key={name} type="hidden" name={name} value={value} />
             ))}
-          <Module label="Connect">
-            <Keys>
-              <Key name="decision" value="allow">
-                Allow
-              </Key>
-              <Key name="decision" value="deny">
-                Deny
-              </Key>
-            </Keys>
-          </Module>
-        </form>
-      )}
+        <Module label="Connect">
+          <Keys>
+            <Key
+              id="allow"
+              name="decision"
+              value="allow"
+              off={authorize ? undefined : (error ?? NOT_VALID)}
+            >
+              Allow
+            </Key>
+            <Key
+              id="deny"
+              name="decision"
+              value="deny"
+              off={authorize ? undefined : (error ?? NOT_VALID)}
+            >
+              Deny
+            </Key>
+          </Keys>
+        </Module>
+      </form>
     </Device>
   ),
   boxes: authorize && (

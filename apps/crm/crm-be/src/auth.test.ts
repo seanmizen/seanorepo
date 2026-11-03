@@ -278,7 +278,7 @@ describe('sessions and sign-out', () => {
       headers: { cookie: first },
     });
     expect(page.statusCode).toBe(200);
-    expect(page.body).toContain('This session');
+    expect(page.body).toContain('(this session)');
     expect(page.body.match(/<button[^>]*value="[0-9a-f-]{36}"/g)).toHaveLength(
       2,
     );

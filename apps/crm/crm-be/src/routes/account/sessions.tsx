@@ -16,11 +16,18 @@ interface SessionRow {
   last_seen_at: string;
 }
 
+/** Why "Everywhere else" cannot act. */
+const OTHERS_OFF = 'No other session is signed in.';
+
+/** Why this session has no Revoke. */
+const THIS_OFF = 'You use this session now. To end it, tap sign out.';
+
 /**
- * The sessions page. The device signs out every other session, and it
- * shows only when there is one. The Sessions box lists the sessions, with a
- * small revoke key for each one except this session. "sign out" in the
- * nav ends this session.
+ * The sessions page. The device signs out every other session. The
+ * Sessions box lists the sessions, with a small revoke key for each one.
+ * "sign out" in the nav ends this session. "Everywhere else" and the
+ * revoke key of this session are always in their place: a key that cannot
+ * act is off, with the reason (REQ-CRM-BUTTON-001).
  */
 export const sessionsPage = ({
   currentId,
@@ -32,61 +39,52 @@ export const sessionsPage = ({
   const others = sessions.some((session) => session.id !== currentId);
   return {
     title: 'Sessions',
-    device: others ? (
+    device: (
       <Device>
         <Module label="Sign out">
           <form method="post" action="/account/sessions">
-            <Key name="revoke" value="others">
+            <Key
+              id="revoke-others"
+              name="revoke"
+              value="others"
+              off={others ? undefined : OTHERS_OFF}
+            >
               Everywhere else
             </Key>
           </form>
         </Module>
       </Device>
-    ) : undefined,
+    ),
     boxes: (
       <Box title="Sessions">
-        {others ? (
-          <form method="post" action="/account/sessions">
-            <SessionTable currentId={currentId} sessions={sessions} />
-          </form>
-        ) : (
-          <SessionTable currentId={currentId} sessions={sessions} />
-        )}
+        <form method="post" action="/account/sessions">
+          <RecordTable
+            head={['Device', 'Signed in', 'Last seen', 'Action']}
+            rows={sessions.map((session) => ({
+              key: session.id,
+              cells: [
+                session.id === currentId
+                  ? `${session.user_agent || 'Unknown device'} (this session)`
+                  : session.user_agent || 'Unknown device',
+                <When key="signed-in" value={session.created_at} />,
+                <When key="last-seen" value={session.last_seen_at} />,
+                session.id === currentId ? (
+                  <Key key="revoke" id="revoke-this" off={THIS_OFF}>
+                    Revoke
+                  </Key>
+                ) : (
+                  <Key key="revoke" name="revoke" value={session.id}>
+                    Revoke
+                  </Key>
+                ),
+              ],
+            }))}
+          />
+        </form>
       </Box>
     ),
   };
 };
-
-/**
- * The sessions as a table, with a revoke key for each one except this
- * session. The page puts it in a form only when it has a revoke key.
- */
-const SessionTable = ({
-  currentId,
-  sessions,
-}: {
-  currentId: string;
-  sessions: SessionRow[];
-}) => (
-  <RecordTable
-    head={['Device', 'Signed in', 'Last seen', 'Action']}
-    rows={sessions.map((session) => ({
-      key: session.id,
-      cells: [
-        session.user_agent || 'Unknown device',
-        <When key="signed-in" value={session.created_at} />,
-        <When key="last-seen" value={session.last_seen_at} />,
-        session.id === currentId ? (
-          'This session'
-        ) : (
-          <Key key="revoke" name="revoke" value={session.id}>
-            Revoke
-          </Key>
-        ),
-      ],
-    }))}
-  />
-);
 
 /**
  * Revoke one session of this person, or all their sessions except this one
