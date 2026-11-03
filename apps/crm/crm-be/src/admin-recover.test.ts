@@ -62,7 +62,7 @@ describe('admin:recover', () => {
     expect(count('passkey')).toBe(0);
     // Only the session of the other person stays.
     expect(count('session')).toBe(1);
-    expect((await get('/', passkeyCookie)).statusCode).toBe(303);
+    expect((await get('/orgs', passkeyCookie)).statusCode).toBe(303);
     expect((await get('/account/sessions', other)).statusCode).toBe(200);
 
     const row = db
@@ -117,7 +117,7 @@ describe('admin:recover', () => {
       SESSION_DAYS * 24 * 60 * 60,
     );
     expect((await get('/', upgraded)).statusCode).toBe(200);
-    expect((await get('/', cookie)).statusCode).toBe(303);
+    expect((await get('/orgs', cookie)).statusCode).toBe(303);
     const { response } = await signInWithPasskey(app, key);
     expect(response.statusCode).toBe(200);
 

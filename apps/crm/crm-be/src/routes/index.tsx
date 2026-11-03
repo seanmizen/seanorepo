@@ -11,6 +11,7 @@ import {
 } from '../org';
 import { type PageParts, renderPage } from '../render';
 import { BareText } from '../ui/BareText';
+import { Box } from '../ui/Box';
 import { Device } from '../ui/Device';
 import { Key, Keys } from '../ui/Key';
 import { LatchKey } from '../ui/LatchKey';
@@ -395,15 +396,47 @@ export const listOrgs = (db: Database, query: ListQuery, date: string) => {
   return { rows, total, page };
 };
 
+/** The heading of the public home. */
+export const HOME_HEADING = 'seanmizen.com client portal';
+
+/**
+ * The public home: `/` for a signed-out visitor. It shows only the heading
+ * and two links, in words for a visitor. It reads no data.
+ */
+export const homePage = (): PageParts => ({
+  title: 'Client portal',
+  boxes: (
+    <Box title={HOME_HEADING}>
+      <ul>
+        <li>
+          <a href="/login">Sign in</a>
+        </li>
+        <li>
+          <a href="/privacy">Privacy notice</a>
+        </li>
+      </ul>
+    </Box>
+  ),
+});
+
 /**
  * `GET /` and `GET /orgs`, with
  * `?q=<text>&stage=<stage>&sort=<sort>&dir=<asc|desc>&page=<n>`. One
  * handler serves both paths, and the forms of each page submit to its own
  * path.
+ *
+ * A signed-out visitor can open `/` (`SIGNED_OUT_PATHS` in `auth.ts`), and
+ * gets the public home (`homePage`) at the same URL. The list needs the
+ * admin.
  */
 export const listRoute = (app: FastifyInstance, db: Database) => {
   for (const path of LIST_PATHS) {
     app.get(path, { config: { admin: true } }, async (request, reply) => {
+      if (!request.auth) {
+        return reply
+          .type('text/html; charset=utf-8')
+          .send(renderPage(request, homePage()));
+      }
       const date = today();
       const query = parseListQuery(request.query);
       const { rows, total, page } = listOrgs(db, query, date);

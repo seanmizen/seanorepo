@@ -101,6 +101,7 @@ describe('the dates on the pages', () => {
       '/account',
       '/account/passkeys',
       '/account/sessions',
+      '/privacy',
     ]) {
       const html = (
         await app.inject({ method: 'GET', url, headers: { cookie } })

@@ -26,8 +26,9 @@ export const PUBLIC_URL = (
   process.env.CRM_PUBLIC_URL || 'http://localhost:4100'
 ).replace(/\/+$/, '');
 
-/** The paths that a signed-out visitor can open. */
+/** The paths that everyone can open, signed in or not. */
 const PUBLIC_PATHS = new Set([
+  '/privacy',
   '/login',
   '/login/code',
   '/login/verify',
@@ -38,6 +39,14 @@ const PUBLIC_PATHS = new Set([
   '/api/passkeys/sign-in-options',
   '/api/passkeys/sign-in',
 ]);
+
+/**
+ * The paths that a signed-out visitor can open, and that have the usual
+ * checks for a signed-in person. `/` is the public home for a signed-out
+ * visitor, and the list for the admin (`routes/index.tsx`): the same URL,
+ * with no redirect.
+ */
+const SIGNED_OUT_PATHS = new Set(['/']);
 
 /** The only paths that a recovery session can open, with the public paths. */
 const RECOVERY_PATHS = new Set([
@@ -328,7 +337,8 @@ export type LoginLimits = ReturnType<typeof makeLoginLimits>;
  *    `SameSite=Lax` cookie is the first guard. This is the second.
  * 2. Finds the session from the cookie and sets `request.auth`.
  * 3. Sends a signed-out visitor to `/login?next=<path>`. The public paths and
- *    `/static/` are open to everyone.
+ *    `/static/` are open to everyone. SIGNED_OUT_PATHS are open to a
+ *    signed-out visitor, and the next steps check a signed-in person there.
  * 4. Sends a recovery session to `/account/passkeys` from each path that is
  *    not in RECOVERY_PATHS.
  * 5. On an admin route (`config: { admin: true }`), lets only the admin in a
@@ -356,13 +366,13 @@ export const registerAuth = (app: FastifyInstance, db: Database) => {
     const path = request.url.split('?')[0];
     const open = PUBLIC_PATHS.has(path) || path.startsWith('/static/');
     if (!auth) {
-      if (open) {
+      if (open || SIGNED_OUT_PATHS.has(path)) {
         done();
       } else if (path.startsWith('/api/')) {
         reply.code(401).send({ error: 'Sign in first.' });
       } else {
         const next =
-          request.method === 'GET' && request.url !== '/'
+          request.method === 'GET'
             ? `?next=${encodeURIComponent(request.url)}`
             : '';
         reply.redirect(`/login${next}`, 303);

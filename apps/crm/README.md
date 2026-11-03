@@ -56,6 +56,18 @@ each redirect, and `nextNumber` gives each new number.
   `/account/passkeys` and `/account/sessions`. In the demo, also the
   `Reset demo data` button (see [Demo](#demo)).
 
+Two pages are open to everyone:
+
+- `/` for a signed-out visitor: the public home. The heading
+  `seanmizen.com client portal`, and two links: `Sign in` and
+  `Privacy notice`. It reads no data. It is the same URL as the list,
+  with no redirect (`homePage` in `routes/index.tsx`).
+- `/privacy`: the privacy notice. All of its text is in
+  `crm-be/src/content/privacy.tsx`, as plain JSX, so a change to the
+  notice is an ordinary PR. Change `PRIVACY_UPDATED` in that file with
+  the text: the page shows it as "Last updated". The demo shows the same
+  notice, and one line that all the demo data is fictional.
+
 `GET /api/health` returns `{ "ok": true }`. The design is in
 [docs/001-guiding-design.md](docs/001-guiding-design.md).
 
@@ -150,7 +162,7 @@ the `parts` that the route gives it.
    font. A box can hold links, keys and forms. On a narrow screen, each
    table row is a block of lines.
 5. **Footer** (`ui/Footer.tsx`, text). The pager of a long list (`pager`),
-   and `top`.
+   `privacy` and `top`. Each page has it, signed in or not.
 
 The layout has one breakpoint, 960px (REQ-CRM-LAYOUT-001, in
 `crm-fe/src/theme.css`):
@@ -240,8 +252,9 @@ A session is a random cookie (`crm_session`) that lasts 90 days.
 except this session. When there is another session, its "Sign out" module
 has the key "Everywhere else", which revokes all other sessions. The nav of
 each page has "sign out" for this session. Each page except the sign-in
-pages, `/api/health` and `/favicon.ico` needs a session. A signed-out visitor goes
-to `/login?next=<path>`. `/favicon.ico` returns 204: the crm has no icon.
+pages, `/privacy`, `/api/health` and `/favicon.ico` needs a session. `/` is
+open to a signed-out visitor, and shows the public home. A signed-out
+visitor of each other page goes to `/login?next=<path>`. `/favicon.ico` returns 204: the crm has no icon.
 
 ## Passkeys and the admin
 
