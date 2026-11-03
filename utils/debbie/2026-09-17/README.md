@@ -134,7 +134,7 @@ Roles set what a target machine does. Set them in
 | none | tracks `release` and is reachable over ngrok | — | any |
 | `ROLE_WEBSERVER=yes` | also runs the sites | the LAN | any |
 | `ROLE_WEBSERVER=yes` and `ROLE_TUNNEL=yes` | also runs the Cloudflare tunnel | loopback only | exactly one |
-| `ROLE_VPN=yes` (with any other roles) | also routes the LAN for the owner's Tailscale devices | — | one |
+| `ROLE_VPN=yes` (with any other roles) | also routes the LAN for the owner's Tailscale devices | — | one or more (failover) |
 
 asus has all three roles. The tunnel needs the webserver role on the same
 machine. The VPN needs no other role. A LAN webserver keeps
@@ -408,6 +408,15 @@ does not cross a router. Use the LAN address, or the host's tailnet name.
 Install the Tailscale app and sign in with the tailnet owner's login. A phone
 uses the LAN route with no setting. On a laptop that is on the LAN itself,
 leave **Use Tailscale subnets** off at home.
+
+#### More than one VPN machine
+
+Any machine can have `ROLE_VPN=yes`, and more than one can at the same time.
+Set up each one with the steps above. Each one advertises the same LAN subnet.
+Tailscale sends all traffic through the router that joined the tailnet first.
+When that router is out of contact for more than 15 seconds, traffic moves to
+another one. You cannot choose the primary. So a second VPN machine keeps the
+LAN reachable when the first one is down. asus is the primary.
 
 #### Move the role to another machine
 

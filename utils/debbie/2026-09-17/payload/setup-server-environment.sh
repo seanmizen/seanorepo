@@ -66,7 +66,8 @@ fi
 #                   public one must have a single writer.
 #   ROLE_VPN        runs Tailscale (tailscaled.service) as a subnet router for
 #                   the LAN - REQ-NETWORK-006. Opens no port. Needs no other
-#                   role. One machine: one router for one LAN.
+#                   role. More than one machine can have it: the first to join
+#                   the tailnet is primary, and the others are failover.
 #
 # This script checks the settings here, before it installs anything, so a typo
 # fails the run and does not leave a half-provisioned machine.
