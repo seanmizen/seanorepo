@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { after, test } from 'node:test';
 import {
+  areaOf,
   collectCitations,
   evidencePath,
   evidenceProblem,
@@ -35,6 +36,7 @@ const file = (path, text = '') => {
 file('requirements/platform.md');
 file('apps/web/requirements/nav.md');
 file('apps/web/src/nav.ts', '// see REQ-NAV-001\n');
+file('apps/crm/src/page.tsx', '// see REQ-CRM-BARE-001\n');
 file('apps/web/node_modules/dep/requirements/dep.md');
 file('utils/debbie/2026-09-17/requirements/server.md');
 file('utils/debbie/2026-09-17/payload/assert.sh', '# REQ-SERVER-001\n');
@@ -61,6 +63,7 @@ test('skips archive/ and node_modules/ when discovering requirements', () => {
 test('skips archive/ when collecting citations', () => {
   const cited = collectCitations(root).map((c) => `${c.file} ${c.id}`);
   assert.deepEqual(cited.sort(), [
+    'apps/crm/src/page.tsx REQ-CRM-BARE-001',
     'apps/web/src/nav.ts REQ-NAV-001',
     'utils/debbie/2026-09-17/payload/assert.sh REQ-SERVER-001',
   ]);
@@ -121,4 +124,9 @@ test('an Inspection cites its first backticked repo path', () => {
     evidencePath('Inspection', 'Inspection — `/usr/local/lib` holds units'),
     undefined,
   );
+});
+
+test('the area of an ID is the word before the number', () => {
+  assert.equal(areaOf('REQ-NAV-014'), 'NAV');
+  assert.equal(areaOf('REQ-CRM-BARE-001'), 'BARE');
 });

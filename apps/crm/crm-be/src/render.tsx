@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { FastifyRequest } from 'fastify';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Page } from './ui/Page';
 
 /** crm-fe builds here. index.ts serves `dist/static` at `/static/`. */
 export const FE_DIST = path.join(import.meta.dir, '..', '..', 'crm-fe', 'dist');
@@ -29,19 +31,39 @@ const readAssets = () => {
   return { js, css };
 };
 
+/** The themes. `bare` is the page with no page styles and no scripts. */
+export type Theme = 'pixel-3' | 'bare';
+
 /**
- * Render one page to a full HTML document: the doctype, the `<head>` with the
- * asset tags from the Rsbuild manifest, and `children` in the `<body>`.
+ * The theme of a request: `bare` when the URL has `?theme=bare`, otherwise
+ * `pixel-3`. A person uses `?theme=bare` to see a page as raw HTML
+ * (REQ-CRM-BARE-001).
  */
-export const renderPage = (title: string, children: ReactNode): string => {
-  const { js, css } = readAssets();
+export const themeOf = (request: FastifyRequest): Theme =>
+  (request.query as { theme?: unknown } | undefined)?.theme === 'bare'
+    ? 'bare'
+    : 'pixel-3';
+
+/**
+ * Render one page to a full HTML document: the doctype, the `<head>`, and
+ * `children` in the panel layout (`ui/Page.tsx`) with `title` on the plate.
+ * The `<head>` has the asset tags from the Rsbuild manifest. With
+ * `?theme=bare` it has no asset tags.
+ */
+export const renderPage = (
+  title: string,
+  children: ReactNode,
+  request: FastifyRequest,
+): string => {
+  const { js, css } =
+    themeOf(request) === 'bare' ? { js: [], css: [] } : readAssets();
   return `<!doctype html>${renderToStaticMarkup(
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="light dark" />
-        <title>{title}</title>
+        <title>{`${title} - crm`}</title>
         {css.map((href) => (
           <link key={href} rel="stylesheet" href={href} />
         ))}
@@ -49,7 +71,9 @@ export const renderPage = (title: string, children: ReactNode): string => {
           <script key={src} src={src} defer />
         ))}
       </head>
-      <body>{children}</body>
+      <body>
+        <Page title={title}>{children}</Page>
+      </body>
     </html>,
   )}`;
 };

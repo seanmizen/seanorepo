@@ -21,21 +21,32 @@ yarn workspace crm-be test
   `/static/`, all on port 4100.
 - `crm-be/src/routes/` holds one file for each URL. Each file holds the
   Fastify route and its page component. `crm-be/src/index.ts` registers them.
-- `crm-be/src/render.tsx` holds `renderPage()`. It adds the doctype, the
-  `<head>`, and the asset tags from `crm-fe/dist/manifest.json`.
-- `crm-fe` holds only what the browser runs: `src/main.css` and `src/main.ts`.
-  It has no React. Rsbuild builds them to `crm-fe/dist` with hashed names and
-  a manifest.
+- `crm-be/src/render.tsx` holds `renderPage(title, children, request)`. It
+  adds the doctype, the `<head>`, the asset tags from
+  `crm-fe/dist/manifest.json`, and the panel layout (`ui/Page.tsx`).
+- `crm-be/src/ui/` holds the parts of the panel that pages share: `Panel`,
+  `Key`, `Led`, `Field` and `Label`.
+- `crm-fe` holds only what the browser runs: `src/theme.css` and
+  `src/main.ts`. It has no React. Rsbuild builds them to `crm-fe/dist` with
+  hashed names and a manifest.
 - `shared` holds the API types.
 
 `yarn workspace crm start` builds crm-fe once. Then Rsbuild builds crm-fe in
 watch mode and Bun runs crm-be in watch mode. `yarn workspace crm-be test`
 also builds crm-fe first, because the test of `/` reads the manifest.
 
+## Theme
+
+`crm-fe/src/theme.css` is the Pixel-3 theme of autosam: an instrument panel
+with silkscreen labels, raised keys, LEDs and one red signal color. Dark mode
+follows `prefers-color-scheme`. Add `?theme=bare` to a URL to see the page
+with no page styles and no scripts.
+
 ## Page rules
 
 - The browser runs no React.
-- Every page works as raw HTML, with no CSS and no JavaScript.
+- Every page works as raw HTML, with no CSS and no JavaScript
+  (REQ-CRM-BARE-001).
 - Biome fails on `dangerouslySetInnerHTML` under `apps/crm` (see the
   `overrides` in the root `biome.json`).
 
