@@ -1,9 +1,13 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
-import { type Auth, audit } from '../../auth';
-import { renderPage } from '../../render';
-import { Key } from '../../ui/Key';
-import { Panel } from '../../ui/Panel';
+import { type Auth, audit, now } from '../../auth';
+import { type PageParts, renderPage } from '../../render';
+import { Device } from '../../ui/Device';
+import { Key, Keys } from '../../ui/Key';
+import { Lcd } from '../../ui/Lcd';
+import { Module } from '../../ui/Module';
+import { Records, RecordTable } from '../../ui/Records';
+import { When } from '../../ui/When';
 
 interface SessionRow {
   id: string;
@@ -12,8 +16,12 @@ interface SessionRow {
   last_seen_at: string;
 }
 
-/** The sessions list. Each row has a revoke button, except this session. */
-export const SessionsPage = ({
+/**
+ * The sessions page. The LCD shows the person and the count. The device
+ * has the two sign-out keys. The records list the sessions, with a revoke
+ * key for each one except this session.
+ */
+export const sessionsPage = ({
   email,
   currentId,
   sessions,
@@ -21,59 +29,72 @@ export const SessionsPage = ({
   email: string;
   currentId: string;
   sessions: SessionRow[];
+}): PageParts => ({
+  title: 'Sessions',
+  device: (
+    <Device>
+      <Lcd
+        rows={[
+          { label: 'Person', value: email },
+          { label: 'Sessions', value: String(sessions.length) },
+        ]}
+      />
+      <Module label="Sign out">
+        <Keys>
+          <form method="post" action="/account/sessions">
+            <Key name="revoke" value="others">
+              Everywhere else
+            </Key>
+          </form>
+          <form method="post" action="/logout">
+            <Key>This device</Key>
+          </form>
+        </Keys>
+      </Module>
+    </Device>
+  ),
+  records: (
+    <Records title="Sessions">
+      {sessions.some((session) => session.id !== currentId) ? (
+        <form method="post" action="/account/sessions">
+          <SessionTable currentId={currentId} sessions={sessions} />
+        </form>
+      ) : (
+        <SessionTable currentId={currentId} sessions={sessions} />
+      )}
+    </Records>
+  ),
+});
+
+/**
+ * The sessions as a table, with a revoke key for each one except this
+ * session. The page puts it in a form only when it has a revoke key.
+ */
+const SessionTable = ({
+  currentId,
+  sessions,
+}: {
+  currentId: string;
+  sessions: SessionRow[];
 }) => (
-  <Panel label="Sessions">
-    <p>Signed in as {email}.</p>
-    <form method="post" action="/account/sessions">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Device</th>
-            <th scope="col">Signed in</th>
-            <th scope="col">Last seen</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sessions.map((session) => (
-            <tr key={session.id}>
-              <td>{session.user_agent || 'Unknown device'}</td>
-              <td>
-                <time dateTime={session.created_at}>{session.created_at}</time>
-              </td>
-              <td>
-                <time dateTime={session.last_seen_at}>
-                  {session.last_seen_at}
-                </time>
-              </td>
-              <td>
-                {session.id === currentId ? (
-                  'This session'
-                ) : (
-                  <Key name="revoke" value={session.id}>
-                    Revoke
-                  </Key>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p>
-        <Key name="revoke" value="others">
-          Sign out everywhere else
-        </Key>
-      </p>
-    </form>
-    <form method="post" action="/logout">
-      <p>
-        <Key>Sign out</Key>
-      </p>
-    </form>
-    <p>
-      <a href="/account/passkeys">Passkeys</a>
-    </p>
-  </Panel>
+  <RecordTable
+    head={['Device', 'Signed in', 'Last seen', 'Action']}
+    rows={sessions.map((session) => ({
+      key: session.id,
+      cells: [
+        session.user_agent || 'Unknown device',
+        <When key="signed-in" value={session.created_at} />,
+        <When key="last-seen" value={session.last_seen_at} />,
+        session.id === currentId ? (
+          'This session'
+        ) : (
+          <Key key="revoke" name="revoke" value={session.id}>
+            Revoke
+          </Key>
+        ),
+      ],
+    }))}
+  />
 );
 
 /**
@@ -109,20 +130,17 @@ export const accountSessionsRoute = (app: FastifyInstance, db: Database) => {
         `SELECT id, user_agent, created_at, last_seen_at FROM session
          WHERE person_id = ? AND expires_at > ? ORDER BY last_seen_at DESC;`,
       )
-      .all(auth.personId, new Date().toISOString());
-    return reply
-      .type('text/html; charset=utf-8')
-      .send(
-        renderPage(
-          'Sessions',
-          <SessionsPage
-            email={auth.email}
-            currentId={auth.sessionId}
-            sessions={sessions}
-          />,
-          request,
-        ),
-      );
+      .all(auth.personId, now());
+    return reply.type('text/html; charset=utf-8').send(
+      renderPage(
+        request,
+        sessionsPage({
+          email: auth.email,
+          currentId: auth.sessionId,
+          sessions,
+        }),
+      ),
+    );
   });
 
   app.post<{ Body: { revoke?: string } }>(

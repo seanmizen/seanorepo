@@ -9,10 +9,12 @@ import {
   safeNext,
   startSession,
 } from '../../auth';
-import { renderPage } from '../../render';
+import { type PageParts, renderPage } from '../../render';
+import { Device } from '../../ui/Device';
 import { Field } from '../../ui/Field';
 import { Key } from '../../ui/Key';
-import { Panel } from '../../ui/Panel';
+import { Lcd } from '../../ui/Lcd';
+import { Module } from '../../ui/Module';
 
 interface CodeBody {
   email?: string;
@@ -21,10 +23,11 @@ interface CodeBody {
 }
 
 /**
- * The page after the email form. It says that an email went out, and it has
- * the code form. The text is the same for a known and an unknown email.
+ * The page after the email form. The intro says that an email went out, and
+ * the device has the code form. The text is the same for a known and an
+ * unknown email.
  */
-export const CodePage = ({
+export const codePage = ({
   email,
   next,
   error,
@@ -32,47 +35,48 @@ export const CodePage = ({
   email: string;
   next: string;
   error?: string;
-}) => (
-  <Panel label="Code">
-    <p>
-      If {email || 'this email address'} has an account, we sent it a sign-in
-      link and a 6-digit code. They work for {LOGIN_TOKEN_MINUTES} minutes.
-    </p>
-    {error && <p role="alert">{error}</p>}
-    <form method="post" action="/login/code">
-      <input type="hidden" name="next" value={next} />
+}): PageParts => ({
+  title: 'Check your email',
+  intro: `If ${email || 'this email address'} has an account, we sent it a sign-in link and a 6-digit code.`,
+  device: (
+    <Device>
+      <Lcd alert={error} />
+      <Module label="Code">
+        <form method="post" action="/login/code">
+          <input type="hidden" name="next" value={next} />
+          <Field label="Email address">
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              defaultValue={email}
+            />
+          </Field>
+          <Field label="6-digit code">
+            <input
+              name="code"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              autoComplete="one-time-code"
+              required
+            />
+          </Field>
+          <Key>Sign in</Key>
+        </form>
+      </Module>
+    </Device>
+  ),
+  help: (
+    <>
+      <p>The link and the code work for {LOGIN_TOKEN_MINUTES} minutes.</p>
       <p>
-        <Field label="Email address">
-          <input
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            defaultValue={email}
-          />
-        </Field>
+        <a href={`/login?${new URLSearchParams({ next })}`}>Send a new email</a>
       </p>
-      <p>
-        <Field label="6-digit code">
-          <input
-            name="code"
-            inputMode="numeric"
-            pattern="[0-9]{6}"
-            maxLength={6}
-            autoComplete="one-time-code"
-            required
-          />
-        </Field>
-      </p>
-      <p>
-        <Key>Sign in</Key>
-      </p>
-    </form>
-    <p>
-      <a href={`/login?${new URLSearchParams({ next })}`}>Send a new email</a>
-    </p>
-  </Panel>
-);
+    </>
+  ),
+});
 
 /**
  * Spend the login token that has this email and code. Returns the person id,
@@ -103,18 +107,15 @@ export const loginCodeRoute = (
   limits: LoginLimits,
 ) => {
   app.get<{ Querystring: CodeBody }>('/login/code', async (request, reply) =>
-    reply
-      .type('text/html; charset=utf-8')
-      .send(
-        renderPage(
-          'Check your email',
-          <CodePage
-            email={normalizeEmail(request.query.email)}
-            next={safeNext(request.query.next)}
-          />,
-          request,
-        ),
+    reply.type('text/html; charset=utf-8').send(
+      renderPage(
+        request,
+        codePage({
+          email: normalizeEmail(request.query.email),
+          next: safeNext(request.query.next),
+        }),
       ),
+    ),
   );
 
   app.post<{ Body: CodeBody }>('/login/code', async (request, reply) => {
@@ -125,13 +126,7 @@ export const loginCodeRoute = (
       reply
         .code(status)
         .type('text/html; charset=utf-8')
-        .send(
-          renderPage(
-            'Check your email',
-            <CodePage email={email} next={next} error={error} />,
-            request,
-          ),
-        );
+        .send(renderPage(request, codePage({ email, next, error })));
 
     if (!limits('code', email, request.ip)) {
       return fail(

@@ -2,10 +2,12 @@ import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { type Auth, audit, normalizeEmail } from '../../auth';
 import { formText, makeSlug } from '../../org';
-import { renderPage } from '../../render';
+import { type PageParts, renderPage } from '../../render';
+import { Device } from '../../ui/Device';
 import { Field } from '../../ui/Field';
 import { Key } from '../../ui/Key';
-import { Panel } from '../../ui/Panel';
+import { Lcd } from '../../ui/Lcd';
+import { Module } from '../../ui/Module';
 
 /** The fields of the new-lead form. */
 const FIELDS = [
@@ -22,84 +24,92 @@ const FIELDS = [
 type NewOrgBody = Partial<Record<(typeof FIELDS)[number], string>>;
 
 /**
- * The new-lead form. On an error it shows the message and keeps the values
- * that the person typed.
+ * The new-lead page. The device is the form: a module for the
+ * organisation, the address and the contact, then the key that adds the
+ * lead. On an error, the LCD shows the message, and the form keeps the
+ * values that the person typed.
  */
-export const NewOrgPage = ({
+export const newOrgPage = ({
   values = {},
   error,
 }: {
   values?: NewOrgBody;
   error?: string;
-}) => (
-  <Panel label="New lead">
-    {error && <p role="alert">{error}</p>}
-    <form method="post" action="/orgs/new">
-      <fieldset>
-        <legend>Organisation</legend>
-        <Field label="Name">
-          <input name="name" required defaultValue={values.name} />
-        </Field>
-        <Field label="Address line 1">
-          <input
-            name="address_line_1"
-            autoComplete="address-line1"
-            defaultValue={values.address_line_1}
-          />
-        </Field>
-        <Field label="Address line 2">
-          <input
-            name="address_line_2"
-            autoComplete="address-line2"
-            defaultValue={values.address_line_2}
-          />
-        </Field>
-        <Field label="Postcode">
-          <input
-            name="postcode"
-            autoComplete="postal-code"
-            autoCapitalize="characters"
-            defaultValue={values.postcode}
-          />
-        </Field>
-        <Field label="Source">
-          <input
-            name="source"
-            placeholder="door, referral, web"
-            defaultValue={values.source}
-          />
-        </Field>
-      </fieldset>
-      <fieldset>
-        <legend>Contact</legend>
-        <Field label="Contact name">
-          <input
-            name="contact_name"
-            autoComplete="off"
-            defaultValue={values.contact_name}
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            name="phone"
-            type="tel"
-            autoComplete="off"
-            defaultValue={values.phone}
-          />
-        </Field>
-        <Field label="Email">
-          <input
-            name="email"
-            type="email"
-            autoComplete="off"
-            defaultValue={values.email}
-          />
-        </Field>
-      </fieldset>
-      <Key>Add lead</Key>
-    </form>
-  </Panel>
-);
+} = {}): PageParts => ({
+  title: 'New lead',
+  intro: 'Add an organisation and its contact, at the stage Lead.',
+  device: (
+    <Device>
+      <Lcd alert={error} />
+      <form method="post" action="/orgs/new">
+        <Module label="Organisation">
+          <Field label="Name">
+            <input name="name" required defaultValue={values.name} />
+          </Field>
+          <Field label="Source">
+            <input
+              name="source"
+              placeholder="door, referral, web"
+              defaultValue={values.source}
+            />
+          </Field>
+        </Module>
+        <Module label="Address">
+          <Field label="Address line 1">
+            <input
+              name="address_line_1"
+              autoComplete="address-line1"
+              defaultValue={values.address_line_1}
+            />
+          </Field>
+          <Field label="Address line 2">
+            <input
+              name="address_line_2"
+              autoComplete="address-line2"
+              defaultValue={values.address_line_2}
+            />
+          </Field>
+          <Field label="Postcode">
+            <input
+              name="postcode"
+              autoComplete="postal-code"
+              autoCapitalize="characters"
+              defaultValue={values.postcode}
+            />
+          </Field>
+        </Module>
+        <Module label="Contact">
+          <Field label="Contact name">
+            <input
+              name="contact_name"
+              autoComplete="off"
+              defaultValue={values.contact_name}
+            />
+          </Field>
+          <Field label="Phone">
+            <input
+              name="phone"
+              type="tel"
+              autoComplete="off"
+              defaultValue={values.phone}
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              name="email"
+              type="email"
+              autoComplete="off"
+              defaultValue={values.email}
+            />
+          </Field>
+        </Module>
+        <Module label="Save">
+          <Key>Add lead</Key>
+        </Module>
+      </form>
+    </Device>
+  ),
+});
 
 /**
  * Add the organisation, its contact (a `person`) and the owner `membership`,
@@ -163,7 +173,7 @@ export const orgsNewRoute = (app: FastifyInstance, db: Database) => {
   app.get('/orgs/new', { config: { admin: true } }, async (request, reply) =>
     reply
       .type('text/html; charset=utf-8')
-      .send(renderPage('New lead', <NewOrgPage />, request)),
+      .send(renderPage(request, newOrgPage())),
   );
 
   app.post<{ Body: NewOrgBody }>(
@@ -181,13 +191,7 @@ export const orgsNewRoute = (app: FastifyInstance, db: Database) => {
         return reply
           .code(400)
           .type('text/html; charset=utf-8')
-          .send(
-            renderPage(
-              'New lead',
-              <NewOrgPage values={values} error={error} />,
-              request,
-            ),
-          );
+          .send(renderPage(request, newOrgPage({ values, error })));
       }
       const slug = addOrg(db, (request.auth as Auth).personId, values);
       return reply.redirect(`/${slug}`, 303);

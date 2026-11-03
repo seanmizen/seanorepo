@@ -149,7 +149,7 @@ describe('POST /orgs/new', () => {
       url: '/orgs',
       headers: { cookie },
     });
-    expect(list.body).toContain('<h1>Organisations</h1>');
+    expect(list.body).toContain('<title>Organisations - crm</title>');
   });
 
   test('with no name, shows the form again with the error and the values, and adds nothing', async () => {

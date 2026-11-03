@@ -9,10 +9,15 @@ import {
   type SessionMethod,
 } from '../../auth';
 import { canChangePasskeys } from '../../passkeys';
-import { renderPage } from '../../render';
+import { type PageParts, renderPage } from '../../render';
+import { Device } from '../../ui/Device';
 import { Key } from '../../ui/Key';
-import { Panel } from '../../ui/Panel';
+import { Lcd } from '../../ui/Lcd';
+import { Module } from '../../ui/Module';
 import { AddPasskey } from '../../ui/Passkey';
+import { Records, RecordTable } from '../../ui/Records';
+import { When } from '../../ui/When';
+import { SESSION_TEXT } from '../account';
 
 interface PasskeyRow {
   id: string;
@@ -21,13 +26,10 @@ interface PasskeyRow {
   last_used_at: string | null;
 }
 
-const METHOD_TEXT: Record<SessionMethod, string> = {
-  email: 'an email link or code',
-  passkey: 'a passkey',
-  recovery: 'an enrolment link',
-};
-
-/** One line that tells this session what it can do on this page. */
+/**
+ * One line under the device that tells this session what it can do on
+ * this page.
+ */
 const Notice = ({
   method,
   admin,
@@ -63,11 +65,13 @@ const Notice = ({
 };
 
 /**
- * The passkeys page: the list (name, added, last used), a delete button for
- * each one, and the form that adds a passkey. The add form needs JavaScript
- * (WebAuthn). With no JavaScript the page says so (REQ-CRM-BARE-001).
+ * The passkeys page. The LCD shows the person, the session and the count.
+ * The device adds a passkey. The records list the passkeys (name, added,
+ * last used), with a delete key for each one. The add form needs
+ * JavaScript (WebAuthn). With no JavaScript the module says so
+ * (REQ-CRM-BARE-001).
  */
-export const PasskeysPage = ({
+export const passkeysPage = ({
   email,
   method,
   admin,
@@ -83,76 +87,67 @@ export const PasskeysPage = ({
   canChange: boolean;
   passkeys: PasskeyRow[];
   error?: string;
-}) => (
-  <>
-    <Panel label="Passkeys">
-      <p>
-        Signed in as {email}. This session started with {METHOD_TEXT[method]}.
-      </p>
-      <Notice
-        method={method}
-        admin={admin}
-        firstPasskey={firstPasskey}
-        canChange={canChange}
+}): PageParts => ({
+  title: 'Passkeys',
+  device: (
+    <Device>
+      <Lcd
+        alert={error}
+        rows={[
+          { label: 'Person', value: email },
+          { label: 'Session', value: SESSION_TEXT[method] },
+          { label: 'Passkeys', value: String(passkeys.length) },
+        ]}
       />
-      {error && <p role="alert">{error}</p>}
+      {canChange && (
+        <Module label="Add a passkey">
+          <AddPasskey next="/account/passkeys" />
+        </Module>
+      )}
+    </Device>
+  ),
+  help: (
+    <Notice
+      method={method}
+      admin={admin}
+      firstPasskey={firstPasskey}
+      canChange={canChange}
+    />
+  ),
+  records: (
+    <Records title="Passkeys">
       {passkeys.length === 0 ? (
         <p>You have no passkeys.</p>
       ) : (
         <form method="post" action="/account/passkeys">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Added</th>
-                <th scope="col">Last used</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {passkeys.map((passkey) => (
-                <tr key={passkey.id}>
-                  <td>{passkey.name}</td>
-                  <td>
-                    <time dateTime={passkey.created_at}>
-                      {passkey.created_at}
-                    </time>
-                  </td>
-                  <td>
-                    {passkey.last_used_at ? (
-                      <time dateTime={passkey.last_used_at}>
-                        {passkey.last_used_at}
-                      </time>
-                    ) : (
-                      'Never'
-                    )}
-                  </td>
-                  <td>
-                    {canChange ? (
-                      <Key name="delete" value={passkey.id}>
-                        Delete
-                      </Key>
-                    ) : (
-                      'Sign in with a passkey to delete'
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <RecordTable
+            head={['Name', 'Added', 'Last used', 'Action']}
+            rows={passkeys.map((passkey) => ({
+              key: passkey.id,
+              cells: [
+                passkey.name,
+                <When key="added" value={passkey.created_at} />,
+                passkey.last_used_at ? (
+                  <When key="used" value={passkey.last_used_at} />
+                ) : (
+                  'Never'
+                ),
+                canChange ? (
+                  <Key key="delete" name="delete" value={passkey.id}>
+                    Delete
+                  </Key>
+                ) : (
+                  'Sign in with a passkey to delete'
+                ),
+              ],
+            }))}
+          />
         </form>
       )}
-    </Panel>
-    {canChange && (
-      <Panel label="Add a passkey">
-        <AddPasskey next="/account/passkeys" />
-      </Panel>
-    )}
-    <p>
-      <a href="/account/sessions">Sessions</a>
-    </p>
-  </>
-);
+    </Records>
+  ),
+  entries: ['passkeys'],
+});
 
 /** Render the page for this session, with `error` if there is one. */
 const sendPage = (
@@ -168,24 +163,20 @@ const sendPage = (
        WHERE person_id = ? ORDER BY created_at, rowid;`,
     )
     .all(auth.personId);
-  return reply
-    .type('text/html; charset=utf-8')
-    .send(
-      renderPage(
-        'Passkeys',
-        <PasskeysPage
-          email={auth.email}
-          method={auth.method}
-          admin={isAdmin(auth)}
-          firstPasskey={!hasPasskey(db, auth.personId)}
-          canChange={canChangePasskeys(db, auth)}
-          passkeys={passkeys}
-          error={error}
-        />,
-        request,
-        ['passkeys'],
-      ),
-    );
+  return reply.type('text/html; charset=utf-8').send(
+    renderPage(
+      request,
+      passkeysPage({
+        email: auth.email,
+        method: auth.method,
+        admin: isAdmin(auth),
+        firstPasskey: !hasPasskey(db, auth.personId),
+        canChange: canChangePasskeys(db, auth),
+        passkeys,
+        error,
+      }),
+    ),
+  );
 };
 
 /**
