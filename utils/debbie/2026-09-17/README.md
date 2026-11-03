@@ -136,6 +136,18 @@ The tunnel needs the webserver role on the same machine. A LAN webserver keeps
 its own data, separate from the public machine's. To see a machine's roles:
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
+## Wifi
+
+Name the wifi networks a machine joins in `scripts/3-provision/<machine>.env`,
+as numbered pairs `WIFI_1_SSID`/`WIFI_1_PASS` up to 4. `provision.sh` installs
+them, so a machine installed over ethernet gets wifi too, and a machine can
+hold more than one network. The machine stores each password as a hashed PSK,
+never in plaintext. An unset slot changes no wifi (REQ-SERVER-017).
+
+A machine the installer configured over wifi keeps that single-network stanza
+in `/etc/network/interfaces`, and these keys do not change it. Clear that
+stanza first if you want provisioning to own the wifi on such a machine.
+
 ### Move the tunnel from machine A to machine B
 
 A runs the sites and the tunnel. B has whatever roles you gave it. This moves

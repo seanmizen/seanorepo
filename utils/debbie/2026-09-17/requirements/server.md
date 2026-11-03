@@ -648,3 +648,51 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Relations:**
   - depends-on REQ-SERVER-002
   - depends-on REQ-SERVER-014
+
+
+## REQ-SERVER-017 — The host joins the wifi networks named in provisioning
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1003
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** The host shall associate with each wifi network named in the
+  provision env file, with each network's password stored as a hashed PSK.
+- **Rationale:** The installer keeps wifi only for the interface it installed
+  over, and only as a single-network stanza (REQ-SERVER-005). A box installed
+  over ethernet keeps no wifi at all, so the failover watchdog has no wireless
+  link to promote, and a wifi move needs a physical visit.
+
+  So provisioning takes the networks instead. `setup-server-environment.sh`
+  reads numbered `WIFI_n_SSID`/`WIFI_n_PASS` pairs from the env file, installs
+  `wpasupplicant`, writes `/etc/wpa_supplicant/wpa_supplicant.conf` with a
+  hashed PSK per network, and points the wireless `interfaces.d` stanza at that
+  file with `wpa-conf`. This is ifupdown, so it agrees with the failover
+  watchdog, which uses `ip` only. It is not NetworkManager, so it avoids the
+  trap REQ-SERVER-005 records.
+
+  The step holds more than one network, so a box can join both the home wifi
+  and a phone hotspot. It is idempotent: the file is rewritten in full on every
+  run, and the hash is a deterministic function of SSID and password, so a
+  re-run with the same inputs leaves identical bytes.
+
+  Unset changes nothing (REQ-SERVER-014). A box with no `WIFI_n_SSID` keeps the
+  addressing it has, carries no `wpasupplicant`, and gets no wifi file. The
+  password is never stored in plaintext on the machine. The env file on the
+  operator's computer holds the plaintext, as the build step's `WIFI_PASS`
+  does, and that file is gitignored.
+
+  This owns the wireless stanza only where the installer did not write one. On
+  a box the installer configured over wifi, the single-network stanza stays and
+  this file is not used. REQ-SERVER-005 covers that box.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wifi config persisted"
+    accepts the `wpa_supplicant.conf` form, and still skips on a host with no
+    wireless interface
+  - Demonstration — `./provision.sh <machine>` with one or more networks named,
+    and the machine associates over `wlan0` after the reboot. The VM matrix
+    cannot cover this: QEMU has no 802.11 device the installer would drive
+- **Relations:**
+  - refines REQ-SERVER-005
+  - depends-on REQ-SERVER-014

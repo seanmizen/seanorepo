@@ -1534,10 +1534,12 @@ fi
 echo "== network =="
 if [ -n "$(ls -d /sys/class/net/*/wireless 2> /dev/null)" ]; then
     # netcfg persists wifi as an ifupdown stanza plus wpasupplicant in the
-    # target. The check also accepts a NetworkManager profile, for the setup
-    # that REQ-NETWORK-004 proposes.
+    # target (REQ-SERVER-005). Provisioning persists it as a wpa_supplicant.conf
+    # with hashed PSKs (REQ-SERVER-017). The check also accepts a NetworkManager
+    # profile, for the setup that REQ-NETWORK-004 proposes.
     check "wifi config persisted" \
         'sudo -n grep -rqs "wpa-ssid\|wpa-psk" /etc/network/interfaces /etc/network/interfaces.d/ \
+         || sudo -n grep -qs "^[[:space:]]*psk=" /etc/wpa_supplicant/wpa_supplicant.conf \
          || sudo -n grep -rqs "^ssid=\|wifi.ssid" /etc/NetworkManager/system-connections/'
     # No `exit` in here either, subshell or not: a loop that sets a flag says
     # what it means, and cannot be broken by a later change to how check() runs.

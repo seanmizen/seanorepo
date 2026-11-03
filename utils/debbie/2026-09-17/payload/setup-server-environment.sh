@@ -1308,6 +1308,71 @@ fi
 # and veths do not. The watchdog uses the same test: one rule, not two lists of
 # name prefixes that drift apart.
 #------------------------------------------------------------------------------
+# Wifi networks from provisioning - REQ-SERVER-017.
+#
+# The installer keeps wifi only for the interface it installed over, and only
+# as a single-network ifupdown stanza (REQ-SERVER-005). A box installed over
+# ethernet keeps no wifi at all. This section takes the networks from the
+# provision env file instead, so a box joins them whatever it installed over,
+# so the set is idempotent, and so a box can hold more than one network.
+#
+# UNSET CHANGES NOTHING - REQ-SERVER-014. With no WIFI_1_SSID set, this writes
+# no file, installs no package, and the loop below adds no wpa-conf line. The
+# box keeps the addressing it has.
+#
+# The password is stored as a hashed PSK, never in plaintext. wpa_passphrase
+# derives the hash. The commented plaintext line it also prints is removed. The
+# env file on the operator's computer still holds the plaintext, as the build
+# step's WIFI_PASS does, and that file is gitignored.
+#
+# The whole file is written on every run. A re-run with the same inputs leaves
+# identical bytes, because the hash is a deterministic function of SSID and
+# password. The loop below points the wireless stanza at this file with
+# wpa-conf. The reboot at the end of provisioning associates it.
+#
+# This takes ownership of the wireless stanza only where the installer did not
+# write one. On a box the installer configured over wifi, the single-network
+# stanza in /etc/network/interfaces stays, and the loop leaves that interface
+# alone, so this file is not used there.
+#------------------------------------------------------------------------------
+WPA_CONF=""
+wifi_declared=no
+for i in 1 2 3 4; do
+    sv="WIFI_${i}_SSID"
+    [ -z "${!sv:-}" ] || wifi_declared=yes
+done
+
+if [ "$wifi_declared" = yes ]; then
+    log "wifi networks from provisioning"
+    # wpa_passphrase and the ifupdown wpa-conf hook both come from this package.
+    # Installed only when a network is declared, so a box with no wifi does not
+    # carry it (REQ-SERVER-014).
+    apt-get install -y wpasupplicant
+    install -d -m 0755 /etc/wpa_supplicant
+    WPA_CONF=/etc/wpa_supplicant/wpa_supplicant.conf
+
+    wifi_tmp="$(mktemp)"
+    {
+        echo "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-SERVER-017"
+        echo "ctrl_interface=DIR=/run/wpa_supplicant GROUP=netdev"
+        echo "update_config=1"
+        for i in 1 2 3 4; do
+            sv="WIFI_${i}_SSID"
+            pv="WIFI_${i}_PASS"
+            [ -n "${!sv:-}" ] || continue
+            [ -n "${!pv:-}" ] || die "WIFI_${i}_SSID is set, WIFI_${i}_PASS is empty. An open network is not supported."
+            # wpa_passphrase prints the hashed PSK and a commented plaintext
+            # line. grep -v removes the plaintext. pipefail makes a rejected
+            # password (not 8 to 63 characters) fail the run here, not later.
+            wpa_passphrase "${!sv}" "${!pv}" | grep -v '^[[:space:]]*#psk=' \
+                || die "wpa_passphrase rejected WIFI_${i}. A WPA2 password is 8 to 63 characters."
+        done
+    } > "$wifi_tmp"
+    install -m 0600 -o root -g root "$wifi_tmp" "$WPA_CONF"
+    rm -f "$wifi_tmp"
+fi
+
+#------------------------------------------------------------------------------
 log "addressing every physical interface"
 
 install -d -m 0755 /etc/network/interfaces.d
@@ -1329,6 +1394,11 @@ for net_path in /sys/class/net/*; do
         echo "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-003"
         echo "allow-hotplug $net_if"
         echo "iface $net_if inet dhcp"
+        # A wireless interface gets the provisioned networks (REQ-SERVER-017).
+        # A real wifi device has a /sys wireless directory; ethernet does not.
+        if [ -n "$WPA_CONF" ] && [ -e "$net_path/wireless" ]; then
+            echo "    wpa-conf $WPA_CONF"
+        fi
     } > "$net_tmp"
 
     if [ ! -f "$net_stanza" ] || ! cmp -s "$net_tmp" "$net_stanza"; then
