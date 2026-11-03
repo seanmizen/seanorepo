@@ -2,9 +2,19 @@
 
 A homebrew CRM for a solo developer who sells software services door to door.
 It keeps contacts, visits, the pipeline and the GDPR records. Stripe keeps the
-billing. The app is a skeleton. After sign-in, `GET /` shows a placeholder
-page with the health result, and `GET /api/health` returns
-`{ "ok": true }`. The design is in
+billing. After sign-in, the seller has these pages:
+
+- `/` (Today): the organisations with a next action due today or earlier,
+  oldest first, and the "New lead" key.
+- `/orgs`: all organisations. A GET form searches the name and the postcode,
+  and filters by stage. The URL holds the search.
+- `/orgs/new`: add an organisation and its contact. The slug comes from the
+  name.
+- `/<slug>`: one organisation. It shows the details, the contacts, the visits
+  and the notes, newest first. Its forms log a visit, change the stage and
+  the next action, and add a note.
+
+`GET /api/health` returns `{ "ok": true }`. The design is in
 [docs/001-guiding-design.md](docs/001-guiding-design.md).
 
 ```bash
@@ -25,6 +35,13 @@ yarn workspace crm-be test
 - `crm-be/src/render.tsx` holds `renderPage(title, children, request)`. It
   adds the doctype, the `<head>`, the asset tags from
   `crm-fe/dist/manifest.json`, and the panel layout (`ui/Page.tsx`).
+- `crm-be/src/org.ts` holds the organisation: the stages, the visit outcomes,
+  the slug maker and the London date. The page for `/<slug>` is
+  `routes/[slug].tsx`, and its forms post to `routes/[slug]/*.ts`. The static
+  routes win over `/<slug>`, and `RESERVED_SLUGS` keeps their first words out
+  of the slugs.
+- Each write to an organisation, a person, a membership, a visit or a note
+  adds an `audit_log` row. The actor is the id of the signed-in person.
 - `crm-be/src/ui/` holds the parts of the panel that pages share: `Panel`,
   `Key`, `Led`, `Field` and `Label`.
 - `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`
@@ -118,8 +135,8 @@ Where each part is:
 - `crm-be/src/routes/login.tsx`, `routes/login/code.tsx`,
   `routes/login/verify.tsx`, `routes/logout.ts`,
   `routes/account/sessions.tsx`: one file for each URL.
-- `crm-be/src/test-helpers.ts`: `testApp()`, `signIn()` and `signInAdmin()`
-  for tests. In tests, the admin is `admin@example.com`.
+- `crm-be/src/test-helpers.ts`: `testApp()`, `signIn()`, `signInAdmin()`
+  and `addOrg()` for tests. In tests, the admin is `admin@example.com`.
 - `crm-be/src/test-authenticator.ts`: a software passkey for tests.
 
 ## Env vars
