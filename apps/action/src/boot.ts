@@ -31,9 +31,9 @@ function onFailure(f: LoadFailure): void {
   }
 }
 
-// The console key: the backtick key (the key left of 1, on any layout).
-// The web backend sends it to the game as the key code Grave on every
-// layout (game/src/main.zig opens the console on Grave).
+// The console key is a bind: "bind grave toggleconsole"
+// (game/src/game_console.zig). swindowzig sends the backtick key (the key
+// left of 1, on any layout) as the key code Grave.
 // While the console is open, the hidden text <input> has the focus. Then
 // the backtick key types "`", and the console closes on that character.
 // On a layout where the key types another character, the listener sends
