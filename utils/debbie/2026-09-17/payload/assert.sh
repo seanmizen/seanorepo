@@ -1304,6 +1304,58 @@ else
     sk "sshd exempts loopback from per-source penalties" "setup-server-environment.sh writes the drop-in"
 fi
 
+# REQ-NETWORK-006 - the VPN (Tailscale, as a subnet router for the LAN).
+#
+# What this section proves: with the role, tailscale comes from Tailscale's
+# apt source, tailscaled runs, IPv4 forwarding is on, and the machine is on
+# the tailnet and routes the LAN subnet of its uplink. Without the role, none
+# of it exists.
+#
+# What it cannot prove: a client that connects from outside the LAN. That is a
+# demonstration on the real machine. A VM is never logged in to the tailnet,
+# so the two login checks fail there by design: the role is not complete
+# until the owner approves the machine.
+echo
+echo "== vpn: tailscale (REQ-NETWORK-006) =="
+TS_UNIT=tailscaled.service
+# The LAN subnet of the uplink that holds the IPv4 default route. The same
+# rule as setup-server-environment.sh.
+ts_lan() {
+    dev="$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+    ip -4 -o route show dev "${dev:-none}" scope link 2> /dev/null | awk '$1 ~ /\// { print $1; exit }'
+}
+if [ "$PHASE" = provisioned ] && [ -e /etc/seanorepo/roles/vpn ]; then
+    check "tailscale installed" \
+        'dpkg-query -W -f="\${Status}" tailscale 2>/dev/null | grep -q "^install ok installed"'
+    check "exactly one tailscale apt source" \
+        '[ "$(grep -rl "pkgs.tailscale.com" /etc/apt/sources.list.d/ 2>/dev/null | wc -l)" -eq 1 ]'
+    check "$TS_UNIT enabled" "systemctl is-enabled $TS_UNIT"
+    check "$TS_UNIT active" "systemctl is-active $TS_UNIT"
+    # Read /proc: assert.sh runs as the deploy user, and sysctl is in /usr/sbin,
+    # which is not on that user's PATH.
+    check "IPv4 forwarding is on" '[ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ]'
+    # IPv6 forwarding stops the uplinks from accepting router advertisements,
+    # and they get their IPv6 addresses by SLAAC.
+    check "IPv6 forwarding stays off" '[ "$(cat /proc/sys/net/ipv6/conf/all/forwarding)" = 0 ]'
+    check "this machine is on the tailnet" \
+        'sudo -n tailscale status --json --peers=false 2>/dev/null | grep -q "\"BackendState\": *\"Running\""'
+    # Advertised is this machine's setting. Primary means the owner approved
+    # the route in the admin console and the tailnet uses it.
+    check "it advertises the LAN subnet $(ts_lan)" \
+        'lan="$(ts_lan)"; [ -n "$lan" ] && sudo -n tailscale debug prefs 2>/dev/null | tr -d " \n" | grep -q "\"AdvertiseRoutes\":\[[^]]*\"$lan\""'
+    check "the tailnet routes the LAN subnet through it (route approved)" \
+        'lan="$(ts_lan)"; [ -n "$lan" ] && sudo -n tailscale status --json --peers=false 2>/dev/null | tr -d " \n" | grep -q "\"PrimaryRoutes\":\[[^]]*\"$lan\""'
+elif [ "$PHASE" = provisioned ]; then
+    check "tailscale absent without the VPN role" \
+        '! dpkg-query -W -f="\${Status}" tailscale 2>/dev/null | grep -q "^install ok installed"'
+    check "no tailscale apt source without the VPN role" \
+        '[ -z "$(grep -rl "pkgs.tailscale.com" /etc/apt/sources.list.d/ 2>/dev/null)" ]'
+    check "no forwarding setting without the VPN role" \
+        '[ ! -e /etc/sysctl.d/90-seanorepo-vpn.conf ]'
+else
+    sk "the VPN role decides tailscale and forwarding" "setup-server-environment.sh sets the roles"
+fi
+
 # REQ-SERVER-010 - the deploy user's shell.
 echo
 echo "== interactive shell (REQ-SERVER-010) =="
@@ -1623,6 +1675,11 @@ lan_tcp_listeners() {
             if (addr ~ /^127\./) next
             if (addr == "::1") next
             if (addr ~ /^::ffff:127\./) next
+            # Tailscale addresses (REQ-NETWORK-006): 100.64.0.0/10 and
+            # fd7a:115c:a1e0::/48. Only tailnet devices reach them, through
+            # tailscale0. tailscaled listens there for its peer API.
+            if (addr ~ /^fd7a:115c:a1e0:/) next
+            if (split(addr, o, ".") == 4 && o[1] == 100 && o[2] >= 64 && o[2] <= 127) next
             print addr ":" port
         }'
 }

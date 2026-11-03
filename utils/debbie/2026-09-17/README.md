@@ -61,6 +61,9 @@ Test these on a real target machine:
 - disk layouts other than one virtio disk
 - mDNS from another machine on the LAN, and a published port refused from another machine
 - a Cloudflare tunnel or ngrok session that connects (no VM has credentials)
+- the VPN's tailnet login and its route (no VM is on the tailnet).
+  `ROLE_VPN=yes ./scripts/test-vm/test-vm.sh --assert` tests the rest of the
+  VPN role, and its two login checks fail there by design.
 - an unattended security update that installs, which takes weeks and a real advisory
 - the deploy units with the scripts under test: the units in the VM run the
   scripts from the guest's `release` checkout, and `assert.sh` runs the scripts
@@ -131,8 +134,10 @@ Roles set what a target machine does. Set them in
 | none | tracks `release` and is reachable over ngrok | — | any |
 | `ROLE_WEBSERVER=yes` | also runs the sites | the LAN | any |
 | `ROLE_WEBSERVER=yes` and `ROLE_TUNNEL=yes` | also runs the Cloudflare tunnel | loopback only | exactly one |
+| `ROLE_VPN=yes` (with any other roles) | also routes the LAN for the owner's Tailscale devices | — | one |
 
-The tunnel needs the webserver role on the same machine. A LAN webserver keeps
+asus has all three roles. The tunnel needs the webserver role on the same
+machine. The VPN needs no other role. A LAN webserver keeps
 its own data, separate from the public machine's. To see a machine's roles:
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
@@ -364,3 +369,48 @@ ssh srv@<name>.local 'journalctl -u custom-ngrok.service -b | grep -o "url=tcp:/
 
 If you cannot reach the machine at all, the ngrok dashboard shows the address.
 Then connect with `ssh -p <port> srv@<host>` and your usual key.
+
+### VPN (Tailscale)
+
+The machine with `ROLE_VPN=yes` (asus) is a Tailscale subnet router, beside
+ngrok (REQ-NETWORK-006). A device on the owner's tailnet reaches every LAN
+device at its LAN address, for example `ssh srv@<LAN address>` or the router's
+admin page, from any network. It opens no port: tailscaled dials out, and uses
+Tailscale's relay on 443/tcp when no direct path exists.
+
+The tailnet uses a personal login on the free Personal plan. A tailnet on a
+custom domain counts as business use and starts a paid trial.
+
+**Limit.** `<name>.local` names do not resolve through the VPN, because mDNS
+does not cross a router. Use the LAN address, or the host's tailnet name.
+
+#### Set it up, once
+
+1. Provision with `ROLE_VPN=yes` in `3-provision/<name>.env`. At the end, the
+   run prints the login command with the LAN subnet in it.
+2. Run that command, and open the URL that it prints. Approve the machine as
+   the tailnet owner:
+
+   ```bash
+   ssh -t srv@<name>.local sudo tailscale up --advertise-routes=<LAN subnet>
+   ```
+
+3. In the admin console (`login.tailscale.com/admin/machines`), for the
+   machine:
+   - **Edit route settings**: approve the LAN subnet.
+   - **Disable key expiry**. Without this, the machine leaves the tailnet after
+     180 days.
+4. Check: `./provision.sh <name> --assert`. The VPN section passes only after
+   steps 2 and 3.
+
+#### Add a device
+
+Install the Tailscale app and sign in with the tailnet owner's login. A phone
+uses the LAN route with no setting. On a laptop that is on the LAN itself,
+leave **Use Tailscale subnets** off at home.
+
+#### Move the role to another machine
+
+Provision the old machine without `ROLE_VPN`: it logs out and removes
+tailscale. Then set up the new machine. Remove the old machine in the admin
+console.

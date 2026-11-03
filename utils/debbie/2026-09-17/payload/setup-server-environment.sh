@@ -18,6 +18,7 @@
 #             interface, and the failover watchdog
 #          9. tcp-getter, and loopback exempt from sshd penalties
 #         10. the gated upgrade of cloudflared and ngrok
+#         11. the VPN (Tailscale), on a machine with ROLE_VPN=yes
 #
 # Docker, Node, Yarn, the shell and the seanorepo clone come from
 # setup-developer-environment.sh, which runs first.
@@ -26,7 +27,7 @@
 # test-vm.sh runs it twice to prove this. Each step has a check in assert.sh.
 #
 # Usage: sudo SERVER_NAME=<name> [DEPLOY_USER=srv] [ROLE_WEBSERVER=yes]
-#        [ROLE_TUNNEL=yes] bash setup-server-environment.sh
+#        [ROLE_TUNNEL=yes] [ROLE_VPN=yes] bash setup-server-environment.sh
 set -euo pipefail
 IFS=$'\n\t'
 export DEBIAN_FRONTEND=noninteractive
@@ -63,6 +64,9 @@ fi
 #                   tunnel only forwards to localhost:4xxx. EXACTLY ONE machine in
 #                   the fleet: the apps are SQLite on local volumes, and the
 #                   public one must have a single writer.
+#   ROLE_VPN        runs Tailscale (tailscaled.service) as a subnet router for
+#                   the LAN - REQ-NETWORK-006. Opens no port. Needs no other
+#                   role. One machine: one router for one LAN.
 #
 # This script checks the settings here, before it installs anything, so a typo
 # fails the run and does not leave a half-provisioned machine.
@@ -79,6 +83,8 @@ ROLE_WEBSERVER="$(role_value "${ROLE_WEBSERVER:-}")" \
     || { echo "[server-setup] ERROR: ROLE_WEBSERVER must be yes, no or unset" >&2; exit 1; }
 ROLE_TUNNEL="$(role_value "${ROLE_TUNNEL:-}")" \
     || { echo "[server-setup] ERROR: ROLE_TUNNEL must be yes, no or unset" >&2; exit 1; }
+ROLE_VPN="$(role_value "${ROLE_VPN:-}")" \
+    || { echo "[server-setup] ERROR: ROLE_VPN must be yes, no or unset" >&2; exit 1; }
 if [ "$ROLE_TUNNEL" = yes ] && [ "$ROLE_WEBSERVER" != yes ]; then
     echo "[server-setup] ERROR: ROLE_TUNNEL=yes needs ROLE_WEBSERVER=yes - the tunnel forwards to this machine's own sites." >&2
     exit 1
@@ -784,10 +790,11 @@ done
 # Make the role files match the settings validated at the top. Written whole,
 # removed when off - never left as they were.
 install -d -m 0755 "$ROLES_DIR"
-for role in webserver tunnel; do
+for role in webserver tunnel vpn; do
     case "$role" in
         webserver) want="$ROLE_WEBSERVER" ;;
         tunnel)    want="$ROLE_TUNNEL" ;;
+        vpn)       want="$ROLE_VPN" ;;
     esac
     if [ "$want" = yes ]; then
         [ -e "$ROLES_DIR/$role" ] || log "  role $role: ON"
@@ -1509,6 +1516,118 @@ else
     log "  sshd has no per-source penalties - nothing to exempt"
 fi
 
+#------------------------------------------------------------------------------
+# The VPN - REQ-NETWORK-006.
+#
+# Remote access to the LAN from any network, through Tailscale. The router is
+# behind CGNAT on IPv4, and the owner's phone line is IPv4-only, so neither end
+# can accept a connection. tailscaled dials out to Tailscale's coordination
+# server. When no direct path exists, it dials out to a DERP relay on 443/tcp.
+# The traffic is WireGuard, end to end: a relay passes packets it cannot read.
+#
+# This machine is a subnet router. It advertises the LAN subnet of its uplink,
+# so a client reaches every LAN device through it. tailscaled masquerades the
+# routed traffic itself (--snat-subnet-routes, its default), and inserts its own
+# FORWARD rules, so Docker's FORWARD policy does not drop them.
+#
+# NO INBOUND PORT. tailscaled only dials out, so REQ-NETWORK-001 and
+# REQ-SERVER-002 hold with no exception.
+#
+# ONE MANUAL STEP. Joining the tailnet needs the owner's approval in a browser.
+# This script installs and starts tailscaled, and cannot log in. Until someone
+# runs the `tailscale up` command that it prints, the machine is not on the
+# tailnet. After the login, the owner approves the route and disables key
+# expiry in the admin console. The README gives the steps.
+#
+# NOTHING RESTARTS. tailscaled is a new service. A later run changes only the
+# advertised route, with `tailscale set`.
+#
+# WITHOUT THE ROLE, the machine has no tailscaled (REQ-SERVER-014). A machine
+# that loses the role logs out, and loses the package, its apt source and the
+# forwarding setting.
+#------------------------------------------------------------------------------
+TAILSCALE_KEYRING=/usr/share/keyrings/tailscale-archive-keyring.gpg
+TAILSCALE_LIST=/etc/apt/sources.list.d/tailscale.list
+# The Debian codename, for example trixie. Tailscale publishes one suite each.
+TAILSCALE_SUITE="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+TAILSCALE_UNIT=tailscaled.service
+# IPv4 forwarding. Docker turns it on as well, but the VPN must not depend on
+# Docker. IPv4 only: IPv6 forwarding stops the kernel from accepting router
+# advertisements (accept_ra=1), and the uplinks get their IPv6 addresses by
+# SLAAC.
+VPN_SYSCTL=/etc/sysctl.d/90-seanorepo-vpn.conf
+
+# The state of tailscaled: Running, NeedsLogin, Stopped, or empty. No jq: grep
+# reads the one field.
+tailscale_state() {
+    tailscale status --json 2> /dev/null \
+        | grep -o '"BackendState": *"[A-Za-z]*"' | head -n 1 | sed 's/.*"\([A-Za-z]*\)"$/\1/'
+}
+
+log "vpn (tailscale)"
+if [ "$ROLE_VPN" = yes ]; then
+    # Binary already, like Cloudflare's key: no `gpg --dearmor`. A temp file
+    # first, so a curl that stops mid-stream leaves no unusable keyring.
+    if [ ! -s "$TAILSCALE_KEYRING" ]; then
+        log "  fetching Tailscale's apt signing key"
+        ts_key_tmp="$(mktemp)"
+        curl -fsSL "https://pkgs.tailscale.com/stable/debian/$TAILSCALE_SUITE.noarmor.gpg" -o "$ts_key_tmp"
+        install -m 0644 -o root -g root "$ts_key_tmp" "$TAILSCALE_KEYRING"
+        rm -f "$ts_key_tmp"
+    fi
+    # Written whole and compared whole, like the cloudflared source list.
+    ts_deb_line="deb [signed-by=$TAILSCALE_KEYRING] https://pkgs.tailscale.com/stable/debian $TAILSCALE_SUITE main"
+    ts_repo_changed=0
+    if [ ! -f "$TAILSCALE_LIST" ] || [ "$(cat "$TAILSCALE_LIST")" != "$ts_deb_line" ]; then
+        log "  writing $TAILSCALE_LIST"
+        printf '%s\n' "$ts_deb_line" > "$TAILSCALE_LIST"
+        ts_repo_changed=1
+    fi
+    if [ "$ts_repo_changed" = 1 ] \
+        || ! dpkg-query -W -f='${Status}' tailscale 2> /dev/null | grep -q "^install ok installed"; then
+        apt-get update -y
+    fi
+    apt-get install -y tailscale
+
+    printf '%s\n' "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-006" \
+        "net.ipv4.ip_forward = 1" > "$VPN_SYSCTL"
+    sysctl -q -w net.ipv4.ip_forward=1
+
+    # On an active service, `enable --now` changes nothing.
+    systemctl enable --now "$TAILSCALE_UNIT"
+
+    # The LAN subnet of the uplink that holds the IPv4 default route. Any
+    # proto: on asus, dhcpcd installs the subnet route as `proto dhcp`.
+    ts_dev="$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+    ts_lan="$(ip -4 -o route show dev "${ts_dev:-none}" scope link 2> /dev/null | awk '$1 ~ /\// { print $1; exit }')"
+    [ -n "$ts_lan" ] || die "no LAN subnet on the uplink '${ts_dev:-none}' - cannot choose the route to advertise"
+
+    ts_state="$(tailscale_state)"
+    if [ "$ts_state" = Running ]; then
+        log "  on the tailnet - advertising $ts_lan"
+        tailscale set --advertise-routes="$ts_lan"
+    else
+        log "  NOTE: this machine is not on the tailnet (state: ${ts_state:-unknown})."
+        log "        Run this once, and open the URL that it prints:"
+        log "          ssh -t $DEPLOY_USER@$SERVER_NAME.local sudo tailscale up --advertise-routes=$ts_lan"
+        log "        Then, in the admin console, approve the route and disable key"
+        log "        expiry. See 'VPN' in utils/debbie/2026-09-17/README.md."
+    fi
+else
+    if dpkg-query -W -f='${Status}' tailscale 2> /dev/null | grep -q "^install ok installed"; then
+        log "  ROLE_VPN is not yes - logging out and removing tailscale"
+        tailscale logout 2> /dev/null || true
+        systemctl disable --now "$TAILSCALE_UNIT" || true
+        apt-get purge -y tailscale
+    fi
+    # tailscale depends on tailscale-archive-keyring, which owns the keyring
+    # file. Purge the package, so dpkg agrees with the disk.
+    if dpkg-query -W -f='${Status}' tailscale-archive-keyring 2> /dev/null | grep -q "^install ok installed"; then
+        apt-get purge -y tailscale-archive-keyring
+    fi
+    rm -f "$TAILSCALE_LIST" "$TAILSCALE_KEYRING" "$VPN_SYSCTL"
+fi
+
 # The .deb files that apt keeps after an install. Nothing reads them again, and
 # the disk can be as small as 128 GB, shared with Docker images and the SQLite
 # volumes.
@@ -1516,7 +1635,7 @@ log "clearing the apt cache"
 apt-get clean
 
 log "================================================================"
-log "roles on $SERVER_NAME: webserver=$ROLE_WEBSERVER tunnel=$ROLE_TUNNEL"
+log "roles on $SERVER_NAME: webserver=$ROLE_WEBSERVER tunnel=$ROLE_TUNNEL vpn=$ROLE_VPN"
 [ "$ROLE_WEBSERVER" = yes ] || log "  this machine tracks release but runs NO sites (ROLE_WEBSERVER unset)"
 log "================================================================"
 log "done"

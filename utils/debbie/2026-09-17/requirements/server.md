@@ -547,9 +547,9 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   and pointed `provision.sh` at the live machine. Both failures are silent
   until they matter.
 
-  So each role (`ROLE_WEBSERVER`, `ROLE_TUNNEL`) is off unless it is set to
-  `yes`. Every provisioning run makes the roles of the machine match the
-  settings exactly. `SERVER_NAME` has no default in any script. The scripts
+  So each role (`ROLE_WEBSERVER`, `ROLE_TUNNEL`, `ROLE_VPN`) is off unless it
+  is set to `yes`. Every provisioning run makes the roles of the machine match
+  the settings exactly. `SERVER_NAME` has no default in any script. The scripts
   refuse a retired setting by name. They do not ignore it.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "roles on this machine are

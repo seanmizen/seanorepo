@@ -6,8 +6,9 @@ behaviour that keeps that path alive without anyone watching.
 `2026-09-17/` implements these requirements, and the evidence below cites the
 files of that generation. `REQ-NETWORK-001` and `REQ-NETWORK-002` cover the
 tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
-`REQ-NETWORK-005` covers remote SSH. The outage of 2026-08-14, recorded in
-`REQ-NETWORK-003`, is the reason for the failover requirements.
+`REQ-NETWORK-005` covers remote SSH. `REQ-NETWORK-006` covers the VPN. The
+outage of 2026-08-14, recorded in `REQ-NETWORK-003`, is the reason for the
+failover requirements.
 
 ---
 
@@ -211,3 +212,72 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
 - **Relations:**
   - depends-on REQ-NETWORK-001
   - depends-on REQ-SERVER-008
+
+## REQ-NETWORK-006 — The VPN host routes its owner's devices into the LAN
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1032
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** Where the host has `ROLE_VPN=yes`, the host shall route the
+  LAN subnet of its uplink for the devices on the owner's Tailscale tailnet,
+  as a subnet router that opens no inbound port.
+- **Rationale:** ngrok (`REQ-NETWORK-005`) gives a new address at each agent
+  restart, so it needs `apps/tcp-getter` to email the address, and it carries
+  SSH only. A VPN gives every LAN device at a fixed address.
+
+  **Neither end can accept a connection.** The router's IPv4 WAN address is
+  CGNAT (`100.64.0.0/10`), so no IPv4 port forward is possible. The owner's
+  phone line is IPv4-only, so it cannot reach the home over IPv6 either. A
+  self-hosted WireGuard listener on the host's IPv6 address worked on the
+  host, and failed from the phone with "no route to host". Two ends behind
+  NAT need a relay with a public address.
+
+  **Tailscale is that relay, at no cost.** tailscaled dials out to Tailscale's
+  coordination server, and to a DERP relay on 443/tcp when no direct path
+  exists. Both are outbound, so `REQ-NETWORK-001` and `REQ-SERVER-002` hold
+  with no exception. The traffic is WireGuard, end to end: a relay passes
+  packets that it cannot read. The free Personal plan covers the owner's
+  devices. A tailnet on a custom domain counts as business use and starts a
+  paid trial, so the tailnet uses a personal login. The rejected options: a
+  VPS hub (costs money), a free cloud VM (needs a card, and the provider can
+  reclaim an idle VM), and Cloudflare WARP (Cloudflare decrypts the traffic).
+
+  **The host routes and masquerades.** tailscaled advertises the LAN subnet,
+  and rewrites the source of routed traffic to the host's LAN address
+  (`--snat-subnet-routes`, its default). So no LAN device needs a route back.
+  tailscaled inserts its own FORWARD rules, ahead of the Docker and ufw
+  policies. IPv4 forwarding is on. IPv6 forwarding stays off, because it stops
+  the uplinks from accepting router advertisements, and they get their IPv6
+  addresses by SLAAC.
+
+  **One manual step.** Joining the tailnet needs the owner's approval in a
+  browser, so provisioning installs and starts tailscaled and then prints the
+  `tailscale up` command. In the admin console, the owner approves the route
+  and disables key expiry for the host. Without the second, the host leaves
+  the tailnet after 180 days.
+
+  The role decides all of it (`REQ-SERVER-014`). Without the role, the host
+  has no tailscaled, no Tailscale apt source and no forwarding setting.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "tailscale installed"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "exactly one tailscale apt
+    source"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "tailscaled.service active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "IPv4 forwarding is on"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "IPv6 forwarding stays off"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "this machine is on the
+    tailnet"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tailnet routes the
+    LAN subnet through it (route approved)"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "tailscale absent without
+    the VPN role"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw allows no port beyond
+    the four" — the role opens no port
+  - Demonstration — a phone on IPv4-only mobile data, with Wi-Fi off, opens
+    the router's admin page and an SSH session to the host through the tailnet
+- **Relations:**
+  - depends-on REQ-NETWORK-001
+  - depends-on REQ-SERVER-002
+  - depends-on REQ-SERVER-014
