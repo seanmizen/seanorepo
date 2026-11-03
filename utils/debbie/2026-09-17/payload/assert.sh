@@ -782,19 +782,22 @@ deploy_failed_app() {
 # prefix. The tool output is at debug. A failed tool repeats its last lines at
 # error. The yarn shim prints one line of tool output for each command.
 # `yarn prod:docker` prints a line with its own info prefix, as
-# scripts/prod-docker-all.sh does. `yarn workspace tcp-getter build` fails: that
-# is the forced failure, and it does not stop the deploy. LOG_PREFIX is empty,
+# scripts/prod-docker-all.sh does. The machine has no tunnel role, so the
+# deploy starts the LAN edge, and the docker shim fails that start: that is the
+# forced failure, and it does not stop the deploy. LOG_PREFIX is empty,
 # so scripts/log.sh makes the decision itself: stdout is a file, so it adds the
 # prefixes. Returns 0 when every part of the check passed.
 deploy_log_levels() {
     local t="$1" rc=0
     scratch_release "$t" > /dev/null
     git -C "$t/machine" pull -q
-    printf '#!/bin/sh\necho "yarn $*" >> "%s/calls"\ncase "$*" in\n  prod:docker) echo "<6>[prod-docker-all] app started"; exit 0 ;;\nesac\necho "tool output of yarn $*"\n[ "$*" != "workspace tcp-getter build" ]\n' \
+    printf '#!/bin/sh\necho "yarn $*" >> "%s/calls"\ncase "$*" in\n  prod:docker) echo "<6>[prod-docker-all] app started"; exit 0 ;;\nesac\necho "tool output of yarn $*"\n' \
         "$t" > "$t/bin/yarn"
-    chmod +x "$t/bin/yarn"
+    printf '#!/bin/sh\necho "docker $*" >> "%s/calls"\ncase "$*" in\n  *"--profile lan up"*) echo "tool output of the LAN edge"; exit 1 ;;\nesac\n' \
+        "$t" > "$t/bin/docker"
+    chmod +x "$t/bin/yarn" "$t/bin/docker"
     mkdir -p "$t/roles"
-    touch "$t/roles/webserver" "$t/roles/tunnel"
+    touch "$t/roles/webserver"
     LOG_PREFIX='' PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
         DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" > "$t/out" 2>&1
     # Each line has a prefix.
@@ -802,8 +805,8 @@ deploy_log_levels() {
     grep -qx '<7>tool output of yarn install --immutable' "$t/out" || rc=1
     # At info and above: the deploy's own lines, and the context of the failure.
     ! grep '^<[0-6]>.*tool output' "$t/out" \
-        | grep -qvx '<3>\[deploy\]   | tool output of yarn workspace tcp-getter build' || rc=1
-    grep -qx '<3>\[deploy\]   | tool output of yarn workspace tcp-getter build' "$t/out" || rc=1
+        | grep -qvx '<3>\[deploy\]   | tool output of the LAN edge' || rc=1
+    grep -qx '<3>\[deploy\]   | tool output of the LAN edge' "$t/out" || rc=1
     grep -qx '<6>\[prod-docker-all\] app started' "$t/out" || rc=1
     grep -qx '<6>\[deploy\] done' "$t/out" || rc=1
     rm -rf "$t"
