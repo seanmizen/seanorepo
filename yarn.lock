@@ -7255,6 +7255,7 @@ __metadata:
     "@fastify/cookie": "npm:^11.1.5"
     "@fastify/formbody": "npm:^9.0.1"
     "@fastify/static": "npm:^8.3.0"
+    "@modelcontextprotocol/sdk": "npm:^1.32.0"
     "@simplewebauthn/server": "npm:^13.3.3"
     "@types/node": "npm:^22.19.1"
     "@types/nodemailer": "npm:^7.0.4"
@@ -7266,6 +7267,7 @@ __metadata:
     react: "npm:^19.2.1"
     react-dom: "npm:^19.2.1"
     typescript: "npm:^5.9.3"
+    zod: "npm:^4.6.5"
   languageName: unknown
   linkType: soft
 

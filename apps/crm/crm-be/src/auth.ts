@@ -48,6 +48,19 @@ const PUBLIC_PATHS = new Set([
  */
 const SIGNED_OUT_PATHS = new Set(['/']);
 
+/**
+ * The paths that use no session cookie. `/api/mcp` takes a bearer token,
+ * and the OAuth endpoints take the values of the OAuth flow (`oauth.ts`).
+ * A cookie gives them nothing, so the hook skips the Origin check and the
+ * session check on them. Each path under `/.well-known/` is also one of
+ * them: the OAuth metadata, or a 404.
+ */
+const COOKIELESS_PATHS = new Set([
+  '/api/mcp',
+  '/api/oauth/register',
+  '/api/oauth/token',
+]);
+
 /** The only paths that a recovery session can open, with the public paths. */
 const RECOVERY_PATHS = new Set([
   '/account/passkeys',
@@ -89,7 +102,8 @@ export const newToken = () => randomBytes(32).toString('base64url');
 
 export const now = () => new Date().toISOString();
 
-const later = (ms: number) => new Date(Date.now() + ms).toISOString();
+/** The time `ms` from now, as ISO 8601 UTC text. */
+export const later = (ms: number) => new Date(Date.now() + ms).toISOString();
 
 /** Lower case, no spaces at the ends. Each email lookup uses this form. */
 export const normalizeEmail = (email: unknown) =>
@@ -133,11 +147,14 @@ export const audit = (
   );
 };
 
-/** True if `auth` is the person for CRM_ADMIN_EMAIL. */
-export const isAdmin = (auth: Auth) => {
+/** True if `email` is CRM_ADMIN_EMAIL. */
+export const isAdminEmail = (email: string | null) => {
   const admin = normalizeEmail(process.env.CRM_ADMIN_EMAIL);
-  return admin !== '' && normalizeEmail(auth.email) === admin;
+  return admin !== '' && normalizeEmail(email) === admin;
 };
+
+/** True if `auth` is the person for CRM_ADMIN_EMAIL. */
+export const isAdmin = (auth: Auth) => isAdminEmail(auth.email);
 
 /** True if the person has one or more passkeys. */
 export const hasPasskey = (db: Database, personId: string) =>
@@ -333,15 +350,17 @@ export type LoginLimits = ReturnType<typeof makeLoginLimits>;
 
 /**
  * Register the auth hook. On each request it:
- * 1. Refuses a POST whose `Origin` header is a different host (CSRF). The
+ * 1. Lets the paths in COOKIELESS_PATHS through with no session. They
+ *    check their own credentials (`oauth.ts`).
+ * 2. Refuses a POST whose `Origin` header is a different host (CSRF). The
  *    `SameSite=Lax` cookie is the first guard. This is the second.
- * 2. Finds the session from the cookie and sets `request.auth`.
- * 3. Sends a signed-out visitor to `/login?next=<path>`. The public paths and
+ * 3. Finds the session from the cookie and sets `request.auth`.
+ * 4. Sends a signed-out visitor to `/login?next=<path>`. The public paths and
  *    `/static/` are open to everyone. SIGNED_OUT_PATHS are open to a
  *    signed-out visitor, and the next steps check a signed-in person there.
- * 4. Sends a recovery session to `/account/passkeys` from each path that is
+ * 5. Sends a recovery session to `/account/passkeys` from each path that is
  *    not in RECOVERY_PATHS.
- * 5. On an admin route (`config: { admin: true }`), lets only the admin in a
+ * 6. On an admin route (`config: { admin: true }`), lets only the admin in a
  *    passkey session through. Each other session gets the 403 page of
  *    `ui/AdminOnly.tsx` at the same URL, with no redirect. For the admin, the
  *    page holds the passkey step: add the first passkey, or sign in with a
@@ -353,6 +372,11 @@ export const registerAuth = (app: FastifyInstance, db: Database) => {
   // call `done`, so the route handler never runs. (Under Bun, `reply.sent`
   // can still be false when an async hook returns.)
   app.addHook('onRequest', (request, reply, done) => {
+    const path = request.url.split('?')[0];
+    if (COOKIELESS_PATHS.has(path) || path.startsWith('/.well-known/')) {
+      done();
+      return;
+    }
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       const origin = request.headers.origin;
       if (origin !== undefined && !sameHost(origin, request.host)) {
@@ -363,7 +387,6 @@ export const registerAuth = (app: FastifyInstance, db: Database) => {
 
     const auth = findSession(db, request.cookies[SESSION_COOKIE]);
     request.auth = auth;
-    const path = request.url.split('?')[0];
     const open = PUBLIC_PATHS.has(path) || path.startsWith('/static/');
     if (!auth) {
       if (open || SIGNED_OUT_PATHS.has(path)) {

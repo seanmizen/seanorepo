@@ -77,6 +77,7 @@ Prefixes are globally unique. Add a row when you add a file.
 | `CRM-ID` | `apps/crm/requirements/id.md` | crm — short IDs, never a UUID in a URL or on a page |
 | `CRM-LAYOUT` | `apps/crm/requirements/layout.md` | crm — one breakpoint, and a 40/60 grid of the device and the boxes |
 | `CRM-LCD` | `apps/crm/requirements/lcd.md` | crm — no LED in the glass, characters that do not move, LEDs in the bezel |
+| `CRM-MCP` | `apps/crm/requirements/mcp.md` | crm — the MCP tools never delete, erase or touch money |
 | `BOOTMAP` | `utils/bootmap/requirements/bootmap.md` | bootmap — the boot treemap and its three renderers |
 | `BRIEF` | `apps/inside/requirements/brief.md` | inside — briefs and who can see them |
 | `CHIPS` | `apps/inside/requirements/chips.md` | inside — floating status chip chrome |

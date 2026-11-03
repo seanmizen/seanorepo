@@ -59,8 +59,43 @@ export const orgEditPage = ({
 });
 
 /**
+ * Check the post of the organisation form, then save it over `org`, with
+ * an audit row of the names of the changed fields. With no change, nothing
+ * is written. Returns the slug and the changed fields, or the error and the
+ * values to show again. The route `POST /<slug>/edit` and the MCP tool
+ * `update_organisation` call it.
+ */
+export const updateOrg = (
+  db: Database,
+  actor: string,
+  org: Org,
+  post: unknown,
+):
+  | { slug: string; fields: string[] }
+  | { error: string; values: FormValues } => {
+  const { values, error } = parseForm(organisationForm, post);
+  if (error) return { error, values };
+  const slug = resolveSlug(db, values, org.id);
+  if ('error' in slug) return { error: slug.error, values };
+  const next = { ...values, slug: slug.slug };
+  const fields = changedFields(organisationForm, { ...org }, next);
+  if (fields.length > 0) {
+    db.transaction(() => {
+      db.query(
+        `UPDATE organisation SET ${ORG_COLUMNS.map((name) => `${name} = ?`).join(', ')},
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE id = ?;`,
+      ).run(...orgColumnValues(next), org.id);
+      audit(db, actor, 'update', 'organisation', org.id, { fields });
+    })();
+  }
+  return { slug: next.slug, fields };
+};
+
+/**
  * `GET` and `POST /<slug>/edit`. A save writes an audit row with the names
- * of the changed fields, then opens the organisation at its URL slug.
+ * of the changed fields (`updateOrg`), then opens the organisation at its
+ * URL slug.
  */
 export const orgEditRoute = (app: FastifyInstance, db: Database) => {
   const send = (
@@ -89,32 +124,14 @@ export const orgEditRoute = (app: FastifyInstance, db: Database) => {
     async (request, reply) => {
       const org = findOrg(db, request.params.slug);
       if (!org) return sendNotFound(request, reply);
-      const { values, error } = parseForm(organisationForm, request.body);
-      if (error) return send(request, reply, { org, values, error });
-      const slug = resolveSlug(db, values, org.id);
-      if ('error' in slug) {
-        return send(request, reply, { org, values, error: slug.error });
-      }
-      const next = { ...values, slug: slug.slug };
-      const fields = changedFields(organisationForm, { ...org }, next);
-      if (fields.length > 0) {
-        db.transaction(() => {
-          db.query(
-            `UPDATE organisation SET ${ORG_COLUMNS.map((name) => `${name} = ?`).join(', ')},
-               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-             WHERE id = ?;`,
-          ).run(...orgColumnValues(next), org.id);
-          audit(
-            db,
-            (request.auth as Auth).personId,
-            'update',
-            'organisation',
-            org.id,
-            { fields },
-          );
-        })();
-      }
-      return reply.redirect(orgPath(next.slug), 303);
+      const saved = updateOrg(
+        db,
+        (request.auth as Auth).personId,
+        org,
+        request.body,
+      );
+      if ('error' in saved) return send(request, reply, { org, ...saved });
+      return reply.redirect(orgPath(saved.slug), 303);
     },
   );
 };

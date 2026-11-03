@@ -11,6 +11,7 @@
 | [`REQ-CRM-ID-001`](id.md#req-crm-id-001--no-uuid-in-a-url-or-on-a-page) | No UUID in a URL or on a page | active | constraint | P1 | sean |
 | [`REQ-CRM-LAYOUT-001`](layout.md#req-crm-layout-001--one-breakpoint-and-a-4060-grid-of-the-device-and-the-boxes) | One breakpoint, and a 40/60 grid of the device and the boxes | active | constraint | P1 | sean |
 | [`REQ-CRM-LCD-001`](lcd.md#req-crm-lcd-001--no-led-in-the-glass-characters-that-do-not-move-and-leds-in-the-bezel) | No LED in the glass, characters that do not move, and LEDs in the bezel | active | constraint | P1 | sean |
+| [`REQ-CRM-MCP-001`](mcp.md#req-crm-mcp-001--no-mcp-tool-deletes-erases-or-touches-money) | No MCP tool deletes, erases or touches money | active | constraint | P1 | sean |
 
 ## Dependency graph
 

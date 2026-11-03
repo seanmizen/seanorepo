@@ -36,9 +36,12 @@ describe('migrations', () => {
     const db = openDatabase(file);
     expect(tableNames(db)).toEqual([
       'audit_log',
+      'connection',
       'login_token',
       'membership',
       'note',
+      'oauth_client',
+      'oauth_code',
       'org_counter',
       'organisation',
       'passkey',
@@ -139,7 +142,12 @@ describe('migrations', () => {
       "INSERT INTO note (id, organisation_id, body, created_at) VALUES ('n-b', 'b', 'y', '2026-01-01T10:00:00.000Z');",
     );
 
-    expect(migrate(db)).toEqual(['004-numbers.sql']);
+    // 004 runs first, then each later migration.
+    expect(migrate(db)).toEqual(
+      readdirSync(MIGRATIONS_DIR)
+        .filter((name) => name.endsWith('.sql') && name >= '004')
+        .sort(),
+    );
     expect(
       db
         .query(

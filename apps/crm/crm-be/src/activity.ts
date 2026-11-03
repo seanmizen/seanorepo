@@ -129,8 +129,9 @@ const setLost = (db: Database, actor: string, org: Org) =>
 
 /**
  * Add a visit or a note to `org`, from the values of the Log module, with
- * the next activity number and an audit row. The audit row never copies
- * the text: it is relationship data.
+ * the next activity number and an audit row. The audit row has the names
+ * of the fields with a value, and never copies the text: it is
+ * relationship data. Returns the activity number.
  */
 export const logActivity = (
   db: Database,
@@ -145,8 +146,11 @@ export const logActivity = (
       db.query(
         'INSERT INTO note (id, organisation_id, number, body) VALUES (?, ?, ?, ?);',
       ).run(id, org.id, number, values.note);
-      audit(db, actor, 'create', 'note', id, { organisation_id: org.id });
-      return;
+      audit(db, actor, 'create', 'note', id, {
+        organisation_id: org.id,
+        fields: ['note'],
+      });
+      return number;
     }
     db.query(
       'INSERT INTO visit (id, organisation_id, number, outcome, note) VALUES (?, ?, ?, ?, ?);',
@@ -154,8 +158,10 @@ export const logActivity = (
     audit(db, actor, 'create', 'visit', id, {
       organisation_id: org.id,
       outcome: values.outcome,
+      fields: values.note ? ['outcome', 'note'] : ['outcome'],
     });
     if (values.outcome === 'do_not_knock') setLost(db, actor, org);
+    return number;
   })();
 
 /**
