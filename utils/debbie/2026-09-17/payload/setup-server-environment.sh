@@ -118,6 +118,64 @@ log() { echo "[server-setup] $*"; }
 # computer only, so this file has its own.
 die() { echo "[server-setup] ERROR: $*" >&2; exit 1; }
 
+#------------------------------------------------------------------------------
+# Setup replaces only its own files - REQ-NETWORK-003.
+#
+# Each file that this script writes under /etc starts with a `Managed by` line
+# that names this script. `#` or `//`, as the format of the file needs. The
+# line is the mark of ownership. may_replace is the one place that reads it.
+# This script writes or replaces such a file only when:
+#   - the file does not exist, or
+#   - the first line of the file is that header.
+# A file without the header is a person's file. This script logs its name and
+# changes nothing in it.
+#
+# Why: a person can write a file where this script also writes one. A Wi-Fi
+# stanza in interfaces.d with a `wpa-conf` line is the example. A replacement
+# removed that line. Wi-Fi stayed up until the next reboot, and after the
+# reboot the host could not join its Wi-Fi. That host had no cable.
+#
+# To take a file from this script, delete its header line. To give the file
+# back, delete the file. The next run writes it again.
+#
+# Files that this script owns outright do not use the rule. Each one says why
+# where this script writes it: /etc/docker/daemon.json, the apt source lists,
+# 20auto-upgrades, the role flags, /etc/hostname and the 127.0.1.1 line of
+# /etc/hosts.
+#------------------------------------------------------------------------------
+MANAGED_BY="Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh"
+
+# may_replace FILE: exit 0 when this script can write FILE.
+may_replace() {
+    local first=""
+    [ -e "$1" ] || return 0
+    # read, not `head | grep -q`: under pipefail a pipe can fail on SIGPIPE.
+    IFS= read -r first < "$1" || true
+    case "$first" in
+        "# $MANAGED_BY"* | "// $MANAGED_BY"*) return 0 ;;
+    esac
+    log "  keeping $1 unchanged: line 1 is not the '# $MANAGED_BY' header, so a person owns the file"
+    return 1
+}
+
+# write_managed FILE MODE: install stdin as FILE, root:root and MODE, when
+# may_replace permits it and the bytes are different. A correct file keeps its
+# bytes. Sets managed_changed=1 when it writes, and 0 when it does not.
+write_managed() {
+    local dest="$1" mode="$2" tmp
+    managed_changed=0
+    # Read stdin first, also for a kept file. A writer into a pipe that
+    # nobody reads can fail on SIGPIPE, and pipefail then stops the script.
+    tmp="$(mktemp)"
+    cat > "$tmp"
+    if may_replace "$dest" && { [ ! -f "$dest" ] || ! cmp -s "$tmp" "$dest"; }; then
+        log "  writing $dest"
+        install -m "$mode" -o root -g root "$tmp" "$dest"
+        managed_changed=1
+    fi
+    rm -f "$tmp"
+}
+
 # Where this script and its unit templates were unpacked. provision.sh and
 # test-vm.sh both send payload/ and services/ as one tar and run this file by
 # path, so $0 is real in both.
@@ -163,6 +221,9 @@ apt-get install -y ufw avahi-daemon avahi-utils libnss-mdns ca-certificates curl
 
 #------------------------------------------------------------------------------
 # Hostname and mDNS - REQ-SERVER-004
+#
+# Not write_managed. The machine's name comes from SERVER_NAME and nowhere
+# else, so this script repairs the value and owns it.
 #
 # REPAIR, NOT RE-DO. The preseed's late_command sets both of these before the
 # first boot, so on such a machine this script skips every branch here. The
@@ -226,8 +287,8 @@ systemctl enable --now avahi-daemon
 #------------------------------------------------------------------------------
 log "ignoring lid, idle, power, suspend and hibernate events"
 install -d /etc/systemd/logind.conf.d
-cat > /etc/systemd/logind.conf.d/10-debbie-nosleep.conf <<'EOF'
-# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-SERVER-001
+write_managed /etc/systemd/logind.conf.d/10-debbie-nosleep.conf 0644 <<EOF
+# $MANAGED_BY - REQ-SERVER-001
 [Login]
 HandleLidSwitch=ignore
 HandleLidSwitchExternalPower=ignore
@@ -261,8 +322,8 @@ systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 #------------------------------------------------------------------------------
 log "capping the journal at 1G"
 install -d /etc/systemd/journald.conf.d
-cat > /etc/systemd/journald.conf.d/10-debbie-size.conf <<'EOF'
-# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-SERVER-007
+write_managed /etc/systemd/journald.conf.d/10-debbie-size.conf 0644 <<EOF
+# $MANAGED_BY - REQ-SERVER-007
 [Journal]
 SystemMaxUse=1G
 EOF
@@ -315,26 +376,29 @@ ufw --force enable
 #------------------------------------------------------------------------------
 log "ssh accepts keys only"
 install -d -m 755 /etc/ssh/sshd_config.d
-cat > /etc/ssh/sshd_config.d/10-debbie-keys-only.conf <<'EOF'
-# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-SERVER-008
+SSHD_KEYS_ONLY=/etc/ssh/sshd_config.d/10-debbie-keys-only.conf
+write_managed "$SSHD_KEYS_ONLY" 0644 <<EOF
+# $MANAGED_BY - REQ-SERVER-008
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
 EOF
-chmod 644 /etc/ssh/sshd_config.d/10-debbie-keys-only.conf
 
 # Check BEFORE the reload. A malformed sshd_config that is only written costs
 # nothing. One that is written and then reloaded stops sshd, and this script
 # runs over that SSH connection. On failure, the script removes the drop-in and
 # stops with an error. The machine then accepts passwords: degraded, but
 # reachable. That is the correct result on a host whose only other way in is a
-# physical keyboard.
+# physical keyboard. The script removes only a drop-in that it wrote on this
+# run. A drop-in that it did not change is not the cause.
 if sshd -t; then
     systemctl reload ssh
-else
+elif [ "$managed_changed" = 1 ]; then
     log "  ERROR: sshd -t rejected the drop-in. Removing it and stopping."
-    rm -f /etc/ssh/sshd_config.d/10-debbie-keys-only.conf
+    rm -f "$SSHD_KEYS_ONLY"
     exit 1
+else
+    die "sshd -t rejected the sshd configuration. This script did not change it on this run. Repair it, then run this script again."
 fi
 
 #------------------------------------------------------------------------------
@@ -404,13 +468,17 @@ log "unattended security upgrades"
 # from a debconf answer, but interactively, so this script writes the file
 # directly. It is a generated file, not a dpkg conffile, so no upgrade prompts
 # about it.
+#
+# NOT write_managed. `dpkg-reconfigure unattended-upgrades` writes this file
+# without the header, and then the header rule would keep the package's file
+# forever. This script owns the two values, so it writes the file on every run.
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
 // Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-SERVER-006
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 EOF
 
-cat > /etc/apt/apt.conf.d/52debbie-unattended-upgrades <<'EOF'
+write_managed /etc/apt/apt.conf.d/52debbie-unattended-upgrades 0644 <<'EOF'
 // Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-SERVER-006
 
 // apt.conf lists APPEND. Without these two lines, Debian's three stock
@@ -483,6 +551,8 @@ systemctl enable apt-daily.timer apt-daily-upgrade.timer
 # WRITTEN WHOLE AND COMPARED WHOLE, with no comment in it. daemon.json is
 # strict JSON, dockerd does not start on a file it cannot parse, and a
 # half-merged file is a machine with no Docker. This script owns the file.
+# JSON has no comments, so the file cannot hold the header, and the header
+# rule of may_replace does not apply to it.
 #------------------------------------------------------------------------------
 DOCKER_DAEMON_JSON=/etc/docker/daemon.json
 
@@ -789,7 +859,9 @@ for old_unit in custom-deploy-poll.timer custom-deploy-poll.service; do
 done
 
 # Make the role files match the settings validated at the top. Written whole,
-# removed when off - never left as they were.
+# removed when off - never left as they were. Not write_managed:
+# /etc/seanorepo is this script's own directory, and ROLE_* is the one source
+# of truth for these files.
 install -d -m 0755 "$ROLES_DIR"
 for role in webserver tunnel vpn; do
     case "$role" in
@@ -867,10 +939,7 @@ $DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $TCP_GETTER_UNIT
 EOF
 
 if visudo -cf "$sudoers_tmp" > /dev/null; then
-    if [ ! -f "$SUDOERS_DEST" ] || ! cmp -s "$sudoers_tmp" "$SUDOERS_DEST"; then
-        log "  installing $SUDOERS_DEST"
-        install -m 0440 -o root -g root "$sudoers_tmp" "$SUDOERS_DEST"
-    fi
+    write_managed "$SUDOERS_DEST" 0440 < "$sudoers_tmp"
 else
     # Fatal, with an error. A deploy that cannot restart the tunnel serves old
     # ingress after a config.yml change, with no report. There is no correct way
@@ -953,6 +1022,10 @@ fi
 # file keeps the same bytes, and a wrong one is replaced, not appended to. An
 # append makes apt report a repository configured twice on every update, and
 # payload/assert.sh counts the lines.
+#
+# The header rule (may_replace) does not apply to the apt source lists. This
+# script owns them outright. A hand-written source for the same repository is
+# the duplicate that the assert counts, so a replacement is the repair.
 cf_deb_line="deb [arch=$(dpkg --print-architecture) signed-by=$CLOUDFLARED_KEYRING] https://pkg.cloudflare.com/cloudflared $CLOUDFLARED_SUITE main"
 cf_repo_changed=0
 if [ ! -f "$CLOUDFLARED_LIST" ] || [ "$(cat "$CLOUDFLARED_LIST")" != "$cf_deb_line" ]; then
@@ -1331,22 +1404,22 @@ for net_path in /sys/class/net/*; do
         continue
     fi
 
-    net_stanza="/etc/network/interfaces.d/$net_if"
-    net_tmp="$(mktemp)"
-    {
-        echo "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-003"
-        echo "allow-hotplug $net_if"
-        echo "iface $net_if inet dhcp"
-    } > "$net_tmp"
+    # A file without the header is a person's stanza, for example a Wi-Fi
+    # stanza with a wpa-conf line. write_managed keeps it as it is. See
+    # may_replace.
+    # A heredoc, not a pipe: a pipe runs write_managed in a subshell, and
+    # managed_changed would not reach the test below.
+    write_managed "/etc/network/interfaces.d/$net_if" 0644 <<EOF
+# $MANAGED_BY - REQ-NETWORK-003
+allow-hotplug $net_if
+iface $net_if inet dhcp
+EOF
 
-    if [ ! -f "$net_stanza" ] || ! cmp -s "$net_tmp" "$net_stanza"; then
-        log "  writing $net_stanza"
-        install -m 0644 -o root -g root "$net_tmp" "$net_stanza"
+    if [ "$managed_changed" = 1 ]; then
         # ifup, not a restart of networking. A stop of the whole stack would
         # also stop the interface that this script arrived over.
         ifup "$net_if" > /dev/null 2>&1 || log "    $net_if did not start - no cable, or no DHCP server"
     fi
-    rm -f "$net_tmp"
 done
 
 #------------------------------------------------------------------------------
@@ -1373,15 +1446,11 @@ done
 log "ARP answers per interface"
 
 ARP_SYSCTL=/etc/sysctl.d/90-seanorepo-arp.conf
-arp_tmp="$(mktemp)"
-printf '%s\n' "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-003" \
-    "net.ipv4.conf.all.arp_ignore = 1" \
-    "net.ipv4.conf.all.arp_announce = 2" > "$arp_tmp"
-if [ ! -f "$ARP_SYSCTL" ] || ! cmp -s "$arp_tmp" "$ARP_SYSCTL"; then
-    log "  writing $ARP_SYSCTL"
-    install -m 0644 -o root -g root "$arp_tmp" "$ARP_SYSCTL"
-fi
-rm -f "$arp_tmp"
+write_managed "$ARP_SYSCTL" 0644 <<EOF
+# $MANAGED_BY - REQ-NETWORK-003
+net.ipv4.conf.all.arp_ignore = 1
+net.ipv4.conf.all.arp_announce = 2
+EOF
 sysctl -q -p "$ARP_SYSCTL"
 
 #------------------------------------------------------------------------------
@@ -1536,17 +1605,18 @@ case "$(sshd -T 2> /dev/null || true)" in
 esac
 if [ "$sshd_has_penalties" = yes ]; then
     log "  exempting loopback from sshd per-source penalties"
-    cat > "$NGROK_SSHD_DROPIN" <<'EOF'
-# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-005. ngrok arrives from loopback.
+    write_managed "$NGROK_SSHD_DROPIN" 0644 <<EOF
+# $MANAGED_BY - REQ-NETWORK-005. ngrok arrives from loopback.
 PerSourcePenaltyExemptList 127.0.0.1,::1
 EOF
-    chmod 644 "$NGROK_SSHD_DROPIN"
     if sshd -t; then
         systemctl reload ssh
-    else
+    elif [ "$managed_changed" = 1 ]; then
         log "  ERROR: sshd -t rejected $NGROK_SSHD_DROPIN. Removing it and stopping."
         rm -f "$NGROK_SSHD_DROPIN"
         exit 1
+    else
+        die "sshd -t rejected the sshd configuration. This script did not change it on this run. Repair it, then run this script again."
     fi
 else
     log "  sshd has no per-source penalties - nothing to exempt"
@@ -1625,8 +1695,10 @@ if [ "$ROLE_VPN" = yes ]; then
     fi
     apt-get install -y tailscale
 
-    printf '%s\n' "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-006" \
-        "net.ipv4.ip_forward = 1" > "$VPN_SYSCTL"
+    write_managed "$VPN_SYSCTL" 0644 <<EOF
+# $MANAGED_BY - REQ-NETWORK-006
+net.ipv4.ip_forward = 1
+EOF
     sysctl -q -w net.ipv4.ip_forward=1
 
     # On an active service, `enable --now` changes nothing.
@@ -1661,7 +1733,11 @@ else
     if dpkg-query -W -f='${Status}' tailscale-archive-keyring 2> /dev/null | grep -q "^install ok installed"; then
         apt-get purge -y tailscale-archive-keyring
     fi
-    rm -f "$TAILSCALE_LIST" "$TAILSCALE_KEYRING" "$VPN_SYSCTL"
+    rm -f "$TAILSCALE_LIST" "$TAILSCALE_KEYRING"
+    # A forwarding file that a person wrote stays. See may_replace.
+    if may_replace "$VPN_SYSCTL"; then
+        rm -f "$VPN_SYSCTL"
+    fi
 fi
 
 # The .deb files that apt keeps after an install. Nothing reads them again, and

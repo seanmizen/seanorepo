@@ -292,6 +292,17 @@ the power button for four seconds. The firmware then cuts the power.
 Security updates install automatically. The target machine never reboots on
 its own, so a kernel fix waits until you reboot it.
 
+### Change a file that setup writes
+
+Line 1 of most files that setup writes under `/etc` is a `# Managed by` header
+(`//` in an apt file). Setup replaces such a file when its content is
+different. To keep your own version, delete the header line. Setup then
+leaves the file as it is, and logs its name (REQ-NETWORK-003). To give the
+file back to setup, delete it. The next provisioning run writes it again.
+
+A hand-written Wi-Fi stanza in `/etc/network/interfaces.d/<iface>` is the
+usual example. Give it no header, so that setup keeps its `wpa-conf` line.
+
 ### Upgrade or roll back cloudflared and ngrok
 
 `custom-vendor-upgrade.timer` updates both, once a day at about 05:30. It

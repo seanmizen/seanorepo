@@ -1586,19 +1586,34 @@ if [ "$PHASE" = provisioned ]; then
     # watchdog that finds no candidates fails silently.
     check "the watchdog does not depend on nmcli" \
         "! grep -vE '^[[:space:]]*#' '$NF_SCRIPT' | grep -q nmcli"
-    check "every physical interface has an address" \
-        'bad=0; for p in /sys/class/net/*; do [ -e "$p/device" ] || continue;
-             i=$(basename "$p");
-             ip -4 -o addr show "$i" | grep -q inet || bad=1; done; [ "$bad" = 0 ]'
-    # Every physical interface, and not "more than one". A machine with one
-    # link has exactly one default route, and that is correct. A check that
-    # demands two fails on a machine that has only wifi.
-    # What it proves either way is that the per-interface addressing above
-    # produced a route for every link the watchdog could promote.
-    check "every physical interface holds a default route" \
-        'want=$(ls -d /sys/class/net/*/device 2>/dev/null | wc -l);
-         got=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\") print \$(i+1)}" | sort -u | wc -l);
-         [ "$want" -gt 0 ] && [ "$got" = "$want" ]'
+    # Each physical interface WITH CARRIER, and not "more than one". A machine
+    # with one link has exactly one default route, and that is correct. A
+    # check that demands two fails on a machine that has only wifi.
+    # What it proves is that the per-interface addressing above produced an
+    # address and a route for every link the watchdog could promote.
+    #
+    # The check skips an interface with no carrier, and gives the reason. A
+    # wired port with no cable cannot get an address, and the watchdog cannot
+    # promote it. A Wi-Fi-only host has such a port. An interface with carrier
+    # and no address still fails. /sys/class/net/<iface>/carrier reads 1 for
+    # carrier and 0 for no carrier, and the read fails on an interface that is
+    # down. The last two both count as no carrier.
+    nf_carrier=0
+    for p in /sys/class/net/*; do
+        [ -e "$p/device" ] || continue
+        i=$(basename "$p")
+        if [ "$(cat "$p/carrier" 2> /dev/null)" = 1 ]; then
+            nf_carrier=$((nf_carrier + 1))
+            check "every physical interface has an address ($i)" \
+                "ip -4 -o addr show '$i' | grep -q inet"
+            check "every physical interface holds a default route ($i)" \
+                "ip -4 route show default dev '$i' | grep -q ."
+        else
+            sk "every physical interface has an address ($i)" "no carrier on $i: no cable, or the link is down"
+            sk "every physical interface holds a default route ($i)" "no carrier on $i: no cable, or the link is down"
+        fi
+    done
+    check "at least one physical interface has carrier" "[ $nf_carrier -gt 0 ]"
     # Two links on one subnet: with the kernel default, the wired card answers
     # ARP for the wifi address, the router sends wifi's replies to the wired
     # card, and the watchdog's `ping -I <wifi>` never sees them. The file makes
@@ -1676,6 +1691,7 @@ else
     sk "the watchdog does not depend on nmcli" "setup-server-environment.sh installs it"
     sk "every physical interface has an address" "setup-server-environment.sh addresses them"
     sk "every physical interface holds a default route" "setup-server-environment.sh addresses them"
+    sk "at least one physical interface has carrier" "setup-server-environment.sh addresses them"
     sk "each interface answers ARP only for its own address (arp_ignore=1, arp_announce=2)" "setup-server-environment.sh sets it"
     sk "case 1+8: a healthy run succeeds, changes nothing and logs nothing" "setup-server-environment.sh installs it"
     sk "case 4: upstream dead with carrier up moves the default route" "setup-server-environment.sh installs it"
@@ -1747,13 +1763,49 @@ fi
 # passed in a VM: QEMU has no 802.11 device the installer would drive, so a
 # green VM run says nothing at all about this and must not pretend otherwise.
 echo "== network =="
+
+# wifi_joins_at_boot IFACE: exit 0 when the configuration on disk lets IFACE
+# join a Wi-Fi network at boot. One of these must be true:
+#   1. the ifupdown stanza of IFACE has `wpa-ssid`. netcfg writes this form.
+#   2. the stanza has `wpa-conf <file>`, and <file> has a `network={` block
+#      with an `ssid=` line. A person writes this form by hand.
+#   3. a NetworkManager profile has an SSID.
+# The stanza is the `iface IFACE` line and its option lines, up to the next
+# stanza keyword. The function reads the files as root: wpa_supplicant.conf
+# holds the key, so only root can read it. No `exit` in here: a return says
+# the result.
+wifi_joins_at_boot() {
+    local opts conf
+    opts="$(sudo -n cat /etc/network/interfaces /etc/network/interfaces.d/* 2> /dev/null | awk -v i="$1" '
+        $1 ~ /^(iface|auto|allow-[a-z]+|mapping|source|source-directory)$/ { in_stanza = ($1 == "iface" && $2 == i); next }
+        in_stanza && ($1 == "wpa-ssid" || $1 == "wpa-conf") { print $1, $2 }')"
+    case "$opts" in
+        *wpa-ssid*) return 0 ;;
+    esac
+    conf="$(printf '%s\n' "$opts" | awk '$1 == "wpa-conf" { print $2; exit }')"
+    if [ -n "$conf" ] && sudo -n cat "$conf" 2> /dev/null | awk '
+        /^[[:space:]]*network[[:space:]]*=[[:space:]]*\{/ { in_block = 1; next }
+        in_block && /^[[:space:]]*\}/ { in_block = 0; next }
+        in_block && /^[[:space:]]*ssid[[:space:]]*=/ { found = 1 }
+        END { exit !found }'; then
+        return 0
+    fi
+    sudo -n grep -rqs '^ssid=\|wifi.ssid' /etc/NetworkManager/system-connections/
+}
+
 if [ -n "$(ls -d /sys/class/net/*/wireless 2> /dev/null)" ]; then
     # netcfg persists wifi as an ifupdown stanza plus wpasupplicant in the
-    # target. The check also accepts a NetworkManager profile, for the setup
-    # that REQ-NETWORK-004 proposes.
-    check "wifi config persisted" \
-        'sudo -n grep -rqs "wpa-ssid\|wpa-psk" /etc/network/interfaces /etc/network/interfaces.d/ \
-         || sudo -n grep -rqs "^ssid=\|wifi.ssid" /etc/NetworkManager/system-connections/'
+    # target. A person can also write a stanza with wpa-conf. The check also
+    # accepts a NetworkManager profile. The check reads each wireless
+    # interface by name, so a stanza for another interface does not count.
+    for w in /sys/class/net/*/wireless; do
+        i=$(basename "$(dirname "$w")")
+        if wifi_joins_at_boot "$i"; then
+            ok "wifi config persisted ($i)"
+        else
+            no "wifi config persisted ($i): no wpa-ssid, no wpa-conf file with an ssid, and no NetworkManager profile. This host will not join its Wi-Fi after a reboot."
+        fi
+    done
     # No `exit` in here either, subshell or not: a loop that sets a flag says
     # what it means, and cannot be broken by a later change to how check() runs.
     check "a wireless interface has an address" \

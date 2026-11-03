@@ -589,6 +589,39 @@ do_assert() {
     [ "$firstboot_rc" = 0 ] \
         || die_code 1 "first-boot assertions failed - the INSTALL is wrong, not the provisioning. A later pass is not a fix: setup-server-environment.sh repairs the hostname and mDNS, so it goes green either way."
 
+    #--------------------------------------------------------------------------
+    # A hand-written interface file keeps its bytes - REQ-NETWORK-003.
+    #
+    # Setup replaces a file under /etc only when line 1 is its `Managed by`
+    # header. This writes a file without the header in interfaces.d, BEFORE the
+    # first provisioning run, for the last physical interface that the
+    # installer did not configure. That is n1 or n2, never n0. The stanza is a
+    # plain DHCP stanza, so the network checks still apply to the interface.
+    # After both provisioning runs and the reboot, the file must have the same
+    # sha256 as here. On metal, the example is a Wi-Fi stanza with wpa-conf.
+    #--------------------------------------------------------------------------
+    log "writing a hand-written interface file, which setup must keep"
+    local hw_file hw_before
+    hw_file="$(ssh "${ssh_opts[@]}" "$target" 'sudo -n bash -s' <<'HW_EOF'
+set -eu
+hw_if=""
+for p in /sys/class/net/*; do
+    [ -e "$p/device" ] || continue
+    i=$(basename "$p")
+    grep -qE "^[[:space:]]*(auto|allow-hotplug|iface)[[:space:]]+$i\b" /etc/network/interfaces && continue
+    hw_if="$i"
+done
+[ -n "$hw_if" ]
+f="/etc/network/interfaces.d/$hw_if"
+mkdir -p /etc/network/interfaces.d
+printf '%s\n' "# Hand-written by test-vm.sh. Setup must keep these bytes - REQ-NETWORK-003." \
+    "allow-hotplug $hw_if" "iface $hw_if inet dhcp" > "$f"
+echo "$f"
+HW_EOF
+    )" || die_code 2 "could not write the hand-written interface file"
+    hw_before="$(ssh "${ssh_opts[@]}" "$target" "sha256sum '$hw_file'" | cut -d' ' -f1)"
+    [ -n "$hw_before" ] || die_code 2 "could not hash $hw_file"
+
     log "provisioning"
     # payload/ AND services/, because the unit templates travel with the script
     # that installs them. The VM's checkout is on `release` and does not have a
@@ -667,6 +700,17 @@ do_assert() {
     ssh "${ssh_opts[@]}" "$target" \
         "EXPECT_ARCH=$GUEST_ARCH EXPECT_HOSTNAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER UNDER_TEST_DIR=/tmp/under-test/$gen/services EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
         < "$GEN_DIR/payload/assert.sh" || rc=$?
+
+    # The hand-written interface file from before the first provisioning run.
+    log "a hand-written interface file keeps its bytes"
+    local hw_after
+    hw_after="$(ssh "${ssh_opts[@]}" "$target" "sha256sum '$hw_file'" 2> /dev/null | cut -d' ' -f1 || true)"
+    if [ "$hw_after" = "$hw_before" ]; then
+        log "  PASS: $hw_file has the bytes that it had before provisioning"
+    else
+        log "  FAIL: setup changed $hw_file, a file without its header"
+        rc=1
+    fi
 
     #--------------------------------------------------------------------------
     # Case 5 of the failover matrix: a cable pulled out - REQ-NETWORK-003.
