@@ -1,7 +1,8 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
-import { type Auth, now, type SessionMethod } from '../auth';
+import { type Auth, isAdmin, now, type SessionMethod } from '../auth';
 import { demoLoginOn } from '../demo';
+import { listConnections } from '../oauth';
 import { type PageParts, renderPage } from '../render';
 import { Device } from '../ui/Device';
 import { Key } from '../ui/Key';
@@ -18,17 +19,20 @@ export const SESSION_TEXT: Record<SessionMethod, string> = {
 /**
  * The account page. The nav links to it, and so does the path title of
  * each account page. The LCD shows the email and how this session signed
- * in, then a menu of the account pages, each with its count. While the
- * demo switch is on (`demo.ts`), the Demo module holds `Reset demo data`.
+ * in, then a menu of the account pages, each with its count. Only the
+ * admin has the Connections page (`connections`). While the demo switch is
+ * on (`demo.ts`), the Demo module holds `Reset demo data`.
  */
 export const accountPage = ({
   auth,
   passkeys,
   sessions,
+  connections,
 }: {
   auth: Auth;
   passkeys: number;
   sessions: number;
+  connections?: number;
 }): PageParts => ({
   title: 'Account',
   device: (
@@ -52,6 +56,15 @@ export const accountPage = ({
               name: 'Sessions',
               value: String(sessions),
             },
+            ...(connections === undefined
+              ? []
+              : [
+                  {
+                    href: '/account/connections',
+                    name: 'Connections',
+                    value: String(connections),
+                  },
+                ]),
           ],
         }}
       />
@@ -86,6 +99,9 @@ export const accountRoute = (app: FastifyInstance, db: Database) => {
             auth.personId,
             now(),
           ),
+          connections: isAdmin(auth)
+            ? listConnections(db, auth.personId).length
+            : undefined,
         }),
       ),
     );

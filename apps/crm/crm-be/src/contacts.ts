@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { audit, normalizeEmail } from './auth';
 import { contactForm } from './forms/contact';
-import { changedFields, type FormValues } from './forms/form';
+import { changedFields, type FormValues, fieldsOf } from './forms/form';
 import { nextNumber } from './org';
 
 /**
@@ -48,9 +48,9 @@ export const findContact = (db: Database, orgId: string, number: number) =>
 /**
  * Add a contact to an organisation, from the values of the contact form:
  * a `person` and a `membership` with the next contact number, each with an
- * audit row. If a person has
- * the email, link that person and leave the row as it is. Run it in a
- * transaction. Returns an error if the person is a contact of the
+ * audit row. The audit rows have the names of the fields with a value. If a
+ * person has the email, link that person and leave the row as it is. Run it
+ * in a transaction. Returns an error if the person is a contact of the
  * organisation already.
  */
 export const addContact = (
@@ -78,7 +78,12 @@ export const addContact = (
     db.query(
       'INSERT INTO person (id, email, name, phone) VALUES (?, ?, ?, ?);',
     ).run(personId, values.email || null, values.name, values.phone || null);
-    audit(db, actor, 'create', 'person', personId, { organisation_id: orgId });
+    audit(db, actor, 'create', 'person', personId, {
+      organisation_id: orgId,
+      fields: fieldsOf(contactForm)
+        .map((field) => field.name)
+        .filter((name) => name !== 'role' && values[name]),
+    });
   }
   db.query(
     'INSERT INTO membership (person_id, organisation_id, role, number) VALUES (?, ?, ?, ?);',
@@ -86,6 +91,7 @@ export const addContact = (
   audit(db, actor, 'create', 'membership', orgId, {
     person_id: personId,
     role: values.role,
+    fields: ['role'],
   });
   return undefined;
 };

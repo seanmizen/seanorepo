@@ -97,6 +97,18 @@ export const nextNumber = (db: Database, orgId: string, kind: NumberKind) => {
 };
 
 /**
+ * The last number that `nextNumber` gave to a `kind` of record of the
+ * organisation `orgId`, or null. Run it in the transaction that added the
+ * record, to get its number.
+ */
+export const lastNumber = (db: Database, orgId: string, kind: NumberKind) =>
+  db
+    .query<{ last: number }, [string, NumberKind]>(
+      'SELECT last FROM org_counter WHERE organisation_id = ? AND kind = ?;',
+    )
+    .get(orgId, kind)?.last ?? null;
+
+/**
  * The number in a path segment, such as the `2` of `/contacts/2`, or null
  * when the segment is not a number from 1. The routes send 404 for null.
  */
@@ -178,6 +190,29 @@ export interface Pipeline {
   next_action: string | null;
   next_action_on: string | null;
 }
+
+/**
+ * Read a pipeline from a post: `stage`, `next_action` and `next_action_on`
+ * (a date, `YYYY-MM-DD`). An empty next action or date is null. Returns the
+ * pipeline, or the error for the first value that is not valid. The route
+ * `POST /orgs/<slug>/stage` and the MCP tools `set_stage` and
+ * `set_next_action` use it, so they accept the same values.
+ */
+export const parsePipeline = (
+  body: unknown,
+): { pipeline: Pipeline } | { error: string } => {
+  const post = (body ?? {}) as Record<string, unknown>;
+  const stage = formText(post.stage);
+  const nextAction = formText(post.next_action) || null;
+  const nextActionOn = formText(post.next_action_on) || null;
+  if (!isStage(stage)) return { error: 'Choose a stage.' };
+  if (nextActionOn && !/^\d{4}-\d{2}-\d{2}$/.test(nextActionOn)) {
+    return { error: 'The Due date is not valid.' };
+  }
+  return {
+    pipeline: { stage, next_action: nextAction, next_action_on: nextActionOn },
+  };
+};
 
 /**
  * Set the pipeline of `org`, with an audit row for the Activity list. The
