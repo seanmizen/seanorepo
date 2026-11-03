@@ -105,6 +105,11 @@ test_cloudflared() {
   test_endpoint "http://localhost:4090" "Library" || ((failed++))
   test_endpoint "http://localhost:4090/api/health" "Song API" || ((failed++))
 
+  echo -e "\n${YELLOW}crm.seanmizen.com${NC}"
+  test_endpoint "http://localhost:4100/api/health" "Health" || ((failed++))
+  # A signed-out visitor goes to /login. A 200 here means no sign-in guard.
+  test_endpoint "http://localhost:4100/" "Sign-in guard" 303 || ((failed++))
+
   echo -e "\n${YELLOW}seansconverter.com${NC}"
   test_endpoint "http://localhost:4050" "Frontend" || ((failed++))
   test_endpoint "http://localhost:4051/api/health" "Backend API" || ((failed++))
