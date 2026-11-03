@@ -44,7 +44,9 @@ git worktree add -b SEAN-{n}/{short-description} ../seanorepo-{n} origin/main
 - Work in the worktree. Never edit the `main` checkout.
 - A worktree has no `node_modules`, and the commit hook needs it. Run
   `yarn install` in the worktree. The global Yarn cache makes it take about
-  40 s. Never symlink `node_modules` from the main checkout: a tool that
+  40 s. `nmMode: hardlinks-global` in `.yarnrc.yml` makes the `node_modules`
+  files hard links into the global Yarn store, so the install adds almost no
+  disk use. Never symlink `node_modules` from the main checkout: a tool that
   deletes through the link (for example `next dev` when it cleans `.next`)
   then deletes files in the main checkout.
 - Read the acceptance criteria before writing code. For out-of-scope work you
