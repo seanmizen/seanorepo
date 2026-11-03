@@ -311,7 +311,7 @@ in no repository:
 | **ngrok token** - SSH from outside the LAN | every machine | as `srv` on the machine: `ngrok config add-authtoken <token>`, then run `./3-provision/provision.sh <machine>` again. Find the address: [Remote SSH](../README.md#remote-ssh-ngrok) |
 | **Serve the sites** | webservers | set `ROLE_WEBSERVER=yes` in `3-provision/<machine>.env`, and run `./3-provision/provision.sh <machine>` again. Without the tunnel role, the sites are published on the LAN |
 | **Tunnel credentials** - the internet reaches this machine | the ONE tunnel machine | Set `ROLE_TUNNEL=yes` too. Copy the credentials JSON into `apps/cloudflared/credentials/` on the machine ([recipe](../README.md#set-up-the-cloudflare-tunnel)). Run `./3-provision/provision.sh <machine>` again |
-| **VPN (Tailscale)** - SSH and the LAN from any network | the ONE VPN machine | Set `ROLE_VPN=yes`, then log in once and approve the route ([recipe](../README.md#vpn-tailscale)). On a machine that serves sites, run `./3-provision/provision.sh <machine> --no-reboot`, then `--assert` |
+| **VPN (Tailscale)** - SSH and the LAN from any network | each VPN machine | Set `ROLE_VPN=yes`, then log in once and approve the route ([recipe](../README.md#vpn-tailscale)). On a machine that serves sites, run `./3-provision/provision.sh <machine> --no-reboot`, then `--assert` |
 
 **Moving the public sites to another machine** is a deliberate act, because the
 data moves with them (SQLite on local volumes):
