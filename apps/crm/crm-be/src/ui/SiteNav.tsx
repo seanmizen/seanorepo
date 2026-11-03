@@ -1,9 +1,12 @@
 import { Fragment } from 'react';
 
-/** The app links of the nav, in order. "sign out" comes after them. */
+/**
+ * The app links of the nav, in order. "sign out" comes after them. `also`
+ * is a different path of the same page: `/` shows the same list as
+ * `/orgs`.
+ */
 const LINKS = [
-  { href: '/', text: 'today' },
-  { href: '/orgs', text: 'orgs' },
+  { href: '/orgs', text: 'orgs', also: '/' },
   { href: '/orgs/new', text: 'new lead' },
   { href: '/account', text: 'account' },
 ];
@@ -24,9 +27,9 @@ const segmentText = (segment: string) => {
  *    each segment of the URL. Each segment above the page is a link. The
  *    page itself is dimmed and has `aria-current="page"`. The title is the
  *    first element in `<body>`.
- * 2. For a signed-in person, one line of links: today, orgs, new lead,
- *    account, sign out. The link to this page is text, not a link. "sign
- *    out" is a form, because it sends a POST.
+ * 2. For a signed-in person, one line of links: orgs, new lead, account,
+ *    sign out. The link to this page is text, not a link. "sign out" is a
+ *    form, because it sends a POST.
  *
  * With no page styles, the title is a heading and the links are a list.
  */
@@ -67,9 +70,9 @@ export const SiteNav = ({
       {signedIn && (
         <nav className="links" aria-label="crm">
           <ul>
-            {LINKS.map(({ href, text }) => (
+            {LINKS.map(({ href, text, also }) => (
               <li key={href}>
-                {href === path ? (
+                {href === path || also === path ? (
                   <span aria-current="page">{text}</span>
                 ) : (
                   <a href={href}>{text}</a>

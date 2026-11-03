@@ -1,3 +1,4 @@
+import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -12,13 +13,15 @@ import {
   signInAdmin,
   testApp,
 } from '../test-helpers';
+import { LIST_PATHS, nextSort, PAGE_SIZE } from './index';
 
 let app: ReturnType<typeof buildApp>;
+let db: Database;
 let close: () => Promise<void>;
 let cookie: string;
 
 beforeEach(() => {
-  ({ app, close } = testApp());
+  ({ app, db, close } = testApp());
   cookie = signInAdmin(app);
 });
 
@@ -79,21 +82,79 @@ const addFullOrg = async () => {
   return slug;
 };
 
-describe('GET /', () => {
-  test('renders the Today page in the page anatomy, with the assets', async () => {
+/** The names in the menu of the LCD, in order. */
+const names = async (url: string) => {
+  const response = await get(url);
+  expect(response.statusCode).toBe(200);
+  return [
+    ...response.body.matchAll(
+      /<li><a href="\/orgs\/[^"]+"><span class="name">([^<]+)<\/span>/g,
+    ),
+  ].map((m) => m[1]);
+};
+
+/** Set the added time of an organisation. */
+const setAdded = (slug: string, at: string) =>
+  db
+    .query('UPDATE organisation SET created_at = ? WHERE slug = ?;')
+    .run(at, slug);
+
+/** The id of an organisation. */
+const idOf = (slug: string) =>
+  db
+    .query<{ id: string }, [string]>(
+      'SELECT id FROM organisation WHERE slug = ?;',
+    )
+    .get(slug)?.id;
+
+/** Add a visit to an organisation at the time `at`. */
+const addVisit = (slug: string, at: string) =>
+  db
+    .query(
+      `INSERT INTO visit (id, organisation_id, at, outcome) VALUES (?, ?, ?, 'spoke');`,
+    )
+    .run(crypto.randomUUID(), idOf(slug) ?? '', at);
+
+/** Add a note to an organisation at the time `at`. */
+const addNote = (slug: string, at: string) =>
+  db
+    .query(
+      `INSERT INTO note (id, organisation_id, body, created_at) VALUES (?, ?, 'A note', ?);`,
+    )
+    .run(crypto.randomUUID(), idOf(slug) ?? '', at);
+
+/**
+ * Three organisations with known times, and no next action:
+ * - Bravo: added first, with a visit last.
+ * - Alpha: added second, with a note.
+ * - Charlie: added last, with no visit or note.
+ */
+const addThree = async () => {
+  for (const name of ['Alpha', 'Bravo', 'Charlie']) {
+    await addOrg(app, cookie, { name });
+  }
+  setAdded('bravo', '2026-01-01T10:00:00.000Z');
+  setAdded('alpha', '2026-02-01T10:00:00.000Z');
+  setAdded('charlie', '2026-03-01T10:00:00.000Z');
+  addNote('alpha', '2026-03-15T10:00:00.000Z');
+  addVisit('bravo', '2026-04-01T10:00:00.000Z');
+};
+
+describe('GET / and GET /orgs', () => {
+  test('renders the list in the page anatomy, with the assets', async () => {
     const response = await get('/');
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toBe('text/html; charset=utf-8');
 
     const html = response.body;
     expect(html.startsWith('<!doctype html><html lang="en">')).toBe(true);
-    expect(html).toContain('<title>Today - crm</title>');
+    expect(html).toContain('<title>Organisations - crm</title>');
     expect(html).toContain(
       '<body><h1 id="top" class="title"><span aria-current="page">crm</span></h1><nav class="links"',
     );
     expect(html).toContain('<div class="device"><div class="lcd">');
     expect(html).toContain('<footer class="foot">');
-    expect(html).toContain('Nothing is due.');
+    expect(html).toContain('No organisations yet.');
 
     const manifest = JSON.parse(
       readFileSync(path.join(FE_DIST, 'manifest.json'), 'utf8'),
@@ -115,36 +176,262 @@ describe('GET /', () => {
     );
   });
 
-  test('the LCD lists the organisations due today or earlier, oldest first, as a menu', async () => {
-    await addDue('Due Today', dayFromToday(0));
+  test('the LCD lists every organisation as a menu: name, stage, next action date and last activity, with a lit LED when due', async () => {
     await addDue('Due Last Week', dayFromToday(-7), 'Knock again');
+    await addDue('Due Today', dayFromToday(0));
     await addDue('Due Tomorrow', dayFromToday(1));
     await addOrg(app, cookie, { name: 'No Date' });
+    setAdded('no-date', '2026-01-01T10:00:00.000Z');
 
-    const html = (await get('/')).body;
-    const lcd = divOf(html, 'lcd');
-    expect(lcd).toContain('<dt>Due</dt><dd>2</dd>');
+    const lcd = divOf((await get('/')).body, 'lcd');
     expect(lcd).toContain(
-      '<dt>Overdue</dt><dd><span class="led on">1</span></dd>',
+      '<ol class="menu" data-legend-name="Organisation" data-legend-value="Next action" data-legend-detail="Stage" data-legend-status="Last activity">',
     );
+    expect(lcd).toContain(
+      '<a href="/orgs/due-last-week"><span class="name">Due Last Week</span>',
+    );
+    // The LED of a next action is lit when it is due today or overdue.
+    const led = (date: string) =>
+      new RegExp(
+        `<span class="led( on)?"><time dateTime="[^"]+" title="[^"]+">${formatDate(date)}</time></span>`,
+      ).exec(lcd)?.[1] === ' on';
+    expect(led(dayFromToday(-7))).toBe(true);
+    expect(led(dayFromToday(0))).toBe(true);
+    expect(led(dayFromToday(1))).toBe(false);
+    // With no page styles, text tells each value and the due state.
     const text = bodyText(lcd);
-    expect(text).not.toContain('Due Tomorrow');
-    expect(text).not.toContain('No Date');
-    expect(text.indexOf('Due Last Week')).toBeLessThan(
-      text.indexOf('Due Today'),
-    );
-    expect(lcd).toContain(
-      '<a href="/due-last-week"><span class="name">Due Last Week</span>',
-    );
-    // The status words come next to the date, never in place of it.
     expect(text).toContain(
-      `Due Last Week ${formatDate(dayFromToday(-7))} Knock again 7 days overdue`,
+      `Due Last Week · next action ${formatDate(dayFromToday(-7))} (7 days overdue) · stage Lead · last activity`,
     );
     expect(text).toContain(
-      `Due Today ${formatDate(dayFromToday(0))} Call today`,
+      `Due Today · next action ${formatDate(dayFromToday(0))} (today) · stage Lead`,
     );
-    expect(lcd).toContain('<span class="led on">7 days overdue</span>');
-    expect(lcd).toContain('<span class="led">today</span>');
+    expect(text).toContain(
+      `Due Tomorrow · next action ${formatDate(dayFromToday(1))} · stage Lead`,
+    );
+    expect(text).toContain(
+      'No Date · next action None · stage Lead · last activity 2026-Jan-01',
+    );
+  });
+
+  test('the default order: due and overdue first, the oldest due first, then the rest by last activity, the newest first', async () => {
+    await addThree();
+    await addDue('Due Today', dayFromToday(0));
+    await addDue('Due Last Week', dayFromToday(-7));
+    await addDue('Due Tomorrow', dayFromToday(1));
+    setAdded('due-tomorrow', '2026-05-01T10:00:00.000Z');
+    expect(await names('/')).toEqual([
+      'Due Last Week',
+      'Due Today',
+      'Due Tomorrow',
+      'Bravo',
+      'Alpha',
+      'Charlie',
+    ]);
+    // No sort key is lit, and the module says the order.
+    const html = (await get('/')).body;
+    expect(html).not.toMatch(/data-direction=/);
+    expect(bodyText(html)).toContain('Sort Due first');
+  });
+
+  test('the last activity is the newest of the last visit, the last note and the added date', async () => {
+    await addThree();
+    const text = bodyText(divOf((await get('/')).body, 'lcd'));
+    expect(text).toContain(
+      'Bravo · next action None · stage Lead · last activity 2026-Apr-01',
+    );
+    expect(text).toContain(
+      'Alpha · next action None · stage Lead · last activity 2026-Mar-15',
+    );
+    expect(text).toContain(
+      'Charlie · next action None · stage Lead · last activity 2026-Mar-01',
+    );
+  });
+
+  test('each sort orders the list, ascending and descending', async () => {
+    await addThree();
+    expect(await names('/?sort=activity&dir=asc')).toEqual([
+      'Charlie',
+      'Alpha',
+      'Bravo',
+    ]);
+    expect(await names('/?sort=activity&dir=desc')).toEqual([
+      'Bravo',
+      'Alpha',
+      'Charlie',
+    ]);
+    expect(await names('/?sort=added&dir=asc')).toEqual([
+      'Bravo',
+      'Alpha',
+      'Charlie',
+    ]);
+    expect(await names('/?sort=added&dir=desc')).toEqual([
+      'Charlie',
+      'Alpha',
+      'Bravo',
+    ]);
+    expect(await names('/?sort=name&dir=asc')).toEqual([
+      'Alpha',
+      'Bravo',
+      'Charlie',
+    ]);
+    expect(await names('/?sort=name&dir=desc')).toEqual([
+      'Charlie',
+      'Bravo',
+      'Alpha',
+    ]);
+    // A sort that does not exist gives the default order.
+    expect(await names('/?sort=nope&dir=desc')).toEqual(await names('/'));
+  });
+
+  test('the Date added sort shows the date added in the place of the last activity', async () => {
+    await addThree();
+    const lcd = divOf((await get('/?sort=added&dir=asc')).body, 'lcd');
+    expect(lcd).toContain('data-legend-status="Date added"');
+    expect(bodyText(lcd)).toContain(
+      'Bravo · next action None · stage Lead · date added 2026-Jan-01',
+    );
+  });
+
+  test('a sort key sorts ascending, then descending, then removes the sort, and a different key replaces the sort', () => {
+    const none = { sort: '', dir: 'asc' } as const;
+    expect(nextSort(none, 'name')).toEqual({ sort: 'name', dir: 'asc' });
+    expect(nextSort({ sort: 'name', dir: 'asc' }, 'name')).toEqual({
+      sort: 'name',
+      dir: 'desc',
+    });
+    expect(nextSort({ sort: 'name', dir: 'desc' }, 'name')).toEqual(none);
+    expect(nextSort({ sort: 'name', dir: 'desc' }, 'added')).toEqual({
+      sort: 'added',
+      dir: 'asc',
+    });
+  });
+
+  test('each sort key is a GET form that keeps the search and the stage, with plain state text and an LED green for ascending and red for descending', async () => {
+    const html = (await get('/?q=acme&stage=lead&sort=name&dir=asc')).body;
+    // The lit key: the next press sorts descending.
+    expect(html).toContain(
+      '<form action="/" method="get"><input type="hidden" name="q" value="acme"/><input type="hidden" name="stage" value="lead"/><input type="hidden" name="sort" value="name"/><input type="hidden" name="dir" value="desc"/><button type="submit" class="key latch" aria-pressed="true" data-direction="asc">Name<span class="bare-text">, A to Z</span></button></form>',
+    );
+    // A key that is not lit: the next press sorts ascending by that key.
+    expect(html).toContain(
+      '<input type="hidden" name="sort" value="added"/><input type="hidden" name="dir" value="asc"/><button type="submit" class="key latch" aria-pressed="false">Date added</button>',
+    );
+    expect(bodyText(html)).toContain('Sort A to Z');
+
+    // The third press removes the sort: the form has no sort field.
+    const desc = (await get('/?q=acme&sort=name&dir=desc')).body;
+    expect(desc).toContain(
+      '<form action="/" method="get"><input type="hidden" name="q" value="acme"/><button type="submit" class="key latch" aria-pressed="true" data-direction="desc">Name<span class="bare-text">, Z to A</span></button></form>',
+    );
+    expect(bodyText(desc)).toContain('Sort Z to A');
+    const activity = (await get('/?sort=activity&dir=desc')).body;
+    expect(bodyText(activity)).toContain('Last activity , Newest first');
+  });
+
+  test('the search and the stage keys are one GET form, which keeps the sort', async () => {
+    const html = (await get('/?q=acme&stage=quoted&sort=added&dir=desc')).body;
+    const start = html.indexOf(
+      '<form action="/" method="get"><input type="hidden" name="sort" value="added"/><input type="hidden" name="dir" value="desc"/>',
+    );
+    expect(start).toBeGreaterThan(-1);
+    const form = html.slice(start, html.indexOf('</form>', start));
+    expect(form).toContain(
+      '<input type="search" placeholder="Name or postcode" name="q" value="acme"/>',
+    );
+    // The Search key comes first, so the Enter key sends it. It keeps the
+    // stage that is lit.
+    expect(form.indexOf('>Search</button>')).toBeLessThan(
+      form.indexOf('class="key latch"'),
+    );
+    expect(form).toContain(
+      '<button type="submit" class="key" value="quoted" name="stage">Search</button>',
+    );
+    expect(form).toContain(
+      '<button type="submit" class="key latch" aria-pressed="false" value="" name="stage">All</button>',
+    );
+    expect(form).toContain(
+      '<button type="submit" class="key latch" aria-pressed="true" value="quoted" name="stage">Quoted<span class="latch-state" aria-hidden="true"> (current)</span></button>',
+    );
+  });
+
+  test('searches the name and the postcode, and filters by stage', async () => {
+    await addOrg(app, cookie, { name: 'Zed Bakery', postcode: 'sw1a 1aa' });
+    const slug = await addOrg(app, cookie, {
+      name: 'Acme Plumbing',
+      postcode: 'E1 6AN',
+    });
+    await postForm(app, `/${slug}/stage`, { stage: 'quoted' }, cookie);
+    await addOrg(app, cookie, { name: '100% Cotton' });
+
+    expect(await names('/?q=ACME')).toEqual(['Acme Plumbing']);
+    expect(await names('/?q=SW1A1AA')).toEqual(['Zed Bakery']);
+    expect(await names('/?q=e1%206')).toEqual(['Acme Plumbing']);
+    // A % in the search matches only a %.
+    expect(await names('/?q=%25')).toEqual(['100% Cotton']);
+    expect(await names('/?stage=quoted')).toEqual(['Acme Plumbing']);
+    expect(await names('/?stage=lead&sort=name&dir=asc')).toEqual([
+      '100% Cotton',
+      'Zed Bakery',
+    ]);
+    expect(await names('/?stage=nope')).toHaveLength(3);
+    expect(await names('/?q=zed&stage=quoted')).toEqual([]);
+    expect((await get('/?q=zed&stage=quoted')).body).toContain(
+      'No organisation matches.',
+    );
+  });
+
+  test(`shows ${PAGE_SIZE} rows on a page, with a pager in the footer`, async () => {
+    const rows = Array.from({ length: PAGE_SIZE + 5 }, (_, i) => {
+      const n = String(i).padStart(2, '0');
+      return `('id-${n}', 'org-${n}', 'Org ${n}', 'lead', '2026-01-01T10:00:${n}.000Z')`;
+    });
+    db.exec(
+      `INSERT INTO organisation (id, slug, name, stage, created_at) VALUES ${rows.join(', ')};`,
+    );
+
+    const first = await names('/?sort=name&dir=asc');
+    expect(first).toHaveLength(PAGE_SIZE);
+    expect(first[0]).toBe('Org 00');
+    const html = (await get('/?sort=name&dir=asc')).body;
+    const foot = html.slice(html.indexOf('<footer'));
+    expect(foot).toContain(
+      `<span>1–${PAGE_SIZE} of ${PAGE_SIZE + 5}</span> <a href="/?sort=name&amp;dir=asc&amp;page=2" rel="next">next</a>`,
+    );
+    expect(foot).not.toContain('rel="prev"');
+
+    const second = await names('/?sort=name&dir=asc&page=2');
+    expect(second).toEqual(['Org 50', 'Org 51', 'Org 52', 'Org 53', 'Org 54']);
+    const last = (await get('/?sort=name&dir=asc&page=2')).body;
+    expect(last).toContain(
+      `<a href="/?sort=name&amp;dir=asc" rel="prev">previous</a> <span>${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}</span>`,
+    );
+    expect(last).not.toContain('rel="next"');
+    // A page after the last page shows the last page.
+    expect(await names('/?sort=name&dir=asc&page=9')).toEqual(second);
+    // A short list has no pager.
+    expect((await get('/?q=Org%2000')).body).not.toContain('rel="next"');
+  });
+
+  test('/ and /orgs show the same list, and the forms of each submit to its own path', async () => {
+    await addThree();
+    expect(await names('/orgs?sort=name&dir=desc')).toEqual(
+      await names('/?sort=name&dir=desc'),
+    );
+    for (const path of LIST_PATHS) {
+      const html = (await get(`${path}?sort=name&dir=asc&q=a`)).body;
+      expect(html).toContain('<title>Organisations - crm</title>');
+      const actions = [
+        ...html.matchAll(/<form action="([^"]+)" method="get">/g),
+      ]
+        .map((m) => m[1])
+        .filter((action) => action !== '/orgs/new');
+      expect(actions).toHaveLength(4);
+      expect(new Set(actions)).toEqual(new Set([path]));
+    }
+    expect((await get('/orgs')).body).toContain(
+      '<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <span class="here" aria-current="page">orgs</span></span></h1>',
+    );
   });
 });
 
@@ -153,8 +440,6 @@ describe('the page anatomy', () => {
     const slug = await addFullOrg();
     const titles: Record<string, string> = {
       '/': '<h1 id="top" class="title"><span aria-current="page">crm</span></h1>',
-      '/orgs':
-        '<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <span class="here" aria-current="page">orgs</span></span></h1>',
       '/orgs/new':
         '<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <a href="/orgs">orgs</a> / <span class="here" aria-current="page">new</span></span></h1>',
       [`/${slug}`]: `<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <span class="here" aria-current="page">${slug}</span></span></h1>`,
@@ -178,27 +463,43 @@ describe('the page anatomy', () => {
   });
 
   test('the nav links each app page, and the link to this page is text', async () => {
-    const html = (await get('/orgs')).body;
-    const nav = html.slice(
-      html.indexOf('<nav class="links"'),
-      html.indexOf('</nav>'),
+    for (const path of LIST_PATHS) {
+      const html = (await get(path)).body;
+      const nav = html.slice(
+        html.indexOf('<nav class="links"'),
+        html.indexOf('</nav>'),
+      );
+      expect(nav).toContain('<span aria-current="page">orgs</span>');
+      expect(nav).not.toContain('<a href="/orgs">');
+      expect(nav).toContain('<a href="/orgs/new">new lead</a>');
+      expect(nav).toContain('<a href="/account">account</a>');
+      expect(nav).toContain(
+        '<form action="/logout" method="post"><button type="submit" class="link">sign out</button></form>',
+      );
+    }
+    const account = (await get('/account')).body;
+    expect(account).toContain('<a href="/orgs">orgs</a>');
+  });
+
+  test('the footer has the pager and top, and no theme or mode stepper', async () => {
+    const html = (await get('/')).body;
+    expect(html).toContain(
+      '<footer class="foot"><nav class="foot-links" aria-label="Page"><a href="#top">top</a></nav></footer>',
     );
-    expect(nav).toContain('<a href="/">today</a>');
-    expect(nav).toContain('<span aria-current="page">orgs</span>');
-    expect(nav).not.toContain('<a href="/orgs">');
-    expect(nav).toContain('<a href="/orgs/new">new lead</a>');
-    expect(nav).toContain('<a href="/account">account</a>');
-    expect(nav).toContain(
-      '<form action="/logout" method="post"><button type="submit" class="link">sign out</button></form>',
-    );
+    expect(html).toContain('<html lang="en">');
+    expect(html).toContain('<meta name="color-scheme" content="light dark"/>');
+    expect(html).not.toContain('theme=bare');
+    // The mode follows the system. No route keeps a mode.
+    const mode = await postForm(app, '/mode', { mode: 'dark' }, cookie);
+    expect(mode.statusCode).toBe(404);
+    expect(mode.cookies).toEqual([]);
   });
 
   test('no LCD holds a form control, a heading or help text, and only a menu has links', async () => {
     const slug = await addFullOrg();
     const pages = [
       '/',
-      '/orgs',
-      '/orgs?q=acme',
+      '/orgs?q=acme&sort=name&dir=desc',
       `/${slug}`,
       '/account',
       '/account/passkeys',
@@ -219,59 +520,7 @@ describe('the page anatomy', () => {
         '<a ',
       );
     }
-    expect(lcds).toBe(htmls.length);
-  });
-
-  test('the theme stepper links this URL in the other theme', async () => {
-    const themed = (await get('/orgs?q=acme')).body;
-    expect(themed).toContain(
-      '<a class="step" href="/orgs?q=acme&amp;theme=bare" aria-label="Theme: Bare">',
-    );
-    const bare = (await get('/orgs?q=acme&theme=bare')).body;
-    expect(bare).toContain(
-      '<a class="step" href="/orgs?q=acme" aria-label="Theme: Pixel-3">',
-    );
-  });
-});
-
-describe('POST /mode', () => {
-  test('keeps the mode in a cookie, and each page then has it on <html>', async () => {
-    const response = await postForm(
-      app,
-      '/mode',
-      { mode: 'dark', next: '/orgs' },
-      cookie,
-    );
-    expect(response.statusCode).toBe(303);
-    expect(response.headers.location).toBe('/orgs');
-    const mode = response.cookies.find((c) => c.name === 'crm_mode');
-    expect(mode?.value).toBe('dark');
-
-    const html = (await get('/orgs', { cookie: `${cookie}; crm_mode=dark` }))
-      .body;
-    expect(html).toContain('<html lang="en" data-mode="dark">');
-    expect(html).toContain('<meta name="color-scheme" content="dark"/>');
-    expect(bodyText(html)).toContain('‹ Mode Dark ›');
-    expect(html).toContain(
-      'value="light" aria-label="Mode: Light" name="mode"',
-    );
-    expect(html).toContain('value="auto" aria-label="Mode: Auto" name="mode"');
-
-    const auto = await postForm(app, '/mode', { mode: 'auto', next: '/' });
-    expect(auto.statusCode).toBe(303);
-    expect(auto.cookies.find((c) => c.name === 'crm_mode')?.value).toBe('');
-  });
-
-  test('a signed-out visitor can use it, and it only opens a local next', async () => {
-    const response = await postForm(app, '/mode', {
-      mode: 'light',
-      next: '//evil.example',
-    });
-    expect(response.statusCode).toBe(303);
-    expect(response.headers.location).toBe('/');
-    expect((await postForm(app, '/mode', { mode: 'blue' })).statusCode).toBe(
-      400,
-    );
+    expect(lcds).toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -281,8 +530,7 @@ describe('every page with ?theme=bare', () => {
 
     const pages = [
       '/',
-      '/orgs',
-      '/orgs?q=acme&stage=quoted',
+      '/?q=acme&stage=quoted&sort=name&dir=desc',
       '/orgs/new',
       `/${slug}`,
       '/account',
@@ -301,11 +549,8 @@ describe('every page with ?theme=bare', () => {
       expect(html).not.toContain(' style="');
       expect(html).not.toContain('<script');
 
-      // The bare page has all the text of the themed page. Only the value
-      // of the theme stepper differs.
-      expect(bodyText(html).replace('Theme Bare', 'Theme Pixel-3')).toBe(
-        bodyText(themed),
-      );
+      // The bare page has all the text of the themed page.
+      expect(bodyText(html)).toBe(bodyText(themed));
 
       // The nav is a plain list of links.
       expect(html).toContain('<nav class="links" aria-label="crm"><ul><li>');
@@ -323,20 +568,21 @@ describe('every page with ?theme=bare', () => {
       }
     }
 
-    // Today: text carries the due state. The theme stepper says the theme.
-    const today = bodyText(bare['/']);
-    expect(today).toContain('Overdue 1');
-    expect(today).toContain('Acme Plumbing 2000-Jan-01 Chase quote');
-    expect(today).toContain('days overdue');
-    expect(today).toContain('‹ Theme Bare ›');
-
-    // /orgs: attributes carry the search, and the LCD the count.
-    const search = bare['/orgs?q=acme&stage=quoted'];
-    expect(search).toContain('<input type="search" name="q" value="acme"/>');
-    expect(search).toContain(
-      '<option value="quoted" selected="">Quoted</option>',
+    // Home: text carries each value and the due state.
+    expect(bodyText(bare['/'])).toContain(
+      'Acme Plumbing · next action 2000-Jan-01 (',
     );
-    expect(search).toContain('<dt>Matches</dt><dd>1</dd>');
+    expect(bodyText(bare['/'])).toContain('days overdue) · stage Quoted');
+
+    // Home with a search, a stage and a sort: attributes carry the search,
+    // and text carries the stage and the sort direction.
+    const search = bare['/?q=acme&stage=quoted&sort=name&dir=desc'];
+    expect(search).toContain(
+      '<input type="search" placeholder="Name or postcode" name="q" value="acme"/>',
+    );
+    expect(bodyText(search)).toContain('Quoted (current)');
+    expect(bodyText(search)).toContain('Name , Z to A');
+    expect(bodyText(search)).toContain('All Lead Visited');
 
     // /orgs/new: an attribute marks the field that the form needs.
     expect(bare['/orgs/new']).toContain('<input required="" name="name"');
@@ -364,5 +610,8 @@ describe('every page with ?theme=bare', () => {
         `<button type="submit" class="key" value="${outcome}" name="outcome">`,
       );
     }
+
+    // The sessions page: a revoke key for each other session is a form.
+    expect(bodyText(bare['/account/sessions'])).toContain('This session');
   });
 });

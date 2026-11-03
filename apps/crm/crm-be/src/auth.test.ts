@@ -352,6 +352,8 @@ describe('sessions and sign-out', () => {
 
 describe('?theme=bare', () => {
   test('each sign-in page shows its form with no page styles and no scripts (REQ-CRM-BARE-001)', async () => {
+    // A second session, so the sessions page has its sign-out form.
+    await signIn(app, db, 'a@example.com');
     const cookie = await signIn(app, db, 'a@example.com');
     const pages: [string, string][] = [
       ['/login?theme=bare', '<form action="/login" method="post">'],

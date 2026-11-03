@@ -25,6 +25,11 @@ export interface MenuItem {
 /** A menu: the records to pick from, with a legend over each column. */
 export interface Menu {
   legend: [string, string];
+  /**
+   * The legend of the second line of each row: the detail and the status.
+   * It shows under `legend`.
+   */
+  sublegend?: [string, string];
   items: MenuItem[];
   /** The text when `items` is empty. */
   empty: string;
@@ -40,7 +45,8 @@ export interface Menu {
  * - `rows`: the read-out, as a `<dl>`: a label and a value in each row.
  * - `menu`: a list of records. Each row is a link, as each song in the
  *   track list of autosam. The menu is the only part of the LCD that a
- *   person can tap.
+ *   person can tap. A long menu scrolls in the glass, so the modules under
+ *   the LCD stay near.
  *
  * With nothing to show, the LCD is absent. Text carries each value and each
  * state, so the LCD reads the same with no page styles (REQ-CRM-BARE-001).
@@ -79,6 +85,8 @@ export const Lcd = ({
               className="menu"
               data-legend-name={menu.legend[0]}
               data-legend-value={menu.legend[1]}
+              data-legend-detail={menu.sublegend?.[0]}
+              data-legend-status={menu.sublegend?.[1]}
             >
               {menu.items.map((item) => (
                 <li key={item.href}>

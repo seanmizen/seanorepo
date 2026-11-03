@@ -13,9 +13,9 @@ interface VerifyBody {
 }
 
 /**
- * The page that the email link opens. A GET only shows the "Sign in" key.
- * The key sends the POST that spends the token. Email scanners open every
- * link, so a GET must never sign in.
+ * The page that the email link opens. A GET only shows the "Sign in" key,
+ * with no text to explain it. The key sends the POST that spends the
+ * token. Email scanners open every link, so a GET must never sign in.
  */
 export const verifyPage = ({
   token,
@@ -29,7 +29,6 @@ export const verifyPage = ({
   const ready = token !== '' && !error;
   return {
     title: 'Sign in',
-    intro: ready ? 'Press the key to sign in on this device.' : undefined,
     device: (
       <Device>
         <Lcd alert={error} />
@@ -82,7 +81,7 @@ export const loginVerifyRoute = (app: FastifyInstance, db: Database) => {
           verifyPage({
             token,
             next: safeNext(request.query.next),
-            error: token ? undefined : 'This link has no sign-in token.',
+            error: token ? undefined : 'This link is not complete.',
           }),
         ),
       );

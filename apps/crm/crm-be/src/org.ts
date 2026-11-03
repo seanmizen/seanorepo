@@ -64,7 +64,6 @@ export const RESERVED_SLUGS = new Set([
   'logout',
   'account',
   'orgs',
-  'mode',
   'static',
   'api',
 ]);

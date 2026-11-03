@@ -4,16 +4,22 @@ A homebrew CRM for a solo developer who sells software services door to door.
 It keeps contacts, visits, the pipeline and the GDPR records. Stripe keeps the
 billing. After sign-in, the seller has these pages:
 
-- `/` (Today): the organisations with a next action due today or earlier,
-  oldest first, and the "New lead" key.
-- `/orgs`: all organisations. A GET form searches the name and the postcode,
-  and filters by stage. The URL holds the search.
+- `/` and `/orgs`: one list of every organisation (one handler). The LCD
+  is a menu: name, stage, next action date and last activity, with a lit
+  LED when the next action is due. Each row links to `/orgs/<slug>`. The
+  default order puts the due and overdue ones first (the oldest first),
+  then the rest by last activity (the newest first). Three sort keys
+  (`Last activity`, `Date added`, `Name`) sort ascending (green LED), then
+  descending (red LED), then remove the sort. A search field (name or
+  postcode) and the stage keys filter it. The URL holds all of it:
+  `?q=&stage=&sort=&dir=&page=`. 50 rows to a page, with a pager in the
+  footer.
 - `/orgs/new`: add an organisation and its contact. The slug comes from the
   name.
 - `/<slug>`: one organisation. It shows the details, the contacts, the visits
   and the notes, newest first. Its forms log a visit, change the stage and
   the next action, and add a note.
-- `/account`: the person and the session, with links to
+- `/account`: the email and how this session signed in, with links to
   `/account/passkeys` and `/account/sessions`.
 
 `GET /api/health` returns `{ "ok": true }`. The design is in
@@ -75,8 +81,8 @@ the `parts` that the route gives it.
    seanmizen.com: `/account/passkeys` reads `crm / account / passkeys`. Each
    part above the page is a link, and the page itself has a dim color. The title is
    the first element in `<body>`. Under it, for a signed-in person, one line
-   of links: `today · orgs · new lead · account · sign out`. The link to this
-   page is text, with `aria-current="page"`.
+   of links: `orgs · new lead · account · sign out`. The link to this page
+   is text, with `aria-current="page"`.
 2. **Intro** (`intro`, text). At most one sentence.
 3. **Device** (`device`). The core function of the page, as one instrument:
    a `Device` with the `Lcd` at the top, then each `Module` on a grid of 6
@@ -89,8 +95,8 @@ the `parts` that the route gives it.
 4. **Records** (`records`, text). History and reference data, as `Records`:
    tables, lists and definition lists in the page font, with no panel. On a
    phone, each table row is a block of lines.
-5. **Footer** (`ui/Footer.tsx`, text). `top`, the pager of a long list
-   (`pager`), and the theme and mode steppers.
+5. **Footer** (`ui/Footer.tsx`, text). The pager of a long list (`pager`),
+   and `top`.
 
 On a wide screen the page starts at the top left. The device is a column of
 about 360px, and the records fill the space to its right. On a phone it is
@@ -107,21 +113,21 @@ node apps/crm/scripts/shoot.mjs [out-dir]
 ## Theme
 
 `crm-fe/src/theme.css` is the Pixel-3 theme of autosam: an instrument panel
-with silkscreen labels, raised keys, LEDs and one red signal color. Text
-links use the ink color with an underline.
+with silkscreen labels, raised keys, LEDs and one red signal color. The one
+other color is the green LED of a sort key in ascending order. Text links
+use the ink color with an underline.
 
-- **Theme.** Add `?theme=bare` to a URL to see the page with no page styles
-  and no scripts. The theme stepper in the footer links this URL in the
-  other theme.
-- **Mode.** Auto, light or dark. Auto follows `prefers-color-scheme`. The
-  mode stepper in the footer sends `POST /mode`, which keeps the mode in the
-  `crm_mode` cookie for one year and opens the page again. crm-be then puts
-  `data-mode` on `<html>`. A signed-out visitor can use it too.
+- **Bare.** Add `?theme=bare` to a URL to see the page with no page styles
+  and no scripts. No page links to it.
+- **Mode.** Light or dark, as the system sets it (`prefers-color-scheme`).
 - **Dates.** A date shows as `2026-Nov-03`, and a date and time as
-  `2026-Nov-03 13:31`, in London time. Each one is a `<time>` with the full
-  ISO value in `datetime` and the full date and time with seconds in
-  `title` (REQ-CRM-DATE-001). Words such as `2 days overdue` show next to
-  the date, never in place of it.
+  `2026-Nov-03 13:31`, in London time, in the mono font. Each one is a
+  `<time>` with the full ISO value in `datetime` and the full date and time
+  with seconds in `title` (REQ-CRM-DATE-001). Words such as `2 days
+  overdue` show next to the date, never in place of it.
+- **Words.** The text of a page uses only the words on its keys, labels and
+  legends. It never names a part of the panel (key, module, LCD), and help
+  text is rare.
 
 ## Page rules
 
@@ -151,11 +157,11 @@ missing. To add other people, add `person` rows.
    deletes its row.
 
 A session is a random cookie (`crm_session`) that lasts 90 days.
-`/account/sessions` lists the sessions and revokes one. Its "Sign out"
-module has two keys: "Everywhere else" revokes all other sessions, and
-"This device" signs out. The nav of each page also has "sign out". Each
-page except the sign-in pages, `/mode`, `/api/health` and `/favicon.ico`
-needs a session. A signed-out visitor goes
+`/account/sessions` lists the sessions, with a "Revoke" key for each one
+except this session. When there is another session, its "Sign out" module
+has the key "Everywhere else", which revokes all other sessions. The nav of
+each page has "sign out" for this session. Each page except the sign-in
+pages, `/api/health` and `/favicon.ico` needs a session. A signed-out visitor goes
 to `/login?next=<path>`. `/favicon.ico` returns 204: the crm has no icon.
 
 ## Passkeys and the admin

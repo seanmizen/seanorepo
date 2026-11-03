@@ -7,6 +7,9 @@ import { formatDate, fullDateTime, isoDateTime } from '../dates';
  * seconds. So a hover shows the full value, and the bare theme keeps it in
  * an attribute. `value` is an ISO 8601 time or a `YYYY-MM-DD` date. `time`
  * is false to show only the date of a time.
+ *
+ * The theme shows each `<time>` in the mono font (the `time` rule in
+ * `crm-fe/src/theme.css`), so the dates in a column line up.
  */
 export const When = ({ value, time }: { value: string; time?: boolean }) => (
   <time dateTime={isoDateTime(value)} title={fullDateTime(value)}>

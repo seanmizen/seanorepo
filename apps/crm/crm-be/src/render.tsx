@@ -59,33 +59,6 @@ export const themeOf = (request: FastifyRequest): Theme =>
     ? 'bare'
     : 'pixel-3';
 
-/** The color modes, in the order of the mode stepper. */
-export const MODES = ['auto', 'light', 'dark'] as const;
-export type Mode = (typeof MODES)[number];
-
-/** The cookie that keeps the mode. `routes/mode.ts` sets it. */
-export const MODE_COOKIE = 'crm_mode';
-
-export const isMode = (value: unknown): value is Mode =>
-  MODES.includes(value as Mode);
-
-/**
- * The color mode of a request, from its cookie. `auto` follows the system
- * (`prefers-color-scheme`).
- */
-export const modeOf = (request: FastifyRequest): Mode => {
-  const value = request.cookies?.[MODE_COOKIE];
-  return isMode(value) ? value : 'auto';
-};
-
-/** `url` in the other theme: with `?theme=bare`, or with no theme. */
-const otherThemeHref = (url: string, theme: Theme) => {
-  const target = new URL(url, 'http://crm.invalid');
-  if (theme === 'bare') target.searchParams.delete('theme');
-  else target.searchParams.set('theme', 'bare');
-  return `${target.pathname}${target.search}`;
-};
-
 /** The parts of a page, in the order of the anatomy. */
 export interface PageParts {
   /** The text of `<title>`, before " - crm". */
@@ -113,36 +86,27 @@ export interface PageParts {
  * 2. The intro: at most one sentence.
  * 3. The device (the core function), with its help text under it.
  * 4. The records: text.
- * 5. The footer (`ui/Footer.tsx`): `top`, the pager, and the theme and
- *    mode steppers.
+ * 5. The footer (`ui/Footer.tsx`): `top` and the pager.
  *
  * On a wide screen the device is a fixed column at the left, and the
  * records fill the space to its right. On a phone it is one column.
  *
  * The `<head>` has the asset tags of the `main` entry and of `entries` from
- * the Rsbuild manifest. With `?theme=bare` it has no asset tags.
+ * the Rsbuild manifest. With `?theme=bare` it has no asset tags. The color
+ * mode follows the system (`prefers-color-scheme`).
  */
 export const renderPage = (
   request: FastifyRequest,
   { title, intro, device, help, records, pager, entries = [] }: PageParts,
 ): string => {
-  const theme = themeOf(request);
-  const mode = modeOf(request);
   const { js, css } =
-    theme === 'bare' ? { js: [], css: [] } : readAssets(entries);
-  // A page from a failed POST shows at the URL of the POST. The theme and
-  // mode steppers must open a page with a GET, so they use `/` there.
-  const here = request.method === 'GET' ? request.url : '/';
-  const step = MODES.indexOf(mode);
+    themeOf(request) === 'bare' ? { js: [], css: [] } : readAssets(entries);
   return `<!doctype html>${renderToStaticMarkup(
-    <html lang="en" data-mode={mode === 'auto' ? undefined : mode}>
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta
-          name="color-scheme"
-          content={mode === 'auto' ? 'light dark' : mode}
-        />
+        <meta name="color-scheme" content="light dark" />
         <title>{`${title} - crm`}</title>
         {css.map((href) => (
           <link key={href} rel="stylesheet" href={href} />
@@ -170,16 +134,7 @@ export const renderPage = (
             </div>
           )}
         </main>
-        <Footer
-          pager={pager}
-          theme={theme}
-          otherTheme={theme === 'bare' ? 'pixel-3' : 'bare'}
-          otherThemeHref={otherThemeHref(here, theme)}
-          mode={mode}
-          prevMode={MODES[(step + MODES.length - 1) % MODES.length]}
-          nextMode={MODES[(step + 1) % MODES.length]}
-          next={here}
-        />
+        <Footer pager={pager} />
       </body>
     </html>,
   )}`;
