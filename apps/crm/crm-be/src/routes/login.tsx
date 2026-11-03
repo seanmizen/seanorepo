@@ -7,6 +7,7 @@ import {
   type LoginLimits,
   newToken,
   normalizeEmail,
+  PUBLIC_URL,
   safeNext,
 } from '../auth';
 import { sendEmail } from '../email';
@@ -15,21 +16,32 @@ import { Field } from '../ui/Field';
 import { Key } from '../ui/Key';
 import { Panel } from '../ui/Panel';
 
-/**
- * The base of the link in the sign-in email. It comes from config and never
- * from the Host header: a forged Host header must not put a different host
- * into the email.
- */
-export const PUBLIC_URL = (
-  process.env.CRM_PUBLIC_URL || 'http://localhost:4100'
-).replace(/\/+$/, '');
-
 interface LoginBody {
   email?: string;
   next?: string;
 }
 
-/** The sign-in form. One field: the email address. */
+/**
+ * The passkey sign-in. The button needs JavaScript (WebAuthn), so it is
+ * `hidden` until `crm-fe/src/passkeys.ts` shows it. With no JavaScript the
+ * note shows, and the email form still works. This is the one exception to
+ * REQ-CRM-BARE-001.
+ */
+export const PasskeySignIn = ({ next }: { next: string }) => (
+  <Panel label="Passkey">
+    <p data-passkey-note="">
+      Passkeys need JavaScript. Use the email form, or turn on JavaScript.
+    </p>
+    <p role="alert" hidden data-passkey-error="" />
+    <p>
+      <Key type="button" hidden data-passkey="sign-in" data-next={next}>
+        Sign in with a passkey
+      </Key>
+    </p>
+  </Panel>
+);
+
+/** The sign-in page: the email form, and the passkey sign-in next to it. */
 export const LoginPage = ({
   next,
   email = '',
@@ -37,6 +49,22 @@ export const LoginPage = ({
 }: {
   next: string;
   email?: string;
+  error?: string;
+}) => (
+  <>
+    <EmailForm next={next} email={email} error={error} />
+    <PasskeySignIn next={next} />
+  </>
+);
+
+/** The email form. One field: the email address. */
+const EmailForm = ({
+  next,
+  email,
+  error,
+}: {
+  next: string;
+  email: string;
   error?: string;
 }) => (
   <Panel label="Email link">
@@ -114,6 +142,7 @@ export const loginRoute = (
           'Sign in',
           <LoginPage next={safeNext(request.query.next)} />,
           request,
+          ['passkeys'],
         ),
       ),
   );
@@ -130,6 +159,7 @@ export const loginRoute = (
             'Sign in',
             <LoginPage next={next} error="Type your email address." />,
             request,
+            ['passkeys'],
           ),
         );
     }
@@ -146,6 +176,7 @@ export const loginRoute = (
               error={`Too many attempts. Wait ${LOGIN_TOKEN_MINUTES} minutes, then try again.`}
             />,
             request,
+            ['passkeys'],
           ),
         );
     }

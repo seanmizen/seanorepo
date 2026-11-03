@@ -8,11 +8,17 @@ import { ensureAdmin, makeLoginLimits, registerAuth } from './auth';
 import { DB_PATH, openDatabase } from './db';
 import { checkEmailConfig } from './email';
 import { FE_DIST } from './render';
+import { accountPasskeysRoute } from './routes/account/passkeys';
 import { accountSessionsRoute } from './routes/account/sessions';
 import { healthRoute } from './routes/api/health';
+import { passkeyRegisterRoute } from './routes/api/passkeys/register';
+import { passkeyRegisterOptionsRoute } from './routes/api/passkeys/register-options';
+import { passkeySignInRoute } from './routes/api/passkeys/sign-in';
+import { passkeySignInOptionsRoute } from './routes/api/passkeys/sign-in-options';
 import { homeRoute } from './routes/index';
 import { loginRoute } from './routes/login';
 import { loginCodeRoute } from './routes/login/code';
+import { loginRecoverRoute } from './routes/login/recover';
 import { loginVerifyRoute } from './routes/login/verify';
 import { logoutRoute } from './routes/logout';
 
@@ -46,8 +52,14 @@ export const buildApp = (db: Database) => {
   loginRoute(app, db, limits);
   loginCodeRoute(app, db, limits);
   loginVerifyRoute(app, db);
+  loginRecoverRoute(app, db);
   logoutRoute(app, db);
   accountSessionsRoute(app, db);
+  accountPasskeysRoute(app, db);
+  passkeyRegisterOptionsRoute(app, db);
+  passkeyRegisterRoute(app, db);
+  passkeySignInOptionsRoute(app, db);
+  passkeySignInRoute(app, db);
 
   return app;
 };

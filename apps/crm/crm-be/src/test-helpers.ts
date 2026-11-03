@@ -2,19 +2,27 @@ import type { Database } from 'bun:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { SESSION_COOKIE } from './auth';
+import { hash, newToken, SESSION_COOKIE } from './auth';
 import { openDatabase } from './db';
 import { devOutbox } from './email';
 import { buildApp } from './index';
 
+/** The admin email in tests. testApp() sets CRM_ADMIN_EMAIL to it. */
+export const TEST_ADMIN_EMAIL = 'admin@example.com';
+
+/** The database of each test app, for signInAdmin(app). */
+const databases = new WeakMap<ReturnType<typeof buildApp>, Database>();
+
 /**
- * A fresh app on a fresh SQLite file in a temp folder. Call `close()` at the
- * end of the test.
+ * A fresh app on a fresh SQLite file in a temp folder, with TEST_ADMIN_EMAIL
+ * as the admin. Call `close()` at the end of the test.
  */
 export const testApp = () => {
+  process.env.CRM_ADMIN_EMAIL = TEST_ADMIN_EMAIL;
   const dir = mkdtempSync(path.join(tmpdir(), 'crm-test-'));
   const db = openDatabase(path.join(dir, 'crm.db'));
   const app = buildApp(db);
+  databases.set(app, db);
   const close = async () => {
     await app.close();
     db.close();
@@ -83,4 +91,32 @@ export const signIn = async (
   const cookie = response.cookies.find((c) => c.name === SESSION_COOKIE);
   if (!cookie) throw new Error(`Sign-in as ${email} set no session cookie.`);
   return `${SESSION_COOKIE}=${cookie.value}`;
+};
+
+/**
+ * A session for the admin (TEST_ADMIN_EMAIL), as if a passkey sign-in made
+ * it. It adds the admin person if it is missing, and puts the session row
+ * into the database directly: a test has no WebAuthn. Returns the `cookie`
+ * header value. Use it for an admin route (`config: { admin: true }`).
+ */
+export const signInAdmin = (
+  app: ReturnType<typeof buildApp>,
+  db = databases.get(app),
+) => {
+  if (!db) throw new Error('signInAdmin needs an app from testApp().');
+  const known = db
+    .query<{ id: string }, [string]>('SELECT id FROM person WHERE email = ?;')
+    .get(TEST_ADMIN_EMAIL);
+  const personId = known?.id ?? addPerson(db, TEST_ADMIN_EMAIL);
+  const token = newToken();
+  db.query(
+    `INSERT INTO session (id, person_id, token_hash, expires_at, method)
+     VALUES (?, ?, ?, ?, 'passkey');`,
+  ).run(
+    crypto.randomUUID(),
+    personId,
+    hash(token),
+    new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  );
+  return `${SESSION_COOKIE}=${token}`;
 };

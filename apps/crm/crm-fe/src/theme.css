@@ -129,6 +129,12 @@ code {
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
+/* A class that sets `display` (.key, .panel form) must not show a `hidden`
+   element. These selectors are more specific than the classes. */
+.key[hidden],
+.panel form[hidden] {
+  display: none;
+}
 
 /* The silkscreen label */
 .label {

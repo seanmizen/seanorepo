@@ -70,6 +70,9 @@ export const SessionsPage = ({
         <Key>Sign out</Key>
       </p>
     </form>
+    <p>
+      <a href="/account/passkeys">Passkeys</a>
+    </p>
   </Panel>
 );
 

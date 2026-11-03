@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@rsbuild/core": "^1.6.13",
+    "@simplewebauthn/browser": "^13.3.0",
     "typescript": "^5.9.3"
   }
 }
