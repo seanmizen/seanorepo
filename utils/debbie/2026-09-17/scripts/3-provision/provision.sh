@@ -42,7 +42,7 @@ WORK="$GEN_DIR/working"                          # shared by all three steps
 
 select_env "$HERE" "${1:-}"
 shift
-read_env SERVER_NAME DEPLOY_USER SSH_KEY ROLE_WEBSERVER ROLE_TUNNEL
+read_env SERVER_NAME DEPLOY_USER SSH_KEY ROLE_WEBSERVER ROLE_TUNNEL ROLE_VPN
 DEPLOY_USER="${DEPLOY_USER:-srv}"
 # No default - REQ-SERVER-014. With a default, a forgotten line would make a
 # NEW machine claim the name of a live one, and this script would dial the
@@ -328,9 +328,9 @@ if [ "$MODE" != assert ]; then
     log "running setup-server-environment.sh"
     # Roles from .env (REQ-SERVER-014). Passed even when empty, so the machine's
     # roles always match this file: a role that is not set here is OFF there.
-    log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset}"
+    log "roles from $ENV_FILE: webserver=${ROLE_WEBSERVER:-unset} tunnel=${ROLE_TUNNEL:-unset} vpn=${ROLE_VPN:-unset}"
     send_and_run "setup-server-environment.sh" \
-        "SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}'"
+        "SERVER_NAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' ROLE_WEBSERVER='${ROLE_WEBSERVER:-}' ROLE_TUNNEL='${ROLE_TUNNEL:-}' ROLE_VPN='${ROLE_VPN:-}'"
 
     if [ "$MODE" = noreboot ]; then
         log "setup done. Skipping the reboot and the assertions (--no-reboot)."
@@ -377,7 +377,7 @@ rc=0
 # check /etc/seanorepo/roles against the roles asked for, and an unset value
 # means "no roles". Without it, every machine provisioned WITH a role would
 # fail that check with a correct configuration.
-EXPECT_ROLES="$( { [ "${ROLE_WEBSERVER:-}" = yes ] && echo webserver; [ "${ROLE_TUNNEL:-}" = yes ] && echo tunnel; true; } | tr '\n' ' ' | sed 's/ $//')"
+EXPECT_ROLES="$( { [ "${ROLE_WEBSERVER:-}" = yes ] && echo webserver; [ "${ROLE_TUNNEL:-}" = yes ] && echo tunnel; [ "${ROLE_VPN:-}" = yes ] && echo vpn; true; } | tr '\n' ' ' | sed 's/ $//')"
 
 sshto "EXPECT_HOSTNAME='$SERVER_NAME' DEPLOY_USER='$DEPLOY_USER' EXPECT_ROLES='$EXPECT_ROLES' PHASE=provisioned bash -s" \
     < "$GEN_DIR/payload/assert.sh" || rc=$?

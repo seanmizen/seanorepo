@@ -52,7 +52,7 @@ key_home() {
         ISO)                         echo 1-build-iso ;;
         PASSWORD_CRYPTED)            echo 2-serve-preseed ;;
         SSH_KEY)                     echo "2-serve-preseed, 3-provision" ;;
-        ROLE_WEBSERVER|ROLE_TUNNEL)  echo 3-provision ;;
+        ROLE_WEBSERVER|ROLE_TUNNEL|ROLE_VPN) echo 3-provision ;;
         WIFI_*|PORT|SERVE_IP)        echo "1-build-iso, 2-serve-preseed" ;;
         SERVER_NAME)                 echo "2-serve-preseed, 3-provision" ;;
         DEPLOY_USER)                 echo "all three" ;;

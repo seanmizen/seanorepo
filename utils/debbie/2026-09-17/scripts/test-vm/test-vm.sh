@@ -36,10 +36,13 @@ DEPLOY_USER="${DEPLOY_USER:-srv}"
 SERVER_NAME="${SERVER_NAME:-debbie}"
 # Roles (REQ-SERVER-014). None by default, like a machine whose .env sets
 # none: the VM then proves that a machine with no role tracks `release` and
-# runs nothing. Set either one in the environment to give the guest that role.
+# runs nothing. Set any of them in the environment to give the guest that role.
+# ROLE_VPN=yes tests the VPN role (REQ-NETWORK-006). The VM has no global IPv6,
+# so its ::51 check skips.
 ROLE_WEBSERVER="${ROLE_WEBSERVER:-}"
 ROLE_TUNNEL="${ROLE_TUNNEL:-}"
-EXPECT_ROLES="$( { [ "$ROLE_WEBSERVER" = yes ] && echo webserver; [ "$ROLE_TUNNEL" = yes ] && echo tunnel; true; } | tr '\n' ' ' | sed 's/ $//')"
+ROLE_VPN="${ROLE_VPN:-}"
+EXPECT_ROLES="$( { [ "$ROLE_WEBSERVER" = yes ] && echo webserver; [ "$ROLE_TUNNEL" = yes ] && echo tunnel; [ "$ROLE_VPN" = yes ] && echo vpn; true; } | tr '\n' ' ' | sed 's/ $//')"
 INSTALL_TIMEOUT="${INSTALL_TIMEOUT:-3600}"
 SSH_TIMEOUT="${SSH_TIMEOUT:-180}"
 
@@ -600,7 +603,7 @@ do_assert() {
         # authorized_keys. setup-server-environment.sh writes that file whole
         # (REQ-SERVER-008), so without this the first provisioning run locks
         # the harness out of its own guest.
-        ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL EXTRA_AUTHORIZED_KEYS='$(cat "$KEY.pub")' bash /tmp/debbie-payload/payload/setup-server-environment.sh ${1:-}" \
+        ssh "${ssh_opts[@]}" "$target" "sudo -n SERVER_NAME=$SERVER_NAME DEPLOY_USER=$DEPLOY_USER ROLE_WEBSERVER=$ROLE_WEBSERVER ROLE_TUNNEL=$ROLE_TUNNEL ROLE_VPN=$ROLE_VPN EXTRA_AUTHORIZED_KEYS='$(cat "$KEY.pub")' bash /tmp/debbie-payload/payload/setup-server-environment.sh ${1:-}" \
             || die_code 2 "setup-server-environment.sh failed${2:-}"
     }
     run_setup

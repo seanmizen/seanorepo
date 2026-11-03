@@ -67,7 +67,7 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "hibernate key ignored"
 - **Relations:** none
 
-## REQ-SERVER-002 — Only four ports are reachable
+## REQ-SERVER-002 — Only the listed ports are reachable
 
 - **Status:** active
 - **Source:** sean
@@ -78,7 +78,8 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   22/tcp, 80/tcp, 443/tcp and 5353/udp, and refuse every other port, including
   every port published by a container. A webserver without the tunnel role
   serves its sites to the LAN through Caddy on port 80, one of the four
-  (REQ-SERVER-016). Its apps stay on loopback.
+  (REQ-SERVER-016). Its apps stay on loopback. A host with `ROLE_VPN=yes`
+  also accepts 51820/udp (REQ-NETWORK-006). No other host accepts it.
 - **Rationale:** Everything public arrives through the Cloudflare tunnel, which
   is an outbound connection. An open application port is a second way in that
   nobody audits or watches. The app ports (4000-4999) stay closed on every
@@ -88,6 +89,12 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   The checks assert the count as well as the membership. A check that only
   finds the four would let a fifth port appear silently, and that is the drift
   this requirement must catch.
+
+  **The VPN port is the one exception, and only on the VPN host.** WireGuard
+  sends no reply to a packet without a valid key, so a port scan cannot see
+  51820/udp. The role decides the rule (REQ-SERVER-014): a host without
+  `ROLE_VPN=yes` has four ports, and the count check expects five only on the
+  VPN host.
 
   **Container ports need their own checks.** Docker writes its own chains into
   the `nat` and `filter` tables. A container published with `-p 4000:4000`
@@ -121,7 +128,11 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw active"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw allows no port beyond
-    the four"
+    the list"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ufw allows 51820/udp on
+    the VPN host"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "51820/udp is closed
+    without the VPN role"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "docker publishes to
     loopback by default"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "nothing outside the four
@@ -547,8 +558,8 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   and pointed `provision.sh` at the live machine. Both failures are silent
   until they matter.
 
-  So each role (`ROLE_WEBSERVER`, `ROLE_TUNNEL`) is off unless it is set to
-  `yes`. Every provisioning run makes the roles of the machine match the
+  So each role (`ROLE_WEBSERVER`, `ROLE_TUNNEL`, `ROLE_VPN`) is off unless it
+  is set to `yes`. Every provisioning run makes the roles of the machine match the
   settings exactly. `SERVER_NAME` has no default in any script. The scripts
   refuse a retired setting by name. They do not ignore it.
 - **Verification:**

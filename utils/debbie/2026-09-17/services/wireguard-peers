@@ -1,0 +1,14 @@
+# The WireGuard peers of the VPN host - REQ-NETWORK-006.
+#
+# One line for each device: <name> <tunnel address> <public key>
+#   name             lowercase letters, digits and hyphens
+#   tunnel address   10.99.0.2 to 10.99.0.254, a different one for each device.
+#                    10.99.0.1 is the host.
+#   public key       the WireGuard public key of the device. Never a private key.
+#
+# setup-server-environment.sh reads this file. A provisioning run applies it
+# with `wg syncconf`, so the tunnels of the other peers stay up. The README
+# gives the procedure to add a device.
+#
+# Example. The key is not real, and the line is a comment:
+# phone 10.99.0.2 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

@@ -1,0 +1,16 @@
+# Written by payload/setup-server-environment.sh from services/custom-vpn-sync.timer.
+# Edit that file, not this copy. - REQ-NETWORK-007
+[Unit]
+Description=Every 2 minutes, keep the VPN in line with the network
+
+[Timer]
+# 2 minutes is the longest time that a wrong record or a moved address lasts.
+# REQ-NETWORK-007 allows 3 minutes. A run that finds nothing to change costs
+# one Cloudflare GET and logs nothing.
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=10s
+Unit=custom-vpn-sync.service
+
+[Install]
+WantedBy=timers.target

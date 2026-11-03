@@ -21,7 +21,7 @@ in the comments of each script.
 |---|---|---|
 | `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. `1-build-iso/` holds one `.env` for every machine. The other steps hold one `<machine>.env` each. `lib.sh` holds the functions they share. | your computer |
 | `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
-| `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh`, `host-tools.sh` and `net-failover.sh`, with the systemd unit beside each. It also holds the units for cloudflared, ngrok and tcp-getter. systemd starts the first three scripts from the `release` checkout. `setup-server-environment.sh` installs `net-failover.sh` in `/usr/local/lib/seanorepo`. | the target machine |
+| `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh`, `host-tools.sh`, `net-failover.sh` and `vpn-sync.sh`, with the systemd unit beside each. It also holds the units for cloudflared, ngrok and tcp-getter, and `wireguard-peers`, the VPN's peer list. systemd starts the first three scripts from the `release` checkout. `setup-server-environment.sh` installs `net-failover.sh` and `vpn-sync.sh` in `/usr/local/lib/seanorepo`. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
 
 ## Test a change in the VM
@@ -61,6 +61,9 @@ Test these on a real target machine:
 - disk layouts other than one virtio disk
 - mDNS from another machine on the LAN, and a published port refused from another machine
 - a Cloudflare tunnel or ngrok session that connects (no VM has credentials)
+- a WireGuard client that connects, the `::51` address and the DNS update (no
+  VM has global IPv6 or a DNS token). `ROLE_VPN=yes ./scripts/test-vm/test-vm.sh --assert`
+  tests the rest of the VPN role.
 - an unattended security update that installs, which takes weeks and a real advisory
 - the deploy units with the scripts under test: the units in the VM run the
   scripts from the guest's `release` checkout, and `assert.sh` runs the scripts
@@ -131,8 +134,10 @@ Roles set what a target machine does. Set them in
 | none | tracks `release` and is reachable over ngrok | — | any |
 | `ROLE_WEBSERVER=yes` | also runs the sites | the LAN | any |
 | `ROLE_WEBSERVER=yes` and `ROLE_TUNNEL=yes` | also runs the Cloudflare tunnel | loopback only | exactly one |
+| `ROLE_VPN=yes` (with any other roles) | also runs the WireGuard VPN and opens 51820/udp | — | one |
 
-The tunnel needs the webserver role on the same machine. A LAN webserver keeps
+asus has all three roles. The tunnel needs the webserver role on the same
+machine. The VPN needs no other role. A LAN webserver keeps
 its own data, separate from the public machine's. To see a machine's roles:
 `ssh srv@<name>.local ls /etc/seanorepo/roles`.
 
@@ -364,3 +369,115 @@ ssh srv@<name>.local 'journalctl -u custom-ngrok.service -b | grep -o "url=tcp:/
 
 If you cannot reach the machine at all, the ngrok dashboard shows the address.
 Then connect with `ssh -p <port> srv@<host>` and your usual key.
+
+### WireGuard VPN
+
+The machine with `ROLE_VPN=yes` (asus) runs a WireGuard VPN beside ngrok
+(REQ-NETWORK-006). The router's IPv4 address is CGNAT, so WireGuard listens on
+UDP 51820 over IPv6, at the delegated /64 plus `::51`. Clients connect to
+`vpn.seanmizen.com:51820`. Inside the tunnel, traffic is IPv4
+(`10.99.0.0/24`), and asus masquerades it onto the LAN. The host is
+`10.99.0.1`.
+
+`custom-vpn-sync.timer` runs every 2 minutes. It keeps the `::51` address on
+the uplink that holds the default route, and keeps the forwarding rules. It
+makes the `vpn.seanmizen.com` AAAA record equal to the address
+(REQ-NETWORK-007).
+
+**Limits.** The client network must have IPv6. Most UK mobile data has it.
+Many hotel and cafe networks do not. On those, connect through the phone's
+hotspot. `<name>.local` names do not resolve through the tunnel, because mDNS
+does not cross a router. Use the LAN address, or `10.99.0.1` for the host.
+
+#### Set it up, once
+
+Do these steps in this order, at home, on the LAN.
+
+1. **Add the router rule.** See [The router rule](#the-router-rule) below.
+2. **Make the DNS token.** In the Cloudflare dashboard: *My Profile > API
+   Tokens > Create Token > Create Custom Token*. Give it one permission:
+   Zone, DNS, Edit. Under *Zone Resources*, include the specific zone
+   seanmizen.com only. Do not use the OpenTofu token. Put the token on asus,
+   root-only. The command reads the token without an echo:
+   ```bash
+   read -rs TOKEN && printf %s "$TOKEN" | ssh srv@asus.local \
+     'sudo install -m 600 -o root -g root /dev/stdin /etc/seanorepo/vpn-ddns.token'; unset TOKEN
+   ```
+3. **Create the record.** `infra/cloudflare/seanmizen_com.tf` declares
+   `vpn.seanmizen.com`. The next release creates it (CI applies the stack).
+   Then add its import block, as for any new record.
+4. **Set the role.** Add `ROLE_VPN=yes` to `scripts/3-provision/asus.env`.
+   That file is gitignored. Keep `ROLE_WEBSERVER=yes` and `ROLE_TUNNEL=yes`.
+5. **Provision without a reboot**, so the sites stay up. Then run the checks:
+   ```bash
+   scripts/3-provision/provision.sh asus --no-reboot
+   scripts/3-provision/provision.sh asus --assert
+   ```
+   The VPN part restarts no network interface, cloudflared or Docker.
+   The output shows the host's public key. To see it again:
+   `ssh srv@asus.local sudo wg show wg0 public-key`.
+
+#### Add a device
+
+1. Make a key pair on the device. In the WireGuard app, *Add a tunnel >
+   Create from scratch* makes one. On a computer, use
+   `wg genkey | tee device.key | wg pubkey`. The private key stays on the
+   device.
+2. Add one line to [`services/wireguard-peers`](./services/wireguard-peers):
+   a name, a free tunnel address from `10.99.0.2` to `10.99.0.254`, and the
+   **public** key. Commit it.
+3. Run `scripts/3-provision/provision.sh asus --no-reboot`. It applies the new
+   list with `wg syncconf`, so the other tunnels stay up.
+4. Configure the device:
+   ```ini
+   [Interface]
+   PrivateKey = <the device's private key>
+   Address = 10.99.0.N/32
+
+   [Peer]
+   PublicKey = <the host's public key>
+   Endpoint = vpn.seanmizen.com:51820
+   AllowedIPs = 10.99.0.0/24, 10.9.8.0/24
+   PersistentKeepalive = 25
+   ```
+   `AllowedIPs` sends only the tunnel and the LAN through the VPN. Other
+   traffic uses the device's own network.
+
+To remove a device, remove its line and provision again.
+
+#### The router rule
+
+The ZTE router drops inbound IPv6 by default. One manual rule lets the VPN
+port through. Nothing automates it, and a factory reset of the router
+removes it. After a reset, add it again with the same fields.
+
+In the ZTE web interface: *Internet > Security > Filter Criteria > IP Filter -
+IPv6*. Add a rule:
+
+| Field | Value |
+|---|---|
+| Name | `wireguard` |
+| Mode | Allow |
+| Protocol | UDP |
+| Source address and port | empty |
+| Destination address | **empty** |
+| Destination port | `51820` to `51820` |
+| Ingress | `WAN-DHCP-CONNECTION` |
+| Egress | `LAN` |
+
+The rule has no destination address on purpose. The ISP can change the
+delegated prefix, and a rule with an address then stops working. As a
+result, UDP 51820 reaches every LAN device over IPv6. Only the VPN host
+listens on it, and the host's firewall opens it only with the role.
+
+#### Operate the VPN
+
+| To | Run |
+|---|---|
+| see the peers and their last handshake | `ssh srv@asus.local sudo wg show` |
+| see what the sync changed | `ssh srv@asus.local journalctl -u custom-vpn-sync.service -n 20` |
+| check the record | `dig +short AAAA vpn.seanmizen.com` |
+| check the address on the host | `ssh srv@asus.local 'ip -6 -o addr show scope global' \| grep ::51/` |
+
+A sync that changes nothing logs nothing. The journal holds one line for each
+change, and one line when a condition starts, for example a missing token.

@@ -6,8 +6,10 @@ behaviour that keeps that path alive without anyone watching.
 `2026-09-17/` implements these requirements, and the evidence below cites the
 files of that generation. `REQ-NETWORK-001` and `REQ-NETWORK-002` cover the
 tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
-`REQ-NETWORK-005` covers remote SSH. The outage of 2026-08-14, recorded in
-`REQ-NETWORK-003`, is the reason for the failover requirements.
+`REQ-NETWORK-005` covers remote SSH through ngrok. `REQ-NETWORK-006` and
+`REQ-NETWORK-007` cover the WireGuard VPN and its DNS record. The outage of
+2026-08-14, recorded in `REQ-NETWORK-003`, is the reason for the failover
+requirements.
 
 ---
 
@@ -29,6 +31,14 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
   address can change freely, and TLS terminates at the edge. The firewall can
   also stay closed. `REQ-SERVER-002` allows four ports, and none of them is an
   application port.
+
+  **The one deliberate inbound port is the VPN.** On the machine with the VPN
+  role, the router lets UDP 51820 through over IPv6, and WireGuard listens on
+  it (`REQ-NETWORK-006`). It serves no public traffic, so this statement still
+  holds. The port is acceptable because WireGuard sends no reply to a packet
+  without a valid key. A port scan gets no answer, the same as from a port
+  that the firewall drops, so the scan cannot see the port. Only a device with
+  a key from the repository's peer list gets a reply.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other ports open"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "cloudflared installed"
@@ -211,3 +221,151 @@ tunnel. `REQ-NETWORK-003` and `REQ-NETWORK-004` cover route failover.
 - **Relations:**
   - depends-on REQ-NETWORK-001
   - depends-on REQ-SERVER-008
+
+## REQ-NETWORK-006 — The VPN host lets its own devices into the LAN over IPv6
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1032
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** Where the host has `ROLE_VPN=yes`, the host shall forward
+  traffic to the LAN from the peers in `services/wireguard-peers` that
+  connect over WireGuard on UDP 51820.
+- **Rationale:** ngrok (`REQ-NETWORK-005`) gives a new address at each agent
+  restart, so it needs `apps/tcp-getter` to email the address. A VPN gives a
+  fixed name, SSH to every LAN device, and no third party in the traffic path.
+  It costs nothing. A VPS hub costs money. Cloudflare WARP decrypts the
+  traffic and couples the VPN to the production tunnel.
+
+  **IPv6 only, from outside.** The router's IPv4 WAN address is CGNAT
+  (`100.64.0.0/10`), so no IPv4 port forward is possible. IPv6 is native: the
+  ISP delegates a /56, and each host has a public address. So WireGuard
+  listens over IPv6, and a client needs an IPv6 network. Most UK mobile data
+  has IPv6. On a network without it, use a phone hotspot. Inside the tunnel,
+  traffic is IPv4 (`10.99.0.0/24`), and the host masquerades it onto the LAN,
+  so LAN devices need no route to the tunnel.
+
+  **A fixed address: the /64 of the uplink, plus `::51`.** The uplinks get
+  stable-privacy SLAAC addresses, which nobody can type. On asus, the
+  ethernet and the wifi get SLAAC addresses on the same /64. So `::51` must be
+  on one interface only: on both, duplicate address detection fails on the
+  second. `services/vpn-sync.sh` puts it on the uplink that holds the IPv4
+  default route, because `net-failover.sh` keeps that route on an uplink that
+  works (`REQ-NETWORK-003`). It removes the old address before it adds the
+  new one. A policy route sends replies from `::51` out of the same uplink:
+  the watchdog moves the IPv4 route only, so after a failover the main IPv6
+  route can still point at the dead uplink. `ip addr` adds the address to a
+  running interface, so nothing restarts. Neither ifupdown nor dhcpcd removes
+  an address that it did not add.
+
+  **The masquerade rule names no interface.** It matches the source
+  `10.99.0.0/24` and the destination, the LAN subnet that the script reads
+  from the uplink's own kernel route. So the rule works on whichever uplink is
+  live. Docker sets the FORWARD policy to DROP, so a `DOCKER-USER` rule
+  accepts traffic from `wg0` to the LAN, and its replies. The sync runs every
+  2 minutes and adds any rule that a reboot removed.
+
+  **Keys.** The host makes its private key on the host, once. The key never
+  leaves the host and is in no repository. The peers' public keys are in the
+  repository, one line for each device, so a new device is one line and one
+  provisioning run. `wg syncconf` applies the new list, and the tunnels of the
+  other peers stay up. `Table = off` stops `wg-quick` from adding routes, so
+  `wg0` never takes the default route.
+
+  **The router rule.** The ZTE allows the port with one manual IPv6 filter
+  rule (see the README). The rule has no destination address, so it survives a
+  prefix change. The host's own firewall opens 51820/udp only with the role
+  (`REQ-SERVER-002`).
+
+  This requirement adds the VPN beside ngrok. ngrok stays until the
+  demonstrations below pass on the real machine.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wg0 is up at
+    10.99.0.1/24"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wg0 listens on UDP
+    51820"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wg0 adds no default
+    route"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the private key and the
+    config are root-only"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wg0 runs every peer of
+    wg0.conf"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "DOCKER-USER accepts
+    traffic from wg0"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tunnel is
+    masqueraded onto the LAN"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "::51 is on exactly one
+    interface, the uplink" (skipped in a VM, which has no global IPv6)
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no WireGuard config
+    without the VPN role"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no ::51 address without
+    the VPN role"
+  - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh`
+    makes the private key on the host and never replaces it, writes `wg0.conf`
+    from `services/wireguard-peers`, and applies a change with `wg syncconf`
+  - Demonstration — on asus: a phone on mobile data, with wifi off, connects.
+    Over the tunnel it opens SSH to asus with a key, and reaches one other LAN
+    device.
+  - Demonstration — on asus: a laptop on the phone's hotspot does the same.
+  - Demonstration — on asus: provisioning with the role restarts no network
+    interface, cloudflared or Docker. seanmizen.com, carolinemizen.art and SSH
+    through ngrok all work after it.
+- **Relations:**
+  - depends-on REQ-NETWORK-003
+  - depends-on REQ-SERVER-002
+  - depends-on REQ-SERVER-014
+
+## REQ-NETWORK-007 — The VPN's DNS name follows the host's address
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1032
+- **Type:** functional
+- **Priority:** P2
+- **Statement:** While the host has `ROLE_VPN=yes`, the host shall make the
+  AAAA record of `vpn.seanmizen.com` equal to its `::51` address within 3
+  minutes of a difference.
+- **Rationale:** The ISP delegates the IPv6 prefix, and it can change at a
+  reconnect. One 28-day WAN session showed one prefix, but a reconnect is
+  untested. So the record must follow the address, and no person must do it.
+  Clients connect to `vpn.seanmizen.com:51820`, so a wrong record is a VPN
+  that nobody can reach.
+
+  `custom-vpn-sync.timer` runs `services/vpn-sync.sh` every 2 minutes. The
+  script reads the `::51` address from the interface, reads the record with
+  one GET, and on a difference writes it with one PATCH. A run that changes
+  nothing logs nothing. Logs go to the journal. There is no notification:
+  ntfy is deprecated.
+
+  **Its own token.** The token has DNS:Edit on the seanmizen.com zone and
+  nothing else. It is a root-only file on the host. It is never the OpenTofu
+  token, which can change every zone, the tunnel and the state bucket. A
+  stolen DNS token can change DNS records in one zone. The OpenTofu token on
+  the host would give much more. OpenTofu applies only in CI from `release`,
+  so the host must not apply.
+
+  **Two owners, one record.** `infra/cloudflare/` declares the record:
+  grey-cloud, because Cloudflare's proxy does not carry UDP, and TTL 60, so a
+  new address reaches clients fast. It ignores changes to the content, so an
+  apply never writes the placeholder back over the timer's value.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-vpn-sync.timer
+    active"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the VPN sync runs every
+    two minutes"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the VPN sync runs only
+    on a machine with the VPN role"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the VPN sync timer is
+    off without the VPN role"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the DNS token is
+    root-only" (skipped where the machine has no token)
+  - Inspection — the OpenTofu stack of Cloudflare (the repository's
+    `infra` folder, outside this unit) declares the AAAA record grey-cloud,
+    TTL 60, with `ignore_changes = [content]`
+  - Inspection — `utils/debbie/2026-09-17/services/vpn-sync.sh` passes the
+    token to curl on stdin, never in argv, and writes the record only when it
+    differs from the address
+  - Demonstration — on asus: set the AAAA record to a wrong value by hand. The
+    timer restores it within 3 minutes.
+- **Relations:** depends-on REQ-NETWORK-006
