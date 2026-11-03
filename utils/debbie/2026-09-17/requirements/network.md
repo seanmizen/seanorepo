@@ -127,6 +127,31 @@ failover requirements.
   address (`arp_announce=2`). `arp_filter` is wrong here: it answers only on
   the interface that holds the route to the asker, so wifi goes silent while
   the route is on wired.
+
+  **Setup replaces only its own files.** Setup gives each physical interface
+  a stanza in `/etc/network/interfaces.d/<iface>`, so that the watchdog has a
+  link to move to. Setup writes or replaces that file only when the file does
+  not exist, or when line 1 is the `# Managed by` header of setup. For a file
+  without the header, setup changes nothing and logs the file name. The same
+  rule applies to the other files under `/etc` that setup writes with the
+  header. The one exception is `/etc/apt/apt.conf.d/20auto-upgrades`, because
+  `dpkg-reconfigure unattended-upgrades` writes that file without the header.
+  `may_replace` in `payload/setup-server-environment.sh` is the one place that
+  reads the header. The files that setup owns outright, for example
+  `/etc/docker/daemon.json`, say why at the place where setup writes them.
+
+  The reason: a person can write a file where setup also writes one. On a
+  Wi-Fi-only host, a person added the Wi-Fi in `interfaces.d/wlan0`, with a
+  `wpa-conf` line. A provisioning run replaced the file with a plain DHCP
+  stanza. Wi-Fi stayed up because it was already up. After the next reboot,
+  the host would not join its Wi-Fi, and it had no cable. A host in that state
+  needs a person at its console. To take a file from setup, delete the header
+  line. To give it back, delete the file.
+
+  **A port with no cable is not a fault.** The address checks skip an
+  interface with no carrier, and give the reason. A Wi-Fi-only host has a
+  wired port with no cable, and the watchdog cannot move the route to that
+  port. An interface with carrier and no address still fails.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/net-failover.sh` probes the
     gateway with `ping -I <iface>` through the interface that owns the route,
@@ -145,9 +170,17 @@ failover requirements.
     setting is in `/etc/sysctl.d/90-seanorepo-arp.conf`, so it survives a
     reboot, and the live values match it
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 7: the route does not fail back on its own"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "every physical
+    interface has an address" and "every physical interface holds a default
+    route" — one result for each interface, skipped for an interface with no
+    carrier
   - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › "case 5:
     pulling the cable on n1" — carrier loss, driven through the QEMU monitor,
     because only the emulator can remove a link
+  - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › "a
+    hand-written interface file keeps its bytes" — the harness writes a file
+    without the header in `interfaces.d`, provisions twice, reboots, and
+    compares the sha256 of the file with its first value
   - Demonstration — a machine with one link runs the watchdog and finds nothing
     to promote. The VM always has three links, so no VM check covers this.
 - **Relations:** depends-on REQ-NETWORK-001

@@ -234,11 +234,28 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   result is a headless machine with no network and no way in. For that reason
   the migration is separate from the machine install. `REQ-NETWORK-004`
   records it.
+
+  A person can also add the Wi-Fi by hand, after the install: a stanza in
+  `/etc/network/interfaces.d/<iface>` with `wpa-conf <file>`, where the file
+  has a `network={` block with an `ssid=`. That form also satisfies this
+  requirement. Setup keeps such a file, because it has no `# Managed by`
+  header (`REQ-NETWORK-003`).
+
+  The check reads the configuration on disk for each wireless interface. The
+  stanza of the interface must have `wpa-ssid`, or `wpa-conf` with a file
+  that has an `ssid`, or a NetworkManager profile must have an SSID. Without
+  one of these, the check fails, and the message says that the host will not
+  join its Wi-Fi after a reboot. Wi-Fi that is up is not proof: it can stay up
+  from before a provisioning run that removed its configuration.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "wifi config persisted"
-    (skipped where the host has no wireless interface, which is every VM run —
-    QEMU has no 802.11 device the installer would drive)
+    (one result for each wireless interface, skipped where the host has no
+    wireless interface)
 - **Relations:** none
+
+  A VM has no wireless device: QEMU has no 802.11 device that the installer
+  would drive. So every VM run skips the Wi-Fi check, and only a run on metal
+  proves it.
 
 
 ## REQ-SERVER-006 — Security updates apply without anyone logging in
