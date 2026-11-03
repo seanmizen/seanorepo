@@ -971,11 +971,15 @@ button.link:hover {
 
 /* Home */
 
-/* The search field and its key share one row. */
+/* The search field and its key share one row. The key is in a wrapper
+   for the swap (`#search-send`), which adds no box. */
 .search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.25em;
+}
+.search > .send {
+  display: contents;
 }
 
 /* Organisation
