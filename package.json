@@ -25,7 +25,7 @@
     "ascii": "node utils/image-to-ascii/src/cli.mjs",
     "ascii-go": "go run -C utils/image-to-ascii ./cmd/image-to-ascii",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",
-    "prod:docker": "yarn workspaces foreach -At --exclude seanscards run prod:docker",
+    "prod:docker": "bash scripts/prod-docker-all.sh",
     "down": "yarn workspaces foreach -Apt run down",
     "check": "biome check .",
     "fix": "biome check --write .",
