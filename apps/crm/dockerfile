@@ -1,8 +1,14 @@
 # Build context is the monorepo root (see docker-compose.yml).
+#
+# One container runs `yarn workspace crm start`: Rsbuild builds crm-fe once,
+# then builds it in watch mode while Bun runs crm-be in watch mode. Rsbuild needs Node, and
+# crm-be needs Bun, so the image has both. SQLite comes from bun:sqlite, which
+# is part of the Bun runtime.
 
 # dev: the image installs the dependencies. docker-compose fills its named
 # node_modules volume from them. The source comes in through the bind mount.
 FROM node:24-slim AS dev
+COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 
 COPY package.json yarn.lock .yarnrc.yml ./
@@ -13,8 +19,9 @@ COPY apps/crm/package.json ./apps/crm/
 COPY apps/crm/crm-fe/package.json ./apps/crm/crm-fe/
 COPY apps/crm/crm-be/package.json ./apps/crm/crm-be/
 COPY apps/crm/shared/package.json ./apps/crm/shared/
-RUN yarn workspaces focus crm-fe
+RUN yarn workspaces focus crm crm-fe crm-be crm-shared
 
-WORKDIR /app/apps/crm/crm-fe
+WORKDIR /app/apps/crm
+ENV NODE_ENV=development
 EXPOSE 4100
-CMD ["yarn", "rsbuild", "dev", "--port", "4100", "--host", "0.0.0.0"]
+CMD ["yarn", "start"]

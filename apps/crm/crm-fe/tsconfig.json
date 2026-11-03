@@ -2,12 +2,7 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2020"],
-    "jsx": "react-jsx",
-    "types": ["@rsbuild/core/types"],
-    "paths": {
-      "@/*": ["./src/*"],
-      "@shared/*": ["../shared/*"]
-    }
+    "types": ["@rsbuild/core/types"]
   },
-  "include": ["src", "../shared"]
+  "include": ["src", "rsbuild.config.ts"]
 }

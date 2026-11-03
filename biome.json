@@ -44,5 +44,17 @@
         "useLiteralKeys": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/crm/**"],
+      "linter": {
+        "rules": {
+          "security": {
+            "noDangerouslySetInnerHtml": "error"
+          }
+        }
+      }
+    }
+  ]
 }
