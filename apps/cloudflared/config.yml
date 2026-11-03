@@ -94,5 +94,10 @@ ingress:
   - hostname: crm.seanmizen.com
     service: http://localhost:4100
 
+  # demo-crm.seanmizen.com - Port 4101. The crm demo (crm-demo in
+  # apps/crm/docker-compose.yml): the same image as crm, with dummy data.
+  - hostname: demo-crm.seanmizen.com
+    service: http://localhost:4101
+
   # Catch-all for unmatched routes
   - service: http_status:404

@@ -32,6 +32,7 @@ const PUBLIC_PATHS = new Set([
   '/login/code',
   '/login/verify',
   '/login/recover',
+  '/login/demo',
   '/favicon.ico',
   '/api/health',
   '/api/passkeys/sign-in-options',
@@ -171,7 +172,9 @@ const setSessionCookie = (
  * Start a session for `personId`: a session row with the token hash, and the
  * cookie with the raw token. `how` is the sign-in step. A link or a code
  * gives an `email` session. A recovery session lasts RECOVERY_MINUTES, and
- * the others last SESSION_DAYS. The new session replaces the current session
+ * the others last SESSION_DAYS. `demo` is the button of the demo
+ * (`routes/login/demo.tsx`): it gives a `passkey` session with no check,
+ * and the audit row keeps the method `demo`. The new session replaces the current session
  * of the request, if there is one: this function deletes its row. Returns
  * the session id.
  */
@@ -180,10 +183,14 @@ export const startSession = (
   request: FastifyRequest,
   reply: FastifyReply,
   personId: string,
-  how: 'link' | 'code' | 'passkey' | 'recovery',
+  how: 'link' | 'code' | 'passkey' | 'recovery' | 'demo',
 ) => {
   const method: SessionMethod =
-    how === 'link' || how === 'code' ? 'email' : how;
+    how === 'link' || how === 'code'
+      ? 'email'
+      : how === 'demo'
+        ? 'passkey'
+        : how;
   const seconds =
     method === 'recovery' ? RECOVERY_MINUTES * 60 : SESSION_DAYS * 24 * 60 * 60;
   const token = newToken();
