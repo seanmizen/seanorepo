@@ -12,9 +12,12 @@
  * layout. The script builds crm-fe, starts crm-be on PORT (default 4110)
  * with a new SQLite file in a temp folder, and puts sample organisations,
  * a passkey and an admin passkey session in it. It touches no other
- * database. Then Playwright (from the repo node_modules) takes each page at
- * 1200px and 390px, in light and dark mode, and a few pages with
- * ?theme=bare. At the end it stops crm-be and deletes the database.
+ * database. There are more than 50 organisations, so the list (/ and
+ * /orgs) has a second page. Then Playwright (from the repo node_modules) takes each page
+ * at 1200px and 390px, in light and dark mode, and a few pages with
+ * ?theme=bare. It takes each sort and filter of the list at 1200px in
+ * light mode and at 390px in dark mode. At the end it stops crm-be and
+ * deletes the database.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -125,14 +128,56 @@ const ORGS = [
   },
 ];
 
+/**
+ * 56 more organisations, so that the list has more than 50 rows. Each
+ * has a different added date. Some have a next action (a few of them due),
+ * a visit or a note.
+ */
+const STREETS = ['Abbey', 'Bridge', 'Castle', 'Church', 'Granary', 'Market'];
+const TRADES = [
+  'Bakery',
+  'Barbers',
+  'Butchers',
+  'Dental',
+  'Florist',
+  'Gym',
+  'Opticians',
+  'Pharmacy',
+  'Tailors',
+  'Vets',
+];
+const MORE_STAGES = ['lead', 'visited', 'follow_up', 'quoted', 'won', 'lost'];
+for (let i = 0; i < 56; i += 1) {
+  const name = `${STREETS[i % 6]} ${TRADES[Math.floor(i / 6)]}`;
+  let next = null;
+  if (i % 11 === 0) next = ['Knock again', day(-3 - (i % 4))];
+  else if (i % 3 === 0) next = ['Send the price list', day(1 + (i % 9))];
+  ORGS.push({
+    slug: name.toLowerCase().replaceAll(' ', '-'),
+    name,
+    address: [
+      `${i + 1} ${STREETS[i % 6]} Road`,
+      null,
+      `ZZ${(i % 9) + 1} ${i % 10}AB`,
+    ],
+    stage: MORE_STAGES[i % 6],
+    next,
+    contact: null,
+    visits: i % 4 === 0 ? [[-(i % 30) - 1, 'spoke', null]] : [],
+    notes: i % 5 === 0 ? [[-(i % 20) - 1, 'Asked about prices.']] : [],
+    added: -100 + i,
+  });
+}
+
 const seed = (adminToken, emailToken) => {
   const hash = (token) => createHash('sha256').update(token).digest('hex');
   const rows = [];
-  for (const org of ORGS) {
+  for (const [index, org] of ORGS.entries()) {
     const id = randomUUID();
+    const added = at(org.added ?? -45 + index);
     rows.push(
       `INSERT INTO organisation (id, slug, name, address_line_1, address_line_2, postcode, stage, next_action, next_action_on, lawful_basis, source, created_at)
-       VALUES (${q(id)}, ${q(org.slug)}, ${q(org.name)}, ${org.address.map(q).join(', ')}, ${q(org.stage)}, ${q(org.next?.[0] ?? null)}, ${q(org.next?.[1] ?? null)}, 'legitimate_interests', 'door', ${q(at(-45))});`,
+       VALUES (${q(id)}, ${q(org.slug)}, ${q(org.name)}, ${org.address.map(q).join(', ')}, ${q(org.stage)}, ${q(org.next?.[0] ?? null)}, ${q(org.next?.[1] ?? null)}, 'legitimate_interests', 'door', ${q(added)});`,
     );
     if (org.contact) {
       const person = randomUUID();
@@ -199,9 +244,11 @@ try {
   seed(adminToken, emailToken);
 
   const signedIn = [
-    ['today', '/'],
-    ['orgs', '/orgs'],
-    ['orgs-search', '/orgs?q=street&stage=visited'],
+    ['home', '/'],
+    ['home-page-2', '/?page=2'],
+    ['home-search', '/?q=street&stage=visited'],
+    // /orgs is the same list as /.
+    ['orgs', '/orgs?sort=name&dir=asc'],
     ['org', '/example-plumbing'],
     ['org-new', '/orgs/new'],
     ['account', '/account'],
@@ -215,6 +262,18 @@ try {
     ['verify', '/login/verify?token=sample'],
     // An error shows in the LCD.
     ['verify-error', '/login/verify'],
+  ];
+  // Each sort of the list, ascending and descending, and the filters
+  // with a sort.
+  const homeStates = [
+    ['home-activity-asc', '/?sort=activity&dir=asc'],
+    ['home-activity-desc', '/?sort=activity&dir=desc'],
+    ['home-added-asc', '/?sort=added&dir=asc'],
+    ['home-added-desc', '/?sort=added&dir=desc'],
+    ['home-name-asc', '/?sort=name&dir=asc'],
+    ['home-name-desc', '/?sort=name&dir=desc'],
+    ['home-stage-quoted', '/?stage=quoted&sort=name&dir=desc'],
+    ['home-no-match', '/?q=nothing-matches'],
   ];
   const shoot = async (page, name, url, tag) => {
     await page.goto(`${BASE}${url}`);
@@ -244,6 +303,11 @@ try {
         { name: 'crm_session', value: adminToken, url: BASE },
       ]);
       for (const [name, url] of signedIn) await shoot(page, name, url, tag);
+      if (tag === 'light-wide' || tag === 'dark-phone') {
+        for (const [name, url] of homeStates) {
+          await shoot(page, name, url, tag);
+        }
+      }
       await context.close();
     }
   }
@@ -256,14 +320,12 @@ try {
   ]);
   const page = await context.newPage();
   for (const [name, url] of [
-    ['today', '/?theme=bare'],
+    ['home', '/?sort=name&dir=asc&theme=bare'],
+    ['sessions', '/account/sessions?theme=bare'],
     ['org', '/example-plumbing?theme=bare'],
   ]) {
     await shoot(page, name, url, 'bare');
   }
-  // The mode stepper sets dark mode on a light system.
-  await context.addCookies([{ name: 'crm_mode', value: 'dark', url: BASE }]);
-  await shoot(page, 'org', '/example-plumbing', 'mode-dark');
   await context.close();
   console.log(out);
 } finally {

@@ -17,7 +17,6 @@ import { Module } from '../../ui/Module';
 import { AddPasskey } from '../../ui/Passkey';
 import { Records, RecordTable } from '../../ui/Records';
 import { When } from '../../ui/When';
-import { SESSION_TEXT } from '../account';
 
 interface PasskeyRow {
   id: string;
@@ -27,10 +26,10 @@ interface PasskeyRow {
 }
 
 /**
- * One line under the device that tells this session what it can do on
- * this page.
+ * The one sentence under the nav that tells this session what it can do on
+ * this page, or nothing.
  */
-const Notice = ({
+const notice = ({
   method,
   admin,
   firstPasskey,
@@ -42,37 +41,25 @@ const Notice = ({
   canChange: boolean;
 }) => {
   if (method === 'recovery') {
-    return (
-      <p>
-        This is a recovery session. It can only add a passkey, and it ends{' '}
-        {RECOVERY_MINUTES} minutes after it started. When you add a passkey,
-        this session becomes a passkey session.
-      </p>
-    );
+    return `This recovery session can only add a passkey, and it ends ${RECOVERY_MINUTES} minutes after it started.`;
   }
   if (admin && firstPasskey) {
-    return (
-      <p>
-        You are the admin. The admin pages need a passkey. Add one to this
-        device, and the admin pages open in this session.
-      </p>
-    );
+    return 'The admin pages need a passkey, so add one to this device to open them in this session.';
   }
   if (!canChange) {
-    return <p>To add or delete a passkey, sign in with a passkey.</p>;
+    return 'To add or delete a passkey, sign in with a passkey.';
   }
-  return null;
+  return undefined;
 };
 
 /**
- * The passkeys page. The LCD shows the person, the session and the count.
- * The device adds a passkey. The records list the passkeys (name, added,
- * last used), with a delete key for each one. The add form needs
- * JavaScript (WebAuthn). With no JavaScript the module says so
- * (REQ-CRM-BARE-001).
+ * The passkeys page. The intro tells a session that cannot change its
+ * passkeys why. The device adds a passkey, and the LCD shows only an
+ * error. The records list the passkeys (name, added, last used), with a
+ * small delete key for each one. The add form needs JavaScript (WebAuthn).
+ * With no JavaScript the module says so (REQ-CRM-BARE-001).
  */
 export const passkeysPage = ({
-  email,
   method,
   admin,
   firstPasskey,
@@ -80,7 +67,6 @@ export const passkeysPage = ({
   passkeys,
   error,
 }: {
-  email: string;
   method: SessionMethod;
   admin: boolean;
   firstPasskey: boolean;
@@ -89,31 +75,18 @@ export const passkeysPage = ({
   error?: string;
 }): PageParts => ({
   title: 'Passkeys',
-  device: (
-    <Device>
-      <Lcd
-        alert={error}
-        rows={[
-          { label: 'Person', value: email },
-          { label: 'Session', value: SESSION_TEXT[method] },
-          { label: 'Passkeys', value: String(passkeys.length) },
-        ]}
-      />
-      {canChange && (
-        <Module label="Add a passkey">
-          <AddPasskey next="/account/passkeys" />
-        </Module>
-      )}
-    </Device>
-  ),
-  help: (
-    <Notice
-      method={method}
-      admin={admin}
-      firstPasskey={firstPasskey}
-      canChange={canChange}
-    />
-  ),
+  intro: notice({ method, admin, firstPasskey, canChange }),
+  device:
+    canChange || error ? (
+      <Device>
+        <Lcd alert={error} />
+        {canChange && (
+          <Module label="Add a passkey">
+            <AddPasskey next="/account/passkeys" />
+          </Module>
+        )}
+      </Device>
+    ) : undefined,
   records: (
     <Records title="Passkeys">
       {passkeys.length === 0 ? (
@@ -167,7 +140,6 @@ const sendPage = (
     renderPage(
       request,
       passkeysPage({
-        email: auth.email,
         method: auth.method,
         admin: isAdmin(auth),
         firstPasskey: !hasPasskey(db, auth.personId),

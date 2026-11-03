@@ -79,7 +79,9 @@ describe('POST /<slug>/visits', () => {
     const today = (
       await app.inject({ method: 'GET', url: '/', headers: { cookie } })
     ).body;
-    expect(today).toContain('Nothing is due');
+    // The list has no due next action, so no LED is lit.
+    expect(today).toContain('<span class="none">None</span>');
+    expect(today).not.toContain('class="led on"');
   });
 
   test('the other outcomes leave the stage as it is', async () => {

@@ -70,7 +70,7 @@ describe('the dates on the pages', () => {
     await close();
   });
 
-  test('every date and time on each page is a <time> with the full value, in the one format (REQ-CRM-DATE-001)', async () => {
+  test('every date and time on each page is a <time> with the full value, in the one format, in mono (REQ-CRM-DATE-001)', async () => {
     const slug = await addOrg(app, cookie, {
       name: 'Acme Plumbing',
       contact_name: 'Ann Smith',
@@ -89,7 +89,7 @@ describe('the dates on the pages', () => {
     let times = 0;
     for (const url of [
       '/',
-      '/orgs',
+      '/?sort=added&dir=desc',
       `/${slug}`,
       '/account',
       '/account/passkeys',
@@ -111,8 +111,17 @@ describe('the dates on the pages', () => {
         /\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/,
       );
     }
-    // Today, the orgs menu, the LCD and records of the organisation, and
-    // the sessions: each one has a date.
+    // The home menu (both sorts), the LCD and records of the organisation,
+    // and the sessions: each one has a date.
     expect(times).toBeGreaterThanOrEqual(8);
+
+    // The page styles show each <time> in the mono font, so the dates in a
+    // column line up.
+    const home = (
+      await app.inject({ method: 'GET', url: '/', headers: { cookie } })
+    ).body;
+    const href = home.match(/<link rel="stylesheet" href="([^"]+)"/)?.[1];
+    const css = (await app.inject({ method: 'GET', url: String(href) })).body;
+    expect(css).toMatch(/(^|[}\s,])time\s*\{[^}]*font-family:\s*var\(--mono\)/);
   });
 });
