@@ -44,8 +44,171 @@ The two hard parts are:
 10. **GDPR tools.** Data export for subject access requests (DSARs), erasure,
     a retention schedule with automatic purge, a suppression list, and an
     audit log.
-11. **Auth.** The app has one user, so it uses a passkey. Cloudflare Access
-    sits in front of the app.
+11. **Auth.** One login system for the admin and for clients. See
+    [Auth and tenancy](#auth-and-tenancy).
+12. **MCP server.** Claude Code reads the CRM and adds records to it. See
+    [MCP server](#mcp-server).
+
+## Auth and tenancy
+
+Keep it simple. Each concern has one obvious place in the code, so that a
+debug session can find it with grep.
+
+### One login system
+
+- **The admin and the clients use the same flow.** Sean is the admin. He
+  uses the flow every day before the client portal ships, so he finds the
+  problems first.
+- **No Cloudflare Access.** It adds a second login for the admin. Then the
+  admin flow is different from the client flow.
+
+### Sign-in
+
+- **Email link, with a code as a backup.** The email contains a link and a
+  6-digit code. The link opens a page with a "Sign in" button. The button
+  sends the POST. Reason: email scanners (for example Outlook Safe Links)
+  open every link. If the link itself used the token, a scanner would use it
+  up before the person clicks.
+- **The token.** It is single-use and it expires after 15 minutes. The
+  database stores only its hash.
+- **Email provider.** A transactional email provider sends the email
+  (Postmark, Resend or SES).
+- **Passkey for clients.** Optional. After the first login, the app offers
+  "Save a passkey on this phone". Use [SimpleWebAuthn][simplewebauthn].
+- **Rate limits.** The email-link endpoint and the code endpoint have rate
+  limits by email address and by IP.
+
+### The admin role
+
+- **The admin role requires a passkey.** An email link alone gives a
+  session. The admin area opens only after a passkey sign-in.
+- **One config key holds the admin email.** No signup flow can give the
+  admin role to a person.
+
+### Sessions
+
+- **Cookie.** The session lasts 60–90 days. The cookie is `HttpOnly`,
+  `Secure` and `SameSite=Lax`.
+- **Sessions list.** It shows the device, the browser and the last-seen time
+  for each session. Each session has a revoke button.
+- **"Sign out everywhere else".** One button revokes all other sessions.
+
+### Lost device
+
+Passkeys sync through iCloud Keychain, Google Password Manager or 1Password.
+If Sean loses a phone, he does these steps:
+
+1. Sign in on another device.
+2. Revoke the session of the lost phone.
+3. Lock the lost phone with Find My.
+
+Register two passkeys on day one: one in iCloud Keychain and one in a
+different manager. The passkey list shows a name and a last-used date for
+each passkey.
+
+### Lockout recovery
+
+- **No recovery codes and no admin recovery by email.** Recovery by email
+  cancels the passkey requirement.
+- **SSH access to the box is the root of trust.** One backend command does
+  the recovery:
+
+  ```bash
+  docker exec backend-crm bun run admin:recover <email>
+  ```
+
+  The command does these steps:
+
+  1. It deletes the passkeys of the admin.
+  2. It revokes all sessions of the admin.
+  3. It prints a single-use enrolment link. The link expires after 15
+     minutes.
+
+- **A backend test covers the command.**
+
+### Clients and billing
+
+- The [Stripe Customer Portal][stripe-portal] covers invoices, payment
+  methods and cancellation.
+- The CRM client portal comes later, with the first feature for clients
+  (quotes, contracts or documents).
+
+### Tenancy model
+
+```text
+Person (one login, one email)
+  └── Membership (role: owner | staff)
+        └── Organisation (one slug, one Stripe Customer)
+```
+
+- One person can belong to many organisations. After login, a person with
+  more than one organisation sees a picker.
+- Each organisation is a separate Stripe Customer. It has its own invoices,
+  VAT details and Direct Debit mandate.
+- Each person has one email. There is no account linking.
+- GDPR erasure applies to the person and to their memberships. The statutory
+  records of the organisation follow the retention tier (see
+  [Two tiers of data](#two-tiers-of-data)).
+
+### URLs
+
+URLs are readable, and a person can share them. A URL is never a
+credential. The session controls access.
+
+```text
+crm.seanmizen.com/acme-plumbing
+crm.seanmizen.com/acme-plumbing/invoices/INV-0042
+crm.seanmizen.com/acme-plumbing/quotes/website-refresh
+```
+
+- A signed-out visitor gets the sign-in page. After sign-in, the visitor
+  returns to the same URL.
+- A slug comes from a trading name. Reason: the business name of a sole
+  trader can be personal data.
+- On erasure, the app deletes the slug too. Old links then return 404.
+
+## MCP server
+
+The MCP server lets Claude Code read the CRM and add records to it. Keep it
+simple, with one obvious place in the code.
+
+- **Location.** The server is part of `crm-be`. It uses the Streamable HTTP
+  transport at `/api/mcp`, with
+  [`@modelcontextprotocol/sdk`][mcp-sdk]. There is no separate app.
+- **One file.** `apps/crm/crm-be/src/mcp.ts` registers all tools. Each tool
+  calls the same service functions as the REST routes. Do not duplicate
+  logic.
+- **Auth.** Use personal access tokens. The admin creates and revokes them
+  in the CRM. They show in the same list as sessions, with a name and a
+  last-used date. Only the admin can have one. Claude Code connects with a
+  bearer header:
+
+  ```bash
+  claude mcp add --transport http crm https://crm.seanmizen.com/api/mcp \
+    --header "Authorization: Bearer <token>"
+  ```
+
+  Add OAuth only if a claude.ai connector or a mobile connector becomes
+  necessary.
+- **Tool scope is the same as the offline scope.** Read tools, plus writes
+  that only append. Examples:
+  - `search_contacts`
+  - `get_organisation`
+  - `list_tasks_today`
+  - `list_invoices` (from the Stripe mirror)
+  - `create_lead`
+  - `log_visit`
+  - `add_note`
+
+  Erasure, deletes and all actions that move money stay in the UI only.
+- **Audit.** Every MCP call goes into the same audit log as the UI actions.
+  The actor is `mcp:<token-name>`.
+- **Untrusted data.** A tool result can contain text that a client wrote.
+  The model must treat that text as data. This is one
+  more reason to keep destructive tools out of MCP.
+- **GDPR.** CRM data that goes through MCP goes to the LLM provider. The
+  provider is a processor. Name it in the privacy notice and in the record of
+  processing.
 
 ## GDPR and record-keeping
 
@@ -264,6 +427,9 @@ Linked in this document:
 - [`idb`][idb]
 - [WebKit: 7-day cap on script-writable storage][webkit-7day]
 - [MDN: `navigator.setAppBadge()`][mdn-badge]
+- [SimpleWebAuthn][simplewebauthn]
+- [Stripe Customer Portal][stripe-portal]
+- [`@modelcontextprotocol/sdk`][mcp-sdk]
 
 [stripe-gb-pricing]: https://stripe.com/gb/pricing
 [stripe-tap]: https://docs.stripe.com/terminal/payments/setup-reader/tap-to-pay
@@ -283,3 +449,6 @@ Linked in this document:
 [idb]: https://github.com/jakearchibald/idb
 [webkit-7day]: https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/
 [mdn-badge]: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/setAppBadge
+[simplewebauthn]: https://simplewebauthn.dev
+[stripe-portal]: https://docs.stripe.com/customer-management
+[mcp-sdk]: https://github.com/modelcontextprotocol/typescript-sdk
