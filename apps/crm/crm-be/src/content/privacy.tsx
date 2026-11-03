@@ -18,7 +18,7 @@ export const PRIVACY_UPDATED = '2026-11-03';
 export const PRIVACY_EMAIL = 'sean@seanmizen.com';
 
 /** The ICO registration number. A placeholder until Sean registers. */
-export const ICO_REGISTRATION = '[ICO registration number]';
+export const ICO_REGISTRATION = '[ICO registration number pending]';
 
 const Email = () => <a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a>;
 
