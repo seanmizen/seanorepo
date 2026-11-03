@@ -100,9 +100,11 @@ uplink() {
         | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }'
 }
 
-# The LAN subnet on that uplink, from the kernel's own route for it.
+# The LAN subnet on that uplink, from its on-link subnet route. Any proto: on
+# asus, dhcpcd adds the address with `noprefixroute` and installs the subnet
+# route itself as `proto dhcp`, so a `proto kernel` filter finds nothing.
 lan_subnet() {
-    ip -4 -o route show dev "$1" proto kernel scope link 2> /dev/null | awk '{ print $1; exit }'
+    ip -4 -o route show dev "$1" scope link 2> /dev/null | awk '$1 ~ /\// { print $1; exit }'
 }
 
 # One SLAAC address on the uplink, for its /64 prefix. `dynamic` excludes the
