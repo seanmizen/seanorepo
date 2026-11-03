@@ -35,6 +35,7 @@ import { orgContactRemoveRoute } from './routes/orgs/[slug]/contacts/[id]/remove
 import { orgEditRoute } from './routes/orgs/[slug]/edit';
 import { orgStageRoute } from './routes/orgs/[slug]/stage';
 import { orgsNewRoute } from './routes/orgs/new';
+import { privacyRoute } from './routes/privacy';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4100;
 const IS_TEST = process.env.NODE_ENV === 'test';
@@ -42,8 +43,8 @@ const IS_TEST = process.env.NODE_ENV === 'test';
 /**
  * Make the Fastify app. It renders every page, serves the crm-fe build at
  * `/static/`, and serves the API under `/api`. One route file for each URL,
- * in `routes/`. Every page except the sign-in pages needs a session (see
- * `auth.ts`).
+ * in `routes/`. Every page except `/privacy`, the sign-in pages and the
+ * public home (`/`, signed out) needs a session (see `auth.ts`).
  */
 export const buildApp = (db: Database) => {
   const app = Fastify({ logger: !IS_TEST });
@@ -61,6 +62,7 @@ export const buildApp = (db: Database) => {
   });
 
   listRoute(app, db);
+  privacyRoute(app);
   healthRoute(app);
   faviconRoute(app);
   const limits = makeLoginLimits();

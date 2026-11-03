@@ -247,7 +247,7 @@ describe('the admin pages', () => {
     expect((await get('/', upgraded)).statusCode).toBe(200);
     // The same session, with a new token: the old cookie stops working.
     expect(sessionMethods()).toEqual(['passkey']);
-    expect((await get('/', cookie)).statusCode).toBe(303);
+    expect((await get('/orgs', cookie)).statusCode).toBe(303);
     expect(auditActions().slice(-2)).toEqual([
       expect.objectContaining({ action: 'passkey_add' }),
       { action: 'session_upgrade', detail: '{"from":"email","to":"passkey"}' },

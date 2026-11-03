@@ -1,7 +1,7 @@
 # Cloudflare as code
 
 The Cloudflare setup for all of Sean's sites, in OpenTofu: the zones, the browser cache TTL, the
-DNS records, the tunnel and its ingress rules. Git holds the code. The
+DNS records, the redirect rules, the tunnel and its ingress rules. Git holds the code. The
 state is in the R2 bucket `seanorepo-tofu-state`, which CI and every
 checkout share. A push to `release` applies the stack in CI
 (`.github/workflows/infra-apply.yml`). One import block for each resource
@@ -21,6 +21,7 @@ rebuilds a lost state (see "The state").
    | Zone    | DNS                        | Edit   |
    | Zone    | Zone Settings              | Edit   |
    | Account | Workers R2 Storage         | Edit   |
+   | Zone    | Single Redirect            | Edit   |
 
    Under *Zone Resources*, include only seanmizen.com, carolinemizen.art
    and seansconverter.com.
@@ -94,7 +95,10 @@ copy it into the `.tf` files first.
 ## Files
 
 - `main.tf`: the account ID.
-- `<zone>.tf`: one file for each zone, with its DNS records.
+- `<zone>.tf`: one file for each zone, with its DNS records. The redirect
+  rules of seanmizen.com are one `cloudflare_ruleset` in
+  `seanmizen_com.tf`. Cloudflare allows one ruleset for each phase in a
+  zone, so add a new redirect as one more rule in that ruleset.
 - `tunnel.tf`: the tunnel.
 - `r2.tf`: the R2 buckets, except the state bucket. The crm backup bucket
   is in the EU jurisdiction.

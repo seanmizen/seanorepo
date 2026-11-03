@@ -230,19 +230,18 @@ describe('next', () => {
 });
 
 describe('the session check', () => {
-  test('/login and /api/health are open, other pages need a session', async () => {
-    expect(
-      (await app.inject({ method: 'GET', url: '/api/health' })).statusCode,
-    ).toBe(200);
-    expect(
-      (await app.inject({ method: 'GET', url: '/login' })).statusCode,
-    ).toBe(200);
-    const home = await app.inject({ method: 'GET', url: '/' });
-    expect(home.statusCode).toBe(303);
-    expect(home.headers.location).toBe('/login');
+  test('/, /privacy, /login and /api/health are open, other pages need a session', async () => {
+    for (const url of ['/', '/privacy', '/login', '/api/health']) {
+      const page = await app.inject({ method: 'GET', url });
+      expect(page.statusCode).toBe(200);
+      expect(page.headers.location).toBeUndefined();
+    }
+    const orgs = await app.inject({ method: 'GET', url: '/orgs' });
+    expect(orgs.statusCode).toBe(303);
+    expect(orgs.headers.location).toBe('/login?next=%2Forgs');
     const bad = await app.inject({
       method: 'GET',
-      url: '/',
+      url: '/orgs',
       headers: { cookie: `${SESSION_COOKIE}=not-a-session` },
     });
     expect(bad.statusCode).toBe(303);

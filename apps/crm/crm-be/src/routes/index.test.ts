@@ -505,10 +505,10 @@ describe('the page anatomy', () => {
     expect(account).toContain('<a href="/orgs">orgs</a>');
   });
 
-  test('the footer has the pager and top, and no theme or mode stepper', async () => {
+  test('the footer has the pager, privacy and top, and no theme or mode stepper', async () => {
     const html = (await get('/')).body;
     expect(html).toContain(
-      '<footer class="foot"><nav class="foot-links" aria-label="Page"><a href="#top">top</a></nav></footer>',
+      '<footer class="foot"><nav class="foot-links" aria-label="Page"><a href="/privacy">privacy</a> <a href="#top">top</a></nav></footer>',
     );
     expect(html).toContain('<html lang="en">');
     expect(html).toContain('<meta name="color-scheme" content="light dark"/>');
@@ -563,6 +563,7 @@ describe('every page with ?theme=bare', () => {
       ...editPages(orgHtml),
       '/account',
       '/account/sessions',
+      '/privacy',
     ];
     const bare: Record<string, string> = {};
     for (const page of pages) {

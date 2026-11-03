@@ -19,7 +19,7 @@
  * 1440px (REQ-CRM-LAYOUT-001). The script reads the breakpoint from
  * crm-fe/src/theme.css. It takes each sort and filter of the list at
  * 1200px in light mode and at 390px in dark mode, and a few pages with
- * ?theme=bare. "home-hover" has the pointer on a menu row: compare it with
+ * ?theme=bare. "public-home" and "privacy" are signed out. "home-hover" has the pointer on a menu row: compare it with
  * "home" to see that no character moves (REQ-CRM-LCD-001). The script
  * prints each page that scrolls sideways. At the end it stops crm-be and
  * deletes the database.
@@ -328,6 +328,9 @@ try {
     ['not-found', '/orgs/no-such-org'],
   ];
   const signedOut = [
+    // The public home, and the privacy notice.
+    ['public-home', '/'],
+    ['privacy', '/privacy'],
     ['login', '/login'],
     ['code', '/login/code?email=admin%40example.com'],
     ['verify', '/login/verify?token=sample'],
@@ -399,10 +402,16 @@ try {
   const context = await browser.newContext({
     viewport: { width: 1200, height: 900 },
   });
+  const page = await context.newPage();
+  for (const [name, url] of [
+    ['public-home', '/?theme=bare'],
+    ['privacy', '/privacy?theme=bare'],
+  ]) {
+    await shoot(page, name, url, 'bare');
+  }
   await context.addCookies([
     { name: 'crm_session', value: adminToken, url: BASE },
   ]);
-  const page = await context.newPage();
   for (const [name, url] of [
     ['home', '/?sort=name&dir=asc&theme=bare'],
     ['sessions', '/account/sessions?theme=bare'],
