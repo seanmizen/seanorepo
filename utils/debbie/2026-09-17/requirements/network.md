@@ -115,6 +115,18 @@ failover requirements.
   So the probe must go *through* the interface that owns the route. A healthy
   link must never be bounced, because an unnecessary failover is an outage
   too.
+
+  A probe through an interface is true only if the replies come back through
+  that interface. On `asus`, wired and wifi share one subnet. With the kernel
+  default (`arp_ignore=0`), both cards answer ARP for both addresses, and the
+  wired reply arrives first. The router then sends the replies for the wifi
+  address to the wired card. `ping -I <wifi>` binds its socket to wifi, so it
+  never sees them. The probe of a working wifi link failed, and a real wired
+  failure would have left no route. So each interface answers ARP only for
+  its own address (`arp_ignore=1`), and sends ARP requests that carry its own
+  address (`arp_announce=2`). `arp_filter` is wrong here: it answers only on
+  the interface that holds the route to the asker, so wifi goes silent while
+  the route is on wired.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/net-failover.sh` probes the
     gateway with `ping -I <iface>` through the interface that owns the route,
@@ -128,6 +140,10 @@ failover requirements.
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 4: upstream dead with carrier up moves the
     default route" — the check reproduces the 2026-08-14 failure: it blackholes
     the gateway while the carrier stays up
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "each interface
+    answers ARP only for its own address (arp_ignore=1, arp_announce=2)" — the
+    setting is in `/etc/sysctl.d/90-seanorepo-arp.conf`, so it survives a
+    reboot, and the live values match it
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "case 7: the route does not fail back on its own"
   - Test — `utils/debbie/2026-09-17/scripts/test-vm/test-vm.sh` › "case 5:
     pulling the cable on n1" — carrier loss, driven through the QEMU monitor,
@@ -138,7 +154,9 @@ failover requirements.
 
   A VM run does not cover wifi association and WPA. QEMU has no wireless
   device. The VM matrix proves the probe, the promotion and the demotion. Only
-  a run on metal proves wifi.
+  a run on metal proves wifi. The VM gives each link its own subnet, so only a
+  run on metal with two links on one subnet proves the ARP setting: case 4
+  with the route on wired.
 
 ## REQ-NETWORK-004 — The failover watchdog and the wifi configuration agree on an owner
 

@@ -1349,6 +1349,41 @@ for net_path in /sys/class/net/*; do
 done
 
 #------------------------------------------------------------------------------
+# Each interface answers ARP only for its own address - REQ-NETWORK-003.
+#
+# By default Linux answers an ARP request on every interface, for every local
+# address. When two links share one subnet, both links answer "who has the
+# wifi address?". The wired reply arrives first, so the router sends the wifi
+# address's packets to the wired card. The watchdog probes wifi with
+# `ping -I <iface>`, which binds the socket to wifi. The kernel does not give
+# that socket a reply that arrives on the wired card, so the probe fails while
+# wifi works.
+#
+# arp_ignore=1: an interface answers only for an address that is on that
+# interface. arp_announce=2: an ARP request that an interface sends carries an
+# address of that interface. The kernel uses the larger of the "all" value and
+# the value of the interface, so the "all" keys also cover an interface that
+# appears later. NOT arp_filter: it answers only on the interface that holds
+# the route to the asker, and that silences wifi while the route is on wired.
+#
+# UNCONDITIONAL, like the watchdog. A machine with one link holds all of its
+# LAN addresses on that link, so the setting changes nothing there.
+#------------------------------------------------------------------------------
+log "ARP answers per interface"
+
+ARP_SYSCTL=/etc/sysctl.d/90-seanorepo-arp.conf
+arp_tmp="$(mktemp)"
+printf '%s\n' "# Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-NETWORK-003" \
+    "net.ipv4.conf.all.arp_ignore = 1" \
+    "net.ipv4.conf.all.arp_announce = 2" > "$arp_tmp"
+if [ ! -f "$ARP_SYSCTL" ] || ! cmp -s "$arp_tmp" "$ARP_SYSCTL"; then
+    log "  writing $ARP_SYSCTL"
+    install -m 0644 -o root -g root "$arp_tmp" "$ARP_SYSCTL"
+fi
+rm -f "$arp_tmp"
+sysctl -q -p "$ARP_SYSCTL"
+
+#------------------------------------------------------------------------------
 # The failover watchdog - REQ-NETWORK-003.
 #
 # NetworkManager reacts to carrier, not to reachability. An interface with

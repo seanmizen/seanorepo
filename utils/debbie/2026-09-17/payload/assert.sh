@@ -1446,6 +1446,15 @@ if [ "$PHASE" = provisioned ]; then
         'want=$(ls -d /sys/class/net/*/device 2>/dev/null | wc -l);
          got=$(ip -4 route show default | awk "{for(i=1;i<NF;i++) if(\$i==\"dev\") print \$(i+1)}" | sort -u | wc -l);
          [ "$want" -gt 0 ] && [ "$got" = "$want" ]'
+    # Two links on one subnet: with the kernel default, the wired card answers
+    # ARP for the wifi address, the router sends wifi's replies to the wired
+    # card, and the watchdog's `ping -I <wifi>` never sees them. The file makes
+    # it survive a reboot. The live values make it hold now.
+    check "each interface answers ARP only for its own address (arp_ignore=1, arp_announce=2)" \
+        "grep -qx 'net.ipv4.conf.all.arp_ignore = 1' /etc/sysctl.d/90-seanorepo-arp.conf \
+         && grep -qx 'net.ipv4.conf.all.arp_announce = 2' /etc/sysctl.d/90-seanorepo-arp.conf \
+         && [ \"\$(cat /proc/sys/net/ipv4/conf/all/arp_ignore)\" = 1 ] \
+         && [ \"\$(cat /proc/sys/net/ipv4/conf/all/arp_announce)\" = 2 ]"
 
     # --- the matrix, cases that need no QEMU monitor -----------------------
     # Case 1 and 8: a healthy machine is a no-op, and a second run changes
@@ -1514,6 +1523,7 @@ else
     sk "the watchdog does not depend on nmcli" "setup-server-environment.sh installs it"
     sk "every physical interface has an address" "setup-server-environment.sh addresses them"
     sk "every physical interface holds a default route" "setup-server-environment.sh addresses them"
+    sk "each interface answers ARP only for its own address (arp_ignore=1, arp_announce=2)" "setup-server-environment.sh sets it"
     sk "case 1+8: a healthy run succeeds, changes nothing and logs nothing" "setup-server-environment.sh installs it"
     sk "case 4: upstream dead with carrier up moves the default route" "setup-server-environment.sh installs it"
     sk "case 7: the route does not fail back on its own" "setup-server-environment.sh installs it"
