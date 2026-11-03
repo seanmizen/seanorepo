@@ -231,7 +231,7 @@ const server = spawn('bun', ['src/index.ts'], {
     DB_PATH: dbPath,
     CRM_ADMIN_EMAIL: ADMIN,
     CRM_PUBLIC_URL: BASE,
-    EMAIL_API_KEY: '',
+    SMTP_PASS: '',
   },
   stdio: 'ignore',
 });

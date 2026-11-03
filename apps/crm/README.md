@@ -235,18 +235,21 @@ Where each part is:
 | `NODE_ENV` | unset | `auth.ts`, `email.ts` | `production` adds `Secure` to the session cookie. The prod compose service sets it. `test` puts emails into `devOutbox` in place of stdout. |
 | `CRM_ADMIN_EMAIL` | unset | `index.ts`, `auth.ts` | The admin email. At boot, crm-be makes this person if it is missing. Only this person opens the admin routes. Unset: crm-be makes nobody, only existing people can sign in, and nobody opens the admin routes. |
 | `CRM_PUBLIC_URL` | `http://localhost:4100` | `auth.ts` | The prod compose service sets `https://crm.seanmizen.com`. The start of the links in the sign-in email and from `admin:recover`. Its host is the WebAuthn relying party ID, and its origin is the expected WebAuthn origin. A passkey works only on this host. The links never use the request `Host` header. |
-| `EMAIL_API_KEY` | unset | `email.ts` | The email provider key. Unset: dev mode. Each email goes to stdout, and crm-be sends nothing. |
-| `EMAIL_PROVIDER` | unset | `email.ts` | `resend` or `postmark`. Necessary when `EMAIL_API_KEY` has a value. |
-| `EMAIL_FROM` | unset | `email.ts` | The sender address. Necessary when `EMAIL_API_KEY` has a value. |
+| `SMTP_HOST` | `smtp.gmail.com` | `email.ts` | The SMTP server. |
+| `SMTP_PORT` | `587` | `email.ts` | The SMTP port. `465` uses TLS from the start. Each other port uses STARTTLS. |
+| `SMTP_USER` | unset | `email.ts` | The SMTP user and the sender address: `9mazes@gmail.com`. Necessary when `SMTP_PASS` has a value. |
+| `SMTP_PASS` | unset | `email.ts` | The Gmail app password of `SMTP_USER`. Unset: dev mode. Each email goes to stdout, and crm-be sends nothing. |
+| `EMAIL_FROM_NAME` | `seanmizen.com Administrator` | `email.ts` | The display name of the sender. The From header is `"<EMAIL_FROM_NAME>" <SMTP_USER>`. |
 | `CRM_R2_BUCKET` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The R2 bucket of the backups: `crm`. Unset: the Litestream sidecar prints "Replication is off." and stops. Nothing goes to R2. |
 | `CRM_R2_ENDPOINT` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The EU endpoint of R2: `https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com`. When `CRM_R2_BUCKET` has a value, each other endpoint stops the sidecar with status 1. |
 | `LITESTREAM_ACCESS_KEY_ID` | unset | Litestream | The access key ID of the R2 API token for the bucket `crm`. |
 | `LITESTREAM_SECRET_ACCESS_KEY` | unset | Litestream | The secret access key of the same token. |
 
-When `EMAIL_API_KEY` has a value and `EMAIL_PROVIDER` or `EMAIL_FROM` is wrong,
-crm-be stops at boot.
+When `SMTP_PASS` has a value and `SMTP_USER` has none, crm-be stops at boot.
+crm-be does not wait for the send. When a send fails, crm-be logs the SMTP
+error code and status, with no secret, and the response does not change.
 
-- **dev:** `docker-compose.yml` passes the `CRM_*` and `EMAIL_*` values through
+- **dev:** `docker-compose.yml` passes the `CRM_*`, `SMTP_*` and `EMAIL_FROM_NAME` values through
   from the host.
 - **prod:** `docker-compose.yml` sets `NODE_ENV=production`,
   `CRM_PUBLIC_URL=https://crm.seanmizen.com` and `DB_PATH=/data/crm.db`. Each
@@ -273,16 +276,22 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
 
   ```bash
   CRM_ADMIN_EMAIL=
-  EMAIL_API_KEY=
-  EMAIL_PROVIDER=
-  EMAIL_FROM=
+  SMTP_HOST=
+  SMTP_PORT=
+  SMTP_USER=
+  SMTP_PASS=
   CRM_R2_BUCKET=crm
   CRM_R2_ENDPOINT=https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com
   LITESTREAM_ACCESS_KEY_ID=
   LITESTREAM_SECRET_ACCESS_KEY=
   ```
 
-  With no email key, each sign-in email goes to the log (`docker logs crm`).
+  Copy the four `SMTP_*` lines from `apps/carolinemizen.art/caroline-be/.env`
+  on asus. tcp-getter, caroline-be and inside-be send with the same Gmail
+  account, `9mazes@gmail.com`. The `SMTP_PASS` app password gives full access
+  to the `9mazes@gmail.com` mailbox. The account is a sender-only account:
+  keep no other mail in it. With no `SMTP_PASS`, each sign-in email goes to
+  the log (`docker logs crm`).
 - **Recovery.** `bun run admin:recover <email>` runs in the container:
 
   ```bash
