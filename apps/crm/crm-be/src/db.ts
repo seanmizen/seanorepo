@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -10,10 +10,53 @@ import path from 'node:path';
 export const DB_PATH =
   process.env.DB_PATH || path.join(import.meta.dir, '..', 'data', 'crm.db');
 
-/** Open (or create) the SQLite file at `file`, in WAL mode. */
+/**
+ * The numbered SQL files (`001-init.sql`, ...). The path is relative to this
+ * file, so it is the same in tests, in dev and in Docker.
+ */
+export const MIGRATIONS_DIR = path.join(import.meta.dir, '..', 'migrations');
+
+/**
+ * Apply each new `.sql` file in `dir`, in name order. Each file runs once, in
+ * its own transaction, and its name goes into `schema_migrations`. There are
+ * no down migrations. Returns the names of the files that this call applied.
+ */
+export const migrate = (db: Database, dir = MIGRATIONS_DIR): string[] => {
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+  );`);
+  const done = new Set(
+    db
+      .query<{ name: string }, []>('SELECT name FROM schema_migrations;')
+      .all()
+      .map((row) => row.name),
+  );
+  const pending = readdirSync(dir)
+    .filter((name) => name.endsWith('.sql') && !done.has(name))
+    .sort();
+  for (const name of pending) {
+    const sql = readFileSync(path.join(dir, name), 'utf8');
+    db.transaction(() => {
+      db.exec(sql);
+      db.query(
+        'INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?);',
+      ).run(name, new Date().toISOString());
+    })();
+  }
+  return pending;
+};
+
+/**
+ * Open (or create) the SQLite file at `file`, in WAL mode, with foreign keys
+ * on. Then apply the new migrations.
+ */
 export const openDatabase = (file: string): Database => {
   mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file, { create: true, strict: true });
   db.exec('PRAGMA journal_mode = WAL;');
+  // SQLite ignores this PRAGMA in a transaction, so set it before migrate().
+  db.exec('PRAGMA foreign_keys = ON;');
+  migrate(db);
   return db;
 };
