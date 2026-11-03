@@ -4,7 +4,6 @@ paths:
   - "utils/debbie/**"
   - "apps/*/*-be/src/**"
   - "apps/*/backend/**"
-  - "apps/tcp-getter/**"
   - "apps/ffmpeg-converter/*.go"
 ---
 
@@ -92,5 +91,4 @@ of them at once.
 | cous-be | not yet |
 | planning-poker backend | not yet |
 | seanscards backend | not yet |
-| tcp-getter | not yet |
 | ffmpeg-converter (Go) | not yet |
