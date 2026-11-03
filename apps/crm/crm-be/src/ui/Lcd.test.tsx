@@ -126,6 +126,14 @@ describe('the LCD (REQ-CRM-LCD-001)', () => {
         /\.menu a:is\(:hover, :focus-visible\) \.arrow::before \{\s*content: "\\25B6";/,
       );
       expect(THEME.match(/\\25B6/g)).toHaveLength(1);
+      // The arrow of a name order is in the arrow column of the legend: the
+      // legend of the names starts after that column.
+      expect(THEME).toMatch(
+        /\.menu::before \{[^}]*padding-left: calc\(0\.75rem \+ var\(--arrow\)\);/,
+      );
+      expect(THEME).toMatch(
+        /\.menu\[data-order-name\] > li:first-child::before \{[^}]*left: 0\.75rem;/,
+      );
       expect(THEME).toMatch(
         /@media \(prefers-reduced-motion: reduce\) \{[^}]*\.mark::before \{\s*animation: none;/,
       );

@@ -17,7 +17,9 @@
  *    caret stay in the search field, and the page did not load again (a
  *    mark on `window` from before the search is still there).
  * 2. Tap a stage key, then a sort key. Each one updates the list and the
- *    URL in place, and the key that had the focus has it again.
+ *    URL in place, and the key that had the focus has it again. The arrow
+ *    of the order on the LCD legend moves in place: from Next action to
+ *    Organisation, in the arrow column, and from `▲` to `▼`.
  * 3. With JavaScript off, the same search loads the full page, and the
  *    search field has the focus (`autofocus`).
  *
@@ -103,6 +105,32 @@ const searchHasFocus = (page, text) =>
 const focusText = (page) =>
   page.evaluate(() => document.activeElement?.firstChild?.textContent);
 
+/**
+ * The arrows of the order on the LCD legend: the arrow in the arrow column
+ * of the name legend (`none` when it is blank), and the value and status
+ * legends, which hold their arrow in their text. `left` is the left edge of
+ * the arrow in the name legend, and `arrowColumn` is the left edge of the
+ * arrow column of the first row. They are equal when the arrow is in the
+ * arrow column.
+ */
+const arrows = (page) =>
+  page.evaluate(() => {
+    const menu = document.querySelector('.lcd .menu');
+    const row = menu.querySelector('li');
+    const arrow = getComputedStyle(row, '::before');
+    const menuLeft = menu.getBoundingClientRect().left;
+    return {
+      name: arrow.content,
+      value: menu.dataset.legendValue,
+      status: menu.dataset.legendStatus,
+      left:
+        arrow.content === 'none'
+          ? undefined
+          : menuLeft + Number.parseFloat(arrow.left),
+      arrowColumn: menu.querySelector('.arrow').getBoundingClientRect().left,
+    };
+  });
+
 execFileSync('yarn', ['workspace', 'crm-fe', 'build'], { stdio: 'ignore' });
 const server = spawn('bun', ['src/index.ts'], {
   cwd: path.join(CRM, 'crm-be'),
@@ -167,7 +195,14 @@ try {
 
   await page.getByRole('button', { name: 'All', exact: true }).click();
   await page.waitForURL((url) => !url.searchParams.get('stage'));
-  await page.getByRole('button', { name: 'Name', exact: true }).click();
+  // The default order: the arrow is on Next action, ascending.
+  const byDefault = await arrows(page);
+  assert.equal(byDefault.name, 'none');
+  assert.equal(byDefault.value, '▲ Next action');
+  assert.equal(byDefault.status, 'Last activity');
+  await page
+    .getByRole('button', { name: 'Organisation name', exact: true })
+    .click();
   await page.waitForURL((url) => url.searchParams.get('sort') === 'name');
   await page.waitForFunction(
     () => document.querySelector('#sort .value')?.textContent === 'A to Z',
@@ -176,7 +211,13 @@ try {
     'Battersea Bakery',
     'Lavender Hill Florist',
   ]);
-  assert.equal(await focusText(page), 'Name');
+  assert.equal(await focusText(page), 'Organisation name');
+  // The arrow moved to Organisation, in the arrow column of the rows.
+  const byName = await arrows(page);
+  assert.equal(byName.name, '"▲"');
+  assert.equal(byName.value, 'Next action');
+  assert.equal(byName.status, 'Last activity');
+  assert.equal(byName.left, byName.arrowColumn);
   // The Name key keeps the focus, so Enter presses it again.
   await page.keyboard.press('Enter');
   await page.waitForURL((url) => url.searchParams.get('dir') === 'desc');
@@ -187,7 +228,8 @@ try {
     'Lavender Hill Florist',
     'Battersea Bakery',
   ]);
-  assert.equal(await focusText(page), 'Name');
+  assert.equal(await focusText(page), 'Organisation name');
+  assert.equal((await arrows(page)).name, '"▼"');
   // The search form keeps the new sort: Enter sends it.
   await page.locator('input[type="search"]').fill('');
   await page.keyboard.press('Enter');
@@ -195,7 +237,22 @@ try {
   assert.equal(new URL(page.url()).searchParams.get('sort'), 'name');
   assert.equal((await names(page))[0], 'Lavender Hill Florist');
   assert.equal(await page.evaluate(() => window.swapMark), 'still here');
-  console.log('ok: a sort key updates the list in place, with focus kept');
+  // Last activity: the arrow moves to the status legend.
+  await page
+    .getByRole('button', { name: 'Last activity', exact: true })
+    .click();
+  await page.waitForURL((url) => url.searchParams.get('sort') === 'activity');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.lcd .menu')?.dataset.legendStatus ===
+      '▲ Last activity',
+  );
+  assert.equal((await arrows(page)).name, 'none');
+  assert.equal((await arrows(page)).value, 'Next action');
+  assert.equal(await page.evaluate(() => window.swapMark), 'still here');
+  console.log(
+    'ok: a sort key updates the list and the arrow of the order in place, with focus kept',
+  );
   await context.close();
 
   // 3: with JavaScript off, the search loads the full page.
@@ -211,10 +268,12 @@ try {
   ]);
   assert.equal(new URL(noScript.url()).searchParams.get('q'), 'sw11');
   assert.equal((await names(noScript)).length, 2);
-  assert.equal(
-    await noScript.evaluate(() => document.activeElement?.getAttribute('name')),
-    'q',
-    'With JavaScript off, autofocus puts the cursor in the search field.',
+  // The browser applies autofocus at a later frame of the load, so wait
+  // for it.
+  await noScript.waitForFunction(
+    () => document.activeElement?.getAttribute('name') === 'q',
+    undefined,
+    { timeout: 5000 },
   );
   console.log('ok: with JavaScript off, the search loads the full page');
   await bare.close();

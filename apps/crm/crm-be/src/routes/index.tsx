@@ -20,22 +20,42 @@ import { Module } from '../ui/Module';
 import { When } from '../ui/When';
 
 /**
- * The sort keys of the list, in order: the text on each key, and the text
- * of each direction. The list legend uses the same words.
+ * The sort keys of the list, in order: the text on each key, the text of
+ * each direction, and the LCD column that sets the order. The list legend
+ * uses the same words.
  */
 export const SORTS = {
   activity: {
     text: 'Last activity',
     asc: 'Oldest first',
     desc: 'Newest first',
+    column: 'status',
   },
-  added: { text: 'Date added', asc: 'Oldest first', desc: 'Newest first' },
-  name: { text: 'Name', asc: 'A to Z', desc: 'Z to A' },
+  added: {
+    text: 'Date added',
+    asc: 'Oldest first',
+    desc: 'Newest first',
+    column: 'status',
+  },
+  name: {
+    text: 'Organisation name',
+    asc: 'A to Z',
+    desc: 'Z to A',
+    column: 'name',
+  },
 } as const;
 
 export type Sort = keyof typeof SORTS;
 
 export type Direction = 'asc' | 'desc';
+
+/**
+ * `text` in a sentence: a capital that starts a word of more than one
+ * letter becomes small. "Oldest first" gives "oldest first", and "A to Z"
+ * does not change.
+ */
+const lower = (text: string) =>
+  text.replace(/\b[A-Z](?=[a-z])/g, (letter) => letter.toLowerCase());
 
 const isSort = (value: string): value is Sort => Object.hasOwn(SORTS, value);
 
@@ -146,7 +166,8 @@ export type ListRow = Pick<
  *   date added, so the list shows the value that it is in order of.
  * - Sort: three latching keys. A lit key has a green LED for ascending, and
  *   a red LED for descending. With no key lit, the order is the default:
- *   due first.
+ *   due first. The legend of the column that sets the order shows an
+ *   arrow, `▲` or `▼`. The default order puts it on Next action, `▲`.
  * - Search and stage: one GET form. The Search key sends the stage that is
  *   lit, so the Enter key in the field keeps it. Each stage key sends its
  *   own stage.
@@ -184,6 +205,17 @@ export const listPage = ({
           menu={{
             legend: ['Organisation', 'Next action'],
             sublegend: ['Stage', dateName],
+            order: sort
+              ? {
+                  column: SORTS[sort].column,
+                  dir,
+                  text: `Sorted by ${lower(SORTS[sort].text)}, ${lower(SORTS[sort][dir])}`,
+                }
+              : {
+                  column: 'value',
+                  dir: 'asc',
+                  text: 'Sorted by next action, oldest first',
+                },
             empty:
               q || stage ? 'No organisation matches.' : 'No organisations yet.',
             items: rows.map((row) => {
@@ -325,7 +357,7 @@ export const listPage = ({
  * One row of sort keys. Each key is a GET form that keeps the search and
  * the stage, and sends the sort of the next press. "Last activity" and
  * "Date added" do not fit three to a row on a phone, so the keys are two
- * rows: those two, then "Name".
+ * rows: those two, then "Organisation name".
  */
 const SortKeys = ({
   path,

@@ -535,6 +535,29 @@ button.link:hover {
   /* biome-ignore lint/suspicious/noUselessEscapeInString: a CSS line break */
   content: attr(data-legend-value) "\A" attr(data-legend-status);
 }
+/* The arrow of the order (REQ-CRM-LCD-001). A value or status legend is
+   aligned right, so its text holds the arrow and no character moves. The
+   name legend keeps the arrow column of the rows free, and the arrow of a
+   name order shows in it. The first row draws it, because the menu has no
+   other free part. */
+.menu[data-order-name] {
+  position: relative;
+}
+.menu[data-order-name] > li:first-child::before {
+  position: absolute;
+  top: 0;
+  left: 0.75rem;
+  color: var(--dim);
+  font-size: 0.75em;
+  font-weight: 500;
+  text-shadow: none;
+}
+.menu[data-order-name="asc"] > li:first-child::before {
+  content: "\25B2";
+}
+.menu[data-order-name="desc"] > li:first-child::before {
+  content: "\25BC";
+}
 .menu li {
   grid-column: 1 / -1;
   display: grid;
