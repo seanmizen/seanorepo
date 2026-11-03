@@ -43,7 +43,7 @@ const auditRows = () =>
     .all('sign_in');
 
 describe('GET /orgs/new', () => {
-  test('shows the new-lead form with each field', async () => {
+  test('shows the organisation form, the contact form and one Save key', async () => {
     const response = await app.inject({
       method: 'GET',
       url: '/orgs/new',
@@ -54,16 +54,26 @@ describe('GET /orgs/new', () => {
     expect(html).toContain('<form action="/orgs/new" method="post">');
     for (const name of [
       'name',
+      'source',
+      'slug',
       'address_line_1',
       'address_line_2',
       'postcode',
       'contact_name',
-      'phone',
-      'email',
-      'source',
+      'contact_phone',
+      'contact_email',
+      'contact_role',
     ]) {
       expect(html).toContain(`name="${name}"`);
     }
+    const labels = [...html.matchAll(/<h2 class="label">([^<]+)<\/h2>/g)].map(
+      (match) => match[1],
+    );
+    expect(labels).toEqual(['Organisation', 'Address', 'First contact']);
+    expect(html.match(/<button type="submit" class="key">/g)).toEqual([
+      '<button type="submit" class="key">',
+    ]);
+    expect(html).not.toContain('class="records');
   });
 });
 
@@ -77,14 +87,14 @@ describe('POST /orgs/new', () => {
         address_line_1: '1 High Street',
         postcode: 'sw1a 1aa',
         contact_name: 'Ann Smith',
-        phone: '07700 900000',
-        email: 'Ann@Example.com',
+        contact_phone: '07700 900000',
+        contact_email: 'Ann@Example.com',
         source: 'door',
       },
       cookie,
     );
     expect(response.statusCode).toBe(303);
-    expect(response.headers.location).toBe('/acme-plumbing');
+    expect(response.headers.location).toBe('/orgs/acme-plumbing');
 
     expect(db.query('SELECT * FROM organisation;').get()).toMatchObject({
       slug: 'acme-plumbing',
@@ -119,7 +129,10 @@ describe('POST /orgs/new', () => {
   test('links the person that has the email, and adds no person', async () => {
     const existing = addPerson(db, 'ann@example.com');
     const people = count('person');
-    await addOrg(app, cookie, { name: 'Acme', email: 'ANN@example.com' });
+    await addOrg(app, cookie, {
+      name: 'Acme',
+      contact_email: 'ANN@example.com',
+    });
     expect(count('person')).toBe(people);
     expect(db.query('SELECT person_id FROM membership;').get()).toEqual({
       person_id: existing,
@@ -135,28 +148,57 @@ describe('POST /orgs/new', () => {
 
   test('a contact with no email is allowed, and two contacts with no email do not clash', async () => {
     await addOrg(app, cookie, { name: 'A', contact_name: 'Ann' });
-    await addOrg(app, cookie, { name: 'B', phone: '07700 900001' });
+    await addOrg(app, cookie, { name: 'B', contact_phone: '07700 900001' });
     expect(count('membership')).toBe(2);
   });
 
-  test('keeps each slug unique, and never makes a reserved word', async () => {
+  test('keeps each slug unique, and never makes "new"', async () => {
     expect(await addOrg(app, cookie, { name: 'Acme' })).toBe('acme');
     expect(await addOrg(app, cookie, { name: 'ACME!' })).toBe('acme-2');
-    expect(await addOrg(app, cookie, { name: 'Orgs' })).toBe('orgs-2');
-    // /orgs is still the list.
-    const list = await app.inject({
+    expect(await addOrg(app, cookie, { name: 'New' })).toBe('new-2');
+    expect(await addOrg(app, cookie, { name: 'Login' })).toBe('login');
+    // /orgs/new is still the new-lead page.
+    const page = await app.inject({
       method: 'GET',
-      url: '/orgs',
+      url: '/orgs/new',
       headers: { cookie },
     });
-    expect(list.body).toContain('<title>Organisations - crm</title>');
+    expect(page.body).toContain('<title>New lead - crm</title>');
+  });
+
+  test('a typed URL name is the slug, if it is free and valid', async () => {
+    expect(await addOrg(app, cookie, { name: 'Acme', slug: 'Acme-West' })).toBe(
+      'acme-west',
+    );
+    for (const [slug, error] of [
+      ['acme-west', 'Another organisation has this URL name.'],
+      [
+        'new',
+        'The crm uses the URL name &quot;new&quot;. Type a different URL name.',
+      ],
+      [
+        'acme west',
+        'The URL name can have only lowercase letters, digits and single hyphens, at most 60.',
+      ],
+    ]) {
+      const response = await postForm(
+        app,
+        '/orgs/new',
+        { name: 'Acme', slug },
+        cookie,
+      );
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toContain(`<p role="alert">${error}</p>`);
+      expect(response.body).toContain(`value="${slug}"`);
+    }
+    expect(count('organisation')).toBe(1);
   });
 
   test('with no name, shows the form again with the error and the values, and adds nothing', async () => {
     const response = await postForm(
       app,
       '/orgs/new',
-      { name: '  ', postcode: 'E1 6AN' },
+      { name: '  ', postcode: 'E1 6AN', contact_name: 'Ann' },
       cookie,
     );
     expect(response.statusCode).toBe(400);
@@ -164,6 +206,7 @@ describe('POST /orgs/new', () => {
       '<p role="alert">Type the name of the organisation.</p>',
     );
     expect(response.body).toContain('value="E1 6AN"');
+    expect(response.body).toContain('name="contact_name" value="Ann"');
     expect(count('organisation')).toBe(0);
   });
 
@@ -171,7 +214,7 @@ describe('POST /orgs/new', () => {
     const response = await postForm(
       app,
       '/orgs/new',
-      { name: 'Acme', email: 'not an email' },
+      { name: 'Acme', contact_email: 'not an email' },
       cookie,
     );
     expect(response.statusCode).toBe(400);

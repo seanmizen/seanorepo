@@ -7,6 +7,7 @@
 |---|---|---|---|---|---|
 | [`REQ-CRM-BARE-001`](bare.md#req-crm-bare-001--every-page-works-as-raw-html) | Every page works as raw HTML | active | constraint | P1 | sean |
 | [`REQ-CRM-DATE-001`](date.md#req-crm-date-001--one-format-for-each-date-and-time) | One format for each date and time | active | constraint | P1 | sean |
+| [`REQ-CRM-FORM-001`](form.md#req-crm-form-001--the-create-page-and-the-edit-page-show-one-form) | The create page and the edit page show one form | active | constraint | P1 | sean |
 
 ## Dependency graph
 

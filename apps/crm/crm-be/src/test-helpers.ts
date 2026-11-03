@@ -53,7 +53,9 @@ export const postForm = (
 
 /**
  * Add an organisation through `POST /orgs/new`, as the person of `cookie`.
- * Returns its slug.
+ * The contact fields have the prefix `contact_` (`contact_name`,
+ * `contact_phone`, `contact_email`, `contact_role`). Returns the slug: the
+ * page is `/orgs/<slug>`.
  */
 export const addOrg = async (
   app: ReturnType<typeof buildApp>,
@@ -64,7 +66,7 @@ export const addOrg = async (
   if (response.statusCode !== 303) {
     throw new Error(`POST /orgs/new returned ${response.statusCode}.`);
   }
-  return String(response.headers.location).slice(1);
+  return String(response.headers.location).replace(/^\/orgs\//, '');
 };
 
 /** The text that a person reads in the `<body>`, with no markup. */

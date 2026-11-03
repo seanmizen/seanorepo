@@ -1,13 +1,13 @@
 import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { buildApp } from '../../index';
+import type { buildApp } from '../../../index';
 import {
   addOrg,
   postForm,
   signInAdmin,
   TEST_ADMIN_EMAIL,
   testApp,
-} from '../../test-helpers';
+} from '../../../test-helpers';
 
 let app: ReturnType<typeof buildApp>;
 let db: Database;
@@ -36,7 +36,7 @@ describe('POST /<slug>/stage', () => {
   test('sets the stage and the next action, writes an audit row, then goes to the page', async () => {
     const response = await postForm(
       app,
-      `/${slug}/stage`,
+      `/orgs/${slug}/stage`,
       {
         stage: 'quoted',
         next_action: 'Chase quote',
@@ -45,7 +45,7 @@ describe('POST /<slug>/stage', () => {
       cookie,
     );
     expect(response.statusCode).toBe(303);
-    expect(response.headers.location).toBe('/acme');
+    expect(response.headers.location).toBe('/orgs/acme');
     expect(org()).toEqual({
       stage: 'quoted',
       next_action: 'Chase quote',
@@ -64,13 +64,23 @@ describe('POST /<slug>/stage', () => {
           .get(TEST_ADMIN_EMAIL) as { id: string }
       ).id,
     );
+    // The audit row has the names of the changed fields and the stage
+    // before and after, for the Activity list. It never has the text of
+    // the next action.
     expect(JSON.parse(row.detail)).toEqual({
+      fields: ['stage', 'next_action', 'next_action_on'],
+      from: 'lead',
       stage: 'quoted',
       next_action_on: '2030-01-02',
+      cleared: false,
     });
 
     const html = (
-      await app.inject({ method: 'GET', url: '/acme', headers: { cookie } })
+      await app.inject({
+        method: 'GET',
+        url: '/orgs/acme',
+        headers: { cookie },
+      })
     ).body;
     expect(html).toContain(
       '<button type="submit" class="key latch" aria-pressed="true" value="quoted" name="stage">Quoted<span class="latch-state" aria-hidden="true"> (current)</span></button>',
@@ -81,16 +91,25 @@ describe('POST /<slug>/stage', () => {
     );
   });
 
+  test('a post that changes nothing writes no audit row', async () => {
+    const rows = () =>
+      db
+        .query("SELECT count(*) AS n FROM audit_log WHERE action = 'update';")
+        .get();
+    await postForm(app, `/orgs/${slug}/stage`, { stage: 'lead' }, cookie);
+    expect(rows()).toEqual({ n: 0 });
+  });
+
   test('empty values clear the next action', async () => {
     await postForm(
       app,
-      `/${slug}/stage`,
+      `/orgs/${slug}/stage`,
       { stage: 'lead', next_action: 'x', next_action_on: '2030-01-02' },
       cookie,
     );
     await postForm(
       app,
-      `/${slug}/stage`,
+      `/orgs/${slug}/stage`,
       { stage: 'lead', next_action: '', next_action_on: '' },
       cookie,
     );
@@ -104,7 +123,7 @@ describe('POST /<slug>/stage', () => {
   test('a stage or a date that is not valid returns 400 and changes nothing', async () => {
     const bad = await postForm(
       app,
-      `/${slug}/stage`,
+      `/orgs/${slug}/stage`,
       { stage: 'nope' },
       cookie,
     );
@@ -112,7 +131,7 @@ describe('POST /<slug>/stage', () => {
     expect(bad.body).toContain('<p role="alert">Choose a stage.</p>');
     const badDate = await postForm(
       app,
-      `/${slug}/stage`,
+      `/orgs/${slug}/stage`,
       { stage: 'won', next_action_on: 'tomorrow' },
       cookie,
     );
@@ -127,7 +146,7 @@ describe('POST /<slug>/stage', () => {
   test('a slug that does not exist returns 404', async () => {
     const response = await postForm(
       app,
-      '/no-such-org/stage',
+      '/orgs/no-such-org/stage',
       { stage: 'won' },
       cookie,
     );

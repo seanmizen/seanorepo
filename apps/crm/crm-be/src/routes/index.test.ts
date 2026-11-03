@@ -45,7 +45,7 @@ const addDue = async (name: string, date: string, nextAction = 'Call') => {
   const slug = await addOrg(app, cookie, { name });
   await postForm(
     app,
-    `/${slug}/stage`,
+    `/orgs/${slug}/stage`,
     { stage: 'lead', next_action: nextAction, next_action_on: date },
     cookie,
   );
@@ -58,13 +58,13 @@ const addFullOrg = async () => {
     name: 'Acme Plumbing',
     postcode: 'SW1A 1AA',
     contact_name: 'Ann Smith',
-    phone: '07700 900000',
-    email: 'ann@example.com',
+    contact_phone: '07700 900000',
+    contact_email: 'ann@example.com',
     source: 'door',
   });
   await postForm(
     app,
-    `/${slug}/stage`,
+    `/orgs/${slug}/stage`,
     {
       stage: 'quoted',
       next_action: 'Chase quote',
@@ -74,12 +74,34 @@ const addFullOrg = async () => {
   );
   await postForm(
     app,
-    `/${slug}/visits`,
+    `/orgs/${slug}/activity`,
     { outcome: 'spoke', note: 'Wants a site' },
     cookie,
   );
-  await postForm(app, `/${slug}/notes`, { body: 'Owner is Ann' }, cookie);
+  await postForm(
+    app,
+    `/orgs/${slug}/activity`,
+    { outcome: 'note', note: 'Owner is Ann' },
+    cookie,
+  );
   return slug;
+};
+
+/**
+ * The edit pages that the organisation page links: the organisation, the
+ * first contact and the first visit or note.
+ */
+const editPages = (orgHtml: string) => {
+  const link = (pattern: RegExp) => {
+    const match = orgHtml.match(pattern);
+    if (!match) throw new Error(`No link matches ${pattern}.`);
+    return match[0];
+  };
+  return [
+    link(/\/orgs\/[a-z0-9-]+\/edit(?=")/),
+    link(/\/orgs\/[a-z0-9-]+\/contacts\/[0-9a-f-]+(?=")/),
+    link(/\/orgs\/[a-z0-9-]+\/activity\/[0-9a-f-]+(?=")/),
+  ];
 };
 
 /** The names in the menu of the LCD, in order. */
@@ -361,7 +383,7 @@ describe('GET / and GET /orgs', () => {
       name: 'Acme Plumbing',
       postcode: 'E1 6AN',
     });
-    await postForm(app, `/${slug}/stage`, { stage: 'quoted' }, cookie);
+    await postForm(app, `/orgs/${slug}/stage`, { stage: 'quoted' }, cookie);
     await addOrg(app, cookie, { name: '100% Cotton' });
 
     expect(await names('/?q=ACME')).toEqual(['Acme Plumbing']);
@@ -442,7 +464,7 @@ describe('the page anatomy', () => {
       '/': '<h1 id="top" class="title"><span aria-current="page">crm</span></h1>',
       '/orgs/new':
         '<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <a href="/orgs">orgs</a> / <span class="here" aria-current="page">new</span></span></h1>',
-      [`/${slug}`]: `<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <span class="here" aria-current="page">${slug}</span></span></h1>`,
+      [`/orgs/${slug}`]: `<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <a href="/orgs">orgs</a> / <span class="here" aria-current="page">${slug}</span></span></h1>`,
       '/account/passkeys':
         '<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <a href="/account">account</a> / <span class="here" aria-current="page">passkeys</span></span></h1>',
     };
@@ -497,10 +519,12 @@ describe('the page anatomy', () => {
 
   test('no LCD holds a form control, a heading or help text, and only a menu has links', async () => {
     const slug = await addFullOrg();
+    const [, , activityEdit] = editPages((await get(`/orgs/${slug}`)).body);
     const pages = [
       '/',
       '/orgs?q=acme&sort=name&dir=desc',
-      `/${slug}`,
+      `/orgs/${slug}`,
+      activityEdit,
       '/account',
       '/account/passkeys',
       '/account/sessions',
@@ -527,12 +551,14 @@ describe('the page anatomy', () => {
 describe('every page with ?theme=bare', () => {
   test('every page shows each state and allows each action with no page styles and no JavaScript (REQ-CRM-BARE-001)', async () => {
     const slug = await addFullOrg();
+    const orgHtml = (await get(`/orgs/${slug}`)).body;
 
     const pages = [
       '/',
       '/?q=acme&stage=quoted&sort=name&dir=desc',
       '/orgs/new',
-      `/${slug}`,
+      `/orgs/${slug}`,
+      ...editPages(orgHtml),
       '/account',
       '/account/sessions',
     ];
@@ -585,11 +611,13 @@ describe('every page with ?theme=bare', () => {
     expect(bodyText(search)).toContain('All Lead Visited');
 
     // /orgs/new: an attribute marks the field that the form needs.
-    expect(bare['/orgs/new']).toContain('<input required="" name="name"');
+    expect(bare['/orgs/new']).toContain('<input required="" name="name"/>');
 
     // The organisation page: text and attributes carry each state, and each
-    // outcome and each stage is one submit key.
-    const org = bare[`/${slug}`];
+    // Save as button and each stage is one submit button. The Activity list
+    // is a <details>, so it opens with no script.
+    const org = bare[`/orgs/${slug}`];
+    expect(org).toContain('<details class="events"><summary>');
     expect(org).toContain(
       '<button type="submit" class="key latch" aria-pressed="true" value="quoted" name="stage">',
     );
@@ -611,6 +639,10 @@ describe('every page with ?theme=bare', () => {
       );
     }
 
+    // The edit page of a visit or a note: the LED of one Save as button is
+    // on, and text says which.
+    const [, , activityEdit] = editPages(orgHtml);
+    expect(bodyText(bare[activityEdit]).match(/\(current\)/g)).toHaveLength(1);
     // The sessions page: a revoke key for each other session is a form.
     expect(bodyText(bare['/account/sessions'])).toContain('This session');
   });

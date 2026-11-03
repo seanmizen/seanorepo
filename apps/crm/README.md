@@ -14,11 +14,24 @@ billing. After sign-in, the seller has these pages:
   postcode) and the stage keys filter it. The URL holds all of it:
   `?q=&stage=&sort=&dir=&page=`. 50 rows to a page, with a pager in the
   footer.
-- `/orgs/new`: add an organisation and its contact. The slug comes from the
-  name.
-- `/<slug>`: one organisation. It shows the details, the contacts, the visits
-  and the notes, newest first. Its forms log a visit, change the stage and
-  the next action, and add a note.
+- `/orgs/new`: the new lead. The organisation form and the contact form,
+  and one `Save` key. An empty URL name (the slug) comes from the name.
+- `/orgs/<slug>`: one organisation. The LCD shows the name, the stage, the
+  next action and its due date, and the last visit. The modules:
+  - **Log**: the `Visit note` field, then the Save as keys. `No answer`,
+    `Spoke`, `Call back`, `Not interested` and `Do not knock` save a visit
+    with the note. `Note only` saves the text as a note. `Do not knock`
+    also sets the stage to Lost.
+  - **Stage**: one latching key for each stage. Each key saves.
+  - **Next action**: the action, its due date and `Save`.
+  - **Add a contact**: the contact form and `Save`.
+
+  The records: **Activity** (every event, newest first, in a `<details>`
+  that is closed until a tap), **Contacts** (each with `Edit` and
+  `Remove`) and **Details** (with `Edit`).
+- `/orgs/<slug>/edit`, `/orgs/<slug>/contacts/<person-id>` and
+  `/orgs/<slug>/activity/<id>`: the edit pages. Each one is the same form
+  as its create page, filled in (REQ-CRM-FORM-001).
 - `/account`: the email and how this session signed in, with links to
   `/account/passkeys` and `/account/sessions`.
 
@@ -48,16 +61,33 @@ yarn workspace crm-be test
 - `crm-be/src/dates.ts` holds the London date and the date format, and
   `ui/When.tsx` shows a date (REQ-CRM-DATE-001). No other code formats a
   date.
-- `crm-be/src/org.ts` holds the organisation: the stages, the visit outcomes
-  and the slug maker. The page for `/<slug>` is
-  `routes/[slug].tsx`, and its forms post to `routes/[slug]/*.ts`. The static
-  routes win over `/<slug>`, and `RESERVED_SLUGS` keeps their first words out
-  of the slugs.
+- `crm-be/src/org.ts` holds the organisation: the stages, the visit
+  outcomes, the slug maker, `orgPath` (each link to an organisation) and
+  `setPipeline` (the stage and the next action). The page for
+  `/orgs/<slug>` is `routes/orgs/[slug].tsx`, and its forms post to
+  `routes/orgs/[slug]/*`. The static route `/orgs/new` wins over
+  `/orgs/<slug>`, and no slug is `new` (`RESERVED_SLUG`).
+- `crm-be/src/forms/` holds one form definition for each record type:
+  `organisation.ts`, `contact.ts` and `activity.ts` (the Log module). A
+  definition has the fields, the labels, the placeholders and the checks.
+  `ui/RecordForm.tsx` renders it, on the create page and on the edit page,
+  and `parseForm` in `forms/form.ts` reads the post of both. No other code
+  lists the fields of a record (REQ-CRM-FORM-001).
+- `crm-be/src/activity.ts` holds the visits and the notes, and
+  `listEvents`: the Activity list of an organisation. It joins the visits,
+  the notes and the `audit_log` rows of the organisation, its contacts and
+  its activity. `crm-be/src/contacts.ts` holds the contacts: add, change and
+  remove.
 - Each write to an organisation, a person, a membership, a visit or a note
-  adds an `audit_log` row. The actor is the id of the signed-in person.
+  adds an `audit_log` row. The actor is the id of the signed-in person. The
+  row keeps ids, stages, dates and the names of the changed fields. It
+  never keeps personal data or the text of a note: the Activity list gets
+  the names from the current tables. A contact that is not in the crm now
+  shows as "a removed contact".
 - `crm-be/src/ui/` holds the parts that pages share: `SiteNav`, `Footer`,
   `Device`, `Lcd`, `Module`, `Key` (and `Keys`, a row of keys), `LatchKey`,
-  `Field`, `Records` (and `RecordTable`), `When`, `Led` and `Label`.
+  `Field`, `RecordForm`, `Records` (and `RecordTable`), `When`, `Led` and
+  `Label`.
   `ui/Passkey.tsx` holds the two passkey controls (add a passkey, sign in
   with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
   route.
@@ -138,6 +168,11 @@ use the ink color with an underline.
   still works.
 - Biome fails on `dangerouslySetInnerHTML` under `apps/crm` (see the
   `overrides` in the root `biome.json`).
+- The text on a page uses only the words that the page shows: the labels
+  of its fields, buttons and headings. It never uses the words of the code,
+  such as key, module, LCD, outcome or record. If a sentence must tell what
+  a button does, it names the button by its label, for example "Type a
+  visit note, then tap Note only." Most buttons need no sentence.
 
 ## Sign-in
 

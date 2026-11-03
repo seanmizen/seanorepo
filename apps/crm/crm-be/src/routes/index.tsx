@@ -1,7 +1,14 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { dueWords, today } from '../dates';
-import { formText, isStage, type Org, STAGES, type Stage } from '../org';
+import {
+  formText,
+  isStage,
+  type Org,
+  orgPath,
+  STAGES,
+  type Stage,
+} from '../org';
 import { type PageParts, renderPage } from '../render';
 import { BareText } from '../ui/BareText';
 import { Device } from '../ui/Device';
@@ -172,7 +179,7 @@ export const listPage = ({
               const due =
                 row.next_action_on !== null && row.next_action_on <= date;
               return {
-                href: `/orgs/${row.slug}`,
+                href: orgPath(row.slug),
                 name: row.name,
                 value: (
                   <>

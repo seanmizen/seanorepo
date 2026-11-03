@@ -156,10 +156,13 @@ URLs are readable, and a person can share them. A URL is never a
 credential. The session controls access.
 
 ```text
-crm.seanmizen.com/acme-plumbing
-crm.seanmizen.com/acme-plumbing/invoices/INV-0042
-crm.seanmizen.com/acme-plumbing/quotes/website-refresh
+crm.seanmizen.com/orgs/acme-plumbing
+crm.seanmizen.com/orgs/acme-plumbing/invoices/INV-0042
+crm.seanmizen.com/orgs/acme-plumbing/quotes/website-refresh
 ```
+
+- Each organisation is under `/orgs/`. The only slug that an organisation
+  cannot have is `new`, because `/orgs/new` is the new-lead page.
 
 - A signed-out visitor gets the sign-in page. After sign-in, the visitor
   returns to the same URL.
