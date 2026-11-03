@@ -207,7 +207,7 @@ export const PrivacyNotice = () => (
         This site has one cookie, <code>crm_session</code>. It keeps you signed
         in, for up to 90 days. It is strictly necessary, so it needs no consent.
         A visitor who does not sign in gets no cookie. This site has no
-        tracking, analytics or advertising cookies.
+        tracking, analytics or advertising cookies. Thank god.
       </p>
     </Box>
 
