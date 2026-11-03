@@ -1,15 +1,10 @@
 import type { FC } from 'react';
 import { useCallback, useContext, useEffect, useState } from 'react';
-import {
-  EntityList,
-  LastUpdated,
-  Spacer,
-  SSHModal,
-  ThemeToggle,
-} from '@/components';
+import { EntityList, LastUpdated, Spacer, ThemeToggle } from '@/components';
 import { Donate, Github, Projects, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 import { ThemeContext } from '@/providers';
+import { SSHModal } from '../../../ssh-modal';
 import { HomeLi } from '../../components/home-li';
 import type { HireSettings } from '../../components/shader-ripple';
 import {

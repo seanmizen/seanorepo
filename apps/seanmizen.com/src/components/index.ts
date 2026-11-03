@@ -9,6 +9,5 @@ export { Portrait } from './portrait';
 export { ShaderRipple } from './shader-ripple';
 export { SiteTitle } from './site-title';
 export { Spacer } from './spacer';
-export { SSHModal } from './ssh-modal';
 export { Subtitle } from './subtitle';
 export { ThemeToggle } from './theme-toggle';

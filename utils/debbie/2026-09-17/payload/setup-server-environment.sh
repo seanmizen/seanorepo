@@ -13,12 +13,11 @@
 #          4. Docker publishing to loopback only
 #          5. the checkout moved to the release branch
 #          6. the release poller, the deploy unit and the roles
-#          7. the Cloudflare tunnel, then ngrok
+#          7. the Cloudflare tunnel, and the removal of ngrok and tcp-getter
 #          8. SSH keys for the deploy user, an address for each network
 #             interface, and the failover watchdog
-#          9. tcp-getter, and loopback exempt from sshd penalties
-#         10. the gated upgrade of cloudflared and ngrok
-#         11. the VPN (Tailscale), on a machine with ROLE_VPN=yes
+#          9. the gated upgrade of cloudflared
+#         10. the VPN (Tailscale), on a machine with ROLE_VPN=yes
 #
 # Docker, Node, Yarn, the shell and the seanorepo clone come from
 # setup-developer-environment.sh, which runs first.
@@ -45,7 +44,7 @@ fi
 # to do.
 #
 # Every machine gets the same capabilities: Docker, Node, the checkout, the release
-# poller, ngrok, the shell. A role switches one of them on. Each role is a
+# poller, the shell. A role switches one of them on. Each role is a
 # ROLE_<NAME> setting, taken from scripts/3-provision/<machine>.env by provision.sh, and a flag file
 # under /etc/seanorepo/roles/ that the role's unit is conditioned on.
 #
@@ -507,7 +506,7 @@ EOF
 # Enabled, NOT --now, like the deploy poller and the tunnel below. A reboot
 # follows provisioning, in both harnesses and on real hardware. A start here
 # could let a catch-up run take the dpkg lock while this script installs
-# cloudflared and ngrok.
+# cloudflared.
 systemctl enable apt-daily.timer apt-daily-upgrade.timer
 
 #------------------------------------------------------------------------------
@@ -742,18 +741,10 @@ EDGE_CADDYFILE="$REPO_DIR/infra/edge/Caddyfile"
 # from the payload instead, so it matches the provisioner that installed it.
 NET_FAILOVER_DIR=/usr/local/lib/seanorepo
 NET_FAILOVER_SCRIPT="$NET_FAILOVER_DIR/net-failover.sh"
-# The gated upgrade of cloudflared and ngrok, from the payload for the same
-# reason as the watchdog: it must work on a machine that has never deployed.
+# The gated upgrade of cloudflared, from the payload for the same reason as
+# the watchdog: it must work on a machine that has never deployed.
 VENDOR_UPGRADE_SCRIPT="$NET_FAILOVER_DIR/vendor-upgrade.sh"
 
-# tcp-getter runs on the host, not in a container. It reads this host's ngrok
-# agent API and this host's SSH host key. So it is a host unit, like
-# cloudflared and ngrok, and not a workspace in `yarn prod:docker`.
-TCP_GETTER_DIR="$REPO_DIR/apps/tcp-getter"
-TCP_GETTER_UNIT=custom-tcp-getter.service
-# From the nodejs package that setup-developer-environment.sh installs. Stated
-# absolutely because a unit gets no PATH worth trusting.
-NODE_BIN=/usr/bin/node
 # Must match CLOUDFLARED_UNIT in that deploy.sh. The tunnel section near the
 # end of this script writes the unit. This is the name that the deploy can
 # restart. payload/assert.sh checks that three names agree: the unit on disk,
@@ -814,8 +805,7 @@ UNIT_TEMPLATE_VARS=(
     LAN_NAMES_SCRIPT EDGE_CADDYFILE
     NET_FAILOVER_SCRIPT
     VENDOR_UPGRADE_SCRIPT
-    TCP_GETTER_DIR NODE_BIN
-    CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR NGROK_CONFIG
+    CLOUDFLARED_DIR CLOUDFLARED_CONFIG CLOUDFLARED_CREDS_DIR
 )
 
 render_unit() {
@@ -909,16 +899,16 @@ sudo -u "$DEPLOY_USER" -H REPO_DIR="$REPO_DIR" bash "$SERVICES_SRC/host-tools.sh
 #------------------------------------------------------------------------------
 # The sudoers drop-in - REQ-DEPLOY-005
 #
-# deploy.sh runs as $DEPLOY_USER and needs root for two restarts only: the
-# tunnel, when apps/cloudflared/config.yml changes, and tcp-getter. This file
-# grants those two commands. No wildcard, no other unit, no other verb, and no
-# ALL in the command position. So the deploy does not need general root.
+# deploy.sh runs as $DEPLOY_USER and needs root for one restart only: the
+# tunnel, when apps/cloudflared/config.yml changes. This file grants that one
+# command. No wildcard, no other unit, no other verb, and no ALL in the
+# command position. So the deploy does not need general root.
 #
 # What this file is, and what it is not. write_overrides in scripts/lib.sh has
 # the installer write `$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL` to
 # /etc/sudoers.d/90-$DEPLOY_USER. So on a provisioned machine, this file
 # restricts nothing: the account has general passwordless root. This file makes
-# the DEPLOY need only these commands, so that a tighter grant later
+# the DEPLOY need only this command, so that a tighter grant later
 # (REQ-SERVER-008) does not break the deploy. This file is not the security
 # boundary. A deploy that works inside it makes that boundary possible.
 #
@@ -933,9 +923,8 @@ sudoers_tmp="$(mktemp)"
 
 cat > "$sudoers_tmp" <<EOF
 # Managed by utils/debbie/2026-09-17/payload/setup-server-environment.sh - REQ-DEPLOY-005.
-# Two commands, both restarts. The sudoers section of that script says why.
+# One command, a restart. The sudoers section of that script says why.
 $DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $CLOUDFLARED_UNIT
-$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $TCP_GETTER_UNIT
 EOF
 
 if visudo -cf "$sudoers_tmp" > /dev/null; then
@@ -1187,127 +1176,66 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# ngrok - remote SSH, REQ-NETWORK-005
+# ngrok and tcp-getter are retired - REQ-NETWORK-005.
 #
-# `ngrok tcp 22` is the ONLY way into this machine from outside the home
-# network. There is deliberately no Cloudflare SSH tunnel. Without ngrok, the
-# machine is reachable from the LAN only, and the first sign is a failed login
-# from somewhere else.
+# The tailnet (REQ-NETWORK-006) is the way in from outside the LAN. ngrok, and
+# tcp-getter, which emailed the ngrok address, have no job now. A machine that
+# an earlier run of this script set up has both. This step removes them: the
+# units, the package, its apt source and key, the authtoken, the leftover
+# tcp-getter files in the checkout, and the sshd drop-in that exempted
+# loopback (every ngrok login arrived from 127.0.0.1).
 #
-# From ngrok's apt repository, so dpkg owns the binary, and
-# custom-vendor-upgrade.timer updates it like cloudflared (REQ-SERVER-015). The package installs /usr/local/bin/ngrok and
-# nothing else: no unit, no postinst. That path is the package's own choice,
-# checked by unpacking ngrok_3.39.11-0_arm64.deb. So, unlike for cloudflared,
-# the path is not a sign of a manual install, and payload/assert.sh asks dpkg
-# who owns the file.
-#
-# Suite `bookworm`. ngrok publishes suites for each release up to bookworm, and
-# had no `trixie` suite on 2026-09-19 (404). `buster` and `bookworm` serve the
-# same 3.39.11. The newest suite is the least likely to be retired first.
+# On a machine that never had them, this step changes nothing.
 #------------------------------------------------------------------------------
-NGROK_KEYRING=/usr/share/keyrings/ngrok.asc
-NGROK_LIST=/etc/apt/sources.list.d/ngrok.list
-NGROK_SUITE="${NGROK_SUITE:-bookworm}"
-NGROK_UNIT=custom-ngrok.service
+log "removing ngrok and tcp-getter"
+
 deploy_home="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
-# ngrok v3's default config path for the user it runs as.
-# `ngrok config add-authtoken <token>`, run as $DEPLOY_USER, writes exactly this
-# file. So the documented setup step and the unit agree, and neither names the
-# other.
-NGROK_CONFIG="$deploy_home/.config/ngrok/ngrok.yml"
 
-log "ngrok ssh tunnel"
-
-# ASCII-armoured, and kept that way. apt reads an armoured key directly when
-# the file ends in .asc, so there is no gpg --dearmor step to get wrong. It
-# downloads to a temp file first, like the other keys, so a curl that stops
-# mid-stream cannot leave a present, unusable keyring that the guard never
-# repairs.
-if [ ! -s "$NGROK_KEYRING" ]; then
-    log "  fetching ngrok's apt signing key"
-    ngrok_key_tmp="$(mktemp)"
-    curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc -o "$ngrok_key_tmp"
-    install -m 0644 -o root -g root "$ngrok_key_tmp" "$NGROK_KEYRING"
-    rm -f "$ngrok_key_tmp"
-fi
-
-ngrok_deb_line="deb [signed-by=$NGROK_KEYRING] https://ngrok-agent.s3.amazonaws.com $NGROK_SUITE main"
-ngrok_repo_changed=0
-if [ ! -f "$NGROK_LIST" ] || [ "$(cat "$NGROK_LIST")" != "$ngrok_deb_line" ]; then
-    log "  writing $NGROK_LIST"
-    printf '%s\n' "$ngrok_deb_line" > "$NGROK_LIST"
-    ngrok_repo_changed=1
-fi
-
-if [ "$ngrok_repo_changed" = 1 ] \
-    || ! dpkg-query -W -f='${Status}' ngrok 2> /dev/null | grep -q "^install ok installed"; then
-    apt-get update -y
-fi
-
-apt-get install -y ngrok
-
-# One agent. `ngrok service install` writes ngrok.service and is the
-# documented setup, so a repair session is likely to use it.
-# ngrok-custom.service is the unit of an older setup. Two agents give two
-# public addresses for one sshd, and use up the free plan's session limit.
-# Disabled, not masked, for the same reasons as the cloudflared loop above.
-for stale_unit in ngrok.service ngrok-custom.service; do
-    if systemctl cat -- "$stale_unit" > /dev/null 2>&1; then
-        log "  disabling $stale_unit so it cannot race $NGROK_UNIT"
-        systemctl disable --now "$stale_unit" || true
-    fi
+# The custom-* units are from this generation. `ngrok service install` writes
+# ngrok.service. The archived generation used the other two names.
+retired_changed=0
+for retired_unit in custom-ngrok.service custom-tcp-getter.service \
+    ngrok.service ngrok-custom.service tcp-getter-custom.service; do
+    retired_file="$(systemctl show -P FragmentPath "$retired_unit" 2> /dev/null || true)"
+    [ -n "$retired_file" ] || continue
+    log "  stopping, disabling and removing $retired_unit"
+    systemctl disable --now "$retired_unit" 2> /dev/null || true
+    rm -f "$retired_file"
+    retired_changed=1
 done
-
-# The config directory, private to the deploy user. Provisioning creates the
-# directory and NEVER writes the file. The authtoken is a credential for the
-# ngrok account of the person who set it up, and it is in no repository.
-install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$deploy_home/.config"
-install -d -o "$DEPLOY_USER" -g "$deploy_group" -m 0700 "$(dirname "$NGROK_CONFIG")"
-
-#------------------------------------------------------------------------------
-# The unit.
-#
-# NEVER STOPS TRYING. That is the opposite of the tunnel's choice, and it is
-# deliberate. The tunnel stops after five failures, because many failures
-# would hide the cause. This unit is the way back in when something is wrong
-# already: a network outage, a failover, or ngrok down for an hour. A unit that
-# stopped before the network came back would stay down until someone rebooted
-# a machine that nobody can reach. So StartLimitIntervalSec=0 and a 30s
-# RestartSec: at most about 2900 lines a day, into a journal capped at 1G
-# (REQ-SERVER-007).
-#
-# The condition refuses a machine with no token at all. That is a normal
-# first-boot state, not a failure: skipped, inactive, and never looping.
-#
-# --log stdout: the journal is where the public address is recorded (the free
-# plan changes it on every restart), and with a log destination set ngrok does
-# not try to draw its console UI on a terminal it does not have.
-#
-# The web inspector keeps its default of 127.0.0.1:4040. Loopback only, which
-# the "nothing outside the four ports listens on a non-loopback address" check
-# enforces whenever the agent is running.
-#------------------------------------------------------------------------------
-units_changed=0
-
-render_unit "$NGROK_UNIT"
-
-if [ "$units_changed" = 1 ]; then
+if [ "$retired_changed" = 1 ]; then
     systemctl daemon-reload
 fi
 
-# Enable only when the config has a token. This matches the condition, plus
-# the one thing that a condition cannot read. Never disabled in the else
-# branch, like the tunnel: a provisioning run must not stop remote access.
-if [ -s "$NGROK_CONFIG" ] && grep -q "authtoken" "$NGROK_CONFIG" 2> /dev/null; then
-    log "  authtoken present - enabling $NGROK_UNIT"
-    systemctl enable "$NGROK_UNIT"
-else
-    log "  NOT enabling $NGROK_UNIT - this machine has no ngrok authtoken."
-    log "        This is normal for a new machine. Until it is fixed, this"
-    log "        machine CANNOT be reached over SSH from outside the LAN."
-    log "        On the machine, as $DEPLOY_USER:"
-    log "          ngrok config add-authtoken <token>   # dashboard.ngrok.com"
-    log "        then run this script again. See utils/debbie/2026-09-17/README.md."
+if dpkg-query -W -f='${Status}' ngrok 2> /dev/null | grep -q "^install ok installed"; then
+    log "  purging the ngrok package"
+    apt-get purge -y ngrok
+fi
+# The config holds the authtoken. The last path is the state that the vendor
+# upgrade kept for ngrok.
+rm -rf "$deploy_home/.config/ngrok"
+rm -f /etc/apt/sources.list.d/ngrok.list /usr/share/keyrings/ngrok.asc \
+    /var/lib/seanorepo/vendor-upgrade/ngrok
+
+# A checkout that moves past the workspace keeps its untracked files: the
+# .env, with a mail password, and the build. Removed only when git tracks
+# nothing there, so a checkout of an older release keeps its workspace.
+TCP_GETTER_DIR="$REPO_DIR/apps/tcp-getter"
+if [ -d "$TCP_GETTER_DIR" ]; then
+    tcp_getter_tracked="$(sudo -u "$DEPLOY_USER" -H git -C "$REPO_DIR" ls-files -- apps/tcp-getter)"
+    if [ -z "$tcp_getter_tracked" ]; then
+        log "  removing the untracked files in $TCP_GETTER_DIR"
+        rm -rf "$TCP_GETTER_DIR"
+    fi
+fi
+
+# The header rule applies: a person's file stays.
+RETIRED_SSHD_DROPIN=/etc/ssh/sshd_config.d/20-debbie-ngrok-loopback.conf
+if [ -e "$RETIRED_SSHD_DROPIN" ] && may_replace "$RETIRED_SSHD_DROPIN"; then
+    log "  removing $RETIRED_SSHD_DROPIN - loopback gets sshd's per-source penalties again"
+    rm -f "$RETIRED_SSHD_DROPIN"
+    sshd -t
+    systemctl reload ssh
 fi
 
 #------------------------------------------------------------------------------
@@ -1502,18 +1430,17 @@ done
 systemctl enable custom-net-failover.timer
 
 #------------------------------------------------------------------------------
-# The gated upgrade of cloudflared and ngrok - REQ-SERVER-015.
+# The gated upgrade of cloudflared - REQ-SERVER-015.
 #
 # unattended-upgrades takes the Debian security suite only (REQ-SERVER-006), so
-# it never updates these two vendor packages. This timer installs a new
-# version when it has been the newest version for 7 days. It restarts the
-# tunnel after a cloudflared install, and never restarts ngrok. See
+# it never updates this vendor package. This timer installs a new version when
+# it has been the newest version for 7 days, and then restarts the tunnel. See
 # services/vendor-upgrade.sh for the reasons.
 #
 # Enabled, not started, like the other timers. Persistent=true runs a missed
 # day at the next boot.
 #------------------------------------------------------------------------------
-log "gated upgrade of cloudflared and ngrok"
+log "gated upgrade of cloudflared"
 
 if [ ! -f "$VENDOR_UPGRADE_SCRIPT" ] \
     || ! cmp -s "$SERVICES_SRC/vendor-upgrade.sh" "$VENDOR_UPGRADE_SCRIPT"; then
@@ -1531,96 +1458,6 @@ if [ "$units_changed" = 1 ]; then
 fi
 
 systemctl enable custom-vendor-upgrade.timer
-
-#------------------------------------------------------------------------------
-# tcp-getter - the service that tells you the ngrok address.
-#
-# ngrok gives a new host:port on every agent restart, and nothing else on this
-# machine reports it. Without tcp-getter, remote access works, but nobody can
-# find the address. The first time you are away from home, that is the same as
-# no remote access.
-#
-# A HOST UNIT, NOT A CONTAINER. It reads this host's ngrok agent on loopback,
-# and this host's /etc/ssh/ssh_host_ed25519_key.pub to pin the host key in the
-# command that it emails. A container on a bridge network reaches neither,
-# unless the ngrok inspector moves off loopback and the key is mounted in.
-#
-# NODE, NOT BUN. Nothing provisions bun. A bun binary copied into a home
-# directory has no package owner and gets no updates. The host has Node and
-# yarn. Debian 13 ships Node 20, which cannot run TypeScript, so deploy.sh
-# builds the workspace with rslib and this unit runs the output. CLAUDE.md
-# gives bundling to the build tool, not to bun.
-#------------------------------------------------------------------------------
-log "tcp-getter"
-
-units_changed=0
-
-render_unit "$TCP_GETTER_UNIT"
-
-if [ "$units_changed" = 1 ]; then
-    systemctl daemon-reload
-fi
-
-# Enabled whenever it can run. The unit's own Conditions decide each start. So
-# an enable before the .env or the build exists costs one skipped start and one
-# log line, not a restart loop. Never disabled in the else branch, like the
-# tunnel and ngrok: a provisioning run must not stop the report of the remote
-# address.
-if [ -d "$TCP_GETTER_DIR" ]; then
-    log "  enabling $TCP_GETTER_UNIT"
-    systemctl enable "$TCP_GETTER_UNIT"
-    [ -s "$TCP_GETTER_DIR/.env" ] || {
-        log "  NOTE: $TCP_GETTER_DIR/.env does not exist, so systemd skips the"
-        log "        unit at boot. Copy .env.example and fill it in. Until then,"
-        log "        nothing reports this machine's ngrok address."
-    }
-else
-    log "  $TCP_GETTER_DIR is not in the checkout - nothing to enable"
-fi
-
-#------------------------------------------------------------------------------
-# sshd's per-source penalties must not apply to loopback - REQ-NETWORK-005.
-#
-# OpenSSH 9.8 and later refuse an address for a time after failed or
-# unfinished logins (PerSourcePenalties, on by default). Every ngrok connection
-# reaches sshd from 127.0.0.1. So one scanner on the public ngrok address earns
-# penalties for loopback, and the owner's own login, through the same tunnel
-# from the same 127.0.0.1, is refused before authentication. The correct key
-# does not help. With loopback exempt, the ngrok path has no per-address
-# throttling, like an OpenSSH older than the feature. REQ-SERVER-008 keeps
-# attackers out.
-#
-# LAN addresses keep their penalties. Only when sshd knows the keyword: an
-# unknown keyword fails `sshd -t`, and an sshd that does not start is the one
-# failure that nobody can repair on this machine remotely.
-#------------------------------------------------------------------------------
-NGROK_SSHD_DROPIN=/etc/ssh/sshd_config.d/20-debbie-ngrok-loopback.conf
-# Matched with `case` on captured output, not `sshd -T | grep -q`. Under
-# pipefail, grep -q exits at the first match, sshd gets SIGPIPE when it writes
-# the rest, and the pipeline reports failure. So the result would depend on
-# timing, and two VM runs of the same image can disagree.
-case "$(sshd -T 2> /dev/null || true)" in
-    *persourcepenaltyexemptlist*) sshd_has_penalties=yes ;;
-    *) sshd_has_penalties=no ;;
-esac
-if [ "$sshd_has_penalties" = yes ]; then
-    log "  exempting loopback from sshd per-source penalties"
-    write_managed "$NGROK_SSHD_DROPIN" 0644 <<EOF
-# $MANAGED_BY - REQ-NETWORK-005. ngrok arrives from loopback.
-PerSourcePenaltyExemptList 127.0.0.1,::1
-EOF
-    if sshd -t; then
-        systemctl reload ssh
-    elif [ "$managed_changed" = 1 ]; then
-        log "  ERROR: sshd -t rejected $NGROK_SSHD_DROPIN. Removing it and stopping."
-        rm -f "$NGROK_SSHD_DROPIN"
-        exit 1
-    else
-        die "sshd -t rejected the sshd configuration. This script did not change it on this run. Repair it, then run this script again."
-    fi
-else
-    log "  sshd has no per-source penalties - nothing to exempt"
-fi
 
 #------------------------------------------------------------------------------
 # The VPN - REQ-NETWORK-006.

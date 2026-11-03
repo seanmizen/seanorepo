@@ -26,10 +26,11 @@ from a clean `main`; debbie polls every two minutes.
 
 ## Remote SSH
 
-From outside the home network, the only way in is **ngrok**: `ngrok tcp 22`
-runs on the machine. The `2025-10-08b` machine runs it as `ngrok-custom.service`; the
-`2026-09-17` generation provisions it as `custom-ngrok.service` (#317). How to
-set it up and find the address is in [its README](./2026-09-17/README.md#remote-ssh-ngrok).
+From outside the home network, the only way in is the **tailnet**
+(REQ-NETWORK-006). A machine with `ROLE_VPN=yes` is a Tailscale subnet router
+for the LAN: `ssh srv@<name>` reaches it by its tailnet name, and any other LAN
+machine at its LAN address, through it. How to set it up is in
+[its README](./2026-09-17/README.md#vpn-tailscale).
 
 The Cloudflare SSH tunnel (`ssh.seanmizen.com`) that used to be documented here
 is dead: no ingress config in the repository serves it. It is in `archive/`

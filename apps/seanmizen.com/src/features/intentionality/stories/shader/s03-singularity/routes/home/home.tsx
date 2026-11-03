@@ -6,12 +6,12 @@ import {
   EntityList,
   LastUpdated,
   Spacer,
-  SSHModal,
   ThemeToggle,
 } from '@/components';
 import { Donate, Github, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 import { ThemeContext } from '@/providers';
+import { SSHModal } from '../../../ssh-modal';
 import { HomeLi } from '../../components/home-li';
 
 const Home: FC = () => {

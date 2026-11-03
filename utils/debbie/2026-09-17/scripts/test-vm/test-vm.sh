@@ -642,7 +642,7 @@ HW_EOF
     run_setup
 
     # Run both AGAIN - REQ-SERVER-010. Every documented step after the first
-    # provisioning (tunnel credentials, an ngrok token) is "run provision.sh
+    # provisioning (tunnel credentials, for example) is "run provision.sh
     # again", so a second run must succeed and change nothing that the scripts
     # own.
     # The deploy user's .zshrc is hashed before and after it, and assert.sh

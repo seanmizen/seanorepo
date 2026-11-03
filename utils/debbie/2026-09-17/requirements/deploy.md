@@ -195,13 +195,13 @@ does with the repository.
   rules are the only thing the tunnel reads from the repository, so a diff
   against that one path is a sufficient trigger.
 
-  This is one of the two places where the deploy needs root. The sudoers
-  drop-in grants exactly two commands: a restart of the tunnel unit and a
-  restart of the tcp-getter unit. It grants no general privilege.
+  This is the one place where the deploy needs root. The sudoers drop-in
+  grants exactly one command: a restart of the tunnel unit. It grants no
+  general privilege.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/payload/setup-server-environment.sh` writes
     the sudoers drop-in. It grants the deploy user `systemctl restart` of the
-    tunnel unit and of the tcp-getter unit, and nothing else
+    tunnel unit, and nothing else
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` diffs the last
     deployed SHA (from the marker) against `HEAD` with a pathspec, and does not
     pipe into `grep`. It restarts when it cannot prove the config unchanged:
@@ -214,7 +214,7 @@ does with the repository.
     systemctl restart of a single unit" — each grant is matched whole against an
     anchored pattern, so nothing can be appended to it
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in has exactly
-    two rules"
+    one rule"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in grants no
     wildcard"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sudoers drop-in grants no

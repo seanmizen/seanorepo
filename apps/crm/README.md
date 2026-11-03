@@ -572,7 +572,7 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
   ```
 
   Copy the four `SMTP_*` lines from `apps/carolinemizen.art/caroline-be/.env`
-  on asus. tcp-getter, caroline-be and inside-be send with the same Gmail
+  on asus. caroline-be and inside-be send with the same Gmail
   account, `9mazes@gmail.com`. The `SMTP_PASS` app password gives full access
   to the `9mazes@gmail.com` mailbox. The account is a sender-only account:
   keep no other mail in it. With no `SMTP_PASS`, each sign-in email goes to

@@ -21,7 +21,7 @@ in the comments of each script.
 |---|---|---|
 | `scripts/` | What you run: `1-build-iso/`, `2-serve-preseed/`, `3-provision/`, `test-vm/`. `1-build-iso/` holds one `.env` for every machine. The other steps hold one `<machine>.env` each. `lib.sh` holds the functions they share. | your computer |
 | `payload/` | What the scripts send to a target machine: `preseed.cfg` (installer answers), `setup-developer-environment.sh` (toolchain and shell), `setup-server-environment.sh` (server configuration), `assert.sh` (checks). | the installer, then the target machine |
-| `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh`, `host-tools.sh` and `net-failover.sh`, with the systemd unit beside each. It also holds the units for cloudflared, ngrok and tcp-getter. systemd starts the first three scripts from the `release` checkout. `setup-server-environment.sh` installs `net-failover.sh` in `/usr/local/lib/seanorepo`. | the target machine |
+| `services/` | What runs on a target machine all the time: `release-poll.sh`, `deploy.sh`, `host-tools.sh` and `net-failover.sh`, with the systemd unit beside each. It also holds the units for cloudflared and the gated vendor upgrade. systemd starts the first three scripts from the `release` checkout. `setup-server-environment.sh` installs `net-failover.sh` in `/usr/local/lib/seanorepo`. | the target machine |
 | `working/` | Output: ISOs, the SSH key, VM images. Gitignored. | — |
 
 ## Test a change in the VM
@@ -60,7 +60,7 @@ Test these on a real target machine:
 - amd64-specific boot: BIOS/CSM, Secure Boot, `grub-efi-amd64`, CPU microcode
 - disk layouts other than one virtio disk
 - mDNS from another machine on the LAN, and a published port refused from another machine
-- a Cloudflare tunnel or ngrok session that connects (no VM has credentials)
+- a Cloudflare tunnel that connects (no VM has credentials)
 - the VPN's tailnet login and its route (no VM is on the tailnet).
   `ROLE_VPN=yes ./scripts/test-vm/test-vm.sh --assert` tests the rest of the
   VPN role. Its three login checks fail there by design: "this machine is on
@@ -133,7 +133,7 @@ Roles set what a target machine does. Set them in
 
 | Roles | The target machine | Sites published on | How many |
 |---|---|---|---|
-| none | tracks `release` and is reachable over ngrok | — | any |
+| none | tracks `release`. From outside the LAN, reachable through a `ROLE_VPN` machine | — | any |
 | `ROLE_WEBSERVER=yes` | also runs the sites | the LAN | any |
 | `ROLE_WEBSERVER=yes` and `ROLE_TUNNEL=yes` | also runs the Cloudflare tunnel | loopback only | exactly one |
 | `ROLE_VPN=yes` (with any other roles) | also routes the LAN for the owner's Tailscale devices | — | one or more (failover) |
@@ -234,18 +234,6 @@ The unit is `custom-cloudflared.service` on a machine that runs this
 generation, and `cloudflared-custom.service` on a machine that runs the archived
 2025-10-08b generation. `systemctl list-units "*cloudflared*"` names it.
 
-#### 6. ngrok, separately
-
-It does not move with the role. On B:
-
-```bash
-ssh srv@<B>.local 'ngrok config add-authtoken <token>'
-ssh -t srv@<B>.local 'sudo systemctl enable --now custom-ngrok.service'
-```
-
-The address **and** the SSH host key both change, so the command tcp-getter
-emails you will not match the one you have. Expect that rather than debug it.
-
 #### Rollback
 
 One command on each machine, while A runs:
@@ -303,49 +291,39 @@ file back to setup, delete it. The next provisioning run writes it again.
 A hand-written Wi-Fi stanza in `/etc/network/interfaces.d/<iface>` is the
 usual example. Give it no header, so that setup keeps its `wpa-conf` line.
 
-### Upgrade or roll back cloudflared and ngrok
+### Upgrade or roll back cloudflared
 
-`custom-vendor-upgrade.timer` updates both, once a day at about 05:30. It
+`custom-vendor-upgrade.timer` updates it, once a day at about 05:30. It
 installs a version only when it has been the newest version for 7 days
-(REQ-SERVER-015). After a cloudflared install it restarts the tunnel. It never
-restarts ngrok, because a restart gives a new public address: the new ngrok
-starts at the next restart of `custom-ngrok.service`.
+(REQ-SERVER-015). After the install it restarts the tunnel.
 
 ```bash
 # what the timer did, and what it waits for
 ssh srv@<name>.local journalctl -u custom-vendor-upgrade.service -n 20
 ```
 
-To upgrade now, without the wait, run these from the LAN (a restart of
-`custom-ngrok.service` ends an SSH session that came through ngrok):
+To upgrade now, without the wait:
 
 ```bash
-ssh -t srv@<name>.local 'sudo apt-get update && sudo apt-get install --only-upgrade cloudflared ngrok \
-  && sudo systemctl restart custom-cloudflared.service custom-ngrok.service'
+ssh -t srv@<name>.local 'sudo apt-get update && sudo apt-get install --only-upgrade cloudflared \
+  && sudo systemctl restart custom-cloudflared.service'
 ```
 
 **Roll back.** Hold the package after the rollback, or the timer upgrades it
-again after 7 days. `sudo apt-mark unhold <package>` ends the hold.
+again after 7 days. `sudo apt-mark unhold cloudflared` ends the hold.
+Cloudflare's apt repository holds only the newest version, so apt cannot
+install an older one. Use the `.deb` from the GitHub release:
 
-- **cloudflared:** Cloudflare's apt repository holds only the newest version,
-  so apt cannot install an older one. Use the `.deb` from the GitHub release:
-  ```bash
-  ssh -t srv@<name>.local 'v=<version>; a=$(dpkg --print-architecture); \
-    curl -fsSLO https://github.com/cloudflare/cloudflared/releases/download/$v/cloudflared-linux-$a.deb \
-    && sudo dpkg -i cloudflared-linux-$a.deb && sudo apt-mark hold cloudflared \
-    && sudo systemctl restart custom-cloudflared.service'
-  ```
-- **ngrok:** its repository holds every version, so apt can install an older
-  one:
-  ```bash
-  ssh srv@<name>.local apt-cache policy ngrok     # the versions apt can install
-  ssh -t srv@<name>.local 'sudo apt-get install --allow-downgrades ngrok=<version> \
-    && sudo apt-mark hold ngrok'
-  ```
+```bash
+ssh -t srv@<name>.local 'v=<version>; a=$(dpkg --print-architecture); \
+  curl -fsSLO https://github.com/cloudflare/cloudflared/releases/download/$v/cloudflared-linux-$a.deb \
+  && sudo dpkg -i cloudflared-linux-$a.deb && sudo apt-mark hold cloudflared \
+  && sudo systemctl restart custom-cloudflared.service'
+```
 
-The units run `/usr/bin/cloudflared` and `/usr/local/bin/ngrok`, the paths
-that the packages install. dpkg replaces a binary in one step, so there is no
-moment when a unit points at a missing file.
+The unit runs `/usr/bin/cloudflared`, the path that the package installs.
+dpkg replaces a binary in one step, so there is no moment when the unit
+points at a missing file.
 
 ### Set up the Cloudflare tunnel
 
@@ -371,31 +349,20 @@ repository.
 4. Run `provision.sh <machine>` again. It enables the tunnel when the machine
    has the tunnel role and the credentials are present.
 
-### Remote SSH (ngrok)
-
-ngrok is the only way to reach a target machine over SSH from outside the LAN
-(REQ-NETWORK-005). Every target machine runs it once it has a token.
-
-1. On the target machine, as `srv`: `ngrok config add-authtoken <token>`
-   (the token is on dashboard.ngrok.com).
-2. Run `provision.sh <machine>` again. It enables `custom-ngrok.service`.
-
-The address changes each time ngrok restarts. To find it:
-
-```bash
-ssh srv@<name>.local 'journalctl -u custom-ngrok.service -b | grep -o "url=tcp://[^ ]*" | tail -1'
-```
-
-If you cannot reach the machine at all, the ngrok dashboard shows the address.
-Then connect with `ssh -p <port> srv@<host>` and your usual key.
-
 ### VPN (Tailscale)
 
-The machine with `ROLE_VPN=yes` (asus) is a Tailscale subnet router, beside
-ngrok (REQ-NETWORK-006). A device on the owner's tailnet reaches every LAN
-device at its LAN address, for example `ssh srv@<LAN address>` or the router's
-admin page, from any network. It opens no port: tailscaled dials out, and uses
-Tailscale's relay on 443/tcp when no direct path exists.
+The tailnet is the only way to reach a target machine over SSH from outside
+the LAN (REQ-NETWORK-005). The machine with `ROLE_VPN=yes` (asus) is a
+Tailscale subnet router (REQ-NETWORK-006). A device on the owner's tailnet
+reaches every LAN device at its LAN address, for example
+`ssh srv@<LAN address>` or the router's admin page, from any network. The
+`ROLE_VPN` machine itself answers at its tailnet name: `ssh srv@<name>`. It
+opens no port: tailscaled dials out, and uses Tailscale's relay on 443/tcp
+when no direct path exists.
+
+A machine without `ROLE_VPN` is reachable from outside the LAN only while a
+`ROLE_VPN` machine is up. A second `ROLE_VPN` machine gives failover (see
+"More than one VPN machine" below).
 
 The tailnet uses a personal login on the free Personal plan. A tailnet on a
 custom domain counts as business use and starts a paid trial.

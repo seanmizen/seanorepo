@@ -1,22 +1,11 @@
 import type { FC } from 'react';
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  Entity,
-  EntityList,
-  HomeLi,
-  SiteTitle,
-  Spacer,
-  SSHModal,
-} from '@/components';
+import { Entity, EntityList, HomeLi, SiteTitle, Spacer } from '@/components';
 import { Donate, Github, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
 
 const Home: FC = () => {
-  const [isSSHModalOpen, setIsSSHModalOpen] = useState(false);
-
   useKeySequence({
-    ssh: () => setIsSSHModalOpen(true),
     poop: () => alert('oops, poop!'),
   });
 
@@ -44,10 +33,6 @@ const Home: FC = () => {
           </HomeLi>
         ))}
       </EntityList>
-      <SSHModal
-        isOpen={isSSHModalOpen}
-        onClose={() => setIsSSHModalOpen(false)}
-      />
     </main>
   );
 };

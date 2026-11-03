@@ -47,7 +47,6 @@ MARKER="${DEPLOY_MARKER:-$STATE_DIR/last-deployed}"
 # and the name sudo permits all agree. A change to the name must change both
 # scripts, or the assertion fails.
 CLOUDFLARED_UNIT="custom-cloudflared.service"
-TCP_GETTER_UNIT="custom-tcp-getter.service"
 CLOUDFLARED_CONFIG="apps/cloudflared/config.yml"
 
 # Absolute, and matching the sudoers drop-in character for character. sudo
@@ -265,8 +264,8 @@ remove_orphans || true
 
 run_quiet yarn install --immutable
 
-# A failure in one app does not stop the steps below (REQ-SERVER-018). The edge,
-# tcp-getter and the tunnel do not need every app to start. The script records
+# A failure in one app does not stop the steps below (REQ-SERVER-018). The edge
+# and the tunnel do not need every app to start. The script records
 # the failure in the marker and exits non-zero at the end. The next poll then
 # tries the deploy again.
 #
@@ -298,35 +297,6 @@ else
         log_err "the LAN edge (Caddy) did not start"
         exit_status=1
     fi
-fi
-
-#------------------------------------------------------------------------------
-# tcp-getter - built here, because nothing else builds it.
-#
-# It is a host unit rather than a container, so `yarn prod:docker` above skips
-# it, and the unit runs Node against dist/index.mjs. Node cannot run
-# TypeScript, so without this step the unit either runs the previous commit's
-# bundle or refuses to start at all.
-#
-# The build runs here rather than in the unit's ExecStartPre because this is
-# the step that knows the code moved. ExecStartPre would rebuild on every
-# restart and put a yarn invocation inside systemd's startup path.
-#
-# NOT FATAL. A tcp-getter that fails to build must not stop a deploy that has
-# already brought every site up. The sites are the point. tcp-getter only
-# reports an address. The failure goes to the log as an error, and the deploy
-# continues.
-#------------------------------------------------------------------------------
-if run_quiet yarn workspace tcp-getter build; then
-    if ! $SYSTEMCTL cat -- "$TCP_GETTER_UNIT" > /dev/null 2>&1; then
-        log_debug "$TCP_GETTER_UNIT is not installed on this host - nothing to restart"
-    elif sudo -n "$SYSTEMCTL" restart "$TCP_GETTER_UNIT"; then
-        log_info "rebuilt tcp-getter and restarted $TCP_GETTER_UNIT"
-    else
-        log_err "rebuilt tcp-getter but could not restart $TCP_GETTER_UNIT - it may be serving the previous bundle"
-    fi
-else
-    log_err "tcp-getter failed to build - the unit keeps the previous bundle, and this machine's ngrok address may go unreported"
 fi
 
 # THE SCRIPT WRITES THE MARKER HERE, BEFORE THE END (REQ-DEPLOY-002).

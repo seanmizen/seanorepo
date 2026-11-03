@@ -1,7 +1,7 @@
 # Written by payload/setup-server-environment.sh from services/custom-vendor-upgrade.timer.
 # Edit that file, not this copy. - REQ-SERVER-015
 [Unit]
-Description=Once a day, install cloudflared or ngrok versions that are 7 days old
+Description=Once a day, install a cloudflared version that is 7 days old
 
 [Timer]
 # Early, because a cloudflared install restarts the tunnel for a few seconds.

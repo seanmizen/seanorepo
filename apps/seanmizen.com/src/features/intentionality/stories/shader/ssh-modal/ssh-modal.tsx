@@ -1,3 +1,6 @@
+/* The SSH modal, kept for the stages of this story only. The live site does
+   not have it. The service that it posts to is retired (REQ-NETWORK-005), so
+   a submit shows the error message. */
 import type { ChangeEvent, FC, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import styles from './ssh-modal.module.css';

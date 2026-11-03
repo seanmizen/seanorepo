@@ -38,7 +38,6 @@ use their host ports. See `infra/edge/README.md`.
 | 4010 / 4011 | seanscards FE / BE. Local only. Not deployed. |
 | 4020 / 4021 | carolinemizen.art FE / BE |
 | 4030 / 4031 | planning-poker FE / BE |
-| 4040 | RESERVED - the ngrok web inspector binds it |
 | 4042 | voxel.seanmizen.com |
 | 4050 / 4051 | seansconverter.com FE / BE (apps/ffmpeg-converter) |
 | 4060 / 4061 | inside.seanmizen.com FE / BE |
@@ -47,7 +46,6 @@ use their host ports. See `infra/edge/README.md`.
 | 4090 | autosam.seanmizen.com (page and song API in one process). 4091 reserved. |
 | 4100 | crm.seanmizen.com (apps/crm, pages and API in one process). Not on the LAN edge: sign-in needs HTTPS. |
 | 4101 | demo-crm.seanmizen.com (apps/crm, the `crm-demo` service: the same image as crm). Runs only where `apps/crm/.env.demo` exists. Not on the LAN edge. |
-| 4120 | tcp-getter (host unit, reached at `seanmizen.com/tcp/*`) |
 
 ### Add a service
 
