@@ -1,9 +1,10 @@
 import type { FC } from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Entity, EntityList, Spacer, SSHModal } from '@/components';
+import { Entity, EntityList, Spacer } from '@/components';
 import { Donate, Github, Intentionality, ThisPage } from '@/features';
 import { useKeySequence } from '@/hooks';
+import { SSHModal } from '../../../ssh-modal';
 import { HomeLi } from '../../components/home-li';
 
 const Home: FC = () => {

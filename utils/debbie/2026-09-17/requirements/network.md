@@ -237,31 +237,42 @@ failover requirements.
 - **Type:** functional
 - **Priority:** P1
 - **Statement:** The host shall accept an SSH connection that originates outside
-  the local network, without any inbound port being opened.
+  the local network, through the tailnet (`REQ-NETWORK-006`), without any
+  inbound port being opened.
 - **Rationale:** Most repair work on this machine is done by hand over SSH,
-  usually while something is broken, and often from somewhere else. `ngrok tcp
-  22` is the only path that does this. The agent dials out, so
+  usually while something is broken, and often from somewhere else. The
+  tailnet is the only path that does this. tailscaled dials out, so
   `REQ-NETWORK-001` holds. The Cloudflare SSH tunnel (`ssh.seanmizen.com`)
   does not work, and this generation does not build it.
 
-  ngrok is the only way in, and two properties follow from that. The agent
-  never stops retrying, because a unit that stopped during an outage would
-  stay down on a machine that nobody can reach. Every ngrok login reaches
-  `sshd` from `127.0.0.1`, so loopback is exempt from the per-source penalties
-  of sshd. Without the exemption, one scanner on the public address would
-  lock the owner out before authentication, whatever key the owner held.
-  `REQ-SERVER-008` keeps attackers out.
+  A host with `ROLE_VPN` is on the tailnet itself, so `ssh srv@<name>` reaches
+  it by its tailnet name. A LAN host without `ROLE_VPN` is reachable at its
+  LAN address, through a `ROLE_VPN` host that routes the LAN subnet. So it is
+  reachable only while a `ROLE_VPN` host is up. A second `ROLE_VPN` host gives
+  failover.
+
+  ngrok was the earlier path. It gave a new address at each restart, so it
+  needed tcp-getter to email the address. Every ngrok login arrived at `sshd`
+  from `127.0.0.1`, so loopback was exempt from the per-source penalties of
+  sshd. Both are retired, and provisioning removes them from a host that has
+  them. A forgotten ngrok agent is a second, public way in. `REQ-SERVER-008`
+  keeps attackers out.
 - **Verification:**
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok is dpkg-owned, not a manual binary drop"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok runs as $DEPLOY_USER"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok never stops retrying"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no other ngrok unit is enabled"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "starting ngrok without an authtoken refuses rather than looping"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sshd exempts loopback from per-source penalties"
-  - Demonstration — an SSH login through ngrok from off the LAN, with key
-    authentication, on the real machine
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "this machine is on the
+    tailnet"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the tailnet routes the
+    LAN subnet through it (route approved)"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "ngrok is not installed"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "no ngrok or tcp-getter
+    unit"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "sshd exempts no
+    loopback address from per-source penalties"
+  - Demonstration — from off the LAN, on the real machines: `ssh srv@<name>`
+    to the `ROLE_VPN` host over the tailnet, and an SSH login to a second LAN
+    host at its LAN address, both with key authentication
 - **Relations:**
   - depends-on REQ-NETWORK-001
+  - depends-on REQ-NETWORK-006
   - depends-on REQ-SERVER-008
 
 ## REQ-NETWORK-006 — The VPN host routes its owner's devices into the LAN
@@ -274,8 +285,8 @@ failover requirements.
 - **Statement:** Where the host has `ROLE_VPN=yes`, the host shall route the
   LAN subnet of its uplink for the devices on the owner's Tailscale tailnet,
   as a subnet router that opens no inbound port.
-- **Rationale:** ngrok (`REQ-NETWORK-005`) gives a new address at each agent
-  restart, so it needs `apps/tcp-getter` to email the address, and it carries
+- **Rationale:** The earlier remote path, ngrok, is retired
+  (`REQ-NETWORK-005`). It gave a new address at each restart, and it carried
   SSH only. A VPN gives every LAN device at a fixed address.
 
   **Neither end can accept a connection.** The router's IPv4 WAN address is

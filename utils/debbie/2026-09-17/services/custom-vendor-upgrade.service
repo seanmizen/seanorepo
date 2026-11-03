@@ -1,7 +1,7 @@
 # Written by payload/setup-server-environment.sh from services/custom-vendor-upgrade.service.
 # Edit that file, not this copy. - REQ-SERVER-015
 [Unit]
-Description=Install a new cloudflared or ngrok when the version is 7 days old
+Description=Install a new cloudflared when the version is 7 days old
 After=network-online.target
 Wants=network-online.target
 
@@ -10,7 +10,7 @@ Type=oneshot
 # root: the script runs apt-get and restarts custom-cloudflared.service.
 User=root
 ExecStart=${VENDOR_UPGRADE_SCRIPT}
-# A download and an install of two packages, plus a wait of up to 600s for the
+# A download and an install of one package, plus a wait of up to 600s for the
 # dpkg lock. Anything longer than this is hung.
 TimeoutStartSec=900
 

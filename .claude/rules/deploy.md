@@ -37,11 +37,12 @@ ssh srv@asus ~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --f
 Each deploy line has a level. Tool output is at debug. See
 `.claude/rules/logging.md`.
 
-Provisioning, roles, moving the tunnel between machines, and ngrok are all in
+Provisioning, roles, moving the tunnel between machines, and the VPN
+(Tailscale, the only way in from outside the LAN) are all in
 `utils/debbie/2026-09-17/README.md`. Read it before you change anything under
 `utils/debbie/`.
 
 Things that are not in git and live only on the machine: `.env` files, the
-Cloudflare tunnel credential in `apps/cloudflared/credentials/`, the ngrok
-authtoken, and the SQLite/upload Docker volumes. Never `git clean` a server
+Cloudflare tunnel credential in `apps/cloudflared/credentials/`, and the
+SQLite/upload Docker volumes. Never `git clean` a server
 checkout.

@@ -2,7 +2,6 @@ tunnel: 0f63e5e3-ee1c-425a-9916-cd037524731d
 credentials-file: ./credentials/0f63e5e3-ee1c-425a-9916-cd037524731d.json
 
 # Cloudflared Ingress Rules (Port Range: 4xxx)
-# !! PORT 4040 IS BANNED — ngrok's web inspector binds it by default. Never assign any service to 4040.
 # To add a new service:
 # 1. Choose an available port in the 4xxx range (e.g., 4070 for frontend, 4071 for backend)
 # 2. Add hostname rules following the pattern below
@@ -23,7 +22,6 @@ ingress:
     service: http://localhost:4030
 
   # voxel.seanmizen.com - Port 4042 (Frontend only, static WebGPU voxel)
-  # Note: 4040 is reserved by ngrok's web inspector — do not use.
   - hostname: voxel.seanmizen.com
     service: http://localhost:4042
 
@@ -35,15 +33,8 @@ ingress:
     service: http://localhost:4060
 
   # seanmizen.com - Port 4000 (Frontend only)
-  # tcp-getter at tcp/
-  - hostname: seanmizen.com
-    path: /tcp/*
-    service: http://localhost:4120
   - hostname: seanmizen.com
     service: http://localhost:4000
-  - hostname: www.seanmizen.com
-    path: /tcp/*
-    service: http://localhost:4120
   - hostname: www.seanmizen.com
     service: http://localhost:4000
 

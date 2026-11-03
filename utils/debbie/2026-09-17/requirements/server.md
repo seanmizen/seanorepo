@@ -408,8 +408,8 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   reason it sits next to `REQ-SERVER-007` and replaces nothing.
 
   **Withdrawn 2026-09-19.** Throttling by source address has nothing to act on
-  here. The only internet-facing SSH path is ngrok, which reaches `sshd` from
-  `127.0.0.1`, so every remote client shares one address. If loopback is
+  here. The only internet-facing SSH path was ngrok (now retired), which
+  reached `sshd` from `127.0.0.1`, so every remote client shared one address. If loopback is
   exempt, the throttle stops no attacker. If loopback is not exempt, one
   scanner can lock out the owner. The LAN is exempt, so provisioning cannot
   lock itself out. `REQ-SERVER-008` keeps attackers out. `REQ-SERVER-007`
@@ -588,15 +588,15 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Origin:** #476
 - **Type:** functional
 - **Priority:** P2
-- **Statement:** When a new version of `cloudflared` or `ngrok` has been the
-  newest version for 7 days, the host shall install it unattended.
+- **Statement:** When a new version of `cloudflared` has been the newest
+  version for 7 days, the host shall install it unattended.
 - **Rationale:** `REQ-SERVER-006` takes the Debian security suite only, so it
-  never updates these two packages, which come from their vendors' apt
-  repositories. Without an update path, a daemon on the internet stays at an
-  old version with no report, which is the reason `cloudflared` runs from a
-  package at all.
+  never updates this package, which comes from the vendor's apt repository.
+  Without an update path, a daemon on the internet stays at an old version
+  with no report, which is the reason `cloudflared` runs from a package at
+  all.
 
-  The vendors put every release in one suite, so apt cannot tell a security
+  The vendor puts every release in one suite, so apt cannot tell a security
   fix from a feature release or a bad one. The history of `cloudflared`
   decided the rule. Its two security advisories are local, and for Windows. It
   has no remote vulnerability in the daemon. Its bad releases were short:
@@ -606,28 +606,27 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   within 2 days. A 7-day minimum age skips all of them, and costs little
   against that history.
 
-  The repositories record no publish date, and Cloudflare's holds only the
-  newest version. So the host records when it first sees each version. A
-  newer version resets the count, so a series of quick fixes waits until the
+  The repository records no publish date, and holds only the newest
+  version. So the host records when it first sees each version. A newer
+  version resets the count, so a series of quick fixes waits until the
   releases stop.
 
   After an install the host restarts the tunnel, which drops requests for a
-  few seconds, so the timer runs early in the morning. It never restarts
-  ngrok: on the free plan, a restart gives a new public address. The new ngrok
-  version starts at the next restart of the unit. `unattended-upgrades` keeps
-  its security-only configuration, and this is a separate timer.
+  few seconds, so the timer runs early in the morning.
+  `unattended-upgrades` keeps its security-only configuration, and this is a
+  separate timer.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "custom-vendor-upgrade.timer installed and enabled"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade is installed outside the checkout"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade gate is 7 days"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade installs nothing before a version is 7 days old"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade installs both packages on day 7"
-  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade restarts cloudflared and never ngrok"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade installs cloudflared on day 7"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the vendor upgrade restarts the tunnel after the install"
   - Inspection — `utils/debbie/2026-09-17/services/vendor-upgrade.sh` skips a
     package that `apt-mark hold` holds, so a rollback stays in place
 - **Relations:**
   - refines REQ-SERVER-006
-  - depends-on REQ-NETWORK-005
+  - depends-on REQ-NETWORK-001
 
 ## REQ-SERVER-016 — The roles decide the edge
 
@@ -707,7 +706,7 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Priority:** P1
 - **Statement:** When `yarn prod:docker` fails, the deploy shall do its
   remaining steps and then exit non-zero.
-- **Rationale:** The edge, tcp-getter and the tunnel do not need every app to
+- **Rationale:** The edge and the tunnel do not need every app to
   start. When a failed app stopped the deploy, the tunnel did not restart, and
   new hostnames stayed on 404 although their containers were up.
 

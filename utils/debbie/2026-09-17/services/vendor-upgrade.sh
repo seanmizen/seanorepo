@@ -1,33 +1,29 @@
 #!/bin/bash
-# vendor-upgrade.sh: installs a new cloudflared or ngrok only when the version
-# is 7 days old - REQ-SERVER-015.
+# vendor-upgrade.sh: installs a new cloudflared only when the version is 7
+# days old - REQ-SERVER-015.
 #
 # Where: a provisioned machine. custom-vendor-upgrade.timer runs it as root.
 # When:  once a day, early in the morning.
 # Why:   unattended-upgrades takes the Debian security suite only
-#        (REQ-SERVER-006), so it never updates the two vendor packages. The
-#        vendors put every release, security fix or feature, in one suite, so
+#        (REQ-SERVER-006), so it never updates the vendor package. The
+#        vendor puts every release, security fix or feature, in one suite, so
 #        apt cannot tell a security release from a bad one. cloudflared's
 #        history has bad releases (2024.1.3, 2024.9.0, 2026.8.0, 2026.8.1), and
 #        each one was fixed or reverted within 2 days. It has no remote
 #        vulnerability in the daemon. So a version installs only after it has
 #        been the newest version for MIN_AGE_DAYS.
 #
-# How it measures age. The vendor repositories record no publish date.
-# Cloudflare's repository holds only the newest version. So the script records
-# the date when it FIRST SEES each candidate version, in STATE_DIR. A newer
+# How it measures age. The vendor repository records no publish date, and
+# holds only the newest version. So the script records the date when it
+# FIRST SEES each candidate version, in STATE_DIR. A newer
 # version before the gate opens replaces the record and starts a new count, so
 # a series of quick fixes delays the install until the releases stop.
 #
-# After an install:
-#   - cloudflared: the script restarts custom-cloudflared.service, if it runs.
-#     The restart drops requests for a few seconds, so the timer runs early.
-#   - ngrok: NO restart. On the free plan, a restart gives a new public address.
-#     The new version starts at the next restart of custom-ngrok.service (a
-#     reboot, or a reconnect after an outage).
+# After an install, the script restarts custom-cloudflared.service, if it
+# runs. The restart drops requests for a few seconds, so the timer runs early.
 #
 # A package that `apt-mark hold` holds is skipped, so a rollback can stay in
-# place. See the README, "Upgrade or roll back cloudflared and ngrok".
+# place. See the README, "Upgrade or roll back cloudflared".
 #
 # The script does not run `apt-get update`. apt-daily.timer refreshes the
 # package lists twice a day, for every source.
@@ -46,7 +42,6 @@ NOW="${NOW:-$(date +%s)}"
 # package:unit. The unit is restarted after an install. Empty means no restart.
 PACKAGES=(
     cloudflared:custom-cloudflared.service
-    ngrok:
 )
 
 log() { echo "[vendor-upgrade] $*"; }

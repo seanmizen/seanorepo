@@ -782,19 +782,22 @@ deploy_failed_app() {
 # prefix. The tool output is at debug. A failed tool repeats its last lines at
 # error. The yarn shim prints one line of tool output for each command.
 # `yarn prod:docker` prints a line with its own info prefix, as
-# scripts/prod-docker-all.sh does. `yarn workspace tcp-getter build` fails: that
-# is the forced failure, and it does not stop the deploy. LOG_PREFIX is empty,
+# scripts/prod-docker-all.sh does. The machine has no tunnel role, so the
+# deploy starts the LAN edge, and the docker shim fails that start: that is the
+# forced failure, and it does not stop the deploy. LOG_PREFIX is empty,
 # so scripts/log.sh makes the decision itself: stdout is a file, so it adds the
 # prefixes. Returns 0 when every part of the check passed.
 deploy_log_levels() {
     local t="$1" rc=0
     scratch_release "$t" > /dev/null
     git -C "$t/machine" pull -q
-    printf '#!/bin/sh\necho "yarn $*" >> "%s/calls"\ncase "$*" in\n  prod:docker) echo "<6>[prod-docker-all] app started"; exit 0 ;;\nesac\necho "tool output of yarn $*"\n[ "$*" != "workspace tcp-getter build" ]\n' \
+    printf '#!/bin/sh\necho "yarn $*" >> "%s/calls"\ncase "$*" in\n  prod:docker) echo "<6>[prod-docker-all] app started"; exit 0 ;;\nesac\necho "tool output of yarn $*"\n' \
         "$t" > "$t/bin/yarn"
-    chmod +x "$t/bin/yarn"
+    printf '#!/bin/sh\necho "docker $*" >> "%s/calls"\ncase "$*" in\n  *"--profile lan up"*) echo "tool output of the LAN edge"; exit 1 ;;\nesac\n' \
+        "$t" > "$t/bin/docker"
+    chmod +x "$t/bin/yarn" "$t/bin/docker"
     mkdir -p "$t/roles"
-    touch "$t/roles/webserver" "$t/roles/tunnel"
+    touch "$t/roles/webserver"
     LOG_PREFIX='' PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
         DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" > "$t/out" 2>&1
     # Each line has a prefix.
@@ -802,8 +805,8 @@ deploy_log_levels() {
     grep -qx '<7>tool output of yarn install --immutable' "$t/out" || rc=1
     # At info and above: the deploy's own lines, and the context of the failure.
     ! grep '^<[0-6]>.*tool output' "$t/out" \
-        | grep -qvx '<3>\[deploy\]   | tool output of yarn workspace tcp-getter build' || rc=1
-    grep -qx '<3>\[deploy\]   | tool output of yarn workspace tcp-getter build' "$t/out" || rc=1
+        | grep -qvx '<3>\[deploy\]   | tool output of the LAN edge' || rc=1
+    grep -qx '<3>\[deploy\]   | tool output of the LAN edge' "$t/out" || rc=1
     grep -qx '<6>\[prod-docker-all\] app started' "$t/out" || rc=1
     grep -qx '<6>\[deploy\] done' "$t/out" || rc=1
     rm -rf "$t"
@@ -1123,13 +1126,13 @@ if [ "$PHASE" = provisioned ]; then
     check "sudoers drop-in is owned by root:root" \
         "[ \"\$(sudo -n stat -c '%U:%G' '$SUDOERS_DEST' 2>/dev/null)\" = root:root ]"
     check "sudoers drop-in parses" "sudo -n visudo -cf '$SUDOERS_DEST'"
-    # Exactly two rules: the tunnel and tcp-getter. Comments and blank lines
-    # grant nothing. An extra rule grants something, and a check that read only
-    # the first line would miss it. The count is not the boundary. The boundary
-    # is "every rule restarts one named unit", and the next check enforces that
-    # on each line. The fixed count stops a third rule from arriving unnoticed.
-    check "sudoers drop-in has exactly two rules" \
-        "[ \"\$(sudo -n grep -cvE '^[[:space:]]*(#.*)?\$' '$SUDOERS_DEST')\" -eq 2 ]"
+    # Exactly one rule: the tunnel. Comments and blank lines grant nothing. An
+    # extra rule grants something, and a check that read only the first line
+    # would miss it. The count is not the boundary. The boundary is "every rule
+    # restarts one named unit", and the next check enforces that on each line.
+    # The fixed count stops a second rule from arriving unnoticed.
+    check "sudoers drop-in has exactly one rule" \
+        "[ \"\$(sudo -n grep -cvE '^[[:space:]]*(#.*)?\$' '$SUDOERS_DEST')\" -eq 1 ]"
     # The rule, whole, against a pattern that admits exactly one systemctl
     # restart of one unit. Anchored at both ends, so nothing can be appended.
     # No comma (a command list), no wildcard, no ALL in the command position,
@@ -1160,13 +1163,19 @@ if [ "$PHASE" = provisioned ]; then
     # permitted. A hardcoded unit list fails on any machine whose checkout is
     # older than the provisioner, and during a rollout that is every machine.
     #
+    # In the VM harness, the deploy.sh of the commit under test (the same rule
+    # as the behaviour checks). The guest clones `release`, and the payload
+    # comes from the commit under test. A commit that removes a unit from both
+    # deploy.sh and the drop-in would otherwise fail here until the release.
+    # On metal, DEPLOY_UNDER_TEST is the checkout's deploy.sh.
+    #
     # Gated on the same rule as the deploy-poller section, and not on the
     # file being there. `sed` on an absent file yields nothing, so `want` is
     # empty and the check goes red, which is right when the commit on disk says
     # the file should exist and wrong when it says it cannot.
     if deploy_script_expected; then
         check "every unit deploy.sh restarts is a unit sudo permits" \
-            'units=$(sed -n "s/^[A-Z_]*UNIT=\"\\([^\"]*\\.service\\)\".*/\\1/p" "$DEPLOY_SCRIPT");
+            'units=$(sed -n "s/^[A-Z_]*UNIT=\"\\([^\"]*\\.service\\)\".*/\\1/p" "${DEPLOY_UNDER_TEST:-$DEPLOY_SCRIPT}");
              [ -n "$units" ] || exit 1;
              for want in $units; do
                  sudo -n grep -qF "/usr/bin/systemctl restart $want" "$SUDOERS_DEST" || exit 1;
@@ -1179,7 +1188,7 @@ else
     sk "sudoers drop-in is mode 440"    "setup-server-environment.sh installs it"
     sk "sudoers drop-in is owned by root:root" "setup-server-environment.sh installs it"
     sk "sudoers drop-in parses"         "setup-server-environment.sh installs it"
-    sk "sudoers drop-in has exactly two rules" "setup-server-environment.sh installs it"
+    sk "sudoers drop-in has exactly one rule" "setup-server-environment.sh installs it"
     sk "every rule is a single systemctl restart of a single unit" "setup-server-environment.sh installs it"
     sk "sudoers drop-in grants no wildcard"     "setup-server-environment.sh installs it"
     sk "sudoers drop-in grants no command list" "setup-server-environment.sh installs it"
@@ -1346,115 +1355,42 @@ else
 fi
 
 echo
-echo "== tcp-getter =="
-TCP_GETTER_UNIT=custom-tcp-getter.service
-TCP_GETTER_DIR="/home/$DEPLOY_USER/projects/seanorepo/apps/tcp-getter"
+# REQ-NETWORK-005 - SSH from outside the LAN goes through the tailnet
+# (REQ-NETWORK-006). ngrok and tcp-getter are retired. A machine that an
+# earlier provisioning run gave them must not keep them: a forgotten ngrok
+# agent is a second, public way in to sshd.
+echo "== ngrok and tcp-getter are gone (REQ-NETWORK-005) =="
+NGROK_CONFIG_DIR="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)/.config/ngrok"
 if [ "$PHASE" = provisioned ]; then
-    check "$TCP_GETTER_UNIT installed in /usr/local/lib/systemd/system" \
-        "[ -f /usr/local/lib/systemd/system/$TCP_GETTER_UNIT ]"
-    check "tcp-getter runs as $DEPLOY_USER" \
-        "[ \"\$(systemctl show -p User --value $TCP_GETTER_UNIT)\" = '$DEPLOY_USER' ]"
-    # The unit runs node. Nothing on this machine provisions bun, so a unit
-    # that named bun would depend on a hand-dropped binary.
-    check "tcp-getter runs node, not bun" \
-        "systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q '/usr/bin/node' \
-         && ! systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q bun"
-    # bun reads .env by itself and node does not. Without the flag the service
-    # starts and then exits on a missing MAIL_PASSWORD.
-    check "tcp-getter passes --env-file, which node needs and bun did not" \
-        "systemctl show -p ExecStart --value $TCP_GETTER_UNIT | grep -q -- '--env-file'"
-    check "no stale tcp-getter-custom.service is enabled" \
-        '[ "$(systemctl is-enabled tcp-getter-custom.service 2>&1)" != enabled ]'
-    if [ -s "$TCP_GETTER_DIR/.env" ] && [ -f "$TCP_GETTER_DIR/dist/index.mjs" ]; then
-        check "tcp-getter is listening on 4120" \
-            'ss -ltn 2>/dev/null | grep -q ":4120 "'
-    else
-        # A provisioned machine before its first deploy has neither, and the
-        # unit's Conditions are what keep that state quiet.
-        check "tcp-getter refuses to start while .env or the build is absent" \
-            "sudo -n systemctl start $TCP_GETTER_UNIT > /dev/null 2>&1;
-             sleep 2;
-             [ \"\$(systemctl is-active $TCP_GETTER_UNIT 2>&1)\" = inactive ] \
-             && [ \"\$(systemctl is-failed $TCP_GETTER_UNIT 2>&1)\" != failed ]"
-    fi
-fi
-
-# REQ-NETWORK-005 - remote SSH through ngrok.
-#
-# Like the tunnel, no VM has an authtoken and none ever will, so nothing here
-# proves the agent connects or that a login from off the LAN works. Only the
-# machine itself can prove that. What this section proves: the binary is a
-# package, there is one agent at most, it runs unprivileged, it never gives up
-# once it has a token, and without one it refuses rather than loops. Plus the
-# sshd half, which a VM CAN prove: loopback, where every ngrok login comes
-# from, is exempt from sshd's per-source penalties.
-echo "== ngrok ssh tunnel (REQ-NETWORK-005) =="
-NGROK_UNIT=custom-ngrok.service
-NGROK_CONFIG="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)/.config/ngrok/ngrok.yml"
-if [ "$PHASE" = provisioned ]; then
-    check "ngrok installed" \
-        'dpkg-query -W -f="\${Status}" ngrok 2>/dev/null | grep -q "^install ok installed"'
-    check "exactly one ngrok apt source" \
-        '[ "$(grep -rhs "ngrok-agent.s3.amazonaws.com" /etc/apt/sources.list /etc/apt/sources.list.d/ | grep -vc "^#")" = 1 ]'
-    # The package itself installs /usr/local/bin/ngrok, so the path proves
-    # nothing. Its dpkg owner proves it. A hand-dropped binary there is the
-    # fault.
-    check "ngrok is dpkg-owned, not a manual binary drop" \
-        'dpkg -S /usr/local/bin/ngrok 2>/dev/null | grep -q "^ngrok:"'
-    check "$NGROK_UNIT installed in /usr/local/lib/systemd/system" \
-        "[ -f /usr/local/lib/systemd/system/$NGROK_UNIT ]"
-    check "ngrok runs as $DEPLOY_USER" \
-        "[ \"\$(systemctl show -p User --value $NGROK_UNIT)\" = '$DEPLOY_USER' ]"
-    # The way back in must outlast an outage: no start limit, always restart.
-    check "ngrok never stops retrying" \
-        "[ \"\$(systemctl show -p StartLimitIntervalUSec --value $NGROK_UNIT)\" = 0 ] \
-         && [ \"\$(systemctl show -p Restart --value $NGROK_UNIT)\" = always ]"
-    check "no other ngrok unit is enabled" \
-        'for u in ngrok.service ngrok-custom.service; do
-             if systemctl is-enabled "$u" 2>/dev/null | grep -qx enabled; then exit 1; fi
+    check "ngrok is not installed" \
+        '! dpkg-query -W -f="\${Status}" ngrok 2>/dev/null | grep -q "^install ok installed"'
+    check "no ngrok apt source" \
+        '[ -z "$(grep -rls "ngrok-agent.s3.amazonaws.com" /etc/apt/sources.list /etc/apt/sources.list.d/)" ]'
+    check "no ngrok or tcp-getter unit" \
+        'for u in custom-ngrok.service custom-tcp-getter.service ngrok.service ngrok-custom.service tcp-getter-custom.service; do
+             if systemctl cat -- "$u" > /dev/null 2>&1; then exit 1; fi
          done; true'
-    check "ngrok config directory is private to $DEPLOY_USER" \
-        "[ \"\$(sudo -n stat -c '%a %U' \"\$(dirname '$NGROK_CONFIG')\" 2>/dev/null)\" = '700 $DEPLOY_USER' ]"
-    if sudo -n grep -qs authtoken "$NGROK_CONFIG"; then
-        check "$NGROK_UNIT enabled (authtoken present)" "systemctl is-enabled $NGROK_UNIT"
+    check "no ngrok authtoken or config" "! sudo -n test -e '$NGROK_CONFIG_DIR'"
+    check "nothing listens on 4040 or 4120" \
+        '! ss -ltn 2>/dev/null | grep -qE ":(4040|4120) "'
+    # Asked of sshd, and not of a file (the logind_handler rule).
+    check "sshd exempts no loopback address from per-source penalties" \
+        'case "$(sshd_effective PerSourcePenaltyExemptList)" in *127.0.0.1* | *::1*) exit 1 ;; esac; true'
+    # A checkout of an older release still tracks the workspace. Then it is
+    # the release's, not a leftover.
+    if [ -n "$(git -C "$REPO_DIR" ls-files -- apps/tcp-getter 2> /dev/null)" ]; then
+        sk "no leftover apps/tcp-getter in the checkout" "the checkout's release still has the workspace"
     else
-        check "ngrok is NOT enabled while the authtoken is absent" \
-            '[ "$(systemctl is-enabled "$NGROK_UNIT" 2>&1)" != enabled ]'
-        # Safe to start: with no token there is no tunnel to disturb.
-        check "starting ngrok without an authtoken refuses rather than looping" \
-            'sudo -n systemctl start "$NGROK_UNIT" > /dev/null 2>&1;
-             sleep 2;
-             [ "$(systemctl is-active "$NGROK_UNIT" 2>&1)" = inactive ] \
-             && [ "$(systemctl is-failed "$NGROK_UNIT" 2>&1)" != failed ]'
-    fi
-    # Asked of sshd, and not of the drop-in (the logind_handler rule). Skipped,
-    # and not passed, where sshd predates per-source penalties: there is
-    # nothing to exempt.
-    # `case`, not `| grep -q`, for the pipefail/SIGPIPE reason in setup-server-environment.sh.
-    case "$(sudo -n sshd -T 2> /dev/null || true)" in
-        *persourcepenaltyexemptlist*) sshd_has_penalties=yes ;;
-        *) sshd_has_penalties=no ;;
-    esac
-    echo "      sshd reports: $(sudo -n sshd -T 2> /dev/null | grep -i '^persourcepenalt' | tr '\n' ';' || true)"
-    if [ "$sshd_has_penalties" = yes ]; then
-        check "sshd exempts loopback from per-source penalties" \
-            '[ "$(sshd_effective PerSourcePenaltyExemptList)" = "127.0.0.1,::1" ]'
-    else
-        sk "sshd exempts loopback from per-source penalties" "this sshd has no per-source penalties"
+        check "no leftover apps/tcp-getter in the checkout" "[ ! -e '$REPO_DIR/apps/tcp-getter' ]"
     fi
 else
-    sk "ngrok installed"                            "setup-server-environment.sh installs it"
-    sk "exactly one ngrok apt source"               "setup-server-environment.sh writes it"
-    sk "ngrok is dpkg-owned, not a manual binary drop" "setup-server-environment.sh installs it"
-    sk "$NGROK_UNIT installed in /usr/local/lib/systemd/system" "setup-server-environment.sh writes it"
-    sk "ngrok runs as $DEPLOY_USER"                 "setup-server-environment.sh writes the unit"
-    sk "ngrok never stops retrying"                 "setup-server-environment.sh writes the unit"
-    sk "no other ngrok unit is enabled"             "setup-server-environment.sh disables them"
-    sk "ngrok config directory is private to $DEPLOY_USER" "setup-server-environment.sh creates it"
-    sk "$NGROK_UNIT enabled (authtoken present)"    "setup-server-environment.sh decides this"
-    sk "ngrok is NOT enabled while the authtoken is absent" "setup-server-environment.sh decides this"
-    sk "starting ngrok without an authtoken refuses rather than looping" "setup-server-environment.sh writes the unit"
-    sk "sshd exempts loopback from per-source penalties" "setup-server-environment.sh writes the drop-in"
+    sk "ngrok is not installed"                      "setup-server-environment.sh removes it"
+    sk "no ngrok apt source"                         "setup-server-environment.sh removes it"
+    sk "no ngrok or tcp-getter unit"                 "setup-server-environment.sh removes them"
+    sk "no ngrok authtoken or config"                "setup-server-environment.sh removes it"
+    sk "nothing listens on 4040 or 4120"             "setup-server-environment.sh removes ngrok and tcp-getter"
+    sk "sshd exempts no loopback address from per-source penalties" "setup-server-environment.sh removes the drop-in"
+    sk "no leftover apps/tcp-getter in the checkout" "setup-server-environment.sh removes it"
 fi
 
 # REQ-NETWORK-006 - the VPN (Tailscale, as a subnet router for the LAN).
@@ -1698,15 +1634,15 @@ else
     sk "case 7: the route does not fail back on its own" "setup-server-environment.sh installs it"
 fi
 
-echo "== gated upgrade of cloudflared and ngrok (REQ-SERVER-015) =="
+echo "== gated upgrade of cloudflared (REQ-SERVER-015) =="
 VU_TIMER=custom-vendor-upgrade.timer
 VU_SERVICE=custom-vendor-upgrade.service
 VU_SCRIPT=/usr/local/lib/seanorepo/vendor-upgrade.sh
 
 # vu_scenario: run the INSTALLED script against stub commands, with no root.
-# The stubs record every apt-get and systemctl call in $1/calls. cloudflared and
-# ngrok each have a newer candidate. The script runs on day 0, day 6 and day 7,
-# and the calls after each run go to $1/calls.dayN.
+# The stubs record every apt-get and systemctl call in $1/calls. cloudflared
+# has a newer candidate. The script runs on day 0, day 6 and day 7, and the
+# calls after each run go to $1/calls.dayN.
 vu_scenario() {
     local t="$1" day
     mkdir -p "$t/bin"
@@ -1717,7 +1653,6 @@ vu_scenario() {
     printf '%s\n' '#!/bin/sh' 'case "$1" in is-active) exit 0 ;; esac; echo "systemctl $*" >> "$VU/calls"' > "$t/bin/systemctl"
     chmod +x "$t"/bin/*
     echo 2026.9.1 > "$t/installed-cloudflared"; echo 2026.9.2 > "$t/candidate-cloudflared"
-    echo 3.39.11 > "$t/installed-ngrok"; echo 3.40.0 > "$t/candidate-ngrok"
     for day in 0 6 7; do
         : > "$t/calls"
         VU="$t" PATH="$t/bin:$PATH" STATE_DIR="$t/state" NOW=$((1790000000 + day * 86400)) \
@@ -1740,14 +1675,14 @@ if [ "$PHASE" = provisioned ]; then
     if vu_scenario "$VU_DIR"; then
         check "the vendor upgrade installs nothing before a version is 7 days old" \
             '[ ! -s "$VU_DIR/calls.day0" ] && [ ! -s "$VU_DIR/calls.day6" ]'
-        check "the vendor upgrade installs both packages on day 7" \
-            'grep -q "install .*cloudflared=2026.9.2" "$VU_DIR/calls.day7" && grep -q "install .*ngrok=3.40.0" "$VU_DIR/calls.day7"'
-        check "the vendor upgrade restarts cloudflared and never ngrok" \
-            'grep -q "restart custom-cloudflared.service" "$VU_DIR/calls.day7" && ! grep -qi "restart .*ngrok" "$VU_DIR/calls.day7"'
+        check "the vendor upgrade installs cloudflared on day 7" \
+            'grep -q "install .*cloudflared=2026.9.2" "$VU_DIR/calls.day7"'
+        check "the vendor upgrade restarts the tunnel after the install" \
+            'grep -q "restart custom-cloudflared.service" "$VU_DIR/calls.day7"'
     else
         no "the vendor upgrade installs nothing before a version is 7 days old"
-        no "the vendor upgrade installs both packages on day 7"
-        no "the vendor upgrade restarts cloudflared and never ngrok"
+        no "the vendor upgrade installs cloudflared on day 7"
+        no "the vendor upgrade restarts the tunnel after the install"
     fi
     rm -rf "$VU_DIR"
 else
@@ -1755,8 +1690,8 @@ else
     sk "the vendor upgrade is installed outside the checkout" "setup-server-environment.sh installs it"
     sk "the vendor upgrade gate is 7 days" "setup-server-environment.sh installs it"
     sk "the vendor upgrade installs nothing before a version is 7 days old" "setup-server-environment.sh installs it"
-    sk "the vendor upgrade installs both packages on day 7" "setup-server-environment.sh installs it"
-    sk "the vendor upgrade restarts cloudflared and never ngrok" "setup-server-environment.sh installs it"
+    sk "the vendor upgrade installs cloudflared on day 7" "setup-server-environment.sh installs it"
+    sk "the vendor upgrade restarts the tunnel after the install" "setup-server-environment.sh installs it"
 fi
 
 # REQ-SERVER-005 - only meaningful on a wireless host. Skipped rather than
