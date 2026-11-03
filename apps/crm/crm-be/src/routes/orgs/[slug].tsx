@@ -12,7 +12,15 @@ import {
   type RecordFormDef,
 } from '../../forms/form';
 import { organisationForm } from '../../forms/organisation';
-import { findOrg, type Org, OUTCOMES, orgPath, STAGES } from '../../org';
+import {
+  activityPath,
+  contactPath,
+  findOrg,
+  type Org,
+  OUTCOMES,
+  orgPath,
+  STAGES,
+} from '../../org';
 import { type PageParts, renderPage } from '../../render';
 import { Box } from '../../ui/Box';
 import { Device } from '../../ui/Device';
@@ -89,22 +97,28 @@ const orgChange = (detail: Record<string, string | null | string[]>) => {
  * One line of the Activity list, as text: `what` happened, the `text` of
  * a visit or a note, and the `edit` link of a visit or a note. The words
  * are the words on the page: the labels of the fields, the stages and the
- * Save as buttons.
+ * Save as buttons. A visit or a note shows its number, as in its URL
+ * (REQ-CRM-ID-001): `Visit 17: Spoke.`, `Note 18:`.
  */
 const describe = (
   org: Org,
   event: Event,
 ): { what: ReactNode; text?: string; edit?: string } => {
-  const edit = `${orgPath(org.slug)}/activity/${encodeURIComponent(event.id)}`;
+  const edit =
+    event.number === null ? undefined : activityPath(org.slug, event.number);
   if (event.kind === 'visit' && event.outcome) {
     return {
-      what: `Visit: ${OUTCOMES[event.outcome]}.`,
+      what: `Visit ${event.number}: ${OUTCOMES[event.outcome]}.`,
       text: event.note ?? undefined,
       edit,
     };
   }
   if (event.kind === 'note') {
-    return { what: 'Note:', text: event.note ?? undefined, edit };
+    return {
+      what: `Note ${event.number}:`,
+      text: event.note ?? undefined,
+      edit,
+    };
   }
   const detail = JSON.parse(event.detail ?? '{}');
   const fields: string[] = Array.isArray(detail.fields) ? detail.fields : [];
@@ -148,7 +162,7 @@ const describe = (
       return {
         what: event.record_at ? (
           <>
-            {was === 'note' ? 'Note' : 'Visit'} of{' '}
+            {was === 'note' ? 'Note' : 'Visit'} {event.number} of{' '}
             <When value={event.record_at} />: {changes}.
           </>
         ) : (
@@ -230,7 +244,6 @@ export const orgPage = ({
   /** The values of the Add a contact module after an error. */
   contact?: FormValues;
 }): PageParts => {
-  const path = orgPath(org.slug);
   const lastVisit = events.find((event) => event.kind === 'visit');
   return {
     title: org.name,
@@ -267,11 +280,11 @@ export const orgPage = ({
             },
           ]}
         />
-        <form method="post" action={`${path}/activity`}>
+        <form method="post" action={orgPath(org.slug, 'activity')}>
           <RecordForm form={activityForm} />
         </form>
         <Module label="Stage" value={STAGES[org.stage]}>
-          <form method="post" action={`${path}/stage`}>
+          <form method="post" action={orgPath(org.slug, 'stage')}>
             <input
               type="hidden"
               name="next_action"
@@ -297,7 +310,7 @@ export const orgPage = ({
           </form>
         </Module>
         <Module label="Next action">
-          <form method="post" action={`${path}/stage`}>
+          <form method="post" action={orgPath(org.slug, 'stage')}>
             <input type="hidden" name="stage" value={org.stage} />
             <Field label="Action">
               <textarea
@@ -318,7 +331,7 @@ export const orgPage = ({
             </div>
           </form>
         </Module>
-        <form method="post" action={`${path}/contacts`}>
+        <form method="post" action={orgPath(org.slug, 'contacts')}>
           <RecordForm
             form={contactForm}
             values={contact}
@@ -385,14 +398,10 @@ export const orgPage = ({
                     ''
                   ),
                   <span key="edit" className="row-actions">
-                    <a
-                      href={`${path}/contacts/${encodeURIComponent(person.id)}`}
-                    >
-                      Edit
-                    </a>{' '}
+                    <a href={contactPath(org.slug, person.number)}>Edit</a>{' '}
                     <form
                       method="post"
-                      action={`${path}/contacts/${encodeURIComponent(person.id)}/remove`}
+                      action={contactPath(org.slug, person.number, 'remove')}
                     >
                       <button type="submit" className="link">
                         Remove
@@ -422,7 +431,7 @@ export const orgPage = ({
             </dd>
           </dl>
           <p className="row-actions">
-            <a href={`${path}/edit`}>Edit</a>
+            <a href={orgPath(org.slug, 'edit')}>Edit</a>
           </p>
         </Box>
       </>

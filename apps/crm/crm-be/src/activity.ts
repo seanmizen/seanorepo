@@ -2,12 +2,12 @@ import type { Database } from 'bun:sqlite';
 import { audit } from './auth';
 import { NOTE_ONLY } from './forms/activity';
 import type { FormValues } from './forms/form';
-import { type Org, type Outcome, setPipeline } from './org';
+import { nextNumber, type Org, type Outcome, setPipeline } from './org';
 
 /**
  * The activity of an organisation: its visits and its notes, in one list.
  * The routes `routes/orgs/[slug]/activity.ts`,
- * `routes/orgs/[slug]/activity/[id].tsx` and the organisation page call
+ * `routes/orgs/[slug]/activity/[number].tsx` and the organisation page call
  * these functions.
  *
  * A visit is a row of `visit`, and a note is a row of `note`. The Log
@@ -16,6 +16,11 @@ import { type Org, type Outcome, setPipeline } from './org';
 export interface Activity {
   kind: 'visit' | 'note';
   id: string;
+  /**
+   * The activity number in the organisation. A visit and a note share one
+   * counter. The URL and the page show it (REQ-CRM-ID-001).
+   */
+  number: number;
   /** The time of the visit, or the time that the note was added. */
   at: string;
   /** The outcome of a visit. A note has none. */
@@ -25,10 +30,10 @@ export interface Activity {
 }
 
 const ACTIVITY_SQL = `
-  SELECT 'visit' AS kind, id, at, outcome, note, rowid AS seq
+  SELECT 'visit' AS kind, id, number, at, outcome, note, rowid AS seq
     FROM visit WHERE organisation_id = ?1
   UNION ALL
-  SELECT 'note', id, created_at, NULL, body, rowid
+  SELECT 'note', id, number, created_at, NULL, body, rowid
     FROM note WHERE organisation_id = ?1`;
 
 /**
@@ -44,6 +49,11 @@ export interface Event {
   kind: 'visit' | 'note' | 'change';
   /** The id of the visit or the note, or of the audit row. */
   id: string;
+  /**
+   * A visit or a note: its activity number. A change to a visit or a note:
+   * the number of that entry, or null when it is not in the crm now.
+   */
+  number: number | null;
   at: string;
   /** A visit: its outcome. */
   outcome: Outcome | null;
@@ -74,16 +84,16 @@ export interface Event {
 export const listEvents = (db: Database, orgId: string) =>
   db
     .query<Event, [string]>(
-      `SELECT kind, id, at, outcome, note, action, entity, detail, person, record_at FROM (
-         SELECT 'visit' AS kind, id, at, outcome, note, NULL AS action, NULL AS entity,
+      `SELECT kind, id, number, at, outcome, note, action, entity, detail, person, record_at FROM (
+         SELECT 'visit' AS kind, id, number, at, outcome, note, NULL AS action, NULL AS entity,
                 NULL AS detail, NULL AS person, NULL AS record_at, 1 AS rank, rowid AS seq
            FROM visit WHERE organisation_id = ?1
          UNION ALL
-         SELECT 'note', id, created_at, NULL, body, NULL, NULL, NULL, NULL, NULL, 1, rowid
+         SELECT 'note', id, number, created_at, NULL, body, NULL, NULL, NULL, NULL, NULL, 1, rowid
            FROM note WHERE organisation_id = ?1
          UNION ALL
-         SELECT 'change', a.id, a.at, NULL, NULL, a.action, a.entity, a.detail,
-                p.name, COALESCE(v.at, n.created_at), 0, a.rowid
+         SELECT 'change', a.id, COALESCE(v.number, n.number), a.at, NULL, NULL, a.action,
+                a.entity, a.detail, p.name, COALESCE(v.at, n.created_at), 0, a.rowid
            FROM audit_log AS a
            LEFT JOIN person AS p ON p.id = CASE a.entity
              WHEN 'person' THEN a.entity_id
@@ -98,13 +108,13 @@ export const listEvents = (db: Database, orgId: string) =>
     )
     .all(orgId);
 
-/** The visit or the note `id` of an organisation, or null. */
-export const findActivity = (db: Database, orgId: string, id: string) =>
+/** The visit or the note with `number` of an organisation, or null. */
+export const findActivity = (db: Database, orgId: string, number: number) =>
   db
-    .query<Activity, [string, string]>(
-      `SELECT kind, id, at, outcome, note FROM (${ACTIVITY_SQL}) WHERE id = ?2;`,
+    .query<Activity, [string, number]>(
+      `SELECT kind, id, number, at, outcome, note FROM (${ACTIVITY_SQL}) WHERE number = ?2;`,
     )
-    .get(orgId, id);
+    .get(orgId, number);
 
 /**
  * The outcome `do_not_knock` sets the stage to lost and clears the next
@@ -119,8 +129,8 @@ const setLost = (db: Database, actor: string, org: Org) =>
 
 /**
  * Add a visit or a note to `org`, from the values of the Log module, with
- * an audit row. The audit row never copies the text: it is relationship
- * data.
+ * the next activity number and an audit row. The audit row never copies
+ * the text: it is relationship data.
  */
 export const logActivity = (
   db: Database,
@@ -130,16 +140,17 @@ export const logActivity = (
 ) =>
   db.transaction(() => {
     const id = crypto.randomUUID();
+    const number = nextNumber(db, org.id, 'activity');
     if (values.outcome === NOTE_ONLY) {
       db.query(
-        'INSERT INTO note (id, organisation_id, body) VALUES (?, ?, ?);',
-      ).run(id, org.id, values.note);
+        'INSERT INTO note (id, organisation_id, number, body) VALUES (?, ?, ?, ?);',
+      ).run(id, org.id, number, values.note);
       audit(db, actor, 'create', 'note', id, { organisation_id: org.id });
       return;
     }
     db.query(
-      'INSERT INTO visit (id, organisation_id, outcome, note) VALUES (?, ?, ?, ?);',
-    ).run(id, org.id, values.outcome, values.note || null);
+      'INSERT INTO visit (id, organisation_id, number, outcome, note) VALUES (?, ?, ?, ?, ?);',
+    ).run(id, org.id, number, values.outcome, values.note || null);
     audit(db, actor, 'create', 'visit', id, {
       organisation_id: org.id,
       outcome: values.outcome,
@@ -150,8 +161,8 @@ export const logActivity = (
 /**
  * Save the Log module of the edit page over `current`. A different key
  * changes the outcome, or changes a visit to a note, or a note to a visit.
- * The record keeps its id and its time. The audit row has the names of the
- * changed fields.
+ * The record keeps its id, its number and its time. The audit row has the
+ * names of the changed fields.
  */
 export const saveActivity = (
   db: Database,
@@ -173,14 +184,23 @@ export const saveActivity = (
     }
     if (kind === 'note') {
       db.query(
-        `INSERT INTO note (id, organisation_id, body, created_at) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT (id) DO UPDATE SET body = ?3;`,
-      ).run(current.id, org.id, values.note, current.at);
+        `INSERT INTO note (id, organisation_id, number, body, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT (id) DO UPDATE SET body = ?4;`,
+      ).run(current.id, org.id, current.number, values.note, current.at);
     } else {
       db.query(
-        `INSERT INTO visit (id, organisation_id, at, outcome, note) VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT (id) DO UPDATE SET outcome = ?4, note = ?5;`,
-      ).run(current.id, org.id, current.at, outcome, values.note || null);
+        `INSERT INTO visit (id, organisation_id, number, at, outcome, note)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT (id) DO UPDATE SET outcome = ?5, note = ?6;`,
+      ).run(
+        current.id,
+        org.id,
+        current.number,
+        current.at,
+        outcome,
+        values.note || null,
+      );
     }
     audit(db, actor, 'update', kind, current.id, {
       organisation_id: org.id,

@@ -8,7 +8,7 @@ export const ROLES = { owner: 'Owner', staff: 'Staff' } as const;
  * The form of a contact: a `person`, and their `membership` of one
  * organisation (REQ-CRM-FORM-001). The Add a contact module of
  * `/<slug>`, the First contact module of `/orgs/new` (with the prefix
- * `contact_`) and the edit page `/<slug>/contacts/<person-id>` render it.
+ * `contact_`) and the edit page `/orgs/<slug>/contacts/<number>` render it.
  * The role is the column of the membership. The other fields are columns
  * of the person.
  *

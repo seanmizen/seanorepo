@@ -1,8 +1,15 @@
+import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { migrate, openDatabase } from './db';
+import { MIGRATIONS_DIR, migrate, openDatabase } from './db';
 
 let dir: string;
 let file: string;
@@ -32,6 +39,7 @@ describe('migrations', () => {
       'login_token',
       'membership',
       'note',
+      'org_counter',
       'organisation',
       'passkey',
       'person',
@@ -71,9 +79,111 @@ describe('migrations', () => {
     const db = openDatabase(file);
     expect(() =>
       db
-        .query('INSERT INTO note (id, organisation_id, body) VALUES (?, ?, ?);')
+        .query(
+          'INSERT INTO note (id, organisation_id, number, body) VALUES (?, ?, 1, ?);',
+        )
         .run(crypto.randomUUID(), 'no-such-organisation', 'hello'),
     ).toThrow(/FOREIGN KEY constraint failed/);
+    db.close();
+  });
+
+  test('004 numbers the existing records of each organisation in creation order, and starts the counters (REQ-CRM-ID-001)', () => {
+    // A database at 003, as it was before the numbers.
+    const before = path.join(dir, 'before');
+    mkdirSync(before);
+    for (const name of readdirSync(MIGRATIONS_DIR)) {
+      if (name < '004') {
+        copyFileSync(path.join(MIGRATIONS_DIR, name), path.join(before, name));
+      }
+    }
+    const db = new Database(file, { create: true, strict: true });
+    db.exec('PRAGMA foreign_keys = ON;');
+    migrate(db, before);
+    const run = (sql: string, ...values: string[]) =>
+      db.query(sql).run(...values);
+    for (const org of ['a', 'b', 'empty']) {
+      run(
+        'INSERT INTO organisation (id, slug, name) VALUES (?, ?, ?);',
+        org,
+        org,
+        org,
+      );
+    }
+    for (const person of ['p1', 'p2', 'p3']) {
+      run('INSERT INTO person (id, name) VALUES (?, ?);', person, person);
+    }
+    // p3 is a contact of a and b: a number in each.
+    for (const [person, org] of [
+      ['p2', 'a'],
+      ['p3', 'b'],
+      ['p1', 'a'],
+      ['p3', 'a'],
+    ]) {
+      run(
+        "INSERT INTO membership (person_id, organisation_id, role) VALUES (?, ?, 'owner');",
+        person,
+        org,
+      );
+    }
+    // The rows are not in time order: the number follows the time.
+    run(
+      "INSERT INTO visit (id, organisation_id, at, outcome) VALUES ('v-late', 'a', '2026-03-01T10:00:00.000Z', 'spoke');",
+    );
+    run(
+      "INSERT INTO note (id, organisation_id, body, created_at) VALUES ('n-mid', 'a', 'x', '2026-02-01T10:00:00.000Z');",
+    );
+    run(
+      "INSERT INTO visit (id, organisation_id, at, outcome) VALUES ('v-early', 'a', '2026-01-01T10:00:00.000Z', 'no_answer');",
+    );
+    run(
+      "INSERT INTO note (id, organisation_id, body, created_at) VALUES ('n-b', 'b', 'y', '2026-01-01T10:00:00.000Z');",
+    );
+
+    expect(migrate(db)).toEqual(['004-numbers.sql']);
+    expect(
+      db
+        .query(
+          'SELECT organisation_id, person_id, number FROM membership ORDER BY organisation_id, number;',
+        )
+        .all(),
+    ).toEqual([
+      { organisation_id: 'a', person_id: 'p2', number: 1 },
+      { organisation_id: 'a', person_id: 'p1', number: 2 },
+      { organisation_id: 'a', person_id: 'p3', number: 3 },
+      { organisation_id: 'b', person_id: 'p3', number: 1 },
+    ]);
+    expect(
+      db
+        .query(
+          `SELECT organisation_id, id, number FROM visit
+           UNION ALL SELECT organisation_id, id, number FROM note
+           ORDER BY organisation_id, number;`,
+        )
+        .all(),
+    ).toEqual([
+      { organisation_id: 'a', id: 'v-early', number: 1 },
+      { organisation_id: 'a', id: 'n-mid', number: 2 },
+      { organisation_id: 'a', id: 'v-late', number: 3 },
+      { organisation_id: 'b', id: 'n-b', number: 1 },
+    ]);
+    expect(
+      db
+        .query(
+          'SELECT organisation_id, kind, last FROM org_counter ORDER BY organisation_id, kind;',
+        )
+        .all(),
+    ).toEqual([
+      { organisation_id: 'a', kind: 'activity', last: 3 },
+      { organisation_id: 'a', kind: 'contact', last: 3 },
+      { organisation_id: 'b', kind: 'activity', last: 1 },
+      { organisation_id: 'b', kind: 'contact', last: 1 },
+    ]);
+    // A number is unique in its organisation.
+    expect(() =>
+      run(
+        "INSERT INTO note (id, organisation_id, number, body) VALUES ('n-dup', 'a', 2, 'z');",
+      ),
+    ).toThrow(/UNIQUE constraint failed/);
     db.close();
   });
 });

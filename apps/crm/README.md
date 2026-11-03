@@ -16,7 +16,7 @@ billing. After sign-in, the seller has these pages:
   `?q=&stage=&sort=&dir=&page=`. 50 rows to a page, with a pager in the
   footer.
 - `/orgs/new`: the new lead. The organisation form and the contact form,
-  and one `Save` key. An empty URL name (the slug) comes from the name.
+  and one `Save` key. An empty URL slug comes from the name.
 - `/orgs/<slug>`: one organisation. The LCD shows the name, the stage, the
   next action and its due date, and the last visit. The modules:
   - **Log**: the `Visit note` field, then the Save as keys. `No answer`,
@@ -29,10 +29,29 @@ billing. After sign-in, the seller has these pages:
 
   The boxes: **Activity** (every event, newest first, in a `<details>`
   that is closed until a tap), **Contacts** (each with `Edit` and
-  `Remove`) and **Details** (with `Edit`).
-- `/orgs/<slug>/edit`, `/orgs/<slug>/contacts/<person-id>` and
-  `/orgs/<slug>/activity/<id>`: the edit pages. Each one is the same form
-  as its create page, filled in (REQ-CRM-FORM-001).
+  `Remove`) and **Details** (with `Edit`). Each visit and note in Activity
+  shows its number, for example `Visit 17: Spoke.`.
+- `/orgs/<slug>/edit`, `/orgs/<slug>/contacts/<number>` and
+  `/orgs/<slug>/activity/<number>`: the edit pages. Each one is the same
+  form as its create page, filled in (REQ-CRM-FORM-001). The LCD of an
+  activity entry shows its `Type`: `Note`, or `Visit, <outcome>`.
+
+### Short IDs
+
+No URL and no page shows a UUID (REQ-CRM-ID-001):
+
+- An organisation is its slug: `/orgs/bakery`.
+- A contact or an activity entry has a number in its organisation, from 1:
+  `/orgs/bakery/contacts/2`, `/orgs/bakery/activity/17`. A visit and a note
+  share one counter.
+- A number is never used again. The table `org_counter` keeps the last
+  number of each organisation and kind, also after a delete.
+- A global record (an invoice, later) gets a prefix and a number:
+  `INV-0042`.
+
+The UUIDs stay the primary keys and the foreign keys. `orgPath`,
+`contactPath` and `activityPath` in `crm-be/src/org.ts` make each link and
+each redirect, and `nextNumber` gives each new number.
 - `/account`: the email and how this session signed in, with links to
   `/account/passkeys` and `/account/sessions`. In the demo, also the
   `Reset demo data` button (see [Demo](#demo)).
@@ -64,7 +83,8 @@ yarn workspace crm-be test
   `ui/When.tsx` shows a date (REQ-CRM-DATE-001). No other code formats a
   date.
 - `crm-be/src/org.ts` holds the organisation: the stages, the visit
-  outcomes, the slug maker, `orgPath` (each link to an organisation) and
+  outcomes, the slug maker, the paths (`orgPath`, `contactPath` and
+  `activityPath`), `nextNumber` (see [Short IDs](#short-ids)) and
   `setPipeline` (the stage and the next action). The page for
   `/orgs/<slug>` is `routes/orgs/[slug].tsx`, and its forms post to
   `routes/orgs/[slug]/*`. The static route `/orgs/new` wins over
@@ -479,7 +499,8 @@ fictional set: 10 organisations, with contacts, visits, notes and stage
 changes. The dates are relative to today, so some next actions are overdue,
 one is due today, and some are in the future. The seed writes through the
 same functions as the routes, so the Activity list of each organisation has
-its rows. It keeps the person of `CRM_ADMIN_EMAIL`, with their sessions and
+its rows, and each contact and activity entry gets its number from the same
+counter. It keeps the person of `CRM_ADMIN_EMAIL`, with their sessions and
 passkeys, and deletes each other person. Two runs give the same data.
 
 Each name is fictional. Each email is at `example.com`, each phone number is

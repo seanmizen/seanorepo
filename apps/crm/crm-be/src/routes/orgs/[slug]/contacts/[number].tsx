@@ -4,7 +4,13 @@ import type { Auth } from '../../../../auth';
 import { type Contact, findContact, saveContact } from '../../../../contacts';
 import { contactForm } from '../../../../forms/contact';
 import { type FormValues, parseForm } from '../../../../forms/form';
-import { findOrg, type Org, orgPath } from '../../../../org';
+import {
+  contactPath,
+  findOrg,
+  type Org,
+  orgPath,
+  parseNumber,
+} from '../../../../org';
 import { type PageParts, renderPage } from '../../../../render';
 import { Device } from '../../../../ui/Device';
 import { Key } from '../../../../ui/Key';
@@ -14,8 +20,9 @@ import { RecordForm } from '../../../../ui/RecordForm';
 import { sendNotFound } from '../../[slug]';
 
 /**
- * The edit page of a contact: the contact form of the Add a contact
- * module, filled in, and one `Save` key. A person can be a contact of more
+ * The edit page of a contact, at its contact number in the organisation
+ * (REQ-CRM-ID-001): the contact form of the Add a contact module, filled
+ * in, and one `Save` key. A person can be a contact of more
  * than one organisation. The intro names the others, because a change to
  * the name, the phone or the email shows there too.
  */
@@ -40,10 +47,7 @@ export const contactEditPage = ({
   device: (
     <Device>
       <Lcd alert={error} />
-      <form
-        method="post"
-        action={`${orgPath(org.slug)}/contacts/${encodeURIComponent(contact.id)}`}
-      >
+      <form method="post" action={contactPath(org.slug, contact.number)}>
         <RecordForm
           form={contactForm}
           values={
@@ -75,7 +79,11 @@ const otherOrgs = (db: Database, personId: string, orgId: string) =>
     .all(personId, orgId)
     .map((row) => row.name);
 
-/** `GET` and `POST /<slug>/contacts/<person-id>`: edit a contact. */
+/**
+ * `GET` and `POST /orgs/<slug>/contacts/<number>`: edit a contact. A number
+ * that the organisation does not have, or a segment that is not a number,
+ * gets 404.
+ */
 export const orgContactEditRoute = (app: FastifyInstance, db: Database) => {
   const send = (
     request: FastifyRequest,
@@ -99,14 +107,15 @@ export const orgContactEditRoute = (app: FastifyInstance, db: Database) => {
         ),
       );
 
-  const find = (params: { slug: string; id: string }) => {
+  const find = (params: { slug: string; number: string }) => {
     const org = findOrg(db, params.slug);
-    const contact = org && findContact(db, org.id, params.id);
+    const number = parseNumber(params.number);
+    const contact = org && number && findContact(db, org.id, number);
     return org && contact ? { org, contact } : null;
   };
 
-  app.get<{ Params: { slug: string; id: string } }>(
-    '/orgs/:slug/contacts/:id',
+  app.get<{ Params: { slug: string; number: string } }>(
+    '/orgs/:slug/contacts/:number',
     { config: { admin: true } },
     async (request, reply) => {
       const found = find(request.params);
@@ -115,8 +124,8 @@ export const orgContactEditRoute = (app: FastifyInstance, db: Database) => {
     },
   );
 
-  app.post<{ Params: { slug: string; id: string } }>(
-    '/orgs/:slug/contacts/:id',
+  app.post<{ Params: { slug: string; number: string } }>(
+    '/orgs/:slug/contacts/:number',
     { config: { admin: true } },
     async (request, reply) => {
       const found = find(request.params);

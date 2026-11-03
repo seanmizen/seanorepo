@@ -56,10 +56,52 @@ export const isOutcome = (value: string): value is Outcome =>
   Object.hasOwn(OUTCOMES, value);
 
 /**
- * The path of the page of the organisation with `slug`. Each link to an
- * organisation uses it.
+ * The path of the page of the organisation with `slug`, or of a page under
+ * it: `orgPath('bakery', 'edit')` is `/orgs/bakery/edit`. Each link to an
+ * organisation, and each redirect, uses it or a sibling below. A path has
+ * no UUID (REQ-CRM-ID-001).
  */
-export const orgPath = (slug: string) => `/orgs/${slug}`;
+export const orgPath = (slug: string, ...rest: (string | number)[]) =>
+  ['/orgs', slug, ...rest].join('/');
+
+/** The path of contact `number` of the organisation with `slug`. */
+export const contactPath = (slug: string, number: number, ...rest: string[]) =>
+  orgPath(slug, 'contacts', number, ...rest);
+
+/** The path of activity entry `number` (a visit or a note) of `slug`. */
+export const activityPath = (slug: string, number: number) =>
+  orgPath(slug, 'activity', number);
+
+/**
+ * The kinds of record that an organisation numbers. A visit and a note are
+ * both `activity`, so they share one counter.
+ */
+export type NumberKind = 'contact' | 'activity';
+
+/**
+ * The next number of a `kind` of record of the organisation `orgId`,
+ * counted from 1 (REQ-CRM-ID-001). The counter in `org_counter` keeps the
+ * last number given, so a number is never used again, also after a
+ * delete. Run it in the transaction that adds the record.
+ */
+export const nextNumber = (db: Database, orgId: string, kind: NumberKind) => {
+  const row = db
+    .query<{ last: number }, [string, NumberKind]>(
+      `INSERT INTO org_counter (organisation_id, kind, last) VALUES (?1, ?2, 1)
+       ON CONFLICT (organisation_id, kind) DO UPDATE SET last = last + 1
+       RETURNING last;`,
+    )
+    .get(orgId, kind);
+  if (!row) throw new Error(`No ${kind} number for organisation ${orgId}.`);
+  return row.last;
+};
+
+/**
+ * The number in a path segment, such as the `2` of `/contacts/2`, or null
+ * when the segment is not a number from 1. The routes send 404 for null.
+ */
+export const parseNumber = (segment: string) =>
+  /^[1-9]\d{0,8}$/.test(segment) ? Number(segment) : null;
 
 /**
  * The one slug that no organisation can have: `/orgs/new` is the new-lead
@@ -115,7 +157,7 @@ export const resolveSlug = (
 ): { slug: string } | { error: string } => {
   if (!values.slug) return { slug: makeSlug(db, values.name, except) };
   if (slugTaken(db, values.slug, except)) {
-    return { error: 'Another organisation has this URL name.' };
+    return { error: 'Another organisation has this URL slug.' };
   }
   return { slug: values.slug };
 };

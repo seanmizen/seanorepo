@@ -52,13 +52,13 @@ describe('makeSlug', () => {
 });
 
 describe('resolveSlug', () => {
-  test('an empty URL name comes from the name, and a typed one must be free', () => {
+  test('an empty URL slug comes from the name, and a typed one must be free', () => {
     addOrgRow('acme');
     expect(resolveSlug(db, { slug: '', name: 'Acme' })).toEqual({
       slug: 'acme-2',
     });
     expect(resolveSlug(db, { slug: 'acme', name: 'Other' })).toEqual({
-      error: 'Another organisation has this URL name.',
+      error: 'Another organisation has this URL slug.',
     });
     expect(resolveSlug(db, { slug: 'acme-west', name: 'Acme' })).toEqual({
       slug: 'acme-west',

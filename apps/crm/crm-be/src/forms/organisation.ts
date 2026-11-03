@@ -7,7 +7,7 @@ import { type FormValues, fieldsOf, type RecordFormDef } from './form';
  * routes parse it. The stage and the next action are not in this form: the
  * modules of the organisation page set them.
  *
- * The URL name is the slug. An empty URL name comes from the name
+ * The URL slug is the slug. An empty URL slug comes from the name
  * (`resolveSlug` in `org.ts`).
  */
 export const organisationForm: RecordFormDef = {
@@ -23,7 +23,7 @@ export const organisationForm: RecordFormDef = {
         { name: 'source', label: 'Source', placeholder: 'door, referral, web' },
         {
           name: 'slug',
-          label: 'URL name',
+          label: 'URL slug',
           placeholder: 'From the name',
           autoCapitalize: 'none',
           normalize: (value) => value.toLowerCase(),
@@ -32,10 +32,10 @@ export const organisationForm: RecordFormDef = {
               value.length > SLUG_MAX ||
               !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
             ) {
-              return `The URL name can have only lowercase letters, digits and single hyphens, at most ${SLUG_MAX}.`;
+              return `The URL slug can have only lowercase letters, digits and single hyphens, at most ${SLUG_MAX}.`;
             }
             if (value === RESERVED_SLUG) {
-              return `The crm uses the URL name "${value}". Type a different URL name.`;
+              return `The crm uses the URL slug "${value}". Type a different URL slug.`;
             }
             return undefined;
           },

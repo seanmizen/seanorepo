@@ -12,7 +12,7 @@ export const LOG_KEYS: Record<string, string> = {
 
 /**
  * The form of an activity: a visit or a note (REQ-CRM-FORM-001). It is the
- * Log module. `/<slug>` renders it empty, and `/<slug>/activity/<id>`
+ * Log module. `/<slug>` renders it empty, and `/orgs/<slug>/activity/<number>`
  * renders it with the current values.
  *
  * Each key saves. An outcome key saves a visit with that outcome and the
