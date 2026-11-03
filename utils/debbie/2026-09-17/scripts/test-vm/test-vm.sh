@@ -38,7 +38,7 @@ SERVER_NAME="${SERVER_NAME:-debbie}"
 # none: the VM then proves that a machine with no role tracks `release` and
 # runs nothing. Set any of them in the environment to give the guest that role.
 # ROLE_VPN=yes tests the VPN role (REQ-NETWORK-006). The VM is never on the
-# tailnet, so its two login checks fail by design.
+# tailnet, so its three login checks fail by design.
 ROLE_WEBSERVER="${ROLE_WEBSERVER:-}"
 ROLE_TUNNEL="${ROLE_TUNNEL:-}"
 ROLE_VPN="${ROLE_VPN:-}"

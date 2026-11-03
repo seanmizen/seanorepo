@@ -63,7 +63,9 @@ Test these on a real target machine:
 - a Cloudflare tunnel or ngrok session that connects (no VM has credentials)
 - the VPN's tailnet login and its route (no VM is on the tailnet).
   `ROLE_VPN=yes ./scripts/test-vm/test-vm.sh --assert` tests the rest of the
-  VPN role, and its two login checks fail there by design.
+  VPN role. Its three login checks fail there by design: "this machine is on
+  the tailnet", "it advertises the LAN subnet" and "the tailnet routes the LAN
+  subnet through it".
 - an unattended security update that installs, which takes weeks and a real advisory
 - the deploy units with the scripts under test: the units in the VM run the
   scripts from the guest's `release` checkout, and `assert.sh` runs the scripts
