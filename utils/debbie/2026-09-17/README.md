@@ -278,7 +278,8 @@ All commands run from your computer. Replace `<name>` with the target machine's
 | To | Run |
 |---|---|
 | follow the release poller and deploys | `ssh srv@<name>.local journalctl -u custom-release-poll.service -u custom-deploy.service -f` |
-| see deploy decisions only | `ssh srv@<name>.local journalctl -u custom-deploy.service -p info` |
+| see the deploy's own lines only (started, failed, done) | `ssh srv@<name>.local journalctl -u custom-deploy.service -p info` |
+| see the deploy failures only, with the output of each failed tool | `ssh srv@<name>.local journalctl -u custom-deploy.service -p err` |
 | deploy now, whatever changed | `ssh srv@<name>.local ~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force` |
 | check whether an update needs a reboot | `ssh srv@<name>.local cat /var/run/reboot-required` |
 | see recent security updates | `ssh srv@<name>.local 'journalctl -u unattended-upgrades --no-pager \| tail -40'` |

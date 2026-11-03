@@ -9,16 +9,21 @@
 # Why:   the demo needs its own env file. Without the file, the demo
 #        profile is off, the demo does not start, and prod does not change.
 #
+# The build output is at debug (run_quiet in scripts/log.sh, REQ-SERVER-019).
+#
 # Usage: yarn workspace crm prod:docker
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+LOG_TAG=crm
+# shellcheck source=../../../scripts/log.sh
+. ../../scripts/log.sh
 
 profiles=(--profile prod)
 if [ -f .env.demo ]; then
   profiles+=(--profile demo)
 else
-  echo "crm: apps/crm/.env.demo does not exist. The demo is off."
+  log_info "apps/crm/.env.demo does not exist. The demo is off."
 fi
 
-BUILD_TARGET=prod docker compose "${profiles[@]}" up --build --detach
+BUILD_TARGET=prod run_quiet docker compose "${profiles[@]}" up --build --detach

@@ -778,6 +778,57 @@ deploy_failed_app() {
     return "$rc"
 }
 
+# REQ-SERVER-019: under systemd, each line of the deploy has a priority
+# prefix. The tool output is at debug. A failed tool repeats its last lines at
+# error. The yarn shim prints one line of tool output for each command.
+# `yarn prod:docker` prints a line with its own info prefix, as
+# scripts/prod-docker-all.sh does. `yarn workspace tcp-getter build` fails: that
+# is the forced failure, and it does not stop the deploy. LOG_PREFIX is empty,
+# so scripts/log.sh makes the decision itself: stdout is a file, so it adds the
+# prefixes. Returns 0 when every part of the check passed.
+deploy_log_levels() {
+    local t="$1" rc=0
+    scratch_release "$t" > /dev/null
+    git -C "$t/machine" pull -q
+    printf '#!/bin/sh\necho "yarn $*" >> "%s/calls"\ncase "$*" in\n  prod:docker) echo "<6>[prod-docker-all] app started"; exit 0 ;;\nesac\necho "tool output of yarn $*"\n[ "$*" != "workspace tcp-getter build" ]\n' \
+        "$t" > "$t/bin/yarn"
+    chmod +x "$t/bin/yarn"
+    mkdir -p "$t/roles"
+    touch "$t/roles/webserver" "$t/roles/tunnel"
+    LOG_PREFIX='' PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
+        DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" > "$t/out" 2>&1
+    # Each line has a prefix.
+    ! grep -qv '^<[0-7]>' "$t/out" || rc=1
+    grep -qx '<7>tool output of yarn install --immutable' "$t/out" || rc=1
+    # At info and above: the deploy's own lines, and the context of the failure.
+    ! grep '^<[0-6]>.*tool output' "$t/out" \
+        | grep -qvx '<3>\[deploy\]   | tool output of yarn workspace tcp-getter build' || rc=1
+    grep -qx '<3>\[deploy\]   | tool output of yarn workspace tcp-getter build' "$t/out" || rc=1
+    grep -qx '<6>\[prod-docker-all\] app started' "$t/out" || rc=1
+    grep -qx '<6>\[deploy\] done' "$t/out" || rc=1
+    rm -rf "$t"
+    return "$rc"
+}
+
+# REQ-SERVER-019: the scripts of the deploy path run each tool that prints
+# build or progress output in run_quiet, or send its output to /dev/null.
+# `yarn prod:docker` is not on the list, because prod-docker-all.sh sets the
+# level of its own lines. The awk joins the lines that end in a backslash, so
+# a command on two lines is one line here. Prints each line that breaks the
+# rule. Returns 0 when there is none.
+deploy_loud_tools() {
+    local f bad=0
+    for f in "$@"; do
+        [ -r "$f" ] || { echo "cannot read $f"; bad=1; continue; }
+        awk '/\\$/ { sub(/\\$/, ""); buf = buf $0; next } { print buf $0; buf = "" }' "$f" \
+            | grep -E '^[^#]*\b(docker[[:space:]]+(compose|build|pull|network[[:space:]]+create)|yarn[[:space:]]+(install|workspace|run|build)|git[[:space:]]+(fetch|checkout|pull|clone)|apt(-get)?|curl|wget)\b' \
+            | grep -vE 'run_quiet|>[[:space:]]*/dev/null' \
+            | sed "s|^|$f: |" \
+            | grep . && bad=1
+    done
+    return "$bad"
+}
+
 if [ "$PHASE" = provisioned ]; then
     UD=/usr/local/lib/systemd/system
     check "custom-release-poll.timer enabled"   'systemctl is-enabled custom-release-poll.timer'
@@ -986,12 +1037,25 @@ if [ "$PHASE" = provisioned ]; then
             'deploy_renamed_app "$(mktemp -d)"'
         check "a failed app does not stop the tunnel step, and the deploy exits non-zero" \
             'deploy_failed_app "$(mktemp -d)"'
+        # REQ-SERVER-019: see deploy_log_levels and deploy_loud_tools above.
+        # The root of the copy under test is four levels above deploy.sh.
+        check "each deploy line has a level, tool output is at debug, and a failure shows its output at error" \
+            'deploy_log_levels "$(mktemp -d)"'
+        check "the deploy path runs build tools only in run_quiet" \
+            'root="$(dirname "$DEPLOY_UNDER_TEST")/../../../..";
+             deploy_loud_tools "$DEPLOY_UNDER_TEST" "$RELEASE_POLL_UNDER_TEST" "$root/scripts/prod-docker-all.sh" \
+                 "$root"/apps/*/scripts/prod-docker.sh'
+        check "yarn prod:docker runs every app after a failure, with the build output at debug" \
+            'bash "$(dirname "$DEPLOY_UNDER_TEST")/../../../../scripts/prod-docker-all.test.sh"'
     else
         sk "the release poller moves the checkout and touches no service" "$behaviour_skip_reason"
         sk "a release poll leaves the checkout alone while a deploy holds the lock" "$behaviour_skip_reason"
         sk "the deploy runs once per checkout and again after a reboot" "$behaviour_skip_reason"
         sk "the deploy removes the old container of a renamed app and starts the new one" "$behaviour_skip_reason"
         sk "a failed app does not stop the tunnel step, and the deploy exits non-zero" "$behaviour_skip_reason"
+        sk "each deploy line has a level, tool output is at debug, and a failure shows its output at error" "$behaviour_skip_reason"
+        sk "the deploy path runs build tools only in run_quiet" "$behaviour_skip_reason"
+        sk "yarn prod:docker runs every app after a failure, with the build output at debug" "$behaviour_skip_reason"
         sk "the deploy publishes the apps on loopback, with or without the tunnel" "$behaviour_skip_reason"
         sk "the deploy starts the LAN edge without the tunnel and stops it with" "$behaviour_skip_reason"
     fi
