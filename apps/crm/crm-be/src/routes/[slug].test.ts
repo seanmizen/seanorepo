@@ -33,7 +33,11 @@ describe('GET /<slug>', () => {
     const response = await get(`/${slug}`);
     expect(response.statusCode).toBe(200);
     const html = response.body;
-    expect(html).toContain('<h1>Acme Plumbing</h1>');
+    expect(html).toContain('<title>Acme Plumbing - crm</title>');
+    expect(html).toContain(
+      '<span class="here" aria-current="page">acme-plumbing</span>',
+    );
+    expect(html).toContain('<dt>Name</dt><dd>Acme Plumbing</dd>');
     expect(html).toContain('<dt>Stage</dt><dd>Lead</dd>');
     expect(html).toContain('<dd>1 High Street, SW1A 1AA</dd>');
     expect(html).toContain('<dd>legitimate interests</dd>');
@@ -77,21 +81,26 @@ describe('GET /<slug>', () => {
     expect(html.indexOf('Second note')).toBeLessThan(
       html.indexOf('First note'),
     );
-    expect(html).toContain('<td>Spoke</td><td>Second visit</td>');
+    expect(html).toContain(
+      '<td data-label="Outcome">Spoke</td><td data-label="Note">Second visit</td>',
+    );
   });
 
   test('a slug that does not exist returns 404', async () => {
     const response = await get('/no-such-org');
     expect(response.statusCode).toBe(404);
-    expect(response.body).toContain('<h1>Not found</h1>');
+    expect(response.body).toContain('<title>Not found - crm</title>');
+    expect(response.body).toContain('No organisation has this address.');
   });
 
   test('the pages with fixed paths win over the slug route', async () => {
-    expect((await get('/orgs')).body).toContain('<h1>Organisations</h1>');
+    expect((await get('/orgs')).body).toContain(
+      '<title>Organisations - crm</title>',
+    );
     expect((await get('/login')).statusCode).toBe(200);
     expect((await get('/api/health')).body).toBe('{"ok":true}');
     expect((await get('/account/sessions')).body).toContain(
-      '<h1>Sessions</h1>',
+      '<title>Sessions - crm</title>',
     );
   });
 

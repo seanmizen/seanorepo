@@ -3,16 +3,29 @@
  *
  * Where: crm-be/src/render.tsx links the build of this file in every page.
  * The components in crm-be/src/ui/ give the markup that it styles.
- * When: on every page, except with ?theme=bare. Dark mode follows
- * prefers-color-scheme.
- * Why: the page is one object, an instrument panel.
- * 1. Silkscreen labels: small spaced capitals in mono, muted, as printed on
- *    the panel of an instrument. A label never competes with a value.
- * 2. One signal color. Red is "on": the lit LED. All else is grey.
- * 3. Form shows the action. A key is raised and moves when pressed.
- * 4. Panels sit on a chassis. The 2px seams show the chassis behind them.
- * 5. The plate holds the display glass. In dark mode the plate is brushed
- *    steel, because a plate darker than the page looks like a hole.
+ * When: on every page, except with ?theme=bare. The mode follows
+ * prefers-color-scheme, or the data-mode attribute on <html> (the mode
+ * stepper in the footer sets it).
+ * Why: each page has one anatomy. Text is around one device:
+ * 1. The nav (text): the path title, then one line of links.
+ * 2. The intro (text): at most one sentence.
+ * 3. The device: the core function of the page, as one instrument. The
+ *    LCD shows data or a menu. The modules hold keys and fields.
+ * 4. The records (text): tables and lists in the page font, no panels.
+ * 5. The footer (text): top, the pager, the theme and mode steppers.
+ *
+ * The principles of the device, as in autosam pixel-3.css:
+ * 1. One grid. Each module sits on a grid of 6 columns, and each key is a
+ *    whole share of its row.
+ * 2. One anatomy. Each module has its label at the top left, its value at
+ *    the top right, and its control below.
+ * 3. Silkscreen labels: small spaced capitals in mono, muted. A label
+ *    never competes with a value.
+ * 4. One signal color. Red is "on": the lit LED. All else is grey.
+ * 5. Form shows the action. A key is raised and moves when pressed. A key
+ *    that latches has an LED.
+ * 6. The faceplate holds the LCD glass. In dark mode the faceplate is
+ *    brushed steel, because a plate darker than the page looks like a hole.
  *
  * A class gives a state its look. Text, native elements and attributes carry
  * the state, so a page without this file still shows every state and allows
@@ -33,7 +46,7 @@
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
 
-  /* The plate: the color of the plain display of autosam. */
+  /* The faceplate: the color of the plain display of autosam. */
   --plate: var(--key-black);
   --plate-shadow: none;
 
@@ -48,14 +61,26 @@
   --glass-edge: 0 0 0 1px rgb(0 0 0 / 0.5);
   --lit: #1d2419;
   --dim: rgb(29 36 25 / 0.55);
+  --ghost: rgb(29 36 25 / 0.12);
   --glow: 1px 1px 0 rgb(0 0 0 / 0.13);
+
+  /* The width of the device column on a wide screen: about 360px. */
+  --device-width: 26rem;
 
   font-size: 14px;
 }
+:root[data-mode="light"] {
+  color-scheme: light;
+}
+:root[data-mode="dark"] {
+  color-scheme: dark;
+}
 
-/* Tone dark. */
+/* Tone dark. The same tokens are in two blocks: one for the system mode,
+   and one for the dark mode that the mode stepper sets. CSS cannot join a
+   media query and a selector in one rule. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-mode="light"]) {
     --bg: #1d1c1a;
     --surface: #2b2926;
     --ink: #ecebe5;
@@ -64,9 +89,9 @@
     --accent: #b8313f;
     --key-black: #0c0b0a;
 
-    /* The plate is brushed steel: cool grey, lighter than the panel, with
-       fine horizontal grain. Its edge is chamfered (light on top, dark
-       below), and it throws a shadow, so it stands out. */
+    /* The faceplate is brushed steel: cool grey, lighter than the
+       modules, with fine horizontal grain. Its edge is chamfered (light on
+       top, dark below), and it throws a shadow, so it stands out. */
     --plate:
       repeating-linear-gradient(
         180deg,
@@ -94,7 +119,42 @@
     --glass-edge: inset 0 -1px 0 rgb(255 255 255 / 0.14);
     --lit: #101807;
     --dim: rgb(16 24 7 / 0.6);
+    --ghost: rgb(16 24 7 / 0.15);
   }
+}
+:root[data-mode="dark"] {
+  --bg: #1d1c1a;
+  --surface: #2b2926;
+  --ink: #ecebe5;
+  --muted: #9a978e;
+  --line: #4a4743;
+  --accent: #b8313f;
+  --key-black: #0c0b0a;
+  --plate:
+    repeating-linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.035) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgb(0 0 0 / 0.05) 0 1px,
+      transparent 1px 7px
+    ), linear-gradient(#777b80, #484b50);
+  --plate-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -1px 0 rgb(0 0 0 / 0.55),
+    inset 1px 0 0 rgb(255 255 255 / 0.08), inset -1px 0 0 rgb(0 0 0 / 0.3), 0 3px
+    8px rgb(0 0 0 / 0.6);
+  --glass: #7c9e36;
+  --glass-texture: radial-gradient(
+    ellipse at 50% 40%,
+    rgb(214 255 120 / 0.35),
+    transparent 70%
+  );
+  --glass-edge: inset 0 -1px 0 rgb(255 255 255 / 0.14);
+  --lit: #101807;
+  --dim: rgb(16 24 7 / 0.6);
+  --ghost: rgb(16 24 7 / 0.15);
 }
 
 /* A small screen is a phone, maybe held outdoors. The text is larger than
@@ -105,35 +165,37 @@
   }
 }
 
-/* The page */
+/* The page: it starts at the top left, as autosam (REQ-DENSE-001). */
 body {
   margin: 0;
+  padding: 1rem;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--body);
-  line-height: 1.3;
-}
-.page {
-  display: grid;
-  gap: 1em;
-  max-width: 60em;
-  margin: 0 auto;
-  padding: 1em;
-}
-@media (max-width: 760px) {
-  .page {
-    padding: 0.5em;
-  }
+  line-height: 1.35;
 }
 code {
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
-/* A class that sets `display` (.key, .panel form) must not show a `hidden`
-   element. These selectors are more specific than the classes. */
-.key[hidden],
-.panel form[hidden] {
-  display: none;
+/* A date never breaks at its hyphens. */
+time {
+  white-space: nowrap;
+}
+
+/* A text link: the ink color with an underline, in each state. */
+a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+a:hover {
+  text-decoration-thickness: 2px;
+}
+:is(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 /* The silkscreen label */
@@ -146,19 +208,118 @@ code {
   color: var(--muted);
 }
 
-/* The plate and its glass: the page title on the display. */
-.plate {
-  padding: 1em;
+/* 1. The nav. The title is the path, as on seanmizen.com: "crm" at the
+   full size, the path smaller, the page itself dimmed. */
+.title {
+  margin: 0;
+  font-size: 1.6em;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.title .path {
+  font-size: 0.7em;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.title .here {
+  color: var(--muted);
+}
+.links ul {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0.35em 0 0;
+  padding: 0;
+  list-style: none;
+}
+.links li + li::before {
+  content: "·";
+  padding: 0 0.5em;
+  color: var(--muted);
+}
+.links [aria-current] {
+  color: var(--muted);
+}
+.links form {
+  display: inline;
+}
+/* "sign out" is a submit key in a form, but it reads as a text link. */
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+button.link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* 2. The intro */
+.intro {
+  max-width: 40em;
+  margin: 0.75em 0 0;
+  color: var(--muted);
+}
+
+/* The body: the device column at the left, the records to its right. On a
+   phone, one column. */
+.body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.5em 2em;
+  margin-top: 1em;
+}
+.device-col {
+  flex: 0 0 var(--device-width);
+  max-width: 100%;
+  display: grid;
+  gap: 0.75em;
+}
+.records-col {
+  flex: 1 1 26rem;
+  min-width: 0;
+  max-width: 50rem;
+  display: grid;
+  gap: 1.75em;
+}
+@media (max-width: 760px) {
+  .device-col {
+    flex-basis: 100%;
+  }
+}
+
+/* 3. The device: modules on a chassis. The 2px seams show the chassis
+   behind them. A form that holds modules puts them on the same grid. */
+.device {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
   border-radius: 6px;
+  background: var(--line);
+}
+.device > form {
+  display: contents;
+}
+
+/* The LCD: the glass on its faceplate. */
+.lcd {
+  grid-column: 1 / -1;
+  padding: 0.75em;
+  border-radius: 4px;
   background: var(--plate);
   box-shadow: var(--plate-shadow);
 }
 .glass {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 0.75em;
-  padding: 0.75em 1em;
+  display: grid;
+  gap: 0.75em;
+  padding: 0.6em 0.75em;
   border-radius: 3px;
   background: var(--glass-texture), var(--glass);
   box-shadow:
@@ -168,52 +329,195 @@ code {
   font-family: var(--mono);
   text-shadow: var(--glow);
 }
-.glass .label {
+.glass p {
+  margin: 0;
+}
+.glass .empty {
   color: var(--dim);
+}
+/* The alert: a message about the last action, after a lit LED. */
+.glass [role="alert"] {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+}
+.glass [role="alert"]::before {
+  content: "";
+  flex: none;
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+}
+/* The read-out: a printed legend at the left of each value. */
+.readout {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.3em 1em;
+  margin: 0;
+}
+.readout > div {
+  display: contents;
+}
+.readout dt,
+.menu::before,
+.menu::after {
+  color: var(--dim);
+  font-size: 0.75em;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   text-shadow: none;
 }
-.glass a {
+.readout dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* The menu: a legend over each column, then one row for each record, as
+   the track list of autosam. The row under the pointer is an inverted bar
+   with a cursor. */
+.menu {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0 -0.75em;
+  padding: 0;
+  list-style: none;
+}
+.menu::before {
+  content: attr(data-legend-name);
+  grid-column: 1;
+  padding: 0 0.75rem 0.25em;
+}
+.menu::after {
+  content: attr(data-legend-value);
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0 0.75rem 0.25em;
+  text-align: right;
+}
+.menu li {
+  grid-column: 1 / -1;
+}
+.menu a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.1em 1ch;
+  padding: 0.4em 0.75rem;
+  color: inherit;
   text-decoration: none;
 }
-.glass h1 {
-  margin: 0;
-  font-size: 1.6em;
+.menu a:is(:hover, :focus-visible) {
+  outline: none;
+  background: var(--lit);
+  color: var(--glass);
+  text-shadow: none;
+}
+.menu .name {
+  grid-column: 1;
   font-weight: 500;
-  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.menu a:is(:hover, :focus-visible) .name::before {
+  content: "\25B6 ";
+}
+.menu .value {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+.menu .detail {
+  grid-column: 1;
+  grid-row: 2;
+  color: var(--dim);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.menu .status {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.menu a:is(:hover, :focus-visible) .detail {
+  color: inherit;
 }
 
-/* The chassis and its panels. A panel has its label at the top left and
-   its content below. */
-.chassis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22em), 1fr));
-  gap: 2px;
-  padding: 2px;
-  border-radius: 6px;
+/* An LED: a light before its text, lit red when on. The text tells the
+   state. The light only shows it. */
+.led::before {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.4em;
+  border-radius: 50%;
   background: var(--line);
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.25);
 }
-.panel {
+.glass .led::before {
+  background: var(--ghost);
+  box-shadow: none;
+}
+.led.on::before,
+.glass .led.on::before {
+  background: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+}
+
+/* A module: the label at the top left, the value at the top right, the
+   control below. */
+.module {
+  grid-column: span 6;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-content: start;
-  gap: 0.75em;
+  align-items: baseline;
+  gap: 0.5em;
   padding: 0.75em;
   border-radius: 4px;
   background: var(--surface);
 }
-.panel > h2 {
-  margin: 0;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
+.module.span-2 {
+  grid-column: span 2;
 }
-.panel form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
+.module.span-3 {
+  grid-column: span 3;
+}
+.module.span-4 {
+  grid-column: span 4;
+}
+.module > h2 {
+  margin: 0;
+}
+.module > .value {
+  margin: 0;
+  justify-self: end;
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+.module > :not(h2, .value) {
+  grid-column: 1 / -1;
+}
+.module p {
+  margin: 0;
+}
+.module form {
+  display: grid;
   gap: 0.5em;
 }
+.module [data-passkey-note] {
+  color: var(--muted);
+}
 
-/* The key: raised, and it moves when pressed. */
+/* The key: raised, and it moves when pressed. In a module it fills its
+   cell of the grid. */
 .key {
   display: inline-grid;
   align-content: center;
@@ -244,41 +548,72 @@ code {
   opacity: 0.4;
   cursor: default;
 }
-.key:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 1px;
-}
-
-/* The LED: a light before its text. It is lit red when on. The text tells
-   the state. The light only shows it. */
-.led {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  font-family: var(--mono);
-}
-.led::before {
+/* A key that latches: an LED on top, lit red when on. */
+.key.latch::before {
   content: "";
-  flex: none;
-  width: 0.6em;
-  height: 0.6em;
-  border-radius: 50%;
+  justify-self: center;
+  width: 1.5em;
+  height: 3px;
+  margin-bottom: 0.3em;
+  border-radius: 2px;
   background: var(--line);
-  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.25);
 }
-.led.on::before {
+.key.latch[aria-pressed="true"] {
+  background: var(--surface);
+  box-shadow:
+    inset 0 2px 0 var(--line),
+    0 0 0 1px var(--line);
+  font-weight: 700;
+}
+.key.latch[aria-pressed="true"]::before {
   background: var(--accent);
   box-shadow: 0 0 4px var(--accent);
 }
+/* The LED shows the state, so the text of the state is for no page styles
+   only. */
+.latch-state {
+  display: none;
+}
+/* A row of keys: each key is a whole share of the row. */
+.keys {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 0.25em;
+}
+.keys > form {
+  display: grid;
+}
+/* Three keys to a row on a grid of 6. A last row of 2 keys shares the row
+   in halves. A last row of 1 key has the whole row. */
+.keys.grid {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.keys.grid > * {
+  grid-column: span 2;
+}
+.keys.grid > :nth-child(3n + 1):nth-last-child(2),
+.keys.grid > :nth-child(3n + 2):last-child {
+  grid-column: span 3;
+}
+.keys.grid > :nth-child(3n + 1):last-child {
+  grid-column: span 6;
+}
 
-/* The field: its label above, the control below. */
+/* The field: its label above, the control below. The control uses the
+   page font and fills its module. A textarea grows to show all of its
+   text. */
 .field {
   display: grid;
   gap: 0.25em;
 }
 .field :is(input, select, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   min-height: 2.25em;
-  padding: 0.25em 0.5em;
+  padding: 0.3em 0.5em;
   border: 0;
   border-radius: 3px;
   background: var(--bg);
@@ -287,83 +622,192 @@ code {
     inset 0 1px 0 var(--line),
     0 0 0 1px var(--line);
   font: inherit;
-  font-family: var(--mono);
 }
 .field textarea {
-  min-height: 6em;
+  field-sizing: content;
+  min-height: 2.25em;
   resize: vertical;
 }
-.field :is(input, select, textarea):focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 1px;
+.field textarea[rows="2"] {
+  min-height: 3.6em;
 }
 
-/* The table: silkscreen heads, rows with a seam between them. */
-.panel table {
+/* Under the device: help as plain text. */
+.help {
+  max-width: var(--device-width);
+  color: var(--muted);
+}
+.help p {
+  margin: 0 0 0.4em;
+}
+
+/* 4. The records: text. A heading, then a table, a list or a definition
+   list in the page font. */
+.records h2 {
+  margin: 0 0 0.4em;
+  font-size: 1.15em;
+  font-weight: 600;
+}
+.records p {
+  margin: 0;
+}
+.records table {
   width: 100%;
   border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
 }
-.panel :is(th, td) {
-  padding: 0.4em 0.5em 0.4em 0;
+.records :is(th, td) {
+  padding: 0.35em 1em 0.35em 0;
+  border-top: 1px solid var(--line);
   text-align: left;
   vertical-align: baseline;
+  overflow-wrap: anywhere;
 }
-.panel thead th,
-.panel dt,
-.panel legend {
+.records thead th {
+  border-top: 0;
+  color: var(--muted);
+  font-weight: 400;
+}
+.records tbody th {
+  font-weight: 500;
+}
+.records time {
+  white-space: nowrap;
+}
+.records ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+.records li + li {
+  margin-top: 0.3em;
+}
+.records dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35em 1.5em;
+  margin: 0;
+}
+.records dt {
+  color: var(--muted);
+}
+.records dd {
+  margin: 0;
+}
+/* A key in a record row is small. */
+.records .key {
+  min-height: 1.8em;
+  padding: 0.1em 0.6em;
+  font-size: 0.9em;
+}
+/* On a phone, each row of a table is a block of lines. Each line has its
+   column name before it. A row header is the first line, in bold. */
+@media (max-width: 760px) {
+  .records thead {
+    display: none;
+  }
+  .records :is(table, tbody, tr, th, td) {
+    display: block;
+  }
+  .records tr {
+    padding: 0.4em 0;
+    border-top: 1px solid var(--line);
+  }
+  .records tbody :is(th, td) {
+    padding: 0.1em 0;
+    border: 0;
+  }
+  .records td[data-label] {
+    display: grid;
+    grid-template-columns: 6.5em minmax(0, 1fr);
+    align-items: baseline;
+  }
+  .records td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+  }
+  .records td[data-label] > .key {
+    justify-self: start;
+  }
+}
+
+/* 5. The footer: the page links, then the steppers, as the small steppers
+   under the device of autosam. */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75em 1.5em;
+  margin-top: 2.5em;
+}
+.foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1em;
+}
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+}
+.step,
+.step-value {
+  display: inline-grid;
+  align-content: center;
+  min-height: 2em;
+  padding: 0.2em 0.6em;
+  border: 0;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow:
+    inset 0 -2px 0 var(--line),
+    0 0 0 1px var(--line);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.1;
+  text-decoration: none;
+}
+.step {
+  cursor: pointer;
+}
+.step:hover {
+  background: var(--bg);
+}
+.step:active {
+  transform: translateY(1px);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.step-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.step-value small {
   font-family: var(--mono);
   font-size: 0.75em;
-  font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.panel tbody tr {
-  border-top: 1px solid var(--line);
-}
-.panel tbody th {
-  font-weight: 500;
-}
-/* A date in a table does not break at its hyphens. */
-.panel td time {
-  white-space: nowrap;
-}
 
-/* A list of details: silkscreen terms on the left, values on the right. */
-.panel dl {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  align-items: baseline;
-  gap: 0.4em 1em;
-  margin: 0;
-}
-.panel dd {
-  margin: 0;
-}
-
-/* A fieldset groups the fields of a long form and fills the row. A field
-   with a textarea also fills the row, so a note has room on a phone. */
-.panel fieldset {
-  display: grid;
-  flex: 1 1 100%;
-  gap: 0.5em;
-  margin: 0;
-  padding: 0.5em 0.75em 0.75em;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-}
-.panel legend {
-  padding: 0 0.25em;
-}
-.panel form .field:has(textarea) {
-  flex: 1 1 100%;
+/* A class that sets `display` must not show a `hidden` element. These
+   selectors are more specific than the classes. */
+.key[hidden],
+.module form[hidden] {
+  display: none;
 }
 
 /* Touch targets are at least 44px high on a phone and under a finger, as
    in REQ-DENSE-006 of autosam. */
 @media (max-width: 760px), (pointer: coarse) {
   .key,
+  .step,
+  .step-value,
   .field :is(input, select) {
+    min-height: 44px;
+  }
+  .records .key {
     min-height: 44px;
   }
 }

@@ -1,9 +1,11 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { hash, now, safeNext, startSession } from '../../auth';
-import { renderPage } from '../../render';
+import { type PageParts, renderPage } from '../../render';
+import { Device } from '../../ui/Device';
 import { Key } from '../../ui/Key';
-import { Panel } from '../../ui/Panel';
+import { Lcd } from '../../ui/Lcd';
+import { Module } from '../../ui/Module';
 
 interface VerifyBody {
   token?: string;
@@ -11,11 +13,11 @@ interface VerifyBody {
 }
 
 /**
- * The page that the email link opens. A GET only shows the "Sign in" button.
- * The button sends the POST that spends the token. Email scanners open every
+ * The page that the email link opens. A GET only shows the "Sign in" key.
+ * The key sends the POST that spends the token. Email scanners open every
  * link, so a GET must never sign in.
  */
-export const VerifyPage = ({
+export const verifyPage = ({
   token,
   next,
   error,
@@ -23,26 +25,34 @@ export const VerifyPage = ({
   token: string;
   next: string;
   error?: string;
-}) => (
-  <Panel label="Email link">
-    {error && <p role="alert">{error}</p>}
-    {token && !error ? (
-      <form method="post" action="/login/verify">
-        <input type="hidden" name="token" value={token} />
-        <input type="hidden" name="next" value={next} />
-        <p>
-          <Key>Sign in</Key>
-        </p>
-      </form>
-    ) : (
+}): PageParts => {
+  const ready = token !== '' && !error;
+  return {
+    title: 'Sign in',
+    intro: ready ? 'Press the key to sign in on this device.' : undefined,
+    device: (
+      <Device>
+        <Lcd alert={error} />
+        {ready && (
+          <Module label="Email link">
+            <form method="post" action="/login/verify">
+              <input type="hidden" name="token" value={token} />
+              <input type="hidden" name="next" value={next} />
+              <Key>Sign in</Key>
+            </form>
+          </Module>
+        )}
+      </Device>
+    ),
+    help: ready ? undefined : (
       <p>
         <a href={`/login?${new URLSearchParams({ next })}`}>
           Send a new sign-in email
         </a>
       </p>
-    )}
-  </Panel>
-);
+    ),
+  };
+};
 
 /**
  * Spend the login token with this raw value. Returns the person id, or null
@@ -66,19 +76,16 @@ export const loginVerifyRoute = (app: FastifyInstance, db: Database) => {
     '/login/verify',
     async (request, reply) => {
       const token = String(request.query.token ?? '');
-      return reply
-        .type('text/html; charset=utf-8')
-        .send(
-          renderPage(
-            'Sign in',
-            <VerifyPage
-              token={token}
-              next={safeNext(request.query.next)}
-              error={token ? undefined : 'This link has no sign-in token.'}
-            />,
-            request,
-          ),
-        );
+      return reply.type('text/html; charset=utf-8').send(
+        renderPage(
+          request,
+          verifyPage({
+            token,
+            next: safeNext(request.query.next),
+            error: token ? undefined : 'This link has no sign-in token.',
+          }),
+        ),
+      );
     },
   );
 
@@ -92,13 +99,12 @@ export const loginVerifyRoute = (app: FastifyInstance, db: Database) => {
         .type('text/html; charset=utf-8')
         .send(
           renderPage(
-            'Sign in',
-            <VerifyPage
-              token=""
-              next={next}
-              error="This link is used or expired."
-            />,
             request,
+            verifyPage({
+              token: '',
+              next,
+              error: 'This link is used or expired.',
+            }),
           ),
         );
     }

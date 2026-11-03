@@ -11,10 +11,12 @@ import {
   safeNext,
 } from '../auth';
 import { sendEmail } from '../email';
-import { renderPage } from '../render';
+import { type PageParts, renderPage } from '../render';
+import { Device } from '../ui/Device';
 import { Field } from '../ui/Field';
 import { Key } from '../ui/Key';
-import { Panel } from '../ui/Panel';
+import { Lcd } from '../ui/Lcd';
+import { Module } from '../ui/Module';
 import { PasskeySignIn } from '../ui/Passkey';
 
 interface LoginBody {
@@ -22,8 +24,12 @@ interface LoginBody {
   next?: string;
 }
 
-/** The sign-in page: the email form, and the passkey sign-in next to it. */
-export const LoginPage = ({
+/**
+ * The sign-in page: a small device with the email module and the passkey
+ * module. With no JavaScript, the passkey module shows its note, and the
+ * email form still works (REQ-CRM-BARE-001).
+ */
+export const loginPage = ({
   next,
   email = '',
   error,
@@ -31,51 +37,38 @@ export const LoginPage = ({
   next: string;
   email?: string;
   error?: string;
-}) => (
-  <>
-    <EmailForm next={next} email={email} error={error} />
-    {/* With no JavaScript, the note shows, and the email form still works
-        (REQ-CRM-BARE-001). */}
-    <Panel label="Passkey">
-      <PasskeySignIn
-        next={next}
-        note="Passkeys need JavaScript. Use the email form, or turn on JavaScript."
-      />
-    </Panel>
-  </>
-);
-
-/** The email form. One field: the email address. */
-const EmailForm = ({
-  next,
-  email,
-  error,
-}: {
-  next: string;
-  email: string;
-  error?: string;
-}) => (
-  <Panel label="Email link">
-    {error && <p role="alert">{error}</p>}
-    <form method="post" action="/login">
-      <input type="hidden" name="next" value={next} />
-      <p>
-        <Field label="Email address">
-          <input
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            defaultValue={email}
-          />
-        </Field>
-      </p>
-      <p>
-        <Key>Email me a sign-in link</Key>
-      </p>
-    </form>
-  </Panel>
-);
+}): PageParts => ({
+  title: 'Sign in',
+  intro: 'Sign in with a link by email, or with a passkey.',
+  device: (
+    <Device>
+      <Lcd alert={error} />
+      <Module label="Email link">
+        <form method="post" action="/login">
+          <input type="hidden" name="next" value={next} />
+          <Field label="Email address">
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              defaultValue={email}
+            />
+          </Field>
+          <Key>Email me a sign-in link</Key>
+        </form>
+      </Module>
+      <Module label="Passkey">
+        <PasskeySignIn
+          next={next}
+          note="Passkeys need JavaScript. Use the email form, or turn on JavaScript."
+        />
+      </Module>
+    </Device>
+  ),
+  help: `The email has a link and a 6-digit code. Each one works one time, for ${LOGIN_TOKEN_MINUTES} minutes.`,
+  entries: ['passkeys'],
+});
 
 /**
  * Make a login token for the person with `email`, and email the link and the
@@ -126,12 +119,7 @@ export const loginRoute = (
     reply
       .type('text/html; charset=utf-8')
       .send(
-        renderPage(
-          'Sign in',
-          <LoginPage next={safeNext(request.query.next)} />,
-          request,
-          ['passkeys'],
-        ),
+        renderPage(request, loginPage({ next: safeNext(request.query.next) })),
       ),
   );
 
@@ -144,10 +132,8 @@ export const loginRoute = (
         .type('text/html; charset=utf-8')
         .send(
           renderPage(
-            'Sign in',
-            <LoginPage next={next} error="Type your email address." />,
             request,
-            ['passkeys'],
+            loginPage({ next, error: 'Type your email address.' }),
           ),
         );
     }
@@ -157,14 +143,12 @@ export const loginRoute = (
         .type('text/html; charset=utf-8')
         .send(
           renderPage(
-            'Sign in',
-            <LoginPage
-              next={next}
-              email={email}
-              error={`Too many attempts. Wait ${LOGIN_TOKEN_MINUTES} minutes, then try again.`}
-            />,
             request,
-            ['passkeys'],
+            loginPage({
+              next,
+              email,
+              error: `Too many attempts. Wait ${LOGIN_TOKEN_MINUTES} minutes, then try again.`,
+            }),
           ),
         );
     }

@@ -22,7 +22,7 @@ afterEach(async () => {
   await close();
 });
 
-/** The names in the result table, in order. */
+/** The names in the result menu of the LCD, in order. */
 const names = async (url: string) => {
   const response = await app.inject({
     method: 'GET',
@@ -32,7 +32,7 @@ const names = async (url: string) => {
   expect(response.statusCode).toBe(200);
   return [
     ...response.body.matchAll(
-      /<th scope="row"><a href="\/[^"]+">([^<]+)<\/a>/g,
+      /<li><a href="\/[^"]+"><span class="name">([^<]+)<\/span>/g,
     ),
   ].map((m) => m[1]);
 };
@@ -48,7 +48,7 @@ describe('GET /orgs', () => {
       await app.inject({ method: 'GET', url: '/orgs', headers: { cookie } })
     ).body;
     expect(html).toContain('<form action="/orgs" method="get">');
-    expect(html).toContain('3 organisations.');
+    expect(html).toContain('<dt>Organisations</dt><dd>3</dd>');
   });
 
   test('searches the name, with no regard to case', async () => {

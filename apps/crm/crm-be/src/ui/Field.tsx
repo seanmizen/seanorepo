@@ -4,7 +4,8 @@ import { Label } from './Label';
 /**
  * A field: a silkscreen label above one control (`<input>`, `<select>` or
  * `<textarea>`). The `<label>` holds the control, so the label names it with
- * no `id`.
+ * no `id`. The control uses the page font and fills its module. For a text
+ * that can be long, use a `<textarea>`: it grows to show all of its value.
  */
 export const Field = ({
   label,

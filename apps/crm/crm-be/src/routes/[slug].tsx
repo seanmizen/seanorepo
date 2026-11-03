@@ -1,17 +1,16 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import {
-  findOrg,
-  formatTime,
-  type Org,
-  OUTCOMES,
-  type Outcome,
-  STAGES,
-} from '../org';
-import { renderPage } from '../render';
+import { dueWords, today } from '../dates';
+import { findOrg, type Org, OUTCOMES, type Outcome, STAGES } from '../org';
+import { type PageParts, renderPage } from '../render';
+import { Device } from '../ui/Device';
 import { Field } from '../ui/Field';
-import { Key } from '../ui/Key';
-import { Panel } from '../ui/Panel';
+import { Key, Keys } from '../ui/Key';
+import { LatchKey } from '../ui/LatchKey';
+import { Lcd } from '../ui/Lcd';
+import { Module } from '../ui/Module';
+import { Records, RecordTable } from '../ui/Records';
+import { When } from '../ui/When';
 
 interface Contact {
   id: string;
@@ -34,21 +33,24 @@ interface Note {
   created_at: string;
 }
 
-/** A time as text that a person reads, in a `<time>` element. */
-const Time = ({ iso }: { iso: string }) => (
-  <time dateTime={iso}>{formatTime(iso)}</time>
-);
-
 /**
- * The organisation page: its details, the forms that log a visit, change the
- * stage and next action, and add a note, then the visits, notes and
- * contacts, newest first.
+ * The organisation page.
+ *
+ * - The LCD: the name, the stage, the next action and its due date, and
+ *   the last visit. An error from a form shows first.
+ * - The modules: log a visit, the stage, the next action, add a note.
+ * - The records: the contacts, the visits, the notes and the details.
  *
  * To log a visit takes at most 3 taps. The note is optional: tap the field
  * and type it. Then tap one outcome key. Each outcome key also saves, so a
  * visit with no note is 1 tap, and a visit with a note is 2 taps.
+ *
+ * Each stage key saves the stage at once. Its form also sends the next
+ * action as it is, because `POST /<slug>/stage` sets all three. The next
+ * action has its own form, so the Enter key in its date field saves it
+ * and does not change the stage.
  */
-export const OrgPage = ({
+export const orgPage = ({
   org,
   contacts,
   visits,
@@ -60,167 +62,207 @@ export const OrgPage = ({
   visits: Visit[];
   notes: Note[];
   error?: string;
-}) => (
-  <>
-    {error && (
-      <Panel label="Error">
-        <p role="alert">{error}</p>
-      </Panel>
-    )}
-    <Panel label="Details">
-      <dl>
-        <dt>Stage</dt>
-        <dd>{STAGES[org.stage]}</dd>
-        <dt>Next action</dt>
-        <dd>
-          {org.next_action || 'None'}
-          {org.next_action_on && (
-            <>
-              {' on '}
-              <time dateTime={org.next_action_on}>{org.next_action_on}</time>
-            </>
+}): PageParts => {
+  const last = visits[0];
+  return {
+    title: org.name,
+    device: (
+      <Device>
+        <Lcd
+          alert={error}
+          rows={[
+            { label: 'Name', value: org.name },
+            { label: 'Stage', value: STAGES[org.stage] },
+            { label: 'Next action', value: org.next_action || 'None' },
+            org.next_action_on
+              ? {
+                  label: 'Due',
+                  value: (
+                    <>
+                      <When value={org.next_action_on} /> ·{' '}
+                      {dueWords(org.next_action_on)}
+                    </>
+                  ),
+                  led: org.next_action_on < today(),
+                }
+              : { label: 'Due', value: 'None' },
+            {
+              label: 'Last visit',
+              value: last ? (
+                <>
+                  <When value={last.at} time={false} /> ·{' '}
+                  {OUTCOMES[last.outcome]}
+                </>
+              ) : (
+                'None'
+              ),
+            },
+          ]}
+        />
+        <Module label="Log a visit">
+          <form method="post" action={`/${org.slug}/visits`}>
+            <Field label="Note (optional)">
+              <textarea name="note" rows={2} />
+            </Field>
+            <Keys grid>
+              {Object.entries(OUTCOMES).map(([value, text]) => (
+                <Key key={value} name="outcome" value={value}>
+                  {text}
+                </Key>
+              ))}
+            </Keys>
+          </form>
+        </Module>
+        <Module label="Stage" value={STAGES[org.stage]}>
+          <form method="post" action={`/${org.slug}/stage`}>
+            <input
+              type="hidden"
+              name="next_action"
+              value={org.next_action ?? ''}
+            />
+            <input
+              type="hidden"
+              name="next_action_on"
+              value={org.next_action_on ?? ''}
+            />
+            <Keys grid>
+              {Object.entries(STAGES).map(([value, text]) => (
+                <LatchKey
+                  key={value}
+                  name="stage"
+                  value={value}
+                  on={value === org.stage}
+                >
+                  {text}
+                </LatchKey>
+              ))}
+            </Keys>
+          </form>
+        </Module>
+        <Module label="Next action">
+          <form method="post" action={`/${org.slug}/stage`}>
+            <input type="hidden" name="stage" value={org.stage} />
+            <Field label="Action">
+              <textarea
+                name="next_action"
+                rows={1}
+                defaultValue={org.next_action ?? ''}
+              />
+            </Field>
+            <Field label="Due">
+              <input
+                name="next_action_on"
+                type="date"
+                defaultValue={org.next_action_on ?? ''}
+              />
+            </Field>
+            <Key>Save</Key>
+          </form>
+        </Module>
+        <Module label="Add a note">
+          <form method="post" action={`/${org.slug}/notes`}>
+            <Field label="Note">
+              <textarea name="body" rows={2} required />
+            </Field>
+            <Key>Add note</Key>
+          </form>
+        </Module>
+      </Device>
+    ),
+    help: (
+      <>
+        <p>
+          Each outcome key saves the visit. "Do not knock" also sets the stage
+          to Lost.
+        </p>
+        <p>Each stage key saves the stage at once.</p>
+      </>
+    ),
+    records: (
+      <>
+        <Records title="Contacts">
+          {contacts.length === 0 ? (
+            <p>No contacts.</p>
+          ) : (
+            <RecordTable
+              head={['Name', 'Phone', 'Email', 'Role']}
+              rowHeader
+              rows={contacts.map((contact) => ({
+                key: contact.id,
+                cells: [
+                  contact.name || 'No name',
+                  contact.phone ? (
+                    <a key="phone" href={`tel:${contact.phone}`}>
+                      {contact.phone}
+                    </a>
+                  ) : (
+                    'None'
+                  ),
+                  contact.email ? (
+                    <a key="email" href={`mailto:${contact.email}`}>
+                      {contact.email}
+                    </a>
+                  ) : (
+                    'None'
+                  ),
+                  contact.role,
+                ],
+              }))}
+            />
           )}
-        </dd>
-        <dt>Address</dt>
-        <dd>
-          {[org.address_line_1, org.address_line_2, org.postcode]
-            .filter(Boolean)
-            .join(', ') || 'None'}
-        </dd>
-        <dt>Source</dt>
-        <dd>{org.source || 'None'}</dd>
-        <dt>Lawful basis</dt>
-        <dd>{org.lawful_basis?.replaceAll('_', ' ') || 'None'}</dd>
-        <dt>Added</dt>
-        <dd>
-          <Time iso={org.created_at} />
-        </dd>
-      </dl>
-    </Panel>
-    <Panel label="Log a visit">
-      <form method="post" action={`/${org.slug}/visits`}>
-        <Field label="Note (optional)">
-          <textarea name="note" rows={2} />
-        </Field>
-        {Object.entries(OUTCOMES).map(([value, text]) => (
-          <Key key={value} name="outcome" value={value}>
-            {text}
-          </Key>
-        ))}
-      </form>
-      <p>
-        Each outcome key saves the visit. "Do not knock" sets the stage to lost.
-      </p>
-    </Panel>
-    <Panel label="Stage and next action">
-      <form method="post" action={`/${org.slug}/stage`}>
-        <Field label="Stage">
-          <select name="stage" defaultValue={org.stage}>
-            {Object.entries(STAGES).map(([value, text]) => (
-              <option key={value} value={value}>
-                {text}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Next action">
-          <input name="next_action" defaultValue={org.next_action ?? ''} />
-        </Field>
-        <Field label="On">
-          <input
-            name="next_action_on"
-            type="date"
-            defaultValue={org.next_action_on ?? ''}
-          />
-        </Field>
-        <Key>Save</Key>
-      </form>
-    </Panel>
-    <Panel label="Visits">
-      {visits.length === 0 ? (
-        <p>No visits.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">When</th>
-              <th scope="col">Outcome</th>
-              <th scope="col">Note</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visits.map((visit) => (
-              <tr key={visit.id}>
-                <td>
-                  <Time iso={visit.at} />
-                </td>
-                <td>{OUTCOMES[visit.outcome]}</td>
-                <td>{visit.note || 'None'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Panel>
-    <Panel label="Notes">
-      <form method="post" action={`/${org.slug}/notes`}>
-        <Field label="Note">
-          <textarea name="body" rows={2} required />
-        </Field>
-        <Key>Add note</Key>
-      </form>
-      {notes.length === 0 ? (
-        <p>No notes.</p>
-      ) : (
-        <ul>
-          {notes.map((note) => (
-            <li key={note.id}>
-              <Time iso={note.created_at} />: {note.body}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
-    <Panel label="Contacts">
-      {contacts.length === 0 ? (
-        <p>No contacts.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Phone</th>
-              <th scope="col">Email</th>
-              <th scope="col">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contacts.map((contact) => (
-              <tr key={contact.id}>
-                <th scope="row">{contact.name || 'No name'}</th>
-                <td>
-                  {contact.phone ? (
-                    <a href={`tel:${contact.phone}`}>{contact.phone}</a>
-                  ) : (
-                    'None'
-                  )}
-                </td>
-                <td>
-                  {contact.email ? (
-                    <a href={`mailto:${contact.email}`}>{contact.email}</a>
-                  ) : (
-                    'None'
-                  )}
-                </td>
-                <td>{contact.role}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Panel>
-  </>
-);
+        </Records>
+        <Records title="Visits">
+          {visits.length === 0 ? (
+            <p>No visits.</p>
+          ) : (
+            <RecordTable
+              head={['When', 'Outcome', 'Note']}
+              rows={visits.map((visit) => ({
+                key: visit.id,
+                cells: [
+                  <When key="when" value={visit.at} />,
+                  OUTCOMES[visit.outcome],
+                  visit.note || 'None',
+                ],
+              }))}
+            />
+          )}
+        </Records>
+        <Records title="Notes">
+          {notes.length === 0 ? (
+            <p>No notes.</p>
+          ) : (
+            <ul>
+              {notes.map((note) => (
+                <li key={note.id}>
+                  <When value={note.created_at} />: {note.body}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Records>
+        <Records title="Details">
+          <dl>
+            <dt>Address</dt>
+            <dd>
+              {[org.address_line_1, org.address_line_2, org.postcode]
+                .filter(Boolean)
+                .join(', ') || 'None'}
+            </dd>
+            <dt>Source</dt>
+            <dd>{org.source || 'None'}</dd>
+            <dt>Lawful basis</dt>
+            <dd>{org.lawful_basis?.replaceAll('_', ' ') || 'None'}</dd>
+            <dt>Added</dt>
+            <dd>
+              <When value={org.created_at} />
+            </dd>
+          </dl>
+        </Records>
+      </>
+    ),
+  };
+};
 
 /** Send the 404 page for a slug that no organisation has. */
 export const sendNotFound = (request: FastifyRequest, reply: FastifyReply) =>
@@ -228,16 +270,10 @@ export const sendNotFound = (request: FastifyRequest, reply: FastifyReply) =>
     .code(404)
     .type('text/html; charset=utf-8')
     .send(
-      renderPage(
-        'Not found',
-        <Panel label="Not found">
-          <p>No organisation has this address.</p>
-          <p>
-            <a href="/orgs">All organisations</a>
-          </p>
-        </Panel>,
-        request,
-      ),
+      renderPage(request, {
+        title: 'Not found',
+        intro: 'No organisation has this address.',
+      }),
     );
 
 /**
@@ -272,17 +308,7 @@ export const sendOrgPage = (
     .code(error ? 400 : 200)
     .type('text/html; charset=utf-8')
     .send(
-      renderPage(
-        org.name,
-        <OrgPage
-          org={org}
-          contacts={contacts}
-          visits={visits}
-          notes={notes}
-          error={error}
-        />,
-        request,
-      ),
+      renderPage(request, orgPage({ org, contacts, visits, notes, error })),
     );
 };
 

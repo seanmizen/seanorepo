@@ -1313,7 +1313,7 @@ fi
 #
 # What it cannot prove: a client that connects from outside the LAN. That is a
 # demonstration on the real machine. A VM is never logged in to the tailnet,
-# so the two login checks fail there by design: the role is not complete
+# so the three login checks fail there by design: the role is not complete
 # until the owner approves the machine.
 echo
 echo "== vpn: tailscale (REQ-NETWORK-006) =="

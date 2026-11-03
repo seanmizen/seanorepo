@@ -73,10 +73,11 @@ describe('POST /<slug>/stage', () => {
       await app.inject({ method: 'GET', url: '/acme', headers: { cookie } })
     ).body;
     expect(html).toContain(
-      '<option value="quoted" selected="">Quoted</option>',
+      '<button type="submit" class="key latch" aria-pressed="true" value="quoted" name="stage">Quoted<span class="latch-state" aria-hidden="true"> (current)</span></button>',
     );
+    expect(html).toContain('<dt>Next action</dt><dd>Chase quote</dd>');
     expect(html).toContain(
-      'Chase quote on <time dateTime="2030-01-02">2030-01-02</time>',
+      '<time dateTime="2030-01-02T00:00:00+00:00" title="2030-Jan-02 00:00:00">2030-Jan-02</time>',
     );
   });
 
