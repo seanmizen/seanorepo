@@ -48,9 +48,6 @@ Two pages are open to everyone:
   notice is an ordinary PR. Change `PRIVACY_UPDATED` in that file with
   the text: the page shows it as "Last updated". The demo shows the same
   notice, and one line that all the demo data is fictional.
-  `seanmizen.com/privacy` sends a visitor here with a 302 (the redirect
-  rule in `infra/cloudflare/seanmizen_com.tf`), for a short URL on
-  printed cards.
 
 `GET /api/health` returns `{ "ok": true }`. The design is in
 [docs/001-guiding-design.md](docs/001-guiding-design.md).

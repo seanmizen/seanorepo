@@ -198,38 +198,3 @@ resource "cloudflare_dns_record" "seanmizen_com_www_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
-# The redirect rules of the zone (the phase http_request_dynamic_redirect).
-# Cloudflare allows one ruleset for each phase in a zone, so each new
-# redirect is one more rule in this list.
-#
-# seanmizen.com/privacy is the short URL of the crm privacy notice, for
-# printed cards. The status is 302, so the target can change later.
-#
-# If the apply says that a ruleset for this phase exists, a redirect from
-# the dashboard (for example hue.seanmizen.com) is in it. Copy each of its
-# rules into this list, add an import block (ID
-# "zones/<zone id>/<ruleset id>"), then apply again.
-resource "cloudflare_ruleset" "seanmizen_com_redirects" {
-  zone_id = cloudflare_zone.seanmizen_com.id
-  name    = "Redirects"
-  kind    = "zone"
-  phase   = "http_request_dynamic_redirect"
-  rules = [
-    {
-      ref         = "privacy_to_crm"
-      description = "seanmizen.com/privacy to the crm privacy notice"
-      expression  = "(http.host in {\"seanmizen.com\" \"www.seanmizen.com\"} and http.request.uri.path eq \"/privacy\")"
-      action      = "redirect"
-      action_parameters = {
-        from_value = {
-          status_code           = 302
-          preserve_query_string = false
-          target_url = {
-            value = "https://crm.seanmizen.com/privacy"
-          }
-        }
-      }
-    },
-  ]
-}
-
