@@ -186,10 +186,10 @@ time {
   body {
     padding: 1px 1px 1rem;
   }
-  :is(.title, .links, .intro, .help, .foot) {
+  :is(.demo, .title, .links, .intro, .help, .foot) {
     padding-inline: 0.6rem;
   }
-  .title {
+  body > :first-child {
     padding-top: 0.6rem;
   }
 }
@@ -209,6 +209,11 @@ time {
   body > * {
     grid-column: 1 / -1;
   }
+}
+
+/* The demo line (ui/DemoBanner.tsx): plain text over the path title. */
+.demo {
+  margin: 0 0 0.5em;
 }
 
 /* A text link: the ink color with an underline, in each state. */
