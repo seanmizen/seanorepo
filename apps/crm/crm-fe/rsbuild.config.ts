@@ -10,7 +10,8 @@ export default defineConfig({
   source: {
     entry: {
       main: ['./src/main.ts', './src/theme.css'],
-      // Only the sign-in page and the passkeys page load this entry.
+      // Only the pages with a passkey control load this entry: /login,
+      // /account/passkeys and the 403 page of an admin route.
       passkeys: './src/passkeys.ts',
     },
   },

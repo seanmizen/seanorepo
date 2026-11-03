@@ -15,31 +15,12 @@ import { renderPage } from '../render';
 import { Field } from '../ui/Field';
 import { Key } from '../ui/Key';
 import { Panel } from '../ui/Panel';
+import { PasskeySignIn } from '../ui/Passkey';
 
 interface LoginBody {
   email?: string;
   next?: string;
 }
-
-/**
- * The passkey sign-in. The button needs JavaScript (WebAuthn), so it is
- * `hidden` until `crm-fe/src/passkeys.ts` shows it. With no JavaScript the
- * note shows, and the email form still works. This is the one exception to
- * REQ-CRM-BARE-001.
- */
-export const PasskeySignIn = ({ next }: { next: string }) => (
-  <Panel label="Passkey">
-    <p data-passkey-note="">
-      Passkeys need JavaScript. Use the email form, or turn on JavaScript.
-    </p>
-    <p role="alert" hidden data-passkey-error="" />
-    <p>
-      <Key type="button" hidden data-passkey="sign-in" data-next={next}>
-        Sign in with a passkey
-      </Key>
-    </p>
-  </Panel>
-);
 
 /** The sign-in page: the email form, and the passkey sign-in next to it. */
 export const LoginPage = ({
@@ -53,7 +34,14 @@ export const LoginPage = ({
 }) => (
   <>
     <EmailForm next={next} email={email} error={error} />
-    <PasskeySignIn next={next} />
+    {/* With no JavaScript, the note shows, and the email form still works
+        (REQ-CRM-BARE-001). */}
+    <Panel label="Passkey">
+      <PasskeySignIn
+        next={next}
+        note="Passkeys need JavaScript. Use the email form, or turn on JavaScript."
+      />
+    </Panel>
   </>
 );
 

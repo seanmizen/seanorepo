@@ -140,6 +140,19 @@ export const postJson = (
   });
 
 /**
+ * The `cookie` header value after `response`: the new session cookie if the
+ * response set one, else `cookie`. The first passkey of a person gives the
+ * session a new token (`upgradeSession`).
+ */
+export const cookieAfter = (
+  response: Awaited<ReturnType<typeof postJson>>,
+  cookie: string,
+) => {
+  const set = response.cookies.find((c) => c.name === SESSION_COOKIE);
+  return set ? `${SESSION_COOKIE}=${set.value}` : cookie;
+};
+
+/**
  * Add a passkey with `name` for the session in `cookie`, through the real
  * WebAuthn routes. Returns the last response: 200, or the error.
  */
@@ -148,6 +161,7 @@ export const addTestPasskey = async (
   cookie: string,
   authenticator: TestAuthenticator,
   name = 'Test key',
+  next?: string,
 ) => {
   const options = await postJson(
     app,
@@ -159,29 +173,32 @@ export const addTestPasskey = async (
   return postJson(
     app,
     '/api/passkeys/register',
-    { name, response: authenticator.register(options.json()) },
+    { name, response: authenticator.register(options.json()), next },
     cookie,
   );
 };
 
 /**
- * Sign in with `authenticator` through the real WebAuthn routes. Returns the
- * last response and the `cookie` header value (empty when the sign-in
- * failed).
+ * Sign in with `authenticator` through the real WebAuthn routes, from the
+ * session in `cookie` if there is one. Returns the last response and the
+ * `cookie` header value (empty when the sign-in failed).
  */
 export const signInWithPasskey = async (
   app: App,
   authenticator: TestAuthenticator,
   next?: string,
+  cookie?: string,
 ) => {
   const options = await postJson(app, '/api/passkeys/sign-in-options', {});
-  const response = await postJson(app, '/api/passkeys/sign-in', {
-    response: authenticator.signIn(options.json()),
-    next,
-  });
-  const cookie = response.cookies.find((c) => c.name === SESSION_COOKIE);
+  const response = await postJson(
+    app,
+    '/api/passkeys/sign-in',
+    { response: authenticator.signIn(options.json()), next },
+    cookie,
+  );
+  const set = response.cookies.find((c) => c.name === SESSION_COOKIE);
   return {
     response,
-    cookie: cookie ? `${SESSION_COOKIE}=${cookie.value}` : '',
+    cookie: set ? `${SESSION_COOKIE}=${set.value}` : '',
   };
 };

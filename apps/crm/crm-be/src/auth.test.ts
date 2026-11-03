@@ -248,6 +248,12 @@ describe('the session check', () => {
     expect(bad.statusCode).toBe(303);
   });
 
+  test('/favicon.ico is open and is never a redirect', async () => {
+    const icon = await app.inject({ method: 'GET', url: '/favicon.ico' });
+    expect(icon.statusCode).toBe(204);
+    expect(icon.headers.location).toBeUndefined();
+  });
+
   test('a POST from a different origin gets 403', async () => {
     const cookie = await signIn(app, db, 'a@example.com');
     const response = await app.inject({

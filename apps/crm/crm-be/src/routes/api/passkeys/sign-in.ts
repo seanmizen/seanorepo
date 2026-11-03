@@ -11,7 +11,8 @@ import { verifySignIn } from '../../../passkeys';
 /**
  * `POST /api/passkeys/sign-in`. Open to a signed-out visitor. Verifies the
  * response from `startAuthentication()`, starts a passkey session, and
- * returns the path to open.
+ * returns the path to open. The passkey session replaces the current session
+ * (for example an email session), if there is one (see `startSession`).
  */
 export const passkeySignInRoute = (app: FastifyInstance, db: Database) => {
   app.post<{ Body: Partial<PasskeySignInRequest> }>(

@@ -43,11 +43,14 @@ yarn workspace crm-be test
 - Each write to an organisation, a person, a membership, a visit or a note
   adds an `audit_log` row. The actor is the id of the signed-in person.
 - `crm-be/src/ui/` holds the parts of the panel that pages share: `Panel`,
-  `Key`, `Led`, `Field` and `Label`.
+  `Key`, `Led`, `Field` and `Label`. `ui/Passkey.tsx` holds the two passkey
+  controls (add a passkey, sign in with a passkey), and `ui/AdminOnly.tsx`
+  holds the 403 page of an admin route.
 - `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`
   and `src/passkeys.ts`. It has no React. Rsbuild builds them to
-  `crm-fe/dist` with hashed names and a manifest. Only `/login` and
-  `/account/passkeys` load the `passkeys` entry.
+  `crm-fe/dist` with hashed names and a manifest. Only the pages with a
+  passkey control load the `passkeys` entry: `/login`, `/account/passkeys`
+  and the 403 page of an admin route.
 - `shared` holds the API types.
 
 `yarn workspace crm start` builds crm-fe once. Then Rsbuild builds crm-fe in
@@ -84,13 +87,15 @@ missing. To add other people, add `person` rows.
    sends a POST. A GET never signs in, because email scanners open links.
 3. `/login/code` takes the email and the code.
 
-4. `/login` also has "Sign in with a passkey". It needs JavaScript.
+4. `/login` also has "Sign in with a passkey". It needs JavaScript. A
+   passkey sign-in replaces the current session, if there is one: crm-be
+   deletes its row.
 
 A session is a random cookie (`crm_session`) that lasts 90 days.
 `/account/sessions` lists the sessions, revokes one, or revokes all others,
-and has the "Sign out" button. Each page except the sign-in pages and
-`/api/health` needs a session. A signed-out visitor goes to
-`/login?next=<path>`.
+and has the "Sign out" button. Each page except the sign-in pages,
+`/api/health` and `/favicon.ico` needs a session. A signed-out visitor goes
+to `/login?next=<path>`. `/favicon.ico` returns 204: the crm has no icon.
 
 ## Passkeys and the admin
 
@@ -101,12 +106,25 @@ started: `email`, `passkey` or `recovery`.
 
 - **Admin routes.** A route with `config: { admin: true }` in its Fastify
   route options is an admin route. Only the person for `CRM_ADMIN_EMAIL`, in
-  a `passkey` session, opens it. Each other session gets a 403 page. An
-  email session of the admin goes to `/account/passkeys` while the admin
-  has no passkey.
+  a `passkey` session, opens it. Each other session gets a 403 page at the
+  same URL, with no redirect (`ui/AdminOnly.tsx`). The page tells the
+  person why:
+  - The admin with no passkey: "This page needs a passkey. Add one to this
+    device." The page holds the add-passkey form.
+  - The admin with a passkey, in an email session: "This page needs a
+    passkey sign-in." The page holds the "Sign in with a passkey" key.
+  - Each other person: the page is for the admin only.
+
+  After the passkey step, the script opens the same URL again.
 - **Passkey changes.** The admin adds or deletes a passkey only in a
   `passkey` session. The exception is the first passkey: while the admin
   has none, an email or recovery session can add one.
+- **The first passkey opens the admin pages.** When a person adds their
+  first passkey, the session becomes a `passkey` session
+  (`upgradeSession` in `auth.ts`). The person does not sign out and sign in
+  again. The WebAuthn registration with user verification proves the
+  authenticator, and the session was already trusted to add the first
+  passkey. The session gets a new token, and lasts 90 days from then.
 - **Recovery.** On the box, run this in crm-be:
 
   ```bash
@@ -116,9 +134,11 @@ started: `email`, `passkey` or `recovery`.
   It deletes the passkeys of that person, revokes all their sessions, and
   prints an enrolment link to `/login/recover`. The link works one time,
   for 15 minutes. It starts a `recovery` session that opens only
-  `/account/passkeys`, for 15 minutes.
-- **Audit.** `passkey_add`, `passkey_delete`, `recover` and each `sign_in`
-  (with its method) go to `audit_log`.
+  `/account/passkeys`, for 15 minutes. Its first passkey makes it a
+  `passkey` session.
+- **Audit.** `passkey_add`, `passkey_delete`, `recover`, `session_upgrade`
+  (with the old method) and each `sign_in` (with its method, and the
+  session it replaced) go to `audit_log`.
 
 Where each part is:
 

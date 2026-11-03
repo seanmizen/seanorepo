@@ -8,11 +8,11 @@ import {
   RECOVERY_MINUTES,
   type SessionMethod,
 } from '../../auth';
-import { canChangePasskeys, NAME_MAX } from '../../passkeys';
+import { canChangePasskeys } from '../../passkeys';
 import { renderPage } from '../../render';
-import { Field } from '../../ui/Field';
 import { Key } from '../../ui/Key';
 import { Panel } from '../../ui/Panel';
+import { AddPasskey } from '../../ui/Passkey';
 
 interface PasskeyRow {
   id: string;
@@ -43,16 +43,16 @@ const Notice = ({
     return (
       <p>
         This is a recovery session. It can only add a passkey, and it ends{' '}
-        {RECOVERY_MINUTES} minutes after it started. After you add a passkey,
-        sign out and sign in with the passkey.
+        {RECOVERY_MINUTES} minutes after it started. When you add a passkey,
+        this session becomes a passkey session.
       </p>
     );
   }
   if (admin && firstPasskey) {
     return (
       <p>
-        You are the admin. The admin pages need a passkey sign-in. Add a
-        passkey, then sign out and sign in with the passkey.
+        You are the admin. The admin pages need a passkey. Add one to this
+        device, and the admin pages open in this session.
       </p>
     );
   }
@@ -145,25 +145,7 @@ export const PasskeysPage = ({
     </Panel>
     {canChange && (
       <Panel label="Add a passkey">
-        <p data-passkey-note="">
-          Passkeys need JavaScript. Turn on JavaScript to add a passkey.
-        </p>
-        <form hidden data-passkey="register">
-          <p>
-            <Field label="Name">
-              <input
-                name="name"
-                required
-                maxLength={NAME_MAX}
-                placeholder="iPhone"
-              />
-            </Field>
-          </p>
-          <p role="alert" hidden data-passkey-error="" />
-          <p>
-            <Key>Add a passkey</Key>
-          </p>
-        </form>
+        <AddPasskey next="/account/passkeys" />
       </Panel>
     )}
     <p>
