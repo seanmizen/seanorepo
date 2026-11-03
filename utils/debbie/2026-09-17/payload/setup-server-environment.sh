@@ -1620,6 +1620,11 @@ else
         systemctl disable --now "$TAILSCALE_UNIT" || true
         apt-get purge -y tailscale
     fi
+    # tailscale depends on tailscale-archive-keyring, which owns the keyring
+    # file. Purge the package, so dpkg agrees with the disk.
+    if dpkg-query -W -f='${Status}' tailscale-archive-keyring 2> /dev/null | grep -q "^install ok installed"; then
+        apt-get purge -y tailscale-archive-keyring
+    fi
     rm -f "$TAILSCALE_LIST" "$TAILSCALE_KEYRING" "$VPN_SYSCTL"
 fi
 
