@@ -154,10 +154,10 @@ marker_apps="$(sed -n 3p "$MARKER" 2> /dev/null || true)"
 
 # The boot id changes on every boot and on nothing else. With the boot id in
 # the marker, the deploy runs again after a boot, although `release` has not
-# moved. The restart policies of the apps (REQ-SERVER-020) start their
-# containers again. This deploy also starts each container that no policy
-# starts, for example the LAN edge. A restart of the Docker daemon alone does
-# not change the boot id, so only the policies cover it. The release poller
+# moved. The restart policies of the apps and the LAN edge (REQ-SERVER-020)
+# start their containers again. This deploy also starts each container that
+# no policy starts. A restart of the Docker daemon alone does not change the
+# boot id, so only the policies cover it. The release poller
 # triggers this unit after every run, so the first poll after a boot finds it.
 boot_id="$(cat /proc/sys/kernel/random/boot_id 2> /dev/null || true)"
 
@@ -285,6 +285,9 @@ fi
 # without the tunnel role runs Caddy, so the LAN reaches each site at
 # <site>.<hostname>.local. On the tunnel machine Caddy must not run, so it is
 # stopped there: a machine that gains the tunnel role loses its LAN edge.
+# `down` removes the container. Caddy has `restart: unless-stopped`
+# (REQ-SERVER-020), and a container that stops but stays would start again
+# with the Docker daemon.
 EDGE_COMPOSE="$REPO_DIR/infra/edge/docker-compose.yml"
 if [ -e "$ROLES_DIR/tunnel" ]; then
     EDGE_HOST="$(hostname -s)" docker compose -f "$EDGE_COMPOSE" --profile lan down --remove-orphans > /dev/null 2>&1 || true

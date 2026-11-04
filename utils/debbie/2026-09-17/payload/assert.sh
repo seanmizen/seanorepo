@@ -1120,10 +1120,12 @@ fi
 #
 # The daemon stops each container with status 0, and then starts again only
 # the containers with `unless-stopped` or `always`. So each production service
-# (the profiles prod and demo) must have one of the two. `docker compose
-# config` resolves the anchors and the merges, so the check reads the policy
-# that compose gives to the container. --no-env-resolution: an env file that
-# is only on the server (apps/*/.env) must not stop the check.
+# (the profiles prod and demo) must have one of the two. The LAN edge (the
+# profile lan) has the same rule. `docker compose config` resolves the anchors
+# and the merges, so the check reads the policy that compose gives to the
+# container. --no-env-resolution: an env file that is only on the server
+# (apps/*/.env) must not stop the check. EDGE_HOST: the edge compose file
+# stops when it has no value, and the policy does not use it.
 #
 # Prints each service that breaks the rule, as "file: service (policy)", and
 # each file that compose cannot read. Returns 0 when there is none. An empty
@@ -1132,7 +1134,7 @@ compose_restart_faults() {
     local f json bad=0
     for f in "$@"; do
         [ -s "$f" ] || continue
-        if ! json="$(docker compose -f "$f" --profile prod --profile demo config --no-env-resolution --format json 2> /dev/null)"; then
+        if ! json="$(EDGE_HOST=assert docker compose -f "$f" --profile prod --profile demo --profile lan config --no-env-resolution --format json 2> /dev/null)"; then
             echo "$f: docker compose cannot read it"
             bad=1
             continue
@@ -1166,12 +1168,14 @@ if [ "$PHASE" = provisioned ]; then
              "  good: {image: busybox, profiles: [prod], restart: unless-stopped}" \
              "  none: {image: busybox, profiles: [prod]}" \
              "  quits: {image: busybox, profiles: [demo], restart: on-failure}" \
+             "  edge: {image: busybox, profiles: [lan], restart: \"no\"}" \
              "  dev: {image: busybox, profiles: [dev]}" > "$t/docker-compose.yml";
          out=$(compose_restart_faults "$t/docker-compose.yml") && exit 1;
-         [ "$(printf "%s\n" "$out" | sed "s|^$t/docker-compose.yml: ||" | sort | tr "\n" " ")" = "none (none) quits (on-failure) " ]'
+         [ "$(printf "%s\n" "$out" | sed "s|^$t/docker-compose.yml: ||" | sort | tr "\n" " ")" = "edge (no) none (none) quits (on-failure) " ]'
 
-    # The compose files of the commit under test. The VM harness copies them
-    # beside the deploy scripts. On metal, the checkout's own files.
+    # The compose files of the commit under test: the apps and the LAN edge.
+    # The VM harness copies them beside the deploy scripts. On metal, the
+    # checkout's own files.
     restart_root=
     if [ -n "${UNDER_TEST_DIR:-}" ] && [ -d "$UNDER_TEST_DIR/../../../../apps" ]; then
         restart_root="$(cd "$UNDER_TEST_DIR/../../../.." && pwd)"
@@ -1180,18 +1184,20 @@ if [ "$PHASE" = provisioned ]; then
     fi
     if [ -n "$restart_root" ]; then
         restart_rc=0
-        restart_faults="$(compose_restart_faults "$restart_root"/apps/*/docker-compose.yml)" || restart_rc=1
+        restart_faults="$(compose_restart_faults "$restart_root"/apps/*/docker-compose.yml \
+            "$restart_root/infra/edge/docker-compose.yml")" || restart_rc=1
         [ -n "$restart_faults" ] && printf '%s\n' "$restart_faults" | sed 's/^/  /'
-        check "each production service of the apps has restart unless-stopped or always" \
-            '[ "$restart_rc" = 0 ]'
+        # A missing edge file is a fault: compose_restart_faults skips it.
+        check "each production service of the apps and the LAN edge has restart unless-stopped or always" \
+            '[ "$restart_rc" = 0 ] && [ -s "$restart_root/infra/edge/docker-compose.yml" ]'
     else
-        sk "each production service of the apps has restart unless-stopped or always" \
+        sk "each production service of the apps and the LAN edge has restart unless-stopped or always" \
             "no apps directory at $REPO_DIR or under UNDER_TEST_DIR"
     fi
 else
     sk "the restart check finds a production service with no policy or with on-failure" \
         "setup-developer-environment.sh installs docker"
-    sk "each production service of the apps has restart unless-stopped or always" \
+    sk "each production service of the apps and the LAN edge has restart unless-stopped or always" \
         "setup-developer-environment.sh clones the checkout"
 fi
 

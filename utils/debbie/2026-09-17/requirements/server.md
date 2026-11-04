@@ -652,8 +652,9 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   answers any other name with 404.
 
   The roles decide it, as REQ-SERVER-014 requires: no setting can turn Caddy on
-  by default. `deploy.sh` stops Caddy on a machine that has the tunnel role,
-  and the mDNS unit is conditioned on the role files.
+  by default. `deploy.sh` removes the Caddy container (`down`) on a machine
+  that has the tunnel role, so its restart policy cannot start it again. The
+  role files decide whether the mDNS unit starts.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the deploy starts the LAN
     edge without the tunnel and stops it with"
@@ -761,8 +762,8 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Type:** functional
 - **Priority:** P1
 - **Statement:** When the Docker daemon starts again, each production
-  container of the apps that ran before the daemon stopped shall run again,
-  with no deploy.
+  container of the apps and the LAN edge that ran before the daemon stopped
+  shall run again, with no deploy.
 - **Rationale:** An upgrade of the Docker package restarts the daemon. A
   provisioning run and an unattended upgrade can each do this, and a reboot
   does the same. The daemon stops each container with status 0. Then it starts
@@ -780,13 +781,20 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
   no `CRM_R2_BUCKET` prints that replication is off, and then waits. A
   container that stops with status 0 under `unless-stopped` would start again
   in a loop.
+
+  The LAN edge (`infra/edge/docker-compose.yml`, the profile `lan`) has the
+  same policy. Without it, a webserver without the tunnel role keeps the apps
+  after a restart of the daemon, and the LAN cannot reach them. On the tunnel
+  machine the deploy removes the edge container (`down`, REQ-SERVER-016). The
+  daemon then has no container to start.
 - **Verification:**
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the restart check
     finds a production service with no policy or with on-failure"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "each production
-    service of the apps has restart unless-stopped or always"
+    service of the apps and the LAN edge has restart unless-stopped or always"
   - Demonstration — on the webserver, `sudo systemctl restart docker`. Then
-    `docker ps` shows each container of the apps that ran before.
+    `docker ps` shows each container of the apps that ran before. On a
+    webserver without the tunnel role, it also shows `edge-caddy`.
 - **Relations:**
   - refines REQ-SERVER-006
   - refines REQ-DEPLOY-002
