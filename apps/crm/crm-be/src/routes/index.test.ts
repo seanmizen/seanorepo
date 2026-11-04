@@ -14,12 +14,10 @@ import {
   signInAdmin,
   testApp,
 } from '../test-helpers';
-import { LIST_PATHS, LIST_SWAP, nextSort, PAGE_SIZE } from './index';
+import { LIST_PATHS, nextSort, PAGE_SIZE } from './index';
 
-/** The attribute that makes a form or a link of the list swap in place. */
-const SWAP = `data-swap="${LIST_SWAP}"`;
 /** The start of a GET form of the list at `/`. */
-const LIST_FORM = `<form ${SWAP} action="/" method="get">`;
+const LIST_FORM = `<form action="/" method="get">`;
 
 let app: ReturnType<typeof buildApp>;
 let db: Database;
@@ -439,7 +437,7 @@ describe('GET / and GET /orgs', () => {
     // With a search in the URL, the field has autofocus, so a full page
     // load puts the cursor back in it.
     expect(form).toContain(
-      '<input type="search" placeholder="Name or postcode" autofocus="" name="q" value="acme"/>',
+      '<input id="q" type="search" placeholder="Name or postcode" autofocus="" name="q" value="acme"/>',
     );
     // The Search key comes first, so the Enter key sends it. It keeps the
     // sort and the stage that is lit.
@@ -498,7 +496,7 @@ describe('GET / and GET /orgs', () => {
     const html = (await get('/?sort=name&dir=asc')).body;
     const foot = html.slice(html.indexOf('<footer'));
     expect(foot).toContain(
-      `<span>1–${PAGE_SIZE} of ${PAGE_SIZE + 5}</span> <a href="/?sort=name&amp;dir=asc&amp;page=2" rel="next" ${SWAP}>next</a>`,
+      `<span>1–${PAGE_SIZE} of ${PAGE_SIZE + 5}</span> <a href="/?sort=name&amp;dir=asc&amp;page=2" rel="next">next</a>`,
     );
     expect(foot).not.toContain('rel="prev"');
     expect(foot).toContain(
@@ -509,7 +507,7 @@ describe('GET / and GET /orgs', () => {
     expect(second).toEqual(['Org 50', 'Org 51', 'Org 52', 'Org 53', 'Org 54']);
     const last = (await get('/?sort=name&dir=asc&page=2')).body;
     expect(last).toContain(
-      `<a href="/?sort=name&amp;dir=asc" rel="prev" ${SWAP}>previous</a> <span>${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}</span>`,
+      `<a href="/?sort=name&amp;dir=asc" rel="prev">previous</a> <span>${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}</span>`,
     );
     expect(last).not.toContain('rel="next"');
     expect(last).toContain('id="page-next" disabled=""');
@@ -523,7 +521,7 @@ describe('GET / and GET /orgs', () => {
     expect(short).toContain('id="page-next" disabled=""');
   });
 
-  test('the search, the stage keys, the sort keys and the pager swap the list in place, and the search field is not in a swapped part', async () => {
+  test('each key of the list is a plain form or link, and the search field has an id (REQ-CRM-MORPH-001)', async () => {
     const rows = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => {
       const n = String(i).padStart(2, '0');
       return `('id-${n}', 'org-${n}', 'Org ${n}', 'lead', '2026-01-01T10:00:${n}.000Z')`;
@@ -532,29 +530,23 @@ describe('GET / and GET /orgs', () => {
       `INSERT INTO organisation (id, slug, name, stage, created_at) VALUES ${rows.join(', ')};`,
     );
     const html = (await get('/?page=2')).body;
-    // Each GET form of the list swaps, except "New lead", which opens a
-    // new page.
+    // The morph (crm-fe/src/morph.ts) needs no marks: each form and link
+    // is a plain one.
+    expect(html).not.toContain('data-swap');
     const forms = [...html.matchAll(/<form ([^>]*)>/g)].map((m) => m[1]);
-    expect(forms.filter((tag) => tag.includes(SWAP))).toHaveLength(4);
-    expect(forms.filter((tag) => !tag.includes(SWAP))).toEqual([
+    expect(forms).toEqual([
       'action="/logout" method="post"',
+      'action="/" method="get"',
+      'action="/" method="get"',
+      'action="/" method="get"',
+      'action="/" method="get"',
       'action="/orgs/new" method="get"',
     ]);
-    expect(html).toContain(`rel="prev" ${SWAP}>previous</a>`);
-    // Each selector matches one part of the page.
-    for (const part of [
-      'class="lcd"',
-      'id="sort"',
-      'id="search-send"',
-      'id="stage"',
-      'class="foot"',
-    ]) {
-      expect(html.split(part)).toHaveLength(2);
-    }
-    // The search field is in the Search module, which has no id, so the
-    // swap never replaces it. With no search, it has no autofocus.
+    expect(html).toContain('rel="prev">previous</a>');
+    // With an id, the morph keeps the same field, with its focus and its
+    // caret. With no search, it has no autofocus.
     expect(html).toContain(
-      '<section class="module"><h2 class="label">Search</h2><div class="search"><label class="field"><span class="bare-text">Name or postcode </span><input type="search" placeholder="Name or postcode" name="q" value=""/></label><span id="search-send" class="send">',
+      '<section class="module"><h2 class="label">Search</h2><div class="search"><label class="field"><span class="bare-text">Name or postcode </span><input id="q" type="search" placeholder="Name or postcode" name="q" value=""/></label><span id="search-send" class="send">',
     );
   });
 
@@ -567,9 +559,7 @@ describe('GET / and GET /orgs', () => {
       const html = (await get(`${path}?sort=name&dir=asc&q=a`)).body;
       expect(html).toContain('<title>Organisations - crm</title>');
       const actions = [
-        ...html.matchAll(
-          /<form (?:data-swap="[^"]+" )?action="([^"]+)" method="get">/g,
-        ),
+        ...html.matchAll(/<form action="([^"]+)" method="get">/g),
       ]
         .map((m) => m[1])
         .filter((action) => action !== '/orgs/new');
@@ -795,7 +785,7 @@ describe('every page with ?theme=bare', () => {
     // and text carries the stage and the sort direction.
     const search = bare['/?q=acme&stage=quoted&sort=name&dir=desc'];
     expect(search).toContain(
-      '<input type="search" placeholder="Name or postcode" autofocus="" name="q" value="acme"/>',
+      '<input id="q" type="search" placeholder="Name or postcode" autofocus="" name="q" value="acme"/>',
     );
     expect(bodyText(search)).toContain('Quoted (current)');
     expect(bodyText(search)).toContain('Organisation name , Z to A');

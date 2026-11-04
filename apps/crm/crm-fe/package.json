@@ -11,5 +11,8 @@
     "@rsbuild/core": "^1.6.13",
     "@simplewebauthn/browser": "^13.3.0",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "idiomorph": "0.8.0"
   }
 }

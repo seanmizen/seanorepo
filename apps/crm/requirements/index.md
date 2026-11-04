@@ -13,6 +13,7 @@
 | [`REQ-CRM-LAYOUT-001`](layout.md#req-crm-layout-001--one-breakpoint-and-a-4060-grid-of-the-device-and-the-boxes) | One breakpoint, and a 40/60 grid of the device and the boxes | active | constraint | P1 | sean |
 | [`REQ-CRM-LCD-001`](lcd.md#req-crm-lcd-001--no-led-in-the-glass-characters-that-do-not-move-and-leds-in-the-bezel) | No LED in the glass, characters that do not move, and LEDs in the bezel | active | constraint | P1 | sean |
 | [`REQ-CRM-MCP-001`](mcp.md#req-crm-mcp-001--no-mcp-tool-deletes-erases-or-touches-money) | No MCP tool deletes, erases or touches money | active | constraint | P1 | sean |
+| [`REQ-CRM-MORPH-001`](morph.md#req-crm-morph-001--a-press-updates-the-page-in-place-with-focus-and-scroll-kept) | A press updates the page in place, with focus and scroll kept | active | functional | P2 | sean |
 | [`REQ-CRM-UNDO-001`](undo.md#req-crm-undo-001--one-history-that-only-grows-and-no-delete) | One history that only grows, and no delete | active | constraint | P2 | sean |
 | [`REQ-CRM-UNDO-002`](undo.md#req-crm-undo-002--undo-and-redo-are-one-stack) | Undo and Redo are one stack | active | functional | P2 | sean |
 | [`REQ-CRM-UNDO-003`](undo.md#req-crm-undo-003--restore-shows-one-hidden-record-one-time) | Restore shows one hidden record, one time | active | functional | P2 | sean |
@@ -29,13 +30,16 @@ graph TD
   REQ_CRM_LAYOUT_001["REQ-CRM-LAYOUT-001<br/>One breakpoint, and a 40/60 grid of the device and the boxes"]
   REQ_CRM_LCD_001["REQ-CRM-LCD-001<br/>No LED in the glass, characters that do not move, and LEDs in the bezel"]
   REQ_CRM_MCP_001["REQ-CRM-MCP-001<br/>No MCP tool deletes, erases or touches money"]
+  REQ_CRM_MORPH_001["REQ-CRM-MORPH-001<br/>A press updates the page in place, with focus and scroll kept"]
   REQ_CRM_UNDO_001["REQ-CRM-UNDO-001<br/>One history that only grows, and no delete"]
   REQ_CRM_UNDO_002["REQ-CRM-UNDO-002<br/>Undo and Redo are one stack"]
   REQ_CRM_UNDO_003["REQ-CRM-UNDO-003<br/>Restore shows one hidden record, one time"]
+  REQ_CRM_MORPH_001 -->|depends-on| REQ_CRM_BARE_001
   REQ_CRM_UNDO_002 -->|depends-on| REQ_CRM_UNDO_001
   REQ_CRM_UNDO_003 -->|depends-on| REQ_CRM_UNDO_001
 ```
 
 ## Derived reverse links
 
+- `REQ-CRM-BARE-001` — required-by REQ-CRM-MORPH-001
 - `REQ-CRM-UNDO-001` — required-by REQ-CRM-UNDO-002, required-by REQ-CRM-UNDO-003

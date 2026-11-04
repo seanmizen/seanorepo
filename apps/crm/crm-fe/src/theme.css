@@ -995,7 +995,7 @@ button.link:disabled {
 /* Home */
 
 /* The search field and its key share one row. The key is in a wrapper
-   for the swap (`#search-send`), which adds no box. */
+   (`#search-send`) that adds no box. */
 .search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

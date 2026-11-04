@@ -45,6 +45,6 @@ do not move. The LCD of the crm follows the same rules.
   - Test — `apps/crm/crm-be/src/ui/Lcd.test.tsx` › "no LED is inside the glass, and each menu row has the arrow column and an LED in the bezel (REQ-CRM-LCD-001)"
   - Test — `apps/crm/crm-be/src/ui/Lcd.test.tsx` › "each page follows the LCD rules, and the theme fixes the row height and the arrow column (REQ-CRM-LCD-001)"
   - Test — `apps/crm/crm-be/src/routes/index.test.ts` › "the LCD legend shows the arrow of the order on the column that sets it, and text tells the order (REQ-CRM-LCD-001)"
-  - Demonstration — `node apps/crm/scripts/swap-test.mjs`: a sort key moves the arrow in place. The arrow of the name legend is in the arrow column.
+  - Demonstration — `node apps/crm/scripts/morph-test.mjs`: a sort key moves the arrow in place. The arrow of the name legend is in the arrow column.
   - Demonstration — `node apps/crm/scripts/shoot.mjs`: compare `home-hover-*` with `home-*`. The pointer on a row shows the arrow, and no character moves.
 - **Relations:** none

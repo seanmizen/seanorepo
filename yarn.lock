@@ -7277,6 +7277,7 @@ __metadata:
   dependencies:
     "@rsbuild/core": "npm:^1.6.13"
     "@simplewebauthn/browser": "npm:^13.3.0"
+    idiomorph: "npm:0.8.0"
     typescript: "npm:^5.9.3"
   languageName: unknown
   linkType: soft
@@ -9999,6 +10000,13 @@ __metadata:
   dependencies:
     safer-buffer: "npm:>= 2.1.2 < 3.0.0"
   checksum: 10c0/be2fd2414f7e94be3a63063fa0ad5919c16bc7b6e00c77eea0765ced6db405739f38dd51016583058fba25cc1d0106ba30b83fbb7a7e32f824d4db76f23d8d33
+  languageName: node
+  linkType: hard
+
+"idiomorph@npm:0.8.0":
+  version: 0.8.0
+  resolution: "idiomorph@npm:0.8.0"
+  checksum: 10c0/9d4eb98b685ecb801c50af9d41b2a03affc7eb4865d48c277a839185a55f0e297c69ebb0ecc727e78b5568761cc74e533f7f42d13bef56337c0ab5e8a08bbde7
   languageName: node
   linkType: hard
 

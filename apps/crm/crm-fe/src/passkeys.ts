@@ -74,57 +74,65 @@ const ready = (root: ParentNode, control: HTMLElement) => {
   return true;
 };
 
-const signIn = document.querySelector<HTMLButtonElement>(
-  '[data-passkey="sign-in"]',
-);
-if (signIn) {
-  const root = signIn.closest('section') ?? document;
-  if (ready(root, signIn)) {
-    signIn.addEventListener('click', async () => {
-      signIn.disabled = true;
-      try {
-        const optionsJSON = await postJson<
-          Parameters<typeof startAuthentication>[0]['optionsJSON']
-        >('/api/passkeys/sign-in-options', {});
-        const response = await startAuthentication({ optionsJSON });
-        const { next } = await postJson<PasskeySignInResponse>(
-          '/api/passkeys/sign-in',
-          { response, next: signIn.dataset.next ?? '/' },
-        );
-        location.assign(next);
-      } catch (error) {
-        showError(root, error);
-        signIn.disabled = false;
-      }
-    });
+/** Turn on each passkey control of the page. */
+const setUp = () => {
+  for (const control of document.querySelectorAll<HTMLElement>(
+    '[data-passkey]',
+  )) {
+    ready(control.closest('section') ?? document, control);
   }
-}
+};
 
-const register = document.querySelector<HTMLFormElement>(
-  'form[data-passkey="register"]',
-);
-if (register) {
-  const root = register.closest('section') ?? document;
-  if (ready(root, register)) {
-    register.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const button = register.querySelector('button');
-      if (button) button.disabled = true;
-      try {
-        const name = new FormData(register).get('name');
-        const optionsJSON = await postJson<
-          Parameters<typeof startRegistration>[0]['optionsJSON']
-        >('/api/passkeys/register-options', {});
-        const response = await startRegistration({ optionsJSON });
-        const { next } = await postJson<PasskeyRegisterResponse>(
-          '/api/passkeys/register',
-          { name, response, next: register.dataset.next ?? '/' },
-        );
-        location.assign(next);
-      } catch (error) {
-        showError(root, error);
-        if (button) button.disabled = false;
-      }
-    });
+// The listeners are on `document`, so a control that a morph adds
+// (morph.ts) works too. After a morph, the control has the state that the
+// server rendered (off, with the note), so `setUp` runs again.
+setUp();
+document.addEventListener('crm:morph', setUp);
+
+document.addEventListener('click', async (event) => {
+  const signIn = (event.target as Element | null)?.closest?.(
+    'button[data-passkey="sign-in"]',
+  );
+  if (!(signIn instanceof HTMLButtonElement)) return;
+  const root = signIn.closest('section') ?? document;
+  signIn.disabled = true;
+  try {
+    const optionsJSON = await postJson<
+      Parameters<typeof startAuthentication>[0]['optionsJSON']
+    >('/api/passkeys/sign-in-options', {});
+    const response = await startAuthentication({ optionsJSON });
+    const { next } = await postJson<PasskeySignInResponse>(
+      '/api/passkeys/sign-in',
+      { response, next: signIn.dataset.next ?? '/' },
+    );
+    location.assign(next);
+  } catch (error) {
+    showError(root, error);
+    signIn.disabled = false;
   }
-}
+});
+
+document.addEventListener('submit', async (event) => {
+  const register = event.target;
+  if (!(register instanceof HTMLFormElement)) return;
+  if (register.dataset.passkey !== 'register') return;
+  event.preventDefault();
+  const root = register.closest('section') ?? document;
+  const button = register.querySelector('button');
+  if (button) button.disabled = true;
+  try {
+    const name = new FormData(register).get('name');
+    const optionsJSON = await postJson<
+      Parameters<typeof startRegistration>[0]['optionsJSON']
+    >('/api/passkeys/register-options', {});
+    const response = await startRegistration({ optionsJSON });
+    const { next } = await postJson<PasskeyRegisterResponse>(
+      '/api/passkeys/register',
+      { name, response, next: register.dataset.next ?? '/' },
+    );
+    location.assign(next);
+  } catch (error) {
+    showError(root, error);
+    if (button) button.disabled = false;
+  }
+});

@@ -38,7 +38,9 @@ const NOT_VALID = 'The app did not send a valid request.';
  * The form sends the values of the request again, as hidden fields, and
  * the post checks them again. A request that is not valid shows its error
  * in the LCD, and Allow and Deny are off, with the error as their reason
- * (REQ-CRM-BUTTON-001).
+ * (REQ-CRM-BUTTON-001). The form has `data-reload`: the post redirects to
+ * the app, at a different origin, so the browser sends it with a full load
+ * and the morph does not (REQ-CRM-MORPH-001).
  */
 export const authorizePage = ({
   authorize,
@@ -67,7 +69,7 @@ export const authorizePage = ({
             : undefined
         }
       />
-      <form method="post" action={AUTHORIZE_PATH}>
+      <form method="post" action={AUTHORIZE_PATH} data-reload="">
         {authorize &&
           Object.entries({
             response_type: 'code',
