@@ -64,7 +64,10 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          # Pin the major version. On Node 26, `playwright install` stops after
+          # the Chrome download and does not extract it. 'lts/*' changed to 26
+          # without a commit here, so a pin makes a Node change a visible edit.
+          node-version: '24'
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -97,6 +100,9 @@ jobs:
         run: yarn workspace inside test:unit
 
       - name: Install Playwright browser
+        # A normal install takes less than 1 minute. If it stops, this limit
+        # fails the step quickly and names it, before the job limit.
+        timeout-minutes: 5
         run: npx playwright install --with-deps chromium
 
       - name: E2E

@@ -24,7 +24,9 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          # Pin the major version. On Node 26, `playwright install` stops after
+          # the Chrome download and does not extract it.
+          node-version: '24'
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -41,6 +43,9 @@ jobs:
         run: yarn install --immutable
 
       - name: Install Playwright browsers
+        # A normal install takes less than 1 minute. If it stops, this limit
+        # fails the step quickly and names it, before the job limit.
+        timeout-minutes: 5
         working-directory: apps/ffmpeg-converter/web
         run: yarn playwright install --with-deps chromium
 
