@@ -10,18 +10,19 @@ x-autosam-base: &autosam-base
     target: ${BUILD_TARGET:-dev}
   ports:
     - "${PUBLISH_ADDR:-127.0.0.1}:4090:4090"
-  # AUTOSAM_EDIT_KEY lets a visitor add, change, archive and restore songs.
-  # Keep it in apps/autosam/.env on the server. Without it, the songs are
-  # read-only.
-  env_file:
-    - path: ./.env
-      required: false
 
 services:
   frontend:
     <<: *autosam-base
     profiles: ["prod"]
     restart: unless-stopped
+    # AUTOSAM_EDIT_KEY lets a visitor add, change, archive and restore songs.
+    # The server secrets live in /etc/seanorepo (REQ-SERVER-021). Without the
+    # key, the songs are read-only. required: false, so `yarn prod:docker`
+    # also runs on a computer with no secrets.
+    env_file:
+      - path: /etc/seanorepo/autosam.env
+        required: false
     volumes:
       - autosam_songs_data:/data
     # The edge routes to this service by its alias (infra/edge).
@@ -32,6 +33,9 @@ services:
 
   frontend-dev:
     <<: *autosam-base
+    env_file:
+      - path: ./.env
+        required: false
     environment:
       - AUTOSAM_EDIT_KEY=${AUTOSAM_EDIT_KEY:-local-dev-edit-key}
     volumes:

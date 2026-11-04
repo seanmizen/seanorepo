@@ -56,6 +56,9 @@ SYSTEMCTL=/usr/bin/systemctl
 # Role flags that setup-server-environment.sh writes (REQ-SERVER-014). The
 # override is for the tests only.
 ROLES_DIR="${ROLES_DIR:-/etc/seanorepo/roles}"
+# The secret files that a webserver must have (REQ-SERVER-022). The list is
+# in the checkout that this script deploys.
+SECRETS_LIST_REL="utils/debbie/2026-09-17/services/server-secrets.list"
 
 #------------------------------------------------------------------------------
 # Logging: log_err, log_warn, log_info, log_debug and run_quiet
@@ -187,6 +190,33 @@ OLD_SHA="$marker_sha"
 NEW_SHA="$HEAD_SHA"
 
 log_info "deploying: $reason"
+
+#------------------------------------------------------------------------------
+# Server secrets - REQ-SERVER-021 and REQ-SERVER-022
+#
+# Each app secret file is in /etc/seanorepo. The compose files read them with
+# `required: false`, so `yarn prod:docker` also runs on a computer with no
+# secrets. On a webserver, a missing file starts an app with no secrets: no
+# sign-in email, no backup, or no start at all. So the deploy stops here and
+# names each missing file. It writes no marker, so the next poll tries again.
+#------------------------------------------------------------------------------
+if [ -e "$ROLES_DIR/webserver" ]; then
+    secrets_list="$REPO_DIR/$SECRETS_LIST_REL"
+    [ -r "$secrets_list" ] \
+        || { log_err "cannot read $secrets_list - no app deployed"; exit 1; }
+    missing=0
+    while IFS= read -r secret || [ -n "$secret" ]; do
+        case "$secret" in '' | '#'*) continue ;; esac
+        if [ ! -r "$secret" ]; then
+            log_err "secret file missing, or $(id -un) cannot read it: $secret"
+            missing=$((missing + 1))
+        fi
+    done < "$secrets_list"
+    if [ "$missing" -gt 0 ]; then
+        log_err "$missing secret file(s) missing - no app deployed. The 'Server secrets' table in utils/debbie/2026-09-17/README.md names each file"
+        exit 1
+    fi
+fi
 
 # THE DEPLOY PATH HAS NO `git clean` (REQ-DEPLOY-006).
 # apps/cloudflared/credentials/ is gitignored and holds the tunnel's

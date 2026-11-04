@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # prod-docker.sh: builds the crm prod image and starts crm and its
 # Litestream sidecar. It also starts the demo (crm-demo and its sidecar)
-# when apps/crm/.env.demo exists.
+# when /etc/seanorepo/crm-demo.env exists (REQ-SERVER-021).
 #
 # Where: the web box (asus), through `yarn prod:docker` in deploy.sh. Also
 #        your own computer, before a release.
@@ -19,11 +19,12 @@ LOG_TAG=crm
 # shellcheck source=../../../scripts/log.sh
 . ../../scripts/log.sh
 
+DEMO_ENV=/etc/seanorepo/crm-demo.env
 profiles=(--profile prod)
-if [ -f .env.demo ]; then
+if [ -f "$DEMO_ENV" ]; then
   profiles+=(--profile demo)
 else
-  log_info "apps/crm/.env.demo does not exist. The demo is off."
+  log_info "$DEMO_ENV does not exist. The demo is off."
 fi
 
 BUILD_TARGET=prod run_quiet docker compose "${profiles[@]}" up --build --detach

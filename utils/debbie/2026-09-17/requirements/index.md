@@ -43,6 +43,8 @@
 | [`REQ-SERVER-018`](server.md#req-server-018--a-failed-app-does-not-stop-the-other-deploy-steps) | A failed app does not stop the other deploy steps | active | functional | P1 | sean |
 | [`REQ-SERVER-019`](server.md#req-server-019--the-deploy-log-has-a-level-on-each-line) | The deploy log has a level on each line | active | functional | P2 | sean |
 | [`REQ-SERVER-020`](server.md#req-server-020--a-restart-of-docker-brings-each-app-back) | A restart of Docker brings each app back | active | functional | P1 | sean |
+| [`REQ-SERVER-021`](server.md#req-server-021--server-secrets-live-in-one-directory) | Server secrets live in one directory | active | constraint | P1 | sean |
+| [`REQ-SERVER-022`](server.md#req-server-022--the-deploy-stops-when-a-server-secret-is-missing) | The deploy stops when a server secret is missing | active | functional | P1 | sean |
 
 ## Dependency graph
 
@@ -86,6 +88,8 @@ graph TD
   REQ_SERVER_018["REQ-SERVER-018<br/>A failed app does not stop the other deploy steps"]
   REQ_SERVER_019["REQ-SERVER-019<br/>The deploy log has a level on each line"]
   REQ_SERVER_020["REQ-SERVER-020<br/>A restart of Docker brings each app back"]
+  REQ_SERVER_021["REQ-SERVER-021<br/>Server secrets live in one directory"]
+  REQ_SERVER_022["REQ-SERVER-022<br/>The deploy stops when a server secret is missing"]
   REQ_DEPLOY_002 -->|depends-on| REQ_DEPLOY_001
   REQ_DEPLOY_003 -->|depends-on| REQ_DEPLOY_002
   REQ_DEPLOY_004 -->|depends-on| REQ_DEPLOY_002
@@ -121,6 +125,9 @@ graph TD
   REQ_SERVER_019 -->|refines| REQ_DEPLOY_002
   REQ_SERVER_020 -->|refines| REQ_SERVER_006
   REQ_SERVER_020 -->|refines| REQ_DEPLOY_002
+  REQ_SERVER_021 -->|refines| REQ_DEPLOY_006
+  REQ_SERVER_022 -->|depends-on| REQ_SERVER_021
+  REQ_SERVER_022 -->|refines| REQ_SERVER_014
   style REQ_NETWORK_004 stroke-dasharray: 4 4
   style REQ_SERVER_009 stroke-dasharray: 4 4
 ```
@@ -131,7 +138,7 @@ graph TD
 - `REQ-DEPLOY-002` — required-by REQ-DEPLOY-003, required-by REQ-DEPLOY-004, required-by REQ-DEPLOY-007, refined-by REQ-SERVER-014, refined-by REQ-SERVER-017, refined-by REQ-SERVER-018, refined-by REQ-SERVER-019, refined-by REQ-SERVER-020
 - `REQ-DEPLOY-004` — required-by REQ-DEPLOY-005, required-by REQ-DEPLOY-006
 - `REQ-DEPLOY-005` — required-by REQ-NETWORK-002, refined-by REQ-SERVER-018
-- `REQ-DEPLOY-006` — required-by REQ-NETWORK-002
+- `REQ-DEPLOY-006` — required-by REQ-NETWORK-002, refined-by REQ-SERVER-021
 - `REQ-NETWORK-001` — required-by REQ-NETWORK-002, required-by REQ-NETWORK-003, required-by REQ-NETWORK-005, required-by REQ-NETWORK-006, required-by REQ-SERVER-015
 - `REQ-NETWORK-002` — refined-by REQ-SERVER-014
 - `REQ-NETWORK-003` — required-by REQ-NETWORK-004
@@ -142,4 +149,5 @@ graph TD
 - `REQ-SERVER-006` — refined-by REQ-SERVER-015, refined-by REQ-SERVER-020
 - `REQ-SERVER-008` — required-by REQ-NETWORK-005, refined-by REQ-SERVER-009
 - `REQ-SERVER-011` — required-by REQ-SERVER-012, required-by REQ-SERVER-013
-- `REQ-SERVER-014` — required-by REQ-NETWORK-006, required-by REQ-SERVER-016
+- `REQ-SERVER-014` — required-by REQ-NETWORK-006, required-by REQ-SERVER-016, refined-by REQ-SERVER-022
+- `REQ-SERVER-021` — required-by REQ-SERVER-022

@@ -81,7 +81,7 @@ file and the uploads directory are named Docker volumes there, so they survive
 rebuilds. This is where the data lives.
 
 > **`SITE_NAME` lives on the host, not in the repo.** It is `inside.space`, and
-> the deployed `.env` on the production server (asus) needs the same value. `.env.example` carries it
+> `/etc/seanorepo/inside.env` on the production server (asus) needs the same value. `.env.example` carries it
 > for a fresh checkout only. A stale `SITE_NAME` signs every magic-link email
 > with the old name, and nothing in CI can see that.
 

@@ -852,6 +852,12 @@ done
 # removed when off - never left as they were. Not write_managed:
 # /etc/seanorepo is this script's own directory, and ROLE_* is the one source
 # of truth for these files.
+#
+# /etc/seanorepo also holds the server secrets (REQ-SERVER-021). root owns it,
+# and only the group of the deploy user reads it: deploy.sh and docker compose
+# run as the deploy user. A person puts each secret file here by hand (README,
+# "Server secrets"). This script never writes or reads a secret file.
+install -d -o root -g "$deploy_group" -m 0750 /etc/seanorepo
 install -d -m 0755 "$ROLES_DIR"
 for role in webserver tunnel vpn; do
     case "$role" in

@@ -78,7 +78,10 @@ yarn install
 Each workspace has its own env file. Git ignores both.
 
 - `caroline-be/.env`: copy `caroline-be/.env.example`. It names and describes
-  each key. Only the backend container (`backend`, `backend-dev`) loads it.
+  each key. Only the dev backend container (`backend-dev`) loads it. The prod
+  backend container (`backend`) loads `/etc/seanorepo/caroline.env` on the
+  server, with the same keys (REQ-SERVER-021). The "Server secrets" table in
+  `utils/debbie/2026-09-17/README.md` shows how to add it.
 - `caroline-fe/.env`: copy `caroline-fe/.env.example`. rsbuild reads it at
   build time, and each value goes into the bundle. It holds no secret.
 

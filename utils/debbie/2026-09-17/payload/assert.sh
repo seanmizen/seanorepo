@@ -700,7 +700,10 @@ fi
 # Each shim appends its argv to $1/calls and does nothing else, so a test can
 # assert exactly which service commands a script ran - and a script that
 # misbehaves writes a line to a file instead of rebuilding containers in the
-# middle of an assertion run. Prints the SHA `release` ends on.
+# middle of an assertion run. The first commit has a list of server secrets
+# with no file in it (REQ-SERVER-022), so a deploy with the webserver role
+# needs no file in /etc/seanorepo. Prints the SHA `release` ends on.
+SECRETS_LIST_REL="utils/debbie/2026-09-17/services/server-secrets.list"
 scratch_release() {
     local t="$1" c
     mkdir -p "$t/bin"
@@ -710,7 +713,10 @@ scratch_release() {
     done
     git init -q --bare "$t/origin.git"
     git init -q "$t/w"
-    git -C "$t/w" -c user.email=a@t -c user.name=a commit -q --allow-empty -m one
+    mkdir -p "$t/w/$(dirname "$SECRETS_LIST_REL")"
+    echo "# no secret files" > "$t/w/$SECRETS_LIST_REL"
+    git -C "$t/w" add "$SECRETS_LIST_REL"
+    git -C "$t/w" -c user.email=a@t -c user.name=a commit -q -m one
     git -C "$t/w" remote add origin "$t/origin.git"
     git -C "$t/w" push -q origin HEAD:refs/heads/release
     git clone -q -b release "$t/origin.git" "$t/machine"
@@ -795,6 +801,35 @@ deploy_failed_app() {
     [ "$(grep -c "^yarn prod:docker" "$t/calls")" = 2 ] || rc=1
     grep -q "trying again" "$t/out2" || rc=1
     grep -q "not restarting custom-cloudflared.service" "$t/out2" || rc=1
+    rm -rf "$t"
+    return "$rc"
+}
+
+# REQ-SERVER-022: a webserver with a missing secret file does not deploy. The
+# list names one file that exists and one that does not. With the webserver
+# role, the deploy must exit non-zero, name the missing file, not name the
+# other file, and not run `yarn prod:docker`. Without the role, the deploy
+# does not read the list and runs `yarn prod:docker`.
+# Returns 0 when every part of the check passed.
+deploy_missing_secret() {
+    local t="$1" rc=0 rc1=0
+    scratch_release "$t" > /dev/null
+    git -C "$t/machine" pull -q
+    mkdir -p "$t/roles" "$t/secrets"
+    touch "$t/roles/webserver" "$t/secrets/present.env"
+    printf '%s\n' "# a comment" "$t/secrets/present.env" "$t/secrets/absent.env" \
+        > "$t/machine/$SECRETS_LIST_REL"
+    PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
+        DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" > "$t/out1" 2>&1 || rc1=$?
+    [ "$rc1" -ne 0 ] || rc=1
+    grep -q "secret file missing.*: $t/secrets/absent.env" "$t/out1" || rc=1
+    ! grep -q "present.env" "$t/out1" || rc=1
+    ! grep -q "^yarn prod:docker" "$t/calls" 2> /dev/null || rc=1
+    [ ! -e "$t/marker" ] || rc=1
+    rm "$t/roles/webserver"
+    PATH="$t/bin:$PATH" REPO_DIR="$t/machine" DEPLOY_LOCK_FILE="$t/lock" ROLES_DIR="$t/roles" \
+        DEPLOY_MARKER="$t/marker" XDG_STATE_HOME="$t/state" "$DEPLOY_UNDER_TEST" > "$t/out2" 2>&1 || rc=1
+    grep -q "^yarn prod:docker" "$t/calls" || rc=1
     rm -rf "$t"
     return "$rc"
 }
@@ -916,6 +951,10 @@ if [ "$PHASE" = provisioned ]; then
     check "roles on this machine are exactly '${EXPECT_ROLES:-none}'" \
         '[ "$(ls /etc/seanorepo/roles 2>/dev/null | sort | tr "\n" " " | sed "s/ $//")" = "$(printf "%s" "${EXPECT_ROLES:-}" | tr " " "\n" | sort | tr "\n" " " | sed "s/ $//")" ]'
     check "the #307 serving flag is gone" '[ ! -e /etc/seanorepo/serving ]'
+    # REQ-SERVER-021: the server secrets directory. root owns it, and only the
+    # group of the deploy user reads it.
+    check "/etc/seanorepo is root:$(id -gn "$DEPLOY_USER" 2>/dev/null), mode 750" \
+        '[ "$(stat -c "%U:%G %a" /etc/seanorepo 2>/dev/null)" = "root:$(id -gn "$DEPLOY_USER") 750" ]'
     if [ ! -e /etc/seanorepo/roles/webserver ]; then
         # REQ-SERVER-014: with no role, a triggered deploy is
         # skipped by its condition and runs nothing.
@@ -1061,6 +1100,9 @@ if [ "$PHASE" = provisioned ]; then
             'deploy_renamed_app "$(mktemp -d)"'
         check "a failed app does not stop the tunnel step, and the deploy exits non-zero" \
             'deploy_failed_app "$(mktemp -d)"'
+        # REQ-SERVER-022: see deploy_missing_secret above.
+        check "a webserver with a missing secret file stops before yarn prod:docker" \
+            'deploy_missing_secret "$(mktemp -d)"'
         # REQ-SERVER-019: see deploy_log_levels and deploy_loud_tools above.
         # The root of the copy under test is four levels above deploy.sh.
         check "each deploy line has a level, tool output is at debug, and a failure shows its output at error" \
@@ -1077,6 +1119,7 @@ if [ "$PHASE" = provisioned ]; then
         sk "the deploy runs once per checkout and again after a reboot" "$behaviour_skip_reason"
         sk "the deploy removes the old container of a renamed app and starts the new one" "$behaviour_skip_reason"
         sk "a failed app does not stop the tunnel step, and the deploy exits non-zero" "$behaviour_skip_reason"
+        sk "a webserver with a missing secret file stops before yarn prod:docker" "$behaviour_skip_reason"
         sk "each deploy line has a level, tool output is at debug, and a failure shows its output at error" "$behaviour_skip_reason"
         sk "the deploy path runs build tools only in run_quiet" "$behaviour_skip_reason"
         sk "yarn prod:docker runs every app after a failure, with the build output at debug" "$behaviour_skip_reason"
@@ -1099,6 +1142,7 @@ else
     sk "the LAN names follow the roles" "setup-server-environment.sh installs it"
     sk "roles on this machine are exactly '${EXPECT_ROLES:-none}'" "setup-server-environment.sh writes them"
     sk "the #307 serving flag is gone" "setup-server-environment.sh removes it"
+    sk "/etc/seanorepo is root:$(id -gn "$DEPLOY_USER" 2>/dev/null), mode 750" "setup-server-environment.sh creates it"
     sk "without the webserver role a triggered deploy runs nothing" "setup-server-environment.sh installs it"
     sk "the deploy publishes the apps on loopback, with or without the tunnel" "setup-developer-environment.sh clones the checkout"
     sk "the deploy starts the LAN edge without the tunnel and stops it with" "setup-developer-environment.sh clones the checkout"
@@ -1114,6 +1158,7 @@ else
     sk "the deploy runs once per checkout and again after a reboot" "setup-developer-environment.sh clones the checkout"
     sk "the deploy removes the old container of a renamed app and starts the new one" "setup-developer-environment.sh clones the checkout"
     sk "a failed app does not stop the tunnel step, and the deploy exits non-zero" "setup-developer-environment.sh clones the checkout"
+    sk "a webserver with a missing secret file stops before yarn prod:docker" "setup-developer-environment.sh clones the checkout"
 fi
 
 # REQ-SERVER-020 - after a restart of the Docker daemon, each app runs again.
@@ -1124,7 +1169,7 @@ fi
 # profile lan) has the same rule. `docker compose config` resolves the anchors
 # and the merges, so the check reads the policy that compose gives to the
 # container. --no-env-resolution: an env file that is only on the server
-# (apps/*/.env) must not stop the check. EDGE_HOST: the edge compose file
+# (/etc/seanorepo) must not stop the check. EDGE_HOST: the edge compose file
 # stops when it has no value, and the policy does not use it.
 #
 # Prints each service that breaks the rule, as "file: service (policy)", and

@@ -8,15 +8,19 @@
 #
 # demo: crm-demo and its Litestream sidecar. The same image, the same code
 # and the same settings as prod. Only the env is different: its own volume,
-# apps/crm/.env.demo, host port 4101, demo-crm.seanmizen.com, and the backup
-# bucket crm-demo with the prefix demo-crm.db/. scripts/prod-docker.sh adds
-# this profile only when apps/crm/.env.demo exists. Without the file, the
-# demo does not start.
+# /etc/seanorepo/crm-demo.env, host port 4101, demo-crm.seanmizen.com, and
+# the backup bucket crm-demo with the prefix demo-crm.db/.
+# scripts/prod-docker.sh adds this profile only when
+# /etc/seanorepo/crm-demo.env exists. Without the file, the demo does not
+# start.
 #
-# Each container gets only the secrets it uses. The app containers read
-# .env or .env.demo, which hold no R2 key. Each Litestream sidecar reads only
-# its R2 file: .env.r2 or .env.demo.r2. A test (crm-be/src/demo.test.ts)
-# fails when an app container and a sidecar share an env file.
+# The server secrets live in /etc/seanorepo (REQ-SERVER-021). Each container
+# gets only the secrets it uses. The app containers read crm.env or
+# crm-demo.env, which hold no R2 key. Each Litestream sidecar reads only its
+# R2 file: crm-r2.env or crm-demo-r2.env. A test (crm-be/src/demo.test.ts)
+# fails when an app container and a sidecar share an env file. Each file is
+# required: false, so `yarn prod:docker` also runs on a computer with no
+# secrets. Without a file, each of its values is unset, and unset means off.
 #
 # dev: bind-mounts the monorepo root, so `@shared/*` resolves. node_modules
 # is a named volume that the image fills. This keeps the Linux builds of
@@ -71,11 +75,9 @@ x-litestream-base: &litestream-base
 services:
   crm:
     <<: *crm-base
-    # The secrets of the crm app: apps/crm/.env on the server. Git ignores it,
-    # and deploy.sh never changes it. The README "Env vars" table names each
-    # value. Without the file, each one is unset, and unset means off.
+    # The README "Env vars" table names each value.
     env_file:
-      - path: ./.env
+      - path: /etc/seanorepo/crm.env
         required: false
     profiles: ['prod']
     restart: unless-stopped
@@ -92,12 +94,12 @@ services:
 
   # Litestream replicates /data/crm.db to the R2 bucket (EU jurisdiction),
   # under the prefix CRM_R2_PATH. The README has the restore command.
-  # apps/crm/.env.r2 holds its four R2 values, and nothing else.
+  # /etc/seanorepo/crm-r2.env holds its four R2 values, and nothing else.
   litestream:
     <<: *litestream-base
     container_name: crm-litestream
     env_file:
-      - path: ./.env.r2
+      - path: /etc/seanorepo/crm-r2.env
         required: false
     profiles: ['prod']
     depends_on:
@@ -110,13 +112,13 @@ services:
 
   # The demo (demo-crm.seanmizen.com). The same image and settings as crm.
   # Its own volume, env file, host port and public URL. scripts/prod-docker.sh
-  # adds the demo profile only when .env.demo exists. The README "Demo"
-  # section has the template of the file.
+  # adds the demo profile only when /etc/seanorepo/crm-demo.env exists. The
+  # README "Demo" section has the template of the file.
   crm-demo:
     <<: *crm-base
     container_name: crm-demo
     env_file:
-      - path: ./.env.demo
+      - path: /etc/seanorepo/crm-demo.env
         required: false
     profiles: ['demo']
     restart: unless-stopped
@@ -133,13 +135,13 @@ services:
       - 'description=crm demo (https://demo-crm.seanmizen.com)'
 
   # Litestream for the demo: the bucket crm-demo (CRM_R2_BUCKET in
-  # .env.demo.r2), with its own R2 key, and the prefix demo-crm.db. A test
+  # crm-demo-r2.env), with its own R2 key, and the prefix demo-crm.db. A test
   # (crm-be/src/demo.test.ts) fails when two sidecars have the same prefix.
   litestream-demo:
     <<: *litestream-base
     container_name: crm-demo-litestream
     env_file:
-      - path: ./.env.demo.r2
+      - path: /etc/seanorepo/crm-demo-r2.env
         required: false
     profiles: ['demo']
     depends_on:

@@ -29,12 +29,6 @@ x-backend-base: &backend-base
     - '${PUBLISH_ADDR:-127.0.0.1}:4061:4061'
   labels:
     - 'description=inside - Backend API (http://localhost:4061/api)'
-  # Secrets and SMTP config. Optional so `start:docker` works on a fresh clone
-  # with the dev defaults. Production refuses to boot without real values, so
-  # the deploy host must have this file.
-  env_file:
-    - path: ./inside-be/.env
-      required: false
   environment:
     - PORT=4061
     - DB_PATH=/app/db
@@ -64,6 +58,13 @@ services:
     <<: *backend-base
     profiles: ['prod']
     restart: unless-stopped
+    # Secrets and SMTP config. The server secrets live in /etc/seanorepo
+    # (REQ-SERVER-021). Production refuses to boot without real values, and
+    # deploy.sh stops when the file is missing on a webserver. required:
+    # false, so `yarn prod:docker` also runs on a computer with no secrets.
+    env_file:
+      - path: /etc/seanorepo/inside.env
+        required: false
     # The edge routes to this service by its alias (infra/edge).
     networks:
       default: {}
@@ -76,6 +77,10 @@ services:
   backend-dev:
     <<: *backend-base
     profiles: ['dev']
+    # Optional, so `start:docker` works on a fresh clone with the dev defaults.
+    env_file:
+      - path: ./inside-be/.env
+        required: false
     volumes:
       - type: bind
         source: ../..

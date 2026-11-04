@@ -42,7 +42,10 @@ Provisioning, roles, moving the tunnel between machines, and the VPN
 `utils/debbie/2026-09-17/README.md`. Read it before you change anything under
 `utils/debbie/`.
 
-Things that are not in git and live only on the machine: `.env` files, the
-Cloudflare tunnel credential in `apps/cloudflared/credentials/`, and the
-SQLite/upload Docker volumes. Never `git clean` a server
-checkout.
+Things that are not in git and live only on the machine: the app secret
+files in `/etc/seanorepo/` (REQ-SERVER-021), the Cloudflare tunnel credential
+in `apps/cloudflared/credentials/`, and the SQLite/upload Docker volumes.
+Never `git clean` a server checkout. `deploy.sh` stops before
+`yarn prod:docker` when a file in
+`utils/debbie/2026-09-17/services/server-secrets.list` is missing. The
+debbie README "Server secrets" table names each file.

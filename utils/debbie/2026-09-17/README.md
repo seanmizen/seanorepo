@@ -174,14 +174,17 @@ ssh srv@<B>.local 'install -d -m 0700 ~/projects/seanorepo/apps/cloudflared/cred
   && install -m 0600 /tmp/<uuid>.json ~/projects/seanorepo/apps/cloudflared/credentials/ && rm /tmp/<uuid>.json'
 ```
 
-Then every `.env` each app needs, and any site data. Check the `uuid` matches
-`tunnel:` in `apps/cloudflared/config.yml`, or B serves a different tunnel and
-every hostname moves with it.
+Check the `uuid` matches `tunnel:` in `apps/cloudflared/config.yml`, or B
+serves a different tunnel and every hostname moves with it.
+
+Then each file in [Server secrets](#server-secrets), and any site data.
+Without a file on the list, the deploy on B stops and names the file.
 
 The crm streams its database to R2 (`apps/crm/README.md`, "Backups"). Two
 machines must never stream to the same bucket. On B, remove `CRM_R2_BUCKET`
-from `apps/crm/.env.r2` until A stops the crm. To get the data on B, run the
-restore commands with `-e CRM_R2_BUCKET=crm` after `run`.
+from `/etc/seanorepo/crm-r2.env` until A stops the crm. Keep the file: the
+deploy needs it. To get the data on B, run the restore commands with
+`-e CRM_R2_BUCKET=crm` after `run`.
 
 #### 3. Deploy, and prove B on the LAN
 
@@ -247,9 +250,10 @@ Leave A powered for a week. That is also what keeps any data you did not copy.
 
 #### Things that bite
 
-- **A `.env` edited for a LAN test survives every deploy.** `deploy.sh` never
-  touches `.env`. A `CORS_ORIGIN` pointed at a LAN address gives a public site
-  that refuses its own frontend. Put it back before step 4.
+- **A secret file edited for a LAN test survives every deploy.** `deploy.sh`
+  never changes a file in `/etc/seanorepo/`. A `CORS_ORIGIN` pointed at a LAN
+  address gives a public site that refuses its own frontend. Put it back
+  before step 4.
 - **A frontend rebuilt with a LAN `API_URL` does not survive** - `deploy.sh
   --force` rebuilds it with `/api`. Run it anyway, to be sure.
 - **`working/id_ed25519` is not the admin key.** A machine installed by this
@@ -257,6 +261,45 @@ Leave A powered for a week. That is also what keeps any data you did not copy.
   different key, add the new key beside the old one. Prove that it works
   **before** you remove anything. sshd refuses passwords, so a wrong
   `authorized_keys` leaves only the console.
+
+## Server secrets
+
+Each app secret file on a target machine is in `/etc/seanorepo/`
+(REQ-SERVER-021). The directory is `root:srv`, mode 0750.
+`setup-server-environment.sh` makes it. Each file is `root:srv`, mode 0640:
+root writes it, and `srv` reads it, because `docker compose` runs as `srv`.
+No file is in git, and no script writes one.
+
+`services/server-secrets.list` names the files that a machine with
+`ROLE_WEBSERVER=yes` must have. Before `yarn prod:docker`, `deploy.sh` stops
+with an error that names each missing file (REQ-SERVER-022). The crm demo
+files are optional: without `crm-demo.env`, the demo is off.
+
+| File | Values | Read by | Issue a value again |
+|---|---|---|---|
+| `autosam.env` | `AUTOSAM_EDIT_KEY` | autosam (`frontend`) | `openssl rand -hex 32`. Give the new key to each editor. |
+| `caroline.env` | `JWT_SECRET`, `COOKIE_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ADMIN_EMAILS`, `FRONTEND_URL`, `CORS_ORIGIN`, `UPLOADS_URL`, and the other keys in `caroline-be/.env.example` | caroline-be (`backend`) | `JWT_SECRET`, `COOKIE_SECRET`: `openssl rand -base64 32`. A new value signs each admin out. `SMTP_PASS`: a Gmail app password of `9mazes@gmail.com` (Google account → Security → App passwords). Revoke the old one there. |
+| `crm.env` | `CRM_ADMIN_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | crm (`crm`) | `SMTP_PASS`: the same Gmail app password as `caroline.env`. |
+| `crm-r2.env` | `CRM_R2_BUCKET`, `CRM_R2_ENDPOINT`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` | the crm Litestream sidecar (`litestream`) | Cloudflare dashboard → R2 → Manage API tokens → Create API token, *Object Read & Write*, the bucket `crm` only. Delete the old token. |
+| `inside.env` | `JWT_SECRET`, `COOKIE_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ADMIN_EMAILS`, `SITE_NAME`, `FRONTEND_URL`, `CORS_ORIGIN`, and the other keys in `inside-be/.env.example` | inside-be (`backend`) | As `caroline.env`. |
+| `crm-demo.env` (optional) | `CRM_ADMIN_EMAIL`, `CRM_UNSAFE_DEMO_LOGIN` | the crm demo (`crm-demo`) | No secret. `apps/crm/README.md`, "Demo", has the values. |
+| `crm-demo-r2.env` (optional) | the four values of `crm-r2.env`, for the bucket `crm-demo` | the demo Litestream sidecar (`litestream-demo`) | As `crm-r2.env`, for the bucket `crm-demo` only. Never the key of `crm`. |
+
+Each app README names its values. The services are in each app's
+`docker-compose.yml`. Each dev service reads its own file in the checkout.
+
+Add or change a file:
+
+```bash
+ssh -t srv@<name>.local
+sudoedit /etc/seanorepo/<file>.env
+sudo chown root:srv /etc/seanorepo/<file>.env && sudo chmod 0640 /etc/seanorepo/<file>.env
+cut -d= -f1 /etc/seanorepo/<file>.env    # the names, with no values
+~/projects/seanorepo/utils/debbie/2026-09-17/services/deploy.sh --force
+```
+
+`/etc/seanorepo/` also holds the role flags (`roles/`). A file that only a
+root service reads is `root:root`, mode 0600.
 
 ## Operate a target machine
 
