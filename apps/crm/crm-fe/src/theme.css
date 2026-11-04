@@ -8,32 +8,34 @@
  * Why: each page has one anatomy:
  * 1. The nav (text): the path title, then one line of links.
  * 2. The intro (text): at most one sentence.
- * 3. The device: the core function of the page, as one instrument. The
- *    LCD shows data or a menu. The modules hold keys and fields.
- * 4. The boxes: the data of the page. Each box is white, with a silkscreen
- *    title and plain text.
- * 5. The footer (text): the pager and top.
+ * 3. The rack: the device of the page on its side, at the full width. The
+ *    display unit is the glass as a strip of readings, with the plate keys
+ *    at its right. The control unit holds the modules on a grid of 12.
+ * 4. The band: the data of the page, at the full width, under the rack.
+ *    It is a chart of real tables, with a gutter that names each group.
+ * 5. The footer (text): privacy and top.
+ * A page that is not on the rack has the old anatomy: the device and
+ * the boxes, in a 40/60 grid (REQ-CRM-LAYOUT-001).
  *
- * The layout (REQ-CRM-LAYOUT-001):
+ * The layout (REQ-CRM-LAYOUT-002):
  * 1. One breakpoint: 960px. Each width media query in this file is
  *    (width < 960px) for a narrow screen or (width >= 960px) for a wide
  *    screen. crm-be/src/layout.test.ts fails on a different value. No other
  *    rule changes the layout: no row of the page wraps at a width that its
- *    content sets.
- * 2. Why 960px: at 960px the device column is about 364px wide, the width
- *    that the device has on a phone, and the data column is about 547px
- *    wide, enough for the five columns of the Contacts table. A tablet held
+ *    content sets. One height query is allowed: (height >= 720px).
+ * 2. Why 960px: at 960px each module of the control unit has room for its
+ *    keys, and the band has room for its seven columns. A tablet held
  *    upright (768px to 834px) gets the narrow layout, which suits a finger.
- * 3. Wide: a grid of two columns, 2fr 3fr (40% and 60%). The device (the
- *    control panel) is at the left. The boxes (the data) are at the right.
- *    The page is at most 1200px wide, at the top left. The app links are in
+ * 3. Wide: the rack, then the band, each at the full width of the page.
+ *    The page is at most 1680px wide, at the top left. The app links are in
  *    the footer row.
- * 4. Narrow: one column, in the order of the HTML: the nav, the device, the
- *    boxes, the footer. The page margin is 1px.
+ * 4. Narrow: one column, in the order of the HTML. The ears of the rack
+ *    go, each module has the full width, and each band row folds to two
+ *    lines. The page margin is 1px.
  * 5. The root font is 14px on a wide screen and 17px on a narrow screen
- *    (see :root). So no column width uses rem or em: the columns are
+ *    (see :root). So no column width of the page uses rem: the columns are
  *    fractions, and the page width is in px. The font change does not move
- *    the breakpoint or change a column width.
+ *    the breakpoint.
  *
  * The principles of the device, as in autosam pixel-3.css:
  * 1. One grid. Each module sits on a grid of 6 columns, and each key is a
@@ -77,6 +79,8 @@
      --accent, made brighter for the black faceplate. */
   --led-off: rgb(255 255 255 / 0.13);
   --led-on: #c42a3a;
+  /* The print on the faceplate: the captions of the plate keys. */
+  --plate-ink: var(--surface);
 
   /* The glass: the reflective LCD of autosam. Dark segments throw a small
      shadow on the reflector behind them. --glass-edge is a background
@@ -100,7 +104,7 @@
 /* A narrow screen is a phone or a tablet, maybe held outdoors. The text is
    larger than on a wide screen. 17px also stops iOS from a zoom into a
    field. The font changes at the one breakpoint, so no column width uses
-   rem (REQ-CRM-LAYOUT-001). */
+   rem (REQ-CRM-LAYOUT-002). */
 @media (width < 960px) {
   :root {
     font-size: 17px;
@@ -139,6 +143,7 @@
       0 3px 8px rgb(0 0 0 / 0.6);
     --led-off: rgb(0 0 0 / 0.3);
     --led-on: var(--accent);
+    --plate-ink: var(--ink);
 
     /* The LCD has its backlight on: brighter in the middle. The window in
        the steel has no outline. Its bottom edge catches the light. */
@@ -186,7 +191,7 @@ time {
   body {
     padding: 1px 1px 1rem;
   }
-  :is(.demo, .title, .links, .intro, .help, .foot) {
+  :is(.demo, .title, .links, .intro, .help, .band-head, .foot) {
     padding-inline: 0.6rem;
   }
   body > :first-child {
@@ -208,6 +213,10 @@ time {
   }
   body > * {
     grid-column: 1 / -1;
+  }
+  /* A page on the rack has the width for the band: at most 1680px. */
+  body:has(> main > .rack) {
+    max-width: 1680px;
   }
 }
 
@@ -362,14 +371,13 @@ button.link:disabled {
 }
 
 /* The LCD: the glass in its faceplate. The rules of the LCD are
-   REQ-CRM-LCD-001, and crm-be/src/ui/Lcd.tsx owns them:
+   REQ-CRM-LCD-002, and crm-be/src/ui/Lcd.tsx owns them:
    1. No LED is inside the glass. A status in the glass is the status
       mark: a solid circle in the ink of the LCD, which blinks slowly.
    2. The characters never move. Each menu row has an arrow column at its
       left. A hover or a focus shows the arrow there, and changes no
       layout.
-   3. The menu rows have one fixed height. The LED of a row is in the
-      bezel at its right, so the LEDs are a straight column. */
+   3. The menu rows have one fixed height. */
 .lcd {
   grid-column: 1 / -1;
   padding: 0.75em;
@@ -377,17 +385,9 @@ button.link:disabled {
   background: var(--plate);
   box-shadow: var(--plate-shadow);
 }
-/* The window: the glass, and the LED column of the bezel at its right
-   (--bezel, 0 when no menu row has an LED). The glass is the background
-   of the window, so in a long menu the text scrolls over a glass that
-   stays still. The top layer is the shadow of the bezel on the glass. */
-.window {
-  --bezel: 0px;
-  --arrow: 1.25rem;
-  position: relative;
-  display: grid;
-  gap: 0.75em;
-  padding: 0.6em 0;
+/* The glass: the window of the LCD, and the glass of the display unit of
+   the rack. The top layer is the shadow of the bezel on the glass. */
+:is(.window, .glass) {
   border-radius: 3px;
   background-image:
     linear-gradient(rgb(0 0 0 / 0.4), transparent 6px),
@@ -399,23 +399,21 @@ button.link:disabled {
     ), var(--glass-edge), var(--glass-texture),
     linear-gradient(var(--glass), var(--glass));
   background-repeat: no-repeat;
-  background-size: calc(100% - var(--bezel)) 100%;
   color: var(--lit);
   font-family: var(--mono);
   text-shadow: var(--glow);
 }
-.window:has(> .menu.leds) {
-  --bezel: 1.75em;
-}
-/* The LED column is part of the bezel at the right, so the faceplate
-   needs only a small margin after it. */
-.lcd:has(> .window > .menu.leds) {
-  padding-right: 0.25em;
+.window {
+  --arrow: 1.25rem;
+  position: relative;
+  display: grid;
+  gap: 0.75em;
+  padding: 0.6em 0;
 }
 /* The text of the glass that is not a menu: the alert, the read-out and
    the empty text. */
 .window > :not(.menu) {
-  margin-inline: 0.75rem calc(0.75rem + var(--bezel));
+  margin-inline: 0.75rem;
 }
 .window p {
   margin-block: 0;
@@ -423,18 +421,6 @@ button.link:disabled {
 .window .empty {
   color: var(--dim);
 }
-/* A long menu scrolls in the window, as a display with a fixed number of
-   lines. So the modules under the LCD stay near the top of the page. A
-   row cut at the bottom shows that there is more. The scroll bar is in the
-   bezel. The hidden text of each row (.bare-text) stays in the window, so
-   it does not make the page longer. */
-.window:has(> .menu) {
-  max-height: 60vh;
-  overflow-y: auto;
-  scrollbar-color: rgb(255 255 255 / 0.3) transparent;
-  scrollbar-width: thin;
-}
-
 /* The status mark: a solid circle in the ink of the LCD, before the alert
    and before a value with a status. It blinks slowly. It is not an LED:
    an LED is never inside the glass. The text next to it tells the state,
@@ -445,6 +431,8 @@ button.link:disabled {
   gap: 0.5em;
 }
 .window [role="alert"]::before,
+.glass > .status:not(.empty)::before,
+.strip .mark::before,
 .readout .mark::before {
   content: "";
   display: inline-block;
@@ -456,6 +444,7 @@ button.link:disabled {
   box-shadow: var(--glow);
   animation: crm-mark-blink 2s step-end infinite;
 }
+.strip .mark::before,
 .readout .mark::before {
   margin-right: 0.5em;
 }
@@ -466,6 +455,8 @@ button.link:disabled {
 }
 @media (prefers-reduced-motion: reduce) {
   .window [role="alert"]::before,
+  .glass > .status::before,
+  .strip .mark::before,
   .readout .mark::before {
     animation: none;
   }
@@ -483,6 +474,7 @@ button.link:disabled {
   display: contents;
 }
 .readout dt,
+.strip dt,
 .menu::before,
 .menu::after {
   color: var(--dim);
@@ -497,30 +489,22 @@ button.link:disabled {
   overflow-wrap: anywhere;
 }
 
-/* The menu: a legend over each column, then one row for each record, as
-   the track list of autosam. Each row has one fixed height (--row): one
-   line, or two lines with .two-lines. Each row is a grid of the glass part
-   (the link) and the bezel part (the LED). */
+/* The menu: a legend over each column, then one row for each page, as
+   the track list of autosam. Each row has one fixed height (--row). */
 .menu {
   --row: 2.15em;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--bezel);
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.menu.two-lines {
-  --row: 3.4em;
-}
 /* The legends: the name legend over the names (after the arrow column),
-   and the value legend over the values. With .two-lines, each legend has a
-   second line for the second line of the rows. */
+   and the value legend over the values. */
 .menu::before,
 .menu::after {
-  grid-column: 1;
   grid-row: 1;
+  grid-column: 1;
   padding-bottom: 0.3em;
-  white-space: pre;
 }
 .menu::before {
   content: attr(data-legend-name);
@@ -532,62 +516,21 @@ button.link:disabled {
   padding-right: 0.75rem;
   text-align: right;
 }
-/* "\A" is the CSS escape of a line break. The safe fix of Biome removes
-   the backslash, so each of these lines has a biome-ignore. */
-.menu[data-legend-detail]::before {
-  /* biome-ignore lint/suspicious/noUselessEscapeInString: a CSS line break */
-  content: attr(data-legend-name) "\A" attr(data-legend-detail);
-}
-.menu[data-legend-status]::after {
-  /* biome-ignore lint/suspicious/noUselessEscapeInString: a CSS line break */
-  content: attr(data-legend-value) "\A" attr(data-legend-status);
-}
-/* The arrow of the order (REQ-CRM-LCD-001). A value or status legend is
-   aligned right, so its text holds the arrow and no character moves. The
-   name legend keeps the arrow column of the rows free, and the arrow of a
-   name order shows in it. The first row draws it, because the menu has no
-   other free part. */
-.menu[data-order-name] {
-  position: relative;
-}
-.menu[data-order-name] > li:first-child::before {
-  position: absolute;
-  top: 0;
-  left: 0.75rem;
-  color: var(--dim);
-  font-size: 0.75em;
-  font-weight: 500;
-  text-shadow: none;
-}
-.menu[data-order-name="asc"] > li:first-child::before {
-  content: "\25B2";
-}
-.menu[data-order-name="desc"] > li:first-child::before {
-  content: "\25BC";
-}
 .menu li {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--bezel);
   height: var(--row);
 }
-/* A row: the arrow column, the name and its value, then the detail and
-   its status. The tracks have fixed sizes, so a hover changes no layout.
-   A text that does not fit ends in an ellipsis. The title of the row has
-   the full text. */
+/* A row: the arrow column, the name and its value. The tracks have fixed
+   sizes, so a hover changes no layout. A text that does not fit ends in an
+   ellipsis. The title of the row has the full text. */
 .menu a {
   display: grid;
   grid-template-columns: var(--arrow) minmax(0, 1fr) auto;
-  grid-template-rows: 1.35em;
-  align-content: center;
-  row-gap: 0.1em;
+  align-items: center;
+  height: 100%;
   padding: 0 0.75rem;
   overflow: hidden;
   color: inherit;
   text-decoration: none;
-}
-.menu.two-lines a {
-  grid-template-rows: 1.35em 1.15em;
 }
 .menu a:is(:hover, :focus-visible) {
   outline: none;
@@ -596,74 +539,241 @@ button.link:disabled {
   text-shadow: none;
 }
 .menu .arrow {
-  grid-column: 1;
-  grid-row: 1;
   font-size: 0.8em;
-  line-height: 1.7;
 }
-.menu a:is(:hover, :focus-visible) .arrow::before {
+/* The arrow of a hover or a focus, in the arrow column of a menu row or a
+   band row. */
+:is(
+    .menu a:is(:hover, :focus-visible),
+    .chart tbody tr:is(:hover, :focus-within)
+  )
+  .arrow::before {
   content: "\25B6";
 }
-.menu :is(.name, .detail) {
-  grid-column: 2;
+.menu .name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.menu .name {
-  grid-row: 1;
   font-weight: 500;
 }
 .menu .value {
-  grid-column: 3;
-  grid-row: 1;
   padding-left: 1ch;
   text-align: right;
   white-space: nowrap;
 }
-.menu .detail {
-  grid-row: 2;
-  color: var(--dim);
-  font-size: 0.85em;
+
+/* The rack (REQ-CRM-LAYOUT-002, crm-be/src/ui/Rack.tsx): the device of
+   the page on its side. The units stack on one chassis, with 2px seams
+   between them. Each unit has an ear at each end: metal with two screw
+   holes. On a narrow screen the ears go. */
+.rack {
+  display: grid;
+  gap: 2px;
+  margin-top: 0.75em;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--line);
 }
-.menu .status {
-  grid-column: 3;
-  grid-row: 2;
-  justify-self: end;
-  padding-left: 1ch;
-  color: var(--dim);
-  font-size: 0.85em;
-  white-space: nowrap;
+.unit {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) 15px;
+  gap: 2px;
 }
-.menu a:is(:hover, :focus-visible) :is(.detail, .status) {
-  color: inherit;
+.ear {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-radius: 3px;
+  background: var(--bg);
 }
-/* A record with no value, for example no next action: dim, so a due date
-   stands out. */
-.menu .none {
-  color: var(--dim);
-}
-.menu a:is(:hover, :focus-visible) .none {
-  color: inherit;
-}
-/* The LED of a row, in the bezel at its right, in the middle of the row:
-   a dark socket when off, lit red when on. The rows have one height, so the
-   LEDs are a straight column at equal steps. */
-.menu .led {
-  grid-column: 2;
-  align-self: center;
-  justify-self: center;
-  width: 0.55em;
-  height: 0.55em;
+.ear::before,
+.ear::after {
+  content: "";
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--led-off);
+  background: var(--line);
   box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.4);
 }
-.menu .led.on {
-  background: var(--led-on);
-  box-shadow:
-    0 0 5px var(--led-on),
-    inset 0 -1px 1px rgb(0 0 0 / 0.25);
+@media (width < 960px) {
+  .unit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ear {
+    display: none;
+  }
+}
+
+/* The display unit (crm-be/src/ui/DisplayUnit.tsx): the glass as one
+   strip of readings, and the plate keys at its right, on the faceplate.
+   The rules of the glass are REQ-CRM-LCD-002: no LED in the glass, and the
+   blinking ink mark is the only mark in it. Each value and each line of a
+   reading is one line high, so the glass keeps its height when the data
+   changes (REQ-CRM-MORPH-001). */
+.faceplate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65em;
+  padding: 0.6em;
+  border-radius: 4px;
+  background: var(--plate);
+  box-shadow: var(--plate-shadow);
+}
+.glass {
+  display: grid;
+  align-content: start;
+  gap: 0.45em;
+  padding: 0.6em 0.85em;
+}
+/* The line of a save or an error: always present on a page that can show
+   one, so the glass does not move. */
+.glass > .status {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  height: 1.35em;
+  margin: 0;
+  padding-bottom: 0.4em;
+  overflow: hidden;
+  border-bottom: 1px solid var(--ghost);
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* The strip: a legend over each value, with faint rules between the
+   readings. The name is the one large value. */
+.strip {
+  display: flex;
+  margin: 0;
+}
+.strip > div {
+  flex: 1 1 0;
+  display: grid;
+  align-content: start;
+  gap: 0.1em;
+  min-width: 0;
+  padding: 0 1.05em;
+  border-left: 1px solid var(--ghost);
+}
+.strip > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.strip > .name {
+  flex-grow: 3.5;
+}
+.strip > .count {
+  flex: 0 0 6em;
+}
+.strip dt {
+  margin-bottom: 0.2em;
+}
+.strip dd {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.strip .name > .value {
+  font-size: 1.55em;
+  font-weight: 500;
+  line-height: 1.15;
+}
+.strip .count > .value {
+  font-size: 2.3em;
+  font-weight: 500;
+  line-height: 1;
+}
+.strip .text > .value {
+  font-size: 1.15em;
+  font-weight: 500;
+}
+.strip .line {
+  font-size: 0.95em;
+}
+.strip .text > .line {
+  color: var(--dim);
+}
+/* The plate: the keys at the right of the glass, each with its caption
+   under it. A caption tells what the key acts on, or why it is off
+   (REQ-CRM-BUTTON-001). */
+.plate {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(6.5em, auto);
+  align-content: center;
+  gap: 0.3em;
+}
+.plate-key {
+  display: grid;
+  gap: 0.3em;
+  min-width: 0;
+}
+.plate .caption {
+  overflow: hidden;
+  color: var(--plate-ink);
+  font-family: var(--mono);
+  font-size: 0.62em;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.11em;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+@media (width < 960px) {
+  .faceplate {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5em;
+    padding: 0.5em;
+  }
+  .glass {
+    padding: 0.5em 0.65em;
+  }
+  /* The readings fold: the name has its own row, and the rest share the
+     next row in thirds. */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 0.5em;
+  }
+  .strip > div {
+    padding: 0 0.6em;
+  }
+  .strip > .name {
+    grid-column: 1 / -1;
+    padding: 0 0 0.5em;
+    border-left: 0;
+    border-bottom: 1px solid var(--ghost);
+  }
+  .strip > .name + div {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .strip .name > .value {
+    font-size: 1.35em;
+  }
+  .strip .count > .value {
+    font-size: 1.7em;
+  }
+  .plate {
+    grid-auto-columns: minmax(0, 1fr);
+  }
+}
+
+/* The control unit (crm-be/src/ui/ControlUnit.tsx): the modules side by
+   side, on a grid of 12, with 2px seams. A form that holds modules puts
+   them on the same grid. On a narrow screen each module has the full
+   width. */
+.modules {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 2px;
+}
+.modules > form {
+  display: contents;
 }
 
 /* A module: the label at the top left, the value at the top right, the
@@ -687,6 +797,28 @@ button.link:disabled {
 }
 .module.span-4 {
   grid-column: span 4;
+}
+.module.span-5 {
+  grid-column: span 5;
+}
+.module.span-7 {
+  grid-column: span 7;
+}
+.module.span-8 {
+  grid-column: span 8;
+}
+.module.span-9 {
+  grid-column: span 9;
+}
+.module.span-12 {
+  grid-column: span 12;
+}
+/* On a narrow screen each module of the control unit has the full
+   width. */
+@media (width < 960px) {
+  .modules .module {
+    grid-column: 1 / -1;
+  }
 }
 .module > h2 {
   margin: 0;
@@ -732,6 +864,7 @@ button.link:disabled {
   /* A key label never wraps. A row of keys gives each key the width of
      its label. */
   white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
   transition: transform 60ms;
 }
@@ -807,6 +940,17 @@ button.link:disabled {
 }
 .keys.grid > :nth-child(3n + 1):last-child {
   grid-column: span 6;
+}
+/* Four keys to a row on a wide screen, and three on a narrow screen. Each
+   key keeps its width, so a short last row has a gap at its end. */
+.keys.four {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (width < 960px) {
+  .keys.four {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* The field: its label above, the control below. The control uses the
@@ -952,7 +1096,273 @@ button.link:disabled {
   }
 }
 
-/* 5. The footer: the pager and top, as one line of text. On a wide screen
+/* The band (crm-be/src/ui/Band.tsx): the data of the page, under the
+   rack, at the full width. One chart on the chassis, with 2px seams, as
+   the chord chart of autosam. The gutter at the left names each group of
+   rows. The rules of the rows are REQ-CRM-LCD-002:
+   1. Each row has one fixed height. A text that does not fit ends in an
+      ellipsis.
+   2. The name starts with the arrow column. A hover or a focus shows the
+      arrow there, and no character moves.
+   3. The LED of a row is on the chassis seam at its left (.c-seam), not
+      on the paper of the row. */
+.band {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4em;
+  margin-top: 1em;
+}
+.band-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1em;
+}
+.band-head > h2 {
+  margin: 0;
+  color: var(--ink);
+}
+.band-head > .info {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chart {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 2px;
+  border-radius: 6px;
+  background: var(--line);
+}
+/* The columns of fixed width. The name and the next action share the rest
+   of the width in halves. */
+.chart col.c-gutter {
+  width: 8.5em;
+}
+.chart col.c-seam {
+  width: 1.8em;
+}
+.chart col.c-stage {
+  width: 6.2em;
+}
+.chart col.c-due {
+  width: 16em;
+}
+.chart col.c-last {
+  width: 8.8em;
+}
+.chart col.c-postcode {
+  width: 6em;
+}
+.chart :is(th, td) {
+  height: 2.2em;
+  padding: 0 0.65rem;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface);
+  font-weight: 400;
+  text-align: left;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+/* The legends: silkscreen, on the chassis. */
+.chart thead th {
+  height: auto;
+  padding: 0.45em 0.65rem;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.72em;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+/* The gutter: the name of the group, and its count in mono. The name is in
+   the line of the first row of its group: 2.9333 of 0.75em is 2.2em. */
+.chart tbody .c-gutter {
+  vertical-align: top;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.75em;
+  font-weight: 500;
+  line-height: 2.9333;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.chart tbody .c-gutter > .count {
+  float: right;
+  margin-left: 0.5em;
+  color: var(--ink);
+  font-size: 1.25em;
+  line-height: 2.3467;
+  letter-spacing: 0;
+}
+/* The seam: the chassis between the gutter and the row. Its LED is lit
+   red when the next action is due. */
+.chart .c-seam {
+  padding: 0;
+  background: transparent;
+  text-align: center;
+}
+.chart .led {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.16);
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.35);
+  vertical-align: middle;
+}
+.chart .led.on {
+  background: var(--led-on);
+  box-shadow:
+    0 0 5px var(--led-on),
+    inset 0 -1px 1px rgb(0 0 0 / 0.25);
+}
+/* The name: a link, with the arrow column at its left. */
+.chart .arrow {
+  display: inline-block;
+  width: 1.1rem;
+  font-size: 0.8em;
+}
+.chart thead .arrow {
+  font-size: 1em;
+}
+.chart tbody th {
+  font-weight: 500;
+}
+.chart tbody th a {
+  color: inherit;
+  text-decoration: none;
+}
+.chart tbody th a:focus-visible {
+  outline-offset: -2px;
+}
+.chart tbody tr:is(:hover, :focus-within) > :not(.c-gutter, .c-seam) {
+  background: var(--bg);
+}
+.chart tbody tr:is(:hover, :focus-within) th a {
+  text-decoration: underline;
+}
+.chart .none {
+  color: var(--muted);
+}
+.chart td.empty {
+  height: auto;
+  padding: 1em 0.9em;
+  color: var(--muted);
+  white-space: normal;
+}
+/* On a narrow screen each row folds to two lines, at one fixed height: the
+   name and the postcode, then the next action and its date. The gutter is
+   a line over the first row of its group. The stage and the last activity
+   are on the page of the organisation. */
+@media (width < 960px) {
+  .chart {
+    display: block;
+    border-spacing: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .chart :is(colgroup, thead) {
+    display: none;
+  }
+  .chart tbody {
+    display: grid;
+    gap: 1px;
+    margin-bottom: 2px;
+    padding: 2px;
+    border-radius: 6px;
+    background: var(--line);
+  }
+  .chart tr {
+    display: grid;
+    grid-template-columns: 1.8em auto minmax(0, 1fr) auto;
+    grid-template-rows: 1.5em 1.3em;
+    grid-template-areas: "seam name name date" "seam postcode action words";
+    column-gap: 0.5em;
+    align-content: center;
+    height: 3.4em;
+    padding-right: 0.6em;
+    background: linear-gradient(
+      to right,
+      transparent 1.8em,
+      var(--surface) 1.8em
+    );
+  }
+  .chart tr:has(> th.c-gutter) {
+    grid-template-rows: 2.2em 1.5em 1.3em;
+    grid-template-areas: "gutter gutter gutter gutter" "seam name name date" "seam postcode action words";
+    align-content: start;
+    height: 5.6em;
+  }
+  .chart :is(th, td) {
+    display: block;
+    height: auto;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .chart tbody tr:is(:hover, :focus-within) > :not(.c-gutter, .c-seam) {
+    background: none;
+  }
+  .chart tbody .c-gutter {
+    grid-area: gutter;
+    margin-right: -0.6em;
+    padding: 0 0.8em;
+    background: var(--bg);
+  }
+  .chart .c-seam {
+    grid-area: seam;
+    align-self: center;
+  }
+  .chart tbody th.c-name {
+    grid-area: name;
+    align-self: end;
+  }
+  .chart td.c-postcode {
+    grid-area: postcode;
+    color: var(--muted);
+    font-size: 0.9em;
+  }
+  .chart td.c-action {
+    grid-area: action;
+    color: var(--muted);
+    font-size: 0.9em;
+  }
+  /* The date and its words go to two lines, at the right. */
+  .chart td.c-due {
+    display: contents;
+  }
+  .chart td.c-due > * {
+    grid-area: date;
+    align-self: end;
+    justify-self: end;
+    font-size: 0.9em;
+  }
+  .chart td.c-due > .words {
+    grid-area: words;
+    align-self: start;
+  }
+  .chart td.c-due > .sep {
+    display: none;
+  }
+  .chart :is(.c-stage, .c-last, .arrow) {
+    display: none;
+  }
+  .chart td.empty {
+    padding: 0.9em;
+    background: var(--surface);
+  }
+}
+
+/* 5. The footer: privacy and top, as one line of text. On a wide screen
    the app links are at its left. */
 .foot {
   margin-top: 2.5rem;

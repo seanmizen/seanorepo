@@ -4,19 +4,29 @@ A homebrew CRM for a solo developer who sells software services door to door.
 It keeps contacts, visits, the pipeline and the GDPR records. Stripe keeps the
 billing. After sign-in, the seller has these pages:
 
-- `/` and `/orgs`: one list of every organisation (one handler). The LCD
-  is a menu: name, stage, next action date and last activity (the newest
-  visit, note or add date; a hidden visit or note does not count). The LED of a
-  row, in the bezel at its right, is lit when the next action is due. Each
-  row links to `/orgs/<slug>`. The
-  default order puts the due and overdue ones first (the oldest first),
-  then the rest by last activity (the newest first). Three sort keys
-  (`Last activity`, `Date added`, `Name`) sort ascending (green LED), then
-  descending (red LED), then remove the sort. A search field (name or
-  postcode) and the stage keys filter it. The URL holds all of it:
-  `?q=&stage=&sort=&dir=&page=`. 50 rows to a page, with a pager in the
-  footer. With JavaScript, the search, the stage keys, the sort keys and
-  the pager update the list in place, and the focus stays where it was
+- `/` and `/orgs`: the Plan, one list of every organisation (one handler,
+  `routes/index.tsx`). The page is a rack over a band:
+  - The glass reads the first organisation of the list (its name, its next
+    action and its due date), the counts of Overdue and Today, and the
+    rows that show. The plate keys are the pager: `Prev` and `Next`, 50
+    rows to a page.
+  - The control unit: Search (name or postcode, and `New lead`), Stage
+    (`All` and one key for each stage) and Sort. The sort keys are `Due`
+    (the default), `Date added` and `Name`. `Date added` and `Name` sort
+    ascending (green LED), then descending (red LED), then go back to
+    `Due`.
+  - The band groups the organisations by the date of the next action:
+    Overdue, Today, Next 7 days, Later and None. The sort sets the order in
+    each group. `Due` puts the oldest due date first, then the newest last
+    activity (the newest visit, note or add date; a hidden visit or note
+    does not count). Each row shows the name (a link to `/orgs/<slug>`),
+    the stage, the next action, its date, the last activity (the date
+    added with the `Date added` sort) and the postcode. A row in Today
+    shows only the word `today`, because its group has one day. The LED of
+    a row, on the seam at its left, is lit when the next action is due.
+
+  The URL holds the state: `?q=&stage=&sort=&dir=&page=`. With JavaScript,
+  each key updates the page in place, and the focus stays where it was
   (see [Page rules](#page-rules)).
 - `/orgs/new`: the new lead. The organisation form and the contact form,
   and one `Save` key. An empty URL slug comes from the name.
@@ -187,44 +197,51 @@ the `parts` that the route gives it.
    link to this page is text, with `aria-current="page"`. On a wide screen
    the theme shows these links in the footer row.
 2. **Intro** (`intro`, text). At most one sentence.
-3. **Device** (`device`). The core function of the page, as one instrument:
-   a `Device` with the `Lcd` at the top, then each `Module` on a grid of 6
-   columns. The LCD shows data, or a menu: a list of records, each row a
-   link. Nothing else in the LCD is interactive, and it never holds the page
-   title, help text or a form control. A form error shows in the LCD, after
-   the status mark. A module has its silkscreen label at the top left, its
-   value at the top right, and its keys and fields below.
-4. **Help and boxes** (`help` and `boxes`). The help is plain text. The
-   data of the page is a stack of boxes (`ui/Box`): each box is white, with
-   a silkscreen title, then tables, lists and definition lists in the page
-   font. A box can hold links, keys and forms. On a narrow screen, each
-   table row is a block of lines.
-5. **Footer** (`ui/Footer.tsx`, text). The pager of the list (`pager`),
-   `privacy` and `top`. Each page has it, signed in or not. The pager is
-   `previous`, the rows of this page and `next`. Both are always there.
-   On the first page `previous` is off, and on the last page `next` is
-   off.
+3. **Rack** (`rack`). The device of the page on its side, at the full
+   width (`ui/Rack.tsx`). Its units stack on one chassis, each with an ear
+   at each end:
+   - The display unit (`ui/DisplayUnit.tsx`): the glass as one strip of
+     readings, legend over value, with the plate keys at its right. Each
+     plate key has a caption under it: what the key acts on (Page 2 of 3),
+     or why it is off (First page). A save or an error has its own line at
+     the top of the glass.
+   - The control unit (`ui/ControlUnit.tsx`): the modules side by side, on
+     a grid of 12 columns. A module (`ui/Module.tsx`) is a `<section>` with
+     its silkscreen label (an `<h2>`) at the top left, its value at the top
+     right, and its keys and fields below.
+4. **Band** (`band`). The data of the page, under the rack, at the full
+   width (`ui/Band.tsx`): a `<section>` with an `<h2>`, then a real table.
+   A gutter at the left names each group of rows (a `<tbody>` with a
+   `<th scope="rowgroup">`). The LED of a row is on the chassis seam at its
+   left.
+5. **Footer** (`ui/Footer.tsx`, text). `privacy` and `top`. Each page has
+   it, signed in or not.
 
-The layout has one breakpoint, 960px (REQ-CRM-LAYOUT-001, in
+A page that is not on the rack has the old parts in place of 3 and 4: the
+device (`device`, a `Device` with an `Lcd` and modules on a grid of 6) in
+the left column, and the help and the boxes (`help` and `boxes`, each box
+a `ui/Box`) in the right column, in a 40/60 grid. Each page moves to the
+rack in its own change (`docs/002-rack.md`, Order of work).
+
+The layout has one width breakpoint, 960px (REQ-CRM-LAYOUT-002, in
 `crm-fe/src/theme.css`):
 
-- **Wide (960px and more):** a grid of two columns, 40% and 60%. The device
-  is the left column. The help and the boxes are the right column. The page
-  is at most 1200px wide and starts at the top left. The nav links move to
-  the footer row, next to `top`.
-- **Narrow (less than 960px):** one column: nav, device, help, boxes,
-  footer. The page margin is 1px, so the device and the boxes use almost
-  all of the width.
+- **Wide (960px and more):** the rack, then the band, each at the full
+  width. The page is at most 1680px wide and starts at the top left. The
+  nav links move to the footer row, next to `top`.
+- **Narrow (less than 960px):** one column, in the order of the HTML. The
+  ears go, each module has the full width, and each band row folds to two
+  lines. The page margin is 1px.
 
-The root font is 14px wide and 17px narrow, so no column width uses `rem`:
-the columns are fractions.
+The root font is 14px wide and 17px narrow, so no column width of the page
+uses `rem`.
 
-The LCD follows the rules of a real display (REQ-CRM-LCD-001, in
-`ui/Lcd.tsx`). No LED is inside the glass: a status there is the status
-mark, an ink circle that blinks slowly. The characters never move: each
-menu row has an arrow column at its left, and a hover shows the arrow
-there. The menu rows have one height, and the LED of a row is in the bezel
-at its right, so the LEDs are a straight column.
+The glass and the band follow the rules of a real display
+(REQ-CRM-LCD-002). An LED is only on metal: the chassis seam of a band row
+(due), or the top of a latching key (pressed). No LED is inside a glass: a
+status there is the status mark, an ink circle that blinks slowly. The
+characters never move: each band row and each menu row has one height and
+an arrow column at the left of its name, and a hover shows the arrow there.
 
 To see each page, run the screenshot script from the repo root. It starts
 crm-be on port 4110 with a new SQLite file in a temp folder, and puts sample

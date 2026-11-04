@@ -10,8 +10,11 @@ const THEME = readFileSync(
   'utf8',
 );
 
-/** The one breakpoint of the layout, in px (REQ-CRM-LAYOUT-001). */
+/** The one width breakpoint of the layout, in px (REQ-CRM-LAYOUT-002). */
 const BREAKPOINT = 960;
+
+/** The one height breakpoint of the layout, in px (REQ-CRM-LAYOUT-002). */
+const TALL = 720;
 
 let app: ReturnType<typeof buildApp>;
 let close: () => Promise<void>;
@@ -30,8 +33,8 @@ afterEach(async () => {
 const get = async (url: string) =>
   (await app.inject({ method: 'GET', url, headers: { cookie } })).body;
 
-describe('the layout (REQ-CRM-LAYOUT-001)', () => {
-  test('every width media query in theme.css uses the one breakpoint, and no row of the page wraps (REQ-CRM-LAYOUT-001)', () => {
+describe('the layout (REQ-CRM-LAYOUT-002)', () => {
+  test('every width media query in theme.css uses the one breakpoint, each height query uses 720px, and no row of the page wraps (REQ-CRM-LAYOUT-002)', () => {
     const queries = [...THEME.matchAll(/@media([^{]+)\{/g)].map((match) =>
       match[1].trim(),
     );
@@ -47,17 +50,72 @@ describe('the layout (REQ-CRM-LAYOUT-001)', () => {
         `(width >= ${BREAKPOINT}px)`,
       ]).toContain(feature);
     }
+    // A height query is the one height breakpoint.
+    const heights = queries.flatMap((query) =>
+      [...query.matchAll(/\([^)]*height[^)]*\)/g)].map((match) => match[0]),
+    );
+    for (const feature of heights) {
+      expect(feature).toBe(`(height >= ${TALL}px)`);
+    }
     // The comment that names the breakpoint.
     expect(THEME).toContain(`One breakpoint: ${BREAKPOINT}px.`);
-    // The wide grid is 40% and 60%, in fractions. No flex row wraps at a
-    // width that its content or the root font sets.
-    expect(THEME).toContain(
-      'grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);',
+    // The control unit is a grid of 12, in fractions. A page on the rack
+    // is at most 1680px wide. No flex row wraps at a width that its
+    // content or the root font sets.
+    expect(THEME).toMatch(
+      /\.modules \{[^}]*grid-template-columns: repeat\(12, minmax\(0, 1fr\)\);/,
+    );
+    expect(THEME).toMatch(
+      /body:has\(> main > \.rack\) \{\s*max-width: 1680px;/,
     );
     expect(THEME).not.toMatch(/flex-wrap:\s*wrap/);
   });
 
-  test('the left column holds only the device, and each section of data is a Box in the right column (REQ-CRM-LAYOUT-001)', async () => {
+  test('the home is the rack over the band: the display unit, then the control unit on a grid of 12, then the band (REQ-CRM-LAYOUT-002)', async () => {
+    await addOrg(app, cookie, { name: 'Acme Plumbing' });
+    for (const url of ['/', '/orgs']) {
+      const html = await get(url);
+      const main = html.slice(
+        html.indexOf('<main>') + '<main>'.length,
+        html.indexOf('</main>'),
+      );
+      // The rack, then the band, and no part of the old layout.
+      const rack = divOf(main, 'rack');
+      expect(main.startsWith(rack)).toBe(true);
+      expect(main.slice(rack.length)).toMatch(
+        /^<section class="band" aria-labelledby="[^"]+">[\s\S]*<\/section>$/,
+      );
+      expect(html).not.toContain('class="device');
+      expect(html).not.toContain('class="body"');
+      // The units, each with an ear at each end.
+      const ear = '<span class="ear" aria-hidden="true"></span>';
+      const display = divOf(rack, 'unit display');
+      const controls = divOf(rack, 'unit controls');
+      expect(rack).toBe(`<div class="rack">${display}${controls}</div>`);
+      for (const unit of [display, controls]) {
+        expect(unit).toMatch(/^<div class="unit \w+"><span class="ear"/);
+        expect(unit).toEndWith(`${ear}</div>`);
+      }
+      // The control unit: Search, Stage and Sort. Their spans fill the
+      // grid of 12.
+      const spans = [
+        ...controls.matchAll(
+          /<section id="(\w+)" class="module(?: span-(\d+))?">/g,
+        ),
+      ].map((match) => [match[1], Number(match[2] ?? 6)]);
+      expect(spans).toEqual([
+        ['search', 3],
+        ['stage', 6],
+        ['sort', 3],
+      ]);
+    }
+  });
+
+  test('a page with a device keeps the 40/60 grid: the left column holds only the device, and each section of data is a Box (REQ-CRM-LAYOUT-002)', async () => {
+    // The wide grid is 40% and 60%, in fractions.
+    expect(THEME).toContain(
+      'grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);',
+    );
     const slug = await addOrg(app, cookie, {
       name: 'Acme Plumbing',
       contact_name: 'Ann Smith',
@@ -94,7 +152,7 @@ describe('the layout (REQ-CRM-LAYOUT-001)', () => {
     }
   });
 
-  test('the nav links are in the HTML once, under the path title (REQ-CRM-LAYOUT-001)', async () => {
+  test('the nav links are in the HTML once, under the path title (REQ-CRM-LAYOUT-002)', async () => {
     const html = await get('/');
     expect(html.match(/<nav class="links"/g)).toHaveLength(1);
     expect(html).toMatch(

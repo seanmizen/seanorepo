@@ -46,12 +46,20 @@ export const Key = ({
  * A row of keys. The keys share the row in whole parts, as on the grid of
  * autosam. With `grid`, the keys go three to a row on a grid of 6 columns,
  * and a short last row shares its row in halves or in one whole: five keys
- * are a row of 3, then a row of 2.
+ * are a row of 3, then a row of 2. With `four`, the keys go four to a row
+ * on a wide screen, and three to a row on a narrow screen. Each key keeps
+ * its width, so a short last row has a gap at its end.
  */
 export const Keys = ({
   grid = false,
+  four = false,
   children,
 }: {
   grid?: boolean;
+  four?: boolean;
   children: ReactNode;
-}) => <div className={grid ? 'keys grid' : 'keys'}>{children}</div>;
+}) => (
+  <div className={four ? 'keys four' : grid ? 'keys grid' : 'keys'}>
+    {children}
+  </div>
+);

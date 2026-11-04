@@ -297,7 +297,7 @@ export const mcpServer = (db: Database, actor: string) => {
       description: [
         'Find organisations by name or postcode, and by stage.',
         `The results come in pages of ${PAGE_SIZE}.`,
-        'The organisations with a next action that is due come first. Then the others come by last activity, newest first.',
+        'The organisations with a next action come first, by its date, the oldest first. So the overdue ones come first, then the ones due today. Then the organisations with no next action come by last activity, newest first.',
         DATES,
         UNTRUSTED,
       ].join(' '),

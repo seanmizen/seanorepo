@@ -113,6 +113,13 @@ export const daysFromToday = (date: string) =>
       DAY_MS,
   );
 
+/** The date `days` after the date `date`, both as `YYYY-MM-DD`. */
+export const addDays = (date: string, days: number) => {
+  const day = new Date(`${date}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + days);
+  return day.toISOString().slice(0, 10);
+};
+
 /**
  * The status of a next action on `date`, in words: `today`, `tomorrow`,
  * `in 3 days`, `1 day overdue`, `2 days overdue`. These words are status
