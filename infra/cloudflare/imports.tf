@@ -182,6 +182,12 @@ import {
   id = "8e76a7e41317a164bf03bf360ba4ac38/crm/eu"
 }
 
+# Sean made this bucket in the dashboard (r2.tf). The first apply imports it.
+import {
+  to = cloudflare_r2_bucket.crm_demo
+  id = "8e76a7e41317a164bf03bf360ba4ac38/crm-demo/eu"
+}
+
 import {
   to = cloudflare_dns_record.seanmizen_com_crm_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/9acee00c5d6d76c22103a3efaeed6dc1"
