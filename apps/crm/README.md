@@ -629,7 +629,7 @@ entry by its number in the organisation (REQ-CRM-ID-001).
 | `SMTP_PASS` | unset | `email.ts` | The Gmail app password of `SMTP_USER`. Unset: dev mode. Each email goes to stdout, and crm-be sends nothing. |
 | `EMAIL_FROM_NAME` | `seanmizen.com Administrator` | `email.ts` | The display name of the sender. The From header is `"<EMAIL_FROM_NAME>" <SMTP_USER>`. |
 | `CRM_R2_BUCKET` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The R2 bucket of the backups: `crm`. Unset: the Litestream sidecar prints "Replication is off." and waits with no work. Nothing goes to R2. |
-| `CRM_R2_ENDPOINT` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The EU endpoint of R2: `https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com`. When `CRM_R2_BUCKET` has a value, each other endpoint stops the sidecar with status 1. |
+| `CRM_R2_ENDPOINT` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The EU endpoint of R2: `https://<account_id>.eu.r2.cloudflarestorage.com`. The account ID is on the R2 overview page of the Cloudflare dashboard. When `CRM_R2_BUCKET` has a value, each other endpoint stops the sidecar with status 1. |
 | `LITESTREAM_ACCESS_KEY_ID` | unset | Litestream | The access key ID of the R2 API token for the bucket `crm`. |
 | `LITESTREAM_SECRET_ACCESS_KEY` | unset | Litestream | The secret access key of the same token. |
 | `CRM_R2_PATH` | unset | `docker-compose.yml` (each Litestream sidecar), `litestream.yml` | The prefix of the backup files in the bucket. The compose file sets it: `crm.db` for prod, `demo-crm.db` for the demo. Unset: the sidecar stops with status 1. |
@@ -670,7 +670,7 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
   SMTP_USER=
   SMTP_PASS=
   CRM_R2_BUCKET=crm
-  CRM_R2_ENDPOINT=https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com
+  CRM_R2_ENDPOINT=https://<account_id>.eu.r2.cloudflarestorage.com
   LITESTREAM_ACCESS_KEY_ID=
   LITESTREAM_SECRET_ACCESS_KEY=
   ```
@@ -701,8 +701,9 @@ The `litestream` service in the `prod` profile (`litestream.yml`) streams
   jurisdiction. UK GDPR allows a transfer to the EEA under the UK adequacy
   regulations.
 - **Endpoint:**
-  `https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com`.
-  The default R2 endpoint cannot reach an EU bucket.
+  `https://<account_id>.eu.r2.cloudflarestorage.com`. The account ID is on
+  the R2 overview page of the Cloudflare dashboard. The default R2 endpoint
+  cannot reach an EU bucket.
 - **Status:** `docker logs crm-litestream`.
 - **Restart:** `unless-stopped`. After a restart of Docker or of the host,
   each sidecar starts again with no deploy (REQ-SERVER-020).
@@ -754,7 +755,7 @@ both build from the `release` checkout on asus, and both change on
 
 ```bash
 CRM_R2_BUCKET=crm
-CRM_R2_ENDPOINT=https://8e76a7e41317a164bf03bf360ba4ac38.eu.r2.cloudflarestorage.com
+CRM_R2_ENDPOINT=https://<account_id>.eu.r2.cloudflarestorage.com
 LITESTREAM_ACCESS_KEY_ID=
 LITESTREAM_SECRET_ACCESS_KEY=
 CRM_ADMIN_EMAIL=demo@example.com
