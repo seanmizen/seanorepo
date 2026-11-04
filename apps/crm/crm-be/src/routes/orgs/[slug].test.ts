@@ -134,8 +134,19 @@ describe('GET /orgs/<slug>', () => {
       'Not interested Do not knock sets Lost',
       'Note only no visit',
     ]);
+    // Each form lands on Next action (the phone window).
     expect(controls).toContain(
-      '<form action="/orgs/acme-plumbing/activity" method="post">',
+      '<form action="/orgs/acme-plumbing/activity#next" method="post">',
+    );
+    expect(
+      controls.match(/action="\/orgs\/acme-plumbing\/stage#next"/g),
+    ).toHaveLength(3);
+    // The tabs of the phone window: Log, Stage and Next action.
+    expect(bodyText(`<body>${divOf(html, 'deck')}`)).toStartWith(
+      'Log Stage Next action Log Visit note',
+    );
+    expect(html).toContain(
+      '<nav class="tabs" aria-label="Modules"><a href="#log"><span>Log</span></a><a href="#stage"><span>Stage</span></a><a href="#next"><span>Next action</span></a></nav>',
     );
     // Each stage key shows its count.
     expect(bodyText(`<body>${divOf(controls, 'keys grid')}`)).toBe(

@@ -215,7 +215,7 @@ yarn workspace crm-be test
   with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
   route.
 - `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`,
-  `src/morph.ts` and `src/passkeys.ts`. It has no React. Rsbuild builds them to
+  `src/morph.ts`, `src/window.ts` and `src/passkeys.ts`. It has no React. Rsbuild builds them to
   `crm-fe/dist` with hashed names and a manifest. Only the pages with a
   passkey control load the `passkeys` entry: `/login`, `/account/passkeys`
   and the 403 page of an admin route.
@@ -304,8 +304,18 @@ The layout has one width breakpoint, 960px (REQ-CRM-LAYOUT-002, in
   width. The page is at most 1680px wide and starts at the top left. The
   nav links move to the footer row, next to `top`.
 - **Narrow (less than 960px):** one column, in the order of the HTML. The
-  ears go, each module has the full width, and each band row folds to two
-  lines. The page margin is 1px.
+  ears go, each band row folds to two lines, and the page margin is 1px.
+  The control unit of `/`, `/orgs`, `/orgs/<slug>` and `/orgs/new` is the
+  **phone window**: one module wide, with tabs over it. A swipe or a tap on
+  a tab changes the module, and only the window scrolls sideways
+  (`ControlUnit` with `tabs`, and `crm-fe/src/window.ts`, which lights the
+  tab in view). Each form of the control unit of an organisation lands on
+  Next action (`#next` in its action), so Call back opens Next action with
+  no page jump. Each target is at least 44px high.
+
+In a window 720px or taller, at each width, the display unit stays at the
+top of the page (`position: sticky`), so Save, Save lead, Prev and Next
+stay in reach. This is the one height query.
 
 The root font is 14px wide and 17px narrow, so no column width of the page
 uses `rem`.

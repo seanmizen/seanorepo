@@ -74,15 +74,23 @@ describe('GET /orgs/new', () => {
     }
     const modules = [
       ...html.matchAll(
-        /<section class="module span-3"><h2 class="label">([^<]+)<\/h2>/g,
+        /<section id="([\w-]+)" class="module span-3"><h2 class="label">([^<]+)<\/h2>/g,
       ),
-    ].map((match) => match[1]);
+    ].map((match) => `${match[1]} ${match[2]}`);
     expect(modules).toEqual([
-      'Organisation',
-      'Address',
-      'First contact',
-      'First visit',
+      'organisation Organisation',
+      'address Address',
+      'first-contact First contact',
+      'first-visit First visit',
     ]);
+    // The tabs of the phone window link each module, in order.
+    expect(
+      [...html.matchAll(/<a href="#([\w-]+)"><span>([^<]+)<\/span><\/a>/g)]
+        .map((match) => `${match[1]} ${match[2]}`)
+        .join(', '),
+    ).toBe(
+      'organisation Organisation, address Address, first-contact Contact, first-visit Visit',
+    );
     // One key saves: Save lead, on the plate. It submits the form by its
     // id.
     expect(html).toContain(

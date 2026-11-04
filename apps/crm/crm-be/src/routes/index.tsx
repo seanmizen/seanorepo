@@ -516,7 +516,13 @@ export const listPage = ({
             counts: modes,
           })}
         />
-        <ControlUnit>
+        <ControlUnit
+          tabs={[
+            { id: 'search', label: 'Search' },
+            { id: 'stage', label: 'Stage' },
+            { id: 'sort', label: 'Sort' },
+          ]}
+        >
           <form method="get" action={path}>
             <Module id="search" label="Search" span={3}>
               <div className="search">
