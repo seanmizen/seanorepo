@@ -9,8 +9,14 @@
 # demo: crm-demo and its Litestream sidecar. The same image, the same code
 # and the same settings as prod. Only the env is different: its own volume,
 # apps/crm/.env.demo, host port 4101, demo-crm.seanmizen.com, and the backup
-# bucket crm-demo with the prefix demo-crm.db/. scripts/prod-docker.sh adds this profile only when
-# apps/crm/.env.demo exists. Without the file, the demo does not start.
+# bucket crm-demo with the prefix demo-crm.db/. scripts/prod-docker.sh adds
+# this profile only when apps/crm/.env.demo exists. Without the file, the
+# demo does not start.
+#
+# Each container gets only the secrets it uses. The app containers read
+# .env or .env.demo, which hold no R2 key. Each Litestream sidecar reads only
+# its R2 file: .env.r2 or .env.demo.r2. A test (crm-be/src/demo.test.ts)
+# fails when an app container and a sidecar share an env file.
 #
 # dev: bind-mounts the monorepo root, so `@shared/*` resolves. node_modules
 # is a named volume that the image fills. This keeps the Linux builds of
@@ -24,14 +30,6 @@ x-crm-base: &crm-base
     target: ${BUILD_TARGET:-dev}
   ports:
     - '${PUBLISH_ADDR:-127.0.0.1}:4100:4100'
-
-# The secrets of the prod services: apps/crm/.env on the server. Git ignores
-# it, and deploy.sh never changes it. The README "Env vars" table names each
-# value. Without the file, each one is unset, and unset means off.
-x-crm-env-file: &crm-env-file
-  env_file:
-    - path: ./.env
-      required: false
 
 # The Litestream sidecar of a crm database. Config: litestream.yml. Each
 # sidecar sets CRM_R2_PATH, the prefix of its backup files in the bucket.
@@ -72,7 +70,13 @@ x-litestream-base: &litestream-base
 
 services:
   crm:
-    <<: [*crm-base, *crm-env-file]
+    <<: *crm-base
+    # The secrets of the crm app: apps/crm/.env on the server. Git ignores it,
+    # and deploy.sh never changes it. The README "Env vars" table names each
+    # value. Without the file, each one is unset, and unset means off.
+    env_file:
+      - path: ./.env
+        required: false
     profiles: ['prod']
     restart: unless-stopped
     environment:
@@ -88,9 +92,13 @@ services:
 
   # Litestream replicates /data/crm.db to the R2 bucket (EU jurisdiction),
   # under the prefix CRM_R2_PATH. The README has the restore command.
+  # apps/crm/.env.r2 holds its four R2 values, and nothing else.
   litestream:
-    <<: [*crm-env-file, *litestream-base]
+    <<: *litestream-base
     container_name: crm-litestream
+    env_file:
+      - path: ./.env.r2
+        required: false
     profiles: ['prod']
     depends_on:
       - crm
@@ -124,14 +132,14 @@ services:
     labels:
       - 'description=crm demo (https://demo-crm.seanmizen.com)'
 
-  # Litestream for the demo: the bucket crm-demo (CRM_R2_BUCKET in .env.demo),
-  # with its own R2 key, and the prefix demo-crm.db. A test
+  # Litestream for the demo: the bucket crm-demo (CRM_R2_BUCKET in
+  # .env.demo.r2), with its own R2 key, and the prefix demo-crm.db. A test
   # (crm-be/src/demo.test.ts) fails when two sidecars have the same prefix.
   litestream-demo:
     <<: *litestream-base
     container_name: crm-demo-litestream
     env_file:
-      - path: ./.env.demo
+      - path: ./.env.demo.r2
         required: false
     profiles: ['demo']
     depends_on:

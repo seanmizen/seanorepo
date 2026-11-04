@@ -180,7 +180,7 @@ every hostname moves with it.
 
 The crm streams its database to R2 (`apps/crm/README.md`, "Backups"). Two
 machines must never stream to the same bucket. On B, remove `CRM_R2_BUCKET`
-from `apps/crm/.env` until A stops the crm. To get the data on B, run the
+from `apps/crm/.env.r2` until A stops the crm. To get the data on B, run the
 restore commands with `-e CRM_R2_BUCKET=crm` after `run`.
 
 #### 3. Deploy, and prove B on the LAN

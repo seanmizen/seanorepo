@@ -10,8 +10,9 @@ x-frontend-base: &frontend-base
     x-bake:
       no-cache: false
       provenance: false
-  env_file:
-    - ./caroline-be/.env
+  # No env_file: the frontend container gets no secret. The prod image is
+  # static files that `serve` sends, and API_URL and DEBUG_MODE are build
+  # args. In dev, rsbuild reads caroline-fe/.env from the bind mount.
   ports:
     - "${PUBLISH_ADDR:-127.0.0.1}:4020:4020"
   labels:
