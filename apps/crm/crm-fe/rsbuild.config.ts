@@ -9,8 +9,9 @@ export default defineConfig({
   mode: 'production',
   source: {
     entry: {
-      // swap.ts updates a part of the page in place (`data-swap`).
-      main: ['./src/main.ts', './src/swap.ts', './src/theme.css'],
+      // morph.ts updates the page in place after each press
+      // (REQ-CRM-MORPH-001).
+      main: ['./src/main.ts', './src/morph.ts', './src/theme.css'],
       // Only the pages with a passkey control load this entry: /login,
       // /account/passkeys and the 403 page of an admin route.
       passkeys: './src/passkeys.ts',

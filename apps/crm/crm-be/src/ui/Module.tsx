@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
  * the device. The label is an `<h2>`, so the page has an outline with no
  * page styles. A module with no label holds only the key that saves a form
  * of more than one module. `id` is the target of a link to the module, or
- * of a swap (`data-swap`, in `crm-fe/src/swap.ts`).
+ * that the morph keeps (`crm-fe/src/morph.ts`).
  *
  * The passkey script finds its note and its error line in the same
  * `<section>`, so each passkey control is in a module.

@@ -137,15 +137,6 @@ const Hidden = ({ fields }: { fields: Record<string, string> }) =>
       <input key={name} type="hidden" name={name} value={value} />
     ));
 
-/**
- * The parts of the list page that a search, a stage key, a sort key or the
- * pager replaces in place (`data-swap`, in `crm-fe/src/swap.ts`): the LCD,
- * the Sort module, the hidden fields and the Search key of the search form,
- * the Stage module and the footer (the pager). No part holds the search
- * field, so the field keeps the focus and the caret.
- */
-export const LIST_SWAP = '.lcd, #sort, #search-send, #stage, .foot';
-
 /** One row of the list. */
 export type ListRow = Pick<
   Org,
@@ -182,8 +173,8 @@ export type ListRow = Pick<
  *
  * Each key is a GET submit to `path`, so the URL holds the search, the
  * stage and the sort, and each key works with no page styles and no
- * JavaScript. With JavaScript, each key and the pager replace `LIST_SWAP`
- * in place. With a search in the URL, the search field has `autofocus`, so
+ * JavaScript. With JavaScript, each key and the pager update the page in
+ * place (REQ-CRM-MORPH-001). With a search in the URL, the search field has `autofocus`, so
  * a full page load also puts the cursor back in it. The words on the page
  * are the words of its keys and legends, with no help text.
  */
@@ -275,12 +266,13 @@ export const listPage = ({
           <SortKeys path={path} query={query} keys={['activity', 'added']} />
           <SortKeys path={path} query={query} keys={['name']} />
         </Module>
-        <form method="get" action={path} data-swap={LIST_SWAP}>
+        <form method="get" action={path}>
           <Module label="Search">
             <div className="search">
               <label className="field">
                 <BareText>Name or postcode </BareText>
                 <input
+                  id="q"
                   name="q"
                   type="search"
                   placeholder="Name or postcode"
@@ -334,11 +326,7 @@ export const listPage = ({
     pager: (
       <>
         {page > 1 ? (
-          <a
-            href={listHref(path, { ...query, page: page - 1 })}
-            rel="prev"
-            data-swap={LIST_SWAP}
-          >
+          <a href={listHref(path, { ...query, page: page - 1 })} rel="prev">
             previous
           </a>
         ) : (
@@ -357,11 +345,7 @@ export const listPage = ({
             : `${first}–${Math.min(total, page * PAGE_SIZE)} of ${total}`}
         </span>{' '}
         {page < pages ? (
-          <a
-            href={listHref(path, { ...query, page: page + 1 })}
-            rel="next"
-            data-swap={LIST_SWAP}
-          >
+          <a href={listHref(path, { ...query, page: page + 1 })} rel="next">
             next
           </a>
         ) : (
@@ -399,7 +383,7 @@ const SortKeys = ({
       const next = nextSort(query, key);
       const on = query.sort === key;
       return (
-        <form key={key} method="get" action={path} data-swap={LIST_SWAP}>
+        <form key={key} method="get" action={path}>
           <Hidden
             fields={{
               q: query.q,

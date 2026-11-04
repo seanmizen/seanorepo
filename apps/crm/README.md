@@ -135,7 +135,7 @@ yarn workspace crm-be test
   with a passkey), and `ui/AdminOnly.tsx` holds the 403 page of an admin
   route.
 - `crm-fe` holds only what the browser runs: `src/theme.css`, `src/main.ts`,
-  `src/swap.ts` and `src/passkeys.ts`. It has no React. Rsbuild builds them to
+  `src/morph.ts` and `src/passkeys.ts`. It has no React. Rsbuild builds them to
   `crm-fe/dist` with hashed names and a manifest. Only the pages with a
   passkey control load the `passkeys` entry: `/login`, `/account/passkeys`
   and the 403 page of an admin route.
@@ -237,16 +237,17 @@ prints each page that scrolls sideways.
 node apps/crm/scripts/shoot.mjs [out-dir]
 ```
 
-To test the list in place (`crm-fe/src/swap.ts`) in a browser, run the
-swap test from the repo root. It starts crm-be on port 4127 with a new
-SQLite file, as the screenshot script does. In Chromium, it types `sw11` in
-the search field and presses Enter. Then it checks the URL, the rows, the
-focus and the caret, and that the page did not load again. It does the
-same for a stage key and a sort key. Then it does the search again with
-JavaScript off.
+To test the morph (`crm-fe/src/morph.ts`) in a browser, run the morph
+test from the repo root. It starts crm-be on port 4127 with a new SQLite
+file, as the screenshot script does. In Chromium, it does a search, a
+stage key and a sort key on the list, and a Log press on an organisation
+page. After each press it checks the URL, the focus, the scroll position,
+and that the page did not load again. It checks Back and Forward, a link
+to a passkey page, and a fetch that fails. Then it does a Log press and a
+search with `?theme=bare` and with JavaScript off.
 
 ```bash
-node apps/crm/scripts/swap-test.mjs
+node apps/crm/scripts/morph-test.mjs
 ```
 
 ## Theme
@@ -276,14 +277,15 @@ use the ink color with an underline.
   needs JavaScript. With no JavaScript, the page says so, and email sign-in
   still works.
 - Interactivity is an enhancement on top of a working HTML form or link,
-  never a React component in the browser. A GET form or a link with
-  `data-swap="<selector list>"` updates the page in place
-  (`crm-fe/src/swap.ts`, on every page). The script fetches the URL that
-  the browser would load. It replaces each element that matches the
-  selector list with the element from the response. Then it puts the URL in
-  the address bar, and keeps the focus and the caret. On an error it loads
-  the full page. A swap never replaces the field that a person types in:
-  on the list, `LIST_SWAP` in `routes/index.tsx` names each swapped part.
+  never a React component in the browser. Each form and in-app link
+  updates the page in place (REQ-CRM-MORPH-001, `crm-fe/src/morph.ts`, on
+  every page). The script sends the same request with `fetch` and morphs
+  the response into the page with idiomorph. The focus and the scroll
+  position stay, and the URL goes into history. On an error it sends the
+  request again as a normal submit or load. A form or link with
+  `data-reload` always loads the full page. Use it only for a post that
+  redirects to a different origin, for example the OAuth consent form.
+  Give a control an `id` when the morph must keep it as the same node.
 - A button is always in its place (REQ-CRM-BUTTON-001). When it cannot
   act, it is off (`disabled`), with the reason in its hover text and in
   its accessible description. Use the `off` prop of `ui/Key.tsx`. With no
